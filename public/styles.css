@@ -183,10 +183,11 @@ h3,
 }
 
 .brand-mark {
+  display: block;
   font-size: 2rem;
   font-weight: 800;
   letter-spacing: 0.08em;
-  line-height: 1;
+  line-height: 0.92;
 }
 
 .brand-subtitle {
@@ -239,6 +240,10 @@ h3,
   align-self: stretch;
   min-height: 0;
   gap: 10px;
+}
+
+.mobile-nav {
+  display: none;
 }
 
 .nav-link,
@@ -1546,67 +1551,152 @@ h3,
 
 @media (max-width: 1024px) {
   .page-shell {
-    padding: 24px;
+    padding: 104px 24px calc(118px + env(safe-area-inset-bottom, 0px));
   }
 
   .topbar {
+    position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: auto;
     width: auto;
-    grid-template-columns: 1fr;
-    grid-template-rows: none;
-    justify-items: stretch;
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
-    border-top: none;
+    height: 82px;
+    display: block;
+    gap: 16px;
+    padding: 16px 20px;
+    z-index: 170;
+    background: rgba(8, 14, 24, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: none;
+    box-shadow:
+      0 10px 28px rgba(0, 0, 0, 0.16),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+    animation: none;
+    transform: none;
+    overflow: visible;
   }
 
   .brand {
-    text-align: center;
-    justify-items: center;
+    text-align: left;
+    justify-items: start;
+    flex: 0 0 auto;
+  }
+
+  .searchbar {
+    display: none;
   }
 
   .nav-actions {
+    position: static;
+    display: block;
+    min-height: auto;
+    gap: 0;
+  }
+
+  .nav-actions > .nav-link {
+    display: none;
+  }
+
+  .mobile-nav {
+    position: fixed;
+    left: 50%;
+    right: auto;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    z-index: 160;
+    width: min(calc(100vw - 28px), 420px);
+    max-width: calc(100vw - 28px);
     display: flex;
-    flex-wrap: wrap;
+    align-items: center;
     justify-content: center;
+    gap: 10px;
+    margin: 0;
+    padding: 12px;
+    border-radius: 28px;
+    background: rgba(8, 14, 24, 0.84);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:
+      0 18px 44px rgba(0, 0, 0, 0.28),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
   }
 
   .user-panel {
+    position: fixed;
+    top: 16px;
+    right: 20px;
+    z-index: 171;
+    display: flex;
+    flex-direction: row;
     align-items: center;
+    justify-content: flex-end;
     min-width: auto;
-    order: 3;
     width: auto;
-    margin-top: 6px;
+    margin-top: 0;
     padding: 0;
+    gap: 10px;
     border: none;
     background: transparent;
     box-shadow: none;
   }
 
   .user-summary {
-    grid-template-columns: 1fr;
-    justify-items: center;
-    text-align: center;
+    width: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
   }
 
   .user-copy {
-    justify-items: center;
+    display: none;
+  }
+
+  .user-role {
+    display: none;
+  }
+
+  .user-status {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin-left: 0;
+  }
+
+  .currency {
+    padding: 8px 10px;
+    border-radius: 999px;
+    background: rgba(248, 243, 233, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    min-width: 0;
+  }
+
+  .currency-icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .currency-value {
+    font-size: 0.76rem;
   }
 
   .avatar {
-    order: 4;
-    justify-self: center;
-    align-self: center;
+    width: 50px;
+    height: 50px;
+    justify-self: auto;
+    align-self: auto;
+    order: 2;
   }
 
   .site-footer {
     grid-template-columns: 1fr;
     text-align: center;
-    margin: 0 0 -24px;
+    margin: 0;
+    margin-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   }
 
   .footer-left,
@@ -1649,19 +1739,12 @@ h3,
 
 @media (max-width: 680px) {
   .page-shell {
-    padding: 14px 14px calc(108px + env(safe-area-inset-bottom, 0px));
+    padding: 90px 14px calc(108px + env(safe-area-inset-bottom, 0px));
   }
 
   .topbar {
-    position: static;
-    gap: 14px;
-    padding: 0;
-    margin: 0;
-    background: transparent;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    border: none;
-    box-shadow: none;
+    height: 72px;
+    padding: 12px 14px;
   }
 
   .brand {
@@ -1669,40 +1752,21 @@ h3,
   }
 
   .brand-mark {
-    font-size: 1.6rem;
+    font-size: 1.45rem;
   }
 
-  .searchbar {
-    padding: 0 16px;
-  }
-
-  .nav-actions {
-    position: fixed;
-    left: 50%;
-    right: auto;
-    width: min(calc(100vw - 24px), 560px);
-    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-    transform: translateX(-50%);
-    z-index: 160;
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    align-items: stretch;
+  .mobile-nav {
+    width: min(calc(100vw - 24px), 400px);
+    max-width: calc(100vw - 24px);
     gap: 8px;
-    margin: 0;
     padding: 10px;
     border-radius: 26px;
-    background: rgba(8, 14, 24, 0.84);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow:
-      0 18px 44px rgba(0, 0, 0, 0.28),
-      inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
   }
 
-  .nav-link {
-    width: 100%;
-    min-width: 0;
+  .mobile-nav .nav-link {
+    width: auto;
+    flex: 0 0 auto;
+    min-width: 56px;
     flex-direction: column;
     justify-content: center;
     gap: 6px;
@@ -1714,7 +1778,7 @@ h3,
     text-align: center;
   }
 
-  .nav-link:hover,
+  .mobile-nav .nav-link:hover,
   .user-name:hover {
     transform: none;
     letter-spacing: 0.02em;
@@ -1726,37 +1790,34 @@ h3,
   }
 
   .user-panel {
-    width: auto;
-    min-width: 0;
-    margin-top: 0;
-    padding: 0;
-    gap: 0;
-    align-items: center;
-    border: none;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  .user-summary {
-    width: auto;
-    display: flex;
-    justify-content: center;
-  }
-
-  .user-copy,
-  .user-status,
-  .user-role {
-    display: none;
+    top: 12px;
+    right: 14px;
+    gap: 8px;
   }
 
   .avatar {
     width: 48px;
     height: 48px;
-    justify-self: center;
-    align-self: center;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.36),
       0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+
+  .user-status {
+    gap: 6px;
+  }
+
+  .currency {
+    padding: 7px 9px;
+  }
+
+  .currency-icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .currency-value {
+    font-size: 0.72rem;
   }
 
   .main-content {
