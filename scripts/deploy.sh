@@ -10,6 +10,8 @@ RUN_DB_MIGRATIONS="${RUN_DB_MIGRATIONS:-0}"
 HEALTHCHECK_URL="${HEALTHCHECK_URL:-http://127.0.0.1:3001/api/health}"
 HEALTHCHECK_URL="${HEALTHCHECK_URL//$'\r'/}"
 HEALTHCHECK_URL="${HEALTHCHECK_URL//$'\n'/}"
+HEALTHCHECK_RETRIES="${HEALTHCHECK_RETRIES:-15}"
+HEALTHCHECK_DELAY_SECONDS="${HEALTHCHECK_DELAY_SECONDS:-2}"
 
 mkdir -p "$DEPLOY_DIR"
 
@@ -49,6 +51,19 @@ sudo systemctl --no-pager --full status "$FRONTEND_SERVICE_NAME"
 sudo systemctl --no-pager --full status "$BACKEND_SERVICE_NAME"
 
 echo "[deploy] checking backend health: $HEALTHCHECK_URL"
-curl --fail --silent --show-error "$HEALTHCHECK_URL" >/dev/null
+for ((attempt = 1; attempt <= HEALTHCHECK_RETRIES; attempt++)); do
+  if curl --fail --silent --show-error "$HEALTHCHECK_URL" >/dev/null; then
+    echo "[deploy] backend health check passed"
+    break
+  fi
+
+  if [[ "$attempt" -eq "$HEALTHCHECK_RETRIES" ]]; then
+    echo "[deploy] backend health check failed after $HEALTHCHECK_RETRIES attempts" >&2
+    exit 1
+  fi
+
+  echo "[deploy] backend not ready yet, retrying in ${HEALTHCHECK_DELAY_SECONDS}s (attempt ${attempt}/${HEALTHCHECK_RETRIES})"
+  sleep "$HEALTHCHECK_DELAY_SECONDS"
+done
 
 echo "[deploy] done"
