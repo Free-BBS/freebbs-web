@@ -1,7 +1,9 @@
 const API_BASE_URL = (() => {
-  const protocol = window.location.protocol === "file:" ? "http:" : window.location.protocol;
-  const hostname = window.location.hostname || "127.0.0.1";
-  return `${protocol}//${hostname}:3001/api`;
+  if (window.location.protocol === "file:") {
+    return "http://127.0.0.1:3001/api";
+  }
+
+  return `${window.location.origin}/api`;
 })();
 
 const STORAGE_KEY = "free_bbs_auth_token";
