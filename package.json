@@ -1,0 +1,22 @@
+{
+  "name": "free-bbs",
+  "version": "1.0.0",
+  "description": "FREE-BBS learning platform homepage and auth backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "start:frontend": "node server.js",
+    "start:backend": "node backend/server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.14.1",
+    "nodemailer": "^6.10.0"
+  },
+  "keywords": [
+    "free-bbs",
+    "nodejs"
+  ],
+  "license": "MIT"
+}

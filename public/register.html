@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FREE-BBS - 注册</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Noto+Serif+SC:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="auth-page-body">
+    <main class="auth-page-shell">
+      <section class="auth-page-panel" aria-labelledby="auth-page-title">
+        <h1 class="auth-page-title" id="auth-page-title">注册</h1>
+        <form class="auth-form auth-form-register" id="auth-page-form" data-auth-mode="register">
+          <div class="auth-grid-row auth-grid-row-four">
+            <label class="auth-field">
+              <span>用户名</span>
+              <input id="auth-username" name="username" type="text" minlength="3" maxlength="64" required />
+            </label>
+
+            <label class="auth-field">
+              <span>姓名</span>
+              <input id="auth-full-name" name="fullName" type="text" maxlength="64" required />
+            </label>
+
+            <label class="auth-field">
+              <span>学号</span>
+              <input id="auth-student-id" name="studentId" type="text" inputmode="numeric" maxlength="10" placeholder="20开头10位" required />
+            </label>
+
+            <label class="auth-field">
+              <span>专业</span>
+              <button class="auth-major-fixed" id="auth-major-fixed" type="button">电子信息科学与技术</button>
+            </label>
+          </div>
+
+          <div class="auth-grid-row auth-grid-row-two">
+            <label class="auth-field">
+              <span>邮箱</span>
+              <input id="auth-email" name="email" type="email" autocomplete="email" required />
+            </label>
+
+            <label class="auth-field">
+              <span>邮箱验证码</span>
+              <div class="auth-inline">
+                <input id="auth-email-code" name="emailCode" type="text" inputmode="numeric" maxlength="6" placeholder="请输入6位验证码" required />
+                <button class="auth-inline-button" id="send-email-code" type="button">发送验证码</button>
+              </div>
+            </label>
+          </div>
+
+          <div class="auth-grid-row auth-grid-row-two">
+            <label class="auth-field">
+              <span>密码</span>
+              <input id="auth-password" name="password" type="password" autocomplete="new-password" required />
+            </label>
+
+            <label class="auth-field">
+              <span>确认密码</span>
+              <input id="auth-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" required />
+            </label>
+          </div>
+
+          <p class="auth-message" id="auth-message"></p>
+          <button class="auth-submit" id="auth-submit" type="submit">注册</button>
+        </form>
+        <p class="auth-page-switch">已经有账号？<a href="./login.html">去登录</a></p>
+      </section>
+    </main>
+    <script src="./auth.js"></script>
+  </body>
+</html>

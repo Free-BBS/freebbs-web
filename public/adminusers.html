@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FREE-BBS - 用户管理</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Noto+Serif+SC:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="adminusers-page">
+    <div class="page-shell page-shell-settings">
+      <header class="topbar">
+        <a class="brand" href="./index.html" aria-label="FREE-BBS 首页">
+          <span class="brand-mark">FREE-BBS</span>
+          <span class="brand-subtitle">Electronic Learning Platform</span>
+        </a>
+
+        <form class="searchbar" role="search">
+          <span class="search-symbol" aria-hidden="true">⌕</span>
+          <input type="search" placeholder="搜索课程、讨论、资料、地图坐标" aria-label="搜索" />
+        </form>
+
+        <nav class="nav-actions" aria-label="顶部导航">
+          <a class="nav-link" href="./index.html#map-section">
+            <img class="nav-icon" src="./assets/icons/map.svg" alt="" aria-hidden="true" />
+            <span>世界</span>
+          </a>
+          <a class="nav-link" href="./index.html#discussion">
+            <img class="nav-icon" src="./assets/icons/people.svg" alt="" aria-hidden="true" />
+            <span>讨论</span>
+          </a>
+          <a class="nav-link manage-link hidden" href="./adminusers.html">
+            <img class="nav-icon" src="./assets/icons/gear.svg" alt="" aria-hidden="true" />
+            <span>管理</span>
+          </a>
+
+          <div class="user-panel" id="user-panel">
+            <div class="user-summary">
+              <button class="avatar" type="button" aria-label="用户头像">
+                <img class="avatar-image" id="avatar-image" src="./assets/avatar_placeholder.png" alt="用户头像占位图" />
+              </button>
+              <div class="user-copy">
+                <button class="user-name" type="button" id="user-name">登录/注册</button>
+                <div class="user-role" id="user-role">学生</div>
+              </div>
+            </div>
+            <div class="user-status" id="user-status">
+              <span class="currency currency-electric" data-tooltip="电元" aria-label="电元">
+                <img class="currency-icon" src="./assets/icons/electron.svg" alt="电元" />
+                <span class="currency-value">-</span>
+              </span>
+              <span class="currency currency-magnetic" data-tooltip="磁元" aria-label="磁元">
+                <img class="currency-icon" src="./assets/icons/magnetron.svg" alt="磁元" />
+                <span class="currency-value">-</span>
+              </span>
+            </div>
+          </div>
+        </nav>
+      </header>
+
+      <main class="main-content settings-main">
+        <section class="settings-shell" aria-label="用户管理">
+          <div class="settings-header">
+            <h1>用户名单</h1>
+            <button class="admin-button admin-button-primary admin-add-button" id="admin-add-user" type="button">新增用户</button>
+          </div>
+
+          <section class="admin-section hidden" id="admin-section" aria-label="管理员功能区">
+            <p class="auth-message admin-message" id="admin-message"></p>
+            <div class="admin-users-table">
+              <div class="admin-users-head">
+                <span>用户名</span>
+                <span>姓名</span>
+                <span>学号</span>
+                <span>邮箱</span>
+                <span>角色</span>
+                <span>电元</span>
+                <span>磁元</span>
+                <span>操作</span>
+              </div>
+              <div class="admin-users" id="admin-users"></div>
+            </div>
+          </section>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <div class="footer-block footer-left">
+          <p>© Free-bbs 工作组 2026-2027</p>
+        </div>
+
+        <div class="footer-block footer-center">
+          <div class="footer-links">
+            <a href="#staff">工作人员名单</a>
+            <a href="https://www.tsinghua.edu.cn/" target="_blank" rel="noreferrer">清华大学电子系</a>
+            <a href="#association">电子系学生科协</a>
+          </div>
+          <p>&lt;xx备114514&gt;</p>
+        </div>
+
+        <div class="footer-block footer-right">
+          <p>Powered By Alicloud</p>
+        </div>
+      </footer>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
