@@ -1678,9 +1678,11 @@ h3,
 
   .nav-actions {
     position: fixed;
-    left: 12px;
-    right: 12px;
+    left: 50%;
+    right: auto;
+    width: min(calc(100vw - 24px), 560px);
     bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
     z-index: 160;
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
