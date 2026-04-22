@@ -104,7 +104,7 @@ function getFortuneResult() {
     };
   }
 
-  if (score >= 8) {
+  if (score >= 3) {
     return {
       score,
       date: getTodayKey(),
