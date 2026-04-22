@@ -58,11 +58,12 @@ jobs:
       - name: Package release
         run: |
           set -euo pipefail
+          ARCHIVE_PATH="/tmp/free-bbs-${GITHUB_SHA}.tar.gz"
           tar \
             --exclude='.git' \
             --exclude='node_modules' \
             --exclude='database/uploads' \
-            -czf "free-bbs-${GITHUB_SHA}.tar.gz" .
+            -czf "$ARCHIVE_PATH" .
 
       - name: Configure SSH
         run: |
@@ -77,7 +78,8 @@ jobs:
       - name: Upload release artifact
         run: |
           set -euo pipefail
-          scp -P "$DEPLOY_PORT" "free-bbs-${GITHUB_SHA}.tar.gz" "$DEPLOY_USER@$DEPLOY_HOST:/tmp/free-bbs-${GITHUB_SHA}.tar.gz"
+          ARCHIVE_PATH="/tmp/free-bbs-${GITHUB_SHA}.tar.gz"
+          scp -P "$DEPLOY_PORT" "$ARCHIVE_PATH" "$DEPLOY_USER@$DEPLOY_HOST:/tmp/free-bbs-${GITHUB_SHA}.tar.gz"
 
       - name: Deploy on app server
         run: |
