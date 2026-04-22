@@ -1136,6 +1136,16 @@ h3,
   text-transform: uppercase;
 }
 
+.fortune-tagline {
+  margin: 18px 0 0;
+  max-width: 320px;
+  color: rgba(232, 237, 243, 0.84);
+  font-family: var(--font-copy);
+  font-size: 1rem;
+  line-height: 1.7;
+  text-align: center;
+}
+
 .fortune-great {
   background: linear-gradient(135deg, #d8a742, #ffe59a);
   color: #3a2700;

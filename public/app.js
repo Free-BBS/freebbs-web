@@ -77,7 +77,8 @@ function getFortuneResult() {
       date: getTodayKey(),
       label: "大吉",
       colorClass: "fortune-great",
-      colorName: "金色"
+      colorName: "金色",
+      tagline: "Absolute legend 🤩"
     };
   }
 
@@ -87,7 +88,8 @@ function getFortuneResult() {
       date: getTodayKey(),
       label: "吉",
       colorClass: "fortune-good",
-      colorName: "红色"
+      colorName: "红色",
+      tagline: "闭眼写，随手推"
     };
   }
 
@@ -97,7 +99,8 @@ function getFortuneResult() {
       date: getTodayKey(),
       label: "平",
       colorClass: "fortune-neutral",
-      colorName: "白色"
+      colorName: "白色",
+      tagline: "人生是个泊松过程，一时的等待是为了下一次跳跃"
     };
   }
 
@@ -107,7 +110,8 @@ function getFortuneResult() {
       date: getTodayKey(),
       label: "凶",
       colorClass: "fortune-bad",
-      colorName: "绿色"
+      colorName: "绿色",
+      tagline: "六根清净方为稻，退步原来是向前"
     };
   }
 
@@ -116,7 +120,8 @@ function getFortuneResult() {
     date: getTodayKey(),
     label: "大凶",
     colorClass: "fortune-awful",
-    colorName: "黑色"
+    colorName: "黑色",
+    tagline: "前所未见，触目惊心。"
   };
 }
 
@@ -137,6 +142,7 @@ function ensureFortuneModal() {
       <h2 class="fortune-title" id="fortune-title">今日运势</h2>
       <p class="fortune-date" id="fortune-date"></p>
       <div class="fortune-badge" id="fortune-badge"></div>
+      <p class="fortune-tagline" id="fortune-tagline"></p>
     </section>
   `;
 
@@ -161,10 +167,12 @@ function openFortuneModal() {
   const result = getFortuneResult();
   const badge = modal.querySelector("#fortune-badge");
   const date = modal.querySelector("#fortune-date");
+  const tagline = modal.querySelector("#fortune-tagline");
 
   badge.className = `fortune-badge ${result.colorClass}`;
   badge.textContent = result.label;
   date.textContent = result.date;
+  tagline.textContent = result.tagline;
   modal.classList.remove("hidden");
 }
 
