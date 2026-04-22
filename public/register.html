@@ -19,34 +19,52 @@
         <form class="auth-form auth-form-register" id="auth-page-form" data-auth-mode="register">
           <div class="auth-grid-row auth-grid-row-four">
             <label class="auth-field">
-              <span>用户名</span>
+              <span class="auth-label">
+                <img class="auth-label-icon" src="./assets/icons/username.svg" alt="" aria-hidden="true" />
+                <span>用户名</span>
+              </span>
               <input id="auth-username" name="username" type="text" minlength="3" maxlength="64" required />
             </label>
 
             <label class="auth-field">
-              <span>姓名</span>
+              <span class="auth-label">
+                <img class="auth-label-icon" src="./assets/icons/username.svg" alt="" aria-hidden="true" />
+                <span>姓名</span>
+              </span>
               <input id="auth-full-name" name="fullName" type="text" maxlength="64" required />
             </label>
 
             <label class="auth-field">
-              <span>学号</span>
+              <span class="auth-label">
+                <img class="auth-label-icon" src="./assets/icons/id.svg" alt="" aria-hidden="true" />
+                <span>学号</span>
+              </span>
               <input id="auth-student-id" name="studentId" type="text" inputmode="numeric" maxlength="10" placeholder="20开头10位" required />
             </label>
 
             <label class="auth-field">
-              <span>专业</span>
+              <span class="auth-label">
+                <img class="auth-label-icon" src="./assets/icons/subject.svg" alt="" aria-hidden="true" />
+                <span>专业</span>
+              </span>
               <button class="auth-major-fixed" id="auth-major-fixed" type="button">电子信息科学与技术</button>
             </label>
           </div>
 
           <div class="auth-grid-row auth-grid-row-two">
             <label class="auth-field">
-              <span>邮箱</span>
+              <span class="auth-label">
+                <img class="auth-label-icon" src="./assets/icons/mail.svg" alt="" aria-hidden="true" />
+                <span>邮箱</span>
+              </span>
               <input id="auth-email" name="email" type="email" autocomplete="email" required />
             </label>
 
             <label class="auth-field">
-              <span>邮箱验证码</span>
+              <span class="auth-label">
+                <img class="auth-label-icon" src="./assets/icons/mail.svg" alt="" aria-hidden="true" />
+                <span>邮箱验证码</span>
+              </span>
               <div class="auth-inline">
                 <input id="auth-email-code" name="emailCode" type="text" inputmode="numeric" maxlength="6" placeholder="请输入6位验证码" required />
                 <button class="auth-inline-button" id="send-email-code" type="button">发送验证码</button>
@@ -56,12 +74,18 @@
 
           <div class="auth-grid-row auth-grid-row-two">
             <label class="auth-field">
-              <span>密码</span>
+              <span class="auth-label">
+                <img class="auth-label-icon" src="./assets/icons/key.svg" alt="" aria-hidden="true" />
+                <span>密码</span>
+              </span>
               <input id="auth-password" name="password" type="password" autocomplete="new-password" required />
             </label>
 
             <label class="auth-field">
-              <span>确认密码</span>
+              <span class="auth-label">
+                <img class="auth-label-icon" src="./assets/icons/key.svg" alt="" aria-hidden="true" />
+                <span>确认密码</span>
+              </span>
               <input id="auth-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" required />
             </label>
           </div>

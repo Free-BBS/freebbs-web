@@ -257,13 +257,16 @@ h3,
   width: 16px;
   height: 16px;
   flex: 0 0 auto;
-  filter: brightness(0) invert(1) opacity(0.76);
-  transition: filter 200ms ease, transform 200ms ease;
+  filter: brightness(0) invert(1) opacity(0.92);
+  transition: transform 200ms ease;
 }
 
 .nav-link:hover .nav-icon {
-  filter: brightness(0) invert(1) opacity(1);
   transform: scale(1.08);
+}
+
+.fortune-link .nav-icon {
+  filter: brightness(0) invert(1) opacity(0.92);
 }
 
 .user-panel {
@@ -814,6 +817,44 @@ h3,
   min-height: 100vh;
 }
 
+.world-stage {
+  min-height: calc(100vh - 220px);
+}
+
+.discussion-shell {
+  min-height: calc(100vh - 280px);
+  padding: 28px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(248, 243, 233, 0.12), rgba(248, 243, 233, 0.08));
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-stroke);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow);
+}
+
+.discussion-placeholder {
+  min-height: calc(100vh - 336px);
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  position: relative;
+}
+
+.discussion-line {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08), rgba(89, 216, 255, 0.24), rgba(255, 255, 255, 0.08));
+}
+
+.discussion-line-short {
+  width: 52%;
+}
+
+.discussion-line-medium {
+  width: 74%;
+}
+
 .map-placeholder {
   position: relative;
   min-height: 100vh;
@@ -997,6 +1038,101 @@ h3,
   display: none !important;
 }
 
+.fortune-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+}
+
+.fortune-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 10, 18, 0.62);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.fortune-panel {
+  position: relative;
+  z-index: 1;
+  width: min(100% - 32px, 460px);
+  margin: 10vh auto 0;
+  padding: 30px 28px 28px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(248, 243, 233, 0.13), rgba(248, 243, 233, 0.08));
+  border: 1px solid var(--glass-stroke);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 26px 60px rgba(4, 10, 18, 0.3);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  text-align: center;
+  animation: reveal-in 0.28s ease both;
+}
+
+.fortune-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  border: none;
+  background: transparent;
+  color: var(--paper);
+  font-size: 1.6rem;
+  cursor: pointer;
+}
+
+.fortune-title {
+  margin: 0;
+  font-size: 2rem;
+  color: var(--paper);
+}
+
+.fortune-date {
+  margin: 8px 0 20px;
+  color: var(--muted);
+  font-family: var(--font-ui);
+}
+
+.fortune-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 128px;
+  padding: 14px 24px;
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.fortune-great {
+  background: linear-gradient(135deg, #d8a742, #ffe59a);
+  color: #3a2700;
+}
+
+.fortune-good {
+  background: linear-gradient(135deg, #b93a3a, #ff6f5f);
+  color: #fff2ef;
+}
+
+.fortune-neutral {
+  background: linear-gradient(135deg, #e8e6df, #ffffff);
+  color: #182433;
+}
+
+.fortune-bad {
+  background: linear-gradient(135deg, #2f8f54, #66c27f);
+  color: #eefcf1;
+}
+
+.fortune-awful {
+  background: linear-gradient(135deg, #020202, #2c2c2c);
+  color: #f9f5ee;
+}
+
+
 .auth-modal {
   position: fixed;
   inset: 0;
@@ -1076,6 +1212,7 @@ h3,
 .auth-form {
   display: grid;
   gap: 14px;
+  font-family: var(--font-ui);
 }
 
 .auth-grid-row {
@@ -1097,6 +1234,20 @@ h3,
   font-size: 0.92rem;
   font-weight: 700;
   color: var(--ink);
+  font-family: var(--font-ui);
+}
+
+.auth-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-label-icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  filter: brightness(0) invert(1) opacity(0.84);
 }
 
 .auth-field input {
@@ -1213,12 +1364,14 @@ h3,
   font-size: clamp(2rem, 4vw, 3rem);
   line-height: 1;
   color: var(--ink);
+  text-align: center;
 }
 
 .auth-page-switch {
   margin: 20px 0 0;
   color: var(--ink);
   font-size: 0.95rem;
+  font-family: var(--font-ui);
 }
 
 .auth-page-switch a {

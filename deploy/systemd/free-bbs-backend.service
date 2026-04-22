@@ -1,0 +1,16 @@
+[Unit]
+Description=FREE-BBS backend
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/data/www/free-BBS
+EnvironmentFile=/etc/free-bbs/free-bbs.env
+ExecStart=/usr/bin/env npm run start:backend
+Restart=always
+RestartSec=5
+User=deploy
+Group=deploy
+
+[Install]
+WantedBy=multi-user.target

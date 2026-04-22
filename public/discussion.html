@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FREE-BBS - 个人设置</title>
+    <title>FREE-BBS - 讨论</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -12,7 +12,7 @@
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body>
+  <body class="discussion-page">
     <div class="page-shell page-shell-settings">
       <header class="topbar">
         <a class="brand" href="./index.html" aria-label="FREE-BBS 首页">
@@ -68,44 +68,18 @@
       </header>
 
       <main class="main-content settings-main">
-        <section class="settings-shell" aria-label="个人设置">
+        <section class="settings-shell" aria-label="讨论">
           <div class="settings-header">
-            <h1>个人设置</h1>
+            <h1>讨论</h1>
           </div>
-          <section class="settings-profile" aria-label="个人设置内容">
-            <form class="settings-form" id="settings-form">
-              <div class="settings-avatar-row">
-                <div class="settings-avatar-preview">
-                  <img class="settings-avatar-image" id="settings-avatar-image" src="./assets/avatar_placeholder.png" alt="当前头像" />
-                </div>
-                <div class="settings-avatar-copy">
-                  <h2>头像</h2>
-                  <p>支持 PNG、JPG、WEBP、GIF，大小不超过 5MB。</p>
-                  <label class="settings-upload-button" for="settings-avatar-input">上传新头像</label>
-                  <input class="hidden" id="settings-avatar-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
-                </div>
-              </div>
-
-              <div class="settings-grid">
-                <label class="auth-field">
-                  <span>姓名</span>
-                  <input id="settings-full-name" type="text" maxlength="64" required />
-                </label>
-
-                <label class="auth-field">
-                  <span>个人网页</span>
-                  <input id="settings-website-url" type="url" placeholder="https://example.com" />
-                </label>
-              </div>
-
-              <label class="auth-field">
-                <span>个人简介</span>
-                <textarea id="settings-bio" rows="6" maxlength="1000" placeholder="介绍一下你的研究方向、兴趣或正在做的项目"></textarea>
-              </label>
-
-              <p class="auth-message settings-message" id="settings-message"></p>
-              <button class="auth-submit" type="submit">保存设置</button>
-            </form>
+          <section class="discussion-shell" aria-label="讨论区">
+            <div class="discussion-placeholder">
+              <div class="discussion-line"></div>
+              <div class="discussion-line discussion-line-short"></div>
+              <div class="discussion-line"></div>
+              <div class="discussion-line discussion-line-medium"></div>
+              <div class="map-label">讨论区预留</div>
+            </div>
           </section>
         </section>
       </main>

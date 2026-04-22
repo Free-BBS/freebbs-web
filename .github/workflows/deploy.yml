@@ -1,0 +1,49 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: free-bbs-production
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Validate project
+        run: bash scripts/ci-validate.sh
+
+  deploy:
+    runs-on: self-hosted
+    needs: validate
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Deploy on app server
+        env:
+          DEPLOY_DIR: /data/www/free-BBS
+          FREE_BBS_ENV_FILE: /etc/free-bbs/free-bbs.env
+          FRONTEND_SERVICE_NAME: free-bbs-frontend
+          BACKEND_SERVICE_NAME: free-bbs-backend
+          RUN_DB_MIGRATIONS: "1"
+        run: bash scripts/deploy.sh

@@ -36,3 +36,15 @@ mysql -u root -p < database/seed.sql
 
 - username: `admin`
 - password: `free-bbs`
+
+## CI/CD
+
+仓库内已提供 GitHub Actions 自部署方案：
+
+- `.github/workflows/deploy.yml`
+- `scripts/ci-validate.sh`
+- `scripts/deploy.sh`
+- `scripts/migrate.sh`
+- `deploy/systemd/`
+
+完整部署说明见 `DEPLOYMENT.md`。

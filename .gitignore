@@ -71,8 +71,10 @@ web_modules/
 !.env.example
 envs.sh
 
-# Database files
-database/
+# Database runtime files
+database/uploads/
+*.sqlite
+*.sqlite3
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache

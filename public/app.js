@@ -12,6 +12,7 @@ const userState = {
   token: localStorage.getItem(STORAGE_KEY) || "",
   username: "",
   fullName: "",
+  studentId: "",
   avatarPath: "",
   bio: "",
   websiteUrl: "",
@@ -28,6 +29,7 @@ const adminUsers = document.getElementById("admin-users");
 const adminMessage = document.getElementById("admin-message");
 const adminAddUserButton = document.getElementById("admin-add-user");
 const manageLinks = document.querySelectorAll(".manage-link");
+const fortuneLinks = document.querySelectorAll(".fortune-link");
 const avatarImages = document.querySelectorAll(".avatar-image");
 const settingsForm = document.getElementById("settings-form");
 const settingsMessage = document.getElementById("settings-message");
@@ -39,6 +41,125 @@ const settingsAvatarImage = document.getElementById("settings-avatar-image");
 
 function getAvatarUrl(avatarPath) {
   return avatarPath ? `${API_ROOT}${avatarPath}` : DEFAULT_AVATAR;
+}
+
+function getTodayKey() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function hashFortuneSeed(seed) {
+  let hash = 2166136261;
+
+  for (const char of seed) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0);
+}
+
+function getFortuneResult() {
+  const score = hashFortuneSeed(`${userState.studentId}-${getTodayKey()}`) % 101;
+
+  if (score >= 90) {
+    return {
+      score,
+      date: getTodayKey(),
+      label: "大吉",
+      colorClass: "fortune-great",
+      colorName: "金色"
+    };
+  }
+
+  if (score >= 50) {
+    return {
+      score,
+      date: getTodayKey(),
+      label: "吉",
+      colorClass: "fortune-good",
+      colorName: "红色"
+    };
+  }
+
+  if (score >= 20) {
+    return {
+      score,
+      date: getTodayKey(),
+      label: "平",
+      colorClass: "fortune-neutral",
+      colorName: "白色"
+    };
+  }
+
+  if (score >= 8) {
+    return {
+      score,
+      date: getTodayKey(),
+      label: "凶",
+      colorClass: "fortune-bad",
+      colorName: "绿色"
+    };
+  }
+
+  return {
+    score,
+    date: getTodayKey(),
+    label: "大凶",
+    colorClass: "fortune-awful",
+    colorName: "黑色"
+  };
+}
+
+function ensureFortuneModal() {
+  let modal = document.getElementById("fortune-modal");
+
+  if (modal) {
+    return modal;
+  }
+
+  modal = document.createElement("div");
+  modal.id = "fortune-modal";
+  modal.className = "fortune-modal hidden";
+  modal.innerHTML = `
+    <div class="fortune-backdrop" data-action="close"></div>
+    <section class="fortune-panel" aria-labelledby="fortune-title">
+      <button class="fortune-close" type="button" data-action="close" aria-label="关闭">×</button>
+      <h2 class="fortune-title" id="fortune-title">今日运势</h2>
+      <p class="fortune-date" id="fortune-date"></p>
+      <div class="fortune-badge" id="fortune-badge"></div>
+    </section>
+  `;
+
+  document.body.append(modal);
+
+  modal.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-action='close']");
+    if (target) {
+      modal.classList.add("hidden");
+    }
+  });
+
+  return modal;
+}
+
+function openFortuneModal() {
+  if (!userState.isLoggedIn || !userState.studentId) {
+    return;
+  }
+
+  const modal = ensureFortuneModal();
+  const result = getFortuneResult();
+  const badge = modal.querySelector("#fortune-badge");
+  const date = modal.querySelector("#fortune-date");
+
+  badge.className = `fortune-badge ${result.colorClass}`;
+  badge.textContent = result.label;
+  date.textContent = result.date;
+  modal.classList.remove("hidden");
 }
 
 function escapeHtml(value) {
@@ -116,6 +237,7 @@ function saveSession(token, user) {
   userState.token = token;
   userState.username = user.username;
   userState.fullName = user.fullName || "";
+  userState.studentId = user.studentId || "";
   userState.role = user.role || "student";
   userState.avatarPath = user.avatarPath || "";
   userState.bio = user.bio || "";
@@ -133,6 +255,7 @@ function clearSession() {
   userState.token = "";
   userState.username = "";
   userState.fullName = "";
+  userState.studentId = "";
   userState.role = "";
   userState.avatarPath = "";
   userState.bio = "";
@@ -293,9 +416,14 @@ async function loadAdminUsers() {
 
 function renderAdminSection() {
   const isAdmin = userState.isLoggedIn && userState.role === "admin";
+  const showFortune = userState.isLoggedIn && Boolean(userState.studentId);
 
   manageLinks.forEach((link) => {
     link.classList.toggle("hidden", !isAdmin);
+  });
+
+  fortuneLinks.forEach((link) => {
+    link.classList.toggle("hidden", !showFortune);
   });
 
   if (!adminSection) {
@@ -490,10 +618,21 @@ async function handleAdminUsersClick(event) {
 
 userName.addEventListener("click", handleAuthEntry);
 avatarButton.addEventListener("click", handleAvatarClick);
+fortuneLinks.forEach((link) => {
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    openFortuneModal();
+  });
+});
 adminAddUserButton?.addEventListener("click", insertAdminDraftRow);
 adminUsers?.addEventListener("click", handleAdminUsersClick);
 settingsForm?.addEventListener("submit", handleSettingsSubmit);
 settingsAvatarInput?.addEventListener("change", handleAvatarUpload);
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    document.getElementById("fortune-modal")?.classList.add("hidden");
+  }
+});
 renderUser();
 restoreSession();
 renderAdminSection();
