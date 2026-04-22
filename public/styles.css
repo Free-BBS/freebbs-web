@@ -97,6 +97,25 @@ body::after {
   mix-blend-mode: soft-light;
 }
 
+.home-page {
+  background:
+    linear-gradient(140deg, rgba(7, 11, 18, 0.76), rgba(10, 18, 27, 0.66)),
+    #0c1320;
+}
+
+.home-page::before {
+  background:
+    linear-gradient(135deg, rgba(5, 10, 18, 0.68), rgba(9, 16, 24, 0.46)),
+    url("./assets/homebg.png") center center / cover no-repeat;
+  filter: none;
+  inset: 0;
+  animation: none;
+}
+
+.home-page::after {
+  opacity: 0.52;
+}
+
 a {
   color: inherit;
   text-decoration: none;
