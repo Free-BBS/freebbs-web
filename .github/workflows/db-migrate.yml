@@ -1,50 +1,25 @@
-name: Deploy
+name: Database Migration
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
-      run_db_migrations:
-        description: "Run database migrations during deploy"
-        required: false
-        default: false
-        type: boolean
+      confirm_production_database:
+        description: "Type RUN to execute production database scripts"
+        required: true
+        type: string
 
 concurrency:
-  group: free-bbs-production
-  cancel-in-progress: true
+  group: free-bbs-production-db
+  cancel-in-progress: false
 
 jobs:
-  validate:
+  migrate:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Validate project
-        run: bash scripts/ci-validate.sh
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: validate
     env:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/data/www/free-BBS' }}
       ENV_FILE: ${{ vars.FREE_BBS_ENV_FILE || '/etc/free-bbs/free-bbs.env' }}
-      FRONTEND_SERVICE_NAME: ${{ vars.FRONTEND_SERVICE_NAME || 'free-bbs-frontend' }}
-      BACKEND_SERVICE_NAME: ${{ vars.BACKEND_SERVICE_NAME || 'free-bbs-backend' }}
-      HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL || 'http://127.0.0.1:3001/api/health' }}
-      RUN_DB_MIGRATIONS: ${{ github.event_name == 'workflow_dispatch' && inputs.run_db_migrations && '1' || '0' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,6 +29,16 @@ jobs:
         with:
           node-version: 20
           cache: npm
+
+      - name: Validate confirmation
+        run: |
+          if [[ "${{ inputs.confirm_production_database }}" != "RUN" ]]; then
+            echo "Refusing to run database migration without explicit RUN confirmation." >&2
+            exit 1
+          fi
+
+      - name: Validate project
+        run: bash scripts/ci-validate.sh
 
       - name: Package release
         run: |
@@ -79,21 +64,19 @@ jobs:
           set -euo pipefail
           scp -P "$DEPLOY_PORT" "free-bbs-${GITHUB_SHA}.tar.gz" "$DEPLOY_USER@$DEPLOY_HOST:/tmp/free-bbs-${GITHUB_SHA}.tar.gz"
 
-      - name: Deploy on app server
+      - name: Run database migration remotely
         run: |
           set -euo pipefail
           ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -euo pipefail; \
-             RELEASE_DIR=/tmp/free-bbs-release-${GITHUB_SHA}; \
+             RELEASE_DIR=/tmp/free-bbs-db-${GITHUB_SHA}; \
              rm -rf \"\$RELEASE_DIR\"; \
              mkdir -p \"\$RELEASE_DIR\"; \
              tar -xzf /tmp/free-bbs-${GITHUB_SHA}.tar.gz -C \"\$RELEASE_DIR\"; \
              cd \"\$RELEASE_DIR\"; \
-             DEPLOY_DIR='$DEPLOY_PATH' \
-             FREE_BBS_ENV_FILE='$ENV_FILE' \
-             FRONTEND_SERVICE_NAME='$FRONTEND_SERVICE_NAME' \
-             BACKEND_SERVICE_NAME='$BACKEND_SERVICE_NAME' \
-             RUN_DB_MIGRATIONS='$RUN_DB_MIGRATIONS' \
-             HEALTHCHECK_URL='$HEALTHCHECK_URL' \
-             bash scripts/deploy.sh; \
+             if [[ ! -f '$ENV_FILE' ]]; then echo 'missing env file: $ENV_FILE' >&2; exit 1; fi; \
+             set -a; \
+             . '$ENV_FILE'; \
+             set +a; \
+             bash scripts/migrate.sh; \
              rm -rf \"\$RELEASE_DIR\" /tmp/free-bbs-${GITHUB_SHA}.tar.gz"

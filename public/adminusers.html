@@ -76,6 +76,13 @@
 
           <section class="admin-section hidden" id="admin-section" aria-label="管理员功能区">
             <p class="auth-message admin-message" id="admin-message"></p>
+            <section class="admin-tools" aria-label="运势控制">
+              <label class="admin-toggle" for="fortune-bonus-toggle">
+                <input id="fortune-bonus-toggle" type="checkbox" />
+                <span>运势加成开关</span>
+              </label>
+              <p class="admin-tools-copy">打开后，每次运势计算都会额外执行 `score += 20`。</p>
+            </section>
             <div class="admin-users-table">
               <div class="admin-users-head">
                 <span>用户名</span>

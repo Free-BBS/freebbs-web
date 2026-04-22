@@ -19,4 +19,7 @@ test -f public/world.html
 test -f public/discussion.html
 test -f backend/server.js
 
+echo "[ci] checking database scripts for destructive statements"
+bash scripts/assert-safe-sql.sh
+
 echo "[ci] done"

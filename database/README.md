@@ -16,32 +16,38 @@ SOURCE database/seed.sql;
 
 默认数据库名为 `free_bbs`。
 
-如果你已经跑过旧版本数据库，需要补以下结构：
+更推荐使用增量迁移脚本：
 
-```sql
-ALTER TABLE users ADD COLUMN email_verified_at DATETIME NULL;
-ALTER TABLE users ADD COLUMN full_name VARCHAR(64) NOT NULL DEFAULT '' AFTER username;
-ALTER TABLE users ADD COLUMN student_id VARCHAR(10) NOT NULL DEFAULT '' AFTER full_name;
-ALTER TABLE users ADD COLUMN electrons BIGINT NOT NULL DEFAULT 0 AFTER role;
-ALTER TABLE users ADD COLUMN manetrons BIGINT NOT NULL DEFAULT 0 AFTER electrons;
-ALTER TABLE users ADD COLUMN avatar_path VARCHAR(255) NULL AFTER major;
-ALTER TABLE users ADD COLUMN bio TEXT NULL AFTER avatar_path;
-ALTER TABLE users ADD COLUMN website_url VARCHAR(255) NULL AFTER bio;
-ALTER TABLE users ADD UNIQUE KEY uniq_users_student_id (student_id);
-
-CREATE TABLE email_verification_codes (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  email VARCHAR(128) NOT NULL,
-  code_hash VARCHAR(64) NOT NULL,
-  expires_at DATETIME NOT NULL,
-  used_at DATETIME NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_email_verification_codes_email (email),
-  INDEX idx_email_verification_codes_expires_at (expires_at)
-);
+```bash
+export BACKEND_IP=127.0.0.1
+export MYSQL_PORT=3306
+export MYSQL_USER=root
+export MYSQL_PASSWORD=your-password
+export MYSQL_DATABASE=free_bbs
+bash scripts/migrate.sh
 ```
 
 系统会预置管理员账户：
 
 - 用户名：`admin`
 - 密码：`free-bbs`
+
+## Migrations
+
+- `database/schema.sql` 和 `database/seed.sql` 用于全新初始化
+- `database/migrations/*.sql` 用于生产增量迁移
+- `scripts/migrate.sh` 会自动创建 `schema_migrations` 表，并且只执行未执行过的迁移文件
+
+新增数据库列时，新增一个按时间或顺序递增命名的迁移文件，例如：
+
+```sql
+ALTER TABLE users
+  ADD COLUMN bio TEXT NULL,
+  ADD COLUMN website_url VARCHAR(255) NULL;
+```
+
+建议命名格式：
+
+- `001_init_schema.sql`
+- `002_seed_admin.sql`
+- `003_add_user_profile_fields.sql`

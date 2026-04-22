@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "start:frontend": "node server.js",
-    "start:backend": "node backend/server.js"
+    "start:backend": "node backend/server.js",
+    "testbench:fortune": "node test/testbench.js"
   },
   "dependencies": {
     "express": "^4.21.2",

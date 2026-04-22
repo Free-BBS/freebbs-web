@@ -6,7 +6,8 @@ DEPLOY_DIR="${DEPLOY_DIR:-/data/www/free-BBS}"
 ENV_FILE="${FREE_BBS_ENV_FILE:-/etc/free-bbs/free-bbs.env}"
 FRONTEND_SERVICE_NAME="${FRONTEND_SERVICE_NAME:-free-bbs-frontend}"
 BACKEND_SERVICE_NAME="${BACKEND_SERVICE_NAME:-free-bbs-backend}"
-RUN_DB_MIGRATIONS="${RUN_DB_MIGRATIONS:-1}"
+RUN_DB_MIGRATIONS="${RUN_DB_MIGRATIONS:-0}"
+HEALTHCHECK_URL="${HEALTHCHECK_URL:-http://127.0.0.1:3001/api/health}"
 
 mkdir -p "$DEPLOY_DIR"
 
@@ -35,6 +36,8 @@ fi
 
 if [[ "$RUN_DB_MIGRATIONS" == "1" ]]; then
   bash scripts/migrate.sh
+else
+  echo "[deploy] skipping database migrations"
 fi
 
 echo "[deploy] restarting services"
@@ -42,5 +45,8 @@ sudo systemctl restart "$FRONTEND_SERVICE_NAME"
 sudo systemctl restart "$BACKEND_SERVICE_NAME"
 sudo systemctl --no-pager --full status "$FRONTEND_SERVICE_NAME"
 sudo systemctl --no-pager --full status "$BACKEND_SERVICE_NAME"
+
+echo "[deploy] checking backend health: $HEALTHCHECK_URL"
+curl --fail --silent --show-error "$HEALTHCHECK_URL" >/dev/null
 
 echo "[deploy] done"

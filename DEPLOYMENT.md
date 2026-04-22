@@ -2,8 +2,9 @@
 
 本项目采用一台应用服务器 + 一台数据服务器的部署方式。
 
-- GitHub Actions runner 运行在应用服务器上
-- 应用服务器拉代码、校验、部署、重启服务
+- GitHub Actions 运行在 GitHub 托管 runner 上
+- GitHub Actions 通过 SSH 把发布包上传到应用服务器
+- 应用服务器本地执行部署、重启服务
 - 数据服务器只允许来自应用服务器 IP 的 MySQL 连接
 
 ## 1. 网络结构
@@ -115,27 +116,18 @@ sudo systemctl enable free-bbs-backend
 
 注意：service 文件里默认使用 `deploy` 用户。如果你的实际部署用户不同，要同步修改。
 
-## 5. GitHub Actions Runner
+## 5. GitHub Actions SSH 部署
 
-在应用服务器上，用 `deploy` 用户安装 GitHub self-hosted runner。
+GitHub Actions 不再需要安装 self-hosted runner。
 
-在 GitHub 仓库：
-
-- `Settings`
-- `Actions`
-- `Runners`
-- `New self-hosted runner`
-
-按页面给出的命令在应用服务器执行即可。
-
-Runner 需要具备：
+应用服务器需要具备：
 
 - 读写 `/data/www/free-BBS`
 - 读取 `/etc/free-bbs/free-bbs.env`
 - 执行 `sudo systemctl restart free-bbs-frontend`
 - 执行 `sudo systemctl restart free-bbs-backend`
 
-建议给 runner 用户单独加 sudoers：
+建议给部署用户单独加 sudoers：
 
 ```bash
 sudo visudo -f /etc/sudoers.d/free-bbs-runner
@@ -149,35 +141,69 @@ deploy ALL=NOPASSWD:/bin/systemctl restart free-bbs-frontend,/bin/systemctl rest
 
 如果你的 `systemctl` 路径不同，用 `which systemctl` 确认后再写。
 
+然后为 GitHub Actions 准备 SSH 登录：
+
+```bash
+sudo -u deploy mkdir -p /home/deploy/.ssh
+sudo -u deploy chmod 700 /home/deploy/.ssh
+sudo -u deploy ssh-keygen -t ed25519 -f /home/deploy/.ssh/github-actions -C "github-actions@free-bbs"
+sudo -u deploy cat /home/deploy/.ssh/github-actions.pub
+```
+
+把公钥追加到服务器上的 `~deploy/.ssh/authorized_keys`：
+
+```bash
+sudo -u deploy sh -c 'cat /home/deploy/.ssh/github-actions.pub >> /home/deploy/.ssh/authorized_keys'
+sudo -u deploy chmod 600 /home/deploy/.ssh/authorized_keys
+```
+
+把私钥内容保存到 GitHub 仓库的 `Settings -> Secrets and variables -> Actions`：
+
+- `DEPLOY_HOST`: 应用服务器 IP 或域名
+- `DEPLOY_USER`: `deploy`
+- `DEPLOY_SSH_KEY`: `/home/deploy/.ssh/github-actions` 私钥全文
+
+建议再配置以下 repository variables：
+
+- `DEPLOY_PORT`: `22`
+- `DEPLOY_PATH`: `/data/www/free-BBS`
+- `FREE_BBS_ENV_FILE`: `/etc/free-bbs/free-bbs.env`
+- `FRONTEND_SERVICE_NAME`: `free-bbs-frontend`
+- `BACKEND_SERVICE_NAME`: `free-bbs-backend`
+- `HEALTHCHECK_URL`: `http://127.0.0.1:3001/api/health`
+
 ## 6. GitHub Workflow
 
 仓库里已经提供：
 
 - `.github/workflows/deploy.yml`
+- `.github/workflows/db-migrate.yml`
 - `scripts/ci-validate.sh`
 - `scripts/deploy.sh`
 - `scripts/migrate.sh`
 
 工作流逻辑：
 
-1. 在应用服务器 runner 上 checkout 代码
+1. GitHub 托管 runner checkout 代码
 2. 执行 `npm ci`
 3. 做语法和必要文件检查
-4. 同步代码到 `/data/www/free-BBS`
-5. 重新安装依赖
-6. 读取 `/etc/free-bbs/free-bbs.env`
-7. 从应用服务器连接数据服务器执行 `schema.sql` 和 `seed.sql`
-8. 重启前后端服务
+4. 打包代码并通过 SSH 上传到应用服务器
+5. 应用服务器解压发布包并同步到 `/data/www/free-BBS`
+6. 重新安装依赖
+7. 读取 `/etc/free-bbs/free-bbs.env`
+8. 默认不执行数据库 SQL，只重启前后端服务并做健康检查
+
+数据库变更需要手动触发 `.github/workflows/db-migrate.yml`，并在输入框里明确填写 `RUN`。迁移脚本会执行 `database/migrations/*.sql` 中尚未执行过的文件，而不是反复重跑整份初始化 SQL。
 
 ## 7. 数据服务器为什么只需要放行应用服务器
 
-因为 workflow 并不是 GitHub 云端 runner 在直接连数据库。
+因为数据库迁移仍然是在应用服务器上执行。
 
 真实链路是：
 
 - GitHub 触发 workflow
-- 应用服务器上的 self-hosted runner 接任务
-- runner 在应用服务器本机执行 `mysql -h DATA_SERVER_IP ...`
+- GitHub 托管 runner 通过 SSH 登录应用服务器
+- 应用服务器本机执行 `mysql -h DATA_SERVER_IP ...`
 
 所以数据服务器只需要相信应用服务器 IP，不需要相信 GitHub 的公网 IP 段。
 

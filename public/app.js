@@ -19,7 +19,8 @@ const userState = {
   bio: "",
   websiteUrl: "",
   electrons: 0,
-  manetrons: 0
+  manetrons: 0,
+  fortuneBonusEnabled: false
 };
 
 const userName = document.getElementById("user-name");
@@ -30,6 +31,7 @@ const adminSection = document.getElementById("admin-section");
 const adminUsers = document.getElementById("admin-users");
 const adminMessage = document.getElementById("admin-message");
 const adminAddUserButton = document.getElementById("admin-add-user");
+const fortuneBonusToggle = document.getElementById("fortune-bonus-toggle");
 const manageLinks = document.querySelectorAll(".manage-link");
 const fortuneLinks = document.querySelectorAll(".fortune-link");
 const avatarImages = document.querySelectorAll(".avatar-image");
@@ -65,7 +67,9 @@ function hashFortuneSeed(seed) {
 }
 
 function getFortuneResult() {
-  const score = hashFortuneSeed(`${userState.studentId}-${getTodayKey()}`) % 101;
+  const score =
+    (hashFortuneSeed(`${userState.studentId}-${getTodayKey()}`) % 101) +
+    (userState.fortuneBonusEnabled ? 20 : 0);
 
   if (score >= 90) {
     return {
@@ -313,6 +317,22 @@ async function restoreSession() {
   }
 }
 
+async function loadFortuneConfig() {
+  try {
+    const payload = await callApi("/fortune-config", {
+      method: "GET"
+    });
+
+    userState.fortuneBonusEnabled = Boolean(payload.fortuneBonusEnabled);
+  } catch {
+    userState.fortuneBonusEnabled = false;
+  }
+
+  if (fortuneBonusToggle) {
+    fortuneBonusToggle.checked = userState.fortuneBonusEnabled;
+  }
+}
+
 function isSettingsPage() {
   return window.location.pathname.endsWith("/settings.html");
 }
@@ -433,6 +453,11 @@ function renderAdminSection() {
   }
 
   adminSection.classList.toggle("hidden", !isAdmin);
+
+  if (fortuneBonusToggle) {
+    fortuneBonusToggle.checked = userState.fortuneBonusEnabled;
+    fortuneBonusToggle.disabled = !isAdmin;
+  }
 
   if (isAdmin && isAdminUsersPage()) {
     loadAdminUsers();
@@ -618,6 +643,34 @@ async function handleAdminUsersClick(event) {
   }
 }
 
+async function handleFortuneBonusToggle(event) {
+  if (!isAdminUsersPage() || userState.role !== "admin" || !fortuneBonusToggle) {
+    return;
+  }
+
+  const enabled = event.target.checked;
+  fortuneBonusToggle.disabled = true;
+  setAdminMessage("正在更新运势开关...");
+
+  try {
+    const payload = await callApi("/admin/fortune-config", {
+      method: "PATCH",
+      body: JSON.stringify({
+        fortuneBonusEnabled: enabled
+      })
+    });
+
+    userState.fortuneBonusEnabled = Boolean(payload.fortuneBonusEnabled);
+    fortuneBonusToggle.checked = userState.fortuneBonusEnabled;
+    setAdminMessage(userState.fortuneBonusEnabled ? "运势加成已开启" : "运势加成已关闭");
+  } catch (error) {
+    fortuneBonusToggle.checked = userState.fortuneBonusEnabled;
+    setAdminMessage(error.message);
+  } finally {
+    fortuneBonusToggle.disabled = false;
+  }
+}
+
 userName.addEventListener("click", handleAuthEntry);
 avatarButton.addEventListener("click", handleAvatarClick);
 fortuneLinks.forEach((link) => {
@@ -628,6 +681,7 @@ fortuneLinks.forEach((link) => {
 });
 adminAddUserButton?.addEventListener("click", insertAdminDraftRow);
 adminUsers?.addEventListener("click", handleAdminUsersClick);
+fortuneBonusToggle?.addEventListener("change", handleFortuneBonusToggle);
 settingsForm?.addEventListener("submit", handleSettingsSubmit);
 settingsAvatarInput?.addEventListener("change", handleAvatarUpload);
 window.addEventListener("keydown", (event) => {
@@ -636,6 +690,7 @@ window.addEventListener("keydown", (event) => {
   }
 });
 renderUser();
+loadFortuneConfig();
 restoreSession();
 renderAdminSection();
 renderSettingsForm();

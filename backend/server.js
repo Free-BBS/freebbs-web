@@ -9,6 +9,7 @@ const { sendVerificationCode } = require("./mailer");
 const { CODE_TTL_MINUTES, buildExpiryDate, generateEmailCode, hashCode } = require("./verification");
 
 const app = express();
+const FORTUNE_BONUS_KEY = "fortune_bonus_enabled";
 
 fs.mkdirSync(config.uploadDir, { recursive: true });
 
@@ -27,6 +28,41 @@ app.use((request, response, next) => {
 });
 
 app.use("/uploads", express.static(config.uploadDir));
+
+async function ensureAppSettingsTable() {
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS app_settings (
+      setting_key VARCHAR(64) PRIMARY KEY,
+      setting_value VARCHAR(255) NOT NULL,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )`
+  );
+}
+
+async function getAppSetting(key, defaultValue = "") {
+  const [rows] = await pool.execute(
+    `SELECT setting_value
+     FROM app_settings
+     WHERE setting_key = ?
+     LIMIT 1`,
+    [key]
+  );
+
+  return rows[0]?.setting_value ?? defaultValue;
+}
+
+async function setAppSetting(key, value) {
+  await pool.execute(
+    `INSERT INTO app_settings (setting_key, setting_value)
+     VALUES (?, ?)
+     ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)`,
+    [key, String(value)]
+  );
+}
+
+async function getFortuneBonusEnabled() {
+  return (await getAppSetting(FORTUNE_BONUS_KEY, "0")) === "1";
+}
 
 function toUserProfile(row) {
   return {
@@ -158,6 +194,16 @@ app.get("/api/health", async (_request, response) => {
       message: "Database connection failed",
       detail: error.message
     });
+  }
+});
+
+app.get("/api/fortune-config", async (_request, response) => {
+  try {
+    response.json({
+      fortuneBonusEnabled: await getFortuneBonusEnabled()
+    });
+  } catch (error) {
+    response.status(500).json({ message: "获取运势配置失败", detail: error.message });
   }
 });
 
@@ -472,6 +518,25 @@ app.get("/api/admin/users", async (request, response) => {
   }
 });
 
+app.patch("/api/admin/fortune-config", async (request, response) => {
+  try {
+    const adminUser = await requireAdmin(request, response);
+
+    if (!adminUser) {
+      return;
+    }
+
+    const fortuneBonusEnabled = Boolean(request.body.fortuneBonusEnabled);
+    await setAppSetting(FORTUNE_BONUS_KEY, fortuneBonusEnabled ? "1" : "0");
+
+    response.json({
+      fortuneBonusEnabled
+    });
+  } catch (error) {
+    response.status(500).json({ message: "更新运势配置失败", detail: error.message });
+  }
+});
+
 app.post("/api/admin/users", async (request, response) => {
   try {
     const adminUser = await requireAdmin(request, response);
@@ -646,7 +711,16 @@ app.delete("/api/admin/users/:id", async (request, response) => {
   }
 });
 
-app.listen(config.apiPort, config.apiHost, () => {
-  console.log(`FREE-BBS backend running at http://${config.apiHost}:${config.apiPort}`);
-  console.log(`MySQL target: ${config.db.host}:${config.db.port}/${config.db.database}`);
+async function start() {
+  await ensureAppSettingsTable();
+
+  app.listen(config.apiPort, config.apiHost, () => {
+    console.log(`FREE-BBS backend running at http://${config.apiHost}:${config.apiPort}`);
+    console.log(`MySQL target: ${config.db.host}:${config.db.port}/${config.db.database}`);
+  });
+}
+
+start().catch((error) => {
+  console.error("Failed to start backend", error);
+  process.exit(1);
 });
