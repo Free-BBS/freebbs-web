@@ -1893,7 +1893,8 @@ h3,
   }
 
   .auth-inline {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
   }
 
   .auth-grid-row-two,
