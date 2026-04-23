@@ -1165,6 +1165,10 @@ h3,
   gap: 22px;
 }
 
+.discussion-layout:not(.is-detail-view) .discussion-detail {
+  display: none;
+}
+
 .discussion-layout.is-detail-view .discussion-feed,
 .discussion-layout.is-detail-view .discussion-stats-sidebar {
   display: none;
@@ -1683,18 +1687,16 @@ h3,
   grid-template-columns: 1fr 1.2fr 1fr;
   align-items: center;
   gap: 16px;
-  padding: 22px 28px 14px;
+  padding: 22px 0 14px;
   margin: 0 0 -24px;
-  border: 1px solid var(--glass-stroke);
-  border-radius: var(--radius-lg);
-  background:
-    linear-gradient(145deg, rgba(248, 243, 233, 0.12), rgba(248, 243, 233, 0.06));
+  border: none;
+  border-radius: 0;
+  background: transparent;
   color: var(--paper);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    0 18px 40px rgba(3, 8, 16, 0.18);
+  font-family: var(--font-ui);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
 }
 
 .footer-block p {
@@ -2408,6 +2410,10 @@ h3,
     border-radius: 28px;
   }
 
+  .discussion-stats-section:nth-of-type(n + 3) {
+    display: none;
+  }
+
   .discussion-compose-grid {
     grid-template-columns: 1fr;
   }
@@ -2549,7 +2555,13 @@ h3,
   }
 
   .discussion-post-card {
-    grid-template-columns: 42px minmax(0, 1fr);
+    grid-template-columns: 64px minmax(0, 1fr);
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
+    margin-left: -14px;
+    margin-right: -14px;
+    width: calc(100% + 28px);
   }
 
   .discussion-post-open {
@@ -2560,13 +2572,52 @@ h3,
     padding: 14px 12px;
   }
 
+  .discussion-post-author {
+    padding: 12px 6px;
+  }
+
+  .discussion-like-button {
+    padding: 6px 4px;
+  }
+
   .discussion-post-card-meta {
     justify-content: flex-start;
     text-align: left;
   }
 
   .discussion-board-list {
-    display: grid;
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .discussion-board-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .discussion-stats-sidebar {
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .discussion-stats-section {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  .discussion-stats-section:first-child h2,
+  .discussion-stats-section:first-child .discussion-kicker {
+    display: none;
+  }
+
+  .discussion-board-chip {
+    width: auto;
+    min-width: 72px;
+    flex: 0 0 auto;
+    justify-content: center;
+    border-radius: 999px;
+    padding: 10px 14px;
   }
 
   .hero-image-frame {
