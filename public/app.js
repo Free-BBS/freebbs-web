@@ -42,6 +42,7 @@ const settingsBio = document.getElementById("settings-bio");
 const settingsWebsiteUrl = document.getElementById("settings-website-url");
 const settingsAvatarInput = document.getElementById("settings-avatar-input");
 const settingsAvatarImage = document.getElementById("settings-avatar-image");
+const settingsLogoutButton = document.getElementById("settings-logout-button");
 
 function getAvatarUrl(avatarPath) {
   return avatarPath ? `${API_ROOT}${avatarPath}` : DEFAULT_AVATAR;
@@ -505,6 +506,17 @@ function handleAvatarClick() {
   }
 }
 
+function handleSettingsLogout() {
+  if (!isSettingsPage() || !userState.isLoggedIn) {
+    return;
+  }
+
+  if (window.confirm(`确认退出 ${userState.fullName || userState.username}？`)) {
+    clearSession();
+    window.location.href = "./index.html";
+  }
+}
+
 async function handleSettingsSubmit(event) {
   if (!isSettingsPage()) {
     return;
@@ -692,6 +704,7 @@ adminUsers?.addEventListener("click", handleAdminUsersClick);
 fortuneBonusToggle?.addEventListener("change", handleFortuneBonusToggle);
 settingsForm?.addEventListener("submit", handleSettingsSubmit);
 settingsAvatarInput?.addEventListener("change", handleAvatarUpload);
+settingsLogoutButton?.addEventListener("click", handleSettingsLogout);
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     document.getElementById("fortune-modal")?.classList.add("hidden");
