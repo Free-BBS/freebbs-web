@@ -1417,8 +1417,9 @@ h3,
 
 .auth-page-body {
   min-height: 100vh;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   padding: 24px;
 }
 
@@ -1426,6 +1427,7 @@ h3,
   width: 100%;
   display: grid;
   place-items: center;
+  flex: 1;
 }
 
 .auth-page-panel {
