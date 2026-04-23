@@ -1,6 +1,14 @@
 const API_BASE_URL = (() => {
-  if (window.location.protocol === "file:") {
-    return "http://127.0.0.1:3001/api";
+  const isLocalFrontend =
+    window.location.protocol === "file:" ||
+    ["localhost", "127.0.0.1", "0.0.0.0"].includes(window.location.hostname) ||
+    window.location.port === "3000";
+
+  if (isLocalFrontend) {
+    const host = window.location.hostname && window.location.protocol !== "file:" && window.location.hostname !== "0.0.0.0"
+      ? window.location.hostname
+      : "127.0.0.1";
+    return `http://${host}:3001/api`;
   }
 
   return `${window.location.origin}/api`;
@@ -43,6 +51,67 @@ const settingsWebsiteUrl = document.getElementById("settings-website-url");
 const settingsAvatarInput = document.getElementById("settings-avatar-input");
 const settingsAvatarImage = document.getElementById("settings-avatar-image");
 const settingsLogoutButton = document.getElementById("settings-logout-button");
+const homeDiscussionList = document.getElementById("home-discussion-list");
+const discussionLayout = document.querySelector(".discussion-layout");
+const discussionBoardList = document.getElementById("discussion-board-list");
+const discussionPostList = document.getElementById("discussion-post-list");
+const discussionDetail = document.getElementById("discussion-detail");
+const discussionCreateToggle = document.getElementById("discussion-create-toggle");
+const discussionComposeForm = document.getElementById("discussion-compose-form");
+const discussionComposeBoard = document.getElementById("discussion-compose-board");
+const discussionComposeTitle = document.getElementById("discussion-compose-title");
+const discussionComposeContent = document.getElementById("discussion-compose-content");
+const discussionComposeMessage = document.getElementById("discussion-compose-message");
+const discussionStatsPosts = document.getElementById("discussion-stats-posts");
+const discussionStatsLikes = document.getElementById("discussion-stats-likes");
+const discussionState = {
+  boards: [],
+  posts: [],
+  activeBoard: "all",
+  activePostId: 0,
+  isFallback: false,
+  activePost: null,
+  comments: []
+};
+const FALLBACK_DISCUSSION_BOARDS = [
+  {
+    id: -1,
+    slug: "daily",
+    name: "日常",
+    description: "本地测试版块",
+    sortOrder: 10
+  }
+];
+const FALLBACK_DISCUSSION_POST = {
+  id: -1,
+  title: "测试帖子",
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  board: {
+    slug: "daily",
+    name: "日常"
+  },
+  author: {
+    id: -1,
+    username: "admin",
+    fullName: "管理员",
+    displayName: "管理员",
+    studentId: "0000000000",
+    avatarPath: ""
+  },
+  likeCount: 0,
+  commentCount: 0,
+  likedByMe: false,
+  contentMarkdown: [
+    "这是一篇本地测试帖子，用于接口请求失败时占位。",
+    "",
+    "支持 **Markdown**，也支持 KaTeX：$E=mc^2$。",
+    "",
+    "$$",
+    "\\int_0^1 x^2\\,dx = \\frac{1}{3}",
+    "$$"
+  ].join("\n")
+};
 
 function getAvatarUrl(avatarPath) {
   return avatarPath ? `${API_ROOT}${avatarPath}` : DEFAULT_AVATAR;
@@ -198,6 +267,44 @@ function renderCurrency(type, value) {
   `;
 }
 
+function formatDateTime(value) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+}
+
+function formatDateOnly(value) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
+}
+
 function renderUser() {
   if (!userState.isLoggedIn) {
     userName.textContent = "登录/注册";
@@ -211,6 +318,7 @@ function renderUser() {
     avatarImages.forEach((image) => {
       image.src = DEFAULT_AVATAR;
     });
+    renderDiscussionComposerState();
     return;
   }
 
@@ -229,6 +337,8 @@ function renderUser() {
   if (settingsAvatarImage) {
     settingsAvatarImage.src = getAvatarUrl(userState.avatarPath);
   }
+
+  renderDiscussionComposerState();
 }
 
 function setAdminMessage(message) {
@@ -240,6 +350,12 @@ function setAdminMessage(message) {
 function setSettingsMessage(message) {
   if (settingsMessage) {
     settingsMessage.textContent = message || "";
+  }
+}
+
+function setDiscussionMessage(message) {
+  if (discussionComposeMessage) {
+    discussionComposeMessage.textContent = message || "";
   }
 }
 
@@ -348,6 +464,602 @@ function isSettingsPage() {
 
 function isAdminUsersPage() {
   return window.location.pathname.endsWith("/adminusers.html");
+}
+
+function isDiscussionPage() {
+  return window.location.pathname.endsWith("/discussion.html");
+}
+
+function getDiscussionQueryState() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    board: String(params.get("board") || "all").trim().toLowerCase() || "all",
+    postId: Number(params.get("post") || 0)
+  };
+}
+
+function updateDiscussionQuery({ board, postId } = {}) {
+  if (!isDiscussionPage()) {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+
+  if (board && board !== "all") {
+    url.searchParams.set("board", board);
+  } else {
+    url.searchParams.delete("board");
+  }
+
+  if (postId) {
+    url.searchParams.set("post", String(postId));
+  } else {
+    url.searchParams.delete("post");
+  }
+
+  window.history.replaceState({}, "", url);
+}
+
+function renderHomeDiscussionPosts(posts) {
+  if (!homeDiscussionList) {
+    return;
+  }
+
+  if (!posts.length) {
+    homeDiscussionList.innerHTML = `
+      <article class="home-discussion-empty">
+        <p>讨论区还没有帖子，去发第一篇吧。</p>
+      </article>
+    `;
+    return;
+  }
+
+  homeDiscussionList.innerHTML = posts.map((post) => `
+    <a class="home-discussion-item" href="./discussion.html?post=${post.id}">
+      <div class="home-discussion-item-main">
+        <h3>${escapeHtml(post.title)}</h3>
+      </div>
+      <div class="home-discussion-meta">
+        <span>${escapeHtml(post.author.displayName)}</span>
+        <span>${escapeHtml(formatDateOnly(post.createdAt))}</span>
+      </div>
+    </a>
+  `).join("");
+}
+
+function renderFallbackHomeDiscussionPost() {
+  renderHomeDiscussionPosts([FALLBACK_DISCUSSION_POST]);
+}
+
+function useFallbackDiscussionData() {
+  discussionState.boards = FALLBACK_DISCUSSION_BOARDS;
+  discussionState.posts = [FALLBACK_DISCUSSION_POST];
+  discussionState.activeBoard = "daily";
+  discussionState.isFallback = true;
+}
+
+function renderDiscussionBoards() {
+  if (!discussionBoardList) {
+    return;
+  }
+
+  const boards = [
+    {
+      slug: "all",
+      name: "全部",
+      description: "所有版块的最新帖子"
+    },
+    ...discussionState.boards
+  ];
+
+  discussionBoardList.innerHTML = boards.map((board) => `
+    <button
+      class="discussion-board-chip ${discussionState.activeBoard === board.slug ? "is-active" : ""}"
+      type="button"
+      data-board-slug="${board.slug}"
+      title="${escapeHtml(board.description || board.name)}"
+    >
+      <span class="discussion-board-name">${escapeHtml(board.name)}</span>
+    </button>
+  `).join("");
+}
+
+function renderDiscussionComposeBoards() {
+  if (!discussionComposeBoard) {
+    return;
+  }
+
+  discussionComposeBoard.innerHTML = discussionState.boards.map((board) => `
+    <option value="${board.slug}">${escapeHtml(board.name)}</option>
+  `).join("");
+
+  const preferredBoard =
+    discussionState.activeBoard !== "all" &&
+    discussionState.boards.some((board) => board.slug === discussionState.activeBoard)
+      ? discussionState.activeBoard
+      : discussionState.boards[0]?.slug;
+
+  if (preferredBoard) {
+    discussionComposeBoard.value = preferredBoard;
+  }
+}
+
+function renderDiscussionPosts() {
+  if (!discussionPostList) {
+    return;
+  }
+
+  if (!discussionState.posts.length) {
+    discussionPostList.innerHTML = `
+      <article class="discussion-empty">
+        <p>这个版块还没有帖子。</p>
+      </article>
+    `;
+    return;
+  }
+
+  discussionPostList.innerHTML = discussionState.posts.map((post) => `
+    <article
+      class="discussion-post-card ${discussionState.activePostId === post.id ? "is-active" : ""}"
+      role="button"
+      tabindex="0"
+      data-post-id="${post.id}"
+    >
+      <div class="discussion-post-author">
+        <img class="discussion-post-avatar" src="${escapeHtml(getAvatarUrl(post.author.avatarPath))}" alt="${escapeHtml(post.author.displayName)} 的头像" />
+        <button class="discussion-like-button ${post.likedByMe ? "is-liked" : ""}" type="button" data-action="toggle-like" data-post-id="${post.id}" aria-label="点赞">
+          <span aria-hidden="true">▲</span>
+          <strong>${post.likeCount || 0}</strong>
+        </button>
+      </div>
+      <div class="discussion-post-card-main">
+        <div class="discussion-post-source">
+          <span class="discussion-post-board">r/${escapeHtml(post.board.name)}</span>
+          <span>${escapeHtml(post.author.displayName)}</span>
+          <span>${escapeHtml(formatDateOnly(post.createdAt))}</span>
+        </div>
+        <h3>${escapeHtml(post.title)}</h3>
+        <div class="discussion-post-actions" aria-hidden="true">
+          <span>${post.commentCount || 0} 条评论</span>
+          <span>${post.likeCount || 0} 个赞</span>
+          ${userState.role === "admin" ? `<span class="discussion-delete-action" data-action="delete-post" data-post-id="${post.id}">删除</span>` : ""}
+        </div>
+      </div>
+      <span class="discussion-post-open" aria-hidden="true">↗</span>
+    </article>
+  `).join("");
+}
+
+function renderMarkdownContent(markdown) {
+  const mathBlocks = [];
+  const placeholderPrefix = "FREE_BBS_MATH_TOKEN_";
+  const protectedMarkdown = String(markdown || "")
+    .replace(/\$\$([\s\S]+?)\$\$/g, (_match, expression) => {
+      const token = `${placeholderPrefix}${mathBlocks.length}`;
+      mathBlocks.push({
+        displayMode: true,
+        expression: String(expression || "").trim()
+      });
+      return `\n\n${token}\n\n`;
+    })
+    .replace(/(^|[^\\$])\$([^\n$]+?)\$/g, (_match, prefix, expression) => {
+      const token = `${placeholderPrefix}${mathBlocks.length}`;
+      mathBlocks.push({
+        displayMode: false,
+        expression: String(expression || "").trim()
+      });
+      return `${prefix}${token}`;
+    });
+
+  const safeMarkdown = escapeHtml(protectedMarkdown);
+  const renderedMarkdown = window.marked?.parse
+    ? window.marked.parse(safeMarkdown, {
+        gfm: true,
+        breaks: true
+      })
+    : safeMarkdown.replace(/\n/g, "<br />");
+
+  const renderMathBlock = (_match, index) => {
+    const mathBlock = mathBlocks[Number(index)];
+
+    if (!mathBlock) {
+      return "";
+    }
+
+    if (window.katex?.renderToString) {
+      return window.katex.renderToString(mathBlock.expression, {
+        displayMode: mathBlock.displayMode,
+        throwOnError: false
+      });
+    }
+
+    const delimiter = mathBlock.displayMode ? "$$" : "$";
+    return `${delimiter}${escapeHtml(mathBlock.expression)}${delimiter}`;
+  };
+
+  return renderedMarkdown
+    .replace(new RegExp(`<p>\\s*${placeholderPrefix}(\\d+)\\s*</p>`, "g"), renderMathBlock)
+    .replace(new RegExp(`${placeholderPrefix}(\\d+)`, "g"), renderMathBlock);
+}
+
+function applyMathRendering(root) {
+  if (!root || typeof window.renderMathInElement !== "function") {
+    return;
+  }
+
+  window.renderMathInElement(root, {
+    delimiters: [
+      { left: "$$", right: "$$", display: true },
+      { left: "$", right: "$", display: false },
+      { left: "\\(", right: "\\)", display: false },
+      { left: "\\[", right: "\\]", display: true }
+    ],
+    throwOnError: false
+  });
+}
+
+function setDiscussionDetailView(isDetailView) {
+  discussionLayout?.classList.toggle("is-detail-view", Boolean(isDetailView));
+}
+
+function renderDiscussionStats(stats) {
+  if (discussionStatsPosts) {
+    discussionStatsPosts.textContent = String(stats?.postCount ?? discussionState.posts.length ?? 0);
+  }
+
+  if (discussionStatsLikes) {
+    discussionStatsLikes.textContent = String(stats?.likeCount ?? 0);
+  }
+}
+
+function renderDiscussionComments() {
+  const list = document.getElementById("discussion-comment-list");
+
+  if (!list) {
+    return;
+  }
+
+  if (!discussionState.comments.length) {
+    list.innerHTML = `<p class="discussion-stats-muted">还没有评论。</p>`;
+    return;
+  }
+
+  list.innerHTML = discussionState.comments.map((comment) => `
+    <article class="discussion-comment">
+      <img class="discussion-comment-avatar" src="${escapeHtml(getAvatarUrl(comment.author.avatarPath))}" alt="${escapeHtml(comment.author.displayName)} 的头像" />
+      <div class="discussion-comment-body">
+        <div class="discussion-comment-meta">
+          <strong>${escapeHtml(comment.author.displayName)}</strong>
+          <span>${escapeHtml(formatDateTime(comment.createdAt))}</span>
+        </div>
+        <div class="discussion-comment-content">${renderMarkdownContent(comment.contentMarkdown)}</div>
+      </div>
+    </article>
+  `).join("");
+
+  list.querySelectorAll(".discussion-comment-content").forEach((node) => applyMathRendering(node));
+}
+
+function renderDiscussionDetail(post) {
+  if (!discussionDetail) {
+    return;
+  }
+
+  if (!post) {
+    setDiscussionDetailView(false);
+    discussionDetail.classList.add("hidden");
+    discussionDetail.innerHTML = "";
+    discussionState.activePost = null;
+    discussionState.comments = [];
+    return;
+  }
+
+  setDiscussionDetailView(true);
+  discussionDetail.classList.remove("hidden");
+  discussionDetail.dataset.postId = String(post.id);
+  discussionState.activePost = post;
+  discussionDetail.innerHTML = `
+    <header class="discussion-detail-head">
+      <div class="discussion-detail-toolbar">
+        <button class="discussion-detail-back" type="button" data-action="close-detail">返回帖子列表</button>
+        ${userState.role === "admin" ? `<button class="discussion-detail-delete" type="button" data-action="delete-post" data-post-id="${post.id}">删除帖子</button>` : ""}
+      </div>
+      <span class="discussion-post-board">${escapeHtml(post.board.name)}</span>
+      <h2>${escapeHtml(post.title)}</h2>
+      <div class="discussion-detail-meta">
+        <span>${escapeHtml(post.author.displayName)}</span>
+        <span>${escapeHtml(formatDateTime(post.createdAt))}</span>
+        <button class="discussion-detail-like ${post.likedByMe ? "is-liked" : ""}" type="button" data-action="toggle-like" data-post-id="${post.id}">${post.likeCount || 0} 赞</button>
+        <span>${post.commentCount || 0} 条评论</span>
+      </div>
+    </header>
+    <div class="discussion-markdown-body" id="discussion-markdown-body">${renderMarkdownContent(post.contentMarkdown)}</div>
+    <section class="discussion-comments" aria-label="评论">
+      <div class="discussion-comments-head">
+        <h3>评论</h3>
+      </div>
+      <form class="discussion-comment-form" id="discussion-comment-form">
+        <textarea id="discussion-comment-input" rows="4" maxlength="5000" placeholder="写一条评论，支持 Markdown 和 KaTeX"></textarea>
+        <div class="discussion-compose-actions">
+          <p class="discussion-message" id="discussion-comment-message"></p>
+          <button class="auth-submit discussion-submit" type="submit">发表评论</button>
+        </div>
+      </form>
+      <div class="discussion-comment-list" id="discussion-comment-list">
+        <p class="discussion-stats-muted">正在加载评论...</p>
+      </div>
+    </section>
+  `;
+
+  const markdownBody = document.getElementById("discussion-markdown-body");
+  applyMathRendering(markdownBody);
+  markdownBody?.querySelectorAll("a").forEach((link) => {
+    link.target = "_blank";
+    link.rel = "noreferrer";
+  });
+  loadDiscussionComments(post.id);
+}
+
+function renderDiscussionComposerState() {
+  if (!discussionCreateToggle || !discussionComposeForm) {
+    return;
+  }
+
+  if (userState.isLoggedIn) {
+    discussionCreateToggle.textContent = discussionState.isFallback ? "重试发布" : "发布帖子";
+    discussionCreateToggle.disabled = false;
+    return;
+  }
+
+  discussionCreateToggle.textContent = "登录后发帖";
+  discussionCreateToggle.disabled = false;
+  discussionComposeForm.classList.add("hidden");
+}
+
+async function loadHomeDiscussionPosts() {
+  if (!homeDiscussionList) {
+    return;
+  }
+
+  try {
+    const payload = await callApi("/discussion/posts?board=all&limit=6", {
+      method: "GET"
+    });
+    renderHomeDiscussionPosts(payload.posts || []);
+  } catch {
+    renderFallbackHomeDiscussionPost();
+  }
+}
+
+async function loadDiscussionBoards() {
+  try {
+    const payload = await callApi("/discussion/boards", {
+      method: "GET"
+    });
+    discussionState.boards = payload.boards || [];
+    discussionState.isFallback = false;
+  } catch {
+    discussionState.boards = FALLBACK_DISCUSSION_BOARDS;
+    discussionState.isFallback = true;
+  }
+
+  renderDiscussionBoards();
+  renderDiscussionComposeBoards();
+  renderDiscussionComposerState();
+}
+
+async function loadDiscussionStats() {
+  if (!discussionStatsPosts && !discussionStatsLikes) {
+    return;
+  }
+
+  try {
+    const payload = await callApi("/discussion/stats", {
+      method: "GET"
+    });
+    renderDiscussionStats(payload);
+  } catch {
+    renderDiscussionStats(null);
+  }
+}
+
+async function loadDiscussionComments(postId) {
+  try {
+    const payload = await callApi(`/discussion/posts/${postId}/comments`, {
+      method: "GET"
+    });
+    discussionState.comments = payload.comments || [];
+  } catch {
+    discussionState.comments = [];
+  }
+
+  renderDiscussionComments();
+}
+
+function updatePostReactionState(postId, liked, likeCount) {
+  discussionState.posts = discussionState.posts.map((post) => (
+    post.id === postId
+      ? {
+          ...post,
+          likedByMe: liked,
+          likeCount
+        }
+      : post
+  ));
+
+  if (discussionState.activePost?.id === postId) {
+    discussionState.activePost = {
+      ...discussionState.activePost,
+      likedByMe: liked,
+      likeCount
+    };
+  }
+}
+
+async function toggleDiscussionLike(postId) {
+  if (!postId) {
+    return;
+  }
+
+  if (!userState.isLoggedIn) {
+    openModal("login");
+    return;
+  }
+
+  const payload = await callApi(`/discussion/posts/${postId}/like`, {
+    method: "POST"
+  });
+
+  updatePostReactionState(postId, Boolean(payload.liked), Number(payload.likeCount || 0));
+  renderDiscussionPosts();
+
+  if (discussionState.activePost?.id === postId) {
+    renderDiscussionDetail(discussionState.activePost);
+  }
+
+  loadDiscussionStats();
+}
+
+async function loadDiscussionDetail(postId) {
+  if (!discussionDetail || !postId) {
+    return;
+  }
+
+  setDiscussionDetailView(true);
+  discussionDetail.classList.remove("hidden");
+  discussionDetail.innerHTML = `
+    <div class="discussion-detail-empty">
+      <p>正在加载帖子详情...</p>
+    </div>
+  `;
+
+  if (postId === FALLBACK_DISCUSSION_POST.id) {
+    discussionState.activePostId = FALLBACK_DISCUSSION_POST.id;
+    renderDiscussionPosts();
+    renderDiscussionDetail(FALLBACK_DISCUSSION_POST);
+    discussionDetail.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    });
+    updateDiscussionQuery({
+      board: discussionState.activeBoard,
+      postId: discussionState.activePostId
+    });
+    return;
+  }
+
+  const payload = await callApi(`/discussion/posts/${postId}`, {
+    method: "GET"
+  });
+  discussionState.activePostId = payload.post.id;
+  renderDiscussionPosts();
+  renderDiscussionDetail(payload.post);
+  discussionDetail.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
+  updateDiscussionQuery({
+    board: discussionState.activeBoard,
+    postId: discussionState.activePostId
+  });
+}
+
+async function loadDiscussionPosts({ autoOpen = false } = {}) {
+  if (!discussionPostList) {
+    return;
+  }
+
+  discussionPostList.innerHTML = `
+    <article class="discussion-empty">
+      <p>正在加载帖子...</p>
+    </article>
+  `;
+
+  try {
+    const payload = await callApi(
+      `/discussion/posts?board=${encodeURIComponent(discussionState.activeBoard)}&limit=30`,
+      {
+        method: "GET"
+      }
+    );
+    discussionState.posts = payload.posts || [];
+  } catch {
+    useFallbackDiscussionData();
+  }
+
+  if (discussionState.activePostId && !discussionState.posts.some((post) => post.id === discussionState.activePostId)) {
+    discussionState.activePostId = 0;
+  }
+
+  renderDiscussionBoards();
+  renderDiscussionComposeBoards();
+  renderDiscussionPosts();
+  loadDiscussionStats();
+
+  if (!autoOpen) {
+    updateDiscussionQuery({
+      board: discussionState.activeBoard,
+      postId: discussionState.activePostId
+    });
+    return;
+  }
+
+  if (discussionState.activePostId) {
+    await loadDiscussionDetail(discussionState.activePostId);
+    return;
+  }
+
+  if (discussionState.posts[0]) {
+    await loadDiscussionDetail(discussionState.posts[0].id);
+    return;
+  }
+
+  renderDiscussionDetail(null);
+  updateDiscussionQuery({
+    board: discussionState.activeBoard,
+    postId: 0
+  });
+}
+
+async function initializeDiscussionPage() {
+  if (!isDiscussionPage()) {
+    return;
+  }
+
+  try {
+    await loadDiscussionBoards();
+
+    const query = getDiscussionQueryState();
+    const validBoard = query.board === "all" || discussionState.boards.some((board) => board.slug === query.board);
+    discussionState.activeBoard = validBoard ? query.board : "all";
+    discussionState.activePostId = 0;
+
+    if (query.postId) {
+      try {
+        const payload = await callApi(`/discussion/posts/${query.postId}`, {
+          method: "GET"
+        });
+        discussionState.activePostId = payload.post.id;
+        discussionState.activeBoard = payload.post.board.slug;
+        renderDiscussionDetail(payload.post);
+      } catch {
+        discussionState.activePostId = FALLBACK_DISCUSSION_POST.id;
+        discussionState.activeBoard = FALLBACK_DISCUSSION_POST.board.slug;
+        renderDiscussionDetail(FALLBACK_DISCUSSION_POST);
+      }
+    }
+
+    await loadDiscussionPosts({
+      autoOpen: Boolean(discussionState.activePostId)
+    });
+  } catch {
+    useFallbackDiscussionData();
+    discussionState.activePostId = FALLBACK_DISCUSSION_POST.id;
+    renderDiscussionBoards();
+    renderDiscussionComposeBoards();
+    renderDiscussionPosts();
+    renderDiscussionDetail(FALLBACK_DISCUSSION_POST);
+  }
 }
 
 function renderAdminUsers(users) {
@@ -691,6 +1403,248 @@ async function handleFortuneBonusToggle(event) {
   }
 }
 
+async function handleDiscussionBoardClick(event) {
+  const button = event.target.closest("[data-board-slug]");
+
+  if (!button) {
+    return;
+  }
+
+  discussionState.activeBoard = button.dataset.boardSlug || "all";
+  discussionState.activePostId = 0;
+  renderDiscussionDetail(null);
+  await loadDiscussionPosts({
+    autoOpen: false
+  });
+}
+
+async function handleDiscussionPostClick(event) {
+  const likeButton = event.target.closest("[data-action='toggle-like']");
+
+  if (likeButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    await toggleDiscussionLike(Number(likeButton.dataset.postId || 0));
+    return;
+  }
+
+  const deleteButton = event.target.closest("[data-action='delete-post']");
+
+  if (deleteButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    await deleteDiscussionPost(Number(deleteButton.dataset.postId || 0));
+    return;
+  }
+
+  const button = event.target.closest("[data-post-id]");
+
+  if (!button) {
+    return;
+  }
+
+  const postId = Number(button.dataset.postId || 0);
+
+  if (!postId) {
+    return;
+  }
+
+  await loadDiscussionDetail(postId);
+}
+
+async function deleteDiscussionPost(postId) {
+  if (!postId || userState.role !== "admin") {
+    return;
+  }
+
+  if (!window.confirm("确认删除这篇帖子？")) {
+    return;
+  }
+
+  try {
+    await callApi(`/admin/discussion/posts/${postId}`, {
+      method: "DELETE"
+    });
+
+    discussionState.posts = discussionState.posts.filter((post) => post.id !== postId);
+
+    if (discussionState.activePostId === postId) {
+      discussionState.activePostId = 0;
+      renderDiscussionDetail(null);
+      updateDiscussionQuery({
+        board: discussionState.activeBoard,
+        postId: 0
+      });
+    }
+
+    renderDiscussionPosts();
+    await loadDiscussionPosts({
+      autoOpen: false
+    });
+  } catch (error) {
+    window.alert(error.message);
+  }
+}
+
+async function handleDiscussionDetailClick(event) {
+  const likeButton = event.target.closest("[data-action='toggle-like']");
+
+  if (likeButton) {
+    await toggleDiscussionLike(Number(likeButton.dataset.postId || 0));
+    return;
+  }
+
+  const deleteButton = event.target.closest("[data-action='delete-post']");
+
+  if (deleteButton) {
+    await deleteDiscussionPost(Number(deleteButton.dataset.postId || 0));
+    return;
+  }
+
+  const button = event.target.closest("[data-action='close-detail']");
+
+  if (!button) {
+    return;
+  }
+
+  discussionState.activePostId = 0;
+  renderDiscussionPosts();
+  renderDiscussionDetail(null);
+  updateDiscussionQuery({
+    board: discussionState.activeBoard,
+    postId: 0
+  });
+}
+
+async function handleDiscussionCommentSubmit(event) {
+  const form = event.target.closest("#discussion-comment-form");
+
+  if (!form || !discussionState.activePostId) {
+    return;
+  }
+
+  event.preventDefault();
+
+  if (!userState.isLoggedIn) {
+    openModal("login");
+    return;
+  }
+
+  const input = form.querySelector("#discussion-comment-input");
+  const message = form.querySelector("#discussion-comment-message");
+  const contentMarkdown = input?.value.trim() || "";
+
+  if (message) {
+    message.textContent = "正在发布评论...";
+  }
+
+  try {
+    const payload = await callApi(`/discussion/posts/${discussionState.activePostId}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ contentMarkdown })
+    });
+
+    discussionState.comments = [...discussionState.comments, payload.comment];
+    if (discussionState.activePost) {
+      discussionState.activePost.commentCount = Number(discussionState.activePost.commentCount || 0) + 1;
+    }
+    discussionState.posts = discussionState.posts.map((post) => (
+      post.id === discussionState.activePostId
+        ? {
+            ...post,
+            commentCount: Number(post.commentCount || 0) + 1
+          }
+        : post
+    ));
+    input.value = "";
+    if (message) {
+      message.textContent = payload.message || "评论已发布";
+    }
+    renderDiscussionComments();
+    renderDiscussionPosts();
+  } catch (error) {
+    if (message) {
+      message.textContent = error.message;
+    }
+  }
+}
+
+async function handleDiscussionCreateToggle() {
+  if (!discussionComposeForm) {
+    return;
+  }
+
+  if (!userState.isLoggedIn) {
+    openModal("login");
+    return;
+  }
+
+  if (discussionState.isFallback) {
+    setDiscussionMessage("正在重新连接讨论后端...");
+    await loadDiscussionBoards();
+
+    if (discussionState.isFallback) {
+      setDiscussionMessage("讨论后端暂不可用，请确认后端已启动并刷新重试");
+      return;
+    }
+
+    setDiscussionMessage("");
+  }
+
+  discussionComposeForm.classList.toggle("hidden");
+  if (!discussionComposeForm.classList.contains("hidden")) {
+    discussionComposeTitle?.focus();
+  }
+}
+
+async function handleDiscussionComposeSubmit(event) {
+  if (!discussionComposeForm) {
+    return;
+  }
+
+  event.preventDefault();
+
+  if (!userState.isLoggedIn) {
+    openModal("login");
+    return;
+  }
+
+  if (discussionState.isFallback) {
+    setDiscussionMessage("讨论后端暂不可用，无法发布帖子");
+    return;
+  }
+
+  setDiscussionMessage("正在发布帖子...");
+
+  try {
+    const payload = await callApi("/discussion/posts", {
+      method: "POST",
+      body: JSON.stringify({
+        boardSlug: discussionComposeBoard.value,
+        title: discussionComposeTitle.value.trim(),
+        contentMarkdown: discussionComposeContent.value
+      })
+    });
+
+    setDiscussionMessage(payload.message || "帖子发布成功");
+    discussionComposeForm.reset();
+    discussionComposeForm.classList.add("hidden");
+    discussionState.activeBoard = payload.post.board.slug;
+    discussionState.activePostId = payload.post.id;
+    await loadDiscussionPosts({
+      autoOpen: false
+    });
+    renderDiscussionDetail(payload.post);
+    updateDiscussionQuery({
+      board: discussionState.activeBoard,
+      postId: discussionState.activePostId
+    });
+  } catch (error) {
+    setDiscussionMessage(error.message);
+    discussionComposeForm.classList.remove("hidden");
+  }
+}
+
 userName.addEventListener("click", handleAuthEntry);
 avatarButton.addEventListener("click", handleAvatarClick);
 fortuneLinks.forEach((link) => {
@@ -705,6 +1659,16 @@ fortuneBonusToggle?.addEventListener("change", handleFortuneBonusToggle);
 settingsForm?.addEventListener("submit", handleSettingsSubmit);
 settingsAvatarInput?.addEventListener("change", handleAvatarUpload);
 settingsLogoutButton?.addEventListener("click", handleSettingsLogout);
+discussionBoardList?.addEventListener("click", (event) => {
+  handleDiscussionBoardClick(event);
+});
+discussionPostList?.addEventListener("click", (event) => {
+  handleDiscussionPostClick(event);
+});
+discussionDetail?.addEventListener("click", handleDiscussionDetailClick);
+discussionDetail?.addEventListener("submit", handleDiscussionCommentSubmit);
+discussionCreateToggle?.addEventListener("click", handleDiscussionCreateToggle);
+discussionComposeForm?.addEventListener("submit", handleDiscussionComposeSubmit);
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     document.getElementById("fortune-modal")?.classList.add("hidden");
@@ -715,3 +1679,6 @@ loadFortuneConfig();
 restoreSession();
 renderAdminSection();
 renderSettingsForm();
+renderDiscussionComposerState();
+loadHomeDiscussionPosts();
+initializeDiscussionPage();
