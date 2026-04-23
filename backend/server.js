@@ -1035,6 +1035,61 @@ app.get("/api/auth/me", async (request, response) => {
   }
 });
 
+app.get("/api/users/:studentId/public-profile", async (request, response) => {
+  const studentId = String(request.params.studentId || "").trim();
+
+  if (!/^20\d{8}$/.test(studentId)) {
+    response.status(400).json({ message: "无效学号" });
+    return;
+  }
+
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, username, full_name, student_id, role, grade, major, avatar_path, bio, website_url, created_at
+       FROM users
+       WHERE student_id = ?
+       LIMIT 1`,
+      [studentId]
+    );
+
+    if (!rows[0]) {
+      response.status(404).json({ message: "用户不存在" });
+      return;
+    }
+
+    const user = rows[0];
+    const [statsRows] = await pool.execute(
+      `SELECT
+         (SELECT COUNT(*) FROM discussion_posts WHERE author_student_id = ?) AS post_count,
+         (SELECT COUNT(*) FROM discussion_post_likes l
+            INNER JOIN discussion_posts p ON p.id = l.post_id
+            WHERE p.author_student_id = ?) AS like_count`
+      ,
+      [studentId, studentId]
+    );
+
+    response.json({
+      profile: {
+        id: user.id,
+        username: user.username,
+        fullName: user.full_name,
+        studentId: user.student_id,
+        role: user.role,
+        grade: user.grade || "",
+        major: user.major || "",
+        avatarPath: user.avatar_path || "",
+        bio: user.bio || "",
+        websiteUrl: user.website_url || "",
+        createdAt: user.created_at,
+        postCount: Number(statsRows[0]?.post_count || 0),
+        likeCount: Number(statsRows[0]?.like_count || 0)
+      }
+    });
+  } catch (error) {
+    response.status(500).json({ message: "获取公开主页失败", detail: error.message });
+  }
+});
+
 app.patch("/api/profile", async (request, response) => {
   try {
     const user = await requireAuth(request, response);

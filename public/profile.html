@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FREE-BBS - 个人主页</title>
+    <link rel="icon" type="image/png" href="./assets/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Noto+Serif+SC:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell page-shell-settings">
+      <header class="topbar">
+        <a class="brand" href="./index.html" aria-label="FREE-BBS 首页">
+          <span class="brand-mark">FREE<br />BBS</span>
+        </a>
+
+        <form class="searchbar" role="search">
+          <span class="search-symbol" aria-hidden="true">⌕</span>
+          <input type="search" placeholder="搜索课程、讨论、资料、地图坐标" aria-label="搜索" />
+        </form>
+
+        <nav class="nav-actions" aria-label="顶部导航">
+          <a class="nav-link" href="./world.html">
+            <img class="nav-icon" src="./assets/icons/map.svg" alt="" aria-hidden="true" />
+            <span>世界</span>
+          </a>
+          <a class="nav-link" href="./discussion.html">
+            <img class="nav-icon" src="./assets/icons/people.svg" alt="" aria-hidden="true" />
+            <span>讨论</span>
+          </a>
+          <a class="nav-link fortune-link hidden" href="#">
+            <img class="nav-icon" src="./assets/icons/yunshi.svg" alt="" aria-hidden="true" />
+            <span>今日运势</span>
+          </a>
+          <a class="nav-link manage-link hidden" href="./adminusers.html">
+            <img class="nav-icon" src="./assets/icons/gear.svg" alt="" aria-hidden="true" />
+            <span>管理</span>
+          </a>
+
+          <div class="user-panel" id="user-panel">
+            <div class="user-summary">
+              <button class="avatar" type="button" aria-label="用户头像">
+                <img class="avatar-image" id="avatar-image" src="./assets/avatar_placeholder.png" alt="用户头像占位图" />
+              </button>
+              <div class="user-copy">
+                <button class="user-name" type="button" id="user-name">登录/注册</button>
+                <div class="user-role" id="user-role">学生</div>
+              </div>
+            </div>
+            <div class="user-status" id="user-status">
+              <span class="currency currency-electric" data-tooltip="电元" aria-label="电元">
+                <img class="currency-icon" src="./assets/icons/electron.svg" alt="电元" />
+                <span class="currency-value">-</span>
+              </span>
+              <span class="currency currency-magnetic" data-tooltip="磁元" aria-label="磁元">
+                <img class="currency-icon" src="./assets/icons/magnetron.svg" alt="磁元" />
+                <span class="currency-value">-</span>
+              </span>
+            </div>
+          </div>
+        </nav>
+      </header>
+
+      <nav class="mobile-nav" aria-label="手机底部导航">
+        <a class="nav-link" href="./world.html">
+          <img class="nav-icon" src="./assets/icons/map.svg" alt="" aria-hidden="true" />
+          <span>世界</span>
+        </a>
+        <a class="nav-link" href="./discussion.html">
+          <img class="nav-icon" src="./assets/icons/people.svg" alt="" aria-hidden="true" />
+          <span>讨论</span>
+        </a>
+        <a class="nav-link fortune-link hidden" href="#">
+          <img class="nav-icon" src="./assets/icons/yunshi.svg" alt="" aria-hidden="true" />
+          <span>今日运势</span>
+        </a>
+        <a class="nav-link manage-link hidden" href="./adminusers.html">
+          <img class="nav-icon" src="./assets/icons/gear.svg" alt="" aria-hidden="true" />
+          <span>管理</span>
+        </a>
+      </nav>
+
+      <main class="main-content settings-main">
+        <section class="settings-shell" aria-label="个人主页">
+          <div class="settings-header">
+            <h1>个人主页</h1>
+          </div>
+
+          <section class="settings-profile public-profile-shell" aria-label="公开个人资料">
+            <div class="public-profile-header">
+              <div class="public-profile-avatar-wrap">
+                <img class="public-profile-avatar" id="public-profile-avatar" src="./assets/avatar_placeholder.png" alt="用户头像" />
+              </div>
+              <div class="public-profile-copy">
+                <p class="discussion-kicker">Public Profile</p>
+                <h2 id="public-profile-name">加载中...</h2>
+                <div class="public-profile-meta">
+                  <span id="public-profile-student-id">-</span>
+                  <span id="public-profile-major">-</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="public-profile-stats">
+              <article class="public-profile-stat">
+                <span>发帖</span>
+                <strong id="public-profile-post-count">-</strong>
+              </article>
+              <article class="public-profile-stat">
+                <span>获赞</span>
+                <strong id="public-profile-like-count">-</strong>
+              </article>
+            </div>
+
+            <div class="settings-grid public-profile-grid">
+              <div class="auth-field public-profile-field">
+                <span>简介</span>
+                <p id="public-profile-bio">正在加载...</p>
+              </div>
+              <div class="auth-field public-profile-field">
+                <span>个人网页</span>
+                <p id="public-profile-website">-</p>
+              </div>
+            </div>
+
+            <p class="auth-message settings-message" id="public-profile-message"></p>
+          </section>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <div class="footer-block footer-left">
+          <p>© Free-bbs 工作组 2026-2027</p>
+        </div>
+
+        <div class="footer-block footer-center">
+          <div class="footer-links">
+            <a href="#staff">工作人员名单</a>
+            <a href="https://www.ee.tsinghua.edu.cn/" target="_blank" rel="noreferrer">清华大学电子系</a>
+            <a href="https://www.eesast.com">电子系学生科协</a>
+          </div>
+          <p>&lt;京ICP备2025155858号-2&gt;</p>
+        </div>
+
+        <div class="footer-block footer-right">
+          <p><a href="mailto:feedback@free-bbs.cn">反馈：feedback@free-bbs.cn</a></p>
+        </div>
+      </footer>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

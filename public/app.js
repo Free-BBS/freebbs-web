@@ -51,6 +51,15 @@ const settingsWebsiteUrl = document.getElementById("settings-website-url");
 const settingsAvatarInput = document.getElementById("settings-avatar-input");
 const settingsAvatarImage = document.getElementById("settings-avatar-image");
 const settingsLogoutButton = document.getElementById("settings-logout-button");
+const publicProfileAvatar = document.getElementById("public-profile-avatar");
+const publicProfileName = document.getElementById("public-profile-name");
+const publicProfileStudentId = document.getElementById("public-profile-student-id");
+const publicProfileMajor = document.getElementById("public-profile-major");
+const publicProfilePostCount = document.getElementById("public-profile-post-count");
+const publicProfileLikeCount = document.getElementById("public-profile-like-count");
+const publicProfileBio = document.getElementById("public-profile-bio");
+const publicProfileWebsite = document.getElementById("public-profile-website");
+const publicProfileMessage = document.getElementById("public-profile-message");
 const homeDiscussionList = document.getElementById("home-discussion-list");
 const discussionLayout = document.querySelector(".discussion-layout");
 const discussionBoardList = document.getElementById("discussion-board-list");
@@ -470,6 +479,73 @@ function isDiscussionPage() {
   return window.location.pathname.endsWith("/discussion.html");
 }
 
+function isPublicProfilePage() {
+  return window.location.pathname.endsWith("/profile.html");
+}
+
+function getProfileStudentIdFromQuery() {
+  return String(new URLSearchParams(window.location.search).get("studentId") || "").trim();
+}
+
+function isValidPublicStudentId(studentId) {
+  return /^20\d{8}$/.test(String(studentId || "").trim());
+}
+
+function getProfileHref(studentId) {
+  if (!isValidPublicStudentId(studentId)) {
+    return "";
+  }
+
+  return `./profile.html?studentId=${encodeURIComponent(studentId)}`;
+}
+
+function renderAuthorProfileLink(author, className, includeAvatar = false) {
+  const displayName = escapeHtml(author?.displayName || author?.fullName || author?.username || "匿名用户");
+  const profileHref = getProfileHref(author?.studentId);
+
+  if (!profileHref) {
+    return includeAvatar
+      ? `
+        <span class="${className}">
+          <img class="discussion-post-avatar" src="${escapeHtml(getAvatarUrl(author?.avatarPath))}" alt="${displayName} 的头像" />
+          <span>${displayName}</span>
+        </span>
+      `
+      : `<span class="${className}">${displayName}</span>`;
+  }
+
+  return includeAvatar
+    ? `
+      <a class="${className}" data-action="open-profile" href="${profileHref}">
+        <img class="discussion-post-avatar" src="${escapeHtml(getAvatarUrl(author?.avatarPath))}" alt="${displayName} 的头像" />
+        <span>${displayName}</span>
+      </a>
+    `
+    : `<a class="${className}" data-action="open-profile" href="${profileHref}">${displayName}</a>`;
+}
+
+function normalizeWebsiteUrl(value) {
+  const raw = String(value || "").trim();
+
+  if (!raw) {
+    return "";
+  }
+
+  const candidate = /^[a-z]+:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+  try {
+    return new URL(candidate).toString();
+  } catch {
+    return "";
+  }
+}
+
+function setPublicProfileMessage(message) {
+  if (publicProfileMessage) {
+    publicProfileMessage.textContent = message || "";
+  }
+}
+
 function getDiscussionQueryState() {
   const params = new URLSearchParams(window.location.search);
   return {
@@ -606,7 +682,7 @@ function renderDiscussionPosts() {
       data-post-id="${post.id}"
     >
       <div class="discussion-post-author">
-        <img class="discussion-post-avatar" src="${escapeHtml(getAvatarUrl(post.author.avatarPath))}" alt="${escapeHtml(post.author.displayName)} 的头像" />
+        ${renderAuthorProfileLink(post.author, "discussion-author-link discussion-author-link-avatar", true)}
         <button class="discussion-like-button ${post.likedByMe ? "is-liked" : ""}" type="button" data-action="toggle-like" data-post-id="${post.id}" aria-label="点赞">
           <span aria-hidden="true">▲</span>
           <strong>${post.likeCount || 0}</strong>
@@ -615,7 +691,7 @@ function renderDiscussionPosts() {
       <div class="discussion-post-card-main">
         <div class="discussion-post-source">
           <span class="discussion-post-board">r/${escapeHtml(post.board.name)}</span>
-          <span>${escapeHtml(post.author.displayName)}</span>
+          ${renderAuthorProfileLink(post.author, "discussion-author-link")}
           <span>${escapeHtml(formatDateOnly(post.createdAt))}</span>
         </div>
         <h3>${escapeHtml(post.title)}</h3>
@@ -726,10 +802,10 @@ function renderDiscussionComments() {
 
   list.innerHTML = discussionState.comments.map((comment) => `
     <article class="discussion-comment">
-      <img class="discussion-comment-avatar" src="${escapeHtml(getAvatarUrl(comment.author.avatarPath))}" alt="${escapeHtml(comment.author.displayName)} 的头像" />
+      ${renderAuthorProfileLink(comment.author, "discussion-comment-author-link", true)}
       <div class="discussion-comment-body">
         <div class="discussion-comment-meta">
-          <strong>${escapeHtml(comment.author.displayName)}</strong>
+          ${renderAuthorProfileLink(comment.author, "discussion-author-link")}
           <span>${escapeHtml(formatDateTime(comment.createdAt))}</span>
         </div>
         <div class="discussion-comment-content">${renderMarkdownContent(comment.contentMarkdown)}</div>
@@ -767,7 +843,7 @@ function renderDiscussionDetail(post) {
       <span class="discussion-post-board">${escapeHtml(post.board.name)}</span>
       <h2>${escapeHtml(post.title)}</h2>
       <div class="discussion-detail-meta">
-        <span>${escapeHtml(post.author.displayName)}</span>
+        ${renderAuthorProfileLink(post.author, "discussion-author-link")}
         <span>${escapeHtml(formatDateTime(post.createdAt))}</span>
         <button class="discussion-detail-like ${post.likedByMe ? "is-liked" : ""}" type="button" data-action="toggle-like" data-post-id="${post.id}">${post.likeCount || 0} 赞</button>
         <span>${post.commentCount || 0} 条评论</span>
@@ -1059,6 +1135,75 @@ async function initializeDiscussionPage() {
     renderDiscussionComposeBoards();
     renderDiscussionPosts();
     renderDiscussionDetail(FALLBACK_DISCUSSION_POST);
+  }
+}
+
+async function loadPublicProfile() {
+  if (!isPublicProfilePage()) {
+    return;
+  }
+
+  const studentId = getProfileStudentIdFromQuery();
+
+  if (!isValidPublicStudentId(studentId)) {
+    if (publicProfileName) {
+      publicProfileName.textContent = "未找到用户";
+    }
+    if (publicProfileBio) {
+      publicProfileBio.textContent = "请从帖子作者头像进入个人主页。";
+    }
+    setPublicProfileMessage("无效学号");
+    return;
+  }
+
+  setPublicProfileMessage("正在加载个人主页...");
+
+  try {
+    const payload = await callApi(`/users/${encodeURIComponent(studentId)}/public-profile`, {
+      method: "GET"
+    });
+    const profile = payload.profile || {};
+
+    if (publicProfileAvatar) {
+      publicProfileAvatar.src = getAvatarUrl(profile.avatarPath);
+    }
+    if (publicProfileName) {
+      publicProfileName.textContent = profile.fullName || profile.username || "未命名用户";
+    }
+    if (publicProfileStudentId) {
+      publicProfileStudentId.textContent = profile.studentId || "未公开学号";
+    }
+    if (publicProfileMajor) {
+      const majorParts = [profile.grade, profile.major].filter(Boolean);
+      publicProfileMajor.textContent = majorParts.join(" · ") || "未填写院系信息";
+    }
+    if (publicProfilePostCount) {
+      publicProfilePostCount.textContent = String(profile.postCount ?? 0);
+    }
+    if (publicProfileLikeCount) {
+      publicProfileLikeCount.textContent = String(profile.likeCount ?? 0);
+    }
+    if (publicProfileBio) {
+      publicProfileBio.textContent = profile.bio || "这个人很神秘，什么都没写。";
+    }
+    if (publicProfileWebsite) {
+      const websiteUrl = normalizeWebsiteUrl(profile.websiteUrl);
+      if (websiteUrl) {
+        publicProfileWebsite.innerHTML = `<a href="${escapeHtml(websiteUrl)}" target="_blank" rel="noreferrer">${escapeHtml(profile.websiteUrl)}</a>`;
+      } else {
+        publicProfileWebsite.textContent = "未填写";
+      }
+    }
+
+    setPublicProfileMessage("");
+  } catch (error) {
+    if (publicProfileName) {
+      publicProfileName.textContent = "加载失败";
+    }
+    if (publicProfileBio) {
+      publicProfileBio.textContent = "暂时无法获取该用户的公开资料。";
+    }
+    setPublicProfileMessage(error.message);
   }
 }
 
@@ -1419,6 +1564,10 @@ async function handleDiscussionBoardClick(event) {
 }
 
 async function handleDiscussionPostClick(event) {
+  if (event.target.closest("[data-action='open-profile']")) {
+    return;
+  }
+
   const likeButton = event.target.closest("[data-action='toggle-like']");
 
   if (likeButton) {
@@ -1682,3 +1831,4 @@ renderSettingsForm();
 renderDiscussionComposerState();
 loadHomeDiscussionPosts();
 initializeDiscussionPage();
+loadPublicProfile();
