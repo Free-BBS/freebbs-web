@@ -993,6 +993,181 @@ h3,
   min-height: calc(100vh - 220px);
 }
 
+.world-page {
+  background: #020202;
+}
+
+.world-page::before {
+  background:
+    radial-gradient(40% 34% at 50% 50%, rgba(255, 255, 255, 0.06), transparent 70%),
+    linear-gradient(180deg, rgba(6, 6, 6, 0.72), rgba(2, 2, 2, 0.98));
+  background-size: 100% 100%;
+  filter: blur(42px);
+  animation: none;
+}
+
+.world-page::after {
+  opacity: 0.5;
+  background:
+    radial-gradient(circle at 14% 18%, rgba(255, 255, 255, 0.16) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 30% 72%, rgba(255, 255, 255, 0.12) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 62% 36%, rgba(255, 255, 255, 0.12) 0 1.2px, transparent 1.6px),
+    radial-gradient(circle at 78% 66%, rgba(255, 255, 255, 0.12) 0 1.4px, transparent 1.8px),
+    radial-gradient(circle at 88% 24%, rgba(255, 255, 255, 0.1) 0 1.4px, transparent 1.8px);
+  background-size: 340px 340px, 420px 420px, 500px 500px, 620px 620px, 580px 580px;
+  mix-blend-mode: screen;
+}
+
+.world-page .searchbar {
+  display: none;
+}
+
+.world-page .topbar {
+  grid-template-rows: auto minmax(0, 1fr);
+  background: linear-gradient(180deg, rgba(10, 10, 10, 0.84), rgba(10, 10, 10, 0.4));
+}
+
+.world-page .site-footer {
+  background: linear-gradient(180deg, rgba(10, 10, 10, 0.26), rgba(10, 10, 10, 0.12));
+}
+
+.world-main {
+  min-height: calc(100vh - 48px);
+  padding-bottom: 0;
+}
+
+.world-shell {
+  width: 100%;
+  margin: 0 auto;
+}
+
+.world-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.world-stage {
+  width: 100%;
+  min-height: calc(100vh - 66px);
+}
+
+.world-cosmos {
+  position: relative;
+  min-height: calc(100vh - 66px);
+  overflow: hidden;
+  background: linear-gradient(180deg, #050505, #010101);
+  isolation: isolate;
+}
+
+.world-cosmos::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.04) 0 1px, transparent 1.8px);
+  background-size: 420px 420px;
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+.world-stars,
+.world-canvas,
+.world-label-layer,
+.world-vignette {
+  position: absolute;
+  inset: 0;
+}
+
+.world-stars {
+  opacity: 0.66;
+  pointer-events: none;
+}
+
+.world-stars-near {
+  background-image:
+    radial-gradient(circle at 6% 16%, rgba(255, 255, 255, 0.95) 0 1.2px, transparent 1.8px),
+    radial-gradient(circle at 14% 68%, rgba(255, 255, 255, 0.8) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 22% 34%, rgba(255, 255, 255, 0.88) 0 1.1px, transparent 1.8px),
+    radial-gradient(circle at 34% 54%, rgba(255, 255, 255, 0.82) 0 1.3px, transparent 1.9px),
+    radial-gradient(circle at 48% 18%, rgba(255, 255, 255, 0.9) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 56% 74%, rgba(255, 255, 255, 0.72) 0 1.1px, transparent 1.8px),
+    radial-gradient(circle at 66% 26%, rgba(255, 255, 255, 0.82) 0 1.2px, transparent 1.9px),
+    radial-gradient(circle at 82% 48%, rgba(255, 255, 255, 0.86) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 90% 22%, rgba(255, 255, 255, 0.82) 0 1.3px, transparent 2px),
+    radial-gradient(circle at 92% 82%, rgba(255, 255, 255, 0.72) 0 1px, transparent 1.6px);
+  animation: none;
+}
+
+.world-stars-far {
+  background-image:
+    radial-gradient(circle at 10% 42%, rgba(255, 255, 255, 0.34) 0 0.8px, transparent 1.6px),
+    radial-gradient(circle at 18% 86%, rgba(255, 255, 255, 0.26) 0 0.7px, transparent 1.4px),
+    radial-gradient(circle at 28% 8%, rgba(255, 255, 255, 0.28) 0 0.8px, transparent 1.5px),
+    radial-gradient(circle at 44% 88%, rgba(255, 255, 255, 0.26) 0 0.7px, transparent 1.4px),
+    radial-gradient(circle at 58% 44%, rgba(255, 255, 255, 0.24) 0 0.7px, transparent 1.4px),
+    radial-gradient(circle at 72% 12%, rgba(255, 255, 255, 0.3) 0 0.8px, transparent 1.5px),
+    radial-gradient(circle at 84% 72%, rgba(255, 255, 255, 0.28) 0 0.7px, transparent 1.5px);
+  animation: none;
+}
+
+.world-canvas {
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.world-label-layer {
+  z-index: 2;
+  pointer-events: none;
+}
+
+.world-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-width: 120px;
+  opacity: 0;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.world-label.is-visible {
+  opacity: 1;
+}
+
+.world-label-title {
+  font-family: var(--font-ui);
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.84);
+  white-space: nowrap;
+}
+
+.world-label-line {
+  width: 56px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.44), transparent);
+}
+
+.world-vignette {
+  background: radial-gradient(circle at center, transparent 48%, rgba(0, 0, 0, 0.28) 76%, rgba(0, 0, 0, 0.82) 100%);
+  pointer-events: none;
+  z-index: 3;
+}
+
 .home-discussion-panel {
   display: grid;
   gap: 22px;
@@ -2330,6 +2505,46 @@ h3,
   }
 }
 
+@keyframes nebula-drift {
+  from {
+    transform: translate3d(-18px, -10px, 0) scale(0.98);
+  }
+
+  to {
+    transform: translate3d(22px, 16px, 0) scale(1.06);
+  }
+}
+
+@keyframes star-pulse {
+  from {
+    opacity: 0.54;
+  }
+
+  to {
+    opacity: 0.92;
+  }
+}
+
+@keyframes star-drift {
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(-16px);
+  }
+}
+
+@keyframes edge-flow {
+  from {
+    stroke-dashoffset: 0;
+  }
+
+  to {
+    stroke-dashoffset: -48;
+  }
+}
+
 @supports (animation-timeline: view()) {
   .settings-profile,
   .admin-user-row,
@@ -2556,6 +2771,16 @@ h3,
     border-radius: 28px;
   }
 
+  .world-cosmos,
+  .world-stage {
+    min-height: calc(100vh - 124px);
+  }
+
+  .world-label-title {
+    font-size: 0.82rem;
+    letter-spacing: 0.14em;
+  }
+
   .discussion-stats-section:nth-of-type(n + 3) {
     display: none;
   }
@@ -2775,6 +3000,24 @@ h3,
   .map-placeholder {
     min-height: 78vh;
     background-size: 32px 32px, 32px 32px, 100% 100%;
+  }
+
+  .world-main {
+    min-height: auto;
+  }
+
+  .world-cosmos,
+  .world-stage {
+    min-height: calc(100vh - 118px);
+  }
+
+  .world-label-title {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+  }
+
+  .world-label-line {
+    width: 42px;
   }
 
   .map-rings {

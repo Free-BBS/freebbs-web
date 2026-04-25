@@ -12,13 +12,13 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./world.css" />
   </head>
   <body class="world-page">
-    <div class="page-shell page-shell-settings">
+    <div class="page-shell page-shell-world">
       <header class="topbar">
         <a class="brand" href="./index.html" aria-label="FREE-BBS 首页">
           <span class="brand-mark">FREE<br />BBS</span>
-          
         </a>
 
         <form class="searchbar" role="search">
@@ -27,7 +27,7 @@
         </form>
 
         <nav class="nav-actions" aria-label="顶部导航">
-          <a class="nav-link" href="./world.html">
+          <a class="nav-link active" href="./world.html" aria-current="page">
             <img class="nav-icon" src="./assets/icons/map.svg" alt="" aria-hidden="true" />
             <span>世界</span>
           </a>
@@ -69,7 +69,7 @@
       </header>
 
       <nav class="mobile-nav" aria-label="手机底部导航">
-        <a class="nav-link" href="./world.html">
+        <a class="nav-link active" href="./world.html" aria-current="page">
           <img class="nav-icon" src="./assets/icons/map.svg" alt="" aria-hidden="true" />
           <span>世界</span>
         </a>
@@ -87,46 +87,82 @@
         </a>
       </nav>
 
-      <main class="main-content settings-main">
-        <section class="settings-shell" aria-label="世界">
-          <div class="settings-header">
-            <h1>世界</h1>
-          </div>
-          <section class="map-stage world-stage" aria-label="地图区域">
-            <div class="map-placeholder">
-              <div class="map-rings" aria-hidden="true"></div>
-              <div class="map-vector map-vector-north" aria-hidden="true"></div>
-              <div class="map-vector map-vector-east" aria-hidden="true"></div>
-              <div class="map-coord map-coord-top">ZONE 01 / CAMPUS GRID</div>
-              <div class="map-coord map-coord-bottom">FREE-BBS LEARNING MAP</div>
-              <div class="map-coord map-coord-left">N 40°</div>
-              <div class="map-coord map-coord-right">E 116°</div>
-              <div class="map-label">地图区域预留</div>
+      <main class="main-content world-main">
+        <section class="world-shell" aria-label="世界知识地图">
+          <header class="world-command">
+            <div>
+              <p class="world-kicker">Knowledge World</p>
+              <h1 class="world-title">世界</h1>
             </div>
+            <form class="world-search" id="world-search-form" role="search">
+              <span class="world-search-icon" aria-hidden="true">⌕</span>
+              <input id="world-search-input" type="search" placeholder="搜索知识点，例如 傅里叶变换" autocomplete="off" />
+              <button class="world-search-button" type="submit">定位</button>
+            </form>
+          </header>
+
+          <section class="world-layout">
+            <div class="world-map-card" id="world-map-card">
+              <div class="world-map-toolbar" aria-label="地图控制">
+                <button class="world-tool-button" type="button" id="zoom-in" aria-label="放大">+</button>
+                <button class="world-tool-button" type="button" id="zoom-out" aria-label="缩小">−</button>
+                <button class="world-tool-button world-tool-reset" type="button" id="zoom-reset">重置</button>
+              </div>
+
+              <svg
+                class="knowledge-map"
+                id="knowledge-map"
+                viewBox="0 0 1400 900"
+                role="img"
+                aria-label="电子系课程知识地图"
+              >
+                <defs>
+                  <filter id="nodeGlow" x="-120%" y="-120%" width="340%" height="340%">
+                    <feGaussianBlur stdDeviation="5" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                  <filter id="edgeGlow" x="-80%" y="-80%" width="260%" height="260%">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                  <linearGradient id="islandGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#18334a" stop-opacity="0.95" />
+                    <stop offset="55%" stop-color="#0f263a" stop-opacity="0.88" />
+                    <stop offset="100%" stop-color="#081522" stop-opacity="0.96" />
+                  </linearGradient>
+                  <radialGradient id="nodeCore" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stop-color="#ffffff" />
+                    <stop offset="42%" stop-color="#84f2ff" />
+                    <stop offset="100%" stop-color="#2b78ff" />
+                  </radialGradient>
+                </defs>
+                <g id="map-viewport">
+                  <g id="region-layer"></g>
+                  <g id="edge-layer"></g>
+                  <g id="node-layer"></g>
+                </g>
+              </svg>
+
+              <div class="world-tooltip" id="world-tooltip" role="tooltip"></div>
+            </div>
+
+            <aside class="world-detail-panel" id="world-detail-panel" aria-live="polite">
+              <p class="detail-kicker">Node Detail</p>
+              <h2>选择一个知识点</h2>
+              <p class="detail-empty">点击地图中的发光节点，查看简介、难度和前置知识。</p>
+            </aside>
           </section>
         </section>
       </main>
-
-      <footer class="site-footer">
-        <div class="footer-block footer-left">
-          <p>© Free-bbs 工作组 2026-2027</p>
-        </div>
-
-        <div class="footer-block footer-center">
-          <div class="footer-links">
-            <a href="#staff">工作人员名单</a>
-            <a href="https://www.ee.tsinghua.edu.cn/" target="_blank" rel="noreferrer">清华大学电子系</a>
-            <a href="https://www.eesast.com">电子系学生科协</a>
-          </div>
-          <p>&lt;京ICP备2025155858号-2&gt;</p>
-        </div>
-
-        <div class="footer-block footer-right">
-          <p><a href="mailto:feedback@free-bbs.cn">反馈：feedback@free-bbs.cn</a></p>
-        </div>
-      </footer>
     </div>
 
     <script src="./app.js"></script>
+    <script src="./world.js"></script>
   </body>
 </html>
