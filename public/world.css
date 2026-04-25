@@ -9,8 +9,8 @@
 .world-page::before {
   inset: 0;
   background:
-    linear-gradient(135deg, rgba(5, 10, 18, 0.7), rgba(9, 16, 24, 0.5)),
-    url("./assets/homebg.png") center center / cover no-repeat;
+    linear-gradient(135deg, rgba(5, 10, 18, 0.42), rgba(9, 16, 24, 0.32)),
+    url("./assets/world_bg.png") center center / cover no-repeat;
   filter: none;
   animation: none;
 }
@@ -71,10 +71,12 @@
   background:
     linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(4, 12, 22, 0.1), rgba(4, 12, 22, 0.28)),
+    url("./assets/world_bg.png") center center / cover no-repeat,
     radial-gradient(circle at 18% 26%, rgba(89, 216, 255, 0.18), transparent 34%),
     radial-gradient(circle at 76% 62%, rgba(126, 230, 199, 0.14), transparent 36%),
     radial-gradient(circle at center, rgba(7, 14, 24, 0.32), rgba(2, 8, 14, 0.68) 100%);
-  background-size: 64px 64px, 64px 64px, 100% 100%, 100% 100%, 100% 100%;
+  background-size: 64px 64px, 64px 64px, 100% 100%, cover, 100% 100%, 100% 100%, 100% 100%;
 }
 
 .world-map-card::before {
@@ -100,7 +102,12 @@
   gap: 8px;
 }
 
+.world-mobile-switcher {
+  display: none;
+}
+
 .world-tool-button,
+.world-switch-button,
 .detail-action,
 .detail-close {
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -130,11 +137,27 @@
 }
 
 .world-tool-button:hover,
+.world-switch-button:hover,
 .detail-action:hover,
 .detail-close:hover {
   transform: translateY(-1px);
   border-color: rgba(126, 230, 199, 0.44);
   background: linear-gradient(135deg, rgba(126, 230, 199, 0.28), rgba(89, 216, 255, 0.28));
+}
+
+.world-switch-label {
+  min-width: 128px;
+  padding: 9px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(7, 14, 24, 0.54);
+  color: var(--paper);
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+  font-weight: 800;
+  text-align: center;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .knowledge-map {
@@ -152,17 +175,13 @@
   cursor: grabbing;
 }
 
-.region-island {
-  fill: url("#islandGradient");
-  stroke: rgba(126, 230, 199, 0.42);
-  stroke-width: 1.5;
-  filter: drop-shadow(0 18px 24px rgba(0, 0, 0, 0.32)) drop-shadow(0 0 18px rgba(89, 216, 255, 0.14));
+.region-shadow {
+  fill: rgba(2, 8, 14, 0.28);
+  filter: blur(12px);
 }
 
-.region-surface {
-  fill: rgba(89, 216, 255, 0.05);
-  stroke: rgba(255, 255, 255, 0.1);
-  stroke-width: 1;
+.region-island-image {
+  filter: drop-shadow(0 24px 32px rgba(0, 0, 0, 0.32)) drop-shadow(0 0 18px rgba(89, 216, 255, 0.12));
 }
 
 .region-label {
@@ -226,6 +245,13 @@
 
 .knowledge-node.is-muted {
   opacity: 0.28;
+}
+
+.knowledge-region.is-mobile-hidden,
+.knowledge-node.is-mobile-hidden,
+.knowledge-edge.is-mobile-hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .knowledge-node.is-active .node-halo,
@@ -440,8 +466,38 @@
   }
 
   .world-map-toolbar {
-    top: 12px;
-    left: 12px;
+    display: none;
+  }
+
+  .world-mobile-switcher {
+    position: absolute;
+    inset: 0;
+    z-index: 8;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    pointer-events: none;
+  }
+
+  .world-switch-button {
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 1.7rem;
+    line-height: 1;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    pointer-events: auto;
+  }
+
+  .world-switch-label {
+    position: absolute;
+    left: 50%;
+    bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    pointer-events: none;
   }
 
   .world-detail-panel {
