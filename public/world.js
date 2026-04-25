@@ -387,8 +387,12 @@ function openDetailPanel(node) {
   const stars = "★".repeat(node.difficulty) + "☆".repeat(5 - node.difficulty);
 
   panel.innerHTML = `
-    <p class="detail-kicker">Node Detail</p>
-    <h2>${escapeHtml(node.name)}</h2>
+    <div class="detail-head">
+      <div>
+        <h2>${escapeHtml(node.name)}</h2>
+      </div>
+      <button class="detail-close" type="button" aria-label="关闭详情">×</button>
+    </div>
     <p class="detail-description">${escapeHtml(node.description)}</p>
     <div class="detail-meta">
       <div class="detail-row">
@@ -406,6 +410,9 @@ function openDetailPanel(node) {
     </div>
     <button class="detail-action" type="button">进入学习</button>
   `;
+  panel.classList.add("is-open");
+  panel.setAttribute("aria-hidden", "false");
+  panel.querySelector(".detail-close")?.addEventListener("click", closeDetailPanel);
 }
 
 function setupSearch() {
@@ -418,7 +425,9 @@ function setupSearch() {
 
   const focusNode = (query) => {
     const keyword = query.trim().toLowerCase();
-    const node = knowledgeNodes.find((item) => item.name.toLowerCase().includes(keyword));
+    const node = knowledgeNodes.find((item) => {
+      return item.name.toLowerCase().includes(keyword) || item.region.toLowerCase().includes(keyword);
+    });
 
     if (!keyword || !node) {
       mapState.highlightedNodeId = "";
@@ -439,6 +448,19 @@ function setupSearch() {
   input.addEventListener("input", () => {
     focusNode(input.value);
   });
+}
+
+function closeDetailPanel() {
+  const panel = document.getElementById("world-detail-panel");
+
+  if (!panel) {
+    return;
+  }
+
+  panel.classList.remove("is-open");
+  panel.setAttribute("aria-hidden", "true");
+  mapState.activeNodeId = "";
+  setNodeClasses();
 }
 
 function setupZoomAndPan() {
@@ -591,4 +613,21 @@ document.addEventListener("DOMContentLoaded", () => {
   renderMap();
   setupSearch();
   setupZoomAndPan();
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeDetailPanel();
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    const panel = document.getElementById("world-detail-panel");
+    const clickedPanel = event.target.closest?.("#world-detail-panel");
+    const clickedNode = event.target.closest?.(".knowledge-node");
+    const clickedSearch = event.target.closest?.("#world-search-form");
+
+    if (panel?.classList.contains("is-open") && !clickedPanel && !clickedNode && !clickedSearch) {
+      closeDetailPanel();
+    }
+  });
 });
