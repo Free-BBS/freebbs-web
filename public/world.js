@@ -187,7 +187,8 @@ const knowledgeRegions = [
     name: "数理基础",
     labelX: 275,
     labelY: 120,
-    image: "./assets/math_island_transparent.png",
+    image: "./assets/math_island.webp",
+    mobileImage: "./assets/math_island_mobile.webp",
     imageX: 10,
     imageY: -20,
     imageWidth: 500,
@@ -199,7 +200,8 @@ const knowledgeRegions = [
     name: "信号系统",
     labelX: 1055,
     labelY: 115,
-    image: "./assets/signals_island_transparent.png",
+    image: "./assets/signals_island.webp",
+    mobileImage: "./assets/signals_island_mobile.webp",
     imageX: 810,
     imageY: -5,
     imageWidth: 520,
@@ -211,7 +213,8 @@ const knowledgeRegions = [
     name: "电子电路与系统",
     labelX: 365,
     labelY: 515,
-    image: "./assets/circuits_island_transparent.png",
+    image: "./assets/circuits_island.webp",
+    mobileImage: "./assets/circuits_island_mobile.webp",
     imageX: 35,
     imageY: 405,
     imageWidth: 555,
@@ -223,7 +226,8 @@ const knowledgeRegions = [
     name: "数字电路",
     labelX: 1075,
     labelY: 550,
-    image: "./assets/digital_island_transparent.png",
+    image: "./assets/digital_island.webp",
+    mobileImage: "./assets/digital_island_mobile.webp",
     imageX: 805,
     imageY: 445,
     imageWidth: 540,
@@ -261,6 +265,7 @@ let edgeLayer;
 let nodeLayer;
 let tooltip;
 let animationFrameId = 0;
+let currentImageMode = "";
 
 function createSvgElement(tagName, attributes = {}) {
   const element = document.createElementNS("http://www.w3.org/2000/svg", tagName);
@@ -318,13 +323,18 @@ function renderRegions() {
     });
     const image = createSvgElement("image", {
       class: "region-island-image",
-      href: region.image,
+      "data-region": region.name,
       x: region.imageX,
       y: region.imageY,
       width: region.imageWidth,
       height: region.imageHeight,
       preserveAspectRatio: "xMidYMid meet"
     });
+    const imageHref = getRegionImageHref(region);
+
+    if (imageHref) {
+      image.setAttribute("href", imageHref);
+    }
     const label = createSvgElement("text", {
       class: "region-label",
       x: region.labelX,
@@ -588,6 +598,7 @@ function applyMobileIslandView({ center = false } = {}) {
   const activeRegion = mobileRegionNames[mapState.mobileRegionIndex];
   const label = document.getElementById("mobile-island-label");
   const isMobile = isMobileIslandMode();
+  updateRegionImageSources(isMobile);
 
   if (label) {
     label.textContent = activeRegion;
@@ -615,6 +626,42 @@ function applyMobileIslandView({ center = false } = {}) {
 
 function isMobileIslandMode() {
   return window.matchMedia("(max-width: 680px)").matches;
+}
+
+function getRegionImageHref(region) {
+  if (!isMobileIslandMode()) {
+    return region.image;
+  }
+
+  return region.name === mobileRegionNames[mapState.mobileRegionIndex] ? region.mobileImage : "";
+}
+
+function updateRegionImageSources(isMobile = isMobileIslandMode()) {
+  const mode = isMobile ? `mobile:${mobileRegionNames[mapState.mobileRegionIndex]}` : "desktop";
+
+  if (mode === currentImageMode) {
+    return;
+  }
+
+  currentImageMode = mode;
+  document.querySelectorAll(".region-island-image").forEach((imageElement) => {
+    const region = knowledgeRegions.find((item) => item.name === imageElement.dataset.region);
+
+    if (!region) {
+      return;
+    }
+
+    if (!isMobile) {
+      imageElement.setAttribute("href", region.image);
+      return;
+    }
+
+    if (region.name === mobileRegionNames[mapState.mobileRegionIndex]) {
+      imageElement.setAttribute("href", region.mobileImage);
+    } else {
+      imageElement.removeAttribute("href");
+    }
+  });
 }
 
 function closeDetailPanel() {

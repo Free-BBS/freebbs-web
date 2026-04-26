@@ -16,6 +16,7 @@ const mimeTypes = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".svg": "image/svg+xml",
+  ".webp": "image/webp",
   ".ico": "image/x-icon",
   ".woff": "font/woff",
   ".woff2": "font/woff2",
@@ -33,8 +34,16 @@ function sendFile(filePath, response) {
     }
 
     const ext = path.extname(filePath).toLowerCase();
-    response.writeHead(200, {
+    const headers = {
       "Content-Type": mimeTypes[ext] || "application/octet-stream"
+    };
+
+    if ([".png", ".jpg", ".jpeg", ".svg", ".webp", ".ico", ".woff", ".woff2", ".ttf"].includes(ext)) {
+      headers["Cache-Control"] = "public, max-age=31536000, immutable";
+    }
+
+    response.writeHead(200, {
+      ...headers
     });
     response.end(data);
   });

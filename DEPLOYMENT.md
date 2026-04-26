@@ -193,6 +193,8 @@ sudo -u deploy chmod 600 /home/deploy/.ssh/authorized_keys
 7. 读取 `/etc/free-bbs/free-bbs.env`
 8. 默认不执行数据库 SQL，只重启前后端服务并做健康检查
 
+头像和其它上传文件不会放进 Git。生产环境的 `UPLOAD_DIR=/data/www/free-BBS/uploads` 是运行期持久目录，`scripts/deploy.sh` 会在同步代码时排除 `uploads` 和 `database/uploads`，避免 `rsync --delete` 在每次部署时删除用户头像。
+
 数据库变更需要手动触发 `.github/workflows/db-migrate.yml`，并在输入框里明确填写 `RUN`。迁移脚本会执行 `database/migrations/*.sql` 中尚未执行过的文件，而不是反复重跑整份初始化 SQL。
 
 ## 7. 数据服务器为什么只需要放行应用服务器

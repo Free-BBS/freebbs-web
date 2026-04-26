@@ -14,7 +14,7 @@ const API_BASE_URL = (() => {
   return `${window.location.origin}/api`;
 })();
 const API_ROOT = API_BASE_URL.replace(/\/api$/, "");
-const DEFAULT_AVATAR = "./assets/avatar_placeholder.png";
+const DEFAULT_AVATAR = "./assets/avatar_placeholder.webp";
 
 const STORAGE_KEY = "free_bbs_auth_token";
 const userState = {

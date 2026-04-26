@@ -19,6 +19,7 @@ echo "[deploy] syncing project to $DEPLOY_DIR"
 rsync -a --delete \
   --exclude ".git" \
   --exclude "node_modules" \
+  --exclude "uploads" \
   --exclude "database/uploads" \
   "$ROOT_DIR"/ "$DEPLOY_DIR"/
 
@@ -36,6 +37,11 @@ if [[ -f "$ENV_FILE" ]]; then
 else
   echo "[deploy] missing env file: $ENV_FILE" >&2
   exit 1
+fi
+
+if [[ -n "${UPLOAD_DIR:-}" ]]; then
+  echo "[deploy] ensuring upload directory exists: $UPLOAD_DIR"
+  mkdir -p "$UPLOAD_DIR"
 fi
 
 if [[ "$RUN_DB_MIGRATIONS" == "1" ]]; then
