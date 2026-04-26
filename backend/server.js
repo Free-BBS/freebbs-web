@@ -424,6 +424,53 @@ app.get("/api/health", async (_request, response) => {
   }
 });
 
+app.post("/api/ai/chat", async (request, response) => {
+  const payload = request.body;
+
+  if (!payload || typeof payload !== "object") {
+    response.status(400).json({ message: "请求体必须是 JSON 对象" });
+    return;
+  }
+
+  try {
+    const agentResponse = await fetch(`${config.agentBaseUrl.replace(/\/$/, "")}/api/v1/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (payload.stream) {
+      response.status(agentResponse.status);
+      response.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      response.setHeader("Cache-Control", "no-cache");
+      response.setHeader("X-Accel-Buffering", "no");
+
+      if (!agentResponse.body) {
+        response.end();
+        return;
+      }
+
+      for await (const chunk of agentResponse.body) {
+        response.write(chunk);
+      }
+      response.end();
+      return;
+    }
+
+    const text = await agentResponse.text();
+    response.status(agentResponse.status);
+    response.setHeader("Content-Type", agentResponse.headers.get("content-type") || "application/json; charset=utf-8");
+    response.send(text);
+  } catch (error) {
+    response.status(502).json({
+      message: "AI 服务暂时不可用",
+      detail: error.message
+    });
+  }
+});
+
 app.get("/api/fortune-config", async (_request, response) => {
   try {
     response.json({

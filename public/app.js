@@ -15,6 +15,7 @@ const API_BASE_URL = (() => {
 })();
 const API_ROOT = API_BASE_URL.replace(/\/api$/, "");
 const DEFAULT_AVATAR = "./assets/avatar_placeholder.webp";
+const MAX_AGENT_AVATAR = "./assets/max_the_agent_avatar.webp";
 
 const STORAGE_KEY = "free_bbs_auth_token";
 const userState = {
@@ -73,6 +74,11 @@ const discussionComposeContent = document.getElementById("discussion-compose-con
 const discussionComposeMessage = document.getElementById("discussion-compose-message");
 const discussionStatsPosts = document.getElementById("discussion-stats-posts");
 const discussionStatsLikes = document.getElementById("discussion-stats-likes");
+const aiChatForm = document.getElementById("aichat-form");
+const aiChatInput = document.getElementById("aichat-input");
+const aiChatThread = document.getElementById("aichat-thread");
+const aiChatStatus = document.getElementById("aichat-status");
+const aiChatSend = document.getElementById("aichat-send");
 const discussionState = {
   boards: [],
   posts: [],
@@ -81,6 +87,10 @@ const discussionState = {
   isFallback: false,
   activePost: null,
   comments: []
+};
+const aiChatState = {
+  messages: [],
+  isSending: false
 };
 const FALLBACK_DISCUSSION_BOARDS = [
   {
@@ -327,6 +337,9 @@ function renderUser() {
     avatarImages.forEach((image) => {
       image.src = DEFAULT_AVATAR;
     });
+    document.querySelectorAll(".aichat-message-user .aichat-avatar-image").forEach((image) => {
+      image.src = DEFAULT_AVATAR;
+    });
     renderDiscussionComposerState();
     return;
   }
@@ -340,6 +353,9 @@ function renderUser() {
     renderCurrency("magnetic", userState.manetrons)
   ].join("");
   avatarImages.forEach((image) => {
+    image.src = getAvatarUrl(userState.avatarPath);
+  });
+  document.querySelectorAll(".aichat-message-user .aichat-avatar-image").forEach((image) => {
     image.src = getAvatarUrl(userState.avatarPath);
   });
 
@@ -477,6 +493,10 @@ function isAdminUsersPage() {
 
 function isDiscussionPage() {
   return window.location.pathname.endsWith("/discussion.html");
+}
+
+function isAiChatPage() {
+  return window.location.pathname.endsWith("/aichat.html");
 }
 
 function isPublicProfilePage() {
@@ -772,6 +792,194 @@ function applyMathRendering(root) {
     ],
     throwOnError: false
   });
+}
+
+function setAiChatStatus(message) {
+  if (aiChatStatus) {
+    aiChatStatus.textContent = message || "";
+  }
+}
+
+function scrollAiChatToBottom() {
+  if (aiChatThread) {
+    aiChatThread.scrollTop = aiChatThread.scrollHeight;
+  }
+}
+
+function resizeAiChatInput() {
+  if (!aiChatInput) {
+    return;
+  }
+
+  aiChatInput.style.height = "auto";
+  aiChatInput.style.height = `${Math.min(aiChatInput.scrollHeight, 180)}px`;
+}
+
+function appendAiChatMessage(role, content = "") {
+  if (!aiChatThread) {
+    return null;
+  }
+
+  const article = document.createElement("article");
+  article.className = `aichat-message aichat-message-${role}`;
+  const avatarUrl = role === "user" ? getAvatarUrl(userState.avatarPath) : MAX_AGENT_AVATAR;
+  const avatarAlt = role === "user" ? "你的头像" : "Max 的头像";
+  article.innerHTML = `
+    <div class="aichat-avatar">
+      <img class="aichat-avatar-image" src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(avatarAlt)}" />
+    </div>
+    <div class="aichat-bubble discussion-markdown-body"></div>
+  `;
+
+  aiChatThread.append(article);
+  updateAiChatMessage(article, content);
+  scrollAiChatToBottom();
+  return article;
+}
+
+function updateAiChatMessage(article, content) {
+  const bubble = article?.querySelector(".aichat-bubble");
+
+  if (!bubble) {
+    return;
+  }
+
+  bubble.innerHTML = renderMarkdownContent(content || "...");
+  applyMathRendering(bubble);
+  scrollAiChatToBottom();
+}
+
+function buildAiChatPayload(userMessage) {
+  const recentMessages = aiChatState.messages.slice(-13);
+
+  return {
+    messages: [
+      ...recentMessages,
+      {
+        role: "user",
+        content: userMessage
+      }
+    ],
+    stream: true,
+    temperature: 0.6
+  };
+}
+
+async function streamAiChatResponse(payload, onDelta) {
+  const response = await fetch(`${API_BASE_URL}/ai/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(userState.token ? { Authorization: `Bearer ${userState.token}` } : {})
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => ({}));
+    throw new Error(errorPayload.detail ? `${errorPayload.message}：${errorPayload.detail}` : (errorPayload.message || "AI 请求失败"));
+  }
+
+  if (!response.body) {
+    throw new Error("浏览器不支持流式响应");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    const events = buffer.split("\n\n");
+    buffer = events.pop() || "";
+
+    for (const eventText of events) {
+      const dataLine = eventText.split("\n").find((line) => line.startsWith("data:"));
+
+      if (!dataLine) {
+        continue;
+      }
+
+      const eventPayload = JSON.parse(dataLine.replace(/^data:\s*/, ""));
+
+      if (eventPayload.error) {
+        throw new Error(eventPayload.error.message || "AI 服务返回错误");
+      }
+
+      if (eventPayload.delta) {
+        onDelta(eventPayload.delta);
+      }
+    }
+
+    if (done) {
+      break;
+    }
+  }
+}
+
+async function handleAiChatSubmit(event) {
+  event.preventDefault();
+
+  if (!aiChatInput || aiChatState.isSending) {
+    return;
+  }
+
+  const userMessage = aiChatInput.value.trim();
+
+  if (!userMessage) {
+    return;
+  }
+
+  aiChatState.isSending = true;
+  aiChatInput.value = "";
+  resizeAiChatInput();
+  aiChatInput.disabled = true;
+  if (aiChatSend) {
+    aiChatSend.disabled = true;
+  }
+  setAiChatStatus("Max 正在输入...");
+
+  appendAiChatMessage("user", userMessage);
+  const assistantArticle = appendAiChatMessage("assistant", "");
+  let assistantContent = "";
+
+  try {
+    await streamAiChatResponse(buildAiChatPayload(userMessage), (delta) => {
+      assistantContent += delta;
+      updateAiChatMessage(assistantArticle, assistantContent);
+    });
+
+    aiChatState.messages.push({ role: "user", content: userMessage });
+    aiChatState.messages.push({ role: "assistant", content: assistantContent });
+    setAiChatStatus("");
+  } catch (error) {
+    updateAiChatMessage(assistantArticle, `请求失败：${error.message}`);
+    setAiChatStatus("AI 服务不可用，请确认 freebbs-agent 已启动。");
+  } finally {
+    aiChatState.isSending = false;
+    aiChatInput.disabled = false;
+    if (aiChatSend) {
+      aiChatSend.disabled = false;
+    }
+    aiChatInput.focus();
+  }
+}
+
+function initializeAiChatPage() {
+  if (!isAiChatPage()) {
+    return;
+  }
+
+  aiChatInput?.addEventListener("input", resizeAiChatInput);
+  aiChatInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      aiChatForm?.requestSubmit();
+    }
+  });
+  aiChatForm?.addEventListener("submit", handleAiChatSubmit);
+  resizeAiChatInput();
 }
 
 function setDiscussionDetailView(isDetailView) {
@@ -1831,4 +2039,5 @@ renderSettingsForm();
 renderDiscussionComposerState();
 loadHomeDiscussionPosts();
 initializeDiscussionPage();
+initializeAiChatPage();
 loadPublicProfile();

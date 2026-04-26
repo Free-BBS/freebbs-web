@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FREE-BBS - 讨论</title>
+    <title>FREE-BBS - 问问 Max</title>
     <link rel="icon" type="image/png" href="./assets/favicon-64.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -12,23 +12,18 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
-    <link
-      rel="stylesheet"
-      href="/vendor/katex/dist/katex.min.css"
-    />
+    <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css" />
   </head>
-  <body class="discussion-page">
+  <body class="aichat-page">
     <div class="page-shell page-shell-settings">
       <header class="topbar">
         <a class="brand" href="./index.html" aria-label="FREE-BBS 首页">
           <span class="brand-mark">FREE<br />BBS</span>
         </a>
-
         <form class="searchbar" role="search">
           <span class="search-symbol" aria-hidden="true">⌕</span>
           <input type="search" placeholder="搜索课程、讨论、资料、地图坐标" aria-label="搜索" />
         </form>
-
         <nav class="nav-actions" aria-label="顶部导航">
           <a class="nav-link" href="./world.html">
             <img class="nav-icon" src="./assets/icons/map.svg" alt="" aria-hidden="true" />
@@ -38,7 +33,7 @@
             <img class="nav-icon" src="./assets/icons/people.svg" alt="" aria-hidden="true" />
             <span>讨论</span>
           </a>
-          <a class="nav-link" href="./aichat.html">
+          <a class="nav-link is-active" href="./aichat.html">
             <img class="nav-icon" src="./assets/icons/ai.svg" alt="" aria-hidden="true" />
             <span>问问 Max</span>
           </a>
@@ -50,7 +45,6 @@
             <img class="nav-icon" src="./assets/icons/gear.svg" alt="" aria-hidden="true" />
             <span>管理</span>
           </a>
-
           <div class="user-panel" id="user-panel">
             <div class="user-summary">
               <button class="avatar" type="button" aria-label="用户头像">
@@ -74,7 +68,6 @@
           </div>
         </nav>
       </header>
-
       <nav class="mobile-nav" aria-label="手机底部导航">
         <a class="nav-link" href="./world.html">
           <img class="nav-icon" src="./assets/icons/map.svg" alt="" aria-hidden="true" />
@@ -84,10 +77,10 @@
           <img class="nav-icon" src="./assets/icons/people.svg" alt="" aria-hidden="true" />
           <span>讨论</span>
         </a>
-          <a class="nav-link" href="./aichat.html">
-            <img class="nav-icon" src="./assets/icons/ai.svg" alt="" aria-hidden="true" />
-            <span>问问 Max</span>
-          </a>
+        <a class="nav-link is-active" href="./aichat.html">
+          <img class="nav-icon" src="./assets/icons/ai.svg" alt="" aria-hidden="true" />
+          <span>问问 Max</span>
+        </a>
         <a class="nav-link fortune-link hidden" href="#">
           <img class="nav-icon" src="./assets/icons/yunshi.svg" alt="" aria-hidden="true" />
           <span>今日运势</span>
@@ -97,85 +90,29 @@
           <span>管理</span>
         </a>
       </nav>
-
       <main class="main-content settings-main">
-        <section class="settings-shell" aria-label="讨论">
-          <div class="settings-header">
-            <h1>讨论</h1>
+        <section class="aichat-shell" aria-label="问问 Max">
+          <div class="aichat-thread" id="aichat-thread" aria-live="polite">
+            <article class="aichat-message aichat-message-assistant">
+              <div class="aichat-avatar">
+                <img class="aichat-avatar-image" src="./assets/max_the_agent_avatar.webp" alt="Max 的头像" />
+              </div>
+              <div class="aichat-bubble discussion-markdown-body">
+                <p>你好，我是 Max。可以问我课程、推导、代码或讨论区里适合展开的问题。</p>
+              </div>
+            </article>
           </div>
-          <section class="discussion-shell" aria-label="讨论区">
-            <section class="discussion-layout">
-              <section class="discussion-feed" aria-label="帖子列表">
-                <form class="discussion-compose hidden" id="discussion-compose-form">
-                  <div class="discussion-compose-grid">
-                    <label class="auth-field">
-                      <span>版块</span>
-                      <select id="discussion-compose-board" required></select>
-                    </label>
-                    <label class="auth-field">
-                      <span>标题</span>
-                      <input id="discussion-compose-title" type="text" maxlength="120" required />
-                    </label>
-                  </div>
-                  <label class="auth-field">
-                    <span>正文</span>
-                    <textarea
-                      id="discussion-compose-content"
-                      rows="10"
-                      maxlength="20000"
-                      placeholder="支持 Markdown 与 KaTeX，例如：$E=mc^2$ 或 $$\\int_0^1 x^2\\,dx$$"
-                      required
-                    ></textarea>
-                  </label>
-                  <div class="discussion-compose-actions">
-                    <p class="discussion-message" id="discussion-compose-message"></p>
-                    <button class="auth-submit discussion-submit" type="submit">发布</button>
-                  </div>
-                </form>
-
-                <div class="discussion-post-list" id="discussion-post-list">
-                  <article class="discussion-empty">
-                    <p>正在加载帖子...</p>
-                  </article>
-                </div>
-              </section>
-
-              <article class="discussion-detail" id="discussion-detail" aria-live="polite">
-              </article>
-
-              <aside class="discussion-stats-sidebar" id="discussion-stats-sidebar" aria-label="讨论统计">
-                <section class="discussion-stats-section">
-                  <p class="discussion-kicker">Boards</p>
-                  <h2>版块</h2>
-                  <div class="discussion-board-list" id="discussion-board-list"></div>
-                </section>
-
-                <section class="discussion-stats-section">
-                  <button class="discussion-create-toggle" id="discussion-create-toggle" type="button">发布帖子</button>
-                </section>
-
-                <section class="discussion-stats-section">
-                  <p class="discussion-kicker">Posts</p>
-                  <h2>发帖统计</h2>
-                  <strong class="discussion-stats-number" id="discussion-stats-posts">-</strong>
-                </section>
-
-                <section class="discussion-stats-section">
-                  <p class="discussion-kicker">Likes</p>
-                  <h2>获赞统计</h2>
-                  <strong class="discussion-stats-number" id="discussion-stats-likes">-</strong>
-                </section>
-              </aside>
-            </section>
-          </section>
+          <form class="aichat-composer" id="aichat-form">
+            <textarea id="aichat-input" rows="1" placeholder="问问 Max..." aria-label="输入给 Max 的问题" maxlength="12000" required></textarea>
+            <button class="aichat-send" id="aichat-send" type="submit">发送</button>
+          </form>
+          <p class="aichat-status" id="aichat-status"></p>
         </section>
       </main>
-
       <footer class="site-footer">
         <div class="footer-block footer-left">
           <p>© Free-bbs 工作组 2026-2027</p>
         </div>
-
         <div class="footer-block footer-center">
           <div class="footer-links">
             <a href="#staff">工作人员名单</a>
@@ -184,13 +121,11 @@
           </div>
           <p>&lt;京ICP备2025155858号-2&gt;</p>
         </div>
-
         <div class="footer-block footer-right">
           <p><a href="mailto:feedback@free-bbs.cn">反馈：feedback@free-bbs.cn</a></p>
         </div>
       </footer>
     </div>
-
     <script src="/vendor/marked/lib/marked.umd.js"></script>
     <script src="/vendor/katex/dist/katex.min.js"></script>
     <script src="/vendor/katex/dist/contrib/auto-render.min.js"></script>

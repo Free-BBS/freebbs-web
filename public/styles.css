@@ -277,6 +277,12 @@ h3,
   letter-spacing: 0.08em;
 }
 
+.nav-link.is-active {
+  background: rgba(248, 243, 233, 0.12);
+  color: var(--paper);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
 .nav-icon {
   width: 16px;
   height: 16px;
@@ -1800,6 +1806,149 @@ h3,
   text-decoration-color: rgba(156, 233, 255, 0.42);
 }
 
+.aichat-shell {
+  width: min(100%, 980px);
+  height: calc(100vh - 116px);
+  min-height: 640px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  gap: 14px;
+  color: var(--paper);
+}
+
+.aichat-thread {
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 24px;
+  padding: 28px 8px 18px;
+  scrollbar-width: thin;
+}
+
+.aichat-message {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.aichat-message-user {
+  grid-template-columns: minmax(0, 1fr) 36px;
+}
+
+.aichat-message-user .aichat-avatar {
+  grid-column: 2;
+  grid-row: 1;
+  background: rgba(255, 211, 109, 0.16);
+}
+
+.aichat-message-user .aichat-bubble {
+  justify-self: end;
+  max-width: min(760px, 100%);
+  background: rgba(248, 243, 233, 0.12);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.aichat-avatar {
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(120, 217, 198, 0.22), rgba(89, 216, 255, 0.18));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--paper);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.aichat-avatar-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.aichat-bubble {
+  min-width: 0;
+  padding: 2px 0;
+}
+
+.aichat-message-user .aichat-bubble {
+  padding: 14px 16px;
+  border-radius: 18px;
+}
+
+.aichat-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 28px;
+  background: rgba(248, 243, 233, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 20px 50px rgba(3, 8, 16, 0.22);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.aichat-composer textarea {
+  width: 100%;
+  max-height: 180px;
+  resize: none;
+  border: none;
+  outline: none;
+  padding: 13px 6px 10px 12px;
+  background: transparent;
+  color: var(--paper);
+  line-height: 1.55;
+}
+
+.aichat-composer textarea::placeholder {
+  color: rgba(244, 239, 231, 0.48);
+}
+
+.aichat-send {
+  min-width: 72px;
+  border: none;
+  border-radius: 18px;
+  padding: 12px 18px;
+  background: var(--paper);
+  color: #101823;
+  font-family: var(--font-ui);
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+
+.aichat-send:hover {
+  transform: translateY(-1px);
+}
+
+.aichat-send:disabled,
+.aichat-composer textarea:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.aichat-status {
+  min-height: 1.4em;
+  margin: 0;
+  padding: 0 14px;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+}
+
 .discussion-comments {
   display: grid;
   gap: 16px;
@@ -2763,6 +2912,11 @@ h3,
     grid-template-columns: 1fr;
   }
 
+  .aichat-shell {
+    height: calc(100vh - 116px);
+    min-height: 560px;
+  }
+
   .discussion-stats-sidebar {
     grid-column: auto;
     grid-row: 1;
@@ -2912,6 +3066,43 @@ h3,
   .discussion-feed,
   .discussion-detail {
     padding: 18px;
+  }
+
+  .aichat-shell {
+    height: calc(100vh - 186px);
+    min-height: 480px;
+  }
+
+  .aichat-thread {
+    padding: 10px 0;
+    gap: 18px;
+  }
+
+  .aichat-message {
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .aichat-message-user {
+    grid-template-columns: minmax(0, 1fr) 32px;
+  }
+
+  .aichat-avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .aichat-composer {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 22px;
+  }
+
+  .aichat-send {
+    min-width: 58px;
+    padding: 10px 12px;
+    border-radius: 16px;
   }
 
   .discussion-compose-actions {
