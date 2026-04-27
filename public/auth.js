@@ -87,7 +87,7 @@ async function handleAuthSubmit(event) {
         });
 
     localStorage.setItem(STORAGE_KEY, payload.token);
-    window.location.href = "./index.html";
+    window.location.href = "/";
   } catch (error) {
     setMessage(error.message);
   } finally {

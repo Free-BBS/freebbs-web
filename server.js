@@ -6,6 +6,27 @@ const host = process.env.HOST || "127.0.0.1";
 const port = process.env.PORT || 3000;
 const publicDir = path.join(__dirname, "public");
 const vendorDir = path.join(__dirname, "node_modules");
+const pageRoutes = new Map([
+  ["/adminusers", "/adminusers.html"],
+  ["/aichat", "/aichat.html"],
+  ["/discussion", "/discussion.html"],
+  ["/login", "/login.html"],
+  ["/profile", "/profile.html"],
+  ["/register", "/register.html"],
+  ["/settings", "/settings.html"],
+  ["/world", "/world.html"]
+]);
+const htmlRedirects = new Map([
+  ["/adminusers.html", "/adminusers"],
+  ["/aichat.html", "/aichat"],
+  ["/discussion.html", "/discussion"],
+  ["/index.html", "/"],
+  ["/login.html", "/login"],
+  ["/profile.html", "/profile"],
+  ["/register.html", "/register"],
+  ["/settings.html", "/settings"],
+  ["/world.html", "/world"]
+]);
 
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
@@ -51,7 +72,19 @@ function sendFile(filePath, response) {
 
 const server = http.createServer((request, response) => {
   const requestUrl = new URL(request.url || "/", `http://${request.headers.host || `${host}:${port}`}`);
-  const urlPath = requestUrl.pathname === "/" ? "/index.html" : requestUrl.pathname;
+  const cleanPath = requestUrl.pathname.endsWith("/") && requestUrl.pathname !== "/"
+    ? requestUrl.pathname.slice(0, -1)
+    : requestUrl.pathname;
+
+  if (htmlRedirects.has(cleanPath)) {
+    const redirectUrl = new URL(request.url || "/", `http://${request.headers.host || `${host}:${port}`}`);
+    redirectUrl.pathname = htmlRedirects.get(cleanPath);
+    response.writeHead(301, { Location: `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}` });
+    response.end();
+    return;
+  }
+
+  const urlPath = cleanPath === "/" ? "/index.html" : (pageRoutes.get(cleanPath) || cleanPath);
   const normalizedPath = path.normalize(urlPath).replace(/^(\.\.[/\\])+/, "");
   const isVendorRequest = normalizedPath.startsWith("/vendor/");
   const baseDir = isVendorRequest ? vendorDir : publicDir;

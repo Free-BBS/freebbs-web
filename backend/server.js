@@ -1,4 +1,5 @@
 const express = require("express");
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const pool = require("./db");
@@ -173,6 +174,24 @@ async function ensureDiscussionTables() {
   }
 }
 
+async function ensureAiDialogTables() {
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS ai_dialogs (
+      id BIGINT PRIMARY KEY AUTO_INCREMENT,
+      did VARCHAR(36) NOT NULL UNIQUE,
+      user_id BIGINT NOT NULL,
+      title VARCHAR(120) NOT NULL,
+      messages_json LONGTEXT NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT fk_ai_dialogs_user
+        FOREIGN KEY (user_id) REFERENCES users (id)
+        ON DELETE CASCADE,
+      INDEX idx_ai_dialogs_user_updated_at (user_id, updated_at DESC)
+    )`
+  );
+}
+
 async function getAppSetting(key, defaultValue = "") {
   const [rows] = await pool.execute(
     `SELECT setting_value
@@ -274,6 +293,58 @@ function toDiscussionPostDetail(row) {
     ...toDiscussionPostSummary(row),
     contentMarkdown: row.content_markdown || ""
   };
+}
+
+function toAiDialogSummary(row) {
+  return {
+    did: row.did,
+    title: row.title,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function normalizeAiMessages(value) {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const messages = [];
+
+  for (const message of value) {
+    if (!message || typeof message !== "object") {
+      return null;
+    }
+
+    const role = message.role;
+    const content = message.content;
+
+    if (!["user", "assistant"].includes(role)) {
+      return null;
+    }
+
+    if (typeof content !== "string") {
+      return null;
+    }
+
+    messages.push({
+      role,
+      content: content.slice(0, 20000)
+    });
+  }
+
+  return messages;
+}
+
+function buildAiDialogTitle(title, messages) {
+  const explicitTitle = String(title || "").trim();
+
+  if (explicitTitle) {
+    return explicitTitle.slice(0, 120);
+  }
+
+  const firstUserMessage = messages.find((message) => message.role === "user")?.content || "新的对话";
+  return firstUserMessage.replace(/\s+/g, " ").trim().slice(0, 32) || "新的对话";
 }
 
 function normalizeLimit(value, defaultLimit = 12, maxLimit = 50) {
@@ -468,6 +539,129 @@ app.post("/api/ai/chat", async (request, response) => {
       message: "AI 服务暂时不可用",
       detail: error.message
     });
+  }
+});
+
+app.get("/api/ai/dialogs", async (request, response) => {
+  try {
+    await ensureAiDialogTables();
+
+    const user = await requireAuth(request, response);
+
+    if (!user) {
+      return;
+    }
+
+    const limit = normalizeLimit(request.query.limit, 12, 30);
+    const [rows] = await pool.execute(
+      `SELECT did, title, created_at, updated_at
+       FROM ai_dialogs
+       WHERE user_id = ?
+       ORDER BY updated_at DESC, id DESC
+       LIMIT ${limit}`,
+      [user.id]
+    );
+
+    response.json({
+      dialogs: rows.map(toAiDialogSummary)
+    });
+  } catch (error) {
+    response.status(500).json({ message: "获取 AI 对话失败", detail: error.message });
+  }
+});
+
+app.get("/api/ai/dialogs/:did", async (request, response) => {
+  try {
+    await ensureAiDialogTables();
+
+    const user = await requireAuth(request, response);
+
+    if (!user) {
+      return;
+    }
+
+    const did = String(request.params.did || "").trim();
+    const [rows] = await pool.execute(
+      `SELECT did, title, messages_json, created_at, updated_at
+       FROM ai_dialogs
+       WHERE did = ? AND user_id = ?
+       LIMIT 1`,
+      [did, user.id]
+    );
+
+    if (!rows[0]) {
+      response.status(404).json({ message: "对话不存在" });
+      return;
+    }
+
+    response.json({
+      dialog: {
+        ...toAiDialogSummary(rows[0]),
+        messages: JSON.parse(rows[0].messages_json || "[]")
+      }
+    });
+  } catch (error) {
+    response.status(500).json({ message: "获取 AI 对话详情失败", detail: error.message });
+  }
+});
+
+app.post("/api/ai/dialogs", async (request, response) => {
+  try {
+    await ensureAiDialogTables();
+
+    const user = await requireAuth(request, response);
+
+    if (!user) {
+      return;
+    }
+
+    const messages = normalizeAiMessages(request.body.messages);
+
+    if (!messages || !messages.length) {
+      response.status(400).json({ message: "对话内容不能为空" });
+      return;
+    }
+
+    const did = String(request.body.did || "").trim() || crypto.randomUUID();
+    const title = buildAiDialogTitle(request.body.title, messages);
+    const messagesJson = JSON.stringify(messages);
+
+    const [existing] = await pool.execute(
+      `SELECT did
+       FROM ai_dialogs
+       WHERE did = ? AND user_id = ?
+       LIMIT 1`,
+      [did, user.id]
+    );
+
+    if (existing[0]) {
+      await pool.execute(
+        `UPDATE ai_dialogs
+         SET title = ?, messages_json = ?
+         WHERE did = ? AND user_id = ?`,
+        [title, messagesJson, did, user.id]
+      );
+    } else {
+      await pool.execute(
+        `INSERT INTO ai_dialogs (did, user_id, title, messages_json)
+         VALUES (?, ?, ?, ?)`,
+        [did, user.id, title, messagesJson]
+      );
+    }
+
+    const [rows] = await pool.execute(
+      `SELECT did, title, created_at, updated_at
+       FROM ai_dialogs
+       WHERE did = ? AND user_id = ?
+       LIMIT 1`,
+      [did, user.id]
+    );
+
+    response.status(existing[0] ? 200 : 201).json({
+      dialog: toAiDialogSummary(rows[0])
+    });
+  } catch (error) {
+    response.status(500).json({ message: "保存 AI 对话失败", detail: error.message });
   }
 });
 
@@ -1449,6 +1643,7 @@ app.delete("/api/admin/users/:id", async (request, response) => {
 async function start() {
   await ensureAppSettingsTable();
   await ensureDiscussionTables();
+  await ensureAiDialogTables();
 
   app.listen(config.apiPort, config.apiHost, () => {
     console.log(`FREE-BBS backend running at http://${config.apiHost}:${config.apiPort}`);

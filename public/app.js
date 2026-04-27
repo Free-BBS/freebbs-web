@@ -14,8 +14,8 @@ const API_BASE_URL = (() => {
   return `${window.location.origin}/api`;
 })();
 const API_ROOT = API_BASE_URL.replace(/\/api$/, "");
-const DEFAULT_AVATAR = "./assets/avatar_placeholder.webp";
-const MAX_AGENT_AVATAR = "./assets/max_the_agent_avatar.webp";
+const DEFAULT_AVATAR = "/assets/avatar_placeholder.webp";
+const MAX_AGENT_AVATAR = "/assets/max_the_agent_avatar.webp";
 
 const STORAGE_KEY = "free_bbs_auth_token";
 const userState = {
@@ -79,6 +79,11 @@ const aiChatInput = document.getElementById("aichat-input");
 const aiChatThread = document.getElementById("aichat-thread");
 const aiChatStatus = document.getElementById("aichat-status");
 const aiChatSend = document.getElementById("aichat-send");
+const aiChatDialogList = document.getElementById("aichat-dialog-list");
+const aiChatNewDialog = document.getElementById("aichat-new-dialog");
+const aiChatDialogId = document.getElementById("aichat-dialog-id");
+const aiChatShell = document.querySelector(".aichat-shell");
+const aiChatDialogToggle = document.getElementById("aichat-dialog-toggle");
 const discussionState = {
   boards: [],
   posts: [],
@@ -89,6 +94,8 @@ const discussionState = {
   comments: []
 };
 const aiChatState = {
+  currentDid: "",
+  dialogs: [],
   messages: [],
   isSending: false
 };
@@ -280,7 +287,7 @@ function renderCurrency(type, value) {
 
   return `
     <span class="currency currency-${type}" data-tooltip="${label}" aria-label="${label}">
-      <img class="currency-icon" src="./assets/icons/${icon}.svg" alt="${label}" />
+      <img class="currency-icon" src="/assets/icons/${icon}.svg" alt="${label}" />
       <span class="currency-value">${value}</span>
     </span>
   `;
@@ -340,6 +347,7 @@ function renderUser() {
     document.querySelectorAll(".aichat-message-user .aichat-avatar-image").forEach((image) => {
       image.src = DEFAULT_AVATAR;
     });
+    renderAiDialogList();
     renderDiscussionComposerState();
     return;
   }
@@ -358,6 +366,7 @@ function renderUser() {
   document.querySelectorAll(".aichat-message-user .aichat-avatar-image").forEach((image) => {
     image.src = getAvatarUrl(userState.avatarPath);
   });
+  renderAiDialogList();
 
   if (settingsAvatarImage) {
     settingsAvatarImage.src = getAvatarUrl(userState.avatarPath);
@@ -385,7 +394,7 @@ function setDiscussionMessage(message) {
 }
 
 function openModal(mode = "login") {
-  window.location.href = mode === "register" ? "./register.html" : "./login.html";
+  window.location.href = mode === "register" ? "/register" : "/login";
 }
 
 function saveSession(token, user) {
@@ -402,6 +411,7 @@ function saveSession(token, user) {
   userState.manetrons = user.manetrons ?? 0;
   localStorage.setItem(STORAGE_KEY, token);
   renderUser();
+  loadAiDialogs();
   renderSettingsForm();
   renderAdminSection();
 }
@@ -419,7 +429,11 @@ function clearSession() {
   userState.electrons = 0;
   userState.manetrons = 0;
   localStorage.removeItem(STORAGE_KEY);
+  aiChatState.currentDid = "";
+  aiChatState.dialogs = [];
+  aiChatState.messages = [];
   renderUser();
+  renderAiChatThread();
   renderSettingsForm();
   renderAdminSection();
 }
@@ -446,7 +460,7 @@ async function callApi(path, options = {}) {
 async function restoreSession() {
   if (!userState.token) {
     if (isSettingsPage() || isAdminUsersPage()) {
-      window.location.href = "./login.html";
+      window.location.href = "/login";
       return;
     }
     renderUser();
@@ -462,7 +476,7 @@ async function restoreSession() {
   } catch {
     clearSession();
     if (isSettingsPage() || isAdminUsersPage()) {
-      window.location.href = "./login.html";
+      window.location.href = "/login";
     }
   }
 }
@@ -484,23 +498,28 @@ async function loadFortuneConfig() {
 }
 
 function isSettingsPage() {
-  return window.location.pathname.endsWith("/settings.html");
+  return isCurrentPath("/settings");
 }
 
 function isAdminUsersPage() {
-  return window.location.pathname.endsWith("/adminusers.html");
+  return isCurrentPath("/adminusers");
 }
 
 function isDiscussionPage() {
-  return window.location.pathname.endsWith("/discussion.html");
+  return isCurrentPath("/discussion");
 }
 
 function isAiChatPage() {
-  return window.location.pathname.endsWith("/aichat.html");
+  return isCurrentPath("/aichat");
 }
 
 function isPublicProfilePage() {
-  return window.location.pathname.endsWith("/profile.html");
+  return isCurrentPath("/profile");
+}
+
+function isCurrentPath(pagePath) {
+  const pathname = window.location.pathname.replace(/\/$/, "") || "/";
+  return pathname === pagePath || pathname === `${pagePath}.html`;
 }
 
 function getProfileStudentIdFromQuery() {
@@ -516,7 +535,7 @@ function getProfileHref(studentId) {
     return "";
   }
 
-  return `./profile.html?studentId=${encodeURIComponent(studentId)}`;
+  return `/profile?studentId=${encodeURIComponent(studentId)}`;
 }
 
 function renderAuthorProfileLink(author, className, includeAvatar = false) {
@@ -611,7 +630,7 @@ function renderHomeDiscussionPosts(posts) {
   }
 
   homeDiscussionList.innerHTML = posts.map((post) => `
-    <a class="home-discussion-item" href="./discussion.html?post=${post.id}">
+    <a class="home-discussion-item" href="/discussion?post=${post.id}">
       <div class="home-discussion-item-main">
         <h3>${escapeHtml(post.title)}</h3>
       </div>
@@ -800,6 +819,12 @@ function setAiChatStatus(message) {
   }
 }
 
+function setAiDialogId(did) {
+  if (aiChatDialogId) {
+    aiChatDialogId.textContent = did ? `did: ${did}` : "";
+  }
+}
+
 function scrollAiChatToBottom() {
   if (aiChatThread) {
     aiChatThread.scrollTop = aiChatThread.scrollHeight;
@@ -837,6 +862,36 @@ function appendAiChatMessage(role, content = "") {
   return article;
 }
 
+function renderAiWelcomeMessage() {
+  if (!aiChatThread) {
+    return;
+  }
+
+  aiChatThread.innerHTML = `
+    <article class="aichat-message aichat-message-assistant">
+      <div class="aichat-avatar">
+        <img class="aichat-avatar-image" src="${escapeHtml(MAX_AGENT_AVATAR)}" alt="Max 的头像" />
+      </div>
+      <div class="aichat-bubble discussion-markdown-body">
+        <p>你好，我是 Max。可以问我课程、推导、代码或讨论区里适合展开的问题。</p>
+      </div>
+    </article>
+  `;
+}
+
+function renderAiChatThread() {
+  if (!aiChatThread) {
+    return;
+  }
+
+  renderAiWelcomeMessage();
+  aiChatState.messages.forEach((message) => {
+    appendAiChatMessage(message.role, message.content);
+  });
+  setAiDialogId(aiChatState.currentDid);
+  scrollAiChatToBottom();
+}
+
 function updateAiChatMessage(article, content) {
   const bubble = article?.querySelector(".aichat-bubble");
 
@@ -863,6 +918,145 @@ function buildAiChatPayload(userMessage) {
     stream: true,
     temperature: 0.6
   };
+}
+
+function getAiDialogTitle(messages = aiChatState.messages) {
+  const firstUserMessage = messages.find((message) => message.role === "user")?.content || "新的对话";
+  return firstUserMessage.replace(/\s+/g, " ").trim().slice(0, 32) || "新的对话";
+}
+
+function getAiDialogIdFromUrl() {
+  return String(new URLSearchParams(window.location.search).get("did") || "").trim();
+}
+
+function updateAiDialogUrl(did, { replace = false } = {}) {
+  if (!isAiChatPage()) {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+
+  if (did) {
+    url.searchParams.set("did", did);
+  } else {
+    url.searchParams.delete("did");
+  }
+
+  const method = replace ? "replaceState" : "pushState";
+  window.history[method]({}, "", url);
+}
+
+function renderAiDialogList() {
+  if (!aiChatDialogList) {
+    return;
+  }
+
+  if (!userState.isLoggedIn) {
+    aiChatDialogList.innerHTML = `<p class="aichat-dialog-empty">登录后保存最近对话。</p>`;
+    setAiDialogId("");
+    return;
+  }
+
+  if (!aiChatState.dialogs.length) {
+    aiChatDialogList.innerHTML = `<p class="aichat-dialog-empty">还没有保存的对话。</p>`;
+    setAiDialogId(aiChatState.currentDid);
+    return;
+  }
+
+  aiChatDialogList.innerHTML = aiChatState.dialogs.map((dialog) => `
+    <button class="aichat-dialog-item ${dialog.did === aiChatState.currentDid ? "is-active" : ""}" type="button" data-did="${escapeHtml(dialog.did)}">
+      <span>${escapeHtml(dialog.title || "新的对话")}</span>
+      <small>${escapeHtml(formatDateTime(dialog.updatedAt || dialog.createdAt))}</small>
+    </button>
+  `).join("");
+  setAiDialogId(aiChatState.currentDid);
+}
+
+async function loadAiDialogs() {
+  if (!isAiChatPage() || !aiChatDialogList || !userState.token) {
+    renderAiDialogList();
+    return;
+  }
+
+  try {
+    const payload = await callApi("/ai/dialogs?limit=20", {
+      method: "GET"
+    });
+    aiChatState.dialogs = payload.dialogs || [];
+  } catch {
+    aiChatState.dialogs = [];
+  }
+
+  renderAiDialogList();
+
+  const urlDid = getAiDialogIdFromUrl();
+  if (urlDid && urlDid !== aiChatState.currentDid) {
+    await loadAiDialog(urlDid, { updateUrl: false });
+  }
+}
+
+async function saveAiDialog() {
+  if (!userState.token || !aiChatState.messages.length) {
+    renderAiDialogList();
+    return;
+  }
+
+  try {
+    const payload = await callApi("/ai/dialogs", {
+      method: "POST",
+      body: JSON.stringify({
+        did: aiChatState.currentDid || undefined,
+        title: getAiDialogTitle(),
+        messages: aiChatState.messages
+      })
+    });
+
+    aiChatState.currentDid = payload.dialog.did;
+    updateAiDialogUrl(aiChatState.currentDid, { replace: true });
+    const rest = aiChatState.dialogs.filter((dialog) => dialog.did !== payload.dialog.did);
+    aiChatState.dialogs = [payload.dialog, ...rest].slice(0, 20);
+    renderAiDialogList();
+  } catch (error) {
+    setAiChatStatus(`对话未保存：${error.message}`);
+  }
+}
+
+async function loadAiDialog(did, { updateUrl = true } = {}) {
+  if (!did || aiChatState.isSending) {
+    return;
+  }
+
+  try {
+    setAiChatStatus("正在加载对话...");
+    const payload = await callApi(`/ai/dialogs/${encodeURIComponent(did)}`, {
+      method: "GET"
+    });
+    aiChatState.currentDid = payload.dialog.did;
+    aiChatState.messages = payload.dialog.messages || [];
+    if (updateUrl) {
+      updateAiDialogUrl(aiChatState.currentDid);
+    }
+    renderAiChatThread();
+    renderAiDialogList();
+    setAiChatStatus("");
+  } catch (error) {
+    setAiChatStatus(error.message);
+  }
+}
+
+function startNewAiDialog() {
+  if (aiChatState.isSending) {
+    return;
+  }
+
+  aiChatState.currentDid = "";
+  aiChatState.messages = [];
+  updateAiDialogUrl("");
+  renderAiChatThread();
+  renderAiDialogList();
+  aiChatShell?.classList.remove("is-dialogs-open");
+  setAiChatStatus("");
+  aiChatInput?.focus();
 }
 
 async function streamAiChatResponse(payload, onDelta) {
@@ -953,6 +1147,7 @@ async function handleAiChatSubmit(event) {
     aiChatState.messages.push({ role: "user", content: userMessage });
     aiChatState.messages.push({ role: "assistant", content: assistantContent });
     setAiChatStatus("");
+    await saveAiDialog();
   } catch (error) {
     updateAiChatMessage(assistantArticle, `请求失败：${error.message}`);
     setAiChatStatus("AI 服务不可用，请确认 freebbs-agent 已启动。");
@@ -979,6 +1174,31 @@ function initializeAiChatPage() {
     }
   });
   aiChatForm?.addEventListener("submit", handleAiChatSubmit);
+  aiChatNewDialog?.addEventListener("click", startNewAiDialog);
+  aiChatDialogToggle?.addEventListener("click", () => {
+    aiChatShell?.classList.toggle("is-dialogs-open");
+  });
+  aiChatDialogList?.addEventListener("click", (event) => {
+    const button = event.target.closest(".aichat-dialog-item");
+
+    if (button) {
+      loadAiDialog(button.dataset.did || "");
+      aiChatShell?.classList.remove("is-dialogs-open");
+    }
+  });
+  window.addEventListener("popstate", () => {
+    const did = getAiDialogIdFromUrl();
+    if (did) {
+      loadAiDialog(did, { updateUrl: false });
+    } else {
+      aiChatState.currentDid = "";
+      aiChatState.messages = [];
+      renderAiChatThread();
+      renderAiDialogList();
+    }
+  });
+  renderAiChatThread();
+  loadAiDialogs();
   resizeAiChatInput();
 }
 
@@ -1566,8 +1786,8 @@ function handleAvatarClick() {
     return;
   }
 
-  if (!window.location.pathname.endsWith("/settings.html")) {
-    window.location.href = "./settings.html";
+  if (!isSettingsPage()) {
+    window.location.href = "/settings";
   }
 }
 
@@ -1578,7 +1798,7 @@ function handleSettingsLogout() {
 
   if (window.confirm(`确认退出 ${userState.fullName || userState.username}？`)) {
     clearSession();
-    window.location.href = "./index.html";
+    window.location.href = "/";
   }
 }
 
