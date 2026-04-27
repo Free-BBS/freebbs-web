@@ -11,6 +11,15 @@ const { CODE_TTL_MINUTES, buildExpiryDate, generateEmailCode, hashCode } = requi
 
 const app = express();
 const FORTUNE_BONUS_KEY = "fortune_bonus_enabled";
+const MAX_AGENT_USER = {
+  username: "max_the_agent",
+  fullName: "Max",
+  studentId: "2099999999",
+  email: "max@free-bbs.local",
+  avatarPath: "/assets/max_the_agent_avatar.webp"
+};
+const MAX_MENTION_PATTERN = /(^|[^\p{L}\p{N}_])@max(?=$|[^\p{L}\p{N}_])/iu;
+const DISCUSSION_REACTION_TYPES = new Set(["smile", "light", "fireworks"]);
 const DISCUSSION_BOARD_SEEDS = [
   {
     slug: "daily",
@@ -64,6 +73,75 @@ async function ensureAppSettingsTable() {
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )`
   );
+}
+
+function generateUserUid() {
+  return `u_${crypto.randomBytes(8).toString("hex")}`;
+}
+
+async function createUniqueUserUid() {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const uid = generateUserUid();
+    const [rows] = await pool.execute(
+      `SELECT id FROM users WHERE uid = ? LIMIT 1`,
+      [uid]
+    );
+
+    if (!rows[0]) {
+      return uid;
+    }
+  }
+
+  throw new Error("无法生成唯一 UID");
+}
+
+async function ensureUsersUidColumn() {
+  const [columns] = await pool.execute(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'users'
+       AND COLUMN_NAME = 'uid'
+     LIMIT 1`
+  );
+
+  if (!columns[0]) {
+    await pool.execute(
+      `ALTER TABLE users
+       ADD COLUMN uid VARCHAR(32) NULL AFTER id,
+       ADD UNIQUE KEY uq_users_uid (uid)`
+    );
+  }
+
+  const [usersWithoutUid] = await pool.execute(
+    `SELECT id
+     FROM users
+     WHERE uid IS NULL OR uid = ''
+     ORDER BY id ASC`
+  );
+
+  for (const row of usersWithoutUid) {
+    await pool.execute(
+      `UPDATE users
+       SET uid = ?
+       WHERE id = ? AND (uid IS NULL OR uid = '')`,
+      [await createUniqueUserUid(), row.id]
+    );
+  }
+
+  const [indexes] = await pool.execute(
+    `SELECT INDEX_NAME
+     FROM INFORMATION_SCHEMA.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'users'
+       AND COLUMN_NAME = 'uid'
+       AND NON_UNIQUE = 0
+     LIMIT 1`
+  );
+
+  if (!indexes[0]) {
+    await pool.execute(`ALTER TABLE users ADD UNIQUE KEY uq_users_uid (uid)`);
+  }
 }
 
 async function ensureDiscussionTables() {
@@ -128,8 +206,9 @@ async function ensureDiscussionTables() {
     `CREATE TABLE IF NOT EXISTS discussion_post_likes (
       post_id BIGINT NOT NULL,
       user_id BIGINT NOT NULL,
+      reaction_type VARCHAR(24) NOT NULL DEFAULT 'smile',
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (post_id, user_id),
+      PRIMARY KEY (post_id, user_id, reaction_type),
       CONSTRAINT fk_discussion_post_likes_post
         FOREIGN KEY (post_id) REFERENCES discussion_posts (id)
         ON DELETE CASCADE,
@@ -140,10 +219,29 @@ async function ensureDiscussionTables() {
     )`
   );
 
+  const [reactionColumns] = await pool.execute(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'discussion_post_likes'
+       AND COLUMN_NAME = 'reaction_type'
+     LIMIT 1`
+  );
+
+  if (!reactionColumns[0]) {
+    await pool.execute(
+      `ALTER TABLE discussion_post_likes
+       ADD COLUMN reaction_type VARCHAR(24) NOT NULL DEFAULT 'smile' AFTER user_id,
+       DROP PRIMARY KEY,
+       ADD PRIMARY KEY (post_id, user_id, reaction_type)`
+    );
+  }
+
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS discussion_comments (
       id BIGINT PRIMARY KEY AUTO_INCREMENT,
       post_id BIGINT NOT NULL,
+      parent_comment_id BIGINT NULL,
       user_id BIGINT NOT NULL,
       author_student_id VARCHAR(10) NULL,
       content_markdown TEXT NOT NULL,
@@ -152,13 +250,37 @@ async function ensureDiscussionTables() {
       CONSTRAINT fk_discussion_comments_post
         FOREIGN KEY (post_id) REFERENCES discussion_posts (id)
         ON DELETE CASCADE,
+      CONSTRAINT fk_discussion_comments_parent
+        FOREIGN KEY (parent_comment_id) REFERENCES discussion_comments (id)
+        ON DELETE CASCADE,
       CONSTRAINT fk_discussion_comments_user
         FOREIGN KEY (user_id) REFERENCES users (id)
         ON DELETE CASCADE,
+      INDEX idx_discussion_comments_parent (parent_comment_id),
       INDEX idx_discussion_comments_post_created_at (post_id, created_at ASC),
       INDEX idx_discussion_comments_user (user_id)
     )`
   );
+
+  const [commentColumns] = await pool.execute(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'discussion_comments'
+       AND COLUMN_NAME = 'parent_comment_id'
+     LIMIT 1`
+  );
+
+  if (!commentColumns[0]) {
+    await pool.execute(
+      `ALTER TABLE discussion_comments
+       ADD COLUMN parent_comment_id BIGINT NULL AFTER post_id,
+       ADD INDEX idx_discussion_comments_parent (parent_comment_id),
+       ADD CONSTRAINT fk_discussion_comments_parent
+         FOREIGN KEY (parent_comment_id) REFERENCES discussion_comments (id)
+         ON DELETE CASCADE`
+    );
+  }
 
   for (const board of DISCUSSION_BOARD_SEEDS) {
     await pool.execute(
@@ -192,6 +314,38 @@ async function ensureAiDialogTables() {
   );
 }
 
+async function ensureMaxAgentUser() {
+  const existing = await getUserByIdFromUsername(MAX_AGENT_USER.username);
+
+  if (existing) {
+    await pool.execute(
+      `UPDATE users
+       SET uid = COALESCE(NULLIF(uid, ''), ?),
+           full_name = ?,
+           avatar_path = ?
+       WHERE id = ?`,
+      [await createUniqueUserUid(), MAX_AGENT_USER.fullName, MAX_AGENT_USER.avatarPath, existing.id]
+    );
+    return;
+  }
+
+  const passwordHash = hashPassword(crypto.randomUUID());
+
+  await pool.execute(
+    `INSERT INTO users (uid, username, full_name, student_id, email, password_hash, email_verified_at, role, avatar_path)
+     VALUES (?, ?, ?, ?, ?, ?, NOW(), 'student', ?)`,
+    [
+      await createUniqueUserUid(),
+      MAX_AGENT_USER.username,
+      MAX_AGENT_USER.fullName,
+      MAX_AGENT_USER.studentId,
+      MAX_AGENT_USER.email,
+      passwordHash,
+      MAX_AGENT_USER.avatarPath
+    ]
+  );
+}
+
 async function getAppSetting(key, defaultValue = "") {
   const [rows] = await pool.execute(
     `SELECT setting_value
@@ -220,6 +374,7 @@ async function getFortuneBonusEnabled() {
 function toUserProfile(row) {
   return {
     id: row.id,
+    uid: row.uid || "",
     username: row.username,
     fullName: row.full_name,
     studentId: row.student_id,
@@ -259,30 +414,35 @@ function toDiscussionPostSummary(row) {
     },
     author: {
       id: row.user_id,
+      uid: row.uid || "",
       username: row.username,
-      fullName: row.full_name || "",
-      displayName: row.full_name || row.username,
-      studentId: row.author_student_id || row.student_id || "",
+      fullName: "",
+      displayName: row.username || "匿名用户",
       avatarPath: row.avatar_path || ""
     },
     likeCount: Number(row.like_count || 0),
+    lightCount: Number(row.light_count || 0),
+    fireworksCount: Number(row.fireworks_count || 0),
     commentCount: Number(row.comment_count || 0),
-    likedByMe: Boolean(row.liked_by_me)
+    likedByMe: Boolean(row.liked_by_me),
+    lightedByMe: Boolean(row.lighted_by_me),
+    fireworksByMe: Boolean(row.fireworks_by_me)
   };
 }
 
 function toDiscussionComment(row) {
   return {
     id: row.id,
+    parentCommentId: row.parent_comment_id ? Number(row.parent_comment_id) : null,
     contentMarkdown: row.content_markdown || "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     author: {
       id: row.user_id,
+      uid: row.uid || "",
       username: row.username,
-      fullName: row.full_name || "",
-      displayName: row.full_name || row.username,
-      studentId: row.author_student_id || row.student_id || "",
+      fullName: "",
+      displayName: row.username || "匿名用户",
       avatarPath: row.avatar_path || ""
     }
   };
@@ -293,6 +453,131 @@ function toDiscussionPostDetail(row) {
     ...toDiscussionPostSummary(row),
     contentMarkdown: row.content_markdown || ""
   };
+}
+
+async function getDiscussionCommentById(commentId) {
+  const [rows] = await pool.execute(
+    `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at,
+            COALESCE(c.author_student_id, u.student_id) AS author_student_id,
+            u.student_id, u.uid, u.username, u.full_name, u.avatar_path
+     FROM discussion_comments c
+     INNER JOIN users u ON u.id = c.user_id
+     WHERE c.id = ?
+     LIMIT 1`,
+    [commentId]
+  );
+
+  return rows[0] ? toDiscussionComment(rows[0]) : null;
+}
+
+function shouldAskMax(contentMarkdown) {
+  return MAX_MENTION_PATTERN.test(String(contentMarkdown || ""));
+}
+
+function buildMaxDiscussionPrompt(post, comments, triggerComment) {
+  const renderedComments = comments.map((comment) => {
+    const prefix = comment.id === triggerComment.id ? "[触发 @max 的评论]" : "[评论]";
+    const parent = comment.parentCommentId ? ` 回复 #${comment.parentCommentId}` : "";
+    return `${prefix} #${comment.id}${parent} ${comment.author.displayName}：\n${comment.contentMarkdown}`;
+  }).join("\n\n");
+
+  return [
+    "你是 FREE-BBS 讨论区中的 Max。请根据帖子正文和评论上下文，回复触发 @max 的那条评论。",
+    "要求：直接给出可作为评论发布的内容；支持 Markdown 和 KaTeX；不要编造未知事实；如果信息不足，请说明需要补充的信息。",
+    "",
+    `帖子标题：${post.title}`,
+    `版块：${post.board.name}`,
+    `发帖人：${post.author.displayName}`,
+    "",
+    "帖子正文：",
+    post.contentMarkdown,
+    "",
+    "评论上下文：",
+    renderedComments || "暂无其他评论"
+  ].join("\n");
+}
+
+async function createMaxDiscussionReply(postId, triggerComment) {
+  await ensureMaxAgentUser();
+
+  const [postRows] = await pool.execute(
+    `SELECT p.id, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
+            b.slug AS board_slug, b.name AS board_name,
+            COALESCE(p.author_student_id, u.student_id) AS author_student_id,
+            u.student_id, u.uid, u.username, u.full_name, u.avatar_path,
+            0 AS like_count,
+            0 AS light_count,
+            0 AS fireworks_count,
+            0 AS comment_count,
+            0 AS liked_by_me,
+            0 AS lighted_by_me,
+            0 AS fireworks_by_me
+     FROM discussion_posts p
+     INNER JOIN discussion_boards b ON b.id = p.board_id
+     INNER JOIN users u ON u.id = p.user_id
+     WHERE p.id = ?
+     LIMIT 1`,
+    [postId]
+  );
+
+  if (!postRows[0]) {
+    return null;
+  }
+
+  const [commentRows] = await pool.execute(
+    `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at,
+            COALESCE(c.author_student_id, u.student_id) AS author_student_id,
+            u.student_id, u.uid, u.username, u.full_name, u.avatar_path
+     FROM discussion_comments c
+     INNER JOIN users u ON u.id = c.user_id
+     WHERE c.post_id = ?
+     ORDER BY c.created_at ASC, c.id ASC`,
+    [postId]
+  );
+
+  const post = toDiscussionPostDetail(postRows[0]);
+  const comments = commentRows.map(toDiscussionComment);
+  const prompt = buildMaxDiscussionPrompt(post, comments, triggerComment);
+  const agentResponse = await fetch(`${config.agentBaseUrl.replace(/\/$/, "")}/api/v1/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      messages: [
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      temperature: 0.5
+    })
+  });
+
+  const agentPayload = await agentResponse.json().catch(() => ({}));
+
+  if (!agentResponse.ok) {
+    throw new Error(agentPayload?.error?.message || agentPayload.message || "Max 暂时无法回复");
+  }
+
+  const answer = String(agentPayload.answer || agentPayload.content || "").trim();
+
+  if (!answer) {
+    return null;
+  }
+
+  const maxUser = await getUserByIdFromUsername(MAX_AGENT_USER.username);
+  if (!maxUser) {
+    return null;
+  }
+
+  const [result] = await pool.execute(
+    `INSERT INTO discussion_comments (post_id, parent_comment_id, user_id, author_student_id, content_markdown)
+     VALUES (?, ?, ?, ?, ?)`,
+    [postId, triggerComment.id, maxUser.id, maxUser.student_id, answer.slice(0, 5000)]
+  );
+
+  return getDiscussionCommentById(result.insertId);
 }
 
 function toAiDialogSummary(row) {
@@ -380,9 +665,19 @@ function issueToken(user) {
 
 async function getUserById(id) {
   const [rows] = await pool.execute(
-    `SELECT id, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, grade, major, avatar_path, bio, website_url, created_at
+    `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, grade, major, avatar_path, bio, website_url, created_at
      FROM users WHERE id = ? LIMIT 1`,
     [id]
+  );
+
+  return rows[0] || null;
+}
+
+async function getUserByIdFromUsername(username) {
+  const [rows] = await pool.execute(
+    `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, grade, major, avatar_path, bio, website_url, created_at
+     FROM users WHERE username = ? LIMIT 1`,
+    [username]
   );
 
   return rows[0] || null;
@@ -496,6 +791,12 @@ app.get("/api/health", async (_request, response) => {
 });
 
 app.post("/api/ai/chat", async (request, response) => {
+  const user = await requireAuth(request, response);
+
+  if (!user) {
+    return;
+  }
+
   const payload = request.body;
 
   if (!payload || typeof payload !== "object") {
@@ -701,7 +1002,7 @@ app.get("/api/discussion/stats", async (_request, response) => {
     const [summaryRows] = await pool.execute(
       `SELECT
          (SELECT COUNT(*) FROM discussion_posts) AS post_count,
-         (SELECT COUNT(*) FROM discussion_post_likes) AS like_count`
+         (SELECT COUNT(*) FROM discussion_post_likes WHERE reaction_type = 'smile') AS like_count`
     );
     const [boardRows] = await pool.execute(
       `SELECT b.slug, b.name, COUNT(p.id) AS post_count
@@ -749,22 +1050,28 @@ app.get("/api/discussion/posts", async (request, response) => {
       `SELECT p.id, p.title, p.created_at, p.updated_at, p.user_id,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
-              u.student_id, u.username, u.full_name, u.avatar_path,
-              COUNT(DISTINCT l.user_id) AS like_count,
+              u.student_id, u.uid, u.username, u.full_name, u.avatar_path,
+              COUNT(DISTINCT CASE WHEN l.reaction_type = 'smile' THEN l.user_id END) AS like_count,
+              COUNT(DISTINCT CASE WHEN l.reaction_type = 'light' THEN l.user_id END) AS light_count,
+              COUNT(DISTINCT CASE WHEN l.reaction_type = 'fireworks' THEN l.user_id END) AS fireworks_count,
               COUNT(DISTINCT c.id) AS comment_count,
-              MAX(CASE WHEN my_like.user_id IS NULL THEN 0 ELSE 1 END) AS liked_by_me
+              MAX(CASE WHEN my_smile.user_id IS NULL THEN 0 ELSE 1 END) AS liked_by_me,
+              MAX(CASE WHEN my_light.user_id IS NULL THEN 0 ELSE 1 END) AS lighted_by_me,
+              MAX(CASE WHEN my_fireworks.user_id IS NULL THEN 0 ELSE 1 END) AS fireworks_by_me
        FROM discussion_posts p
        INNER JOIN discussion_boards b ON b.id = p.board_id
        INNER JOIN users u ON u.id = p.user_id
        LEFT JOIN discussion_post_likes l ON l.post_id = p.id
        LEFT JOIN discussion_comments c ON c.post_id = p.id
-       LEFT JOIN discussion_post_likes my_like ON my_like.post_id = p.id AND my_like.user_id = ${currentUser ? "?" : "0"}
+       LEFT JOIN discussion_post_likes my_smile ON my_smile.post_id = p.id AND my_smile.reaction_type = 'smile' AND my_smile.user_id = ${currentUser ? "?" : "0"}
+       LEFT JOIN discussion_post_likes my_light ON my_light.post_id = p.id AND my_light.reaction_type = 'light' AND my_light.user_id = ${currentUser ? "?" : "0"}
+       LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? "?" : "0"}
        ${where}
        GROUP BY p.id, p.title, p.created_at, p.updated_at, p.user_id,
-                b.slug, b.name, p.author_student_id, u.student_id, u.username, u.full_name, u.avatar_path
+                b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        ORDER BY p.created_at DESC, p.id DESC
        LIMIT ${limit}`,
-      currentUser ? [currentUser.id, ...params] : params
+      currentUser ? [currentUser.id, currentUser.id, currentUser.id, ...params] : params
     );
 
     response.json({
@@ -792,22 +1099,28 @@ app.get("/api/discussion/posts/:id", async (request, response) => {
       `SELECT p.id, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
-              u.student_id, u.username, u.full_name, u.avatar_path,
-              COUNT(DISTINCT l.user_id) AS like_count,
+              u.student_id, u.uid, u.username, u.full_name, u.avatar_path,
+              COUNT(DISTINCT CASE WHEN l.reaction_type = 'smile' THEN l.user_id END) AS like_count,
+              COUNT(DISTINCT CASE WHEN l.reaction_type = 'light' THEN l.user_id END) AS light_count,
+              COUNT(DISTINCT CASE WHEN l.reaction_type = 'fireworks' THEN l.user_id END) AS fireworks_count,
               COUNT(DISTINCT c.id) AS comment_count,
-              MAX(CASE WHEN my_like.user_id IS NULL THEN 0 ELSE 1 END) AS liked_by_me
+              MAX(CASE WHEN my_smile.user_id IS NULL THEN 0 ELSE 1 END) AS liked_by_me,
+              MAX(CASE WHEN my_light.user_id IS NULL THEN 0 ELSE 1 END) AS lighted_by_me,
+              MAX(CASE WHEN my_fireworks.user_id IS NULL THEN 0 ELSE 1 END) AS fireworks_by_me
        FROM discussion_posts p
        INNER JOIN discussion_boards b ON b.id = p.board_id
        INNER JOIN users u ON u.id = p.user_id
        LEFT JOIN discussion_post_likes l ON l.post_id = p.id
        LEFT JOIN discussion_comments c ON c.post_id = p.id
-       LEFT JOIN discussion_post_likes my_like ON my_like.post_id = p.id AND my_like.user_id = ${currentUser ? "?" : "0"}
+       LEFT JOIN discussion_post_likes my_smile ON my_smile.post_id = p.id AND my_smile.reaction_type = 'smile' AND my_smile.user_id = ${currentUser ? "?" : "0"}
+       LEFT JOIN discussion_post_likes my_light ON my_light.post_id = p.id AND my_light.reaction_type = 'light' AND my_light.user_id = ${currentUser ? "?" : "0"}
+       LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? "?" : "0"}
        WHERE p.id = ?
          AND b.is_active = 1
        GROUP BY p.id, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
-                b.slug, b.name, p.author_student_id, u.student_id, u.username, u.full_name, u.avatar_path
+                b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        LIMIT 1`,
-      currentUser ? [currentUser.id, postId] : [postId]
+      currentUser ? [currentUser.id, currentUser.id, currentUser.id, postId] : [postId]
     );
 
     if (!rows[0]) {
@@ -869,10 +1182,14 @@ app.post("/api/discussion/posts", async (request, response) => {
       `SELECT p.id, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
-              u.student_id, u.username, u.full_name, u.avatar_path,
+              u.student_id, u.uid, u.username, u.full_name, u.avatar_path,
               0 AS like_count,
+              0 AS light_count,
+              0 AS fireworks_count,
               0 AS comment_count,
-              0 AS liked_by_me
+              0 AS liked_by_me,
+              0 AS lighted_by_me,
+              0 AS fireworks_by_me
        FROM discussion_posts p
        INNER JOIN discussion_boards b ON b.id = p.board_id
        INNER JOIN users u ON u.id = p.user_id
@@ -901,9 +1218,15 @@ app.post("/api/discussion/posts/:id/like", async (request, response) => {
     }
 
     const postId = Number(request.params.id);
+    const reactionType = String(request.body.reactionType || "smile").trim().toLowerCase();
 
     if (!postId) {
       response.status(400).json({ message: "无效帖子 ID" });
+      return;
+    }
+
+    if (!DISCUSSION_REACTION_TYPES.has(reactionType)) {
+      response.status(400).json({ message: "无效反应类型" });
       return;
     }
 
@@ -920,38 +1243,44 @@ app.post("/api/discussion/posts/:id/like", async (request, response) => {
     const [existing] = await pool.execute(
       `SELECT post_id
        FROM discussion_post_likes
-       WHERE post_id = ? AND user_id = ?
+       WHERE post_id = ? AND user_id = ? AND reaction_type = ?
        LIMIT 1`,
-      [postId, user.id]
+      [postId, user.id, reactionType]
     );
 
-    let liked = true;
+    let active = true;
 
     if (existing[0]) {
       await pool.execute(
         `DELETE FROM discussion_post_likes
-         WHERE post_id = ? AND user_id = ?`,
-        [postId, user.id]
+         WHERE post_id = ? AND user_id = ? AND reaction_type = ?`,
+        [postId, user.id, reactionType]
       );
-      liked = false;
+      active = false;
     } else {
       await pool.execute(
-        `INSERT INTO discussion_post_likes (post_id, user_id)
-         VALUES (?, ?)`,
-        [postId, user.id]
+        `INSERT INTO discussion_post_likes (post_id, user_id, reaction_type)
+         VALUES (?, ?, ?)`,
+        [postId, user.id, reactionType]
       );
     }
 
     const [countRows] = await pool.execute(
-      `SELECT COUNT(*) AS like_count
+      `SELECT reaction_type, COUNT(*) AS reaction_count
        FROM discussion_post_likes
-       WHERE post_id = ?`,
+       WHERE post_id = ?
+       GROUP BY reaction_type`,
       [postId]
     );
+    const counts = Object.fromEntries(countRows.map((row) => [row.reaction_type, Number(row.reaction_count || 0)]));
 
     response.json({
-      liked,
-      likeCount: Number(countRows[0]?.like_count || 0)
+      reactionType,
+      active,
+      liked: reactionType === "smile" ? active : undefined,
+      likeCount: counts.smile || 0,
+      lightCount: counts.light || 0,
+      fireworksCount: counts.fireworks || 0
     });
   } catch (error) {
     response.status(500).json({ message: "更新点赞失败", detail: error.message });
@@ -970,9 +1299,9 @@ app.get("/api/discussion/posts/:id/comments", async (request, response) => {
     await ensureDiscussionTables();
 
     const [rows] = await pool.execute(
-      `SELECT c.id, c.post_id, c.user_id, c.content_markdown, c.created_at, c.updated_at,
+      `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at,
               COALESCE(c.author_student_id, u.student_id) AS author_student_id,
-              u.student_id, u.username, u.full_name, u.avatar_path
+              u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        FROM discussion_comments c
        INNER JOIN users u ON u.id = c.user_id
        WHERE c.post_id = ?
@@ -999,6 +1328,7 @@ app.post("/api/discussion/posts/:id/comments", async (request, response) => {
     }
 
     const postId = Number(request.params.id);
+    const parentCommentId = Number(request.body.parentCommentId || 0);
     const contentMarkdown = String(request.body.contentMarkdown || "").trim();
 
     if (!postId) {
@@ -1021,16 +1351,31 @@ app.post("/api/discussion/posts/:id/comments", async (request, response) => {
       return;
     }
 
+    if (parentCommentId) {
+      const [parentRows] = await pool.execute(
+        `SELECT id
+         FROM discussion_comments
+         WHERE id = ? AND post_id = ?
+         LIMIT 1`,
+        [parentCommentId, postId]
+      );
+
+      if (!parentRows[0]) {
+        response.status(404).json({ message: "被回复的评论不存在" });
+        return;
+      }
+    }
+
     const [result] = await pool.execute(
-      `INSERT INTO discussion_comments (post_id, user_id, author_student_id, content_markdown)
-       VALUES (?, ?, ?, ?)`,
-      [postId, user.id, user.student_id, contentMarkdown]
+      `INSERT INTO discussion_comments (post_id, parent_comment_id, user_id, author_student_id, content_markdown)
+       VALUES (?, ?, ?, ?, ?)`,
+      [postId, parentCommentId || null, user.id, user.student_id, contentMarkdown]
     );
 
     const [rows] = await pool.execute(
-      `SELECT c.id, c.post_id, c.user_id, c.content_markdown, c.created_at, c.updated_at,
+      `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at,
               COALESCE(c.author_student_id, u.student_id) AS author_student_id,
-              u.student_id, u.username, u.full_name, u.avatar_path
+              u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        FROM discussion_comments c
        INNER JOIN users u ON u.id = c.user_id
        WHERE c.id = ?
@@ -1038,9 +1383,21 @@ app.post("/api/discussion/posts/:id/comments", async (request, response) => {
       [result.insertId]
     );
 
+    const comment = toDiscussionComment(rows[0]);
+    const maxPending = user.username !== MAX_AGENT_USER.username && shouldAskMax(contentMarkdown);
+
+    if (maxPending) {
+      setImmediate(() => {
+        createMaxDiscussionReply(postId, comment).catch((error) => {
+          console.error("Failed to create Max discussion reply", error);
+        });
+      });
+    }
+
     response.status(201).json({
-      message: "评论已发布",
-      comment: toDiscussionComment(rows[0])
+      message: maxPending ? "评论已发布，Max 正在回复" : "评论已发布",
+      comment,
+      maxPending
     });
   } catch (error) {
     response.status(500).json({ message: "发布评论失败", detail: error.message });
@@ -1141,9 +1498,9 @@ app.post("/api/auth/register", async (request, response) => {
     const major = "电子信息科学与技术";
 
     const [result] = await pool.execute(
-      `INSERT INTO users (username, full_name, student_id, email, password_hash, role, grade, major, email_verified_at)
-       VALUES (?, ?, ?, ?, ?, 'student', ?, ?, NOW())`,
-      [username, fullName, studentId, email, hashPassword(password), grade, major]
+      `INSERT INTO users (uid, username, full_name, student_id, email, password_hash, role, grade, major, email_verified_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'student', ?, ?, NOW())`,
+      [await createUniqueUserUid(), username, fullName, studentId, email, hashPassword(password), grade, major]
     );
 
     await pool.execute(
@@ -1235,7 +1592,7 @@ app.post("/api/auth/login", async (request, response) => {
 
   try {
     const [rows] = await pool.execute(
-      `SELECT id, username, full_name, student_id, email, email_verified_at, password_hash, role, electrons, manetrons, grade, major, avatar_path, bio, website_url, created_at
+      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, password_hash, role, electrons, manetrons, grade, major, avatar_path, bio, website_url, created_at
        FROM users
        WHERE username = ? OR email = ?
        LIMIT 1`,
@@ -1276,21 +1633,23 @@ app.get("/api/auth/me", async (request, response) => {
   }
 });
 
-app.get("/api/users/:studentId/public-profile", async (request, response) => {
-  const studentId = String(request.params.studentId || "").trim();
+app.get("/api/users/:uid/public-profile", async (request, response) => {
+  const userKey = String(request.params.uid || "").trim();
+  const isUid = /^u_?[a-z0-9]{6,32}$/i.test(userKey);
+  const isLegacyStudentId = /^20\d{8}$/.test(userKey);
 
-  if (!/^20\d{8}$/.test(studentId)) {
-    response.status(400).json({ message: "无效学号" });
+  if (!isUid && !isLegacyStudentId) {
+    response.status(400).json({ message: "无效用户 UID" });
     return;
   }
 
   try {
     const [rows] = await pool.execute(
-      `SELECT id, username, full_name, student_id, role, grade, major, avatar_path, bio, website_url, created_at
+      `SELECT id, uid, username, full_name, student_id, role, grade, major, avatar_path, bio, website_url, created_at
        FROM users
-       WHERE student_id = ?
+       WHERE ${isUid ? "uid" : "student_id"} = ?
        LIMIT 1`,
-      [studentId]
+      [userKey]
     );
 
     if (!rows[0]) {
@@ -1299,12 +1658,13 @@ app.get("/api/users/:studentId/public-profile", async (request, response) => {
     }
 
     const user = rows[0];
+    const studentId = user.student_id;
     const [statsRows] = await pool.execute(
       `SELECT
          (SELECT COUNT(*) FROM discussion_posts WHERE author_student_id = ?) AS post_count,
-         (SELECT COUNT(*) FROM discussion_post_likes l
-            INNER JOIN discussion_posts p ON p.id = l.post_id
-            WHERE p.author_student_id = ?) AS like_count`
+	         (SELECT COUNT(*) FROM discussion_post_likes l
+	            INNER JOIN discussion_posts p ON p.id = l.post_id
+	            WHERE p.author_student_id = ? AND l.reaction_type = 'smile') AS like_count`
       ,
       [studentId, studentId]
     );
@@ -1312,9 +1672,9 @@ app.get("/api/users/:studentId/public-profile", async (request, response) => {
     response.json({
       profile: {
         id: user.id,
+        uid: user.uid || "",
         username: user.username,
-        fullName: user.full_name,
-        studentId: user.student_id,
+        fullName: "",
         role: user.role,
         grade: user.grade || "",
         major: user.major || "",
@@ -1360,9 +1720,12 @@ app.patch("/api/profile", async (request, response) => {
 
     await pool.execute(
       `UPDATE users
-       SET full_name = ?, bio = ?, website_url = ?
+       SET uid = COALESCE(NULLIF(uid, ''), ?),
+           full_name = ?,
+           bio = ?,
+           website_url = ?
        WHERE id = ?`,
-      [fullName, bio || null, websiteUrl || null, user.id]
+      [await createUniqueUserUid(), fullName, bio || null, websiteUrl || null, user.id]
     );
 
     response.json({
@@ -1409,9 +1772,10 @@ app.post("/api/profile/avatar", async (request, response) => {
     await fs.promises.writeFile(path.join(config.uploadDir, fileName), fileBuffer);
     await pool.execute(
       `UPDATE users
-       SET avatar_path = ?
+       SET uid = COALESCE(NULLIF(uid, ''), ?),
+           avatar_path = ?
        WHERE id = ?`,
-      [avatarPath, user.id]
+      [await createUniqueUserUid(), avatarPath, user.id]
     );
 
     removeStoredAvatar(user.avatar_path);
@@ -1434,7 +1798,7 @@ app.get("/api/admin/users", async (request, response) => {
     }
 
     const [rows] = await pool.execute(
-      `SELECT id, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, grade, major, avatar_path, bio, website_url, created_at
+      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, grade, major, avatar_path, bio, website_url, created_at
        FROM users
        ORDER BY created_at DESC`
     );
@@ -1518,10 +1882,11 @@ app.post("/api/admin/users", async (request, response) => {
 
     const [result] = await pool.execute(
       `INSERT INTO users (
-        username, full_name, student_id, email, password_hash, email_verified_at,
+        uid, username, full_name, student_id, email, password_hash, email_verified_at,
         role, electrons, manetrons, grade, major
-      ) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?)`,
       [
+        await createUniqueUserUid(),
         username,
         fullName,
         studentId,
@@ -1581,9 +1946,14 @@ app.patch("/api/admin/users/:id", async (request, response) => {
 
     await pool.execute(
       `UPDATE users
-       SET full_name = ?, role = ?, electrons = ?, manetrons = ?
+       SET uid = COALESCE(NULLIF(uid, ''), ?),
+           full_name = ?,
+           role = ?,
+           electrons = ?,
+           manetrons = ?
        WHERE id = ?`,
       [
+        await createUniqueUserUid(),
         fullName,
         role,
         Number.isFinite(electrons) ? electrons : 0,
@@ -1641,6 +2011,7 @@ app.delete("/api/admin/users/:id", async (request, response) => {
 });
 
 async function start() {
+  await ensureUsersUidColumn();
   await ensureAppSettingsTable();
   await ensureDiscussionTables();
   await ensureAiDialogTables();

@@ -1369,37 +1369,47 @@ h3,
   border: 1px solid rgba(255, 255, 255, 0.16);
 }
 
-.discussion-like-button {
-  display: grid;
+.discussion-inline-reactions,
+.discussion-detail-reactions {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.discussion-reaction-button {
+  display: inline-grid;
+  grid-template-columns: auto auto;
+  align-items: center;
   justify-items: center;
-  gap: 2px;
-  padding: 6px 8px;
+  gap: 5px;
+  padding: 5px 8px;
   border: none;
-  border-radius: 12px;
+  border-radius: 999px;
   background: transparent;
   color: var(--paper);
   cursor: pointer;
   font-family: var(--font-ui);
 }
 
-.discussion-like-button span {
-  color: rgba(244, 239, 231, 0.44);
-  font-size: 0.7rem;
-  line-height: 1;
+.discussion-reaction-button img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: brightness(0) invert(1) opacity(0.72);
 }
 
-.discussion-like-button strong {
+.discussion-reaction-button strong {
   font-size: 0.82rem;
   line-height: 1.1;
 }
 
-.discussion-like-button.is-liked {
-  background: rgba(255, 211, 109, 0.14);
+.discussion-reaction-button.is-reacted {
   color: var(--accent);
 }
 
-.discussion-like-button.is-liked span {
-  color: var(--accent);
+.discussion-reaction-button.is-reacted img {
+  filter: brightness(0) saturate(100%) invert(83%) sepia(58%) saturate(606%) hue-rotate(345deg) brightness(101%) contrast(101%);
 }
 
 .discussion-post-source,
@@ -1432,6 +1442,30 @@ h3,
   padding: 4px 8px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.045);
+}
+
+.discussion-comment-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.discussion-post-actions .discussion-comment-count,
+.discussion-detail-meta .discussion-comment-count {
+  padding: 0;
+  background: transparent;
+}
+
+.discussion-comment-count img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: brightness(0) invert(1) opacity(0.72);
+}
+
+.discussion-comment-count strong {
+  font-size: 0.82rem;
+  line-height: 1.1;
 }
 
 .discussion-post-actions .discussion-delete-action,
@@ -1707,26 +1741,8 @@ h3,
   font-size: 0.78rem;
 }
 
-.discussion-detail-like {
-  padding: 5px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-  background: rgba(248, 243, 233, 0.08);
-  color: var(--ink);
-  cursor: pointer;
-  font-family: var(--font-ui);
-  font-size: 0.78rem;
-}
-
-.discussion-detail-like.is-liked {
-  color: var(--accent);
-  background: rgba(255, 211, 109, 0.14);
-  border-color: rgba(255, 211, 109, 0.24);
-}
-
 .discussion-detail-back:hover,
-.discussion-detail-delete:hover,
-.discussion-detail-like:hover {
+.discussion-detail-delete:hover {
   background: rgba(248, 243, 233, 0.12);
 }
 
@@ -1804,6 +1820,50 @@ h3,
   color: #9ce9ff;
   text-decoration: underline;
   text-decoration-color: rgba(156, 233, 255, 0.42);
+}
+
+.aichat-page:not(.is-ai-authenticated) .aichat-shell {
+  display: none;
+}
+
+.aichat-auth-required {
+  width: min(100%, 720px);
+  min-height: 52vh;
+  margin: 0 auto;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 14px;
+  text-align: center;
+  color: var(--paper);
+}
+
+.aichat-page.is-ai-authenticated .aichat-auth-required {
+  display: none;
+}
+
+.aichat-auth-required h1,
+.aichat-auth-required p {
+  margin: 0;
+}
+
+.aichat-auth-required h1 {
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 5vw, 4.2rem);
+  line-height: 1;
+}
+
+.aichat-auth-required p {
+  color: var(--muted);
+}
+
+.aichat-auth-link {
+  border-radius: 999px;
+  padding: 12px 20px;
+  background: var(--paper);
+  color: #101823;
+  font-family: var(--font-ui);
+  font-weight: 800;
 }
 
 .aichat-shell {
@@ -2101,6 +2161,19 @@ h3,
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.discussion-comment-replies {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding-left: 16px;
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.discussion-comment-reply {
+  padding: 12px;
+  background: rgba(248, 243, 233, 0.04);
+}
+
 .discussion-comment-avatar {
   width: 38px;
   height: 38px;
@@ -2129,6 +2202,29 @@ h3,
   color: var(--muted);
   font-family: var(--font-ui);
   font-size: 0.78rem;
+}
+
+.discussion-comment-reply-button {
+  border: none;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: rgba(248, 243, 233, 0.08);
+  color: var(--paper);
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.discussion-comment-reply-slot {
+  margin-top: 10px;
+}
+
+.discussion-reply-form {
+  padding: 10px;
+  border-radius: 16px;
+  background: rgba(248, 243, 233, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .discussion-comment-content {
@@ -3252,6 +3348,35 @@ h3,
     padding: 18px;
   }
 
+  .discussion-comment {
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px;
+    border-radius: 14px;
+  }
+
+  .discussion-comment-author-link .discussion-post-avatar,
+  .discussion-comment-avatar {
+    width: 30px;
+    height: 30px;
+  }
+
+  .discussion-comment-replies {
+    gap: 8px;
+    margin-top: 8px;
+    padding-left: 6px;
+    border-left-width: 1px;
+  }
+
+  .discussion-comment-reply {
+    padding: 8px;
+  }
+
+  .discussion-comment-meta {
+    gap: 6px 8px;
+    font-size: 0.72rem;
+  }
+
   .aichat-shell {
     height: calc(100vh - 186px);
     min-height: 480px;
@@ -3347,7 +3472,7 @@ h3,
     padding: 12px 6px;
   }
 
-  .discussion-like-button {
+  .discussion-reaction-button {
     padding: 6px 4px;
   }
 

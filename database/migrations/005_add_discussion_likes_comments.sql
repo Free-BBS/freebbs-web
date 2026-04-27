@@ -1,8 +1,9 @@
 CREATE TABLE IF NOT EXISTS discussion_post_likes (
     post_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
+    reaction_type VARCHAR(24) NOT NULL DEFAULT 'smile',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (post_id, user_id),
+    PRIMARY KEY (post_id, user_id, reaction_type),
     CONSTRAINT fk_discussion_post_likes_post
         FOREIGN KEY (post_id) REFERENCES discussion_posts (id)
         ON DELETE CASCADE,
@@ -29,4 +30,3 @@ CREATE TABLE IF NOT EXISTS discussion_comments (
     INDEX idx_discussion_comments_post_created_at (post_id, created_at ASC),
     INDEX idx_discussion_comments_user (user_id)
 );
-

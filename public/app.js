@@ -21,6 +21,7 @@ const STORAGE_KEY = "free_bbs_auth_token";
 const userState = {
   isLoggedIn: false,
   token: localStorage.getItem(STORAGE_KEY) || "",
+  uid: "",
   username: "",
   fullName: "",
   studentId: "",
@@ -119,15 +120,19 @@ const FALLBACK_DISCUSSION_POST = {
   },
   author: {
     id: -1,
+    uid: "u_local_admin",
     username: "admin",
     fullName: "管理员",
     displayName: "管理员",
-    studentId: "0000000000",
     avatarPath: ""
   },
   likeCount: 0,
+  lightCount: 0,
+  fireworksCount: 0,
   commentCount: 0,
   likedByMe: false,
+  lightedByMe: false,
+  fireworksByMe: false,
   contentMarkdown: [
     "这是一篇本地测试帖子，用于接口请求失败时占位。",
     "",
@@ -138,9 +143,40 @@ const FALLBACK_DISCUSSION_POST = {
     "$$"
   ].join("\n")
 };
+const DISCUSSION_REACTIONS = {
+  smile: {
+    countKey: "likeCount",
+    activeKey: "likedByMe",
+    label: "令人高兴",
+    inactiveIcon: "/assets/icons/smile.svg",
+    activeIcon: "/assets/icons/smile.svg"
+  },
+  light: {
+    countKey: "lightCount",
+    activeKey: "lightedByMe",
+    label: "有启发性",
+    inactiveIcon: "/assets/icons/light-off.svg",
+    activeIcon: "/assets/icons/light-on.svg"
+  },
+  fireworks: {
+    countKey: "fireworksCount",
+    activeKey: "fireworksByMe",
+    label: "恭喜",
+    inactiveIcon: "/assets/icons/fireworks.svg",
+    activeIcon: "/assets/icons/fireworks.svg"
+  }
+};
 
 function getAvatarUrl(avatarPath) {
-  return avatarPath ? `${API_ROOT}${avatarPath}` : DEFAULT_AVATAR;
+  if (!avatarPath) {
+    return DEFAULT_AVATAR;
+  }
+
+  if (String(avatarPath).startsWith("/assets/") || /^https?:\/\//i.test(String(avatarPath))) {
+    return avatarPath;
+  }
+
+  return `${API_ROOT}${avatarPath}`;
 }
 
 function getTodayKey() {
@@ -332,6 +368,11 @@ function formatDateOnly(value) {
 }
 
 function renderUser() {
+  if (isAiChatPage()) {
+    document.body.classList.add("is-ai-session-ready");
+    document.body.classList.toggle("is-ai-authenticated", userState.isLoggedIn);
+  }
+
   if (!userState.isLoggedIn) {
     userName.textContent = "登录/注册";
     if (userRole) {
@@ -400,6 +441,7 @@ function openModal(mode = "login") {
 function saveSession(token, user) {
   userState.isLoggedIn = true;
   userState.token = token;
+  userState.uid = user.uid || "";
   userState.username = user.username;
   userState.fullName = user.fullName || "";
   userState.studentId = user.studentId || "";
@@ -419,6 +461,7 @@ function saveSession(token, user) {
 function clearSession() {
   userState.isLoggedIn = false;
   userState.token = "";
+  userState.uid = "";
   userState.username = "";
   userState.fullName = "";
   userState.studentId = "";
@@ -522,25 +565,27 @@ function isCurrentPath(pagePath) {
   return pathname === pagePath || pathname === `${pagePath}.html`;
 }
 
-function getProfileStudentIdFromQuery() {
-  return String(new URLSearchParams(window.location.search).get("studentId") || "").trim();
+function getProfileUidFromQuery() {
+  const params = new URLSearchParams(window.location.search);
+  return String(params.get("uid") || params.get("studentId") || "").trim();
 }
 
-function isValidPublicStudentId(studentId) {
-  return /^20\d{8}$/.test(String(studentId || "").trim());
+function isValidPublicUid(uid) {
+  const value = String(uid || "").trim();
+  return /^u_?[a-z0-9]{6,32}$/i.test(value) || /^20\d{8}$/.test(value);
 }
 
-function getProfileHref(studentId) {
-  if (!isValidPublicStudentId(studentId)) {
+function getProfileHref(uid) {
+  if (!isValidPublicUid(uid)) {
     return "";
   }
 
-  return `/profile?studentId=${encodeURIComponent(studentId)}`;
+  return `/profile?uid=${encodeURIComponent(uid)}`;
 }
 
 function renderAuthorProfileLink(author, className, includeAvatar = false) {
   const displayName = escapeHtml(author?.displayName || author?.fullName || author?.username || "匿名用户");
-  const profileHref = getProfileHref(author?.studentId);
+  const profileHref = getProfileHref(author?.uid);
 
   if (!profileHref) {
     return includeAvatar
@@ -722,10 +767,6 @@ function renderDiscussionPosts() {
     >
       <div class="discussion-post-author">
         ${renderAuthorProfileLink(post.author, "discussion-author-link discussion-author-link-avatar", true)}
-        <button class="discussion-like-button ${post.likedByMe ? "is-liked" : ""}" type="button" data-action="toggle-like" data-post-id="${post.id}" aria-label="点赞">
-          <span aria-hidden="true">▲</span>
-          <strong>${post.likeCount || 0}</strong>
-        </button>
       </div>
       <div class="discussion-post-card-main">
         <div class="discussion-post-source">
@@ -735,14 +776,47 @@ function renderDiscussionPosts() {
         </div>
         <h3>${escapeHtml(post.title)}</h3>
         <div class="discussion-post-actions" aria-hidden="true">
-          <span>${post.commentCount || 0} 条评论</span>
-          <span>${post.likeCount || 0} 个赞</span>
+          <span class="discussion-comment-count" title="评论">
+            <img src="/assets/icons/chats.svg" alt="" aria-hidden="true" />
+            <strong>${post.commentCount || 0}</strong>
+          </span>
+          <div class="discussion-inline-reactions" aria-label="帖子反应">
+            ${renderDiscussionReactionButton(post, "smile")}
+            ${renderDiscussionReactionButton(post, "light")}
+            ${renderDiscussionReactionButton(post, "fireworks")}
+          </div>
           ${userState.role === "admin" ? `<span class="discussion-delete-action" data-action="delete-post" data-post-id="${post.id}">删除</span>` : ""}
         </div>
       </div>
       <span class="discussion-post-open" aria-hidden="true">↗</span>
     </article>
   `).join("");
+}
+
+function renderDiscussionReactionButton(post, reactionType) {
+  const reaction = DISCUSSION_REACTIONS[reactionType];
+
+  if (!reaction) {
+    return "";
+  }
+
+  const active = Boolean(post[reaction.activeKey]);
+  const icon = active ? reaction.activeIcon : reaction.inactiveIcon;
+
+  return `
+    <button
+      class="discussion-reaction-button ${active ? "is-reacted" : ""}"
+      type="button"
+      data-action="toggle-reaction"
+      data-reaction-type="${reactionType}"
+      data-post-id="${post.id}"
+      aria-label="${escapeHtml(reaction.label)}"
+      title="${escapeHtml(reaction.label)}"
+    >
+      <img src="${escapeHtml(icon)}" alt="" aria-hidden="true" />
+      <strong>${post[reaction.countKey] || 0}</strong>
+    </button>
+  `;
 }
 
 function renderMarkdownContent(markdown) {
@@ -795,6 +869,10 @@ function renderMarkdownContent(markdown) {
   return renderedMarkdown
     .replace(new RegExp(`<p>\\s*${placeholderPrefix}(\\d+)\\s*</p>`, "g"), renderMathBlock)
     .replace(new RegExp(`${placeholderPrefix}(\\d+)`, "g"), renderMathBlock);
+}
+
+function shouldWaitForMaxReply(contentMarkdown) {
+  return /(^|[^\p{L}\p{N}_])@max(?=$|[^\p{L}\p{N}_])/iu.test(String(contentMarkdown || ""));
 }
 
 function applyMathRendering(root) {
@@ -1060,6 +1138,10 @@ function startNewAiDialog() {
 }
 
 async function streamAiChatResponse(payload, onDelta) {
+  if (!userState.token) {
+    throw new Error("请先登录后再使用问问 Max");
+  }
+
   const response = await fetch(`${API_BASE_URL}/ai/chat`, {
     method: "POST",
     headers: {
@@ -1114,6 +1196,11 @@ async function streamAiChatResponse(payload, onDelta) {
 
 async function handleAiChatSubmit(event) {
   event.preventDefault();
+
+  if (!userState.isLoggedIn) {
+    openModal("login");
+    return;
+  }
 
   if (!aiChatInput || aiChatState.isSending) {
     return;
@@ -1228,18 +1315,33 @@ function renderDiscussionComments() {
     return;
   }
 
-  list.innerHTML = discussionState.comments.map((comment) => `
-    <article class="discussion-comment">
+  const commentsByParent = new Map();
+  discussionState.comments.forEach((comment) => {
+    const parentId = comment.parentCommentId || 0;
+    commentsByParent.set(parentId, [...(commentsByParent.get(parentId) || []), comment]);
+  });
+
+  const renderComment = (comment, depth = 0) => {
+    const replies = commentsByParent.get(comment.id) || [];
+
+    return `
+    <article class="discussion-comment ${depth > 0 ? "discussion-comment-reply" : ""}" data-comment-id="${comment.id}">
       ${renderAuthorProfileLink(comment.author, "discussion-comment-author-link", true)}
       <div class="discussion-comment-body">
         <div class="discussion-comment-meta">
           ${renderAuthorProfileLink(comment.author, "discussion-author-link")}
           <span>${escapeHtml(formatDateTime(comment.createdAt))}</span>
+          <button class="discussion-comment-reply-button" type="button" data-action="reply-comment" data-comment-id="${comment.id}" data-author-name="${escapeHtml(comment.author?.displayName || comment.author?.fullName || comment.author?.username || "匿名用户")}">回复</button>
         </div>
         <div class="discussion-comment-content">${renderMarkdownContent(comment.contentMarkdown)}</div>
+        <div class="discussion-comment-reply-slot" data-reply-slot="${comment.id}"></div>
+        ${replies.length ? `<div class="discussion-comment-replies">${replies.map((reply) => renderComment(reply, depth + 1)).join("")}</div>` : ""}
       </div>
     </article>
-  `).join("");
+  `;
+  };
+
+  list.innerHTML = (commentsByParent.get(0) || []).map((comment) => renderComment(comment)).join("");
 
   list.querySelectorAll(".discussion-comment-content").forEach((node) => applyMathRendering(node));
 }
@@ -1273,8 +1375,15 @@ function renderDiscussionDetail(post) {
       <div class="discussion-detail-meta">
         ${renderAuthorProfileLink(post.author, "discussion-author-link")}
         <span>${escapeHtml(formatDateTime(post.createdAt))}</span>
-        <button class="discussion-detail-like ${post.likedByMe ? "is-liked" : ""}" type="button" data-action="toggle-like" data-post-id="${post.id}">${post.likeCount || 0} 赞</button>
-        <span>${post.commentCount || 0} 条评论</span>
+        <div class="discussion-detail-reactions">
+          ${renderDiscussionReactionButton(post, "smile")}
+          ${renderDiscussionReactionButton(post, "light")}
+          ${renderDiscussionReactionButton(post, "fireworks")}
+        </div>
+        <span class="discussion-comment-count" title="评论">
+          <img src="/assets/icons/chats.svg" alt="" aria-hidden="true" />
+          <strong>${post.commentCount || 0}</strong>
+        </span>
       </div>
     </header>
     <div class="discussion-markdown-body" id="discussion-markdown-body">${renderMarkdownContent(post.contentMarkdown)}</div>
@@ -1282,10 +1391,10 @@ function renderDiscussionDetail(post) {
       <div class="discussion-comments-head">
         <h3>评论</h3>
       </div>
-      <form class="discussion-comment-form" id="discussion-comment-form">
-        <textarea id="discussion-comment-input" rows="4" maxlength="5000" placeholder="写一条评论，支持 Markdown 和 KaTeX"></textarea>
+      <form class="discussion-comment-form" id="discussion-comment-form" data-parent-comment-id="">
+        <textarea class="discussion-comment-input" id="discussion-comment-input" rows="4" maxlength="5000" placeholder="写一条评论，支持 Markdown 和 KaTeX"></textarea>
         <div class="discussion-compose-actions">
-          <p class="discussion-message" id="discussion-comment-message"></p>
+          <p class="discussion-message discussion-comment-message" id="discussion-comment-message"></p>
           <button class="auth-submit discussion-submit" type="submit">发表评论</button>
         </div>
       </form>
@@ -1380,13 +1489,53 @@ async function loadDiscussionComments(postId) {
   renderDiscussionComments();
 }
 
-function updatePostReactionState(postId, liked, likeCount) {
+function pollDiscussionCommentsForMax(postId, baselineCount, messageNode) {
+  let attempts = 0;
+  const timer = window.setInterval(async () => {
+    attempts += 1;
+
+    try {
+      await loadDiscussionComments(postId);
+
+      if (discussionState.comments.length > baselineCount) {
+        window.clearInterval(timer);
+        if (messageNode) {
+          messageNode.textContent = "Max 已回复";
+        }
+        return;
+      }
+    } catch {
+      // loadDiscussionComments already handles display fallback.
+    }
+
+    if (attempts >= 12) {
+      window.clearInterval(timer);
+      if (messageNode) {
+        messageNode.textContent = "评论已发布，Max 可能稍后回复";
+      }
+    }
+  }, 2500);
+}
+
+function updatePostReactionState(postId, reactionType, active, counts) {
+  const reaction = DISCUSSION_REACTIONS[reactionType];
+
+  if (!reaction) {
+    return;
+  }
+
+  const updates = {
+    [reaction.activeKey]: active,
+    likeCount: Number(counts.likeCount || 0),
+    lightCount: Number(counts.lightCount || 0),
+    fireworksCount: Number(counts.fireworksCount || 0)
+  };
+
   discussionState.posts = discussionState.posts.map((post) => (
     post.id === postId
       ? {
           ...post,
-          likedByMe: liked,
-          likeCount
+          ...updates
         }
       : post
   ));
@@ -1394,13 +1543,12 @@ function updatePostReactionState(postId, liked, likeCount) {
   if (discussionState.activePost?.id === postId) {
     discussionState.activePost = {
       ...discussionState.activePost,
-      likedByMe: liked,
-      likeCount
+      ...updates
     };
   }
 }
 
-async function toggleDiscussionLike(postId) {
+async function toggleDiscussionReaction(postId, reactionType = "smile") {
   if (!postId) {
     return;
   }
@@ -1411,10 +1559,11 @@ async function toggleDiscussionLike(postId) {
   }
 
   const payload = await callApi(`/discussion/posts/${postId}/like`, {
-    method: "POST"
+    method: "POST",
+    body: JSON.stringify({ reactionType })
   });
 
-  updatePostReactionState(postId, Boolean(payload.liked), Number(payload.likeCount || 0));
+  updatePostReactionState(postId, reactionType, Boolean(payload.active), payload);
   renderDiscussionPosts();
 
   if (discussionState.activePost?.id === postId) {
@@ -1571,23 +1720,23 @@ async function loadPublicProfile() {
     return;
   }
 
-  const studentId = getProfileStudentIdFromQuery();
+  const profileUid = getProfileUidFromQuery();
 
-  if (!isValidPublicStudentId(studentId)) {
+  if (!isValidPublicUid(profileUid)) {
     if (publicProfileName) {
       publicProfileName.textContent = "未找到用户";
     }
     if (publicProfileBio) {
       publicProfileBio.textContent = "请从帖子作者头像进入个人主页。";
     }
-    setPublicProfileMessage("无效学号");
+    setPublicProfileMessage("无效用户 UID");
     return;
   }
 
   setPublicProfileMessage("正在加载个人主页...");
 
   try {
-    const payload = await callApi(`/users/${encodeURIComponent(studentId)}/public-profile`, {
+    const payload = await callApi(`/users/${encodeURIComponent(profileUid)}/public-profile`, {
       method: "GET"
     });
     const profile = payload.profile || {};
@@ -1596,10 +1745,10 @@ async function loadPublicProfile() {
       publicProfileAvatar.src = getAvatarUrl(profile.avatarPath);
     }
     if (publicProfileName) {
-      publicProfileName.textContent = profile.fullName || profile.username || "未命名用户";
+      publicProfileName.textContent = profile.username || "未命名用户";
     }
     if (publicProfileStudentId) {
-      publicProfileStudentId.textContent = profile.studentId || "未公开学号";
+      publicProfileStudentId.textContent = profile.uid ? `UID ${profile.uid}` : "未公开 UID";
     }
     if (publicProfileMajor) {
       const majorParts = [profile.grade, profile.major].filter(Boolean);
@@ -1996,12 +2145,12 @@ async function handleDiscussionPostClick(event) {
     return;
   }
 
-  const likeButton = event.target.closest("[data-action='toggle-like']");
+  const likeButton = event.target.closest("[data-action='toggle-reaction']");
 
   if (likeButton) {
     event.preventDefault();
     event.stopPropagation();
-    await toggleDiscussionLike(Number(likeButton.dataset.postId || 0));
+    await toggleDiscussionReaction(Number(likeButton.dataset.postId || 0), likeButton.dataset.reactionType || "smile");
     return;
   }
 
@@ -2064,10 +2213,47 @@ async function deleteDiscussionPost(postId) {
 }
 
 async function handleDiscussionDetailClick(event) {
-  const likeButton = event.target.closest("[data-action='toggle-like']");
+  const replyButton = event.target.closest("[data-action='reply-comment']");
+
+  if (replyButton) {
+    if (!userState.isLoggedIn) {
+      openModal("login");
+      return;
+    }
+
+    const commentId = Number(replyButton.dataset.commentId || 0);
+    const authorName = replyButton.dataset.authorName || "这条评论";
+    const slot = discussionDetail.querySelector(`[data-reply-slot="${commentId}"]`);
+
+    if (!slot) {
+      return;
+    }
+
+    if (slot.innerHTML.trim()) {
+      slot.innerHTML = "";
+      return;
+    }
+
+    discussionDetail.querySelectorAll(".discussion-comment-reply-slot").forEach((node) => {
+      node.innerHTML = "";
+    });
+    slot.innerHTML = `
+      <form class="discussion-comment-form discussion-reply-form" data-parent-comment-id="${commentId}">
+        <textarea class="discussion-comment-input" rows="3" maxlength="5000" placeholder="回复 ${escapeHtml(authorName)}，支持 Markdown 和 KaTeX"></textarea>
+        <div class="discussion-compose-actions">
+          <p class="discussion-message discussion-comment-message"></p>
+          <button class="auth-submit discussion-submit" type="submit">发布回复</button>
+        </div>
+      </form>
+    `;
+    slot.querySelector("textarea")?.focus();
+    return;
+  }
+
+  const likeButton = event.target.closest("[data-action='toggle-reaction']");
 
   if (likeButton) {
-    await toggleDiscussionLike(Number(likeButton.dataset.postId || 0));
+    await toggleDiscussionReaction(Number(likeButton.dataset.postId || 0), likeButton.dataset.reactionType || "smile");
     return;
   }
 
@@ -2094,7 +2280,7 @@ async function handleDiscussionDetailClick(event) {
 }
 
 async function handleDiscussionCommentSubmit(event) {
-  const form = event.target.closest("#discussion-comment-form");
+  const form = event.target.closest(".discussion-comment-form");
 
   if (!form || !discussionState.activePostId) {
     return;
@@ -2107,38 +2293,48 @@ async function handleDiscussionCommentSubmit(event) {
     return;
   }
 
-  const input = form.querySelector("#discussion-comment-input");
-  const message = form.querySelector("#discussion-comment-message");
+  const input = form.querySelector(".discussion-comment-input");
+  const message = form.querySelector(".discussion-comment-message");
+  const parentCommentId = Number(form.dataset.parentCommentId || 0);
   const contentMarkdown = input?.value.trim() || "";
 
   if (message) {
-    message.textContent = "正在发布评论...";
+    message.textContent = parentCommentId ? "正在发布回复..." : "正在发布评论...";
   }
 
   try {
     const payload = await callApi(`/discussion/posts/${discussionState.activePostId}/comments`, {
       method: "POST",
-      body: JSON.stringify({ contentMarkdown })
+      body: JSON.stringify({
+        contentMarkdown,
+        parentCommentId: parentCommentId || undefined
+      })
     });
 
-    discussionState.comments = [...discussionState.comments, payload.comment];
+    const baselineCommentCount = discussionState.comments.length;
+    const newComments = [payload.comment].filter(Boolean);
+    discussionState.comments = [...discussionState.comments, ...newComments];
+    const addedCommentCount = newComments.length;
     if (discussionState.activePost) {
-      discussionState.activePost.commentCount = Number(discussionState.activePost.commentCount || 0) + 1;
+      discussionState.activePost.commentCount = Number(discussionState.activePost.commentCount || 0) + addedCommentCount;
     }
     discussionState.posts = discussionState.posts.map((post) => (
       post.id === discussionState.activePostId
         ? {
             ...post,
-            commentCount: Number(post.commentCount || 0) + 1
+            commentCount: Number(post.commentCount || 0) + addedCommentCount
           }
         : post
     ));
     input.value = "";
     if (message) {
-      message.textContent = payload.message || "评论已发布";
+      message.textContent = payload.message || (parentCommentId ? "回复已发布" : "评论已发布");
     }
     renderDiscussionComments();
     renderDiscussionPosts();
+    if (payload.maxPending || shouldWaitForMaxReply(contentMarkdown)) {
+      pollDiscussionCommentsForMax(discussionState.activePostId, baselineCommentCount + addedCommentCount, message);
+    }
   } catch (error) {
     if (message) {
       message.textContent = error.message;
