@@ -12,6 +12,7 @@ const { CODE_TTL_MINUTES, buildExpiryDate, generateEmailCode, hashCode } = requi
 
 const app = express();
 const FORTUNE_BONUS_KEY = "fortune_bonus_enabled";
+const FORTUNE_LOOKBACK_DAYS = 30;
 const MAX_AGENT_USER = {
   username: "max_the_agent",
   fullName: "Max",
@@ -466,6 +467,24 @@ async function ensureAiDialogTables() {
   );
 }
 
+async function ensureFortuneTables() {
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS user_fortunes (
+      id BIGINT PRIMARY KEY AUTO_INCREMENT,
+      user_id BIGINT NOT NULL,
+      fortune_date DATE NOT NULL,
+      score INT NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT fk_user_fortunes_user
+        FOREIGN KEY (user_id) REFERENCES users (id)
+        ON DELETE CASCADE,
+      UNIQUE KEY uq_user_fortunes_user_date (user_id, fortune_date),
+      INDEX idx_user_fortunes_user_date (user_id, fortune_date)
+    )`
+  );
+}
+
 async function ensureMaxAgentUser() {
   const existing = await getUserByIdFromUsername(MAX_AGENT_USER.username);
 
@@ -521,6 +540,54 @@ async function setAppSetting(key, value) {
 
 async function getFortuneBonusEnabled() {
   return (await getAppSetting(FORTUNE_BONUS_KEY, "0")) === "1";
+}
+
+function toDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function generateFortuneScore(fortuneBonusEnabled) {
+  return crypto.randomInt(0, 101) + (fortuneBonusEnabled ? 20 : 0);
+}
+
+async function ensureUserFortuneWindow(user, fortuneBonusEnabled) {
+  await ensureFortuneTables();
+
+  const today = new Date();
+  const todayKey = toDateKey(today);
+  const dates = Array.from({ length: FORTUNE_LOOKBACK_DAYS }, (_, index) => (
+    toDateKey(addDays(today, index - FORTUNE_LOOKBACK_DAYS + 1))
+  ));
+
+  await pool.execute(
+    `INSERT IGNORE INTO user_fortunes (user_id, fortune_date, score)
+     VALUES (?, ?, ?)`,
+    [user.id, todayKey, generateFortuneScore(fortuneBonusEnabled)]
+  );
+
+  const [rows] = await pool.execute(
+    `SELECT DATE_FORMAT(fortune_date, '%Y-%m-%d') AS fortune_date, score
+     FROM user_fortunes
+     WHERE user_id = ?
+       AND fortune_date BETWEEN ? AND ?`,
+    [user.id, dates[0], dates[dates.length - 1]]
+  );
+  const scoreByDate = new Map(rows.map((row) => [row.fortune_date, Number(row.score)]));
+
+  return dates.map((date) => ({
+    date,
+    score: scoreByDate.has(date) ? scoreByDate.get(date) : null
+  }));
 }
 
 function toUserProfile(row) {
@@ -1200,6 +1267,29 @@ app.get("/api/fortune-config", async (_request, response) => {
     });
   } catch (error) {
     response.status(500).json({ message: "获取运势配置失败", detail: error.message });
+  }
+});
+
+app.get("/api/fortune", async (request, response) => {
+  try {
+    const user = await requireAuth(request, response);
+
+    if (!user) {
+      return;
+    }
+
+    const fortuneBonusEnabled = await getFortuneBonusEnabled();
+    const history = await ensureUserFortuneWindow(user, fortuneBonusEnabled);
+    const todayKey = toDateKey(new Date());
+    const today = history.find((item) => item.date === todayKey) || history[history.length - 1];
+
+    response.json({
+      fortuneBonusEnabled,
+      today,
+      history
+    });
+  } catch (error) {
+    response.status(500).json({ message: "获取运势失败", detail: error.message });
   }
 });
 
@@ -2617,6 +2707,7 @@ async function start() {
   await ensureAppSettingsTable();
   await ensureDiscussionTables();
   await ensureAiDialogTables();
+  await ensureFortuneTables();
 
   app.listen(config.apiPort, config.apiHost, () => {
     console.log(`FREE-BBS backend running at http://${config.apiHost}:${config.apiPort}`);

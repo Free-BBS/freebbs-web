@@ -201,26 +201,11 @@ function getTodayKey() {
   return `${year}-${month}-${day}`;
 }
 
-function hashFortuneSeed(seed) {
-  let hash = 2166136261;
-
-  for (const char of seed) {
-    hash ^= char.charCodeAt(0);
-    hash = Math.imul(hash, 16777619);
-  }
-
-  return (hash >>> 0);
-}
-
-function getFortuneResult() {
-  const score =
-    (hashFortuneSeed(`${userState.studentId}-${getTodayKey()}`) % 101) +
-    (userState.fortuneBonusEnabled ? 20 : 0);
-
+function getFortuneResult(score, date = getTodayKey()) {
   if (score >= 90) {
     return {
       score,
-      date: getTodayKey(),
+      date,
       label: "大吉",
       colorClass: "fortune-great",
       colorName: "金色",
@@ -231,7 +216,7 @@ function getFortuneResult() {
   if (score >= 50) {
     return {
       score,
-      date: getTodayKey(),
+      date,
       label: "吉",
       colorClass: "fortune-good",
       colorName: "红色",
@@ -242,7 +227,7 @@ function getFortuneResult() {
   if (score >= 20) {
     return {
       score,
-      date: getTodayKey(),
+      date,
       label: "平",
       colorClass: "fortune-neutral",
       colorName: "白色",
@@ -253,7 +238,7 @@ function getFortuneResult() {
   if (score >= 3) {
     return {
       score,
-      date: getTodayKey(),
+      date,
       label: "凶",
       colorClass: "fortune-bad",
       colorName: "绿色",
@@ -263,7 +248,7 @@ function getFortuneResult() {
 
   return {
     score,
-    date: getTodayKey(),
+    date,
     label: "大凶",
     colorClass: "fortune-awful",
     colorName: "黑色",
@@ -288,7 +273,12 @@ function ensureFortuneModal() {
       <h2 class="fortune-title" id="fortune-title">今日运势</h2>
       <p class="fortune-date" id="fortune-date"></p>
       <div class="fortune-badge" id="fortune-badge"></div>
+      <p class="fortune-score" id="fortune-score"></p>
       <p class="fortune-tagline" id="fortune-tagline"></p>
+      <div class="fortune-chart-wrap">
+        <canvas class="fortune-chart" id="fortune-chart" width="720" height="260" aria-label="近一个月运势曲线"></canvas>
+      </div>
+      <p class="fortune-chart-caption" id="fortune-chart-caption"></p>
     </section>
   `;
 
@@ -304,22 +294,132 @@ function ensureFortuneModal() {
   return modal;
 }
 
-function openFortuneModal() {
+function drawFortuneChart(canvas, history) {
+  if (!canvas || !history?.length) {
+    return;
+  }
+
+  const context = canvas.getContext("2d");
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const width = Math.max(320, Math.floor(rect.width || canvas.width));
+  const height = Math.max(160, Math.floor(rect.height || canvas.height));
+  canvas.width = Math.floor(width * dpr);
+  canvas.height = Math.floor(height * dpr);
+  context.setTransform(dpr, 0, 0, dpr, 0, 0);
+  context.clearRect(0, 0, width, height);
+
+  const padding = { top: 18, right: 18, bottom: 30, left: 36 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const scoredHistory = history.filter((item) => item.score !== null && item.score !== undefined);
+  const maxScore = Math.max(120, ...scoredHistory.map((item) => Number(item.score) || 0));
+  const minScore = 0;
+  const xFor = (index) => padding.left + (history.length === 1 ? chartWidth / 2 : (chartWidth * index) / (history.length - 1));
+  const yFor = (score) => padding.top + chartHeight - ((score - minScore) / (maxScore - minScore)) * chartHeight;
+
+  context.lineWidth = 1;
+  context.strokeStyle = "rgba(232, 237, 243, 0.16)";
+  context.fillStyle = "rgba(232, 237, 243, 0.5)";
+  context.font = "12px sans-serif";
+  context.textAlign = "right";
+  context.textBaseline = "middle";
+
+  [0, 30, 60, 90, 120].forEach((tick) => {
+    const y = yFor(tick);
+    context.beginPath();
+    context.moveTo(padding.left, y);
+    context.lineTo(width - padding.right, y);
+    context.stroke();
+    context.fillText(String(tick), padding.left - 8, y);
+  });
+
+  context.beginPath();
+  let hasActiveLine = false;
+  history.forEach((item, index) => {
+    if (item.score === null || item.score === undefined) {
+      hasActiveLine = false;
+      return;
+    }
+
+    const x = xFor(index);
+    const y = yFor(Number(item.score) || 0);
+    if (!hasActiveLine) {
+      context.moveTo(x, y);
+      hasActiveLine = true;
+    } else {
+      context.lineTo(x, y);
+    }
+  });
+  context.lineWidth = 3;
+  context.lineJoin = "round";
+  context.lineCap = "round";
+  context.strokeStyle = "#ffe59a";
+  context.stroke();
+
+  history.forEach((item, index) => {
+    if (item.score === null || item.score === undefined) {
+      return;
+    }
+
+    const x = xFor(index);
+    const y = yFor(Number(item.score) || 0);
+    context.beginPath();
+    context.arc(x, y, index === history.length - 1 ? 4.5 : 3, 0, Math.PI * 2);
+    context.fillStyle = index === history.length - 1 ? "#ffffff" : "#ffe59a";
+    context.fill();
+  });
+
+  const firstDate = history[0]?.date?.slice(5) || "";
+  const lastDate = history[history.length - 1]?.date?.slice(5) || "";
+  context.fillStyle = "rgba(232, 237, 243, 0.6)";
+  context.textBaseline = "top";
+  context.textAlign = "left";
+  context.fillText(firstDate, padding.left, height - 20);
+  context.textAlign = "right";
+  context.fillText(lastDate, width - padding.right, height - 20);
+}
+
+async function openFortuneModal() {
   if (!userState.isLoggedIn || !userState.studentId) {
     return;
   }
 
   const modal = ensureFortuneModal();
-  const result = getFortuneResult();
   const badge = modal.querySelector("#fortune-badge");
   const date = modal.querySelector("#fortune-date");
+  const score = modal.querySelector("#fortune-score");
   const tagline = modal.querySelector("#fortune-tagline");
+  const chart = modal.querySelector("#fortune-chart");
+  const chartCaption = modal.querySelector("#fortune-chart-caption");
 
-  badge.className = `fortune-badge ${result.colorClass}`;
-  badge.textContent = result.label;
-  date.textContent = result.date;
-  tagline.textContent = result.tagline;
   modal.classList.remove("hidden");
+  badge.className = "fortune-badge";
+  badge.textContent = "加载中";
+  date.textContent = "";
+  score.textContent = "";
+  tagline.textContent = "";
+  chartCaption.textContent = "";
+
+  try {
+    const payload = await callApi("/fortune", {
+      method: "GET"
+    });
+    userState.fortuneBonusEnabled = Boolean(payload.fortuneBonusEnabled);
+    const result = getFortuneResult(Number(payload.today.score), payload.today.date);
+
+    badge.className = `fortune-badge ${result.colorClass}`;
+    badge.textContent = result.label;
+    date.textContent = result.date;
+    score.textContent = `运势得分 ${result.score}`;
+    tagline.textContent = result.tagline;
+    chartCaption.textContent = "近一个月运势曲线";
+    window.requestAnimationFrame(() => drawFortuneChart(chart, payload.history || []));
+  } catch (error) {
+    badge.className = "fortune-badge fortune-awful";
+    badge.textContent = "失败";
+    tagline.textContent = error.message || "获取运势失败";
+  }
 }
 
 function escapeHtml(value) {
