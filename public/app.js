@@ -1186,6 +1186,10 @@ function buildAiChatPayload(userMessage) {
   const recentMessages = aiChatState.messages.slice(-13);
 
   return {
+    agent: "general_chat",
+    source: "direct_chat",
+    channel: "aichat",
+    did: aiChatState.currentDid || "",
     messages: [
       ...recentMessages,
       {

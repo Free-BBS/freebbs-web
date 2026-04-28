@@ -21,6 +21,7 @@ npm run start:backend
 - `MYSQL_PASSWORD`
 - `MYSQL_DATABASE`
 - `AUTH_SECRET`
+- `AGENT_URL`：freebbs-agent 服务地址，默认 `http://127.0.0.1:5001`
 - `BOTMAIL_SMTP`
 - `BOTMAIL_SMTP_PORT`
 - `BOTMAIL_USER`

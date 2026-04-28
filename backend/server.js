@@ -727,6 +727,44 @@ function buildMaxDiscussionPrompt(post, comments, triggerComment) {
   ].join("\n");
 }
 
+function buildAgentUserContext(user) {
+  if (!user) {
+    return null;
+  }
+
+  return {
+    uid: user.uid || "",
+    username: user.username || "",
+    fullName: user.fullName || user.full_name || "",
+    studentId: user.student_id || user.studentId || "",
+    displayName: user.displayName || user.fullName || user.full_name || user.username || ""
+  };
+}
+
+function buildAgentChatPayload(user, payload, defaults = {}) {
+  return {
+    ...payload,
+    agent: payload.agent || defaults.agent || "general_chat",
+    source: payload.source || defaults.source || "direct_chat",
+    channel: payload.channel || defaults.channel || payload.source || defaults.source || "direct_chat",
+    user: buildAgentUserContext(user),
+    context: {
+      ...(defaults.context || {}),
+      ...(payload.context && typeof payload.context === "object" ? payload.context : {})
+    }
+  };
+}
+
+async function postAgentChat(payload) {
+  return fetch(`${config.agentBaseUrl.replace(/\/$/, "")}/api/v1/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
 async function createMaxDiscussionReply(postId, triggerComment) {
   await ensureMaxAgentUser();
 
@@ -772,20 +810,24 @@ async function createMaxDiscussionReply(postId, triggerComment) {
   const post = toDiscussionPostDetail(postRows[0]);
   const comments = commentRows.map(toDiscussionComment);
   const prompt = buildMaxDiscussionPrompt(post, comments, triggerComment);
-  const agentResponse = await fetch(`${config.agentBaseUrl.replace(/\/$/, "")}/api/v1/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      messages: [
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      temperature: 0.5
-    })
+  const agentResponse = await postAgentChat({
+    agent: "comment_mention",
+    source: "comment",
+    channel: "discussion_comment",
+    message: prompt,
+    temperature: 0.5,
+    context: {
+      post: {
+        id: post.id,
+        pid: post.pid,
+        title: post.title,
+        board: post.board,
+        author: post.author,
+        contentMarkdown: post.contentMarkdown
+      },
+      triggerComment,
+      comments
+    }
   });
 
   const agentPayload = await agentResponse.json().catch(() => ({}));
@@ -1099,13 +1141,15 @@ app.post("/api/ai/chat", async (request, response) => {
   }
 
   try {
-    const agentResponse = await fetch(`${config.agentBaseUrl.replace(/\/$/, "")}/api/v1/chat`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
+    const agentPayload = buildAgentChatPayload(user, payload, {
+      agent: "general_chat",
+      source: "direct_chat",
+      channel: "aichat",
+      context: {
+        dialogId: payload.did || payload.conversationId || payload.conversation_id || ""
+      }
     });
+    const agentResponse = await postAgentChat(agentPayload);
 
     if (payload.stream) {
       response.status(agentResponse.status);

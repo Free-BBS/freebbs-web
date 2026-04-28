@@ -80,6 +80,7 @@ MYSQL_DATABASE=free_bbs
 
 UPLOAD_DIR=/data/www/free-BBS/uploads
 AUTH_SECRET=replace-with-a-random-secret
+AGENT_URL=http://127.0.0.1:5001
 
 BOTMAIL_SMTP=smtp.feishu.cn
 BOTMAIL_SMTP_PORT=465
