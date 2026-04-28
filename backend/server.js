@@ -2,6 +2,7 @@ const express = require("express");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const sharp = require("sharp");
 const pool = require("./db");
 const config = require("./config");
 const { hashPassword, verifyPassword } = require("./password");
@@ -25,31 +26,42 @@ const DISCUSSION_BOARD_SEEDS = [
     slug: "daily",
     name: "日常",
     description: "生活、课程与校园碎碎念",
+    descriptionMarkdown: "生活、课程与校园碎碎念。可以分享日常、提问、吐槽和轻量讨论。",
     sortOrder: 10
   },
   {
     slug: "math",
     name: "数理",
     description: "数学、物理与推导讨论",
+    descriptionMarkdown: "数学、物理与推导讨论。支持 Markdown 与 KaTeX，例如 `$E=mc^2$`。",
     sortOrder: 20
   },
   {
     slug: "circuit",
     name: "电路",
     description: "模电、数电与硬件实现",
+    descriptionMarkdown: "模电、数电与硬件实现相关内容。建议附上电路图、波形、公式或关键参数。",
     sortOrder: 30
   },
   {
     slug: "signal",
     name: "信号",
     description: "信号、系统与通信方向讨论",
+    descriptionMarkdown: "信号、系统与通信方向讨论。可以贴推导、代码、仿真结果和参考资料。",
     sortOrder: 40
+  },
+  {
+    slug: "changelog",
+    name: "更新日志",
+    description: "站点更新、修复与版本记录",
+    descriptionMarkdown: "FREE-BBS 的站点更新、修复与版本记录。这里用于同步功能变化和维护信息。",
+    sortOrder: 50
   }
 ];
 
 fs.mkdirSync(config.uploadDir, { recursive: true });
 
-app.use(express.json({ limit: "8mb" }));
+app.use(express.json({ limit: "28mb" }));
 app.use((request, response, next) => {
   response.setHeader("Access-Control-Allow-Origin", process.env.CORS_ORIGIN || "*");
   response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -79,6 +91,10 @@ function generateUserUid() {
   return `u_${crypto.randomBytes(8).toString("hex")}`;
 }
 
+function generateDiscussionPostPid() {
+  return `p_${crypto.randomBytes(8).toString("hex")}`;
+}
+
 async function createUniqueUserUid() {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const uid = generateUserUid();
@@ -93,6 +109,22 @@ async function createUniqueUserUid() {
   }
 
   throw new Error("无法生成唯一 UID");
+}
+
+async function createUniqueDiscussionPostPid() {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const pid = generateDiscussionPostPid();
+    const [rows] = await pool.execute(
+      `SELECT id FROM discussion_posts WHERE pid = ? LIMIT 1`,
+      [pid]
+    );
+
+    if (!rows[0]) {
+      return pid;
+    }
+  }
+
+  throw new Error("无法生成唯一 PID");
 }
 
 async function ensureUsersUidColumn() {
@@ -151,6 +183,7 @@ async function ensureDiscussionTables() {
       slug VARCHAR(64) NOT NULL UNIQUE,
       name VARCHAR(64) NOT NULL,
       description VARCHAR(255) NULL,
+      description_markdown MEDIUMTEXT NULL,
       sort_order INT NOT NULL DEFAULT 0,
       is_active TINYINT(1) NOT NULL DEFAULT 1,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -158,14 +191,37 @@ async function ensureDiscussionTables() {
     )`
   );
 
+  const [boardDescriptionColumns] = await pool.execute(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'discussion_boards'
+       AND COLUMN_NAME = 'description_markdown'
+     LIMIT 1`
+  );
+
+  if (!boardDescriptionColumns[0]) {
+    await pool.execute(
+      `ALTER TABLE discussion_boards
+       ADD COLUMN description_markdown MEDIUMTEXT NULL AFTER description`
+    );
+  }
+
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS discussion_posts (
       id BIGINT PRIMARY KEY AUTO_INCREMENT,
+      pid VARCHAR(32) NULL UNIQUE,
       board_id BIGINT NOT NULL,
       user_id BIGINT NOT NULL,
       author_student_id VARCHAR(10) NULL,
       title VARCHAR(120) NOT NULL,
       content_markdown MEDIUMTEXT NOT NULL,
+      is_pinned TINYINT(1) NOT NULL DEFAULT 0,
+      pinned_at DATETIME NULL,
+      pinned_by BIGINT NULL,
+      is_featured TINYINT(1) NOT NULL DEFAULT 0,
+      featured_at DATETIME NULL,
+      featured_by BIGINT NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       CONSTRAINT fk_discussion_posts_board
@@ -174,10 +230,64 @@ async function ensureDiscussionTables() {
       CONSTRAINT fk_discussion_posts_user
         FOREIGN KEY (user_id) REFERENCES users (id)
         ON DELETE CASCADE,
+      CONSTRAINT fk_discussion_posts_pinned_by
+        FOREIGN KEY (pinned_by) REFERENCES users (id)
+        ON DELETE SET NULL,
+      CONSTRAINT fk_discussion_posts_featured_by
+        FOREIGN KEY (featured_by) REFERENCES users (id)
+        ON DELETE SET NULL,
+      INDEX idx_discussion_posts_featured_created_at (is_featured, featured_at DESC, created_at DESC),
+      INDEX idx_discussion_posts_pinned_created_at (is_pinned, pinned_at DESC, created_at DESC),
       INDEX idx_discussion_posts_board_created_at (board_id, created_at DESC),
       INDEX idx_discussion_posts_created_at (created_at DESC)
     )`
   );
+
+  const [pidColumns] = await pool.execute(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'discussion_posts'
+       AND COLUMN_NAME = 'pid'
+     LIMIT 1`
+  );
+
+  if (!pidColumns[0]) {
+    await pool.execute(
+      `ALTER TABLE discussion_posts
+       ADD COLUMN pid VARCHAR(32) NULL AFTER id`
+    );
+  }
+
+  const [postsWithoutPid] = await pool.execute(
+    `SELECT id
+     FROM discussion_posts
+     WHERE pid IS NULL OR pid = ''
+     ORDER BY id ASC`
+  );
+
+  for (const row of postsWithoutPid) {
+    await pool.execute(
+      `UPDATE discussion_posts
+       SET pid = ?
+       WHERE id = ? AND (pid IS NULL OR pid = '')`,
+      [await createUniqueDiscussionPostPid(), row.id]
+    );
+  }
+
+  const [pidIndexes] = await pool.execute(
+    `SELECT INDEX_NAME
+     FROM INFORMATION_SCHEMA.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'discussion_posts'
+       AND COLUMN_NAME = 'pid'
+       AND NON_UNIQUE = 0
+     LIMIT 1`
+  );
+
+  if (!pidIndexes[0]) {
+    await pool.execute(`ALTER TABLE discussion_posts ADD UNIQUE KEY uq_discussion_posts_pid (pid)`);
+  }
 
   const [columns] = await pool.execute(
     `SELECT COLUMN_NAME
@@ -201,6 +311,31 @@ async function ensureDiscussionTables() {
      SET p.author_student_id = u.student_id
      WHERE p.author_student_id IS NULL`
   );
+
+  const postPinColumns = [
+    ["is_pinned", "ALTER TABLE discussion_posts ADD COLUMN is_pinned TINYINT(1) NOT NULL DEFAULT 0 AFTER content_markdown"],
+    ["pinned_at", "ALTER TABLE discussion_posts ADD COLUMN pinned_at DATETIME NULL AFTER is_pinned"],
+    ["pinned_by", "ALTER TABLE discussion_posts ADD COLUMN pinned_by BIGINT NULL AFTER pinned_at"],
+    ["is_featured", "ALTER TABLE discussion_posts ADD COLUMN is_featured TINYINT(1) NOT NULL DEFAULT 0 AFTER pinned_by"],
+    ["featured_at", "ALTER TABLE discussion_posts ADD COLUMN featured_at DATETIME NULL AFTER is_featured"],
+    ["featured_by", "ALTER TABLE discussion_posts ADD COLUMN featured_by BIGINT NULL AFTER featured_at"]
+  ];
+
+  for (const [columnName, alterSql] of postPinColumns) {
+    const [pinColumns] = await pool.execute(
+      `SELECT COLUMN_NAME
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'discussion_posts'
+         AND COLUMN_NAME = ?
+       LIMIT 1`,
+      [columnName]
+    );
+
+    if (!pinColumns[0]) {
+      await pool.execute(alterSql);
+    }
+  }
 
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS discussion_post_likes (
@@ -262,6 +397,22 @@ async function ensureDiscussionTables() {
     )`
   );
 
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS discussion_board_moderators (
+      board_id BIGINT NOT NULL,
+      user_id BIGINT NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (board_id, user_id),
+      CONSTRAINT fk_discussion_board_moderators_board
+        FOREIGN KEY (board_id) REFERENCES discussion_boards (id)
+        ON DELETE CASCADE,
+      CONSTRAINT fk_discussion_board_moderators_user
+        FOREIGN KEY (user_id) REFERENCES users (id)
+        ON DELETE CASCADE,
+      INDEX idx_discussion_board_moderators_user (user_id)
+    )`
+  );
+
   const [commentColumns] = await pool.execute(
     `SELECT COLUMN_NAME
      FROM INFORMATION_SCHEMA.COLUMNS
@@ -284,14 +435,15 @@ async function ensureDiscussionTables() {
 
   for (const board of DISCUSSION_BOARD_SEEDS) {
     await pool.execute(
-      `INSERT INTO discussion_boards (slug, name, description, sort_order, is_active)
-       VALUES (?, ?, ?, ?, 1)
+      `INSERT INTO discussion_boards (slug, name, description, description_markdown, sort_order, is_active)
+       VALUES (?, ?, ?, ?, ?, 1)
        ON DUPLICATE KEY UPDATE
          name = VALUES(name),
          description = VALUES(description),
+         description_markdown = COALESCE(discussion_boards.description_markdown, VALUES(description_markdown)),
          sort_order = VALUES(sort_order),
          is_active = VALUES(is_active)`,
-      [board.slug, board.name, board.description, board.sortOrder]
+      [board.slug, board.name, board.description, board.descriptionMarkdown, board.sortOrder]
     );
   }
 }
@@ -398,13 +550,17 @@ function toDiscussionBoard(row) {
     slug: row.slug,
     name: row.name,
     description: row.description || "",
-    sortOrder: Number(row.sort_order || 0)
+    descriptionMarkdown: row.description_markdown || row.description || "",
+    sortOrder: Number(row.sort_order || 0),
+    canModerate: Boolean(row.can_moderate),
+    canManageModerators: Boolean(row.can_manage_moderators)
   };
 }
 
 function toDiscussionPostSummary(row) {
   return {
-    id: row.id,
+    id: row.pid || String(row.id),
+    pid: row.pid || String(row.id),
     title: row.title,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -412,6 +568,13 @@ function toDiscussionPostSummary(row) {
       slug: row.board_slug,
       name: row.board_name
     },
+    isPinned: Boolean(row.is_pinned),
+    pinnedAt: row.pinned_at || null,
+    isFeatured: Boolean(row.is_featured),
+    featuredAt: row.featured_at || null,
+    canFeature: Boolean(row.can_feature),
+    canPin: Boolean(row.can_pin),
+    canDelete: Boolean(row.can_delete),
     author: {
       id: row.user_id,
       uid: row.uid || "",
@@ -501,7 +664,8 @@ async function createMaxDiscussionReply(postId, triggerComment) {
   await ensureMaxAgentUser();
 
   const [postRows] = await pool.execute(
-    `SELECT p.id, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
+    `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
+            p.is_pinned, p.pinned_at, p.is_featured, p.featured_at,
             b.slug AS board_slug, b.name AS board_name,
             COALESCE(p.author_student_id, u.student_id) AS author_student_id,
             u.student_id, u.uid, u.username, u.full_name, u.avatar_path,
@@ -511,7 +675,10 @@ async function createMaxDiscussionReply(postId, triggerComment) {
             0 AS comment_count,
             0 AS liked_by_me,
             0 AS lighted_by_me,
-            0 AS fireworks_by_me
+            0 AS fireworks_by_me,
+            0 AS can_feature,
+            0 AS can_pin,
+            0 AS can_delete
      FROM discussion_posts p
      INNER JOIN discussion_boards b ON b.id = p.board_id
      INNER JOIN users u ON u.id = p.user_id
@@ -644,7 +811,7 @@ function normalizeLimit(value, defaultLimit = 12, maxLimit = 50) {
 
 async function getDiscussionBoardBySlug(slug) {
   const [rows] = await pool.execute(
-    `SELECT id, slug, name, description, sort_order
+    `SELECT id, slug, name, description, description_markdown, sort_order
      FROM discussion_boards
      WHERE slug = ?
        AND is_active = 1
@@ -653,6 +820,61 @@ async function getDiscussionBoardBySlug(slug) {
   );
 
   return rows[0] || null;
+}
+
+async function getDiscussionPostByPublicId(value) {
+  const postKey = String(value || "").trim();
+
+  if (!postKey) {
+    return null;
+  }
+
+  const params = [postKey];
+  let legacyCondition = "";
+
+  if (/^\d+$/.test(postKey)) {
+    legacyCondition = " OR id = ?";
+    params.push(Number(postKey));
+  }
+
+  const [rows] = await pool.execute(
+    `SELECT id, pid, board_id
+     FROM discussion_posts
+     WHERE pid = ?${legacyCondition}
+     LIMIT 1`,
+    params
+  );
+
+  return rows[0] || null;
+}
+
+async function canModerateBoard(user, boardId) {
+  if (!user || !boardId) {
+    return false;
+  }
+
+  if (user.role === "admin") {
+    return true;
+  }
+
+  const [rows] = await pool.execute(
+    `SELECT board_id
+     FROM discussion_board_moderators
+     WHERE board_id = ? AND user_id = ?
+     LIMIT 1`,
+    [boardId, user.id]
+  );
+
+  return Boolean(rows[0]);
+}
+
+async function requireDiscussionBoardModerator(user, boardId, response) {
+  if (await canModerateBoard(user, boardId)) {
+    return true;
+  }
+
+  response.status(403).json({ message: "需要该版块版主权限" });
+  return false;
 }
 
 function issueToken(user) {
@@ -762,6 +984,11 @@ function buildAvatarFileName(userId, mimeType) {
   }
 
   return `user-${userId}-${Date.now()}${extension}`;
+}
+
+function buildDiscussionImageFileName(userId) {
+  const suffix = crypto.randomBytes(8).toString("hex");
+  return `discussion-${userId}-${Date.now()}-${suffix}.webp`;
 }
 
 function removeStoredAvatar(avatarPath) {
@@ -979,12 +1206,18 @@ app.get("/api/fortune-config", async (_request, response) => {
 app.get("/api/discussion/boards", async (_request, response) => {
   try {
     await ensureDiscussionTables();
+    const currentUser = await getOptionalAuthUser(_request);
 
     const [rows] = await pool.execute(
-      `SELECT id, slug, name, description, sort_order
-       FROM discussion_boards
-       WHERE is_active = 1
-       ORDER BY sort_order ASC, id ASC`
+      `SELECT b.id, b.slug, b.name, b.description, b.description_markdown, b.sort_order,
+              MAX(CASE WHEN ? = 'admin' THEN 1 ELSE 0 END) AS can_moderate,
+              MAX(CASE WHEN ? = 'admin' THEN 1 ELSE 0 END) AS can_manage_moderators
+       FROM discussion_boards b
+       LEFT JOIN discussion_board_moderators m ON m.board_id = b.id AND m.user_id = ?
+       WHERE b.is_active = 1
+       GROUP BY b.id, b.slug, b.name, b.description, b.description_markdown, b.sort_order
+       ORDER BY b.sort_order ASC, b.id ASC`,
+      [currentUser?.role || "", currentUser?.role || "", currentUser?.id || 0]
     );
 
     response.json({
@@ -992,6 +1225,262 @@ app.get("/api/discussion/boards", async (_request, response) => {
     });
   } catch (error) {
     response.status(500).json({ message: "获取讨论版块失败", detail: error.message });
+  }
+});
+
+app.patch("/api/discussion/boards/:slug/description", async (request, response) => {
+  try {
+    await ensureDiscussionTables();
+
+    const user = await requireAdmin(request, response);
+
+    if (!user) {
+      return;
+    }
+
+    const slug = String(request.params.slug || "").trim().toLowerCase();
+    const descriptionMarkdown = String(request.body.descriptionMarkdown || "").trim();
+
+    if (!descriptionMarkdown || descriptionMarkdown.length > 10000) {
+      response.status(400).json({ message: "版块说明不能为空，且不能超过 10000 个字符" });
+      return;
+    }
+
+    const board = await getDiscussionBoardBySlug(slug);
+
+    if (!board) {
+      response.status(404).json({ message: "讨论版块不存在" });
+      return;
+    }
+
+    await pool.execute(
+      `UPDATE discussion_boards
+       SET description_markdown = ?
+       WHERE id = ?`,
+      [descriptionMarkdown, board.id]
+    );
+
+    response.json({
+      board: {
+        ...toDiscussionBoard({
+          ...board,
+          description_markdown: descriptionMarkdown,
+          can_moderate: 1,
+          can_manage_moderators: user.role === "admin" ? 1 : 0
+        })
+      }
+    });
+  } catch (error) {
+    response.status(500).json({ message: "更新版块说明失败", detail: error.message });
+  }
+});
+
+function toModeratorUser(row) {
+  return {
+    id: row.id,
+    uid: row.uid || "",
+    username: row.username,
+    fullName: row.full_name || "",
+    studentId: row.student_id || "",
+    email: row.email || "",
+    avatarPath: row.avatar_path || "",
+    isModerator: Boolean(row.is_moderator)
+  };
+}
+
+app.get("/api/discussion/boards/:slug/moderators", async (request, response) => {
+  try {
+    await ensureDiscussionTables();
+
+    const adminUser = await requireAdmin(request, response);
+
+    if (!adminUser) {
+      return;
+    }
+
+    const board = await getDiscussionBoardBySlug(String(request.params.slug || "").trim().toLowerCase());
+
+    if (!board) {
+      response.status(404).json({ message: "讨论版块不存在" });
+      return;
+    }
+
+    const [rows] = await pool.execute(
+      `SELECT u.id, u.uid, u.username, u.full_name, u.student_id, u.email, u.avatar_path, 1 AS is_moderator
+       FROM discussion_board_moderators m
+       INNER JOIN users u ON u.id = m.user_id
+       WHERE m.board_id = ?
+       ORDER BY u.username ASC, u.id ASC`,
+      [board.id]
+    );
+
+    response.json({
+      moderators: rows.map(toModeratorUser)
+    });
+  } catch (error) {
+    response.status(500).json({ message: "获取版主名单失败", detail: error.message });
+  }
+});
+
+app.get("/api/discussion/boards/:slug/moderator-candidates", async (request, response) => {
+  try {
+    await ensureDiscussionTables();
+
+    const adminUser = await requireAdmin(request, response);
+
+    if (!adminUser) {
+      return;
+    }
+
+    const board = await getDiscussionBoardBySlug(String(request.params.slug || "").trim().toLowerCase());
+
+    if (!board) {
+      response.status(404).json({ message: "讨论版块不存在" });
+      return;
+    }
+
+    const query = String(request.query.query || "").trim();
+
+    if (!query || query.length < 2) {
+      response.status(400).json({ message: "请输入至少 2 个字符用于搜索" });
+      return;
+    }
+
+    const likeQuery = `%${query}%`;
+    const [rows] = await pool.execute(
+      `SELECT u.id, u.uid, u.username, u.full_name, u.student_id, u.email, u.avatar_path,
+              CASE WHEN m.user_id IS NULL THEN 0 ELSE 1 END AS is_moderator
+       FROM users u
+       LEFT JOIN discussion_board_moderators m ON m.board_id = ? AND m.user_id = u.id
+       WHERE u.uid = ?
+          OR u.student_id = ?
+          OR u.username = ?
+          OR u.email = ?
+          OR u.full_name = ?
+          OR u.uid LIKE ?
+          OR u.student_id LIKE ?
+          OR u.username LIKE ?
+          OR u.email LIKE ?
+          OR u.full_name LIKE ?
+       ORDER BY is_moderator DESC, u.username ASC, u.id ASC
+       LIMIT 20`,
+      [board.id, query, query, query, query, query, likeQuery, likeQuery, likeQuery, likeQuery, likeQuery]
+    );
+
+    response.json({
+      users: rows.map(toModeratorUser)
+    });
+  } catch (error) {
+    response.status(500).json({ message: "搜索用户失败", detail: error.message });
+  }
+});
+
+app.patch("/api/discussion/boards/:slug/moderators/:userId", async (request, response) => {
+  try {
+    await ensureDiscussionTables();
+
+    const adminUser = await requireAdmin(request, response);
+
+    if (!adminUser) {
+      return;
+    }
+
+    const board = await getDiscussionBoardBySlug(String(request.params.slug || "").trim().toLowerCase());
+    const targetUserId = Number(request.params.userId);
+    const isModerator = Boolean(request.body.isModerator);
+
+    if (!board) {
+      response.status(404).json({ message: "讨论版块不存在" });
+      return;
+    }
+
+    if (!targetUserId) {
+      response.status(400).json({ message: "无效用户 ID" });
+      return;
+    }
+
+    const [users] = await pool.execute(
+      `SELECT id FROM users WHERE id = ? LIMIT 1`,
+      [targetUserId]
+    );
+
+    if (!users[0]) {
+      response.status(404).json({ message: "用户不存在" });
+      return;
+    }
+
+    if (isModerator) {
+      await pool.execute(
+        `INSERT INTO discussion_board_moderators (board_id, user_id)
+         VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)`,
+        [board.id, targetUserId]
+      );
+    } else {
+      await pool.execute(
+        `DELETE FROM discussion_board_moderators
+         WHERE board_id = ? AND user_id = ?`,
+        [board.id, targetUserId]
+      );
+    }
+
+    response.json({
+      ok: true,
+      userId: targetUserId,
+      isModerator
+    });
+  } catch (error) {
+    response.status(500).json({ message: "更新版主名单失败", detail: error.message });
+  }
+});
+
+app.post("/api/discussion/uploads/images", async (request, response) => {
+  try {
+    const user = await requireAuth(request, response);
+
+    if (!user) {
+      return;
+    }
+
+    const imageDataUrl = String(request.body.imageDataUrl || "");
+    const match = imageDataUrl.match(/^data:(image\/(?:png|jpeg|jpg|webp|gif|avif|heic|heif|bmp|tiff|svg\+xml));base64,([A-Za-z0-9+/=]+)$/i);
+
+    if (!match) {
+      response.status(400).json({ message: "请上传图片文件" });
+      return;
+    }
+
+    const fileBuffer = Buffer.from(match[2], "base64");
+
+    if (!fileBuffer.length || fileBuffer.length > 20 * 1024 * 1024) {
+      response.status(400).json({ message: "图片大小需在 20MB 以内" });
+      return;
+    }
+
+    const outputBuffer = await sharp(fileBuffer, { animated: false })
+      .rotate()
+      .resize({
+        width: 1600,
+        height: 1600,
+        fit: "inside",
+        withoutEnlargement: true
+      })
+      .webp({ quality: 82 })
+      .toBuffer();
+
+    if (!outputBuffer.length || outputBuffer.length > 4 * 1024 * 1024) {
+      response.status(400).json({ message: "图片转换后仍超过 4MB，请换一张更小的图片" });
+      return;
+    }
+
+    const fileName = buildDiscussionImageFileName(user.id);
+    await fs.promises.writeFile(path.join(config.uploadDir, fileName), outputBuffer);
+
+    response.status(201).json({
+      url: `/uploads/${fileName}`
+    });
+  } catch (error) {
+    response.status(500).json({ message: "上传图片失败", detail: error.message });
   }
 });
 
@@ -1005,11 +1494,11 @@ app.get("/api/discussion/stats", async (_request, response) => {
          (SELECT COUNT(*) FROM discussion_post_likes WHERE reaction_type = 'smile') AS like_count`
     );
     const [boardRows] = await pool.execute(
-      `SELECT b.slug, b.name, COUNT(p.id) AS post_count
+      `SELECT b.slug, b.name, b.description, b.description_markdown, COUNT(p.id) AS post_count
        FROM discussion_boards b
        LEFT JOIN discussion_posts p ON p.board_id = b.id
        WHERE b.is_active = 1
-       GROUP BY b.id, b.slug, b.name, b.sort_order
+       GROUP BY b.id, b.slug, b.name, b.description, b.description_markdown, b.sort_order
        ORDER BY b.sort_order ASC, b.id ASC`
     );
 
@@ -1019,6 +1508,8 @@ app.get("/api/discussion/stats", async (_request, response) => {
       boards: boardRows.map((row) => ({
         slug: row.slug,
         name: row.name,
+        description: row.description || "",
+        descriptionMarkdown: row.description_markdown || row.description || "",
         postCount: Number(row.post_count || 0)
       }))
     });
@@ -1047,7 +1538,8 @@ app.get("/api/discussion/posts", async (request, response) => {
     const where = boardSlug === "all" ? "WHERE b.is_active = 1" : "WHERE b.is_active = 1 AND b.slug = ?";
     const params = boardSlug === "all" ? [] : [boardSlug];
     const [rows] = await pool.execute(
-      `SELECT p.id, p.title, p.created_at, p.updated_at, p.user_id,
+      `SELECT p.id, p.pid, p.title, p.created_at, p.updated_at, p.user_id,
+              p.is_pinned, p.pinned_at, p.is_featured, p.featured_at,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
               u.student_id, u.uid, u.username, u.full_name, u.avatar_path,
@@ -1057,21 +1549,27 @@ app.get("/api/discussion/posts", async (request, response) => {
               COUNT(DISTINCT c.id) AS comment_count,
               MAX(CASE WHEN my_smile.user_id IS NULL THEN 0 ELSE 1 END) AS liked_by_me,
               MAX(CASE WHEN my_light.user_id IS NULL THEN 0 ELSE 1 END) AS lighted_by_me,
-              MAX(CASE WHEN my_fireworks.user_id IS NULL THEN 0 ELSE 1 END) AS fireworks_by_me
+              MAX(CASE WHEN my_fireworks.user_id IS NULL THEN 0 ELSE 1 END) AS fireworks_by_me,
+              MAX(CASE WHEN ? = 'admin' OR bm.user_id IS NOT NULL THEN 1 ELSE 0 END) AS can_feature,
+              MAX(CASE WHEN ? = 'admin' THEN 1 ELSE 0 END) AS can_pin,
+              MAX(CASE WHEN ? = 'admin' THEN 1 ELSE 0 END) AS can_delete
        FROM discussion_posts p
        INNER JOIN discussion_boards b ON b.id = p.board_id
        INNER JOIN users u ON u.id = p.user_id
        LEFT JOIN discussion_post_likes l ON l.post_id = p.id
        LEFT JOIN discussion_comments c ON c.post_id = p.id
+       LEFT JOIN discussion_board_moderators bm ON bm.board_id = b.id AND bm.user_id = ?
        LEFT JOIN discussion_post_likes my_smile ON my_smile.post_id = p.id AND my_smile.reaction_type = 'smile' AND my_smile.user_id = ${currentUser ? "?" : "0"}
        LEFT JOIN discussion_post_likes my_light ON my_light.post_id = p.id AND my_light.reaction_type = 'light' AND my_light.user_id = ${currentUser ? "?" : "0"}
        LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? "?" : "0"}
        ${where}
-       GROUP BY p.id, p.title, p.created_at, p.updated_at, p.user_id,
+       GROUP BY p.id, p.pid, p.title, p.created_at, p.updated_at, p.user_id, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at,
                 b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
-       ORDER BY p.created_at DESC, p.id DESC
+       ORDER BY ${boardSlug === "all" ? "p.is_pinned DESC, p.pinned_at DESC, p.created_at DESC, p.id DESC" : "p.is_pinned DESC, p.pinned_at DESC, p.is_featured DESC, p.featured_at DESC, p.created_at DESC, p.id DESC"}
        LIMIT ${limit}`,
-      currentUser ? [currentUser.id, currentUser.id, currentUser.id, ...params] : params
+      currentUser
+        ? [currentUser.role, currentUser.role, currentUser.role, currentUser.id, currentUser.id, currentUser.id, currentUser.id, ...params]
+        : ["", "", "", 0, ...params]
     );
 
     response.json({
@@ -1084,19 +1582,19 @@ app.get("/api/discussion/posts", async (request, response) => {
 });
 
 app.get("/api/discussion/posts/:id", async (request, response) => {
-  const postId = Number(request.params.id);
-
-  if (!postId) {
-    response.status(400).json({ message: "无效帖子 ID" });
-    return;
-  }
-
   try {
     await ensureDiscussionTables();
     const currentUser = await getOptionalAuthUser(request);
+    const post = await getDiscussionPostByPublicId(request.params.id);
+
+    if (!post) {
+      response.status(404).json({ message: "帖子不存在" });
+      return;
+    }
 
     const [rows] = await pool.execute(
-      `SELECT p.id, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
+      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
+              p.is_pinned, p.pinned_at, p.is_featured, p.featured_at,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
               u.student_id, u.uid, u.username, u.full_name, u.avatar_path,
@@ -1106,21 +1604,27 @@ app.get("/api/discussion/posts/:id", async (request, response) => {
               COUNT(DISTINCT c.id) AS comment_count,
               MAX(CASE WHEN my_smile.user_id IS NULL THEN 0 ELSE 1 END) AS liked_by_me,
               MAX(CASE WHEN my_light.user_id IS NULL THEN 0 ELSE 1 END) AS lighted_by_me,
-              MAX(CASE WHEN my_fireworks.user_id IS NULL THEN 0 ELSE 1 END) AS fireworks_by_me
+              MAX(CASE WHEN my_fireworks.user_id IS NULL THEN 0 ELSE 1 END) AS fireworks_by_me,
+              MAX(CASE WHEN ? = 'admin' OR bm.user_id IS NOT NULL THEN 1 ELSE 0 END) AS can_feature,
+              MAX(CASE WHEN ? = 'admin' THEN 1 ELSE 0 END) AS can_pin,
+              MAX(CASE WHEN ? = 'admin' THEN 1 ELSE 0 END) AS can_delete
        FROM discussion_posts p
        INNER JOIN discussion_boards b ON b.id = p.board_id
        INNER JOIN users u ON u.id = p.user_id
        LEFT JOIN discussion_post_likes l ON l.post_id = p.id
        LEFT JOIN discussion_comments c ON c.post_id = p.id
+       LEFT JOIN discussion_board_moderators bm ON bm.board_id = b.id AND bm.user_id = ?
        LEFT JOIN discussion_post_likes my_smile ON my_smile.post_id = p.id AND my_smile.reaction_type = 'smile' AND my_smile.user_id = ${currentUser ? "?" : "0"}
        LEFT JOIN discussion_post_likes my_light ON my_light.post_id = p.id AND my_light.reaction_type = 'light' AND my_light.user_id = ${currentUser ? "?" : "0"}
        LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? "?" : "0"}
        WHERE p.id = ?
          AND b.is_active = 1
-       GROUP BY p.id, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
+       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at,
                 b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        LIMIT 1`,
-      currentUser ? [currentUser.id, currentUser.id, currentUser.id, postId] : [postId]
+      currentUser
+        ? [currentUser.role, currentUser.role, currentUser.role, currentUser.id, currentUser.id, currentUser.id, currentUser.id, post.id]
+        : ["", "", "", 0, post.id]
     );
 
     if (!rows[0]) {
@@ -1172,14 +1676,23 @@ app.post("/api/discussion/posts", async (request, response) => {
       return;
     }
 
+    if (board.slug === "changelog" && user.role !== "admin") {
+      response.status(403).json({ message: "更新日志版块仅管理员可以发帖" });
+      return;
+    }
+
+    const canFeatureCreatedPost = await canModerateBoard(user, board.id);
+
+    const postPid = await createUniqueDiscussionPostPid();
     const [result] = await pool.execute(
-      `INSERT INTO discussion_posts (board_id, user_id, author_student_id, title, content_markdown)
-       VALUES (?, ?, ?, ?, ?)`,
-      [board.id, user.id, user.student_id, title, contentMarkdown]
+      `INSERT INTO discussion_posts (pid, board_id, user_id, author_student_id, title, content_markdown)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [postPid, board.id, user.id, user.student_id, title, contentMarkdown]
     );
 
     const [rows] = await pool.execute(
-      `SELECT p.id, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
+      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
+              p.is_pinned, p.pinned_at, p.is_featured, p.featured_at,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
               u.student_id, u.uid, u.username, u.full_name, u.avatar_path,
@@ -1189,7 +1702,10 @@ app.post("/api/discussion/posts", async (request, response) => {
               0 AS comment_count,
               0 AS liked_by_me,
               0 AS lighted_by_me,
-              0 AS fireworks_by_me
+              0 AS fireworks_by_me,
+              ${canFeatureCreatedPost ? "1" : "0"} AS can_feature,
+              ${user.role === "admin" ? "1" : "0"} AS can_pin,
+              ${user.role === "admin" ? "1" : "0"} AS can_delete
        FROM discussion_posts p
        INNER JOIN discussion_boards b ON b.id = p.board_id
        INNER JOIN users u ON u.id = p.user_id
@@ -1207,6 +1723,82 @@ app.post("/api/discussion/posts", async (request, response) => {
   }
 });
 
+app.patch("/api/discussion/posts/:id/pin", async (request, response) => {
+  try {
+    await ensureDiscussionTables();
+
+    const user = await requireAdmin(request, response);
+
+    if (!user) {
+      return;
+    }
+
+    const pinned = Boolean(request.body.pinned);
+    const post = await getDiscussionPostByPublicId(request.params.id);
+
+    if (!post) {
+      response.status(404).json({ message: "帖子不存在" });
+      return;
+    }
+
+    await pool.execute(
+      `UPDATE discussion_posts
+       SET is_pinned = ?,
+           pinned_at = ${pinned ? "NOW()" : "NULL"},
+           pinned_by = ?
+       WHERE id = ?`,
+      [pinned ? 1 : 0, pinned ? user.id : null, post.id]
+    );
+
+    response.json({
+      ok: true,
+      isPinned: pinned
+    });
+  } catch (error) {
+    response.status(500).json({ message: "更新置顶状态失败", detail: error.message });
+  }
+});
+
+app.patch("/api/discussion/posts/:id/feature", async (request, response) => {
+  try {
+    await ensureDiscussionTables();
+
+    const user = await requireAuth(request, response);
+
+    if (!user) {
+      return;
+    }
+
+    const featured = Boolean(request.body.featured);
+    const post = await getDiscussionPostByPublicId(request.params.id);
+
+    if (!post) {
+      response.status(404).json({ message: "帖子不存在" });
+      return;
+    }
+
+    if (!(await requireDiscussionBoardModerator(user, post.board_id, response))) {
+      return;
+    }
+
+    await pool.execute(
+      `UPDATE discussion_posts
+       SET is_featured = ?,
+           featured_at = ${featured ? "NOW()" : "NULL"},
+           featured_by = ?
+       WHERE id = ?`,
+      [featured ? 1 : 0, featured ? user.id : null, post.id]
+    );
+
+    response.json({
+      ok: true,
+      isFeatured: featured
+    });
+  } catch (error) {
+    response.status(500).json({ message: "更新精华状态失败", detail: error.message });
+  }
+});
+
 app.post("/api/discussion/posts/:id/like", async (request, response) => {
   try {
     await ensureDiscussionTables();
@@ -1217,25 +1809,16 @@ app.post("/api/discussion/posts/:id/like", async (request, response) => {
       return;
     }
 
-    const postId = Number(request.params.id);
     const reactionType = String(request.body.reactionType || "smile").trim().toLowerCase();
-
-    if (!postId) {
-      response.status(400).json({ message: "无效帖子 ID" });
-      return;
-    }
 
     if (!DISCUSSION_REACTION_TYPES.has(reactionType)) {
       response.status(400).json({ message: "无效反应类型" });
       return;
     }
 
-    const [posts] = await pool.execute(
-      `SELECT id FROM discussion_posts WHERE id = ? LIMIT 1`,
-      [postId]
-    );
+    const post = await getDiscussionPostByPublicId(request.params.id);
 
-    if (!posts[0]) {
+    if (!post) {
       response.status(404).json({ message: "帖子不存在" });
       return;
     }
@@ -1245,7 +1828,7 @@ app.post("/api/discussion/posts/:id/like", async (request, response) => {
        FROM discussion_post_likes
        WHERE post_id = ? AND user_id = ? AND reaction_type = ?
        LIMIT 1`,
-      [postId, user.id, reactionType]
+      [post.id, user.id, reactionType]
     );
 
     let active = true;
@@ -1254,14 +1837,14 @@ app.post("/api/discussion/posts/:id/like", async (request, response) => {
       await pool.execute(
         `DELETE FROM discussion_post_likes
          WHERE post_id = ? AND user_id = ? AND reaction_type = ?`,
-        [postId, user.id, reactionType]
+        [post.id, user.id, reactionType]
       );
       active = false;
     } else {
       await pool.execute(
         `INSERT INTO discussion_post_likes (post_id, user_id, reaction_type)
          VALUES (?, ?, ?)`,
-        [postId, user.id, reactionType]
+        [post.id, user.id, reactionType]
       );
     }
 
@@ -1270,7 +1853,7 @@ app.post("/api/discussion/posts/:id/like", async (request, response) => {
        FROM discussion_post_likes
        WHERE post_id = ?
        GROUP BY reaction_type`,
-      [postId]
+      [post.id]
     );
     const counts = Object.fromEntries(countRows.map((row) => [row.reaction_type, Number(row.reaction_count || 0)]));
 
@@ -1288,15 +1871,14 @@ app.post("/api/discussion/posts/:id/like", async (request, response) => {
 });
 
 app.get("/api/discussion/posts/:id/comments", async (request, response) => {
-  const postId = Number(request.params.id);
-
-  if (!postId) {
-    response.status(400).json({ message: "无效帖子 ID" });
-    return;
-  }
-
   try {
     await ensureDiscussionTables();
+    const post = await getDiscussionPostByPublicId(request.params.id);
+
+    if (!post) {
+      response.status(404).json({ message: "帖子不存在" });
+      return;
+    }
 
     const [rows] = await pool.execute(
       `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at,
@@ -1306,7 +1888,7 @@ app.get("/api/discussion/posts/:id/comments", async (request, response) => {
        INNER JOIN users u ON u.id = c.user_id
        WHERE c.post_id = ?
        ORDER BY c.created_at ASC, c.id ASC`,
-      [postId]
+      [post.id]
     );
 
     response.json({
@@ -1327,26 +1909,17 @@ app.post("/api/discussion/posts/:id/comments", async (request, response) => {
       return;
     }
 
-    const postId = Number(request.params.id);
     const parentCommentId = Number(request.body.parentCommentId || 0);
     const contentMarkdown = String(request.body.contentMarkdown || "").trim();
-
-    if (!postId) {
-      response.status(400).json({ message: "无效帖子 ID" });
-      return;
-    }
 
     if (!contentMarkdown || contentMarkdown.length > 5000) {
       response.status(400).json({ message: "评论不能为空，且长度不能超过 5000 个字符" });
       return;
     }
 
-    const [posts] = await pool.execute(
-      `SELECT id FROM discussion_posts WHERE id = ? LIMIT 1`,
-      [postId]
-    );
+    const post = await getDiscussionPostByPublicId(request.params.id);
 
-    if (!posts[0]) {
+    if (!post) {
       response.status(404).json({ message: "帖子不存在" });
       return;
     }
@@ -1357,7 +1930,7 @@ app.post("/api/discussion/posts/:id/comments", async (request, response) => {
          FROM discussion_comments
          WHERE id = ? AND post_id = ?
          LIMIT 1`,
-        [parentCommentId, postId]
+        [parentCommentId, post.id]
       );
 
       if (!parentRows[0]) {
@@ -1369,7 +1942,7 @@ app.post("/api/discussion/posts/:id/comments", async (request, response) => {
     const [result] = await pool.execute(
       `INSERT INTO discussion_comments (post_id, parent_comment_id, user_id, author_student_id, content_markdown)
        VALUES (?, ?, ?, ?, ?)`,
-      [postId, parentCommentId || null, user.id, user.student_id, contentMarkdown]
+      [post.id, parentCommentId || null, user.id, user.student_id, contentMarkdown]
     );
 
     const [rows] = await pool.execute(
@@ -1388,7 +1961,7 @@ app.post("/api/discussion/posts/:id/comments", async (request, response) => {
 
     if (maxPending) {
       setImmediate(() => {
-        createMaxDiscussionReply(postId, comment).catch((error) => {
+        createMaxDiscussionReply(post.id, comment).catch((error) => {
           console.error("Failed to create Max discussion reply", error);
         });
       });
@@ -1404,6 +1977,35 @@ app.post("/api/discussion/posts/:id/comments", async (request, response) => {
   }
 });
 
+app.delete("/api/discussion/posts/:id", async (request, response) => {
+  try {
+    await ensureDiscussionTables();
+
+    const user = await requireAdmin(request, response);
+
+    if (!user) {
+      return;
+    }
+
+    const post = await getDiscussionPostByPublicId(request.params.id);
+
+    if (!post) {
+      response.status(404).json({ message: "帖子不存在" });
+      return;
+    }
+
+    await pool.execute(
+      `DELETE FROM discussion_posts
+       WHERE id = ?`,
+      [post.id]
+    );
+
+    response.json({ ok: true });
+  } catch (error) {
+    response.status(500).json({ message: "删除帖子失败", detail: error.message });
+  }
+});
+
 app.delete("/api/admin/discussion/posts/:id", async (request, response) => {
   try {
     await ensureDiscussionTables();
@@ -1414,17 +2016,17 @@ app.delete("/api/admin/discussion/posts/:id", async (request, response) => {
       return;
     }
 
-    const postId = Number(request.params.id);
+    const post = await getDiscussionPostByPublicId(request.params.id);
 
-    if (!postId) {
-      response.status(400).json({ message: "无效帖子 ID" });
+    if (!post) {
+      response.status(404).json({ message: "帖子不存在" });
       return;
     }
 
     const [result] = await pool.execute(
       `DELETE FROM discussion_posts
        WHERE id = ?`,
-      [postId]
+      [post.id]
     );
 
     if (result.affectedRows === 0) {

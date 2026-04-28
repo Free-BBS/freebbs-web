@@ -106,6 +106,17 @@
           <section class="discussion-shell" aria-label="讨论区">
             <section class="discussion-layout">
               <section class="discussion-feed" aria-label="帖子列表">
+                <section class="discussion-board-about" id="discussion-board-about">
+                  <div class="discussion-board-about-head">
+                    <h2 id="discussion-board-about-title">版块</h2>
+                    <div class="discussion-board-admin-actions">
+                      <button class="discussion-board-moderators hidden" id="discussion-board-moderators" type="button">管理版主</button>
+                      <button class="discussion-board-edit hidden" id="discussion-board-edit" type="button">编辑</button>
+                    </div>
+                  </div>
+                  <div class="discussion-board-about-body discussion-markdown-body" id="discussion-board-about-body"></div>
+                </section>
+
                 <form class="discussion-compose hidden" id="discussion-compose-form">
                   <div class="discussion-compose-grid">
                     <label class="auth-field">
@@ -119,6 +130,10 @@
                   </div>
                   <label class="auth-field">
                     <span>正文</span>
+                    <div class="discussion-editor-toolbar">
+                      <button class="discussion-editor-button" id="discussion-insert-image" type="button">插入图片</button>
+                      <input class="hidden" id="discussion-image-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple />
+                    </div>
                     <textarea
                       id="discussion-compose-content"
                       rows="10"
