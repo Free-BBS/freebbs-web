@@ -36,7 +36,8 @@ const userState = {
 const userName = document.getElementById("user-name");
 const userRole = document.getElementById("user-role");
 const userStatus = document.getElementById("user-status");
-const avatarButton = document.querySelector(".avatar");
+const userSettingsButton = document.getElementById("user-settings-button");
+const userLogoutButton = document.getElementById("user-logout-button");
 const adminSection = document.getElementById("admin-section");
 const adminUsers = document.getElementById("admin-users");
 const adminMessage = document.getElementById("admin-message");
@@ -53,6 +54,11 @@ const settingsWebsiteUrl = document.getElementById("settings-website-url");
 const settingsAvatarInput = document.getElementById("settings-avatar-input");
 const settingsAvatarImage = document.getElementById("settings-avatar-image");
 const settingsLogoutButton = document.getElementById("settings-logout-button");
+const settingsPasswordForm = document.getElementById("settings-password-form");
+const settingsPasswordMessage = document.getElementById("settings-password-message");
+const settingsCurrentPassword = document.getElementById("settings-current-password");
+const settingsNewPassword = document.getElementById("settings-new-password");
+const settingsNewPasswordConfirm = document.getElementById("settings-new-password-confirm");
 const publicProfileAvatar = document.getElementById("public-profile-avatar");
 const publicProfileName = document.getElementById("public-profile-name");
 const publicProfileStudentId = document.getElementById("public-profile-student-id");
@@ -489,9 +495,12 @@ function renderUser() {
 
   if (!userState.isLoggedIn) {
     userName.textContent = "登录/注册";
+    userName.disabled = false;
     if (userRole) {
       userRole.textContent = "学生";
     }
+    userSettingsButton?.classList.add("hidden");
+    userLogoutButton?.classList.add("hidden");
     userStatus.innerHTML = [
       renderCurrency("electric", "-"),
       renderCurrency("magnetic", "-")
@@ -508,9 +517,12 @@ function renderUser() {
   }
 
   userName.textContent = userState.fullName || userState.username;
+  userName.disabled = true;
   if (userRole) {
     userRole.textContent = userState.role === "admin" ? "管理员" : "学生";
   }
+  userSettingsButton?.classList.remove("hidden");
+  userLogoutButton?.classList.remove("hidden");
   userStatus.innerHTML = [
     renderCurrency("electric", userState.electrons),
     renderCurrency("magnetic", userState.manetrons)
@@ -539,6 +551,12 @@ function setAdminMessage(message) {
 function setSettingsMessage(message) {
   if (settingsMessage) {
     settingsMessage.textContent = message || "";
+  }
+}
+
+function setSettingsPasswordMessage(message) {
+  if (settingsPasswordMessage) {
+    settingsPasswordMessage.textContent = message || "";
   }
 }
 
@@ -950,7 +968,7 @@ function renderDiscussionPosts() {
             ${renderDiscussionReactionButton(post, "light")}
             ${renderDiscussionReactionButton(post, "fireworks")}
           </div>
-          ${post.canDelete ? `<span class="discussion-delete-action" data-action="delete-post" data-post-id="${escapeHtml(post.id)}">删除</span>` : ""}
+          ${post.canDelete ? `<span class="discussion-delete-action" data-action="delete-post" data-post-id="${escapeHtml(post.id)}"><img class="discussion-action-icon" src="/assets/icons/trash.svg" alt="" aria-hidden="true" /><span>删除</span></span>` : ""}
         </div>
       </div>
       <span class="discussion-post-open" aria-hidden="true">↗</span>
@@ -1571,18 +1589,21 @@ function renderDiscussionDetail(post) {
   discussionDetail.innerHTML = `
     <header class="discussion-detail-head">
       <div class="discussion-detail-toolbar">
-        <button class="discussion-detail-back" type="button" data-action="close-detail">返回帖子列表</button>
+        <button class="discussion-detail-back" type="button" data-action="close-detail">
+          <img class="discussion-action-icon" src="/assets/icons/return.svg" alt="" aria-hidden="true" />
+          <span>返回帖子</span>
+        </button>
         ${(post.canPin || post.canFeature || post.canDelete) ? `
           <div class="discussion-moderator-actions">
-            ${post.canPin ? `<button class="discussion-detail-pin" type="button" data-action="toggle-pin" data-post-id="${escapeHtml(post.id)}" data-pinned="${post.isPinned ? "1" : "0"}">${post.isPinned ? "取消置顶" : "置顶文章"}</button>` : ""}
-            ${post.canFeature ? `<button class="discussion-detail-feature" type="button" data-action="toggle-feature" data-post-id="${escapeHtml(post.id)}" data-featured="${post.isFeatured ? "1" : "0"}">${post.isFeatured ? "取消精华" : "加精华"}</button>` : ""}
-            ${post.canDelete ? `<button class="discussion-detail-delete" type="button" data-action="delete-post" data-post-id="${escapeHtml(post.id)}">删除帖子</button>` : ""}
+            ${post.canPin ? `<button class="discussion-detail-pin ${post.isPinned ? "is-active" : ""}" type="button" data-action="toggle-pin" data-post-id="${escapeHtml(post.id)}" data-pinned="${post.isPinned ? "1" : "0"}"><img class="discussion-action-icon" src="/assets/icons/top.svg" alt="" aria-hidden="true" /><span>${post.isPinned ? "取消置顶" : "置顶文章"}</span></button>` : ""}
+            ${post.canFeature ? `<button class="discussion-detail-feature ${post.isFeatured ? "is-active" : ""}" type="button" data-action="toggle-feature" data-post-id="${escapeHtml(post.id)}" data-featured="${post.isFeatured ? "1" : "0"}"><img class="discussion-action-icon" src="/assets/icons/star.svg" alt="" aria-hidden="true" /><span>${post.isFeatured ? "取消精华" : "加精华"}</span></button>` : ""}
+            ${post.canDelete ? `<button class="discussion-detail-delete" type="button" data-action="delete-post" data-post-id="${escapeHtml(post.id)}"><img class="discussion-action-icon" src="/assets/icons/trash.svg" alt="" aria-hidden="true" /><span>删除帖子</span></button>` : ""}
           </div>
         ` : ""}
       </div>
-      <span class="discussion-post-board">${escapeHtml(post.board.name)}</span>
       <h2>${escapeHtml(post.title)}</h2>
       <div class="discussion-detail-meta">
+        <span class="discussion-detail-board">#${escapeHtml(post.board.name)}</span>
         ${renderAuthorProfileLink(post.author, "discussion-author-link")}
         <span>${escapeHtml(formatDateTime(post.createdAt))}</span>
         <div class="discussion-detail-reactions">
@@ -2127,15 +2148,10 @@ function renderSettingsForm() {
 function handleAuthEntry() {
   if (!userState.isLoggedIn) {
     openModal("login");
-    return;
-  }
-
-  if (window.confirm(`以 ${userState.fullName || userState.username} 身份登录中。是否退出登录？`)) {
-    clearSession();
   }
 }
 
-function handleAvatarClick() {
+function handleUserSettingsClick() {
   if (!userState.isLoggedIn) {
     openModal("login");
     return;
@@ -2143,6 +2159,20 @@ function handleAvatarClick() {
 
   if (!isSettingsPage()) {
     window.location.href = "/settings";
+  }
+}
+
+function handleUserLogoutClick() {
+  if (!userState.isLoggedIn) {
+    openModal("login");
+    return;
+  }
+
+  if (window.confirm(`确认退出 ${userState.fullName || userState.username}？`)) {
+    clearSession();
+    if (isSettingsPage()) {
+      window.location.href = "/";
+    }
   }
 }
 
@@ -2180,6 +2210,45 @@ async function handleSettingsSubmit(event) {
     setSettingsMessage(payload.message || "个人设置已保存");
   } catch (error) {
     setSettingsMessage(error.message);
+  }
+}
+
+async function handleSettingsPasswordSubmit(event) {
+  if (!isSettingsPage()) {
+    return;
+  }
+
+  event.preventDefault();
+
+  const currentPassword = settingsCurrentPassword.value;
+  const newPassword = settingsNewPassword.value;
+  const newPasswordConfirm = settingsNewPasswordConfirm.value;
+
+  if (newPassword.length < 6) {
+    setSettingsPasswordMessage("新密码长度至少为 6 位");
+    return;
+  }
+
+  if (newPassword !== newPasswordConfirm) {
+    setSettingsPasswordMessage("两次输入的新密码不一致");
+    return;
+  }
+
+  setSettingsPasswordMessage("正在更新密码...");
+
+  try {
+    const payload = await callApi("/profile/password", {
+      method: "PATCH",
+      body: JSON.stringify({
+        currentPassword,
+        newPassword
+      })
+    });
+
+    settingsPasswordForm.reset();
+    setSettingsPasswordMessage(payload.message || "密码已更新");
+  } catch (error) {
+    setSettingsPasswordMessage(error.message);
   }
 }
 
@@ -3133,7 +3202,8 @@ async function handleCodeCopyClick(event) {
 }
 
 userName.addEventListener("click", handleAuthEntry);
-avatarButton.addEventListener("click", handleAvatarClick);
+userSettingsButton?.addEventListener("click", handleUserSettingsClick);
+userLogoutButton?.addEventListener("click", handleUserLogoutClick);
 fortuneLinks.forEach((link) => {
   link.addEventListener("click", (event) => {
     event.preventDefault();
@@ -3144,6 +3214,7 @@ adminAddUserButton?.addEventListener("click", insertAdminDraftRow);
 adminUsers?.addEventListener("click", handleAdminUsersClick);
 fortuneBonusToggle?.addEventListener("change", handleFortuneBonusToggle);
 settingsForm?.addEventListener("submit", handleSettingsSubmit);
+settingsPasswordForm?.addEventListener("submit", handleSettingsPasswordSubmit);
 settingsAvatarInput?.addEventListener("change", handleAvatarUpload);
 settingsLogoutButton?.addEventListener("click", handleSettingsLogout);
 discussionBoardList?.addEventListener("click", (event) => {

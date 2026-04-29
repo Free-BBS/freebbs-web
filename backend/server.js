@@ -2473,6 +2473,60 @@ app.patch("/api/profile", async (request, response) => {
   }
 });
 
+app.patch("/api/profile/password", async (request, response) => {
+  try {
+    const user = await requireAuth(request, response);
+
+    if (!user) {
+      return;
+    }
+
+    const currentPassword = String(request.body.currentPassword || "");
+    const newPassword = String(request.body.newPassword || "");
+
+    if (!currentPassword || !newPassword) {
+      response.status(400).json({ message: "请输入当前密码和新密码" });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      response.status(400).json({ message: "新密码长度至少为 6 位" });
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      response.status(400).json({ message: "新密码不能与当前密码相同" });
+      return;
+    }
+
+    const [rows] = await pool.execute(
+      `SELECT password_hash
+       FROM users
+       WHERE id = ?
+       LIMIT 1`,
+      [user.id]
+    );
+
+    const row = rows[0];
+
+    if (!row || !verifyPassword(currentPassword, row.password_hash)) {
+      response.status(401).json({ message: "当前密码错误" });
+      return;
+    }
+
+    await pool.execute(
+      `UPDATE users
+       SET password_hash = ?
+       WHERE id = ?`,
+      [hashPassword(newPassword), user.id]
+    );
+
+    response.json({ message: "密码已更新" });
+  } catch (error) {
+    response.status(500).json({ message: "修改密码失败", detail: error.message });
+  }
+});
+
 app.post("/api/profile/avatar", async (request, response) => {
   try {
     const user = await requireAuth(request, response);
