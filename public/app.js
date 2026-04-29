@@ -1023,13 +1023,14 @@ function renderMarkdownContent(markdown) {
       return `${prefix}${token}`;
     });
 
-  const safeMarkdown = escapeHtml(protectedMarkdown);
   const renderedMarkdown = window.marked?.parse
-    ? window.marked.parse(safeMarkdown, {
+    ? window.marked.parse(protectedMarkdown, {
         gfm: true,
         breaks: true
       })
-    : safeMarkdown.replace(/\n/g, "<br />");
+    : escapeHtml(protectedMarkdown).replace(/\n/g, "<br />");
+
+  const safeRenderedMarkdown = sanitizeRenderedMarkdown(renderedMarkdown);
 
   const renderMathBlock = (_match, index) => {
     const mathBlock = mathBlocks[Number(index)];
@@ -1049,9 +1050,70 @@ function renderMarkdownContent(markdown) {
     return `${delimiter}${escapeHtml(mathBlock.expression)}${delimiter}`;
   };
 
-  return renderedMarkdown
+  return safeRenderedMarkdown
     .replace(new RegExp(`<p>\\s*${placeholderPrefix}(\\d+)\\s*</p>`, "g"), renderMathBlock)
     .replace(new RegExp(`${placeholderPrefix}(\\d+)`, "g"), renderMathBlock);
+}
+
+function sanitizeRenderedMarkdown(html) {
+  if (typeof document === "undefined") {
+    return String(html || "");
+  }
+
+  const template = document.createElement("template");
+  template.innerHTML = String(html || "");
+  const blockedTags = new Set([
+    "script",
+    "style",
+    "iframe",
+    "object",
+    "embed",
+    "link",
+    "meta",
+    "base",
+    "form",
+    "input",
+    "button",
+    "textarea",
+    "select",
+    "option"
+  ]);
+  const allowedAttributes = new Set([
+    "href",
+    "src",
+    "alt",
+    "title",
+    "class",
+    "id",
+    "colspan",
+    "rowspan",
+    "align"
+  ]);
+
+  template.content.querySelectorAll("*").forEach((element) => {
+    const tagName = element.tagName.toLowerCase();
+
+    if (blockedTags.has(tagName)) {
+      element.remove();
+      return;
+    }
+
+    Array.from(element.attributes).forEach((attribute) => {
+      const name = attribute.name.toLowerCase();
+      const value = attribute.value || "";
+
+      if (name.startsWith("on") || !allowedAttributes.has(name)) {
+        element.removeAttribute(attribute.name);
+        return;
+      }
+
+      if ((name === "href" || name === "src") && /^(?:javascript|data):/i.test(value.trim())) {
+        element.removeAttribute(attribute.name);
+      }
+    });
+  });
+
+  return template.innerHTML;
 }
 
 function shouldWaitForMaxReply(contentMarkdown) {
