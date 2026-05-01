@@ -21,9 +21,47 @@ const authMessage = document.getElementById("auth-message");
 const authSubmit = document.getElementById("auth-submit");
 const sendEmailCodeButton = document.getElementById("send-email-code");
 const authMajorFixed = document.getElementById("auth-major-fixed");
+const EMAIL_CODE_RESEND_SECONDS = 60;
+let emailCodeCountdownTimer = null;
+let emailCodeCountdownRemaining = 0;
 
 function setMessage(message) {
   authMessage.textContent = message || "";
+}
+
+function setEmailCodeButtonCountdown(seconds) {
+  if (!sendEmailCodeButton) {
+    return;
+  }
+
+  window.clearInterval(emailCodeCountdownTimer);
+  emailCodeCountdownRemaining = Math.max(0, Number(seconds) || 0);
+
+  if (!emailCodeCountdownRemaining) {
+    sendEmailCodeButton.disabled = false;
+    sendEmailCodeButton.textContent = "发送验证码";
+    return;
+  }
+
+  const renderCountdown = () => {
+    sendEmailCodeButton.disabled = true;
+    sendEmailCodeButton.textContent = `${emailCodeCountdownRemaining}s后重发`;
+  };
+
+  renderCountdown();
+  emailCodeCountdownTimer = window.setInterval(() => {
+    emailCodeCountdownRemaining -= 1;
+
+    if (emailCodeCountdownRemaining <= 0) {
+      window.clearInterval(emailCodeCountdownTimer);
+      emailCodeCountdownTimer = null;
+      sendEmailCodeButton.disabled = false;
+      sendEmailCodeButton.textContent = "发送验证码";
+      return;
+    }
+
+    renderCountdown();
+  }, 1000);
 }
 
 async function callApi(path, options = {}) {
@@ -38,7 +76,9 @@ async function callApi(path, options = {}) {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(payload.detail ? `${payload.message}：${payload.detail}` : (payload.message || "请求失败"));
+    const error = new Error(payload.detail ? `${payload.message}：${payload.detail}` : (payload.message || "请求失败"));
+    error.status = response.status;
+    throw error;
   }
 
   return payload;
@@ -49,10 +89,10 @@ async function handleAuthSubmit(event) {
 
   const mode = authForm.dataset.authMode;
   authSubmit.disabled = true;
-  setMessage(mode === "login" ? "正在登录..." : "正在注册...");
+  setMessage(mode === "login" ? "正在登录..." : (mode === "remake" ? "正在重设密码..." : "正在注册..."));
 
   try {
-    if (mode === "register") {
+    if (mode === "register" || mode === "remake") {
       const studentId = document.getElementById("auth-student-id").value.trim();
       const password = document.getElementById("auth-password").value;
       const passwordConfirm = document.getElementById("auth-password-confirm").value;
@@ -66,15 +106,28 @@ async function handleAuthSubmit(event) {
       }
     }
 
-    const payload = mode === "login"
-      ? await callApi("/auth/login", {
+    let payload;
+
+    if (mode === "login") {
+      payload = await callApi("/auth/login", {
           method: "POST",
           body: JSON.stringify({
             identifier: document.getElementById("auth-identifier").value.trim(),
             password: document.getElementById("auth-password").value
           })
+        });
+    } else if (mode === "remake") {
+      payload = await callApi("/auth/reset-password", {
+        method: "POST",
+        body: JSON.stringify({
+          studentId: document.getElementById("auth-student-id").value.trim(),
+          email: document.getElementById("auth-email").value.trim(),
+          emailCode: document.getElementById("auth-email-code").value.trim(),
+          password: document.getElementById("auth-password").value
         })
-      : await callApi("/auth/register", {
+      });
+    } else {
+      payload = await callApi("/auth/register", {
           method: "POST",
           body: JSON.stringify({
             username: document.getElementById("auth-username").value.trim(),
@@ -85,6 +138,7 @@ async function handleAuthSubmit(event) {
             password: document.getElementById("auth-password").value
           })
         });
+    }
 
     localStorage.setItem(STORAGE_KEY, payload.token);
     window.location.href = "/";
@@ -97,9 +151,20 @@ async function handleAuthSubmit(event) {
 
 async function handleSendEmailCode() {
   const emailInput = document.getElementById("auth-email");
+  const studentIdInput = document.getElementById("auth-student-id");
+  const mode = authForm.dataset.authMode;
+
+  if (emailCodeCountdownRemaining > 0) {
+    return;
+  }
 
   if (!emailInput || !emailInput.value.trim()) {
     setMessage("请先输入邮箱地址");
+    return;
+  }
+
+  if (mode === "remake" && (!studentIdInput || !/^20\d{8}$/.test(studentIdInput.value.trim()))) {
+    setMessage("请先输入 20 开头的 10 位学号");
     return;
   }
 
@@ -107,16 +172,29 @@ async function handleSendEmailCode() {
   setMessage("正在发送验证码...");
 
   try {
-    const payload = await callApi("/auth/send-email-code", {
+    const payload = await callApi(mode === "remake" ? "/auth/send-reset-code" : "/auth/send-email-code", {
       method: "POST",
-      body: JSON.stringify({ email: emailInput.value.trim() })
+      body: JSON.stringify({
+        email: emailInput.value.trim(),
+        ...(mode === "remake" ? { studentId: studentIdInput.value.trim() } : {})
+      })
     });
 
     setMessage(payload.message || "验证码已发送");
+    setEmailCodeButtonCountdown(EMAIL_CODE_RESEND_SECONDS);
   } catch (error) {
     setMessage(error.message);
+    if (error.status === 429) {
+      setEmailCodeButtonCountdown(EMAIL_CODE_RESEND_SECONDS);
+    } else {
+      sendEmailCodeButton.disabled = false;
+      sendEmailCodeButton.textContent = "发送验证码";
+    }
   } finally {
-    sendEmailCodeButton.disabled = false;
+    if (emailCodeCountdownRemaining <= 0) {
+      sendEmailCodeButton.disabled = false;
+      sendEmailCodeButton.textContent = "发送验证码";
+    }
   }
 }
 
