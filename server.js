@@ -13,6 +13,7 @@ const pageRoutes = new Map([
   ["/login", "/login.html"],
   ["/profile", "/profile.html"],
   ["/register", "/register.html"],
+  ["/remake", "/remake.html"],
   ["/settings", "/settings.html"],
   ["/world", "/world.html"]
 ]);
@@ -24,6 +25,7 @@ const htmlRedirects = new Map([
   ["/login.html", "/login"],
   ["/profile.html", "/profile"],
   ["/register.html", "/register"],
+  ["/remake.html", "/remake"],
   ["/settings.html", "/settings"],
   ["/world.html", "/world"]
 ]);
@@ -44,9 +46,32 @@ const mimeTypes = {
   ".ttf": "font/ttf"
 };
 
-function sendFile(filePath, response) {
+function sendNotFoundPage(response) {
+  const filePath = path.join(publicDir, "404.html");
   fs.readFile(filePath, (error, data) => {
     if (error) {
+      response.writeHead(404, {
+        "Content-Type": "text/plain; charset=utf-8"
+      });
+      response.end("404 Not Found");
+      return;
+    }
+
+    response.writeHead(404, {
+      "Content-Type": "text/html; charset=utf-8"
+    });
+    response.end(data);
+  });
+}
+
+function sendFile(filePath, response, options = {}) {
+  fs.readFile(filePath, (error, data) => {
+    if (error) {
+      if (error.code === "ENOENT" && options.htmlNotFound) {
+        sendNotFoundPage(response);
+        return;
+      }
+
       response.writeHead(error.code === "ENOENT" ? 404 : 500, {
         "Content-Type": "text/plain; charset=utf-8"
       });
@@ -90,6 +115,9 @@ const server = http.createServer((request, response) => {
   const baseDir = isVendorRequest ? vendorDir : publicDir;
   const relativePath = isVendorRequest ? normalizedPath.replace(/^\/vendor/, "") : normalizedPath;
   const filePath = path.join(baseDir, relativePath);
+  const ext = path.extname(filePath).toLowerCase();
+  const acceptsHtml = (request.headers.accept || "").includes("text/html");
+  const htmlNotFound = !isVendorRequest && (acceptsHtml || !ext || ext === ".html");
 
   if (!filePath.startsWith(baseDir)) {
     response.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
@@ -97,7 +125,7 @@ const server = http.createServer((request, response) => {
     return;
   }
 
-  sendFile(filePath, response);
+  sendFile(filePath, response, { htmlNotFound });
 });
 
 server.listen(port, host, () => {

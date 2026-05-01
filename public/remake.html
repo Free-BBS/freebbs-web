@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FREE-BBS - 找回密码</title>
+    <link rel="icon" type="image/png" href="/assets/favicon-64.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Noto+Serif+SC:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="auth-page-body">
+    <main class="auth-page-shell">
+      <section class="auth-page-panel" aria-labelledby="auth-page-title">
+        <h1 class="auth-page-title" id="auth-page-title">找回密码</h1>
+        <form class="auth-form auth-form-register" id="auth-page-form" data-auth-mode="remake">
+          <div class="auth-grid-row auth-grid-row-two">
+            <label class="auth-field">
+              <span class="auth-label">
+                <img class="auth-label-icon" src="/assets/icons/id.svg" alt="" aria-hidden="true" />
+                <span>学号</span>
+              </span>
+              <input id="auth-student-id" name="studentId" type="text" inputmode="numeric" maxlength="10" placeholder="20开头10位" required />
+            </label>
+
+            <label class="auth-field">
+              <span class="auth-label">
+                <img class="auth-label-icon" src="/assets/icons/mail.svg" alt="" aria-hidden="true" />
+                <span>邮箱</span>
+              </span>
+              <input id="auth-email" name="email" type="email" autocomplete="email" required />
+            </label>
+          </div>
+
+          <label class="auth-field">
+            <span class="auth-label">
+              <img class="auth-label-icon" src="/assets/icons/mail.svg" alt="" aria-hidden="true" />
+              <span>邮箱验证码</span>
+            </span>
+            <div class="auth-inline">
+              <input id="auth-email-code" name="emailCode" type="text" inputmode="numeric" maxlength="6" placeholder="请输入6位验证码" required />
+              <button class="auth-inline-button" id="send-email-code" type="button">发送验证码</button>
+            </div>
+          </label>
+
+          <div class="auth-grid-row auth-grid-row-two">
+            <label class="auth-field">
+              <span class="auth-label">
+                <img class="auth-label-icon" src="/assets/icons/key.svg" alt="" aria-hidden="true" />
+                <span>新密码</span>
+              </span>
+              <input id="auth-password" name="password" type="password" autocomplete="new-password" required />
+            </label>
+
+            <label class="auth-field">
+              <span class="auth-label">
+                <img class="auth-label-icon" src="/assets/icons/key.svg" alt="" aria-hidden="true" />
+                <span>确认新密码</span>
+              </span>
+              <input id="auth-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" required />
+            </label>
+          </div>
+
+          <p class="auth-message" id="auth-message"></p>
+          <button class="auth-submit" id="auth-submit" type="submit">重设密码</button>
+        </form>
+        <p class="auth-page-switch">想起密码？<a href="/login">去登录</a></p>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="footer-block footer-left">
+        <p>© Free-bbs 工作组 2026-2027</p>
+      </div>
+
+      <div class="footer-block footer-center">
+        <div class="footer-links">
+          <a href="#staff">工作人员名单</a>
+          <a href="https://www.ee.tsinghua.edu.cn/" target="_blank" rel="noreferrer">清华大学电子系</a>
+          <a href="https://www.eesast.com">电子系学生科协</a>
+        </div>
+        <p>&lt;京ICP备2025155858号-2&gt;</p>
+      </div>
+
+      <div class="footer-block footer-right">
+        <p><a href="mailto:feedback@free-bbs.cn">反馈：feedback@free-bbs.cn</a></p>
+      </div>
+    </footer>
+    <script src="/auth.js"></script>
+  </body>
+</html>

@@ -2317,6 +2317,68 @@ app.post("/api/auth/send-email-code", async (request, response) => {
   }
 });
 
+app.post("/api/auth/send-reset-code", async (request, response) => {
+  const studentId = String(request.body.studentId || "").trim();
+  const email = String(request.body.email || "").trim().toLowerCase();
+
+  if (!/^20\d{8}$/.test(studentId)) {
+    response.status(400).json({ message: "学号必须是 20 开头的 10 位数字" });
+    return;
+  }
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    response.status(400).json({ message: "请输入有效邮箱地址" });
+    return;
+  }
+
+  try {
+    const [users] = await pool.execute(
+      `SELECT id
+       FROM users
+       WHERE student_id = ? AND LOWER(email) = ?
+       LIMIT 1`,
+      [studentId, email]
+    );
+
+    if (!users[0]) {
+      response.status(404).json({ message: "学号和邮箱不匹配" });
+      return;
+    }
+
+    const [recentCodes] = await pool.execute(
+      `SELECT id
+       FROM email_verification_codes
+       WHERE email = ?
+         AND created_at > (NOW() - INTERVAL 60 SECOND)
+       ORDER BY id DESC
+       LIMIT 1`,
+      [email]
+    );
+
+    if (recentCodes[0]) {
+      response.status(429).json({ message: "发送过于频繁，请稍后再试" });
+      return;
+    }
+
+    const code = generateEmailCode();
+
+    await pool.execute(`DELETE FROM email_verification_codes WHERE email = ?`, [email]);
+    await pool.execute(
+      `INSERT INTO email_verification_codes (email, code_hash, expires_at)
+       VALUES (?, ?, ?)`,
+      [email, hashCode(email, code), buildExpiryDate()]
+    );
+
+    await sendVerificationCode(email, code);
+
+    response.json({
+      message: `验证码已发送，${CODE_TTL_MINUTES} 分钟内有效`
+    });
+  } catch (error) {
+    response.status(500).json({ message: "发送验证码失败", detail: error.message });
+  }
+});
+
 app.post("/api/auth/login", async (request, response) => {
   const identifier = String(request.body.identifier || "").trim();
   const password = String(request.body.password || "");
@@ -2350,6 +2412,91 @@ app.post("/api/auth/login", async (request, response) => {
     });
   } catch (error) {
     response.status(500).json({ message: "登录失败", detail: error.message });
+  }
+});
+
+app.post("/api/auth/reset-password", async (request, response) => {
+  const studentId = String(request.body.studentId || "").trim();
+  const email = String(request.body.email || "").trim().toLowerCase();
+  const emailCode = String(request.body.emailCode || "").trim();
+  const password = String(request.body.password || "");
+
+  if (!/^20\d{8}$/.test(studentId)) {
+    response.status(400).json({ message: "学号必须是 20 开头的 10 位数字" });
+    return;
+  }
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    response.status(400).json({ message: "请输入有效邮箱地址" });
+    return;
+  }
+
+  if (!/^\d{6}$/.test(emailCode)) {
+    response.status(400).json({ message: "请输入 6 位邮箱验证码" });
+    return;
+  }
+
+  if (!password || password.length < 6) {
+    response.status(400).json({ message: "新密码长度至少为 6 位" });
+    return;
+  }
+
+  try {
+    const [codeRows] = await pool.execute(
+      `SELECT id
+       FROM email_verification_codes
+       WHERE email = ?
+         AND code_hash = ?
+         AND used_at IS NULL
+         AND expires_at > NOW()
+       ORDER BY id DESC
+       LIMIT 1`,
+      [email, hashCode(email, emailCode)]
+    );
+
+    if (!codeRows[0]) {
+      response.status(400).json({ message: "邮箱验证码错误或已过期" });
+      return;
+    }
+
+    const [users] = await pool.execute(
+      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, grade, major, avatar_path, bio, website_url, created_at
+       FROM users
+       WHERE student_id = ? AND LOWER(email) = ?
+       LIMIT 1`,
+      [studentId, email]
+    );
+
+    const row = users[0];
+
+    if (!row) {
+      response.status(404).json({ message: "学号和邮箱不匹配" });
+      return;
+    }
+
+    await pool.execute(
+      `UPDATE users
+       SET password_hash = ?
+       WHERE id = ?`,
+      [hashPassword(password), row.id]
+    );
+
+    await pool.execute(
+      `UPDATE email_verification_codes
+       SET used_at = NOW()
+       WHERE id = ?`,
+      [codeRows[0].id]
+    );
+
+    const user = toUserProfile(await getUserById(row.id));
+
+    response.json({
+      message: "密码已重设",
+      token: issueToken(user),
+      user
+    });
+  } catch (error) {
+    response.status(500).json({ message: "重设密码失败", detail: error.message });
   }
 });
 
