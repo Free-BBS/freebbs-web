@@ -772,7 +772,7 @@ function normalizeSandboxLanguage(language) {
     return "python";
   }
 
-  if (value === "cpp" || value === "c++") {
+  if (value === "c" || value === "gcc" || value === "cpp" || value === "c++" || value === "cplusplus" || value === "cc" || value === "cxx" || value === "g++") {
     return "cpp";
   }
 
