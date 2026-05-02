@@ -2148,11 +2148,22 @@ h3,
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.discussion-markdown-body pre code.hljs {
+  display: block;
+  overflow-x: visible;
+  padding: 0;
+  background: transparent;
+  color: rgba(244, 239, 231, 0.92);
+}
+
 .code-copy-button,
-.code-run-button {
+.code-run-button,
+.code-result-copy-button {
   position: absolute;
   top: 8px;
-  padding: 5px 9px;
+  width: 30px;
+  height: 30px;
+  padding: 5px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
   background: rgba(248, 243, 233, 0.1);
@@ -2160,6 +2171,9 @@ h3,
   cursor: pointer;
   font-family: var(--font-ui);
   font-size: 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .code-copy-button {
@@ -2167,22 +2181,49 @@ h3,
 }
 
 .code-run-button {
-  right: 52px;
+  right: 46px;
+}
+
+.code-result-copy-button {
+  right: 8px;
+}
+
+.code-copy-button img,
+.code-run-button img,
+.code-result-copy-button img,
+.aichat-copy-button img {
+  width: 16px;
+  height: 16px;
+  display: block;
+  filter: invert(1);
+  opacity: 0.86;
 }
 
 .code-copy-button:disabled,
-.code-run-button:disabled {
+.code-run-button:disabled,
+.code-result-copy-button:disabled {
   cursor: wait;
   opacity: 0.65;
 }
 
 .code-run-result {
+  position: relative;
   margin: -0.6em 0 1em;
-  padding: 12px 14px;
+  padding: 12px 52px 12px 14px;
   border-radius: 14px;
   background: rgba(6, 10, 18, 0.72);
   border: 1px solid rgba(89, 216, 255, 0.2);
   color: rgba(244, 239, 231, 0.9);
+}
+
+.code-run-result.is-code-run-success {
+  border-color: rgba(95, 231, 152, 0.72);
+  box-shadow: 0 0 0 1px rgba(95, 231, 152, 0.16), 0 0 18px rgba(95, 231, 152, 0.22);
+}
+
+.code-run-result.is-code-run-error {
+  border-color: rgba(255, 103, 103, 0.78);
+  box-shadow: 0 0 0 1px rgba(255, 103, 103, 0.16), 0 0 18px rgba(255, 103, 103, 0.24);
 }
 
 .code-run-result-text {
@@ -2195,6 +2236,80 @@ h3,
   color: inherit;
   font-family: "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
   font-size: 0.82rem;
+}
+
+.code-run-output-block {
+  position: relative;
+  margin: 0 0 10px;
+  padding: 0;
+}
+
+.code-run-output-block .code-run-result-text {
+  padding-right: 62px;
+}
+
+.code-run-output-block:last-of-type {
+  margin-bottom: 0;
+}
+
+.code-run-output-label {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 2px 8px 3px;
+  border-radius: 0 12px 0 8px;
+  background: rgba(248, 243, 233, 0.14);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(244, 239, 231, 0.72);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  line-height: 1.2;
+}
+
+.code-copy-menu {
+  position: absolute;
+  top: 44px;
+  right: 8px;
+  min-width: 110px;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(10, 15, 24, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+  z-index: 6;
+}
+
+.code-copy-menu button {
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--paper);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  text-align: left;
+}
+
+.code-copy-menu button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.discussion-markdown-body pre > .code-copy-menu {
+  top: 8px;
+  right: 84px;
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  padding: 4px;
+}
+
+.discussion-markdown-body pre > .code-copy-menu button {
+  width: auto;
+  white-space: nowrap;
+  padding: 6px 8px;
 }
 
 .code-run-gallery {
@@ -2421,6 +2536,7 @@ h3,
 }
 
 .aichat-message {
+  position: relative;
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr);
   gap: 14px;
@@ -2473,6 +2589,59 @@ h3,
   padding: 2px 0;
 }
 
+.aichat-message-assistant .aichat-bubble {
+  padding-right: 42px;
+}
+
+.aichat-copy-control {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 3;
+}
+
+.aichat-copy-button {
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(10, 15, 24, 0.5);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.aichat-copy-menu {
+  position: absolute;
+  top: 36px;
+  right: 0;
+  min-width: 130px;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(10, 15, 24, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+}
+
+.aichat-copy-menu button {
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--paper);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  text-align: left;
+}
+
+.aichat-copy-menu button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
 .aichat-message-user .aichat-bubble {
   padding: 14px 16px;
   border-radius: 18px;
@@ -2499,14 +2668,16 @@ h3,
 
 .aichat-composer textarea {
   width: 100%;
+  height: 44px;
+  min-height: 44px;
   max-height: 180px;
   resize: none;
   border: none;
   outline: none;
-  padding: 13px 6px 10px 12px;
+  padding: 10px 6px 10px 12px;
   background: transparent;
   color: var(--paper);
-  line-height: 1.55;
+  line-height: 1.45;
 }
 
 .aichat-composer textarea::placeholder {
@@ -2543,6 +2714,45 @@ h3,
   color: var(--muted);
   font-family: var(--font-ui);
   font-size: 0.84rem;
+}
+
+.aichat-status.is-thinking {
+  width: max-content;
+  max-width: 100%;
+  color: rgba(244, 239, 231, 0.44);
+  background: linear-gradient(90deg, rgba(244, 239, 231, 0.32), rgba(244, 239, 231, 0.78), rgba(244, 239, 231, 0.32));
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: max-thinking-shimmer 1.45s ease-in-out infinite;
+}
+
+.aichat-thinking-inline {
+  display: inline-block;
+  color: rgba(244, 239, 231, 0.44);
+  background: linear-gradient(90deg, rgba(244, 239, 231, 0.3), rgba(244, 239, 231, 0.78), rgba(244, 239, 231, 0.3));
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: max-thinking-shimmer 1.45s ease-in-out infinite;
+}
+
+@keyframes max-thinking-shimmer {
+  0% {
+    background-position: 120% 0;
+    opacity: 0.54;
+  }
+
+  50% {
+    opacity: 0.82;
+  }
+
+  100% {
+    background-position: -120% 0;
+    opacity: 0.54;
+  }
 }
 
 .aichat-meta-row {
@@ -2850,6 +3060,33 @@ h3,
 
 .hidden {
   display: none !important;
+}
+
+.copy-success-popup {
+  position: fixed;
+  left: 50%;
+  bottom: 34px;
+  z-index: 90;
+  max-width: min(480px, calc(100vw - 32px));
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: rgba(10, 15, 24, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(244, 239, 231, 0.94);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.3);
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  text-align: center;
+  transform: translate(-50%, 12px);
+  opacity: 0;
+  transition: opacity 180ms ease, transform 180ms ease;
+  pointer-events: none;
+}
+
+.copy-success-popup.is-visible {
+  transform: translate(-50%, 0);
+  opacity: 1;
 }
 
 .fortune-modal {

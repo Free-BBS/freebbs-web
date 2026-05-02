@@ -110,7 +110,8 @@ const aiChatState = {
   currentDid: "",
   dialogs: [],
   messages: [],
-  isSending: false
+  isSending: false,
+  statusTimer: 0
 };
 const FALLBACK_DISCUSSION_BOARDS = [
   {
@@ -435,6 +436,43 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function getCopySuccessMessage(format) {
+  if (format === "word") {
+    return "复制成功！请在word中粘贴使用";
+  }
+
+  if (format === "latex") {
+    return "复制成功！请复制到overleaf或其他latex编辑软件中使用";
+  }
+
+  return "复制成功";
+}
+
+function showCopySuccessPopup(format) {
+  let popup = document.getElementById("copy-success-popup");
+
+  if (!popup) {
+    popup = document.createElement("div");
+    popup.id = "copy-success-popup";
+    popup.className = "copy-success-popup hidden";
+    popup.setAttribute("role", "status");
+    popup.setAttribute("aria-live", "polite");
+    document.body.append(popup);
+  }
+
+  window.clearTimeout(Number(popup.dataset.timer || 0));
+  popup.textContent = getCopySuccessMessage(format);
+  popup.classList.remove("hidden");
+  popup.classList.remove("is-visible");
+  window.requestAnimationFrame(() => {
+    popup.classList.add("is-visible");
+  });
+  popup.dataset.timer = String(window.setTimeout(() => {
+    popup.classList.remove("is-visible");
+    window.setTimeout(() => popup.classList.add("hidden"), 180);
+  }, 2200));
 }
 
 function renderCurrency(type, value) {
@@ -1143,27 +1181,109 @@ function addCodeCopyButtons(root) {
     }
 
     const code = pre.querySelector("code");
+    const language = getCodeBlockLanguage(code);
     const button = document.createElement("button");
     button.className = "code-copy-button";
     button.type = "button";
-    button.dataset.action = "copy-code";
-    button.textContent = "复制";
+    button.dataset.action = "toggle-code-copy-menu";
+    button.title = "复制代码";
     button.setAttribute("aria-label", "复制代码");
     button.dataset.code = code?.textContent || pre.textContent || "";
+    button.dataset.language = language;
+    button.innerHTML = `<img src="/assets/icons/copy.svg" alt="" aria-hidden="true" />`;
     pre.append(button);
+    pre.append(createCodeCopyMenu());
+  });
+}
+
+function createCodeCopyMenu() {
+  const menu = document.createElement("div");
+  menu.className = "code-copy-menu hidden";
+  menu.setAttribute("role", "menu");
+  menu.innerHTML = `
+    <button type="button" role="menuitem" data-action="copy-code" data-copy-format="text">纯文本</button>
+    <button type="button" role="menuitem" data-action="copy-code" data-copy-format="latex">LaTeX</button>
+    <button type="button" role="menuitem" data-action="copy-code" data-copy-format="word">Word</button>
+  `;
+  return menu;
+}
+
+function normalizeCodeLanguageName(language) {
+  const value = String(language || "").trim().toLowerCase();
+
+  if (value === "python" || value === "py" || value === "python3") {
+    return "python";
+  }
+
+  if (value === "matlab" || value === "m") {
+    return "matlab";
+  }
+
+  if (value === "java") {
+    return "java";
+  }
+
+  if (value === "c" || value === "gcc") {
+    return "c";
+  }
+
+  if (value === "cpp" || value === "c++" || value === "cplusplus" || value === "cc" || value === "cxx" || value === "g++") {
+    return "cpp";
+  }
+
+  if (value === "bash" || value === "sh" || value === "shell" || value === "zsh" || value === "terminal" || value === "console") {
+    return "bash";
+  }
+
+  return value;
+}
+
+function getCodeBlockLanguage(code) {
+  const className = code?.className || "";
+  const languageMatch = className.match(/(?:^|\s)language-([^\s]+)/);
+  return normalizeCodeLanguageName(languageMatch?.[1] || code?.dataset.language || "");
+}
+
+function applyCodeHighlighting(root) {
+  const highlighter = window.hljs;
+
+  if (!root || !highlighter?.highlightElement) {
+    return;
+  }
+
+  highlighter.configure?.({
+    ignoreUnescapedHTML: true,
+    languages: ["python", "matlab", "java", "c", "cpp", "bash", "javascript", "json", "css", "html", "xml"]
+  });
+  highlighter.registerAliases?.(["py", "python3"], { languageName: "python" });
+  highlighter.registerAliases?.(["m"], { languageName: "matlab" });
+  highlighter.registerAliases?.(["c++", "cplusplus", "cc", "cxx", "g++"], { languageName: "cpp" });
+  highlighter.registerAliases?.(["gcc"], { languageName: "c" });
+  highlighter.registerAliases?.(["sh", "shell", "zsh", "terminal", "console"], { languageName: "bash" });
+
+  root.querySelectorAll("pre code").forEach((code) => {
+    const language = getCodeBlockLanguage(code);
+
+    if (language && highlighter.getLanguage?.(language)) {
+      code.className = code.className.replace(/(?:^|\s)language-[^\s]+/g, "").trim();
+      code.classList.add(`language-${language}`);
+      code.dataset.language = language;
+    }
+
+    if (!code.dataset.highlighted) {
+      highlighter.highlightElement(code);
+    }
   });
 }
 
 function normalizeRunnableCodeLanguage(code) {
-  const className = code?.className || "";
-  const languageMatch = className.match(/(?:^|\s)language-([^\s]+)/);
-  const language = String(languageMatch?.[1] || code?.dataset.language || "").trim().toLowerCase();
+  const language = getCodeBlockLanguage(code);
 
-  if (language === "python" || language === "py") {
+  if (language === "python") {
     return "python";
   }
 
-  if (language === "cpp" || language === "c++") {
+  if (language === "c" || language === "cpp") {
     return "cpp";
   }
 
@@ -1193,8 +1313,9 @@ function addCodeRunButtons(root) {
     button.dataset.action = "run-code";
     button.dataset.language = language;
     button.dataset.code = code?.textContent || "";
-    button.textContent = "运行";
+    button.title = "运行代码";
     button.setAttribute("aria-label", "运行代码");
+    button.innerHTML = `<img src="/assets/icons/run.svg" alt="" aria-hidden="true" />`;
     pre.append(button);
   });
 }
@@ -1205,6 +1326,7 @@ function enhanceMarkdownContent(root) {
   }
 
   applyMathRendering(root);
+  applyCodeHighlighting(root);
   addCodeCopyButtons(root);
   addCodeRunButtons(root);
   root.querySelectorAll("a").forEach((link) => {
@@ -1220,7 +1342,40 @@ function enhanceMarkdownContent(root) {
 function setAiChatStatus(message) {
   if (aiChatStatus) {
     aiChatStatus.textContent = message || "";
+    aiChatStatus.classList.toggle("is-thinking", Boolean(message && /^Max 正在(?:思考|输入)/.test(message)));
   }
+}
+
+function clearAiChatStatusTimer() {
+  if (aiChatState.statusTimer) {
+    window.clearTimeout(aiChatState.statusTimer);
+    aiChatState.statusTimer = 0;
+  }
+}
+
+function startAiChatThinkingStatus() {
+  clearAiChatStatusTimer();
+  setAiChatStatus("Max 正在思考......");
+  aiChatState.statusTimer = window.setTimeout(() => {
+    setAiChatStatus("Max 正在输入......");
+    aiChatState.statusTimer = 0;
+  }, 1000 + Math.floor(Math.random() * 4001));
+}
+
+function stopAiChatThinkingStatus(message = "") {
+  clearAiChatStatusTimer();
+  setAiChatStatus(message);
+}
+
+function setAiChatThinkingBubble(article, message) {
+  const bubble = article?.querySelector(".aichat-bubble");
+
+  if (!bubble || article?.dataset.markdown) {
+    return;
+  }
+
+  bubble.innerHTML = `<span class="aichat-thinking-inline">${escapeHtml(message)}</span>`;
+  scrollAiChatToBottom();
 }
 
 function setAiDialogId(did) {
@@ -1240,8 +1395,34 @@ function resizeAiChatInput() {
     return;
   }
 
+  if (!aiChatInput.value) {
+    aiChatInput.style.height = "";
+    return;
+  }
+
   aiChatInput.style.height = "auto";
   aiChatInput.style.height = `${Math.min(aiChatInput.scrollHeight, 180)}px`;
+}
+
+function addAiMessageCopyControls(article) {
+  if (!article || !article.classList.contains("aichat-message-assistant") || article.querySelector(".aichat-copy-control")) {
+    return;
+  }
+
+  const control = document.createElement("div");
+  control.className = "aichat-copy-control";
+  control.innerHTML = `
+    <button class="aichat-copy-button" type="button" data-action="toggle-ai-copy-menu" aria-label="复制 Max 回复" title="复制">
+      <img src="/assets/icons/copy.svg" alt="" aria-hidden="true" />
+    </button>
+    <div class="aichat-copy-menu hidden" role="menu">
+      <button type="button" role="menuitem" data-action="copy-ai-message" data-copy-format="markdown">Markdown</button>
+      <button type="button" role="menuitem" data-action="copy-ai-message" data-copy-format="word">Word</button>
+      <button type="button" role="menuitem" data-action="copy-ai-message" data-copy-format="text">纯文本</button>
+      <button type="button" role="menuitem" data-action="copy-ai-message" data-copy-format="latex">LaTeX</button>
+    </div>
+  `;
+  article.append(control);
 }
 
 function appendAiChatMessage(role, content = "") {
@@ -1261,6 +1442,7 @@ function appendAiChatMessage(role, content = "") {
   `;
 
   aiChatThread.append(article);
+  addAiMessageCopyControls(article);
   updateAiChatMessage(article, content);
   scrollAiChatToBottom();
   return article;
@@ -1281,6 +1463,11 @@ function renderAiWelcomeMessage() {
       </div>
     </article>
   `;
+  const welcome = aiChatThread.querySelector(".aichat-message-assistant");
+  if (welcome) {
+    welcome.dataset.markdown = "你好，我是 Max。可以问我课程、推导、代码或讨论区里适合展开的问题。";
+    addAiMessageCopyControls(welcome);
+  }
 }
 
 function renderAiChatThread() {
@@ -1303,8 +1490,14 @@ function updateAiChatMessage(article, content) {
     return;
   }
 
-  bubble.innerHTML = renderMarkdownContent(content || "...");
-  enhanceMarkdownContent(bubble);
+  article.dataset.markdown = content || "";
+  if (content) {
+    bubble.innerHTML = renderMarkdownContent(content);
+    enhanceMarkdownContent(bubble);
+  } else {
+    bubble.innerHTML = `<span class="aichat-thinking-inline">Max 正在思考......</span>`;
+  }
+  addAiMessageCopyControls(article);
   scrollAiChatToBottom();
 }
 
@@ -1457,6 +1650,7 @@ function startNewAiDialog() {
     return;
   }
 
+  clearAiChatStatusTimer();
   aiChatState.currentDid = "";
   aiChatState.messages = [];
   updateAiDialogUrl("");
@@ -1549,25 +1743,30 @@ async function handleAiChatSubmit(event) {
   if (aiChatSend) {
     aiChatSend.disabled = true;
   }
-  setAiChatStatus("Max 正在输入...");
-
   appendAiChatMessage("user", userMessage);
   const assistantArticle = appendAiChatMessage("assistant", "");
+  startAiChatThinkingStatus();
+  setAiChatThinkingBubble(assistantArticle, "Max 正在思考......");
+  const bubbleTimer = window.setTimeout(() => {
+    setAiChatThinkingBubble(assistantArticle, "Max 正在输入......");
+  }, 1000 + Math.floor(Math.random() * 4001));
   let assistantContent = "";
 
   try {
     await streamAiChatResponse(buildAiChatPayload(userMessage), (delta) => {
+      window.clearTimeout(bubbleTimer);
       assistantContent += delta;
       updateAiChatMessage(assistantArticle, assistantContent);
     });
 
     aiChatState.messages.push({ role: "user", content: userMessage });
     aiChatState.messages.push({ role: "assistant", content: assistantContent });
-    setAiChatStatus("");
+    stopAiChatThinkingStatus();
     await saveAiDialog();
   } catch (error) {
+    window.clearTimeout(bubbleTimer);
     updateAiChatMessage(assistantArticle, `请求失败：${error.message}`);
-    setAiChatStatus("AI 服务不可用，请确认 freebbs-agent 已启动。");
+    stopAiChatThinkingStatus("AI 服务不可用，请确认 freebbs-agent 已启动。");
   } finally {
     aiChatState.isSending = false;
     aiChatInput.disabled = false;
@@ -3286,26 +3485,504 @@ async function handleDiscussionPaste(event) {
   await insertDiscussionImages(files);
 }
 
-async function handleCodeCopyClick(event) {
-  const button = event.target.closest("[data-action='copy-code']");
+async function writeClipboardText(text) {
+  await navigator.clipboard.writeText(String(text || ""));
+}
 
-  if (!button) {
+async function writeClipboardHtml(html, text) {
+  if (navigator.clipboard?.write && window.ClipboardItem) {
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        "text/html": new Blob([html], { type: "text/html" }),
+        "text/plain": new Blob([text], { type: "text/plain" })
+      })
+    ]);
     return;
   }
 
-  const code = button.dataset.code || "";
+  await writeClipboardText(text);
+}
+
+function markdownToPlainText(markdown) {
+  return String(markdown || "")
+    .replace(/```[^\n]*\n([\s\S]*?)```/g, (_match, code) => `\n${code.trimEnd()}\n`)
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^>\s?/gm, "")
+    .replace(/^\s*[-*+]\s+/gm, "- ")
+    .replace(/^\s*\d+\.\s+/gm, "")
+    .replace(/[*_`~]/g, "")
+    .trim();
+}
+
+function hasCjkText(value) {
+  return /[\u3400-\u9fff\uf900-\ufaff]/.test(String(value || ""));
+}
+
+function normalizeWordStrongSpacing(root) {
+  root.querySelectorAll("strong, b").forEach((strong) => {
+    strong.textContent = strong.textContent.trim();
+
+    const previous = strong.previousSibling;
+    if (
+      previous?.nodeType === Node.TEXT_NODE &&
+      /\s$/.test(previous.textContent || "") &&
+      hasCjkText(`${previous.textContent}${strong.textContent}`)
+    ) {
+      previous.textContent = previous.textContent.replace(/\s+$/, "");
+    }
+
+    const next = strong.nextSibling;
+    if (
+      next?.nodeType === Node.TEXT_NODE &&
+      /^\s/.test(next.textContent || "") &&
+      hasCjkText(`${strong.textContent}${next.textContent}`)
+    ) {
+      next.textContent = next.textContent.replace(/^\s+/, "");
+    }
+  });
+}
+
+function applyWordThreeLineTables(root) {
+  root.querySelectorAll("table").forEach((table) => {
+    table.setAttribute("width", "100%");
+    table.setAttribute("style", "border-collapse:collapse;width:100%;margin:8pt 0;border-top:1.5pt solid #000;border-bottom:1.5pt solid #000;mso-table-lspace:0pt;mso-table-rspace:0pt;");
+
+    table.querySelectorAll("th, td").forEach((cell) => {
+      cell.setAttribute("style", "padding:5pt 6pt;border-left:0;border-right:0;border-top:0;border-bottom:0;vertical-align:top;");
+    });
+
+    const headerCells = table.querySelectorAll("thead th");
+    headerCells.forEach((cell) => {
+      cell.setAttribute("style", "padding:5pt 6pt;border-left:0;border-right:0;border-top:0;border-bottom:1pt solid #000;vertical-align:top;font-weight:bold;");
+    });
+
+    if (!headerCells.length) {
+      table.querySelectorAll("tr:first-child th, tr:first-child td").forEach((cell) => {
+        cell.setAttribute("style", "padding:5pt 6pt;border-left:0;border-right:0;border-top:0;border-bottom:1pt solid #000;vertical-align:top;font-weight:bold;");
+      });
+    }
+  });
+}
+
+function buildWordHighlightedCodeNodes(code, rawText) {
+  return buildWordHighlightedCodeNodesForLanguage(getCodeBlockLanguage(code), rawText);
+}
+
+function buildWordHighlightedCodeNodesForLanguage(language, rawText) {
+  const highlighter = window.hljs;
+
+  if (language && highlighter?.highlight && highlighter.getLanguage?.(language)) {
+    const template = document.createElement("template");
+    template.innerHTML = highlighter.highlight(String(rawText || ""), {
+      language,
+      ignoreIllegals: true
+    }).value;
+    return Array.from(template.content.childNodes);
+  }
+
+  return [document.createTextNode(String(rawText || ""))];
+}
+
+function appendWordCodeWithBreaks(cell, nodes) {
+  const appendTextWithBreaks = (text) => {
+    String(text || "").replace(/\r\n?/g, "\n").split("\n").forEach((line, index) => {
+      if (index) {
+        cell.append(document.createElement("br"));
+      }
+      const chunks = String(line || " ").match(/.{1,72}/g) || [" "];
+      chunks.forEach((chunk, chunkIndex) => {
+        if (chunkIndex) {
+          cell.append(document.createElement("wbr"));
+        }
+        cell.append(document.createTextNode(chunk));
+      });
+    });
+  };
+
+  nodes.forEach((node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      appendTextWithBreaks(node.textContent);
+      return;
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+
+    const span = document.createElement("span");
+    span.className = node.className || "";
+    span.innerHTML = "";
+    appendWordCodeWithBreaks(span, Array.from(node.childNodes));
+    cell.append(span);
+  });
+}
+
+function createWordCodeTable(text, language = "") {
+  const table = document.createElement("table");
+  table.setAttribute("width", "100%");
+  table.setAttribute("border", "1");
+  table.setAttribute("cellspacing", "0");
+  table.setAttribute("cellpadding", "0");
+  table.setAttribute("style", "border-collapse:collapse;width:100%;max-width:100%;table-layout:fixed;margin:8pt 0;mso-width-percent:1000;mso-table-lspace:0pt;mso-table-rspace:0pt;border:1pt solid #8a8f98;mso-border-alt:solid #8a8f98 .75pt;");
+  table.innerHTML = `
+    <colgroup>
+      <col width="100%" style="width:100%;" />
+    </colgroup>
+    <tbody>
+      <tr>
+        <td width="100%" style="width:100%;max-width:100%;border:1pt solid #8a8f98;mso-border-alt:solid #8a8f98 .75pt;padding:8pt;background:transparent;font-family:Consolas,'Courier New',monospace;font-size:9.5pt;line-height:1.35;word-break:break-word;word-wrap:break-word;overflow-wrap:break-word;"></td>
+      </tr>
+    </tbody>
+  `;
+  appendWordCodeWithBreaks(
+    table.querySelector("td"),
+    buildWordHighlightedCodeNodesForLanguage(normalizeCodeLanguageName(language), text)
+  );
+  return table;
+}
+
+function buildWordDocumentHtml(bodyHtml) {
+  return `<!doctype html><html><head><meta charset="utf-8"><style>body,p,li,td,th{font-family:"Times New Roman",SimSun,serif;mso-ascii-font-family:"Times New Roman";mso-hansi-font-family:"Times New Roman";mso-fareast-font-family:SimSun;} strong,b{font-weight:bold;}.hljs-keyword,.hljs-selector-tag,.hljs-built_in{color:#cf222e;}.hljs-title,.hljs-title.function_{color:#8250df;}.hljs-string,.hljs-attr{color:#0a3069;}.hljs-number,.hljs-literal{color:#0550ae;}.hljs-comment{color:#6e7781;font-style:italic;}.hljs-meta,.hljs-preprocessor{color:#953800;}.hljs-type,.hljs-class .hljs-title{color:#116329;}</style></head><body style="font-family:'Times New Roman',SimSun,serif;mso-ascii-font-family:'Times New Roman';mso-hansi-font-family:'Times New Roman';mso-fareast-font-family:SimSun;font-size:11pt;line-height:1.55;">${bodyHtml}</body></html>`;
+}
+
+function buildWordHtmlFromMarkdown(markdown) {
+  const template = document.createElement("template");
+  template.innerHTML = renderMarkdownContent(markdown);
+  normalizeWordStrongSpacing(template.content);
+  applyWordThreeLineTables(template.content);
+
+  template.content.querySelectorAll("pre").forEach((pre) => {
+    const code = pre.querySelector("code");
+    const text = code?.textContent || pre.textContent || "";
+    pre.replaceWith(createWordCodeTable(text, getCodeBlockLanguage(code)));
+  });
+
+  template.content.querySelectorAll("code").forEach((code) => {
+    code.setAttribute("style", "font-family:Consolas,'Courier New',monospace;background:transparent;padding:0;");
+  });
+
+  return buildWordDocumentHtml(template.innerHTML);
+}
+
+function escapeLatexText(value) {
+  return String(value || "")
+    .replace(/\\/g, "\\textbackslash{}")
+    .replace(/([&%#_{}])/g, "\\$1")
+    .replace(/\$/g, "\\$")
+    .replace(/~/g, "\\textasciitilde{}")
+    .replace(/\^/g, "\\textasciicircum{}");
+}
+
+function escapeLatexInline(value) {
+  return String(value || "")
+    .split(/(\$\$[\s\S]+?\$\$|\$[^\n$]+?\$)/g)
+    .map((part) => {
+      if (/^\$\$[\s\S]+\$\$$/.test(part) || /^\$[^\n$]+\$$/.test(part)) {
+        return part;
+      }
+
+      return escapeLatexText(part)
+        .replace(/\*\*([^*]+)\*\*/g, "\\textbf{$1}")
+        .replace(/\*([^*]+)\*/g, "\\emph{$1}")
+        .replace(/`([^`]+)`/g, "\\texttt{$1}")
+        .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 (\\url{$2})");
+    })
+    .join("");
+}
+
+function latexListingLanguage(language) {
+  const normalized = normalizeCodeLanguageName(language);
+
+  if (normalized === "python") {
+    return "Python";
+  }
+
+  if (normalized === "java") {
+    return "Java";
+  }
+
+  if (normalized === "c") {
+    return "C";
+  }
+
+  if (normalized === "cpp") {
+    return "C++";
+  }
+
+  if (normalized === "matlab") {
+    return "Matlab";
+  }
+
+  return "";
+}
+
+function markdownToLatexBody(markdown) {
+  const lines = String(markdown || "").split(/\r?\n/);
+  const output = [];
+  let inCode = false;
+  let codeLanguage = "";
+  let inList = false;
+
+  const closeList = () => {
+    if (inList) {
+      output.push("\\end{itemize}");
+      inList = false;
+    }
+  };
+
+  lines.forEach((line) => {
+    const fence = line.match(/^```([^\s`]*)/);
+
+    if (fence) {
+      if (inCode) {
+        output.push("\\end{lstlisting}");
+        inCode = false;
+        codeLanguage = "";
+      } else {
+        closeList();
+        codeLanguage = latexListingLanguage(fence[1]);
+        output.push(`\\begin{lstlisting}${codeLanguage ? `[language=${codeLanguage}]` : ""}`);
+        inCode = true;
+      }
+      return;
+    }
+
+    if (inCode) {
+      output.push(line);
+      return;
+    }
+
+    const heading = line.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+      closeList();
+      const command = heading[1].length === 1 ? "section" : heading[1].length === 2 ? "subsection" : "subsubsection";
+      output.push(`\\${command}{${escapeLatexInline(heading[2])}}`);
+      return;
+    }
+
+    const listItem = line.match(/^\s*(?:[-*+]|\d+\.)\s+(.+)$/);
+    if (listItem) {
+      if (!inList) {
+        output.push("\\begin{itemize}");
+        inList = true;
+      }
+      output.push(`\\item ${escapeLatexInline(listItem[1])}`);
+      return;
+    }
+
+    closeList();
+
+    if (!line.trim()) {
+      output.push("");
+      return;
+    }
+
+    output.push(escapeLatexInline(line.replace(/^>\s?/, "")));
+  });
+
+  if (inCode) {
+    output.push("\\end{lstlisting}");
+  }
+  closeList();
+  return output.join("\n");
+}
+
+function buildLatexDocument(markdown) {
+  const author = userState.username || userState.fullName || "FREE-BBS 用户";
+
+  return `\\documentclass[UTF8]{ctexart}
+\\usepackage{amsmath,amssymb}
+\\usepackage{xcolor}
+\\usepackage{hyperref}
+\\usepackage{listings}
+\\lstset{
+  basicstyle=\\ttfamily\\small,
+  breaklines=true,
+  frame=single,
+  columns=fullflexible
+}
+\\title{Max 回复}
+\\author{${escapeLatexText(author)}}
+\\date{\\today}
+
+\\begin{document}
+\\maketitle
+
+${markdownToLatexBody(markdown)}
+
+\\end{document}
+`;
+}
+
+function closeAiCopyMenus(exceptMenu = null) {
+  document.querySelectorAll(".aichat-copy-menu").forEach((menu) => {
+    if (menu !== exceptMenu) {
+      menu.classList.add("hidden");
+    }
+  });
+}
+
+function closeCodeCopyMenus(exceptMenu = null) {
+  document.querySelectorAll(".code-copy-menu").forEach((menu) => {
+    if (menu !== exceptMenu) {
+      menu.classList.add("hidden");
+    }
+  });
+}
+
+function buildCodeLatexListing(code, language = "") {
+  const listingLanguage = latexListingLanguage(language);
+  return `\\begin{lstlisting}${listingLanguage ? `[language=${listingLanguage}]` : ""}
+${String(code || "").replace(/\\end\{lstlisting\}/g, "\\end {lstlisting}")}
+\\end{lstlisting}
+`;
+}
+
+function buildCodeWordHtml(code, language = "") {
+  const container = document.createElement("div");
+  container.append(createWordCodeTable(code, language));
+  return buildWordDocumentHtml(container.innerHTML);
+}
+
+async function copyCodeText(code, language, format) {
+  if (format === "latex") {
+    await writeClipboardText(buildCodeLatexListing(code, language));
+    return;
+  }
+
+  if (format === "word") {
+    await writeClipboardHtml(buildCodeWordHtml(code, language), code);
+    return;
+  }
+
+  await writeClipboardText(code);
+}
+
+async function copyAiMessage(article, format) {
+  const markdown = article?.dataset.markdown || "";
+
+  if (format === "markdown") {
+    await writeClipboardText(markdown);
+    return;
+  }
+
+  if (format === "word") {
+    await writeClipboardHtml(buildWordHtmlFromMarkdown(markdown), markdownToPlainText(markdown));
+    return;
+  }
+
+  if (format === "latex") {
+    await writeClipboardText(buildLatexDocument(markdown));
+    return;
+  }
+
+  await writeClipboardText(markdownToPlainText(markdown));
+}
+
+async function handleAiMessageCopyClick(event) {
+  const toggle = event.target.closest("[data-action='toggle-ai-copy-menu']");
+
+  if (toggle) {
+    const menu = toggle.closest(".aichat-copy-control")?.querySelector(".aichat-copy-menu");
+    if (!menu) {
+      return;
+    }
+
+    const isHidden = menu.classList.contains("hidden");
+    closeAiCopyMenus(menu);
+    menu.classList.toggle("hidden", !isHidden);
+    event.stopPropagation();
+    return;
+  }
+
+  const option = event.target.closest("[data-action='copy-ai-message']");
+
+  if (!option) {
+    closeAiCopyMenus();
+    return;
+  }
+
+  const article = option.closest(".aichat-message-assistant");
+  const button = article?.querySelector(".aichat-copy-button");
+  const originalTitle = button?.title || "复制";
 
   try {
-    await navigator.clipboard.writeText(code);
-    button.textContent = "已复制";
+    const format = option.dataset.copyFormat;
+    await copyAiMessage(article, format);
+    showCopySuccessPopup(format);
+    if (button) {
+      button.title = "已复制";
+      window.setTimeout(() => {
+        button.title = originalTitle;
+      }, 1200);
+    }
+  } catch {
+    if (button) {
+      button.title = "复制失败";
+      window.setTimeout(() => {
+        button.title = originalTitle;
+      }, 1200);
+    }
+  } finally {
+    closeAiCopyMenus();
+  }
+}
+
+async function handleCodeCopyClick(event) {
+  const toggle = event.target.closest("[data-action='toggle-code-copy-menu']");
+
+  if (toggle) {
+    const menu = toggle.parentElement?.querySelector(".code-copy-menu");
+    if (!menu) {
+      return;
+    }
+
+    const isHidden = menu.classList.contains("hidden");
+    closeCodeCopyMenus(menu);
+    menu.classList.toggle("hidden", !isHidden);
+    event.stopPropagation();
+    return;
+  }
+
+  const option = event.target.closest("[data-action='copy-code']");
+
+  if (!option) {
+    closeCodeCopyMenus();
+    return;
+  }
+
+  const container = option.closest("pre, .code-run-result");
+  const button = container?.querySelector("[data-action='toggle-code-copy-menu']");
+  const code = button?.dataset.code || "";
+  const language = button?.dataset.language || "";
+  const originalTitle = button?.title || "复制代码";
+
+  try {
+    const format = option.dataset.copyFormat;
+    await copyCodeText(code, language, format);
+    showCopySuccessPopup(format);
+    if (button) {
+      button.title = "已复制";
+    }
     window.setTimeout(() => {
-      button.textContent = "复制";
+      if (button) {
+        button.title = originalTitle;
+      }
     }, 1200);
   } catch {
-    button.textContent = "复制失败";
+    if (button) {
+      button.title = "复制失败";
+    }
     window.setTimeout(() => {
-      button.textContent = "复制";
+      if (button) {
+        button.title = originalTitle;
+      }
     }, 1200);
+  } finally {
+    closeCodeCopyMenus();
   }
 }
 
@@ -3317,6 +3994,20 @@ function revokeCodeRunObjectUrls(result) {
   result?.querySelectorAll("img[data-object-url]").forEach((image) => {
     URL.revokeObjectURL(image.dataset.objectUrl);
   });
+}
+
+function addCodeRunResultCopyControls(result, text) {
+  const copyButton = document.createElement("button");
+  copyButton.className = "code-result-copy-button";
+  copyButton.type = "button";
+  copyButton.dataset.action = "toggle-code-copy-menu";
+  copyButton.dataset.code = String(text || "");
+  copyButton.dataset.language = "";
+  copyButton.title = "复制运行结果";
+  copyButton.setAttribute("aria-label", "复制运行结果");
+  copyButton.innerHTML = `<img src="/assets/icons/copy.svg" alt="" aria-hidden="true" />`;
+  result.append(copyButton);
+  result.append(createCodeCopyMenu());
 }
 
 async function loadAuthenticatedCodeRunImage(image, file) {
@@ -3349,11 +4040,44 @@ function renderCodeRunResult(result, payload) {
   const stdout = String(payload?.stdout || "");
   const stderr = String(payload?.stderr || "");
   const files = (Array.isArray(payload?.files) ? payload.files : []).filter(isImageOutputFile);
-  const output = stdout || stderr || `代码执行结束，exit code: ${payload?.exit_code ?? "unknown"}`;
-  const text = document.createElement("pre");
-  text.className = "code-run-result-text";
-  text.textContent = output.trimEnd() || "代码执行完成，没有 stdout 输出。";
-  result.append(text);
+  const exitCode = Number(payload?.exit_code ?? payload?.exitCode ?? 0);
+  const isSuccess = Number.isFinite(exitCode) && exitCode === 0 && !stderr;
+  const output = [
+    stdout ? `stdout:\n${stdout.trimEnd()}` : "",
+    stderr ? `stderr:\n${stderr.trimEnd()}` : ""
+  ].filter(Boolean).join("\n\n") || (isSuccess ? "" : `代码执行结束，exit code: ${payload?.exit_code ?? "unknown"}`);
+  result.classList.toggle("is-code-run-success", isSuccess);
+  result.classList.toggle("is-code-run-error", !isSuccess);
+  const copyText = output.trimEnd();
+  addCodeRunResultCopyControls(result, copyText);
+
+  [
+    ["stdout", stdout],
+    ["stderr", stderr]
+  ].forEach(([label, value]) => {
+    if (!value) {
+      return;
+    }
+
+    const block = document.createElement("div");
+    block.className = "code-run-output-block";
+    block.innerHTML = `<span class="code-run-output-label">${label}</span>`;
+    const text = document.createElement("pre");
+    text.className = "code-run-result-text";
+    text.textContent = String(value).trimEnd();
+    block.append(text);
+    result.append(block);
+  });
+
+  if (!stdout && !stderr && !isSuccess) {
+    const block = document.createElement("div");
+    block.className = "code-run-output-block";
+    const text = document.createElement("pre");
+    text.className = "code-run-result-text";
+    text.textContent = output;
+    block.append(text);
+    result.append(block);
+  }
 
   if (files.length) {
     const gallery = document.createElement("div");
@@ -3391,7 +4115,7 @@ async function handleCodeRunClick(event) {
   }
 
   button.disabled = true;
-  button.textContent = "运行中";
+  button.title = "运行中";
   result.textContent = "正在执行代码...";
 
   try {
@@ -3405,10 +4129,18 @@ async function handleCodeRunClick(event) {
     });
     renderCodeRunResult(result, payload);
   } catch (error) {
-    result.textContent = `运行失败：${error.message}`;
+    const message = error.message;
+    result.innerHTML = "";
+    result.classList.remove("is-code-run-success");
+    result.classList.add("is-code-run-error");
+    addCodeRunResultCopyControls(result, message);
+    result.append(Object.assign(document.createElement("pre"), {
+      className: "code-run-result-text",
+      textContent: error.message
+    }));
   } finally {
     button.disabled = false;
-    button.textContent = "运行";
+    button.title = "运行代码";
   }
 }
 
@@ -3470,9 +4202,12 @@ discussionImageInput?.addEventListener("change", async (event) => {
 discussionComposeContent?.addEventListener("paste", handleDiscussionPaste);
 document.addEventListener("click", handleCodeCopyClick);
 document.addEventListener("click", handleCodeRunClick);
+document.addEventListener("click", handleAiMessageCopyClick);
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     document.getElementById("fortune-modal")?.classList.add("hidden");
+    closeAiCopyMenus();
+    closeCodeCopyMenus();
   }
 });
 renderUser();
