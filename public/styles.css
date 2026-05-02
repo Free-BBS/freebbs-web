@@ -2142,16 +2142,16 @@ h3,
 .discussion-markdown-body pre {
   position: relative;
   overflow-x: auto;
-  padding: 16px 76px 16px 16px;
+  padding: 16px 118px 16px 16px;
   border-radius: 18px;
   background: rgba(10, 15, 24, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.code-copy-button {
+.code-copy-button,
+.code-run-button {
   position: absolute;
   top: 8px;
-  right: 8px;
   padding: 5px 9px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
@@ -2160,6 +2160,63 @@ h3,
   cursor: pointer;
   font-family: var(--font-ui);
   font-size: 0.72rem;
+}
+
+.code-copy-button {
+  right: 8px;
+}
+
+.code-run-button {
+  right: 52px;
+}
+
+.code-copy-button:disabled,
+.code-run-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.code-run-result {
+  margin: -0.6em 0 1em;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(6, 10, 18, 0.72);
+  border: 1px solid rgba(89, 216, 255, 0.2);
+  color: rgba(244, 239, 231, 0.9);
+}
+
+.code-run-result-text {
+  margin: 0;
+  padding: 0;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font-family: "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
+  font-size: 0.82rem;
+}
+
+.code-run-gallery {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.code-run-gallery img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.code-run-image-error {
+  margin: 0;
+  color: rgba(255, 160, 150, 0.92);
+  font-size: 0.86rem;
 }
 
 .discussion-markdown-body img {

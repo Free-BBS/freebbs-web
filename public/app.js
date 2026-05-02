@@ -1154,6 +1154,51 @@ function addCodeCopyButtons(root) {
   });
 }
 
+function normalizeRunnableCodeLanguage(code) {
+  const className = code?.className || "";
+  const languageMatch = className.match(/(?:^|\s)language-([^\s]+)/);
+  const language = String(languageMatch?.[1] || code?.dataset.language || "").trim().toLowerCase();
+
+  if (language === "python" || language === "py") {
+    return "python";
+  }
+
+  if (language === "cpp" || language === "c++") {
+    return "cpp";
+  }
+
+  return "";
+}
+
+function addCodeRunButtons(root) {
+  if (!isAiChatPage()) {
+    return;
+  }
+
+  root?.querySelectorAll("pre").forEach((pre) => {
+    if (pre.querySelector(".code-run-button")) {
+      return;
+    }
+
+    const code = pre.querySelector("code");
+    const language = normalizeRunnableCodeLanguage(code);
+
+    if (!language) {
+      return;
+    }
+
+    const button = document.createElement("button");
+    button.className = "code-run-button";
+    button.type = "button";
+    button.dataset.action = "run-code";
+    button.dataset.language = language;
+    button.dataset.code = code?.textContent || "";
+    button.textContent = "运行";
+    button.setAttribute("aria-label", "运行代码");
+    pre.append(button);
+  });
+}
+
 function enhanceMarkdownContent(root) {
   if (!root) {
     return;
@@ -1161,6 +1206,7 @@ function enhanceMarkdownContent(root) {
 
   applyMathRendering(root);
   addCodeCopyButtons(root);
+  addCodeRunButtons(root);
   root.querySelectorAll("a").forEach((link) => {
     link.target = "_blank";
     link.rel = "noreferrer";
@@ -3263,6 +3309,109 @@ async function handleCodeCopyClick(event) {
   }
 }
 
+function isImageOutputFile(file) {
+  return /\.(?:png|jpg|jpeg|webp|gif)(?:$|\?)/i.test(String(file || ""));
+}
+
+function revokeCodeRunObjectUrls(result) {
+  result?.querySelectorAll("img[data-object-url]").forEach((image) => {
+    URL.revokeObjectURL(image.dataset.objectUrl);
+  });
+}
+
+async function loadAuthenticatedCodeRunImage(image, file) {
+  try {
+    const response = await fetch(`${API_ROOT}${file}`, {
+      headers: {
+        ...(userState.token ? { Authorization: `Bearer ${userState.token}` } : {})
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error("图片加载失败");
+    }
+
+    const objectUrl = URL.createObjectURL(await response.blob());
+    image.dataset.objectUrl = objectUrl;
+    image.src = objectUrl;
+  } catch (error) {
+    image.replaceWith(Object.assign(document.createElement("p"), {
+      className: "code-run-image-error",
+      textContent: error.message
+    }));
+  }
+}
+
+function renderCodeRunResult(result, payload) {
+  revokeCodeRunObjectUrls(result);
+  result.innerHTML = "";
+
+  const stdout = String(payload?.stdout || "");
+  const stderr = String(payload?.stderr || "");
+  const files = (Array.isArray(payload?.files) ? payload.files : []).filter(isImageOutputFile);
+  const output = stdout || stderr || `代码执行结束，exit code: ${payload?.exit_code ?? "unknown"}`;
+  const text = document.createElement("pre");
+  text.className = "code-run-result-text";
+  text.textContent = output.trimEnd() || "代码执行完成，没有 stdout 输出。";
+  result.append(text);
+
+  if (files.length) {
+    const gallery = document.createElement("div");
+    gallery.className = "code-run-gallery";
+
+    files.forEach((file) => {
+      const image = document.createElement("img");
+      image.alt = "代码生成的图片";
+      image.loading = "lazy";
+      image.decoding = "async";
+      gallery.append(image);
+      loadAuthenticatedCodeRunImage(image, file);
+    });
+
+    result.append(gallery);
+  }
+}
+
+async function handleCodeRunClick(event) {
+  const button = event.target.closest("[data-action='run-code']");
+
+  if (!button) {
+    return;
+  }
+
+  const pre = button.closest("pre");
+  let result = pre?.nextElementSibling?.classList?.contains("code-run-result")
+    ? pre.nextElementSibling
+    : null;
+
+  if (!result) {
+    result = document.createElement("div");
+    result.className = "code-run-result";
+    pre?.after(result);
+  }
+
+  button.disabled = true;
+  button.textContent = "运行中";
+  result.textContent = "正在执行代码...";
+
+  try {
+    const payload = await callApi("/code/run", {
+      method: "POST",
+      body: JSON.stringify({
+        language: button.dataset.language,
+        code: button.dataset.code || "",
+        timeout: 10
+      })
+    });
+    renderCodeRunResult(result, payload);
+  } catch (error) {
+    result.textContent = `运行失败：${error.message}`;
+  } finally {
+    button.disabled = false;
+    button.textContent = "运行";
+  }
+}
+
 userName.addEventListener("click", handleAuthEntry);
 userSettingsButton?.addEventListener("click", handleUserSettingsClick);
 userLogoutButton?.addEventListener("click", handleUserLogoutClick);
@@ -3320,6 +3469,7 @@ discussionImageInput?.addEventListener("change", async (event) => {
 });
 discussionComposeContent?.addEventListener("paste", handleDiscussionPaste);
 document.addEventListener("click", handleCodeCopyClick);
+document.addEventListener("click", handleCodeRunClick);
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     document.getElementById("fortune-modal")?.classList.add("hidden");

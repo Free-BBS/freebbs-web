@@ -29,6 +29,8 @@ module.exports = {
   },
   authSecret: process.env.AUTH_SECRET || "free-bbs-dev-secret",
   agentBaseUrl: process.env.AGENT_URL || "http://127.0.0.1:5001",
+  sandboxBaseUrl: process.env.SANDBOX_URL || "http://127.0.0.1:8000",
+  sandboxOutputDir: process.env.SANDBOX_OUTPUT_DIR || path.join(__dirname, "..", "..", "sandbox", "outputs"),
   uploadDir: process.env.UPLOAD_DIR || path.join(__dirname, "..", "database", "uploads"),
   mail: {
     host: process.env.BOTMAIL_SMTP || "",

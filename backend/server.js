@@ -765,6 +765,69 @@ async function postAgentChat(payload) {
   });
 }
 
+function normalizeSandboxLanguage(language) {
+  const value = String(language || "").trim().toLowerCase();
+
+  if (value === "python" || value === "py") {
+    return "python";
+  }
+
+  if (value === "cpp" || value === "c++") {
+    return "cpp";
+  }
+
+  return "";
+}
+
+function getSandboxUid(user) {
+  return user.uid || user.username || `user-${user.id}`;
+}
+
+function isSafeSandboxFilename(filename) {
+  return /^[A-Za-z0-9_.-]+\.(?:png|jpg|jpeg|webp|gif)$/i.test(String(filename || ""));
+}
+
+function mapSandboxOutputFiles(files, uid) {
+  const outputRoot = path.resolve(config.sandboxOutputDir);
+  const userOutputRoot = path.resolve(outputRoot, uid);
+
+  return (Array.isArray(files) ? files : [])
+    .map((file) => {
+      const resolved = path.resolve(String(file || ""));
+
+      if (!resolved.startsWith(`${userOutputRoot}${path.sep}`)) {
+        return "";
+      }
+
+      const filename = path.basename(resolved);
+
+      if (!isSafeSandboxFilename(filename)) {
+        return "";
+      }
+
+      return `/api/code/outputs/${encodeURIComponent(uid)}/${encodeURIComponent(filename)}`;
+    })
+    .filter(Boolean);
+}
+
+async function postSandboxRun(payload, timeoutSeconds) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), (timeoutSeconds + 3) * 1000);
+
+  try {
+    return await fetch(`${config.sandboxBaseUrl.replace(/\/$/, "")}/run`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function createMaxDiscussionReply(postId, triggerComment) {
   await ensureMaxAgentUser();
 
@@ -1179,6 +1242,92 @@ app.post("/api/ai/chat", async (request, response) => {
       detail: error.message
     });
   }
+});
+
+app.post("/api/code/run", async (request, response) => {
+  const user = await requireAuth(request, response);
+
+  if (!user) {
+    return;
+  }
+
+  const language = normalizeSandboxLanguage(request.body?.language);
+  const code = String(request.body?.code || "");
+  const timeout = Math.min(Math.max(Number(request.body?.timeout || 10), 1), 30);
+
+  if (!language) {
+    response.status(400).json({ message: "仅支持运行 Python 和 C++ 代码" });
+    return;
+  }
+
+  if (!code.trim()) {
+    response.status(400).json({ message: "代码不能为空" });
+    return;
+  }
+
+  if (Buffer.byteLength(code, "utf8") > 256 * 1024) {
+    response.status(400).json({ message: "代码过长" });
+    return;
+  }
+
+  const uid = getSandboxUid(user);
+
+  try {
+    const sandboxResponse = await postSandboxRun({
+      language,
+      code,
+      uid,
+      timeout
+    }, timeout);
+    const text = await sandboxResponse.text();
+    const payload = JSON.parse(text || "{}");
+    payload.files = mapSandboxOutputFiles(payload.files, uid);
+
+    response.status(sandboxResponse.ok ? 200 : sandboxResponse.status).json(payload);
+  } catch (error) {
+    const message = error.name === "AbortError" ? "代码执行超时" : "代码沙盒不可用";
+    response.status(502).json({
+      message,
+      detail: error.message
+    });
+  }
+});
+
+app.get("/api/code/outputs/:uid/:filename", async (request, response) => {
+  const user = await requireAuth(request, response);
+
+  if (!user) {
+    return;
+  }
+
+  const uid = String(request.params.uid || "");
+  const filename = String(request.params.filename || "");
+  const expectedUid = getSandboxUid(user);
+
+  if (uid !== expectedUid && user.role !== "admin") {
+    response.status(403).json({ message: "无权访问该输出文件" });
+    return;
+  }
+
+  if (!isSafeSandboxFilename(filename)) {
+    response.status(400).json({ message: "非法文件名" });
+    return;
+  }
+
+  const outputRoot = path.resolve(config.sandboxOutputDir);
+  const targetPath = path.resolve(outputRoot, uid, filename);
+
+  if (!targetPath.startsWith(`${path.resolve(outputRoot, uid)}${path.sep}`)) {
+    response.status(400).json({ message: "非法文件路径" });
+    return;
+  }
+
+  response.setHeader("Cache-Control", "private, max-age=3600");
+  response.sendFile(targetPath, (error) => {
+    if (error && !response.headersSent) {
+      response.status(error.statusCode || 404).json({ message: "输出文件不存在" });
+    }
+  });
 });
 
 app.get("/api/ai/dialogs", async (request, response) => {
