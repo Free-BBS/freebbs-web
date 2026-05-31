@@ -109,39 +109,150 @@
       </nav>
 
       <main class="main-content">
-        <section class="hero-section" aria-label="首页引导">
+        <section class="hero-section landing-hero" aria-label="首页引导">
           <div class="hero-copy">
-            <h1>欢迎来到</h1>
-            <h1> FREE-BBS。</h1>
+            <p class="hero-kicker">FREE BBS · 电子系学生自主学习平台</p>
+            <h1>让学习自由，</h1>
+            <h1>但不孤独。</h1>
             <p class="hero-text">
-              这是面向电子系自主学习场景的数字入口。你可以在这里搜索内容、参与讨论，并通过地图探索知识节点与学习路径。
+              学生主导、长期公益、独立于评价体系的学习交流平台。在 AI 时代，帮助电子系同学重新掌握课程脉络、提出真实问题，并把讨论连接到项目探索。
             </p>
+            <div class="hero-actions" aria-label="主要入口">
+              <a class="hero-primary-action" href="/world">探索知识地图</a>
+              <a class="hero-secondary-action" href="/discussion">进入思辨场域</a>
+            </div>
+            <div class="hero-proof-grid" aria-label="平台定位">
+              <span>Free Learning</span>
+              <span>Free Discussion</span>
+              <span>Free Exploration</span>
+            </div>
           </div>
 
           <div class="hero-visual">
-            <div class="hero-image-frame">
-              <img class="hero-image" src="/assets/maxwithmac.webp" alt="FREE-BBS 首页展示图" />
+            <div class="landing-console" aria-label="FREE BBS 学习中枢预览">
+              <div class="landing-console-top">
+                <span>Learning Hub</span>
+                <strong>FREE BBS</strong>
+                <img src="/assets/max_the_agent_avatar.webp" alt="Max 头像" />
+              </div>
+              <div class="landing-console-map">
+                <span class="map-node map-node-core">自主学习</span>
+                <span class="map-node map-node-math">数理基础</span>
+                <span class="map-node map-node-circuit">电路系统</span>
+                <span class="map-node map-node-signal">信号处理</span>
+                <span class="map-node map-node-project">PBL 项目</span>
+                <i class="map-link map-link-a"></i>
+                <i class="map-link map-link-b"></i>
+                <i class="map-link map-link-c"></i>
+                <i class="map-link map-link-d"></i>
+              </div>
+              <div class="landing-console-bottom">
+                <article>
+                  <span>今日讨论</span>
+                  <strong>如何把傅里叶级数和通信调制串起来？</strong>
+                </article>
+                <article>
+                  <span>Max 建议</span>
+                  <strong>先画知识依赖，再补推导缺口。</strong>
+                </article>
+              </div>
             </div>
           </div>
         </section>
 
-        <a class="scroll-guide" href="/world">
-          <span class="scroll-guide-text">进入 FreeBBS 世界</span>
-          <span class="scroll-guide-arrow" aria-hidden="true">▾</span>
-        </a>
-
-        <section class="home-discussion-panel" aria-labelledby="home-discussion-title">
-          <div class="home-discussion-header">
-            <div>
-              <p class="home-discussion-kicker">Latest From Boards</p>
-              <h2 id="home-discussion-title">最新讨论</h2>
-            </div>
-            <a class="home-discussion-link" href="/discussion">进入讨论区</a>
+        <section class="landing-bridge" aria-label="平台定位">
+          <p>FREE BBS 不是另一个帖子列表，而是一套让学习过程可记录、可讨论、可延展的学术社区入口。</p>
+          <div class="landing-bridge-points">
+            <span>学生主导</span>
+            <span>长期公益</span>
+            <span>独立于评价体系</span>
           </div>
+        </section>
 
-          <div class="home-discussion-list" id="home-discussion-list">
-            <article class="home-discussion-empty">
-              <p>正在加载最新帖子...</p>
+        <section class="landing-section landing-mission" aria-labelledby="landing-mission-title">
+          <div class="landing-section-copy">
+            <p class="landing-kicker">Why Free BBS</p>
+            <h2 id="landing-mission-title">把 AI 放回工具的位置，把人放回学习主体的位置。</h2>
+            <p class="landing-section-note">
+              平台先帮你看清知识之间的关系，再把困惑带到讨论里，最后连接到真实项目和协作者。
+            </p>
+          </div>
+          <div class="landing-mission-path">
+            <article>
+              <span>01</span>
+              <h3>课程脉络不再迷失</h3>
+              <p>不止生成总结，而是把概念、章节和课程之间的关系组织成可追踪的知识图谱。</p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3>讨论重新产生问题</h3>
+              <p>以知识点和看板为单位组织交流，让人机交互与同伴互助共同引发深度思考。</p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3>能力走向真实交付</h3>
+              <p>从课程之外的真实需求出发，连接协作者、项目和成果，训练定义问题的能力。</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="landing-section landing-product" aria-labelledby="landing-product-title">
+          <div class="landing-section-copy">
+            <p class="landing-kicker">Product Map</p>
+            <h2 id="landing-product-title">一站式学习共同体，从课程到讨论再到项目。</h2>
+            <p class="landing-section-note">
+              每个入口都服务于同一个目标：让同学先形成自己的理解，再借助社区和 AI 推进下一步。
+            </p>
+          </div>
+          <div class="landing-product-grid">
+            <a class="landing-product-card is-large" href="/world">
+              <span>课程 · 知识图谱</span>
+              <h3>跨课程知识梳理</h3>
+              <p>以知识点和课程章节双目录组织资料，帮助同学看清概念之间的路径。</p>
+            </a>
+            <a class="landing-product-card" href="/discussion">
+              <span>讨论 · 思辨场域</span>
+              <h3>沉淀深度问题</h3>
+              <p>围绕课程、知识点和项目看板展开讨论。</p>
+            </a>
+            <a class="landing-product-card" href="/aichat">
+              <span>AI · 学习助手</span>
+              <h3>按需调用 Max</h3>
+              <p>让 AI 辅助检索、解释和复盘，而不是替代思考。</p>
+            </a>
+            <article class="landing-product-card">
+              <span>PBL · 项目孵化器</span>
+              <h3>连接真实需求</h3>
+              <p>从思维碰撞到灵感迸发，支持项目制学习的动机和协作匹配。</p>
+            </article>
+            <article class="landing-product-card">
+              <span>通知 · 信息动脉</span>
+              <h3>聚合关键节点</h3>
+              <p>课程、项目、活动和通知进入同一个学习入口。</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="landing-section landing-roadmap" aria-labelledby="landing-roadmap-title">
+          <div class="landing-section-copy">
+            <p class="landing-kicker">Roadmap</p>
+            <h2 id="landing-roadmap-title">从功能验证，到学习生态。</h2>
+          </div>
+          <div class="landing-roadmap-track">
+            <article>
+              <time>2026.05</time>
+              <h3>平台功能验证</h3>
+              <p>以首批课程为基础，验证课程区、讨论区和通知区的核心体验。</p>
+            </article>
+            <article>
+              <time>2026.08</time>
+              <h3>V1.0 上线</h3>
+              <p>建立可复制的课程接入流程，完善项目匹配区和社区治理机制。</p>
+            </article>
+            <article>
+              <time>2027.08</time>
+              <h3>一站式共同体</h3>
+              <p>接入主要课程，完善个性化和项目匹配，形成长期学习生态。</p>
             </article>
           </div>
         </section>

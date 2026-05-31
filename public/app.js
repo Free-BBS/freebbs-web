@@ -1852,9 +1852,10 @@ function renderDiscussionComments() {
 
   const renderComment = (comment, depth = 0) => {
     const replies = commentsByParent.get(comment.id) || [];
+    const displayDepth = Math.min(depth, 4);
 
-    return `
-    <article class="discussion-comment ${depth > 0 ? "discussion-comment-reply" : ""}" data-comment-id="${comment.id}">
+    const current = `
+    <article class="discussion-comment ${depth > 0 ? "discussion-comment-reply" : ""}" data-comment-id="${comment.id}" data-comment-depth="${displayDepth}" style="--comment-depth: ${displayDepth}">
       ${renderAuthorProfileLink(comment.author, "discussion-comment-author-link", true)}
       <div class="discussion-comment-body">
         <div class="discussion-comment-meta">
@@ -1864,10 +1865,11 @@ function renderDiscussionComments() {
         </div>
         <div class="discussion-comment-content">${renderMarkdownContent(comment.contentMarkdown)}</div>
         <div class="discussion-comment-reply-slot" data-reply-slot="${comment.id}"></div>
-        ${replies.length ? `<div class="discussion-comment-replies">${replies.map((reply) => renderComment(reply, depth + 1)).join("")}</div>` : ""}
       </div>
     </article>
   `;
+
+    return [current, ...replies.map((reply) => renderComment(reply, depth + 1))].join("");
   };
 
   list.innerHTML = (commentsByParent.get(0) || []).map((comment) => renderComment(comment)).join("");
