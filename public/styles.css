@@ -7840,3 +7840,2020 @@ body:not(.world-page) .site-footer p {
     display: none;
   }
 }
+
+/* Dark chalkboard refinement */
+:root {
+  --chalk-board: #080908;
+  --chalk-board-deep: #030404;
+  --chalk-board-mid: #101110;
+  --chalk-dust: rgba(244, 240, 223, 0.72);
+  --chalk-line: rgba(244, 240, 223, 0.16);
+  --chalk-line-strong: rgba(244, 240, 223, 0.3);
+  --chalk-text: #f3efdc;
+  --chalk-muted: rgba(243, 239, 220, 0.58);
+  --chalk-yellow: #e5c96d;
+  --chalk-blue: #b7d7f0;
+  --chalk-wood: #4b3524;
+}
+
+body:not(.world-page):not(.home-page) {
+  background:
+    radial-gradient(820px 540px at 80% 0%, rgba(244, 240, 223, 0.055), transparent 64%),
+    radial-gradient(660px 460px at 12% 20%, rgba(183, 215, 240, 0.035), transparent 62%),
+    linear-gradient(135deg, #030404 0%, #0a0b0a 48%, #020303 100%);
+}
+
+body:not(.world-page):not(.home-page)::before {
+  background:
+    linear-gradient(rgba(5, 6, 5, 0.78), rgba(5, 6, 5, 0.88)),
+    radial-gradient(circle at 18% 18%, rgba(244, 240, 223, 0.065) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 76% 62%, rgba(244, 240, 223, 0.045) 0 1px, transparent 1.8px),
+    repeating-linear-gradient(0deg, rgba(244, 240, 223, 0.014) 0 1px, transparent 1px 8px),
+    repeating-linear-gradient(90deg, rgba(244, 240, 223, 0.012) 0 1px, transparent 1px 11px);
+}
+
+body:not(.world-page) .topbar {
+  background:
+    linear-gradient(90deg, rgba(4, 5, 4, 0.95), rgba(12, 13, 12, 0.82)),
+    #050605;
+  border-right-color: rgba(75, 53, 36, 0.9);
+}
+
+.discussion-page .settings-shell {
+  max-width: 1440px;
+}
+
+.discussion-page .settings-header {
+  position: relative;
+  min-height: 112px;
+  margin-bottom: 22px;
+  padding: 18px 0 28px;
+  border-bottom: 2px solid rgba(244, 240, 223, 0.18);
+}
+
+.discussion-page .settings-header::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -7px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(244, 240, 223, 0.34), transparent);
+  filter: blur(0.2px);
+}
+
+.discussion-page .settings-header h1 {
+  max-width: 920px;
+  color: var(--chalk-text);
+  font-family: "Caveat", "Ma Shan Zheng", var(--font-display);
+  font-size: clamp(4.2rem, 10vw, 8.6rem);
+  font-weight: 700;
+  line-height: 0.82;
+  letter-spacing: 0;
+  text-shadow:
+    0 0 1px rgba(244, 240, 223, 0.8),
+    0 12px 32px rgba(0, 0, 0, 0.42);
+}
+
+.discussion-page .discussion-shell {
+  min-height: auto;
+}
+
+.discussion-page .discussion-layout {
+  grid-template-columns: minmax(220px, 292px) minmax(0, 900px);
+  justify-content: start;
+  align-items: start;
+  gap: clamp(18px, 3vw, 42px);
+}
+
+.discussion-page .discussion-layout:not(.is-detail-view) .discussion-feed {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.discussion-page .discussion-layout:not(.is-detail-view) .discussion-stats-sidebar {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.discussion-page .discussion-layout.is-detail-view {
+  grid-template-columns: minmax(0, 980px);
+}
+
+.discussion-page .discussion-detail {
+  grid-column: 1 / -1;
+}
+
+.discussion-page .discussion-feed {
+  gap: 20px;
+}
+
+.discussion-page .discussion-board-about,
+.discussion-page .discussion-compose,
+.discussion-page .discussion-detail,
+.discussion-page .discussion-stats-sidebar {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(244, 240, 223, 0.18);
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(244, 240, 223, 0.055), rgba(244, 240, 223, 0.025)),
+    rgba(7, 8, 7, 0.72);
+  box-shadow:
+    inset 0 0 0 1px rgba(244, 240, 223, 0.035),
+    inset 0 0 42px rgba(244, 240, 223, 0.024),
+    0 22px 52px rgba(0, 0, 0, 0.32);
+}
+
+.discussion-page .discussion-board-about::after,
+.discussion-page .discussion-compose::after,
+.discussion-page .discussion-detail::after,
+.discussion-page .discussion-stats-sidebar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 16%, rgba(244, 240, 223, 0.06) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 72% 80%, rgba(244, 240, 223, 0.045) 0 1px, transparent 1.8px);
+  background-size: 88px 88px, 112px 112px;
+  opacity: 0.7;
+}
+
+.discussion-page .discussion-board-about {
+  padding: clamp(20px, 3vw, 34px);
+}
+
+.discussion-page .discussion-board-about-head {
+  align-items: start;
+  border-bottom: 1px dashed rgba(244, 240, 223, 0.22);
+  padding-bottom: 14px;
+}
+
+.discussion-page .discussion-board-about h2,
+.discussion-page .discussion-detail-head h2 {
+  font-family: "Caveat", "Ma Shan Zheng", var(--font-display);
+  letter-spacing: 0;
+}
+
+.discussion-page .discussion-board-about h2 {
+  font-size: clamp(2rem, 4vw, 3.3rem);
+  line-height: 0.95;
+}
+
+.discussion-page .discussion-board-about-body {
+  color: rgba(244, 240, 223, 0.72);
+  font-size: 1rem;
+}
+
+.discussion-page .discussion-stats-sidebar {
+  position: sticky;
+  top: 28px;
+  gap: 18px;
+  min-height: 0;
+  padding: 18px;
+  background:
+    linear-gradient(180deg, rgba(244, 240, 223, 0.065), rgba(244, 240, 223, 0.025)),
+    #050605;
+}
+
+.discussion-page .discussion-stats-section {
+  gap: 10px;
+  padding-bottom: 18px;
+  border-bottom: 1px dashed rgba(244, 240, 223, 0.18);
+}
+
+.discussion-page .discussion-stats-section:nth-child(2) {
+  padding: 0;
+  border: 0;
+}
+
+.discussion-page .discussion-kicker,
+.discussion-page .discussion-post-board,
+.discussion-page .discussion-detail-board {
+  color: var(--chalk-blue);
+  font-family: var(--font-ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.discussion-page .discussion-stats-section h2 {
+  color: var(--chalk-text);
+  font-family: "Caveat", "Ma Shan Zheng", var(--font-display);
+  font-size: 2rem;
+  letter-spacing: 0;
+}
+
+.discussion-page .discussion-stats-number {
+  color: var(--chalk-yellow);
+  font-family: "Caveat", "Ma Shan Zheng", var(--font-display);
+  font-size: 3.25rem;
+  font-weight: 700;
+}
+
+.discussion-page .discussion-board-list {
+  gap: 8px;
+}
+
+.discussion-page .discussion-board-chip {
+  position: relative;
+  min-height: 46px;
+  padding: 11px 12px 11px 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--chalk-text);
+  box-shadow: none;
+}
+
+.discussion-page .discussion-board-chip::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 9px;
+  bottom: 9px;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(244, 240, 223, 0.24);
+}
+
+.discussion-page .discussion-board-chip:hover,
+.discussion-page .discussion-board-chip.is-active {
+  background: rgba(244, 240, 223, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(244, 240, 223, 0.14);
+}
+
+.discussion-page .discussion-board-chip.is-active::before {
+  background: var(--chalk-yellow);
+  box-shadow: 0 0 14px rgba(229, 201, 109, 0.22);
+}
+
+.discussion-page .discussion-board-name {
+  color: var(--chalk-text);
+  font-size: 0.92rem;
+}
+
+.discussion-page .discussion-create-toggle,
+.discussion-page .discussion-submit,
+.discussion-page .discussion-board-save {
+  min-height: 46px;
+  border-radius: 2px;
+  border: 1px solid rgba(244, 240, 223, 0.24);
+  background: rgba(244, 240, 223, 0.09);
+  color: var(--chalk-text);
+  font-weight: 800;
+  box-shadow:
+    inset 0 -1px 0 rgba(244, 240, 223, 0.12),
+    0 12px 28px rgba(0, 0, 0, 0.24);
+}
+
+.discussion-page .discussion-create-toggle:hover,
+.discussion-page .discussion-submit:hover,
+.discussion-page .discussion-board-save:hover {
+  background: rgba(244, 240, 223, 0.16);
+  transform: translateY(-1px);
+}
+
+.discussion-page .discussion-post-list {
+  gap: 15px;
+}
+
+.discussion-page .discussion-post-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 19px 18px 17px;
+  border: 1px solid rgba(244, 240, 223, 0.16);
+  border-radius: 4px;
+  background:
+    linear-gradient(110deg, rgba(244, 240, 223, 0.08), rgba(244, 240, 223, 0.035) 52%, rgba(183, 215, 240, 0.03)),
+    rgba(8, 9, 8, 0.74);
+  box-shadow:
+    inset 0 0 0 1px rgba(244, 240, 223, 0.028),
+    0 18px 34px rgba(0, 0, 0, 0.26);
+  transform-origin: 50% 0;
+}
+
+.discussion-page .discussion-post-card::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: clamp(38px, 12%, 96px);
+  width: 82px;
+  height: 15px;
+  border: 1px solid rgba(244, 240, 223, 0.12);
+  background:
+    linear-gradient(90deg, rgba(244, 240, 223, 0.14), rgba(244, 240, 223, 0.26), rgba(244, 240, 223, 0.12));
+  box-shadow: 0 7px 14px rgba(0, 0, 0, 0.18);
+  transform: rotate(-1.4deg);
+}
+
+.discussion-page .discussion-post-card:nth-child(even)::before {
+  left: auto;
+  right: clamp(42px, 14%, 110px);
+  transform: rotate(1.2deg);
+}
+
+.discussion-page .discussion-post-card:hover,
+.discussion-page .discussion-post-card.is-active {
+  border-color: rgba(244, 240, 223, 0.32);
+  background:
+    linear-gradient(110deg, rgba(244, 240, 223, 0.12), rgba(244, 240, 223, 0.052) 54%, rgba(229, 201, 109, 0.04)),
+    rgba(10, 11, 10, 0.84);
+  box-shadow:
+    inset 0 0 0 1px rgba(244, 240, 223, 0.04),
+    0 24px 46px rgba(0, 0, 0, 0.34);
+}
+
+.discussion-page .discussion-post-card-main h3 {
+  max-width: 720px;
+  color: var(--chalk-text);
+  font-family: "Caveat", "Ma Shan Zheng", var(--font-display);
+  font-size: clamp(2rem, 3.6vw, 3.15rem);
+  font-weight: 700;
+  line-height: 0.92;
+  letter-spacing: 0;
+  text-shadow: 0 0 1px rgba(244, 240, 223, 0.7);
+}
+
+.discussion-page .discussion-post-source,
+.discussion-page .discussion-post-actions,
+.discussion-page .discussion-detail-meta,
+.discussion-page .discussion-comment-meta {
+  flex-wrap: wrap;
+  color: var(--chalk-muted);
+}
+
+.discussion-page .discussion-author-link {
+  color: rgba(244, 240, 223, 0.8);
+}
+
+.discussion-page .discussion-post-avatar,
+.discussion-page .discussion-comment-avatar {
+  border: 1px solid rgba(244, 240, 223, 0.24);
+  box-shadow: 0 0 0 3px rgba(244, 240, 223, 0.04);
+}
+
+.discussion-page .discussion-post-open {
+  align-self: center;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(244, 240, 223, 0.18);
+  border-radius: 50%;
+  color: rgba(244, 240, 223, 0.56);
+  font-size: 0.88rem;
+}
+
+.discussion-page .discussion-reaction-button,
+.discussion-page .discussion-comment-count,
+.discussion-page .discussion-pin-badge,
+.discussion-page .discussion-feature-badge {
+  border-radius: 999px;
+  border-color: rgba(244, 240, 223, 0.18);
+  background: rgba(244, 240, 223, 0.055);
+}
+
+.discussion-page .discussion-reaction-button.is-reacted,
+.discussion-page .discussion-pin-badge,
+.discussion-page .discussion-feature-badge {
+  color: var(--chalk-yellow);
+  border-color: rgba(229, 201, 109, 0.34);
+  background: rgba(229, 201, 109, 0.08);
+}
+
+.discussion-page .discussion-detail {
+  padding: clamp(22px, 4vw, 44px);
+}
+
+.discussion-page .discussion-detail-head {
+  gap: 18px;
+  padding-bottom: 24px;
+  border-bottom: 1px dashed rgba(244, 240, 223, 0.2);
+}
+
+.discussion-page .discussion-detail-head h2 {
+  max-width: 880px;
+  font-size: clamp(3rem, 7vw, 6.4rem);
+  line-height: 0.86;
+}
+
+.discussion-page .discussion-detail-toolbar,
+.discussion-page .discussion-moderator-actions,
+.discussion-page .discussion-editor-toolbar {
+  flex-wrap: wrap;
+}
+
+.discussion-page .discussion-detail-back,
+.discussion-page .discussion-detail-pin,
+.discussion-page .discussion-detail-feature,
+.discussion-page .discussion-detail-delete,
+.discussion-page .discussion-board-edit,
+.discussion-page .discussion-board-moderators,
+.discussion-page .discussion-editor-button,
+.discussion-page .discussion-comment-reply-button {
+  border-radius: 999px;
+  border: 1px solid rgba(244, 240, 223, 0.18);
+  background: rgba(244, 240, 223, 0.055);
+  color: var(--chalk-text);
+}
+
+.discussion-page .discussion-markdown-body {
+  color: rgba(244, 240, 223, 0.78);
+}
+
+.discussion-page .discussion-markdown-body h1,
+.discussion-page .discussion-markdown-body h2,
+.discussion-page .discussion-markdown-body h3,
+.discussion-page .discussion-markdown-body h4 {
+  color: var(--chalk-text);
+  font-family: "Caveat", "Ma Shan Zheng", var(--font-display);
+  letter-spacing: 0;
+}
+
+.discussion-page .discussion-comments {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px dashed rgba(244, 240, 223, 0.18);
+}
+
+.discussion-page .discussion-comments-head h3 {
+  color: var(--chalk-text);
+  font-family: "Caveat", "Ma Shan Zheng", var(--font-display);
+  font-size: 2.6rem;
+  letter-spacing: 0;
+}
+
+.discussion-page .discussion-comment {
+  border-radius: 4px;
+  border-color: rgba(244, 240, 223, 0.14);
+  background: rgba(244, 240, 223, 0.045);
+}
+
+.discussion-page .discussion-compose textarea,
+.discussion-page .discussion-compose select,
+.discussion-page .discussion-compose input,
+.discussion-page .discussion-comment-form textarea,
+.discussion-page .discussion-board-description-input,
+.discussion-page .discussion-moderator-search input {
+  border-radius: 3px;
+  border-color: rgba(244, 240, 223, 0.18);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+@media (max-width: 1180px) {
+  .discussion-page .discussion-layout {
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 22px;
+  }
+}
+
+@media (max-width: 900px) {
+  .discussion-page .settings-header {
+    min-height: 82px;
+    margin-bottom: 16px;
+  }
+
+  .discussion-page .settings-header h1 {
+    font-size: clamp(3.5rem, 18vw, 6.2rem);
+  }
+
+  .discussion-page .discussion-layout,
+  .discussion-page .discussion-layout:not(.is-detail-view),
+  .discussion-page .discussion-layout.is-detail-view {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .discussion-page .discussion-layout:not(.is-detail-view) .discussion-stats-sidebar,
+  .discussion-page .discussion-layout:not(.is-detail-view) .discussion-feed,
+  .discussion-page .discussion-detail {
+    grid-column: 1;
+  }
+
+  .discussion-page .discussion-layout:not(.is-detail-view) .discussion-stats-sidebar {
+    grid-row: 1;
+    position: relative;
+    top: 0;
+  }
+
+  .discussion-page .discussion-layout:not(.is-detail-view) .discussion-feed {
+    grid-row: 2;
+  }
+
+  .discussion-page .discussion-board-list {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .discussion-page .discussion-board-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .discussion-page .discussion-board-chip {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 132px;
+  }
+
+  .discussion-page .discussion-stats-section:nth-child(n + 3) {
+    display: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .discussion-page .settings-shell {
+    padding-inline: 14px;
+  }
+
+  .discussion-page .discussion-board-about,
+  .discussion-page .discussion-compose,
+  .discussion-page .discussion-detail,
+  .discussion-page .discussion-stats-sidebar {
+    padding: 16px;
+  }
+
+  .discussion-page .discussion-post-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding: 20px 15px 16px;
+  }
+
+  .discussion-page .discussion-post-author,
+  .discussion-page .discussion-post-open {
+    display: none;
+  }
+
+  .discussion-page .discussion-post-card-main h3 {
+    font-size: clamp(1.9rem, 12vw, 2.65rem);
+  }
+
+  .discussion-page .discussion-detail-head h2 {
+    font-size: clamp(2.7rem, 15vw, 4.6rem);
+  }
+}
+
+/* Minimal dark mode for every page except the landing page */
+:root {
+  --minimal-bg: #050607;
+  --minimal-surface: #0b0d10;
+  --minimal-surface-soft: #0f1216;
+  --minimal-line: rgba(255, 255, 255, 0.1);
+  --minimal-line-strong: rgba(255, 255, 255, 0.18);
+  --minimal-text: #f4f5f5;
+  --minimal-muted: rgba(244, 245, 245, 0.58);
+  --minimal-dim: rgba(244, 245, 245, 0.38);
+  --minimal-accent: #f4f5f5;
+}
+
+body:not(.home-page) {
+  background: var(--minimal-bg) !important;
+  color: var(--minimal-text);
+}
+
+body:not(.home-page)::before,
+body:not(.home-page)::after {
+  display: none !important;
+}
+
+body:not(.home-page) .topbar {
+  background: #050607 !important;
+  border-right: 1px solid var(--minimal-line);
+  box-shadow: none;
+}
+
+body:not(.home-page) .brand,
+body:not(.home-page) .nav-link,
+body:not(.home-page) .user-name,
+body:not(.home-page) .user-role,
+body:not(.home-page) .user-status,
+body:not(.home-page) .settings-header h1,
+body:not(.home-page) .settings-section-heading h2,
+body:not(.home-page) .discussion-detail-head h2,
+body:not(.home-page) .discussion-feed-head h2,
+body:not(.home-page) .discussion-sidebar-head h2,
+body:not(.home-page) .auth-page-title,
+body:not(.home-page) .aichat-auth-required h1,
+body:not(.home-page) .world-title h1 {
+  color: var(--minimal-text) !important;
+  font-family: var(--font-display);
+  letter-spacing: 0;
+  text-shadow: none;
+}
+
+body:not(.home-page) .nav-link,
+body:not(.home-page) .user-panel,
+body:not(.home-page) .searchbar,
+body:not(.home-page) .mobile-nav {
+  border-color: transparent;
+  background: transparent !important;
+  box-shadow: none;
+}
+
+body:not(.home-page) .nav-link:hover,
+body:not(.home-page) .nav-link.is-active,
+body:not(.home-page) .user-name:hover {
+  background: var(--minimal-surface-soft) !important;
+  color: var(--minimal-text);
+}
+
+body:not(.home-page) .searchbar {
+  border: 1px solid var(--minimal-line);
+}
+
+body:not(.home-page) .searchbar input,
+body:not(.home-page) input,
+body:not(.home-page) textarea,
+body:not(.home-page) select {
+  color: var(--minimal-text);
+}
+
+body:not(.home-page) input::placeholder,
+body:not(.home-page) textarea::placeholder,
+body:not(.home-page) .searchbar input::placeholder {
+  color: var(--minimal-dim);
+}
+
+body:not(.home-page) .main-content {
+  background: transparent;
+}
+
+body:not(.home-page) .settings-shell,
+body:not(.home-page) .aichat-shell,
+body:not(.home-page) .discussion-shell,
+body:not(.home-page) .world-shell {
+  max-width: 1180px;
+}
+
+body:not(.home-page) .settings-header,
+body:not(.home-page) .world-title {
+  min-height: 0;
+  margin-bottom: 28px;
+  padding: 0 0 18px;
+  border-bottom: 1px solid var(--minimal-line);
+}
+
+body:not(.home-page) .settings-header::before,
+body:not(.home-page) .world-title::before,
+body:not(.home-page) .world-title::after {
+  display: none;
+}
+
+body:not(.home-page) .settings-header h1,
+body:not(.home-page) .world-title h1 {
+  font-size: clamp(2rem, 5vw, 4.5rem);
+  line-height: 1;
+}
+
+body:not(.home-page) .settings-profile,
+body:not(.home-page) .settings-card,
+body:not(.home-page) .settings-form,
+body:not(.home-page) .auth-page-panel,
+body:not(.home-page) .auth-panel,
+body:not(.home-page) .aichat-auth-required,
+body:not(.home-page) .aichat-dialogs,
+body:not(.home-page) .aichat-main,
+body:not(.home-page) .aichat-composer,
+body:not(.home-page) .discussion-feed,
+body:not(.home-page) .discussion-detail,
+body:not(.home-page) .discussion-stats-sidebar,
+body:not(.home-page) .discussion-board-about,
+body:not(.home-page) .discussion-compose,
+body:not(.home-page) .public-profile-field,
+body:not(.home-page) .public-profile-stat,
+body:not(.home-page) .admin-user-row,
+body:not(.home-page) .world-panel,
+body:not(.home-page) .world-card {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+body:not(.home-page) .settings-profile,
+body:not(.home-page) .aichat-main,
+body:not(.home-page) .discussion-board-about,
+body:not(.home-page) .discussion-compose,
+body:not(.home-page) .discussion-detail,
+body:not(.home-page) .public-profile-field {
+  padding: 0;
+}
+
+body:not(.home-page) .settings-grid,
+body:not(.home-page) .public-profile-grid,
+body:not(.home-page) .admin-user-list {
+  gap: 18px;
+}
+
+body:not(.home-page) .auth-field,
+body:not(.home-page) .public-profile-field,
+body:not(.home-page) .admin-user-row,
+body:not(.home-page) .discussion-post-card,
+body:not(.home-page) .discussion-comment,
+body:not(.home-page) .aichat-dialog-item,
+body:not(.home-page) .aichat-new-dialog,
+body:not(.home-page) .aichat-bubble,
+body:not(.home-page) .world-node-card {
+  border: 0 !important;
+  border-bottom: 1px solid var(--minimal-line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body:not(.home-page) .auth-input-wrapper,
+body:not(.home-page) .auth-tabs,
+body:not(.home-page) .auth-field input,
+body:not(.home-page) .auth-field textarea,
+body:not(.home-page) .discussion-compose textarea,
+body:not(.home-page) .discussion-compose select,
+body:not(.home-page) .discussion-compose input,
+body:not(.home-page) .discussion-comment-form textarea,
+body:not(.home-page) .discussion-board-description-input,
+body:not(.home-page) .discussion-moderator-search input,
+body:not(.home-page) .aichat-composer textarea,
+body:not(.home-page) .settings-upload-button,
+body:not(.home-page) .settings-logout-button {
+  border: 1px solid var(--minimal-line) !important;
+  border-radius: 8px !important;
+  background: var(--minimal-surface) !important;
+  box-shadow: none !important;
+}
+
+body:not(.home-page) .auth-submit,
+body:not(.home-page) .discussion-submit,
+body:not(.home-page) .discussion-create-toggle,
+body:not(.home-page) .discussion-board-save,
+body:not(.home-page) .aichat-send,
+body:not(.home-page) .aichat-auth-link,
+body:not(.home-page) .settings-save,
+body:not(.home-page) .settings-upload-button,
+body:not(.home-page) .discussion-detail-back,
+body:not(.home-page) .discussion-detail-pin,
+body:not(.home-page) .discussion-detail-feature,
+body:not(.home-page) .discussion-detail-delete,
+body:not(.home-page) .discussion-board-edit,
+body:not(.home-page) .discussion-board-moderators,
+body:not(.home-page) .discussion-editor-button,
+body:not(.home-page) .discussion-comment-reply-button {
+  border: 1px solid var(--minimal-line-strong) !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: var(--minimal-text) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body:not(.home-page) .auth-submit:hover,
+body:not(.home-page) .discussion-submit:hover,
+body:not(.home-page) .discussion-create-toggle:hover,
+body:not(.home-page) .discussion-board-save:hover,
+body:not(.home-page) .aichat-send:hover,
+body:not(.home-page) .aichat-auth-link:hover,
+body:not(.home-page) .settings-save:hover,
+body:not(.home-page) .settings-upload-button:hover,
+body:not(.home-page) .discussion-detail-back:hover,
+body:not(.home-page) .discussion-detail-pin:hover,
+body:not(.home-page) .discussion-detail-feature:hover,
+body:not(.home-page) .discussion-detail-delete:hover,
+body:not(.home-page) .discussion-board-edit:hover,
+body:not(.home-page) .discussion-board-moderators:hover,
+body:not(.home-page) .discussion-editor-button:hover,
+body:not(.home-page) .discussion-comment-reply-button:hover {
+  background: var(--minimal-surface-soft) !important;
+}
+
+body:not(.home-page) .discussion-board-about::after,
+body:not(.home-page) .discussion-compose::after,
+body:not(.home-page) .discussion-detail::after,
+body:not(.home-page) .discussion-stats-sidebar::after,
+body:not(.home-page) .discussion-post-card::before,
+body:not(.home-page) .discussion-board-chip::before,
+body:not(.home-page) .discussion-comment::before,
+body:not(.home-page) .discussion-comment-reply::before {
+  display: none !important;
+}
+
+body:not(.home-page) .discussion-layout {
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  gap: 36px;
+}
+
+body:not(.home-page) .discussion-stats-sidebar {
+  position: sticky;
+  top: 24px;
+  padding: 0;
+}
+
+body:not(.home-page) .discussion-stats-section {
+  padding: 0 0 18px;
+  border-bottom: 1px solid var(--minimal-line);
+}
+
+body:not(.home-page) .discussion-stats-section h2,
+body:not(.home-page) .discussion-board-about h2,
+body:not(.home-page) .discussion-comments-head h3 {
+  color: var(--minimal-text);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+body:not(.home-page) .discussion-stats-number {
+  color: var(--minimal-text);
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+}
+
+body:not(.home-page) .discussion-board-list {
+  gap: 0;
+}
+
+body:not(.home-page) .discussion-board-chip {
+  min-height: 40px;
+  padding: 8px 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+body:not(.home-page) .discussion-board-chip:hover,
+body:not(.home-page) .discussion-board-chip.is-active {
+  color: var(--minimal-text);
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body:not(.home-page) .discussion-board-chip.is-active .discussion-board-name,
+body:not(.home-page) .aichat-dialog-item.is-active span {
+  color: var(--minimal-text);
+}
+
+body:not(.home-page) .discussion-board-name,
+body:not(.home-page) .discussion-kicker,
+body:not(.home-page) .discussion-post-board,
+body:not(.home-page) .discussion-detail-board,
+body:not(.home-page) .discussion-post-card-meta,
+body:not(.home-page) .discussion-detail-meta,
+body:not(.home-page) .discussion-comment-meta,
+body:not(.home-page) .aichat-status,
+body:not(.home-page) .aichat-dialog-id,
+body:not(.home-page) .aichat-dialog-empty,
+body:not(.home-page) .settings-section-heading p,
+body:not(.home-page) .settings-avatar-copy p,
+body:not(.home-page) .public-profile-field p,
+body:not(.home-page) .public-profile-meta,
+body:not(.home-page) .discussion-empty,
+body:not(.home-page) .discussion-detail-empty {
+  color: var(--minimal-muted) !important;
+}
+
+body:not(.home-page) .discussion-board-about {
+  display: none;
+}
+
+body:not(.home-page) .discussion-post-list {
+  gap: 0;
+}
+
+body:not(.home-page) .discussion-post-card {
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 14px;
+  padding: 18px 0;
+}
+
+body:not(.home-page) .discussion-post-card:hover,
+body:not(.home-page) .discussion-post-card.is-active {
+  background: transparent !important;
+}
+
+body:not(.home-page) .discussion-post-card-main h3 {
+  color: var(--minimal-text);
+  font-family: var(--font-display);
+  font-size: clamp(1.2rem, 2.3vw, 2rem);
+  line-height: 1.15;
+  text-shadow: none;
+}
+
+body:not(.home-page) .discussion-post-open {
+  display: none;
+}
+
+body:not(.home-page) .discussion-reaction-button,
+body:not(.home-page) .discussion-comment-count,
+body:not(.home-page) .discussion-pin-badge,
+body:not(.home-page) .discussion-feature-badge {
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--minimal-muted) !important;
+}
+
+body:not(.home-page) .discussion-reaction-button.is-reacted,
+body:not(.home-page) .discussion-pin-badge,
+body:not(.home-page) .discussion-feature-badge {
+  color: var(--minimal-text) !important;
+}
+
+body:not(.home-page) .discussion-detail {
+  max-width: 860px;
+  padding: 0;
+}
+
+body:not(.home-page) .discussion-detail-head {
+  border-bottom: 1px solid var(--minimal-line);
+}
+
+body:not(.home-page) .discussion-detail-head h2 {
+  font-size: clamp(1.8rem, 5vw, 3.6rem);
+  line-height: 1.05;
+}
+
+body:not(.home-page) .discussion-comments {
+  border-top: 1px solid var(--minimal-line);
+}
+
+body:not(.home-page) .discussion-comment {
+  padding: 18px 0;
+}
+
+body:not(.home-page) .aichat-shell {
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 32px;
+}
+
+body:not(.home-page) .aichat-dialogs {
+  padding: 0;
+}
+
+body:not(.home-page) .aichat-main {
+  min-height: calc(100vh - 120px);
+}
+
+body:not(.home-page) .aichat-thread {
+  padding: 0;
+}
+
+body:not(.home-page) .aichat-message {
+  gap: 12px;
+}
+
+body:not(.home-page) .aichat-bubble {
+  padding: 0 0 18px;
+}
+
+body:not(.home-page) .aichat-message-user .aichat-bubble {
+  background: transparent !important;
+}
+
+body:not(.home-page) .aichat-composer {
+  padding: 12px;
+  border-top: 1px solid var(--minimal-line) !important;
+}
+
+body:not(.home-page) .auth-page-body {
+  background: var(--minimal-bg) !important;
+}
+
+body:not(.home-page).auth-page-body {
+  background: var(--minimal-bg) !important;
+}
+
+body:not(.home-page) .auth-page-panel {
+  max-width: 420px;
+  padding: 0;
+  opacity: 1 !important;
+  animation: none !important;
+  transform: none !important;
+}
+
+body:not(.home-page) .site-footer {
+  border-top: 1px solid var(--minimal-line);
+  color: var(--minimal-muted);
+}
+
+body:not(.home-page) .site-footer a,
+body:not(.home-page) .site-footer p {
+  color: var(--minimal-muted);
+}
+
+body:not(.home-page) .nav-icon,
+body:not(.home-page) .currency-icon,
+body:not(.home-page) .user-action-icon,
+body:not(.home-page) .discussion-action-icon,
+body:not(.home-page) .discussion-reaction-button img,
+body:not(.home-page) .aichat-copy-button img {
+  filter: brightness(0) invert(1) opacity(0.72);
+}
+
+@media (max-width: 1024px) {
+  body:not(.home-page) .topbar {
+    border-right: 0;
+    border-bottom: 1px solid var(--minimal-line);
+  }
+}
+
+@media (max-width: 900px) {
+  body:not(.home-page) .discussion-layout,
+  body:not(.home-page) .discussion-layout:not(.is-detail-view),
+  body:not(.home-page) .discussion-layout.is-detail-view,
+  body:not(.home-page) .aichat-shell {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  body:not(.home-page) .discussion-stats-sidebar {
+    position: relative;
+    top: 0;
+  }
+
+  body:not(.home-page) .discussion-board-list,
+  body:not(.home-page) .aichat-dialog-list {
+    display: flex;
+    gap: 18px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scrollbar-width: none;
+  }
+
+  body:not(.home-page) .discussion-board-list::-webkit-scrollbar,
+  body:not(.home-page) .aichat-dialog-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  body:not(.home-page) .discussion-board-chip,
+  body:not(.home-page) .aichat-dialog-item {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 108px;
+  }
+}
+
+@media (max-width: 620px) {
+  body:not(.home-page) .settings-shell,
+  body:not(.home-page) .discussion-shell,
+  body:not(.home-page) .aichat-shell,
+  body:not(.home-page) .world-shell {
+    padding-inline: 16px;
+  }
+
+  body:not(.home-page) .settings-header h1,
+  body:not(.home-page) .world-title h1 {
+    font-size: clamp(1.8rem, 12vw, 3.2rem);
+  }
+
+  body:not(.home-page) .discussion-post-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body:not(.home-page) .discussion-post-author {
+    display: none;
+  }
+}
+
+/* Minimal dark mode cleanup */
+body:not(.home-page) .discussion-stats-section,
+body:not(.home-page) .discussion-empty,
+body:not(.home-page) .discussion-detail-empty,
+body:not(.home-page) .home-discussion-empty,
+body:not(.home-page) .aichat-auth-required,
+body:not(.home-page) .settings-empty,
+body:not(.home-page) .auth-page-panel {
+  border: 0 !important;
+  border-bottom: 1px solid var(--minimal-line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body:not(.home-page) .discussion-empty,
+body:not(.home-page) .discussion-detail-empty {
+  min-height: auto;
+  padding: 28px 0;
+  text-align: left;
+}
+
+body:not(.home-page) .discussion-stats-section {
+  padding: 0 0 16px !important;
+}
+
+body:not(.home-page) .discussion-stats-section:nth-child(2) {
+  padding: 0 0 18px !important;
+  border-bottom: 1px solid var(--minimal-line) !important;
+}
+
+body:not(.home-page) .discussion-stats-section:nth-child(n + 3) {
+  background: transparent !important;
+}
+
+body:not(.home-page) .discussion-create-toggle {
+  width: 100%;
+}
+
+body:not(.home-page).auth-page-body,
+body:not(.home-page) .auth-page-shell {
+  background: var(--minimal-bg) !important;
+  color: var(--minimal-text) !important;
+}
+
+body:not(.home-page).auth-page-body .auth-page-title {
+  color: var(--minimal-text) !important;
+  opacity: 1 !important;
+}
+
+body:not(.home-page).auth-page-body .auth-field span,
+body:not(.home-page).auth-page-body .auth-page-switch,
+body:not(.home-page).auth-page-body .auth-page-switch a,
+body:not(.home-page).auth-page-body .auth-message {
+  color: var(--minimal-muted) !important;
+  opacity: 1 !important;
+}
+
+body:not(.home-page).auth-page-body .auth-input-wrapper,
+body:not(.home-page).auth-page-body .auth-input-wrapper input {
+  color: var(--minimal-text) !important;
+  opacity: 1 !important;
+}
+
+body:not(.home-page).auth-page-body .auth-input-wrapper {
+  border-color: var(--minimal-line-strong) !important;
+  background: #080a0c !important;
+}
+
+body:not(.home-page).auth-page-body .auth-submit {
+  border-color: var(--minimal-line-strong) !important;
+  color: var(--minimal-text) !important;
+  opacity: 1 !important;
+}
+
+body:not(.home-page).auth-page-body .site-footer {
+  opacity: 0.72;
+}
+
+@media (max-width: 900px) {
+  body:not(.home-page) .discussion-stats-section:nth-child(n + 3) {
+    display: none !important;
+  }
+}
+
+/* Theme switcher */
+body:not(.home-page) .theme-toggle {
+  min-height: 38px;
+  border: 1px solid var(--minimal-line-strong) !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--minimal-text) !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-align: center;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+body:not(.home-page) .theme-toggle:hover {
+  background: var(--minimal-surface-soft) !important;
+  transform: none !important;
+}
+
+body:not(.home-page) .nav-actions > .theme-toggle {
+  width: 100%;
+  justify-content: center;
+  padding: 10px 12px;
+}
+
+body:not(.home-page) .mobile-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 8px 10px;
+}
+
+body:not(.home-page) .auth-theme-toggle {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 20;
+  padding: 9px 13px;
+}
+
+/* Minimal light mode for every page except the landing page */
+body.theme-light:not(.home-page) {
+  --minimal-bg: #f7f7f4;
+  --minimal-surface: #ffffff;
+  --minimal-surface-soft: #ecece7;
+  --minimal-line: rgba(10, 12, 14, 0.12);
+  --minimal-line-strong: rgba(10, 12, 14, 0.22);
+  --minimal-text: #111315;
+  --minimal-muted: rgba(17, 19, 21, 0.62);
+  --minimal-dim: rgba(17, 19, 21, 0.42);
+  --minimal-accent: #111315;
+  background: var(--minimal-bg) !important;
+  color: var(--minimal-text) !important;
+}
+
+body.theme-light:not(.home-page).auth-page-body,
+body.theme-light:not(.home-page) .auth-page-shell {
+  background: var(--minimal-bg) !important;
+  color: var(--minimal-text) !important;
+}
+
+body.theme-light:not(.home-page) .topbar {
+  background: var(--minimal-bg) !important;
+  border-color: var(--minimal-line) !important;
+}
+
+body.theme-light:not(.home-page) .mobile-nav {
+  background: rgba(247, 247, 244, 0.94) !important;
+  border-color: var(--minimal-line) !important;
+}
+
+body.theme-light:not(.home-page) .brand,
+body.theme-light:not(.home-page) .brand-mark,
+body.theme-light:not(.home-page) .nav-link,
+body.theme-light:not(.home-page) .user-name,
+body.theme-light:not(.home-page) .user-role,
+body.theme-light:not(.home-page) .user-status,
+body.theme-light:not(.home-page) .settings-header h1,
+body.theme-light:not(.home-page) .settings-section-heading h2,
+body.theme-light:not(.home-page) .discussion-detail-head h2,
+body.theme-light:not(.home-page) .discussion-feed-head h2,
+body.theme-light:not(.home-page) .discussion-sidebar-head h2,
+body.theme-light:not(.home-page) .auth-page-title,
+body.theme-light:not(.home-page) .aichat-auth-required h1,
+body.theme-light:not(.home-page) .world-title h1,
+body.theme-light:not(.home-page) .discussion-post-card-main h3,
+body.theme-light:not(.home-page) .discussion-stats-section h2,
+body.theme-light:not(.home-page) .discussion-board-about h2,
+body.theme-light:not(.home-page) .discussion-comments-head h3,
+body.theme-light:not(.home-page) .discussion-stats-number {
+  color: var(--minimal-text) !important;
+}
+
+body.theme-light:not(.home-page) .nav-link:hover,
+body.theme-light:not(.home-page) .nav-link.is-active,
+body.theme-light:not(.home-page) .user-name:hover,
+body.theme-light:not(.home-page) .theme-toggle:hover {
+  background: var(--minimal-surface-soft) !important;
+  color: var(--minimal-text) !important;
+}
+
+body.theme-light:not(.home-page) .searchbar,
+body.theme-light:not(.home-page) .auth-input-wrapper,
+body.theme-light:not(.home-page) .auth-tabs,
+body.theme-light:not(.home-page) .auth-field input,
+body.theme-light:not(.home-page) .auth-field textarea,
+body.theme-light:not(.home-page) .discussion-compose textarea,
+body.theme-light:not(.home-page) .discussion-compose select,
+body.theme-light:not(.home-page) .discussion-compose input,
+body.theme-light:not(.home-page) .discussion-comment-form textarea,
+body.theme-light:not(.home-page) .discussion-board-description-input,
+body.theme-light:not(.home-page) .discussion-moderator-search input,
+body.theme-light:not(.home-page) .aichat-composer textarea,
+body.theme-light:not(.home-page) .settings-upload-button,
+body.theme-light:not(.home-page) .settings-logout-button,
+body.theme-light:not(.home-page).auth-page-body .auth-input-wrapper {
+  background: var(--minimal-surface) !important;
+  border-color: var(--minimal-line) !important;
+  color: var(--minimal-text) !important;
+}
+
+body.theme-light:not(.home-page) input,
+body.theme-light:not(.home-page) textarea,
+body.theme-light:not(.home-page) select,
+body.theme-light:not(.home-page) .searchbar input,
+body.theme-light:not(.home-page) .aichat-composer textarea,
+body.theme-light:not(.home-page).auth-page-body .auth-input-wrapper input {
+  color: var(--minimal-text) !important;
+}
+
+body.theme-light:not(.home-page) input::placeholder,
+body.theme-light:not(.home-page) textarea::placeholder,
+body.theme-light:not(.home-page) .searchbar input::placeholder,
+body.theme-light:not(.home-page) .aichat-composer textarea::placeholder {
+  color: var(--minimal-dim) !important;
+}
+
+body.theme-light:not(.home-page) .auth-submit,
+body.theme-light:not(.home-page) .discussion-submit,
+body.theme-light:not(.home-page) .discussion-create-toggle,
+body.theme-light:not(.home-page) .discussion-board-save,
+body.theme-light:not(.home-page) .aichat-send,
+body.theme-light:not(.home-page) .aichat-auth-link,
+body.theme-light:not(.home-page) .settings-save,
+body.theme-light:not(.home-page) .settings-upload-button,
+body.theme-light:not(.home-page) .discussion-detail-back,
+body.theme-light:not(.home-page) .discussion-detail-pin,
+body.theme-light:not(.home-page) .discussion-detail-feature,
+body.theme-light:not(.home-page) .discussion-detail-delete,
+body.theme-light:not(.home-page) .discussion-board-edit,
+body.theme-light:not(.home-page) .discussion-board-moderators,
+body.theme-light:not(.home-page) .discussion-editor-button,
+body.theme-light:not(.home-page) .discussion-comment-reply-button,
+body.theme-light:not(.home-page) .theme-toggle {
+  border-color: var(--minimal-line-strong) !important;
+  color: var(--minimal-text) !important;
+}
+
+body.theme-light:not(.home-page) .discussion-board-name,
+body.theme-light:not(.home-page) .discussion-kicker,
+body.theme-light:not(.home-page) .discussion-post-board,
+body.theme-light:not(.home-page) .discussion-detail-board,
+body.theme-light:not(.home-page) .discussion-post-source,
+body.theme-light:not(.home-page) .discussion-post-source span,
+body.theme-light:not(.home-page) .discussion-post-actions,
+body.theme-light:not(.home-page) .discussion-post-actions span,
+body.theme-light:not(.home-page) .discussion-post-card-meta,
+body.theme-light:not(.home-page) .discussion-detail-meta,
+body.theme-light:not(.home-page) .discussion-comment-meta,
+body.theme-light:not(.home-page) .aichat-status,
+body.theme-light:not(.home-page) .aichat-dialog-id,
+body.theme-light:not(.home-page) .aichat-dialog-empty,
+body.theme-light:not(.home-page) .settings-section-heading p,
+body.theme-light:not(.home-page) .settings-avatar-copy p,
+body.theme-light:not(.home-page) .public-profile-field p,
+body.theme-light:not(.home-page) .public-profile-meta,
+body.theme-light:not(.home-page) .discussion-empty,
+body.theme-light:not(.home-page) .discussion-detail-empty,
+body.theme-light:not(.home-page).auth-page-body .auth-field span,
+body.theme-light:not(.home-page).auth-page-body .auth-page-switch,
+body.theme-light:not(.home-page).auth-page-body .auth-page-switch a,
+body.theme-light:not(.home-page).auth-page-body .auth-message {
+  color: var(--minimal-muted) !important;
+}
+
+body.theme-light:not(.home-page) .discussion-author-link,
+body.theme-light:not(.home-page) .discussion-comment-author-link {
+  color: rgba(17, 19, 21, 0.74) !important;
+}
+
+body.theme-light:not(.home-page) .auth-label-icon {
+  filter: brightness(0) opacity(0.56) !important;
+}
+
+body:not(.home-page).theme-dark .auth-label-icon {
+  filter: brightness(0) invert(1) opacity(0.68) !important;
+}
+
+body.theme-light:not(.home-page) .site-footer,
+body.theme-light:not(.home-page) .site-footer a,
+body.theme-light:not(.home-page) .site-footer p {
+  color: var(--minimal-muted) !important;
+  border-color: var(--minimal-line) !important;
+}
+
+body.theme-light:not(.home-page) .nav-icon,
+body.theme-light:not(.home-page) .currency-icon,
+body.theme-light:not(.home-page) .user-action-icon,
+body.theme-light:not(.home-page) .discussion-action-icon,
+body.theme-light:not(.home-page) .discussion-reaction-button img,
+body.theme-light:not(.home-page) .aichat-copy-button img {
+  filter: brightness(0) opacity(0.72) !important;
+}
+
+body.theme-light:not(.home-page) .avatar,
+body.theme-light:not(.home-page) .avatar-image,
+body.theme-light:not(.home-page) .discussion-post-avatar,
+body.theme-light:not(.home-page) .discussion-comment-avatar,
+body.theme-light:not(.home-page) .aichat-avatar {
+  border-color: var(--minimal-line-strong) !important;
+}
+
+@media (max-width: 1024px) {
+  body:not(.home-page) .nav-actions > .theme-toggle {
+    display: none;
+  }
+}
+
+/* AI chat layout and light-mode contrast refinement */
+body:not(.home-page) .aichat-shell {
+  width: min(100%, 1240px);
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) !important;
+  gap: clamp(24px, 4vw, 56px);
+  align-items: stretch;
+}
+
+body:not(.home-page) .aichat-dialogs {
+  grid-column: 1 !important;
+  grid-row: 1;
+  min-width: 0;
+  padding: 0 0 18px;
+  border-bottom: 1px solid var(--minimal-line) !important;
+}
+
+body:not(.home-page) .aichat-main {
+  grid-column: 2 !important;
+  grid-row: 1;
+  min-height: calc(100vh - 132px);
+}
+
+body:not(.home-page) .aichat-new-dialog {
+  min-height: 42px;
+  padding: 0 0 14px;
+  border: 0 !important;
+  border-bottom: 1px solid var(--minimal-line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--minimal-text) !important;
+}
+
+body:not(.home-page) .aichat-dialog-list {
+  gap: 0;
+}
+
+body:not(.home-page) .aichat-dialog-item {
+  padding: 14px 0;
+}
+
+body:not(.home-page) .aichat-dialog-item span,
+body:not(.home-page) .aichat-bubble,
+body:not(.home-page) .aichat-bubble p,
+body:not(.home-page) .aichat-bubble li,
+body:not(.home-page) .aichat-bubble strong,
+body:not(.home-page) .aichat-bubble code {
+  color: var(--minimal-text) !important;
+}
+
+body:not(.home-page) .aichat-dialog-item small,
+body:not(.home-page) .aichat-dialog-empty,
+body:not(.home-page) .aichat-dialog-id,
+body:not(.home-page) .aichat-status,
+body:not(.home-page) .aichat-auth-required p {
+  color: var(--minimal-muted) !important;
+}
+
+body:not(.home-page) .aichat-message-user .aichat-bubble {
+  padding: 12px 0 18px;
+  border-bottom: 1px solid var(--minimal-line) !important;
+  border-radius: 0 !important;
+}
+
+body:not(.home-page) .aichat-auth-required {
+  width: min(100%, 760px);
+  margin: 18vh auto 0;
+  text-align: center;
+}
+
+body:not(.home-page) .aichat-auth-required h1 {
+  font-size: clamp(2.8rem, 6.4vw, 4.8rem);
+  line-height: 1;
+}
+
+body.theme-light:not(.home-page) .aichat-dialog-item span,
+body.theme-light:not(.home-page) .aichat-bubble,
+body.theme-light:not(.home-page) .aichat-bubble p,
+body.theme-light:not(.home-page) .aichat-bubble li,
+body.theme-light:not(.home-page) .aichat-bubble strong,
+body.theme-light:not(.home-page) .aichat-bubble code,
+body.theme-light:not(.home-page) .discussion-markdown-body,
+body.theme-light:not(.home-page) .discussion-markdown-body p,
+body.theme-light:not(.home-page) .discussion-markdown-body li,
+body.theme-light:not(.home-page) .discussion-markdown-body strong,
+body.theme-light:not(.home-page) .aichat-auth-required h1 {
+  color: #0d0f12 !important;
+}
+
+body.theme-light:not(.home-page) .discussion-markdown-body a {
+  color: #1f4f8f !important;
+}
+
+body.theme-light:not(.home-page) .aichat-dialog-item small,
+body.theme-light:not(.home-page) .aichat-dialog-empty,
+body.theme-light:not(.home-page) .aichat-dialog-id,
+body.theme-light:not(.home-page) .aichat-status,
+body.theme-light:not(.home-page) .aichat-auth-required p {
+  color: rgba(13, 15, 18, 0.68) !important;
+}
+
+body.theme-light:not(.home-page) .aichat-copy-button,
+body.theme-light:not(.home-page) .aichat-copy-menu {
+  background: #ffffff !important;
+  border-color: var(--minimal-line) !important;
+  box-shadow: none !important;
+}
+
+body.theme-light:not(.home-page) .aichat-copy-menu button {
+  color: var(--minimal-text) !important;
+}
+
+body.theme-light:not(.home-page) .aichat-copy-menu button:hover {
+  background: var(--minimal-surface-soft) !important;
+}
+
+@media (max-width: 900px) {
+  body:not(.home-page) .aichat-shell {
+    grid-template-columns: 1fr !important;
+    gap: 24px;
+  }
+
+  body:not(.home-page) .aichat-dialogs,
+  body:not(.home-page) .aichat-main {
+    grid-column: 1 !important;
+  }
+
+  body:not(.home-page) .aichat-main {
+    min-height: calc(100vh - 210px);
+  }
+}
+
+/* Light-mode code blocks */
+body.theme-light:not(.home-page) .discussion-markdown-body :not(pre) > code {
+  padding: 0.14em 0.36em;
+  border: 1px solid rgba(10, 12, 14, 0.1) !important;
+  border-radius: 5px;
+  background: #ededeb !important;
+  color: #111315 !important;
+}
+
+body.theme-light:not(.home-page) .discussion-markdown-body pre {
+  padding: 16px 118px 16px 16px;
+  border: 1px solid rgba(10, 12, 14, 0.14) !important;
+  border-radius: 8px;
+  background: #f0f0ed !important;
+  color: #111315 !important;
+  box-shadow: none !important;
+}
+
+body.theme-light:not(.home-page) .discussion-markdown-body pre code,
+body.theme-light:not(.home-page) .discussion-markdown-body pre code.hljs,
+body.theme-light:not(.home-page) .aichat-bubble pre code,
+body.theme-light:not(.home-page) .aichat-bubble pre code.hljs {
+  display: block;
+  overflow-x: visible;
+  padding: 0;
+  border: 0 !important;
+  background: transparent !important;
+  color: #111315 !important;
+}
+
+body.theme-light:not(.home-page) .hljs-comment,
+body.theme-light:not(.home-page) .hljs-quote {
+  color: #6f757a !important;
+}
+
+body.theme-light:not(.home-page) .hljs-keyword,
+body.theme-light:not(.home-page) .hljs-selector-tag,
+body.theme-light:not(.home-page) .hljs-subst {
+  color: #7d3fb2 !important;
+}
+
+body.theme-light:not(.home-page) .hljs-string,
+body.theme-light:not(.home-page) .hljs-doctag,
+body.theme-light:not(.home-page) .hljs-regexp {
+  color: #126b45 !important;
+}
+
+body.theme-light:not(.home-page) .hljs-number,
+body.theme-light:not(.home-page) .hljs-literal,
+body.theme-light:not(.home-page) .hljs-variable,
+body.theme-light:not(.home-page) .hljs-template-variable {
+  color: #8a4b08 !important;
+}
+
+body.theme-light:not(.home-page) .hljs-title,
+body.theme-light:not(.home-page) .hljs-section,
+body.theme-light:not(.home-page) .hljs-selector-id {
+  color: #1f4f8f !important;
+}
+
+body.theme-light:not(.home-page) .hljs-type,
+body.theme-light:not(.home-page) .hljs-class .hljs-title {
+  color: #9a4d00 !important;
+}
+
+body.theme-light:not(.home-page) .code-copy-button,
+body.theme-light:not(.home-page) .code-run-button,
+body.theme-light:not(.home-page) .code-result-copy-button {
+  border-color: rgba(10, 12, 14, 0.14) !important;
+  background: #ffffff !important;
+  color: #111315 !important;
+}
+
+body.theme-light:not(.home-page) .code-copy-button img,
+body.theme-light:not(.home-page) .code-run-button img,
+body.theme-light:not(.home-page) .code-result-copy-button img {
+  filter: brightness(0) opacity(0.72) !important;
+}
+
+body.theme-light:not(.home-page) .code-copy-menu {
+  background: #ffffff !important;
+  border-color: rgba(10, 12, 14, 0.14) !important;
+  box-shadow: none !important;
+}
+
+body.theme-light:not(.home-page) .code-copy-menu button {
+  color: #111315 !important;
+}
+
+body.theme-light:not(.home-page) .code-copy-menu button:hover {
+  background: #ededeb !important;
+}
+
+body.theme-light:not(.home-page) .code-run-result {
+  border-color: rgba(10, 12, 14, 0.14) !important;
+  background: #f0f0ed !important;
+  color: #111315 !important;
+  box-shadow: none !important;
+}
+
+body.theme-light:not(.home-page) .code-run-output-label {
+  background: #ffffff !important;
+  border-color: rgba(10, 12, 14, 0.12) !important;
+  color: rgba(17, 19, 21, 0.62) !important;
+}
+
+.fortune-checkin-button,
+.electromagnetic-button {
+  min-height: 42px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.fortune-checkin-button:disabled,
+.electromagnetic-button:disabled {
+  cursor: default;
+  opacity: 0.56;
+}
+
+.fortune-records,
+.electromagnetic-section,
+.electromagnetic-balances {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.fortune-record-row,
+.electromagnetic-shop-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.fortune-record-empty,
+.electromagnetic-section p,
+.electromagnetic-shop-item p {
+  margin: 0;
+  color: var(--minimal-muted, rgba(244, 245, 245, 0.58));
+}
+
+.electromagnetic-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.electromagnetic-balances {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.electromagnetic-section h3 {
+  margin: 0;
+}
+
+.landing-heat-leaderboard {
+  display: grid;
+  gap: 22px;
+  padding: clamp(42px, 7vw, 82px) 0;
+  border-top: 1px solid var(--chalk-line);
+}
+
+.landing-heat-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.landing-heat-user {
+  display: grid;
+  grid-template-columns: auto 44px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--chalk-line);
+  color: var(--chalk-text);
+}
+
+.landing-heat-user img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.landing-heat-user span {
+  color: var(--chalk-yellow);
+  font-weight: 900;
+}
+
+.landing-heat-user strong,
+.landing-heat-user em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.landing-heat-user em {
+  grid-column: 3;
+  color: var(--chalk-muted);
+  font-style: normal;
+}
+
+.landing-heat-empty {
+  color: var(--chalk-muted);
+}
+
+body.theme-light:not(.home-page) .fortune-records,
+body.theme-light:not(.home-page) .electromagnetic-section,
+body.theme-light:not(.home-page) .electromagnetic-balances,
+body.theme-light:not(.home-page) .fortune-record-row,
+body.theme-light:not(.home-page) .electromagnetic-shop-item {
+  border-color: var(--minimal-line) !important;
+}
+
+body.theme-light:not(.home-page) .fortune-checkin-button,
+body.theme-light:not(.home-page) .electromagnetic-button {
+  border-color: var(--minimal-line-strong);
+  color: var(--minimal-text);
+}
+
+body.theme-light:not(.home-page) .fortune-record-empty,
+body.theme-light:not(.home-page) .electromagnetic-section p,
+body.theme-light:not(.home-page) .electromagnetic-shop-item p {
+  color: var(--minimal-muted);
+}
+
+@media (max-width: 760px) {
+  .landing-heat-list,
+  .fortune-record-row,
+  .electromagnetic-shop-item {
+    grid-template-columns: 1fr;
+  }
+}
+
+.economy-page .economy-auth-required,
+.economy-page .economy-shell {
+  display: none;
+}
+
+.economy-page:not(.is-economy-authenticated) .economy-auth-required,
+.economy-page.is-economy-authenticated .economy-shell {
+  display: block;
+}
+
+.economy-main {
+  min-height: 100dvh;
+}
+
+.economy-auth-required,
+.economy-shell {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+}
+
+.economy-auth-required h1,
+.economy-header h1 {
+  margin: 0;
+  color: var(--chalk-text);
+  font-family: "Caveat", "Ma Shan Zheng", var(--font-display);
+  font-size: clamp(3.4rem, 8vw, 6.8rem);
+  line-height: 0.9;
+  letter-spacing: 0;
+}
+
+.economy-auth-required p,
+.economy-header p,
+.economy-heat-panel p,
+.shop-item-copy p,
+.inventory-item-copy p {
+  color: var(--chalk-muted);
+}
+
+.economy-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--chalk-line);
+}
+
+.economy-header > div {
+  display: grid;
+  gap: 10px;
+  max-width: 720px;
+}
+
+.economy-inventory-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--chalk-line-strong);
+  border-radius: 999px;
+  color: var(--chalk-text);
+  text-decoration: none;
+  background: rgba(244, 240, 223, 0.06);
+}
+
+.economy-inventory-link img {
+  width: 18px;
+  height: 18px;
+  filter: invert(93%) sepia(13%) saturate(476%) hue-rotate(5deg) brightness(104%) contrast(91%);
+}
+
+.economy-balance-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 22px 0;
+}
+
+.economy-heat-panel,
+.shop-item-card,
+.inventory-item-row {
+  border: 1px solid var(--chalk-line);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(244, 240, 223, 0.055), rgba(244, 240, 223, 0.02)),
+    rgba(5, 6, 5, 0.76);
+}
+
+.economy-heat-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: clamp(18px, 3vw, 28px);
+  margin-bottom: 26px;
+}
+
+.economy-heat-panel h2,
+.economy-section-head h2,
+.shop-item-copy h2,
+.inventory-item-copy h2 {
+  margin: 0;
+  color: var(--chalk-text);
+  letter-spacing: 0;
+}
+
+.economy-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+}
+
+.shop-item-card {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 18px;
+  min-height: 360px;
+  padding: 18px;
+}
+
+.shop-item-image,
+.inventory-item-image {
+  display: grid;
+  place-items: center;
+  background: rgba(244, 240, 223, 0.06);
+  border: 1px dashed rgba(244, 240, 223, 0.2);
+}
+
+.shop-item-image {
+  min-height: 150px;
+}
+
+.shop-item-image img,
+.inventory-item-image img {
+  width: 54px;
+  height: 54px;
+  filter: invert(93%) sepia(13%) saturate(476%) hue-rotate(5deg) brightness(104%) contrast(91%);
+}
+
+.shop-item-copy,
+.inventory-item-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.shop-item-copy strong,
+.inventory-item-copy strong {
+  color: var(--chalk-yellow);
+}
+
+.shop-item-actions,
+.inventory-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.inventory-list {
+  display: grid;
+  gap: 14px;
+}
+
+.inventory-item-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 16px;
+}
+
+.inventory-item-image {
+  width: 96px;
+  aspect-ratio: 1;
+}
+
+body.theme-light:not(.home-page) .economy-auth-required h1,
+body.theme-light:not(.home-page) .economy-header h1,
+body.theme-light:not(.home-page) .economy-heat-panel h2,
+body.theme-light:not(.home-page) .economy-section-head h2,
+body.theme-light:not(.home-page) .shop-item-copy h2,
+body.theme-light:not(.home-page) .inventory-item-copy h2,
+body.theme-light:not(.home-page) .economy-inventory-link {
+  color: var(--minimal-text);
+}
+
+body.theme-light:not(.home-page) .economy-auth-required p,
+body.theme-light:not(.home-page) .economy-header p,
+body.theme-light:not(.home-page) .economy-heat-panel p,
+body.theme-light:not(.home-page) .shop-item-copy p,
+body.theme-light:not(.home-page) .inventory-item-copy p {
+  color: var(--minimal-muted);
+}
+
+body.theme-light:not(.home-page) .economy-heat-panel,
+body.theme-light:not(.home-page) .shop-item-card,
+body.theme-light:not(.home-page) .inventory-item-row,
+body.theme-light:not(.home-page) .economy-inventory-link {
+  border-color: var(--minimal-line);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+body.theme-light:not(.home-page) .shop-item-image,
+body.theme-light:not(.home-page) .inventory-item-image {
+  border-color: rgba(18, 22, 18, 0.16);
+  background: rgba(18, 22, 18, 0.04);
+}
+
+body.theme-light:not(.home-page) .shop-item-image img,
+body.theme-light:not(.home-page) .inventory-item-image img,
+body.theme-light:not(.home-page) .economy-inventory-link img {
+  filter: none;
+}
+
+@media (max-width: 760px) {
+  .economy-header,
+  .economy-heat-panel,
+  .economy-section-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .inventory-item-row {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .inventory-item-image {
+    width: 72px;
+  }
+
+  .inventory-item-actions {
+    grid-column: 1 / -1;
+  }
+}

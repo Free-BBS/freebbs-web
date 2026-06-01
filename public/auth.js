@@ -15,6 +15,7 @@ const API_BASE_URL = (() => {
 })();
 
 const STORAGE_KEY = "free_bbs_auth_token";
+const THEME_STORAGE_KEY = "free_bbs_theme_mode";
 
 const authForm = document.getElementById("auth-page-form");
 const authMessage = document.getElementById("auth-message");
@@ -24,6 +25,43 @@ const authMajorFixed = document.getElementById("auth-major-fixed");
 const EMAIL_CODE_RESEND_SECONDS = 60;
 let emailCodeCountdownTimer = null;
 let emailCodeCountdownRemaining = 0;
+
+function getStoredThemeMode() {
+  return localStorage.getItem(THEME_STORAGE_KEY) === "light" ? "light" : "dark";
+}
+
+function applyThemeMode(mode) {
+  const normalizedMode = mode === "light" ? "light" : "dark";
+  document.body.classList.toggle("theme-light", normalizedMode === "light");
+  document.body.classList.toggle("theme-dark", normalizedMode !== "light");
+  document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+    const isLight = normalizedMode === "light";
+    button.setAttribute("aria-pressed", String(isLight));
+    button.textContent = isLight ? "暗色模式" : "明亮模式";
+    button.setAttribute("aria-label", isLight ? "切换到暗色模式" : "切换到明亮模式");
+  });
+}
+
+function toggleThemeMode() {
+  const nextMode = document.body.classList.contains("theme-light") ? "dark" : "light";
+  localStorage.setItem(THEME_STORAGE_KEY, nextMode);
+  applyThemeMode(nextMode);
+}
+
+function initializeThemeMode() {
+  if (document.querySelector("[data-theme-toggle]")) {
+    applyThemeMode(getStoredThemeMode());
+    return;
+  }
+
+  const button = document.createElement("button");
+  button.className = "theme-toggle auth-theme-toggle";
+  button.type = "button";
+  button.dataset.themeToggle = "true";
+  button.addEventListener("click", toggleThemeMode);
+  document.body.appendChild(button);
+  applyThemeMode(getStoredThemeMode());
+}
 
 function setMessage(message) {
   authMessage.textContent = message || "";
@@ -203,3 +241,4 @@ sendEmailCodeButton?.addEventListener("click", handleSendEmailCode);
 authMajorFixed?.addEventListener("click", () => {
   window.alert("目前只开放给电子系同学");
 });
+initializeThemeMode();
