@@ -4,7 +4,9 @@
       "key": "differential_converter",
       "assetKey": "differential_converter",
       "name": "微分器",
-      "description": "购买后可以在仓库中使用，把 5 个电元转化为 5 个磁元，或反向转换。",
+      "class": "converter",
+      "description": "一次性转换资产。",
+      "desc": "上帝说：\n【此处省略四行】。\n于是便有了光。",
       "image": "/assets/icons/battery.svg",
       "cost": {
         "electric": 1,
@@ -13,6 +15,19 @@
       "use": {
         "type": "currency_converter",
         "amount": 5
+      }
+    },
+    {
+      "key": "fishbone",
+      "assetKey": "fishbone",
+      "name": "鱼骨头",
+      "class": "useless",
+      "description": "一个鱼骨头",
+      "desc": "一个鱼骨头，没有人知道是哪里来的。也许是某个不小心吃鱼时掉落的，也可能是某个不小心吃鱼时捡到的。总之它就是一个鱼骨头，没有什么用处。",
+      "image": "/assets/icons/fishbone.svg",
+      "cost": {
+        "electric": 5,
+        "magnetic": 5
       }
     }
   ]

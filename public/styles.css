@@ -9006,6 +9006,10 @@ body:not(.home-page).auth-page-body .site-footer {
 
 /* Theme switcher */
 body:not(.home-page) .theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   min-height: 38px;
   border: 1px solid var(--minimal-line-strong) !important;
   border-radius: 999px !important;
@@ -9019,6 +9023,11 @@ body:not(.home-page) .theme-toggle {
   letter-spacing: 0;
   text-align: center;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+body:not(.home-page) .theme-toggle-icon {
+  width: 18px;
+  height: 18px;
 }
 
 body:not(.home-page) .theme-toggle:hover {
@@ -9732,16 +9741,19 @@ body.theme-light:not(.home-page) .electromagnetic-shop-item p {
 
 .shop-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .shop-item-card {
+  position: relative;
   display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: 18px;
-  min-height: 360px;
-  padding: 18px;
+  grid-template-rows: 44% minmax(0, 1fr) auto;
+  gap: 8px;
+  aspect-ratio: 3 / 4;
+  min-height: 0;
+  padding: 10px;
+  overflow: hidden;
 }
 
 .shop-item-image,
@@ -9753,20 +9765,50 @@ body.theme-light:not(.home-page) .electromagnetic-shop-item p {
 }
 
 .shop-item-image {
-  min-height: 150px;
+  min-height: 0;
 }
 
 .shop-item-image img,
 .inventory-item-image img {
-  width: 54px;
-  height: 54px;
+  width: clamp(32px, 4vw, 54px);
+  height: clamp(32px, 4vw, 54px);
   filter: invert(93%) sepia(13%) saturate(476%) hue-rotate(5deg) brightness(104%) contrast(91%);
 }
 
 .shop-item-copy,
 .inventory-item-copy {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
+}
+
+.shop-item-copy .discussion-kicker {
+  display: none;
+}
+
+.shop-item-copy h2,
+.inventory-item-copy h2 {
+  overflow: hidden;
+  margin: 0;
+  font-size: clamp(0.9rem, 1.2vw, 1.05rem);
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shop-item-copy p,
+.inventory-item-copy p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.shop-item-copy strong,
+.inventory-item-copy strong {
+  font-size: 0.78rem;
 }
 
 .shop-item-copy strong,
@@ -9776,27 +9818,165 @@ body.theme-light:not(.home-page) .electromagnetic-shop-item p {
 
 .shop-item-actions,
 .inventory-item-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  gap: 6px;
+}
+
+.shop-item-actions {
+  grid-template-columns: 1fr;
+}
+
+.inventory-item-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.shop-inspect-panel {
+  width: min(720px, calc(100vw - 28px));
+}
+
+.shop-inspect-layout {
+  display: grid;
+  grid-template-columns: minmax(160px, 240px) minmax(0, 1fr);
+  gap: 22px;
+  align-items: stretch;
+}
+
+.shop-inspect-image {
+  display: grid;
+  place-items: center;
+  min-height: 280px;
+  border: 1px dashed var(--chalk-line-strong);
+  background: rgba(244, 240, 223, 0.06);
+}
+
+.shop-inspect-image img {
+  width: min(120px, 48%);
+  aspect-ratio: 1;
+  filter: invert(93%) sepia(13%) saturate(476%) hue-rotate(5deg) brightness(104%) contrast(91%);
+}
+
+.shop-inspect-copy {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.shop-inspect-copy h2 {
+  margin: 0;
+  color: var(--chalk-text);
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  line-height: 1;
+}
+
+.shop-inspect-copy p {
+  margin: 0;
+  color: var(--chalk-muted);
+  line-height: 1.7;
+}
+
+.shop-inspect-copy strong {
+  color: var(--chalk-yellow);
+}
+
+.shop-inspect-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.economy-activation-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.economy-activation-button img {
+  width: 18px;
+  height: 18px;
+}
+
+.economy-activation-button[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 10;
+  width: max-content;
+  max-width: 220px;
+  padding: 7px 9px;
+  border: 1px solid var(--chalk-line);
+  border-radius: 6px;
+  background: rgba(5, 6, 5, 0.94);
+  color: var(--chalk-text);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.economy-activation-button[data-tooltip]:hover::after,
+.economy-activation-button[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.shop-item-actions .electromagnetic-button,
+.inventory-item-actions .electromagnetic-button {
+  min-height: 30px;
+  padding: 5px 6px;
+  border-radius: 7px;
+  font-size: 0.68rem;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .inventory-list {
   display: grid;
-  gap: 14px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .inventory-item-row {
+  position: relative;
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 18px;
-  padding: 16px;
+  grid-template-rows: 56% minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 8px;
+  aspect-ratio: 3 / 4;
+  padding: 10px;
+  overflow: hidden;
 }
 
 .inventory-item-image {
-  width: 96px;
-  aspect-ratio: 1;
+  width: auto;
+  min-height: 0;
+}
+
+.inventory-item-copy {
+  align-content: center;
+}
+
+.asset-quantity-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid rgba(244, 240, 223, 0.28);
+  border-radius: 999px;
+  background: rgba(5, 6, 5, 0.82);
+  color: var(--chalk-yellow);
+  font-size: 0.72rem;
+  font-weight: 900;
 }
 
 body.theme-light:not(.home-page) .economy-auth-required h1,
@@ -9833,8 +10013,30 @@ body.theme-light:not(.home-page) .inventory-item-image {
 
 body.theme-light:not(.home-page) .shop-item-image img,
 body.theme-light:not(.home-page) .inventory-item-image img,
-body.theme-light:not(.home-page) .economy-inventory-link img {
+body.theme-light:not(.home-page) .economy-inventory-link img,
+body.theme-light:not(.home-page) .shop-inspect-image img {
   filter: none;
+}
+
+body.theme-light:not(.home-page) .asset-quantity-badge {
+  border-color: var(--minimal-line);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--minimal-text);
+}
+
+body.theme-light:not(.home-page) .shop-inspect-image,
+body.theme-light:not(.home-page) .economy-activation-button[data-tooltip]::after {
+  border-color: var(--minimal-line);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--minimal-text);
+}
+
+body.theme-light:not(.home-page) .shop-inspect-copy h2 {
+  color: var(--minimal-text);
+}
+
+body.theme-light:not(.home-page) .shop-inspect-copy p {
+  color: var(--minimal-muted);
 }
 
 @media (max-width: 760px) {
@@ -9845,15 +10047,46 @@ body.theme-light:not(.home-page) .economy-inventory-link img {
     flex-direction: column;
   }
 
-  .inventory-item-row {
-    grid-template-columns: 72px minmax(0, 1fr);
-  }
-
-  .inventory-item-image {
-    width: 72px;
+  .shop-grid,
+  .inventory-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
   }
 
   .inventory-item-actions {
-    grid-column: 1 / -1;
+    grid-column: auto;
+  }
+
+  .shop-item-card,
+  .inventory-item-row {
+    padding: 8px;
+    gap: 7px;
+  }
+
+  .shop-item-copy p,
+  .inventory-item-copy p {
+    -webkit-line-clamp: 2;
+    font-size: 0.68rem;
+  }
+
+  .shop-item-actions,
+  .inventory-item-actions {
+    gap: 4px;
+  }
+
+  .shop-inspect-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .shop-inspect-image {
+    min-height: 180px;
+  }
+
+  .shop-item-actions .electromagnetic-button,
+  .inventory-item-actions .electromagnetic-button {
+    width: 100%;
+    min-height: 24px;
+    padding: 3px 4px;
+    font-size: 0.58rem;
   }
 }
