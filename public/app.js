@@ -4146,6 +4146,65 @@ async function handleCodeRunClick(event) {
   }
 }
 
+function initializeLandingMotion() {
+  const landingMain = document.querySelector(".landing-main");
+  if (!landingMain) {
+    return;
+  }
+
+  const revealSelectors = [
+    ".landing-hero .hero-copy > *",
+    ".landing-hero .hero-visual",
+    ".landing-bridge",
+    ".landing-section-copy > *",
+    ".landing-mission-path article",
+    ".landing-product-card",
+    ".landing-roadmap-track article"
+  ];
+  const revealElements = document.querySelectorAll(revealSelectors.join(","));
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  revealElements.forEach((element, index) => {
+    element.classList.add("landing-reveal");
+    element.style.setProperty("--reveal-index", String(index % 6));
+
+    if (prefersReducedMotion) {
+      element.classList.add("is-visible");
+    }
+  });
+
+  if (!prefersReducedMotion && "IntersectionObserver" in window) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) {
+            return;
+          }
+
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        });
+      },
+      {
+        rootMargin: "0px 0px -12% 0px",
+        threshold: 0.16
+      }
+    );
+
+    revealElements.forEach((element) => observer.observe(element));
+  } else {
+    revealElements.forEach((element) => element.classList.add("is-visible"));
+  }
+
+  document.querySelectorAll(".landing-product-card").forEach((card) => {
+    card.addEventListener("pointermove", (event) => {
+      const rect = card.getBoundingClientRect();
+      card.style.setProperty("--mx", `${event.clientX - rect.left}px`);
+      card.style.setProperty("--my", `${event.clientY - rect.top}px`);
+    });
+  });
+}
+
 userName.addEventListener("click", handleAuthEntry);
 userSettingsButton?.addEventListener("click", handleUserSettingsClick);
 userLogoutButton?.addEventListener("click", handleUserLogoutClick);
@@ -4219,6 +4278,7 @@ renderAdminSection();
 renderSettingsForm();
 renderDiscussionComposerState();
 loadHomeDiscussionPosts();
+initializeLandingMotion();
 initializeDiscussionPage();
 initializeAiChatPage();
 loadPublicProfile();
