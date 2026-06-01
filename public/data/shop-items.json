@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "key": "differential_converter",
+      "assetKey": "differential_converter",
+      "name": "微分器",
+      "description": "购买后可以在仓库中使用，把 5 个电元转化为 5 个磁元，或反向转换。",
+      "image": "/assets/icons/battery.svg",
+      "cost": {
+        "electric": 1,
+        "magnetic": 1
+      },
+      "use": {
+        "type": "currency_converter",
+        "amount": 5
+      }
+    }
+  ]
+}

@@ -25,7 +25,8 @@ module.exports = {
     port: Number(process.env.MYSQL_PORT || 3306),
     user: process.env.MYSQL_USER || "root",
     password: process.env.MYSQL_PASSWORD || "",
-    database: process.env.MYSQL_DATABASE || "free_bbs"
+    database: process.env.MYSQL_DATABASE || "free_bbs",
+    ...(process.env.MYSQL_SOCKET ? { socketPath: process.env.MYSQL_SOCKET } : {})
   },
   authSecret: process.env.AUTH_SECRET || "free-bbs-dev-secret",
   agentBaseUrl: process.env.AGENT_URL || "http://127.0.0.1:5001",

@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
     role ENUM('student', 'ta', 'teacher', 'admin') DEFAULT 'student',
     electrons BIGINT NOT NULL DEFAULT 0,
     manetrons BIGINT NOT NULL DEFAULT 0,
+    heat BIGINT NOT NULL DEFAULT 0,
     grade VARCHAR(16),
     major VARCHAR(64),
     avatar_path VARCHAR(255) NULL,
@@ -54,6 +55,36 @@ CREATE TABLE IF NOT EXISTS user_fortunes (
         ON DELETE CASCADE,
     UNIQUE KEY uq_user_fortunes_user_date (user_id, fortune_date),
     INDEX idx_user_fortunes_user_date (user_id, fortune_date)
+);
+
+CREATE TABLE IF NOT EXISTS user_assets (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    asset_key VARCHAR(64) NOT NULL,
+    quantity BIGINT NOT NULL DEFAULT 0,
+    metadata_json JSON NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_user_assets_user
+        FOREIGN KEY (user_id) REFERENCES users (id)
+        ON DELETE CASCADE,
+    UNIQUE KEY uq_user_assets_user_asset (user_id, asset_key),
+    INDEX idx_user_assets_asset_key (asset_key)
+);
+
+CREATE TABLE IF NOT EXISTS user_checkins (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    checkin_date DATE NOT NULL,
+    streak_count INT NOT NULL DEFAULT 1,
+    reward_electrons INT NOT NULL DEFAULT 1,
+    fortune_score INT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_user_checkins_user
+        FOREIGN KEY (user_id) REFERENCES users (id)
+        ON DELETE CASCADE,
+    UNIQUE KEY uq_user_checkins_user_date (user_id, checkin_date),
+    INDEX idx_user_checkins_user_date (user_id, checkin_date)
 );
 
 CREATE TABLE IF NOT EXISTS ai_dialogs (

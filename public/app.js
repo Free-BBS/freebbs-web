@@ -18,6 +18,7 @@ const DEFAULT_AVATAR = "/assets/avatar_placeholder.webp";
 const MAX_AGENT_AVATAR = "/assets/max_the_agent_avatar.webp";
 
 const STORAGE_KEY = "free_bbs_auth_token";
+const THEME_STORAGE_KEY = "free_bbs_theme_mode";
 const userState = {
   isLoggedIn: false,
   token: localStorage.getItem(STORAGE_KEY) || "",
@@ -30,6 +31,7 @@ const userState = {
   websiteUrl: "",
   electrons: 0,
   manetrons: 0,
+  heat: 0,
   fortuneBonusEnabled: false
 };
 
@@ -46,6 +48,8 @@ const fortuneBonusToggle = document.getElementById("fortune-bonus-toggle");
 const manageLinks = document.querySelectorAll(".manage-link");
 const fortuneLinks = document.querySelectorAll(".fortune-link");
 const avatarImages = document.querySelectorAll(".avatar-image");
+let electromagneticLinks = Array.from(document.querySelectorAll(".electromagnetic-link"));
+let inventoryLinks = Array.from(document.querySelectorAll(".inventory-link"));
 const settingsForm = document.getElementById("settings-form");
 const settingsMessage = document.getElementById("settings-message");
 const settingsFullName = document.getElementById("settings-full-name");
@@ -113,6 +117,120 @@ const aiChatState = {
   isSending: false,
   statusTimer: 0
 };
+
+function getStoredThemeMode() {
+  return localStorage.getItem(THEME_STORAGE_KEY) === "light" ? "light" : "dark";
+}
+
+function applyThemeMode(mode) {
+  if (document.body.classList.contains("home-page")) {
+    return;
+  }
+
+  const normalizedMode = mode === "light" ? "light" : "dark";
+  document.body.classList.toggle("theme-light", normalizedMode === "light");
+  document.body.classList.toggle("theme-dark", normalizedMode !== "light");
+  document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+    const isLight = normalizedMode === "light";
+    button.setAttribute("aria-pressed", String(isLight));
+    button.textContent = isLight ? "暗色模式" : "明亮模式";
+    button.setAttribute("aria-label", isLight ? "切换到暗色模式" : "切换到明亮模式");
+  });
+}
+
+function toggleThemeMode() {
+  const nextMode = document.body.classList.contains("theme-light") ? "dark" : "light";
+  localStorage.setItem(THEME_STORAGE_KEY, nextMode);
+  applyThemeMode(nextMode);
+}
+
+function createThemeToggleButton(className) {
+  const button = document.createElement("button");
+  button.className = className;
+  button.type = "button";
+  button.dataset.themeToggle = "true";
+  button.addEventListener("click", toggleThemeMode);
+  return button;
+}
+
+function initializeThemeMode() {
+  if (document.body.classList.contains("home-page")) {
+    return;
+  }
+
+  const navActions = document.querySelector(".nav-actions");
+  const mobileNav = document.querySelector(".mobile-nav");
+
+  if (navActions && !navActions.querySelector("[data-theme-toggle]")) {
+    const userPanel = navActions.querySelector(".user-panel");
+    const themeButton = createThemeToggleButton("theme-toggle nav-link");
+    navActions.insertBefore(themeButton, userPanel || null);
+  }
+
+  if (mobileNav && !mobileNav.querySelector("[data-theme-toggle]")) {
+    mobileNav.appendChild(createThemeToggleButton("theme-toggle mobile-theme-toggle"));
+  }
+
+  applyThemeMode(getStoredThemeMode());
+}
+
+function createNavLink({ href = "#", icon, text, className = "" }) {
+  const link = document.createElement("a");
+  link.className = `nav-link ${className}`.trim();
+  link.href = href;
+  link.innerHTML = `
+    <img class="nav-icon" src="/assets/icons/${icon}.svg" alt="" aria-hidden="true" />
+    <span>${escapeHtml(text)}</span>
+  `;
+  return link;
+}
+
+function initializeEconomyNavigation() {
+  fortuneLinks.forEach((link) => {
+    const text = link.querySelector("span");
+    const icon = link.querySelector("img");
+    if (text) {
+      text.textContent = "签到";
+    }
+    if (icon) {
+      icon.src = "/assets/icons/electron.svg";
+    }
+  });
+
+  document.querySelectorAll(".nav-actions, .mobile-nav").forEach((nav) => {
+    let electromagneticLink = nav.querySelector(".electromagnetic-link");
+    if (!electromagneticLink) {
+      electromagneticLink = createNavLink({
+        href: "/electromagnetic",
+        icon: "battery",
+        text: "电磁场",
+        className: "electromagnetic-link hidden"
+      });
+      const manageLink = nav.querySelector(".manage-link");
+      nav.insertBefore(electromagneticLink, manageLink || null);
+    }
+
+    if (!electromagneticLinks.includes(electromagneticLink)) {
+      electromagneticLinks.push(electromagneticLink);
+    }
+
+    let inventoryLink = nav.querySelector(".inventory-link");
+    if (!inventoryLink) {
+      inventoryLink = createNavLink({
+        href: "/inventory",
+        icon: "inventory",
+        text: "仓库",
+        className: "inventory-link hidden"
+      });
+      const manageLink = nav.querySelector(".manage-link");
+      nav.insertBefore(inventoryLink, manageLink || null);
+    }
+
+    if (!inventoryLinks.includes(inventoryLink)) {
+      inventoryLinks.push(inventoryLink);
+    }
+  });
+}
 const FALLBACK_DISCUSSION_BOARDS = [
   {
     id: -1,
@@ -277,15 +395,15 @@ function ensureFortuneModal() {
     <div class="fortune-backdrop" data-action="close"></div>
     <section class="fortune-panel" aria-labelledby="fortune-title">
       <button class="fortune-close" type="button" data-action="close" aria-label="关闭">×</button>
-      <h2 class="fortune-title" id="fortune-title">今日运势</h2>
+      <h2 class="fortune-title" id="fortune-title">签到</h2>
       <p class="fortune-date" id="fortune-date"></p>
       <div class="fortune-badge" id="fortune-badge"></div>
       <p class="fortune-score" id="fortune-score"></p>
       <p class="fortune-tagline" id="fortune-tagline"></p>
-      <div class="fortune-chart-wrap">
-        <canvas class="fortune-chart" id="fortune-chart" width="720" height="260" aria-label="近一个月运势曲线"></canvas>
+      <button class="fortune-checkin-button" id="fortune-checkin-button" type="button">签到</button>
+      <div class="fortune-records" id="fortune-records" aria-label="签到记录">
       </div>
-      <p class="fortune-chart-caption" id="fortune-chart-caption"></p>
+      <p class="fortune-chart-caption" id="fortune-chart-caption">签到记录</p>
     </section>
   `;
 
@@ -397,7 +515,8 @@ async function openFortuneModal() {
   const date = modal.querySelector("#fortune-date");
   const score = modal.querySelector("#fortune-score");
   const tagline = modal.querySelector("#fortune-tagline");
-  const chart = modal.querySelector("#fortune-chart");
+  const checkinButton = modal.querySelector("#fortune-checkin-button");
+  const records = modal.querySelector("#fortune-records");
   const chartCaption = modal.querySelector("#fortune-chart-caption");
 
   modal.classList.remove("hidden");
@@ -406,26 +525,480 @@ async function openFortuneModal() {
   date.textContent = "";
   score.textContent = "";
   tagline.textContent = "";
-  chartCaption.textContent = "";
+  chartCaption.textContent = "签到记录";
+  records.innerHTML = `<p class="fortune-record-empty">正在加载签到记录...</p>`;
+  checkinButton.disabled = true;
+  checkinButton.textContent = "加载中";
 
-  try {
-    const payload = await callApi("/fortune", {
-      method: "GET"
-    });
+  const renderCheckinPayload = (payload) => {
     userState.fortuneBonusEnabled = Boolean(payload.fortuneBonusEnabled);
-    const result = getFortuneResult(Number(payload.today.score), payload.today.date);
+    if (payload.user) {
+      saveSession(userState.token, payload.user);
+    }
+    const today = payload.today || payload.todayFortune;
+    const result = getFortuneResult(Number(today?.fortuneScore ?? today?.score ?? 0), today?.date);
 
     badge.className = `fortune-badge ${result.colorClass}`;
     badge.textContent = result.label;
     date.textContent = result.date;
-    score.textContent = `运势得分 ${result.score}`;
+    score.textContent = `今日运势 ${result.score}`;
     tagline.textContent = result.tagline;
-    chartCaption.textContent = "近一个月运势曲线";
-    window.requestAnimationFrame(() => drawFortuneChart(chart, payload.history || []));
+    checkinButton.disabled = Boolean(payload.checkedInToday);
+    checkinButton.textContent = payload.checkedInToday ? "今日已签到" : "签到领取电元";
+    records.innerHTML = (payload.records || []).length
+      ? payload.records.map((item) => `
+          <div class="fortune-record-row">
+            <span>${escapeHtml(item.date)}</span>
+            <strong>连续 ${Number(item.streak || 0)} 天</strong>
+            <span>+${Number(item.rewardElectrons || 0)} 电元</span>
+          </div>
+        `).join("")
+      : `<p class="fortune-record-empty">还没有签到记录。</p>`;
+  };
+
+  try {
+    const payload = await callApi("/checkin", { method: "GET" });
+    renderCheckinPayload(payload);
+    checkinButton.onclick = async () => {
+      checkinButton.disabled = true;
+      checkinButton.textContent = "签到中";
+      const nextPayload = await callApi("/checkin", { method: "POST" });
+      renderCheckinPayload(nextPayload.summary ? {
+        ...nextPayload.summary,
+        user: nextPayload.user
+      } : nextPayload);
+    };
   } catch (error) {
     badge.className = "fortune-badge fortune-awful";
     badge.textContent = "失败";
-    tagline.textContent = error.message || "获取运势失败";
+    tagline.textContent = error.message || "获取签到失败";
+    checkinButton.disabled = false;
+    checkinButton.textContent = "重试";
+  }
+}
+
+function ensureElectromagneticModal() {
+  let modal = document.getElementById("electromagnetic-modal");
+
+  if (modal) {
+    return modal;
+  }
+
+  modal = document.createElement("div");
+  modal.id = "electromagnetic-modal";
+  modal.className = "fortune-modal electromagnetic-modal hidden";
+  modal.innerHTML = `
+    <div class="fortune-backdrop" data-action="close"></div>
+    <section class="fortune-panel electromagnetic-panel" aria-labelledby="electromagnetic-title">
+      <button class="fortune-close" type="button" data-action="close" aria-label="关闭">×</button>
+      <h2 class="fortune-title" id="electromagnetic-title">电磁场</h2>
+      <p class="fortune-tagline">用电元或磁元购买资产，或兑换热力。</p>
+      <div class="electromagnetic-balances" id="electromagnetic-balances"></div>
+      <section class="electromagnetic-section">
+        <h3>热力</h3>
+        <p>消耗 1 个电元或 1 个磁元，可以获得 1 点热力。每日 24:00 热力减半并向上取整。</p>
+        <div class="electromagnetic-actions">
+          <button class="electromagnetic-button" data-action="buy-heat" data-currency="electric" type="button">用电元 +1 热力</button>
+          <button class="electromagnetic-button" data-action="buy-heat" data-currency="magnetic" type="button">用磁元 +1 热力</button>
+        </div>
+      </section>
+      <section class="electromagnetic-section">
+        <h3>商店</h3>
+        <article class="electromagnetic-shop-item">
+          <div>
+            <strong>微分器</strong>
+            <p>消耗 1 个电元或 1 个磁元购买。拥有后可在电元和磁元之间按 5:5 转换。</p>
+          </div>
+          <div class="electromagnetic-actions">
+            <button class="electromagnetic-button" data-action="buy-differentiator" data-currency="electric" type="button">电元购买</button>
+            <button class="electromagnetic-button" data-action="buy-differentiator" data-currency="magnetic" type="button">磁元购买</button>
+          </div>
+        </article>
+      </section>
+      <section class="electromagnetic-section">
+        <h3>资产</h3>
+        <div id="electromagnetic-assets"></div>
+        <div class="electromagnetic-actions">
+          <button class="electromagnetic-button" data-action="convert" data-direction="electric_to_magnetic" type="button">5 电元 → 5 磁元</button>
+          <button class="electromagnetic-button" data-action="convert" data-direction="magnetic_to_electric" type="button">5 磁元 → 5 电元</button>
+        </div>
+      </section>
+      <p class="discussion-message" id="electromagnetic-message"></p>
+    </section>
+  `;
+  document.body.append(modal);
+  modal.addEventListener("click", handleElectromagneticModalClick);
+  return modal;
+}
+
+function renderElectromagneticModal(payload) {
+  const modal = ensureElectromagneticModal();
+  const balances = modal.querySelector("#electromagnetic-balances");
+  const assets = modal.querySelector("#electromagnetic-assets");
+
+  if (payload.user) {
+    saveSession(userState.token, payload.user);
+  }
+
+  balances.innerHTML = [
+    renderCurrency("electric", userState.electrons),
+    renderCurrency("magnetic", userState.manetrons),
+    renderCurrency("heat", userState.heat)
+  ].join("");
+
+  const assetRows = payload.assets || [];
+  const differentiator = assetRows.find((item) => item.key === "differential_converter");
+  assets.innerHTML = differentiator
+    ? `<p>微分器 × ${Number(differentiator.quantity || 0)}</p>`
+    : `<p>还没有资产。</p>`;
+}
+
+async function openElectromagneticModal() {
+  if (!userState.isLoggedIn) {
+    openModal("login");
+    return;
+  }
+
+  const modal = ensureElectromagneticModal();
+  const message = modal.querySelector("#electromagnetic-message");
+  modal.classList.remove("hidden");
+  message.textContent = "正在加载...";
+
+  try {
+    const payload = await callApi("/electromagnetic", { method: "GET" });
+    renderElectromagneticModal(payload);
+    message.textContent = "";
+  } catch (error) {
+    message.textContent = error.message;
+  }
+}
+
+async function handleElectromagneticModalClick(event) {
+  const close = event.target.closest("[data-action='close']");
+  if (close) {
+    ensureElectromagneticModal().classList.add("hidden");
+    return;
+  }
+
+  const button = event.target.closest("[data-action]");
+  if (!button || button.dataset.action === "close") {
+    return;
+  }
+
+  const modal = ensureElectromagneticModal();
+  const message = modal.querySelector("#electromagnetic-message");
+  const action = button.dataset.action;
+  button.disabled = true;
+  message.textContent = "处理中...";
+
+  try {
+    let payload;
+    if (action === "buy-heat") {
+      payload = await callApi("/electromagnetic/heat", {
+        method: "POST",
+        body: JSON.stringify({ currency: button.dataset.currency })
+      });
+      payload.assets = await getCurrentAssets();
+    } else if (action === "buy-differentiator") {
+      payload = await callApi("/electromagnetic/shop/differential-converter", {
+        method: "POST",
+        body: JSON.stringify({ currency: button.dataset.currency })
+      });
+    } else if (action === "convert") {
+      payload = await callApi("/electromagnetic/convert", {
+        method: "POST",
+        body: JSON.stringify({ direction: button.dataset.direction })
+      });
+    }
+
+    if (payload) {
+      renderElectromagneticModal(payload);
+      message.textContent = "已更新";
+      loadHeatLeaderboard();
+    }
+  } catch (error) {
+    message.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function getCurrentAssets() {
+  const payload = await callApi("/electromagnetic", { method: "GET" });
+  return payload.assets || [];
+}
+
+function renderEconomyBalances(target, user = userState) {
+  if (!target) {
+    return;
+  }
+
+  target.innerHTML = [
+    renderCurrency("electric", user.electrons ?? 0),
+    renderCurrency("magnetic", user.manetrons ?? 0),
+    renderCurrency("heat", user.heat ?? 0)
+  ].join("");
+}
+
+function renderShopCost(cost = {}) {
+  const parts = [];
+
+  if (Number(cost.electric || 0) > 0) {
+    parts.push(`${Number(cost.electric)} 电元`);
+  }
+
+  if (Number(cost.magnetic || 0) > 0) {
+    parts.push(`${Number(cost.magnetic)} 磁元`);
+  }
+
+  return parts.join(" / ") || "未定价";
+}
+
+async function loadElectromagneticPage() {
+  if (!isElectromagneticPage()) {
+    return;
+  }
+
+  const grid = document.getElementById("shop-grid");
+  const message = document.getElementById("economy-message");
+  const balances = document.getElementById("economy-balance-row");
+
+  if (!userState.isLoggedIn) {
+    return;
+  }
+
+  try {
+    if (message) {
+      message.textContent = "正在加载商店...";
+    }
+    const payload = await callApi("/electromagnetic", { method: "GET" });
+    if (payload.user) {
+      saveSession(userState.token, payload.user);
+    }
+    renderEconomyBalances(balances);
+    if (grid) {
+      grid.innerHTML = (payload.shopItems || []).map((item) => `
+        <article class="shop-item-card" data-item-key="${escapeHtml(item.key)}">
+          <div class="shop-item-image">
+            <img src="${escapeHtml(item.image || "/assets/icons/battery.svg")}" alt="" aria-hidden="true" />
+          </div>
+          <div class="shop-item-copy">
+            <p class="discussion-kicker">Asset</p>
+            <h2>${escapeHtml(item.name)}</h2>
+            <p>${escapeHtml(item.description || "")}</p>
+            <strong>${escapeHtml(renderShopCost(item.cost))}</strong>
+          </div>
+          <div class="shop-item-actions">
+            ${Number(item.cost?.electric || 0) > 0 ? `<button class="electromagnetic-button" data-action="purchase-item" data-item-key="${escapeHtml(item.key)}" data-currency="electric" type="button">电元购买</button>` : ""}
+            ${Number(item.cost?.magnetic || 0) > 0 ? `<button class="electromagnetic-button" data-action="purchase-item" data-item-key="${escapeHtml(item.key)}" data-currency="magnetic" type="button">磁元购买</button>` : ""}
+          </div>
+        </article>
+      `).join("") || `<p class="fortune-record-empty">暂无商品。</p>`;
+    }
+    if (message) {
+      message.textContent = "";
+    }
+  } catch (error) {
+    if (message) {
+      message.textContent = error.message;
+    }
+  }
+}
+
+async function loadInventoryPage() {
+  if (!isInventoryPage()) {
+    return;
+  }
+
+  const list = document.getElementById("inventory-list");
+  const message = document.getElementById("inventory-message");
+  const balances = document.getElementById("inventory-balance-row");
+
+  if (!userState.isLoggedIn) {
+    return;
+  }
+
+  try {
+    if (message) {
+      message.textContent = "正在加载仓库...";
+    }
+    const payload = await callApi("/electromagnetic", { method: "GET" });
+    if (payload.user) {
+      saveSession(userState.token, payload.user);
+    }
+    renderEconomyBalances(balances);
+    if (list) {
+      list.innerHTML = (payload.assets || []).map((asset) => {
+        const item = asset.item || asset.metadata || {};
+        const isConverter = asset.key === "differential_converter";
+        return `
+          <article class="inventory-item-row" data-asset-key="${escapeHtml(asset.key)}">
+            <div class="inventory-item-image">
+              <img src="${escapeHtml(item.image || "/assets/icons/inventory.svg")}" alt="" aria-hidden="true" />
+            </div>
+            <div class="inventory-item-copy">
+              <h2>${escapeHtml(item.name || asset.key)}</h2>
+              <p>${escapeHtml(item.description || "")}</p>
+              <strong>拥有 ${Number(asset.quantity || 0)} 个</strong>
+            </div>
+            ${isConverter ? `
+              <div class="inventory-item-actions">
+                <button class="electromagnetic-button" data-action="convert" data-direction="electric_to_magnetic" type="button">5 电元转 5 磁元</button>
+                <button class="electromagnetic-button" data-action="convert" data-direction="magnetic_to_electric" type="button">5 磁元转 5 电元</button>
+              </div>
+            ` : ""}
+          </article>
+        `;
+      }).join("") || `<p class="fortune-record-empty">仓库里还没有物品。</p>`;
+    }
+    if (message) {
+      message.textContent = "";
+    }
+  } catch (error) {
+    if (message) {
+      message.textContent = error.message;
+    }
+  }
+}
+
+async function handleElectromagneticPageClick(event) {
+  const button = event.target.closest("[data-action]");
+
+  if (!button || !isElectromagneticPage()) {
+    return;
+  }
+
+  const message = document.getElementById("economy-message");
+  button.disabled = true;
+  if (message) {
+    message.textContent = "处理中...";
+  }
+
+  try {
+    if (button.dataset.action === "buy-heat") {
+      const payload = await callApi("/electromagnetic/heat", {
+        method: "POST",
+        body: JSON.stringify({ currency: button.dataset.currency })
+      });
+      if (payload.user) {
+        saveSession(userState.token, payload.user);
+      }
+      renderEconomyBalances(document.getElementById("economy-balance-row"));
+      loadHeatLeaderboard();
+    }
+
+    if (button.dataset.action === "purchase-item") {
+      await callApi(`/electromagnetic/shop/${encodeURIComponent(button.dataset.itemKey || "")}/purchase`, {
+        method: "POST",
+        body: JSON.stringify({ currency: button.dataset.currency })
+      });
+      await loadElectromagneticPage();
+    }
+
+    if (message) {
+      message.textContent = "已更新";
+    }
+  } catch (error) {
+    if (message) {
+      message.textContent = error.message;
+    }
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function handleInventoryPageClick(event) {
+  const button = event.target.closest("[data-action='convert']");
+
+  if (!button || !isInventoryPage()) {
+    return;
+  }
+
+  const message = document.getElementById("inventory-message");
+  button.disabled = true;
+  if (message) {
+    message.textContent = "正在转换...";
+  }
+
+  try {
+    await callApi("/electromagnetic/convert", {
+      method: "POST",
+      body: JSON.stringify({ direction: button.dataset.direction })
+    });
+    await loadInventoryPage();
+    if (message) {
+      message.textContent = "已转换";
+    }
+  } catch (error) {
+    if (message) {
+      message.textContent = error.message;
+    }
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function ensureHeatLeaderboardSection() {
+  if (!document.body.classList.contains("home-page")) {
+    return null;
+  }
+
+  let section = document.getElementById("landing-heat-leaderboard");
+  if (section) {
+    return section;
+  }
+
+  const main = document.querySelector(".landing-main");
+  const bridge = document.querySelector(".landing-bridge");
+  if (!main) {
+    return null;
+  }
+
+  section = document.createElement("section");
+  section.id = "landing-heat-leaderboard";
+  section.className = "landing-heat-leaderboard";
+  section.innerHTML = `
+    <div class="landing-section-copy">
+      <p class="section-kicker">Heat</p>
+      <h2>今日热力前三</h2>
+    </div>
+    <div class="landing-heat-list" id="landing-heat-list">
+      <p class="landing-heat-empty">正在加载...</p>
+    </div>
+  `;
+
+  if (bridge?.nextSibling) {
+    main.insertBefore(section, bridge.nextSibling);
+  } else {
+    main.append(section);
+  }
+
+  return section;
+}
+
+async function loadHeatLeaderboard() {
+  const section = ensureHeatLeaderboardSection();
+  const list = document.getElementById("landing-heat-list");
+
+  if (!section || !list) {
+    return;
+  }
+
+  try {
+    const payload = await fetch(`${API_BASE_URL}/leaderboard/heat?limit=3`).then((response) => response.json());
+    const users = payload.users || [];
+    list.innerHTML = users.length
+      ? users.map((user, index) => `
+          <a class="landing-heat-user" href="/profile?uid=${encodeURIComponent(user.uid || user.username)}">
+            <span>${index + 1}</span>
+            <img src="${escapeHtml(getAvatarUrl(user.avatarPath))}" alt="${escapeHtml(user.fullName || user.username)} 的头像" />
+            <strong>${escapeHtml(user.fullName || user.username)}</strong>
+            <em>${Number(user.heat || 0)} 热力</em>
+          </a>
+        `).join("")
+      : `<p class="landing-heat-empty">还没有热力记录。</p>`;
+  } catch {
+    list.innerHTML = `<p class="landing-heat-empty">热力榜暂时不可用。</p>`;
   }
 }
 
@@ -476,8 +1049,18 @@ function showCopySuccessPopup(format) {
 }
 
 function renderCurrency(type, value) {
-  const icon = type === "electric" ? "electron" : "magnetron";
-  const label = type === "electric" ? "电元" : "磁元";
+  const iconMap = {
+    electric: "electron",
+    magnetic: "magnetron",
+    heat: "flame"
+  };
+  const labelMap = {
+    electric: "电元",
+    magnetic: "磁元",
+    heat: "热力"
+  };
+  const icon = iconMap[type] || "electron";
+  const label = labelMap[type] || "电元";
 
   return `
     <span class="currency currency-${type}" data-tooltip="${label}" aria-label="${label}">
@@ -531,6 +1114,10 @@ function renderUser() {
     document.body.classList.toggle("is-ai-authenticated", userState.isLoggedIn);
   }
 
+  if (isEconomyPage()) {
+    document.body.classList.toggle("is-economy-authenticated", userState.isLoggedIn);
+  }
+
   if (!userState.isLoggedIn) {
     userName.textContent = "登录/注册";
     userName.disabled = false;
@@ -541,7 +1128,8 @@ function renderUser() {
     userLogoutButton?.classList.add("hidden");
     userStatus.innerHTML = [
       renderCurrency("electric", "-"),
-      renderCurrency("magnetic", "-")
+      renderCurrency("magnetic", "-"),
+      renderCurrency("heat", "-")
     ].join("");
     avatarImages.forEach((image) => {
       image.src = DEFAULT_AVATAR;
@@ -563,7 +1151,8 @@ function renderUser() {
   userLogoutButton?.classList.remove("hidden");
   userStatus.innerHTML = [
     renderCurrency("electric", userState.electrons),
-    renderCurrency("magnetic", userState.manetrons)
+    renderCurrency("magnetic", userState.manetrons),
+    renderCurrency("heat", userState.heat)
   ].join("");
   avatarImages.forEach((image) => {
     image.src = getAvatarUrl(userState.avatarPath);
@@ -621,6 +1210,7 @@ function saveSession(token, user) {
   userState.websiteUrl = user.websiteUrl || "";
   userState.electrons = user.electrons ?? 0;
   userState.manetrons = user.manetrons ?? 0;
+  userState.heat = user.heat ?? 0;
   localStorage.setItem(STORAGE_KEY, token);
   renderUser();
   loadAiDialogs();
@@ -641,6 +1231,7 @@ function clearSession() {
   userState.websiteUrl = "";
   userState.electrons = 0;
   userState.manetrons = 0;
+  userState.heat = 0;
   localStorage.removeItem(STORAGE_KEY);
   aiChatState.currentDid = "";
   aiChatState.dialogs = [];
@@ -724,6 +1315,18 @@ function isDiscussionPage() {
 
 function isAiChatPage() {
   return isCurrentPath("/aichat");
+}
+
+function isElectromagneticPage() {
+  return isCurrentPath("/electromagnetic");
+}
+
+function isInventoryPage() {
+  return isCurrentPath("/inventory");
+}
+
+function isEconomyPage() {
+  return isElectromagneticPage() || isInventoryPage();
 }
 
 function isPublicProfilePage() {
@@ -2350,6 +2953,9 @@ function renderAdminUsers(users) {
       <div class="admin-user-cell">
         <input data-field="manetrons" type="number" value="${user.manetrons}" />
       </div>
+      <div class="admin-user-cell">
+        <input data-field="heat" type="number" value="${user.heat || 0}" />
+      </div>
       <div class="admin-actions admin-user-cell">
         <button class="admin-button admin-button-primary" data-action="save">保存</button>
         <button class="admin-button admin-button-danger" data-action="delete">删除</button>
@@ -2391,6 +2997,9 @@ function insertAdminDraftRow() {
     <div class="admin-user-cell">
       <input data-field="manetrons" type="number" value="0" />
     </div>
+    <div class="admin-user-cell">
+      <input data-field="heat" type="number" value="0" />
+    </div>
     <div class="admin-actions admin-user-cell">
       <input class="admin-password-input" data-field="password" type="password" placeholder="初始密码" />
       <button class="admin-button admin-button-primary" data-action="create">保存</button>
@@ -2424,6 +3033,14 @@ function renderAdminSection() {
   });
 
   fortuneLinks.forEach((link) => {
+    link.classList.toggle("hidden", !showFortune);
+  });
+
+  electromagneticLinks.forEach((link) => {
+    link.classList.toggle("hidden", !showFortune);
+  });
+
+  inventoryLinks.forEach((link) => {
     link.classList.toggle("hidden", !showFortune);
   });
 
@@ -2625,6 +3242,7 @@ async function handleAdminUsersClick(event) {
   const role = card.querySelector('[data-field="role"]').value;
   const electrons = Number(card.querySelector('[data-field="electrons"]').value || 0);
   const manetrons = Number(card.querySelector('[data-field="manetrons"]').value || 0);
+  const heat = Number(card.querySelector('[data-field="heat"]')?.value || 0);
 
   try {
     if (button.dataset.action === "cancel") {
@@ -2645,7 +3263,8 @@ async function handleAdminUsersClick(event) {
           password: card.querySelector('[data-field="password"]').value,
           role,
           electrons,
-          manetrons
+          manetrons,
+          heat
         })
       });
       setAdminMessage("用户创建成功");
@@ -2657,7 +3276,7 @@ async function handleAdminUsersClick(event) {
       setAdminMessage("正在保存用户...");
       await callApi(`/admin/users/${userId}`, {
         method: "PATCH",
-        body: JSON.stringify({ fullName, role, electrons, manetrons })
+        body: JSON.stringify({ fullName, role, electrons, manetrons, heat })
       });
       setAdminMessage("用户已更新");
       loadAdminUsers();
@@ -4264,6 +4883,8 @@ discussionComposeContent?.addEventListener("paste", handleDiscussionPaste);
 document.addEventListener("click", handleCodeCopyClick);
 document.addEventListener("click", handleCodeRunClick);
 document.addEventListener("click", handleAiMessageCopyClick);
+document.addEventListener("click", handleElectromagneticPageClick);
+document.addEventListener("click", handleInventoryPageClick);
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     document.getElementById("fortune-modal")?.classList.add("hidden");
@@ -4273,11 +4894,19 @@ window.addEventListener("keydown", (event) => {
 });
 renderUser();
 loadFortuneConfig();
-restoreSession();
+restoreSession().finally(() => {
+  renderAdminSection();
+  loadElectromagneticPage();
+  loadInventoryPage();
+});
 renderAdminSection();
 renderSettingsForm();
 renderDiscussionComposerState();
+initializeThemeMode();
+initializeEconomyNavigation();
+renderAdminSection();
 loadHomeDiscussionPosts();
+loadHeatLeaderboard();
 initializeLandingMotion();
 initializeDiscussionPage();
 initializeAiChatPage();

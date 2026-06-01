@@ -12,7 +12,16 @@ const { CODE_TTL_MINUTES, buildExpiryDate, generateEmailCode, hashCode } = requi
 
 const app = express();
 const FORTUNE_BONUS_KEY = "fortune_bonus_enabled";
+const HEAT_DECAY_DATE_KEY = "heat_decay_last_date";
 const FORTUNE_LOOKBACK_DAYS = 30;
+const CHECKIN_LOOKBACK_DAYS = 14;
+const MAX_CHECKIN_STREAK_REWARD = 5;
+const SHOP_CATALOG_PATH = path.join(__dirname, "..", "public", "data", "shop-items.json");
+const REACTION_MANETRON_REWARDS = {
+  smile: 1,
+  light: 2,
+  fireworks: 1
+};
 const MAX_AGENT_USER = {
   username: "max_the_agent",
   fullName: "Max",
@@ -485,6 +494,67 @@ async function ensureFortuneTables() {
   );
 }
 
+async function ensureEconomyTables() {
+  const userColumns = [
+    ["heat", "ALTER TABLE users ADD COLUMN heat BIGINT NOT NULL DEFAULT 0 AFTER manetrons"]
+  ];
+
+  for (const [columnName, alterSql] of userColumns) {
+    const [columns] = await pool.execute(
+      `SELECT COLUMN_NAME
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'users'
+         AND COLUMN_NAME = ?
+       LIMIT 1`,
+      [columnName]
+    );
+
+    if (!columns[0]) {
+      await pool.execute(alterSql);
+    }
+  }
+
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS user_assets (
+      id BIGINT PRIMARY KEY AUTO_INCREMENT,
+      user_id BIGINT NOT NULL,
+      asset_key VARCHAR(64) NOT NULL,
+      quantity BIGINT NOT NULL DEFAULT 0,
+      metadata_json JSON NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT fk_user_assets_user
+        FOREIGN KEY (user_id) REFERENCES users (id)
+        ON DELETE CASCADE,
+      UNIQUE KEY uq_user_assets_user_asset (user_id, asset_key),
+      INDEX idx_user_assets_asset_key (asset_key)
+    )`
+  );
+
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS user_checkins (
+      id BIGINT PRIMARY KEY AUTO_INCREMENT,
+      user_id BIGINT NOT NULL,
+      checkin_date DATE NOT NULL,
+      streak_count INT NOT NULL DEFAULT 1,
+      reward_electrons INT NOT NULL DEFAULT 1,
+      fortune_score INT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT fk_user_checkins_user
+        FOREIGN KEY (user_id) REFERENCES users (id)
+        ON DELETE CASCADE,
+      UNIQUE KEY uq_user_checkins_user_date (user_id, checkin_date),
+      INDEX idx_user_checkins_user_date (user_id, checkin_date)
+    )`
+  );
+}
+
+async function ensureEconomyReady() {
+  await ensureFortuneTables();
+  await ensureEconomyTables();
+}
+
 async function ensureMaxAgentUser() {
   const existing = await getUserByIdFromUsername(MAX_AGENT_USER.username);
 
@@ -542,6 +612,47 @@ async function getFortuneBonusEnabled() {
   return (await getAppSetting(FORTUNE_BONUS_KEY, "0")) === "1";
 }
 
+async function decayHeatIfNeeded(referenceDate = new Date()) {
+  await ensureEconomyTables();
+
+  const todayKey = toDateKey(referenceDate);
+  const lastDecayDate = await getAppSetting(HEAT_DECAY_DATE_KEY, "");
+
+  if (!lastDecayDate) {
+    await setAppSetting(HEAT_DECAY_DATE_KEY, todayKey);
+    return false;
+  }
+
+  if (lastDecayDate === todayKey) {
+    return false;
+  }
+
+  await pool.execute(
+    `UPDATE users
+     SET heat = CEIL(heat / 2)
+     WHERE heat > 0`
+  );
+  await setAppSetting(HEAT_DECAY_DATE_KEY, todayKey);
+  return true;
+}
+
+function scheduleNextHeatDecay() {
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(24, 0, 0, 0);
+  const delay = Math.max(1000, next.getTime() - now.getTime());
+
+  setTimeout(async () => {
+    try {
+      await decayHeatIfNeeded(new Date());
+    } catch (error) {
+      console.error("Failed to decay heat", error);
+    } finally {
+      scheduleNextHeatDecay();
+    }
+  }, delay);
+}
+
 function toDateKey(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -590,6 +701,221 @@ async function ensureUserFortuneWindow(user, fortuneBonusEnabled) {
   }));
 }
 
+async function getCheckinSummary(user, fortuneBonusEnabled) {
+  await ensureEconomyReady();
+
+  const today = new Date();
+  const todayKey = toDateKey(today);
+  const startKey = toDateKey(addDays(today, -CHECKIN_LOOKBACK_DAYS + 1));
+  const [rows] = await pool.execute(
+    `SELECT DATE_FORMAT(checkin_date, '%Y-%m-%d') AS checkin_date,
+            streak_count,
+            reward_electrons,
+            fortune_score
+     FROM user_checkins
+     WHERE user_id = ?
+       AND checkin_date BETWEEN ? AND ?
+     ORDER BY checkin_date DESC`,
+    [user.id, startKey, todayKey]
+  );
+  const todayRow = rows.find((row) => row.checkin_date === todayKey);
+  const fortuneHistory = await ensureUserFortuneWindow(user, fortuneBonusEnabled);
+  const todayFortune = fortuneHistory.find((item) => item.date === todayKey);
+
+  return {
+    checkedInToday: Boolean(todayRow),
+    today: todayRow ? {
+      date: todayRow.checkin_date,
+      streak: Number(todayRow.streak_count || 0),
+      rewardElectrons: Number(todayRow.reward_electrons || 0),
+      fortuneScore: Number(todayRow.fortune_score ?? todayFortune?.score ?? 0)
+    } : null,
+    todayFortune: {
+      date: todayKey,
+      score: Number(todayFortune?.score ?? 0)
+    },
+    records: rows.map((row) => ({
+      date: row.checkin_date,
+      streak: Number(row.streak_count || 0),
+      rewardElectrons: Number(row.reward_electrons || 0),
+      fortuneScore: Number(row.fortune_score || 0)
+    }))
+  };
+}
+
+async function performDailyCheckin(user) {
+  await ensureEconomyReady();
+
+  const fortuneBonusEnabled = await getFortuneBonusEnabled();
+  const today = new Date();
+  const todayKey = toDateKey(today);
+  const yesterdayKey = toDateKey(addDays(today, -1));
+  const fortuneHistory = await ensureUserFortuneWindow(user, fortuneBonusEnabled);
+  const todayFortune = fortuneHistory.find((item) => item.date === todayKey);
+
+  const [existing] = await pool.execute(
+    `SELECT DATE_FORMAT(checkin_date, '%Y-%m-%d') AS checkin_date,
+            streak_count,
+            reward_electrons,
+            fortune_score
+     FROM user_checkins
+     WHERE user_id = ? AND checkin_date = ?
+     LIMIT 1`,
+    [user.id, todayKey]
+  );
+
+  if (existing[0]) {
+    return {
+      alreadyCheckedIn: true,
+      summary: await getCheckinSummary(user, fortuneBonusEnabled)
+    };
+  }
+
+  const [previousRows] = await pool.execute(
+    `SELECT streak_count
+     FROM user_checkins
+     WHERE user_id = ? AND checkin_date = ?
+     LIMIT 1`,
+    [user.id, yesterdayKey]
+  );
+  const streak = previousRows[0] ? Number(previousRows[0].streak_count || 0) + 1 : 1;
+  const rewardElectrons = Math.min(streak, MAX_CHECKIN_STREAK_REWARD);
+  const fortuneScore = Number(todayFortune?.score ?? generateFortuneScore(fortuneBonusEnabled));
+
+  await pool.execute(
+    `INSERT INTO user_checkins (user_id, checkin_date, streak_count, reward_electrons, fortune_score)
+     VALUES (?, ?, ?, ?, ?)`,
+    [user.id, todayKey, streak, rewardElectrons, fortuneScore]
+  );
+  await pool.execute(
+    `UPDATE users
+     SET electrons = electrons + ?
+     WHERE id = ?`,
+    [rewardElectrons, user.id]
+  );
+
+  return {
+    alreadyCheckedIn: false,
+    summary: await getCheckinSummary(user, fortuneBonusEnabled)
+  };
+}
+
+async function getUserAssets(userId) {
+  await ensureEconomyTables();
+  const shopItems = getShopItems();
+  const shopItemByAsset = new Map(shopItems.map((item) => [item.assetKey, item]));
+
+  const [rows] = await pool.execute(
+    `SELECT asset_key, quantity, metadata_json, created_at, updated_at
+     FROM user_assets
+     WHERE user_id = ?
+     ORDER BY asset_key ASC`,
+    [userId]
+  );
+
+  return rows.map((row) => ({
+    key: row.asset_key,
+    quantity: Number(row.quantity || 0),
+    metadata: row.metadata_json || null,
+    item: shopItemByAsset.get(row.asset_key) || null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }));
+}
+
+function getShopItems() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(SHOP_CATALOG_PATH, "utf8"));
+    const items = Array.isArray(raw.items) ? raw.items : [];
+
+    return items.map((item) => {
+      const key = String(item.key || "").trim();
+      const cost = item.cost && typeof item.cost === "object" ? item.cost : {};
+
+      return {
+        key,
+        assetKey: String(item.assetKey || key).trim(),
+        name: String(item.name || key).trim(),
+        description: String(item.description || "").trim(),
+        image: String(item.image || "").trim(),
+        cost: Object.fromEntries(
+          Object.entries(cost)
+            .map(([currency, value]) => [normalizeCurrencyType(currency), Number(value)])
+            .filter(([currency, value]) => ["electric", "magnetic"].includes(currency) && Number.isFinite(value) && value > 0)
+        ),
+        use: item.use && typeof item.use === "object" ? item.use : null
+      };
+    }).filter((item) => item.key && item.assetKey && Object.keys(item.cost).length);
+  } catch (error) {
+    console.error("Failed to load shop catalog", error);
+    return [];
+  }
+}
+
+function getShopItem(key) {
+  const normalizedKey = String(key || "").replace(/-/g, "_");
+  return getShopItems().find((item) => item.key === normalizedKey || item.assetKey === normalizedKey) || null;
+}
+
+async function getHeatLeaderboard(limit = 3) {
+  await ensureEconomyTables();
+
+  const [rows] = await pool.execute(
+    `SELECT uid, username, full_name, avatar_path, heat
+     FROM users
+     WHERE heat > 0
+     ORDER BY heat DESC, updated_at DESC, id ASC
+     LIMIT ${normalizeLimit(limit, 3, 10)}`
+  );
+
+  return rows.map((row) => ({
+    uid: row.uid || "",
+    username: row.username,
+    fullName: row.full_name,
+    avatarPath: row.avatar_path || "",
+    heat: Number(row.heat || 0)
+  }));
+}
+
+function normalizeCurrencyType(value) {
+  const currency = String(value || "").trim().toLowerCase();
+
+  if (["electric", "electron", "electrons"].includes(currency)) {
+    return "electric";
+  }
+
+  if (["magnetic", "magnetron", "manetron", "manetrons", "magnetrons"].includes(currency)) {
+    return "magnetic";
+  }
+
+  return "";
+}
+
+function currencyColumn(currency) {
+  if (currency === "electric") {
+    return "electrons";
+  }
+
+  if (currency === "magnetic") {
+    return "manetrons";
+  }
+
+  return "manetrons";
+}
+
+async function awardPostAuthorManetrons(post, delta) {
+  if (!post?.user_id || !delta) {
+    return;
+  }
+
+  await pool.execute(
+    `UPDATE users
+     SET manetrons = GREATEST(0, manetrons + ?)
+     WHERE id = ?`,
+    [delta, post.user_id]
+  );
+}
+
 function toUserProfile(row) {
   return {
     id: row.id,
@@ -607,6 +933,7 @@ function toUserProfile(row) {
     websiteUrl: row.website_url || "",
     electrons: Number(row.electrons || 0),
     manetrons: Number(row.manetrons || 0),
+    heat: Number(row.heat || 0),
     createdAt: row.created_at
   };
 }
@@ -1059,7 +1386,7 @@ function issueToken(user) {
 
 async function getUserById(id) {
   const [rows] = await pool.execute(
-    `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, grade, major, avatar_path, bio, website_url, created_at
+    `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
      FROM users WHERE id = ? LIMIT 1`,
     [id]
   );
@@ -1069,7 +1396,7 @@ async function getUserById(id) {
 
 async function getUserByIdFromUsername(username) {
   const [rows] = await pool.execute(
-    `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, grade, major, avatar_path, bio, website_url, created_at
+    `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
      FROM users WHERE username = ? LIMIT 1`,
     [username]
   );
@@ -1483,6 +1810,229 @@ app.get("/api/fortune", async (request, response) => {
     });
   } catch (error) {
     response.status(500).json({ message: "获取运势失败", detail: error.message });
+  }
+});
+
+app.get("/api/checkin", async (request, response) => {
+  try {
+    const user = await requireAuth(request, response);
+
+    if (!user) {
+      return;
+    }
+
+    const fortuneBonusEnabled = await getFortuneBonusEnabled();
+    const summary = await getCheckinSummary(user, fortuneBonusEnabled);
+
+    response.json({
+      fortuneBonusEnabled,
+      ...summary,
+      user: toUserProfile(await getUserById(user.id))
+    });
+  } catch (error) {
+    response.status(500).json({ message: "获取签到信息失败", detail: error.message });
+  }
+});
+
+app.post("/api/checkin", async (request, response) => {
+  try {
+    const user = await requireAuth(request, response);
+
+    if (!user) {
+      return;
+    }
+
+    const result = await performDailyCheckin(user);
+
+    response.json({
+      ...result,
+      user: toUserProfile(await getUserById(user.id))
+    });
+  } catch (error) {
+    response.status(500).json({ message: "签到失败", detail: error.message });
+  }
+});
+
+app.get("/api/electromagnetic", async (request, response) => {
+  try {
+    const user = await requireAuth(request, response);
+
+    if (!user) {
+      return;
+    }
+
+    await decayHeatIfNeeded(new Date());
+
+    response.json({
+      user: toUserProfile(await getUserById(user.id)),
+      assets: await getUserAssets(user.id),
+      shopItems: getShopItems()
+    });
+  } catch (error) {
+    response.status(500).json({ message: "获取电磁场失败", detail: error.message });
+  }
+});
+
+app.post("/api/electromagnetic/heat", async (request, response) => {
+  try {
+    const user = await requireAuth(request, response);
+
+    if (!user) {
+      return;
+    }
+
+    await decayHeatIfNeeded(new Date());
+    const currency = normalizeCurrencyType(request.body.currency);
+
+    if (!["electric", "magnetic"].includes(currency)) {
+      response.status(400).json({ message: "请选择消耗电元或磁元" });
+      return;
+    }
+
+    const column = currencyColumn(currency);
+    const [result] = await pool.execute(
+      `UPDATE users
+       SET ${column} = ${column} - 1,
+           heat = heat + 1
+       WHERE id = ? AND ${column} >= 1`,
+      [user.id]
+    );
+
+    if (!result.affectedRows) {
+      response.status(400).json({ message: "余额不足" });
+      return;
+    }
+
+    response.json({
+      user: toUserProfile(await getUserById(user.id))
+    });
+  } catch (error) {
+    response.status(500).json({ message: "兑换热力失败", detail: error.message });
+  }
+});
+
+async function purchaseShopItem(request, response, itemKey) {
+  try {
+    const user = await requireAuth(request, response);
+
+    if (!user) {
+      return;
+    }
+
+    const item = getShopItem(itemKey);
+    const currency = normalizeCurrencyType(request.body.currency);
+
+    if (!item) {
+      response.status(404).json({ message: "商品不存在" });
+      return;
+    }
+
+    const cost = Number(item.cost[currency] || 0);
+
+    if (!cost) {
+      response.status(400).json({ message: "请选择电元或磁元购买" });
+      return;
+    }
+
+    const column = currencyColumn(currency);
+    const [result] = await pool.execute(
+      `UPDATE users
+       SET ${column} = ${column} - ?
+       WHERE id = ? AND ${column} >= ?`,
+      [cost, user.id, cost]
+    );
+
+    if (!result.affectedRows) {
+      response.status(400).json({ message: "余额不足" });
+      return;
+    }
+
+    await pool.execute(
+      `INSERT INTO user_assets (user_id, asset_key, quantity, metadata_json)
+       VALUES (?, ?, 1, JSON_OBJECT('name', ?, 'description', ?, 'image', ?))
+       ON DUPLICATE KEY UPDATE
+         quantity = quantity + 1,
+         metadata_json = VALUES(metadata_json)`,
+      [user.id, item.assetKey, item.name, item.description, item.image]
+    );
+
+    response.json({
+      user: toUserProfile(await getUserById(user.id)),
+      assets: await getUserAssets(user.id)
+    });
+  } catch (error) {
+    response.status(500).json({ message: "购买失败", detail: error.message });
+  }
+}
+
+app.post("/api/electromagnetic/shop/:itemKey/purchase", async (request, response) => {
+  await purchaseShopItem(request, response, String(request.params.itemKey || ""));
+});
+
+app.post("/api/electromagnetic/shop/differential-converter", async (request, response) => {
+  await purchaseShopItem(request, response, "differential_converter");
+});
+
+app.post("/api/electromagnetic/convert", async (request, response) => {
+  try {
+    const user = await requireAuth(request, response);
+
+    if (!user) {
+      return;
+    }
+
+    const direction = String(request.body.direction || "").trim().toLowerCase();
+    const fromColumn = direction === "electric_to_magnetic" ? "electrons" : (direction === "magnetic_to_electric" ? "manetrons" : "");
+    const toColumn = direction === "electric_to_magnetic" ? "manetrons" : (direction === "magnetic_to_electric" ? "electrons" : "");
+
+    if (!fromColumn || !toColumn) {
+      response.status(400).json({ message: "无效转换方向" });
+      return;
+    }
+
+    const [assetRows] = await pool.execute(
+      `SELECT quantity
+       FROM user_assets
+       WHERE user_id = ? AND asset_key = 'differential_converter'
+       LIMIT 1`,
+      [user.id]
+    );
+
+    if (!assetRows[0] || Number(assetRows[0].quantity || 0) < 1) {
+      response.status(400).json({ message: "需要先拥有微分器" });
+      return;
+    }
+
+    const [result] = await pool.execute(
+      `UPDATE users
+       SET ${fromColumn} = ${fromColumn} - 5,
+           ${toColumn} = ${toColumn} + 5
+       WHERE id = ? AND ${fromColumn} >= 5`,
+      [user.id]
+    );
+
+    if (!result.affectedRows) {
+      response.status(400).json({ message: "余额不足，至少需要 5 个" });
+      return;
+    }
+
+    response.json({
+      user: toUserProfile(await getUserById(user.id)),
+      assets: await getUserAssets(user.id)
+    });
+  } catch (error) {
+    response.status(500).json({ message: "转换失败", detail: error.message });
+  }
+});
+
+app.get("/api/leaderboard/heat", async (request, response) => {
+  try {
+    await decayHeatIfNeeded(new Date());
+    response.json({
+      users: await getHeatLeaderboard(normalizeLimit(request.query.limit, 3, 10))
+    });
+  } catch (error) {
+    response.status(500).json({ message: "获取热力榜失败", detail: error.message });
   }
 });
 
@@ -1972,6 +2522,12 @@ app.post("/api/discussion/posts", async (request, response) => {
        VALUES (?, ?, ?, ?, ?, ?)`,
       [postPid, board.id, user.id, user.student_id, title, contentMarkdown]
     );
+    await pool.execute(
+      `UPDATE users
+       SET manetrons = manetrons + 1
+       WHERE id = ?`,
+      [user.id]
+    );
 
     const [rows] = await pool.execute(
       `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
@@ -2129,6 +2685,11 @@ app.post("/api/discussion/posts/:id/like", async (request, response) => {
          VALUES (?, ?, ?)`,
         [post.id, user.id, reactionType]
       );
+    }
+
+    if (post.user_id !== user.id) {
+      const reward = REACTION_MANETRON_REWARDS[reactionType] || 0;
+      await awardPostAuthorManetrons(post, active ? reward : -reward);
     }
 
     const [countRows] = await pool.execute(
@@ -2539,7 +3100,7 @@ app.post("/api/auth/login", async (request, response) => {
 
   try {
     const [rows] = await pool.execute(
-      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, password_hash, role, electrons, manetrons, grade, major, avatar_path, bio, website_url, created_at
+      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, password_hash, role, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
        FROM users
        WHERE username = ? OR email = ?
        LIMIT 1`,
@@ -2609,7 +3170,7 @@ app.post("/api/auth/reset-password", async (request, response) => {
     }
 
     const [users] = await pool.execute(
-      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, grade, major, avatar_path, bio, website_url, created_at
+      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
        FROM users
        WHERE student_id = ? AND LOWER(email) = ?
        LIMIT 1`,
@@ -2884,7 +3445,7 @@ app.get("/api/admin/users", async (request, response) => {
     }
 
     const [rows] = await pool.execute(
-      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, grade, major, avatar_path, bio, website_url, created_at
+      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
        FROM users
        ORDER BY created_at DESC`
     );
@@ -2932,6 +3493,7 @@ app.post("/api/admin/users", async (request, response) => {
     const role = String(request.body.role || "student").trim();
     const electrons = Number(request.body.electrons ?? 0);
     const manetrons = Number(request.body.manetrons ?? 0);
+    const heat = Number(request.body.heat ?? 0);
 
     if (!username || username.length < 3 || username.length > 64) {
       response.status(400).json({ message: "用户名长度需在 3 到 64 个字符之间" });
@@ -2969,8 +3531,8 @@ app.post("/api/admin/users", async (request, response) => {
     const [result] = await pool.execute(
       `INSERT INTO users (
         uid, username, full_name, student_id, email, password_hash, email_verified_at,
-        role, electrons, manetrons, grade, major
-      ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?)`,
+        role, electrons, manetrons, heat, grade, major
+      ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?)`,
       [
         await createUniqueUserUid(),
         username,
@@ -2981,6 +3543,7 @@ app.post("/api/admin/users", async (request, response) => {
         role,
         Number.isFinite(electrons) ? electrons : 0,
         Number.isFinite(manetrons) ? manetrons : 0,
+        Number.isFinite(heat) ? heat : 0,
         grade,
         major
       ]
@@ -3014,6 +3577,7 @@ app.patch("/api/admin/users/:id", async (request, response) => {
     const role = String(request.body.role || "").trim();
     const electrons = Number(request.body.electrons ?? 0);
     const manetrons = Number(request.body.manetrons ?? 0);
+    const heat = Number(request.body.heat ?? 0);
 
     if (!targetId) {
       response.status(400).json({ message: "无效用户 ID" });
@@ -3036,7 +3600,8 @@ app.patch("/api/admin/users/:id", async (request, response) => {
            full_name = ?,
            role = ?,
            electrons = ?,
-           manetrons = ?
+           manetrons = ?,
+           heat = ?
        WHERE id = ?`,
       [
         await createUniqueUserUid(),
@@ -3044,6 +3609,7 @@ app.patch("/api/admin/users/:id", async (request, response) => {
         role,
         Number.isFinite(electrons) ? electrons : 0,
         Number.isFinite(manetrons) ? manetrons : 0,
+        Number.isFinite(heat) ? heat : 0,
         targetId
       ]
     );
@@ -3102,6 +3668,9 @@ async function start() {
   await ensureDiscussionTables();
   await ensureAiDialogTables();
   await ensureFortuneTables();
+  await ensureEconomyTables();
+  await decayHeatIfNeeded(new Date());
+  scheduleNextHeatDecay();
 
   app.listen(config.apiPort, config.apiHost, () => {
     console.log(`FREE-BBS backend running at http://${config.apiHost}:${config.apiPort}`);

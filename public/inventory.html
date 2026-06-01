@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FREE-BBS - 仓库</title>
+    <link rel="icon" type="image/png" href="/assets/favicon-64.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Noto+Serif+SC:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="inventory-page economy-page">
+    <div class="page-shell page-shell-settings">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="FREE-BBS 首页">
+          <span class="brand-mark">FREE<br />BBS</span>
+        </a>
+        <form class="searchbar" role="search">
+          <span class="search-symbol" aria-hidden="true">⌕</span>
+          <input type="search" placeholder="搜索课程、讨论、资料、地图坐标" aria-label="搜索" />
+        </form>
+        <nav class="nav-actions" aria-label="顶部导航">
+          <a class="nav-link" href="/">
+            <img class="nav-icon" src="/assets/icons/home.svg" alt="" aria-hidden="true" />
+            <span>主页</span>
+          </a>
+          <a class="nav-link" href="/world">
+            <img class="nav-icon" src="/assets/icons/map.svg" alt="" aria-hidden="true" />
+            <span>世界</span>
+          </a>
+          <a class="nav-link" href="/discussion">
+            <img class="nav-icon" src="/assets/icons/people.svg" alt="" aria-hidden="true" />
+            <span>讨论</span>
+          </a>
+          <a class="nav-link" href="/aichat">
+            <img class="nav-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
+            <span>问问 Max</span>
+          </a>
+          <a class="nav-link fortune-link hidden" href="#">
+            <img class="nav-icon" src="/assets/icons/yunshi.svg" alt="" aria-hidden="true" />
+            <span>今日运势</span>
+          </a>
+          <a class="nav-link electromagnetic-link hidden" href="/electromagnetic">
+            <img class="nav-icon" src="/assets/icons/battery.svg" alt="" aria-hidden="true" />
+            <span>电磁场</span>
+          </a>
+          <a class="nav-link inventory-link hidden is-active" href="/inventory" aria-current="page">
+            <img class="nav-icon" src="/assets/icons/inventory.svg" alt="" aria-hidden="true" />
+            <span>仓库</span>
+          </a>
+          <a class="nav-link manage-link hidden" href="/adminusers">
+            <img class="nav-icon" src="/assets/icons/gear.svg" alt="" aria-hidden="true" />
+            <span>管理</span>
+          </a>
+          <div class="user-panel" id="user-panel">
+            <div class="user-summary">
+              <button class="avatar" type="button" aria-label="用户头像">
+                <img class="avatar-image" id="avatar-image" src="/assets/avatar_placeholder.webp" alt="用户头像占位图" />
+              </button>
+              <div class="user-actions" id="user-actions">
+                <button class="user-icon-button hidden" id="user-settings-button" type="button" aria-label="设置">
+                  <img class="user-action-icon" src="/assets/icons/gear.svg" alt="" aria-hidden="true" />
+                  <span>设置</span>
+                </button>
+                <button class="user-icon-button hidden" id="user-logout-button" type="button" aria-label="退出">
+                  <img class="user-action-icon" src="/assets/icons/exit.svg" alt="" aria-hidden="true" />
+                  <span>退出</span>
+                </button>
+              </div>
+              <div class="user-copy">
+                <button class="user-name" type="button" id="user-name">登录/注册</button>
+                <div class="user-role" id="user-role">学生</div>
+              </div>
+            </div>
+            <div class="user-status" id="user-status">
+              <span class="currency currency-electric" data-tooltip="电元" aria-label="电元">
+                <img class="currency-icon" src="/assets/icons/electron.svg" alt="电元" />
+                <span class="currency-value">-</span>
+              </span>
+              <span class="currency currency-magnetic" data-tooltip="磁元" aria-label="磁元">
+                <img class="currency-icon" src="/assets/icons/magnetron.svg" alt="磁元" />
+                <span class="currency-value">-</span>
+              </span>
+            </div>
+          </div>
+        </nav>
+      </header>
+      <nav class="mobile-nav" aria-label="手机底部导航">
+        <a class="nav-link" href="/world">
+          <img class="nav-icon" src="/assets/icons/map.svg" alt="" aria-hidden="true" />
+          <span>世界</span>
+        </a>
+        <a class="nav-link" href="/discussion">
+          <img class="nav-icon" src="/assets/icons/people.svg" alt="" aria-hidden="true" />
+          <span>讨论</span>
+        </a>
+        <a class="nav-link" href="/aichat">
+          <img class="nav-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
+          <span>问问 Max</span>
+        </a>
+        <a class="nav-link fortune-link hidden" href="#">
+          <img class="nav-icon" src="/assets/icons/yunshi.svg" alt="" aria-hidden="true" />
+          <span>今日运势</span>
+        </a>
+        <a class="nav-link electromagnetic-link hidden" href="/electromagnetic">
+          <img class="nav-icon" src="/assets/icons/battery.svg" alt="" aria-hidden="true" />
+          <span>电磁场</span>
+        </a>
+        <a class="nav-link inventory-link hidden is-active" href="/inventory" aria-current="page">
+          <img class="nav-icon" src="/assets/icons/inventory.svg" alt="" aria-hidden="true" />
+          <span>仓库</span>
+        </a>
+      </nav>
+      <main class="main-content settings-main economy-main">
+        <section class="economy-auth-required" aria-label="登录后进入仓库">
+          <h1>仓库</h1>
+          <p>登录后可以查看并使用已经获得的资产。</p>
+          <a class="aichat-auth-link" href="/login">登录 / 注册</a>
+        </section>
+        <section class="economy-shell" aria-label="仓库资产">
+          <header class="economy-header">
+            <div>
+              <p class="discussion-kicker">Inventory</p>
+              <h1>仓库</h1>
+              <p>已经购买的资产会保存在这里。微分器可用于电元和磁元的双向转换。</p>
+            </div>
+            <a class="economy-inventory-link" href="/electromagnetic">
+              <img src="/assets/icons/battery.svg" alt="" aria-hidden="true" />
+              <span>前往商店</span>
+            </a>
+          </header>
+          <div class="economy-balance-row" id="inventory-balance-row"></div>
+          <p id="inventory-message" class="discussion-message"></p>
+          <div class="inventory-list" id="inventory-list"></div>
+        </section>
+      </main>
+    </div>
+    <script src="/app.js"></script>
+  </body>
+</html>
