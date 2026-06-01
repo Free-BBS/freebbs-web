@@ -248,6 +248,10 @@ h3,
   display: none;
 }
 
+.mobile-theme-toggle {
+  display: none;
+}
+
 .nav-link,
 .user-name,
 .avatar {
@@ -3822,8 +3826,8 @@ h3,
 }
 
 .fortune-good {
-  background: linear-gradient(135deg, #b93a3a, #ff6f5f);
-  color: #fff2ef;
+  background: linear-gradient(135deg, #f7b6cc, #ffdbe8);
+  color: #4a1027;
 }
 
 .fortune-neutral {
@@ -3832,13 +3836,13 @@ h3,
 }
 
 .fortune-bad {
-  background: linear-gradient(135deg, #2f8f54, #66c27f);
+  background: linear-gradient(135deg, #2f8f54, #75d690);
   color: #eefcf1;
 }
 
 .fortune-awful {
-  background: linear-gradient(135deg, #020202, #2c2c2c);
-  color: #f9f5ee;
+  background: linear-gradient(135deg, #b93a3a, #ff6f5f);
+  color: #fff2ef;
 }
 
 
@@ -4367,10 +4371,16 @@ h3,
     max-width: calc(100vw - 28px);
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 10px;
     margin: 0;
     padding: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
     border-radius: 28px;
     background: rgba(8, 14, 24, 0.84);
     border: 1px solid rgba(255, 255, 255, 0.12);
@@ -4381,31 +4391,40 @@ h3,
     -webkit-backdrop-filter: blur(20px);
   }
 
+  .mobile-nav::-webkit-scrollbar {
+    display: none;
+  }
+
   .user-panel {
     position: fixed;
-    top: 16px;
+    top: 12px;
     right: 20px;
     z-index: 171;
-    display: flex;
-    flex-direction: row;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
     align-items: center;
     justify-content: flex-end;
+    justify-items: end;
     min-width: auto;
     width: auto;
     margin-top: 0;
     padding: 0;
-    gap: 10px;
+    gap: 5px;
     border: none;
     background: transparent;
     box-shadow: none;
   }
 
   .user-summary {
+    grid-column: 1;
+    grid-row: 2;
     width: auto;
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 8px;
+    justify-content: flex-end;
+    gap: 6px;
+    padding-right: 46px;
   }
 
   .user-copy {
@@ -4427,23 +4446,34 @@ h3,
   }
 
   .user-status {
+    grid-column: 1;
+    grid-row: 1;
     display: inline-flex;
     align-items: center;
     flex-wrap: nowrap;
-    gap: 8px;
+    gap: 16px;
     margin-left: 0;
+    padding-right: 46px;
+  }
+
+  .user-panel .mobile-theme-toggle {
+    display: inline-flex;
   }
 
   .user-actions {
     width: auto;
-    gap: 8px;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
   }
 
   .user-icon-button {
-    padding: 8px;
-    border-radius: 999px;
-    background: rgba(248, 243, 233, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    border: 0;
   }
 
   .user-icon-button span {
@@ -4451,10 +4481,10 @@ h3,
   }
 
   .currency {
-    padding: 8px 10px;
-    border-radius: 999px;
-    background: rgba(248, 243, 233, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    border: 0;
     min-width: 0;
   }
 
@@ -4468,11 +4498,13 @@ h3,
   }
 
   .avatar {
-    width: 50px;
-    height: 50px;
+    position: absolute;
+    top: 8px;
+    right: 0;
+    width: 40px;
+    height: 40px;
     justify-self: auto;
     align-self: auto;
-    order: 2;
   }
 
   .site-footer {
@@ -4755,7 +4787,7 @@ h3,
   .mobile-nav .nav-link {
     width: auto;
     flex: 0 0 auto;
-    min-width: 56px;
+    min-width: 64px;
     flex-direction: column;
     justify-content: center;
     gap: 6px;
@@ -4765,6 +4797,7 @@ h3,
     line-height: 1.15;
     letter-spacing: 0.02em;
     text-align: center;
+    scroll-snap-align: center;
   }
 
   .mobile-nav .nav-link:hover,
@@ -4781,23 +4814,23 @@ h3,
   .user-panel {
     top: 12px;
     right: 14px;
-    gap: 8px;
+    gap: 5px;
   }
 
   .avatar {
-    width: 48px;
-    height: 48px;
+    width: 40px;
+    height: 40px;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.36),
       0 0 0 1px rgba(255, 255, 255, 0.06);
   }
 
   .user-status {
-    gap: 6px;
+    gap: 14px;
   }
 
   .currency {
-    padding: 7px 9px;
+    padding: 0;
   }
 
   .currency-icon {
@@ -7811,25 +7844,18 @@ body:not(.world-page) .site-footer p {
 }
 
 @media (max-width: 680px) {
+  .home-page .user-panel {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+  }
+
   .home-page .user-copy {
-    display: block;
-    order: 3;
-    max-width: 96px;
-    padding-top: 0;
+    display: none;
   }
 
   .home-page .user-name {
-    display: inline-flex;
-    width: auto;
-    max-width: 96px;
-    padding: 8px 10px;
-    border: 1px solid rgba(244, 240, 223, 0.18);
-    border-radius: 999px;
-    background: rgba(244, 240, 223, 0.07) !important;
-    color: var(--chalk-text);
-    font-size: 0.72rem;
-    line-height: 1;
-    white-space: nowrap;
+    display: none;
   }
 
   .home-page .user-role {
@@ -7837,7 +7863,29 @@ body:not(.world-page) .site-footer p {
   }
 
   .home-page .user-status {
-    display: none;
+    display: inline-flex;
+  }
+
+  .home-page .user-panel .mobile-theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    min-width: 0;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--chalk-text);
+    font-size: 0.7rem;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .home-page .user-panel .mobile-theme-toggle .theme-toggle-icon {
+    width: 14px;
+    height: 14px;
   }
 }
 
@@ -7884,11 +7932,7 @@ body:not(.world-page) .topbar {
 }
 
 .discussion-page .settings-header {
-  position: relative;
-  min-height: 112px;
-  margin-bottom: 22px;
-  padding: 18px 0 28px;
-  border-bottom: 2px solid rgba(244, 240, 223, 0.18);
+  display: none;
 }
 
 .discussion-page .settings-header::before {
@@ -9035,6 +9079,16 @@ body:not(.home-page) .theme-toggle:hover {
   transform: none !important;
 }
 
+body:not(.home-page) .aichat-dialog-toggle {
+  border-color: var(--minimal-line-strong) !important;
+  background: var(--minimal-surface) !important;
+  color: var(--minimal-text) !important;
+}
+
+body:not(.home-page) .aichat-dialog-toggle:hover {
+  background: var(--minimal-surface-soft) !important;
+}
+
 body:not(.home-page) .nav-actions > .theme-toggle {
   width: 100%;
   justify-content: center;
@@ -9042,11 +9096,31 @@ body:not(.home-page) .nav-actions > .theme-toggle {
 }
 
 body:not(.home-page) .mobile-theme-toggle {
-  display: inline-flex;
+  display: none;
   align-items: center;
   justify-content: center;
   min-width: 72px;
   padding: 8px 10px;
+}
+
+@media (max-width: 1024px) {
+  body:not(.home-page) .user-panel .mobile-theme-toggle {
+    display: inline-flex;
+    min-height: 28px;
+    min-width: 0;
+    padding: 0 4px;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    font-size: 0.7rem;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  body:not(.home-page) .user-panel .mobile-theme-toggle .theme-toggle-icon {
+    width: 14px;
+    height: 14px;
+  }
 }
 
 body:not(.home-page) .auth-theme-toggle {
@@ -9088,12 +9162,50 @@ body.theme-light:not(.home-page) .mobile-nav {
   border-color: var(--minimal-line) !important;
 }
 
+body.theme-light:not(.home-page) .fortune-backdrop {
+  background: rgba(17, 19, 21, 0.28) !important;
+}
+
+body.theme-light:not(.home-page) .fortune-panel {
+  background: #ffffff !important;
+  border-color: var(--minimal-line) !important;
+  color: var(--minimal-text) !important;
+  box-shadow: 0 26px 70px rgba(10, 12, 14, 0.18) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+body.theme-light:not(.home-page) .fortune-close,
+body.theme-light:not(.home-page) .fortune-title,
+body.theme-light:not(.home-page) .fortune-score,
+body.theme-light:not(.home-page) .fortune-record-row,
+body.theme-light:not(.home-page) .electromagnetic-section h3,
+body.theme-light:not(.home-page) .electromagnetic-shop-item strong,
+body.theme-light:not(.home-page) #electromagnetic-assets {
+  color: var(--minimal-text) !important;
+}
+
+body.theme-light:not(.home-page) .fortune-date,
+body.theme-light:not(.home-page) .fortune-tagline,
+body.theme-light:not(.home-page) .fortune-chart-caption {
+  color: var(--minimal-muted) !important;
+}
+
+body.theme-light:not(.home-page) .fortune-chart-wrap {
+  background: var(--minimal-surface-soft) !important;
+  border-color: var(--minimal-line) !important;
+}
+
 body.theme-light:not(.home-page) .brand,
 body.theme-light:not(.home-page) .brand-mark,
 body.theme-light:not(.home-page) .nav-link,
 body.theme-light:not(.home-page) .user-name,
 body.theme-light:not(.home-page) .user-role,
 body.theme-light:not(.home-page) .user-status,
+body.theme-light:not(.home-page) .currency,
+body.theme-light:not(.home-page) .currency-electric,
+body.theme-light:not(.home-page) .currency-magnetic,
+body.theme-light:not(.home-page) .currency-value,
 body.theme-light:not(.home-page) .settings-header h1,
 body.theme-light:not(.home-page) .settings-section-heading h2,
 body.theme-light:not(.home-page) .discussion-detail-head h2,
@@ -9249,8 +9361,15 @@ body.theme-light:not(.home-page) .aichat-avatar {
 body:not(.home-page) .aichat-shell {
   width: min(100%, 1240px);
   grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) !important;
-  gap: clamp(24px, 4vw, 56px);
+  gap: 18px;
   align-items: stretch;
+}
+
+body.aichat-page:not(.home-page) .aichat-shell {
+  width: 100%;
+  max-width: none;
+  margin-left: 0;
+  margin-right: auto;
 }
 
 body:not(.home-page) .aichat-dialogs {
@@ -9363,7 +9482,8 @@ body.theme-light:not(.home-page) .aichat-copy-menu button:hover {
 @media (max-width: 900px) {
   body:not(.home-page) .aichat-shell {
     grid-template-columns: 1fr !important;
-    gap: 24px;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 12px;
   }
 
   body:not(.home-page) .aichat-dialogs,
@@ -9371,8 +9491,143 @@ body.theme-light:not(.home-page) .aichat-copy-menu button:hover {
     grid-column: 1 !important;
   }
 
+  body:not(.home-page) .aichat-dialog-toggle {
+    position: static;
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+    margin: 0;
+    transform: none;
+  }
+
+  body:not(.home-page) .aichat-dialogs {
+    position: fixed;
+    top: 92px;
+    left: 12px;
+    bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+    z-index: 166;
+    width: min(300px, calc(100vw - 24px));
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 8px;
+    padding: 12px;
+    overflow: hidden;
+    transform: translateX(calc(-100% - 24px));
+    transition: transform 180ms ease;
+  }
+
+  body:not(.home-page) .aichat-shell.is-dialogs-open .aichat-dialogs {
+    transform: translateX(0);
+  }
+
+  body:not(.home-page) .aichat-dialog-list {
+    display: grid;
+    gap: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-bottom: 0;
+  }
+
+  body:not(.home-page) .aichat-dialog-item {
+    width: 100%;
+    min-width: 0;
+  }
+
   body:not(.home-page) .aichat-main {
-    min-height: calc(100vh - 210px);
+    grid-row: 2;
+    min-height: 0;
+  }
+}
+
+.aichat-page .aichat-main {
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  gap: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.aichat-page .aichat-thread {
+  overscroll-behavior: contain;
+}
+
+.aichat-page .aichat-composer {
+  position: relative;
+  bottom: auto;
+  margin: 0;
+}
+
+.aichat-page .aichat-meta-row {
+  margin: 0;
+  padding-top: 0;
+}
+
+@media (max-width: 900px) {
+  .aichat-page {
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior-y: none;
+  }
+
+  .aichat-page .page-shell {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .aichat-page .main-content,
+  .aichat-page .settings-main {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .aichat-page .site-footer {
+    display: none;
+  }
+
+  .aichat-page .aichat-shell {
+    height: calc(100dvh - 218px);
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .aichat-page .aichat-main {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .aichat-page .aichat-thread {
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 620px) {
+  .discussion-page .page-shell {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .discussion-page .settings-shell,
+  body:not(.home-page) .discussion-shell {
+    width: 100%;
+    max-width: none;
+    padding-inline: 0 !important;
+  }
+
+  .discussion-page .settings-header {
+    padding-inline: 14px;
+  }
+
+  .discussion-page .discussion-feed,
+  .discussion-page .discussion-detail,
+  .discussion-page .discussion-stats-sidebar,
+  .discussion-page .discussion-board-about,
+  .discussion-page .discussion-compose {
+    border-left: 0 !important;
+    border-right: 0 !important;
+    border-radius: 0 !important;
   }
 }
 
@@ -9606,8 +9861,8 @@ body.theme-light:not(.home-page) .electromagnetic-shop-item {
 
 body.theme-light:not(.home-page) .fortune-checkin-button,
 body.theme-light:not(.home-page) .electromagnetic-button {
-  border-color: var(--minimal-line-strong);
-  color: var(--minimal-text);
+  border-color: var(--minimal-line-strong) !important;
+  color: var(--minimal-text) !important;
 }
 
 body.theme-light:not(.home-page) .fortune-record-empty,
@@ -9985,8 +10240,15 @@ body.theme-light:not(.home-page) .economy-heat-panel h2,
 body.theme-light:not(.home-page) .economy-section-head h2,
 body.theme-light:not(.home-page) .shop-item-copy h2,
 body.theme-light:not(.home-page) .inventory-item-copy h2,
-body.theme-light:not(.home-page) .economy-inventory-link {
-  color: var(--minimal-text);
+body.theme-light:not(.home-page) .economy-inventory-link,
+body.theme-light:not(.home-page) .economy-balance-row .currency,
+body.theme-light:not(.home-page) .economy-balance-row .currency-electric,
+body.theme-light:not(.home-page) .economy-balance-row .currency-magnetic,
+body.theme-light:not(.home-page) .economy-balance-row .currency-value,
+body.theme-light:not(.home-page) .inventory-list .electromagnetic-button,
+body.theme-light:not(.home-page) .shop-grid .electromagnetic-button,
+body.theme-light:not(.home-page) .shop-inspect-actions .electromagnetic-button {
+  color: var(--minimal-text) !important;
 }
 
 body.theme-light:not(.home-page) .economy-auth-required p,
@@ -9994,7 +10256,7 @@ body.theme-light:not(.home-page) .economy-header p,
 body.theme-light:not(.home-page) .economy-heat-panel p,
 body.theme-light:not(.home-page) .shop-item-copy p,
 body.theme-light:not(.home-page) .inventory-item-copy p {
-  color: var(--minimal-muted);
+  color: var(--minimal-muted) !important;
 }
 
 body.theme-light:not(.home-page) .economy-heat-panel,

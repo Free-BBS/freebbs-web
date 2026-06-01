@@ -124,13 +124,10 @@ function getStoredThemeMode() {
 }
 
 function applyThemeMode(mode) {
-  if (document.body.classList.contains("home-page")) {
-    return;
-  }
-
   const normalizedMode = mode === "light" ? "light" : "dark";
   document.body.classList.toggle("theme-light", normalizedMode === "light");
   document.body.classList.toggle("theme-dark", normalizedMode !== "light");
+
   document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
     const isLight = normalizedMode === "light";
     button.setAttribute("aria-pressed", String(isLight));
@@ -158,21 +155,20 @@ function createThemeToggleButton(className) {
 }
 
 function initializeThemeMode() {
-  if (document.body.classList.contains("home-page")) {
-    return;
-  }
-
+  const isHomePage = document.body.classList.contains("home-page");
   const navActions = document.querySelector(".nav-actions");
-  const mobileNav = document.querySelector(".mobile-nav");
+  const userPanel = document.getElementById("user-panel");
+  const userActions = document.getElementById("user-actions");
 
-  if (navActions && !navActions.querySelector("[data-theme-toggle]")) {
-    const userPanel = navActions.querySelector(".user-panel");
+  if (!isHomePage && navActions && !navActions.querySelector("[data-theme-toggle]")) {
     const themeButton = createThemeToggleButton("theme-toggle nav-link");
     navActions.insertBefore(themeButton, userPanel || null);
   }
 
-  if (mobileNav && !mobileNav.querySelector("[data-theme-toggle]")) {
-    mobileNav.appendChild(createThemeToggleButton("theme-toggle mobile-theme-toggle"));
+  if (userActions && !userActions.querySelector("[data-theme-toggle]")) {
+    userActions.appendChild(createThemeToggleButton("theme-toggle mobile-theme-toggle"));
+  } else if (userPanel && !userPanel.querySelector("[data-theme-toggle]")) {
+    userPanel.appendChild(createThemeToggleButton("theme-toggle mobile-theme-toggle"));
   }
 
   applyThemeMode(getStoredThemeMode());
@@ -335,10 +331,21 @@ function getFortuneResult(score, date = getTodayKey()) {
     return {
       score,
       date,
-      label: "大吉",
+      label: "祥瑞",
       colorClass: "fortune-great",
       colorName: "金色",
-      tagline: "Absolute legend 🤩"
+      tagline: "Absoulute legend"
+    };
+  }
+
+  if (score >= 70) {
+    return {
+      score,
+      date,
+      label: "大吉",
+      colorClass: "fortune-awful",
+      colorName: "红色",
+      tagline: "Absoulute legend"
     };
   }
 
@@ -347,8 +354,8 @@ function getFortuneResult(score, date = getTodayKey()) {
       score,
       date,
       label: "吉",
-      colorClass: "fortune-good",
-      colorName: "红色",
+      colorClass: "fortune-bad",
+      colorName: "绿色",
       tagline: "闭眼写，随手推"
     };
   }
@@ -357,31 +364,20 @@ function getFortuneResult(score, date = getTodayKey()) {
     return {
       score,
       date,
-      label: "平",
-      colorClass: "fortune-neutral",
-      colorName: "白色",
+      label: "顺",
+      colorClass: "fortune-good",
+      colorName: "粉色",
       tagline: "人生是个泊松过程，一时的等待是为了下一次跳跃"
-    };
-  }
-
-  if (score >= 3) {
-    return {
-      score,
-      date,
-      label: "凶",
-      colorClass: "fortune-bad",
-      colorName: "绿色",
-      tagline: "六根清净方为稻，退步原来是向前"
     };
   }
 
   return {
     score,
     date,
-    label: "大凶",
-    colorClass: "fortune-awful",
-    colorName: "黑色",
-    tagline: "前所未见，触目惊心。"
+    label: "平",
+    colorClass: "fortune-neutral",
+    colorName: "白色",
+    tagline: "人生是个泊松过程，一时的等待是为了下一次跳跃"
   };
 }
 
@@ -837,6 +833,49 @@ function openShopInspectModal(itemKey) {
   modal.classList.remove("hidden");
 }
 
+function openInventoryInspectModal(asset) {
+  const item = asset?.item || asset?.metadata || {};
+
+  if (!asset) {
+    return;
+  }
+
+  const modal = ensureShopInspectModal();
+  modal.querySelector("#shop-inspect-image").src = item.image || "/assets/icons/inventory.svg";
+  modal.querySelector("#shop-inspect-class").textContent = item.class === "useless" ? "无用类" : "资产";
+  modal.querySelector("#shop-inspect-title").textContent = item.name || asset.key || "资产";
+  modal.querySelector("#shop-inspect-desc").textContent = item.desc || item.description || "这个资产还没有说明。";
+  modal.querySelector("#shop-inspect-price").textContent = `持有 ${Number(asset.quantity || 0)} 个`;
+  modal.querySelector("#shop-inspect-message").textContent = "";
+  modal.querySelector("#shop-inspect-actions").innerHTML = asset.key === "differential_converter"
+    ? `
+      <button class="electromagnetic-button" data-action="convert" data-direction="electric_to_magnetic" type="button" title="5 电元转 5 磁元">电 → 磁</button>
+      <button class="electromagnetic-button" data-action="convert" data-direction="magnetic_to_electric" type="button" title="5 磁元转 5 电元">磁 → 电</button>
+    `
+    : `<p class="fortune-record-empty">这个资产暂时没有可执行操作。</p>`;
+  modal.classList.remove("hidden");
+}
+
+function refreshOpenShopInspectActions(itemKey) {
+  const modal = document.getElementById("shop-inspect-modal");
+
+  if (!modal || modal.classList.contains("hidden")) {
+    return;
+  }
+
+  const item = economyShopItems.find((shopItem) => shopItem.key === itemKey);
+  const actions = modal.querySelector("#shop-inspect-actions");
+
+  if (!item || !actions) {
+    return;
+  }
+
+  actions.innerHTML = [
+    renderActivationButton(item, "electric"),
+    renderActivationButton(item, "magnetic")
+  ].join("") || `<p class="fortune-record-empty">这个物品暂时无法激发。</p>`;
+}
+
 async function loadElectromagneticPage() {
   if (!isElectromagneticPage()) {
     return;
@@ -909,9 +948,11 @@ async function loadInventoryPage() {
     if (payload.user) {
       saveSession(userState.token, payload.user);
     }
+    const assets = payload.assets || [];
+    window.freeBbsInventoryAssets = assets;
     renderEconomyBalances(balances);
     if (list) {
-      list.innerHTML = (payload.assets || []).map((asset) => {
+      list.innerHTML = assets.map((asset) => {
         const item = asset.item || asset.metadata || {};
         const isConverter = asset.key === "differential_converter";
         return `
@@ -923,12 +964,13 @@ async function loadInventoryPage() {
             <div class="inventory-item-copy">
               <h2>${escapeHtml(item.name || asset.key)}</h2>
             </div>
-            ${isConverter ? `
-              <div class="inventory-item-actions">
+            <div class="inventory-item-actions">
+              <button class="electromagnetic-button" data-action="inspect-inventory-item" data-asset-key="${escapeHtml(asset.key)}" type="button">端详</button>
+              ${isConverter ? `
                 <button class="electromagnetic-button" data-action="convert" data-direction="electric_to_magnetic" type="button" title="5 电元转 5 磁元">电 → 磁</button>
                 <button class="electromagnetic-button" data-action="convert" data-direction="magnetic_to_electric" type="button" title="5 磁元转 5 电元">磁 → 电</button>
-              </div>
-            ` : ""}
+              ` : ""}
+            </div>
           </article>
         `;
       }).join("") || `<p class="fortune-record-empty">仓库里还没有物品。</p>`;
@@ -972,16 +1014,22 @@ async function handleElectromagneticPageClick(event) {
     }
 
     if (button.dataset.action === "purchase-item") {
-      await callApi(`/electromagnetic/shop/${encodeURIComponent(button.dataset.itemKey || "")}/purchase`, {
+      const itemKey = button.dataset.itemKey || "";
+      const payload = await callApi(`/electromagnetic/shop/${encodeURIComponent(itemKey)}/purchase`, {
         method: "POST",
         body: JSON.stringify({ currency: button.dataset.currency })
       });
+      if (payload.user) {
+        saveSession(userState.token, payload.user);
+      }
+      refreshOpenShopInspectActions(itemKey);
       await loadElectromagneticPage();
       const modal = document.getElementById("shop-inspect-modal");
       const modalMessage = modal?.querySelector("#shop-inspect-message");
       if (modalMessage) {
         modalMessage.textContent = "已激发";
       }
+      refreshOpenShopInspectActions(itemKey);
     }
 
     if (message) {
@@ -997,13 +1045,33 @@ async function handleElectromagneticPageClick(event) {
 }
 
 async function handleInventoryPageClick(event) {
-  const button = event.target.closest("[data-action='convert']");
+  const closeInspect = event.target.closest("[data-action='close-shop-inspect']");
+  if (closeInspect) {
+    ensureShopInspectModal().classList.add("hidden");
+    return;
+  }
+
+  const button = event.target.closest("[data-action]");
 
   if (!button || !isInventoryPage()) {
     return;
   }
 
   const message = document.getElementById("inventory-message");
+
+  if (button.dataset.action === "inspect-inventory-item") {
+    const assets = window.freeBbsInventoryAssets || [];
+    openInventoryInspectModal(assets.find((asset) => asset.key === button.dataset.assetKey));
+    if (message) {
+      message.textContent = "";
+    }
+    return;
+  }
+
+  if (button.dataset.action !== "convert") {
+    return;
+  }
+
   button.disabled = true;
   if (message) {
     message.textContent = "正在转换...";
@@ -1015,6 +1083,17 @@ async function handleInventoryPageClick(event) {
       body: JSON.stringify({ direction: button.dataset.direction })
     });
     await loadInventoryPage();
+    const modal = document.getElementById("shop-inspect-modal");
+    const activeAssetKey = modal && !modal.classList.contains("hidden") ? "differential_converter" : "";
+    if (activeAssetKey) {
+      const assets = window.freeBbsInventoryAssets || [];
+      const activeAsset = assets.find((asset) => asset.key === activeAssetKey);
+      if (activeAsset) {
+        openInventoryInspectModal(activeAsset);
+      } else {
+        modal.classList.add("hidden");
+      }
+    }
     if (message) {
       message.textContent = "已转换";
     }
