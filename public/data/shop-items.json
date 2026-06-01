@@ -26,8 +26,7 @@
       "desc": "一个鱼骨头，没有人知道是哪里来的。也许是某个不小心吃鱼时掉落的，也可能是某个不小心吃鱼时捡到的。总之它就是一个鱼骨头，没有什么用处。",
       "image": "/assets/icons/fishbone.svg",
       "cost": {
-        "electric": 5,
-        "magnetic": 5
+        "electric": 5
       }
     }
   ]
