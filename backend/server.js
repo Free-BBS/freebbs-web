@@ -7,7 +7,6 @@ const pool = require("./db");
 const config = require("./config");
 const { hashPassword, verifyPassword } = require("./password");
 const { sign, verify } = require("./token");
-const { sendVerificationCode } = require("./mailer");
 const { CODE_TTL_MINUTES, buildExpiryDate, generateEmailCode, hashCode } = require("./verification");
 
 const app = express();
@@ -29,6 +28,11 @@ const MAX_AGENT_USER = {
   email: "max@free-bbs.local",
   avatarPath: "/assets/max_the_agent_avatar.webp"
 };
+
+async function sendVerificationCode(email, code) {
+  const mailer = require("./mailer");
+  return mailer.sendVerificationCode(email, code);
+}
 const MAX_MENTION_PATTERN = /(^|[^\p{L}\p{N}_])@max(?=$|[^\p{L}\p{N}_])/iu;
 const DISCUSSION_REACTION_TYPES = new Set(["smile", "light", "fireworks"]);
 const DISCUSSION_BOARD_SEEDS = [
@@ -809,6 +813,7 @@ async function getUserAssets(userId) {
     `SELECT asset_key, quantity, metadata_json, created_at, updated_at
      FROM user_assets
      WHERE user_id = ?
+       AND quantity > 0
      ORDER BY asset_key ASC`,
     [userId]
   );
@@ -830,13 +835,20 @@ function getShopItems() {
 
     return items.map((item) => {
       const key = String(item.key || "").trim();
-      const cost = item.cost && typeof item.cost === "object" ? item.cost : {};
+      const baseCost = item.cost && typeof item.cost === "object" ? item.cost : {};
+      const cost = {
+        ...baseCost,
+        ...(item.electric ? { electric: item.electric } : {}),
+        ...(item.magnetic ? { magnetic: item.magnetic } : {})
+      };
 
       return {
         key,
         assetKey: String(item.assetKey || key).trim(),
         name: String(item.name || key).trim(),
+        class: String(item.class || "usable").trim(),
         description: String(item.description || "").trim(),
+        desc: String(item.desc || item.description || "").trim(),
         image: String(item.image || "").trim(),
         cost: Object.fromEntries(
           Object.entries(cost)
@@ -845,7 +857,7 @@ function getShopItems() {
         ),
         use: item.use && typeof item.use === "object" ? item.use : null
       };
-    }).filter((item) => item.key && item.assetKey && Object.keys(item.cost).length);
+    }).filter((item) => item.key && item.assetKey);
   } catch (error) {
     console.error("Failed to load shop catalog", error);
     return [];
@@ -1938,8 +1950,9 @@ async function purchaseShopItem(request, response, itemKey) {
     const [result] = await pool.execute(
       `UPDATE users
        SET ${column} = ${column} - ?
+           , heat = heat + ?
        WHERE id = ? AND ${column} >= ?`,
-      [cost, user.id, cost]
+      [cost, cost, user.id, cost]
     );
 
     if (!result.affectedRows) {
@@ -1949,11 +1962,11 @@ async function purchaseShopItem(request, response, itemKey) {
 
     await pool.execute(
       `INSERT INTO user_assets (user_id, asset_key, quantity, metadata_json)
-       VALUES (?, ?, 1, JSON_OBJECT('name', ?, 'description', ?, 'image', ?))
+       VALUES (?, ?, 1, JSON_OBJECT('name', ?, 'description', ?, 'desc', ?, 'image', ?, 'class', ?))
        ON DUPLICATE KEY UPDATE
          quantity = quantity + 1,
          metadata_json = VALUES(metadata_json)`,
-      [user.id, item.assetKey, item.name, item.description, item.image]
+      [user.id, item.assetKey, item.name, item.description, item.desc, item.image, item.class]
     );
 
     response.json({
@@ -1974,6 +1987,8 @@ app.post("/api/electromagnetic/shop/differential-converter", async (request, res
 });
 
 app.post("/api/electromagnetic/convert", async (request, response) => {
+  let connection;
+
   try {
     const user = await requireAuth(request, response);
 
@@ -1990,20 +2005,25 @@ app.post("/api/electromagnetic/convert", async (request, response) => {
       return;
     }
 
-    const [assetRows] = await pool.execute(
-      `SELECT quantity
-       FROM user_assets
-       WHERE user_id = ? AND asset_key = 'differential_converter'
-       LIMIT 1`,
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [assetResult] = await connection.execute(
+      `UPDATE user_assets
+       SET quantity = quantity - 1
+       WHERE user_id = ?
+         AND asset_key = 'differential_converter'
+         AND quantity >= 1`,
       [user.id]
     );
 
-    if (!assetRows[0] || Number(assetRows[0].quantity || 0) < 1) {
+    if (!assetResult.affectedRows) {
+      await connection.rollback();
       response.status(400).json({ message: "需要先拥有微分器" });
       return;
     }
 
-    const [result] = await pool.execute(
+    const [result] = await connection.execute(
       `UPDATE users
        SET ${fromColumn} = ${fromColumn} - 5,
            ${toColumn} = ${toColumn} + 5
@@ -2012,16 +2032,24 @@ app.post("/api/electromagnetic/convert", async (request, response) => {
     );
 
     if (!result.affectedRows) {
+      await connection.rollback();
       response.status(400).json({ message: "余额不足，至少需要 5 个" });
       return;
     }
+
+    await connection.commit();
 
     response.json({
       user: toUserProfile(await getUserById(user.id)),
       assets: await getUserAssets(user.id)
     });
   } catch (error) {
+    if (connection) {
+      await connection.rollback().catch(() => {});
+    }
     response.status(500).json({ message: "转换失败", detail: error.message });
+  } finally {
+    connection?.release();
   }
 });
 

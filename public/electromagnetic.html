@@ -117,16 +117,14 @@
       </nav>
       <main class="main-content settings-main economy-main">
         <section class="economy-auth-required" aria-label="登录后进入电磁场">
-          <h1>电磁场</h1>
-          <p>登录后可以购买资产、兑换热力，并进入仓库使用物品。</p>
+          <p>登录后可以购买资产，并进入仓库使用物品。购买时消耗的电元或磁元会转化为热力。</p>
           <a class="aichat-auth-link" href="/login">登录 / 注册</a>
         </section>
         <section class="economy-shell" aria-label="电磁场商店">
           <header class="economy-header">
             <div>
               <p class="discussion-kicker">Electromagnetic Field</p>
-              <h1>电磁场</h1>
-              <p>商品由商店目录维护。当前可用资产会进入仓库，后续可以继续扩展更多物品。</p>
+              <p>商品由商店目录维护。购买会消耗电元或磁元，并把消耗值加入热力。</p>
             </div>
             <a class="economy-inventory-link" href="/inventory">
               <img src="/assets/icons/inventory.svg" alt="" aria-hidden="true" />
@@ -134,16 +132,6 @@
             </a>
           </header>
           <div class="economy-balance-row" id="economy-balance-row"></div>
-          <section class="economy-heat-panel" aria-label="热力兑换">
-            <div>
-              <h2>热力</h2>
-              <p>消耗 1 个电元或 1 个磁元获得 1 点热力。每日 24:00 热力减半并向上取整。</p>
-            </div>
-            <div class="electromagnetic-actions">
-              <button class="electromagnetic-button" data-action="buy-heat" data-currency="electric" type="button">用电元兑换</button>
-              <button class="electromagnetic-button" data-action="buy-heat" data-currency="magnetic" type="button">用磁元兑换</button>
-            </div>
-          </section>
           <section aria-label="商店商品">
             <div class="economy-section-head">
               <h2>商店</h2>

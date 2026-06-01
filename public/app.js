@@ -34,6 +34,7 @@ const userState = {
   heat: 0,
   fortuneBonusEnabled: false
 };
+let economyShopItems = [];
 
 const userName = document.getElementById("user-name");
 const userRole = document.getElementById("user-role");
@@ -133,7 +134,10 @@ function applyThemeMode(mode) {
   document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
     const isLight = normalizedMode === "light";
     button.setAttribute("aria-pressed", String(isLight));
-    button.textContent = isLight ? "暗色模式" : "明亮模式";
+    button.innerHTML = `
+      <img class="nav-icon theme-toggle-icon" src="/assets/icons/${isLight ? "moon" : "sun"}.svg" alt="" aria-hidden="true" />
+      <span>${isLight ? "暗色模式" : "明亮模式"}</span>
+    `;
     button.setAttribute("aria-label", isLight ? "切换到暗色模式" : "切换到明亮模式");
   });
 }
@@ -592,16 +596,8 @@ function ensureElectromagneticModal() {
     <section class="fortune-panel electromagnetic-panel" aria-labelledby="electromagnetic-title">
       <button class="fortune-close" type="button" data-action="close" aria-label="关闭">×</button>
       <h2 class="fortune-title" id="electromagnetic-title">电磁场</h2>
-      <p class="fortune-tagline">用电元或磁元购买资产，或兑换热力。</p>
+      <p class="fortune-tagline">购买资产会消耗电元或磁元，并把消耗值加入热力。</p>
       <div class="electromagnetic-balances" id="electromagnetic-balances"></div>
-      <section class="electromagnetic-section">
-        <h3>热力</h3>
-        <p>消耗 1 个电元或 1 个磁元，可以获得 1 点热力。每日 24:00 热力减半并向上取整。</p>
-        <div class="electromagnetic-actions">
-          <button class="electromagnetic-button" data-action="buy-heat" data-currency="electric" type="button">用电元 +1 热力</button>
-          <button class="electromagnetic-button" data-action="buy-heat" data-currency="magnetic" type="button">用磁元 +1 热力</button>
-        </div>
-      </section>
       <section class="electromagnetic-section">
         <h3>商店</h3>
         <article class="electromagnetic-shop-item">
@@ -693,13 +689,7 @@ async function handleElectromagneticModalClick(event) {
 
   try {
     let payload;
-    if (action === "buy-heat") {
-      payload = await callApi("/electromagnetic/heat", {
-        method: "POST",
-        body: JSON.stringify({ currency: button.dataset.currency })
-      });
-      payload.assets = await getCurrentAssets();
-    } else if (action === "buy-differentiator") {
+    if (action === "buy-differentiator") {
       payload = await callApi("/electromagnetic/shop/differential-converter", {
         method: "POST",
         body: JSON.stringify({ currency: button.dataset.currency })
@@ -754,6 +744,99 @@ function renderShopCost(cost = {}) {
   return parts.join(" / ") || "未定价";
 }
 
+function ensureShopInspectModal() {
+  let modal = document.getElementById("shop-inspect-modal");
+
+  if (modal) {
+    return modal;
+  }
+
+  modal = document.createElement("div");
+  modal.id = "shop-inspect-modal";
+  modal.className = "fortune-modal shop-inspect-modal hidden";
+  modal.innerHTML = `
+    <div class="fortune-backdrop" data-action="close-shop-inspect"></div>
+    <section class="fortune-panel shop-inspect-panel" aria-labelledby="shop-inspect-title">
+      <button class="fortune-close" type="button" data-action="close-shop-inspect" aria-label="关闭">×</button>
+      <div class="shop-inspect-layout">
+        <div class="shop-inspect-image">
+          <img id="shop-inspect-image" src="/assets/icons/battery.svg" alt="" aria-hidden="true" />
+        </div>
+        <div class="shop-inspect-copy">
+          <p class="discussion-kicker" id="shop-inspect-class"></p>
+          <h2 id="shop-inspect-title"></h2>
+          <p id="shop-inspect-desc"></p>
+          <strong id="shop-inspect-price"></strong>
+          <div class="shop-inspect-actions" id="shop-inspect-actions"></div>
+          <p class="discussion-message" id="shop-inspect-message"></p>
+        </div>
+      </div>
+    </section>
+  `;
+  document.body.append(modal);
+  return modal;
+}
+
+function getCurrencyOwned(currency) {
+  if (currency === "electric") {
+    return Number(userState.electrons || 0);
+  }
+
+  if (currency === "magnetic") {
+    return Number(userState.manetrons || 0);
+  }
+
+  return 0;
+}
+
+function renderActivationButton(item, currency) {
+  const price = Number(item.cost?.[currency] || 0);
+
+  if (!price) {
+    return "";
+  }
+
+  const icon = currency === "electric" ? "electron" : "magnetron";
+  const label = currency === "electric" ? "电激发" : "磁激发";
+  const owned = getCurrencyOwned(currency);
+
+  return `
+    <button
+      class="electromagnetic-button economy-activation-button"
+      data-action="purchase-item"
+      data-item-key="${escapeHtml(item.key)}"
+      data-currency="${currency}"
+      data-tooltip="${label}：消耗 ${price}，当前持有 ${owned}"
+      title="${label}：${price}/${owned}"
+      type="button"
+    >
+      <img src="/assets/icons/${icon}.svg" alt="" aria-hidden="true" />
+      <span>${price}/${owned}</span>
+    </button>
+  `;
+}
+
+function openShopInspectModal(itemKey) {
+  const item = economyShopItems.find((shopItem) => shopItem.key === itemKey);
+
+  if (!item) {
+    return;
+  }
+
+  const modal = ensureShopInspectModal();
+  modal.querySelector("#shop-inspect-image").src = item.image || "/assets/icons/battery.svg";
+  modal.querySelector("#shop-inspect-class").textContent = item.class === "useless" ? "无用类" : "资产";
+  modal.querySelector("#shop-inspect-title").textContent = item.name || item.key;
+  modal.querySelector("#shop-inspect-desc").textContent = item.desc || item.description || "";
+  modal.querySelector("#shop-inspect-price").textContent = renderShopCost(item.cost);
+  modal.querySelector("#shop-inspect-message").textContent = "";
+  modal.querySelector("#shop-inspect-actions").innerHTML = [
+    renderActivationButton(item, "electric"),
+    renderActivationButton(item, "magnetic")
+  ].join("") || `<p class="fortune-record-empty">这个物品暂时无法激发。</p>`;
+  modal.classList.remove("hidden");
+}
+
 async function loadElectromagneticPage() {
   if (!isElectromagneticPage()) {
     return;
@@ -775,22 +858,22 @@ async function loadElectromagneticPage() {
     if (payload.user) {
       saveSession(userState.token, payload.user);
     }
+    economyShopItems = payload.shopItems || [];
+    const assetQuantityByKey = new Map((payload.assets || []).map((asset) => [asset.key, Number(asset.quantity || 0)]));
     renderEconomyBalances(balances);
     if (grid) {
-      grid.innerHTML = (payload.shopItems || []).map((item) => `
+      grid.innerHTML = economyShopItems.map((item) => `
         <article class="shop-item-card" data-item-key="${escapeHtml(item.key)}">
+          <span class="asset-quantity-badge">${assetQuantityByKey.get(item.assetKey || item.key) || 0}</span>
           <div class="shop-item-image">
             <img src="${escapeHtml(item.image || "/assets/icons/battery.svg")}" alt="" aria-hidden="true" />
           </div>
           <div class="shop-item-copy">
             <p class="discussion-kicker">Asset</p>
             <h2>${escapeHtml(item.name)}</h2>
-            <p>${escapeHtml(item.description || "")}</p>
-            <strong>${escapeHtml(renderShopCost(item.cost))}</strong>
           </div>
           <div class="shop-item-actions">
-            ${Number(item.cost?.electric || 0) > 0 ? `<button class="electromagnetic-button" data-action="purchase-item" data-item-key="${escapeHtml(item.key)}" data-currency="electric" type="button">电元购买</button>` : ""}
-            ${Number(item.cost?.magnetic || 0) > 0 ? `<button class="electromagnetic-button" data-action="purchase-item" data-item-key="${escapeHtml(item.key)}" data-currency="magnetic" type="button">磁元购买</button>` : ""}
+            <button class="electromagnetic-button" data-action="inspect-item" data-item-key="${escapeHtml(item.key)}" type="button">端详</button>
           </div>
         </article>
       `).join("") || `<p class="fortune-record-empty">暂无商品。</p>`;
@@ -833,18 +916,17 @@ async function loadInventoryPage() {
         const isConverter = asset.key === "differential_converter";
         return `
           <article class="inventory-item-row" data-asset-key="${escapeHtml(asset.key)}">
+            <span class="asset-quantity-badge">${Number(asset.quantity || 0)}</span>
             <div class="inventory-item-image">
               <img src="${escapeHtml(item.image || "/assets/icons/inventory.svg")}" alt="" aria-hidden="true" />
             </div>
             <div class="inventory-item-copy">
               <h2>${escapeHtml(item.name || asset.key)}</h2>
-              <p>${escapeHtml(item.description || "")}</p>
-              <strong>拥有 ${Number(asset.quantity || 0)} 个</strong>
             </div>
             ${isConverter ? `
               <div class="inventory-item-actions">
-                <button class="electromagnetic-button" data-action="convert" data-direction="electric_to_magnetic" type="button">5 电元转 5 磁元</button>
-                <button class="electromagnetic-button" data-action="convert" data-direction="magnetic_to_electric" type="button">5 磁元转 5 电元</button>
+                <button class="electromagnetic-button" data-action="convert" data-direction="electric_to_magnetic" type="button" title="5 电元转 5 磁元">电 → 磁</button>
+                <button class="electromagnetic-button" data-action="convert" data-direction="magnetic_to_electric" type="button" title="5 磁元转 5 电元">磁 → 电</button>
               </div>
             ` : ""}
           </article>
@@ -862,6 +944,12 @@ async function loadInventoryPage() {
 }
 
 async function handleElectromagneticPageClick(event) {
+  const closeInspect = event.target.closest("[data-action='close-shop-inspect']");
+  if (closeInspect) {
+    ensureShopInspectModal().classList.add("hidden");
+    return;
+  }
+
   const button = event.target.closest("[data-action]");
 
   if (!button || !isElectromagneticPage()) {
@@ -875,16 +963,12 @@ async function handleElectromagneticPageClick(event) {
   }
 
   try {
-    if (button.dataset.action === "buy-heat") {
-      const payload = await callApi("/electromagnetic/heat", {
-        method: "POST",
-        body: JSON.stringify({ currency: button.dataset.currency })
-      });
-      if (payload.user) {
-        saveSession(userState.token, payload.user);
+    if (button.dataset.action === "inspect-item") {
+      openShopInspectModal(button.dataset.itemKey || "");
+      if (message) {
+        message.textContent = "";
       }
-      renderEconomyBalances(document.getElementById("economy-balance-row"));
-      loadHeatLeaderboard();
+      return;
     }
 
     if (button.dataset.action === "purchase-item") {
@@ -893,6 +977,11 @@ async function handleElectromagneticPageClick(event) {
         body: JSON.stringify({ currency: button.dataset.currency })
       });
       await loadElectromagneticPage();
+      const modal = document.getElementById("shop-inspect-modal");
+      const modalMessage = modal?.querySelector("#shop-inspect-message");
+      if (modalMessage) {
+        modalMessage.textContent = "已激发";
+      }
     }
 
     if (message) {

@@ -37,7 +37,10 @@ function applyThemeMode(mode) {
   document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
     const isLight = normalizedMode === "light";
     button.setAttribute("aria-pressed", String(isLight));
-    button.textContent = isLight ? "暗色模式" : "明亮模式";
+    button.innerHTML = `
+      <img class="nav-icon theme-toggle-icon" src="/assets/icons/${isLight ? "moon" : "sun"}.svg" alt="" aria-hidden="true" />
+      <span>${isLight ? "暗色模式" : "明亮模式"}</span>
+    `;
     button.setAttribute("aria-label", isLight ? "切换到暗色模式" : "切换到明亮模式");
   });
 }
