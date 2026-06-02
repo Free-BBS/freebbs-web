@@ -236,6 +236,9 @@ async function ensureDiscussionTables() {
       is_featured TINYINT(1) NOT NULL DEFAULT 0,
       featured_at DATETIME NULL,
       featured_by BIGINT NULL,
+      is_deleted TINYINT(1) NOT NULL DEFAULT 0,
+      deleted_at DATETIME NULL,
+      deleted_by BIGINT NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       CONSTRAINT fk_discussion_posts_board
@@ -332,7 +335,10 @@ async function ensureDiscussionTables() {
     ["pinned_by", "ALTER TABLE discussion_posts ADD COLUMN pinned_by BIGINT NULL AFTER pinned_at"],
     ["is_featured", "ALTER TABLE discussion_posts ADD COLUMN is_featured TINYINT(1) NOT NULL DEFAULT 0 AFTER pinned_by"],
     ["featured_at", "ALTER TABLE discussion_posts ADD COLUMN featured_at DATETIME NULL AFTER is_featured"],
-    ["featured_by", "ALTER TABLE discussion_posts ADD COLUMN featured_by BIGINT NULL AFTER featured_at"]
+    ["featured_by", "ALTER TABLE discussion_posts ADD COLUMN featured_by BIGINT NULL AFTER featured_at"],
+    ["is_deleted", "ALTER TABLE discussion_posts ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0 AFTER featured_by"],
+    ["deleted_at", "ALTER TABLE discussion_posts ADD COLUMN deleted_at DATETIME NULL AFTER is_deleted"],
+    ["deleted_by", "ALTER TABLE discussion_posts ADD COLUMN deleted_by BIGINT NULL AFTER deleted_at"]
   ];
 
   for (const [columnName, alterSql] of postPinColumns) {
@@ -818,14 +824,21 @@ async function getUserAssets(userId) {
     [userId]
   );
 
-  return rows.map((row) => ({
-    key: row.asset_key,
-    quantity: Number(row.quantity || 0),
-    metadata: row.metadata_json || null,
-    item: shopItemByAsset.get(row.asset_key) || null,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
-  }));
+  return rows.map((row) => {
+    const item = shopItemByAsset.get(row.asset_key) || null;
+    const metadata = row.metadata_json || null;
+    const isGift = item?.isGift === false || metadata?.isgift === false || metadata?.isGift === false ? false : true;
+
+    return {
+      key: row.asset_key,
+      quantity: Number(row.quantity || 0),
+      metadata,
+      item,
+      isGift,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  });
 }
 
 function getShopItems() {
@@ -850,6 +863,7 @@ function getShopItems() {
         description: String(item.description || "").trim(),
         desc: String(item.desc || item.description || "").trim(),
         image: String(item.image || "").trim(),
+        isGift: item.isgift === false || item.is_gift === false || item.isGift === false ? false : true,
         cost: Object.fromEntries(
           Object.entries(cost)
             .map(([currency, value]) => [normalizeCurrencyType(currency), Number(value)])
@@ -869,6 +883,26 @@ function getShopItem(key) {
   return getShopItems().find((item) => item.key === normalizedKey || item.assetKey === normalizedKey) || null;
 }
 
+function normalizeAssetMetadataJson(value, fallback = {}) {
+  if (!value) {
+    return fallback;
+  }
+
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  }
+
+  if (typeof value === "object") {
+    return value;
+  }
+
+  return fallback;
+}
+
 async function getHeatLeaderboard(limit = 3) {
   await ensureEconomyTables();
 
@@ -883,6 +917,7 @@ async function getHeatLeaderboard(limit = 3) {
   return rows.map((row) => ({
     uid: row.uid || "",
     username: row.username,
+    nickname: row.username,
     fullName: row.full_name,
     avatarPath: row.avatar_path || "",
     heat: Number(row.heat || 0)
@@ -964,10 +999,11 @@ function toDiscussionBoard(row) {
 }
 
 function toDiscussionPostSummary(row) {
+  const isDeleted = Boolean(row.is_deleted);
   return {
     id: row.pid || String(row.id),
     pid: row.pid || String(row.id),
-    title: row.title,
+    title: isDeleted ? "已删除的帖子" : row.title,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     board: {
@@ -978,9 +1014,11 @@ function toDiscussionPostSummary(row) {
     pinnedAt: row.pinned_at || null,
     isFeatured: Boolean(row.is_featured),
     featuredAt: row.featured_at || null,
-    canFeature: Boolean(row.can_feature),
-    canPin: Boolean(row.can_pin),
-    canDelete: Boolean(row.can_delete),
+    isDeleted,
+    deletedAt: row.deleted_at || null,
+    canFeature: !isDeleted && Boolean(row.can_feature),
+    canPin: !isDeleted && Boolean(row.can_pin),
+    canDelete: !isDeleted && Boolean(row.can_delete),
     author: {
       id: row.user_id,
       uid: row.uid || "",
@@ -1018,9 +1056,10 @@ function toDiscussionComment(row) {
 }
 
 function toDiscussionPostDetail(row) {
+  const isDeleted = Boolean(row.is_deleted);
   return {
     ...toDiscussionPostSummary(row),
-    contentMarkdown: row.content_markdown || ""
+    contentMarkdown: isDeleted ? "这篇帖子已被删除。" : (row.content_markdown || "")
   };
 }
 
@@ -1349,7 +1388,7 @@ async function getDiscussionPostByPublicId(value) {
   }
 
   const [rows] = await pool.execute(
-    `SELECT id, pid, board_id
+    `SELECT id, pid, board_id, user_id, is_deleted
      FROM discussion_posts
      WHERE pid = ?${legacyCondition}
      LIMIT 1`,
@@ -1962,11 +2001,11 @@ async function purchaseShopItem(request, response, itemKey) {
 
     await pool.execute(
       `INSERT INTO user_assets (user_id, asset_key, quantity, metadata_json)
-       VALUES (?, ?, 1, JSON_OBJECT('name', ?, 'description', ?, 'desc', ?, 'image', ?, 'class', ?))
+       VALUES (?, ?, 1, JSON_OBJECT('name', ?, 'description', ?, 'desc', ?, 'image', ?, 'class', ?, 'isgift', ?))
        ON DUPLICATE KEY UPDATE
          quantity = quantity + 1,
          metadata_json = VALUES(metadata_json)`,
-      [user.id, item.assetKey, item.name, item.description, item.desc, item.image, item.class]
+      [user.id, item.assetKey, item.name, item.description, item.desc, item.image, item.class, item.isGift !== false]
     );
 
     response.json({
@@ -2048,6 +2087,137 @@ app.post("/api/electromagnetic/convert", async (request, response) => {
       await connection.rollback().catch(() => {});
     }
     response.status(500).json({ message: "转换失败", detail: error.message });
+  } finally {
+    connection?.release();
+  }
+});
+
+app.post("/api/electromagnetic/assets/:assetKey/gift", async (request, response) => {
+  let connection;
+
+  try {
+    const user = await requireAuth(request, response);
+
+    if (!user) {
+      return;
+    }
+
+    const requestedAssetKey = String(request.params.assetKey || "").trim();
+    const target = String(request.body.target || "").trim();
+
+    if (!requestedAssetKey) {
+      response.status(400).json({ message: "无效资产" });
+      return;
+    }
+
+    if (!target) {
+      response.status(400).json({ message: "请输入接收者 UID 或昵称" });
+      return;
+    }
+
+    const item = getShopItem(requestedAssetKey);
+
+    if (!item) {
+      response.status(404).json({ message: "资产不存在" });
+      return;
+    }
+
+    if (item.isGift === false) {
+      response.status(400).json({ message: "这个资产不能赠与" });
+      return;
+    }
+
+    const assetKey = item.assetKey || item.key;
+
+    const [targetRows] = await pool.execute(
+      `SELECT id, uid, username, full_name, student_id
+       FROM users
+       WHERE uid = ?
+          OR student_id = ?
+          OR LOWER(username) = LOWER(?)
+          OR LOWER(full_name) = LOWER(?)
+       ORDER BY
+         CASE
+           WHEN uid = ? THEN 0
+           WHEN student_id = ? THEN 1
+           WHEN LOWER(username) = LOWER(?) THEN 2
+           ELSE 3
+         END,
+         id ASC
+       LIMIT 1`,
+      [target, target, target, target, target, target, target]
+    );
+    const targetUser = targetRows[0];
+
+    if (!targetUser) {
+      response.status(404).json({ message: "接收者不存在" });
+      return;
+    }
+
+    if (targetUser.id === user.id) {
+      response.status(400).json({ message: "不能赠与给自己" });
+      return;
+    }
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [assetRows] = await connection.execute(
+      `SELECT asset_key, quantity, metadata_json
+       FROM user_assets
+       WHERE user_id = ? AND asset_key = ? AND quantity > 0
+       LIMIT 1
+       FOR UPDATE`,
+      [user.id, assetKey]
+    );
+    const asset = assetRows[0];
+
+    if (!asset) {
+      await connection.rollback();
+      response.status(400).json({ message: "你没有这个资产" });
+      return;
+    }
+
+    await connection.execute(
+      `UPDATE user_assets
+       SET quantity = quantity - 1
+       WHERE user_id = ? AND asset_key = ? AND quantity > 0`,
+      [user.id, assetKey]
+    );
+
+    await connection.execute(
+      `INSERT INTO user_assets (user_id, asset_key, quantity, metadata_json)
+       VALUES (?, ?, 1, ?)
+       ON DUPLICATE KEY UPDATE
+         quantity = quantity + 1,
+         metadata_json = COALESCE(user_assets.metadata_json, VALUES(metadata_json))`,
+      [
+        targetUser.id,
+        assetKey,
+        JSON.stringify({
+          ...item,
+          ...normalizeAssetMetadataJson(asset.metadata_json, {}),
+          isgift: item.isGift !== false
+        })
+      ]
+    );
+
+    await connection.commit();
+
+    response.json({
+      ok: true,
+      recipient: {
+        uid: targetUser.uid || "",
+        username: targetUser.username,
+        fullName: targetUser.full_name || ""
+      },
+      assets: await getUserAssets(user.id)
+    });
+  } catch (error) {
+    if (connection) {
+      await connection.rollback().catch(() => {});
+    }
+    response.status(500).json({ message: "赠与失败", detail: error.message });
   } finally {
     connection?.release();
   }
@@ -2351,13 +2521,13 @@ app.get("/api/discussion/stats", async (_request, response) => {
 
     const [summaryRows] = await pool.execute(
       `SELECT
-         (SELECT COUNT(*) FROM discussion_posts) AS post_count,
+         (SELECT COUNT(*) FROM discussion_posts WHERE is_deleted = 0) AS post_count,
          (SELECT COUNT(*) FROM discussion_post_likes WHERE reaction_type = 'smile') AS like_count`
     );
     const [boardRows] = await pool.execute(
       `SELECT b.slug, b.name, b.description, b.description_markdown, COUNT(p.id) AS post_count
        FROM discussion_boards b
-       LEFT JOIN discussion_posts p ON p.board_id = b.id
+       LEFT JOIN discussion_posts p ON p.board_id = b.id AND p.is_deleted = 0
        WHERE b.is_active = 1
        GROUP BY b.id, b.slug, b.name, b.description, b.description_markdown, b.sort_order
        ORDER BY b.sort_order ASC, b.id ASC`
@@ -2382,6 +2552,7 @@ app.get("/api/discussion/stats", async (_request, response) => {
 app.get("/api/discussion/posts", async (request, response) => {
   const boardSlug = String(request.query.board || "all").trim().toLowerCase();
   const limit = normalizeLimit(request.query.limit, 12, 50);
+  const clientHash = String(request.query.hash || "").trim();
 
   try {
     await ensureDiscussionTables();
@@ -2396,11 +2567,48 @@ app.get("/api/discussion/posts", async (request, response) => {
       }
     }
 
-    const where = boardSlug === "all" ? "WHERE b.is_active = 1" : "WHERE b.is_active = 1 AND b.slug = ?";
+    const visibilityCondition = currentUser?.role === "admin" ? "" : " AND p.is_deleted = 0";
+    const where = boardSlug === "all"
+      ? `WHERE b.is_active = 1${visibilityCondition}`
+      : `WHERE b.is_active = 1 AND b.slug = ?${visibilityCondition}`;
     const params = boardSlug === "all" ? [] : [boardSlug];
+    const [hashRows] = await pool.execute(
+      `SELECT COUNT(DISTINCT p.id) AS post_count,
+              COUNT(DISTINCT c.id) AS comment_count,
+              COUNT(DISTINCT CONCAT(l.post_id, ':', l.user_id, ':', l.reaction_type)) AS reaction_count,
+              COALESCE(MAX(UNIX_TIMESTAMP(GREATEST(
+                p.created_at,
+                p.updated_at,
+                COALESCE(p.deleted_at, p.updated_at),
+                COALESCE(c.updated_at, p.updated_at),
+                COALESCE(l.created_at, p.updated_at)
+              ))), 0) AS newest_change
+       FROM discussion_posts p
+       INNER JOIN discussion_boards b ON b.id = p.board_id
+       LEFT JOIN discussion_comments c ON c.post_id = p.id
+       LEFT JOIN discussion_post_likes l ON l.post_id = p.id
+       ${where}`,
+      params
+    );
+    const postsHash = [
+      Number(hashRows[0]?.post_count || 0),
+      Number(hashRows[0]?.comment_count || 0),
+      Number(hashRows[0]?.reaction_count || 0),
+      Number(hashRows[0]?.newest_change || 0)
+    ].join(":");
+
+    if (clientHash && clientHash === postsHash) {
+      response.json({
+        hash: postsHash,
+        notModified: true,
+        posts: []
+      });
+      return;
+    }
+
     const [rows] = await pool.execute(
       `SELECT p.id, p.pid, p.title, p.created_at, p.updated_at, p.user_id,
-              p.is_pinned, p.pinned_at, p.is_featured, p.featured_at,
+              p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.deleted_at,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
               u.student_id, u.uid, u.username, u.full_name, u.avatar_path,
@@ -2413,7 +2621,7 @@ app.get("/api/discussion/posts", async (request, response) => {
               MAX(CASE WHEN my_fireworks.user_id IS NULL THEN 0 ELSE 1 END) AS fireworks_by_me,
               MAX(CASE WHEN ? = 'admin' OR bm.user_id IS NOT NULL THEN 1 ELSE 0 END) AS can_feature,
               MAX(CASE WHEN ? = 'admin' THEN 1 ELSE 0 END) AS can_pin,
-              MAX(CASE WHEN ? = 'admin' THEN 1 ELSE 0 END) AS can_delete
+              MAX(CASE WHEN ? = 'admin' OR p.user_id = ? THEN 1 ELSE 0 END) AS can_delete
        FROM discussion_posts p
        INNER JOIN discussion_boards b ON b.id = p.board_id
        INNER JOIN users u ON u.id = p.user_id
@@ -2424,16 +2632,18 @@ app.get("/api/discussion/posts", async (request, response) => {
        LEFT JOIN discussion_post_likes my_light ON my_light.post_id = p.id AND my_light.reaction_type = 'light' AND my_light.user_id = ${currentUser ? "?" : "0"}
        LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? "?" : "0"}
        ${where}
-       GROUP BY p.id, p.pid, p.title, p.created_at, p.updated_at, p.user_id, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at,
+       GROUP BY p.id, p.pid, p.title, p.created_at, p.updated_at, p.user_id, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.deleted_at,
                 b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        ORDER BY ${boardSlug === "all" ? "p.is_pinned DESC, p.pinned_at DESC, p.created_at DESC, p.id DESC" : "p.is_pinned DESC, p.pinned_at DESC, p.is_featured DESC, p.featured_at DESC, p.created_at DESC, p.id DESC"}
-       LIMIT ${limit}`,
+      LIMIT ${limit}`,
       currentUser
-        ? [currentUser.role, currentUser.role, currentUser.role, currentUser.id, currentUser.id, currentUser.id, currentUser.id, ...params]
-        : ["", "", "", 0, ...params]
+        ? [currentUser.role, currentUser.role, currentUser.role, currentUser.id, currentUser.id, currentUser.id, currentUser.id, currentUser.id, ...params]
+        : ["", "", "", 0, 0, ...params]
     );
 
     response.json({
+      hash: postsHash,
+      notModified: false,
       posts: rows.map(toDiscussionPostSummary)
     });
   } catch (error) {
@@ -2455,7 +2665,7 @@ app.get("/api/discussion/posts/:id", async (request, response) => {
 
     const [rows] = await pool.execute(
       `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
-              p.is_pinned, p.pinned_at, p.is_featured, p.featured_at,
+              p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.deleted_at,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
               u.student_id, u.uid, u.username, u.full_name, u.avatar_path,
@@ -2468,7 +2678,7 @@ app.get("/api/discussion/posts/:id", async (request, response) => {
               MAX(CASE WHEN my_fireworks.user_id IS NULL THEN 0 ELSE 1 END) AS fireworks_by_me,
               MAX(CASE WHEN ? = 'admin' OR bm.user_id IS NOT NULL THEN 1 ELSE 0 END) AS can_feature,
               MAX(CASE WHEN ? = 'admin' THEN 1 ELSE 0 END) AS can_pin,
-              MAX(CASE WHEN ? = 'admin' THEN 1 ELSE 0 END) AS can_delete
+              MAX(CASE WHEN ? = 'admin' OR p.user_id = ? THEN 1 ELSE 0 END) AS can_delete
        FROM discussion_posts p
        INNER JOIN discussion_boards b ON b.id = p.board_id
        INNER JOIN users u ON u.id = p.user_id
@@ -2480,12 +2690,13 @@ app.get("/api/discussion/posts/:id", async (request, response) => {
        LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? "?" : "0"}
        WHERE p.id = ?
          AND b.is_active = 1
-       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at,
+         AND (? = 'admin' OR p.is_deleted = 0)
+       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.deleted_at,
                 b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        LIMIT 1`,
       currentUser
-        ? [currentUser.role, currentUser.role, currentUser.role, currentUser.id, currentUser.id, currentUser.id, currentUser.id, post.id]
-        : ["", "", "", 0, post.id]
+        ? [currentUser.role, currentUser.role, currentUser.role, currentUser.id, currentUser.id, currentUser.id, currentUser.id, currentUser.id, post.id, currentUser.role]
+        : ["", "", "", 0, 0, post.id, ""]
     );
 
     if (!rows[0]) {
@@ -2572,7 +2783,9 @@ app.post("/api/discussion/posts", async (request, response) => {
               0 AS fireworks_by_me,
               ${canFeatureCreatedPost ? "1" : "0"} AS can_feature,
               ${user.role === "admin" ? "1" : "0"} AS can_pin,
-              ${user.role === "admin" ? "1" : "0"} AS can_delete
+              1 AS can_delete,
+              0 AS is_deleted,
+              NULL AS deleted_at
        FROM discussion_posts p
        INNER JOIN discussion_boards b ON b.id = p.board_id
        INNER JOIN users u ON u.id = p.user_id
@@ -2604,6 +2817,11 @@ app.patch("/api/discussion/posts/:id/pin", async (request, response) => {
     const post = await getDiscussionPostByPublicId(request.params.id);
 
     if (!post) {
+      response.status(404).json({ message: "帖子不存在" });
+      return;
+    }
+
+    if (post.is_deleted) {
       response.status(404).json({ message: "帖子不存在" });
       return;
     }
@@ -2640,6 +2858,11 @@ app.patch("/api/discussion/posts/:id/feature", async (request, response) => {
     const post = await getDiscussionPostByPublicId(request.params.id);
 
     if (!post) {
+      response.status(404).json({ message: "帖子不存在" });
+      return;
+    }
+
+    if (post.is_deleted) {
       response.status(404).json({ message: "帖子不存在" });
       return;
     }
@@ -2686,6 +2909,11 @@ app.post("/api/discussion/posts/:id/like", async (request, response) => {
     const post = await getDiscussionPostByPublicId(request.params.id);
 
     if (!post) {
+      response.status(404).json({ message: "帖子不存在" });
+      return;
+    }
+
+    if (post.is_deleted) {
       response.status(404).json({ message: "帖子不存在" });
       return;
     }
@@ -2745,9 +2973,15 @@ app.post("/api/discussion/posts/:id/like", async (request, response) => {
 app.get("/api/discussion/posts/:id/comments", async (request, response) => {
   try {
     await ensureDiscussionTables();
+    const currentUser = await getOptionalAuthUser(request);
     const post = await getDiscussionPostByPublicId(request.params.id);
 
     if (!post) {
+      response.status(404).json({ message: "帖子不存在" });
+      return;
+    }
+
+    if (post.is_deleted && currentUser?.role !== "admin") {
       response.status(404).json({ message: "帖子不存在" });
       return;
     }
@@ -2792,6 +3026,11 @@ app.post("/api/discussion/posts/:id/comments", async (request, response) => {
     const post = await getDiscussionPostByPublicId(request.params.id);
 
     if (!post) {
+      response.status(404).json({ message: "帖子不存在" });
+      return;
+    }
+
+    if (post.is_deleted) {
       response.status(404).json({ message: "帖子不存在" });
       return;
     }
@@ -2853,7 +3092,7 @@ app.delete("/api/discussion/posts/:id", async (request, response) => {
   try {
     await ensureDiscussionTables();
 
-    const user = await requireAdmin(request, response);
+    const user = await requireAuth(request, response);
 
     if (!user) {
       return;
@@ -2866,10 +3105,24 @@ app.delete("/api/discussion/posts/:id", async (request, response) => {
       return;
     }
 
+    if (user.role !== "admin" && post.user_id !== user.id) {
+      response.status(403).json({ message: "只能删除自己的帖子" });
+      return;
+    }
+
     await pool.execute(
-      `DELETE FROM discussion_posts
+      `UPDATE discussion_posts
+       SET is_deleted = 1,
+           deleted_at = NOW(),
+           deleted_by = ?,
+           is_pinned = 0,
+           pinned_at = NULL,
+           pinned_by = NULL,
+           is_featured = 0,
+           featured_at = NULL,
+           featured_by = NULL
        WHERE id = ?`,
-      [post.id]
+      [user.id, post.id]
     );
 
     response.json({ ok: true });
@@ -2896,9 +3149,18 @@ app.delete("/api/admin/discussion/posts/:id", async (request, response) => {
     }
 
     const [result] = await pool.execute(
-      `DELETE FROM discussion_posts
+      `UPDATE discussion_posts
+       SET is_deleted = 1,
+           deleted_at = NOW(),
+           deleted_by = ?,
+           is_pinned = 0,
+           pinned_at = NULL,
+           pinned_by = NULL,
+           is_featured = 0,
+           featured_at = NULL,
+           featured_by = NULL
        WHERE id = ?`,
-      [post.id]
+      [adminUser.id, post.id]
     );
 
     if (result.affectedRows === 0) {
@@ -3691,18 +3953,24 @@ app.delete("/api/admin/users/:id", async (request, response) => {
 });
 
 async function start() {
-  await ensureUsersUidColumn();
-  await ensureAppSettingsTable();
-  await ensureDiscussionTables();
-  await ensureAiDialogTables();
-  await ensureFortuneTables();
-  await ensureEconomyTables();
-  await decayHeatIfNeeded(new Date());
-  scheduleNextHeatDecay();
-
   app.listen(config.apiPort, config.apiHost, () => {
     console.log(`FREE-BBS backend running at http://${config.apiHost}:${config.apiPort}`);
     console.log(`MySQL target: ${config.db.host}:${config.db.port}/${config.db.database}`);
+  });
+
+  setImmediate(async () => {
+    try {
+      await ensureUsersUidColumn();
+      await ensureAppSettingsTable();
+      await ensureDiscussionTables();
+      await ensureAiDialogTables();
+      await ensureFortuneTables();
+      await ensureEconomyTables();
+      await decayHeatIfNeeded(new Date());
+      scheduleNextHeatDecay();
+    } catch (error) {
+      console.error("Backend maintenance checks failed", error);
+    }
   });
 }
 

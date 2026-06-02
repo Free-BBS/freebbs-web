@@ -105,6 +105,8 @@ const aiChatDialogToggle = document.getElementById("aichat-dialog-toggle");
 const discussionState = {
   boards: [],
   posts: [],
+  postsHashByBoard: {},
+  postCache: new Map(),
   activeBoard: "all",
   activePostId: "",
   isFallback: false,
@@ -812,6 +814,41 @@ function renderActivationButton(item, currency) {
   `;
 }
 
+function normalizeShopCatalogItem(item) {
+  const key = String(item?.key || "").trim();
+
+  return {
+    ...item,
+    key,
+    assetKey: String(item?.assetKey || key).trim(),
+    name: String(item?.name || key).trim(),
+    class: String(item?.class || "usable").trim(),
+    description: String(item?.description || "").trim(),
+    desc: String(item?.desc || item?.description || "").trim(),
+    image: String(item?.image || "").trim(),
+    isGift: item?.isgift === false || item?.is_gift === false || item?.isGift === false ? false : true,
+    cost: item?.cost && typeof item.cost === "object" ? item.cost : {}
+  };
+}
+
+async function loadShopCatalogFromJson() {
+  try {
+    const response = await fetch("/data/shop-items.json", {
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      throw new Error("shop catalog unavailable");
+    }
+
+    const payload = await response.json();
+    const items = Array.isArray(payload.items) ? payload.items : [];
+    return items.map(normalizeShopCatalogItem).filter((item) => item.key);
+  } catch {
+    return [];
+  }
+}
+
 function openShopInspectModal(itemKey) {
   const item = economyShopItems.find((shopItem) => shopItem.key === itemKey);
 
@@ -834,12 +871,14 @@ function openShopInspectModal(itemKey) {
 }
 
 function openInventoryInspectModal(asset) {
-  const item = asset?.item || asset?.metadata || {};
-
   if (!asset) {
     return;
   }
 
+  const catalogItem = economyShopItems.find((shopItem) => (
+    shopItem.assetKey === asset.key || shopItem.key === asset.key
+  ));
+  const item = catalogItem || asset.item || asset.metadata || {};
   const modal = ensureShopInspectModal();
   modal.querySelector("#shop-inspect-image").src = item.image || "/assets/icons/inventory.svg";
   modal.querySelector("#shop-inspect-class").textContent = item.class === "useless" ? "无用类" : "资产";
@@ -847,12 +886,22 @@ function openInventoryInspectModal(asset) {
   modal.querySelector("#shop-inspect-desc").textContent = item.desc || item.description || "这个资产还没有说明。";
   modal.querySelector("#shop-inspect-price").textContent = `持有 ${Number(asset.quantity || 0)} 个`;
   modal.querySelector("#shop-inspect-message").textContent = "";
-  modal.querySelector("#shop-inspect-actions").innerHTML = asset.key === "differential_converter"
+  const canGift = Boolean(catalogItem) && catalogItem.isGift !== false;
+  const converterActions = asset.key === "differential_converter"
     ? `
       <button class="electromagnetic-button" data-action="convert" data-direction="electric_to_magnetic" type="button" title="5 电元转 5 磁元">电 → 磁</button>
       <button class="electromagnetic-button" data-action="convert" data-direction="magnetic_to_electric" type="button" title="5 磁元转 5 电元">磁 → 电</button>
     `
-    : `<p class="fortune-record-empty">这个资产暂时没有可执行操作。</p>`;
+    : "";
+  const giftActions = canGift
+    ? `
+      <div class="inventory-gift-form" data-gift-asset-key="${escapeHtml(asset.key)}">
+        <input class="inventory-gift-input" type="text" placeholder="输入 UID 或昵称" maxlength="64" />
+        <button class="electromagnetic-button" data-action="gift-inventory-item" data-asset-key="${escapeHtml(asset.key)}" type="button">赠与</button>
+      </div>
+    `
+    : `<p class="fortune-record-empty">这个资产不能赠与。</p>`;
+  modal.querySelector("#shop-inspect-actions").innerHTML = [converterActions, giftActions].filter(Boolean).join("");
   modal.classList.remove("hidden");
 }
 
@@ -897,7 +946,10 @@ async function loadElectromagneticPage() {
     if (payload.user) {
       saveSession(userState.token, payload.user);
     }
-    economyShopItems = payload.shopItems || [];
+    const staticShopItems = await loadShopCatalogFromJson();
+    economyShopItems = staticShopItems.length
+      ? staticShopItems
+      : (payload.shopItems || []).map(normalizeShopCatalogItem);
     const assetQuantityByKey = new Map((payload.assets || []).map((asset) => [asset.key, Number(asset.quantity || 0)]));
     renderEconomyBalances(balances);
     if (grid) {
@@ -948,13 +1000,29 @@ async function loadInventoryPage() {
     if (payload.user) {
       saveSession(userState.token, payload.user);
     }
-    const assets = payload.assets || [];
+    const staticShopItems = await loadShopCatalogFromJson();
+    economyShopItems = staticShopItems.length
+      ? staticShopItems
+      : (payload.shopItems || economyShopItems).map(normalizeShopCatalogItem);
+    const shopItemByAsset = new Map(economyShopItems.flatMap((item) => [
+      [item.assetKey || item.key, item],
+      [item.key, item]
+    ]));
+    const assets = (payload.assets || []).map((asset) => {
+      const catalogItem = shopItemByAsset.get(asset.key);
+      return catalogItem
+        ? {
+            ...asset,
+            item: catalogItem,
+            isGift: catalogItem.isGift !== false
+          }
+        : asset;
+    });
     window.freeBbsInventoryAssets = assets;
     renderEconomyBalances(balances);
     if (list) {
       list.innerHTML = assets.map((asset) => {
         const item = asset.item || asset.metadata || {};
-        const isConverter = asset.key === "differential_converter";
         return `
           <article class="inventory-item-row" data-asset-key="${escapeHtml(asset.key)}">
             <span class="asset-quantity-badge">${Number(asset.quantity || 0)}</span>
@@ -966,10 +1034,6 @@ async function loadInventoryPage() {
             </div>
             <div class="inventory-item-actions">
               <button class="electromagnetic-button" data-action="inspect-inventory-item" data-asset-key="${escapeHtml(asset.key)}" type="button">端详</button>
-              ${isConverter ? `
-                <button class="electromagnetic-button" data-action="convert" data-direction="electric_to_magnetic" type="button" title="5 电元转 5 磁元">电 → 磁</button>
-                <button class="electromagnetic-button" data-action="convert" data-direction="magnetic_to_electric" type="button" title="5 磁元转 5 电元">磁 → 电</button>
-              ` : ""}
             </div>
           </article>
         `;
@@ -1068,6 +1132,68 @@ async function handleInventoryPageClick(event) {
     return;
   }
 
+  if (button.dataset.action === "gift-inventory-item") {
+    const modal = document.getElementById("shop-inspect-modal");
+    const modalMessage = modal?.querySelector("#shop-inspect-message");
+    const targetInput = modal?.querySelector(".inventory-gift-input");
+    const target = targetInput?.value.trim() || "";
+
+    if (!target) {
+      if (modalMessage) {
+        modalMessage.textContent = "请输入接收者 UID 或昵称";
+      }
+      return;
+    }
+
+    button.disabled = true;
+    if (message) {
+      message.textContent = "正在赠与...";
+    }
+    if (modalMessage) {
+      modalMessage.textContent = "正在赠与...";
+    }
+
+    try {
+      const assetKey = button.dataset.assetKey || "";
+      let payload;
+      try {
+        payload = await callApi(`/electromagnetic/assets/${encodeURIComponent(assetKey)}/gift`, {
+          method: "POST",
+          body: JSON.stringify({ target })
+        });
+      } catch (error) {
+        const fetchFailed = error.message === "Failed to fetch" || error.message === "请求失败";
+        throw new Error(fetchFailed ? "赠与接口不可用，请确认后端已加载最新代码" : error.message);
+      }
+      await loadInventoryPage();
+      const assets = window.freeBbsInventoryAssets || [];
+      const activeAsset = assets.find((asset) => asset.key === assetKey);
+      if (activeAsset) {
+        openInventoryInspectModal(activeAsset);
+      } else {
+        modal?.classList.add("hidden");
+      }
+      const recipient = payload.recipient?.username || payload.recipient?.uid || target;
+      if (message) {
+        message.textContent = `已赠与给 ${recipient}`;
+      }
+      const refreshedMessage = document.getElementById("shop-inspect-message");
+      if (refreshedMessage) {
+        refreshedMessage.textContent = `已赠与给 ${recipient}`;
+      }
+    } catch (error) {
+      if (message) {
+        message.textContent = error.message;
+      }
+      if (modalMessage) {
+        modalMessage.textContent = error.message;
+      }
+    } finally {
+      button.disabled = false;
+    }
+    return;
+  }
+
   if (button.dataset.action !== "convert") {
     return;
   }
@@ -1159,8 +1285,8 @@ async function loadHeatLeaderboard() {
       ? users.map((user, index) => `
           <a class="landing-heat-user" href="/profile?uid=${encodeURIComponent(user.uid || user.username)}">
             <span>${index + 1}</span>
-            <img src="${escapeHtml(getAvatarUrl(user.avatarPath))}" alt="${escapeHtml(user.fullName || user.username)} 的头像" />
-            <strong>${escapeHtml(user.fullName || user.username)}</strong>
+            <img src="${escapeHtml(getAvatarUrl(user.avatarPath))}" alt="${escapeHtml(user.nickname || user.username)} 的头像" />
+            <strong>${escapeHtml(user.nickname || user.username)}</strong>
             <em>${Number(user.heat || 0)} 热力</em>
           </a>
         `).join("")
@@ -2885,14 +3011,6 @@ async function loadDiscussionDetail(postId) {
     return;
   }
 
-  setDiscussionDetailView(true);
-  discussionDetail.classList.remove("hidden");
-  discussionDetail.innerHTML = `
-    <div class="discussion-detail-empty">
-      <p>正在加载帖子详情...</p>
-    </div>
-  `;
-
   if (postId === FALLBACK_DISCUSSION_POST.id) {
     discussionState.activePostId = FALLBACK_DISCUSSION_POST.id;
     renderDiscussionPosts();
@@ -2908,10 +3026,30 @@ async function loadDiscussionDetail(postId) {
     return;
   }
 
+  const cachedPost = discussionState.postCache.get(postId);
+  if (cachedPost) {
+    discussionState.activePostId = cachedPost.id;
+    renderDiscussionPosts();
+    renderDiscussionDetail(cachedPost);
+    updateDiscussionQuery({
+      board: discussionState.activeBoard,
+      postId: discussionState.activePostId
+    });
+  } else {
+    setDiscussionDetailView(true);
+    discussionDetail.classList.remove("hidden");
+    discussionDetail.innerHTML = `
+      <div class="discussion-detail-empty">
+        <p>正在加载帖子详情...</p>
+      </div>
+    `;
+  }
+
   const payload = await callApi(`/discussion/posts/${encodeURIComponent(postId)}`, {
     method: "GET"
   });
   discussionState.activePostId = payload.post.id;
+  discussionState.postCache.set(payload.post.id, payload.post);
   renderDiscussionPosts();
   renderDiscussionDetail(payload.post);
   discussionDetail.scrollIntoView({
@@ -2929,20 +3067,44 @@ async function loadDiscussionPosts({ autoOpen = false } = {}) {
     return;
   }
 
-  discussionPostList.innerHTML = `
-    <article class="discussion-empty">
-      <p>正在加载帖子...</p>
-    </article>
-  `;
+  const activeBoard = discussionState.activeBoard || "all";
+  const currentHash = discussionState.postsHashByBoard[activeBoard] || "";
+
+  if (!discussionState.posts.length) {
+    discussionPostList.innerHTML = `
+      <article class="discussion-empty">
+        <p>正在加载帖子...</p>
+      </article>
+    `;
+  }
 
   try {
+    const query = new URLSearchParams({
+      board: activeBoard,
+      limit: "30"
+    });
+
+    if (currentHash) {
+      query.set("hash", currentHash);
+    }
+
     const payload = await callApi(
-      `/discussion/posts?board=${encodeURIComponent(discussionState.activeBoard)}&limit=30`,
+      `/discussion/posts?${query.toString()}`,
       {
         method: "GET"
       }
     );
-    discussionState.posts = payload.posts || [];
+    if (!payload.notModified) {
+      discussionState.posts = payload.posts || [];
+      discussionState.postsHashByBoard[activeBoard] = payload.hash || "";
+      discussionState.posts.forEach((post) => {
+        const cachedPost = discussionState.postCache.get(post.id);
+        discussionState.postCache.set(post.id, {
+          ...(cachedPost || {}),
+          ...post
+        });
+      });
+    }
   } catch {
     useFallbackDiscussionData();
   }
@@ -3577,7 +3739,15 @@ async function deleteDiscussionPost(postId) {
       method: "DELETE"
     });
 
-    discussionState.posts = discussionState.posts.filter((post) => post.id !== postId);
+    discussionState.postCache.delete(postId);
+    delete discussionState.postsHashByBoard[discussionState.activeBoard || "all"];
+    discussionState.posts = userState.role === "admin"
+      ? discussionState.posts.map((post) => (
+          post.id === postId
+            ? { ...post, title: "已删除的帖子", isDeleted: true, canDelete: false }
+            : post
+        ))
+      : discussionState.posts.filter((post) => post.id !== postId);
 
     if (discussionState.activePostId === postId) {
       discussionState.activePostId = "";
