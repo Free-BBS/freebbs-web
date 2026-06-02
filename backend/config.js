@@ -21,7 +21,7 @@ module.exports = {
   apiHost: process.env.API_HOST || "127.0.0.1",
   apiPort: Number(process.env.API_PORT || 3001),
   db: {
-    host: process.env.BACKEND_IP || localIp,
+    host: process.env.BACKEND_IP || "127.0.0.1",
     port: Number(process.env.MYSQL_PORT || 3306),
     user: process.env.MYSQL_USER || "root",
     password: process.env.MYSQL_PASSWORD || "",

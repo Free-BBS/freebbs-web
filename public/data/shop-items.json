@@ -15,7 +15,8 @@
       "use": {
         "type": "currency_converter",
         "amount": 5
-      }
+      },
+      "isgift": false
     },
     {
       "key": "fishbone",
@@ -27,7 +28,8 @@
       "image": "/assets/icons/fishbone.svg",
       "cost": {
         "electric": 5
-      }
+      },
+      "isgift": true
     }
   ]
 }

@@ -9383,6 +9383,20 @@ body.theme-light:not(.home-page) .discussion-comment-author-link {
   color: rgba(17, 19, 21, 0.74) !important;
 }
 
+body.theme-light:not(.home-page) .discussion-comment,
+body.theme-light:not(.home-page) .discussion-comment-body,
+body.theme-light:not(.home-page) .discussion-comment-content,
+body.theme-light:not(.home-page) .discussion-comment-content p,
+body.theme-light:not(.home-page) .discussion-comment-content li,
+body.theme-light:not(.home-page) .discussion-comment-content span,
+body.theme-light:not(.home-page) .discussion-comment-content strong {
+  color: var(--minimal-text) !important;
+}
+
+body.theme-light:not(.home-page) .discussion-comment-content a {
+  color: #1f5fbf !important;
+}
+
 body.theme-light:not(.home-page) .auth-label-icon {
   filter: brightness(0) opacity(0.56) !important;
 }
@@ -10203,6 +10217,28 @@ body.theme-light:not(.home-page) .electromagnetic-shop-item p {
   gap: 10px;
 }
 
+.inventory-gift-form {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.inventory-gift-input {
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(244, 240, 223, 0.18);
+  border-radius: 8px;
+  background: rgba(5, 6, 5, 0.56);
+  color: var(--chalk-text);
+  font: inherit;
+}
+
+.inventory-gift-input::placeholder {
+  color: rgba(244, 240, 223, 0.48);
+}
+
 .economy-activation-button {
   position: relative;
   display: inline-flex;
@@ -10313,6 +10349,16 @@ body.theme-light:not(.home-page) .inventory-list .electromagnetic-button,
 body.theme-light:not(.home-page) .shop-grid .electromagnetic-button,
 body.theme-light:not(.home-page) .shop-inspect-actions .electromagnetic-button {
   color: var(--minimal-text) !important;
+}
+
+body.theme-light:not(.home-page) .inventory-gift-input {
+  border-color: var(--minimal-line) !important;
+  background: var(--minimal-surface) !important;
+  color: var(--minimal-text) !important;
+}
+
+body.theme-light:not(.home-page) .inventory-gift-input::placeholder {
+  color: var(--minimal-dim) !important;
 }
 
 body.theme-light:not(.home-page) .economy-auth-required p,
