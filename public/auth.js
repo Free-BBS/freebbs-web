@@ -45,10 +45,77 @@ function applyThemeMode(mode) {
   });
 }
 
-function toggleThemeMode() {
+function getThemeRevealOrigin(event) {
+  if (event && typeof event.clientX === "number" && typeof event.clientY === "number") {
+    if (event.clientX !== 0 || event.clientY !== 0) {
+      return { x: event.clientX, y: event.clientY };
+    }
+  }
+
+  const button = event?.currentTarget;
+  if (button) {
+    const rect = button.getBoundingClientRect();
+    return {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2
+    };
+  }
+
+  return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+}
+
+function playThemeToggleMicroInteraction(event) {
+  const button = event?.currentTarget;
+  button?.classList.add("is-theme-switching");
+
+  window.setTimeout(() => {
+    button?.classList.remove("is-theme-switching");
+  }, 680);
+}
+
+function applyThemeModeWithTransition(mode, event) {
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const origin = getThemeRevealOrigin(event);
+
+  if (!prefersReducedMotion) {
+    playThemeToggleMicroInteraction(event);
+  }
+
+  if (typeof document.startViewTransition !== "function" || prefersReducedMotion) {
+    applyThemeMode(mode);
+    return;
+  }
+
+  const { x, y } = origin;
+  const endRadius = Math.hypot(
+    Math.max(x, window.innerWidth - x),
+    Math.max(y, window.innerHeight - y)
+  );
+  const transition = document.startViewTransition(() => applyThemeMode(mode));
+
+  transition.ready
+    .then(() => {
+      document.documentElement.animate(
+        {
+          clipPath: [
+            `circle(0px at ${x}px ${y}px)`,
+            `circle(${endRadius}px at ${x}px ${y}px)`
+          ]
+        },
+        {
+          duration: 560,
+          easing: "cubic-bezier(0.22, 0.76, 0.2, 1)",
+          pseudoElement: "::view-transition-new(root)"
+        }
+      );
+    })
+    .catch(() => {});
+}
+
+function toggleThemeMode(event) {
   const nextMode = document.body.classList.contains("theme-light") ? "dark" : "light";
   localStorage.setItem(THEME_STORAGE_KEY, nextMode);
-  applyThemeMode(nextMode);
+  applyThemeModeWithTransition(nextMode, event);
 }
 
 function initializeThemeMode() {
