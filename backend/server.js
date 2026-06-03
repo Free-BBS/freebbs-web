@@ -2515,14 +2515,21 @@ app.post("/api/discussion/uploads/images", async (request, response) => {
   }
 });
 
-app.get("/api/discussion/stats", async (_request, response) => {
+app.get("/api/discussion/stats", async (request, response) => {
   try {
     await ensureDiscussionTables();
+    const currentUser = await getOptionalAuthUser(request);
 
     const [summaryRows] = await pool.execute(
       `SELECT
-         (SELECT COUNT(*) FROM discussion_posts WHERE is_deleted = 0) AS post_count,
-         (SELECT COUNT(*) FROM discussion_post_likes WHERE reaction_type = 'smile') AS like_count`
+         (SELECT COUNT(*) FROM discussion_posts WHERE user_id = ? AND is_deleted = 0) AS post_count,
+         (SELECT COUNT(*)
+          FROM discussion_post_likes l
+          INNER JOIN discussion_posts p ON p.id = l.post_id
+          WHERE p.user_id = ?
+            AND p.is_deleted = 0
+            AND l.reaction_type = 'smile') AS like_count`,
+      [currentUser?.id || 0, currentUser?.id || 0]
     );
     const [boardRows] = await pool.execute(
       `SELECT b.slug, b.name, b.description, b.description_markdown, COUNT(p.id) AS post_count
