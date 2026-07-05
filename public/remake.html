@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -24,12 +24,25 @@
                 <img class="auth-label-icon" src="/assets/icons/id.svg" alt="" aria-hidden="true" />
                 <span>学号</span>
               </span>
-              <input id="auth-student-id" name="studentId" type="text" inputmode="numeric" maxlength="10" placeholder="20开头10位" required />
+              <input
+                id="auth-student-id"
+                name="studentId"
+                type="text"
+                inputmode="numeric"
+                maxlength="10"
+                placeholder="20开头10位"
+                required
+              />
             </label>
 
             <label class="auth-field">
               <span class="auth-label">
-                <img class="auth-label-icon" src="/assets/icons/mail.svg" alt="" aria-hidden="true" />
+                <img
+                  class="auth-label-icon"
+                  src="/assets/icons/mail.svg"
+                  alt=""
+                  aria-hidden="true"
+                />
                 <span>邮箱</span>
               </span>
               <input id="auth-email" name="email" type="email" autocomplete="email" required />
@@ -42,26 +55,58 @@
               <span>邮箱验证码</span>
             </span>
             <div class="auth-inline">
-              <input id="auth-email-code" name="emailCode" type="text" inputmode="numeric" maxlength="6" placeholder="请输入6位验证码" required />
-              <button class="auth-inline-button" id="send-email-code" type="button">发送验证码</button>
+              <input
+                id="auth-email-code"
+                name="emailCode"
+                type="text"
+                inputmode="numeric"
+                maxlength="6"
+                placeholder="请输入6位验证码"
+                required
+              />
+              <button class="auth-inline-button" id="send-email-code" type="button">
+                发送验证码
+              </button>
             </div>
           </label>
 
           <div class="auth-grid-row auth-grid-row-two">
             <label class="auth-field">
               <span class="auth-label">
-                <img class="auth-label-icon" src="/assets/icons/key.svg" alt="" aria-hidden="true" />
+                <img
+                  class="auth-label-icon"
+                  src="/assets/icons/key.svg"
+                  alt=""
+                  aria-hidden="true"
+                />
                 <span>新密码</span>
               </span>
-              <input id="auth-password" name="password" type="password" autocomplete="new-password" required />
+              <input
+                id="auth-password"
+                name="password"
+                type="password"
+                autocomplete="new-password"
+                required
+              />
             </label>
 
             <label class="auth-field">
               <span class="auth-label">
-                <img class="auth-label-icon" src="/assets/icons/key.svg" alt="" aria-hidden="true" />
+                <img
+                  class="auth-label-icon"
+                  src="/assets/icons/key.svg"
+                  alt=""
+                  aria-hidden="true"
+                />
                 <span>确认新密码</span>
               </span>
-              <input id="auth-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" required />
+              <input
+                id="auth-password-confirm"
+                name="passwordConfirm"
+                type="password"
+                autocomplete="new-password"
+                required
+              />
             </label>
           </div>
 
@@ -79,7 +124,9 @@
       <div class="footer-block footer-center">
         <div class="footer-links">
           <a href="#staff">工作人员名单</a>
-          <a href="https://www.ee.tsinghua.edu.cn/" target="_blank" rel="noreferrer">清华大学电子系</a>
+          <a href="https://www.ee.tsinghua.edu.cn/" target="_blank" rel="noreferrer"
+            >清华大学电子系</a
+          >
           <a href="https://www.eesast.com">电子系学生科协</a>
         </div>
         <p>&lt;京ICP备2025155858号-2&gt;</p>

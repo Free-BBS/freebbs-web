@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       run_db_migrations:
-        description: "Run database migrations during deploy"
+        description: 'Run database migrations during deploy'
         required: false
         default: false
         type: boolean

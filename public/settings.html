@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -18,7 +18,6 @@
       <header class="topbar">
         <a class="brand" href="/" aria-label="FREE-BBS 首页">
           <span class="brand-mark">FREE<br />BBS</span>
-          
         </a>
 
         <form class="searchbar" role="search">
@@ -55,15 +54,40 @@
           <div class="user-panel" id="user-panel">
             <div class="user-summary">
               <button class="avatar" type="button" aria-label="用户头像">
-                <img class="avatar-image" id="avatar-image" src="/assets/avatar_placeholder.webp" alt="用户头像占位图" />
+                <img
+                  class="avatar-image"
+                  id="avatar-image"
+                  src="/assets/avatar_placeholder.webp"
+                  alt="用户头像占位图"
+                />
               </button>
               <div class="user-actions" id="user-actions">
-                <button class="user-icon-button hidden" id="user-settings-button" type="button" aria-label="设置">
-                  <img class="user-action-icon" src="/assets/icons/gear.svg" alt="" aria-hidden="true" />
+                <button
+                  class="user-icon-button hidden"
+                  id="user-settings-button"
+                  type="button"
+                  aria-label="设置"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/gear.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
                   <span>设置</span>
                 </button>
-                <button class="user-icon-button hidden" id="user-logout-button" type="button" aria-label="退出">
-                  <img class="user-action-icon" src="/assets/icons/exit.svg" alt="" aria-hidden="true" />
+                <button
+                  class="user-icon-button hidden"
+                  id="user-logout-button"
+                  type="button"
+                  aria-label="退出"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/exit.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
                   <span>退出</span>
                 </button>
               </div>
@@ -95,10 +119,10 @@
           <img class="nav-icon" src="/assets/icons/people.svg" alt="" aria-hidden="true" />
           <span>讨论</span>
         </a>
-          <a class="nav-link" href="/aichat">
-            <img class="nav-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
-            <span>问问 Max</span>
-          </a>
+        <a class="nav-link" href="/aichat">
+          <img class="nav-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
+          <span>问问 Max</span>
+        </a>
         <a class="nav-link fortune-link hidden" href="#">
           <img class="nav-icon" src="/assets/icons/yunshi.svg" alt="" aria-hidden="true" />
           <span>今日运势</span>
@@ -113,19 +137,33 @@
         <section class="settings-shell" aria-label="个人设置">
           <div class="settings-header">
             <h1>个人设置</h1>
-            <button class="settings-logout-button" id="settings-logout-button" type="button">退出</button>
+            <button class="settings-logout-button" id="settings-logout-button" type="button">
+              退出
+            </button>
           </div>
           <section class="settings-profile" aria-label="个人设置内容">
             <form class="settings-form" id="settings-form">
               <div class="settings-avatar-row">
                 <div class="settings-avatar-preview">
-                  <img class="settings-avatar-image" id="settings-avatar-image" src="/assets/avatar_placeholder.webp" alt="当前头像" />
+                  <img
+                    class="settings-avatar-image"
+                    id="settings-avatar-image"
+                    src="/assets/avatar_placeholder.webp"
+                    alt="当前头像"
+                  />
                 </div>
                 <div class="settings-avatar-copy">
                   <h2>头像</h2>
                   <p>支持 PNG、JPG、WEBP、GIF，大小不超过 5MB。</p>
-                  <label class="settings-upload-button" for="settings-avatar-input">上传新头像</label>
-                  <input class="hidden" id="settings-avatar-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                  <label class="settings-upload-button" for="settings-avatar-input"
+                    >上传新头像</label
+                  >
+                  <input
+                    class="hidden"
+                    id="settings-avatar-input"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                  />
                 </div>
               </div>
 
@@ -143,7 +181,12 @@
 
               <label class="auth-field">
                 <span>个人简介</span>
-                <textarea id="settings-bio" rows="6" maxlength="1000" placeholder="介绍一下你的研究方向、兴趣或正在做的项目"></textarea>
+                <textarea
+                  id="settings-bio"
+                  rows="6"
+                  maxlength="1000"
+                  placeholder="介绍一下你的研究方向、兴趣或正在做的项目"
+                ></textarea>
               </label>
 
               <p class="auth-message settings-message" id="settings-message"></p>
@@ -159,18 +202,35 @@
               <div class="settings-grid">
                 <label class="auth-field">
                   <span>当前密码</span>
-                  <input id="settings-current-password" type="password" autocomplete="current-password" required />
+                  <input
+                    id="settings-current-password"
+                    type="password"
+                    autocomplete="current-password"
+                    required
+                  />
                 </label>
 
                 <label class="auth-field">
                   <span>新密码</span>
-                  <input id="settings-new-password" type="password" minlength="6" autocomplete="new-password" required />
+                  <input
+                    id="settings-new-password"
+                    type="password"
+                    minlength="6"
+                    autocomplete="new-password"
+                    required
+                  />
                 </label>
               </div>
 
               <label class="auth-field">
                 <span>确认新密码</span>
-                <input id="settings-new-password-confirm" type="password" minlength="6" autocomplete="new-password" required />
+                <input
+                  id="settings-new-password-confirm"
+                  type="password"
+                  minlength="6"
+                  autocomplete="new-password"
+                  required
+                />
               </label>
 
               <p class="auth-message settings-message" id="settings-password-message"></p>
@@ -188,7 +248,9 @@
         <div class="footer-block footer-center">
           <div class="footer-links">
             <a href="#staff">工作人员名单</a>
-            <a href="https://www.ee.tsinghua.edu.cn/" target="_blank" rel="noreferrer">清华大学电子系</a>
+            <a href="https://www.ee.tsinghua.edu.cn/" target="_blank" rel="noreferrer"
+              >清华大学电子系</a
+            >
             <a href="https://www.eesast.com">电子系学生科协</a>
           </div>
           <p>&lt;京ICP备2025155858号-2&gt;</p>

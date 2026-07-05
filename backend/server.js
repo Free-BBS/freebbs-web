@@ -1,87 +1,92 @@
-const express = require("express");
-const crypto = require("crypto");
-const fs = require("fs");
-const path = require("path");
-const sharp = require("sharp");
-const pool = require("./db");
-const config = require("./config");
-const { hashPassword, verifyPassword } = require("./password");
-const { sign, verify } = require("./token");
-const { CODE_TTL_MINUTES, buildExpiryDate, generateEmailCode, hashCode } = require("./verification");
+const express = require('express');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const sharp = require('sharp');
+const pool = require('./db');
+const config = require('./config');
+const { hashPassword, verifyPassword } = require('./password');
+const { sign, verify } = require('./token');
+const {
+  CODE_TTL_MINUTES,
+  buildExpiryDate,
+  generateEmailCode,
+  hashCode,
+} = require('./verification');
 
 const app = express();
-const FORTUNE_BONUS_KEY = "fortune_bonus_enabled";
-const HEAT_DECAY_DATE_KEY = "heat_decay_last_date";
+const FORTUNE_BONUS_KEY = 'fortune_bonus_enabled';
+const HEAT_DECAY_DATE_KEY = 'heat_decay_last_date';
 const FORTUNE_LOOKBACK_DAYS = 30;
 const CHECKIN_LOOKBACK_DAYS = 14;
 const MAX_CHECKIN_STREAK_REWARD = 5;
-const SHOP_CATALOG_PATH = path.join(__dirname, "..", "public", "data", "shop-items.json");
+const SHOP_CATALOG_PATH = path.join(__dirname, '..', 'public', 'data', 'shop-items.json');
 const REACTION_MANETRON_REWARDS = {
   smile: 1,
   light: 2,
-  fireworks: 1
+  fireworks: 1,
 };
 const MAX_AGENT_USER = {
-  username: "max_the_agent",
-  fullName: "Max",
-  studentId: "2099999999",
-  email: "max@free-bbs.local",
-  avatarPath: "/assets/max_the_agent_avatar.webp"
+  username: 'max_the_agent',
+  fullName: 'Max',
+  studentId: '2099999999',
+  email: 'max@free-bbs.local',
+  avatarPath: '/assets/max_the_agent_avatar.webp',
 };
 
 async function sendVerificationCode(email, code) {
-  const mailer = require("./mailer");
+  const mailer = require('./mailer');
   return mailer.sendVerificationCode(email, code);
 }
 const MAX_MENTION_PATTERN = /(^|[^\p{L}\p{N}_])@max(?=$|[^\p{L}\p{N}_])/iu;
-const DISCUSSION_REACTION_TYPES = new Set(["smile", "light", "fireworks"]);
+const DISCUSSION_REACTION_TYPES = new Set(['smile', 'light', 'fireworks']);
 const DISCUSSION_BOARD_SEEDS = [
   {
-    slug: "daily",
-    name: "日常",
-    description: "生活、课程与校园碎碎念",
-    descriptionMarkdown: "生活、课程与校园碎碎念。可以分享日常、提问、吐槽和轻量讨论。",
-    sortOrder: 10
+    slug: 'daily',
+    name: '日常',
+    description: '生活、课程与校园碎碎念',
+    descriptionMarkdown: '生活、课程与校园碎碎念。可以分享日常、提问、吐槽和轻量讨论。',
+    sortOrder: 10,
   },
   {
-    slug: "math",
-    name: "数理",
-    description: "数学、物理与推导讨论",
-    descriptionMarkdown: "数学、物理与推导讨论。支持 Markdown 与 KaTeX，例如 `$E=mc^2$`。",
-    sortOrder: 20
+    slug: 'math',
+    name: '数理',
+    description: '数学、物理与推导讨论',
+    descriptionMarkdown: '数学、物理与推导讨论。支持 Markdown 与 KaTeX，例如 `$E=mc^2$`。',
+    sortOrder: 20,
   },
   {
-    slug: "circuit",
-    name: "电路",
-    description: "模电、数电与硬件实现",
-    descriptionMarkdown: "模电、数电与硬件实现相关内容。建议附上电路图、波形、公式或关键参数。",
-    sortOrder: 30
+    slug: 'circuit',
+    name: '电路',
+    description: '模电、数电与硬件实现',
+    descriptionMarkdown: '模电、数电与硬件实现相关内容。建议附上电路图、波形、公式或关键参数。',
+    sortOrder: 30,
   },
   {
-    slug: "signal",
-    name: "信号",
-    description: "信号、系统与通信方向讨论",
-    descriptionMarkdown: "信号、系统与通信方向讨论。可以贴推导、代码、仿真结果和参考资料。",
-    sortOrder: 40
+    slug: 'signal',
+    name: '信号',
+    description: '信号、系统与通信方向讨论',
+    descriptionMarkdown: '信号、系统与通信方向讨论。可以贴推导、代码、仿真结果和参考资料。',
+    sortOrder: 40,
   },
   {
-    slug: "changelog",
-    name: "更新日志",
-    description: "站点更新、修复与版本记录",
-    descriptionMarkdown: "FREE-BBS 的站点更新、修复与版本记录。这里用于同步功能变化和维护信息。",
-    sortOrder: 50
-  }
+    slug: 'changelog',
+    name: '更新日志',
+    description: '站点更新、修复与版本记录',
+    descriptionMarkdown: 'FREE-BBS 的站点更新、修复与版本记录。这里用于同步功能变化和维护信息。',
+    sortOrder: 50,
+  },
 ];
 
 fs.mkdirSync(config.uploadDir, { recursive: true });
 
-app.use(express.json({ limit: "28mb" }));
+app.use(express.json({ limit: '28mb' }));
 app.use((request, response, next) => {
-  response.setHeader("Access-Control-Allow-Origin", process.env.CORS_ORIGIN || "*");
-  response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  response.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+  response.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
 
-  if (request.method === "OPTIONS") {
+  if (request.method === 'OPTIONS') {
     response.status(204).end();
     return;
   }
@@ -89,7 +94,7 @@ app.use((request, response, next) => {
   next();
 });
 
-app.use("/uploads", express.static(config.uploadDir));
+app.use('/uploads', express.static(config.uploadDir));
 
 async function ensureAppSettingsTable() {
   await pool.execute(
@@ -97,48 +102,44 @@ async function ensureAppSettingsTable() {
       setting_key VARCHAR(64) PRIMARY KEY,
       setting_value VARCHAR(255) NOT NULL,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )`
+    )`,
   );
 }
 
 function generateUserUid() {
-  return `u_${crypto.randomBytes(8).toString("hex")}`;
+  return `u_${crypto.randomBytes(8).toString('hex')}`;
 }
 
 function generateDiscussionPostPid() {
-  return `p_${crypto.randomBytes(8).toString("hex")}`;
+  return `p_${crypto.randomBytes(8).toString('hex')}`;
 }
 
 async function createUniqueUserUid() {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const uid = generateUserUid();
-    const [rows] = await pool.execute(
-      `SELECT id FROM users WHERE uid = ? LIMIT 1`,
-      [uid]
-    );
+    const [rows] = await pool.execute(`SELECT id FROM users WHERE uid = ? LIMIT 1`, [uid]);
 
     if (!rows[0]) {
       return uid;
     }
   }
 
-  throw new Error("无法生成唯一 UID");
+  throw new Error('无法生成唯一 UID');
 }
 
 async function createUniqueDiscussionPostPid() {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const pid = generateDiscussionPostPid();
-    const [rows] = await pool.execute(
-      `SELECT id FROM discussion_posts WHERE pid = ? LIMIT 1`,
-      [pid]
-    );
+    const [rows] = await pool.execute(`SELECT id FROM discussion_posts WHERE pid = ? LIMIT 1`, [
+      pid,
+    ]);
 
     if (!rows[0]) {
       return pid;
     }
   }
 
-  throw new Error("无法生成唯一 PID");
+  throw new Error('无法生成唯一 PID');
 }
 
 async function ensureUsersUidColumn() {
@@ -148,14 +149,14 @@ async function ensureUsersUidColumn() {
      WHERE TABLE_SCHEMA = DATABASE()
        AND TABLE_NAME = 'users'
        AND COLUMN_NAME = 'uid'
-     LIMIT 1`
+     LIMIT 1`,
   );
 
   if (!columns[0]) {
     await pool.execute(
       `ALTER TABLE users
        ADD COLUMN uid VARCHAR(32) NULL AFTER id,
-       ADD UNIQUE KEY uq_users_uid (uid)`
+       ADD UNIQUE KEY uq_users_uid (uid)`,
     );
   }
 
@@ -163,7 +164,7 @@ async function ensureUsersUidColumn() {
     `SELECT id
      FROM users
      WHERE uid IS NULL OR uid = ''
-     ORDER BY id ASC`
+     ORDER BY id ASC`,
   );
 
   for (const row of usersWithoutUid) {
@@ -171,7 +172,7 @@ async function ensureUsersUidColumn() {
       `UPDATE users
        SET uid = ?
        WHERE id = ? AND (uid IS NULL OR uid = '')`,
-      [await createUniqueUserUid(), row.id]
+      [await createUniqueUserUid(), row.id],
     );
   }
 
@@ -182,7 +183,7 @@ async function ensureUsersUidColumn() {
        AND TABLE_NAME = 'users'
        AND COLUMN_NAME = 'uid'
        AND NON_UNIQUE = 0
-     LIMIT 1`
+     LIMIT 1`,
   );
 
   if (!indexes[0]) {
@@ -202,7 +203,7 @@ async function ensureDiscussionTables() {
       is_active TINYINT(1) NOT NULL DEFAULT 1,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )`
+    )`,
   );
 
   const [boardDescriptionColumns] = await pool.execute(
@@ -211,13 +212,13 @@ async function ensureDiscussionTables() {
      WHERE TABLE_SCHEMA = DATABASE()
        AND TABLE_NAME = 'discussion_boards'
        AND COLUMN_NAME = 'description_markdown'
-     LIMIT 1`
+     LIMIT 1`,
   );
 
   if (!boardDescriptionColumns[0]) {
     await pool.execute(
       `ALTER TABLE discussion_boards
-       ADD COLUMN description_markdown MEDIUMTEXT NULL AFTER description`
+       ADD COLUMN description_markdown MEDIUMTEXT NULL AFTER description`,
     );
   }
 
@@ -257,7 +258,7 @@ async function ensureDiscussionTables() {
       INDEX idx_discussion_posts_pinned_created_at (is_pinned, pinned_at DESC, created_at DESC),
       INDEX idx_discussion_posts_board_created_at (board_id, created_at DESC),
       INDEX idx_discussion_posts_created_at (created_at DESC)
-    )`
+    )`,
   );
 
   const [pidColumns] = await pool.execute(
@@ -266,13 +267,13 @@ async function ensureDiscussionTables() {
      WHERE TABLE_SCHEMA = DATABASE()
        AND TABLE_NAME = 'discussion_posts'
        AND COLUMN_NAME = 'pid'
-     LIMIT 1`
+     LIMIT 1`,
   );
 
   if (!pidColumns[0]) {
     await pool.execute(
       `ALTER TABLE discussion_posts
-       ADD COLUMN pid VARCHAR(32) NULL AFTER id`
+       ADD COLUMN pid VARCHAR(32) NULL AFTER id`,
     );
   }
 
@@ -280,7 +281,7 @@ async function ensureDiscussionTables() {
     `SELECT id
      FROM discussion_posts
      WHERE pid IS NULL OR pid = ''
-     ORDER BY id ASC`
+     ORDER BY id ASC`,
   );
 
   for (const row of postsWithoutPid) {
@@ -288,7 +289,7 @@ async function ensureDiscussionTables() {
       `UPDATE discussion_posts
        SET pid = ?
        WHERE id = ? AND (pid IS NULL OR pid = '')`,
-      [await createUniqueDiscussionPostPid(), row.id]
+      [await createUniqueDiscussionPostPid(), row.id],
     );
   }
 
@@ -299,7 +300,7 @@ async function ensureDiscussionTables() {
        AND TABLE_NAME = 'discussion_posts'
        AND COLUMN_NAME = 'pid'
        AND NON_UNIQUE = 0
-     LIMIT 1`
+     LIMIT 1`,
   );
 
   if (!pidIndexes[0]) {
@@ -312,13 +313,13 @@ async function ensureDiscussionTables() {
      WHERE TABLE_SCHEMA = DATABASE()
        AND TABLE_NAME = 'discussion_posts'
        AND COLUMN_NAME = 'author_student_id'
-     LIMIT 1`
+     LIMIT 1`,
   );
 
   if (!columns[0]) {
     await pool.execute(
       `ALTER TABLE discussion_posts
-       ADD COLUMN author_student_id VARCHAR(10) NULL AFTER user_id`
+       ADD COLUMN author_student_id VARCHAR(10) NULL AFTER user_id`,
     );
   }
 
@@ -326,19 +327,43 @@ async function ensureDiscussionTables() {
     `UPDATE discussion_posts p
      INNER JOIN users u ON u.id = p.user_id
      SET p.author_student_id = u.student_id
-     WHERE p.author_student_id IS NULL`
+     WHERE p.author_student_id IS NULL`,
   );
 
   const postPinColumns = [
-    ["is_pinned", "ALTER TABLE discussion_posts ADD COLUMN is_pinned TINYINT(1) NOT NULL DEFAULT 0 AFTER content_markdown"],
-    ["pinned_at", "ALTER TABLE discussion_posts ADD COLUMN pinned_at DATETIME NULL AFTER is_pinned"],
-    ["pinned_by", "ALTER TABLE discussion_posts ADD COLUMN pinned_by BIGINT NULL AFTER pinned_at"],
-    ["is_featured", "ALTER TABLE discussion_posts ADD COLUMN is_featured TINYINT(1) NOT NULL DEFAULT 0 AFTER pinned_by"],
-    ["featured_at", "ALTER TABLE discussion_posts ADD COLUMN featured_at DATETIME NULL AFTER is_featured"],
-    ["featured_by", "ALTER TABLE discussion_posts ADD COLUMN featured_by BIGINT NULL AFTER featured_at"],
-    ["is_deleted", "ALTER TABLE discussion_posts ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0 AFTER featured_by"],
-    ["deleted_at", "ALTER TABLE discussion_posts ADD COLUMN deleted_at DATETIME NULL AFTER is_deleted"],
-    ["deleted_by", "ALTER TABLE discussion_posts ADD COLUMN deleted_by BIGINT NULL AFTER deleted_at"]
+    [
+      'is_pinned',
+      'ALTER TABLE discussion_posts ADD COLUMN is_pinned TINYINT(1) NOT NULL DEFAULT 0 AFTER content_markdown',
+    ],
+    [
+      'pinned_at',
+      'ALTER TABLE discussion_posts ADD COLUMN pinned_at DATETIME NULL AFTER is_pinned',
+    ],
+    ['pinned_by', 'ALTER TABLE discussion_posts ADD COLUMN pinned_by BIGINT NULL AFTER pinned_at'],
+    [
+      'is_featured',
+      'ALTER TABLE discussion_posts ADD COLUMN is_featured TINYINT(1) NOT NULL DEFAULT 0 AFTER pinned_by',
+    ],
+    [
+      'featured_at',
+      'ALTER TABLE discussion_posts ADD COLUMN featured_at DATETIME NULL AFTER is_featured',
+    ],
+    [
+      'featured_by',
+      'ALTER TABLE discussion_posts ADD COLUMN featured_by BIGINT NULL AFTER featured_at',
+    ],
+    [
+      'is_deleted',
+      'ALTER TABLE discussion_posts ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0 AFTER featured_by',
+    ],
+    [
+      'deleted_at',
+      'ALTER TABLE discussion_posts ADD COLUMN deleted_at DATETIME NULL AFTER is_deleted',
+    ],
+    [
+      'deleted_by',
+      'ALTER TABLE discussion_posts ADD COLUMN deleted_by BIGINT NULL AFTER deleted_at',
+    ],
   ];
 
   for (const [columnName, alterSql] of postPinColumns) {
@@ -349,7 +374,7 @@ async function ensureDiscussionTables() {
          AND TABLE_NAME = 'discussion_posts'
          AND COLUMN_NAME = ?
        LIMIT 1`,
-      [columnName]
+      [columnName],
     );
 
     if (!pinColumns[0]) {
@@ -371,7 +396,7 @@ async function ensureDiscussionTables() {
         FOREIGN KEY (user_id) REFERENCES users (id)
         ON DELETE CASCADE,
       INDEX idx_discussion_post_likes_user (user_id)
-    )`
+    )`,
   );
 
   const [reactionColumns] = await pool.execute(
@@ -380,7 +405,7 @@ async function ensureDiscussionTables() {
      WHERE TABLE_SCHEMA = DATABASE()
        AND TABLE_NAME = 'discussion_post_likes'
        AND COLUMN_NAME = 'reaction_type'
-     LIMIT 1`
+     LIMIT 1`,
   );
 
   if (!reactionColumns[0]) {
@@ -388,7 +413,7 @@ async function ensureDiscussionTables() {
       `ALTER TABLE discussion_post_likes
        ADD COLUMN reaction_type VARCHAR(24) NOT NULL DEFAULT 'smile' AFTER user_id,
        DROP PRIMARY KEY,
-       ADD PRIMARY KEY (post_id, user_id, reaction_type)`
+       ADD PRIMARY KEY (post_id, user_id, reaction_type)`,
     );
   }
 
@@ -414,7 +439,7 @@ async function ensureDiscussionTables() {
       INDEX idx_discussion_comments_parent (parent_comment_id),
       INDEX idx_discussion_comments_post_created_at (post_id, created_at ASC),
       INDEX idx_discussion_comments_user (user_id)
-    )`
+    )`,
   );
 
   await pool.execute(
@@ -430,7 +455,7 @@ async function ensureDiscussionTables() {
         FOREIGN KEY (user_id) REFERENCES users (id)
         ON DELETE CASCADE,
       INDEX idx_discussion_board_moderators_user (user_id)
-    )`
+    )`,
   );
 
   const [commentColumns] = await pool.execute(
@@ -439,7 +464,7 @@ async function ensureDiscussionTables() {
      WHERE TABLE_SCHEMA = DATABASE()
        AND TABLE_NAME = 'discussion_comments'
        AND COLUMN_NAME = 'parent_comment_id'
-     LIMIT 1`
+     LIMIT 1`,
   );
 
   if (!commentColumns[0]) {
@@ -449,7 +474,7 @@ async function ensureDiscussionTables() {
        ADD INDEX idx_discussion_comments_parent (parent_comment_id),
        ADD CONSTRAINT fk_discussion_comments_parent
          FOREIGN KEY (parent_comment_id) REFERENCES discussion_comments (id)
-         ON DELETE CASCADE`
+         ON DELETE CASCADE`,
     );
   }
 
@@ -463,7 +488,7 @@ async function ensureDiscussionTables() {
          description_markdown = COALESCE(discussion_boards.description_markdown, VALUES(description_markdown)),
          sort_order = VALUES(sort_order),
          is_active = VALUES(is_active)`,
-      [board.slug, board.name, board.description, board.descriptionMarkdown, board.sortOrder]
+      [board.slug, board.name, board.description, board.descriptionMarkdown, board.sortOrder],
     );
   }
 }
@@ -482,7 +507,7 @@ async function ensureAiDialogTables() {
         FOREIGN KEY (user_id) REFERENCES users (id)
         ON DELETE CASCADE,
       INDEX idx_ai_dialogs_user_updated_at (user_id, updated_at DESC)
-    )`
+    )`,
   );
 }
 
@@ -500,13 +525,13 @@ async function ensureFortuneTables() {
         ON DELETE CASCADE,
       UNIQUE KEY uq_user_fortunes_user_date (user_id, fortune_date),
       INDEX idx_user_fortunes_user_date (user_id, fortune_date)
-    )`
+    )`,
   );
 }
 
 async function ensureEconomyTables() {
   const userColumns = [
-    ["heat", "ALTER TABLE users ADD COLUMN heat BIGINT NOT NULL DEFAULT 0 AFTER manetrons"]
+    ['heat', 'ALTER TABLE users ADD COLUMN heat BIGINT NOT NULL DEFAULT 0 AFTER manetrons'],
   ];
 
   for (const [columnName, alterSql] of userColumns) {
@@ -517,7 +542,7 @@ async function ensureEconomyTables() {
          AND TABLE_NAME = 'users'
          AND COLUMN_NAME = ?
        LIMIT 1`,
-      [columnName]
+      [columnName],
     );
 
     if (!columns[0]) {
@@ -539,7 +564,7 @@ async function ensureEconomyTables() {
         ON DELETE CASCADE,
       UNIQUE KEY uq_user_assets_user_asset (user_id, asset_key),
       INDEX idx_user_assets_asset_key (asset_key)
-    )`
+    )`,
   );
 
   await pool.execute(
@@ -556,7 +581,7 @@ async function ensureEconomyTables() {
         ON DELETE CASCADE,
       UNIQUE KEY uq_user_checkins_user_date (user_id, checkin_date),
       INDEX idx_user_checkins_user_date (user_id, checkin_date)
-    )`
+    )`,
   );
 }
 
@@ -575,7 +600,12 @@ async function ensureMaxAgentUser() {
            full_name = ?,
            avatar_path = ?
        WHERE id = ?`,
-      [await createUniqueUserUid(), MAX_AGENT_USER.fullName, MAX_AGENT_USER.avatarPath, existing.id]
+      [
+        await createUniqueUserUid(),
+        MAX_AGENT_USER.fullName,
+        MAX_AGENT_USER.avatarPath,
+        existing.id,
+      ],
     );
     return;
   }
@@ -592,18 +622,18 @@ async function ensureMaxAgentUser() {
       MAX_AGENT_USER.studentId,
       MAX_AGENT_USER.email,
       passwordHash,
-      MAX_AGENT_USER.avatarPath
-    ]
+      MAX_AGENT_USER.avatarPath,
+    ],
   );
 }
 
-async function getAppSetting(key, defaultValue = "") {
+async function getAppSetting(key, defaultValue = '') {
   const [rows] = await pool.execute(
     `SELECT setting_value
      FROM app_settings
      WHERE setting_key = ?
      LIMIT 1`,
-    [key]
+    [key],
   );
 
   return rows[0]?.setting_value ?? defaultValue;
@@ -614,19 +644,19 @@ async function setAppSetting(key, value) {
     `INSERT INTO app_settings (setting_key, setting_value)
      VALUES (?, ?)
      ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)`,
-    [key, String(value)]
+    [key, String(value)],
   );
 }
 
 async function getFortuneBonusEnabled() {
-  return (await getAppSetting(FORTUNE_BONUS_KEY, "0")) === "1";
+  return (await getAppSetting(FORTUNE_BONUS_KEY, '0')) === '1';
 }
 
 async function decayHeatIfNeeded(referenceDate = new Date()) {
   await ensureEconomyTables();
 
   const todayKey = toDateKey(referenceDate);
-  const lastDecayDate = await getAppSetting(HEAT_DECAY_DATE_KEY, "");
+  const lastDecayDate = await getAppSetting(HEAT_DECAY_DATE_KEY, '');
 
   if (!lastDecayDate) {
     await setAppSetting(HEAT_DECAY_DATE_KEY, todayKey);
@@ -640,7 +670,7 @@ async function decayHeatIfNeeded(referenceDate = new Date()) {
   await pool.execute(
     `UPDATE users
      SET heat = CEIL(heat / 2)
-     WHERE heat > 0`
+     WHERE heat > 0`,
   );
   await setAppSetting(HEAT_DECAY_DATE_KEY, todayKey);
   return true;
@@ -656,7 +686,7 @@ function scheduleNextHeatDecay() {
     try {
       await decayHeatIfNeeded(new Date());
     } catch (error) {
-      console.error("Failed to decay heat", error);
+      console.error('Failed to decay heat', error);
     } finally {
       scheduleNextHeatDecay();
     }
@@ -665,8 +695,8 @@ function scheduleNextHeatDecay() {
 
 function toDateKey(date) {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
 
   return `${year}-${month}-${day}`;
 }
@@ -686,14 +716,14 @@ async function ensureUserFortuneWindow(user, fortuneBonusEnabled) {
 
   const today = new Date();
   const todayKey = toDateKey(today);
-  const dates = Array.from({ length: FORTUNE_LOOKBACK_DAYS }, (_, index) => (
-    toDateKey(addDays(today, index - FORTUNE_LOOKBACK_DAYS + 1))
-  ));
+  const dates = Array.from({ length: FORTUNE_LOOKBACK_DAYS }, (_, index) =>
+    toDateKey(addDays(today, index - FORTUNE_LOOKBACK_DAYS + 1)),
+  );
 
   await pool.execute(
     `INSERT IGNORE INTO user_fortunes (user_id, fortune_date, score)
      VALUES (?, ?, ?)`,
-    [user.id, todayKey, generateFortuneScore(fortuneBonusEnabled)]
+    [user.id, todayKey, generateFortuneScore(fortuneBonusEnabled)],
   );
 
   const [rows] = await pool.execute(
@@ -701,13 +731,13 @@ async function ensureUserFortuneWindow(user, fortuneBonusEnabled) {
      FROM user_fortunes
      WHERE user_id = ?
        AND fortune_date BETWEEN ? AND ?`,
-    [user.id, dates[0], dates[dates.length - 1]]
+    [user.id, dates[0], dates[dates.length - 1]],
   );
   const scoreByDate = new Map(rows.map((row) => [row.fortune_date, Number(row.score)]));
 
   return dates.map((date) => ({
     date,
-    score: scoreByDate.has(date) ? scoreByDate.get(date) : null
+    score: scoreByDate.has(date) ? scoreByDate.get(date) : null,
   }));
 }
 
@@ -726,7 +756,7 @@ async function getCheckinSummary(user, fortuneBonusEnabled) {
      WHERE user_id = ?
        AND checkin_date BETWEEN ? AND ?
      ORDER BY checkin_date DESC`,
-    [user.id, startKey, todayKey]
+    [user.id, startKey, todayKey],
   );
   const todayRow = rows.find((row) => row.checkin_date === todayKey);
   const fortuneHistory = await ensureUserFortuneWindow(user, fortuneBonusEnabled);
@@ -734,22 +764,24 @@ async function getCheckinSummary(user, fortuneBonusEnabled) {
 
   return {
     checkedInToday: Boolean(todayRow),
-    today: todayRow ? {
-      date: todayRow.checkin_date,
-      streak: Number(todayRow.streak_count || 0),
-      rewardElectrons: Number(todayRow.reward_electrons || 0),
-      fortuneScore: Number(todayRow.fortune_score ?? todayFortune?.score ?? 0)
-    } : null,
+    today: todayRow
+      ? {
+          date: todayRow.checkin_date,
+          streak: Number(todayRow.streak_count || 0),
+          rewardElectrons: Number(todayRow.reward_electrons || 0),
+          fortuneScore: Number(todayRow.fortune_score ?? todayFortune?.score ?? 0),
+        }
+      : null,
     todayFortune: {
       date: todayKey,
-      score: Number(todayFortune?.score ?? 0)
+      score: Number(todayFortune?.score ?? 0),
     },
     records: rows.map((row) => ({
       date: row.checkin_date,
       streak: Number(row.streak_count || 0),
       rewardElectrons: Number(row.reward_electrons || 0),
-      fortuneScore: Number(row.fortune_score || 0)
-    }))
+      fortuneScore: Number(row.fortune_score || 0),
+    })),
   };
 }
 
@@ -771,13 +803,13 @@ async function performDailyCheckin(user) {
      FROM user_checkins
      WHERE user_id = ? AND checkin_date = ?
      LIMIT 1`,
-    [user.id, todayKey]
+    [user.id, todayKey],
   );
 
   if (existing[0]) {
     return {
       alreadyCheckedIn: true,
-      summary: await getCheckinSummary(user, fortuneBonusEnabled)
+      summary: await getCheckinSummary(user, fortuneBonusEnabled),
     };
   }
 
@@ -786,7 +818,7 @@ async function performDailyCheckin(user) {
      FROM user_checkins
      WHERE user_id = ? AND checkin_date = ?
      LIMIT 1`,
-    [user.id, yesterdayKey]
+    [user.id, yesterdayKey],
   );
   const streak = previousRows[0] ? Number(previousRows[0].streak_count || 0) + 1 : 1;
   const rewardElectrons = Math.min(streak, MAX_CHECKIN_STREAK_REWARD);
@@ -795,18 +827,18 @@ async function performDailyCheckin(user) {
   await pool.execute(
     `INSERT INTO user_checkins (user_id, checkin_date, streak_count, reward_electrons, fortune_score)
      VALUES (?, ?, ?, ?, ?)`,
-    [user.id, todayKey, streak, rewardElectrons, fortuneScore]
+    [user.id, todayKey, streak, rewardElectrons, fortuneScore],
   );
   await pool.execute(
     `UPDATE users
      SET electrons = electrons + ?
      WHERE id = ?`,
-    [rewardElectrons, user.id]
+    [rewardElectrons, user.id],
   );
 
   return {
     alreadyCheckedIn: false,
-    summary: await getCheckinSummary(user, fortuneBonusEnabled)
+    summary: await getCheckinSummary(user, fortuneBonusEnabled),
   };
 }
 
@@ -821,13 +853,17 @@ async function getUserAssets(userId) {
      WHERE user_id = ?
        AND quantity > 0
      ORDER BY asset_key ASC`,
-    [userId]
+    [userId],
   );
 
   return rows.map((row) => {
     const item = shopItemByAsset.get(row.asset_key) || null;
     const metadata = row.metadata_json || null;
-    const isGift = item?.isGift === false || metadata?.isgift === false || metadata?.isGift === false ? false : true;
+    const isGift = !(
+      item?.isGift === false ||
+      metadata?.isgift === false ||
+      metadata?.isGift === false
+    );
 
     return {
       key: row.asset_key,
@@ -836,51 +872,61 @@ async function getUserAssets(userId) {
       item,
       isGift,
       createdAt: row.created_at,
-      updatedAt: row.updated_at
+      updatedAt: row.updated_at,
     };
   });
 }
 
 function getShopItems() {
   try {
-    const raw = JSON.parse(fs.readFileSync(SHOP_CATALOG_PATH, "utf8"));
+    const raw = JSON.parse(fs.readFileSync(SHOP_CATALOG_PATH, 'utf8'));
     const items = Array.isArray(raw.items) ? raw.items : [];
 
-    return items.map((item) => {
-      const key = String(item.key || "").trim();
-      const baseCost = item.cost && typeof item.cost === "object" ? item.cost : {};
-      const cost = {
-        ...baseCost,
-        ...(item.electric ? { electric: item.electric } : {}),
-        ...(item.magnetic ? { magnetic: item.magnetic } : {})
-      };
+    return items
+      .map((item) => {
+        const key = String(item.key || '').trim();
+        const baseCost = item.cost && typeof item.cost === 'object' ? item.cost : {};
+        const cost = {
+          ...baseCost,
+          ...(item.electric ? { electric: item.electric } : {}),
+          ...(item.magnetic ? { magnetic: item.magnetic } : {}),
+        };
 
-      return {
-        key,
-        assetKey: String(item.assetKey || key).trim(),
-        name: String(item.name || key).trim(),
-        class: String(item.class || "usable").trim(),
-        description: String(item.description || "").trim(),
-        desc: String(item.desc || item.description || "").trim(),
-        image: String(item.image || "").trim(),
-        isGift: item.isgift === false || item.is_gift === false || item.isGift === false ? false : true,
-        cost: Object.fromEntries(
-          Object.entries(cost)
-            .map(([currency, value]) => [normalizeCurrencyType(currency), Number(value)])
-            .filter(([currency, value]) => ["electric", "magnetic"].includes(currency) && Number.isFinite(value) && value > 0)
-        ),
-        use: item.use && typeof item.use === "object" ? item.use : null
-      };
-    }).filter((item) => item.key && item.assetKey);
+        return {
+          key,
+          assetKey: String(item.assetKey || key).trim(),
+          name: String(item.name || key).trim(),
+          class: String(item.class || 'usable').trim(),
+          description: String(item.description || '').trim(),
+          desc: String(item.desc || item.description || '').trim(),
+          image: String(item.image || '').trim(),
+          isGift: !(item.isgift === false || item.is_gift === false || item.isGift === false),
+          cost: Object.fromEntries(
+            Object.entries(cost)
+              .map(([currency, value]) => [normalizeCurrencyType(currency), Number(value)])
+              .filter(
+                ([currency, value]) =>
+                  ['electric', 'magnetic'].includes(currency) &&
+                  Number.isFinite(value) &&
+                  value > 0,
+              ),
+          ),
+          use: item.use && typeof item.use === 'object' ? item.use : null,
+        };
+      })
+      .filter((item) => item.key && item.assetKey);
   } catch (error) {
-    console.error("Failed to load shop catalog", error);
+    console.error('Failed to load shop catalog', error);
     return [];
   }
 }
 
 function getShopItem(key) {
-  const normalizedKey = String(key || "").replace(/-/g, "_");
-  return getShopItems().find((item) => item.key === normalizedKey || item.assetKey === normalizedKey) || null;
+  const normalizedKey = String(key || '').replace(/-/g, '_');
+  return (
+    getShopItems().find((item) => item.key === normalizedKey || item.assetKey === normalizedKey) ||
+    null
+  );
 }
 
 function normalizeAssetMetadataJson(value, fallback = {}) {
@@ -888,7 +934,7 @@ function normalizeAssetMetadataJson(value, fallback = {}) {
     return fallback;
   }
 
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     try {
       return JSON.parse(value);
     } catch {
@@ -896,7 +942,7 @@ function normalizeAssetMetadataJson(value, fallback = {}) {
     }
   }
 
-  if (typeof value === "object") {
+  if (typeof value === 'object') {
     return value;
   }
 
@@ -911,43 +957,45 @@ async function getHeatLeaderboard(limit = 3) {
      FROM users
      WHERE heat > 0
      ORDER BY heat DESC, updated_at DESC, id ASC
-     LIMIT ${normalizeLimit(limit, 3, 10)}`
+     LIMIT ${normalizeLimit(limit, 3, 10)}`,
   );
 
   return rows.map((row) => ({
-    uid: row.uid || "",
+    uid: row.uid || '',
     username: row.username,
     nickname: row.username,
     fullName: row.full_name,
-    avatarPath: row.avatar_path || "",
-    heat: Number(row.heat || 0)
+    avatarPath: row.avatar_path || '',
+    heat: Number(row.heat || 0),
   }));
 }
 
 function normalizeCurrencyType(value) {
-  const currency = String(value || "").trim().toLowerCase();
+  const currency = String(value || '')
+    .trim()
+    .toLowerCase();
 
-  if (["electric", "electron", "electrons"].includes(currency)) {
-    return "electric";
+  if (['electric', 'electron', 'electrons'].includes(currency)) {
+    return 'electric';
   }
 
-  if (["magnetic", "magnetron", "manetron", "manetrons", "magnetrons"].includes(currency)) {
-    return "magnetic";
+  if (['magnetic', 'magnetron', 'manetron', 'manetrons', 'magnetrons'].includes(currency)) {
+    return 'magnetic';
   }
 
-  return "";
+  return '';
 }
 
 function currencyColumn(currency) {
-  if (currency === "electric") {
-    return "electrons";
+  if (currency === 'electric') {
+    return 'electrons';
   }
 
-  if (currency === "magnetic") {
-    return "manetrons";
+  if (currency === 'magnetic') {
+    return 'manetrons';
   }
 
-  return "manetrons";
+  return 'manetrons';
 }
 
 async function awardPostAuthorManetrons(post, delta) {
@@ -959,14 +1007,14 @@ async function awardPostAuthorManetrons(post, delta) {
     `UPDATE users
      SET manetrons = GREATEST(0, manetrons + ?)
      WHERE id = ?`,
-    [delta, post.user_id]
+    [delta, post.user_id],
   );
 }
 
 function toUserProfile(row) {
   return {
     id: row.id,
-    uid: row.uid || "",
+    uid: row.uid || '',
     username: row.username,
     fullName: row.full_name,
     studentId: row.student_id,
@@ -975,13 +1023,13 @@ function toUserProfile(row) {
     role: row.role,
     grade: row.grade,
     major: row.major,
-    avatarPath: row.avatar_path || "",
-    bio: row.bio || "",
-    websiteUrl: row.website_url || "",
+    avatarPath: row.avatar_path || '',
+    bio: row.bio || '',
+    websiteUrl: row.website_url || '',
     electrons: Number(row.electrons || 0),
     manetrons: Number(row.manetrons || 0),
     heat: Number(row.heat || 0),
-    createdAt: row.created_at
+    createdAt: row.created_at,
   };
 }
 
@@ -990,11 +1038,11 @@ function toDiscussionBoard(row) {
     id: row.id,
     slug: row.slug,
     name: row.name,
-    description: row.description || "",
-    descriptionMarkdown: row.description_markdown || row.description || "",
+    description: row.description || '',
+    descriptionMarkdown: row.description_markdown || row.description || '',
     sortOrder: Number(row.sort_order || 0),
     canModerate: Boolean(row.can_moderate),
-    canManageModerators: Boolean(row.can_manage_moderators)
+    canManageModerators: Boolean(row.can_manage_moderators),
   };
 }
 
@@ -1003,12 +1051,12 @@ function toDiscussionPostSummary(row) {
   return {
     id: row.pid || String(row.id),
     pid: row.pid || String(row.id),
-    title: isDeleted ? "已删除的帖子" : row.title,
+    title: isDeleted ? '已删除的帖子' : row.title,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     board: {
       slug: row.board_slug,
-      name: row.board_name
+      name: row.board_name,
     },
     isPinned: Boolean(row.is_pinned),
     pinnedAt: row.pinned_at || null,
@@ -1021,11 +1069,11 @@ function toDiscussionPostSummary(row) {
     canDelete: !isDeleted && Boolean(row.can_delete),
     author: {
       id: row.user_id,
-      uid: row.uid || "",
+      uid: row.uid || '',
       username: row.username,
-      fullName: "",
-      displayName: row.username || "匿名用户",
-      avatarPath: row.avatar_path || ""
+      fullName: '',
+      displayName: row.username || '匿名用户',
+      avatarPath: row.avatar_path || '',
     },
     likeCount: Number(row.like_count || 0),
     lightCount: Number(row.light_count || 0),
@@ -1033,7 +1081,7 @@ function toDiscussionPostSummary(row) {
     commentCount: Number(row.comment_count || 0),
     likedByMe: Boolean(row.liked_by_me),
     lightedByMe: Boolean(row.lighted_by_me),
-    fireworksByMe: Boolean(row.fireworks_by_me)
+    fireworksByMe: Boolean(row.fireworks_by_me),
   };
 }
 
@@ -1041,17 +1089,17 @@ function toDiscussionComment(row) {
   return {
     id: row.id,
     parentCommentId: row.parent_comment_id ? Number(row.parent_comment_id) : null,
-    contentMarkdown: row.content_markdown || "",
+    contentMarkdown: row.content_markdown || '',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     author: {
       id: row.user_id,
-      uid: row.uid || "",
+      uid: row.uid || '',
       username: row.username,
-      fullName: "",
-      displayName: row.username || "匿名用户",
-      avatarPath: row.avatar_path || ""
-    }
+      fullName: '',
+      displayName: row.username || '匿名用户',
+      avatarPath: row.avatar_path || '',
+    },
   };
 }
 
@@ -1059,7 +1107,7 @@ function toDiscussionPostDetail(row) {
   const isDeleted = Boolean(row.is_deleted);
   return {
     ...toDiscussionPostSummary(row),
-    contentMarkdown: isDeleted ? "这篇帖子已被删除。" : (row.content_markdown || "")
+    contentMarkdown: isDeleted ? '这篇帖子已被删除。' : row.content_markdown || '',
   };
 }
 
@@ -1072,37 +1120,39 @@ async function getDiscussionCommentById(commentId) {
      INNER JOIN users u ON u.id = c.user_id
      WHERE c.id = ?
      LIMIT 1`,
-    [commentId]
+    [commentId],
   );
 
   return rows[0] ? toDiscussionComment(rows[0]) : null;
 }
 
 function shouldAskMax(contentMarkdown) {
-  return MAX_MENTION_PATTERN.test(String(contentMarkdown || ""));
+  return MAX_MENTION_PATTERN.test(String(contentMarkdown || ''));
 }
 
 function buildMaxDiscussionPrompt(post, comments, triggerComment) {
-  const renderedComments = comments.map((comment) => {
-    const prefix = comment.id === triggerComment.id ? "[触发 @max 的评论]" : "[评论]";
-    const parent = comment.parentCommentId ? ` 回复 #${comment.parentCommentId}` : "";
-    return `${prefix} #${comment.id}${parent} ${comment.author.displayName}：\n${comment.contentMarkdown}`;
-  }).join("\n\n");
+  const renderedComments = comments
+    .map((comment) => {
+      const prefix = comment.id === triggerComment.id ? '[触发 @max 的评论]' : '[评论]';
+      const parent = comment.parentCommentId ? ` 回复 #${comment.parentCommentId}` : '';
+      return `${prefix} #${comment.id}${parent} ${comment.author.displayName}：\n${comment.contentMarkdown}`;
+    })
+    .join('\n\n');
 
   return [
-    "你是 FREE-BBS 讨论区中的 Max。请根据帖子正文和评论上下文，回复触发 @max 的那条评论。",
-    "要求：直接给出可作为评论发布的内容；支持 Markdown 和 KaTeX；不要编造未知事实；如果信息不足，请说明需要补充的信息。",
-    "",
+    '你是 FREE-BBS 讨论区中的 Max。请根据帖子正文和评论上下文，回复触发 @max 的那条评论。',
+    '要求：直接给出可作为评论发布的内容；支持 Markdown 和 KaTeX；不要编造未知事实；如果信息不足，请说明需要补充的信息。',
+    '',
     `帖子标题：${post.title}`,
     `版块：${post.board.name}`,
     `发帖人：${post.author.displayName}`,
-    "",
-    "帖子正文：",
+    '',
+    '帖子正文：',
     post.contentMarkdown,
-    "",
-    "评论上下文：",
-    renderedComments || "暂无其他评论"
-  ].join("\n");
+    '',
+    '评论上下文：',
+    renderedComments || '暂无其他评论',
+  ].join('\n');
 }
 
 function buildAgentUserContext(user) {
@@ -1111,50 +1161,62 @@ function buildAgentUserContext(user) {
   }
 
   return {
-    uid: user.uid || "",
-    username: user.username || "",
-    fullName: user.fullName || user.full_name || "",
-    studentId: user.student_id || user.studentId || "",
-    displayName: user.displayName || user.fullName || user.full_name || user.username || ""
+    uid: user.uid || '',
+    username: user.username || '',
+    fullName: user.fullName || user.full_name || '',
+    studentId: user.student_id || user.studentId || '',
+    displayName: user.displayName || user.fullName || user.full_name || user.username || '',
   };
 }
 
 function buildAgentChatPayload(user, payload, defaults = {}) {
   return {
     ...payload,
-    agent: payload.agent || defaults.agent || "general_chat",
-    source: payload.source || defaults.source || "direct_chat",
-    channel: payload.channel || defaults.channel || payload.source || defaults.source || "direct_chat",
+    agent: payload.agent || defaults.agent || 'general_chat',
+    source: payload.source || defaults.source || 'direct_chat',
+    channel:
+      payload.channel || defaults.channel || payload.source || defaults.source || 'direct_chat',
     user: buildAgentUserContext(user),
     context: {
       ...(defaults.context || {}),
-      ...(payload.context && typeof payload.context === "object" ? payload.context : {})
-    }
+      ...(payload.context && typeof payload.context === 'object' ? payload.context : {}),
+    },
   };
 }
 
 async function postAgentChat(payload) {
-  return fetch(`${config.agentBaseUrl.replace(/\/$/, "")}/api/v1/chat`, {
-    method: "POST",
+  return fetch(`${config.agentBaseUrl.replace(/\/$/, '')}/api/v1/chat`, {
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json"
+      'Content-Type': 'application/json',
     },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
 function normalizeSandboxLanguage(language) {
-  const value = String(language || "").trim().toLowerCase();
+  const value = String(language || '')
+    .trim()
+    .toLowerCase();
 
-  if (value === "python" || value === "py") {
-    return "python";
+  if (value === 'python' || value === 'py') {
+    return 'python';
   }
 
-  if (value === "c" || value === "gcc" || value === "cpp" || value === "c++" || value === "cplusplus" || value === "cc" || value === "cxx" || value === "g++") {
-    return "cpp";
+  if (
+    value === 'c' ||
+    value === 'gcc' ||
+    value === 'cpp' ||
+    value === 'c++' ||
+    value === 'cplusplus' ||
+    value === 'cc' ||
+    value === 'cxx' ||
+    value === 'g++'
+  ) {
+    return 'cpp';
   }
 
-  return "";
+  return '';
 }
 
 function getSandboxUid(user) {
@@ -1162,7 +1224,7 @@ function getSandboxUid(user) {
 }
 
 function isSafeSandboxFilename(filename) {
-  return /^[A-Za-z0-9_.-]+\.(?:png|jpg|jpeg|webp|gif)$/i.test(String(filename || ""));
+  return /^[A-Za-z0-9_.-]+\.(?:png|jpg|jpeg|webp|gif)$/i.test(String(filename || ''));
 }
 
 function mapSandboxOutputFiles(files, uid) {
@@ -1171,16 +1233,16 @@ function mapSandboxOutputFiles(files, uid) {
 
   return (Array.isArray(files) ? files : [])
     .map((file) => {
-      const resolved = path.resolve(String(file || ""));
+      const resolved = path.resolve(String(file || ''));
 
       if (!resolved.startsWith(`${userOutputRoot}${path.sep}`)) {
-        return "";
+        return '';
       }
 
       const filename = path.basename(resolved);
 
       if (!isSafeSandboxFilename(filename)) {
-        return "";
+        return '';
       }
 
       return `/api/code/outputs/${encodeURIComponent(uid)}/${encodeURIComponent(filename)}`;
@@ -1193,13 +1255,13 @@ async function postSandboxRun(payload, timeoutSeconds) {
   const timer = setTimeout(() => controller.abort(), (timeoutSeconds + 3) * 1000);
 
   try {
-    return await fetch(`${config.sandboxBaseUrl.replace(/\/$/, "")}/run`, {
-      method: "POST",
+    return await fetch(`${config.sandboxBaseUrl.replace(/\/$/, '')}/run`, {
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json"
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
-      signal: controller.signal
+      signal: controller.signal,
     });
   } finally {
     clearTimeout(timer);
@@ -1230,7 +1292,7 @@ async function createMaxDiscussionReply(postId, triggerComment) {
      INNER JOIN users u ON u.id = p.user_id
      WHERE p.id = ?
      LIMIT 1`,
-    [postId]
+    [postId],
   );
 
   if (!postRows[0]) {
@@ -1245,16 +1307,16 @@ async function createMaxDiscussionReply(postId, triggerComment) {
      INNER JOIN users u ON u.id = c.user_id
      WHERE c.post_id = ?
      ORDER BY c.created_at ASC, c.id ASC`,
-    [postId]
+    [postId],
   );
 
   const post = toDiscussionPostDetail(postRows[0]);
   const comments = commentRows.map(toDiscussionComment);
   const prompt = buildMaxDiscussionPrompt(post, comments, triggerComment);
   const agentResponse = await postAgentChat({
-    agent: "comment_mention",
-    source: "comment",
-    channel: "discussion_comment",
+    agent: 'comment_mention',
+    source: 'comment',
+    channel: 'discussion_comment',
     message: prompt,
     temperature: 0.5,
     context: {
@@ -1264,20 +1326,20 @@ async function createMaxDiscussionReply(postId, triggerComment) {
         title: post.title,
         board: post.board,
         author: post.author,
-        contentMarkdown: post.contentMarkdown
+        contentMarkdown: post.contentMarkdown,
       },
       triggerComment,
-      comments
-    }
+      comments,
+    },
   });
 
   const agentPayload = await agentResponse.json().catch(() => ({}));
 
   if (!agentResponse.ok) {
-    throw new Error(agentPayload?.error?.message || agentPayload.message || "Max 暂时无法回复");
+    throw new Error(agentPayload?.error?.message || agentPayload.message || 'Max 暂时无法回复');
   }
 
-  const answer = String(agentPayload.answer || agentPayload.content || "").trim();
+  const answer = String(agentPayload.answer || agentPayload.content || '').trim();
 
   if (!answer) {
     return null;
@@ -1291,7 +1353,7 @@ async function createMaxDiscussionReply(postId, triggerComment) {
   const [result] = await pool.execute(
     `INSERT INTO discussion_comments (post_id, parent_comment_id, user_id, author_student_id, content_markdown)
      VALUES (?, ?, ?, ?, ?)`,
-    [postId, triggerComment.id, maxUser.id, maxUser.student_id, answer.slice(0, 5000)]
+    [postId, triggerComment.id, maxUser.id, maxUser.student_id, answer.slice(0, 5000)],
   );
 
   return getDiscussionCommentById(result.insertId);
@@ -1302,7 +1364,7 @@ function toAiDialogSummary(row) {
     did: row.did,
     title: row.title,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
   };
 }
 
@@ -1314,24 +1376,24 @@ function normalizeAiMessages(value) {
   const messages = [];
 
   for (const message of value) {
-    if (!message || typeof message !== "object") {
+    if (!message || typeof message !== 'object') {
       return null;
     }
 
-    const role = message.role;
-    const content = message.content;
+    const { role } = message;
+    const { content } = message;
 
-    if (!["user", "assistant"].includes(role)) {
+    if (!['user', 'assistant'].includes(role)) {
       return null;
     }
 
-    if (typeof content !== "string") {
+    if (typeof content !== 'string') {
       return null;
     }
 
     messages.push({
       role,
-      content: content.slice(0, 20000)
+      content: content.slice(0, 20000),
     });
   }
 
@@ -1339,14 +1401,15 @@ function normalizeAiMessages(value) {
 }
 
 function buildAiDialogTitle(title, messages) {
-  const explicitTitle = String(title || "").trim();
+  const explicitTitle = String(title || '').trim();
 
   if (explicitTitle) {
     return explicitTitle.slice(0, 120);
   }
 
-  const firstUserMessage = messages.find((message) => message.role === "user")?.content || "新的对话";
-  return firstUserMessage.replace(/\s+/g, " ").trim().slice(0, 32) || "新的对话";
+  const firstUserMessage =
+    messages.find((message) => message.role === 'user')?.content || '新的对话';
+  return firstUserMessage.replace(/\s+/g, ' ').trim().slice(0, 32) || '新的对话';
 }
 
 function normalizeLimit(value, defaultLimit = 12, maxLimit = 50) {
@@ -1366,24 +1429,24 @@ async function getDiscussionBoardBySlug(slug) {
      WHERE slug = ?
        AND is_active = 1
      LIMIT 1`,
-    [slug]
+    [slug],
   );
 
   return rows[0] || null;
 }
 
 async function getDiscussionPostByPublicId(value) {
-  const postKey = String(value || "").trim();
+  const postKey = String(value || '').trim();
 
   if (!postKey) {
     return null;
   }
 
   const params = [postKey];
-  let legacyCondition = "";
+  let legacyCondition = '';
 
   if (/^\d+$/.test(postKey)) {
-    legacyCondition = " OR id = ?";
+    legacyCondition = ' OR id = ?';
     params.push(Number(postKey));
   }
 
@@ -1392,7 +1455,7 @@ async function getDiscussionPostByPublicId(value) {
      FROM discussion_posts
      WHERE pid = ?${legacyCondition}
      LIMIT 1`,
-    params
+    params,
   );
 
   return rows[0] || null;
@@ -1403,7 +1466,7 @@ async function canModerateBoard(user, boardId) {
     return false;
   }
 
-  if (user.role === "admin") {
+  if (user.role === 'admin') {
     return true;
   }
 
@@ -1412,7 +1475,7 @@ async function canModerateBoard(user, boardId) {
      FROM discussion_board_moderators
      WHERE board_id = ? AND user_id = ?
      LIMIT 1`,
-    [boardId, user.id]
+    [boardId, user.id],
   );
 
   return Boolean(rows[0]);
@@ -1423,7 +1486,7 @@ async function requireDiscussionBoardModerator(user, boardId, response) {
     return true;
   }
 
-  response.status(403).json({ message: "需要该版块版主权限" });
+  response.status(403).json({ message: '需要该版块版主权限' });
   return false;
 }
 
@@ -1431,7 +1494,7 @@ function issueToken(user) {
   return sign({
     sub: user.id,
     username: user.username,
-    exp: Date.now() + 7 * 24 * 60 * 60 * 1000
+    exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
   });
 }
 
@@ -1439,7 +1502,7 @@ async function getUserById(id) {
   const [rows] = await pool.execute(
     `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
      FROM users WHERE id = ? LIMIT 1`,
-    [id]
+    [id],
   );
 
   return rows[0] || null;
@@ -1449,26 +1512,26 @@ async function getUserByIdFromUsername(username) {
   const [rows] = await pool.execute(
     `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
      FROM users WHERE username = ? LIMIT 1`,
-    [username]
+    [username],
   );
 
   return rows[0] || null;
 }
 
 async function requireAuth(request, response) {
-  const authorization = request.headers.authorization || "";
-  const token = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+  const authorization = request.headers.authorization || '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
   const payload = verify(token);
 
   if (!payload || !payload.sub) {
-    response.status(401).json({ message: "未登录或登录已失效" });
+    response.status(401).json({ message: '未登录或登录已失效' });
     return null;
   }
 
   const user = await getUserById(payload.sub);
 
   if (!user) {
-    response.status(401).json({ message: "用户不存在" });
+    response.status(401).json({ message: '用户不存在' });
     return null;
   }
 
@@ -1476,8 +1539,8 @@ async function requireAuth(request, response) {
 }
 
 async function getOptionalAuthUser(request) {
-  const authorization = request.headers.authorization || "";
-  const token = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+  const authorization = request.headers.authorization || '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
   const payload = verify(token);
 
   if (!payload || !payload.sub) {
@@ -1494,8 +1557,8 @@ async function requireAdmin(request, response) {
     return null;
   }
 
-  if (user.role !== "admin") {
-    response.status(403).json({ message: "需要管理员权限" });
+  if (user.role !== 'admin') {
+    response.status(403).json({ message: '需要管理员权限' });
     return null;
   }
 
@@ -1503,15 +1566,15 @@ async function requireAdmin(request, response) {
 }
 
 function sanitizeWebsiteUrl(value) {
-  const websiteUrl = String(value || "").trim();
+  const websiteUrl = String(value || '').trim();
 
   if (!websiteUrl) {
-    return "";
+    return '';
   }
 
   try {
     const url = new URL(websiteUrl);
-    if (!["http:", "https:"].includes(url.protocol)) {
+    if (!['http:', 'https:'].includes(url.protocol)) {
       return null;
     }
     return url.toString();
@@ -1522,10 +1585,10 @@ function sanitizeWebsiteUrl(value) {
 
 function buildAvatarFileName(userId, mimeType) {
   const extensionMap = {
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
-    "image/gif": ".gif"
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/webp': '.webp',
+    'image/gif': '.gif',
   };
   const extension = extensionMap[mimeType];
 
@@ -1537,7 +1600,7 @@ function buildAvatarFileName(userId, mimeType) {
 }
 
 function buildDiscussionImageFileName(userId) {
-  const suffix = crypto.randomBytes(8).toString("hex");
+  const suffix = crypto.randomBytes(8).toString('hex');
   return `discussion-${userId}-${Date.now()}-${suffix}.webp`;
 }
 
@@ -1550,24 +1613,24 @@ function removeStoredAvatar(avatarPath) {
   fs.promises.unlink(path.join(config.uploadDir, fileName)).catch(() => {});
 }
 
-app.get("/api/health", async (_request, response) => {
+app.get('/api/health', async (_request, response) => {
   try {
-    await pool.query("SELECT 1");
+    await pool.query('SELECT 1');
     response.json({
       ok: true,
       dbHost: config.db.host,
-      database: config.db.database
+      database: config.db.database,
     });
   } catch (error) {
     response.status(500).json({
       ok: false,
-      message: "Database connection failed",
-      detail: error.message
+      message: 'Database connection failed',
+      detail: error.message,
     });
   }
 });
 
-app.post("/api/ai/chat", async (request, response) => {
+app.post('/api/ai/chat', async (request, response) => {
   const user = await requireAuth(request, response);
 
   if (!user) {
@@ -1576,27 +1639,27 @@ app.post("/api/ai/chat", async (request, response) => {
 
   const payload = request.body;
 
-  if (!payload || typeof payload !== "object") {
-    response.status(400).json({ message: "请求体必须是 JSON 对象" });
+  if (!payload || typeof payload !== 'object') {
+    response.status(400).json({ message: '请求体必须是 JSON 对象' });
     return;
   }
 
   try {
     const agentPayload = buildAgentChatPayload(user, payload, {
-      agent: "general_chat",
-      source: "direct_chat",
-      channel: "aichat",
+      agent: 'general_chat',
+      source: 'direct_chat',
+      channel: 'aichat',
       context: {
-        dialogId: payload.did || payload.conversationId || payload.conversation_id || ""
-      }
+        dialogId: payload.did || payload.conversationId || payload.conversation_id || '',
+      },
     });
     const agentResponse = await postAgentChat(agentPayload);
 
     if (payload.stream) {
       response.status(agentResponse.status);
-      response.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-      response.setHeader("Cache-Control", "no-cache");
-      response.setHeader("X-Accel-Buffering", "no");
+      response.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      response.setHeader('Cache-Control', 'no-cache');
+      response.setHeader('X-Accel-Buffering', 'no');
 
       if (!agentResponse.body) {
         response.end();
@@ -1612,17 +1675,20 @@ app.post("/api/ai/chat", async (request, response) => {
 
     const text = await agentResponse.text();
     response.status(agentResponse.status);
-    response.setHeader("Content-Type", agentResponse.headers.get("content-type") || "application/json; charset=utf-8");
+    response.setHeader(
+      'Content-Type',
+      agentResponse.headers.get('content-type') || 'application/json; charset=utf-8',
+    );
     response.send(text);
   } catch (error) {
     response.status(502).json({
-      message: "AI 服务暂时不可用",
-      detail: error.message
+      message: 'AI 服务暂时不可用',
+      detail: error.message,
     });
   }
 });
 
-app.post("/api/code/run", async (request, response) => {
+app.post('/api/code/run', async (request, response) => {
   const user = await requireAuth(request, response);
 
   if (!user) {
@@ -1630,65 +1696,68 @@ app.post("/api/code/run", async (request, response) => {
   }
 
   const language = normalizeSandboxLanguage(request.body?.language);
-  const code = String(request.body?.code || "");
+  const code = String(request.body?.code || '');
   const timeout = Math.min(Math.max(Number(request.body?.timeout || 10), 1), 30);
 
   if (!language) {
-    response.status(400).json({ message: "仅支持运行 Python 和 C++ 代码" });
+    response.status(400).json({ message: '仅支持运行 Python 和 C++ 代码' });
     return;
   }
 
   if (!code.trim()) {
-    response.status(400).json({ message: "代码不能为空" });
+    response.status(400).json({ message: '代码不能为空' });
     return;
   }
 
-  if (Buffer.byteLength(code, "utf8") > 256 * 1024) {
-    response.status(400).json({ message: "代码过长" });
+  if (Buffer.byteLength(code, 'utf8') > 256 * 1024) {
+    response.status(400).json({ message: '代码过长' });
     return;
   }
 
   const uid = getSandboxUid(user);
 
   try {
-    const sandboxResponse = await postSandboxRun({
-      language,
-      code,
-      uid,
-      timeout
-    }, timeout);
+    const sandboxResponse = await postSandboxRun(
+      {
+        language,
+        code,
+        uid,
+        timeout,
+      },
+      timeout,
+    );
     const text = await sandboxResponse.text();
-    const payload = JSON.parse(text || "{}");
+    const payload = JSON.parse(text || '{}');
     payload.files = mapSandboxOutputFiles(payload.files, uid);
 
     response.status(sandboxResponse.ok ? 200 : sandboxResponse.status).json(payload);
   } catch (error) {
-    const message = error.name === "AbortError" ? "代码执行超时" : "代码沙盒不可用";
+    const message = error.name === 'AbortError' ? '代码执行超时' : '代码沙盒不可用';
     response.status(502).json({
       message,
-      detail: error.message
+      detail: error.message,
     });
   }
 });
 
-app.get("/api/code/outputs/:uid/:filename", async (request, response) => {
+app.get('/api/code/outputs/:uid/:filename', async (request, response) => {
   const user = await requireAuth(request, response);
 
   if (!user) {
     return;
   }
 
-  const uid = String(request.params.uid || "");
-  const filename = String(request.params.filename || "");
+  const uid = String(request.params.uid || '');
+  const filename = String(request.params.filename || '');
   const expectedUid = getSandboxUid(user);
 
-  if (uid !== expectedUid && user.role !== "admin") {
-    response.status(403).json({ message: "无权访问该输出文件" });
+  if (uid !== expectedUid && user.role !== 'admin') {
+    response.status(403).json({ message: '无权访问该输出文件' });
     return;
   }
 
   if (!isSafeSandboxFilename(filename)) {
-    response.status(400).json({ message: "非法文件名" });
+    response.status(400).json({ message: '非法文件名' });
     return;
   }
 
@@ -1696,19 +1765,19 @@ app.get("/api/code/outputs/:uid/:filename", async (request, response) => {
   const targetPath = path.resolve(outputRoot, uid, filename);
 
   if (!targetPath.startsWith(`${path.resolve(outputRoot, uid)}${path.sep}`)) {
-    response.status(400).json({ message: "非法文件路径" });
+    response.status(400).json({ message: '非法文件路径' });
     return;
   }
 
-  response.setHeader("Cache-Control", "private, max-age=3600");
+  response.setHeader('Cache-Control', 'private, max-age=3600');
   response.sendFile(targetPath, (error) => {
     if (error && !response.headersSent) {
-      response.status(error.statusCode || 404).json({ message: "输出文件不存在" });
+      response.status(error.statusCode || 404).json({ message: '输出文件不存在' });
     }
   });
 });
 
-app.get("/api/ai/dialogs", async (request, response) => {
+app.get('/api/ai/dialogs', async (request, response) => {
   try {
     await ensureAiDialogTables();
 
@@ -1725,18 +1794,18 @@ app.get("/api/ai/dialogs", async (request, response) => {
        WHERE user_id = ?
        ORDER BY updated_at DESC, id DESC
        LIMIT ${limit}`,
-      [user.id]
+      [user.id],
     );
 
     response.json({
-      dialogs: rows.map(toAiDialogSummary)
+      dialogs: rows.map(toAiDialogSummary),
     });
   } catch (error) {
-    response.status(500).json({ message: "获取 AI 对话失败", detail: error.message });
+    response.status(500).json({ message: '获取 AI 对话失败', detail: error.message });
   }
 });
 
-app.get("/api/ai/dialogs/:did", async (request, response) => {
+app.get('/api/ai/dialogs/:did', async (request, response) => {
   try {
     await ensureAiDialogTables();
 
@@ -1746,32 +1815,32 @@ app.get("/api/ai/dialogs/:did", async (request, response) => {
       return;
     }
 
-    const did = String(request.params.did || "").trim();
+    const did = String(request.params.did || '').trim();
     const [rows] = await pool.execute(
       `SELECT did, title, messages_json, created_at, updated_at
        FROM ai_dialogs
        WHERE did = ? AND user_id = ?
        LIMIT 1`,
-      [did, user.id]
+      [did, user.id],
     );
 
     if (!rows[0]) {
-      response.status(404).json({ message: "对话不存在" });
+      response.status(404).json({ message: '对话不存在' });
       return;
     }
 
     response.json({
       dialog: {
         ...toAiDialogSummary(rows[0]),
-        messages: JSON.parse(rows[0].messages_json || "[]")
-      }
+        messages: JSON.parse(rows[0].messages_json || '[]'),
+      },
     });
   } catch (error) {
-    response.status(500).json({ message: "获取 AI 对话详情失败", detail: error.message });
+    response.status(500).json({ message: '获取 AI 对话详情失败', detail: error.message });
   }
 });
 
-app.post("/api/ai/dialogs", async (request, response) => {
+app.post('/api/ai/dialogs', async (request, response) => {
   try {
     await ensureAiDialogTables();
 
@@ -1784,11 +1853,11 @@ app.post("/api/ai/dialogs", async (request, response) => {
     const messages = normalizeAiMessages(request.body.messages);
 
     if (!messages || !messages.length) {
-      response.status(400).json({ message: "对话内容不能为空" });
+      response.status(400).json({ message: '对话内容不能为空' });
       return;
     }
 
-    const did = String(request.body.did || "").trim() || crypto.randomUUID();
+    const did = String(request.body.did || '').trim() || crypto.randomUUID();
     const title = buildAiDialogTitle(request.body.title, messages);
     const messagesJson = JSON.stringify(messages);
 
@@ -1797,7 +1866,7 @@ app.post("/api/ai/dialogs", async (request, response) => {
        FROM ai_dialogs
        WHERE did = ? AND user_id = ?
        LIMIT 1`,
-      [did, user.id]
+      [did, user.id],
     );
 
     if (existing[0]) {
@@ -1805,13 +1874,13 @@ app.post("/api/ai/dialogs", async (request, response) => {
         `UPDATE ai_dialogs
          SET title = ?, messages_json = ?
          WHERE did = ? AND user_id = ?`,
-        [title, messagesJson, did, user.id]
+        [title, messagesJson, did, user.id],
       );
     } else {
       await pool.execute(
         `INSERT INTO ai_dialogs (did, user_id, title, messages_json)
          VALUES (?, ?, ?, ?)`,
-        [did, user.id, title, messagesJson]
+        [did, user.id, title, messagesJson],
       );
     }
 
@@ -1820,28 +1889,28 @@ app.post("/api/ai/dialogs", async (request, response) => {
        FROM ai_dialogs
        WHERE did = ? AND user_id = ?
        LIMIT 1`,
-      [did, user.id]
+      [did, user.id],
     );
 
     response.status(existing[0] ? 200 : 201).json({
-      dialog: toAiDialogSummary(rows[0])
+      dialog: toAiDialogSummary(rows[0]),
     });
   } catch (error) {
-    response.status(500).json({ message: "保存 AI 对话失败", detail: error.message });
+    response.status(500).json({ message: '保存 AI 对话失败', detail: error.message });
   }
 });
 
-app.get("/api/fortune-config", async (_request, response) => {
+app.get('/api/fortune-config', async (_request, response) => {
   try {
     response.json({
-      fortuneBonusEnabled: await getFortuneBonusEnabled()
+      fortuneBonusEnabled: await getFortuneBonusEnabled(),
     });
   } catch (error) {
-    response.status(500).json({ message: "获取运势配置失败", detail: error.message });
+    response.status(500).json({ message: '获取运势配置失败', detail: error.message });
   }
 });
 
-app.get("/api/fortune", async (request, response) => {
+app.get('/api/fortune', async (request, response) => {
   try {
     const user = await requireAuth(request, response);
 
@@ -1857,14 +1926,14 @@ app.get("/api/fortune", async (request, response) => {
     response.json({
       fortuneBonusEnabled,
       today,
-      history
+      history,
     });
   } catch (error) {
-    response.status(500).json({ message: "获取运势失败", detail: error.message });
+    response.status(500).json({ message: '获取运势失败', detail: error.message });
   }
 });
 
-app.get("/api/checkin", async (request, response) => {
+app.get('/api/checkin', async (request, response) => {
   try {
     const user = await requireAuth(request, response);
 
@@ -1878,14 +1947,14 @@ app.get("/api/checkin", async (request, response) => {
     response.json({
       fortuneBonusEnabled,
       ...summary,
-      user: toUserProfile(await getUserById(user.id))
+      user: toUserProfile(await getUserById(user.id)),
     });
   } catch (error) {
-    response.status(500).json({ message: "获取签到信息失败", detail: error.message });
+    response.status(500).json({ message: '获取签到信息失败', detail: error.message });
   }
 });
 
-app.post("/api/checkin", async (request, response) => {
+app.post('/api/checkin', async (request, response) => {
   try {
     const user = await requireAuth(request, response);
 
@@ -1897,14 +1966,14 @@ app.post("/api/checkin", async (request, response) => {
 
     response.json({
       ...result,
-      user: toUserProfile(await getUserById(user.id))
+      user: toUserProfile(await getUserById(user.id)),
     });
   } catch (error) {
-    response.status(500).json({ message: "签到失败", detail: error.message });
+    response.status(500).json({ message: '签到失败', detail: error.message });
   }
 });
 
-app.get("/api/electromagnetic", async (request, response) => {
+app.get('/api/electromagnetic', async (request, response) => {
   try {
     const user = await requireAuth(request, response);
 
@@ -1917,14 +1986,14 @@ app.get("/api/electromagnetic", async (request, response) => {
     response.json({
       user: toUserProfile(await getUserById(user.id)),
       assets: await getUserAssets(user.id),
-      shopItems: getShopItems()
+      shopItems: getShopItems(),
     });
   } catch (error) {
-    response.status(500).json({ message: "获取电磁场失败", detail: error.message });
+    response.status(500).json({ message: '获取电磁场失败', detail: error.message });
   }
 });
 
-app.post("/api/electromagnetic/heat", async (request, response) => {
+app.post('/api/electromagnetic/heat', async (request, response) => {
   try {
     const user = await requireAuth(request, response);
 
@@ -1935,8 +2004,8 @@ app.post("/api/electromagnetic/heat", async (request, response) => {
     await decayHeatIfNeeded(new Date());
     const currency = normalizeCurrencyType(request.body.currency);
 
-    if (!["electric", "magnetic"].includes(currency)) {
-      response.status(400).json({ message: "请选择消耗电元或磁元" });
+    if (!['electric', 'magnetic'].includes(currency)) {
+      response.status(400).json({ message: '请选择消耗电元或磁元' });
       return;
     }
 
@@ -1946,19 +2015,19 @@ app.post("/api/electromagnetic/heat", async (request, response) => {
        SET ${column} = ${column} - 1,
            heat = heat + 1
        WHERE id = ? AND ${column} >= 1`,
-      [user.id]
+      [user.id],
     );
 
     if (!result.affectedRows) {
-      response.status(400).json({ message: "余额不足" });
+      response.status(400).json({ message: '余额不足' });
       return;
     }
 
     response.json({
-      user: toUserProfile(await getUserById(user.id))
+      user: toUserProfile(await getUserById(user.id)),
     });
   } catch (error) {
-    response.status(500).json({ message: "兑换热力失败", detail: error.message });
+    response.status(500).json({ message: '兑换热力失败', detail: error.message });
   }
 });
 
@@ -1974,14 +2043,14 @@ async function purchaseShopItem(request, response, itemKey) {
     const currency = normalizeCurrencyType(request.body.currency);
 
     if (!item) {
-      response.status(404).json({ message: "商品不存在" });
+      response.status(404).json({ message: '商品不存在' });
       return;
     }
 
     const cost = Number(item.cost[currency] || 0);
 
     if (!cost) {
-      response.status(400).json({ message: "请选择电元或磁元购买" });
+      response.status(400).json({ message: '请选择电元或磁元购买' });
       return;
     }
 
@@ -1991,11 +2060,11 @@ async function purchaseShopItem(request, response, itemKey) {
        SET ${column} = ${column} - ?
            , heat = heat + ?
        WHERE id = ? AND ${column} >= ?`,
-      [cost, cost, user.id, cost]
+      [cost, cost, user.id, cost],
     );
 
     if (!result.affectedRows) {
-      response.status(400).json({ message: "余额不足" });
+      response.status(400).json({ message: '余额不足' });
       return;
     }
 
@@ -2005,27 +2074,36 @@ async function purchaseShopItem(request, response, itemKey) {
        ON DUPLICATE KEY UPDATE
          quantity = quantity + 1,
          metadata_json = VALUES(metadata_json)`,
-      [user.id, item.assetKey, item.name, item.description, item.desc, item.image, item.class, item.isGift !== false]
+      [
+        user.id,
+        item.assetKey,
+        item.name,
+        item.description,
+        item.desc,
+        item.image,
+        item.class,
+        item.isGift !== false,
+      ],
     );
 
     response.json({
       user: toUserProfile(await getUserById(user.id)),
-      assets: await getUserAssets(user.id)
+      assets: await getUserAssets(user.id),
     });
   } catch (error) {
-    response.status(500).json({ message: "购买失败", detail: error.message });
+    response.status(500).json({ message: '购买失败', detail: error.message });
   }
 }
 
-app.post("/api/electromagnetic/shop/:itemKey/purchase", async (request, response) => {
-  await purchaseShopItem(request, response, String(request.params.itemKey || ""));
+app.post('/api/electromagnetic/shop/:itemKey/purchase', async (request, response) => {
+  await purchaseShopItem(request, response, String(request.params.itemKey || ''));
 });
 
-app.post("/api/electromagnetic/shop/differential-converter", async (request, response) => {
-  await purchaseShopItem(request, response, "differential_converter");
+app.post('/api/electromagnetic/shop/differential-converter', async (request, response) => {
+  await purchaseShopItem(request, response, 'differential_converter');
 });
 
-app.post("/api/electromagnetic/convert", async (request, response) => {
+app.post('/api/electromagnetic/convert', async (request, response) => {
   let connection;
 
   try {
@@ -2035,12 +2113,24 @@ app.post("/api/electromagnetic/convert", async (request, response) => {
       return;
     }
 
-    const direction = String(request.body.direction || "").trim().toLowerCase();
-    const fromColumn = direction === "electric_to_magnetic" ? "electrons" : (direction === "magnetic_to_electric" ? "manetrons" : "");
-    const toColumn = direction === "electric_to_magnetic" ? "manetrons" : (direction === "magnetic_to_electric" ? "electrons" : "");
+    const direction = String(request.body.direction || '')
+      .trim()
+      .toLowerCase();
+    const fromColumn =
+      direction === 'electric_to_magnetic'
+        ? 'electrons'
+        : direction === 'magnetic_to_electric'
+          ? 'manetrons'
+          : '';
+    const toColumn =
+      direction === 'electric_to_magnetic'
+        ? 'manetrons'
+        : direction === 'magnetic_to_electric'
+          ? 'electrons'
+          : '';
 
     if (!fromColumn || !toColumn) {
-      response.status(400).json({ message: "无效转换方向" });
+      response.status(400).json({ message: '无效转换方向' });
       return;
     }
 
@@ -2053,12 +2143,12 @@ app.post("/api/electromagnetic/convert", async (request, response) => {
        WHERE user_id = ?
          AND asset_key = 'differential_converter'
          AND quantity >= 1`,
-      [user.id]
+      [user.id],
     );
 
     if (!assetResult.affectedRows) {
       await connection.rollback();
-      response.status(400).json({ message: "需要先拥有微分器" });
+      response.status(400).json({ message: '需要先拥有微分器' });
       return;
     }
 
@@ -2067,12 +2157,12 @@ app.post("/api/electromagnetic/convert", async (request, response) => {
        SET ${fromColumn} = ${fromColumn} - 5,
            ${toColumn} = ${toColumn} + 5
        WHERE id = ? AND ${fromColumn} >= 5`,
-      [user.id]
+      [user.id],
     );
 
     if (!result.affectedRows) {
       await connection.rollback();
-      response.status(400).json({ message: "余额不足，至少需要 5 个" });
+      response.status(400).json({ message: '余额不足，至少需要 5 个' });
       return;
     }
 
@@ -2080,19 +2170,19 @@ app.post("/api/electromagnetic/convert", async (request, response) => {
 
     response.json({
       user: toUserProfile(await getUserById(user.id)),
-      assets: await getUserAssets(user.id)
+      assets: await getUserAssets(user.id),
     });
   } catch (error) {
     if (connection) {
       await connection.rollback().catch(() => {});
     }
-    response.status(500).json({ message: "转换失败", detail: error.message });
+    response.status(500).json({ message: '转换失败', detail: error.message });
   } finally {
     connection?.release();
   }
 });
 
-app.post("/api/electromagnetic/assets/:assetKey/gift", async (request, response) => {
+app.post('/api/electromagnetic/assets/:assetKey/gift', async (request, response) => {
   let connection;
 
   try {
@@ -2102,28 +2192,28 @@ app.post("/api/electromagnetic/assets/:assetKey/gift", async (request, response)
       return;
     }
 
-    const requestedAssetKey = String(request.params.assetKey || "").trim();
-    const target = String(request.body.target || "").trim();
+    const requestedAssetKey = String(request.params.assetKey || '').trim();
+    const target = String(request.body.target || '').trim();
 
     if (!requestedAssetKey) {
-      response.status(400).json({ message: "无效资产" });
+      response.status(400).json({ message: '无效资产' });
       return;
     }
 
     if (!target) {
-      response.status(400).json({ message: "请输入接收者 UID 或昵称" });
+      response.status(400).json({ message: '请输入接收者 UID 或昵称' });
       return;
     }
 
     const item = getShopItem(requestedAssetKey);
 
     if (!item) {
-      response.status(404).json({ message: "资产不存在" });
+      response.status(404).json({ message: '资产不存在' });
       return;
     }
 
     if (item.isGift === false) {
-      response.status(400).json({ message: "这个资产不能赠与" });
+      response.status(400).json({ message: '这个资产不能赠与' });
       return;
     }
 
@@ -2145,17 +2235,17 @@ app.post("/api/electromagnetic/assets/:assetKey/gift", async (request, response)
          END,
          id ASC
        LIMIT 1`,
-      [target, target, target, target, target, target, target]
+      [target, target, target, target, target, target, target],
     );
     const targetUser = targetRows[0];
 
     if (!targetUser) {
-      response.status(404).json({ message: "接收者不存在" });
+      response.status(404).json({ message: '接收者不存在' });
       return;
     }
 
     if (targetUser.id === user.id) {
-      response.status(400).json({ message: "不能赠与给自己" });
+      response.status(400).json({ message: '不能赠与给自己' });
       return;
     }
 
@@ -2168,13 +2258,13 @@ app.post("/api/electromagnetic/assets/:assetKey/gift", async (request, response)
        WHERE user_id = ? AND asset_key = ? AND quantity > 0
        LIMIT 1
        FOR UPDATE`,
-      [user.id, assetKey]
+      [user.id, assetKey],
     );
     const asset = assetRows[0];
 
     if (!asset) {
       await connection.rollback();
-      response.status(400).json({ message: "你没有这个资产" });
+      response.status(400).json({ message: '你没有这个资产' });
       return;
     }
 
@@ -2182,7 +2272,7 @@ app.post("/api/electromagnetic/assets/:assetKey/gift", async (request, response)
       `UPDATE user_assets
        SET quantity = quantity - 1
        WHERE user_id = ? AND asset_key = ? AND quantity > 0`,
-      [user.id, assetKey]
+      [user.id, assetKey],
     );
 
     await connection.execute(
@@ -2197,9 +2287,9 @@ app.post("/api/electromagnetic/assets/:assetKey/gift", async (request, response)
         JSON.stringify({
           ...item,
           ...normalizeAssetMetadataJson(asset.metadata_json, {}),
-          isgift: item.isGift !== false
-        })
-      ]
+          isgift: item.isGift !== false,
+        }),
+      ],
     );
 
     await connection.commit();
@@ -2207,34 +2297,34 @@ app.post("/api/electromagnetic/assets/:assetKey/gift", async (request, response)
     response.json({
       ok: true,
       recipient: {
-        uid: targetUser.uid || "",
+        uid: targetUser.uid || '',
         username: targetUser.username,
-        fullName: targetUser.full_name || ""
+        fullName: targetUser.full_name || '',
       },
-      assets: await getUserAssets(user.id)
+      assets: await getUserAssets(user.id),
     });
   } catch (error) {
     if (connection) {
       await connection.rollback().catch(() => {});
     }
-    response.status(500).json({ message: "赠与失败", detail: error.message });
+    response.status(500).json({ message: '赠与失败', detail: error.message });
   } finally {
     connection?.release();
   }
 });
 
-app.get("/api/leaderboard/heat", async (request, response) => {
+app.get('/api/leaderboard/heat', async (request, response) => {
   try {
     await decayHeatIfNeeded(new Date());
     response.json({
-      users: await getHeatLeaderboard(normalizeLimit(request.query.limit, 3, 10))
+      users: await getHeatLeaderboard(normalizeLimit(request.query.limit, 3, 10)),
     });
   } catch (error) {
-    response.status(500).json({ message: "获取热力榜失败", detail: error.message });
+    response.status(500).json({ message: '获取热力榜失败', detail: error.message });
   }
 });
 
-app.get("/api/discussion/boards", async (_request, response) => {
+app.get('/api/discussion/boards', async (_request, response) => {
   try {
     await ensureDiscussionTables();
     const currentUser = await getOptionalAuthUser(_request);
@@ -2248,18 +2338,18 @@ app.get("/api/discussion/boards", async (_request, response) => {
        WHERE b.is_active = 1
        GROUP BY b.id, b.slug, b.name, b.description, b.description_markdown, b.sort_order
        ORDER BY b.sort_order ASC, b.id ASC`,
-      [currentUser?.role || "", currentUser?.role || "", currentUser?.id || 0]
+      [currentUser?.role || '', currentUser?.role || '', currentUser?.id || 0],
     );
 
     response.json({
-      boards: rows.map(toDiscussionBoard)
+      boards: rows.map(toDiscussionBoard),
     });
   } catch (error) {
-    response.status(500).json({ message: "获取讨论版块失败", detail: error.message });
+    response.status(500).json({ message: '获取讨论版块失败', detail: error.message });
   }
 });
 
-app.patch("/api/discussion/boards/:slug/description", async (request, response) => {
+app.patch('/api/discussion/boards/:slug/description', async (request, response) => {
   try {
     await ensureDiscussionTables();
 
@@ -2269,18 +2359,20 @@ app.patch("/api/discussion/boards/:slug/description", async (request, response) 
       return;
     }
 
-    const slug = String(request.params.slug || "").trim().toLowerCase();
-    const descriptionMarkdown = String(request.body.descriptionMarkdown || "").trim();
+    const slug = String(request.params.slug || '')
+      .trim()
+      .toLowerCase();
+    const descriptionMarkdown = String(request.body.descriptionMarkdown || '').trim();
 
     if (!descriptionMarkdown || descriptionMarkdown.length > 10000) {
-      response.status(400).json({ message: "版块说明不能为空，且不能超过 10000 个字符" });
+      response.status(400).json({ message: '版块说明不能为空，且不能超过 10000 个字符' });
       return;
     }
 
     const board = await getDiscussionBoardBySlug(slug);
 
     if (!board) {
-      response.status(404).json({ message: "讨论版块不存在" });
+      response.status(404).json({ message: '讨论版块不存在' });
       return;
     }
 
@@ -2288,7 +2380,7 @@ app.patch("/api/discussion/boards/:slug/description", async (request, response) 
       `UPDATE discussion_boards
        SET description_markdown = ?
        WHERE id = ?`,
-      [descriptionMarkdown, board.id]
+      [descriptionMarkdown, board.id],
     );
 
     response.json({
@@ -2297,29 +2389,29 @@ app.patch("/api/discussion/boards/:slug/description", async (request, response) 
           ...board,
           description_markdown: descriptionMarkdown,
           can_moderate: 1,
-          can_manage_moderators: user.role === "admin" ? 1 : 0
-        })
-      }
+          can_manage_moderators: user.role === 'admin' ? 1 : 0,
+        }),
+      },
     });
   } catch (error) {
-    response.status(500).json({ message: "更新版块说明失败", detail: error.message });
+    response.status(500).json({ message: '更新版块说明失败', detail: error.message });
   }
 });
 
 function toModeratorUser(row) {
   return {
     id: row.id,
-    uid: row.uid || "",
+    uid: row.uid || '',
     username: row.username,
-    fullName: row.full_name || "",
-    studentId: row.student_id || "",
-    email: row.email || "",
-    avatarPath: row.avatar_path || "",
-    isModerator: Boolean(row.is_moderator)
+    fullName: row.full_name || '',
+    studentId: row.student_id || '',
+    email: row.email || '',
+    avatarPath: row.avatar_path || '',
+    isModerator: Boolean(row.is_moderator),
   };
 }
 
-app.get("/api/discussion/boards/:slug/moderators", async (request, response) => {
+app.get('/api/discussion/boards/:slug/moderators', async (request, response) => {
   try {
     await ensureDiscussionTables();
 
@@ -2329,10 +2421,14 @@ app.get("/api/discussion/boards/:slug/moderators", async (request, response) => 
       return;
     }
 
-    const board = await getDiscussionBoardBySlug(String(request.params.slug || "").trim().toLowerCase());
+    const board = await getDiscussionBoardBySlug(
+      String(request.params.slug || '')
+        .trim()
+        .toLowerCase(),
+    );
 
     if (!board) {
-      response.status(404).json({ message: "讨论版块不存在" });
+      response.status(404).json({ message: '讨论版块不存在' });
       return;
     }
 
@@ -2342,18 +2438,18 @@ app.get("/api/discussion/boards/:slug/moderators", async (request, response) => 
        INNER JOIN users u ON u.id = m.user_id
        WHERE m.board_id = ?
        ORDER BY u.username ASC, u.id ASC`,
-      [board.id]
+      [board.id],
     );
 
     response.json({
-      moderators: rows.map(toModeratorUser)
+      moderators: rows.map(toModeratorUser),
     });
   } catch (error) {
-    response.status(500).json({ message: "获取版主名单失败", detail: error.message });
+    response.status(500).json({ message: '获取版主名单失败', detail: error.message });
   }
 });
 
-app.get("/api/discussion/boards/:slug/moderator-candidates", async (request, response) => {
+app.get('/api/discussion/boards/:slug/moderator-candidates', async (request, response) => {
   try {
     await ensureDiscussionTables();
 
@@ -2363,17 +2459,21 @@ app.get("/api/discussion/boards/:slug/moderator-candidates", async (request, res
       return;
     }
 
-    const board = await getDiscussionBoardBySlug(String(request.params.slug || "").trim().toLowerCase());
+    const board = await getDiscussionBoardBySlug(
+      String(request.params.slug || '')
+        .trim()
+        .toLowerCase(),
+    );
 
     if (!board) {
-      response.status(404).json({ message: "讨论版块不存在" });
+      response.status(404).json({ message: '讨论版块不存在' });
       return;
     }
 
-    const query = String(request.query.query || "").trim();
+    const query = String(request.query.query || '').trim();
 
     if (!query || query.length < 2) {
-      response.status(400).json({ message: "请输入至少 2 个字符用于搜索" });
+      response.status(400).json({ message: '请输入至少 2 个字符用于搜索' });
       return;
     }
 
@@ -2395,18 +2495,30 @@ app.get("/api/discussion/boards/:slug/moderator-candidates", async (request, res
           OR u.full_name LIKE ?
        ORDER BY is_moderator DESC, u.username ASC, u.id ASC
        LIMIT 20`,
-      [board.id, query, query, query, query, query, likeQuery, likeQuery, likeQuery, likeQuery, likeQuery]
+      [
+        board.id,
+        query,
+        query,
+        query,
+        query,
+        query,
+        likeQuery,
+        likeQuery,
+        likeQuery,
+        likeQuery,
+        likeQuery,
+      ],
     );
 
     response.json({
-      users: rows.map(toModeratorUser)
+      users: rows.map(toModeratorUser),
     });
   } catch (error) {
-    response.status(500).json({ message: "搜索用户失败", detail: error.message });
+    response.status(500).json({ message: '搜索用户失败', detail: error.message });
   }
 });
 
-app.patch("/api/discussion/boards/:slug/moderators/:userId", async (request, response) => {
+app.patch('/api/discussion/boards/:slug/moderators/:userId', async (request, response) => {
   try {
     await ensureDiscussionTables();
 
@@ -2416,27 +2528,28 @@ app.patch("/api/discussion/boards/:slug/moderators/:userId", async (request, res
       return;
     }
 
-    const board = await getDiscussionBoardBySlug(String(request.params.slug || "").trim().toLowerCase());
+    const board = await getDiscussionBoardBySlug(
+      String(request.params.slug || '')
+        .trim()
+        .toLowerCase(),
+    );
     const targetUserId = Number(request.params.userId);
     const isModerator = Boolean(request.body.isModerator);
 
     if (!board) {
-      response.status(404).json({ message: "讨论版块不存在" });
+      response.status(404).json({ message: '讨论版块不存在' });
       return;
     }
 
     if (!targetUserId) {
-      response.status(400).json({ message: "无效用户 ID" });
+      response.status(400).json({ message: '无效用户 ID' });
       return;
     }
 
-    const [users] = await pool.execute(
-      `SELECT id FROM users WHERE id = ? LIMIT 1`,
-      [targetUserId]
-    );
+    const [users] = await pool.execute(`SELECT id FROM users WHERE id = ? LIMIT 1`, [targetUserId]);
 
     if (!users[0]) {
-      response.status(404).json({ message: "用户不存在" });
+      response.status(404).json({ message: '用户不存在' });
       return;
     }
 
@@ -2445,27 +2558,27 @@ app.patch("/api/discussion/boards/:slug/moderators/:userId", async (request, res
         `INSERT INTO discussion_board_moderators (board_id, user_id)
          VALUES (?, ?)
          ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)`,
-        [board.id, targetUserId]
+        [board.id, targetUserId],
       );
     } else {
       await pool.execute(
         `DELETE FROM discussion_board_moderators
          WHERE board_id = ? AND user_id = ?`,
-        [board.id, targetUserId]
+        [board.id, targetUserId],
       );
     }
 
     response.json({
       ok: true,
       userId: targetUserId,
-      isModerator
+      isModerator,
     });
   } catch (error) {
-    response.status(500).json({ message: "更新版主名单失败", detail: error.message });
+    response.status(500).json({ message: '更新版主名单失败', detail: error.message });
   }
 });
 
-app.post("/api/discussion/uploads/images", async (request, response) => {
+app.post('/api/discussion/uploads/images', async (request, response) => {
   try {
     const user = await requireAuth(request, response);
 
@@ -2473,18 +2586,20 @@ app.post("/api/discussion/uploads/images", async (request, response) => {
       return;
     }
 
-    const imageDataUrl = String(request.body.imageDataUrl || "");
-    const match = imageDataUrl.match(/^data:(image\/(?:png|jpeg|jpg|webp|gif|avif|heic|heif|bmp|tiff|svg\+xml));base64,([A-Za-z0-9+/=]+)$/i);
+    const imageDataUrl = String(request.body.imageDataUrl || '');
+    const match = imageDataUrl.match(
+      /^data:(image\/(?:png|jpeg|jpg|webp|gif|avif|heic|heif|bmp|tiff|svg\+xml));base64,([A-Za-z0-9+/=]+)$/i,
+    );
 
     if (!match) {
-      response.status(400).json({ message: "请上传图片文件" });
+      response.status(400).json({ message: '请上传图片文件' });
       return;
     }
 
-    const fileBuffer = Buffer.from(match[2], "base64");
+    const fileBuffer = Buffer.from(match[2], 'base64');
 
     if (!fileBuffer.length || fileBuffer.length > 20 * 1024 * 1024) {
-      response.status(400).json({ message: "图片大小需在 20MB 以内" });
+      response.status(400).json({ message: '图片大小需在 20MB 以内' });
       return;
     }
 
@@ -2493,14 +2608,14 @@ app.post("/api/discussion/uploads/images", async (request, response) => {
       .resize({
         width: 1600,
         height: 1600,
-        fit: "inside",
-        withoutEnlargement: true
+        fit: 'inside',
+        withoutEnlargement: true,
       })
       .webp({ quality: 82 })
       .toBuffer();
 
     if (!outputBuffer.length || outputBuffer.length > 4 * 1024 * 1024) {
-      response.status(400).json({ message: "图片转换后仍超过 4MB，请换一张更小的图片" });
+      response.status(400).json({ message: '图片转换后仍超过 4MB，请换一张更小的图片' });
       return;
     }
 
@@ -2508,14 +2623,14 @@ app.post("/api/discussion/uploads/images", async (request, response) => {
     await fs.promises.writeFile(path.join(config.uploadDir, fileName), outputBuffer);
 
     response.status(201).json({
-      url: `/uploads/${fileName}`
+      url: `/uploads/${fileName}`,
     });
   } catch (error) {
-    response.status(500).json({ message: "上传图片失败", detail: error.message });
+    response.status(500).json({ message: '上传图片失败', detail: error.message });
   }
 });
 
-app.get("/api/discussion/stats", async (request, response) => {
+app.get('/api/discussion/stats', async (request, response) => {
   try {
     await ensureDiscussionTables();
     const currentUser = await getOptionalAuthUser(request);
@@ -2529,7 +2644,7 @@ app.get("/api/discussion/stats", async (request, response) => {
           WHERE p.user_id = ?
             AND p.is_deleted = 0
             AND l.reaction_type = 'smile') AS like_count`,
-      [currentUser?.id || 0, currentUser?.id || 0]
+      [currentUser?.id || 0, currentUser?.id || 0],
     );
     const [boardRows] = await pool.execute(
       `SELECT b.slug, b.name, b.description, b.description_markdown, COUNT(p.id) AS post_count
@@ -2537,7 +2652,7 @@ app.get("/api/discussion/stats", async (request, response) => {
        LEFT JOIN discussion_posts p ON p.board_id = b.id AND p.is_deleted = 0
        WHERE b.is_active = 1
        GROUP BY b.id, b.slug, b.name, b.description, b.description_markdown, b.sort_order
-       ORDER BY b.sort_order ASC, b.id ASC`
+       ORDER BY b.sort_order ASC, b.id ASC`,
     );
 
     response.json({
@@ -2546,39 +2661,42 @@ app.get("/api/discussion/stats", async (request, response) => {
       boards: boardRows.map((row) => ({
         slug: row.slug,
         name: row.name,
-        description: row.description || "",
-        descriptionMarkdown: row.description_markdown || row.description || "",
-        postCount: Number(row.post_count || 0)
-      }))
+        description: row.description || '',
+        descriptionMarkdown: row.description_markdown || row.description || '',
+        postCount: Number(row.post_count || 0),
+      })),
     });
   } catch (error) {
-    response.status(500).json({ message: "获取讨论统计失败", detail: error.message });
+    response.status(500).json({ message: '获取讨论统计失败', detail: error.message });
   }
 });
 
-app.get("/api/discussion/posts", async (request, response) => {
-  const boardSlug = String(request.query.board || "all").trim().toLowerCase();
+app.get('/api/discussion/posts', async (request, response) => {
+  const boardSlug = String(request.query.board || 'all')
+    .trim()
+    .toLowerCase();
   const limit = normalizeLimit(request.query.limit, 12, 50);
-  const clientHash = String(request.query.hash || "").trim();
+  const clientHash = String(request.query.hash || '').trim();
 
   try {
     await ensureDiscussionTables();
     const currentUser = await getOptionalAuthUser(request);
 
-    if (boardSlug !== "all") {
+    if (boardSlug !== 'all') {
       const board = await getDiscussionBoardBySlug(boardSlug);
 
       if (!board) {
-        response.status(404).json({ message: "讨论版块不存在" });
+        response.status(404).json({ message: '讨论版块不存在' });
         return;
       }
     }
 
-    const visibilityCondition = currentUser?.role === "admin" ? "" : " AND p.is_deleted = 0";
-    const where = boardSlug === "all"
-      ? `WHERE b.is_active = 1${visibilityCondition}`
-      : `WHERE b.is_active = 1 AND b.slug = ?${visibilityCondition}`;
-    const params = boardSlug === "all" ? [] : [boardSlug];
+    const visibilityCondition = currentUser?.role === 'admin' ? '' : ' AND p.is_deleted = 0';
+    const where =
+      boardSlug === 'all'
+        ? `WHERE b.is_active = 1${visibilityCondition}`
+        : `WHERE b.is_active = 1 AND b.slug = ?${visibilityCondition}`;
+    const params = boardSlug === 'all' ? [] : [boardSlug];
     const [hashRows] = await pool.execute(
       `SELECT COUNT(DISTINCT p.id) AS post_count,
               COUNT(DISTINCT c.id) AS comment_count,
@@ -2595,20 +2713,20 @@ app.get("/api/discussion/posts", async (request, response) => {
        LEFT JOIN discussion_comments c ON c.post_id = p.id
        LEFT JOIN discussion_post_likes l ON l.post_id = p.id
        ${where}`,
-      params
+      params,
     );
     const postsHash = [
       Number(hashRows[0]?.post_count || 0),
       Number(hashRows[0]?.comment_count || 0),
       Number(hashRows[0]?.reaction_count || 0),
-      Number(hashRows[0]?.newest_change || 0)
-    ].join(":");
+      Number(hashRows[0]?.newest_change || 0),
+    ].join(':');
 
     if (clientHash && clientHash === postsHash) {
       response.json({
         hash: postsHash,
         notModified: true,
-        posts: []
+        posts: [],
       });
       return;
     }
@@ -2635,38 +2753,48 @@ app.get("/api/discussion/posts", async (request, response) => {
        LEFT JOIN discussion_post_likes l ON l.post_id = p.id
        LEFT JOIN discussion_comments c ON c.post_id = p.id
        LEFT JOIN discussion_board_moderators bm ON bm.board_id = b.id AND bm.user_id = ?
-       LEFT JOIN discussion_post_likes my_smile ON my_smile.post_id = p.id AND my_smile.reaction_type = 'smile' AND my_smile.user_id = ${currentUser ? "?" : "0"}
-       LEFT JOIN discussion_post_likes my_light ON my_light.post_id = p.id AND my_light.reaction_type = 'light' AND my_light.user_id = ${currentUser ? "?" : "0"}
-       LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? "?" : "0"}
+       LEFT JOIN discussion_post_likes my_smile ON my_smile.post_id = p.id AND my_smile.reaction_type = 'smile' AND my_smile.user_id = ${currentUser ? '?' : '0'}
+       LEFT JOIN discussion_post_likes my_light ON my_light.post_id = p.id AND my_light.reaction_type = 'light' AND my_light.user_id = ${currentUser ? '?' : '0'}
+       LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? '?' : '0'}
        ${where}
        GROUP BY p.id, p.pid, p.title, p.created_at, p.updated_at, p.user_id, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.deleted_at,
                 b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
-       ORDER BY ${boardSlug === "all" ? "p.is_pinned DESC, p.pinned_at DESC, p.created_at DESC, p.id DESC" : "p.is_pinned DESC, p.pinned_at DESC, p.is_featured DESC, p.featured_at DESC, p.created_at DESC, p.id DESC"}
+       ORDER BY ${boardSlug === 'all' ? 'p.is_pinned DESC, p.pinned_at DESC, p.created_at DESC, p.id DESC' : 'p.is_pinned DESC, p.pinned_at DESC, p.is_featured DESC, p.featured_at DESC, p.created_at DESC, p.id DESC'}
       LIMIT ${limit}`,
       currentUser
-        ? [currentUser.role, currentUser.role, currentUser.role, currentUser.id, currentUser.id, currentUser.id, currentUser.id, currentUser.id, ...params]
-        : ["", "", "", 0, 0, ...params]
+        ? [
+            currentUser.role,
+            currentUser.role,
+            currentUser.role,
+            currentUser.id,
+            currentUser.id,
+            currentUser.id,
+            currentUser.id,
+            currentUser.id,
+            ...params,
+          ]
+        : ['', '', '', 0, 0, ...params],
     );
 
     response.json({
       hash: postsHash,
       notModified: false,
-      posts: rows.map(toDiscussionPostSummary)
+      posts: rows.map(toDiscussionPostSummary),
     });
   } catch (error) {
-    console.error("Failed to list discussion posts", error);
-    response.status(500).json({ message: "获取帖子列表失败", detail: error.message });
+    console.error('Failed to list discussion posts', error);
+    response.status(500).json({ message: '获取帖子列表失败', detail: error.message });
   }
 });
 
-app.get("/api/discussion/posts/:id", async (request, response) => {
+app.get('/api/discussion/posts/:id', async (request, response) => {
   try {
     await ensureDiscussionTables();
     const currentUser = await getOptionalAuthUser(request);
     const post = await getDiscussionPostByPublicId(request.params.id);
 
     if (!post) {
-      response.status(404).json({ message: "帖子不存在" });
+      response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
@@ -2692,9 +2820,9 @@ app.get("/api/discussion/posts/:id", async (request, response) => {
        LEFT JOIN discussion_post_likes l ON l.post_id = p.id
        LEFT JOIN discussion_comments c ON c.post_id = p.id
        LEFT JOIN discussion_board_moderators bm ON bm.board_id = b.id AND bm.user_id = ?
-       LEFT JOIN discussion_post_likes my_smile ON my_smile.post_id = p.id AND my_smile.reaction_type = 'smile' AND my_smile.user_id = ${currentUser ? "?" : "0"}
-       LEFT JOIN discussion_post_likes my_light ON my_light.post_id = p.id AND my_light.reaction_type = 'light' AND my_light.user_id = ${currentUser ? "?" : "0"}
-       LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? "?" : "0"}
+       LEFT JOIN discussion_post_likes my_smile ON my_smile.post_id = p.id AND my_smile.reaction_type = 'smile' AND my_smile.user_id = ${currentUser ? '?' : '0'}
+       LEFT JOIN discussion_post_likes my_light ON my_light.post_id = p.id AND my_light.reaction_type = 'light' AND my_light.user_id = ${currentUser ? '?' : '0'}
+       LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? '?' : '0'}
        WHERE p.id = ?
          AND b.is_active = 1
          AND (? = 'admin' OR p.is_deleted = 0)
@@ -2702,24 +2830,35 @@ app.get("/api/discussion/posts/:id", async (request, response) => {
                 b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        LIMIT 1`,
       currentUser
-        ? [currentUser.role, currentUser.role, currentUser.role, currentUser.id, currentUser.id, currentUser.id, currentUser.id, currentUser.id, post.id, currentUser.role]
-        : ["", "", "", 0, 0, post.id, ""]
+        ? [
+            currentUser.role,
+            currentUser.role,
+            currentUser.role,
+            currentUser.id,
+            currentUser.id,
+            currentUser.id,
+            currentUser.id,
+            currentUser.id,
+            post.id,
+            currentUser.role,
+          ]
+        : ['', '', '', 0, 0, post.id, ''],
     );
 
     if (!rows[0]) {
-      response.status(404).json({ message: "帖子不存在" });
+      response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
     response.json({
-      post: toDiscussionPostDetail(rows[0])
+      post: toDiscussionPostDetail(rows[0]),
     });
   } catch (error) {
-    response.status(500).json({ message: "获取帖子详情失败", detail: error.message });
+    response.status(500).json({ message: '获取帖子详情失败', detail: error.message });
   }
 });
 
-app.post("/api/discussion/posts", async (request, response) => {
+app.post('/api/discussion/posts', async (request, response) => {
   try {
     await ensureDiscussionTables();
 
@@ -2729,34 +2868,36 @@ app.post("/api/discussion/posts", async (request, response) => {
       return;
     }
 
-    const boardSlug = String(request.body.boardSlug || "").trim().toLowerCase();
-    const title = String(request.body.title || "").trim();
-    const contentMarkdown = String(request.body.contentMarkdown || "").trim();
+    const boardSlug = String(request.body.boardSlug || '')
+      .trim()
+      .toLowerCase();
+    const title = String(request.body.title || '').trim();
+    const contentMarkdown = String(request.body.contentMarkdown || '').trim();
 
     if (!boardSlug) {
-      response.status(400).json({ message: "请选择版块" });
+      response.status(400).json({ message: '请选择版块' });
       return;
     }
 
     if (!title || title.length > 120) {
-      response.status(400).json({ message: "标题不能为空，且长度不能超过 120 个字符" });
+      response.status(400).json({ message: '标题不能为空，且长度不能超过 120 个字符' });
       return;
     }
 
     if (!contentMarkdown || contentMarkdown.length > 20000) {
-      response.status(400).json({ message: "正文不能为空，且长度不能超过 20000 个字符" });
+      response.status(400).json({ message: '正文不能为空，且长度不能超过 20000 个字符' });
       return;
     }
 
     const board = await getDiscussionBoardBySlug(boardSlug);
 
     if (!board) {
-      response.status(404).json({ message: "讨论版块不存在" });
+      response.status(404).json({ message: '讨论版块不存在' });
       return;
     }
 
-    if (board.slug === "changelog" && user.role !== "admin") {
-      response.status(403).json({ message: "更新日志版块仅管理员可以发帖" });
+    if (board.slug === 'changelog' && user.role !== 'admin') {
+      response.status(403).json({ message: '更新日志版块仅管理员可以发帖' });
       return;
     }
 
@@ -2766,13 +2907,13 @@ app.post("/api/discussion/posts", async (request, response) => {
     const [result] = await pool.execute(
       `INSERT INTO discussion_posts (pid, board_id, user_id, author_student_id, title, content_markdown)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [postPid, board.id, user.id, user.student_id, title, contentMarkdown]
+      [postPid, board.id, user.id, user.student_id, title, contentMarkdown],
     );
     await pool.execute(
       `UPDATE users
        SET manetrons = manetrons + 1
        WHERE id = ?`,
-      [user.id]
+      [user.id],
     );
 
     const [rows] = await pool.execute(
@@ -2788,8 +2929,8 @@ app.post("/api/discussion/posts", async (request, response) => {
               0 AS liked_by_me,
               0 AS lighted_by_me,
               0 AS fireworks_by_me,
-              ${canFeatureCreatedPost ? "1" : "0"} AS can_feature,
-              ${user.role === "admin" ? "1" : "0"} AS can_pin,
+              ${canFeatureCreatedPost ? '1' : '0'} AS can_feature,
+              ${user.role === 'admin' ? '1' : '0'} AS can_pin,
               1 AS can_delete,
               0 AS is_deleted,
               NULL AS deleted_at
@@ -2798,19 +2939,19 @@ app.post("/api/discussion/posts", async (request, response) => {
        INNER JOIN users u ON u.id = p.user_id
        WHERE p.id = ?
        LIMIT 1`,
-      [result.insertId]
+      [result.insertId],
     );
 
     response.status(201).json({
-      message: "帖子发布成功",
-      post: toDiscussionPostDetail(rows[0])
+      message: '帖子发布成功',
+      post: toDiscussionPostDetail(rows[0]),
     });
   } catch (error) {
-    response.status(500).json({ message: "发布帖子失败", detail: error.message });
+    response.status(500).json({ message: '发布帖子失败', detail: error.message });
   }
 });
 
-app.patch("/api/discussion/posts/:id/pin", async (request, response) => {
+app.patch('/api/discussion/posts/:id/pin', async (request, response) => {
   try {
     await ensureDiscussionTables();
 
@@ -2824,34 +2965,34 @@ app.patch("/api/discussion/posts/:id/pin", async (request, response) => {
     const post = await getDiscussionPostByPublicId(request.params.id);
 
     if (!post) {
-      response.status(404).json({ message: "帖子不存在" });
+      response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
     if (post.is_deleted) {
-      response.status(404).json({ message: "帖子不存在" });
+      response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
     await pool.execute(
       `UPDATE discussion_posts
        SET is_pinned = ?,
-           pinned_at = ${pinned ? "NOW()" : "NULL"},
+           pinned_at = ${pinned ? 'NOW()' : 'NULL'},
            pinned_by = ?
        WHERE id = ?`,
-      [pinned ? 1 : 0, pinned ? user.id : null, post.id]
+      [pinned ? 1 : 0, pinned ? user.id : null, post.id],
     );
 
     response.json({
       ok: true,
-      isPinned: pinned
+      isPinned: pinned,
     });
   } catch (error) {
-    response.status(500).json({ message: "更新置顶状态失败", detail: error.message });
+    response.status(500).json({ message: '更新置顶状态失败', detail: error.message });
   }
 });
 
-app.patch("/api/discussion/posts/:id/feature", async (request, response) => {
+app.patch('/api/discussion/posts/:id/feature', async (request, response) => {
   try {
     await ensureDiscussionTables();
 
@@ -2865,12 +3006,12 @@ app.patch("/api/discussion/posts/:id/feature", async (request, response) => {
     const post = await getDiscussionPostByPublicId(request.params.id);
 
     if (!post) {
-      response.status(404).json({ message: "帖子不存在" });
+      response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
     if (post.is_deleted) {
-      response.status(404).json({ message: "帖子不存在" });
+      response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
@@ -2881,22 +3022,22 @@ app.patch("/api/discussion/posts/:id/feature", async (request, response) => {
     await pool.execute(
       `UPDATE discussion_posts
        SET is_featured = ?,
-           featured_at = ${featured ? "NOW()" : "NULL"},
+           featured_at = ${featured ? 'NOW()' : 'NULL'},
            featured_by = ?
        WHERE id = ?`,
-      [featured ? 1 : 0, featured ? user.id : null, post.id]
+      [featured ? 1 : 0, featured ? user.id : null, post.id],
     );
 
     response.json({
       ok: true,
-      isFeatured: featured
+      isFeatured: featured,
     });
   } catch (error) {
-    response.status(500).json({ message: "更新精华状态失败", detail: error.message });
+    response.status(500).json({ message: '更新精华状态失败', detail: error.message });
   }
 });
 
-app.post("/api/discussion/posts/:id/like", async (request, response) => {
+app.post('/api/discussion/posts/:id/like', async (request, response) => {
   try {
     await ensureDiscussionTables();
 
@@ -2906,22 +3047,24 @@ app.post("/api/discussion/posts/:id/like", async (request, response) => {
       return;
     }
 
-    const reactionType = String(request.body.reactionType || "smile").trim().toLowerCase();
+    const reactionType = String(request.body.reactionType || 'smile')
+      .trim()
+      .toLowerCase();
 
     if (!DISCUSSION_REACTION_TYPES.has(reactionType)) {
-      response.status(400).json({ message: "无效反应类型" });
+      response.status(400).json({ message: '无效反应类型' });
       return;
     }
 
     const post = await getDiscussionPostByPublicId(request.params.id);
 
     if (!post) {
-      response.status(404).json({ message: "帖子不存在" });
+      response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
     if (post.is_deleted) {
-      response.status(404).json({ message: "帖子不存在" });
+      response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
@@ -2930,7 +3073,7 @@ app.post("/api/discussion/posts/:id/like", async (request, response) => {
        FROM discussion_post_likes
        WHERE post_id = ? AND user_id = ? AND reaction_type = ?
        LIMIT 1`,
-      [post.id, user.id, reactionType]
+      [post.id, user.id, reactionType],
     );
 
     let active = true;
@@ -2939,14 +3082,14 @@ app.post("/api/discussion/posts/:id/like", async (request, response) => {
       await pool.execute(
         `DELETE FROM discussion_post_likes
          WHERE post_id = ? AND user_id = ? AND reaction_type = ?`,
-        [post.id, user.id, reactionType]
+        [post.id, user.id, reactionType],
       );
       active = false;
     } else {
       await pool.execute(
         `INSERT INTO discussion_post_likes (post_id, user_id, reaction_type)
          VALUES (?, ?, ?)`,
-        [post.id, user.id, reactionType]
+        [post.id, user.id, reactionType],
       );
     }
 
@@ -2960,36 +3103,38 @@ app.post("/api/discussion/posts/:id/like", async (request, response) => {
        FROM discussion_post_likes
        WHERE post_id = ?
        GROUP BY reaction_type`,
-      [post.id]
+      [post.id],
     );
-    const counts = Object.fromEntries(countRows.map((row) => [row.reaction_type, Number(row.reaction_count || 0)]));
+    const counts = Object.fromEntries(
+      countRows.map((row) => [row.reaction_type, Number(row.reaction_count || 0)]),
+    );
 
     response.json({
       reactionType,
       active,
-      liked: reactionType === "smile" ? active : undefined,
+      liked: reactionType === 'smile' ? active : undefined,
       likeCount: counts.smile || 0,
       lightCount: counts.light || 0,
-      fireworksCount: counts.fireworks || 0
+      fireworksCount: counts.fireworks || 0,
     });
   } catch (error) {
-    response.status(500).json({ message: "更新点赞失败", detail: error.message });
+    response.status(500).json({ message: '更新点赞失败', detail: error.message });
   }
 });
 
-app.get("/api/discussion/posts/:id/comments", async (request, response) => {
+app.get('/api/discussion/posts/:id/comments', async (request, response) => {
   try {
     await ensureDiscussionTables();
     const currentUser = await getOptionalAuthUser(request);
     const post = await getDiscussionPostByPublicId(request.params.id);
 
     if (!post) {
-      response.status(404).json({ message: "帖子不存在" });
+      response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
-    if (post.is_deleted && currentUser?.role !== "admin") {
-      response.status(404).json({ message: "帖子不存在" });
+    if (post.is_deleted && currentUser?.role !== 'admin') {
+      response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
@@ -3001,18 +3146,18 @@ app.get("/api/discussion/posts/:id/comments", async (request, response) => {
        INNER JOIN users u ON u.id = c.user_id
        WHERE c.post_id = ?
        ORDER BY c.created_at ASC, c.id ASC`,
-      [post.id]
+      [post.id],
     );
 
     response.json({
-      comments: rows.map(toDiscussionComment)
+      comments: rows.map(toDiscussionComment),
     });
   } catch (error) {
-    response.status(500).json({ message: "获取评论失败", detail: error.message });
+    response.status(500).json({ message: '获取评论失败', detail: error.message });
   }
 });
 
-app.post("/api/discussion/posts/:id/comments", async (request, response) => {
+app.post('/api/discussion/posts/:id/comments', async (request, response) => {
   try {
     await ensureDiscussionTables();
 
@@ -3023,22 +3168,22 @@ app.post("/api/discussion/posts/:id/comments", async (request, response) => {
     }
 
     const parentCommentId = Number(request.body.parentCommentId || 0);
-    const contentMarkdown = String(request.body.contentMarkdown || "").trim();
+    const contentMarkdown = String(request.body.contentMarkdown || '').trim();
 
     if (!contentMarkdown || contentMarkdown.length > 5000) {
-      response.status(400).json({ message: "评论不能为空，且长度不能超过 5000 个字符" });
+      response.status(400).json({ message: '评论不能为空，且长度不能超过 5000 个字符' });
       return;
     }
 
     const post = await getDiscussionPostByPublicId(request.params.id);
 
     if (!post) {
-      response.status(404).json({ message: "帖子不存在" });
+      response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
     if (post.is_deleted) {
-      response.status(404).json({ message: "帖子不存在" });
+      response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
@@ -3048,11 +3193,11 @@ app.post("/api/discussion/posts/:id/comments", async (request, response) => {
          FROM discussion_comments
          WHERE id = ? AND post_id = ?
          LIMIT 1`,
-        [parentCommentId, post.id]
+        [parentCommentId, post.id],
       );
 
       if (!parentRows[0]) {
-        response.status(404).json({ message: "被回复的评论不存在" });
+        response.status(404).json({ message: '被回复的评论不存在' });
         return;
       }
     }
@@ -3060,7 +3205,7 @@ app.post("/api/discussion/posts/:id/comments", async (request, response) => {
     const [result] = await pool.execute(
       `INSERT INTO discussion_comments (post_id, parent_comment_id, user_id, author_student_id, content_markdown)
        VALUES (?, ?, ?, ?, ?)`,
-      [post.id, parentCommentId || null, user.id, user.student_id, contentMarkdown]
+      [post.id, parentCommentId || null, user.id, user.student_id, contentMarkdown],
     );
 
     const [rows] = await pool.execute(
@@ -3071,7 +3216,7 @@ app.post("/api/discussion/posts/:id/comments", async (request, response) => {
        INNER JOIN users u ON u.id = c.user_id
        WHERE c.id = ?
        LIMIT 1`,
-      [result.insertId]
+      [result.insertId],
     );
 
     const comment = toDiscussionComment(rows[0]);
@@ -3080,22 +3225,22 @@ app.post("/api/discussion/posts/:id/comments", async (request, response) => {
     if (maxPending) {
       setImmediate(() => {
         createMaxDiscussionReply(post.id, comment).catch((error) => {
-          console.error("Failed to create Max discussion reply", error);
+          console.error('Failed to create Max discussion reply', error);
         });
       });
     }
 
     response.status(201).json({
-      message: maxPending ? "评论已发布，Max 正在回复" : "评论已发布",
+      message: maxPending ? '评论已发布，Max 正在回复' : '评论已发布',
       comment,
-      maxPending
+      maxPending,
     });
   } catch (error) {
-    response.status(500).json({ message: "发布评论失败", detail: error.message });
+    response.status(500).json({ message: '发布评论失败', detail: error.message });
   }
 });
 
-app.delete("/api/discussion/posts/:id", async (request, response) => {
+app.delete('/api/discussion/posts/:id', async (request, response) => {
   try {
     await ensureDiscussionTables();
 
@@ -3108,12 +3253,12 @@ app.delete("/api/discussion/posts/:id", async (request, response) => {
     const post = await getDiscussionPostByPublicId(request.params.id);
 
     if (!post) {
-      response.status(404).json({ message: "帖子不存在" });
+      response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
-    if (user.role !== "admin" && post.user_id !== user.id) {
-      response.status(403).json({ message: "只能删除自己的帖子" });
+    if (user.role !== 'admin' && post.user_id !== user.id) {
+      response.status(403).json({ message: '只能删除自己的帖子' });
       return;
     }
 
@@ -3129,16 +3274,16 @@ app.delete("/api/discussion/posts/:id", async (request, response) => {
            featured_at = NULL,
            featured_by = NULL
        WHERE id = ?`,
-      [user.id, post.id]
+      [user.id, post.id],
     );
 
     response.json({ ok: true });
   } catch (error) {
-    response.status(500).json({ message: "删除帖子失败", detail: error.message });
+    response.status(500).json({ message: '删除帖子失败', detail: error.message });
   }
 });
 
-app.delete("/api/admin/discussion/posts/:id", async (request, response) => {
+app.delete('/api/admin/discussion/posts/:id', async (request, response) => {
   try {
     await ensureDiscussionTables();
 
@@ -3151,7 +3296,7 @@ app.delete("/api/admin/discussion/posts/:id", async (request, response) => {
     const post = await getDiscussionPostByPublicId(request.params.id);
 
     if (!post) {
-      response.status(404).json({ message: "帖子不存在" });
+      response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
@@ -3167,55 +3312,55 @@ app.delete("/api/admin/discussion/posts/:id", async (request, response) => {
            featured_at = NULL,
            featured_by = NULL
        WHERE id = ?`,
-      [adminUser.id, post.id]
+      [adminUser.id, post.id],
     );
 
     if (result.affectedRows === 0) {
-      response.status(404).json({ message: "帖子不存在" });
+      response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
     response.json({ ok: true });
   } catch (error) {
-    response.status(500).json({ message: "删除帖子失败", detail: error.message });
+    response.status(500).json({ message: '删除帖子失败', detail: error.message });
   }
 });
 
-app.post("/api/auth/register", async (request, response) => {
-  const username = String(request.body.username || "").trim();
-  const fullName = String(request.body.fullName || "").trim();
-  const studentId = String(request.body.studentId || "").trim();
-  const email = String(request.body.email || "").trim();
-  const password = String(request.body.password || "");
-  const emailCode = String(request.body.emailCode || "").trim();
+app.post('/api/auth/register', async (request, response) => {
+  const username = String(request.body.username || '').trim();
+  const fullName = String(request.body.fullName || '').trim();
+  const studentId = String(request.body.studentId || '').trim();
+  const email = String(request.body.email || '').trim();
+  const password = String(request.body.password || '');
+  const emailCode = String(request.body.emailCode || '').trim();
 
   if (!username || username.length < 3 || username.length > 64) {
-    response.status(400).json({ message: "用户名长度需在 3 到 64 个字符之间" });
+    response.status(400).json({ message: '用户名长度需在 3 到 64 个字符之间' });
     return;
   }
 
   if (!fullName || fullName.length > 64) {
-    response.status(400).json({ message: "请输入姓名，且长度不超过 64 个字符" });
+    response.status(400).json({ message: '请输入姓名，且长度不超过 64 个字符' });
     return;
   }
 
   if (!/^20\d{8}$/.test(studentId)) {
-    response.status(400).json({ message: "学号必须是 20 开头的 10 位数字" });
+    response.status(400).json({ message: '学号必须是 20 开头的 10 位数字' });
     return;
   }
 
   if (!password || password.length < 6) {
-    response.status(400).json({ message: "密码长度至少为 6 位" });
+    response.status(400).json({ message: '密码长度至少为 6 位' });
     return;
   }
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    response.status(400).json({ message: "请输入有效邮箱地址" });
+    response.status(400).json({ message: '请输入有效邮箱地址' });
     return;
   }
 
   if (!/^\d{6}$/.test(emailCode)) {
-    response.status(400).json({ message: "请输入 6 位邮箱验证码" });
+    response.status(400).json({ message: '请输入 6 位邮箱验证码' });
     return;
   }
 
@@ -3229,28 +3374,37 @@ app.post("/api/auth/register", async (request, response) => {
          AND expires_at > NOW()
        ORDER BY id DESC
        LIMIT 1`,
-      [email, hashCode(email, emailCode)]
+      [email, hashCode(email, emailCode)],
     );
 
     if (!codeRows[0]) {
-      response.status(400).json({ message: "邮箱验证码错误或已过期" });
+      response.status(400).json({ message: '邮箱验证码错误或已过期' });
       return;
     }
 
     const grade = studentId.slice(0, 4);
-    const major = "电子信息科学与技术";
+    const major = '电子信息科学与技术';
 
     const [result] = await pool.execute(
       `INSERT INTO users (uid, username, full_name, student_id, email, password_hash, role, grade, major, email_verified_at)
        VALUES (?, ?, ?, ?, ?, ?, 'student', ?, ?, NOW())`,
-      [await createUniqueUserUid(), username, fullName, studentId, email, hashPassword(password), grade, major]
+      [
+        await createUniqueUserUid(),
+        username,
+        fullName,
+        studentId,
+        email,
+        hashPassword(password),
+        grade,
+        major,
+      ],
     );
 
     await pool.execute(
       `UPDATE email_verification_codes
        SET used_at = NOW()
        WHERE id = ?`,
-      [codeRows[0].id]
+      [codeRows[0].id],
     );
 
     const rows = [await getUserById(result.insertId)];
@@ -3259,34 +3413,35 @@ app.post("/api/auth/register", async (request, response) => {
 
     response.status(201).json({
       token: issueToken(user),
-      user
+      user,
     });
   } catch (error) {
-    if (error && error.code === "ER_DUP_ENTRY") {
-      response.status(409).json({ message: "用户名或邮箱已存在" });
+    if (error && error.code === 'ER_DUP_ENTRY') {
+      response.status(409).json({ message: '用户名或邮箱已存在' });
       return;
     }
 
-    response.status(500).json({ message: "注册失败", detail: error.message });
+    response.status(500).json({ message: '注册失败', detail: error.message });
   }
 });
 
-app.post("/api/auth/send-email-code", async (request, response) => {
-  const email = String(request.body.email || "").trim().toLowerCase();
+app.post('/api/auth/send-email-code', async (request, response) => {
+  const email = String(request.body.email || '')
+    .trim()
+    .toLowerCase();
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    response.status(400).json({ message: "请输入有效邮箱地址" });
+    response.status(400).json({ message: '请输入有效邮箱地址' });
     return;
   }
 
   try {
-    const [existingUsers] = await pool.execute(
-      `SELECT id FROM users WHERE email = ? LIMIT 1`,
-      [email]
-    );
+    const [existingUsers] = await pool.execute(`SELECT id FROM users WHERE email = ? LIMIT 1`, [
+      email,
+    ]);
 
     if (existingUsers[0]) {
-      response.status(409).json({ message: "该邮箱已被注册" });
+      response.status(409).json({ message: '该邮箱已被注册' });
       return;
     }
 
@@ -3297,11 +3452,11 @@ app.post("/api/auth/send-email-code", async (request, response) => {
          AND created_at > (NOW() - INTERVAL 60 SECOND)
        ORDER BY id DESC
        LIMIT 1`,
-      [email]
+      [email],
     );
 
     if (recentCodes[0]) {
-      response.status(429).json({ message: "发送过于频繁，请稍后再试" });
+      response.status(429).json({ message: '发送过于频繁，请稍后再试' });
       return;
     }
 
@@ -3311,30 +3466,32 @@ app.post("/api/auth/send-email-code", async (request, response) => {
     await pool.execute(
       `INSERT INTO email_verification_codes (email, code_hash, expires_at)
        VALUES (?, ?, ?)`,
-      [email, hashCode(email, code), buildExpiryDate()]
+      [email, hashCode(email, code), buildExpiryDate()],
     );
 
     await sendVerificationCode(email, code);
 
     response.json({
-      message: `验证码已发送，${CODE_TTL_MINUTES} 分钟内有效`
+      message: `验证码已发送，${CODE_TTL_MINUTES} 分钟内有效`,
     });
   } catch (error) {
-    response.status(500).json({ message: "发送验证码失败", detail: error.message });
+    response.status(500).json({ message: '发送验证码失败', detail: error.message });
   }
 });
 
-app.post("/api/auth/send-reset-code", async (request, response) => {
-  const studentId = String(request.body.studentId || "").trim();
-  const email = String(request.body.email || "").trim().toLowerCase();
+app.post('/api/auth/send-reset-code', async (request, response) => {
+  const studentId = String(request.body.studentId || '').trim();
+  const email = String(request.body.email || '')
+    .trim()
+    .toLowerCase();
 
   if (!/^20\d{8}$/.test(studentId)) {
-    response.status(400).json({ message: "学号必须是 20 开头的 10 位数字" });
+    response.status(400).json({ message: '学号必须是 20 开头的 10 位数字' });
     return;
   }
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    response.status(400).json({ message: "请输入有效邮箱地址" });
+    response.status(400).json({ message: '请输入有效邮箱地址' });
     return;
   }
 
@@ -3344,11 +3501,11 @@ app.post("/api/auth/send-reset-code", async (request, response) => {
        FROM users
        WHERE student_id = ? AND LOWER(email) = ?
        LIMIT 1`,
-      [studentId, email]
+      [studentId, email],
     );
 
     if (!users[0]) {
-      response.status(404).json({ message: "学号和邮箱不匹配" });
+      response.status(404).json({ message: '学号和邮箱不匹配' });
       return;
     }
 
@@ -3359,11 +3516,11 @@ app.post("/api/auth/send-reset-code", async (request, response) => {
          AND created_at > (NOW() - INTERVAL 60 SECOND)
        ORDER BY id DESC
        LIMIT 1`,
-      [email]
+      [email],
     );
 
     if (recentCodes[0]) {
-      response.status(429).json({ message: "发送过于频繁，请稍后再试" });
+      response.status(429).json({ message: '发送过于频繁，请稍后再试' });
       return;
     }
 
@@ -3373,25 +3530,25 @@ app.post("/api/auth/send-reset-code", async (request, response) => {
     await pool.execute(
       `INSERT INTO email_verification_codes (email, code_hash, expires_at)
        VALUES (?, ?, ?)`,
-      [email, hashCode(email, code), buildExpiryDate()]
+      [email, hashCode(email, code), buildExpiryDate()],
     );
 
     await sendVerificationCode(email, code);
 
     response.json({
-      message: `验证码已发送，${CODE_TTL_MINUTES} 分钟内有效`
+      message: `验证码已发送，${CODE_TTL_MINUTES} 分钟内有效`,
     });
   } catch (error) {
-    response.status(500).json({ message: "发送验证码失败", detail: error.message });
+    response.status(500).json({ message: '发送验证码失败', detail: error.message });
   }
 });
 
-app.post("/api/auth/login", async (request, response) => {
-  const identifier = String(request.body.identifier || "").trim();
-  const password = String(request.body.password || "");
+app.post('/api/auth/login', async (request, response) => {
+  const identifier = String(request.body.identifier || '').trim();
+  const password = String(request.body.password || '');
 
   if (!identifier || !password) {
-    response.status(400).json({ message: "请输入用户名/邮箱和密码" });
+    response.status(400).json({ message: '请输入用户名/邮箱和密码' });
     return;
   }
 
@@ -3401,13 +3558,13 @@ app.post("/api/auth/login", async (request, response) => {
        FROM users
        WHERE username = ? OR email = ?
        LIMIT 1`,
-      [identifier, identifier]
+      [identifier, identifier],
     );
 
     const row = rows[0];
 
     if (!row || !verifyPassword(password, row.password_hash)) {
-      response.status(401).json({ message: "用户名/邮箱或密码错误" });
+      response.status(401).json({ message: '用户名/邮箱或密码错误' });
       return;
     }
 
@@ -3415,36 +3572,38 @@ app.post("/api/auth/login", async (request, response) => {
 
     response.json({
       token: issueToken(user),
-      user
+      user,
     });
   } catch (error) {
-    response.status(500).json({ message: "登录失败", detail: error.message });
+    response.status(500).json({ message: '登录失败', detail: error.message });
   }
 });
 
-app.post("/api/auth/reset-password", async (request, response) => {
-  const studentId = String(request.body.studentId || "").trim();
-  const email = String(request.body.email || "").trim().toLowerCase();
-  const emailCode = String(request.body.emailCode || "").trim();
-  const password = String(request.body.password || "");
+app.post('/api/auth/reset-password', async (request, response) => {
+  const studentId = String(request.body.studentId || '').trim();
+  const email = String(request.body.email || '')
+    .trim()
+    .toLowerCase();
+  const emailCode = String(request.body.emailCode || '').trim();
+  const password = String(request.body.password || '');
 
   if (!/^20\d{8}$/.test(studentId)) {
-    response.status(400).json({ message: "学号必须是 20 开头的 10 位数字" });
+    response.status(400).json({ message: '学号必须是 20 开头的 10 位数字' });
     return;
   }
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    response.status(400).json({ message: "请输入有效邮箱地址" });
+    response.status(400).json({ message: '请输入有效邮箱地址' });
     return;
   }
 
   if (!/^\d{6}$/.test(emailCode)) {
-    response.status(400).json({ message: "请输入 6 位邮箱验证码" });
+    response.status(400).json({ message: '请输入 6 位邮箱验证码' });
     return;
   }
 
   if (!password || password.length < 6) {
-    response.status(400).json({ message: "新密码长度至少为 6 位" });
+    response.status(400).json({ message: '新密码长度至少为 6 位' });
     return;
   }
 
@@ -3458,11 +3617,11 @@ app.post("/api/auth/reset-password", async (request, response) => {
          AND expires_at > NOW()
        ORDER BY id DESC
        LIMIT 1`,
-      [email, hashCode(email, emailCode)]
+      [email, hashCode(email, emailCode)],
     );
 
     if (!codeRows[0]) {
-      response.status(400).json({ message: "邮箱验证码错误或已过期" });
+      response.status(400).json({ message: '邮箱验证码错误或已过期' });
       return;
     }
 
@@ -3471,13 +3630,13 @@ app.post("/api/auth/reset-password", async (request, response) => {
        FROM users
        WHERE student_id = ? AND LOWER(email) = ?
        LIMIT 1`,
-      [studentId, email]
+      [studentId, email],
     );
 
     const row = users[0];
 
     if (!row) {
-      response.status(404).json({ message: "学号和邮箱不匹配" });
+      response.status(404).json({ message: '学号和邮箱不匹配' });
       return;
     }
 
@@ -3485,29 +3644,29 @@ app.post("/api/auth/reset-password", async (request, response) => {
       `UPDATE users
        SET password_hash = ?
        WHERE id = ?`,
-      [hashPassword(password), row.id]
+      [hashPassword(password), row.id],
     );
 
     await pool.execute(
       `UPDATE email_verification_codes
        SET used_at = NOW()
        WHERE id = ?`,
-      [codeRows[0].id]
+      [codeRows[0].id],
     );
 
     const user = toUserProfile(await getUserById(row.id));
 
     response.json({
-      message: "密码已重设",
+      message: '密码已重设',
       token: issueToken(user),
-      user
+      user,
     });
   } catch (error) {
-    response.status(500).json({ message: "重设密码失败", detail: error.message });
+    response.status(500).json({ message: '重设密码失败', detail: error.message });
   }
 });
 
-app.get("/api/auth/me", async (request, response) => {
+app.get('/api/auth/me', async (request, response) => {
   try {
     const user = await requireAuth(request, response);
 
@@ -3516,20 +3675,20 @@ app.get("/api/auth/me", async (request, response) => {
     }
 
     response.json({
-      user: toUserProfile(user)
+      user: toUserProfile(user),
     });
   } catch (error) {
-    response.status(500).json({ message: "获取用户信息失败", detail: error.message });
+    response.status(500).json({ message: '获取用户信息失败', detail: error.message });
   }
 });
 
-app.get("/api/users/:uid/public-profile", async (request, response) => {
-  const userKey = String(request.params.uid || "").trim();
+app.get('/api/users/:uid/public-profile', async (request, response) => {
+  const userKey = String(request.params.uid || '').trim();
   const isUid = /^u_?[a-z0-9]{6,32}$/i.test(userKey);
   const isLegacyStudentId = /^20\d{8}$/.test(userKey);
 
   if (!isUid && !isLegacyStudentId) {
-    response.status(400).json({ message: "无效用户 UID" });
+    response.status(400).json({ message: '无效用户 UID' });
     return;
   }
 
@@ -3537,13 +3696,13 @@ app.get("/api/users/:uid/public-profile", async (request, response) => {
     const [rows] = await pool.execute(
       `SELECT id, uid, username, full_name, student_id, role, grade, major, avatar_path, bio, website_url, created_at
        FROM users
-       WHERE ${isUid ? "uid" : "student_id"} = ?
+       WHERE ${isUid ? 'uid' : 'student_id'} = ?
        LIMIT 1`,
-      [userKey]
+      [userKey],
     );
 
     if (!rows[0]) {
-      response.status(404).json({ message: "用户不存在" });
+      response.status(404).json({ message: '用户不存在' });
       return;
     }
 
@@ -3554,34 +3713,33 @@ app.get("/api/users/:uid/public-profile", async (request, response) => {
          (SELECT COUNT(*) FROM discussion_posts WHERE author_student_id = ?) AS post_count,
 	         (SELECT COUNT(*) FROM discussion_post_likes l
 	            INNER JOIN discussion_posts p ON p.id = l.post_id
-	            WHERE p.author_student_id = ? AND l.reaction_type = 'smile') AS like_count`
-      ,
-      [studentId, studentId]
+	            WHERE p.author_student_id = ? AND l.reaction_type = 'smile') AS like_count`,
+      [studentId, studentId],
     );
 
     response.json({
       profile: {
         id: user.id,
-        uid: user.uid || "",
+        uid: user.uid || '',
         username: user.username,
-        fullName: "",
+        fullName: '',
         role: user.role,
-        grade: user.grade || "",
-        major: user.major || "",
-        avatarPath: user.avatar_path || "",
-        bio: user.bio || "",
-        websiteUrl: user.website_url || "",
+        grade: user.grade || '',
+        major: user.major || '',
+        avatarPath: user.avatar_path || '',
+        bio: user.bio || '',
+        websiteUrl: user.website_url || '',
         createdAt: user.created_at,
         postCount: Number(statsRows[0]?.post_count || 0),
-        likeCount: Number(statsRows[0]?.like_count || 0)
-      }
+        likeCount: Number(statsRows[0]?.like_count || 0),
+      },
     });
   } catch (error) {
-    response.status(500).json({ message: "获取公开主页失败", detail: error.message });
+    response.status(500).json({ message: '获取公开主页失败', detail: error.message });
   }
 });
 
-app.patch("/api/profile", async (request, response) => {
+app.patch('/api/profile', async (request, response) => {
   try {
     const user = await requireAuth(request, response);
 
@@ -3589,22 +3747,22 @@ app.patch("/api/profile", async (request, response) => {
       return;
     }
 
-    const fullName = String(request.body.fullName || "").trim();
-    const bio = String(request.body.bio || "").trim();
-    const websiteUrl = sanitizeWebsiteUrl(request.body.websiteUrl || "");
+    const fullName = String(request.body.fullName || '').trim();
+    const bio = String(request.body.bio || '').trim();
+    const websiteUrl = sanitizeWebsiteUrl(request.body.websiteUrl || '');
 
     if (!fullName || fullName.length > 64) {
-      response.status(400).json({ message: "姓名不能为空，且长度不超过 64 个字符" });
+      response.status(400).json({ message: '姓名不能为空，且长度不超过 64 个字符' });
       return;
     }
 
     if (bio.length > 1000) {
-      response.status(400).json({ message: "个人简介不能超过 1000 个字符" });
+      response.status(400).json({ message: '个人简介不能超过 1000 个字符' });
       return;
     }
 
     if (websiteUrl === null) {
-      response.status(400).json({ message: "个人网页链接必须为 http 或 https 地址" });
+      response.status(400).json({ message: '个人网页链接必须为 http 或 https 地址' });
       return;
     }
 
@@ -3615,19 +3773,19 @@ app.patch("/api/profile", async (request, response) => {
            bio = ?,
            website_url = ?
        WHERE id = ?`,
-      [await createUniqueUserUid(), fullName, bio || null, websiteUrl || null, user.id]
+      [await createUniqueUserUid(), fullName, bio || null, websiteUrl || null, user.id],
     );
 
     response.json({
-      message: "个人资料已更新",
-      user: toUserProfile(await getUserById(user.id))
+      message: '个人资料已更新',
+      user: toUserProfile(await getUserById(user.id)),
     });
   } catch (error) {
-    response.status(500).json({ message: "更新个人资料失败", detail: error.message });
+    response.status(500).json({ message: '更新个人资料失败', detail: error.message });
   }
 });
 
-app.patch("/api/profile/password", async (request, response) => {
+app.patch('/api/profile/password', async (request, response) => {
   try {
     const user = await requireAuth(request, response);
 
@@ -3635,21 +3793,21 @@ app.patch("/api/profile/password", async (request, response) => {
       return;
     }
 
-    const currentPassword = String(request.body.currentPassword || "");
-    const newPassword = String(request.body.newPassword || "");
+    const currentPassword = String(request.body.currentPassword || '');
+    const newPassword = String(request.body.newPassword || '');
 
     if (!currentPassword || !newPassword) {
-      response.status(400).json({ message: "请输入当前密码和新密码" });
+      response.status(400).json({ message: '请输入当前密码和新密码' });
       return;
     }
 
     if (newPassword.length < 6) {
-      response.status(400).json({ message: "新密码长度至少为 6 位" });
+      response.status(400).json({ message: '新密码长度至少为 6 位' });
       return;
     }
 
     if (currentPassword === newPassword) {
-      response.status(400).json({ message: "新密码不能与当前密码相同" });
+      response.status(400).json({ message: '新密码不能与当前密码相同' });
       return;
     }
 
@@ -3658,13 +3816,13 @@ app.patch("/api/profile/password", async (request, response) => {
        FROM users
        WHERE id = ?
        LIMIT 1`,
-      [user.id]
+      [user.id],
     );
 
     const row = rows[0];
 
     if (!row || !verifyPassword(currentPassword, row.password_hash)) {
-      response.status(401).json({ message: "当前密码错误" });
+      response.status(401).json({ message: '当前密码错误' });
       return;
     }
 
@@ -3672,16 +3830,16 @@ app.patch("/api/profile/password", async (request, response) => {
       `UPDATE users
        SET password_hash = ?
        WHERE id = ?`,
-      [hashPassword(newPassword), user.id]
+      [hashPassword(newPassword), user.id],
     );
 
-    response.json({ message: "密码已更新" });
+    response.json({ message: '密码已更新' });
   } catch (error) {
-    response.status(500).json({ message: "修改密码失败", detail: error.message });
+    response.status(500).json({ message: '修改密码失败', detail: error.message });
   }
 });
 
-app.post("/api/profile/avatar", async (request, response) => {
+app.post('/api/profile/avatar', async (request, response) => {
   try {
     const user = await requireAuth(request, response);
 
@@ -3689,11 +3847,13 @@ app.post("/api/profile/avatar", async (request, response) => {
       return;
     }
 
-    const imageDataUrl = String(request.body.imageDataUrl || "");
-    const match = imageDataUrl.match(/^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
+    const imageDataUrl = String(request.body.imageDataUrl || '');
+    const match = imageDataUrl.match(
+      /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/,
+    );
 
     if (!match) {
-      response.status(400).json({ message: "请上传 PNG、JPG、WEBP 或 GIF 图片" });
+      response.status(400).json({ message: '请上传 PNG、JPG、WEBP 或 GIF 图片' });
       return;
     }
 
@@ -3701,14 +3861,14 @@ app.post("/api/profile/avatar", async (request, response) => {
     const fileName = buildAvatarFileName(user.id, mimeType);
 
     if (!fileName) {
-      response.status(400).json({ message: "不支持的头像格式" });
+      response.status(400).json({ message: '不支持的头像格式' });
       return;
     }
 
-    const fileBuffer = Buffer.from(match[2], "base64");
+    const fileBuffer = Buffer.from(match[2], 'base64');
 
     if (!fileBuffer.length || fileBuffer.length > 5 * 1024 * 1024) {
-      response.status(400).json({ message: "头像大小需在 5MB 以内" });
+      response.status(400).json({ message: '头像大小需在 5MB 以内' });
       return;
     }
 
@@ -3719,21 +3879,21 @@ app.post("/api/profile/avatar", async (request, response) => {
        SET uid = COALESCE(NULLIF(uid, ''), ?),
            avatar_path = ?
        WHERE id = ?`,
-      [await createUniqueUserUid(), avatarPath, user.id]
+      [await createUniqueUserUid(), avatarPath, user.id],
     );
 
     removeStoredAvatar(user.avatar_path);
 
     response.json({
-      message: "头像上传成功",
-      user: toUserProfile(await getUserById(user.id))
+      message: '头像上传成功',
+      user: toUserProfile(await getUserById(user.id)),
     });
   } catch (error) {
-    response.status(500).json({ message: "头像上传失败", detail: error.message });
+    response.status(500).json({ message: '头像上传失败', detail: error.message });
   }
 });
 
-app.get("/api/admin/users", async (request, response) => {
+app.get('/api/admin/users', async (request, response) => {
   try {
     const adminUser = await requireAdmin(request, response);
 
@@ -3744,18 +3904,18 @@ app.get("/api/admin/users", async (request, response) => {
     const [rows] = await pool.execute(
       `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
        FROM users
-       ORDER BY created_at DESC`
+       ORDER BY created_at DESC`,
     );
 
     response.json({
-      users: rows.map(toUserProfile)
+      users: rows.map(toUserProfile),
     });
   } catch (error) {
-    response.status(500).json({ message: "获取用户列表失败", detail: error.message });
+    response.status(500).json({ message: '获取用户列表失败', detail: error.message });
   }
 });
 
-app.patch("/api/admin/fortune-config", async (request, response) => {
+app.patch('/api/admin/fortune-config', async (request, response) => {
   try {
     const adminUser = await requireAdmin(request, response);
 
@@ -3764,17 +3924,17 @@ app.patch("/api/admin/fortune-config", async (request, response) => {
     }
 
     const fortuneBonusEnabled = Boolean(request.body.fortuneBonusEnabled);
-    await setAppSetting(FORTUNE_BONUS_KEY, fortuneBonusEnabled ? "1" : "0");
+    await setAppSetting(FORTUNE_BONUS_KEY, fortuneBonusEnabled ? '1' : '0');
 
     response.json({
-      fortuneBonusEnabled
+      fortuneBonusEnabled,
     });
   } catch (error) {
-    response.status(500).json({ message: "更新运势配置失败", detail: error.message });
+    response.status(500).json({ message: '更新运势配置失败', detail: error.message });
   }
 });
 
-app.post("/api/admin/users", async (request, response) => {
+app.post('/api/admin/users', async (request, response) => {
   try {
     const adminUser = await requireAdmin(request, response);
 
@@ -3782,48 +3942,48 @@ app.post("/api/admin/users", async (request, response) => {
       return;
     }
 
-    const username = String(request.body.username || "").trim();
-    const fullName = String(request.body.fullName || "").trim();
-    const studentId = String(request.body.studentId || "").trim();
-    const email = String(request.body.email || "").trim();
-    const password = String(request.body.password || "");
-    const role = String(request.body.role || "student").trim();
+    const username = String(request.body.username || '').trim();
+    const fullName = String(request.body.fullName || '').trim();
+    const studentId = String(request.body.studentId || '').trim();
+    const email = String(request.body.email || '').trim();
+    const password = String(request.body.password || '');
+    const role = String(request.body.role || 'student').trim();
     const electrons = Number(request.body.electrons ?? 0);
     const manetrons = Number(request.body.manetrons ?? 0);
     const heat = Number(request.body.heat ?? 0);
 
     if (!username || username.length < 3 || username.length > 64) {
-      response.status(400).json({ message: "用户名长度需在 3 到 64 个字符之间" });
+      response.status(400).json({ message: '用户名长度需在 3 到 64 个字符之间' });
       return;
     }
 
     if (!fullName || fullName.length > 64) {
-      response.status(400).json({ message: "请输入姓名，且长度不超过 64 个字符" });
+      response.status(400).json({ message: '请输入姓名，且长度不超过 64 个字符' });
       return;
     }
 
     if (!/^20\d{8}$/.test(studentId)) {
-      response.status(400).json({ message: "学号必须是 20 开头的 10 位数字" });
+      response.status(400).json({ message: '学号必须是 20 开头的 10 位数字' });
       return;
     }
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      response.status(400).json({ message: "请输入有效邮箱地址" });
+      response.status(400).json({ message: '请输入有效邮箱地址' });
       return;
     }
 
     if (!password || password.length < 6) {
-      response.status(400).json({ message: "密码长度至少为 6 位" });
+      response.status(400).json({ message: '密码长度至少为 6 位' });
       return;
     }
 
-    if (!["student", "admin"].includes(role)) {
-      response.status(400).json({ message: "角色不合法" });
+    if (!['student', 'admin'].includes(role)) {
+      response.status(400).json({ message: '角色不合法' });
       return;
     }
 
     const grade = studentId.slice(0, 4);
-    const major = "电子信息科学与技术";
+    const major = '电子信息科学与技术';
 
     const [result] = await pool.execute(
       `INSERT INTO users (
@@ -3842,26 +4002,26 @@ app.post("/api/admin/users", async (request, response) => {
         Number.isFinite(manetrons) ? manetrons : 0,
         Number.isFinite(heat) ? heat : 0,
         grade,
-        major
-      ]
+        major,
+      ],
     );
 
     const user = await getUserById(result.insertId);
 
     response.status(201).json({
-      user: toUserProfile(user)
+      user: toUserProfile(user),
     });
   } catch (error) {
-    if (error && error.code === "ER_DUP_ENTRY") {
-      response.status(409).json({ message: "用户名、学号或邮箱已存在" });
+    if (error && error.code === 'ER_DUP_ENTRY') {
+      response.status(409).json({ message: '用户名、学号或邮箱已存在' });
       return;
     }
 
-    response.status(500).json({ message: "创建用户失败", detail: error.message });
+    response.status(500).json({ message: '创建用户失败', detail: error.message });
   }
 });
 
-app.patch("/api/admin/users/:id", async (request, response) => {
+app.patch('/api/admin/users/:id', async (request, response) => {
   try {
     const adminUser = await requireAdmin(request, response);
 
@@ -3870,24 +4030,24 @@ app.patch("/api/admin/users/:id", async (request, response) => {
     }
 
     const targetId = Number(request.params.id);
-    const fullName = String(request.body.fullName || "").trim();
-    const role = String(request.body.role || "").trim();
+    const fullName = String(request.body.fullName || '').trim();
+    const role = String(request.body.role || '').trim();
     const electrons = Number(request.body.electrons ?? 0);
     const manetrons = Number(request.body.manetrons ?? 0);
     const heat = Number(request.body.heat ?? 0);
 
     if (!targetId) {
-      response.status(400).json({ message: "无效用户 ID" });
+      response.status(400).json({ message: '无效用户 ID' });
       return;
     }
 
     if (!fullName || fullName.length > 64) {
-      response.status(400).json({ message: "请输入姓名，且长度不超过 64 个字符" });
+      response.status(400).json({ message: '请输入姓名，且长度不超过 64 个字符' });
       return;
     }
 
-    if (!["student", "admin"].includes(role)) {
-      response.status(400).json({ message: "角色不合法" });
+    if (!['student', 'admin'].includes(role)) {
+      response.status(400).json({ message: '角色不合法' });
       return;
     }
 
@@ -3907,26 +4067,26 @@ app.patch("/api/admin/users/:id", async (request, response) => {
         Number.isFinite(electrons) ? electrons : 0,
         Number.isFinite(manetrons) ? manetrons : 0,
         Number.isFinite(heat) ? heat : 0,
-        targetId
-      ]
+        targetId,
+      ],
     );
 
     const user = await getUserById(targetId);
 
     if (!user) {
-      response.status(404).json({ message: "用户不存在" });
+      response.status(404).json({ message: '用户不存在' });
       return;
     }
 
     response.json({
-      user: toUserProfile(user)
+      user: toUserProfile(user),
     });
   } catch (error) {
-    response.status(500).json({ message: "更新用户失败", detail: error.message });
+    response.status(500).json({ message: '更新用户失败', detail: error.message });
   }
 });
 
-app.delete("/api/admin/users/:id", async (request, response) => {
+app.delete('/api/admin/users/:id', async (request, response) => {
   try {
     const adminUser = await requireAdmin(request, response);
 
@@ -3937,25 +4097,25 @@ app.delete("/api/admin/users/:id", async (request, response) => {
     const targetId = Number(request.params.id);
 
     if (!targetId) {
-      response.status(400).json({ message: "无效用户 ID" });
+      response.status(400).json({ message: '无效用户 ID' });
       return;
     }
 
     if (targetId === adminUser.id) {
-      response.status(400).json({ message: "不能删除当前登录的管理员账户" });
+      response.status(400).json({ message: '不能删除当前登录的管理员账户' });
       return;
     }
 
     const [result] = await pool.execute(`DELETE FROM users WHERE id = ?`, [targetId]);
 
     if (result.affectedRows === 0) {
-      response.status(404).json({ message: "用户不存在" });
+      response.status(404).json({ message: '用户不存在' });
       return;
     }
 
     response.json({ ok: true });
   } catch (error) {
-    response.status(500).json({ message: "删除用户失败", detail: error.message });
+    response.status(500).json({ message: '删除用户失败', detail: error.message });
   }
 });
 
@@ -3976,12 +4136,12 @@ async function start() {
       await decayHeatIfNeeded(new Date());
       scheduleNextHeatDecay();
     } catch (error) {
-      console.error("Backend maintenance checks failed", error);
+      console.error('Backend maintenance checks failed', error);
     }
   });
 }
 
 start().catch((error) => {
-  console.error("Failed to start backend", error);
+  console.error('Failed to start backend', error);
   process.exit(1);
 });

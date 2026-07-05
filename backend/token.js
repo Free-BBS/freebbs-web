@@ -1,10 +1,10 @@
-const jwt = require("jsonwebtoken");
-const config = require("./config");
+const jwt = require('jsonwebtoken');
+const config = require('./config');
 
 function sign(payload) {
   const { exp, ...claims } = payload;
   const options = {
-    algorithm: "HS256"
+    algorithm: 'HS256',
   };
 
   if (exp) {
@@ -21,12 +21,12 @@ function verify(token) {
 
   try {
     const payload = jwt.verify(token, config.authSecret, {
-      algorithms: ["HS256"]
+      algorithms: ['HS256'],
     });
 
     return {
       ...payload,
-      exp: payload.exp ? payload.exp * 1000 : undefined
+      exp: payload.exp ? payload.exp * 1000 : undefined,
     };
   } catch {
     return null;
@@ -35,5 +35,5 @@ function verify(token) {
 
 module.exports = {
   sign,
-  verify
+  verify,
 };

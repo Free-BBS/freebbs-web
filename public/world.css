@@ -3,7 +3,7 @@
   overflow: hidden;
   background:
     linear-gradient(140deg, rgba(8, 12, 16, 0.68), rgba(10, 16, 23, 0.62)),
-    url("/assets/world_bg.webp") center center / cover no-repeat,
+    url('/assets/world_bg.webp') center center / cover no-repeat,
     #0b1017;
 }
 
@@ -123,8 +123,7 @@
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 0;
   background:
-    linear-gradient(180deg, rgba(8, 12, 16, 0.1), rgba(8, 12, 16, 0.76)),
-    rgba(12, 16, 19, 0.86);
+    linear-gradient(180deg, rgba(8, 12, 16, 0.1), rgba(8, 12, 16, 0.76)), rgba(12, 16, 19, 0.86);
   box-shadow: 0 28px 70px rgba(0, 0, 0, 0.34);
 }
 
@@ -201,7 +200,10 @@
   font-weight: 900;
   text-decoration: none;
   cursor: pointer;
-  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
 }
 
 .study-world-action-discuss {
@@ -253,7 +255,7 @@
 body.light-mode.world-page {
   background:
     linear-gradient(140deg, rgba(247, 243, 235, 0.74), rgba(235, 229, 216, 0.7)),
-    url("/assets/world_bg.webp") center center / cover no-repeat,
+    url('/assets/world_bg.webp') center center / cover no-repeat,
     #f4efe7;
 }
 

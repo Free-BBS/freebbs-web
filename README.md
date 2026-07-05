@@ -6,16 +6,16 @@ FREE-BBS 是一个学习社区原型仓库，当前采用 Node.js 静态前端�
 
 ## 技术栈现状
 
-| 层级 | 当前技术 | 说明 |
-| --- | --- | --- |
-| 前端页面 | 原生 HTML / CSS / JavaScript | 页面在 `public/`，主要逻辑集中在 `public/app.js`，样式集中在 `public/styles.css`。 |
-| 静态服务 | Node.js `http` 模块 | `server.js` 提供静态资源、无 `.html` 路由和 `/vendor/*` 依赖资源访问。 |
-| 后端 API | Node.js / Express | `backend/server.js` 提供认证、用户、讨论区、签到/资产、上传和 AI 转发等 API。 |
-| 数据库 | MySQL 8 兼容 SQL | `database/schema.sql`、`database/seed.sql` 用于初始化；`database/migrations/*.sql` 用于增量迁移。 |
-| 富文本/公式/代码渲染 | `marked`、KaTeX、Highlight.js CDN assets | 前端用于讨论区 Markdown、公式和代码内容展示。 |
-| 3D/视觉 | Three.js、WebP/PNG 静态资源 | 资源位于 `public/assets/`。 |
-| 邮件与认证预留 | nodemailer、jsonwebtoken、密码工具 | 配置在 `backend/config.js`、`backend/mailer.js`、`backend/password.js`、`backend/token.js`。 |
-| 部署 | GitHub Actions + SSH + systemd | 说明见 `DEPLOYMENT.md`，脚本在 `.github/workflows/`、`scripts/`、`deploy/systemd/`。 |
+| 层级                 | 当前技术                                 | 说明                                                                                              |
+| -------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 前端页面             | 原生 HTML / CSS / JavaScript             | 页面在 `public/`，主要逻辑集中在 `public/app.js`，样式集中在 `public/styles.css`。                |
+| 静态服务             | Node.js `http` 模块                      | `server.js` 提供静态资源、无 `.html` 路由和 `/vendor/*` 依赖资源访问。                            |
+| 后端 API             | Node.js / Express                        | `backend/server.js` 提供认证、用户、讨论区、签到/资产、上传和 AI 转发等 API。                     |
+| 数据库               | MySQL 8 兼容 SQL                         | `database/schema.sql`、`database/seed.sql` 用于初始化；`database/migrations/*.sql` 用于增量迁移。 |
+| 富文本/公式/代码渲染 | `marked`、KaTeX、Highlight.js CDN assets | 前端用于讨论区 Markdown、公式和代码内容展示。                                                     |
+| 3D/视觉              | Three.js、WebP/PNG 静态资源              | 资源位于 `public/assets/`。                                                                       |
+| 邮件与认证预留       | nodemailer、jsonwebtoken、密码工具       | 配置在 `backend/config.js`、`backend/mailer.js`、`backend/password.js`、`backend/token.js`。      |
+| 部署                 | GitHub Actions + SSH + systemd           | 说明见 `DEPLOYMENT.md`，脚本在 `.github/workflows/`、`scripts/`、`deploy/systemd/`。              |
 
 ## 目录结构
 
@@ -84,19 +84,19 @@ http://127.0.0.1:3001/api/health
 
 后端相关环境变量模板在 `backend/.env.example`。常用字段：
 
-| 变量 | 默认值 | 用途 |
-| --- | --- | --- |
-| `API_HOST` | `127.0.0.1` | 后端监听地址。 |
-| `API_PORT` | `3001` | 后端监听端口。 |
-| `BACKEND_IP` | `127.0.0.1` | MySQL 主机地址。 |
-| `MYSQL_PORT` | `3306` | MySQL 端口。 |
-| `MYSQL_USER` | `root` | MySQL 用户名。 |
-| `MYSQL_PASSWORD` | 空 | MySQL 密码。 |
-| `MYSQL_DATABASE` | `free_bbs` | 数据库名。 |
-| `AUTH_SECRET` | `free-bbs-dev-secret` | JWT 签名密钥，生产环境必须替换。 |
-| `UPLOAD_DIR` | `database/uploads` | 上传文件目录，生产环境应放在持久目录。 |
-| `AGENT_URL` | `http://127.0.0.1:5001` | 预留 AI agent 服务地址。 |
-| `SANDBOX_URL` | `http://127.0.0.1:8000` | 预留代码运行/沙箱服务地址。 |
+| 变量             | 默认值                  | 用途                                   |
+| ---------------- | ----------------------- | -------------------------------------- |
+| `API_HOST`       | `127.0.0.1`             | 后端监听地址。                         |
+| `API_PORT`       | `3001`                  | 后端监听端口。                         |
+| `BACKEND_IP`     | `127.0.0.1`             | MySQL 主机地址。                       |
+| `MYSQL_PORT`     | `3306`                  | MySQL 端口。                           |
+| `MYSQL_USER`     | `root`                  | MySQL 用户名。                         |
+| `MYSQL_PASSWORD` | 空                      | MySQL 密码。                           |
+| `MYSQL_DATABASE` | `free_bbs`              | 数据库名。                             |
+| `AUTH_SECRET`    | `free-bbs-dev-secret`   | JWT 签名密钥，生产环境必须替换。       |
+| `UPLOAD_DIR`     | `database/uploads`      | 上传文件目录，生产环境应放在持久目录。 |
+| `AGENT_URL`      | `http://127.0.0.1:5001` | 预留 AI agent 服务地址。               |
+| `SANDBOX_URL`    | `http://127.0.0.1:8000` | 预留代码运行/沙箱服务地址。            |
 
 本地可以复制模板后自行填写：
 
@@ -141,15 +141,15 @@ password: free-bbs
 
 ## 当前功能分布
 
-| 功能 | 前端位置 | 后端/数据依赖 |
-| --- | --- | --- |
-| 首页与导航 | `public/index.html`、`public/app.js`、`public/styles.css` | 静态服务即可展示。 |
-| 学习世界 | `public/world.html`、`public/world.js`、`public/world.css` | 静态服务即可展示，版块跳转到讨论区。 |
-| 登录 / 注册 / 个人资料 | `public/login.html`、`public/register.html`、`public/profile.html`、`public/auth.js`、`public/app.js` | 需要认证 API、用户表和 JWT。 |
-| 讨论区 | `public/discussion.html`、`public/app.js` | 需要讨论区 API、MySQL 表、上传目录。 |
-| AI 对话 | `public/aichat.html`、`public/app.js` | 需要后端 API 转发到 `AGENT_URL`。 |
-| 签到 / 资产玩法 | `public/electromagnetic.html`、`public/inventory.html`、`public/data/shop-items.json`、`public/app.js` | 需要用户、签到、资产相关 API 和数据库表。 |
-| 管理用户 | `public/adminusers.html` | 需要管理员鉴权和用户管理 API。 |
+| 功能                   | 前端位置                                                                                               | 后端/数据依赖                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| 首页与导航             | `public/index.html`、`public/app.js`、`public/styles.css`                                              | 静态服务即可展示。                        |
+| 学习世界               | `public/world.html`、`public/world.js`、`public/world.css`                                             | 静态服务即可展示，版块跳转到讨论区。      |
+| 登录 / 注册 / 个人资料 | `public/login.html`、`public/register.html`、`public/profile.html`、`public/auth.js`、`public/app.js`  | 需要认证 API、用户表和 JWT。              |
+| 讨论区                 | `public/discussion.html`、`public/app.js`                                                              | 需要讨论区 API、MySQL 表、上传目录。      |
+| AI 对话                | `public/aichat.html`、`public/app.js`                                                                  | 需要后端 API 转发到 `AGENT_URL`。         |
+| 签到 / 资产玩法        | `public/electromagnetic.html`、`public/inventory.html`、`public/data/shop-items.json`、`public/app.js` | 需要用户、签到、资产相关 API 和数据库表。 |
+| 管理用户               | `public/adminusers.html`                                                                               | 需要管理员鉴权和用户管理 API。            |
 
 ## CI/CD 和部署
 
@@ -177,6 +177,42 @@ password: free-bbs
 - 新增 API 功能时，同步补数据库迁移、环境变量说明和 README 功能表。
 - 数据库结构变更走 `database/migrations/`，不要只改 `schema.sql`。
 - 大型图片优先使用 WebP；是否删除 PNG 源图需要先确认页面引用和设计源文件用途。
+
+## 代码规范
+
+FREE-BBS 采用成熟规范组合，不单独发明一套项目风格：
+
+- JavaScript 风格：Airbnb Base。
+- 自动格式化：Prettier。
+- 编辑器基础风格：EditorConfig。
+- 提交信息：Conventional Commits。
+
+提交前运行：
+
+```bash
+npm run check
+```
+
+自动修复格式和可修复 lint 问题：
+
+```bash
+npm run lint:fix
+npm run format
+```
+
+当前 ESLint 配置基于 Airbnb Base，但为了兼容现有原型代码，部分历史模式暂时降级为 warning，例如参数属性赋值、`alert` / `confirm`、嵌套三元表达式、未使用的遗留函数等。后续拆分 `backend/server.js` 和 `public/app.js` 时应逐步收紧这些规则。
+
+Commit message 使用 Conventional Commits：
+
+```text
+feat: add discussion post api
+fix: correct login token validation
+refactor: split backend server routes
+docs: update local setup guide
+style: format frontend files
+test: add auth api test
+chore: update dependencies
+```
 
 ## 后续重构建议
 

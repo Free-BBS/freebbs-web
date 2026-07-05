@@ -1,0 +1,5 @@
+node_modules/
+database/uploads/
+test/
+public/vendor/
+*.min.js

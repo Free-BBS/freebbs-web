@@ -1,4 +1,4 @@
-const crypto = require("crypto");
+const crypto = require('crypto');
 
 const CODE_TTL_MINUTES = 10;
 
@@ -8,9 +8,9 @@ function generateEmailCode() {
 
 function hashCode(email, code) {
   return crypto
-    .createHash("sha256")
+    .createHash('sha256')
     .update(`${String(email).toLowerCase()}::${code}`)
-    .digest("hex");
+    .digest('hex');
 }
 
 function buildExpiryDate() {
@@ -23,5 +23,5 @@ module.exports = {
   CODE_TTL_MINUTES,
   buildExpiryDate,
   generateEmailCode,
-  hashCode
+  hashCode,
 };

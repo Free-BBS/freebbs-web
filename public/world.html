@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -23,7 +23,13 @@
 
         <form class="searchbar" id="world-search-form" role="search">
           <span class="search-symbol" aria-hidden="true">⌕</span>
-          <input id="world-search-input" type="search" placeholder="搜索知识点、课程区域" aria-label="搜索知识点" autocomplete="off" />
+          <input
+            id="world-search-input"
+            type="search"
+            placeholder="搜索知识点、课程区域"
+            aria-label="搜索知识点"
+            autocomplete="off"
+          />
         </form>
 
         <nav class="nav-actions" aria-label="顶部导航">
@@ -55,15 +61,40 @@
           <div class="user-panel" id="user-panel">
             <div class="user-summary">
               <button class="avatar" type="button" aria-label="用户头像">
-                <img class="avatar-image" id="avatar-image" src="/assets/avatar_placeholder.webp" alt="用户头像占位图" />
+                <img
+                  class="avatar-image"
+                  id="avatar-image"
+                  src="/assets/avatar_placeholder.webp"
+                  alt="用户头像占位图"
+                />
               </button>
               <div class="user-actions" id="user-actions">
-                <button class="user-icon-button hidden" id="user-settings-button" type="button" aria-label="设置">
-                  <img class="user-action-icon" src="/assets/icons/gear.svg" alt="" aria-hidden="true" />
+                <button
+                  class="user-icon-button hidden"
+                  id="user-settings-button"
+                  type="button"
+                  aria-label="设置"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/gear.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
                   <span>设置</span>
                 </button>
-                <button class="user-icon-button hidden" id="user-logout-button" type="button" aria-label="退出">
-                  <img class="user-action-icon" src="/assets/icons/exit.svg" alt="" aria-hidden="true" />
+                <button
+                  class="user-icon-button hidden"
+                  id="user-logout-button"
+                  type="button"
+                  aria-label="退出"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/exit.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
                   <span>退出</span>
                 </button>
               </div>
@@ -95,10 +126,10 @@
           <img class="nav-icon" src="/assets/icons/people.svg" alt="" aria-hidden="true" />
           <span>讨论</span>
         </a>
-          <a class="nav-link" href="/aichat">
-            <img class="nav-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
-            <span>问问 Max</span>
-          </a>
+        <a class="nav-link" href="/aichat">
+          <img class="nav-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
+          <span>问问 Max</span>
+        </a>
         <a class="nav-link fortune-link hidden" href="#">
           <img class="nav-icon" src="/assets/icons/yunshi.svg" alt="" aria-hidden="true" />
           <span>今日运势</span>
@@ -117,11 +148,26 @@
           </header>
 
           <div class="study-world-carousel" aria-label="左右滑动选择学习世界">
-            <button class="study-world-nav study-world-nav-prev" type="button" data-world-scroll="-1" aria-label="上一个学习世界">
+            <button
+              class="study-world-nav study-world-nav-prev"
+              type="button"
+              data-world-scroll="-1"
+              aria-label="上一个学习世界"
+            >
               ‹
             </button>
-            <div class="study-world-track" id="study-world-track" tabindex="0" aria-live="polite"></div>
-            <button class="study-world-nav study-world-nav-next" type="button" data-world-scroll="1" aria-label="下一个学习世界">
+            <div
+              class="study-world-track"
+              id="study-world-track"
+              tabindex="0"
+              aria-live="polite"
+            ></div>
+            <button
+              class="study-world-nav study-world-nav-next"
+              type="button"
+              data-world-scroll="1"
+              aria-label="下一个学习世界"
+            >
               ›
             </button>
           </div>
