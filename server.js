@@ -1,68 +1,68 @@
-const http = require("http");
-const fs = require("fs");
-const path = require("path");
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
 
-const host = process.env.HOST || "127.0.0.1";
+const host = process.env.HOST || '127.0.0.1';
 const port = process.env.PORT || 3000;
-const publicDir = path.join(__dirname, "public");
-const vendorDir = path.join(__dirname, "node_modules");
+const publicDir = path.join(__dirname, 'public');
+const vendorDir = path.join(__dirname, 'node_modules');
 const pageRoutes = new Map([
-  ["/adminusers", "/adminusers.html"],
-  ["/aichat", "/aichat.html"],
-  ["/discussion", "/discussion.html"],
-  ["/electromagnetic", "/electromagnetic.html"],
-  ["/inventory", "/inventory.html"],
-  ["/login", "/login.html"],
-  ["/profile", "/profile.html"],
-  ["/register", "/register.html"],
-  ["/remake", "/remake.html"],
-  ["/settings", "/settings.html"],
-  ["/world", "/world.html"]
+  ['/adminusers', '/adminusers.html'],
+  ['/aichat', '/aichat.html'],
+  ['/discussion', '/discussion.html'],
+  ['/electromagnetic', '/electromagnetic.html'],
+  ['/inventory', '/inventory.html'],
+  ['/login', '/login.html'],
+  ['/profile', '/profile.html'],
+  ['/register', '/register.html'],
+  ['/remake', '/remake.html'],
+  ['/settings', '/settings.html'],
+  ['/world', '/world.html'],
 ]);
 const htmlRedirects = new Map([
-  ["/adminusers.html", "/adminusers"],
-  ["/aichat.html", "/aichat"],
-  ["/discussion.html", "/discussion"],
-  ["/electromagnetic.html", "/electromagnetic"],
-  ["/inventory.html", "/inventory"],
-  ["/index.html", "/"],
-  ["/login.html", "/login"],
-  ["/profile.html", "/profile"],
-  ["/register.html", "/register"],
-  ["/remake.html", "/remake"],
-  ["/settings.html", "/settings"],
-  ["/world.html", "/world"]
+  ['/adminusers.html', '/adminusers'],
+  ['/aichat.html', '/aichat'],
+  ['/discussion.html', '/discussion'],
+  ['/electromagnetic.html', '/electromagnetic'],
+  ['/inventory.html', '/inventory'],
+  ['/index.html', '/'],
+  ['/login.html', '/login'],
+  ['/profile.html', '/profile'],
+  ['/register.html', '/register'],
+  ['/remake.html', '/remake'],
+  ['/settings.html', '/settings'],
+  ['/world.html', '/world'],
 ]);
 
 const mimeTypes = {
-  ".css": "text/css; charset=utf-8",
-  ".html": "text/html; charset=utf-8",
-  ".js": "application/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".svg": "image/svg+xml",
-  ".webp": "image/webp",
-  ".ico": "image/x-icon",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
-  ".ttf": "font/ttf"
+  '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
 };
 
 function sendNotFoundPage(response) {
-  const filePath = path.join(publicDir, "404.html");
+  const filePath = path.join(publicDir, '404.html');
   fs.readFile(filePath, (error, data) => {
     if (error) {
       response.writeHead(404, {
-        "Content-Type": "text/plain; charset=utf-8"
+        'Content-Type': 'text/plain; charset=utf-8',
       });
-      response.end("404 Not Found");
+      response.end('404 Not Found');
       return;
     }
 
     response.writeHead(404, {
-      "Content-Type": "text/html; charset=utf-8"
+      'Content-Type': 'text/html; charset=utf-8',
     });
     response.end(data);
   });
@@ -71,61 +71,72 @@ function sendNotFoundPage(response) {
 function sendFile(filePath, response, options = {}) {
   fs.readFile(filePath, (error, data) => {
     if (error) {
-      if (error.code === "ENOENT" && options.htmlNotFound) {
+      if (error.code === 'ENOENT' && options.htmlNotFound) {
         sendNotFoundPage(response);
         return;
       }
 
-      response.writeHead(error.code === "ENOENT" ? 404 : 500, {
-        "Content-Type": "text/plain; charset=utf-8"
+      response.writeHead(error.code === 'ENOENT' ? 404 : 500, {
+        'Content-Type': 'text/plain; charset=utf-8',
       });
-      response.end(error.code === "ENOENT" ? "404 Not Found" : "500 Internal Server Error");
+      response.end(error.code === 'ENOENT' ? '404 Not Found' : '500 Internal Server Error');
       return;
     }
 
     const ext = path.extname(filePath).toLowerCase();
     const headers = {
-      "Content-Type": mimeTypes[ext] || "application/octet-stream"
+      'Content-Type': mimeTypes[ext] || 'application/octet-stream',
     };
 
-    if ([".png", ".jpg", ".jpeg", ".svg", ".webp", ".ico", ".woff", ".woff2", ".ttf"].includes(ext)) {
-      headers["Cache-Control"] = "public, max-age=31536000, immutable";
+    if (
+      ['.png', '.jpg', '.jpeg', '.svg', '.webp', '.ico', '.woff', '.woff2', '.ttf'].includes(ext)
+    ) {
+      headers['Cache-Control'] = 'public, max-age=31536000, immutable';
     }
 
     response.writeHead(200, {
-      ...headers
+      ...headers,
     });
     response.end(data);
   });
 }
 
 const server = http.createServer((request, response) => {
-  const requestUrl = new URL(request.url || "/", `http://${request.headers.host || `${host}:${port}`}`);
-  const cleanPath = requestUrl.pathname.endsWith("/") && requestUrl.pathname !== "/"
-    ? requestUrl.pathname.slice(0, -1)
-    : requestUrl.pathname;
+  const requestUrl = new URL(
+    request.url || '/',
+    `http://${request.headers.host || `${host}:${port}`}`,
+  );
+  const cleanPath =
+    requestUrl.pathname.endsWith('/') && requestUrl.pathname !== '/'
+      ? requestUrl.pathname.slice(0, -1)
+      : requestUrl.pathname;
 
   if (htmlRedirects.has(cleanPath)) {
-    const redirectUrl = new URL(request.url || "/", `http://${request.headers.host || `${host}:${port}`}`);
+    const redirectUrl = new URL(
+      request.url || '/',
+      `http://${request.headers.host || `${host}:${port}`}`,
+    );
     redirectUrl.pathname = htmlRedirects.get(cleanPath);
-    response.writeHead(301, { Location: `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}` });
+    response.writeHead(301, {
+      Location: `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`,
+    });
     response.end();
     return;
   }
 
-  const urlPath = cleanPath === "/" ? "/index.html" : (pageRoutes.get(cleanPath) || cleanPath);
-  const normalizedPath = path.normalize(urlPath).replace(/^(\.\.[/\\])+/, "");
-  const isVendorRequest = normalizedPath.startsWith("/vendor/");
+  const urlPath = cleanPath === '/' ? '/index.html' : pageRoutes.get(cleanPath) || cleanPath;
+  const normalizedPath = path.normalize(urlPath).replace(/^(\.\.[/\\])+/, '');
+  const isVendorRequest = normalizedPath.startsWith('/vendor/');
   const baseDir = isVendorRequest ? vendorDir : publicDir;
-  const relativePath = isVendorRequest ? normalizedPath.replace(/^\/vendor/, "") : normalizedPath;
+  const relativePath = isVendorRequest ? normalizedPath.replace(/^\/vendor/, '') : normalizedPath;
   const filePath = path.join(baseDir, relativePath);
   const ext = path.extname(filePath).toLowerCase();
-  const acceptsHtml = (request.headers.accept || "").includes("text/html");
-  const htmlNotFound = !isVendorRequest && (acceptsHtml || !ext || ext === ".html");
+  const acceptsHtml = (request.headers.accept || '').includes('text/html');
+  const htmlNotFound = !isVendorRequest && (acceptsHtml || !ext || ext === '.html');
 
   if (!filePath.startsWith(baseDir)) {
-    response.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
-    response.end("403 Forbidden");
+    response.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+    response.end('403 Forbidden');
     return;
   }
 

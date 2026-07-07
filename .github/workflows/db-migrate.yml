@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_production_database:
-        description: "Type RUN to execute production database scripts"
+        description: 'Type RUN to execute production database scripts'
         required: true
         type: string
 

@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FREE-BBS - 世界</title>
+    <title>FREE-BBS - 学习世界</title>
     <link rel="icon" type="image/png" href="/assets/favicon-64.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -23,7 +23,13 @@
 
         <form class="searchbar" id="world-search-form" role="search">
           <span class="search-symbol" aria-hidden="true">⌕</span>
-          <input id="world-search-input" type="search" placeholder="搜索知识点、课程区域" aria-label="搜索知识点" autocomplete="off" />
+          <input
+            id="world-search-input"
+            type="search"
+            placeholder="搜索知识点、课程区域"
+            aria-label="搜索知识点"
+            autocomplete="off"
+          />
         </form>
 
         <nav class="nav-actions" aria-label="顶部导航">
@@ -33,7 +39,7 @@
           </a>
           <a class="nav-link active" href="/world" aria-current="page">
             <img class="nav-icon" src="/assets/icons/map.svg" alt="" aria-hidden="true" />
-            <span>世界</span>
+            <span>学习世界</span>
           </a>
           <a class="nav-link" href="/discussion">
             <img class="nav-icon" src="/assets/icons/people.svg" alt="" aria-hidden="true" />
@@ -55,15 +61,40 @@
           <div class="user-panel" id="user-panel">
             <div class="user-summary">
               <button class="avatar" type="button" aria-label="用户头像">
-                <img class="avatar-image" id="avatar-image" src="/assets/avatar_placeholder.webp" alt="用户头像占位图" />
+                <img
+                  class="avatar-image"
+                  id="avatar-image"
+                  src="/assets/avatar_placeholder.webp"
+                  alt="用户头像占位图"
+                />
               </button>
               <div class="user-actions" id="user-actions">
-                <button class="user-icon-button hidden" id="user-settings-button" type="button" aria-label="设置">
-                  <img class="user-action-icon" src="/assets/icons/gear.svg" alt="" aria-hidden="true" />
+                <button
+                  class="user-icon-button hidden"
+                  id="user-settings-button"
+                  type="button"
+                  aria-label="设置"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/gear.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
                   <span>设置</span>
                 </button>
-                <button class="user-icon-button hidden" id="user-logout-button" type="button" aria-label="退出">
-                  <img class="user-action-icon" src="/assets/icons/exit.svg" alt="" aria-hidden="true" />
+                <button
+                  class="user-icon-button hidden"
+                  id="user-logout-button"
+                  type="button"
+                  aria-label="退出"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/exit.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
                   <span>退出</span>
                 </button>
               </div>
@@ -89,16 +120,16 @@
       <nav class="mobile-nav" aria-label="手机底部导航">
         <a class="nav-link active" href="/world" aria-current="page">
           <img class="nav-icon" src="/assets/icons/map.svg" alt="" aria-hidden="true" />
-          <span>世界</span>
+          <span>学习世界</span>
         </a>
         <a class="nav-link" href="/discussion">
           <img class="nav-icon" src="/assets/icons/people.svg" alt="" aria-hidden="true" />
           <span>讨论</span>
         </a>
-          <a class="nav-link" href="/aichat">
-            <img class="nav-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
-            <span>问问 Max</span>
-          </a>
+        <a class="nav-link" href="/aichat">
+          <img class="nav-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
+          <span>问问 Max</span>
+        </a>
         <a class="nav-link fortune-link hidden" href="#">
           <img class="nav-icon" src="/assets/icons/yunshi.svg" alt="" aria-hidden="true" />
           <span>今日运势</span>
@@ -110,64 +141,36 @@
       </nav>
 
       <main class="main-content world-main">
-        <section class="world-shell" aria-label="世界知识地图">
-          <div class="world-map-card" id="world-map-card">
-            <div class="world-map-toolbar" aria-label="地图控制">
-              <button class="world-tool-button" type="button" id="zoom-in" aria-label="放大">+</button>
-              <button class="world-tool-button" type="button" id="zoom-out" aria-label="缩小">−</button>
-              <button class="world-tool-button world-tool-reset" type="button" id="zoom-reset">重置</button>
-            </div>
+        <section class="study-world-shell" aria-label="学习世界">
+          <header class="study-world-header">
+            <p class="study-world-kicker">Learning Worlds</p>
+            <h1>学习世界</h1>
+          </header>
 
-            <div class="world-mobile-switcher" aria-label="切换课程岛屿">
-              <button class="world-switch-button" type="button" id="mobile-prev-island" aria-label="上一个岛屿">‹</button>
-              <div class="world-switch-label" id="mobile-island-label">数理基础</div>
-              <button class="world-switch-button" type="button" id="mobile-next-island" aria-label="下一个岛屿">›</button>
-            </div>
-
-            <svg
-              class="knowledge-map"
-              id="knowledge-map"
-              viewBox="0 0 1400 900"
-              role="img"
-              aria-label="电子系课程知识地图"
+          <div class="study-world-carousel" aria-label="左右滑动选择学习世界">
+            <button
+              class="study-world-nav study-world-nav-prev"
+              type="button"
+              data-world-scroll="-1"
+              aria-label="上一个学习世界"
             >
-              <defs>
-                <filter id="nodeGlow" x="-120%" y="-120%" width="340%" height="340%">
-                  <feGaussianBlur stdDeviation="5" result="blur" />
-                  <feMerge>
-                    <feMergeNode in="blur" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
-                </filter>
-                <filter id="edgeGlow" x="-80%" y="-80%" width="260%" height="260%">
-                  <feGaussianBlur stdDeviation="3" result="blur" />
-                  <feMerge>
-                    <feMergeNode in="blur" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
-                </filter>
-                <linearGradient id="islandGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#18334a" stop-opacity="0.95" />
-                  <stop offset="55%" stop-color="#0f263a" stop-opacity="0.88" />
-                  <stop offset="100%" stop-color="#081522" stop-opacity="0.96" />
-                </linearGradient>
-                <radialGradient id="nodeCore" cx="50%" cy="50%" r="50%">
-                  <stop offset="0%" stop-color="#ffffff" />
-                  <stop offset="42%" stop-color="#84f2ff" />
-                  <stop offset="100%" stop-color="#2b78ff" />
-                </radialGradient>
-              </defs>
-              <g id="map-viewport">
-                <g id="region-layer"></g>
-                <g id="edge-layer"></g>
-                <g id="node-layer"></g>
-              </g>
-            </svg>
-
-            <div class="world-tooltip" id="world-tooltip" role="tooltip"></div>
+              ‹
+            </button>
+            <div
+              class="study-world-track"
+              id="study-world-track"
+              tabindex="0"
+              aria-live="polite"
+            ></div>
+            <button
+              class="study-world-nav study-world-nav-next"
+              type="button"
+              data-world-scroll="1"
+              aria-label="下一个学习世界"
+            >
+              ›
+            </button>
           </div>
-
-          <aside class="world-detail-panel" id="world-detail-panel" aria-live="polite" aria-hidden="true"></aside>
         </section>
       </main>
     </div>

@@ -1,0 +1,29 @@
+{
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2022": true
+  },
+  "extends": ["airbnb-base", "prettier"],
+  "parserOptions": {
+    "ecmaVersion": "latest",
+    "sourceType": "script"
+  },
+  "rules": {
+    "no-console": "off",
+    "consistent-return": "off",
+    "no-param-reassign": "warn",
+    "import/no-extraneous-dependencies": "off",
+    "global-require": "off",
+    "no-alert": "warn",
+    "no-await-in-loop": "off",
+    "no-constant-condition": "warn",
+    "no-continue": "off",
+    "no-nested-ternary": "warn",
+    "no-restricted-syntax": "off",
+    "no-unneeded-ternary": "warn",
+    "no-use-before-define": "off",
+    "no-unused-vars": "warn",
+    "prefer-destructuring": "warn"
+  }
+}

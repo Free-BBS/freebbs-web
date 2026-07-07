@@ -1,146 +1,151 @@
 const API_BASE_URL = (() => {
   const isLocalFrontend =
-    window.location.protocol === "file:" ||
-    ["localhost", "127.0.0.1", "0.0.0.0"].includes(window.location.hostname) ||
-    window.location.port === "3000";
+    window.location.protocol === 'file:' ||
+    ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname) ||
+    window.location.port === '3000';
 
   if (isLocalFrontend) {
-    const host = window.location.hostname && window.location.protocol !== "file:" && window.location.hostname !== "0.0.0.0"
-      ? window.location.hostname
-      : "127.0.0.1";
+    const host =
+      window.location.hostname &&
+      window.location.protocol !== 'file:' &&
+      window.location.hostname !== '0.0.0.0'
+        ? window.location.hostname
+        : '127.0.0.1';
     return `http://${host}:3001/api`;
   }
 
   return `${window.location.origin}/api`;
 })();
-const API_ROOT = API_BASE_URL.replace(/\/api$/, "");
-const DEFAULT_AVATAR = "/assets/avatar_placeholder.webp";
-const MAX_AGENT_AVATAR = "/assets/max_the_agent_avatar.webp";
+const API_ROOT = API_BASE_URL.replace(/\/api$/, '');
+const DEFAULT_AVATAR = '/assets/avatar_placeholder.webp';
+const MAX_AGENT_AVATAR = '/assets/max_the_agent_avatar.webp';
 
-const STORAGE_KEY = "free_bbs_auth_token";
-const THEME_STORAGE_KEY = "free_bbs_theme_mode";
+const STORAGE_KEY = 'free_bbs_auth_token';
+const THEME_STORAGE_KEY = 'free_bbs_theme_mode';
 const userState = {
   isLoggedIn: false,
-  token: localStorage.getItem(STORAGE_KEY) || "",
-  uid: "",
-  username: "",
-  fullName: "",
-  studentId: "",
-  avatarPath: "",
-  bio: "",
-  websiteUrl: "",
+  token: localStorage.getItem(STORAGE_KEY) || '',
+  uid: '',
+  username: '',
+  fullName: '',
+  studentId: '',
+  avatarPath: '',
+  bio: '',
+  websiteUrl: '',
   electrons: 0,
   manetrons: 0,
   heat: 0,
-  fortuneBonusEnabled: false
+  fortuneBonusEnabled: false,
 };
 let economyShopItems = [];
 
-const userName = document.getElementById("user-name");
-const userRole = document.getElementById("user-role");
-const userStatus = document.getElementById("user-status");
-const userSettingsButton = document.getElementById("user-settings-button");
-const userLogoutButton = document.getElementById("user-logout-button");
-const adminSection = document.getElementById("admin-section");
-const adminUsers = document.getElementById("admin-users");
-const adminMessage = document.getElementById("admin-message");
-const adminAddUserButton = document.getElementById("admin-add-user");
-const fortuneBonusToggle = document.getElementById("fortune-bonus-toggle");
-const manageLinks = document.querySelectorAll(".manage-link");
-const fortuneLinks = document.querySelectorAll(".fortune-link");
-const avatarImages = document.querySelectorAll(".avatar-image");
-let electromagneticLinks = Array.from(document.querySelectorAll(".electromagnetic-link"));
-let inventoryLinks = Array.from(document.querySelectorAll(".inventory-link"));
-const settingsForm = document.getElementById("settings-form");
-const settingsMessage = document.getElementById("settings-message");
-const settingsFullName = document.getElementById("settings-full-name");
-const settingsBio = document.getElementById("settings-bio");
-const settingsWebsiteUrl = document.getElementById("settings-website-url");
-const settingsAvatarInput = document.getElementById("settings-avatar-input");
-const settingsAvatarImage = document.getElementById("settings-avatar-image");
-const settingsLogoutButton = document.getElementById("settings-logout-button");
-const settingsPasswordForm = document.getElementById("settings-password-form");
-const settingsPasswordMessage = document.getElementById("settings-password-message");
-const settingsCurrentPassword = document.getElementById("settings-current-password");
-const settingsNewPassword = document.getElementById("settings-new-password");
-const settingsNewPasswordConfirm = document.getElementById("settings-new-password-confirm");
-const publicProfileAvatar = document.getElementById("public-profile-avatar");
-const publicProfileName = document.getElementById("public-profile-name");
-const publicProfileStudentId = document.getElementById("public-profile-student-id");
-const publicProfileMajor = document.getElementById("public-profile-major");
-const publicProfilePostCount = document.getElementById("public-profile-post-count");
-const publicProfileLikeCount = document.getElementById("public-profile-like-count");
-const publicProfileBio = document.getElementById("public-profile-bio");
-const publicProfileWebsite = document.getElementById("public-profile-website");
-const publicProfileMessage = document.getElementById("public-profile-message");
-const homeDiscussionList = document.getElementById("home-discussion-list");
-const discussionLayout = document.querySelector(".discussion-layout");
-const discussionBoardList = document.getElementById("discussion-board-list");
-const discussionPostList = document.getElementById("discussion-post-list");
-const discussionDetail = document.getElementById("discussion-detail");
-const discussionCreateToggle = document.getElementById("discussion-create-toggle");
-const discussionComposeForm = document.getElementById("discussion-compose-form");
-const discussionComposeBoard = document.getElementById("discussion-compose-board");
-const discussionComposeTitle = document.getElementById("discussion-compose-title");
-const discussionComposeContent = document.getElementById("discussion-compose-content");
-const discussionComposeMessage = document.getElementById("discussion-compose-message");
-const discussionInsertImage = document.getElementById("discussion-insert-image");
-const discussionImageInput = document.getElementById("discussion-image-input");
-const discussionBoardAboutTitle = document.getElementById("discussion-board-about-title");
-const discussionBoardAboutBody = document.getElementById("discussion-board-about-body");
-const discussionBoardEdit = document.getElementById("discussion-board-edit");
-const discussionBoardModerators = document.getElementById("discussion-board-moderators");
-const discussionStatsPosts = document.getElementById("discussion-stats-posts");
-const discussionStatsLikes = document.getElementById("discussion-stats-likes");
-const aiChatForm = document.getElementById("aichat-form");
-const aiChatInput = document.getElementById("aichat-input");
-const aiChatThread = document.getElementById("aichat-thread");
-const aiChatStatus = document.getElementById("aichat-status");
-const aiChatSend = document.getElementById("aichat-send");
-const aiChatDialogList = document.getElementById("aichat-dialog-list");
-const aiChatNewDialog = document.getElementById("aichat-new-dialog");
-const aiChatDialogId = document.getElementById("aichat-dialog-id");
-const aiChatShell = document.querySelector(".aichat-shell");
-const aiChatDialogToggle = document.getElementById("aichat-dialog-toggle");
+const userName = document.getElementById('user-name');
+const userRole = document.getElementById('user-role');
+const userStatus = document.getElementById('user-status');
+const userSettingsButton = document.getElementById('user-settings-button');
+const userLogoutButton = document.getElementById('user-logout-button');
+const adminSection = document.getElementById('admin-section');
+const adminUsers = document.getElementById('admin-users');
+const adminMessage = document.getElementById('admin-message');
+const adminAddUserButton = document.getElementById('admin-add-user');
+const fortuneBonusToggle = document.getElementById('fortune-bonus-toggle');
+const manageLinks = document.querySelectorAll('.manage-link');
+const fortuneLinks = document.querySelectorAll('.fortune-link');
+const avatarImages = document.querySelectorAll('.avatar-image');
+const electromagneticLinks = Array.from(document.querySelectorAll('.electromagnetic-link'));
+const inventoryLinks = Array.from(document.querySelectorAll('.inventory-link'));
+const settingsForm = document.getElementById('settings-form');
+const settingsMessage = document.getElementById('settings-message');
+const settingsFullName = document.getElementById('settings-full-name');
+const settingsBio = document.getElementById('settings-bio');
+const settingsWebsiteUrl = document.getElementById('settings-website-url');
+const settingsAvatarInput = document.getElementById('settings-avatar-input');
+const settingsAvatarImage = document.getElementById('settings-avatar-image');
+const settingsLogoutButton = document.getElementById('settings-logout-button');
+const settingsPasswordForm = document.getElementById('settings-password-form');
+const settingsPasswordMessage = document.getElementById('settings-password-message');
+const settingsCurrentPassword = document.getElementById('settings-current-password');
+const settingsNewPassword = document.getElementById('settings-new-password');
+const settingsNewPasswordConfirm = document.getElementById('settings-new-password-confirm');
+const publicProfileAvatar = document.getElementById('public-profile-avatar');
+const publicProfileName = document.getElementById('public-profile-name');
+const publicProfileStudentId = document.getElementById('public-profile-student-id');
+const publicProfileMajor = document.getElementById('public-profile-major');
+const publicProfilePostCount = document.getElementById('public-profile-post-count');
+const publicProfileLikeCount = document.getElementById('public-profile-like-count');
+const publicProfileBio = document.getElementById('public-profile-bio');
+const publicProfileWebsite = document.getElementById('public-profile-website');
+const publicProfileMessage = document.getElementById('public-profile-message');
+const homeDiscussionList = document.getElementById('home-discussion-list');
+const discussionLayout = document.querySelector('.discussion-layout');
+const discussionBoardList = document.getElementById('discussion-board-list');
+const discussionPostList = document.getElementById('discussion-post-list');
+const discussionDetail = document.getElementById('discussion-detail');
+const discussionCreateToggle = document.getElementById('discussion-create-toggle');
+const discussionComposeForm = document.getElementById('discussion-compose-form');
+const discussionComposeBoard = document.getElementById('discussion-compose-board');
+const discussionComposeTitle = document.getElementById('discussion-compose-title');
+const discussionComposeContent = document.getElementById('discussion-compose-content');
+const discussionComposeMessage = document.getElementById('discussion-compose-message');
+const discussionInsertImage = document.getElementById('discussion-insert-image');
+const discussionImageInput = document.getElementById('discussion-image-input');
+const discussionBoardAboutTitle = document.getElementById('discussion-board-about-title');
+const discussionBoardAboutBody = document.getElementById('discussion-board-about-body');
+const discussionBoardEdit = document.getElementById('discussion-board-edit');
+const discussionBoardModerators = document.getElementById('discussion-board-moderators');
+const discussionStatsPosts = document.getElementById('discussion-stats-posts');
+const discussionStatsLikes = document.getElementById('discussion-stats-likes');
+const aiChatForm = document.getElementById('aichat-form');
+const aiChatInput = document.getElementById('aichat-input');
+const aiChatThread = document.getElementById('aichat-thread');
+const aiChatStatus = document.getElementById('aichat-status');
+const aiChatSend = document.getElementById('aichat-send');
+const aiChatDialogList = document.getElementById('aichat-dialog-list');
+const aiChatNewDialog = document.getElementById('aichat-new-dialog');
+const aiChatDialogId = document.getElementById('aichat-dialog-id');
+const aiChatShell = document.querySelector('.aichat-shell');
+const aiChatDialogToggle = document.getElementById('aichat-dialog-toggle');
 const discussionState = {
   boards: [],
   posts: [],
   postsHashByBoard: {},
   postCache: new Map(),
-  activeBoard: "all",
-  activePostId: "",
+  activeBoard: 'all',
+  activePostId: '',
   isFallback: false,
   activePost: null,
-  comments: []
+  comments: [],
 };
 const aiChatState = {
-  currentDid: "",
+  currentDid: '',
   dialogs: [],
   messages: [],
   isSending: false,
-  statusTimer: 0
+  statusTimer: 0,
 };
 
 function getStoredThemeMode() {
-  return localStorage.getItem(THEME_STORAGE_KEY) === "light" ? "light" : "dark";
+  return localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark';
 }
 
 function applyThemeMode(mode) {
-  const normalizedMode = mode === "light" ? "light" : "dark";
-  document.body.classList.toggle("theme-light", normalizedMode === "light");
-  document.body.classList.toggle("theme-dark", normalizedMode !== "light");
+  const normalizedMode = mode === 'light' ? 'light' : 'dark';
+  document.body.classList.toggle('theme-light', normalizedMode === 'light');
+  document.body.classList.toggle('theme-dark', normalizedMode !== 'light');
 
-  document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
-    const isLight = normalizedMode === "light";
-    button.setAttribute("aria-pressed", String(isLight));
+  document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+    const isLight = normalizedMode === 'light';
+    button.setAttribute('aria-pressed', String(isLight));
     button.innerHTML = `
-      <img class="nav-icon theme-toggle-icon" src="/assets/icons/${isLight ? "moon" : "sun"}.svg" alt="" aria-hidden="true" />
-      <span>${isLight ? "暗色模式" : "明亮模式"}</span>
+      <img class="nav-icon theme-toggle-icon" src="/assets/icons/${isLight ? 'moon' : 'sun'}.svg" alt="" aria-hidden="true" />
+      <span>${isLight ? '暗色模式' : '明亮模式'}</span>
     `;
-    button.setAttribute("aria-label", isLight ? "切换到暗色模式" : "切换到明亮模式");
+    button.setAttribute('aria-label', isLight ? '切换到暗色模式' : '切换到明亮模式');
   });
 }
 
+function toggleThemeMode() {
+  const nextMode = document.body.classList.contains('theme-light') ? 'dark' : 'light';
 function getThemeRevealOrigin(event) {
   if (event && typeof event.clientX === "number" && typeof event.clientY === "number") {
     if (event.clientX !== 0 || event.clientY !== 0) {
@@ -215,36 +220,36 @@ function toggleThemeMode(event) {
 }
 
 function createThemeToggleButton(className) {
-  const button = document.createElement("button");
+  const button = document.createElement('button');
   button.className = className;
-  button.type = "button";
-  button.dataset.themeToggle = "true";
-  button.addEventListener("click", toggleThemeMode);
+  button.type = 'button';
+  button.dataset.themeToggle = 'true';
+  button.addEventListener('click', toggleThemeMode);
   return button;
 }
 
 function initializeThemeMode() {
-  const isHomePage = document.body.classList.contains("home-page");
-  const navActions = document.querySelector(".nav-actions");
-  const userPanel = document.getElementById("user-panel");
-  const userActions = document.getElementById("user-actions");
+  const isHomePage = document.body.classList.contains('home-page');
+  const navActions = document.querySelector('.nav-actions');
+  const userPanel = document.getElementById('user-panel');
+  const userActions = document.getElementById('user-actions');
 
-  if (!isHomePage && navActions && !navActions.querySelector("[data-theme-toggle]")) {
-    const themeButton = createThemeToggleButton("theme-toggle nav-link");
+  if (!isHomePage && navActions && !navActions.querySelector('[data-theme-toggle]')) {
+    const themeButton = createThemeToggleButton('theme-toggle nav-link');
     navActions.insertBefore(themeButton, userPanel || null);
   }
 
-  if (userActions && !userActions.querySelector("[data-theme-toggle]")) {
-    userActions.appendChild(createThemeToggleButton("theme-toggle mobile-theme-toggle"));
-  } else if (userPanel && !userPanel.querySelector("[data-theme-toggle]")) {
-    userPanel.appendChild(createThemeToggleButton("theme-toggle mobile-theme-toggle"));
+  if (userActions && !userActions.querySelector('[data-theme-toggle]')) {
+    userActions.appendChild(createThemeToggleButton('theme-toggle mobile-theme-toggle'));
+  } else if (userPanel && !userPanel.querySelector('[data-theme-toggle]')) {
+    userPanel.appendChild(createThemeToggleButton('theme-toggle mobile-theme-toggle'));
   }
 
   applyThemeMode(getStoredThemeMode());
 }
 
-function createNavLink({ href = "#", icon, text, className = "" }) {
-  const link = document.createElement("a");
+function createNavLink({ href = '#', icon, text, className = '' }) {
+  const link = document.createElement('a');
   link.className = `nav-link ${className}`.trim();
   link.href = href;
   link.innerHTML = `
@@ -256,26 +261,26 @@ function createNavLink({ href = "#", icon, text, className = "" }) {
 
 function initializeEconomyNavigation() {
   fortuneLinks.forEach((link) => {
-    const text = link.querySelector("span");
-    const icon = link.querySelector("img");
+    const text = link.querySelector('span');
+    const icon = link.querySelector('img');
     if (text) {
-      text.textContent = "签到";
+      text.textContent = '签到';
     }
     if (icon) {
-      icon.src = "/assets/icons/electron.svg";
+      icon.src = '/assets/icons/electron.svg';
     }
   });
 
-  document.querySelectorAll(".nav-actions, .mobile-nav").forEach((nav) => {
-    let electromagneticLink = nav.querySelector(".electromagnetic-link");
+  document.querySelectorAll('.nav-actions, .mobile-nav').forEach((nav) => {
+    let electromagneticLink = nav.querySelector('.electromagnetic-link');
     if (!electromagneticLink) {
       electromagneticLink = createNavLink({
-        href: "/electromagnetic",
-        icon: "battery",
-        text: "电磁场",
-        className: "electromagnetic-link hidden"
+        href: '/electromagnetic',
+        icon: 'battery',
+        text: '电磁场',
+        className: 'electromagnetic-link hidden',
       });
-      const manageLink = nav.querySelector(".manage-link");
+      const manageLink = nav.querySelector('.manage-link');
       nav.insertBefore(electromagneticLink, manageLink || null);
     }
 
@@ -283,15 +288,15 @@ function initializeEconomyNavigation() {
       electromagneticLinks.push(electromagneticLink);
     }
 
-    let inventoryLink = nav.querySelector(".inventory-link");
+    let inventoryLink = nav.querySelector('.inventory-link');
     if (!inventoryLink) {
       inventoryLink = createNavLink({
-        href: "/inventory",
-        icon: "inventory",
-        text: "仓库",
-        className: "inventory-link hidden"
+        href: '/inventory',
+        icon: 'inventory',
+        text: '仓库',
+        className: 'inventory-link hidden',
       });
-      const manageLink = nav.querySelector(".manage-link");
+      const manageLink = nav.querySelector('.manage-link');
       nav.insertBefore(inventoryLink, manageLink || null);
     }
 
@@ -303,23 +308,23 @@ function initializeEconomyNavigation() {
 const FALLBACK_DISCUSSION_BOARDS = [
   {
     id: -1,
-    slug: "daily",
-    name: "日常",
-    description: "本地测试版块",
-    descriptionMarkdown: "本地测试版块。后端连接失败时显示。",
+    slug: 'daily',
+    name: '日常',
+    description: '本地测试版块',
+    descriptionMarkdown: '本地测试版块。后端连接失败时显示。',
     canModerate: false,
     canManageModerators: false,
-    sortOrder: 10
-  }
+    sortOrder: 10,
+  },
 ];
 const FALLBACK_DISCUSSION_POST = {
-  id: "local-test-post",
-  title: "测试帖子",
+  id: 'local-test-post',
+  title: '测试帖子',
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
   board: {
-    slug: "daily",
-    name: "日常"
+    slug: 'daily',
+    name: '日常',
   },
   isPinned: false,
   isFeatured: false,
@@ -328,11 +333,11 @@ const FALLBACK_DISCUSSION_POST = {
   canDelete: false,
   author: {
     id: -1,
-    uid: "u_local_admin",
-    username: "admin",
-    fullName: "管理员",
-    displayName: "管理员",
-    avatarPath: ""
+    uid: 'u_local_admin',
+    username: 'admin',
+    fullName: '管理员',
+    displayName: '管理员',
+    avatarPath: '',
   },
   likeCount: 0,
   lightCount: 0,
@@ -342,37 +347,37 @@ const FALLBACK_DISCUSSION_POST = {
   lightedByMe: false,
   fireworksByMe: false,
   contentMarkdown: [
-    "这是一篇本地测试帖子，用于接口请求失败时占位。",
-    "",
-    "支持 **Markdown**，也支持 KaTeX：$E=mc^2$。",
-    "",
-    "$$",
-    "\\int_0^1 x^2\\,dx = \\frac{1}{3}",
-    "$$"
-  ].join("\n")
+    '这是一篇本地测试帖子，用于接口请求失败时占位。',
+    '',
+    '支持 **Markdown**，也支持 KaTeX：$E=mc^2$。',
+    '',
+    '$$',
+    '\\int_0^1 x^2\\,dx = \\frac{1}{3}',
+    '$$',
+  ].join('\n'),
 };
 const DISCUSSION_REACTIONS = {
   smile: {
-    countKey: "likeCount",
-    activeKey: "likedByMe",
-    label: "令人高兴",
-    inactiveIcon: "/assets/icons/smile.svg",
-    activeIcon: "/assets/icons/smile.svg"
+    countKey: 'likeCount',
+    activeKey: 'likedByMe',
+    label: '令人高兴',
+    inactiveIcon: '/assets/icons/smile.svg',
+    activeIcon: '/assets/icons/smile.svg',
   },
   light: {
-    countKey: "lightCount",
-    activeKey: "lightedByMe",
-    label: "有启发性",
-    inactiveIcon: "/assets/icons/light-off.svg",
-    activeIcon: "/assets/icons/light-on.svg"
+    countKey: 'lightCount',
+    activeKey: 'lightedByMe',
+    label: '有启发性',
+    inactiveIcon: '/assets/icons/light-off.svg',
+    activeIcon: '/assets/icons/light-on.svg',
   },
   fireworks: {
-    countKey: "fireworksCount",
-    activeKey: "fireworksByMe",
-    label: "恭喜",
-    inactiveIcon: "/assets/icons/fireworks.svg",
-    activeIcon: "/assets/icons/fireworks.svg"
-  }
+    countKey: 'fireworksCount',
+    activeKey: 'fireworksByMe',
+    label: '恭喜',
+    inactiveIcon: '/assets/icons/fireworks.svg',
+    activeIcon: '/assets/icons/fireworks.svg',
+  },
 };
 
 function getAvatarUrl(avatarPath) {
@@ -380,7 +385,7 @@ function getAvatarUrl(avatarPath) {
     return DEFAULT_AVATAR;
   }
 
-  if (String(avatarPath).startsWith("/assets/") || /^https?:\/\//i.test(String(avatarPath))) {
+  if (String(avatarPath).startsWith('/assets/') || /^https?:\/\//i.test(String(avatarPath))) {
     return avatarPath;
   }
 
@@ -390,8 +395,8 @@ function getAvatarUrl(avatarPath) {
 function getTodayKey() {
   const now = new Date();
   const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
@@ -400,10 +405,10 @@ function getFortuneResult(score, date = getTodayKey()) {
     return {
       score,
       date,
-      label: "祥瑞",
-      colorClass: "fortune-great",
-      colorName: "金色",
-      tagline: "Absoulute legend"
+      label: '祥瑞',
+      colorClass: 'fortune-great',
+      colorName: '金色',
+      tagline: 'Absoulute legend',
     };
   }
 
@@ -411,10 +416,10 @@ function getFortuneResult(score, date = getTodayKey()) {
     return {
       score,
       date,
-      label: "大吉",
-      colorClass: "fortune-awful",
-      colorName: "红色",
-      tagline: "Absoulute legend"
+      label: '大吉',
+      colorClass: 'fortune-awful',
+      colorName: '红色',
+      tagline: 'Absoulute legend',
     };
   }
 
@@ -422,10 +427,10 @@ function getFortuneResult(score, date = getTodayKey()) {
     return {
       score,
       date,
-      label: "吉",
-      colorClass: "fortune-bad",
-      colorName: "绿色",
-      tagline: "闭眼写，随手推"
+      label: '吉',
+      colorClass: 'fortune-bad',
+      colorName: '绿色',
+      tagline: '闭眼写，随手推',
     };
   }
 
@@ -433,33 +438,33 @@ function getFortuneResult(score, date = getTodayKey()) {
     return {
       score,
       date,
-      label: "顺",
-      colorClass: "fortune-good",
-      colorName: "粉色",
-      tagline: "人生是个泊松过程，一时的等待是为了下一次跳跃"
+      label: '顺',
+      colorClass: 'fortune-good',
+      colorName: '粉色',
+      tagline: '人生是个泊松过程，一时的等待是为了下一次跳跃',
     };
   }
 
   return {
     score,
     date,
-    label: "平",
-    colorClass: "fortune-neutral",
-    colorName: "白色",
-    tagline: "人生是个泊松过程，一时的等待是为了下一次跳跃"
+    label: '平',
+    colorClass: 'fortune-neutral',
+    colorName: '白色',
+    tagline: '人生是个泊松过程，一时的等待是为了下一次跳跃',
   };
 }
 
 function ensureFortuneModal() {
-  let modal = document.getElementById("fortune-modal");
+  let modal = document.getElementById('fortune-modal');
 
   if (modal) {
     return modal;
   }
 
-  modal = document.createElement("div");
-  modal.id = "fortune-modal";
-  modal.className = "fortune-modal hidden";
+  modal = document.createElement('div');
+  modal.id = 'fortune-modal';
+  modal.className = 'fortune-modal hidden';
   modal.innerHTML = `
     <div class="fortune-backdrop" data-action="close"></div>
     <section class="fortune-panel" aria-labelledby="fortune-title">
@@ -478,10 +483,10 @@ function ensureFortuneModal() {
 
   document.body.append(modal);
 
-  modal.addEventListener("click", (event) => {
+  modal.addEventListener('click', (event) => {
     const target = event.target.closest("[data-action='close']");
     if (target) {
-      modal.classList.add("hidden");
+      modal.classList.add('hidden');
     }
   });
 
@@ -493,7 +498,7 @@ function drawFortuneChart(canvas, history) {
     return;
   }
 
-  const context = canvas.getContext("2d");
+  const context = canvas.getContext('2d');
   const rect = canvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
   const width = Math.max(320, Math.floor(rect.width || canvas.width));
@@ -509,15 +514,18 @@ function drawFortuneChart(canvas, history) {
   const scoredHistory = history.filter((item) => item.score !== null && item.score !== undefined);
   const maxScore = Math.max(120, ...scoredHistory.map((item) => Number(item.score) || 0));
   const minScore = 0;
-  const xFor = (index) => padding.left + (history.length === 1 ? chartWidth / 2 : (chartWidth * index) / (history.length - 1));
-  const yFor = (score) => padding.top + chartHeight - ((score - minScore) / (maxScore - minScore)) * chartHeight;
+  const xFor = (index) =>
+    padding.left +
+    (history.length === 1 ? chartWidth / 2 : (chartWidth * index) / (history.length - 1));
+  const yFor = (score) =>
+    padding.top + chartHeight - ((score - minScore) / (maxScore - minScore)) * chartHeight;
 
   context.lineWidth = 1;
-  context.strokeStyle = "rgba(232, 237, 243, 0.16)";
-  context.fillStyle = "rgba(232, 237, 243, 0.5)";
-  context.font = "12px sans-serif";
-  context.textAlign = "right";
-  context.textBaseline = "middle";
+  context.strokeStyle = 'rgba(232, 237, 243, 0.16)';
+  context.fillStyle = 'rgba(232, 237, 243, 0.5)';
+  context.font = '12px sans-serif';
+  context.textAlign = 'right';
+  context.textBaseline = 'middle';
 
   [0, 30, 60, 90, 120].forEach((tick) => {
     const y = yFor(tick);
@@ -546,9 +554,9 @@ function drawFortuneChart(canvas, history) {
     }
   });
   context.lineWidth = 3;
-  context.lineJoin = "round";
-  context.lineCap = "round";
-  context.strokeStyle = "#ffe59a";
+  context.lineJoin = 'round';
+  context.lineCap = 'round';
+  context.strokeStyle = '#ffe59a';
   context.stroke();
 
   history.forEach((item, index) => {
@@ -560,17 +568,17 @@ function drawFortuneChart(canvas, history) {
     const y = yFor(Number(item.score) || 0);
     context.beginPath();
     context.arc(x, y, index === history.length - 1 ? 4.5 : 3, 0, Math.PI * 2);
-    context.fillStyle = index === history.length - 1 ? "#ffffff" : "#ffe59a";
+    context.fillStyle = index === history.length - 1 ? '#ffffff' : '#ffe59a';
     context.fill();
   });
 
-  const firstDate = history[0]?.date?.slice(5) || "";
-  const lastDate = history[history.length - 1]?.date?.slice(5) || "";
-  context.fillStyle = "rgba(232, 237, 243, 0.6)";
-  context.textBaseline = "top";
-  context.textAlign = "left";
+  const firstDate = history[0]?.date?.slice(5) || '';
+  const lastDate = history[history.length - 1]?.date?.slice(5) || '';
+  context.fillStyle = 'rgba(232, 237, 243, 0.6)';
+  context.textBaseline = 'top';
+  context.textAlign = 'left';
   context.fillText(firstDate, padding.left, height - 20);
-  context.textAlign = "right";
+  context.textAlign = 'right';
   context.fillText(lastDate, width - padding.right, height - 20);
 }
 
@@ -580,24 +588,24 @@ async function openFortuneModal() {
   }
 
   const modal = ensureFortuneModal();
-  const badge = modal.querySelector("#fortune-badge");
-  const date = modal.querySelector("#fortune-date");
-  const score = modal.querySelector("#fortune-score");
-  const tagline = modal.querySelector("#fortune-tagline");
-  const checkinButton = modal.querySelector("#fortune-checkin-button");
-  const records = modal.querySelector("#fortune-records");
-  const chartCaption = modal.querySelector("#fortune-chart-caption");
+  const badge = modal.querySelector('#fortune-badge');
+  const date = modal.querySelector('#fortune-date');
+  const score = modal.querySelector('#fortune-score');
+  const tagline = modal.querySelector('#fortune-tagline');
+  const checkinButton = modal.querySelector('#fortune-checkin-button');
+  const records = modal.querySelector('#fortune-records');
+  const chartCaption = modal.querySelector('#fortune-chart-caption');
 
-  modal.classList.remove("hidden");
-  badge.className = "fortune-badge";
-  badge.textContent = "加载中";
-  date.textContent = "";
-  score.textContent = "";
-  tagline.textContent = "";
-  chartCaption.textContent = "签到记录";
+  modal.classList.remove('hidden');
+  badge.className = 'fortune-badge';
+  badge.textContent = '加载中';
+  date.textContent = '';
+  score.textContent = '';
+  tagline.textContent = '';
+  chartCaption.textContent = '签到记录';
   records.innerHTML = `<p class="fortune-record-empty">正在加载签到记录...</p>`;
   checkinButton.disabled = true;
-  checkinButton.textContent = "加载中";
+  checkinButton.textContent = '加载中';
 
   const renderCheckinPayload = (payload) => {
     userState.fortuneBonusEnabled = Boolean(payload.fortuneBonusEnabled);
@@ -613,49 +621,57 @@ async function openFortuneModal() {
     score.textContent = `今日运势 ${result.score}`;
     tagline.textContent = result.tagline;
     checkinButton.disabled = Boolean(payload.checkedInToday);
-    checkinButton.textContent = payload.checkedInToday ? "今日已签到" : "签到领取电元";
+    checkinButton.textContent = payload.checkedInToday ? '今日已签到' : '签到领取电元';
     records.innerHTML = (payload.records || []).length
-      ? payload.records.map((item) => `
+      ? payload.records
+          .map(
+            (item) => `
           <div class="fortune-record-row">
             <span>${escapeHtml(item.date)}</span>
             <strong>连续 ${Number(item.streak || 0)} 天</strong>
             <span>+${Number(item.rewardElectrons || 0)} 电元</span>
           </div>
-        `).join("")
+        `,
+          )
+          .join('')
       : `<p class="fortune-record-empty">还没有签到记录。</p>`;
   };
 
   try {
-    const payload = await callApi("/checkin", { method: "GET" });
+    const payload = await callApi('/checkin', { method: 'GET' });
     renderCheckinPayload(payload);
     checkinButton.onclick = async () => {
       checkinButton.disabled = true;
-      checkinButton.textContent = "签到中";
-      const nextPayload = await callApi("/checkin", { method: "POST" });
-      renderCheckinPayload(nextPayload.summary ? {
-        ...nextPayload.summary,
-        user: nextPayload.user
-      } : nextPayload);
+      checkinButton.textContent = '签到中';
+      const nextPayload = await callApi('/checkin', { method: 'POST' });
+      renderCheckinPayload(
+        nextPayload.summary
+          ? {
+              ...nextPayload.summary,
+              user: nextPayload.user,
+            }
+          : nextPayload,
+      );
     };
   } catch (error) {
-    badge.className = "fortune-badge fortune-awful";
-    badge.textContent = "失败";
-    tagline.textContent = error.message || "获取签到失败";
+    badge.className = 'fortune-badge fortune-awful';
+    badge.textContent = '失败';
+    tagline.textContent = error.message || '获取签到失败';
     checkinButton.disabled = false;
-    checkinButton.textContent = "重试";
+    checkinButton.textContent = '重试';
   }
 }
 
 function ensureElectromagneticModal() {
-  let modal = document.getElementById("electromagnetic-modal");
+  let modal = document.getElementById('electromagnetic-modal');
 
   if (modal) {
     return modal;
   }
 
-  modal = document.createElement("div");
-  modal.id = "electromagnetic-modal";
-  modal.className = "fortune-modal electromagnetic-modal hidden";
+  modal = document.createElement('div');
+  modal.id = 'electromagnetic-modal';
+  modal.className = 'fortune-modal electromagnetic-modal hidden';
   modal.innerHTML = `
     <div class="fortune-backdrop" data-action="close"></div>
     <section class="fortune-panel electromagnetic-panel" aria-labelledby="electromagnetic-title">
@@ -688,27 +704,27 @@ function ensureElectromagneticModal() {
     </section>
   `;
   document.body.append(modal);
-  modal.addEventListener("click", handleElectromagneticModalClick);
+  modal.addEventListener('click', handleElectromagneticModalClick);
   return modal;
 }
 
 function renderElectromagneticModal(payload) {
   const modal = ensureElectromagneticModal();
-  const balances = modal.querySelector("#electromagnetic-balances");
-  const assets = modal.querySelector("#electromagnetic-assets");
+  const balances = modal.querySelector('#electromagnetic-balances');
+  const assets = modal.querySelector('#electromagnetic-assets');
 
   if (payload.user) {
     saveSession(userState.token, payload.user);
   }
 
   balances.innerHTML = [
-    renderCurrency("electric", userState.electrons),
-    renderCurrency("magnetic", userState.manetrons),
-    renderCurrency("heat", userState.heat)
-  ].join("");
+    renderCurrency('electric', userState.electrons),
+    renderCurrency('magnetic', userState.manetrons),
+    renderCurrency('heat', userState.heat),
+  ].join('');
 
   const assetRows = payload.assets || [];
-  const differentiator = assetRows.find((item) => item.key === "differential_converter");
+  const differentiator = assetRows.find((item) => item.key === 'differential_converter');
   assets.innerHTML = differentiator
     ? `<p>微分器 × ${Number(differentiator.quantity || 0)}</p>`
     : `<p>还没有资产。</p>`;
@@ -716,19 +732,19 @@ function renderElectromagneticModal(payload) {
 
 async function openElectromagneticModal() {
   if (!userState.isLoggedIn) {
-    openModal("login");
+    openModal('login');
     return;
   }
 
   const modal = ensureElectromagneticModal();
-  const message = modal.querySelector("#electromagnetic-message");
-  modal.classList.remove("hidden");
-  message.textContent = "正在加载...";
+  const message = modal.querySelector('#electromagnetic-message');
+  modal.classList.remove('hidden');
+  message.textContent = '正在加载...';
 
   try {
-    const payload = await callApi("/electromagnetic", { method: "GET" });
+    const payload = await callApi('/electromagnetic', { method: 'GET' });
     renderElectromagneticModal(payload);
-    message.textContent = "";
+    message.textContent = '';
   } catch (error) {
     message.textContent = error.message;
   }
@@ -737,38 +753,38 @@ async function openElectromagneticModal() {
 async function handleElectromagneticModalClick(event) {
   const close = event.target.closest("[data-action='close']");
   if (close) {
-    ensureElectromagneticModal().classList.add("hidden");
+    ensureElectromagneticModal().classList.add('hidden');
     return;
   }
 
-  const button = event.target.closest("[data-action]");
-  if (!button || button.dataset.action === "close") {
+  const button = event.target.closest('[data-action]');
+  if (!button || button.dataset.action === 'close') {
     return;
   }
 
   const modal = ensureElectromagneticModal();
-  const message = modal.querySelector("#electromagnetic-message");
-  const action = button.dataset.action;
+  const message = modal.querySelector('#electromagnetic-message');
+  const { action } = button.dataset;
   button.disabled = true;
-  message.textContent = "处理中...";
+  message.textContent = '处理中...';
 
   try {
     let payload;
-    if (action === "buy-differentiator") {
-      payload = await callApi("/electromagnetic/shop/differential-converter", {
-        method: "POST",
-        body: JSON.stringify({ currency: button.dataset.currency })
+    if (action === 'buy-differentiator') {
+      payload = await callApi('/electromagnetic/shop/differential-converter', {
+        method: 'POST',
+        body: JSON.stringify({ currency: button.dataset.currency }),
       });
-    } else if (action === "convert") {
-      payload = await callApi("/electromagnetic/convert", {
-        method: "POST",
-        body: JSON.stringify({ direction: button.dataset.direction })
+    } else if (action === 'convert') {
+      payload = await callApi('/electromagnetic/convert', {
+        method: 'POST',
+        body: JSON.stringify({ direction: button.dataset.direction }),
       });
     }
 
     if (payload) {
       renderElectromagneticModal(payload);
-      message.textContent = "已更新";
+      message.textContent = '已更新';
       loadHeatLeaderboard();
     }
   } catch (error) {
@@ -779,7 +795,7 @@ async function handleElectromagneticModalClick(event) {
 }
 
 async function getCurrentAssets() {
-  const payload = await callApi("/electromagnetic", { method: "GET" });
+  const payload = await callApi('/electromagnetic', { method: 'GET' });
   return payload.assets || [];
 }
 
@@ -789,10 +805,10 @@ function renderEconomyBalances(target, user = userState) {
   }
 
   target.innerHTML = [
-    renderCurrency("electric", user.electrons ?? 0),
-    renderCurrency("magnetic", user.manetrons ?? 0),
-    renderCurrency("heat", user.heat ?? 0)
-  ].join("");
+    renderCurrency('electric', user.electrons ?? 0),
+    renderCurrency('magnetic', user.manetrons ?? 0),
+    renderCurrency('heat', user.heat ?? 0),
+  ].join('');
 }
 
 function renderShopCost(cost = {}) {
@@ -806,19 +822,19 @@ function renderShopCost(cost = {}) {
     parts.push(`${Number(cost.magnetic)} 磁元`);
   }
 
-  return parts.join(" / ") || "未定价";
+  return parts.join(' / ') || '未定价';
 }
 
 function ensureShopInspectModal() {
-  let modal = document.getElementById("shop-inspect-modal");
+  let modal = document.getElementById('shop-inspect-modal');
 
   if (modal) {
     return modal;
   }
 
-  modal = document.createElement("div");
-  modal.id = "shop-inspect-modal";
-  modal.className = "fortune-modal shop-inspect-modal hidden";
+  modal = document.createElement('div');
+  modal.id = 'shop-inspect-modal';
+  modal.className = 'fortune-modal shop-inspect-modal hidden';
   modal.innerHTML = `
     <div class="fortune-backdrop" data-action="close-shop-inspect"></div>
     <section class="fortune-panel shop-inspect-panel" aria-labelledby="shop-inspect-title">
@@ -843,11 +859,11 @@ function ensureShopInspectModal() {
 }
 
 function getCurrencyOwned(currency) {
-  if (currency === "electric") {
+  if (currency === 'electric') {
     return Number(userState.electrons || 0);
   }
 
-  if (currency === "magnetic") {
+  if (currency === 'magnetic') {
     return Number(userState.manetrons || 0);
   }
 
@@ -858,11 +874,11 @@ function renderActivationButton(item, currency) {
   const price = Number(item.cost?.[currency] || 0);
 
   if (!price) {
-    return "";
+    return '';
   }
 
-  const icon = currency === "electric" ? "electron" : "magnetron";
-  const label = currency === "electric" ? "电激发" : "磁激发";
+  const icon = currency === 'electric' ? 'electron' : 'magnetron';
+  const label = currency === 'electric' ? '电激发' : '磁激发';
   const owned = getCurrencyOwned(currency);
 
   return `
@@ -882,30 +898,30 @@ function renderActivationButton(item, currency) {
 }
 
 function normalizeShopCatalogItem(item) {
-  const key = String(item?.key || "").trim();
+  const key = String(item?.key || '').trim();
 
   return {
     ...item,
     key,
     assetKey: String(item?.assetKey || key).trim(),
     name: String(item?.name || key).trim(),
-    class: String(item?.class || "usable").trim(),
-    description: String(item?.description || "").trim(),
-    desc: String(item?.desc || item?.description || "").trim(),
-    image: String(item?.image || "").trim(),
-    isGift: item?.isgift === false || item?.is_gift === false || item?.isGift === false ? false : true,
-    cost: item?.cost && typeof item.cost === "object" ? item.cost : {}
+    class: String(item?.class || 'usable').trim(),
+    description: String(item?.description || '').trim(),
+    desc: String(item?.desc || item?.description || '').trim(),
+    image: String(item?.image || '').trim(),
+    isGift: !(item?.isgift === false || item?.is_gift === false || item?.isGift === false),
+    cost: item?.cost && typeof item.cost === 'object' ? item.cost : {},
   };
 }
 
 async function loadShopCatalogFromJson() {
   try {
-    const response = await fetch("/data/shop-items.json", {
-      cache: "no-store"
+    const response = await fetch('/data/shop-items.json', {
+      cache: 'no-store',
     });
 
     if (!response.ok) {
-      throw new Error("shop catalog unavailable");
+      throw new Error('shop catalog unavailable');
     }
 
     const payload = await response.json();
@@ -924,17 +940,17 @@ function openShopInspectModal(itemKey) {
   }
 
   const modal = ensureShopInspectModal();
-  modal.querySelector("#shop-inspect-image").src = item.image || "/assets/icons/battery.svg";
-  modal.querySelector("#shop-inspect-class").textContent = item.class === "useless" ? "无用类" : "资产";
-  modal.querySelector("#shop-inspect-title").textContent = item.name || item.key;
-  modal.querySelector("#shop-inspect-desc").textContent = item.desc || item.description || "";
-  modal.querySelector("#shop-inspect-price").textContent = renderShopCost(item.cost);
-  modal.querySelector("#shop-inspect-message").textContent = "";
-  modal.querySelector("#shop-inspect-actions").innerHTML = [
-    renderActivationButton(item, "electric"),
-    renderActivationButton(item, "magnetic")
-  ].join("") || `<p class="fortune-record-empty">这个物品暂时无法激发。</p>`;
-  modal.classList.remove("hidden");
+  modal.querySelector('#shop-inspect-image').src = item.image || '/assets/icons/battery.svg';
+  modal.querySelector('#shop-inspect-class').textContent =
+    item.class === 'useless' ? '无用类' : '资产';
+  modal.querySelector('#shop-inspect-title').textContent = item.name || item.key;
+  modal.querySelector('#shop-inspect-desc').textContent = item.desc || item.description || '';
+  modal.querySelector('#shop-inspect-price').textContent = renderShopCost(item.cost);
+  modal.querySelector('#shop-inspect-message').textContent = '';
+  modal.querySelector('#shop-inspect-actions').innerHTML =
+    [renderActivationButton(item, 'electric'), renderActivationButton(item, 'magnetic')].join('') ||
+    `<p class="fortune-record-empty">这个物品暂时无法激发。</p>`;
+  modal.classList.remove('hidden');
 }
 
 function openInventoryInspectModal(asset) {
@@ -942,24 +958,27 @@ function openInventoryInspectModal(asset) {
     return;
   }
 
-  const catalogItem = economyShopItems.find((shopItem) => (
-    shopItem.assetKey === asset.key || shopItem.key === asset.key
-  ));
+  const catalogItem = economyShopItems.find(
+    (shopItem) => shopItem.assetKey === asset.key || shopItem.key === asset.key,
+  );
   const item = catalogItem || asset.item || asset.metadata || {};
   const modal = ensureShopInspectModal();
-  modal.querySelector("#shop-inspect-image").src = item.image || "/assets/icons/inventory.svg";
-  modal.querySelector("#shop-inspect-class").textContent = item.class === "useless" ? "无用类" : "资产";
-  modal.querySelector("#shop-inspect-title").textContent = item.name || asset.key || "资产";
-  modal.querySelector("#shop-inspect-desc").textContent = item.desc || item.description || "这个资产还没有说明。";
-  modal.querySelector("#shop-inspect-price").textContent = `持有 ${Number(asset.quantity || 0)} 个`;
-  modal.querySelector("#shop-inspect-message").textContent = "";
+  modal.querySelector('#shop-inspect-image').src = item.image || '/assets/icons/inventory.svg';
+  modal.querySelector('#shop-inspect-class').textContent =
+    item.class === 'useless' ? '无用类' : '资产';
+  modal.querySelector('#shop-inspect-title').textContent = item.name || asset.key || '资产';
+  modal.querySelector('#shop-inspect-desc').textContent =
+    item.desc || item.description || '这个资产还没有说明。';
+  modal.querySelector('#shop-inspect-price').textContent = `持有 ${Number(asset.quantity || 0)} 个`;
+  modal.querySelector('#shop-inspect-message').textContent = '';
   const canGift = Boolean(catalogItem) && catalogItem.isGift !== false;
-  const converterActions = asset.key === "differential_converter"
-    ? `
+  const converterActions =
+    asset.key === 'differential_converter'
+      ? `
       <button class="electromagnetic-button" data-action="convert" data-direction="electric_to_magnetic" type="button" title="5 电元转 5 磁元">电 → 磁</button>
       <button class="electromagnetic-button" data-action="convert" data-direction="magnetic_to_electric" type="button" title="5 磁元转 5 电元">磁 → 电</button>
     `
-    : "";
+      : '';
   const giftActions = canGift
     ? `
       <div class="inventory-gift-form" data-gift-asset-key="${escapeHtml(asset.key)}">
@@ -968,28 +987,29 @@ function openInventoryInspectModal(asset) {
       </div>
     `
     : `<p class="fortune-record-empty">这个资产不能赠与。</p>`;
-  modal.querySelector("#shop-inspect-actions").innerHTML = [converterActions, giftActions].filter(Boolean).join("");
-  modal.classList.remove("hidden");
+  modal.querySelector('#shop-inspect-actions').innerHTML = [converterActions, giftActions]
+    .filter(Boolean)
+    .join('');
+  modal.classList.remove('hidden');
 }
 
 function refreshOpenShopInspectActions(itemKey) {
-  const modal = document.getElementById("shop-inspect-modal");
+  const modal = document.getElementById('shop-inspect-modal');
 
-  if (!modal || modal.classList.contains("hidden")) {
+  if (!modal || modal.classList.contains('hidden')) {
     return;
   }
 
   const item = economyShopItems.find((shopItem) => shopItem.key === itemKey);
-  const actions = modal.querySelector("#shop-inspect-actions");
+  const actions = modal.querySelector('#shop-inspect-actions');
 
   if (!item || !actions) {
     return;
   }
 
-  actions.innerHTML = [
-    renderActivationButton(item, "electric"),
-    renderActivationButton(item, "magnetic")
-  ].join("") || `<p class="fortune-record-empty">这个物品暂时无法激发。</p>`;
+  actions.innerHTML =
+    [renderActivationButton(item, 'electric'), renderActivationButton(item, 'magnetic')].join('') ||
+    `<p class="fortune-record-empty">这个物品暂时无法激发。</p>`;
 }
 
 async function loadElectromagneticPage() {
@@ -997,9 +1017,9 @@ async function loadElectromagneticPage() {
     return;
   }
 
-  const grid = document.getElementById("shop-grid");
-  const message = document.getElementById("economy-message");
-  const balances = document.getElementById("economy-balance-row");
+  const grid = document.getElementById('shop-grid');
+  const message = document.getElementById('economy-message');
+  const balances = document.getElementById('economy-balance-row');
 
   if (!userState.isLoggedIn) {
     return;
@@ -1007,9 +1027,9 @@ async function loadElectromagneticPage() {
 
   try {
     if (message) {
-      message.textContent = "正在加载商店...";
+      message.textContent = '正在加载商店...';
     }
-    const payload = await callApi("/electromagnetic", { method: "GET" });
+    const payload = await callApi('/electromagnetic', { method: 'GET' });
     if (payload.user) {
       saveSession(userState.token, payload.user);
     }
@@ -1017,14 +1037,19 @@ async function loadElectromagneticPage() {
     economyShopItems = staticShopItems.length
       ? staticShopItems
       : (payload.shopItems || []).map(normalizeShopCatalogItem);
-    const assetQuantityByKey = new Map((payload.assets || []).map((asset) => [asset.key, Number(asset.quantity || 0)]));
+    const assetQuantityByKey = new Map(
+      (payload.assets || []).map((asset) => [asset.key, Number(asset.quantity || 0)]),
+    );
     renderEconomyBalances(balances);
     if (grid) {
-      grid.innerHTML = economyShopItems.map((item) => `
+      grid.innerHTML =
+        economyShopItems
+          .map(
+            (item) => `
         <article class="shop-item-card" data-item-key="${escapeHtml(item.key)}">
           <span class="asset-quantity-badge">${assetQuantityByKey.get(item.assetKey || item.key) || 0}</span>
           <div class="shop-item-image">
-            <img src="${escapeHtml(item.image || "/assets/icons/battery.svg")}" alt="" aria-hidden="true" />
+            <img src="${escapeHtml(item.image || '/assets/icons/battery.svg')}" alt="" aria-hidden="true" />
           </div>
           <div class="shop-item-copy">
             <p class="discussion-kicker">Asset</p>
@@ -1034,10 +1059,12 @@ async function loadElectromagneticPage() {
             <button class="electromagnetic-button" data-action="inspect-item" data-item-key="${escapeHtml(item.key)}" type="button">端详</button>
           </div>
         </article>
-      `).join("") || `<p class="fortune-record-empty">暂无商品。</p>`;
+      `,
+          )
+          .join('') || `<p class="fortune-record-empty">暂无商品。</p>`;
     }
     if (message) {
-      message.textContent = "";
+      message.textContent = '';
     }
   } catch (error) {
     if (message) {
@@ -1051,9 +1078,9 @@ async function loadInventoryPage() {
     return;
   }
 
-  const list = document.getElementById("inventory-list");
-  const message = document.getElementById("inventory-message");
-  const balances = document.getElementById("inventory-balance-row");
+  const list = document.getElementById('inventory-list');
+  const message = document.getElementById('inventory-message');
+  const balances = document.getElementById('inventory-balance-row');
 
   if (!userState.isLoggedIn) {
     return;
@@ -1061,9 +1088,9 @@ async function loadInventoryPage() {
 
   try {
     if (message) {
-      message.textContent = "正在加载仓库...";
+      message.textContent = '正在加载仓库...';
     }
-    const payload = await callApi("/electromagnetic", { method: "GET" });
+    const payload = await callApi('/electromagnetic', { method: 'GET' });
     if (payload.user) {
       saveSession(userState.token, payload.user);
     }
@@ -1071,30 +1098,34 @@ async function loadInventoryPage() {
     economyShopItems = staticShopItems.length
       ? staticShopItems
       : (payload.shopItems || economyShopItems).map(normalizeShopCatalogItem);
-    const shopItemByAsset = new Map(economyShopItems.flatMap((item) => [
-      [item.assetKey || item.key, item],
-      [item.key, item]
-    ]));
+    const shopItemByAsset = new Map(
+      economyShopItems.flatMap((item) => [
+        [item.assetKey || item.key, item],
+        [item.key, item],
+      ]),
+    );
     const assets = (payload.assets || []).map((asset) => {
       const catalogItem = shopItemByAsset.get(asset.key);
       return catalogItem
         ? {
             ...asset,
             item: catalogItem,
-            isGift: catalogItem.isGift !== false
+            isGift: catalogItem.isGift !== false,
           }
         : asset;
     });
     window.freeBbsInventoryAssets = assets;
     renderEconomyBalances(balances);
     if (list) {
-      list.innerHTML = assets.map((asset) => {
-        const item = asset.item || asset.metadata || {};
-        return `
+      list.innerHTML =
+        assets
+          .map((asset) => {
+            const item = asset.item || asset.metadata || {};
+            return `
           <article class="inventory-item-row" data-asset-key="${escapeHtml(asset.key)}">
             <span class="asset-quantity-badge">${Number(asset.quantity || 0)}</span>
             <div class="inventory-item-image">
-              <img src="${escapeHtml(item.image || "/assets/icons/inventory.svg")}" alt="" aria-hidden="true" />
+              <img src="${escapeHtml(item.image || '/assets/icons/inventory.svg')}" alt="" aria-hidden="true" />
             </div>
             <div class="inventory-item-copy">
               <h2>${escapeHtml(item.name || asset.key)}</h2>
@@ -1104,10 +1135,11 @@ async function loadInventoryPage() {
             </div>
           </article>
         `;
-      }).join("") || `<p class="fortune-record-empty">仓库里还没有物品。</p>`;
+          })
+          .join('') || `<p class="fortune-record-empty">仓库里还没有物品。</p>`;
     }
     if (message) {
-      message.textContent = "";
+      message.textContent = '';
     }
   } catch (error) {
     if (message) {
@@ -1119,52 +1151,55 @@ async function loadInventoryPage() {
 async function handleElectromagneticPageClick(event) {
   const closeInspect = event.target.closest("[data-action='close-shop-inspect']");
   if (closeInspect) {
-    ensureShopInspectModal().classList.add("hidden");
+    ensureShopInspectModal().classList.add('hidden');
     return;
   }
 
-  const button = event.target.closest("[data-action]");
+  const button = event.target.closest('[data-action]');
 
   if (!button || !isElectromagneticPage()) {
     return;
   }
 
-  const message = document.getElementById("economy-message");
+  const message = document.getElementById('economy-message');
   button.disabled = true;
   if (message) {
-    message.textContent = "处理中...";
+    message.textContent = '处理中...';
   }
 
   try {
-    if (button.dataset.action === "inspect-item") {
-      openShopInspectModal(button.dataset.itemKey || "");
+    if (button.dataset.action === 'inspect-item') {
+      openShopInspectModal(button.dataset.itemKey || '');
       if (message) {
-        message.textContent = "";
+        message.textContent = '';
       }
       return;
     }
 
-    if (button.dataset.action === "purchase-item") {
-      const itemKey = button.dataset.itemKey || "";
-      const payload = await callApi(`/electromagnetic/shop/${encodeURIComponent(itemKey)}/purchase`, {
-        method: "POST",
-        body: JSON.stringify({ currency: button.dataset.currency })
-      });
+    if (button.dataset.action === 'purchase-item') {
+      const itemKey = button.dataset.itemKey || '';
+      const payload = await callApi(
+        `/electromagnetic/shop/${encodeURIComponent(itemKey)}/purchase`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ currency: button.dataset.currency }),
+        },
+      );
       if (payload.user) {
         saveSession(userState.token, payload.user);
       }
       refreshOpenShopInspectActions(itemKey);
       await loadElectromagneticPage();
-      const modal = document.getElementById("shop-inspect-modal");
-      const modalMessage = modal?.querySelector("#shop-inspect-message");
+      const modal = document.getElementById('shop-inspect-modal');
+      const modalMessage = modal?.querySelector('#shop-inspect-message');
       if (modalMessage) {
-        modalMessage.textContent = "已激发";
+        modalMessage.textContent = '已激发';
       }
       refreshOpenShopInspectActions(itemKey);
     }
 
     if (message) {
-      message.textContent = "已更新";
+      message.textContent = '已更新';
     }
   } catch (error) {
     if (message) {
@@ -1178,59 +1213,59 @@ async function handleElectromagneticPageClick(event) {
 async function handleInventoryPageClick(event) {
   const closeInspect = event.target.closest("[data-action='close-shop-inspect']");
   if (closeInspect) {
-    ensureShopInspectModal().classList.add("hidden");
+    ensureShopInspectModal().classList.add('hidden');
     return;
   }
 
-  const button = event.target.closest("[data-action]");
+  const button = event.target.closest('[data-action]');
 
   if (!button || !isInventoryPage()) {
     return;
   }
 
-  const message = document.getElementById("inventory-message");
+  const message = document.getElementById('inventory-message');
 
-  if (button.dataset.action === "inspect-inventory-item") {
+  if (button.dataset.action === 'inspect-inventory-item') {
     const assets = window.freeBbsInventoryAssets || [];
     openInventoryInspectModal(assets.find((asset) => asset.key === button.dataset.assetKey));
     if (message) {
-      message.textContent = "";
+      message.textContent = '';
     }
     return;
   }
 
-  if (button.dataset.action === "gift-inventory-item") {
-    const modal = document.getElementById("shop-inspect-modal");
-    const modalMessage = modal?.querySelector("#shop-inspect-message");
-    const targetInput = modal?.querySelector(".inventory-gift-input");
-    const target = targetInput?.value.trim() || "";
+  if (button.dataset.action === 'gift-inventory-item') {
+    const modal = document.getElementById('shop-inspect-modal');
+    const modalMessage = modal?.querySelector('#shop-inspect-message');
+    const targetInput = modal?.querySelector('.inventory-gift-input');
+    const target = targetInput?.value.trim() || '';
 
     if (!target) {
       if (modalMessage) {
-        modalMessage.textContent = "请输入接收者 UID 或昵称";
+        modalMessage.textContent = '请输入接收者 UID 或昵称';
       }
       return;
     }
 
     button.disabled = true;
     if (message) {
-      message.textContent = "正在赠与...";
+      message.textContent = '正在赠与...';
     }
     if (modalMessage) {
-      modalMessage.textContent = "正在赠与...";
+      modalMessage.textContent = '正在赠与...';
     }
 
     try {
-      const assetKey = button.dataset.assetKey || "";
+      const assetKey = button.dataset.assetKey || '';
       let payload;
       try {
         payload = await callApi(`/electromagnetic/assets/${encodeURIComponent(assetKey)}/gift`, {
-          method: "POST",
-          body: JSON.stringify({ target })
+          method: 'POST',
+          body: JSON.stringify({ target }),
         });
       } catch (error) {
-        const fetchFailed = error.message === "Failed to fetch" || error.message === "请求失败";
-        throw new Error(fetchFailed ? "赠与接口不可用，请确认后端已加载最新代码" : error.message);
+        const fetchFailed = error.message === 'Failed to fetch' || error.message === '请求失败';
+        throw new Error(fetchFailed ? '赠与接口不可用，请确认后端已加载最新代码' : error.message);
       }
       await loadInventoryPage();
       const assets = window.freeBbsInventoryAssets || [];
@@ -1238,13 +1273,13 @@ async function handleInventoryPageClick(event) {
       if (activeAsset) {
         openInventoryInspectModal(activeAsset);
       } else {
-        modal?.classList.add("hidden");
+        modal?.classList.add('hidden');
       }
       const recipient = payload.recipient?.username || payload.recipient?.uid || target;
       if (message) {
         message.textContent = `已赠与给 ${recipient}`;
       }
-      const refreshedMessage = document.getElementById("shop-inspect-message");
+      const refreshedMessage = document.getElementById('shop-inspect-message');
       if (refreshedMessage) {
         refreshedMessage.textContent = `已赠与给 ${recipient}`;
       }
@@ -1261,34 +1296,35 @@ async function handleInventoryPageClick(event) {
     return;
   }
 
-  if (button.dataset.action !== "convert") {
+  if (button.dataset.action !== 'convert') {
     return;
   }
 
   button.disabled = true;
   if (message) {
-    message.textContent = "正在转换...";
+    message.textContent = '正在转换...';
   }
 
   try {
-    await callApi("/electromagnetic/convert", {
-      method: "POST",
-      body: JSON.stringify({ direction: button.dataset.direction })
+    await callApi('/electromagnetic/convert', {
+      method: 'POST',
+      body: JSON.stringify({ direction: button.dataset.direction }),
     });
     await loadInventoryPage();
-    const modal = document.getElementById("shop-inspect-modal");
-    const activeAssetKey = modal && !modal.classList.contains("hidden") ? "differential_converter" : "";
+    const modal = document.getElementById('shop-inspect-modal');
+    const activeAssetKey =
+      modal && !modal.classList.contains('hidden') ? 'differential_converter' : '';
     if (activeAssetKey) {
       const assets = window.freeBbsInventoryAssets || [];
       const activeAsset = assets.find((asset) => asset.key === activeAssetKey);
       if (activeAsset) {
         openInventoryInspectModal(activeAsset);
       } else {
-        modal.classList.add("hidden");
+        modal.classList.add('hidden');
       }
     }
     if (message) {
-      message.textContent = "已转换";
+      message.textContent = '已转换';
     }
   } catch (error) {
     if (message) {
@@ -1300,24 +1336,24 @@ async function handleInventoryPageClick(event) {
 }
 
 function ensureHeatLeaderboardSection() {
-  if (!document.body.classList.contains("home-page")) {
+  if (!document.body.classList.contains('home-page')) {
     return null;
   }
 
-  let section = document.getElementById("landing-heat-leaderboard");
+  let section = document.getElementById('landing-heat-leaderboard');
   if (section) {
     return section;
   }
 
-  const main = document.querySelector(".landing-main");
-  const bridge = document.querySelector(".landing-bridge");
+  const main = document.querySelector('.landing-main');
+  const bridge = document.querySelector('.landing-bridge');
   if (!main) {
     return null;
   }
 
-  section = document.createElement("section");
-  section.id = "landing-heat-leaderboard";
-  section.className = "landing-heat-leaderboard";
+  section = document.createElement('section');
+  section.id = 'landing-heat-leaderboard';
+  section.className = 'landing-heat-leaderboard';
   section.innerHTML = `
     <div class="landing-section-copy">
       <p class="section-kicker">Heat</p>
@@ -1339,24 +1375,30 @@ function ensureHeatLeaderboardSection() {
 
 async function loadHeatLeaderboard() {
   const section = ensureHeatLeaderboardSection();
-  const list = document.getElementById("landing-heat-list");
+  const list = document.getElementById('landing-heat-list');
 
   if (!section || !list) {
     return;
   }
 
   try {
-    const payload = await fetch(`${API_BASE_URL}/leaderboard/heat?limit=3`).then((response) => response.json());
+    const payload = await fetch(`${API_BASE_URL}/leaderboard/heat?limit=3`).then((response) =>
+      response.json(),
+    );
     const users = payload.users || [];
     list.innerHTML = users.length
-      ? users.map((user, index) => `
+      ? users
+          .map(
+            (user, index) => `
           <a class="landing-heat-user" href="/profile?uid=${encodeURIComponent(user.uid || user.username)}">
             <span>${index + 1}</span>
             <img src="${escapeHtml(getAvatarUrl(user.avatarPath))}" alt="${escapeHtml(user.nickname || user.username)} 的头像" />
             <strong>${escapeHtml(user.nickname || user.username)}</strong>
             <em>${Number(user.heat || 0)} 热力</em>
           </a>
-        `).join("")
+        `,
+          )
+          .join('')
       : `<p class="landing-heat-empty">还没有热力记录。</p>`;
   } catch {
     list.innerHTML = `<p class="landing-heat-empty">热力榜暂时不可用。</p>`;
@@ -1364,64 +1406,66 @@ async function loadHeatLeaderboard() {
 }
 
 function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 function getCopySuccessMessage(format) {
-  if (format === "word") {
-    return "复制成功！请在word中粘贴使用";
+  if (format === 'word') {
+    return '复制成功！请在word中粘贴使用';
   }
 
-  if (format === "latex") {
-    return "复制成功！请复制到overleaf或其他latex编辑软件中使用";
+  if (format === 'latex') {
+    return '复制成功！请复制到overleaf或其他latex编辑软件中使用';
   }
 
-  return "复制成功";
+  return '复制成功';
 }
 
 function showCopySuccessPopup(format) {
-  let popup = document.getElementById("copy-success-popup");
+  let popup = document.getElementById('copy-success-popup');
 
   if (!popup) {
-    popup = document.createElement("div");
-    popup.id = "copy-success-popup";
-    popup.className = "copy-success-popup hidden";
-    popup.setAttribute("role", "status");
-    popup.setAttribute("aria-live", "polite");
+    popup = document.createElement('div');
+    popup.id = 'copy-success-popup';
+    popup.className = 'copy-success-popup hidden';
+    popup.setAttribute('role', 'status');
+    popup.setAttribute('aria-live', 'polite');
     document.body.append(popup);
   }
 
   window.clearTimeout(Number(popup.dataset.timer || 0));
   popup.textContent = getCopySuccessMessage(format);
-  popup.classList.remove("hidden");
-  popup.classList.remove("is-visible");
+  popup.classList.remove('hidden');
+  popup.classList.remove('is-visible');
   window.requestAnimationFrame(() => {
-    popup.classList.add("is-visible");
+    popup.classList.add('is-visible');
   });
-  popup.dataset.timer = String(window.setTimeout(() => {
-    popup.classList.remove("is-visible");
-    window.setTimeout(() => popup.classList.add("hidden"), 180);
-  }, 2200));
+  popup.dataset.timer = String(
+    window.setTimeout(() => {
+      popup.classList.remove('is-visible');
+      window.setTimeout(() => popup.classList.add('hidden'), 180);
+    }, 2200),
+  );
 }
 
 function renderCurrency(type, value) {
   const iconMap = {
-    electric: "electron",
-    magnetic: "magnetron",
-    heat: "flame"
+    electric: 'electron',
+    magnetic: 'magnetron',
+    heat: 'flame',
   };
   const labelMap = {
-    electric: "电元",
-    magnetic: "磁元",
-    heat: "热力"
+    electric: '电元',
+    magnetic: '磁元',
+    heat: '热力',
   };
-  const icon = iconMap[type] || "electron";
-  const label = labelMap[type] || "电元";
+  const icon = iconMap[type] || 'electron';
+  const label = labelMap[type] || '电元';
 
   return `
     <span class="currency currency-${type}" data-tooltip="${label}" aria-label="${label}">
@@ -1433,7 +1477,7 @@ function renderCurrency(type, value) {
 
 function formatDateTime(value) {
   if (!value) {
-    return "";
+    return '';
   }
 
   const date = new Date(value);
@@ -1442,18 +1486,18 @@ function formatDateTime(value) {
     return String(value);
   }
 
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
   }).format(date);
 }
 
 function formatDateOnly(value) {
   if (!value) {
-    return "";
+    return '';
   }
 
   const date = new Date(value);
@@ -1462,40 +1506,40 @@ function formatDateOnly(value) {
     return String(value);
   }
 
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   }).format(date);
 }
 
 function renderUser() {
   if (isAiChatPage()) {
-    document.body.classList.add("is-ai-session-ready");
-    document.body.classList.toggle("is-ai-authenticated", userState.isLoggedIn);
+    document.body.classList.add('is-ai-session-ready');
+    document.body.classList.toggle('is-ai-authenticated', userState.isLoggedIn);
   }
 
   if (isEconomyPage()) {
-    document.body.classList.toggle("is-economy-authenticated", userState.isLoggedIn);
+    document.body.classList.toggle('is-economy-authenticated', userState.isLoggedIn);
   }
 
   if (!userState.isLoggedIn) {
-    userName.textContent = "登录/注册";
+    userName.textContent = '登录/注册';
     userName.disabled = false;
     if (userRole) {
-      userRole.textContent = "学生";
+      userRole.textContent = '学生';
     }
-    userSettingsButton?.classList.add("hidden");
-    userLogoutButton?.classList.add("hidden");
+    userSettingsButton?.classList.add('hidden');
+    userLogoutButton?.classList.add('hidden');
     userStatus.innerHTML = [
-      renderCurrency("electric", "-"),
-      renderCurrency("magnetic", "-"),
-      renderCurrency("heat", "-")
-    ].join("");
+      renderCurrency('electric', '-'),
+      renderCurrency('magnetic', '-'),
+      renderCurrency('heat', '-'),
+    ].join('');
     avatarImages.forEach((image) => {
       image.src = DEFAULT_AVATAR;
     });
-    document.querySelectorAll(".aichat-message-user .aichat-avatar-image").forEach((image) => {
+    document.querySelectorAll('.aichat-message-user .aichat-avatar-image').forEach((image) => {
       image.src = DEFAULT_AVATAR;
     });
     renderAiDialogList();
@@ -1506,19 +1550,19 @@ function renderUser() {
   userName.textContent = userState.fullName || userState.username;
   userName.disabled = true;
   if (userRole) {
-    userRole.textContent = userState.role === "admin" ? "管理员" : "学生";
+    userRole.textContent = userState.role === 'admin' ? '管理员' : '学生';
   }
-  userSettingsButton?.classList.remove("hidden");
-  userLogoutButton?.classList.remove("hidden");
+  userSettingsButton?.classList.remove('hidden');
+  userLogoutButton?.classList.remove('hidden');
   userStatus.innerHTML = [
-    renderCurrency("electric", userState.electrons),
-    renderCurrency("magnetic", userState.manetrons),
-    renderCurrency("heat", userState.heat)
-  ].join("");
+    renderCurrency('electric', userState.electrons),
+    renderCurrency('magnetic', userState.manetrons),
+    renderCurrency('heat', userState.heat),
+  ].join('');
   avatarImages.forEach((image) => {
     image.src = getAvatarUrl(userState.avatarPath);
   });
-  document.querySelectorAll(".aichat-message-user .aichat-avatar-image").forEach((image) => {
+  document.querySelectorAll('.aichat-message-user .aichat-avatar-image').forEach((image) => {
     image.src = getAvatarUrl(userState.avatarPath);
   });
   renderAiDialogList();
@@ -1532,43 +1576,43 @@ function renderUser() {
 
 function setAdminMessage(message) {
   if (adminMessage) {
-    adminMessage.textContent = message || "";
+    adminMessage.textContent = message || '';
   }
 }
 
 function setSettingsMessage(message) {
   if (settingsMessage) {
-    settingsMessage.textContent = message || "";
+    settingsMessage.textContent = message || '';
   }
 }
 
 function setSettingsPasswordMessage(message) {
   if (settingsPasswordMessage) {
-    settingsPasswordMessage.textContent = message || "";
+    settingsPasswordMessage.textContent = message || '';
   }
 }
 
 function setDiscussionMessage(message) {
   if (discussionComposeMessage) {
-    discussionComposeMessage.textContent = message || "";
+    discussionComposeMessage.textContent = message || '';
   }
 }
 
-function openModal(mode = "login") {
-  window.location.href = mode === "register" ? "/register" : "/login";
+function openModal(mode = 'login') {
+  window.location.href = mode === 'register' ? '/register' : '/login';
 }
 
 function saveSession(token, user) {
   userState.isLoggedIn = true;
   userState.token = token;
-  userState.uid = user.uid || "";
+  userState.uid = user.uid || '';
   userState.username = user.username;
-  userState.fullName = user.fullName || "";
-  userState.studentId = user.studentId || "";
-  userState.role = user.role || "student";
-  userState.avatarPath = user.avatarPath || "";
-  userState.bio = user.bio || "";
-  userState.websiteUrl = user.websiteUrl || "";
+  userState.fullName = user.fullName || '';
+  userState.studentId = user.studentId || '';
+  userState.role = user.role || 'student';
+  userState.avatarPath = user.avatarPath || '';
+  userState.bio = user.bio || '';
+  userState.websiteUrl = user.websiteUrl || '';
   userState.electrons = user.electrons ?? 0;
   userState.manetrons = user.manetrons ?? 0;
   userState.heat = user.heat ?? 0;
@@ -1581,20 +1625,20 @@ function saveSession(token, user) {
 
 function clearSession() {
   userState.isLoggedIn = false;
-  userState.token = "";
-  userState.uid = "";
-  userState.username = "";
-  userState.fullName = "";
-  userState.studentId = "";
-  userState.role = "";
-  userState.avatarPath = "";
-  userState.bio = "";
-  userState.websiteUrl = "";
+  userState.token = '';
+  userState.uid = '';
+  userState.username = '';
+  userState.fullName = '';
+  userState.studentId = '';
+  userState.role = '';
+  userState.avatarPath = '';
+  userState.bio = '';
+  userState.websiteUrl = '';
   userState.electrons = 0;
   userState.manetrons = 0;
   userState.heat = 0;
   localStorage.removeItem(STORAGE_KEY);
-  aiChatState.currentDid = "";
+  aiChatState.currentDid = '';
   aiChatState.dialogs = [];
   aiChatState.messages = [];
   renderUser();
@@ -1606,17 +1650,19 @@ function clearSession() {
 async function callApi(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       ...(userState.token ? { Authorization: `Bearer ${userState.token}` } : {}),
-      ...(options.headers || {})
+      ...(options.headers || {}),
     },
-    ...options
+    ...options,
   });
 
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(payload.detail ? `${payload.message}：${payload.detail}` : (payload.message || "请求失败"));
+    throw new Error(
+      payload.detail ? `${payload.message}：${payload.detail}` : payload.message || '请求失败',
+    );
   }
 
   return payload;
@@ -1625,7 +1671,7 @@ async function callApi(path, options = {}) {
 async function restoreSession() {
   if (!userState.token) {
     if (isSettingsPage() || isAdminUsersPage()) {
-      window.location.href = "/login";
+      window.location.href = '/login';
       return;
     }
     renderUser();
@@ -1633,23 +1679,23 @@ async function restoreSession() {
   }
 
   try {
-    const payload = await callApi("/auth/me", {
-      method: "GET"
+    const payload = await callApi('/auth/me', {
+      method: 'GET',
     });
 
     saveSession(userState.token, payload.user);
   } catch {
     clearSession();
     if (isSettingsPage() || isAdminUsersPage()) {
-      window.location.href = "/login";
+      window.location.href = '/login';
     }
   }
 }
 
 async function loadFortuneConfig() {
   try {
-    const payload = await callApi("/fortune-config", {
-      method: "GET"
+    const payload = await callApi('/fortune-config', {
+      method: 'GET',
     });
 
     userState.fortuneBonusEnabled = Boolean(payload.fortuneBonusEnabled);
@@ -1663,27 +1709,27 @@ async function loadFortuneConfig() {
 }
 
 function isSettingsPage() {
-  return isCurrentPath("/settings");
+  return isCurrentPath('/settings');
 }
 
 function isAdminUsersPage() {
-  return isCurrentPath("/adminusers");
+  return isCurrentPath('/adminusers');
 }
 
 function isDiscussionPage() {
-  return isCurrentPath("/discussion");
+  return isCurrentPath('/discussion');
 }
 
 function isAiChatPage() {
-  return isCurrentPath("/aichat");
+  return isCurrentPath('/aichat');
 }
 
 function isElectromagneticPage() {
-  return isCurrentPath("/electromagnetic");
+  return isCurrentPath('/electromagnetic');
 }
 
 function isInventoryPage() {
-  return isCurrentPath("/inventory");
+  return isCurrentPath('/inventory');
 }
 
 function isEconomyPage() {
@@ -1691,34 +1737,36 @@ function isEconomyPage() {
 }
 
 function isPublicProfilePage() {
-  return isCurrentPath("/profile");
+  return isCurrentPath('/profile');
 }
 
 function isCurrentPath(pagePath) {
-  const pathname = window.location.pathname.replace(/\/$/, "") || "/";
+  const pathname = window.location.pathname.replace(/\/$/, '') || '/';
   return pathname === pagePath || pathname === `${pagePath}.html`;
 }
 
 function getProfileUidFromQuery() {
   const params = new URLSearchParams(window.location.search);
-  return String(params.get("uid") || params.get("studentId") || "").trim();
+  return String(params.get('uid') || params.get('studentId') || '').trim();
 }
 
 function isValidPublicUid(uid) {
-  const value = String(uid || "").trim();
+  const value = String(uid || '').trim();
   return /^u_?[a-z0-9]{6,32}$/i.test(value) || /^20\d{8}$/.test(value);
 }
 
 function getProfileHref(uid) {
   if (!isValidPublicUid(uid)) {
-    return "";
+    return '';
   }
 
   return `/profile?uid=${encodeURIComponent(uid)}`;
 }
 
 function renderAuthorProfileLink(author, className, includeAvatar = false) {
-  const displayName = escapeHtml(author?.displayName || author?.fullName || author?.username || "匿名用户");
+  const displayName = escapeHtml(
+    author?.displayName || author?.fullName || author?.username || '匿名用户',
+  );
   const profileHref = getProfileHref(author?.uid);
 
   if (!profileHref) {
@@ -1743,10 +1791,10 @@ function renderAuthorProfileLink(author, className, includeAvatar = false) {
 }
 
 function normalizeWebsiteUrl(value) {
-  const raw = String(value || "").trim();
+  const raw = String(value || '').trim();
 
   if (!raw) {
-    return "";
+    return '';
   }
 
   const candidate = /^[a-z]+:\/\//i.test(raw) ? raw : `https://${raw}`;
@@ -1754,21 +1802,24 @@ function normalizeWebsiteUrl(value) {
   try {
     return new URL(candidate).toString();
   } catch {
-    return "";
+    return '';
   }
 }
 
 function setPublicProfileMessage(message) {
   if (publicProfileMessage) {
-    publicProfileMessage.textContent = message || "";
+    publicProfileMessage.textContent = message || '';
   }
 }
 
 function getDiscussionQueryState() {
   const params = new URLSearchParams(window.location.search);
   return {
-    board: String(params.get("board") || "all").trim().toLowerCase() || "all",
-    postId: String(params.get("post") || "").trim()
+    board:
+      String(params.get('board') || 'all')
+        .trim()
+        .toLowerCase() || 'all',
+    postId: String(params.get('post') || '').trim(),
   };
 }
 
@@ -1779,19 +1830,19 @@ function updateDiscussionQuery({ board, postId } = {}) {
 
   const url = new URL(window.location.href);
 
-  if (board && board !== "all") {
-    url.searchParams.set("board", board);
+  if (board && board !== 'all') {
+    url.searchParams.set('board', board);
   } else {
-    url.searchParams.delete("board");
+    url.searchParams.delete('board');
   }
 
   if (postId) {
-    url.searchParams.set("post", String(postId));
+    url.searchParams.set('post', String(postId));
   } else {
-    url.searchParams.delete("post");
+    url.searchParams.delete('post');
   }
 
-  window.history.replaceState({}, "", url);
+  window.history.replaceState({}, '', url);
 }
 
 function renderHomeDiscussionPosts(posts) {
@@ -1808,7 +1859,9 @@ function renderHomeDiscussionPosts(posts) {
     return;
   }
 
-  homeDiscussionList.innerHTML = posts.map((post) => `
+  homeDiscussionList.innerHTML = posts
+    .map(
+      (post) => `
     <a class="home-discussion-item" href="/discussion?post=${encodeURIComponent(post.id)}">
       <div class="home-discussion-item-main">
         <h3>${escapeHtml(post.title)}</h3>
@@ -1818,7 +1871,9 @@ function renderHomeDiscussionPosts(posts) {
         <span>${escapeHtml(formatDateOnly(post.createdAt))}</span>
       </div>
     </a>
-  `).join("");
+  `,
+    )
+    .join('');
 }
 
 function renderFallbackHomeDiscussionPost() {
@@ -1828,7 +1883,7 @@ function renderFallbackHomeDiscussionPost() {
 function useFallbackDiscussionData() {
   discussionState.boards = FALLBACK_DISCUSSION_BOARDS;
   discussionState.posts = [FALLBACK_DISCUSSION_POST];
-  discussionState.activeBoard = "daily";
+  discussionState.activeBoard = 'daily';
   discussionState.isFallback = true;
 }
 
@@ -1839,34 +1894,38 @@ function renderDiscussionBoards() {
 
   const boards = [
     {
-      slug: "all",
-      name: "全部",
-      description: "所有版块的最新帖子"
+      slug: 'all',
+      name: '全部',
+      description: '所有版块的最新帖子',
     },
-    ...discussionState.boards
+    ...discussionState.boards,
   ];
 
-  discussionBoardList.innerHTML = boards.map((board) => `
+  discussionBoardList.innerHTML = boards
+    .map(
+      (board) => `
     <button
-      class="discussion-board-chip ${discussionState.activeBoard === board.slug ? "is-active" : ""}"
+      class="discussion-board-chip ${discussionState.activeBoard === board.slug ? 'is-active' : ''}"
       type="button"
       data-board-slug="${board.slug}"
       title="${escapeHtml(board.description || board.name)}"
     >
       <span class="discussion-board-name">${escapeHtml(board.name)}</span>
     </button>
-  `).join("");
+  `,
+    )
+    .join('');
 
   renderDiscussionBoardAbout();
 }
 
 function getActiveDiscussionBoard() {
-  if (discussionState.activeBoard === "all") {
+  if (discussionState.activeBoard === 'all') {
     return {
-      slug: "all",
-      name: "全部",
-      descriptionMarkdown: "所有版块的最新帖子。",
-      canModerate: false
+      slug: 'all',
+      name: '全部',
+      descriptionMarkdown: '所有版块的最新帖子。',
+      canModerate: false,
     };
   }
 
@@ -1879,27 +1938,29 @@ function renderDiscussionBoardAbout() {
   }
 
   const board = getActiveDiscussionBoard();
-  const aboutBox = document.getElementById("discussion-board-about");
+  const aboutBox = document.getElementById('discussion-board-about');
 
-  if (!board || board.slug === "all") {
-    aboutBox?.classList.add("hidden");
+  if (!board || board.slug === 'all') {
+    aboutBox?.classList.add('hidden');
     return;
   }
 
-  aboutBox?.classList.remove("hidden");
-  aboutBox?.classList.remove("is-editing", "is-managing-moderators");
+  aboutBox?.classList.remove('hidden');
+  aboutBox?.classList.remove('is-editing', 'is-managing-moderators');
   discussionBoardAboutTitle.textContent = `${board.name}版块`;
-  discussionBoardAboutBody.innerHTML = renderMarkdownContent(board.descriptionMarkdown || board.description || "暂无说明。");
+  discussionBoardAboutBody.innerHTML = renderMarkdownContent(
+    board.descriptionMarkdown || board.description || '暂无说明。',
+  );
   enhanceMarkdownContent(discussionBoardAboutBody);
 
   if (discussionBoardEdit) {
-    discussionBoardEdit.classList.toggle("hidden", !board.canModerate);
-    discussionBoardEdit.textContent = "编辑";
+    discussionBoardEdit.classList.toggle('hidden', !board.canModerate);
+    discussionBoardEdit.textContent = '编辑';
   }
 
   if (discussionBoardModerators) {
-    discussionBoardModerators.classList.toggle("hidden", !board.canManageModerators);
-    discussionBoardModerators.textContent = "管理版主";
+    discussionBoardModerators.classList.toggle('hidden', !board.canManageModerators);
+    discussionBoardModerators.textContent = '管理版主';
   }
 }
 
@@ -1908,16 +1969,20 @@ function renderDiscussionComposeBoards() {
     return;
   }
 
-  const availableBoards = discussionState.boards.filter((board) => (
-    board.slug !== "changelog" || userState.role === "admin"
-  ));
+  const availableBoards = discussionState.boards.filter(
+    (board) => board.slug !== 'changelog' || userState.role === 'admin',
+  );
 
-  discussionComposeBoard.innerHTML = availableBoards.map((board) => `
+  discussionComposeBoard.innerHTML = availableBoards
+    .map(
+      (board) => `
     <option value="${board.slug}">${escapeHtml(board.name)}</option>
-  `).join("");
+  `,
+    )
+    .join('');
 
   const preferredBoard =
-    discussionState.activeBoard !== "all" &&
+    discussionState.activeBoard !== 'all' &&
     availableBoards.some((board) => board.slug === discussionState.activeBoard)
       ? discussionState.activeBoard
       : availableBoards[0]?.slug;
@@ -1941,22 +2006,24 @@ function renderDiscussionPosts() {
     return;
   }
 
-  discussionPostList.innerHTML = discussionState.posts.map((post) => `
+  discussionPostList.innerHTML = discussionState.posts
+    .map(
+      (post) => `
     <article
-      class="discussion-post-card ${discussionState.activePostId === post.id ? "is-active" : ""}"
+      class="discussion-post-card ${discussionState.activePostId === post.id ? 'is-active' : ''}"
       role="button"
       tabindex="0"
       data-post-id="${escapeHtml(post.id)}"
     >
       <div class="discussion-post-author">
-        ${renderAuthorProfileLink(post.author, "discussion-author-link discussion-author-link-avatar", true)}
+        ${renderAuthorProfileLink(post.author, 'discussion-author-link discussion-author-link-avatar', true)}
       </div>
       <div class="discussion-post-card-main">
         <div class="discussion-post-source">
           <span class="discussion-post-board">r/${escapeHtml(post.board.name)}</span>
-          ${post.isPinned ? `<span class="discussion-pin-badge">置顶</span>` : ""}
-          ${post.isFeatured ? `<span class="discussion-feature-badge">精华</span>` : ""}
-          ${renderAuthorProfileLink(post.author, "discussion-author-link")}
+          ${post.isPinned ? `<span class="discussion-pin-badge">置顶</span>` : ''}
+          ${post.isFeatured ? `<span class="discussion-feature-badge">精华</span>` : ''}
+          ${renderAuthorProfileLink(post.author, 'discussion-author-link')}
           <span>${escapeHtml(formatDateOnly(post.createdAt))}</span>
         </div>
         <h3>${escapeHtml(post.title)}</h3>
@@ -1966,23 +2033,25 @@ function renderDiscussionPosts() {
             <strong>${post.commentCount || 0}</strong>
           </span>
           <div class="discussion-inline-reactions" aria-label="帖子反应">
-            ${renderDiscussionReactionButton(post, "smile")}
-            ${renderDiscussionReactionButton(post, "light")}
-            ${renderDiscussionReactionButton(post, "fireworks")}
+            ${renderDiscussionReactionButton(post, 'smile')}
+            ${renderDiscussionReactionButton(post, 'light')}
+            ${renderDiscussionReactionButton(post, 'fireworks')}
           </div>
-          ${post.canDelete ? `<span class="discussion-delete-action" data-action="delete-post" data-post-id="${escapeHtml(post.id)}"><img class="discussion-action-icon" src="/assets/icons/trash.svg" alt="" aria-hidden="true" /><span>删除</span></span>` : ""}
+          ${post.canDelete ? `<span class="discussion-delete-action" data-action="delete-post" data-post-id="${escapeHtml(post.id)}"><img class="discussion-action-icon" src="/assets/icons/trash.svg" alt="" aria-hidden="true" /><span>删除</span></span>` : ''}
         </div>
       </div>
       <span class="discussion-post-open" aria-hidden="true">↗</span>
     </article>
-  `).join("");
+  `,
+    )
+    .join('');
 }
 
 function renderDiscussionReactionButton(post, reactionType) {
   const reaction = DISCUSSION_REACTIONS[reactionType];
 
   if (!reaction) {
-    return "";
+    return '';
   }
 
   const active = Boolean(post[reaction.activeKey]);
@@ -1990,7 +2059,7 @@ function renderDiscussionReactionButton(post, reactionType) {
 
   return `
     <button
-      class="discussion-reaction-button ${active ? "is-reacted" : ""}"
+      class="discussion-reaction-button ${active ? 'is-reacted' : ''}"
       type="button"
       data-action="toggle-reaction"
       data-reaction-type="${reactionType}"
@@ -2006,13 +2075,13 @@ function renderDiscussionReactionButton(post, reactionType) {
 
 function renderMarkdownContent(markdown) {
   const mathBlocks = [];
-  const placeholderPrefix = "FREE_BBS_MATH_TOKEN_";
-  const protectedMarkdown = String(markdown || "")
+  const placeholderPrefix = 'FREE_BBS_MATH_TOKEN_';
+  const protectedMarkdown = String(markdown || '')
     .replace(/\$\$([\s\S]+?)\$\$/g, (_match, expression) => {
       const token = `${placeholderPrefix}${mathBlocks.length}`;
       mathBlocks.push({
         displayMode: true,
-        expression: String(expression || "").trim()
+        expression: String(expression || '').trim(),
       });
       return `\n\n${token}\n\n`;
     })
@@ -2020,7 +2089,7 @@ function renderMarkdownContent(markdown) {
       const token = `${placeholderPrefix}${mathBlocks.length}`;
       mathBlocks.push({
         displayMode: false,
-        expression: String(expression || "").trim()
+        expression: String(expression || '').trim(),
       });
       return `${prefix}${token}`;
     });
@@ -2028,9 +2097,9 @@ function renderMarkdownContent(markdown) {
   const renderedMarkdown = window.marked?.parse
     ? window.marked.parse(protectedMarkdown, {
         gfm: true,
-        breaks: true
+        breaks: true,
       })
-    : escapeHtml(protectedMarkdown).replace(/\n/g, "<br />");
+    : escapeHtml(protectedMarkdown).replace(/\n/g, '<br />');
 
   const safeRenderedMarkdown = sanitizeRenderedMarkdown(renderedMarkdown);
 
@@ -2038,61 +2107,61 @@ function renderMarkdownContent(markdown) {
     const mathBlock = mathBlocks[Number(index)];
 
     if (!mathBlock) {
-      return "";
+      return '';
     }
 
     if (window.katex?.renderToString) {
       return window.katex.renderToString(mathBlock.expression, {
         displayMode: mathBlock.displayMode,
-        throwOnError: false
+        throwOnError: false,
       });
     }
 
-    const delimiter = mathBlock.displayMode ? "$$" : "$";
+    const delimiter = mathBlock.displayMode ? '$$' : '$';
     return `${delimiter}${escapeHtml(mathBlock.expression)}${delimiter}`;
   };
 
   return safeRenderedMarkdown
-    .replace(new RegExp(`<p>\\s*${placeholderPrefix}(\\d+)\\s*</p>`, "g"), renderMathBlock)
-    .replace(new RegExp(`${placeholderPrefix}(\\d+)`, "g"), renderMathBlock);
+    .replace(new RegExp(`<p>\\s*${placeholderPrefix}(\\d+)\\s*</p>`, 'g'), renderMathBlock)
+    .replace(new RegExp(`${placeholderPrefix}(\\d+)`, 'g'), renderMathBlock);
 }
 
 function sanitizeRenderedMarkdown(html) {
-  if (typeof document === "undefined") {
-    return String(html || "");
+  if (typeof document === 'undefined') {
+    return String(html || '');
   }
 
-  const template = document.createElement("template");
-  template.innerHTML = String(html || "");
+  const template = document.createElement('template');
+  template.innerHTML = String(html || '');
   const blockedTags = new Set([
-    "script",
-    "style",
-    "iframe",
-    "object",
-    "embed",
-    "link",
-    "meta",
-    "base",
-    "form",
-    "input",
-    "button",
-    "textarea",
-    "select",
-    "option"
+    'script',
+    'style',
+    'iframe',
+    'object',
+    'embed',
+    'link',
+    'meta',
+    'base',
+    'form',
+    'input',
+    'button',
+    'textarea',
+    'select',
+    'option',
   ]);
   const allowedAttributes = new Set([
-    "href",
-    "src",
-    "alt",
-    "title",
-    "class",
-    "id",
-    "colspan",
-    "rowspan",
-    "align"
+    'href',
+    'src',
+    'alt',
+    'title',
+    'class',
+    'id',
+    'colspan',
+    'rowspan',
+    'align',
   ]);
 
-  template.content.querySelectorAll("*").forEach((element) => {
+  template.content.querySelectorAll('*').forEach((element) => {
     const tagName = element.tagName.toLowerCase();
 
     if (blockedTags.has(tagName)) {
@@ -2102,14 +2171,14 @@ function sanitizeRenderedMarkdown(html) {
 
     Array.from(element.attributes).forEach((attribute) => {
       const name = attribute.name.toLowerCase();
-      const value = attribute.value || "";
+      const value = attribute.value || '';
 
-      if (name.startsWith("on") || !allowedAttributes.has(name)) {
+      if (name.startsWith('on') || !allowedAttributes.has(name)) {
         element.removeAttribute(attribute.name);
         return;
       }
 
-      if ((name === "href" || name === "src") && /^(?:javascript|data):/i.test(value.trim())) {
+      if ((name === 'href' || name === 'src') && /^(?:javascript|data):/i.test(value.trim())) {
         element.removeAttribute(attribute.name);
       }
     });
@@ -2119,40 +2188,40 @@ function sanitizeRenderedMarkdown(html) {
 }
 
 function shouldWaitForMaxReply(contentMarkdown) {
-  return /(^|[^\p{L}\p{N}_])@max(?=$|[^\p{L}\p{N}_])/iu.test(String(contentMarkdown || ""));
+  return /(^|[^\p{L}\p{N}_])@max(?=$|[^\p{L}\p{N}_])/iu.test(String(contentMarkdown || ''));
 }
 
 function applyMathRendering(root) {
-  if (!root || typeof window.renderMathInElement !== "function") {
+  if (!root || typeof window.renderMathInElement !== 'function') {
     return;
   }
 
   window.renderMathInElement(root, {
     delimiters: [
-      { left: "$$", right: "$$", display: true },
-      { left: "$", right: "$", display: false },
-      { left: "\\(", right: "\\)", display: false },
-      { left: "\\[", right: "\\]", display: true }
+      { left: '$$', right: '$$', display: true },
+      { left: '$', right: '$', display: false },
+      { left: '\\(', right: '\\)', display: false },
+      { left: '\\[', right: '\\]', display: true },
     ],
-    throwOnError: false
+    throwOnError: false,
   });
 }
 
 function addCodeCopyButtons(root) {
-  root?.querySelectorAll("pre").forEach((pre) => {
-    if (pre.querySelector(".code-copy-button")) {
+  root?.querySelectorAll('pre').forEach((pre) => {
+    if (pre.querySelector('.code-copy-button')) {
       return;
     }
 
-    const code = pre.querySelector("code");
+    const code = pre.querySelector('code');
     const language = getCodeBlockLanguage(code);
-    const button = document.createElement("button");
-    button.className = "code-copy-button";
-    button.type = "button";
-    button.dataset.action = "toggle-code-copy-menu";
-    button.title = "复制代码";
-    button.setAttribute("aria-label", "复制代码");
-    button.dataset.code = code?.textContent || pre.textContent || "";
+    const button = document.createElement('button');
+    button.className = 'code-copy-button';
+    button.type = 'button';
+    button.dataset.action = 'toggle-code-copy-menu';
+    button.title = '复制代码';
+    button.setAttribute('aria-label', '复制代码');
+    button.dataset.code = code?.textContent || pre.textContent || '';
     button.dataset.language = language;
     button.innerHTML = `<img src="/assets/icons/copy.svg" alt="" aria-hidden="true" />`;
     pre.append(button);
@@ -2161,9 +2230,9 @@ function addCodeCopyButtons(root) {
 }
 
 function createCodeCopyMenu() {
-  const menu = document.createElement("div");
-  menu.className = "code-copy-menu hidden";
-  menu.setAttribute("role", "menu");
+  const menu = document.createElement('div');
+  menu.className = 'code-copy-menu hidden';
+  menu.setAttribute('role', 'menu');
   menu.innerHTML = `
     <button type="button" role="menuitem" data-action="copy-code" data-copy-format="text">纯文本</button>
     <button type="button" role="menuitem" data-action="copy-code" data-copy-format="latex">LaTeX</button>
@@ -2173,39 +2242,55 @@ function createCodeCopyMenu() {
 }
 
 function normalizeCodeLanguageName(language) {
-  const value = String(language || "").trim().toLowerCase();
+  const value = String(language || '')
+    .trim()
+    .toLowerCase();
 
-  if (value === "python" || value === "py" || value === "python3") {
-    return "python";
+  if (value === 'python' || value === 'py' || value === 'python3') {
+    return 'python';
   }
 
-  if (value === "matlab" || value === "m") {
-    return "matlab";
+  if (value === 'matlab' || value === 'm') {
+    return 'matlab';
   }
 
-  if (value === "java") {
-    return "java";
+  if (value === 'java') {
+    return 'java';
   }
 
-  if (value === "c" || value === "gcc") {
-    return "c";
+  if (value === 'c' || value === 'gcc') {
+    return 'c';
   }
 
-  if (value === "cpp" || value === "c++" || value === "cplusplus" || value === "cc" || value === "cxx" || value === "g++") {
-    return "cpp";
+  if (
+    value === 'cpp' ||
+    value === 'c++' ||
+    value === 'cplusplus' ||
+    value === 'cc' ||
+    value === 'cxx' ||
+    value === 'g++'
+  ) {
+    return 'cpp';
   }
 
-  if (value === "bash" || value === "sh" || value === "shell" || value === "zsh" || value === "terminal" || value === "console") {
-    return "bash";
+  if (
+    value === 'bash' ||
+    value === 'sh' ||
+    value === 'shell' ||
+    value === 'zsh' ||
+    value === 'terminal' ||
+    value === 'console'
+  ) {
+    return 'bash';
   }
 
   return value;
 }
 
 function getCodeBlockLanguage(code) {
-  const className = code?.className || "";
+  const className = code?.className || '';
   const languageMatch = className.match(/(?:^|\s)language-([^\s]+)/);
-  return normalizeCodeLanguageName(languageMatch?.[1] || code?.dataset.language || "");
+  return normalizeCodeLanguageName(languageMatch?.[1] || code?.dataset.language || '');
 }
 
 function applyCodeHighlighting(root) {
@@ -2217,19 +2302,33 @@ function applyCodeHighlighting(root) {
 
   highlighter.configure?.({
     ignoreUnescapedHTML: true,
-    languages: ["python", "matlab", "java", "c", "cpp", "bash", "javascript", "json", "css", "html", "xml"]
+    languages: [
+      'python',
+      'matlab',
+      'java',
+      'c',
+      'cpp',
+      'bash',
+      'javascript',
+      'json',
+      'css',
+      'html',
+      'xml',
+    ],
   });
-  highlighter.registerAliases?.(["py", "python3"], { languageName: "python" });
-  highlighter.registerAliases?.(["m"], { languageName: "matlab" });
-  highlighter.registerAliases?.(["c++", "cplusplus", "cc", "cxx", "g++"], { languageName: "cpp" });
-  highlighter.registerAliases?.(["gcc"], { languageName: "c" });
-  highlighter.registerAliases?.(["sh", "shell", "zsh", "terminal", "console"], { languageName: "bash" });
+  highlighter.registerAliases?.(['py', 'python3'], { languageName: 'python' });
+  highlighter.registerAliases?.(['m'], { languageName: 'matlab' });
+  highlighter.registerAliases?.(['c++', 'cplusplus', 'cc', 'cxx', 'g++'], { languageName: 'cpp' });
+  highlighter.registerAliases?.(['gcc'], { languageName: 'c' });
+  highlighter.registerAliases?.(['sh', 'shell', 'zsh', 'terminal', 'console'], {
+    languageName: 'bash',
+  });
 
-  root.querySelectorAll("pre code").forEach((code) => {
+  root.querySelectorAll('pre code').forEach((code) => {
     const language = getCodeBlockLanguage(code);
 
     if (language && highlighter.getLanguage?.(language)) {
-      code.className = code.className.replace(/(?:^|\s)language-[^\s]+/g, "").trim();
+      code.className = code.className.replace(/(?:^|\s)language-[^\s]+/g, '').trim();
       code.classList.add(`language-${language}`);
       code.dataset.language = language;
     }
@@ -2243,15 +2342,15 @@ function applyCodeHighlighting(root) {
 function normalizeRunnableCodeLanguage(code) {
   const language = getCodeBlockLanguage(code);
 
-  if (language === "python") {
-    return "python";
+  if (language === 'python') {
+    return 'python';
   }
 
-  if (language === "c" || language === "cpp") {
-    return "cpp";
+  if (language === 'c' || language === 'cpp') {
+    return 'cpp';
   }
 
-  return "";
+  return '';
 }
 
 function addCodeRunButtons(root) {
@@ -2259,26 +2358,26 @@ function addCodeRunButtons(root) {
     return;
   }
 
-  root?.querySelectorAll("pre").forEach((pre) => {
-    if (pre.querySelector(".code-run-button")) {
+  root?.querySelectorAll('pre').forEach((pre) => {
+    if (pre.querySelector('.code-run-button')) {
       return;
     }
 
-    const code = pre.querySelector("code");
+    const code = pre.querySelector('code');
     const language = normalizeRunnableCodeLanguage(code);
 
     if (!language) {
       return;
     }
 
-    const button = document.createElement("button");
-    button.className = "code-run-button";
-    button.type = "button";
-    button.dataset.action = "run-code";
+    const button = document.createElement('button');
+    button.className = 'code-run-button';
+    button.type = 'button';
+    button.dataset.action = 'run-code';
     button.dataset.language = language;
-    button.dataset.code = code?.textContent || "";
-    button.title = "运行代码";
-    button.setAttribute("aria-label", "运行代码");
+    button.dataset.code = code?.textContent || '';
+    button.title = '运行代码';
+    button.setAttribute('aria-label', '运行代码');
     button.innerHTML = `<img src="/assets/icons/run.svg" alt="" aria-hidden="true" />`;
     pre.append(button);
   });
@@ -2293,20 +2392,23 @@ function enhanceMarkdownContent(root) {
   applyCodeHighlighting(root);
   addCodeCopyButtons(root);
   addCodeRunButtons(root);
-  root.querySelectorAll("a").forEach((link) => {
-    link.target = "_blank";
-    link.rel = "noreferrer";
+  root.querySelectorAll('a').forEach((link) => {
+    link.target = '_blank';
+    link.rel = 'noreferrer';
   });
-  root.querySelectorAll("img").forEach((image) => {
-    image.loading = "lazy";
-    image.decoding = "async";
+  root.querySelectorAll('img').forEach((image) => {
+    image.loading = 'lazy';
+    image.decoding = 'async';
   });
 }
 
 function setAiChatStatus(message) {
   if (aiChatStatus) {
-    aiChatStatus.textContent = message || "";
-    aiChatStatus.classList.toggle("is-thinking", Boolean(message && /^Max 正在(?:思考|输入)/.test(message)));
+    aiChatStatus.textContent = message || '';
+    aiChatStatus.classList.toggle(
+      'is-thinking',
+      Boolean(message && /^Max 正在(?:思考|输入)/.test(message)),
+    );
   }
 }
 
@@ -2319,20 +2421,23 @@ function clearAiChatStatusTimer() {
 
 function startAiChatThinkingStatus() {
   clearAiChatStatusTimer();
-  setAiChatStatus("Max 正在思考......");
-  aiChatState.statusTimer = window.setTimeout(() => {
-    setAiChatStatus("Max 正在输入......");
-    aiChatState.statusTimer = 0;
-  }, 1000 + Math.floor(Math.random() * 4001));
+  setAiChatStatus('Max 正在思考......');
+  aiChatState.statusTimer = window.setTimeout(
+    () => {
+      setAiChatStatus('Max 正在输入......');
+      aiChatState.statusTimer = 0;
+    },
+    1000 + Math.floor(Math.random() * 4001),
+  );
 }
 
-function stopAiChatThinkingStatus(message = "") {
+function stopAiChatThinkingStatus(message = '') {
   clearAiChatStatusTimer();
   setAiChatStatus(message);
 }
 
 function setAiChatThinkingBubble(article, message) {
-  const bubble = article?.querySelector(".aichat-bubble");
+  const bubble = article?.querySelector('.aichat-bubble');
 
   if (!bubble || article?.dataset.markdown) {
     return;
@@ -2344,7 +2449,7 @@ function setAiChatThinkingBubble(article, message) {
 
 function setAiDialogId(did) {
   if (aiChatDialogId) {
-    aiChatDialogId.textContent = did ? `did: ${did}` : "";
+    aiChatDialogId.textContent = did ? `did: ${did}` : '';
   }
 }
 
@@ -2360,21 +2465,25 @@ function resizeAiChatInput() {
   }
 
   if (!aiChatInput.value) {
-    aiChatInput.style.height = "";
+    aiChatInput.style.height = '';
     return;
   }
 
-  aiChatInput.style.height = "auto";
+  aiChatInput.style.height = 'auto';
   aiChatInput.style.height = `${Math.min(aiChatInput.scrollHeight, 180)}px`;
 }
 
 function addAiMessageCopyControls(article) {
-  if (!article || !article.classList.contains("aichat-message-assistant") || article.querySelector(".aichat-copy-control")) {
+  if (
+    !article ||
+    !article.classList.contains('aichat-message-assistant') ||
+    article.querySelector('.aichat-copy-control')
+  ) {
     return;
   }
 
-  const control = document.createElement("div");
-  control.className = "aichat-copy-control";
+  const control = document.createElement('div');
+  control.className = 'aichat-copy-control';
   control.innerHTML = `
     <button class="aichat-copy-button" type="button" data-action="toggle-ai-copy-menu" aria-label="复制 Max 回复" title="复制">
       <img src="/assets/icons/copy.svg" alt="" aria-hidden="true" />
@@ -2389,15 +2498,15 @@ function addAiMessageCopyControls(article) {
   article.append(control);
 }
 
-function appendAiChatMessage(role, content = "") {
+function appendAiChatMessage(role, content = '') {
   if (!aiChatThread) {
     return null;
   }
 
-  const article = document.createElement("article");
+  const article = document.createElement('article');
   article.className = `aichat-message aichat-message-${role}`;
-  const avatarUrl = role === "user" ? getAvatarUrl(userState.avatarPath) : MAX_AGENT_AVATAR;
-  const avatarAlt = role === "user" ? "你的头像" : "Max 的头像";
+  const avatarUrl = role === 'user' ? getAvatarUrl(userState.avatarPath) : MAX_AGENT_AVATAR;
+  const avatarAlt = role === 'user' ? '你的头像' : 'Max 的头像';
   article.innerHTML = `
     <div class="aichat-avatar">
       <img class="aichat-avatar-image" src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(avatarAlt)}" />
@@ -2427,9 +2536,9 @@ function renderAiWelcomeMessage() {
       </div>
     </article>
   `;
-  const welcome = aiChatThread.querySelector(".aichat-message-assistant");
+  const welcome = aiChatThread.querySelector('.aichat-message-assistant');
   if (welcome) {
-    welcome.dataset.markdown = "你好，我是 Max。可以问我课程、推导、代码或讨论区里适合展开的问题。";
+    welcome.dataset.markdown = '你好，我是 Max。可以问我课程、推导、代码或讨论区里适合展开的问题。';
     addAiMessageCopyControls(welcome);
   }
 }
@@ -2448,13 +2557,13 @@ function renderAiChatThread() {
 }
 
 function updateAiChatMessage(article, content) {
-  const bubble = article?.querySelector(".aichat-bubble");
+  const bubble = article?.querySelector('.aichat-bubble');
 
   if (!bubble) {
     return;
   }
 
-  article.dataset.markdown = content || "";
+  article.dataset.markdown = content || '';
   if (content) {
     bubble.innerHTML = renderMarkdownContent(content);
     enhanceMarkdownContent(bubble);
@@ -2469,29 +2578,30 @@ function buildAiChatPayload(userMessage) {
   const recentMessages = aiChatState.messages.slice(-13);
 
   return {
-    agent: "general_chat",
-    source: "direct_chat",
-    channel: "aichat",
-    did: aiChatState.currentDid || "",
+    agent: 'general_chat',
+    source: 'direct_chat',
+    channel: 'aichat',
+    did: aiChatState.currentDid || '',
     messages: [
       ...recentMessages,
       {
-        role: "user",
-        content: userMessage
-      }
+        role: 'user',
+        content: userMessage,
+      },
     ],
     stream: true,
-    temperature: 0.6
+    temperature: 0.6,
   };
 }
 
 function getAiDialogTitle(messages = aiChatState.messages) {
-  const firstUserMessage = messages.find((message) => message.role === "user")?.content || "新的对话";
-  return firstUserMessage.replace(/\s+/g, " ").trim().slice(0, 32) || "新的对话";
+  const firstUserMessage =
+    messages.find((message) => message.role === 'user')?.content || '新的对话';
+  return firstUserMessage.replace(/\s+/g, ' ').trim().slice(0, 32) || '新的对话';
 }
 
 function getAiDialogIdFromUrl() {
-  return String(new URLSearchParams(window.location.search).get("did") || "").trim();
+  return String(new URLSearchParams(window.location.search).get('did') || '').trim();
 }
 
 function updateAiDialogUrl(did, { replace = false } = {}) {
@@ -2502,13 +2612,13 @@ function updateAiDialogUrl(did, { replace = false } = {}) {
   const url = new URL(window.location.href);
 
   if (did) {
-    url.searchParams.set("did", did);
+    url.searchParams.set('did', did);
   } else {
-    url.searchParams.delete("did");
+    url.searchParams.delete('did');
   }
 
-  const method = replace ? "replaceState" : "pushState";
-  window.history[method]({}, "", url);
+  const method = replace ? 'replaceState' : 'pushState';
+  window.history[method]({}, '', url);
 }
 
 function renderAiDialogList() {
@@ -2518,7 +2628,7 @@ function renderAiDialogList() {
 
   if (!userState.isLoggedIn) {
     aiChatDialogList.innerHTML = `<p class="aichat-dialog-empty">登录后保存最近对话。</p>`;
-    setAiDialogId("");
+    setAiDialogId('');
     return;
   }
 
@@ -2528,12 +2638,16 @@ function renderAiDialogList() {
     return;
   }
 
-  aiChatDialogList.innerHTML = aiChatState.dialogs.map((dialog) => `
-    <button class="aichat-dialog-item ${dialog.did === aiChatState.currentDid ? "is-active" : ""}" type="button" data-did="${escapeHtml(dialog.did)}">
-      <span>${escapeHtml(dialog.title || "新的对话")}</span>
+  aiChatDialogList.innerHTML = aiChatState.dialogs
+    .map(
+      (dialog) => `
+    <button class="aichat-dialog-item ${dialog.did === aiChatState.currentDid ? 'is-active' : ''}" type="button" data-did="${escapeHtml(dialog.did)}">
+      <span>${escapeHtml(dialog.title || '新的对话')}</span>
       <small>${escapeHtml(formatDateTime(dialog.updatedAt || dialog.createdAt))}</small>
     </button>
-  `).join("");
+  `,
+    )
+    .join('');
   setAiDialogId(aiChatState.currentDid);
 }
 
@@ -2544,8 +2658,8 @@ async function loadAiDialogs() {
   }
 
   try {
-    const payload = await callApi("/ai/dialogs?limit=20", {
-      method: "GET"
+    const payload = await callApi('/ai/dialogs?limit=20', {
+      method: 'GET',
     });
     aiChatState.dialogs = payload.dialogs || [];
   } catch {
@@ -2567,13 +2681,13 @@ async function saveAiDialog() {
   }
 
   try {
-    const payload = await callApi("/ai/dialogs", {
-      method: "POST",
+    const payload = await callApi('/ai/dialogs', {
+      method: 'POST',
       body: JSON.stringify({
         did: aiChatState.currentDid || undefined,
         title: getAiDialogTitle(),
-        messages: aiChatState.messages
-      })
+        messages: aiChatState.messages,
+      }),
     });
 
     aiChatState.currentDid = payload.dialog.did;
@@ -2592,9 +2706,9 @@ async function loadAiDialog(did, { updateUrl = true } = {}) {
   }
 
   try {
-    setAiChatStatus("正在加载对话...");
+    setAiChatStatus('正在加载对话...');
     const payload = await callApi(`/ai/dialogs/${encodeURIComponent(did)}`, {
-      method: "GET"
+      method: 'GET',
     });
     aiChatState.currentDid = payload.dialog.did;
     aiChatState.messages = payload.dialog.messages || [];
@@ -2603,7 +2717,7 @@ async function loadAiDialog(did, { updateUrl = true } = {}) {
     }
     renderAiChatThread();
     renderAiDialogList();
-    setAiChatStatus("");
+    setAiChatStatus('');
   } catch (error) {
     setAiChatStatus(error.message);
   }
@@ -2615,60 +2729,64 @@ function startNewAiDialog() {
   }
 
   clearAiChatStatusTimer();
-  aiChatState.currentDid = "";
+  aiChatState.currentDid = '';
   aiChatState.messages = [];
-  updateAiDialogUrl("");
+  updateAiDialogUrl('');
   renderAiChatThread();
   renderAiDialogList();
-  aiChatShell?.classList.remove("is-dialogs-open");
-  setAiChatStatus("");
+  aiChatShell?.classList.remove('is-dialogs-open');
+  setAiChatStatus('');
   aiChatInput?.focus();
 }
 
 async function streamAiChatResponse(payload, onDelta) {
   if (!userState.token) {
-    throw new Error("请先登录后再使用问问 Max");
+    throw new Error('请先登录后再使用问问 Max');
   }
 
   const response = await fetch(`${API_BASE_URL}/ai/chat`, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
-      ...(userState.token ? { Authorization: `Bearer ${userState.token}` } : {})
+      'Content-Type': 'application/json',
+      ...(userState.token ? { Authorization: `Bearer ${userState.token}` } : {}),
     },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
     const errorPayload = await response.json().catch(() => ({}));
-    throw new Error(errorPayload.detail ? `${errorPayload.message}：${errorPayload.detail}` : (errorPayload.message || "AI 请求失败"));
+    throw new Error(
+      errorPayload.detail
+        ? `${errorPayload.message}：${errorPayload.detail}`
+        : errorPayload.message || 'AI 请求失败',
+    );
   }
 
   if (!response.body) {
-    throw new Error("浏览器不支持流式响应");
+    throw new Error('浏览器不支持流式响应');
   }
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  let buffer = "";
+  let buffer = '';
 
   while (true) {
     const { done, value } = await reader.read();
     buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-    const events = buffer.split("\n\n");
-    buffer = events.pop() || "";
+    const events = buffer.split('\n\n');
+    buffer = events.pop() || '';
 
     for (const eventText of events) {
-      const dataLine = eventText.split("\n").find((line) => line.startsWith("data:"));
+      const dataLine = eventText.split('\n').find((line) => line.startsWith('data:'));
 
       if (!dataLine) {
         continue;
       }
 
-      const eventPayload = JSON.parse(dataLine.replace(/^data:\s*/, ""));
+      const eventPayload = JSON.parse(dataLine.replace(/^data:\s*/, ''));
 
       if (eventPayload.error) {
-        throw new Error(eventPayload.error.message || "AI 服务返回错误");
+        throw new Error(eventPayload.error.message || 'AI 服务返回错误');
       }
 
       if (eventPayload.delta) {
@@ -2686,7 +2804,7 @@ async function handleAiChatSubmit(event) {
   event.preventDefault();
 
   if (!userState.isLoggedIn) {
-    openModal("login");
+    openModal('login');
     return;
   }
 
@@ -2701,20 +2819,23 @@ async function handleAiChatSubmit(event) {
   }
 
   aiChatState.isSending = true;
-  aiChatInput.value = "";
+  aiChatInput.value = '';
   resizeAiChatInput();
   aiChatInput.disabled = true;
   if (aiChatSend) {
     aiChatSend.disabled = true;
   }
-  appendAiChatMessage("user", userMessage);
-  const assistantArticle = appendAiChatMessage("assistant", "");
+  appendAiChatMessage('user', userMessage);
+  const assistantArticle = appendAiChatMessage('assistant', '');
   startAiChatThinkingStatus();
-  setAiChatThinkingBubble(assistantArticle, "Max 正在思考......");
-  const bubbleTimer = window.setTimeout(() => {
-    setAiChatThinkingBubble(assistantArticle, "Max 正在输入......");
-  }, 1000 + Math.floor(Math.random() * 4001));
-  let assistantContent = "";
+  setAiChatThinkingBubble(assistantArticle, 'Max 正在思考......');
+  const bubbleTimer = window.setTimeout(
+    () => {
+      setAiChatThinkingBubble(assistantArticle, 'Max 正在输入......');
+    },
+    1000 + Math.floor(Math.random() * 4001),
+  );
+  let assistantContent = '';
 
   try {
     await streamAiChatResponse(buildAiChatPayload(userMessage), (delta) => {
@@ -2723,14 +2844,14 @@ async function handleAiChatSubmit(event) {
       updateAiChatMessage(assistantArticle, assistantContent);
     });
 
-    aiChatState.messages.push({ role: "user", content: userMessage });
-    aiChatState.messages.push({ role: "assistant", content: assistantContent });
+    aiChatState.messages.push({ role: 'user', content: userMessage });
+    aiChatState.messages.push({ role: 'assistant', content: assistantContent });
     stopAiChatThinkingStatus();
     await saveAiDialog();
   } catch (error) {
     window.clearTimeout(bubbleTimer);
     updateAiChatMessage(assistantArticle, `请求失败：${error.message}`);
-    stopAiChatThinkingStatus("AI 服务不可用，请确认 freebbs-agent 已启动。");
+    stopAiChatThinkingStatus('AI 服务不可用，请确认 freebbs-agent 已启动。');
   } finally {
     aiChatState.isSending = false;
     aiChatInput.disabled = false;
@@ -2746,32 +2867,32 @@ function initializeAiChatPage() {
     return;
   }
 
-  aiChatInput?.addEventListener("input", resizeAiChatInput);
-  aiChatInput?.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+  aiChatInput?.addEventListener('input', resizeAiChatInput);
+  aiChatInput?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
       aiChatForm?.requestSubmit();
     }
   });
-  aiChatForm?.addEventListener("submit", handleAiChatSubmit);
-  aiChatNewDialog?.addEventListener("click", startNewAiDialog);
-  aiChatDialogToggle?.addEventListener("click", () => {
-    aiChatShell?.classList.toggle("is-dialogs-open");
+  aiChatForm?.addEventListener('submit', handleAiChatSubmit);
+  aiChatNewDialog?.addEventListener('click', startNewAiDialog);
+  aiChatDialogToggle?.addEventListener('click', () => {
+    aiChatShell?.classList.toggle('is-dialogs-open');
   });
-  aiChatDialogList?.addEventListener("click", (event) => {
-    const button = event.target.closest(".aichat-dialog-item");
+  aiChatDialogList?.addEventListener('click', (event) => {
+    const button = event.target.closest('.aichat-dialog-item');
 
     if (button) {
-      loadAiDialog(button.dataset.did || "");
-      aiChatShell?.classList.remove("is-dialogs-open");
+      loadAiDialog(button.dataset.did || '');
+      aiChatShell?.classList.remove('is-dialogs-open');
     }
   });
-  window.addEventListener("popstate", () => {
+  window.addEventListener('popstate', () => {
     const did = getAiDialogIdFromUrl();
     if (did) {
       loadAiDialog(did, { updateUrl: false });
     } else {
-      aiChatState.currentDid = "";
+      aiChatState.currentDid = '';
       aiChatState.messages = [];
       renderAiChatThread();
       renderAiDialogList();
@@ -2783,12 +2904,14 @@ function initializeAiChatPage() {
 }
 
 function setDiscussionDetailView(isDetailView) {
-  discussionLayout?.classList.toggle("is-detail-view", Boolean(isDetailView));
+  discussionLayout?.classList.toggle('is-detail-view', Boolean(isDetailView));
 }
 
 function renderDiscussionStats(stats) {
   if (discussionStatsPosts) {
-    discussionStatsPosts.textContent = String(stats?.postCount ?? discussionState.posts.length ?? 0);
+    discussionStatsPosts.textContent = String(
+      stats?.postCount ?? discussionState.posts.length ?? 0,
+    );
   }
 
   if (discussionStatsLikes) {
@@ -2797,7 +2920,7 @@ function renderDiscussionStats(stats) {
 }
 
 function renderDiscussionComments() {
-  const list = document.getElementById("discussion-comment-list");
+  const list = document.getElementById('discussion-comment-list');
 
   if (!list) {
     return;
@@ -2819,13 +2942,13 @@ function renderDiscussionComments() {
     const displayDepth = Math.min(depth, 4);
 
     const current = `
-    <article class="discussion-comment ${depth > 0 ? "discussion-comment-reply" : ""}" data-comment-id="${comment.id}" data-comment-depth="${displayDepth}" style="--comment-depth: ${displayDepth}">
-      ${renderAuthorProfileLink(comment.author, "discussion-comment-author-link", true)}
+    <article class="discussion-comment ${depth > 0 ? 'discussion-comment-reply' : ''}" data-comment-id="${comment.id}" data-comment-depth="${displayDepth}" style="--comment-depth: ${displayDepth}">
+      ${renderAuthorProfileLink(comment.author, 'discussion-comment-author-link', true)}
       <div class="discussion-comment-body">
         <div class="discussion-comment-meta">
-          ${renderAuthorProfileLink(comment.author, "discussion-author-link")}
+          ${renderAuthorProfileLink(comment.author, 'discussion-author-link')}
           <span>${escapeHtml(formatDateTime(comment.createdAt))}</span>
-          <button class="discussion-comment-reply-button" type="button" data-action="reply-comment" data-comment-id="${comment.id}" data-author-name="${escapeHtml(comment.author?.displayName || comment.author?.fullName || comment.author?.username || "匿名用户")}">回复</button>
+          <button class="discussion-comment-reply-button" type="button" data-action="reply-comment" data-comment-id="${comment.id}" data-author-name="${escapeHtml(comment.author?.displayName || comment.author?.fullName || comment.author?.username || '匿名用户')}">回复</button>
         </div>
         <div class="discussion-comment-content">${renderMarkdownContent(comment.contentMarkdown)}</div>
         <div class="discussion-comment-reply-slot" data-reply-slot="${comment.id}"></div>
@@ -2833,12 +2956,16 @@ function renderDiscussionComments() {
     </article>
   `;
 
-    return [current, ...replies.map((reply) => renderComment(reply, depth + 1))].join("");
+    return [current, ...replies.map((reply) => renderComment(reply, depth + 1))].join('');
   };
 
-  list.innerHTML = (commentsByParent.get(0) || []).map((comment) => renderComment(comment)).join("");
+  list.innerHTML = (commentsByParent.get(0) || [])
+    .map((comment) => renderComment(comment))
+    .join('');
 
-  list.querySelectorAll(".discussion-comment-content").forEach((node) => enhanceMarkdownContent(node));
+  list
+    .querySelectorAll('.discussion-comment-content')
+    .forEach((node) => enhanceMarkdownContent(node));
 }
 
 function renderDiscussionDetail(post) {
@@ -2848,15 +2975,15 @@ function renderDiscussionDetail(post) {
 
   if (!post) {
     setDiscussionDetailView(false);
-    discussionDetail.classList.add("hidden");
-    discussionDetail.innerHTML = "";
+    discussionDetail.classList.add('hidden');
+    discussionDetail.innerHTML = '';
     discussionState.activePost = null;
     discussionState.comments = [];
     return;
   }
 
   setDiscussionDetailView(true);
-  discussionDetail.classList.remove("hidden");
+  discussionDetail.classList.remove('hidden');
   discussionDetail.dataset.postId = String(post.id);
   discussionState.activePost = post;
   discussionDetail.innerHTML = `
@@ -2866,23 +2993,27 @@ function renderDiscussionDetail(post) {
           <img class="discussion-action-icon" src="/assets/icons/return.svg" alt="" aria-hidden="true" />
           <span>返回帖子</span>
         </button>
-        ${(post.canPin || post.canFeature || post.canDelete) ? `
+        ${
+          post.canPin || post.canFeature || post.canDelete
+            ? `
           <div class="discussion-moderator-actions">
-            ${post.canPin ? `<button class="discussion-detail-pin ${post.isPinned ? "is-active" : ""}" type="button" data-action="toggle-pin" data-post-id="${escapeHtml(post.id)}" data-pinned="${post.isPinned ? "1" : "0"}"><img class="discussion-action-icon" src="/assets/icons/top.svg" alt="" aria-hidden="true" /><span>${post.isPinned ? "取消置顶" : "置顶文章"}</span></button>` : ""}
-            ${post.canFeature ? `<button class="discussion-detail-feature ${post.isFeatured ? "is-active" : ""}" type="button" data-action="toggle-feature" data-post-id="${escapeHtml(post.id)}" data-featured="${post.isFeatured ? "1" : "0"}"><img class="discussion-action-icon" src="/assets/icons/star.svg" alt="" aria-hidden="true" /><span>${post.isFeatured ? "取消精华" : "加精华"}</span></button>` : ""}
-            ${post.canDelete ? `<button class="discussion-detail-delete" type="button" data-action="delete-post" data-post-id="${escapeHtml(post.id)}"><img class="discussion-action-icon" src="/assets/icons/trash.svg" alt="" aria-hidden="true" /><span>删除帖子</span></button>` : ""}
+            ${post.canPin ? `<button class="discussion-detail-pin ${post.isPinned ? 'is-active' : ''}" type="button" data-action="toggle-pin" data-post-id="${escapeHtml(post.id)}" data-pinned="${post.isPinned ? '1' : '0'}"><img class="discussion-action-icon" src="/assets/icons/top.svg" alt="" aria-hidden="true" /><span>${post.isPinned ? '取消置顶' : '置顶文章'}</span></button>` : ''}
+            ${post.canFeature ? `<button class="discussion-detail-feature ${post.isFeatured ? 'is-active' : ''}" type="button" data-action="toggle-feature" data-post-id="${escapeHtml(post.id)}" data-featured="${post.isFeatured ? '1' : '0'}"><img class="discussion-action-icon" src="/assets/icons/star.svg" alt="" aria-hidden="true" /><span>${post.isFeatured ? '取消精华' : '加精华'}</span></button>` : ''}
+            ${post.canDelete ? `<button class="discussion-detail-delete" type="button" data-action="delete-post" data-post-id="${escapeHtml(post.id)}"><img class="discussion-action-icon" src="/assets/icons/trash.svg" alt="" aria-hidden="true" /><span>删除帖子</span></button>` : ''}
           </div>
-        ` : ""}
+        `
+            : ''
+        }
       </div>
       <h2>${escapeHtml(post.title)}</h2>
       <div class="discussion-detail-meta">
         <span class="discussion-detail-board">#${escapeHtml(post.board.name)}</span>
-        ${renderAuthorProfileLink(post.author, "discussion-author-link")}
+        ${renderAuthorProfileLink(post.author, 'discussion-author-link')}
         <span>${escapeHtml(formatDateTime(post.createdAt))}</span>
         <div class="discussion-detail-reactions">
-          ${renderDiscussionReactionButton(post, "smile")}
-          ${renderDiscussionReactionButton(post, "light")}
-          ${renderDiscussionReactionButton(post, "fireworks")}
+          ${renderDiscussionReactionButton(post, 'smile')}
+          ${renderDiscussionReactionButton(post, 'light')}
+          ${renderDiscussionReactionButton(post, 'fireworks')}
         </div>
         <span class="discussion-comment-count" title="评论">
           <img src="/assets/icons/chats.svg" alt="" aria-hidden="true" />
@@ -2908,7 +3039,7 @@ function renderDiscussionDetail(post) {
     </section>
   `;
 
-  const markdownBody = document.getElementById("discussion-markdown-body");
+  const markdownBody = document.getElementById('discussion-markdown-body');
   enhanceMarkdownContent(markdownBody);
   loadDiscussionComments(post.id);
 }
@@ -2919,14 +3050,14 @@ function renderDiscussionComposerState() {
   }
 
   if (userState.isLoggedIn) {
-    discussionCreateToggle.textContent = discussionState.isFallback ? "重试发布" : "发布帖子";
+    discussionCreateToggle.textContent = discussionState.isFallback ? '重试发布' : '发布帖子';
     discussionCreateToggle.disabled = false;
     return;
   }
 
-  discussionCreateToggle.textContent = "登录后发帖";
+  discussionCreateToggle.textContent = '登录后发帖';
   discussionCreateToggle.disabled = false;
-  discussionComposeForm.classList.add("hidden");
+  discussionComposeForm.classList.add('hidden');
 }
 
 async function loadHomeDiscussionPosts() {
@@ -2935,8 +3066,8 @@ async function loadHomeDiscussionPosts() {
   }
 
   try {
-    const payload = await callApi("/discussion/posts?board=all&limit=6", {
-      method: "GET"
+    const payload = await callApi('/discussion/posts?board=all&limit=6', {
+      method: 'GET',
     });
     renderHomeDiscussionPosts(payload.posts || []);
   } catch {
@@ -2946,8 +3077,8 @@ async function loadHomeDiscussionPosts() {
 
 async function loadDiscussionBoards() {
   try {
-    const payload = await callApi("/discussion/boards", {
-      method: "GET"
+    const payload = await callApi('/discussion/boards', {
+      method: 'GET',
     });
     discussionState.boards = payload.boards || [];
     discussionState.isFallback = false;
@@ -2967,8 +3098,8 @@ async function loadDiscussionStats() {
   }
 
   try {
-    const payload = await callApi("/discussion/stats", {
-      method: "GET"
+    const payload = await callApi('/discussion/stats', {
+      method: 'GET',
     });
     renderDiscussionStats(payload);
   } catch {
@@ -2979,7 +3110,7 @@ async function loadDiscussionStats() {
 async function loadDiscussionComments(postId) {
   try {
     const payload = await callApi(`/discussion/posts/${encodeURIComponent(postId)}/comments`, {
-      method: "GET"
+      method: 'GET',
     });
     discussionState.comments = payload.comments || [];
   } catch {
@@ -3000,7 +3131,7 @@ function pollDiscussionCommentsForMax(postId, baselineCount, messageNode) {
       if (discussionState.comments.length > baselineCount) {
         window.clearInterval(timer);
         if (messageNode) {
-          messageNode.textContent = "Max 已回复";
+          messageNode.textContent = 'Max 已回复';
         }
         return;
       }
@@ -3011,7 +3142,7 @@ function pollDiscussionCommentsForMax(postId, baselineCount, messageNode) {
     if (attempts >= 12) {
       window.clearInterval(timer);
       if (messageNode) {
-        messageNode.textContent = "评论已发布，Max 可能稍后回复";
+        messageNode.textContent = '评论已发布，Max 可能稍后回复';
       }
     }
   }, 2500);
@@ -3028,39 +3159,39 @@ function updatePostReactionState(postId, reactionType, active, counts) {
     [reaction.activeKey]: active,
     likeCount: Number(counts.likeCount || 0),
     lightCount: Number(counts.lightCount || 0),
-    fireworksCount: Number(counts.fireworksCount || 0)
+    fireworksCount: Number(counts.fireworksCount || 0),
   };
 
-  discussionState.posts = discussionState.posts.map((post) => (
+  discussionState.posts = discussionState.posts.map((post) =>
     post.id === postId
       ? {
           ...post,
-          ...updates
+          ...updates,
         }
-      : post
-  ));
+      : post,
+  );
 
   if (discussionState.activePost?.id === postId) {
     discussionState.activePost = {
       ...discussionState.activePost,
-      ...updates
+      ...updates,
     };
   }
 }
 
-async function toggleDiscussionReaction(postId, reactionType = "smile") {
+async function toggleDiscussionReaction(postId, reactionType = 'smile') {
   if (!postId) {
     return;
   }
 
   if (!userState.isLoggedIn) {
-    openModal("login");
+    openModal('login');
     return;
   }
 
   const payload = await callApi(`/discussion/posts/${encodeURIComponent(postId)}/like`, {
-    method: "POST",
-    body: JSON.stringify({ reactionType })
+    method: 'POST',
+    body: JSON.stringify({ reactionType }),
   });
 
   updatePostReactionState(postId, reactionType, Boolean(payload.active), payload);
@@ -3083,12 +3214,12 @@ async function loadDiscussionDetail(postId) {
     renderDiscussionPosts();
     renderDiscussionDetail(FALLBACK_DISCUSSION_POST);
     discussionDetail.scrollIntoView({
-      behavior: "smooth",
-      block: "start"
+      behavior: 'smooth',
+      block: 'start',
     });
     updateDiscussionQuery({
       board: discussionState.activeBoard,
-      postId: discussionState.activePostId
+      postId: discussionState.activePostId,
     });
     return;
   }
@@ -3100,11 +3231,11 @@ async function loadDiscussionDetail(postId) {
     renderDiscussionDetail(cachedPost);
     updateDiscussionQuery({
       board: discussionState.activeBoard,
-      postId: discussionState.activePostId
+      postId: discussionState.activePostId,
     });
   } else {
     setDiscussionDetailView(true);
-    discussionDetail.classList.remove("hidden");
+    discussionDetail.classList.remove('hidden');
     discussionDetail.innerHTML = `
       <div class="discussion-detail-empty">
         <p>正在加载帖子详情...</p>
@@ -3113,19 +3244,19 @@ async function loadDiscussionDetail(postId) {
   }
 
   const payload = await callApi(`/discussion/posts/${encodeURIComponent(postId)}`, {
-    method: "GET"
+    method: 'GET',
   });
   discussionState.activePostId = payload.post.id;
   discussionState.postCache.set(payload.post.id, payload.post);
   renderDiscussionPosts();
   renderDiscussionDetail(payload.post);
   discussionDetail.scrollIntoView({
-    behavior: "smooth",
-    block: "start"
+    behavior: 'smooth',
+    block: 'start',
   });
   updateDiscussionQuery({
     board: discussionState.activeBoard,
-    postId: discussionState.activePostId
+    postId: discussionState.activePostId,
   });
 }
 
@@ -3134,8 +3265,8 @@ async function loadDiscussionPosts({ autoOpen = false } = {}) {
     return;
   }
 
-  const activeBoard = discussionState.activeBoard || "all";
-  const currentHash = discussionState.postsHashByBoard[activeBoard] || "";
+  const activeBoard = discussionState.activeBoard || 'all';
+  const currentHash = discussionState.postsHashByBoard[activeBoard] || '';
 
   if (!discussionState.posts.length) {
     discussionPostList.innerHTML = `
@@ -3148,27 +3279,24 @@ async function loadDiscussionPosts({ autoOpen = false } = {}) {
   try {
     const query = new URLSearchParams({
       board: activeBoard,
-      limit: "30"
+      limit: '30',
     });
 
     if (currentHash) {
-      query.set("hash", currentHash);
+      query.set('hash', currentHash);
     }
 
-    const payload = await callApi(
-      `/discussion/posts?${query.toString()}`,
-      {
-        method: "GET"
-      }
-    );
+    const payload = await callApi(`/discussion/posts?${query.toString()}`, {
+      method: 'GET',
+    });
     if (!payload.notModified) {
       discussionState.posts = payload.posts || [];
-      discussionState.postsHashByBoard[activeBoard] = payload.hash || "";
+      discussionState.postsHashByBoard[activeBoard] = payload.hash || '';
       discussionState.posts.forEach((post) => {
         const cachedPost = discussionState.postCache.get(post.id);
         discussionState.postCache.set(post.id, {
           ...(cachedPost || {}),
-          ...post
+          ...post,
         });
       });
     }
@@ -3176,8 +3304,11 @@ async function loadDiscussionPosts({ autoOpen = false } = {}) {
     useFallbackDiscussionData();
   }
 
-  if (discussionState.activePostId && !discussionState.posts.some((post) => post.id === discussionState.activePostId)) {
-    discussionState.activePostId = "";
+  if (
+    discussionState.activePostId &&
+    !discussionState.posts.some((post) => post.id === discussionState.activePostId)
+  ) {
+    discussionState.activePostId = '';
   }
 
   renderDiscussionBoards();
@@ -3188,7 +3319,7 @@ async function loadDiscussionPosts({ autoOpen = false } = {}) {
   if (!autoOpen) {
     updateDiscussionQuery({
       board: discussionState.activeBoard,
-      postId: discussionState.activePostId
+      postId: discussionState.activePostId,
     });
     return;
   }
@@ -3206,7 +3337,7 @@ async function loadDiscussionPosts({ autoOpen = false } = {}) {
   renderDiscussionDetail(null);
   updateDiscussionQuery({
     board: discussionState.activeBoard,
-    postId: ""
+    postId: '',
   });
 }
 
@@ -3219,14 +3350,15 @@ async function initializeDiscussionPage() {
     await loadDiscussionBoards();
 
     const query = getDiscussionQueryState();
-    const validBoard = query.board === "all" || discussionState.boards.some((board) => board.slug === query.board);
-    discussionState.activeBoard = validBoard ? query.board : "all";
-    discussionState.activePostId = "";
+    const validBoard =
+      query.board === 'all' || discussionState.boards.some((board) => board.slug === query.board);
+    discussionState.activeBoard = validBoard ? query.board : 'all';
+    discussionState.activePostId = '';
 
     if (query.postId) {
       try {
         const payload = await callApi(`/discussion/posts/${encodeURIComponent(query.postId)}`, {
-          method: "GET"
+          method: 'GET',
         });
         discussionState.activePostId = payload.post.id;
         discussionState.activeBoard = payload.post.board.slug;
@@ -3239,7 +3371,7 @@ async function initializeDiscussionPage() {
     }
 
     await loadDiscussionPosts({
-      autoOpen: Boolean(discussionState.activePostId)
+      autoOpen: Boolean(discussionState.activePostId),
     });
   } catch {
     useFallbackDiscussionData();
@@ -3260,20 +3392,20 @@ async function loadPublicProfile() {
 
   if (!isValidPublicUid(profileUid)) {
     if (publicProfileName) {
-      publicProfileName.textContent = "未找到用户";
+      publicProfileName.textContent = '未找到用户';
     }
     if (publicProfileBio) {
-      publicProfileBio.textContent = "请从帖子作者头像进入个人主页。";
+      publicProfileBio.textContent = '请从帖子作者头像进入个人主页。';
     }
-    setPublicProfileMessage("无效用户 UID");
+    setPublicProfileMessage('无效用户 UID');
     return;
   }
 
-  setPublicProfileMessage("正在加载个人主页...");
+  setPublicProfileMessage('正在加载个人主页...');
 
   try {
     const payload = await callApi(`/users/${encodeURIComponent(profileUid)}/public-profile`, {
-      method: "GET"
+      method: 'GET',
     });
     const profile = payload.profile || {};
 
@@ -3281,14 +3413,14 @@ async function loadPublicProfile() {
       publicProfileAvatar.src = getAvatarUrl(profile.avatarPath);
     }
     if (publicProfileName) {
-      publicProfileName.textContent = profile.username || "未命名用户";
+      publicProfileName.textContent = profile.username || '未命名用户';
     }
     if (publicProfileStudentId) {
-      publicProfileStudentId.textContent = profile.uid ? `UID ${profile.uid}` : "未公开 UID";
+      publicProfileStudentId.textContent = profile.uid ? `UID ${profile.uid}` : '未公开 UID';
     }
     if (publicProfileMajor) {
       const majorParts = [profile.grade, profile.major].filter(Boolean);
-      publicProfileMajor.textContent = majorParts.join(" · ") || "未填写院系信息";
+      publicProfileMajor.textContent = majorParts.join(' · ') || '未填写院系信息';
     }
     if (publicProfilePostCount) {
       publicProfilePostCount.textContent = String(profile.postCount ?? 0);
@@ -3297,24 +3429,24 @@ async function loadPublicProfile() {
       publicProfileLikeCount.textContent = String(profile.likeCount ?? 0);
     }
     if (publicProfileBio) {
-      publicProfileBio.textContent = profile.bio || "这个人很神秘，什么都没写。";
+      publicProfileBio.textContent = profile.bio || '这个人很神秘，什么都没写。';
     }
     if (publicProfileWebsite) {
       const websiteUrl = normalizeWebsiteUrl(profile.websiteUrl);
       if (websiteUrl) {
         publicProfileWebsite.innerHTML = `<a href="${escapeHtml(websiteUrl)}" target="_blank" rel="noreferrer">${escapeHtml(profile.websiteUrl)}</a>`;
       } else {
-        publicProfileWebsite.textContent = "未填写";
+        publicProfileWebsite.textContent = '未填写';
       }
     }
 
-    setPublicProfileMessage("");
+    setPublicProfileMessage('');
   } catch (error) {
     if (publicProfileName) {
-      publicProfileName.textContent = "加载失败";
+      publicProfileName.textContent = '加载失败';
     }
     if (publicProfileBio) {
-      publicProfileBio.textContent = "暂时无法获取该用户的公开资料。";
+      publicProfileBio.textContent = '暂时无法获取该用户的公开资料。';
     }
     setPublicProfileMessage(error.message);
   }
@@ -3325,7 +3457,9 @@ function renderAdminUsers(users) {
     return;
   }
 
-  adminUsers.innerHTML = users.map((user) => `
+  adminUsers.innerHTML = users
+    .map(
+      (user) => `
     <article class="admin-user-row" data-user-id="${user.id}">
       <div class="admin-user-cell">
         <input data-field="username" type="text" value="${escapeHtml(user.username)}" readonly />
@@ -3341,7 +3475,7 @@ function renderAdminUsers(users) {
       </div>
       <div class="admin-user-cell">
         <select data-field="role">
-          ${["student", "admin"].map((role) => `<option value="${role}" ${user.role === role ? "selected" : ""}>${role}</option>`).join("")}
+          ${['student', 'admin'].map((role) => `<option value="${role}" ${user.role === role ? 'selected' : ''}>${role}</option>`).join('')}
         </select>
       </div>
       <div class="admin-user-cell">
@@ -3358,7 +3492,9 @@ function renderAdminUsers(users) {
         <button class="admin-button admin-button-danger" data-action="delete">删除</button>
       </div>
     </article>
-  `).join("");
+  `,
+    )
+    .join('');
 }
 
 function insertAdminDraftRow() {
@@ -3366,9 +3502,9 @@ function insertAdminDraftRow() {
     return;
   }
 
-  const draft = document.createElement("article");
-  draft.className = "admin-user-row admin-user-row-draft";
-  draft.dataset.userId = "draft";
+  const draft = document.createElement('article');
+  draft.className = 'admin-user-row admin-user-row-draft';
+  draft.dataset.userId = 'draft';
   draft.innerHTML = `
     <div class="admin-user-cell">
       <input data-field="username" type="text" placeholder="用户名" />
@@ -3409,12 +3545,12 @@ function insertAdminDraftRow() {
 }
 
 async function loadAdminUsers() {
-  if (!adminSection || !isAdminUsersPage() || userState.role !== "admin") {
+  if (!adminSection || !isAdminUsersPage() || userState.role !== 'admin') {
     return;
   }
 
   try {
-    const payload = await callApi("/admin/users", { method: "GET" });
+    const payload = await callApi('/admin/users', { method: 'GET' });
     renderAdminUsers(payload.users || []);
   } catch (error) {
     setAdminMessage(error.message);
@@ -3422,30 +3558,30 @@ async function loadAdminUsers() {
 }
 
 function renderAdminSection() {
-  const isAdmin = userState.isLoggedIn && userState.role === "admin";
+  const isAdmin = userState.isLoggedIn && userState.role === 'admin';
   const showFortune = userState.isLoggedIn && Boolean(userState.studentId);
 
   manageLinks.forEach((link) => {
-    link.classList.toggle("hidden", !isAdmin);
+    link.classList.toggle('hidden', !isAdmin);
   });
 
   fortuneLinks.forEach((link) => {
-    link.classList.toggle("hidden", !showFortune);
+    link.classList.toggle('hidden', !showFortune);
   });
 
   electromagneticLinks.forEach((link) => {
-    link.classList.toggle("hidden", !showFortune);
+    link.classList.toggle('hidden', !showFortune);
   });
 
   inventoryLinks.forEach((link) => {
-    link.classList.toggle("hidden", !showFortune);
+    link.classList.toggle('hidden', !showFortune);
   });
 
   if (!adminSection) {
     return;
   }
 
-  adminSection.classList.toggle("hidden", !isAdmin);
+  adminSection.classList.toggle('hidden', !isAdmin);
 
   if (fortuneBonusToggle) {
     fortuneBonusToggle.checked = userState.fortuneBonusEnabled;
@@ -3462,39 +3598,39 @@ function renderSettingsForm() {
     return;
   }
 
-  settingsFullName.value = userState.fullName || "";
-  settingsBio.value = userState.bio || "";
-  settingsWebsiteUrl.value = userState.websiteUrl || "";
+  settingsFullName.value = userState.fullName || '';
+  settingsBio.value = userState.bio || '';
+  settingsWebsiteUrl.value = userState.websiteUrl || '';
   settingsAvatarImage.src = getAvatarUrl(userState.avatarPath);
 }
 
 function handleAuthEntry() {
   if (!userState.isLoggedIn) {
-    openModal("login");
+    openModal('login');
   }
 }
 
 function handleUserSettingsClick() {
   if (!userState.isLoggedIn) {
-    openModal("login");
+    openModal('login');
     return;
   }
 
   if (!isSettingsPage()) {
-    window.location.href = "/settings";
+    window.location.href = '/settings';
   }
 }
 
 function handleUserLogoutClick() {
   if (!userState.isLoggedIn) {
-    openModal("login");
+    openModal('login');
     return;
   }
 
   if (window.confirm(`确认退出 ${userState.fullName || userState.username}？`)) {
     clearSession();
     if (isSettingsPage()) {
-      window.location.href = "/";
+      window.location.href = '/';
     }
   }
 }
@@ -3506,7 +3642,7 @@ function handleSettingsLogout() {
 
   if (window.confirm(`确认退出 ${userState.fullName || userState.username}？`)) {
     clearSession();
-    window.location.href = "/";
+    window.location.href = '/';
   }
 }
 
@@ -3516,21 +3652,21 @@ async function handleSettingsSubmit(event) {
   }
 
   event.preventDefault();
-  setSettingsMessage("正在保存设置...");
+  setSettingsMessage('正在保存设置...');
 
   try {
-    const payload = await callApi("/profile", {
-      method: "PATCH",
+    const payload = await callApi('/profile', {
+      method: 'PATCH',
       body: JSON.stringify({
         fullName: settingsFullName.value.trim(),
         bio: settingsBio.value.trim(),
-        websiteUrl: settingsWebsiteUrl.value.trim()
-      })
+        websiteUrl: settingsWebsiteUrl.value.trim(),
+      }),
     });
 
     saveSession(userState.token, payload.user);
     renderSettingsForm();
-    setSettingsMessage(payload.message || "个人设置已保存");
+    setSettingsMessage(payload.message || '个人设置已保存');
   } catch (error) {
     setSettingsMessage(error.message);
   }
@@ -3548,28 +3684,28 @@ async function handleSettingsPasswordSubmit(event) {
   const newPasswordConfirm = settingsNewPasswordConfirm.value;
 
   if (newPassword.length < 6) {
-    setSettingsPasswordMessage("新密码长度至少为 6 位");
+    setSettingsPasswordMessage('新密码长度至少为 6 位');
     return;
   }
 
   if (newPassword !== newPasswordConfirm) {
-    setSettingsPasswordMessage("两次输入的新密码不一致");
+    setSettingsPasswordMessage('两次输入的新密码不一致');
     return;
   }
 
-  setSettingsPasswordMessage("正在更新密码...");
+  setSettingsPasswordMessage('正在更新密码...');
 
   try {
-    const payload = await callApi("/profile/password", {
-      method: "PATCH",
+    const payload = await callApi('/profile/password', {
+      method: 'PATCH',
       body: JSON.stringify({
         currentPassword,
-        newPassword
-      })
+        newPassword,
+      }),
     });
 
     settingsPasswordForm.reset();
-    setSettingsPasswordMessage(payload.message || "密码已更新");
+    setSettingsPasswordMessage(payload.message || '密码已更新');
   } catch (error) {
     setSettingsPasswordMessage(error.message);
   }
@@ -3586,34 +3722,34 @@ async function handleAvatarUpload(event) {
     return;
   }
 
-  if (!file.type.startsWith("image/")) {
-    setSettingsMessage("请选择图片文件");
-    event.target.value = "";
+  if (!file.type.startsWith('image/')) {
+    setSettingsMessage('请选择图片文件');
+    event.target.value = '';
     return;
   }
 
-  setSettingsMessage("正在上传头像...");
+  setSettingsMessage('正在上传头像...');
 
   try {
     const imageDataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ""));
-      reader.onerror = () => reject(new Error("读取头像文件失败"));
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('读取头像文件失败'));
       reader.readAsDataURL(file);
     });
 
-    const payload = await callApi("/profile/avatar", {
-      method: "POST",
-      body: JSON.stringify({ imageDataUrl })
+    const payload = await callApi('/profile/avatar', {
+      method: 'POST',
+      body: JSON.stringify({ imageDataUrl }),
     });
 
     saveSession(userState.token, payload.user);
     renderSettingsForm();
-    setSettingsMessage(payload.message || "头像上传成功");
+    setSettingsMessage(payload.message || '头像上传成功');
   } catch (error) {
     setSettingsMessage(error.message);
   } finally {
-    event.target.value = "";
+    event.target.value = '';
   }
 }
 
@@ -3622,13 +3758,13 @@ async function handleAdminUsersClick(event) {
     return;
   }
 
-  const button = event.target.closest("button[data-action]");
+  const button = event.target.closest('button[data-action]');
 
   if (!button) {
     return;
   }
 
-  const card = button.closest(".admin-user-row");
+  const card = button.closest('.admin-user-row');
   const userId = card?.dataset.userId;
 
   if (!card || !userId) {
@@ -3642,16 +3778,16 @@ async function handleAdminUsersClick(event) {
   const heat = Number(card.querySelector('[data-field="heat"]')?.value || 0);
 
   try {
-    if (button.dataset.action === "cancel") {
+    if (button.dataset.action === 'cancel') {
       card.remove();
-      setAdminMessage("");
+      setAdminMessage('');
       return;
     }
 
-    if (button.dataset.action === "create") {
-      setAdminMessage("正在创建用户...");
-      await callApi("/admin/users", {
-        method: "POST",
+    if (button.dataset.action === 'create') {
+      setAdminMessage('正在创建用户...');
+      await callApi('/admin/users', {
+        method: 'POST',
         body: JSON.stringify({
           username: card.querySelector('[data-field="username"]').value.trim(),
           fullName,
@@ -3661,35 +3797,35 @@ async function handleAdminUsersClick(event) {
           role,
           electrons,
           manetrons,
-          heat
-        })
+          heat,
+        }),
       });
-      setAdminMessage("用户创建成功");
+      setAdminMessage('用户创建成功');
       loadAdminUsers();
       return;
     }
 
-    if (button.dataset.action === "save") {
-      setAdminMessage("正在保存用户...");
+    if (button.dataset.action === 'save') {
+      setAdminMessage('正在保存用户...');
       await callApi(`/admin/users/${userId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ fullName, role, electrons, manetrons, heat })
+        method: 'PATCH',
+        body: JSON.stringify({ fullName, role, electrons, manetrons, heat }),
       });
-      setAdminMessage("用户已更新");
+      setAdminMessage('用户已更新');
       loadAdminUsers();
       return;
     }
 
-    if (button.dataset.action === "delete") {
-      if (!window.confirm("确认删除该用户？")) {
+    if (button.dataset.action === 'delete') {
+      if (!window.confirm('确认删除该用户？')) {
         return;
       }
 
-      setAdminMessage("正在删除用户...");
+      setAdminMessage('正在删除用户...');
       await callApi(`/admin/users/${userId}`, {
-        method: "DELETE"
+        method: 'DELETE',
       });
-      setAdminMessage("用户已删除");
+      setAdminMessage('用户已删除');
       loadAdminUsers();
     }
   } catch (error) {
@@ -3698,25 +3834,25 @@ async function handleAdminUsersClick(event) {
 }
 
 async function handleFortuneBonusToggle(event) {
-  if (!isAdminUsersPage() || userState.role !== "admin" || !fortuneBonusToggle) {
+  if (!isAdminUsersPage() || userState.role !== 'admin' || !fortuneBonusToggle) {
     return;
   }
 
   const enabled = event.target.checked;
   fortuneBonusToggle.disabled = true;
-  setAdminMessage("正在更新运势开关...");
+  setAdminMessage('正在更新运势开关...');
 
   try {
-    const payload = await callApi("/admin/fortune-config", {
-      method: "PATCH",
+    const payload = await callApi('/admin/fortune-config', {
+      method: 'PATCH',
       body: JSON.stringify({
-        fortuneBonusEnabled: enabled
-      })
+        fortuneBonusEnabled: enabled,
+      }),
     });
 
     userState.fortuneBonusEnabled = Boolean(payload.fortuneBonusEnabled);
     fortuneBonusToggle.checked = userState.fortuneBonusEnabled;
-    setAdminMessage(userState.fortuneBonusEnabled ? "运势加成已开启" : "运势加成已关闭");
+    setAdminMessage(userState.fortuneBonusEnabled ? '运势加成已开启' : '运势加成已关闭');
   } catch (error) {
     fortuneBonusToggle.checked = userState.fortuneBonusEnabled;
     setAdminMessage(error.message);
@@ -3726,17 +3862,17 @@ async function handleFortuneBonusToggle(event) {
 }
 
 async function handleDiscussionBoardClick(event) {
-  const button = event.target.closest("[data-board-slug]");
+  const button = event.target.closest('[data-board-slug]');
 
   if (!button) {
     return;
   }
 
-  discussionState.activeBoard = button.dataset.boardSlug || "all";
-  discussionState.activePostId = "";
+  discussionState.activeBoard = button.dataset.boardSlug || 'all';
+  discussionState.activePostId = '';
   renderDiscussionDetail(null);
   await loadDiscussionPosts({
-    autoOpen: false
+    autoOpen: false,
   });
 }
 
@@ -3750,21 +3886,27 @@ async function handleDiscussionPostClick(event) {
   if (likeButton) {
     event.preventDefault();
     event.stopPropagation();
-    await toggleDiscussionReaction(likeButton.dataset.postId || "", likeButton.dataset.reactionType || "smile");
+    await toggleDiscussionReaction(
+      likeButton.dataset.postId || '',
+      likeButton.dataset.reactionType || 'smile',
+    );
     return;
   }
 
   const pinButton = event.target.closest("[data-action='toggle-pin']");
 
   if (pinButton) {
-    await toggleDiscussionPin(pinButton.dataset.postId || "", pinButton.dataset.pinned === "1");
+    await toggleDiscussionPin(pinButton.dataset.postId || '', pinButton.dataset.pinned === '1');
     return;
   }
 
   const featureButton = event.target.closest("[data-action='toggle-feature']");
 
   if (featureButton) {
-    await toggleDiscussionFeature(featureButton.dataset.postId || "", featureButton.dataset.featured === "1");
+    await toggleDiscussionFeature(
+      featureButton.dataset.postId || '',
+      featureButton.dataset.featured === '1',
+    );
     return;
   }
 
@@ -3773,17 +3915,17 @@ async function handleDiscussionPostClick(event) {
   if (deleteButton) {
     event.preventDefault();
     event.stopPropagation();
-    await deleteDiscussionPost(deleteButton.dataset.postId || "");
+    await deleteDiscussionPost(deleteButton.dataset.postId || '');
     return;
   }
 
-  const button = event.target.closest("[data-post-id]");
+  const button = event.target.closest('[data-post-id]');
 
   if (!button) {
     return;
   }
 
-  const postId = button.dataset.postId || "";
+  const postId = button.dataset.postId || '';
 
   if (!postId) {
     return;
@@ -3797,37 +3939,38 @@ async function deleteDiscussionPost(postId) {
     return;
   }
 
-  if (!window.confirm("确认删除这篇帖子？")) {
+  if (!window.confirm('确认删除这篇帖子？')) {
     return;
   }
 
   try {
     await callApi(`/discussion/posts/${encodeURIComponent(postId)}`, {
-      method: "DELETE"
+      method: 'DELETE',
     });
 
     discussionState.postCache.delete(postId);
-    delete discussionState.postsHashByBoard[discussionState.activeBoard || "all"];
-    discussionState.posts = userState.role === "admin"
-      ? discussionState.posts.map((post) => (
-          post.id === postId
-            ? { ...post, title: "已删除的帖子", isDeleted: true, canDelete: false }
-            : post
-        ))
-      : discussionState.posts.filter((post) => post.id !== postId);
+    delete discussionState.postsHashByBoard[discussionState.activeBoard || 'all'];
+    discussionState.posts =
+      userState.role === 'admin'
+        ? discussionState.posts.map((post) =>
+            post.id === postId
+              ? { ...post, title: '已删除的帖子', isDeleted: true, canDelete: false }
+              : post,
+          )
+        : discussionState.posts.filter((post) => post.id !== postId);
 
     if (discussionState.activePostId === postId) {
-      discussionState.activePostId = "";
+      discussionState.activePostId = '';
       renderDiscussionDetail(null);
       updateDiscussionQuery({
         board: discussionState.activeBoard,
-        postId: ""
+        postId: '',
       });
     }
 
     renderDiscussionPosts();
     await loadDiscussionPosts({
-      autoOpen: false
+      autoOpen: false,
     });
   } catch (error) {
     window.alert(error.message);
@@ -3841,20 +3984,18 @@ async function toggleDiscussionPin(postId, pinned) {
 
   try {
     const payload = await callApi(`/discussion/posts/${encodeURIComponent(postId)}/pin`, {
-      method: "PATCH",
-      body: JSON.stringify({ pinned: !pinned })
+      method: 'PATCH',
+      body: JSON.stringify({ pinned: !pinned }),
     });
 
-    discussionState.posts = discussionState.posts.map((post) => (
-      post.id === postId
-        ? { ...post, isPinned: Boolean(payload.isPinned) }
-        : post
-    ));
+    discussionState.posts = discussionState.posts.map((post) =>
+      post.id === postId ? { ...post, isPinned: Boolean(payload.isPinned) } : post,
+    );
 
     if (discussionState.activePost?.id === postId) {
       discussionState.activePost = {
         ...discussionState.activePost,
-        isPinned: Boolean(payload.isPinned)
+        isPinned: Boolean(payload.isPinned),
       };
       renderDiscussionDetail(discussionState.activePost);
     }
@@ -3872,20 +4013,18 @@ async function toggleDiscussionFeature(postId, featured) {
 
   try {
     const payload = await callApi(`/discussion/posts/${encodeURIComponent(postId)}/feature`, {
-      method: "PATCH",
-      body: JSON.stringify({ featured: !featured })
+      method: 'PATCH',
+      body: JSON.stringify({ featured: !featured }),
     });
 
-    discussionState.posts = discussionState.posts.map((post) => (
-      post.id === postId
-        ? { ...post, isFeatured: Boolean(payload.isFeatured) }
-        : post
-    ));
+    discussionState.posts = discussionState.posts.map((post) =>
+      post.id === postId ? { ...post, isFeatured: Boolean(payload.isFeatured) } : post,
+    );
 
     if (discussionState.activePost?.id === postId) {
       discussionState.activePost = {
         ...discussionState.activePost,
-        isFeatured: Boolean(payload.isFeatured)
+        isFeatured: Boolean(payload.isFeatured),
       };
       renderDiscussionDetail(discussionState.activePost);
     }
@@ -3899,24 +4038,24 @@ async function toggleDiscussionFeature(postId, featured) {
 async function editActiveBoardDescription() {
   const board = getActiveDiscussionBoard();
 
-  if (!board || board.slug === "all" || !board.canModerate) {
+  if (!board || board.slug === 'all' || !board.canModerate) {
     return;
   }
 
-  const aboutBox = document.getElementById("discussion-board-about");
+  const aboutBox = document.getElementById('discussion-board-about');
 
   if (!aboutBox || !discussionBoardAboutBody) {
     return;
   }
 
-  if (aboutBox.classList.contains("is-editing")) {
+  if (aboutBox.classList.contains('is-editing')) {
     renderDiscussionBoardAbout();
     return;
   }
 
-  const currentMarkdown = board.descriptionMarkdown || board.description || "";
-  aboutBox.classList.add("is-editing");
-  discussionBoardEdit.textContent = "取消";
+  const currentMarkdown = board.descriptionMarkdown || board.description || '';
+  aboutBox.classList.add('is-editing');
+  discussionBoardEdit.textContent = '取消';
   discussionBoardAboutBody.innerHTML = `
     <div class="discussion-board-edit-grid">
       <textarea class="discussion-board-description-input" rows="7" maxlength="10000">${escapeHtml(currentMarkdown)}</textarea>
@@ -3928,24 +4067,24 @@ async function editActiveBoardDescription() {
     </div>
   `;
 
-  const input = discussionBoardAboutBody.querySelector(".discussion-board-description-input");
-  const preview = discussionBoardAboutBody.querySelector(".discussion-board-description-preview");
+  const input = discussionBoardAboutBody.querySelector('.discussion-board-description-input');
+  const preview = discussionBoardAboutBody.querySelector('.discussion-board-description-preview');
 
   const renderPreview = () => {
-    preview.innerHTML = renderMarkdownContent(input.value || "暂无说明。");
+    preview.innerHTML = renderMarkdownContent(input.value || '暂无说明。');
     enhanceMarkdownContent(preview);
   };
 
-  input.addEventListener("input", renderPreview);
+  input.addEventListener('input', renderPreview);
   renderPreview();
   input.focus();
 }
 
 async function saveActiveBoardDescription() {
   const board = getActiveDiscussionBoard();
-  const aboutBox = document.getElementById("discussion-board-about");
-  const input = discussionBoardAboutBody?.querySelector(".discussion-board-description-input");
-  const message = document.getElementById("discussion-board-edit-message");
+  const aboutBox = document.getElementById('discussion-board-about');
+  const input = discussionBoardAboutBody?.querySelector('.discussion-board-description-input');
+  const message = document.getElementById('discussion-board-edit-message');
 
   if (!board || !board.canModerate || !input) {
     return;
@@ -3955,27 +4094,28 @@ async function saveActiveBoardDescription() {
 
   if (!trimmed) {
     if (message) {
-      message.textContent = "版块说明不能为空";
+      message.textContent = '版块说明不能为空';
     }
     return;
   }
 
   try {
     if (message) {
-      message.textContent = "正在保存...";
+      message.textContent = '正在保存...';
     }
 
-    const payload = await callApi(`/discussion/boards/${encodeURIComponent(board.slug)}/description`, {
-      method: "PATCH",
-      body: JSON.stringify({ descriptionMarkdown: trimmed })
-    });
+    const payload = await callApi(
+      `/discussion/boards/${encodeURIComponent(board.slug)}/description`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ descriptionMarkdown: trimmed }),
+      },
+    );
 
-    discussionState.boards = discussionState.boards.map((item) => (
-      item.slug === board.slug
-        ? { ...item, ...(payload.board || {}), canModerate: true }
-        : item
-    ));
-    aboutBox?.classList.remove("is-editing");
+    discussionState.boards = discussionState.boards.map((item) =>
+      item.slug === board.slug ? { ...item, ...(payload.board || {}), canModerate: true } : item,
+    );
+    aboutBox?.classList.remove('is-editing');
     renderDiscussionBoards();
   } catch (error) {
     if (message) {
@@ -3987,33 +4127,35 @@ async function saveActiveBoardDescription() {
 function renderModeratorUserRow(user) {
   const title = user.username || user.uid || `用户 ${user.id}`;
   const meta = [
-    user.uid ? `uid ${user.uid}` : "",
-    user.studentId ? `学号 ${user.studentId}` : "",
-    user.email || "",
-    user.fullName || ""
-  ].filter(Boolean).join(" · ");
+    user.uid ? `uid ${user.uid}` : '',
+    user.studentId ? `学号 ${user.studentId}` : '',
+    user.email || '',
+    user.fullName || '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return `
     <article class="discussion-moderator-row" data-user-id="${user.id}">
       <img class="discussion-moderator-avatar" src="${escapeHtml(getAvatarUrl(user.avatarPath))}" alt="${escapeHtml(title)} 的头像" />
       <div class="discussion-moderator-copy">
         <strong>${escapeHtml(title)}</strong>
-        <span>${escapeHtml(meta || "无更多信息")}</span>
+        <span>${escapeHtml(meta || '无更多信息')}</span>
       </div>
       <button
-        class="discussion-moderator-toggle ${user.isModerator ? "is-active" : ""}"
+        class="discussion-moderator-toggle ${user.isModerator ? 'is-active' : ''}"
         type="button"
         data-action="toggle-board-moderator"
         data-user-id="${user.id}"
-        data-is-moderator="${user.isModerator ? "1" : "0"}"
-      >${user.isModerator ? "移出版主" : "设为版主"}</button>
+        data-is-moderator="${user.isModerator ? '1' : '0'}"
+      >${user.isModerator ? '移出版主' : '设为版主'}</button>
     </article>
   `;
 }
 
 async function loadBoardModeratorList(board) {
-  const list = discussionBoardAboutBody?.querySelector("#discussion-moderator-list");
-  const message = discussionBoardAboutBody?.querySelector("#discussion-moderator-message");
+  const list = discussionBoardAboutBody?.querySelector('#discussion-moderator-list');
+  const message = discussionBoardAboutBody?.querySelector('#discussion-moderator-message');
 
   if (!list) {
     return;
@@ -4021,19 +4163,22 @@ async function loadBoardModeratorList(board) {
 
   try {
     if (message) {
-      message.textContent = "正在加载版主名单...";
+      message.textContent = '正在加载版主名单...';
     }
 
-    const payload = await callApi(`/discussion/boards/${encodeURIComponent(board.slug)}/moderators`, {
-      method: "GET"
-    });
+    const payload = await callApi(
+      `/discussion/boards/${encodeURIComponent(board.slug)}/moderators`,
+      {
+        method: 'GET',
+      },
+    );
     const moderators = payload.moderators || [];
     list.innerHTML = moderators.length
-      ? moderators.map(renderModeratorUserRow).join("")
+      ? moderators.map(renderModeratorUserRow).join('')
       : `<p class="discussion-stats-muted">这个版块还没有单独设置版主。</p>`;
 
     if (message) {
-      message.textContent = "";
+      message.textContent = '';
     }
   } catch (error) {
     if (message) {
@@ -4044,24 +4189,24 @@ async function loadBoardModeratorList(board) {
 
 async function openBoardModeratorsPanel() {
   const board = getActiveDiscussionBoard();
-  const aboutBox = document.getElementById("discussion-board-about");
+  const aboutBox = document.getElementById('discussion-board-about');
 
-  if (!board || board.slug === "all" || !board.canManageModerators || !discussionBoardAboutBody) {
+  if (!board || board.slug === 'all' || !board.canManageModerators || !discussionBoardAboutBody) {
     return;
   }
 
-  if (aboutBox?.classList.contains("is-managing-moderators")) {
+  if (aboutBox?.classList.contains('is-managing-moderators')) {
     renderDiscussionBoardAbout();
     return;
   }
 
-  aboutBox?.classList.remove("is-editing");
-  aboutBox?.classList.add("is-managing-moderators");
+  aboutBox?.classList.remove('is-editing');
+  aboutBox?.classList.add('is-managing-moderators');
   if (discussionBoardEdit) {
-    discussionBoardEdit.textContent = "编辑";
+    discussionBoardEdit.textContent = '编辑';
   }
   if (discussionBoardModerators) {
-    discussionBoardModerators.textContent = "关闭名单";
+    discussionBoardModerators.textContent = '关闭名单';
   }
 
   discussionBoardAboutBody.innerHTML = `
@@ -4077,36 +4222,39 @@ async function openBoardModeratorsPanel() {
     </div>
   `;
 
-  discussionBoardAboutBody.querySelector("#discussion-moderator-query")?.focus();
+  discussionBoardAboutBody.querySelector('#discussion-moderator-query')?.focus();
   await loadBoardModeratorList(board);
 }
 
 async function searchBoardModeratorCandidates() {
   const board = getActiveDiscussionBoard();
-  const input = discussionBoardAboutBody?.querySelector("#discussion-moderator-query");
-  const results = discussionBoardAboutBody?.querySelector("#discussion-moderator-results");
-  const message = discussionBoardAboutBody?.querySelector("#discussion-moderator-message");
-  const query = input?.value.trim() || "";
+  const input = discussionBoardAboutBody?.querySelector('#discussion-moderator-query');
+  const results = discussionBoardAboutBody?.querySelector('#discussion-moderator-results');
+  const message = discussionBoardAboutBody?.querySelector('#discussion-moderator-message');
+  const query = input?.value.trim() || '';
 
   if (!board || !results || !message) {
     return;
   }
 
   if (query.length < 2) {
-    message.textContent = "请输入至少 2 个字符";
+    message.textContent = '请输入至少 2 个字符';
     return;
   }
 
   try {
-    message.textContent = "正在搜索...";
-    const payload = await callApi(`/discussion/boards/${encodeURIComponent(board.slug)}/moderator-candidates?query=${encodeURIComponent(query)}`, {
-      method: "GET"
-    });
+    message.textContent = '正在搜索...';
+    const payload = await callApi(
+      `/discussion/boards/${encodeURIComponent(board.slug)}/moderator-candidates?query=${encodeURIComponent(query)}`,
+      {
+        method: 'GET',
+      },
+    );
     const users = payload.users || [];
     results.innerHTML = users.length
-      ? users.map(renderModeratorUserRow).join("")
+      ? users.map(renderModeratorUserRow).join('')
       : `<p class="discussion-stats-muted">没有找到匹配用户。</p>`;
-    message.textContent = "";
+    message.textContent = '';
   } catch (error) {
     message.textContent = error.message;
   }
@@ -4115,8 +4263,8 @@ async function searchBoardModeratorCandidates() {
 async function toggleBoardModerator(button) {
   const board = getActiveDiscussionBoard();
   const userId = Number(button.dataset.userId || 0);
-  const isModerator = button.dataset.isModerator === "1";
-  const message = discussionBoardAboutBody?.querySelector("#discussion-moderator-message");
+  const isModerator = button.dataset.isModerator === '1';
+  const message = discussionBoardAboutBody?.querySelector('#discussion-moderator-message');
 
   if (!board || !userId) {
     return;
@@ -4126,21 +4274,24 @@ async function toggleBoardModerator(button) {
 
   try {
     if (message) {
-      message.textContent = "正在更新版主名单...";
+      message.textContent = '正在更新版主名单...';
     }
 
-    const payload = await callApi(`/discussion/boards/${encodeURIComponent(board.slug)}/moderators/${userId}`, {
-      method: "PATCH",
-      body: JSON.stringify({ isModerator: !isModerator })
-    });
+    const payload = await callApi(
+      `/discussion/boards/${encodeURIComponent(board.slug)}/moderators/${userId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ isModerator: !isModerator }),
+      },
+    );
 
-    button.dataset.isModerator = payload.isModerator ? "1" : "0";
-    button.classList.toggle("is-active", Boolean(payload.isModerator));
-    button.textContent = payload.isModerator ? "移出版主" : "设为版主";
+    button.dataset.isModerator = payload.isModerator ? '1' : '0';
+    button.classList.toggle('is-active', Boolean(payload.isModerator));
+    button.textContent = payload.isModerator ? '移出版主' : '设为版主';
     await loadBoardModeratorList(board);
 
     if (message) {
-      message.textContent = "版主名单已更新";
+      message.textContent = '版主名单已更新';
     }
   } catch (error) {
     if (message) {
@@ -4156,12 +4307,12 @@ async function handleDiscussionDetailClick(event) {
 
   if (replyButton) {
     if (!userState.isLoggedIn) {
-      openModal("login");
+      openModal('login');
       return;
     }
 
     const commentId = Number(replyButton.dataset.commentId || 0);
-    const authorName = replyButton.dataset.authorName || "这条评论";
+    const authorName = replyButton.dataset.authorName || '这条评论';
     const slot = discussionDetail.querySelector(`[data-reply-slot="${commentId}"]`);
 
     if (!slot) {
@@ -4169,12 +4320,12 @@ async function handleDiscussionDetailClick(event) {
     }
 
     if (slot.innerHTML.trim()) {
-      slot.innerHTML = "";
+      slot.innerHTML = '';
       return;
     }
 
-    discussionDetail.querySelectorAll(".discussion-comment-reply-slot").forEach((node) => {
-      node.innerHTML = "";
+    discussionDetail.querySelectorAll('.discussion-comment-reply-slot').forEach((node) => {
+      node.innerHTML = '';
     });
     slot.innerHTML = `
       <form class="discussion-comment-form discussion-reply-form" data-parent-comment-id="${commentId}">
@@ -4185,35 +4336,41 @@ async function handleDiscussionDetailClick(event) {
         </div>
       </form>
     `;
-    slot.querySelector("textarea")?.focus();
+    slot.querySelector('textarea')?.focus();
     return;
   }
 
   const likeButton = event.target.closest("[data-action='toggle-reaction']");
 
   if (likeButton) {
-    await toggleDiscussionReaction(likeButton.dataset.postId || "", likeButton.dataset.reactionType || "smile");
+    await toggleDiscussionReaction(
+      likeButton.dataset.postId || '',
+      likeButton.dataset.reactionType || 'smile',
+    );
     return;
   }
 
   const pinButton = event.target.closest("[data-action='toggle-pin']");
 
   if (pinButton) {
-    await toggleDiscussionPin(pinButton.dataset.postId || "", pinButton.dataset.pinned === "1");
+    await toggleDiscussionPin(pinButton.dataset.postId || '', pinButton.dataset.pinned === '1');
     return;
   }
 
   const featureButton = event.target.closest("[data-action='toggle-feature']");
 
   if (featureButton) {
-    await toggleDiscussionFeature(featureButton.dataset.postId || "", featureButton.dataset.featured === "1");
+    await toggleDiscussionFeature(
+      featureButton.dataset.postId || '',
+      featureButton.dataset.featured === '1',
+    );
     return;
   }
 
   const deleteButton = event.target.closest("[data-action='delete-post']");
 
   if (deleteButton) {
-    await deleteDiscussionPost(deleteButton.dataset.postId || "");
+    await deleteDiscussionPost(deleteButton.dataset.postId || '');
     return;
   }
 
@@ -4223,17 +4380,17 @@ async function handleDiscussionDetailClick(event) {
     return;
   }
 
-  discussionState.activePostId = "";
+  discussionState.activePostId = '';
   renderDiscussionPosts();
   renderDiscussionDetail(null);
   updateDiscussionQuery({
     board: discussionState.activeBoard,
-    postId: ""
+    postId: '',
   });
 }
 
 async function handleDiscussionCommentSubmit(event) {
-  const form = event.target.closest(".discussion-comment-form");
+  const form = event.target.closest('.discussion-comment-form');
 
   if (!form || !discussionState.activePostId) {
     return;
@@ -4242,51 +4399,59 @@ async function handleDiscussionCommentSubmit(event) {
   event.preventDefault();
 
   if (!userState.isLoggedIn) {
-    openModal("login");
+    openModal('login');
     return;
   }
 
-  const input = form.querySelector(".discussion-comment-input");
-  const message = form.querySelector(".discussion-comment-message");
+  const input = form.querySelector('.discussion-comment-input');
+  const message = form.querySelector('.discussion-comment-message');
   const parentCommentId = Number(form.dataset.parentCommentId || 0);
-  const contentMarkdown = input?.value.trim() || "";
+  const contentMarkdown = input?.value.trim() || '';
 
   if (message) {
-    message.textContent = parentCommentId ? "正在发布回复..." : "正在发布评论...";
+    message.textContent = parentCommentId ? '正在发布回复...' : '正在发布评论...';
   }
 
   try {
-    const payload = await callApi(`/discussion/posts/${encodeURIComponent(discussionState.activePostId)}/comments`, {
-      method: "POST",
-      body: JSON.stringify({
-        contentMarkdown,
-        parentCommentId: parentCommentId || undefined
-      })
-    });
+    const payload = await callApi(
+      `/discussion/posts/${encodeURIComponent(discussionState.activePostId)}/comments`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          contentMarkdown,
+          parentCommentId: parentCommentId || undefined,
+        }),
+      },
+    );
 
     const baselineCommentCount = discussionState.comments.length;
     const newComments = [payload.comment].filter(Boolean);
     discussionState.comments = [...discussionState.comments, ...newComments];
     const addedCommentCount = newComments.length;
     if (discussionState.activePost) {
-      discussionState.activePost.commentCount = Number(discussionState.activePost.commentCount || 0) + addedCommentCount;
+      discussionState.activePost.commentCount =
+        Number(discussionState.activePost.commentCount || 0) + addedCommentCount;
     }
-    discussionState.posts = discussionState.posts.map((post) => (
+    discussionState.posts = discussionState.posts.map((post) =>
       post.id === discussionState.activePostId
         ? {
             ...post,
-            commentCount: Number(post.commentCount || 0) + addedCommentCount
+            commentCount: Number(post.commentCount || 0) + addedCommentCount,
           }
-        : post
-    ));
-    input.value = "";
+        : post,
+    );
+    input.value = '';
     if (message) {
-      message.textContent = payload.message || (parentCommentId ? "回复已发布" : "评论已发布");
+      message.textContent = payload.message || (parentCommentId ? '回复已发布' : '评论已发布');
     }
     renderDiscussionComments();
     renderDiscussionPosts();
     if (payload.maxPending || shouldWaitForMaxReply(contentMarkdown)) {
-      pollDiscussionCommentsForMax(discussionState.activePostId, baselineCommentCount + addedCommentCount, message);
+      pollDiscussionCommentsForMax(
+        discussionState.activePostId,
+        baselineCommentCount + addedCommentCount,
+        message,
+      );
     }
   } catch (error) {
     if (message) {
@@ -4301,24 +4466,24 @@ async function handleDiscussionCreateToggle() {
   }
 
   if (!userState.isLoggedIn) {
-    openModal("login");
+    openModal('login');
     return;
   }
 
   if (discussionState.isFallback) {
-    setDiscussionMessage("正在重新连接讨论后端...");
+    setDiscussionMessage('正在重新连接讨论后端...');
     await loadDiscussionBoards();
 
     if (discussionState.isFallback) {
-      setDiscussionMessage("讨论后端暂不可用，请确认后端已启动并刷新重试");
+      setDiscussionMessage('讨论后端暂不可用，请确认后端已启动并刷新重试');
       return;
     }
 
-    setDiscussionMessage("");
+    setDiscussionMessage('');
   }
 
-  discussionComposeForm.classList.toggle("hidden");
-  if (!discussionComposeForm.classList.contains("hidden")) {
+  discussionComposeForm.classList.toggle('hidden');
+  if (!discussionComposeForm.classList.contains('hidden')) {
     discussionComposeTitle?.focus();
   }
 }
@@ -4331,43 +4496,43 @@ async function handleDiscussionComposeSubmit(event) {
   event.preventDefault();
 
   if (!userState.isLoggedIn) {
-    openModal("login");
+    openModal('login');
     return;
   }
 
   if (discussionState.isFallback) {
-    setDiscussionMessage("讨论后端暂不可用，无法发布帖子");
+    setDiscussionMessage('讨论后端暂不可用，无法发布帖子');
     return;
   }
 
-  setDiscussionMessage("正在发布帖子...");
+  setDiscussionMessage('正在发布帖子...');
 
   try {
-    const payload = await callApi("/discussion/posts", {
-      method: "POST",
+    const payload = await callApi('/discussion/posts', {
+      method: 'POST',
       body: JSON.stringify({
         boardSlug: discussionComposeBoard.value,
         title: discussionComposeTitle.value.trim(),
-        contentMarkdown: discussionComposeContent.value
-      })
+        contentMarkdown: discussionComposeContent.value,
+      }),
     });
 
-    setDiscussionMessage(payload.message || "帖子发布成功");
+    setDiscussionMessage(payload.message || '帖子发布成功');
     discussionComposeForm.reset();
-    discussionComposeForm.classList.add("hidden");
+    discussionComposeForm.classList.add('hidden');
     discussionState.activeBoard = payload.post.board.slug;
     discussionState.activePostId = payload.post.id;
     await loadDiscussionPosts({
-      autoOpen: false
+      autoOpen: false,
     });
     renderDiscussionDetail(payload.post);
     updateDiscussionQuery({
       board: discussionState.activeBoard,
-      postId: discussionState.activePostId
+      postId: discussionState.activePostId,
     });
   } catch (error) {
     setDiscussionMessage(error.message);
-    discussionComposeForm.classList.remove("hidden");
+    discussionComposeForm.classList.remove('hidden');
   }
 }
 
@@ -4380,8 +4545,8 @@ function insertTextAtTextarea(textarea, text) {
   const end = textarea.selectionEnd ?? textarea.value.length;
   const before = textarea.value.slice(0, start);
   const after = textarea.value.slice(end);
-  const prefix = before && !before.endsWith("\n") ? "\n" : "";
-  const suffix = after && !after.startsWith("\n") ? "\n" : "";
+  const prefix = before && !before.endsWith('\n') ? '\n' : '';
+  const suffix = after && !after.startsWith('\n') ? '\n' : '';
   textarea.value = `${before}${prefix}${text}${suffix}${after}`;
   const cursor = before.length + prefix.length + text.length;
   textarea.focus();
@@ -4389,21 +4554,22 @@ function insertTextAtTextarea(textarea, text) {
 }
 
 async function resizeImageFileToWebp(file) {
-  if (!file?.type?.startsWith("image/")) {
-    throw new Error("请选择图片文件");
+  if (!file?.type?.startsWith('image/')) {
+    throw new Error('请选择图片文件');
   }
 
-  const readOriginalFile = () => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("读取图片失败"));
-    reader.readAsDataURL(file);
-  });
+  const readOriginalFile = () =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('读取图片失败'));
+      reader.readAsDataURL(file);
+    });
 
   let source;
 
   try {
-    if (typeof createImageBitmap === "function") {
+    if (typeof createImageBitmap === 'function') {
       source = await createImageBitmap(file);
     } else {
       source = await new Promise((resolve, reject) => {
@@ -4415,7 +4581,7 @@ async function resizeImageFileToWebp(file) {
         };
         image.onerror = () => {
           URL.revokeObjectURL(objectUrl);
-          reject(new Error("读取图片失败"));
+          reject(new Error('读取图片失败'));
         };
         image.src = objectUrl;
       });
@@ -4432,10 +4598,10 @@ async function resizeImageFileToWebp(file) {
   const scale = Math.min(1, maxSide / Math.max(source.width, source.height));
   const width = Math.max(1, Math.round(source.width * scale));
   const height = Math.max(1, Math.round(source.height * scale));
-  const canvas = document.createElement("canvas");
+  const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  const context = canvas.getContext("2d");
+  const context = canvas.getContext('2d');
 
   if (!context) {
     source.close?.();
@@ -4446,40 +4612,40 @@ async function resizeImageFileToWebp(file) {
   source.close?.();
 
   const blob = await new Promise((resolve) => {
-    canvas.toBlob((result) => resolve(result), "image/webp", 0.82);
+    canvas.toBlob((result) => resolve(result), 'image/webp', 0.82);
   });
 
-  if (!blob || !blob.type || blob.type.toLowerCase() !== "image/webp") {
+  if (!blob || !blob.type || blob.type.toLowerCase() !== 'image/webp') {
     return readOriginalFile();
   }
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("读取图片失败"));
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('读取图片失败'));
     reader.readAsDataURL(blob);
   });
 }
 
 async function uploadDiscussionImage(file) {
   if (!userState.isLoggedIn) {
-    openModal("login");
-    return "";
+    openModal('login');
+    return '';
   }
 
-  setDiscussionMessage(`正在处理图片：${file.name || "image"}`);
+  setDiscussionMessage(`正在处理图片：${file.name || 'image'}`);
   const imageDataUrl = await resizeImageFileToWebp(file);
-  setDiscussionMessage(`正在上传图片：${file.name || "image"}`);
-  const payload = await callApi("/discussion/uploads/images", {
-    method: "POST",
-    body: JSON.stringify({ imageDataUrl })
+  setDiscussionMessage(`正在上传图片：${file.name || 'image'}`);
+  const payload = await callApi('/discussion/uploads/images', {
+    method: 'POST',
+    body: JSON.stringify({ imageDataUrl }),
   });
 
-  return payload.url || "";
+  return payload.url || '';
 }
 
 async function insertDiscussionImages(files) {
-  const imageFiles = Array.from(files || []).filter((file) => file.type.startsWith("image/"));
+  const imageFiles = Array.from(files || []).filter((file) => file.type.startsWith('image/'));
 
   if (!imageFiles.length) {
     return;
@@ -4490,18 +4656,23 @@ async function insertDiscussionImages(files) {
       const url = await uploadDiscussionImage(file);
 
       if (url) {
-        insertTextAtTextarea(discussionComposeContent, `![${file.name ? file.name.replace(/\.[^.]+$/, "") : "图片"}](${getAvatarUrl(url)})`);
+        insertTextAtTextarea(
+          discussionComposeContent,
+          `![${file.name ? file.name.replace(/\.[^.]+$/, '') : '图片'}](${getAvatarUrl(url)})`,
+        );
       }
     }
 
-    setDiscussionMessage("图片已插入正文");
+    setDiscussionMessage('图片已插入正文');
   } catch (error) {
     setDiscussionMessage(error.message);
   }
 }
 
 async function handleDiscussionPaste(event) {
-  const files = Array.from(event.clipboardData?.files || []).filter((file) => file.type.startsWith("image/"));
+  const files = Array.from(event.clipboardData?.files || []).filter((file) =>
+    file.type.startsWith('image/'),
+  );
 
   if (!files.length) {
     return;
@@ -4512,16 +4683,16 @@ async function handleDiscussionPaste(event) {
 }
 
 async function writeClipboardText(text) {
-  await navigator.clipboard.writeText(String(text || ""));
+  await navigator.clipboard.writeText(String(text || ''));
 }
 
 async function writeClipboardHtml(html, text) {
   if (navigator.clipboard?.write && window.ClipboardItem) {
     await navigator.clipboard.write([
       new ClipboardItem({
-        "text/html": new Blob([html], { type: "text/html" }),
-        "text/plain": new Blob([text], { type: "text/plain" })
-      })
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([text], { type: 'text/plain' }),
+      }),
     ]);
     return;
   }
@@ -4530,63 +4701,75 @@ async function writeClipboardHtml(html, text) {
 }
 
 function markdownToPlainText(markdown) {
-  return String(markdown || "")
+  return String(markdown || '')
     .replace(/```[^\n]*\n([\s\S]*?)```/g, (_match, code) => `\n${code.trimEnd()}\n`)
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/^>\s?/gm, "")
-    .replace(/^\s*[-*+]\s+/gm, "- ")
-    .replace(/^\s*\d+\.\s+/gm, "")
-    .replace(/[*_`~]/g, "")
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^>\s?/gm, '')
+    .replace(/^\s*[-*+]\s+/gm, '- ')
+    .replace(/^\s*\d+\.\s+/gm, '')
+    .replace(/[*_`~]/g, '')
     .trim();
 }
 
 function hasCjkText(value) {
-  return /[\u3400-\u9fff\uf900-\ufaff]/.test(String(value || ""));
+  return /[\u3400-\u9fff\uf900-\ufaff]/.test(String(value || ''));
 }
 
 function normalizeWordStrongSpacing(root) {
-  root.querySelectorAll("strong, b").forEach((strong) => {
+  root.querySelectorAll('strong, b').forEach((strong) => {
     strong.textContent = strong.textContent.trim();
 
     const previous = strong.previousSibling;
     if (
       previous?.nodeType === Node.TEXT_NODE &&
-      /\s$/.test(previous.textContent || "") &&
+      /\s$/.test(previous.textContent || '') &&
       hasCjkText(`${previous.textContent}${strong.textContent}`)
     ) {
-      previous.textContent = previous.textContent.replace(/\s+$/, "");
+      previous.textContent = previous.textContent.replace(/\s+$/, '');
     }
 
     const next = strong.nextSibling;
     if (
       next?.nodeType === Node.TEXT_NODE &&
-      /^\s/.test(next.textContent || "") &&
+      /^\s/.test(next.textContent || '') &&
       hasCjkText(`${strong.textContent}${next.textContent}`)
     ) {
-      next.textContent = next.textContent.replace(/^\s+/, "");
+      next.textContent = next.textContent.replace(/^\s+/, '');
     }
   });
 }
 
 function applyWordThreeLineTables(root) {
-  root.querySelectorAll("table").forEach((table) => {
-    table.setAttribute("width", "100%");
-    table.setAttribute("style", "border-collapse:collapse;width:100%;margin:8pt 0;border-top:1.5pt solid #000;border-bottom:1.5pt solid #000;mso-table-lspace:0pt;mso-table-rspace:0pt;");
+  root.querySelectorAll('table').forEach((table) => {
+    table.setAttribute('width', '100%');
+    table.setAttribute(
+      'style',
+      'border-collapse:collapse;width:100%;margin:8pt 0;border-top:1.5pt solid #000;border-bottom:1.5pt solid #000;mso-table-lspace:0pt;mso-table-rspace:0pt;',
+    );
 
-    table.querySelectorAll("th, td").forEach((cell) => {
-      cell.setAttribute("style", "padding:5pt 6pt;border-left:0;border-right:0;border-top:0;border-bottom:0;vertical-align:top;");
+    table.querySelectorAll('th, td').forEach((cell) => {
+      cell.setAttribute(
+        'style',
+        'padding:5pt 6pt;border-left:0;border-right:0;border-top:0;border-bottom:0;vertical-align:top;',
+      );
     });
 
-    const headerCells = table.querySelectorAll("thead th");
+    const headerCells = table.querySelectorAll('thead th');
     headerCells.forEach((cell) => {
-      cell.setAttribute("style", "padding:5pt 6pt;border-left:0;border-right:0;border-top:0;border-bottom:1pt solid #000;vertical-align:top;font-weight:bold;");
+      cell.setAttribute(
+        'style',
+        'padding:5pt 6pt;border-left:0;border-right:0;border-top:0;border-bottom:1pt solid #000;vertical-align:top;font-weight:bold;',
+      );
     });
 
     if (!headerCells.length) {
-      table.querySelectorAll("tr:first-child th, tr:first-child td").forEach((cell) => {
-        cell.setAttribute("style", "padding:5pt 6pt;border-left:0;border-right:0;border-top:0;border-bottom:1pt solid #000;vertical-align:top;font-weight:bold;");
+      table.querySelectorAll('tr:first-child th, tr:first-child td').forEach((cell) => {
+        cell.setAttribute(
+          'style',
+          'padding:5pt 6pt;border-left:0;border-right:0;border-top:0;border-bottom:1pt solid #000;vertical-align:top;font-weight:bold;',
+        );
       });
     }
   });
@@ -4600,31 +4783,34 @@ function buildWordHighlightedCodeNodesForLanguage(language, rawText) {
   const highlighter = window.hljs;
 
   if (language && highlighter?.highlight && highlighter.getLanguage?.(language)) {
-    const template = document.createElement("template");
-    template.innerHTML = highlighter.highlight(String(rawText || ""), {
+    const template = document.createElement('template');
+    template.innerHTML = highlighter.highlight(String(rawText || ''), {
       language,
-      ignoreIllegals: true
+      ignoreIllegals: true,
     }).value;
     return Array.from(template.content.childNodes);
   }
 
-  return [document.createTextNode(String(rawText || ""))];
+  return [document.createTextNode(String(rawText || ''))];
 }
 
 function appendWordCodeWithBreaks(cell, nodes) {
   const appendTextWithBreaks = (text) => {
-    String(text || "").replace(/\r\n?/g, "\n").split("\n").forEach((line, index) => {
-      if (index) {
-        cell.append(document.createElement("br"));
-      }
-      const chunks = String(line || " ").match(/.{1,72}/g) || [" "];
-      chunks.forEach((chunk, chunkIndex) => {
-        if (chunkIndex) {
-          cell.append(document.createElement("wbr"));
+    String(text || '')
+      .replace(/\r\n?/g, '\n')
+      .split('\n')
+      .forEach((line, index) => {
+        if (index) {
+          cell.append(document.createElement('br'));
         }
-        cell.append(document.createTextNode(chunk));
+        const chunks = String(line || ' ').match(/.{1,72}/g) || [' '];
+        chunks.forEach((chunk, chunkIndex) => {
+          if (chunkIndex) {
+            cell.append(document.createElement('wbr'));
+          }
+          cell.append(document.createTextNode(chunk));
+        });
       });
-    });
   };
 
   nodes.forEach((node) => {
@@ -4637,21 +4823,24 @@ function appendWordCodeWithBreaks(cell, nodes) {
       return;
     }
 
-    const span = document.createElement("span");
-    span.className = node.className || "";
-    span.innerHTML = "";
+    const span = document.createElement('span');
+    span.className = node.className || '';
+    span.innerHTML = '';
     appendWordCodeWithBreaks(span, Array.from(node.childNodes));
     cell.append(span);
   });
 }
 
-function createWordCodeTable(text, language = "") {
-  const table = document.createElement("table");
-  table.setAttribute("width", "100%");
-  table.setAttribute("border", "1");
-  table.setAttribute("cellspacing", "0");
-  table.setAttribute("cellpadding", "0");
-  table.setAttribute("style", "border-collapse:collapse;width:100%;max-width:100%;table-layout:fixed;margin:8pt 0;mso-width-percent:1000;mso-table-lspace:0pt;mso-table-rspace:0pt;border:1pt solid #8a8f98;mso-border-alt:solid #8a8f98 .75pt;");
+function createWordCodeTable(text, language = '') {
+  const table = document.createElement('table');
+  table.setAttribute('width', '100%');
+  table.setAttribute('border', '1');
+  table.setAttribute('cellspacing', '0');
+  table.setAttribute('cellpadding', '0');
+  table.setAttribute(
+    'style',
+    'border-collapse:collapse;width:100%;max-width:100%;table-layout:fixed;margin:8pt 0;mso-width-percent:1000;mso-table-lspace:0pt;mso-table-rspace:0pt;border:1pt solid #8a8f98;mso-border-alt:solid #8a8f98 .75pt;',
+  );
   table.innerHTML = `
     <colgroup>
       <col width="100%" style="width:100%;" />
@@ -4663,8 +4852,8 @@ function createWordCodeTable(text, language = "") {
     </tbody>
   `;
   appendWordCodeWithBreaks(
-    table.querySelector("td"),
-    buildWordHighlightedCodeNodesForLanguage(normalizeCodeLanguageName(language), text)
+    table.querySelector('td'),
+    buildWordHighlightedCodeNodesForLanguage(normalizeCodeLanguageName(language), text),
   );
   return table;
 }
@@ -4674,35 +4863,38 @@ function buildWordDocumentHtml(bodyHtml) {
 }
 
 function buildWordHtmlFromMarkdown(markdown) {
-  const template = document.createElement("template");
+  const template = document.createElement('template');
   template.innerHTML = renderMarkdownContent(markdown);
   normalizeWordStrongSpacing(template.content);
   applyWordThreeLineTables(template.content);
 
-  template.content.querySelectorAll("pre").forEach((pre) => {
-    const code = pre.querySelector("code");
-    const text = code?.textContent || pre.textContent || "";
+  template.content.querySelectorAll('pre').forEach((pre) => {
+    const code = pre.querySelector('code');
+    const text = code?.textContent || pre.textContent || '';
     pre.replaceWith(createWordCodeTable(text, getCodeBlockLanguage(code)));
   });
 
-  template.content.querySelectorAll("code").forEach((code) => {
-    code.setAttribute("style", "font-family:Consolas,'Courier New',monospace;background:transparent;padding:0;");
+  template.content.querySelectorAll('code').forEach((code) => {
+    code.setAttribute(
+      'style',
+      "font-family:Consolas,'Courier New',monospace;background:transparent;padding:0;",
+    );
   });
 
   return buildWordDocumentHtml(template.innerHTML);
 }
 
 function escapeLatexText(value) {
-  return String(value || "")
-    .replace(/\\/g, "\\textbackslash{}")
-    .replace(/([&%#_{}])/g, "\\$1")
-    .replace(/\$/g, "\\$")
-    .replace(/~/g, "\\textasciitilde{}")
-    .replace(/\^/g, "\\textasciicircum{}");
+  return String(value || '')
+    .replace(/\\/g, '\\textbackslash{}')
+    .replace(/([&%#_{}])/g, '\\$1')
+    .replace(/\$/g, '\\$')
+    .replace(/~/g, '\\textasciitilde{}')
+    .replace(/\^/g, '\\textasciicircum{}');
 }
 
 function escapeLatexInline(value) {
-  return String(value || "")
+  return String(value || '')
     .split(/(\$\$[\s\S]+?\$\$|\$[^\n$]+?\$)/g)
     .map((part) => {
       if (/^\$\$[\s\S]+\$\$$/.test(part) || /^\$[^\n$]+\$$/.test(part)) {
@@ -4710,51 +4902,51 @@ function escapeLatexInline(value) {
       }
 
       return escapeLatexText(part)
-        .replace(/\*\*([^*]+)\*\*/g, "\\textbf{$1}")
-        .replace(/\*([^*]+)\*/g, "\\emph{$1}")
-        .replace(/`([^`]+)`/g, "\\texttt{$1}")
-        .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
-        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 (\\url{$2})");
+        .replace(/\*\*([^*]+)\*\*/g, '\\textbf{$1}')
+        .replace(/\*([^*]+)\*/g, '\\emph{$1}')
+        .replace(/`([^`]+)`/g, '\\texttt{$1}')
+        .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 (\\url{$2})');
     })
-    .join("");
+    .join('');
 }
 
 function latexListingLanguage(language) {
   const normalized = normalizeCodeLanguageName(language);
 
-  if (normalized === "python") {
-    return "Python";
+  if (normalized === 'python') {
+    return 'Python';
   }
 
-  if (normalized === "java") {
-    return "Java";
+  if (normalized === 'java') {
+    return 'Java';
   }
 
-  if (normalized === "c") {
-    return "C";
+  if (normalized === 'c') {
+    return 'C';
   }
 
-  if (normalized === "cpp") {
-    return "C++";
+  if (normalized === 'cpp') {
+    return 'C++';
   }
 
-  if (normalized === "matlab") {
-    return "Matlab";
+  if (normalized === 'matlab') {
+    return 'Matlab';
   }
 
-  return "";
+  return '';
 }
 
 function markdownToLatexBody(markdown) {
-  const lines = String(markdown || "").split(/\r?\n/);
+  const lines = String(markdown || '').split(/\r?\n/);
   const output = [];
   let inCode = false;
-  let codeLanguage = "";
+  let codeLanguage = '';
   let inList = false;
 
   const closeList = () => {
     if (inList) {
-      output.push("\\end{itemize}");
+      output.push('\\end{itemize}');
       inList = false;
     }
   };
@@ -4764,13 +4956,13 @@ function markdownToLatexBody(markdown) {
 
     if (fence) {
       if (inCode) {
-        output.push("\\end{lstlisting}");
+        output.push('\\end{lstlisting}');
         inCode = false;
-        codeLanguage = "";
+        codeLanguage = '';
       } else {
         closeList();
         codeLanguage = latexListingLanguage(fence[1]);
-        output.push(`\\begin{lstlisting}${codeLanguage ? `[language=${codeLanguage}]` : ""}`);
+        output.push(`\\begin{lstlisting}${codeLanguage ? `[language=${codeLanguage}]` : ''}`);
         inCode = true;
       }
       return;
@@ -4784,7 +4976,12 @@ function markdownToLatexBody(markdown) {
     const heading = line.match(/^(#{1,6})\s+(.+)$/);
     if (heading) {
       closeList();
-      const command = heading[1].length === 1 ? "section" : heading[1].length === 2 ? "subsection" : "subsubsection";
+      const command =
+        heading[1].length === 1
+          ? 'section'
+          : heading[1].length === 2
+            ? 'subsection'
+            : 'subsubsection';
       output.push(`\\${command}{${escapeLatexInline(heading[2])}}`);
       return;
     }
@@ -4792,7 +4989,7 @@ function markdownToLatexBody(markdown) {
     const listItem = line.match(/^\s*(?:[-*+]|\d+\.)\s+(.+)$/);
     if (listItem) {
       if (!inList) {
-        output.push("\\begin{itemize}");
+        output.push('\\begin{itemize}');
         inList = true;
       }
       output.push(`\\item ${escapeLatexInline(listItem[1])}`);
@@ -4802,22 +4999,22 @@ function markdownToLatexBody(markdown) {
     closeList();
 
     if (!line.trim()) {
-      output.push("");
+      output.push('');
       return;
     }
 
-    output.push(escapeLatexInline(line.replace(/^>\s?/, "")));
+    output.push(escapeLatexInline(line.replace(/^>\s?/, '')));
   });
 
   if (inCode) {
-    output.push("\\end{lstlisting}");
+    output.push('\\end{lstlisting}');
   }
   closeList();
-  return output.join("\n");
+  return output.join('\n');
 }
 
 function buildLatexDocument(markdown) {
-  const author = userState.username || userState.fullName || "FREE-BBS 用户";
+  const author = userState.username || userState.fullName || 'FREE-BBS 用户';
 
   return `\\documentclass[UTF8]{ctexart}
 \\usepackage{amsmath,amssymb}
@@ -4844,42 +5041,42 @@ ${markdownToLatexBody(markdown)}
 }
 
 function closeAiCopyMenus(exceptMenu = null) {
-  document.querySelectorAll(".aichat-copy-menu").forEach((menu) => {
+  document.querySelectorAll('.aichat-copy-menu').forEach((menu) => {
     if (menu !== exceptMenu) {
-      menu.classList.add("hidden");
+      menu.classList.add('hidden');
     }
   });
 }
 
 function closeCodeCopyMenus(exceptMenu = null) {
-  document.querySelectorAll(".code-copy-menu").forEach((menu) => {
+  document.querySelectorAll('.code-copy-menu').forEach((menu) => {
     if (menu !== exceptMenu) {
-      menu.classList.add("hidden");
+      menu.classList.add('hidden');
     }
   });
 }
 
-function buildCodeLatexListing(code, language = "") {
+function buildCodeLatexListing(code, language = '') {
   const listingLanguage = latexListingLanguage(language);
-  return `\\begin{lstlisting}${listingLanguage ? `[language=${listingLanguage}]` : ""}
-${String(code || "").replace(/\\end\{lstlisting\}/g, "\\end {lstlisting}")}
+  return `\\begin{lstlisting}${listingLanguage ? `[language=${listingLanguage}]` : ''}
+${String(code || '').replace(/\\end\{lstlisting\}/g, '\\end {lstlisting}')}
 \\end{lstlisting}
 `;
 }
 
-function buildCodeWordHtml(code, language = "") {
-  const container = document.createElement("div");
+function buildCodeWordHtml(code, language = '') {
+  const container = document.createElement('div');
   container.append(createWordCodeTable(code, language));
   return buildWordDocumentHtml(container.innerHTML);
 }
 
 async function copyCodeText(code, language, format) {
-  if (format === "latex") {
+  if (format === 'latex') {
     await writeClipboardText(buildCodeLatexListing(code, language));
     return;
   }
 
-  if (format === "word") {
+  if (format === 'word') {
     await writeClipboardHtml(buildCodeWordHtml(code, language), code);
     return;
   }
@@ -4888,19 +5085,19 @@ async function copyCodeText(code, language, format) {
 }
 
 async function copyAiMessage(article, format) {
-  const markdown = article?.dataset.markdown || "";
+  const markdown = article?.dataset.markdown || '';
 
-  if (format === "markdown") {
+  if (format === 'markdown') {
     await writeClipboardText(markdown);
     return;
   }
 
-  if (format === "word") {
+  if (format === 'word') {
     await writeClipboardHtml(buildWordHtmlFromMarkdown(markdown), markdownToPlainText(markdown));
     return;
   }
 
-  if (format === "latex") {
+  if (format === 'latex') {
     await writeClipboardText(buildLatexDocument(markdown));
     return;
   }
@@ -4912,14 +5109,14 @@ async function handleAiMessageCopyClick(event) {
   const toggle = event.target.closest("[data-action='toggle-ai-copy-menu']");
 
   if (toggle) {
-    const menu = toggle.closest(".aichat-copy-control")?.querySelector(".aichat-copy-menu");
+    const menu = toggle.closest('.aichat-copy-control')?.querySelector('.aichat-copy-menu');
     if (!menu) {
       return;
     }
 
-    const isHidden = menu.classList.contains("hidden");
+    const isHidden = menu.classList.contains('hidden');
     closeAiCopyMenus(menu);
-    menu.classList.toggle("hidden", !isHidden);
+    menu.classList.toggle('hidden', !isHidden);
     event.stopPropagation();
     return;
   }
@@ -4931,23 +5128,23 @@ async function handleAiMessageCopyClick(event) {
     return;
   }
 
-  const article = option.closest(".aichat-message-assistant");
-  const button = article?.querySelector(".aichat-copy-button");
-  const originalTitle = button?.title || "复制";
+  const article = option.closest('.aichat-message-assistant');
+  const button = article?.querySelector('.aichat-copy-button');
+  const originalTitle = button?.title || '复制';
 
   try {
     const format = option.dataset.copyFormat;
     await copyAiMessage(article, format);
     showCopySuccessPopup(format);
     if (button) {
-      button.title = "已复制";
+      button.title = '已复制';
       window.setTimeout(() => {
         button.title = originalTitle;
       }, 1200);
     }
   } catch {
     if (button) {
-      button.title = "复制失败";
+      button.title = '复制失败';
       window.setTimeout(() => {
         button.title = originalTitle;
       }, 1200);
@@ -4961,14 +5158,14 @@ async function handleCodeCopyClick(event) {
   const toggle = event.target.closest("[data-action='toggle-code-copy-menu']");
 
   if (toggle) {
-    const menu = toggle.parentElement?.querySelector(".code-copy-menu");
+    const menu = toggle.parentElement?.querySelector('.code-copy-menu');
     if (!menu) {
       return;
     }
 
-    const isHidden = menu.classList.contains("hidden");
+    const isHidden = menu.classList.contains('hidden');
     closeCodeCopyMenus(menu);
-    menu.classList.toggle("hidden", !isHidden);
+    menu.classList.toggle('hidden', !isHidden);
     event.stopPropagation();
     return;
   }
@@ -4980,18 +5177,18 @@ async function handleCodeCopyClick(event) {
     return;
   }
 
-  const container = option.closest("pre, .code-run-result");
+  const container = option.closest('pre, .code-run-result');
   const button = container?.querySelector("[data-action='toggle-code-copy-menu']");
-  const code = button?.dataset.code || "";
-  const language = button?.dataset.language || "";
-  const originalTitle = button?.title || "复制代码";
+  const code = button?.dataset.code || '';
+  const language = button?.dataset.language || '';
+  const originalTitle = button?.title || '复制代码';
 
   try {
     const format = option.dataset.copyFormat;
     await copyCodeText(code, language, format);
     showCopySuccessPopup(format);
     if (button) {
-      button.title = "已复制";
+      button.title = '已复制';
     }
     window.setTimeout(() => {
       if (button) {
@@ -5000,7 +5197,7 @@ async function handleCodeCopyClick(event) {
     }, 1200);
   } catch {
     if (button) {
-      button.title = "复制失败";
+      button.title = '复制失败';
     }
     window.setTimeout(() => {
       if (button) {
@@ -5013,24 +5210,24 @@ async function handleCodeCopyClick(event) {
 }
 
 function isImageOutputFile(file) {
-  return /\.(?:png|jpg|jpeg|webp|gif)(?:$|\?)/i.test(String(file || ""));
+  return /\.(?:png|jpg|jpeg|webp|gif)(?:$|\?)/i.test(String(file || ''));
 }
 
 function revokeCodeRunObjectUrls(result) {
-  result?.querySelectorAll("img[data-object-url]").forEach((image) => {
+  result?.querySelectorAll('img[data-object-url]').forEach((image) => {
     URL.revokeObjectURL(image.dataset.objectUrl);
   });
 }
 
 function addCodeRunResultCopyControls(result, text) {
-  const copyButton = document.createElement("button");
-  copyButton.className = "code-result-copy-button";
-  copyButton.type = "button";
-  copyButton.dataset.action = "toggle-code-copy-menu";
-  copyButton.dataset.code = String(text || "");
-  copyButton.dataset.language = "";
-  copyButton.title = "复制运行结果";
-  copyButton.setAttribute("aria-label", "复制运行结果");
+  const copyButton = document.createElement('button');
+  copyButton.className = 'code-result-copy-button';
+  copyButton.type = 'button';
+  copyButton.dataset.action = 'toggle-code-copy-menu';
+  copyButton.dataset.code = String(text || '');
+  copyButton.dataset.language = '';
+  copyButton.title = '复制运行结果';
+  copyButton.setAttribute('aria-label', '复制运行结果');
   copyButton.innerHTML = `<img src="/assets/icons/copy.svg" alt="" aria-hidden="true" />`;
   result.append(copyButton);
   result.append(createCodeCopyMenu());
@@ -5040,80 +5237,83 @@ async function loadAuthenticatedCodeRunImage(image, file) {
   try {
     const response = await fetch(`${API_ROOT}${file}`, {
       headers: {
-        ...(userState.token ? { Authorization: `Bearer ${userState.token}` } : {})
-      }
+        ...(userState.token ? { Authorization: `Bearer ${userState.token}` } : {}),
+      },
     });
 
     if (!response.ok) {
-      throw new Error("图片加载失败");
+      throw new Error('图片加载失败');
     }
 
     const objectUrl = URL.createObjectURL(await response.blob());
     image.dataset.objectUrl = objectUrl;
     image.src = objectUrl;
   } catch (error) {
-    image.replaceWith(Object.assign(document.createElement("p"), {
-      className: "code-run-image-error",
-      textContent: error.message
-    }));
+    image.replaceWith(
+      Object.assign(document.createElement('p'), {
+        className: 'code-run-image-error',
+        textContent: error.message,
+      }),
+    );
   }
 }
 
 function renderCodeRunResult(result, payload) {
   revokeCodeRunObjectUrls(result);
-  result.innerHTML = "";
+  result.innerHTML = '';
 
-  const stdout = String(payload?.stdout || "");
-  const stderr = String(payload?.stderr || "");
+  const stdout = String(payload?.stdout || '');
+  const stderr = String(payload?.stderr || '');
   const files = (Array.isArray(payload?.files) ? payload.files : []).filter(isImageOutputFile);
   const exitCode = Number(payload?.exit_code ?? payload?.exitCode ?? 0);
   const isSuccess = Number.isFinite(exitCode) && exitCode === 0 && !stderr;
-  const output = [
-    stdout ? `stdout:\n${stdout.trimEnd()}` : "",
-    stderr ? `stderr:\n${stderr.trimEnd()}` : ""
-  ].filter(Boolean).join("\n\n") || (isSuccess ? "" : `代码执行结束，exit code: ${payload?.exit_code ?? "unknown"}`);
-  result.classList.toggle("is-code-run-success", isSuccess);
-  result.classList.toggle("is-code-run-error", !isSuccess);
+  const output =
+    [stdout ? `stdout:\n${stdout.trimEnd()}` : '', stderr ? `stderr:\n${stderr.trimEnd()}` : '']
+      .filter(Boolean)
+      .join('\n\n') ||
+    (isSuccess ? '' : `代码执行结束，exit code: ${payload?.exit_code ?? 'unknown'}`);
+  result.classList.toggle('is-code-run-success', isSuccess);
+  result.classList.toggle('is-code-run-error', !isSuccess);
   const copyText = output.trimEnd();
   addCodeRunResultCopyControls(result, copyText);
 
   [
-    ["stdout", stdout],
-    ["stderr", stderr]
+    ['stdout', stdout],
+    ['stderr', stderr],
   ].forEach(([label, value]) => {
     if (!value) {
       return;
     }
 
-    const block = document.createElement("div");
-    block.className = "code-run-output-block";
+    const block = document.createElement('div');
+    block.className = 'code-run-output-block';
     block.innerHTML = `<span class="code-run-output-label">${label}</span>`;
-    const text = document.createElement("pre");
-    text.className = "code-run-result-text";
+    const text = document.createElement('pre');
+    text.className = 'code-run-result-text';
     text.textContent = String(value).trimEnd();
     block.append(text);
     result.append(block);
   });
 
   if (!stdout && !stderr && !isSuccess) {
-    const block = document.createElement("div");
-    block.className = "code-run-output-block";
-    const text = document.createElement("pre");
-    text.className = "code-run-result-text";
+    const block = document.createElement('div');
+    block.className = 'code-run-output-block';
+    const text = document.createElement('pre');
+    text.className = 'code-run-result-text';
     text.textContent = output;
     block.append(text);
     result.append(block);
   }
 
   if (files.length) {
-    const gallery = document.createElement("div");
-    gallery.className = "code-run-gallery";
+    const gallery = document.createElement('div');
+    gallery.className = 'code-run-gallery';
 
     files.forEach((file) => {
-      const image = document.createElement("img");
-      image.alt = "代码生成的图片";
-      image.loading = "lazy";
-      image.decoding = "async";
+      const image = document.createElement('img');
+      image.alt = '代码生成的图片';
+      image.loading = 'lazy';
+      image.decoding = 'async';
       gallery.append(image);
       loadAuthenticatedCodeRunImage(image, file);
     });
@@ -5129,75 +5329,77 @@ async function handleCodeRunClick(event) {
     return;
   }
 
-  const pre = button.closest("pre");
-  let result = pre?.nextElementSibling?.classList?.contains("code-run-result")
+  const pre = button.closest('pre');
+  let result = pre?.nextElementSibling?.classList?.contains('code-run-result')
     ? pre.nextElementSibling
     : null;
 
   if (!result) {
-    result = document.createElement("div");
-    result.className = "code-run-result";
+    result = document.createElement('div');
+    result.className = 'code-run-result';
     pre?.after(result);
   }
 
   button.disabled = true;
-  button.title = "运行中";
-  result.textContent = "正在执行代码...";
+  button.title = '运行中';
+  result.textContent = '正在执行代码...';
 
   try {
-    const payload = await callApi("/code/run", {
-      method: "POST",
+    const payload = await callApi('/code/run', {
+      method: 'POST',
       body: JSON.stringify({
         language: button.dataset.language,
-        code: button.dataset.code || "",
-        timeout: 10
-      })
+        code: button.dataset.code || '',
+        timeout: 10,
+      }),
     });
     renderCodeRunResult(result, payload);
   } catch (error) {
-    const message = error.message;
-    result.innerHTML = "";
-    result.classList.remove("is-code-run-success");
-    result.classList.add("is-code-run-error");
+    const { message } = error;
+    result.innerHTML = '';
+    result.classList.remove('is-code-run-success');
+    result.classList.add('is-code-run-error');
     addCodeRunResultCopyControls(result, message);
-    result.append(Object.assign(document.createElement("pre"), {
-      className: "code-run-result-text",
-      textContent: error.message
-    }));
+    result.append(
+      Object.assign(document.createElement('pre'), {
+        className: 'code-run-result-text',
+        textContent: error.message,
+      }),
+    );
   } finally {
     button.disabled = false;
-    button.title = "运行代码";
+    button.title = '运行代码';
   }
 }
 
 function initializeLandingMotion() {
-  const landingMain = document.querySelector(".landing-main");
+  const landingMain = document.querySelector('.landing-main');
   if (!landingMain) {
     return;
   }
 
   const revealSelectors = [
-    ".landing-hero .hero-copy > *",
-    ".landing-hero .hero-visual",
-    ".landing-bridge",
-    ".landing-section-copy > *",
-    ".landing-mission-path article",
-    ".landing-product-card",
-    ".landing-roadmap-track article"
+    '.landing-hero .hero-copy > *',
+    '.landing-hero .hero-visual',
+    '.landing-bridge',
+    '.landing-section-copy > *',
+    '.landing-mission-path article',
+    '.landing-product-card',
+    '.landing-roadmap-track article',
   ];
-  const revealElements = document.querySelectorAll(revealSelectors.join(","));
-  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const revealElements = document.querySelectorAll(revealSelectors.join(','));
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   revealElements.forEach((element, index) => {
-    element.classList.add("landing-reveal");
-    element.style.setProperty("--reveal-index", String(index % 6));
+    element.classList.add('landing-reveal');
+    element.style.setProperty('--reveal-index', String(index % 6));
 
     if (prefersReducedMotion) {
-      element.classList.add("is-visible");
+      element.classList.add('is-visible');
     }
   });
 
-  if (!prefersReducedMotion && "IntersectionObserver" in window) {
+  if (!prefersReducedMotion && 'IntersectionObserver' in window) {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -5205,59 +5407,59 @@ function initializeLandingMotion() {
             return;
           }
 
-          entry.target.classList.add("is-visible");
+          entry.target.classList.add('is-visible');
           observer.unobserve(entry.target);
         });
       },
       {
-        rootMargin: "0px 0px -12% 0px",
-        threshold: 0.16
-      }
+        rootMargin: '0px 0px -12% 0px',
+        threshold: 0.16,
+      },
     );
 
     revealElements.forEach((element) => observer.observe(element));
   } else {
-    revealElements.forEach((element) => element.classList.add("is-visible"));
+    revealElements.forEach((element) => element.classList.add('is-visible'));
   }
 
-  document.querySelectorAll(".landing-product-card").forEach((card) => {
-    card.addEventListener("pointermove", (event) => {
+  document.querySelectorAll('.landing-product-card').forEach((card) => {
+    card.addEventListener('pointermove', (event) => {
       const rect = card.getBoundingClientRect();
-      card.style.setProperty("--mx", `${event.clientX - rect.left}px`);
-      card.style.setProperty("--my", `${event.clientY - rect.top}px`);
+      card.style.setProperty('--mx', `${event.clientX - rect.left}px`);
+      card.style.setProperty('--my', `${event.clientY - rect.top}px`);
     });
   });
 }
 
-userName.addEventListener("click", handleAuthEntry);
-userSettingsButton?.addEventListener("click", handleUserSettingsClick);
-userLogoutButton?.addEventListener("click", handleUserLogoutClick);
+userName.addEventListener('click', handleAuthEntry);
+userSettingsButton?.addEventListener('click', handleUserSettingsClick);
+userLogoutButton?.addEventListener('click', handleUserLogoutClick);
 fortuneLinks.forEach((link) => {
-  link.addEventListener("click", (event) => {
+  link.addEventListener('click', (event) => {
     event.preventDefault();
     openFortuneModal();
   });
 });
-adminAddUserButton?.addEventListener("click", insertAdminDraftRow);
-adminUsers?.addEventListener("click", handleAdminUsersClick);
-fortuneBonusToggle?.addEventListener("change", handleFortuneBonusToggle);
-settingsForm?.addEventListener("submit", handleSettingsSubmit);
-settingsPasswordForm?.addEventListener("submit", handleSettingsPasswordSubmit);
-settingsAvatarInput?.addEventListener("change", handleAvatarUpload);
-settingsLogoutButton?.addEventListener("click", handleSettingsLogout);
-discussionBoardList?.addEventListener("click", (event) => {
+adminAddUserButton?.addEventListener('click', insertAdminDraftRow);
+adminUsers?.addEventListener('click', handleAdminUsersClick);
+fortuneBonusToggle?.addEventListener('change', handleFortuneBonusToggle);
+settingsForm?.addEventListener('submit', handleSettingsSubmit);
+settingsPasswordForm?.addEventListener('submit', handleSettingsPasswordSubmit);
+settingsAvatarInput?.addEventListener('change', handleAvatarUpload);
+settingsLogoutButton?.addEventListener('click', handleSettingsLogout);
+discussionBoardList?.addEventListener('click', (event) => {
   handleDiscussionBoardClick(event);
 });
-discussionPostList?.addEventListener("click", (event) => {
+discussionPostList?.addEventListener('click', (event) => {
   handleDiscussionPostClick(event);
 });
-discussionDetail?.addEventListener("click", handleDiscussionDetailClick);
-discussionDetail?.addEventListener("submit", handleDiscussionCommentSubmit);
-discussionCreateToggle?.addEventListener("click", handleDiscussionCreateToggle);
-discussionComposeForm?.addEventListener("submit", handleDiscussionComposeSubmit);
-discussionBoardEdit?.addEventListener("click", editActiveBoardDescription);
-discussionBoardModerators?.addEventListener("click", openBoardModeratorsPanel);
-discussionBoardAboutBody?.addEventListener("click", (event) => {
+discussionDetail?.addEventListener('click', handleDiscussionDetailClick);
+discussionDetail?.addEventListener('submit', handleDiscussionCommentSubmit);
+discussionCreateToggle?.addEventListener('click', handleDiscussionCreateToggle);
+discussionComposeForm?.addEventListener('submit', handleDiscussionComposeSubmit);
+discussionBoardEdit?.addEventListener('click', editActiveBoardDescription);
+discussionBoardModerators?.addEventListener('click', openBoardModeratorsPanel);
+discussionBoardAboutBody?.addEventListener('click', (event) => {
   if (event.target.closest("[data-action='save-board-description']")) {
     saveActiveBoardDescription();
     return;
@@ -5273,26 +5475,26 @@ discussionBoardAboutBody?.addEventListener("click", (event) => {
     toggleBoardModerator(moderatorToggle);
   }
 });
-discussionBoardAboutBody?.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && event.target.closest("#discussion-moderator-query")) {
+discussionBoardAboutBody?.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' && event.target.closest('#discussion-moderator-query')) {
     event.preventDefault();
     searchBoardModeratorCandidates();
   }
 });
-discussionInsertImage?.addEventListener("click", () => discussionImageInput?.click());
-discussionImageInput?.addEventListener("change", async (event) => {
+discussionInsertImage?.addEventListener('click', () => discussionImageInput?.click());
+discussionImageInput?.addEventListener('change', async (event) => {
   await insertDiscussionImages(event.target.files);
-  event.target.value = "";
+  event.target.value = '';
 });
-discussionComposeContent?.addEventListener("paste", handleDiscussionPaste);
-document.addEventListener("click", handleCodeCopyClick);
-document.addEventListener("click", handleCodeRunClick);
-document.addEventListener("click", handleAiMessageCopyClick);
-document.addEventListener("click", handleElectromagneticPageClick);
-document.addEventListener("click", handleInventoryPageClick);
-window.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") {
-    document.getElementById("fortune-modal")?.classList.add("hidden");
+discussionComposeContent?.addEventListener('paste', handleDiscussionPaste);
+document.addEventListener('click', handleCodeCopyClick);
+document.addEventListener('click', handleCodeRunClick);
+document.addEventListener('click', handleAiMessageCopyClick);
+document.addEventListener('click', handleElectromagneticPageClick);
+document.addEventListener('click', handleInventoryPageClick);
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    document.getElementById('fortune-modal')?.classList.add('hidden');
     closeAiCopyMenus();
     closeCodeCopyMenus();
   }

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -12,14 +12,8 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css" />
-    <link
-      rel="stylesheet"
-      href="/vendor/katex/dist/katex.min.css"
-    />
-    <link
-      rel="stylesheet"
-      href="/vendor/@highlightjs/cdn-assets/styles/github-dark.min.css"
-    />
+    <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css" />
+    <link rel="stylesheet" href="/vendor/@highlightjs/cdn-assets/styles/github-dark.min.css" />
   </head>
   <body class="discussion-page">
     <div class="page-shell page-shell-settings">
@@ -40,7 +34,7 @@
           </a>
           <a class="nav-link" href="/world">
             <img class="nav-icon" src="/assets/icons/map.svg" alt="" aria-hidden="true" />
-            <span>世界</span>
+            <span>学习世界</span>
           </a>
           <a class="nav-link" href="/discussion">
             <img class="nav-icon" src="/assets/icons/people.svg" alt="" aria-hidden="true" />
@@ -62,15 +56,40 @@
           <div class="user-panel" id="user-panel">
             <div class="user-summary">
               <button class="avatar" type="button" aria-label="用户头像">
-                <img class="avatar-image" id="avatar-image" src="/assets/avatar_placeholder.webp" alt="用户头像占位图" />
+                <img
+                  class="avatar-image"
+                  id="avatar-image"
+                  src="/assets/avatar_placeholder.webp"
+                  alt="用户头像占位图"
+                />
               </button>
               <div class="user-actions" id="user-actions">
-                <button class="user-icon-button hidden" id="user-settings-button" type="button" aria-label="设置">
-                  <img class="user-action-icon" src="/assets/icons/gear.svg" alt="" aria-hidden="true" />
+                <button
+                  class="user-icon-button hidden"
+                  id="user-settings-button"
+                  type="button"
+                  aria-label="设置"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/gear.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
                   <span>设置</span>
                 </button>
-                <button class="user-icon-button hidden" id="user-logout-button" type="button" aria-label="退出">
-                  <img class="user-action-icon" src="/assets/icons/exit.svg" alt="" aria-hidden="true" />
+                <button
+                  class="user-icon-button hidden"
+                  id="user-logout-button"
+                  type="button"
+                  aria-label="退出"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/exit.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
                   <span>退出</span>
                 </button>
               </div>
@@ -96,16 +115,16 @@
       <nav class="mobile-nav" aria-label="手机底部导航">
         <a class="nav-link" href="/world">
           <img class="nav-icon" src="/assets/icons/map.svg" alt="" aria-hidden="true" />
-          <span>世界</span>
+          <span>学习世界</span>
         </a>
         <a class="nav-link" href="/discussion">
           <img class="nav-icon" src="/assets/icons/people.svg" alt="" aria-hidden="true" />
           <span>讨论</span>
         </a>
-          <a class="nav-link" href="/aichat">
-            <img class="nav-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
-            <span>问问 Max</span>
-          </a>
+        <a class="nav-link" href="/aichat">
+          <img class="nav-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
+          <span>问问 Max</span>
+        </a>
         <a class="nav-link fortune-link hidden" href="#">
           <img class="nav-icon" src="/assets/icons/yunshi.svg" alt="" aria-hidden="true" />
           <span>今日运势</span>
@@ -128,11 +147,26 @@
                   <div class="discussion-board-about-head">
                     <h2 id="discussion-board-about-title">版块</h2>
                     <div class="discussion-board-admin-actions">
-                      <button class="discussion-board-moderators hidden" id="discussion-board-moderators" type="button">管理版主</button>
-                      <button class="discussion-board-edit hidden" id="discussion-board-edit" type="button">编辑</button>
+                      <button
+                        class="discussion-board-moderators hidden"
+                        id="discussion-board-moderators"
+                        type="button"
+                      >
+                        管理版主
+                      </button>
+                      <button
+                        class="discussion-board-edit hidden"
+                        id="discussion-board-edit"
+                        type="button"
+                      >
+                        编辑
+                      </button>
                     </div>
                   </div>
-                  <div class="discussion-board-about-body discussion-markdown-body" id="discussion-board-about-body"></div>
+                  <div
+                    class="discussion-board-about-body discussion-markdown-body"
+                    id="discussion-board-about-body"
+                  ></div>
                 </section>
 
                 <form class="discussion-compose hidden" id="discussion-compose-form">
@@ -149,8 +183,20 @@
                   <label class="auth-field">
                     <span>正文</span>
                     <div class="discussion-editor-toolbar">
-                      <button class="discussion-editor-button" id="discussion-insert-image" type="button">插入图片</button>
-                      <input class="hidden" id="discussion-image-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple />
+                      <button
+                        class="discussion-editor-button"
+                        id="discussion-insert-image"
+                        type="button"
+                      >
+                        插入图片
+                      </button>
+                      <input
+                        class="hidden"
+                        id="discussion-image-input"
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        multiple
+                      />
                     </div>
                     <textarea
                       id="discussion-compose-content"
@@ -173,10 +219,17 @@
                 </div>
               </section>
 
-              <article class="discussion-detail" id="discussion-detail" aria-live="polite">
-              </article>
+              <article
+                class="discussion-detail"
+                id="discussion-detail"
+                aria-live="polite"
+              ></article>
 
-              <aside class="discussion-stats-sidebar" id="discussion-stats-sidebar" aria-label="讨论统计">
+              <aside
+                class="discussion-stats-sidebar"
+                id="discussion-stats-sidebar"
+                aria-label="讨论统计"
+              >
                 <section class="discussion-stats-section">
                   <p class="discussion-kicker">Boards</p>
                   <h2>版块</h2>
@@ -184,7 +237,13 @@
                 </section>
 
                 <section class="discussion-stats-section">
-                  <button class="discussion-create-toggle" id="discussion-create-toggle" type="button">发布帖子</button>
+                  <button
+                    class="discussion-create-toggle"
+                    id="discussion-create-toggle"
+                    type="button"
+                  >
+                    发布帖子
+                  </button>
                 </section>
 
                 <section class="discussion-stats-section">
@@ -212,7 +271,9 @@
         <div class="footer-block footer-center">
           <div class="footer-links">
             <a href="#staff">工作人员名单</a>
-            <a href="https://www.ee.tsinghua.edu.cn/" target="_blank" rel="noreferrer">清华大学电子系</a>
+            <a href="https://www.ee.tsinghua.edu.cn/" target="_blank" rel="noreferrer"
+              >清华大学电子系</a
+            >
             <a href="https://www.eesast.com">电子系学生科协</a>
           </div>
           <p>&lt;京ICP备2025155858号-2&gt;</p>
