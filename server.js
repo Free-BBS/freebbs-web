@@ -17,6 +17,7 @@ const pageRoutes = new Map([
   ['/register', '/register.html'],
   ['/remake', '/remake.html'],
   ['/settings', '/settings.html'],
+  ['/workbench', '/workbench.html'],
   ['/world', '/world.html'],
 ]);
 const htmlRedirects = new Map([
@@ -31,6 +32,7 @@ const htmlRedirects = new Map([
   ['/register.html', '/register'],
   ['/remake.html', '/remake'],
   ['/settings.html', '/settings'],
+  ['/workbench.html', '/workbench'],
   ['/world.html', '/world'],
 ]);
 

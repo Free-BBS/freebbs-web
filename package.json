@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "start:local": "bash scripts/start-local.sh",
     "start:frontend": "node server.js",
     "start:backend": "node backend/server.js",
     "testbench:fortune": "node test/testbench.js",

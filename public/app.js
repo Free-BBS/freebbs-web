@@ -146,75 +146,6 @@ function applyThemeMode(mode) {
 
 function toggleThemeMode() {
   const nextMode = document.body.classList.contains('theme-light') ? 'dark' : 'light';
-function getThemeRevealOrigin(event) {
-  if (event && typeof event.clientX === "number" && typeof event.clientY === "number") {
-    if (event.clientX !== 0 || event.clientY !== 0) {
-      return { x: event.clientX, y: event.clientY };
-    }
-  }
-
-  const button = event?.currentTarget;
-  if (button) {
-    const rect = button.getBoundingClientRect();
-    return {
-      x: rect.left + rect.width / 2,
-      y: rect.top + rect.height / 2
-    };
-  }
-
-  return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
-}
-
-function playThemeToggleMicroInteraction(event) {
-  const button = event?.currentTarget;
-  button?.classList.add("is-theme-switching");
-
-  window.setTimeout(() => {
-    button?.classList.remove("is-theme-switching");
-  }, 680);
-}
-
-function applyThemeModeWithTransition(mode, event) {
-  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const origin = getThemeRevealOrigin(event);
-
-  if (!prefersReducedMotion) {
-    playThemeToggleMicroInteraction(event);
-  }
-
-  if (typeof document.startViewTransition !== "function" || prefersReducedMotion) {
-    applyThemeMode(mode);
-    return;
-  }
-
-  const { x, y } = origin;
-  const endRadius = Math.hypot(
-    Math.max(x, window.innerWidth - x),
-    Math.max(y, window.innerHeight - y)
-  );
-  const transition = document.startViewTransition(() => applyThemeMode(mode));
-
-  transition.ready
-    .then(() => {
-      document.documentElement.animate(
-        {
-          clipPath: [
-            `circle(0px at ${x}px ${y}px)`,
-            `circle(${endRadius}px at ${x}px ${y}px)`
-          ]
-        },
-        {
-          duration: 560,
-          easing: "cubic-bezier(0.22, 0.76, 0.2, 1)",
-          pseudoElement: "::view-transition-new(root)"
-        }
-      );
-    })
-    .catch(() => {});
-}
-
-function toggleThemeMode(event) {
-  const nextMode = document.body.classList.contains("theme-light") ? "dark" : "light";
   localStorage.setItem(THEME_STORAGE_KEY, nextMode);
   applyThemeModeWithTransition(nextMode, event);
 }
@@ -257,6 +188,67 @@ function createNavLink({ href = '#', icon, text, className = '' }) {
     <span>${escapeHtml(text)}</span>
   `;
   return link;
+}
+
+function initializeDashboardShell() {
+  const path = window.location.pathname.replace(/\/$/, '') || '/';
+  const pageTitles = {
+    '/': '首页',
+    '/world': '学习世界',
+    '/discussion': '讨论区',
+    '/workbench': '我的工作台',
+    '/aichat': '问问 Max',
+    '/settings': '设置',
+    '/profile': '个人主页',
+    '/adminusers': '用户管理',
+    '/electromagnetic': '电磁场',
+    '/inventory': '仓库',
+    '/login': '登录',
+    '/register': '注册',
+    '/remake': '找回密码',
+  };
+  const navItems = [
+    { href: '/', icon: 'home', label: '首页' },
+    { href: '/world', icon: 'map', label: '学习世界' },
+    { href: '/discussion', icon: 'people', label: '讨论区' },
+    { href: '/workbench', icon: 'run', label: '我的工作台' },
+    { href: '/aichat', icon: 'ai', label: '问问 Max' },
+    { href: '/settings', icon: 'gear', label: '设置' },
+  ];
+
+  document.body.dataset.pageTitle = pageTitles[path] || 'FREE-BBS';
+  document.querySelectorAll('.main-content').forEach((main) => {
+    main.dataset.pageTitle = document.body.dataset.pageTitle;
+  });
+
+  document.querySelectorAll('.nav-actions, .mobile-nav').forEach((nav) => {
+    navItems.forEach(({ href, icon, label }) => {
+      let link = nav.querySelector(`.nav-link[href="${href}"]`);
+      if (!link) {
+        link = createNavLink({
+          href,
+          icon,
+          text: label,
+          className: href === '/settings' ? 'settings-nav-link' : '',
+        });
+      }
+
+      const navAnchor = nav.querySelector('.fortune-link, .manage-link, #user-panel');
+      nav.insertBefore(link, navAnchor || null);
+
+      const text = link.querySelector('span');
+      if (text) {
+        text.textContent = label;
+      }
+
+      link.classList.toggle('is-active', href === path);
+      if (href === path) {
+        link.setAttribute('aria-current', 'page');
+      } else if (link.getAttribute('aria-current') === 'page') {
+        link.removeAttribute('aria-current');
+      }
+    });
+  });
 }
 
 function initializeEconomyNavigation() {
@@ -5509,6 +5501,7 @@ restoreSession().finally(() => {
 renderAdminSection();
 renderSettingsForm();
 renderDiscussionComposerState();
+initializeDashboardShell();
 initializeThemeMode();
 initializeEconomyNavigation();
 renderAdminSection();
