@@ -46,7 +46,15 @@ npm install
 npm ci
 ```
 
-### 2. 启动前端静态服务
+### 2. 一键启动本地前后端
+
+```bash
+npm run start:local
+```
+
+脚本会优先加载 `backend/.env`，其次加载本地 `envs.sh`，然后同时启动前端静态服务和后端 API。
+
+### 3. 单独启动前端静态服务
 
 ```bash
 npm run start:frontend
@@ -64,7 +72,7 @@ http://127.0.0.1:3000
 HOST=0.0.0.0 PORT=3000 npm run start:frontend
 ```
 
-### 3. 启动后端 API
+### 4. 单独启动后端 API
 
 前端会按当前浏览器地址推导 API 地址：本地开发时通常请求 `http://127.0.0.1:3001/api` 或同主机 `3001` 端口；生产同域访问时请求 `/api`。
 

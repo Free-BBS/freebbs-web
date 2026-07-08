@@ -190,6 +190,67 @@ function createNavLink({ href = '#', icon, text, className = '' }) {
   return link;
 }
 
+function initializeDashboardShell() {
+  const path = window.location.pathname.replace(/\/$/, '') || '/';
+  const pageTitles = {
+    '/': '首页',
+    '/world': '学习世界',
+    '/discussion': '讨论区',
+    '/workbench': '我的工作台',
+    '/aichat': '问问 Max',
+    '/settings': '设置',
+    '/profile': '个人主页',
+    '/adminusers': '用户管理',
+    '/electromagnetic': '电磁场',
+    '/inventory': '仓库',
+    '/login': '登录',
+    '/register': '注册',
+    '/remake': '找回密码',
+  };
+  const navItems = [
+    { href: '/', icon: 'home', label: '首页' },
+    { href: '/world', icon: 'map', label: '学习世界' },
+    { href: '/discussion', icon: 'people', label: '讨论区' },
+    { href: '/workbench', icon: 'run', label: '我的工作台' },
+    { href: '/aichat', icon: 'ai', label: '问问 Max' },
+    { href: '/settings', icon: 'gear', label: '设置' },
+  ];
+
+  document.body.dataset.pageTitle = pageTitles[path] || 'FREE-BBS';
+  document.querySelectorAll('.main-content').forEach((main) => {
+    main.dataset.pageTitle = document.body.dataset.pageTitle;
+  });
+
+  document.querySelectorAll('.nav-actions, .mobile-nav').forEach((nav) => {
+    navItems.forEach(({ href, icon, label }) => {
+      let link = nav.querySelector(`.nav-link[href="${href}"]`);
+      if (!link) {
+        link = createNavLink({
+          href,
+          icon,
+          text: label,
+          className: href === '/settings' ? 'settings-nav-link' : '',
+        });
+      }
+
+      const navAnchor = nav.querySelector('.fortune-link, .manage-link, #user-panel');
+      nav.insertBefore(link, navAnchor || null);
+
+      const text = link.querySelector('span');
+      if (text) {
+        text.textContent = label;
+      }
+
+      link.classList.toggle('is-active', href === path);
+      if (href === path) {
+        link.setAttribute('aria-current', 'page');
+      } else if (link.getAttribute('aria-current') === 'page') {
+        link.removeAttribute('aria-current');
+      }
+    });
+  });
+}
+
 function initializeEconomyNavigation() {
   fortuneLinks.forEach((link) => {
     const text = link.querySelector('span');
@@ -5440,6 +5501,7 @@ restoreSession().finally(() => {
 renderAdminSection();
 renderSettingsForm();
 renderDiscussionComposerState();
+initializeDashboardShell();
 initializeThemeMode();
 initializeEconomyNavigation();
 renderAdminSection();
