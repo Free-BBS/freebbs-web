@@ -147,7 +147,7 @@ function applyThemeMode(mode) {
 function toggleThemeMode() {
   const nextMode = document.body.classList.contains('theme-light') ? 'dark' : 'light';
   localStorage.setItem(THEME_STORAGE_KEY, nextMode);
-  applyThemeMode(nextMode);
+  applyThemeModeWithTransition(nextMode, event);
 }
 
 function createThemeToggleButton(className) {
