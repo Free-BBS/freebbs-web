@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>信号系统知识点 Demo</title>
+    <link rel="stylesheet" href="./vendor/katex/katex.min.css" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="demo-shell">
+      <header class="course-bar">
+        <a class="course-mark" href="#overview" aria-label="回到课程导引页">
+          <span>SS</span>
+          <strong id="course-title"></strong>
+        </a>
+        <section class="progress-panel" aria-label="学习进度">
+          <div>
+            <span>已学习</span>
+            <strong id="learned-count">0</strong>
+          </div>
+          <div>
+            <span>复习中</span>
+            <strong id="review-count">0</strong>
+          </div>
+          <div>
+            <span>知识点</span>
+            <strong id="total-count">5</strong>
+          </div>
+        </section>
+      </header>
+
+      <section class="overview-page" id="overview-page" aria-label="课程导引页">
+        <section class="course-hero" aria-labelledby="hero-title">
+          <div class="hero-copy">
+            <p class="eyebrow" id="course-term"></p>
+            <h1 id="hero-title">信号系统学习路线</h1>
+            <p id="course-description"></p>
+          </div>
+          <aside class="focus-card" aria-label="建议继续学习">
+            <p class="eyebrow">Continue</p>
+            <h2 id="focus-title"></h2>
+            <p id="focus-summary"></p>
+            <div class="tag-row" id="focus-tags"></div>
+          </aside>
+        </section>
+
+        <section class="route-brief" aria-label="学习路线说明">
+          <div>
+            <p class="eyebrow">How To Learn</p>
+            <h2>先建立对象，再进入频域</h2>
+          </div>
+          <p>
+            这条路线先让你知道“信号是什么”，再用 LTI
+            系统把输入输出关系固定下来，最后用傅里叶分析和采样定理解释时域与频域的互相翻译。
+          </p>
+          <div class="overview-actions">
+            <button class="primary-button" id="continue-button" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 12h14" />
+                <path d="M13 6l6 6-6 6" />
+              </svg>
+              继续学习
+            </button>
+            <a class="ghost-link" href="/discussion?board=signal">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+              </svg>
+              讨论区
+            </a>
+          </div>
+        </section>
+
+        <nav class="knowledge-strip" aria-label="知识点路径">
+          <div class="strip-heading">
+            <div>
+              <p class="eyebrow">Course Path</p>
+              <h2>知识点路径</h2>
+            </div>
+            <p>点击卡片查看预览，进入详情后会切换到更适合阅读的紧凑页面。</p>
+          </div>
+          <div class="point-list" id="point-list"></div>
+        </nav>
+      </section>
+
+      <article class="detail-page hidden" id="detail-page" aria-label="知识点详情页">
+        <nav class="detail-nav" aria-label="知识点详情导航">
+          <a class="ghost-link" href="#overview">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M19 12H5" />
+              <path d="M11 18l-6-6 6-6" />
+            </svg>
+            课程路线
+          </a>
+          <div class="pager-actions">
+            <button class="ghost-button" id="prev-button" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+              上一个
+            </button>
+            <button class="ghost-button" id="next-button" type="button">
+              下一个
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </button>
+          </div>
+        </nav>
+
+        <header class="detail-header" id="reading">
+          <div>
+            <p class="eyebrow">Knowledge Detail</p>
+            <h1 id="point-title"></h1>
+            <p id="point-summary"></p>
+            <div class="tag-row" id="detail-tags"></div>
+          </div>
+          <div class="detail-actions">
+            <button class="ghost-button" id="learn-button" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 13l4 4L19 7" />
+              </svg>
+              学习
+            </button>
+            <button class="ghost-button" id="review-button" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 4v6h6M20 20v-6h-6M5 19a8 8 0 0 0 13-3M19 5A8 8 0 0 0 6 8" />
+              </svg>
+              复习
+            </button>
+          </div>
+        </header>
+
+        <section class="content-section reading-section" aria-label="正文区">
+          <div class="section-heading">
+            <p class="eyebrow">Reading</p>
+            <h2>正文区</h2>
+          </div>
+          <div class="inline-resource-row" id="inline-resource-row"></div>
+          <div class="body-content" id="body-content"></div>
+        </section>
+
+        <section class="content-section resource-section" id="resources" aria-label="资料区">
+          <div class="section-heading">
+            <p class="eyebrow">Resources</p>
+            <h2>资料区</h2>
+          </div>
+          <div class="resource-list" id="resource-list"></div>
+        </section>
+
+        <section class="discussion-card" aria-label="讨论入口">
+          <div>
+            <p class="eyebrow">Discussion</p>
+            <h2>把卡住的地方丢进讨论区</h2>
+            <p>当前 demo 默认接到信号系统板块，后续可以按课程和知识点细分讨论入口。</p>
+          </div>
+          <a class="discussion-link" href="/discussion?board=signal">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+            </svg>
+            进入讨论
+          </a>
+        </section>
+      </article>
+    </main>
+
+    <button
+      class="rag-fab"
+      id="rag-toggle"
+      type="button"
+      aria-controls="rag-dock"
+      aria-expanded="false"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3l1.6 5.3L19 10l-5.4 1.7L12 17l-1.6-5.3L5 10l5.4-1.7z" />
+        <path d="M19 15l.8 2.4L22 18l-2.2.6L19 21l-.8-2.4L16 18l2.2-.6z" />
+      </svg>
+      <span>Ask Max</span>
+    </button>
+
+    <aside class="rag-dock hidden" id="rag-dock" aria-label="RAG 对话区">
+      <header class="rag-header">
+        <div>
+          <p class="eyebrow">Local RAG Mock</p>
+          <h2>Max 学习助手</h2>
+        </div>
+        <button class="icon-button" id="rag-close" type="button" aria-label="关闭 RAG 对话">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </header>
+      <div class="rag-context">
+        <span>当前参考</span>
+        <strong id="rag-context-title"></strong>
+      </div>
+      <div class="rag-thread" id="rag-thread" aria-live="polite"></div>
+      <div class="rag-prompts">
+        <button type="button" data-rag-question="这个知识点最容易错在哪里？">易错点</button>
+        <button type="button" data-rag-question="帮我用直觉解释一下">直觉解释</button>
+        <button type="button" data-rag-question="给我一道检查理解的小题">小题检查</button>
+      </div>
+      <form class="rag-form" id="rag-form">
+        <label for="rag-input">围绕当前知识点提问</label>
+        <textarea
+          id="rag-input"
+          rows="3"
+          placeholder="例如：这个知识点和前置知识有什么关系？"
+        ></textarea>
+        <button class="primary-button" type="submit">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M22 2L11 13" />
+            <path d="M22 2l-7 20-4-9-9-4z" />
+          </svg>
+          发送
+        </button>
+      </form>
+    </aside>
+
+    <div class="modal hidden" id="point-modal" aria-hidden="true">
+      <div class="modal-backdrop" data-action="close-modal"></div>
+      <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <button class="modal-close" type="button" data-action="close-modal" aria-label="关闭">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+        <p class="eyebrow" id="modal-kicker"></p>
+        <h2 id="modal-title"></h2>
+        <p id="modal-summary"></p>
+        <dl class="modal-meta">
+          <div>
+            <dt>前置知识</dt>
+            <dd id="modal-prerequisites"></dd>
+          </div>
+          <div>
+            <dt>当前状态</dt>
+            <dd id="modal-status"></dd>
+          </div>
+        </dl>
+        <div class="resource-list" id="modal-resources"></div>
+        <div class="modal-actions">
+          <button class="ghost-button" type="button" data-action="mark-learned">标记学习</button>
+          <button class="ghost-button" type="button" data-action="mark-review">标记复习</button>
+          <button class="primary-button" type="button" data-action="open-detail">进入详情</button>
+        </div>
+      </section>
+    </div>
+
+    <script src="./data.js"></script>
+    <script src="./vendor/marked/marked.umd.js"></script>
+    <script src="./vendor/katex/katex.min.js"></script>
+    <script src="./markdown-renderer.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

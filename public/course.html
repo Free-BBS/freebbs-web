@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FREE-BBS - 课程</title>
+    <link rel="icon" type="image/png" href="/assets/favicon-64.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Noto+Serif+SC:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/course.css" />
+  </head>
+  <body class="course-page">
+    <div class="page-shell page-shell-settings">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="FREE-BBS 首页">
+          <span class="brand-mark">FREE<br />BBS</span>
+        </a>
+
+        <form class="searchbar" role="search">
+          <span class="search-symbol" aria-hidden="true">⌕</span>
+          <input type="search" placeholder="搜索课程、讨论、资料、地图坐标" aria-label="搜索" />
+        </form>
+
+        <nav class="nav-actions" aria-label="顶部导航">
+          <a class="nav-link" href="/">
+            <img class="nav-icon" src="/assets/icons/home.svg" alt="" aria-hidden="true" />
+            <span>主页</span>
+          </a>
+          <a class="nav-link" href="/world">
+            <img class="nav-icon" src="/assets/icons/map.svg" alt="" aria-hidden="true" />
+            <span>学习世界</span>
+          </a>
+          <a class="nav-link" href="/discussion">
+            <img class="nav-icon" src="/assets/icons/people.svg" alt="" aria-hidden="true" />
+            <span>讨论</span>
+          </a>
+          <a class="nav-link" href="/aichat">
+            <img class="nav-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
+            <span>问问 Max</span>
+          </a>
+          <a class="nav-link fortune-link hidden" href="#">
+            <img class="nav-icon" src="/assets/icons/yunshi.svg" alt="" aria-hidden="true" />
+            <span>今日运势</span>
+          </a>
+          <a class="nav-link manage-link hidden" href="/adminusers">
+            <img class="nav-icon" src="/assets/icons/gear.svg" alt="" aria-hidden="true" />
+            <span>管理</span>
+          </a>
+
+          <div class="user-panel" id="user-panel">
+            <div class="user-summary">
+              <button class="avatar" type="button" aria-label="用户头像">
+                <img
+                  class="avatar-image"
+                  id="avatar-image"
+                  src="/assets/avatar_placeholder.webp"
+                  alt="用户头像占位图"
+                />
+              </button>
+              <div class="user-actions" id="user-actions">
+                <button
+                  class="user-icon-button hidden"
+                  id="user-settings-button"
+                  type="button"
+                  aria-label="设置"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/gear.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>设置</span>
+                </button>
+                <button
+                  class="user-icon-button hidden"
+                  id="user-logout-button"
+                  type="button"
+                  aria-label="退出"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/exit.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>退出</span>
+                </button>
+              </div>
+              <div class="user-copy">
+                <button class="user-name" type="button" id="user-name">登录/注册</button>
+                <div class="user-role" id="user-role">学生</div>
+              </div>
+            </div>
+            <div class="user-status" id="user-status">
+              <span class="currency currency-electric" data-tooltip="电元" aria-label="电元">
+                <img class="currency-icon" src="/assets/icons/electron.svg" alt="电元" />
+                <span class="currency-value">-</span>
+              </span>
+              <span class="currency currency-magnetic" data-tooltip="磁元" aria-label="磁元">
+                <img class="currency-icon" src="/assets/icons/magnetron.svg" alt="磁元" />
+                <span class="currency-value">-</span>
+              </span>
+            </div>
+          </div>
+        </nav>
+      </header>
+
+      <nav class="mobile-nav" aria-label="手机底部导航">
+        <a class="nav-link" href="/world">
+          <img class="nav-icon" src="/assets/icons/map.svg" alt="" aria-hidden="true" />
+          <span>学习世界</span>
+        </a>
+        <a class="nav-link" href="/discussion">
+          <img class="nav-icon" src="/assets/icons/people.svg" alt="" aria-hidden="true" />
+          <span>讨论</span>
+        </a>
+        <a class="nav-link" href="/aichat">
+          <img class="nav-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
+          <span>问问 Max</span>
+        </a>
+        <a class="nav-link fortune-link hidden" href="#">
+          <img class="nav-icon" src="/assets/icons/yunshi.svg" alt="" aria-hidden="true" />
+          <span>今日运势</span>
+        </a>
+        <a class="nav-link manage-link hidden" href="/adminusers">
+          <img class="nav-icon" src="/assets/icons/gear.svg" alt="" aria-hidden="true" />
+          <span>管理</span>
+        </a>
+      </nav>
+
+      <main class="main-content settings-main course-main" data-course-page>
+        <section class="course-shell" aria-label="课程">
+          <header class="course-hero">
+            <div>
+              <p class="course-kicker" id="course-code"></p>
+              <h1 id="course-title"></h1>
+              <p id="course-description"></p>
+            </div>
+            <aside
+              class="course-progress"
+              id="course-progress-summary"
+              aria-label="学习进度"
+            ></aside>
+          </header>
+
+          <section class="course-overview" aria-label="课程概览">
+            <p id="course-summary"></p>
+            <a
+              class="course-discussion-link"
+              id="course-discussion-link"
+              href="/discussion?board=signal"
+            >
+              <img src="/assets/icons/chats.svg" alt="" aria-hidden="true" />
+              <span>进入讨论</span>
+            </a>
+          </section>
+
+          <section class="course-toolbar" aria-label="课程工具">
+            <label class="course-search">
+              <span>知识点搜索</span>
+              <input id="course-search-input" type="search" placeholder="输入傅里叶、采样、卷积" />
+            </label>
+          </section>
+
+          <section
+            class="course-point-list"
+            id="course-point-list"
+            aria-label="知识点列表"
+          ></section>
+        </section>
+
+        <div class="course-point-modal hidden" id="course-point-modal"></div>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+    <script src="/course-data.js"></script>
+    <script src="/course.js"></script>
+  </body>
+</html>

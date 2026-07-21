@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FREE-BBS - 知识点</title>
+    <link rel="icon" type="image/png" href="/assets/favicon-64.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Noto+Serif+SC:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/course.css" />
+    <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css" />
+    <link rel="stylesheet" href="/vendor/@highlightjs/cdn-assets/styles/github-dark.min.css" />
+  </head>
+  <body class="knowledge-page">
+    <div class="page-shell page-shell-settings">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="FREE-BBS 首页">
+          <span class="brand-mark">FREE<br />BBS</span>
+        </a>
+
+        <form class="searchbar" role="search">
+          <span class="search-symbol" aria-hidden="true">⌕</span>
+          <input type="search" placeholder="搜索课程、讨论、资料、地图坐标" aria-label="搜索" />
+        </form>
+
+        <nav class="nav-actions" aria-label="顶部导航">
+          <a class="nav-link" href="/">
+            <img class="nav-icon" src="/assets/icons/home.svg" alt="" aria-hidden="true" />
+            <span>主页</span>
+          </a>
+          <a class="nav-link" href="/world">
+            <img class="nav-icon" src="/assets/icons/map.svg" alt="" aria-hidden="true" />
+            <span>学习世界</span>
+          </a>
+          <a class="nav-link" href="/discussion">
+            <img class="nav-icon" src="/assets/icons/people.svg" alt="" aria-hidden="true" />
+            <span>讨论</span>
+          </a>
+          <a class="nav-link" href="/aichat">
+            <img class="nav-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
+            <span>问问 Max</span>
+          </a>
+          <a class="nav-link fortune-link hidden" href="#">
+            <img class="nav-icon" src="/assets/icons/yunshi.svg" alt="" aria-hidden="true" />
+            <span>今日运势</span>
+          </a>
+          <a class="nav-link manage-link hidden" href="/adminusers">
+            <img class="nav-icon" src="/assets/icons/gear.svg" alt="" aria-hidden="true" />
+            <span>管理</span>
+          </a>
+
+          <div class="user-panel" id="user-panel">
+            <div class="user-summary">
+              <button class="avatar" type="button" aria-label="用户头像">
+                <img
+                  class="avatar-image"
+                  id="avatar-image"
+                  src="/assets/avatar_placeholder.webp"
+                  alt="用户头像占位图"
+                />
+              </button>
+              <div class="user-actions" id="user-actions">
+                <button
+                  class="user-icon-button hidden"
+                  id="user-settings-button"
+                  type="button"
+                  aria-label="设置"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/gear.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>设置</span>
+                </button>
+                <button
+                  class="user-icon-button hidden"
+                  id="user-logout-button"
+                  type="button"
+                  aria-label="退出"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/exit.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>退出</span>
+                </button>
+              </div>
+              <div class="user-copy">
+                <button class="user-name" type="button" id="user-name">登录/注册</button>
+                <div class="user-role" id="user-role">学生</div>
+              </div>
+            </div>
+            <div class="user-status" id="user-status">
+              <span class="currency currency-electric" data-tooltip="电元" aria-label="电元">
+                <img class="currency-icon" src="/assets/icons/electron.svg" alt="电元" />
+                <span class="currency-value">-</span>
+              </span>
+              <span class="currency currency-magnetic" data-tooltip="磁元" aria-label="磁元">
+                <img class="currency-icon" src="/assets/icons/magnetron.svg" alt="磁元" />
+                <span class="currency-value">-</span>
+              </span>
+            </div>
+          </div>
+        </nav>
+      </header>
+
+      <nav class="mobile-nav" aria-label="手机底部导航">
+        <a class="nav-link" href="/world">
+          <img class="nav-icon" src="/assets/icons/map.svg" alt="" aria-hidden="true" />
+          <span>学习世界</span>
+        </a>
+        <a class="nav-link" href="/discussion">
+          <img class="nav-icon" src="/assets/icons/people.svg" alt="" aria-hidden="true" />
+          <span>讨论</span>
+        </a>
+        <a class="nav-link" href="/aichat">
+          <img class="nav-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
+          <span>问问 Max</span>
+        </a>
+        <a class="nav-link fortune-link hidden" href="#">
+          <img class="nav-icon" src="/assets/icons/yunshi.svg" alt="" aria-hidden="true" />
+          <span>今日运势</span>
+        </a>
+        <a class="nav-link manage-link hidden" href="/adminusers">
+          <img class="nav-icon" src="/assets/icons/gear.svg" alt="" aria-hidden="true" />
+          <span>管理</span>
+        </a>
+      </nav>
+
+      <main class="main-content settings-main knowledge-main" data-knowledge-page>
+        <section class="knowledge-shell" aria-label="知识点详情">
+          <aside class="knowledge-sidebar" aria-label="课程知识点">
+            <a class="knowledge-back" id="knowledge-course-link" href="/course?course=signals"></a>
+            <div class="knowledge-list" id="knowledge-point-list"></div>
+          </aside>
+
+          <article class="knowledge-content">
+            <header class="knowledge-header">
+              <p class="course-kicker">Knowledge Point</p>
+              <h1 id="knowledge-title"></h1>
+              <p id="knowledge-summary"></p>
+              <div class="knowledge-actions" id="knowledge-actions"></div>
+            </header>
+
+            <section class="knowledge-section" aria-label="正文区">
+              <h2>正文区</h2>
+              <div class="discussion-markdown-body" id="knowledge-body"></div>
+            </section>
+
+            <section class="knowledge-section" aria-label="资料区">
+              <h2>资料区</h2>
+              <div class="course-resource-list" id="knowledge-resources"></div>
+            </section>
+
+            <section class="knowledge-section knowledge-rag" aria-label="RAG 对话区">
+              <div class="knowledge-section-head">
+                <h2>RAG 对话区</h2>
+                <a id="knowledge-discussion-link" href="/discussion?board=signal">讨论入口</a>
+              </div>
+              <div class="knowledge-rag-thread" id="knowledge-rag-thread" aria-live="polite"></div>
+              <form class="knowledge-rag-form" id="knowledge-rag-form">
+                <textarea
+                  id="knowledge-rag-input"
+                  rows="3"
+                  maxlength="4000"
+                  placeholder="问 Max 一个关于当前知识点的问题"
+                  required
+                ></textarea>
+                <button id="knowledge-rag-send" type="submit">
+                  <img src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
+                  <span>发送</span>
+                </button>
+              </form>
+              <p class="knowledge-rag-status" id="knowledge-rag-status"></p>
+            </section>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <script src="/vendor/marked/lib/marked.umd.js"></script>
+    <script src="/vendor/@highlightjs/cdn-assets/highlight.min.js"></script>
+    <script src="/vendor/@highlightjs/cdn-assets/languages/matlab.min.js"></script>
+    <script src="/vendor/katex/dist/katex.min.js"></script>
+    <script src="/vendor/katex/dist/contrib/auto-render.min.js"></script>
+    <script src="/app.js"></script>
+    <script src="/course-data.js"></script>
+    <script src="/course.js"></script>
+  </body>
+</html>
