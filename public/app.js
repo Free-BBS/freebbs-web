@@ -213,6 +213,7 @@ function initializeDashboardShell() {
     '/discussion': '讨论区',
     '/workbench': '我的工作台',
     '/aichat': '问问 Max',
+    '/development': '发展端',
     '/settings': '设置',
     '/profile': '个人主页',
     '/adminusers': '用户管理',
@@ -228,6 +229,7 @@ function initializeDashboardShell() {
     { href: '/discussion', icon: 'people', label: '讨论区' },
     { href: '/workbench', icon: 'run', label: '我的工作台' },
     { href: '/aichat', icon: 'ai', label: '问问 Max' },
+    { href: '/development', icon: 'star', label: '发展端' },
     { href: '/settings', icon: 'gear', label: '设置' },
   ];
   const activePath = ['/course', '/knowledge'].includes(path) ? '/world' : path;
