@@ -132,22 +132,72 @@
       </nav>
       <main class="main-content settings-main">
         <section class="aichat-auth-required" aria-label="登录后使用问问 Max">
-          <h1>问问 Max</h1>
-          <p>MAX只和有名有姓的小朋友聊天哦</p>
+          <img
+            class="aichat-auth-avatar"
+            src="/assets/max_the_agent_avatar.webp"
+            alt="Max 的头像"
+          />
+          <p class="aichat-kicker">MAX · AI STUDY PARTNER</p>
+          <h1>登录后，继续和 Max 对话</h1>
+          <p>课程、推导、代码或讨论区里的问题，都可以从这里开始。</p>
           <a class="aichat-auth-link" href="/login">登录 / 注册</a>
         </section>
 
         <section class="aichat-shell" aria-label="问问 Max">
-          <button class="aichat-dialog-toggle" id="aichat-dialog-toggle" type="button">
-            过去对话
+          <button
+            class="aichat-dialog-toggle"
+            id="aichat-dialog-toggle"
+            type="button"
+            aria-controls="aichat-dialogs"
+            aria-expanded="false"
+          >
+            <img src="/assets/icons/chats.svg" alt="" aria-hidden="true" />
+            <span>对话记录</span>
           </button>
-          <aside class="aichat-dialogs" aria-label="最近对话">
-            <button class="aichat-new-dialog" id="aichat-new-dialog" type="button">新对话</button>
+          <button
+            class="aichat-dialog-backdrop"
+            type="button"
+            aria-label="关闭对话记录"
+            aria-hidden="true"
+            tabindex="-1"
+          ></button>
+          <aside class="aichat-dialogs" id="aichat-dialogs" aria-label="最近对话">
+            <div class="aichat-dialogs-head">
+              <div class="aichat-dialogs-title">
+                <div>
+                  <p class="aichat-kicker">CONVERSATIONS</p>
+                  <h2>最近对话</h2>
+                </div>
+                <button class="aichat-dialog-close" type="button" aria-label="关闭对话记录">
+                  <span aria-hidden="true">×</span>
+                </button>
+              </div>
+              <button class="aichat-new-dialog" id="aichat-new-dialog" type="button">
+                <span aria-hidden="true">＋</span>
+                <span>新对话</span>
+              </button>
+            </div>
             <div class="aichat-dialog-list" id="aichat-dialog-list"></div>
           </aside>
 
           <section class="aichat-main" aria-label="当前对话">
-            <div class="aichat-thread" id="aichat-thread" aria-live="polite">
+            <header class="aichat-main-header">
+              <div class="aichat-main-identity">
+                <img
+                  class="aichat-main-avatar"
+                  src="/assets/max_the_agent_avatar.webp"
+                  alt=""
+                  aria-hidden="true"
+                />
+                <div>
+                  <p class="aichat-kicker">MAX · STUDY PARTNER</p>
+                  <h2>问问 Max</h2>
+                  <p>专注课程、推导与代码问题</p>
+                </div>
+              </div>
+              <p class="aichat-presence">课程 / 推导 / 代码</p>
+            </header>
+            <div class="aichat-thread" id="aichat-thread" aria-live="polite" aria-atomic="false">
               <article class="aichat-message aichat-message-assistant">
                 <div class="aichat-avatar">
                   <img
@@ -170,11 +220,21 @@
                 maxlength="12000"
                 required
               ></textarea>
-              <button class="aichat-send" id="aichat-send" type="submit">发送</button>
+              <button class="aichat-send" id="aichat-send" type="submit">
+                <span>发送</span>
+                <span class="aichat-send-arrow" aria-hidden="true">↗</span>
+              </button>
             </form>
             <div class="aichat-meta-row">
-              <p class="aichat-status" id="aichat-status"></p>
-              <p class="aichat-dialog-id" id="aichat-dialog-id"></p>
+              <p class="aichat-shortcut">
+                <kbd>Enter</kbd> 发送
+                <span aria-hidden="true">·</span>
+                <kbd>Shift + Enter</kbd> 换行
+              </p>
+              <div class="aichat-meta-status">
+                <p class="aichat-status" id="aichat-status"></p>
+                <p class="aichat-dialog-id" id="aichat-dialog-id"></p>
+              </div>
             </div>
           </section>
         </section>

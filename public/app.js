@@ -122,6 +122,11 @@ const aiChatNewDialog = document.getElementById('aichat-new-dialog');
 const aiChatDialogId = document.getElementById('aichat-dialog-id');
 const aiChatShell = document.querySelector('.aichat-shell');
 const aiChatDialogToggle = document.getElementById('aichat-dialog-toggle');
+const aiChatDialogBackdrop = document.querySelector('.aichat-dialog-backdrop');
+const aiChatDialogs = document.getElementById('aichat-dialogs');
+const aiChatDialogClose = document.querySelector('.aichat-dialog-close');
+const aiChatMain = document.querySelector('.aichat-main');
+const aiChatDrawerMedia = window.matchMedia('(max-width: 900px)');
 const discussionState = {
   boards: [],
   posts: [],
@@ -2703,6 +2708,37 @@ function setAiDialogId(did) {
   }
 }
 
+function setAiDialogsOpen(isOpen, { restoreFocus = false } = {}) {
+  if (!aiChatShell) {
+    return;
+  }
+
+  const shouldOpen = Boolean(isOpen && aiChatDrawerMedia.matches);
+  const inertTargets = [
+    document.querySelector('.topbar'),
+    document.querySelector('.mobile-nav'),
+    aiChatDialogToggle,
+    aiChatMain,
+  ].filter(Boolean);
+
+  aiChatShell.classList.toggle('is-dialogs-open', shouldOpen);
+  aiChatDialogToggle?.setAttribute('aria-expanded', String(shouldOpen));
+  inertTargets.forEach((element) => element.toggleAttribute('inert', shouldOpen));
+
+  if (shouldOpen) {
+    aiChatDialogs?.setAttribute('role', 'dialog');
+    aiChatDialogs?.setAttribute('aria-modal', 'true');
+    window.requestAnimationFrame(() => aiChatDialogClose?.focus());
+  } else {
+    aiChatDialogs?.removeAttribute('role');
+    aiChatDialogs?.removeAttribute('aria-modal');
+  }
+
+  if (restoreFocus && !shouldOpen && aiChatDrawerMedia.matches) {
+    aiChatDialogToggle?.focus();
+  }
+}
+
 function scrollAiChatToBottom() {
   if (aiChatThread) {
     aiChatThread.scrollTop = aiChatThread.scrollHeight;
@@ -2984,7 +3020,7 @@ function startNewAiDialog() {
   updateAiDialogUrl('');
   renderAiChatThread();
   renderAiDialogList();
-  aiChatShell?.classList.remove('is-dialogs-open');
+  setAiDialogsOpen(false);
   setAiChatStatus('');
   aiChatInput?.focus();
 }
@@ -3127,14 +3163,30 @@ function initializeAiChatPage() {
   aiChatForm?.addEventListener('submit', handleAiChatSubmit);
   aiChatNewDialog?.addEventListener('click', startNewAiDialog);
   aiChatDialogToggle?.addEventListener('click', () => {
-    aiChatShell?.classList.toggle('is-dialogs-open');
+    setAiDialogsOpen(!aiChatShell?.classList.contains('is-dialogs-open'));
   });
+  aiChatDialogClose?.addEventListener('click', () =>
+    setAiDialogsOpen(false, { restoreFocus: true }),
+  );
+  aiChatDialogBackdrop?.addEventListener('click', () =>
+    setAiDialogsOpen(false, { restoreFocus: true }),
+  );
   aiChatDialogList?.addEventListener('click', (event) => {
     const button = event.target.closest('.aichat-dialog-item');
 
     if (button) {
       loadAiDialog(button.dataset.did || '');
-      aiChatShell?.classList.remove('is-dialogs-open');
+      setAiDialogsOpen(false, { restoreFocus: true });
+    }
+  });
+  aiChatDrawerMedia.addEventListener('change', (event) => {
+    if (!event.matches) {
+      setAiDialogsOpen(false);
+    }
+  });
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && aiChatShell?.classList.contains('is-dialogs-open')) {
+      setAiDialogsOpen(false, { restoreFocus: true });
     }
   });
   window.addEventListener('popstate', () => {
