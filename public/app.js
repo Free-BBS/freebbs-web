@@ -78,6 +78,14 @@ const publicProfileBio = document.getElementById('public-profile-bio');
 const publicProfileWebsite = document.getElementById('public-profile-website');
 const publicProfileMessage = document.getElementById('public-profile-message');
 const homeDiscussionList = document.getElementById('home-discussion-list');
+const homeFeedToggle = document.getElementById('home-feed-toggle');
+const homeFeedModeLabel = document.getElementById('home-feed-mode-label');
+const homeFeedStatus = document.getElementById('home-feed-status');
+const homeBoardActivity = document.getElementById('home-board-activity');
+const homeBoardStatus = document.getElementById('home-board-status');
+const homeHeatList = document.getElementById('landing-heat-list');
+const homeHeatStatus = document.getElementById('home-heat-status');
+const homeBoardDesktopMedia = window.matchMedia('(min-width: 901px)');
 const discussionLayout = document.querySelector('.discussion-layout');
 const discussionBoardList = document.getElementById('discussion-board-list');
 const discussionPostList = document.getElementById('discussion-post-list');
@@ -116,6 +124,11 @@ const discussionState = {
   isFallback: false,
   activePost: null,
   comments: [],
+};
+const homeDashboardState = {
+  feedMode: 'hot',
+  feedCache: new Map(),
+  feedRequestId: 0,
 };
 const aiChatState = {
   currentDid: '',
@@ -1376,73 +1389,92 @@ async function handleInventoryPageClick(event) {
   }
 }
 
-function ensureHeatLeaderboardSection() {
-  if (!document.body.classList.contains('home-page')) {
-    return null;
-  }
-
-  let section = document.getElementById('landing-heat-leaderboard');
-  if (section) {
-    return section;
-  }
-
-  const main = document.querySelector('.landing-main');
-  const bridge = document.querySelector('.landing-bridge');
-  if (!main) {
-    return null;
-  }
-
-  section = document.createElement('section');
-  section.id = 'landing-heat-leaderboard';
-  section.className = 'landing-heat-leaderboard';
-  section.innerHTML = `
-    <div class="landing-section-copy">
-      <p class="section-kicker">Heat</p>
-      <h2>今日热力前三</h2>
-    </div>
-    <div class="landing-heat-list" id="landing-heat-list">
-      <p class="landing-heat-empty">正在加载...</p>
-    </div>
-  `;
-
-  if (bridge?.nextSibling) {
-    main.insertBefore(section, bridge.nextSibling);
-  } else {
-    main.append(section);
-  }
-
-  return section;
-}
-
-async function loadHeatLeaderboard() {
-  const section = ensureHeatLeaderboardSection();
-  const list = document.getElementById('landing-heat-list');
-
-  if (!section || !list) {
+function renderHeatLeaderboard(users) {
+  if (!homeHeatList) {
     return;
   }
 
-  try {
-    const payload = await fetch(`${API_BASE_URL}/leaderboard/heat?limit=3`).then((response) =>
-      response.json(),
-    );
-    const users = payload.users || [];
-    list.innerHTML = users.length
-      ? users
-          .map(
-            (user, index) => `
-          <a class="landing-heat-user" href="/profile?uid=${encodeURIComponent(user.uid || user.username)}">
-            <span>${index + 1}</span>
-            <img src="${escapeHtml(getAvatarUrl(user.avatarPath))}" alt="${escapeHtml(user.nickname || user.username)} 的头像" />
-            <strong>${escapeHtml(user.nickname || user.username)}</strong>
-            <em>${Number(user.heat || 0)} 热力</em>
+  if (!users.length) {
+    homeHeatList.innerHTML = `
+      <li class="home-dashboard-empty">
+        <p>还没有用户进入热力榜。</p>
+      </li>
+    `;
+    return;
+  }
+
+  homeHeatList.innerHTML = users
+    .map((user, index) => {
+      const displayName = user.nickname || user.username || '匿名用户';
+      return `
+        <li class="home-heat-item">
+          <a href="/profile?uid=${encodeURIComponent(user.uid || user.username)}">
+            <span class="home-heat-rank">${index + 1}</span>
+            <img src="${escapeHtml(getAvatarUrl(user.avatarPath))}" alt="" />
+            <span class="home-heat-user-copy">
+              <strong>${escapeHtml(displayName)}</strong>
+              <small>${index === 0 ? '本期领跑' : '社区贡献'}</small>
+            </span>
+            <span class="home-heat-score">
+              <strong>${Number(user.heat || 0)}</strong>
+              <small>热力</small>
+            </span>
           </a>
-        `,
-          )
-          .join('')
-      : `<p class="landing-heat-empty">还没有热力记录。</p>`;
+        </li>
+      `;
+    })
+    .join('');
+}
+
+function renderHeatLeaderboardLoading() {
+  if (!homeHeatList) {
+    return;
+  }
+
+  homeHeatList.innerHTML = Array.from(
+    { length: 5 },
+    () => `
+      <li class="home-heat-loading-item" aria-hidden="true">
+        <span class="home-loading-rank"></span>
+        <span class="home-loading-avatar"></span>
+        <span class="home-loading-meta"></span>
+      </li>
+    `,
+  ).join('');
+}
+
+async function loadHeatLeaderboard() {
+  if (!homeHeatList) {
+    return;
+  }
+
+  homeHeatList.setAttribute('aria-busy', 'true');
+  renderHeatLeaderboardLoading();
+  if (homeHeatStatus) {
+    homeHeatStatus.textContent = '正在加载热力榜…';
+  }
+
+  try {
+    const payload = await callApi('/leaderboard/heat?limit=5', {
+      method: 'GET',
+    });
+    const users = payload.users || [];
+    renderHeatLeaderboard(users);
+    if (homeHeatStatus) {
+      homeHeatStatus.textContent = `已加载热力榜前 ${users.length} 名`;
+    }
   } catch {
-    list.innerHTML = `<p class="landing-heat-empty">热力榜暂时不可用。</p>`;
+    homeHeatList.innerHTML = `
+      <li class="home-dashboard-empty">
+        <p>热力榜暂时无法加载。</p>
+        <button type="button" data-action="retry-home-heat">重新加载</button>
+      </li>
+    `;
+    if (homeHeatStatus) {
+      homeHeatStatus.textContent = '热力榜加载失败';
+    }
+  } finally {
+    homeHeatList.setAttribute('aria-busy', 'false');
   }
 }
 
@@ -1892,39 +1924,166 @@ function updateDiscussionQuery({ board, postId } = {}) {
   window.history.replaceState({}, '', url);
 }
 
-function renderHomeDiscussionPosts(posts) {
+function setHomeFeedStatus(message) {
+  if (homeFeedStatus) {
+    homeFeedStatus.textContent = message || '';
+  }
+}
+
+function updateHomeFeedToggle() {
+  if (!homeFeedToggle || !homeFeedModeLabel) {
+    return;
+  }
+
+  const isHot = homeDashboardState.feedMode === 'hot';
+  const currentLabel = isHot ? '热帖' : '最新帖';
+  const nextLabel = isHot ? '最新帖' : '热帖';
+
+  homeFeedModeLabel.textContent = currentLabel;
+  homeFeedToggle.setAttribute('aria-pressed', String(isHot));
+  homeFeedToggle.setAttribute('aria-label', '热帖优先');
+  homeFeedToggle.title = `切换到${nextLabel}`;
+}
+
+function renderHomeFeedLoading() {
+  if (!homeDiscussionList) {
+    return;
+  }
+
+  homeDiscussionList.setAttribute('aria-busy', 'true');
+  homeDiscussionList.innerHTML = Array.from(
+    { length: 5 },
+    () => `
+      <article class="home-feed-loading-item" aria-hidden="true">
+        <span class="home-loading-kicker"></span>
+        <span class="home-loading-title"></span>
+        <span class="home-loading-meta"></span>
+      </article>
+    `,
+  ).join('');
+}
+
+function getHomePostReactionCount(post) {
+  return (
+    Number(post.likeCount || 0) + Number(post.lightCount || 0) + Number(post.fireworksCount || 0)
+  );
+}
+
+function renderHomeDiscussionPosts(posts, mode = homeDashboardState.feedMode) {
   if (!homeDiscussionList) {
     return;
   }
 
   if (!posts.length) {
     homeDiscussionList.innerHTML = `
-      <article class="home-discussion-empty">
-        <p>讨论区还没有帖子，去发第一篇吧。</p>
+      <article class="home-dashboard-empty">
+        <p>暂时没有${mode === 'hot' ? '热帖' : '最新帖子'}。</p>
+        <a href="/discussion">进入讨论区发帖</a>
       </article>
     `;
     return;
   }
 
   homeDiscussionList.innerHTML = posts
-    .map(
-      (post) => `
-    <a class="home-discussion-item" href="/discussion?post=${encodeURIComponent(post.id)}">
-      <div class="home-discussion-item-main">
-        <h3>${escapeHtml(post.title)}</h3>
-      </div>
-      <div class="home-discussion-meta">
-        <span>${escapeHtml(post.author.displayName)}</span>
-        <span>${escapeHtml(formatDateOnly(post.createdAt))}</span>
-      </div>
-    </a>
-  `,
-    )
+    .map((post) => {
+      const reactionCount = getHomePostReactionCount(post);
+      const commentCount = Number(post.commentCount || 0);
+      const authorName =
+        post.author?.displayName || post.author?.fullName || post.author?.username || '匿名用户';
+      const boardSlug = post.board?.slug || 'all';
+      const boardName = post.board?.name || '全部';
+
+      return `
+        <a
+          class="home-feed-item"
+          role="listitem"
+          href="/discussion?board=${encodeURIComponent(boardSlug)}&post=${encodeURIComponent(post.id)}"
+        >
+          <span class="home-feed-item-top">
+            <span class="home-feed-board">r/${escapeHtml(boardName)}</span>
+            ${post.isPinned ? '<span class="home-feed-badge">置顶</span>' : ''}
+            ${post.isFeatured ? '<span class="home-feed-badge">精华</span>' : ''}
+            <time datetime="${escapeHtml(post.createdAt)}">${escapeHtml(formatDateOnly(post.createdAt))}</time>
+          </span>
+          <h3 class="home-feed-title">${escapeHtml(post.title)}</h3>
+          <span class="home-feed-meta">
+            <span class="home-feed-author">${escapeHtml(authorName)}</span>
+            <span
+              class="home-feed-signals"
+              aria-label="${commentCount} 条评论，${reactionCount} 个反应"
+            >
+              <span class="home-feed-signal">评论 ${commentCount}</span>
+              <span class="home-feed-signal">反应 ${reactionCount}</span>
+            </span>
+          </span>
+        </a>
+      `;
+    })
     .join('');
 }
 
-function renderFallbackHomeDiscussionPost() {
-  renderHomeDiscussionPosts([FALLBACK_DISCUSSION_POST]);
+function renderHomeDiscussionError() {
+  if (!homeDiscussionList) {
+    return;
+  }
+
+  homeDiscussionList.innerHTML = `
+    <article class="home-dashboard-empty">
+      <p>帖子暂时无法加载。</p>
+      <button type="button" data-action="retry-home-feed">重新加载</button>
+    </article>
+  `;
+}
+
+function renderHomeBoardActivity(boards) {
+  if (!homeBoardActivity) {
+    return;
+  }
+
+  if (!boards.length) {
+    homeBoardActivity.innerHTML = `
+      <div class="home-dashboard-empty">
+        <p>还没有分区互动记录。</p>
+      </div>
+    `;
+    return;
+  }
+
+  const maxInteractions = Math.max(
+    1,
+    ...boards.map((board) => Number(board.interactionCount || 0)),
+  );
+
+  homeBoardActivity.innerHTML = boards
+    .map((board) => {
+      const postCount = Number(board.postCount || 0);
+      const commentCount = Number(board.commentCount || 0);
+      const reactionCount = Number(board.reactionCount || 0);
+      const interactionCount = Number(board.interactionCount ?? commentCount + reactionCount);
+
+      return `
+        <a
+          class="home-board-item"
+          role="listitem"
+          href="/discussion?board=${encodeURIComponent(board.slug || 'all')}"
+        >
+          <span class="home-board-item-head">
+            <strong class="home-board-name"># ${escapeHtml(board.name || board.slug)}</strong>
+            <span class="home-board-interactions">${interactionCount} 次互动</span>
+          </span>
+          <progress
+            class="home-board-progress"
+            max="${maxInteractions}"
+            value="${interactionCount}"
+            aria-hidden="true"
+          >${interactionCount}</progress>
+          <span class="home-board-meta">
+            ${postCount} 帖 · ${commentCount} 评论 · ${reactionCount} 反应
+          </span>
+        </a>
+      `;
+    })
+    .join('');
 }
 
 function useFallbackDiscussionData() {
@@ -3116,18 +3275,138 @@ function renderDiscussionComposerState() {
   discussionComposeForm.classList.add('hidden');
 }
 
-async function loadHomeDiscussionPosts() {
+async function loadHomeDiscussionPosts(mode = homeDashboardState.feedMode, { force = false } = {}) {
   if (!homeDiscussionList) {
     return;
   }
 
+  const normalizedMode = mode === 'latest' ? 'latest' : 'hot';
+  homeDashboardState.feedMode = normalizedMode;
+  updateHomeFeedToggle();
+
+  const cachedPosts = homeDashboardState.feedCache.get(normalizedMode);
+  if (cachedPosts && !force) {
+    renderHomeDiscussionPosts(cachedPosts, normalizedMode);
+    homeDiscussionList.setAttribute('aria-busy', 'false');
+    setHomeFeedStatus(`已显示${normalizedMode === 'hot' ? '热帖' : '最新帖'}`);
+    return;
+  }
+
+  const requestId = homeDashboardState.feedRequestId + 1;
+  homeDashboardState.feedRequestId = requestId;
+  homeFeedToggle.disabled = true;
+  renderHomeFeedLoading();
+  setHomeFeedStatus(`正在加载${normalizedMode === 'hot' ? '热帖' : '最新帖'}…`);
+
   try {
-    const payload = await callApi('/discussion/posts?board=all&limit=6', {
+    const query = new URLSearchParams({
+      board: 'all',
+      limit: '6',
+      sort: normalizedMode,
+    });
+    const payload = await callApi(`/discussion/posts?${query.toString()}`, {
       method: 'GET',
     });
-    renderHomeDiscussionPosts(payload.posts || []);
+
+    if (requestId !== homeDashboardState.feedRequestId) {
+      return;
+    }
+
+    const posts = payload.posts || [];
+    homeDashboardState.feedCache.set(normalizedMode, posts);
+    renderHomeDiscussionPosts(posts, normalizedMode);
+    setHomeFeedStatus(`已显示${normalizedMode === 'hot' ? '热帖' : '最新帖'}`);
   } catch {
-    renderFallbackHomeDiscussionPost();
+    if (requestId === homeDashboardState.feedRequestId) {
+      renderHomeDiscussionError();
+      setHomeFeedStatus('帖子加载失败');
+    }
+  } finally {
+    if (requestId === homeDashboardState.feedRequestId) {
+      homeDiscussionList.setAttribute('aria-busy', 'false');
+      homeFeedToggle.disabled = false;
+    }
+  }
+}
+
+function renderHomeBoardLoading() {
+  if (!homeBoardActivity) {
+    return;
+  }
+
+  homeBoardActivity.innerHTML = Array.from(
+    { length: 5 },
+    () => `
+      <div class="home-board-loading-item" aria-hidden="true">
+        <span class="home-loading-title"></span>
+        <span class="home-loading-meta"></span>
+      </div>
+    `,
+  ).join('');
+}
+
+async function loadHomeBoardActivity() {
+  if (!homeBoardActivity || homeBoardActivity.dataset.loading === 'true') {
+    return;
+  }
+
+  homeBoardActivity.dataset.loading = 'true';
+  homeBoardActivity.setAttribute('aria-busy', 'true');
+  renderHomeBoardLoading();
+  if (homeBoardStatus) {
+    homeBoardStatus.textContent = '正在加载分区互动数据…';
+  }
+
+  try {
+    const payload = await callApi('/discussion/stats', {
+      method: 'GET',
+    });
+    const boards = payload.boards || [];
+    renderHomeBoardActivity(boards);
+    homeBoardActivity.dataset.loaded = 'true';
+    if (homeBoardStatus) {
+      homeBoardStatus.textContent = `已加载 ${boards.length} 个分区的互动数据`;
+    }
+  } catch {
+    homeBoardActivity.innerHTML = `
+      <div class="home-dashboard-empty">
+        <p>分区互动暂时无法加载。</p>
+        <button type="button" data-action="retry-home-boards">重新加载</button>
+      </div>
+    `;
+    if (homeBoardStatus) {
+      homeBoardStatus.textContent = '分区互动数据加载失败';
+    }
+  } finally {
+    homeBoardActivity.setAttribute('aria-busy', 'false');
+    delete homeBoardActivity.dataset.loading;
+  }
+}
+
+function loadHomeBoardActivityForViewport(event = homeBoardDesktopMedia) {
+  if (event.matches && homeBoardActivity?.dataset.loaded !== 'true') {
+    loadHomeBoardActivity();
+  }
+}
+
+function handleHomeFeedToggleClick() {
+  const nextMode = homeDashboardState.feedMode === 'hot' ? 'latest' : 'hot';
+  loadHomeDiscussionPosts(nextMode);
+}
+
+function handleHomeDashboardRetry(event) {
+  const button = event.target.closest('button[data-action]');
+
+  if (!button) {
+    return;
+  }
+
+  if (button.dataset.action === 'retry-home-feed') {
+    loadHomeDiscussionPosts(homeDashboardState.feedMode, { force: true });
+  } else if (button.dataset.action === 'retry-home-boards') {
+    loadHomeBoardActivity();
+  } else if (button.dataset.action === 'retry-home-heat') {
+    loadHeatLeaderboard();
   }
 }
 
@@ -5584,11 +5863,14 @@ discussionImageInput?.addEventListener('change', async (event) => {
   event.target.value = '';
 });
 discussionComposeContent?.addEventListener('paste', handleDiscussionPaste);
+homeFeedToggle?.addEventListener('click', handleHomeFeedToggleClick);
+homeBoardDesktopMedia.addEventListener('change', loadHomeBoardActivityForViewport);
 document.addEventListener('click', handleCodeCopyClick);
 document.addEventListener('click', handleCodeRunClick);
 document.addEventListener('click', handleAiMessageCopyClick);
 document.addEventListener('click', handleElectromagneticPageClick);
 document.addEventListener('click', handleInventoryPageClick);
+document.addEventListener('click', handleHomeDashboardRetry);
 window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     document.getElementById('fortune-modal')?.classList.add('hidden');
@@ -5611,6 +5893,7 @@ initializeThemeMode();
 initializeEconomyNavigation();
 renderAdminSection();
 loadHomeDiscussionPosts();
+loadHomeBoardActivityForViewport();
 loadHeatLeaderboard();
 initializeLandingMotion();
 initializeDiscussionPage();

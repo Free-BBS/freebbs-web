@@ -2647,9 +2647,24 @@ app.get('/api/discussion/stats', async (request, response) => {
       [currentUser?.id || 0, currentUser?.id || 0],
     );
     const [boardRows] = await pool.execute(
-      `SELECT b.slug, b.name, b.description, b.description_markdown, COUNT(p.id) AS post_count
+      `SELECT b.slug, b.name, b.description, b.description_markdown,
+              COUNT(p.id) AS post_count,
+              COALESCE(SUM(c.comment_count), 0) AS comment_count,
+              COALESCE(SUM(l.reaction_count), 0) AS reaction_count,
+              COALESCE(SUM(c.comment_count), 0)
+                + COALESCE(SUM(l.reaction_count), 0) AS interaction_count
        FROM discussion_boards b
        LEFT JOIN discussion_posts p ON p.board_id = b.id AND p.is_deleted = 0
+       LEFT JOIN (
+         SELECT post_id, COUNT(*) AS comment_count
+         FROM discussion_comments
+         GROUP BY post_id
+       ) c ON c.post_id = p.id
+       LEFT JOIN (
+         SELECT post_id, COUNT(*) AS reaction_count
+         FROM discussion_post_likes
+         GROUP BY post_id
+       ) l ON l.post_id = p.id
        WHERE b.is_active = 1
        GROUP BY b.id, b.slug, b.name, b.description, b.description_markdown, b.sort_order
        ORDER BY b.sort_order ASC, b.id ASC`,
@@ -2664,6 +2679,9 @@ app.get('/api/discussion/stats', async (request, response) => {
         description: row.description || '',
         descriptionMarkdown: row.description_markdown || row.description || '',
         postCount: Number(row.post_count || 0),
+        commentCount: Number(row.comment_count || 0),
+        reactionCount: Number(row.reaction_count || 0),
+        interactionCount: Number(row.interaction_count || 0),
       })),
     });
   } catch (error) {
@@ -2677,6 +2695,10 @@ app.get('/api/discussion/posts', async (request, response) => {
     .toLowerCase();
   const limit = normalizeLimit(request.query.limit, 12, 50);
   const clientHash = String(request.query.hash || '').trim();
+  const requestedSort = String(request.query.sort || 'latest')
+    .trim()
+    .toLowerCase();
+  const sortMode = requestedSort === 'hot' ? 'hot' : 'latest';
 
   try {
     await ensureDiscussionTables();
@@ -2697,6 +2719,19 @@ app.get('/api/discussion/posts', async (request, response) => {
         ? `WHERE b.is_active = 1${visibilityCondition}`
         : `WHERE b.is_active = 1 AND b.slug = ?${visibilityCondition}`;
     const params = boardSlug === 'all' ? [] : [boardSlug];
+    let orderBy = 'p.is_pinned DESC, p.pinned_at DESC, p.created_at DESC, p.id DESC';
+    if (sortMode === 'hot') {
+      orderBy = `p.is_pinned DESC,
+                 (
+                   COUNT(DISTINCT c.id) * 3
+                   + COUNT(DISTINCT CONCAT(l.post_id, ':', l.user_id, ':', l.reaction_type))
+                 ) DESC,
+                 p.created_at DESC,
+                 p.id DESC`;
+    } else if (boardSlug !== 'all') {
+      orderBy =
+        'p.is_pinned DESC, p.pinned_at DESC, p.is_featured DESC, p.featured_at DESC, p.created_at DESC, p.id DESC';
+    }
     const [hashRows] = await pool.execute(
       `SELECT COUNT(DISTINCT p.id) AS post_count,
               COUNT(DISTINCT c.id) AS comment_count,
@@ -2716,6 +2751,7 @@ app.get('/api/discussion/posts', async (request, response) => {
       params,
     );
     const postsHash = [
+      sortMode,
       Number(hashRows[0]?.post_count || 0),
       Number(hashRows[0]?.comment_count || 0),
       Number(hashRows[0]?.reaction_count || 0),
@@ -2759,7 +2795,7 @@ app.get('/api/discussion/posts', async (request, response) => {
        ${where}
        GROUP BY p.id, p.pid, p.title, p.created_at, p.updated_at, p.user_id, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.deleted_at,
                 b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
-       ORDER BY ${boardSlug === 'all' ? 'p.is_pinned DESC, p.pinned_at DESC, p.created_at DESC, p.id DESC' : 'p.is_pinned DESC, p.pinned_at DESC, p.is_featured DESC, p.featured_at DESC, p.created_at DESC, p.id DESC'}
+       ORDER BY ${orderBy}
       LIMIT ${limit}`,
       currentUser
         ? [
