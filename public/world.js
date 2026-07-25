@@ -4,6 +4,7 @@ const studyWorlds = [
     image: '/assets/math_island.webp',
     mobileImage: '/assets/math_island_mobile.webp',
     board: 'math',
+    course: '',
     description: '从微积分、线性代数、复指数到概率统计，为后续信号、电路和系统分析打底。',
     tags: ['微积分', '线性代数', '概率统计'],
   },
@@ -12,6 +13,7 @@ const studyWorlds = [
     image: '/assets/signals_island.webp',
     mobileImage: '/assets/signals_island_mobile.webp',
     board: 'signal',
+    course: 'signals',
     description: '围绕信号分类、傅里叶、拉普拉斯与采样定理，理解时域和频域之间的转换。',
     tags: ['傅里叶', '拉普拉斯', '采样'],
   },
@@ -20,6 +22,7 @@ const studyWorlds = [
     image: '/assets/circuits_island.webp',
     mobileImage: '/assets/circuits_island_mobile.webp',
     board: 'circuit',
+    course: '',
     description: '从基尔霍夫定律、运放、滤波器和反馈系统进入模拟电路与系统设计。',
     tags: ['电路分析', '运算放大器', '反馈'],
   },
@@ -28,6 +31,7 @@ const studyWorlds = [
     image: '/assets/digital_island.webp',
     mobileImage: '/assets/digital_island_mobile.webp',
     board: 'circuit',
+    course: '',
     description: '用布尔代数、逻辑门、状态机和 Verilog 建模搭建数字系统的思维框架。',
     tags: ['逻辑门', '状态机', 'Verilog'],
   },
@@ -51,12 +55,19 @@ function discussionHref(board) {
   return `/discussion?board=${encodeURIComponent(board)}`;
 }
 
+function courseHref(course) {
+  return `/course?course=${encodeURIComponent(course)}`;
+}
+
 function renderStudyWorlds() {
   if (!track) return;
 
   track.innerHTML = studyWorlds
     .map((world) => {
       const tags = world.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join('');
+      const studyAction = world.course
+        ? `<a class="study-world-action" href="${courseHref(world.course)}">进入学习</a>`
+        : '<button class="study-world-action study-world-action-disabled" type="button" disabled>进入学习</button>';
       return `
         <article class="study-world-card">
           <picture class="study-world-media">
@@ -72,7 +83,7 @@ function renderStudyWorlds() {
             </div>
           </div>
           <div class="study-world-actions">
-            <button class="study-world-action study-world-action-disabled" type="button" disabled>进入学习</button>
+            ${studyAction}
             <a class="study-world-action study-world-action-discuss" href="${discussionHref(world.board)}">进入讨论</a>
           </div>
         </article>

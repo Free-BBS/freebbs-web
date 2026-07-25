@@ -144,10 +144,23 @@ function applyThemeMode(mode) {
   });
 }
 
-function toggleThemeMode() {
+function applyThemeModeWithTransition(mode, event) {
+  const button = event?.currentTarget;
+
+  button?.classList.add('is-theme-switching');
+  applyThemeMode(mode);
+
+  if (button) {
+    window.setTimeout(() => {
+      button.classList.remove('is-theme-switching');
+    }, 620);
+  }
+}
+
+function toggleThemeMode(event) {
   const nextMode = document.body.classList.contains('theme-light') ? 'dark' : 'light';
   localStorage.setItem(THEME_STORAGE_KEY, nextMode);
-  applyThemeMode(nextMode);
+  applyThemeModeWithTransition(nextMode, event);
 }
 
 function createThemeToggleButton(className) {
@@ -195,9 +208,12 @@ function initializeDashboardShell() {
   const pageTitles = {
     '/': '首页',
     '/world': '学习世界',
+    '/course': '课程',
+    '/knowledge': '知识点',
     '/discussion': '讨论区',
     '/workbench': '我的工作台',
     '/aichat': '问问 Max',
+    '/development': '发展端',
     '/settings': '设置',
     '/profile': '个人主页',
     '/adminusers': '用户管理',
@@ -213,8 +229,10 @@ function initializeDashboardShell() {
     { href: '/discussion', icon: 'people', label: '讨论区' },
     { href: '/workbench', icon: 'run', label: '我的工作台' },
     { href: '/aichat', icon: 'ai', label: '问问 Max' },
+    { href: '/development', icon: 'star', label: '发展端' },
     { href: '/settings', icon: 'gear', label: '设置' },
   ];
+  const activePath = ['/course', '/knowledge'].includes(path) ? '/world' : path;
 
   document.body.dataset.pageTitle = pageTitles[path] || 'FREE-BBS';
   document.querySelectorAll('.main-content').forEach((main) => {
@@ -241,8 +259,8 @@ function initializeDashboardShell() {
         text.textContent = label;
       }
 
-      link.classList.toggle('is-active', href === path);
-      if (href === path) {
+      link.classList.toggle('is-active', href === activePath);
+      if (href === activePath) {
         link.setAttribute('aria-current', 'page');
       } else if (link.getAttribute('aria-current') === 'page') {
         link.removeAttribute('aria-current');
@@ -5422,6 +5440,15 @@ function initializeLandingMotion() {
     });
   });
 }
+
+window.freeBbsApp = {
+  enhanceMarkdownContent,
+  get userState() {
+    return userState;
+  },
+  renderMarkdownContent,
+  streamAiChatResponse,
+};
 
 userName.addEventListener('click', handleAuthEntry);
 userSettingsButton?.addEventListener('click', handleUserSettingsClick);

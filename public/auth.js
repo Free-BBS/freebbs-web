@@ -48,10 +48,23 @@ function applyThemeMode(mode) {
   });
 }
 
-function toggleThemeMode() {
+function applyThemeModeWithTransition(mode, event) {
+  const button = event?.currentTarget;
+
+  button?.classList.add('is-theme-switching');
+  applyThemeMode(mode);
+
+  if (button) {
+    window.setTimeout(() => {
+      button.classList.remove('is-theme-switching');
+    }, 620);
+  }
+}
+
+function toggleThemeMode(event) {
   const nextMode = document.body.classList.contains('theme-light') ? 'dark' : 'light';
   localStorage.setItem(THEME_STORAGE_KEY, nextMode);
-  applyThemeMode(nextMode);
+  applyThemeModeWithTransition(nextMode, event);
 }
 
 function initializeThemeMode() {
