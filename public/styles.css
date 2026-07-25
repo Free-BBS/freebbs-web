@@ -11514,6 +11514,16 @@ body.discussion-page .discussion-layout.is-detail-view {
   grid-template-columns: minmax(0, 1fr) !important;
 }
 
+body.discussion-page .main-content .discussion-detail {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
+body.discussion-page .main-content .discussion-detail > * {
+  min-width: 0;
+}
+
 body.discussion-page .discussion-layout,
 body.discussion-page .discussion-detail {
   scroll-margin-top: 118px;
@@ -11787,6 +11797,8 @@ body.discussion-page .main-content .discussion-markdown-body strong {
 }
 
 body.discussion-page .main-content .discussion-markdown-body {
+  min-width: 0;
+  max-width: 100%;
   font-size: 1rem;
   line-height: 1.82;
 }
@@ -11804,6 +11816,9 @@ body.discussion-page .main-content .discussion-markdown-body blockquote {
 }
 
 body.discussion-page .main-content .discussion-markdown-body :not(pre) > code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   border: 1px solid rgba(7, 9, 11, 0.1);
   background: #edf1f2 !important;
   color: #0b4e59 !important;
