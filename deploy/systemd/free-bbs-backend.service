@@ -6,11 +6,15 @@ After=network.target
 Type=simple
 WorkingDirectory=/data/www/free-BBS
 EnvironmentFile=/etc/free-bbs/free-bbs.env
-ExecStart=/usr/bin/env npm run start:backend
+ExecStart=/usr/bin/env AGENT_SETTINGS_REQUIRED=true npm run start:backend
 Restart=always
 RestartSec=5
-User=deploy
-Group=deploy
+RuntimeDirectory=free-bbs
+RuntimeDirectoryMode=0750
+UMask=0007
+User=freebbs-backend
+Group=freebbs-agent-config
+SupplementaryGroups=freebbs-backend
 
 [Install]
 WantedBy=multi-user.target

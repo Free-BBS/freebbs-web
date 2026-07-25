@@ -20,6 +20,9 @@ const pageRoutes = new Map([
   ['/register', '/register.html'],
   ['/remake', '/remake.html'],
   ['/settings', '/settings.html'],
+  ['/system-settings', '/system-settings.html'],
+  ['/system-settings/course-materials', '/system-settings-course-materials.html'],
+  ['/system-settings/model', '/system-settings-model.html'],
   ['/workbench', '/workbench.html'],
   ['/world', '/world.html'],
 ]);
@@ -38,6 +41,9 @@ const htmlRedirects = new Map([
   ['/register.html', '/register'],
   ['/remake.html', '/remake'],
   ['/settings.html', '/settings'],
+  ['/system-settings-course-materials.html', '/system-settings/course-materials'],
+  ['/system-settings-model.html', '/system-settings/model'],
+  ['/system-settings.html', '/system-settings'],
   ['/workbench.html', '/workbench'],
   ['/world.html', '/world'],
 ]);

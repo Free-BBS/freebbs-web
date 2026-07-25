@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="配置 FREE-BBS 课程资料在服务器上的根目录。" />
+    <title>FREE-BBS - 课程资料</title>
+    <link rel="icon" type="image/png" href="/assets/favicon-64.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Noto+Serif+SC:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="system-settings-page system-settings-course-page">
+    <div class="page-shell page-shell-settings">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="FREE-BBS 首页">
+          <span class="brand-mark">FREE<br />BBS</span>
+        </a>
+
+        <nav class="nav-actions" aria-label="主导航">
+          <div class="user-panel" id="user-panel">
+            <div class="user-summary">
+              <button class="avatar" type="button" aria-label="登录或注册">
+                <img
+                  class="avatar-image"
+                  src="/assets/avatar_placeholder.webp"
+                  alt="当前用户头像"
+                />
+              </button>
+              <div class="user-actions" id="user-actions">
+                <button
+                  class="user-icon-button hidden"
+                  id="user-settings-button"
+                  type="button"
+                  aria-label="个人设置"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/gear.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>设置</span>
+                </button>
+                <button
+                  class="user-icon-button hidden"
+                  id="user-logout-button"
+                  type="button"
+                  aria-label="退出"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/exit.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>退出</span>
+                </button>
+              </div>
+              <div class="user-copy">
+                <button class="user-name" type="button" id="user-name">登录/注册</button>
+                <div class="user-role" id="user-role">学生</div>
+              </div>
+            </div>
+            <div class="user-status" id="user-status" aria-label="账户资产">
+              <span class="currency currency-electric" aria-label="电元">
+                <img class="currency-icon" src="/assets/icons/electron.svg" alt="" />
+                <span class="currency-value">-</span>
+              </span>
+              <span class="currency currency-magnetic" aria-label="磁元">
+                <img class="currency-icon" src="/assets/icons/magnetron.svg" alt="" />
+                <span class="currency-value">-</span>
+              </span>
+              <span class="currency currency-heat" aria-label="热力">
+                <img class="currency-icon" src="/assets/icons/flame.svg" alt="" />
+                <span class="currency-value">-</span>
+              </span>
+            </div>
+          </div>
+        </nav>
+      </header>
+
+      <nav class="mobile-nav" aria-label="手机底部导航"></nav>
+
+      <main
+        class="main-content settings-main system-settings-main hidden"
+        id="system-settings-content"
+        data-admin-content
+      >
+        <section
+          class="system-settings-shell system-settings-detail-shell"
+          aria-labelledby="system-course-title"
+        >
+          <a class="system-settings-back" href="/system-settings">← 返回系统设置</a>
+
+          <header class="system-settings-intro">
+            <p class="system-settings-kicker">Course materials</p>
+            <h1 class="visually-hidden" id="system-course-title">课程资料</h1>
+            <p>
+              设置服务器上的绝对目录。Agent 会以此为根解析相对的 RAG
+              索引路径；保存时会检查目录是否存在且可读。
+            </p>
+          </header>
+
+          <form class="system-settings-form" id="system-course-form" aria-label="课程资料设置">
+            <div class="system-settings-form-heading">
+              <div>
+                <h2>课程资料根目录</h2>
+                <p>更改根目录会切换 Agent 的资料索引位置，但不会自动创建或重建索引。</p>
+              </div>
+              <strong id="system-course-config-state" role="status" aria-live="polite"
+                >等待读取</strong
+              >
+            </div>
+
+            <label class="system-settings-field" for="system-course-root">
+              <span>服务器绝对路径</span>
+              <input
+                id="system-course-root"
+                type="text"
+                name="rootDirectory"
+                autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+                placeholder="/data/free-bbs/course-materials"
+                required
+                aria-describedby="system-course-root-help"
+              />
+            </label>
+            <p class="system-settings-help" id="system-course-root-help">
+              请输入后端服务进程可读取的目录；相对路径和普通文件不会被接受。
+            </p>
+
+            <div class="system-settings-form-actions">
+              <button class="system-settings-submit" type="submit">验证并保存</button>
+            </div>
+
+            <p
+              class="system-settings-message"
+              id="system-course-message"
+              role="status"
+              aria-live="polite"
+            ></p>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+    <script src="/system-settings.js"></script>
+  </body>
+</html>

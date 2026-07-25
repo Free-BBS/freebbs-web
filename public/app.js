@@ -22,6 +22,13 @@ const MAX_AGENT_AVATAR = '/assets/max_the_agent_avatar.webp';
 
 const STORAGE_KEY = 'free_bbs_auth_token';
 const THEME_STORAGE_KEY = 'free_bbs_theme_mode';
+const USER_ROLE_LABELS = {
+  student: '学生',
+  ta: '助教',
+  teacher: '教师',
+  admin: '管理员',
+};
+const ADMIN_ROLE_OPTIONS = Object.entries(USER_ROLE_LABELS);
 const userState = {
   isLoggedIn: false,
   token: localStorage.getItem(STORAGE_KEY) || '',
@@ -38,6 +45,7 @@ const userState = {
   fortuneBonusEnabled: false,
 };
 let economyShopItems = [];
+let sessionReady = Promise.resolve();
 
 const userName = document.getElementById('user-name');
 const userRole = document.getElementById('user-role');
@@ -246,7 +254,10 @@ function initializeDashboardShell() {
     '/development': '发展端',
     '/settings': '设置',
     '/profile': '个人主页',
-    '/adminusers': '用户管理',
+    '/adminusers': '用户权限',
+    '/system-settings': '系统设置',
+    '/system-settings/model': '模型与密钥',
+    '/system-settings/course-materials': '课程资料',
     '/electromagnetic': '电磁场',
     '/inventory': '仓库',
     '/login': '登录',
@@ -261,8 +272,19 @@ function initializeDashboardShell() {
     { href: '/aichat', icon: 'ai', label: '问问 Max' },
     { href: '/development', icon: 'star', label: '发展端' },
     { href: '/settings', icon: 'gear', label: '设置' },
+    {
+      href: '/system-settings',
+      icon: 'gear',
+      label: '系统设置',
+      className: 'system-settings-link hidden',
+    },
   ];
-  const activePath = ['/course', '/knowledge'].includes(path) ? '/world' : path;
+  let activePath = path;
+  if (path.startsWith('/system-settings') || path === '/adminusers') {
+    activePath = '/system-settings';
+  } else if (['/course', '/knowledge'].includes(path)) {
+    activePath = '/world';
+  }
 
   document.body.dataset.pageTitle = pageTitles[path] || 'FREE-BBS';
   document.querySelectorAll('.main-content').forEach((main) => {
@@ -270,14 +292,14 @@ function initializeDashboardShell() {
   });
 
   document.querySelectorAll('.nav-actions, .mobile-nav').forEach((nav) => {
-    navItems.forEach(({ href, icon, label }) => {
+    navItems.forEach(({ href, icon, label, className = '' }) => {
       let link = nav.querySelector(`.nav-link[href="${href}"]`);
       if (!link) {
         link = createNavLink({
           href,
           icon,
           text: label,
-          className: href === '/settings' ? 'settings-nav-link' : '',
+          className: className || (href === '/settings' ? 'settings-nav-link' : ''),
         });
       }
 
@@ -1626,7 +1648,7 @@ function renderUser() {
   userName.textContent = userState.fullName || userState.username;
   userName.disabled = true;
   if (userRole) {
-    userRole.textContent = userState.role === 'admin' ? '管理员' : '学生';
+    userRole.textContent = USER_ROLE_LABELS[userState.role] || '学生';
   }
   userSettingsButton?.classList.remove('hidden');
   userLogoutButton?.classList.remove('hidden');
@@ -1749,8 +1771,8 @@ async function callApi(path, options = {}) {
 
 async function restoreSession() {
   if (!userState.token) {
-    if (isSettingsPage() || isAdminUsersPage()) {
-      window.location.href = '/login';
+    if (isSettingsPage() || isAdminManagementPage()) {
+      window.location.replace('/login');
       return;
     }
     renderUser();
@@ -1763,10 +1785,14 @@ async function restoreSession() {
     });
 
     saveSession(userState.token, payload.user);
+
+    if (isAdminManagementPage() && userState.role !== 'admin') {
+      window.location.replace('/');
+    }
   } catch {
     clearSession();
-    if (isSettingsPage() || isAdminUsersPage()) {
-      window.location.href = '/login';
+    if (isSettingsPage() || isAdminManagementPage()) {
+      window.location.replace('/login');
     }
   }
 }
@@ -1793,6 +1819,15 @@ function isSettingsPage() {
 
 function isAdminUsersPage() {
   return isCurrentPath('/adminusers');
+}
+
+function isSystemSettingsPage() {
+  const path = window.location.pathname.replace(/\/$/, '') || '/';
+  return path === '/system-settings' || path.startsWith('/system-settings/');
+}
+
+function isAdminManagementPage() {
+  return isAdminUsersPage() || isSystemSettingsPage();
 }
 
 function isDiscussionPage() {
@@ -3797,34 +3832,103 @@ function renderAdminUsers(users) {
       (user) => `
     <article class="admin-user-row" data-user-id="${user.id}">
       <div class="admin-user-cell">
-        <input data-field="username" type="text" value="${escapeHtml(user.username)}" readonly />
+        <label>
+          <span class="admin-user-field-label">用户名</span>
+          <input
+            data-field="username"
+            type="text"
+            value="${escapeHtml(user.username)}"
+            aria-label="${escapeHtml(user.username)}的用户名"
+            readonly
+          />
+        </label>
       </div>
       <div class="admin-user-cell">
-        <input data-field="fullName" type="text" value="${escapeHtml(user.fullName)}" />
+        <label>
+          <span class="admin-user-field-label">姓名</span>
+          <input
+            data-field="fullName"
+            type="text"
+            value="${escapeHtml(user.fullName)}"
+            aria-label="${escapeHtml(user.username)}的姓名"
+          />
+        </label>
       </div>
       <div class="admin-user-cell">
-        <input data-field="studentId" type="text" value="${escapeHtml(user.studentId)}" readonly />
+        <label>
+          <span class="admin-user-field-label">学号</span>
+          <input
+            data-field="studentId"
+            type="text"
+            value="${escapeHtml(user.studentId)}"
+            aria-label="${escapeHtml(user.username)}的学号"
+            readonly
+          />
+        </label>
       </div>
       <div class="admin-user-cell">
-        <input data-field="email" type="email" value="${escapeHtml(user.email)}" readonly />
+        <label>
+          <span class="admin-user-field-label">邮箱</span>
+          <input
+            data-field="email"
+            type="email"
+            value="${escapeHtml(user.email)}"
+            aria-label="${escapeHtml(user.username)}的邮箱"
+            readonly
+          />
+        </label>
       </div>
       <div class="admin-user-cell">
-        <select data-field="role">
-          ${['student', 'admin'].map((role) => `<option value="${role}" ${user.role === role ? 'selected' : ''}>${role}</option>`).join('')}
-        </select>
+        <label>
+          <span class="admin-user-field-label">角色</span>
+          <select data-field="role" aria-label="${escapeHtml(user.username)}的角色">
+            ${ADMIN_ROLE_OPTIONS.map(
+              ([role, label]) =>
+                `<option value="${role}" ${user.role === role ? 'selected' : ''}>${label}</option>`,
+            ).join('')}
+          </select>
+        </label>
       </div>
       <div class="admin-user-cell">
-        <input data-field="electrons" type="number" value="${user.electrons}" />
+        <label>
+          <span class="admin-user-field-label">电元</span>
+          <input
+            data-field="electrons"
+            type="number"
+            value="${user.electrons}"
+            aria-label="${escapeHtml(user.username)}的电元"
+          />
+        </label>
       </div>
       <div class="admin-user-cell">
-        <input data-field="manetrons" type="number" value="${user.manetrons}" />
+        <label>
+          <span class="admin-user-field-label">磁元</span>
+          <input
+            data-field="manetrons"
+            type="number"
+            value="${user.manetrons}"
+            aria-label="${escapeHtml(user.username)}的磁元"
+          />
+        </label>
       </div>
       <div class="admin-user-cell">
-        <input data-field="heat" type="number" value="${user.heat || 0}" />
+        <label>
+          <span class="admin-user-field-label">热力</span>
+          <input
+            data-field="heat"
+            type="number"
+            value="${user.heat || 0}"
+            aria-label="${escapeHtml(user.username)}的热力"
+          />
+        </label>
       </div>
       <div class="admin-actions admin-user-cell">
-        <button class="admin-button admin-button-primary" data-action="save">保存</button>
-        <button class="admin-button admin-button-danger" data-action="delete">删除</button>
+        <button class="admin-button admin-button-primary" data-action="save" type="button">
+          保存
+        </button>
+        <button class="admin-button admin-button-danger" data-action="delete" type="button">
+          删除
+        </button>
       </div>
     </article>
   `,
@@ -3842,36 +3946,75 @@ function insertAdminDraftRow() {
   draft.dataset.userId = 'draft';
   draft.innerHTML = `
     <div class="admin-user-cell">
-      <input data-field="username" type="text" placeholder="用户名" />
+      <label>
+        <span class="admin-user-field-label">用户名</span>
+        <input data-field="username" type="text" placeholder="用户名" aria-label="新用户的用户名" />
+      </label>
     </div>
     <div class="admin-user-cell">
-      <input data-field="fullName" type="text" placeholder="姓名" />
+      <label>
+        <span class="admin-user-field-label">姓名</span>
+        <input data-field="fullName" type="text" placeholder="姓名" aria-label="新用户的姓名" />
+      </label>
     </div>
     <div class="admin-user-cell">
-      <input data-field="studentId" type="text" placeholder="学号" />
+      <label>
+        <span class="admin-user-field-label">学号</span>
+        <input data-field="studentId" type="text" placeholder="学号" aria-label="新用户的学号" />
+      </label>
     </div>
     <div class="admin-user-cell">
-      <input data-field="email" type="email" placeholder="邮箱" />
+      <label>
+        <span class="admin-user-field-label">邮箱</span>
+        <input data-field="email" type="email" placeholder="邮箱" aria-label="新用户的邮箱" />
+      </label>
     </div>
     <div class="admin-user-cell">
-      <select data-field="role">
-        <option value="student">student</option>
-        <option value="admin">admin</option>
-      </select>
+      <label>
+        <span class="admin-user-field-label">角色</span>
+        <select data-field="role" aria-label="新用户的角色">
+          ${ADMIN_ROLE_OPTIONS.map(
+            ([role, label]) => `<option value="${role}">${label}</option>`,
+          ).join('')}
+        </select>
+      </label>
     </div>
     <div class="admin-user-cell">
-      <input data-field="electrons" type="number" value="0" />
+      <label>
+        <span class="admin-user-field-label">电元</span>
+        <input data-field="electrons" type="number" value="0" aria-label="新用户的电元" />
+      </label>
     </div>
     <div class="admin-user-cell">
-      <input data-field="manetrons" type="number" value="0" />
+      <label>
+        <span class="admin-user-field-label">磁元</span>
+        <input data-field="manetrons" type="number" value="0" aria-label="新用户的磁元" />
+      </label>
     </div>
     <div class="admin-user-cell">
-      <input data-field="heat" type="number" value="0" />
+      <label>
+        <span class="admin-user-field-label">热力</span>
+        <input data-field="heat" type="number" value="0" aria-label="新用户的热力" />
+      </label>
     </div>
     <div class="admin-actions admin-user-cell">
-      <input class="admin-password-input" data-field="password" type="password" placeholder="初始密码" />
-      <button class="admin-button admin-button-primary" data-action="create">保存</button>
-      <button class="admin-button admin-button-secondary" data-action="cancel">取消</button>
+      <label class="admin-password-field">
+        <span class="admin-user-field-label">初始密码</span>
+        <input
+          class="admin-password-input"
+          data-field="password"
+          type="password"
+          placeholder="初始密码"
+          autocomplete="new-password"
+          aria-label="新用户的初始密码"
+        />
+      </label>
+      <button class="admin-button admin-button-primary" data-action="create" type="button">
+        保存
+      </button>
+      <button class="admin-button admin-button-secondary" data-action="cancel" type="button">
+        取消
+      </button>
     </div>
   `;
 
@@ -3898,6 +4041,14 @@ function renderAdminSection() {
 
   manageLinks.forEach((link) => {
     link.classList.toggle('hidden', !isAdmin);
+  });
+
+  document.querySelectorAll('.system-settings-link').forEach((link) => {
+    link.classList.toggle('hidden', !isAdmin);
+  });
+
+  document.querySelectorAll('[data-admin-content]').forEach((content) => {
+    content.classList.toggle('hidden', !isAdmin);
   });
 
   fortuneLinks.forEach((link) => {
@@ -5798,7 +5949,11 @@ function initializeLandingMotion() {
 }
 
 window.freeBbsApp = {
+  callApi,
   enhanceMarkdownContent,
+  get sessionReady() {
+    return sessionReady;
+  },
   get userState() {
     return userState;
   },
@@ -5880,7 +6035,7 @@ window.addEventListener('keydown', (event) => {
 });
 renderUser();
 loadFortuneConfig();
-restoreSession().finally(() => {
+sessionReady = restoreSession().finally(() => {
   renderAdminSection();
   loadElectromagneticPage();
   loadInventoryPage();

@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>FREE-BBS - 用户管理</title>
+    <meta name="description" content="FREE-BBS 管理员用户权限设置。" />
+    <title>FREE-BBS - 用户权限</title>
     <link rel="icon" type="image/png" href="/assets/favicon-64.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -134,10 +135,10 @@
         </a>
       </nav>
 
-      <main class="main-content settings-main">
-        <section class="settings-shell" aria-label="用户管理">
+      <main class="main-content settings-main hidden" id="admin-users-content" data-admin-content>
+        <section class="settings-shell" aria-label="用户权限">
           <div class="settings-header">
-            <h1>用户名单</h1>
+            <h1>用户权限</h1>
             <button
               class="admin-button admin-button-primary admin-add-button"
               id="admin-add-user"
@@ -147,8 +148,13 @@
             </button>
           </div>
 
-          <section class="admin-section hidden" id="admin-section" aria-label="管理员功能区">
-            <p class="auth-message admin-message" id="admin-message"></p>
+          <section class="admin-section hidden" id="admin-section" aria-label="用户权限设置">
+            <p
+              class="auth-message admin-message"
+              id="admin-message"
+              role="status"
+              aria-live="polite"
+            ></p>
             <section class="admin-tools" aria-label="运势控制">
               <label class="admin-toggle" for="fortune-bonus-toggle">
                 <input id="fortune-bonus-toggle" type="checkbox" />
@@ -165,6 +171,7 @@
                 <span>角色</span>
                 <span>电元</span>
                 <span>磁元</span>
+                <span>热力</span>
                 <span>操作</span>
               </div>
               <div class="admin-users" id="admin-users"></div>

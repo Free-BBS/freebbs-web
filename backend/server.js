@@ -8,6 +8,14 @@ const config = require('./config');
 const { hashPassword, verifyPassword } = require('./password');
 const { sign, verify } = require('./token');
 const {
+  SystemSettingsError,
+  createSystemSettingsStore,
+  decodeEncryptionKey,
+  ensureSystemSecretSettingsTable,
+  safeTokenEquals,
+  validateCourseMaterialsRoot,
+} = require('./system-settings');
+const {
   CODE_TTL_MINUTES,
   buildExpiryDate,
   generateEmailCode,
@@ -15,6 +23,8 @@ const {
 } = require('./verification');
 
 const app = express();
+const internalApp = express();
+let agentSettingsInternalState = config.agentServiceToken ? 'starting' : 'disabled';
 const FORTUNE_BONUS_KEY = 'fortune_bonus_enabled';
 const HEAT_DECAY_DATE_KEY = 'heat_decay_last_date';
 const FORTUNE_LOOKBACK_DAYS = 30;
@@ -33,6 +43,15 @@ const MAX_AGENT_USER = {
   email: 'max@free-bbs.local',
   avatarPath: '/assets/max_the_agent_avatar.webp',
 };
+const USER_ROLES = new Set(['student', 'ta', 'teacher', 'admin']);
+const systemSettingsStore = createSystemSettingsStore({
+  pool,
+  encryptionKey: config.settingsEncryptionKey,
+  defaultBaseUrl: config.llmBaseUrl,
+  defaultCourseMaterialsRoot: config.courseMaterialsRoot,
+  defaultModel: config.llmModel,
+  courseMaterialsAllowedRoot: config.courseMaterialsAllowedRoot,
+});
 
 async function sendVerificationCode(email, code) {
   const mailer = require('./mailer');
@@ -100,11 +119,124 @@ async function ensureAppSettingsTable() {
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS app_settings (
       setting_key VARCHAR(64) PRIMARY KEY,
-      setting_value VARCHAR(255) NOT NULL,
+      setting_value TEXT NOT NULL,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )`,
   );
 }
+
+function toPublicModelSettings(settings) {
+  return {
+    configured: Boolean(settings.configured),
+    lastFour: settings.lastFour || '',
+    baseUrl: settings.baseUrl || '',
+    model: settings.model || '',
+    updatedAt: settings.modelUpdatedAt || null,
+    revision: Number(settings.revision || 0),
+  };
+}
+
+function toPublicCourseSettings(settings) {
+  return {
+    rootDirectory: settings.courseMaterialsRoot || '',
+    courseMaterialsRoot: settings.courseMaterialsRoot || '',
+    updatedAt: settings.courseMaterialsUpdatedAt || null,
+    revision: Number(settings.revision || 0),
+  };
+}
+
+function sendSystemSettingsError(response, error, fallbackMessage) {
+  if (error instanceof SystemSettingsError) {
+    response.status(error.status).json({
+      message: error.message,
+      code: error.code,
+    });
+    return;
+  }
+
+  console.error(fallbackMessage, error?.code || error?.name || 'unknown error');
+  response.status(500).json({
+    message: fallbackMessage,
+    code: 'SYSTEM_SETTINGS_INTERNAL_ERROR',
+  });
+}
+
+function getBearerToken(request) {
+  const authorization = String(request.headers.authorization || '');
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : '';
+}
+
+function requireAgentService(request, response, next) {
+  if (!safeTokenEquals(getBearerToken(request), config.agentServiceToken)) {
+    response.setHeader('WWW-Authenticate', 'Bearer');
+    response.status(401).json({
+      message: 'Agent service authentication required',
+      code: 'AGENT_SERVICE_UNAUTHORIZED',
+    });
+    return;
+  }
+
+  next();
+}
+
+internalApp.disable('x-powered-by');
+internalApp.disable('etag');
+internalApp.use((_request, response, next) => {
+  response.setHeader('Cache-Control', 'no-store, max-age=0');
+  response.setHeader('Pragma', 'no-cache');
+  next();
+});
+internalApp.get('/internal/v1/agent-config', requireAgentService, async (_request, response) => {
+  try {
+    const settings = await systemSettingsStore.readSettings({
+      includeSecret: true,
+    });
+
+    if (!settings.apiKey || !settings.baseUrl || !settings.model) {
+      response.status(503).json({
+        error: {
+          code: 'agent_config_missing',
+          message: 'LLM configuration is incomplete',
+        },
+      });
+      return;
+    }
+
+    const courseMaterialsRoot = settings.courseMaterialsRoot
+      ? await validateCourseMaterialsRoot(
+          settings.courseMaterialsRoot,
+          config.courseMaterialsAllowedRoot,
+        )
+      : '';
+
+    response.json({
+      apiKey: settings.apiKey,
+      baseUrl: settings.baseUrl || '',
+      model: settings.model || '',
+      courseMaterialsRoot,
+      revision: Number(settings.revision || 0),
+    });
+  } catch (error) {
+    if (error instanceof SystemSettingsError) {
+      response.status(503).json({
+        error: {
+          code: 'agent_config_missing',
+          message: 'Agent configuration is unavailable',
+        },
+      });
+      return;
+    }
+
+    console.error('读取 Agent 配置失败', error?.code || error?.name || 'unknown error');
+    response.status(500).json({
+      error: {
+        code: 'agent_config_unavailable',
+        message: 'Agent configuration is temporarily unavailable',
+      },
+    });
+  }
+});
 
 function generateUserUid() {
   return `u_${crypto.randomBytes(8).toString('hex')}`;
@@ -1565,6 +1697,81 @@ async function requireAdmin(request, response) {
   return user;
 }
 
+class AdminUserUpdateError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.name = 'AdminUserUpdateError';
+    this.status = status;
+  }
+}
+
+async function lockAdminStateAndTarget(connection, actorId, targetId) {
+  const [adminRows] = await connection.execute(
+    `SELECT id
+     FROM users
+     WHERE role = 'admin'
+     ORDER BY id ASC
+     FOR UPDATE`,
+  );
+  const actorIsCurrentAdmin = adminRows.some((row) => Number(row.id) === Number(actorId));
+
+  if (!actorIsCurrentAdmin) {
+    throw new AdminUserUpdateError('管理员权限已失效', 403);
+  }
+
+  const [targetRows] = await connection.execute(
+    `SELECT id, role
+     FROM users
+     WHERE id = ?
+     LIMIT 1
+     FOR UPDATE`,
+    [targetId],
+  );
+  const targetUser = targetRows[0];
+
+  if (!targetUser) {
+    throw new AdminUserUpdateError('用户不存在', 404);
+  }
+
+  return {
+    adminRows,
+    targetUser,
+  };
+}
+
+async function lockAndValidateRoleChange(connection, actorId, targetId, nextRole) {
+  const { adminRows, targetUser } = await lockAdminStateAndTarget(connection, actorId, targetId);
+
+  if (targetUser.role === 'admin' && nextRole !== 'admin' && adminRows.length <= 1) {
+    throw new AdminUserUpdateError('不能降低最后一个管理员的权限', 409);
+  }
+
+  return targetUser;
+}
+
+async function lockAndValidateUserDeletion(connection, actorId, targetId) {
+  const { adminRows, targetUser } = await lockAdminStateAndTarget(connection, actorId, targetId);
+
+  if (Number(targetUser.id) === Number(actorId)) {
+    throw new AdminUserUpdateError('不能删除当前登录的管理员账户', 400);
+  }
+
+  if (targetUser.role === 'admin' && adminRows.length <= 1) {
+    throw new AdminUserUpdateError('不能删除最后一个管理员账户', 409);
+  }
+
+  return targetUser;
+}
+
+function sendAdminUserUpdateError(response, error, fallbackMessage) {
+  if (error instanceof AdminUserUpdateError) {
+    response.status(error.status).json({ message: error.message });
+    return;
+  }
+
+  response.status(500).json({ message: fallbackMessage, detail: error.message });
+}
+
 function sanitizeWebsiteUrl(value) {
   const websiteUrl = String(value || '').trim();
 
@@ -1616,10 +1823,15 @@ function removeStoredAvatar(avatarPath) {
 app.get('/api/health', async (_request, response) => {
   try {
     await pool.query('SELECT 1');
-    response.json({
-      ok: true,
+    const agentSettingsHealthy =
+      !config.agentSettingsRequired || agentSettingsInternalState === 'ready';
+
+    response.status(agentSettingsHealthy ? 200 : 503).json({
+      ok: agentSettingsHealthy,
+      agentSettingsApi: agentSettingsInternalState,
       dbHost: config.db.host,
       database: config.db.database,
+      ...(agentSettingsHealthy ? {} : { message: 'Agent settings internal API is not ready' }),
     });
   } catch (error) {
     response.status(500).json({
@@ -3951,6 +4163,100 @@ app.get('/api/admin/users', async (request, response) => {
   }
 });
 
+app.get('/api/admin/system-settings/model', async (request, response) => {
+  try {
+    const adminUser = await requireAdmin(request, response);
+
+    if (!adminUser) {
+      return;
+    }
+
+    response.json(toPublicModelSettings(await systemSettingsStore.readSettings()));
+  } catch (error) {
+    sendSystemSettingsError(response, error, '获取模型设置失败');
+  }
+});
+
+app.patch('/api/admin/system-settings/model', async (request, response) => {
+  try {
+    const adminUser = await requireAdmin(request, response);
+
+    if (!adminUser) {
+      return;
+    }
+
+    const body = request.body || {};
+
+    if (
+      Object.prototype.hasOwnProperty.call(body, 'baseUrl') ||
+      Object.prototype.hasOwnProperty.call(body, 'model')
+    ) {
+      throw new SystemSettingsError('API Base URL 和模型名由部署环境管理', {
+        code: 'MODEL_ENDPOINT_MANAGED_BY_DEPLOYMENT',
+      });
+    }
+
+    const update = {
+      actorId: adminUser.id,
+      ...(Object.prototype.hasOwnProperty.call(body, 'apiKey') ? { apiKey: body.apiKey } : {}),
+    };
+    const settings = await systemSettingsStore.updateModelSettings(update);
+
+    response.json(toPublicModelSettings(settings));
+  } catch (error) {
+    sendSystemSettingsError(response, error, '更新模型设置失败');
+  }
+});
+
+app.delete('/api/admin/system-settings/model/api-key', async (request, response) => {
+  try {
+    const adminUser = await requireAdmin(request, response);
+
+    if (!adminUser) {
+      return;
+    }
+
+    response.json(toPublicModelSettings(await systemSettingsStore.deleteApiKey()));
+  } catch (error) {
+    sendSystemSettingsError(response, error, '删除模型 API key 失败');
+  }
+});
+
+app.get('/api/admin/system-settings/course-materials', async (request, response) => {
+  try {
+    const adminUser = await requireAdmin(request, response);
+
+    if (!adminUser) {
+      return;
+    }
+
+    response.json(toPublicCourseSettings(await systemSettingsStore.readSettings()));
+  } catch (error) {
+    sendSystemSettingsError(response, error, '获取课程资料设置失败');
+  }
+});
+
+app.patch('/api/admin/system-settings/course-materials', async (request, response) => {
+  try {
+    const adminUser = await requireAdmin(request, response);
+
+    if (!adminUser) {
+      return;
+    }
+
+    const body = request.body || {};
+    const settings = await systemSettingsStore.updateCourseMaterialsRoot({
+      courseMaterialsRoot: Object.prototype.hasOwnProperty.call(body, 'rootDirectory')
+        ? body.rootDirectory
+        : body.courseMaterialsRoot,
+    });
+
+    response.json(toPublicCourseSettings(settings));
+  } catch (error) {
+    sendSystemSettingsError(response, error, '更新课程资料设置失败');
+  }
+});
+
 app.patch('/api/admin/fortune-config', async (request, response) => {
   try {
     const adminUser = await requireAdmin(request, response);
@@ -4013,7 +4319,7 @@ app.post('/api/admin/users', async (request, response) => {
       return;
     }
 
-    if (!['student', 'admin'].includes(role)) {
+    if (!USER_ROLES.has(role)) {
       response.status(400).json({ message: '角色不合法' });
       return;
     }
@@ -4058,6 +4364,8 @@ app.post('/api/admin/users', async (request, response) => {
 });
 
 app.patch('/api/admin/users/:id', async (request, response) => {
+  let connection;
+
   try {
     const adminUser = await requireAdmin(request, response);
 
@@ -4082,12 +4390,16 @@ app.patch('/api/admin/users/:id', async (request, response) => {
       return;
     }
 
-    if (!['student', 'admin'].includes(role)) {
+    if (!USER_ROLES.has(role)) {
       response.status(400).json({ message: '角色不合法' });
       return;
     }
 
-    await pool.execute(
+    const generatedUid = await createUniqueUserUid();
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    await lockAndValidateRoleChange(connection, adminUser.id, targetId, role);
+    await connection.execute(
       `UPDATE users
        SET uid = COALESCE(NULLIF(uid, ''), ?),
            full_name = ?,
@@ -4097,7 +4409,7 @@ app.patch('/api/admin/users/:id', async (request, response) => {
            heat = ?
        WHERE id = ?`,
       [
-        await createUniqueUserUid(),
+        generatedUid,
         fullName,
         role,
         Number.isFinite(electrons) ? electrons : 0,
@@ -4106,23 +4418,73 @@ app.patch('/api/admin/users/:id', async (request, response) => {
         targetId,
       ],
     );
+    await connection.commit();
 
     const user = await getUserById(targetId);
-
-    if (!user) {
-      response.status(404).json({ message: '用户不存在' });
-      return;
-    }
 
     response.json({
       user: toUserProfile(user),
     });
   } catch (error) {
-    response.status(500).json({ message: '更新用户失败', detail: error.message });
+    if (connection) {
+      await connection.rollback().catch(() => {});
+    }
+    sendAdminUserUpdateError(response, error, '更新用户失败');
+  } finally {
+    connection?.release();
+  }
+});
+
+app.patch('/api/admin/users/:id/role', async (request, response) => {
+  let connection;
+
+  try {
+    const adminUser = await requireAdmin(request, response);
+
+    if (!adminUser) {
+      return;
+    }
+
+    const targetId = Number(request.params.id);
+    const role = String(request.body?.role || '').trim();
+
+    if (!targetId) {
+      response.status(400).json({ message: '无效用户 ID' });
+      return;
+    }
+
+    if (!USER_ROLES.has(role)) {
+      response.status(400).json({ message: '角色不合法' });
+      return;
+    }
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    await lockAndValidateRoleChange(connection, adminUser.id, targetId, role);
+    await connection.execute(
+      `UPDATE users
+       SET role = ?
+       WHERE id = ?`,
+      [role, targetId],
+    );
+    await connection.commit();
+
+    response.json({
+      user: toUserProfile(await getUserById(targetId)),
+    });
+  } catch (error) {
+    if (connection) {
+      await connection.rollback().catch(() => {});
+    }
+    sendAdminUserUpdateError(response, error, '更新用户权限失败');
+  } finally {
+    connection?.release();
   }
 });
 
 app.delete('/api/admin/users/:id', async (request, response) => {
+  let connection;
+
   try {
     const adminUser = await requireAdmin(request, response);
 
@@ -4137,44 +4499,120 @@ app.delete('/api/admin/users/:id', async (request, response) => {
       return;
     }
 
-    if (targetId === adminUser.id) {
-      response.status(400).json({ message: '不能删除当前登录的管理员账户' });
-      return;
-    }
-
-    const [result] = await pool.execute(`DELETE FROM users WHERE id = ?`, [targetId]);
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    await lockAndValidateUserDeletion(connection, adminUser.id, targetId);
+    const [result] = await connection.execute(`DELETE FROM users WHERE id = ?`, [targetId]);
 
     if (result.affectedRows === 0) {
-      response.status(404).json({ message: '用户不存在' });
-      return;
+      throw new AdminUserUpdateError('用户不存在', 404);
     }
 
+    await connection.commit();
     response.json({ ok: true });
   } catch (error) {
-    response.status(500).json({ message: '删除用户失败', detail: error.message });
+    if (connection) {
+      await connection.rollback().catch(() => {});
+    }
+    sendAdminUserUpdateError(response, error, '删除用户失败');
+  } finally {
+    connection?.release();
   }
 });
 
-async function start() {
-  app.listen(config.apiPort, config.apiHost, () => {
-    console.log(`FREE-BBS backend running at http://${config.apiHost}:${config.apiPort}`);
-    console.log(`MySQL target: ${config.db.host}:${config.db.port}/${config.db.database}`);
+async function removeStaleAgentSettingsSocket(socketPath) {
+  try {
+    const socketStats = await fs.promises.lstat(socketPath);
+
+    if (!socketStats.isSocket()) {
+      throw new Error('AGENT_SETTINGS_SOCKET 指向的现有路径不是 Unix socket');
+    }
+
+    await fs.promises.unlink(socketPath);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+  }
+}
+
+async function startAgentSettingsInternalApi() {
+  if (!config.agentServiceToken) {
+    agentSettingsInternalState = 'disabled';
+
+    if (config.agentSettingsRequired) {
+      throw new Error('AGENT_SERVICE_TOKEN is required when AGENT_SETTINGS_REQUIRED is enabled');
+    }
+
+    console.warn('Agent settings internal API disabled: AGENT_SERVICE_TOKEN is not configured');
+    return null;
+  }
+
+  if (config.agentServiceToken.length < 32) {
+    throw new Error('AGENT_SERVICE_TOKEN must contain at least 32 characters');
+  }
+
+  if (!path.isAbsolute(config.agentSettingsSocket)) {
+    throw new Error('AGENT_SETTINGS_SOCKET must be an absolute path');
+  }
+
+  decodeEncryptionKey(config.settingsEncryptionKey);
+
+  await fs.promises.mkdir(path.dirname(config.agentSettingsSocket), {
+    recursive: true,
+    mode: 0o750,
+  });
+  await removeStaleAgentSettingsSocket(config.agentSettingsSocket);
+
+  const internalServer = await new Promise((resolve, reject) => {
+    const server = internalApp.listen(config.agentSettingsSocket);
+    const handleError = (error) => {
+      reject(error);
+    };
+
+    server.once('error', handleError);
+    server.once('listening', () => {
+      server.removeListener('error', handleError);
+      resolve(server);
+    });
   });
 
-  setImmediate(async () => {
-    try {
-      await ensureUsersUidColumn();
-      await ensureAppSettingsTable();
-      await ensureDiscussionTables();
-      await ensureAiDialogTables();
-      await ensureFortuneTables();
-      await ensureEconomyTables();
-      await decayHeatIfNeeded(new Date());
-      scheduleNextHeatDecay();
-    } catch (error) {
-      console.error('Backend maintenance checks failed', error);
-    }
+  internalServer.on('error', (error) => {
+    agentSettingsInternalState = 'failed';
+    console.error('Agent settings internal API failed', error);
   });
+  await fs.promises.chmod(config.agentSettingsSocket, 0o660);
+  agentSettingsInternalState = 'ready';
+  console.log(`Agent settings internal API listening on ${config.agentSettingsSocket}`);
+  return internalServer;
+}
+
+async function start() {
+  await ensureUsersUidColumn();
+  await ensureAppSettingsTable();
+  await ensureSystemSecretSettingsTable(pool);
+  await ensureDiscussionTables();
+  await ensureAiDialogTables();
+  await ensureFortuneTables();
+  await ensureEconomyTables();
+  await decayHeatIfNeeded(new Date());
+  scheduleNextHeatDecay();
+
+  try {
+    await startAgentSettingsInternalApi();
+  } catch (error) {
+    agentSettingsInternalState = 'failed';
+    throw error;
+  }
+
+  await new Promise((resolve, reject) => {
+    const publicServer = app.listen(config.apiPort, config.apiHost);
+    publicServer.once('error', reject);
+    publicServer.once('listening', resolve);
+  });
+
+  console.log(`FREE-BBS backend running at http://${config.apiHost}:${config.apiPort}`);
+  console.log(`MySQL target: ${config.db.host}:${config.db.port}/${config.db.database}`);
 }
 
 start().catch((error) => {

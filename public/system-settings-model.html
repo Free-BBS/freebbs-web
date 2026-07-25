@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="配置 FREE-BBS Agent 服务使用的大模型 API key。" />
+    <title>FREE-BBS - 模型与密钥</title>
+    <link rel="icon" type="image/png" href="/assets/favicon-64.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Noto+Serif+SC:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="system-settings-page system-settings-model-page">
+    <div class="page-shell page-shell-settings">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="FREE-BBS 首页">
+          <span class="brand-mark">FREE<br />BBS</span>
+        </a>
+
+        <nav class="nav-actions" aria-label="主导航">
+          <div class="user-panel" id="user-panel">
+            <div class="user-summary">
+              <button class="avatar" type="button" aria-label="登录或注册">
+                <img
+                  class="avatar-image"
+                  src="/assets/avatar_placeholder.webp"
+                  alt="当前用户头像"
+                />
+              </button>
+              <div class="user-actions" id="user-actions">
+                <button
+                  class="user-icon-button hidden"
+                  id="user-settings-button"
+                  type="button"
+                  aria-label="个人设置"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/gear.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>设置</span>
+                </button>
+                <button
+                  class="user-icon-button hidden"
+                  id="user-logout-button"
+                  type="button"
+                  aria-label="退出"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/exit.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>退出</span>
+                </button>
+              </div>
+              <div class="user-copy">
+                <button class="user-name" type="button" id="user-name">登录/注册</button>
+                <div class="user-role" id="user-role">学生</div>
+              </div>
+            </div>
+            <div class="user-status" id="user-status" aria-label="账户资产">
+              <span class="currency currency-electric" aria-label="电元">
+                <img class="currency-icon" src="/assets/icons/electron.svg" alt="" />
+                <span class="currency-value">-</span>
+              </span>
+              <span class="currency currency-magnetic" aria-label="磁元">
+                <img class="currency-icon" src="/assets/icons/magnetron.svg" alt="" />
+                <span class="currency-value">-</span>
+              </span>
+              <span class="currency currency-heat" aria-label="热力">
+                <img class="currency-icon" src="/assets/icons/flame.svg" alt="" />
+                <span class="currency-value">-</span>
+              </span>
+            </div>
+          </div>
+        </nav>
+      </header>
+
+      <nav class="mobile-nav" aria-label="手机底部导航"></nav>
+
+      <main
+        class="main-content settings-main system-settings-main hidden"
+        id="system-settings-content"
+        data-admin-content
+      >
+        <section
+          class="system-settings-shell system-settings-detail-shell"
+          aria-labelledby="system-model-title"
+        >
+          <a class="system-settings-back" href="/system-settings">← 返回系统设置</a>
+
+          <header class="system-settings-intro">
+            <p class="system-settings-kicker">Model access</p>
+            <h1 class="visually-hidden" id="system-model-title">模型与密钥</h1>
+            <p>页面不会回显已保存的密钥。输入新密钥并保存后，Agent 服务会通过同机内部接口读取。</p>
+          </header>
+
+          <form class="system-settings-form" id="system-model-form" aria-label="模型密钥设置">
+            <div class="system-settings-form-heading">
+              <div>
+                <h2>大模型 API key</h2>
+                <p>仅在需要替换密钥时填写。</p>
+              </div>
+              <strong id="system-model-config-state" role="status" aria-live="polite"
+                >等待读取</strong
+              >
+            </div>
+
+            <label class="system-settings-field" for="system-model-api-key">
+              <span>新的 API key</span>
+            </label>
+            <div class="system-settings-secret-field">
+              <input
+                id="system-model-api-key"
+                type="password"
+                name="apiKey"
+                autocomplete="new-password"
+                autocapitalize="none"
+                spellcheck="false"
+                aria-describedby="system-model-api-key-help"
+              />
+              <button
+                class="system-settings-secret-toggle"
+                id="system-model-api-key-toggle"
+                type="button"
+                aria-label="显示 API key"
+                aria-pressed="false"
+              >
+                显示
+              </button>
+            </div>
+            <p class="system-settings-help" id="system-model-api-key-help">
+              已保存的值只显示配置状态与末四位，不会写入输入框。
+            </p>
+
+            <div class="system-settings-form-actions">
+              <button class="system-settings-submit" type="submit">保存新密钥</button>
+              <button
+                class="system-settings-clear"
+                id="system-model-api-key-clear"
+                type="button"
+                disabled
+              >
+                清除密钥
+              </button>
+            </div>
+
+            <p
+              class="system-settings-message"
+              id="system-model-message"
+              role="status"
+              aria-live="polite"
+            ></p>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+    <script src="/system-settings.js"></script>
+  </body>
+</html>

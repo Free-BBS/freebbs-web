@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta
+      name="description"
+      content="FREE-BBS 管理员系统设置入口，用于管理模型密钥、用户权限和课程资料目录。"
+    />
+    <title>FREE-BBS - 系统设置</title>
+    <link rel="icon" type="image/png" href="/assets/favicon-64.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Noto+Serif+SC:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="system-settings-page system-settings-index-page">
+    <div class="page-shell page-shell-settings">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="FREE-BBS 首页">
+          <span class="brand-mark">FREE<br />BBS</span>
+        </a>
+
+        <nav class="nav-actions" aria-label="主导航">
+          <div class="user-panel" id="user-panel">
+            <div class="user-summary">
+              <button class="avatar" type="button" aria-label="登录或注册">
+                <img
+                  class="avatar-image"
+                  src="/assets/avatar_placeholder.webp"
+                  alt="当前用户头像"
+                />
+              </button>
+              <div class="user-actions" id="user-actions">
+                <button
+                  class="user-icon-button hidden"
+                  id="user-settings-button"
+                  type="button"
+                  aria-label="个人设置"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/gear.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>设置</span>
+                </button>
+                <button
+                  class="user-icon-button hidden"
+                  id="user-logout-button"
+                  type="button"
+                  aria-label="退出"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/exit.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>退出</span>
+                </button>
+              </div>
+              <div class="user-copy">
+                <button class="user-name" type="button" id="user-name">登录/注册</button>
+                <div class="user-role" id="user-role">学生</div>
+              </div>
+            </div>
+            <div class="user-status" id="user-status" aria-label="账户资产">
+              <span class="currency currency-electric" aria-label="电元">
+                <img class="currency-icon" src="/assets/icons/electron.svg" alt="" />
+                <span class="currency-value">-</span>
+              </span>
+              <span class="currency currency-magnetic" aria-label="磁元">
+                <img class="currency-icon" src="/assets/icons/magnetron.svg" alt="" />
+                <span class="currency-value">-</span>
+              </span>
+              <span class="currency currency-heat" aria-label="热力">
+                <img class="currency-icon" src="/assets/icons/flame.svg" alt="" />
+                <span class="currency-value">-</span>
+              </span>
+            </div>
+          </div>
+        </nav>
+      </header>
+
+      <nav class="mobile-nav" aria-label="手机底部导航"></nav>
+
+      <main
+        class="main-content settings-main system-settings-main hidden"
+        id="system-settings-content"
+        data-admin-content
+      >
+        <section class="system-settings-shell" aria-labelledby="system-settings-title">
+          <header class="system-settings-intro">
+            <p class="system-settings-kicker">Administration</p>
+            <h1 class="visually-hidden" id="system-settings-title">系统设置</h1>
+            <p>每类配置都有独立页面。选择一项进入，保存后即可返回这里继续管理其它设置。</p>
+          </header>
+
+          <nav class="system-settings-menu" aria-label="系统设置功能">
+            <a
+              class="system-settings-menu-item"
+              href="/system-settings/model"
+              aria-describedby="system-settings-model-description"
+            >
+              <span class="system-settings-menu-icon" aria-hidden="true">
+                <img src="/assets/icons/key.svg" alt="" />
+              </span>
+              <span class="system-settings-menu-copy">
+                <strong>模型与密钥</strong>
+                <small id="system-settings-model-description"
+                  >更新供同机 Agent 服务读取的大模型 API key。</small
+                >
+              </span>
+              <span class="system-settings-menu-arrow" aria-hidden="true">→</span>
+            </a>
+
+            <a
+              class="system-settings-menu-item"
+              href="/adminusers"
+              aria-describedby="system-settings-users-description"
+            >
+              <span class="system-settings-menu-icon" aria-hidden="true">
+                <img src="/assets/icons/people.svg" alt="" />
+              </span>
+              <span class="system-settings-menu-copy">
+                <strong>用户权限</strong>
+                <small id="system-settings-users-description"
+                  >查看用户并调整学生、助教、教师或管理员角色。</small
+                >
+              </span>
+              <span class="system-settings-menu-arrow" aria-hidden="true">→</span>
+            </a>
+
+            <a
+              class="system-settings-menu-item"
+              href="/system-settings/course-materials"
+              aria-describedby="system-settings-course-description"
+            >
+              <span class="system-settings-menu-icon" aria-hidden="true">
+                <img src="/assets/icons/subject.svg" alt="" />
+              </span>
+              <span class="system-settings-menu-copy">
+                <strong>课程资料</strong>
+                <small id="system-settings-course-description"
+                  >指定 Agent 解析课程资料与相对 RAG 索引路径的根目录。</small
+                >
+              </span>
+              <span class="system-settings-menu-arrow" aria-hidden="true">→</span>
+            </a>
+          </nav>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+    <script src="/system-settings.js"></script>
+  </body>
+</html>
