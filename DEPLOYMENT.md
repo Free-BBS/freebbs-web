@@ -206,10 +206,31 @@ sudo visudo -f /etc/sudoers.d/free-bbs-runner
 写入：
 
 ```text
-deploy ALL=NOPASSWD:/bin/systemctl restart free-bbs-frontend,/bin/systemctl restart free-bbs-backend,/bin/systemctl status free-bbs-frontend,/bin/systemctl status free-bbs-backend
+Cmnd_Alias FREE_BBS_SERVICE_CONTROL = /usr/bin/systemctl restart free-bbs-frontend, \
+    /usr/bin/systemctl restart free-bbs-backend, \
+    /usr/bin/systemctl --no-pager --full status free-bbs-frontend, \
+    /usr/bin/systemctl --no-pager --full status free-bbs-backend
+Defaults:deploy listpw=all
+deploy ALL=(root) NOPASSWD: FREE_BBS_SERVICE_CONTROL
 ```
 
-如果你的 `systemctl` 路径不同，用 `which systemctl` 确认后再写。
+这里的用户名必须与 GitHub Secret `DEPLOY_USER` 完全相同。先用 `command -v systemctl`
+确认路径；部署脚本和仓库提供的规则默认使用 `/usr/bin/systemctl`。保存后验证语法和部署
+用户的实际权限：
+
+```bash
+sudo chmod 0440 /etc/sudoers.d/free-bbs-runner
+sudo visudo -cf /etc/sudoers
+sudo -u deploy -H sudo -k
+sudo -u deploy -H sudo -n -l /usr/bin/systemctl restart free-bbs-frontend
+sudo -u deploy -H sudo -n -l /usr/bin/systemctl restart free-bbs-backend
+sudo -u deploy -H sudo -n -l /usr/bin/systemctl --no-pager --full status free-bbs-frontend
+sudo -u deploy -H sudo -n -l /usr/bin/systemctl --no-pager --full status free-bbs-backend
+```
+
+`listpw=all` 要求该专用部署用户的所有 sudo 权限都是免密规则；不要再给它添加需要密码
+的通用 sudo 权限。部署脚本会先清除凭据缓存，再在同步生产目录之前用 `sudo -n -l`
+检查上述四条权限，避免安装完依赖后才因密码提示中断。
 
 然后为 GitHub Actions 准备 SSH 登录：
 

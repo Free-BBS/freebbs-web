@@ -15,6 +15,8 @@ HEALTHCHECK_DELAY_SECONDS="${HEALTHCHECK_DELAY_SECONDS:-2}"
 NODE_VERSION_FILE="$ROOT_DIR/.nvmrc"
 NODE_BINARY="${NODE_BINARY:-/usr/bin/node}"
 NPM_BINARY="${NPM_BINARY:-/usr/bin/npm}"
+SYSTEMCTL_BINARY="${SYSTEMCTL_BINARY:-/usr/bin/systemctl}"
+SUDO_BINARY="${SUDO_BINARY:-/usr/bin/sudo}"
 
 if [[ ! -r "$NODE_VERSION_FILE" ]]; then
   echo "[deploy] missing Node.js version file: $NODE_VERSION_FILE" >&2
@@ -33,10 +35,12 @@ if [[ "$RUN_DB_MIGRATIONS" != "0" && "$RUN_DB_MIGRATIONS" != "1" ]]; then
   exit 1
 fi
 
-if [[ ! -x "$NODE_BINARY" || ! -x "$NPM_BINARY" ]]; then
-  echo "[deploy] Node.js and npm must be installed at $NODE_BINARY and $NPM_BINARY" >&2
-  exit 1
-fi
+for required_binary in "$NODE_BINARY" "$NPM_BINARY" "$SYSTEMCTL_BINARY" "$SUDO_BINARY"; do
+  if [[ ! -x "$required_binary" ]]; then
+    echo "[deploy] required system binary is missing or not executable: $required_binary" >&2
+    exit 1
+  fi
+done
 
 NODE_MAJOR="$("$NODE_BINARY" -p "process.versions.node.split('.')[0]")"
 if ((NODE_MAJOR < REQUIRED_NODE_MAJOR)); then
@@ -45,13 +49,23 @@ if ((NODE_MAJOR < REQUIRED_NODE_MAJOR)); then
   exit 1
 fi
 
+# Do not let an interactive sudo timestamp hide a password-protected rule.
+"$SUDO_BINARY" -k
+
 for service_name in "$FRONTEND_SERVICE_NAME" "$BACKEND_SERVICE_NAME"; do
-  load_state="$(systemctl show "$service_name" --property=LoadState --value 2>/dev/null || true)"
-  exec_start="$(systemctl show "$service_name" --property=ExecStart --value 2>/dev/null || true)"
+  load_state="$("$SYSTEMCTL_BINARY" show "$service_name" --property=LoadState --value 2>/dev/null || true)"
+  exec_start="$("$SYSTEMCTL_BINARY" show "$service_name" --property=ExecStart --value 2>/dev/null || true)"
 
   if [[ "$load_state" != "loaded" || "$exec_start" != *"$NODE_BINARY"* ]]; then
     echo "[deploy] $service_name must be loaded and configured to start with $NODE_BINARY" >&2
     echo "[deploy] install the repository systemd units and run systemctl daemon-reload before retrying" >&2
+    exit 1
+  fi
+
+  if ! "$SUDO_BINARY" -n -l "$SYSTEMCTL_BINARY" restart "$service_name" >/dev/null 2>&1 ||
+    ! "$SUDO_BINARY" -n -l "$SYSTEMCTL_BINARY" --no-pager --full status "$service_name" >/dev/null 2>&1; then
+    echo "[deploy] passwordless sudo is not configured for $service_name restart/status" >&2
+    echo "[deploy] add the exact NOPASSWD commands and listpw=all with visudo before retrying" >&2
     exit 1
   fi
 done
@@ -91,10 +105,10 @@ else
 fi
 
 echo "[deploy] restarting services"
-sudo -n systemctl restart "$FRONTEND_SERVICE_NAME"
-sudo -n systemctl restart "$BACKEND_SERVICE_NAME"
-sudo -n systemctl status "$FRONTEND_SERVICE_NAME"
-sudo -n systemctl status "$BACKEND_SERVICE_NAME"
+"$SUDO_BINARY" -n "$SYSTEMCTL_BINARY" restart "$FRONTEND_SERVICE_NAME"
+"$SUDO_BINARY" -n "$SYSTEMCTL_BINARY" restart "$BACKEND_SERVICE_NAME"
+"$SUDO_BINARY" -n "$SYSTEMCTL_BINARY" --no-pager --full status "$FRONTEND_SERVICE_NAME"
+"$SUDO_BINARY" -n "$SYSTEMCTL_BINARY" --no-pager --full status "$BACKEND_SERVICE_NAME"
 
 echo "[deploy] checking backend health: $HEALTHCHECK_URL"
 for ((attempt = 1; attempt <= HEALTHCHECK_RETRIES; attempt++)); do
