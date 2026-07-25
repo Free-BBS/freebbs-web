@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "FREE-BBS learning platform homepage and auth backend",
   "main": "server.js",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "start": "node server.js",
     "start:local": "bash scripts/start-local.sh",

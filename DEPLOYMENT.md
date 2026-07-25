@@ -36,7 +36,18 @@ sudo apt-get update
 sudo apt-get install -y git rsync mysql-client
 ```
 
-安装 Node.js 20 和 npm。
+安装 Node.js 24 LTS 和 npm，并确认服务器实际使用的版本：
+
+```bash
+/usr/bin/node --version
+/usr/bin/npm --version
+```
+
+`/usr/bin/node --version` 必须为 `v24` 或更高版本。Node 需要安装在系统路径中，不要只
+安装到 `deploy` 用户的 nvm 目录。GitHub runner 与应用服务器都以仓库根目录的
+`.nvmrc` 为版本基准；GitHub runner 不会自动升级应用服务器上的 Node.js。部署脚本会在
+同步生产目录前检查 `/usr/bin/node` 及 systemd 的实际启动命令，避免旧运行时造成只更新
+了一半的发布。
 
 创建部署用户、彼此隔离的服务用户与 Unix Socket 共享组：
 
@@ -69,7 +80,7 @@ sudo chmod 751 /etc/free-bbs
 sudo useradd -m -s /bin/bash deploy
 ```
 
-`deploy` 只负责发布文件和重启服务，不运行站点进程，也不要加入
+`deploy` 只负责发布文件、执行手动数据库迁移和重启服务，不运行站点进程，也不要加入
 `freebbs-agent-config` 组。这样前端进程和部署进程都无法连接内部配置 socket。
 
 如果你不想使用 `deploy` 这个部署用户名，可以换成已有用户，但要同步修改
@@ -169,6 +180,7 @@ sudo cp deploy/systemd/free-bbs-backend.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable free-bbs-frontend
 sudo systemctl enable free-bbs-backend
+sudo systemctl show free-bbs-frontend free-bbs-backend --property=ExecStart
 ```
 
 service 文件分别使用 `freebbs-frontend` 与 `freebbs-backend`。不要为了省事改回同一个
@@ -181,7 +193,7 @@ GitHub Actions 不再需要安装 self-hosted runner。
 应用服务器需要具备：
 
 - 读写 `/data/www/free-BBS`
-- 读取 `/etc/free-bbs/free-bbs.env`（仅部署脚本和数据库迁移）
+- 手动执行数据库迁移工作流时，读取 `/etc/free-bbs/free-bbs.env`
 - 执行 `sudo systemctl restart free-bbs-frontend`
 - 执行 `sudo systemctl restart free-bbs-backend`
 
@@ -247,13 +259,23 @@ sudo -u deploy chmod 600 /home/deploy/.ssh/authorized_keys
 3. 做语法和必要文件检查
 4. 打包代码并通过 SSH 上传到应用服务器
 5. 应用服务器解压发布包并同步到 `/data/www/free-BBS`
-6. 重新安装依赖
-7. 读取 `/etc/free-bbs/free-bbs.env`
-8. 默认不执行数据库 SQL，只重启前后端服务并做健康检查
+6. 仅安装生产依赖
+7. 重启前后端服务并做健康检查
 
 头像和其它上传文件不会放进 Git。生产环境的 `UPLOAD_DIR=/data/www/free-BBS/uploads` 是运行期持久目录，`scripts/deploy.sh` 会在同步代码时排除 `uploads` 和 `database/uploads`，避免 `rsync --delete` 在每次部署时删除用户头像。
 
+普通代码部署不会读取 `/etc/free-bbs/free-bbs.env`，避免让 SSH 发布流程接触数据库密码、
+Agent token 和设置加密密钥。只有明确填写 `RUN` 的数据库迁移工作流会加载该文件。
+
 数据库变更需要手动触发 `.github/workflows/db-migrate.yml`，并在输入框里明确填写 `RUN`。迁移脚本会执行 `database/migrations/*.sql` 中尚未执行过的文件，而不是反复重跑整份初始化 SQL。
+
+如果数据库迁移提示环境文件不可读，保持文件为 `0640`，不要改成 `0644`：
+
+```bash
+sudo chown deploy:freebbs-backend /etc/free-bbs/free-bbs.env
+sudo chmod 0640 /etc/free-bbs/free-bbs.env
+sudo -u deploy test -r /etc/free-bbs/free-bbs.env
+```
 
 系统设置功能依赖 `016_create_system_secret_settings.sql`。部署包含该功能的版本前，先手动
 运行数据库迁移工作流；否则管理员保存模型 API key 时会失败。

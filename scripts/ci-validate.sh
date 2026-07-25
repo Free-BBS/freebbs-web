@@ -8,12 +8,14 @@ echo "[ci] installing dependencies"
 npm ci
 
 echo "[ci] syntax check"
+bash -n scripts/*.sh
 node --check server.js
 node --check backend/server.js
 node --check public/app.js
 node --check public/auth.js
 
 echo "[ci] validating required files"
+test -f .nvmrc
 test -f public/index.html
 test -f public/world.html
 test -f public/discussion.html

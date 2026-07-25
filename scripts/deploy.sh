@@ -12,6 +12,49 @@ HEALTHCHECK_URL="${HEALTHCHECK_URL//$'\r'/}"
 HEALTHCHECK_URL="${HEALTHCHECK_URL//$'\n'/}"
 HEALTHCHECK_RETRIES="${HEALTHCHECK_RETRIES:-15}"
 HEALTHCHECK_DELAY_SECONDS="${HEALTHCHECK_DELAY_SECONDS:-2}"
+NODE_VERSION_FILE="$ROOT_DIR/.nvmrc"
+NODE_BINARY="${NODE_BINARY:-/usr/bin/node}"
+NPM_BINARY="${NPM_BINARY:-/usr/bin/npm}"
+
+if [[ ! -r "$NODE_VERSION_FILE" ]]; then
+  echo "[deploy] missing Node.js version file: $NODE_VERSION_FILE" >&2
+  exit 1
+fi
+
+REQUIRED_NODE_VERSION="$(tr -d '[:space:]' <"$NODE_VERSION_FILE")"
+REQUIRED_NODE_MAJOR="${REQUIRED_NODE_VERSION%%.*}"
+if [[ ! "$REQUIRED_NODE_MAJOR" =~ ^[0-9]+$ ]]; then
+  echo "[deploy] .nvmrc must start with a numeric Node.js major version" >&2
+  exit 1
+fi
+
+if [[ "$RUN_DB_MIGRATIONS" != "0" && "$RUN_DB_MIGRATIONS" != "1" ]]; then
+  echo "[deploy] RUN_DB_MIGRATIONS must be 0 or 1" >&2
+  exit 1
+fi
+
+if [[ ! -x "$NODE_BINARY" || ! -x "$NPM_BINARY" ]]; then
+  echo "[deploy] Node.js and npm must be installed at $NODE_BINARY and $NPM_BINARY" >&2
+  exit 1
+fi
+
+NODE_MAJOR="$("$NODE_BINARY" -p "process.versions.node.split('.')[0]")"
+if ((NODE_MAJOR < REQUIRED_NODE_MAJOR)); then
+  echo "[deploy] Node.js ${REQUIRED_NODE_VERSION} or newer is required; found $("$NODE_BINARY" --version)" >&2
+  echo "[deploy] upgrade the app server runtime before retrying this deployment" >&2
+  exit 1
+fi
+
+for service_name in "$FRONTEND_SERVICE_NAME" "$BACKEND_SERVICE_NAME"; do
+  load_state="$(systemctl show "$service_name" --property=LoadState --value 2>/dev/null || true)"
+  exec_start="$(systemctl show "$service_name" --property=ExecStart --value 2>/dev/null || true)"
+
+  if [[ "$load_state" != "loaded" || "$exec_start" != *"$NODE_BINARY"* ]]; then
+    echo "[deploy] $service_name must be loaded and configured to start with $NODE_BINARY" >&2
+    echo "[deploy] install the repository systemd units and run systemctl daemon-reload before retrying" >&2
+    exit 1
+  fi
+done
 
 mkdir -p "$DEPLOY_DIR"
 
@@ -26,35 +69,32 @@ rsync -a --delete \
 cd "$DEPLOY_DIR"
 
 echo "[deploy] installing dependencies"
-npm ci
-
-if [[ -f "$ENV_FILE" ]]; then
-  echo "[deploy] loading environment from $ENV_FILE"
-  set -a
-  # shellcheck disable=SC1090
-  source "$ENV_FILE"
-  set +a
-else
-  echo "[deploy] missing env file: $ENV_FILE" >&2
-  exit 1
-fi
-
-if [[ -n "${UPLOAD_DIR:-}" ]]; then
-  echo "[deploy] ensuring upload directory exists: $UPLOAD_DIR"
-  mkdir -p "$UPLOAD_DIR"
-fi
+"$NPM_BINARY" ci --omit=dev
 
 if [[ "$RUN_DB_MIGRATIONS" == "1" ]]; then
-  bash scripts/migrate.sh
+  if [[ ! -r "$ENV_FILE" ]]; then
+    echo "[deploy] migration environment is not readable: $ENV_FILE" >&2
+    echo "[deploy] grant the deployment user read access with mode 0640; do not use 0644" >&2
+    exit 1
+  fi
+
+  echo "[deploy] loading migration environment from $ENV_FILE"
+  (
+    set -a
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    set +a
+    bash scripts/migrate.sh
+  )
 else
-  echo "[deploy] skipping database migrations"
+  echo "[deploy] skipping database migrations; backend secrets are not loaded"
 fi
 
 echo "[deploy] restarting services"
-sudo systemctl restart "$FRONTEND_SERVICE_NAME"
-sudo systemctl restart "$BACKEND_SERVICE_NAME"
-sudo systemctl --no-pager --full status "$FRONTEND_SERVICE_NAME"
-sudo systemctl --no-pager --full status "$BACKEND_SERVICE_NAME"
+sudo -n systemctl restart "$FRONTEND_SERVICE_NAME"
+sudo -n systemctl restart "$BACKEND_SERVICE_NAME"
+sudo -n systemctl status "$FRONTEND_SERVICE_NAME"
+sudo -n systemctl status "$BACKEND_SERVICE_NAME"
 
 echo "[deploy] checking backend health: $HEALTHCHECK_URL"
 for ((attempt = 1; attempt <= HEALTHCHECK_RETRIES; attempt++)); do

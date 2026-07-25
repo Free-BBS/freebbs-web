@@ -8,8 +8,12 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: read
+
 concurrency:
-  group: free-bbs-production-db
+  group: free-bbs-production
+  queue: max
   cancel-in-progress: false
 
 jobs:
@@ -22,17 +26,19 @@ jobs:
       ENV_FILE: ${{ vars.FREE_BBS_ENV_FILE || '/etc/free-bbs/free-bbs.env' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Validate confirmation
+        env:
+          CONFIRM_PRODUCTION_DATABASE: ${{ inputs.confirm_production_database }}
         run: |
-          if [[ "${{ inputs.confirm_production_database }}" != "RUN" ]]; then
+          if [[ "$CONFIRM_PRODUCTION_DATABASE" != "RUN" ]]; then
             echo "Refusing to run database migration without explicit RUN confirmation." >&2
             exit 1
           fi
@@ -72,13 +78,20 @@ jobs:
           ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -euo pipefail; \
              RELEASE_DIR=/tmp/free-bbs-db-${GITHUB_SHA}; \
+             ARCHIVE_PATH=/tmp/free-bbs-${GITHUB_SHA}.tar.gz; \
+             trap 'rm -rf \"\$RELEASE_DIR\" \"\$ARCHIVE_PATH\"' EXIT; \
              rm -rf \"\$RELEASE_DIR\"; \
              mkdir -p \"\$RELEASE_DIR\"; \
-             tar -xzf /tmp/free-bbs-${GITHUB_SHA}.tar.gz -C \"\$RELEASE_DIR\"; \
+             tar -xzf \"\$ARCHIVE_PATH\" -C \"\$RELEASE_DIR\"; \
              cd \"\$RELEASE_DIR\"; \
-             if [[ ! -f '$ENV_FILE' ]]; then echo 'missing env file: $ENV_FILE' >&2; exit 1; fi; \
-             set -a; \
-             . '$ENV_FILE'; \
-             set +a; \
-             bash scripts/migrate.sh; \
-             rm -rf \"\$RELEASE_DIR\" /tmp/free-bbs-${GITHUB_SHA}.tar.gz"
+             if [[ ! -r '$ENV_FILE' ]]; then \
+               echo 'migration environment is not readable by the deployment user: $ENV_FILE' >&2; \
+               echo 'set owner to the deployment user, group to freebbs-backend, and mode to 0640' >&2; \
+               exit 1; \
+             fi; \
+             ( \
+               set -a; \
+               . '$ENV_FILE'; \
+               set +a; \
+               bash scripts/migrate.sh; \
+             )"
