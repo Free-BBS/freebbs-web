@@ -52,6 +52,7 @@ const fortuneBonusToggle = document.getElementById('fortune-bonus-toggle');
 const manageLinks = document.querySelectorAll('.manage-link');
 const fortuneLinks = document.querySelectorAll('.fortune-link');
 const avatarImages = document.querySelectorAll('.avatar-image');
+const avatarButtons = document.querySelectorAll('.avatar');
 const electromagneticLinks = Array.from(document.querySelectorAll('.electromagnetic-link'));
 const inventoryLinks = Array.from(document.querySelectorAll('.inventory-link'));
 const settingsForm = document.getElementById('settings-form');
@@ -203,6 +204,22 @@ function createNavLink({ href = '#', icon, text, className = '' }) {
   return link;
 }
 
+function centerActiveMobileNavigation() {
+  document.querySelectorAll('.mobile-nav').forEach((nav) => {
+    const activeLink = nav.querySelector('.nav-link.is-active');
+
+    if (!activeLink) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      const centeredScrollLeft =
+        activeLink.offsetLeft - (nav.clientWidth - activeLink.offsetWidth) / 2;
+      nav.scrollLeft = Math.max(0, centeredScrollLeft);
+    });
+  });
+}
+
 function initializeDashboardShell() {
   const path = window.location.pathname.replace(/\/$/, '') || '/';
   const pageTitles = {
@@ -267,9 +284,13 @@ function initializeDashboardShell() {
       }
     });
   });
+
+  centerActiveMobileNavigation();
 }
 
 function initializeEconomyNavigation() {
+  const path = window.location.pathname.replace(/\/$/, '') || '/';
+
   fortuneLinks.forEach((link) => {
     const text = link.querySelector('span');
     const icon = link.querySelector('img');
@@ -297,6 +318,10 @@ function initializeEconomyNavigation() {
     if (!electromagneticLinks.includes(electromagneticLink)) {
       electromagneticLinks.push(electromagneticLink);
     }
+    electromagneticLink.classList.toggle('is-active', path === '/electromagnetic');
+    if (path === '/electromagnetic') {
+      electromagneticLink.setAttribute('aria-current', 'page');
+    }
 
     let inventoryLink = nav.querySelector('.inventory-link');
     if (!inventoryLink) {
@@ -313,7 +338,13 @@ function initializeEconomyNavigation() {
     if (!inventoryLinks.includes(inventoryLink)) {
       inventoryLinks.push(inventoryLink);
     }
+    inventoryLink.classList.toggle('is-active', path === '/inventory');
+    if (path === '/inventory') {
+      inventoryLink.setAttribute('aria-current', 'page');
+    }
   });
+
+  centerActiveMobileNavigation();
 }
 const FALLBACK_DISCUSSION_BOARDS = [
   {
@@ -1549,6 +1580,9 @@ function renderUser() {
     avatarImages.forEach((image) => {
       image.src = DEFAULT_AVATAR;
     });
+    avatarButtons.forEach((button) => {
+      button.setAttribute('aria-label', '登录或注册');
+    });
     document.querySelectorAll('.aichat-message-user .aichat-avatar-image').forEach((image) => {
       image.src = DEFAULT_AVATAR;
     });
@@ -1571,6 +1605,9 @@ function renderUser() {
   ].join('');
   avatarImages.forEach((image) => {
     image.src = getAvatarUrl(userState.avatarPath);
+  });
+  avatarButtons.forEach((button) => {
+    button.setAttribute('aria-label', '打开账户设置');
   });
   document.querySelectorAll('.aichat-message-user .aichat-avatar-image').forEach((image) => {
     image.src = getAvatarUrl(userState.avatarPath);
@@ -1919,6 +1956,7 @@ function renderDiscussionBoards() {
       type="button"
       data-board-slug="${board.slug}"
       title="${escapeHtml(board.description || board.name)}"
+      aria-pressed="${discussionState.activeBoard === board.slug ? 'true' : 'false'}"
     >
       <span class="discussion-board-name">${escapeHtml(board.name)}</span>
     </button>
@@ -2021,8 +2059,6 @@ function renderDiscussionPosts() {
       (post) => `
     <article
       class="discussion-post-card ${discussionState.activePostId === post.id ? 'is-active' : ''}"
-      role="button"
-      tabindex="0"
       data-post-id="${escapeHtml(post.id)}"
     >
       <div class="discussion-post-author">
@@ -2036,8 +2072,17 @@ function renderDiscussionPosts() {
           ${renderAuthorProfileLink(post.author, 'discussion-author-link')}
           <span>${escapeHtml(formatDateOnly(post.createdAt))}</span>
         </div>
-        <h3>${escapeHtml(post.title)}</h3>
-        <div class="discussion-post-actions" aria-hidden="true">
+        <h3>
+          <button
+            class="discussion-post-title"
+            type="button"
+            data-action="open-post"
+            data-post-id="${escapeHtml(post.id)}"
+          >
+            ${escapeHtml(post.title)}
+          </button>
+        </h3>
+        <div class="discussion-post-actions">
           <span class="discussion-comment-count" title="评论">
             <img src="/assets/icons/chats.svg" alt="" aria-hidden="true" />
             <strong>${post.commentCount || 0}</strong>
@@ -2047,7 +2092,7 @@ function renderDiscussionPosts() {
             ${renderDiscussionReactionButton(post, 'light')}
             ${renderDiscussionReactionButton(post, 'fireworks')}
           </div>
-          ${post.canDelete ? `<span class="discussion-delete-action" data-action="delete-post" data-post-id="${escapeHtml(post.id)}"><img class="discussion-action-icon" src="/assets/icons/trash.svg" alt="" aria-hidden="true" /><span>删除</span></span>` : ''}
+          ${post.canDelete ? `<button class="discussion-delete-action" type="button" data-action="delete-post" data-post-id="${escapeHtml(post.id)}"><img class="discussion-action-icon" src="/assets/icons/trash.svg" alt="" aria-hidden="true" /><span>删除</span></button>` : ''}
         </div>
       </div>
       <span class="discussion-post-open" aria-hidden="true">↗</span>
@@ -2075,6 +2120,7 @@ function renderDiscussionReactionButton(post, reactionType) {
       data-reaction-type="${reactionType}"
       data-post-id="${escapeHtml(post.id)}"
       aria-label="${escapeHtml(reaction.label)}"
+      aria-pressed="${active ? 'true' : 'false'}"
       title="${escapeHtml(reaction.label)}"
     >
       <img src="${escapeHtml(icon)}" alt="" aria-hidden="true" />
@@ -3015,7 +3061,7 @@ function renderDiscussionDetail(post) {
             : ''
         }
       </div>
-      <h2>${escapeHtml(post.title)}</h2>
+      <h2 id="discussion-detail-title" tabindex="-1">${escapeHtml(post.title)}</h2>
       <div class="discussion-detail-meta">
         <span class="discussion-detail-board">#${escapeHtml(post.board.name)}</span>
         ${renderAuthorProfileLink(post.author, 'discussion-author-link')}
@@ -3037,9 +3083,9 @@ function renderDiscussionDetail(post) {
         <h3>评论</h3>
       </div>
       <form class="discussion-comment-form" id="discussion-comment-form" data-parent-comment-id="">
-        <textarea class="discussion-comment-input" id="discussion-comment-input" rows="4" maxlength="5000" placeholder="写一条评论，支持 Markdown 和 KaTeX"></textarea>
+        <textarea class="discussion-comment-input" id="discussion-comment-input" rows="4" maxlength="5000" placeholder="写一条评论，支持 Markdown 和 KaTeX" aria-label="评论内容" required></textarea>
         <div class="discussion-compose-actions">
-          <p class="discussion-message discussion-comment-message" id="discussion-comment-message"></p>
+          <p class="discussion-message discussion-comment-message" id="discussion-comment-message" role="status" aria-live="polite"></p>
           <button class="auth-submit discussion-submit" type="submit">发表评论</button>
         </div>
       </form>
@@ -3587,6 +3633,8 @@ function renderAdminSection() {
     link.classList.toggle('hidden', !showFortune);
   });
 
+  centerActiveMobileNavigation();
+
   if (!adminSection) {
     return;
   }
@@ -3617,6 +3665,17 @@ function renderSettingsForm() {
 function handleAuthEntry() {
   if (!userState.isLoggedIn) {
     openModal('login');
+  }
+}
+
+function handleAvatarEntry() {
+  if (!userState.isLoggedIn) {
+    openModal('login');
+    return;
+  }
+
+  if (!isSettingsPage()) {
+    window.location.href = '/settings';
   }
 }
 
@@ -3942,6 +4001,11 @@ async function handleDiscussionPostClick(event) {
   }
 
   await loadDiscussionDetail(postId);
+  window.requestAnimationFrame(() => {
+    document.getElementById('discussion-detail-title')?.focus({
+      preventScroll: true,
+    });
+  });
 }
 
 async function deleteDiscussionPost(postId) {
@@ -4339,9 +4403,9 @@ async function handleDiscussionDetailClick(event) {
     });
     slot.innerHTML = `
       <form class="discussion-comment-form discussion-reply-form" data-parent-comment-id="${commentId}">
-        <textarea class="discussion-comment-input" rows="3" maxlength="5000" placeholder="回复 ${escapeHtml(authorName)}，支持 Markdown 和 KaTeX"></textarea>
+        <textarea class="discussion-comment-input" rows="3" maxlength="5000" placeholder="回复 ${escapeHtml(authorName)}，支持 Markdown 和 KaTeX" aria-label="回复 ${escapeHtml(authorName)}" required></textarea>
         <div class="discussion-compose-actions">
-          <p class="discussion-message discussion-comment-message"></p>
+          <p class="discussion-message discussion-comment-message" role="status" aria-live="polite"></p>
           <button class="auth-submit discussion-submit" type="submit">发布回复</button>
         </div>
       </form>
@@ -4390,12 +4454,25 @@ async function handleDiscussionDetailClick(event) {
     return;
   }
 
+  const previousPostId = String(discussionState.activePostId || '');
   discussionState.activePostId = '';
   renderDiscussionPosts();
   renderDiscussionDetail(null);
   updateDiscussionQuery({
     board: discussionState.activeBoard,
     postId: '',
+  });
+  discussionLayout?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start',
+  });
+  window.requestAnimationFrame(() => {
+    const titleButton = Array.from(
+      discussionPostList?.querySelectorAll('.discussion-post-title') || [],
+    ).find((candidate) => candidate.dataset.postId === previousPostId);
+    titleButton?.focus({
+      preventScroll: true,
+    });
   });
 }
 
@@ -5451,6 +5528,7 @@ window.freeBbsApp = {
 };
 
 userName.addEventListener('click', handleAuthEntry);
+avatarButtons.forEach((button) => button.addEventListener('click', handleAvatarEntry));
 userSettingsButton?.addEventListener('click', handleUserSettingsClick);
 userLogoutButton?.addEventListener('click', handleUserLogoutClick);
 fortuneLinks.forEach((link) => {
