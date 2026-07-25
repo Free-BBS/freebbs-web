@@ -2,7 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>FREE-BBS - 讨论</title>
     <link rel="icon" type="image/png" href="/assets/favicon-64.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -207,7 +207,12 @@
                     ></textarea>
                   </label>
                   <div class="discussion-compose-actions">
-                    <p class="discussion-message" id="discussion-compose-message"></p>
+                    <p
+                      class="discussion-message"
+                      id="discussion-compose-message"
+                      role="status"
+                      aria-live="polite"
+                    ></p>
                     <button class="auth-submit discussion-submit" type="submit">发布</button>
                   </div>
                 </form>
@@ -219,11 +224,7 @@
                 </div>
               </section>
 
-              <article
-                class="discussion-detail"
-                id="discussion-detail"
-                aria-live="polite"
-              ></article>
+              <article class="discussion-detail" id="discussion-detail"></article>
 
               <aside
                 class="discussion-stats-sidebar"
