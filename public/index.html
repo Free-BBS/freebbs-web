@@ -140,133 +140,162 @@
         </a>
       </nav>
 
-      <main class="main-content landing-main">
-        <section class="landing-hero" aria-label="首页引导">
-          <div class="hero-copy">
-            <p class="hero-kicker">FREE BBS · EE Learning Commons</p>
-            <h1>把电子系的学习问题，放到同一张桌面上。</h1>
-            <p class="hero-text">
-              课程地图、讨论区和 Max
-              学习助手服务同一个目标：先看清知识关系，再把真实困惑写下来，让后来的人继续接上。
-            </p>
-            <div class="hero-actions" aria-label="主要入口">
-              <a class="hero-primary-action" href="/world">进入学习世界</a>
-              <a class="hero-secondary-action" href="/discussion">阅读讨论</a>
-            </div>
-          </div>
+      <main class="main-content home-dashboard-main">
+        <h1 class="visually-hidden">FREE-BBS 社区首页</h1>
 
-          <aside class="hero-visual" aria-label="平台状态摘要">
-            <div class="landing-dossier">
-              <div class="dossier-head">
-                <span>当前学习现场</span>
-                <strong>FREE-BBS</strong>
+        <div class="home-dashboard">
+          <section class="home-dashboard-panel home-feed-panel" aria-labelledby="home-feed-title">
+            <header class="home-panel-header">
+              <div>
+                <p class="home-panel-kicker">Discussion</p>
+                <h2 id="home-feed-title">讨论区动态</h2>
               </div>
-              <div class="dossier-map">
-                <img src="/assets/math_island_transparent.png" alt="数理基础知识岛" />
-                <img src="/assets/circuits_island_transparent.png" alt="电路系统知识岛" />
-                <img src="/assets/signals_island_transparent.png" alt="信号处理知识岛" />
+              <div class="home-panel-actions">
+                <a class="home-panel-link" href="/discussion">进入讨论区</a>
+                <button
+                  class="home-feed-toggle"
+                  id="home-feed-toggle"
+                  type="button"
+                  aria-pressed="true"
+                  aria-controls="home-discussion-list"
+                  aria-label="热帖优先"
+                >
+                  <span class="home-feed-toggle-label">排序</span>
+                  <strong id="home-feed-mode-label">热帖</strong>
+                </button>
               </div>
-              <dl class="dossier-stats">
-                <div>
-                  <dt>课程路径</dt>
-                  <dd>地图化梳理</dd>
-                </div>
-                <div>
-                  <dt>讨论沉淀</dt>
-                  <dd>问题长期保存</dd>
-                </div>
-                <div>
-                  <dt>AI 辅助</dt>
-                  <dd>只整理上下文</dd>
-                </div>
-              </dl>
-            </div>
-          </aside>
-        </section>
+            </header>
 
-        <section class="landing-bridge" aria-label="平台原则">
-          <p>不是公告栏，不是资料仓库，也不是让 AI 替你学习的入口。</p>
-          <div class="landing-bridge-points">
-            <span>学生主导</span>
-            <span>公益维护</span>
-            <span>问题优先</span>
-          </div>
-        </section>
-
-        <section class="landing-section landing-mission" aria-labelledby="landing-mission-title">
-          <div class="landing-section-copy">
-            <p class="landing-kicker">Learning method</p>
-            <h2 id="landing-mission-title">学习不是从答案开始，而是从问题的位置开始。</h2>
-            <p class="landing-section-note">
-              FREE-BBS 把学习过程拆成三步：定位知识、整理问题、进入讨论。每一步都留下可追踪的记录。
+            <p class="visually-hidden" id="home-feed-status" role="status" aria-live="polite">
+              正在加载热帖…
             </p>
-          </div>
-          <div class="landing-mission-path">
-            <article>
-              <span>01</span>
-              <h3>定位</h3>
-              <p>从课程和知识点进入地图，找到前置概念、关联章节和可能的应用方向。</p>
-            </article>
-            <article>
-              <span>02</span>
-              <h3>整理</h3>
-              <p>用 Max 辅助补资料、理清上下文，但保留自己的推导、判断和疑问。</p>
-            </article>
-            <article>
-              <span>03</span>
-              <h3>讨论</h3>
-              <p>把问题交给同学、助教和项目伙伴，让一次困惑变成可复用的公共记录。</p>
-            </article>
-          </div>
-        </section>
+            <div
+              class="home-feed-list"
+              id="home-discussion-list"
+              role="list"
+              aria-busy="true"
+              aria-describedby="home-feed-status"
+            >
+              <article class="home-feed-loading-item" aria-hidden="true">
+                <span class="home-loading-kicker"></span>
+                <span class="home-loading-title"></span>
+                <span class="home-loading-meta"></span>
+              </article>
+              <article class="home-feed-loading-item" aria-hidden="true">
+                <span class="home-loading-kicker"></span>
+                <span class="home-loading-title"></span>
+                <span class="home-loading-meta"></span>
+              </article>
+              <article class="home-feed-loading-item" aria-hidden="true">
+                <span class="home-loading-kicker"></span>
+                <span class="home-loading-title"></span>
+                <span class="home-loading-meta"></span>
+              </article>
+              <article class="home-feed-loading-item" aria-hidden="true">
+                <span class="home-loading-kicker"></span>
+                <span class="home-loading-title"></span>
+                <span class="home-loading-meta"></span>
+              </article>
+              <article class="home-feed-loading-item" aria-hidden="true">
+                <span class="home-loading-kicker"></span>
+                <span class="home-loading-title"></span>
+                <span class="home-loading-meta"></span>
+              </article>
+            </div>
+          </section>
 
-        <section class="landing-section landing-product" aria-labelledby="landing-product-title">
-          <div class="landing-section-copy">
-            <p class="landing-kicker">Entry points</p>
-            <h2 id="landing-product-title">首页只保留三条最常用的学习路径。</h2>
-          </div>
-          <div class="landing-product-grid">
-            <a class="landing-product-card is-large" href="/world">
-              <span>知识地图</span>
-              <h3>先看关系，再看资料。</h3>
-              <p>用知识岛和课程路径理解概念之间的依赖，减少只看单章材料造成的断裂。</p>
-            </a>
-            <a class="landing-product-card" href="/discussion">
-              <span>讨论区</span>
-              <h3>把问题留下来。</h3>
-              <p>围绕课程、知识点和项目主题展开交流，后来的同学可以继续补充。</p>
-            </a>
-            <a class="landing-product-card" href="/aichat">
-              <span>Max</span>
-              <h3>帮你整理上下文。</h3>
-              <p>解释概念、梳理资料、复盘讨论，但不替代自己的判断。</p>
-            </a>
-          </div>
-        </section>
+          <section class="home-dashboard-panel home-board-panel" aria-labelledby="home-board-title">
+            <header class="home-panel-header">
+              <div>
+                <p class="home-panel-kicker">Boards</p>
+                <h2 id="home-board-title">分区互动</h2>
+              </div>
+              <a class="home-panel-link" href="/discussion">查看全部</a>
+            </header>
 
-        <section class="landing-section landing-roadmap" aria-labelledby="landing-roadmap-title">
-          <div class="landing-section-copy">
-            <p class="landing-kicker">Roadmap</p>
-            <h2 id="landing-roadmap-title">先把少数课程做扎实，再扩展成长期学习共同体。</h2>
-          </div>
-          <div class="landing-roadmap-track">
-            <article>
-              <time>2026.05</time>
-              <h3>功能验证</h3>
-              <p>验证地图、讨论、通知和登录体系。</p>
-            </article>
-            <article>
-              <time>2026.08</time>
-              <h3>V1.0 上线</h3>
-              <p>完善课程接入流程和社区治理。</p>
-            </article>
-            <article>
-              <time>2027.08</time>
-              <h3>学习共同体</h3>
-              <p>接入更多课程，形成持续维护的学习网络。</p>
-            </article>
-          </div>
-        </section>
+            <p class="visually-hidden" id="home-board-status" role="status" aria-live="polite">
+              正在加载分区互动数据…
+            </p>
+            <div
+              class="home-board-activity"
+              id="home-board-activity"
+              role="list"
+              aria-busy="true"
+              aria-describedby="home-board-status"
+            >
+              <div class="home-board-loading-item" aria-hidden="true">
+                <span class="home-loading-title"></span>
+                <span class="home-loading-meta"></span>
+              </div>
+              <div class="home-board-loading-item" aria-hidden="true">
+                <span class="home-loading-title"></span>
+                <span class="home-loading-meta"></span>
+              </div>
+              <div class="home-board-loading-item" aria-hidden="true">
+                <span class="home-loading-title"></span>
+                <span class="home-loading-meta"></span>
+              </div>
+              <div class="home-board-loading-item" aria-hidden="true">
+                <span class="home-loading-title"></span>
+                <span class="home-loading-meta"></span>
+              </div>
+              <div class="home-board-loading-item" aria-hidden="true">
+                <span class="home-loading-title"></span>
+                <span class="home-loading-meta"></span>
+              </div>
+            </div>
+          </section>
+
+          <section
+            class="home-dashboard-panel home-heat-panel"
+            id="landing-heat-leaderboard"
+            aria-labelledby="home-heat-title"
+          >
+            <header class="home-panel-header">
+              <div>
+                <p class="home-panel-kicker">Heat</p>
+                <h2 id="home-heat-title">热力榜前五</h2>
+              </div>
+            </header>
+
+            <p class="visually-hidden" id="home-heat-status" role="status" aria-live="polite">
+              正在加载热力榜…
+            </p>
+            <ol
+              class="home-heat-list"
+              id="landing-heat-list"
+              aria-busy="true"
+              aria-describedby="home-heat-status"
+              aria-label="热力榜前五名"
+            >
+              <li class="home-heat-loading-item" aria-hidden="true">
+                <span class="home-loading-rank"></span>
+                <span class="home-loading-avatar"></span>
+                <span class="home-loading-title"></span>
+              </li>
+              <li class="home-heat-loading-item" aria-hidden="true">
+                <span class="home-loading-rank"></span>
+                <span class="home-loading-avatar"></span>
+                <span class="home-loading-title"></span>
+              </li>
+              <li class="home-heat-loading-item" aria-hidden="true">
+                <span class="home-loading-rank"></span>
+                <span class="home-loading-avatar"></span>
+                <span class="home-loading-title"></span>
+              </li>
+              <li class="home-heat-loading-item" aria-hidden="true">
+                <span class="home-loading-rank"></span>
+                <span class="home-loading-avatar"></span>
+                <span class="home-loading-title"></span>
+              </li>
+              <li class="home-heat-loading-item" aria-hidden="true">
+                <span class="home-loading-rank"></span>
+                <span class="home-loading-avatar"></span>
+                <span class="home-loading-title"></span>
+              </li>
+            </ol>
+          </section>
+        </div>
       </main>
 
       <footer class="site-footer">
