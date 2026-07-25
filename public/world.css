@@ -1,10 +1,11 @@
 .world-page {
-  min-height: 100vh;
-  overflow: hidden;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: hidden;
   background:
     linear-gradient(140deg, rgba(8, 12, 16, 0.68), rgba(10, 16, 23, 0.62)),
     url('/assets/world_bg.webp') center center / cover no-repeat,
-    #0b1017;
+    #0b1017 !important;
 }
 
 .world-page::before,
@@ -13,9 +14,14 @@
 }
 
 .page-shell-world {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: block;
-  padding: 0 0 0 256px;
+  padding: 0 0 0 var(--bbs-shell-width, 248px) !important;
+  background: transparent !important;
+}
+
+body.world-page .page-shell.page-shell-world {
+  background: transparent !important;
 }
 
 .world-page .site-footer {
@@ -24,9 +30,9 @@
 
 .world-page .topbar {
   grid-template-rows: auto auto minmax(0, 1fr);
-  background: rgba(9, 12, 14, 0.78);
-  border-right: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.06);
+  background: rgba(9, 12, 14, 0.88) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.06) !important;
 }
 
 .world-page .searchbar {
@@ -39,15 +45,23 @@
 }
 
 .world-main {
-  height: 100vh;
-  min-height: 100vh;
-  padding: 0;
+  width: 100%;
+  min-width: 0;
+  height: 100dvh;
+  min-height: 100dvh;
+  padding: 0 !important;
   overflow: hidden;
 }
 
+.world-main::before {
+  display: none !important;
+}
+
 .study-world-shell {
-  min-height: 100vh;
-  height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  min-height: 100dvh;
+  height: 100dvh;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: clamp(18px, 3vw, 30px);
@@ -88,6 +102,7 @@
 
 .study-world-track {
   width: 100%;
+  max-width: 100%;
   min-width: 0;
   display: flex;
   gap: clamp(18px, 3vw, 34px);
@@ -97,6 +112,7 @@
   scroll-padding-inline: 4px;
   padding: 4px max(4px, 5vw) 22px 4px;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-inline: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(244, 239, 231, 0.48) rgba(244, 239, 231, 0.14);
 }
@@ -114,11 +130,12 @@
 }
 
 .study-world-card {
-  flex: 0 0 min(78vw, 820px);
+  flex: 0 0
+    min(820px, max(520px, calc(100vw - var(--bbs-shell-width, 248px) - clamp(48px, 10vw, 136px))));
   scroll-snap-align: center;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto auto;
-  min-height: min(640px, calc(100vh - 190px));
+  min-height: min(640px, calc(100dvh - 190px));
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 0;
@@ -252,78 +269,89 @@
   right: 10px;
 }
 
-body.light-mode.world-page {
+body.theme-light.world-page {
   background:
     linear-gradient(140deg, rgba(247, 243, 235, 0.74), rgba(235, 229, 216, 0.7)),
     url('/assets/world_bg.webp') center center / cover no-repeat,
-    #f4efe7;
+    #f4efe7 !important;
 }
 
-body.light-mode.world-page .topbar {
-  background: rgba(248, 243, 233, 0.88);
-  border-right-color: rgba(28, 29, 25, 0.12);
+body.theme-light.world-page .topbar {
+  background: rgba(248, 243, 233, 0.92) !important;
+  border-right-color: rgba(28, 29, 25, 0.12) !important;
 }
 
-body.light-mode .study-world-shell,
-body.light-mode .study-world-action {
-  color: var(--ink);
+body.theme-light.world-page .study-world-shell,
+body.theme-light.world-page .study-world-action {
+  color: #1c1d19 !important;
 }
 
-body.light-mode .study-world-kicker,
-body.light-mode .study-world-label,
-body.light-mode .study-world-copy p:not(.study-world-label),
-body.light-mode .study-world-tags span {
-  color: rgba(28, 29, 25, 0.7);
+body.theme-light.world-page .study-world-kicker,
+body.theme-light.world-page .study-world-label,
+body.theme-light.world-page .study-world-copy p:not(.study-world-label),
+body.theme-light.world-page .study-world-tags span {
+  color: rgba(28, 29, 25, 0.7) !important;
 }
 
-body.light-mode .study-world-card {
+body.theme-light.world-page .study-world-card {
   border-color: rgba(28, 29, 25, 0.14);
   background: rgba(255, 252, 244, 0.9);
   box-shadow: 0 24px 58px rgba(58, 50, 38, 0.16);
 }
 
-body.light-mode .study-world-tags span,
-body.light-mode .study-world-action {
+body.theme-light.world-page .study-world-copy h2 {
+  color: #1c1d19 !important;
+}
+
+body.theme-light.world-page .study-world-tags span,
+body.theme-light.world-page .study-world-action {
   border-color: rgba(28, 29, 25, 0.18);
 }
 
-body.light-mode .study-world-action-discuss {
-  background: #11110f;
-  color: var(--paper);
-  border-color: #11110f;
+body.theme-light.world-page .study-world-tags span {
+  background: rgba(28, 29, 25, 0.045) !important;
 }
 
-body.light-mode .study-world-action-disabled {
-  color: rgba(28, 29, 25, 0.36);
+body.theme-light.world-page .study-world-action-discuss {
+  background: #11110f !important;
+  color: var(--paper) !important;
+  border-color: #11110f !important;
+}
+
+body.theme-light.world-page .study-world-action-disabled {
+  color: rgba(28, 29, 25, 0.46) !important;
   background: rgba(28, 29, 25, 0.04);
 }
 
-body.light-mode .study-world-nav {
+body.theme-light.world-page .study-world-nav {
   background: rgba(255, 252, 244, 0.78);
-  color: var(--ink);
+  color: #1c1d19;
   border-color: rgba(28, 29, 25, 0.16);
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 900px) {
   .world-page {
-    overflow: hidden;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .page-shell-world {
-    padding-left: 0;
-    padding-bottom: 76px;
+    min-height: 100dvh;
+    padding: 0 0 calc(76px + env(safe-area-inset-bottom, 0px)) !important;
   }
 
   .world-main {
-    height: calc(100vh - 76px);
-    min-height: calc(100vh - 76px);
+    height: auto;
+    min-height: calc(100dvh - 76px - env(safe-area-inset-bottom, 0px));
+    overflow: visible;
   }
 
   .study-world-shell {
-    height: calc(100vh - 76px);
-    min-height: calc(100vh - 76px);
+    height: auto;
+    min-height: calc(100dvh - 76px - env(safe-area-inset-bottom, 0px));
     gap: 14px;
-    padding: 18px 0 10px;
+    padding: calc(18px + env(safe-area-inset-top, 0px)) 0 18px;
   }
 
   .study-world-header {
@@ -337,6 +365,7 @@ body.light-mode .study-world-nav {
   .study-world-track {
     gap: 14px;
     padding: 2px 18px 14px;
+    scroll-snap-type: x proximity;
     scrollbar-width: none;
   }
 
@@ -346,12 +375,15 @@ body.light-mode .study-world-nav {
 
   .study-world-card {
     flex-basis: calc(100vw - 36px);
-    min-height: 100%;
-    max-height: 100%;
+    min-height: 0;
+    max-height: none;
+    grid-template-rows: auto auto auto;
+    scroll-snap-align: start;
   }
 
   .study-world-media img {
-    min-height: 250px;
+    min-height: 220px;
+    aspect-ratio: 16 / 10;
   }
 
   .study-world-copy {
