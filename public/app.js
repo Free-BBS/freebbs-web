@@ -138,6 +138,11 @@ const discussionState = {
   activePost: null,
   comments: [],
 };
+const DISCUSSION_COMMENT_PREVIEW_DELAY_MS = 160;
+const DISCUSSION_COMMENT_DRAFT_LIMIT = 40;
+const discussionCommentDrafts = new Map();
+const discussionOpenReplyByPost = new Map();
+const discussionCommentPreviewTimers = new WeakMap();
 const homeDashboardState = {
   feedMode: 'hot',
   feedCache: new Map(),
@@ -200,12 +205,11 @@ function createThemeToggleButton(className) {
 }
 
 function initializeThemeMode() {
-  const isHomePage = document.body.classList.contains('home-page');
   const navActions = document.querySelector('.nav-actions');
   const userPanel = document.getElementById('user-panel');
   const userActions = document.getElementById('user-actions');
 
-  if (!isHomePage && navActions && !navActions.querySelector('[data-theme-toggle]')) {
+  if (navActions && !navActions.querySelector('[data-theme-toggle]')) {
     const themeButton = createThemeToggleButton('theme-toggle nav-link');
     navActions.insertBefore(themeButton, userPanel || null);
   }
@@ -2330,7 +2334,10 @@ function renderDiscussionReactionButton(post, reactionType) {
 
 function renderMarkdownContent(markdown) {
   const mathBlocks = [];
-  const placeholderPrefix = 'FREE_BBS_MATH_TOKEN_';
+  const placeholderNonce =
+    window.crypto?.randomUUID?.().replace(/-/g, '') ||
+    `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+  const placeholderPrefix = `FREE_BBS_MATH_TOKEN_${placeholderNonce}_`;
   const protectedMarkdown = String(markdown || '')
     .replace(/\$\$([\s\S]+?)\$\$/g, (_match, expression) => {
       const token = `${placeholderPrefix}${mathBlocks.length}`;
@@ -2358,17 +2365,18 @@ function renderMarkdownContent(markdown) {
 
   const safeRenderedMarkdown = sanitizeRenderedMarkdown(renderedMarkdown);
 
-  const renderMathBlock = (_match, index) => {
+  const renderMathBlock = (index) => {
     const mathBlock = mathBlocks[Number(index)];
 
     if (!mathBlock) {
-      return '';
+      return null;
     }
 
     if (window.katex?.renderToString) {
       return window.katex.renderToString(mathBlock.expression, {
         displayMode: mathBlock.displayMode,
         throwOnError: false,
+        trust: false,
       });
     }
 
@@ -2376,67 +2384,252 @@ function renderMarkdownContent(markdown) {
     return `${delimiter}${escapeHtml(mathBlock.expression)}${delimiter}`;
   };
 
-  return safeRenderedMarkdown
-    .replace(new RegExp(`<p>\\s*${placeholderPrefix}(\\d+)\\s*</p>`, 'g'), renderMathBlock)
-    .replace(new RegExp(`${placeholderPrefix}(\\d+)`, 'g'), renderMathBlock);
+  if (typeof document === 'undefined') {
+    return safeRenderedMarkdown;
+  }
+
+  const resultTemplate = document.createElement('template');
+  resultTemplate.innerHTML = safeRenderedMarkdown;
+  const mathTokenPattern = new RegExp(`${placeholderPrefix}(\\d+)`, 'g');
+  const standaloneMathTokenPattern = new RegExp(`^\\s*${placeholderPrefix}(\\d+)\\s*$`);
+  const textNodes = [];
+  const walker = document.createTreeWalker(resultTemplate.content, window.NodeFilter.SHOW_TEXT);
+
+  while (walker.nextNode()) {
+    textNodes.push(walker.currentNode);
+  }
+
+  const createMathFragment = (index) => {
+    const renderedMath = renderMathBlock(index);
+
+    if (renderedMath === null) {
+      return null;
+    }
+
+    const mathTemplate = document.createElement('template');
+    mathTemplate.innerHTML = renderedMath;
+    return mathTemplate.content;
+  };
+
+  textNodes.forEach((textNode) => {
+    const text = textNode.nodeValue || '';
+    mathTokenPattern.lastIndex = 0;
+
+    if (!mathTokenPattern.test(text)) {
+      return;
+    }
+
+    const standaloneMatch = text.match(standaloneMathTokenPattern);
+    const parent = textNode.parentElement;
+
+    if (standaloneMatch && parent?.tagName === 'P' && parent.childNodes.length === 1) {
+      const mathFragment = createMathFragment(standaloneMatch[1]);
+
+      if (mathFragment) {
+        parent.replaceWith(mathFragment);
+      }
+      return;
+    }
+
+    const replacement = document.createDocumentFragment();
+    let previousIndex = 0;
+    mathTokenPattern.lastIndex = 0;
+
+    text.replace(mathTokenPattern, (match, index, offset) => {
+      replacement.append(document.createTextNode(text.slice(previousIndex, offset)));
+      const mathFragment = createMathFragment(index);
+
+      if (mathFragment) {
+        replacement.append(mathFragment);
+      } else {
+        replacement.append(document.createTextNode(match));
+      }
+
+      previousIndex = offset + match.length;
+      return match;
+    });
+
+    replacement.append(document.createTextNode(text.slice(previousIndex)));
+    textNode.replaceWith(replacement);
+  });
+
+  return resultTemplate.innerHTML;
+}
+
+const SAFE_MARKDOWN_TAGS = new Set([
+  'a',
+  'blockquote',
+  'br',
+  'code',
+  'del',
+  'em',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'hr',
+  'img',
+  'input',
+  'li',
+  'ol',
+  'p',
+  'pre',
+  's',
+  'strong',
+  'sub',
+  'sup',
+  'table',
+  'tbody',
+  'td',
+  'tfoot',
+  'th',
+  'thead',
+  'tr',
+  'ul',
+]);
+const DROP_MARKDOWN_TAGS = new Set([
+  'base',
+  'button',
+  'embed',
+  'form',
+  'iframe',
+  'link',
+  'meta',
+  'noscript',
+  'object',
+  'script',
+  'select',
+  'style',
+  'template',
+  'textarea',
+]);
+const SAFE_MARKDOWN_ATTRIBUTES_BY_TAG = {
+  a: new Set(['href', 'title']),
+  code: new Set(['class']),
+  img: new Set(['alt', 'src', 'title']),
+  input: new Set(['checked', 'disabled', 'type']),
+  li: new Set(['class', 'value']),
+  ol: new Set(['class', 'reversed', 'start', 'type']),
+  p: new Set(['class']),
+  pre: new Set(['class']),
+  table: new Set(['class']),
+  td: new Set(['align', 'colspan', 'rowspan']),
+  th: new Set(['align', 'colspan', 'rowspan']),
+  ul: new Set(['class']),
+};
+
+function isSafeRenderedMarkdownUrl(value, attributeName) {
+  const rawValue = String(value || '').trim();
+  const hasUnsafeControlCharacter = Array.from(rawValue).some((character) => {
+    const codePoint = character.codePointAt(0);
+    return (codePoint >= 0 && codePoint <= 31) || (codePoint >= 127 && codePoint <= 159);
+  });
+
+  if (!rawValue || hasUnsafeControlCharacter) {
+    return false;
+  }
+
+  if (attributeName === 'href' && rawValue.startsWith('#')) {
+    return true;
+  }
+
+  try {
+    const url = new URL(rawValue, window.location.href);
+    const allowedProtocols =
+      attributeName === 'src'
+        ? new Set(['http:', 'https:'])
+        : new Set(['http:', 'https:', 'mailto:', 'tel:']);
+    return allowedProtocols.has(url.protocol);
+  } catch {
+    return false;
+  }
 }
 
 function sanitizeRenderedMarkdown(html) {
   if (typeof document === 'undefined') {
-    return String(html || '');
+    return escapeHtml(String(html || ''));
   }
 
   const template = document.createElement('template');
   template.innerHTML = String(html || '');
-  const blockedTags = new Set([
-    'script',
-    'style',
-    'iframe',
-    'object',
-    'embed',
-    'link',
-    'meta',
-    'base',
-    'form',
-    'input',
-    'button',
-    'textarea',
-    'select',
-    'option',
-  ]);
-  const allowedAttributes = new Set([
-    'href',
-    'src',
-    'alt',
-    'title',
-    'class',
-    'id',
-    'colspan',
-    'rowspan',
-    'align',
-  ]);
 
-  template.content.querySelectorAll('*').forEach((element) => {
+  Array.from(template.content.querySelectorAll('*')).forEach((element) => {
     const tagName = element.tagName.toLowerCase();
 
-    if (blockedTags.has(tagName)) {
-      element.remove();
+    if (!SAFE_MARKDOWN_TAGS.has(tagName)) {
+      if (DROP_MARKDOWN_TAGS.has(tagName)) {
+        element.remove();
+      } else {
+        element.replaceWith(...Array.from(element.childNodes));
+      }
       return;
     }
 
+    const allowedAttributes = SAFE_MARKDOWN_ATTRIBUTES_BY_TAG[tagName] || new Set();
     Array.from(element.attributes).forEach((attribute) => {
       const name = attribute.name.toLowerCase();
       const value = attribute.value || '';
 
-      if (name.startsWith('on') || !allowedAttributes.has(name)) {
+      if (!allowedAttributes.has(name)) {
         element.removeAttribute(attribute.name);
         return;
       }
 
-      if ((name === 'href' || name === 'src') && /^(?:javascript|data):/i.test(value.trim())) {
+      if ((name === 'href' || name === 'src') && !isSafeRenderedMarkdownUrl(value, name)) {
+        element.removeAttribute(attribute.name);
+        return;
+      }
+
+      if (name === 'class') {
+        const safeClasses = value
+          .split(/\s+/)
+          .filter(
+            (className) =>
+              /^(?:contains-task-list|task-list-item)$/.test(className) ||
+              /^language-[\w#+.-]{1,48}$/.test(className),
+          );
+
+        if (safeClasses.length) {
+          element.setAttribute('class', safeClasses.join(' '));
+        } else {
+          element.removeAttribute('class');
+        }
+        return;
+      }
+
+      if (name === 'align' && !/^(?:left|center|right)$/i.test(value)) {
+        element.removeAttribute(attribute.name);
+        return;
+      }
+
+      if (
+        ['colspan', 'rowspan'].includes(name) &&
+        (!/^\d{1,2}$/.test(value) || Number(value) < 1)
+      ) {
+        element.removeAttribute(attribute.name);
+        return;
+      }
+
+      if (['start', 'value'].includes(name) && !/^-?\d{1,9}$/.test(value)) {
+        element.removeAttribute(attribute.name);
+        return;
+      }
+
+      if (tagName === 'ol' && name === 'type' && !/^[1aAiI]$/.test(value)) {
         element.removeAttribute(attribute.name);
       }
     });
+
+    if (tagName === 'input') {
+      if (element.getAttribute('type') !== 'checkbox') {
+        element.remove();
+        return;
+      }
+
+      element.setAttribute('disabled', '');
+    }
   });
 
   return template.innerHTML;
@@ -2459,6 +2652,7 @@ function applyMathRendering(root) {
       { left: '\\[', right: '\\]', display: true },
     ],
     throwOnError: false,
+    trust: false,
   });
 }
 
@@ -2638,22 +2832,25 @@ function addCodeRunButtons(root) {
   });
 }
 
-function enhanceMarkdownContent(root) {
+function enhanceMarkdownContent(root, { interactiveCodeControls = true } = {}) {
   if (!root) {
     return;
   }
 
   applyMathRendering(root);
   applyCodeHighlighting(root);
-  addCodeCopyButtons(root);
-  addCodeRunButtons(root);
+  if (interactiveCodeControls) {
+    addCodeCopyButtons(root);
+    addCodeRunButtons(root);
+  }
   root.querySelectorAll('a').forEach((link) => {
     link.target = '_blank';
-    link.rel = 'noreferrer';
+    link.rel = 'noopener noreferrer';
   });
   root.querySelectorAll('img').forEach((image) => {
     image.loading = 'lazy';
     image.decoding = 'async';
+    image.referrerPolicy = 'no-referrer';
   });
 }
 
@@ -3221,6 +3418,276 @@ function renderDiscussionStats(stats) {
   }
 }
 
+function getDiscussionCommentDraftKey(postId, parentCommentId = 0) {
+  return JSON.stringify([String(postId || ''), Number(parentCommentId || 0)]);
+}
+
+function getDiscussionCommentDraft(postId, parentCommentId = 0) {
+  return discussionCommentDrafts.get(getDiscussionCommentDraftKey(postId, parentCommentId)) || '';
+}
+
+function rememberDiscussionCommentDraft(postId, parentCommentId, value) {
+  const key = getDiscussionCommentDraftKey(postId, parentCommentId);
+  const draft = String(value || '');
+
+  if (!draft.trim()) {
+    discussionCommentDrafts.delete(key);
+    return;
+  }
+
+  // Reinsert existing drafts so the map also acts as a small LRU cache.
+  discussionCommentDrafts.delete(key);
+  discussionCommentDrafts.set(key, draft);
+
+  while (discussionCommentDrafts.size > DISCUSSION_COMMENT_DRAFT_LIMIT) {
+    discussionCommentDrafts.delete(discussionCommentDrafts.keys().next().value);
+  }
+}
+
+function clearDiscussionCommentDraft(postId, parentCommentId = 0) {
+  discussionCommentDrafts.delete(getDiscussionCommentDraftKey(postId, parentCommentId));
+}
+
+function renderDiscussionCommentComposerFields({
+  postId,
+  parentCommentId = 0,
+  rows = 4,
+  placeholder,
+  ariaLabel,
+  inputId = '',
+}) {
+  const previewId = parentCommentId
+    ? `discussion-comment-preview-${Number(parentCommentId)}`
+    : 'discussion-comment-preview';
+  const draft = getDiscussionCommentDraft(postId, parentCommentId);
+
+  return `
+    <div class="discussion-comment-editor">
+      <textarea
+        class="discussion-comment-input"
+        ${inputId ? `id="${escapeHtml(inputId)}"` : ''}
+        rows="${Number(rows)}"
+        maxlength="5000"
+        placeholder="${escapeHtml(placeholder)}"
+        aria-label="${escapeHtml(ariaLabel)}"
+        aria-controls="${previewId}"
+        required
+      >${escapeHtml(draft)}</textarea>
+      <section class="discussion-comment-preview is-empty" data-comment-preview aria-label="Markdown 实时预览">
+        <div class="discussion-comment-preview-head" aria-hidden="true">
+          <strong>实时预览</strong>
+          <span>Markdown</span>
+        </div>
+        <div
+          class="discussion-comment-preview-body discussion-markdown-body is-empty"
+          id="${previewId}"
+          data-comment-preview-body
+        >
+          <p class="discussion-comment-preview-empty">输入 Markdown 后将在这里预览。</p>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function getDiscussionCommentFormContext(inputOrForm) {
+  const form = inputOrForm?.closest?.('.discussion-comment-form');
+
+  if (!form) {
+    return null;
+  }
+
+  return {
+    form,
+    input: form.querySelector('.discussion-comment-input'),
+    parentCommentId: Number(form.dataset.parentCommentId || 0),
+    postId: String(
+      form.dataset.postId || discussionDetail?.dataset.postId || discussionState.activePostId || '',
+    ),
+  };
+}
+
+function updateDiscussionCommentPreview(form) {
+  const context = getDiscussionCommentFormContext(form);
+  const preview = context?.form.querySelector('[data-comment-preview]');
+  const previewBody = context?.form.querySelector('[data-comment-preview-body]');
+
+  if (!context?.input || !preview || !previewBody) {
+    return;
+  }
+
+  const markdown = context.input.value;
+  const isEmpty = !markdown.trim();
+  preview.classList.toggle('is-empty', isEmpty);
+  previewBody.classList.toggle('is-empty', isEmpty);
+
+  if (isEmpty) {
+    previewBody.innerHTML =
+      '<p class="discussion-comment-preview-empty">输入 Markdown 后将在这里预览。</p>';
+    return;
+  }
+
+  previewBody.innerHTML = renderMarkdownContent(markdown);
+  enhanceMarkdownContent(previewBody, {
+    interactiveCodeControls: false,
+  });
+}
+
+function initializeDiscussionCommentComposer(form) {
+  const context = getDiscussionCommentFormContext(form);
+
+  if (!context?.input) {
+    return;
+  }
+
+  rememberDiscussionCommentDraft(context.postId, context.parentCommentId, context.input.value);
+  updateDiscussionCommentPreview(context.form);
+}
+
+function scheduleDiscussionCommentPreview(input, delay = DISCUSSION_COMMENT_PREVIEW_DELAY_MS) {
+  const context = getDiscussionCommentFormContext(input);
+
+  if (!context?.input) {
+    return;
+  }
+
+  rememberDiscussionCommentDraft(context.postId, context.parentCommentId, context.input.value);
+
+  const pendingTimer = discussionCommentPreviewTimers.get(context.input);
+  if (pendingTimer) {
+    window.clearTimeout(pendingTimer);
+  }
+
+  const timer = window.setTimeout(() => {
+    discussionCommentPreviewTimers.delete(context.input);
+
+    if (context.input.isConnected) {
+      updateDiscussionCommentPreview(context.form);
+    }
+  }, delay);
+  discussionCommentPreviewTimers.set(context.input, timer);
+}
+
+function clearDiscussionCommentComposer(form) {
+  const context = getDiscussionCommentFormContext(form);
+
+  if (!context?.input) {
+    return;
+  }
+
+  const pendingTimer = discussionCommentPreviewTimers.get(context.input);
+  if (pendingTimer) {
+    window.clearTimeout(pendingTimer);
+    discussionCommentPreviewTimers.delete(context.input);
+  }
+
+  context.input.value = '';
+  clearDiscussionCommentDraft(context.postId, context.parentCommentId);
+  updateDiscussionCommentPreview(context.form);
+}
+
+function handleDiscussionCommentInput(event) {
+  const input = event.target.closest?.('.discussion-comment-input');
+
+  if (!input) {
+    return;
+  }
+
+  const context = getDiscussionCommentFormContext(input);
+  if (context) {
+    rememberDiscussionCommentDraft(context.postId, context.parentCommentId, context.input.value);
+  }
+
+  if (event.isComposing || input.dataset.isComposing === 'true') {
+    return;
+  }
+
+  scheduleDiscussionCommentPreview(input);
+}
+
+function handleDiscussionCommentCompositionStart(event) {
+  const input = event.target.closest?.('.discussion-comment-input');
+  if (input) {
+    input.dataset.isComposing = 'true';
+  }
+}
+
+function handleDiscussionCommentCompositionEnd(event) {
+  const input = event.target.closest?.('.discussion-comment-input');
+
+  if (!input) {
+    return;
+  }
+
+  delete input.dataset.isComposing;
+  // Let the browser commit the final IME value before rendering the preview.
+  scheduleDiscussionCommentPreview(input, 0);
+}
+
+function getDiscussionCommentById(commentId) {
+  return discussionState.comments.find((comment) => String(comment.id) === String(commentId));
+}
+
+function getDiscussionCommentAuthorName(comment) {
+  return (
+    comment?.author?.displayName ||
+    comment?.author?.fullName ||
+    comment?.author?.username ||
+    '这条评论'
+  );
+}
+
+function renderDiscussionReplyForm(postId, commentId, authorName) {
+  return `
+    <form
+      class="discussion-comment-form discussion-reply-form"
+      data-post-id="${escapeHtml(postId)}"
+      data-parent-comment-id="${Number(commentId)}"
+    >
+      ${renderDiscussionCommentComposerFields({
+        postId,
+        parentCommentId: commentId,
+        rows: 3,
+        placeholder: `回复 ${authorName}，支持 Markdown 和 KaTeX`,
+        ariaLabel: `回复 ${authorName}`,
+      })}
+      <div class="discussion-compose-actions">
+        <p class="discussion-message discussion-comment-message" role="status" aria-live="polite"></p>
+        <button class="auth-submit discussion-submit" type="submit">发布回复</button>
+      </div>
+    </form>
+  `;
+}
+
+function mountDiscussionReplyForm(slot, postId, commentId, authorName, { focus = false } = {}) {
+  slot.innerHTML = renderDiscussionReplyForm(postId, commentId, authorName);
+  const form = slot.querySelector('.discussion-reply-form');
+  initializeDiscussionCommentComposer(form);
+
+  if (focus) {
+    form?.querySelector('.discussion-comment-input')?.focus();
+  }
+}
+
+function restoreOpenDiscussionReplyComposer() {
+  const postId = String(discussionState.activePostId || '');
+  const commentId = discussionOpenReplyByPost.get(postId);
+
+  if (!postId || !commentId) {
+    return;
+  }
+
+  const comment = getDiscussionCommentById(commentId);
+  const slot = discussionDetail?.querySelector(`[data-reply-slot="${Number(commentId)}"]`);
+
+  if (!comment || !slot) {
+    discussionOpenReplyByPost.delete(postId);
+    return;
+  }
+
+  mountDiscussionReplyForm(slot, postId, commentId, getDiscussionCommentAuthorName(comment));
+}
+
 function renderDiscussionComments() {
   const list = document.getElementById('discussion-comment-list');
 
@@ -3252,7 +3719,7 @@ function renderDiscussionComments() {
           <span>${escapeHtml(formatDateTime(comment.createdAt))}</span>
           <button class="discussion-comment-reply-button" type="button" data-action="reply-comment" data-comment-id="${comment.id}" data-author-name="${escapeHtml(comment.author?.displayName || comment.author?.fullName || comment.author?.username || '匿名用户')}">回复</button>
         </div>
-        <div class="discussion-comment-content">${renderMarkdownContent(comment.contentMarkdown)}</div>
+        <div class="discussion-comment-content discussion-markdown-body">${renderMarkdownContent(comment.contentMarkdown)}</div>
         <div class="discussion-comment-reply-slot" data-reply-slot="${comment.id}"></div>
       </div>
     </article>
@@ -3268,6 +3735,7 @@ function renderDiscussionComments() {
   list
     .querySelectorAll('.discussion-comment-content')
     .forEach((node) => enhanceMarkdownContent(node));
+  restoreOpenDiscussionReplyComposer();
 }
 
 function renderDiscussionDetail(post) {
@@ -3328,8 +3796,19 @@ function renderDiscussionDetail(post) {
       <div class="discussion-comments-head">
         <h3>评论</h3>
       </div>
-      <form class="discussion-comment-form" id="discussion-comment-form" data-parent-comment-id="">
-        <textarea class="discussion-comment-input" id="discussion-comment-input" rows="4" maxlength="5000" placeholder="写一条评论，支持 Markdown 和 KaTeX" aria-label="评论内容" required></textarea>
+      <form
+        class="discussion-comment-form"
+        id="discussion-comment-form"
+        data-post-id="${escapeHtml(post.id)}"
+        data-parent-comment-id=""
+      >
+        ${renderDiscussionCommentComposerFields({
+          postId: post.id,
+          rows: 4,
+          placeholder: '写一条评论，支持 Markdown 和 KaTeX',
+          ariaLabel: '评论内容',
+          inputId: 'discussion-comment-input',
+        })}
         <div class="discussion-compose-actions">
           <p class="discussion-message discussion-comment-message" id="discussion-comment-message" role="status" aria-live="polite"></p>
           <button class="auth-submit discussion-submit" type="submit">发表评论</button>
@@ -3343,6 +3822,7 @@ function renderDiscussionDetail(post) {
 
   const markdownBody = document.getElementById('discussion-markdown-body');
   enhanceMarkdownContent(markdownBody);
+  initializeDiscussionCommentComposer(document.getElementById('discussion-comment-form'));
   loadDiscussionComments(post.id);
 }
 
@@ -4875,24 +5355,30 @@ async function handleDiscussionDetailClick(event) {
       return;
     }
 
+    const postId = String(discussionState.activePostId || '');
     if (slot.innerHTML.trim()) {
+      discussionOpenReplyByPost.delete(postId);
       slot.innerHTML = '';
       return;
     }
 
+    discussionDetail.querySelectorAll('.discussion-reply-form').forEach((form) => {
+      const context = getDiscussionCommentFormContext(form);
+      if (context?.input) {
+        rememberDiscussionCommentDraft(
+          context.postId,
+          context.parentCommentId,
+          context.input.value,
+        );
+      }
+    });
     discussionDetail.querySelectorAll('.discussion-comment-reply-slot').forEach((node) => {
       node.innerHTML = '';
     });
-    slot.innerHTML = `
-      <form class="discussion-comment-form discussion-reply-form" data-parent-comment-id="${commentId}">
-        <textarea class="discussion-comment-input" rows="3" maxlength="5000" placeholder="回复 ${escapeHtml(authorName)}，支持 Markdown 和 KaTeX" aria-label="回复 ${escapeHtml(authorName)}" required></textarea>
-        <div class="discussion-compose-actions">
-          <p class="discussion-message discussion-comment-message" role="status" aria-live="polite"></p>
-          <button class="auth-submit discussion-submit" type="submit">发布回复</button>
-        </div>
-      </form>
-    `;
-    slot.querySelector('textarea')?.focus();
+    discussionOpenReplyByPost.set(postId, commentId);
+    mountDiscussionReplyForm(slot, postId, commentId, authorName, {
+      focus: true,
+    });
     return;
   }
 
@@ -4976,9 +5462,25 @@ async function handleDiscussionCommentSubmit(event) {
   const message = form.querySelector('.discussion-comment-message');
   const parentCommentId = Number(form.dataset.parentCommentId || 0);
   const contentMarkdown = input?.value.trim() || '';
+  const postId = String(form.dataset.postId || discussionState.activePostId);
+  const submitButton = form.querySelector('[type="submit"]');
+
+  if (!contentMarkdown) {
+    if (message) {
+      message.textContent = parentCommentId ? '请输入回复内容' : '请输入评论内容';
+    }
+    input?.focus();
+    return;
+  }
+
+  rememberDiscussionCommentDraft(postId, parentCommentId, input?.value || '');
 
   if (message) {
     message.textContent = parentCommentId ? '正在发布回复...' : '正在发布评论...';
+  }
+  form.setAttribute('aria-busy', 'true');
+  if (submitButton) {
+    submitButton.disabled = true;
   }
 
   try {
@@ -5009,7 +5511,10 @@ async function handleDiscussionCommentSubmit(event) {
           }
         : post,
     );
-    input.value = '';
+    clearDiscussionCommentComposer(form);
+    if (parentCommentId) {
+      discussionOpenReplyByPost.delete(postId);
+    }
     if (message) {
       message.textContent = payload.message || (parentCommentId ? '回复已发布' : '评论已发布');
     }
@@ -5025,6 +5530,11 @@ async function handleDiscussionCommentSubmit(event) {
   } catch (error) {
     if (message) {
       message.textContent = error.message;
+    }
+  } finally {
+    form.removeAttribute('aria-busy');
+    if (submitButton) {
+      submitButton.disabled = false;
     }
   }
 }
@@ -6038,6 +6548,9 @@ discussionPostList?.addEventListener('click', (event) => {
 });
 discussionDetail?.addEventListener('click', handleDiscussionDetailClick);
 discussionDetail?.addEventListener('submit', handleDiscussionCommentSubmit);
+discussionDetail?.addEventListener('input', handleDiscussionCommentInput);
+discussionDetail?.addEventListener('compositionstart', handleDiscussionCommentCompositionStart);
+discussionDetail?.addEventListener('compositionend', handleDiscussionCommentCompositionEnd);
 discussionCreateToggle?.addEventListener('click', handleDiscussionCreateToggle);
 discussionComposeForm?.addEventListener('submit', handleDiscussionComposeSubmit);
 discussionBoardEdit?.addEventListener('click', editActiveBoardDescription);

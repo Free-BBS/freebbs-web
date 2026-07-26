@@ -1,0 +1,1451 @@
+/*
+ * Unified UI polish
+ *
+ * This final layer turns the current shell into a small, shared design system.
+ * Page-specific styles still own layout and content; this file owns theme
+ * tokens, shell alignment, touch sizing, and the intentionally flatter mobile
+ * hierarchy.
+ */
+
+:root {
+  --bbs-shell-width: 216px;
+  --bbs-content-gutter: clamp(24px, 3vw, 46px);
+  --ui-page: #f4f6f8;
+  --ui-surface: #ffffff;
+  --ui-surface-raised: #ffffff;
+  --ui-surface-soft: #edf2f3;
+  --ui-input: #ffffff;
+  --ui-text: #071317;
+  --ui-muted: rgba(7, 19, 23, 0.62);
+  --ui-faint: rgba(7, 19, 23, 0.42);
+  --ui-line: rgba(7, 19, 23, 0.12);
+  --ui-line-strong: rgba(7, 19, 23, 0.2);
+  --ui-accent: #075d68;
+  --ui-accent-hover: #064a54;
+  --ui-accent-soft: rgba(39, 136, 152, 0.11);
+  --ui-danger: #9b3429;
+  --ui-focus: #087f90;
+  --ui-shadow: 0 16px 42px rgba(6, 54, 65, 0.08);
+}
+
+body.theme-light {
+  --bbs-shell-page: var(--ui-page);
+  --bbs-shell-text: var(--ui-text);
+  --bbs-shell-muted: var(--ui-muted);
+  --minimal-bg: var(--ui-page);
+  --minimal-text: var(--ui-text);
+  --minimal-muted: var(--ui-muted);
+  --minimal-line: var(--ui-line);
+}
+
+body.theme-dark {
+  --ui-page: #0d181d;
+  --ui-surface: #14242b;
+  --ui-surface-raised: #182b33;
+  --ui-surface-soft: #1c3139;
+  --ui-input: #101f25;
+  --ui-text: #edf6f7;
+  --ui-muted: rgba(237, 246, 247, 0.68);
+  --ui-faint: rgba(237, 246, 247, 0.46);
+  --ui-line: rgba(223, 242, 244, 0.13);
+  --ui-line-strong: rgba(223, 242, 244, 0.22);
+  --ui-accent: #72d6df;
+  --ui-accent-hover: #94e4eb;
+  --ui-accent-soft: rgba(85, 190, 202, 0.14);
+  --ui-danger: #ff9b8f;
+  --ui-focus: #8de8ee;
+  --ui-shadow: 0 20px 52px rgba(0, 0, 0, 0.24);
+  --bbs-shell-page: var(--ui-page);
+  --bbs-shell-text: var(--ui-text);
+  --bbs-shell-muted: var(--ui-muted);
+  --bbs-shell-line: var(--ui-line);
+  --minimal-bg: var(--ui-page);
+  --minimal-text: var(--ui-text);
+  --minimal-muted: var(--ui-muted);
+  --minimal-line: var(--ui-line);
+}
+
+html {
+  background: var(--ui-page);
+}
+
+html:has(body.theme-light) {
+  color-scheme: light;
+  background: #f4f6f8;
+}
+
+html:has(body.theme-dark) {
+  color-scheme: dark;
+  background: #0d181d;
+}
+
+body:not(.auth-page-body),
+body:not(.auth-page-body) .page-shell {
+  background: var(--ui-page) !important;
+  color: var(--ui-text) !important;
+}
+
+body:not(.auth-page-body) .page-shell {
+  padding: 0 0 48px var(--bbs-shell-width) !important;
+}
+
+body:not(.auth-page-body) .topbar {
+  width: var(--bbs-shell-width) !important;
+  padding: 20px 13px !important;
+  background: var(--bbs-shell-sidebar, #063641) !important;
+  border-right: 1px solid rgba(245, 251, 253, 0.14) !important;
+}
+
+body.theme-light:not(.auth-page-body) .topbar,
+body.theme-dark:not(.auth-page-body) .topbar {
+  background: var(--bbs-shell-sidebar, #063641) !important;
+}
+
+body:not(.auth-page-body) .brand {
+  min-height: 148px;
+  gap: 11px;
+  padding-bottom: 18px;
+  border-bottom-width: 1px;
+}
+
+body:not(.auth-page-body) .brand::before {
+  width: 84px;
+  height: 84px;
+  border: 1px solid rgba(245, 251, 253, 0.3);
+  border-radius: 24px;
+  background: #063641 url('/assets/freebbs-emblem-v2.png') center / cover no-repeat;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
+}
+
+body:not(.auth-page-body) .brand-mark::after {
+  color: var(--bbs-shell-sidebar-text, #f5fbfd) !important;
+  font-size: 1.32rem;
+  letter-spacing: 0.035em;
+}
+
+body:not(.auth-page-body) .nav-actions {
+  gap: 5px;
+  padding: 12px 3px 0;
+}
+
+body:not(.auth-page-body) .nav-link {
+  min-height: 46px;
+  gap: 11px;
+  padding: 0 12px;
+  border-radius: 9px !important;
+  font-size: 0.92rem;
+}
+
+body:not(.auth-page-body) .topbar .nav-link,
+body:not(.auth-page-body) .topbar .nav-link span {
+  color: rgba(245, 251, 253, 0.9) !important;
+}
+
+body:not(.auth-page-body) .topbar .nav-link:hover,
+body:not(.auth-page-body) .topbar .nav-link.is-active {
+  background: var(--bbs-shell-sidebar-active, #278898) !important;
+  color: #ffffff !important;
+}
+
+body:not(.auth-page-body) .topbar .nav-icon {
+  filter: brightness(0) invert(1) !important;
+}
+
+body:not(.auth-page-body) .nav-icon {
+  width: 21px;
+  height: 21px;
+}
+
+body:not(.auth-page-body) .nav-actions > .theme-toggle {
+  display: flex !important;
+}
+
+body:not(.auth-page-body) .main-content {
+  padding: 124px var(--bbs-content-gutter) 60px !important;
+}
+
+body:not(.auth-page-body) .main-content::before {
+  left: calc(var(--bbs-shell-width) + var(--bbs-content-gutter));
+  right: var(--bbs-content-gutter);
+  height: 92px;
+  padding-right: min(38vw, 420px);
+  border-bottom: 1px solid var(--ui-line);
+  background: var(--ui-page);
+  color: var(--ui-text);
+  font-size: clamp(1.8rem, 3vw, 2.28rem);
+}
+
+body:not(.auth-page-body) .user-panel {
+  top: 14px;
+  right: var(--bbs-content-gutter);
+  height: 62px;
+  color: var(--ui-text) !important;
+}
+
+body:not(.auth-page-body) .avatar {
+  width: 56px !important;
+  height: 56px !important;
+  border: 1px solid var(--ui-line) !important;
+  background: var(--ui-surface-soft) !important;
+}
+
+body:not(.auth-page-body) .user-name {
+  max-width: 128px;
+  color: var(--ui-text) !important;
+  font-size: 0.9rem;
+}
+
+body:not(.auth-page-body) .currency {
+  min-width: 60px;
+  border-color: var(--ui-line) !important;
+  background: var(--ui-surface) !important;
+  color: var(--ui-text) !important;
+}
+
+body:not(.auth-page-body) .site-footer {
+  margin-inline: var(--bbs-content-gutter);
+  border-color: var(--ui-line) !important;
+}
+
+body:not(.auth-page-body) .site-footer,
+body:not(.auth-page-body) .site-footer a,
+body:not(.auth-page-body) .site-footer p {
+  color: var(--ui-muted) !important;
+}
+
+:where(a, button, input, select, textarea):focus-visible {
+  outline-color: var(--ui-focus) !important;
+  outline-offset: 3px;
+}
+
+body:not(.auth-page-body) .topbar :where(a, button):focus-visible,
+body:not(.auth-page-body) .mobile-nav :where(a, button):focus-visible {
+  outline-color: #bff8f7 !important;
+}
+
+/* Shared surfaces and fields */
+
+body:not(.auth-page-body) .settings-profile,
+body:not(.auth-page-body) .settings-card,
+body:not(.auth-page-body) .workbench-card,
+body:not(.auth-page-body) .discussion-board-about,
+body:not(.auth-page-body) .discussion-compose,
+body:not(.auth-page-body) .discussion-detail,
+body:not(.auth-page-body) .discussion-stats-sidebar,
+body:not(.auth-page-body) .discussion-post-card,
+body:not(.auth-page-body) .aichat-dialogs,
+body:not(.auth-page-body) .aichat-main,
+body:not(.auth-page-body) .aichat-auth-required,
+body:not(.auth-page-body) .economy-auth-required,
+body:not(.auth-page-body) .economy-heat-panel,
+body:not(.auth-page-body) .shop-item-card,
+body:not(.auth-page-body) .inventory-item-row,
+body:not(.auth-page-body) .home-dashboard-panel,
+body:not(.auth-page-body) .public-profile-stat,
+body:not(.auth-page-body) .admin-user-row,
+body:not(.auth-page-body) .system-settings-menu,
+body:not(.auth-page-body) .system-settings-form,
+body:not(.auth-page-body) .course-hero,
+body:not(.auth-page-body) .course-overview,
+body:not(.auth-page-body) .course-toolbar,
+body:not(.auth-page-body) .course-card,
+body:not(.auth-page-body) .knowledge-sidebar,
+body:not(.auth-page-body) .knowledge-content,
+body:not(.auth-page-body) .knowledge-section,
+body:not(.auth-page-body) .knowledge-rag-thread {
+  border-color: var(--ui-line) !important;
+  background: var(--ui-surface) !important;
+  color: var(--ui-text) !important;
+  box-shadow: var(--ui-shadow) !important;
+}
+
+body:not(.auth-page-body) :where(input, textarea, select) {
+  border-color: var(--ui-line-strong) !important;
+  background: var(--ui-input) !important;
+  color: var(--ui-text) !important;
+}
+
+body:not(.auth-page-body) :where(input, textarea)::placeholder {
+  color: var(--ui-faint) !important;
+}
+
+body:not(.auth-page-body) .main-content :where(p, li, dd, small),
+body:not(.auth-page-body) .discussion-post-card-meta,
+body:not(.auth-page-body) .discussion-detail-meta,
+body:not(.auth-page-body) .discussion-comment-meta {
+  color: var(--ui-muted) !important;
+}
+
+body:not(.auth-page-body) .main-content :where(h1, h2, h3, h4, strong, label) {
+  color: var(--ui-text) !important;
+}
+
+body:not(.auth-page-body) .main-content :where(.discussion-kicker, .course-kicker, .aichat-kicker),
+body.system-settings-page .system-settings-kicker {
+  color: var(--ui-accent) !important;
+  font-size: max(0.76rem, 12px);
+}
+
+body.theme-dark:not(.auth-page-body) .main-content :where(a) {
+  color: var(--ui-accent) !important;
+}
+
+body:not(.auth-page-body)
+  .main-content
+  :is(
+    .auth-submit,
+    .discussion-submit,
+    .discussion-create-toggle,
+    .discussion-board-save,
+    .aichat-send,
+    .aichat-new-dialog,
+    .aichat-auth-link,
+    .system-settings-submit,
+    .knowledge-rag-form button,
+    .course-discussion-link
+  ),
+body:not(.auth-page-body)
+  .main-content
+  :is(
+    .auth-submit,
+    .discussion-submit,
+    .discussion-create-toggle,
+    .discussion-board-save,
+    .aichat-send,
+    .aichat-new-dialog,
+    .aichat-auth-link,
+    .system-settings-submit,
+    .knowledge-rag-form button,
+    .course-discussion-link
+  )
+  * {
+  color: #ffffff !important;
+}
+
+/* Home */
+
+body.home-page .home-dashboard {
+  width: min(100%, 1440px);
+  margin-inline: auto;
+}
+
+body.home-page .home-dashboard-panel {
+  box-shadow: var(--ui-shadow) !important;
+}
+
+body.home-page .home-dashboard {
+  --home-dashboard-line: var(--ui-line);
+  --home-dashboard-line-strong: var(--ui-line-strong);
+  --home-dashboard-muted: var(--ui-muted);
+  --home-dashboard-accent: var(--ui-accent);
+}
+
+body.home-page .home-panel-kicker,
+body.home-page .home-feed-badge,
+body.home-page .home-heat-user-copy small {
+  font-size: 0.76rem;
+}
+
+body.theme-dark.home-page .home-feed-toggle,
+body.theme-dark.home-page .home-dashboard-empty button,
+body.theme-dark.home-page .home-dashboard-empty a {
+  border-color: var(--ui-line-strong);
+  background: var(--ui-surface-soft);
+}
+
+body.theme-dark.home-page .home-feed-toggle:hover {
+  background: #223a43;
+}
+
+body.theme-dark.home-page .home-board-progress,
+body.theme-dark.home-page .home-board-progress::-webkit-progress-bar {
+  background: #23373e;
+}
+
+body.theme-dark.home-page .home-heat-score {
+  color: #ff9b78 !important;
+}
+
+body.theme-dark.home-page .home-loading-kicker,
+body.theme-dark.home-page .home-loading-title,
+body.theme-dark.home-page .home-loading-meta,
+body.theme-dark.home-page .home-loading-rank,
+body.theme-dark.home-page .home-loading-avatar {
+  background: linear-gradient(90deg, #21343b 20%, #2b444d 48%, #21343b 76%);
+  background-size: 220% 100%;
+}
+
+/* Learning world keeps its immersive image stage while sharing the shell. */
+
+body.theme-dark.world-page:not(.auth-page-body) {
+  background:
+    linear-gradient(140deg, rgba(8, 12, 16, 0.68), rgba(10, 16, 23, 0.62)),
+    url('/assets/world_bg.webp') center center / cover no-repeat,
+    #0b1017 !important;
+}
+
+body.theme-light.world-page:not(.auth-page-body) {
+  background:
+    linear-gradient(140deg, rgba(247, 243, 235, 0.74), rgba(235, 229, 216, 0.7)),
+    url('/assets/world_bg.webp') center center / cover no-repeat,
+    #f4efe7 !important;
+}
+
+body.world-page:not(.auth-page-body) .page-shell-world {
+  background: transparent !important;
+}
+
+body.world-page:not(.auth-page-body) .world-main {
+  padding: 0 !important;
+}
+
+body.world-page:not(.auth-page-body) .world-main::before {
+  display: none !important;
+}
+
+body.not-found-page:not(.auth-page-body) {
+  background:
+    linear-gradient(rgba(8, 14, 24, 0.24), rgba(8, 14, 24, 0.46)),
+    url('/assets/404bg.webp') center center / cover no-repeat !important;
+  color: #f4efe7 !important;
+}
+
+/* Discussion and Markdown */
+
+body.discussion-page .settings-shell,
+body.aichat-page .aichat-shell {
+  width: min(100%, 1320px);
+  max-width: 1320px !important;
+}
+
+body.discussion-page .main-content .discussion-detail-head h2 {
+  max-width: 24ch;
+  color: var(--ui-text) !important;
+}
+
+body.discussion-page .main-content .discussion-post-title,
+body.discussion-page .main-content .discussion-post-card-main h3,
+body.discussion-page .main-content .discussion-comments-head h3,
+body.discussion-page .main-content .discussion-comment-content {
+  color: var(--ui-text) !important;
+}
+
+body.discussion-page .main-content .discussion-post-source,
+body.discussion-page .main-content .discussion-post-actions,
+body.discussion-page .main-content .discussion-detail-meta,
+body.discussion-page .main-content .discussion-comment-meta {
+  color: var(--ui-muted) !important;
+}
+
+body.discussion-page .main-content .discussion-post-source .discussion-post-board,
+body.discussion-page .main-content .discussion-detail-board,
+body.discussion-page .main-content .discussion-author-link,
+body.discussion-page .main-content .discussion-comment-author-link {
+  color: var(--ui-accent) !important;
+}
+
+body.discussion-page .main-content .discussion-comment {
+  border-color: var(--ui-line) !important;
+  background: var(--ui-surface-soft) !important;
+}
+
+body.discussion-page .discussion-comment-replies {
+  border-left-color: color-mix(in srgb, var(--ui-accent) 34%, transparent);
+}
+
+body.discussion-page .main-content .discussion-reaction-button,
+body.discussion-page .main-content .discussion-comment-count,
+body.discussion-page .main-content .discussion-detail-back,
+body.discussion-page .main-content .discussion-detail-pin,
+body.discussion-page .main-content .discussion-detail-feature,
+body.discussion-page .main-content .discussion-detail-delete,
+body.discussion-page .main-content .discussion-board-edit,
+body.discussion-page .main-content .discussion-board-moderators,
+body.discussion-page .main-content .discussion-editor-button,
+body.discussion-page .main-content .discussion-comment-reply-button {
+  min-width: 44px;
+  min-height: 44px;
+  border-color: var(--ui-line) !important;
+  background: var(--ui-surface-soft) !important;
+  color: var(--ui-text) !important;
+}
+
+body.theme-dark.discussion-page .main-content .discussion-reaction-button img,
+body.theme-dark.discussion-page .main-content .discussion-comment-count img,
+body.theme-dark.discussion-page .main-content .discussion-action-icon {
+  filter: brightness(0) invert(1) opacity(0.74) !important;
+}
+
+body.discussion-page .main-content .discussion-markdown-body,
+body.discussion-page .main-content .discussion-markdown-body p,
+body.discussion-page .main-content .discussion-markdown-body li,
+body.discussion-page .main-content .discussion-markdown-body strong {
+  color: var(--ui-text) !important;
+}
+
+body.discussion-page .main-content .discussion-markdown-body a {
+  color: var(--ui-accent) !important;
+}
+
+body.discussion-page .main-content .discussion-markdown-body blockquote {
+  border-left-color: color-mix(in srgb, var(--ui-accent) 55%, transparent);
+  background: var(--ui-accent-soft);
+  color: var(--ui-muted) !important;
+}
+
+body.theme-dark.discussion-page .main-content .discussion-markdown-body :not(pre) > code {
+  border-color: var(--ui-line);
+  background: #20343c !important;
+  color: #bdebf0 !important;
+}
+
+.discussion-comment-content.discussion-markdown-body {
+  overflow-wrap: anywhere;
+}
+
+.discussion-comment-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 12px;
+  background: var(--ui-input);
+}
+
+body.discussion-page .main-content .discussion-comment-editor textarea {
+  min-height: 184px;
+  padding: 16px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.discussion-comment-preview {
+  min-width: 0;
+  min-height: 184px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border-left: 1px solid var(--ui-line);
+  background: color-mix(in srgb, var(--ui-surface-soft) 62%, transparent);
+}
+
+.discussion-comment-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ui-line);
+  color: var(--ui-muted) !important;
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.discussion-comment-preview-head strong,
+.discussion-comment-preview-head span {
+  color: var(--ui-muted) !important;
+  font: inherit;
+}
+
+.discussion-comment-preview-head span {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.discussion-comment-preview-body {
+  min-width: 0;
+  padding: 14px 16px;
+  overflow: auto;
+  color: var(--ui-text);
+  font-size: 0.94rem;
+  line-height: 1.72;
+}
+
+.discussion-comment-preview-body.is-empty {
+  color: var(--ui-faint) !important;
+}
+
+.discussion-comment-preview-empty {
+  margin: 0 !important;
+  color: var(--ui-faint) !important;
+}
+
+/* Ask Max */
+
+body.aichat-page .main-content .aichat-dialogs,
+body.aichat-page .main-content .aichat-main,
+body.aichat-page .main-content .aichat-auth-required {
+  border-color: var(--ui-line) !important;
+  background: var(--ui-surface) !important;
+}
+
+body.aichat-page .aichat-dialogs-head,
+body.aichat-page .aichat-main-header,
+body.aichat-page .main-content .aichat-composer {
+  border-color: var(--ui-line) !important;
+  background: var(--ui-surface) !important;
+}
+
+body.aichat-page .main-content .aichat-thread {
+  background: color-mix(in srgb, var(--ui-surface-soft) 54%, transparent);
+}
+
+body.aichat-page .main-content .aichat-bubble,
+body.aichat-page .main-content .aichat-bubble p,
+body.aichat-page .main-content .aichat-bubble li,
+body.aichat-page .main-content .aichat-bubble strong,
+body.aichat-page .main-content .aichat-bubble code {
+  color: var(--ui-text) !important;
+}
+
+body.aichat-page .main-content .aichat-bubble {
+  border-color: var(--ui-line) !important;
+  background: var(--ui-surface-raised) !important;
+}
+
+body.theme-dark.aichat-page .main-content .aichat-message-assistant .aichat-bubble {
+  background: var(--ui-surface-raised) !important;
+}
+
+body.aichat-page .main-content .aichat-message-user .aichat-bubble {
+  border-color: color-mix(in srgb, var(--ui-accent) 30%, transparent) !important;
+  background: var(--ui-accent-soft) !important;
+}
+
+body.aichat-page .main-content .aichat-composer textarea,
+body.aichat-page .main-content .aichat-meta-row {
+  background: var(--ui-input) !important;
+  color: var(--ui-text) !important;
+}
+
+body.theme-dark.aichat-page .main-content .aichat-kicker,
+body.theme-dark.aichat-page .main-content .aichat-presence,
+body.theme-dark.aichat-page .main-content .aichat-composer::before {
+  color: var(--ui-accent) !important;
+}
+
+body.theme-dark.aichat-page .main-content .aichat-composer textarea::placeholder,
+body.theme-dark.aichat-page .main-content .aichat-shortcut,
+body.theme-dark.aichat-page .main-content .aichat-status,
+body.theme-dark.aichat-page .main-content .aichat-dialog-id {
+  color: var(--ui-muted) !important;
+}
+
+body.theme-dark.aichat-page .main-content .aichat-shortcut kbd {
+  border-color: var(--ui-line-strong);
+  background: var(--ui-surface-soft);
+  color: var(--ui-text);
+}
+
+body.aichat-page .main-content .aichat-copy-button {
+  width: 44px;
+  height: 44px;
+  border-color: var(--ui-line) !important;
+  background: var(--ui-surface-raised) !important;
+}
+
+body.theme-dark.aichat-page .main-content .aichat-copy-button img {
+  filter: brightness(0) invert(1) opacity(0.72) !important;
+}
+
+body.theme-dark.aichat-page .main-content .aichat-dialog-toggle,
+body.theme-dark.aichat-page .main-content .aichat-dialogs,
+body.theme-dark.aichat-page .main-content .aichat-dialog-close {
+  border-color: var(--ui-line) !important;
+  background: var(--ui-surface) !important;
+  color: var(--ui-text) !important;
+}
+
+body.theme-dark.aichat-page .main-content .aichat-dialog-toggle span,
+body.theme-dark.aichat-page .main-content .aichat-dialog-close span {
+  color: var(--ui-text) !important;
+}
+
+body.theme-dark.aichat-page .main-content .aichat-dialog-toggle img {
+  filter: brightness(0) invert(1) opacity(0.76) !important;
+}
+
+body.aichat-page .main-content .aichat-copy-menu {
+  border-color: var(--ui-line) !important;
+  background: var(--ui-surface-raised) !important;
+}
+
+/* Settings, profile, admin, and system settings */
+
+body:not(.auth-page-body) .settings-shell,
+body:not(.auth-page-body) .system-settings-shell {
+  margin-inline: auto;
+}
+
+body:not(.auth-page-body) .settings-shell {
+  align-content: start;
+  align-items: start;
+  grid-auto-rows: max-content;
+}
+
+body:not(.auth-page-body) .public-profile-shell {
+  width: min(100%, 900px);
+  margin-inline: auto;
+  justify-self: center;
+  align-content: start;
+  grid-auto-rows: max-content;
+}
+
+body:not(.auth-page-body) .settings-profile,
+body:not(.auth-page-body) .settings-card {
+  border-radius: 14px !important;
+}
+
+body:not(.auth-page-body) .public-profile-stat {
+  box-shadow: none !important;
+}
+
+body:not(.auth-page-body) .public-profile-field,
+body.theme-dark:not(.auth-page-body) .public-profile-field {
+  padding: 12px 0 0 !important;
+  border: 0 !important;
+  border-top: 1px solid var(--ui-line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body:not(.auth-page-body) .settings-password-form {
+  border-color: var(--ui-line);
+}
+
+body.theme-dark:not(.auth-page-body) .settings-form input,
+body.theme-dark:not(.auth-page-body) .settings-form textarea,
+body.theme-dark:not(.auth-page-body) .settings-password-form input {
+  border-color: var(--ui-line-strong) !important;
+  background: var(--ui-input) !important;
+  color: var(--ui-text) !important;
+}
+
+body.theme-dark:not(.auth-page-body) .settings-form input::placeholder,
+body.theme-dark:not(.auth-page-body) .settings-form textarea::placeholder,
+body.theme-dark:not(.auth-page-body) .settings-password-form input::placeholder {
+  color: var(--ui-faint) !important;
+}
+
+body.system-settings-page .system-settings-menu-item,
+body.system-settings-page .system-settings-form-heading {
+  border-color: var(--ui-line);
+}
+
+body.system-settings-page .system-settings-menu-item {
+  color: var(--ui-text) !important;
+}
+
+body.system-settings-page .system-settings-menu-item:hover {
+  background: var(--ui-accent-soft);
+}
+
+body.system-settings-page .system-settings-menu-icon,
+body.system-settings-page .system-settings-secret-toggle {
+  border-color: var(--ui-line-strong);
+  background: var(--ui-surface-soft);
+  color: var(--ui-text) !important;
+}
+
+body.theme-dark.system-settings-page .system-settings-menu-icon img {
+  filter: brightness(0) invert(1);
+}
+
+body.system-settings-page .system-settings-back {
+  min-height: 44px;
+  color: var(--ui-accent) !important;
+}
+
+body.theme-dark.system-settings-page .system-settings-field input,
+body.theme-dark.system-settings-page .system-settings-secret-field input {
+  border-color: var(--ui-line-strong) !important;
+  background: var(--ui-input) !important;
+  color: var(--ui-text) !important;
+}
+
+body.adminusers-page .admin-add-button,
+body.adminusers-page .admin-button {
+  min-height: 44px;
+}
+
+body.adminusers-page .admin-section,
+body.adminusers-page .admin-users-table {
+  align-content: start;
+}
+
+body.adminusers-page .admin-toggle {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+body.adminusers-page .admin-user-row :is(input, select) {
+  min-height: 44px;
+}
+
+body.adminusers-page .admin-user-row select {
+  height: 44px;
+}
+
+body.theme-dark.adminusers-page .admin-users-head,
+body.theme-dark.adminusers-page .admin-user-row {
+  border-color: var(--ui-line) !important;
+  background: var(--ui-surface) !important;
+}
+
+body.theme-dark.adminusers-page .admin-user-row input,
+body.theme-dark.adminusers-page .admin-user-row select {
+  border-color: var(--ui-line-strong) !important;
+  background: var(--ui-input) !important;
+  color: var(--ui-text) !important;
+}
+
+body.theme-dark.adminusers-page .admin-user-row input[readonly] {
+  background: var(--ui-surface-soft) !important;
+  color: var(--ui-muted) !important;
+}
+
+/* Economy pages */
+
+.economy-page .shop-grid,
+.economy-page .inventory-list {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.economy-page .shop-item-actions .electromagnetic-button,
+.economy-page .inventory-item-actions .electromagnetic-button,
+.economy-page .economy-inventory-link,
+.economy-page .economy-activation-button {
+  min-height: 44px;
+  font-size: 0.8rem;
+}
+
+body.theme-dark.economy-page .shop-item-image,
+body.theme-dark.economy-page .inventory-item-image,
+body.theme-dark.economy-page .shop-inspect-image {
+  border-color: var(--ui-line);
+  background: var(--ui-surface-soft);
+}
+
+body.theme-dark.economy-page .shop-item-image img,
+body.theme-dark.economy-page .inventory-item-image img,
+body.theme-dark.economy-page .economy-inventory-link img,
+body.theme-dark.economy-page .shop-inspect-image img {
+  filter: none !important;
+}
+
+/* Authentication */
+
+.auth-page-body,
+.auth-page-body .auth-page-shell {
+  background: var(--ui-page) !important;
+  color: var(--ui-text) !important;
+}
+
+.auth-page-body {
+  padding: 0 !important;
+}
+
+.auth-page-body .auth-page-shell {
+  min-height: 100dvh;
+  padding: max(28px, env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px))
+    max(28px, env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px));
+}
+
+.auth-page-body .auth-page-panel {
+  width: min(100%, 460px);
+  max-width: 460px !important;
+  padding: clamp(26px, 4vw, 38px) !important;
+  border: 1px solid var(--ui-line) !important;
+  border-radius: 16px !important;
+  background: var(--ui-surface) !important;
+  color: var(--ui-text) !important;
+  box-shadow: var(--ui-shadow) !important;
+}
+
+.auth-page-body:has(.auth-grid-row-four) .auth-page-panel {
+  width: min(100%, 880px);
+  max-width: 880px !important;
+}
+
+.auth-page-body .auth-grid-row-four {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.auth-page-body .auth-page-title,
+.auth-page-body .auth-label,
+.auth-page-body .auth-page-switch,
+.auth-page-body .auth-page-switch a {
+  color: var(--ui-text) !important;
+}
+
+.auth-page-body .auth-field input {
+  border-color: var(--ui-line-strong) !important;
+  background: var(--ui-input) !important;
+  color: var(--ui-text) !important;
+}
+
+.auth-page-body .auth-submit {
+  min-height: 48px;
+  border-color: #075d68 !important;
+  background: #075d68 !important;
+  color: #ffffff !important;
+}
+
+.auth-page-body .auth-submit:hover {
+  border-color: #064a54 !important;
+  background: #064a54 !important;
+}
+
+.auth-page-body .auth-submit:disabled,
+.auth-page-body .auth-inline-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.auth-page-body .auth-label-icon {
+  filter: none !important;
+  opacity: 0.72;
+}
+
+body.theme-dark.auth-page-body .auth-label-icon {
+  filter: brightness(0) invert(1) !important;
+}
+
+.auth-page-body .site-footer,
+.auth-page-body .site-footer a,
+.auth-page-body .site-footer p {
+  color: var(--ui-muted) !important;
+}
+
+/*
+ * The legacy theme sheet contains high-specificity authentication rules.
+ * Keep this final layer equally specific so both themes use the shared
+ * surfaces instead of the old translucent white panel.
+ */
+html body.auth-page-body .auth-page-panel,
+html body.auth-page-body.theme-light .auth-page-panel,
+html body.auth-page-body.theme-dark .auth-page-panel {
+  border-color: var(--ui-line) !important;
+  background: var(--ui-surface) !important;
+  color: var(--ui-text) !important;
+  box-shadow: var(--ui-shadow) !important;
+}
+
+html body.auth-page-body .auth-field {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html body.auth-page-body .auth-field input,
+html body.auth-page-body.theme-light .auth-form input,
+html body.auth-page-body.theme-dark .auth-form input {
+  border-color: var(--ui-line-strong) !important;
+  background: var(--ui-input) !important;
+  color: var(--ui-text) !important;
+  box-shadow: none !important;
+}
+
+html body.auth-page-body .auth-field input::placeholder,
+html body.auth-page-body.theme-light .auth-form input::placeholder,
+html body.auth-page-body.theme-dark .auth-form input::placeholder {
+  color: var(--ui-faint) !important;
+}
+
+html body.auth-page-body .auth-major-fixed,
+html body.auth-page-body .auth-inline-button {
+  min-height: 48px;
+  border-color: var(--ui-line-strong) !important;
+  background: var(--ui-surface-soft) !important;
+  color: var(--ui-text) !important;
+  box-shadow: none !important;
+}
+
+html body.auth-page-body .auth-submit,
+html body.auth-page-body.theme-light .auth-submit,
+html body.auth-page-body.theme-dark .auth-submit {
+  border-color: #075d68 !important;
+  background: #075d68 !important;
+  color: #ffffff !important;
+}
+
+html body.auth-page-body .auth-submit:hover,
+html body.auth-page-body.theme-light .auth-submit:hover,
+html body.auth-page-body.theme-dark .auth-submit:hover {
+  border-color: #064a54 !important;
+  background: #064a54 !important;
+}
+
+/* Responsive hierarchy */
+
+@media (max-width: 1180px) and (min-width: 901px) {
+  :root {
+    --bbs-shell-width: 196px;
+    --bbs-content-gutter: 28px;
+  }
+
+  body:not(.auth-page-body) .brand::before {
+    width: 72px;
+    height: 72px;
+  }
+
+  body:not(.auth-page-body) .brand {
+    min-height: 132px;
+  }
+
+  body:not(.auth-page-body) .nav-link {
+    font-size: 0.86rem;
+  }
+
+  body:not(.auth-page-body) .currency {
+    min-width: 48px;
+    padding-inline: 7px;
+  }
+
+  body:not(.auth-page-body) .user-panel {
+    gap: 10px;
+  }
+}
+
+@media (max-width: 900px) {
+  :root {
+    --bbs-shell-width: 0px;
+    --bbs-content-gutter: 14px;
+    --mobile-nav-space: calc(92px + env(safe-area-inset-bottom, 0px));
+  }
+
+  body:not(.auth-page-body) .page-shell {
+    padding: 0 0 var(--mobile-nav-space) !important;
+  }
+
+  body:not(.auth-page-body) .topbar,
+  body:not(.auth-page-body) .topbar .nav-actions {
+    display: contents !important;
+  }
+
+  body:not(.auth-page-body) .topbar > .brand,
+  body:not(.auth-page-body) .topbar > .searchbar,
+  body:not(.auth-page-body) .topbar .nav-actions > .nav-link,
+  body:not(.auth-page-body) .topbar .nav-actions > .theme-toggle {
+    display: none !important;
+  }
+
+  body:not(.auth-page-body) .user-panel {
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    right: calc(14px + env(safe-area-inset-right, 0px));
+    z-index: 150;
+    width: 44px;
+    height: 44px;
+    display: flex !important;
+    gap: 0;
+  }
+
+  body:not(.auth-page-body) .user-summary {
+    width: 44px !important;
+    display: block !important;
+  }
+
+  body:not(.auth-page-body) .avatar {
+    width: 44px !important;
+    height: 44px !important;
+  }
+
+  body:not(.auth-page-body) .user-copy,
+  body:not(.auth-page-body) .user-status {
+    display: none !important;
+  }
+
+  body:not(.auth-page-body) .user-actions {
+    display: contents !important;
+  }
+
+  body:not(.auth-page-body) .user-actions > :not(.mobile-theme-toggle) {
+    display: none !important;
+  }
+
+  body:not(.auth-page-body) .user-actions .mobile-theme-toggle {
+    position: fixed;
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    right: calc(66px + env(safe-area-inset-right, 0px));
+    z-index: 151;
+    width: 44px;
+    height: 44px;
+    display: grid !important;
+    place-items: center;
+    padding: 0;
+    border: 1px solid var(--ui-line) !important;
+    border-radius: 12px !important;
+    background: var(--ui-surface) !important;
+    color: var(--ui-text) !important;
+  }
+
+  body:not(.auth-page-body) .user-actions .mobile-theme-toggle .nav-icon {
+    width: 21px;
+    height: 21px;
+    filter: none !important;
+  }
+
+  body.theme-dark:not(.auth-page-body) .user-actions .mobile-theme-toggle .nav-icon {
+    filter: brightness(0) invert(1) !important;
+  }
+
+  body:not(.auth-page-body) .user-actions .mobile-theme-toggle span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  body:not(.auth-page-body) .main-content {
+    padding: calc(82px + env(safe-area-inset-top, 0px))
+      calc(var(--bbs-content-gutter) + env(safe-area-inset-right, 0px)) 30px
+      calc(var(--bbs-content-gutter) + env(safe-area-inset-left, 0px)) !important;
+  }
+
+  body:not(.auth-page-body) .main-content::before {
+    top: env(safe-area-inset-top, 0px);
+    left: calc(14px + env(safe-area-inset-left, 0px));
+    right: calc(118px + env(safe-area-inset-right, 0px));
+    height: 64px;
+    padding-right: 0;
+    border-bottom-width: 1px;
+    font-size: clamp(1.45rem, 7vw, 1.85rem);
+  }
+
+  body:not(.auth-page-body) .site-footer {
+    margin-inline: var(--bbs-content-gutter);
+  }
+
+  body:not(.auth-page-body) .mobile-nav {
+    left: calc(10px + env(safe-area-inset-left, 0px));
+    right: calc(10px + env(safe-area-inset-right, 0px));
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    width: auto;
+    max-width: 680px;
+    min-height: 68px;
+    display: flex !important;
+    gap: 3px;
+    padding: 6px;
+    overflow-x: auto;
+    margin-inline: auto;
+    transform: none;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    border-radius: 18px !important;
+    background: rgba(6, 54, 65, 0.97) !important;
+    box-shadow: 0 16px 34px rgba(0, 25, 31, 0.28) !important;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+
+  body:not(.auth-page-body) .mobile-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  body:not(.auth-page-body) .mobile-nav .nav-link {
+    width: auto !important;
+    min-width: 72px;
+    min-height: 54px;
+    flex: 0 0 72px !important;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    padding: 5px 4px;
+    border-radius: 12px !important;
+    color: rgba(255, 255, 255, 0.8) !important;
+    font-size: 0.75rem;
+    line-height: 1.05;
+    text-align: center;
+    scroll-snap-align: center;
+  }
+
+  body:not(.auth-page-body) .mobile-nav .nav-link:hover,
+  body:not(.auth-page-body) .mobile-nav .nav-link.is-active {
+    background: rgba(255, 255, 255, 0.15) !important;
+    color: #ffffff !important;
+  }
+
+  body:not(.auth-page-body) .mobile-nav .nav-icon {
+    width: 21px;
+    height: 21px;
+    opacity: 0.9 !important;
+  }
+
+  body:not(.auth-page-body) .settings-shell,
+  body:not(.auth-page-body) .discussion-shell,
+  body:not(.auth-page-body) .course-shell,
+  body:not(.auth-page-body) .knowledge-shell,
+  body:not(.auth-page-body) .world-shell,
+  body:not(.auth-page-body) .economy-shell,
+  body:not(.auth-page-body) .workbench-shell {
+    width: 100%;
+    padding-inline: 0 !important;
+  }
+
+  body:not(.auth-page-body) .settings-profile,
+  body:not(.auth-page-body) .settings-card,
+  body:not(.auth-page-body) .discussion-board-about,
+  body:not(.auth-page-body) .discussion-compose,
+  body:not(.auth-page-body) .discussion-detail,
+  body:not(.auth-page-body) .discussion-stats-sidebar,
+  body:not(.auth-page-body) .aichat-dialogs,
+  body:not(.auth-page-body) .aichat-main,
+  body:not(.auth-page-body) .course-hero,
+  body:not(.auth-page-body) .course-overview,
+  body:not(.auth-page-body) .course-toolbar,
+  body:not(.auth-page-body) .knowledge-sidebar,
+  body:not(.auth-page-body) .knowledge-content,
+  body:not(.auth-page-body) .knowledge-section {
+    border-radius: 12px !important;
+    box-shadow: none !important;
+  }
+
+  body.knowledge-page .knowledge-main .knowledge-sidebar {
+    gap: 10px;
+    padding: 0 0 14px !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--ui-line) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+
+  body.knowledge-page .knowledge-list {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  body.knowledge-page .knowledge-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  body.knowledge-page .knowledge-list-item {
+    min-width: 172px;
+    min-height: 68px;
+    flex: 0 0 172px;
+    align-content: center;
+    padding: 10px 12px;
+    scroll-snap-align: start;
+  }
+
+  body.discussion-page .main-content {
+    padding-inline: calc(var(--bbs-content-gutter) + env(safe-area-inset-left, 0px))
+      calc(var(--bbs-content-gutter) + env(safe-area-inset-right, 0px)) !important;
+  }
+
+  body.discussion-page .main-content .discussion-stats-sidebar {
+    padding: 14px !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+
+  body.discussion-page .main-content .discussion-feed,
+  body.discussion-page .main-content .discussion-detail {
+    border: 0 !important;
+    background: transparent !important;
+  }
+
+  body.discussion-page .main-content .discussion-detail {
+    padding: 4px 0 0 !important;
+  }
+
+  body.discussion-page .main-content .discussion-post-card {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px 2px !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--ui-line) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  body.discussion-page .discussion-post-author,
+  body.discussion-page .discussion-post-open {
+    display: none;
+  }
+
+  body.discussion-page .discussion-detail-toolbar,
+  body.discussion-page .discussion-moderator-actions {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  body.discussion-page .discussion-comment {
+    --comment-indent-size: 10px;
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 10px;
+    margin-left: min(calc(var(--comment-depth, 0) * 8px), 12px);
+    padding: 13px 0;
+    border: 0 !important;
+    border-bottom: 1px solid var(--ui-line) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+
+  body.discussion-page .discussion-comment-replies {
+    margin-top: 8px;
+    padding-left: 10px;
+    border-left-width: 1px;
+  }
+
+  body.discussion-page .discussion-reply-form {
+    padding: 10px 0 0;
+    border: 0;
+    background: transparent;
+  }
+
+  body.discussion-page .discussion-comment-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.discussion-page .discussion-comment-preview {
+    min-height: 112px;
+    max-height: min(40dvh, 320px);
+    border-top: 1px solid var(--ui-line);
+    border-left: 0;
+  }
+
+  body.discussion-page .discussion-comment-preview-body {
+    min-height: 88px;
+  }
+
+  body.aichat-page .main-content .aichat-copy-button,
+  body.aichat-page .main-content .aichat-dialog-close {
+    width: 44px;
+    height: 44px;
+  }
+
+  body:not(.auth-page-body) .discussion-markdown-body pre {
+    padding-top: 60px !important;
+  }
+
+  body:not(.auth-page-body) .discussion-markdown-body pre > .code-copy-menu {
+    top: 8px;
+    right: 8px;
+  }
+
+  body:not(.auth-page-body) .discussion-markdown-body pre > .code-run-menu {
+    top: 8px;
+    right: 60px;
+  }
+
+  body.workbench-page .workbench-intro h1 {
+    display: none;
+  }
+
+  body.workbench-page .workbench-card {
+    min-height: 0;
+  }
+
+  body.adminusers-page .admin-add-button,
+  body.adminusers-page .admin-button,
+  body.system-settings-page .system-settings-back {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 560px) {
+  .auth-page-body .auth-page-shell {
+    padding-inline: max(14px, env(safe-area-inset-left, 0px))
+      max(14px, env(safe-area-inset-right, 0px));
+  }
+
+  .auth-page-body .auth-page-panel {
+    padding: 22px 18px !important;
+  }
+
+  .auth-page-body .auth-grid-row,
+  .auth-page-body .auth-grid-row-four,
+  .auth-page-body .auth-grid-row-two,
+  .auth-page-body .auth-inline {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .auth-page-body .auth-inline-button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  body:not(.auth-page-body) .settings-profile,
+  body:not(.auth-page-body) .settings-card,
+  body.system-settings-page .system-settings-form {
+    padding: 16px !important;
+  }
+
+  body:not(.auth-page-body) .public-profile-header {
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  body:not(.auth-page-body) .public-profile-avatar-wrap {
+    width: 96px;
+    height: 96px;
+    padding: 6px;
+  }
+
+  body:not(.auth-page-body) .public-profile-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body:not(.auth-page-body) .public-profile-stat {
+    padding: 14px;
+  }
+
+  body.home-page .home-dashboard-panel {
+    padding: 15px;
+  }
+
+  body.home-page .home-panel-actions {
+    align-items: flex-end;
+  }
+
+  body.home-page .home-heat-score,
+  body.home-page .home-heat-user-copy small,
+  body.home-page .home-feed-badge {
+    font-size: 0.76rem;
+  }
+
+  .economy-page .shop-grid,
+  .economy-page .inventory-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) and (max-height: 700px) {
+  body.home-page {
+    overflow-y: auto;
+  }
+
+  body.home-page .home-dashboard-main {
+    min-height: auto;
+    overflow: visible;
+  }
+
+  body.home-page .home-dashboard {
+    height: auto;
+    min-height: 0;
+    grid-template-rows: none;
+  }
+
+  body.home-page .home-dashboard-panel {
+    min-height: 280px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+}
