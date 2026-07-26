@@ -3,6 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta
+      name="description"
+      content="选择一个课程岛屿，进入对应的学习地图或讨论区。"
+    />
     <title>FREE-BBS - 学习世界</title>
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-v2-32.png" />
@@ -10,12 +14,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Noto+Serif+SC:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Noto+Serif+SC:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css" />
-    <link rel="stylesheet" href="/world.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/world.css" />
   </head>
   <body class="world-page">
     <div class="page-shell page-shell-world">
@@ -29,8 +33,8 @@
           <input
             id="world-search-input"
             type="search"
-            placeholder="搜索知识点、课程区域"
-            aria-label="搜索知识点"
+            placeholder="搜索岛屿"
+            aria-label="搜索岛屿"
             autocomplete="off"
           />
         </form>
@@ -144,39 +148,70 @@
       </nav>
 
       <main class="main-content world-main">
-        <section class="study-world-shell" aria-label="学习世界">
-          <header class="study-world-header">
-            <p class="study-world-kicker">Learning Worlds</p>
-            <h1>学习世界</h1>
-          </header>
+        <section class="world-showcase" aria-label="选择学习岛屿">
+          <button
+            class="world-arrow world-arrow-prev"
+            id="world-prev"
+            type="button"
+            aria-label="上一个岛屿"
+          >
+            <span aria-hidden="true">‹</span>
+          </button>
 
-          <div class="study-world-carousel" aria-label="左右滑动选择学习世界">
+          <article class="world-island-view" aria-live="polite">
             <button
-              class="study-world-nav study-world-nav-prev"
+              class="world-island-button"
+              id="world-island-button"
               type="button"
-              data-world-scroll="-1"
-              aria-label="上一个学习世界"
+              aria-haspopup="dialog"
+              aria-controls="world-modal"
             >
-              ‹
+              <picture>
+                <source id="world-island-mobile-source" media="(max-width: 680px)" />
+                <img id="world-island-image" alt="" />
+              </picture>
             </button>
-            <div
-              class="study-world-track"
-              id="study-world-track"
-              tabindex="0"
-              aria-live="polite"
-            ></div>
-            <button
-              class="study-world-nav study-world-nav-next"
-              type="button"
-              data-world-scroll="1"
-              aria-label="下一个学习世界"
-            >
-              ›
-            </button>
-          </div>
+            <h1 class="world-island-title" id="world-island-title"></h1>
+          </article>
+
+          <button
+            class="world-arrow world-arrow-next"
+            id="world-next"
+            type="button"
+            aria-label="下一个岛屿"
+          >
+            <span aria-hidden="true">›</span>
+          </button>
         </section>
       </main>
     </div>
+
+    <dialog class="world-modal" id="world-modal" aria-labelledby="world-modal-title">
+      <section class="world-modal-panel">
+        <button class="world-modal-close" type="button" data-close-modal aria-label="关闭弹窗">
+          <span aria-hidden="true">×</span>
+        </button>
+
+        <div class="world-modal-intro">
+          <p class="world-modal-kicker">学习岛屿</p>
+          <h2 id="world-modal-title"></h2>
+          <p id="world-modal-description"></p>
+        </div>
+
+        <div class="world-modal-actions">
+          <a class="world-modal-action world-modal-action-map" id="world-map-link" href="/course">
+            进入学习地图
+          </a>
+          <a
+            class="world-modal-action world-modal-action-discussion"
+            id="world-discussion-link"
+            href="/discussion"
+          >
+            进入讨论
+          </a>
+        </div>
+      </section>
+    </dialog>
 
     <script src="/app.js"></script>
     <script src="/world.js"></script>
