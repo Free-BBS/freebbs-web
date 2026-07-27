@@ -255,7 +255,7 @@
   async function initializeSystemSettings() {
     await app.sessionReady;
 
-    if (!app.userState.isLoggedIn || app.userState.role !== 'admin') {
+    if (!app.userState.isLoggedIn || !app.userState.isAdmin) {
       return;
     }
 

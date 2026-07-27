@@ -139,54 +139,31 @@
         </a>
       </nav>
 
-      <main class="main-content settings-main knowledge-main" data-knowledge-page>
-        <section class="knowledge-shell" aria-label="知识点详情">
-          <aside class="knowledge-sidebar" aria-label="课程知识点">
-            <a class="knowledge-back" id="knowledge-course-link" href="/course?course=signals"></a>
-            <div class="knowledge-list" id="knowledge-point-list"></div>
-          </aside>
-
-          <article class="knowledge-content">
-            <header class="knowledge-header">
-              <p class="course-kicker">Knowledge Point</p>
-              <h1 id="knowledge-title"></h1>
-              <p id="knowledge-summary"></p>
-              <div class="knowledge-actions" id="knowledge-actions"></div>
-            </header>
-
-            <section class="knowledge-section" aria-label="正文区">
-              <h2>正文区</h2>
-              <div class="discussion-markdown-body" id="knowledge-body"></div>
-            </section>
-
-            <section class="knowledge-section" aria-label="资料区">
-              <h2>资料区</h2>
-              <div class="course-resource-list" id="knowledge-resources"></div>
-            </section>
-
-            <section class="knowledge-section knowledge-rag" aria-label="RAG 对话区">
-              <div class="knowledge-section-head">
-                <h2>RAG 对话区</h2>
-                <a id="knowledge-discussion-link" href="/discussion?board=signal">讨论入口</a>
-              </div>
-              <div class="knowledge-rag-thread" id="knowledge-rag-thread" aria-live="polite"></div>
-              <form class="knowledge-rag-form" id="knowledge-rag-form">
-                <textarea
-                  id="knowledge-rag-input"
-                  rows="3"
-                  maxlength="4000"
-                  placeholder="问 Max 一个关于当前知识点的问题"
-                  required
-                ></textarea>
-                <button id="knowledge-rag-send" type="submit">
-                  <img src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
-                  <span>发送</span>
-                </button>
-              </form>
-              <p class="knowledge-rag-status" id="knowledge-rag-status"></p>
-            </section>
-          </article>
-        </section>
+      <main class="knowledge-main course-material-immersive" data-knowledge-page>
+        <a
+          class="course-map-reader-control course-material-back"
+          id="knowledge-course-link"
+          href="/course?course=signals"
+          aria-label="返回课程地图"
+          >←</a
+        >
+        <article class="course-material-reader">
+          <header class="course-material-header">
+            <p class="course-kicker" id="knowledge-node-id">Knowledge Point</p>
+            <h1 id="knowledge-title"></h1>
+            <p id="knowledge-summary"></p>
+          </header>
+          <section
+            class="discussion-markdown-body course-material-body"
+            id="knowledge-body"
+            aria-label="课程资料正文"
+          ></section>
+          <nav class="course-material-navigation" aria-label="知识结点导航">
+            <a id="knowledge-previous-link" href="#">← 上一个</a>
+            <a id="knowledge-next-link" href="#">下一个 →</a>
+            <a id="knowledge-discussion-link" href="/discussion?board=signal">讨论</a>
+          </nav>
+        </article>
       </main>
     </div>
 
@@ -196,7 +173,6 @@
     <script src="/vendor/katex/dist/katex.min.js"></script>
     <script src="/vendor/katex/dist/contrib/auto-render.min.js"></script>
     <script src="/app.js"></script>
-    <script src="/course-data.js"></script>
-    <script src="/course.js"></script>
+    <script src="/knowledge.js"></script>
   </body>
 </html>

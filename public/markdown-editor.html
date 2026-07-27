@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>FREE-BBS - Markdown 编辑器</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-v2-32.png" />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/course.css" />
+    <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css" />
+    <link rel="stylesheet" href="/vendor/@highlightjs/cdn-assets/styles/github-dark.min.css" />
+    <link rel="stylesheet" href="/ui-polish.css" />
+  </head>
+  <body class="knowledge-page markdown-editor-page">
+    <div class="page-shell page-shell-settings">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="FREE-BBS 首页"
+          ><span class="brand-mark">FREE<br />BBS</span></a
+        >
+        <form class="searchbar" role="search">
+          <span class="search-symbol">⌕</span
+          ><input type="search" placeholder="搜索课程、讨论、资料、地图坐标" aria-label="搜索" />
+        </form>
+        <nav class="nav-actions">
+          <a class="nav-link" href="/world"
+            ><img class="nav-icon" src="/assets/icons/map.svg" alt="" /><span>学习世界</span></a
+          >
+          <a class="nav-link" href="/discussion"
+            ><img class="nav-icon" src="/assets/icons/people.svg" alt="" /><span>讨论</span></a
+          >
+          <a class="nav-link manage-link hidden" href="/adminusers"
+            ><img class="nav-icon" src="/assets/icons/gear.svg" alt="" /><span>管理</span></a
+          >
+          <a class="nav-link fortune-link hidden" href="#"><span>今日运势</span></a>
+          <div class="user-panel" id="user-panel">
+            <div class="user-summary">
+              <button class="avatar" type="button">
+                <img
+                  class="avatar-image"
+                  id="avatar-image"
+                  src="/assets/avatar_placeholder.webp"
+                  alt="用户头像"
+                />
+              </button>
+              <div class="user-actions" id="user-actions">
+                <button class="user-icon-button hidden" id="user-settings-button" type="button">
+                  <img class="user-action-icon" src="/assets/icons/gear.svg" alt="" /><span
+                    >设置</span
+                  >
+                </button>
+                <button class="user-icon-button hidden" id="user-logout-button" type="button">
+                  <img class="user-action-icon" src="/assets/icons/exit.svg" alt="" /><span
+                    >退出</span
+                  >
+                </button>
+              </div>
+              <div class="user-copy">
+                <button class="user-name" id="user-name" type="button">登录/注册</button>
+                <div class="user-role" id="user-role">学生</div>
+              </div>
+            </div>
+            <div class="user-status" id="user-status">
+              <span class="currency"><span class="currency-value">-</span></span>
+            </div>
+          </div>
+        </nav>
+      </header>
+      <nav class="mobile-nav">
+        <a class="nav-link" href="/world"><span>学习世界</span></a
+        ><a class="nav-link" href="/discussion"><span>讨论</span></a>
+      </nav>
+      <main class="main-content settings-main knowledge-main" data-markdown-editor>
+        <section class="markdown-editor-shell">
+          <header class="markdown-editor-header">
+            <div>
+              <p class="course-kicker" id="markdown-course-name">Course Material</p>
+              <h1 id="markdown-node-title">Markdown 编辑器</h1>
+              <p id="markdown-editor-subtitle">支持 KaTeX 公式、代码高亮与图片上传。</p>
+            </div>
+            <div class="course-map-actions">
+              <a id="markdown-back-link" href="/course-map-editor">返回地图</a>
+              <button id="markdown-save" type="button">保存文档</button>
+            </div>
+          </header>
+          <div class="markdown-toolbar" id="markdown-toolbar" aria-label="Markdown 工具栏">
+            <button data-wrap="**|**" type="button">加粗</button>
+            <button data-prefix="## " type="button">标题</button>
+            <button data-wrap="`|`" type="button">行内代码</button>
+            <button data-block="code" type="button">代码块</button>
+            <button data-wrap="$|$" type="button">行内公式</button>
+            <button data-block="formula" type="button">公式块</button>
+            <button id="markdown-upload-button" type="button">上传图片</button>
+            <input class="hidden" id="markdown-image-input" type="file" accept="image/*" />
+            <span class="markdown-save-status" id="markdown-save-status"></span>
+          </div>
+          <section class="markdown-workspace">
+            <label class="markdown-source-panel">
+              <span>Markdown</span>
+              <textarea
+                id="markdown-source"
+                spellcheck="false"
+                aria-label="Markdown 正文"
+              ></textarea>
+            </label>
+            <section class="markdown-preview-panel" aria-label="实时预览">
+              <span>预览</span>
+              <article class="discussion-markdown-body" id="markdown-preview"></article>
+            </section>
+          </section>
+        </section>
+      </main>
+    </div>
+    <script src="/vendor/marked/lib/marked.umd.js"></script>
+    <script src="/vendor/@highlightjs/cdn-assets/highlight.min.js"></script>
+    <script src="/vendor/katex/dist/katex.min.js"></script>
+    <script src="/vendor/katex/dist/contrib/auto-render.min.js"></script>
+    <script src="/app.js"></script>
+    <script src="/markdown-editor.js"></script>
+  </body>
+</html>

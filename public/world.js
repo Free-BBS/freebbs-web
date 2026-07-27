@@ -14,8 +14,7 @@ const studyWorlds = [
     mobileImage: '/assets/signals_island_mobile.webp',
     board: 'signal',
     course: 'signals',
-    description:
-      '围绕信号分类、卷积、傅里叶分析与采样定理，理解信号在时域和频域中的结构与变化。',
+    description: '围绕信号分类、卷积、傅里叶分析与采样定理，理解信号在时域和频域中的结构与变化。',
   },
   {
     name: '电子电路与系统',
@@ -23,8 +22,7 @@ const studyWorlds = [
     mobileImage: '/assets/circuits_island_mobile.webp',
     board: 'circuit',
     course: 'circuits',
-    description:
-      '从基尔霍夫定律、运算放大器、滤波器到反馈系统，逐步进入模拟电路与系统设计。',
+    description: '从基尔霍夫定律、运算放大器、滤波器到反馈系统，逐步进入模拟电路与系统设计。',
   },
   {
     name: '数字电路',
@@ -118,8 +116,7 @@ function showWorldAt(nextIndex, direction) {
 }
 
 function switchWorld(direction) {
-  const nextIndex =
-    (activeWorldIndex + direction + studyWorlds.length) % studyWorlds.length;
+  const nextIndex = (activeWorldIndex + direction + studyWorlds.length) % studyWorlds.length;
   showWorldAt(nextIndex, direction);
 }
 

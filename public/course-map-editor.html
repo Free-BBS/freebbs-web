@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>FREE-BBS - 编辑课程地图</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-v2-32.png" />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/course.css" />
+    <link rel="stylesheet" href="/ui-polish.css" />
+  </head>
+  <body class="course-page course-map-editor-page">
+    <div class="page-shell page-shell-settings">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="FREE-BBS 首页"
+          ><span class="brand-mark">FREE<br />BBS</span></a
+        >
+        <form class="searchbar" role="search">
+          <span class="search-symbol" aria-hidden="true">⌕</span>
+          <input type="search" placeholder="搜索课程、讨论、资料、地图坐标" aria-label="搜索" />
+        </form>
+        <nav class="nav-actions" aria-label="顶部导航">
+          <a class="nav-link" href="/"
+            ><img class="nav-icon" src="/assets/icons/home.svg" alt="" /><span>主页</span></a
+          >
+          <a class="nav-link" href="/world"
+            ><img class="nav-icon" src="/assets/icons/map.svg" alt="" /><span>学习世界</span></a
+          >
+          <a class="nav-link" href="/discussion"
+            ><img class="nav-icon" src="/assets/icons/people.svg" alt="" /><span>讨论</span></a
+          >
+          <a class="nav-link" href="/aichat"
+            ><img class="nav-icon" src="/assets/icons/ai.svg" alt="" /><span>问问 Max</span></a
+          >
+          <a class="nav-link fortune-link hidden" href="#"
+            ><img class="nav-icon" src="/assets/icons/yunshi.svg" alt="" /><span>今日运势</span></a
+          >
+          <a class="nav-link manage-link hidden" href="/adminusers"
+            ><img class="nav-icon" src="/assets/icons/gear.svg" alt="" /><span>管理</span></a
+          >
+          <div class="user-panel" id="user-panel">
+            <div class="user-summary">
+              <button class="avatar" type="button">
+                <img
+                  class="avatar-image"
+                  id="avatar-image"
+                  src="/assets/avatar_placeholder.webp"
+                  alt="用户头像"
+                />
+              </button>
+              <div class="user-actions" id="user-actions">
+                <button class="user-icon-button hidden" id="user-settings-button" type="button">
+                  <img class="user-action-icon" src="/assets/icons/gear.svg" alt="" /><span
+                    >设置</span
+                  >
+                </button>
+                <button class="user-icon-button hidden" id="user-logout-button" type="button">
+                  <img class="user-action-icon" src="/assets/icons/exit.svg" alt="" /><span
+                    >退出</span
+                  >
+                </button>
+              </div>
+              <div class="user-copy">
+                <button class="user-name" id="user-name" type="button">登录/注册</button>
+                <div class="user-role" id="user-role">学生</div>
+              </div>
+            </div>
+            <div class="user-status" id="user-status">
+              <span class="currency"><span class="currency-value">-</span></span>
+            </div>
+          </div>
+        </nav>
+      </header>
+      <nav class="mobile-nav" aria-label="手机底部导航">
+        <a class="nav-link" href="/world"
+          ><img class="nav-icon" src="/assets/icons/map.svg" alt="" /><span>学习世界</span></a
+        >
+        <a class="nav-link" href="/discussion"
+          ><img class="nav-icon" src="/assets/icons/people.svg" alt="" /><span>讨论</span></a
+        >
+        <a class="nav-link" href="/aichat"
+          ><img class="nav-icon" src="/assets/icons/ai.svg" alt="" /><span>问问 Max</span></a
+        >
+      </nav>
+      <main class="main-content settings-main course-main course-map-main" data-course-map-editor>
+        <section class="course-editor-shell">
+          <header class="course-editor-header">
+            <div>
+              <p class="course-kicker">Knowledge Map Studio</p>
+              <h1 id="course-editor-title">编辑课程地图</h1>
+              <p>拖拽结点调整位置；选择连接工具后依次点击起点和终点。</p>
+            </div>
+            <div class="course-map-actions">
+              <a id="course-map-reader-link" href="/course">查看阅读模式</a>
+              <button id="course-add-node-button" type="button">添加结点</button>
+            </div>
+          </header>
+          <section class="course-editor-layout">
+            <aside class="course-editor-sidebar">
+              <div class="course-editor-tools">
+                <h2>连接工具</h2>
+                <div class="course-edge-tools">
+                  <button data-edge-tool="ordered" type="button">顺序箭头</button>
+                  <button data-edge-tool="related" type="button">关联虚线</button>
+                  <button data-edge-tool="none" type="button">取消连接</button>
+                </div>
+                <p id="course-edge-status">拖拽结点，或选择一种连接工具。</p>
+              </div>
+              <form class="course-node-form hidden" id="course-node-form">
+                <h2 id="course-node-form-title">知识结点</h2>
+                <label
+                  >结点 ID<input id="course-node-id" required maxlength="64" placeholder="SS-01-01"
+                /></label>
+                <label>标题<input id="course-node-title" required maxlength="160" /></label>
+                <label
+                  >简介<textarea id="course-node-summary" maxlength="500" rows="4"></textarea>
+                </label>
+                <div class="course-position-fields">
+                  <label>X<input id="course-node-x" type="number" min="0" max="10000" /></label>
+                  <label>Y<input id="course-node-y" type="number" min="0" max="10000" /></label>
+                </div>
+                <p class="course-editor-message" id="course-node-message"></p>
+                <div class="course-node-form-actions">
+                  <button class="is-primary" type="submit">保存结点</button>
+                  <a class="hidden" id="course-document-edit-link" href="/markdown-editor"
+                    >编辑文档</a
+                  >
+                  <button class="is-danger hidden" id="course-delete-node" type="button">
+                    删除结点
+                  </button>
+                </div>
+              </form>
+              <section class="course-edge-list-panel">
+                <h2>连接列表</h2>
+                <div id="course-edge-list"></div>
+              </section>
+            </aside>
+            <section class="course-map-panel is-editor">
+              <p class="course-map-status" id="course-map-status">正在载入地图…</p>
+              <div class="course-map-scroller" id="course-map-scroller">
+                <div class="course-map-canvas" id="course-map-canvas"></div>
+              </div>
+            </section>
+          </section>
+        </section>
+      </main>
+    </div>
+    <script src="/app.js"></script>
+    <script src="/course-map.js"></script>
+  </body>
+</html>

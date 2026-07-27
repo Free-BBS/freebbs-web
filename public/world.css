@@ -89,11 +89,8 @@ body.world-page .world-main::before {
   grid-template-columns: clamp(58px, 8vw, 108px) minmax(0, 1fr) clamp(58px, 8vw, 108px);
   align-items: center;
   gap: clamp(8px, 2vw, 28px);
-  padding:
-    max(18px, env(safe-area-inset-top, 0px))
-    max(18px, env(safe-area-inset-right, 0px))
-    max(18px, env(safe-area-inset-bottom, 0px))
-    max(18px, env(safe-area-inset-left, 0px));
+  padding: max(18px, env(safe-area-inset-top, 0px)) max(18px, env(safe-area-inset-right, 0px))
+    max(18px, env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px));
 }
 
 .world-island-view {
@@ -120,8 +117,7 @@ body.world-page .world-main::before {
   outline: 0;
   background: transparent;
   cursor: pointer;
-  filter:
-    drop-shadow(0 38px 36px rgba(0, 0, 0, 0.42))
+  filter: drop-shadow(0 38px 36px rgba(0, 0, 0, 0.42))
     drop-shadow(0 0 38px rgba(87, 168, 202, 0.14));
   transition:
     filter 260ms ease,
@@ -149,8 +145,7 @@ body.world-page .world-main::before {
 
 .world-island-button:hover {
   transform: translateY(-8px) scale(1.015);
-  filter:
-    drop-shadow(0 48px 42px rgba(0, 0, 0, 0.48))
+  filter: drop-shadow(0 48px 42px rgba(0, 0, 0, 0.48))
     drop-shadow(0 0 54px rgba(105, 194, 228, 0.2));
 }
 
@@ -233,7 +228,10 @@ body.world-page .world-main::before {
     linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px),
     linear-gradient(155deg, rgba(20, 31, 43, 0.98), rgba(7, 14, 22, 0.99));
-  background-size: 46px 46px, 46px 46px, 100% 100%;
+  background-size:
+    46px 46px,
+    46px 46px,
+    100% 100%;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.1),
     0 40px 110px rgba(0, 0, 0, 0.58);
@@ -397,11 +395,8 @@ body.world-page .world-main::before {
     min-height: 460px;
     grid-template-columns: 46px minmax(0, 1fr) 46px;
     gap: 5px;
-    padding:
-      max(12px, env(safe-area-inset-top, 0px))
-      max(10px, env(safe-area-inset-right, 0px))
-      max(18px, env(safe-area-inset-bottom, 0px))
-      max(10px, env(safe-area-inset-left, 0px));
+    padding: max(12px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-right, 0px))
+      max(18px, env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px));
   }
 
   .world-island-view {

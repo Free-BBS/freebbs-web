@@ -28,7 +28,7 @@ const USER_ROLE_LABELS = {
   teacher: '教师',
   admin: '管理员',
 };
-const ADMIN_ROLE_OPTIONS = Object.entries(USER_ROLE_LABELS);
+const ADMIN_ROLE_OPTIONS = Object.entries(USER_ROLE_LABELS).filter(([role]) => role !== 'admin');
 const userState = {
   isLoggedIn: false,
   token: localStorage.getItem(STORAGE_KEY) || '',
@@ -42,9 +42,11 @@ const userState = {
   electrons: 0,
   manetrons: 0,
   heat: 0,
+  isAdmin: false,
   fortuneBonusEnabled: false,
 };
 let economyShopItems = [];
+let adminPermissionCatalog = { boards: [], courses: [] };
 let sessionReady = Promise.resolve();
 
 const userName = document.getElementById('user-name');
@@ -1657,7 +1659,9 @@ function renderUser() {
   userName.textContent = userState.fullName || userState.username;
   userName.disabled = true;
   if (userRole) {
-    userRole.textContent = USER_ROLE_LABELS[userState.role] || '学生';
+    userRole.textContent = userState.isAdmin
+      ? '管理员'
+      : USER_ROLE_LABELS[userState.role] || '学生';
   }
   userSettingsButton?.classList.remove('hidden');
   userLogoutButton?.classList.remove('hidden');
@@ -1720,6 +1724,7 @@ function saveSession(token, user) {
   userState.fullName = user.fullName || '';
   userState.studentId = user.studentId || '';
   userState.role = user.role || 'student';
+  userState.isAdmin = Boolean(user.isAdmin || user.role === 'admin');
   userState.avatarPath = user.avatarPath || '';
   userState.bio = user.bio || '';
   userState.websiteUrl = user.websiteUrl || '';
@@ -1741,6 +1746,7 @@ function clearSession() {
   userState.fullName = '';
   userState.studentId = '';
   userState.role = '';
+  userState.isAdmin = false;
   userState.avatarPath = '';
   userState.bio = '';
   userState.websiteUrl = '';
@@ -1795,7 +1801,7 @@ async function restoreSession() {
 
     saveSession(userState.token, payload.user);
 
-    if (isAdminManagementPage() && userState.role !== 'admin') {
+    if (isAdminManagementPage() && !userState.isAdmin) {
       window.location.replace('/');
     }
   } catch {
@@ -2221,7 +2227,7 @@ function renderDiscussionComposeBoards() {
   }
 
   const availableBoards = discussionState.boards.filter(
-    (board) => board.slug !== 'changelog' || userState.role === 'admin',
+    (board) => board.slug !== 'changelog' || userState.isAdmin,
   );
 
   discussionComposeBoard.innerHTML = availableBoards
@@ -2848,6 +2854,10 @@ function enhanceMarkdownContent(root, { interactiveCodeControls = true } = {}) {
     link.rel = 'noopener noreferrer';
   });
   root.querySelectorAll('img').forEach((image) => {
+    const source = image.getAttribute('src') || '';
+    if (source.startsWith('/uploads/')) {
+      image.src = `${API_ROOT}${source}`;
+    }
     image.loading = 'lazy';
     image.decoding = 'async';
     image.referrerPolicy = 'no-referrer';
@@ -4354,7 +4364,33 @@ async function loadPublicProfile() {
   }
 }
 
-function renderAdminUsers(users) {
+function renderAdminPermissionGroup(title, type, options, activeSlugs = []) {
+  const active = new Set(activeSlugs);
+  return `
+    <fieldset class="admin-permission-group">
+      <legend>${escapeHtml(title)}</legend>
+      <div class="admin-permission-options">
+        ${options
+          .map(
+            (option) => `
+          <label class="admin-permission-toggle">
+            <input
+              type="checkbox"
+              data-permission="${escapeHtml(type)}"
+              value="${escapeHtml(option.slug)}"
+              ${active.has(option.slug) ? 'checked' : ''}
+            />
+            <span>${escapeHtml(option.name)}</span>
+          </label>
+        `,
+          )
+          .join('')}
+      </div>
+    </fieldset>
+  `;
+}
+
+function renderAdminUsers(users, permissionCatalog = adminPermissionCatalog) {
   if (!adminUsers) {
     return;
   }
@@ -4412,13 +4448,19 @@ function renderAdminUsers(users) {
       </div>
       <div class="admin-user-cell">
         <label>
-          <span class="admin-user-field-label">角色</span>
+          <span class="admin-user-field-label">身份</span>
           <select data-field="role" aria-label="${escapeHtml(user.username)}的角色">
             ${ADMIN_ROLE_OPTIONS.map(
               ([role, label]) =>
                 `<option value="${role}" ${user.role === role ? 'selected' : ''}>${label}</option>`,
             ).join('')}
           </select>
+        </label>
+      </div>
+      <div class="admin-user-cell admin-user-admin-flag">
+        <label class="admin-permission-toggle">
+          <input data-field="isAdmin" type="checkbox" ${user.isAdmin ? 'checked' : ''} />
+          <span>管理员</span>
         </label>
       </div>
       <div class="admin-user-cell">
@@ -4462,6 +4504,20 @@ function renderAdminUsers(users) {
           删除
         </button>
       </div>
+      <div class="admin-user-permissions">
+        ${renderAdminPermissionGroup(
+          '讨论区板块负责人',
+          'board',
+          permissionCatalog.boards || [],
+          user.boardModeratorSlugs || [],
+        )}
+        ${renderAdminPermissionGroup(
+          '课程资料负责人',
+          'course',
+          permissionCatalog.courses || [],
+          user.courseManagerSlugs || [],
+        )}
+      </div>
     </article>
   `,
     )
@@ -4503,12 +4559,18 @@ function insertAdminDraftRow() {
     </div>
     <div class="admin-user-cell">
       <label>
-        <span class="admin-user-field-label">角色</span>
+        <span class="admin-user-field-label">身份</span>
         <select data-field="role" aria-label="新用户的角色">
           ${ADMIN_ROLE_OPTIONS.map(
             ([role, label]) => `<option value="${role}">${label}</option>`,
           ).join('')}
         </select>
+      </label>
+    </div>
+    <div class="admin-user-cell admin-user-admin-flag">
+      <label class="admin-permission-toggle">
+        <input data-field="isAdmin" type="checkbox" />
+        <span>管理员</span>
       </label>
     </div>
     <div class="admin-user-cell">
@@ -4555,20 +4617,21 @@ function insertAdminDraftRow() {
 }
 
 async function loadAdminUsers() {
-  if (!adminSection || !isAdminUsersPage() || userState.role !== 'admin') {
+  if (!adminSection || !isAdminUsersPage() || !userState.isAdmin) {
     return;
   }
 
   try {
     const payload = await callApi('/admin/users', { method: 'GET' });
-    renderAdminUsers(payload.users || []);
+    adminPermissionCatalog = payload.permissionCatalog || { boards: [], courses: [] };
+    renderAdminUsers(payload.users || [], adminPermissionCatalog);
   } catch (error) {
     setAdminMessage(error.message);
   }
 }
 
 function renderAdminSection() {
-  const isAdmin = userState.isLoggedIn && userState.role === 'admin';
+  const isAdmin = userState.isLoggedIn && userState.isAdmin;
   const showFortune = userState.isLoggedIn && Boolean(userState.studentId);
 
   manageLinks.forEach((link) => {
@@ -4807,6 +4870,15 @@ async function handleAdminUsersClick(event) {
   const electrons = Number(card.querySelector('[data-field="electrons"]').value || 0);
   const manetrons = Number(card.querySelector('[data-field="manetrons"]').value || 0);
   const heat = Number(card.querySelector('[data-field="heat"]')?.value || 0);
+  const isAdmin = Boolean(card.querySelector('[data-field="isAdmin"]')?.checked);
+  const boardModeratorSlugs = Array.from(
+    card.querySelectorAll('[data-permission="board"]:checked'),
+    (input) => input.value,
+  );
+  const courseManagerSlugs = Array.from(
+    card.querySelectorAll('[data-permission="course"]:checked'),
+    (input) => input.value,
+  );
 
   try {
     if (button.dataset.action === 'cancel') {
@@ -4826,6 +4898,7 @@ async function handleAdminUsersClick(event) {
           email: card.querySelector('[data-field="email"]').value.trim(),
           password: card.querySelector('[data-field="password"]').value,
           role,
+          isAdmin,
           electrons,
           manetrons,
           heat,
@@ -4840,7 +4913,16 @@ async function handleAdminUsersClick(event) {
       setAdminMessage('正在保存用户...');
       await callApi(`/admin/users/${userId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ fullName, role, electrons, manetrons, heat }),
+        body: JSON.stringify({
+          fullName,
+          role,
+          isAdmin,
+          electrons,
+          manetrons,
+          heat,
+          boardModeratorSlugs,
+          courseManagerSlugs,
+        }),
       });
       setAdminMessage('用户已更新');
       loadAdminUsers();
@@ -4865,7 +4947,7 @@ async function handleAdminUsersClick(event) {
 }
 
 async function handleFortuneBonusToggle(event) {
-  if (!isAdminUsersPage() || userState.role !== 'admin' || !fortuneBonusToggle) {
+  if (!isAdminUsersPage() || !userState.isAdmin || !fortuneBonusToggle) {
     return;
   }
 
@@ -4986,14 +5068,13 @@ async function deleteDiscussionPost(postId) {
 
     discussionState.postCache.delete(postId);
     delete discussionState.postsHashByBoard[discussionState.activeBoard || 'all'];
-    discussionState.posts =
-      userState.role === 'admin'
-        ? discussionState.posts.map((post) =>
-            post.id === postId
-              ? { ...post, title: '已删除的帖子', isDeleted: true, canDelete: false }
-              : post,
-          )
-        : discussionState.posts.filter((post) => post.id !== postId);
+    discussionState.posts = userState.isAdmin
+      ? discussionState.posts.map((post) =>
+          post.id === postId
+            ? { ...post, title: '已删除的帖子', isDeleted: true, canDelete: false }
+            : post,
+        )
+      : discussionState.posts.filter((post) => post.id !== postId);
 
     if (discussionState.activePostId === postId) {
       discussionState.activePostId = '';

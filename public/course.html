@@ -137,53 +137,27 @@
         </a>
       </nav>
 
-      <main class="main-content settings-main course-main" data-course-page>
-        <section class="course-shell" aria-label="课程">
-          <header class="course-hero">
-            <div>
-              <p class="course-kicker" id="course-code"></p>
-              <h1 id="course-title"></h1>
-              <p id="course-description"></p>
-            </div>
-            <aside
-              class="course-progress"
-              id="course-progress-summary"
-              aria-label="学习进度"
-            ></aside>
-          </header>
-
-          <section class="course-overview" aria-label="课程概览">
-            <p id="course-summary"></p>
-            <a
-              class="course-discussion-link"
-              id="course-discussion-link"
-              href="/discussion?board=signal"
-            >
-              <img src="/assets/icons/chats.svg" alt="" aria-hidden="true" />
-              <span>进入讨论</span>
-            </a>
-          </section>
-
-          <section class="course-toolbar" aria-label="课程工具">
-            <label class="course-search">
-              <span>知识点搜索</span>
-              <input id="course-search-input" type="search" placeholder="输入傅里叶、采样、卷积" />
-            </label>
-          </section>
-
-          <section
-            class="course-point-list"
-            id="course-point-list"
-            aria-label="知识点列表"
-          ></section>
+      <main class="course-main course-map-main course-map-immersive" data-course-map-page>
+        <nav class="course-map-reader-controls" aria-label="地图操作">
+          <a class="course-map-reader-control" href="/world" aria-label="返回学习世界">←</a>
+          <a
+            class="course-map-reader-control hidden"
+            id="course-map-edit-link"
+            href="/course-map-editor"
+            aria-label="编辑知识地图"
+            >✎</a
+          >
+        </nav>
+        <section class="course-map-panel" aria-label="知识地图">
+          <p class="course-map-status" id="course-map-status">正在载入知识地图…</p>
+          <div class="course-map-scroller" id="course-map-scroller">
+            <div class="course-map-canvas" id="course-map-canvas"></div>
+          </div>
         </section>
-
-        <div class="course-point-modal hidden" id="course-point-modal"></div>
       </main>
     </div>
 
     <script src="/app.js"></script>
-    <script src="/course-data.js"></script>
-    <script src="/course.js"></script>
+    <script src="/course-map.js"></script>
   </body>
 </html>

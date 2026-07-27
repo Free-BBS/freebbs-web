@@ -7,6 +7,7 @@ const pool = require('./db');
 const config = require('./config');
 const { hashPassword, verifyPassword } = require('./password');
 const { sign, verify } = require('./token');
+const { createCourseMapsRouter, ensureCourseMapTables } = require('./course-maps');
 const {
   SystemSettingsError,
   createSystemSettingsStore,
@@ -275,6 +276,24 @@ async function createUniqueDiscussionPostPid() {
 }
 
 async function ensureUsersUidColumn() {
+  const [adminColumns] = await pool.execute(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'users'
+       AND COLUMN_NAME = 'is_admin'
+     LIMIT 1`,
+  );
+
+  if (!adminColumns[0]) {
+    await pool.execute(
+      `ALTER TABLE users
+       ADD COLUMN is_admin TINYINT(1) NOT NULL DEFAULT 0 AFTER role`,
+    );
+  }
+
+  await pool.execute(`UPDATE users SET is_admin = 1 WHERE role = 'admin'`);
+
   const [columns] = await pool.execute(
     `SELECT COLUMN_NAME
      FROM INFORMATION_SCHEMA.COLUMNS
@@ -1153,6 +1172,7 @@ function toUserProfile(row) {
     email: row.email,
     emailVerifiedAt: row.email_verified_at,
     role: row.role,
+    isAdmin: Boolean(row.is_admin || row.role === 'admin'),
     grade: row.grade,
     major: row.major,
     avatarPath: row.avatar_path || '',
@@ -1598,7 +1618,7 @@ async function canModerateBoard(user, boardId) {
     return false;
   }
 
-  if (user.role === 'admin') {
+  if (user.is_admin) {
     return true;
   }
 
@@ -1632,7 +1652,7 @@ function issueToken(user) {
 
 async function getUserById(id) {
   const [rows] = await pool.execute(
-    `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
+    `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, is_admin, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
      FROM users WHERE id = ? LIMIT 1`,
     [id],
   );
@@ -1642,7 +1662,7 @@ async function getUserById(id) {
 
 async function getUserByIdFromUsername(username) {
   const [rows] = await pool.execute(
-    `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
+    `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, is_admin, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
      FROM users WHERE username = ? LIMIT 1`,
     [username],
   );
@@ -1689,13 +1709,23 @@ async function requireAdmin(request, response) {
     return null;
   }
 
-  if (user.role !== 'admin') {
+  if (!user.is_admin) {
     response.status(403).json({ message: '需要管理员权限' });
     return null;
   }
 
   return user;
 }
+
+app.use(
+  '/api/courses',
+  createCourseMapsRouter({
+    pool,
+    requireAuth,
+    getOptionalAuthUser,
+    uploadDir: config.uploadDir,
+  }),
+);
 
 class AdminUserUpdateError extends Error {
   constructor(message, status = 400) {
@@ -1709,7 +1739,7 @@ async function lockAdminStateAndTarget(connection, actorId, targetId) {
   const [adminRows] = await connection.execute(
     `SELECT id
      FROM users
-     WHERE role = 'admin'
+     WHERE is_admin = 1
      ORDER BY id ASC
      FOR UPDATE`,
   );
@@ -1720,7 +1750,7 @@ async function lockAdminStateAndTarget(connection, actorId, targetId) {
   }
 
   const [targetRows] = await connection.execute(
-    `SELECT id, role
+    `SELECT id, role, is_admin
      FROM users
      WHERE id = ?
      LIMIT 1
@@ -1739,10 +1769,16 @@ async function lockAdminStateAndTarget(connection, actorId, targetId) {
   };
 }
 
-async function lockAndValidateRoleChange(connection, actorId, targetId, nextRole) {
+async function lockAndValidateRoleChange(
+  connection,
+  actorId,
+  targetId,
+  nextRole,
+  nextIsAdmin = nextRole === 'admin',
+) {
   const { adminRows, targetUser } = await lockAdminStateAndTarget(connection, actorId, targetId);
 
-  if (targetUser.role === 'admin' && nextRole !== 'admin' && adminRows.length <= 1) {
+  if (targetUser.is_admin && !nextIsAdmin && adminRows.length <= 1) {
     throw new AdminUserUpdateError('不能降低最后一个管理员的权限', 409);
   }
 
@@ -1756,7 +1792,7 @@ async function lockAndValidateUserDeletion(connection, actorId, targetId) {
     throw new AdminUserUpdateError('不能删除当前登录的管理员账户', 400);
   }
 
-  if (targetUser.role === 'admin' && adminRows.length <= 1) {
+  if (targetUser.is_admin && adminRows.length <= 1) {
     throw new AdminUserUpdateError('不能删除最后一个管理员账户', 409);
   }
 
@@ -1963,7 +1999,7 @@ app.get('/api/code/outputs/:uid/:filename', async (request, response) => {
   const filename = String(request.params.filename || '');
   const expectedUid = getSandboxUid(user);
 
-  if (uid !== expectedUid && user.role !== 'admin') {
+  if (uid !== expectedUid && !user.is_admin) {
     response.status(403).json({ message: '无权访问该输出文件' });
     return;
   }
@@ -2543,14 +2579,14 @@ app.get('/api/discussion/boards', async (_request, response) => {
 
     const [rows] = await pool.execute(
       `SELECT b.id, b.slug, b.name, b.description, b.description_markdown, b.sort_order,
-              MAX(CASE WHEN ? = 'admin' THEN 1 ELSE 0 END) AS can_moderate,
-              MAX(CASE WHEN ? = 'admin' THEN 1 ELSE 0 END) AS can_manage_moderators
+              MAX(CASE WHEN ? = 1 OR m.user_id IS NOT NULL THEN 1 ELSE 0 END) AS can_moderate,
+              MAX(CASE WHEN ? = 1 THEN 1 ELSE 0 END) AS can_manage_moderators
        FROM discussion_boards b
        LEFT JOIN discussion_board_moderators m ON m.board_id = b.id AND m.user_id = ?
        WHERE b.is_active = 1
        GROUP BY b.id, b.slug, b.name, b.description, b.description_markdown, b.sort_order
        ORDER BY b.sort_order ASC, b.id ASC`,
-      [currentUser?.role || '', currentUser?.role || '', currentUser?.id || 0],
+      [currentUser?.is_admin ? 1 : 0, currentUser?.is_admin ? 1 : 0, currentUser?.id || 0],
     );
 
     response.json({
@@ -2565,7 +2601,7 @@ app.patch('/api/discussion/boards/:slug/description', async (request, response) 
   try {
     await ensureDiscussionTables();
 
-    const user = await requireAdmin(request, response);
+    const user = await requireAuth(request, response);
 
     if (!user) {
       return;
@@ -2588,6 +2624,10 @@ app.patch('/api/discussion/boards/:slug/description', async (request, response) 
       return;
     }
 
+    if (!(await requireDiscussionBoardModerator(user, board.id, response))) {
+      return;
+    }
+
     await pool.execute(
       `UPDATE discussion_boards
        SET description_markdown = ?
@@ -2601,7 +2641,7 @@ app.patch('/api/discussion/boards/:slug/description', async (request, response) 
           ...board,
           description_markdown: descriptionMarkdown,
           can_moderate: 1,
-          can_manage_moderators: user.role === 'admin' ? 1 : 0,
+          can_manage_moderators: user.is_admin ? 1 : 0,
         }),
       },
     });
@@ -2925,7 +2965,7 @@ app.get('/api/discussion/posts', async (request, response) => {
       }
     }
 
-    const visibilityCondition = currentUser?.role === 'admin' ? '' : ' AND p.is_deleted = 0';
+    const visibilityCondition = currentUser?.is_admin ? '' : ' AND p.is_deleted = 0';
     const where =
       boardSlug === 'all'
         ? `WHERE b.is_active = 1${visibilityCondition}`
@@ -2992,9 +3032,9 @@ app.get('/api/discussion/posts', async (request, response) => {
               MAX(CASE WHEN my_smile.user_id IS NULL THEN 0 ELSE 1 END) AS liked_by_me,
               MAX(CASE WHEN my_light.user_id IS NULL THEN 0 ELSE 1 END) AS lighted_by_me,
               MAX(CASE WHEN my_fireworks.user_id IS NULL THEN 0 ELSE 1 END) AS fireworks_by_me,
-              MAX(CASE WHEN ? = 'admin' OR bm.user_id IS NOT NULL THEN 1 ELSE 0 END) AS can_feature,
-              MAX(CASE WHEN ? = 'admin' THEN 1 ELSE 0 END) AS can_pin,
-              MAX(CASE WHEN ? = 'admin' OR p.user_id = ? THEN 1 ELSE 0 END) AS can_delete
+              MAX(CASE WHEN ? = 1 OR bm.user_id IS NOT NULL THEN 1 ELSE 0 END) AS can_feature,
+              MAX(CASE WHEN ? = 1 OR bm.user_id IS NOT NULL THEN 1 ELSE 0 END) AS can_pin,
+              MAX(CASE WHEN ? = 1 OR bm.user_id IS NOT NULL OR p.user_id = ? THEN 1 ELSE 0 END) AS can_delete
        FROM discussion_posts p
        INNER JOIN discussion_boards b ON b.id = p.board_id
        INNER JOIN users u ON u.id = p.user_id
@@ -3011,9 +3051,9 @@ app.get('/api/discussion/posts', async (request, response) => {
       LIMIT ${limit}`,
       currentUser
         ? [
-            currentUser.role,
-            currentUser.role,
-            currentUser.role,
+            currentUser.is_admin ? 1 : 0,
+            currentUser.is_admin ? 1 : 0,
+            currentUser.is_admin ? 1 : 0,
             currentUser.id,
             currentUser.id,
             currentUser.id,
@@ -3059,9 +3099,9 @@ app.get('/api/discussion/posts/:id', async (request, response) => {
               MAX(CASE WHEN my_smile.user_id IS NULL THEN 0 ELSE 1 END) AS liked_by_me,
               MAX(CASE WHEN my_light.user_id IS NULL THEN 0 ELSE 1 END) AS lighted_by_me,
               MAX(CASE WHEN my_fireworks.user_id IS NULL THEN 0 ELSE 1 END) AS fireworks_by_me,
-              MAX(CASE WHEN ? = 'admin' OR bm.user_id IS NOT NULL THEN 1 ELSE 0 END) AS can_feature,
-              MAX(CASE WHEN ? = 'admin' THEN 1 ELSE 0 END) AS can_pin,
-              MAX(CASE WHEN ? = 'admin' OR p.user_id = ? THEN 1 ELSE 0 END) AS can_delete
+              MAX(CASE WHEN ? = 1 OR bm.user_id IS NOT NULL THEN 1 ELSE 0 END) AS can_feature,
+              MAX(CASE WHEN ? = 1 OR bm.user_id IS NOT NULL THEN 1 ELSE 0 END) AS can_pin,
+              MAX(CASE WHEN ? = 1 OR bm.user_id IS NOT NULL OR p.user_id = ? THEN 1 ELSE 0 END) AS can_delete
        FROM discussion_posts p
        INNER JOIN discussion_boards b ON b.id = p.board_id
        INNER JOIN users u ON u.id = p.user_id
@@ -3073,22 +3113,22 @@ app.get('/api/discussion/posts/:id', async (request, response) => {
        LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? '?' : '0'}
        WHERE p.id = ?
          AND b.is_active = 1
-         AND (? = 'admin' OR p.is_deleted = 0)
+         AND (? = 1 OR p.is_deleted = 0)
        GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.deleted_at,
                 b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        LIMIT 1`,
       currentUser
         ? [
-            currentUser.role,
-            currentUser.role,
-            currentUser.role,
+            currentUser.is_admin ? 1 : 0,
+            currentUser.is_admin ? 1 : 0,
+            currentUser.is_admin ? 1 : 0,
             currentUser.id,
             currentUser.id,
             currentUser.id,
             currentUser.id,
             currentUser.id,
             post.id,
-            currentUser.role,
+            currentUser.is_admin ? 1 : 0,
           ]
         : ['', '', '', 0, 0, post.id, ''],
     );
@@ -3144,7 +3184,7 @@ app.post('/api/discussion/posts', async (request, response) => {
       return;
     }
 
-    if (board.slug === 'changelog' && user.role !== 'admin') {
+    if (board.slug === 'changelog' && !user.is_admin) {
       response.status(403).json({ message: '更新日志版块仅管理员可以发帖' });
       return;
     }
@@ -3178,7 +3218,7 @@ app.post('/api/discussion/posts', async (request, response) => {
               0 AS lighted_by_me,
               0 AS fireworks_by_me,
               ${canFeatureCreatedPost ? '1' : '0'} AS can_feature,
-              ${user.role === 'admin' ? '1' : '0'} AS can_pin,
+              ${canFeatureCreatedPost ? '1' : '0'} AS can_pin,
               1 AS can_delete,
               0 AS is_deleted,
               NULL AS deleted_at
@@ -3203,7 +3243,7 @@ app.patch('/api/discussion/posts/:id/pin', async (request, response) => {
   try {
     await ensureDiscussionTables();
 
-    const user = await requireAdmin(request, response);
+    const user = await requireAuth(request, response);
 
     if (!user) {
       return;
@@ -3219,6 +3259,10 @@ app.patch('/api/discussion/posts/:id/pin', async (request, response) => {
 
     if (post.is_deleted) {
       response.status(404).json({ message: '帖子不存在' });
+      return;
+    }
+
+    if (!(await requireDiscussionBoardModerator(user, post.board_id, response))) {
       return;
     }
 
@@ -3381,7 +3425,7 @@ app.get('/api/discussion/posts/:id/comments', async (request, response) => {
       return;
     }
 
-    if (post.is_deleted && currentUser?.role !== 'admin') {
+    if (post.is_deleted && !currentUser?.is_admin) {
       response.status(404).json({ message: '帖子不存在' });
       return;
     }
@@ -3505,8 +3549,8 @@ app.delete('/api/discussion/posts/:id', async (request, response) => {
       return;
     }
 
-    if (user.role !== 'admin' && post.user_id !== user.id) {
-      response.status(403).json({ message: '只能删除自己的帖子' });
+    if (post.user_id !== user.id && !(await canModerateBoard(user, post.board_id))) {
+      response.status(403).json({ message: '只能删除自己的帖子，或需要该版块版主权限' });
       return;
     }
 
@@ -3802,7 +3846,7 @@ app.post('/api/auth/login', async (request, response) => {
 
   try {
     const [rows] = await pool.execute(
-      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, password_hash, role, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
+      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, password_hash, role, is_admin, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
        FROM users
        WHERE username = ? OR email = ?
        LIMIT 1`,
@@ -3874,7 +3918,7 @@ app.post('/api/auth/reset-password', async (request, response) => {
     }
 
     const [users] = await pool.execute(
-      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
+      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, is_admin, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
        FROM users
        WHERE student_id = ? AND LOWER(email) = ?
        LIMIT 1`,
@@ -3942,7 +3986,7 @@ app.get('/api/users/:uid/public-profile', async (request, response) => {
 
   try {
     const [rows] = await pool.execute(
-      `SELECT id, uid, username, full_name, student_id, role, grade, major, avatar_path, bio, website_url, created_at
+      `SELECT id, uid, username, full_name, student_id, role, is_admin, grade, major, avatar_path, bio, website_url, created_at
        FROM users
        WHERE ${isUid ? 'uid' : 'student_id'} = ?
        LIMIT 1`,
@@ -3972,6 +4016,7 @@ app.get('/api/users/:uid/public-profile', async (request, response) => {
         username: user.username,
         fullName: '',
         role: user.role,
+        isAdmin: Boolean(user.is_admin),
         grade: user.grade || '',
         major: user.major || '',
         avatarPath: user.avatar_path || '',
@@ -4141,6 +4186,115 @@ app.post('/api/profile/avatar', async (request, response) => {
   }
 });
 
+async function getPermissionCatalog(executor = pool) {
+  const [boardRows] = await executor.execute(
+    `SELECT id, slug, name
+     FROM discussion_boards
+     WHERE is_active = 1
+     ORDER BY sort_order ASC, id ASC`,
+  );
+  const [courseRows] = await executor.execute(
+    `SELECT id, slug, name
+     FROM courses
+     WHERE is_active = 1
+     ORDER BY sort_order ASC, id ASC`,
+  );
+  return {
+    boards: boardRows.map((row) => ({ id: Number(row.id), slug: row.slug, name: row.name })),
+    courses: courseRows.map((row) => ({ id: Number(row.id), slug: row.slug, name: row.name })),
+  };
+}
+
+async function addUserResponsibilities(users, executor = pool) {
+  if (!users.length) {
+    return [];
+  }
+  const userIds = users.map((user) => Number(user.id));
+  const placeholders = userIds.map(() => '?').join(', ');
+  const [boardRows] = await executor.execute(
+    `SELECT m.user_id, b.slug
+     FROM discussion_board_moderators m
+     INNER JOIN discussion_boards b ON b.id = m.board_id
+     WHERE m.user_id IN (${placeholders})`,
+    userIds,
+  );
+  const [courseRows] = await executor.execute(
+    `SELECT m.user_id, c.slug
+     FROM course_material_managers m
+     INNER JOIN courses c ON c.id = m.course_id
+     WHERE m.user_id IN (${placeholders})`,
+    userIds,
+  );
+  const boardSlugsByUser = new Map();
+  const courseSlugsByUser = new Map();
+  boardRows.forEach((row) => {
+    const slugs = boardSlugsByUser.get(Number(row.user_id)) || [];
+    slugs.push(row.slug);
+    boardSlugsByUser.set(Number(row.user_id), slugs);
+  });
+  courseRows.forEach((row) => {
+    const slugs = courseSlugsByUser.get(Number(row.user_id)) || [];
+    slugs.push(row.slug);
+    courseSlugsByUser.set(Number(row.user_id), slugs);
+  });
+  return users.map((row) => ({
+    ...toUserProfile(row),
+    boardModeratorSlugs: boardSlugsByUser.get(Number(row.id)) || [],
+    courseManagerSlugs: courseSlugsByUser.get(Number(row.id)) || [],
+  }));
+}
+
+function normalizeResponsibilitySlugs(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return [
+    ...new Set(
+      value
+        .map((item) =>
+          String(item || '')
+            .trim()
+            .toLowerCase(),
+        )
+        .filter(Boolean),
+    ),
+  ];
+}
+
+async function replaceUserResponsibilities(
+  connection,
+  targetUserId,
+  boardModeratorSlugs,
+  courseManagerSlugs,
+) {
+  const catalog = await getPermissionCatalog(connection);
+  const boardIdsBySlug = new Map(catalog.boards.map((board) => [board.slug, board.id]));
+  const courseIdsBySlug = new Map(catalog.courses.map((course) => [course.slug, course.id]));
+  const invalidBoard = boardModeratorSlugs.find((slug) => !boardIdsBySlug.has(slug));
+  const invalidCourse = courseManagerSlugs.find((slug) => !courseIdsBySlug.has(slug));
+  if (invalidBoard || invalidCourse) {
+    throw new AdminUserUpdateError('权限配置包含不存在的讨论版块或课程', 400);
+  }
+  await connection.execute(`DELETE FROM discussion_board_moderators WHERE user_id = ?`, [
+    targetUserId,
+  ]);
+  await connection.execute(`DELETE FROM course_material_managers WHERE user_id = ?`, [
+    targetUserId,
+  ]);
+  for (const slug of boardModeratorSlugs) {
+    await connection.execute(
+      `INSERT INTO discussion_board_moderators (board_id, user_id) VALUES (?, ?)`,
+      [boardIdsBySlug.get(slug), targetUserId],
+    );
+  }
+  for (const slug of courseManagerSlugs) {
+    await connection.execute(
+      `INSERT INTO course_material_managers (course_id, user_id) VALUES (?, ?)`,
+      [courseIdsBySlug.get(slug), targetUserId],
+    );
+  }
+}
+
 app.get('/api/admin/users', async (request, response) => {
   try {
     const adminUser = await requireAdmin(request, response);
@@ -4149,14 +4303,17 @@ app.get('/api/admin/users', async (request, response) => {
       return;
     }
 
+    await ensureDiscussionTables();
+    await ensureCourseMapTables(pool);
     const [rows] = await pool.execute(
-      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
+      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, is_admin, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
        FROM users
        ORDER BY created_at DESC`,
     );
 
     response.json({
-      users: rows.map(toUserProfile),
+      users: await addUserResponsibilities(rows),
+      permissionCatalog: await getPermissionCatalog(),
     });
   } catch (error) {
     response.status(500).json({ message: '获取用户列表失败', detail: error.message });
@@ -4290,6 +4447,7 @@ app.post('/api/admin/users', async (request, response) => {
     const email = String(request.body.email || '').trim();
     const password = String(request.body.password || '');
     const role = String(request.body.role || 'student').trim();
+    const isAdmin = Boolean(request.body.isAdmin || role === 'admin');
     const electrons = Number(request.body.electrons ?? 0);
     const manetrons = Number(request.body.manetrons ?? 0);
     const heat = Number(request.body.heat ?? 0);
@@ -4330,8 +4488,8 @@ app.post('/api/admin/users', async (request, response) => {
     const [result] = await pool.execute(
       `INSERT INTO users (
         uid, username, full_name, student_id, email, password_hash, email_verified_at,
-        role, electrons, manetrons, heat, grade, major
-      ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?)`,
+        role, is_admin, electrons, manetrons, heat, grade, major
+      ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?)`,
       [
         await createUniqueUserUid(),
         username,
@@ -4340,6 +4498,7 @@ app.post('/api/admin/users', async (request, response) => {
         email,
         hashPassword(password),
         role,
+        isAdmin ? 1 : 0,
         Number.isFinite(electrons) ? electrons : 0,
         Number.isFinite(manetrons) ? manetrons : 0,
         Number.isFinite(heat) ? heat : 0,
@@ -4376,6 +4535,9 @@ app.patch('/api/admin/users/:id', async (request, response) => {
     const targetId = Number(request.params.id);
     const fullName = String(request.body.fullName || '').trim();
     const role = String(request.body.role || '').trim();
+    const isAdmin = Boolean(request.body.isAdmin || role === 'admin');
+    const boardModeratorSlugs = normalizeResponsibilitySlugs(request.body.boardModeratorSlugs);
+    const courseManagerSlugs = normalizeResponsibilitySlugs(request.body.courseManagerSlugs);
     const electrons = Number(request.body.electrons ?? 0);
     const manetrons = Number(request.body.manetrons ?? 0);
     const heat = Number(request.body.heat ?? 0);
@@ -4396,14 +4558,17 @@ app.patch('/api/admin/users/:id', async (request, response) => {
     }
 
     const generatedUid = await createUniqueUserUid();
+    await ensureDiscussionTables();
+    await ensureCourseMapTables(pool);
     connection = await pool.getConnection();
     await connection.beginTransaction();
-    await lockAndValidateRoleChange(connection, adminUser.id, targetId, role);
+    await lockAndValidateRoleChange(connection, adminUser.id, targetId, role, isAdmin);
     await connection.execute(
       `UPDATE users
        SET uid = COALESCE(NULLIF(uid, ''), ?),
            full_name = ?,
            role = ?,
+           is_admin = ?,
            electrons = ?,
            manetrons = ?,
            heat = ?
@@ -4412,11 +4577,18 @@ app.patch('/api/admin/users/:id', async (request, response) => {
         generatedUid,
         fullName,
         role,
+        isAdmin ? 1 : 0,
         Number.isFinite(electrons) ? electrons : 0,
         Number.isFinite(manetrons) ? manetrons : 0,
         Number.isFinite(heat) ? heat : 0,
         targetId,
       ],
+    );
+    await replaceUserResponsibilities(
+      connection,
+      targetId,
+      boardModeratorSlugs,
+      courseManagerSlugs,
     );
     await connection.commit();
 
@@ -4447,6 +4619,7 @@ app.patch('/api/admin/users/:id/role', async (request, response) => {
 
     const targetId = Number(request.params.id);
     const role = String(request.body?.role || '').trim();
+    const isAdmin = Boolean(request.body?.isAdmin || role === 'admin');
 
     if (!targetId) {
       response.status(400).json({ message: '无效用户 ID' });
@@ -4460,12 +4633,12 @@ app.patch('/api/admin/users/:id/role', async (request, response) => {
 
     connection = await pool.getConnection();
     await connection.beginTransaction();
-    await lockAndValidateRoleChange(connection, adminUser.id, targetId, role);
+    await lockAndValidateRoleChange(connection, adminUser.id, targetId, role, isAdmin);
     await connection.execute(
       `UPDATE users
-       SET role = ?
+       SET role = ?, is_admin = ?
        WHERE id = ?`,
-      [role, targetId],
+      [role, isAdmin ? 1 : 0, targetId],
     );
     await connection.commit();
 
@@ -4592,6 +4765,7 @@ async function start() {
   await ensureAppSettingsTable();
   await ensureSystemSecretSettingsTable(pool);
   await ensureDiscussionTables();
+  await ensureCourseMapTables(pool);
   await ensureAiDialogTables();
   await ensureFortuneTables();
   await ensureEconomyTables();
