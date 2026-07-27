@@ -9,6 +9,9 @@ const NODE_ID_PATTERN = /^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$/;
 const EDGE_TYPES = new Set(['ordered', 'related']);
 const MAX_MARKDOWN_LENGTH = 500000;
 const MAX_MAP_COORDINATE = 10000;
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const MAX_BACKGROUND_URL_LENGTH = 512;
+const SAFE_LOCAL_BACKGROUND_PATH = /^\/(?:assets|uploads)\/[A-Za-z0-9][A-Za-z0-9/_.-]*$/;
 
 function normalizeNodeId(value) {
   return String(value || '')
@@ -26,6 +29,50 @@ function normalizeCoordinate(value) {
     return null;
   }
   return Math.max(0, Math.min(MAX_MAP_COORDINATE, Math.round(parsed)));
+}
+
+function normalizeMapBackgroundUrl(value) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) {
+    return '';
+  }
+  if (normalized.length > MAX_BACKGROUND_URL_LENGTH) {
+    return null;
+  }
+  if (normalized.startsWith('/')) {
+    if (
+      !SAFE_LOCAL_BACKGROUND_PATH.test(normalized) ||
+      normalized.includes('..') ||
+      normalized.includes('//')
+    ) {
+      return null;
+    }
+    return normalized;
+  }
+  try {
+    const url = new URL(normalized);
+    if (url.protocol !== 'https:' || url.username || url.password) {
+      return null;
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function decodeImageDataUrl(value) {
+  const imageDataUrl = String(value || '');
+  const match = imageDataUrl.match(
+    /^data:(image\/(?:png|jpeg|jpg|webp|gif|avif|heic|heif|bmp|tiff|svg\+xml));base64,([A-Za-z0-9+/=]+)$/i,
+  );
+  if (!match) {
+    return null;
+  }
+  const fileBuffer = Buffer.from(match[2], 'base64');
+  if (!fileBuffer.length || fileBuffer.length > MAX_IMAGE_BYTES) {
+    return null;
+  }
+  return fileBuffer;
 }
 
 function toCourse(row) {
@@ -92,6 +139,19 @@ async function ensureCourseMapTables(pool) {
       CONSTRAINT fk_course_material_managers_user
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
       INDEX idx_course_material_managers_user (user_id)
+    )`,
+  );
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS course_map_settings (
+      course_id BIGINT PRIMARY KEY,
+      background_url VARCHAR(512) NULL,
+      updated_by BIGINT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT fk_course_map_settings_course
+        FOREIGN KEY (course_id) REFERENCES courses (id) ON DELETE CASCADE,
+      CONSTRAINT fk_course_map_settings_updated_by
+        FOREIGN KEY (updated_by) REFERENCES users (id) ON DELETE SET NULL
     )`,
   );
   await pool.execute(
@@ -294,11 +354,19 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
          ORDER BY created_at ASC, source_node_id ASC, target_node_id ASC`,
         [course.id],
       );
+      const [settingsRows] = await pool.execute(
+        `SELECT background_url
+         FROM course_map_settings
+         WHERE course_id = ?
+         LIMIT 1`,
+        [course.id],
+      );
       response.json({
         course: {
           ...toCourse(course),
           canEditMap: await canManageCourse(pool, currentUser, course.id),
         },
+        backgroundUrl: settingsRows[0]?.background_url || '',
         nodes: nodeRows.map((row) => toMapNode(row)),
         edges: edgeRows.map(toMapEdge),
       });
@@ -527,6 +595,59 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
     }
   });
 
+  router.put('/:slug/map/background', async (request, response) => {
+    try {
+      await ensureCourseMapTables(pool);
+      const access = await requireCourseManager(request, response);
+      if (!access) {
+        return;
+      }
+
+      let backgroundUrl;
+      if (Object.hasOwn(request.body, 'imageDataUrl')) {
+        const fileBuffer = decodeImageDataUrl(request.body.imageDataUrl);
+        if (!fileBuffer) {
+          response.status(400).json({ message: '请上传 20MB 以内的有效图片文件' });
+          return;
+        }
+        const outputBuffer = await sharp(fileBuffer, { animated: false })
+          .rotate()
+          .resize({ width: 3840, height: 2160, fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 88 })
+          .toBuffer();
+        const fileName = `course-map-background-${access.course.slug}-${access.user.id}-${Date.now()}-${crypto
+          .randomBytes(8)
+          .toString('hex')}.webp`;
+        await fs.promises.mkdir(uploadDir, { recursive: true });
+        await fs.promises.writeFile(path.join(uploadDir, fileName), outputBuffer);
+        backgroundUrl = `/uploads/${fileName}`;
+      } else if (Object.hasOwn(request.body, 'backgroundUrl')) {
+        backgroundUrl = normalizeMapBackgroundUrl(request.body.backgroundUrl);
+        if (backgroundUrl === null) {
+          response.status(400).json({
+            message: '背景地址需为 HTTPS 图片地址，或站内 /assets、/uploads 图片路径',
+          });
+          return;
+        }
+      } else {
+        response.status(400).json({ message: '请提供背景图片或背景地址' });
+        return;
+      }
+
+      await pool.execute(
+        `INSERT INTO course_map_settings (course_id, background_url, updated_by)
+         VALUES (?, NULLIF(?, ''), ?)
+         ON DUPLICATE KEY UPDATE
+           background_url = VALUES(background_url),
+           updated_by = VALUES(updated_by)`,
+        [access.course.id, backgroundUrl, access.user.id],
+      );
+      response.json({ backgroundUrl });
+    } catch (error) {
+      sendCourseError(response, error, '保存课程地图背景失败');
+    }
+  });
+
   router.post('/:slug/map/uploads/images', async (request, response) => {
     try {
       await ensureCourseMapTables(pool);
@@ -534,17 +655,9 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
       if (!access) {
         return;
       }
-      const imageDataUrl = String(request.body.imageDataUrl || '');
-      const match = imageDataUrl.match(
-        /^data:(image\/(?:png|jpeg|jpg|webp|gif|avif|heic|heif|bmp|tiff|svg\+xml));base64,([A-Za-z0-9+/=]+)$/i,
-      );
-      if (!match) {
-        response.status(400).json({ message: '请上传图片文件' });
-        return;
-      }
-      const fileBuffer = Buffer.from(match[2], 'base64');
-      if (!fileBuffer.length || fileBuffer.length > 20 * 1024 * 1024) {
-        response.status(400).json({ message: '图片大小需在 20MB 以内' });
+      const fileBuffer = decodeImageDataUrl(request.body.imageDataUrl);
+      if (!fileBuffer) {
+        response.status(400).json({ message: '请上传 20MB 以内的有效图片文件' });
         return;
       }
       const outputBuffer = await sharp(fileBuffer, { animated: false })
@@ -574,5 +687,6 @@ module.exports = {
   createCourseMapsRouter,
   ensureCourseMapTables,
   isValidNodeId,
+  normalizeMapBackgroundUrl,
   normalizeNodeId,
 };

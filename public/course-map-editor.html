@@ -82,67 +82,208 @@
           ><img class="nav-icon" src="/assets/icons/ai.svg" alt="" /><span>问问 Max</span></a
         >
       </nav>
-      <main class="main-content settings-main course-main course-map-main" data-course-map-editor>
-        <section class="course-editor-shell">
-          <header class="course-editor-header">
+      <main class="course-main course-map-main course-map-editor-immersive" data-course-map-editor>
+        <header class="course-map-studio-bar">
+          <div class="course-map-studio-identity">
+            <a class="course-map-studio-back" href="/world" aria-label="返回学习世界">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+            </a>
             <div>
-              <p class="course-kicker">Knowledge Map Studio</p>
+              <span>KNOWLEDGE MAP</span>
               <h1 id="course-editor-title">编辑课程地图</h1>
-              <p>拖拽结点调整位置；选择连接工具后依次点击起点和终点。</p>
             </div>
-            <div class="course-map-actions">
-              <a id="course-map-reader-link" href="/course">查看阅读模式</a>
-              <button id="course-add-node-button" type="button">添加结点</button>
+          </div>
+          <p class="course-map-studio-save-state" id="course-map-save-state" aria-live="polite">
+            拖拽光点调整结点位置
+          </p>
+          <a class="course-map-studio-preview" id="course-map-reader-link" href="/course">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+              <circle cx="12" cy="12" r="2.7" />
+            </svg>
+            <span>阅读模式</span>
+          </a>
+        </header>
+
+        <nav class="course-map-studio-tools" aria-label="地图编辑工具" role="toolbar">
+          <button
+            class="is-active"
+            id="course-select-tool"
+            data-edge-tool="none"
+            type="button"
+            aria-label="选择与拖拽"
+            aria-pressed="true"
+            data-tooltip="选择与拖拽"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m5 3 13 8-6 2-3 6L5 3Z" />
+            </svg>
+          </button>
+          <span class="course-map-tool-divider" aria-hidden="true"></span>
+          <button
+            id="course-add-node-button"
+            type="button"
+            aria-label="添加知识结点"
+            data-tooltip="添加结点"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="8" />
+              <path d="M12 8v8M8 12h8" />
+            </svg>
+          </button>
+          <button
+            data-edge-tool="ordered"
+            type="button"
+            aria-label="添加顺序连接"
+            aria-pressed="false"
+            data-tooltip="顺序箭头"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 12h15M15 8l4 4-4 4" />
+            </svg>
+          </button>
+          <button
+            data-edge-tool="related"
+            type="button"
+            aria-label="添加关联连接"
+            aria-pressed="false"
+            data-tooltip="关联虚线"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 12h2m3 0h2m3 0h2m3 0h1" />
+              <circle cx="4" cy="12" r="2" />
+              <circle cx="20" cy="12" r="2" />
+            </svg>
+          </button>
+          <span class="course-map-tool-divider" aria-hidden="true"></span>
+          <button
+            id="course-edge-panel-toggle"
+            type="button"
+            aria-label="管理连接"
+            aria-expanded="false"
+            data-tooltip="管理连接"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M9.5 14.5 14.5 9M7.5 17.5l-1 1a3.5 3.5 0 0 1-5-5l3-3a3.5 3.5 0 0 1 5 0M16.5 6.5l1-1a3.5 3.5 0 0 1 5 5l-3 3a3.5 3.5 0 0 1-5 0"
+              />
+            </svg>
+          </button>
+          <button
+            id="course-background-panel-toggle"
+            type="button"
+            aria-label="设置地图背景"
+            aria-expanded="false"
+            data-tooltip="地图背景"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <circle cx="8" cy="9" r="1.5" />
+              <path d="m4 17 5-5 4 4 2-2 5 4" />
+            </svg>
+          </button>
+        </nav>
+
+        <aside class="course-map-studio-panel hidden" id="course-node-panel">
+          <div class="course-map-panel-heading">
+            <div>
+              <span>NODE</span>
+              <h2 id="course-node-form-title">知识结点</h2>
             </div>
-          </header>
-          <section class="course-editor-layout">
-            <aside class="course-editor-sidebar">
-              <div class="course-editor-tools">
-                <h2>连接工具</h2>
-                <div class="course-edge-tools">
-                  <button data-edge-tool="ordered" type="button">顺序箭头</button>
-                  <button data-edge-tool="related" type="button">关联虚线</button>
-                  <button data-edge-tool="none" type="button">取消连接</button>
-                </div>
-                <p id="course-edge-status">拖拽结点，或选择一种连接工具。</p>
-              </div>
-              <form class="course-node-form hidden" id="course-node-form">
-                <h2 id="course-node-form-title">知识结点</h2>
-                <label
-                  >结点 ID<input id="course-node-id" required maxlength="64" placeholder="SS-01-01"
-                /></label>
-                <label>标题<input id="course-node-title" required maxlength="160" /></label>
-                <label
-                  >简介<textarea id="course-node-summary" maxlength="500" rows="4"></textarea>
-                </label>
-                <div class="course-position-fields">
-                  <label>X<input id="course-node-x" type="number" min="0" max="10000" /></label>
-                  <label>Y<input id="course-node-y" type="number" min="0" max="10000" /></label>
-                </div>
-                <p class="course-editor-message" id="course-node-message"></p>
-                <div class="course-node-form-actions">
-                  <button class="is-primary" type="submit">保存结点</button>
-                  <a class="hidden" id="course-document-edit-link" href="/markdown-editor"
-                    >编辑文档</a
-                  >
-                  <button class="is-danger hidden" id="course-delete-node" type="button">
-                    删除结点
-                  </button>
-                </div>
-              </form>
-              <section class="course-edge-list-panel">
-                <h2>连接列表</h2>
-                <div id="course-edge-list"></div>
-              </section>
-            </aside>
-            <section class="course-map-panel is-editor">
-              <p class="course-map-status" id="course-map-status">正在载入地图…</p>
-              <div class="course-map-scroller" id="course-map-scroller">
-                <div class="course-map-canvas" id="course-map-canvas"></div>
-              </div>
-            </section>
-          </section>
+            <button
+              class="course-map-panel-close"
+              type="button"
+              data-close-studio-panel
+              aria-label="关闭结点面板"
+            >
+              ×
+            </button>
+          </div>
+          <form class="course-node-form hidden" id="course-node-form">
+            <label
+              >结点 ID<input id="course-node-id" required maxlength="64" placeholder="SS-01-01"
+            /></label>
+            <label>结点名<input id="course-node-title" required maxlength="160" /></label>
+            <label
+              >简介<textarea id="course-node-summary" maxlength="500" rows="4"></textarea>
+            </label>
+            <div class="course-position-fields">
+              <label>X 坐标<input id="course-node-x" type="number" min="0" max="10000" /></label>
+              <label>Y 坐标<input id="course-node-y" type="number" min="0" max="10000" /></label>
+            </div>
+            <p class="course-editor-message" id="course-node-message"></p>
+            <div class="course-node-form-actions">
+              <button class="is-primary" type="submit">保存结点</button>
+              <a class="hidden" id="course-document-edit-link" href="/markdown-editor">编辑文档</a>
+              <button class="is-danger hidden" id="course-delete-node" type="button">
+                删除结点
+              </button>
+            </div>
+          </form>
+        </aside>
+
+        <aside class="course-map-studio-panel hidden" id="course-edge-panel">
+          <div class="course-map-panel-heading">
+            <div>
+              <span>CONNECTIONS</span>
+              <h2>连接管理</h2>
+            </div>
+            <button
+              class="course-map-panel-close"
+              type="button"
+              data-close-studio-panel
+              aria-label="关闭连接面板"
+            >
+              ×
+            </button>
+          </div>
+          <div class="course-edge-list-panel">
+            <div id="course-edge-list"></div>
+          </div>
+        </aside>
+
+        <aside class="course-map-studio-panel hidden" id="course-background-panel">
+          <div class="course-map-panel-heading">
+            <div>
+              <span>CANVAS</span>
+              <h2>地图背景</h2>
+            </div>
+            <button
+              class="course-map-panel-close"
+              type="button"
+              data-close-studio-panel
+              aria-label="关闭背景面板"
+            >
+              ×
+            </button>
+          </div>
+          <div class="course-map-background-settings">
+            <div class="course-map-background-preview" id="course-map-background-preview">
+              <span>当前使用默认星图背景</span>
+            </div>
+            <p>上传一张图片作为整张课程地图的背景。图片会自动压缩并覆盖画布。</p>
+            <input class="hidden" id="course-map-background-input" type="file" accept="image/*" />
+            <div class="course-map-background-actions">
+              <button class="is-primary" id="course-map-background-upload" type="button">
+                选择图片
+              </button>
+              <button id="course-map-background-clear" type="button">恢复默认</button>
+            </div>
+          </div>
+        </aside>
+
+        <section class="course-map-panel is-editor" aria-label="课程知识地图编辑画布">
+          <p class="course-map-status" id="course-map-status" aria-live="polite">正在载入地图…</p>
+          <div class="course-map-scroller" id="course-map-scroller">
+            <div class="course-map-canvas" id="course-map-canvas"></div>
+          </div>
         </section>
+
+        <p class="course-map-studio-hint" id="course-edge-status" aria-live="polite">
+          拖拽光点移动结点 · 滚动画布浏览地图
+        </p>
       </main>
     </div>
     <script src="/app.js"></script>

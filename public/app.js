@@ -467,16 +467,19 @@ const DISCUSSION_REACTIONS = {
   },
 };
 
+function resolveAssetUrl(assetPath) {
+  const normalizedPath = String(assetPath || '').trim();
+  if (!normalizedPath || /^(?:https?:|data:|blob:)/i.test(normalizedPath)) {
+    return normalizedPath;
+  }
+  if (normalizedPath.startsWith('/uploads/')) {
+    return `${API_ROOT}${normalizedPath}`;
+  }
+  return normalizedPath;
+}
+
 function getAvatarUrl(avatarPath) {
-  if (!avatarPath) {
-    return DEFAULT_AVATAR;
-  }
-
-  if (String(avatarPath).startsWith('/assets/') || /^https?:\/\//i.test(String(avatarPath))) {
-    return avatarPath;
-  }
-
-  return `${API_ROOT}${avatarPath}`;
+  return resolveAssetUrl(avatarPath) || DEFAULT_AVATAR;
 }
 
 function getTodayKey() {
@@ -6601,6 +6604,7 @@ window.freeBbsApp = {
     return userState;
   },
   renderMarkdownContent,
+  resolveAssetUrl,
   streamAiChatResponse,
 };
 

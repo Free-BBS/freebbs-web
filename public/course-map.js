@@ -9,23 +9,32 @@
   const app = window.freeBbsApp;
   const params = new URLSearchParams(window.location.search);
   const courseSlug = params.get('course') || 'signals';
-  const NODE_WIDTH = 230;
-  const NODE_HEIGHT = 104;
+  const NODE_LABEL_WIDTH = 220;
+  const NODE_LABEL_HEIGHT = 126;
+  const NODE_DOT_RADIUS = 13;
+  const EDITOR_CANVAS_INSET_X = editorPage ? 96 : 0;
+  const EDITOR_CANVAS_INSET_Y = editorPage ? 104 : 0;
   const state = {
     course: null,
     nodes: [],
     edges: [],
+    backgroundUrl: '',
     selectedNodeId: '',
     creatingNode: false,
     edgeTool: '',
     edgeSource: '',
     drag: null,
+    suppressClickUntil: 0,
+    activePanelId: '',
   };
 
   const canvas = document.getElementById('course-map-canvas');
   const scroller = document.getElementById('course-map-scroller');
   const status = document.getElementById('course-map-status');
   const nodeForm = document.getElementById('course-node-form');
+  const saveState = document.getElementById('course-map-save-state');
+  const nodePanel = document.getElementById('course-node-panel');
+  const positionSaveQueues = new Map();
 
   function escapeHtml(value) {
     return String(value || '')
@@ -43,6 +52,73 @@
     status.textContent = message || '';
     status.classList.toggle('is-error', isError);
     status.classList.toggle('hidden', !message);
+  }
+
+  function setSaveState(message, isError = false) {
+    if (!saveState) {
+      return;
+    }
+    saveState.textContent = message || '';
+    saveState.classList.toggle('is-error', isError);
+  }
+
+  function resolveBackgroundUrl(value = state.backgroundUrl) {
+    return app.resolveAssetUrl?.(value) || value || '';
+  }
+
+  function setBackgroundSurface() {
+    if (!canvas) {
+      return;
+    }
+    const resolvedUrl = resolveBackgroundUrl();
+    canvas.classList.toggle('has-custom-background', Boolean(resolvedUrl));
+    if (resolvedUrl) {
+      canvas.style.setProperty('--course-map-background-image', `url("${resolvedUrl}")`);
+    } else {
+      canvas.style.removeProperty('--course-map-background-image');
+    }
+    const preview = document.getElementById('course-map-background-preview');
+    if (preview) {
+      preview.classList.toggle('has-image', Boolean(resolvedUrl));
+      preview.style.backgroundImage = resolvedUrl ? `url("${resolvedUrl}")` : '';
+      preview.innerHTML = `<span>${resolvedUrl ? '当前地图背景' : '当前使用默认星图背景'}</span>`;
+    }
+    document
+      .getElementById('course-map-background-clear')
+      ?.toggleAttribute('disabled', !resolvedUrl);
+  }
+
+  function closeStudioPanels() {
+    document.querySelectorAll('.course-map-studio-panel').forEach((panel) => {
+      panel.classList.add('hidden');
+    });
+    document
+      .querySelectorAll('#course-edge-panel-toggle, #course-background-panel-toggle')
+      .forEach((button) => {
+        button.classList.remove('is-active');
+        button.setAttribute('aria-expanded', 'false');
+      });
+    state.activePanelId = '';
+  }
+
+  function openStudioPanel(panelId, triggerId = '', allowToggle = false) {
+    const panel = document.getElementById(panelId);
+    if (!panel) {
+      return;
+    }
+    const shouldClose =
+      allowToggle && state.activePanelId === panelId && !panel.classList.contains('hidden');
+    closeStudioPanels();
+    if (shouldClose) {
+      return;
+    }
+    panel.classList.remove('hidden');
+    state.activePanelId = panelId;
+    if (triggerId) {
+      const trigger = document.getElementById(triggerId);
+      trigger?.classList.add('is-active');
+      trigger?.setAttribute('aria-expanded', 'true');
+    }
   }
 
   function nodeById(nodeId) {
@@ -64,8 +140,20 @@
   }
 
   function mapDimensions() {
-    const maxX = Math.max(1100, ...state.nodes.map((node) => node.position.x + NODE_WIDTH + 180));
-    const maxY = Math.max(680, ...state.nodes.map((node) => node.position.y + NODE_HEIGHT + 180));
+    const viewportWidth = scroller?.clientWidth || 1100;
+    const viewportHeight = scroller?.clientHeight || 680;
+    const maxX = Math.max(
+      viewportWidth,
+      1100,
+      ...state.nodes.map(
+        (node) => node.position.x + EDITOR_CANVAS_INSET_X + NODE_LABEL_WIDTH / 2 + 180,
+      ),
+    );
+    const maxY = Math.max(
+      viewportHeight,
+      680,
+      ...state.nodes.map((node) => node.position.y + EDITOR_CANVAS_INSET_Y + NODE_DOT_RADIUS + 180),
+    );
     return { width: maxX, height: maxY };
   }
 
@@ -75,27 +163,20 @@
     if (!source || !target) {
       return '';
     }
-    const sourceCenter = {
-      x: source.position.x + NODE_WIDTH / 2,
-      y: source.position.y + NODE_HEIGHT / 2,
-    };
-    const targetCenter = {
-      x: target.position.x + NODE_WIDTH / 2,
-      y: target.position.y + NODE_HEIGHT / 2,
-    };
-    const boundaryPoint = (from, toward) => {
+    const sourceCenter = source.position;
+    const targetCenter = target.position;
+    const boundaryPoint = (from, toward, radius) => {
       const dx = toward.x - from.x;
       const dy = toward.y - from.y;
-      const xScale = dx ? NODE_WIDTH / 2 / Math.abs(dx) : Number.POSITIVE_INFINITY;
-      const yScale = dy ? NODE_HEIGHT / 2 / Math.abs(dy) : Number.POSITIVE_INFINITY;
-      const scale = Math.min(xScale, yScale);
+      const distance = Math.hypot(dx, dy) || 1;
+      const scale = radius / distance;
       return {
         x: from.x + dx * scale,
         y: from.y + dy * scale,
       };
     };
-    const sourcePoint = boundaryPoint(sourceCenter, targetCenter);
-    const targetPoint = boundaryPoint(targetCenter, sourceCenter);
+    const sourcePoint = boundaryPoint(sourceCenter, targetCenter, NODE_DOT_RADIUS);
+    const targetPoint = boundaryPoint(targetCenter, sourceCenter, NODE_DOT_RADIUS + 6);
     const sourceX = sourcePoint.x;
     const sourceY = sourcePoint.y;
     const targetX = targetPoint.x;
@@ -136,6 +217,7 @@
     canvas.style.width = `${dimensions.width}px`;
     canvas.style.height = `${dimensions.height}px`;
     canvas.innerHTML = `
+      <div class="course-map-background" aria-hidden="true"></div>
       <div class="course-map-grid" aria-hidden="true"></div>
       ${renderEdgesSvg(dimensions)}
       ${state.nodes
@@ -148,17 +230,21 @@
               type="button"
               data-node-id="${escapeHtml(node.id)}"
               style="left:${node.position.x}px;top:${node.position.y}px"
-              aria-label="${escapeHtml(node.title)}"
+              aria-label="${escapeHtml(node.title)}，结点 ${escapeHtml(node.id)}${node.hasDocument ? '，已挂载文档' : ''}"
             >
-              <span class="course-map-node-id">${escapeHtml(node.id)}</span>
-              <strong>${escapeHtml(node.title)}</strong>
-              <small>${escapeHtml(node.summary || '暂无简介')}</small>
-              <span class="course-map-document-state">${node.hasDocument ? '文档已挂载' : '暂无文档'}</span>
+              <span class="course-map-hologram">
+                <span class="course-map-node-id">${escapeHtml(node.id)}</span>
+                <strong>${escapeHtml(node.title)}</strong>
+              </span>
+              <span class="course-map-beacon" aria-hidden="true">
+                <span></span>
+              </span>
             </button>
           `;
         })
         .join('')}
     `;
+    setBackgroundSurface();
     bindNodeEvents();
     renderEdgeList();
   }
@@ -167,6 +253,18 @@
     canvas?.querySelectorAll('[data-edge-index]').forEach((pathNode) => {
       pathNode.setAttribute('d', edgePath(state.edges[Number(pathNode.dataset.edgeIndex)]));
     });
+  }
+
+  function syncCanvasDimensions() {
+    if (!canvas) {
+      return;
+    }
+    const dimensions = mapDimensions();
+    canvas.style.width = `${dimensions.width}px`;
+    canvas.style.height = `${dimensions.height}px`;
+    const edgesSvg = canvas.querySelector('.course-map-edges');
+    edgesSvg?.setAttribute('width', String(dimensions.width));
+    edgesSvg?.setAttribute('height', String(dimensions.height));
   }
 
   function renderReaderHeader() {
@@ -206,6 +304,7 @@
       state.edges.push(payload.edge);
       state.edgeSource = '';
       setEdgeStatus('连接已创建，可继续选择下一条连接的起点。');
+      setSaveState('连接已创建');
       renderMap();
     } catch (error) {
       setEdgeStatus(error.message, true);
@@ -219,6 +318,8 @@
     }
     state.selectedNodeId = nodeId;
     state.creatingNode = false;
+    openStudioPanel('course-node-panel');
+    nodePanel?.classList.remove('hidden');
     nodeForm?.classList.remove('hidden');
     document.getElementById('course-node-form-title').textContent = '编辑知识结点';
     const idInput = document.getElementById('course-node-id');
@@ -240,7 +341,7 @@
     canvas?.querySelectorAll('.course-map-node').forEach((nodeElement) => {
       nodeElement.addEventListener('click', (event) => {
         const nodeId = nodeElement.dataset.nodeId;
-        if (state.drag?.moved) {
+        if (Date.now() < state.suppressClickUntil) {
           event.preventDefault();
           return;
         }
@@ -258,6 +359,35 @@
       if (!editorPage) {
         return;
       }
+      nodeElement.addEventListener('keydown', (event) => {
+        const direction = {
+          ArrowLeft: [-1, 0],
+          ArrowRight: [1, 0],
+          ArrowUp: [0, -1],
+          ArrowDown: [0, 1],
+        }[event.key];
+        if (!direction || state.edgeTool) {
+          return;
+        }
+        event.preventDefault();
+        const node = nodeById(nodeElement.dataset.nodeId);
+        if (!node) {
+          return;
+        }
+        const previousPosition = { ...node.position };
+        const step = event.shiftKey ? 12 : 1;
+        node.position.x = Math.max(70, node.position.x + direction[0] * step);
+        node.position.y = Math.max(NODE_LABEL_HEIGHT + 24, node.position.y + direction[1] * step);
+        nodeElement.style.left = `${node.position.x}px`;
+        nodeElement.style.top = `${node.position.y}px`;
+        syncCanvasDimensions();
+        updateEdgeGeometry();
+        if (state.selectedNodeId === node.id) {
+          document.getElementById('course-node-x').value = node.position.x;
+          document.getElementById('course-node-y').value = node.position.y;
+        }
+        queuePositionSave(node, { ...node.position }, previousPosition);
+      });
       nodeElement.addEventListener('pointerdown', (event) => {
         if (state.edgeTool || event.button !== 0) {
           return;
@@ -269,6 +399,7 @@
         state.drag = {
           node,
           element: nodeElement,
+          pointerId: event.pointerId,
           startClientX: event.clientX,
           startClientY: event.clientY,
           startX: node.position.x,
@@ -276,6 +407,7 @@
           moved: false,
         };
         nodeElement.setPointerCapture(event.pointerId);
+        nodeElement.classList.add('is-dragging');
       });
       nodeElement.addEventListener('pointermove', (event) => {
         if (!state.drag || state.drag.element !== nodeElement) {
@@ -286,34 +418,91 @@
         if (Math.abs(dx) + Math.abs(dy) > 4) {
           state.drag.moved = true;
         }
-        state.drag.node.position.x = Math.max(0, Math.round(state.drag.startX + dx));
-        state.drag.node.position.y = Math.max(0, Math.round(state.drag.startY + dy));
+        state.drag.node.position.x = Math.max(70, Math.round(state.drag.startX + dx));
+        state.drag.node.position.y = Math.max(
+          NODE_LABEL_HEIGHT + 24,
+          Math.round(state.drag.startY + dy),
+        );
         nodeElement.style.left = `${state.drag.node.position.x}px`;
         nodeElement.style.top = `${state.drag.node.position.y}px`;
+        syncCanvasDimensions();
         updateEdgeGeometry();
       });
-      nodeElement.addEventListener('pointerup', async (event) => {
+      nodeElement.addEventListener('pointerup', (event) => {
         if (!state.drag || state.drag.element !== nodeElement) {
           return;
         }
         const drag = state.drag;
         state.drag = null;
-        nodeElement.releasePointerCapture(event.pointerId);
+        nodeElement.classList.remove('is-dragging');
+        if (nodeElement.hasPointerCapture(event.pointerId)) {
+          nodeElement.releasePointerCapture(event.pointerId);
+        }
         if (!drag.moved) {
           return;
         }
+        state.suppressClickUntil = Date.now() + 260;
+        const savedPosition = { ...drag.node.position };
+        if (state.selectedNodeId === drag.node.id) {
+          document.getElementById('course-node-x').value = savedPosition.x;
+          document.getElementById('course-node-y').value = savedPosition.y;
+        }
+        queuePositionSave(drag.node, savedPosition, {
+          x: drag.startX,
+          y: drag.startY,
+        });
+      });
+      const cancelDrag = () => {
+        if (!state.drag || state.drag.element !== nodeElement) {
+          return;
+        }
+        const drag = state.drag;
+        state.drag = null;
+        drag.node.position.x = drag.startX;
+        drag.node.position.y = drag.startY;
+        nodeElement.style.left = `${drag.startX}px`;
+        nodeElement.style.top = `${drag.startY}px`;
+        nodeElement.classList.remove('is-dragging');
+        syncCanvasDimensions();
+        updateEdgeGeometry();
+        setSaveState('已取消移动');
+      };
+      nodeElement.addEventListener('pointercancel', cancelDrag);
+      nodeElement.addEventListener('lostpointercapture', cancelDrag);
+    });
+  }
+
+  function queuePositionSave(node, position, previousPosition) {
+    setSaveState(`正在保存 ${node.id} 的位置…`);
+    const previousQueue = positionSaveQueues.get(node.id) || Promise.resolve();
+    const nextQueue = previousQueue
+      .catch(() => {})
+      .then(async () => {
         try {
-          await updateNode(drag.node);
-          if (state.selectedNodeId === drag.node.id) {
-            document.getElementById('course-node-x').value = drag.node.position.x;
-            document.getElementById('course-node-y').value = drag.node.position.y;
+          await updateNode(node, position);
+          if (node.position.x === position.x && node.position.y === position.y) {
+            setSaveState(
+              `已保存 · ${new Date().toLocaleTimeString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}`,
+            );
           }
-          setEdgeStatus(`已保存 ${drag.node.id} 的位置。`);
         } catch (error) {
-          setEdgeStatus(error.message, true);
+          if (node.position.x === position.x && node.position.y === position.y) {
+            node.position = { ...previousPosition };
+            renderMap();
+          }
+          setSaveState(error.message, true);
+          setEdgeStatus(`位置保存失败：${error.message}`, true);
+        }
+      })
+      .finally(() => {
+        if (positionSaveQueues.get(node.id) === nextQueue) {
+          positionSaveQueues.delete(node.id);
         }
       });
-    });
+    positionSaveQueues.set(node.id, nextQueue);
   }
 
   function setNodeMessage(message, isError = false) {
@@ -335,6 +524,10 @@
   function beginCreateNode() {
     state.selectedNodeId = '';
     state.creatingNode = true;
+    state.edgeTool = '';
+    state.edgeSource = '';
+    openStudioPanel('course-node-panel');
+    nodePanel?.classList.remove('hidden');
     nodeForm.classList.remove('hidden');
     document.getElementById('course-node-form-title').textContent = '添加知识结点';
     const idInput = document.getElementById('course-node-id');
@@ -342,11 +535,18 @@
     idInput.readOnly = false;
     document.getElementById('course-node-title').value = '';
     document.getElementById('course-node-summary').value = '';
-    document.getElementById('course-node-x').value = Math.max(40, scroller.scrollLeft + 160);
-    document.getElementById('course-node-y').value = Math.max(40, scroller.scrollTop + 160);
+    document.getElementById('course-node-x').value = Math.max(
+      70,
+      Math.round(scroller.scrollLeft + scroller.clientWidth / 2),
+    );
+    document.getElementById('course-node-y').value = Math.max(
+      NODE_LABEL_HEIGHT + 24,
+      Math.round(scroller.scrollTop + scroller.clientHeight / 2),
+    );
     document.getElementById('course-delete-node').classList.add('hidden');
     document.getElementById('course-document-edit-link').classList.add('hidden');
     setNodeMessage('结点 ID 创建后不可修改。');
+    updateToolState();
     renderMap();
     idInput.focus();
   }
@@ -363,7 +563,7 @@
     };
   }
 
-  async function updateNode(node) {
+  async function updateNode(node, position = node.position) {
     await app.callApi(
       `/courses/${encodeURIComponent(courseSlug)}/map/nodes/${encodeURIComponent(node.id)}`,
       {
@@ -371,7 +571,7 @@
         body: JSON.stringify({
           title: node.title,
           summary: node.summary,
-          position: node.position,
+          position,
         }),
       },
     );
@@ -390,6 +590,7 @@
         state.nodes.push(payload.node);
         selectNode(payload.node.id);
         setNodeMessage('知识结点已创建。');
+        setSaveState('结点已创建');
       } else {
         const node = nodeById(state.selectedNodeId);
         Object.assign(node, {
@@ -401,6 +602,7 @@
         renderMap();
         selectNode(node.id);
         setNodeMessage('知识结点已保存。');
+        setSaveState('结点已保存');
       }
     } catch (error) {
       setNodeMessage(error.message, true);
@@ -423,8 +625,10 @@
       );
       state.selectedNodeId = '';
       nodeForm.classList.add('hidden');
+      closeStudioPanels();
       renderMap();
       setEdgeStatus(`已删除 ${node.id}。`);
+      setSaveState('结点已删除');
     } catch (error) {
       setNodeMessage(error.message, true);
     }
@@ -462,8 +666,111 @@
       state.edges.splice(index, 1);
       renderMap();
       setEdgeStatus('连接已删除。');
+      setSaveState('连接已删除');
     } catch (error) {
       setEdgeStatus(error.message, true);
+    }
+  }
+
+  function updateToolState() {
+    document.querySelectorAll('[data-edge-tool]').forEach((tool) => {
+      const toolValue = tool.dataset.edgeTool;
+      const isActive = toolValue === 'none' ? !state.edgeTool : toolValue === state.edgeTool;
+      tool.classList.toggle('is-active', isActive);
+      tool.setAttribute('aria-pressed', String(isActive));
+    });
+    scroller?.classList.toggle('is-connecting', Boolean(state.edgeTool));
+  }
+
+  async function saveBackground(body) {
+    setSaveState('正在更新地图背景…');
+    try {
+      const payload = await app.callApi(
+        `/courses/${encodeURIComponent(courseSlug)}/map/background`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(body),
+        },
+      );
+      state.backgroundUrl = payload.backgroundUrl || '';
+      setBackgroundSurface();
+      setSaveState(state.backgroundUrl ? '地图背景已更新' : '已恢复默认背景');
+    } catch (error) {
+      setSaveState(error.message, true);
+      setEdgeStatus(`背景更新失败：${error.message}`, true);
+    }
+  }
+
+  async function uploadBackground(file) {
+    if (!file?.type.startsWith('image/')) {
+      setEdgeStatus('请选择图片文件。', true);
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      setEdgeStatus('背景图片需在 20MB 以内。', true);
+      return;
+    }
+    setSaveState('正在处理背景图片…');
+    try {
+      const imageDataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('读取背景图片失败'));
+        reader.readAsDataURL(file);
+      });
+      await saveBackground({ imageDataUrl });
+    } catch (error) {
+      setSaveState(error.message, true);
+    }
+  }
+
+  function bindCanvasPanning() {
+    if (!scroller) {
+      return;
+    }
+    let pan = null;
+    scroller.addEventListener('pointerdown', (event) => {
+      if (
+        event.button !== 0 ||
+        state.edgeTool ||
+        event.target.closest('.course-map-node') ||
+        event.target.closest('button, a, input, textarea')
+      ) {
+        return;
+      }
+      pan = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        scrollLeft: scroller.scrollLeft,
+        scrollTop: scroller.scrollTop,
+      };
+      scroller.setPointerCapture(event.pointerId);
+      scroller.classList.add('is-panning');
+    });
+    scroller.addEventListener('pointermove', (event) => {
+      if (!pan || pan.pointerId !== event.pointerId) {
+        return;
+      }
+      scroller.scrollLeft = pan.scrollLeft - (event.clientX - pan.startX);
+      scroller.scrollTop = pan.scrollTop - (event.clientY - pan.startY);
+    });
+    const finishPan = (event) => {
+      if (!pan || pan.pointerId !== event.pointerId) {
+        return;
+      }
+      pan = null;
+      scroller.classList.remove('is-panning');
+      if (scroller.hasPointerCapture(event.pointerId)) {
+        scroller.releasePointerCapture(event.pointerId);
+      }
+    };
+    scroller.addEventListener('pointerup', finishPan);
+    scroller.addEventListener('pointercancel', finishPan);
+    if ('ResizeObserver' in window) {
+      new ResizeObserver(syncCanvasDimensions).observe(scroller);
+    } else {
+      window.addEventListener('resize', syncCanvasDimensions);
     }
   }
 
@@ -471,17 +778,27 @@
     document.getElementById('course-add-node-button')?.addEventListener('click', beginCreateNode);
     nodeForm?.addEventListener('submit', saveNodeForm);
     document.getElementById('course-delete-node')?.addEventListener('click', deleteSelectedNode);
+    document
+      .getElementById('course-edge-panel-toggle')
+      ?.addEventListener('click', () =>
+        openStudioPanel('course-edge-panel', 'course-edge-panel-toggle', true),
+      );
+    document.getElementById('course-background-panel-toggle')?.addEventListener('click', () => {
+      openStudioPanel('course-background-panel', 'course-background-panel-toggle', true);
+      setBackgroundSurface();
+    });
+    document.querySelectorAll('[data-close-studio-panel]').forEach((button) => {
+      button.addEventListener('click', closeStudioPanels);
+    });
     document.querySelectorAll('[data-edge-tool]').forEach((button) => {
       button.addEventListener('click', () => {
         state.edgeTool = button.dataset.edgeTool === 'none' ? '' : button.dataset.edgeTool;
         state.edgeSource = '';
-        document.querySelectorAll('[data-edge-tool]').forEach((tool) => {
-          tool.classList.toggle('is-active', tool.dataset.edgeTool === state.edgeTool);
-        });
+        updateToolState();
         setEdgeStatus(
           state.edgeTool
             ? `已选择${state.edgeTool === 'ordered' ? '顺序箭头' : '关联虚线'}，请点击起点。`
-            : '连接工具已取消，可拖拽或编辑结点。',
+            : '拖拽光点移动结点 · 拖拽空白处平移画布',
         );
         renderMap();
       });
@@ -492,6 +809,43 @@
         deleteEdge(Number(button.dataset.deleteEdge));
       }
     });
+    const backgroundInput = document.getElementById('course-map-background-input');
+    document.getElementById('course-map-background-upload')?.addEventListener('click', () => {
+      backgroundInput?.click();
+    });
+    backgroundInput?.addEventListener('change', (event) => {
+      uploadBackground(event.target.files?.[0]);
+      event.target.value = '';
+    });
+    document.getElementById('course-map-background-clear')?.addEventListener('click', () => {
+      saveBackground({ backgroundUrl: '' });
+    });
+    document.addEventListener('keydown', (event) => {
+      const target = event.target;
+      const isEditingField =
+        target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+      if (event.key === 'Escape') {
+        if (state.edgeTool) {
+          state.edgeTool = '';
+          state.edgeSource = '';
+          updateToolState();
+          renderMap();
+          setEdgeStatus('已退出连接模式。');
+        } else {
+          closeStudioPanels();
+        }
+      }
+      if (
+        (event.key === 'Delete' || event.key === 'Backspace') &&
+        state.selectedNodeId &&
+        !isEditingField
+      ) {
+        event.preventDefault();
+        deleteSelectedNode();
+      }
+    });
+    bindCanvasPanning();
+    updateToolState();
   }
 
   async function initialize() {
@@ -503,9 +857,15 @@
       state.course = payload.course;
       state.nodes = payload.nodes || [];
       state.edges = payload.edges || [];
+      state.backgroundUrl = payload.backgroundUrl || '';
       if (editorPage && !state.course.canEditMap) {
+        renderEditorHeader();
+        renderMap();
         setStatus('你不是该课程的资料负责人，无法编辑这张地图。', true);
-        document.querySelector('.course-editor-layout')?.classList.add('is-readonly');
+        editorPage.classList.add('is-readonly');
+        editorPage.querySelectorAll('button, input, textarea').forEach((control) => {
+          control.disabled = true;
+        });
         return;
       }
       if (mapPage) {
@@ -515,6 +875,7 @@
         bindEditorControls();
       }
       renderMap();
+      setSaveState(editorPage ? '所有修改会自动保存' : '');
       setStatus(state.nodes.length ? '' : '这门课程的知识地图还是空的。');
     } catch (error) {
       setStatus(error.message, true);

@@ -20,9 +20,27 @@ test('course map pages load their dedicated controllers', () => {
   assert.match(reader, /<script src="\/course-map\.js"><\/script>/);
   assert.match(editor, /data-course-map-editor/);
   assert.match(editor, /id="course-map-canvas"/);
+  assert.match(editor, /course-map-editor-immersive/);
+  assert.match(editor, /id="course-background-panel-toggle"/);
+  assert.match(editor, /id="course-map-background-input"/);
   assert.match(markdownEditor, /data-markdown-editor/);
   assert.match(markdownEditor, /id="markdown-source"/);
   assert.match(markdownEditor, /vendor\/katex/);
+});
+
+test('course map controller supports holographic nodes, dragging, and persisted backgrounds', () => {
+  const controller = fs.readFileSync(path.join(root, 'public', 'course-map.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'public', 'course.css'), 'utf8');
+  const backend = fs.readFileSync(path.join(root, 'backend', 'server.js'), 'utf8');
+
+  assert.match(controller, /course-map-hologram/);
+  assert.match(controller, /course-map-beacon/);
+  assert.match(controller, /addEventListener\('pointermove'/);
+  assert.match(controller, /queuePositionSave/);
+  assert.match(controller, /map\/background/);
+  assert.match(styles, /\.course-map-editor-immersive/);
+  assert.match(styles, /\.course-map-beacon/);
+  assert.match(backend, /GET, POST, PUT, PATCH, DELETE, OPTIONS/);
 });
 
 test('knowledge page uses database-backed knowledge controller', () => {

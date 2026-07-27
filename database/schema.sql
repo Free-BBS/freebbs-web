@@ -70,6 +70,18 @@ CREATE TABLE IF NOT EXISTS course_material_managers (
     INDEX idx_course_material_managers_user (user_id)
 );
 
+CREATE TABLE IF NOT EXISTS course_map_settings (
+    course_id BIGINT PRIMARY KEY,
+    background_url VARCHAR(512) NULL,
+    updated_by BIGINT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_course_map_settings_course
+        FOREIGN KEY (course_id) REFERENCES courses (id) ON DELETE CASCADE,
+    CONSTRAINT fk_course_map_settings_updated_by
+        FOREIGN KEY (updated_by) REFERENCES users (id) ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS course_map_nodes (
     course_id BIGINT NOT NULL,
     node_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
