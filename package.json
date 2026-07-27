@@ -12,6 +12,7 @@
     "start:frontend": "node server.js",
     "start:backend": "node backend/server.js",
     "testbench:fortune": "node test/testbench.js",
+    "test:admin-users": "node --test scripts/admin-users-page.test.js",
     "test:course-maps": "node --test backend/course-maps.test.js scripts/course-map-pages.test.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

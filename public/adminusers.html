@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="FREE-BBS 管理员用户权限设置。" />
-    <title>FREE-BBS - 用户权限</title>
+    <meta name="description" content="FREE-BBS 用户与权限管理。" />
+    <title>FREE-BBS - 用户管理</title>
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-v2-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/freebbs-apple-touch-v2.png" />
@@ -16,6 +16,7 @@
     />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/adminusers.css" />
   </head>
   <body class="adminusers-page">
     <div class="page-shell page-shell-settings">
@@ -138,48 +139,114 @@
         </a>
       </nav>
 
-      <main class="main-content settings-main hidden" id="admin-users-content" data-admin-content>
-        <section class="settings-shell" aria-label="用户权限">
-          <div class="settings-header">
-            <h1>用户权限</h1>
+      <main
+        class="main-content settings-main hidden"
+        id="admin-users-content"
+        data-admin-content
+        data-page-title="用户管理"
+      >
+        <section class="settings-shell admin-directory-shell" aria-label="用户管理">
+          <header class="admin-page-header">
+            <div class="admin-page-heading">
+              <p>USER DIRECTORY</p>
+            </div>
             <button
               class="admin-button admin-button-primary admin-add-button"
               id="admin-add-user"
               type="button"
             >
-              新增用户
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              <span>新增用户</span>
             </button>
-          </div>
+          </header>
 
-          <section class="admin-section hidden" id="admin-section" aria-label="用户权限设置">
+          <section class="admin-section hidden" id="admin-section" aria-label="用户管理设置">
             <p
               class="auth-message admin-message"
               id="admin-message"
               role="status"
               aria-live="polite"
             ></p>
-            <section class="admin-tools" aria-label="运势控制">
-              <label class="admin-toggle" for="fortune-bonus-toggle">
-                <input id="fortune-bonus-toggle" type="checkbox" />
-                <span>运势加成开关</span>
+
+            <section class="admin-directory-toolbar" aria-label="筛选用户">
+              <label class="admin-user-search" for="admin-user-search">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="11" cy="11" r="6.5" />
+                  <path d="m16 16 4 4" />
+                </svg>
+                <input
+                  id="admin-user-search"
+                  type="search"
+                  placeholder="搜索姓名、用户名、学号或邮箱"
+                  aria-label="搜索用户"
+                  autocomplete="off"
+                />
               </label>
-              <p class="admin-tools-copy">打开后，每次运势计算都会额外执行 `score += 20`。</p>
-            </section>
-            <div class="admin-users-table">
-              <div class="admin-users-head">
-                <span>用户名</span>
-                <span>姓名</span>
-                <span>学号</span>
-                <span>邮箱</span>
+              <label class="admin-user-filter">
                 <span>身份</span>
-                <span>管理员</span>
-                <span>电元</span>
-                <span>磁元</span>
-                <span>热力</span>
-                <span>操作</span>
+                <select id="admin-user-role-filter" aria-label="按身份筛选用户">
+                  <option value="all">全部身份</option>
+                  <option value="admin">管理员</option>
+                  <option value="teacher">教师</option>
+                  <option value="ta">助教</option>
+                  <option value="student">学生</option>
+                </select>
+              </label>
+              <label class="admin-user-filter">
+                <span>负责范围</span>
+                <select id="admin-user-scope-filter" aria-label="按负责范围筛选用户">
+                  <option value="all">全部范围</option>
+                  <option value="board">讨论区负责人</option>
+                  <option value="course">课程资料负责人</option>
+                  <option value="none">无负责范围</option>
+                </select>
+              </label>
+              <div class="admin-user-result-count" aria-live="polite">
+                <strong id="admin-user-visible-count">0</strong>
+                <span id="admin-user-count-label">位用户</span>
               </div>
-              <div class="admin-users" id="admin-users"></div>
-            </div>
+            </section>
+
+            <details class="admin-utility-settings">
+              <summary>
+                <span>
+                  <strong>附加设置</strong>
+                  <small>运势功能的全局行为</small>
+                </span>
+                <span class="admin-utility-summary-state">展开</span>
+              </summary>
+              <div class="admin-tools" aria-label="运势控制">
+                <div>
+                  <strong>运势加成</strong>
+                  <p class="admin-tools-copy">开启后，每次运势计算会额外增加 20 分。</p>
+                </div>
+                <label class="admin-toggle" for="fortune-bonus-toggle">
+                  <input id="fortune-bonus-toggle" type="checkbox" aria-label="启用运势加成" />
+                  <span aria-hidden="true"></span>
+                  <b>启用</b>
+                </label>
+              </div>
+            </details>
+
+            <section class="admin-users-table" aria-label="用户目录">
+              <header class="admin-user-list-heading">
+                <div>
+                  <h2>账号列表</h2>
+                  <p>选择一个账号，展开详细设置。</p>
+                </div>
+              </header>
+              <div class="admin-users" id="admin-users" role="list"></div>
+              <div class="admin-user-empty hidden" id="admin-user-empty">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="10" cy="10" r="5.5" />
+                  <path d="m14.5 14.5 4 4M5 20h14" />
+                </svg>
+                <strong>没有符合条件的用户</strong>
+                <span>换一个关键词或筛选条件试试。</span>
+              </div>
+            </section>
           </section>
         </section>
       </main>

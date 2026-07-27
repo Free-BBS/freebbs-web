@@ -20,6 +20,9 @@ node --check public/markdown-editor.js
 echo "[ci] course map tests"
 npm run test:course-maps
 
+echo "[ci] admin users page tests"
+npm run test:admin-users
+
 echo "[ci] validating required files"
 test -f .nvmrc
 test -f public/index.html

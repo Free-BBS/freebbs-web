@@ -47,6 +47,8 @@ const userState = {
 };
 let economyShopItems = [];
 let adminPermissionCatalog = { boards: [], courses: [] };
+let adminExpandedUserId = '';
+let adminMessageTimer = 0;
 let sessionReady = Promise.resolve();
 
 const userName = document.getElementById('user-name');
@@ -58,6 +60,12 @@ const adminSection = document.getElementById('admin-section');
 const adminUsers = document.getElementById('admin-users');
 const adminMessage = document.getElementById('admin-message');
 const adminAddUserButton = document.getElementById('admin-add-user');
+const adminUserSearch = document.getElementById('admin-user-search');
+const adminUserRoleFilter = document.getElementById('admin-user-role-filter');
+const adminUserScopeFilter = document.getElementById('admin-user-scope-filter');
+const adminUserVisibleCount = document.getElementById('admin-user-visible-count');
+const adminUserCountLabel = document.getElementById('admin-user-count-label');
+const adminUserEmpty = document.getElementById('admin-user-empty');
 const fortuneBonusToggle = document.getElementById('fortune-bonus-toggle');
 const manageLinks = document.querySelectorAll('.manage-link');
 const fortuneLinks = document.querySelectorAll('.fortune-link');
@@ -265,7 +273,7 @@ function initializeDashboardShell() {
     '/development': '发展端',
     '/settings': '设置',
     '/profile': '个人主页',
-    '/adminusers': '用户权限',
+    '/adminusers': '用户管理',
     '/system-settings': '系统设置',
     '/system-settings/model': '模型与密钥',
     '/system-settings/course-materials': '课程资料',
@@ -1691,9 +1699,19 @@ function renderUser() {
   renderDiscussionComposerState();
 }
 
-function setAdminMessage(message) {
+function setAdminMessage(message, autoHideDelay = 0) {
+  window.clearTimeout(adminMessageTimer);
+  adminMessageTimer = 0;
   if (adminMessage) {
     adminMessage.textContent = message || '';
+  }
+  if (adminMessage && message && autoHideDelay > 0) {
+    adminMessageTimer = window.setTimeout(() => {
+      if (adminMessage.textContent === message) {
+        adminMessage.textContent = '';
+      }
+      adminMessageTimer = 0;
+    }, autoHideDelay);
   }
 }
 
@@ -4367,30 +4385,347 @@ async function loadPublicProfile() {
   }
 }
 
+function normalizeAdminRole(role) {
+  return ADMIN_ROLE_OPTIONS.some(([value]) => value === role) ? role : 'student';
+}
+
+function getAdminRoleLabel(role) {
+  return USER_ROLE_LABELS[normalizeAdminRole(role)] || USER_ROLE_LABELS.student;
+}
+
+function getAdminUserInitial(user) {
+  return String(user.fullName || user.username || '?')
+    .trim()
+    .slice(0, 1)
+    .toUpperCase();
+}
+
+function renderAdminRoleOptions(selectedRole = 'student') {
+  const normalizedRole = normalizeAdminRole(selectedRole);
+  return ADMIN_ROLE_OPTIONS.map(
+    ([role, label]) =>
+      `<option value="${role}" ${normalizedRole === role ? 'selected' : ''}>${label}</option>`,
+  ).join('');
+}
+
+function renderAdminScopeBadges(boardCount, courseCount, isAdmin = false) {
+  const badges = [];
+  if (isAdmin) {
+    badges.push('<span class="admin-user-badge is-admin">管理员</span>');
+  }
+  if (boardCount > 0) {
+    badges.push(`<span class="admin-user-badge">讨论区负责人 · ${Number(boardCount)}</span>`);
+  }
+  if (courseCount > 0) {
+    badges.push(`<span class="admin-user-badge">课程负责人 · ${Number(courseCount)}</span>`);
+  }
+  if (!badges.length) {
+    badges.push('<span class="admin-user-badge is-muted">普通成员</span>');
+  }
+  return badges.join('');
+}
+
 function renderAdminPermissionGroup(title, type, options, activeSlugs = []) {
   const active = new Set(activeSlugs);
   return `
-    <fieldset class="admin-permission-group">
-      <legend>${escapeHtml(title)}</legend>
+    <fieldset class="admin-permission-group" data-permission-group="${escapeHtml(type)}">
+      <legend>
+        <span>${escapeHtml(title)}</span>
+        <small data-permission-count="${escapeHtml(type)}">${active.size} / ${options.length}</small>
+      </legend>
       <div class="admin-permission-options">
-        ${options
-          .map(
-            (option) => `
-          <label class="admin-permission-toggle">
-            <input
-              type="checkbox"
-              data-permission="${escapeHtml(type)}"
-              value="${escapeHtml(option.slug)}"
-              ${active.has(option.slug) ? 'checked' : ''}
-            />
-            <span>${escapeHtml(option.name)}</span>
-          </label>
-        `,
-          )
-          .join('')}
+        ${
+          options.length
+            ? options
+                .map(
+                  (option) => `
+            <label class="admin-permission-toggle">
+              <input
+                type="checkbox"
+                data-permission="${escapeHtml(type)}"
+                value="${escapeHtml(option.slug)}"
+                ${active.has(option.slug) ? 'checked' : ''}
+              />
+              <span>${escapeHtml(option.name)}</span>
+            </label>
+          `,
+                )
+                .join('')
+            : '<p class="admin-permission-empty">暂无可分配项目</p>'
+        }
       </div>
     </fieldset>
   `;
+}
+
+function renderAdminTextField({
+  label,
+  field,
+  value = '',
+  type = 'text',
+  readonly = false,
+  placeholder = '',
+  autocomplete = '',
+  className = '',
+  ownerLabel = '',
+}) {
+  return `
+    <label class="admin-user-field ${className}">
+      <span>${escapeHtml(label)}</span>
+      <input
+        data-field="${escapeHtml(field)}"
+        type="${escapeHtml(type)}"
+        value="${escapeHtml(value)}"
+        ${readonly ? 'readonly' : ''}
+        ${placeholder ? `placeholder="${escapeHtml(placeholder)}"` : ''}
+        ${autocomplete ? `autocomplete="${escapeHtml(autocomplete)}"` : ''}
+        aria-label="${escapeHtml(ownerLabel ? `${ownerLabel}的${label}` : label)}"
+      />
+    </label>
+  `;
+}
+
+function renderAdminUserEditor(user, permissionCatalog) {
+  const ownerLabel = user.username || '用户';
+  return `
+    <div class="admin-user-editor" id="admin-user-editor-${user.id}" hidden>
+      <section class="admin-user-editor-section">
+        <header>
+          <div>
+            <h3>账号资料</h3>
+            <p>姓名可以修改，其余账号标识保持只读。</p>
+          </div>
+        </header>
+        <div class="admin-user-fields-grid">
+          ${renderAdminTextField({
+            label: '姓名',
+            field: 'fullName',
+            value: user.fullName,
+            ownerLabel,
+          })}
+          ${renderAdminTextField({
+            label: '用户名',
+            field: 'username',
+            value: user.username,
+            readonly: true,
+            ownerLabel,
+          })}
+          ${renderAdminTextField({
+            label: '学号',
+            field: 'studentId',
+            value: user.studentId,
+            readonly: true,
+            ownerLabel,
+          })}
+          ${renderAdminTextField({
+            label: '邮箱',
+            field: 'email',
+            value: user.email,
+            type: 'email',
+            readonly: true,
+            className: 'is-wide',
+            ownerLabel,
+          })}
+        </div>
+      </section>
+
+      <section class="admin-user-editor-section">
+        <header>
+          <div>
+            <h3>身份与账户数值</h3>
+            <p>管理员权限与教学身份相互独立。</p>
+          </div>
+        </header>
+        <div class="admin-user-access-grid">
+          <label class="admin-user-field">
+            <span>身份</span>
+            <select data-field="role" aria-label="${escapeHtml(ownerLabel)}的身份">
+              ${renderAdminRoleOptions(user.role)}
+            </select>
+          </label>
+          <label class="admin-admin-toggle">
+            <input data-field="isAdmin" type="checkbox" ${user.isAdmin ? 'checked' : ''} />
+            <span class="admin-admin-toggle-control" aria-hidden="true"></span>
+            <span>
+              <strong>管理员</strong>
+              <small>允许管理全站用户与设置</small>
+            </span>
+          </label>
+          <div class="admin-user-balance-fields">
+            ${renderAdminTextField({
+              label: '电元',
+              field: 'electrons',
+              value: user.electrons,
+              type: 'number',
+              ownerLabel,
+            })}
+            ${renderAdminTextField({
+              label: '磁元',
+              field: 'manetrons',
+              value: user.manetrons,
+              type: 'number',
+              ownerLabel,
+            })}
+            ${renderAdminTextField({
+              label: '热力',
+              field: 'heat',
+              value: user.heat || 0,
+              type: 'number',
+              ownerLabel,
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section class="admin-user-editor-section">
+        <header>
+          <div>
+            <h3>负责范围</h3>
+            <p>选择该用户可以管理的讨论板块与课程资料。</p>
+          </div>
+        </header>
+        <div class="admin-user-permissions">
+          ${renderAdminPermissionGroup(
+            '讨论区板块负责人',
+            'board',
+            permissionCatalog.boards || [],
+            user.boardModeratorSlugs || [],
+          )}
+          ${renderAdminPermissionGroup(
+            '课程资料负责人',
+            'course',
+            permissionCatalog.courses || [],
+            user.courseManagerSlugs || [],
+          )}
+        </div>
+      </section>
+
+      <footer class="admin-user-editor-actions">
+        <p class="admin-user-card-status" role="status" aria-live="polite">尚未修改</p>
+        <div>
+          <button class="admin-button admin-button-danger" data-action="delete" type="button">
+            删除账号
+          </button>
+          <button class="admin-button admin-button-primary" data-action="save" type="button">
+            保存修改
+          </button>
+        </div>
+      </footer>
+    </div>
+  `;
+}
+
+function renderAdminUserCard(user, permissionCatalog) {
+  const boardCount = (user.boardModeratorSlugs || []).length;
+  const courseCount = (user.courseManagerSlugs || []).length;
+  const normalizedRole = normalizeAdminRole(user.role);
+  const searchIndex = [user.uid, user.username, user.fullName, user.studentId, user.email]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return `
+    <article
+      class="admin-user-row"
+      data-user-id="${user.id}"
+      data-role="${escapeHtml(normalizedRole)}"
+      data-is-admin="${user.isAdmin ? 'true' : 'false'}"
+      data-board-count="${boardCount}"
+      data-course-count="${courseCount}"
+      data-search-index="${escapeHtml(searchIndex)}"
+      role="listitem"
+    >
+      <header class="admin-user-summary">
+        <button
+          class="admin-user-disclosure"
+          data-admin-ui-action="toggle-editor"
+          type="button"
+          aria-expanded="false"
+          aria-controls="admin-user-editor-${user.id}"
+        >
+          <span class="admin-user-avatar">
+            <img
+              src="${escapeHtml(getAvatarUrl(user.avatarPath))}"
+              alt="${escapeHtml(user.fullName || user.username)}的头像"
+            />
+            <span aria-hidden="true">${escapeHtml(getAdminUserInitial(user))}</span>
+          </span>
+          <span class="admin-user-summary-copy">
+            <strong data-admin-summary-name>${escapeHtml(user.fullName || user.username)}</strong>
+            <small data-admin-summary-meta
+              >@${escapeHtml(user.username)} · ${escapeHtml(user.studentId || user.uid || '无学号')}</small
+            >
+          </span>
+          <span class="admin-user-role-badge" data-admin-summary-role>
+            ${escapeHtml(getAdminRoleLabel(normalizedRole))}
+          </span>
+          <span class="admin-user-summary-scopes" data-admin-summary-scopes>
+            ${renderAdminScopeBadges(boardCount, courseCount, user.isAdmin)}
+          </span>
+          <span class="admin-user-disclosure-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6" /></svg>
+          </span>
+        </button>
+      </header>
+      ${renderAdminUserEditor(user, permissionCatalog)}
+    </article>
+  `;
+}
+
+function setAdminUserCardExpanded(card, expanded) {
+  const disclosure = card?.querySelector('[data-admin-ui-action="toggle-editor"]');
+  const editor = card?.querySelector('.admin-user-editor');
+  if (!card || !disclosure || !editor) {
+    return;
+  }
+  card.classList.toggle('is-expanded', expanded);
+  disclosure.setAttribute('aria-expanded', String(expanded));
+  editor.hidden = !expanded;
+}
+
+function updateAdminUserListFilters() {
+  if (!adminUsers) {
+    return;
+  }
+  const query = String(adminUserSearch?.value || '')
+    .trim()
+    .toLowerCase();
+  const roleFilter = adminUserRoleFilter?.value || 'all';
+  const scopeFilter = adminUserScopeFilter?.value || 'all';
+  const cards = Array.from(
+    adminUsers.querySelectorAll('.admin-user-row:not(.admin-user-row-draft)'),
+  );
+  let visibleCount = 0;
+
+  cards.forEach((card) => {
+    const boardCount = Number(card.dataset.boardCount || 0);
+    const courseCount = Number(card.dataset.courseCount || 0);
+    const matchesQuery = !query || String(card.dataset.searchIndex || '').includes(query);
+    const matchesRole =
+      roleFilter === 'all' ||
+      (roleFilter === 'admin' ? card.dataset.isAdmin === 'true' : card.dataset.role === roleFilter);
+    const matchesScope =
+      scopeFilter === 'all' ||
+      (scopeFilter === 'board' && boardCount > 0) ||
+      (scopeFilter === 'course' && courseCount > 0) ||
+      (scopeFilter === 'none' && boardCount === 0 && courseCount === 0);
+    const keepVisible =
+      card.classList.contains('is-expanded') || card.classList.contains('is-dirty');
+    const visible = keepVisible || (matchesQuery && matchesRole && matchesScope);
+    card.hidden = !visible;
+    visibleCount += visible ? 1 : 0;
+  });
+
+  if (adminUserVisibleCount) {
+    adminUserVisibleCount.textContent = String(visibleCount);
+  }
+  if (adminUserCountLabel) {
+    adminUserCountLabel.textContent =
+      visibleCount === cards.length ? '位用户' : ` / ${cards.length} 位用户`;
+  }
+  adminUserEmpty?.classList.toggle(
+    'hidden',
+    visibleCount > 0 || Boolean(adminUsers.querySelector('.admin-user-row-draft')),
+  );
 }
 
 function renderAdminUsers(users, permissionCatalog = adminPermissionCatalog) {
@@ -4398,225 +4733,329 @@ function renderAdminUsers(users, permissionCatalog = adminPermissionCatalog) {
     return;
   }
 
-  adminUsers.innerHTML = users
-    .map(
-      (user) => `
-    <article class="admin-user-row" data-user-id="${user.id}">
-      <div class="admin-user-cell">
-        <label>
-          <span class="admin-user-field-label">用户名</span>
-          <input
-            data-field="username"
-            type="text"
-            value="${escapeHtml(user.username)}"
-            aria-label="${escapeHtml(user.username)}的用户名"
-            readonly
-          />
-        </label>
-      </div>
-      <div class="admin-user-cell">
-        <label>
-          <span class="admin-user-field-label">姓名</span>
-          <input
-            data-field="fullName"
-            type="text"
-            value="${escapeHtml(user.fullName)}"
-            aria-label="${escapeHtml(user.username)}的姓名"
-          />
-        </label>
-      </div>
-      <div class="admin-user-cell">
-        <label>
-          <span class="admin-user-field-label">学号</span>
-          <input
-            data-field="studentId"
-            type="text"
-            value="${escapeHtml(user.studentId)}"
-            aria-label="${escapeHtml(user.username)}的学号"
-            readonly
-          />
-        </label>
-      </div>
-      <div class="admin-user-cell">
-        <label>
-          <span class="admin-user-field-label">邮箱</span>
-          <input
-            data-field="email"
-            type="email"
-            value="${escapeHtml(user.email)}"
-            aria-label="${escapeHtml(user.username)}的邮箱"
-            readonly
-          />
-        </label>
-      </div>
-      <div class="admin-user-cell">
-        <label>
-          <span class="admin-user-field-label">身份</span>
-          <select data-field="role" aria-label="${escapeHtml(user.username)}的角色">
-            ${ADMIN_ROLE_OPTIONS.map(
-              ([role, label]) =>
-                `<option value="${role}" ${user.role === role ? 'selected' : ''}>${label}</option>`,
-            ).join('')}
-          </select>
-        </label>
-      </div>
-      <div class="admin-user-cell admin-user-admin-flag">
-        <label class="admin-permission-toggle">
-          <input data-field="isAdmin" type="checkbox" ${user.isAdmin ? 'checked' : ''} />
-          <span>管理员</span>
-        </label>
-      </div>
-      <div class="admin-user-cell">
-        <label>
-          <span class="admin-user-field-label">电元</span>
-          <input
-            data-field="electrons"
-            type="number"
-            value="${user.electrons}"
-            aria-label="${escapeHtml(user.username)}的电元"
-          />
-        </label>
-      </div>
-      <div class="admin-user-cell">
-        <label>
-          <span class="admin-user-field-label">磁元</span>
-          <input
-            data-field="manetrons"
-            type="number"
-            value="${user.manetrons}"
-            aria-label="${escapeHtml(user.username)}的磁元"
-          />
-        </label>
-      </div>
-      <div class="admin-user-cell">
-        <label>
-          <span class="admin-user-field-label">热力</span>
-          <input
-            data-field="heat"
-            type="number"
-            value="${user.heat || 0}"
-            aria-label="${escapeHtml(user.username)}的热力"
-          />
-        </label>
-      </div>
-      <div class="admin-actions admin-user-cell">
-        <button class="admin-button admin-button-primary" data-action="save" type="button">
-          保存
-        </button>
-        <button class="admin-button admin-button-danger" data-action="delete" type="button">
-          删除
-        </button>
-      </div>
-      <div class="admin-user-permissions">
-        ${renderAdminPermissionGroup(
-          '讨论区板块负责人',
-          'board',
-          permissionCatalog.boards || [],
-          user.boardModeratorSlugs || [],
-        )}
-        ${renderAdminPermissionGroup(
-          '课程资料负责人',
-          'course',
-          permissionCatalog.courses || [],
-          user.courseManagerSlugs || [],
-        )}
+  adminUsers.innerHTML = users.map((user) => renderAdminUserCard(user, permissionCatalog)).join('');
+  if (adminExpandedUserId) {
+    const expandedCard = Array.from(adminUsers.querySelectorAll('.admin-user-row')).find(
+      (card) => card.dataset.userId === String(adminExpandedUserId),
+    );
+    setAdminUserCardExpanded(expandedCard, true);
+  }
+  updateAdminUserListFilters();
+}
+
+function renderAdminDraftEditor() {
+  return `
+    <article
+      class="admin-user-row admin-user-row-draft is-expanded"
+      data-user-id="draft"
+      data-role="student"
+      data-is-admin="false"
+      data-board-count="0"
+      data-course-count="0"
+      role="listitem"
+    >
+      <header class="admin-user-summary is-draft">
+        <span class="admin-user-avatar is-new" aria-hidden="true">+</span>
+        <span class="admin-user-summary-copy">
+          <strong>创建新用户</strong>
+          <small>填写登录资料和初始账户设置</small>
+        </span>
+        <span class="admin-user-badge is-new">新账号</span>
+      </header>
+      <div class="admin-user-editor">
+        <section class="admin-user-editor-section">
+          <header>
+            <div>
+              <h3>登录资料</h3>
+              <p>创建后可以继续分配讨论区和课程负责范围。</p>
+            </div>
+          </header>
+          <div class="admin-user-fields-grid">
+            ${renderAdminTextField({
+              label: '用户名',
+              field: 'username',
+              placeholder: '至少 3 个字符',
+              autocomplete: 'off',
+              ownerLabel: '新用户',
+            })}
+            ${renderAdminTextField({
+              label: '姓名',
+              field: 'fullName',
+              placeholder: '真实姓名',
+              ownerLabel: '新用户',
+            })}
+            ${renderAdminTextField({
+              label: '学号',
+              field: 'studentId',
+              placeholder: '20 开头的 10 位学号',
+              ownerLabel: '新用户',
+            })}
+            ${renderAdminTextField({
+              label: '邮箱',
+              field: 'email',
+              type: 'email',
+              placeholder: 'name@example.com',
+              ownerLabel: '新用户',
+            })}
+            ${renderAdminTextField({
+              label: '初始密码',
+              field: 'password',
+              type: 'password',
+              placeholder: '至少 6 位',
+              autocomplete: 'new-password',
+              className: 'is-wide',
+              ownerLabel: '新用户',
+            })}
+          </div>
+        </section>
+
+        <section class="admin-user-editor-section">
+          <header>
+            <div>
+              <h3>身份与初始数值</h3>
+              <p>负责范围可在账号创建完成后设置。</p>
+            </div>
+          </header>
+          <div class="admin-user-access-grid">
+            <label class="admin-user-field">
+              <span>身份</span>
+              <select data-field="role" aria-label="新用户的身份">
+                ${renderAdminRoleOptions('student')}
+              </select>
+            </label>
+            <label class="admin-admin-toggle">
+              <input data-field="isAdmin" type="checkbox" />
+              <span class="admin-admin-toggle-control" aria-hidden="true"></span>
+              <span>
+                <strong>管理员</strong>
+                <small>允许管理全站用户与设置</small>
+              </span>
+            </label>
+            <div class="admin-user-balance-fields">
+              ${renderAdminTextField({
+                label: '电元',
+                field: 'electrons',
+                value: 0,
+                type: 'number',
+                ownerLabel: '新用户',
+              })}
+              ${renderAdminTextField({
+                label: '磁元',
+                field: 'manetrons',
+                value: 0,
+                type: 'number',
+                ownerLabel: '新用户',
+              })}
+              ${renderAdminTextField({
+                label: '热力',
+                field: 'heat',
+                value: 0,
+                type: 'number',
+                ownerLabel: '新用户',
+              })}
+            </div>
+          </div>
+        </section>
+
+        <footer class="admin-user-editor-actions">
+          <p class="admin-user-card-status" role="status" aria-live="polite">
+            创建后即可配置负责范围
+          </p>
+          <div>
+            <button class="admin-button admin-button-secondary" data-action="cancel" type="button">
+              取消
+            </button>
+            <button class="admin-button admin-button-primary" data-action="create" type="button">
+              创建用户
+            </button>
+          </div>
+        </footer>
       </div>
     </article>
-  `,
-    )
-    .join('');
+  `;
 }
 
 function insertAdminDraftRow() {
   if (!adminUsers) {
     return;
   }
+  const existingDraft = adminUsers.querySelector('.admin-user-row-draft');
+  if (existingDraft) {
+    existingDraft.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    existingDraft.querySelector('[data-field="username"]')?.focus();
+    return;
+  }
 
-  const draft = document.createElement('article');
-  draft.className = 'admin-user-row admin-user-row-draft';
-  draft.dataset.userId = 'draft';
-  draft.innerHTML = `
-    <div class="admin-user-cell">
-      <label>
-        <span class="admin-user-field-label">用户名</span>
-        <input data-field="username" type="text" placeholder="用户名" aria-label="新用户的用户名" />
-      </label>
-    </div>
-    <div class="admin-user-cell">
-      <label>
-        <span class="admin-user-field-label">姓名</span>
-        <input data-field="fullName" type="text" placeholder="姓名" aria-label="新用户的姓名" />
-      </label>
-    </div>
-    <div class="admin-user-cell">
-      <label>
-        <span class="admin-user-field-label">学号</span>
-        <input data-field="studentId" type="text" placeholder="学号" aria-label="新用户的学号" />
-      </label>
-    </div>
-    <div class="admin-user-cell">
-      <label>
-        <span class="admin-user-field-label">邮箱</span>
-        <input data-field="email" type="email" placeholder="邮箱" aria-label="新用户的邮箱" />
-      </label>
-    </div>
-    <div class="admin-user-cell">
-      <label>
-        <span class="admin-user-field-label">身份</span>
-        <select data-field="role" aria-label="新用户的角色">
-          ${ADMIN_ROLE_OPTIONS.map(
-            ([role, label]) => `<option value="${role}">${label}</option>`,
-          ).join('')}
-        </select>
-      </label>
-    </div>
-    <div class="admin-user-cell admin-user-admin-flag">
-      <label class="admin-permission-toggle">
-        <input data-field="isAdmin" type="checkbox" />
-        <span>管理员</span>
-      </label>
-    </div>
-    <div class="admin-user-cell">
-      <label>
-        <span class="admin-user-field-label">电元</span>
-        <input data-field="electrons" type="number" value="0" aria-label="新用户的电元" />
-      </label>
-    </div>
-    <div class="admin-user-cell">
-      <label>
-        <span class="admin-user-field-label">磁元</span>
-        <input data-field="manetrons" type="number" value="0" aria-label="新用户的磁元" />
-      </label>
-    </div>
-    <div class="admin-user-cell">
-      <label>
-        <span class="admin-user-field-label">热力</span>
-        <input data-field="heat" type="number" value="0" aria-label="新用户的热力" />
-      </label>
-    </div>
-    <div class="admin-actions admin-user-cell">
-      <label class="admin-password-field">
-        <span class="admin-user-field-label">初始密码</span>
-        <input
-          class="admin-password-input"
-          data-field="password"
-          type="password"
-          placeholder="初始密码"
-          autocomplete="new-password"
-          aria-label="新用户的初始密码"
-        />
-      </label>
-      <button class="admin-button admin-button-primary" data-action="create" type="button">
-        保存
-      </button>
-      <button class="admin-button admin-button-secondary" data-action="cancel" type="button">
-        取消
-      </button>
-    </div>
-  `;
+  const dirtyCard = adminUsers.querySelector('.admin-user-row:not(.admin-user-row-draft).is-dirty');
+  if (dirtyCard) {
+    adminUsers
+      .querySelectorAll('.admin-user-row:not(.admin-user-row-draft).is-expanded')
+      .forEach((card) => setAdminUserCardExpanded(card, false));
+    setAdminUserCardExpanded(dirtyCard, true);
+    adminExpandedUserId = dirtyCard.dataset.userId || '';
+    setAdminUserCardStatus(dirtyCard, '请先保存当前修改，再创建新用户', 'dirty');
+    setAdminMessage('请先保存当前账号的修改', 3200);
+    dirtyCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return;
+  }
 
-  adminUsers.prepend(draft);
-  draft.querySelector('[data-field="username"]').focus();
+  adminUsers.insertAdjacentHTML('afterbegin', renderAdminDraftEditor());
+  const draft = adminUsers.querySelector('.admin-user-row-draft');
+  adminExpandedUserId = 'draft';
+  adminUsers
+    .querySelectorAll('.admin-user-row:not(.admin-user-row-draft).is-expanded')
+    .forEach((card) => setAdminUserCardExpanded(card, false));
+  updateAdminUserListFilters();
+  requestAnimationFrame(() => {
+    draft?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    draft?.querySelector('[data-field="username"]')?.focus();
+  });
+}
+
+function setAdminUserCardStatus(card, message, tone = '') {
+  const status = card?.querySelector('.admin-user-card-status');
+  if (!status) {
+    return;
+  }
+  status.textContent = message;
+  status.dataset.tone = tone;
+}
+
+function getAdminUserCardValues(card) {
+  return {
+    fullName: card.querySelector('[data-field="fullName"]')?.value.trim() || '',
+    role: card.querySelector('[data-field="role"]')?.value || 'student',
+    isAdmin: Boolean(card.querySelector('[data-field="isAdmin"]')?.checked),
+    electrons: Number(card.querySelector('[data-field="electrons"]')?.value || 0),
+    manetrons: Number(card.querySelector('[data-field="manetrons"]')?.value || 0),
+    heat: Number(card.querySelector('[data-field="heat"]')?.value || 0),
+    boardModeratorSlugs: Array.from(
+      card.querySelectorAll('[data-permission="board"]:checked'),
+      (input) => input.value,
+    ),
+    courseManagerSlugs: Array.from(
+      card.querySelectorAll('[data-permission="course"]:checked'),
+      (input) => input.value,
+    ),
+  };
+}
+
+function refreshAdminPermissionCounts(card) {
+  ['board', 'course'].forEach((type) => {
+    const output = card.querySelector(`[data-permission-count="${type}"]`);
+    if (!output) {
+      return;
+    }
+    const total = card.querySelectorAll(`[data-permission="${type}"]`).length;
+    const active = card.querySelectorAll(`[data-permission="${type}"]:checked`).length;
+    output.textContent = `${active} / ${total}`;
+  });
+}
+
+function refreshAdminUserCardSummary(card) {
+  if (!card || card.classList.contains('admin-user-row-draft')) {
+    return;
+  }
+
+  const values = getAdminUserCardValues(card);
+  const username = card.querySelector('[data-field="username"]')?.value.trim() || '';
+  const studentId = card.querySelector('[data-field="studentId"]')?.value.trim() || '';
+  const email = card.querySelector('[data-field="email"]')?.value.trim() || '';
+  const boardCount = values.boardModeratorSlugs.length;
+  const courseCount = values.courseManagerSlugs.length;
+  const normalizedRole = normalizeAdminRole(values.role);
+
+  card.dataset.role = normalizedRole;
+  card.dataset.isAdmin = String(values.isAdmin);
+  card.dataset.boardCount = String(boardCount);
+  card.dataset.courseCount = String(courseCount);
+  card.dataset.searchIndex = [username, values.fullName, studentId, email]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  const summaryName = card.querySelector('[data-admin-summary-name]');
+  const summaryRole = card.querySelector('[data-admin-summary-role]');
+  const summaryScopes = card.querySelector('[data-admin-summary-scopes]');
+  if (summaryName) {
+    summaryName.textContent = values.fullName || username;
+  }
+  if (summaryRole) {
+    summaryRole.textContent = getAdminRoleLabel(normalizedRole);
+  }
+  if (summaryScopes) {
+    summaryScopes.innerHTML = renderAdminScopeBadges(boardCount, courseCount, values.isAdmin);
+  }
+
+  refreshAdminPermissionCounts(card);
+  updateAdminUserListFilters();
+}
+
+function resetAdminDeleteConfirmation(button, card) {
+  if (!button) {
+    return;
+  }
+  window.clearTimeout(button.adminDeleteConfirmationTimer);
+  button.adminDeleteConfirmationTimer = null;
+  button.dataset.confirming = 'false';
+  button.classList.remove('is-confirming');
+  button.textContent = '删除账号';
+  if (card?.classList.contains('is-dirty')) {
+    setAdminUserCardStatus(card, '有未保存的修改', 'dirty');
+  } else {
+    setAdminUserCardStatus(
+      card,
+      button.dataset.previousStatus || '尚未修改',
+      button.dataset.previousTone || '',
+    );
+  }
+  delete button.dataset.previousStatus;
+  delete button.dataset.previousTone;
+}
+
+function handleAdminUserFieldInput(event) {
+  const field = event.target.closest('[data-field], [data-permission]');
+  const card = field?.closest('.admin-user-row');
+  if (!field || !card) {
+    return;
+  }
+
+  const adminToggle = card.querySelector('[data-field="isAdmin"]');
+  const roleField = card.querySelector('[data-field="role"]');
+  if (field === adminToggle && !adminToggle.checked && roleField?.value === 'admin') {
+    roleField.value = 'student';
+  }
+
+  if (card.classList.contains('admin-user-row-draft')) {
+    setAdminUserCardStatus(card, '正在填写新账号', 'dirty');
+    return;
+  }
+
+  card.classList.add('is-dirty');
+  resetAdminDeleteConfirmation(card.querySelector('[data-action="delete"]'), card);
+  setAdminUserCardStatus(card, '有未保存的修改', 'dirty');
+  refreshAdminUserCardSummary(card);
+}
+
+function toggleAdminUserEditor(card) {
+  if (!card || card.classList.contains('admin-user-row-draft')) {
+    return;
+  }
+  const draft = adminUsers?.querySelector('.admin-user-row-draft');
+  if (draft) {
+    setAdminUserCardStatus(draft, '请先创建或取消新用户，再编辑其他账号', 'dirty');
+    setAdminMessage('请先完成或取消新用户', 3200);
+    draft.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    draft.querySelector('[data-field="username"]')?.focus();
+    return;
+  }
+  const shouldExpand = !card.classList.contains('is-expanded');
+  adminUsers
+    ?.querySelectorAll('.admin-user-row:not(.admin-user-row-draft).is-expanded')
+    .forEach((otherCard) => setAdminUserCardExpanded(otherCard, false));
+  setAdminUserCardExpanded(card, shouldExpand);
+  adminExpandedUserId = shouldExpand ? card.dataset.userId || '' : '';
+  updateAdminUserListFilters();
 }
 
 async function loadAdminUsers() {
@@ -4855,6 +5294,12 @@ async function handleAdminUsersClick(event) {
     return;
   }
 
+  const disclosure = event.target.closest('[data-admin-ui-action="toggle-editor"]');
+  if (disclosure) {
+    toggleAdminUserEditor(disclosure.closest('.admin-user-row'));
+    return;
+  }
+
   const button = event.target.closest('button[data-action]');
 
   if (!button) {
@@ -4868,84 +5313,145 @@ async function handleAdminUsersClick(event) {
     return;
   }
 
-  const fullName = card.querySelector('[data-field="fullName"]').value.trim();
-  const role = card.querySelector('[data-field="role"]').value;
-  const electrons = Number(card.querySelector('[data-field="electrons"]').value || 0);
-  const manetrons = Number(card.querySelector('[data-field="manetrons"]').value || 0);
-  const heat = Number(card.querySelector('[data-field="heat"]')?.value || 0);
-  const isAdmin = Boolean(card.querySelector('[data-field="isAdmin"]')?.checked);
-  const boardModeratorSlugs = Array.from(
-    card.querySelectorAll('[data-permission="board"]:checked'),
-    (input) => input.value,
+  const action = button.dataset.action;
+
+  if (action === 'cancel') {
+    card.remove();
+    adminExpandedUserId = '';
+    updateAdminUserListFilters();
+    setAdminMessage('');
+    adminAddUserButton?.focus();
+    return;
+  }
+
+  if (action === 'delete' && button.dataset.confirming !== 'true') {
+    const currentStatus = card.querySelector('.admin-user-card-status');
+    button.dataset.previousStatus = currentStatus?.textContent.trim() || '尚未修改';
+    button.dataset.previousTone = currentStatus?.dataset.tone || '';
+    button.dataset.confirming = 'true';
+    button.classList.add('is-confirming');
+    button.textContent = '再次点击确认';
+    setAdminUserCardStatus(
+      card,
+      `即将删除“${
+        card.querySelector('[data-admin-summary-name]')?.textContent.trim() || '该用户'
+      }”，请再次点击确认`,
+      'danger',
+    );
+    button.adminDeleteConfirmationTimer = window.setTimeout(() => {
+      resetAdminDeleteConfirmation(button, card);
+    }, 5000);
+    return;
+  }
+
+  const values = getAdminUserCardValues(card);
+  const actionButtons = Array.from(card.querySelectorAll('button[data-action]'));
+  const mutableFields = Array.from(card.querySelectorAll('input:not([readonly]), select')).map(
+    (field) => ({
+      field,
+      wasDisabled: field.disabled,
+    }),
   );
-  const courseManagerSlugs = Array.from(
-    card.querySelectorAll('[data-permission="course"]:checked'),
-    (input) => input.value,
-  );
+  actionButtons.forEach((actionButton) => {
+    actionButton.disabled = true;
+  });
+  mutableFields.forEach(({ field }) => {
+    field.disabled = true;
+  });
+  card.classList.add('is-saving');
+  card.setAttribute('aria-busy', 'true');
 
   try {
-    if (button.dataset.action === 'cancel') {
-      card.remove();
-      setAdminMessage('');
-      return;
-    }
-
-    if (button.dataset.action === 'create') {
+    if (action === 'create') {
+      setAdminUserCardStatus(card, '正在创建账号…');
       setAdminMessage('正在创建用户...');
-      await callApi('/admin/users', {
+      const payload = await callApi('/admin/users', {
         method: 'POST',
         body: JSON.stringify({
           username: card.querySelector('[data-field="username"]').value.trim(),
-          fullName,
+          fullName: values.fullName,
           studentId: card.querySelector('[data-field="studentId"]').value.trim(),
           email: card.querySelector('[data-field="email"]').value.trim(),
           password: card.querySelector('[data-field="password"]').value,
-          role,
-          isAdmin,
-          electrons,
-          manetrons,
-          heat,
+          role: values.role,
+          isAdmin: values.isAdmin,
+          electrons: values.electrons,
+          manetrons: values.manetrons,
+          heat: values.heat,
         }),
       });
-      setAdminMessage('用户创建成功');
-      loadAdminUsers();
+      adminExpandedUserId = String(payload.user?.id || '');
+      setAdminMessage('用户创建成功', 3200);
+      await loadAdminUsers();
+      const createdCard = Array.from(adminUsers?.querySelectorAll('.admin-user-row') || []).find(
+        (item) => item.dataset.userId === adminExpandedUserId,
+      );
+      if (createdCard) {
+        setAdminUserCardStatus(createdCard, '账号已创建', 'success');
+        createdCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
       return;
     }
 
-    if (button.dataset.action === 'save') {
+    if (action === 'save') {
+      setAdminUserCardStatus(card, '正在保存…');
       setAdminMessage('正在保存用户...');
       await callApi(`/admin/users/${userId}`, {
         method: 'PATCH',
         body: JSON.stringify({
-          fullName,
-          role,
-          isAdmin,
-          electrons,
-          manetrons,
-          heat,
-          boardModeratorSlugs,
-          courseManagerSlugs,
+          fullName: values.fullName,
+          role: values.role,
+          isAdmin: values.isAdmin,
+          electrons: values.electrons,
+          manetrons: values.manetrons,
+          heat: values.heat,
+          boardModeratorSlugs: values.boardModeratorSlugs,
+          courseManagerSlugs: values.courseManagerSlugs,
         }),
       });
-      setAdminMessage('用户已更新');
-      loadAdminUsers();
+      card.classList.remove('is-dirty');
+      refreshAdminUserCardSummary(card);
+      setAdminUserCardStatus(
+        card,
+        `已保存 · ${new Intl.DateTimeFormat('zh-CN', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }).format(new Date())}`,
+        'success',
+      );
+      setAdminMessage('用户已更新', 3200);
       return;
     }
 
-    if (button.dataset.action === 'delete') {
-      if (!window.confirm('确认删除该用户？')) {
-        return;
-      }
-
+    if (action === 'delete') {
+      window.clearTimeout(button.adminDeleteConfirmationTimer);
+      setAdminUserCardStatus(card, '正在删除账号…', 'danger');
       setAdminMessage('正在删除用户...');
       await callApi(`/admin/users/${userId}`, {
         method: 'DELETE',
       });
-      setAdminMessage('用户已删除');
-      loadAdminUsers();
+      card.remove();
+      adminExpandedUserId = '';
+      updateAdminUserListFilters();
+      setAdminMessage('用户已删除', 3200);
     }
   } catch (error) {
+    if (action === 'delete') {
+      resetAdminDeleteConfirmation(button, card);
+    }
+    setAdminUserCardStatus(card, error.message, 'danger');
     setAdminMessage(error.message);
+  } finally {
+    card.classList.remove('is-saving');
+    card.removeAttribute('aria-busy');
+    if (card.isConnected) {
+      actionButtons.forEach((actionButton) => {
+        actionButton.disabled = false;
+      });
+      mutableFields.forEach(({ field, wasDisabled }) => {
+        field.disabled = wasDisabled;
+      });
+    }
   }
 }
 
@@ -4968,7 +5474,7 @@ async function handleFortuneBonusToggle(event) {
 
     userState.fortuneBonusEnabled = Boolean(payload.fortuneBonusEnabled);
     fortuneBonusToggle.checked = userState.fortuneBonusEnabled;
-    setAdminMessage(userState.fortuneBonusEnabled ? '运势加成已开启' : '运势加成已关闭');
+    setAdminMessage(userState.fortuneBonusEnabled ? '运势加成已开启' : '运势加成已关闭', 3200);
   } catch (error) {
     fortuneBonusToggle.checked = userState.fortuneBonusEnabled;
     setAdminMessage(error.message);
@@ -6620,6 +7126,10 @@ fortuneLinks.forEach((link) => {
 });
 adminAddUserButton?.addEventListener('click', insertAdminDraftRow);
 adminUsers?.addEventListener('click', handleAdminUsersClick);
+adminUsers?.addEventListener('input', handleAdminUserFieldInput);
+adminUserSearch?.addEventListener('input', updateAdminUserListFilters);
+adminUserRoleFilter?.addEventListener('change', updateAdminUserListFilters);
+adminUserScopeFilter?.addEventListener('change', updateAdminUserListFilters);
 fortuneBonusToggle?.addEventListener('change', handleFortuneBonusToggle);
 settingsForm?.addEventListener('submit', handleSettingsSubmit);
 settingsPasswordForm?.addEventListener('submit', handleSettingsPasswordSubmit);
