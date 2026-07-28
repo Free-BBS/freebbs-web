@@ -289,7 +289,7 @@ function initializeDashboardShell() {
     { href: '/discussion', icon: 'people', label: '讨论区' },
     { href: '/workbench', icon: 'run', label: '我的工作台' },
     { href: '/aichat', icon: 'ai', label: '问问 Max' },
-    { href: '/development', icon: 'star', label: '发展端' },
+    { href: '/development/', icon: 'star', label: '发展端' },
     { href: '/settings', icon: 'gear', label: '设置' },
     {
       href: '/system-settings',
@@ -330,8 +330,9 @@ function initializeDashboardShell() {
         text.textContent = label;
       }
 
-      link.classList.toggle('is-active', href === activePath);
-      if (href === activePath) {
+      const navPath = href.endsWith('/') && href !== '/' ? href.slice(0, -1) : href;
+      link.classList.toggle('is-active', navPath === activePath);
+      if (navPath === activePath) {
         link.setAttribute('aria-current', 'page');
       } else if (link.getAttribute('aria-current') === 'page') {
         link.removeAttribute('aria-current');

@@ -313,7 +313,17 @@ sudo -u deploy test -r /etc/free-bbs/free-bbs.env
 
 所以数据服务器只需要相信应用服务器 IP，不需要相信 GitHub 的公网 IP 段。
 
-## 8. 首次上线建议顺序
+## 8. 发展端入口与登录回跳
+
+主站导航固定指向 `/development/`。生产 Nginx 必须在主站静态应用的兜底规则之前加载发展端仓库提供的
+`deploy/nginx/freebbs-development.locations.conf`，并在主站 HTTPS `server` 的静态 fallback 之前 include；该片段使 `/development/` 和 `/api/development/v1/` 由独立发展端接管。不要 include Docker Web 镜像使用的完整 `freebbs-development.conf`。
+`public/development.html` 仅是运行主站静态服务器时的开发提示，不能作为发展端已经上线的证据。
+
+发布顺序固定为：先完成发展端数据库、API、静态页、权限和回滚冒烟，再合并/发布主站入口。`/development`
+以 308 跳转到 `/development/`；旧 `/development.html` 只 canonicalize 到 `/development/`。登录成功后只恢复经
+`public/return-to.js` 验证的同源绝对路径，外部 URL、`//`、反斜杠和畸形编码一律回退首页。
+
+## 9. 首次上线建议顺序
 
 1. 先在应用服务器上手动 `git clone`
 2. 手动执行 `npm ci`
@@ -323,7 +333,7 @@ sudo -u deploy test -r /etc/free-bbs/free-bbs.env
 6. 确认服务正常
 7. 再启用 GitHub Actions 自动部署
 
-## 9. `chown: invalid user` 的处理
+## 10. `chown: invalid user` 的处理
 
 报这个错只有一个原因：系统中不存在 `deploy` 用户。
 

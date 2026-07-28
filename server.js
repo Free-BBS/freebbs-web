@@ -33,7 +33,7 @@ const htmlRedirects = new Map([
   ['/aichat.html', '/aichat'],
   ['/course.html', '/course'],
   ['/course-map-editor.html', '/course-map-editor'],
-  ['/development.html', '/development'],
+  ['/development.html', '/development/'],
   ['/discussion.html', '/discussion'],
   ['/electromagnetic.html', '/electromagnetic'],
   ['/inventory.html', '/inventory'],
@@ -124,6 +124,14 @@ const server = http.createServer((request, response) => {
     request.url || '/',
     `http://${request.headers.host || `${host}:${port}`}`,
   );
+  if (requestUrl.pathname === '/development') {
+    response.writeHead(308, {
+      Location: `/development/${requestUrl.search}`,
+    });
+    response.end();
+    return;
+  }
+
   const cleanPath =
     requestUrl.pathname.endsWith('/') && requestUrl.pathname !== '/'
       ? requestUrl.pathname.slice(0, -1)

@@ -149,15 +149,16 @@ password: free-bbs
 
 ## 当前功能分布
 
-| 功能                   | 前端位置                                                                                               | 后端/数据依赖                             |
-| ---------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
-| 首页与导航             | `public/index.html`、`public/app.js`、`public/styles.css`                                              | 静态服务即可展示。                        |
-| 学习世界               | `public/world.html`、`public/world.js`、`public/world.css`                                             | 静态服务即可展示，版块跳转到讨论区。      |
-| 登录 / 注册 / 个人资料 | `public/login.html`、`public/register.html`、`public/profile.html`、`public/auth.js`、`public/app.js`  | 需要认证 API、用户表和 JWT。              |
-| 讨论区                 | `public/discussion.html`、`public/app.js`                                                              | 需要讨论区 API、MySQL 表、上传目录。      |
-| AI 对话                | `public/aichat.html`、`public/app.js`                                                                  | 需要后端 API 转发到 `AGENT_URL`。         |
-| 签到 / 资产玩法        | `public/electromagnetic.html`、`public/inventory.html`、`public/data/shop-items.json`、`public/app.js` | 需要用户、签到、资产相关 API 和数据库表。 |
-| 管理用户               | `public/adminusers.html`                                                                               | 需要管理员鉴权和用户管理 API。            |
+| 功能                   | 前端位置                                                                                               | 后端/数据依赖                                               |
+| ---------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| 首页与导航             | `public/index.html`、`public/app.js`、`public/styles.css`                                              | 静态服务即可展示。                                          |
+| 学习世界               | `public/world.html`、`public/world.js`、`public/world.css`                                             | 静态服务即可展示，版块跳转到讨论区。                        |
+| 登录 / 注册 / 个人资料 | `public/login.html`、`public/register.html`、`public/profile.html`、`public/auth.js`、`public/app.js`  | 需要认证 API、用户表和 JWT。                                |
+| 讨论区                 | `public/discussion.html`、`public/app.js`                                                              | 需要讨论区 API、MySQL 表、上传目录。                        |
+| AI 对话                | `public/aichat.html`、`public/app.js`                                                                  | 需要后端 API 转发到 `AGENT_URL`。                           |
+| 签到 / 资产玩法        | `public/electromagnetic.html`、`public/inventory.html`、`public/data/shop-items.json`、`public/app.js` | 需要用户、签到、资产相关 API 和数据库表。                   |
+| 管理用户               | `public/adminusers.html`                                                                               | 需要管理员鉴权和用户管理 API。                              |
+| 发展端入口             | `/development/`、`public/development.html`、`public/return-to.js`                                      | 生产由 Nginx 接管独立发展端；本地主站仅显示明确的开发提示。 |
 
 ## CI/CD 和部署
 
@@ -174,6 +175,8 @@ password: free-bbs
 
 注意：
 
+- 发展端 canonical 入口固定为 `/development/`；生产发布必须先验证独立发展端，再开放主站导航。
+- 登录页只接受单斜杠开头的同源 `returnTo` 路径，非法或畸形值回退 `/`。
 - 默认自动部署不会执行数据库 SQL。
 - 数据库迁移需要手动触发 `Database Migration` workflow，并明确输入 `RUN`。
 - 上传文件不应提交到 Git，生产环境建议使用 `UPLOAD_DIR=/data/www/free-BBS/uploads` 这类持久目录。

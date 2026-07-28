@@ -76,8 +76,29 @@
 
       <nav class="mobile-nav" aria-label="手机底部导航"></nav>
 
-      <main class="main-content">
-        <h1>发展端</h1>
+      <main class="main-content settings-main" data-local-development-placeholder>
+        <section class="settings-shell" aria-labelledby="development-title">
+          <div class="settings-header">
+            <h1 id="development-title">发展端</h1>
+          </div>
+          <section class="settings-profile">
+            <h2>本地开发入口</h2>
+            <p>
+              生产环境中的完整发展端 React 应用由生产 Nginx 在
+              <code>/development/</code> 提供；本页只用于主站仓库的本地开发提示，不代表线上功能。
+            </p>
+            <p>
+              <a
+                class="hero-primary-action"
+                href="https://github.com/Free-BBS/Free-bbs-Development"
+                target="_blank"
+                rel="noreferrer"
+              >
+                查看发展端仓库与本地启动说明
+              </a>
+            </p>
+          </section>
+        </section>
       </main>
     </div>
 

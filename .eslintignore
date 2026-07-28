@@ -4,3 +4,4 @@ test/
 public/vendor/
 demo/signals-course/vendor/
 *.min.js
+demo/**/vendor/

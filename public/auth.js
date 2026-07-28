@@ -202,7 +202,11 @@ async function handleAuthSubmit(event) {
     }
 
     localStorage.setItem(STORAGE_KEY, payload.token);
-    window.location.href = '/';
+    if (mode === 'login') {
+      window.location.assign(window.FreeBBSReturnTo.readReturnTo());
+    } else {
+      window.location.assign('/');
+    }
   } catch (error) {
     setMessage(error.message);
   } finally {
