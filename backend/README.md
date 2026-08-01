@@ -60,6 +60,8 @@ npm run start:backend
   连通性和统一认证边界；固定白名单，不发送凭据、不跟随登录跳转、不保留响应 Cookie
 - `GET /api/workbench/connectors/public-notices/probe`：抓取固定的清华公开通知样例页，
   返回状态码、响应哈希、解析版本和条目摘要，供开发阶段验证解析链路
+- `GET /api/workbench/connectors/tsinghua-learn/capabilities`：返回网络学堂连接器核心的
+  解析版本、固定接口范围和安全上限；该接口只说明能力状态，不代表已经取得用户私有数据
 
 以上工作台接口均从 Bearer Token 解析用户身份，不接受客户端传入的 `user_id`。
 
@@ -73,6 +75,18 @@ npm run probe:public-source
 公开通知样例页。它不是统一身份认证实现，也不会绕过登录；生产同步必须改用校方批准的
 SSO / API 流程。FREE BBS 不应收集同学的清华密码；授权令牌仅应由服务端加密保存、
 设置短有效期，并支持用户主动解绑和撤销。
+网络学堂抓取核心位于 `backend/tsinghua-learn-connector.js`。它只接受服务端注入的
+`authorizedFetch`，并只允许固定的 HTTPS 主机与课程、公告、作业接口；重定向、响应体、
+请求总量、课程数、并发数和请求间隔均受限。接入校方批准的 SSO 会话代理前，工作台会明确
+显示“等待授权传输”，不会从浏览器接收密码或 Cookie，也不会伪造私有课程数据。
+
+连接器契约与安全边界可单独回归：
+
+```bash
+npm run test:tsinghua-connectors
+```
+
+完整状态、证据口径和真实统一认证接入条件见 [清华校内连接器说明](../docs/tsinghua-connectors.md)。
 
 - `GET|PATCH /api/admin/system-settings/model`：管理员可查看状态并替换 API key；
   Base URL 和模型名只由部署环境管理，避免把已保存密钥转发到任意地址

@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const express = require('express');
 const { probePrimaryTsinghuaPortals } = require('./portal-boundary-probe');
 const { probePublicNoticeSource } = require('./public-source-probe');
+const { getLearnConnectorCapabilities } = require('./tsinghua-learn-connector');
 
 const NOTIFICATION_CATEGORIES = new Set([
   'course',
@@ -356,6 +357,14 @@ function createWorkbenchRouter({ pool, requireAuth }) {
 
     const portals = await probePrimaryTsinghuaPortals();
     response.json({ portals });
+  });
+  router.get('/connectors/tsinghua-learn/capabilities', async (request, response) => {
+    const user = await requireAuth(request, response);
+    if (!user) {
+      return;
+    }
+
+    response.json({ connector: getLearnConnectorCapabilities() });
   });
 
   router.get('/summary', async (request, response) => {

@@ -2,6 +2,7 @@
 
 const { probePublicNoticeSource } = require('../backend/public-source-probe');
 const { probePrimaryTsinghuaPortals } = require('../backend/portal-boundary-probe');
+const { getTsinghuaConnectorCapabilities } = require('../backend/tsinghua-learn-connector');
 
 async function main() {
   const [publicSource, portals] = await Promise.all([
@@ -12,6 +13,7 @@ async function main() {
     `${JSON.stringify(
       {
         generatedAt: new Date().toISOString(),
+        connectorCapabilities: getTsinghuaConnectorCapabilities(),
         publicSource,
         portals,
       },

@@ -296,10 +296,11 @@
             <article class="workbench-dashboard-card workbench-source-card">
               <div class="workbench-source-copy">
                 <p class="workbench-card-eyebrow">Connector Lab</p>
-                <h2>校内连接器真实自检</h2>
+                <h2>校内连接器证据自检</h2>
                 <p>
-                  先探测网络学堂与信息门户的真实认证边界，再抓取一页清华公开通知作为解析样本。
-                  全程使用固定白名单，不登录、不发送或保存 Cookie，也不继续访问通知详情。
+                  先探测网络学堂与信息门户的真实认证边界，再抓取一页清华公开通知作为解析样本，
+                  同时核对课程、公告与作业解析模块是否加载。真实账号同步尚未验证；未配置校方批准的
+                  授权传输前，不会取得私有数据，也不会从浏览器接收密码或 Cookie。
                 </p>
                 <a
                   href="https://learning.tsinghua.edu.cn/xwgg/tzgg.htm"
@@ -311,24 +312,28 @@
               </div>
               <div class="workbench-source-console">
                 <div class="workbench-source-actions">
-                  <button id="workbench-source-probe" type="button">运行真实抓取测试</button>
-                  <span id="workbench-source-status" role="status">登录后可运行</span>
+                  <button id="workbench-source-probe" type="button">
+                    运行连通性与公开解析自检
+                  </button>
+                  <span id="workbench-source-status" role="status"
+                    >登录 FREE BBS 后可运行，不登录清华</span
+                  >
                 </div>
                 <dl class="workbench-source-metrics hidden" id="workbench-source-metrics">
                   <div>
-                    <dt>HTTP</dt>
+                    <dt>公开样本 HTTP</dt>
                     <dd id="workbench-source-http">—</dd>
                   </div>
                   <div>
-                    <dt>耗时</dt>
+                    <dt>公开样本耗时</dt>
                     <dd id="workbench-source-duration">—</dd>
                   </div>
                   <div>
-                    <dt>字节</dt>
+                    <dt>公开样本字节</dt>
                     <dd id="workbench-source-bytes">—</dd>
                   </div>
                   <div>
-                    <dt>条目</dt>
+                    <dt>公开样本条目</dt>
                     <dd id="workbench-source-count">—</dd>
                   </div>
                 </dl>

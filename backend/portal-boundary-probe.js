@@ -64,6 +64,45 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+async function readBoundedPortalResponse(response, targetName) {
+  const advertisedLength = Number(response.headers.get('content-length') || 0);
+  if (advertisedLength > MAX_RESPONSE_BYTES) {
+    throw new PortalBoundaryProbeError('response_too_large', `${targetName}响应超过安全上限`);
+  }
+
+  if (!response.body || typeof response.body.getReader !== 'function') {
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length > MAX_RESPONSE_BYTES) {
+      throw new PortalBoundaryProbeError('response_too_large', `${targetName}响应超过安全上限`);
+    }
+    return bytes;
+  }
+
+  const reader = response.body.getReader();
+  const chunks = [];
+  let reading = true;
+  let totalBytes = 0;
+  try {
+    while (reading) {
+      const { done, value } = await reader.read();
+      if (done) {
+        reading = false;
+        continue;
+      }
+      const chunk = Buffer.from(value);
+      totalBytes += chunk.length;
+      if (totalBytes > MAX_RESPONSE_BYTES) {
+        await reader.cancel();
+        throw new PortalBoundaryProbeError('response_too_large', `${targetName}响应超过安全上限`);
+      }
+      chunks.push(chunk);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, totalBytes);
+}
+
 async function probePortalBoundary(
   targetId,
   {
@@ -106,21 +145,14 @@ async function probePortalBoundary(
     throw new PortalBoundaryProbeError('upstream_unavailable', `${target.name}当前不可访问`);
   }
 
-  const advertisedLength = Number(response.headers.get('content-length') || 0);
-  if (advertisedLength > MAX_RESPONSE_BYTES) {
-    throw new PortalBoundaryProbeError('response_too_large', `${target.name}响应超过安全上限`);
-  }
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (bytes.length > MAX_RESPONSE_BYTES) {
-    throw new PortalBoundaryProbeError('response_too_large', `${target.name}响应超过安全上限`);
-  }
+  const bytes = await readBoundedPortalResponse(response, target.name);
 
   const rawLocation = response.headers.get('location') || '';
   let safeLocation = '';
   if (rawLocation) {
     try {
       const resolved = new URL(rawLocation, target.url);
-      safeLocation = isTsinghuaHttpsUrl(resolved) ? resolved.toString() : '[已阻止的非白名单跳转]';
+      safeLocation = isTsinghuaHttpsUrl(resolved) ? resolved.origin : '[已阻止的非白名单跳转]';
     } catch {
       safeLocation = '[无效跳转]';
     }
@@ -141,7 +173,7 @@ async function probePortalBoundary(
     status: response.status,
     classification: classifyPortalResponse({
       status: response.status,
-      location: safeLocation,
+      location: rawLocation,
       bodyText,
     }),
     redirectLocation: safeLocation,

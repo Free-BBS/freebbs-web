@@ -47,6 +47,36 @@ test('portal probe records live evidence and discards response cookies', async (
   assert.doesNotMatch(JSON.stringify(result), /JSESSIONID|secret/);
 });
 
+test('portal probe strips sensitive path and query data from an allowed redirect', async () => {
+  const result = await probePortalBoundary('learn', {
+    fetchImpl: async () =>
+      new Response(null, {
+        status: 302,
+        headers: {
+          location:
+            'https://id.tsinghua.edu.cn/do/off/ui/auth/login?ticket=ST-sensitive&state=private',
+        },
+      }),
+    now: () => new Date('2026-08-01T09:00:00.000Z'),
+    useCache: false,
+  });
+
+  assert.equal(result.classification, 'auth_required');
+  assert.equal(result.redirectLocation, 'https://id.tsinghua.edu.cn');
+  assert.doesNotMatch(JSON.stringify(result), /ST-sensitive|ticket=|state=private/);
+});
+
+test('stops reading streamed responses at the byte limit', async () => {
+  await assert.rejects(
+    probePortalBoundary('learn', {
+      fetchImpl: async () => new Response('x'.repeat(128 * 1024 + 1)),
+      now: () => new Date('2026-08-01T09:00:00.000Z'),
+      useCache: false,
+    }),
+    (error) => error instanceof PortalBoundaryProbeError && error.code === 'response_too_large',
+  );
+});
+
 test('portal probe never exposes an arbitrary target URL', async () => {
   await assert.rejects(
     probePortalBoundary('http://127.0.0.1', { fetchImpl: async () => new Response('ok') }),

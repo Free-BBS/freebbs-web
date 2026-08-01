@@ -62,6 +62,12 @@ test('connector self-check targets the two primary portals without accepting arb
   assert.match(html, /网络学堂与信息门户/);
   assert.match(controller, /connectors\/primary-portals\/probe/);
   assert.match(controller, /connectors\/public-notices\/probe/);
+  assert.match(controller, /connectors\/tsinghua-learn\/capabilities/);
+  assert.match(controller, /等待校方批准的授权传输/);
+  assert.match(html, /不会取得私有数据/);
+  assert.match(html, /真实账号同步尚未验证/);
+  assert.match(html, /运行连通性与公开解析自检/);
+  assert.doesNotMatch(controller, /认证后抓取核心就绪/);
   assert.match(controller, /portal\.safeguards\?\.credentialsSent === false/);
   assert.match(controller, /publicSource\?\.safeguards\?\.authenticationUsed === false/);
   assert.match(controller, /publicSource\.cached \? '缓存' : '实时'/);

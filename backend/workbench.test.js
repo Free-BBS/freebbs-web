@@ -88,6 +88,35 @@ test('summary requires authentication and never queries personal data for guests
   assert.equal(calls.length, 0);
 });
 
+test('learn connector capabilities are authenticated and do not claim private data access', async (t) => {
+  const pool = {
+    async execute() {
+      throw new Error('capability discovery must not query the database');
+    },
+  };
+  const baseUrl = await startTestServer(t, {
+    user: { id: 7, is_admin: false },
+    pool,
+  });
+
+  const unauthorized = await requestJson(baseUrl, '/connectors/tsinghua-learn/capabilities', {
+    auth: false,
+  });
+  assert.equal(unauthorized.response.status, 401);
+
+  const { response, payload } = await requestJson(
+    baseUrl,
+    '/connectors/tsinghua-learn/capabilities',
+  );
+  assert.equal(response.status, 200);
+  assert.equal(payload.connector.transport.state, 'awaiting_authorized_transport');
+  assert.equal(payload.connector.validationState, 'fixture_only');
+  assert.equal(payload.connector.liveSyncState, 'blocked_pending_authorization');
+  assert.equal(payload.connector.transport.acceptsPasswordFromBrowser, false);
+  assert.equal(payload.connector.transport.acceptsCookieFromBrowser, false);
+  assert.equal(payload.connector.safeguards.rawResponsesPersisted, false);
+});
+
 test('summary scopes all three data sets to the authenticated user', async (t) => {
   const calls = [];
   const pool = {

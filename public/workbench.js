@@ -672,7 +672,7 @@
     }).format(date);
   }
 
-  function renderSourceEvidence(publicSource, portals) {
+  function renderSourceEvidence(publicSource, portals, connector) {
     const portalResults = Array.isArray(portals) ? portals : [];
     const livePortals = portalResults.filter((portal) => portal.network === 'live');
     elements.sourceMetrics.classList.remove('hidden');
@@ -717,11 +717,36 @@
           publicSource.contentSha256
         }`
       : '公开解析源本次不可用';
+    const connectorEvidence = connector
+      ? `${connector.id}: implementation=${connector.implementationState} / validation=${connector.validationState} / live_sync=${connector.liveSyncState} / auth=${connector.transport?.state} / parser=${connector.parserVersion || 'unknown'}`
+      : '私有连接器能力声明不可用';
 
     elements.sourceProof.classList.remove('hidden');
-    elements.sourceProof.textContent = `${sourceEvidence} · ${portalSummary} · credentials_sent=${credentialsState} · redirects_followed=${redirectState} · public_auth_used=${publicAuthState} · details_followed=${detailFollowState}`;
+    elements.sourceProof.textContent = `${sourceEvidence} · ${portalSummary} · ${connectorEvidence} · credentials_sent=${credentialsState} · redirects_followed=${redirectState} · public_auth_used=${publicAuthState} · details_followed=${detailFollowState}`;
 
     const rows = [];
+    if (connector) {
+      const item = document.createElement('li');
+      const link = document.createElement('a');
+      link.href = 'https://learn.tsinghua.edu.cn/';
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      const status = document.createElement('time');
+      status.textContent = '私有连接器';
+      const title = document.createElement('span');
+      const implementationLabel =
+        connector.validationState === 'fixture_only'
+          ? '抓取解析代码已实现（合成样例已验证）'
+          : '解析验证状态未知';
+      const liveSyncLabel =
+        connector.liveSyncState === 'verified' ? '真实账号同步已验证' : '真实账号同步未验证';
+      const authorizationLabel =
+        connector.transport?.state === 'configured' ? '授权传输已配置' : '等待校方批准的授权传输';
+      title.textContent = `${connector.name} · ${implementationLabel} · ${liveSyncLabel} · ${authorizationLabel}`;
+      link.append(status, title);
+      item.append(link);
+      rows.push(item);
+    }
     portalResults.forEach((portal) => {
       const item = document.createElement('li');
       const link = document.createElement('a');
@@ -774,18 +799,28 @@
   async function runSourceProbe() {
     if (!requireLogin()) return;
     elements.sourceProbe.disabled = true;
-    elements.sourceStatus.textContent = '正在连接两个校内系统并抓取公开样本…';
+    elements.sourceStatus.textContent = '正在探测两个校内认证边界并抓取公开样本…';
     try {
-      const [publicResult, portalResult] = await Promise.allSettled([
+      const [publicResult, portalResult, connectorResult] = await Promise.allSettled([
         app.callApi('/workbench/connectors/public-notices/probe', { method: 'GET' }),
         app.callApi('/workbench/connectors/primary-portals/probe', { method: 'GET' }),
+        app.callApi('/workbench/connectors/tsinghua-learn/capabilities', { method: 'GET' }),
       ]);
-      if (publicResult.status === 'rejected' && portalResult.status === 'rejected') {
+      if (
+        publicResult.status === 'rejected' &&
+        portalResult.status === 'rejected' &&
+        connectorResult.status === 'rejected'
+      ) {
         throw publicResult.reason;
       }
       const publicSource = publicResult.status === 'fulfilled' ? publicResult.value.probe : null;
       const portals = portalResult.status === 'fulfilled' ? portalResult.value.portals : [];
-      renderSourceEvidence(publicSource, portals);
+      const connector =
+        connectorResult.status === 'fulfilled' ? connectorResult.value.connector : null;
+      renderSourceEvidence(publicSource, portals, connector);
+      const failedChecks = [publicResult, portalResult, connectorResult].filter(
+        (result) => result.status === 'rejected',
+      ).length;
       const livePortals = portals.filter((portal) => portal.network === 'live');
       const cachedPortals = livePortals.filter((portal) => portal.cached).length;
       const failedPortals = Math.max(0, 2 - livePortals.length);
@@ -795,7 +830,11 @@
       const publicState = publicSource
         ? `公开样本 ${publicSource.itemCount} 条（${publicSource.cached ? '缓存' : '实时'}）`
         : '公开样本失败';
-      elements.sourceStatus.textContent = `自检完成 · ${portalState} · ${publicState}`;
+      const connectorState = connector
+        ? '私有连接器：合成样例已验证，真实账号同步未验证'
+        : '私有连接器能力声明失败';
+      const completionState = failedChecks ? `自检部分完成（${failedChecks} 项失败）` : '自检完成';
+      elements.sourceStatus.textContent = `${completionState} · ${portalState} · ${publicState} · ${connectorState}`;
     } catch (error) {
       elements.sourceStatus.textContent = error.message || '连接器自检失败';
     } finally {
