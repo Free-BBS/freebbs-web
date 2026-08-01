@@ -22,6 +22,8 @@ const MAX_AGENT_AVATAR = '/assets/max_the_agent_avatar.webp';
 
 const STORAGE_KEY = 'free_bbs_auth_token';
 const THEME_STORAGE_KEY = 'free_bbs_theme_mode';
+const WORKBENCH_LAST_LEARNING_KEY = 'free_bbs_last_learning_route';
+const DISCUSSION_REQUEST_TIMEOUT_MS = 5000;
 const USER_ROLE_LABELS = {
   student: '学生',
   ta: '助教',
@@ -122,6 +124,18 @@ const discussionBoardEdit = document.getElementById('discussion-board-edit');
 const discussionBoardModerators = document.getElementById('discussion-board-moderators');
 const discussionStatsPosts = document.getElementById('discussion-stats-posts');
 const discussionStatsLikes = document.getElementById('discussion-stats-likes');
+const discussionFilterControls = Array.from(document.querySelectorAll('[data-discussion-sort]'));
+const discussionFilterStatus = document.getElementById('discussion-filter-status');
+const workbenchGreeting = document.getElementById('workbench-greeting');
+const workbenchDate = document.getElementById('workbench-date');
+const workbenchSessionState = document.getElementById('workbench-session-state');
+const workbenchContinueTitle = document.getElementById('workbench-continue-title');
+const workbenchContinueDescription = document.getElementById('workbench-continue-description');
+const workbenchContinueLink = document.getElementById('workbench-continue-link');
+const workbenchPriorityList = document.getElementById('workbench-priority-list');
+const workbenchNotificationList = document.getElementById('workbench-notification-list');
+const workbenchScheduleList = document.getElementById('workbench-schedule-list');
+const workbenchAgentAction = document.getElementById('workbench-agent-action');
 const aiChatForm = document.getElementById('aichat-form');
 const aiChatInput = document.getElementById('aichat-input');
 const aiChatThread = document.getElementById('aichat-thread');
@@ -147,7 +161,14 @@ const discussionState = {
   isFallback: false,
   activePost: null,
   comments: [],
+  viewMode: 'latest',
 };
+
+function createDiscussionRequestSignal() {
+  return typeof window.AbortSignal?.timeout === 'function'
+    ? window.AbortSignal.timeout(DISCUSSION_REQUEST_TIMEOUT_MS)
+    : undefined;
+}
 const DISCUSSION_COMMENT_PREVIEW_DELAY_MS = 160;
 const DISCUSSION_COMMENT_DRAFT_LIMIT = 40;
 const discussionCommentDrafts = new Map();
@@ -1630,6 +1651,528 @@ function formatDateOnly(value) {
   }).format(date);
 }
 
+function getLearningRouteMeta(pathname) {
+  return (
+    {
+      '/world': {
+        title: '返回学习世界',
+        description: '继续浏览课程入口和知识地图。',
+      },
+      '/course': {
+        title: '继续课程知识地图',
+        description: '回到最近打开的课程地图，继续定位知识点。',
+      },
+      '/knowledge': {
+        title: '继续知识点阅读',
+        description: '回到最近阅读的知识点与课程资料。',
+      },
+    }[pathname] || null
+  );
+}
+
+function recordRecentLearningRoute() {
+  const pathname = window.location.pathname.replace(/\/$/, '') || '/';
+  const meta = getLearningRouteMeta(pathname);
+
+  if (!meta) {
+    return;
+  }
+
+  localStorage.setItem(
+    WORKBENCH_LAST_LEARNING_KEY,
+    JSON.stringify({
+      href: `${pathname}${window.location.search}`,
+      pathname,
+    }),
+  );
+}
+
+function getStoredLearningRoute() {
+  const fallback = {
+    href: '/world',
+    title: '从学习世界开始',
+    description: '选择一门课程，先从课程地图了解知识结构。',
+  };
+
+  try {
+    const stored = JSON.parse(localStorage.getItem(WORKBENCH_LAST_LEARNING_KEY) || 'null');
+    const pathname = String(stored?.pathname || '');
+    const meta = getLearningRouteMeta(pathname);
+    const url = new URL(String(stored?.href || ''), window.location.origin);
+
+    if (!meta || url.origin !== window.location.origin || url.pathname !== pathname) {
+      return fallback;
+    }
+
+    return {
+      href: `${url.pathname}${url.search}`,
+      ...meta,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+const WORKBENCH_TIME_ZONE = 'Asia/Shanghai';
+const WORKBENCH_CATEGORY_LABELS = {
+  course: '课程',
+  organization: '组织',
+  personal: '个人',
+  system: '系统',
+  activity: '活动',
+};
+const WORKBENCH_PRIORITY_LABELS = {
+  low: '低优先级',
+  normal: '普通',
+  high: '重要',
+  urgent: '紧急',
+};
+const workbenchDashboardState = {
+  ownerKey: '',
+  requestVersion: 0,
+  status: 'idle',
+  summary: null,
+};
+
+function getWorkbenchOwnerKey() {
+  return String(userState.uid || userState.username || '');
+}
+
+function setWorkbenchListBusy(list, isBusy) {
+  list?.setAttribute('aria-busy', String(Boolean(isBusy)));
+}
+
+function truncateWorkbenchText(value, maxLength = 88) {
+  const normalized = String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, Math.max(1, maxLength - 1)).trimEnd()}…`;
+}
+
+function normalizeWorkbenchActionUrl(value) {
+  const raw = String(value || '').trim();
+
+  if (!raw) {
+    return '';
+  }
+
+  try {
+    const url = new URL(raw, window.location.origin);
+
+    if (url.username || url.password) {
+      return '';
+    }
+
+    if (url.origin === window.location.origin) {
+      return `${url.pathname}${url.search}${url.hash}`;
+    }
+
+    return url.protocol === 'https:' ? url.toString() : '';
+  } catch {
+    return '';
+  }
+}
+
+function createWorkbenchDataItem({ eyebrow, title, description, href }) {
+  const item = document.createElement('li');
+  item.className = 'workbench-state-item';
+
+  const itemEyebrow = document.createElement('span');
+  itemEyebrow.textContent = eyebrow;
+
+  const itemTitle = document.createElement('strong');
+  itemTitle.textContent = title;
+
+  const safeHref = normalizeWorkbenchActionUrl(href);
+  if (safeHref) {
+    const link = document.createElement('a');
+    link.className = 'workbench-state-link';
+    link.href = safeHref;
+    link.append(itemTitle);
+
+    if (new URL(safeHref, window.location.origin).origin !== window.location.origin) {
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+    }
+
+    item.append(itemEyebrow, link);
+  } else {
+    item.append(itemEyebrow, itemTitle);
+  }
+
+  const itemDescription = document.createElement('small');
+  itemDescription.textContent = description;
+  item.append(itemDescription);
+  return item;
+}
+
+function replaceWorkbenchDataItems(list, items) {
+  if (!list) {
+    return;
+  }
+
+  setWorkbenchListBusy(list, false);
+  list.replaceChildren(...items);
+}
+
+function formatWorkbenchMoment(value, allDay = false) {
+  if (!value) {
+    return '时间待确认';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '时间待确认';
+  }
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: WORKBENCH_TIME_ZONE,
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+    ...(allDay ? {} : { hour: '2-digit', minute: '2-digit' }),
+  }).format(date);
+}
+
+function formatWorkbenchScheduleWindow(item) {
+  if (item.allDay) {
+    return `${formatWorkbenchMoment(item.startAt, true)} · 全天`;
+  }
+
+  const start = formatWorkbenchMoment(item.startAt);
+  const end = formatWorkbenchMoment(item.endAt);
+  return start === '时间待确认' ? start : `${start} — ${end}`;
+}
+
+function renderWorkbenchImportantItems(items) {
+  const records = Array.isArray(items) ? items.slice(0, 4) : [];
+
+  if (!records.length) {
+    replaceWorkbenchList(
+      workbenchPriorityList,
+      '重要事项',
+      '暂无重要事项',
+      '新建事项或从通知中确认后，会按截止时间显示在这里。',
+    );
+    setWorkbenchListBusy(workbenchPriorityList, false);
+    return;
+  }
+
+  replaceWorkbenchDataItems(
+    workbenchPriorityList,
+    records.map((item) => {
+      const details = [
+        item.dueAt ? `截止：${formatWorkbenchMoment(item.dueAt)}` : '暂未设置截止时间',
+        truncateWorkbenchText(item.description),
+      ].filter(Boolean);
+
+      return createWorkbenchDataItem({
+        eyebrow: WORKBENCH_PRIORITY_LABELS[item.priority] || '重要事项',
+        title: item.title || '未命名事项',
+        description: details.join(' · '),
+        href: item.actionUrl,
+      });
+    }),
+  );
+}
+
+function renderWorkbenchNotifications(items) {
+  const records = Array.isArray(items) ? items.slice(0, 4) : [];
+
+  if (!records.length) {
+    replaceWorkbenchList(
+      workbenchNotificationList,
+      '通知',
+      '暂无新通知',
+      '接入课程或组织通知源后，最新内容会显示在这里。',
+    );
+    setWorkbenchListBusy(workbenchNotificationList, false);
+    return;
+  }
+
+  replaceWorkbenchDataItems(
+    workbenchNotificationList,
+    records.map((item) => {
+      const category = WORKBENCH_CATEGORY_LABELS[item.category] || '通知';
+      const stateLabel = item.readAt || item.isRead ? category : `未读 · ${category}`;
+      const details = [
+        item.publishedAt ? formatWorkbenchMoment(item.publishedAt) : '',
+        truncateWorkbenchText(item.body),
+      ].filter(Boolean);
+
+      return createWorkbenchDataItem({
+        eyebrow: stateLabel,
+        title: item.title || '未命名通知',
+        description: details.join(' · ') || '发布时间待确认',
+        href: item.actionUrl,
+      });
+    }),
+  );
+}
+
+function renderWorkbenchScheduleItems(items) {
+  const records = Array.isArray(items) ? items.slice(0, 4) : [];
+
+  if (!records.length) {
+    replaceWorkbenchList(
+      workbenchScheduleList,
+      '本周时间表',
+      '本周暂无已确认日程',
+      '手动添加或确认计划草稿后，日程才会进入时间表。',
+    );
+    setWorkbenchListBusy(workbenchScheduleList, false);
+    return;
+  }
+
+  replaceWorkbenchDataItems(
+    workbenchScheduleList,
+    records.map((item) =>
+      createWorkbenchDataItem({
+        eyebrow: item.allDay ? '全天' : '已确认',
+        title: item.title || '未命名日程',
+        description: [formatWorkbenchScheduleWindow(item), truncateWorkbenchText(item.description)]
+          .filter(Boolean)
+          .join(' · '),
+        href: item.actionUrl,
+      }),
+    ),
+  );
+}
+
+function renderWorkbenchSummary(summary) {
+  const payload = summary && typeof summary === 'object' ? summary : {};
+  renderWorkbenchImportantItems(payload.importantItems);
+  renderWorkbenchNotifications(payload.notifications);
+  renderWorkbenchScheduleItems(payload.scheduleItems);
+}
+
+function renderWorkbenchLoadingState() {
+  [
+    [workbenchPriorityList, '重要事项', '正在加载个人事项'],
+    [workbenchNotificationList, '通知', '正在加载通知摘要'],
+    [workbenchScheduleList, '本周时间表', '正在加载已确认日程'],
+  ].forEach(([list, eyebrow, title]) => {
+    replaceWorkbenchList(list, eyebrow, title, '正在读取你的个人工作台数据。');
+    setWorkbenchListBusy(list, true);
+  });
+}
+
+function renderWorkbenchErrorState() {
+  [
+    [workbenchPriorityList, '重要事项'],
+    [workbenchNotificationList, '通知'],
+    [workbenchScheduleList, '本周时间表'],
+  ].forEach(([list, eyebrow]) => {
+    replaceWorkbenchList(list, eyebrow, '暂时无法加载', '请检查后端服务或稍后重试。');
+    setWorkbenchListBusy(list, false);
+
+    const retryButton = document.createElement('button');
+    retryButton.className = 'workbench-retry-action';
+    retryButton.type = 'button';
+    retryButton.dataset.workbenchRetry = 'true';
+    retryButton.textContent = '重新加载';
+    list?.firstElementChild?.append(retryButton);
+  });
+}
+
+function resetWorkbenchDashboardState(ownerKey = '') {
+  workbenchDashboardState.requestVersion += 1;
+  workbenchDashboardState.ownerKey = ownerKey;
+  workbenchDashboardState.status = 'idle';
+  workbenchDashboardState.summary = null;
+}
+
+async function loadWorkbenchSummary(force = false) {
+  if (document.body.dataset.workbenchController === 'standalone') {
+    return;
+  }
+
+  if (!workbenchGreeting || !userState.isLoggedIn) {
+    return;
+  }
+
+  const ownerKey = getWorkbenchOwnerKey();
+
+  if (!ownerKey) {
+    return;
+  }
+
+  if (workbenchDashboardState.ownerKey !== ownerKey) {
+    resetWorkbenchDashboardState(ownerKey);
+  }
+
+  if (!force && workbenchDashboardState.status === 'loading') {
+    return;
+  }
+
+  const requestVersion = workbenchDashboardState.requestVersion + 1;
+  workbenchDashboardState.requestVersion = requestVersion;
+  workbenchDashboardState.status = 'loading';
+  renderWorkbenchLoadingState();
+
+  try {
+    const payload = await callApi('/workbench/summary', { method: 'GET' });
+
+    if (
+      requestVersion !== workbenchDashboardState.requestVersion ||
+      !userState.isLoggedIn ||
+      getWorkbenchOwnerKey() !== ownerKey
+    ) {
+      return;
+    }
+
+    workbenchDashboardState.status = 'loaded';
+    workbenchDashboardState.summary = payload;
+    renderWorkbenchSummary(payload);
+  } catch (error) {
+    if (
+      requestVersion !== workbenchDashboardState.requestVersion ||
+      getWorkbenchOwnerKey() !== ownerKey
+    ) {
+      return;
+    }
+
+    if (error.status === 401) {
+      clearSession();
+      return;
+    }
+
+    workbenchDashboardState.status = 'error';
+    workbenchDashboardState.summary = null;
+    renderWorkbenchErrorState();
+  }
+}
+
+function handleWorkbenchRetry(event) {
+  if (!event.target.closest('[data-workbench-retry]')) {
+    return;
+  }
+
+  loadWorkbenchSummary(true);
+}
+
+document.querySelector('.workbench-shell')?.addEventListener('click', handleWorkbenchRetry);
+
+function replaceWorkbenchList(list, eyebrow, title, description) {
+  if (!list) {
+    return;
+  }
+
+  const item = document.createElement('li');
+  item.className = 'workbench-state-item';
+  const itemEyebrow = document.createElement('span');
+  itemEyebrow.textContent = eyebrow;
+  const itemTitle = document.createElement('strong');
+  itemTitle.textContent = title;
+  const itemDescription = document.createElement('small');
+  itemDescription.textContent = description;
+  item.append(itemEyebrow, itemTitle, itemDescription);
+  list.replaceChildren(item);
+}
+
+function renderWorkbenchDashboard() {
+  if (!workbenchGreeting || !workbenchDate) {
+    return;
+  }
+
+  const today = new Intl.DateTimeFormat('zh-CN', {
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long',
+  }).format(new Date());
+  const learningRoute = getStoredLearningRoute();
+  const displayName = userState.fullName || userState.username || '同学';
+  const hasStandaloneWorkbenchController =
+    document.body.dataset.workbenchController === 'standalone';
+
+  document.body.classList.toggle('is-workbench-authenticated', userState.isLoggedIn);
+  workbenchDate.textContent = today;
+  workbenchGreeting.textContent = userState.isLoggedIn
+    ? `${displayName}，今天从哪里继续？`
+    : '把今天要做的事放在一个地方';
+
+  if (workbenchSessionState) {
+    workbenchSessionState.textContent = userState.isLoggedIn
+      ? `已登录 · ${userState.electrons} 电元 · ${userState.manetrons} 磁元 · ${userState.heat} 热力`
+      : '游客预览 · 登录后同步个人学习与时间事项';
+  }
+
+  if (workbenchContinueTitle) {
+    workbenchContinueTitle.textContent = learningRoute.title;
+  }
+  if (workbenchContinueDescription) {
+    workbenchContinueDescription.textContent = learningRoute.description;
+  }
+  if (workbenchContinueLink) {
+    workbenchContinueLink.href = learningRoute.href;
+    workbenchContinueLink.textContent =
+      learningRoute.href === '/world' ? '进入学习世界' : '继续上次学习';
+  }
+
+  if (hasStandaloneWorkbenchController) {
+    // The page controller owns the three data lists and their CRUD state.
+  } else if (userState.isLoggedIn) {
+    const ownerKey = getWorkbenchOwnerKey();
+
+    if (workbenchDashboardState.ownerKey !== ownerKey) {
+      resetWorkbenchDashboardState(ownerKey);
+    }
+
+    if (workbenchDashboardState.status === 'loaded') {
+      renderWorkbenchSummary(workbenchDashboardState.summary);
+    } else if (workbenchDashboardState.status === 'loading') {
+      renderWorkbenchLoadingState();
+    } else if (workbenchDashboardState.status === 'error') {
+      renderWorkbenchErrorState();
+    } else {
+      loadWorkbenchSummary();
+    }
+  } else {
+    if (workbenchDashboardState.ownerKey || workbenchDashboardState.status !== 'idle') {
+      resetWorkbenchDashboardState();
+    }
+
+    replaceWorkbenchList(
+      workbenchPriorityList,
+      '登录后可用',
+      '查看个人重要事项',
+      '登录后按截止时间汇总需要处理的内容。',
+    );
+    replaceWorkbenchList(
+      workbenchNotificationList,
+      '登录后可用',
+      '查看分类通知',
+      '课程、组织和个人通知会在这里集中展示。',
+    );
+    replaceWorkbenchList(
+      workbenchScheduleList,
+      '登录后可用',
+      '查看个人时间表',
+      '登录后查看并调整自己的本周安排。',
+    );
+    setWorkbenchListBusy(workbenchPriorityList, false);
+    setWorkbenchListBusy(workbenchNotificationList, false);
+    setWorkbenchListBusy(workbenchScheduleList, false);
+  }
+
+  if (workbenchAgentAction) {
+    const prompt = encodeURIComponent('请根据我本周的学习目标，生成一份可确认的时间计划草稿');
+    workbenchAgentAction.href = userState.isLoggedIn ? `/aichat?prompt=${prompt}` : '/login';
+    workbenchAgentAction.innerHTML = userState.isLoggedIn
+      ? '让工作管家帮我规划 <span aria-hidden="true">↗</span>'
+      : '登录后使用工作管家 <span aria-hidden="true">↗</span>';
+    workbenchAgentAction.setAttribute(
+      'aria-label',
+      userState.isLoggedIn ? '让工作管家生成计划草稿' : '登录后使用工作管家',
+    );
+  }
+}
 function renderUser() {
   if (isAiChatPage()) {
     document.body.classList.add('is-ai-session-ready');
@@ -1664,6 +2207,7 @@ function renderUser() {
     });
     renderAiDialogList();
     renderDiscussionComposerState();
+    renderWorkbenchDashboard();
     return;
   }
 
@@ -1697,6 +2241,7 @@ function renderUser() {
   }
 
   renderDiscussionComposerState();
+  renderWorkbenchDashboard();
 }
 
 function setAdminMessage(message, autoHideDelay = 0) {
@@ -1797,9 +2342,11 @@ async function callApi(path, options = {}) {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(
+    const error = new Error(
       payload.detail ? `${payload.message}：${payload.detail}` : payload.message || '请求失败',
     );
+    error.status = response.status;
+    throw error;
   }
 
   return payload;
@@ -2270,26 +2817,126 @@ function renderDiscussionComposeBoards() {
   }
 }
 
+function getDiscussionPostEngagement(post) {
+  return (
+    Number(post.commentCount || 0) * 2 +
+    Number(post.likeCount || 0) +
+    Number(post.lightCount || 0) +
+    Number(post.fireworksCount || 0)
+  );
+}
+
+function getDiscussionVisiblePosts() {
+  const mode = discussionState.viewMode;
+  let posts = [...discussionState.posts];
+
+  if (mode === 'unanswered') {
+    posts = posts.filter((post) => Number(post.commentCount || 0) === 0);
+  } else if (mode === 'answered') {
+    posts = posts.filter((post) => Number(post.commentCount || 0) > 0);
+  }
+
+  return posts.sort((left, right) => {
+    const pinnedOrder = Number(Boolean(right.isPinned)) - Number(Boolean(left.isPinned));
+    if (pinnedOrder) {
+      return pinnedOrder;
+    }
+
+    if (mode === 'hot') {
+      const engagementOrder =
+        getDiscussionPostEngagement(right) - getDiscussionPostEngagement(left);
+      if (engagementOrder) {
+        return engagementOrder;
+      }
+    }
+
+    return new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime();
+  });
+}
+
+function getDiscussionViewLabel(mode) {
+  return (
+    {
+      latest: '最新',
+      hot: '热门',
+      unanswered: '待回复',
+      answered: '有回复',
+    }[mode] || '最新'
+  );
+}
+
+function updateDiscussionFilterControls(visibleCount) {
+  discussionFilterControls.forEach((control) => {
+    const isActive = control.dataset.discussionSort === discussionState.viewMode;
+    control.classList.toggle('is-active', isActive);
+    control.setAttribute('aria-pressed', String(isActive));
+  });
+
+  if (discussionFilterStatus) {
+    const sourceLabel = discussionState.isFallback ? '本地演示数据' : '讨论区';
+    discussionFilterStatus.textContent = `${sourceLabel} · 当前列表 ${getDiscussionViewLabel(
+      discussionState.viewMode,
+    )} · ${visibleCount} 帖`;
+  }
+}
+
+function createDiscussionPostExcerpt(post) {
+  const source = String(post.excerpt || post.contentPreview || post.contentMarkdown || '');
+  const plainText = source
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[#>*_`~$\\-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!plainText) {
+    return '';
+  }
+
+  return plainText.length > 96 ? `${plainText.slice(0, 96)}…` : plainText;
+}
+
 function renderDiscussionPosts() {
   if (!discussionPostList) {
     return;
   }
 
+  const visiblePosts = getDiscussionVisiblePosts();
+  updateDiscussionFilterControls(visiblePosts.length);
+
   if (!discussionState.posts.length) {
     discussionPostList.innerHTML = `
-      <article class="discussion-empty">
-        <p>这个版块还没有帖子。</p>
+      <article class="discussion-empty" role="listitem">
+        <strong>这个版块还没有帖子</strong>
+        <p>可以发布第一个问题，或切换到其他版块继续浏览。</p>
       </article>
     `;
     return;
   }
 
-  discussionPostList.innerHTML = discussionState.posts
-    .map(
-      (post) => `
+  if (!visiblePosts.length) {
+    discussionPostList.innerHTML = `
+      <article class="discussion-empty" role="listitem">
+        <strong>当前筛选下没有帖子</strong>
+        <p>当前列表没有符合条件的帖子，可以返回最新内容继续浏览。</p>
+        <button type="button" data-action="reset-discussion-filter">返回最新</button>
+      </article>
+    `;
+    return;
+  }
+
+  discussionPostList.innerHTML = visiblePosts
+    .map((post) => {
+      const excerpt = createDiscussionPostExcerpt(post);
+      const replyCount = Number(post.commentCount || 0);
+      const replyLabel = replyCount > 0 ? `${replyCount} 条回复` : '待回复';
+
+      return `
     <article
-      class="discussion-post-card ${discussionState.activePostId === post.id ? 'is-active' : ''}"
+      class="discussion-post-card ${discussionState.activePostId === post.id ? 'is-active' : ''} ${replyCount > 0 ? 'is-answered' : 'is-unanswered'}"
       data-post-id="${escapeHtml(post.id)}"
+      role="listitem"
     >
       <div class="discussion-post-author">
         ${renderAuthorProfileLink(post.author, 'discussion-author-link discussion-author-link-avatar', true)}
@@ -2301,6 +2948,7 @@ function renderDiscussionPosts() {
           ${post.isFeatured ? `<span class="discussion-feature-badge">精华</span>` : ''}
           ${renderAuthorProfileLink(post.author, 'discussion-author-link')}
           <span>${escapeHtml(formatDateOnly(post.createdAt))}</span>
+          <span class="discussion-post-reply-state">${escapeHtml(replyLabel)}</span>
         </div>
         <h3>
           <button
@@ -2312,10 +2960,11 @@ function renderDiscussionPosts() {
             ${escapeHtml(post.title)}
           </button>
         </h3>
+        ${excerpt ? `<p class="discussion-post-excerpt">${escapeHtml(excerpt)}</p>` : ''}
         <div class="discussion-post-actions">
           <span class="discussion-comment-count" title="评论">
             <img src="/assets/icons/chats.svg" alt="" aria-hidden="true" />
-            <strong>${post.commentCount || 0}</strong>
+            <strong>${replyCount}</strong>
           </span>
           <div class="discussion-inline-reactions" aria-label="帖子反应">
             ${renderDiscussionReactionButton(post, 'smile')}
@@ -2327,9 +2976,34 @@ function renderDiscussionPosts() {
       </div>
       <span class="discussion-post-open" aria-hidden="true">↗</span>
     </article>
-  `,
-    )
+  `;
+    })
     .join('');
+}
+
+function handleDiscussionFilterClick(event) {
+  const control = event.currentTarget;
+  const nextMode = String(control.dataset.discussionSort || 'latest');
+
+  if (!['latest', 'hot', 'unanswered', 'answered'].includes(nextMode)) {
+    return;
+  }
+
+  discussionState.viewMode = nextMode;
+
+  if (
+    discussionState.activePostId &&
+    !getDiscussionVisiblePosts().some((post) => post.id === discussionState.activePostId)
+  ) {
+    discussionState.activePostId = '';
+    renderDiscussionDetail(null);
+    updateDiscussionQuery({
+      board: discussionState.activeBoard,
+      postId: '',
+    });
+  }
+
+  renderDiscussionPosts();
 }
 
 function renderDiscussionReactionButton(post, reactionType) {
@@ -3381,6 +4055,11 @@ function initializeAiChatPage() {
     return;
   }
 
+  const prompt = new URLSearchParams(window.location.search).get('prompt')?.trim();
+  if (aiChatInput && prompt && !aiChatInput.value) {
+    aiChatInput.value = prompt.slice(0, 2000);
+  }
+
   aiChatInput?.addEventListener('input', resizeAiChatInput);
   aiChatInput?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
@@ -4012,6 +4691,7 @@ async function loadDiscussionBoards() {
   try {
     const payload = await callApi('/discussion/boards', {
       method: 'GET',
+      signal: createDiscussionRequestSignal(),
     });
     discussionState.boards = payload.boards || [];
     discussionState.isFallback = false;
@@ -4033,6 +4713,7 @@ async function loadDiscussionStats() {
   try {
     const payload = await callApi('/discussion/stats', {
       method: 'GET',
+      signal: createDiscussionRequestSignal(),
     });
     renderDiscussionStats(payload);
   } catch {
@@ -4198,6 +4879,8 @@ async function loadDiscussionPosts({ autoOpen = false } = {}) {
     return;
   }
 
+  discussionPostList.setAttribute('aria-busy', 'true');
+
   const activeBoard = discussionState.activeBoard || 'all';
   const currentHash = discussionState.postsHashByBoard[activeBoard] || '';
 
@@ -4221,6 +4904,7 @@ async function loadDiscussionPosts({ autoOpen = false } = {}) {
 
     const payload = await callApi(`/discussion/posts?${query.toString()}`, {
       method: 'GET',
+      signal: createDiscussionRequestSignal(),
     });
     if (!payload.notModified) {
       discussionState.posts = payload.posts || [];
@@ -4247,6 +4931,7 @@ async function loadDiscussionPosts({ autoOpen = false } = {}) {
   renderDiscussionBoards();
   renderDiscussionComposeBoards();
   renderDiscussionPosts();
+  discussionPostList.setAttribute('aria-busy', 'false');
   loadDiscussionStats();
 
   if (!autoOpen) {
@@ -5500,6 +6185,15 @@ async function handleDiscussionBoardClick(event) {
 
 async function handleDiscussionPostClick(event) {
   if (event.target.closest("[data-action='open-profile']")) {
+    return;
+  }
+
+  if (event.target.closest("[data-action='reset-discussion-filter']")) {
+    discussionState.viewMode = 'latest';
+    renderDiscussionPosts();
+    discussionFilterControls
+      .find((control) => control.dataset.discussionSort === 'latest')
+      ?.focus();
     return;
   }
 
@@ -7102,6 +7796,7 @@ function initializeLandingMotion() {
 
 window.freeBbsApp = {
   callApi,
+  clearSession,
   enhanceMarkdownContent,
   get sessionReady() {
     return sessionReady;
@@ -7137,6 +7832,9 @@ settingsAvatarInput?.addEventListener('change', handleAvatarUpload);
 settingsLogoutButton?.addEventListener('click', handleSettingsLogout);
 discussionBoardList?.addEventListener('click', (event) => {
   handleDiscussionBoardClick(event);
+});
+discussionFilterControls.forEach((control) => {
+  control.addEventListener('click', handleDiscussionFilterClick);
 });
 discussionPostList?.addEventListener('click', (event) => {
   handleDiscussionPostClick(event);
@@ -7193,6 +7891,7 @@ window.addEventListener('keydown', (event) => {
     closeCodeCopyMenus();
   }
 });
+recordRecentLearningRoute();
 renderUser();
 loadFortuneConfig();
 sessionReady = restoreSession().finally(() => {

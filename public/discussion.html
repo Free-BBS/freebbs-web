@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css" />
     <link rel="stylesheet" href="/vendor/@highlightjs/cdn-assets/styles/github-dark.min.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/discussion.css" />
   </head>
   <body class="discussion-page">
     <div class="page-shell page-shell-settings">
@@ -140,9 +141,17 @@
 
       <main class="main-content settings-main">
         <section class="settings-shell" aria-label="讨论">
-          <div class="settings-header">
-            <h1>讨论</h1>
-          </div>
+          <header class="discussion-page-heading">
+            <div>
+              <p class="discussion-page-eyebrow">Community Commons</p>
+              <h1>讨论区</h1>
+              <p>把问题、思路和经验沉淀下来，也为后来者留下可以继续追问的上下文。</p>
+            </div>
+            <div class="discussion-page-heading-meta" aria-label="讨论区说明">
+              <span><strong>知识讨论</strong> 围绕课程与学习问题展开</span>
+              <span><strong>匿名树洞</strong> 与知识讨论保持清晰边界</span>
+            </div>
+          </header>
           <section class="discussion-shell" aria-label="讨论区">
             <section class="discussion-layout">
               <section class="discussion-feed" aria-label="帖子列表">
@@ -171,6 +180,60 @@
                     id="discussion-board-about-body"
                   ></div>
                 </section>
+
+                <div class="discussion-feed-toolbar">
+                  <div class="discussion-filter-group" role="group" aria-label="帖子筛选">
+                    <button
+                      class="discussion-filter-chip is-active"
+                      type="button"
+                      data-discussion-sort="latest"
+                      aria-pressed="true"
+                    >
+                      最新
+                    </button>
+                    <button
+                      class="discussion-filter-chip"
+                      type="button"
+                      data-discussion-sort="hot"
+                      aria-pressed="false"
+                    >
+                      热门
+                    </button>
+                    <button
+                      class="discussion-filter-chip"
+                      type="button"
+                      data-discussion-sort="unanswered"
+                      aria-pressed="false"
+                    >
+                      待回复
+                    </button>
+                    <button
+                      class="discussion-filter-chip"
+                      type="button"
+                      data-discussion-sort="answered"
+                      aria-pressed="false"
+                    >
+                      有回复
+                    </button>
+                  </div>
+                  <div class="discussion-feed-toolbar-actions">
+                    <p
+                      id="discussion-filter-status"
+                      role="status"
+                      aria-live="polite"
+                      aria-atomic="true"
+                    >
+                      正在连接讨论区…
+                    </p>
+                    <button
+                      class="discussion-create-toggle"
+                      id="discussion-create-toggle"
+                      type="button"
+                    >
+                      发布帖子
+                    </button>
+                  </div>
+                </div>
 
                 <form class="discussion-compose hidden" id="discussion-compose-form">
                   <div class="discussion-compose-grid">
@@ -220,9 +283,27 @@
                   </div>
                 </form>
 
-                <div class="discussion-post-list" id="discussion-post-list">
-                  <article class="discussion-empty">
-                    <p>正在加载帖子...</p>
+                <div
+                  class="discussion-post-list"
+                  id="discussion-post-list"
+                  role="list"
+                  aria-live="polite"
+                  aria-busy="true"
+                >
+                  <article class="discussion-loading-card" aria-hidden="true">
+                    <span class="discussion-loading-meta"></span>
+                    <span class="discussion-loading-title"></span>
+                    <span class="discussion-loading-copy"></span>
+                  </article>
+                  <article class="discussion-loading-card" aria-hidden="true">
+                    <span class="discussion-loading-meta"></span>
+                    <span class="discussion-loading-title"></span>
+                    <span class="discussion-loading-copy"></span>
+                  </article>
+                  <article class="discussion-loading-card" aria-hidden="true">
+                    <span class="discussion-loading-meta"></span>
+                    <span class="discussion-loading-title"></span>
+                    <span class="discussion-loading-copy"></span>
                   </article>
                 </div>
               </section>
@@ -238,16 +319,6 @@
                   <p class="discussion-kicker">Boards</p>
                   <h2>版块</h2>
                   <div class="discussion-board-list" id="discussion-board-list"></div>
-                </section>
-
-                <section class="discussion-stats-section">
-                  <button
-                    class="discussion-create-toggle"
-                    id="discussion-create-toggle"
-                    type="button"
-                  >
-                    发布帖子
-                  </button>
                 </section>
 
                 <section class="discussion-stats-section">

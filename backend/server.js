@@ -8,6 +8,7 @@ const config = require('./config');
 const { hashPassword, verifyPassword } = require('./password');
 const { sign, verify } = require('./token');
 const { createCourseMapsRouter, ensureCourseMapTables } = require('./course-maps');
+const { createWorkbenchRouter, ensureWorkbenchTables } = require('./workbench');
 const {
   SystemSettingsError,
   createSystemSettingsStore,
@@ -1724,6 +1725,13 @@ app.use(
     requireAuth,
     getOptionalAuthUser,
     uploadDir: config.uploadDir,
+  }),
+);
+app.use(
+  '/api/workbench',
+  createWorkbenchRouter({
+    pool,
+    requireAuth,
   }),
 );
 
@@ -4766,6 +4774,7 @@ async function start() {
   await ensureSystemSecretSettingsTable(pool);
   await ensureDiscussionTables();
   await ensureCourseMapTables(pool);
+  await ensureWorkbenchTables(pool);
   await ensureAiDialogTables();
   await ensureFortuneTables();
   await ensureEconomyTables();

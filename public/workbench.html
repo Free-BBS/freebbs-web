@@ -15,8 +15,9 @@
     />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/workbench.css" />
   </head>
-  <body class="workbench-page">
+  <body class="workbench-page" data-workbench-controller="standalone">
     <div class="page-shell page-shell-settings">
       <header class="topbar">
         <a class="brand" href="/" aria-label="FREE-BBS 首页">
@@ -138,42 +139,377 @@
 
       <main class="main-content settings-main workbench-main">
         <section class="workbench-shell" aria-label="我的工作台">
-          <div class="workbench-intro">
-            <p class="discussion-kicker">Workbench</p>
-            <h1>我的工作台</h1>
-            <p>
-              这里集中放学习入口、讨论动态和个人设置。后续重构时可以继续接入待办、收藏、最近阅读和个人统计。
+          <header class="workbench-hero">
+            <div class="workbench-hero-copy">
+              <p class="workbench-eyebrow">Personal Workspace</p>
+              <h1 id="workbench-greeting">把今天要做的事放在一个地方</h1>
+              <p class="workbench-date" id="workbench-date">正在读取日期…</p>
+              <p class="workbench-intro-copy">
+                从最近学习、重要事项和时间安排继续，不需要在不同页面之间重新寻找上下文。
+              </p>
+            </div>
+            <p class="workbench-session-state" id="workbench-session-state" role="status">
+              正在确认登录状态…
             </p>
+          </header>
+
+          <div class="workbench-dashboard-grid">
+            <article class="workbench-dashboard-card workbench-continue-card">
+              <header class="workbench-card-header">
+                <div>
+                  <p class="workbench-card-eyebrow">Continue</p>
+                  <h2>继续学习</h2>
+                </div>
+                <span class="workbench-card-index" aria-hidden="true">01</span>
+              </header>
+              <div class="workbench-continue-copy">
+                <strong id="workbench-continue-title">从学习世界开始</strong>
+                <p id="workbench-continue-description">选择一门课程，先从课程地图了解知识结构。</p>
+              </div>
+              <a class="workbench-primary-action" id="workbench-continue-link" href="/world">
+                进入学习世界
+              </a>
+            </article>
+
+            <article class="workbench-dashboard-card workbench-priority-card">
+              <header class="workbench-card-header">
+                <div>
+                  <p class="workbench-card-eyebrow">Today</p>
+                  <h2>今日重要事项</h2>
+                </div>
+                <div class="workbench-card-tools">
+                  <span class="workbench-card-status">按截止时间</span>
+                  <button
+                    class="workbench-compact-action"
+                    id="workbench-add-important"
+                    type="button"
+                  >
+                    新增事项
+                  </button>
+                </div>
+              </header>
+              <ul
+                class="workbench-state-list"
+                id="workbench-priority-list"
+                aria-live="polite"
+                aria-busy="false"
+              >
+                <li class="workbench-state-item">
+                  <span>正在准备</span>
+                  <strong>读取个人事项</strong>
+                  <small>登录状态确认后将在这里显示。</small>
+                </li>
+              </ul>
+            </article>
+
+            <article class="workbench-dashboard-card workbench-notification-card">
+              <header class="workbench-card-header">
+                <div>
+                  <p class="workbench-card-eyebrow">Inbox</p>
+                  <h2>通知摘要</h2>
+                </div>
+                <a href="/settings">偏好设置</a>
+              </header>
+              <div class="workbench-filter-row" aria-label="通知筛选">
+                <select id="workbench-notification-category" aria-label="通知分类">
+                  <option value="">全部分类</option>
+                  <option value="course">课程</option>
+                  <option value="organization">组织</option>
+                  <option value="personal">个人</option>
+                  <option value="system">系统</option>
+                  <option value="activity">活动</option>
+                </select>
+                <button
+                  class="workbench-filter-action"
+                  type="button"
+                  data-workbench-notification-filter="unread"
+                  aria-pressed="false"
+                >
+                  仅未读
+                </button>
+                <button
+                  class="workbench-filter-action"
+                  type="button"
+                  data-workbench-notification-filter="favorite"
+                  aria-pressed="false"
+                >
+                  仅收藏
+                </button>
+              </div>
+              <ul
+                class="workbench-state-list"
+                id="workbench-notification-list"
+                aria-live="polite"
+                aria-busy="false"
+              >
+                <li class="workbench-state-item">
+                  <span>正在准备</span>
+                  <strong>读取分类通知</strong>
+                  <small>不会用演示数据替代你的真实通知。</small>
+                </li>
+              </ul>
+            </article>
+
+            <article class="workbench-dashboard-card workbench-schedule-card">
+              <header class="workbench-card-header">
+                <div>
+                  <p class="workbench-card-eyebrow">Schedule</p>
+                  <h2>本周时间表</h2>
+                </div>
+                <div class="workbench-card-tools">
+                  <span class="workbench-card-status">用户确认优先</span>
+                  <button
+                    class="workbench-compact-action"
+                    id="workbench-add-schedule"
+                    type="button"
+                  >
+                    新增日程
+                  </button>
+                </div>
+              </header>
+              <ul
+                class="workbench-state-list"
+                id="workbench-schedule-list"
+                aria-live="polite"
+                aria-busy="false"
+              >
+                <li class="workbench-state-item">
+                  <span>正在准备</span>
+                  <strong>读取时间事项</strong>
+                  <small>Agent 建议不会自动写入你的时间表。</small>
+                </li>
+              </ul>
+            </article>
+
+            <article class="workbench-dashboard-card workbench-agent-card">
+              <div>
+                <p class="workbench-card-eyebrow">Planning Agent</p>
+                <h2>先生成草稿，再由你决定</h2>
+                <p>告诉工作管家可用时间和学习目标，它只会生成可预览、可修改的计划草稿。</p>
+              </div>
+              <a class="workbench-agent-action" id="workbench-agent-action" href="/login">
+                让工作管家帮我规划
+                <span aria-hidden="true">↗</span>
+              </a>
+            </article>
+
+            <article class="workbench-dashboard-card workbench-source-card">
+              <div class="workbench-source-copy">
+                <p class="workbench-card-eyebrow">Connector Lab</p>
+                <h2>校内连接器真实自检</h2>
+                <p>
+                  先探测网络学堂与信息门户的真实认证边界，再抓取一页清华公开通知作为解析样本。
+                  全程使用固定白名单，不登录、不发送或保存 Cookie，也不继续访问通知详情。
+                </p>
+                <a
+                  href="https://learning.tsinghua.edu.cn/xwgg/tzgg.htm"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  打开官方原页面逐项核对
+                </a>
+              </div>
+              <div class="workbench-source-console">
+                <div class="workbench-source-actions">
+                  <button id="workbench-source-probe" type="button">运行真实抓取测试</button>
+                  <span id="workbench-source-status" role="status">登录后可运行</span>
+                </div>
+                <dl class="workbench-source-metrics hidden" id="workbench-source-metrics">
+                  <div>
+                    <dt>HTTP</dt>
+                    <dd id="workbench-source-http">—</dd>
+                  </div>
+                  <div>
+                    <dt>耗时</dt>
+                    <dd id="workbench-source-duration">—</dd>
+                  </div>
+                  <div>
+                    <dt>字节</dt>
+                    <dd id="workbench-source-bytes">—</dd>
+                  </div>
+                  <div>
+                    <dt>条目</dt>
+                    <dd id="workbench-source-count">—</dd>
+                  </div>
+                </dl>
+                <p class="workbench-source-proof hidden" id="workbench-source-proof"></p>
+                <ul class="workbench-source-results" id="workbench-source-results"></ul>
+              </div>
+            </article>
           </div>
 
-          <div class="workbench-grid">
-            <a class="workbench-card" href="/world">
-              <span>学习世界</span>
-              <strong>继续看课程地图</strong>
-              <small>从知识岛、专题和路线回到学习现场。</small>
-            </a>
-            <a class="workbench-card" href="/discussion">
-              <span>讨论区</span>
-              <strong>查看最近讨论</strong>
-              <small>浏览帖子、回复问题，把问题沉淀下来。</small>
-            </a>
-            <a class="workbench-card" href="/aichat">
-              <span>问问 Max</span>
-              <strong>打开 AI 学习助手</strong>
-              <small>围绕课程、资料和思路做快速问答。</small>
-            </a>
-            <a class="workbench-card" href="/settings">
-              <span>设置</span>
-              <strong>更新个人资料</strong>
-              <small>维护头像、简介和个人主页信息。</small>
-            </a>
-          </div>
+          <section class="workbench-quick-section" aria-labelledby="workbench-quick-title">
+            <header>
+              <div>
+                <p class="workbench-card-eyebrow">Quick Access</p>
+                <h2 id="workbench-quick-title">快捷入口</h2>
+              </div>
+              <p>用于快速跳转，不代替上面的个人信息与任务视图。</p>
+            </header>
+            <div class="workbench-grid">
+              <a class="workbench-card" href="/world">
+                <span>学习世界</span>
+                <strong>浏览课程地图</strong>
+                <small>从知识岛、专题和路线进入学习现场。</small>
+              </a>
+              <a class="workbench-card" href="/discussion">
+                <span>讨论区</span>
+                <strong>查看最近讨论</strong>
+                <small>浏览帖子、回复问题，把问题沉淀下来。</small>
+              </a>
+              <a class="workbench-card" href="/aichat">
+                <span>问问 Max</span>
+                <strong>打开 AI 学习助手</strong>
+                <small>围绕课程、资料和思路做快速问答。</small>
+              </a>
+              <a class="workbench-card" href="/settings">
+                <span>个人设置</span>
+                <strong>更新个人资料</strong>
+                <small>维护头像、简介和通知偏好。</small>
+              </a>
+            </div>
+          </section>
         </section>
       </main>
+
+      <dialog
+        class="workbench-dialog"
+        id="workbench-important-dialog"
+        aria-labelledby="workbench-important-dialog-title"
+      >
+        <div class="workbench-dialog-panel">
+          <header>
+            <div>
+              <p class="workbench-card-eyebrow">Important Item</p>
+              <h2 id="workbench-important-dialog-title">新增重要事项</h2>
+            </div>
+            <button
+              class="workbench-dialog-close"
+              type="button"
+              data-workbench-dialog-close
+              aria-label="关闭"
+            >
+              ×
+            </button>
+          </header>
+          <form id="workbench-important-form">
+            <input id="workbench-important-id" type="hidden" />
+            <label>
+              <span>标题</span>
+              <input id="workbench-important-title" name="title" maxlength="200" required />
+            </label>
+            <label>
+              <span>说明</span>
+              <textarea
+                id="workbench-important-description"
+                name="description"
+                maxlength="4000"
+                rows="3"
+              ></textarea>
+            </label>
+            <div class="workbench-form-grid">
+              <label>
+                <span>截止时间</span>
+                <input id="workbench-important-due" name="dueAt" type="datetime-local" />
+              </label>
+              <label>
+                <span>优先级</span>
+                <select id="workbench-important-priority" name="priority">
+                  <option value="normal">普通</option>
+                  <option value="high">重要</option>
+                  <option value="urgent">紧急</option>
+                  <option value="low">低</option>
+                </select>
+              </label>
+            </div>
+            <p class="workbench-form-status" id="workbench-important-form-status" role="status"></p>
+            <footer>
+              <button class="workbench-secondary-action" type="button" data-workbench-dialog-close>
+                取消
+              </button>
+              <button class="workbench-dialog-submit" type="submit">保存事项</button>
+            </footer>
+          </form>
+        </div>
+      </dialog>
+
+      <dialog
+        class="workbench-dialog"
+        id="workbench-schedule-dialog"
+        aria-labelledby="workbench-schedule-dialog-title"
+      >
+        <div class="workbench-dialog-panel">
+          <header>
+            <div>
+              <p class="workbench-card-eyebrow">Schedule Item</p>
+              <h2 id="workbench-schedule-dialog-title">新增日程</h2>
+            </div>
+            <button
+              class="workbench-dialog-close"
+              type="button"
+              data-workbench-dialog-close
+              aria-label="关闭"
+            >
+              ×
+            </button>
+          </header>
+          <form id="workbench-schedule-form">
+            <input id="workbench-schedule-id" type="hidden" />
+            <input id="workbench-schedule-version" type="hidden" />
+            <label>
+              <span>标题</span>
+              <input id="workbench-schedule-title" name="title" maxlength="200" required />
+            </label>
+            <label>
+              <span>说明</span>
+              <textarea
+                id="workbench-schedule-description"
+                name="description"
+                maxlength="4000"
+                rows="3"
+              ></textarea>
+            </label>
+            <div class="workbench-form-grid">
+              <label>
+                <span>开始时间</span>
+                <input
+                  id="workbench-schedule-start"
+                  name="startAt"
+                  type="datetime-local"
+                  required
+                />
+              </label>
+              <label>
+                <span>结束时间</span>
+                <input id="workbench-schedule-end" name="endAt" type="datetime-local" required />
+              </label>
+            </div>
+            <label class="workbench-checkbox-row">
+              <input id="workbench-schedule-all-day" name="allDay" type="checkbox" />
+              <span>全天事项</span>
+            </label>
+            <aside
+              class="workbench-conflict-panel hidden"
+              id="workbench-conflict-panel"
+              role="status"
+            ></aside>
+            <p class="workbench-form-status" id="workbench-schedule-form-status" role="status"></p>
+            <footer>
+              <button class="workbench-secondary-action" type="button" data-workbench-dialog-close>
+                取消
+              </button>
+              <button class="workbench-dialog-submit" id="workbench-schedule-submit" type="submit">
+                保存日程
+              </button>
+            </footer>
+          </form>
+        </div>
+      </dialog>
     </div>
 
     <script src="/vendor/marked/marked.min.js"></script>
     <script src="/vendor/dompurify/dist/purify.min.js"></script>
     <script src="/app.js"></script>
+    <script src="/workbench.js"></script>
   </body>
 </html>
