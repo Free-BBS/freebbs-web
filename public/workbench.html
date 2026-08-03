@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
     <link rel="stylesheet" href="/workbench.css" />
+    <link rel="stylesheet" href="/workbench-connectors.css" />
   </head>
   <body class="workbench-page" data-workbench-controller="standalone">
     <div class="page-shell page-shell-settings">
@@ -293,14 +294,56 @@
               </a>
             </article>
 
+            <article
+              class="workbench-dashboard-card workbench-campus-card"
+              aria-labelledby="workbench-campus-card-title"
+            >
+              <div class="workbench-campus-copy">
+                <p class="workbench-card-eyebrow">Campus Account</p>
+                <h2 id="workbench-campus-card-title">连接清华账号</h2>
+                <p>
+                  连接方式由当前部署配置决定。直接 CAS
+                  兼容模式不是校方正式回调；使用该模式时，密码仅在你明确同意后于本次请求中经过 FREE
+                  BBS 后端，并立即用于清华统一身份认证；密码不会持久化。认证成功后，网络学堂 会话
+                  Cookie 只在服务端按用户隔离，并使用独立密钥加密保存。
+                </p>
+              </div>
+              <section class="workbench-campus-panel" aria-label="清华账号连接状态">
+                <header class="workbench-campus-heading">
+                  <div>
+                    <span id="workbench-campus-state" data-state="loading">正在检查</span>
+                    <h3 id="workbench-campus-title">读取校内连接状态</h3>
+                  </div>
+                  <p id="workbench-campus-last-sync">尚无真实同步记录</p>
+                </header>
+                <p id="workbench-campus-description">
+                  正在确认部署环境是否已经配置校方批准的授权入口。
+                </p>
+                <div class="workbench-campus-actions">
+                  <button id="workbench-campus-connect" type="button" disabled>连接网络学堂</button>
+                  <button id="workbench-campus-sync" type="button" disabled>立即同步</button>
+                  <button id="workbench-campus-disconnect" type="button" disabled>解除连接</button>
+                </div>
+                <p
+                  class="workbench-campus-message"
+                  id="workbench-campus-message"
+                  role="status"
+                  aria-live="polite"
+                ></p>
+                <p class="workbench-campus-info-boundary">
+                  信息门户目前仅支持认证边界探测，私有数据同步尚未实现。
+                </p>
+              </section>
+            </article>
+
             <article class="workbench-dashboard-card workbench-source-card">
               <div class="workbench-source-copy">
                 <p class="workbench-card-eyebrow">Connector Lab</p>
                 <h2>校内连接器证据自检</h2>
                 <p>
                   先探测网络学堂与信息门户的真实认证边界，再抓取一页清华公开通知作为解析样本，
-                  同时核对课程、公告与作业解析模块是否加载。真实账号同步尚未验证；未配置校方批准的
-                  授权传输前，不会取得私有数据，也不会从浏览器接收密码或 Cookie。
+                  同时核对课程、公告与作业解析模块是否加载。本自检与上方个人连接状态相互独立；
+                  它只访问固定公开或认证边界地址，不发送账号、密码或 Cookie，也不会取得私有数据。
                 </p>
                 <a
                   href="https://learning.tsinghua.edu.cn/xwgg/tzgg.htm"
@@ -510,11 +553,104 @@
           </form>
         </div>
       </dialog>
+
+      <dialog
+        class="workbench-dialog workbench-campus-login-dialog"
+        id="workbench-campus-login-dialog"
+        aria-labelledby="workbench-campus-login-dialog-title"
+        aria-describedby="workbench-campus-login-dialog-description"
+      >
+        <div class="workbench-dialog-panel workbench-campus-login-panel">
+          <header>
+            <div>
+              <p class="workbench-card-eyebrow">Campus Account</p>
+              <h2 id="workbench-campus-login-dialog-title">直接连接清华账号</h2>
+            </div>
+            <button
+              class="workbench-dialog-close"
+              id="workbench-campus-login-close"
+              type="button"
+              aria-label="关闭直接连接对话框"
+            >
+              ×
+            </button>
+          </header>
+          <form id="workbench-campus-login-form" autocomplete="off">
+            <p
+              class="workbench-campus-login-description"
+              id="workbench-campus-login-dialog-description"
+            >
+              账号和密码仅用于完成本次清华统一身份认证。密码不会写入数据库、文件、日志或响应；
+              提交请求后，页面会立即清空密码输入框。 认证成功后，网络学堂会话 Cookie
+              使用独立密钥加密保存，并按用户隔离。
+            </p>
+            <label class="workbench-campus-login-field">
+              <span>清华账号 / 学号</span>
+              <input
+                id="workbench-campus-login-username"
+                name="username"
+                type="text"
+                inputmode="text"
+                autocomplete="username"
+                autocapitalize="none"
+                spellcheck="false"
+                maxlength="64"
+                required
+              />
+            </label>
+            <label class="workbench-campus-login-field">
+              <span>清华统一身份认证密码</span>
+              <input
+                id="workbench-campus-login-password"
+                name="password"
+                type="password"
+                autocomplete="current-password"
+                maxlength="256"
+                required
+              />
+            </label>
+            <label class="workbench-campus-login-consent">
+              <input id="workbench-campus-login-consent" name="consent" type="checkbox" required />
+              <span>
+                我已知悉并同意：账号和密码仅在本次连接中经过 FREE BBS
+                后端并提交至清华统一身份认证；密码不会持久化。登录成功后仅在服务端加密保存
+                网络学堂会话 Cookie，页面不会读取或保存 Cookie。页面会在我勾选同意并提交后
+                生成一次性兼容设备指纹，仅用于本次认证，不存储。
+              </span>
+            </label>
+            <p
+              class="workbench-campus-login-status"
+              id="workbench-campus-login-status"
+              role="alert"
+              aria-live="assertive"
+            ></p>
+            <footer>
+              <button
+                class="workbench-secondary-action"
+                id="workbench-campus-login-cancel"
+                type="button"
+              >
+                取消
+              </button>
+              <button
+                class="workbench-dialog-submit"
+                id="workbench-campus-login-submit"
+                type="submit"
+              >
+                同意并连接
+              </button>
+            </footer>
+          </form>
+        </div>
+      </dialog>
     </div>
 
     <script src="/vendor/marked/marked.min.js"></script>
     <script src="/vendor/dompurify/dist/purify.min.js"></script>
-    <script src="/app.js"></script>
+    <script src="/app.js?v=20260803-cas-fix-3"></script>
     <script src="/workbench.js"></script>
+    <script src="/assets/vendor/fingerprint2-1.5.1.min.js"></script>
+    <script src="/tsinghua-cas-fingerprint.js"></script>
+    <script src="/workbench-connectors.js?v=20260803-cas-fix-3"></script>
   </body>
 </html>

@@ -88,6 +88,7 @@ function toImportantItem(row) {
     publicId: row.public_id,
     title: row.title,
     description: row.description || '',
+    actionUrl: row.action_url || '',
     dueAt: toIsoString(row.due_at),
     priority: row.priority,
     status: row.status,
@@ -329,7 +330,12 @@ function sendWorkbenchError(response, error, message) {
   response.status(500).json({ message });
 }
 
-function createWorkbenchRouter({ pool, requireAuth }) {
+function createWorkbenchRouter({
+  pool,
+  requireAuth,
+  learnConnectorCapabilities = {},
+  getCampusConnectorStatus = null,
+}) {
   const router = express.Router();
 
   router.get('/connectors/public-notices/probe', async (request, response) => {
@@ -364,7 +370,16 @@ function createWorkbenchRouter({ pool, requireAuth }) {
       return;
     }
 
-    response.json({ connector: getLearnConnectorCapabilities() });
+    const campusStatus =
+      typeof getCampusConnectorStatus === 'function'
+        ? await getCampusConnectorStatus(user.id).catch(() => null)
+        : null;
+    response.json({
+      connector: getLearnConnectorCapabilities({
+        ...learnConnectorCapabilities,
+        learnLiveSyncVerified: Boolean(campusStatus?.connection?.lastSuccessfulSyncAt),
+      }),
+    });
   });
 
   router.get('/summary', async (request, response) => {
@@ -381,7 +396,7 @@ function createWorkbenchRouter({ pool, requireAuth }) {
       }
 
       const [importantRows] = await pool.execute(
-        `SELECT public_id, title, description, due_at, priority, status, source_type,
+        `SELECT public_id, title, description, action_url, due_at, priority, status, source_type,
                 user_confirmed_at, user_overridden_at
          FROM important_items
          WHERE user_id = ?
@@ -668,7 +683,7 @@ function createWorkbenchRouter({ pool, requireAuth }) {
 
       const includeClosed = String(request.query.includeClosed || '').toLowerCase() === 'true';
       const [rows] = await pool.execute(
-        `SELECT public_id, title, description, due_at, priority, status, source_type,
+        `SELECT public_id, title, description, action_url, due_at, priority, status, source_type,
                 user_confirmed_at, user_overridden_at
          FROM important_items
          WHERE user_id = ?
@@ -712,7 +727,7 @@ function createWorkbenchRouter({ pool, requireAuth }) {
         [publicId, user.id, user.id, title, description || '', dueAt || null, priority],
       );
       const [rows] = await pool.execute(
-        `SELECT public_id, title, description, due_at, priority, status, source_type,
+        `SELECT public_id, title, description, action_url, due_at, priority, status, source_type,
                 user_confirmed_at, user_overridden_at
          FROM important_items
          WHERE public_id = ? AND user_id = ? LIMIT 1`,
@@ -817,7 +832,7 @@ function createWorkbenchRouter({ pool, requireAuth }) {
       }
 
       const [rows] = await pool.execute(
-        `SELECT public_id, title, description, due_at, priority, status, source_type,
+        `SELECT public_id, title, description, action_url, due_at, priority, status, source_type,
                 user_confirmed_at, user_overridden_at
          FROM important_items
          WHERE public_id = ? AND user_id = ? LIMIT 1`,

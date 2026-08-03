@@ -1005,6 +1005,8 @@ async function syncTsinghuaLearn(options = {}) {
 function getTsinghuaConnectorCapabilities({
   learnAuthorizedTransportConfigured = false,
   infoAuthorizedTransportConfigured = false,
+  acceptsPasswordFromBrowser = false,
+  learnLiveSyncVerified = false,
 } = {}) {
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -1014,10 +1016,12 @@ function getTsinghuaConnectorCapabilities({
         name: '清华大学网络学堂',
         crawlCore: 'implemented_fixture_validated',
         implementationState: 'implemented',
-        validationState: 'fixture_only',
-        liveSyncState: learnAuthorizedTransportConfigured
-          ? 'transport_configured_live_sync_unverified'
-          : 'blocked_pending_authorization',
+        validationState: learnLiveSyncVerified ? 'live_account_verified' : 'fixture_only',
+        liveSyncState: learnLiveSyncVerified
+          ? 'verified'
+          : learnAuthorizedTransportConfigured
+            ? 'transport_configured_live_sync_unverified'
+            : 'blocked_pending_authorization',
         authorization: learnAuthorizedTransportConfigured
           ? 'configured'
           : 'awaiting_approved_session_broker',
@@ -1037,7 +1041,7 @@ function getTsinghuaConnectorCapabilities({
       },
     ],
     safeguards: {
-      acceptsPasswords: false,
+      acceptsPasswords: Boolean(acceptsPasswordFromBrowser),
       acceptsClientCookies: false,
       arbitraryTargetUrls: false,
       rawPagesPersisted: false,
@@ -1054,9 +1058,9 @@ function getLearnConnectorCapabilities(options = {}) {
     ...learn,
     transport: {
       mode: 'server_side_only',
-      requiresOfficialAuthorization: true,
+      requiresOfficialAuthorization: options.authorizationStrategy !== 'direct_cas',
       state: isConfigured ? 'configured' : 'awaiting_authorized_transport',
-      acceptsPasswordFromBrowser: false,
+      acceptsPasswordFromBrowser: Boolean(options.acceptsPasswordFromBrowser),
       acceptsCookieFromBrowser: false,
       acceptsArbitraryTargetUrl: false,
     },

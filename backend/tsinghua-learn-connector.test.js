@@ -453,4 +453,21 @@ test('advertises implemented and blocked connector boundaries honestly', () => {
   assert.equal(learnCapability.transport.acceptsPasswordFromBrowser, false);
   assert.equal(learnCapability.transport.acceptsCookieFromBrowser, false);
   assert.equal(learnCapability.safeguards.maximumSyncDurationMs, 60_000);
+
+  const directCapability = getLearnConnectorCapabilities({
+    learnAuthorizedTransportConfigured: true,
+    acceptsPasswordFromBrowser: true,
+    authorizationStrategy: 'direct_cas',
+  });
+  assert.equal(directCapability.transport.state, 'configured');
+  assert.equal(directCapability.transport.requiresOfficialAuthorization, false);
+  assert.equal(directCapability.transport.acceptsPasswordFromBrowser, true);
+  assert.equal(directCapability.safeguards.acceptsPasswords, true);
+
+  const verifiedCapability = getLearnConnectorCapabilities({
+    learnAuthorizedTransportConfigured: true,
+    learnLiveSyncVerified: true,
+  });
+  assert.equal(verifiedCapability.validationState, 'live_account_verified');
+  assert.equal(verifiedCapability.liveSyncState, 'verified');
 });

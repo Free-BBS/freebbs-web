@@ -234,6 +234,7 @@
           eyebrow:
             item.status === 'draft' ? '待确认草稿' : PRIORITY_LABELS[item.priority] || '事项',
           title: item.title || '未命名事项',
+          href: item.actionUrl,
           description: [
             item.dueAt ? `截止：${formatMoment(item.dueAt)}` : '暂未设置截止时间',
             truncate(item.description),
@@ -735,9 +736,11 @@
       status.textContent = '私有连接器';
       const title = document.createElement('span');
       const implementationLabel =
-        connector.validationState === 'fixture_only'
-          ? '抓取解析代码已实现（合成样例已验证）'
-          : '解析验证状态未知';
+        connector.validationState === 'live_account_verified'
+          ? '抓取解析代码已通过真实账号同步验证'
+          : connector.validationState === 'fixture_only'
+            ? '抓取解析代码已实现（合成样例已验证）'
+            : '解析验证状态未知';
       const liveSyncLabel =
         connector.liveSyncState === 'verified' ? '真实账号同步已验证' : '真实账号同步未验证';
       const authorizationLabel =
@@ -831,7 +834,9 @@
         ? `公开样本 ${publicSource.itemCount} 条（${publicSource.cached ? '缓存' : '实时'}）`
         : '公开样本失败';
       const connectorState = connector
-        ? '私有连接器：合成样例已验证，真实账号同步未验证'
+        ? connector.liveSyncState === 'verified'
+          ? '私有连接器：真实账号同步已验证'
+          : '私有连接器：合成样例已验证，真实账号同步未验证'
         : '私有连接器能力声明失败';
       const completionState = failedChecks ? `自检部分完成（${failedChecks} 项失败）` : '自检完成';
       elements.sourceStatus.textContent = `${completionState} · ${portalState} · ${publicState} · ${connectorState}`;
@@ -901,6 +906,10 @@
     dialog?.addEventListener('click', (event) => {
       if (event.target === dialog) closeDialog(dialog);
     });
+  });
+
+  window.addEventListener('freebbs:workbench-refresh', () => {
+    if (isLoggedIn()) loadWorkbenchData();
   });
 
   const authObserver = new MutationObserver(syncSession);

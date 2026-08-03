@@ -2330,7 +2330,10 @@ function clearSession() {
 }
 
 async function callApi(path, options = {}) {
+  const isCampusConnectorRequest =
+    path === '/workbench/connectors/tsinghua' || path.startsWith('/workbench/connectors/tsinghua/');
   const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...(isCampusConnectorRequest ? { credentials: 'include' } : {}),
     headers: {
       'Content-Type': 'application/json',
       ...(userState.token ? { Authorization: `Bearer ${userState.token}` } : {}),
@@ -2346,6 +2349,14 @@ async function callApi(path, options = {}) {
       payload.detail ? `${payload.message}：${payload.detail}` : payload.message || '请求失败',
     );
     error.status = response.status;
+    error.code =
+      typeof payload.code === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(payload.code)
+        ? payload.code
+        : 'request_failed';
+    error.stage =
+      typeof payload.stage === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(payload.stage)
+        ? payload.stage
+        : '';
     throw error;
   }
 

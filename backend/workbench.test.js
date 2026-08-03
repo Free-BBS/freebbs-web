@@ -3,7 +3,10 @@ const test = require('node:test');
 const express = require('express');
 const { createWorkbenchRouter, getDefaultWeekRange, parseRange } = require('./workbench');
 
-async function startTestServer(t, { pool, user }) {
+async function startTestServer(
+  t,
+  { pool, user, learnConnectorCapabilities, getCampusConnectorStatus },
+) {
   const app = express();
   app.use(express.json());
   app.use(
@@ -17,6 +20,8 @@ async function startTestServer(t, { pool, user }) {
         }
         return user;
       },
+      learnConnectorCapabilities,
+      getCampusConnectorStatus,
     }),
   );
 
@@ -115,6 +120,36 @@ test('learn connector capabilities are authenticated and do not claim private da
   assert.equal(payload.connector.transport.acceptsPasswordFromBrowser, false);
   assert.equal(payload.connector.transport.acceptsCookieFromBrowser, false);
   assert.equal(payload.connector.safeguards.rawResponsesPersisted, false);
+});
+
+test('learn connector capabilities expose user-scoped real sync evidence', async (t) => {
+  const baseUrl = await startTestServer(t, {
+    user: { id: 7, is_admin: false },
+    pool: {
+      async execute() {
+        return [[]];
+      },
+    },
+    learnConnectorCapabilities: {
+      learnAuthorizedTransportConfigured: true,
+      acceptsPasswordFromBrowser: true,
+      authorizationStrategy: 'direct_cas',
+    },
+    async getCampusConnectorStatus(userId) {
+      assert.equal(userId, 7);
+      return { connection: { lastSuccessfulSyncAt: '2026-08-02T08:00:00.000Z' } };
+    },
+  });
+
+  const { response, payload } = await requestJson(
+    baseUrl,
+    '/connectors/tsinghua-learn/capabilities',
+  );
+  assert.equal(response.status, 200);
+  assert.equal(payload.connector.validationState, 'live_account_verified');
+  assert.equal(payload.connector.liveSyncState, 'verified');
+  assert.equal(payload.connector.transport.state, 'configured');
+  assert.equal(payload.connector.transport.acceptsPasswordFromBrowser, true);
 });
 
 test('summary scopes all three data sets to the authenticated user', async (t) => {

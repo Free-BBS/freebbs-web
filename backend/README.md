@@ -1,9 +1,20 @@
 # Backend
 
-启动认证后端：
+推荐从仓库根目录启动本地前后端：
 
 ```bash
 npm install
+npm run start:local
+```
+
+`start:local` 会加载 `backend/.env`。`npm run start:backend` 只是直接执行
+`node backend/server.js`，不会自动加载该文件；若需要单独启动后端，必须先在当前 shell 中
+显式导出环境变量：
+
+```bash
+set -a
+source backend/.env
+set +a
 npm run start:backend
 ```
 
@@ -62,6 +73,12 @@ npm run start:backend
   返回状态码、响应哈希、解析版本和条目摘要，供开发阶段验证解析链路
 - `GET /api/workbench/connectors/tsinghua-learn/capabilities`：返回网络学堂连接器核心的
   解析版本、固定接口范围和安全上限；该接口只说明能力状态，不代表已经取得用户私有数据
+- `GET /api/workbench/connectors/tsinghua/status`：返回当前用户的连接方式、连接状态和同步证据
+- `POST /api/workbench/connectors/tsinghua/direct-login`：仅在管理员显式启用 `direct_cas`
+  后可用；请求体只接受账号、密码、明确同意和浏览器在同意后生成的 32 位十六进制
+  `fingerprint`。登录名、密码和指纹仅用于本次认证请求，不持久化、不写日志、不在响应中回显
+- `POST /api/workbench/connectors/tsinghua/sync-runs`：使用服务端加密会话创建网络学堂同步任务
+- `DELETE /api/workbench/connectors/tsinghua/connection`：销毁当前用户的加密会话并停止后续同步
 
 以上工作台接口均从 Bearer Token 解析用户身份，不接受客户端传入的 `user_id`。
 
@@ -72,13 +89,22 @@ npm run probe:public-source
 ```
 
 该命令会访问 `learn.tsinghua.edu.cn`、`info.tsinghua.edu.cn` 的登录边界以及固定的
-公开通知样例页。它不是统一身份认证实现，也不会绕过登录；生产同步必须改用校方批准的
-SSO / API 流程。FREE BBS 不应收集同学的清华密码；授权令牌仅应由服务端加密保存、
-设置短有效期，并支持用户主动解绑和撤销。
+公开通知样例页。它本身不登录、不发送凭据，也不能作为真实账号同步证据。私有网络学堂
+同步可由管理员显式启用 `direct_cas` 兼容模式：账号本人明确同意后，浏览器才生成
+与清华当前登录页面兼容的一次性 32 位十六进制 `fingerPrint`。登录名、密码和该指纹只在本次
+请求中短暂经过后端并立即提交统一身份认证，不持久化、不写日志。只有通过私有接口验真的
+Learn 会话凭据会按用户隔离并使用 AES-256-GCM 加密保存；服务端强制设置最长 8 小时有效期，
+若持久 Cookie 更早过期则取更早时间。该模式不是校方为 FREE BBS 注册的 official callback。
+验证码或二次认证挑战会安全失败并停止登录，不会尝试绕过；信息门户私有数据同步仍未实现。
+
+生产环境的 `PUBLIC_WEB_URL` 强制使用 HTTPS；只有 `NODE_ENV=development/test` 且使用 loopback 主机
+时允许 HTTP。直连登录限流目前保存在单个 Node 进程内：每用户 5 次/15 分钟、每 IP 50 次/
+15 分钟；生产多实例必须使用共享限流器。连接器当前使用归一化登录名作为 subject，它不是
+清华官方 canonical subject 或经核验学号，不应把内部 HMAC 绑定描述为校方身份认证结论。
 网络学堂抓取核心位于 `backend/tsinghua-learn-connector.js`。它只接受服务端注入的
 `authorizedFetch`，并只允许固定的 HTTPS 主机与课程、公告、作业接口；重定向、响应体、
-请求总量、课程数、并发数和请求间隔均受限。接入校方批准的 SSO 会话代理前，工作台会明确
-显示“等待授权传输”，不会从浏览器接收密码或 Cookie，也不会伪造私有课程数据。
+请求总量、课程数、并发数和请求间隔均受限。未启用时工作台明确显示“尚未配置”；直接模式
+不会接收浏览器提供的清华 Cookie、自定义目标 URL 或自报 `user_id`，也不会伪造私有数据。
 
 连接器契约与安全边界可单独回归：
 

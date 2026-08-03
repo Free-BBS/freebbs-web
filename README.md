@@ -76,9 +76,16 @@ HOST=0.0.0.0 PORT=3000 npm run start:frontend
 
 前端会按当前浏览器地址推导 API 地址：本地开发时通常请求 `http://127.0.0.1:3001/api` 或同主机 `3001` 端口；生产同域访问时请求 `/api`。
 
+`npm run start:backend` 不会自动读取 `backend/.env`。如果使用该文件，先显式加载：
+
 ```bash
+set -a
+source backend/.env
+set +a
 npm run start:backend
 ```
+
+也可以使用 `npm run start:local`；该脚本会读取 `backend/.env`，并同时启动前端与后端。
 
 默认地址：
 
@@ -112,7 +119,30 @@ http://127.0.0.1:3001/api/health
 cp backend/.env.example backend/.env
 ```
 
+只验证 Web 与清华连接器时，应保持 `AGENT_SERVICE_TOKEN` 为空并设置
+`AGENT_SETTINGS_REQUIRED=false`；不要把示例令牌或示例加密密钥当作可用配置。
+
 `.env`、`.env.*`、`envs.sh` 都是本地配置文件，不应提交。
+
+### 清华网络学堂直连 CAS 边界
+
+`direct_cas` 是兼容接入，不是清华为 FREE BBS 注册的 official OAuth/CAS callback。用户在
+工作台明确同意后，浏览器才会为本次提交生成一次性的 32 位十六进制 `fingerPrint`，并把
+`username`、`password`、`fingerprint` 一次性发送给后端。三者只用于当前认证请求，不写入
+数据库、文件、日志或浏览器存储；认证敏感材料中仅持久化按用户隔离、AES-256-GCM 加密的
+网络学堂会话凭据。
+
+- 会话 grant 的服务端硬上限是 8 小时；持久 Cookie 更早过期时取更早时间。
+- 生产环境的 `PUBLIC_WEB_URL` 强制使用 HTTPS；仅 `NODE_ENV=development/test` 的 loopback 地址
+  允许 HTTP。
+- 直连登录当前按进程内存限流：每个 FREE BBS 用户 5 次/15 分钟、每个 IP 50 次/15 分钟。
+  多实例生产部署必须换成共享限流存储，不能把当前实现视为集群级保护。
+- 当前连接器只把归一化登录名作为会话 subject，它不是清华官方 canonical subject 或已核验
+  学号；数据库中的 HMAC 仅用于本系统内绑定，不能作为官方身份结论。
+- `info.tsinghua.edu.cn` 目前只有公开认证边界探测，私有通知、个人数据和时间表同步尚未实现。
+
+完整安全模型与验收口径见 [清华授权 Broker](docs/tsinghua-authorization-broker.md) 和
+[清华校内连接器说明](docs/tsinghua-connectors.md)。
 
 ## 数据库
 
