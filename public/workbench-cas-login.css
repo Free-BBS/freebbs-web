@@ -1,0 +1,160 @@
+body.workbench-page .workbench-campus-login-dialog {
+  width: min(92vw, 520px);
+  padding: 0;
+  border: 1px solid rgba(93, 218, 224, 0.3);
+  border-radius: 24px;
+  color: var(--workbench-text, #eefafa);
+  background: #071f23;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+}
+
+body.workbench-page .workbench-campus-login-dialog::backdrop {
+  background: rgba(0, 11, 14, 0.76);
+  backdrop-filter: blur(8px);
+}
+
+body.theme-light.workbench-page .workbench-campus-login-dialog {
+  color: #123b3e;
+  background: #f5fbfa;
+}
+
+body.workbench-page .workbench-campus-login-dialog form {
+  display: grid;
+  gap: 18px;
+  padding: clamp(24px, 5vw, 36px);
+  font-family: Inter, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+}
+
+body.workbench-page .workbench-campus-login-dialog header {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+body.workbench-page .workbench-campus-login-dialog h2 {
+  margin: 8px 0 0;
+  font-size: clamp(1.5rem, 5vw, 2rem);
+  line-height: 1.2;
+}
+
+body.workbench-page .workbench-campus-login-dialog header > button {
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(111, 218, 222, 0.22);
+  border-radius: 12px;
+  color: inherit;
+  background: rgba(65, 153, 158, 0.12);
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+body.workbench-page .workbench-campus-login-dialog-note {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid rgba(240, 185, 69, 0.25);
+  border-radius: 14px;
+  color: #d9c894;
+  background: rgba(178, 118, 21, 0.1);
+  font-size: 0.88rem;
+  line-height: 1.65;
+}
+
+body.theme-light.workbench-page .workbench-campus-login-dialog-note {
+  color: #735510;
+}
+
+body.workbench-page .workbench-campus-login-dialog label:not(.workbench-campus-consent) {
+  display: grid;
+  gap: 8px;
+  color: var(--workbench-muted, #a5bdbf);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+body.workbench-page .workbench-campus-login-dialog input[type='text'],
+body.workbench-page .workbench-campus-login-dialog input[type='password'] {
+  width: 100%;
+  min-height: 48px;
+  box-sizing: border-box;
+  border: 1px solid rgba(100, 211, 216, 0.24);
+  border-radius: 14px;
+  outline: none;
+  padding: 0 14px;
+  color: var(--workbench-text, #eefafa);
+  background: rgba(3, 24, 28, 0.72);
+  font: inherit;
+}
+
+body.theme-light.workbench-page .workbench-campus-login-dialog input[type='text'],
+body.theme-light.workbench-page .workbench-campus-login-dialog input[type='password'] {
+  color: #123b3e;
+  background: #fff;
+}
+
+body.workbench-page .workbench-campus-login-dialog input:focus {
+  border-color: #45cbd2;
+  box-shadow: 0 0 0 3px rgba(69, 203, 210, 0.14);
+}
+
+body.workbench-page .workbench-campus-consent {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: flex-start;
+  color: var(--workbench-muted, #a5bdbf);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+body.workbench-page .workbench-campus-consent input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: #20aab3;
+}
+
+body.workbench-page #workbench-campus-login-status {
+  min-height: 1.4em;
+  margin: 0;
+  color: #f39a9e;
+  font-size: 0.86rem;
+}
+
+body.workbench-page .workbench-campus-login-dialog footer {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 12px;
+}
+
+body.workbench-page .workbench-campus-login-dialog footer button {
+  min-height: 46px;
+  border: 1px solid rgba(99, 217, 222, 0.28);
+  border-radius: 14px;
+  color: inherit;
+  background: rgba(27, 111, 117, 0.16);
+  font:
+    700 0.92rem/1 Inter,
+    'PingFang SC',
+    'Microsoft YaHei',
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+body.workbench-page .workbench-campus-login-dialog footer button[type='submit'] {
+  border-color: transparent;
+  color: #f4ffff;
+  background: linear-gradient(135deg, #14939e, #1bb4bf);
+}
+
+body.workbench-page .workbench-campus-login-dialog footer button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+@media (max-width: 520px) {
+  body.workbench-page .workbench-campus-login-dialog footer {
+    grid-template-columns: 1fr;
+  }
+}

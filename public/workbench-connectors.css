@@ -1,0 +1,324 @@
+@import url('/workbench-cas-login.css');
+body.workbench-page .workbench-dashboard-grid > article.workbench-campus-card {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+}
+
+body.workbench-page .workbench-campus-card {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(280px, 0.75fr) minmax(0, 1.25fr);
+  gap: clamp(24px, 3.5vw, 52px);
+  align-items: start;
+  background:
+    radial-gradient(circle at 8% 16%, rgba(34, 205, 215, 0.1), transparent 34%),
+    var(--workbench-panel, rgba(9, 45, 50, 0.94));
+}
+
+body.workbench-page .workbench-campus-copy,
+body.workbench-page .workbench-campus-panel {
+  min-width: 0;
+  font-family: Inter, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+}
+
+body.workbench-page .workbench-campus-copy h2 {
+  margin: 12px 0 20px;
+  font-size: clamp(1.85rem, 2.6vw, 2.75rem);
+  line-height: 1.12;
+  letter-spacing: -0.04em;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+body.workbench-page .workbench-campus-copy > p:not(.workbench-card-eyebrow) {
+  max-width: 32em;
+  margin: 0;
+  color: var(--workbench-muted, #9db6b7);
+  font-size: clamp(0.92rem, 1.05vw, 1.05rem);
+  line-height: 1.75;
+}
+
+body.workbench-page .workbench-campus-panel {
+  min-width: 0;
+  padding: clamp(24px, 3vw, 38px);
+  border: 1px solid rgba(98, 217, 222, 0.2);
+  border-radius: 26px;
+  background: rgba(2, 25, 29, 0.55);
+}
+
+body.theme-light.workbench-page .workbench-campus-panel {
+  background: rgba(255, 255, 255, 0.58);
+}
+
+body.workbench-page .workbench-campus-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+body.workbench-page .workbench-campus-heading > div {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+body.workbench-page #workbench-campus-state {
+  width: fit-content;
+  padding: 6px 12px;
+  border: 1px solid rgba(123, 215, 219, 0.24);
+  border-radius: 999px;
+  color: #9ec7c8;
+  background: rgba(59, 137, 141, 0.12);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+body.workbench-page #workbench-campus-state[data-state='connected'] {
+  border-color: rgba(65, 218, 169, 0.4);
+  color: #7ce6be;
+  background: rgba(30, 160, 113, 0.14);
+}
+
+body.workbench-page #workbench-campus-state[data-state='warning'],
+body.workbench-page #workbench-campus-state[data-state='waiting'] {
+  border-color: rgba(244, 190, 72, 0.35);
+  color: #f2cb77;
+  background: rgba(190, 127, 25, 0.13);
+}
+
+body.workbench-page #workbench-campus-state[data-state='error'] {
+  border-color: rgba(244, 109, 114, 0.38);
+  color: #f18f93;
+  background: rgba(177, 51, 60, 0.14);
+}
+
+body.workbench-page #workbench-campus-title {
+  margin: 0;
+  color: var(--workbench-text, #eefafa);
+  font-size: clamp(1.3rem, 1.7vw, 1.75rem);
+  line-height: 1.3;
+  text-wrap: balance;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+body.workbench-page #workbench-campus-last-sync {
+  margin: 2px 0 0;
+  color: var(--workbench-muted, #9db6b7);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  text-align: right;
+  white-space: nowrap;
+}
+
+body.workbench-page #workbench-campus-description {
+  min-height: 3.4em;
+  margin: 22px 0;
+  color: var(--workbench-muted, #9db6b7);
+  line-height: 1.7;
+}
+
+body.workbench-page .workbench-campus-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+body.workbench-page .workbench-campus-actions button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid rgba(97, 217, 222, 0.32);
+  border-radius: 14px;
+  color: #e9fbfb;
+  background: rgba(22, 118, 125, 0.22);
+  font:
+    700 0.92rem/1 Inter,
+    'PingFang SC',
+    'Microsoft YaHei',
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+body.workbench-page .workbench-campus-actions button:first-child:not(:disabled) {
+  border-color: transparent;
+  background: linear-gradient(135deg, #14939e, #1bb4bf);
+  box-shadow: 0 12px 28px rgba(14, 151, 162, 0.2);
+}
+
+body.workbench-page .workbench-campus-actions button:not(:disabled):hover {
+  transform: translateY(-2px);
+  border-color: rgba(115, 233, 238, 0.68);
+}
+
+body.workbench-page .workbench-campus-actions button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+body.workbench-page .workbench-campus-message {
+  min-height: 1.5em;
+  margin: 18px 0 0;
+  color: #7cdce1;
+  line-height: 1.55;
+}
+
+body.workbench-page .workbench-campus-message[data-state='failed'] {
+  color: #f18f93;
+}
+
+body.workbench-page .workbench-campus-message[data-state='succeeded'] {
+  color: #7ce6be;
+}
+
+body.workbench-page .workbench-campus-info-boundary {
+  margin: 16px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid rgba(116, 197, 200, 0.14);
+  color: var(--workbench-muted, #9db6b7);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+body.workbench-page .workbench-campus-login-panel {
+  overflow: hidden;
+  font-family: Inter, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(28, 180, 191, 0.15), transparent 38%),
+    var(--workbench-panel-strong);
+}
+
+body.workbench-page .workbench-campus-login-panel > header {
+  align-items: flex-start;
+}
+
+body.workbench-page .workbench-campus-login-description {
+  margin: 0;
+  padding: 14px 16px;
+  color: var(--workbench-muted, #9db6b7);
+  font-size: 0.82rem;
+  line-height: 1.65;
+  background: rgba(18, 102, 108, 0.12);
+  border: 1px solid rgba(99, 212, 217, 0.18);
+  border-radius: 14px;
+}
+
+body.theme-light.workbench-page .workbench-campus-login-description {
+  background: rgba(24, 132, 139, 0.08);
+}
+
+body.workbench-page .workbench-campus-login-field > span {
+  color: var(--workbench-text, #eefafa);
+  font-size: 0.8rem;
+}
+
+body.workbench-page .workbench-campus-login-field input {
+  min-height: 48px;
+  border-color: rgba(102, 207, 212, 0.24);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
+}
+
+body.workbench-page .workbench-campus-login-field input:focus-visible {
+  outline: none;
+  border-color: rgba(89, 225, 232, 0.72);
+  box-shadow: 0 0 0 3px rgba(35, 184, 194, 0.14);
+}
+
+body.workbench-page .workbench-campus-login-consent {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 2px;
+  padding: 14px 16px;
+  border: 1px solid rgba(244, 190, 72, 0.28);
+  border-radius: 14px;
+  background: rgba(171, 111, 17, 0.09);
+  cursor: pointer;
+}
+
+body.workbench-page .workbench-campus-login-consent input {
+  width: 20px;
+  min-height: 20px;
+  margin: 1px 0 0;
+  padding: 0;
+  accent-color: #16a6b1;
+}
+
+body.workbench-page .workbench-campus-login-consent > span {
+  color: var(--workbench-muted, #9db6b7);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+body.workbench-page .workbench-campus-login-status {
+  min-height: 1.5em;
+  margin: 0;
+  color: var(--workbench-muted, #9db6b7);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+body.workbench-page .workbench-campus-login-status[data-state='loading'] {
+  color: #7cdce1;
+}
+
+body.workbench-page .workbench-campus-login-status[data-state='failed'] {
+  color: #f18f93;
+}
+
+body.workbench-page .workbench-campus-login-dialog[open] {
+  animation: workbench-campus-dialog-in 160ms ease-out;
+}
+
+@keyframes workbench-campus-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+}
+
+@media (max-width: 980px) {
+  body.workbench-page .workbench-campus-card {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  body.workbench-page .workbench-campus-heading {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  body.workbench-page #workbench-campus-last-sync {
+    text-align: left;
+    white-space: normal;
+  }
+
+  body.workbench-page .workbench-campus-actions {
+    display: grid;
+  }
+
+  body.workbench-page .workbench-campus-actions button {
+    width: 100%;
+  }
+
+  body.workbench-page .workbench-campus-login-panel footer {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  body.workbench-page .workbench-campus-login-panel footer button {
+    width: 100%;
+  }
+}

@@ -30,6 +30,7 @@ function readBooleanEnvironmentVariable(name, defaultValue = false) {
 module.exports = {
   apiHost: process.env.API_HOST || '127.0.0.1',
   apiPort: Number(process.env.API_PORT || 3001),
+  publicWebUrl: process.env.PUBLIC_WEB_URL || 'http://127.0.0.1:3000',
   db: {
     host: process.env.BACKEND_IP || '127.0.0.1',
     port: Number(process.env.MYSQL_PORT || 3306),

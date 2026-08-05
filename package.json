@@ -14,6 +14,10 @@
     "testbench:fortune": "node test/testbench.js",
     "test:admin-users": "node --test scripts/admin-users-page.test.js",
     "test:course-maps": "node --test backend/course-maps.test.js scripts/course-map-pages.test.js",
+    "test:workbench": "node --test backend/workbench.test.js backend/public-source-probe.test.js backend/portal-boundary-probe.test.js backend/tsinghua-learn-connector.test.js scripts/workbench-page.test.js scripts/workbench-connector-page.test.js scripts/tsinghua-cas-fingerprint.test.js",
+    "test:tsinghua-authorization": "node --test backend/tsinghua-connectors/*.test.js",
+    "test:tsinghua-connectors": "node --test backend/public-source-probe.test.js backend/portal-boundary-probe.test.js backend/tsinghua-learn-connector.test.js backend/tsinghua-connectors/*.test.js",
+    "probe:public-source": "node scripts/probe-public-source.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier . --write",
@@ -29,6 +33,7 @@
     "mysql2": "^3.14.1",
     "nodemailer": "^6.10.0",
     "sharp": "^0.34.5",
+    "sm-crypto": "^0.3.14",
     "three": "^0.184.0"
   },
   "keywords": [

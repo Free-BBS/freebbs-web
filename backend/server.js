@@ -8,6 +8,17 @@ const config = require('./config');
 const { hashPassword, verifyPassword } = require('./password');
 const { sign, verify } = require('./token');
 const { createCourseMapsRouter, ensureCourseMapTables } = require('./course-maps');
+const { createWorkbenchRouter, ensureWorkbenchTables } = require('./workbench');
+const { createCampusConnectorBroker } = require('./tsinghua-connectors/broker');
+const { createTsinghuaCasAdapter } = require('./tsinghua-connectors/cas-adapter');
+const { createCampusConnectorCorsPolicy } = require('./tsinghua-connectors/cors');
+const { CredentialVault } = require('./tsinghua-connectors/credential-vault');
+const { createMysqlCampusConnectorStore } = require('./tsinghua-connectors/mysql-store');
+const { createCampusConnectorRouter } = require('./tsinghua-connectors/router');
+const { loadTsinghuaConnectorRuntimeConfig } = require('./tsinghua-connectors/runtime-config');
+const { ensureCampusConnectorTables } = require('./tsinghua-connectors/schema');
+const { createTsinghuaSyncDispatcher } = require('./tsinghua-connectors/sync-dispatcher');
+const { createTsinghuaSyncStore } = require('./tsinghua-connectors/sync-store');
 const {
   SystemSettingsError,
   createSystemSettingsStore,
@@ -24,7 +35,47 @@ const {
 } = require('./verification');
 
 const app = express();
+app.set('trust proxy', 'loopback');
 const internalApp = express();
+const applyCampusConnectorCors = createCampusConnectorCorsPolicy(config.publicWebUrl);
+const tsinghuaConnectorRuntimeConfig = loadTsinghuaConnectorRuntimeConfig();
+const allowLoopbackHttp =
+  tsinghuaConnectorRuntimeConfig.state === 'direct_cas' &&
+  ['development', 'test'].includes(process.env.NODE_ENV) &&
+  new URL(config.publicWebUrl).protocol === 'http:';
+const campusConnectorStore = createMysqlCampusConnectorStore(pool);
+let campusConnectorVault = null;
+
+if (
+  ['ready', 'direct_cas', 'development_mock'].includes(tsinghuaConnectorRuntimeConfig.state) &&
+  tsinghuaConnectorRuntimeConfig.encryptionKey
+) {
+  try {
+    campusConnectorVault = new CredentialVault(tsinghuaConnectorRuntimeConfig.encryptionKey);
+  } catch (error) {
+    console.error('Campus connector credential vault unavailable', error?.code || 'invalid_key');
+  }
+}
+
+const campusConnectorAdapter =
+  tsinghuaConnectorRuntimeConfig.mode === 'direct_cas' ? createTsinghuaCasAdapter() : null;
+const campusConnectorSyncStore = createTsinghuaSyncStore(pool);
+const campusConnectorSyncDispatcher =
+  campusConnectorAdapter && campusConnectorVault
+    ? createTsinghuaSyncDispatcher({
+        adapter: campusConnectorAdapter,
+        syncStore: campusConnectorSyncStore,
+        vault: campusConnectorVault,
+      })
+    : null;
+
+const campusConnectorBroker = createCampusConnectorBroker({
+  store: campusConnectorStore,
+  vault: campusConnectorVault,
+  adapter: campusConnectorAdapter,
+  runtimeConfig: tsinghuaConnectorRuntimeConfig,
+  syncDispatcher: campusConnectorSyncDispatcher,
+});
 let agentSettingsInternalState = config.agentServiceToken ? 'starting' : 'disabled';
 const FORTUNE_BONUS_KEY = 'fortune_bonus_enabled';
 const HEAT_DECAY_DATE_KEY = 'heat_decay_last_date';
@@ -100,9 +151,11 @@ const DISCUSSION_BOARD_SEEDS = [
 
 fs.mkdirSync(config.uploadDir, { recursive: true });
 
-app.use(express.json({ limit: '28mb' }));
 app.use((request, response, next) => {
-  response.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
+  const connectorCorsHandled = applyCampusConnectorCors(request, response);
+  if (!connectorCorsHandled) {
+    response.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
+  }
   response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
 
@@ -113,6 +166,19 @@ app.use((request, response, next) => {
 
   next();
 });
+
+app.use(
+  '/api/workbench/connectors/tsinghua',
+  createCampusConnectorRouter({
+    broker: campusConnectorBroker,
+    allowLoopbackHttp,
+    requireAuth,
+    frontendBaseUrl: config.publicWebUrl,
+    correlationCookieSecure:
+      process.env.NODE_ENV === 'production' || new URL(config.publicWebUrl).protocol === 'https:',
+  }),
+);
+app.use(express.json({ limit: '28mb' }));
 
 app.use('/uploads', express.static(config.uploadDir));
 
@@ -1724,6 +1790,20 @@ app.use(
     requireAuth,
     getOptionalAuthUser,
     uploadDir: config.uploadDir,
+  }),
+);
+app.use(
+  '/api/workbench',
+  createWorkbenchRouter({
+    pool,
+    requireAuth,
+    learnConnectorCapabilities: {
+      learnAuthorizedTransportConfigured: Boolean(campusConnectorSyncDispatcher),
+      acceptsPasswordFromBrowser: tsinghuaConnectorRuntimeConfig.state === 'direct_cas',
+      authorizationStrategy:
+        tsinghuaConnectorRuntimeConfig.state === 'direct_cas' ? 'direct_cas' : 'official',
+    },
+    getCampusConnectorStatus: (userId) => campusConnectorBroker.getStatus(userId),
   }),
 );
 
@@ -4766,6 +4846,8 @@ async function start() {
   await ensureSystemSecretSettingsTable(pool);
   await ensureDiscussionTables();
   await ensureCourseMapTables(pool);
+  await ensureWorkbenchTables(pool);
+  await ensureCampusConnectorTables(pool);
   await ensureAiDialogTables();
   await ensureFortuneTables();
   await ensureEconomyTables();

@@ -25,6 +25,7 @@ fi
 
 export HOST="${HOST:-127.0.0.1}"
 export PORT="${PORT:-3000}"
+export NODE_ENV="${NODE_ENV:-development}"
 export API_HOST="${API_HOST:-127.0.0.1}"
 export API_PORT="${API_PORT:-3001}"
 export BACKEND_IP="${BACKEND_IP:-127.0.0.1}"
