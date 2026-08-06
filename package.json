@@ -11,7 +11,6 @@
     "stop:local:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-local.ps1",
     "start:frontend": "node server.js",
     "start:backend": "node backend/server.js",
-    "sync:course-map": "node scripts/sync-course-map-from-api.js",
     "testbench:fortune": "node test/testbench.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

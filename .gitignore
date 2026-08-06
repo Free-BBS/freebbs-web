@@ -71,6 +71,7 @@ web_modules/
 # Windows-only local service launchers
 /scripts/start-local.ps1
 /scripts/stop-local.ps1
+/scripts/sync-course-map-from-api.js
 
 # Output of 'npm pack'
 *.tgz
