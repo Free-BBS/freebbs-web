@@ -10,21 +10,15 @@ const pageRoutes = new Map([
   ['/adminusers', '/adminusers.html'],
   ['/aichat', '/aichat.html'],
   ['/course', '/course.html'],
-  ['/course-map-editor', '/course-map-editor.html'],
-  ['/development', '/development.html'],
   ['/discussion', '/discussion.html'],
   ['/electromagnetic', '/electromagnetic.html'],
   ['/inventory', '/inventory.html'],
   ['/knowledge', '/knowledge.html'],
-  ['/markdown-editor', '/markdown-editor.html'],
   ['/login', '/login.html'],
   ['/profile', '/profile.html'],
   ['/register', '/register.html'],
   ['/remake', '/remake.html'],
   ['/settings', '/settings.html'],
-  ['/system-settings', '/system-settings.html'],
-  ['/system-settings/course-materials', '/system-settings-course-materials.html'],
-  ['/system-settings/model', '/system-settings-model.html'],
   ['/workbench', '/workbench.html'],
   ['/world', '/world.html'],
 ]);
@@ -32,22 +26,16 @@ const htmlRedirects = new Map([
   ['/adminusers.html', '/adminusers'],
   ['/aichat.html', '/aichat'],
   ['/course.html', '/course'],
-  ['/course-map-editor.html', '/course-map-editor'],
-  ['/development.html', '/development'],
   ['/discussion.html', '/discussion'],
   ['/electromagnetic.html', '/electromagnetic'],
   ['/inventory.html', '/inventory'],
   ['/index.html', '/'],
   ['/knowledge.html', '/knowledge'],
-  ['/markdown-editor.html', '/markdown-editor'],
   ['/login.html', '/login'],
   ['/profile.html', '/profile'],
   ['/register.html', '/register'],
   ['/remake.html', '/remake'],
   ['/settings.html', '/settings'],
-  ['/system-settings-course-materials.html', '/system-settings/course-materials'],
-  ['/system-settings-model.html', '/system-settings/model'],
-  ['/system-settings.html', '/system-settings'],
   ['/workbench.html', '/workbench'],
   ['/world.html', '/world'],
 ]);
@@ -143,10 +131,13 @@ const server = http.createServer((request, response) => {
   }
 
   const urlPath = cleanPath === '/' ? '/index.html' : pageRoutes.get(cleanPath) || cleanPath;
-  const normalizedPath = path.normalize(urlPath).replace(/^(\.\.[/\\])+/, '');
+  // URL paths always use `/`, even when the static server is running on Windows.
+  // Using path.normalize here turns `/vendor/...` into `\\vendor\\...`, which
+  // prevents vendor requests from being recognized and makes every dependency 404.
+  const normalizedPath = path.posix.normalize(urlPath).replace(/^(\.\.\/)+/, '');
   const isVendorRequest = normalizedPath.startsWith('/vendor/');
   const baseDir = isVendorRequest ? vendorDir : publicDir;
-  const relativePath = isVendorRequest ? normalizedPath.replace(/^\/vendor/, '') : normalizedPath;
+  const relativePath = isVendorRequest ? normalizedPath.slice('/vendor'.length) : normalizedPath;
   const filePath = path.join(baseDir, relativePath);
   const ext = path.extname(filePath).toLowerCase();
   const acceptsHtml = (request.headers.accept || '').includes('text/html');

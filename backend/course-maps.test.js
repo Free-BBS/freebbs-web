@@ -209,7 +209,8 @@ test('serves persisted backgrounds publicly and restricts background changes to 
     /^\/uploads\/course-map-background-signals-22-\d+-[a-f0-9]{16}\.webp$/,
   );
   const outputPath = path.join(uploadDir, path.basename(uploadedBody.backgroundUrl));
-  assert.equal((await sharp(outputPath).metadata()).format, 'webp');
+  const outputBuffer = await fs.promises.readFile(outputPath);
+  assert.equal((await sharp(outputBuffer).metadata()).format, 'webp');
   assert.equal(pool.backgroundUrl, uploadedBody.backgroundUrl);
 
   const clearedResponse = await fetch(`${baseUrl}/background`, {
