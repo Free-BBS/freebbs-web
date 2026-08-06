@@ -60,6 +60,18 @@ web_modules/
 # Optional REPL history
 .node_repl_history
 
+# Local editor and agent workspace files
+.vscode/
+.idea/
+*.code-workspace
+/AGENTS.md
+/.agents/
+/.codex/
+
+# Windows-only local service launchers
+/scripts/start-local.ps1
+/scripts/stop-local.ps1
+
 # Output of 'npm pack'
 *.tgz
 
@@ -74,6 +86,7 @@ envs.sh
 
 # Database runtime files
 database/uploads/
+database/backups/
 *.sqlite
 *.sqlite3
 
