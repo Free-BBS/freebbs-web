@@ -1,0 +1,26 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const test = require('node:test');
+
+const root = path.join(__dirname, '..');
+
+test('问问 Max 使用 Navigation Agent 并渲染白名单路由按钮', () => {
+  const appSource = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
+  const backendSource = fs.readFileSync(path.join(root, 'backend', 'server.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'public', 'styles.css'), 'utf8');
+
+  assert.match(appSource, /agent: 'navigation'/);
+  assert.match(appSource, /execute_subagent: 'auto'/);
+  assert.match(appSource, /function renderMaxNavigationRoutes/);
+  assert.match(appSource, /MAX_NAVIGATION_PATHS/);
+  assert.match(appSource, /'\/knowledge'/);
+  assert.match(appSource, /'\/workbench'/);
+  assert.match(appSource, /'\/discussion'/);
+  assert.match(backendSource, /agent: 'navigation'/);
+  assert.match(backendSource, /X-FreeBBS-Internal-Token/);
+  assert.match(backendSource, /X-FreeBBS-UID/);
+  assert.match(backendSource, /X-FreeBBS-Student-No/);
+  assert.match(backendSource, /web_learning:read,thu_info:read/);
+  assert.match(styles, /\.aichat-navigation-action/);
+});

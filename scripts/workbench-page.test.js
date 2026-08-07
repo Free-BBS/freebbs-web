@@ -9,6 +9,19 @@ const app = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 const controller = fs.readFileSync(path.join(root, 'public', 'workbench.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public', 'workbench.css'), 'utf8');
 
+test('workbench only references installed local Markdown assets', () => {
+  assert.match(html, /\/vendor\/marked\/lib\/marked\.umd\.js/);
+  assert.doesNotMatch(html, /\/vendor\/dompurify\//);
+});
+
+test('workbench exposes semester-scoped Learn courses and notices', () => {
+  assert.match(html, /id="workbench-campus-semester"/);
+  assert.match(html, /id="workbench-campus-course-list"/);
+  assert.match(html, /id="workbench-campus-notice-list"/);
+  assert.match(controller, /\/workbench\/campus\/semesters/);
+  assert.match(controller, /renderCampusSemester/);
+});
+
 test('workbench keeps accessible live regions for all personal summaries', () => {
   for (const id of [
     'workbench-priority-list',

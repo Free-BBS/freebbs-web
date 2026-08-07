@@ -616,6 +616,18 @@ body.aichat-page .main-content .aichat-message-user .aichat-bubble {
   background: var(--ui-accent-soft) !important;
 }
 
+body.aichat-page .main-content .aichat-navigation-action strong {
+  color: var(--ui-accent-strong, #075f72) !important;
+}
+
+body.aichat-page .main-content .aichat-navigation-action span {
+  color: var(--ui-text-muted, #486970) !important;
+}
+
+body.theme-dark.aichat-page .main-content .aichat-navigation-action span {
+  color: #b8d2d7 !important;
+}
+
 body.aichat-page .main-content .aichat-composer textarea,
 body.aichat-page .main-content .aichat-meta-row {
   background: var(--ui-input) !important;
