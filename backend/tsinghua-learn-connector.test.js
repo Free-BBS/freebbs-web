@@ -73,6 +73,9 @@ function createFixtureFetch({
       if (url.pathname.endsWith('/getCurrentAndNextSemester')) {
         return jsonResponse({ result: { xnxq: '2026-2027-1' } });
       }
+      if (url.pathname.endsWith('/queryxnxq')) {
+        return jsonResponse({ result: ['2026-2027-1', '2025-2026-3'] });
+      }
       if (url.pathname.includes('/loadCourseBySemesterId/')) {
         return jsonResponse(coursePayload || { resultList: courses });
       }
@@ -310,8 +313,8 @@ test('crawls semester, courses, notices and homework into a normalized snapshot'
   assert.equal(snapshot.importantItems.length, 1);
   assert.equal(snapshot.importantItems[0].status, 'draft');
   assert.equal(snapshot.importantItems[0].dueAt, '2026-08-03T15:59:00.000Z');
-  assert.equal(snapshot.evidence.requestCount, 6);
-  assert.equal(snapshot.evidence.responses.length, 6);
+  assert.equal(snapshot.evidence.requestCount, 7);
+  assert.equal(snapshot.evidence.responses.length, 7);
   assert.match(snapshot.evidence.responses[0].contentSha256, /^[a-f0-9]{64}$/);
   assert.equal(snapshot.evidence.safeguards.credentialsExposedToCaller, false);
   assert.equal(snapshot.evidence.safeguards.rawResponsesStored, false);
@@ -411,7 +414,7 @@ test('stops scheduling more courses when the upstream rate-limits a sync', async
     (error) => error.code === 'upstream_rate_limited',
   );
 
-  assert.ok(authorizedFetch.stats.calls.length <= 5);
+  assert.ok(authorizedFetch.stats.calls.length <= 6);
 });
 
 test('records cookie presence without retaining its value and rejects unbounded limits', async () => {

@@ -1,22 +1,6 @@
 const os = require('os');
 const path = require('path');
 
-function detectLocalIp() {
-  const interfaces = os.networkInterfaces();
-
-  for (const entries of Object.values(interfaces)) {
-    for (const entry of entries || []) {
-      if (entry.family === 'IPv4' && !entry.internal) {
-        return entry.address;
-      }
-    }
-  }
-
-  return '127.0.0.1';
-}
-
-const localIp = detectLocalIp();
-
 function readBooleanEnvironmentVariable(name, defaultValue = false) {
   const rawValue = process.env[name];
 
@@ -41,6 +25,7 @@ module.exports = {
   },
   authSecret: process.env.AUTH_SECRET || 'free-bbs-dev-secret',
   agentBaseUrl: process.env.AGENT_URL || 'http://127.0.0.1:5001',
+  freebbsAgentInternalToken: process.env.FREEBBS_AGENT_INTERNAL_TOKEN || '',
   agentServiceToken: process.env.AGENT_SERVICE_TOKEN || '',
   agentSettingsRequired: readBooleanEnvironmentVariable('AGENT_SETTINGS_REQUIRED'),
   agentSettingsSocket:

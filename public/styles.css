@@ -13897,6 +13897,90 @@ body.aichat-page .main-content .aichat-bubble table {
   overflow-x: auto;
 }
 
+body.aichat-page .main-content .aichat-navigation-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+body.aichat-page .main-content .aichat-navigation-action {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(7, 95, 114, 0.24);
+  border-radius: 12px;
+  background: rgba(39, 136, 152, 0.07);
+  color: #075f72 !important;
+  text-decoration: none;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+body.aichat-page .main-content .aichat-navigation-action:hover {
+  border-color: rgba(7, 95, 114, 0.55);
+  background: rgba(39, 136, 152, 0.13);
+  transform: translateY(-1px);
+}
+
+body.aichat-page .main-content .aichat-navigation-action strong {
+  color: #075f72 !important;
+  font-size: 0.9rem;
+}
+
+body.aichat-page .main-content .aichat-navigation-action span {
+  color: rgba(7, 9, 11, 0.62) !important;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+body.aichat-page .main-content .aichat-subagent-result {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(7, 95, 114, 0.2);
+  border-radius: 12px;
+  background: rgba(7, 95, 114, 0.045);
+}
+
+body.aichat-page .main-content .aichat-subagent-result header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+body.aichat-page .main-content .aichat-subagent-result header span {
+  color: rgba(7, 9, 11, 0.55) !important;
+  font-size: 0.72rem;
+}
+
+body.aichat-page .main-content .aichat-subagent-result ul {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+body.aichat-page .main-content .aichat-subagent-result li {
+  display: grid;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(7, 95, 114, 0.12);
+}
+
+body.aichat-page .main-content .aichat-subagent-result li span,
+body.aichat-page .main-content .aichat-subagent-result p {
+  color: rgba(7, 9, 11, 0.65) !important;
+  font-size: 0.78rem;
+}
+
+body.aichat-page .main-content .aichat-subagent-result .is-error {
+  color: #9d2f22 !important;
+}
+
 body.aichat-page .main-content .aichat-copy-control {
   top: 8px;
   right: 8px;

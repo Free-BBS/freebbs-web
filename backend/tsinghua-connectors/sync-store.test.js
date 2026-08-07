@@ -196,6 +196,11 @@ test('a complete snapshot reconciles untouched drafts and can revive auto-cancel
   assert.match(reconciliation.sql, /dedupe_key IS NULL OR dedupe_key NOT IN \(\?\)/u);
   assert.deepEqual(reconciliation.parameters, [finishedAt, 7, 'homework:1']);
 
+  assert.equal(
+    pool.calls.some(({ sql }) => sql.startsWith('INSERT INTO campus_learn_semester_snapshots')),
+    false,
+  );
+
   const runUpdate = pool.calls.find(
     ({ sql }) =>
       sql.startsWith('UPDATE campus_connector_sync_runs') && sql.includes('schema_version = ?'),
@@ -204,6 +209,42 @@ test('a complete snapshot reconciles untouched drafts and can revive auto-cancel
   assert.match(runUpdate.sql, /request_count = \?/u);
   assert.match(runUpdate.sql, /lease_expires_at = NULL, lease_owner = NULL/u);
   assert.deepEqual(runUpdate.parameters.slice(0, 4), ['succeeded', 'learn-v1', 'snapshot-v1', 7]);
+});
+
+test('completeRun stores normalized courses and notices by semester', async () => {
+  const finishedAt = new Date('2026-08-02T08:05:00.000Z');
+  const pool = createTransactionalPool(async (sql) => {
+    if (sql.startsWith('SELECT r.id AS run_id')) return [[runningRow()], []];
+    return [{ affectedRows: 1 }, []];
+  });
+  const store = createTsinghuaSyncStore(pool);
+  await store.completeRun(
+    claimedRun(),
+    {
+      status: 'complete',
+      semesterId: '2026-2027-1',
+      fetchedAt: finishedAt.toISOString(),
+      courses: [{ sourceReference: 'course:a', title: '信号与系统' }],
+      notifications: [
+        {
+          sourceReference: 'notice:a',
+          courseReference: 'course:a',
+          title: '[信号与系统] 第一讲',
+        },
+      ],
+      importantItems: [],
+    },
+    finishedAt,
+  );
+
+  const upsert = pool.calls.find(({ sql }) =>
+    sql.startsWith('INSERT INTO campus_learn_semester_snapshots'),
+  );
+  assert.ok(upsert);
+  assert.equal(upsert.parameters[0], 7);
+  assert.equal(upsert.parameters[1], '2026-2027-1');
+  assert.equal(JSON.parse(upsert.parameters[2])[0].title, '信号与系统');
+  assert.equal(JSON.parse(upsert.parameters[3])[0].courseReference, 'course:a');
 });
 
 test('a partial snapshot never cancels items omitted from that snapshot', async () => {

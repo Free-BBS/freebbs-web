@@ -28,6 +28,7 @@
   let currentConnector = null;
   let directLoginAbortController = null;
   let directLoginPending = false;
+  let autoSyncRequested = false;
 
   function isLoggedIn() {
     const user = app.userState || {};
@@ -387,6 +388,7 @@
       });
       if (version !== requestVersion) return;
       renderStatus(payload.connector);
+      void maybeAutoSync(payload.connector);
     } catch (error) {
       if (version !== requestVersion) return;
       currentConnector = null;
@@ -398,6 +400,21 @@
       elements.sync.disabled = true;
       elements.disconnect.disabled = true;
     }
+  }
+
+  async function maybeAutoSync(connector) {
+    if (autoSyncRequested || !isLoggedIn() || !connector?.sync?.available) return;
+    const latestRun = connector.sync.latestRun;
+    if (['queued', 'running'].includes(latestRun?.status)) return;
+
+    const lastSuccessfulAt = Date.parse(connector.connection?.lastSuccessfulSyncAt || '');
+    const intervalSeconds = Math.max(60, Number(connector.sync.minimumIntervalSeconds) || 300);
+    const stale =
+      !Number.isFinite(lastSuccessfulAt) || Date.now() - lastSuccessfulAt >= intervalSeconds * 1000;
+    if (!stale) return;
+
+    autoSyncRequested = true;
+    await syncNow({ automatic: true });
   }
 
   async function connect() {
@@ -534,9 +551,9 @@
     }
   }
 
-  async function syncNow() {
+  async function syncNow({ automatic = false } = {}) {
     elements.sync.disabled = true;
-    setMessage('正在创建同步任务…');
+    setMessage(automatic ? '通知数据已过期，正在自动同步…' : '正在创建同步任务…');
     try {
       const payload = await app.callApi('/workbench/connectors/tsinghua/sync-runs', {
         method: 'POST',

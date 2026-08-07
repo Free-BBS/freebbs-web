@@ -24,6 +24,10 @@ const ALLOWED_API_REQUESTS = Object.freeze([
   }),
   Object.freeze({
     method: 'GET',
+    pattern: /^\/b\/wlxt\/kc\/v_wlkc_xs_xktjb_coassb\/queryxnxq$/,
+  }),
+  Object.freeze({
+    method: 'GET',
     pattern:
       /^\/b\/wlxt\/kc\/v_wlkc_xs_xkb_kcb_extend\/student\/loadCourseBySemesterId\/[A-Za-z0-9._:-]{1,128}\/zh$/,
   }),
@@ -543,6 +547,30 @@ function parseSemester(payload) {
   return normalizeIdentifier(result.xnxq ?? result.id, '学期');
 }
 
+function parseSemesterList(payload) {
+  let rows = payload;
+  if (!Array.isArray(rows)) {
+    rows = payload?.result ?? payload?.object ?? payload?.list ?? payload?.xnxq ?? [];
+  }
+  if (!Array.isArray(rows)) rows = [rows];
+  const seen = new Set();
+  const semesters = [];
+  rows.forEach((row) => {
+    const value = typeof row === 'string' ? row : (row?.xnxq ?? row?.id ?? row?.value);
+    const id = String(value || '').trim();
+    if (!/^[A-Za-z0-9._:-]{1,32}$/.test(id) || seen.has(id)) return;
+    seen.add(id);
+    semesters.push({
+      id,
+      label: normalizeText(
+        typeof row === 'string' ? row : (row?.xnxqmc ?? row?.name ?? row?.label ?? id),
+        64,
+      ),
+    });
+  });
+  return semesters;
+}
+
 function parseCourses(payload, semesterId) {
   const rows = expectNestedArray(payload, ['resultList'], '课程列表');
   const courses = [];
@@ -861,6 +889,7 @@ async function performTsinghuaLearnSync({
   minimumRequestIntervalMs = DEFAULT_MINIMUM_REQUEST_INTERVAL_MS,
   clock,
   sleep,
+  semesterId: requestedSemesterId,
 } = {}) {
   const boundedMaxRequests = Math.min(Math.max(1, Number(maxRequests) || 1), DEFAULT_MAX_REQUESTS);
   const boundedMaxResponseBytes = Math.min(
@@ -884,14 +913,29 @@ async function performTsinghuaLearnSync({
     '/b/kc/zhjw_v_code_xnxq/getCurrentAndNextSemester',
   );
   const semesterId = parseSemester(semesterPayload);
+  const semesterListPayload = await transport.requestJson(
+    'semester-list',
+    'GET',
+    '/b/wlxt/kc/v_wlkc_xs_xktjb_coassb/queryxnxq',
+  );
+  const availableSemesters = parseSemesterList(semesterListPayload);
+  if (!availableSemesters.some((semester) => semester.id === semesterId)) {
+    availableSemesters.unshift({ id: semesterId, label: semesterId });
+  }
+  const selectedSemesterId = requestedSemesterId
+    ? normalizeIdentifier(requestedSemesterId, '学期')
+    : semesterId;
+  if (!availableSemesters.some((semester) => semester.id === selectedSemesterId)) {
+    throw new TsinghuaConnectorError('semester_not_available', '所选学期不在网络学堂列表中');
+  }
   const coursePayload = await transport.requestJson(
     'courses',
     'GET',
     `/b/wlxt/kc/v_wlkc_xs_xkb_kcb_extend/student/loadCourseBySemesterId/${encodeURIComponent(
-      semesterId,
+      selectedSemesterId,
     )}/zh`,
   );
-  const parsedCourses = parseCourses(coursePayload, semesterId);
+  const parsedCourses = parseCourses(coursePayload, selectedSemesterId);
   const warnings = [...parsedCourses.warnings];
   const courses = parsedCourses.courses.slice(0, boundedMaxCourses);
   const boundedConcurrency = Math.min(
@@ -944,7 +988,9 @@ async function performTsinghuaLearnSync({
     parserVersion: PARSER_VERSION,
     fetchedAt: fetchedAt.toISOString(),
     status: errors.length || warnings.length ? 'partial' : 'complete',
-    semesterId,
+    semesterId: selectedSemesterId,
+    currentSemesterId: semesterId,
+    availableSemesters,
     courses: courses.map(toPublicCourse),
     notifications,
     homework,
@@ -1102,6 +1148,7 @@ module.exports = {
   parseHomework,
   parseNotices,
   parseSemester,
+  parseSemesterList,
   stableReference,
   syncTsinghuaLearn,
   validateLearnApiPath,

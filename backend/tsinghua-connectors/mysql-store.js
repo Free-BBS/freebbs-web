@@ -596,8 +596,8 @@ function createMysqlCampusConnectorStore(pool) {
       await pool.execute(
         `INSERT INTO campus_connector_sync_runs (
           public_id, trace_id, connector_id, connector_generation,
-          requested_by_user_id, trigger_type, status, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?)`,
+          requested_by_user_id, trigger_type, target_semester_id, status, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?)`,
         [
           run.publicId,
           run.traceId,
@@ -605,6 +605,7 @@ function createMysqlCampusConnectorStore(pool) {
           run.connectorGeneration,
           run.requestedByUserId,
           run.triggerType,
+          run.targetSemesterId || null,
           run.createdAt,
         ],
       );
@@ -613,6 +614,7 @@ function createMysqlCampusConnectorStore(pool) {
         trace_id: run.traceId,
         connector_id: run.connectorId,
         connector_generation: run.connectorGeneration,
+        target_semester_id: run.targetSemesterId || null,
         status: 'queued',
       };
     } catch (error) {

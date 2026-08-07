@@ -336,6 +336,35 @@
               </section>
             </article>
 
+            <article class="workbench-dashboard-card workbench-campus-courses-card">
+              <header class="workbench-campus-courses-header">
+                <div>
+                  <p class="workbench-card-eyebrow">Tsinghua Learn</p>
+                  <h2>分学期课程与公告</h2>
+                  <p>课程和公告来自最近一次成功的网络学堂同步，并按 FREE-BBS 用户隔离保存。</p>
+                </div>
+                <label>
+                  <span>学期</span>
+                  <select id="workbench-campus-semester" disabled>
+                    <option value="">尚无同步学期</option>
+                  </select>
+                </label>
+              </header>
+              <p id="workbench-campus-courses-status" role="status" aria-live="polite">
+                连接清华账号并完成同步后，这里会显示课程。
+              </p>
+              <div class="workbench-campus-courses-layout">
+                <section aria-labelledby="workbench-campus-courses-title">
+                  <h3 id="workbench-campus-courses-title">课程列表</h3>
+                  <div id="workbench-campus-course-list" class="workbench-campus-course-list"></div>
+                </section>
+                <section aria-labelledby="workbench-campus-notices-title">
+                  <h3 id="workbench-campus-notices-title">课程公告</h3>
+                  <div id="workbench-campus-notice-list" class="workbench-campus-notice-list"></div>
+                </section>
+              </div>
+            </article>
+
             <article class="workbench-dashboard-card workbench-source-card">
               <div class="workbench-source-copy">
                 <p class="workbench-card-eyebrow">Connector Lab</p>
@@ -645,8 +674,7 @@
       </dialog>
     </div>
 
-    <script src="/vendor/marked/marked.min.js"></script>
-    <script src="/vendor/dompurify/dist/purify.min.js"></script>
+    <script src="/vendor/marked/lib/marked.umd.js"></script>
     <script src="/app.js?v=20260803-cas-fix-3"></script>
     <script src="/workbench.js"></script>
     <script src="/assets/vendor/fingerprint2-1.5.1.min.js"></script>

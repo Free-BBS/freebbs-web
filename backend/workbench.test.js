@@ -233,6 +233,44 @@ test('summary scopes all three data sets to the authenticated user', async (t) =
   assert.match(calls[2].sql, /WHERE user_id = \?/);
 });
 
+test('campus semesters expose only the authenticated user normalized snapshot', async (t) => {
+  const calls = [];
+  const baseUrl = await startTestServer(t, {
+    user: { id: 21, is_admin: false },
+    pool: {
+      async execute(statement, parameters = []) {
+        const sql = statement.replace(/\s+/g, ' ').trim();
+        calls.push({ sql, parameters });
+        if (sql.includes('FROM campus_learn_semester_catalogs')) return [[]];
+        return [
+          [
+            {
+              semester_id: '2026-2027-1',
+              courses_json: JSON.stringify([{ sourceReference: 'course:a', title: '信号与系统' }]),
+              notifications_json: JSON.stringify([
+                { sourceReference: 'notice:a', courseReference: 'course:a', title: '第一讲' },
+              ]),
+              sync_status: 'complete',
+              fetched_at: new Date('2026-08-02T08:00:00.000Z'),
+            },
+          ],
+        ];
+      },
+    },
+  });
+
+  const list = await requestJson(baseUrl, '/campus/semesters');
+  assert.equal(list.response.status, 200);
+  assert.equal(list.payload.semesters[0].courseCount, 1);
+  assert.equal(list.payload.semesters[0].notificationCount, 1);
+
+  const detail = await requestJson(baseUrl, '/campus/semesters/2026-2027-1');
+  assert.equal(detail.response.status, 200);
+  assert.equal(detail.payload.semester.courses[0].title, '信号与系统');
+  assert.deepEqual(calls[0].parameters, [21]);
+  assert.deepEqual(calls[2].parameters, [21, '2026-2027-1']);
+});
+
 test('notification limits are clamped before being embedded in the query', async (t) => {
   const calls = [];
   const baseUrl = await startTestServer(t, {

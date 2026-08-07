@@ -47,6 +47,10 @@
     sourceCount: document.getElementById('workbench-source-count'),
     sourceProof: document.getElementById('workbench-source-proof'),
     sourceResults: document.getElementById('workbench-source-results'),
+    campusSemester: document.getElementById('workbench-campus-semester'),
+    campusCoursesStatus: document.getElementById('workbench-campus-courses-status'),
+    campusCourseList: document.getElementById('workbench-campus-course-list'),
+    campusNoticeList: document.getElementById('workbench-campus-notice-list'),
   };
 
   const CATEGORY_LABELS = {
@@ -70,6 +74,7 @@
     scheduleItems: [],
     notificationFilters: { category: '', unread: false, favorite: false },
     conflictAcknowledgement: '',
+    campusSemesters: [],
   };
 
   function getUser() {
@@ -101,6 +106,145 @@
       return url.protocol === 'https:' ? url.toString() : '';
     } catch {
       return '';
+    }
+  }
+
+  function renderCampusSemester(semester) {
+    elements.campusCourseList.replaceChildren();
+    elements.campusNoticeList.replaceChildren();
+    const courses = Array.isArray(semester?.courses) ? semester.courses : [];
+    const notices = Array.isArray(semester?.notifications) ? semester.notifications : [];
+
+    if (!courses.length) {
+      const empty = document.createElement('p');
+      empty.className = 'workbench-campus-empty';
+      empty.textContent = '该学期没有同步到课程。';
+      elements.campusCourseList.append(empty);
+    }
+    courses.forEach((course) => {
+      const item = document.createElement('article');
+      item.className = 'workbench-campus-course';
+      const title = document.createElement('strong');
+      title.textContent = course.title || '未命名课程';
+      const detail = document.createElement('p');
+      detail.textContent =
+        [course.teacher, course.scheduleText, course.locationText].filter(Boolean).join(' · ') ||
+        '暂无教师与上课地点信息';
+      item.append(title, detail);
+      elements.campusCourseList.append(item);
+    });
+
+    if (!notices.length) {
+      const empty = document.createElement('p');
+      empty.className = 'workbench-campus-empty';
+      empty.textContent = '该学期没有同步到课程公告。';
+      elements.campusNoticeList.append(empty);
+    }
+    notices.forEach((notice) => {
+      const item = document.createElement('article');
+      item.className = 'workbench-campus-notice';
+      const title = document.createElement('strong');
+      title.textContent = notice.title || '未命名公告';
+      const detail = document.createElement('p');
+      detail.textContent = truncate(notice.body || '暂无公告正文', 180);
+      item.append(title, detail);
+      const actionUrl = safeActionUrl(notice.actionUrl);
+      if (actionUrl) {
+        const link = document.createElement('a');
+        link.href = actionUrl;
+        link.target = actionUrl.startsWith('http') ? '_blank' : '_self';
+        link.rel = 'noopener noreferrer';
+        link.textContent = '在网络学堂查看 ↗';
+        item.append(link);
+      }
+      elements.campusNoticeList.append(item);
+    });
+
+    elements.campusCoursesStatus.textContent = `同步于 ${formatMoment(semester.fetchedAt)} · ${courses.length} 门课程 · ${notices.length} 条公告${semester.syncStatus === 'partial' ? ' · 部分同步' : ''}`;
+  }
+
+  async function loadCampusSemester(semesterId) {
+    if (!semesterId) return;
+    elements.campusCoursesStatus.textContent = '正在读取该学期课程与公告…';
+    try {
+      const payload = await app.callApi(
+        `/workbench/campus/semesters/${encodeURIComponent(semesterId)}`,
+        { method: 'GET' },
+      );
+      renderCampusSemester(payload.semester);
+    } catch (error) {
+      elements.campusCoursesStatus.textContent = error.message || '读取学期数据失败';
+    }
+  }
+
+  async function syncCampusSemester(semesterId) {
+    elements.campusSemester.disabled = true;
+    elements.campusCoursesStatus.textContent = `正在同步 ${semesterId} 的课程与公告…`;
+    try {
+      const payload = await app.callApi('/workbench/connectors/tsinghua/sync-runs', {
+        method: 'POST',
+        body: JSON.stringify({ semesterId }),
+      });
+      const publicId = payload.run?.publicId;
+      if (!publicId) throw new Error('同步任务没有返回有效标识');
+      for (let attempt = 0; attempt < 90; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1000));
+        const result = await app.callApi(
+          `/workbench/connectors/tsinghua/sync-runs/${encodeURIComponent(publicId)}`,
+          { method: 'GET' },
+        );
+        if (['succeeded', 'partial'].includes(result.run?.status)) {
+          await loadCampusSemesters(semesterId);
+          window.dispatchEvent(new CustomEvent('freebbs:workbench-refresh'));
+          return;
+        }
+        if (['failed', 'cancelled'].includes(result.run?.status)) {
+          throw new Error(result.run.errorCode || '该学期同步失败');
+        }
+      }
+      throw new Error('该学期同步等待超时');
+    } catch (error) {
+      elements.campusCoursesStatus.textContent = error.message || '该学期同步失败';
+      elements.campusSemester.disabled = false;
+    }
+  }
+
+  async function loadCampusSemesters(preferredSemesterId = '') {
+    if (!elements.campusSemester || !isLoggedIn()) return;
+    elements.campusSemester.disabled = true;
+    try {
+      const payload = await app.callApi('/workbench/campus/semesters', { method: 'GET' });
+      state.campusSemesters = payload.semesters || [];
+      elements.campusSemester.replaceChildren();
+      if (!state.campusSemesters.length) {
+        elements.campusSemester.append(new Option('尚无同步学期', ''));
+        renderCampusSemester({ courses: [], notifications: [] });
+        elements.campusCoursesStatus.textContent = '点击“立即同步”后显示网络学堂课程。';
+        return;
+      }
+      state.campusSemesters.forEach((semester) => {
+        elements.campusSemester.append(
+          new Option(
+            `${semester.label || semester.id}${semester.synced ? `（${semester.courseCount} 门）` : '（选择后同步）'}`,
+            semester.id,
+          ),
+        );
+      });
+      const selectedId = state.campusSemesters.some(
+        (semester) => semester.id === preferredSemesterId,
+      )
+        ? preferredSemesterId
+        : payload.currentSemesterId || state.campusSemesters[0].id;
+      elements.campusSemester.value = selectedId;
+      elements.campusSemester.disabled = false;
+      const selected = state.campusSemesters.find((semester) => semester.id === selectedId);
+      if (selected?.synced) await loadCampusSemester(selectedId);
+      else {
+        renderCampusSemester({ courses: [], notifications: [] });
+        elements.campusCoursesStatus.textContent = '选择该学期后将从网络学堂同步课程与公告。';
+      }
+    } catch (error) {
+      elements.campusCoursesStatus.textContent = error.message || '读取同步学期失败';
     }
   }
 
@@ -875,9 +1019,13 @@
     state.importantItems = [];
     state.notifications = [];
     state.scheduleItems = [];
+    state.campusSemesters = [];
     closeDialog(elements.importantDialog);
     closeDialog(elements.scheduleDialog);
-    if (ownerKey) loadWorkbenchData();
+    if (ownerKey) {
+      loadWorkbenchData();
+      loadCampusSemesters();
+    }
   }
 
   elements.addImportant?.addEventListener('click', () => openImportantEditor());
@@ -898,6 +1046,13 @@
     });
   });
   elements.sourceProbe?.addEventListener('click', runSourceProbe);
+  elements.campusSemester?.addEventListener('change', () => {
+    const semester = state.campusSemesters.find(
+      (item) => item.id === elements.campusSemester.value,
+    );
+    if (semester?.synced) loadCampusSemester(semester.id);
+    else if (semester) syncCampusSemester(semester.id);
+  });
   shell.addEventListener('click', handleShellClick);
   document.querySelectorAll('[data-workbench-dialog-close]').forEach((button) => {
     button.addEventListener('click', () => closeDialog(button.closest('dialog')));
@@ -909,7 +1064,10 @@
   });
 
   window.addEventListener('freebbs:workbench-refresh', () => {
-    if (isLoggedIn()) loadWorkbenchData();
+    if (isLoggedIn()) {
+      loadWorkbenchData();
+      loadCampusSemesters();
+    }
   });
 
   const authObserver = new MutationObserver(syncSession);

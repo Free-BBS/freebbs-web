@@ -482,7 +482,7 @@
     ].join('\n');
 
     return {
-      agent: 'general_chat',
+      agent: 'rag',
       source: 'course_knowledge_detail',
       channel: 'course_rag',
       messages: [
