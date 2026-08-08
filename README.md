@@ -144,6 +144,60 @@ cp backend/.env.example backend/.env
 完整安全模型与验收口径见 [清华授权 Broker](docs/tsinghua-authorization-broker.md) 和
 [清华校内连接器说明](docs/tsinghua-connectors.md)。
 
+### 生产部署：清华连接器配置必须外置
+
+本地 `backend/.env` 只用于开发，不会随 PR 或代码部署进入生产环境。仓库忽略所有 `.env`
+文件，GitHub Actions 使用干净 checkout 打包，生产部署还会通过 `rsync --delete` 同步代码；
+因此不要把生产密钥放在 `/data/www/free-BBS/backend/.env`，该文件既不会被 Git 管理，也可能在
+后续部署中被删除。
+
+生产后端由 systemd 读取服务器外置文件 `/etc/free-bbs/free-bbs.env`。连接器首次上线时，应由
+具有服务器权限的负责人在该文件中一次性加入以下配置：
+
+```dotenv
+NODE_ENV=production
+PUBLIC_WEB_URL=https://www.free-bbs.cn
+CORS_ORIGIN=https://www.free-bbs.cn
+
+TSINGHUA_CONNECTOR_REQUIRED=true
+TSINGHUA_CONNECTOR_MODE=direct_cas
+TSINGHUA_CONNECTOR_ADAPTER_ID=tsinghua_direct_cas
+TSINGHUA_CONNECTOR_ENCRYPTION_KEY=<固定的独立32字节随机密钥>
+TSINGHUA_CONNECTOR_STATE_TTL_SECONDS=600
+TSINGHUA_CONNECTOR_SYNC_INTERVAL_SECONDS=300
+```
+
+密钥只生成并配置一次，例如使用 `openssl rand -base64 32`。它必须独立于用户密码、
+`AUTH_SECRET`、`SETTINGS_ENCRYPTION_KEY` 和其它服务令牌，并应保存在服务器密钥文件或受控的
+密钥管理系统中，禁止写入 Git、PR、Issue、聊天记录或部署日志。
+
+修改后确认权限并重启后端：
+
+```bash
+sudo chown deploy:freebbs-backend /etc/free-bbs/free-bbs.env
+sudo chmod 640 /etc/free-bbs/free-bbs.env
+sudo systemctl restart free-bbs-backend
+sudo systemctl --no-pager --full status free-bbs-backend
+curl --fail http://127.0.0.1:3001/api/health
+```
+
+`/etc/free-bbs/free-bbs.env` 位于代码部署目录之外，正常合并 PR 和重新部署不会覆盖它。必须保持
+`TSINGHUA_CONNECTOR_ENCRYPTION_KEY` 稳定：更换或丢失密钥后，数据库中已有的网络学堂会话将
+无法解密，所有用户都需要重新连接。即使密钥不变，会话仍受网络学堂 Cookie 有效期和服务端
+最长 8 小时 grant 限制；会话自然到期后重新认证属于预期行为。
+
+仓库提供的生产 systemd unit 会强制设置 `TSINGHUA_CONNECTOR_REQUIRED=true`；外置环境文件中也
+保留该值，方便人工审计，但不能通过把它改成 `false` 绕过生产门禁。开启门禁后，`/api/health`
+会返回 `tsinghuaConnector` 的 `required`、`ready`、`state`、`authorizationAvailable`、`syncAvailable` 和
+`missing` 摘要。连接器被禁用、配置不完整、处于 `development_mock`，或授权/同步执行器不可用
+时，健康检查返回 `503`，部署脚本的 `curl --fail` 会据此判定部署失败。本地开发默认
+`TSINGHUA_CONNECTOR_REQUIRED=false`，仍可只启动 Web 与数据库功能。
+
+健康门禁只检查服务端配置和执行器是否就绪，不会代替真实账号验收。部署通过后，仍需使用已
+登录测试账号访问 `/workbench`，确认页面不再显示“尚未配置”，并完成一次“连接网络学堂 →
+立即同步”。服务器重装或迁移时，应从受控备份恢复同一份外置环境文件，不能在每次部署时重新
+生成密钥。
+
 ## 数据库
 
 全新初始化 MySQL：

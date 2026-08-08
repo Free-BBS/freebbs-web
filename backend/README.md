@@ -40,6 +40,19 @@ npm run start:backend
   `/run/free-bbs/agent-config.sock`
 - `SETTINGS_ENCRYPTION_KEY`：用于 AES-256-GCM 加密模型 API key 的 32 字节 Base64
   或 64 位十六进制密钥
+- `TSINGHUA_CONNECTOR_REQUIRED`：把清华连接器就绪状态纳入 `/api/health`；默认 `false`。
+  设为 `true` 时只接受 `ready` 或 `direct_cas`，且授权与同步执行器必须同时可用，否则健康
+  检查返回 `503`。生产 systemd unit 会强制设为 `true`
+- `TSINGHUA_CONNECTOR_MODE`：`disabled`、`direct_cas`、`official` 或仅限本地测试的
+  `development_mock`
+- `TSINGHUA_CONNECTOR_ADAPTER_ID`：连接器 adapter 标识；`direct_cas` 固定为
+  `tsinghua_direct_cas`
+- `TSINGHUA_CONNECTOR_CALLBACK_URL`、`TSINGHUA_CONNECTOR_WORKER_SOCKET`：official 模式的
+  HTTPS 回调地址和本机 worker socket；direct CAS 模式保持为空
+- `TSINGHUA_CONNECTOR_ENCRYPTION_KEY`：独立的 32 字节 Base64 或 64 位十六进制密钥，
+  用于 AES-256-GCM 加密用户会话 grant；不能复用其它密钥，生产部署后必须保持稳定
+- `TSINGHUA_CONNECTOR_STATE_TTL_SECONDS`：一次性授权 state 有效期，默认 `600`
+- `TSINGHUA_CONNECTOR_SYNC_INTERVAL_SECONDS`：连接器同步间隔，默认 `300`
 - `LLM_BASE_URL`、`LLM_MODEL`：数据库尚未配置时使用的模型默认值；默认与 Agent
   的静态开发配置一致，分别为 `https://cloud.infini-ai.com/maas/v1` 和 `glm-5.1`
 - `COURSE_MATERIALS_ALLOWED_ROOT`：管理员可选择的课程资料目录上界
@@ -52,7 +65,8 @@ npm run start:backend
 
 主要接口：
 
-- `GET /api/health`
+- `GET /api/health`：返回数据库、Agent 设置内部接口和清华连接器的安全就绪摘要；当对应的
+  `*_REQUIRED=true` 且依赖未就绪时返回 `503`
 - `POST /api/auth/send-email-code`
 - `POST /api/auth/register`
 - `POST /api/auth/login`
@@ -96,6 +110,13 @@ npm run probe:public-source
 Learn 会话凭据会按用户隔离并使用 AES-256-GCM 加密保存；服务端强制设置最长 8 小时有效期，
 若持久 Cookie 更早过期则取更早时间。该模式不是校方为 FREE BBS 注册的 official callback。
 验证码或二次认证挑战会安全失败并停止登录，不会尝试绕过；信息门户私有数据同步仍未实现。
+
+生产环境应把 `TSINGHUA_CONNECTOR_ENCRYPTION_KEY` 保存在代码目录之外的受控环境文件或密钥
+管理系统中，并跨重启、部署和迁移保持同一个值。更换或丢失该密钥后，数据库内已有会话无法
+解密，所有相关用户都需要重新连接。仓库提供的 systemd unit 强制
+`TSINGHUA_CONNECTOR_REQUIRED=true`；此时 `/api/health` 的 `tsinghuaConnector` 摘要包含
+`required`、`ready`、`state`、`authorizationAvailable`、`syncAvailable` 和 `missing`，但不
+包含密钥、Cookie 或用户 grant。`development_mock` 永远不能通过生产 required 门禁。
 
 生产环境的 `PUBLIC_WEB_URL` 强制使用 HTTPS；只有 `NODE_ENV=development/test` 且使用 loopback 主机
 时允许 HTTP。直连登录限流目前保存在单个 Node 进程内：每用户 5 次/15 分钟、每 IP 50 次/

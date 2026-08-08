@@ -20,7 +20,11 @@ test('workbench exposes a distinct campus account status card', () => {
   assert.match(html, /id="workbench-campus-connect"/);
   assert.match(html, /id="workbench-campus-sync"/);
   assert.match(html, /id="workbench-campus-disconnect"/);
-  assert.match(html, /src="\/workbench-connectors\.js\?v=20260803-cas-fix-3"/);
+  assert.match(
+    html,
+    /id="workbench-campus-credential-expiry"[\s\S]*?aria-live="polite"[\s\S]*?hidden/,
+  );
+  assert.match(html, /src="\/workbench-connectors\.js\?v=20260806-credential-expiry-1"/);
   assert.match(html, /src="\/app\.js\?v=20260803-cas-fix-3"/);
   assert.match(html, /href="\/workbench-connectors\.css"/);
   const fingerprintVendorIndex = html.indexOf('src="/assets/vendor/fingerprint2-1.5.1.min.js"');
@@ -120,6 +124,29 @@ test('UI labels connector modes and incomplete safeguards honestly', () => {
   assert.match(controller, /直接连接安全配置不完整/u);
   assert.match(controller, /正式授权模式不接收清华密码或浏览器 Cookie/u);
   assert.match(controller, /history\.replaceState/);
+  assert.match(controller, /真实数据已部分同步/u);
+  assert.match(controller, /最近同步尝试/u);
+  assert.match(controller, /重试未完成部分/u);
+  assert.match(controller, /partialSyncMessage\(run\)/);
+});
+
+test('campus credential expiry is displayed safely and refreshed on independent timers', () => {
+  assert.match(controller, /connection\?\.credentialExpiresAt/);
+  assert.match(controller, /function credentialExpiryTimestamp\(value\)/);
+  assert.match(controller, /new Date\(timestamp\)\.toISOString\(\) === value/);
+  assert.match(controller, /清华授权有效至/u);
+  assert.match(controller, /清华授权将在 1 小时内到期/u);
+  assert.match(controller, /let credentialExpiryTimer = null/);
+  assert.match(
+    controller,
+    /credentialExpiryTimer = window\.setTimeout\([\s\S]*?loadStatus\(\);[\s\S]*?nextRefreshAt - now/,
+  );
+  assert.match(controller, /function hideCredentialExpiry\(\)[\s\S]*?\.hidden = true/);
+  assert.match(
+    stylesheet,
+    /#workbench-campus-credential-expiry\[data-state='warning'\][\s\S]*?color:\s*#f2cb77/,
+  );
+  assert.match(stylesheet, /#workbench-campus-credential-expiry\[hidden\][\s\S]*?display:\s*none/);
 });
 
 test('terminal sync refreshes workbench data and theme changes do not restart status', () => {
@@ -129,6 +156,32 @@ test('terminal sync refreshes workbench data and theme changes do not restart st
   assert.match(
     stylesheet,
     /@media\s*\(max-width:\s*620px\)[\s\S]*?\.workbench-campus-heading\s*\{[^}]*grid-template-columns:\s*1fr;/,
+  );
+});
+
+test('automatic sync resets for a new owner and a replacement connection', () => {
+  const directLoginStart = controller.indexOf('async function submitDirectLogin');
+  const directLoginEnd = controller.indexOf('\n  async function pollRun', directLoginStart);
+  const directLogin = controller.slice(directLoginStart, directLoginEnd);
+  assert.match(
+    directLogin,
+    /await loginRequest;[\s\S]*?autoSyncRequested = false;[\s\S]*?await loadStatus\(\);/,
+  );
+
+  const disconnectStart = controller.indexOf('async function disconnect');
+  const disconnectEnd = controller.indexOf('\n  function consumeCallbackResult', disconnectStart);
+  const disconnect = controller.slice(disconnectStart, disconnectEnd);
+  assert.match(
+    disconnect,
+    /method: 'DELETE'[\s\S]*?autoSyncRequested = false;[\s\S]*?await loadStatus\(\);/,
+  );
+
+  const syncSessionStart = controller.indexOf('function syncSession');
+  const syncSessionEnd = controller.indexOf('\n\n  const authObserver', syncSessionStart);
+  const sessionSync = controller.slice(syncSessionStart, syncSessionEnd);
+  assert.match(
+    sessionSync,
+    /ownerKey === observedOwnerKey[\s\S]*?autoSyncRequested = false;[\s\S]*?observedOwnerKey = ownerKey;/,
   );
 });
 

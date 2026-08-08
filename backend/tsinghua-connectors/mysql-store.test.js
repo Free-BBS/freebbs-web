@@ -302,3 +302,32 @@ test('natural expiry is idempotent when the generation no longer matches', async
   );
   assert.deepEqual(pool.state, { begins: 1, commits: 1, releases: 1, rollbacks: 0 });
 });
+
+test('latest sync run parses aggregate diagnostics from error_context', async () => {
+  let observedSql = '';
+  const store = createMysqlCampusConnectorStore({
+    async execute(statement) {
+      observedSql = compactSql(statement);
+      return [
+        [
+          {
+            public_id: 'csr_partial',
+            status: 'partial',
+            result_counts: '{"notifications":16}',
+            evidence_json: '{"requestCount":22}',
+            error_context:
+              '{"version":1,"warnings":[{"resource":"homework:unsubmitted","code":"parser_record_rejected","count":2}],"errors":[]}',
+          },
+        ],
+        [],
+      ];
+    },
+  });
+
+  const run = await store.getLatestSyncRun(7, 'tsinghua-learn');
+
+  assert.match(observedSql, /r\.error_context/u);
+  assert.deepEqual(run.result_counts, { notifications: 16 });
+  assert.equal(run.evidence_json.requestCount, 22);
+  assert.equal(run.error_context.warnings[0].count, 2);
+});

@@ -30,6 +30,7 @@ module.exports = {
   agentSettingsRequired: readBooleanEnvironmentVariable('AGENT_SETTINGS_REQUIRED'),
   agentSettingsSocket:
     process.env.AGENT_SETTINGS_SOCKET || path.join(os.tmpdir(), 'free-bbs-agent-config.sock'),
+  tsinghuaConnectorRequired: readBooleanEnvironmentVariable('TSINGHUA_CONNECTOR_REQUIRED'),
   settingsEncryptionKey: process.env.SETTINGS_ENCRYPTION_KEY || '',
   llmBaseUrl: process.env.LLM_BASE_URL || 'https://cloud.infini-ai.com/maas/v1',
   llmModel: process.env.LLM_MODEL || 'glm-5.1',

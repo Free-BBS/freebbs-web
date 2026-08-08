@@ -3976,7 +3976,9 @@ async function pollInfoJob(article, navigationResult) {
   }
 
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    await new Promise((resolve) => window.setTimeout(resolve, 2000));
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 2000);
+    });
     try {
       const envelope = await requestInfoJob(jobId);
       const status = String(envelope.status || 'pending');
@@ -4276,7 +4278,7 @@ async function handleAiChatSubmit(event) {
     renderMaxNavigationRoutes(assistantArticle, result.routes);
     renderMaxSubagentResult(assistantArticle, result);
     if (result.subagent?.status === 'pending') {
-      void pollInfoJob(assistantArticle, result);
+      pollInfoJob(assistantArticle, result);
     }
 
     aiChatState.messages.push({ role: 'user', content: userMessage });

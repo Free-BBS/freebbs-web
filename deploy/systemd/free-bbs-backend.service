@@ -6,7 +6,9 @@ After=network.target
 Type=simple
 WorkingDirectory=/data/www/free-BBS
 EnvironmentFile=/etc/free-bbs/free-bbs.env
-ExecStart=/usr/bin/env AGENT_SETTINGS_REQUIRED=true /usr/bin/node /data/www/free-BBS/backend/server.js
+# Production promises both internal Agent settings and the Tsinghua connector.
+# Secrets and connector mode remain in the external EnvironmentFile above.
+ExecStart=/usr/bin/env AGENT_SETTINGS_REQUIRED=true TSINGHUA_CONNECTOR_REQUIRED=true /usr/bin/node /data/www/free-BBS/backend/server.js
 Restart=always
 RestartSec=5
 RuntimeDirectory=free-bbs

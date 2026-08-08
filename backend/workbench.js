@@ -780,8 +780,8 @@ function createWorkbenchRouter({
          WHERE user_id = ?
            AND deleted_at IS NULL
            ${includeClosed ? '' : "AND status IN ('draft', 'confirmed')"}
-         ORDER BY FIELD(status, 'confirmed', 'draft', 'completed', 'cancelled') ASC,
-                  due_at IS NULL ASC, due_at ASC
+         ORDER BY due_at IS NULL ASC, due_at ASC,
+                  FIELD(status, 'confirmed', 'draft', 'completed', 'cancelled') ASC
          LIMIT 100`,
         [user.id],
       );

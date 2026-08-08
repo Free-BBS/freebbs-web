@@ -17,6 +17,7 @@ function normalizeSyncRun(row) {
     ...row,
     result_counts: parseJsonColumn(row.result_counts),
     evidence_json: parseJsonColumn(row.evidence_json),
+    error_context: parseJsonColumn(row.error_context),
   };
 }
 
@@ -80,6 +81,7 @@ function createMysqlCampusConnectorStore(pool) {
   async function getLatestSyncRun(userId, provider) {
     const [rows] = await pool.execute(
       `SELECT r.public_id, r.trace_id, r.status, r.result_counts, r.error_code,
+              r.error_context,
               r.created_at, r.started_at, r.finished_at
        FROM campus_connector_sync_runs r
        INNER JOIN user_campus_connectors c ON c.id = r.connector_id

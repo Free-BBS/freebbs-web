@@ -63,12 +63,17 @@ test('workbench provides authenticated CRUD controls and conflict confirmation',
   assert.match(html, /id="workbench-important-dialog"/);
   assert.match(html, /id="workbench-add-schedule"/);
   assert.match(html, /id="workbench-schedule-dialog"/);
-  assert.match(html, /src="\/workbench\.js"/);
+  assert.match(html, /src="\/workbench\.js\?v=20260803-sync-closure-1"/);
   assert.match(controller, /\/workbench\/important-items/);
   assert.match(controller, /\/workbench\/schedule-items\/conflicts/);
   assert.match(controller, /\/confirm/);
   assert.match(controller, /payload\.version = Number/);
   assert.match(controller, /state\.conflictAcknowledgement/);
+  assert.match(controller, /确认事项/u);
+  assert.match(controller, /confirm-important/);
+  assert.match(controller, /status: 'confirmed'/);
+  assert.match(controller, /24 小时内截止/u);
+  assert.match(controller, /不会自动占用时间表/u);
 });
 
 test('connector self-check targets the two primary portals without accepting arbitrary URLs', () => {

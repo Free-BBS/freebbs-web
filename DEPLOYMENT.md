@@ -93,6 +93,9 @@ sudo useradd -m -s /bin/bash deploy
 ```bash
 API_HOST=0.0.0.0
 API_PORT=3001
+NODE_ENV=production
+PUBLIC_WEB_URL=https://www.free-bbs.cn
+CORS_ORIGIN=https://www.free-bbs.cn
 
 BACKEND_IP=DATA_SERVER_IP
 MYSQL_PORT=3306
@@ -107,6 +110,16 @@ AGENT_SERVICE_TOKEN=replace-with-at-least-32-random-characters
 AGENT_SETTINGS_REQUIRED=true
 AGENT_SETTINGS_SOCKET=/run/free-bbs/agent-config.sock
 SETTINGS_ENCRYPTION_KEY=replace-with-32-random-bytes-in-base64
+
+TSINGHUA_CONNECTOR_REQUIRED=true
+TSINGHUA_CONNECTOR_MODE=direct_cas
+TSINGHUA_CONNECTOR_ADAPTER_ID=tsinghua_direct_cas
+TSINGHUA_CONNECTOR_CALLBACK_URL=
+TSINGHUA_CONNECTOR_ENCRYPTION_KEY=replace-with-an-independent-stable-32-byte-base64-key
+TSINGHUA_CONNECTOR_WORKER_SOCKET=
+TSINGHUA_CONNECTOR_STATE_TTL_SECONDS=600
+TSINGHUA_CONNECTOR_SYNC_INTERVAL_SECONDS=300
+
 LLM_BASE_URL=https://cloud.infini-ai.com/maas/v1
 LLM_MODEL=glm-5.1
 COURSE_MATERIALS_ALLOWED_ROOT=/data/free-bbs/courses
@@ -128,16 +141,21 @@ HOST=0.0.0.0
 PORT=3000
 ```
 
-生成服务令牌与设置加密密钥：
+分别生成服务令牌、设置加密密钥和清华会话加密密钥：
 
 ```bash
 openssl rand -base64 48
 openssl rand -base64 32
+openssl rand -base64 32
 ```
 
 第一条输出填写到 `AGENT_SERVICE_TOKEN`，第二条输出填写到
-`SETTINGS_ENCRYPTION_KEY`。后端环境文件由部署用户维护，仅后端服务组可读；前端使用完全
-独立的无密钥环境文件：
+`SETTINGS_ENCRYPTION_KEY`，第三条输出填写到 `TSINGHUA_CONNECTOR_ENCRYPTION_KEY`。三个值
+必须互相独立，不能复用 `AUTH_SECRET`、用户密码、Cookie 或其它服务令牌。清华会话密钥只在
+首次部署时生成；后续重启、发布、服务器迁移和从备份恢复都必须继续使用同一个值。更换或丢失
+该密钥会使已有加密会话无法解密，并要求所有已连接用户重新认证。
+
+后端环境文件由部署用户维护，仅后端服务组可读；前端使用完全独立的无密钥环境文件：
 
 ```bash
 sudo chown deploy:freebbs-backend /etc/free-bbs/free-bbs.env
@@ -153,9 +171,12 @@ sudo chmod 750 /data/free-bbs/courses
 Express 应用，并要求 `Authorization: Bearer <AGENT_SERVICE_TOKEN>`。不要在 Nginx 或其它
 反向代理中暴露此 socket。socket 为 `0660`，运行目录为 `0750`，只有后端与 Agent 的
 `freebbs-agent-config` 共享组能够连接；前端和 `deploy` 用户不在该组。
-生产 systemd 单元强制设置 `AGENT_SETTINGS_REQUIRED=true`：服务令牌缺失、内部 API
-启动失败或运行时失效时，后端会启动失败或让 `/api/health` 返回 `503`。本地开发未显式
-开启该变量时仍可不启用内部 API。
+生产 systemd 单元强制设置 `AGENT_SETTINGS_REQUIRED=true` 和
+`TSINGHUA_CONNECTOR_REQUIRED=true`。Agent 服务令牌缺失、内部 API 失效，或清华连接器处于
+`not_configured`/`misconfigured`/`development_mock`、缺少授权 adapter、凭据保险箱或同步执行器时，
+`/api/health` 会返回 `503`。部署脚本使用 `curl --fail` 检查该接口，因此配置不完整不会被标记
+为部署成功。健康响应中的 `tsinghuaConnector` 只包含安全的就绪摘要，不返回密钥、Cookie 或
+用户 grant。本地开发未显式开启 required 变量时，仍可不启用相应内部能力。
 
 创建上传目录：
 
@@ -281,7 +302,7 @@ sudo -u deploy chmod 600 /home/deploy/.ssh/authorized_keys
 4. 打包代码并通过 SSH 上传到应用服务器
 5. 应用服务器解压发布包并同步到 `/data/www/free-BBS`
 6. 仅安装生产依赖
-7. 重启前后端服务并做健康检查
+7. 重启前后端服务，并通过 `/api/health` 验证数据库、Agent 设置接口和清华连接器生产门禁
 
 头像和其它上传文件不会放进 Git。生产环境的 `UPLOAD_DIR=/data/www/free-BBS/uploads` 是运行期持久目录，`scripts/deploy.sh` 会在同步代码时排除 `uploads` 和 `database/uploads`，避免 `rsync --delete` 在每次部署时删除用户头像。
 
