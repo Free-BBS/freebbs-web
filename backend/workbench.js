@@ -83,6 +83,16 @@ function toNotification(row) {
   };
 }
 
+function parseJsonArray(value) {
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(String(value || '[]'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function toImportantItem(row) {
   return {
     publicId: row.public_id,
@@ -449,6 +459,87 @@ function createWorkbenchRouter({
       });
     } catch (error) {
       sendWorkbenchError(response, error, '读取个人工作台失败');
+    }
+  });
+
+  router.get('/campus/semesters', async (request, response) => {
+    try {
+      const user = await requireAuth(request, response);
+      if (!user) return;
+
+      const [catalogRows] = await pool.execute(
+        `SELECT current_semester_id, semesters_json, fetched_at
+         FROM campus_learn_semester_catalogs
+         WHERE user_id = ?
+         LIMIT 1`,
+        [user.id],
+      );
+      const [rows] = await pool.execute(
+        `SELECT semester_id, courses_json, notifications_json, sync_status, fetched_at
+         FROM campus_learn_semester_snapshots
+         WHERE user_id = ?
+         ORDER BY semester_id DESC`,
+        [user.id],
+      );
+      const snapshots = new Map(rows.map((row) => [row.semester_id, row]));
+      const catalog = catalogRows[0];
+      const available = parseJsonArray(catalog?.semesters_json);
+      const semesterEntries = available.length
+        ? available
+        : rows.map((row) => ({ id: row.semester_id, label: row.semester_id }));
+      response.json({
+        currentSemesterId: catalog?.current_semester_id || null,
+        semesters: semesterEntries.map((semester) => {
+          const row = snapshots.get(semester.id);
+          return {
+            id: semester.id,
+            label: semester.label || semester.id,
+            synced: Boolean(row),
+            courseCount: parseJsonArray(row?.courses_json).length,
+            notificationCount: parseJsonArray(row?.notifications_json).length,
+            syncStatus: row?.sync_status || null,
+            fetchedAt: toIsoString(row?.fetched_at),
+          };
+        }),
+      });
+    } catch (error) {
+      sendWorkbenchError(response, error, '读取网络学堂学期失败');
+    }
+  });
+
+  router.get('/campus/semesters/:semesterId', async (request, response) => {
+    try {
+      const user = await requireAuth(request, response);
+      if (!user) return;
+      const semesterId = normalizeText(request.params.semesterId, 32, { required: true });
+      if (!semesterId || !/^[\w-]+$/u.test(semesterId)) {
+        response.status(400).json({ message: '学期标识无效' });
+        return;
+      }
+
+      const [rows] = await pool.execute(
+        `SELECT semester_id, courses_json, notifications_json, sync_status, fetched_at
+         FROM campus_learn_semester_snapshots
+         WHERE user_id = ? AND semester_id = ?
+         LIMIT 1`,
+        [user.id, semesterId],
+      );
+      const row = rows[0];
+      if (!row) {
+        response.status(404).json({ message: '尚未同步该学期' });
+        return;
+      }
+      response.json({
+        semester: {
+          id: row.semester_id,
+          courses: parseJsonArray(row.courses_json),
+          notifications: parseJsonArray(row.notifications_json),
+          syncStatus: row.sync_status,
+          fetchedAt: toIsoString(row.fetched_at),
+        },
+      });
+    } catch (error) {
+      sendWorkbenchError(response, error, '读取网络学堂课程失败');
     }
   });
 

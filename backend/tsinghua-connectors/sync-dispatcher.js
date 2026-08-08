@@ -60,7 +60,11 @@ function createTsinghuaSyncDispatcher({
         invalidTransport.code = 'connector_transport_invalid';
         throw invalidTransport;
       }
-      const snapshot = await runSync({ authorizedFetch, now });
+      const snapshot = await runSync({
+        authorizedFetch,
+        now,
+        semesterId: claimed.target_semester_id || undefined,
+      });
       await syncStore.completeRun(claimed, snapshot, now());
     } catch (error) {
       const code = String(error?.code || 'sync_failed').slice(0, 64);

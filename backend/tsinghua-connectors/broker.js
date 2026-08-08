@@ -382,6 +382,7 @@ function createCampusConnectorBroker({
           ACTIVE_CONNECTION_STATES.has(connectionStatus) &&
           syncDispatcher,
         ),
+        minimumIntervalSeconds: runtimeConfig.syncIntervalSeconds,
         latestRun: latestRun
           ? {
               publicId: latestRun.public_id,
@@ -731,7 +732,11 @@ function createCampusConnectorBroker({
     }
   }
 
-  async function requestSync(userId) {
+  async function requestSync(userId, semesterId = null) {
+    const targetSemesterId = semesterId ? String(semesterId).trim() : null;
+    if (targetSemesterId && !/^[A-Za-z0-9._:-]{1,32}$/.test(targetSemesterId)) {
+      throw new CampusConnectorError('semester_invalid', '学期标识无效。', { status: 400 });
+    }
     const runtime = availability();
     if (!runtime.authorizationAvailable) throw configurationError(runtime);
     if (!syncDispatcher) {
@@ -778,6 +783,7 @@ function createCampusConnectorBroker({
         connectorGeneration: connection.generation,
         requestedByUserId: userId,
         triggerType: 'manual',
+        targetSemesterId,
         createdAt: now(),
       });
     } catch (error) {

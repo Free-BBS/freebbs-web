@@ -3777,7 +3777,8 @@ function buildAiChatPayload(userMessage) {
   const recentMessages = aiChatState.messages.slice(-13);
 
   return {
-    agent: 'general_chat',
+    agent: 'navigation',
+    execute_subagent: 'auto',
     source: 'direct_chat',
     channel: 'aichat',
     did: aiChatState.currentDid || '',
@@ -3788,9 +3789,239 @@ function buildAiChatPayload(userMessage) {
         content: userMessage,
       },
     ],
-    stream: true,
+    stream: false,
     temperature: 0.6,
   };
+}
+
+const MAX_NAVIGATION_PATHS = new Set([
+  '/knowledge',
+  '/workbench',
+  '/discussion',
+  '/course',
+  '/development',
+  '/profile',
+]);
+
+function normalizeMaxNavigationUrl(value) {
+  try {
+    const url = new URL(String(value || ''), window.location.origin);
+    if (url.origin !== window.location.origin || !MAX_NAVIGATION_PATHS.has(url.pathname)) {
+      return '';
+    }
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return '';
+  }
+}
+
+function renderMaxNavigationRoutes(article, routes) {
+  const bubble = article?.querySelector('.aichat-bubble');
+  if (!bubble || !Array.isArray(routes)) {
+    return;
+  }
+
+  const validRoutes = routes
+    .map((route) => ({
+      title: String(route?.title || '').trim(),
+      reason: String(route?.reason || '').trim(),
+      url: normalizeMaxNavigationUrl(route?.url),
+    }))
+    .filter((route) => route.title && route.url)
+    .slice(0, 3);
+
+  if (!validRoutes.length) {
+    return;
+  }
+
+  const actions = document.createElement('nav');
+  actions.className = 'aichat-navigation-actions';
+  actions.setAttribute('aria-label', 'Max 推荐入口');
+
+  for (const route of validRoutes) {
+    const link = document.createElement('a');
+    link.className = 'aichat-navigation-action';
+    link.href = route.url;
+    link.innerHTML = `<strong>${escapeHtml(route.title)}</strong>${
+      route.reason ? `<span>${escapeHtml(route.reason)}</span>` : ''
+    }`;
+    actions.append(link);
+  }
+
+  bubble.append(actions);
+}
+
+function normalizeCourseMention(value) {
+  return String(value || '')
+    .toLocaleLowerCase('zh-CN')
+    .replace(/[\s\-_()（）《》]/g, '');
+}
+
+async function addMentionedCourseMapRoute(navigationResult, userMessage) {
+  const normalizedMessage = normalizeCourseMention(userMessage);
+  if (!normalizedMessage || !userState.token) {
+    return navigationResult;
+  }
+
+  try {
+    const catalog = await callApi('/courses', { method: 'GET' });
+    const courses = Array.isArray(catalog?.courses) ? catalog.courses : [];
+    const course = courses.find((item) =>
+      [item?.name, item?.code, item?.slug]
+        .map(normalizeCourseMention)
+        .filter((candidate) => candidate.length >= 2)
+        .some((candidate) => normalizedMessage.includes(candidate)),
+    );
+    if (!course?.slug || !course?.name) {
+      return navigationResult;
+    }
+
+    const mapRoute = {
+      intent: 'course_graph',
+      module: 'course_graph',
+      title: `${course.name}知识地图`,
+      url: `/course?course=${encodeURIComponent(course.slug)}`,
+      reason: `打开${course.name}的课程知识地图。`,
+    };
+    const routes = Array.isArray(navigationResult?.routes) ? navigationResult.routes : [];
+    const remaining = routes.filter(
+      (route) => route?.intent !== 'course_graph' && route?.url !== mapRoute.url,
+    );
+    return {
+      ...navigationResult,
+      answer: `我找到了你提到的「${course.name}」，可以直接打开它的知识地图。`,
+      intent: 'course_graph',
+      needs_clarification: false,
+      routes: [mapRoute, ...remaining].slice(0, 3),
+    };
+  } catch {
+    return navigationResult;
+  }
+}
+
+function infoResultItems(envelope) {
+  const result = envelope?.result;
+  if (!result || !Array.isArray(result.info)) {
+    return [];
+  }
+  return result.info.slice(0, 8).map((item) => ({
+    title: String(
+      item?.title || item?.name || item?.courseName || item?.course_name || '信息条目',
+    ).trim(),
+    detail: String(item?.summary || item?.content || item?.description || '').trim(),
+  }));
+}
+
+function renderMaxSubagentResult(article, navigationResult) {
+  const bubble = article?.querySelector('.aichat-bubble');
+  const subagent = navigationResult?.subagent;
+  if (!bubble || !subagent || typeof subagent !== 'object') {
+    return null;
+  }
+
+  const oldPanel = bubble.querySelector('.aichat-subagent-result');
+  oldPanel?.remove();
+
+  const panel = document.createElement('section');
+  panel.className = 'aichat-subagent-result';
+  const agentName = String(
+    subagent.agent || navigationResult.delegation?.selected || '',
+  ).toUpperCase();
+  const status = String(subagent.status || navigationResult.delegation?.status || 'completed');
+  const items = infoResultItems(subagent);
+  const summary = String(subagent.result?.summary || '').trim();
+  const pending = status === 'pending';
+
+  panel.innerHTML = `
+    <header><strong>${escapeHtml(agentName || '子 Agent')}</strong><span>${escapeHtml(status)}</span></header>
+    ${pending ? '<p>需要完成认证；任务已启动，页面会自动查询进度。</p>' : ''}
+    ${summary ? `<p>${escapeHtml(summary)}</p>` : ''}
+    ${
+      items.length
+        ? `<ul>${items
+            .map(
+              (item) =>
+                `<li><strong>${escapeHtml(item.title)}</strong>${
+                  item.detail ? `<span>${escapeHtml(item.detail)}</span>` : ''
+                }</li>`,
+            )
+            .join('')}</ul>`
+        : ''
+    }
+  `;
+  bubble.append(panel);
+  return panel;
+}
+
+async function requestInfoJob(jobId) {
+  const response = await fetch(`${API_BASE_URL}/ai/info/jobs/get`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${userState.token}`,
+    },
+    body: JSON.stringify({ job_id: jobId, did: aiChatState.currentDid || '' }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok && response.status !== 202) {
+    throw new Error(result.message || result.error?.message || 'Info 任务查询失败');
+  }
+  return result;
+}
+
+async function pollInfoJob(article, navigationResult) {
+  const jobId = String(navigationResult?.subagent?.execution?.job_id || '').trim();
+  if (!jobId) {
+    return;
+  }
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, 2000));
+    try {
+      const envelope = await requestInfoJob(jobId);
+      const status = String(envelope.status || 'pending');
+      renderMaxSubagentResult(article, {
+        delegation: { selected: 'info', status },
+        subagent: { ...envelope, agent: 'info' },
+      });
+      if (status !== 'pending') {
+        return;
+      }
+    } catch (error) {
+      const panel = article?.querySelector('.aichat-subagent-result');
+      panel?.insertAdjacentHTML(
+        'beforeend',
+        `<p class="is-error">${escapeHtml(error.message)}</p>`,
+      );
+      return;
+    }
+  }
+}
+
+async function requestMaxNavigation(payload) {
+  if (!userState.token) {
+    throw new Error('请先登录后再使用问问 Max');
+  }
+
+  const response = await fetch(`${API_BASE_URL}/ai/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${userState.token}`,
+    },
+    body: JSON.stringify({ ...payload, stream: false }),
+  });
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      result.detail
+        ? `${result.message || 'Navigation 请求失败'}：${result.detail}`
+        : result.error?.message || result.message || 'Navigation 请求失败',
+    );
+  }
+
+  return result;
 }
 
 function getAiDialogTitle(messages = aiChatState.messages) {
@@ -4037,11 +4268,16 @@ async function handleAiChatSubmit(event) {
   let assistantContent = '';
 
   try {
-    await streamAiChatResponse(buildAiChatPayload(userMessage), (delta) => {
-      window.clearTimeout(bubbleTimer);
-      assistantContent += delta;
-      updateAiChatMessage(assistantArticle, assistantContent);
-    });
+    const rawResult = await requestMaxNavigation(buildAiChatPayload(userMessage));
+    const result = await addMentionedCourseMapRoute(rawResult, userMessage);
+    window.clearTimeout(bubbleTimer);
+    assistantContent = String(result.answer || '').trim() || 'Max 暂时没有生成回答。';
+    updateAiChatMessage(assistantArticle, assistantContent);
+    renderMaxNavigationRoutes(assistantArticle, result.routes);
+    renderMaxSubagentResult(assistantArticle, result);
+    if (result.subagent?.status === 'pending') {
+      void pollInfoJob(assistantArticle, result);
+    }
 
     aiChatState.messages.push({ role: 'user', content: userMessage });
     aiChatState.messages.push({ role: 'assistant', content: assistantContent });

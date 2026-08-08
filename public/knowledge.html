@@ -144,26 +144,306 @@
           class="course-map-reader-control course-material-back"
           id="knowledge-course-link"
           href="/course?course=signals"
-          aria-label="返回课程地图"
-          >←</a
+          aria-label="返回课程目录"
         >
-        <article class="course-material-reader">
-          <header class="course-material-header">
-            <p class="course-kicker" id="knowledge-node-id">Knowledge Point</p>
-            <h1 id="knowledge-title"></h1>
-            <p id="knowledge-summary"></p>
-          </header>
-          <section
-            class="discussion-markdown-body course-material-body"
-            id="knowledge-body"
-            aria-label="课程资料正文"
-          ></section>
-          <nav class="course-material-navigation" aria-label="知识结点导航">
-            <a id="knowledge-previous-link" href="#">← 上一个</a>
-            <a id="knowledge-next-link" href="#">下一个 →</a>
-            <a id="knowledge-discussion-link" href="/discussion?board=signal">讨论</a>
-          </nav>
-        </article>
+          <span aria-hidden="true">←</span>
+          <strong>课程目录</strong>
+        </a>
+        <div class="knowledge-workbench" id="knowledge-workbench">
+          <aside class="knowledge-tools" id="knowledge-tools" aria-label="知识点工具栏">
+            <header class="knowledge-tools-header">
+              <span>
+                <small>Workspace</small>
+                <strong>工具</strong>
+              </span>
+              <button
+                id="knowledge-tools-toggle"
+                type="button"
+                aria-label="收起工具栏"
+                aria-expanded="true"
+                aria-controls="knowledge-tools-list"
+              >
+                «
+              </button>
+            </header>
+            <nav class="knowledge-tools-list" id="knowledge-tools-list" aria-label="学习工具">
+              <button
+                class="is-active"
+                type="button"
+                data-knowledge-tool="content"
+                aria-pressed="true"
+              >
+                <span aria-hidden="true">▤</span>
+                <strong>知识正文</strong>
+              </button>
+              <button type="button" data-knowledge-tool="resources" aria-pressed="false">
+                <span aria-hidden="true">◇</span>
+                <strong>学习资源</strong>
+              </button>
+              <button type="button" data-knowledge-tool="feedback" aria-pressed="false">
+                <span aria-hidden="true">↗</span>
+                <strong>学习反馈</strong>
+              </button>
+              <button type="button" data-knowledge-tool="continue" aria-pressed="false">
+                <span aria-hidden="true">▶</span>
+                <strong>继续学习</strong>
+              </button>
+              <button type="button" data-knowledge-tool="notes" aria-pressed="false">
+                <span aria-hidden="true">✎</span>
+                <strong>个人笔记</strong>
+              </button>
+              <button type="button" data-knowledge-tool="contribute" aria-pressed="false">
+                <span aria-hidden="true">＋</span>
+                <strong>参与共建</strong>
+              </button>
+            </nav>
+            <footer class="knowledge-tools-status" id="knowledge-tools-status" aria-live="polite">
+              <span aria-hidden="true"></span>
+              <p>工具接口已预留</p>
+            </footer>
+          </aside>
+
+          <article class="course-material-reader">
+            <nav class="course-material-context" aria-label="课程上下文">
+              <span class="course-kicker" id="knowledge-course-name">信号系统</span>
+              <span class="knowledge-status-badge" id="knowledge-status">未开始</span>
+            </nav>
+            <header class="course-material-header">
+              <div class="course-material-heading">
+                <p class="course-kicker" id="knowledge-node-id">Knowledge Point</p>
+                <h1 id="knowledge-title"></h1>
+                <p id="knowledge-summary"></p>
+              </div>
+              <div class="knowledge-actions" aria-label="学习状态">
+                <button id="knowledge-learn-button" type="button" data-status="learned">
+                  <span aria-hidden="true">✓</span>
+                  学习
+                </button>
+                <button id="knowledge-review-button" type="button" data-status="review">
+                  <span aria-hidden="true">↻</span>
+                  复习
+                </button>
+              </div>
+            </header>
+            <section class="course-material-section" aria-label="课程资料正文">
+              <header class="course-material-section-heading">
+                <div>
+                  <p class="course-kicker">Reading</p>
+                  <h2>正文</h2>
+                </div>
+                <span class="course-material-section-note" id="knowledge-document-status"
+                  >Markdown 课程资料</span
+                >
+              </header>
+              <div class="discussion-markdown-body course-material-body" id="knowledge-body"></div>
+            </section>
+            <nav class="knowledge-sequence-navigation" aria-label="前后知识点导航">
+              <a class="knowledge-sequence-link is-previous" id="knowledge-previous-link">
+                <span aria-hidden="true">←</span>
+                <span>
+                  <small>上一个知识点</small>
+                  <strong id="knowledge-previous-title">已经是第一个知识点</strong>
+                </span>
+              </a>
+              <a class="knowledge-sequence-link is-next" id="knowledge-next-link">
+                <span>
+                  <small>下一个知识点</small>
+                  <strong id="knowledge-next-title">已经是最后一个知识点</strong>
+                </span>
+                <span aria-hidden="true">→</span>
+              </a>
+            </nav>
+          </article>
+
+          <div
+            class="knowledge-panel-resizer hidden"
+            id="knowledge-panel-resizer"
+            role="separator"
+            aria-label="调整右侧交互区宽度"
+            aria-orientation="vertical"
+            aria-valuemin="320"
+            aria-valuemax="720"
+            aria-valuenow="480"
+            tabindex="0"
+          >
+            <span aria-hidden="true">↔</span>
+          </div>
+
+          <div class="knowledge-chat" data-knowledge-chat>
+            <aside
+              class="knowledge-chat-panel hidden"
+              id="knowledge-chat-panel"
+              aria-labelledby="knowledge-chat-title"
+            >
+              <header class="knowledge-chat-header">
+                <span class="knowledge-chat-avatar" aria-hidden="true">M</span>
+                <div>
+                  <p>Course companion</p>
+                  <h2 id="knowledge-chat-title">课程学习面板</h2>
+                </div>
+                <span class="knowledge-chat-demo-badge">当前课程</span>
+                <button
+                  class="knowledge-chat-close"
+                  id="knowledge-chat-close"
+                  type="button"
+                  aria-label="关闭课程学习面板"
+                >
+                  ×
+                </button>
+              </header>
+
+              <nav class="knowledge-chat-tabs" role="tablist" aria-label="课程学习面板分页">
+                <button
+                  class="knowledge-chat-tab is-active"
+                  id="knowledge-chat-tab-max"
+                  type="button"
+                  role="tab"
+                  aria-selected="true"
+                  aria-controls="knowledge-chat-view-max"
+                  data-knowledge-chat-tab="max"
+                >
+                  <span aria-hidden="true">⌁</span>
+                  问问 Max
+                  <small>演示</small>
+                </button>
+                <button
+                  class="knowledge-chat-tab"
+                  id="knowledge-chat-tab-discussion"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="knowledge-chat-view-discussion"
+                  data-knowledge-chat-tab="discussion"
+                  tabindex="-1"
+                >
+                  <span aria-hidden="true">◌</span>
+                  课程讨论
+                  <small id="knowledge-discussion-count">…</small>
+                </button>
+              </nav>
+
+              <section
+                class="knowledge-chat-view knowledge-chat-max-view is-active"
+                id="knowledge-chat-view-max"
+                role="tabpanel"
+                aria-labelledby="knowledge-chat-tab-max"
+                data-knowledge-chat-view="max"
+              >
+                <div class="knowledge-chat-context">
+                  <span>当前知识点</span>
+                  <strong id="knowledge-chat-context">正在载入…</strong>
+                </div>
+
+                <div class="knowledge-chat-thread" id="knowledge-chat-thread" aria-live="polite">
+                  <article class="knowledge-chat-message is-assistant">
+                    <span>Max</span>
+                    <p id="knowledge-chat-welcome">
+                      我会围绕当前知识点帮你梳理思路。现在是纯前端演示，不会向服务器发送内容。
+                    </p>
+                  </article>
+                </div>
+
+                <div class="knowledge-chat-prompts" aria-label="快捷提问">
+                  <button type="button" data-chat-prompt="用直觉解释这个知识点">直觉解释</button>
+                  <button type="button" data-chat-prompt="这个知识点有哪些易错点">易错点</button>
+                  <button type="button" data-chat-prompt="给我一道检查理解的小题">来道小题</button>
+                </div>
+
+                <form class="knowledge-chat-form" id="knowledge-chat-form">
+                  <textarea
+                    id="knowledge-chat-input"
+                    rows="2"
+                    maxlength="500"
+                    aria-label="向 Max 提问"
+                    placeholder="围绕当前知识点提问…"
+                  ></textarea>
+                  <button type="submit" aria-label="发送问题">发送</button>
+                </form>
+                <p class="knowledge-chat-privacy">Max 演示模式 · 内容仅保留在当前页面</p>
+              </section>
+
+              <section
+                class="knowledge-chat-view knowledge-discussion-view hidden"
+                id="knowledge-chat-view-discussion"
+                role="tabpanel"
+                aria-labelledby="knowledge-chat-tab-discussion"
+                data-knowledge-chat-view="discussion"
+                hidden
+              >
+                <header class="knowledge-discussion-toolbar">
+                  <div>
+                    <p>Course board</p>
+                    <h3 id="knowledge-discussion-board-name">课程讨论</h3>
+                  </div>
+                  <div class="knowledge-discussion-toolbar-actions">
+                    <button id="knowledge-discussion-refresh" type="button">刷新</button>
+                    <a id="knowledge-discussion-board-link" href="/discussion">完整讨论区 ↗</a>
+                  </div>
+                </header>
+
+                <div class="knowledge-discussion-list-view" id="knowledge-discussion-list-view">
+                  <p
+                    class="knowledge-discussion-status"
+                    id="knowledge-discussion-status"
+                    role="status"
+                  >
+                    正在载入课程讨论…
+                  </p>
+                  <div
+                    class="knowledge-discussion-list"
+                    id="knowledge-discussion-list"
+                    aria-live="polite"
+                  ></div>
+                </div>
+
+                <article
+                  class="knowledge-discussion-detail hidden"
+                  id="knowledge-discussion-detail"
+                  aria-live="polite"
+                  hidden
+                >
+                  <nav class="knowledge-discussion-detail-actions" aria-label="帖子详情操作">
+                    <button id="knowledge-discussion-back" type="button">← 返回帖子列表</button>
+                    <a id="knowledge-discussion-post-link" href="/discussion">在讨论区打开 ↗</a>
+                  </nav>
+                  <div class="knowledge-discussion-detail-heading">
+                    <div
+                      class="knowledge-discussion-badges"
+                      id="knowledge-discussion-detail-badges"
+                    ></div>
+                    <h3 id="knowledge-discussion-detail-title">正在载入帖子…</h3>
+                    <p id="knowledge-discussion-detail-meta"></p>
+                  </div>
+                  <div
+                    class="discussion-markdown-body knowledge-discussion-detail-body"
+                    id="knowledge-discussion-detail-body"
+                  ></div>
+                  <footer
+                    class="knowledge-discussion-detail-stats"
+                    id="knowledge-discussion-detail-stats"
+                  ></footer>
+                </article>
+              </section>
+            </aside>
+          </div>
+        </div>
+
+        <button
+          class="knowledge-chat-fab"
+          id="knowledge-chat-toggle"
+          type="button"
+          aria-label="打开课程学习面板"
+          aria-controls="knowledge-chat-panel"
+          aria-expanded="false"
+        >
+          <span
+            class="knowledge-chat-fab-symbol"
+            id="knowledge-chat-toggle-symbol"
+            aria-hidden="true"
+            >＋</span
+          >
+          <span class="knowledge-chat-fab-tooltip">打开交互区</span>
+        </button>
       </main>
     </div>
 

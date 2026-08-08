@@ -163,6 +163,7 @@ function createCampusConnectorRouter({
     strict: true,
     type: 'application/json',
   });
+  const syncJsonParser = express.json({ limit: 1024, strict: true, type: 'application/json' });
   const frontendOrigin = new URL(frontendBaseUrl || 'http://127.0.0.1:3000');
   const secureCorrelationCookie =
     typeof correlationCookieSecure === 'boolean'
@@ -336,11 +337,22 @@ function createCampusConnectorRouter({
     }
   });
 
-  router.post('/sync-runs', async (request, response) => {
+  router.post('/sync-runs', syncJsonParser, async (request, response) => {
     try {
       const user = await requireAuth(request, response);
-      if (!user || rejectBody(request, response)) return;
-      response.status(202).json({ run: await broker.requestSync(user.id) });
+      if (!user) return;
+      const fields =
+        request.body && typeof request.body === 'object' ? Object.keys(request.body) : [];
+      if (fields.some((field) => field !== 'semesterId')) {
+        response.status(400).json({
+          code: 'connector_request_body_not_allowed',
+          message: '同步请求只接受网络学堂返回的学期标识。',
+        });
+        return;
+      }
+      response
+        .status(202)
+        .json({ run: await broker.requestSync(user.id, request.body?.semesterId || null) });
     } catch (error) {
       const safeError = asCampusConnectorError(error);
       response.status(safeError.status).json({ code: safeError.code, message: safeError.message });

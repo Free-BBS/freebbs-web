@@ -28,6 +28,10 @@ const ALLOWED_SYNC_REQUESTS = Object.freeze([
   }),
   Object.freeze({
     method: 'GET',
+    pattern: /^\/b\/wlxt\/kc\/v_wlkc_xs_xktjb_coassb\/queryxnxq$/,
+  }),
+  Object.freeze({
+    method: 'GET',
     pattern:
       /^\/b\/wlxt\/kc\/v_wlkc_xs_xkb_kcb_extend\/student\/loadCourseBySemesterId\/[A-Za-z0-9._:-]{1,128}\/zh$/,
   }),

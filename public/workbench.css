@@ -200,6 +200,103 @@ body.workbench-page .workbench-agent-card {
     linear-gradient(110deg, var(--workbench-accent-soft), transparent 62%), var(--workbench-panel);
 }
 
+body.workbench-page .workbench-campus-courses-card {
+  grid-column: 1 / -1;
+}
+
+body.workbench-page .workbench-campus-courses-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+}
+
+body.workbench-page .workbench-campus-courses-header h2,
+body.workbench-page .workbench-campus-courses-layout h3 {
+  margin: 0;
+}
+
+body.workbench-page .workbench-campus-courses-header p,
+body.workbench-page #workbench-campus-courses-status {
+  color: var(--workbench-muted);
+}
+
+body.workbench-page .workbench-campus-courses-header label {
+  display: grid;
+  gap: 6px;
+  min-width: 190px;
+  color: var(--workbench-muted);
+  font-size: 0.75rem;
+}
+
+body.workbench-page .workbench-campus-courses-header select {
+  padding: 10px 12px;
+  color: var(--workbench-text);
+  background: var(--workbench-panel-soft);
+  border: 1px solid var(--workbench-line-strong);
+  border-radius: 10px;
+}
+
+body.workbench-page .workbench-campus-courses-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr);
+  gap: 20px;
+}
+
+body.workbench-page .workbench-campus-courses-layout > section {
+  min-width: 0;
+  padding: 18px;
+  background: var(--workbench-panel-soft);
+  border: 1px solid var(--workbench-line);
+  border-radius: 16px;
+}
+
+body.workbench-page .workbench-campus-course-list,
+body.workbench-page .workbench-campus-notice-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+body.workbench-page .workbench-campus-course,
+body.workbench-page .workbench-campus-notice {
+  padding: 14px;
+  background: var(--workbench-panel);
+  border: 1px solid var(--workbench-line);
+  border-radius: 12px;
+}
+
+body.workbench-page .workbench-campus-course strong,
+body.workbench-page .workbench-campus-notice strong {
+  display: block;
+  margin-bottom: 5px;
+}
+
+body.workbench-page .workbench-campus-course p,
+body.workbench-page .workbench-campus-notice p,
+body.workbench-page .workbench-campus-empty {
+  margin: 0;
+  color: var(--workbench-muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+body.workbench-page .workbench-campus-notice a {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--workbench-accent-strong);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 760px) {
+  body.workbench-page .workbench-campus-courses-header,
+  body.workbench-page .workbench-campus-courses-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
 body.workbench-page .workbench-card-header {
   display: flex;
   align-items: flex-start;

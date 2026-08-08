@@ -31,6 +31,7 @@ function createTsinghuaSyncStore(pool) {
       await connection.beginTransaction();
       const [rows] = await connection.execute(
         `SELECT r.id AS run_id, r.public_id, r.connector_id, r.connector_generation,
+                r.target_semester_id,
                 r.requested_by_user_id, r.status AS run_status,
                 c.user_id, c.provider, c.status AS connector_status, c.generation,
                 c.adapter_id, c.adapter_version, c.credential_type, c.credential_ciphertext,
@@ -198,6 +199,66 @@ function createTsinghuaSyncStore(pool) {
     );
   }
 
+  async function upsertSemesterSnapshot(connection, userId, snapshot, syncedAt) {
+    const semesterId = String(snapshot.semesterId || '')
+      .trim()
+      .slice(0, 32);
+    if (!semesterId) return;
+
+    const courses = Array.isArray(snapshot.courses) ? snapshot.courses : [];
+    const courseReferences = new Set(courses.map((course) => course.sourceReference));
+    const notifications = (Array.isArray(snapshot.notifications) ? snapshot.notifications : [])
+      .filter((notification) => courseReferences.has(notification.courseReference))
+      .map((notification) => ({
+        sourceReference: notification.sourceReference,
+        courseReference: notification.courseReference,
+        title: notification.title,
+        body: notification.body || '',
+        actionUrl: notification.actionUrl || '',
+        importance: notification.importance || 'normal',
+        publishedAt: notification.publishedAt || null,
+        publisher: notification.publisher || '',
+      }));
+
+    await connection.execute(
+      `INSERT INTO campus_learn_semester_snapshots (
+        user_id, semester_id, courses_json, notifications_json, sync_status, fetched_at
+      ) VALUES (?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        courses_json = VALUES(courses_json),
+        notifications_json = VALUES(notifications_json),
+        sync_status = VALUES(sync_status),
+        fetched_at = VALUES(fetched_at)`,
+      [
+        userId,
+        semesterId,
+        JSON.stringify(courses),
+        JSON.stringify(notifications),
+        snapshot.status === 'partial' ? 'partial' : 'complete',
+        normalizeDate(snapshot.fetchedAt) || syncedAt,
+      ],
+    );
+  }
+
+  async function upsertSemesterCatalog(connection, userId, snapshot, syncedAt) {
+    if (!Array.isArray(snapshot.availableSemesters)) return;
+    await connection.execute(
+      `INSERT INTO campus_learn_semester_catalogs (
+        user_id, current_semester_id, semesters_json, fetched_at
+      ) VALUES (?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        current_semester_id = VALUES(current_semester_id),
+        semesters_json = VALUES(semesters_json),
+        fetched_at = VALUES(fetched_at)`,
+      [
+        userId,
+        String(snapshot.currentSemesterId || '').slice(0, 32) || null,
+        JSON.stringify(snapshot.availableSemesters),
+        normalizeDate(snapshot.fetchedAt) || syncedAt,
+      ],
+    );
+  }
+
   function importantItemDedupeKey(item) {
     const value = item?.dedupeKey || item?.sourceReference;
     return String(value || '')
@@ -262,6 +323,8 @@ function createTsinghuaSyncStore(pool) {
       for (const notification of snapshot.notifications || []) {
         await upsertNotification(connection, current.user_id, notification, finishedAt);
       }
+      await upsertSemesterSnapshot(connection, current.user_id, snapshot, finishedAt);
+      await upsertSemesterCatalog(connection, current.user_id, snapshot, finishedAt);
       for (const item of snapshot.importantItems || []) {
         await upsertImportantItem(connection, current.user_id, item);
       }

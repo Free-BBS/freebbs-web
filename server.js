@@ -143,10 +143,13 @@ const server = http.createServer((request, response) => {
   }
 
   const urlPath = cleanPath === '/' ? '/index.html' : pageRoutes.get(cleanPath) || cleanPath;
-  const normalizedPath = path.normalize(urlPath).replace(/^(\.\.[/\\])+/, '');
+  // URL paths always use `/`, even when the static server is running on Windows.
+  // Using path.normalize here turns `/vendor/...` into `\\vendor\\...`, which
+  // prevents vendor requests from being recognized and makes every dependency 404.
+  const normalizedPath = path.posix.normalize(urlPath).replace(/^(\.\.\/)+/, '');
   const isVendorRequest = normalizedPath.startsWith('/vendor/');
   const baseDir = isVendorRequest ? vendorDir : publicDir;
-  const relativePath = isVendorRequest ? normalizedPath.replace(/^\/vendor/, '') : normalizedPath;
+  const relativePath = isVendorRequest ? normalizedPath.slice('/vendor'.length) : normalizedPath;
   const filePath = path.join(baseDir, relativePath);
   const ext = path.extname(filePath).toLowerCase();
   const acceptsHtml = (request.headers.accept || '').includes('text/html');

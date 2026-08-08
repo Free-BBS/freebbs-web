@@ -1388,9 +1388,16 @@ function buildAgentUserContext(user) {
 }
 
 function buildAgentChatPayload(user, payload, defaults = {}) {
+  const allowedAgents = new Set(['navigation', 'general_chat', 'rag', 'info', 'comment_mention']);
+  const requestedAgent = String(payload.agent || defaults.agent || 'navigation').trim();
+  const requestedSubagent = String(payload.execute_subagent || 'none').trim();
+
   return {
     ...payload,
-    agent: payload.agent || defaults.agent || 'general_chat',
+    agent: allowedAgents.has(requestedAgent) ? requestedAgent : 'navigation',
+    execute_subagent: ['none', 'auto', 'rag', 'info'].includes(requestedSubagent)
+      ? requestedSubagent
+      : 'none',
     source: payload.source || defaults.source || 'direct_chat',
     channel:
       payload.channel || defaults.channel || payload.source || defaults.source || 'direct_chat',
@@ -1402,11 +1409,26 @@ function buildAgentChatPayload(user, payload, defaults = {}) {
   };
 }
 
-async function postAgentChat(payload) {
+function buildTrustedAgentHeaders(payload, user = null) {
+  return user && config.freebbsAgentInternalToken
+    ? {
+        'X-FreeBBS-Internal-Token': config.freebbsAgentInternalToken,
+        'X-FreeBBS-UID': String(user.uid || ''),
+        'X-FreeBBS-Student-No': String(user.student_id || user.studentId || ''),
+        'X-FreeBBS-Session-ID': String(payload.did || payload.context?.dialogId || ''),
+        'X-FreeBBS-Permissions': 'web_learning:read,thu_info:read',
+      }
+    : {};
+}
+
+async function postAgentChat(payload, user = null) {
+  const trustedHeaders = buildTrustedAgentHeaders(payload, user);
+
   return fetch(`${config.agentBaseUrl.replace(/\/$/, '')}/api/v1/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...trustedHeaders,
     },
     body: JSON.stringify(payload),
   });
@@ -1974,14 +1996,14 @@ app.post('/api/ai/chat', async (request, response) => {
 
   try {
     const agentPayload = buildAgentChatPayload(user, payload, {
-      agent: 'general_chat',
+      agent: 'navigation',
       source: 'direct_chat',
       channel: 'aichat',
       context: {
         dialogId: payload.did || payload.conversationId || payload.conversation_id || '',
       },
     });
-    const agentResponse = await postAgentChat(agentPayload);
+    const agentResponse = await postAgentChat(agentPayload, user);
 
     if (payload.stream) {
       response.status(agentResponse.status);
@@ -2011,6 +2033,47 @@ app.post('/api/ai/chat', async (request, response) => {
   } catch (error) {
     response.status(502).json({
       message: 'AI 服务暂时不可用',
+      detail: error.message,
+    });
+  }
+});
+
+app.post('/api/ai/info/jobs/get', async (request, response) => {
+  const user = await requireAuth(request, response);
+
+  if (!user) {
+    return;
+  }
+
+  const jobId = String(request.body?.job_id || '').trim();
+  const dialogId = String(request.body?.did || '').trim();
+  if (!/^job_[a-zA-Z0-9_-]+$/.test(jobId)) {
+    response.status(400).json({ message: '无效的 Info Agent 任务 ID' });
+    return;
+  }
+
+  try {
+    const agentResponse = await fetch(
+      `${config.agentBaseUrl.replace(/\/$/, '')}/api/v1/info/jobs/get`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...buildTrustedAgentHeaders({ did: dialogId }, user),
+        },
+        body: JSON.stringify({ job_id: jobId }),
+      },
+    );
+    const text = await agentResponse.text();
+    response.status(agentResponse.status);
+    response.setHeader(
+      'Content-Type',
+      agentResponse.headers.get('content-type') || 'application/json; charset=utf-8',
+    );
+    response.send(text);
+  } catch (error) {
+    response.status(502).json({
+      message: 'Info Agent 任务查询暂时不可用',
       detail: error.message,
     });
   }
