@@ -175,8 +175,8 @@
             <article class="workbench-dashboard-card workbench-priority-card">
               <header class="workbench-card-header">
                 <div>
-                  <p class="workbench-card-eyebrow">Today</p>
-                  <h2>今日重要事项</h2>
+                  <p class="workbench-card-eyebrow">Priority</p>
+                  <h2>重要事项</h2>
                 </div>
                 <div class="workbench-card-tools">
                   <span class="workbench-card-status">按截止时间</span>
@@ -319,6 +319,12 @@
                 <p id="workbench-campus-description">
                   正在确认部署环境是否已经配置校方批准的授权入口。
                 </p>
+                <p
+                  id="workbench-campus-credential-expiry"
+                  role="status"
+                  aria-live="polite"
+                  hidden
+                ></p>
                 <div class="workbench-campus-actions">
                   <button id="workbench-campus-connect" type="button" disabled>连接网络学堂</button>
                   <button id="workbench-campus-sync" type="button" disabled>立即同步</button>
@@ -676,9 +682,9 @@
 
     <script src="/vendor/marked/lib/marked.umd.js"></script>
     <script src="/app.js?v=20260803-cas-fix-3"></script>
-    <script src="/workbench.js"></script>
+    <script src="/workbench.js?v=20260803-sync-closure-1"></script>
     <script src="/assets/vendor/fingerprint2-1.5.1.min.js"></script>
     <script src="/tsinghua-cas-fingerprint.js"></script>
-    <script src="/workbench-connectors.js?v=20260803-cas-fix-3"></script>
+    <script src="/workbench-connectors.js?v=20260806-credential-expiry-1"></script>
   </body>
 </html>

@@ -188,7 +188,9 @@
       const publicId = payload.run?.publicId;
       if (!publicId) throw new Error('同步任务没有返回有效标识');
       for (let attempt = 0; attempt < 90; attempt += 1) {
-        await new Promise((resolve) => window.setTimeout(resolve, 1000));
+        await new Promise((resolve) => {
+          window.setTimeout(resolve, 1000);
+        });
         const result = await app.callApi(
           `/workbench/connectors/tsinghua/sync-runs/${encodeURIComponent(publicId)}`,
           { method: 'GET' },
@@ -269,6 +271,22 @@
       weekday: 'short',
       ...(allDay ? {} : { hour: '2-digit', minute: '2-digit' }),
     }).format(date);
+  }
+
+  function formatImportantDue(item) {
+    if (!item?.dueAt) {
+      return item?.sourceType === 'network_classroom'
+        ? '网络学堂未提供截止时间'
+        : '暂未设置截止时间';
+    }
+    const dueAt = new Date(item.dueAt);
+    if (Number.isNaN(dueAt.getTime())) return '截止时间待确认';
+    const remainingMs = dueAt.getTime() - Date.now();
+    const absolute = formatMoment(item.dueAt);
+    if (remainingMs < 0) return `已逾期 · ${absolute}`;
+    if (remainingMs <= 24 * 60 * 60 * 1_000) return `24 小时内截止 · ${absolute}`;
+    if (remainingMs <= 48 * 60 * 60 * 1_000) return `48 小时内截止 · ${absolute}`;
+    return `截止：${absolute}`;
   }
 
   function toShanghaiInputValue(value) {
@@ -379,16 +397,18 @@
             item.status === 'draft' ? '待确认草稿' : PRIORITY_LABELS[item.priority] || '事项',
           title: item.title || '未命名事项',
           href: item.actionUrl,
-          description: [
-            item.dueAt ? `截止：${formatMoment(item.dueAt)}` : '暂未设置截止时间',
-            truncate(item.description),
-          ]
+          description: [formatImportantDue(item), truncate(item.description)]
             .filter(Boolean)
             .join(' · '),
           className: item.status === 'draft' ? 'is-draft' : '',
           actions: [
+            ...(item.status === 'draft'
+              ? [makeAction('确认事项', 'confirm-important', item.publicId, 'is-primary')]
+              : []),
             makeAction('编辑', 'edit-important', item.publicId),
-            makeAction('完成', 'complete-important', item.publicId, 'is-primary'),
+            ...(item.status === 'draft'
+              ? []
+              : [makeAction('完成', 'complete-important', item.publicId, 'is-primary')]),
             makeAction('删除', 'delete-important', item.publicId, 'is-danger'),
           ],
         }),
@@ -400,11 +420,18 @@
   function renderNotifications() {
     const items = state.notifications.slice(0, 30);
     if (!items.length) {
+      const hasFilter = Boolean(
+        state.notificationFilters.category ||
+        state.notificationFilters.unread ||
+        state.notificationFilters.favorite,
+      );
       renderState(
         elements.notificationList,
         '通知',
-        '当前筛选下没有通知',
-        '可以清除“未读”或“收藏”筛选后再查看。',
+        hasFilter ? '当前筛选下没有通知' : '暂无课程通知',
+        hasFilter
+          ? '可以清除分类、“未读”或“收藏”筛选后再查看。'
+          : '连接并同步网络学堂后，课程公告会显示在这里。',
       );
       return;
     }
@@ -442,7 +469,7 @@
         elements.scheduleList,
         '本周时间表',
         '本周暂无日程',
-        '手动添加或确认工作管家草稿后，日程会进入时间表。',
+        '作业截止时间会进入重要事项，不会自动占用时间表；你可以手动安排学习时段。',
       );
       return;
     }
@@ -737,7 +764,12 @@
       return;
     }
 
-    if (action === 'complete-important' && importantItem) {
+    if (action === 'confirm-important' && importantItem) {
+      await app.callApi(`/workbench/important-items/${encodeURIComponent(publicId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'confirmed' }),
+      });
+    } else if (action === 'complete-important' && importantItem) {
       await app.callApi(`/workbench/important-items/${encodeURIComponent(publicId)}`, {
         method: 'PATCH',
         body: JSON.stringify({ status: 'completed' }),

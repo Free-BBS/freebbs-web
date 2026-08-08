@@ -118,6 +118,32 @@ function toIso(value) {
   return safeDate(value)?.toISOString() || null;
 }
 
+function publicSyncDiagnostics(value) {
+  const normalizeEntries = (entries) =>
+    (Array.isArray(entries) ? entries : [])
+      .slice(0, 64)
+      .map((entry) => {
+        const resource = String(entry?.resource || '').trim();
+        const code = String(entry?.code || '').trim();
+        const count = Number(entry?.count);
+        if (
+          !/^[a-z][a-z0-9:_-]{0,63}$/u.test(resource) ||
+          !/^[a-z][a-z0-9:_-]{0,63}$/u.test(code) ||
+          !Number.isSafeInteger(count) ||
+          count < 1
+        ) {
+          return null;
+        }
+        return { resource, code, count };
+      })
+      .filter(Boolean);
+
+  return {
+    warnings: normalizeEntries(value?.warnings),
+    errors: normalizeEntries(value?.errors),
+  };
+}
+
 function safeScopes(value) {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map((item) => String(item || '').trim()))]
@@ -297,15 +323,21 @@ function createCampusConnectorBroker({
   if (!store) throw new TypeError('store is required');
 
   const availability = () => {
-    const runtime = resolveAvailability(runtimeConfig, adapter);
+    let runtime = resolveAvailability(runtimeConfig, adapter);
     if (runtime.authorizationAvailable && !vault) {
-      return {
+      runtime = {
         state: 'misconfigured',
         authorizationAvailable: false,
         authorizationKind: 'none',
       };
     }
-    return runtime;
+
+    return {
+      ...runtime,
+      syncAvailable: Boolean(
+        runtime.authorizationAvailable && typeof syncDispatcher?.enqueue === 'function',
+      ),
+    };
   };
   function connectionCredentialExpired(connection, currentTime) {
     const expiresAt = safeDate(connection?.credential_expires_at);
@@ -377,11 +409,7 @@ function createCampusConnectorBroker({
         expiresAt: toIso(pendingAuthorization?.expires_at),
       },
       sync: {
-        available: Boolean(
-          runtime.authorizationAvailable &&
-          ACTIVE_CONNECTION_STATES.has(connectionStatus) &&
-          syncDispatcher,
-        ),
+        available: Boolean(runtime.syncAvailable && ACTIVE_CONNECTION_STATES.has(connectionStatus)),
         minimumIntervalSeconds: runtimeConfig.syncIntervalSeconds,
         latestRun: latestRun
           ? {
@@ -391,6 +419,7 @@ function createCampusConnectorBroker({
               finishedAt: toIso(latestRun.finished_at),
               resultCounts: latestRun.result_counts || null,
               errorCode: latestRun.error_code || null,
+              diagnostics: publicSyncDiagnostics(latestRun.error_context),
             }
           : null,
       },
@@ -836,6 +865,7 @@ function createCampusConnectorBroker({
     completeAuthorization,
     connectDirect,
     disconnect,
+    getAvailability: availability,
     getStatus,
     getSyncRun,
     requestSync,

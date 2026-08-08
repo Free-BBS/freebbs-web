@@ -4,6 +4,7 @@
     state: document.getElementById('workbench-campus-state'),
     title: document.getElementById('workbench-campus-title'),
     description: document.getElementById('workbench-campus-description'),
+    credentialExpiry: document.getElementById('workbench-campus-credential-expiry'),
     lastSync: document.getElementById('workbench-campus-last-sync'),
     message: document.getElementById('workbench-campus-message'),
     connect: document.getElementById('workbench-campus-connect'),
@@ -24,6 +25,7 @@
 
   let requestVersion = 0;
   let pollTimer = null;
+  let credentialExpiryTimer = null;
   let observedOwnerKey = null;
   let currentConnector = null;
   let directLoginAbortController = null;
@@ -52,6 +54,100 @@
       minute: '2-digit',
       hourCycle: 'h23',
     }).format(date);
+  }
+
+  function credentialExpiryTimestamp(value) {
+    if (
+      typeof value !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value)
+    ) {
+      return null;
+    }
+    const timestamp = Date.parse(value);
+    return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value
+      ? timestamp
+      : null;
+  }
+
+  function clearCredentialExpiryTimer() {
+    window.clearTimeout(credentialExpiryTimer);
+    credentialExpiryTimer = null;
+  }
+
+  function hideCredentialExpiry() {
+    clearCredentialExpiryTimer();
+    if (!elements.credentialExpiry) return;
+    elements.credentialExpiry.hidden = true;
+    elements.credentialExpiry.textContent = '';
+    elements.credentialExpiry.dataset.state = '';
+  }
+
+  function renderCredentialExpiry(connection, connected) {
+    hideCredentialExpiry();
+    const expiresAt = credentialExpiryTimestamp(connection?.credentialExpiresAt);
+    if (!elements.credentialExpiry || !connected || expiresAt === null) return;
+
+    const now = Date.now();
+    const warningWindow = 60 * 60 * 1000;
+    const remaining = expiresAt - now;
+    if (remaining <= 0) return;
+
+    elements.credentialExpiry.hidden = false;
+    if (remaining <= warningWindow) {
+      elements.credentialExpiry.dataset.state = 'warning';
+      elements.credentialExpiry.textContent = `清华授权将在 1 小时内到期（有效至 ${formatTime(
+        expiresAt,
+      )}），建议现在重新连接。`;
+    } else {
+      elements.credentialExpiry.dataset.state = 'valid';
+      elements.credentialExpiry.textContent = `清华授权有效至 ${formatTime(expiresAt)}`;
+    }
+
+    const warningAt = expiresAt - warningWindow;
+    const nextRefreshAt = warningAt > now ? warningAt : expiresAt;
+    credentialExpiryTimer = window.setTimeout(
+      () => {
+        credentialExpiryTimer = null;
+        loadStatus();
+      },
+      Math.max(0, nextRefreshAt - now + 250),
+    );
+  }
+
+  function describeResultCounts(counts = {}) {
+    const labels = [
+      ['courses', '识别课程'],
+      ['notifications', '导入公告'],
+      ['homework', '解析作业'],
+      ['importantItems', '生成待办'],
+    ];
+    const parts = labels
+      .map(([key, label]) => {
+        const count = Number(counts?.[key]);
+        return Number.isSafeInteger(count) && count > 0 ? `${label} ${count}` : '';
+      })
+      .filter(Boolean);
+    return parts.length ? parts.join('、') : '本次未发现可导入内容';
+  }
+
+  function diagnosticCount(diagnostics = {}) {
+    return ['warnings', 'errors'].reduce(
+      (total, key) =>
+        total +
+        (Array.isArray(diagnostics?.[key]) ? diagnostics[key] : []).reduce((sum, entry) => {
+          const count = Number(entry?.count);
+          return sum + (Number.isSafeInteger(count) && count > 0 ? count : 0);
+        }, 0),
+      0,
+    );
+  }
+
+  function partialSyncMessage(run) {
+    const summary = describeResultCounts(run?.resultCounts);
+    const issueCount = diagnosticCount(run?.diagnostics);
+    return issueCount
+      ? `最近同步部分完成：${summary}；已记录 ${issueCount} 条安全诊断摘要，可重试未完成部分。`
+      : `最近同步部分完成：${summary}；部分记录仍需适配，再次同步后会记录安全诊断摘要。`;
   }
 
   function setMessage(message, state = '') {
@@ -226,6 +322,7 @@
   }
 
   function setLoading() {
+    hideCredentialExpiry();
     elements.state.dataset.state = 'loading';
     elements.state.textContent = '正在检查';
     elements.title.textContent = '读取校内连接状态';
@@ -238,6 +335,7 @@
 
   function renderLoggedOut() {
     closeDirectLoginDialog();
+    hideCredentialExpiry();
     elements.state.dataset.state = 'idle';
     elements.state.textContent = '登录后可用';
     elements.title.textContent = '先登录 FREE BBS';
@@ -258,6 +356,7 @@
     const directCas = isDirectCasConfiguration(configuration);
     const directCasSafeguardsReady = !directCas || hasRequiredDirectCasSafeguards(connector);
     const connected = ['active_unverified', 'active_verified'].includes(connection.status);
+    const partialRun = sync.latestRun?.status === 'partial' ? sync.latestRun : null;
     const needsAuthorization = connection.status === 'reauthorization_required';
     const revoked = connection.status === 'revoked';
     const activeRun = ['queued', 'running'].includes(sync.latestRun?.status)
@@ -288,16 +387,27 @@
       elements.description.textContent =
         '仅当密码不持久化、浏览器不提交 Cookie 且会话 Cookie 在服务端加密保存时，页面才允许直接连接。';
     } else if (connected) {
-      elements.state.dataset.state = 'connected';
-      elements.state.textContent = connection.status === 'active_verified' ? '已验证' : '已连接';
-      elements.title.textContent =
-        connection.status === 'active_verified' ? '网络学堂同步已验证' : '等待首次真实同步';
-      if (directCas) {
+      if (partialRun) {
+        elements.state.dataset.state = 'warning';
+        elements.state.textContent = '部分完成';
+        elements.title.textContent = '真实数据已部分同步';
+        elements.description.textContent = `${describeResultCounts(
+          partialRun.resultCounts,
+        )}。已导入的数据可以正常使用；部分记录仍需适配，可重试同步。`;
+      } else if (directCas) {
+        elements.state.dataset.state = 'connected';
+        elements.state.textContent = connection.status === 'active_verified' ? '已验证' : '已连接';
+        elements.title.textContent =
+          connection.status === 'active_verified' ? '网络学堂同步已验证' : '等待首次真实同步';
         elements.description.textContent =
           connection.status === 'active_verified'
             ? '直接 CAS 会话已连接。密码未持久化；网络学堂会话 Cookie 只以服务端加密凭据保存。'
             : '直接 CAS 会话已连接，密码未持久化；首次真实同步尚未完成。';
       } else {
+        elements.state.dataset.state = 'connected';
+        elements.state.textContent = connection.status === 'active_verified' ? '已验证' : '已连接';
+        elements.title.textContent =
+          connection.status === 'active_verified' ? '网络学堂同步已验证' : '等待首次真实同步';
         elements.description.textContent =
           connection.status === 'active_verified'
             ? '正式授权已连接。同步只通过服务端授权通道读取批准范围内的数据。'
@@ -323,9 +433,20 @@
         '正式授权模式下，清华密码只在校方统一身份认证页面输入，FREE BBS 不接收密码或浏览器 Cookie。';
     }
 
-    elements.lastSync.textContent = connection.lastSuccessfulSyncAt
-      ? `最近真实同步：${formatTime(connection.lastSuccessfulSyncAt)}`
-      : '尚无真实同步记录';
+    renderCredentialExpiry(connection, connected);
+
+    const latestAttemptAt = sync.latestRun?.finishedAt || sync.latestRun?.createdAt;
+    if (partialRun && latestAttemptAt) {
+      elements.lastSync.textContent = `最近同步尝试：${formatTime(latestAttemptAt)}（部分完成）`;
+    } else if (connection.lastSuccessfulSyncAt) {
+      elements.lastSync.textContent = `最近真实同步：${formatTime(
+        connection.lastSuccessfulSyncAt,
+      )}`;
+    } else if (latestAttemptAt) {
+      elements.lastSync.textContent = `最近同步尝试：${formatTime(latestAttemptAt)}`;
+    } else {
+      elements.lastSync.textContent = '尚无真实同步记录';
+    }
     elements.connect.textContent = directCas
       ? needsAuthorization || connected
         ? '重新直接连接'
@@ -338,6 +459,7 @@
         ['not_configured', 'misconfigured', 'development_mock'].includes(configuration.state) ||
         configuration.directLoginAvailable === false
       : !configuration.authorizationAvailable;
+    elements.sync.textContent = partialRun ? '重试未完成部分' : '立即同步';
     elements.sync.disabled = !sync.available || Boolean(activeRun);
     elements.disconnect.disabled = !(connected || needsAuthorization);
 
@@ -357,12 +479,13 @@
         failed: '最近同步失败',
         cancelled: '最近同步已取消',
       };
-      setMessage(
-        run.status === 'failed'
-          ? syncFailureMessage(run.errorCode)
-          : labels[run.status] || '同步状态未知',
-        run.status,
-      );
+      let message = labels[run.status] || '同步状态未知';
+      if (run.status === 'failed') {
+        message = syncFailureMessage(run.errorCode);
+      } else if (run.status === 'partial') {
+        message = partialSyncMessage(run);
+      }
+      setMessage(message, run.status);
     } else {
       setMessage('');
     }
@@ -375,6 +498,7 @@
   async function loadStatus() {
     window.clearTimeout(pollTimer);
     pollTimer = null;
+    clearCredentialExpiryTimer();
     requestVersion += 1;
     const version = requestVersion;
     if (!isLoggedIn()) {
@@ -388,10 +512,11 @@
       });
       if (version !== requestVersion) return;
       renderStatus(payload.connector);
-      void maybeAutoSync(payload.connector);
+      maybeAutoSync(payload.connector);
     } catch (error) {
       if (version !== requestVersion) return;
       currentConnector = null;
+      hideCredentialExpiry();
       elements.state.dataset.state = 'error';
       elements.state.textContent = '读取失败';
       elements.title.textContent = '暂时无法读取连接状态';
@@ -503,6 +628,7 @@
       await loginRequest;
       setMessage('清华账号已连接；密码已从页面清除，会话 Cookie 已在服务端加密保存。', 'succeeded');
       closeDirectLoginDialog({ abort: false });
+      autoSyncRequested = false;
       await loadStatus();
       window.dispatchEvent(new CustomEvent('freebbs:workbench-refresh'));
     } catch (error) {
@@ -576,6 +702,7 @@
     try {
       await app.callApi('/workbench/connectors/tsinghua/connection', { method: 'DELETE' });
       setMessage('连接已解除，已有导入数据已保留。', 'succeeded');
+      autoSyncRequested = false;
       await loadStatus();
     } catch (error) {
       setMessage(error.message || '解除连接失败。', 'failed');
@@ -623,6 +750,7 @@
     const ownerKey = getOwnerKey();
     if (ownerKey === observedOwnerKey) return;
     closeDirectLoginDialog();
+    autoSyncRequested = false;
     observedOwnerKey = ownerKey;
     loadStatus();
   }

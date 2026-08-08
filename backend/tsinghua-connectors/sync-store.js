@@ -20,6 +20,36 @@ function normalizeCount(value) {
   return Number.isSafeInteger(count) && count >= 0 ? count : 0;
 }
 
+function normalizeDiagnosticToken(value, fallback) {
+  const token = String(value || '').trim();
+  return /^[a-z][a-z0-9:_-]{0,63}$/u.test(token) ? token : fallback;
+}
+
+function summarizeDiagnostics(entries) {
+  const totals = new Map();
+  for (const entry of Array.isArray(entries) ? entries.slice(0, 1_000) : []) {
+    const resource = normalizeDiagnosticToken(entry?.resource, 'unknown');
+    const code = normalizeDiagnosticToken(entry?.code, 'unknown');
+    const key = `${resource}\u0000${code}`;
+    const current = totals.get(key) || { resource, code, count: 0 };
+    current.count += 1;
+    totals.set(key, current);
+  }
+  return [...totals.values()]
+    .sort((left, right) =>
+      `${left.resource}:${left.code}`.localeCompare(`${right.resource}:${right.code}`),
+    )
+    .slice(0, 64);
+}
+
+function buildDiagnosticContext(snapshot) {
+  return {
+    version: 1,
+    warnings: summarizeDiagnostics(snapshot?.warnings),
+    errors: summarizeDiagnostics(snapshot?.errors),
+  };
+}
+
 function createTsinghuaSyncStore(pool) {
   if (!pool || typeof pool.getConnection !== 'function') {
     throw new TypeError('A mysql2 pool is required');
@@ -344,10 +374,12 @@ function createTsinghuaSyncStore(pool) {
         notifications: snapshot.notifications?.length || 0,
       };
       const requestCount = normalizeCount(snapshot.evidence?.requestCount);
+      const diagnosticContext = buildDiagnosticContext(snapshot);
       await connection.execute(
         `UPDATE campus_connector_sync_runs
          SET status = ?, parser_version = ?, schema_version = ?, request_count = ?,
-             result_counts = ?, evidence_json = ?, finished_at = ?, heartbeat_at = ?,
+             result_counts = ?, evidence_json = ?, error_context = ?,
+             finished_at = ?, heartbeat_at = ?,
              lease_expires_at = NULL, lease_owner = NULL, error_code = NULL
          WHERE id = ? AND status = 'running'`,
         [
@@ -357,6 +389,7 @@ function createTsinghuaSyncStore(pool) {
           requestCount,
           safeJson(counts),
           safeJson(snapshot.evidence),
+          safeJson(diagnosticContext),
           finishedAt,
           finishedAt,
           current.run_id,
@@ -374,7 +407,7 @@ function createTsinghuaSyncStore(pool) {
       } else {
         await connection.execute(
           `UPDATE user_campus_connectors
-           SET last_error_code = NULL
+           SET status = 'active_verified', last_error_code = NULL
            WHERE id = ? AND generation = ?
              AND status IN ('active_unverified', 'active_verified')`,
           [claimed.connector_id, claimed.connector_generation],

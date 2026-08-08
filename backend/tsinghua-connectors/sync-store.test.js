@@ -207,6 +207,7 @@ test('a complete snapshot reconciles untouched drafts and can revive auto-cancel
   );
   assert.ok(runUpdate);
   assert.match(runUpdate.sql, /request_count = \?/u);
+  assert.match(runUpdate.sql, /error_context = \?/u);
   assert.match(runUpdate.sql, /lease_expires_at = NULL, lease_owner = NULL/u);
   assert.deepEqual(runUpdate.parameters.slice(0, 4), ['succeeded', 'learn-v1', 'snapshot-v1', 7]);
 });
@@ -259,7 +260,20 @@ test('a partial snapshot never cancels items omitted from that snapshot', async 
 
   await store.completeRun(
     claimedRun(),
-    { status: 'partial', importantItems: [], notifications: [] },
+    {
+      status: 'partial',
+      importantItems: [],
+      notifications: [],
+      warnings: [
+        { resource: 'homework:unsubmitted', code: 'parser_record_rejected' },
+        {
+          resource: 'homework:unsubmitted',
+          code: 'parser_record_rejected',
+          courseReference: 'must-not-be-persisted',
+        },
+      ],
+      errors: [{ resource: 'notices', code: 'parser_schema_mismatch', retryable: false }],
+    },
     finishedAt,
   );
 
@@ -267,6 +281,21 @@ test('a partial snapshot never cancels items omitted from that snapshot', async 
     pool.calls.some(({ sql }) => sql.startsWith("UPDATE important_items SET status = 'cancelled'")),
     false,
   );
+  const runUpdate = pool.calls.find(
+    ({ sql }) =>
+      sql.startsWith('UPDATE campus_connector_sync_runs') && sql.includes('schema_version = ?'),
+  );
+  const diagnosticContext = JSON.parse(runUpdate.parameters[6]);
+  assert.deepEqual(diagnosticContext, {
+    version: 1,
+    warnings: [{ resource: 'homework:unsubmitted', code: 'parser_record_rejected', count: 2 }],
+    errors: [{ resource: 'notices', code: 'parser_schema_mismatch', count: 1 }],
+  });
+  assert.doesNotMatch(runUpdate.parameters[6], /must-not-be-persisted/u);
+  const connectorUpdate = pool.calls.find(({ sql }) =>
+    sql.startsWith('UPDATE user_campus_connectors'),
+  );
+  assert.match(connectorUpdate.sql, /status = 'active_verified'/u);
 });
 
 test('completeRun fences a stale run generation before writing imported rows', async () => {

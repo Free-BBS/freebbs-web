@@ -5,6 +5,7 @@ const path = require('path');
 const sharp = require('sharp');
 const pool = require('./db');
 const config = require('./config');
+const { buildBackendHealth } = require('./health');
 const { hashPassword, verifyPassword } = require('./password');
 const { sign, verify } = require('./token');
 const { createCourseMapsRouter, ensureCourseMapTables } = require('./course-maps');
@@ -1961,15 +1962,18 @@ function removeStoredAvatar(avatarPath) {
 app.get('/api/health', async (_request, response) => {
   try {
     await pool.query('SELECT 1');
-    const agentSettingsHealthy =
-      !config.agentSettingsRequired || agentSettingsInternalState === 'ready';
+    const health = buildBackendHealth({
+      agentSettingsRequired: config.agentSettingsRequired,
+      agentSettingsState: agentSettingsInternalState,
+      tsinghuaConnectorRequired: config.tsinghuaConnectorRequired,
+      tsinghuaConnectorAvailability: campusConnectorBroker.getAvailability(),
+      tsinghuaConnectorMissing: tsinghuaConnectorRuntimeConfig.missing,
+    });
 
-    response.status(agentSettingsHealthy ? 200 : 503).json({
-      ok: agentSettingsHealthy,
-      agentSettingsApi: agentSettingsInternalState,
+    response.status(health.statusCode).json({
+      ...health.body,
       dbHost: config.db.host,
       database: config.db.database,
-      ...(agentSettingsHealthy ? {} : { message: 'Agent settings internal API is not ready' }),
     });
   } catch (error) {
     response.status(500).json({

@@ -121,6 +121,21 @@ body.workbench-page #workbench-campus-description {
   line-height: 1.7;
 }
 
+body.workbench-page #workbench-campus-credential-expiry {
+  margin: -10px 0 22px;
+  color: #7ce6be;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+body.workbench-page #workbench-campus-credential-expiry[data-state='warning'] {
+  color: #f2cb77;
+}
+
+body.workbench-page #workbench-campus-credential-expiry[hidden] {
+  display: none;
+}
+
 body.workbench-page .workbench-campus-actions {
   display: flex;
   flex-wrap: wrap;

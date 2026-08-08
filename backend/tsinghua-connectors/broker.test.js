@@ -318,6 +318,106 @@ function createDirectBroker(options = {}) {
   return { adapter, broker, clock, store };
 }
 
+test('exposes only actual, secret-free connector availability', () => {
+  const syncDispatcher = {
+    async enqueue() {
+      return undefined;
+    },
+  };
+  const disabled = createCampusConnectorBroker({
+    store: createMemoryStore(),
+    runtimeConfig: {
+      state: 'not_configured',
+      encryptionKey: 'must-never-be-returned',
+      workerSocket: '/private/connector.sock',
+    },
+    syncDispatcher,
+  }).getAvailability();
+  assert.deepEqual(disabled, {
+    state: 'not_configured',
+    authorizationAvailable: false,
+    authorizationKind: 'none',
+    syncAvailable: false,
+  });
+  assert.doesNotMatch(JSON.stringify(disabled), /must-never|private|connector\.sock/u);
+
+  const missingOfficialAdapter = createCampusConnectorBroker({
+    store: createMemoryStore(),
+    vault: createMemoryVault(),
+    runtimeConfig: {
+      state: 'ready',
+      adapterId: 'official_broker_v1',
+    },
+    syncDispatcher,
+  }).getAvailability();
+  assert.deepEqual(missingOfficialAdapter, {
+    state: 'misconfigured',
+    authorizationAvailable: false,
+    authorizationKind: 'none',
+    syncAvailable: false,
+  });
+
+  const directAdapter = createAdapter({
+    id: 'tsinghua_direct_cas',
+    authenticateDirect() {},
+  });
+  const missingVault = createCampusConnectorBroker({
+    store: createMemoryStore(),
+    adapter: directAdapter,
+    runtimeConfig: {
+      state: 'direct_cas',
+      adapterId: directAdapter.id,
+    },
+    syncDispatcher,
+  }).getAvailability();
+  assert.deepEqual(missingVault, {
+    state: 'misconfigured',
+    authorizationAvailable: false,
+    authorizationKind: 'none',
+    syncAvailable: false,
+  });
+});
+
+test('reports synchronization availability only for a callable dispatcher', async () => {
+  const withoutDispatcher = createDirectBroker({ syncDispatcher: {} });
+  assert.deepEqual(withoutDispatcher.broker.getAvailability(), {
+    state: 'direct_cas',
+    authorizationAvailable: true,
+    authorizationKind: 'direct_credentials',
+    syncAvailable: false,
+  });
+  await withoutDispatcher.broker.connectDirect({
+    userId: 7,
+    username: '2026000000',
+    password: 'one-time-password',
+    fingerprint: FINGERPRINT,
+  });
+  const unavailableStatus = await withoutDispatcher.broker.getStatus(7);
+  assert.equal(unavailableStatus.sync.available, false);
+
+  const withDispatcher = createDirectBroker({
+    syncDispatcher: {
+      async enqueue() {
+        return undefined;
+      },
+    },
+  });
+  assert.deepEqual(withDispatcher.broker.getAvailability(), {
+    state: 'direct_cas',
+    authorizationAvailable: true,
+    authorizationKind: 'direct_credentials',
+    syncAvailable: true,
+  });
+  await withDispatcher.broker.connectDirect({
+    userId: 8,
+    username: '2026000001',
+    password: 'one-time-password',
+    fingerprint: FINGERPRINT,
+  });
+  const availableStatus = await withDispatcher.broker.getStatus(8);
+  assert.equal(availableStatus.sync.available, true);
+});
+
 test('disabled runtime fails closed without creating a flow or authorization URL', async () => {
   const store = createMemoryStore();
   let adapterCalls = 0;
@@ -650,11 +750,29 @@ test('direct CAS mode stores only an encrypted verified session grant', async ()
   assert.equal(connection.credential_ciphertext.includes(Buffer.from(FINGERPRINT)), false);
   assert.match(connection.credential_ciphertext.toString(), /upstream-secret/u);
 
+  store.runs.set('csr_partial', {
+    public_id: 'csr_partial',
+    userId: 7,
+    provider: 'tsinghua-learn',
+    connector_generation: connection.generation,
+    status: 'partial',
+    result_counts: { courses: 5, notifications: 16 },
+    error_context: {
+      warnings: [{ resource: 'homework:unsubmitted', code: 'parser_record_rejected', count: 2 }],
+      errors: [{ resource: 'unsafe value', code: 'raw_private_value', count: 1 }],
+    },
+  });
+
   const status = await broker.getStatus(7);
   assert.equal(status.configuration.authorizationKind, 'direct_credentials');
   assert.equal(status.safeguards.acceptsPasswordFromBrowser, true);
   assert.equal(status.safeguards.storesPassword, false);
   assert.equal(status.safeguards.oneTimeAuthorizationState, false);
+  assert.deepEqual(status.sync.latestRun.resultCounts, { courses: 5, notifications: 16 });
+  assert.deepEqual(status.sync.latestRun.diagnostics, {
+    warnings: [{ resource: 'homework:unsubmitted', code: 'parser_record_rejected', count: 2 }],
+    errors: [],
+  });
   assert.doesNotMatch(JSON.stringify(status), new RegExp(FINGERPRINT, 'iu'));
 });
 
