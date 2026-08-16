@@ -3779,6 +3779,7 @@ function buildAiChatPayload(userMessage) {
   return {
     agent: 'navigation',
     execute_subagent: 'auto',
+    combine_general_chat: true,
     source: 'direct_chat',
     channel: 'aichat',
     did: aiChatState.currentDid || '',
@@ -3858,6 +3859,10 @@ function normalizeCourseMention(value) {
 }
 
 async function addMentionedCourseMapRoute(navigationResult, userMessage) {
+  if (!navigationResult?.navigation_requested) {
+    return navigationResult;
+  }
+
   const normalizedMessage = normalizeCourseMention(userMessage);
   if (!normalizedMessage || !userState.token) {
     return navigationResult;
@@ -3927,6 +3932,9 @@ function renderMaxSubagentResult(article, navigationResult) {
   const agentName = String(
     subagent.agent || navigationResult.delegation?.selected || '',
   ).toUpperCase();
+  if (agentName === 'RAG') {
+    return null;
+  }
   const status = String(subagent.status || navigationResult.delegation?.status || 'completed');
   const items = infoResultItems(subagent);
   const summary = String(subagent.result?.summary || '').trim();
