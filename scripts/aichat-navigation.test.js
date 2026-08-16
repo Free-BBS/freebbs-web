@@ -32,4 +32,8 @@ test('RAG 回答留在聊天气泡中且不会渲染知识页跳转卡片', () =
 
   assert.match(appSource, /if \(agentName === 'RAG'\)/);
   assert.match(appSource, /if \(!navigationResult\?\.navigation_requested\)/);
+  assert.match(
+    appSource,
+    /item\?\.name, item\?\.code, item\?\.slug, item\?\.description, item\?\.summary/,
+  );
 });
