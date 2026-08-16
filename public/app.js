@@ -3858,6 +3858,13 @@ function normalizeCourseMention(value) {
     .replace(/[\s\-_()（）《》]/g, '');
 }
 
+function extractCourseMention(value) {
+  return normalizeCourseMention(value).replace(
+    /请|麻烦|帮我|把我|带我|领我|导引|引导|导航|打开|进入|跳转|前往|到|去|一下|对应的|课程|知识图谱|知识地图|页面|模块|功能|入口/g,
+    '',
+  );
+}
+
 async function addMentionedCourseMapRoute(navigationResult, userMessage) {
   if (!navigationResult?.navigation_requested) {
     return navigationResult;
@@ -3868,14 +3875,20 @@ async function addMentionedCourseMapRoute(navigationResult, userMessage) {
     return navigationResult;
   }
 
+  const courseMention = extractCourseMention(userMessage);
+
   try {
     const catalog = await callApi('/courses', { method: 'GET' });
     const courses = Array.isArray(catalog?.courses) ? catalog.courses : [];
     const course = courses.find((item) =>
-      [item?.name, item?.code, item?.slug]
+      [item?.name, item?.code, item?.slug, item?.description, item?.summary]
         .map(normalizeCourseMention)
         .filter((candidate) => candidate.length >= 2)
-        .some((candidate) => normalizedMessage.includes(candidate)),
+        .some(
+          (candidate) =>
+            normalizedMessage.includes(candidate) ||
+            (courseMention.length >= 2 && candidate.includes(courseMention)),
+        ),
     );
     if (!course?.slug || !course?.name) {
       return navigationResult;
