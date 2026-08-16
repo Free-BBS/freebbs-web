@@ -14,6 +14,10 @@ test('问问 Max 组合普通聊天与 Navigation，并渲染白名单路由按�
   assert.match(appSource, /execute_subagent: 'auto'/);
   assert.match(appSource, /combine_general_chat: true/);
   assert.match(appSource, /function renderMaxNavigationRoutes/);
+  assert.match(appSource, /function wrapMaxAnswerPanel/);
+  assert.match(appSource, /Max 回答/);
+  assert.match(appSource, /页面导航/);
+  assert.match(appSource, /title: '课程与知识图谱'/);
   assert.match(appSource, /MAX_NAVIGATION_PATHS/);
   assert.match(appSource, /'\/knowledge'/);
   assert.match(appSource, /'\/workbench'/);
@@ -25,9 +29,10 @@ test('问问 Max 组合普通聊天与 Navigation，并渲染白名单路由按�
   assert.match(backendSource, /X-FreeBBS-Student-No/);
   assert.match(backendSource, /web_learning:read,thu_info:read/);
   assert.match(styles, /\.aichat-navigation-action/);
+  assert.match(styles, /\.aichat-response-panel/);
 });
 
-test('RAG 回答留在聊天气泡中且不会渲染知识页跳转卡片', () => {
+test('RAG 回答留在上栏且 Navigation 跳转按钮保留在下栏', () => {
   const appSource = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 
   assert.match(appSource, /if \(agentName === 'RAG'\)/);

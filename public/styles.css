@@ -13897,11 +13897,41 @@ body.aichat-page .main-content .aichat-bubble table {
   overflow-x: auto;
 }
 
+body.aichat-page .main-content .aichat-response-panel {
+  min-width: 0;
+}
+
+body.aichat-page .main-content .aichat-response-panel + .aichat-response-panel {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(7, 95, 114, 0.18);
+}
+
+body.aichat-page .main-content .aichat-response-panel > h3 {
+  margin: 0 0 8px;
+  color: #075f72 !important;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+body.aichat-page .main-content .aichat-response-content > :last-child,
+body.aichat-page .main-content .aichat-navigation-summary:last-child {
+  margin-bottom: 0;
+}
+
+body.aichat-page .main-content .aichat-navigation-summary {
+  margin: 0 0 10px;
+  color: rgba(7, 9, 11, 0.66) !important;
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
 body.aichat-page .main-content .aichat-navigation-actions {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
-  margin-top: 16px;
+  margin-top: 10px;
 }
 
 body.aichat-page .main-content .aichat-navigation-action {
