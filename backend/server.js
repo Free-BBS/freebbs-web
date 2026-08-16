@@ -1398,6 +1398,7 @@ function buildAgentChatPayload(user, payload, defaults = {}) {
     execute_subagent: ['none', 'auto', 'rag', 'info'].includes(requestedSubagent)
       ? requestedSubagent
       : 'none',
+    combine_general_chat: payload.combine_general_chat === true,
     source: payload.source || defaults.source || 'direct_chat',
     channel:
       payload.channel || defaults.channel || payload.source || defaults.source || 'direct_chat',
