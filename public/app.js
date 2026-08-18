@@ -3779,6 +3779,7 @@ function buildAiChatPayload(userMessage) {
   return {
     agent: 'navigation',
     execute_subagent: 'auto',
+    combine_general_chat: true,
     source: 'direct_chat',
     channel: 'aichat',
     did: aiChatState.currentDid || '',
@@ -3815,12 +3816,30 @@ function normalizeMaxNavigationUrl(value) {
   }
 }
 
-function renderMaxNavigationRoutes(article, routes) {
-  const bubble = article?.querySelector('.aichat-bubble');
-  if (!bubble || !Array.isArray(routes)) {
+function wrapMaxAnswerPanel(bubble) {
+  if (bubble.querySelector(':scope > .aichat-response-answer')) {
     return;
   }
 
+  const panel = document.createElement('section');
+  panel.className = 'aichat-response-panel aichat-response-answer';
+  panel.innerHTML = '<h3>Max 回答</h3>';
+  const content = document.createElement('div');
+  content.className = 'aichat-response-content';
+  while (bubble.firstChild) {
+    content.append(bubble.firstChild);
+  }
+  panel.append(content);
+  bubble.append(panel);
+}
+
+function renderMaxNavigationRoutes(article, navigationResult) {
+  const bubble = article?.querySelector('.aichat-bubble');
+  if (!bubble) {
+    return;
+  }
+
+  const routes = Array.isArray(navigationResult?.routes) ? navigationResult.routes : [];
   const validRoutes = routes
     .map((route) => ({
       title: String(route?.title || '').trim(),
@@ -3831,7 +3850,28 @@ function renderMaxNavigationRoutes(article, routes) {
     .slice(0, 3);
 
   if (!validRoutes.length) {
-    return;
+    validRoutes.push({
+      title: '课程与知识图谱',
+      reason: '打开课程知识图谱，继续探索相关学习内容。',
+      url: '/course',
+    });
+  }
+
+  wrapMaxAnswerPanel(bubble);
+  bubble.querySelector(':scope > .aichat-response-navigation')?.remove();
+
+  const panel = document.createElement('section');
+  panel.className = 'aichat-response-panel aichat-response-navigation';
+  const heading = document.createElement('h3');
+  heading.textContent = '页面导航';
+  panel.append(heading);
+
+  const navigationAnswer = String(navigationResult?.navigation_answer || '').trim();
+  if (navigationAnswer) {
+    const summary = document.createElement('p');
+    summary.className = 'aichat-navigation-summary';
+    summary.textContent = navigationAnswer;
+    panel.append(summary);
   }
 
   const actions = document.createElement('nav');
@@ -3848,7 +3888,8 @@ function renderMaxNavigationRoutes(article, routes) {
     actions.append(link);
   }
 
-  bubble.append(actions);
+  panel.append(actions);
+  bubble.append(panel);
 }
 
 function normalizeCourseMention(value) {
@@ -3857,20 +3898,37 @@ function normalizeCourseMention(value) {
     .replace(/[\s\-_()（）《》]/g, '');
 }
 
+function extractCourseMention(value) {
+  return normalizeCourseMention(value).replace(
+    /请|麻烦|帮我|把我|带我|领我|导引|引导|导航|打开|进入|跳转|前往|到|去|一下|对应的|课程|知识图谱|知识地图|页面|模块|功能|入口/g,
+    '',
+  );
+}
+
 async function addMentionedCourseMapRoute(navigationResult, userMessage) {
+  if (!navigationResult?.navigation_requested) {
+    return navigationResult;
+  }
+
   const normalizedMessage = normalizeCourseMention(userMessage);
   if (!normalizedMessage || !userState.token) {
     return navigationResult;
   }
 
+  const courseMention = extractCourseMention(userMessage);
+
   try {
     const catalog = await callApi('/courses', { method: 'GET' });
     const courses = Array.isArray(catalog?.courses) ? catalog.courses : [];
     const course = courses.find((item) =>
-      [item?.name, item?.code, item?.slug]
+      [item?.name, item?.code, item?.slug, item?.description, item?.summary]
         .map(normalizeCourseMention)
         .filter((candidate) => candidate.length >= 2)
-        .some((candidate) => normalizedMessage.includes(candidate)),
+        .some(
+          (candidate) =>
+            normalizedMessage.includes(candidate) ||
+            (courseMention.length >= 2 && candidate.includes(courseMention)),
+        ),
     );
     if (!course?.slug || !course?.name) {
       return navigationResult;
@@ -3889,7 +3947,7 @@ async function addMentionedCourseMapRoute(navigationResult, userMessage) {
     );
     return {
       ...navigationResult,
-      answer: `我找到了你提到的「${course.name}」，可以直接打开它的知识地图。`,
+      navigation_answer: `我找到了你提到的「${course.name}」，可以直接打开它的知识地图。`,
       intent: 'course_graph',
       needs_clarification: false,
       routes: [mapRoute, ...remaining].slice(0, 3),
@@ -3927,6 +3985,9 @@ function renderMaxSubagentResult(article, navigationResult) {
   const agentName = String(
     subagent.agent || navigationResult.delegation?.selected || '',
   ).toUpperCase();
+  if (agentName === 'RAG') {
+    return null;
+  }
   const status = String(subagent.status || navigationResult.delegation?.status || 'completed');
   const items = infoResultItems(subagent);
   const summary = String(subagent.result?.summary || '').trim();
@@ -4275,7 +4336,7 @@ async function handleAiChatSubmit(event) {
     window.clearTimeout(bubbleTimer);
     assistantContent = String(result.answer || '').trim() || 'Max 暂时没有生成回答。';
     updateAiChatMessage(assistantArticle, assistantContent);
-    renderMaxNavigationRoutes(assistantArticle, result.routes);
+    renderMaxNavigationRoutes(assistantArticle, result);
     renderMaxSubagentResult(assistantArticle, result);
     if (result.subagent?.status === 'pending') {
       pollInfoJob(assistantArticle, result);
