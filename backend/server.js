@@ -1610,6 +1610,60 @@ function toAiDialogSummary(row) {
   };
 }
 
+const AI_DIALOG_NAVIGATION_PATHS = new Set([
+  '/knowledge',
+  '/workbench',
+  '/discussion',
+  '/course',
+  '/development',
+  '/profile',
+]);
+
+function normalizeAiDialogNavigation(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const navigationAnswer =
+    typeof value.navigation_answer === 'string'
+      ? value.navigation_answer.trim().slice(0, 2000)
+      : '';
+  const routes = [];
+
+  if (Array.isArray(value.routes)) {
+    for (const route of value.routes.slice(0, 3)) {
+      if (!route || typeof route !== 'object' || Array.isArray(route)) {
+        continue;
+      }
+
+      const title = typeof route.title === 'string' ? route.title.trim().slice(0, 120) : '';
+      const reason = typeof route.reason === 'string' ? route.reason.trim().slice(0, 500) : '';
+      let url = '';
+
+      try {
+        const parsedUrl = new URL(String(route.url || ''), 'https://freebbs.local');
+        if (
+          parsedUrl.origin === 'https://freebbs.local' &&
+          AI_DIALOG_NAVIGATION_PATHS.has(parsedUrl.pathname)
+        ) {
+          url = `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`.slice(0, 2000);
+        }
+      } catch {
+        url = '';
+      }
+
+      if (title && url) {
+        routes.push({ title, reason, url });
+      }
+    }
+  }
+
+  return {
+    navigation_answer: navigationAnswer,
+    routes,
+  };
+}
+
 function normalizeAiMessages(value) {
   if (!Array.isArray(value)) {
     return null;
@@ -1633,10 +1687,16 @@ function normalizeAiMessages(value) {
       return null;
     }
 
-    messages.push({
+    const normalizedMessage = {
       role,
       content: content.slice(0, 20000),
-    });
+    };
+    const navigation =
+      role === 'assistant' ? normalizeAiDialogNavigation(message.navigation) : null;
+    if (navigation) {
+      normalizedMessage.navigation = navigation;
+    }
+    messages.push(normalizedMessage);
   }
 
   return messages;
