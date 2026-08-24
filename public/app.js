@@ -4255,12 +4255,12 @@ function startNewAiDialog() {
   aiChatInput?.focus();
 }
 
-async function streamAiChatResponse(payload, onDelta) {
+async function streamAgentChatResponse(endpoint, payload, onDelta) {
   if (!userState.token) {
     throw new Error('请先登录后再使用问问 Max');
   }
 
-  const response = await fetch(`${API_BASE_URL}/ai/chat`, {
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -4314,6 +4314,14 @@ async function streamAiChatResponse(payload, onDelta) {
       break;
     }
   }
+}
+
+async function streamAiChatResponse(payload, onDelta) {
+  return streamAgentChatResponse('/ai/chat', payload, onDelta);
+}
+
+async function streamKnowledgeRagResponse(payload, onDelta) {
+  return streamAgentChatResponse('/ai/knowledge/chat', payload, onDelta);
 }
 
 async function handleAiChatSubmit(event) {
@@ -8145,6 +8153,7 @@ window.freeBbsApp = {
   renderMarkdownContent,
   resolveAssetUrl,
   streamAiChatResponse,
+  streamKnowledgeRagResponse,
 };
 
 userName.addEventListener('click', handleAuthEntry);

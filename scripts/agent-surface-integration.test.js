@@ -19,9 +19,26 @@ test('Info 内置消息页面并代理异步任务', () => {
 });
 
 test('课程知识页调用真正的 RAG Agent', () => {
-  const courseSource = fs.readFileSync(path.join(root, 'public', 'course.js'), 'utf8');
-  assert.match(courseSource, /agent: 'rag'/);
-  assert.doesNotMatch(courseSource, /agent: 'general_chat'/);
+  const appSource = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
+  const knowledgeSource = fs.readFileSync(path.join(root, 'public', 'knowledge.js'), 'utf8');
+  const backendSource = fs.readFileSync(path.join(root, 'backend', 'server.js'), 'utf8');
+  assert.match(appSource, /function streamKnowledgeRagResponse/);
+  assert.match(appSource, /'\/ai\/knowledge\/chat'/);
+  assert.match(knowledgeSource, /function buildKnowledgeChatRequest/);
+  assert.match(knowledgeSource, /app\.streamKnowledgeRagResponse/);
+  assert.match(knowledgeSource, /knowledge-chat-message-body/);
+  assert.match(knowledgeSource, /knowledge-chat-loading-dots/);
+  assert.match(knowledgeSource, /plainText: role === 'user'/);
+  assert.doesNotMatch(knowledgeSource, /agent: 'rag'/);
+  assert.doesNotMatch(knowledgeSource, /temperature:/);
+  assert.doesNotMatch(knowledgeSource, /model:/);
+  assert.doesNotMatch(knowledgeSource, /document\.createElement\('p'\)/);
+  assert.doesNotMatch(knowledgeSource, /createMockReply/);
+  assert.doesNotMatch(knowledgeSource, /agent: 'general_chat'/);
+  assert.match(backendSource, /app\.post\('\/api\/ai\/knowledge\/chat'/);
+  assert.match(backendSource, /function buildKnowledgeRagChatPayload/);
+  assert.match(backendSource, /agent: 'rag'/);
+  assert.match(backendSource, /temperature: KNOWLEDGE_RAG_TEMPERATURE/);
 });
 
 test('工作台在已授权且数据过期时自动同步通知', () => {

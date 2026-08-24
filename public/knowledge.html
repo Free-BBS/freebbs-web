@@ -351,7 +351,7 @@
                 >
                   <span aria-hidden="true">⌁</span>
                   问问 Max
-                  <small>演示</small>
+                  <small>RAG</small>
                 </button>
                 <button
                   class="knowledge-chat-tab"
@@ -384,9 +384,9 @@
                 <div class="knowledge-chat-thread" id="knowledge-chat-thread" aria-live="polite">
                   <article class="knowledge-chat-message is-assistant">
                     <span>Max</span>
-                    <p id="knowledge-chat-welcome">
-                      我会围绕当前知识点帮你梳理思路。现在是纯前端演示，不会向服务器发送内容。
-                    </p>
+                    <div class="knowledge-chat-message-body" id="knowledge-chat-welcome">
+                      我会检索课程资料，并围绕当前知识点帮你梳理思路。
+                    </div>
                   </article>
                 </div>
 
@@ -406,7 +406,9 @@
                   ></textarea>
                   <button type="submit" aria-label="发送问题">发送</button>
                 </form>
-                <p class="knowledge-chat-privacy">Max 演示模式 · 内容仅保留在当前页面</p>
+                <p class="knowledge-chat-privacy" id="knowledge-chat-status">
+                  RAG Agent · 对话不会写入课程讨论区
+                </p>
               </section>
 
               <section

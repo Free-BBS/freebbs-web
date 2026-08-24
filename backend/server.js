@@ -111,6 +111,8 @@ async function sendVerificationCode(email, code) {
   return mailer.sendVerificationCode(email, code);
 }
 const MAX_MENTION_PATTERN = /(^|[^\p{L}\p{N}_])@max(?=$|[^\p{L}\p{N}_])/iu;
+const KNOWLEDGE_RAG_TEMPERATURE = 0.45;
+const KNOWLEDGE_RAG_HISTORY_LIMIT = 6;
 const DISCUSSION_REACTION_TYPES = new Set(['smile', 'light', 'fireworks']);
 const DISCUSSION_BOARD_SEEDS = [
   {
@@ -1436,6 +1438,101 @@ async function postAgentChat(payload, user = null) {
   });
 }
 
+function normalizeKnowledgeRagText(value, maximumLength) {
+  return typeof value === 'string' ? value.trim().slice(0, maximumLength) : '';
+}
+
+function buildKnowledgeRagPrompt(question, context) {
+  return [
+    '请作为课程助教回答学生问题。优先使用检索到的课程资料，并结合当前知识点页面内容；如果资料不足，请明确说明。',
+    '',
+    `课程：${context.courseName || context.courseSlug || '未知课程'}`,
+    `知识点编号：${context.knowledgePointId || '未知'}`,
+    `知识点：${context.knowledgePointTitle || '当前知识点'}`,
+    `摘要：${context.knowledgePointSummary || '暂无摘要'}`,
+    `当前页面正文：\n${context.knowledgePointMarkdown || '暂无正文'}`,
+    '',
+    `学生问题：${question}`,
+  ].join('\n');
+}
+
+function buildKnowledgeRagChatPayload(user, payload) {
+  const rawContext =
+    payload.context && typeof payload.context === 'object' ? payload.context : {};
+  const context = {
+    courseSlug: normalizeKnowledgeRagText(rawContext.courseSlug, 120),
+    courseName: normalizeKnowledgeRagText(rawContext.courseName, 200),
+    knowledgePointId: normalizeKnowledgeRagText(rawContext.knowledgePointId, 120),
+    knowledgePointTitle: normalizeKnowledgeRagText(rawContext.knowledgePointTitle, 300),
+    knowledgePointSummary: normalizeKnowledgeRagText(rawContext.knowledgePointSummary, 2000),
+    knowledgePointMarkdown: normalizeKnowledgeRagText(rawContext.knowledgePointMarkdown, 30000),
+  };
+  const history = Array.isArray(payload.history)
+    ? payload.history
+        .filter(
+          (message) =>
+            message &&
+            ['user', 'assistant'].includes(message.role) &&
+            typeof message.content === 'string' &&
+            message.content.trim(),
+        )
+        .slice(-KNOWLEDGE_RAG_HISTORY_LIMIT)
+        .map((message) => ({
+          role: message.role,
+          content: message.content.trim().slice(0, 8000),
+        }))
+    : [];
+
+  return buildAgentChatPayload(
+    user,
+    {
+      messages: [
+        ...history,
+        {
+          role: 'user',
+          content: buildKnowledgeRagPrompt(payload.question.trim(), context),
+        },
+      ],
+      stream: true,
+      temperature: KNOWLEDGE_RAG_TEMPERATURE,
+      context,
+    },
+    {
+      agent: 'rag',
+      source: 'course_knowledge_detail',
+      channel: 'course_rag',
+    },
+  );
+}
+
+async function relayAgentChatResponse(agentResponse, response, stream) {
+  if (stream) {
+    response.status(agentResponse.status);
+    response.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    response.setHeader('Cache-Control', 'no-cache');
+    response.setHeader('X-Accel-Buffering', 'no');
+
+    if (!agentResponse.body) {
+      response.end();
+      return;
+    }
+
+    for await (const chunk of agentResponse.body) {
+      response.write(chunk);
+    }
+    response.end();
+    return;
+  }
+
+  const text = await agentResponse.text();
+  response.status(agentResponse.status);
+  response.setHeader(
+    'Content-Type',
+    agentResponse.headers.get('content-type') || 'application/json; charset=utf-8',
+  );
+  response.send(text);
+}
+
 function normalizeSandboxLanguage(language) {
   const value = String(language || '')
     .trim()
@@ -2070,34 +2167,36 @@ app.post('/api/ai/chat', async (request, response) => {
     });
     const agentResponse = await postAgentChat(agentPayload, user);
 
-    if (payload.stream) {
-      response.status(agentResponse.status);
-      response.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-      response.setHeader('Cache-Control', 'no-cache');
-      response.setHeader('X-Accel-Buffering', 'no');
-
-      if (!agentResponse.body) {
-        response.end();
-        return;
-      }
-
-      for await (const chunk of agentResponse.body) {
-        response.write(chunk);
-      }
-      response.end();
-      return;
-    }
-
-    const text = await agentResponse.text();
-    response.status(agentResponse.status);
-    response.setHeader(
-      'Content-Type',
-      agentResponse.headers.get('content-type') || 'application/json; charset=utf-8',
-    );
-    response.send(text);
+    await relayAgentChatResponse(agentResponse, response, payload.stream === true);
   } catch (error) {
     response.status(502).json({
       message: 'AI 服务暂时不可用',
+      detail: error.message,
+    });
+  }
+});
+
+app.post('/api/ai/knowledge/chat', async (request, response) => {
+  const user = await requireAuth(request, response);
+
+  if (!user) {
+    return;
+  }
+
+  const payload = request.body;
+  const question = normalizeKnowledgeRagText(payload?.question, 4000);
+  if (!payload || typeof payload !== 'object' || !question) {
+    response.status(400).json({ message: '请输入要询问的问题' });
+    return;
+  }
+
+  try {
+    const agentPayload = buildKnowledgeRagChatPayload(user, { ...payload, question });
+    const agentResponse = await postAgentChat(agentPayload, user);
+    await relayAgentChatResponse(agentResponse, response, true);
+  } catch (error) {
+    response.status(502).json({
+      message: 'RAG Agent 暂时不可用',
       detail: error.message,
     });
   }

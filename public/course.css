@@ -5748,28 +5748,91 @@ a.knowledge-route-node:focus-visible {
 }
 
 .knowledge-chat-message {
-  max-width: 86%;
+  max-width: 88%;
   display: grid;
-  gap: 5px;
+  gap: 4px;
   align-self: flex-start;
 }
 
 .knowledge-chat-message > span {
   color: var(--bbs-shell-muted);
-  font-size: 0.64rem;
-  font-weight: 800;
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
-.knowledge-chat-message > p {
+.knowledge-chat-message-body {
   margin: 0;
-  padding: 12px 14px;
+  padding: 10px 13px;
   border: 1px solid var(--course-line);
   border-radius: 6px 15px 15px;
   background: var(--course-surface-soft);
   color: var(--bbs-shell-text);
-  font-size: 0.88rem;
-  line-height: 1.7;
-  white-space: pre-wrap;
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 400;
+  line-height: 1.62;
+  overflow-wrap: anywhere;
+}
+
+.knowledge-chat-message-body > :first-child {
+  margin-top: 0;
+}
+
+.knowledge-chat-message-body > :last-child {
+  margin-bottom: 0;
+}
+
+.knowledge-chat-message-body p {
+  margin: 0 0 0.68em;
+}
+
+.knowledge-chat-message-body :is(ul, ol) {
+  margin: 0.42em 0 0.72em;
+  padding-left: 1.45em;
+}
+
+.knowledge-chat-message-body li {
+  padding-left: 0.08em;
+}
+
+.knowledge-chat-message-body li + li {
+  margin-top: 0.28em;
+}
+
+.knowledge-chat-message-body :is(h1, h2, h3, h4) {
+  margin: 0.9em 0 0.42em;
+  color: inherit;
+  font-family: var(--font-ui);
+  font-size: 1em;
+  font-weight: 800;
+  line-height: 1.42;
+}
+
+.knowledge-chat-message-body strong {
+  color: inherit;
+  font-weight: 700;
+}
+
+.knowledge-chat-message-body blockquote {
+  margin: 0.65em 0;
+  padding: 0.15em 0 0.15em 0.8em;
+  border-left: 3px solid color-mix(in srgb, var(--course-accent) 45%, transparent);
+  color: var(--bbs-shell-muted);
+}
+
+.knowledge-chat-message-body code {
+  padding: 0.08em 0.34em;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--course-accent) 9%, transparent);
+  font-size: 0.88em;
+}
+
+.knowledge-chat-message-body .katex-display {
+  margin: 0.65em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .knowledge-chat-message.is-user {
@@ -5780,11 +5843,67 @@ a.knowledge-route-node:focus-visible {
   text-align: right;
 }
 
-.knowledge-chat-message.is-user > p {
+.knowledge-chat-message.is-user > .knowledge-chat-message-body {
   border-color: color-mix(in srgb, var(--course-accent) 32%, transparent);
   border-radius: 15px 6px 15px 15px;
   background: var(--course-primary);
   color: #ffffff;
+  font-weight: 500;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.knowledge-chat-message.is-loading .knowledge-chat-message-body {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  color: var(--bbs-shell-muted);
+  font-size: 0.8rem;
+}
+
+.knowledge-chat-loading-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.knowledge-chat-loading-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--course-accent);
+  animation: knowledge-chat-loading-dot 1.05s ease-in-out infinite;
+}
+
+.knowledge-chat-loading-dots i:nth-child(2) {
+  animation-delay: 140ms;
+}
+
+.knowledge-chat-loading-dots i:nth-child(3) {
+  animation-delay: 280ms;
+}
+
+@keyframes knowledge-chat-loading-dot {
+  0%,
+  70%,
+  100% {
+    opacity: 0.34;
+    transform: translateY(0);
+  }
+
+  35% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .knowledge-chat-loading-dots i {
+    animation: none;
+    opacity: 0.72;
+  }
 }
 
 .knowledge-chat-prompts {

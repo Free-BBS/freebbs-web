@@ -28,6 +28,8 @@
     map: null,
     chatOpen: false,
     chatTab: 'max',
+    chatMessages: [],
+    chatSending: false,
     interactionWidth: 0,
     toolsCollapsed: false,
     discussionPosts: [],
@@ -432,54 +434,139 @@
     }
   }
 
-  function appendChatMessage(role, message) {
+  function renderChatMessage(content, message, { plainText = false } = {}) {
+    if (!content) {
+      return;
+    }
+    const messageBody = content;
+
+    if (!plainText && app?.renderMarkdownContent) {
+      messageBody.innerHTML = app.renderMarkdownContent(message || '…');
+      app.enhanceMarkdownContent?.(messageBody);
+    } else {
+      messageBody.textContent = message || '…';
+    }
+  }
+
+  function appendChatMessage(role, message, { loading = false } = {}) {
     const thread = document.getElementById('knowledge-chat-thread');
     if (!thread) {
-      return;
+      return null;
     }
 
     const item = document.createElement('article');
     const author = document.createElement('span');
-    const content = document.createElement('p');
+    const content = document.createElement('div');
     item.className = `knowledge-chat-message is-${role}`;
+    content.className = 'knowledge-chat-message-body';
     author.textContent = role === 'user' ? '你' : 'Max';
-    content.textContent = message;
+
+    if (loading) {
+      item.classList.add('is-loading');
+      const loadingLabel = document.createElement('span');
+      const loadingDots = document.createElement('span');
+      loadingLabel.className = 'knowledge-chat-loading-label';
+      loadingLabel.textContent = message;
+      loadingDots.className = 'knowledge-chat-loading-dots';
+      loadingDots.setAttribute('aria-hidden', 'true');
+      for (let index = 0; index < 3; index += 1) {
+        loadingDots.append(document.createElement('i'));
+      }
+      content.append(loadingLabel, loadingDots);
+    } else {
+      renderChatMessage(content, message, { plainText: role === 'user' });
+    }
     item.append(author, content);
     thread.append(item);
     thread.scrollTop = thread.scrollHeight;
+    return content;
   }
 
-  function createMockReply(prompt) {
-    const title = state.node?.title || '当前知识点';
-    const summary = String(state.node?.summary || '').trim();
-    const summarySentence = summary.replace(/[。！？!?]+$/, '');
-
-    if (/直觉|解释|看懂/.test(prompt)) {
-      return summary
-        ? `先抓住一句话：${summarySentence}。读正文时，把每个定义都对应到“它描述什么、输入是什么、结果怎么变化”这三个问题上。`
-        : `先把「${title}」理解成一个解决问题的工具：确认它描述的对象、允许的操作，以及结论成立的条件。`;
+  function updateChatMessage(content, message) {
+    content?.closest('.knowledge-chat-message')?.classList.remove('is-loading');
+    renderChatMessage(content, message);
+    const thread = document.getElementById('knowledge-chat-thread');
+    if (thread) {
+      thread.scrollTop = thread.scrollHeight;
     }
-
-    if (/易错|错误|坑/.test(prompt)) {
-      return `学习「${title}」时重点检查三件事：符号和自变量是否统一、连续与离散情形是否混用、结论的适用条件是否被省略。做题后再用定义反查一次。`;
-    }
-
-    if (/题|练习|检查/.test(prompt)) {
-      return `自测题：先不看正文，用自己的话说明「${title}」解决了什么问题；再写出一个相关定义或运算，并举一个不满足条件的反例。`;
-    }
-
-    return `我记住你正在学习「${title}」。目前这是纯前端演示，我可以先提供“直觉解释、易错点、自测题”三类固定引导；正式问答会在后端协议确定后接入。`;
   }
 
-  function submitChatPrompt(rawPrompt) {
+  function buildKnowledgeChatRequest(prompt) {
+    const course = state.course || {};
+    const node = state.node || {};
+
+    return {
+      question: prompt,
+      history: state.chatMessages.slice(-6),
+      context: {
+        courseSlug,
+        courseName: course.name || courseSlug,
+        knowledgePointId: node.id || nodeId,
+        knowledgePointTitle: node.title || '',
+        knowledgePointSummary: node.summary || '',
+        knowledgePointMarkdown: node.markdown || '',
+      },
+    };
+  }
+
+  function setChatSending(isSending, status = '') {
+    state.chatSending = Boolean(isSending);
+    const input = document.getElementById('knowledge-chat-input');
+    const sendButton = document.querySelector('#knowledge-chat-form button[type="submit"]');
+    const statusElement = document.getElementById('knowledge-chat-status');
+
+    if (input) {
+      input.disabled = state.chatSending;
+    }
+    if (sendButton) {
+      sendButton.disabled = state.chatSending;
+    }
+    document.querySelectorAll('[data-chat-prompt]').forEach((button) => {
+      const promptButton = button;
+      promptButton.disabled = state.chatSending;
+    });
+    if (statusElement) {
+      statusElement.textContent = status || 'RAG Agent · 对话不会写入课程讨论区';
+    }
+  }
+
+  async function submitChatPrompt(rawPrompt) {
     const prompt = String(rawPrompt || '').trim();
-    if (!prompt) {
+    if (!prompt || state.chatSending) {
       return;
     }
 
     setChatOpen(true);
     appendChatMessage('user', prompt);
-    appendChatMessage('assistant', createMockReply(prompt));
+
+    if (!app?.userState?.token) {
+      appendChatMessage('assistant', '请先登录后再向 Max 提问。');
+      return;
+    }
+    if (!app.streamKnowledgeRagResponse) {
+      appendChatMessage('assistant', 'AI 对话组件未加载，请刷新页面后重试。');
+      return;
+    }
+
+    const answerContent = appendChatMessage('assistant', '正在检索课程资料', { loading: true });
+    let answer = '';
+    setChatSending(true);
+
+    try {
+      await app.streamKnowledgeRagResponse(buildKnowledgeChatRequest(prompt), (delta) => {
+        answer += delta;
+        updateChatMessage(answerContent, answer);
+      });
+      if (!answer.trim()) {
+        throw new Error('Agent 未返回回答内容');
+      }
+      state.chatMessages.push({ role: 'user', content: prompt });
+      state.chatMessages.push({ role: 'assistant', content: answer });
+      setChatSending(false);
+    } catch (error) {
+      updateChatMessage(answerContent, `请求失败：${error.message || 'AI 服务暂时不可用'}`);
+      setChatSending(false, 'RAG Agent 暂时不可用，请稍后重试');
+    }
   }
 
   function setHidden(element, isHidden) {
@@ -857,16 +944,22 @@
 
     toggle?.addEventListener('click', () => setChatOpen(!state.chatOpen));
     close?.addEventListener('click', () => setChatOpen(false));
-    form?.addEventListener('submit', (event) => {
+    form?.addEventListener('submit', async (event) => {
       event.preventDefault();
-      submitChatPrompt(input?.value);
+      const prompt = input?.value;
       if (input) {
         input.value = '';
+      }
+      await submitChatPrompt(prompt);
+      if (input) {
         input.focus();
       }
     });
     document.querySelectorAll('[data-chat-prompt]').forEach((button) => {
-      button.addEventListener('click', () => submitChatPrompt(button.dataset.chatPrompt));
+      button.addEventListener('click', async () => {
+        await submitChatPrompt(button.dataset.chatPrompt);
+        input?.focus();
+      });
     });
     tabs.forEach((button, index) => {
       button.addEventListener('click', () => setChatTab(button.dataset.knowledgeChatTab));
@@ -939,7 +1032,7 @@
       document.getElementById('knowledge-summary').textContent = node.summary || '';
       document.getElementById('knowledge-chat-context').textContent = `${node.id} · ${node.title}`;
       document.getElementById('knowledge-chat-welcome').textContent =
-        `我已经定位到「${node.title}」。你可以让我做直觉解释、提醒易错点，或出一道自测题。当前为纯前端演示。`;
+        `我已经定位到「${node.title}」。你可以让我结合课程资料做直觉解释、提醒易错点，或出一道自测题。`;
 
       const documentStatus = document.getElementById('knowledge-document-status');
       documentStatus.textContent = markdown ? 'Markdown 课程资料' : '文档待补充';
