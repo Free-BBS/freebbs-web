@@ -951,6 +951,23 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
     0 0 0 62px color-mix(in srgb, var(--map-learning) 2%, transparent);
 }
 
+.course-map-directory-current-tags {
+  position: absolute;
+  z-index: 2;
+  top: 22px;
+  right: 22px;
+}
+
+.course-map-directory-current-tags .course-map-topic-tag {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  font-size: 0.68rem;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 38%, transparent),
+    0 5px 14px color-mix(in srgb, var(--course-map-tag-color) 12%, transparent);
+}
+
 .course-map-directory-current-copy {
   position: relative;
   z-index: 1;
@@ -2908,6 +2925,11 @@ body.course-map-editor-page .site-footer {
   .course-map-directory-current {
     margin: 12px 12px 0;
     padding: 20px 17px;
+  }
+
+  .course-map-directory-current-tags {
+    top: 17px;
+    right: 17px;
   }
 
   .course-map-directory-current-copy h2 {

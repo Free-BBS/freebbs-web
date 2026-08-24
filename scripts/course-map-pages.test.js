@@ -153,6 +153,8 @@ test('course map reader groups nodes by chapter and reveals only focused relatio
   assert.match(controller, /free_bbs_current_learning_node_v1/);
   assert.match(controller, /const KNOWLEDGE_TAGS =/);
   assert.match(controller, /function renderNodeTags\(nodeId\)/);
+  assert.match(controller, /function renderDirectoryNodeTags\(nodeId\)/);
+  assert.match(controller, /course-map-directory-current-tags/);
   assert.match(controller, /course-map-topic-tags/);
   assert.doesNotMatch(controller, /course-map-topic-detail/);
   assert.match(styles, /\.course-map-chapter-card\.is-expanded/);
@@ -173,6 +175,7 @@ test('course map reader groups nodes by chapter and reveals only focused relatio
   assert.match(styles, /\.course-map-topic-tag\.is-important/);
   assert.match(styles, /\.course-map-topic-tag\.is-learned/);
   assert.match(styles, /\.course-map-topic-tag\.is-consolidated/);
+  assert.match(styles, /\.course-map-directory-current-tags/);
   assert.doesNotMatch(styles, /\.course-map-topic-detail/);
 });
 

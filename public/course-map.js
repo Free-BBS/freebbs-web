@@ -240,6 +240,11 @@
     `;
   }
 
+  function renderDirectoryNodeTags(nodeId) {
+    const tags = renderNodeTags(nodeId);
+    return tags ? `<div class="course-map-directory-current-tags">${tags}</div>` : '';
+  }
+
   function chapterIdForNodeId(nodeId) {
     const match = String(nodeId || '').match(/^([A-Z][A-Z0-9]*-\d+)/);
     return (
@@ -594,6 +599,7 @@
           ${
             primaryNode
               ? `<div class="course-map-directory-current${learningNode ? ' is-learning' : ''}">
+                  ${renderDirectoryNodeTags(primaryNode.id)}
                   <div class="course-map-directory-current-copy">
                     <small>${learningNode ? 'CURRENT LEARNING · 正在学习' : 'CHAPTER START · 本章起点'}</small>
                     <span>${escapeHtml(primaryNode.id)}</span>
