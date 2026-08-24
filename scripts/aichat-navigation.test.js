@@ -42,3 +42,15 @@ test('RAG 回答留在上栏且 Navigation 跳转按钮保留在下栏', () => {
     /item\?\.name, item\?\.code, item\?\.slug, item\?\.description, item\?\.summary/,
   );
 });
+
+test('Navigation 导引按钮随对话保存并在重新进入页面时恢复', () => {
+  const appSource = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
+  const backendSource = fs.readFileSync(path.join(root, 'backend', 'server.js'), 'utf8');
+
+  assert.match(appSource, /function createAiNavigationSnapshot/);
+  assert.match(appSource, /navigation: createAiNavigationSnapshot\(result\)/);
+  assert.match(appSource, /renderMaxNavigationRoutes\(article, message\.navigation\)/);
+  assert.match(backendSource, /function normalizeAiDialogNavigation/);
+  assert.match(backendSource, /normalizedMessage\.navigation = navigation/);
+  assert.match(backendSource, /AI_DIALOG_NAVIGATION_PATHS/);
+});

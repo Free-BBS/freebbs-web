@@ -3749,7 +3749,10 @@ function renderAiChatThread() {
 
   renderAiWelcomeMessage();
   aiChatState.messages.forEach((message) => {
-    appendAiChatMessage(message.role, message.content);
+    const article = appendAiChatMessage(message.role, message.content);
+    if (message.role === 'assistant' && message.navigation) {
+      renderMaxNavigationRoutes(article, message.navigation);
+    }
   });
   setAiDialogId(aiChatState.currentDid);
   scrollAiChatToBottom();
@@ -3814,6 +3817,22 @@ function normalizeMaxNavigationUrl(value) {
   } catch {
     return '';
   }
+}
+
+function createAiNavigationSnapshot(navigationResult) {
+  const routes = Array.isArray(navigationResult?.routes) ? navigationResult.routes : [];
+
+  return {
+    navigation_answer: String(navigationResult?.navigation_answer || '').trim(),
+    routes: routes
+      .map((route) => ({
+        title: String(route?.title || '').trim(),
+        reason: String(route?.reason || '').trim(),
+        url: normalizeMaxNavigationUrl(route?.url),
+      }))
+      .filter((route) => route.title && route.url)
+      .slice(0, 3),
+  };
 }
 
 function wrapMaxAnswerPanel(bubble) {
@@ -4343,7 +4362,11 @@ async function handleAiChatSubmit(event) {
     }
 
     aiChatState.messages.push({ role: 'user', content: userMessage });
-    aiChatState.messages.push({ role: 'assistant', content: assistantContent });
+    aiChatState.messages.push({
+      role: 'assistant',
+      content: assistantContent,
+      navigation: createAiNavigationSnapshot(result),
+    });
     stopAiChatThinkingStatus();
     await saveAiDialog();
   } catch (error) {
