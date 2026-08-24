@@ -3820,10 +3820,19 @@ function normalizeMaxNavigationUrl(value) {
 }
 
 function createAiNavigationSnapshot(navigationResult) {
-  const routes = Array.isArray(navigationResult?.routes) ? navigationResult.routes : [];
+  let routes = [];
+  if (Array.isArray(navigationResult?.navigation_routes)) {
+    routes = navigationResult.navigation_routes;
+  } else if (Array.isArray(navigationResult?.navigation?.routes)) {
+    routes = navigationResult.navigation.routes;
+  } else if (Array.isArray(navigationResult?.routes)) {
+    routes = navigationResult.routes;
+  }
+  const navigationAnswer =
+    navigationResult?.navigation_answer || navigationResult?.navigation?.answer || '';
 
   return {
-    navigation_answer: String(navigationResult?.navigation_answer || '').trim(),
+    navigation_answer: String(navigationAnswer).trim(),
     routes: routes
       .map((route) => ({
         title: String(route?.title || '').trim(),
@@ -3858,15 +3867,8 @@ function renderMaxNavigationRoutes(article, navigationResult) {
     return;
   }
 
-  const routes = Array.isArray(navigationResult?.routes) ? navigationResult.routes : [];
-  const validRoutes = routes
-    .map((route) => ({
-      title: String(route?.title || '').trim(),
-      reason: String(route?.reason || '').trim(),
-      url: normalizeMaxNavigationUrl(route?.url),
-    }))
-    .filter((route) => route.title && route.url)
-    .slice(0, 3);
+  const navigation = createAiNavigationSnapshot(navigationResult);
+  const validRoutes = [...navigation.routes];
 
   if (!validRoutes.length) {
     validRoutes.push({
@@ -3885,7 +3887,7 @@ function renderMaxNavigationRoutes(article, navigationResult) {
   heading.textContent = '页面导航';
   panel.append(heading);
 
-  const navigationAnswer = String(navigationResult?.navigation_answer || '').trim();
+  const navigationAnswer = navigation.navigation_answer;
   if (navigationAnswer) {
     const summary = document.createElement('p');
     summary.className = 'aichat-navigation-summary';
@@ -3964,12 +3966,14 @@ async function addMentionedCourseMapRoute(navigationResult, userMessage) {
     const remaining = routes.filter(
       (route) => route?.intent !== 'course_graph' && route?.url !== mapRoute.url,
     );
+    const updatedRoutes = [mapRoute, ...remaining].slice(0, 3);
     return {
       ...navigationResult,
       navigation_answer: `我找到了你提到的「${course.name}」，可以直接打开它的知识地图。`,
       intent: 'course_graph',
       needs_clarification: false,
-      routes: [mapRoute, ...remaining].slice(0, 3),
+      routes: updatedRoutes,
+      navigation_routes: updatedRoutes,
     };
   } catch {
     return navigationResult;
@@ -4355,7 +4359,8 @@ async function handleAiChatSubmit(event) {
     window.clearTimeout(bubbleTimer);
     assistantContent = String(result.answer || '').trim() || 'Max 暂时没有生成回答。';
     updateAiChatMessage(assistantArticle, assistantContent);
-    renderMaxNavigationRoutes(assistantArticle, result);
+    const navigation = createAiNavigationSnapshot(result);
+    renderMaxNavigationRoutes(assistantArticle, navigation);
     renderMaxSubagentResult(assistantArticle, result);
     if (result.subagent?.status === 'pending') {
       pollInfoJob(assistantArticle, result);
@@ -4365,7 +4370,7 @@ async function handleAiChatSubmit(event) {
     aiChatState.messages.push({
       role: 'assistant',
       content: assistantContent,
-      navigation: createAiNavigationSnapshot(result),
+      navigation,
     });
     stopAiChatThinkingStatus();
     await saveAiDialog();

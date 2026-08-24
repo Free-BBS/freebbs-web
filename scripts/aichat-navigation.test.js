@@ -48,7 +48,10 @@ test('Navigation 导引按钮随对话保存并在重新进入页面时恢复', 
   const backendSource = fs.readFileSync(path.join(root, 'backend', 'server.js'), 'utf8');
 
   assert.match(appSource, /function createAiNavigationSnapshot/);
-  assert.match(appSource, /navigation: createAiNavigationSnapshot\(result\)/);
+  assert.match(appSource, /Array\.isArray\(navigationResult\?\.navigation_routes\)/);
+  assert.match(appSource, /const navigation = createAiNavigationSnapshot\(result\)/);
+  assert.match(appSource, /renderMaxNavigationRoutes\(assistantArticle, navigation\)/);
+  assert.match(appSource, /navigation,/);
   assert.match(appSource, /renderMaxNavigationRoutes\(article, message\.navigation\)/);
   assert.match(backendSource, /function normalizeAiDialogNavigation/);
   assert.match(backendSource, /normalizedMessage\.navigation = navigation/);
