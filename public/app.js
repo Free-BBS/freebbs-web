@@ -3810,9 +3810,11 @@ const MAX_NAVIGATION_PATHS = new Set([
 function normalizeMaxNavigationUrl(value) {
   try {
     const url = new URL(String(value || ''), window.location.origin);
-    if (url.origin !== window.location.origin || !MAX_NAVIGATION_PATHS.has(url.pathname)) {
+    if (!MAX_NAVIGATION_PATHS.has(url.pathname)) {
       return '';
     }
+    // Agent deployments can use an internal web origin such as 127.0.0.1.
+    // Keep only an approved application path and always navigate on this origin.
     return `${url.pathname}${url.search}${url.hash}`;
   } catch {
     return '';
