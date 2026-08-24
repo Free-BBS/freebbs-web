@@ -18,6 +18,11 @@
   const EDITOR_CANVAS_INSET_Y = editorPage ? 104 : 0;
   const PROGRESS_STORAGE_KEY = 'free_bbs_course_progress_v1';
   const CURRENT_LEARNING_STORAGE_KEY = 'free_bbs_current_learning_node_v1';
+  const KNOWLEDGE_TAGS = [
+    { key: 'important', label: '重要', icon: '★' },
+    { key: 'learned', label: '已学习', icon: '✓' },
+    { key: 'consolidated', label: '已巩固', icon: '◆' },
+  ];
   const SIGNALS_CHAPTER_TITLES = {
     'SS-01': '信号与系统基础',
     'SS-02': '连续系统时域分析',
@@ -44,6 +49,7 @@
     activePanelId: '',
     focusedNodeId: '',
     learningNodeId: '',
+    progress: {},
     activeChapterId: '',
     manualExpandedChapters: new Set(),
     manuallyCollapsedChapters: new Set(),
@@ -182,8 +188,7 @@
       return currentNodeId;
     }
 
-    const progress = readLocalJson(PROGRESS_STORAGE_KEY);
-    const courseProgress = progress?.[courseSlug];
+    const courseProgress = state.progress?.[courseSlug];
     if (!courseProgress || typeof courseProgress !== 'object') {
       return '';
     }
@@ -194,6 +199,45 @@
         String(right[1]?.updatedAt || '').localeCompare(String(left[1]?.updatedAt || '')),
       );
     return latestReview?.[0] || '';
+  }
+
+  function getNodeTags(nodeId) {
+    const entry = state.progress?.[courseSlug]?.[nodeId] || {};
+    const storedTags = Array.isArray(entry.tags) ? entry.tags : [];
+    const legacyLearned = entry.status === 'learned' || entry.status === 'review';
+    const legacyConsolidated = entry.status === 'review';
+    const activeTags = {
+      important: storedTags.includes('important'),
+      learned:
+        storedTags.includes('learned') || storedTags.includes('consolidated') || legacyLearned,
+      consolidated: storedTags.includes('consolidated') || legacyConsolidated,
+    };
+
+    return KNOWLEDGE_TAGS.filter(({ key }) => activeTags[key]);
+  }
+
+  function renderNodeTags(nodeId) {
+    const tags = getNodeTags(nodeId);
+    if (!tags.length) {
+      return '';
+    }
+
+    const labels = tags.map(({ label }) => label).join('、');
+    return `
+      <span class="course-map-topic-tags" aria-label="知识标签：${escapeHtml(labels)}">
+        ${tags
+          .map(
+            ({ key, label, icon }) => `
+              <span
+                class="course-map-topic-tag is-${escapeHtml(key)}"
+                title="${escapeHtml(label)}"
+                aria-hidden="true"
+              >${escapeHtml(icon)}</span>
+            `,
+          )
+          .join('')}
+      </span>
+    `;
   }
 
   function chapterIdForNodeId(nodeId) {
@@ -388,19 +432,16 @@
           aria-pressed="${String(isFocused)}"
           title="${escapeHtml(node.summary || node.title)}"
         >
-          <span class="course-map-topic-code">${escapeHtml(node.id)}</span>
+          <span class="course-map-topic-topline">
+            <span class="course-map-topic-code">${escapeHtml(node.id)}</span>
+            ${renderNodeTags(node.id)}
+          </span>
           <strong>${escapeHtml(node.title)}</strong>
           <span class="course-map-topic-meta">
             ${isLearning ? '<b>正在学习</b>' : ''}
             <i>${relationLabel}</i>
           </span>
         </button>
-        <a
-          class="course-map-topic-detail"
-          href="${knowledgeHref(node.id)}"
-          aria-label="打开${escapeHtml(node.title)}的知识详情"
-          title="打开知识详情"
-        >↗</a>
       </article>
     `;
   }
@@ -1794,6 +1835,7 @@
       state.nodes = payload.nodes || [];
       state.edges = payload.edges || [];
       state.backgroundUrl = payload.backgroundUrl || '';
+      state.progress = readLocalJson(PROGRESS_STORAGE_KEY) || {};
       state.learningNodeId = getLearningNodeId();
       const initialChapters = courseChapters();
       if (!state.learningNodeId) {

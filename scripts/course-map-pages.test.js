@@ -144,10 +144,17 @@ test('course map reader groups nodes by chapter and reveals only focused relatio
   assert.match(controller, /data-reader-node-id/);
   assert.match(controller, /function courseDirectoryHref\(\)/);
   assert.match(controller, /const returnToDirectory = Boolean\(state\.focusedNodeId\)/);
-  assert.match(controller, /directoryLink\.href = returnToDirectory \? courseDirectoryHref\(\) : '\/world'/);
+  assert.match(
+    controller,
+    /directoryLink\.href = returnToDirectory \? courseDirectoryHref\(\) : '\/world'/,
+  );
   assert.match(controller, /window\.location\.assign\(knowledgeHref\(nodeId\)\)/);
   assert.match(controller, /再次点击可打开知识点正文/);
   assert.match(controller, /free_bbs_current_learning_node_v1/);
+  assert.match(controller, /const KNOWLEDGE_TAGS =/);
+  assert.match(controller, /function renderNodeTags\(nodeId\)/);
+  assert.match(controller, /course-map-topic-tags/);
+  assert.doesNotMatch(controller, /course-map-topic-detail/);
   assert.match(styles, /\.course-map-chapter-card\.is-expanded/);
   assert.match(styles, /\.course-map-directory-layout/);
   assert.match(styles, /padding: 84px clamp\(28px, 4vw, 68px\) 86px/);
@@ -162,6 +169,11 @@ test('course map reader groups nodes by chapter and reveals only focused relatio
   assert.match(styles, /\.course-map-cross-grid/);
   assert.match(styles, /\.course-map-topic\.is-focused/);
   assert.match(styles, /\.course-map-topic\.is-learning/);
+  assert.match(styles, /\.course-map-topic-tags/);
+  assert.match(styles, /\.course-map-topic-tag\.is-important/);
+  assert.match(styles, /\.course-map-topic-tag\.is-learned/);
+  assert.match(styles, /\.course-map-topic-tag\.is-consolidated/);
+  assert.doesNotMatch(styles, /\.course-map-topic-detail/);
 });
 
 test('knowledge page uses database-backed knowledge controller', () => {

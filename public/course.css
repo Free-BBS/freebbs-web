@@ -1615,16 +1615,11 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 
 .course-map-chapter-nodes.is-preview-list .course-map-topic-main {
   gap: 4px;
-  padding: 9px 34px 9px 11px;
+  padding: 9px 11px;
 }
 
 .course-map-chapter-nodes.is-preview-list .course-map-topic-meta {
   display: none;
-}
-
-.course-map-chapter-nodes.is-preview-list .course-map-topic-detail {
-  top: 8px;
-  right: 8px;
 }
 
 .course-map-topic {
@@ -1655,13 +1650,21 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   display: grid;
   align-content: center;
   gap: 7px;
-  padding: 14px 39px 14px 15px;
+  padding: 14px 15px;
   border: 0;
   border-radius: inherit;
   background: transparent;
   color: var(--map-text);
   text-align: left;
   cursor: pointer;
+}
+
+.course-map-topic-topline {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .course-map-topic-main:focus-visible {
@@ -1710,33 +1713,40 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   color: var(--map-learning);
 }
 
-.course-map-topic-detail {
-  position: absolute;
-  top: 11px;
-  right: 11px;
-  width: 25px;
-  height: 25px;
-  display: grid;
-  place-items: center;
-  border: 1px solid color-mix(in srgb, var(--map-card-border) 80%, transparent);
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--map-card) 82%, transparent);
-  color: var(--map-muted) !important;
-  font-size: 0.72rem;
-  font-weight: 900;
-  opacity: 0.62;
-  transition:
-    opacity 160ms ease,
-    color 160ms ease,
-    transform 160ms ease;
+.course-map-topic-tags {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
 }
 
-.course-map-topic:hover .course-map-topic-detail,
-.course-map-topic-detail:focus-visible {
-  color: var(--map-beacon) !important;
-  opacity: 1;
-  outline: none;
-  transform: translate(1px, -1px);
+.course-map-topic-tag {
+  --course-map-tag-color: var(--map-muted);
+  width: 20px;
+  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--course-map-tag-color) 42%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--course-map-tag-color) 15%, var(--map-card));
+  color: var(--course-map-tag-color);
+  font-size: 0.61rem;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 30%, transparent);
+}
+
+.course-map-topic-tag.is-important {
+  --course-map-tag-color: #e3a332;
+}
+
+.course-map-topic-tag.is-learned {
+  --course-map-tag-color: #2fb49f;
+}
+
+.course-map-topic-tag.is-consolidated {
+  --course-map-tag-color: #8775ee;
 }
 
 .course-map-topic.is-focused {
