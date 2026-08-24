@@ -3044,29 +3044,40 @@ function renderDiscussionReactionButton(post, reactionType) {
   `;
 }
 
-function renderMarkdownContent(markdown) {
+function protectMarkdownMath(markdown, placeholderPrefix) {
   const mathBlocks = [];
+  const reserveMath = (expression, displayMode) => {
+    const token = `${placeholderPrefix}${mathBlocks.length}`;
+    mathBlocks.push({
+      displayMode,
+      expression: String(expression || '').trim(),
+    });
+    return token;
+  };
+  const protectedMarkdown = String(markdown || '')
+    .replace(
+      /\$\$([\s\S]+?)\$\$/g,
+      (_match, expression) => `\n\n${reserveMath(expression, true)}\n\n`,
+    )
+    .replace(
+      /\\\[([\s\S]+?)\\\]/g,
+      (_match, expression) => `\n\n${reserveMath(expression, true)}\n\n`,
+    )
+    .replace(
+      /(^|[^\\$])\$([^\n$]+?)\$/g,
+      (_match, prefix, expression) => `${prefix}${reserveMath(expression, false)}`,
+    )
+    .replace(/\\\(([^\n]+?)\\\)/g, (_match, expression) => reserveMath(expression, false));
+
+  return { mathBlocks, protectedMarkdown };
+}
+
+function renderMarkdownContent(markdown) {
   const placeholderNonce =
     window.crypto?.randomUUID?.().replace(/-/g, '') ||
     `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
   const placeholderPrefix = `FREE_BBS_MATH_TOKEN_${placeholderNonce}_`;
-  const protectedMarkdown = String(markdown || '')
-    .replace(/\$\$([\s\S]+?)\$\$/g, (_match, expression) => {
-      const token = `${placeholderPrefix}${mathBlocks.length}`;
-      mathBlocks.push({
-        displayMode: true,
-        expression: String(expression || '').trim(),
-      });
-      return `\n\n${token}\n\n`;
-    })
-    .replace(/(^|[^\\$])\$([^\n$]+?)\$/g, (_match, prefix, expression) => {
-      const token = `${placeholderPrefix}${mathBlocks.length}`;
-      mathBlocks.push({
-        displayMode: false,
-        expression: String(expression || '').trim(),
-      });
-      return `${prefix}${token}`;
-    });
+  const { mathBlocks, protectedMarkdown } = protectMarkdownMath(markdown, placeholderPrefix);
 
   const renderedMarkdown = window.marked?.parse
     ? window.marked.parse(protectedMarkdown, {
