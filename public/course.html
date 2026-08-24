@@ -139,7 +139,14 @@
 
       <main class="course-main course-map-main course-map-immersive" data-course-map-page>
         <nav class="course-map-reader-controls" aria-label="地图操作">
-          <a class="course-map-reader-control" href="/world" aria-label="返回学习世界">←</a>
+          <a
+            class="course-map-reader-control"
+            id="course-map-directory-link"
+            href="/world"
+            aria-label="返回学习世界"
+            title="返回学习世界"
+            >←</a
+          >
           <button
             class="course-map-reader-control"
             id="course-map-reset-view"
@@ -157,15 +164,6 @@
             >✎</a
           >
         </nav>
-        <aside class="course-map-reader-hud" aria-live="polite">
-          <p><span aria-hidden="true"></span> Knowledge signal</p>
-          <strong id="course-map-reader-title">知识地图</strong>
-          <small id="course-map-reader-meta">正在同步课程路径…</small>
-          <div class="course-map-reader-legend" aria-label="地图图例">
-            <span><i class="is-focus" aria-hidden="true"></i>点击后显示关联</span>
-            <span><i class="is-learning" aria-hidden="true"></i>正在学习</span>
-          </div>
-        </aside>
         <section class="course-map-panel" aria-label="知识地图">
           <p class="course-map-status" id="course-map-status">正在载入知识地图…</p>
           <div class="course-map-scroller" id="course-map-scroller">

@@ -688,7 +688,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   align-items: start;
   gap: clamp(18px, 2vw, 30px);
   margin: 0 auto;
-  padding: 138px clamp(28px, 4vw, 68px) 86px;
+  padding: 84px clamp(28px, 4vw, 68px) 86px;
 }
 
 .course-map-index-sidebar {
@@ -1108,7 +1108,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   grid-template-columns: minmax(0, 1fr);
   gap: 34px;
   margin: 0 auto;
-  padding: 154px clamp(32px, 6vw, 92px) 36px;
+  padding: 88px clamp(32px, 6vw, 92px) 36px;
 }
 
 .course-map-focused-chapter,
@@ -2856,7 +2856,7 @@ body.course-map-editor-page .site-footer {
   .course-map-directory-layout {
     grid-template-columns: minmax(0, 1fr);
     gap: 14px;
-    padding: 102px 12px 70px;
+    padding: 72px 12px 70px;
   }
 
   .course-map-index-heading {
@@ -2921,7 +2921,7 @@ body.course-map-editor-page .site-footer {
 
   .course-map-focus-workspace {
     gap: 18px;
-    padding: 108px 14px 24px;
+    padding: 76px 14px 24px;
   }
 
   .course-map-focused-heading {
@@ -3093,7 +3093,7 @@ body.course-map-editor-page .site-footer {
 }
 
 .knowledge-workbench {
-  --knowledge-tools-width: 214px;
+  --knowledge-tools-width: 242px;
   --knowledge-interaction-width: 33vw;
   width: min(100%, 1840px);
   display: grid;
@@ -3132,7 +3132,7 @@ body.course-map-editor-page .site-footer {
 }
 
 .knowledge-tools-header {
-  min-height: 68px;
+  min-height: 74px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3150,7 +3150,7 @@ body.course-map-editor-page .site-footer {
 .knowledge-tools-header small {
   color: var(--course-accent);
   font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 0.56rem;
+  font-size: 0.62rem;
   font-weight: 900;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -3158,7 +3158,7 @@ body.course-map-editor-page .site-footer {
 
 .knowledge-tools-header strong {
   color: var(--bbs-shell-text);
-  font-size: 1rem;
+  font-size: 1.15rem;
 }
 
 .knowledge-tools-header button {
@@ -3187,14 +3187,19 @@ body.course-map-editor-page .site-footer {
   min-height: 0;
   display: grid;
   align-content: start;
-  gap: 7px;
-  padding: 12px 10px;
+  gap: 18px;
+  padding: 14px 11px 18px;
   overflow-y: auto;
 }
 
-.knowledge-tools-list button {
+.knowledge-tool-navigation {
+  display: grid;
+  gap: 7px;
+}
+
+.knowledge-tool-navigation button {
   width: 100%;
-  min-height: 50px;
+  min-height: 54px;
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr);
   align-items: center;
@@ -3208,7 +3213,7 @@ body.course-map-editor-page .site-footer {
   cursor: pointer;
 }
 
-.knowledge-tools-list button > span {
+.knowledge-tool-navigation button > span {
   width: 30px;
   height: 30px;
   display: grid;
@@ -3220,26 +3225,163 @@ body.course-map-editor-page .site-footer {
   font-weight: 900;
 }
 
-.knowledge-tools-list button > strong {
+.knowledge-tool-navigation button > strong {
   overflow: hidden;
-  font-size: 0.78rem;
+  font-size: 0.9rem;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.knowledge-tools-list button:hover,
-.knowledge-tools-list button:focus-visible {
+.knowledge-tool-navigation button:hover,
+.knowledge-tool-navigation button:focus-visible {
   border-color: var(--course-line-strong);
   background: var(--course-neutral-surface);
   color: var(--bbs-shell-text);
   outline: none;
 }
 
-.knowledge-tools-list button.is-active {
+.knowledge-tool-navigation button.is-active {
   border-color: color-mix(in srgb, var(--course-accent) 42%, var(--course-line));
   background: var(--course-accent-soft);
   color: var(--bbs-shell-text);
   box-shadow: inset 3px 0 0 var(--course-accent);
+}
+
+.knowledge-tag-panel {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--course-line);
+}
+
+.knowledge-tag-panel-header {
+  display: grid;
+  gap: 3px;
+  padding: 0 5px;
+}
+
+.knowledge-tag-panel-header small {
+  color: var(--course-accent);
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.knowledge-tag-panel-header strong {
+  color: var(--bbs-shell-text);
+  font-size: 0.94rem;
+}
+
+.knowledge-tag-panel-header span {
+  color: var(--bbs-shell-muted);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.knowledge-tag-controls {
+  display: grid;
+  gap: 7px;
+}
+
+.knowledge-tag-button {
+  --knowledge-tag-color: var(--course-accent);
+  width: 100%;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  border: 1px solid color-mix(in srgb, var(--knowledge-tag-color) 26%, var(--course-line));
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--knowledge-tag-color) 5%, transparent);
+  color: var(--bbs-shell-text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.knowledge-tag-button.is-important {
+  --knowledge-tag-color: #e9a83a;
+}
+
+.knowledge-tag-button.is-learned {
+  --knowledge-tag-color: #35bca5;
+}
+
+.knowledge-tag-button.is-consolidated {
+  --knowledge-tag-color: #8b7cf6;
+}
+
+.knowledge-tag-button:hover,
+.knowledge-tag-button:focus-visible {
+  border-color: color-mix(in srgb, var(--knowledge-tag-color) 72%, var(--course-line));
+  background: color-mix(in srgb, var(--knowledge-tag-color) 10%, transparent);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.knowledge-tag-button.is-active {
+  border-color: color-mix(in srgb, var(--knowledge-tag-color) 78%, var(--course-line));
+  background: color-mix(in srgb, var(--knowledge-tag-color) 17%, var(--course-surface-solid));
+  box-shadow:
+    inset 3px 0 0 var(--knowledge-tag-color),
+    0 8px 22px color-mix(in srgb, var(--knowledge-tag-color) 12%, transparent);
+}
+
+.knowledge-tag-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--knowledge-tag-color) 14%, var(--course-neutral-surface));
+  color: var(--knowledge-tag-color);
+  font-size: 0.94rem;
+  font-style: normal;
+  font-weight: 950;
+}
+
+.knowledge-tag-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.knowledge-tag-copy strong {
+  overflow: hidden;
+  color: var(--bbs-shell-text);
+  font-size: 0.86rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-tag-copy small {
+  overflow: hidden;
+  color: var(--bbs-shell-muted);
+  font-size: 0.62rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-tag-state {
+  color: color-mix(in srgb, var(--knowledge-tag-color) 60%, var(--bbs-shell-muted));
+  font-size: 0.8rem;
+  font-style: normal;
+  font-weight: 950;
+  text-align: center;
+}
+
+.knowledge-tag-button.is-active .knowledge-tag-state {
+  color: var(--knowledge-tag-color);
 }
 
 .knowledge-tools-status {
@@ -3263,7 +3405,7 @@ body.course-map-editor-page .site-footer {
 
 .knowledge-tools-status p {
   margin: 0;
-  font-size: 0.62rem;
+  font-size: 0.7rem;
   font-weight: 750;
 }
 
@@ -3274,7 +3416,10 @@ body.course-map-editor-page .site-footer {
 }
 
 .knowledge-workbench.is-tools-collapsed .knowledge-tools-header > span,
-.knowledge-workbench.is-tools-collapsed .knowledge-tools-list button > strong,
+.knowledge-workbench.is-tools-collapsed .knowledge-tool-navigation button > strong,
+.knowledge-workbench.is-tools-collapsed .knowledge-tag-panel-header,
+.knowledge-workbench.is-tools-collapsed .knowledge-tag-copy,
+.knowledge-workbench.is-tools-collapsed .knowledge-tag-state,
 .knowledge-workbench.is-tools-collapsed .knowledge-tools-status p {
   display: none;
 }
@@ -3284,11 +3429,16 @@ body.course-map-editor-page .site-footer {
   padding-left: 8px;
 }
 
-.knowledge-workbench.is-tools-collapsed .knowledge-tools-list button {
+.knowledge-workbench.is-tools-collapsed .knowledge-tool-navigation button,
+.knowledge-workbench.is-tools-collapsed .knowledge-tag-button {
   grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   padding-right: 6px;
   padding-left: 6px;
+}
+
+.knowledge-workbench.is-tools-collapsed .knowledge-tag-panel {
+  padding-bottom: 10px;
 }
 
 .knowledge-workbench.is-tools-collapsed .knowledge-tools-status {
@@ -3487,14 +3637,15 @@ body.is-resizing-knowledge-panel * {
 
 @media (max-width: 1180px) {
   .knowledge-workbench {
-    --knowledge-tools-width: 180px;
+    --knowledge-tools-width: 208px;
   }
 
   .knowledge-workbench.is-tools-collapsed {
     --knowledge-tools-width: 64px;
   }
 
-  .knowledge-tools-list button {
+  .knowledge-tool-navigation button,
+  .knowledge-tag-button {
     padding-right: 7px;
     padding-left: 7px;
   }
@@ -3521,7 +3672,10 @@ body.is-resizing-knowledge-panel * {
 
   .knowledge-tools-header > span,
   .knowledge-tools-header button,
-  .knowledge-tools-list button > strong,
+  .knowledge-tool-navigation button > strong,
+  .knowledge-tag-panel-header,
+  .knowledge-tag-copy,
+  .knowledge-tag-state,
   .knowledge-tools-status p {
     display: none;
   }
@@ -3531,11 +3685,16 @@ body.is-resizing-knowledge-panel * {
     padding-left: 7px;
   }
 
-  .knowledge-tools-list button {
+  .knowledge-tool-navigation button,
+  .knowledge-tag-button {
     grid-template-columns: minmax(0, 1fr);
     justify-items: center;
     padding-right: 4px;
     padding-left: 4px;
+  }
+
+  .knowledge-tag-panel {
+    padding-bottom: 10px;
   }
 
   .knowledge-tools-status {
@@ -3584,7 +3743,8 @@ body.is-resizing-knowledge-panel * {
     border-radius: 12px;
   }
 
-  .knowledge-tools-list button > span {
+  .knowledge-tool-navigation button > span,
+  .knowledge-tag-icon {
     width: 28px;
     height: 28px;
   }
@@ -4632,22 +4792,28 @@ body.knowledge-page:has(.course-material-immersive) .course-material-immersive {
   font-weight: 900;
 }
 
+.knowledge-status-badge.is-important {
+  border-color: color-mix(in srgb, #e9a83a 46%, var(--course-line));
+  background: color-mix(in srgb, #e9a83a 14%, var(--course-surface-solid));
+  color: color-mix(in srgb, #e9a83a 82%, var(--bbs-shell-text));
+}
+
 .knowledge-status-badge.is-learned {
   border-color: rgba(120, 217, 198, 0.34);
   background: var(--course-accent-soft);
   color: var(--course-accent);
 }
 
-.knowledge-status-badge.is-review {
-  border-color: rgba(229, 201, 109, 0.34);
-  background: var(--course-warning-surface);
-  color: var(--course-warning-text);
+.knowledge-status-badge.is-consolidated {
+  border-color: color-mix(in srgb, #8b7cf6 46%, var(--course-line));
+  background: color-mix(in srgb, #8b7cf6 14%, var(--course-surface-solid));
+  color: color-mix(in srgb, #8b7cf6 82%, var(--bbs-shell-text));
 }
 
 .course-material-header {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 28px;
   align-items: end;
   padding: 22px 0 28px;

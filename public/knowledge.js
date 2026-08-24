@@ -9,10 +9,20 @@
   const courseSlug = params.get('course') || 'signals';
   const nodeId = params.get('point') || '';
   const PROGRESS_STORAGE_KEY = 'free_bbs_course_progress_v1';
+  const CURRENT_LEARNING_STORAGE_KEY = 'free_bbs_current_learning_node_v1';
   const INTERACTION_WIDTH_STORAGE_KEY = 'free_bbs_knowledge_interaction_width_v1';
   const TOOLS_COLLAPSED_STORAGE_KEY = 'free_bbs_knowledge_tools_collapsed_v1';
+  const KNOWLEDGE_TAGS = [
+    { key: 'important', label: '重要' },
+    { key: 'learned', label: '已学习' },
+    { key: 'consolidated', label: '已巩固' },
+  ];
   const state = {
-    status: '',
+    tags: {
+      important: false,
+      learned: false,
+      consolidated: false,
+    },
     course: null,
     node: null,
     map: null,
@@ -113,63 +123,136 @@
     }
   }
 
-  function getStoredStatus() {
-    const status = readProgress()[courseSlug]?.[nodeId]?.status;
-    return status === 'learned' || status === 'review' ? status : '';
+  function currentProgressNodeId() {
+    return state.node?.id || nodeId;
   }
 
-  function statusLabel(status) {
-    if (status === 'learned') {
-      return '已学习';
-    }
-
-    if (status === 'review') {
-      return '复习中';
-    }
-
-    return '未开始';
+  function getStoredTags() {
+    const entry = readProgress()[courseSlug]?.[currentProgressNodeId()] || {};
+    const storedTags = Array.isArray(entry.tags) ? entry.tags : [];
+    const legacyLearned = entry.status === 'learned' || entry.status === 'review';
+    const legacyConsolidated = entry.status === 'review';
+    return {
+      important: storedTags.includes('important'),
+      learned: storedTags.includes('learned') || storedTags.includes('consolidated') || legacyLearned,
+      consolidated: storedTags.includes('consolidated') || legacyConsolidated,
+    };
   }
 
-  function renderStatus() {
+  function saveCurrentLearningNode(currentNodeId) {
+    try {
+      const stored = JSON.parse(localStorage.getItem(CURRENT_LEARNING_STORAGE_KEY) || '{}');
+      const learningByCourse =
+        stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+      localStorage.setItem(
+        CURRENT_LEARNING_STORAGE_KEY,
+        JSON.stringify({ ...learningByCourse, [courseSlug]: currentNodeId }),
+      );
+    } catch {
+      // The knowledge page should remain usable when browser storage is unavailable.
+    }
+  }
+
+  function activeTagLabels() {
+    return KNOWLEDGE_TAGS.filter(({ key }) => state.tags[key]).map(({ label }) => label);
+  }
+
+  function renderTags() {
     const statusBadge = document.getElementById('knowledge-status');
-    const learnButton = document.getElementById('knowledge-learn-button');
-    const reviewButton = document.getElementById('knowledge-review-button');
+    const labels = activeTagLabels();
 
     if (statusBadge) {
-      statusBadge.textContent = statusLabel(state.status);
-      statusBadge.className = `knowledge-status-badge${state.status ? ` is-${state.status}` : ''}`;
+      statusBadge.textContent = labels.length ? labels.join(' · ') : '未标记';
+      statusBadge.className = [
+        'knowledge-status-badge',
+        state.tags.important ? 'is-important' : '',
+        state.tags.learned ? 'is-learned' : '',
+        state.tags.consolidated ? 'is-consolidated' : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
     }
 
-    [learnButton, reviewButton].forEach((button) => {
-      if (!button) {
-        return;
-      }
-
-      const isActive = button.dataset.status === state.status;
+    document.querySelectorAll('[data-knowledge-tag]').forEach((button) => {
+      const isActive = Boolean(state.tags[button.dataset.knowledgeTag]);
       button.classList.toggle('is-active', isActive);
       button.setAttribute('aria-pressed', String(isActive));
+      const indicator = button.querySelector('.knowledge-tag-state');
+      if (indicator) {
+        indicator.textContent = isActive ? '✓' : '＋';
+      }
     });
   }
 
-  function saveStatus(status) {
+  function setToolsStatus(message) {
+    const toolsStatus = document.querySelector('#knowledge-tools-status p');
+    if (toolsStatus) {
+      toolsStatus.textContent = message;
+    }
+  }
+
+  function toggleKnowledgeTag(tagKey) {
+    if (!KNOWLEDGE_TAGS.some(({ key }) => key === tagKey)) {
+      return;
+    }
+
+    const nextTags = { ...state.tags, [tagKey]: !state.tags[tagKey] };
+    if (tagKey === 'consolidated' && nextTags.consolidated) {
+      nextTags.learned = true;
+    }
+    if (tagKey === 'learned' && !nextTags.learned) {
+      nextTags.consolidated = false;
+    }
+
     const progress = readProgress();
-    progress[courseSlug] = progress[courseSlug] || {};
-    progress[courseSlug][nodeId] = {
-      status,
+    if (
+      !progress[courseSlug] ||
+      typeof progress[courseSlug] !== 'object' ||
+      Array.isArray(progress[courseSlug])
+    ) {
+      progress[courseSlug] = {};
+    }
+    const progressNodeId = currentProgressNodeId();
+    const previousEntry = progress[courseSlug][progressNodeId];
+    const entry = {
+      ...(previousEntry && typeof previousEntry === 'object' && !Array.isArray(previousEntry)
+        ? previousEntry
+        : {}),
+      tags: KNOWLEDGE_TAGS.filter(({ key }) => nextTags[key]).map(({ key }) => key),
       updatedAt: new Date().toISOString(),
     };
-    localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress));
-    state.status = status;
-    renderStatus();
+
+    if (nextTags.consolidated) {
+      entry.status = 'review';
+    } else if (nextTags.learned) {
+      entry.status = 'learned';
+    } else {
+      delete entry.status;
+    }
+    progress[courseSlug][progressNodeId] = entry;
+
+    try {
+      localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress));
+    } catch {
+      setToolsStatus('标签保存失败，请检查浏览器存储权限');
+      return;
+    }
+
+    const wasActive = state.tags[tagKey];
+    state.tags = nextTags;
+    renderTags();
+    const label = KNOWLEDGE_TAGS.find(({ key }) => key === tagKey)?.label || '标签';
+    const suffix = tagKey === 'consolidated' && !wasActive ? '，并标记为已学习' : '';
+    setToolsStatus(`${wasActive ? '已移除' : '已添加'}「${label}」${suffix}`);
   }
 
   function showPageError(message) {
     page.innerHTML = `<section class="course-empty course-material-error">${escapeHtml(message)}</section>`;
   }
 
-  function bindStatusControls() {
-    document.querySelectorAll('[data-status]').forEach((button) => {
-      button.addEventListener('click', () => saveStatus(button.dataset.status));
+  function bindTagControls() {
+    document.querySelectorAll('[data-knowledge-tag]').forEach((button) => {
+      button.addEventListener('click', () => toggleKnowledgeTag(button.dataset.knowledgeTag));
     });
   }
 
@@ -818,7 +901,7 @@
   }
 
   async function initialize() {
-    bindStatusControls();
+    bindTagControls();
     bindWorkspaceControls();
     bindChatControls();
 
@@ -846,6 +929,7 @@
       state.course = course;
       state.node = node;
       state.map = map;
+      saveCurrentLearningNode(node.id);
 
       document.title = `FREE-BBS - ${node.title}`;
       document.getElementById('knowledge-course-link').href = courseDirectoryHref();
@@ -865,8 +949,8 @@
       );
       app.enhanceMarkdownContent(body);
 
-      state.status = getStoredStatus();
-      renderStatus();
+      state.tags = getStoredTags();
+      renderTags();
       renderKnowledgeSequence(map);
       syncDiscussionContext();
       loadDiscussionPosts();

@@ -166,63 +166,110 @@
                 «
               </button>
             </header>
-            <nav class="knowledge-tools-list" id="knowledge-tools-list" aria-label="学习工具">
-              <button
-                class="is-active"
-                type="button"
-                data-knowledge-tool="content"
-                aria-pressed="true"
-              >
-                <span aria-hidden="true">▤</span>
-                <strong>知识正文</strong>
-              </button>
-              <button type="button" data-knowledge-tool="resources" aria-pressed="false">
-                <span aria-hidden="true">◇</span>
-                <strong>学习资源</strong>
-              </button>
-              <button type="button" data-knowledge-tool="feedback" aria-pressed="false">
-                <span aria-hidden="true">↗</span>
-                <strong>学习反馈</strong>
-              </button>
-              <button type="button" data-knowledge-tool="continue" aria-pressed="false">
-                <span aria-hidden="true">▶</span>
-                <strong>继续学习</strong>
-              </button>
-              <button type="button" data-knowledge-tool="notes" aria-pressed="false">
-                <span aria-hidden="true">✎</span>
-                <strong>个人笔记</strong>
-              </button>
-              <button type="button" data-knowledge-tool="contribute" aria-pressed="false">
-                <span aria-hidden="true">＋</span>
-                <strong>参与共建</strong>
-              </button>
-            </nav>
+            <div class="knowledge-tools-list" id="knowledge-tools-list">
+              <section class="knowledge-tag-panel" aria-labelledby="knowledge-tag-title">
+                <header class="knowledge-tag-panel-header">
+                  <small>MY TAGS</small>
+                  <strong id="knowledge-tag-title">知识标签</strong>
+                  <span>点击为当前知识点标记</span>
+                </header>
+                <div class="knowledge-tag-controls" role="group" aria-label="给当前知识点贴标签">
+                  <button
+                    class="knowledge-tag-button is-important"
+                    type="button"
+                    data-knowledge-tag="important"
+                    aria-pressed="false"
+                    title="标记为重要知识点"
+                  >
+                    <span class="knowledge-tag-icon" aria-hidden="true">★</span>
+                    <span class="knowledge-tag-copy">
+                      <strong>重要</strong>
+                      <small>需要重点回看</small>
+                    </span>
+                    <i class="knowledge-tag-state" aria-hidden="true">＋</i>
+                  </button>
+                  <button
+                    class="knowledge-tag-button is-learned"
+                    type="button"
+                    data-knowledge-tag="learned"
+                    aria-pressed="false"
+                    title="标记为已学习"
+                  >
+                    <span class="knowledge-tag-icon" aria-hidden="true">✓</span>
+                    <span class="knowledge-tag-copy">
+                      <strong>已学习</strong>
+                      <small>已经完成初次学习</small>
+                    </span>
+                    <i class="knowledge-tag-state" aria-hidden="true">＋</i>
+                  </button>
+                  <button
+                    class="knowledge-tag-button is-consolidated"
+                    type="button"
+                    data-knowledge-tag="consolidated"
+                    aria-pressed="false"
+                    title="标记为已巩固"
+                  >
+                    <span class="knowledge-tag-icon" aria-hidden="true">◆</span>
+                    <span class="knowledge-tag-copy">
+                      <strong>已巩固</strong>
+                      <small>能够稳定理解和运用</small>
+                    </span>
+                    <i class="knowledge-tag-state" aria-hidden="true">＋</i>
+                  </button>
+                </div>
+              </section>
+
+              <nav class="knowledge-tool-navigation" aria-label="学习工具">
+                <button
+                  class="is-active"
+                  type="button"
+                  data-knowledge-tool="content"
+                  aria-pressed="true"
+                >
+                  <span aria-hidden="true">▤</span>
+                  <strong>知识正文</strong>
+                </button>
+                <button type="button" data-knowledge-tool="resources" aria-pressed="false">
+                  <span aria-hidden="true">◇</span>
+                  <strong>学习资源</strong>
+                </button>
+                <button type="button" data-knowledge-tool="feedback" aria-pressed="false">
+                  <span aria-hidden="true">↗</span>
+                  <strong>学习反馈</strong>
+                </button>
+                <button type="button" data-knowledge-tool="continue" aria-pressed="false">
+                  <span aria-hidden="true">▶</span>
+                  <strong>继续学习</strong>
+                </button>
+                <button type="button" data-knowledge-tool="notes" aria-pressed="false">
+                  <span aria-hidden="true">✎</span>
+                  <strong>个人笔记</strong>
+                </button>
+                <button type="button" data-knowledge-tool="contribute" aria-pressed="false">
+                  <span aria-hidden="true">＋</span>
+                  <strong>参与共建</strong>
+                </button>
+              </nav>
+
+            </div>
             <footer class="knowledge-tools-status" id="knowledge-tools-status" aria-live="polite">
               <span aria-hidden="true"></span>
-              <p>工具接口已预留</p>
+              <p>标签仅对你可见</p>
             </footer>
           </aside>
 
           <article class="course-material-reader">
             <nav class="course-material-context" aria-label="课程上下文">
               <span class="course-kicker" id="knowledge-course-name">信号系统</span>
-              <span class="knowledge-status-badge" id="knowledge-status">未开始</span>
+              <span class="knowledge-status-badge" id="knowledge-status" aria-live="polite"
+                >未标记</span
+              >
             </nav>
             <header class="course-material-header">
               <div class="course-material-heading">
                 <p class="course-kicker" id="knowledge-node-id">Knowledge Point</p>
                 <h1 id="knowledge-title"></h1>
                 <p id="knowledge-summary"></p>
-              </div>
-              <div class="knowledge-actions" aria-label="学习状态">
-                <button id="knowledge-learn-button" type="button" data-status="learned">
-                  <span aria-hidden="true">✓</span>
-                  学习
-                </button>
-                <button id="knowledge-review-button" type="button" data-status="review">
-                  <span aria-hidden="true">↻</span>
-                  复习
-                </button>
               </div>
             </header>
             <section class="course-material-section" aria-label="课程资料正文">
