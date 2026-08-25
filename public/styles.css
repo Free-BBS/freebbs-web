@@ -13609,6 +13609,7 @@ body.aichat-page .main-content .aichat-new-dialog:hover {
 body.aichat-page .main-content .aichat-dialog-list {
   min-height: 0;
   display: grid;
+  grid-auto-rows: max-content;
   align-content: start;
   gap: 6px;
   overflow-x: hidden;
@@ -13622,6 +13623,7 @@ body.aichat-page .main-content .aichat-dialog-item {
   position: relative;
   width: 100%;
   min-height: 58px;
+  height: max-content;
   display: grid;
   align-content: center;
   gap: 5px;

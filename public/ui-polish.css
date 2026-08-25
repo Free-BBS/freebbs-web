@@ -709,7 +709,13 @@ body:not(.auth-page-body) .public-profile-shell {
 
 body:not(.auth-page-body) .settings-profile,
 body:not(.auth-page-body) .settings-card {
+  padding: clamp(22px, 2.5vw, 30px) !important;
   border-radius: 14px !important;
+}
+
+body:not(.auth-page-body) .settings-form .auth-field {
+  padding: 0;
+  border: 0 !important;
 }
 
 body:not(.auth-page-body) .public-profile-stat {
