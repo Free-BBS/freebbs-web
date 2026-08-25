@@ -14,10 +14,20 @@ const MAX_BACKGROUND_URL_LENGTH = 512;
 const SAFE_LOCAL_BACKGROUND_PATH = /^\/(?:assets|uploads)\/[A-Za-z0-9][A-Za-z0-9/_.-]*$/;
 
 const LEGACY_SECTION_HEADINGS = {
-  basicInfo: /^(?:基本信息|知识点信息|知识信息|概览)$/,
-  knowledge: /^(?:知识|知识正文|核心知识|核心解释|知识详解)$/,
-  applications: /^(?:知识点应用|应用与拓展|应用场景|实际应用|典型应用)$/,
+  basicInfo: /^(?:基本信息|知识点信息|知识信息|概览|附录(?:[:：].*)?|主要依据与修订)$/,
+  knowledge: /^(?:知识|知识正文|知识点正文|核心知识|核心解释|知识详解)$/,
+  applications: /^(?:知识点应用|知识背景与应用|背景与应用|应用与拓展|应用场景|实际应用|典型应用)$/,
 };
+
+function normalizeLegacySectionHeading(value) {
+  return String(value || '')
+    .trim()
+    .replace(
+      /^(?:(?:第?[零一二三四五六七八九十百]+(?:章|节|部分)?)|(?:[（(]?\d+(?:\.\d+)*[）)]?))[.．、:：\s-]+/,
+      '',
+    )
+    .trim();
+}
 
 function normalizeNodeId(value) {
   return String(value || '')
@@ -112,8 +122,9 @@ function splitLegacyKnowledgeDocument(markdown, title = '') {
     if (heading) {
       const level = heading[1].length;
       const label = heading[2].trim();
+      const normalizedLabel = normalizeLegacySectionHeading(label);
       const explicitSection = Object.entries(LEGACY_SECTION_HEADINGS).find(([, pattern]) =>
-        pattern.test(label),
+        pattern.test(normalizedLabel),
       )?.[0];
       if (explicitSection) {
         activeSection = explicitSection;
@@ -137,17 +148,36 @@ function splitLegacyKnowledgeDocument(markdown, title = '') {
   return sections;
 }
 
-function toMapNode(row, includeMarkdown = false) {
+function resolveKnowledgeSections(row) {
   const legacySections = splitLegacyKnowledgeDocument(row.document_markdown, row.title);
   const hasStructuredSections =
     row.knowledge_markdown !== undefined && row.knowledge_markdown !== null;
-  const sections = hasStructuredSections
-    ? {
-        knowledgeMarkdown: row.knowledge_markdown || '',
-        basicInfoMarkdown: row.basic_info_markdown || '',
-        applicationsMarkdown: row.applications_markdown || '',
-      }
-    : legacySections;
+  if (!hasStructuredSections) {
+    return legacySections;
+  }
+
+  const persistedSections = {
+    knowledgeMarkdown: row.knowledge_markdown || '',
+    basicInfoMarkdown: row.basic_info_markdown || '',
+    applicationsMarkdown: row.applications_markdown || '',
+  };
+  const recoveredSections = splitLegacyKnowledgeDocument(
+    persistedSections.knowledgeMarkdown,
+    row.title,
+  );
+  const hasSeparateSupplementaryContent = Boolean(
+    persistedSections.basicInfoMarkdown.trim() || persistedSections.applicationsMarkdown.trim(),
+  );
+  const containsRecoverableLegacySections = Boolean(
+    recoveredSections.basicInfoMarkdown || recoveredSections.applicationsMarkdown,
+  );
+  return !hasSeparateSupplementaryContent && containsRecoverableLegacySections
+    ? recoveredSections
+    : persistedSections;
+}
+
+function toMapNode(row, includeMarkdown = false) {
+  const sections = resolveKnowledgeSections(row);
   return {
     id: row.node_id,
     title: row.title,
@@ -817,5 +847,7 @@ module.exports = {
   isValidNodeId,
   normalizeMapBackgroundUrl,
   normalizeNodeId,
+  normalizeLegacySectionHeading,
+  resolveKnowledgeSections,
   splitLegacyKnowledgeDocument,
 };
