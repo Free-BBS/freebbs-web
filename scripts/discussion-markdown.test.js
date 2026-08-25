@@ -53,3 +53,17 @@ $$\int_0^1 x^2\,dx$$
   }
   assert.doesNotMatch(rendered, /\\[()[\]]/);
 });
+
+test('讨论区明亮模式下的深色代码框使用浅色文字', () => {
+  const discussionHtml = fs.readFileSync(path.join(root, 'public', 'discussion.html'), 'utf8');
+  const discussionStyles = fs.readFileSync(path.join(root, 'public', 'discussion.css'), 'utf8');
+
+  assert.ok(
+    discussionHtml.indexOf('/discussion.css') > discussionHtml.indexOf('/ui-polish.css'),
+    'discussion.css must load after shared theme styles',
+  );
+  assert.match(
+    discussionStyles,
+    /body\.theme-light\.discussion-page[\s\S]*?\.discussion-markdown-body pre code \*[\s\S]*?color:\s*#edf7f8 !important;/,
+  );
+});

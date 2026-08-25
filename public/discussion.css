@@ -42,6 +42,15 @@ body.theme-light.discussion-page {
   --discussion-accent-soft: rgba(8, 121, 133, 0.1);
 }
 
+/* Discussion code blocks keep a dark surface in both themes. Set their
+   foreground explicitly here because this stylesheet loads after the shared
+   light-theme Markdown rules, including for Max-authored comments. */
+body.theme-light.discussion-page .main-content .discussion-markdown-body pre,
+body.theme-light.discussion-page .main-content .discussion-markdown-body pre code,
+body.theme-light.discussion-page .main-content .discussion-markdown-body pre code * {
+  color: #edf7f8 !important;
+}
+
 body.discussion-page .main-content.settings-main {
   width: min(100%, 1380px);
   max-width: none;
