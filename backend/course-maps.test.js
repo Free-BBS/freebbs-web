@@ -10,6 +10,8 @@ const {
   isValidNodeId,
   normalizeMapBackgroundUrl,
   normalizeNodeId,
+  normalizeLegacySectionHeading,
+  resolveKnowledgeSections,
   splitLegacyKnowledgeDocument,
 } = require('./course-maps');
 
@@ -91,6 +93,99 @@ test('keeps ordinary markdown unchanged when a legacy document has no known sect
     basicInfoMarkdown: '',
     applicationsMarkdown: '',
   });
+});
+
+test('normalizes numbered legacy section headings', () => {
+  assert.equal(normalizeLegacySectionHeading('0. 基本信息'), '基本信息');
+  assert.equal(normalizeLegacySectionHeading('1. 知识背景与应用'), '知识背景与应用');
+  assert.equal(normalizeLegacySectionHeading('2. 知识点正文'), '知识点正文');
+  assert.equal(normalizeLegacySectionHeading('二、知识点正文'), '知识点正文');
+});
+
+test('extracts only knowledge content from numbered course documents', () => {
+  const sections = splitLegacyKnowledgeDocument(
+    `# 0. 基本信息
+
+课程名称：高等微积分
+
+## 知识点名称
+
+名称：数域
+
+# 1. 知识背景与应用
+
+## 1.1 知识点概述
+
+本知识点为引出实数域做铺垫。
+
+## 1.2 与其他课程或知识点的联系
+
+相关知识点名称：实数域
+
+# 2. 知识点正文
+
+## 2.1 从数集到数域
+
+这样的数系称为数域。
+
+## 2.2 数域的定义
+
+设 F 是一个非空集合。
+
+# 附录：主要依据与修订
+
+## 主要依据
+
+依据 ID：CAL-PPT-WXF-S1-001
+
+## 修订记录
+
+v0.4`,
+    '数域',
+  );
+
+  assert.match(sections.knowledgeMarkdown, /## 2\.1 从数集到数域/);
+  assert.match(sections.knowledgeMarkdown, /这样的数系称为数域/);
+  assert.match(sections.knowledgeMarkdown, /## 2\.2 数域的定义/);
+  assert.doesNotMatch(
+    sections.knowledgeMarkdown,
+    /基本信息|高等微积分|知识背景与应用|实数域做铺垫|附录|依据 ID|修订记录/,
+  );
+  assert.match(sections.basicInfoMarkdown, /课程名称：高等微积分/);
+  assert.match(sections.basicInfoMarkdown, /依据 ID：CAL-PPT-WXF-S1-001/);
+  assert.match(sections.applicationsMarkdown, /本知识点为引出实数域做铺垫/);
+  assert.match(sections.applicationsMarkdown, /相关知识点名称：实数域/);
+});
+
+test('recovers numbered legacy content previously saved into the knowledge section', () => {
+  const sections = resolveKnowledgeSections({
+    title: '数域',
+    document_markdown: '旧兼容字段',
+    knowledge_markdown: `# 0. 基本信息
+
+课程名称：高等微积分
+
+# 1. 知识背景与应用
+
+用于引出实数域。
+
+# 2. 知识点正文
+
+## 2.1 从数集到数域
+
+这样的数系称为数域。
+
+# 附录：主要依据与修订
+
+依据 ID：CAL-PPT-WXF-S1-001`,
+    basic_info_markdown: '',
+    applications_markdown: '',
+  });
+
+  assert.equal(sections.knowledgeMarkdown, '## 2.1 从数集到数域\n\n这样的数系称为数域。');
+  assert.match(sections.basicInfoMarkdown, /课程名称：高等微积分/);
+  assert.match(sections.basicInfoMarkdown, /依据 ID：CAL-PPT-WXF-S1-001/);
+  assert.equal(sections.applicationsMarkdown, '用于引出实数域。');
 });
 
 function createMockCourseMapPool() {
