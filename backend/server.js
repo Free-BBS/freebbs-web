@@ -1457,8 +1457,7 @@ function buildKnowledgeRagPrompt(question, context) {
 }
 
 function buildKnowledgeRagChatPayload(user, payload) {
-  const rawContext =
-    payload.context && typeof payload.context === 'object' ? payload.context : {};
+  const rawContext = payload.context && typeof payload.context === 'object' ? payload.context : {};
   const context = {
     courseSlug: normalizeKnowledgeRagText(rawContext.courseSlug, 120),
     courseName: normalizeKnowledgeRagText(rawContext.courseName, 200),
@@ -1739,10 +1738,7 @@ function normalizeAiDialogNavigation(value) {
 
       try {
         const parsedUrl = new URL(String(route.url || ''), 'https://freebbs.local');
-        if (
-          parsedUrl.origin === 'https://freebbs.local' &&
-          AI_DIALOG_NAVIGATION_PATHS.has(parsedUrl.pathname)
-        ) {
+        if (AI_DIALOG_NAVIGATION_PATHS.has(parsedUrl.pathname)) {
           url = `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`.slice(0, 2000);
         }
       } catch {
