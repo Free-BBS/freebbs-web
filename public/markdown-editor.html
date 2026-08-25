@@ -82,6 +82,20 @@
               <button id="markdown-save" type="button">保存文档</button>
             </div>
           </header>
+          <nav class="markdown-section-tabs" id="markdown-section-tabs" aria-label="内容分区">
+            <button class="is-active" data-markdown-section="knowledgeMarkdown" type="button">
+              <strong>知识正文</strong>
+              <small>学生阅读的核心内容</small>
+            </button>
+            <button data-markdown-section="basicInfoMarkdown" type="button">
+              <strong>基本信息</strong>
+              <small>别名、符号和课程要求</small>
+            </button>
+            <button data-markdown-section="applicationsMarkdown" type="button">
+              <strong>应用与拓展</strong>
+              <small>应用场景和延伸内容</small>
+            </button>
+          </nav>
           <div class="markdown-toolbar" id="markdown-toolbar" aria-label="Markdown 工具栏">
             <button data-wrap="**|**" type="button">加粗</button>
             <button data-prefix="## " type="button">标题</button>
@@ -95,7 +109,7 @@
           </div>
           <section class="markdown-workspace">
             <label class="markdown-source-panel">
-              <span>Markdown</span>
+              <span id="markdown-source-label">知识正文 Markdown</span>
               <textarea
                 id="markdown-source"
                 spellcheck="false"

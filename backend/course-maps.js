@@ -13,6 +13,12 @@ const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_BACKGROUND_URL_LENGTH = 512;
 const SAFE_LOCAL_BACKGROUND_PATH = /^\/(?:assets|uploads)\/[A-Za-z0-9][A-Za-z0-9/_.-]*$/;
 
+const LEGACY_SECTION_HEADINGS = {
+  basicInfo: /^(?:基本信息|知识点信息|知识信息|概览)$/,
+  knowledge: /^(?:知识|知识正文|核心知识|核心解释|知识详解)$/,
+  applications: /^(?:知识点应用|应用与拓展|应用场景|实际应用|典型应用)$/,
+};
+
 function normalizeNodeId(value) {
   return String(value || '')
     .trim()
@@ -89,7 +95,59 @@ function toCourse(row) {
   };
 }
 
+function splitLegacyKnowledgeDocument(markdown, title = '') {
+  const source = String(markdown || '')
+    .replace(/\r\n?/g, '\n')
+    .trim();
+  const sections = { knowledgeMarkdown: '', basicInfoMarkdown: '', applicationsMarkdown: '' };
+  if (!source) {
+    return sections;
+  }
+
+  const buckets = { knowledge: [], basicInfo: [], applications: [] };
+  let activeSection = 'knowledge';
+  let activeSectionLevel = 0;
+  for (const line of source.split('\n')) {
+    const heading = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+    if (heading) {
+      const level = heading[1].length;
+      const label = heading[2].trim();
+      const explicitSection = Object.entries(LEGACY_SECTION_HEADINGS).find(([, pattern]) =>
+        pattern.test(label),
+      )?.[0];
+      if (explicitSection) {
+        activeSection = explicitSection;
+        activeSectionLevel = level;
+        continue;
+      }
+      if (activeSection !== 'knowledge' && level <= activeSectionLevel) {
+        activeSection = 'knowledge';
+        activeSectionLevel = 0;
+      }
+      if (level === 1 && label === String(title || '').trim()) {
+        continue;
+      }
+    }
+    buckets[activeSection].push(line);
+  }
+
+  sections.knowledgeMarkdown = buckets.knowledge.join('\n').trim();
+  sections.basicInfoMarkdown = buckets.basicInfo.join('\n').trim();
+  sections.applicationsMarkdown = buckets.applications.join('\n').trim();
+  return sections;
+}
+
 function toMapNode(row, includeMarkdown = false) {
+  const legacySections = splitLegacyKnowledgeDocument(row.document_markdown, row.title);
+  const hasStructuredSections =
+    row.knowledge_markdown !== undefined && row.knowledge_markdown !== null;
+  const sections = hasStructuredSections
+    ? {
+        knowledgeMarkdown: row.knowledge_markdown || '',
+        basicInfoMarkdown: row.basic_info_markdown || '',
+        applicationsMarkdown: row.applications_markdown || '',
+      }
+    : legacySections;
   return {
     id: row.node_id,
     title: row.title,
@@ -98,9 +156,14 @@ function toMapNode(row, includeMarkdown = false) {
       x: Number(row.position_x || 0),
       y: Number(row.position_y || 0),
     },
-    hasDocument: Boolean(row.has_document ?? row.document_markdown),
+    hasDocument: Boolean(row.has_document ?? sections.knowledgeMarkdown),
     updatedAt: row.updated_at || null,
-    ...(includeMarkdown ? { markdown: row.document_markdown || '' } : {}),
+    ...(includeMarkdown
+      ? {
+          markdown: sections.knowledgeMarkdown,
+          sections,
+        }
+      : {}),
   };
 }
 
@@ -197,6 +260,21 @@ async function ensureCourseMapTables(pool) {
       CONSTRAINT fk_course_map_edges_created_by
         FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL,
       INDEX idx_course_map_edges_target (course_id, target_node_id)
+    )`,
+  );
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS course_map_node_sections (
+      course_id BIGINT NOT NULL,
+      node_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+      knowledge_markdown MEDIUMTEXT NULL,
+      basic_info_markdown MEDIUMTEXT NULL,
+      applications_markdown MEDIUMTEXT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (course_id, node_id),
+      CONSTRAINT fk_course_map_node_sections_node
+        FOREIGN KEY (course_id, node_id)
+        REFERENCES course_map_nodes (course_id, node_id) ON DELETE CASCADE
     )`,
   );
 
@@ -385,9 +463,13 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
       }
       const nodeId = normalizeNodeId(request.params.nodeId);
       const [rows] = await pool.execute(
-        `SELECT node_id, title, summary, position_x, position_y, document_markdown, updated_at
-         FROM course_map_nodes
-         WHERE course_id = ? AND node_id = ?
+        `SELECT n.node_id, n.title, n.summary, n.position_x, n.position_y,
+                n.document_markdown, n.updated_at,
+                s.knowledge_markdown, s.basic_info_markdown, s.applications_markdown
+         FROM course_map_nodes n
+         LEFT JOIN course_map_node_sections s
+           ON s.course_id = n.course_id AND s.node_id = n.node_id
+         WHERE n.course_id = ? AND n.node_id = ?
          LIMIT 1`,
         [course.id, nodeId],
       );
@@ -492,22 +574,68 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
         return;
       }
       const nodeId = normalizeNodeId(request.params.nodeId);
-      const markdown = String(request.body.markdown || '');
-      if (markdown.length > MAX_MARKDOWN_LENGTH) {
-        response.status(400).json({ message: 'Markdown 文档不能超过 500000 个字符' });
+      const requestedSections = request.body.sections;
+      const usesStructuredSections = requestedSections && typeof requestedSections === 'object';
+      const sections = usesStructuredSections
+        ? {
+            knowledgeMarkdown: String(requestedSections.knowledgeMarkdown || ''),
+            basicInfoMarkdown: String(requestedSections.basicInfoMarkdown || ''),
+            applicationsMarkdown: String(requestedSections.applicationsMarkdown || ''),
+          }
+        : {
+            knowledgeMarkdown: String(request.body.markdown || ''),
+            basicInfoMarkdown: '',
+            applicationsMarkdown: '',
+          };
+      if (Object.values(sections).some((markdown) => markdown.length > MAX_MARKDOWN_LENGTH)) {
+        response.status(400).json({ message: '每个 Markdown 分区不能超过 500000 个字符' });
         return;
       }
-      const [result] = await pool.execute(
-        `UPDATE course_map_nodes
-         SET document_markdown = ?, updated_by = ?
-         WHERE course_id = ? AND node_id = ?`,
-        [markdown, access.user.id, access.course.id, nodeId],
+      const [nodeRows] = await pool.execute(
+        `SELECT 1 FROM course_map_nodes WHERE course_id = ? AND node_id = ? LIMIT 1`,
+        [access.course.id, nodeId],
       );
-      if (!result.affectedRows) {
+      if (!nodeRows[0]) {
         response.status(404).json({ message: '知识结点不存在' });
         return;
       }
-      response.json({ ok: true, nodeId, hasDocument: Boolean(markdown.trim()) });
+      if (usesStructuredSections) {
+        await pool.execute(
+          `INSERT INTO course_map_node_sections (
+            course_id, node_id, knowledge_markdown, basic_info_markdown, applications_markdown
+          ) VALUES (?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE
+            knowledge_markdown = VALUES(knowledge_markdown),
+            basic_info_markdown = VALUES(basic_info_markdown),
+            applications_markdown = VALUES(applications_markdown)`,
+          [
+            access.course.id,
+            nodeId,
+            sections.knowledgeMarkdown,
+            sections.basicInfoMarkdown,
+            sections.applicationsMarkdown,
+          ],
+        );
+      } else {
+        await pool.execute(
+          `INSERT INTO course_map_node_sections (course_id, node_id, knowledge_markdown)
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE knowledge_markdown = VALUES(knowledge_markdown)`,
+          [access.course.id, nodeId, sections.knowledgeMarkdown],
+        );
+      }
+      await pool.execute(
+        `UPDATE course_map_nodes
+         SET document_markdown = ?, updated_by = ?
+         WHERE course_id = ? AND node_id = ?`,
+        [sections.knowledgeMarkdown, access.user.id, access.course.id, nodeId],
+      );
+      response.json({
+        ok: true,
+        nodeId,
+        hasDocument: Boolean(sections.knowledgeMarkdown.trim()),
+        sections,
+      });
     } catch (error) {
       sendCourseError(response, error, '保存 Markdown 文档失败');
     }
@@ -689,4 +817,5 @@ module.exports = {
   isValidNodeId,
   normalizeMapBackgroundUrl,
   normalizeNodeId,
+  splitLegacyKnowledgeDocument,
 };
