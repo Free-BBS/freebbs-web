@@ -136,7 +136,8 @@
     const legacyConsolidated = entry.status === 'review';
     return {
       important: storedTags.includes('important'),
-      learned: storedTags.includes('learned') || storedTags.includes('consolidated') || legacyLearned,
+      learned:
+        storedTags.includes('learned') || storedTags.includes('consolidated') || legacyLearned,
       consolidated: storedTags.includes('consolidated') || legacyConsolidated,
     };
   }

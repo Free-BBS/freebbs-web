@@ -23,6 +23,9 @@ npm run test:course-maps
 echo "[ci] admin users page tests"
 npm run test:admin-users
 
+echo "[ci] discussion Markdown and LaTeX tests"
+npm run test:discussion-markdown
+
 echo "[ci] validating required files"
 test -f .nvmrc
 test -f public/index.html

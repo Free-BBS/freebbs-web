@@ -58,6 +58,54 @@ test('Navigation 导引按钮随对话保存并在重新进入页面时恢复', 
   assert.match(backendSource, /AI_DIALOG_NAVIGATION_PATHS/);
 });
 
+test('对话历史将 Agent 绝对路由保存为白名单站内路径', () => {
+  const backendSource = fs.readFileSync(path.join(root, 'backend', 'server.js'), 'utf8');
+  const functionStart = backendSource.indexOf('const AI_DIALOG_NAVIGATION_PATHS');
+  const functionEnd = backendSource.indexOf('\n\nfunction normalizeAiMessages', functionStart);
+  const functionSource = backendSource.slice(functionStart, functionEnd);
+  const context = { URL };
+
+  vm.runInNewContext(functionSource, context);
+
+  const navigation = context.normalizeAiDialogNavigation({
+    navigation_answer: '进入对应页面。',
+    routes: [
+      {
+        title: '信号系统课程学习',
+        reason: '进入课程岛屿。',
+        url: 'http://127.0.0.1:3000/course?course=signals#map',
+      },
+      {
+        title: '项目区',
+        reason: '寻找项目和队友。',
+        url: 'https://www.free-bbs.cn/development?q=project',
+      },
+      {
+        title: '管理页',
+        reason: '不应保存。',
+        url: 'https://example.test/admin',
+      },
+    ],
+  });
+
+  assert.equal(navigation.navigation_answer, '进入对应页面。');
+  assert.deepEqual(
+    Array.from(navigation.routes, (route) => ({ ...route })),
+    [
+      {
+        title: '信号系统课程学习',
+        reason: '进入课程岛屿。',
+        url: '/course?course=signals#map',
+      },
+      {
+        title: '项目区',
+        reason: '寻找项目和队友。',
+        url: '/development?q=project',
+      },
+    ],
+  );
+});
+
 test('Navigation 接受 Agent 内部域名，但只保留白名单站内路径', () => {
   const appSource = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
   const functionStart = appSource.indexOf('function normalizeMaxNavigationUrl');
