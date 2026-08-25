@@ -13,8 +13,24 @@
   const saveStatus = document.getElementById('markdown-save-status');
   let course;
   let node;
-  let savedValue = '';
+  let activeSection = 'knowledgeMarkdown';
+  let sectionValues = {
+    knowledgeMarkdown: '',
+    basicInfoMarkdown: '',
+    applicationsMarkdown: '',
+  };
+  let savedSections = { ...sectionValues };
   let previewTimer = 0;
+
+  const SECTION_LABELS = {
+    knowledgeMarkdown: '知识正文 Markdown',
+    basicInfoMarkdown: '基本信息 Markdown',
+    applicationsMarkdown: '应用与拓展 Markdown',
+  };
+
+  function hasUnsavedChanges() {
+    return Object.keys(sectionValues).some((key) => sectionValues[key] !== savedSections[key]);
+  }
 
   function setStatus(message, isError = false) {
     saveStatus.textContent = message || '';
@@ -24,6 +40,23 @@
   function renderPreview() {
     preview.innerHTML = app.renderMarkdownContent(source.value);
     app.enhanceMarkdownContent(preview);
+  }
+
+  function selectSection(sectionKey) {
+    if (!Object.hasOwn(sectionValues, sectionKey)) {
+      return;
+    }
+    sectionValues[activeSection] = source.value;
+    activeSection = sectionKey;
+    source.value = sectionValues[activeSection];
+    document.getElementById('markdown-source-label').textContent = SECTION_LABELS[activeSection];
+    document.querySelectorAll('[data-markdown-section]').forEach((button) => {
+      const selected = button.dataset.markdownSection === activeSection;
+      button.classList.toggle('is-active', selected);
+      button.setAttribute('aria-current', selected ? 'true' : 'false');
+    });
+    renderPreview();
+    source.focus();
   }
 
   function insertAround(before, after = before) {
@@ -52,15 +85,16 @@
 
   async function saveDocument() {
     setStatus('正在保存…');
+    sectionValues[activeSection] = source.value;
     try {
       await app.callApi(
         `/courses/${encodeURIComponent(courseSlug)}/map/nodes/${encodeURIComponent(nodeId)}/document`,
         {
           method: 'PUT',
-          body: JSON.stringify({ markdown: source.value }),
+          body: JSON.stringify({ sections: sectionValues }),
         },
       );
-      savedValue = source.value;
+      savedSections = { ...sectionValues };
       setStatus(
         `已保存 · ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`,
       );
@@ -98,9 +132,16 @@
 
   function bindControls() {
     source.addEventListener('input', () => {
-      setStatus(source.value === savedValue ? '已保存' : '有未保存的修改');
+      sectionValues[activeSection] = source.value;
+      setStatus(hasUnsavedChanges() ? '有未保存的修改' : '已保存');
       window.clearTimeout(previewTimer);
       previewTimer = window.setTimeout(renderPreview, 90);
+    });
+    document.getElementById('markdown-section-tabs').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-markdown-section]');
+      if (button) {
+        selectSection(button.dataset.markdownSection);
+      }
     });
     document.getElementById('markdown-toolbar').addEventListener('click', (event) => {
       const button = event.target.closest('button');
@@ -125,7 +166,8 @@
       event.target.value = '';
     });
     window.addEventListener('beforeunload', (event) => {
-      if (source.value !== savedValue) {
+      sectionValues[activeSection] = source.value;
+      if (hasUnsavedChanges()) {
         event.preventDefault();
       }
     });
@@ -163,8 +205,13 @@
         `${node.id} · 支持 KaTeX 公式、代码高亮与图片上传`;
       document.getElementById('markdown-back-link').href =
         `/course-map-editor?course=${encodeURIComponent(courseSlug)}`;
-      source.value = node.markdown || `# ${node.title}\n\n${node.summary || ''}\n`;
-      savedValue = source.value;
+      sectionValues = {
+        knowledgeMarkdown: String(node.sections?.knowledgeMarkdown ?? node.markdown ?? ''),
+        basicInfoMarkdown: String(node.sections?.basicInfoMarkdown || ''),
+        applicationsMarkdown: String(node.sections?.applicationsMarkdown || ''),
+      };
+      savedSections = { ...sectionValues };
+      source.value = sectionValues.knowledgeMarkdown;
       renderPreview();
       bindControls();
       setStatus('已载入文档');
