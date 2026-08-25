@@ -18,6 +18,11 @@
   const EDITOR_CANVAS_INSET_Y = editorPage ? 104 : 0;
   const PROGRESS_STORAGE_KEY = 'free_bbs_course_progress_v1';
   const CURRENT_LEARNING_STORAGE_KEY = 'free_bbs_current_learning_node_v1';
+  const KNOWLEDGE_TAGS = [
+    { key: 'important', label: '重要', icon: '★' },
+    { key: 'learned', label: '已学习', icon: '✓' },
+    { key: 'consolidated', label: '已巩固', icon: '◆' },
+  ];
   const SIGNALS_CHAPTER_TITLES = {
     'SS-01': '信号与系统基础',
     'SS-02': '连续系统时域分析',
@@ -44,6 +49,7 @@
     activePanelId: '',
     focusedNodeId: '',
     learningNodeId: '',
+    progress: {},
     activeChapterId: '',
     manualExpandedChapters: new Set(),
     manuallyCollapsedChapters: new Set(),
@@ -158,6 +164,10 @@
     return `/course-map-editor?course=${encodeURIComponent(courseSlug)}`;
   }
 
+  function courseDirectoryHref() {
+    return `/course?course=${encodeURIComponent(courseSlug)}`;
+  }
+
   function markdownEditorHref(nodeId) {
     const query = new URLSearchParams({ course: courseSlug, point: nodeId });
     return `/markdown-editor?${query.toString()}`;
@@ -178,8 +188,7 @@
       return currentNodeId;
     }
 
-    const progress = readLocalJson(PROGRESS_STORAGE_KEY);
-    const courseProgress = progress?.[courseSlug];
+    const courseProgress = state.progress?.[courseSlug];
     if (!courseProgress || typeof courseProgress !== 'object') {
       return '';
     }
@@ -190,6 +199,50 @@
         String(right[1]?.updatedAt || '').localeCompare(String(left[1]?.updatedAt || '')),
       );
     return latestReview?.[0] || '';
+  }
+
+  function getNodeTags(nodeId) {
+    const entry = state.progress?.[courseSlug]?.[nodeId] || {};
+    const storedTags = Array.isArray(entry.tags) ? entry.tags : [];
+    const legacyLearned = entry.status === 'learned' || entry.status === 'review';
+    const legacyConsolidated = entry.status === 'review';
+    const activeTags = {
+      important: storedTags.includes('important'),
+      learned:
+        storedTags.includes('learned') || storedTags.includes('consolidated') || legacyLearned,
+      consolidated: storedTags.includes('consolidated') || legacyConsolidated,
+    };
+
+    return KNOWLEDGE_TAGS.filter(({ key }) => activeTags[key]);
+  }
+
+  function renderNodeTags(nodeId) {
+    const tags = getNodeTags(nodeId);
+    if (!tags.length) {
+      return '';
+    }
+
+    const labels = tags.map(({ label }) => label).join('、');
+    return `
+      <span class="course-map-topic-tags" aria-label="知识标签：${escapeHtml(labels)}">
+        ${tags
+          .map(
+            ({ key, label, icon }) => `
+              <span
+                class="course-map-topic-tag is-${escapeHtml(key)}"
+                title="${escapeHtml(label)}"
+                aria-hidden="true"
+              >${escapeHtml(icon)}</span>
+            `,
+          )
+          .join('')}
+      </span>
+    `;
+  }
+
+  function renderDirectoryNodeTags(nodeId) {
+    const tags = renderNodeTags(nodeId);
+    return tags ? `<div class="course-map-directory-current-tags">${tags}</div>` : '';
   }
 
   function chapterIdForNodeId(nodeId) {
@@ -384,20 +437,16 @@
           aria-pressed="${String(isFocused)}"
           title="${escapeHtml(node.summary || node.title)}"
         >
-          <span class="course-map-topic-code">${escapeHtml(node.id)}</span>
+          <span class="course-map-topic-topline">
+            <span class="course-map-topic-code">${escapeHtml(node.id)}</span>
+            ${renderNodeTags(node.id)}
+          </span>
           <strong>${escapeHtml(node.title)}</strong>
           <span class="course-map-topic-meta">
             ${isLearning ? '<b>正在学习</b>' : ''}
             <i>${relationLabel}</i>
           </span>
         </button>
-        <a
-          class="course-map-topic-detail"
-          href="${knowledgeHref(node.id)}"
-          data-learning-node-id="${escapeHtml(node.id)}"
-          aria-label="打开${escapeHtml(node.title)}的知识详情"
-          title="打开知识详情"
-        >↗</a>
       </article>
     `;
   }
@@ -550,6 +599,7 @@
           ${
             primaryNode
               ? `<div class="course-map-directory-current${learningNode ? ' is-learning' : ''}">
+                  ${renderDirectoryNodeTags(primaryNode.id)}
                   <div class="course-map-directory-current-copy">
                     <small>${learningNode ? 'CURRENT LEARNING · 正在学习' : 'CHAPTER START · 本章起点'}</small>
                     <span>${escapeHtml(primaryNode.id)}</span>
@@ -562,7 +612,7 @@
                   </div>
                   <div class="course-map-directory-current-actions">
                     <button type="button" data-reader-node-id="${escapeHtml(primaryNode.id)}">查看知识关联</button>
-                    <a href="${knowledgeHref(primaryNode.id)}" data-learning-node-id="${escapeHtml(primaryNode.id)}">进入学习 ↗</a>
+                    <a href="${knowledgeHref(primaryNode.id)}">进入学习 ↗</a>
                   </div>
                 </div>`
               : ''
@@ -605,7 +655,6 @@
             <strong>${escapeHtml(chapter.title)}</strong>
             <span>${viewModel.sameChapterNeighborNodes.length} 个同章直接关联 · ${hiddenNodeCount} 个无关知识点已折叠</span>
           </span>
-          <button type="button" data-focus-exit>返回全章目录</button>
         </header>
         <div class="course-map-focus-stage">
           <div class="course-map-focus-side is-left" aria-label="指进当前聚焦的同章知识点">
@@ -615,7 +664,7 @@
           <div class="course-map-focus-center">
             <small>当前聚焦</small>
             ${renderReaderNode(focusedNode, viewModel)}
-            <span>再次点击可取消聚焦</span>
+            <span>再次点击可打开知识点正文</span>
           </div>
           <div class="course-map-focus-side is-right" aria-label="由当前聚焦指出的同章知识点">
             <span class="course-map-focus-direction">当前聚焦指出 →</span>
@@ -624,7 +673,6 @@
         </div>
         <footer class="course-map-focus-summary">
           <span>仅显示与 ${escapeHtml(focusedNode.id)} 直接相连的本章知识点</span>
-          <button type="button" data-focus-exit>显示本章全部 ${chapter.nodes.length} 个知识点</button>
         </footer>
       </section>
     `;
@@ -1071,29 +1119,16 @@
 
   function renderReaderHeader() {
     document.title = `FREE-BBS - ${state.course.name}知识地图`;
-    const viewModel = readerViewModel();
-    const focusedNode = nodeById(state.focusedNodeId);
     const editLink = document.getElementById('course-map-edit-link');
+    const directoryLink = document.getElementById('course-map-directory-link');
     editLink.href = mapEditorHref();
     editLink.classList.toggle('hidden', !state.course.canEditMap);
-    const title = document.getElementById('course-map-reader-title');
-    const meta = document.getElementById('course-map-reader-meta');
-    if (title) {
-      title.textContent = state.course.name;
-    }
-    if (meta) {
-      if (!state.nodes.length) {
-        meta.textContent = '知识点尚未录入';
-      } else if (focusedNode) {
-        meta.textContent = `聚焦 ${focusedNode.id} · ${viewModel.focusedEdges.length} 个直接关联`;
-      } else {
-        const activeChapter = viewModel.chapters.find(
-          (chapter) => chapter.id === state.activeChapterId,
-        );
-        meta.textContent = activeChapter
-          ? `${activeChapter.id} · ${activeChapter.title} · ${activeChapter.nodes.length} 个知识点`
-          : `${state.nodes.length} 个知识点 · ${viewModel.chapters.length} 个章节`;
-      }
+    if (directoryLink) {
+      const returnToDirectory = Boolean(state.focusedNodeId);
+      const label = returnToDirectory ? '返回课程知识点总览' : '返回学习世界';
+      directoryLink.href = returnToDirectory ? courseDirectoryHref() : '/world';
+      directoryLink.setAttribute('aria-label', label);
+      directoryLink.title = label;
     }
   }
 
@@ -1689,7 +1724,7 @@
 
     const focusNode = (nodeId) => {
       if (state.focusedNodeId === nodeId) {
-        restoreFocusedChapter();
+        window.location.assign(knowledgeHref(nodeId));
         return;
       }
 
@@ -1767,29 +1802,9 @@
         return;
       }
 
-      const focusExit = target?.closest('[data-focus-exit]');
-      if (focusExit) {
-        restoreFocusedChapter();
-        return;
-      }
-
       const topicButton = target?.closest('[data-reader-node-id]');
       if (topicButton) {
         focusNode(topicButton.dataset.readerNodeId);
-        return;
-      }
-
-      const detailLink = target?.closest('[data-learning-node-id]');
-      if (detailLink) {
-        const storedLearning = readLocalJson(CURRENT_LEARNING_STORAGE_KEY);
-        const learningByCourse =
-          storedLearning && typeof storedLearning === 'object' && !Array.isArray(storedLearning)
-            ? storedLearning
-            : {};
-        localStorage.setItem(
-          CURRENT_LEARNING_STORAGE_KEY,
-          JSON.stringify({ ...learningByCourse, [courseSlug]: detailLink.dataset.learningNodeId }),
-        );
         return;
       }
 
@@ -1826,6 +1841,7 @@
       state.nodes = payload.nodes || [];
       state.edges = payload.edges || [];
       state.backgroundUrl = payload.backgroundUrl || '';
+      state.progress = readLocalJson(PROGRESS_STORAGE_KEY) || {};
       state.learningNodeId = getLearningNodeId();
       const initialChapters = courseChapters();
       if (!state.learningNodeId) {

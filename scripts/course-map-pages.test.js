@@ -80,7 +80,9 @@ test('course map pages load their dedicated controllers', () => {
 
   assert.match(reader, /data-course-map-page/);
   assert.match(reader, /<script src="\/course-map\.js"><\/script>/);
-  assert.match(reader, /id="course-map-reader-title"/);
+  assert.doesNotMatch(reader, /course-map-reader-hud/);
+  assert.doesNotMatch(reader, /course-map-reader-title/);
+  assert.doesNotMatch(reader, /course-map-reader-meta/);
   assert.match(editor, /data-course-map-editor/);
   assert.match(editor, /id="course-map-canvas"/);
   assert.match(editor, /course-map-editor-immersive/);
@@ -115,7 +117,9 @@ test('course map reader groups nodes by chapter and reveals only focused relatio
   const controller = fs.readFileSync(path.join(root, 'public', 'course-map.js'), 'utf8');
   const styles = fs.readFileSync(path.join(root, 'public', 'course.css'), 'utf8');
 
-  assert.match(reader, /href="\/world" aria-label="返回学习世界"/);
+  assert.match(reader, /id="course-map-directory-link"/);
+  assert.match(reader, /href="\/world"/);
+  assert.match(reader, /aria-label="返回学习世界"/);
   assert.match(reader, /id="course-map-reset-view"/);
   assert.match(controller, /function courseChapters\(\)/);
   assert.match(controller, /manualExpandedChapters: new Set\(\)/);
@@ -136,21 +140,43 @@ test('course map reader groups nodes by chapter and reveals only focused relatio
   assert.match(controller, /fullExpandedChapters/);
   assert.match(controller, /data-chapter-toggle/);
   assert.match(controller, /data-preview-close/);
-  assert.match(controller, /data-focus-exit/);
+  assert.doesNotMatch(controller, /data-focus-exit/);
   assert.match(controller, /data-reader-node-id/);
+  assert.match(controller, /function courseDirectoryHref\(\)/);
+  assert.match(controller, /const returnToDirectory = Boolean\(state\.focusedNodeId\)/);
+  assert.match(
+    controller,
+    /directoryLink\.href = returnToDirectory \? courseDirectoryHref\(\) : '\/world'/,
+  );
+  assert.match(controller, /window\.location\.assign\(knowledgeHref\(nodeId\)\)/);
+  assert.match(controller, /再次点击可打开知识点正文/);
   assert.match(controller, /free_bbs_current_learning_node_v1/);
+  assert.match(controller, /const KNOWLEDGE_TAGS =/);
+  assert.match(controller, /function renderNodeTags\(nodeId\)/);
+  assert.match(controller, /function renderDirectoryNodeTags\(nodeId\)/);
+  assert.match(controller, /course-map-directory-current-tags/);
+  assert.match(controller, /course-map-topic-tags/);
+  assert.doesNotMatch(controller, /course-map-topic-detail/);
   assert.match(styles, /\.course-map-chapter-card\.is-expanded/);
   assert.match(styles, /\.course-map-directory-layout/);
+  assert.match(styles, /padding: 84px clamp\(28px, 4vw, 68px\) 86px/);
   assert.match(styles, /\.course-map-index-list/);
   assert.match(styles, /\.course-map-directory-current/);
   assert.match(styles, /\.course-map-chapter-card\.is-preview/);
   assert.match(styles, /\.course-map-focus-workspace/);
+  assert.match(styles, /padding: 88px clamp\(32px, 6vw, 92px\) 36px/);
   assert.match(styles, /\.course-map-focus-side\.is-left/);
   assert.match(styles, /\.course-map-cross-relations\.is-incoming/);
   assert.match(styles, /\.course-map-cross-relations\.is-outgoing/);
   assert.match(styles, /\.course-map-cross-grid/);
   assert.match(styles, /\.course-map-topic\.is-focused/);
   assert.match(styles, /\.course-map-topic\.is-learning/);
+  assert.match(styles, /\.course-map-topic-tags/);
+  assert.match(styles, /\.course-map-topic-tag\.is-important/);
+  assert.match(styles, /\.course-map-topic-tag\.is-learned/);
+  assert.match(styles, /\.course-map-topic-tag\.is-consolidated/);
+  assert.match(styles, /\.course-map-directory-current-tags/);
+  assert.doesNotMatch(styles, /\.course-map-topic-detail/);
 });
 
 test('knowledge page uses database-backed knowledge controller', () => {
@@ -158,8 +184,12 @@ test('knowledge page uses database-backed knowledge controller', () => {
   const controller = fs.readFileSync(path.join(root, 'public', 'knowledge.js'), 'utf8');
   const styles = fs.readFileSync(path.join(root, 'public', 'course.css'), 'utf8');
   assert.match(knowledge, /<script src="\/knowledge\.js"><\/script>/);
-  assert.match(knowledge, /id="knowledge-learn-button"/);
-  assert.match(knowledge, /id="knowledge-review-button"/);
+  assert.doesNotMatch(knowledge, /id="knowledge-learn-button"/);
+  assert.doesNotMatch(knowledge, /id="knowledge-review-button"/);
+  assert.match(knowledge, /id="knowledge-tag-title"/);
+  assert.match(knowledge, /data-knowledge-tag="important"/);
+  assert.match(knowledge, /data-knowledge-tag="learned"/);
+  assert.match(knowledge, /data-knowledge-tag="consolidated"/);
   assert.match(knowledge, /id="knowledge-course-link"/);
   assert.match(knowledge, /href="\/course\?course=signals"/);
   assert.match(knowledge, /id="knowledge-workbench"/);
@@ -176,8 +206,22 @@ test('knowledge page uses database-backed knowledge controller', () => {
   assert.match(knowledge, /id="knowledge-discussion-detail"/);
   assert.doesNotMatch(knowledge, /<script src="\/course-data\.js"><\/script>/);
   assert.match(controller, /free_bbs_course_progress_v1/);
+  assert.match(controller, /free_bbs_current_learning_node_v1/);
+  assert.match(controller, /const KNOWLEDGE_TAGS =/);
+  assert.match(controller, /function toggleKnowledgeTag\(tagKey\)/);
+  assert.match(controller, /tagKey === 'consolidated'/);
+  assert.match(controller, /tagKey === 'learned'/);
+  assert.match(controller, /function saveCurrentLearningNode\(currentNodeId\)/);
+  assert.match(controller, /saveCurrentLearningNode\(node\.id\)/);
   assert.match(controller, /renderMarkdownContent/);
-  assert.match(controller, /createMockReply/);
+  assert.match(controller, /function buildKnowledgeChatRequest/);
+  assert.match(controller, /app\.streamKnowledgeRagResponse/);
+  assert.doesNotMatch(controller, /agent: 'rag'/);
+  assert.doesNotMatch(controller, /temperature:/);
+  assert.match(controller, /knowledge-chat-message-body/);
+  assert.match(styles, /\.knowledge-chat-message-body/);
+  assert.match(styles, /@keyframes knowledge-chat-loading-dot/);
+  assert.doesNotMatch(controller, /createMockReply/);
   assert.match(controller, /orderedKnowledgeNodes/);
   assert.match(controller, /renderKnowledgeSequence/);
   assert.match(controller, /free_bbs_knowledge_interaction_width_v1/);
@@ -188,6 +232,10 @@ test('knowledge page uses database-backed knowledge controller', () => {
   assert.match(controller, /\/discussion\/posts\?board=/);
   assert.match(controller, /\/discussion\/posts\/\$\{encodeURIComponent\(postId\)\}/);
   assert.match(styles, /\.knowledge-workbench\.is-interaction-open/);
+  assert.match(styles, /\.knowledge-tag-panel/);
+  assert.match(styles, /\.knowledge-tag-button\.is-important/);
+  assert.match(styles, /\.knowledge-tag-button\.is-learned/);
+  assert.match(styles, /\.knowledge-tag-button\.is-consolidated/);
   assert.match(styles, /\.knowledge-panel-resizer/);
   assert.match(styles, /\.knowledge-sequence-navigation/);
 });
