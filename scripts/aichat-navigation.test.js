@@ -33,6 +33,19 @@ test('问问 Max 组合普通聊天与 Navigation，并渲染白名单路由按�
   assert.match(styles, /\.aichat-response-panel/);
 });
 
+test('最近对话较多时列表项保持内容高度并完整滚动', () => {
+  const styles = fs.readFileSync(path.join(root, 'public', 'styles.css'), 'utf8');
+
+  assert.match(
+    styles,
+    /body\.aichat-page \.main-content \.aichat-dialog-list\s*{[^}]*grid-auto-rows:\s*max-content;/s,
+  );
+  assert.match(
+    styles,
+    /body\.aichat-page \.main-content \.aichat-dialog-item\s*{[^}]*height:\s*max-content;/s,
+  );
+});
+
 test('RAG 回答留在上栏且 Navigation 跳转按钮保留在下栏', () => {
   const appSource = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 
