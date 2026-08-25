@@ -3810,9 +3810,10 @@ const MAX_NAVIGATION_PATHS = new Set([
 function normalizeMaxNavigationUrl(value) {
   try {
     const url = new URL(String(value || ''), window.location.origin);
-    if (url.origin !== window.location.origin || !MAX_NAVIGATION_PATHS.has(url.pathname)) {
+    if (!MAX_NAVIGATION_PATHS.has(url.pathname)) {
       return '';
     }
+    // Agent 服务可能使用容器或回环地址；只保留可信站内路径并切回当前站点域名。
     return `${url.pathname}${url.search}${url.hash}`;
   } catch {
     return '';
@@ -3916,7 +3917,7 @@ function renderMaxNavigationRoutes(article, navigationResult) {
 function normalizeCourseMention(value) {
   return String(value || '')
     .toLocaleLowerCase('zh-CN')
-    .replace(/[\s\-_()（）《》]/g, '');
+    .replace(/[\s\-_()（）《》与]/g, '');
 }
 
 function extractCourseMention(value) {
@@ -3927,50 +3928,84 @@ function extractCourseMention(value) {
 }
 
 async function addMentionedCourseMapRoute(navigationResult, userMessage) {
-  if (!navigationResult?.navigation_requested) {
-    return navigationResult;
-  }
-
   const normalizedMessage = normalizeCourseMention(userMessage);
-  if (!normalizedMessage || !userState.token) {
+  if (!normalizedMessage) {
     return navigationResult;
   }
 
   const courseMention = extractCourseMention(userMessage);
+  const structuredCourse =
+    navigationResult?.course_context ||
+    navigationResult?.subagent?.course ||
+    navigationResult?.navigation?.course_context;
 
   try {
-    const catalog = await callApi('/courses', { method: 'GET' });
-    const courses = Array.isArray(catalog?.courses) ? catalog.courses : [];
-    const course = courses.find((item) =>
-      [item?.name, item?.code, item?.slug, item?.description, item?.summary]
-        .map(normalizeCourseMention)
-        .filter((candidate) => candidate.length >= 2)
-        .some(
-          (candidate) =>
-            normalizedMessage.includes(candidate) ||
-            (courseMention.length >= 2 && candidate.includes(courseMention)),
-        ),
-    );
+    let course = structuredCourse;
+    if (!course?.slug || !course?.name) {
+      if (!userState.token) {
+        return navigationResult;
+      }
+      const catalog = await callApi('/courses', { method: 'GET' });
+      const courses = Array.isArray(catalog?.courses) ? catalog.courses : [];
+      course = courses.find((item) =>
+        [item?.name, item?.code, item?.slug]
+          .map(normalizeCourseMention)
+          .filter((candidate) => candidate.length >= 2)
+          .some(
+            (candidate) =>
+              normalizedMessage.includes(candidate) ||
+              (courseMention.length >= 2 && candidate.includes(courseMention)),
+          ),
+      );
+    }
     if (!course?.slug || !course?.name) {
       return navigationResult;
     }
 
-    const mapRoute = {
-      intent: 'course_graph',
-      module: 'course_graph',
-      title: `${course.name}知识地图`,
-      url: `/course?course=${encodeURIComponent(course.slug)}`,
-      reason: `打开${course.name}的课程知识地图。`,
-    };
-    const routes = Array.isArray(navigationResult?.routes) ? navigationResult.routes : [];
-    const remaining = routes.filter(
-      (route) => route?.intent !== 'course_graph' && route?.url !== mapRoute.url,
-    );
-    const updatedRoutes = [mapRoute, ...remaining].slice(0, 3);
+    const board = String(course.board || course.boardSlug || '').trim();
+    let sourceRoutes = [];
+    if (Array.isArray(navigationResult?.navigation_routes)) {
+      sourceRoutes = navigationResult.navigation_routes;
+    } else if (Array.isArray(navigationResult?.routes)) {
+      sourceRoutes = navigationResult.routes;
+    }
+    let didSpecialize = false;
+    const updatedRoutes = sourceRoutes.map((route) => {
+      const intent = String(route?.intent || '');
+      if (intent === 'course_discussion' && board) {
+        didSpecialize = true;
+        return {
+          ...route,
+          title: `${course.name}讨论区`,
+          url: `/discussion?board=${encodeURIComponent(board)}`,
+          reason: `进入${course.name}对应的课程讨论版。`,
+        };
+      }
+      if (intent === 'course_graph' || (intent === 'knowledge_search' && structuredCourse)) {
+        didSpecialize = true;
+        return {
+          ...route,
+          intent: 'course_graph',
+          module: 'course_graph',
+          title: `${course.name}课程学习`,
+          url: `/course?course=${encodeURIComponent(course.slug)}`,
+          reason: `进入${course.name}课程岛屿和知识地图继续学习。`,
+        };
+      }
+      return route;
+    });
+    if (!didSpecialize) {
+      return navigationResult;
+    }
+
     return {
       ...navigationResult,
-      navigation_answer: `我找到了你提到的「${course.name}」，可以直接打开它的知识地图。`,
-      intent: 'course_graph',
+      course_context: structuredCourse || {
+        slug: course.slug,
+        name: course.name,
+        board,
+      },
+      navigation_answer: `已定位到「${course.name}」，下面是对应的课程入口。`,
       needs_clarification: false,
       routes: updatedRoutes,
       navigation_routes: updatedRoutes,
