@@ -90,6 +90,9 @@ test('course map pages load their dedicated controllers', () => {
   assert.match(editor, /id="course-map-background-input"/);
   assert.match(markdownEditor, /data-markdown-editor/);
   assert.match(markdownEditor, /id="markdown-source"/);
+  assert.match(markdownEditor, /data-markdown-section="knowledgeMarkdown"/);
+  assert.match(markdownEditor, /data-markdown-section="basicInfoMarkdown"/);
+  assert.match(markdownEditor, /data-markdown-section="applicationsMarkdown"/);
   assert.match(markdownEditor, /vendor\/katex/);
 });
 
@@ -197,6 +200,8 @@ test('knowledge page uses database-backed knowledge controller', () => {
   assert.match(knowledge, /id="knowledge-panel-resizer"/);
   assert.match(knowledge, /id="knowledge-previous-link"/);
   assert.match(knowledge, /id="knowledge-next-link"/);
+  assert.match(knowledge, /id="knowledge-basic-info-card"/);
+  assert.match(knowledge, /id="knowledge-applications-card"/);
   assert.doesNotMatch(knowledge, /id="knowledge-route-canvas"/);
   assert.match(knowledge, /id="knowledge-chat-panel"/);
   assert.match(knowledge, /id="knowledge-chat-form"/);
@@ -214,6 +219,7 @@ test('knowledge page uses database-backed knowledge controller', () => {
   assert.match(controller, /function saveCurrentLearningNode\(currentNodeId\)/);
   assert.match(controller, /saveCurrentLearningNode\(node\.id\)/);
   assert.match(controller, /renderMarkdownContent/);
+  assert.match(controller, /sections\.knowledgeMarkdown/);
   assert.match(controller, /function buildKnowledgeChatRequest/);
   assert.match(controller, /app\.streamKnowledgeRagResponse/);
   assert.doesNotMatch(controller, /agent: 'rag'/);

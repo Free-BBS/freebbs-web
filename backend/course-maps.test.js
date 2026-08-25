@@ -10,6 +10,7 @@ const {
   isValidNodeId,
   normalizeMapBackgroundUrl,
   normalizeNodeId,
+  splitLegacyKnowledgeDocument,
 } = require('./course-maps');
 
 test('normalizes knowledge node ids to uppercase ASCII', () => {
@@ -50,6 +51,46 @@ test('rejects unsafe course map background locations', () => {
   assert.equal(normalizeMapBackgroundUrl('http://cdn.example.test/map.webp'), null);
   assert.equal(normalizeMapBackgroundUrl('https://user:secret@example.test/map.webp'), null);
   assert.equal(normalizeMapBackgroundUrl('data:image/png;base64,AAAA'), null);
+});
+
+test('splits legacy knowledge documents into independent content sections', () => {
+  const sections = splitLegacyKnowledgeDocument(
+    `# 傅里叶变换
+
+## 基本信息
+
+- 难度：3
+- 别名：FT
+
+## 核心知识
+
+傅里叶变换把信号从时域转换到频域。
+
+### 定义
+
+$$X(\\omega)=\\int x(t)e^{-j\\omega t}dt$$
+
+## 知识点应用
+
+- 频谱分析
+- 滤波器设计`,
+    '傅里叶变换',
+  );
+
+  assert.equal(sections.basicInfoMarkdown, '- 难度：3\n- 别名：FT');
+  assert.match(sections.knowledgeMarkdown, /傅里叶变换把信号从时域转换到频域/);
+  assert.match(sections.knowledgeMarkdown, /### 定义/);
+  assert.doesNotMatch(sections.knowledgeMarkdown, /基本信息|知识点应用|难度/);
+  assert.equal(sections.applicationsMarkdown, '- 频谱分析\n- 滤波器设计');
+});
+
+test('keeps ordinary markdown unchanged when a legacy document has no known sections', () => {
+  const markdown = '## 定义\n\n正文内容。\n\n## 推导\n\n推导内容。';
+  assert.deepEqual(splitLegacyKnowledgeDocument(markdown), {
+    knowledgeMarkdown: markdown,
+    basicInfoMarkdown: '',
+    applicationsMarkdown: '',
+  });
 });
 
 function createMockCourseMapPool() {

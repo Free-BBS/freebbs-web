@@ -1019,7 +1019,10 @@
         app.callApi(`/courses/${encodeURIComponent(courseSlug)}/map`, { method: 'GET' }),
       ]);
       const { course, node } = detail;
-      const markdown = String(node.markdown || '').trim();
+      const sections = node.sections || {};
+      const markdown = String(sections.knowledgeMarkdown ?? node.markdown ?? '').trim();
+      const basicInfoMarkdown = String(sections.basicInfoMarkdown || '').trim();
+      const applicationsMarkdown = String(sections.applicationsMarkdown || '').trim();
       state.course = course;
       state.node = node;
       state.map = map;
@@ -1042,6 +1045,29 @@
         markdown || '*这个知识结点还没有挂载 Markdown 文档。*',
       );
       app.enhanceMarkdownContent(body);
+
+      const supplementary = document.getElementById('knowledge-supplementary');
+      const supplementarySections = [
+        {
+          markdown: basicInfoMarkdown,
+          card: document.getElementById('knowledge-basic-info-card'),
+          body: document.getElementById('knowledge-basic-info'),
+        },
+        {
+          markdown: applicationsMarkdown,
+          card: document.getElementById('knowledge-applications-card'),
+          body: document.getElementById('knowledge-applications'),
+        },
+      ];
+      supplementarySections.forEach((section) => {
+        const { markdown: supplementaryMarkdown, card, body: supplementaryBody } = section;
+        card?.classList.toggle('hidden', !supplementaryMarkdown);
+        if (supplementaryBody && supplementaryMarkdown) {
+          supplementaryBody.innerHTML = app.renderMarkdownContent(supplementaryMarkdown);
+          app.enhanceMarkdownContent(supplementaryBody);
+        }
+      });
+      supplementary?.classList.toggle('hidden', !basicInfoMarkdown && !applicationsMarkdown);
 
       state.tags = getStoredTags();
       renderTags();
