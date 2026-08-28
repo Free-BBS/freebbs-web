@@ -5,6 +5,7 @@ const path = require('path');
 const sharp = require('sharp');
 const pool = require('./db');
 const config = require('./config');
+const { buildAiDialogExport, buildAiDialogExportFileName } = require('./ai-dialog-export');
 const { buildBackendHealth } = require('./health');
 const { hashPassword, verifyPassword } = require('./password');
 const { sign, verify } = require('./token');
@@ -4620,6 +4621,47 @@ app.get('/api/admin/users', async (request, response) => {
     });
   } catch (error) {
     response.status(500).json({ message: '获取用户列表失败', detail: error.message });
+  }
+});
+
+app.get('/api/admin/ai-dialogs/export', async (request, response) => {
+  try {
+    const adminUser = await requireAdmin(request, response);
+
+    if (!adminUser) {
+      return;
+    }
+
+    await ensureAiDialogTables();
+    const exportedAt = new Date();
+    const [[users], [dialogs]] = await Promise.all([
+      pool.execute(
+        `SELECT id, uid, username, full_name, student_id, role
+         FROM users
+         ORDER BY id ASC`,
+      ),
+      pool.execute(
+        `SELECT id, did, user_id, title, messages_json, created_at, updated_at
+         FROM ai_dialogs
+         ORDER BY user_id ASC, created_at ASC, id ASC`,
+      ),
+    ]);
+    const payload = buildAiDialogExport({
+      users,
+      dialogs,
+      exportedBy: adminUser,
+      exportedAt,
+    });
+
+    response.set({
+      'Cache-Control': 'no-store',
+      'Content-Disposition': `attachment; filename="${buildAiDialogExportFileName(exportedAt)}"`,
+      'Content-Type': 'application/json; charset=utf-8',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    response.send(JSON.stringify(payload, null, 2));
+  } catch (error) {
+    response.status(500).json({ message: '导出 AI 聊天记录失败', detail: error.message });
   }
 });
 

@@ -12,7 +12,7 @@
     "start:frontend": "node server.js",
     "start:backend": "node backend/server.js",
     "testbench:fortune": "node test/testbench.js",
-    "test:admin-users": "node --test scripts/admin-users-page.test.js",
+    "test:admin-users": "node --test backend/ai-dialog-export.test.js scripts/admin-users-page.test.js",
     "test:aichat-navigation": "node --test scripts/aichat-navigation.test.js",
     "test:agent-surfaces": "node --test scripts/agent-surface-integration.test.js",
     "test:discussion-markdown": "node --test scripts/discussion-markdown.test.js",

@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, '..');
 const page = fs.readFileSync(path.join(root, 'public', 'adminusers.html'), 'utf8');
 const controller = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 const styles = fs.readFileSync(path.join(root, 'public', 'adminusers.css'), 'utf8');
+const backend = fs.readFileSync(path.join(root, 'backend', 'server.js'), 'utf8');
 
 test('user management page exposes the responsive directory controls', () => {
   const sharedStyleIndex = page.indexOf('/ui-polish.css');
@@ -23,11 +24,25 @@ test('user management page exposes the responsive directory controls', () => {
   assert.match(page, /id="admin-user-scope-filter"/);
   assert.match(page, /id="admin-user-visible-count"/);
   assert.match(page, /id="admin-user-empty"/);
+  assert.match(page, /id="admin-export-ai-dialogs"/);
+  assert.match(page, />导出 AI 聊天</);
   assert.match(page, /<details class="admin-utility-settings">/);
   assert.match(page, /id="fortune-bonus-toggle"/);
   assert.doesNotMatch(page, /<h1>用户与权限<\/h1>/);
   assert.doesNotMatch(page, /查找用户，管理身份、账户数值与课程或讨论区负责范围/);
   assert.doesNotMatch(page, /class="admin-users-head"/);
+});
+
+test('AI chat export downloads the admin-only JSON attachment', () => {
+  assert.match(
+    backend,
+    /app\.get\('\/api\/admin\/ai-dialogs\/export'[\s\S]*requireAdmin\(request, response\)[\s\S]*Content-Disposition/,
+  );
+  assert.match(controller, /\/admin\/ai-dialogs\/export/);
+  assert.match(controller, /Authorization: `Bearer \$\{userState\.token\}`/);
+  assert.match(controller, /URL\.createObjectURL\(await response\.blob\(\)\)/);
+  assert.match(controller, /downloadLink\.download = fileName/);
+  assert.match(styles, /\.admin-export-button/);
 });
 
 test('user cards keep every account and responsibility field in the editor', () => {
