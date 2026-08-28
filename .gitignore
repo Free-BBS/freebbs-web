@@ -88,6 +88,7 @@ envs.sh
 # Database runtime files
 database/uploads/
 database/backups/
+database/local-rag/
 *.sqlite
 *.sqlite3
 

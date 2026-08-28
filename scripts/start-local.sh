@@ -19,8 +19,10 @@ load_env_file() {
   return 1
 }
 
-if ! load_env_file "$ROOT_DIR/backend/.env"; then
-  load_env_file "$ROOT_DIR/envs.sh" || true
+if [[ "${FREEBBS_SKIP_LOCAL_ENV:-0}" != "1" ]]; then
+  if ! load_env_file "$ROOT_DIR/backend/.env"; then
+    load_env_file "$ROOT_DIR/envs.sh" || true
+  fi
 fi
 
 export HOST="${HOST:-127.0.0.1}"

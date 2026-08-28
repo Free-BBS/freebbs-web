@@ -34,6 +34,7 @@ test -f public/course-map-editor.html
 test -f public/markdown-editor.html
 test -f public/discussion.html
 test -f database/migrations/018_create_course_map_settings.sql
+test -f database/migrations/024_add_rag_index_revision.sql
 test -f backend/server.js
 
 echo "[ci] checking database scripts for destructive statements"
