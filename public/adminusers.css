@@ -53,7 +53,16 @@ body.adminusers-page .admin-page-heading p {
   letter-spacing: 0.2em;
 }
 
-body.adminusers-page .admin-add-button {
+body.adminusers-page .admin-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+body.adminusers-page .admin-add-button,
+body.adminusers-page .admin-export-button {
   min-width: 132px;
   min-height: 46px;
   display: inline-flex;
@@ -74,11 +83,13 @@ body.adminusers-page .admin-add-button {
     filter 160ms ease;
 }
 
-body.adminusers-page .admin-add-button span {
+body.adminusers-page .admin-add-button span,
+body.adminusers-page .admin-export-button span {
   color: inherit !important;
 }
 
-body.adminusers-page .admin-add-button svg {
+body.adminusers-page .admin-add-button svg,
+body.adminusers-page .admin-export-button svg {
   width: 18px;
   height: 18px;
   fill: none;
@@ -87,9 +98,14 @@ body.adminusers-page .admin-add-button svg {
   stroke-width: 2;
 }
 
-body.adminusers-page .admin-add-button:hover {
+body.adminusers-page .admin-add-button:hover,
+body.adminusers-page .admin-export-button:hover {
   filter: brightness(1.08);
   transform: translateY(-1px);
+}
+
+body.adminusers-page .admin-export-button {
+  min-width: 154px;
 }
 
 body.adminusers-page .admin-section {
@@ -1027,6 +1043,11 @@ body.adminusers-page .admin-user-empty span {
     padding-inline: 13px !important;
   }
 
+  body.adminusers-page .admin-export-button {
+    min-width: 140px;
+    padding-inline: 13px !important;
+  }
+
   body.adminusers-page .admin-directory-toolbar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1131,6 +1152,22 @@ body.adminusers-page .admin-user-empty span {
 }
 
 @media (max-width: 520px) {
+  body.adminusers-page .admin-page-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  body.adminusers-page .admin-header-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.adminusers-page .admin-add-button,
+  body.adminusers-page .admin-export-button {
+    width: 100%;
+    min-width: 0;
+  }
+
   body.adminusers-page .admin-user-filter {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;

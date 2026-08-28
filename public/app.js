@@ -62,6 +62,7 @@ const adminSection = document.getElementById('admin-section');
 const adminUsers = document.getElementById('admin-users');
 const adminMessage = document.getElementById('admin-message');
 const adminAddUserButton = document.getElementById('admin-add-user');
+const adminExportAiDialogsButton = document.getElementById('admin-export-ai-dialogs');
 const adminUserSearch = document.getElementById('admin-user-search');
 const adminUserRoleFilter = document.getElementById('admin-user-role-filter');
 const adminUserScopeFilter = document.getElementById('admin-user-scope-filter');
@@ -6149,6 +6150,52 @@ async function loadAdminUsers() {
   }
 }
 
+async function handleAdminAiDialogExport() {
+  if (!isAdminUsersPage() || !userState.isAdmin || !adminExportAiDialogsButton) {
+    return;
+  }
+
+  adminExportAiDialogsButton.disabled = true;
+  adminExportAiDialogsButton.setAttribute('aria-busy', 'true');
+  setAdminMessage('正在导出全部用户的 AI 聊天记录...');
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/admin/ai-dialogs/export`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${userState.token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(
+        payload.detail ? `${payload.message}：${payload.detail}` : payload.message || '导出失败',
+      );
+    }
+
+    const contentDisposition = response.headers.get('Content-Disposition') || '';
+    const fileNameMatch = contentDisposition.match(/filename="([^"]+)"/i);
+    const fileName =
+      fileNameMatch?.[1] || `free-bbs-ai-chats-${new Date().toISOString().slice(0, 10)}.json`;
+    const downloadUrl = URL.createObjectURL(await response.blob());
+    const downloadLink = document.createElement('a');
+    downloadLink.href = downloadUrl;
+    downloadLink.download = fileName;
+    document.body.append(downloadLink);
+    downloadLink.click();
+    downloadLink.remove();
+    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
+    setAdminMessage('AI 聊天记录已导出', 3200);
+  } catch (error) {
+    setAdminMessage(error.message);
+  } finally {
+    adminExportAiDialogsButton.disabled = false;
+    adminExportAiDialogsButton.removeAttribute('aria-busy');
+  }
+}
+
 function renderAdminSection() {
   const isAdmin = userState.isLoggedIn && userState.isAdmin;
   const showFortune = userState.isLoggedIn && Boolean(userState.studentId);
@@ -8213,6 +8260,7 @@ fortuneLinks.forEach((link) => {
   });
 });
 adminAddUserButton?.addEventListener('click', insertAdminDraftRow);
+adminExportAiDialogsButton?.addEventListener('click', handleAdminAiDialogExport);
 adminUsers?.addEventListener('click', handleAdminUsersClick);
 adminUsers?.addEventListener('input', handleAdminUserFieldInput);
 adminUserSearch?.addEventListener('input', updateAdminUserListFilters);
