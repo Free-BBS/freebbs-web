@@ -139,6 +139,16 @@ CREATE TABLE IF NOT EXISTS course_map_node_sections (
         REFERENCES course_map_nodes (course_id, node_id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS rag_index_state (
+    id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+    requested_revision BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    requested_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+INSERT IGNORE INTO rag_index_state (id, requested_revision) VALUES (1, 0);
+
 CREATE TABLE IF NOT EXISTS system_secret_settings (
     setting_key VARCHAR(64) PRIMARY KEY,
     ciphertext MEDIUMBLOB NOT NULL,

@@ -140,6 +140,12 @@ npm run test:tsinghua-connectors
 - `DELETE /api/admin/system-settings/model/api-key`
 - `GET|PATCH /api/admin/system-settings/course-materials`
 
+内部 Unix Socket 还提供 `GET /internal/v1/rag-course-snapshot`。该接口只接受
+`AGENT_SERVICE_TOKEN`，以一致性事务返回启用课程、知识点三个 Markdown 分区、图谱关系和
+`rag_index_state.requested_revision`。课程地图写接口在知识点、正文和图谱关系成功变更后自动
+递增 revision，供 Agent 定时索引器合并连续更新；该机制不要求 MySQL `TRIGGER` 或
+`SUPER` 权限。
+
 同机 agent 通过 Unix Socket 请求：
 
 ```text

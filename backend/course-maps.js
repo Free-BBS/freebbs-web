@@ -307,6 +307,16 @@ async function ensureCourseMapTables(pool) {
         REFERENCES course_map_nodes (course_id, node_id) ON DELETE CASCADE
     )`,
   );
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS rag_index_state (
+      id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+      requested_revision BIGINT UNSIGNED NOT NULL DEFAULT 0,
+      requested_at DATETIME NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )`,
+  );
+  await pool.execute(`INSERT IGNORE INTO rag_index_state (id, requested_revision) VALUES (1, 0)`);
 
   for (const course of COURSE_SEEDS) {
     await pool.execute(
@@ -355,6 +365,15 @@ async function ensureCourseMapTables(pool) {
       );
     }
   }
+}
+
+async function markRagIndexDirty(pool) {
+  await pool.execute(
+    `UPDATE rag_index_state
+     SET requested_revision = requested_revision + 1,
+         requested_at = CURRENT_TIMESTAMP
+     WHERE id = 1`,
+  );
 }
 
 async function getCourseBySlug(pool, slug) {
@@ -546,6 +565,7 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [access.course.id, nodeId, title, summary, x, y, access.user.id, access.user.id],
       );
+      await markRagIndexDirty(pool);
       const [rows] = await pool.execute(
         `SELECT node_id, title, summary, position_x, position_y, document_markdown, updated_at
          FROM course_map_nodes WHERE course_id = ? AND node_id = ? LIMIT 1`,
@@ -583,6 +603,7 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
         response.status(404).json({ message: '知识结点不存在' });
         return;
       }
+      await markRagIndexDirty(pool);
       response.json({
         node: {
           id: nodeId,
@@ -660,6 +681,7 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
          WHERE course_id = ? AND node_id = ?`,
         [sections.knowledgeMarkdown, access.user.id, access.course.id, nodeId],
       );
+      await markRagIndexDirty(pool);
       response.json({
         ok: true,
         nodeId,
@@ -686,6 +708,7 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
         response.status(404).json({ message: '知识结点不存在' });
         return;
       }
+      await markRagIndexDirty(pool);
       response.json({ ok: true });
     } catch (error) {
       sendCourseError(response, error, '删除知识结点失败');
@@ -719,6 +742,7 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
         ) VALUES (?, ?, ?, ?, ?)`,
         [access.course.id, source, target, type, access.user.id],
       );
+      await markRagIndexDirty(pool);
       response.status(201).json({ edge: { source, target, type } });
     } catch (error) {
       sendCourseError(response, error, '创建连接失败');
@@ -747,6 +771,7 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
         response.status(404).json({ message: '连接不存在' });
         return;
       }
+      await markRagIndexDirty(pool);
       response.json({ ok: true });
     } catch (error) {
       sendCourseError(response, error, '删除连接失败');

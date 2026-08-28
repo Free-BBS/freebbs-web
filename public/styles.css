@@ -14009,6 +14009,17 @@ body.aichat-page .main-content .aichat-subagent-result p {
   font-size: 0.78rem;
 }
 
+body.aichat-page .main-content .aichat-subagent-result.is-rag a {
+  color: #075f72;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+body.aichat-page .main-content .aichat-subagent-result.is-rag a:hover {
+  text-decoration: underline;
+}
+
 body.aichat-page .main-content .aichat-subagent-result .is-error {
   color: #9d2f22 !important;
 }
