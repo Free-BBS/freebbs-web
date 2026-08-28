@@ -421,7 +421,7 @@
     toggle.setAttribute('aria-expanded', String(state.chatOpen));
     toggle.setAttribute('aria-label', state.chatOpen ? '关闭课程学习面板' : '打开课程学习面板');
     if (symbol) {
-      symbol.textContent = state.chatOpen ? '×' : '＋';
+      symbol.textContent = state.chatOpen ? '×' : 'AI';
     }
     if (tooltip) {
       tooltip.textContent = state.chatOpen ? '关闭交互区' : '打开交互区';
