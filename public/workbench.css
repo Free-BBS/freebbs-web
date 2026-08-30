@@ -523,6 +523,18 @@ body.workbench-page .workbench-card {
     background 180ms ease;
 }
 
+body.workbench-page .workbench-card.hidden {
+  display: none;
+}
+
+body.workbench-page .workbench-card-button {
+  width: 100%;
+  appearance: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 body.workbench-page .workbench-card:hover {
   background:
     linear-gradient(135deg, var(--workbench-accent-soft), transparent 70%), var(--workbench-panel);

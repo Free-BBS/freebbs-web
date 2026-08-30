@@ -37,6 +37,16 @@ test('workbench keeps accessible live regions for all personal summaries', () =>
   }
 });
 
+test('workbench restores the signed-in economy shortcuts', () => {
+  assert.match(html, /id="workbench-checkin-entry"[\s\S]{0,160}<span>每日签到<\/span>/);
+  assert.match(html, /class="workbench-card workbench-card-button fortune-link hidden"/);
+  assert.match(html, /id="workbench-electromagnetic-entry"[\s\S]{0,80}href="\/electromagnetic"/);
+  assert.match(html, /id="workbench-inventory-entry"[\s\S]{0,80}href="\/inventory"/);
+  assert.match(app, /fortuneLinks\.forEach\([\s\S]*openFortuneModal\(\)/);
+  assert.match(css, /\.workbench-card\.hidden\s*\{[\s\S]*display:\s*none/);
+  assert.match(css, /\.workbench-card-button\s*\{[\s\S]*text-align:\s*left/);
+});
+
 test('workbench loads real summaries only through the authenticated API wrapper', () => {
   assert.match(html, /data-workbench-controller="standalone"/);
   assert.match(app, /document\.body\.dataset\.workbenchController === 'standalone'/);
