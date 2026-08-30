@@ -703,7 +703,8 @@ function drawFortuneChart(canvas, history) {
 }
 
 async function openFortuneModal() {
-  if (!userState.isLoggedIn || !userState.studentId) {
+  if (!userState.isLoggedIn) {
+    openModal('login');
     return;
   }
 
@@ -6233,7 +6234,9 @@ async function handleAdminAiDialogExport() {
 
 function renderAdminSection() {
   const isAdmin = userState.isLoggedIn && userState.isAdmin;
-  const showFortune = userState.isLoggedIn && Boolean(userState.studentId);
+  const showEconomyNavigation = userState.isLoggedIn;
+  const shouldHideEconomyLink = (link) =>
+    !showEconomyNavigation && !link.hasAttribute('data-workbench-economy-entry');
 
   manageLinks.forEach((link) => {
     link.classList.toggle('hidden', !isAdmin);
@@ -6248,15 +6251,15 @@ function renderAdminSection() {
   });
 
   fortuneLinks.forEach((link) => {
-    link.classList.toggle('hidden', !showFortune);
+    link.classList.toggle('hidden', shouldHideEconomyLink(link));
   });
 
   electromagneticLinks.forEach((link) => {
-    link.classList.toggle('hidden', !showFortune);
+    link.classList.toggle('hidden', shouldHideEconomyLink(link));
   });
 
   inventoryLinks.forEach((link) => {
-    link.classList.toggle('hidden', !showFortune);
+    link.classList.toggle('hidden', shouldHideEconomyLink(link));
   });
 
   centerActiveMobileNavigation();
@@ -8293,6 +8296,16 @@ fortuneLinks.forEach((link) => {
     event.preventDefault();
     openFortuneModal();
   });
+});
+document.addEventListener('click', (event) => {
+  const economyLink = event.target.closest('.electromagnetic-link, .inventory-link');
+
+  if (!economyLink || userState.isLoggedIn) {
+    return;
+  }
+
+  event.preventDefault();
+  openModal('login');
 });
 adminAddUserButton?.addEventListener('click', insertAdminDraftRow);
 adminExportAiDialogsButton?.addEventListener('click', handleAdminAiDialogExport);
