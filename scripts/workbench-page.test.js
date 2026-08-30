@@ -37,14 +37,25 @@ test('workbench keeps accessible live regions for all personal summaries', () =>
   }
 });
 
-test('workbench restores the signed-in economy shortcuts', () => {
+test('workbench keeps economy shortcuts visible and usable before sign-in', () => {
+  assert.match(html, /class="workbench-economy-section"/);
   assert.match(html, /id="workbench-checkin-entry"[\s\S]{0,160}<span>每日签到<\/span>/);
-  assert.match(html, /class="workbench-card workbench-card-button fortune-link hidden"/);
+  assert.match(html, /class="workbench-card workbench-card-button fortune-link"/);
   assert.match(html, /id="workbench-electromagnetic-entry"[\s\S]{0,80}href="\/electromagnetic"/);
   assert.match(html, /id="workbench-inventory-entry"[\s\S]{0,80}href="\/inventory"/);
+  assert.match(html, /data-workbench-economy-entry/);
+  assert.doesNotMatch(html, /workbench-(?:checkin|electromagnetic|inventory)-entry[^>]*hidden/);
   assert.match(app, /fortuneLinks\.forEach\([\s\S]*openFortuneModal\(\)/);
+  assert.match(app, /!userState\.isLoggedIn[\s\S]{0,80}openModal\('login'\)/);
+  assert.match(app, /!link\.hasAttribute\('data-workbench-economy-entry'\)/);
+  assert.match(app, /closest\('\.electromagnetic-link, \.inventory-link'\)/);
   assert.match(css, /\.workbench-card\.hidden\s*\{[\s\S]*display:\s*none/);
   assert.match(css, /\.workbench-card-button\s*\{[\s\S]*text-align:\s*left/);
+  assert.match(css, /\.workbench-economy-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(3/);
+  assert.match(
+    css,
+    /\.workbench-economy-section \[data-workbench-economy-entry\][\s\S]*display:\s*grid\s*!important/,
+  );
 });
 
 test('workbench loads real summaries only through the authenticated API wrapper', () => {
