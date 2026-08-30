@@ -32,6 +32,9 @@ FREE-BBS 是一个学习社区原型仓库，当前采用 Node.js 静态前端�
 └── test/                     # 本地 testbench 输出目录，已在 .gitignore 中忽略
 ```
 
+MySQL 课程知识点到 RAG Agent 的生产同步、首次建索引、定时器和验收步骤见
+[RAG 课程数据生产部署操作手册](docs/rag-production-deployment.md)。
+
 ## 本地启动
 
 ### 1. 安装依赖
@@ -53,6 +56,24 @@ npm run start:local
 ```
 
 脚本会优先加载 `backend/.env`，其次加载本地 `envs.sh`，然后同时启动前端静态服务和后端 API。
+
+如果要同时测试网站、MySQL 课程数据、RAG Agent 和自动索引，确保相邻目录中存在
+`freebbs-agent` 及其 `.env`、`.venv`，然后运行：
+
+```bash
+npm run start:local:rag
+```
+
+该命令会应用本地数据库迁移，启动 3000/3001/5001 三个服务，执行首次课程索引，并每
+30 秒检查一次课程 revision。看到 `[local-rag] ready` 后打开：
+
+```text
+http://127.0.0.1:3000
+```
+
+在课程知识点页面中打开 RAG 对话即可测试。按 `Ctrl-C` 会统一停止所有本地服务。生成的
+索引存放在 `database/local-rag/`，不会提交到 Git。若 Agent 仓库不在相邻目录，可设置
+`FREEBBS_AGENT_DIR=/absolute/path/to/freebbs-agent`。
 
 ### 3. 单独启动前端静态服务
 

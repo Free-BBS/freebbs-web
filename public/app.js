@@ -4056,7 +4056,42 @@ function renderMaxSubagentResult(article, navigationResult) {
     subagent.agent || navigationResult.delegation?.selected || '',
   ).toUpperCase();
   if (agentName === 'RAG') {
-    return null;
+    const sources = Array.isArray(subagent.sources)
+      ? subagent.sources
+          .map((source) => ({
+            href: normalizeMaxNavigationUrl(source?.source),
+            id: String(source?.doc_id || source?.chunk_id || '').trim(),
+          }))
+          .filter((source) => source.href)
+          .filter(
+            (source, index, allSources) =>
+              allSources.findIndex((candidate) => candidate.href === source.href) === index,
+          )
+          .slice(0, 4)
+      : [];
+    const courseName = String(
+      navigationResult.course_context?.name || subagent.course?.name || '',
+    ).trim();
+
+    panel.classList.add('is-rag');
+    panel.innerHTML = `
+      <header><strong>RAG · 已检索课程资料</strong><span>${sources.length ? `${sources.length} 个来源` : '课程索引'}</span></header>
+      <p>${escapeHtml(courseName ? `本回答优先参考了「${courseName}」的已索引资料。` : '本回答优先参考了当前课程知识库。')}</p>
+      ${
+        sources.length
+          ? `<ul>${sources
+              .map(
+                (source, index) =>
+                  `<li><a href="${escapeHtml(source.href)}">查看课程资料 ${index + 1}</a>${
+                    source.id ? `<span>${escapeHtml(source.id)}</span>` : ''
+                  }</li>`,
+              )
+              .join('')}</ul>`
+          : ''
+      }
+    `;
+    bubble.append(panel);
+    return panel;
   }
   const status = String(subagent.status || navigationResult.delegation?.status || 'completed');
   const items = infoResultItems(subagent);

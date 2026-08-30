@@ -9,6 +9,7 @@
   "scripts": {
     "start": "node server.js",
     "start:local": "bash scripts/start-local.sh",
+    "start:local:rag": "bash scripts/start-local-rag.sh",
     "start:frontend": "node server.js",
     "start:backend": "node backend/server.js",
     "testbench:fortune": "node test/testbench.js",
@@ -16,7 +17,7 @@
     "test:aichat-navigation": "node --test scripts/aichat-navigation.test.js",
     "test:agent-surfaces": "node --test scripts/agent-surface-integration.test.js",
     "test:discussion-markdown": "node --test scripts/discussion-markdown.test.js",
-    "test:course-maps": "node --test backend/course-maps.test.js scripts/course-map-pages.test.js",
+    "test:course-maps": "node --test backend/course-maps.test.js backend/rag-course-snapshot.test.js scripts/course-map-pages.test.js",
     "test:workbench": "node --test backend/health.test.js backend/workbench.test.js backend/public-source-probe.test.js backend/portal-boundary-probe.test.js backend/tsinghua-learn-connector.test.js scripts/workbench-page.test.js scripts/workbench-connector-page.test.js scripts/tsinghua-cas-fingerprint.test.js",
     "test:tsinghua-authorization": "node --test backend/tsinghua-connectors/*.test.js",
     "test:tsinghua-connectors": "node --test backend/health.test.js backend/public-source-probe.test.js backend/portal-boundary-probe.test.js backend/tsinghua-learn-connector.test.js backend/tsinghua-connectors/*.test.js",

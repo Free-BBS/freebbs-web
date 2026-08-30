@@ -10,6 +10,7 @@ const { buildBackendHealth } = require('./health');
 const { hashPassword, verifyPassword } = require('./password');
 const { sign, verify } = require('./token');
 const { createCourseMapsRouter, ensureCourseMapTables } = require('./course-maps');
+const { readRagCourseSnapshot } = require('./rag-course-snapshot');
 const { createWorkbenchRouter, ensureWorkbenchTables } = require('./workbench');
 const { createCampusConnectorBroker } = require('./tsinghua-connectors/broker');
 const { createTsinghuaCasAdapter } = require('./tsinghua-connectors/cas-adapter');
@@ -308,6 +309,24 @@ internalApp.get('/internal/v1/agent-config', requireAgentService, async (_reques
     });
   }
 });
+
+internalApp.get(
+  '/internal/v1/rag-course-snapshot',
+  requireAgentService,
+  async (_request, response) => {
+    try {
+      response.json(await readRagCourseSnapshot(pool));
+    } catch (error) {
+      console.error('读取 RAG 课程快照失败', error?.code || error?.name || 'unknown error');
+      response.status(500).json({
+        error: {
+          code: 'rag_course_snapshot_unavailable',
+          message: 'RAG course snapshot is temporarily unavailable',
+        },
+      });
+    }
+  },
+);
 
 function generateUserUid() {
   return `u_${crypto.randomBytes(8).toString('hex')}`;
@@ -2154,14 +2173,24 @@ app.post('/api/ai/chat', async (request, response) => {
   }
 
   try {
-    const agentPayload = buildAgentChatPayload(user, payload, {
-      agent: 'navigation',
-      source: 'direct_chat',
-      channel: 'aichat',
-      context: {
-        dialogId: payload.did || payload.conversationId || payload.conversation_id || '',
+    const agentPayload = buildAgentChatPayload(
+      user,
+      {
+        ...payload,
+        // “问问 Max”始终使用自适应路由：课程知识问题交给 RAG，
+        // 普通对话仍由 General Chat 回答。不要依赖浏览器传入这些策略字段。
+        agent: 'navigation',
+        execute_subagent: 'auto',
+        combine_general_chat: true,
       },
-    });
+      {
+        source: 'direct_chat',
+        channel: 'aichat',
+        context: {
+          dialogId: payload.did || payload.conversationId || payload.conversation_id || '',
+        },
+      },
+    );
     const agentResponse = await postAgentChat(agentPayload, user);
 
     await relayAgentChatResponse(agentResponse, response, payload.stream === true);
