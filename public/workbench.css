@@ -483,6 +483,49 @@ body.workbench-page .workbench-quick-section {
   border-top: 1px solid var(--workbench-line);
 }
 
+body.workbench-page .workbench-economy-section {
+  margin-top: 18px;
+  padding: clamp(18px, 3vw, 26px);
+  background:
+    linear-gradient(120deg, var(--workbench-accent-soft), transparent 62%),
+    var(--workbench-panel-soft);
+  border: 1px solid var(--workbench-line);
+  border-radius: 20px;
+}
+
+body.workbench-page .workbench-economy-section > header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+body.workbench-page .workbench-economy-section > header h2 {
+  margin: 4px 0 0;
+  color: var(--workbench-text);
+  font-size: clamp(1.1rem, 2vw, 1.45rem);
+}
+
+body.workbench-page .workbench-economy-section > header > p {
+  max-width: 430px;
+  margin: 0;
+  color: var(--workbench-muted);
+  font-size: 0.76rem;
+  line-height: 1.6;
+  text-align: right;
+}
+
+body.workbench-page .workbench-economy-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+body.workbench-page .workbench-economy-section [data-workbench-economy-entry] {
+  display: grid !important;
+}
+
 body.workbench-page .workbench-quick-section > header {
   display: flex;
   align-items: flex-end;
@@ -521,6 +564,22 @@ body.workbench-page .workbench-card {
     transform 180ms ease,
     border-color 180ms ease,
     background 180ms ease;
+}
+
+body.workbench-page .workbench-card.hidden {
+  display: none;
+}
+
+body.workbench-page .workbench-card-button {
+  width: 100%;
+  appearance: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+body.workbench-page .workbench-economy-grid .workbench-card {
+  min-height: 132px;
 }
 
 body.workbench-page .workbench-card:hover {
@@ -649,6 +708,19 @@ body.workbench-page :where(a, button):focus-visible {
 
   body.workbench-page .workbench-quick-section {
     margin-top: 36px;
+  }
+
+  body.workbench-page .workbench-economy-section > header {
+    display: block;
+  }
+
+  body.workbench-page .workbench-economy-section > header > p {
+    margin-top: 8px;
+    text-align: left;
+  }
+
+  body.workbench-page .workbench-economy-grid {
+    grid-template-columns: 1fr;
   }
 
   body.workbench-page .workbench-quick-section > header {

@@ -150,16 +150,28 @@
             <div class="admin-page-heading">
               <p>USER DIRECTORY</p>
             </div>
-            <button
-              class="admin-button admin-button-primary admin-add-button"
-              id="admin-add-user"
-              type="button"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-              <span>新增用户</span>
-            </button>
+            <div class="admin-header-actions">
+              <button
+                class="admin-button admin-button-secondary admin-export-button"
+                id="admin-export-ai-dialogs"
+                type="button"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 4v11m0 0 4-4m-4 4-4-4M5 19h14" />
+                </svg>
+                <span>导出 AI 聊天</span>
+              </button>
+              <button
+                class="admin-button admin-button-primary admin-add-button"
+                id="admin-add-user"
+                type="button"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                <span>新增用户</span>
+              </button>
+            </div>
           </header>
 
           <section class="admin-section hidden" id="admin-section" aria-label="用户管理设置">

@@ -3582,8 +3582,9 @@ body.is-resizing-knowledge-panel * {
   display: grid;
   place-items: center;
   color: #ffffff;
-  font-size: 2rem;
-  font-weight: 300;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
   line-height: 1;
 }
 
