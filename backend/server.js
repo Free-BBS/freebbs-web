@@ -1776,6 +1776,51 @@ function normalizeAiDialogNavigation(value) {
   };
 }
 
+function normalizeAiDialogRag(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  if (
+    String(value.agent || '')
+      .trim()
+      .toLowerCase() !== 'rag'
+  ) {
+    return null;
+  }
+
+  const rawCourse = value.course && typeof value.course === 'object' ? value.course : {};
+  const course = {
+    slug: typeof rawCourse.slug === 'string' ? rawCourse.slug.trim().slice(0, 120) : '',
+    name: typeof rawCourse.name === 'string' ? rawCourse.name.trim().slice(0, 240) : '',
+    board: typeof rawCourse.board === 'string' ? rawCourse.board.trim().slice(0, 120) : '',
+  };
+  const sources = [];
+
+  if (Array.isArray(value.sources)) {
+    for (const item of value.sources.slice(0, 8)) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        continue;
+      }
+
+      const source = typeof item.source === 'string' ? item.source.trim().slice(0, 2000) : '';
+      const docId = typeof item.doc_id === 'string' ? item.doc_id.trim().slice(0, 240) : '';
+      const chunkId = typeof item.chunk_id === 'string' ? item.chunk_id.trim().slice(0, 240) : '';
+
+      if (source || docId || chunkId) {
+        sources.push({ source, doc_id: docId, chunk_id: chunkId });
+      }
+    }
+  }
+
+  return {
+    agent: 'rag',
+    status: typeof value.status === 'string' ? value.status.trim().slice(0, 40) : 'completed',
+    course,
+    sources,
+  };
+}
+
 function normalizeAiMessages(value) {
   if (!Array.isArray(value)) {
     return null;
@@ -1807,6 +1852,10 @@ function normalizeAiMessages(value) {
       role === 'assistant' ? normalizeAiDialogNavigation(message.navigation) : null;
     if (navigation) {
       normalizedMessage.navigation = navigation;
+    }
+    const rag = role === 'assistant' ? normalizeAiDialogRag(message.rag) : null;
+    if (rag) {
+      normalizedMessage.rag = rag;
     }
     messages.push(normalizedMessage);
   }

@@ -67,3 +67,38 @@ test('讨论区明亮模式下的深色代码框使用浅色文字', () => {
     /body\.theme-light\.discussion-page[\s\S]*?\.discussion-markdown-body pre code \*[\s\S]*?color:\s*#edf7f8 !important;/,
   );
 });
+
+test('切回已有哈希的分区时恢复该分区缓存，而不是保留当前分区帖子', () => {
+  const cacheFunctionStart = appSource.indexOf('function applyDiscussionPostsPayload');
+  const cacheFunctionEnd = appSource.indexOf(
+    '\n\nfunction getDiscussionVisiblePosts',
+    cacheFunctionStart,
+  );
+  const cacheFunctionSource = appSource.slice(cacheFunctionStart, cacheFunctionEnd);
+  const discussionState = {
+    posts: [],
+    postsByBoard: new Map(),
+    postsHashByBoard: {},
+    postCache: new Map(),
+  };
+  const context = { discussionState };
+
+  vm.runInNewContext(cacheFunctionSource, context);
+  context.applyDiscussionPostsPayload('upper', {
+    posts: [{ id: 'upper-post', title: '上方分区' }],
+    hash: 'upper-hash',
+  });
+  context.applyDiscussionPostsPayload('lower', {
+    posts: [{ id: 'lower-post', title: '下方分区' }],
+    hash: 'lower-hash',
+  });
+  context.applyDiscussionPostsPayload('upper', { notModified: true });
+
+  assert.equal(discussionState.posts[0].id, 'upper-post');
+  assert.equal(discussionState.postsHashByBoard.upper, 'upper-hash');
+});
+
+test('讨论区帖子请求只允许最新一次切换更新页面', () => {
+  assert.match(appSource, /postsRequestId:\s*0/);
+  assert.match(appSource, /if \(requestId !== discussionState\.postsRequestId\) \{\s*return;\s*\}/);
+});

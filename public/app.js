@@ -154,7 +154,9 @@ const aiChatDrawerMedia = window.matchMedia('(max-width: 900px)');
 const discussionState = {
   boards: [],
   posts: [],
+  postsByBoard: new Map(),
   postsHashByBoard: {},
+  postsRequestId: 0,
   postCache: new Map(),
   activeBoard: 'all',
   activePostId: '',
@@ -2837,6 +2839,26 @@ function getDiscussionPostEngagement(post) {
   );
 }
 
+function applyDiscussionPostsPayload(boardSlug, payload) {
+  if (payload.notModified) {
+    discussionState.posts = discussionState.postsByBoard.get(boardSlug) || [];
+    return;
+  }
+
+  const posts = payload.posts || [];
+  discussionState.posts = posts;
+  discussionState.postsByBoard.set(boardSlug, posts);
+  discussionState.postsHashByBoard[boardSlug] = payload.hash || '';
+
+  posts.forEach((post) => {
+    const cachedPost = discussionState.postCache.get(post.id);
+    discussionState.postCache.set(post.id, {
+      ...(cachedPost || {}),
+      ...post,
+    });
+  });
+}
+
 function getDiscussionVisiblePosts() {
   const mode = discussionState.viewMode;
   let posts = [...discussionState.posts];
@@ -3764,6 +3786,9 @@ function renderAiChatThread() {
     if (message.role === 'assistant' && message.navigation) {
       renderMaxNavigationRoutes(article, message.navigation);
     }
+    if (message.role === 'assistant' && message.rag) {
+      renderMaxSubagentResult(article, { subagent: message.rag });
+    }
   });
   setAiDialogId(aiChatState.currentDid);
   scrollAiChatToBottom();
@@ -3853,6 +3878,54 @@ function createAiNavigationSnapshot(navigationResult) {
       }))
       .filter((route) => route.title && route.url)
       .slice(0, 3),
+  };
+}
+
+function createAiRagSnapshot(navigationResult) {
+  const subagent = navigationResult?.subagent;
+  const agentName = String(
+    subagent?.agent || navigationResult?.delegation?.selected || '',
+  ).toUpperCase();
+
+  if (agentName !== 'RAG' || !subagent || typeof subagent !== 'object') {
+    return null;
+  }
+
+  const course = subagent.course && typeof subagent.course === 'object' ? subagent.course : {};
+  const sources = Array.isArray(subagent.sources)
+    ? subagent.sources
+        .map((source) => ({
+          chunk_id: String(source?.chunk_id || '')
+            .trim()
+            .slice(0, 240),
+          doc_id: String(source?.doc_id || '')
+            .trim()
+            .slice(0, 240),
+          source: String(source?.source || '')
+            .trim()
+            .slice(0, 2000),
+        }))
+        .filter((source) => source.chunk_id || source.doc_id || source.source)
+        .slice(0, 8)
+    : [];
+
+  return {
+    agent: 'rag',
+    status: String(subagent.status || navigationResult?.delegation?.status || 'completed')
+      .trim()
+      .slice(0, 40),
+    course: {
+      slug: String(course.slug || '')
+        .trim()
+        .slice(0, 120),
+      name: String(course.name || '')
+        .trim()
+        .slice(0, 240),
+      board: String(course.board || '')
+        .trim()
+        .slice(0, 120),
+    },
+    sources,
   };
 }
 
@@ -4060,13 +4133,16 @@ function renderMaxSubagentResult(article, navigationResult) {
           .map((source) => ({
             href: normalizeMaxNavigationUrl(source?.source),
             id: String(source?.doc_id || source?.chunk_id || '').trim(),
+            label: String(source?.source || source?.doc_id || source?.chunk_id || '').trim(),
           }))
-          .filter((source) => source.href)
+          .filter((source) => source.label)
           .filter(
             (source, index, allSources) =>
-              allSources.findIndex((candidate) => candidate.href === source.href) === index,
+              allSources.findIndex(
+                (candidate) => candidate.href === source.href && candidate.label === source.label,
+              ) === index,
           )
-          .slice(0, 4)
+          .slice(0, 8)
       : [];
     const courseName = String(
       navigationResult.course_context?.name || subagent.course?.name || '',
@@ -4081,9 +4157,11 @@ function renderMaxSubagentResult(article, navigationResult) {
           ? `<ul>${sources
               .map(
                 (source, index) =>
-                  `<li><a href="${escapeHtml(source.href)}">查看课程资料 ${index + 1}</a>${
-                    source.id ? `<span>${escapeHtml(source.id)}</span>` : ''
-                  }</li>`,
+                  `<li>${
+                    source.href
+                      ? `<a href="${escapeHtml(source.href)}">查看课程资料 ${index + 1}</a>`
+                      : `<span class="aichat-rag-source-name">${escapeHtml(source.label)}</span>`
+                  }${source.id ? `<span>${escapeHtml(source.id)}</span>` : ''}</li>`,
               )
               .join('')}</ul>`
           : ''
@@ -4449,6 +4527,7 @@ async function handleAiChatSubmit(event) {
     assistantContent = String(result.answer || '').trim() || 'Max 暂时没有生成回答。';
     updateAiChatMessage(assistantArticle, assistantContent);
     const navigation = createAiNavigationSnapshot(result);
+    const rag = createAiRagSnapshot(result);
     renderMaxNavigationRoutes(assistantArticle, navigation);
     renderMaxSubagentResult(assistantArticle, result);
     if (result.subagent?.status === 'pending') {
@@ -4460,6 +4539,7 @@ async function handleAiChatSubmit(event) {
       role: 'assistant',
       content: assistantContent,
       navigation,
+      rag,
     });
     stopAiChatThinkingStatus();
     await saveAiDialog();
@@ -5306,10 +5386,13 @@ async function loadDiscussionPosts({ autoOpen = false } = {}) {
     return;
   }
 
+  const requestId = discussionState.postsRequestId + 1;
+  discussionState.postsRequestId = requestId;
   discussionPostList.setAttribute('aria-busy', 'true');
 
   const activeBoard = discussionState.activeBoard || 'all';
-  const currentHash = discussionState.postsHashByBoard[activeBoard] || '';
+  const hasCachedPosts = discussionState.postsByBoard.has(activeBoard);
+  const currentHash = hasCachedPosts ? discussionState.postsHashByBoard[activeBoard] || '' : '';
 
   if (!discussionState.posts.length) {
     discussionPostList.innerHTML = `
@@ -5333,18 +5416,17 @@ async function loadDiscussionPosts({ autoOpen = false } = {}) {
       method: 'GET',
       signal: createDiscussionRequestSignal(),
     });
-    if (!payload.notModified) {
-      discussionState.posts = payload.posts || [];
-      discussionState.postsHashByBoard[activeBoard] = payload.hash || '';
-      discussionState.posts.forEach((post) => {
-        const cachedPost = discussionState.postCache.get(post.id);
-        discussionState.postCache.set(post.id, {
-          ...(cachedPost || {}),
-          ...post,
-        });
-      });
+
+    if (requestId !== discussionState.postsRequestId) {
+      return;
     }
+
+    applyDiscussionPostsPayload(activeBoard, payload);
   } catch {
+    if (requestId !== discussionState.postsRequestId) {
+      return;
+    }
+
     useFallbackDiscussionData();
   }
 
@@ -6605,6 +6687,8 @@ async function handleDiscussionBoardClick(event) {
   discussionState.activeBoard = button.dataset.boardSlug || 'all';
   discussionState.activePostId = '';
   renderDiscussionDetail(null);
+  renderDiscussionBoards();
+  renderDiscussionComposeBoards();
   await loadDiscussionPosts({
     autoOpen: false,
   });
