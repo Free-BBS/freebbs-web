@@ -271,45 +271,64 @@
                 <p id="knowledge-summary"></p>
               </div>
             </header>
-            <section class="course-material-section" aria-label="课程资料正文">
+            <section class="course-material-section knowledge-overview" id="knowledge-overview">
+              <header class="course-material-section-heading">
+                <div>
+                  <p class="course-kicker">Overview</p>
+                  <h2>学习概览</h2>
+                </div>
+                <span class="course-material-section-note">先了解，再进入正文</span>
+              </header>
+              <p class="knowledge-overview-intro">这里汇总了本知识点的基本信息和应用场景。</p>
+              <section class="knowledge-supplementary" id="knowledge-supplementary">
+                <details class="knowledge-supplementary-card hidden" id="knowledge-basic-info-card" open>
+                  <summary>
+                    <span>
+                      <small>ABOUT</small>
+                      <strong>基本信息</strong>
+                    </span>
+                    <i aria-hidden="true">＋</i>
+                  </summary>
+                  <div
+                    class="discussion-markdown-body knowledge-supplementary-body"
+                    id="knowledge-basic-info"
+                  ></div>
+                </details>
+                <details class="knowledge-supplementary-card hidden" id="knowledge-applications-card" open>
+                  <summary>
+                    <span>
+                      <small>APPLICATIONS</small>
+                      <strong>应用与拓展</strong>
+                    </span>
+                    <i aria-hidden="true">＋</i>
+                  </summary>
+                  <div
+                    class="discussion-markdown-body knowledge-supplementary-body"
+                    id="knowledge-applications"
+                  ></div>
+                </details>
+              </section>
+              <p class="knowledge-overview-empty hidden" id="knowledge-overview-empty">
+                这份资料暂未拆分出基本信息或应用内容，你仍可直接阅读正文。
+              </p>
+              <button class="knowledge-overview-start" id="knowledge-start-reading" type="button">
+                开始阅读正文 <span aria-hidden="true">→</span>
+              </button>
+            </section>
+            <section class="course-material-section hidden" id="knowledge-reading" aria-label="课程资料正文">
               <header class="course-material-section-heading">
                 <div>
                   <p class="course-kicker">Reading</p>
                   <h2>正文</h2>
                 </div>
-                <span class="course-material-section-note" id="knowledge-document-status"
-                  >Markdown 课程资料</span
-                >
+                <div class="knowledge-reading-actions">
+                  <button id="knowledge-return-overview" type="button">← 返回概览</button>
+                  <span class="course-material-section-note" id="knowledge-document-status"
+                    >Markdown 课程资料</span
+                  >
+                </div>
               </header>
               <div class="discussion-markdown-body course-material-body" id="knowledge-body"></div>
-            </section>
-            <section class="knowledge-supplementary hidden" id="knowledge-supplementary">
-              <details class="knowledge-supplementary-card hidden" id="knowledge-basic-info-card">
-                <summary>
-                  <span>
-                    <small>ABOUT</small>
-                    <strong>基本信息</strong>
-                  </span>
-                  <i aria-hidden="true">＋</i>
-                </summary>
-                <div
-                  class="discussion-markdown-body knowledge-supplementary-body"
-                  id="knowledge-basic-info"
-                ></div>
-              </details>
-              <details class="knowledge-supplementary-card hidden" id="knowledge-applications-card">
-                <summary>
-                  <span>
-                    <small>APPLICATIONS</small>
-                    <strong>应用与拓展</strong>
-                  </span>
-                  <i aria-hidden="true">＋</i>
-                </summary>
-                <div
-                  class="discussion-markdown-body knowledge-supplementary-body"
-                  id="knowledge-applications"
-                ></div>
-              </details>
             </section>
             <nav class="knowledge-sequence-navigation" aria-label="前后知识点导航">
               <a class="knowledge-sequence-link is-previous" id="knowledge-previous-link">

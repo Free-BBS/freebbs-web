@@ -157,36 +157,43 @@ v0.4`,
   assert.match(sections.applicationsMarkdown, /相关知识点名称：实数域/);
 });
 
-test('moves unnumbered leading knowledge metadata into basic information', () => {
+test('moves unnumbered Signal and Systems metadata before a plain numbered body title', () => {
   const sections = splitLegacyKnowledgeDocument(
     `课程名称: "信号与系统"
 课程ID: "SS"
-章节/单元: "第五章 连续时间系统的频域分析"
-小节: "5.3 无失真传输"
-知识点名称: "利用系统失真形成特定波形"
-知识点ID: "SS-05-02"
+章节/单元: "第十二章 系统的状态变量分析"
+小节: "12.4 离散时间系统状态方程的建立"
+知识点名称: "离散时间系统的状态方程"
+知识点ID: "SS-12-08"
 知识点类型: "方法"
+知识点层级: "核心"
 难度（1-5）: 4
+重要程度（1-5）: 5
+建议学习时长: "9分钟"
+填写人:
+
+"陈禛兴"
 关联知识点:
-知识点ID: "SS-05-01"
-知识点名称: "信号无失真传输的条件"
+知识点ID: "SS-12-02"
+知识点名称: "连续时间系统的状态方程"
 关系类型: "对比"
 修订记录:
 版本: "v0.3"
 修改人: "陈禛兴"
 
-## 功能性失真
+2. 深入理解与应用
 
-当系统的频率响应刻意偏离无失真传输条件时，可以实现微分、积分等特定波形变换。`,
-    '利用系统失真形成特定波形',
+离散时间系统的状态方程通常由状态转移方程和输出响应方程构成。`,
+    '离散时间系统的状态方程',
   );
 
   assert.match(sections.basicInfoMarkdown, /课程名称: "信号与系统"/);
-  assert.match(sections.basicInfoMarkdown, /知识点ID: "SS-05-02"/);
+  assert.match(sections.basicInfoMarkdown, /知识点ID: "SS-12-08"/);
+  assert.match(sections.basicInfoMarkdown, /填写人:\n\n"陈禛兴"/);
   assert.match(sections.basicInfoMarkdown, /修改人: "陈禛兴"/);
   assert.equal(
     sections.knowledgeMarkdown,
-    '## 功能性失真\n\n当系统的频率响应刻意偏离无失真传输条件时，可以实现微分、积分等特定波形变换。',
+    '2. 深入理解与应用\n\n离散时间系统的状态方程通常由状态转移方程和输出响应方程构成。',
   );
 });
 
