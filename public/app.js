@@ -155,7 +155,10 @@ const aiChatDrawerMedia = window.matchMedia('(max-width: 900px)');
 const discussionState = {
   boards: [],
   posts: [],
+  postsByBoard: new Map(),
   postsHashByBoard: {},
+  postsRequestId: 0,
+  postRequestId: 0,
   postCache: new Map(),
   activeBoard: 'all',
   activePostId: '',
@@ -2839,6 +2842,65 @@ function getDiscussionPostEngagement(post) {
   );
 }
 
+function applyDiscussionPostsPayload(boardSlug, payload) {
+  if (payload.notModified) {
+    discussionState.posts = discussionState.postsByBoard.get(boardSlug) || [];
+    return;
+  }
+
+  const posts = payload.posts || [];
+  discussionState.posts = posts;
+  discussionState.postsByBoard.set(boardSlug, posts);
+  discussionState.postsHashByBoard[boardSlug] = payload.hash || '';
+
+  posts.forEach((post) => {
+    const cachedPost = discussionState.postCache.get(post.id);
+    discussionState.postCache.set(post.id, {
+      ...(cachedPost || {}),
+      ...post,
+    });
+  });
+}
+
+function restoreDiscussionBoardPosts(boardSlug) {
+  const cachedPosts = discussionState.postsByBoard.get(boardSlug);
+  discussionState.posts = cachedPosts || [];
+
+  if (cachedPosts) {
+    renderDiscussionPosts();
+    return;
+  }
+
+  if (discussionPostList) {
+    discussionPostList.innerHTML = `
+      <article class="discussion-empty" role="status">
+        <p>正在加载帖子...</p>
+      </article>
+    `;
+  }
+}
+
+function updateCachedDiscussionPost(postId, updates) {
+  delete discussionState.postsHashByBoard[discussionState.activeBoard || 'all'];
+
+  for (const [boardSlug, posts] of discussionState.postsByBoard) {
+    if (!posts.some((post) => post.id === postId)) {
+      continue;
+    }
+
+    discussionState.postsByBoard.set(
+      boardSlug,
+      posts.map((post) => (post.id === postId ? { ...post, ...updates } : post)),
+    );
+    delete discussionState.postsHashByBoard[boardSlug];
+  }
+
+  const cachedPost = discussionState.postCache.get(postId);
+  if (cachedPost) {
+    discussionState.postCache.set(postId, { ...cachedPost, ...updates });
+  }
+}
+
 function getDiscussionVisiblePosts() {
   const mode = discussionState.viewMode;
   let posts = [...discussionState.posts];
@@ -3766,6 +3828,9 @@ function renderAiChatThread() {
     if (message.role === 'assistant' && message.navigation) {
       renderMaxNavigationRoutes(article, message.navigation);
     }
+    if (message.role === 'assistant' && message.rag) {
+      renderMaxSubagentResult(article, { subagent: message.rag });
+    }
   });
   setAiDialogId(aiChatState.currentDid);
   scrollAiChatToBottom();
@@ -3855,6 +3920,62 @@ function createAiNavigationSnapshot(navigationResult) {
       }))
       .filter((route) => route.title && route.url)
       .slice(0, 3),
+  };
+}
+
+function createAiRagSnapshot(navigationResult) {
+  const subagent = navigationResult?.subagent;
+  const agentName = String(
+    subagent?.agent || navigationResult?.delegation?.selected || '',
+  ).toUpperCase();
+
+  if (agentName !== 'RAG' || !subagent || typeof subagent !== 'object') {
+    return null;
+  }
+
+  let course = {};
+  if (subagent.course && typeof subagent.course === 'object') {
+    course = subagent.course;
+  } else if (
+    navigationResult?.course_context &&
+    typeof navigationResult.course_context === 'object'
+  ) {
+    course = navigationResult.course_context;
+  }
+  const sources = Array.isArray(subagent.sources)
+    ? subagent.sources
+        .map((source) => ({
+          chunk_id: String(source?.chunk_id || '')
+            .trim()
+            .slice(0, 240),
+          doc_id: String(source?.doc_id || '')
+            .trim()
+            .slice(0, 240),
+          source: String(source?.source || '')
+            .trim()
+            .slice(0, 2000),
+        }))
+        .filter((source) => source.chunk_id || source.doc_id || source.source)
+        .slice(0, 8)
+    : [];
+
+  return {
+    agent: 'rag',
+    status: String(subagent.status || navigationResult?.delegation?.status || 'completed')
+      .trim()
+      .slice(0, 40),
+    course: {
+      slug: String(course.slug || '')
+        .trim()
+        .slice(0, 120),
+      name: String(course.name || '')
+        .trim()
+        .slice(0, 240),
+      board: String(course.board || '')
+        .trim()
+        .slice(0, 120),
+    },
+    sources,
   };
 }
 
@@ -4062,13 +4183,16 @@ function renderMaxSubagentResult(article, navigationResult) {
           .map((source) => ({
             href: normalizeMaxNavigationUrl(source?.source),
             id: String(source?.doc_id || source?.chunk_id || '').trim(),
+            label: String(source?.source || source?.doc_id || source?.chunk_id || '').trim(),
           }))
-          .filter((source) => source.href)
+          .filter((source) => source.label)
           .filter(
             (source, index, allSources) =>
-              allSources.findIndex((candidate) => candidate.href === source.href) === index,
+              allSources.findIndex(
+                (candidate) => candidate.href === source.href && candidate.label === source.label,
+              ) === index,
           )
-          .slice(0, 4)
+          .slice(0, 8)
       : [];
     const courseName = String(
       navigationResult.course_context?.name || subagent.course?.name || '',
@@ -4083,9 +4207,11 @@ function renderMaxSubagentResult(article, navigationResult) {
           ? `<ul>${sources
               .map(
                 (source, index) =>
-                  `<li><a href="${escapeHtml(source.href)}">查看课程资料 ${index + 1}</a>${
-                    source.id ? `<span>${escapeHtml(source.id)}</span>` : ''
-                  }</li>`,
+                  `<li>${
+                    source.href
+                      ? `<a href="${escapeHtml(source.href)}">查看课程资料 ${index + 1}</a>`
+                      : `<span class="aichat-rag-source-name">${escapeHtml(source.label)}</span>`
+                  }${source.id ? `<span>${escapeHtml(source.id)}</span>` : ''}</li>`,
               )
               .join('')}</ul>`
           : ''
@@ -4451,6 +4577,7 @@ async function handleAiChatSubmit(event) {
     assistantContent = String(result.answer || '').trim() || 'Max 暂时没有生成回答。';
     updateAiChatMessage(assistantArticle, assistantContent);
     const navigation = createAiNavigationSnapshot(result);
+    const rag = createAiRagSnapshot(result);
     renderMaxNavigationRoutes(assistantArticle, navigation);
     renderMaxSubagentResult(assistantArticle, result);
     if (result.subagent?.status === 'pending') {
@@ -4462,6 +4589,7 @@ async function handleAiChatSubmit(event) {
       role: 'assistant',
       content: assistantContent,
       navigation,
+      rag,
     });
     stopAiChatThinkingStatus();
     await saveAiDialog();
@@ -5267,6 +5395,9 @@ async function loadDiscussionDetail(postId) {
     return;
   }
 
+  const requestId = discussionState.postRequestId + 1;
+  discussionState.postRequestId = requestId;
+  const requestedBoard = discussionState.activeBoard;
   const cachedPost = discussionState.postCache.get(postId);
   if (cachedPost) {
     discussionState.activePostId = cachedPost.id;
@@ -5289,6 +5420,14 @@ async function loadDiscussionDetail(postId) {
   const payload = await callApi(`/discussion/posts/${encodeURIComponent(postId)}`, {
     method: 'GET',
   });
+
+  if (
+    requestId !== discussionState.postRequestId ||
+    requestedBoard !== discussionState.activeBoard
+  ) {
+    return;
+  }
+
   discussionState.activePostId = payload.post.id;
   discussionState.postCache.set(payload.post.id, payload.post);
   renderDiscussionPosts();
@@ -5308,10 +5447,13 @@ async function loadDiscussionPosts({ autoOpen = false } = {}) {
     return;
   }
 
+  const requestId = discussionState.postsRequestId + 1;
+  discussionState.postsRequestId = requestId;
   discussionPostList.setAttribute('aria-busy', 'true');
 
   const activeBoard = discussionState.activeBoard || 'all';
-  const currentHash = discussionState.postsHashByBoard[activeBoard] || '';
+  const hasCachedPosts = discussionState.postsByBoard.has(activeBoard);
+  const currentHash = hasCachedPosts ? discussionState.postsHashByBoard[activeBoard] || '' : '';
 
   if (!discussionState.posts.length) {
     discussionPostList.innerHTML = `
@@ -5335,18 +5477,17 @@ async function loadDiscussionPosts({ autoOpen = false } = {}) {
       method: 'GET',
       signal: createDiscussionRequestSignal(),
     });
-    if (!payload.notModified) {
-      discussionState.posts = payload.posts || [];
-      discussionState.postsHashByBoard[activeBoard] = payload.hash || '';
-      discussionState.posts.forEach((post) => {
-        const cachedPost = discussionState.postCache.get(post.id);
-        discussionState.postCache.set(post.id, {
-          ...(cachedPost || {}),
-          ...post,
-        });
-      });
+
+    if (requestId !== discussionState.postsRequestId) {
+      return;
     }
+
+    applyDiscussionPostsPayload(activeBoard, payload);
   } catch {
+    if (requestId !== discussionState.postsRequestId) {
+      return;
+    }
+
     useFallbackDiscussionData();
   }
 
@@ -6654,7 +6795,11 @@ async function handleDiscussionBoardClick(event) {
 
   discussionState.activeBoard = button.dataset.boardSlug || 'all';
   discussionState.activePostId = '';
+  discussionState.postRequestId += 1;
   renderDiscussionDetail(null);
+  renderDiscussionBoards();
+  renderDiscussionComposeBoards();
+  restoreDiscussionBoardPosts(discussionState.activeBoard);
   await loadDiscussionPosts({
     autoOpen: false,
   });
@@ -6788,6 +6933,7 @@ async function toggleDiscussionPin(postId, pinned) {
     discussionState.posts = discussionState.posts.map((post) =>
       post.id === postId ? { ...post, isPinned: Boolean(payload.isPinned) } : post,
     );
+    updateCachedDiscussionPost(postId, { isPinned: Boolean(payload.isPinned) });
 
     if (discussionState.activePost?.id === postId) {
       discussionState.activePost = {
@@ -6817,6 +6963,7 @@ async function toggleDiscussionFeature(postId, featured) {
     discussionState.posts = discussionState.posts.map((post) =>
       post.id === postId ? { ...post, isFeatured: Boolean(payload.isFeatured) } : post,
     );
+    updateCachedDiscussionPost(postId, { isFeatured: Boolean(payload.isFeatured) });
 
     if (discussionState.activePost?.id === postId) {
       discussionState.activePost = {

@@ -157,6 +157,39 @@ v0.4`,
   assert.match(sections.applicationsMarkdown, /相关知识点名称：实数域/);
 });
 
+test('moves unnumbered leading knowledge metadata into basic information', () => {
+  const sections = splitLegacyKnowledgeDocument(
+    `课程名称: "信号与系统"
+课程ID: "SS"
+章节/单元: "第五章 连续时间系统的频域分析"
+小节: "5.3 无失真传输"
+知识点名称: "利用系统失真形成特定波形"
+知识点ID: "SS-05-02"
+知识点类型: "方法"
+难度（1-5）: 4
+关联知识点:
+知识点ID: "SS-05-01"
+知识点名称: "信号无失真传输的条件"
+关系类型: "对比"
+修订记录:
+版本: "v0.3"
+修改人: "陈禛兴"
+
+## 功能性失真
+
+当系统的频率响应刻意偏离无失真传输条件时，可以实现微分、积分等特定波形变换。`,
+    '利用系统失真形成特定波形',
+  );
+
+  assert.match(sections.basicInfoMarkdown, /课程名称: "信号与系统"/);
+  assert.match(sections.basicInfoMarkdown, /知识点ID: "SS-05-02"/);
+  assert.match(sections.basicInfoMarkdown, /修改人: "陈禛兴"/);
+  assert.equal(
+    sections.knowledgeMarkdown,
+    '## 功能性失真\n\n当系统的频率响应刻意偏离无失真传输条件时，可以实现微分、积分等特定波形变换。',
+  );
+});
+
 test('recovers numbered legacy content previously saved into the knowledge section', () => {
   const sections = resolveKnowledgeSections({
     title: '数域',

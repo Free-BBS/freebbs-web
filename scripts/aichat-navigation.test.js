@@ -63,12 +63,65 @@ test('Navigation 导引按钮随对话保存并在重新进入页面时恢复', 
   assert.match(appSource, /function createAiNavigationSnapshot/);
   assert.match(appSource, /Array\.isArray\(navigationResult\?\.navigation_routes\)/);
   assert.match(appSource, /const navigation = createAiNavigationSnapshot\(result\)/);
+  assert.match(appSource, /const rag = createAiRagSnapshot\(result\)/);
   assert.match(appSource, /renderMaxNavigationRoutes\(assistantArticle, navigation\)/);
   assert.match(appSource, /navigation,/);
+  assert.match(appSource, /rag,/);
   assert.match(appSource, /renderMaxNavigationRoutes\(article, message\.navigation\)/);
+  assert.match(appSource, /renderMaxSubagentResult\(article, \{ subagent: message\.rag \}\)/);
   assert.match(backendSource, /function normalizeAiDialogNavigation/);
+  assert.match(backendSource, /function normalizeAiDialogRag/);
   assert.match(backendSource, /normalizedMessage\.navigation = navigation/);
+  assert.match(backendSource, /normalizedMessage\.rag = rag/);
   assert.match(backendSource, /AI_DIALOG_NAVIGATION_PATHS/);
+});
+
+test('RAG 文档来源会以受限快照保存到对话历史', () => {
+  const backendSource = fs.readFileSync(path.join(root, 'backend', 'server.js'), 'utf8');
+  const functionStart = backendSource.indexOf('function normalizeAiDialogRag');
+  const functionEnd = backendSource.indexOf('\n\nfunction normalizeAiMessages', functionStart);
+  const functionSource = backendSource.slice(functionStart, functionEnd);
+  const context = {};
+
+  vm.runInNewContext(functionSource, context);
+  const rag = context.normalizeAiDialogRag({
+    agent: 'rag',
+    status: 'completed',
+    course: { slug: 'signals', name: '信号系统', board: 'signal' },
+    sources: [
+      { source: 'signals/SS-01-01.md', doc_id: 'signals:SS-01-01', chunk_id: 'chunk-1' },
+      { source: 123 },
+    ],
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(rag)), {
+    agent: 'rag',
+    status: 'completed',
+    course: { slug: 'signals', name: '信号系统', board: 'signal' },
+    sources: [{ source: 'signals/SS-01-01.md', doc_id: 'signals:SS-01-01', chunk_id: 'chunk-1' }],
+  });
+  assert.equal(context.normalizeAiDialogRag({ agent: 'info', sources: [] }), null);
+});
+
+test('RAG 历史快照在 subagent 缺少课程时回退到 course_context', () => {
+  const appSource = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
+  const functionStart = appSource.indexOf('function createAiRagSnapshot');
+  const functionEnd = appSource.indexOf('\n\nfunction wrapMaxAnswerPanel', functionStart);
+  const functionSource = appSource.slice(functionStart, functionEnd);
+  const context = {};
+
+  vm.runInNewContext(functionSource, context);
+  const rag = context.createAiRagSnapshot({
+    delegation: { selected: 'rag' },
+    course_context: { slug: 'signals', name: '信号系统', board: 'signal' },
+    subagent: { agent: 'rag', status: 'completed', sources: [] },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(rag.course)), {
+    slug: 'signals',
+    name: '信号系统',
+    board: 'signal',
+  });
 });
 
 test('对话历史将 Agent 绝对路由保存为白名单站内路径', () => {
