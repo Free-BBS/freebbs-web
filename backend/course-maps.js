@@ -72,6 +72,10 @@ function isLegacyMetadataValueLine(line) {
   return !value || /^(?:".*"|'[^']*'|\[.*\]|\{.*\}|true|false|null)$/i.test(value);
 }
 
+function isLegacyMetadataDividerLine(line) {
+  return /^\s*(?:-{3,}|_{3,}|\*{3,}|[—–]{3,})\s*$/.test(String(line || ''));
+}
+
 function splitLeadingLegacyMetadata(markdown) {
   const lines = String(markdown || '').split('\n');
   const metadata = [];
@@ -80,6 +84,12 @@ function splitLeadingLegacyMetadata(markdown) {
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
+    // Some Signal and Systems documents wrap their frontmatter in horizontal rules.
+    // Those rules are only structural and should not leak into either rendered section.
+    if (isLegacyMetadataDividerLine(line)) {
+      continue;
+    }
+
     if (getLegacyMetadataLabel(line)) {
       metadata.push(line);
       metadataFieldCount += 1;

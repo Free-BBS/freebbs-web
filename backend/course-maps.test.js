@@ -159,7 +159,8 @@ v0.4`,
 
 test('moves unnumbered leading knowledge metadata into basic information', () => {
   const sections = splitLegacyKnowledgeDocument(
-    `课程名称: "信号与系统"
+    `---
+课程名称: "信号与系统"
 课程ID: "SS"
 章节/单元: "第五章 连续时间系统的频域分析"
 小节: "5.3 无失真传输"
@@ -175,6 +176,8 @@ test('moves unnumbered leading knowledge metadata into basic information', () =>
 版本: "v0.3"
 修改人: "陈禛兴"
 
+---
+
 ## 功能性失真
 
 当系统的频率响应刻意偏离无失真传输条件时，可以实现微分、积分等特定波形变换。`,
@@ -184,6 +187,7 @@ test('moves unnumbered leading knowledge metadata into basic information', () =>
   assert.match(sections.basicInfoMarkdown, /课程名称: "信号与系统"/);
   assert.match(sections.basicInfoMarkdown, /知识点ID: "SS-05-02"/);
   assert.match(sections.basicInfoMarkdown, /修改人: "陈禛兴"/);
+  assert.doesNotMatch(sections.basicInfoMarkdown, /^---$/m);
   assert.equal(
     sections.knowledgeMarkdown,
     '## 功能性失真\n\n当系统的频率响应刻意偏离无失真传输条件时，可以实现微分、积分等特定波形变换。',

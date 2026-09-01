@@ -4997,6 +4997,70 @@ body.knowledge-page:has(.course-material-immersive) .course-material-immersive {
   gap: 12px;
 }
 
+.knowledge-overview {
+  align-content: start;
+}
+
+.knowledge-overview-intro,
+.knowledge-overview-empty {
+  max-width: 720px;
+  margin: 0;
+  color: var(--bbs-shell-muted);
+  line-height: 1.75;
+}
+
+.knowledge-overview-empty {
+  padding: 14px 16px;
+  border: 1px dashed var(--course-line-strong);
+  border-radius: 10px;
+  background: var(--course-neutral-surface);
+}
+
+.knowledge-overview-start {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--course-accent);
+  border-radius: 9px;
+  background: var(--course-accent);
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.knowledge-overview-start:hover,
+.knowledge-overview-start:focus-visible {
+  filter: brightness(1.08);
+  outline: 2px solid color-mix(in srgb, var(--course-accent) 40%, transparent);
+  outline-offset: 2px;
+}
+
+.knowledge-reading-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.knowledge-reading-actions button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--course-accent);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.knowledge-reading-actions button:hover,
+.knowledge-reading-actions button:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
 .knowledge-supplementary-card {
   align-self: start;
   border: 1px solid var(--course-line);
