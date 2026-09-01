@@ -202,6 +202,9 @@ test('knowledge page uses database-backed knowledge controller', () => {
   assert.match(knowledge, /id="knowledge-next-link"/);
   assert.match(knowledge, /id="knowledge-basic-info-card"/);
   assert.match(knowledge, /id="knowledge-applications-card"/);
+  assert.match(knowledge, /id="knowledge-overview"/);
+  assert.match(knowledge, /id="knowledge-start-reading"/);
+  assert.match(knowledge, /id="knowledge-reading"/);
   assert.doesNotMatch(knowledge, /id="knowledge-route-canvas"/);
   assert.match(knowledge, /id="knowledge-chat-panel"/);
   assert.match(knowledge, /id="knowledge-chat-form"/);
@@ -220,6 +223,9 @@ test('knowledge page uses database-backed knowledge controller', () => {
   assert.match(controller, /saveCurrentLearningNode\(node\.id\)/);
   assert.match(controller, /renderMarkdownContent/);
   assert.match(controller, /sections\.knowledgeMarkdown/);
+  assert.match(controller, /function setKnowledgeView\(view/);
+  assert.match(controller, /setKnowledgeView\('overview'\)/);
+  assert.match(controller, /setKnowledgeView\('reading'/);
   assert.match(controller, /function buildKnowledgeChatRequest/);
   assert.match(controller, /app\.streamKnowledgeRagResponse/);
   assert.doesNotMatch(controller, /agent: 'rag'/);

@@ -38,6 +38,7 @@
     discussionActivePostId: '',
     discussionListRequest: 0,
     discussionDetailRequest: 0,
+    view: 'overview',
   };
   const discussionDateFormatter = new Intl.DateTimeFormat('zh-CN', {
     month: 'numeric',
@@ -194,6 +195,20 @@
     }
   }
 
+  function setKnowledgeView(view, { focus = false } = {}) {
+    const nextView = view === 'reading' ? 'reading' : 'overview';
+    state.view = nextView;
+    const overview = document.getElementById('knowledge-overview');
+    const reading = document.getElementById('knowledge-reading');
+    overview?.classList.toggle('hidden', nextView !== 'overview');
+    reading?.classList.toggle('hidden', nextView !== 'reading');
+
+    if (focus) {
+      const target = nextView === 'reading' ? reading : overview;
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
   function toggleKnowledgeTag(tagKey) {
     if (!KNOWLEDGE_TAGS.some(({ key }) => key === tagKey)) {
       return;
@@ -339,7 +354,7 @@
           item.setAttribute('aria-pressed', String(isActive));
         });
         if (tool === 'content') {
-          document.getElementById('knowledge-body')?.scrollIntoView({ behavior: 'smooth' });
+          setKnowledgeView('reading', { focus: true });
           if (toolsStatus) {
             toolsStatus.textContent = '正在查看知识正文';
           }
@@ -352,6 +367,13 @@
           }),
         );
       });
+    });
+
+    document.getElementById('knowledge-start-reading')?.addEventListener('click', () => {
+      setKnowledgeView('reading', { focus: true });
+    });
+    document.getElementById('knowledge-return-overview')?.addEventListener('click', () => {
+      setKnowledgeView('overview', { focus: true });
     });
 
     let resizePointerId = null;
@@ -1068,6 +1090,10 @@
         }
       });
       supplementary?.classList.toggle('hidden', !basicInfoMarkdown && !applicationsMarkdown);
+      document
+        .getElementById('knowledge-overview-empty')
+        ?.classList.toggle('hidden', Boolean(basicInfoMarkdown || applicationsMarkdown));
+      setKnowledgeView('overview');
 
       state.tags = getStoredTags();
       renderTags();
