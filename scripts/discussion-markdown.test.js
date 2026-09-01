@@ -102,3 +102,63 @@ test('讨论区帖子请求只允许最新一次切换更新页面', () => {
   assert.match(appSource, /postsRequestId:\s*0/);
   assert.match(appSource, /if \(requestId !== discussionState\.postsRequestId\) \{\s*return;\s*\}/);
 });
+
+test('切换版块时只显示目标缓存，未缓存时显示加载态', () => {
+  const restoreFunctionStart = appSource.indexOf('function restoreDiscussionBoardPosts');
+  const restoreFunctionEnd = appSource.indexOf(
+    '\n\nfunction updateCachedDiscussionPost',
+    restoreFunctionStart,
+  );
+  const restoreFunctionSource = appSource.slice(restoreFunctionStart, restoreFunctionEnd);
+  const discussionState = {
+    posts: [{ id: 'previous-board-post' }],
+    postsByBoard: new Map([['target', [{ id: 'target-post' }]]]),
+  };
+  const discussionPostList = { innerHTML: '' };
+  let renders = 0;
+  const context = {
+    discussionState,
+    discussionPostList,
+    renderDiscussionPosts() {
+      renders += 1;
+    },
+  };
+
+  vm.runInNewContext(restoreFunctionSource, context);
+  context.restoreDiscussionBoardPosts('target');
+  assert.deepEqual(discussionState.posts, [{ id: 'target-post' }]);
+  assert.equal(renders, 1);
+
+  context.restoreDiscussionBoardPosts('uncached');
+  assert.deepEqual(Array.from(discussionState.posts), []);
+  assert.match(discussionPostList.innerHTML, /正在加载帖子/);
+});
+
+test('置顶和精华状态同步所有帖子缓存并使哈希失效', () => {
+  const updateFunctionStart = appSource.indexOf('function updateCachedDiscussionPost');
+  const updateFunctionEnd = appSource.indexOf(
+    '\n\nfunction getDiscussionVisiblePosts',
+    updateFunctionStart,
+  );
+  const updateFunctionSource = appSource.slice(updateFunctionStart, updateFunctionEnd);
+  const discussionState = {
+    postsByBoard: new Map([
+      ['all', [{ id: 'post-1', isPinned: false, isFeatured: false }]],
+      ['signals', [{ id: 'post-1', isPinned: false, isFeatured: false }]],
+      ['other', [{ id: 'post-2', isPinned: false }]],
+    ]),
+    postsHashByBoard: { all: 'all-hash', signals: 'signals-hash', other: 'other-hash' },
+    postCache: new Map([['post-1', { id: 'post-1', isPinned: false }]]),
+  };
+  const context = { discussionState };
+
+  vm.runInNewContext(updateFunctionSource, context);
+  context.updateCachedDiscussionPost('post-1', { isPinned: true, isFeatured: true });
+
+  assert.equal(discussionState.postsByBoard.get('all')[0].isPinned, true);
+  assert.equal(discussionState.postsByBoard.get('signals')[0].isFeatured, true);
+  assert.equal(discussionState.postCache.get('post-1').isPinned, true);
+  assert.equal(Object.hasOwn(discussionState.postsHashByBoard, 'all'), false);
+  assert.equal(Object.hasOwn(discussionState.postsHashByBoard, 'signals'), false);
+  assert.equal(discussionState.postsHashByBoard.other, 'other-hash');
+});

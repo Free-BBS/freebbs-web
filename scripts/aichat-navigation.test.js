@@ -103,6 +103,27 @@ test('RAG 文档来源会以受限快照保存到对话历史', () => {
   assert.equal(context.normalizeAiDialogRag({ agent: 'info', sources: [] }), null);
 });
 
+test('RAG 历史快照在 subagent 缺少课程时回退到 course_context', () => {
+  const appSource = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
+  const functionStart = appSource.indexOf('function createAiRagSnapshot');
+  const functionEnd = appSource.indexOf('\n\nfunction wrapMaxAnswerPanel', functionStart);
+  const functionSource = appSource.slice(functionStart, functionEnd);
+  const context = {};
+
+  vm.runInNewContext(functionSource, context);
+  const rag = context.createAiRagSnapshot({
+    delegation: { selected: 'rag' },
+    course_context: { slug: 'signals', name: '信号系统', board: 'signal' },
+    subagent: { agent: 'rag', status: 'completed', sources: [] },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(rag.course)), {
+    slug: 'signals',
+    name: '信号系统',
+    board: 'signal',
+  });
+});
+
 test('对话历史将 Agent 绝对路由保存为白名单站内路径', () => {
   const backendSource = fs.readFileSync(path.join(root, 'backend', 'server.js'), 'utf8');
   const functionStart = backendSource.indexOf('const AI_DIALOG_NAVIGATION_PATHS');

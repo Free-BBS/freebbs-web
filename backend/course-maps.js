@@ -18,6 +18,38 @@ const LEGACY_SECTION_HEADINGS = {
   knowledge: /^(?:知识|知识正文|知识点正文|核心知识|核心解释|知识详解)$/,
   applications: /^(?:知识点应用|知识背景与应用|背景与应用|应用与拓展|应用场景|实际应用|典型应用)$/,
 };
+const LEGACY_METADATA_LABELS = new Set([
+  '课程名称',
+  '课程ID',
+  '章节/单元',
+  '小节',
+  '知识点名称',
+  '知识点ID',
+  '知识点类型',
+  '知识点层级',
+  '难度（1-5）',
+  '重要程度（1-5）',
+  '建议学习时长',
+  '填写人',
+  '复核人',
+  '状态',
+  '备注',
+  '关联知识点',
+  '关系类型',
+  '关系说明',
+  '主要依据',
+  '复核',
+  '基本信息与正式表格一致',
+  '关联与正式表格一致',
+  '教学范围已复核',
+  '内容准确性已复核',
+  '版本',
+  '日期',
+  '修订记录',
+  '修改人',
+  '修改内容',
+  '复核结论',
+]);
 
 function normalizeLegacySectionHeading(value) {
   return String(value || '')
@@ -27,6 +59,51 @@ function normalizeLegacySectionHeading(value) {
       '',
     )
     .trim();
+}
+
+function getLegacyMetadataLabel(line) {
+  const match = String(line || '').match(/^\s*([^:：]{1,40}?)\s*[:：]/);
+  const label = match?.[1]?.trim() || '';
+  return LEGACY_METADATA_LABELS.has(label) ? label : '';
+}
+
+function isLegacyMetadataValueLine(line) {
+  const value = String(line || '').trim();
+  return !value || /^(?:".*"|'[^']*'|\[.*\]|\{.*\}|true|false|null)$/i.test(value);
+}
+
+function splitLeadingLegacyMetadata(markdown) {
+  const lines = String(markdown || '').split('\n');
+  const metadata = [];
+  let metadataFieldCount = 0;
+  let bodyStart = -1;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (getLegacyMetadataLabel(line)) {
+      metadata.push(line);
+      metadataFieldCount += 1;
+      continue;
+    }
+
+    if (metadataFieldCount && isLegacyMetadataValueLine(line)) {
+      metadata.push(line);
+      continue;
+    }
+
+    bodyStart = index;
+    break;
+  }
+
+  const knowledgeMarkdown = bodyStart >= 0 ? lines.slice(bodyStart).join('\n').trim() : '';
+  if (metadataFieldCount < 4 || !knowledgeMarkdown) {
+    return { knowledgeMarkdown: String(markdown || '').trim(), basicInfoMarkdown: '' };
+  }
+
+  return {
+    knowledgeMarkdown,
+    basicInfoMarkdown: metadata.join('\n').trim(),
+  };
 }
 
 function normalizeNodeId(value) {
@@ -145,6 +222,13 @@ function splitLegacyKnowledgeDocument(markdown, title = '') {
   sections.knowledgeMarkdown = buckets.knowledge.join('\n').trim();
   sections.basicInfoMarkdown = buckets.basicInfo.join('\n').trim();
   sections.applicationsMarkdown = buckets.applications.join('\n').trim();
+
+  if (!sections.basicInfoMarkdown) {
+    const recoveredMetadata = splitLeadingLegacyMetadata(sections.knowledgeMarkdown);
+    sections.knowledgeMarkdown = recoveredMetadata.knowledgeMarkdown;
+    sections.basicInfoMarkdown = recoveredMetadata.basicInfoMarkdown;
+  }
+
   return sections;
 }
 

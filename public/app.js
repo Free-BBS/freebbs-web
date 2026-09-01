@@ -158,6 +158,7 @@ const discussionState = {
   postsByBoard: new Map(),
   postsHashByBoard: {},
   postsRequestId: 0,
+  postRequestId: 0,
   postCache: new Map(),
   activeBoard: 'all',
   activePostId: '',
@@ -2861,6 +2862,45 @@ function applyDiscussionPostsPayload(boardSlug, payload) {
   });
 }
 
+function restoreDiscussionBoardPosts(boardSlug) {
+  const cachedPosts = discussionState.postsByBoard.get(boardSlug);
+  discussionState.posts = cachedPosts || [];
+
+  if (cachedPosts) {
+    renderDiscussionPosts();
+    return;
+  }
+
+  if (discussionPostList) {
+    discussionPostList.innerHTML = `
+      <article class="discussion-empty" role="status">
+        <p>正在加载帖子...</p>
+      </article>
+    `;
+  }
+}
+
+function updateCachedDiscussionPost(postId, updates) {
+  delete discussionState.postsHashByBoard[discussionState.activeBoard || 'all'];
+
+  for (const [boardSlug, posts] of discussionState.postsByBoard) {
+    if (!posts.some((post) => post.id === postId)) {
+      continue;
+    }
+
+    discussionState.postsByBoard.set(
+      boardSlug,
+      posts.map((post) => (post.id === postId ? { ...post, ...updates } : post)),
+    );
+    delete discussionState.postsHashByBoard[boardSlug];
+  }
+
+  const cachedPost = discussionState.postCache.get(postId);
+  if (cachedPost) {
+    discussionState.postCache.set(postId, { ...cachedPost, ...updates });
+  }
+}
+
 function getDiscussionVisiblePosts() {
   const mode = discussionState.viewMode;
   let posts = [...discussionState.posts];
@@ -3893,7 +3933,15 @@ function createAiRagSnapshot(navigationResult) {
     return null;
   }
 
-  const course = subagent.course && typeof subagent.course === 'object' ? subagent.course : {};
+  let course = {};
+  if (subagent.course && typeof subagent.course === 'object') {
+    course = subagent.course;
+  } else if (
+    navigationResult?.course_context &&
+    typeof navigationResult.course_context === 'object'
+  ) {
+    course = navigationResult.course_context;
+  }
   const sources = Array.isArray(subagent.sources)
     ? subagent.sources
         .map((source) => ({
@@ -5347,6 +5395,9 @@ async function loadDiscussionDetail(postId) {
     return;
   }
 
+  const requestId = discussionState.postRequestId + 1;
+  discussionState.postRequestId = requestId;
+  const requestedBoard = discussionState.activeBoard;
   const cachedPost = discussionState.postCache.get(postId);
   if (cachedPost) {
     discussionState.activePostId = cachedPost.id;
@@ -5369,6 +5420,14 @@ async function loadDiscussionDetail(postId) {
   const payload = await callApi(`/discussion/posts/${encodeURIComponent(postId)}`, {
     method: 'GET',
   });
+
+  if (
+    requestId !== discussionState.postRequestId ||
+    requestedBoard !== discussionState.activeBoard
+  ) {
+    return;
+  }
+
   discussionState.activePostId = payload.post.id;
   discussionState.postCache.set(payload.post.id, payload.post);
   renderDiscussionPosts();
@@ -6736,9 +6795,11 @@ async function handleDiscussionBoardClick(event) {
 
   discussionState.activeBoard = button.dataset.boardSlug || 'all';
   discussionState.activePostId = '';
+  discussionState.postRequestId += 1;
   renderDiscussionDetail(null);
   renderDiscussionBoards();
   renderDiscussionComposeBoards();
+  restoreDiscussionBoardPosts(discussionState.activeBoard);
   await loadDiscussionPosts({
     autoOpen: false,
   });
@@ -6872,6 +6933,7 @@ async function toggleDiscussionPin(postId, pinned) {
     discussionState.posts = discussionState.posts.map((post) =>
       post.id === postId ? { ...post, isPinned: Boolean(payload.isPinned) } : post,
     );
+    updateCachedDiscussionPost(postId, { isPinned: Boolean(payload.isPinned) });
 
     if (discussionState.activePost?.id === postId) {
       discussionState.activePost = {
@@ -6901,6 +6963,7 @@ async function toggleDiscussionFeature(postId, featured) {
     discussionState.posts = discussionState.posts.map((post) =>
       post.id === postId ? { ...post, isFeatured: Boolean(payload.isFeatured) } : post,
     );
+    updateCachedDiscussionPost(postId, { isFeatured: Boolean(payload.isFeatured) });
 
     if (discussionState.activePost?.id === postId) {
       discussionState.activePost = {
