@@ -48,6 +48,7 @@ const userState = {
   fortuneBonusEnabled: false,
 };
 let economyShopItems = [];
+let economyShortcutLinks = [];
 let adminPermissionCatalog = { boards: [], courses: [] };
 let adminExpandedUserId = '';
 let adminMessageTimer = 0;
@@ -425,6 +426,92 @@ function initializeEconomyNavigation() {
 
   centerActiveMobileNavigation();
 }
+
+function createEconomyShortcut({ href, icon, text, className = '' }) {
+  const link = document.createElement('a');
+  link.className = `economy-shortcut ${className}`.trim();
+  link.href = href;
+  link.setAttribute('aria-label', text);
+  link.innerHTML = `
+    <img class="economy-shortcut-icon" src="/assets/icons/${icon}.svg" alt="" aria-hidden="true" />
+    <span>${escapeHtml(text)}</span>
+  `;
+  return link;
+}
+
+function setCheckinShortcutState(isComplete) {
+  const link = document.querySelector('.economy-shortcut-checkin');
+  if (!link) {
+    return;
+  }
+
+  const complete = Boolean(isComplete);
+  link.classList.toggle('is-complete', complete);
+  link.setAttribute('aria-label', complete ? '今日已签到' : '签到');
+  link.title = complete ? '今日已签到' : '签到';
+}
+
+async function loadCheckinShortcutState() {
+  if (!userState.isLoggedIn) {
+    setCheckinShortcutState(false);
+    return;
+  }
+
+  try {
+    const payload = await callApi('/checkin', { method: 'GET' });
+    setCheckinShortcutState(payload.checkedInToday);
+  } catch {
+    setCheckinShortcutState(false);
+  }
+}
+
+function initializeUserEconomyShortcuts() {
+  const panel = document.getElementById('user-panel');
+  const status = panel?.querySelector('.user-status');
+  if (!panel || !status) {
+    return;
+  }
+
+  let stack = panel.querySelector('.user-economy-stack');
+  if (!stack) {
+    stack = document.createElement('div');
+    stack.className = 'user-economy-stack';
+
+    const shortcuts = document.createElement('div');
+    shortcuts.className = 'economy-shortcuts';
+
+    const checkinLink = createEconomyShortcut({
+      href: '#checkin',
+      icon: 'calendar',
+      text: '签到',
+      className: 'economy-shortcut-checkin',
+    });
+    checkinLink.addEventListener('click', (event) => {
+      event.preventDefault();
+      openFortuneModal();
+    });
+
+    const inventoryLink = createEconomyShortcut({
+      href: '/inventory',
+      icon: 'inventory',
+      text: '仓库',
+      className: 'economy-shortcut-inventory',
+    });
+    inventoryLink.addEventListener('click', (event) => {
+      if (!userState.isLoggedIn) {
+        event.preventDefault();
+        openModal('login');
+      }
+    });
+
+    shortcuts.append(checkinLink, inventoryLink);
+    stack.append(shortcuts, status);
+    panel.insertBefore(stack, panel.querySelector('.user-summary'));
+    economyShortcutLinks.push(checkinLink, inventoryLink);
+  }
+
+  setCheckinShortcutState(false);
+}
 const FALLBACK_DISCUSSION_BOARDS = [
   {
     id: -1,
@@ -733,6 +820,7 @@ async function openFortuneModal() {
 
   const renderCheckinPayload = (payload) => {
     userState.fortuneBonusEnabled = Boolean(payload.fortuneBonusEnabled);
+    setCheckinShortcutState(payload.checkedInToday);
     if (payload.user) {
       saveSession(userState.token, payload.user);
     }
@@ -2325,6 +2413,7 @@ function clearSession() {
   userState.manetrons = 0;
   userState.heat = 0;
   localStorage.removeItem(STORAGE_KEY);
+  setCheckinShortcutState(false);
   aiChatState.currentDid = '';
   aiChatState.dialogs = [];
   aiChatState.messages = [];
@@ -8532,6 +8621,7 @@ renderUser();
 loadFortuneConfig();
 sessionReady = restoreSession().finally(() => {
   renderAdminSection();
+  loadCheckinShortcutState();
   loadElectromagneticPage();
   loadInventoryPage();
 });
@@ -8541,6 +8631,7 @@ renderDiscussionComposerState();
 initializeDashboardShell();
 initializeThemeMode();
 initializeEconomyNavigation();
+initializeUserEconomyShortcuts();
 renderAdminSection();
 loadHomeDiscussionPosts();
 loadHomeBoardActivityForViewport();

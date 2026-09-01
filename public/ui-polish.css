@@ -182,6 +182,59 @@ body:not(.auth-page-body) .user-panel {
   color: var(--ui-text) !important;
 }
 
+body:not(.auth-page-body) .user-economy-stack {
+  order: 1;
+  align-items: center;
+  gap: 6px;
+}
+
+body:not(.auth-page-body) .economy-shortcuts {
+  justify-content: center;
+  width: 100%;
+  gap: 6px;
+}
+
+body:not(.auth-page-body) .economy-shortcut {
+  min-height: 38px;
+  padding-inline: 14px;
+  border-color: var(--ui-line) !important;
+  background: var(--ui-surface) !important;
+  color: var(--ui-text) !important;
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+}
+
+body:not(.auth-page-body) .economy-shortcut:hover {
+  border-color: var(--ui-focus) !important;
+  background: var(--ui-surface-soft) !important;
+  color: var(--ui-text) !important;
+}
+
+body:not(.auth-page-body) .economy-shortcut-icon {
+  width: 20px;
+  height: 20px;
+  filter: none !important;
+}
+
+body:not(.auth-page-body) .economy-shortcut-checkin .economy-shortcut-icon {
+  filter: grayscale(1) saturate(0) opacity(0.64) !important;
+}
+
+body:not(.auth-page-body) .economy-shortcut-checkin.is-complete {
+  border-color: #d5a43a !important;
+  background: linear-gradient(135deg, #fff7d7, #fffdf5) !important;
+  color: #8a5b08 !important;
+  box-shadow: 0 5px 14px rgba(185, 132, 28, 0.2);
+}
+
+body:not(.auth-page-body) .economy-shortcut-checkin.is-complete .economy-shortcut-icon {
+  filter: none !important;
+}
+
+body:not(.auth-page-body).theme-dark .economy-shortcut-inventory .economy-shortcut-icon {
+  filter: brightness(0) invert(1) !important;
+}
+
 body:not(.auth-page-body) .avatar {
   width: 56px !important;
   height: 56px !important;
@@ -1030,6 +1083,25 @@ html body.auth-page-body.theme-dark .auth-submit:hover {
   body:not(.auth-page-body) .user-panel {
     gap: 10px;
   }
+
+  body:not(.auth-page-body) .user-economy-stack {
+    max-width: 250px;
+  }
+
+  body:not(.auth-page-body) .economy-shortcuts {
+    flex-wrap: wrap;
+  }
+
+  body:not(.auth-page-body) .economy-shortcut {
+    min-height: 34px;
+    padding-inline: 10px;
+    font-size: 0.78rem;
+  }
+
+  body:not(.auth-page-body) .economy-shortcut-icon {
+    width: 18px;
+    height: 18px;
+  }
 }
 
 @media (max-width: 900px) {
@@ -1078,6 +1150,15 @@ html body.auth-page-body.theme-dark .auth-submit:hover {
   body:not(.auth-page-body) .user-copy,
   body:not(.auth-page-body) .user-status {
     display: none !important;
+  }
+
+  body:not(.auth-page-body) .user-economy-stack {
+    display: none !important;
+  }
+
+  body:not(.auth-page-body) .mobile-nav .fortune-link,
+  body:not(.auth-page-body) .mobile-nav .inventory-link {
+    display: flex !important;
   }
 
   body:not(.auth-page-body) .user-actions {
