@@ -22,6 +22,17 @@
   --ui-line-strong: rgba(7, 19, 23, 0.2);
   --ui-accent: #075d68;
   --ui-accent-hover: #064a54;
+  --ui-accent-contrast: #ffffff;
+  --ui-action: #0b5f6c;
+  --ui-action-hover: #084c57;
+  --ui-action-contrast: #ffffff;
+  --ui-reward: #d5a43a;
+  --ui-reward-complete: #bb861e;
+  --ui-reward-soft: #fffdf3;
+  --ui-reward-strong: #ffe9a3;
+  --ui-reward-highlight: #fff1bc;
+  --ui-reward-muted: #8a5b08;
+  --ui-reward-contrast: #704500;
   --ui-accent-soft: rgba(39, 136, 152, 0.11);
   --ui-danger: #9b3429;
   --ui-focus: #087f90;
@@ -51,6 +62,14 @@ body.theme-dark {
   --ui-line-strong: rgba(223, 242, 244, 0.22);
   --ui-accent: #72d6df;
   --ui-accent-hover: #94e4eb;
+  --ui-accent-contrast: #071317;
+  --ui-reward: #d5a43a;
+  --ui-reward-complete: #d5a43a;
+  --ui-reward-soft: #302711;
+  --ui-reward-strong: #493915;
+  --ui-reward-highlight: #3c3015;
+  --ui-reward-muted: #ffe4a0;
+  --ui-reward-contrast: #ffe4a0;
   --ui-accent-soft: rgba(85, 190, 202, 0.14);
   --ui-danger: #ff9b8f;
   --ui-focus: #8de8ee;
@@ -221,9 +240,9 @@ body:not(.auth-page-body) .economy-shortcut-checkin .economy-shortcut-icon {
 }
 
 body:not(.auth-page-body) .economy-shortcut-checkin.is-complete {
-  border-color: #d5a43a !important;
-  background: linear-gradient(135deg, #fff7d7, #fffdf5) !important;
-  color: #8a5b08 !important;
+  border-color: var(--ui-reward-complete) !important;
+  background: linear-gradient(135deg, var(--ui-reward-strong), var(--ui-reward-soft)) !important;
+  color: var(--ui-reward-muted) !important;
   box-shadow: 0 5px 14px rgba(185, 132, 28, 0.2);
 }
 
@@ -369,10 +388,10 @@ body:not(.auth-page-body)
     .aichat-auth-link,
     .system-settings-submit,
     .knowledge-rag-form button,
-    .course-discussion-link
+  .course-discussion-link
   )
   * {
-  color: #ffffff !important;
+  color: var(--ui-action-contrast) !important;
 }
 
 /* Home */
@@ -426,6 +445,61 @@ body.theme-dark.home-page .home-loading-rank,
 body.theme-dark.home-page .home-loading-avatar {
   background: linear-gradient(90deg, #21343b 20%, #2b444d 48%, #21343b 76%);
   background-size: 220% 100%;
+}
+
+/* Reusable economy modals should follow the selected theme even on the
+   landing page, whose larger visual system intentionally keeps its own
+   palette. */
+body.theme-light.home-page .fortune-backdrop {
+  background: rgba(17, 19, 21, 0.28) !important;
+}
+
+body.theme-light.home-page .fortune-panel {
+  background: #ffffff !important;
+  border-color: var(--ui-line) !important;
+  color: var(--ui-text) !important;
+  box-shadow: 0 26px 70px rgba(10, 12, 14, 0.18) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+body.theme-light.home-page .fortune-close,
+body.theme-light.home-page .fortune-title,
+body.theme-light.home-page .fortune-score,
+body.theme-light.home-page .fortune-record-row,
+body.theme-light.home-page .electromagnetic-section h3,
+body.theme-light.home-page .electromagnetic-shop-item strong,
+body.theme-light.home-page #electromagnetic-assets {
+  color: var(--ui-text) !important;
+}
+
+body.theme-light.home-page .fortune-date,
+body.theme-light.home-page .fortune-tagline,
+body.theme-light.home-page .fortune-chart-caption,
+body.theme-light.home-page .fortune-record-empty,
+body.theme-light.home-page .electromagnetic-section p,
+body.theme-light.home-page .electromagnetic-shop-item p {
+  color: var(--ui-muted) !important;
+}
+
+body.theme-light.home-page .fortune-chart-wrap {
+  background: var(--ui-surface-soft) !important;
+  border-color: var(--ui-line) !important;
+}
+
+body.theme-light.home-page .fortune-checkin-button,
+body.theme-light.home-page .electromagnetic-button {
+  border-color: var(--ui-line-strong) !important;
+  background: var(--ui-surface-soft) !important;
+  color: var(--ui-text) !important;
+}
+
+body.theme-light.home-page .fortune-records,
+body.theme-light.home-page .electromagnetic-section,
+body.theme-light.home-page .electromagnetic-balances,
+body.theme-light.home-page .fortune-record-row,
+body.theme-light.home-page .electromagnetic-shop-item {
+  border-color: var(--ui-line) !important;
 }
 
 /* Learning world keeps its immersive image stage while sharing the shell. */
@@ -803,6 +877,18 @@ body.theme-dark:not(.auth-page-body) .settings-password-form input::placeholder 
   color: var(--ui-faint) !important;
 }
 
+body:not(.auth-page-body) .settings-form .auth-submit {
+  border-color: var(--ui-action) !important;
+  background: var(--ui-action) !important;
+  color: var(--ui-action-contrast) !important;
+  box-shadow: none !important;
+}
+
+body:not(.auth-page-body) .settings-form .auth-submit:hover {
+  background: var(--ui-action-hover) !important;
+  color: var(--ui-action-contrast) !important;
+}
+
 body.system-settings-page .system-settings-menu-item,
 body.system-settings-page .system-settings-form-heading {
   border-color: var(--ui-line);
@@ -963,14 +1049,15 @@ body.theme-dark.economy-page .shop-inspect-image img {
 
 .auth-page-body .auth-submit {
   min-height: 48px;
-  border-color: #075d68 !important;
-  background: #075d68 !important;
-  color: #ffffff !important;
+  border-color: var(--ui-action) !important;
+  background: var(--ui-action) !important;
+  color: var(--ui-action-contrast) !important;
 }
 
 .auth-page-body .auth-submit:hover {
-  border-color: #064a54 !important;
-  background: #064a54 !important;
+  border-color: var(--ui-action-hover) !important;
+  background: var(--ui-action-hover) !important;
+  color: var(--ui-action-contrast) !important;
 }
 
 .auth-page-body .auth-submit:disabled,
@@ -1042,16 +1129,17 @@ html body.auth-page-body .auth-inline-button {
 html body.auth-page-body .auth-submit,
 html body.auth-page-body.theme-light .auth-submit,
 html body.auth-page-body.theme-dark .auth-submit {
-  border-color: #075d68 !important;
-  background: #075d68 !important;
-  color: #ffffff !important;
+  border-color: var(--ui-action) !important;
+  background: var(--ui-action) !important;
+  color: var(--ui-action-contrast) !important;
 }
 
 html body.auth-page-body .auth-submit:hover,
 html body.auth-page-body.theme-light .auth-submit:hover,
 html body.auth-page-body.theme-dark .auth-submit:hover {
-  border-color: #064a54 !important;
-  background: #064a54 !important;
+  border-color: var(--ui-action-hover) !important;
+  background: var(--ui-action-hover) !important;
+  color: var(--ui-action-contrast) !important;
 }
 
 /* Responsive hierarchy */
@@ -1153,12 +1241,58 @@ html body.auth-page-body.theme-dark .auth-submit:hover {
   }
 
   body:not(.auth-page-body) .user-economy-stack {
-    display: none !important;
+    position: fixed;
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    right: calc(118px + env(safe-area-inset-right, 0px));
+    z-index: 151;
+    display: block !important;
+    width: 94px;
+    max-width: none;
+    pointer-events: auto;
+  }
+
+  body:not(.auth-page-body) .user-economy-stack .economy-shortcuts {
+    display: flex;
+    width: 94px;
+    gap: 6px;
+  }
+
+  body:not(.auth-page-body) .user-economy-stack .economy-shortcut {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    border: 1px solid var(--ui-line) !important;
+    border-radius: 12px !important;
+    background: var(--ui-surface) !important;
+    color: var(--ui-text) !important;
+    box-shadow: none !important;
+  }
+
+  body:not(.auth-page-body) .user-economy-stack .economy-shortcut:hover {
+    border-color: var(--ui-focus) !important;
+    background: var(--ui-surface-soft) !important;
+    color: var(--ui-text) !important;
+    transform: none;
+  }
+
+  body:not(.auth-page-body) .user-economy-stack .economy-shortcut-icon {
+    width: 21px;
+    height: 21px;
+  }
+
+  body:not(.auth-page-body) .user-economy-stack .economy-shortcut span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
 
   body:not(.auth-page-body) .mobile-nav .fortune-link,
   body:not(.auth-page-body) .mobile-nav .inventory-link {
-    display: flex !important;
+    display: none !important;
   }
 
   body:not(.auth-page-body) .user-actions {
@@ -1236,12 +1370,15 @@ html body.auth-page-body.theme-dark .auth-submit:hover {
     overflow-x: auto;
     margin-inline: auto;
     transform: none;
-    border: 1px solid rgba(255, 255, 255, 0.14) !important;
     border-radius: 18px !important;
-    background: rgba(6, 54, 65, 0.97) !important;
-    box-shadow: 0 16px 34px rgba(0, 25, 31, 0.28) !important;
     scrollbar-width: none;
     scroll-snap-type: x proximity;
+  }
+
+  body:not(.auth-page-body) .mobile-nav {
+    border: 1px solid var(--ui-line) !important;
+    background: var(--ui-surface-raised) !important;
+    box-shadow: var(--ui-shadow) !important;
   }
 
   body:not(.auth-page-body) .mobile-nav::-webkit-scrollbar {
@@ -1258,23 +1395,80 @@ html body.auth-page-body.theme-dark .auth-submit:hover {
     gap: 4px;
     padding: 5px 4px;
     border-radius: 12px !important;
-    color: rgba(255, 255, 255, 0.8) !important;
     font-size: 0.75rem;
     line-height: 1.05;
     text-align: center;
     scroll-snap-align: center;
   }
 
+  body:not(.auth-page-body) .mobile-nav .nav-link {
+    color: var(--ui-muted) !important;
+  }
+
   body:not(.auth-page-body) .mobile-nav .nav-link:hover,
   body:not(.auth-page-body) .mobile-nav .nav-link.is-active {
-    background: rgba(255, 255, 255, 0.15) !important;
-    color: #ffffff !important;
+    background: var(--ui-accent-soft) !important;
+    color: var(--ui-accent) !important;
   }
 
   body:not(.auth-page-body) .mobile-nav .nav-icon {
     width: 21px;
     height: 21px;
     opacity: 0.9 !important;
+  }
+
+  body.theme-light:not(.auth-page-body) .mobile-nav .nav-icon {
+    filter: brightness(0) opacity(0.64) !important;
+  }
+
+  body.theme-dark:not(.auth-page-body) .mobile-nav .nav-icon {
+    filter: brightness(0) invert(1) opacity(0.76) !important;
+  }
+
+  body.theme-light:not(.auth-page-body)
+    .user-economy-stack
+    .economy-shortcut-inventory
+    .economy-shortcut-icon {
+    filter: brightness(0) opacity(0.64) !important;
+  }
+
+  body.theme-dark:not(.auth-page-body)
+    .user-economy-stack
+    .economy-shortcut-inventory
+    .economy-shortcut-icon {
+    filter: brightness(0) invert(1) opacity(0.76) !important;
+  }
+
+  body.theme-dark:not(.auth-page-body)
+    .user-economy-stack
+    .economy-shortcut-checkin.is-complete {
+    border-color: var(--ui-reward-complete) !important;
+    background: linear-gradient(135deg, var(--ui-reward-strong), var(--ui-reward-soft)) !important;
+    color: var(--ui-reward-contrast) !important;
+    box-shadow: 0 5px 14px rgba(185, 132, 28, 0.24) !important;
+  }
+
+  body.theme-light:not(.auth-page-body) .user-economy-stack .economy-shortcut-checkin {
+    border-color: var(--ui-reward) !important;
+    background: var(--ui-reward-soft) !important;
+    color: var(--ui-reward-muted) !important;
+    box-shadow: 0 5px 14px rgba(185, 132, 28, 0.16) !important;
+  }
+
+  body.theme-light:not(.auth-page-body)
+    .user-economy-stack
+    .economy-shortcut-checkin.is-complete {
+    border-color: var(--ui-reward-complete) !important;
+    background: linear-gradient(135deg, var(--ui-reward-strong), var(--ui-reward-highlight)) !important;
+    color: var(--ui-reward-contrast) !important;
+    box-shadow: 0 5px 14px rgba(185, 132, 28, 0.24) !important;
+  }
+
+  body.theme-light:not(.auth-page-body)
+    .user-economy-stack
+    .economy-shortcut-checkin
+    .economy-shortcut-icon {
+    filter: none !important;
   }
 
   body:not(.auth-page-body) .settings-shell,
@@ -1546,5 +1740,44 @@ html body.auth-page-body.theme-dark .auth-submit:hover {
   *::before,
   *::after {
     scroll-behavior: auto !important;
+  }
+}
+
+/* Keep the desktop theme control in one predictable place on every page. */
+@media (min-width: 1025px) {
+  body:not(.auth-page-body) .topbar .nav-actions > .sidebar-theme-toggle {
+    position: fixed;
+    left: calc(var(--bbs-shell-width) / 2);
+    bottom: 18px;
+    z-index: 175;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: calc(var(--bbs-shell-width) - 28px) !important;
+    min-height: 44px;
+    margin: 0;
+    padding: 0 12px;
+    transform: translateX(-50%) !important;
+    border: 1px solid rgba(245, 251, 253, 0.18) !important;
+    border-radius: 12px !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: var(--bbs-shell-sidebar-text, #f5fbfd) !important;
+    box-shadow: none !important;
+    font-size: 0.88rem;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  body:not(.auth-page-body) .topbar .nav-actions > .sidebar-theme-toggle:hover,
+  body:not(.auth-page-body) .topbar .nav-actions > .sidebar-theme-toggle:focus-visible {
+    background: var(--bbs-shell-sidebar-active, #278898) !important;
+    border-color: rgba(245, 251, 253, 0.3) !important;
+    color: #ffffff !important;
+  }
+
+  body:not(.auth-page-body) .topbar .nav-actions > .sidebar-theme-toggle .theme-toggle-icon {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
   }
 }

@@ -246,7 +246,7 @@ function initializeThemeMode() {
   const userActions = document.getElementById('user-actions');
 
   if (navActions && !navActions.querySelector('[data-theme-toggle]')) {
-    const themeButton = createThemeToggleButton('theme-toggle nav-link');
+    const themeButton = createThemeToggleButton('theme-toggle nav-link sidebar-theme-toggle');
     navActions.insertBefore(themeButton, userPanel || null);
   }
 
@@ -283,6 +283,41 @@ function centerActiveMobileNavigation() {
         activeLink.offsetLeft - (nav.clientWidth - activeLink.offsetWidth) / 2;
       nav.scrollLeft = Math.max(0, centeredScrollLeft);
     });
+  });
+}
+
+// Allow vertical mouse-wheel gestures to navigate the horizontally scrollable shell controls.
+function initializeHorizontalWheelScroll() {
+  document.querySelectorAll('.mobile-nav, .discussion-board-list').forEach((nav) => {
+    if (nav.dataset.wheelScrollBound === 'true') {
+      return;
+    }
+
+    nav.setAttribute('data-wheel-scroll-bound', 'true');
+    nav.addEventListener(
+      'wheel',
+      (event) => {
+        if (nav.scrollWidth <= nav.clientWidth + 1) {
+          return;
+        }
+
+        const delta =
+          Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+        if (!delta) {
+          return;
+        }
+
+        const maxScrollLeft = nav.scrollWidth - nav.clientWidth;
+        const nextScrollLeft = Math.max(0, Math.min(maxScrollLeft, nav.scrollLeft + delta));
+        if (nextScrollLeft === nav.scrollLeft) {
+          return;
+        }
+
+        event.preventDefault();
+        nav.scrollTo({ left: nextScrollLeft, behavior: 'auto' });
+      },
+      { passive: false },
+    );
   });
 }
 
@@ -366,6 +401,7 @@ function initializeDashboardShell() {
   });
 
   centerActiveMobileNavigation();
+  initializeHorizontalWheelScroll();
 }
 
 function initializeEconomyNavigation() {

@@ -12469,10 +12469,10 @@ body.discussion-page .main-content .discussion-comment-form textarea,
 body.discussion-page .main-content .discussion-compose textarea,
 body.discussion-page .main-content .discussion-compose input,
 body.discussion-page .main-content .discussion-compose select {
-  border: 1px solid rgba(7, 9, 11, 0.14) !important;
+  border: 1px solid var(--ui-line-strong, rgba(7, 9, 11, 0.14)) !important;
   border-radius: 11px !important;
-  background: #ffffff !important;
-  color: var(--bbs-shell-text) !important;
+  background: var(--ui-input, #ffffff) !important;
+  color: var(--ui-text, var(--bbs-shell-text)) !important;
 }
 
 @media (max-width: 1180px) {

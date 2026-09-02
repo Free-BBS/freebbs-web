@@ -42,6 +42,41 @@ body.theme-light.discussion-page {
   --discussion-accent-soft: rgba(8, 121, 133, 0.1);
 }
 
+/* Keep every discussion editor field on the same theme surface. The legacy
+   shared layer contains high-specificity rules for these controls, so this
+   page layer is intentionally authoritative and loaded last. */
+body.discussion-page .main-content .discussion-comment-form textarea,
+body.discussion-page .main-content .discussion-compose textarea,
+body.discussion-page .main-content .discussion-compose input,
+body.discussion-page .main-content .discussion-compose select,
+body.discussion-page .main-content .discussion-board-description-input,
+body.discussion-page .main-content .discussion-moderator-search input {
+  border-color: var(--ui-line-strong, var(--discussion-line-strong)) !important;
+  background: var(--ui-input, var(--discussion-panel-strong)) !important;
+  color: var(--ui-text, var(--discussion-text)) !important;
+}
+
+body.discussion-page .main-content .discussion-compose select {
+  color-scheme: light;
+}
+
+body.theme-dark.discussion-page .main-content .discussion-compose select {
+  color-scheme: dark;
+}
+
+body.discussion-page .main-content .discussion-compose select option {
+  background: var(--ui-input, var(--discussion-panel-strong));
+  color: var(--ui-text, var(--discussion-text));
+}
+
+body.discussion-page .main-content .discussion-comment-form textarea::placeholder,
+body.discussion-page .main-content .discussion-compose textarea::placeholder,
+body.discussion-page .main-content .discussion-compose input::placeholder,
+body.discussion-page .main-content .discussion-board-description-input::placeholder,
+body.discussion-page .main-content .discussion-moderator-search input::placeholder {
+  color: var(--ui-faint, var(--discussion-muted)) !important;
+}
+
 /* Discussion code blocks keep a dark surface in both themes. Set their
    foreground explicitly here because this stylesheet loads after the shared
    light-theme Markdown rules, including for Max-authored comments. */
