@@ -74,6 +74,24 @@ function isLegacyMetadataValueLine(line) {
 
 function splitLeadingLegacyMetadata(markdown) {
   const lines = String(markdown || '').split('\n');
+  const openingFence = lines[0]?.trim() === '---';
+  if (openingFence) {
+    const closingFenceIndex = lines.findIndex(
+      (line, index) => index > 0 && line.trim() === '---',
+    );
+    if (closingFenceIndex > 1) {
+      const metadata = lines.slice(1, closingFenceIndex);
+      const metadataFieldCount = metadata.filter((line) => getLegacyMetadataLabel(line)).length;
+      const knowledgeMarkdown = lines.slice(closingFenceIndex + 1).join('\n').trim();
+      if (metadataFieldCount >= 4 && knowledgeMarkdown) {
+        return {
+          knowledgeMarkdown,
+          basicInfoMarkdown: metadata.join('\n').trim(),
+        };
+      }
+    }
+  }
+
   const metadata = [];
   let metadataFieldCount = 0;
   let bodyStart = -1;
