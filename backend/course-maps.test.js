@@ -197,6 +197,37 @@ test('moves unnumbered Signal and Systems metadata before a plain numbered body 
   );
 });
 
+test('moves YAML front matter from Signal and Systems documents into basic information', () => {
+  const sections = splitLegacyKnowledgeDocument(
+    `---
+课程名称: "信号与系统"
+课程ID: "SS"
+章节/单元: "第一章 绪论"
+小节: "1.1 信号与系统"
+知识点名称: "信号与系统的基本概念术语"
+知识点ID: "SS-01-01"
+知识点类型: "概念"
+---
+
+1. 基本概念
+
+信号是随时间或空间变化的物理量，系统将输入信号变换为输出信号。
+
+## 知识点应用
+
+用于分析通信、控制和电路系统。`,
+    '信号与系统的基本概念术语',
+  );
+
+  assert.match(sections.basicInfoMarkdown, /课程名称: "信号与系统"/);
+  assert.match(sections.basicInfoMarkdown, /知识点ID: "SS-01-01"/);
+  assert.equal(
+    sections.knowledgeMarkdown,
+    '1. 基本概念\n\n信号是随时间或空间变化的物理量，系统将输入信号变换为输出信号。',
+  );
+  assert.equal(sections.applicationsMarkdown, '用于分析通信、控制和电路系统。');
+});
+
 test('recovers numbered legacy content previously saved into the knowledge section', () => {
   const sections = resolveKnowledgeSections({
     title: '数域',
