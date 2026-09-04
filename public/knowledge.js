@@ -1060,8 +1060,6 @@
       document.getElementById('knowledge-chat-welcome').textContent =
         `我已经定位到「${node.title}」。你可以让我结合课程资料做直觉解释、提醒易错点，或出一道自测题。`;
 
-      const documentStatus = document.getElementById('knowledge-document-status');
-      documentStatus.textContent = markdown ? 'Markdown 课程资料' : '文档待补充';
       const body = document.getElementById('knowledge-body');
       body.innerHTML = app.renderMarkdownContent(
         markdown || '*这个知识结点还没有挂载 Markdown 文档。*',

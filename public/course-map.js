@@ -65,6 +65,7 @@
   const positionSaveQueues = new Map();
   let readerEdgeFrame = 0;
   let readerEdgeTimer = 0;
+  let readerEdgeTooltip = null;
 
   function escapeHtml(value) {
     return String(value || '')
@@ -657,22 +658,73 @@
           </span>
         </header>
         <div class="course-map-focus-stage">
-          <div class="course-map-focus-side is-left" aria-label="指进当前聚焦的同章知识点">
-            <span class="course-map-focus-direction">指进当前聚焦 →</span>
+          <div class="course-map-focus-side is-left" aria-label="同章前置关联知识点">
             ${leftNodes.map((node) => renderReaderNode(node, viewModel)).join('')}
           </div>
           <div class="course-map-focus-center">
-            <small>当前聚焦</small>
             ${renderReaderNode(focusedNode, viewModel)}
-            <span>再次点击可打开知识点正文</span>
           </div>
-          <div class="course-map-focus-side is-right" aria-label="由当前聚焦指出的同章知识点">
-            <span class="course-map-focus-direction">当前聚焦指出 →</span>
+          <div class="course-map-focus-side is-right" aria-label="同章后续关联知识点">
             ${rightNodes.map((node) => renderReaderNode(node, viewModel)).join('')}
           </div>
         </div>
         <footer class="course-map-focus-summary">
-          <span>仅显示与 ${escapeHtml(focusedNode.id)} 直接相连的本章知识点</span>
+          <div class="course-map-focus-notes" aria-label="关联说明">
+            <div class="course-map-focus-arrow-help-row">
+              <a
+                class="course-map-focus-arrow-help"
+                href="#course-map-arrow-help"
+                data-course-map-arrow-help-toggle
+                aria-expanded="false"
+                aria-controls="course-map-arrow-help"
+                aria-haspopup="dialog"
+              >关联箭头解析</a>
+              <div
+                class="course-map-focus-arrow-help-panel hidden"
+                id="course-map-arrow-help"
+                data-course-map-arrow-help-panel
+                role="dialog"
+                aria-label="关联箭头解析"
+              >
+                <div class="course-map-focus-arrow-help-heading">
+                  <strong>关联箭头解析</strong>
+                  <button type="button" data-course-map-arrow-help-close aria-label="关闭关联箭头解析">×</button>
+                </div>
+                <section class="course-map-focus-arrow-help-legend" aria-labelledby="course-map-arrow-help-legend-title">
+                  <h4 id="course-map-arrow-help-legend-title">6类设定的知识点关系</h4>
+                  <dl>
+                    <div>
+                      <dt>前置 · A → B</dt>
+                      <dd>A 是 B 的前置知识点，箭头由前置知识点指向后续知识点。</dd>
+                    </div>
+                    <div>
+                      <dt>推导 · A → B</dt>
+                      <dd>B 是由 A 推导得到的结果，箭头由推导起点指向推导结果。</dd>
+                    </div>
+                    <div>
+                      <dt>应用 · A → B</dt>
+                      <dd>B 是 A 的应用，箭头由基础知识点指向应用知识点。</dd>
+                    </div>
+                    <div>
+                      <dt>推广 · A → B</dt>
+                      <dd>B 是 A 的推广，箭头由基础或特殊形式指向推广或一般形式。</dd>
+                    </div>
+                    <div>
+                      <dt>对比 · A — B</dt>
+                      <dd>A 与 B 为对比关系；该关系无方向，用差异帮助理解。</dd>
+                    </div>
+                    <div>
+                      <dt>等价 · A — B</dt>
+                      <dd>A 与 B 在关系说明注明的条件下为等价关系；该关系无方向。</dd>
+                    </div>
+                  </dl>
+                </section>
+                <p class="course-map-focus-arrow-help-hint">将鼠标停留在图中的连线上，可查看当前两个知识点的实际关系。</p>
+              </div>
+            </div>
+            <span class="course-map-focus-helper">再次点击可打开知识点正文</span>
+          </div>
+          <span class="course-map-focus-summary-copy">仅显示与 ${escapeHtml(focusedNode.id)} 直接相连的本章知识点</span>
         </footer>
       </section>
     `;
@@ -704,9 +756,58 @@
     };
   }
 
+  function readerEdgeDescription(edge) {
+    const sourceTitle = nodeById(edge.source)?.title || edge.source;
+    const targetTitle = nodeById(edge.target)?.title || edge.target;
+    if (edge.type === 'ordered') {
+      return `“${targetTitle}”（后者）为“${sourceTitle}”（前者）的后续学习知识点，二者为课程学习顺序关系。`;
+    }
+    return `“${sourceTitle}”与“${targetTitle}”为补充关联关系。`;
+  }
+
+  function ensureReaderEdgeTooltip() {
+    if (!readerEdgeTooltip) {
+      readerEdgeTooltip = document.createElement('div');
+      readerEdgeTooltip.className = 'course-map-edge-tooltip hidden';
+      readerEdgeTooltip.dataset.courseMapEdgeTooltip = 'true';
+      readerEdgeTooltip.setAttribute('role', 'tooltip');
+      document.body.appendChild(readerEdgeTooltip);
+    }
+    return readerEdgeTooltip;
+  }
+
+  function hideReaderEdgeTooltip() {
+    readerEdgeTooltip?.classList.add('hidden');
+  }
+
+  function showReaderEdgeTooltip(event, edgeHit) {
+    const description = edgeHit.dataset.edgeTooltip || '';
+    if (!description) {
+      hideReaderEdgeTooltip();
+      return;
+    }
+    const tooltip = ensureReaderEdgeTooltip();
+    tooltip.textContent = description;
+    tooltip.classList.remove('hidden');
+    const gap = 14;
+    const margin = 12;
+    const rect = tooltip.getBoundingClientRect();
+    const left = Math.max(
+      margin,
+      Math.min(event.clientX + gap, window.innerWidth - rect.width - margin),
+    );
+    const top = Math.max(
+      margin,
+      Math.min(event.clientY + gap, window.innerHeight - rect.height - margin),
+    );
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+  }
+
   function renderReaderEdges() {
     const edgeLayer = canvas?.querySelector('.course-map-reader-edges');
-    if (!edgeLayer) {
+    const edgeHitLayer = canvas?.querySelector('.course-map-reader-edge-hits');
+    if (!edgeLayer || !edgeHitLayer) {
       return;
     }
     const viewModel = readerViewModel();
@@ -730,7 +831,7 @@
         height: rect.height,
       };
     };
-    const paths = viewModel.focusedEdges
+    const renderedEdges = viewModel.focusedEdges
       .map((edge, index) => {
         const source = positionFor(edge.source);
         const target = positionFor(edge.target);
@@ -741,23 +842,31 @@
           readerEdgeEndpoint(source, target),
           readerEdgeEndpoint(target, source),
         );
-        return `
-          <path class="course-map-edge-halo is-${edge.type}" d="${path}"></path>
-          <path class="course-map-edge is-${edge.type}" d="${path}" ${
-            edge.type === 'ordered' ? 'marker-end="url(#course-map-reader-arrow)"' : ''
-          }></path>
-          ${
-            edge.type === 'ordered'
-              ? `<path class="course-map-edge-pulse" d="${path}" pathLength="1" style="--edge-delay:${index * -0.72}s"></path>`
-              : ''
-          }
-        `;
+        const description = escapeHtml(readerEdgeDescription(edge));
+        return {
+          visible: `
+            <path class="course-map-edge-halo is-${edge.type}" d="${path}"></path>
+            <path class="course-map-edge is-${edge.type}" d="${path}" ${
+              edge.type === 'ordered' ? 'marker-end="url(#course-map-reader-arrow)"' : ''
+            }></path>
+            ${
+              edge.type === 'ordered'
+                ? `<path class="course-map-edge-pulse" d="${path}" pathLength="1" style="--edge-delay:${index * -0.72}s"></path>`
+                : ''
+            }
+          `,
+          hit: `<path class="course-map-edge-hit is-${edge.type}" d="${path}" data-edge-tooltip="${description}"><title>${description}</title></path>`,
+        };
       })
-      .join('');
+      .filter(Boolean);
+    const paths = renderedEdges.map((edge) => edge.visible).join('');
+    const hitPaths = renderedEdges.map((edge) => edge.hit).join('');
 
-    edgeLayer.setAttribute('width', String(canvas.scrollWidth));
-    edgeLayer.setAttribute('height', String(canvas.scrollHeight));
-    edgeLayer.setAttribute('viewBox', `0 0 ${canvas.scrollWidth} ${canvas.scrollHeight}`);
+    [edgeLayer, edgeHitLayer].forEach((layer) => {
+      layer.setAttribute('width', String(canvas.scrollWidth));
+      layer.setAttribute('height', String(canvas.scrollHeight));
+      layer.setAttribute('viewBox', `0 0 ${canvas.scrollWidth} ${canvas.scrollHeight}`);
+    });
     edgeLayer.innerHTML = `
       <defs>
         <marker id="course-map-reader-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
@@ -771,6 +880,7 @@
       </defs>
       ${paths}
     `;
+    edgeHitLayer.innerHTML = hitPaths;
   }
 
   function queueReaderEdges() {
@@ -791,10 +901,10 @@
     );
 
     return `
-      <section class="course-map-cross-relations is-${direction}" aria-label="${isIncoming ? '指进当前聚焦的跨章节关联' : '由当前聚焦指出的跨章节关联'}">
+      <section class="course-map-cross-relations is-${direction}" aria-label="${isIncoming ? '跨章节前置关联' : '跨章节后续关联'}">
         <header>
           <small>${isIncoming ? 'INCOMING RELATIONS' : 'OUTGOING RELATIONS'}</small>
-          <strong>${isIncoming ? '跨章节指进当前聚焦' : '当前聚焦指向跨章节'}</strong>
+          <strong>${isIncoming ? '跨章节前置关联' : '跨章节后续关联'}</strong>
           <span>${chapters.length} 个章节 · ${relationCount} 个知识点</span>
         </header>
         <div class="course-map-cross-grid">
@@ -850,10 +960,12 @@
     scroller?.classList.remove('is-reader-fit');
     canvas.style.width = '100%';
     canvas.style.height = 'auto';
+    hideReaderEdgeTooltip();
     canvas.innerHTML = `
       <div class="course-map-background" aria-hidden="true"></div>
       <div class="course-map-grid" aria-hidden="true"></div>
       <svg class="course-map-edges course-map-reader-edges" aria-hidden="true"></svg>
+      <svg class="course-map-edges course-map-reader-edge-hits" aria-hidden="true"></svg>
       ${chapterContent}
     `;
     setBackgroundSurface();
@@ -1787,8 +1899,22 @@
       scroller?.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
     };
 
+    canvas.addEventListener('pointermove', (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const edgeHit = target?.closest('.course-map-edge-hit');
+      if (edgeHit) {
+        showReaderEdgeTooltip(event, edgeHit);
+        return;
+      }
+      hideReaderEdgeTooltip();
+    });
+    canvas.addEventListener('pointerleave', hideReaderEdgeTooltip);
+
     canvas.addEventListener('click', (event) => {
       const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('.course-map-edge-hit')) {
+        return;
+      }
       const chapterButton = target?.closest('[data-chapter-toggle]');
       if (chapterButton) {
         toggleChapter(chapterButton.dataset.chapterToggle);
@@ -1799,6 +1925,32 @@
       if (previewClose) {
         state.manuallyCollapsedChapters.add(previewClose.dataset.previewClose);
         renderMap();
+        return;
+      }
+
+      const arrowHelpToggle = target?.closest('[data-course-map-arrow-help-toggle]');
+      if (arrowHelpToggle) {
+        event.preventDefault();
+        const arrowHelpPanel = canvas.querySelector('[data-course-map-arrow-help-panel]') ||
+          canvas.querySelector('#course-map-arrow-help');
+        if (arrowHelpPanel) {
+          const shouldOpen = arrowHelpPanel.classList.contains('hidden');
+          arrowHelpPanel.classList.toggle('hidden', !shouldOpen);
+          arrowHelpToggle.setAttribute('aria-expanded', String(shouldOpen));
+          if (shouldOpen) {
+            arrowHelpPanel.querySelector('[data-course-map-arrow-help-close]')?.focus();
+          }
+        }
+        return;
+      }
+
+      const arrowHelpClose = target?.closest('[data-course-map-arrow-help-close]');
+      if (arrowHelpClose) {
+        const arrowHelpPanel = arrowHelpClose.closest('.course-map-focus-arrow-help-panel');
+        const arrowHelpTrigger = canvas.querySelector('[data-course-map-arrow-help-toggle]');
+        arrowHelpPanel?.classList.add('hidden');
+        arrowHelpTrigger?.setAttribute('aria-expanded', 'false');
+        arrowHelpTrigger?.focus();
         return;
       }
 
@@ -1818,17 +1970,32 @@
 
     document.getElementById('course-map-reset-view')?.addEventListener('click', resetReaderView);
     document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        hideReaderEdgeTooltip();
+      }
       if (event.key === 'Escape' && state.focusedNodeId) {
+        const arrowHelpPanel = canvas.querySelector('.course-map-focus-arrow-help-panel:not(.hidden)');
+        if (arrowHelpPanel) {
+          arrowHelpPanel.classList.add('hidden');
+          const arrowHelpToggle = canvas.querySelector('[data-course-map-arrow-help-toggle]');
+          arrowHelpToggle?.setAttribute('aria-expanded', 'false');
+          arrowHelpToggle?.focus();
+          return;
+        }
         restoreFocusedChapter();
       }
     });
 
     let resizeFrame = 0;
     window.addEventListener('resize', () => {
+      hideReaderEdgeTooltip();
       window.cancelAnimationFrame(resizeFrame);
       resizeFrame = window.requestAnimationFrame(queueReaderEdges);
     });
-    scroller?.addEventListener('scroll', queueReaderEdges, { passive: true });
+    scroller?.addEventListener('scroll', () => {
+      hideReaderEdgeTooltip();
+      queueReaderEdges();
+    }, { passive: true });
   }
 
   async function initialize() {

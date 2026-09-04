@@ -26,9 +26,20 @@
   --radius-md: 22px;
   --radius-sm: 18px;
   --radius-xs: 14px;
-  --font-display: 'Syne', 'Noto Serif SC', serif;
-  --font-body: 'Noto Serif SC', Georgia, serif;
-  --font-ui: 'Syne', 'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  /*
+   * Typography roles are deliberately split so a preset can change the
+   * reading experience without touching KaTeX, code blocks, or fixed scenic
+   * pages such as the Learning World.
+   */
+  --font-zh-body: 'Noto Serif SC', Georgia, serif;
+  --font-zh-title: 'Syne', 'Noto Serif SC', serif;
+  --font-zh-ui: 'Syne', 'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-latin: 'Segoe UI', 'Source Sans Pro', Arial, sans-serif;
+  --font-math: 'KaTeX_Main', 'STIX Two Math', 'Cambria Math', 'Times New Roman', serif;
+  --font-code: 'SFMono-Regular', 'Consolas', 'Liberation Mono', monospace;
+  --font-display: var(--font-zh-title);
+  --font-body: var(--font-zh-body);
+  --font-ui: var(--font-zh-ui);
 }
 
 * {

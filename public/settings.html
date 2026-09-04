@@ -196,6 +196,35 @@
               <button class="auth-submit" type="submit">保存设置</button>
             </form>
 
+            <section class="settings-form settings-typography-form" aria-labelledby="settings-typography-title">
+              <div class="settings-section-heading">
+                <h2 id="settings-typography-title">阅读样式</h2>
+              </div>
+
+              <div class="settings-grid">
+                <label class="auth-field" for="settings-font-preset">
+                  <span>字体组合</span>
+                  <select id="settings-font-preset">
+                    <option value="transistor-lab">清晰阅读</option>
+                    <option value="zhongsong-study">中宋书卷</option>
+                    <option value="quantum-board">衬线标题</option>
+                    <option value="night-oscilloscope">高对比代码</option>
+                  </select>
+                </label>
+
+                <label class="auth-field" for="settings-type-scale">
+                  <span>字号大小</span>
+                  <select id="settings-type-scale">
+                    <option value="standard">标准</option>
+                    <option value="comfortable">舒适</option>
+                    <option value="large">大字</option>
+                  </select>
+                </label>
+              </div>
+
+              <p class="settings-typography-preview" id="settings-typography-preview" aria-live="polite"></p>
+            </section>
+
             <form class="settings-form settings-password-form" id="settings-password-form">
               <div class="settings-section-heading">
                 <h2>修改密码</h2>

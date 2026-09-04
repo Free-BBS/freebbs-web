@@ -140,6 +140,42 @@ html body.course-page.course-map-editor-page .site-footer {
 }
 
 .course-map-immersive {
+  /* Reader typography contract: every map element resolves through the same
+   * six-role preferences as the rest of the application.  The aliases keep
+   * this page readable while allowing each role to be changed in Settings. */
+  --course-map-font-body: var(--font-zh-body, var(--font-ui));
+  --course-map-font-title: var(--font-zh-title, var(--font-ui));
+  --course-map-font-ui: var(--font-zh-ui, var(--font-ui));
+  --course-map-font-latin: var(--font-latin, var(--font-ui));
+  --course-map-font-math: var(--font-math, serif);
+  --course-map-font-code: var(--font-code, monospace);
+  --course-map-title-size-step: 6px;
+  --course-map-small-size-step: 4px;
+  --course-map-overline-size-step: 3px;
+  --course-map-action-size-step: 6px;
+  --course-map-index-marker-size: 38px;
+  --course-map-index-marker-font-size: 0.78rem;
+  /* Shared card typography: code/metadata stay secondary to the name. */
+  --course-map-primary-heading-size: calc(
+    clamp(1.18rem, 1.9vw, 1.72rem) + var(--course-map-title-size-step)
+  );
+  --course-map-index-item-title-size: calc(0.72rem + var(--course-map-title-size-step));
+  --course-map-index-meta-size: calc(0.54rem + var(--course-map-overline-size-step));
+  --course-map-chapter-title-size: calc(
+    clamp(1rem, 1.3vw, 1.22rem) + var(--course-map-title-size-step)
+  );
+  --course-map-chapter-meta-size: calc(0.72rem + var(--course-map-small-size-step));
+  --course-map-topic-title-size: calc(
+    clamp(0.96rem, 1.05vw, 1.12rem) + var(--course-map-title-size-step)
+  );
+  --course-map-topic-meta-size: calc(0.66rem + var(--course-map-small-size-step));
+  --course-map-relation-heading-size: clamp(1.15rem, 1.65vw, 1.4rem);
+  --course-map-relation-overline-size: calc(0.6rem + var(--course-map-overline-size-step));
+  --course-map-relation-meta-size: calc(0.66rem + var(--course-map-overline-size-step));
+  --course-map-relation-helper-size: calc(0.62rem + 2px);
+  /* Preview cards are compact by design; enlarge only their chapter name so
+   * the related chapter remains the visual anchor without changing the card. */
+  --course-map-relation-preview-title-size: calc(1rem + var(--course-map-title-size-step));
   position: fixed;
   inset: 0;
   z-index: 200;
@@ -717,19 +753,19 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 .course-map-directory-section-heading small {
   color: var(--map-beacon);
   font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 0.58rem;
+  font-size: calc(0.58rem + var(--course-map-overline-size-step));
   font-weight: 900;
   letter-spacing: 0.14em;
 }
 
 .course-map-index-heading strong {
   color: var(--map-text);
-  font-size: 1rem;
+  font-size: var(--course-map-primary-heading-size);
 }
 
 .course-map-index-heading span {
   color: var(--map-muted);
-  font-size: 0.64rem;
+  font-size: calc(0.64rem + var(--course-map-overline-size-step));
 }
 
 .course-map-index-list {
@@ -743,7 +779,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   width: 100%;
   min-height: 56px;
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) 14px;
+  grid-template-columns: var(--course-map-index-marker-size) minmax(0, 1fr) 14px;
   align-items: center;
   gap: 9px;
   padding: 7px 9px;
@@ -786,15 +822,15 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 }
 
 .course-map-index-number {
-  width: 30px;
-  height: 30px;
+  width: var(--course-map-index-marker-size);
+  height: var(--course-map-index-marker-size);
   display: grid;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--map-card-border-active) 66%, transparent);
   border-radius: 10px;
   color: var(--map-muted);
   font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 0.62rem;
+  font-size: var(--course-map-index-marker-font-size);
   font-weight: 900;
 }
 
@@ -813,7 +849,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 .course-map-index-copy small {
   color: var(--map-muted);
   font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 0.5rem;
+  font-size: calc(0.5rem + var(--course-map-overline-size-step));
   font-weight: 800;
   letter-spacing: 0.08em;
 }
@@ -826,13 +862,13 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 }
 
 .course-map-index-copy strong {
-  font-size: 0.72rem;
+  font-size: var(--course-map-index-item-title-size);
   line-height: 1.22;
 }
 
 .course-map-index-copy span {
   color: var(--map-muted);
-  font-size: 0.54rem;
+  font-size: var(--course-map-index-meta-size);
 }
 
 .course-map-index-item > i {
@@ -859,6 +895,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 }
 
 .course-map-directory-heading {
+  position: relative;
   min-height: 84px;
   display: flex;
   align-items: center;
@@ -869,33 +906,41 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 }
 
 .course-map-directory-heading > span {
+  flex: 1 1 auto;
   min-width: 0;
   display: grid;
   grid-template-columns: auto auto;
   align-items: baseline;
   gap: 4px 10px;
+  padding-right: clamp(220px, 28%, 360px);
 }
 
 .course-map-directory-heading strong {
   grid-column: 1;
   overflow: hidden;
   color: var(--map-text);
-  font-size: clamp(1.18rem, 1.9vw, 1.72rem);
+  font-size: var(--course-map-primary-heading-size);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .course-map-directory-heading i,
-.course-map-directory-heading p,
 .course-map-directory-section-heading i {
   color: var(--map-muted);
-  font-size: 0.66rem;
+  font-size: calc(0.66rem + var(--course-map-overline-size-step));
   font-style: normal;
 }
 
 .course-map-directory-heading p {
-  flex: 0 0 auto;
+  position: absolute;
+  top: 18px;
+  right: 24px;
+  max-width: min(420px, 42%);
   margin: 0;
+  color: var(--map-muted);
+  font-size: calc(0.66rem + var(--course-map-action-size-step));
+  line-height: 1.35;
+  text-align: right;
 }
 
 .course-map-directory-current {
@@ -983,7 +1028,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   margin-top: 14px;
   color: var(--map-muted);
   font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 0.68rem;
+  font-size: calc(0.68rem + var(--course-map-overline-size-step));
   font-weight: 900;
   letter-spacing: 0.08em;
 }
@@ -992,7 +1037,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   max-width: 760px;
   margin: 6px 0 0;
   color: var(--map-text);
-  font-size: clamp(1.55rem, 3.2vw, 2.65rem);
+  font-size: calc(clamp(1.55rem, 3.2vw, 2.65rem) + var(--course-map-title-size-step));
   line-height: 1.14;
 }
 
@@ -1000,7 +1045,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   max-width: 720px;
   margin: 13px 0 0;
   color: var(--map-muted);
-  font-size: 0.78rem;
+  font-size: calc(0.78rem + var(--course-map-small-size-step));
   line-height: 1.7;
 }
 
@@ -1011,7 +1056,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   gap: 4px 8px;
   margin-top: 17px;
   color: var(--map-muted);
-  font-size: 0.65rem;
+  font-size: calc(0.65rem + var(--course-map-small-size-step));
 }
 
 .course-map-directory-current-copy > div b {
@@ -1029,23 +1074,24 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 .course-map-directory-current-actions {
   position: relative;
   z-index: 1;
-  min-width: 132px;
+  min-width: 160px;
   display: grid;
   gap: 8px;
 }
 
 .course-map-directory-current-actions button,
 .course-map-directory-current-actions a {
-  min-height: 38px;
+  min-width: 150px;
+  min-height: 46px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 14px;
+  padding: 0 18px;
   border: 1px solid color-mix(in srgb, var(--map-beacon) 44%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, var(--map-beacon) 12%, transparent);
   color: var(--map-text);
-  font-size: 0.66rem;
+  font-size: calc(0.66rem + var(--course-map-action-size-step));
   font-weight: 900;
   text-decoration: none;
   cursor: pointer;
@@ -1081,7 +1127,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 
 .course-map-directory-section-heading strong {
   color: var(--map-text);
-  font-size: 0.9rem;
+  font-size: var(--course-map-primary-heading-size);
 }
 
 .course-map-directory-nodes {
@@ -1158,6 +1204,30 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   border-bottom: 1px solid color-mix(in srgb, var(--map-card-border) 58%, transparent);
 }
 
+/* Relation-focus cards follow one text contract: chapter/topic names lead, metadata supports. */
+.course-map-focused-chapter .course-map-chapter-copy strong {
+  font-size: clamp(1.75rem, 2.1vw, 2.4rem);
+  line-height: 1.16;
+}
+
+.course-map-focused-chapter .course-map-topic-main {
+  align-content: center;
+}
+
+.course-map-focused-chapter .course-map-topic-main strong {
+  display: block;
+  overflow: hidden;
+  font-size: clamp(1.7rem, 1.9vw, 2.15rem);
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.course-map-focused-chapter .course-map-focus-side .course-map-topic-main strong {
+  font-size: clamp(1.45rem, 1.5vw, 1.8rem);
+  line-height: 1.18;
+}
+
 .course-map-focused-heading > button,
 .course-map-focus-summary button {
   padding: 8px 11px;
@@ -1194,21 +1264,8 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   gap: 12px;
 }
 
-.course-map-focus-direction {
-  color: var(--map-muted);
-  font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 0.58rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .course-map-focus-side.is-left {
   justify-items: end;
-}
-
-.course-map-focus-side.is-left .course-map-focus-direction {
-  text-align: right;
 }
 
 .course-map-focus-side.is-right {
@@ -1226,20 +1283,6 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   text-align: center;
 }
 
-.course-map-focus-center > small {
-  color: var(--map-beacon);
-  font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 0.6rem;
-  font-weight: 900;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.course-map-focus-center > span {
-  color: var(--map-muted);
-  font-size: 0.62rem;
-}
-
 .course-map-focus-center .course-map-topic {
   width: 100%;
   min-height: 116px;
@@ -1250,16 +1293,147 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 }
 
 .course-map-focus-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  display: grid;
+  gap: 8px;
   padding: 13px 22px 18px;
 }
 
-.course-map-focus-summary span {
+.course-map-focus-notes {
+  display: grid;
+  gap: 7px;
+}
+
+.course-map-focus-arrow-help-row {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.course-map-focus-arrow-help {
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--map-signal-end) !important;
+  font-size: var(--course-map-relation-helper-size) !important;
+  font-weight: 800 !important;
+  line-height: 1.35;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  cursor: pointer;
+}
+
+.course-map-focus-arrow-help:hover,
+.course-map-focus-arrow-help:focus-visible {
+  color: var(--map-text) !important;
+  text-decoration-thickness: 2px;
+  outline: 2px solid color-mix(in srgb, var(--map-beacon) 32%, transparent);
+  outline-offset: 4px;
+}
+
+.course-map-focus-arrow-help-panel {
+  flex: 0 1 min(360px, 100%);
+  min-width: min(260px, 100%);
+  max-height: min(680px, calc(100dvh - 48px));
+  overflow-y: auto;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--map-card-border-active) 70%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--map-card) 94%, transparent);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--map-beacon) 16%, transparent);
+}
+
+.course-map-focus-arrow-help-panel:not(.hidden) {
+  display: grid;
+  gap: 8px;
+}
+
+.course-map-focus-arrow-help-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--map-text);
+}
+
+.course-map-focus-arrow-help-heading strong {
+  font-size: 0.88rem;
+  line-height: 1.3;
+}
+
+.course-map-focus-arrow-help-panel .course-map-focus-arrow-help-heading > button {
+  width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--map-card-border) 72%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--map-card) 74%, transparent);
+  color: color-mix(in srgb, var(--map-text) 76%, transparent);
+  font-size: 1.05rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.course-map-focus-arrow-help-panel dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.course-map-focus-arrow-help-panel dl > div {
+  display: grid;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--map-card-border) 58%, transparent);
+}
+
+.course-map-focus-arrow-help-panel h4 {
+  margin: 0;
+  color: color-mix(in srgb, var(--map-text) 76%, transparent);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.course-map-focus-arrow-help-hint {
+  margin: 0;
+  padding-top: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--map-card-border) 58%, transparent);
+  color: color-mix(in srgb, var(--map-text) 76%, transparent);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.course-map-focus-arrow-help-panel dt {
+  color: var(--map-signal-end);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.course-map-focus-arrow-help-panel dd {
+  margin: 0;
+  color: color-mix(in srgb, var(--map-text) 76%, transparent);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.course-map-focus-helper,
+.course-map-focus-summary-copy {
   color: var(--map-muted);
-  font-size: 0.7rem;
+  font-size: calc(0.7rem + 2px);
+  line-height: 1.35;
+}
+
+.course-map-focus-summary-copy {
+  display: block;
+  max-width: none;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .course-map-cross-relations {
@@ -1285,7 +1459,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 
 .course-map-cross-relations > header {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   padding: 0 4px 4px;
   text-align: center;
 }
@@ -1293,19 +1467,20 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 .course-map-cross-relations > header small {
   color: var(--map-signal-middle);
   font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 0.6rem;
+  font-size: var(--course-map-relation-overline-size);
   font-weight: 900;
   letter-spacing: 0.14em;
 }
 
 .course-map-cross-relations > header strong {
   color: var(--map-text);
-  font-size: 1.05rem;
+  font-size: var(--course-map-relation-heading-size);
+  line-height: 1.25;
 }
 
 .course-map-cross-relations > header span {
   color: var(--map-muted);
-  font-size: 0.7rem;
+  font-size: var(--course-map-relation-meta-size);
 }
 
 .course-map-cross-grid {
@@ -1442,12 +1617,12 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 }
 
 .course-map-chapter-card.is-preview .course-map-chapter-copy strong {
-  font-size: 0.88rem;
+  font-size: var(--course-map-relation-preview-title-size);
 }
 
 .course-map-chapter-card.is-preview .course-map-chapter-action {
   max-width: 58px;
-  font-size: 0.58rem;
+  font-size: var(--course-map-relation-helper-size);
   text-align: right;
 }
 
@@ -1512,7 +1687,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 .course-map-chapter-copy small {
   color: var(--chapter-accent);
   font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 0.62rem;
+  font-size: var(--course-map-relation-overline-size);
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1521,7 +1696,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 .course-map-chapter-copy strong {
   overflow: hidden;
   color: var(--map-text);
-  font-size: clamp(1rem, 1.3vw, 1.22rem);
+  font-size: var(--course-map-chapter-title-size);
   line-height: 1.28;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1530,7 +1705,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 .course-map-chapter-copy > span {
   overflow: hidden;
   color: var(--map-muted);
-  font-size: 0.72rem;
+  font-size: var(--course-map-chapter-meta-size);
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1585,7 +1760,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   min-width: 0;
   overflow: hidden;
   color: var(--map-muted);
-  font-size: 0.62rem;
+  font-size: var(--course-map-relation-meta-size);
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1608,7 +1783,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   border-radius: 999px;
   background: color-mix(in srgb, var(--map-card) 72%, transparent);
   color: var(--map-muted);
-  font-size: 0.58rem;
+  font-size: var(--course-map-relation-helper-size);
   font-weight: 800;
   cursor: pointer;
 }
@@ -1689,10 +1864,11 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   outline-offset: -4px;
 }
 
+/* Keep the topic-card geometry and edge strokes stable; only enlarge node content. */
 .course-map-topic-code {
   color: var(--map-muted);
   font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 0.58rem;
+  font-size: calc(0.68rem + 2px);
   font-weight: 800;
   letter-spacing: 0.09em;
 }
@@ -1701,8 +1877,8 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   display: -webkit-box;
   overflow: hidden;
   color: var(--map-text);
-  font-size: 0.83rem;
-  line-height: 1.38;
+  font-size: var(--course-map-topic-title-size);
+  line-height: 1.25;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -1718,7 +1894,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 .course-map-topic-meta b,
 .course-map-topic-meta i {
   color: var(--map-muted);
-  font-size: 0.59rem;
+  font-size: var(--course-map-topic-meta-size);
   font-style: normal;
   font-weight: 700;
 }
@@ -1739,15 +1915,15 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 
 .course-map-topic-tag {
   --course-map-tag-color: var(--map-muted);
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   display: inline-grid;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--course-map-tag-color) 42%, transparent);
   border-radius: 7px;
   background: color-mix(in srgb, var(--course-map-tag-color) 15%, var(--map-card));
   color: var(--course-map-tag-color);
-  font-size: 0.61rem;
+  font-size: 0.66rem;
   font-style: normal;
   font-weight: 900;
   line-height: 1;
@@ -1825,6 +2001,39 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   opacity: 0.72;
 }
 
+.course-map-reader-edge-hits {
+  z-index: 4;
+  pointer-events: none;
+}
+
+.course-map-edge-hit {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.001);
+  stroke-linecap: round;
+  stroke-width: 18;
+  pointer-events: stroke;
+  cursor: help;
+  vector-effect: non-scaling-stroke;
+}
+
+.course-map-edge-tooltip {
+  position: fixed;
+  z-index: 260;
+  max-width: min(380px, calc(100vw - 24px));
+  padding: 10px 12px;
+  border: 1px solid var(--ui-line-strong, rgba(7, 19, 23, 0.2));
+  border-radius: 10px;
+  background: var(--ui-surface-raised, #ffffff);
+  box-shadow: 0 12px 28px rgba(4, 30, 35, 0.18);
+  color: var(--ui-text, #071317);
+  font-family: var(--font-zh-body, var(--font-ui));
+  font-size: clamp(0.78rem, 1.25vw, 0.92rem);
+  font-weight: var(--font-zh-body-weight, 400);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
 @keyframes course-map-learning-pulse {
   0%,
   100% {
@@ -1895,7 +2104,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   width: min(222px, calc(100% - 8px));
   min-height: 64px;
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) 20px;
+  grid-template-columns: 34px minmax(0, 1fr) 22px;
   align-items: center;
   gap: 8px;
   padding: 10px 11px;
@@ -1941,8 +2150,8 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 }
 
 .course-map-node-index {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--map-beacon) 24%, transparent);
@@ -1950,7 +2159,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   background: color-mix(in srgb, var(--map-beacon) 9%, transparent);
   color: var(--map-signal-end);
   font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 0.7rem;
+  font-size: 0.78rem;
   font-weight: 900;
 }
 
@@ -1966,7 +2175,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   gap: 5px;
   color: var(--map-muted);
   font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 0.58rem;
+  font-size: 0.64rem;
   font-weight: 700;
   letter-spacing: 0.11em;
 }
@@ -1990,7 +2199,7 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   overflow: hidden;
   color: var(--map-text);
   font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  font-size: 0.82rem;
+  font-size: calc(0.95rem + var(--course-map-title-size-step));
   font-weight: 800;
   line-height: 1.25;
   text-align: left;
@@ -1999,13 +2208,13 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 }
 
 .course-map-node-arrow {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   display: grid;
   place-items: center;
   border-radius: 50%;
   color: var(--map-muted);
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   transition:
     background 180ms ease,
     color 180ms ease,
@@ -2104,6 +2313,111 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 #course-edge-status.is-error,
 .markdown-save-status.is-error {
   color: #a03d3d !important;
+}
+
+/*
+ * Reader typography contract
+ * --------------------------
+ * Keep the map's visual hierarchy independent from the editor.  Names use
+ * the configurable Chinese title face, supporting copy uses the body face,
+ * controls use the UI face, English labels use the Latin face, and IDs /
+ * technical markers retain the configurable code face.  The Learning World
+ * and course hero's intentional display faces remain outside this scope.
+ */
+.course-map-immersive
+  :where(
+    .course-map-index-heading > strong,
+    .course-map-index-copy > strong,
+    .course-map-directory-heading strong,
+    .course-map-directory-section-heading strong,
+    .course-map-directory-current-copy h2,
+    .course-map-cross-relations > header > strong,
+    .course-map-chapter-copy > strong,
+    .course-map-topic-main > strong,
+    .course-map-node-copy > strong,
+    .course-map-focus-arrow-help-heading > strong
+  ) {
+  font-family: var(--course-map-font-title) !important;
+}
+
+.course-map-immersive
+  :where(
+    .course-map-index-heading > span,
+    .course-map-index-copy > span,
+    .course-map-directory-heading i,
+    .course-map-directory-heading p,
+    .course-map-directory-section-heading > i,
+    .course-map-directory-current-copy p,
+    .course-map-directory-current-copy > div,
+    .course-map-chapter-copy > span,
+    .course-map-preview-context > span,
+    .course-map-topic-meta,
+    .course-map-topic-meta i,
+    .course-map-focus-helper,
+    .course-map-focus-summary-copy,
+    .course-map-focus-arrow-help-panel dd,
+    .course-map-focus-arrow-help-hint,
+    .course-map-cross-relations > header > span
+  ) {
+  font-family: var(--course-map-font-body) !important;
+}
+
+.course-map-immersive
+  :where(
+    .course-map-index-item,
+    .course-map-chapter-toggle,
+    .course-map-chapter-action,
+    .course-map-preview-context > button,
+    .course-map-directory-current-actions > button,
+    .course-map-directory-current-actions > a,
+    .course-map-focused-heading > button,
+    .course-map-focus-summary > button,
+    .course-map-focus-arrow-help,
+    .course-map-node-arrow,
+    .course-map-topic-tag
+  ) {
+  font-family: var(--course-map-font-ui) !important;
+}
+
+.course-map-immersive
+  :where(
+    .course-map-index-heading > small,
+    .course-map-directory-section-heading small,
+    .course-map-cross-relations > header > small
+  ) {
+  font-family: var(--course-map-font-latin) !important;
+}
+
+.course-map-immersive
+  :where(
+    .course-map-index-number,
+    .course-map-index-copy > small,
+    .course-map-directory-heading small,
+    .course-map-directory-current-copy > small,
+    .course-map-directory-current-copy > span,
+    .course-map-directory-current-copy > div b,
+    .course-map-chapter-copy > small,
+    .course-map-topic-code,
+    .course-map-focus-arrow-help-panel dt,
+    .course-map-node-index,
+    .course-map-node-id
+  ) {
+  font-family: var(--course-map-font-code) !important;
+}
+
+/* The relation-help control is one compact reading aid, so keep every label,
+ * description and control on the user's selected Chinese reading face. */
+body:not(.world-page) .course-map-immersive
+  :where(
+    .course-map-focus-arrow-help,
+    .course-map-focus-arrow-help-panel,
+    .course-map-focus-arrow-help-panel *
+  ) {
+  font-family: var(--course-map-font-body) !important;
+}
+
+.course-map-immersive :where(.katex, .katex *) {
+  font-family: var(--course-map-font-math) !important;
 }
 
 /* Map editor */
@@ -2831,6 +3145,7 @@ body.course-map-editor-page .site-footer {
 
   .course-map-directory-current-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
   }
 
   .course-map-focus-workspace {
@@ -2897,7 +3212,7 @@ body.course-map-editor-page .site-footer {
 
   .course-map-index-item {
     min-height: 52px;
-    grid-template-columns: 28px minmax(0, 1fr);
+    grid-template-columns: 34px minmax(0, 1fr);
     gap: 7px;
     padding: 6px 8px;
   }
@@ -2908,14 +3223,19 @@ body.course-map-editor-page .site-footer {
   }
 
   .course-map-index-number {
-    width: 27px;
-    height: 27px;
+    width: 33px;
+    height: 33px;
+    font-size: 0.72rem;
   }
 
   .course-map-directory-heading {
     min-height: 72px;
     align-items: start;
     padding: 14px 16px;
+  }
+
+  .course-map-directory-heading > span {
+    padding-right: 0;
   }
 
   .course-map-directory-heading p {
@@ -2927,13 +3247,18 @@ body.course-map-editor-page .site-footer {
     padding: 20px 17px;
   }
 
+  .course-map-directory-current-actions button,
+  .course-map-directory-current-actions a {
+    min-width: 0;
+  }
+
   .course-map-directory-current-tags {
     top: 17px;
     right: 17px;
   }
 
   .course-map-directory-current-copy h2 {
-    font-size: 1.55rem;
+    font-size: calc(1.55rem + var(--course-map-title-size-step));
   }
 
   .course-map-directory-section-heading {
@@ -2982,18 +3307,27 @@ body.course-map-editor-page .site-footer {
     justify-items: stretch;
   }
 
-  .course-map-focus-side.is-left .course-map-focus-direction,
-  .course-map-focus-side.is-right .course-map-focus-direction {
-    text-align: left;
-  }
-
   .course-map-focus-side .course-map-topic {
     width: 100%;
   }
 
   .course-map-focus-summary {
-    display: grid;
     padding: 12px 16px 16px;
+  }
+
+  .course-map-focus-notes {
+    gap: 6px;
+  }
+
+  .course-map-focus-arrow-help-panel {
+    flex-basis: 100%;
+    min-width: 0;
+    max-height: min(520px, calc(100dvh - 96px));
+  }
+
+  .course-map-focus-helper,
+  .course-map-focus-summary-copy {
+    text-align: left;
   }
 
   .course-map-cross-grid {
@@ -3034,7 +3368,7 @@ body.course-map-editor-page .site-footer {
   }
 
   .course-map-topic-main strong {
-    font-size: 0.79rem;
+    font-size: calc(0.92rem + var(--course-map-title-size-step));
   }
 
   .course-map-studio-bar {
@@ -3606,12 +3940,12 @@ body.is-resizing-knowledge-panel * {
 
 .knowledge-sequence-link {
   min-width: 0;
-  min-height: 72px;
+  min-height: 84px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 11px;
-  padding: 11px 14px;
+  gap: 12px;
+  padding: 13px 16px;
   border: 1px solid var(--course-line);
   border-radius: 10px;
   background: var(--course-neutral-surface);
@@ -3636,20 +3970,21 @@ body.is-resizing-knowledge-panel * {
 
 .knowledge-sequence-link > span[aria-hidden] {
   color: var(--course-accent);
-  font-size: 1.15rem;
+  font-size: 1.35rem;
   font-weight: 900;
 }
 
 .knowledge-sequence-link small {
   color: var(--bbs-shell-muted);
-  font-size: 0.62rem;
+  font-size: 0.84rem;
   font-weight: 850;
+  line-height: 1.3;
 }
 
 .knowledge-sequence-link strong {
   overflow: hidden;
   color: var(--bbs-shell-text);
-  font-size: 0.76rem;
+  font-size: 1rem;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4987,8 +5322,16 @@ body.knowledge-page:has(.course-material-immersive) .course-material-immersive {
   min-width: 0;
   min-height: 0;
   max-width: 820px;
+  font-family: var(--font-zh-body) !important;
   font-size: 1rem;
   line-height: 1.9;
+}
+
+.course-material-body,
+.knowledge-supplementary-body,
+.knowledge-discussion-detail-body {
+  font-synthesis: weight style small-caps;
+  font-weight: var(--font-zh-body-weight, 400);
 }
 
 .knowledge-supplementary {
@@ -5044,21 +5387,28 @@ body.knowledge-page:has(.course-material-immersive) .course-material-immersive {
   gap: 12px;
 }
 
-.knowledge-reading-actions button {
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--course-accent);
+.knowledge-reading-back {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 18px;
+  border: 1px solid var(--course-accent);
+  border-radius: 9px;
+  background: var(--course-accent);
+  color: #ffffff;
   font: inherit;
-  font-size: 0.78rem;
-  font-weight: 800;
+  font-size: 0.94rem;
+  font-weight: 850;
   cursor: pointer;
 }
 
-.knowledge-reading-actions button:hover,
-.knowledge-reading-actions button:focus-visible {
-  text-decoration: underline;
-  outline: none;
+.knowledge-reading-back:hover,
+.knowledge-reading-back:focus-visible {
+  filter: brightness(1.08);
+  outline: 2px solid color-mix(in srgb, var(--course-accent) 40%, transparent);
+  outline-offset: 2px;
 }
 
 .knowledge-supplementary-card {
@@ -5159,6 +5509,14 @@ body.knowledge-page:has(.course-material-immersive) .course-material-immersive {
   color: var(--bbs-shell-text);
 }
 
+/* Ordinary Markdown blocks are regular weight; only semantic <strong>/<b>
+ * below may raise the weight, regardless of the selected Chinese face. */
+.course-material-body :where(p, li, td, th, blockquote),
+.knowledge-supplementary-body :where(p, li, td, th, blockquote),
+.knowledge-discussion-detail-body :where(p, li, td, th, blockquote) {
+  font-weight: var(--font-zh-body-weight, 400);
+}
+
 .course-material-body ul,
 .course-material-body ol {
   padding-left: 1.45em;
@@ -5168,8 +5526,16 @@ body.knowledge-page:has(.course-material-immersive) .course-material-immersive {
   margin-top: 0.42em;
 }
 
-.course-material-body strong {
+.course-material-body :where(strong, b) {
   color: var(--bbs-shell-text);
+  font-family: inherit;
+  font-weight: 700;
+}
+
+.knowledge-supplementary-body :where(strong, b),
+.knowledge-discussion-detail-body :where(strong, b) {
+  font-family: inherit;
+  font-weight: 700;
 }
 
 .course-material-body blockquote {
