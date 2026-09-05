@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FREE-BBS · 知识正文独立字体验证</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/course.css" />
+    <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css" />
+    <link rel="stylesheet" href="/vendor/@highlightjs/cdn-assets/styles/github-dark.min.css" />
+    <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/knowledge-typography.css" />
+    <style>
+      body.typography-fixture {
+        --bbs-shell-width: 0px;
+      }
+      body.typography-fixture .main-content {
+        width: min(1120px, 100%);
+        margin: 0 auto !important;
+        padding: 32px 20px 56px !important;
+      }
+      body.typography-fixture .main-content::before {
+        display: none !important;
+      }
+      .fixture-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        gap: 16px;
+        margin: 24px 0;
+      }
+      .fixture-controls label {
+        display: grid;
+        gap: 6px;
+      }
+      .fixture-controls select {
+        min-height: 44px;
+        max-width: 100%;
+        padding: 6px 12px;
+        border: 1px solid var(--course-line);
+        border-radius: 8px;
+        color: var(--bbs-shell-text);
+        background: var(--course-surface-solid);
+      }
+      .fixture-note {
+        padding: 14px 18px;
+        border: 1px solid var(--course-line);
+        border-radius: 10px;
+        background: var(--course-accent-soft);
+      }
+      .fixture-reader {
+        display: grid;
+        gap: 18px;
+        padding: clamp(18px, 4vw, 42px);
+        border: 1px solid var(--course-line);
+        border-radius: 16px;
+        background: var(--course-surface-solid);
+      }
+      .fixture-metrics {
+        width: 100%;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body class="knowledge-page typography-fixture theme-light">
+    <main class="main-content knowledge-main">
+      <header>
+        <p class="course-kicker">LOCAL TYPOGRAPHY CHECK</p>
+        <h1 id="fixture-page-title">知识正文 · 字体与语义重点验证</h1>
+        <p class="fixture-note">
+          这是固定排版测试样例，非课程原文，不连接账号、课程数据库或 API。
+          下方选择仅应用于当前测试页，不保存字体、字号或主题设置。
+        </p>
+      </header>
+      <div class="fixture-controls" aria-label="字体验证设置">
+        <label for="fixture-font">
+          字体预设
+          <select id="fixture-font"></select>
+        </label>
+        <label for="fixture-scale">
+          字号档位
+          <select id="fixture-scale"></select>
+        </label>
+        <label for="fixture-theme">
+          主题
+          <select id="fixture-theme">
+            <option value="light">明亮模式</option>
+            <option value="dark">暗色模式</option>
+          </select>
+        </label>
+      </div>
+      <section
+        class="fixture-reader"
+        id="knowledge-reading"
+        aria-labelledby="fixture-reading-title"
+      >
+        <header class="course-material-section-heading">
+          <div>
+            <p class="course-kicker">READING</p>
+            <h2 id="fixture-reading-title">正文测试</h2>
+          </div>
+        </header>
+        <div class="discussion-markdown-body course-material-body" id="knowledge-body"></div>
+      </section>
+      <details>
+        <summary>查看当前计算样式与字体加载状态</summary>
+        <pre class="fixture-metrics" id="fixture-metrics" aria-live="polite"></pre>
+      </details>
+    </main>
+    <script type="text/plain" id="fixture-markdown">
+      普通正文：知识点连接起学习的每一步。Regular 400，保留自然的中文和英文混排。
+
+      **重点正文：知识点连接起学习的每一步。Bold 700，应与上一行有明显粗细对比。**
+
+      读卷积时可以按四步走：**翻转、平移、相乘、积分**。这比直接背公式更稳。
+
+      ## Markdown 二级标题：标题保留主题字体
+
+      ### Markdown 三级标题：局部字体替换不改变标题层级
+
+      - 普通列表内容；**列表中的语义重点**；普通内容仍保持常规字重。
+      - 行内代码 `const signal = 1` 保持代码字体；**重点中的代码 `signal`** 不应变为衬线正文。
+
+      > 引用中的普通说明，**引用中的语义重点**，以及普通的后续说明。
+
+      | 测试位置 | 预期展示 |
+      | --- | --- |
+      | 普通单元格 | **单元格中的重点**与普通内容同时存在 |
+      | 数学符号 | 行内公式 $y(t)=x(t)*h(t)$ 保持数学字体 |
+
+      行内公式 $E=mc^2$ 不应跟随中文正文切换；**强调语境中的公式 $x(t)$** 仍使用数学字体。
+
+      $$
+      y(t)=\int_{-\infty}^{\infty}x(\tau)h(t-\tau)\,d\tau.
+      $$
+
+      ```javascript
+      // 代码块保持代码字体、缩进和原有字重。
+      const values = [1, 2, 3];
+      const doubled = values.map((value) => value * 2);
+      ```
+
+      最后一段是普通正文。*斜体强调*与**加粗重点**分别遵循原始 Markdown 语义。
+    </script>
+    <script src="/vendor/marked/lib/marked.umd.js"></script>
+    <script src="/vendor/katex/dist/katex.min.js"></script>
+    <script src="/vendor/katex/dist/contrib/auto-render.min.js"></script>
+    <script src="/typography.js"></script>
+    <script>
+      (() => {
+        const preferences = window.freeBbsTypography;
+        const font = document.getElementById('fixture-font');
+        const scale = document.getElementById('fixture-scale');
+        const theme = document.getElementById('fixture-theme');
+        const body = document.getElementById('knowledge-body');
+        const metrics = document.getElementById('fixture-metrics');
+
+        Object.entries(preferences.presets).forEach(([key, preset]) => {
+          font.add(new Option(preset.name, key));
+        });
+        Object.entries(preferences.typeScalePresets).forEach(([key, preset]) => {
+          scale.add(new Option(preset.name, key));
+        });
+        font.value = 'zhongsong-study';
+        scale.value = 'comfortable';
+
+        // The only source is the fixed text block above, never API or user input.
+        body.innerHTML = window.marked.parse(
+          document.getElementById('fixture-markdown').textContent.replace(/^ {6}/gm, '').trim(),
+        );
+        window.renderMathInElement(body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false },
+          ],
+          throwOnError: false,
+        });
+
+        function renderMetrics() {
+          const samples = {
+            ordinary: '#knowledge-body > p',
+            strong: '#knowledge-body strong',
+            markdownHeading: '#knowledge-body h2',
+            pageHeading: '#fixture-page-title',
+            inlineCode: '#knowledge-body p code, #knowledge-body li code',
+            codeBlock: '#knowledge-body pre code',
+            formula: '#knowledge-body .katex',
+          };
+          const styles = Object.fromEntries(
+            Object.entries(samples).map(([key, selector]) => {
+              const computed = getComputedStyle(document.querySelector(selector));
+              return [
+                key,
+                {
+                  family: computed.fontFamily,
+                  weight: computed.fontWeight,
+                  size: computed.fontSize,
+                },
+              ];
+            }),
+          );
+          const fonts = Array.from(document.fonts)
+            .filter((face) => face.family.includes('FREEBBS Knowledge Serif'))
+            .map((face) => ({ family: face.family, weight: face.weight, status: face.status }));
+          metrics.textContent = JSON.stringify({ styles, fonts }, null, 2);
+        }
+
+        function applyPreview() {
+          preferences.applyPreferences({ fontPreset: font.value, typeScale: scale.value });
+          document.body.classList.toggle('theme-dark', theme.value === 'dark');
+          document.body.classList.toggle('theme-light', theme.value === 'light');
+          renderMetrics();
+          document.fonts.ready.then(renderMetrics);
+        }
+        [font, scale, theme].forEach((control) => {
+          control.addEventListener('change', applyPreview);
+        });
+        document.fonts.addEventListener('loadingdone', renderMetrics);
+        applyPreview();
+      })();
+    </script>
+  </body>
+</html>

@@ -12,6 +12,64 @@ function readPublic(file) {
   return fs.readFileSync(path.join(publicDir, file), 'utf8');
 }
 
+test('book-style knowledge prose has two bundled real font weights', () => {
+  const css = readPublic('knowledge-typography.css');
+  const faces = [...css.matchAll(/@font-face\s*\{([^}]+)\}/g)];
+  assert.equal(faces.length, 2);
+  for (const [index, [name, weight]] of [
+    ['Regular', 400],
+    ['Bold', 700],
+  ].entries()) {
+    const file = `assets/fonts/source-han-serif-sc/SourceHanSerifCN-${name}.otf`;
+    assert.ok(faces[index][1].includes(`url('/${file}')`));
+    assert.match(faces[index][1], /font-family:\s*'FREEBBS Knowledge Serif'/);
+    assert.match(faces[index][1], new RegExp(`font-weight:\\s*${weight}`));
+    assert.match(faces[index][1], /font-display:\s*swap/);
+    assert.doesNotMatch(faces[index][1], /local\s*\(/);
+
+    // Validate the font itself, not just its filename or CSS declaration.
+    const font = fs.readFileSync(path.join(publicDir, file));
+    assert.equal(font.toString('ascii', 0, 4), 'OTTO');
+    const tables = new Map();
+    for (let i = 0; i < font.readUInt16BE(4); i += 1) {
+      const record = 12 + i * 16;
+      tables.set(font.toString('ascii', record, record + 4), font.readUInt32BE(record + 8));
+    }
+    assert.ok(tables.has('OS/2'));
+    assert.equal(font.readUInt16BE(tables.get('OS/2') + 4), weight);
+    assert.ok(!tables.has('fvar'), 'the requested faces must be static, not variable');
+    assert.ok(font.readUInt16BE(tables.get('maxp') + 4) > 20000, 'retain full SC coverage');
+  }
+  assert.match(readPublic('assets/fonts/source-han-serif-sc/LICENSE.txt'), /SIL OPEN FONT LICENSE/);
+});
+
+test('knowledge font override is limited to book-style prose and preserves semantic roles', () => {
+  const css = readPublic('knowledge-typography.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  const scoped = css.replace(/@font-face\s*\{[^}]+\}/g, '').trim();
+  assert.match(
+    scoped,
+    /^html\[data-font-preset='zhongsong-study'\] body\.knowledge-page #knowledge-body\s*\{[^{}]+\}$/,
+  );
+  assert.match(scoped, /--font-zh-body:\s*'FREEBBS Knowledge Serif'/);
+  assert.match(scoped, /--font-zh-body-weight:\s*400/);
+  assert.doesNotMatch(scoped, /--font-(?:zh-title|zh-ui|math|code|latin)\s*:/);
+  assert.doesNotMatch(scoped, /!important/);
+  assert.match(
+    readPublic('course.css'),
+    /\.course-material-body :where\(strong, b\)\s*\{[^}]*font-family:\s*inherit;[^}]*font-weight:\s*700;/,
+  );
+});
+
+test('only the knowledge entry loads the prose font stylesheet after the theme layer', () => {
+  const html = readPublic('knowledge.html');
+  assert.equal((html.match(/href="\/knowledge-typography\.css"/g) || []).length, 1);
+  assert.ok(html.indexOf('/knowledge-typography.css') > html.indexOf('/ui-polish.css'));
+  for (const file of fs.readdirSync(publicDir).filter((entry) => entry.endsWith('.html'))) {
+    if (file !== 'knowledge.html')
+      assert.ok(!readPublic(file).includes('/knowledge-typography.css'));
+  }
+});
+
 function createElement() {
   const listeners = new Map();
   return {

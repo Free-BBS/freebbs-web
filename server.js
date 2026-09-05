@@ -66,6 +66,7 @@ const mimeTypes = {
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
   '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
 };
 
 function sendNotFoundPage(response) {
@@ -107,7 +108,18 @@ function sendFile(filePath, response, options = {}) {
     };
 
     if (
-      ['.png', '.jpg', '.jpeg', '.svg', '.webp', '.ico', '.woff', '.woff2', '.ttf'].includes(ext)
+      [
+        '.png',
+        '.jpg',
+        '.jpeg',
+        '.svg',
+        '.webp',
+        '.ico',
+        '.woff',
+        '.woff2',
+        '.ttf',
+        '.otf',
+      ].includes(ext)
     ) {
       headers['Cache-Control'] = 'public, max-age=31536000, immutable';
     }
