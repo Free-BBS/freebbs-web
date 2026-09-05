@@ -165,7 +165,7 @@ test('course map reader groups nodes by chapter and reveals only focused relatio
   assert.match(styles, /\.course-map-edge-tooltip/);
   assert.match(
     styles,
-    /body:not\(\.world-page\) \.course-map-immersive[\s\S]*?\.course-map-focus-arrow-help-panel \*[\s\S]*?font-family: var\(--course-map-font-body\) !important;/,
+    /body:not\(\.world-page\)\s+\.course-map-immersive[\s\S]*?\.course-map-focus-arrow-help-panel\s+\*[\s\S]*?font-family: var\(--course-map-font-body\) !important;/,
   );
   assert.match(controller, /free_bbs_current_learning_node_v1/);
   assert.match(controller, /const KNOWLEDGE_TAGS =/);

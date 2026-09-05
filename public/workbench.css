@@ -160,6 +160,7 @@ body.workbench-page .workbench-dashboard-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: clamp(14px, 1.8vw, 24px);
+  margin-top: clamp(30px, 4vw, 52px);
 }
 
 body.workbench-page .workbench-dashboard-card {

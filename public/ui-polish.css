@@ -388,7 +388,7 @@ body:not(.auth-page-body)
     .aichat-auth-link,
     .system-settings-submit,
     .knowledge-rag-form button,
-  .course-discussion-link
+    .course-discussion-link
   )
   * {
   color: var(--ui-action-contrast) !important;
@@ -1439,9 +1439,7 @@ html body.auth-page-body.theme-dark .auth-submit:hover {
     filter: brightness(0) invert(1) opacity(0.76) !important;
   }
 
-  body.theme-dark:not(.auth-page-body)
-    .user-economy-stack
-    .economy-shortcut-checkin.is-complete {
+  body.theme-dark:not(.auth-page-body) .user-economy-stack .economy-shortcut-checkin.is-complete {
     border-color: var(--ui-reward-complete) !important;
     background: linear-gradient(135deg, var(--ui-reward-strong), var(--ui-reward-soft)) !important;
     color: var(--ui-reward-contrast) !important;
@@ -1455,11 +1453,13 @@ html body.auth-page-body.theme-dark .auth-submit:hover {
     box-shadow: 0 5px 14px rgba(185, 132, 28, 0.16) !important;
   }
 
-  body.theme-light:not(.auth-page-body)
-    .user-economy-stack
-    .economy-shortcut-checkin.is-complete {
+  body.theme-light:not(.auth-page-body) .user-economy-stack .economy-shortcut-checkin.is-complete {
     border-color: var(--ui-reward-complete) !important;
-    background: linear-gradient(135deg, var(--ui-reward-strong), var(--ui-reward-highlight)) !important;
+    background: linear-gradient(
+      135deg,
+      var(--ui-reward-strong),
+      var(--ui-reward-highlight)
+    ) !important;
     color: var(--ui-reward-contrast) !important;
     box-shadow: 0 5px 14px rgba(185, 132, 28, 0.24) !important;
   }
@@ -1797,7 +1797,18 @@ body:not(.world-page) :where(h1, h2, h3, h4, h5, h6, .brand-mark, .auth-page-tit
 }
 
 body:not(.world-page)
-  :where(button, input, textarea, select, option, label, nav, .nav-link, .user-panel, .site-footer) {
+  :where(
+    button,
+    input,
+    textarea,
+    select,
+    option,
+    label,
+    nav,
+    .nav-link,
+    .user-panel,
+    .site-footer
+  ) {
   font-family: var(--font-zh-ui) !important;
 }
 
@@ -1816,7 +1827,8 @@ body:not(.world-page) .katex {
 /* Learning-world-linked course titles keep the original Chinese serif look. */
 body:not(.world-page) .course-hero h1,
 body:not(.world-page) .knowledge-header h1 {
-  font-family: 'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', 'Noto Serif SC', sans-serif !important;
+  font-family:
+    'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', 'Noto Serif SC', sans-serif !important;
 }
 
 body:not(.auth-page-body) .settings-typography-form {

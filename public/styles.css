@@ -14093,6 +14093,55 @@ body.aichat-page .main-content .aichat-subagent-result.is-rag a:hover {
   text-decoration: underline;
 }
 
+/* Keep retrieved-course sources legible inside the dark Max conversation shell. */
+body.aichat-page .main-content .aichat-subagent-result.is-rag {
+  border-color: rgba(102, 217, 224, 0.34);
+  background:
+    linear-gradient(135deg, rgba(36, 136, 148, 0.22), rgba(11, 35, 42, 0.8)), rgba(10, 31, 37, 0.9);
+  box-shadow: inset 0 1px 0 rgba(184, 247, 247, 0.08);
+}
+
+body.aichat-page .main-content .aichat-subagent-result.is-rag header strong {
+  color: #e1fbfb !important;
+}
+
+body.aichat-page .main-content .aichat-subagent-result.is-rag header span,
+body.aichat-page .main-content .aichat-subagent-result.is-rag > p,
+body.aichat-page .main-content .aichat-subagent-result.is-rag li span {
+  color: #b8d5d7 !important;
+}
+
+body.aichat-page .main-content .aichat-subagent-result.is-rag li {
+  border-top-color: rgba(141, 223, 226, 0.2);
+}
+
+body.aichat-page .main-content .aichat-subagent-result.is-rag a,
+body.aichat-page .main-content .aichat-subagent-result.is-rag .aichat-rag-source-name {
+  color: #83e4e6 !important;
+}
+
+body.theme-light.aichat-page .main-content .aichat-subagent-result.is-rag {
+  border-color: rgba(7, 95, 114, 0.2);
+  background: rgba(7, 95, 114, 0.045);
+  box-shadow: none;
+}
+
+body.theme-light.aichat-page .main-content .aichat-subagent-result.is-rag header strong,
+body.theme-light.aichat-page .main-content .aichat-subagent-result.is-rag a,
+body.theme-light.aichat-page .main-content .aichat-subagent-result.is-rag .aichat-rag-source-name {
+  color: #075f72 !important;
+}
+
+body.theme-light.aichat-page .main-content .aichat-subagent-result.is-rag header span,
+body.theme-light.aichat-page .main-content .aichat-subagent-result.is-rag > p,
+body.theme-light.aichat-page .main-content .aichat-subagent-result.is-rag li span {
+  color: rgba(7, 9, 11, 0.65) !important;
+}
+
+body.theme-light.aichat-page .main-content .aichat-subagent-result.is-rag li {
+  border-top-color: rgba(7, 95, 114, 0.12);
+}
+
 body.aichat-page .main-content .aichat-subagent-result .is-error {
   color: #9d2f22 !important;
 }

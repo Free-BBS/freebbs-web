@@ -13,6 +13,7 @@ node --check server.js
 node --check backend/server.js
 node --check public/app.js
 node --check public/auth.js
+node --check public/typography.js
 node --check public/course-map.js
 node --check public/knowledge.js
 node --check public/markdown-editor.js
@@ -23,6 +24,9 @@ npm run test:course-maps
 
 echo "[ci] public page tests"
 npm run test:public-pages
+
+echo "[ci] typography preferences tests"
+npm run test:typography
 
 echo "[ci] admin users page tests"
 npm run test:admin-users

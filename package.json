@@ -18,6 +18,7 @@
     "test:agent-surfaces": "node --test scripts/agent-surface-integration.test.js",
     "test:discussion-markdown": "node --test scripts/discussion-markdown.test.js",
     "test:public-pages": "node --test scripts/development-navigation.test.js scripts/world-page.test.js",
+    "test:typography": "node --test scripts/typography-preferences.test.js",
     "test:course-maps": "node --test backend/course-maps.test.js backend/rag-course-snapshot.test.js scripts/course-map-pages.test.js",
     "test:workbench": "node --test backend/health.test.js backend/workbench.test.js backend/public-source-probe.test.js backend/portal-boundary-probe.test.js backend/tsinghua-learn-connector.test.js scripts/workbench-page.test.js scripts/workbench-connector-page.test.js scripts/tsinghua-cas-fingerprint.test.js",
     "test:tsinghua-authorization": "node --test backend/tsinghua-connectors/*.test.js",
