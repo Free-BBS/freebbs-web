@@ -17,6 +17,8 @@
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
     <link rel="stylesheet" href="/world.css" />
+    <link rel="stylesheet" href="/planet-materials.css" />
+    <link rel="stylesheet" href="/course-orbit.css" />
   </head>
   <body class="world-page">
     <div class="page-shell page-shell-world">
@@ -24,17 +26,6 @@
         <a class="brand" href="/" aria-label="FREE-BBS 首页">
           <span class="brand-mark">FREE<br />BBS</span>
         </a>
-
-        <form class="searchbar" id="world-search-form" role="search">
-          <span class="search-symbol" aria-hidden="true">⌕</span>
-          <input
-            id="world-search-input"
-            type="search"
-            placeholder="搜索岛屿"
-            aria-label="搜索岛屿"
-            autocomplete="off"
-          />
-        </form>
 
         <nav class="nav-actions" aria-label="顶部导航">
           <a class="nav-link" href="/">
@@ -145,67 +136,382 @@
       </nav>
 
       <main class="main-content world-main">
-        <section class="world-showcase" aria-label="选择学习岛屿">
-          <button
-            class="world-arrow world-arrow-prev"
-            id="world-prev"
-            type="button"
-            aria-label="上一个岛屿"
-          >
-            <span aria-hidden="true">‹</span>
-          </button>
+        <section
+          class="world-explorer"
+          id="world-explorer"
+          data-world-view="orbit"
+          aria-labelledby="world-page-title"
+        >
+          <header class="world-explorer-intro">
+            <p class="world-explorer-kicker">LEARNING WORLD · SIX KNOWLEDGE ISLANDS</p>
+            <h1 id="world-page-title">探索六大知识岛</h1>
+            <p>转动知识轨道，选择一座岛屿查看板块概览，再进入其中的课程小星球。</p>
+          </header>
 
-          <article class="world-island-view" aria-live="polite">
+          <div class="world-orbit-shell">
             <button
-              class="world-island-button"
-              id="world-island-button"
+              class="world-orbit-control world-orbit-control-prev"
               type="button"
-              aria-haspopup="dialog"
-              aria-controls="world-modal"
+              data-orbit-step="-1"
+              aria-controls="world-orbit"
+              aria-label="向左转动知识岛轨道"
             >
-              <picture>
-                <source id="world-island-mobile-source" media="(max-width: 680px)" />
-                <img id="world-island-image" alt="" />
-              </picture>
+              <span aria-hidden="true">‹</span>
             </button>
-            <h1 class="world-island-title" id="world-island-title"></h1>
-          </article>
 
-          <button
-            class="world-arrow world-arrow-next"
-            id="world-next"
-            type="button"
-            aria-label="下一个岛屿"
+            <div
+              class="world-orbit"
+              id="world-orbit"
+              data-orbit-offset="0"
+              tabindex="0"
+              aria-label="六座知识岛围绕 FREE-BBS 学习中枢"
+              aria-describedby="world-orbit-instruction"
+            >
+              <div class="world-orbit-track" id="world-orbit-track">
+                <button
+                  class="island-orbit-item is-active is-orbit-visible"
+                  type="button"
+                  data-world-index="0"
+                  data-world-id="mathematics"
+                  data-status="active"
+                  data-world-state="active"
+                  data-orbit-slot="0"
+                  data-orbit-position="0"
+                  data-hidden="false"
+                  style="--orbit-slot: 0"
+                  aria-haspopup="dialog"
+                  aria-controls="world-modal"
+                  aria-label="查看数学基础知识岛概览"
+                >
+                  <span class="island-orbit-visual" aria-hidden="true">
+                    <picture>
+                      <source media="(max-width: 640px)" srcset="/assets/math_island_mobile.webp" />
+                      <img src="/assets/math_island.webp" alt="" draggable="false" />
+                    </picture>
+                  </span>
+                  <span class="island-orbit-copy">
+                    <small>ISLAND · 已开放</small>
+                    <strong>数学基础</strong>
+                    <span>查看板块 ↗</span>
+                  </span>
+                </button>
+
+                <button
+                  class="island-orbit-item is-coming is-orbit-visible"
+                  type="button"
+                  data-world-index="1"
+                  data-world-id="physics"
+                  data-status="coming"
+                  data-world-state="coming"
+                  data-orbit-slot="1"
+                  data-orbit-position="1"
+                  data-hidden="false"
+                  style="--orbit-slot: 1"
+                  aria-haspopup="dialog"
+                  aria-controls="world-modal"
+                  aria-label="查看物理本质知识岛规划，敬请期待"
+                >
+                  <span class="island-orbit-visual" aria-hidden="true">
+                    <picture>
+                      <source
+                        media="(max-width: 640px)"
+                        srcset="/assets/physics_island_v2_mobile.webp"
+                      />
+                      <img src="/assets/physics_island_v2.webp" alt="" draggable="false" />
+                    </picture>
+                  </span>
+                  <span class="island-orbit-copy">
+                    <small>ISLAND · 建设中</small>
+                    <strong>物理本质</strong>
+                    <span>敬请期待</span>
+                  </span>
+                </button>
+
+                <button
+                  class="island-orbit-item is-active is-hidden-behind-core"
+                  type="button"
+                  data-world-index="2"
+                  data-world-id="circuits"
+                  data-status="active"
+                  data-world-state="active"
+                  data-orbit-slot="2"
+                  data-orbit-position="2"
+                  data-hidden="true"
+                  style="--orbit-slot: 2"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  aria-haspopup="dialog"
+                  aria-controls="world-modal"
+                  aria-label="查看电路架构知识岛概览"
+                >
+                  <span class="island-orbit-visual" aria-hidden="true">
+                    <picture>
+                      <source
+                        media="(max-width: 640px)"
+                        srcset="/assets/circuits_island_mobile.webp"
+                      />
+                      <img src="/assets/circuits_island.webp" alt="" draggable="false" />
+                    </picture>
+                  </span>
+                  <span class="island-orbit-copy">
+                    <small>ISLAND · 已开放</small>
+                    <strong>电路架构</strong>
+                    <span>查看板块 ↗</span>
+                  </span>
+                </button>
+
+                <button
+                  class="island-orbit-item is-active is-orbit-visible"
+                  type="button"
+                  data-world-index="3"
+                  data-world-id="signals"
+                  data-status="active"
+                  data-world-state="active"
+                  data-orbit-slot="4"
+                  data-orbit-position="4"
+                  data-hidden="false"
+                  style="--orbit-slot: 4"
+                  aria-haspopup="dialog"
+                  aria-controls="world-modal"
+                  aria-label="查看信号系统知识岛概览"
+                >
+                  <span class="island-orbit-visual" aria-hidden="true">
+                    <picture>
+                      <source
+                        media="(max-width: 640px)"
+                        srcset="/assets/signals_island_mobile.webp"
+                      />
+                      <img src="/assets/signals_island.webp" alt="" draggable="false" />
+                    </picture>
+                  </span>
+                  <span class="island-orbit-copy">
+                    <small>ISLAND · 已开放</small>
+                    <strong>信号系统</strong>
+                    <span>查看板块 ↗</span>
+                  </span>
+                </button>
+
+                <button
+                  class="island-orbit-item is-coming is-hidden-behind-core"
+                  type="button"
+                  data-world-index="4"
+                  data-world-id="computing"
+                  data-status="coming"
+                  data-world-state="coming"
+                  data-orbit-slot="3"
+                  data-orbit-position="3"
+                  data-hidden="true"
+                  style="--orbit-slot: 3"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  aria-haspopup="dialog"
+                  aria-controls="world-modal"
+                  aria-label="查看计算机科学知识岛规划，敬请期待"
+                >
+                  <span class="island-orbit-visual" aria-hidden="true">
+                    <picture>
+                      <source
+                        media="(max-width: 640px)"
+                        srcset="/assets/digital_island_mobile.webp"
+                      />
+                      <img src="/assets/digital_island.webp" alt="" draggable="false" />
+                    </picture>
+                  </span>
+                  <span class="island-orbit-copy">
+                    <small>ISLAND · 建设中</small>
+                    <strong>计算机科学</strong>
+                    <span>敬请期待</span>
+                  </span>
+                </button>
+
+                <button
+                  class="island-orbit-item is-coming is-orbit-visible"
+                  type="button"
+                  data-world-index="5"
+                  data-world-id="laboratory"
+                  data-status="coming"
+                  data-world-state="coming"
+                  data-orbit-slot="5"
+                  data-orbit-position="5"
+                  data-hidden="false"
+                  style="--orbit-slot: 5"
+                  aria-haspopup="dialog"
+                  aria-controls="world-modal"
+                  aria-label="查看实验能力知识岛规划，敬请期待"
+                >
+                  <span class="island-orbit-visual" aria-hidden="true">
+                    <picture>
+                      <source
+                        media="(max-width: 640px)"
+                        srcset="/assets/laboratory_island_v2_mobile.webp"
+                      />
+                      <img src="/assets/laboratory_island_v2.webp" alt="" draggable="false" />
+                    </picture>
+                  </span>
+                  <span class="island-orbit-copy">
+                    <small>ISLAND · 建设中</small>
+                    <strong>实验能力</strong>
+                    <span>敬请期待</span>
+                  </span>
+                </button>
+              </div>
+
+              <button
+                class="world-core"
+                id="world-core"
+                type="button"
+                aria-pressed="false"
+                aria-controls="world-orbit"
+                aria-describedby="world-orbit-instruction"
+                aria-label="FREE-BBS 学习中枢，点击开启滚轮旋转"
+              >
+                <span class="world-core-ring world-core-ring-back" aria-hidden="true"></span>
+                <span class="world-core-surface" aria-hidden="true"></span>
+                <span class="world-core-ring world-core-ring-front" aria-hidden="true"></span>
+                <span class="world-core-halo" aria-hidden="true"></span>
+                <span class="world-core-identity">
+                  <img src="/assets/freebbs-emblem-v2.png" alt="" aria-hidden="true" />
+                  <span class="world-core-copy">
+                    <span class="world-core-kicker">LEARNING CORE</span>
+                    <strong>FREE-BBS</strong>
+                    <span class="world-core-description">知识在这里汇流</span>
+                  </span>
+                </span>
+              </button>
+            </div>
+
+            <button
+              class="world-orbit-control world-orbit-control-next"
+              type="button"
+              data-orbit-step="1"
+              aria-controls="world-orbit"
+              aria-label="向右转动知识岛轨道"
+            >
+              <span aria-hidden="true">›</span>
+            </button>
+          </div>
+          <div class="world-orbit-footer">
+            <p class="world-orbit-instruction" id="world-orbit-instruction" aria-live="polite">
+              点击中央星球后，用滚轮旋转知识岛；点击外部恢复页面滚动。也可使用左右按钮、方向键或横向滑动。
+            </p>
+            <p class="world-orbit-status" id="world-orbit-status" aria-live="polite"></p>
+          </div>
+        </section>
+
+        <section
+          class="island-course-stage"
+          id="island-course-stage"
+          data-stage-state="closed"
+          aria-labelledby="island-course-title"
+          hidden
+        >
+          <header class="island-course-stage-header">
+            <button class="island-course-back" id="island-course-back" type="button">
+              <span aria-hidden="true">←</span>
+              返回知识群岛
+            </button>
+            <div class="island-course-heading">
+              <p id="island-course-code"></p>
+              <h2 id="island-course-title" tabindex="-1"></h2>
+              <p id="island-course-description"></p>
+            </div>
+          </header>
+
+          <div
+            class="island-course-system"
+            id="island-course-system"
+            data-rotation-active="false"
+            tabindex="0"
+            aria-label="围绕知识岛的课程轨道"
+            aria-describedby="island-course-instruction"
           >
-            <span aria-hidden="true">›</span>
-          </button>
+            <button
+              class="island-course-control island-course-control-prev"
+              type="button"
+              data-course-step="-1"
+              aria-controls="island-course-orbit"
+              aria-label="向左转动课程轨道"
+            >
+              <span aria-hidden="true">‹</span>
+            </button>
+            <div
+              class="island-course-orbit"
+              id="island-course-orbit"
+              role="list"
+              aria-label="板块课程"
+              data-course-offset="0"
+            ></div>
+            <button
+              class="island-course-hub"
+              id="island-course-hub"
+              type="button"
+              aria-pressed="false"
+              aria-controls="island-course-orbit"
+              aria-describedby="island-course-instruction"
+              aria-label="点击知识岛开启课程滚轮旋转"
+            >
+              <img id="island-course-hub-image" alt="" aria-hidden="true" draggable="false" />
+            </button>
+            <button
+              class="island-course-control island-course-control-next"
+              type="button"
+              data-course-step="1"
+              aria-controls="island-course-orbit"
+              aria-label="向右转动课程轨道"
+            >
+              <span aria-hidden="true">›</span>
+            </button>
+          </div>
+          <p
+            class="island-course-instruction"
+            id="island-course-instruction"
+            aria-live="polite"
+          ></p>
+          <p class="island-course-status" id="island-course-status" aria-live="polite"></p>
         </section>
       </main>
     </div>
 
-    <dialog class="world-modal" id="world-modal" aria-labelledby="world-modal-title">
+    <dialog
+      class="world-modal"
+      id="world-modal"
+      aria-labelledby="world-modal-title"
+      aria-describedby="world-modal-description"
+    >
       <section class="world-modal-panel">
         <button class="world-modal-close" type="button" data-close-modal aria-label="关闭弹窗">
           <span aria-hidden="true">×</span>
         </button>
 
-        <div class="world-modal-intro">
-          <p class="world-modal-kicker">学习岛屿</p>
-          <h2 id="world-modal-title"></h2>
-          <p id="world-modal-description"></p>
+        <div class="world-modal-visual" id="world-modal-visual" aria-hidden="true">
+          <img id="world-modal-image" alt="" />
+          <span class="world-modal-symbol" id="world-modal-symbol" hidden></span>
+          <span>ISLAND OVERVIEW</span>
         </div>
 
-        <div class="world-modal-actions">
-          <a class="world-modal-action world-modal-action-map" id="world-map-link" href="/course">
-            进入学习地图
-          </a>
-          <a
-            class="world-modal-action world-modal-action-discussion"
-            id="world-discussion-link"
-            href="/discussion"
-          >
-            进入讨论
-          </a>
+        <div class="world-modal-intro">
+          <p class="world-modal-kicker" id="world-modal-kicker">学习岛屿</p>
+          <h2 id="world-modal-title"></h2>
+          <p class="world-modal-status" id="world-modal-status"></p>
+          <p id="world-modal-description"></p>
+          <p class="world-modal-topics" id="world-modal-topics"></p>
+
+          <div class="world-modal-actions">
+            <button
+              class="world-modal-action world-modal-action-enter"
+              id="world-enter-island"
+              type="button"
+            >
+              进入板块课程
+            </button>
+            <a
+              class="world-modal-action world-modal-action-discussion"
+              id="world-discussion-link"
+              href="/discussion"
+            >
+              进入讨论
+            </a>
+          </div>
         </div>
       </section>
     </dialog>

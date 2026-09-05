@@ -1,0 +1,406 @@
+/* Planet art is decorative; navigation, hit areas and orbital positions remain in world.css. */
+body.world-page .world-core {
+  padding: 0;
+  border: 0;
+  overflow: visible;
+  background: none;
+  box-shadow: none;
+}
+
+body.world-page .world-orbit .world-core {
+  width: clamp(200px, 20vw, 256px);
+  top: 37%;
+  background: none;
+  box-shadow: none;
+}
+
+body.world-page .world-core::before,
+body.world-page .world-core::after {
+  content: none;
+}
+
+.world-core-surface,
+.island-course-planet::before {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: 50%;
+  pointer-events: none;
+  background-color: #537d78;
+  background-image:
+    radial-gradient(ellipse at 28% 24%, rgba(241, 244, 207, 0.16), transparent 44%),
+    radial-gradient(ellipse at 27% 26%, transparent 32%, rgba(4, 17, 24, 0.28) 60%, #020910 95%),
+    url('/assets/planet-core-terrain-v1.webp');
+  background-position: center;
+  background-size: cover;
+  box-shadow:
+    inset 5px 5px 13px rgba(209, 246, 214, 0.32),
+    inset -8px -5px 20px rgba(12, 48, 59, 0.46),
+    0 0 2px 1px rgba(170, 221, 212, 0.42),
+    8px 18px 29px rgba(13, 50, 59, 0.24);
+}
+
+.world-core-surface::after {
+  content: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    160deg,
+    transparent 37%,
+    rgba(2, 13, 19, 0.05) 40%,
+    rgba(16, 53, 64, 0.21) 43%,
+    transparent 48%
+  );
+}
+
+.world-core-surface {
+  border-radius: 0;
+  background: url('/assets/planet-bbs-hub-v3.webp') center / contain no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(0 10px 12px rgba(5, 49, 55, 0.23));
+}
+
+/* Two halves of one tilted ring: the far arc goes behind the opaque globe. */
+.world-core-ring {
+  position: absolute;
+  left: -35%;
+  top: 34%;
+  width: 170%;
+  height: 34%;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 51%,
+    rgba(95, 128, 121, 0.45) 52%,
+    rgba(192, 191, 157, 0.72) 54%,
+    rgba(127, 146, 129, 0.8) 56%,
+    rgba(226, 220, 178, 0.82) 58%,
+    rgba(97, 125, 112, 0.8) 59%,
+    rgba(219, 212, 170, 0.9) 61%,
+    transparent 62%,
+    transparent 64%,
+    rgba(173, 184, 153, 0.64) 65%,
+    rgba(228, 222, 187, 0.78) 68%,
+    transparent 69%
+  );
+  transform: rotate(-20deg);
+  pointer-events: none;
+  animation: bbs-ring-drift 18s ease-in-out infinite;
+}
+
+.world-core-ring-back {
+  z-index: 0;
+  clip-path: inset(0 0 50% 0);
+  opacity: 0.72;
+}
+
+.world-core-ring-front {
+  z-index: 2;
+  clip-path: inset(50% 0 0 0);
+  filter: drop-shadow(0 2px 1px rgba(2, 12, 19, 0.26));
+}
+
+body.world-page .world-core-halo {
+  z-index: 0;
+  inset: -17%;
+  border: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    transparent 40%,
+    rgba(40, 171, 189, 0.1) 49%,
+    rgba(102, 213, 208, 0.21) 57%,
+    rgba(102, 213, 208, 0.06) 65%,
+    transparent 73%
+  );
+  box-shadow: none;
+  filter: blur(8px);
+  pointer-events: none;
+  animation: bbs-halo-breathe 7s ease-in-out infinite;
+}
+
+.world-core-halo::before {
+  content: '';
+  position: absolute;
+  inset: -3%;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 20deg,
+    transparent,
+    rgba(148, 236, 225, 0.22) 65deg,
+    transparent 140deg,
+    rgba(42, 174, 191, 0.18) 235deg,
+    transparent 320deg
+  );
+  mask-image: radial-gradient(circle, transparent 49%, #000 57%, transparent 72%);
+  pointer-events: none;
+  animation: bbs-halo-flow 28s linear infinite;
+}
+
+@keyframes bbs-halo-breathe {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes bbs-halo-flow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes bbs-ring-drift {
+  0%,
+  100% {
+    transform: rotate(-20deg);
+  }
+  50% {
+    transform: rotate(-15deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.world-page .world-core-halo,
+  body.world-page .world-core-halo::before,
+  body.world-page .world-core-ring {
+    animation: none !important;
+  }
+}
+
+body.world-page .world-orbit .world-core > .world-core-identity {
+  position: absolute;
+  z-index: 4;
+  bottom: -6%;
+  left: 50%;
+  width: 128%;
+  min-width: 260px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--world-line);
+  border-radius: 12px;
+  background: var(--world-panel-strong);
+  color: var(--world-paper) !important;
+  box-shadow: 0 8px 18px rgba(2, 16, 24, 0.17);
+  transform: translateX(-50%);
+  text-align: left;
+}
+
+body.world-page .world-orbit .world-core-identity img {
+  width: 32px;
+  border-radius: 7px;
+  filter: none;
+}
+
+.world-core-copy {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+body.world-page .world-orbit .world-core-kicker {
+  margin: 0;
+  color: var(--world-muted) !important;
+  font-family: var(--font-latin), var(--font-zh-ui);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.05em;
+}
+
+body.world-page .world-orbit .world-core strong {
+  color: var(--world-paper) !important;
+  font-family: var(--font-latin), var(--font-zh-title);
+  font-size: clamp(28px, 2.4vw, 34px);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.world-core-description {
+  color: var(--world-muted) !important;
+  font-family: var(--font-zh-body);
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+body.world-page .island-course-planet {
+  --course-terrain-light: rgba(80, 162, 162, 0.58);
+  --course-terrain-dark: rgba(31, 58, 96, 0.38);
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+body.world-page .island-course-planet::before {
+  content: '';
+  width: auto;
+  height: auto;
+  border: 0;
+  background-image:
+    radial-gradient(ellipse at 26% 24%, rgba(252, 250, 215, 0.28), transparent 51%),
+    radial-gradient(ellipse at 27% 26%, transparent 34%, rgba(25, 67, 75, 0.14) 64%, #244552 97%),
+    linear-gradient(140deg, var(--course-terrain-light), var(--course-terrain-dark)),
+    url('/assets/planet-course-terrain-v1.webp');
+  background-blend-mode: normal;
+  transform: none;
+  filter: contrast(0.93) brightness(1.12) saturate(1.2);
+}
+
+body.world-page .island-course-planet::after {
+  z-index: 2;
+  inset: 0;
+  background: var(--course-surface-symbol, none) center / cover no-repeat;
+  box-shadow:
+    inset 1px 1px 3px rgba(228, 255, 226, 0.36),
+    0 0 16px color-mix(in srgb, var(--course-accent) 22%, transparent);
+  opacity: 0.86;
+  mask-image: radial-gradient(
+    ellipse at 50% 37%,
+    #000 32%,
+    rgba(0, 0, 0, 0.8) 53%,
+    transparent 73%
+  );
+  pointer-events: none;
+}
+
+body.world-page .island-course-planet[data-course-slug='math'] {
+  --course-terrain-light: rgba(104, 197, 126, 0.72);
+  --course-terrain-dark: rgba(28, 70, 55, 0.56);
+  --course-accent: #9dddab;
+  --course-surface-symbol: url('/assets/planet-math-markings.svg');
+}
+
+body.world-page .island-course-planet[data-course-slug='circuits'] {
+  --course-terrain-light: rgba(231, 178, 72, 0.74);
+  --course-terrain-dark: rgba(87, 67, 33, 0.53);
+  --course-accent: #e9c679;
+  --course-surface-symbol: url('/assets/planet-circuits-markings.svg');
+}
+
+body.world-page .island-course-planet[data-course-slug='signals'] {
+  --course-terrain-light: rgba(67, 184, 203, 0.72);
+  --course-terrain-dark: rgba(65, 53, 139, 0.58);
+  --course-accent: #91dcee;
+  --course-surface-symbol: url('/assets/planet-signals-markings.svg');
+}
+
+body.world-page .island-course-planet > .island-course-identity {
+  position: absolute;
+  z-index: 3;
+  bottom: -20%;
+  left: 50%;
+  display: grid;
+  width: 118%;
+  gap: 4px;
+  padding: 10px 12px;
+  overflow: visible;
+  border: 1px solid var(--world-line);
+  border-radius: 12px;
+  background: var(--world-panel-strong);
+  box-shadow: 0 8px 20px rgba(2, 16, 24, 0.15);
+  transform: translateX(-50%);
+  -webkit-line-clamp: unset;
+}
+
+.island-course-identity > small {
+  color: var(--world-muted) !important;
+  font-family: var(--font-latin), var(--font-zh-ui);
+  font-size: clamp(11px, 0.6rem, 14px);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  line-height: 1.2;
+}
+
+.island-course-identity > strong {
+  color: var(--world-paper) !important;
+  font-family: var(--font-zh-title);
+  font-size: clamp(18px, 1.1rem, 24px);
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+.island-course-identity > span:not(.island-course-action) {
+  color: var(--world-muted) !important;
+  font-family: var(--font-zh-body);
+  font-size: clamp(13px, 0.75rem, 16px);
+  line-height: 1.45;
+}
+
+.island-course-identity > .island-course-action {
+  color: var(--world-paper) !important;
+  font-family: var(--font-zh-ui);
+  font-size: clamp(14px, 0.8rem, 18px);
+  line-height: 1.3;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  body.world-page .island-course-planet:hover {
+    box-shadow: none;
+  }
+
+  .island-course-planet:hover .island-course-identity {
+    border-color: var(--course-accent);
+  }
+}
+
+@media (max-width: 640px) {
+  body.world-page .world-explorer {
+    padding-top: 96px;
+  }
+
+  body.world-page .world-orbit .world-core {
+    width: 146px;
+    top: 25%;
+    /* Keep the central identity in front of neighbouring island art on narrow screens. */
+    transform: translateZ(130px);
+  }
+
+  body.world-page .world-orbit .world-core > .world-core-identity {
+    width: 136%;
+    min-width: 196px;
+    gap: 6px;
+    padding: 7px 8px;
+    border-radius: 10px;
+  }
+
+  .world-core-description,
+  body.world-page .world-orbit .world-core-kicker {
+    display: block;
+    font-size: 14px;
+  }
+
+  body.world-page .world-orbit .world-core strong {
+    font-size: clamp(20px, 5.6vw, 24px);
+  }
+
+  body.world-page .world-orbit .world-core-identity img {
+    width: 24px;
+  }
+
+  .island-course-node {
+    margin-bottom: 65px;
+  }
+
+  body.world-page .island-course-planet > .island-course-identity {
+    width: 110%;
+    padding: 9px;
+  }
+
+  .island-course-identity > strong {
+    font-size: 18px;
+  }
+}

@@ -17,9 +17,13 @@ node --check public/typography.js
 node --check public/course-map.js
 node --check public/knowledge.js
 node --check public/markdown-editor.js
+node --check public/world.js
 
 echo "[ci] course map tests"
 npm run test:course-maps
+
+echo "[ci] public page tests"
+npm run test:public-pages
 
 echo "[ci] typography preferences tests"
 npm run test:typography

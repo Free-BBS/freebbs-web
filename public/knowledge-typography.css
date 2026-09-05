@@ -1,0 +1,25 @@
+/* Keep the two real weights in one private family. No local() alias: an
+ * installed Heavy face must never be mistaken for the regular reading face. */
+@font-face {
+  font-family: 'FREEBBS Knowledge Serif';
+  src: url('/assets/fonts/source-han-serif-sc/SourceHanSerifCN-Regular.otf') format('opentype');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'FREEBBS Knowledge Serif';
+  src: url('/assets/fonts/source-han-serif-sc/SourceHanSerifCN-Bold.otf') format('opentype');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+/* Only the book-style knowledge prose changes. Existing Markdown rules use
+ * this local body weight for paragraphs and 700 for semantic strong/b.
+ * Titles, UI, KaTeX and code retain their separate font-role variables. */
+html[data-font-preset='zhongsong-study'] body.knowledge-page #knowledge-body {
+  --font-zh-body: 'FREEBBS Knowledge Serif', 'Noto Serif SC', 'STSong', 'SimSun', serif;
+  --font-zh-body-weight: 400;
+}
