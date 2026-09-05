@@ -2407,7 +2407,8 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 
 /* The relation-help control is one compact reading aid, so keep every label,
  * description and control on the user's selected Chinese reading face. */
-body:not(.world-page) .course-map-immersive
+body:not(.world-page)
+  .course-map-immersive
   :where(
     .course-map-focus-arrow-help,
     .course-map-focus-arrow-help-panel,

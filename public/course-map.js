@@ -1931,7 +1931,8 @@
       const arrowHelpToggle = target?.closest('[data-course-map-arrow-help-toggle]');
       if (arrowHelpToggle) {
         event.preventDefault();
-        const arrowHelpPanel = canvas.querySelector('[data-course-map-arrow-help-panel]') ||
+        const arrowHelpPanel =
+          canvas.querySelector('[data-course-map-arrow-help-panel]') ||
           canvas.querySelector('#course-map-arrow-help');
         if (arrowHelpPanel) {
           const shouldOpen = arrowHelpPanel.classList.contains('hidden');
@@ -1974,7 +1975,9 @@
         hideReaderEdgeTooltip();
       }
       if (event.key === 'Escape' && state.focusedNodeId) {
-        const arrowHelpPanel = canvas.querySelector('.course-map-focus-arrow-help-panel:not(.hidden)');
+        const arrowHelpPanel = canvas.querySelector(
+          '.course-map-focus-arrow-help-panel:not(.hidden)',
+        );
         if (arrowHelpPanel) {
           arrowHelpPanel.classList.add('hidden');
           const arrowHelpToggle = canvas.querySelector('[data-course-map-arrow-help-toggle]');
@@ -1992,10 +1995,14 @@
       window.cancelAnimationFrame(resizeFrame);
       resizeFrame = window.requestAnimationFrame(queueReaderEdges);
     });
-    scroller?.addEventListener('scroll', () => {
-      hideReaderEdgeTooltip();
-      queueReaderEdges();
-    }, { passive: true });
+    scroller?.addEventListener(
+      'scroll',
+      () => {
+        hideReaderEdgeTooltip();
+        queueReaderEdges();
+      },
+      { passive: true },
+    );
   }
 
   async function initialize() {
