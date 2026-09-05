@@ -16,9 +16,13 @@ node --check public/auth.js
 node --check public/course-map.js
 node --check public/knowledge.js
 node --check public/markdown-editor.js
+node --check public/world.js
 
 echo "[ci] course map tests"
 npm run test:course-maps
+
+echo "[ci] public page tests"
+npm run test:public-pages
 
 echo "[ci] admin users page tests"
 npm run test:admin-users

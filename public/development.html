@@ -15,6 +15,7 @@
     />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/development.css" />
   </head>
   <body class="development-page">
     <div class="page-shell">
@@ -76,8 +77,105 @@
 
       <nav class="mobile-nav" aria-label="手机底部导航"></nav>
 
-      <main class="main-content">
-        <h1>发展端</h1>
+      <main class="main-content development-main">
+        <section class="development-hero" aria-labelledby="development-title">
+          <div class="development-hero-copy">
+            <p class="development-kicker font-latin">DEVELOPMENT · V1.1</p>
+            <h1 id="development-title">发展端<span>正在建设</span></h1>
+            <p class="development-lead">
+              面向电子系同学与团学组织的一站式发展共同体，正在从规划走向可用产品。
+            </p>
+
+            <div class="development-release" role="status">
+              <span class="development-release-dot" aria-hidden="true"></span>
+              <span>计划随 FREE-BBS V1.1 于 <strong>2026 年 10 月</strong>上线</span>
+            </div>
+
+            <dl class="development-facts">
+              <div>
+                <dt>当前阶段</dt>
+                <dd>功能开发与联调</dd>
+              </div>
+              <div>
+                <dt>目标版本</dt>
+                <dd>V1.1</dd>
+              </div>
+            </dl>
+
+            <div class="development-actions" aria-label="发展端相关入口">
+              <a class="development-action development-action-primary" href="/">返回首页</a>
+              <a class="development-action development-action-secondary" href="/world">
+                先去学习世界
+              </a>
+            </div>
+          </div>
+
+          <figure class="development-scene">
+            <div class="development-scene-frame">
+              <img
+                src="/assets/development-construction-bbs-v2.webp"
+                width="1536"
+                height="1024"
+                alt="FREE-BBS 发展端施工现场，挖掘机前方为 BBS 字样"
+              />
+              <span class="development-scene-label">BUILDING THE NEXT SPACE</span>
+            </div>
+          </figure>
+        </section>
+
+        <section class="development-capabilities" aria-labelledby="development-capabilities-title">
+          <header class="development-section-heading">
+            <div>
+              <p class="development-kicker font-latin">PLANNED CAPABILITIES</p>
+              <h2 id="development-capabilities-title">规划中的能力</h2>
+            </div>
+            <p>以下为当前建设方向，具体开放范围将随开发与联调进度逐步确认。</p>
+          </header>
+
+          <div class="development-card-grid">
+            <article class="development-card development-card-student">
+              <div class="development-card-heading">
+                <span class="development-card-index font-latin">01</span>
+                <div>
+                  <p>面向同学</p>
+                  <h3>组织—同学系统</h3>
+                </div>
+                <span class="development-card-status">开发中</span>
+              </div>
+              <ul>
+                <li>通知与活动</li>
+                <li>活动报名</li>
+                <li>资源开放</li>
+                <li>意见反馈</li>
+                <li>个人活动记录</li>
+              </ul>
+            </article>
+
+            <article class="development-card development-card-organization">
+              <div class="development-card-heading">
+                <span class="development-card-index font-latin">02</span>
+                <div>
+                  <p>面向团学组织</p>
+                  <h3>团委—组织系统</h3>
+                </div>
+                <span class="development-card-status">规划中</span>
+              </div>
+              <ul>
+                <li>工作安排</li>
+                <li>成果收集</li>
+                <li>活动办理</li>
+                <li>资源管理</li>
+                <li>财务统计</li>
+                <li>组织协作</li>
+              </ul>
+            </article>
+          </div>
+
+          <aside class="development-bridge-note">
+            <span aria-hidden="true">↔</span>
+            <p>发展端与学习端保持相对独立，并通过统一身份、个人工作区与页面跳转协同。</p>
+          </aside>
+        </section>
       </main>
     </div>
 
