@@ -388,7 +388,7 @@ body:not(.auth-page-body)
     .aichat-auth-link,
     .system-settings-submit,
     .knowledge-rag-form button,
-  .course-discussion-link
+    .course-discussion-link
   )
   * {
   color: var(--ui-action-contrast) !important;
@@ -1439,9 +1439,7 @@ html body.auth-page-body.theme-dark .auth-submit:hover {
     filter: brightness(0) invert(1) opacity(0.76) !important;
   }
 
-  body.theme-dark:not(.auth-page-body)
-    .user-economy-stack
-    .economy-shortcut-checkin.is-complete {
+  body.theme-dark:not(.auth-page-body) .user-economy-stack .economy-shortcut-checkin.is-complete {
     border-color: var(--ui-reward-complete) !important;
     background: linear-gradient(135deg, var(--ui-reward-strong), var(--ui-reward-soft)) !important;
     color: var(--ui-reward-contrast) !important;
@@ -1455,11 +1453,13 @@ html body.auth-page-body.theme-dark .auth-submit:hover {
     box-shadow: 0 5px 14px rgba(185, 132, 28, 0.16) !important;
   }
 
-  body.theme-light:not(.auth-page-body)
-    .user-economy-stack
-    .economy-shortcut-checkin.is-complete {
+  body.theme-light:not(.auth-page-body) .user-economy-stack .economy-shortcut-checkin.is-complete {
     border-color: var(--ui-reward-complete) !important;
-    background: linear-gradient(135deg, var(--ui-reward-strong), var(--ui-reward-highlight)) !important;
+    background: linear-gradient(
+      135deg,
+      var(--ui-reward-strong),
+      var(--ui-reward-highlight)
+    ) !important;
     color: var(--ui-reward-contrast) !important;
     box-shadow: 0 5px 14px rgba(185, 132, 28, 0.24) !important;
   }
@@ -1780,4 +1780,83 @@ html body.auth-page-body.theme-dark .auth-submit:hover {
     height: 20px;
     flex: 0 0 auto;
   }
+}
+
+/* User typography preferences.  The world showcase is intentionally excluded:
+ * its editorial Chinese display face is part of the page identity. */
+html {
+  font-size: var(--type-scale-rem, 100%);
+}
+
+body:not(.world-page) {
+  font-family: var(--font-zh-body) !important;
+}
+
+body:not(.world-page) :where(h1, h2, h3, h4, h5, h6, .brand-mark, .auth-page-title) {
+  font-family: var(--font-zh-title) !important;
+}
+
+body:not(.world-page)
+  :where(
+    button,
+    input,
+    textarea,
+    select,
+    option,
+    label,
+    nav,
+    .nav-link,
+    .user-panel,
+    .site-footer
+  ) {
+  font-family: var(--font-zh-ui) !important;
+}
+
+body:not(.world-page) :where([data-font-role='latin'], .font-latin) {
+  font-family: var(--font-latin) !important;
+}
+
+body:not(.world-page) :where(pre, pre code, code, kbd, samp, .font-code) {
+  font-family: var(--font-code) !important;
+}
+
+body:not(.world-page) .katex {
+  font-family: var(--font-math);
+}
+
+/* Learning-world-linked course titles keep the original Chinese serif look. */
+body:not(.world-page) .course-hero h1,
+body:not(.world-page) .knowledge-header h1 {
+  font-family:
+    'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', 'Noto Serif SC', sans-serif !important;
+}
+
+body:not(.auth-page-body) .settings-typography-form {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--ui-line);
+}
+
+body:not(.auth-page-body) .settings-typography-form select {
+  min-height: 44px;
+  border: 1px solid var(--ui-line-strong) !important;
+  border-radius: 10px;
+  background: var(--ui-input) !important;
+  color: var(--ui-text) !important;
+  padding: 8px 12px;
+  outline: none;
+}
+
+body:not(.auth-page-body) .settings-typography-form select:focus-visible {
+  border-color: var(--ui-focus) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-focus) 18%, transparent);
+}
+
+body:not(.auth-page-body) .settings-typography-preview {
+  min-height: 1.6em;
+  margin: 0;
+  color: var(--ui-muted) !important;
+  font-family: var(--font-zh-body) !important;
+  font-size: 0.92rem;
+  line-height: 1.65;
 }

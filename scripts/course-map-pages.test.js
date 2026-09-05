@@ -153,6 +153,20 @@ test('course map reader groups nodes by chapter and reveals only focused relatio
   );
   assert.match(controller, /window\.location\.assign\(knowledgeHref\(nodeId\)\)/);
   assert.match(controller, /再次点击可打开知识点正文/);
+  assert.match(controller, /6类设定的知识点关系/);
+  for (const relation of ['前置', '推导', '应用', '推广', '对比', '等价']) {
+    assert.match(controller, new RegExp(`${relation} · A`));
+  }
+  assert.doesNotMatch(controller, /当前节点的全部连线/);
+  assert.match(controller, /function readerEdgeDescription\(edge\)/);
+  assert.match(controller, /course-map-reader-edge-hits/);
+  assert.match(controller, /data-edge-tooltip/);
+  assert.match(styles, /\.course-map-edge-hit/);
+  assert.match(styles, /\.course-map-edge-tooltip/);
+  assert.match(
+    styles,
+    /body:not\(\.world-page\)\s+\.course-map-immersive[\s\S]*?\.course-map-focus-arrow-help-panel\s+\*[\s\S]*?font-family: var\(--course-map-font-body\) !important;/,
+  );
   assert.match(controller, /free_bbs_current_learning_node_v1/);
   assert.match(controller, /const KNOWLEDGE_TAGS =/);
   assert.match(controller, /function renderNodeTags\(nodeId\)/);

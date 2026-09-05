@@ -24,6 +24,9 @@ const STORAGE_KEY = 'free_bbs_auth_token';
 const THEME_STORAGE_KEY = 'free_bbs_theme_mode';
 const WORKBENCH_LAST_LEARNING_KEY = 'free_bbs_last_learning_route';
 const DISCUSSION_REQUEST_TIMEOUT_MS = 5000;
+
+const TYPOGRAPHY_PRESETS = window.freeBbsTypography.presets;
+const TYPE_SCALE_PRESETS = window.freeBbsTypography.typeScalePresets;
 const USER_ROLE_LABELS = {
   student: '学生',
   ta: '助教',
@@ -48,7 +51,7 @@ const userState = {
   fortuneBonusEnabled: false,
 };
 let economyShopItems = [];
-let economyShortcutLinks = [];
+const economyShortcutLinks = [];
 let adminPermissionCatalog = { boards: [], courses: [] };
 let adminExpandedUserId = '';
 let adminMessageTimer = 0;
@@ -90,6 +93,9 @@ const settingsPasswordMessage = document.getElementById('settings-password-messa
 const settingsCurrentPassword = document.getElementById('settings-current-password');
 const settingsNewPassword = document.getElementById('settings-new-password');
 const settingsNewPasswordConfirm = document.getElementById('settings-new-password-confirm');
+const settingsFontPreset = document.getElementById('settings-font-preset');
+const settingsTypeScale = document.getElementById('settings-type-scale');
+const settingsTypographyPreview = document.getElementById('settings-typography-preview');
 const publicProfileAvatar = document.getElementById('public-profile-avatar');
 const publicProfileName = document.getElementById('public-profile-name');
 const publicProfileStudentId = document.getElementById('public-profile-student-id');
@@ -231,6 +237,46 @@ function toggleThemeMode(event) {
   applyThemeModeWithTransition(nextMode, event);
 }
 
+function getStoredTypographyPreferences() {
+  return window.freeBbsTypography.getStoredPreferences();
+}
+
+function applyTypographyPreferences(preferences, { persist = true } = {}) {
+  const normalized = window.freeBbsTypography.applyPreferences(preferences);
+  const preset = TYPOGRAPHY_PRESETS[normalized.fontPreset];
+  const scale = TYPE_SCALE_PRESETS[normalized.typeScale];
+
+  if (settingsFontPreset) {
+    settingsFontPreset.value = normalized.fontPreset;
+  }
+  if (settingsTypeScale) {
+    settingsTypeScale.value = normalized.typeScale;
+  }
+  if (settingsTypographyPreview) {
+    settingsTypographyPreview.textContent = `${preset.name}：${preset.description} ${scale.name}字号：${scale.description}`;
+  }
+  if (persist) {
+    window.freeBbsTypography.savePreferences(normalized);
+  }
+}
+
+function initializeTypographyPreferences() {
+  applyTypographyPreferences(window.freeBbsTypography.getCurrentPreferences(), { persist: false });
+
+  settingsFontPreset?.addEventListener('change', () => {
+    applyTypographyPreferences({
+      ...window.freeBbsTypography.getCurrentPreferences(),
+      fontPreset: settingsFontPreset.value,
+    });
+  });
+  settingsTypeScale?.addEventListener('change', () => {
+    applyTypographyPreferences({
+      ...window.freeBbsTypography.getCurrentPreferences(),
+      typeScale: settingsTypeScale.value,
+    });
+  });
+}
+
 function createThemeToggleButton(className) {
   const button = document.createElement('button');
   button.className = className;
@@ -301,8 +347,7 @@ function initializeHorizontalWheelScroll() {
           return;
         }
 
-        const delta =
-          Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+        const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
         if (!delta) {
           return;
         }
@@ -8550,6 +8595,10 @@ window.freeBbsApp = {
   get sessionReady() {
     return sessionReady;
   },
+  getStoredTypographyPreferences,
+  applyTypographyPreferences,
+  typographyPresets: TYPOGRAPHY_PRESETS,
+  typeScalePresets: TYPE_SCALE_PRESETS,
   get userState() {
     return userState;
   },
@@ -8666,6 +8715,7 @@ renderSettingsForm();
 renderDiscussionComposerState();
 initializeDashboardShell();
 initializeThemeMode();
+initializeTypographyPreferences();
 initializeEconomyNavigation();
 initializeUserEconomyShortcuts();
 renderAdminSection();

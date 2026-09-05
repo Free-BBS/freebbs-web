@@ -281,7 +281,11 @@
               </header>
               <p class="knowledge-overview-intro">这里汇总了本知识点的基本信息和应用场景。</p>
               <section class="knowledge-supplementary" id="knowledge-supplementary">
-                <details class="knowledge-supplementary-card hidden" id="knowledge-basic-info-card" open>
+                <details
+                  class="knowledge-supplementary-card hidden"
+                  id="knowledge-basic-info-card"
+                  open
+                >
                   <summary>
                     <span>
                       <small>ABOUT</small>
@@ -294,7 +298,11 @@
                     id="knowledge-basic-info"
                   ></div>
                 </details>
-                <details class="knowledge-supplementary-card hidden" id="knowledge-applications-card" open>
+                <details
+                  class="knowledge-supplementary-card hidden"
+                  id="knowledge-applications-card"
+                  open
+                >
                   <summary>
                     <span>
                       <small>APPLICATIONS</small>
@@ -315,17 +323,24 @@
                 开始阅读正文 <span aria-hidden="true">→</span>
               </button>
             </section>
-            <section class="course-material-section hidden" id="knowledge-reading" aria-label="课程资料正文">
+            <section
+              class="course-material-section hidden"
+              id="knowledge-reading"
+              aria-label="课程资料正文"
+            >
               <header class="course-material-section-heading">
                 <div>
                   <p class="course-kicker">Reading</p>
                   <h2>正文</h2>
                 </div>
                 <div class="knowledge-reading-actions">
-                  <button id="knowledge-return-overview" type="button">← 返回概览</button>
-                  <span class="course-material-section-note" id="knowledge-document-status"
-                    >Markdown 课程资料</span
+                  <button
+                    class="knowledge-reading-back"
+                    id="knowledge-return-overview"
+                    type="button"
                   >
+                    ← 返回概览
+                  </button>
                 </div>
               </header>
               <div class="discussion-markdown-body course-material-body" id="knowledge-body"></div>
@@ -547,6 +562,7 @@
     <script src="/vendor/@highlightjs/cdn-assets/languages/matlab.min.js"></script>
     <script src="/vendor/katex/dist/katex.min.js"></script>
     <script src="/vendor/katex/dist/contrib/auto-render.min.js"></script>
+    <script src="/typography.js"></script>
     <script src="/app.js"></script>
     <script src="/knowledge.js"></script>
   </body>
