@@ -64,7 +64,7 @@
   section.setAttribute('aria-labelledby', 'course-token-title');
   section.innerHTML = `
     <div class="settings-section-heading"><h2 id="course-token-title">课程组 Agent 接入</h2></div>
-    <p>生成个人 Token，让 Agent 上传课程资料、图片和编辑知识地图。权限随课程负责人分配实时生效。</p>
+    <p>生成个人 Token，让 Agent 将 Markdown 上传为课程地图中的知识点，更新正文、位置和连接，也可上传课程资料与图片。权限随课程负责人分配实时生效。</p>
     <p class="course-token-links"><a id="course-skill-download" download>下载 Agent Skill</a><a id="course-api-docs" target="_blank" rel="noreferrer">API 使用说明</a></p>
     <form id="course-token-form">
       <div class="settings-grid">

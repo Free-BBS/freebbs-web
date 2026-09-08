@@ -4,13 +4,16 @@ const fs = require('node:fs/promises');
 const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { execFile, spawn } = require('node:child_process');
 const { once } = require('node:events');
 const test = require('node:test');
+const { promisify } = require('node:util');
 const mysql = require('mysql2/promise');
 const ExcelJS = require('exceljs');
 const { hashPassword } = require('./password');
 const { hashCode } = require('./verification');
+
+const runProgram = promisify(execFile);
 
 async function reservePort() {
   const server = net.createServer();
@@ -326,6 +329,196 @@ test(
         }
         await api(`/course-upload/tokens/${issued.id}`, { token: legacy.token, method: 'DELETE' });
         await api(route, { token: issued.token, expected: 401 });
+      },
+    );
+
+    await t.test(
+      'Agent CLI publishes knowledge points and connections visible on the course map',
+      async (cliTest) => {
+        const issued = await api('/course-upload/tokens', {
+          token: legacy.token,
+          method: 'POST',
+          body: { name: 'knowledge point CLI test', expiresInDays: 1 },
+          expected: 201,
+        });
+        const forbidden = await api('/course-upload/tokens', {
+          token: outsider.token,
+          method: 'POST',
+          body: { name: 'unauthorized CLI test', expiresInDays: 1 },
+          expected: 201,
+        });
+        cliTest.after(async () => {
+          await db.execute(
+            'INSERT IGNORE INTO course_material_managers (course_id,user_id) VALUES (?,?)',
+            [course.id, legacy.id],
+          );
+          await db.execute(
+            'UPDATE course_upload_tokens SET revoked_at = CURRENT_TIMESTAMP WHERE id IN (?, ?)',
+            [issued.id, forbidden.id],
+          );
+        });
+
+        async function cli(args, token = issued.token, expectedExit = 0) {
+          let output;
+          let exitCode = 0;
+          try {
+            output = await runProgram(
+              process.env.PYTHON || 'python3',
+              [
+                '-B',
+                path.join(root, 'skills/freebbs-course-upload/scripts/freebbs_course_upload.py'),
+                ...args,
+              ],
+              {
+                cwd: root,
+                env: {
+                  ...process.env,
+                  FREEBBS_BASE_URL: base.replace(/\/api$/, ''),
+                  FREEBBS_UPLOAD_TOKEN: token,
+                  NO_PROXY: '127.0.0.1,localhost',
+                  no_proxy: '127.0.0.1,localhost',
+                },
+                timeout: 10000,
+                maxBuffer: 2 * 1024 * 1024,
+              },
+            );
+          } catch (error) {
+            output = error;
+            exitCode = error.code;
+          }
+          assert.equal(output.stdout.includes(token), false, 'CLI stdout must not disclose Token');
+          assert.equal(output.stderr.includes(token), false, 'CLI stderr must not disclose Token');
+          assert.equal(exitCode, expectedExit, `${args[0]}: ${output.stderr}`);
+          return expectedExit ? output.stderr : JSON.parse(output.stdout);
+        }
+
+        const nodeId = 'AGENT-CLI-001';
+        const nextNodeId = 'AGENT-CLI-002';
+        const knowledgeFile = path.join(temp, '知识正文.md');
+        const basicInfoFile = path.join(temp, '基本信息.md');
+        const applicationsFile = path.join(temp, '应用场景.md');
+        const originalKnowledge = '## 卷积\n\n$$y(t) = x(t) * h(t)$$\n';
+        const basicInfo = '## 基本信息\n\n建议学习时长：20 分钟。\n';
+        const applications = '## 应用\n\n用于分析线性时不变系统。\n';
+        await Promise.all([
+          fs.writeFile(knowledgeFile, originalKnowledge),
+          fs.writeFile(basicInfoFile, basicInfo),
+          fs.writeFile(applicationsFile, applications),
+        ]);
+        const created = await cli([
+          'upload-node',
+          course.slug,
+          nodeId,
+          knowledgeFile,
+          '--title',
+          'Agent 发布的知识点',
+          '--summary',
+          '卷积的定义与应用',
+          '--basic-info',
+          basicInfoFile,
+          '--applications',
+          applicationsFile,
+          '--x',
+          '420',
+          '--y',
+          '680',
+          '--expected-revision',
+          'new',
+        ]);
+        assert.equal(created.created, true);
+        assert.equal(created.node.title, 'Agent 发布的知识点');
+        assert.equal(created.node.summary, '卷积的定义与应用');
+        assert.deepEqual(created.node.position, { x: 420, y: 680 });
+        assert.deepEqual(created.node.sections, {
+          knowledgeMarkdown: originalKnowledge,
+          basicInfoMarkdown: basicInfo,
+          applicationsMarkdown: applications,
+        });
+
+        const revisedKnowledge = '## 卷积\n\n修订：卷积具有交换律。\n';
+        await fs.writeFile(knowledgeFile, revisedKnowledge);
+        const updated = await cli(['upload-node', course.slug, nodeId, knowledgeFile]);
+        assert.equal(updated.created, false);
+        assert.equal(updated.node.sections.knowledgeMarkdown, revisedKnowledge);
+        assert.equal(updated.node.sections.basicInfoMarkdown, basicInfo);
+        assert.equal(updated.node.sections.applicationsMarkdown, applications);
+        assert.equal(updated.node.title, created.node.title);
+        assert.equal(updated.node.summary, created.node.summary);
+        assert.deepEqual(updated.node.position, created.node.position);
+        assert.notEqual(updated.node.revision, created.node.revision);
+
+        await cli([
+          'upload-node',
+          course.slug,
+          nextNodeId,
+          knowledgeFile,
+          '--title',
+          '后续知识点',
+          '--x',
+          '620',
+          '--y',
+          '680',
+        ]);
+        const connected = await cli(['connect', course.slug, nodeId, nextNodeId]);
+        assert.deepEqual(connected.edge, { source: nodeId, target: nextNodeId, type: 'ordered' });
+        const map = await cli(['map', course.slug]);
+        assert.equal(map.course.canEditMap, true);
+        assert.ok(
+          map.nodes.some((node) => node.id === nodeId && node.title === created.node.title),
+        );
+        assert.ok(map.nodes.some((node) => node.id === nextNodeId));
+        assert.ok(
+          map.edges.some(
+            (edge) =>
+              edge.source === nodeId && edge.target === nextNodeId && edge.type === 'ordered',
+          ),
+        );
+        const publicMap = await api(`/courses/${course.slug}/map`);
+        assert.ok(publicMap.nodes.some((node) => node.id === nodeId));
+        assert.ok(
+          publicMap.edges.some((edge) => edge.source === nodeId && edge.target === nextNodeId),
+        );
+        const publicNodeRoute = `/courses/${course.slug}/map/nodes/${nodeId}`;
+        const publicNode = await api(publicNodeRoute);
+        assert.deepEqual(publicNode.node.sections, updated.node.sections);
+
+        await fs.writeFile(knowledgeFile, '此内容不应覆盖已经发布的知识点。');
+        const stale = await cli(
+          [
+            'upload-node',
+            course.slug,
+            nodeId,
+            knowledgeFile,
+            '--expected-revision',
+            created.node.revision,
+          ],
+          issued.token,
+          1,
+        );
+        assert.match(stale, /HTTP 409/);
+        const current = await cli(['get-node', course.slug, nodeId]);
+        assert.equal(current.node.revision, updated.node.revision);
+        assert.deepEqual(current.node.sections, updated.node.sections);
+
+        const denied = await cli(
+          ['upload-node', course.slug, nodeId, knowledgeFile],
+          forbidden.token,
+          1,
+        );
+        assert.match(denied, /HTTP 403/);
+        await db.execute(
+          'DELETE FROM course_material_managers WHERE course_id = ? AND user_id = ?',
+          [course.id, legacy.id],
+        );
+        for (const args of [
+          ['upload-node', course.slug, nodeId, knowledgeFile],
+          ['connect', course.slug, nextNodeId, nodeId],
+          ['map', course.slug],
+        ]) {
+          assert.match(await cli(args, issued.token, 1), /HTTP 403/);
+        }
+        assert.deepEqual((await api(publicNodeRoute)).node.sections, updated.node.sections);
+        assert.deepEqual((await api(`/courses/${course.slug}/map`)).edges, publicMap.edges);
       },
     );
 
