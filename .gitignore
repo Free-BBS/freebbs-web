@@ -162,3 +162,6 @@ vite.config.ts.timestamp-*
 
 # Local testbench outputs
 test/
+# Browser verification artifacts
+/.playwright-cli/
+/output/playwright/

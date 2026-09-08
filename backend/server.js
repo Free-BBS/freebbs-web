@@ -9,8 +9,26 @@ const { buildAiDialogExport, buildAiDialogExportFileName } = require('./ai-dialo
 const { buildBackendHealth } = require('./health');
 const { hashPassword, verifyPassword } = require('./password');
 const { sign, verify } = require('./token');
+const {
+  USERNAME_MESSAGE,
+  isValidUsername,
+  enforceUsername,
+  createUsernameRouter,
+} = require('./username-policy');
 const { createCourseMapsRouter, ensureCourseMapTables } = require('./course-maps');
 const { readRagCourseSnapshot } = require('./rag-course-snapshot');
+const { createCourseUploadRouter, ensureCourseUploadTables } = require('./course-upload');
+const {
+  createRegistrationWhitelistRouter,
+  ensureRegistrationWhitelistTables,
+  assertRegistrationWhitelisted,
+  claimRegistrationWhitelist,
+} = require('./registration-whitelist');
+const {
+  createNotificationService,
+  createNotificationsRouter,
+  ensureNotificationTables,
+} = require('./notifications');
 const { createWorkbenchRouter, ensureWorkbenchTables } = require('./workbench');
 const { createCampusConnectorBroker } = require('./tsinghua-connectors/broker');
 const { createTsinghuaCasAdapter } = require('./tsinghua-connectors/cas-adapter');
@@ -107,6 +125,22 @@ const systemSettingsStore = createSystemSettingsStore({
   defaultModel: config.llmModel,
   courseMaterialsAllowedRoot: config.courseMaterialsAllowedRoot,
 });
+const notifications = createNotificationService({ pool, publicWebUrl: config.publicWebUrl });
+
+async function withDatabaseTransaction(callback) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const result = await callback(connection);
+    await connection.commit();
+    return result;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
 
 async function sendVerificationCode(email, code) {
   const mailer = require('./mailer');
@@ -185,7 +219,24 @@ app.use(
 );
 app.use(express.json({ limit: '28mb' }));
 
-app.use('/uploads', express.static(config.uploadDir));
+// Apply the same decoding and normalization as the static server before guarding documents.
+app.use(
+  '/uploads',
+  (request, response, next) => {
+    try {
+      const uploadPath = path.posix.normalize(decodeURIComponent(request.path).replace(/\\/g, '/'));
+      const directory = uploadPath.split('/').filter(Boolean)[0]?.toLowerCase();
+      if (directory === 'course-agent-files') {
+        response.sendStatus(404);
+        return;
+      }
+      next();
+    } catch {
+      response.sendStatus(400);
+    }
+  },
+  express.static(config.uploadDir),
+);
 
 async function ensureAppSettingsTable() {
   await pool.execute(
@@ -336,10 +387,10 @@ function generateDiscussionPostPid() {
   return `p_${crypto.randomBytes(8).toString('hex')}`;
 }
 
-async function createUniqueUserUid() {
+async function createUniqueUserUid(database = pool) {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const uid = generateUserUid();
-    const [rows] = await pool.execute(`SELECT id FROM users WHERE uid = ? LIMIT 1`, [uid]);
+    const [rows] = await database.execute(`SELECT id FROM users WHERE uid = ? LIMIT 1`, [uid]);
 
     if (!rows[0]) {
       return uid;
@@ -1238,12 +1289,12 @@ function currencyColumn(currency) {
   return 'manetrons';
 }
 
-async function awardPostAuthorManetrons(post, delta) {
+async function awardPostAuthorManetrons(post, delta, connection = pool) {
   if (!post?.user_id || !delta) {
     return;
   }
 
-  await pool.execute(
+  await connection.execute(
     `UPDATE users
      SET manetrons = GREATEST(0, manetrons + ?)
      WHERE id = ?`,
@@ -1257,6 +1308,7 @@ function toUserProfile(row) {
     uid: row.uid || '',
     username: row.username,
     fullName: row.full_name,
+    requiresUsernameChange: !isValidUsername(row.username),
     studentId: row.student_id,
     email: row.email,
     emailVerifiedAt: row.email_verified_at,
@@ -1708,11 +1760,24 @@ async function createMaxDiscussionReply(postId, triggerComment) {
     return null;
   }
 
-  const [result] = await pool.execute(
-    `INSERT INTO discussion_comments (post_id, parent_comment_id, user_id, author_student_id, content_markdown)
-     VALUES (?, ?, ?, ?, ?)`,
-    [postId, triggerComment.id, maxUser.id, maxUser.student_id, answer.slice(0, 5000)],
-  );
+  const result = await withDatabaseTransaction(async (connection) => {
+    const [inserted] = await connection.execute(
+      `INSERT INTO discussion_comments (post_id, parent_comment_id, user_id, author_student_id, content_markdown)
+       VALUES (?, ?, ?, ?, ?)`,
+      [postId, triggerComment.id, maxUser.id, maxUser.student_id, answer.slice(0, 5000)],
+    );
+    await notifications.notifyReply(
+      {
+        actor: maxUser,
+        post: postRows[0],
+        commentId: inserted.insertId,
+        parentAuthorId: triggerComment.author.id,
+        contentMarkdown: answer.slice(0, 5000),
+      },
+      connection,
+    );
+    return inserted;
+  });
 
   return getDiscussionCommentById(result.insertId);
 }
@@ -1915,7 +1980,7 @@ async function getDiscussionPostByPublicId(value) {
   }
 
   const [rows] = await pool.execute(
-    `SELECT id, pid, board_id, user_id, is_deleted
+    `SELECT id, pid, board_id, user_id, title, is_deleted
      FROM discussion_posts
      WHERE pid = ?${legacyCondition}
      LIMIT 1`,
@@ -1982,7 +2047,7 @@ async function getUserByIdFromUsername(username) {
   return rows[0] || null;
 }
 
-async function requireAuth(request, response) {
+async function requireAuth(request, response, { allowInvalidUsername = false } = {}) {
   const authorization = request.headers.authorization || '';
   const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
   const payload = verify(token);
@@ -1998,6 +2063,8 @@ async function requireAuth(request, response) {
     response.status(401).json({ message: '用户不存在' });
     return null;
   }
+
+  if (!allowInvalidUsername && !enforceUsername(user, response)) return null;
 
   return user;
 }
@@ -2029,6 +2096,22 @@ async function requireAdmin(request, response) {
   return user;
 }
 
+app.use(
+  '/api/profile/username',
+  createUsernameRouter({ pool, requireAuth, getUserById, toUserProfile, issueToken }),
+);
+app.use(
+  '/api/admin/registration-whitelist',
+  createRegistrationWhitelistRouter({ pool, requireAdmin }),
+);
+app.use(
+  '/api',
+  createNotificationsRouter({ pool, requireAuth, requireAdmin, service: notifications }),
+);
+app.use(
+  '/api/course-upload',
+  createCourseUploadRouter({ pool, requireAuth, uploadDir: config.uploadDir, isValidUsername }),
+);
 app.use(
   '/api/courses',
   createCourseMapsRouter({
@@ -3742,35 +3825,37 @@ app.post('/api/discussion/posts/:id/like', async (request, response) => {
       return;
     }
 
-    const [existing] = await pool.execute(
-      `SELECT post_id
-       FROM discussion_post_likes
-       WHERE post_id = ? AND user_id = ? AND reaction_type = ?
-       LIMIT 1`,
-      [post.id, user.id, reactionType],
-    );
-
-    let active = true;
-
-    if (existing[0]) {
-      await pool.execute(
-        `DELETE FROM discussion_post_likes
-         WHERE post_id = ? AND user_id = ? AND reaction_type = ?`,
+    const active = await withDatabaseTransaction(async (connection) => {
+      await connection.execute('SELECT id FROM discussion_posts WHERE id = ? FOR UPDATE', [
+        post.id,
+      ]);
+      const [existing] = await connection.execute(
+        `SELECT post_id FROM discussion_post_likes
+         WHERE post_id = ? AND user_id = ? AND reaction_type = ? LIMIT 1`,
         [post.id, user.id, reactionType],
       );
-      active = false;
-    } else {
-      await pool.execute(
-        `INSERT INTO discussion_post_likes (post_id, user_id, reaction_type)
-         VALUES (?, ?, ?)`,
-        [post.id, user.id, reactionType],
+      const added = !existing[0];
+      if (added) {
+        await connection.execute(
+          'INSERT INTO discussion_post_likes (post_id, user_id, reaction_type) VALUES (?, ?, ?)',
+          [post.id, user.id, reactionType],
+        );
+      } else {
+        await connection.execute(
+          'DELETE FROM discussion_post_likes WHERE post_id = ? AND user_id = ? AND reaction_type = ?',
+          [post.id, user.id, reactionType],
+        );
+      }
+      if (Number(post.user_id) !== Number(user.id)) {
+        const reward = REACTION_MANETRON_REWARDS[reactionType] || 0;
+        await awardPostAuthorManetrons(post, added ? reward : -reward, connection);
+      }
+      await notifications.notifyReaction(
+        { actor: user, post, reactionType, active: added },
+        connection,
       );
-    }
-
-    if (post.user_id !== user.id) {
-      const reward = REACTION_MANETRON_REWARDS[reactionType] || 0;
-      await awardPostAuthorManetrons(post, active ? reward : -reward);
-    }
+      return added;
+    });
 
     const [countRows] = await pool.execute(
       `SELECT reaction_type, COUNT(*) AS reaction_count
@@ -3861,26 +3946,31 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
       return;
     }
 
-    if (parentCommentId) {
-      const [parentRows] = await pool.execute(
-        `SELECT id
-         FROM discussion_comments
-         WHERE id = ? AND post_id = ?
-         LIMIT 1`,
-        [parentCommentId, post.id],
-      );
-
-      if (!parentRows[0]) {
-        response.status(404).json({ message: '被回复的评论不存在' });
-        return;
+    const result = await withDatabaseTransaction(async (connection) => {
+      let parentAuthorId = null;
+      if (parentCommentId) {
+        const [parentRows] = await connection.execute(
+          'SELECT id, user_id FROM discussion_comments WHERE id = ? AND post_id = ? LIMIT 1 FOR UPDATE',
+          [parentCommentId, post.id],
+        );
+        if (!parentRows[0]) {
+          const error = new Error('被回复的评论不存在');
+          error.status = 404;
+          throw error;
+        }
+        parentAuthorId = parentRows[0].user_id;
       }
-    }
-
-    const [result] = await pool.execute(
-      `INSERT INTO discussion_comments (post_id, parent_comment_id, user_id, author_student_id, content_markdown)
-       VALUES (?, ?, ?, ?, ?)`,
-      [post.id, parentCommentId || null, user.id, user.student_id, contentMarkdown],
-    );
+      const [inserted] = await connection.execute(
+        `INSERT INTO discussion_comments (post_id, parent_comment_id, user_id, author_student_id, content_markdown)
+         VALUES (?, ?, ?, ?, ?)`,
+        [post.id, parentCommentId || null, user.id, user.student_id, contentMarkdown],
+      );
+      await notifications.notifyReply(
+        { actor: user, post, commentId: inserted.insertId, parentAuthorId, contentMarkdown },
+        connection,
+      );
+      return inserted;
+    });
 
     const [rows] = await pool.execute(
       `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at,
@@ -3910,7 +4000,9 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
       maxPending,
     });
   } catch (error) {
-    response.status(500).json({ message: '发布评论失败', detail: error.message });
+    response
+      .status(error.status || 500)
+      .json({ message: error.status ? error.message : '发布评论失败' });
   }
 });
 
@@ -4004,12 +4096,14 @@ app.post('/api/auth/register', async (request, response) => {
   const username = String(request.body.username || '').trim();
   const fullName = String(request.body.fullName || '').trim();
   const studentId = String(request.body.studentId || '').trim();
-  const email = String(request.body.email || '').trim();
+  const email = String(request.body.email || '')
+    .trim()
+    .toLowerCase();
   const password = String(request.body.password || '');
   const emailCode = String(request.body.emailCode || '').trim();
 
-  if (!username || username.length < 3 || username.length > 64) {
-    response.status(400).json({ message: '用户名长度需在 3 到 64 个字符之间' });
+  if (!isValidUsername(username)) {
+    response.status(400).json({ message: USERNAME_MESSAGE });
     return;
   }
 
@@ -4028,8 +4122,8 @@ app.post('/api/auth/register', async (request, response) => {
     return;
   }
 
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    response.status(400).json({ message: '请输入有效邮箱地址' });
+  if (!email || email.length > 128 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    response.status(400).json({ message: '请输入有效邮箱地址，且长度不超过 128 个字符' });
     return;
   }
 
@@ -4039,51 +4133,41 @@ app.post('/api/auth/register', async (request, response) => {
   }
 
   try {
-    const [codeRows] = await pool.execute(
-      `SELECT id
-       FROM email_verification_codes
-       WHERE email = ?
-         AND code_hash = ?
-         AND used_at IS NULL
-         AND expires_at > NOW()
-       ORDER BY id DESC
-       LIMIT 1`,
-      [email, hashCode(email, emailCode)],
-    );
-
-    if (!codeRows[0]) {
-      response.status(400).json({ message: '邮箱验证码错误或已过期' });
-      return;
-    }
-
-    const grade = studentId.slice(0, 4);
-    const major = '电子信息科学与技术';
-
-    const [result] = await pool.execute(
-      `INSERT INTO users (uid, username, full_name, student_id, email, password_hash, role, grade, major, email_verified_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'student', ?, ?, NOW())`,
-      [
-        await createUniqueUserUid(),
-        username,
-        fullName,
-        studentId,
-        email,
-        hashPassword(password),
-        grade,
-        major,
-      ],
-    );
-
-    await pool.execute(
-      `UPDATE email_verification_codes
-       SET used_at = NOW()
-       WHERE id = ?`,
-      [codeRows[0].id],
-    );
-
-    const rows = [await getUserById(result.insertId)];
-
-    const user = toUserProfile(rows[0]);
+    const createdUserId = await withDatabaseTransaction(async (connection) => {
+      const identity = { studentId, fullName, email };
+      await assertRegistrationWhitelisted(connection, identity, { lock: true });
+      const [codeRows] = await connection.execute(
+        `SELECT id FROM email_verification_codes
+         WHERE email = ? AND code_hash = ? AND used_at IS NULL AND expires_at > NOW()
+         ORDER BY id DESC LIMIT 1 FOR UPDATE`,
+        [email, hashCode(email, emailCode)],
+      );
+      if (!codeRows[0]) {
+        const error = new Error('邮箱验证码错误或已过期');
+        error.status = 400;
+        throw error;
+      }
+      const [result] = await connection.execute(
+        `INSERT INTO users (uid, username, full_name, student_id, email, password_hash, role, grade, major, email_verified_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'student', ?, ?, NOW())`,
+        [
+          await createUniqueUserUid(connection),
+          username,
+          fullName,
+          studentId,
+          email,
+          hashPassword(password),
+          studentId.slice(0, 4),
+          '电子信息科学与技术',
+        ],
+      );
+      await claimRegistrationWhitelist(connection, identity, result.insertId);
+      await connection.execute('UPDATE email_verification_codes SET used_at = NOW() WHERE id = ?', [
+        codeRows[0].id,
+      ]);
+      return result.insertId;
+    });
+    const user = toUserProfile(await getUserById(createdUserId));
 
     response.status(201).json({
       token: issueToken(user),
@@ -4091,11 +4175,14 @@ app.post('/api/auth/register', async (request, response) => {
     });
   } catch (error) {
     if (error && error.code === 'ER_DUP_ENTRY') {
-      response.status(409).json({ message: '用户名或邮箱已存在' });
+      response.status(409).json({ message: '用户名、学号或邮箱已存在' });
       return;
     }
 
-    response.status(500).json({ message: '注册失败', detail: error.message });
+    response.status(error.status || 500).json({
+      message: error.status ? error.message : '注册失败',
+      code: error.status ? error.code : undefined,
+    });
   }
 });
 
@@ -4104,12 +4191,17 @@ app.post('/api/auth/send-email-code', async (request, response) => {
     .trim()
     .toLowerCase();
 
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    response.status(400).json({ message: '请输入有效邮箱地址' });
+  if (!email || email.length > 128 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    response.status(400).json({ message: '请输入有效邮箱地址，且长度不超过 128 个字符' });
     return;
   }
 
   try {
+    await assertRegistrationWhitelisted(pool, {
+      studentId: request.body.studentId,
+      fullName: request.body.fullName,
+      email,
+    });
     const [existingUsers] = await pool.execute(`SELECT id FROM users WHERE email = ? LIMIT 1`, [
       email,
     ]);
@@ -4149,7 +4241,11 @@ app.post('/api/auth/send-email-code', async (request, response) => {
       message: `验证码已发送，${CODE_TTL_MINUTES} 分钟内有效`,
     });
   } catch (error) {
-    response.status(500).json({ message: '发送验证码失败', detail: error.message });
+    response.status(error.status || 500).json({
+      message: error.status ? error.message : '发送验证码失败',
+      code: error.code,
+      ...(error.status ? {} : { detail: error.message }),
+    });
   }
 });
 
@@ -4342,7 +4438,7 @@ app.post('/api/auth/reset-password', async (request, response) => {
 
 app.get('/api/auth/me', async (request, response) => {
   try {
-    const user = await requireAuth(request, response);
+    const user = await requireAuth(request, response, { allowInvalidUsername: true });
 
     if (!user) {
       return;
@@ -4875,8 +4971,8 @@ app.post('/api/admin/users', async (request, response) => {
     const manetrons = Number(request.body.manetrons ?? 0);
     const heat = Number(request.body.heat ?? 0);
 
-    if (!username || username.length < 3 || username.length > 64) {
-      response.status(400).json({ message: '用户名长度需在 3 到 64 个字符之间' });
+    if (!isValidUsername(username)) {
+      response.status(400).json({ message: USERNAME_MESSAGE });
       return;
     }
 
@@ -5194,6 +5290,9 @@ async function start() {
   await ensureAiDialogTables();
   await ensureFortuneTables();
   await ensureEconomyTables();
+  await ensureRegistrationWhitelistTables(pool);
+  await ensureNotificationTables(pool);
+  await ensureCourseUploadTables(pool);
   await decayHeatIfNeeded(new Date());
   scheduleNextHeatDecay();
 
@@ -5211,6 +5310,7 @@ async function start() {
   });
 
   console.log(`FREE-BBS backend running at http://${config.apiHost}:${config.apiPort}`);
+  notifications.startWorker();
   console.log(`MySQL target: ${config.db.host}:${config.db.port}/${config.db.database}`);
 }
 

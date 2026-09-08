@@ -1,0 +1,282 @@
+.notification-widget {
+  position: fixed;
+  top: max(18px, env(safe-area-inset-top));
+  right: max(24px, env(safe-area-inset-right));
+  z-index: 280;
+  color: var(--ui-text, #071317);
+  font-family: var(--font-ui, sans-serif);
+}
+
+.notification-widget [hidden],
+.notification-widget[hidden],
+.notification-admin [hidden] {
+  display: none !important;
+}
+
+.notification-bell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  color: var(--ui-text, #071317);
+  background: var(--ui-surface, #fff);
+  border: 1px solid var(--ui-line, #ddd);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.notification-bell svg {
+  width: 23px;
+  height: 23px;
+}
+.notification-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  padding: 0 4px;
+  border: 2px solid var(--ui-page, #f4f6f8);
+  border-radius: 12px;
+  background: #c72f35;
+  color: #fff;
+  font: 700 10px/1 sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.notification-panel {
+  position: absolute;
+  top: 54px;
+  right: 0;
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(680px, calc(100dvh - 100px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--ui-surface, #fff);
+  border: 1px solid var(--ui-line, #ddd);
+  border-radius: 14px;
+  box-shadow: var(--ui-shadow, 0 16px 42px #06364120);
+}
+
+.notification-panel-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ui-line, #ddd);
+  background: var(--ui-surface, #fff);
+}
+.notification-panel-header h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 18px;
+}
+.notification-panel button {
+  font-family: inherit;
+  cursor: pointer;
+}
+.notification-panel button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.notification-read-all,
+.notification-close,
+.notification-load-more {
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--ui-accent, #075d68);
+}
+.notification-close {
+  font-size: 24px;
+}
+.notification-message {
+  margin: 0;
+  padding: 12px 16px;
+  color: var(--ui-muted, #52636a);
+  font-size: 13px;
+}
+.notification-message:empty {
+  display: none;
+}
+.notification-item {
+  margin: 0;
+  border-bottom: 1px solid var(--ui-line, #ddd);
+}
+.notification-item.is-unread {
+  background: var(--ui-accent-soft, #edf6f7);
+}
+.notification-item-button {
+  width: 100%;
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  color: var(--ui-text, #071317);
+  overflow-wrap: anywhere;
+}
+.notification-item-button strong {
+  font-size: 14px;
+  line-height: 1.5;
+}
+.notification-item.is-unread strong::before {
+  content: '●';
+  margin-right: 7px;
+  color: #c72f35;
+  font-size: 8px;
+  vertical-align: middle;
+}
+.notification-item-body {
+  white-space: pre-wrap;
+  color: var(--ui-muted, #52636a);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.notification-item time,
+.notification-item-action {
+  font-size: 12px;
+  color: var(--ui-muted, #52636a);
+}
+.notification-item-action {
+  color: var(--ui-accent, #075d68);
+}
+.notification-load-more {
+  display: block;
+  width: 100%;
+  padding: 14px;
+}
+.notification-widget button:focus-visible,
+.notification-admin :is(button, input, textarea, select):focus-visible {
+  outline: 2px solid var(--ui-focus, #087f90);
+  outline-offset: 2px;
+}
+
+.notification-admin {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  border-top: 1px solid var(--ui-line);
+  padding-top: 24px;
+}
+.notification-admin h2 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--ui-text);
+}
+.notification-admin p {
+  margin: 0;
+  color: var(--ui-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.notification-publish-form {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.notification-publish-form label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  color: var(--ui-text);
+  font-size: 14px;
+}
+.notification-publish-form :is(input:not([type='checkbox']), textarea, select) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 8px;
+  background: var(--ui-input);
+  color: var(--ui-text);
+  font: inherit;
+}
+.notification-publish-form textarea {
+  resize: vertical;
+}
+.notification-target-users {
+  display: grid;
+  gap: 10px;
+}
+.notification-user-options {
+  display: grid;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  padding: 8px;
+}
+.notification-user-options label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 4px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.notification-user-options input {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--ui-accent);
+}
+.notification-selected-users,
+.notification-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.notification-selected-users button,
+.notification-admin-actions button {
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 8px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  cursor: pointer;
+  font: inherit;
+}
+.notification-admin-actions button[type='submit'] {
+  background: var(--ui-action);
+  color: var(--ui-action-contrast);
+  border-color: transparent;
+}
+.notification-admin-actions button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.notification-publish-status:not(:empty) {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--ui-surface-soft);
+  color: var(--ui-text);
+}
+
+@media (max-width: 700px) {
+  .notification-widget {
+    top: max(12px, env(safe-area-inset-top));
+    right: max(12px, env(safe-area-inset-right));
+  }
+  .notification-panel {
+    top: 52px;
+    max-height: calc(100dvh - 90px - env(safe-area-inset-bottom));
+  }
+  .notification-admin-actions {
+    flex-direction: column;
+  }
+}

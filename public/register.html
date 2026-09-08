@@ -15,11 +15,16 @@
     />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/username-guard.css" />
+    <link rel="stylesheet" href="/layout-fixes.css" />
   </head>
   <body class="auth-page-body">
     <main class="auth-page-shell">
       <section class="auth-page-panel" aria-labelledby="auth-page-title">
         <h1 class="auth-page-title" id="auth-page-title">注册</h1>
+        <p class="registration-note">
+          仅限注册白名单内的成员。请填写与名单一致的学号、姓名和邮箱。
+        </p>
         <form class="auth-form auth-form-register" id="auth-page-form" data-auth-mode="register">
           <div class="auth-grid-row auth-grid-row-four">
             <label class="auth-field">
@@ -35,6 +40,9 @@
               <input
                 id="auth-username"
                 name="username"
+                pattern="[A-Za-z0-9_]+"
+                title="仅可使用英文字母、数字和下划线"
+                placeholder="英文字母、数字或下划线"
                 type="text"
                 minlength="3"
                 maxlength="64"
@@ -98,7 +106,14 @@
                 />
                 <span>邮箱</span>
               </span>
-              <input id="auth-email" name="email" type="email" autocomplete="email" required />
+              <input
+                id="auth-email"
+                name="email"
+                type="email"
+                autocomplete="email"
+                maxlength="128"
+                required
+              />
             </label>
 
             <label class="auth-field">
@@ -195,6 +210,7 @@
       </div>
     </footer>
     <script src="/typography.js"></script>
+    <script src="/username-guard.js"></script>
     <script src="/auth.js"></script>
   </body>
 </html>

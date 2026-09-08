@@ -1,0 +1,71 @@
+.username-dialog {
+  box-sizing: border-box;
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 28px;
+  border: 1px solid var(--ui-line, #bacaca);
+  border-radius: 16px;
+  background: var(--ui-surface, #fff);
+  color: var(--ui-text, #18383b);
+  overflow-y: auto;
+}
+
+.username-dialog::backdrop {
+  background: rgb(4 22 26 / 65%);
+}
+
+.username-dialog-form {
+  display: grid;
+  gap: 12px;
+}
+
+.username-dialog-form h2,
+.username-dialog-form p {
+  margin: 0;
+}
+
+.username-dialog-form p,
+.username-dialog-form small {
+  line-height: 1.6;
+}
+
+.username-dialog-form input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-line-strong, #94aaaa);
+  border-radius: 8px;
+  background: var(--ui-input, #fff);
+  color: inherit;
+  font: inherit;
+}
+
+.username-dialog-form button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ui-accent, #075d68);
+  color: var(--ui-accent-contrast, #fff);
+  font: inherit;
+  cursor: pointer;
+}
+
+.username-dialog-form button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.username-dialog-form .username-signout {
+  background: transparent;
+  color: inherit;
+}
+
+.username-dialog-error {
+  color: var(--ui-danger, #b3261e);
+}
+
+.username-dialog-error:empty {
+  display: none;
+}

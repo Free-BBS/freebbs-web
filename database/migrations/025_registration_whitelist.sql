@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS registration_whitelist_state (
+    id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+INSERT IGNORE INTO registration_whitelist_state (id) VALUES (1);
+
+CREATE TABLE IF NOT EXISTS registration_whitelist (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    fingerprint CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL UNIQUE,
+    student_id VARCHAR(10) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    full_name VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
+    email VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
+    active TINYINT(1) NOT NULL DEFAULT 1,
+    claimed_user_id BIGINT UNSIGNED NULL,
+    claimed_at DATETIME NULL,
+    created_by BIGINT UNSIGNED NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_whitelist_active_claimed (active, claimed_user_id)
+);
