@@ -381,6 +381,7 @@ function initializeDashboardShell() {
     '/profile': '个人主页',
     '/adminusers': '用户管理',
     '/system-settings': '系统设置',
+    '/system-settings/announcements': '公告管理',
     '/system-settings/model': '模型与密钥',
     '/system-settings/course-materials': '课程资料',
     '/electromagnetic': '电磁场',

@@ -300,17 +300,17 @@
       state.selectedUsers.clear();
       return;
     }
-    const container = document.querySelector('#admin-users-content .admin-directory-shell');
+    const container = document.querySelector('[data-notification-admin]');
     if (!container || adminSection || user.requiresUsernameChange) return;
     adminSection = document.createElement('section');
-    adminSection.className = 'notification-admin';
+    adminSection.className = 'notification-admin system-settings-form';
     adminSection.setAttribute('aria-labelledby', 'notification-admin-heading');
     adminSection.innerHTML = `
-      <h2 id="notification-admin-heading">发布通知</h2>
+      <h2 id="notification-admin-heading">发布公告</h2>
       <p>站内通知会同时加入邮件发送队列。课程管理组包含该课程的负责人。</p>
       <form class="notification-publish-form">
-        <label>标题<input name="notification-title" required maxlength="160" placeholder="通知标题" /></label>
-        <label>正文<textarea name="notification-body" required maxlength="5000" rows="5" placeholder="填写通知内容"></textarea></label>
+        <label>标题<input name="notification-title" required maxlength="160" placeholder="公告标题" /></label>
+        <label>正文<textarea name="notification-body" required maxlength="5000" rows="5" placeholder="填写公告内容"></textarea></label>
         <label>详情链接（可选）<input name="notification-link" maxlength="500" placeholder="例如 /discussion" /></label>
         <label>接收对象<select name="notification-audience">
           <option value="users">指定用户</option><option value="course">课程管理组</option>
@@ -327,8 +327,8 @@
         <label class="notification-target-role" hidden>身份分组<select name="notification-role">
           <option value="student">学生</option><option value="ta">助教</option><option value="teacher">教师</option><option value="admin">管理员</option>
         </select></label>
-        <p class="notification-target-all" hidden>此通知将发送给站内所有用户。</p>
-        <div class="notification-admin-actions"><button type="submit">发布通知</button>
+        <p class="notification-target-all" hidden>此公告将发送给站内所有用户。</p>
+        <div class="notification-admin-actions"><button type="submit">发布公告</button>
           <button type="button" class="notification-delivery-refresh">刷新邮件状态</button></div>
         <p class="notification-publish-status" role="status" aria-live="polite"></p>
         <p class="notification-delivery-status" role="status"></p>
