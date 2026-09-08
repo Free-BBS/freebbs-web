@@ -1,6 +1,6 @@
 # FREE-BBS 课程组 Agent API
 
-在「个人设置 → 课程组 Agent 接入」生成 Token、下载 Skill。所有用户都可生成 Token；实际课程操作要求用户被分配为该课程的资料负责人，或为站点管理员。教师/助教身份本身不授予课程权限。每次请求重新检查权限、Token 到期/撤销状态与用户名规则。用户名不合规时先登录网站修改。
+在「个人设置 → 课程组 Agent 接入」生成 Token、下载 Skill。Agent 可直接把 Markdown 发布为课程地图中的知识点，更新正文、基本信息、应用、位置和知识点连接，也可上传课程资料与图片。所有用户都可生成 Token；实际课程操作要求用户被分配为该课程的资料负责人，或为站点管理员。教师/助教身份本身不授予课程权限。每次请求重新检查权限、Token 到期/撤销状态与用户名规则。用户名不合规时先登录网站修改。
 
 将 ZIP 解压为 Agent 的 `skills/freebbs-course-upload` 目录（Codex 默认目录为 `~/.codex/skills/freebbs-course-upload`）。Skill 自带仅依赖 Python 3 标准库的脚本。设置 `FREEBBS_BASE_URL` 为站点 origin（例如 `https://free-bbs.cn`），`FREEBBS_UPLOAD_TOKEN` 为个人 Token。请通过本地密钥管理器或安全的环境变量配置注入，不要将 Token 放进命令参数、提交到仓库或粘贴到日志。生产环境只用 HTTPS，本机调试可用 `http://127.0.0.1:3001`。
 
@@ -45,7 +45,7 @@
 }
 ```
 
-`title` 最多 160 字符，`summary` 最多 500，每个 section 最多 500000；坐标为 0–10000 整数。传入空字符串显式清空该分区。未知字段、错误类型、超限数据返回 400。`expectedRevision` 用上次读取的 `node.revision`；创建时用 `new`。不一致返回 409，无写入。Python `put-node` 缺省会预读 revision，但在人工准备修改前也应先读原节点，并在 JSON 中保留那次读取的 revision，防止准备期间发生覆盖。更新 nodes/sections 与 RAG 索引版本在同一事务提交。
+`title` 最多 160 字符，`summary` 最多 500，每个 section 最多 500000；坐标为 0–10000 整数。传入空字符串显式清空该分区。未知字段、错误类型、超限数据返回 400。`expectedRevision` 用上次读取的 `node.revision`；创建时用 `new`。不一致返回 409，无写入。Python `upload-node` 和 `put-node` 缺省会预读 revision，但在准备修改前也应先读原节点，并显式携带那次读取的 revision，防止准备期间发生覆盖。更新 nodes/sections 与 RAG 索引版本在同一事务提交。
 
 资料上传正文：
 
@@ -80,10 +80,74 @@
 
 ## Python 调用示例
 
-以下命令读取环境变量，不接收 Token 参数：
+以下命令读取环境变量，不接收 Token 参数。在 Skill 目录下运行。
+
+### 上传课程地图知识点
+
+`upload-node` 将 UTF-8 Markdown 文件直接写入知识点正文；新建的知识点会出现在课程地图中。`file` 上传的是可下载附件，不会创建知识点或改写正文。
+
+先查看可管理的课程和目标地图，确认知识点编号、空闲位置及已有连接：
 
 ```sh
 python3 scripts/freebbs_course_upload.py courses
+python3 scripts/freebbs_course_upload.py map signals
+```
+
+以下新建示例使用 `SS-03-01` 和坐标 `(960,320)`；实际应选择地图中未使用的编号和与周围节点留有间距的位置。标题为新建知识点的必填项，`--expected-revision new` 防止覆盖同名节点。
+
+```sh
+python3 scripts/freebbs_course_upload.py upload-node signals SS-03-01 fourier.md \
+  --title "傅里叶变换" --summary "时域与频域的桥梁" \
+  --x 960 --y 320 --expected-revision new
+```
+
+更新时先保存原节点，阅读内容后再编辑本地 Markdown。使用读取时的 revision，期间若他人修改节点，上传会以 409 终止，应重新读取并合并后再提交：
+
+```sh
+python3 scripts/freebbs_course_upload.py get-node signals SS-03-01 > node-before.json
+```
+
+准备好新的 `fourier.md` 后执行：
+
+```sh
+NODE_REVISION=$(python3 -c 'import json; print(json.load(open("node-before.json", encoding="utf-8"))["node"]["revision"])')
+python3 scripts/freebbs_course_upload.py upload-node signals SS-03-01 fourier.md \
+  --expected-revision "$NODE_REVISION"
+```
+
+上面的更新只替换正文，保留标题、简介、基本信息、应用和坐标。需要修改其他字段时才传入对应选项：
+
+| 选项                      | 含义                                                                                |
+| ------------------------- | ----------------------------------------------------------------------------------- |
+| `--title TITLE`           | 设置标题；新建必填                                                                  |
+| `--summary SUMMARY`       | 设置简介                                                                            |
+| `--basic-info FILE`       | 用 UTF-8 Markdown 文件替换基本信息分区                                              |
+| `--applications FILE`     | 用 UTF-8 Markdown 文件替换应用分区                                                  |
+| `--x INT`、`--y INT`      | 设置指定坐标；未传入的坐标保持原值                                                  |
+| `--expected-revision REV` | 使用先前读取的 `node.revision`；新建使用 `new`；省略时脚本在写入前读取当前 revision |
+
+正文文件始终替换正文；附加分区文件未提供时保留对应分区，提供空文件则显式清空对应分区。只发布用户指定的课程和知识点，不应因为源文件缺少其他内容而清空已有分区。
+
+为正文插图时先上传图片，将响应中的 `markdown` 插入 `fourier.md` 的相应位置，再用上述 `upload-node` 命令发布：
+
+```sh
+python3 scripts/freebbs_course_upload.py image signals fourier-diagram.png
+```
+
+连接需要两个知识点已经存在。确认地图中已有 `SS-01-01`、新节点 `SS-03-01` 已创建且该连接尚不存在后，可按用户要求建立学习路径：
+
+```sh
+python3 scripts/freebbs_course_upload.py connect signals SS-01-01 SS-03-01 --type ordered
+python3 scripts/freebbs_course_upload.py map signals
+```
+
+`ordered` 表示从 source 指向 target 的学习顺序，也是省略 `--type` 时的默认值；关联知识点使用 `--type related`。写入后检查返回的节点和地图，确认正文、位置及连接符合要求。图片或连接创建遇到超时，先检查结果再决定后续操作，不自动重试。
+
+### JSON、附件与其他地图操作
+
+原有 JSON 部分更新和地图请求命令继续可用：
+
+```sh
 python3 scripts/freebbs_course_upload.py get-node signals SS-01-01
 python3 scripts/freebbs_course_upload.py put-node signals SS-01-01 node-patch.json
 python3 scripts/freebbs_course_upload.py file signals chapter-1.pdf --node-id SS-01-01

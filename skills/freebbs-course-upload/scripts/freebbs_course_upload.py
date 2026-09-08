@@ -12,6 +12,7 @@ import urllib.parse
 import urllib.request
 
 MAX_FILE_BYTES = 20 * 1024 * 1024
+MAX_SECTION_CHARACTERS = 500000
 
 
 class ApiError(Exception):
@@ -81,6 +82,38 @@ class Client:
                 patch["expectedRevision"] = "new"
         return self.request("PUT", self.course_route(course) + "/nodes/" + urllib.parse.quote(node_id, safe=""), patch)
 
+    def upload_node(self, course, node_id, markdown_file, *, title=None, summary=None,
+                    basic_info=None, applications=None, x=None, y=None, expected_revision=None):
+        sections = {}
+        for name, source in [("knowledgeMarkdown", markdown_file),
+                             ("basicInfoMarkdown", basic_info),
+                             ("applicationsMarkdown", applications)]:
+            if source is not None:
+                file = Path(source)
+                if file.stat().st_size > MAX_SECTION_CHARACTERS * 4:
+                    raise ValueError("Each Markdown section must be at most 500000 characters")
+                content = file.read_text(encoding="utf-8-sig")
+                if len(content) > MAX_SECTION_CHARACTERS:
+                    raise ValueError("Each Markdown section must be at most 500000 characters")
+                sections[name] = content
+        patch = {"sections": sections}
+        for name, value in [("title", title), ("summary", summary), ("expectedRevision", expected_revision)]:
+            if value is not None:
+                patch[name] = value
+        position = {name: value for name, value in [("x", x), ("y", y)] if value is not None}
+        if position:
+            patch["position"] = position
+        return self.put_node(course, node_id, patch)
+
+    def get_map(self, course):
+        return self.request("GET", self.course_route(course) + "/map")
+
+    def connect(self, course, source, target, edge_type="ordered"):
+        if edge_type not in {"ordered", "related"}:
+            raise ValueError("Connection type must be ordered or related")
+        return self.request("POST", self.course_route(course) + "/map/edges",
+                            {"source": source, "target": target, "type": edge_type})
+
     def upload(self, course, file_path, image=False, node_id=None):
         source = Path(file_path)
         if not 0 < source.stat().st_size <= MAX_FILE_BYTES:
@@ -102,12 +135,30 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("courses", help="List currently managed courses")
+    cmd = commands.add_parser("map", help="Read the course map, node positions and connections")
+    cmd.add_argument("course")
     for name in ["get-node", "put-node"]:
         cmd = commands.add_parser(name)
         cmd.add_argument("course")
         cmd.add_argument("node_id")
         if name == "put-node":
             cmd.add_argument("json_file", help="UTF-8 JSON node patch")
+    cmd = commands.add_parser("upload-node", help="Create or update a map knowledge point from Markdown")
+    cmd.add_argument("course")
+    cmd.add_argument("node_id")
+    cmd.add_argument("markdown_file", help="UTF-8 Markdown knowledge content (not an attachment)")
+    cmd.add_argument("--title", help="Knowledge point title; required when creating a node")
+    cmd.add_argument("--summary", help="Short summary; omitted keeps the existing summary")
+    cmd.add_argument("--basic-info", help="Optional UTF-8 Markdown file for the basic information section")
+    cmd.add_argument("--applications", help="Optional UTF-8 Markdown file for the applications section")
+    cmd.add_argument("--x", type=int, help="Map x coordinate, 0–10000; omitted keeps the current value")
+    cmd.add_argument("--y", type=int, help="Map y coordinate, 0–10000; omitted keeps the current value")
+    cmd.add_argument("--expected-revision", help="Revision from get-node, or new for creation; conflicting writes stop")
+    cmd = commands.add_parser("connect", help="Connect two existing knowledge points in a course map")
+    cmd.add_argument("course")
+    cmd.add_argument("source")
+    cmd.add_argument("target")
+    cmd.add_argument("--type", choices=["ordered", "related"], default="ordered", dest="edge_type")
     for name in ["files", "file", "image"]:
         cmd = commands.add_parser(name)
         cmd.add_argument("course")
@@ -125,11 +176,20 @@ def main():
         client = Client()
         if args.command == "courses":
             result = client.request("GET", "/courses")
+        elif args.command == "map":
+            result = client.get_map(args.course)
         elif args.command == "get-node":
             result = client.get_node(args.course, args.node_id)
         elif args.command == "put-node":
             patch = json.loads(Path(args.json_file).read_text(encoding="utf-8"))
             result = client.put_node(args.course, args.node_id, patch)
+        elif args.command == "upload-node":
+            result = client.upload_node(args.course, args.node_id, args.markdown_file,
+                                        title=args.title, summary=args.summary, basic_info=args.basic_info,
+                                        applications=args.applications, x=args.x, y=args.y,
+                                        expected_revision=args.expected_revision)
+        elif args.command == "connect":
+            result = client.connect(args.course, args.source, args.target, args.edge_type)
         elif args.command == "files":
             result = client.request("GET", client.course_route(args.course) + "/files")
         elif args.command in {"file", "image"}:

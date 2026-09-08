@@ -103,6 +103,65 @@ class ClientTest(unittest.TestCase):
             self.assertEqual(uploaded["file"]["fileName"], "讲义.md")
             self.assertEqual(uploaded["file"]["size"], len("# 正文".encode()))
 
+    def run_cli(self, *arguments):
+        return subprocess.run(["python3", str(HELPER), *arguments],
+                              env={**os.environ, "FREEBBS_BASE_URL": self.origin, "FREEBBS_UPLOAD_TOKEN": TOKEN},
+                              capture_output=True, text=True, check=False)
+
+    def test_markdown_upload_creates_content_and_only_sends_requested_sections(self):
+        with tempfile.TemporaryDirectory() as directory:
+            knowledge = Path(directory) / "知识.md"
+            basic = Path(directory) / "基本信息.md"
+            applications = Path(directory) / "应用.md"
+            knowledge.write_text("# 卷积\n\n公式 $f * g$", encoding="utf-8-sig")
+            basic.write_text("难度：3", encoding="utf-8")
+            applications.write_text("信号滤波", encoding="utf-8")
+            Handler.missing = True
+            result = self.run_cli("upload-node", "signals", "SS-01-01", str(knowledge),
+                                  "--title", "卷积", "--basic-info", str(basic),
+                                  "--applications", str(applications), "--x", "0", "--y", "120")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            node = json.loads(result.stdout)["node"]
+            self.assertEqual(node["sections"], {"knowledgeMarkdown": "# 卷积\n\n公式 $f * g$",
+                                                 "basicInfoMarkdown": "难度：3", "applicationsMarkdown": "信号滤波"})
+            self.assertEqual(node["position"], {"x": 0, "y": 120})
+            self.assertEqual(node["expectedRevision"], "new")
+            Handler.missing = False
+            result = self.run_cli("upload-node", "signals", "SS-01-01", str(knowledge))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            patch = json.loads(result.stdout)["node"]
+            self.assertEqual(set(patch), {"sections", "expectedRevision"})
+            self.assertEqual(set(patch["sections"]), {"knowledgeMarkdown"})
+            self.assertEqual(patch["expectedRevision"], "r1")
+
+    def test_markdown_conflict_and_invalid_source_stop_without_retry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "knowledge.md"
+            source.write_text("旧版本准备的内容", encoding="utf-8")
+            result = self.run_cli("upload-node", "signals", "SS-01-01", str(source),
+                                  "--expected-revision", "stale")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("409", result.stderr)
+            self.assertNotIn(TOKEN, result.stdout + result.stderr)
+            self.assertEqual([item[0] for item in Handler.requests], ["PUT"])
+            Handler.requests.clear()
+            source.write_bytes(b"\xff\xfe\x00")
+            result = self.run_cli("upload-node", "signals", "SS-01-01", str(source))
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(Handler.requests, [])
+
+    def test_map_and_connect_commands_use_course_routes(self):
+        result = self.run_cli("map", "signals")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(Handler.requests[-1][:2], ("GET", "/api/course-upload/courses/signals/map"))
+        for options, edge_type in [([], "ordered"), (["--type", "related"], "related")]:
+            result = self.run_cli("connect", "signals", "SS-01-01", "SS-01-02", *options)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            method, route, authorization, payload = Handler.requests[-1]
+            self.assertEqual((method, route), ("POST", "/api/course-upload/courses/signals/map/edges"))
+            self.assertEqual(authorization, "Bearer " + TOKEN)
+            self.assertEqual(payload, {"source": "SS-01-01", "target": "SS-01-02", "type": edge_type})
+
     def test_http_and_redirect_and_permission_errors_stop(self):
         for origin in ["http://example.test", "https://user:pass@example.test", "https://example.test/api", "https://example.test/?token=x"]:
             with self.assertRaises(ValueError):
