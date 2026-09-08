@@ -8,6 +8,15 @@
 
 每位收件人的站内通知和邮件任务在同一数据库事务中写入。邮件配置沿用 `BOTMAIL_SMTP`、`BOTMAIL_SMTP_PORT`、`BOTMAIL_USER`、`BOTMAIL_PASS`、`BOTMAIL_FROM`；详情链接使用 `PUBLIC_WEB_URL`。站内通知发布成功代表邮件已经入队，实际邮件发送由每 15 秒运行的后台任务处理。
 
+生产部署在后端服务使用的环境文件（默认 `/etc/free-bbs/free-bbs.env`）中明确配置站点地址，并重新启动后端以加载配置：
+
+```sh
+NODE_ENV=production
+PUBLIC_WEB_URL=https://www.free-bbs.cn
+```
+
+其他部署填写自己的 HTTPS 站点 Origin，不带账号、路径、查询参数或锚点。本机开发可继续使用 `http://127.0.0.1:3000`。生产邮件投递会拒绝无效地址、HTTP 或本机地址，任务保留在队列中并记录 `public_web_url_invalid`，修正配置并重启后可按退避计划重试。链接在投递时生成，因此待发送邮件会使用新地址；已发送邮件的正文无法修改。
+
 SMTP 未配置、邮箱缺失或发送失败都会保留任务并退避重试（最长间隔一小时）。管理员可在通知表单中刷新邮件状态。数据库仅保存固定错误码，不保存 SMTP 返回的敏感信息。任务带五分钟租约，进程重启后可以继续处理；不同实例通过条件更新抢占同一任务。SMTP 与数据库之间无法提供严格的仅投递一次语义，极少数进程中断可能导致重复邮件；重试会沿用同一 Message-ID。
 
 新站内通知使用 `community_notifications` 和 `notification_email_outbox`，与已有学习工作台的 `notifications`、`user_notification_states` 分开，不修改已有课程同步通知。
