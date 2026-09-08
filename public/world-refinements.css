@@ -1,0 +1,495 @@
+/* Keep the rotating island map, using the same quiet surfaces as the rest of the site. */
+body.world-page,
+body.world-page:is(.theme-light, .theme-dark):not(.auth-page-body) {
+  --world-paper: var(--ui-text);
+  --world-muted: var(--ui-muted);
+  --world-line: var(--ui-line);
+  --world-panel: var(--ui-surface-soft);
+  --world-panel-strong: var(--ui-surface);
+  --world-orbit-line: color-mix(in srgb, var(--ui-accent) 25%, var(--ui-line));
+  --world-orbit-line-soft: transparent;
+  --world-orbit-control: var(--ui-surface);
+  --world-orbit-control-hover: var(--ui-surface-soft);
+  --world-orbit-focus: var(--ui-focus);
+  --world-course-accent: var(--ui-accent);
+  --world-coming-surface: var(--ui-surface-soft);
+  --world-coming-text: var(--ui-muted);
+  background:
+    radial-gradient(ellipse at 55% 45%, var(--ui-accent-soft), transparent 65%), var(--ui-page) !important;
+}
+
+body.world-page::before,
+body.world-page::after,
+body.world-page .world-explorer::before,
+body.world-page .island-course-stage::before,
+body.world-page .world-core-halo {
+  display: none;
+}
+
+body.world-page .world-explorer,
+body.world-page .island-course-stage {
+  min-height: 100dvh;
+  padding: 112px clamp(20px, 3vw, 42px) 38px;
+}
+
+body.world-page:not(.auth-page-body) .world-main::before {
+  display: flex !important;
+}
+
+body.world-page .world-explorer-intro {
+  width: min(100%, 760px);
+  gap: 10px;
+  padding: 0;
+  text-align: left;
+}
+
+body.world-page .world-explorer-kicker,
+body.world-page #island-course-code {
+  color: var(--ui-muted) !important;
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+body.world-page .world-explorer-intro h1,
+body.world-page #island-course-title {
+  font-size: clamp(1.65rem, 2.6vw, 2.5rem);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+body.world-page .world-explorer-intro > p:last-child,
+body.world-page #island-course-description {
+  max-width: 48rem;
+  color: var(--ui-muted) !important;
+  font-size: 0.94rem;
+  font-weight: 400;
+  line-height: 1.65;
+}
+
+body.world-page .world-orbit-shell {
+  min-height: 660px;
+  height: 660px;
+}
+
+body.world-page .island-orbit-item {
+  width: clamp(170px, 17vw, 220px);
+}
+
+body.world-page .world-orbit .world-core {
+  width: 200px;
+}
+
+body.world-page .world-orbit::before {
+  border: 2px dashed var(--world-orbit-line);
+  background: none;
+  box-shadow: none;
+  animation: none;
+}
+
+body.world-page .world-orbit::after {
+  content: none;
+}
+
+body.world-page .world-core-ring {
+  opacity: 0.5;
+  animation-duration: 28s;
+}
+
+body.world-page .island-orbit-visual {
+  animation-duration: 8s;
+}
+
+body.world-page .island-orbit-visual img {
+  filter: drop-shadow(0 10px 10px rgba(15, 40, 43, 0.15));
+}
+
+body.world-page .island-orbit-item:is(.is-active, [data-status='active']) .island-orbit-visual {
+  filter: saturate(0.82);
+}
+
+body.world-page .island-orbit-item:is(.is-coming, [data-status='coming']) .island-orbit-visual {
+  filter: grayscale(0.5) brightness(0.95);
+}
+
+body.world-page .island-orbit-copy,
+body.world-page .world-orbit .world-core > .world-core-identity,
+body.world-page .island-course-planet > .island-course-identity {
+  border: 1px solid var(--ui-line);
+  border-radius: 14px;
+  background: var(--ui-surface);
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--ui-line) 60%, transparent);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+body.world-page .island-orbit-copy small,
+body.world-page .world-orbit .world-core-kicker {
+  color: var(--ui-muted) !important;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+body.world-page .world-orbit .world-core > .world-core-identity {
+  width: 110%;
+  min-width: 210px;
+  padding: 9px 12px;
+}
+
+body.world-page .world-orbit .world-core strong {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+body.world-page .world-core-description {
+  font-size: 0.82rem;
+}
+
+body.world-page .world-orbit-control,
+body.world-page .island-course-control {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--ui-line-strong);
+  box-shadow: 0 3px 0 var(--ui-line);
+}
+
+body.world-page .world-orbit-footer {
+  max-width: 720px;
+  margin-top: 0;
+  padding: 16px 0 0;
+  border: 0;
+  border-top: 1px solid var(--ui-line);
+  border-radius: 0;
+  background: none;
+}
+
+body.world-page .world-orbit-instruction,
+body.world-page .world-orbit-status,
+body.world-page .island-course-instruction,
+body.world-page .island-course-status {
+  font-size: 0.84rem;
+  font-weight: 400;
+}
+
+body.world-page .island-course-stage > header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+
+body.world-page .island-course-back {
+  position: static;
+  grid-row: auto;
+  justify-self: start;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-color: var(--ui-line);
+  border-radius: 12px;
+  box-shadow: none;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+body.world-page .island-course-system {
+  --course-planet-size: clamp(104px, 10vw, 132px);
+  height: 720px;
+  margin-top: 24px;
+}
+
+body.world-page .island-course-system:focus-visible {
+  outline: 2px dashed var(--ui-line-strong);
+  outline-offset: 4px;
+  border-radius: 20px;
+}
+
+body.world-page .island-course-hub {
+  width: min(300px, calc(100% - var(--course-planet-size) - 270px));
+}
+
+body.world-page .island-course-hub img {
+  filter: saturate(0.85) drop-shadow(0 12px 12px rgba(15, 40, 43, 0.16));
+}
+
+body.world-page .island-course-orbit::after {
+  border: 2px dashed var(--world-orbit-line);
+  box-shadow: none;
+}
+
+body.world-page .island-course-planet::before {
+  filter: contrast(0.9) brightness(1.08) saturate(0.75);
+  box-shadow:
+    inset 4px 4px 12px rgba(237, 242, 216, 0.3),
+    inset -8px -5px 16px rgba(20, 50, 56, 0.24),
+    0 6px 12px rgba(15, 40, 43, 0.16);
+}
+
+body.world-page .island-course-planet::after {
+  opacity: 0.7;
+  box-shadow: none;
+}
+
+body.world-page .island-course-planet > .island-course-identity {
+  width: 200px;
+  gap: 5px;
+  padding: 10px 12px;
+}
+
+body.world-page .island-course-identity > small {
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+}
+
+body.world-page .island-course-identity > strong {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+body.world-page .island-course-identity > span:not(.island-course-action) {
+  font-size: 0.78rem;
+  font-weight: 400;
+}
+
+body.world-page .island-course-identity > .island-course-action {
+  color: var(--ui-accent) !important;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+body.world-page .world-modal {
+  border-color: var(--ui-line);
+  border-radius: 20px;
+  box-shadow: var(--ui-shadow);
+}
+
+body.world-page .world-modal::backdrop {
+  background: rgba(8, 22, 27, 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+body.world-page .world-modal-visual {
+  background: var(--ui-surface-soft);
+}
+
+@media (max-width: 900px) {
+  body.world-page:not(.auth-page-body) .world-main::before {
+    left: 0;
+    right: 0;
+    padding-left: calc(16px + env(safe-area-inset-left, 0px));
+  }
+
+  body.world-page .world-explorer,
+  body.world-page .island-course-stage {
+    padding: 144px 20px calc(136px + env(safe-area-inset-bottom, 0px));
+  }
+
+  body.world-page .world-orbit .world-core > .world-core-identity {
+    min-width: 170px;
+  }
+
+  body.world-page .world-orbit .world-core {
+    width: 150px;
+  }
+
+  body.world-page .island-orbit-item {
+    width: clamp(150px, 23vw, 190px);
+  }
+
+  body.world-page .island-course-hub {
+    width: min(240px, 32vw);
+  }
+}
+
+@media (max-width: 640px) {
+  body.world-page .world-explorer,
+  body.world-page .island-course-stage {
+    padding-inline: 16px;
+  }
+
+  body.world-page .world-explorer-intro h1,
+  body.world-page #island-course-title {
+    font-size: 1.6rem;
+  }
+
+  body.world-page .world-orbit-shell {
+    min-height: 630px;
+    height: 630px;
+  }
+
+  body.world-page .island-orbit-item {
+    width: clamp(122px, 37vw, 154px);
+  }
+
+  body.world-page .world-orbit .world-core {
+    width: 138px;
+  }
+
+  body.world-page .island-orbit-copy {
+    padding: 8px;
+    gap: 4px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.world-page .island-orbit-copy small {
+    font-size: 0.65rem;
+  }
+
+  body.world-page .island-orbit-copy strong {
+    font-size: 0.86rem;
+  }
+
+  body.world-page .island-orbit-copy > span:last-child {
+    display: none;
+  }
+
+  body.world-page .world-orbit .world-core > .world-core-identity {
+    width: 114%;
+    min-width: 166px;
+    gap: 6px;
+    padding: 8px;
+  }
+
+  body.world-page .world-orbit .world-core strong {
+    font-size: 1.1rem;
+  }
+
+  body.world-page .world-core-description {
+    font-size: 0.72rem;
+  }
+
+  body.world-page .island-course-system {
+    --course-planet-size: 80px;
+    height: 840px;
+    margin-top: 16px;
+  }
+
+  body.world-page .island-course-hub {
+    width: min(48vw, 180px);
+  }
+
+  body.world-page .island-course-orbit::after {
+    width: calc(100% - 84px);
+    height: 580px;
+  }
+
+  body.world-page .island-course-node[data-course-slot='0'] {
+    --course-track-x: calc(93.3013% - 36.3731px);
+    --course-track-y: calc(48% + 145px);
+  }
+
+  body.world-page .island-course-node[data-course-slot='1'] {
+    --course-track-x: 50%;
+    --course-track-y: calc(48% + 290px);
+  }
+
+  body.world-page .island-course-node[data-course-slot='2'] {
+    --course-track-x: calc(6.6987% + 36.3731px);
+    --course-track-y: calc(48% + 145px);
+  }
+
+  body.world-page .island-course-node[data-course-slot='3'] {
+    --course-track-x: calc(6.6987% + 36.3731px);
+    --course-track-y: calc(48% - 145px);
+  }
+
+  body.world-page .island-course-node[data-course-slot='4'] {
+    --course-track-x: 50%;
+    --course-track-y: calc(48% - 290px);
+  }
+
+  body.world-page .island-course-node[data-course-slot='5'] {
+    --course-track-x: calc(93.3013% - 36.3731px);
+    --course-track-y: calc(48% - 145px);
+  }
+
+  body.world-page .island-course-planet > .island-course-identity {
+    width: 150px;
+    padding: 9px 10px;
+    text-align: left;
+  }
+
+  body.world-page .island-course-identity > strong {
+    font-size: 0.92rem;
+  }
+
+  body.world-page .island-course-identity > span:not(.island-course-action) {
+    display: none;
+  }
+
+  body.world-page .island-course-control {
+    top: auto;
+    bottom: -56px;
+    transform: none;
+  }
+
+  body.world-page .island-course-control[data-course-step='-1'] {
+    left: calc(50% - 52px);
+  }
+
+  body.world-page .island-course-control[data-course-step='1'] {
+    right: calc(50% - 52px);
+  }
+
+  body.world-page .island-course-instruction {
+    margin-top: 76px;
+  }
+
+  /* A single course can keep a compact orbit; larger groups retain room for every label. */
+  body.world-page .island-course-system:has(.island-course-node:only-child) {
+    height: 540px;
+  }
+
+  body.world-page .island-course-system:has(.island-course-node:only-child) .island-course-hub {
+    width: 130px;
+  }
+
+  body.world-page
+    .island-course-system:has(.island-course-node:only-child)
+    .island-course-orbit::after {
+    width: calc(100% - 80px);
+    height: 68%;
+  }
+
+  body.world-page .island-course-node:only-child[data-course-slot='0'] {
+    --course-track-x: calc(100% - 40px);
+    --course-track-y: 48%;
+  }
+
+  body.world-page .island-course-node:only-child[data-course-slot='1'] {
+    --course-track-x: calc(75% - 20px);
+    --course-track-y: 77.4449%;
+  }
+
+  body.world-page .island-course-node:only-child[data-course-slot='2'] {
+    --course-track-x: calc(25% + 20px);
+    --course-track-y: 77.4449%;
+  }
+
+  body.world-page .island-course-node:only-child[data-course-slot='3'] {
+    --course-track-x: 40px;
+    --course-track-y: 48%;
+  }
+
+  body.world-page .island-course-node:only-child[data-course-slot='4'] {
+    --course-track-x: calc(25% + 20px);
+    --course-track-y: 18.5551%;
+  }
+
+  body.world-page .island-course-node:only-child[data-course-slot='5'] {
+    --course-track-x: calc(75% - 20px);
+    --course-track-y: 18.5551%;
+  }
+
+  body.world-page .world-modal {
+    max-height: calc(100dvh - 24px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.world-page .island-orbit-visual,
+  body.world-page .world-core-ring {
+    animation: none;
+  }
+}

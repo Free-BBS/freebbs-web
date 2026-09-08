@@ -2359,6 +2359,7 @@ function renderUser() {
 
   if (!userState.isLoggedIn) {
     userName.textContent = '登录/注册';
+    userName.title = '';
     userName.disabled = false;
     if (userRole) {
       userRole.textContent = '学生';
@@ -2385,7 +2386,8 @@ function renderUser() {
     return;
   }
 
-  userName.textContent = userState.fullName || userState.username;
+  userName.textContent = userState.username;
+  userName.title = userState.username;
   userName.disabled = true;
   if (userRole) {
     userRole.textContent = userState.isAdmin
@@ -2473,6 +2475,11 @@ function saveSession(token, user) {
   userState.heat = user.heat ?? 0;
   localStorage.setItem(STORAGE_KEY, token);
   renderUser();
+  window.dispatchEvent(new CustomEvent('freebbs:session-change', { detail: { user } }));
+  if (user.requiresUsernameChange) {
+    window.freeBbsAccount?.requireValidUsername(user);
+    return;
+  }
   loadAiDialogs();
   renderSettingsForm();
   renderAdminSection();
@@ -2494,6 +2501,7 @@ function clearSession() {
   userState.manetrons = 0;
   userState.heat = 0;
   localStorage.removeItem(STORAGE_KEY);
+  window.dispatchEvent(new CustomEvent('freebbs:session-change', { detail: { user: null } }));
   setCheckinShortcutState(false);
   aiChatState.currentDid = '';
   aiChatState.dialogs = [];
@@ -5148,7 +5156,7 @@ function renderDiscussionComments() {
     const displayDepth = Math.min(depth, 4);
 
     const current = `
-    <article class="discussion-comment ${depth > 0 ? 'discussion-comment-reply' : ''}" data-comment-id="${comment.id}" data-comment-depth="${displayDepth}" style="--comment-depth: ${displayDepth}">
+    <article id="comment-${comment.id}" class="discussion-comment ${depth > 0 ? 'discussion-comment-reply' : ''}" data-comment-id="${comment.id}" data-comment-depth="${displayDepth}" style="--comment-depth: ${displayDepth}">
       ${renderAuthorProfileLink(comment.author, 'discussion-comment-author-link', true)}
       <div class="discussion-comment-body">
         <div class="discussion-comment-meta">
@@ -5173,6 +5181,14 @@ function renderDiscussionComments() {
     .querySelectorAll('.discussion-comment-content')
     .forEach((node) => enhanceMarkdownContent(node));
   restoreOpenDiscussionReplyComposer();
+  const commentAnchor = window.location.hash;
+  if (/^#comment-\d+$/.test(commentAnchor) && list.dataset.scrolledAnchor !== commentAnchor) {
+    const target = document.getElementById(commentAnchor.slice(1));
+    if (target) {
+      target.scrollIntoView({ block: 'center' });
+      list.dataset.scrolledAnchor = commentAnchor;
+    }
+  }
 }
 
 function renderDiscussionDetail(post) {
@@ -6545,6 +6561,12 @@ async function handleAdminAiDialogExport() {
 
 function renderAdminSection() {
   const isAdmin = userState.isLoggedIn && userState.isAdmin;
+  if (isAdmin && isAdminUsersPage()) {
+    window.initRegistrationWhitelist?.({
+      apiBaseUrl: API_BASE_URL,
+      getToken: () => userState.token,
+    });
+  }
   const showEconomyNavigation = userState.isLoggedIn;
   const shouldHideEconomyLink = (link) =>
     !showEconomyNavigation && !link.hasAttribute('data-workbench-economy-entry');
@@ -8726,3 +8748,7 @@ initializeLandingMotion();
 initializeDiscussionPage();
 initializeAiChatPage();
 loadPublicProfile();
+
+window.addEventListener('freebbs:username-updated', (event) => {
+  saveSession(event.detail.token, event.detail.user);
+});

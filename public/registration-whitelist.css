@@ -1,0 +1,174 @@
+body.adminusers-page .registration-whitelist-panel {
+  min-width: 0;
+  width: min(100%, 1120px) !important;
+  max-width: 1120px !important;
+  box-sizing: border-box;
+  margin-bottom: 18px;
+  margin-inline: auto;
+  display: block;
+}
+
+.whitelist-details > summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.whitelist-details > summary::before {
+  content: '+';
+}
+
+.whitelist-details[open] > summary::before {
+  content: '−';
+}
+
+.whitelist-details > summary > span:first-of-type {
+  margin-right: auto;
+}
+
+.whitelist-count,
+.whitelist-help,
+.whitelist-pagination {
+  color: var(--ui-muted);
+  font-size: 0.86rem;
+}
+
+.whitelist-content {
+  min-width: 0;
+  padding-top: 12px;
+}
+
+.whitelist-help {
+  line-height: 1.65;
+  margin: 0 0 16px;
+}
+
+.whitelist-upload-form {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.whitelist-upload-form label {
+  display: grid;
+  gap: 8px;
+  font-size: 0.85rem;
+  min-width: 0;
+}
+
+.whitelist-file-label {
+  flex: 1 1 260px;
+}
+
+.whitelist-upload-form input,
+.whitelist-upload-form select,
+.whitelist-search-form input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: var(--ui-input);
+  color: var(--ui-text);
+  font: inherit;
+}
+
+.whitelist-message {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--ui-text);
+}
+
+.whitelist-message.is-error {
+  color: var(--ui-danger);
+}
+
+.whitelist-message:empty {
+  display: none;
+}
+
+.whitelist-search-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 560px;
+  margin: 18px 0 12px;
+}
+
+.whitelist-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.whitelist-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  text-align: left;
+}
+
+.whitelist-table th,
+.whitelist-table td {
+  padding: 12px 10px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--ui-line);
+  overflow-wrap: anywhere;
+  min-width: 70px;
+}
+
+.whitelist-table th:first-child,
+.whitelist-table td:first-child {
+  min-width: 105px;
+}
+
+.whitelist-table td:nth-child(3) {
+  min-width: 180px;
+}
+
+.whitelist-table .admin-button {
+  min-height: 44px;
+}
+
+.whitelist-empty {
+  text-align: center;
+  padding: 30px 12px !important;
+}
+
+.whitelist-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 16px;
+}
+
+@media (max-width: 600px) {
+  .whitelist-upload-form {
+    align-items: stretch;
+  }
+
+  .whitelist-upload-form > * {
+    width: 100%;
+    flex-basis: 100%;
+  }
+
+  .whitelist-count {
+    width: 100%;
+  }
+
+  .whitelist-pagination {
+    justify-content: space-between;
+  }
+}

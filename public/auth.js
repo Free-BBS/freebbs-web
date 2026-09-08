@@ -202,6 +202,9 @@ async function handleAuthSubmit(event) {
     }
 
     localStorage.setItem(STORAGE_KEY, payload.token);
+    if (payload.user?.requiresUsernameChange) {
+      await window.freeBbsAccount.requireValidUsername(payload.user);
+    }
     window.location.href = '/';
   } catch (error) {
     setMessage(error.message);
@@ -239,7 +242,10 @@ async function handleSendEmailCode() {
         method: 'POST',
         body: JSON.stringify({
           email: emailInput.value.trim(),
-          ...(mode === 'remake' ? { studentId: studentIdInput.value.trim() } : {}),
+          studentId: studentIdInput?.value.trim() || '',
+          ...(mode === 'register'
+            ? { fullName: document.getElementById('auth-full-name').value.trim() }
+            : {}),
         }),
       },
     );

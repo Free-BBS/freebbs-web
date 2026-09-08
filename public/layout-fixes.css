@@ -1,0 +1,166 @@
+/* Account controls share predictable space with the page title and notification bell. */
+body:not(.auth-page-body) .user-panel {
+  right: calc(var(--bbs-content-gutter, 24px) + 58px);
+  max-width: calc(100vw - var(--bbs-shell-width, 240px) - 220px);
+}
+
+/* Keep the editor's preview action beside, rather than under, the notification bell. */
+body.course-map-editor-page .course-map-studio-bar {
+  left: max(10px, env(safe-area-inset-left, 0px));
+  right: calc(72px + env(safe-area-inset-right, 0px));
+  width: auto;
+  max-width: 840px;
+  margin-inline: auto;
+  transform: none;
+}
+
+@media (max-width: 560px) {
+  body:not(.auth-page-body) .mobile-nav {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-flow: row;
+    min-height: 0;
+    gap: 3px;
+    padding: 6px;
+    overflow: visible;
+  }
+
+  body:not(.auth-page-body) .mobile-nav .nav-link {
+    min-width: 0 !important;
+    width: 100%;
+    min-height: 46px;
+    padding: 4px 2px;
+    font-size: 0.7rem;
+    gap: 3px;
+  }
+
+  body:not(.auth-page-body) .mobile-nav .nav-link.hidden {
+    display: none !important;
+  }
+
+  body:not(.auth-page-body) .mobile-nav .nav-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  body:not(.auth-page-body) .page-shell {
+    padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+body:not(.auth-page-body) .user-copy {
+  min-width: 0;
+  max-width: 160px;
+}
+
+body:not(.auth-page-body) .user-name {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 1;
+}
+
+body:not(.auth-page-body) .user-summary {
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.registration-note {
+  margin: 0 0 20px;
+  color: var(--ui-muted, #52666b);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+@media (min-width: 901px) and (max-width: 1180px) {
+  body:not(.auth-page-body) .user-economy-stack .user-status {
+    display: none !important;
+  }
+
+  body:not(.auth-page-body) .user-copy {
+    max-width: 120px;
+  }
+}
+
+@media (max-width: 900px) {
+  body:not(.auth-page-body) .user-panel {
+    right: calc(66px + env(safe-area-inset-right, 0px));
+    width: 44px;
+    max-width: 44px;
+  }
+
+  body:not(.auth-page-body) .user-copy {
+    position: fixed;
+    top: calc(69px + env(safe-area-inset-top, 0px));
+    left: calc(14px + env(safe-area-inset-left, 0px));
+    display: block !important;
+    width: calc(100vw - 184px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+    max-width: 260px;
+  }
+
+  body:not(.auth-page-body) .user-name {
+    width: 100%;
+    text-align: left;
+    font-size: 0.88rem;
+  }
+
+  body:not(.auth-page-body) .user-economy-stack {
+    top: calc(61px + env(safe-area-inset-top, 0px));
+    right: calc(66px + env(safe-area-inset-right, 0px));
+  }
+
+  body:not(.auth-page-body) .user-actions .mobile-theme-toggle {
+    top: calc(61px + env(safe-area-inset-top, 0px));
+    right: calc(14px + env(safe-area-inset-right, 0px));
+  }
+
+  body:not(.auth-page-body) .main-content::before {
+    box-sizing: border-box;
+    right: calc(14px + env(safe-area-inset-right, 0px));
+    height: 116px;
+    padding-right: 106px;
+    padding-bottom: 54px;
+    font-size: clamp(1.3rem, 5.5vw, 1.7rem);
+  }
+
+  body:not(.auth-page-body) .main-content,
+  body.home-page .landing-main {
+    padding-top: calc(132px + env(safe-area-inset-top, 0px)) !important;
+    min-width: 0;
+  }
+
+  body:not(.auth-page-body) .main-content > *,
+  body:not(.auth-page-body) .settings-shell > *,
+  body:not(.auth-page-body) .admin-directory-shell > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body.adminusers-page .admin-page-header,
+  body.adminusers-page .admin-header-actions {
+    flex-wrap: wrap;
+  }
+
+  body.adminusers-page .admin-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  body.auth-page-body .auth-grid-row,
+  body.auth-page-body .auth-field {
+    min-width: 0;
+  }
+
+  body.auth-page-body .auth-inline input {
+    min-width: 0;
+    width: 100%;
+  }
+
+  body.auth-page-body .auth-inline-button {
+    flex-shrink: 0;
+  }
+}

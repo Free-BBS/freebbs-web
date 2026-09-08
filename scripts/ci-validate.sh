@@ -34,6 +34,10 @@ npm run test:admin-users
 echo "[ci] discussion Markdown and LaTeX tests"
 npm run test:discussion-markdown
 
+echo "[ci] registration, notifications, username and course API tests"
+npm run test:community
+python3 -B backend/course-upload-client.test.py
+
 echo "[ci] validating required files"
 test -f .nvmrc
 test -f public/index.html
