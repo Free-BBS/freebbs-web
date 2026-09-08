@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const test = require('node:test');
 const express = require('express');
 const mysql = require('mysql2/promise');
+const nodemailer = require('nodemailer');
 const {
   ensureNotificationTables,
   createNotificationService,
@@ -359,6 +360,123 @@ test('an expired sending lease recovers after a worker crash without concurrent 
 test('unconfigured SMTP is an explicit retriable failure without attempting a real email', async () => {
   const send = createNotificationEmailSender({ mail: {} });
   await assert.rejects(send({ email: 'nobody@example.test' }), { code: 'smtp_unconfigured' });
+});
+
+const configuredMail = {
+  host: 'smtp.example.test',
+  port: 465,
+  user: 'mailer@example.test',
+  pass: 'test-only-password',
+  from: 'mailer@example.test',
+};
+
+test('notification emails use the configured public origin and preserve discussion deep links', async (t) => {
+  const messages = [];
+  t.mock.method(nodemailer, 'createTransport', () => ({
+    sendMail: async (message) => messages.push(message),
+  }));
+  const item = {
+    notification_id: 41,
+    email: 'recipient@example.test',
+    title: '新回复',
+    body: '有人回复了你的讨论。',
+    link: '/discussion?post=p_123456#comment-10',
+  };
+  for (const publicWebUrl of [
+    'https://www.free-bbs.cn',
+    'https://school.example.test',
+    'https://127.school.example',
+  ]) {
+    const send = createNotificationEmailSender({
+      mail: configuredMail,
+      publicWebUrl,
+      nodeEnvironment: 'production',
+    });
+    await send(item);
+    const message = messages.at(-1);
+    assert.equal(
+      message.text,
+      `${item.title}\n\n${item.body}\n\n查看通知：${publicWebUrl}${item.link}`,
+    );
+    assert.equal(message.messageId, `<notification-41@${new URL(publicWebUrl).hostname}>`);
+    await send({ ...item, link: '' });
+    assert.ok(messages.at(-1).text.endsWith(`查看通知：${publicWebUrl}/`));
+  }
+  assert.equal(messages.length, 6);
+});
+
+test('invalid production public URLs are rejected before contacting SMTP', async (t) => {
+  const transport = t.mock.method(nodemailer, 'createTransport', () =>
+    assert.fail('Invalid links must never reach SMTP'),
+  );
+  for (const publicWebUrl of [
+    '',
+    'not a URL',
+    '/discussion',
+    'ftp://www.free-bbs.cn',
+    'http://www.free-bbs.cn',
+    'http://127.0.0.1:3000',
+    'https://localhost',
+    'https://localhost.:3000',
+    'https://app.localhost',
+    'https://127.0.0.1:3000',
+    'https://127.10.20.30',
+    'https://127.1',
+    'https://2130706433',
+    'https://0.0.0.0',
+    'https://[::]',
+    'https://[::1]',
+    'https://private:secret@www.free-bbs.cn',
+  ]) {
+    const send = createNotificationEmailSender({
+      mail: configuredMail,
+      publicWebUrl,
+      nodeEnvironment: 'production',
+    });
+    await assert.rejects(send({ email: 'recipient@example.test' }), {
+      code: 'public_web_url_invalid',
+      message: 'Notification PUBLIC_WEB_URL is invalid',
+    });
+  }
+  assert.equal(transport.mock.callCount(), 0);
+});
+
+test('development and test notification emails retain local preview URLs', async (t) => {
+  const messages = [];
+  t.mock.method(nodemailer, 'createTransport', () => ({
+    sendMail: async (message) => messages.push(message),
+  }));
+  for (const nodeEnvironment of ['development', 'test']) {
+    const send = createNotificationEmailSender({
+      mail: configuredMail,
+      publicWebUrl: 'http://127.0.0.1:3000',
+      nodeEnvironment,
+    });
+    await send({ notification_id: 42, email: 'recipient@example.test', link: '/discussion' });
+    assert.ok(messages.at(-1).text.endsWith('查看通知：http://127.0.0.1:3000/discussion'));
+  }
+});
+
+test('an invalid public URL preserves the notification and records a fixed retryable diagnostic', async (t) => {
+  t.mock.method(nodemailer, 'createTransport', () =>
+    assert.fail('Invalid links must never reach SMTP'),
+  );
+  const pool = createDatabase();
+  const service = createNotificationService({
+    pool,
+    sendEmail: createNotificationEmailSender({
+      mail: configuredMail,
+      publicWebUrl: 'https://private:secret@localhost',
+      nodeEnvironment: 'production',
+    }),
+  });
+  await service.publish({ id: 1 }, publication);
+  await service.processOutbox();
+  assert.equal(pool.data.notifications.length, 1);
+  assert.equal(pool.data.outbox[0].status, 'pending');
+  assert.equal(pool.data.outbox[0].last_error_code, 'public_web_url_invalid');
+  assert.ok(pool.data.outbox[0].available_at > Date.now());
+  assert.equal(pool.data.outbox[0].lease_token, null);
 });
 
 async function startServer(t, pool) {

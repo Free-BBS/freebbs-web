@@ -89,12 +89,40 @@ function validatePublication(body = {}) {
   return { title, body: content, link: normalizeNotificationLink(body.link), audience, requestId };
 }
 
+function parseNotificationWebUrl(publicWebUrl, nodeEnvironment) {
+  try {
+    const parsed = new URL(publicWebUrl);
+    const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '');
+    const isLoopback =
+      hostname === 'localhost' ||
+      hostname.endsWith('.localhost') ||
+      /^127\.\d+\.\d+\.\d+$/.test(hostname) ||
+      ['0.0.0.0', '[::]', '[::1]'].includes(hostname);
+    if (
+      !['http:', 'https:'].includes(parsed.protocol) ||
+      parsed.username ||
+      parsed.password ||
+      (nodeEnvironment === 'production' && (parsed.protocol !== 'https:' || isLoopback))
+    ) {
+      throw new Error('Invalid public URL');
+    }
+    return parsed;
+  } catch {
+    const error = new Error('Notification PUBLIC_WEB_URL is invalid');
+    error.code = 'public_web_url_invalid';
+    throw error;
+  }
+}
+
 function createNotificationEmailSender({
   mail = config.mail,
   publicWebUrl = config.publicWebUrl,
+  nodeEnvironment = process.env.NODE_ENV,
 } = {}) {
   let transporter;
   return async (item) => {
+    // Validate at delivery so a configuration problem leaves notifications queued.
+    const publicUrl = parseNotificationWebUrl(publicWebUrl, nodeEnvironment);
     if (!mail.host || !mail.user || !mail.pass || !mail.from) {
       const error = new Error('Notification SMTP is not configured');
       error.code = 'smtp_unconfigured';
@@ -117,14 +145,14 @@ function createNotificationEmailSender({
       });
     }
     const link = normalizeNotificationLink(item.link);
-    const url = new URL(link || '/', publicWebUrl).href;
+    const url = new URL(link || '/', publicUrl.origin).href;
     await transporter.sendMail({
       from: mail.from,
       to: item.email,
       subject: `FREE-BBS · ${item.title}`,
       text: `${item.title}\n\n${item.body}\n\n查看通知：${url}`,
       // Keep a stable Message-ID across retries. Delivery is at-least-once.
-      messageId: `<notification-${item.notification_id}@${new URL(publicWebUrl).hostname}>`,
+      messageId: `<notification-${item.notification_id}@${publicUrl.hostname}>`,
     });
   };
 }
@@ -293,9 +321,11 @@ function createNotificationService({
           );
         } catch (error) {
           // Persist only fixed diagnostic codes, never SMTP replies, email addresses or credentials.
-          const errorCode = ['smtp_unconfigured', 'recipient_email_unavailable'].includes(
-            error.code,
-          )
+          const errorCode = [
+            'smtp_unconfigured',
+            'recipient_email_unavailable',
+            'public_web_url_invalid',
+          ].includes(error.code)
             ? error.code
             : 'smtp_delivery_failed';
           const delay = Math.min(3600, 30 * 2 ** Math.min(Number(items[0].attempts), 7));
