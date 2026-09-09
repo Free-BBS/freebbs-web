@@ -48,7 +48,53 @@
     };
   }
 
-  const model = Object.freeze({ validParameters, evaluate });
+  // Small-signal startup response with v(0) = 1 and dv/dt(0) = 0.
+  // Use dimensionless time omega0*t to avoid large intermediate frequencies.
+  // One normalization for the entire trace preserves its growth/decay envelope;
+  // this ideal linear model does not simulate supply rails or gain stabilization.
+  function sampleTransient(parameters, resistanceOhms) {
+    const result = evaluate(parameters, resistanceOhms);
+    if (resistanceOhms < parameters.rfMinOhms || resistanceOhms > parameters.rfMaxOhms) {
+      throw new TypeError('Resistance is outside the Wien rheostat range');
+    }
+    const durationSeconds = 6 / result.frequencyHz;
+    const intervals = 360;
+    if (!Number.isFinite(durationSeconds) || durationSeconds / intervals <= 0) {
+      throw new TypeError('Wien oscillator time scale is not representable');
+    }
+    const sigma = (result.gain - 3) / 2;
+    const discriminant = 1 - sigma * sigma;
+    const points = [];
+    let maximum = 0;
+    for (let index = 0; index <= intervals; index += 1) {
+      const phase = (index / intervals) * 12 * Math.PI;
+      let value;
+      if (discriminant > 0) {
+        const dampedFrequency = Math.sqrt(discriminant);
+        value =
+          Math.exp(sigma * phase) *
+          (Math.cos(dampedFrequency * phase) -
+            (sigma / dampedFrequency) * Math.sin(dampedFrequency * phase));
+      } else if (discriminant === 0) {
+        value = Math.exp(sigma * phase) * (1 - sigma * phase);
+      } else {
+        const separation = Math.sqrt(-discriminant);
+        value =
+          ((1 - sigma / separation) * Math.exp((sigma + separation) * phase) +
+            (1 + sigma / separation) * Math.exp((sigma - separation) * phase)) /
+          2;
+      }
+      if (!Number.isFinite(value)) {
+        throw new TypeError('Wien oscillator transient is not representable');
+      }
+      maximum = Math.max(maximum, Math.abs(value));
+      points.push({ timeSeconds: (index / intervals) * durationSeconds, value });
+    }
+    for (const point of points) point.value /= maximum;
+    return { durationSeconds, points, normalized: true };
+  }
+
+  const model = Object.freeze({ validParameters, evaluate, sampleTransient });
   if (typeof module === 'object' && module.exports) module.exports = model;
   else Object.assign(root, { freeBbsWienModel: model });
 })(typeof window === 'undefined' ? globalThis : window);
