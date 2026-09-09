@@ -12,6 +12,8 @@ const mysql = require('mysql2/promise');
 const ExcelJS = require('exceljs');
 const { hashPassword } = require('./password');
 const { hashCode } = require('./verification');
+const { COMMUNITY_AGREEMENT_VERSION, EMAIL_CHALLENGE_LIMIT } = require('./registration-guard');
+const { solveBandChallenge: solveChallenge } = require('./test-helpers/auth');
 
 const runProgram = promisify(execFile);
 
@@ -108,21 +110,45 @@ test(
     }
     assert.ok(ready, logs);
 
-    async function api(route, { token, method = 'GET', body, expected = 200 } = {}) {
+    async function registrationPayload(identity) {
+      const agreement = {
+        communityAgreementAccepted: true,
+        communityAgreementVersion: COMMUNITY_AGREEMENT_VERSION,
+      };
+      if (identity.email.length > 128) return { ...agreement, ...identity };
+      const challenge = await api('/auth/registration-challenge', {
+        method: 'POST',
+        body: { email: identity.email },
+      });
+      return { ...agreement, ...identity, captcha: solveChallenge(challenge) };
+    }
+    async function api(
+      route,
+      { token, method = 'GET', body, expected = 200, rawRegistration = false } = {},
+    ) {
+      const requestBody =
+        route === '/auth/register' && !rawRegistration ? await registrationPayload(body) : body;
       const response = await fetch(`${base}${route}`, {
         method,
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        ...(requestBody === undefined ? {} : { body: JSON.stringify(requestBody) }),
       });
       const result = await response.json();
       assert.equal(response.status, expected, `${method} ${route}: ${JSON.stringify(result)}`);
       return result;
     }
     async function login(identifier) {
-      return api('/auth/login', { method: 'POST', body: { identifier, password: 'free-bbs' } });
+      const challenge = await api('/auth/login-challenge', {
+        method: 'POST',
+        body: { identifier },
+      });
+      return api('/auth/login', {
+        method: 'POST',
+        body: { identifier, password: 'free-bbs', captcha: solveChallenge(challenge) },
+      });
     }
     async function createUser(username, studentId) {
       const [inserted] = await db.execute(
@@ -249,6 +275,344 @@ test(
             .subarray(0, 2)
             .toString(),
           'PK',
+        );
+      },
+    );
+
+    await t.test(
+      'registration agreement and captcha cannot be bypassed, replayed, or raced',
+      async () => {
+        const identity = {
+          username: 'guard_student',
+          studentId: '2026000104',
+          fullName: '能带验证学生',
+          email: 'guard@example.invalid',
+          password: 'free-bbs',
+          emailCode: '123456',
+        };
+        await db.execute(
+          'INSERT INTO registration_whitelist (fingerprint,student_id,full_name,email) VALUES (?,?,?,?)',
+          [
+            crypto.randomBytes(32).toString('hex'),
+            identity.studentId,
+            identity.fullName,
+            identity.email,
+          ],
+        );
+        await db.execute(
+          'INSERT INTO email_verification_codes (email,code_hash,expires_at) VALUES (?,?,DATE_ADD(NOW(),INTERVAL 10 MINUTE))',
+          [identity.email, hashCode(identity.email, identity.emailCode)],
+        );
+        const registrationBand = await api('/auth/registration-challenge', {
+          method: 'POST',
+          body: { email: identity.email },
+        });
+        const valid = {
+          ...identity,
+          communityAgreementAccepted: true,
+          communityAgreementVersion: COMMUNITY_AGREEMENT_VERSION,
+          captcha: solveChallenge(registrationBand),
+        };
+        for (const [changes, code] of [
+          [{ communityAgreementAccepted: undefined }, 'community_agreement_required'],
+          [{ communityAgreementAccepted: 'true' }, 'community_agreement_required'],
+          [{ communityAgreementVersion: 'old' }, 'community_agreement_version_mismatch'],
+          [{ captcha: undefined }, 'registration_captcha_required'],
+          [{ captcha: { challengeId: '0'.repeat(64), k: 0 } }, 'registration_captcha_invalid'],
+          [{ email: 'another@example.invalid' }, 'registration_captcha_invalid'],
+        ]) {
+          const rejected = await api('/auth/register', {
+            method: 'POST',
+            body: { ...valid, ...changes },
+            expected: 400,
+            rawRegistration: true,
+          });
+          assert.equal(rejected.code, code);
+        }
+        const incorrect = await api('/auth/register', {
+          method: 'POST',
+          body: {
+            ...valid,
+            captcha: {
+              ...valid.captcha,
+              k: registrationBand.band.candidates.find(
+                (candidate) => candidate.k !== valid.captcha.k,
+              ).k,
+            },
+          },
+          expected: 400,
+          rawRegistration: true,
+        });
+        assert.equal(incorrect.code, 'registration_captcha_incorrect');
+        const replayWrong = await api('/auth/register', {
+          method: 'POST',
+          body: valid,
+          expected: 400,
+          rawRegistration: true,
+        });
+        assert.equal(replayWrong.code, 'registration_captcha_used');
+        const expired = await registrationPayload(identity);
+        await db.execute(
+          'UPDATE registration_challenges SET expires_at = NOW() - INTERVAL 1 SECOND WHERE id = ?',
+          [expired.captcha.challengeId],
+        );
+        assert.equal(
+          (
+            await api('/auth/register', {
+              method: 'POST',
+              body: expired,
+              expected: 400,
+              rawRegistration: true,
+            })
+          ).code,
+          'registration_captcha_expired',
+        );
+        const [[unusedCode]] = await db.query(
+          'SELECT used_at FROM email_verification_codes WHERE email = ?',
+          [identity.email],
+        );
+        assert.equal(
+          unusedCode.used_at,
+          null,
+          'failed captcha must not consume email verification',
+        );
+        const concurrentPayload = await registrationPayload(identity);
+        await api('/auth/register', {
+          method: 'POST',
+          body: { ...concurrentPayload, username: 'admin' },
+          expected: 409,
+          rawRegistration: true,
+        });
+        const [[rolledBackChallenge]] = await db.query(
+          'SELECT consumed_at FROM registration_challenges WHERE id = ?',
+          [concurrentPayload.captcha.challengeId],
+        );
+        assert.equal(
+          rolledBackChallenge.consumed_at,
+          null,
+          'failed account creation rolls back a correct answer',
+        );
+        const [[rolledBackWhitelist]] = await db.query(
+          'SELECT claimed_user_id FROM registration_whitelist WHERE student_id = ?',
+          [identity.studentId],
+        );
+        assert.equal(rolledBackWhitelist.claimed_user_id, null);
+        const outcomes = await Promise.all(
+          [0, 1].map(async () => {
+            const response = await fetch(`${base}/auth/register`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(concurrentPayload),
+            });
+            return { status: response.status, body: await response.json() };
+          }),
+        );
+        assert.deepEqual(outcomes.map((outcome) => outcome.status).sort(), [201, 400]);
+        assert.equal(
+          outcomes.find((outcome) => outcome.status === 400).body.code,
+          'registration_captcha_used',
+        );
+        const registered = outcomes.find((outcome) => outcome.status === 201).body.user;
+        const [[agreement]] = await db.query(
+          'SELECT agreement_version,accepted_at FROM user_community_agreements WHERE user_id = ?',
+          [registered.id],
+        );
+        assert.equal(agreement.agreement_version, COMMUNITY_AGREEMENT_VERSION);
+        assert.ok(agreement.accepted_at);
+        const [[claimed]] = await db.query(
+          'SELECT claimed_user_id FROM registration_whitelist WHERE student_id = ?',
+          [identity.studentId],
+        );
+        assert.equal(Number(claimed.claimed_user_id), Number(registered.id));
+        assert.equal(
+          (
+            await api('/auth/register', {
+              method: 'POST',
+              body: concurrentPayload,
+              expected: 400,
+              rawRegistration: true,
+            })
+          ).code,
+          'registration_captcha_used',
+        );
+        const limitedEmail = 'challenge-rate@example.invalid';
+        for (let count = 0; count < EMAIL_CHALLENGE_LIMIT; count += 1) {
+          const challenge = await api('/auth/registration-challenge', {
+            method: 'POST',
+            body: { email: limitedEmail },
+          });
+          assert.equal(challenge.communityAgreementVersion, COMMUNITY_AGREEMENT_VERSION);
+          assert.ok(new Date(challenge.expiresAt) > new Date());
+          assert.equal(challenge.answerK, undefined);
+          assert.equal(challenge.tolerance, undefined);
+        }
+        assert.equal(
+          (
+            await api('/auth/registration-challenge', {
+              method: 'POST',
+              body: { email: limitedEmail },
+              expected: 429,
+            })
+          ).code,
+          'registration_captcha_rate_limited',
+        );
+      },
+    );
+
+    await t.test(
+      'login requires a separate one-use challenge even after an incorrect password',
+      async () => {
+        async function loginPayload(identifier = 'admin') {
+          const challenge = await api('/auth/login-challenge', {
+            method: 'POST',
+            body: { identifier },
+          });
+          return { identifier, password: 'free-bbs', captcha: solveChallenge(challenge) };
+        }
+        assert.equal(
+          (
+            await api('/auth/login', {
+              method: 'POST',
+              body: { identifier: 'admin', password: 'free-bbs' },
+              expected: 400,
+            })
+          ).code,
+          'login_captcha_required',
+        );
+        const wrongChallenge = await api('/auth/login-challenge', {
+          method: 'POST',
+          body: { identifier: 'admin' },
+        });
+        const wrong = {
+          identifier: 'admin',
+          password: 'free-bbs',
+          captcha: solveChallenge(wrongChallenge),
+        };
+        assert.equal(
+          (
+            await api('/auth/login', {
+              method: 'POST',
+              body: {
+                ...wrong,
+                captcha: {
+                  ...wrong.captcha,
+                  k: wrongChallenge.band.candidates.find(
+                    (candidate) => candidate.k !== wrong.captcha.k,
+                  ).k,
+                },
+              },
+              expected: 400,
+            })
+          ).code,
+          'login_captcha_incorrect',
+        );
+        assert.equal(
+          (await api('/auth/login', { method: 'POST', body: wrong, expected: 400 })).code,
+          'login_captcha_used',
+        );
+        const wrongPassword = await loginPayload();
+        await api('/auth/login', {
+          method: 'POST',
+          body: { ...wrongPassword, password: 'incorrect-password' },
+          expected: 401,
+        });
+        assert.equal(
+          (await api('/auth/login', { method: 'POST', body: wrongPassword, expected: 400 })).code,
+          'login_captcha_used',
+        );
+        const expired = await loginPayload();
+        await db.execute(
+          'UPDATE registration_challenges SET expires_at = NOW() - INTERVAL 1 SECOND WHERE id = ?',
+          [expired.captcha.challengeId],
+        );
+        assert.equal(
+          (await api('/auth/login', { method: 'POST', body: expired, expected: 400 })).code,
+          'login_captcha_expired',
+        );
+        const boundIdentity = await loginPayload();
+        assert.equal(
+          (
+            await api('/auth/login', {
+              method: 'POST',
+              body: { ...boundIdentity, identifier: 'outside_user' },
+              expected: 400,
+            })
+          ).code,
+          'login_captcha_invalid',
+        );
+        await api('/auth/login', {
+          method: 'POST',
+          body: { ...boundIdentity, identifier: ' ADMIN ' },
+        });
+        const email = '2026000102@example.invalid';
+        const registrationChallenge = await api('/auth/registration-challenge', {
+          method: 'POST',
+          body: { email },
+        });
+        assert.equal(
+          (
+            await api('/auth/login', {
+              method: 'POST',
+              body: {
+                identifier: email,
+                password: 'free-bbs',
+                captcha: solveChallenge(registrationChallenge),
+              },
+              expected: 400,
+            })
+          ).code,
+          'login_captcha_invalid',
+        );
+        const loginChallenge = await loginPayload(email);
+        assert.equal(
+          (
+            await api('/auth/register', {
+              method: 'POST',
+              body: {
+                username: 'cross_purpose',
+                studentId: '2026000111',
+                fullName: '验证用途测试',
+                email,
+                password: 'free-bbs',
+                emailCode: '123456',
+                communityAgreementAccepted: true,
+                communityAgreementVersion: COMMUNITY_AGREEMENT_VERSION,
+                captcha: loginChallenge.captcha,
+              },
+              expected: 400,
+              rawRegistration: true,
+            })
+          ).code,
+          'registration_captcha_invalid',
+        );
+        const concurrent = await loginPayload();
+        const outcomes = await Promise.all(
+          [0, 1].map(async () => {
+            const response = await fetch(`${base}/auth/login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(concurrent),
+            });
+            return { status: response.status, body: await response.json() };
+          }),
+        );
+        assert.deepEqual(outcomes.map((outcome) => outcome.status).sort(), [200, 400]);
+        assert.equal(
+          outcomes.find((outcome) => outcome.status === 400).body.code,
+          'login_captcha_used',
+        );
+        for (let count = 0; count < EMAIL_CHALLENGE_LIMIT; count += 1) {
+          await loginPayload('rate_login_unknown');
+        }
+        assert.equal(
+          (
+            await api('/auth/login-challenge', {
+              method: 'POST',
+              body: { identifier: 'rate_login_unknown' },
+              expected: 429,
+            })
+          ).code,
+          'login_captcha_rate_limited',
         );
       },
     );

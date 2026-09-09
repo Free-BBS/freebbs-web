@@ -382,6 +382,16 @@ for (const [file, mode, endpoint] of [
     })) {
       if (harness.elements.has(id)) harness.elements.get(id).value = value;
     }
+    if (mode === 'register') {
+      const agreement = harness.elements.get('auth-community-agreement');
+      agreement.checked = true;
+      agreement.dataset.version = '2026-09-09';
+    }
+    if (mode === 'register' || mode === 'login') {
+      harness.window.freeBbsAuthChallenge = {
+        run: ({ submit }) => submit({ challengeId: 'typography-fixture', k: 0 }),
+      };
+    }
     for (const { src } of pageScripts(page)) {
       if (src === 'typography.js' || src === 'auth.js') {
         vm.runInContext(readPublic(src), harness.context, { filename: src });

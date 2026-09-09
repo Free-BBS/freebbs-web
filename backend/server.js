@@ -27,6 +27,15 @@ const {
   claimRegistrationWhitelist,
 } = require('./registration-whitelist');
 const {
+  assertCommunityAgreement,
+  ensureRegistrationGuardTables,
+  issueRegistrationChallenge,
+  issueLoginChallenge,
+  consumeRegistrationChallenge,
+  consumeLoginChallenge,
+  recordCommunityAgreement,
+} = require('./registration-guard');
+const {
   createNotificationService,
   createNotificationsRouter,
   ensureNotificationTables,
@@ -4096,6 +4105,22 @@ app.delete('/api/admin/discussion/posts/:id', async (request, response) => {
   }
 });
 
+app.post('/api/auth/registration-challenge', async (request, response) => {
+  response.setHeader('Cache-Control', 'no-store');
+  try {
+    const challenge = await issueRegistrationChallenge(pool, {
+      email: request.body?.email,
+      ip: request.ip,
+    });
+    response.json(challenge);
+  } catch (error) {
+    response.status(error.status || 503).json({
+      message: error.status ? error.message : '暂时无法生成能带验证，请稍后重试',
+      code: error.status ? error.code : 'registration_captcha_unavailable',
+    });
+  }
+});
+
 app.post('/api/auth/register', async (request, response) => {
   const username = String(request.body.username || '').trim();
   const fullName = String(request.body.fullName || '').trim();
@@ -4137,7 +4162,14 @@ app.post('/api/auth/register', async (request, response) => {
   }
 
   try {
-    const createdUserId = await withDatabaseTransaction(async (connection) => {
+    assertCommunityAgreement(request.body);
+    const registration = await withDatabaseTransaction(async (connection) => {
+      const challengeError = await consumeRegistrationChallenge(
+        connection,
+        email,
+        request.body.captcha,
+      );
+      if (challengeError) return { challengeError };
       const identity = { studentId, fullName, email };
       await assertRegistrationWhitelisted(connection, identity, { lock: true });
       const [codeRows] = await connection.execute(
@@ -4169,9 +4201,11 @@ app.post('/api/auth/register', async (request, response) => {
       await connection.execute('UPDATE email_verification_codes SET used_at = NOW() WHERE id = ?', [
         codeRows[0].id,
       ]);
-      return result.insertId;
+      await recordCommunityAgreement(connection, result.insertId);
+      return { createdUserId: result.insertId };
     });
-    const user = toUserProfile(await getUserById(createdUserId));
+    if (registration.challengeError) throw registration.challengeError;
+    const user = toUserProfile(await getUserById(registration.createdUserId));
 
     response.status(201).json({
       token: issueToken(user),
@@ -4317,6 +4351,23 @@ app.post('/api/auth/send-reset-code', async (request, response) => {
   }
 });
 
+app.post('/api/auth/login-challenge', async (request, response) => {
+  response.setHeader('Cache-Control', 'no-store');
+  try {
+    response.json(
+      await issueLoginChallenge(pool, {
+        identifier: request.body?.identifier,
+        ip: request.ip,
+      }),
+    );
+  } catch (error) {
+    response.status(error.status || 503).json({
+      message: error.status ? error.message : '暂时无法生成能带验证，请稍后重试',
+      code: error.status ? error.code : 'login_captcha_unavailable',
+    });
+  }
+});
+
 app.post('/api/auth/login', async (request, response) => {
   const identifier = String(request.body.identifier || '').trim();
   const password = String(request.body.password || '');
@@ -4327,6 +4378,12 @@ app.post('/api/auth/login', async (request, response) => {
   }
 
   try {
+    // Commit the one attempt before checking credentials: an incorrect password
+    // must never turn a solved challenge into a reusable password-guessing token.
+    const challengeError = await withDatabaseTransaction((connection) =>
+      consumeLoginChallenge(connection, identifier, request.body.captcha),
+    );
+    if (challengeError) throw challengeError;
     const [rows] = await pool.execute(
       `SELECT id, uid, username, full_name, student_id, email, email_verified_at, password_hash, role, is_admin, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
        FROM users
@@ -4349,7 +4406,10 @@ app.post('/api/auth/login', async (request, response) => {
       user,
     });
   } catch (error) {
-    response.status(500).json({ message: '登录失败', detail: error.message });
+    response.status(error.status || 500).json({
+      message: error.status ? error.message : '登录失败',
+      code: error.status ? error.code : undefined,
+    });
   }
 });
 
@@ -5295,6 +5355,7 @@ async function start() {
   await ensureFortuneTables();
   await ensureEconomyTables();
   await ensureRegistrationWhitelistTables(pool);
+  await ensureRegistrationGuardTables(pool);
   await ensureNotificationTables(pool);
   await ensureCourseUploadTables(pool);
   await ensureCircuitTables(pool);
