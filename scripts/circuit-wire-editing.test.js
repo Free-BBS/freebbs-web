@@ -514,3 +514,23 @@ test('dragging a junction moves its connected wire ends; cancellation restores t
     assert.equal(connections.length, 0, 'junction movement must not create an extra wire');
   }
 });
+
+test('touch pin gestures prevent canvas panning while light taps invoke one connection action', () => {
+  const clicks = [];
+  const state = harness(sample(), {
+    onConnect() {},
+    onPinClick: (endpoint) => clicks.push(endpoint),
+  });
+  const pin = pinHit(state, 'V1', 0);
+  pin.dispatch('pointerdown', { clientX: 60, clientY: 100, pointerType: 'touch' });
+  assert.equal(pin.dispatch('touchstart').defaultPrevented, true);
+  pin.dispatch('pointerup', { clientX: 60, clientY: 100, pointerType: 'touch' });
+  pin.dispatch('click');
+  assert.equal(clicks.length, 1);
+  assert.equal(JSON.stringify(clicks[0]), '{"componentId":"V1","pin":0}');
+  assert.equal(
+    state.rendered.svg.dispatch('touchstart').defaultPrevented,
+    false,
+    'blank canvas remains scrollable',
+  );
+});

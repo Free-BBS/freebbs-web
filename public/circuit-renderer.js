@@ -996,6 +996,13 @@
           const endpoint = { componentId: component.id, pin: pin.pin };
           let suppressClick = false;
           hit.style.touchAction = 'none';
+          hit.addEventListener(
+            'touchstart',
+            (event) => {
+              if (pinDrag?.hit === hit) event.preventDefault();
+            },
+            { passive: false },
+          );
           hit.addEventListener('pointerdown', (event) => {
             event.stopPropagation();
             if (
@@ -1063,6 +1070,10 @@
             pinDrag = null;
             if (hit.hasPointerCapture(event.pointerId)) hit.releasePointerCapture(event.pointerId);
             clearConnectionPreview();
+            if (!moved && event.pointerType === 'touch') {
+              suppressClick = true;
+              options.onPinClick?.(endpoint);
+            }
             if (moved && component.type === 'junction')
               options.onMove(component.id, component.x, component.y);
             if (target)
