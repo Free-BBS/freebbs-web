@@ -169,7 +169,8 @@
             <div class="circuit-heading-actions">
               <a class="circuit-button" href="/circuit">新建</a
               ><button id="circuit-copy" type="button">复制为新电路</button
-              ><button class="is-primary" id="circuit-save" type="button">保存并获取 CID</button>
+              ><button class="is-primary" id="circuit-save" type="button">保存并获取 CID</button
+              ><button id="circuit-publish" type="button" hidden>发表到讨论区</button>
             </div>
           </header>
           <section class="circuit-document-heading" aria-label="电路文档">
@@ -196,13 +197,34 @@
               <div id="circuit-palette"></div>
               <label class="circuit-example-label"
                 >从示例开始<select id="circuit-example">
-                  <option value="divider">电阻分压 · DC</option>
-                  <option value="rc">RC 充放电 · 瞬态</option>
-                  <option value="diode">二极管整流 · 瞬态</option>
                   <option value="blank">空白电路</option>
                 </select></label
               >
               <button id="circuit-load-example" type="button">载入示例</button>
+              <p
+                id="circuit-example-status"
+                class="circuit-status"
+                role="status"
+                aria-live="polite"
+              ></p>
+              <button id="circuit-retry-examples" type="button" hidden>重新读取示例</button>
+              <details id="circuit-example-admin" class="circuit-example-admin" hidden>
+                <summary>管理示例</summary>
+                <p>载入示例后，修改电路名称、说明或元件，再保存示例修改。</p>
+                <button id="circuit-example-create" type="button">当前电路添加为示例</button>
+                <button id="circuit-example-update" type="button" disabled>保存示例修改</button>
+                <p id="circuit-example-target" class="circuit-example-target"></p>
+                <button id="circuit-example-delete" type="button" disabled>删除所选示例</button>
+                <div
+                  id="circuit-example-delete-confirm"
+                  class="circuit-example-delete-confirm"
+                  hidden
+                >
+                  <p id="circuit-example-delete-message"></p>
+                  <button id="circuit-example-delete-yes" type="button">确认删除示例</button>
+                  <button id="circuit-example-delete-no" type="button">取消</button>
+                </div>
+              </details>
             </aside>
             <div class="circuit-canvas-panel">
               <div class="circuit-canvas-toolbar">
@@ -212,7 +234,8 @@
               </div>
               <div class="circuit-stage" id="circuit-stage" aria-label="电路原理图"></div>
               <p class="circuit-canvas-note">
-                导线交叉不代表连接。请将电路接入参考地，电流表串联、电压表并联。
+                选中导线后拖动圆点调整形状，点击 +
+                添加拐点。导线交叉不代表连接；请连接参考地，电流表串联、电压表并联。
               </p>
             </div>
             <aside class="circuit-inspector" aria-labelledby="circuit-inspector-title">
@@ -222,7 +245,8 @@
                 <p class="circuit-selected-name" id="circuit-selected-name"></p>
                 <div class="circuit-selection-actions">
                   <button id="circuit-rotate" type="button">旋转 90°</button
-                  ><button id="circuit-delete" type="button">删除元件</button>
+                  ><button id="circuit-delete" type="button">删除元件</button
+                  ><button id="circuit-reset-wire" type="button" hidden>恢复自动走线</button>
                 </div>
                 <form id="circuit-parameters" novalidate></form>
                 <h3>引脚与连接</h3>
@@ -365,8 +389,8 @@
             <div>
               <h2 id="circuit-sharing-title">把实验带到讨论里</h2>
               <p>
-                保存后复制 Markdown
-                引用，读者可以查看该版本的电路与仿真。修改会创建新版本，既有引用保持不变。
+                复制已保存版本的 Markdown
+                引用，读者可以查看电路与仿真。未保存的修改不会改变既有引用。
               </p>
             </div>
             <div class="circuit-actions">
@@ -377,6 +401,7 @@
               ><button id="circuit-import-json" type="button">导入 JSON</button
               ><input id="circuit-import-file" type="file" accept="application/json,.json" hidden />
             </div>
+            <p id="circuit-reference-hint" class="circuit-reference-hint" role="status"></p>
             <textarea
               id="circuit-reference-text"
               rows="3"

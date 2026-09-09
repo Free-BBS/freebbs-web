@@ -238,6 +238,43 @@
                   </div>
                 </div>
 
+                <section
+                  class="discussion-compose hidden"
+                  id="circuit-discussion-handoff"
+                  aria-label="电路发帖草稿"
+                >
+                  <p
+                    class="discussion-message"
+                    id="circuit-discussion-status"
+                    role="status"
+                    aria-live="polite"
+                  ></p>
+                  <div class="discussion-compose-actions">
+                    <button
+                      class="discussion-editor-button"
+                      id="circuit-discussion-append"
+                      type="button"
+                      hidden
+                    >
+                      将电路引用追加到草稿
+                    </button>
+                    <a
+                      class="discussion-editor-button"
+                      id="circuit-discussion-login"
+                      href="/login"
+                      hidden
+                      >登录后返回此页继续</a
+                    >
+                    <button
+                      class="discussion-editor-button"
+                      id="circuit-discussion-dismiss"
+                      type="button"
+                    >
+                      关闭提示
+                    </button>
+                  </div>
+                </section>
+
                 <form class="discussion-compose hidden" id="discussion-compose-form">
                   <div class="discussion-compose-grid">
                     <label class="auth-field">
@@ -371,6 +408,7 @@
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
     <script src="/app.js"></script>
+    <script src="/circuit-discussion.js"></script>
     <script src="/notifications.js"></script>
   </body>
 </html>

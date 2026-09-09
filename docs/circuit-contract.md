@@ -5,7 +5,7 @@
 `{version:1, components:[], wires:[], analysis:{type:'transient', stop:0.01, step:0.00001, initial:'zero'}}`
 
 元件：`{id:'R1', type:'resistor', x:240, y:160, rotation:0, params:{resistance:1000}}`。
-导线：`{id:'w1', from:{componentId:'R1',pin:0}, to:{componentId:'V1',pin:0}}`。pin 为从0开始的索引。只在引脚之间连接；导线交叉不产生连接。所有 ground 的引脚为同一零电位。坐标以画布 SVG viewBox 为准，rotation 为 0/90/180/270。最多80元件、200导线。
+导线：`{id:'w1', from:{componentId:'R1',pin:0}, to:{componentId:'V1',pin:0}, points:[{x:300,y:160}]}`。可选 `points` 只存中间拐点，最多32个；省略时自动正交走线，显式空数组表示直线。端点由引脚确定，移动元件不会改变拐点坐标。pin 为从0开始的索引。只在引脚之间连接；导线交叉不产生连接。所有 ground 的引脚为同一零电位。坐标以画布 SVG viewBox 为准，rotation 为 0/90/180/270。最多80元件、200导线。
 
 类型和引脚顺序：
 
@@ -41,6 +41,12 @@
 响应 `{circuit:{cid,title,description,document,revision,owner:{uid,username},canEdit,createdAt,updatedAt}}`；列表 `{circuits:[摘要]}`。
 
 页面 `/circuit?cid=...` 编辑/查看，`/circuits`个人列表与新建入口；可同一HTML通过路径区分。嵌入 `/circuit-embed?cid=...&revision=1&view=live|waveform|schematic`。
+
+## 示例与发帖
+
+公开 `GET /api/circuit-examples` 返回 `{examples:[{id,title,description,revision}],canManage}`；`GET /:id` 返回 `{example:{id,title,description,revision,document}}`。管理员 POST `{title,description,document}` 添加；PUT `/:id` 加 `expectedRevision` 更新，DELETE `/:id` 携带 `{expectedRevision}` 删除。修改/删除旧版本返回409，已删示例返回404。种子示例通过唯一 seed_key 和软删除状态保证重启不覆盖修改、不恢复删除。
+
+`/discussion?board=circuit&compose=circuit&cid=...&revision=N` 表示打开电路发帖草稿。讨论页验证固定版本存在后预填默认标题、分区与 Markdown 引用，只打开编辑器，不自动发帖。
 
 ## Markdown引用
 

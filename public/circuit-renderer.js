@@ -81,6 +81,63 @@
     }));
   }
 
+  function getWireRoute(wire, componentList) {
+    const components =
+      componentList instanceof Map
+        ? componentList
+        : new Map((componentList || []).map((component) => [component.id, component]));
+    const from = components.get(wire.from?.componentId);
+    const to = components.get(wire.to?.componentId);
+    if (!from || !to) return [];
+    const a = getPins(from)[wire.from.pin];
+    const b = getPins(to)[wire.to.pin];
+    if (!a || !b) return [];
+    const custom = Array.isArray(wire.points);
+    const mid = Math.round((a.x + b.x) / 40) * 20;
+    const points = custom
+      ? wire.points
+      : [
+          { x: mid, y: a.y },
+          { x: mid, y: b.y },
+        ];
+    const route = [{ x: a.x, y: a.y }, ...points.map(({ x, y }) => ({ x, y })), { x: b.x, y: b.y }];
+    // Keep custom vertex ordering exact; automatic routes only remove duplicate
+    // adjacent corners. Geometry never joins electrically crossing wires.
+    return custom
+      ? route
+      : route.filter(
+          (point, index) =>
+            !index || point.x !== route[index - 1].x || point.y !== route[index - 1].y,
+        );
+  }
+
+  function insertWirePoint(wire, components, position) {
+    const route = getWireRoute(wire, components);
+    if (route.length < 2 || route.length - 2 >= 32) return null;
+    let nearest;
+    for (let index = 0; index < route.length - 1; index += 1) {
+      const a = route[index];
+      const b = route[index + 1];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const denominator = dx * dx + dy * dy;
+      const t = denominator
+        ? Math.max(
+            0,
+            Math.min(1, ((position.x - a.x) * dx + (position.y - a.y) * dy) / denominator),
+          )
+        : 0;
+      const point = { x: a.x + t * dx, y: a.y + t * dy };
+      const distance = Math.hypot(position.x - point.x, position.y - point.y);
+      if (!nearest || distance < nearest.distance) nearest = { index, point, distance };
+    }
+    const points = route.slice(1, -1);
+    points.splice(nearest.index, 0, nearest.point);
+    return { points, index: nearest.index };
+  }
+
+  const wireFocusRequests = new WeakMap();
+
   function svgElement(tag, attributes, text) {
     const element = document.createElementNS(NS, tag);
     Object.entries(attributes || {}).forEach(([name, value]) =>
@@ -196,7 +253,7 @@
       viewBox: (options.viewBox || [0, 0, 1000, 640]).join(' '),
       width: '100%',
       height: '100%',
-      role: 'img',
+      role: options.interactive ? 'group' : 'img',
       'aria-label': '电路原理图',
       class: 'circuit-schematic',
     });
@@ -210,6 +267,9 @@
       .circuit-node{cursor:pointer;outline:none}.circuit-node:focus .circuit-selection{stroke:var(--circuit-accent,#48b6bd)}
       .circuit-pin-hit{fill:transparent;stroke:none;cursor:crosshair}.circuit-pin-hit:focus{fill:#48b6bd33;outline:none}
       .circuit-current{stroke-dasharray:3 7;animation:circuit-current-flow 0.8s linear infinite}
+      .circuit-wire-hit{cursor:pointer;outline:none}.circuit-wire-hit:focus{stroke:#48b6bd33}
+      .circuit-wire-point{cursor:move;outline:none;touch-action:none}.circuit-wire-point:focus + circle{stroke-width:3;fill:var(--circuit-accent,#48b6bd)}
+      .circuit-wire-add{cursor:pointer;outline:none;touch-action:manipulation}.circuit-wire-add:focus circle{stroke-width:3}
       @keyframes circuit-current-flow{to{stroke-dashoffset:-20}}
       @media(prefers-reduced-motion:reduce){.circuit-current{animation:none}}
       text{font-family:var(--font-ui,system-ui,sans-serif);font-variant-numeric:tabular-nums}
@@ -257,46 +317,418 @@
       'stroke-linecap': 'round',
       'stroke-linejoin': 'round',
     });
-    svg.append(wireLayer, nodeLayer);
+    const wireEditLayer = svgElement('g', { class: 'circuit-wire-controls' });
+    svg.append(wireLayer, nodeLayer, wireEditLayer);
+
+    const copyPoints = (points) => points.map(({ x, y }) => ({ x, y }));
+    const editBounds = options.viewBox || [0, 0, 1000, 640];
+    const bounded = (value, axis = 'x') => {
+      const start = editBounds[axis === 'x' ? 0 : 1];
+      const length = editBounds[axis === 'x' ? 2 : 3];
+      return Math.max(start, Math.min(start + length, value));
+    };
+    const deleteButtonTransform = (point) => {
+      const x = Math.max(
+        editBounds[0] + 8,
+        Math.min(editBounds[0] + editBounds[2] - 104, point.x + 18),
+      );
+      const y = Math.max(
+        editBounds[1] + 8,
+        Math.min(editBounds[1] + editBounds[3] - 48, point.y - 52),
+      );
+      return `translate(${x} ${y})`;
+    };
 
     function wirePath(wire) {
-      const fromComponent = components.get(wire.from.componentId);
-      const toComponent = components.get(wire.to.componentId);
-      if (!fromComponent || !toComponent) return '';
-      const a = getPins(fromComponent)[wire.from.pin];
-      const b = getPins(toComponent)[wire.to.pin];
-      if (!a || !b) return '';
-      const mid = Math.round((a.x + b.x) / 40) * 20;
-      return `M ${a.x} ${a.y} H ${mid} V ${b.y} H ${b.x}`;
+      return getWireRoute(wire, components)
+        .map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`)
+        .join(' ');
     }
 
-    (circuit.wires || []).forEach((wire) => {
+    function editablePoints(entry) {
+      if (Array.isArray(entry.wire.points)) return copyPoints(entry.wire.points);
+      const route = getWireRoute(entry.wire, components);
+      const points = route.slice(1, -1);
+      if (points.length || route.length < 2) return points;
+      return [{ x: (route[0].x + route.at(-1).x) / 2, y: (route[0].y + route.at(-1).y) / 2 }];
+    }
+
+    function controlRoute(entry) {
+      const route = getWireRoute(entry.wire, components);
+      return route.length > 1 ? [route[0], ...editablePoints(entry), route.at(-1)] : [];
+    }
+
+    function updateWireGeometry(entry) {
+      const d = wirePath(entry.wire);
+      entry.path.setAttribute('d', d);
+      entry.hit?.setAttribute('d', d);
+      const points = editablePoints(entry);
+      if (entry.controls && points.length !== entry.controls.length && !entry.drag) {
+        renderWireControls(entry);
+        return;
+      }
+      entry.controls?.forEach(({ hit, dot }, index) => {
+        if (!points[index]) return;
+        for (const element of [hit, dot]) {
+          element.setAttribute('cx', points[index].x);
+          element.setAttribute('cy', points[index].y);
+        }
+      });
+      const selectedPoint = points[entry.activePoint];
+      if (entry.deleteControl && selectedPoint)
+        entry.deleteControl.setAttribute('transform', deleteButtonTransform(selectedPoint));
+      const route = controlRoute(entry);
+      entry.addButtons?.forEach((button, index) => {
+        if (!route[index + 1]) return;
+        button.setAttribute(
+          'transform',
+          `translate(${(route[index].x + route[index + 1].x) / 2} ${(route[index].y + route[index + 1].y) / 2})`,
+        );
+      });
+    }
+
+    function showDeletePoint(storedEntry, index) {
+      const entry = storedEntry;
+      entry.deleteControl?.remove();
+      entry.deleteControl = null;
+      entry.activePoint = index;
+      const point = editablePoints(entry)[index];
+      if (!point || !entry.controlsGroup) return;
+      const button = svgElement('g', {
+        class: 'circuit-wire-delete-point',
+        transform: deleteButtonTransform(point),
+        tabindex: 0,
+        role: 'button',
+        'aria-label': `删除拐点 ${index + 1}`,
+        'data-wire-delete-point': index,
+      });
+      button.style.cursor = 'pointer';
+      button.style.touchAction = 'manipulation';
+      button.append(
+        svgElement('rect', {
+          x: -8,
+          y: -8,
+          width: 112,
+          height: 56,
+          fill: 'transparent',
+          stroke: 'none',
+        }),
+      );
+      button.append(
+        svgElement('rect', {
+          x: 0,
+          y: 0,
+          width: 96,
+          height: 40,
+          rx: 6,
+          fill: 'var(--circuit-surface,#102228)',
+          stroke: 'var(--circuit-accent,#48b6bd)',
+          'stroke-width': 1.5,
+        }),
+      );
+      button.append(
+        svgElement(
+          'text',
+          {
+            x: 48,
+            y: 25,
+            'text-anchor': 'middle',
+            'font-size': 15,
+            fill: 'var(--circuit-ink,#dfedf0)',
+            stroke: 'none',
+          },
+          '删除拐点',
+        ),
+      );
+      button.addEventListener('pointerdown', (event) => event.stopPropagation());
+      const remove = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const updated = editablePoints(entry);
+        updated.splice(index, 1);
+        commitWirePoints(entry, updated, Math.min(index, updated.length - 1));
+      };
+      button.addEventListener('click', remove);
+      button.addEventListener('keydown', (event) => {
+        if (['Enter', ' ', 'Delete', 'Backspace'].includes(event.key)) remove(event);
+      });
+      entry.controlsGroup.append(button);
+      entry.deleteControl = button;
+    }
+
+    function focusPoint(entry, index) {
+      const control = entry.controls?.[Math.max(0, Math.min(index, entry.controls.length - 1))];
+      const target = control?.hit || entry.addButtons?.find(Boolean);
+      target?.focus({ preventScroll: true });
+    }
+
+    function commitWirePoints(storedEntry, points, focusIndex) {
+      const entry = storedEntry;
+      entry.wire.points = copyPoints(points);
+      wireFocusRequests.set(container, { wireId: entry.wire.id, index: focusIndex });
+      options.onWireChange?.(entry.wire.id, copyPoints(points));
+      // The owner normally rerenders after updating its document. Keep the
+      // renderer functional for callers that keep this SVG mounted instead.
+      if (svg.parentNode) {
+        renderWireControls(entry);
+        updateWireGeometry(entry);
+        focusPoint(entry, focusIndex);
+      }
+    }
+
+    function cancelWireDrag(storedEntry) {
+      const entry = storedEntry;
+      if (!entry.drag) return;
+      const { originalPoints, pointerId, hit } = entry.drag;
+      entry.drag = null;
+      if (originalPoints === undefined) delete entry.wire.points;
+      else entry.wire.points = copyPoints(originalPoints);
+      if (hit.hasPointerCapture?.(pointerId)) hit.releasePointerCapture(pointerId);
+      renderWireControls(entry);
+      updateWireGeometry(entry);
+    }
+
+    function addWirePoint(entry, position) {
+      const addition = insertWirePoint(entry.wire, components, position);
+      if (addition) commitWirePoints(entry, addition.points, addition.index);
+    }
+
+    function renderWireControls(storedEntry) {
+      const entry = storedEntry;
+      entry.controlsGroup?.remove();
+      entry.controls = [];
+      entry.addButtons = [];
+      entry.deleteControl = null;
+      if (!entry.selected || !options.interactive || typeof options.onWireChange !== 'function')
+        return;
+      const group = svgElement('g', { 'data-wire-controls': entry.wire.id });
+      entry.controlsGroup = group;
+      wireEditLayer.append(group);
+      const points = editablePoints(entry);
+      const route = controlRoute(entry);
+      if (points.length < 32) {
+        route.slice(0, -1).forEach((point, index) => {
+          const next = route[index + 1];
+          if (Math.hypot(next.x - point.x, next.y - point.y) < 34) return;
+          const midpoint = { x: (point.x + next.x) / 2, y: (point.y + next.y) / 2 };
+          const button = svgElement('g', {
+            transform: `translate(${midpoint.x} ${midpoint.y})`,
+            class: 'circuit-wire-add',
+            tabindex: 0,
+            role: 'button',
+            'aria-label': `在导线 ${entry.wire.id} 第 ${index + 1} 段添加拐点`,
+            'data-wire-add': index,
+          });
+          button.append(svgElement('circle', { r: 17, fill: 'transparent', stroke: 'none' }));
+          button.append(
+            svgElement('circle', {
+              r: 8,
+              fill: 'var(--circuit-surface,#102228)',
+              stroke: 'var(--circuit-accent,#48b6bd)',
+              'stroke-width': 1.5,
+            }),
+          );
+          const plus = svgElement('path', {
+            d: 'M -4 0 H 4 M 0 -4 V 4',
+            stroke: 'var(--circuit-accent,#48b6bd)',
+            'stroke-width': 1.5,
+            fill: 'none',
+          });
+          plus.style.pointerEvents = 'none';
+          button.append(plus);
+          button.addEventListener('pointerdown', (event) => event.stopPropagation());
+          const add = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const currentRoute = controlRoute(entry);
+            if (currentRoute[index + 1])
+              addWirePoint(entry, {
+                x: (currentRoute[index].x + currentRoute[index + 1].x) / 2,
+                y: (currentRoute[index].y + currentRoute[index + 1].y) / 2,
+              });
+          };
+          button.addEventListener('click', add);
+          button.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') add(event);
+          });
+          group.append(button);
+          entry.addButtons[index] = button;
+        });
+      }
+      points.forEach((point, index) => {
+        const hit = svgElement('circle', {
+          cx: point.x,
+          cy: point.y,
+          r: 16,
+          class: 'circuit-wire-point',
+          fill: 'transparent',
+          stroke: 'none',
+          tabindex: 0,
+          role: 'button',
+          'data-wire-point': index,
+          'data-wire-id': entry.wire.id,
+          'aria-label': `导线 ${entry.wire.id} 拐点 ${index + 1}，拖动调整；方向键微调，Delete 删除，Esc 取消拖动`,
+          'aria-keyshortcuts': 'ArrowUp ArrowDown ArrowLeft ArrowRight Delete Backspace Escape',
+        });
+        const dot = svgElement('circle', {
+          cx: point.x,
+          cy: point.y,
+          r: 6,
+          fill: 'var(--circuit-surface,#102228)',
+          stroke: 'var(--circuit-accent,#48b6bd)',
+          'stroke-width': 2,
+        });
+        dot.style.pointerEvents = 'none';
+        hit.style.touchAction = 'none';
+        // SVG geometry does not consistently honor touch-action across mobile
+        // engines. Reserve only gestures that start on a vertex for dragging.
+        hit.addEventListener('touchstart', (event) => event.preventDefault(), { passive: false });
+        hit.addEventListener('focus', () => showDeletePoint(entry, index));
+        hit.addEventListener('click', (event) => {
+          event.stopPropagation();
+          showDeletePoint(entry, index);
+        });
+        hit.addEventListener('dblclick', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        });
+        hit.addEventListener('pointerdown', (event) => {
+          if (event.button !== 0 || event.isPrimary === false) return;
+          event.preventDefault();
+          event.stopPropagation();
+          hit.focus({ preventScroll: true });
+          const start = pointerPosition(event);
+          const startPoints = editablePoints(entry);
+          entry.drag = {
+            pointerId: event.pointerId,
+            hit,
+            index,
+            start,
+            startPoints,
+            originalPoints:
+              entry.wire.points === undefined ? undefined : copyPoints(entry.wire.points),
+            moved: false,
+          };
+          hit.setPointerCapture?.(event.pointerId);
+        });
+        hit.addEventListener('pointermove', (event) => {
+          const { drag } = entry;
+          if (!drag || drag.pointerId !== event.pointerId) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const position = pointerPosition(event);
+          const dx = position.x - drag.start.x;
+          const dy = position.y - drag.start.y;
+          if (Math.hypot(dx, dy) < 4 && !drag.moved) return;
+          drag.moved = true;
+          const updated = copyPoints(drag.startPoints);
+          updated[index] = {
+            x: bounded(Math.round((drag.startPoints[index].x + dx) / 10) * 10),
+            y: bounded(Math.round((drag.startPoints[index].y + dy) / 10) * 10, 'y'),
+          };
+          entry.wire.points = updated;
+          updateWireGeometry(entry);
+        });
+        hit.addEventListener('pointerup', (event) => {
+          const { drag } = entry;
+          if (!drag || drag.pointerId !== event.pointerId) return;
+          event.preventDefault();
+          event.stopPropagation();
+          entry.drag = null;
+          if (hit.hasPointerCapture?.(event.pointerId)) hit.releasePointerCapture(event.pointerId);
+          if (drag.moved) commitWirePoints(entry, entry.wire.points, index);
+        });
+        const cancel = (event) => {
+          if (entry.drag?.pointerId === event.pointerId) cancelWireDrag(entry);
+        };
+        hit.addEventListener('pointercancel', cancel);
+        hit.addEventListener('lostpointercapture', cancel);
+        hit.addEventListener('keydown', (event) => {
+          const delta = {
+            ArrowLeft: [-1, 0],
+            ArrowRight: [1, 0],
+            ArrowUp: [0, -1],
+            ArrowDown: [0, 1],
+          }[event.key];
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            cancelWireDrag(entry);
+            focusPoint(entry, index);
+          } else if (delta || event.key === 'Delete' || event.key === 'Backspace') {
+            event.preventDefault();
+            event.stopPropagation();
+            if (entry.drag) cancelWireDrag(entry);
+            const updated = editablePoints(entry);
+            if (delta)
+              updated[index] = {
+                x: bounded(updated[index].x + delta[0] * (event.shiftKey ? 10 : 1)),
+                y: bounded(updated[index].y + delta[1] * (event.shiftKey ? 10 : 1), 'y'),
+              };
+            else updated.splice(index, 1);
+            commitWirePoints(entry, updated, Math.min(index, updated.length - 1));
+          }
+        });
+        group.append(hit, dot);
+        entry.controls.push({ hit, dot });
+      });
+      if (Number.isInteger(entry.activePoint)) showDeletePoint(entry, entry.activePoint);
+    }
+
+    (circuit.wires || []).forEach((storedWire) => {
+      const wire = {
+        ...storedWire,
+        ...(storedWire.points === undefined ? {} : { points: copyPoints(storedWire.points) }),
+      };
       const path = svgElement('path', {
         d: wirePath(wire),
         stroke: 'currentColor',
         'data-wire-id': wire.id,
       });
+      const entry = { wire, path, selected: options.selectedId === wire.id };
       wireLayer.append(path);
       if (options.interactive) {
         const hit = svgElement('path', {
           d: wirePath(wire),
           stroke: 'transparent',
           'stroke-width': 18,
+          class: 'circuit-wire-hit',
           tabindex: 0,
           role: 'button',
-          'aria-label': `选择导线 ${wire.id}`,
+          'aria-label': `选择导线 ${wire.id}${entry.selected ? '，双击添加拐点' : ''}`,
+          'data-wire-hit': wire.id,
         });
+        entry.hit = hit;
         const choose = (event) => {
+          event.preventDefault();
           event.stopPropagation();
-          options.onWireClick?.(wire.id);
+          if (!entry.selected) options.onWireClick?.(wire.id);
         };
         hit.addEventListener('click', choose);
+        hit.addEventListener('dblclick', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (entry.selected && typeof options.onWireChange === 'function')
+            addWirePoint(entry, pointerPosition(event));
+          else options.onWireClick?.(wire.id);
+        });
         hit.addEventListener('keydown', (event) => {
-          if (event.key === 'Enter') choose(event);
+          if (event.key === 'Enter' || event.key === ' ') {
+            choose(event);
+            if (entry.selected) focusPoint(entry, 0);
+          }
         });
         wireLayer.append(hit);
-        wires.push({ wire, path, hit });
-      } else wires.push({ wire, path });
+      }
+      wires.push(entry);
+      renderWireControls(entry);
+    });
+
+    svg.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape' || !wires.some((entry) => entry.drag)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      wires.forEach(cancelWireDrag);
     });
 
     function pointerPosition(event) {
@@ -461,10 +893,7 @@
             Math.max(60, Math.round((drag.startY + point.y - drag.y) / 10) * 10),
           );
           group.setAttribute('transform', `translate(${component.x} ${component.y})`);
-          wires.forEach(({ wire, path, hit }) => {
-            path.setAttribute('d', wirePath(wire));
-            hit?.setAttribute('d', wirePath(wire));
-          });
+          wires.forEach(updateWireGeometry);
         });
         group.addEventListener('pointerup', (event) => {
           if (!drag) return;
@@ -513,8 +942,13 @@
         if (Math.abs(voltage) < 1e-9) return 'var(--circuit-muted,#9db4bb)';
         return `hsl(${voltage < 0 ? 28 : 184} 65% ${Math.round(45 + Math.min(1, Math.abs(voltage) / largest) * 18)}%)`;
       };
-      wires.forEach(({ wire, path }) =>
-        path.setAttribute('stroke', color(netMap[`${wire.from.componentId}:${wire.from.pin}`])),
+      wires.forEach(({ wire, path, selected }) =>
+        path.setAttribute(
+          'stroke',
+          selected && options.interactive
+            ? 'var(--circuit-accent,#48b6bd)'
+            : color(netMap[`${wire.from.componentId}:${wire.from.pin}`]),
+        ),
       );
       nodes.forEach((node) => {
         const { component, reading, pins, indicator } = node;
@@ -538,6 +972,12 @@
       });
     }
     container.append(svg);
+    const focusRequest = wireFocusRequests.get(container);
+    wireFocusRequests.delete(container);
+    if (focusRequest) {
+      const entry = wires.find((item) => item.selected && item.wire.id === focusRequest.wireId);
+      if (entry) focusPoint(entry, focusRequest.index);
+    }
     updateFrame(frame);
     return {
       svg,
@@ -738,7 +1178,15 @@
     };
   }
 
-  const exported = { getPins, formatValue, componentValue, renderSchematic, renderWaveform };
+  const exported = {
+    getPins,
+    getWireRoute,
+    insertWirePoint,
+    formatValue,
+    componentValue,
+    renderSchematic,
+    renderWaveform,
+  };
   if (typeof module !== 'undefined' && module.exports) module.exports = exported;
   globalThis.FreeBbsCircuitRenderer = exported;
 })();
