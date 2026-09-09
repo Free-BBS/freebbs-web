@@ -13,6 +13,8 @@ node --check server.js
 node --check backend/server.js
 node --check public/app.js
 node --check public/auth.js
+node --check public/auth-challenge.js
+node --check backend/registration-guard.js
 node --check public/typography.js
 node --check public/course-map.js
 node --check public/knowledge.js
@@ -39,8 +41,8 @@ npm run test:circuits
 echo "[ci] public page tests"
 npm run test:public-pages
 
-echo "[ci] typography preferences tests"
-npm run test:typography
+echo "[ci] authentication and typography preferences tests"
+npm run test:auth
 
 echo "[ci] admin users page tests"
 npm run test:admin-users
@@ -70,6 +72,10 @@ test -f database/migrations/029_circuit_examples.sql
 test -f database/migrations/018_create_course_map_settings.sql
 test -f database/migrations/024_add_rag_index_revision.sql
 test -f backend/server.js
+test -f backend/registration-guard.js
+test -f public/auth-challenge.js
+test -f public/registration.css
+test -f database/migrations/030_registration_guard.sql
 
 echo "[ci] checking database scripts for destructive statements"
 bash scripts/assert-safe-sql.sh

@@ -68,8 +68,25 @@ npm run start:backend
 - `GET /api/health`：返回数据库、Agent 设置内部接口和清华连接器的安全就绪摘要；当对应的
   `*_REQUIRED=true` 且依赖未就绪时返回 `503`
 - `POST /api/auth/send-email-code`
-- `POST /api/auth/register`
-- `POST /api/auth/login`
+- `POST /api/auth/registration-challenge`：传入 `{ "email": "student@example.edu" }` 获取
+  5 分钟内有效、绑定邮箱的一次性能带题。返回 `challengeId`、`expiresAt`、`carrier`
+  （`electron` / `hole`）、`objective`（`maximum` / `minimum`）、`band.points` 中的
+  `{ k, energy }` 采样点、`band.candidates` 中的 4 个 `{ k }` 标记位置、
+  `band.kMin` / `band.kMax` 和 `communityAgreementVersion`。
+  每 15 分钟最多向同一邮箱发放 12 题，同一来源 IP 最多 60 题，配额与题目均保存在 MySQL。
+- `POST /api/auth/register`：在原有身份、密码和邮箱验证码字段外，必须传入
+  `communityAgreementAccepted: true`、`communityAgreementVersion: "2026-09-09"`，以及
+  `captcha: { challengeId, k }`（`k` 必须是数值）。服务端校验曲线答案，答错即消耗该题；
+  重试时重新获取题目。通过验证后，建号、白名单领取、邮箱验证码消费、题目消费和公约版本／
+  同意时间记录在同一事务中提交，其他注册错误会回滚。公约未勾选或版本过时会返回
+  `community_agreement_required` / `community_agreement_version_mismatch`；能带验证错误码
+  使用 `registration_captcha_` 前缀。旧用户不追溯生成同意记录。
+- `POST /api/auth/login-challenge`：传入 `{ "identifier": "用户名或邮箱" }`，返回与注册题
+  相同的能带数据。题目绑定该用户名／邮箱和登录用途，无法与注册题交叉使用；每个登录标识
+  每 15 分钟最多发放 12 题，来源 IP 的 60 题配额与注册共享。
+- `POST /api/auth/login`：在 `identifier`、`password` 外必须提交 `captcha: { challengeId, k }`。
+  无论密码正确与否，每题仅允许一次尝试；密码错误后必须重新获取题目。能带错误码使用
+  `login_captcha_` 前缀。登录不要求已有用户补签注册公约。
 - `GET /api/auth/me`
 - `GET /api/workbench/summary`：返回当前用户的重要事项、可见通知和本周已确认日程
 - `GET|POST /api/workbench/important-items`
@@ -95,6 +112,12 @@ npm run start:backend
 - `DELETE /api/workbench/connectors/tsinghua/connection`：销毁当前用户的加密会话并停止后续同步
 
 以上工作台接口均从 Bearer Token 解析用户身份，不接受客户端传入的 `user_id`。
+
+能带题展示同时具有能量极大值和极小值的完整起伏曲线。题目仅比较 4 个标记位置的有效质量：
+电子候选位置的二阶导数为正，空穴候选位置的二阶导数为负，按照
+`m_e = ℏ² / E''`、`m_h = −ℏ² / E''` 判定候选位置中的最大／最小有效质量。
+候选位置具有正且有限的质量、避开拐点，`k` 间距至少为 `0.2`；作答容差 `0.025`。
+数据库迁移为 `database/migrations/030_registration_guard.sql`，后端启动时会自动幂等建表。
 
 也可以在仓库根目录直接生成一次可复核的连接器证据：
 
