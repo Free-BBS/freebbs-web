@@ -115,7 +115,7 @@ function wienChallenge(overrides = {}) {
     type: 'wien',
     oscillator: {
       rgOhms: 10000,
-      rOhms: 10000,
+      rOhms: 22000,
       cFarads: 1e-8,
       rfMinOhms: 15000,
       rfMaxOhms: 25000,
@@ -546,30 +546,77 @@ test('dragging and range input move continuously along the band without snapping
   await submission;
 });
 
+function assertResistanceLabel(h, id, expectedOhms) {
+  const label = h.element(`wien-challenge-${id}`).textContent;
+  const match = label.match(/(\d+(?:\.\d+)?)\s*(k?Ω)/);
+  assert.ok(match, `${id} must display a resistance: ${label}`);
+  const actualOhms = Number(match[1]) * (match[2] === 'kΩ' ? 1000 : 1);
+  assert.ok(Math.abs(actualOhms - expectedOhms) < 0.001, `${id}: ${label}`);
+}
+
+test('Wien resistor values are labelled in the circuit without live gain, Q, or pass indicators', () => {
+  const source = readPublic('auth-challenge.js');
+  const graph = source.match(/<svg\s+id="wien-challenge-graph"[\s\S]*?<\/svg>/)?.[0];
+  assert.ok(graph, 'the Wien circuit must be present');
+  for (const resistor of ['r1', 'r2', 'rg', 'r0', 'rv', 'rf']) {
+    assert.ok(graph.includes(`id="wien-challenge-${resistor}-value"`));
+  }
+  assert.doesNotMatch(
+    source,
+    /id="wien-challenge-(gain|q|state|frequency|components)"|wien-challenge-readings|is-satisfied/,
+  );
+  assert.match(source, /小信号瞬态 · 幅值归一化/);
+});
+
 for (const mode of ['login', 'register']) {
-  test(`${mode}: Wien challenge shows startup metrics and submits only the chosen resistance`, async () => {
+  test(`${mode}: Wien movement updates resistance labels without numeric metrics or pass hints`, async () => {
     const h = harness(mode);
     const { submission } = await openChallenge(h, wienChallenge());
     assert.equal(h.element('band-challenge-plot').hidden, true);
     assert.equal(h.element('wien-challenge-plot').hidden, false);
-    assert.match(h.element('band-challenge-title').textContent, /文氏/);
-    assert.match(h.element('band-challenge-task').textContent, /5/);
+    assert.equal(h.element('band-challenge-title').textContent, '证明你是真人');
+    assert.equal(
+      h.element('band-challenge-task').textContent,
+      '拖动反馈电阻的滑片，使电路起振，且起振等效 |Q| > 5。',
+    );
     assert.equal(h.element('band-challenge-confirm').disabled, true);
     const slider = h.element('wien-challenge-position');
     assert.equal(slider.min, '15000');
     assert.equal(slider.max, '25000');
     assert.equal(slider.value, '18000');
-    slider.value = '20000';
-    await slider.dispatch('input');
-    assert.match(h.element('wien-challenge-q').textContent, /∞/);
-    assert.equal(h.element('wien-challenge-state').classList.contains('is-satisfied'), false);
-    slider.value = '23000';
-    await slider.dispatch('input');
-    assert.equal(h.element('wien-challenge-state').classList.contains('is-satisfied'), false);
-    slider.value = '21043';
-    await slider.dispatch('input');
-    assert.equal(h.element('wien-challenge-state').classList.contains('is-satisfied'), true);
-    assert.equal(h.element('band-challenge-confirm').disabled, false);
+    assertResistanceLabel(h, 'rv-value', 3000);
+    assertResistanceLabel(h, 'rf-value', 18000);
+    for (const name of ['gain', 'q', 'state', 'frequency', 'components']) {
+      assert.equal(h.element(`wien-challenge-${name}`), undefined);
+    }
+    let selectionStatus;
+    const waveforms = new Set();
+    for (const resistanceOhms of [19000, 20000, 23000, 21043]) {
+      slider.value = String(resistanceOhms);
+      await slider.dispatch('input');
+      assertResistanceLabel(h, 'rv-value', resistanceOhms - 15000);
+      assertResistanceLabel(h, 'rf-value', resistanceOhms);
+      assertResistanceLabel(h, 'position-value', resistanceOhms);
+      assertResistanceLabel(h, 'r1-value', 22000);
+      assertResistanceLabel(h, 'r2-value', 22000);
+      assertResistanceLabel(h, 'rg-value', 10000);
+      assertResistanceLabel(h, 'r0-value', 15000);
+      const waveform = h.element('wien-challenge-waveform-curve').attributes.d;
+      assert.match(waveform, /^M/);
+      assert.doesNotMatch(waveform, /NaN|Infinity|undefined/);
+      assert.ok(waveform.length > 100, 'the transient waveform must contain a sampled trace');
+      waveforms.add(waveform);
+      const status = h.element('band-challenge-status').textContent;
+      selectionStatus ??= status;
+      assert.equal(status, selectionStatus, 'selection feedback must not reveal the answer');
+      assert.doesNotMatch(status, /起振|满足|正确|增大|减小|增益|\|?Q\|?|∞/);
+      assert.equal(
+        h.element('band-challenge-confirm').disabled,
+        false,
+        'a moved resistance can be submitted regardless of whether it passes',
+      );
+    }
+    assert.equal(waveforms.size, 4, 'resistance changes must update the transient waveform');
     h.responses.push({ body: { token: `${mode}-wien-token`, user: {} } });
     await h.element('band-challenge-confirm').dispatch('click');
     await submission;
@@ -616,6 +663,57 @@ test('refresh can switch question types and cannot reuse a previous answer', asy
     challengeId: 'wien-challenge-2',
     resistanceOhms: 21200,
   });
+});
+
+test('a rejected Wien answer loads new circuit values and requires a fresh resistance selection', async () => {
+  const h = harness('login');
+  const { submission } = await openChallenge(h, wienChallenge());
+  const slider = h.element('wien-challenge-position');
+  slider.value = '23000';
+  await slider.dispatch('input');
+  h.responses.push(
+    {
+      status: 400,
+      body: { message: '阻值不符合要求', code: 'login_captcha_incorrect' },
+    },
+    {
+      body: wienChallenge({
+        challengeId: 'wien-retry',
+        oscillator: {
+          ...wienChallenge().oscillator,
+          rOhms: 33000,
+          rgOhms: 20000,
+          rfMinOhms: 30000,
+          rfMaxOhms: 50000,
+          rfInitialOhms: 36000,
+          qMin: 7,
+        },
+      }),
+    },
+  );
+  await h.element('band-challenge-confirm').dispatch('click');
+  assert.equal(h.requests.length, 3);
+  assert.equal(h.element('band-challenge').open, true);
+  assert.equal(h.element('band-challenge-confirm').disabled, true);
+  assert.match(h.element('band-challenge-status').textContent, /阻值不符合要求/);
+  assert.match(h.element('band-challenge-task').textContent, /7/);
+  assert.equal(slider.value, '36000');
+  assertResistanceLabel(h, 'r1-value', 33000);
+  assertResistanceLabel(h, 'r2-value', 33000);
+  assertResistanceLabel(h, 'rg-value', 20000);
+  assertResistanceLabel(h, 'r0-value', 30000);
+  assertResistanceLabel(h, 'rv-value', 6000);
+  assertResistanceLabel(h, 'rf-value', 36000);
+  slider.value = '42000';
+  await slider.dispatch('input');
+  h.responses.push({ body: { token: 'wien-retry-token', user: {} } });
+  await h.element('band-challenge-confirm').dispatch('click');
+  await submission;
+  assert.deepEqual(h.requests.at(-1).body.captcha, {
+    challengeId: 'wien-retry',
+    resistanceOhms: 42000,
+  });
+  assert.equal(h.storage.get(tokenKey), 'wien-retry-token');
 });
 
 test('Wien expiry and cancellation preserve the authentication form', async () => {

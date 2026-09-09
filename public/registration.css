@@ -357,7 +357,7 @@ body:has(.band-challenge[open]) {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 250px;
+  max-height: 285px;
   margin-top: 10px;
   overflow: visible;
   touch-action: none;
@@ -392,11 +392,6 @@ body:has(.band-challenge[open]) {
     23px system-ui,
     sans-serif;
   user-select: none;
-}
-
-.wien-circuit-label .wien-gain-symbol {
-  font-size: 30px;
-  font-style: italic;
 }
 
 .wien-wiper {
@@ -440,39 +435,43 @@ body:has(.band-challenge[open]) {
   font-weight: 600;
 }
 
-.wien-challenge-readings {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin: 10px 0 0;
-  padding: 10px 0 0;
+.wien-transient {
+  margin-top: 10px;
+  padding-top: 8px;
   border-top: 1px solid var(--ui-line);
 }
 
-.wien-challenge-readings dt {
-  color: var(--ui-muted);
-  font-size: 0.74rem;
+#wien-challenge-waveform {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 135px;
 }
 
-.wien-challenge-readings dd {
-  margin: 4px 0 0;
-  color: var(--ui-text);
+.wien-wave-grid {
+  fill: none;
+  stroke: var(--ui-line);
+  stroke-dasharray: 3 6;
+}
+
+.wien-wave-axes {
+  fill: none;
+  stroke: var(--ui-muted);
+}
+
+.wien-wave-label {
+  fill: var(--ui-muted);
   font:
-    1.15rem ui-monospace,
+    20px ui-monospace,
     monospace;
-  font-variant-numeric: tabular-nums;
 }
 
-.wien-challenge-state {
-  margin: 8px 0 4px;
-  color: var(--ui-muted);
-  font-size: 0.8rem;
-  line-height: 1.7;
-}
-
-.wien-challenge-state.is-satisfied {
-  color: var(--ui-text);
-  font-weight: 600;
+.wien-wave-curve {
+  fill: none;
+  stroke: var(--ui-text);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 @media (max-width: 600px) {

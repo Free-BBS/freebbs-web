@@ -71,23 +71,23 @@
       </div>
       <div class="band-challenge-plot wien-challenge-plot" id="wien-challenge-plot" hidden>
         <div class="band-challenge-legend wien-challenge-legend">
-          <span>文氏桥 · 等值 RC</span><span id="wien-challenge-components"></span>
+          <span>文氏桥 · 等值 RC</span><span id="wien-challenge-capacitance"></span>
         </div>
         <svg
           id="wien-challenge-graph"
-          viewBox="0 0 600 380"
+          viewBox="0 0 600 460"
           role="img"
           aria-label="文氏桥振荡器电路：输出经串联 RC 接同相端，同相端经并联 RC 接地；反相端经 Rg 接地，输出经滑动变阻器 Rf 反馈到反相端。拖动下方滑片调节 Rf。"
         >
           <g class="wien-wire" aria-hidden="true">
             <path d="M400 210H550V45H480 M430 45H390 M380 45H208V180H272" />
-            <path d="M88 124V100H208 M150 100V142 M88 170V210H150V154 M120 210V225" />
+            <path d="M108 124V100H208 M166 100V142 M108 170V210H166V154 M137 210V225" />
             <path d="M272 240H195V275 M195 321V340 M245 240V320H263 M289 320H300 M500 320H550V210" />
-            <path d="M108 225H132 M112 232H128 M116 239H124 M183 340H207 M187 347H203 M191 354H199" />
-            <path d="M380 31V59 M390 31V59 M136 142H164 M136 154H164" />
+            <path d="M125 225H149 M129 232H145 M133 239H141 M183 340H207 M187 347H203 M191 354H199" />
+            <path d="M380 31V59 M390 31V59 M152 142H180 M152 154H180" />
             <path class="wien-amplifier" d="M272 150L400 210L272 270Z" />
             <rect x="430" y="35" width="50" height="20" />
-            <rect x="78" y="124" width="20" height="46" />
+            <rect x="98" y="124" width="20" height="46" />
             <rect x="185" y="275" width="20" height="46" />
             <rect x="263" y="310" width="26" height="20" />
             <rect class="wien-rheostat-track" x="300" y="310" width="200" height="20" rx="2" />
@@ -97,17 +97,23 @@
             <circle class="wien-junction" cx="550" cy="210" r="4" />
           </g>
           <g class="wien-circuit-label" aria-hidden="true">
-            <text x="455" y="23" text-anchor="middle">R</text>
-            <text x="385" y="23" text-anchor="middle">C</text>
-            <text x="55" y="155">R</text>
-            <text x="174" y="155">C</text>
+            <text x="455" y="23" text-anchor="middle">R₁</text>
+            <text id="wien-challenge-r1-value" x="455" y="85" text-anchor="middle"></text>
+            <text x="385" y="23" text-anchor="middle">C₁</text>
+            <text x="86" y="132" text-anchor="end">R₂</text>
+            <text id="wien-challenge-r2-value" x="86" y="163" text-anchor="end"></text>
+            <text x="166" y="190" text-anchor="middle">C₂</text>
             <text x="286" y="188">+</text>
             <text x="286" y="249">−</text>
-            <text class="wien-gain-symbol" x="325" y="220" text-anchor="middle">A</text>
+            <text x="325" y="220" text-anchor="middle">运放</text>
             <text x="480" y="193">输出</text>
-            <text x="145" y="307">R<tspan dy="5" font-size="16">g</tspan></text>
-            <text x="273" y="360" text-anchor="middle">R<tspan dy="5" font-size="16">0</tspan></text>
-            <text x="415" y="362" text-anchor="middle">R<tspan dy="5" font-size="16">v</tspan><tspan dy="-5"> · 拖动滑片</tspan></text>
+            <text x="175" y="279" text-anchor="end">Rg</text>
+            <text id="wien-challenge-rg-value" x="175" y="310" text-anchor="end"></text>
+            <text x="273" y="360" text-anchor="middle">R₀</text>
+            <text id="wien-challenge-r0-value" x="273" y="391" text-anchor="middle"></text>
+            <text x="420" y="360" text-anchor="middle">Rv · 滑动变阻器</text>
+            <text id="wien-challenge-rv-value" x="420" y="391" text-anchor="middle"></text>
+            <text x="350" y="437" text-anchor="middle">Rf = R₀ + Rv = <tspan id="wien-challenge-rf-value"></tspan></text>
           </g>
           <g id="wien-challenge-wiper" class="wien-wiper" aria-hidden="true">
             <circle class="wien-wiper-halo" cy="285" r="28" />
@@ -124,12 +130,19 @@
         <p class="band-challenge-controls" id="wien-challenge-controls">
           拖动滑片，或用滑块 / 方向键微调。
         </p>
-        <dl class="wien-challenge-readings">
-          <div><dt>放大倍数 A</dt><dd id="wien-challenge-gain"></dd></div>
-          <div><dt>起振等效 |Q|</dt><dd id="wien-challenge-q"></dd></div>
-        </dl>
-        <p class="wien-challenge-state" id="wien-challenge-state" aria-live="polite"></p>
-        <p class="band-challenge-controls" id="wien-challenge-frequency"></p>
+        <div class="wien-transient">
+          <p class="band-challenge-controls">小信号瞬态 · 幅值归一化</p>
+          <svg id="wien-challenge-waveform" viewBox="0 0 600 170" role="img" aria-label="输出电压的瞬态波形，幅值按整段峰值归一化，横轴为时间">
+            <path class="wien-wave-grid" d="M56 32H572 M56 82H572 M56 132H572 M142 26V138 M228 26V138 M314 26V138 M400 26V138 M486 26V138" />
+            <path class="wien-wave-axes" d="M56 26V138H578" />
+            <text class="wien-wave-label" x="16" y="39">+1</text>
+            <text class="wien-wave-label" x="28" y="89">0</text>
+            <text class="wien-wave-label" x="16" y="139">−1</text>
+            <text class="wien-wave-label" x="56" y="164">0</text>
+            <text class="wien-wave-label" id="wien-challenge-waveform-time" x="572" y="164" text-anchor="end"></text>
+            <path class="wien-wave-curve" id="wien-challenge-waveform-curve" />
+          </svg>
+        </div>
       </div>
       <details class="band-challenge-hint" id="band-challenge-hint" hidden>
         <summary>一点物理提示</summary>
@@ -253,7 +266,9 @@
   }
 
   function formatResistance(value) {
-    return value >= 1000 ? `${(value / 1000).toFixed(3)} kΩ` : `${value.toFixed(1)} Ω`;
+    return value >= 1000
+      ? `${Number((value / 1000).toFixed(3))} kΩ`
+      : `${Number(value.toFixed(1))} Ω`;
   }
 
   function setResistance(value, moved = true) {
@@ -264,7 +279,6 @@
       parameters.rfMaxOhms,
       Math.max(parameters.rfMinOhms, Number(value)),
     );
-    const state = window.freeBbsWienModel.evaluate(parameters, resistanceOhms);
     const position =
       300 +
       ((resistanceOhms - parameters.rfMinOhms) / (parameters.rfMaxOhms - parameters.rfMinOhms)) *
@@ -274,24 +288,30 @@
     wienSlider.value = String(resistanceOhms);
     wienSlider.setAttribute('aria-valuetext', `反馈电阻 ${formatResistance(resistanceOhms)}`);
     wienElement('position-value').textContent = formatResistance(resistanceOhms);
+    wienElement('rv-value').textContent = formatResistance(resistanceOhms - parameters.rfMinOhms);
+    wienElement('rf-value').textContent = formatResistance(resistanceOhms);
+    wienGraph.setAttribute(
+      'aria-label',
+      `文氏桥振荡器电路：R1、R2 均为 ${formatResistance(parameters.rOhms)}，` +
+        `Rg 为 ${formatResistance(parameters.rgOhms)}，R0 为 ${formatResistance(parameters.rfMinOhms)}，` +
+        `滑动变阻器 Rv 为 ${formatResistance(resistanceOhms - parameters.rfMinOhms)}，` +
+        `总反馈电阻 Rf 为 ${formatResistance(resistanceOhms)}。拖动滑片调节阻值。`,
+    );
     wienElement('wiper').setAttribute('transform', `translate(${position}, 0)`);
     wienElement('wiper-wire').setAttribute('d', `M550 320V285H${position}`);
-    wienElement('gain').textContent = state.gain.toFixed(3);
-    wienElement('q').textContent = Number.isFinite(state.q) ? state.q.toFixed(2) : '∞（临界）';
-    wienElement('state').classList.toggle('is-satisfied', state.satisfies);
-    let stateDescription;
-    if (state.satisfies) {
-      stateDescription = `已起振，且 |Q| > ${parameters.qMin}，满足要求`;
-    } else if (!Number.isFinite(state.q)) {
-      stateDescription = '临界未起振：请略微增大反馈电阻';
-    } else if (state.starts) {
-      stateDescription = `已起振，需继续调整至 |Q| > ${parameters.qMin}`;
-    } else if (state.gain <= 3) {
-      stateDescription = '尚未起振：请增大反馈电阻';
-    } else {
-      stateDescription = '增益过大，未形成振荡：请减小反馈电阻';
-    }
-    wienElement('state').textContent = stateDescription;
+    const transient = window.freeBbsWienModel.sampleTransient(parameters, resistanceOhms);
+    wienElement('waveform-curve').setAttribute(
+      'd',
+      transient.points
+        .map((point, index) => {
+          const x = 56 + (point.timeSeconds / transient.durationSeconds) * 516;
+          const y = 82 - point.value * 50;
+          return `${index ? 'L' : 'M'}${x.toFixed(3)} ${y.toFixed(3)}`;
+        })
+        .join(' '),
+    );
+    wienElement('waveform-time').textContent =
+      `${Number((transient.durationSeconds * 1000).toFixed(2))} ms`;
     if (moved)
       status.textContent = `阻值已选择，确认后继续${session.mode === 'login' ? '登录' : '注册'}。`;
     updateControls();
@@ -311,17 +331,17 @@
 
   function renderWienChallenge() {
     const { oscillator } = session.challenge;
-    const state = window.freeBbsWienModel.evaluate(oscillator, oscillator.rfInitialOhms);
-    element('title').textContent = '让文氏振荡器起振';
+    element('title').textContent = '证明你是真人';
     dialog.querySelector('.band-challenge-eyebrow').textContent =
       `${session.mode === 'login' ? '登录' : '注册'}验证 · 电路实验`;
     element('task').textContent =
       `拖动反馈电阻的滑片，使电路起振，且起振等效 |Q| > ${oscillator.qMin}。`;
-    wienElement('components').textContent =
-      `R = ${formatResistance(oscillator.rOhms)} · C = ${(oscillator.cFarads * 1e9).toFixed(1)} nF`;
-    wienElement('frequency').textContent =
-      `Rg = ${formatResistance(oscillator.rgOhms)} · R0 = ${formatResistance(oscillator.rfMinOhms)}；` +
-      `f₀ ≈ ${state.frequencyHz >= 1000 ? `${(state.frequencyHz / 1000).toFixed(2)} kHz` : `${state.frequencyHz.toFixed(1)} Hz`}`;
+    wienElement('capacitance').textContent =
+      `C₁ = C₂ = ${Number((oscillator.cFarads * 1e9).toFixed(1))} nF`;
+    wienElement('r1-value').textContent = formatResistance(oscillator.rOhms);
+    wienElement('r2-value').textContent = formatResistance(oscillator.rOhms);
+    wienElement('rg-value').textContent = formatResistance(oscillator.rgOhms);
+    wienElement('r0-value').textContent = formatResistance(oscillator.rfMinOhms);
     wienSlider.min = String(oscillator.rfMinOhms);
     wienSlider.max = String(oscillator.rfMaxOhms);
     wienSlider.step = String((oscillator.rfMaxOhms - oscillator.rfMinOhms) / 2000);

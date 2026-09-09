@@ -78,6 +78,8 @@ npm run start:backend
   `type: "wien"` 返回 `oscillator: { rgOhms, rOhms, cFarads, rfMinOhms, rfMaxOhms, rfInitialOhms, qMin }`。
   两个选频电阻均为 `rOhms`，两个选频电容均为 `cFarads`；`rgOhms` 是固定负反馈接地电阻，
   滑动变阻器调节总反馈电阻 `Rf`，范围与初值由 `rf*Ohms` 字段给出。
+  电路图标注 `R1`、`R2`、`Rg`、`R0`、`Rv` 和总反馈电阻 `Rf` 的阻值；
+  `R0 = rfMinOhms`，滑动部分 `Rv = Rf − R0`，随拖动更新。
   每 15 分钟最多向同一邮箱发放 12 题，同一来源 IP 最多 60 题，配额与题目均保存在 MySQL。
 - `POST /api/auth/register`：在原有身份、密码和邮箱验证码字段外，必须传入
   `communityAgreementAccepted: true`、`communityAgreementVersion: "2026-09-09"`，以及
@@ -137,6 +139,11 @@ npm run start:backend
 选定 `qMin > 0.5` 后，允许的总反馈电阻严格满足
 `2Rg < Rf < (2 + 1/qMin)Rg`，且必须位于滑块量程内；起振和 `|Q|` 的等号边界均不通过。
 参数每题随机生成，可通过范围至少占滑块全程的 14%，滑块初始位置不满足起振条件。
+交互时显示阻值和瞬态波形，不显示实时 `A`、`|Q|`、起振状态文字或通过提示；用户需根据
+电路参数、波形和题目给定的阈值自行判断，提交后由服务端校验。只要调节过阻值即可提交，
+按钮状态不泄露答案。
+波形展示六个自然周期内的小信号瞬态，整条曲线统一归一化幅值，保留衰减、等幅或增长的
+包络；横轴为实际时间。它不模拟电源轨限幅或非线性稳幅，不表示实际输出电压。
 电路拓扑和起振条件参考 [Analog Devices AN-580](https://www.analog.com/AN-580)；
 二阶极点参数参考 [A Filter Primer](https://www.analog.com/en/resources/technical-articles/a-filter-primer.html)。
 上述起振一侧的 `|Q|` 定义由特征方程推导，未把传统稳定滤波器的正 `Q` 直接套用到不稳定状态。
