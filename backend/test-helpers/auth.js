@@ -41,4 +41,18 @@ function solveBandChallenge({ challengeId, carrier, objective, band }) {
   return { challengeId, k: selected.k };
 }
 
-module.exports = { solveBandChallenge };
+function solveAuthChallenge(challenge) {
+  if (challenge.type === 'wien') {
+    assert.ok(challenge.challengeId);
+    const { rgOhms, qMin } = challenge.oscillator;
+    // Interior of the startup and strict |Q| interval; avoid either boundary.
+    return {
+      challengeId: challenge.challengeId,
+      resistanceOhms: rgOhms * (2 + 0.5 / qMin),
+    };
+  }
+  assert.equal(challenge.type, 'band');
+  return solveBandChallenge(challenge);
+}
+
+module.exports = { solveBandChallenge, solveAuthChallenge };

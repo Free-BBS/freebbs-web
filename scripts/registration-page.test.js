@@ -107,6 +107,25 @@ function challenge(overrides = {}) {
   };
 }
 
+function wienChallenge(overrides = {}) {
+  return {
+    challengeId: 'wien-challenge-1',
+    communityAgreementVersion: agreementVersion,
+    expiresAt: new Date(now + 120000).toISOString(),
+    type: 'wien',
+    oscillator: {
+      rgOhms: 10000,
+      rOhms: 10000,
+      cFarads: 1e-8,
+      rfMinOhms: 15000,
+      rfMaxOhms: 25000,
+      rfInitialOhms: 18000,
+      qMin: 5,
+    },
+    ...overrides,
+  };
+}
+
 function harness(mode = 'register') {
   const page = readPublic(mode === 'register' ? 'register.html' : `${mode}.html`);
   const elements = new Map();
@@ -198,7 +217,7 @@ function harness(mode = 'register') {
       };
     },
   });
-  for (const file of ['auth-challenge.js', 'auth.js']) {
+  for (const file of ['wien-oscillator-model.js', 'auth-challenge.js', 'auth.js']) {
     vm.runInContext(readPublic(file), context, { filename: file });
   }
   return {
@@ -223,7 +242,8 @@ async function openChallenge(h, data = challenge()) {
   const submission = h.submit();
   await flush();
   assert.equal(h.element('band-challenge').open, true);
-  assert.equal(h.element('band-challenge-plot').hidden, false);
+  const plot = data.type === 'wien' ? 'wien-challenge-plot' : 'band-challenge-plot';
+  assert.equal(h.element(plot).hidden, false);
   return { submission };
 }
 
@@ -524,4 +544,135 @@ test('dragging and range input move continuously along the band without snapping
   assert.equal(h.element('band-challenge-confirm').disabled, false);
   await h.element('band-challenge-close').dispatch('click');
   await submission;
+});
+
+for (const mode of ['login', 'register']) {
+  test(`${mode}: Wien challenge shows startup metrics and submits only the chosen resistance`, async () => {
+    const h = harness(mode);
+    const { submission } = await openChallenge(h, wienChallenge());
+    assert.equal(h.element('band-challenge-plot').hidden, true);
+    assert.equal(h.element('wien-challenge-plot').hidden, false);
+    assert.match(h.element('band-challenge-title').textContent, /文氏/);
+    assert.match(h.element('band-challenge-task').textContent, /5/);
+    assert.equal(h.element('band-challenge-confirm').disabled, true);
+    const slider = h.element('wien-challenge-position');
+    assert.equal(slider.min, '15000');
+    assert.equal(slider.max, '25000');
+    assert.equal(slider.value, '18000');
+    slider.value = '20000';
+    await slider.dispatch('input');
+    assert.match(h.element('wien-challenge-q').textContent, /∞/);
+    assert.equal(h.element('wien-challenge-state').classList.contains('is-satisfied'), false);
+    slider.value = '23000';
+    await slider.dispatch('input');
+    assert.equal(h.element('wien-challenge-state').classList.contains('is-satisfied'), false);
+    slider.value = '21043';
+    await slider.dispatch('input');
+    assert.equal(h.element('wien-challenge-state').classList.contains('is-satisfied'), true);
+    assert.equal(h.element('band-challenge-confirm').disabled, false);
+    h.responses.push({ body: { token: `${mode}-wien-token`, user: {} } });
+    await h.element('band-challenge-confirm').dispatch('click');
+    await submission;
+    assert.ok(h.requests[1].url.endsWith(`/auth/${mode}`));
+    assert.deepEqual(h.requests[1].body.captcha, {
+      challengeId: 'wien-challenge-1',
+      resistanceOhms: 21043,
+    });
+    assert.equal(h.storage.get(tokenKey), `${mode}-wien-token`);
+    if (mode === 'register') assert.equal(h.requests[1].body.communityAgreementAccepted, true);
+  });
+}
+
+test('refresh can switch question types and cannot reuse a previous answer', async () => {
+  const h = harness('login');
+  const { submission } = await openChallenge(h, wienChallenge());
+  h.element('wien-challenge-position').value = '21000';
+  await h.element('wien-challenge-position').dispatch('input');
+  h.responses.push({ body: challenge({ type: 'band' }) });
+  await h.element('band-challenge-refresh').dispatch('click');
+  assert.equal(h.element('wien-challenge-plot').hidden, true);
+  assert.equal(h.element('wien-challenge-hint').hidden, true);
+  assert.equal(h.element('wien-challenge-position').disabled, true);
+  assert.equal(h.element('band-challenge-plot').hidden, false);
+  assert.equal(h.element('band-challenge-confirm').disabled, true);
+  await h.element('wien-challenge-position').dispatch('input');
+  assert.equal(h.element('band-challenge-confirm').disabled, true);
+  h.element('band-challenge-position').value = '0.413';
+  await h.element('band-challenge-position').dispatch('input');
+  h.responses.push({ body: wienChallenge({ challengeId: 'wien-challenge-2' }) });
+  await h.element('band-challenge-refresh').dispatch('click');
+  assert.equal(h.element('band-challenge-plot').hidden, true);
+  assert.equal(h.element('band-challenge-position').disabled, true);
+  assert.equal(h.element('wien-challenge-hint').hidden, false);
+  assert.equal(h.element('band-challenge-confirm').disabled, true);
+  await h.element('band-challenge-position').dispatch('input');
+  assert.equal(h.element('band-challenge-confirm').disabled, true);
+  h.element('wien-challenge-position').value = '21200';
+  await h.element('wien-challenge-position').dispatch('input');
+  h.responses.push({ body: { token: 'switched-token', user: {} } });
+  await h.element('band-challenge-confirm').dispatch('click');
+  await submission;
+  assert.deepEqual(h.requests.at(-1).body.captcha, {
+    challengeId: 'wien-challenge-2',
+    resistanceOhms: 21200,
+  });
+});
+
+test('Wien expiry and cancellation preserve the authentication form', async () => {
+  const h = harness();
+  const { submission } = await openChallenge(h, wienChallenge());
+  h.element('wien-challenge-position').value = '21000';
+  await h.element('wien-challenge-position').dispatch('input');
+  h.tick(120000);
+  assert.equal(h.element('wien-challenge-position').disabled, true);
+  assert.equal(h.element('band-challenge-confirm').disabled, true);
+  await h.element('band-challenge-confirm').dispatch('click');
+  assert.equal(h.requests.length, 1);
+  await h.element('band-challenge').dispatch('cancel');
+  await submission;
+  assert.equal(h.storage.get(tokenKey), 'existing-token');
+  assert.equal(h.element('auth-community-agreement').checked, true);
+  assert.equal(h.element('auth-password').value, 'password for tests');
+  assert.equal(h.intervals.size, 0);
+});
+
+test('Wien wiper drags continuously over its full range and retains the released resistance', async () => {
+  const h = harness('login');
+  const { submission } = await openChallenge(h, wienChallenge());
+  const graph = h.element('wien-challenge-graph');
+  const slider = h.element('wien-challenge-position');
+  await graph.dispatch('pointerdown', { button: 0, pointerId: 1, clientX: 400, clientY: 100 });
+  assert.equal(slider.value, '18000', 'unrelated circuit parts must not move the wiper');
+  await graph.dispatch('pointerdown', { button: 0, pointerId: 1, clientX: 360, clientY: 285 });
+  await graph.dispatch('pointermove', { pointerId: 1, clientX: 800, clientY: 280 });
+  assert.equal(slider.value, '25000');
+  await graph.dispatch('pointermove', { pointerId: 1, clientX: 100, clientY: 280 });
+  assert.equal(slider.value, '15000');
+  await graph.dispatch('pointerup', { pointerId: 1, clientX: 421.14, clientY: 280 });
+  assert.ok(Math.abs(Number(slider.value) - 21057) < 1e-8);
+  await graph.dispatch('pointermove', { pointerId: 1, clientX: 480, clientY: 280 });
+  assert.ok(Math.abs(Number(slider.value) - 21057) < 1e-8, 'release must stop the drag');
+  h.responses.push({ body: { token: 'pointer-token', user: {} } });
+  await h.element('band-challenge-confirm').dispatch('click');
+  await submission;
+  assert.ok(Math.abs(h.requests[1].body.captcha.resistanceOhms - 21057) < 1e-8);
+  assert.equal(Object.hasOwn(h.requests[1].body.captcha, 'k'), false);
+});
+
+test('malformed or unknown challenge types fail closed and can be refreshed', async () => {
+  for (const data of [wienChallenge({ oscillator: {} }), challenge({ type: 'unknown' })]) {
+    const h = harness('login');
+    h.responses.push({ body: data });
+    const submission = h.submit();
+    await flush();
+    assert.equal(h.element('band-challenge-confirm').disabled, true);
+    assert.equal(h.element('wien-challenge-plot').hidden, true);
+    assert.equal(h.element('band-challenge-plot').hidden, true);
+    assert.equal(h.element('band-challenge-refresh').disabled, false);
+    h.responses.push({ body: wienChallenge() });
+    await h.element('band-challenge-refresh').dispatch('click');
+    assert.equal(h.element('wien-challenge-plot').hidden, false);
+    await h.element('band-challenge-close').dispatch('click');
+    await submission;
+  }
 });

@@ -9,7 +9,7 @@ const { once } = require('node:events');
 const test = require('node:test');
 const mysql = require('mysql2/promise');
 const { hashPassword } = require('./password');
-const { solveBandChallenge } = require('./test-helpers/auth');
+const { solveAuthChallenge } = require('./test-helpers/auth');
 
 async function reservePort() {
   const server = net.createServer();
@@ -139,7 +139,7 @@ test(
       });
       return api('/auth/login', {
         method: 'POST',
-        body: { identifier, password: 'free-bbs', captcha: solveBandChallenge(challenge) },
+        body: { identifier, password: 'free-bbs', captcha: solveAuthChallenge(challenge) },
       });
     }
     async function createUser(username, studentId) {

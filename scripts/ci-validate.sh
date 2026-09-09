@@ -14,6 +14,7 @@ node --check backend/server.js
 node --check public/app.js
 node --check public/auth.js
 node --check public/auth-challenge.js
+node --check public/wien-oscillator-model.js
 node --check backend/registration-guard.js
 node --check public/typography.js
 node --check public/course-map.js
@@ -74,8 +75,10 @@ test -f database/migrations/024_add_rag_index_revision.sql
 test -f backend/server.js
 test -f backend/registration-guard.js
 test -f public/auth-challenge.js
+test -f public/wien-oscillator-model.js
 test -f public/registration.css
 test -f database/migrations/030_registration_guard.sql
+test -f database/migrations/031_auth_circuit_challenges.sql
 
 echo "[ci] checking database scripts for destructive statements"
 bash scripts/assert-safe-sql.sh

@@ -261,7 +261,8 @@ body:has(.band-challenge[open]) {
   margin-top: 12px;
 }
 
-#band-challenge-position {
+#band-challenge-position,
+#wien-challenge-position {
   display: block;
   box-sizing: border-box;
   width: 100%;
@@ -319,7 +320,8 @@ body:has(.band-challenge[open]) {
 }
 
 .band-challenge button:disabled,
-#band-challenge-position:disabled {
+#band-challenge-position:disabled,
+#wien-challenge-position:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -327,6 +329,150 @@ body:has(.band-challenge[open]) {
 .band-challenge-expiry {
   text-align: right;
   margin-top: 10px;
+}
+
+.wien-challenge-legend {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.band-challenge:has(#wien-challenge-plot:not([hidden])) h2 {
+  margin: 10px 0 6px;
+}
+
+.band-challenge:has(#wien-challenge-plot:not([hidden])) #band-challenge-task {
+  margin-bottom: 12px;
+}
+
+.band-challenge:has(#wien-challenge-plot:not([hidden])) .band-challenge-status {
+  margin: 8px 0;
+}
+
+.wien-challenge-plot {
+  margin-bottom: 10px;
+}
+
+#wien-challenge-graph {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 250px;
+  margin-top: 10px;
+  overflow: visible;
+  touch-action: none;
+}
+
+.wien-wire {
+  fill: none;
+  stroke: var(--ui-text);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.wien-wire .wien-amplifier {
+  fill: var(--ui-surface);
+}
+
+.wien-wire .wien-junction {
+  fill: var(--ui-text);
+  stroke: none;
+}
+
+.wien-wire .wien-rheostat-track {
+  fill: var(--ui-surface);
+  stroke: #b84230;
+  stroke-width: 3;
+}
+
+.wien-circuit-label {
+  fill: var(--ui-text);
+  font:
+    23px system-ui,
+    sans-serif;
+  user-select: none;
+}
+
+.wien-circuit-label .wien-gain-symbol {
+  font-size: 30px;
+  font-style: italic;
+}
+
+.wien-wiper {
+  cursor: ew-resize;
+}
+
+.wien-wiper-halo {
+  fill: #b84230;
+  opacity: 0.14;
+}
+
+.wien-wiper-handle {
+  fill: #b84230;
+  stroke: var(--ui-surface);
+  stroke-width: 2;
+}
+
+.wien-wiper-arrow {
+  fill: none;
+  stroke: #b84230;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.wien-wiper-grip {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+
+.wien-challenge-plot .band-position-heading {
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 8px;
+}
+
+#wien-challenge-position-value {
+  color: var(--ui-text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.wien-challenge-readings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 10px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--ui-line);
+}
+
+.wien-challenge-readings dt {
+  color: var(--ui-muted);
+  font-size: 0.74rem;
+}
+
+.wien-challenge-readings dd {
+  margin: 4px 0 0;
+  color: var(--ui-text);
+  font:
+    1.15rem ui-monospace,
+    monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.wien-challenge-state {
+  margin: 8px 0 4px;
+  color: var(--ui-muted);
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+
+.wien-challenge-state.is-satisfied {
+  color: var(--ui-text);
+  font-weight: 600;
 }
 
 @media (max-width: 600px) {

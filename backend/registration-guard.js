@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const wienModel = require('../public/wien-oscillator-model');
 
 const COMMUNITY_AGREEMENT_VERSION = '2026-09-09';
 const CHALLENGE_TTL_SECONDS = 300;
@@ -108,7 +109,12 @@ function generateBandChallenge() {
     const candidates = selected.map(({ k }) => ({ k })).sort((a, b) => a.k - b.k);
     const points = samples.map(({ k, energy }) => ({ k, energy }));
     return {
-      publicChallenge: { carrier, objective, band: { points, candidates, kMin: -1, kMax: 1 } },
+      publicChallenge: {
+        type: 'band',
+        carrier,
+        objective,
+        band: { points, candidates, kMin: -1, kMax: 1 },
+      },
       answerK,
       tolerance: ANSWER_TOLERANCE,
     };
@@ -116,20 +122,52 @@ function generateBandChallenge() {
   throw new Error('Could not generate separated positive-mass band candidates');
 }
 
+function generateWienChallenge() {
+  const choose = (values) => values[crypto.randomInt(values.length)];
+  const rgOhms = choose([6800, 8200, 10000, 12000, 15000]);
+  const rfMinOhms = Math.round(rgOhms * choose([1.65, 1.7, 1.75, 1.8]));
+  const rfMaxOhms = Math.round(rgOhms * choose([2.4, 2.45, 2.5]));
+  const oscillator = {
+    rgOhms,
+    rOhms: choose([6800, 10000, 15000, 22000]),
+    cFarads: choose([10e-9, 22e-9, 47e-9]),
+    rfMinOhms,
+    rfMaxOhms,
+    rfInitialOhms: rfMinOhms,
+    qMin: choose([4, 5, 6, 8]),
+  };
+  // The strict feasible interval is (2 Rg, (2 + 1/qMin) Rg), spanning at
+  // least 14% of the slider. Initial gain is below startup; the upper end
+  // starts but has insufficient startup pole |Q|, so both conditions matter.
+  return {
+    publicChallenge: { type: 'wien', oscillator },
+    circuitParameters: oscillator,
+    // An old deployment interpreting this as a band row must reject it.
+    answerK: 2,
+    tolerance: 0,
+  };
+}
+
+function generateAuthChallenge() {
+  return crypto.randomInt(2) === 0 ? generateBandChallenge() : generateWienChallenge();
+}
+
 async function ensureRegistrationGuardTables(pool) {
   if (!schemaPromises.has(pool)) {
     schemaPromises.set(
       pool,
       (async () => {
-        const migration = await fs.readFile(
-          path.join(__dirname, '..', 'database', 'migrations', '030_registration_guard.sql'),
-          'utf8',
-        );
-        for (const statement of migration
-          .split(';')
-          .map((item) => item.trim())
-          .filter(Boolean)) {
-          await pool.execute(statement);
+        for (const file of ['030_registration_guard.sql', '031_auth_circuit_challenges.sql']) {
+          const migration = await fs.readFile(
+            path.join(__dirname, '..', 'database', 'migrations', file),
+            'utf8',
+          );
+          for (const statement of migration
+            .split(';')
+            .map((item) => item.trim())
+            .filter(Boolean)) {
+            await pool.execute(statement);
+          }
         }
       })().catch((error) => {
         schemaPromises.delete(pool);
@@ -140,7 +178,7 @@ async function ensureRegistrationGuardTables(pool) {
   await schemaPromises.get(pool);
 }
 
-async function issueBandChallenge(pool, { identity, purpose, ip }) {
+async function issueAuthChallenge(pool, { identity, purpose, ip }) {
   const normalizedIdentity = typeof identity === 'string' ? identity.trim().toLowerCase() : '';
   const prefix = purpose === 'login' ? 'login_captcha' : 'registration_captcha';
   if (
@@ -187,7 +225,7 @@ async function issueBandChallenge(pool, { identity, purpose, ip }) {
       );
     } else {
       const challengeId = crypto.randomBytes(32).toString('hex');
-      const generated = generateBandChallenge();
+      const generated = generateAuthChallenge();
       const expirySeconds = nowSeconds + CHALLENGE_TTL_SECONDS;
       await connection.execute(
         `INSERT INTO registration_challenges (id, email, purpose, answer_k, tolerance, expires_at)
@@ -201,6 +239,12 @@ async function issueBandChallenge(pool, { identity, purpose, ip }) {
           expirySeconds,
         ],
       );
+      if (generated.circuitParameters) {
+        await connection.execute(
+          'INSERT INTO registration_challenge_circuits (challenge_id, parameters) VALUES (?, ?)',
+          [challengeId, JSON.stringify(generated.circuitParameters)],
+        );
+      }
       result = {
         challengeId,
         expiresAt: new Date(expirySeconds * 1000).toISOString(),
@@ -227,41 +271,68 @@ async function issueBandChallenge(pool, { identity, purpose, ip }) {
 }
 
 async function issueRegistrationChallenge(pool, { email, ip }) {
-  return issueBandChallenge(pool, { identity: email, purpose: 'register', ip });
+  return issueAuthChallenge(pool, { identity: email, purpose: 'register', ip });
 }
 
 async function issueLoginChallenge(pool, { identifier, ip }) {
-  return issueBandChallenge(pool, { identity: identifier, purpose: 'login', ip });
+  return issueAuthChallenge(pool, { identity: identifier, purpose: 'login', ip });
 }
 
 // The caller must hold a transaction. Errors are RETURNED so incorrect answers
 // can commit consumption; successful answers commit atomically with user creation.
-async function consumeBandChallenge(connection, identity, captcha, purpose) {
+async function consumeAuthChallenge(connection, identity, captcha, purpose) {
   const prefix = purpose === 'login' ? 'login_captcha' : 'registration_captcha';
   if (
     !captcha ||
     typeof captcha.challengeId !== 'string' ||
     !/^[a-f0-9]{64}$/.test(captcha.challengeId)
   ) {
-    return new RegistrationGuardError('请完成能带验证', `${prefix}_required`);
+    return new RegistrationGuardError('请完成互动验证', `${prefix}_required`);
   }
   const [[challenge]] = await connection.execute(
-    `SELECT email, purpose, answer_k, tolerance, consumed_at, expires_at <= NOW() AS expired
-     FROM registration_challenges WHERE id = ? FOR UPDATE`,
+    `SELECT challenge.email, challenge.purpose, challenge.answer_k, challenge.tolerance,
+            challenge.consumed_at, challenge.expires_at <= NOW() AS expired,
+            circuit.challenge_id AS circuit_id, circuit.parameters AS circuit_parameters
+     FROM registration_challenges AS challenge
+     LEFT JOIN registration_challenge_circuits AS circuit ON circuit.challenge_id = challenge.id
+     WHERE challenge.id = ? FOR UPDATE`,
     [captcha.challengeId],
   );
   if (!challenge || challenge.email !== identity || challenge.purpose !== purpose) {
-    return new RegistrationGuardError('能带验证无效，请重新验证', `${prefix}_invalid`);
+    return new RegistrationGuardError('互动验证无效，请重新验证', `${prefix}_invalid`);
   }
   if (challenge.consumed_at) {
     return new RegistrationGuardError('本题已使用，请换一道题重新验证', `${prefix}_used`);
   }
   if (Number(challenge.expired)) {
-    return new RegistrationGuardError('能带验证已过期，请换一道题', `${prefix}_expired`);
+    return new RegistrationGuardError('互动验证已过期，请换一道题', `${prefix}_expired`);
   }
   await connection.execute('UPDATE registration_challenges SET consumed_at = NOW() WHERE id = ?', [
     captcha.challengeId,
   ]);
+  if (challenge.circuit_id) {
+    let parameters;
+    try {
+      parameters =
+        typeof challenge.circuit_parameters === 'string'
+          ? JSON.parse(challenge.circuit_parameters)
+          : challenge.circuit_parameters;
+    } catch {
+      parameters = null;
+    }
+    if (
+      !wienModel.validParameters(parameters) ||
+      typeof captcha.resistanceOhms !== 'number' ||
+      !Number.isFinite(captcha.resistanceOhms) ||
+      !wienModel.evaluate(parameters, captcha.resistanceOhms).satisfies
+    ) {
+      return new RegistrationGuardError(
+        '阻值还不合适：请同时满足起振和起振极点 |Q| 要求。请换一道题再试',
+        `${prefix}_incorrect`,
+      );
+    }
+    return null;
+  }
   if (
     typeof captcha.k !== 'number' ||
     !Number.isFinite(captcha.k) ||
@@ -279,11 +350,11 @@ async function consumeBandChallenge(connection, identity, captcha, purpose) {
 }
 
 async function consumeRegistrationChallenge(connection, email, captcha) {
-  return consumeBandChallenge(connection, email, captcha, 'register');
+  return consumeAuthChallenge(connection, email, captcha, 'register');
 }
 
 async function consumeLoginChallenge(connection, identifier, captcha) {
-  return consumeBandChallenge(connection, identifier.trim().toLowerCase(), captcha, 'login');
+  return consumeAuthChallenge(connection, identifier.trim().toLowerCase(), captcha, 'login');
 }
 
 async function recordCommunityAgreement(connection, userId) {
@@ -300,6 +371,8 @@ module.exports = {
   IP_CHALLENGE_LIMIT,
   assertCommunityAgreement,
   generateBandChallenge,
+  generateWienChallenge,
+  generateAuthChallenge,
   ensureRegistrationGuardTables,
   issueRegistrationChallenge,
   issueLoginChallenge,

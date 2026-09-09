@@ -4115,7 +4115,7 @@ app.post('/api/auth/registration-challenge', async (request, response) => {
     response.json(challenge);
   } catch (error) {
     response.status(error.status || 503).json({
-      message: error.status ? error.message : '暂时无法生成能带验证，请稍后重试',
+      message: error.status ? error.message : '暂时无法生成互动验证，请稍后重试',
       code: error.status ? error.code : 'registration_captcha_unavailable',
     });
   }
@@ -4362,7 +4362,7 @@ app.post('/api/auth/login-challenge', async (request, response) => {
     );
   } catch (error) {
     response.status(error.status || 503).json({
-      message: error.status ? error.message : '暂时无法生成能带验证，请稍后重试',
+      message: error.status ? error.message : '暂时无法生成互动验证，请稍后重试',
       code: error.status ? error.code : 'login_captcha_unavailable',
     });
   }
