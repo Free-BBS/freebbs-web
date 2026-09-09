@@ -252,7 +252,7 @@ test('registration requires a selected position and submits the captured fields 
   assert.equal(h.requests.length, 1, 'unmoved and repeated submissions must not send requests');
   h.element('auth-email').value = 'edited@example.test';
   h.element('auth-password').value = 'edited while modal open';
-  h.element('band-challenge-position').value = '3';
+  h.element('band-challenge-position').value = '0.413';
   await h.element('band-challenge-position').dispatch('input');
   h.responses.push({ body: { token: 'created-token', user: {} } });
   await h.element('band-challenge-confirm').dispatch('click');
@@ -267,7 +267,7 @@ test('registration requires a selected position and submits the captured fields 
     password: 'password for tests',
     communityAgreementAccepted: true,
     communityAgreementVersion: agreementVersion,
-    captcha: { challengeId: 'challenge-1', k: 0.45 },
+    captcha: { challengeId: 'challenge-1', k: 0.413 },
   });
   assert.equal(h.storage.get(tokenKey), 'created-token');
   assert.equal(h.window.location.href, '/');
@@ -307,7 +307,7 @@ test('login requires a challenge and submits captured credentials without regist
   assert.equal(h.element('auth-submit').disabled, true);
   h.element('auth-identifier').value = 'edited';
   h.element('auth-password').value = 'edited password';
-  h.element('band-challenge-position').value = '0';
+  h.element('band-challenge-position').value = '-0.673';
   await h.element('band-challenge-position').dispatch('input');
   h.responses.push({ body: { token: 'login-token', user: {} } });
   await h.element('band-challenge-confirm').dispatch('click');
@@ -316,7 +316,7 @@ test('login requires a challenge and submits captured credentials without regist
   assert.deepEqual(h.requests[1].body, {
     identifier: 'reader',
     password: 'password for tests',
-    captcha: { challengeId: 'challenge-1', k: -0.7 },
+    captcha: { challengeId: 'challenge-1', k: -0.673 },
   });
   assert.equal(h.storage.get(tokenKey), 'login-token');
   assert.equal(h.window.location.href, '/');
@@ -389,12 +389,12 @@ for (const mode of ['register', 'login']) {
     assert.match(h.element('band-challenge-formula').textContent, /−ℏ²/);
     assert.equal(h.element('band-challenge-particle').classList.contains('is-hole'), true);
     assert.match(h.element('band-challenge-status').textContent, /位置不正确/);
-    h.element('band-challenge-position').value = '4';
+    h.element('band-challenge-position').value = '0.617';
     await h.element('band-challenge-position').dispatch('input');
     h.responses.push({ body: { token: 'retry-token', user: {} } });
     await h.element('band-challenge-confirm').dispatch('click');
     await submission;
-    assert.deepEqual(h.requests[3].body.captcha, { challengeId: 'challenge-2', k: 0.6 });
+    assert.deepEqual(h.requests[3].body.captcha, { challengeId: 'challenge-2', k: 0.617 });
     assert.equal(h.storage.get(tokenKey), 'retry-token');
   });
 }
@@ -455,15 +455,15 @@ test('expiry disables movement and confirmation until a fresh question is loaded
   await submission;
 });
 
-test('pointer dragging snaps to marked positions and keyboard range input selects candidate indices', async () => {
+test('dragging and range input move continuously along the band without snapping to reference marks', async () => {
   const h = harness();
   const { submission } = await openChallenge(h);
   const graph = h.element('band-challenge-graph');
   const slider = h.element('band-challenge-position');
-  assert.equal(slider.min, '0');
-  assert.equal(slider.max, '4');
-  assert.equal(slider.step, '1');
-  assert.equal(slider.value, '2');
+  assert.equal(slider.min, '-1');
+  assert.equal(slider.max, '1');
+  assert.equal(slider.step, '0.001');
+  assert.equal(slider.value, '0');
   assert.equal(h.element('band-challenge-confirm').disabled, true);
   const marks = h.element('band-challenge-candidates').children;
   assert.equal(marks.filter((mark) => mark.tagName === 'circle').length, 5);
@@ -472,30 +472,55 @@ test('pointer dragging snaps to marked positions and keyboard range input select
     ['A', 'B', 'C', 'D', 'E'],
   );
   await graph.dispatch('pointerdown', { button: 0, pointerId: 1, clientX: -100, clientY: 100 });
-  assert.equal(slider.value, '0');
-  assert.match(slider.attributes['aria-valuetext'], /-0\.700/);
+  assert.equal(slider.value, '-1');
+  assert.match(slider.attributes['aria-valuetext'], /-1\.000/);
   await graph.dispatch('pointermove', { pointerId: 1, clientX: 900, clientY: 100 });
-  assert.equal(slider.value, '4');
-  assert.match(slider.attributes['aria-valuetext'], /0\.600/);
+  assert.equal(slider.value, '1');
+  assert.match(slider.attributes['aria-valuetext'], /1\.000/);
   await graph.dispatch('pointermove', { pointerId: 1, clientX: 410.2, clientY: 100 });
-  assert.equal(slider.value, '3', 'k = 0.4 should snap to the nearest candidate at k = 0.45');
-  await graph.dispatch('pointerup', { pointerId: 1, clientX: 309, clientY: 100 });
-  assert.equal(slider.value, '2');
+  assert.ok(Math.abs(Number(slider.value) - 0.4) < 1e-12, 'k = 0.4 must remain between marks');
+  await graph.dispatch('pointerup', { pointerId: 1, clientX: 413.489, clientY: 100 });
+  const released = Number(slider.value);
+  assert.ok(Math.abs(released - 0.413) < 1e-12, 'release must preserve the actual drop position');
+  const { points } = challenge().band;
+  const right = points.findIndex((point) => point.k >= released);
+  const leftPoint = points[right - 1];
+  const rightPoint = points[right];
+  const fraction = (released - leftPoint.k) / (rightPoint.k - leftPoint.k);
+  const energy = leftPoint.energy + fraction * (rightPoint.energy - leftPoint.energy);
+  const energies = points.map((point) => point.energy);
+  const y =
+    244 -
+    ((energy - Math.min(...energies)) / (Math.max(...energies) - Math.min(...energies))) * 190;
+  const { transform } = h.element('band-challenge-particle').attributes;
+  const position = transform
+    .match(/translate\(([^,]+), ([^)]+)\)/)
+    .slice(1)
+    .map(Number);
+  assert.ok(Math.abs(position[0] - 413.489) < 1e-12);
+  assert.ok(
+    Math.abs(position[1] - y) < 1e-12,
+    'the particle must stay on the curve between samples',
+  );
   await graph.dispatch('pointermove', { pointerId: 1, clientX: 900, clientY: 100 });
-  assert.equal(slider.value, '2', 'pointer movement after release must not change the position');
-  for (const [index, { k }] of challenge().band.candidates.entries()) {
-    slider.value = String(index);
+  assert.equal(
+    Number(slider.value),
+    released,
+    'pointer movement after release must not change the position',
+  );
+  for (const k of [-0.673, -0.2, 0.413, 0.617]) {
+    slider.value = String(k);
     await slider.dispatch('input');
-    assert.equal(slider.value, String(index));
+    assert.equal(slider.value, String(k));
     assert.ok(slider.attributes['aria-valuetext'].includes(k.toFixed(3)));
   }
   slider.value = '-99';
   await slider.dispatch('input');
-  assert.equal(slider.value, '0');
+  assert.equal(slider.value, '-1');
   slider.value = '99';
   await slider.dispatch('input');
-  assert.equal(slider.value, '4');
-  assert.match(slider.attributes['aria-valuetext'], /0\.600/);
+  assert.equal(slider.value, '1');
+  assert.match(slider.attributes['aria-valuetext'], /1\.000/);
   assert.equal(h.element('band-challenge-confirm').disabled, false);
   await h.element('band-challenge-close').dispatch('click');
   await submission;

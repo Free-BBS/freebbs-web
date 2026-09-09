@@ -7,7 +7,7 @@ const CHALLENGE_TTL_SECONDS = 300;
 const RATE_WINDOW_SECONDS = 900;
 const EMAIL_CHALLENGE_LIMIT = 12;
 const IP_CHALLENGE_LIMIT = 60;
-const ANSWER_TOLERANCE = 0.025;
+const ANSWER_TOLERANCE = 0.05;
 const CANDIDATE_SPACING = 0.2;
 const schemaPromises = new WeakMap();
 
@@ -267,7 +267,8 @@ async function consumeBandChallenge(connection, identity, captcha, purpose) {
     !Number.isFinite(captcha.k) ||
     captcha.k < -1 ||
     captcha.k > 1 ||
-    Math.abs(captcha.k - Number(challenge.answer_k)) > Number(challenge.tolerance)
+    // k lies in [-1, 1]; allow only floating-point roundoff at the inclusive boundary.
+    Math.abs(captcha.k - Number(challenge.answer_k)) > Number(challenge.tolerance) + Number.EPSILON
   ) {
     return new RegistrationGuardError(
       '位置还不准确：请在标记位置中比较有效质量，二阶导数绝对值越小，质量越大。请换一道题再试',

@@ -59,14 +59,14 @@
         <input
           id="band-challenge-position"
           type="range"
-          min="0"
-          max="4"
-          step="1"
+          min="-1"
+          max="1"
+          step="0.001"
           value="0"
           aria-describedby="band-challenge-controls"
         />
         <p class="band-challenge-controls" id="band-challenge-controls">
-          拖动粒子到标记点，会自动吸附；也可用下方滑块或方向键逐点选择。
+          沿能带自由拖动粒子，停在目标标记附近的小范围内即可；也可用下方滑块或方向键微调。
         </p>
       </div>
       <details class="band-challenge-hint">
@@ -155,24 +155,15 @@
   function setPosition(value, moved = true) {
     if (!session?.challenge || session.loading || session.submitting || isExpired()) return;
     if (!Number.isFinite(Number(value))) return;
-    const { candidates } = session.challenge.band;
-    let selected = 0;
-    candidates.forEach((candidate, index) => {
-      if (
-        Math.abs(candidate.k - Number(value)) < Math.abs(candidates[selected].k - Number(value))
-      ) {
-        selected = index;
-      }
-    });
-    const { k } = candidates[selected];
+    const { kMin, kMax } = session.challenge.band;
+    const k = Math.min(kMax, Math.max(kMin, Number(value)));
     const energy = energyAt(k);
     const { x, y } = plotPosition(k, energy);
     session.k = k;
     session.moved ||= moved;
-    slider.value = String(selected);
-    const label = String.fromCharCode(65 + selected);
-    element('position-value').textContent = `${label} · k = ${k.toFixed(3)}`;
-    slider.setAttribute('aria-valuetext', `位置 ${label}，波矢 k = ${k.toFixed(3)}`);
+    slider.value = String(k);
+    element('position-value').textContent = `k = ${k.toFixed(3)}`;
+    slider.setAttribute('aria-valuetext', `波矢 k = ${k.toFixed(3)}`);
     element('particle').setAttribute('transform', `translate(${x}, ${y})`);
     document.getElementById('band-particle-guide').setAttribute('d', `M${x} ${y}V268`);
     if (moved)
@@ -201,7 +192,7 @@
     element('title').textContent = `让${carrier}的有效质量${objective}`;
     dialog.querySelector('.band-challenge-eyebrow').textContent =
       `${session.mode === 'login' ? '登录' : '注册'}验证 · 能带实验`;
-    element('task').textContent = `在标记位置中，将${carrier}拖到正有效质量${objective}的点。`;
+    element('task').textContent = `比较标记位置，将${carrier}拖到正有效质量${objective}的点附近。`;
     element('band-label').textContent = isHole ? '价带 · 空穴 h+' : '导带 · 电子 e−';
     element('symbol').textContent = isHole ? 'h+' : 'e−';
     element('particle').classList.toggle('is-hole', isHole);
@@ -240,10 +231,10 @@
     });
     document.getElementById('band-k-min').textContent = String(band.kMin);
     document.getElementById('band-k-max').textContent = String(band.kMax);
-    slider.min = '0';
-    slider.max = String(band.candidates.length - 1);
-    slider.step = '1';
-    setPosition(band.candidates[Math.floor(band.candidates.length / 2)].k, false);
+    slider.min = String(band.kMin);
+    slider.max = String(band.kMax);
+    slider.step = String((band.kMax - band.kMin) / 2000);
+    setPosition((band.kMin + band.kMax) / 2, false);
     element('plot').hidden = false;
     updateExpiry();
     slider.focus({ preventScroll: true });
@@ -334,10 +325,7 @@
     dragging = false;
   });
   slider.addEventListener('input', () => {
-    if (!session?.challenge) return;
-    const { candidates } = session.challenge.band;
-    const index = Math.min(candidates.length - 1, Math.max(0, Math.round(Number(slider.value))));
-    if (candidates[index]) setPosition(candidates[index].k);
+    setPosition(slider.value);
   });
   refreshButton.addEventListener('click', () => loadChallenge());
   closeButton.addEventListener('click', () => finish(null));

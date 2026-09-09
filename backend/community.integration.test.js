@@ -351,6 +351,20 @@ test(
           rawRegistration: true,
         });
         assert.equal(replayWrong.code, 'registration_captcha_used');
+        const outsideTolerance = await registrationPayload(identity);
+        outsideTolerance.captcha.k += outsideTolerance.captcha.k > 0 ? -0.050001 : 0.050001;
+        assert.equal(
+          (
+            await api('/auth/register', {
+              method: 'POST',
+              body: outsideTolerance,
+              expected: 400,
+              rawRegistration: true,
+            })
+          ).code,
+          'registration_captcha_incorrect',
+          'free dragging just beyond the accepted range must fail',
+        );
         const expired = await registrationPayload(identity);
         await db.execute(
           'UPDATE registration_challenges SET expires_at = NOW() - INTERVAL 1 SECOND WHERE id = ?',
@@ -377,6 +391,8 @@ test(
           'failed captcha must not consume email verification',
         );
         const concurrentPayload = await registrationPayload(identity);
+        // A free drop at the inclusive tolerance boundary still creates the account.
+        concurrentPayload.captcha.k += concurrentPayload.captcha.k > 0 ? -0.05 : 0.05;
         await api('/auth/register', {
           method: 'POST',
           body: { ...concurrentPayload, username: 'admin' },
@@ -510,7 +526,21 @@ test(
           (await api('/auth/login', { method: 'POST', body: wrong, expected: 400 })).code,
           'login_captcha_used',
         );
+        const outsideTolerance = await loginPayload();
+        outsideTolerance.captcha.k += outsideTolerance.captcha.k > 0 ? -0.050001 : 0.050001;
+        assert.equal(
+          (
+            await api('/auth/login', {
+              method: 'POST',
+              body: outsideTolerance,
+              expected: 400,
+            })
+          ).code,
+          'login_captcha_incorrect',
+          'free dragging just beyond the accepted range must fail',
+        );
         const wrongPassword = await loginPayload();
+        wrongPassword.captcha.k += wrongPassword.captcha.k > 0 ? -0.04 : 0.04;
         await api('/auth/login', {
           method: 'POST',
           body: { ...wrongPassword, password: 'incorrect-password' },
@@ -530,6 +560,8 @@ test(
           'login_captcha_expired',
         );
         const boundIdentity = await loginPayload();
+        // Identity binding also applies when dropping at the inclusive boundary.
+        boundIdentity.captcha.k += boundIdentity.captcha.k > 0 ? -0.05 : 0.05;
         assert.equal(
           (
             await api('/auth/login', {
