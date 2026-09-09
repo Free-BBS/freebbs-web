@@ -99,11 +99,55 @@ test('oscillating bands have energy peaks and valleys with four separated positi
     assert.ok(sorted.at(-1).mass / sorted.at(-2).mass > 1.3, 'maximum mass must be unambiguous');
     const solved = objective === 'maximum' ? sorted.at(-1) : sorted[0];
     assert.equal(solved.k, answerK);
-    assert.ok(tolerance <= 0.025);
+    assert.equal(tolerance, 0.05);
   }
   assert.equal(combinations.size, 4);
   assert.deepEqual([...answerIndices].sort(), [0, 1, 2, 3]);
   assert.ok(answers.size > 40, 'answer positions must vary materially');
+});
+
+test('login and registration accept free positions through the inclusive tolerance boundary', async () => {
+  for (const [purpose, consume, prefix] of [
+    ['register', consumeRegistrationChallenge, 'registration'],
+    ['login', consumeLoginChallenge, 'login'],
+  ]) {
+    for (const answer of [-0.5, 0.5]) {
+      for (const offset of [-0.2, -0.050001, -0.05, -0.04, 0, 0.04, 0.05, 0.050001, 0.2]) {
+        let consumed = false;
+        const connection = {
+          async execute(sql) {
+            if (sql.startsWith('SELECT')) {
+              return [
+                [
+                  {
+                    email: 'student@example.invalid',
+                    purpose,
+                    answer_k: answer,
+                    tolerance: 0.05,
+                    expired: 0,
+                    consumed_at: null,
+                  },
+                ],
+              ];
+            }
+            consumed = true;
+            return [{ affectedRows: 1 }];
+          },
+        };
+        const result = await consume(connection, 'student@example.invalid', {
+          challengeId: 'b'.repeat(64),
+          k: answer + offset,
+        });
+        const label = `${purpose}: answer ${answer}, offset ${offset}`;
+        if (Math.abs(offset) <= 0.05) {
+          assert.equal(result, null, label);
+        } else {
+          assert.equal(result.code, `${prefix}_captcha_incorrect`, label);
+        }
+        assert.equal(consumed, true, label);
+      }
+    }
+  }
 });
 
 test('captcha rejects client coercion, expires, binds email, and has one attempt', async () => {
