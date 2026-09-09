@@ -5,10 +5,11 @@
 `{version:1, components:[], wires:[], analysis:{type:'transient', stop:0.01, step:0.00001, initial:'zero'}}`
 
 元件：`{id:'R1', type:'resistor', x:240, y:160, rotation:0, params:{resistance:1000}}`。
-导线：`{id:'w1', from:{componentId:'R1',pin:0}, to:{componentId:'V1',pin:0}, points:[{x:300,y:160}]}`。可选 `points` 只存中间拐点，最多32个；省略时自动正交走线，显式空数组表示直线。端点由引脚确定，移动元件不会改变拐点坐标。pin 为从0开始的索引。只在引脚之间连接；导线交叉不产生连接。所有 ground 的引脚为同一零电位。坐标以画布 SVG viewBox 为准，rotation 为 0/90/180/270。最多80元件、200导线。
+导线：`{id:'w1', from:{componentId:'R1',pin:0}, to:{componentId:'V1',pin:0}, points:[{x:300,y:160}]}`。可选 `points` 只存中间拐点，最多32个；省略时自动正交走线，显式空数组表示直线。端点由引脚确定，移动元件不会改变拐点坐标。pin 为从0开始的索引。导线端点均为引脚，导线中途接线通过 junction 元件表示：目标导线分成两段并共用该连接点。普通交叉不产生连接。所有 ground 的引脚为同一零电位。坐标以画布 SVG viewBox 为准，rotation 为 0/90/180/270。最多80元件、200导线。
 
 类型和引脚顺序：
 
+- junction: [连接点]，params={}，引脚位于元件坐标原点，无支路和独立测量通道。
 - ground: [地]
 - resistor, capacitor, inductor, voltage, current, diode, nonlinear, voltmeter, ammeter, oscilloscope: [正,负]；二极管正端为阳极。
 - vcvs, vccs: [输出正,输出负,控制正,控制负]
@@ -26,9 +27,11 @@
 - `catalog`: 以 type 为键的 `{label,pins:[文字],defaults:{...}}` 元件目录。
 - `validateDocument(document)`: 无效时 throw（中文可读信息），有效时返回标准化文档。
 - `simulate(document, options=document.analysis)`: 返回下述结果，失败 throw（禁止伪造0曲线）。
+- `sourceAnalysisAdvice(document, options=document.analysis)`: 返回 `{warnings, suggestedAnalysis}`，指出周期源采样不足或分析模式不适用；建议不修改原文档。
+- `limits`: 瞬态与扫描的采样点上限。
 - `buildNets(document)`: 返回 `{pinNets:{'R1:0':'n1',...}, nets:[...], ground:'0'}`，用于示意图电压着色。
 
-分析：`{type:'dc'}`；`{type:'transient',stop,step,initial:'zero'|'operating-point'}`；`{type:'sweep',componentId:'V1',parameter:'dc',start:0,stop:5,points:101}`；`{type:'ac',start:10,stop:1e5,points:101,scale:'log'|'linear'}`。扫描参数也支持 beta、w、l、k 等数值参数。最多2000点，非收敛/浮空/非法公式须可读报错。
+分析：`{type:'dc'}`；`{type:'transient',stop,step,initial:'zero'|'operating-point'}`；`{type:'sweep',componentId:'V1',parameter:'dc',start:0,stop:5,points:101}`；`{type:'ac',start:10,stop:1e5,points:101,scale:'log'|'linear'}`。扫描参数也支持 beta、w、l、k 等数值参数。瞬态最多100001点，参数和AC扫描最多2000点，非收敛/浮空/非法公式须可读报错。
 
 结果：`{analysis, x:[], xLabel, xUnit, traces:[{id,label,unit,values:[],phase?:[]}], frames:[{voltages:{net:value},currents:{componentId:value}}], warnings:[]}`。每个元件都有 `V:<id>`（正负引脚压差；晶体管取首末引脚）和 `I:<id>` 的 trace，ground除外。AC values 为幅值，phase为角度；frames可以只包含直流工作点，动态图只播放时域帧。仪表无独立电流量测时为理想开路，电流表串接0V源。所有值必须有限。
 

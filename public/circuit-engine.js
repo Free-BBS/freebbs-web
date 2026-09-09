@@ -1,6 +1,7 @@
 /* Numerical teaching models; see docs/circuit-contract.md and the ngspice manual. */
 /* eslint-disable no-param-reassign */
 (function circuitEngineModule(root) {
+  const limits = Object.freeze({ maxTransientPoints: 100001, maxSweepPoints: 2000 });
   const sourceDefaults = {
     dc: 5,
     waveform: 'dc',
@@ -14,6 +15,7 @@
   const twoPins = ['正', '负'];
   const catalog = {
     ground: { label: '参考地', pins: ['地'], defaults: {} },
+    junction: { label: '连接点', pins: ['连接点'], defaults: {} },
     resistor: { label: '电阻', pins: twoPins, defaults: { resistance: 1000 } },
     capacitor: { label: '电容', pins: twoPins, defaults: { capacitance: 0.000001 } },
     inductor: { label: '电感', pins: twoPins, defaults: { inductance: 0.001 } },
@@ -232,7 +234,7 @@
           throw new Error(`${component.id}.${key} 必须大于 0。`);
         if (['frequency', 'delay', 'lambda', 'acAmplitude'].includes(key) && value < 0)
           throw new Error(`${component.id}.${key} 不能小于 0。`);
-        if (key === 'duty' && (value <= 0 || value >= 1))
+        if (key === 'duty' && params.waveform === 'pulse' && (value <= 0 || value >= 1))
           throw new Error(`${component.id}.duty 必须在 0 与 1 之间。`);
       } else if (typeof value !== 'string') throw new Error(`${component.id}.${key} 必须是文本。`);
     }
@@ -265,8 +267,10 @@
       const initial = options.initial || 'zero';
       if (stop <= 0 || step <= 0 || step > stop)
         throw new Error('瞬态结束时间和步长必须大于 0，步长不能超过结束时间。');
-      if (Math.ceil(stop / step - 1e-10) + 1 > 2000)
-        throw new Error('瞬态最多 2000 个采样点；请增大步长或缩短仿真时间。');
+      if (Math.ceil(stop / step - 1e-10) + 1 > limits.maxTransientPoints)
+        throw new Error(
+          `瞬态最多 ${limits.maxTransientPoints} 个采样点；请增大步长或缩短仿真时间。`,
+        );
       if (!['zero', 'operating-point'].includes(initial))
         throw new Error('瞬态初值必须为 zero 或 operating-point。');
       return { type, stop, step, initial };
@@ -276,8 +280,8 @@
     const start = finite(options.start ?? (type === 'ac' ? 10 : 0), '扫描起点');
     const stop = finite(options.stop ?? (type === 'ac' ? 100000 : 5), '扫描终点');
     const points = options.points ?? 101;
-    if (!Number.isInteger(points) || points < 2 || points > 2000)
-      throw new Error('扫描点数必须为 2 至 2000 的整数。');
+    if (!Number.isInteger(points) || points < 2 || points > limits.maxSweepPoints)
+      throw new Error(`扫描点数必须为 2 至 ${limits.maxSweepPoints} 的整数。`);
     if (type === 'ac') {
       const scale = options.scale || 'log';
       if (start <= 0 || stop <= start || !['log', 'linear'].includes(scale))
@@ -389,6 +393,118 @@
       analysis: normalizeAnalysis(document.analysis || { type: 'dc' }, components),
     };
   }
+  function normalizedSourceAdvice(document, analysis) {
+    const sources = document.components.filter(
+      ({ type, params }) =>
+        ['voltage', 'current'].includes(type) &&
+        ['sine', 'pulse'].includes(params.waveform) &&
+        params.amplitude !== 0,
+    );
+    const warnings = [];
+    if (!sources.length) return { warnings, suggestedAnalysis: null };
+    const concise = (number) => Number(number.toPrecision(4));
+    const fastestPeriod = 1 / Math.max(...sources.map(({ params }) => params.frequency));
+    const requiredStep = Math.min(
+      ...sources.map(({ params }) =>
+        Math.min(
+          1 / (100 * params.frequency),
+          params.waveform === 'pulse'
+            ? Math.min(params.duty, 1 - params.duty) / (10 * params.frequency)
+            : Infinity,
+        ),
+      ),
+    );
+    const lastDelay = Math.max(...sources.map(({ params }) => params.delay));
+    if (['dc', 'sweep'].includes(analysis.type))
+      warnings.push(
+        `${sources.map(({ id }) => id).join('、')} 设置了周期波形，但当前为直流${analysis.type === 'sweep' ? '扫描' : '工作点'}分析，只使用电源的直流偏置；请使用瞬态分析查看随时间变化的波形。`,
+      );
+    if (analysis.type === 'transient') {
+      for (const { id, params } of sources) {
+        const samples = 1 / (params.frequency * analysis.step);
+        if (samples < 100 * (1 - 1e-12))
+          warnings.push(
+            `${id} 的 ${concise(params.frequency)} Hz 波形每周期仅 ${concise(samples)} 个采样点，可能混叠成直线或失真；建议每周期至少 100 点，步长不超过 ${concise(1 / (100 * params.frequency))} s。`,
+          );
+        if (
+          params.waveform === 'pulse' &&
+          samples * Math.min(params.duty, 1 - params.duty) < 10 * (1 - 1e-12)
+        )
+          warnings.push(
+            `${id} 的脉冲高电平或低电平过窄，当前步长可能漏掉脉冲；建议每段至少 10 个采样点。`,
+          );
+        if (params.delay >= analysis.stop)
+          warnings.push(`${id} 的启动延迟不小于仿真截止时间，当前窗口无法观察周期波形。`);
+        else if (analysis.stop - params.delay < (1 / params.frequency) * (1 - 1e-12))
+          warnings.push(`${id} 在当前窗口内不足一个完整周期，请延长截止时间。`);
+      }
+    }
+    const initial = analysis.type === 'transient' ? analysis.initial : 'zero';
+    let step = requiredStep;
+    const pointCount = (stop) => Math.ceil(stop / step - 1e-10) + 1;
+    let stop;
+    if (
+      analysis.type === 'transient' &&
+      analysis.stop - lastDelay >= fastestPeriod * (1 - 1e-12) &&
+      pointCount(analysis.stop) <= limits.maxTransientPoints
+    ) {
+      stop = analysis.stop;
+      step = Math.min(analysis.step, requiredStep);
+    } else {
+      const maximumStop = step * (limits.maxTransientPoints - 1);
+      if (maximumStop - lastDelay < fastestPeriod * (1 - 1e-12)) {
+        warnings.push(
+          `无法在 ${limits.maxTransientPoints} 个采样点内兼顾电源延迟和所需采样密度；请缩短启动延迟或降低最高频率后再设置瞬态分析。`,
+        );
+        return { warnings, suggestedAnalysis: null };
+      }
+      stop = Math.min(lastDelay + 10 * fastestPeriod, maximumStop);
+    }
+    const incomplete = sources.filter(
+      ({ params }) => stop - params.delay < (1 / params.frequency) * (1 - 1e-12),
+    );
+    if (incomplete.length)
+      warnings.push(
+        `建议窗口按最快电源设置，${incomplete.map(({ id }) => id).join('、')} 的较慢波形仍不足一个完整周期；如需观察这些电源，请在采样点上限内延长截止时间。`,
+      );
+    return {
+      warnings,
+      suggestedAnalysis: normalizeAnalysis(
+        { type: 'transient', stop, step, initial },
+        document.components,
+      ),
+    };
+  }
+  function sourceAnalysisAdvice(input, options) {
+    const document = validateDocument(input);
+    const analysis = normalizeAnalysis(options || document.analysis, document.components);
+    return normalizedSourceAdvice(document, analysis);
+  }
+  function playbackFrameStep(input, result, { duration = 8000, frameInterval = 50 } = {}) {
+    const document = validateDocument(input);
+    if (!result || result.analysis?.type !== 'transient' || !result.x?.length) return 1;
+    if (
+      !Number.isFinite(duration) ||
+      duration <= 0 ||
+      !Number.isFinite(frameInterval) ||
+      frameInterval < 0
+    )
+      throw new Error('回放时长必须大于 0，帧间隔必须为非负有限数值。');
+    const samples = (result.x.length * frameInterval) / duration;
+    const frequencies = document.components
+      .filter(
+        ({ type, params }) =>
+          ['voltage', 'current'].includes(type) &&
+          ['sine', 'pulse'].includes(params.waveform) &&
+          params.amplitude !== 0,
+      )
+      .map(({ params }) => params.frequency);
+    if (!frequencies.length) return samples;
+    return Math.min(
+      samples,
+      Math.max(1, Math.floor(1 / (20 * Math.max(...frequencies) * result.analysis.step))),
+    );
+  }
   function netsFor(document) {
     const parent = new Map();
     const key = (endpoint) => `${endpoint.componentId}:${endpoint.pin}`;
@@ -444,27 +560,33 @@
   function compile(document) {
     if (!document.components.some((component) => component.type === 'ground'))
       throw new Error('电路缺少参考地；请放置参考地并连接电源或公共节点。');
-    if (!document.components.some((component) => component.type !== 'ground'))
+    if (!document.components.some((component) => !['ground', 'junction'].includes(component.type)))
       throw new Error('请先添加元件并连接电路。');
     const nets = netsFor(document);
-    const unknownNets = nets.nets.filter((net) => net !== '0');
+    const electricalComponents = document.components.filter(
+      (component) => !['ground', 'junction'].includes(component.type),
+    );
+    const electricalNets = new Set(
+      electricalComponents.flatMap((component) =>
+        catalog[component.type].pins.map((_, pin) => nets.pinNets[`${component.id}:${pin}`]),
+      ),
+    );
+    const unknownNets = nets.nets.filter((net) => net !== '0' && electricalNets.has(net));
     const indices = new Map(unknownNets.map((net, index) => [net, index]));
     let dimension = unknownNets.length;
-    const components = document.components
-      .filter((component) => component.type !== 'ground')
-      .map((component) => {
-        const pins = catalog[component.type].pins.map(
-          (_, pin) => indices.get(nets.pinNets[`${component.id}:${pin}`]) ?? -1,
-        );
-        const compiled = { ...component, pins, branch: -1 };
-        if (branchTypes.has(component.type)) {
-          compiled.branch = dimension;
-          dimension += 1;
-        }
-        if (component.type === 'nonlinear')
-          compiled.expression = parseExpression(component.params.expression);
-        return compiled;
-      });
+    const components = electricalComponents.map((component) => {
+      const pins = catalog[component.type].pins.map(
+        (_, pin) => indices.get(nets.pinNets[`${component.id}:${pin}`]) ?? -1,
+      );
+      const compiled = { ...component, pins, branch: -1 };
+      if (branchTypes.has(component.type)) {
+        compiled.branch = dimension;
+        dimension += 1;
+      }
+      if (component.type === 'nonlinear')
+        compiled.expression = parseExpression(component.params.expression);
+      return compiled;
+    });
     const byId = new Map(components.map((component) => [component.id, component]));
     components.forEach((component) => {
       if (component.type === 'cccs' || component.type === 'ccvs') {
@@ -1087,8 +1209,15 @@
         : analysis.points || 1;
     if (points * system.dimension ** 3 * (analysis.type === 'ac' ? 4 : 1) > 6e8)
       throw new Error('计算量超过浏览器仿真限额；请减少扫描点数或简化电路。');
+    const resultScalars =
+      points * (1 + system.components.length * (analysis.type === 'ac' ? 4 : 2)) +
+      (analysis.type === 'ac' ? 1 : points) *
+        (system.unknownNets.length + 1 + system.components.length);
+    if (resultScalars > 8e6)
+      throw new Error('结果数据量超过浏览器仿真限额；请减少采样点或元件数量。');
     const result = emptyResult(system, analysis);
     result.warnings.push('教学模型：不包含晶体管寄生电容、击穿、温度漂移及完整工艺 SPICE 参数。');
+    result.warnings.push(...normalizedSourceAdvice(document, analysis).warnings);
     if (analysis.type === 'dc') {
       const context = { kind: 'dc' };
       appendTimeResult(result, system, solvePoint(system, context), context, 0);
@@ -1157,7 +1286,15 @@
     return result;
   }
 
-  const exported = { catalog, validateDocument, buildNets, simulate };
+  const exported = {
+    catalog,
+    limits,
+    validateDocument,
+    sourceAnalysisAdvice,
+    playbackFrameStep,
+    buildNets,
+    simulate,
+  };
   if (typeof module !== 'undefined' && module.exports) module.exports = exported;
   root.FreeBbsCircuitEngine = exported;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

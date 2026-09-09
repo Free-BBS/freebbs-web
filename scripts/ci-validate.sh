@@ -25,6 +25,7 @@ node --check public/circuit-discussion.js
 node --check public/circuit-engine.js
 node --check public/circuit-worker.js
 node --check public/circuit-renderer.js
+node --check public/circuit-wiring.js
 node --check public/circuit.js
 node --check public/circuit-embeds.js
 node --check public/circuit-embed.js

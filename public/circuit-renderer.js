@@ -2,6 +2,7 @@
   const NS = 'http://www.w3.org/2000/svg';
   const labels = {
     ground: '接地',
+    junction: '连接点',
     resistor: '电阻',
     capacitor: '电容',
     inductor: '电感',
@@ -46,6 +47,7 @@
       [40, 0, '−'],
     ];
     if (component.type === 'ground') offsets = [[0, -28, 'GND']];
+    if (component.type === 'junction') offsets = [[0, 0, '连接点']];
     if (component.type === 'bjt')
       offsets = [
         [0, -40, 'C'],
@@ -147,8 +149,22 @@
     return element;
   }
 
+  function sourceValueLines(component) {
+    const p = component.params || {};
+    if (!['voltage', 'current'].includes(component.type) || !['sine', 'pulse'].includes(p.waveform))
+      return null;
+    const unit = component.type === 'voltage' ? 'V' : 'A';
+    return [
+      `${p.waveform === 'sine' ? '正弦' : '脉冲'} ${formatValue(Number(p.amplitude), unit)}${p.waveform === 'sine' ? '峰值' : '增量'}`,
+      formatValue(Number(p.frequency), 'Hz'),
+      `偏置 ${formatValue(Number(p.dc), unit)}`,
+    ];
+  }
+
   function componentValue(component) {
     const p = component.params || {};
+    const sourceLines = sourceValueLines(component);
+    if (sourceLines) return sourceLines.join(' · ');
     if (component.type === 'resistor') return formatValue(Number(p.resistance), 'Ω');
     if (component.type === 'capacitor') return formatValue(Number(p.capacitance), 'F');
     if (component.type === 'inductor') return formatValue(Number(p.inductance), 'H');
@@ -187,8 +203,12 @@
     const voltageMarks = () => {
       line('M -12 -4 V 4 M -16 0 H -8 M 8 0 H 16');
     };
+    const sourceWaveform = component.params?.waveform;
+    const varyingSource = ['sine', 'pulse'].includes(sourceWaveform);
     const { type } = component;
-    if (type === 'ground') {
+    if (type === 'junction') {
+      group.append(svgElement('circle', { cx: 0, cy: 0, r: 5, fill: 'currentColor' }));
+    } else if (type === 'ground') {
       line('M 0 -28 V 0 M -15 0 H 15 M -10 6 H 10 M -5 12 H 5');
     } else if (type === 'resistor') {
       line('M -40 0 H -25 L -20 -9 L -12 9 L -4 -9 L 4 9 L 12 -9 L 20 9 L 25 0 H 40');
@@ -239,9 +259,24 @@
     } else {
       line('M -40 0 H -22 M 22 0 H 40');
       circle(22);
-      if (type === 'voltage') voltageMarks();
-      else if (type === 'current') currentArrow();
-      else if (type === 'voltmeter') text('V');
+      if (type === 'voltage') {
+        if (varyingSource) {
+          line('M -9 -17 V -11 M -12 -14 H -6 M 6 -14 H 12');
+          line(
+            sourceWaveform === 'sine'
+              ? 'M -15 2 C -10 -11 -5 -11 0 2 C 5 15 10 15 15 2'
+              : 'M -15 7 H -9 V -5 H 0 V 7 H 8 V -5 H 15',
+          );
+        } else voltageMarks();
+      } else if (type === 'current') {
+        currentArrow();
+        if (varyingSource)
+          line(
+            sourceWaveform === 'sine'
+              ? 'M -12 -12 C -8 -16 -4 -16 0 -12 C 4 -8 8 -8 12 -12'
+              : 'M -12 -9 H -7 V -15 H 0 V -9 H 7 V -15 H 12',
+          );
+      } else if (type === 'voltmeter') text('V');
       else if (type === 'ammeter') text('A');
       else if (type === 'oscilloscope') line('M -16 0 C -11 -19 -5 -19 0 0 C 5 19 11 19 16 0');
     }
@@ -319,6 +354,95 @@
     });
     const wireEditLayer = svgElement('g', { class: 'circuit-wire-controls' });
     svg.append(wireLayer, nodeLayer, wireEditLayer);
+    const connectionLayer = svgElement('g', {
+      'data-connection-preview': '',
+      visibility: 'hidden',
+      fill: 'none',
+      stroke: 'var(--circuit-accent,#48b6bd)',
+    });
+    connectionLayer.style.pointerEvents = 'none';
+    const connectionHighlight = svgElement('path', { 'stroke-width': 8, opacity: 0.3 });
+    const connectionPath = svgElement('path', { 'stroke-width': 2.4, 'stroke-dasharray': '7 5' });
+    const connectionLanding = svgElement('circle', {
+      r: 6,
+      fill: 'var(--circuit-accent,#48b6bd)',
+      'stroke-width': 2,
+    });
+    connectionLayer.append(connectionHighlight, connectionPath, connectionLanding);
+    svg.append(connectionLayer);
+    let pinDrag = null;
+
+    function nearestWirePosition(wire, position) {
+      const route = getWireRoute(wire, components);
+      let nearest;
+      for (let index = 1; index < route.length; index += 1) {
+        const from = route[index - 1];
+        const to = route[index];
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        const lengthSquared = dx * dx + dy * dy;
+        const ratio = lengthSquared
+          ? Math.max(
+              0,
+              Math.min(
+                1,
+                ((position.x - from.x) * dx + (position.y - from.y) * dy) / lengthSquared,
+              ),
+            )
+          : 0;
+        const point = { x: from.x + ratio * dx, y: from.y + ratio * dy };
+        const distance = Math.hypot(point.x - position.x, point.y - position.y);
+        if (!nearest || distance < nearest.distance) nearest = { position: point, distance };
+      }
+      return nearest;
+    }
+
+    function connectionTarget(position, origin) {
+      let closest;
+      components.forEach((component) => {
+        getPins(component).forEach((pin) => {
+          if (pin.componentId === origin.componentId && pin.pin === origin.pin) return;
+          const distance = Math.hypot(pin.x - position.x, pin.y - position.y);
+          if (distance <= 17 && (!closest || distance < closest.distance))
+            closest = {
+              endpoint: { componentId: pin.componentId, pin: pin.pin },
+              position: { x: pin.x, y: pin.y },
+              distance,
+            };
+        });
+      });
+      if (closest) return closest;
+      wires.forEach(({ wire }) => {
+        const point = nearestWirePosition(wire, position);
+        if (point?.distance <= 12 && (!closest || point.distance < closest.distance))
+          closest = { wireId: wire.id, ...point };
+      });
+      return closest;
+    }
+
+    function clearConnectionPreview() {
+      connectionLayer.setAttribute('visibility', 'hidden');
+      wireEditLayer.setAttribute('visibility', 'visible');
+    }
+
+    function previewConnection(position, origin = options.wireStart) {
+      const component = components.get(origin?.componentId);
+      const from = origin?.wireId ? origin.position : component && getPins(component)[origin.pin];
+      if (!from) return clearConnectionPreview();
+      const target = connectionTarget(position, origin);
+      const to = target?.position || position;
+      const middleX = (from.x + to.x) / 2;
+      connectionLayer.setAttribute('visibility', 'visible');
+      connectionPath.setAttribute('d', `M ${from.x} ${from.y} H ${middleX} V ${to.y} H ${to.x}`);
+      connectionHighlight.setAttribute(
+        'd',
+        target?.wireId ? wirePath(wires.find(({ wire }) => wire.id === target.wireId).wire) : '',
+      );
+      connectionLanding.setAttribute('cx', to.x);
+      connectionLanding.setAttribute('cy', to.y);
+      connectionLanding.setAttribute('visibility', target ? 'visible' : 'hidden');
+      return target;
+    }
 
     const copyPoints = (points) => points.map(({ x, y }) => ({ x, y }));
     const editBounds = options.viewBox || [0, 0, 1000, 640];
@@ -499,7 +623,12 @@
       entry.controls = [];
       entry.addButtons = [];
       entry.deleteControl = null;
-      if (!entry.selected || !options.interactive || typeof options.onWireChange !== 'function')
+      if (
+        !entry.selected ||
+        !options.interactive ||
+        options.wireStart ||
+        typeof options.onWireChange !== 'function'
+      )
         return;
       const group = svgElement('g', { 'data-wire-controls': entry.wire.id });
       entry.controlsGroup = group;
@@ -702,20 +831,25 @@
         const choose = (event) => {
           event.preventDefault();
           event.stopPropagation();
-          if (!entry.selected) options.onWireClick?.(wire.id);
+          const route = getWireRoute(wire, components);
+          const position =
+            Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
+              ? pointerPosition(event)
+              : route[Math.floor(route.length / 2)];
+          options.onWireClick?.(wire.id, nearestWirePosition(wire, position)?.position || position);
         };
         hit.addEventListener('click', choose);
         hit.addEventListener('dblclick', (event) => {
           event.preventDefault();
           event.stopPropagation();
-          if (entry.selected && typeof options.onWireChange === 'function')
+          if (!options.wireStart && entry.selected && typeof options.onWireChange === 'function')
             addWirePoint(entry, pointerPosition(event));
-          else options.onWireClick?.(wire.id);
+          else choose(event);
         });
         hit.addEventListener('keydown', (event) => {
           if (event.key === 'Enter' || event.key === ' ') {
             choose(event);
-            if (entry.selected) focusPoint(entry, 0);
+            if (entry.selected && !options.wireStart) focusPoint(entry, 0);
           }
         });
         wireLayer.append(hit);
@@ -725,6 +859,13 @@
     });
 
     svg.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && pinDrag) {
+        const { hit, pointerId } = pinDrag;
+        pinDrag.cancel();
+        pinDrag = null;
+        if (hit.hasPointerCapture(pointerId)) hit.releasePointerCapture(pointerId);
+        clearConnectionPreview();
+      }
       if (event.key !== 'Escape' || !wires.some((entry) => entry.drag)) return;
       event.preventDefault();
       event.stopPropagation();
@@ -738,6 +879,14 @@
       point.x = event.clientX;
       point.y = event.clientY;
       return point.matrixTransform(matrix.inverse());
+    }
+    if (options.interactive) {
+      svg.addEventListener('pointermove', (event) => {
+        if (options.wireStart && !pinDrag) previewConnection(pointerPosition(event));
+      });
+      svg.addEventListener('pointerleave', () => {
+        if (!pinDrag) clearConnectionPreview();
+      });
     }
 
     components.forEach((storedComponent) => {
@@ -756,21 +905,22 @@
         );
       }
       group.append(svgElement('title', {}, `${component.id} · ${componentValue(component)}`));
-      group.append(
-        svgElement('rect', {
-          x: -54,
-          y: -54,
-          width: 108,
-          height: 114,
-          rx: 7,
-          class: 'circuit-selection',
-          fill: 'transparent',
-          stroke:
-            options.selectedId === component.id ? 'var(--circuit-accent,#48b6bd)' : 'transparent',
-          'stroke-dasharray': '4 4',
-          'stroke-width': 1.3,
-        }),
-      );
+      if (component.type !== 'junction')
+        group.append(
+          svgElement('rect', {
+            x: -54,
+            y: -54,
+            width: 108,
+            height: 114,
+            rx: 7,
+            class: 'circuit-selection',
+            fill: 'transparent',
+            stroke:
+              options.selectedId === component.id ? 'var(--circuit-accent,#48b6bd)' : 'transparent',
+            'stroke-dasharray': '4 4',
+            'stroke-width': 1.3,
+          }),
+        );
       const symbol = svgElement('g', {
         transform: `rotate(${component.rotation || 0})`,
         stroke: 'currentColor',
@@ -780,45 +930,54 @@
       group.append(symbol);
       const labelX = ['bjt', 'mosfet'].includes(component.type) ? 25 : 0;
       const labelY = ['bjt', 'mosfet'].includes(component.type) ? -14 : -33;
-      group.append(
-        svgElement(
-          'text',
-          {
-            x: labelX,
-            y: labelY,
-            fill: 'currentColor',
-            'font-size': 14,
-            'font-weight': 600,
-            'text-anchor': labelX ? 'start' : 'middle',
-            stroke: 'none',
-          },
-          component.id,
-        ),
-      );
+      if (component.type !== 'junction')
+        group.append(
+          svgElement(
+            'text',
+            {
+              x: labelX,
+              y: labelY,
+              fill: 'currentColor',
+              'font-size': 14,
+              'font-weight': 600,
+              'text-anchor': labelX ? 'start' : 'middle',
+              stroke: 'none',
+            },
+            component.id,
+          ),
+        );
+      const sourceLines = sourceValueLines(component);
+      const readingY = ['vcvs', 'vccs'].includes(component.type) ? 68 : 58;
       const reading = svgElement(
         'text',
         {
           x: 0,
-          y: ['vcvs', 'vccs'].includes(component.type) ? 68 : 58,
+          y: sourceLines ? 42 : readingY,
           fill: 'var(--circuit-muted,#9db4bb)',
           'font-size': 12,
           'text-anchor': 'middle',
           stroke: 'none',
         },
-        componentValue(component),
+        sourceLines ? undefined : componentValue(component),
       );
-      group.append(reading);
+      if (sourceLines)
+        sourceLines.forEach((value, index) =>
+          reading.append(svgElement('tspan', { x: 0, dy: index ? 14 : 0 }, value)),
+        );
+      if (component.type !== 'junction') group.append(reading);
       const pins = [];
       getPins(component).forEach((pin) => {
         const x = pin.x - component.x;
         const y = pin.y - component.y;
         const active =
           options.wireStart?.componentId === component.id && options.wireStart?.pin === pin.pin;
+        const inactiveFill =
+          component.type === 'junction' ? 'currentColor' : 'var(--circuit-surface,#102228)';
         const dot = svgElement('circle', {
           cx: x,
           cy: y,
           r: active ? 7 : 4,
-          fill: active ? 'var(--circuit-accent,#48b6bd)' : 'var(--circuit-surface,#102228)',
+          fill: active ? 'var(--circuit-accent,#48b6bd)' : inactiveFill,
           stroke: 'currentColor',
           'stroke-width': 2,
         });
@@ -834,10 +993,117 @@
             role: 'button',
             'aria-label': `${component.id} ${pin.label} 引脚`,
           });
-          hit.addEventListener('pointerdown', (event) => event.stopPropagation());
+          const endpoint = { componentId: component.id, pin: pin.pin };
+          let suppressClick = false;
+          hit.style.touchAction = 'none';
+          hit.addEventListener(
+            'touchstart',
+            (event) => {
+              if (pinDrag?.hit === hit) event.preventDefault();
+            },
+            { passive: false },
+          );
+          hit.addEventListener('pointerdown', (event) => {
+            event.stopPropagation();
+            if (
+              event.button !== 0 ||
+              event.isPrimary === false ||
+              (component.type === 'junction'
+                ? typeof options.onMove !== 'function'
+                : typeof options.onConnect !== 'function')
+            )
+              return;
+            suppressClick = false;
+            const originalPosition = { x: component.x, y: component.y };
+            pinDrag = {
+              endpoint,
+              origin: pointerPosition(event),
+              pointerId: event.pointerId,
+              hit,
+              moved: false,
+              originalPosition,
+              cancel() {
+                suppressClick = true;
+                if (component.type === 'junction') {
+                  component.x = originalPosition.x;
+                  component.y = originalPosition.y;
+                  group.setAttribute('transform', `translate(${component.x} ${component.y})`);
+                  wires.forEach(updateWireGeometry);
+                }
+              },
+            };
+            hit.setPointerCapture(event.pointerId);
+          });
+          hit.addEventListener('pointermove', (event) => {
+            if (pinDrag?.hit !== hit || pinDrag.pointerId !== event.pointerId) return;
+            const position = pointerPosition(event);
+            if (
+              !pinDrag.moved &&
+              Math.hypot(position.x - pinDrag.origin.x, position.y - pinDrag.origin.y) < 4
+            )
+              return;
+            event.preventDefault();
+            event.stopPropagation();
+            pinDrag.moved = true;
+            suppressClick = true;
+            wireEditLayer.setAttribute('visibility', 'hidden');
+            if (component.type === 'junction') {
+              component.x = bounded(
+                Math.round((pinDrag.originalPosition.x + position.x - pinDrag.origin.x) / 10) * 10,
+              );
+              component.y = bounded(
+                Math.round((pinDrag.originalPosition.y + position.y - pinDrag.origin.y) / 10) * 10,
+                'y',
+              );
+              group.setAttribute('transform', `translate(${component.x} ${component.y})`);
+              wires.forEach(updateWireGeometry);
+            } else previewConnection(position, endpoint);
+          });
+          hit.addEventListener('pointerup', (event) => {
+            if (pinDrag?.hit !== hit || pinDrag.pointerId !== event.pointerId) return;
+            event.stopPropagation();
+            const { moved } = pinDrag;
+            const target =
+              moved && component.type !== 'junction'
+                ? connectionTarget(pointerPosition(event), endpoint)
+                : null;
+            pinDrag = null;
+            if (hit.hasPointerCapture(event.pointerId)) hit.releasePointerCapture(event.pointerId);
+            clearConnectionPreview();
+            if (!moved && event.pointerType === 'touch') {
+              suppressClick = true;
+              options.onPinClick?.(endpoint);
+            }
+            if (moved && component.type === 'junction')
+              options.onMove(component.id, component.x, component.y);
+            if (target)
+              options.onConnect(
+                endpoint,
+                target.endpoint
+                  ? { endpoint: target.endpoint }
+                  : { wireId: target.wireId, position: target.position },
+              );
+          });
+          hit.addEventListener('pointercancel', (event) => {
+            if (pinDrag?.hit !== hit || pinDrag.pointerId !== event.pointerId) return;
+            pinDrag.cancel();
+            pinDrag = null;
+            if (hit.hasPointerCapture(event.pointerId)) hit.releasePointerCapture(event.pointerId);
+            clearConnectionPreview();
+          });
+          hit.addEventListener('lostpointercapture', () => {
+            if (pinDrag?.hit !== hit) return;
+            pinDrag.cancel();
+            pinDrag = null;
+            clearConnectionPreview();
+          });
           hit.addEventListener('click', (event) => {
             event.stopPropagation();
-            options.onPinClick?.({ componentId: component.id, pin: pin.pin });
+            if (suppressClick) {
+              suppressClick = false;
+              return;
+            }
+            options.onPinClick?.(endpoint);
           });
           hit.addEventListener('keydown', (event) => {
             if (event.key === 'Enter' || event.key === ' ') {
@@ -857,7 +1123,7 @@
         'stroke-width': 3,
         visibility: 'hidden',
       });
-      group.append(indicator);
+      if (component.type !== 'junction') group.append(indicator);
       nodes.push({ component, reading, pins, indicator });
       nodeLayer.append(group);
       if (options.selectable && !options.interactive) {
@@ -959,11 +1225,14 @@
           reading.textContent = formatValue(a - b, 'V');
         } else if (frame && component.type === 'ammeter')
           reading.textContent = formatValue(frame.currents?.[component.id] || 0, 'A');
-        else if (!frame) reading.textContent = componentValue(component);
+        else if (!frame && !sourceValueLines(component))
+          reading.textContent = componentValue(component);
         const current = frame?.currents?.[component.id] || 0;
         indicator.setAttribute(
           'visibility',
-          options.animate && Math.abs(current) > 1e-12 && component.type !== 'ground'
+          options.animate &&
+            Math.abs(current) > 1e-12 &&
+            !['ground', 'junction'].includes(component.type)
             ? 'visible'
             : 'hidden',
         );
@@ -989,6 +1258,72 @@
   }
 
   const traceColors = ['#2ba5ad', '#e2853f', '#8875cc', '#ca5d82', '#598f43', '#a38532'];
+
+  // Keep each pixel column's envelope, including narrow spikes between its endpoints.
+  // Only SVG vertices are reduced; measurements and exports retain every sample.
+  function waveformSampleIndices(xValues, values, pixelWidth, logX = false) {
+    const count = Math.min(xValues.length, values.length);
+    const buckets = Math.max(1, Math.floor(pixelWidth) || 1);
+    if (count <= buckets * 4) return Array.from({ length: count }, (_, index) => index);
+    const project = (value) => (logX ? Math.log10(value) : value);
+    const start = project(xValues[0]);
+    const span = project(xValues[count - 1]) - start || 1;
+    const indices = [];
+    let bucket = -1;
+    let first;
+    let last;
+    let minimum;
+    let maximum;
+    const flush = () => {
+      if (first !== undefined)
+        indices.push(...[...new Set([first, minimum, maximum, last])].sort((a, b) => a - b));
+    };
+    for (let index = 0; index < count; index += 1) {
+      if (!Number.isFinite(values[index]) || !Number.isFinite(xValues[index])) continue;
+      const next = Math.max(
+        0,
+        Math.min(buckets - 1, Math.floor(((project(xValues[index]) - start) / span) * buckets)),
+      );
+      if (next !== bucket) {
+        flush();
+        bucket = next;
+        first = index;
+        minimum = index;
+        maximum = index;
+      }
+      if (values[index] < values[minimum]) minimum = index;
+      if (values[index] > values[maximum]) maximum = index;
+      last = index;
+    }
+    flush();
+    return indices;
+  }
+
+  function nearestWaveformSample(xValues, value, logX = false) {
+    if (!xValues.length) return -1;
+    const project = (sample) => (logX ? Math.log10(sample) : sample);
+    const direction = xValues.at(-1) < xValues[0] ? -1 : 1;
+    const target = project(value) * direction;
+    const lowerBound = (needle) => {
+      let low = 0;
+      let high = xValues.length;
+      while (low < high) {
+        const middle = Math.floor((low + high) / 2);
+        if (project(xValues[middle]) * direction < needle) low = middle + 1;
+        else high = middle;
+      }
+      return low;
+    };
+    const after = lowerBound(target);
+    let nearest = Math.min(after, xValues.length - 1);
+    if (
+      after > 0 &&
+      Math.abs(project(xValues[after - 1]) * direction - target) <=
+        Math.abs(project(xValues[nearest]) * direction - target)
+    )
+      nearest = after - 1;
+    return lowerBound(project(xValues[nearest]) * direction);
+  }
 
   function renderWaveform(container, result, options = {}) {
     container.replaceChildren();
@@ -1109,10 +1444,10 @@
       );
       traces.forEach((trace, traceIndex) => {
         const values = valuesOf(trace);
-        const path = values
-          .map((value, index) =>
-            Number.isFinite(value) && Number.isFinite(xValues[index])
-              ? `${index ? 'L' : 'M'} ${px(xValues[index]).toFixed(3)} ${py(value).toFixed(3)}`
+        const path = waveformSampleIndices(xValues, values, width, logX)
+          .map((index, vertex) =>
+            Number.isFinite(values[index]) && Number.isFinite(xValues[index])
+              ? `${vertex ? 'L' : 'M'} ${px(xValues[index]).toFixed(3)} ${py(values[index]).toFixed(3)}`
               : '',
           )
           .join(' ');
@@ -1154,14 +1489,8 @@
           Math.max(0, (((event.clientX - box.left) / box.width) * chartWidth - left) / width),
         );
         const value = logX ? 10 ** (xMin + ratio * (xMax - xMin)) : xMin + ratio * (xMax - xMin);
-        let nearest = 0;
-        for (let index = 1; index < xValues.length; index += 1)
-          if (
-            Math.abs(projectX(xValues[index]) - projectX(value)) <
-            Math.abs(projectX(xValues[nearest]) - projectX(value))
-          )
-            nearest = index;
-        if (!xValues.length) return;
+        const nearest = nearestWaveformSample(xValues, value, logX);
+        if (nearest < 0) return;
         cursor.setAttribute('d', `M ${px(xValues[nearest])} ${top} V ${top + height}`);
         readout.textContent = `${formatValue(xValues[nearest], result.xUnit || '')} · ${traces.map((trace) => `${trace.label}: ${formatValue(valuesOf(trace)[nearest], unit)}`).join(' · ')}`;
       }
@@ -1184,6 +1513,8 @@
     insertWirePoint,
     formatValue,
     componentValue,
+    waveformSampleIndices,
+    nearestWaveformSample,
     renderSchematic,
     renderWaveform,
   };

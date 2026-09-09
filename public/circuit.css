@@ -368,6 +368,34 @@
 #circuit-run-status {
   margin-top: 14px;
 }
+.circuit-source-advice {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  color: var(--ui-text);
+  font-size: 13px;
+  line-height: 1.65;
+}
+.circuit-source-advice p {
+  margin: 0 0 8px;
+}
+.circuit-source-advice p:empty {
+  display: none;
+}
+.circuit-source-advice button {
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+}
+#circuit-sampling-count {
+  margin: 10px 0 0;
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+#circuit-sampling-count:empty {
+  display: none;
+}
 .circuit-traces {
   border: 0;
   padding: 0;
