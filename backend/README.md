@@ -80,7 +80,7 @@ npm run start:backend
   滑动变阻器调节总反馈电阻 `Rf`，范围与初值由 `rf*Ohms` 字段给出。
   电路图标注 `R1`、`R2`、`Rg`、`R0`、`Rv` 和总反馈电阻 `Rf` 的阻值；
   `R0 = rfMinOhms`，滑动部分 `Rv = Rf − R0`，随拖动更新。
-  每 15 分钟最多向同一邮箱发放 12 题，同一来源 IP 最多 60 题，配额与题目均保存在 MySQL。
+  获取题目和“换一道题”不按邮箱或来源 IP 限制频率；每题仍保存在 MySQL 并在 5 分钟后过期。
 - `POST /api/auth/register`：在原有身份、密码和邮箱验证码字段外，必须传入
   `communityAgreementAccepted: true`、`communityAgreementVersion: "2026-09-09"`，以及
   能带题提交 `captcha: { challengeId, k }`，文氏题提交 `captcha: { challengeId, resistanceOhms }`。
@@ -91,8 +91,8 @@ npm run start:backend
   `community_agreement_required` / `community_agreement_version_mismatch`；互动验证错误码
   使用 `registration_captcha_` 前缀。旧用户不追溯生成同意记录。
 - `POST /api/auth/login-challenge`：传入 `{ "identifier": "用户名或邮箱" }`，返回与注册题
-  相同的随机题型数据。题目绑定该用户名／邮箱和登录用途，无法与注册题交叉使用；每个登录标识
-  每 15 分钟最多发放 12 题，来源 IP 的 60 题配额与注册共享。
+  相同的随机题型数据。题目绑定该用户名／邮箱和登录用途，无法与注册题交叉使用；
+  获取和更换题目不按登录标识或来源 IP 限制频率，历史配额记录不会影响新请求。
 - `POST /api/auth/login`：在 `identifier`、`password` 外必须按题型提交上述 `captcha` 答案。
   无论密码正确与否，每题仅允许一次尝试；密码错误后必须重新获取题目。互动验证错误码使用
   `login_captcha_` 前缀。登录不要求已有用户补签注册公约。

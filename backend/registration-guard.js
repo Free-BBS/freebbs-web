@@ -5,9 +5,6 @@ const wienModel = require('../public/wien-oscillator-model');
 
 const COMMUNITY_AGREEMENT_VERSION = '2026-09-09';
 const CHALLENGE_TTL_SECONDS = 300;
-const RATE_WINDOW_SECONDS = 900;
-const EMAIL_CHALLENGE_LIMIT = 12;
-const IP_CHALLENGE_LIMIT = 60;
 const ANSWER_TOLERANCE = 0.05;
 const CANDIDATE_SPACING = 0.2;
 const schemaPromises = new WeakMap();
@@ -178,7 +175,7 @@ async function ensureRegistrationGuardTables(pool) {
   await schemaPromises.get(pool);
 }
 
-async function issueAuthChallenge(pool, { identity, purpose, ip }) {
+async function issueAuthChallenge(pool, { identity, purpose }) {
   const normalizedIdentity = typeof identity === 'string' ? identity.trim().toLowerCase() : '';
   const prefix = purpose === 'login' ? 'login_captcha' : 'registration_captcha';
   if (
@@ -197,61 +194,33 @@ async function issueAuthChallenge(pool, { identity, purpose, ip }) {
     await connection.beginTransaction();
     const [[clock]] = await connection.execute('SELECT UNIX_TIMESTAMP(NOW()) AS now_seconds');
     const nowSeconds = Number(clock.now_seconds);
-    const windowStart = Math.floor(nowSeconds / RATE_WINDOW_SECONDS) * RATE_WINDOW_SECONDS;
-    let limited = false;
-    // Database counters and row locks enforce the limits across all API instances.
-    for (const [scope, limit] of [
-      [`${purpose}:${normalizedIdentity}`, EMAIL_CHALLENGE_LIMIT],
-      [`ip:${ip || 'unknown'}`, IP_CHALLENGE_LIMIT],
-    ]) {
-      const scopeHash = crypto.createHash('sha256').update(scope).digest('hex');
-      await connection.execute(
-        `INSERT INTO registration_challenge_rates (scope_hash, window_start, issued_count)
-         VALUES (?, ?, 1) ON DUPLICATE KEY UPDATE issued_count = issued_count + 1`,
-        [scopeHash, windowStart],
-      );
-      const [[rate]] = await connection.execute(
-        `SELECT issued_count FROM registration_challenge_rates
-         WHERE scope_hash = ? AND window_start = ?`,
-        [scopeHash, windowStart],
-      );
-      if (Number(rate.issued_count) > limit) limited = true;
-    }
-    if (limited) {
-      result = new RegistrationGuardError(
-        '验证请求过于频繁，请稍后再试',
-        `${prefix}_rate_limited`,
-        429,
-      );
-    } else {
-      const challengeId = crypto.randomBytes(32).toString('hex');
-      const generated = generateAuthChallenge();
-      const expirySeconds = nowSeconds + CHALLENGE_TTL_SECONDS;
-      await connection.execute(
-        `INSERT INTO registration_challenges (id, email, purpose, answer_k, tolerance, expires_at)
+    const challengeId = crypto.randomBytes(32).toString('hex');
+    const generated = generateAuthChallenge();
+    const expirySeconds = nowSeconds + CHALLENGE_TTL_SECONDS;
+    await connection.execute(
+      `INSERT INTO registration_challenges (id, email, purpose, answer_k, tolerance, expires_at)
          VALUES (?, ?, ?, ?, ?, FROM_UNIXTIME(?))`,
-        [
-          challengeId,
-          normalizedIdentity,
-          purpose,
-          generated.answerK,
-          generated.tolerance,
-          expirySeconds,
-        ],
-      );
-      if (generated.circuitParameters) {
-        await connection.execute(
-          'INSERT INTO registration_challenge_circuits (challenge_id, parameters) VALUES (?, ?)',
-          [challengeId, JSON.stringify(generated.circuitParameters)],
-        );
-      }
-      result = {
+      [
         challengeId,
-        expiresAt: new Date(expirySeconds * 1000).toISOString(),
-        ...generated.publicChallenge,
-        communityAgreementVersion: COMMUNITY_AGREEMENT_VERSION,
-      };
+        normalizedIdentity,
+        purpose,
+        generated.answerK,
+        generated.tolerance,
+        expirySeconds,
+      ],
+    );
+    if (generated.circuitParameters) {
+      await connection.execute(
+        'INSERT INTO registration_challenge_circuits (challenge_id, parameters) VALUES (?, ?)',
+        [challengeId, JSON.stringify(generated.circuitParameters)],
+      );
     }
+    result = {
+      challengeId,
+      expiresAt: new Date(expirySeconds * 1000).toISOString(),
+      ...generated.publicChallenge,
+      communityAgreementVersion: COMMUNITY_AGREEMENT_VERSION,
+    };
     await connection.commit();
   } catch (error) {
     await connection.rollback();
@@ -259,23 +228,19 @@ async function issueAuthChallenge(pool, { identity, purpose, ip }) {
   } finally {
     connection.release();
   }
-  if (result instanceof Error) throw result;
-  // Bounded cleanup preserves current challenges and current rate-limit windows.
+  // Bounded cleanup preserves all current challenges.
   await pool.execute(
     'DELETE FROM registration_challenges WHERE expires_at < NOW() - INTERVAL 1 DAY LIMIT 100',
-  );
-  await pool.execute(
-    'DELETE FROM registration_challenge_rates WHERE window_start < UNIX_TIMESTAMP(NOW()) - 86400 LIMIT 100',
   );
   return result;
 }
 
-async function issueRegistrationChallenge(pool, { email, ip }) {
-  return issueAuthChallenge(pool, { identity: email, purpose: 'register', ip });
+async function issueRegistrationChallenge(pool, { email }) {
+  return issueAuthChallenge(pool, { identity: email, purpose: 'register' });
 }
 
-async function issueLoginChallenge(pool, { identifier, ip }) {
-  return issueAuthChallenge(pool, { identity: identifier, purpose: 'login', ip });
+async function issueLoginChallenge(pool, { identifier }) {
+  return issueAuthChallenge(pool, { identity: identifier, purpose: 'login' });
 }
 
 // The caller must hold a transaction. Errors are RETURNED so incorrect answers
@@ -367,8 +332,6 @@ async function recordCommunityAgreement(connection, userId) {
 module.exports = {
   COMMUNITY_AGREEMENT_VERSION,
   CHALLENGE_TTL_SECONDS,
-  EMAIL_CHALLENGE_LIMIT,
-  IP_CHALLENGE_LIMIT,
   assertCommunityAgreement,
   generateBandChallenge,
   generateWienChallenge,

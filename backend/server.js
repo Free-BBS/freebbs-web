@@ -4110,7 +4110,6 @@ app.post('/api/auth/registration-challenge', async (request, response) => {
   try {
     const challenge = await issueRegistrationChallenge(pool, {
       email: request.body?.email,
-      ip: request.ip,
     });
     response.json(challenge);
   } catch (error) {
@@ -4357,7 +4356,6 @@ app.post('/api/auth/login-challenge', async (request, response) => {
     response.json(
       await issueLoginChallenge(pool, {
         identifier: request.body?.identifier,
-        ip: request.ip,
       }),
     );
   } catch (error) {
