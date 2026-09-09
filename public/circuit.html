@@ -228,14 +228,14 @@
             </aside>
             <div class="circuit-canvas-panel">
               <div class="circuit-canvas-toolbar">
-                <p id="circuit-canvas-help">拖动元件调整位置；依次点击两个引脚连线。</p>
+                <p id="circuit-canvas-help">从引脚拖到另一引脚或导线即可接通；也可依次点击连线。</p>
                 <button id="circuit-cancel-wire" type="button" hidden>取消连线</button
                 ><span id="circuit-count">0 个元件</span>
               </div>
               <div class="circuit-stage" id="circuit-stage" aria-label="电路原理图"></div>
               <p class="circuit-canvas-note">
-                选中导线后拖动圆点调整形状，点击 +
-                添加拐点。导线交叉不代表连接；请连接参考地，电流表串联、电压表并联。
+                拖动引脚即可连线，落在导线上会生成实心连接点。选中导线可从该处继续连线；
+                拖动圆点调整形状，点击 + 添加拐点。普通交叉不接通，实心圆点才表示连接。
               </p>
             </div>
             <aside class="circuit-inspector" aria-labelledby="circuit-inspector-title">
@@ -247,6 +247,7 @@
                   <button id="circuit-rotate" type="button">旋转 90°</button
                   ><button id="circuit-delete" type="button">删除元件</button
                   ><button id="circuit-reset-wire" type="button" hidden>恢复自动走线</button>
+                  <button id="circuit-start-wire" type="button" hidden>从此处连线</button>
                 </div>
                 <form id="circuit-parameters" novalidate></form>
                 <h3>引脚与连接</h3>
@@ -345,6 +346,11 @@
                 >
               </div>
             </form>
+            <p id="circuit-sampling-count" class="circuit-parameter-hint"></p>
+            <div id="circuit-source-advice" class="circuit-source-advice" hidden>
+              <p id="circuit-source-advice-text" role="status"></p>
+              <button id="circuit-source-transient" type="button" hidden>设置合适的瞬态采样</button>
+            </div>
             <p id="circuit-run-status" class="circuit-status" role="status" aria-live="polite">
               选择分析方式，然后运行仿真。
             </p>
@@ -417,9 +423,9 @@
               Ebers–Moll、MOS 长沟道平方律，以及有限增益和限幅运放。它不是完整工艺 SPICE 模型。
             </p>
             <p>
-              参数使用 SI 单位，例如 1 kΩ 输入 1000，1 μF 输入 1e-6。最多 80 个元件、200 条导线和
-              2000
-              个分析点。仿真遇到浮空节点、非收敛或非法表达式时会报告错误，不生成替代曲线。非线性元件可填写
+              参数使用 SI 单位，例如 1 kΩ 输入 1000，1 μF 输入 1e-6。最多 80 个元件、200 条导线；
+              瞬态最多 100001 个采样点，参数扫描和 AC 扫描最多 2000 点。
+              仿真遇到浮空节点、非收敛或非法表达式时会报告错误，不生成替代曲线。非线性元件可填写
               i=k*u^3 等安全数学表达式。
             </p>
             <p>
@@ -440,6 +446,7 @@
     <script src="/app.js"></script>
     <script src="/circuit-engine.js"></script>
     <script src="/circuit-renderer.js"></script>
+    <script src="/circuit-wiring.js"></script>
     <script src="/circuit.js"></script>
     <script src="/notifications.js"></script>
   </body>

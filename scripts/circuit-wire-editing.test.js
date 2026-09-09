@@ -363,3 +363,154 @@ test('read-only diagrams expose no wire editing controls or pointer handlers', (
   state.find('data-wire-id', 'w1').dispatch('dblclick', { clientX: 260, clientY: 200 });
   assert.equal(state.changes.length, 0);
 });
+
+function pinHit(state, componentId, pin) {
+  return state
+    .find('data-component-id', componentId)
+    .all((element) => element.getAttribute('data-pin') === String(pin))[0];
+}
+
+test('junctions render one centered accessible solid pin without labels, boxes or current arrows', () => {
+  const document = sample();
+  document.components.push({ id: 'J1', type: 'junction', x: 260, y: 200, params: {} });
+  const clicked = [];
+  const state = harness(document, { onPinClick: (endpoint) => clicked.push(endpoint) });
+  const node = state.find('data-component-id', 'J1');
+  assert.equal(node.all((element) => element.tagName === 'text').length, 0);
+  assert.equal(node.all((element) => element.tagName === 'rect').length, 0);
+  const pin = pinHit(state, 'J1', 0);
+  assert.equal(pin.getAttribute('cx'), '0');
+  assert.equal(pin.getAttribute('cy'), '0');
+  pin.dispatch('click');
+  assert.equal(JSON.stringify(clicked), '[{"componentId":"J1","pin":0}]');
+  state.rendered.updateFrame({ voltages: {}, currents: { J1: 1 } });
+  assert.equal(
+    node.all((element) => element.getAttribute('class') === 'circuit-current').length,
+    0,
+  );
+});
+
+test('selected wires report projected click positions; connection mode disables editing and previews snap targets', () => {
+  const clicks = [];
+  const state = harness(sample(), {
+    wireStart: { componentId: 'V1', pin: 0 },
+    onWireClick: (id, position) => clicks.push({ id, position }),
+  });
+  assert.equal(state.find('data-wire-point', 0), undefined);
+  const wire = state.find('data-wire-hit', 'w1');
+  wire.dispatch('pointermove', { clientX: 266, clientY: 200 });
+  const preview = state.find('data-connection-preview', '');
+  assert.equal(preview.getAttribute('visibility'), 'visible');
+  assert.match(preview.children[0].getAttribute('d'), /M 140 100/);
+  assert.match(preview.children[1].getAttribute('d'), /M 60 100 .*260/);
+  assert.equal(preview.children[2].getAttribute('cx'), '260');
+  assert.equal(preview.children[2].getAttribute('cy'), '200');
+  wire.dispatch('click', { clientX: 266, clientY: 200 });
+  assert.equal(JSON.stringify(clicks), '[{"id":"w1","position":{"x":260,"y":200}}]');
+  assert.equal(state.changes.length, 0);
+  pinHit(state, 'R1', 0).dispatch('pointermove', { clientX: 360, clientY: 300 });
+  assert.equal(preview.children[0].getAttribute('d'), '');
+  assert.equal(preview.children[2].getAttribute('cx'), '360');
+});
+
+test('pending wire origins preview without mutating the stored wire or creating junctions', () => {
+  const document = sample();
+  const before = JSON.stringify(document);
+  const state = harness(document, { wireStart: { wireId: 'w1', position: { x: 260, y: 200 } } });
+  state.rendered.svg.dispatch('pointermove', { clientX: 600, clientY: 450 });
+  const preview = state.find('data-connection-preview', '');
+  assert.match(preview.children[1].getAttribute('d'), /^M 260 200 /);
+  assert.equal(JSON.stringify(document), before);
+  assert.equal(state.changes.length, 0);
+});
+
+test('mouse and touch pin drags connect to wires or pins once on release while light clicks retain their behavior', () => {
+  for (const pointerType of ['mouse', 'touch']) {
+    const connections = [];
+    const clicks = [];
+    const state = harness(sample(), {
+      onConnect: (from, target) => connections.push({ from, target }),
+      onPinClick: (endpoint) => clicks.push(endpoint),
+    });
+    const pin = pinHit(state, 'V1', 0);
+    const drag = (x, y) => {
+      pin.dispatch('pointerdown', { clientX: 60, clientY: 100, pointerType });
+      assert.equal(connections.length, clicks.length);
+      pin.dispatch('pointermove', { clientX: x, clientY: y, pointerType });
+      assert.equal(
+        connections.length,
+        clicks.length,
+        'drag previews do not invoke owner callbacks',
+      );
+      pin.dispatch('pointerup', { clientX: x, clientY: y, pointerType });
+      pin.dispatch('click');
+    };
+    drag(265, 200);
+    assert.equal(
+      JSON.stringify(connections[0]),
+      '{"from":{"componentId":"V1","pin":0},"target":{"wireId":"w1","position":{"x":260,"y":200}}}',
+    );
+    assert.equal(clicks.length, 0, 'the synthetic click after a drag cannot start a second wire');
+    connections.length = 0;
+    drag(360, 300);
+    assert.equal(
+      JSON.stringify(connections[0]),
+      '{"from":{"componentId":"V1","pin":0},"target":{"endpoint":{"componentId":"R1","pin":0}}}',
+    );
+    pin.dispatch('pointerdown', { clientX: 60, clientY: 100, pointerType });
+    pin.dispatch('pointerup', { clientX: 60, clientY: 100, pointerType });
+    pin.dispatch('click');
+    assert.equal(clicks.length, 1);
+  }
+});
+
+test('blank drops, Escape, pointer cancellation and lost capture leave no partial connection', () => {
+  for (const finish of ['blank', 'Escape', 'pointercancel', 'lostpointercapture']) {
+    const connections = [];
+    const clicks = [];
+    const state = harness(sample(), {
+      onConnect: (...args) => connections.push(args),
+      onPinClick: (...args) => clicks.push(args),
+    });
+    const pin = pinHit(state, 'V1', 0);
+    pin.dispatch('pointerdown', { clientX: 60, clientY: 100, pointerType: 'touch' });
+    pin.dispatch('pointermove', { clientX: 700, clientY: 500, pointerType: 'touch' });
+    if (finish === 'Escape') pin.dispatch('keydown', { key: 'Escape' });
+    else if (finish !== 'blank') pin.dispatch(finish);
+    pin.dispatch('pointerup', { clientX: 700, clientY: 500, pointerType: 'touch' });
+    pin.dispatch('click');
+    assert.equal(connections.length, 0, finish);
+    assert.equal(clicks.length, 0, finish);
+    assert.equal(state.find('data-connection-preview', '').getAttribute('visibility'), 'hidden');
+    assert.equal(state.changes.length, 0, finish);
+  }
+});
+
+test('dragging a junction moves its connected wire ends; cancellation restores the original geometry', () => {
+  for (const finish of ['pointerup', 'pointercancel', 'Escape', 'lostpointercapture']) {
+    const document = sample();
+    document.components.push({ id: 'J1', type: 'junction', x: 260, y: 200, params: {} });
+    document.wires[0].to = { componentId: 'J1', pin: 0 };
+    document.wires[0].points = [];
+    const moves = [];
+    const connections = [];
+    const state = harness(document, {
+      onMove: (...args) => moves.push(args),
+      onConnect: (...args) => connections.push(args),
+    });
+    const pin = pinHit(state, 'J1', 0);
+    pin.dispatch('pointerdown', { clientX: 260, clientY: 200, pointerType: 'touch' });
+    pin.dispatch('pointermove', { clientX: 290, clientY: 230, pointerType: 'touch' });
+    assert.equal(state.find('data-wire-id', 'w1').getAttribute('d'), 'M 140 100 L 290 230');
+    assert.equal(moves.length, 0, 'moving previews locally until release');
+    assert.equal(document.components.at(-1).x, 260, 'the preview cannot mutate the saved draft');
+    if (finish === 'Escape') pin.dispatch('keydown', { key: 'Escape' });
+    else pin.dispatch(finish, { clientX: 290, clientY: 230 });
+    if (finish === 'pointerup') assert.deepEqual(moves, [['J1', 290, 230]]);
+    else {
+      assert.equal(moves.length, 0, finish);
+      assert.equal(state.find('data-wire-id', 'w1').getAttribute('d'), 'M 140 100 L 260 200');
+    }
+    assert.equal(connections.length, 0, 'junction movement must not create an extra wire');
+  }
+});

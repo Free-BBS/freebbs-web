@@ -113,3 +113,55 @@ test('storage uses the engine validator for components, wiring, scans and safe e
   badType.document.components[0].type = 'script';
   assert.throws(() => validateCircuitInput(badType));
 });
+
+test('create and update validation preserve junction wiring and high resolution sine analysis', () => {
+  const body = input();
+  body.document.components = [
+    {
+      id: 'V1',
+      type: 'voltage',
+      x: 100,
+      y: 100,
+      params: { dc: 0, waveform: 'sine', amplitude: 12, frequency: 10000, duty: 50 },
+    },
+    { id: 'R1', type: 'resistor', x: 300, y: 100, params: { resistance: 1000 } },
+    { id: 'G1', type: 'ground', x: 300, y: 200 },
+    { id: 'J1', type: 'junction', x: 200, y: 100, rotation: 0, params: {} },
+  ];
+  body.document.wires = [
+    {
+      id: 'w1',
+      from: { componentId: 'V1', pin: 0 },
+      to: { componentId: 'J1', pin: 0 },
+      points: [{ x: 150, y: 100 }],
+    },
+    {
+      id: 'w2',
+      from: { componentId: 'J1', pin: 0 },
+      to: { componentId: 'R1', pin: 0 },
+      points: [],
+    },
+    { id: 'w3', from: { componentId: 'R1', pin: 1 }, to: { componentId: 'G1', pin: 0 } },
+    { id: 'w4', from: { componentId: 'V1', pin: 1 }, to: { componentId: 'G1', pin: 0 } },
+  ];
+  body.document.analysis = { type: 'transient', stop: 0.1, step: 1e-6, initial: 'operating-point' };
+  const before = JSON.stringify(body);
+  const created = validateCircuitInput(body);
+  assert.deepEqual(created.document.components[3], body.document.components[3]);
+  assert.deepEqual(created.document.wires, body.document.wires);
+  assert.deepEqual(created.document.analysis, body.document.analysis);
+  assert.equal(created.document.components[0].params.duty, 50);
+  const updated = validateCircuitInput({ ...created, expectedRevision: 1 }, { updating: true });
+  assert.deepEqual(JSON.parse(JSON.stringify(updated.document)), created.document);
+  assert.equal(JSON.stringify(body), before);
+
+  const invalidPin = structuredClone(body);
+  invalidPin.document.wires[0].to.pin = 1;
+  assert.throws(() => validateCircuitInput(invalidPin), /引脚/);
+  const invalidJunction = structuredClone(body);
+  invalidJunction.document.components[3].params.resistance = 1;
+  assert.throws(() => validateCircuitInput(invalidJunction), /不支持参数/);
+  const invalidPoints = structuredClone(body);
+  invalidPoints.document.analysis.stop = 0.100001;
+  assert.throws(() => validateCircuitInput(invalidPoints), /100001/);
+});

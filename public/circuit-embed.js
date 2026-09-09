@@ -93,7 +93,11 @@
     const delta = state.lastTick ? Math.min(timestamp - state.lastTick, 100) : 0;
     state.lastTick = timestamp;
     state.playPosition =
-      (state.playPosition + (delta / 8000) * state.result.frames.length) %
+      (state.playPosition +
+        engine.playbackFrameStep(state.circuit.document, state.result, {
+          duration: 8000,
+          frameInterval: delta,
+        })) %
       state.result.frames.length;
     const index = Math.floor(state.playPosition);
     if (index !== state.frame) drawFrame(index);
@@ -104,7 +108,13 @@
     state.playing = true;
     state.playPosition = state.frame;
     state.lastTick = 0;
-    play.textContent = '暂停';
+    const frameInterval = 1000 / 60;
+    const frameStep = engine.playbackFrameStep(state.circuit.document, state.result, {
+      duration: 8000,
+      frameInterval,
+    });
+    play.textContent =
+      frameStep < (frameInterval / 8000) * state.result.frames.length ? '暂停 · 慢放' : '暂停';
     play.setAttribute('aria-pressed', 'true');
     root.classList.remove('is-paused');
     state.animation = window.requestAnimationFrame(tick);

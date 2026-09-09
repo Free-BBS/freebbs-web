@@ -83,6 +83,52 @@ test('resistor divider obeys KCL; ideal voltage and current meters do not load t
   assert.equal(nets.pinNets['V1:1'], '0');
 });
 
+test('junction wire splits preserve circuit values and allow branches without grounding or extra traces', () => {
+  const document = series('resistor', { resistance: 1000 });
+  const baseline = engine.simulate(document);
+  document.components.push({ id: 'J1', type: 'junction' });
+  const wire = document.wires[1];
+  const end = wire.to;
+  wire.to = { componentId: 'J1', pin: 0 };
+  document.wires.push({ id: 'wSplit', from: { componentId: 'J1', pin: 0 }, to: end });
+  const result = engine.simulate(document);
+  assert.deepEqual(result.traces, baseline.traces);
+  assert.equal(Object.hasOwn(result.frames[0].currents, 'J1'), false);
+  const nets = engine.buildNets(document);
+  assert.equal(nets.pinNets['J1:0'], nets.pinNets['R1:1']);
+  assert.equal(nets.pinNets['J1:0'], nets.pinNets['X1:0']);
+  assert.notEqual(nets.pinNets['J1:0'], '0');
+  document.components.push({ id: 'Rload', type: 'resistor', params: { resistance: 1000 } });
+  document.wires.push(
+    { id: 'wBranch', from: { componentId: 'J1', pin: 0 }, to: { componentId: 'Rload', pin: 0 } },
+    { id: 'wReturn', from: { componentId: 'Rload', pin: 1 }, to: { componentId: 'GND', pin: 0 } },
+  );
+  near(value(engine.simulate(document), 'V:Rload'), 5 / 3);
+});
+
+test('orphan junctions and junction-only wire chains do not add floating electrical unknowns', () => {
+  const document = series('resistor', { resistance: 1000 });
+  const baseline = engine.simulate(document);
+  document.components.push({ id: 'J1', type: 'junction' });
+  assert.deepEqual(engine.simulate(document).traces, baseline.traces);
+  document.components.push({ id: 'J2', type: 'junction' }, { id: 'J3', type: 'junction' });
+  document.wires.push(
+    { id: 'wOrphan1', from: { componentId: 'J1', pin: 0 }, to: { componentId: 'J2', pin: 0 } },
+    { id: 'wOrphan2', from: { componentId: 'J2', pin: 0 }, to: { componentId: 'J3', pin: 0 } },
+  );
+  assert.deepEqual(engine.simulate(document).traces, baseline.traces);
+  // A real floating component must still contribute its pins to the solve.
+  document.components.push({ id: 'Rfloating', type: 'resistor' });
+  document.wires.push({
+    id: 'wFloating',
+    from: { componentId: 'Rfloating', pin: 0 },
+    to: { componentId: 'J3', pin: 0 },
+  });
+  assert.throws(() => engine.simulate(document), /浮空/);
+  document.wires.pop();
+  assert.throws(() => engine.simulate(document), /浮空/);
+});
+
 test('RC step uses zero initial capacitor voltage and converges to analytical exponential', () => {
   const document = series('capacitor', { capacitance: 1e-6 });
   const result = engine.simulate(document, {
@@ -467,6 +513,271 @@ test('sine/pulse source transient values honor DC offset, phase, delay and duty'
   assert.deepEqual(pulse.traces.find((trace) => trace.id === 'V:V1').values, [0, 5, 5, 5, 0, 0]);
 });
 
+test('voltage and current sine sources match their analytic waveform at every transient sample', () => {
+  for (const type of ['voltage', 'current']) {
+    const params = {
+      dc: type === 'voltage' ? 1 : 0.001,
+      waveform: 'sine',
+      amplitude: type === 'voltage' ? 3 : 0.003,
+      frequency: 250,
+      phase: 45,
+      delay: 0.0002,
+    };
+    const document = circuit(
+      [
+        ['S1', type, params],
+        ['R1', 'resistor', { resistance: 1000 }],
+        ['G1', 'ground'],
+      ],
+      [
+        ['S1:0', 'R1:0'],
+        ['S1:1', 'G1:0'],
+        ['R1:1', 'G1:0'],
+      ],
+      { type: 'transient', stop: 0.002, step: 0.00001 },
+    );
+    const result = engine.simulate(document);
+    result.x.forEach((time, index) => {
+      const expected =
+        time < params.delay
+          ? params.dc
+          : params.dc +
+            params.amplitude *
+              Math.sin(
+                2 * Math.PI * (params.frequency * (time - params.delay) + params.phase / 360),
+              );
+      near(value(result, `${type === 'voltage' ? 'V' : 'I'}:S1`, index), expected, 1e-10);
+      near(value(result, 'V:R1', index), type === 'voltage' ? expected : -1000 * expected, 1e-9);
+    });
+  }
+});
+
+test('source advice detects aliasing and preserves the transient window while refining its step', () => {
+  const document = series(
+    'resistor',
+    {},
+    { dc: 0, waveform: 'sine', amplitude: 12, frequency: 10000 },
+  );
+  document.analysis = { type: 'transient', stop: 0.1, step: 0.0001, initial: 'operating-point' };
+  const original = JSON.stringify(document);
+  const coarse = engine.simulate(document);
+  assert.ok(
+    Math.max(...coarse.traces.find((trace) => trace.id === 'V:V1').values.map(Math.abs)) < 1e-8,
+  );
+  assert.ok(coarse.warnings.some((warning) => /每周期仅 1 个采样点.*混叠/.test(warning)));
+  const advice = engine.sourceAnalysisAdvice(document);
+  assert.deepEqual(advice.suggestedAnalysis, {
+    type: 'transient',
+    stop: 0.1,
+    step: 0.000001,
+    initial: 'operating-point',
+  });
+  assert.equal(JSON.stringify(document), original);
+  assert.deepEqual(engine.sourceAnalysisAdvice(document, advice.suggestedAnalysis), {
+    warnings: [],
+    suggestedAnalysis: advice.suggestedAnalysis,
+  });
+});
+
+test('source advice explains DC and sweep semantics and samples narrow pulses densely', () => {
+  const document = series(
+    'resistor',
+    {},
+    { dc: 0, waveform: 'sine', amplitude: 1, frequency: 1000 },
+  );
+  const dc = engine.sourceAnalysisAdvice(document);
+  assert.ok(dc.warnings.some((warning) => /直流工作点.*直流偏置/.test(warning)));
+  assert.deepEqual(dc.suggestedAnalysis, {
+    type: 'transient',
+    stop: 0.01,
+    step: 0.00001,
+    initial: 'zero',
+  });
+  const sweep = engine.sourceAnalysisAdvice(document, {
+    type: 'sweep',
+    componentId: 'R1',
+    parameter: 'resistance',
+    start: 100,
+    stop: 1000,
+    points: 3,
+  });
+  assert.ok(sweep.warnings.some((warning) => /直流扫描/.test(warning)));
+  document.components[0].params.waveform = 'pulse';
+  document.components[0].params.duty = 0.001;
+  const pulse = engine.sourceAnalysisAdvice(document, {
+    type: 'transient',
+    stop: 0.001,
+    step: 0.00001,
+  });
+  near(pulse.suggestedAnalysis.step, 1e-7, 1e-20);
+  assert.ok(pulse.warnings.some((warning) => /漏掉脉冲/.test(warning)));
+});
+
+test('source advice includes delayed sources, identifies slow sources and refuses impossible windows', () => {
+  const document = series(
+    'resistor',
+    {},
+    { dc: 0, waveform: 'sine', amplitude: 1, frequency: 10000 },
+  );
+  document.components.push({
+    id: 'I1',
+    type: 'current',
+    params: { waveform: 'sine', frequency: 10, delay: 0.002 },
+  });
+  let advice = engine.sourceAnalysisAdvice(document);
+  near(advice.suggestedAnalysis.stop, 0.003, 1e-15);
+  assert.ok(advice.warnings.some((warning) => /I1.*较慢波形.*不足一个完整周期/.test(warning)));
+  document.components[0].params.delay = 1;
+  advice = engine.sourceAnalysisAdvice(document, { type: 'transient', stop: 0.01, step: 0.00001 });
+  assert.equal(advice.suggestedAnalysis, null);
+  assert.ok(advice.warnings.some((warning) => /启动延迟不小于/.test(warning)));
+  assert.ok(advice.warnings.some((warning) => /无法在 100001 个采样点内兼顾/.test(warning)));
+  document.components[0].params.amplitude = 0;
+  document.components.at(-1).params.amplitude = 0;
+  assert.deepEqual(engine.sourceAnalysisAdvice(document), {
+    warnings: [],
+    suggestedAnalysis: null,
+  });
+});
+
+test('source advice can relax an unnecessarily tiny step to include delayed excitation', () => {
+  const document = series('resistor', {}, { dc: 0, waveform: 'sine', frequency: 1000, delay: 0.1 });
+  const advice = engine.sourceAnalysisAdvice(document, {
+    type: 'transient',
+    stop: 0.00001,
+    step: 1e-9,
+  });
+  near(advice.suggestedAnalysis.step, 0.00001);
+  near(advice.suggestedAnalysis.stop, 0.11);
+});
+
+test('playback limits skipping to twenty displayed frames per source period', () => {
+  const document = series('resistor', {}, { dc: 0, waveform: 'sine', frequency: 10000 });
+  const result = {
+    analysis: { type: 'transient', stop: 0.1, step: 1e-6 },
+    x: new Array(100001),
+  };
+  assert.equal(engine.playbackFrameStep(document, result), 5);
+  assert.equal(engine.playbackFrameStep(document, result, { frameInterval: 1000 }), 5);
+  assert.equal(engine.playbackFrameStep(document, result, { frameInterval: 0 }), 0);
+  result.x.length = 101;
+  near(engine.playbackFrameStep(document, result), (101 * 50) / 8000);
+  result.analysis.step = 0.0001;
+  assert.equal(engine.playbackFrameStep(document, result, { frameInterval: 1000 }), 1);
+  document.components[0].params.amplitude = 0;
+  near(engine.playbackFrameStep(document, result, { frameInterval: 1000 }), 101 / 8);
+});
+
+test('duty bounds apply only to pulse while every waveform still requires a finite numeric duty', () => {
+  const document = series('resistor', {}, { waveform: 'sine', duty: 50 });
+  assert.equal(engine.validateDocument(document).components[0].params.duty, 50);
+  document.components[0].params.waveform = 'dc';
+  assert.equal(engine.validateDocument(document).components[0].params.duty, 50);
+  document.components[0].params.waveform = 'pulse';
+  for (const duty of [0, 1, 50, -1]) {
+    document.components[0].params.duty = duty;
+    assert.throws(() => engine.validateDocument(document), /duty/);
+  }
+  for (const waveform of ['sine', 'dc', 'pulse']) {
+    document.components[0].params.waveform = waveform;
+    for (const duty of [NaN, Infinity, '0.5']) {
+      document.components[0].params.duty = duty;
+      assert.throws(() => engine.validateDocument(document), /duty/);
+    }
+  }
+  delete document.components[0].params.duty;
+  assert.equal(engine.validateDocument(document).components[0].params.duty, 0.5);
+});
+
+test('transient supports 20000 and 100001 points while scans keep their separate limit', () => {
+  assert.deepEqual(engine.limits, { maxTransientPoints: 100001, maxSweepPoints: 2000 });
+  const document = series('resistor');
+  for (const points of [20000, 100001]) {
+    const result = engine.simulate(document, {
+      type: 'transient',
+      stop: (points - 1) * 1e-6,
+      step: 1e-6,
+    });
+    assert.equal(result.x.length, points);
+    near(value(result, 'V:X1', -1), 2.5);
+  }
+  assert.throws(
+    () => engine.simulate(document, { type: 'transient', stop: 0.100001, step: 1e-6 }),
+    /100001/,
+  );
+  assert.throws(
+    () => engine.simulate(document, { type: 'ac', start: 1, stop: 1000, points: 2001 }),
+    /2000/,
+  );
+});
+
+test('result memory budget rejects many parallel channels before allocation without changing document limits', () => {
+  const parts = [
+    ['V1', 'voltage'],
+    ['G1', 'ground'],
+  ];
+  const links = [['V1:1', 'G1:0']];
+  for (let index = 0; index < 78; index += 1) {
+    parts.push([`R${index}`, 'resistor']);
+    links.push(['V1:0', `R${index}:0`], [`R${index}:1`, 'G1:0']);
+  }
+  const document = circuit(parts, links, { type: 'transient', stop: 0.1, step: 1e-6 });
+  assert.equal(engine.validateDocument(document).components.length, 80);
+  assert.throws(() => engine.simulate(document), /结果数据量.*减少采样点或元件数量/);
+  const ac = engine.simulate(document, { type: 'ac', start: 1, stop: 10000, points: 2000 });
+  assert.equal(ac.x.length, 2000);
+  assert.equal(ac.frames.length, 1);
+});
+
+test('adequately sampled bridge rectification recovers the full-wave output at 100001 points', () => {
+  const document = circuit(
+    [
+      ['Vin', 'voltage', { dc: 0, waveform: 'sine', amplitude: 12, frequency: 10000 }],
+      ['Rs', 'resistor', { resistance: 50 }],
+      ['RL', 'resistor', { resistance: 50 }],
+      ['Dap', 'diode'],
+      ['Dbp', 'diode'],
+      ['Dna', 'diode'],
+      ['Dnb', 'diode'],
+      ['G1', 'ground'],
+    ],
+    [
+      ['Vin:0', 'Rs:0'],
+      ['Rs:1', 'Dap:0'],
+      ['Rs:1', 'Dna:1'],
+      ['Vin:1', 'Dbp:0'],
+      ['Vin:1', 'Dnb:1'],
+      ['Vin:1', 'G1:0'],
+      ['Dap:1', 'Dbp:1'],
+      ['Dap:1', 'RL:0'],
+      ['Dna:0', 'Dnb:0'],
+      ['Dna:0', 'RL:1'],
+    ],
+    { type: 'transient', stop: 0.1, step: 0.0001 },
+  );
+  const coarse = engine.simulate(document);
+  assert.ok(
+    Math.max(...coarse.traces.find((trace) => trace.id === 'V:RL').values.map(Math.abs)) < 1e-8,
+  );
+  const result = engine.simulate(document, engine.sourceAnalysisAdvice(document).suggestedAnalysis);
+  assert.equal(result.x.length, 100001);
+  near(value(result, 'V:Vin', 25), 12);
+  near(value(result, 'V:Vin', 75), -12);
+  // Independent scalar Shockley solution: |Vin| = I(Rs + RL) + 2 Vt ln(1 + I/Is).
+  let low = 0;
+  let high = 0.12;
+  for (let index = 0; index < 60; index += 1) {
+    const current = (low + high) / 2;
+    if (100 * current + 2 * 0.02585 * Math.log1p(current / 1e-12) < 12) low = current;
+    else high = current;
+  }
+  const expected = (50 * (low + high)) / 2;
+  near(value(result, 'V:RL', 25), expected, 1e-7);
+  near(value(result, 'V:RL', 75), expected, 1e-7);
+  near(value(result, 'V:RL', 99975), expected, 1e-7);
+  assert.ok(!result.warnings.some((warning) => /混叠/.test(warning)));
+});
+
 test('expression code injection, malformed AST, nonfinite values and unsafe identifiers are rejected', () => {
   for (const expression of [
     'globalThis.alert(1)',
@@ -559,7 +870,7 @@ test('analysis limits reject excessive work, invalid sweeps and invalid frequenc
   const document = series('resistor');
   assert.throws(
     () => engine.simulate(document, { type: 'transient', stop: 1, step: 1e-9 }),
-    /2000/,
+    /100001/,
   );
   assert.throws(
     () => engine.simulate(document, { type: 'ac', start: 0, stop: 100, points: 10 }),

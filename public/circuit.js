@@ -4,6 +4,7 @@
   const app = window.freeBbsApp;
   const engine = window.FreeBbsCircuitEngine;
   const renderer = window.FreeBbsCircuitRenderer;
+  const wiring = window.FreeBbsCircuitWiring;
   const params = new URLSearchParams(window.location.search);
   const listPage = window.location.pathname.replace(/\/$/, '') === '/circuits';
   const $ = (id) => document.getElementById(`circuit-${id}`);
@@ -34,12 +35,12 @@
     inductance: '电感 / H',
     dc: '直流偏置',
     waveform: '波形',
-    amplitude: '波形幅度',
+    amplitude: '波形峰值',
     frequency: '频率 / Hz',
     phase: '相位 / °',
     duty: '占空比 / 0–1',
     delay: '延迟 / s',
-    acAmplitude: 'AC 幅度',
+    acAmplitude: 'AC 小信号峰值',
     gain: '增益',
     control: '控制电流元件',
     is: '饱和电流 Is / A',
@@ -69,6 +70,7 @@
     editVersion: 0,
     selectedId: '',
     selectedWire: '',
+    wireAnchor: null,
     wireStart: null,
     schematic: null,
     result: null,
@@ -204,6 +206,8 @@
     $('delete').disabled = !state.editable || (!state.selectedId && !state.selectedWire);
     $('reset-wire').hidden = !state.selectedWire;
     $('reset-wire').disabled = !state.editable;
+    $('start-wire').hidden = !state.selectedWire || Boolean(state.wireStart);
+    $('start-wire').disabled = !state.editable;
     $('palette')
       .querySelectorAll('button')
       .forEach((button) => {
@@ -235,19 +239,21 @@
       $('reference-text').value = '';
       $('reference-text').hidden = true;
     }
+    const junctions = state.document.components.filter((item) => item.type === 'junction').length;
     $('count').textContent =
-      `${state.document.components.length} 个元件 · ${state.document.wires.length} 条导线`;
+      `${state.document.components.length - junctions} 个元件${junctions ? ` · ${junctions} 个连接点` : ''} · ${state.document.wires.length} 条导线`;
     const identifier = state.cid ? `${state.cid} · 版本 ${state.revision}` : '尚未保存';
     const owner = state.owner?.username ? ` · ${state.owner.username}` : '';
     const mode = state.editable ? '保存后可通过 CID 公开访问' : '只读视图 · 可复制为新电路';
     $('document-meta').textContent = `${identifier}${owner} · ${mode}`;
     $('cancel-wire').hidden = !state.wireStart;
-    let help = '拖动元件调整位置；依次点击两个引脚连线。';
+    let help = '从引脚拖到另一引脚或导线即可接通；也可依次点击连线。';
     if (state.wireStart)
-      help = `已选 ${state.wireStart.componentId} 的引脚 ${state.wireStart.pin + 1}，点击另一个引脚完成连接。`;
+      help = `${state.wireStart.wireId ? `从导线 ${state.wireStart.wireId}` : `从 ${state.wireStart.componentId} 的引脚 ${state.wireStart.pin + 1}`} 连线：点击目标引脚或导线，Esc 取消。`;
     if (!state.editable) help = '只读预览，可选中元件查看参数；复制后继续编辑。';
     $('canvas-help').textContent = help;
     updateExampleControls();
+    renderSourceAdvice();
   }
 
   function stopPlayback() {
@@ -307,11 +313,20 @@
         renderInspector();
         renderSchematic();
       },
-      onWireClick(id) {
+      onWireClick(id, position) {
+        if (state.wireStart) {
+          completeConnection(state.wireStart, { wireId: id, position });
+          return;
+        }
+        const wasSelected = state.selectedWire === id;
         state.selectedId = '';
         state.selectedWire = id;
+        state.wireAnchor = position;
         renderInspector();
-        renderSchematic();
+        if (!wasSelected) renderSchematic();
+      },
+      onConnect(fromEndpoint, target) {
+        completeConnection(fromEndpoint, target);
       },
       onWireChange(id, points) {
         if (!state.editable) return;
@@ -380,28 +395,77 @@
     const target = { componentId: endpoint.componentId, pin: endpoint.pin };
     if (!state.wireStart) {
       state.wireStart = target;
-      $('canvas-help').textContent =
-        `已选 ${target.componentId} 的引脚 ${target.pin + 1}，点击另一个引脚完成连接。`;
     } else {
-      const from = state.wireStart;
-      const samePin = (left, right) =>
-        left.componentId === right.componentId && left.pin === right.pin;
-      const duplicate = state.document.wires.some(
-        (wire) =>
-          (samePin(wire.from, from) && samePin(wire.to, target)) ||
-          (samePin(wire.from, target) && samePin(wire.to, from)),
-      );
-      if (samePin(from, target)) setStatus('已取消连线。');
-      else if (duplicate) setStatus('这两个引脚已经连接。');
-      else if (state.document.wires.length >= 200) setStatus('每个电路最多 200 条导线。', 'error');
-      else {
-        state.document.wires.push({ id: uniqueId('w'), from, to: target });
-        changed();
-        setStatus(`已连接 ${from.componentId} 与 ${target.componentId}。`);
-      }
-      state.wireStart = null;
-      $('canvas-help').textContent = '拖动元件调整位置；依次点击两个引脚连线。';
+      completeConnection(state.wireStart, { endpoint: target });
+      return;
     }
+    updateControls();
+    renderInspector();
+    renderSchematic();
+  }
+
+  function completeConnection(origin, target) {
+    if (!state.editable) return;
+    try {
+      if (origin.wireId && origin.wireId === target.wireId) {
+        setStatus('已取消：起点和终点位于同一条导线。');
+        return;
+      }
+      let { document } = state;
+      let from = origin;
+      if (origin.wireId) {
+        const split = wiring.connectToWire(document, origin.wireId, origin.position);
+        document = split.document;
+        from = split.endpoint;
+      }
+      if (target.wireId) {
+        document = wiring.connectToWire(document, target.wireId, target.position, {
+          fromEndpoint: from,
+        }).document;
+      } else {
+        const to = target.endpoint;
+        const samePin = (a, b) => a.componentId === b.componentId && a.pin === b.pin;
+        if (samePin(from, to)) {
+          setStatus('已取消连线。');
+          return;
+        }
+        const duplicate = document.wires.some(
+          (wire) =>
+            (samePin(wire.from, from) && samePin(wire.to, to)) ||
+            (samePin(wire.to, from) && samePin(wire.from, to)),
+        );
+        if (duplicate) {
+          setStatus('这两个连接点已经接通。');
+          return;
+        }
+        if (document.wires.length >= 200) throw new Error('每个电路最多 200 条导线。');
+        document = clone(document);
+        const ids = new Set([...document.components, ...document.wires].map((item) => item.id));
+        let index = 1;
+        while (ids.has(`w${index}`)) index += 1;
+        document.wires.push({ id: `w${index}`, from, to });
+      }
+      state.document = document;
+      state.selectedId = '';
+      state.selectedWire = '';
+      changed();
+      setStatus('导线已接通；实心圆点表示电气连接。');
+    } catch (error) {
+      setStatus(error.message, 'error');
+    } finally {
+      state.wireStart = null;
+      updateControls();
+      renderInspector();
+      renderSchematic();
+    }
+  }
+
+  function startFromWire() {
+    const wire = state.document.wires.find((item) => item.id === state.selectedWire);
+    if (!wire || !state.editable) return;
+    const route = renderer.getWireRoute(wire, state.document.components);
+    const position = state.wireAnchor || route[Math.floor(route.length / 2)];
+    state.wireStart = { wireId: wire.id, position };
     updateControls();
     renderInspector();
     renderSchematic();
@@ -409,6 +473,7 @@
 
   function renderPalette() {
     $('palette').innerHTML = Object.entries(engine.catalog)
+      .filter(([type]) => type !== 'junction')
       .map(
         ([type, item]) =>
           `<button type="button" data-add-component="${escapeHtml(type)}"><span class="circuit-palette-symbol" aria-hidden="true">${escapeHtml(prefixes[type])}</span>${escapeHtml(item.label)}</button>`,
@@ -445,7 +510,16 @@
     const field = options
       ? `<select data-parameter="${key}" ${state.editable ? '' : 'disabled'}>${options.map(([option, label]) => `<option value="${escapeHtml(option)}" ${option === value ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}</select>`
       : `<input data-parameter="${key}" type="${typeof value === 'number' ? 'number' : 'text'}" ${typeof value === 'number' ? 'step="any"' : 'maxlength="256"'} value="${escapeHtml(value)}" ${state.editable ? '' : 'readonly'} />`;
-    return `<label>${escapeHtml(parameterLabels[key] || key)}${field}</label>`;
+    let label = parameterLabels[key] || key;
+    if (['voltage', 'current'].includes(component.type)) {
+      const unit = component.type === 'voltage' ? 'V' : 'A';
+      if (key === 'dc')
+        label = `${component.params.waveform === 'dc' ? '直流值' : '直流偏置'} / ${unit}`;
+      if (key === 'amplitude')
+        label = `${component.params.waveform === 'pulse' ? '脉冲增量' : '正弦峰值'} / ${unit}`;
+      if (key === 'acAmplitude') label = `AC 小信号峰值 / ${unit}`;
+    }
+    return `<label>${escapeHtml(label)}${field}</label>`;
   }
 
   function wireLabel(wire) {
@@ -467,6 +541,14 @@
       : `导线 ${selectedWire.id}`;
     $('parameters').innerHTML = component
       ? Object.entries(component.params)
+          .filter(([key]) => {
+            if (!['voltage', 'current'].includes(component.type)) return true;
+            if (key === 'duty') return component.params.waveform === 'pulse';
+            return (
+              component.params.waveform !== 'dc' ||
+              !['amplitude', 'frequency', 'delay'].includes(key)
+            );
+          })
           .map(([key, value]) => parameterInput(component, key, value))
           .join('')
       : '';
@@ -475,9 +557,19 @@
         'beforeend',
         '<p class="circuit-parameter-hint">使用 u、k、数学运算和函数，例如 i=k*u^3。参数变化后可再次扫描特性。</p>',
       );
+    if (component && ['voltage', 'current'].includes(component.type)) {
+      $('parameters').insertAdjacentHTML(
+        'beforeend',
+        '<p id="circuit-source-parameter-hint" class="circuit-parameter-hint"></p>',
+      );
+      renderSourceParameterHint(component);
+    }
     if (selectedWire)
       $('parameters').innerHTML =
-        '<p class="circuit-parameter-hint">拖动圆点调整形状；点击 + 或双击线段添加拐点。选中圆点后用方向键微调、Delete 删除，Esc 取消拖动。</p>';
+        '<p class="circuit-parameter-hint">点击“从此处连线”，再点击另一条导线或引脚即可接通。拖动圆点调整形状；点击 + 或双击添加拐点，选中后可删除。</p>';
+    if (component?.type === 'junction')
+      $('parameters').innerHTML =
+        '<p class="circuit-parameter-hint">实心连接点将相连的导线电气接通。拖动圆点可移动连接点，轻点继续连线；删除圆点会移除它连接的导线。</p>';
     const wires = selectedWire
       ? [selectedWire]
       : state.document.wires.filter(
@@ -532,9 +624,75 @@
     event.target.setCustomValidity('');
     component.params[key] = value;
     changed();
+    if (key === 'waveform') {
+      renderInspector();
+      $('parameters').querySelector('[data-parameter="waveform"]')?.focus();
+    } else renderSourceParameterHint(component);
     renderSweepOptions();
     renderSchematic();
     setStatus(`已更新 ${component.id} 的${parameterLabels[key] || key}。`);
+  }
+
+  function renderSourceParameterHint(component) {
+    const hint = $('source-parameter-hint');
+    if (!hint || !['voltage', 'current'].includes(component.type)) return;
+    const p = component.params;
+    const unit = component.type === 'voltage' ? 'V' : 'A';
+    let text = '直流值用于 DC 工作点。';
+    if (p.waveform === 'sine') {
+      const amplitude = Math.abs(p.amplitude);
+      text = `正弦输出 = 直流偏置 + 峰值 × sin(2π × 频率 × (t − 延迟) + 相位)。范围 ${formatNumber(p.dc - amplitude, unit)} 至 ${formatNumber(p.dc + amplitude, unit)}；不需要占空比。`;
+    } else if (p.waveform === 'pulse') {
+      text = `脉冲在 ${formatNumber(p.dc, unit)} 与 ${formatNumber(p.dc + p.amplitude, unit)} 之间切换；占空比表示高电平占一个周期的比例。`;
+    }
+    hint.textContent = `${text} 时间波形使用“瞬态响应”；“AC 小信号峰值”只用于交流小信号分析。相位单位为度。`;
+  }
+
+  function renderSourceAdvice() {
+    const panel = $('source-advice');
+    if (!panel) return;
+    const button = $('source-transient');
+    button.hidden = true;
+    const { analysis } = state.document;
+    $('sampling-count').textContent =
+      analysis.type === 'transient'
+        ? `预计 ${Math.ceil(analysis.stop / analysis.step - 1e-10) + 1} 个采样点（含初始点），瞬态最多 ${engine.limits.maxTransientPoints} 点。`
+        : '';
+    try {
+      const advice = engine.sourceAnalysisAdvice(state.document);
+      $('source-advice-text').textContent = advice.warnings.join(' ');
+      if (
+        advice.suggestedAnalysis &&
+        JSON.stringify(advice.suggestedAnalysis) !== JSON.stringify(analysis)
+      ) {
+        const suggested = advice.suggestedAnalysis;
+        button.hidden = false;
+        button.disabled = !state.editable || Boolean(state.worker);
+        button.textContent = `设置合适的瞬态采样：步长 ${formatNumber(suggested.step, 's')}，截止 ${formatNumber(suggested.stop, 's')}`;
+        button.title = state.editable
+          ? '应用后可运行仿真；保存后才会更新电路版本。'
+          : '复制为新电路后可调整分析参数。';
+      }
+      panel.hidden = !advice.warnings.length && button.hidden;
+    } catch (error) {
+      panel.hidden = false;
+      $('source-advice-text').textContent = error.message;
+    }
+  }
+
+  function applySourceSampling() {
+    if (!state.editable || state.worker) return;
+    try {
+      const { suggestedAnalysis } = engine.sourceAnalysisAdvice(state.document);
+      if (!suggestedAnalysis) return;
+      state.document.analysis = suggestedAnalysis;
+      renderAnalysis();
+      changed();
+      renderSchematic();
+      setStatus('已应用瞬态采样设置，点击“运行仿真”查看波形。', '', 'run-status');
+    } catch (error) {
+      setStatus(error.message, 'error', 'run-status');
+    }
   }
 
   function renderSweepOptions() {
@@ -591,6 +749,7 @@
       const fieldGroup = element;
       fieldGroup.hidden = fieldGroup.dataset.analysis !== analysis.type;
     });
+    renderSourceAdvice();
   }
 
   function readAnalysis() {
@@ -1342,6 +1501,7 @@
       renderSchematic();
     });
     $('load-example').addEventListener('click', loadExample);
+    $('start-wire').addEventListener('click', startFromWire);
     $('reset-wire').addEventListener('click', () => {
       if (!state.editable) return;
       const wire = state.document.wires.find((item) => item.id === state.selectedWire);
@@ -1370,6 +1530,7 @@
       applyAnalysis();
     });
     $('run').addEventListener('click', runSimulation);
+    $('source-transient').addEventListener('click', applySourceSampling);
     $('stop').addEventListener('click', () => stopSimulation('仿真已取消。'));
     $('save').addEventListener('click', saveCircuit);
     $('copy').addEventListener('click', copyCircuit);
@@ -1394,14 +1555,20 @@
         return;
       }
       state.playing = true;
-      $('play').textContent = '暂停';
+      const frameStep = Math.max(
+        1,
+        Math.floor(
+          engine.playbackFrameStep(state.document, state.result, {
+            duration: 10000,
+            frameInterval: 50,
+          }),
+        ),
+      );
+      $('play').textContent =
+        frameStep < Math.max(1, Math.floor(state.result.x.length / 200)) ? '暂停 · 慢放' : '暂停';
       renderSchematic();
       state.animation = window.setInterval(() => {
-        if (state.result)
-          setFrame(
-            (state.frame + Math.max(1, Math.floor(state.result.x.length / 200))) %
-              state.result.x.length,
-          );
+        if (state.result) setFrame((state.frame + frameStep) % state.result.x.length);
       }, 50);
     });
     page
