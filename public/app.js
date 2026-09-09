@@ -374,6 +374,8 @@ function initializeDashboardShell() {
     '/course': '课程',
     '/knowledge': '知识点',
     '/discussion': '讨论区',
+    '/circuits': '电路实验室',
+    '/circuit': '电路仿真',
     '/workbench': '我的工作台',
     '/aichat': '问问 Max',
     '/development': '发展端',
@@ -394,6 +396,7 @@ function initializeDashboardShell() {
     { href: '/', icon: 'home', label: '首页' },
     { href: '/world', icon: 'map', label: '学习世界' },
     { href: '/discussion', icon: 'people', label: '讨论区' },
+    { href: '/circuits', icon: 'circuit', label: '电路实验室' },
     { href: '/workbench', icon: 'run', label: '我的工作台' },
     { href: '/aichat', icon: 'ai', label: '问问 Max' },
     { href: '/development', icon: 'star', label: '发展端' },
@@ -410,6 +413,8 @@ function initializeDashboardShell() {
     activePath = '/system-settings';
   } else if (['/course', '/knowledge'].includes(path)) {
     activePath = '/world';
+  } else if (path === '/circuit') {
+    activePath = '/circuits';
   }
 
   document.body.dataset.pageTitle = pageTitles[path] || 'FREE-BBS';
@@ -3798,6 +3803,35 @@ function addCodeRunButtons(root) {
   });
 }
 
+let circuitReferenceLoader;
+
+function enhanceCircuitReferences(root) {
+  if (!root.querySelector('a[href*="/circuit?"]')) return;
+  if (window.FreeBbsCircuitEmbeds) {
+    window.FreeBbsCircuitEmbeds.enhance(root);
+    return;
+  }
+  if (!circuitReferenceLoader) {
+    circuitReferenceLoader = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = '/circuit-embeds.js';
+      script.async = true;
+      script.onload = resolve;
+      script.onerror = () => {
+        script.remove();
+        circuitReferenceLoader = null;
+        reject(new Error('电路引用组件载入失败'));
+      };
+      document.head.append(script);
+    });
+  }
+  circuitReferenceLoader
+    .then(() => window.FreeBbsCircuitEmbeds?.enhance(root))
+    .catch(() => {
+      // The ordinary circuit link remains available if the optional preview cannot load.
+    });
+}
+
 function enhanceMarkdownContent(root, { interactiveCodeControls = true } = {}) {
   if (!root) {
     return;
@@ -3822,6 +3856,7 @@ function enhanceMarkdownContent(root, { interactiveCodeControls = true } = {}) {
     image.decoding = 'async';
     image.referrerPolicy = 'no-referrer';
   });
+  enhanceCircuitReferences(root);
 }
 
 function setAiChatStatus(message) {

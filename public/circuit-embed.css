@@ -1,0 +1,243 @@
+:root {
+  color-scheme: light dark;
+  --circuit-surface: #f8faf9;
+  --circuit-ink: #263f44;
+  --circuit-muted: #60757a;
+  --circuit-grid: #d6e1df;
+  --circuit-accent: #207f86;
+  --embed-background: #ffffff;
+  --embed-error: #b23834;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --circuit-surface: #102228;
+    --circuit-ink: #dfedf0;
+    --circuit-muted: #9db4bb;
+    --circuit-grid: #283e44;
+    --circuit-accent: #57bdc3;
+    --embed-background: #11292f;
+    --embed-error: #f4a19c;
+  }
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --circuit-surface: #102228;
+  --circuit-ink: #dfedf0;
+  --circuit-muted: #9db4bb;
+  --circuit-grid: #283e44;
+  --circuit-accent: #57bdc3;
+  --embed-background: #11292f;
+  --embed-error: #f4a19c;
+}
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+* {
+  box-sizing: border-box;
+}
+[hidden] {
+  display: none !important;
+}
+body {
+  margin: 0;
+  color: var(--circuit-ink);
+  background: var(--embed-background);
+}
+button,
+input {
+  font: inherit;
+}
+button,
+#embed-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 5px 10px;
+  border: 1px solid var(--circuit-grid);
+  border-radius: 7px;
+  background: var(--circuit-surface);
+  color: var(--circuit-ink);
+  font-size: 12px;
+  text-decoration: none;
+  cursor: pointer;
+}
+button:hover,
+#embed-open:hover {
+  border-color: var(--circuit-accent);
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+:focus-visible {
+  outline: 2px solid var(--circuit-accent);
+  outline-offset: 3px;
+}
+.circuit-embed {
+  min-width: 0;
+  padding: 14px;
+}
+.embed-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  gap: 10px 14px;
+}
+.embed-heading {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.embed-kind {
+  color: var(--circuit-accent);
+  font-size: 11px;
+}
+.embed-heading h1 {
+  margin: 2px 0 5px;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.embed-meta,
+.embed-hint,
+.embed-model {
+  margin: 5px 0;
+  color: var(--circuit-muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.embed-meta {
+  font-variant-numeric: tabular-nums;
+}
+.embed-feedback {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+  align-items: center;
+  margin: 8px 0;
+}
+#embed-status {
+  flex: 1 1 180px;
+  margin: 0;
+  color: var(--circuit-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+#embed-status.is-error {
+  color: var(--embed-error);
+}
+.embed-schematic {
+  width: 100%;
+  height: clamp(240px, 48vw, 380px);
+  overflow: hidden;
+  border: 1px solid var(--circuit-grid);
+  border-radius: 7px;
+  background: var(--circuit-surface);
+}
+.embed-timeline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.embed-timeline input {
+  flex: 1;
+  min-width: 30px;
+  accent-color: var(--circuit-accent);
+}
+.embed-timeline output {
+  min-width: 70px;
+  font-size: 12px;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.is-paused .circuit-current {
+  animation-play-state: paused !important;
+}
+.embed-waves {
+  margin-top: 10px;
+  border-top: 1px solid var(--circuit-grid);
+}
+summary {
+  padding: 8px 0;
+  color: var(--circuit-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.embed-wave-content {
+  min-width: 0;
+}
+.embed-channel-picker {
+  border-bottom: 1px solid var(--circuit-grid);
+}
+#embed-channels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  max-height: 170px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 8px 2px 12px;
+  border: 0;
+}
+#embed-channels label,
+.embed-phase {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--circuit-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+#embed-channels input,
+.embed-phase input {
+  flex: 0 0 auto;
+  accent-color: var(--circuit-accent);
+}
+.embed-phase {
+  margin-top: 8px;
+}
+#embed-waveform {
+  max-height: 540px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+#embed-waveform svg {
+  min-width: 0 !important;
+  max-width: 100%;
+}
+.embed-model {
+  margin-top: 10px;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 340px) {
+  .circuit-embed {
+    padding: 10px;
+  }
+  .embed-heading {
+    flex-basis: 160px;
+  }
+  .embed-timeline {
+    gap: 6px;
+  }
+}

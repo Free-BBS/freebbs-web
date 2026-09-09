@@ -16,6 +16,7 @@ const {
   createUsernameRouter,
 } = require('./username-policy');
 const { createCourseMapsRouter, ensureCourseMapTables } = require('./course-maps');
+const { createCircuitsRouter, ensureCircuitTables } = require('./circuits');
 const { readRagCourseSnapshot } = require('./rag-course-snapshot');
 const { createCourseUploadRouter, ensureCourseUploadTables } = require('./course-upload');
 const {
@@ -2108,6 +2109,7 @@ app.use(
   '/api',
   createNotificationsRouter({ pool, requireAuth, requireAdmin, service: notifications }),
 );
+app.use('/api/circuits', createCircuitsRouter({ pool, requireAuth }));
 app.use(
   '/api/course-upload',
   createCourseUploadRouter({ pool, requireAuth, uploadDir: config.uploadDir, isValidUsername }),
@@ -5293,6 +5295,7 @@ async function start() {
   await ensureRegistrationWhitelistTables(pool);
   await ensureNotificationTables(pool);
   await ensureCourseUploadTables(pool);
+  await ensureCircuitTables(pool);
   await decayHeatIfNeeded(new Date());
   scheduleNextHeatDecay();
 
