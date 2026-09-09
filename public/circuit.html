@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>FREE-BBS - 电路实验室</title>
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-v2-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/freebbs-apple-touch-v2.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Noto+Serif+SC:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/course.css" />
+    <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/username-guard.css" />
+    <link rel="stylesheet" href="/notifications.css" />
+    <link rel="stylesheet" href="/course-upload.css" />
+    <link rel="stylesheet" href="/layout-fixes.css" />
+    <link rel="stylesheet" href="/circuit.css" />
+  </head>
+  <body class="circuit-page">
+    <div class="page-shell page-shell-settings">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="FREE-BBS 首页">
+          <span class="brand-mark">FREE<br />BBS</span>
+        </a>
+
+        <form class="searchbar" role="search">
+          <span class="search-symbol" aria-hidden="true">⌕</span>
+          <input type="search" placeholder="搜索课程、讨论、资料、地图坐标" aria-label="搜索" />
+        </form>
+
+        <nav class="nav-actions" aria-label="顶部导航">
+          <a class="nav-link" href="/">
+            <img class="nav-icon" src="/assets/icons/home.svg" alt="" aria-hidden="true" />
+            <span>主页</span>
+          </a>
+          <a class="nav-link" href="/world">
+            <img class="nav-icon" src="/assets/icons/map.svg" alt="" aria-hidden="true" />
+            <span>学习世界</span>
+          </a>
+          <a class="nav-link" href="/discussion">
+            <img class="nav-icon" src="/assets/icons/people.svg" alt="" aria-hidden="true" />
+            <span>讨论</span>
+          </a>
+          <a class="nav-link" href="/aichat">
+            <img class="nav-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
+            <span>问问 Max</span>
+          </a>
+          <a class="nav-link fortune-link hidden" href="#">
+            <img class="nav-icon" src="/assets/icons/yunshi.svg" alt="" aria-hidden="true" />
+            <span>今日运势</span>
+          </a>
+          <a class="nav-link manage-link hidden" href="/adminusers">
+            <img class="nav-icon" src="/assets/icons/gear.svg" alt="" aria-hidden="true" />
+            <span>管理</span>
+          </a>
+
+          <div class="user-panel" id="user-panel">
+            <div class="user-summary">
+              <button class="avatar" type="button" aria-label="用户头像">
+                <img
+                  class="avatar-image"
+                  id="avatar-image"
+                  src="/assets/avatar_placeholder.webp"
+                  alt="用户头像占位图"
+                />
+              </button>
+              <div class="user-actions" id="user-actions">
+                <button
+                  class="user-icon-button hidden"
+                  id="user-settings-button"
+                  type="button"
+                  aria-label="设置"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/gear.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>设置</span>
+                </button>
+                <button
+                  class="user-icon-button hidden"
+                  id="user-logout-button"
+                  type="button"
+                  aria-label="退出"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/exit.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>退出</span>
+                </button>
+              </div>
+              <div class="user-copy">
+                <button class="user-name" type="button" id="user-name">登录/注册</button>
+                <div class="user-role" id="user-role">学生</div>
+              </div>
+            </div>
+            <div class="user-status" id="user-status">
+              <span class="currency currency-electric" data-tooltip="电元" aria-label="电元">
+                <img class="currency-icon" src="/assets/icons/electron.svg" alt="电元" />
+                <span class="currency-value">-</span>
+              </span>
+              <span class="currency currency-magnetic" data-tooltip="磁元" aria-label="磁元">
+                <img class="currency-icon" src="/assets/icons/magnetron.svg" alt="磁元" />
+                <span class="currency-value">-</span>
+              </span>
+            </div>
+          </div>
+        </nav>
+      </header>
+
+      <nav class="mobile-nav" aria-label="手机底部导航">
+        <a class="nav-link" href="/world">
+          <img class="nav-icon" src="/assets/icons/map.svg" alt="" aria-hidden="true" />
+          <span>学习世界</span>
+        </a>
+        <a class="nav-link" href="/discussion">
+          <img class="nav-icon" src="/assets/icons/people.svg" alt="" aria-hidden="true" />
+          <span>讨论</span>
+        </a>
+        <a class="nav-link" href="/aichat">
+          <img class="nav-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
+          <span>问问 Max</span>
+        </a>
+        <a class="nav-link fortune-link hidden" href="#">
+          <img class="nav-icon" src="/assets/icons/yunshi.svg" alt="" aria-hidden="true" />
+          <span>今日运势</span>
+        </a>
+        <a class="nav-link manage-link hidden" href="/adminusers">
+          <img class="nav-icon" src="/assets/icons/gear.svg" alt="" aria-hidden="true" />
+          <span>管理</span>
+        </a>
+      </nav>
+
+      <main class="main-content circuit-main" data-circuit-page>
+        <section id="circuit-list-page" hidden>
+          <header class="circuit-heading">
+            <div>
+              <p class="circuit-kicker">电路实验室</p>
+              <h1>我的电路</h1>
+              <p>搭建、仿真，并把可复现的实验嵌入课程讨论。</p>
+            </div>
+            <a class="circuit-button is-primary" href="/circuit">新建电路</a>
+          </header>
+          <p id="circuit-list-status" class="circuit-status" role="status"></p>
+          <div class="circuit-list" id="circuit-list"></div>
+          <button id="circuit-list-more" type="button" hidden>加载更多</button>
+        </section>
+
+        <section id="circuit-editor-page" hidden>
+          <header class="circuit-heading">
+            <div>
+              <p class="circuit-kicker">
+                <a href="/circuits">我的电路</a><span aria-hidden="true"> / </span>实验工作台
+              </p>
+              <h1>电路实验室</h1>
+              <p>从一个元件开始，观察每一次连接带来的变化。</p>
+            </div>
+            <div class="circuit-heading-actions">
+              <a class="circuit-button" href="/circuit">新建</a
+              ><button id="circuit-copy" type="button">复制为新电路</button
+              ><button class="is-primary" id="circuit-save" type="button">保存并获取 CID</button>
+            </div>
+          </header>
+          <section class="circuit-document-heading" aria-label="电路文档">
+            <label>电路名称<input id="circuit-title" maxlength="120" value="未命名电路" /></label>
+            <label
+              >实验说明<textarea
+                id="circuit-description"
+                rows="2"
+                maxlength="2000"
+                placeholder="描述电路用途、参数或你想验证的问题。"
+              ></textarea>
+            </label>
+            <p class="circuit-document-meta" id="circuit-document-meta">
+              尚未保存 · 保存后可通过 CID 公开访问
+            </p>
+            <p id="circuit-status" class="circuit-status" role="status" aria-live="polite"></p>
+            <a id="circuit-login" href="/login" hidden>登录后返回此页保存，当前草稿会保留</a>
+          </section>
+
+          <section class="circuit-workspace" aria-label="电路绘图工作台">
+            <aside class="circuit-palette" aria-labelledby="circuit-palette-title">
+              <h2 id="circuit-palette-title">元件</h2>
+              <p>点击添加到画布</p>
+              <div id="circuit-palette"></div>
+              <label class="circuit-example-label"
+                >从示例开始<select id="circuit-example">
+                  <option value="divider">电阻分压 · DC</option>
+                  <option value="rc">RC 充放电 · 瞬态</option>
+                  <option value="diode">二极管整流 · 瞬态</option>
+                  <option value="blank">空白电路</option>
+                </select></label
+              >
+              <button id="circuit-load-example" type="button">载入示例</button>
+            </aside>
+            <div class="circuit-canvas-panel">
+              <div class="circuit-canvas-toolbar">
+                <p id="circuit-canvas-help">拖动元件调整位置；依次点击两个引脚连线。</p>
+                <button id="circuit-cancel-wire" type="button" hidden>取消连线</button
+                ><span id="circuit-count">0 个元件</span>
+              </div>
+              <div class="circuit-stage" id="circuit-stage" aria-label="电路原理图"></div>
+              <p class="circuit-canvas-note">
+                导线交叉不代表连接。请将电路接入参考地，电流表串联、电压表并联。
+              </p>
+            </div>
+            <aside class="circuit-inspector" aria-labelledby="circuit-inspector-title">
+              <h2 id="circuit-inspector-title">元件参数</h2>
+              <p id="circuit-selection-empty">选中一个元件，查看参数和连接。</p>
+              <div id="circuit-selection" hidden>
+                <p class="circuit-selected-name" id="circuit-selected-name"></p>
+                <div class="circuit-selection-actions">
+                  <button id="circuit-rotate" type="button">旋转 90°</button
+                  ><button id="circuit-delete" type="button">删除元件</button>
+                </div>
+                <form id="circuit-parameters" novalidate></form>
+                <h3>引脚与连接</h3>
+                <div id="circuit-connections"></div>
+              </div>
+            </aside>
+          </section>
+
+          <section class="circuit-analysis" aria-labelledby="circuit-analysis-title">
+            <div class="circuit-section-heading">
+              <div>
+                <p class="circuit-kicker">分析</p>
+                <h2 id="circuit-analysis-title">运行实验</h2>
+              </div>
+              <div class="circuit-actions">
+                <button id="circuit-run" class="is-primary" type="button">运行仿真</button
+                ><button id="circuit-stop" type="button" disabled>取消</button>
+              </div>
+            </div>
+            <form id="circuit-analysis-form" novalidate>
+              <label
+                >分析类型<select id="circuit-analysis-type">
+                  <option value="dc">直流工作点 DC</option>
+                  <option value="transient">瞬态响应</option>
+                  <option value="sweep">参数扫描</option>
+                  <option value="ac">交流小信号 AC</option>
+                </select></label
+              >
+              <div class="circuit-analysis-fields" data-analysis="transient" hidden>
+                <label
+                  >截止时间 / s<input
+                    id="circuit-transient-stop"
+                    type="number"
+                    step="any"
+                    min="0"
+                    value="0.01"
+                /></label>
+                <label
+                  >时间步长 / s<input
+                    id="circuit-transient-step"
+                    type="number"
+                    step="any"
+                    min="0"
+                    value="0.00002"
+                /></label>
+                <label
+                  >初始状态<select id="circuit-transient-initial">
+                    <option value="zero">零初始储能</option>
+                    <option value="operating-point">直流工作点</option>
+                  </select></label
+                >
+              </div>
+              <div class="circuit-analysis-fields" data-analysis="sweep" hidden>
+                <label>扫描元件<select id="circuit-sweep-component"></select></label
+                ><label>扫描参数<select id="circuit-sweep-parameter"></select></label>
+                <label
+                  >起点<input id="circuit-sweep-start" type="number" step="any" value="0" /></label
+                ><label
+                  >终点<input id="circuit-sweep-stop" type="number" step="any" value="5" /></label
+                ><label
+                  >采样点数<input
+                    id="circuit-sweep-points"
+                    type="number"
+                    min="2"
+                    max="2000"
+                    value="101"
+                /></label>
+              </div>
+              <div class="circuit-analysis-fields" data-analysis="ac" hidden>
+                <label
+                  >起始频率 / Hz<input
+                    id="circuit-ac-start"
+                    type="number"
+                    step="any"
+                    min="0"
+                    value="10" /></label
+                ><label
+                  >截止频率 / Hz<input
+                    id="circuit-ac-stop"
+                    type="number"
+                    step="any"
+                    min="0"
+                    value="100000" /></label
+                ><label
+                  >采样点数<input
+                    id="circuit-ac-points"
+                    type="number"
+                    min="2"
+                    max="2000"
+                    value="101" /></label
+                ><label
+                  >频率间隔<select id="circuit-ac-scale">
+                    <option value="log">对数</option>
+                    <option value="linear">线性</option>
+                  </select></label
+                >
+              </div>
+            </form>
+            <p id="circuit-run-status" class="circuit-status" role="status" aria-live="polite">
+              选择分析方式，然后运行仿真。
+            </p>
+          </section>
+
+          <section
+            class="circuit-results"
+            id="circuit-results"
+            aria-labelledby="circuit-results-title"
+            hidden
+          >
+            <div class="circuit-section-heading">
+              <div>
+                <p class="circuit-kicker">测量</p>
+                <h2 id="circuit-results-title">波形与读数</h2>
+              </div>
+              <div class="circuit-actions">
+                <button id="circuit-export-csv" type="button">导出 CSV</button
+                ><label class="circuit-inline-check" id="circuit-phase-control" hidden
+                  ><input id="circuit-show-phase" type="checkbox" />显示相位</label
+                >
+              </div>
+            </div>
+            <fieldset class="circuit-traces">
+              <legend>显示曲线</legend>
+              <div id="circuit-traces"></div>
+            </fieldset>
+            <div class="circuit-waveform" id="circuit-waveform"></div>
+            <div class="circuit-playback" id="circuit-playback">
+              <button id="circuit-play" type="button">播放</button
+              ><label for="circuit-frame">查看采样点</label
+              ><input id="circuit-frame" type="range" min="0" max="0" value="0" /><output
+                id="circuit-frame-label"
+                >0</output
+              >
+            </div>
+            <div class="circuit-meters" id="circuit-meters"></div>
+            <p class="circuit-status" id="circuit-warnings"></p>
+          </section>
+
+          <section class="circuit-sharing" aria-labelledby="circuit-sharing-title">
+            <div>
+              <h2 id="circuit-sharing-title">把实验带到讨论里</h2>
+              <p>
+                保存后复制 Markdown
+                引用，读者可以查看该版本的电路与仿真。修改会创建新版本，既有引用保持不变。
+              </p>
+            </div>
+            <div class="circuit-actions">
+              <button type="button" data-circuit-reference="live">复制动态图引用</button
+              ><button type="button" data-circuit-reference="waveform">复制波形引用</button
+              ><button type="button" data-circuit-reference="schematic">复制原理图引用</button
+              ><button id="circuit-export-json" type="button">导出 JSON</button
+              ><button id="circuit-import-json" type="button">导入 JSON</button
+              ><input id="circuit-import-file" type="file" accept="application/json,.json" hidden />
+            </div>
+            <textarea
+              id="circuit-reference-text"
+              rows="3"
+              aria-label="电路 Markdown 引用"
+              readonly
+              hidden
+            ></textarea>
+          </section>
+          <details class="circuit-model-notes">
+            <summary>模型范围与使用说明</summary>
+            <p>
+              本实验室采用用于教学的电路数值模型：MNA、非线性迭代、二极管 Shockley、BJT
+              Ebers–Moll、MOS 长沟道平方律，以及有限增益和限幅运放。它不是完整工艺 SPICE 模型。
+            </p>
+            <p>
+              参数使用 SI 单位，例如 1 kΩ 输入 1000，1 μF 输入 1e-6。最多 80 个元件、200 条导线和
+              2000
+              个分析点。仿真遇到浮空节点、非收敛或非法表达式时会报告错误，不生成替代曲线。非线性元件可填写
+              i=k*u^3 等安全数学表达式。
+            </p>
+            <p>
+              AC 为工作点附近的小信号线性化；动态图只播放瞬态帧。参考
+              <a
+                href="https://ngspice.sourceforge.io/docs/ngspice-manual.pdf"
+                target="_blank"
+                rel="noopener noreferrer"
+                >ngspice 用户手册</a
+              >了解分析语义。
+            </p>
+          </details>
+        </section>
+      </main>
+    </div>
+    <script src="/typography.js"></script>
+    <script src="/username-guard.js"></script>
+    <script src="/app.js"></script>
+    <script src="/circuit-engine.js"></script>
+    <script src="/circuit-renderer.js"></script>
+    <script src="/circuit.js"></script>
+    <script src="/notifications.js"></script>
+  </body>
+</html>

@@ -18,9 +18,19 @@ node --check public/course-map.js
 node --check public/knowledge.js
 node --check public/markdown-editor.js
 node --check public/world.js
+node --check backend/circuits.js
+node --check public/circuit-engine.js
+node --check public/circuit-worker.js
+node --check public/circuit-renderer.js
+node --check public/circuit.js
+node --check public/circuit-embeds.js
+node --check public/circuit-embed.js
 
 echo "[ci] course map tests"
 npm run test:course-maps
+
+echo "[ci] circuit engine, references and storage tests"
+npm run test:circuits
 
 echo "[ci] public page tests"
 npm run test:public-pages
@@ -45,6 +55,13 @@ test -f public/world.html
 test -f public/course-map-editor.html
 test -f public/markdown-editor.html
 test -f public/discussion.html
+test -f public/circuit.html
+test -f public/circuit-embed.html
+test -f public/circuit.css
+test -f public/circuit-embed.css
+test -f public/circuit-embeds.css
+test -f docs/circuit-simulator.md
+test -f database/migrations/028_circuit_library.sql
 test -f database/migrations/018_create_course_map_settings.sql
 test -f database/migrations/024_add_rag_index_revision.sql
 test -f backend/server.js
