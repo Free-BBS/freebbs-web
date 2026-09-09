@@ -14,7 +14,6 @@ const { hashPassword } = require('./password');
 const { hashCode } = require('./verification');
 const {
   COMMUNITY_AGREEMENT_VERSION,
-  EMAIL_CHALLENGE_LIMIT,
   generateBandChallenge,
   generateWienChallenge,
 } = require('./registration-guard');
@@ -497,27 +496,6 @@ test(
           ).code,
           'registration_captcha_used',
         );
-        const limitedEmail = 'challenge-rate@example.invalid';
-        for (let count = 0; count < EMAIL_CHALLENGE_LIMIT; count += 1) {
-          const challenge = await api('/auth/registration-challenge', {
-            method: 'POST',
-            body: { email: limitedEmail },
-          });
-          assert.equal(challenge.communityAgreementVersion, COMMUNITY_AGREEMENT_VERSION);
-          assert.ok(new Date(challenge.expiresAt) > new Date());
-          assert.equal(challenge.answerK, undefined);
-          assert.equal(challenge.tolerance, undefined);
-        }
-        assert.equal(
-          (
-            await api('/auth/registration-challenge', {
-              method: 'POST',
-              body: { email: limitedEmail },
-              expected: 429,
-            })
-          ).code,
-          'registration_captcha_rate_limited',
-        );
       },
     );
 
@@ -673,18 +651,74 @@ test(
           outcomes.find((outcome) => outcome.status === 400).body.code,
           'login_captcha_used',
         );
-        for (let count = 0; count < EMAIL_CHALLENGE_LIMIT; count += 1) {
-          await loginPayload('rate_login_unknown');
+      },
+    );
+
+    await t.test(
+      'login and registration issue fresh challenges beyond former identity and shared IP quotas',
+      async () => {
+        const identity = 'unlimited-challenges@example.invalid';
+        const [[clock]] = await db.execute('SELECT UNIX_TIMESTAMP(NOW()) AS now_seconds');
+        const windowStart = Math.floor(Number(clock.now_seconds) / 900) * 900;
+        for (const scope of [`register:${identity}`, `login:${identity}`, 'ip:127.0.0.1']) {
+          const scopeHash = crypto.createHash('sha256').update(scope).digest('hex');
+          // Preserve historical counters, including saturated current windows.
+          // Seed the next window too so the assertion survives a clock boundary.
+          for (const window of [windowStart - 172800, windowStart, windowStart + 900]) {
+            await db.execute(
+              `INSERT INTO registration_challenge_rates (scope_hash, window_start, issued_count)
+               VALUES (?, ?, 10000)`,
+              [scopeHash, window],
+            );
+          }
         }
-        assert.equal(
-          (
-            await api('/auth/login-challenge', {
-              method: 'POST',
-              body: { identifier: 'rate_login_unknown' },
-              expected: 429,
-            })
-          ).code,
-          'login_captcha_rate_limited',
+        const [ratesBefore] = await db.execute(
+          'SELECT * FROM registration_challenge_rates ORDER BY scope_hash, window_start',
+        );
+        const challengeIds = new Set();
+        // Each mode exceeds the former per-identity allowance of 12, and all
+        // 66 requests use the same loopback IP, beyond its former allowance of 60.
+        for (let count = 0; count < 33; count += 1) {
+          for (const purpose of ['register', 'login']) {
+            const startedAt = Date.now();
+            const challenge = await api(
+              `/auth/${purpose === 'register' ? 'registration' : 'login'}-challenge`,
+              {
+                method: 'POST',
+                body: purpose === 'register' ? { email: identity } : { identifier: identity },
+              },
+            );
+            assert.match(challenge.challengeId, /^[a-f0-9]{64}$/);
+            assert.equal(challengeIds.has(challenge.challengeId), false);
+            challengeIds.add(challenge.challengeId);
+            assert.ok(['band', 'wien'].includes(challenge.type));
+            assert.equal(challenge.communityAgreementVersion, COMMUNITY_AGREEMENT_VERSION);
+            const expiry = new Date(challenge.expiresAt).getTime();
+            assert.ok(expiry >= startedAt + 298000 && expiry <= Date.now() + 301000);
+            assert.equal(challenge.answerK, undefined);
+            assert.equal(challenge.tolerance, undefined);
+          }
+        }
+        assert.equal(challengeIds.size, 66);
+        const [issued] = await db.execute(
+          'SELECT id, purpose, consumed_at FROM registration_challenges WHERE email = ?',
+          [identity],
+        );
+        assert.equal(issued.length, 66);
+        for (const purpose of ['register', 'login']) {
+          assert.equal(issued.filter((challenge) => challenge.purpose === purpose).length, 33);
+        }
+        for (const challenge of issued) {
+          assert.equal(challengeIds.has(challenge.id), true);
+          assert.equal(challenge.consumed_at, null);
+        }
+        const [ratesAfter] = await db.execute(
+          'SELECT * FROM registration_challenge_rates ORDER BY scope_hash, window_start',
+        );
+        assert.deepEqual(
+          ratesAfter,
+          ratesBefore,
+          'legacy counters must not gate or track issuance',
         );
       },
     );
@@ -692,8 +726,6 @@ test(
     await t.test(
       'Wien challenges verify startup and strict pole |Q| for registration and login',
       async () => {
-        // Keep this independent scenario inside the existing per-IP test quota.
-        await db.execute('DELETE FROM registration_challenge_rates');
         const identity = {
           username: 'wien_student',
           studentId: '2026000124',
