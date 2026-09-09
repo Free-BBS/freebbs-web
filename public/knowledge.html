@@ -22,6 +22,7 @@
     <link rel="stylesheet" href="/username-guard.css" />
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
+    <link rel="stylesheet" href="/knowledge-editor.css" />
   </head>
   <body class="knowledge-page">
     <div class="page-shell page-shell-settings">
@@ -274,7 +275,156 @@
                 <h1 id="knowledge-title"></h1>
                 <p id="knowledge-summary"></p>
               </div>
+              <button
+                class="knowledge-edit-toggle"
+                id="knowledge-edit-toggle"
+                type="button"
+                aria-controls="knowledge-editor"
+                aria-expanded="false"
+                hidden
+              >
+                <span aria-hidden="true">✎</span>
+                编辑知识点
+              </button>
             </header>
+            <p class="knowledge-edit-notice" id="knowledge-edit-notice" role="status" hidden></p>
+            <section
+              class="knowledge-editor"
+              id="knowledge-editor"
+              aria-labelledby="knowledge-editor-title"
+              hidden
+            >
+              <header class="knowledge-editor-heading">
+                <h2 id="knowledge-editor-title">编辑知识点</h2>
+                <p>修改当前知识点的内容，保存后课程成员即可查看。</p>
+              </header>
+              <nav class="knowledge-editor-sections" aria-label="选择编辑内容">
+                <button
+                  type="button"
+                  data-knowledge-editor-section="knowledgeMarkdown"
+                  aria-pressed="true"
+                >
+                  正文
+                </button>
+                <button
+                  type="button"
+                  data-knowledge-editor-section="basicInfoMarkdown"
+                  aria-pressed="false"
+                >
+                  基本信息
+                </button>
+                <button
+                  type="button"
+                  data-knowledge-editor-section="applicationsMarkdown"
+                  aria-pressed="false"
+                >
+                  应用与拓展
+                </button>
+              </nav>
+              <div class="knowledge-editor-workspace">
+                <div class="knowledge-editor-modes" role="group" aria-label="编辑器视图">
+                  <button type="button" data-knowledge-editor-mode="edit" aria-pressed="true">
+                    编辑
+                  </button>
+                  <button type="button" data-knowledge-editor-mode="preview" aria-pressed="false">
+                    预览
+                  </button>
+                </div>
+                <div id="knowledge-editor-edit-pane">
+                  <div
+                    class="knowledge-editor-toolbar"
+                    id="knowledge-editor-toolbar"
+                    role="group"
+                    aria-label="Markdown 格式工具"
+                  >
+                    <button type="button" data-wrap="**|**" title="加粗" aria-label="加粗">
+                      <strong aria-hidden="true">B</strong>
+                    </button>
+                    <button type="button" data-wrap="*|*" title="斜体" aria-label="斜体">
+                      <em aria-hidden="true">I</em>
+                    </button>
+                    <button type="button" data-wrap="`|`" title="行内代码" aria-label="行内代码">
+                      <span aria-hidden="true">&lt;/&gt;</span>
+                    </button>
+                    <button type="button" data-prefix="## " title="二级标题" aria-label="二级标题">
+                      <span aria-hidden="true">H2</span>
+                    </button>
+                    <button type="button" data-prefix="- " title="无序列表" aria-label="无序列表">
+                      <span aria-hidden="true">• 列表</span>
+                    </button>
+                    <button type="button" data-prefix="1. " title="有序列表" aria-label="有序列表">
+                      <span aria-hidden="true">1. 列表</span>
+                    </button>
+                    <button type="button" data-prefix="> " title="引用" aria-label="引用">
+                      引用
+                    </button>
+                    <button type="button" data-wrap="[|](https://)" title="插入链接">链接</button>
+                    <button type="button" data-block="code" title="插入代码块">代码块</button>
+                    <button type="button" data-block="formula" title="插入数学公式">公式</button>
+                    <button
+                      class="knowledge-editor-upload"
+                      id="knowledge-editor-upload"
+                      type="button"
+                    >
+                      <span aria-hidden="true">＋</span> 上传图片
+                    </button>
+                    <input
+                      id="knowledge-editor-image-input"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+                      aria-label="上传知识点图片"
+                      hidden
+                    />
+                  </div>
+                  <label
+                    class="knowledge-editor-source-label"
+                    id="knowledge-editor-source-label"
+                    for="knowledge-editor-source"
+                  >
+                    正文 Markdown
+                  </label>
+                  <textarea
+                    id="knowledge-editor-source"
+                    rows="18"
+                    spellcheck="false"
+                    aria-describedby="knowledge-editor-help"
+                    placeholder="使用 Markdown 编写知识点，支持标题、列表、代码、公式和图片。"
+                  ></textarea>
+                </div>
+                <section
+                  class="knowledge-editor-preview-pane"
+                  id="knowledge-editor-preview-pane"
+                  aria-label="Markdown 效果预览"
+                  hidden
+                >
+                  <div class="discussion-markdown-body" id="knowledge-editor-preview"></div>
+                </section>
+              </div>
+              <p class="knowledge-editor-help" id="knowledge-editor-help">
+                支持 Markdown 与数学公式；图片支持 PNG、JPG、WebP、GIF、AVIF，单张不超过 20 MB。
+              </p>
+              <footer class="knowledge-editor-footer">
+                <p class="knowledge-editor-status" id="knowledge-editor-status" role="status"></p>
+                <div class="knowledge-editor-actions">
+                  <button id="knowledge-editor-cancel" type="button">取消</button>
+                  <button class="knowledge-editor-save" id="knowledge-editor-save" type="button">
+                    保存
+                  </button>
+                </div>
+              </footer>
+              <div
+                class="knowledge-editor-discard"
+                id="knowledge-editor-discard"
+                role="alert"
+                hidden
+              >
+                <p>还有未保存的修改，是否放弃？</p>
+                <div class="knowledge-editor-actions">
+                  <button id="knowledge-editor-discard-confirm" type="button">放弃修改</button>
+                  <button id="knowledge-editor-discard-keep" type="button">继续编辑</button>
+                </div>
+              </div>
+            </section>
             <section class="course-material-section knowledge-overview" id="knowledge-overview">
               <header class="course-material-section-heading">
                 <div>
@@ -490,10 +640,97 @@
                     <h3 id="knowledge-discussion-board-name">课程讨论</h3>
                   </div>
                   <div class="knowledge-discussion-toolbar-actions">
+                    <button id="knowledge-discussion-compose-toggle" type="button">发帖子</button>
                     <button id="knowledge-discussion-refresh" type="button">刷新</button>
                     <a id="knowledge-discussion-board-link" href="/discussion">完整讨论区 ↗</a>
                   </div>
                 </header>
+
+                <section
+                  class="knowledge-discussion-compose"
+                  id="knowledge-discussion-compose"
+                  aria-labelledby="knowledge-discussion-compose-heading"
+                  hidden
+                >
+                  <header class="knowledge-discussion-compose-heading">
+                    <h3 id="knowledge-discussion-compose-heading">发起课程讨论</h3>
+                    <p>帖子会发布到当前课程的讨论区。</p>
+                  </header>
+                  <form id="knowledge-discussion-compose-form" novalidate>
+                    <label for="knowledge-discussion-compose-title">标题</label>
+                    <input
+                      id="knowledge-discussion-compose-title"
+                      type="text"
+                      maxlength="120"
+                      required
+                      placeholder="用一句话说明你想讨论的问题"
+                    />
+                    <div
+                      class="knowledge-discussion-compose-modes"
+                      role="group"
+                      aria-label="帖子正文视图"
+                    >
+                      <button
+                        type="button"
+                        data-knowledge-discussion-compose-mode="edit"
+                        aria-pressed="true"
+                      >
+                        编辑
+                      </button>
+                      <button
+                        type="button"
+                        data-knowledge-discussion-compose-mode="preview"
+                        aria-pressed="false"
+                      >
+                        预览
+                      </button>
+                    </div>
+                    <div id="knowledge-discussion-compose-edit-pane">
+                      <label for="knowledge-discussion-compose-content">正文 Markdown</label>
+                      <textarea
+                        id="knowledge-discussion-compose-content"
+                        rows="7"
+                        maxlength="20000"
+                        required
+                        placeholder="写下问题、思路或分享，支持 Markdown 与数学公式。"
+                      ></textarea>
+                    </div>
+                    <section
+                      id="knowledge-discussion-compose-preview-pane"
+                      aria-label="帖子正文预览"
+                      hidden
+                    >
+                      <div
+                        class="discussion-markdown-body"
+                        id="knowledge-discussion-compose-preview"
+                      ></div>
+                    </section>
+                    <p
+                      class="knowledge-discussion-form-status"
+                      id="knowledge-discussion-compose-status"
+                      role="status"
+                    ></p>
+                    <a
+                      class="knowledge-discussion-login"
+                      id="knowledge-discussion-compose-login"
+                      href="/login"
+                      hidden
+                      >登录后返回此页</a
+                    >
+                    <div class="knowledge-discussion-form-actions">
+                      <button id="knowledge-discussion-compose-cancel" type="button">
+                        返回列表
+                      </button>
+                      <button
+                        class="knowledge-discussion-publish"
+                        id="knowledge-discussion-compose-submit"
+                        type="submit"
+                      >
+                        发布帖子
+                      </button>
+                    </div>
+                  </form>
+                </section>
 
                 <div class="knowledge-discussion-list-view" id="knowledge-discussion-list-view">
                   <p
@@ -536,6 +773,64 @@
                     class="knowledge-discussion-detail-stats"
                     id="knowledge-discussion-detail-stats"
                   ></footer>
+                  <section
+                    class="knowledge-discussion-comments-section"
+                    aria-labelledby="knowledge-discussion-comments-heading"
+                  >
+                    <h4 id="knowledge-discussion-comments-heading">评论</h4>
+                    <div
+                      class="knowledge-discussion-comments"
+                      id="knowledge-discussion-comments"
+                      aria-live="polite"
+                    ></div>
+                    <form
+                      class="knowledge-discussion-comment-form"
+                      id="knowledge-discussion-comment-form"
+                      novalidate
+                    >
+                      <div
+                        class="knowledge-discussion-comment-target"
+                        id="knowledge-discussion-comment-target"
+                        hidden
+                      >
+                        <span
+                          >回复 <strong id="knowledge-discussion-comment-target-name"></strong
+                        ></span>
+                        <button id="knowledge-discussion-comment-target-cancel" type="button">
+                          取消回复
+                        </button>
+                      </div>
+                      <label for="knowledge-discussion-comment-content">参与讨论</label>
+                      <textarea
+                        id="knowledge-discussion-comment-content"
+                        rows="3"
+                        maxlength="5000"
+                        required
+                        placeholder="写下你的回复，支持 Markdown。"
+                      ></textarea>
+                      <p
+                        class="knowledge-discussion-form-status"
+                        id="knowledge-discussion-comment-status"
+                        role="status"
+                      ></p>
+                      <a
+                        class="knowledge-discussion-login"
+                        id="knowledge-discussion-comment-login"
+                        href="/login"
+                        hidden
+                        >登录后返回此页</a
+                      >
+                      <div class="knowledge-discussion-form-actions">
+                        <button
+                          class="knowledge-discussion-publish"
+                          id="knowledge-discussion-comment-submit"
+                          type="submit"
+                        >
+                          发布评论
+                        </button>
+                      </div>
+                    </form>
+                  </section>
                 </article>
               </section>
             </aside>
@@ -570,6 +865,7 @@
     <script src="/username-guard.js"></script>
     <script src="/app.js"></script>
     <script src="/knowledge.js"></script>
+    <script src="/knowledge-editor.js"></script>
     <script src="/notifications.js"></script>
   </body>
 </html>

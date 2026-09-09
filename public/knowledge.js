@@ -26,7 +26,7 @@
     course: null,
     node: null,
     map: null,
-    chatOpen: false,
+    chatOpen: true,
     chatTab: 'max',
     chatMessages: [],
     chatSending: false,
@@ -38,6 +38,15 @@
     discussionActivePostId: '',
     discussionListRequest: 0,
     discussionDetailRequest: 0,
+    discussionPost: null,
+    discussionComments: [],
+    discussionCommentDrafts: new Map(),
+    discussionCommentParentId: 0,
+    discussionCommentSending: false,
+    discussionPostSending: false,
+    discussionComposeMode: 'edit',
+    discussionSessionUid: '',
+    discussionSessionVersion: 0,
     view: 'overview',
   };
   const discussionDateFormatter = new Intl.DateTimeFormat('zh-CN', {
@@ -423,7 +432,7 @@
     window.addEventListener('resize', () => setInteractionWidth(state.interactionWidth));
   }
 
-  function setChatOpen(isOpen) {
+  function setChatOpen(isOpen, { focus = true } = {}) {
     const workbench = document.getElementById('knowledge-workbench');
     const panel = document.getElementById('knowledge-chat-panel');
     const resizer = document.getElementById('knowledge-panel-resizer');
@@ -448,7 +457,7 @@
     if (tooltip) {
       tooltip.textContent = state.chatOpen ? '关闭交互区' : '打开交互区';
     }
-    if (state.chatOpen) {
+    if (state.chatOpen && focus) {
       const focusTarget =
         state.chatTab === 'max'
           ? input
@@ -672,6 +681,7 @@
     }
     if (boardLink) {
       boardLink.href = href;
+      setHidden(boardLink, !state.course.boardSlug);
     }
     if (footerLink) {
       footerLink.href = href;
@@ -696,7 +706,7 @@
           <span aria-hidden="true">◌</span>
           <strong>这里还没有课程讨论</strong>
           <p>可以从一个概念、一道题或正文里没看懂的步骤开始。</p>
-          <a href="${discussionBoardHref()}">去发布第一条讨论 ↗</a>
+          <button type="button" data-knowledge-discussion-compose>发布第一条讨论</button>
         </section>
       `;
       return;
@@ -742,7 +752,9 @@
     const previousPostId = state.discussionActivePostId;
     setHidden(listView, false);
     setHidden(detail, true);
+    setHidden(document.getElementById('knowledge-discussion-compose'), true);
     state.discussionActivePostId = '';
+    state.discussionDetailRequest += 1;
 
     if (focus && previousPostId) {
       const previousCard = [...document.querySelectorAll('[data-discussion-post-id]')].find(
@@ -765,6 +777,12 @@
 
     setHidden(listView, true);
     setHidden(detail, false);
+    setHidden(document.getElementById('knowledge-discussion-compose'), true);
+    setHidden(document.getElementById('knowledge-discussion-comment-form'), true);
+    const comments = document.getElementById('knowledge-discussion-comments');
+    if (comments) comments.textContent = '正在载入评论…';
+    state.discussionPost = null;
+    state.discussionComments = [];
     detail?.setAttribute('aria-busy', 'true');
     if (title) {
       title.textContent = summary?.title || '正在载入帖子…';
@@ -871,7 +889,16 @@
       if (requestId !== state.discussionDetailRequest) {
         return;
       }
-      renderDiscussionDetail(payload.post || {});
+      state.discussionPost = payload.post || {};
+      renderDiscussionDetail(state.discussionPost);
+      selectDiscussionCommentTarget(0, { focus: false, force: true });
+      await loadDiscussionComments(postId, requestId);
+      if (requestId === state.discussionDetailRequest) {
+        setHidden(
+          document.getElementById('knowledge-discussion-comment-form'),
+          Boolean(state.discussionPost.isDeleted),
+        );
+      }
     } catch (error) {
       if (requestId !== state.discussionDetailRequest) {
         return;
@@ -881,10 +908,19 @@
   }
 
   async function loadDiscussionPosts({ force = false } = {}) {
-    if (!app || !state.course || state.discussionLoading) {
+    if (!app || !state.course || (state.discussionLoading && !force)) {
       return;
     }
     if (state.discussionLoaded && !force) {
+      return;
+    }
+    if (!state.course.boardSlug) {
+      state.discussionPosts = [];
+      state.discussionLoaded = true;
+      setDiscussionStatus('当前课程尚未关联讨论区，请联系课程负责人。');
+      document.getElementById('knowledge-discussion-list')?.replaceChildren();
+      const count = document.getElementById('knowledge-discussion-count');
+      if (count) count.textContent = '0';
       return;
     }
 
@@ -933,6 +969,426 @@
         }
       }
     }
+  }
+
+  function setDiscussionFormStatus(kind, message, error = false) {
+    const status = document.getElementById(`knowledge-discussion-${kind}-status`);
+    if (status) {
+      status.textContent = message;
+      status.classList.toggle('is-error', error);
+    }
+  }
+
+  function updateDiscussionFormControls() {
+    ['compose', 'comment'].forEach((kind) => {
+      const busy =
+        kind === 'compose' ? state.discussionPostSending : state.discussionCommentSending;
+      const form = document.getElementById(`knowledge-discussion-${kind}-form`);
+      setHidden(
+        document.getElementById(`knowledge-discussion-${kind}-login`),
+        Boolean(app.userState.isLoggedIn),
+      );
+      form?.setAttribute('aria-busy', String(busy));
+      form?.querySelectorAll('button, input, textarea').forEach((control) => {
+        const input = control;
+        input.disabled = busy;
+      });
+    });
+  }
+
+  function setDiscussionComposeMode(mode) {
+    state.discussionComposeMode = mode === 'preview' ? 'preview' : 'edit';
+    const isPreview = state.discussionComposeMode === 'preview';
+    setHidden(document.getElementById('knowledge-discussion-compose-edit-pane'), isPreview);
+    setHidden(document.getElementById('knowledge-discussion-compose-preview-pane'), !isPreview);
+    document.querySelectorAll('[data-knowledge-discussion-compose-mode]').forEach((button) => {
+      const selected =
+        button.dataset.knowledgeDiscussionComposeMode === state.discussionComposeMode;
+      button.classList.toggle('is-active', selected);
+      button.setAttribute('aria-pressed', String(selected));
+    });
+    if (isPreview) {
+      const preview = document.getElementById('knowledge-discussion-compose-preview');
+      const content = document.getElementById('knowledge-discussion-compose-content');
+      if (preview) {
+        preview.innerHTML = app.renderMarkdownContent(content?.value || '*还没有正文。*');
+        app.enhanceMarkdownContent(preview);
+      }
+    }
+  }
+
+  function showDiscussionComposer() {
+    restoreDiscussionPostDraft();
+    state.discussionDetailRequest += 1;
+    state.discussionActivePostId = '';
+    setHidden(document.getElementById('knowledge-discussion-list-view'), true);
+    setHidden(document.getElementById('knowledge-discussion-detail'), true);
+    setHidden(document.getElementById('knowledge-discussion-compose'), false);
+    setDiscussionComposeMode(state.discussionComposeMode);
+    if (!state.discussionPostSending) {
+      setDiscussionFormStatus(
+        'compose',
+        app.userState.isLoggedIn ? '' : '登录后可以发布，当前草稿会保留。',
+      );
+      document.getElementById('knowledge-discussion-compose-title')?.focus();
+    }
+  }
+
+  async function submitDiscussionPost() {
+    if (state.discussionPostSending) return;
+    const titleInput = document.getElementById('knowledge-discussion-compose-title');
+    const contentInput = document.getElementById('knowledge-discussion-compose-content');
+    const title = String(titleInput?.value || '').trim();
+    const contentMarkdown = String(contentInput?.value || '').trim();
+    if (!app.userState.isLoggedIn) {
+      setDiscussionFormStatus('compose', '请先登录后再发布，当前草稿已保留。', true);
+      return;
+    }
+    if (!title || title.length > 120 || !contentMarkdown || contentMarkdown.length > 20000) {
+      setDiscussionFormStatus(
+        'compose',
+        '请填写标题和正文，标题最多 120 字，正文最多 20000 字。',
+        true,
+      );
+      return;
+    }
+    if (!state.course?.boardSlug) {
+      setDiscussionFormStatus('compose', '当前课程尚未关联讨论区，请联系课程负责人。', true);
+      return;
+    }
+    const version = state.discussionSessionVersion;
+    state.discussionPostSending = true;
+    updateDiscussionFormControls();
+    setDiscussionFormStatus('compose', '正在发布…');
+    try {
+      const payload = await app.callApi('/discussion/posts', {
+        method: 'POST',
+        body: JSON.stringify({ boardSlug: getDiscussionBoardSlug(), title, contentMarkdown }),
+      });
+      if (version !== state.discussionSessionVersion) return;
+      titleInput.value = '';
+      contentInput.value = '';
+      persistDiscussionPostDraft();
+      document.getElementById('knowledge-discussion-compose-preview')?.replaceChildren();
+      state.discussionComposeMode = 'edit';
+      setDiscussionFormStatus('compose', '帖子已发布');
+      const { post } = payload;
+      if (post?.id) {
+        state.discussionPosts = [
+          post,
+          ...state.discussionPosts.filter((item) => item.id !== post.id),
+        ];
+        renderDiscussionList();
+        await Promise.all([loadDiscussionPosts({ force: true }), openDiscussionPost(post.id)]);
+      } else {
+        showDiscussionList();
+        await loadDiscussionPosts({ force: true });
+      }
+    } catch (error) {
+      if (version === state.discussionSessionVersion) {
+        setDiscussionFormStatus('compose', `${error.message || '发布失败'}，草稿已保留。`, true);
+      }
+    } finally {
+      if (version === state.discussionSessionVersion) {
+        state.discussionPostSending = false;
+        updateDiscussionFormControls();
+      }
+    }
+  }
+
+  function discussionCommentDraftKey(
+    postId = state.discussionActivePostId,
+    parentId = state.discussionCommentParentId,
+  ) {
+    return `${postId}:${parentId}`;
+  }
+
+  function selectDiscussionCommentTarget(rawParentId, { focus = true, force = false } = {}) {
+    if (state.discussionCommentSending && !force) return;
+    const parentId = Number(rawParentId) || 0;
+    const parent = state.discussionComments.find((comment) => Number(comment.id) === parentId);
+    state.discussionCommentParentId = parent ? parentId : 0;
+    const source = document.getElementById('knowledge-discussion-comment-content');
+    if (source) source.value = state.discussionCommentDrafts.get(discussionCommentDraftKey()) || '';
+    const name = document.getElementById('knowledge-discussion-comment-target-name');
+    if (name) name.textContent = parent ? getDiscussionAuthor(parent) : '';
+    setHidden(document.getElementById('knowledge-discussion-comment-target'), !parent);
+    setDiscussionFormStatus(
+      'comment',
+      app.userState.isLoggedIn ? '' : '登录后可以回复；如已输入草稿，请先复制再前往登录。',
+    );
+    if (focus) source?.focus();
+  }
+
+  function renderDiscussionComments() {
+    const list = document.getElementById('knowledge-discussion-comments');
+    if (!list) return;
+    if (!state.discussionComments.length) {
+      list.innerHTML =
+        '<p class="knowledge-discussion-empty-copy">还没有评论，可以在下方发表你的看法。</p>';
+      return;
+    }
+    list.innerHTML = state.discussionComments
+      .map((comment) => {
+        const parent = state.discussionComments.find(
+          (item) => Number(item.id) === Number(comment.parentCommentId),
+        );
+        return `<article class="knowledge-discussion-comment" data-knowledge-discussion-comment="${escapeHtml(comment.id)}">
+        <header class="knowledge-discussion-comment-meta">
+          <strong>${escapeHtml(getDiscussionAuthor(comment))}</strong>
+          <time>${escapeHtml(formatDiscussionDate(comment.createdAt))}</time>
+          <button type="button" data-knowledge-discussion-reply="${escapeHtml(comment.id)}">回复</button>
+        </header>
+        ${parent ? `<p class="knowledge-discussion-comment-parent">回复 ${escapeHtml(getDiscussionAuthor(parent))}</p>` : ''}
+        <div class="discussion-markdown-body">${app.renderMarkdownContent(comment.contentMarkdown || '')}</div>
+      </article>`;
+      })
+      .join('');
+    app.enhanceMarkdownContent(list);
+  }
+
+  async function loadDiscussionComments(postId, requestId) {
+    try {
+      const payload = await app.callApi(
+        `/discussion/posts/${encodeURIComponent(postId)}/comments`,
+        { method: 'GET' },
+      );
+      if (
+        requestId !== state.discussionDetailRequest ||
+        String(postId) !== state.discussionActivePostId
+      )
+        return;
+      state.discussionComments = Array.isArray(payload.comments) ? payload.comments : [];
+      renderDiscussionComments();
+    } catch (error) {
+      if (requestId !== state.discussionDetailRequest) return;
+      const list = document.getElementById('knowledge-discussion-comments');
+      if (list) list.textContent = error.message || '评论读取失败，请重新打开帖子重试。';
+    }
+  }
+
+  async function submitDiscussionComment() {
+    if (state.discussionCommentSending || !state.discussionPost || state.discussionPost.isDeleted)
+      return;
+    const source = document.getElementById('knowledge-discussion-comment-content');
+    const contentMarkdown = String(source?.value || '').trim();
+    if (!app.userState.isLoggedIn) {
+      setDiscussionFormStatus('comment', '请先复制当前草稿，再登录后回复。', true);
+      return;
+    }
+    if (!contentMarkdown || contentMarkdown.length > 5000) {
+      setDiscussionFormStatus('comment', '评论不能为空，且最多 5000 字。', true);
+      return;
+    }
+    const postId = state.discussionActivePostId;
+    const parentCommentId = state.discussionCommentParentId;
+    const key = discussionCommentDraftKey(postId, parentCommentId);
+    const version = state.discussionSessionVersion;
+    const detailRequest = state.discussionDetailRequest;
+    state.discussionCommentDrafts.set(key, source.value);
+    state.discussionCommentSending = true;
+    updateDiscussionFormControls();
+    setDiscussionFormStatus('comment', '正在发布回复…');
+    try {
+      const payload = await app.callApi(
+        `/discussion/posts/${encodeURIComponent(postId)}/comments`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ contentMarkdown, parentCommentId: parentCommentId || undefined }),
+        },
+      );
+      if (version !== state.discussionSessionVersion) return;
+      state.discussionCommentDrafts.delete(key);
+      loadDiscussionPosts({ force: true });
+      if (
+        state.discussionActivePostId === postId &&
+        state.discussionDetailRequest === detailRequest
+      ) {
+        if (discussionCommentDraftKey() === key) source.value = '';
+        if (payload.comment) {
+          state.discussionComments = [
+            ...state.discussionComments.filter((comment) => comment.id !== payload.comment.id),
+            payload.comment,
+          ];
+        }
+        if (state.discussionPost) {
+          state.discussionPost.commentCount = Math.max(
+            Number(state.discussionPost.commentCount || 0) + 1,
+            state.discussionComments.length,
+          );
+          renderDiscussionDetail(state.discussionPost);
+        }
+        renderDiscussionComments();
+        setDiscussionFormStatus('comment', payload.message || '回复已发布');
+      }
+    } catch (error) {
+      if (
+        version === state.discussionSessionVersion &&
+        state.discussionActivePostId === postId &&
+        state.discussionDetailRequest === detailRequest
+      ) {
+        setDiscussionFormStatus(
+          'comment',
+          `${error.message || '发布回复失败'}，草稿已保留。`,
+          true,
+        );
+      }
+    } finally {
+      if (version === state.discussionSessionVersion) {
+        state.discussionCommentSending = false;
+        updateDiscussionFormControls();
+      }
+    }
+  }
+
+  function discussionPostStorageKey() {
+    return `free_bbs_knowledge_discussion_draft_v1:${courseSlug}:${nodeId}`;
+  }
+
+  function persistDiscussionPostDraft() {
+    const title = document.getElementById('knowledge-discussion-compose-title')?.value || '';
+    const content = document.getElementById('knowledge-discussion-compose-content')?.value || '';
+    try {
+      if (!title && !content) {
+        sessionStorage.removeItem(discussionPostStorageKey());
+      } else {
+        sessionStorage.setItem(
+          discussionPostStorageKey(),
+          JSON.stringify({
+            uid: app.userState.isLoggedIn ? app.userState.uid : '',
+            title,
+            content,
+          }),
+        );
+      }
+      return true;
+    } catch {
+      // The in-page draft remains available when tab storage is unavailable.
+      return false;
+    }
+  }
+
+  function restoreDiscussionPostDraft() {
+    const title = document.getElementById('knowledge-discussion-compose-title');
+    const content = document.getElementById('knowledge-discussion-compose-content');
+    if (!title || !content || title.value || content.value) return;
+    try {
+      const draft = JSON.parse(sessionStorage.getItem(discussionPostStorageKey()) || 'null');
+      if (!draft) return;
+      const uid = app.userState.isLoggedIn ? app.userState.uid : '';
+      if (draft.uid && draft.uid !== uid) {
+        sessionStorage.removeItem(discussionPostStorageKey());
+        return;
+      }
+      title.value = typeof draft.title === 'string' ? draft.title.slice(0, 120) : '';
+      content.value = typeof draft.content === 'string' ? draft.content.slice(0, 20000) : '';
+      persistDiscussionPostDraft();
+    } catch {
+      // Malformed or inaccessible storage must not prevent opening the composer.
+    }
+  }
+
+  function bindDiscussionComposer() {
+    state.discussionSessionUid = app?.userState?.uid || '';
+    document
+      .getElementById('knowledge-discussion-compose-toggle')
+      ?.addEventListener('click', showDiscussionComposer);
+    document
+      .getElementById('knowledge-discussion-compose-cancel')
+      ?.addEventListener('click', () => showDiscussionList());
+    document
+      .getElementById('knowledge-discussion-compose-form')
+      ?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        submitDiscussionPost();
+      });
+    document.querySelectorAll('[data-knowledge-discussion-compose-mode]').forEach((button) => {
+      button.addEventListener('click', () =>
+        setDiscussionComposeMode(button.dataset.knowledgeDiscussionComposeMode),
+      );
+    });
+    ['title', 'content'].forEach((name) => {
+      document
+        .getElementById(`knowledge-discussion-compose-${name}`)
+        ?.addEventListener('input', persistDiscussionPostDraft);
+    });
+    document
+      .getElementById('knowledge-discussion-comment-form')
+      ?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        submitDiscussionComment();
+      });
+    document
+      .getElementById('knowledge-discussion-comment-content')
+      ?.addEventListener('input', (event) => {
+        state.discussionCommentDrafts.set(discussionCommentDraftKey(), event.target.value);
+      });
+    document
+      .getElementById('knowledge-discussion-comment-target-cancel')
+      ?.addEventListener('click', () => selectDiscussionCommentTarget(0));
+    document.getElementById('knowledge-discussion-comments')?.addEventListener('click', (event) => {
+      const button = event.target.closest?.('[data-knowledge-discussion-reply]');
+      if (button) selectDiscussionCommentTarget(button.dataset.knowledgeDiscussionReply);
+    });
+    window.addEventListener('freebbs:session-change', () => {
+      const uid = app.userState.isLoggedIn ? app.userState.uid : '';
+      const previousUid = state.discussionSessionUid;
+      if (uid === previousUid) return;
+      state.discussionSessionUid = uid;
+      state.discussionSessionVersion += 1;
+      state.discussionListRequest += 1;
+      state.discussionDetailRequest += 1;
+      state.discussionLoading = false;
+      state.discussionLoaded = false;
+      state.discussionPostSending = false;
+      state.discussionCommentSending = false;
+      state.discussionPosts = [];
+      state.discussionPost = null;
+      state.discussionComments = [];
+      if (previousUid) {
+        state.discussionCommentDrafts.clear();
+        ['compose-title', 'compose-content', 'comment-content'].forEach((name) => {
+          const input = document.getElementById(`knowledge-discussion-${name}`);
+          if (input) input.value = '';
+        });
+        document.getElementById('knowledge-discussion-compose-preview')?.replaceChildren();
+        persistDiscussionPostDraft();
+        selectDiscussionCommentTarget(0, { focus: false });
+        setDiscussionFormStatus('compose', '');
+      } else {
+        restoreDiscussionPostDraft();
+        persistDiscussionPostDraft();
+      }
+      if (previousUid || state.discussionActivePostId) showDiscussionList();
+      [
+        'detail-title',
+        'detail-meta',
+        'detail-badges',
+        'detail-body',
+        'detail-stats',
+        'comments',
+      ].forEach((name) => {
+        document.getElementById(`knowledge-discussion-${name}`)?.replaceChildren();
+      });
+      renderDiscussionList();
+      updateDiscussionFormControls();
+      loadDiscussionPosts({ force: true });
+    });
+    window.addEventListener('beforeunload', (event) => {
+      const hasPostDraft = ['title', 'content'].some((name) =>
+        document.getElementById(`knowledge-discussion-compose-${name}`)?.value.trim(),
+      );
+      const hasCommentDraft = [...state.discussionCommentDrafts.values()].some((value) =>
+        value.trim(),
+      );
+      if (
+        (hasPostDraft && !persistDiscussionPostDraft()) ||
+        hasCommentDraft ||
+        state.discussionPostSending ||
+        state.discussionCommentSending
+      )
+        event.preventDefault();
+    });
   }
 
   function setChatTab(rawTab) {
@@ -998,13 +1454,17 @@
       });
     });
     discussionList?.addEventListener('click', (event) => {
+      if (event.target.closest?.('[data-knowledge-discussion-compose]')) {
+        showDiscussionComposer();
+        return;
+      }
       const card = event.target.closest?.('[data-discussion-post-id]');
       if (card) {
         openDiscussionPost(card.dataset.discussionPostId);
       }
     });
     discussionRefresh?.addEventListener('click', () => {
-      showDiscussionList();
+      if (state.discussionActivePostId) openDiscussionPost(state.discussionActivePostId);
       loadDiscussionPosts({ force: true });
     });
     discussionBack?.addEventListener('click', () => showDiscussionList({ focus: true }));
@@ -1016,10 +1476,73 @@
     });
   }
 
+  function renderKnowledgeContent(node) {
+    const sections = node.sections || {};
+    const markdown = String(sections.knowledgeMarkdown ?? node.markdown ?? '').trim();
+    const basicInfoMarkdown = String(sections.basicInfoMarkdown || '').trim();
+    const applicationsMarkdown = String(sections.applicationsMarkdown || '').trim();
+
+    document.title = `FREE-BBS - ${node.title}`;
+    document.getElementById('knowledge-node-id').textContent = node.id;
+    document.getElementById('knowledge-title').textContent = node.title;
+    document.getElementById('knowledge-summary').textContent = node.summary || '';
+    document.getElementById('knowledge-chat-context').textContent = `${node.id} · ${node.title}`;
+    document.getElementById('knowledge-chat-welcome').textContent =
+      `我已经定位到「${node.title}」。你可以让我结合课程资料做直觉解释、提醒易错点，或出一道自测题。`;
+
+    const body = document.getElementById('knowledge-body');
+    body.innerHTML = app.renderMarkdownContent(
+      markdown || '*这个知识结点还没有挂载 Markdown 文档。*',
+    );
+    app.enhanceMarkdownContent(body);
+
+    const supplementary = document.getElementById('knowledge-supplementary');
+    const supplementarySections = [
+      {
+        markdown: basicInfoMarkdown,
+        card: document.getElementById('knowledge-basic-info-card'),
+        body: document.getElementById('knowledge-basic-info'),
+      },
+      {
+        markdown: applicationsMarkdown,
+        card: document.getElementById('knowledge-applications-card'),
+        body: document.getElementById('knowledge-applications'),
+      },
+    ];
+    supplementarySections.forEach((section) => {
+      const { markdown: supplementaryMarkdown, card, body: supplementaryBody } = section;
+      card?.classList.toggle('hidden', !supplementaryMarkdown);
+      if (supplementaryBody) {
+        supplementaryBody.innerHTML = supplementaryMarkdown
+          ? app.renderMarkdownContent(supplementaryMarkdown)
+          : '';
+        if (supplementaryMarkdown) {
+          app.enhanceMarkdownContent(supplementaryBody);
+        }
+      }
+    });
+    supplementary?.classList.toggle('hidden', !basicInfoMarkdown && !applicationsMarkdown);
+    document
+      .getElementById('knowledge-overview-empty')
+      ?.classList.toggle('hidden', Boolean(basicInfoMarkdown || applicationsMarkdown));
+    setKnowledgeView(state.view);
+  }
+
+  page.addEventListener('knowledge:document-saved', (event) => {
+    const node = event.detail?.node;
+    if (!node || !state.node || node.id !== state.node.id) {
+      return;
+    }
+    state.node = node;
+    renderKnowledgeContent(node);
+  });
+
   async function initialize() {
     bindTagControls();
     bindWorkspaceControls();
     bindChatControls();
+    bindDiscussionComposer();
+    setChatOpen(true, { focus: false });
 
     if (!app) {
       showPageError('课程渲染模块未加载，请刷新页面后重试。');
@@ -1027,6 +1550,8 @@
     }
 
     await app.sessionReady;
+    restoreDiscussionPostDraft();
+    updateDiscussionFormControls();
     if (!nodeId) {
       showPageError('未指定知识结点。');
       return;
@@ -1041,63 +1566,21 @@
         app.callApi(`/courses/${encodeURIComponent(courseSlug)}/map`, { method: 'GET' }),
       ]);
       const { course, node } = detail;
-      const sections = node.sections || {};
-      const markdown = String(sections.knowledgeMarkdown ?? node.markdown ?? '').trim();
-      const basicInfoMarkdown = String(sections.basicInfoMarkdown || '').trim();
-      const applicationsMarkdown = String(sections.applicationsMarkdown || '').trim();
       state.course = course;
       state.node = node;
       state.map = map;
       saveCurrentLearningNode(node.id);
 
-      document.title = `FREE-BBS - ${node.title}`;
       document.getElementById('knowledge-course-link').href = courseDirectoryHref();
       document.getElementById('knowledge-course-name').textContent = course.name;
-      document.getElementById('knowledge-node-id').textContent = node.id;
-      document.getElementById('knowledge-title').textContent = node.title;
-      document.getElementById('knowledge-summary').textContent = node.summary || '';
-      document.getElementById('knowledge-chat-context').textContent = `${node.id} · ${node.title}`;
-      document.getElementById('knowledge-chat-welcome').textContent =
-        `我已经定位到「${node.title}」。你可以让我结合课程资料做直觉解释、提醒易错点，或出一道自测题。`;
-
-      const body = document.getElementById('knowledge-body');
-      body.innerHTML = app.renderMarkdownContent(
-        markdown || '*这个知识结点还没有挂载 Markdown 文档。*',
-      );
-      app.enhanceMarkdownContent(body);
-
-      const supplementary = document.getElementById('knowledge-supplementary');
-      const supplementarySections = [
-        {
-          markdown: basicInfoMarkdown,
-          card: document.getElementById('knowledge-basic-info-card'),
-          body: document.getElementById('knowledge-basic-info'),
-        },
-        {
-          markdown: applicationsMarkdown,
-          card: document.getElementById('knowledge-applications-card'),
-          body: document.getElementById('knowledge-applications'),
-        },
-      ];
-      supplementarySections.forEach((section) => {
-        const { markdown: supplementaryMarkdown, card, body: supplementaryBody } = section;
-        card?.classList.toggle('hidden', !supplementaryMarkdown);
-        if (supplementaryBody && supplementaryMarkdown) {
-          supplementaryBody.innerHTML = app.renderMarkdownContent(supplementaryMarkdown);
-          app.enhanceMarkdownContent(supplementaryBody);
-        }
-      });
-      supplementary?.classList.toggle('hidden', !basicInfoMarkdown && !applicationsMarkdown);
-      document
-        .getElementById('knowledge-overview-empty')
-        ?.classList.toggle('hidden', Boolean(basicInfoMarkdown || applicationsMarkdown));
-      setKnowledgeView('overview');
+      renderKnowledgeContent(node);
 
       state.tags = getStoredTags();
       renderTags();
       renderKnowledgeSequence(map);
       syncDiscussionContext();
       loadDiscussionPosts();
+      page.dispatchEvent(new CustomEvent('knowledge:loaded', { detail: { course, node } }));
     } catch (error) {
       showPageError(error.message || '知识点加载失败。');
     }
