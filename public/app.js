@@ -56,6 +56,7 @@ let adminPermissionCatalog = { boards: [], courses: [] };
 let adminExpandedUserId = '';
 let adminMessageTimer = 0;
 let sessionReady = Promise.resolve();
+let discussionReady = Promise.resolve();
 
 const userName = document.getElementById('user-name');
 const userRole = document.getElementById('user-role');
@@ -2994,6 +2995,7 @@ function renderDiscussionComposeBoards() {
     return;
   }
 
+  const previousBoard = discussionComposeBoard.value;
   const availableBoards = discussionState.boards.filter(
     (board) => board.slug !== 'changelog' || userState.isAdmin,
   );
@@ -3014,6 +3016,12 @@ function renderDiscussionComposeBoards() {
 
   if (preferredBoard) {
     discussionComposeBoard.value = preferredBoard;
+  }
+  if (
+    discussionComposeForm?.dataset.circuitHandoff &&
+    availableBoards.some((board) => board.slug === previousBoard)
+  ) {
+    discussionComposeBoard.value = previousBoard;
   }
 }
 
@@ -5328,7 +5336,9 @@ function renderDiscussionComposerState() {
 
   discussionCreateToggle.textContent = '登录后发帖';
   discussionCreateToggle.disabled = false;
-  discussionComposeForm.classList.add('hidden');
+  if (!discussionComposeForm.dataset.circuitHandoff) {
+    discussionComposeForm.classList.add('hidden');
+  }
 }
 
 async function loadHomeDiscussionPosts(mode = homeDashboardState.feedMode, { force = false } = {}) {
@@ -5791,6 +5801,7 @@ async function initializeDiscussionPage() {
     renderDiscussionPosts();
     renderDiscussionDetail(FALLBACK_DISCUSSION_POST);
   }
+  return { boards: discussionState.boards, isFallback: discussionState.isFallback };
 }
 
 async function loadPublicProfile() {
@@ -7709,6 +7720,7 @@ async function handleDiscussionComposeSubmit(event) {
   }
 
   event.preventDefault();
+  if (discussionComposeForm.dataset.submitting === 'true') return;
 
   if (!userState.isLoggedIn) {
     openModal('login');
@@ -7721,6 +7733,11 @@ async function handleDiscussionComposeSubmit(event) {
   }
 
   setDiscussionMessage('正在发布帖子...');
+  const submittedUid = userState.uid;
+  const submitButton = discussionComposeForm.querySelector('button[type="submit"]');
+  discussionComposeForm.dataset.submitting = 'true';
+  discussionComposeForm.setAttribute('aria-busy', 'true');
+  if (submitButton) submitButton.disabled = true;
 
   try {
     const payload = await callApi('/discussion/posts', {
@@ -7732,7 +7749,11 @@ async function handleDiscussionComposeSubmit(event) {
       }),
     });
 
+    if (!userState.isLoggedIn || userState.uid !== submittedUid) return;
     setDiscussionMessage(payload.message || '帖子发布成功');
+    discussionComposeForm.dispatchEvent(
+      new CustomEvent('discussion:published', { detail: { post: payload.post } }),
+    );
     discussionComposeForm.reset();
     discussionComposeForm.classList.add('hidden');
     discussionState.activeBoard = payload.post.board.slug;
@@ -7746,8 +7767,13 @@ async function handleDiscussionComposeSubmit(event) {
       postId: discussionState.activePostId,
     });
   } catch (error) {
+    if (!userState.isLoggedIn || userState.uid !== submittedUid) return;
     setDiscussionMessage(error.message);
     discussionComposeForm.classList.remove('hidden');
+  } finally {
+    delete discussionComposeForm.dataset.submitting;
+    discussionComposeForm.removeAttribute('aria-busy');
+    if (submitButton) submitButton.disabled = false;
   }
 }
 
@@ -8653,6 +8679,9 @@ window.freeBbsApp = {
   get sessionReady() {
     return sessionReady;
   },
+  get discussionReady() {
+    return discussionReady;
+  },
   getStoredTypographyPreferences,
   applyTypographyPreferences,
   typographyPresets: TYPOGRAPHY_PRESETS,
@@ -8781,7 +8810,7 @@ loadHomeDiscussionPosts();
 loadHomeBoardActivityForViewport();
 loadHeatLeaderboard();
 initializeLandingMotion();
-initializeDiscussionPage();
+discussionReady = initializeDiscussionPage();
 initializeAiChatPage();
 loadPublicProfile();
 

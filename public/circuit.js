@@ -85,6 +85,13 @@
     listOffset: 0,
     listLoading: false,
     sessionUid: '',
+    examples: [],
+    loadedExample: null,
+    exampleBusy: false,
+    exampleLoading: false,
+    exampleRequest: 0,
+    exampleLoadRequest: 0,
+    deleteExample: null,
   };
 
   function escapeHtml(value) {
@@ -129,6 +136,7 @@
           document: state.document,
           cid: state.cid,
           revision: state.revision,
+          loadedExample: state.loadedExample,
           uid: app.userState.isLoggedIn ? app.userState.uid : '',
         }),
       );
@@ -157,6 +165,14 @@
         return false;
       }
       state.document = engine.validateDocument(saved.document);
+      if (
+        isExampleAdmin() &&
+        Number.isSafeInteger(saved.loadedExample?.id) &&
+        saved.loadedExample.id > 0 &&
+        Number.isSafeInteger(saved.loadedExample.revision) &&
+        saved.loadedExample.revision > 0
+      )
+        state.loadedExample = saved.loadedExample;
       if (state.cid && Number.isSafeInteger(saved.revision)) state.revision = saved.revision;
       $('title').value = String(saved.title || '未命名电路').slice(0, 120);
       $('description').value = String(saved.description || '').slice(0, 2000);
@@ -172,6 +188,9 @@
 
   function updateControls() {
     $('save').disabled = state.saving || !state.editable;
+    $('publish').hidden = !state.cid;
+    $('publish').disabled = state.dirty || state.saving;
+    $('publish').title = state.dirty ? '请先保存当前修改，再发表到讨论区' : '';
     const saveLabel = state.cid ? `保存新版本${state.dirty ? ' · 有修改' : ''}` : '保存并获取 CID';
     $('save').textContent = state.saving ? '正在保存…' : saveLabel;
     $('title').readOnly = !state.editable;
@@ -183,6 +202,8 @@
     $('import-json').disabled = !state.editable;
     $('rotate').disabled = !state.editable || !state.selectedId;
     $('delete').disabled = !state.editable || (!state.selectedId && !state.selectedWire);
+    $('reset-wire').hidden = !state.selectedWire;
+    $('reset-wire').disabled = !state.editable;
     $('palette')
       .querySelectorAll('button')
       .forEach((button) => {
@@ -197,8 +218,23 @@
       });
     page.querySelectorAll('[data-circuit-reference]').forEach((button) => {
       const control = button;
-      control.disabled = !state.cid || state.dirty;
+      control.disabled = !state.cid;
+      control.title = state.cid ? `引用已保存的第 ${state.revision} 版` : '请先保存电路，获取 CID';
     });
+    let referenceHint = '请先保存电路，获取 CID 后即可复制引用。';
+    if (!app.userState.isLoggedIn && !state.cid)
+      referenceHint = '请先登录并保存电路，获取 CID 后即可复制引用。';
+    if (state.cid) referenceHint = `引用指向已保存的第 ${state.revision} 版。`;
+    if (state.cid && state.dirty)
+      referenceHint += '当前有未保存修改；再次保存后，新的引用才会包含这些修改。';
+    $('reference-hint').textContent = referenceHint;
+    if (
+      !state.cid ||
+      !$('reference-text').value.includes(`cid=${state.cid}&revision=${state.revision}&`)
+    ) {
+      $('reference-text').value = '';
+      $('reference-text').hidden = true;
+    }
     $('count').textContent =
       `${state.document.components.length} 个元件 · ${state.document.wires.length} 条导线`;
     const identifier = state.cid ? `${state.cid} · 版本 ${state.revision}` : '尚未保存';
@@ -211,6 +247,7 @@
       help = `已选 ${state.wireStart.componentId} 的引脚 ${state.wireStart.pin + 1}，点击另一个引脚完成连接。`;
     if (!state.editable) help = '只读预览，可选中元件查看参数；复制后继续编辑。';
     $('canvas-help').textContent = help;
+    updateExampleControls();
   }
 
   function stopPlayback() {
@@ -273,6 +310,17 @@
       onWireClick(id) {
         state.selectedId = '';
         state.selectedWire = id;
+        renderInspector();
+        renderSchematic();
+      },
+      onWireChange(id, points) {
+        if (!state.editable) return;
+        const wire = state.document.wires.find((item) => item.id === id);
+        if (!wire) return;
+        wire.points = points.map((point) => ({ x: point.x, y: point.y }));
+        state.selectedId = '';
+        state.selectedWire = id;
+        changed({ electrical: false });
         renderInspector();
         renderSchematic();
       },
@@ -427,6 +475,9 @@
         'beforeend',
         '<p class="circuit-parameter-hint">使用 u、k、数学运算和函数，例如 i=k*u^3。参数变化后可再次扫描特性。</p>',
       );
+    if (selectedWire)
+      $('parameters').innerHTML =
+        '<p class="circuit-parameter-hint">拖动圆点调整形状；点击 + 或双击线段添加拐点。选中圆点后用方向键微调、Delete 删除，Esc 取消拖动。</p>';
     const wires = selectedWire
       ? [selectedWire]
       : state.document.wires.filter(
@@ -595,56 +646,73 @@
     }
   }
 
-  function exampleComponent(type, id, x, y, overrides = {}) {
+  function blankExample() {
     return {
-      type,
-      id,
-      x,
-      y,
-      rotation: 0,
-      params: { ...clone(engine.catalog[type].defaults), ...overrides },
+      title: '未命名电路',
+      description: '',
+      document: { version: 1, components: [], wires: [], analysis: { type: 'dc' } },
     };
   }
 
-  function example(name) {
-    const doc = { version: 1, components: [], wires: [], analysis: { type: 'dc' } };
-    if (name === 'blank') return { title: '未命名电路', description: '', document: doc };
-    const transient = name !== 'divider';
-    const sourceParams =
-      name === 'diode' ? { dc: 0, waveform: 'sine', amplitude: 2, frequency: 500 } : { dc: 5 };
-    const loadType = { rc: 'capacitor', diode: 'diode', divider: 'resistor' }[name];
-    const loadId = { rc: 'C1', diode: 'D1', divider: 'R2' }[name];
-    doc.components = [
-      exampleComponent('voltage', 'V1', 210, 180, sourceParams),
-      exampleComponent('resistor', 'R1', 440, 180),
-      exampleComponent(loadType, loadId, 670, 180),
-      exampleComponent('ground', 'G1', 440, 430),
-      exampleComponent('voltmeter', 'VM1', 670, 360),
-    ];
-    const load = doc.components[2].id;
-    const connections = [
-      ['V1', 0, 'R1', 0],
-      ['R1', 1, load, 0],
-      [load, 1, 'G1', 0],
-      ['V1', 1, 'G1', 0],
-      ['VM1', 0, load, 0],
-      ['VM1', 1, 'G1', 0],
-    ];
-    doc.wires = connections.map(([fromId, fromPin, toId, toPin], index) => ({
-      id: `w${index + 1}`,
-      from: { componentId: fromId, pin: fromPin },
-      to: { componentId: toId, pin: toPin },
-    }));
-    if (transient) doc.analysis = { type: 'transient', stop: 0.01, step: 0.00002, initial: 'zero' };
-    return {
-      title: { divider: '电阻分压实验', rc: 'RC 充电响应', diode: '二极管伏安与整流' }[name],
-      description: {
-        divider: '5 V 电源与两个 1 kΩ 电阻，电压表测量输出电压。调整阻值后再次运行。',
-        rc: '5 V 阶跃驱动 1 kΩ / 1 μF 电路，从零初始储能观察电容充电。',
-        diode: '正弦电压驱动电阻与二极管，观察二极管电压和电流的非线性关系。',
-      }[name],
-      document: doc,
-    };
+  function isExampleAdmin() {
+    return app.userState.isLoggedIn && app.userState.isAdmin;
+  }
+
+  function updateExampleControls() {
+    const admin = isExampleAdmin();
+    const selected = state.examples.find((item) => String(item.id) === $('example').value);
+    const busy = state.exampleBusy || state.exampleLoading;
+    $('example-admin').hidden = !admin;
+    $('example').disabled = busy;
+    $('load-example').disabled = !state.editable || busy;
+    $('example-create').disabled = !admin || !state.editable || busy || state.saving;
+    $('example-update').disabled =
+      !admin ||
+      !state.editable ||
+      busy ||
+      state.saving ||
+      !selected ||
+      selected.id !== state.loadedExample?.id;
+    $('example-delete').disabled = !admin || !selected || busy;
+    $('example-delete-yes').disabled = busy;
+    $('example-delete-no').disabled = busy;
+    $('example-delete-confirm').hidden = !admin || !state.deleteExample;
+    $('example-target').textContent = state.loadedExample
+      ? `编辑目标：${state.loadedExample.title} · 第 ${state.loadedExample.revision} 版`
+      : '先载入要修改的示例。';
+  }
+
+  async function refreshExamples(preferred = $('example').value) {
+    state.exampleRequest += 1;
+    const request = state.exampleRequest;
+    state.deleteExample = null;
+    state.exampleLoading = true;
+    updateExampleControls();
+    try {
+      const payload = await app.callApi('/circuit-examples', { method: 'GET' });
+      if (request !== state.exampleRequest) return false;
+      state.examples = payload.examples || [];
+      $('example').replaceChildren(
+        ...state.examples.map((item) => new window.Option(item.title, String(item.id))),
+        new window.Option('空白电路', 'blank'),
+      );
+      $('example').value = state.examples.some((item) => String(item.id) === preferred)
+        ? preferred
+        : 'blank';
+      $('retry-examples').hidden = true;
+      return true;
+    } catch (error) {
+      if (request === state.exampleRequest) {
+        setStatus(`示例读取失败：${error.message}`, 'error', 'example-status');
+        $('retry-examples').hidden = false;
+      }
+      return false;
+    } finally {
+      if (request === state.exampleRequest) {
+        state.exampleLoading = false;
+        updateExampleControls();
+      }
+    }
   }
 
   function confirmDraftReplacement(action) {
@@ -653,20 +721,194 @@
     return window.confirm(`${action}会替换当前草稿，是否继续？`);
   }
 
-  function loadExample() {
-    if (!state.editable || !confirmDraftReplacement('载入示例')) return;
-    const sample = example($('example').value);
-    state.document = sample.document;
-    $('title').value = sample.title;
-    $('description').value = sample.description;
-    state.selectedId = '';
-    state.selectedWire = '';
-    state.wireStart = null;
-    changed();
-    renderAnalysis();
-    renderInspector();
-    renderSchematic();
-    setStatus('示例已载入，可修改参数或直接运行仿真。');
+  async function loadExample({ initial = false } = {}) {
+    if (!state.editable || state.exampleBusy || (!initial && !confirmDraftReplacement('载入示例')))
+      return;
+    const id = $('example').value;
+    state.exampleLoadRequest += 1;
+    const request = state.exampleLoadRequest;
+    const { editVersion, generation } = state;
+    state.exampleLoading = true;
+    state.deleteExample = null;
+    updateExampleControls();
+    try {
+      const sample =
+        id === 'blank'
+          ? blankExample()
+          : (await app.callApi(`/circuit-examples/${encodeURIComponent(id)}`, { method: 'GET' }))
+              .example;
+      if (request !== state.exampleLoadRequest || generation !== state.generation) return;
+      if (editVersion !== state.editVersion) {
+        setStatus('读取期间草稿已修改，请再次载入示例。', 'error', 'example-status');
+        return;
+      }
+      state.document = engine.validateDocument(sample.document);
+      $('title').value = sample.title;
+      $('description').value = sample.description;
+      state.loadedExample = sample.id
+        ? { id: sample.id, revision: sample.revision, title: sample.title }
+        : null;
+      if (sample.id) {
+        state.examples = state.examples.map((item) =>
+          item.id === sample.id
+            ? {
+                id: sample.id,
+                revision: sample.revision,
+                title: sample.title,
+                description: sample.description,
+              }
+            : item,
+        );
+        const option = Array.from($('example').options).find(
+          (item) => item.value === String(sample.id),
+        );
+        if (option) option.textContent = sample.title;
+      }
+      state.selectedId = '';
+      state.selectedWire = '';
+      state.wireStart = null;
+      if (!initial) changed();
+      else invalidateResult();
+      renderAnalysis();
+      renderInspector();
+      renderSchematic();
+      updateControls();
+      setStatus(initial ? '' : '示例已载入，可修改后另存为自己的电路。', '', 'example-status');
+      if (initial) setStatus('选择分析方式，然后运行仿真。', '', 'run-status');
+    } catch (error) {
+      if (request === state.exampleLoadRequest && generation === state.generation)
+        setStatus(`示例载入失败：${error.message}`, 'error', 'example-status');
+    } finally {
+      if (request === state.exampleLoadRequest) {
+        state.exampleLoading = false;
+        updateExampleControls();
+      }
+    }
+  }
+
+  async function saveExample(updating) {
+    if (!isExampleAdmin() || !state.editable || state.exampleBusy || state.exampleLoading) return;
+    if (!$('parameters').reportValidity()) return;
+    const target = updating ? state.loadedExample : null;
+    if (updating && (!target || String(target.id) !== $('example').value)) return;
+    const { generation } = state;
+    let data;
+    try {
+      const analysis = readAnalysis();
+      if (JSON.stringify(analysis) !== JSON.stringify(state.document.analysis)) {
+        state.document.analysis = analysis;
+        changed();
+      }
+      data = { ...metadata(), document: engine.validateDocument(state.document) };
+      if (!data.title) throw new Error('请填写电路名称，作为示例名称。');
+    } catch (error) {
+      setStatus(error.message, 'error', 'example-status');
+      return;
+    }
+    state.exampleBusy = true;
+    state.deleteExample = null;
+    updateExampleControls();
+    setStatus(updating ? '正在保存示例修改…' : '正在添加示例…', '', 'example-status');
+    try {
+      const payload = await app.callApi(
+        target ? `/circuit-examples/${target.id}` : '/circuit-examples',
+        {
+          method: target ? 'PUT' : 'POST',
+          body: JSON.stringify({
+            ...data,
+            ...(target ? { expectedRevision: target.revision } : {}),
+          }),
+        },
+      );
+      if (generation !== state.generation) return;
+      state.loadedExample = {
+        id: payload.example.id,
+        revision: payload.example.revision,
+        title: payload.example.title,
+      };
+      persistDraft();
+      const refreshed = await refreshExamples(String(payload.example.id));
+      if (generation !== state.generation) return;
+      if (refreshed)
+        setStatus(
+          `示例「${payload.example.title}」已${updating ? '更新' : '添加'}。`,
+          'success',
+          'example-status',
+        );
+      else
+        setStatus('示例已保存，但列表刷新失败。请点击“重新读取示例”。', 'error', 'example-status');
+    } catch (error) {
+      if (generation !== state.generation) return;
+      setStatus(
+        error.status === 409
+          ? '示例已被其他管理员更新。当前电路草稿已保留，请重新载入示例比较，或添加为新示例。'
+          : `示例保存失败：${error.message}`,
+        'error',
+        'example-status',
+      );
+    } finally {
+      if (generation === state.generation) {
+        state.exampleBusy = false;
+        updateExampleControls();
+      }
+    }
+  }
+
+  function confirmExampleDeletion() {
+    const selected = state.examples.find((item) => String(item.id) === $('example').value);
+    if (!isExampleAdmin() || !selected || state.exampleBusy || state.exampleLoading) return;
+    state.deleteExample = { ...selected };
+    $('example-delete-message').textContent =
+      `删除示例「${selected.title}」？同学已经另存的电路与引用会保留。`;
+    updateExampleControls();
+  }
+
+  async function deleteExample() {
+    const target = state.deleteExample;
+    if (!isExampleAdmin() || !target || state.exampleBusy) return;
+    const { generation } = state;
+    state.exampleBusy = true;
+    updateExampleControls();
+    try {
+      await app.callApi(`/circuit-examples/${target.id}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ expectedRevision: target.revision }),
+      });
+      if (generation !== state.generation) return;
+      state.deleteExample = null;
+      if (state.loadedExample?.id === target.id) state.loadedExample = null;
+      persistDraft();
+      const refreshed = await refreshExamples('blank');
+      if (generation === state.generation && refreshed)
+        setStatus('示例已删除，画布中的电路仍然保留。', 'success', 'example-status');
+      else if (generation === state.generation)
+        setStatus('示例已删除，但列表刷新失败。请点击“重新读取示例”。', 'error', 'example-status');
+    } catch (error) {
+      if (generation === state.generation)
+        setStatus(
+          error.status === 409 ? '示例已更新，请重新读取后再删除。' : `删除失败：${error.message}`,
+          'error',
+          'example-status',
+        );
+      if (generation === state.generation && error.status === 409)
+        $('retry-examples').hidden = false;
+    } finally {
+      if (generation === state.generation) {
+        state.exampleBusy = false;
+        updateExampleControls();
+      }
+    }
+  }
+
+  function publishToDiscussion() {
+    if (!state.cid || state.dirty || state.saving) return;
+    const query = new URLSearchParams({
+      board: 'circuit',
+      compose: 'circuit',
+      cid: state.cid,
+      revision: String(state.revision),
+    });
+    window.location.assign(`/discussion?${query}`);
   }
 
   function renderWaveform() {
@@ -887,6 +1129,7 @@
     state.revision = 0;
     state.latestRevision = 0;
     state.owner = null;
+    state.loadedExample = null;
     state.editable = true;
     $('title').value = `${$('title').value.replace(/ · 副本$/, '')} · 副本`.slice(0, 120);
     window.history.replaceState(null, '', '/circuit');
@@ -898,7 +1141,9 @@
   }
 
   async function copyReference(view) {
-    if (!state.cid || state.dirty) return setStatus('请先保存当前版本，再复制引用。', 'error');
+    if (!state.cid) return setStatus('请先保存电路，获取 CID 后再复制引用。', 'error');
+    const copiedRevision = state.revision;
+    const unsavedHint = state.dirty ? '未保存的修改尚未包含在引用中。' : '';
     const label = { live: '电路动态图', waveform: '电路波形', schematic: '电路原理图' }[view];
     const query = new URLSearchParams({ cid: state.cid, revision: String(state.revision), view });
     const markdown = `[${label}](/circuit?${query.toString()})`;
@@ -906,11 +1151,14 @@
     $('reference-text').hidden = false;
     try {
       await navigator.clipboard.writeText(markdown);
-      setStatus(`${label}引用已复制。`, 'success');
+      setStatus(
+        `${label}引用已复制，指向已保存的第 ${copiedRevision} 版。${unsavedHint}`,
+        'success',
+      );
     } catch {
       $('reference-text').focus();
       $('reference-text').select();
-      setStatus('请复制下方已选中的 Markdown 引用。');
+      setStatus(`请复制下方已选中的第 ${copiedRevision} 版 Markdown 引用。${unsavedHint}`);
     }
   }
 
@@ -968,6 +1216,7 @@
     state.generation += 1;
     const { generation } = state;
     state.editable = false;
+    state.loadedExample = null;
     updateControls();
     setStatus('正在载入电路…');
     try {
@@ -1093,6 +1342,28 @@
       renderSchematic();
     });
     $('load-example').addEventListener('click', loadExample);
+    $('reset-wire').addEventListener('click', () => {
+      if (!state.editable) return;
+      const wire = state.document.wires.find((item) => item.id === state.selectedWire);
+      if (!wire) return;
+      delete wire.points;
+      changed({ electrical: false });
+      renderSchematic();
+    });
+    $('retry-examples').addEventListener('click', () => refreshExamples());
+    $('example').addEventListener('change', () => {
+      state.deleteExample = null;
+      updateExampleControls();
+    });
+    $('example-create').addEventListener('click', () => saveExample(false));
+    $('example-update').addEventListener('click', () => saveExample(true));
+    $('example-delete').addEventListener('click', confirmExampleDeletion);
+    $('example-delete-yes').addEventListener('click', deleteExample);
+    $('example-delete-no').addEventListener('click', () => {
+      state.deleteExample = null;
+      updateExampleControls();
+    });
+    $('publish').addEventListener('click', publishToDiscussion);
     $('analysis-form').addEventListener('submit', (event) => event.preventDefault());
     $('analysis-form').addEventListener('change', (event) => {
       if (event.target === $('sweep-component')) renderSweepOptions();
@@ -1154,7 +1425,8 @@
     });
     $('list-more').addEventListener('click', () => loadList());
     document.addEventListener('keydown', (event) => {
-      if (listPage) return;
+      if (listPage || event.defaultPrevented) return;
+      if (event.target.closest('[data-wire-controls]')) return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
         saveCircuit();
@@ -1190,12 +1462,20 @@
     });
     window.addEventListener('freebbs:session-change', () => {
       const uid = app.userState.isLoggedIn ? app.userState.uid : '';
-      if (uid === state.sessionUid) return;
+      if (uid === state.sessionUid) {
+        updateControls();
+        return;
+      }
       const previous = state.sessionUid;
       state.sessionUid = uid;
       state.generation += 1;
       state.listLoading = false;
       state.saving = false;
+      state.exampleBusy = false;
+      state.loadedExample = null;
+      state.deleteExample = null;
+      state.exampleLoadRequest += 1;
+      state.exampleLoading = false;
       if (listPage) {
         loadList({ reset: true });
         return;
@@ -1206,7 +1486,7 @@
         state.dirty = false;
         if (state.cid) loadCircuit(state.cid);
         else {
-          state.document = example('blank').document;
+          state.document = blankExample().document;
           $('title').value = '未命名电路';
           $('description').value = '';
           state.selectedId = '';
@@ -1217,6 +1497,7 @@
       } else if (state.cid) loadCircuit(state.cid);
       else persistDraft();
       updateControls();
+      refreshExamples();
     });
   }
 
@@ -1236,6 +1517,7 @@
       return;
     }
     renderPalette();
+    const examplesReady = refreshExamples();
     const cid = params.get('cid');
     const revision = params.get('revision');
     if (cid) {
@@ -1247,15 +1529,23 @@
       }
       await loadCircuit(cid, revision || '');
     } else {
-      const sample = example('divider');
+      const sample = blankExample();
       state.document = sample.document;
       $('title').value = sample.title;
       $('description').value = sample.description;
-      restoreDraft();
+      const restored = restoreDraft();
       renderAnalysis();
       renderInspector();
       renderSchematic();
       updateControls();
+      await examplesReady;
+      if (!restored && !state.dirty && state.examples.length) {
+        $('example').value = String(state.examples[0].id);
+        await loadExample({ initial: true });
+      } else if (state.loadedExample) {
+        $('example').value = String(state.loadedExample.id);
+        updateExampleControls();
+      }
     }
   }
 

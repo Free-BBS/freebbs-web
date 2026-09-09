@@ -206,6 +206,46 @@
   margin-top: 8px;
   width: 100%;
 }
+.circuit-example-admin {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-line);
+  font-size: 0.75rem;
+}
+.circuit-example-admin summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.circuit-example-admin p {
+  margin: 10px 0;
+  color: var(--ui-muted);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.circuit-example-admin button {
+  width: 100%;
+  margin-top: 7px;
+  padding: 8px;
+  white-space: normal;
+  font-size: 0.74rem;
+}
+.circuit-example-delete-confirm {
+  padding-top: 5px;
+}
+.circuit-reference-hint {
+  flex-basis: 100%;
+  margin: 4px 0;
+  color: var(--ui-muted);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+#circuit-example-delete-yes {
+  color: var(--ui-danger, #d77c74);
+}
+#circuit-retry-examples {
+  white-space: normal;
+  font-size: 0.74rem;
+}
 .circuit-canvas-panel {
   min-width: 0;
   display: flex;

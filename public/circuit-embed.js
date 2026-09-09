@@ -246,8 +246,12 @@
   }
   function diagramBounds(documentValue) {
     if (!documentValue.components.length) return [0, 0, 1000, 640];
-    const xs = documentValue.components.map((item) => item.x);
-    const ys = documentValue.components.map((item) => item.y);
+    const positions = [
+      ...documentValue.components,
+      ...documentValue.wires.flatMap((wire) => wire.points || []),
+    ];
+    const xs = positions.map((item) => item.x);
+    const ys = positions.map((item) => item.y);
     const left = Math.min(...xs) - 100;
     const top = Math.min(...ys) - 95;
     return [

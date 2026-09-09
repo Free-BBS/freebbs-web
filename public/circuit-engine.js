@@ -366,7 +366,21 @@
       const to = endpoint(wire.to);
       if (from.componentId === to.componentId && from.pin === to.pin)
         throw new Error('导线两端不能是同一个引脚。');
-      return { id: wire.id, from, to };
+      let points;
+      if (wire.points !== undefined) {
+        if (!Array.isArray(wire.points) || wire.points.length > 32)
+          throw new Error('每条导线最多包含 32 个中间拐点，points 必须为数组。');
+        points = wire.points.map((point) => {
+          if (!point || typeof point !== 'object' || Array.isArray(point))
+            throw new Error('导线拐点必须包含数值坐标 x 和 y。');
+          const x = finite(point.x, '导线拐点横坐标');
+          const y = finite(point.y, '导线拐点纵坐标');
+          if (Math.abs(x) > 100000 || Math.abs(y) > 100000)
+            throw new Error('导线拐点坐标超出画布范围。');
+          return { x, y };
+        });
+      }
+      return { id: wire.id, from, to, ...(points === undefined ? {} : { points }) };
     });
     return {
       version: 1,
