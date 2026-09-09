@@ -238,7 +238,8 @@ test('knowledge page uses database-backed knowledge controller', () => {
   assert.match(controller, /renderMarkdownContent/);
   assert.match(controller, /sections\.knowledgeMarkdown/);
   assert.match(controller, /function setKnowledgeView\(view/);
-  assert.match(controller, /setKnowledgeView\('overview'\)/);
+  assert.match(controller, /view: 'overview'/);
+  assert.match(controller, /setKnowledgeView\(state\.view\)/);
   assert.match(controller, /setKnowledgeView\('reading'/);
   assert.match(controller, /function buildKnowledgeChatRequest/);
   assert.match(controller, /app\.streamKnowledgeRagResponse/);

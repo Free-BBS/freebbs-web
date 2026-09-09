@@ -1,0 +1,627 @@
+.knowledge-page #knowledge-title {
+  margin-bottom: 0;
+  font-size: clamp(1.75rem, 2.4vw, 2.25rem);
+  line-height: 1.4;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.knowledge-page .course-material-header {
+  gap: 10px;
+  padding-top: 12px;
+  padding-bottom: 20px;
+}
+
+.knowledge-page .course-material-header > .course-material-heading > p:last-child {
+  margin-top: 12px;
+  font-size: 0.91rem;
+  line-height: 1.7;
+}
+
+.knowledge-page .course-material-section-heading h2 {
+  font-size: 1.3rem;
+  line-height: 1.4;
+}
+
+.knowledge-edit-toggle,
+.knowledge-editor button {
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--course-line-strong);
+  border-radius: 6px;
+  background: var(--course-surface-solid);
+  color: var(--bbs-shell-text);
+  font: 600 0.82rem / 1.3 var(--font-ui);
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.knowledge-edit-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  width: fit-content;
+  margin-top: 12px;
+  white-space: nowrap;
+}
+
+.knowledge-editor [hidden],
+.knowledge-edit-toggle[hidden],
+.knowledge-edit-notice[hidden],
+.knowledge-editor[hidden],
+.course-material-reader.is-editing #knowledge-overview,
+.course-material-reader.is-editing #knowledge-reading,
+.course-material-reader.is-editing .knowledge-sequence-navigation {
+  display: none !important;
+}
+
+.knowledge-edit-toggle:hover,
+.knowledge-editor button:hover {
+  border-color: var(--course-accent);
+  background: var(--course-accent-soft);
+}
+
+.knowledge-edit-toggle:focus-visible,
+.knowledge-editor button:focus-visible,
+#knowledge-editor-source:focus-visible {
+  outline: 2px solid var(--course-accent);
+  outline-offset: 3px;
+}
+
+.knowledge-edit-toggle:disabled,
+.knowledge-editor button:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+.knowledge-editor {
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+  padding-top: 24px;
+  border-top: 1px solid var(--course-line);
+  color: var(--bbs-shell-text);
+}
+
+.knowledge-editor-heading h2 {
+  margin: 0 0 6px;
+  color: var(--bbs-shell-text);
+  font: 700 1.12rem / 1.4 var(--font-ui);
+}
+
+.knowledge-editor-heading p,
+.knowledge-edit-notice,
+.knowledge-editor-help,
+.knowledge-editor-status,
+.knowledge-editor-discard p {
+  margin: 0;
+  color: var(--bbs-shell-muted);
+  font: 400 0.79rem / 1.65 var(--font-ui);
+  overflow-wrap: anywhere;
+}
+
+.knowledge-edit-notice {
+  padding: 10px 14px;
+  border-left: 3px solid var(--course-accent);
+  background: var(--course-accent-soft);
+  color: var(--course-accent);
+}
+
+.knowledge-editor-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.knowledge-editor-sections button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--bbs-shell-muted);
+}
+
+.knowledge-editor-sections button[aria-pressed='true'] {
+  background: var(--course-accent-soft);
+  color: var(--course-accent);
+}
+
+.knowledge-editor-workspace {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--course-line-strong);
+  border-radius: 8px;
+  background: var(--course-surface-solid);
+}
+
+.knowledge-editor-modes {
+  display: flex;
+  gap: 12px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--course-line);
+  background: var(--course-surface-soft);
+}
+
+.knowledge-editor-modes button {
+  min-height: 42px;
+  padding: 10px 2px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--bbs-shell-muted);
+}
+
+.knowledge-editor-modes button[aria-pressed='true'] {
+  border-bottom-color: var(--course-accent);
+  color: var(--course-accent);
+}
+
+.knowledge-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--course-line);
+}
+
+.knowledge-editor-toolbar button {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 6px 8px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 0.76rem;
+}
+
+.knowledge-editor-toolbar .knowledge-editor-upload {
+  color: var(--course-accent);
+}
+
+.knowledge-editor-source-label {
+  display: block;
+  padding: 14px 16px 0;
+  color: var(--bbs-shell-muted);
+  font: 500 0.73rem / 1.4 var(--font-ui);
+}
+
+#knowledge-editor-source {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 340px;
+  max-height: 75dvh;
+  display: block;
+  margin: 0;
+  padding: 12px 16px 20px;
+  resize: vertical;
+  border: 0;
+  border-radius: 0;
+  background: var(--course-surface-solid);
+  color: var(--bbs-shell-text);
+  font:
+    400 0.91rem / 1.8 'SFMono-Regular',
+    Consolas,
+    'Liberation Mono',
+    monospace;
+  tab-size: 2;
+}
+
+#knowledge-editor-source:focus-visible {
+  outline-offset: -3px;
+}
+
+#knowledge-editor-source::placeholder {
+  color: var(--bbs-shell-muted);
+}
+
+.knowledge-editor-preview-pane {
+  min-height: 340px;
+  min-width: 0;
+  padding: 20px 16px;
+  overflow-wrap: anywhere;
+}
+
+#knowledge-editor-preview {
+  min-width: 0;
+}
+
+#knowledge-editor-preview > :first-child {
+  margin-top: 0;
+}
+
+.knowledge-editor:not([hidden]) #knowledge-editor-preview:empty::before {
+  content: '这里显示当前内容的预览。';
+  color: var(--bbs-shell-muted);
+  font: 400 0.85rem / 1.7 var(--font-ui);
+}
+
+.knowledge-editor-footer,
+.knowledge-editor-discard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.knowledge-editor-status {
+  flex: 1 1 160px;
+}
+
+.knowledge-editor-status.is-error {
+  color: var(--course-warning-text);
+}
+
+.knowledge-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.knowledge-editor-actions .knowledge-editor-save {
+  min-width: 76px;
+  border-color: var(--course-accent);
+  background: var(--course-accent);
+  color: var(--course-surface-solid);
+}
+
+.knowledge-editor-actions .knowledge-editor-save:hover {
+  background: color-mix(in srgb, var(--course-accent) 88%, var(--bbs-shell-text));
+}
+
+.knowledge-editor-discard {
+  padding: 14px;
+  border-left: 3px solid var(--course-warning-text);
+  background: var(--course-warning-surface);
+}
+
+.knowledge-editor-discard p {
+  color: var(--course-warning-text);
+}
+
+.knowledge-page .knowledge-chat-panel [hidden],
+.knowledge-page .knowledge-chat-view.hidden {
+  display: none !important;
+}
+
+.knowledge-page #knowledge-chat-title {
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.knowledge-page #knowledge-discussion-detail-title {
+  font-size: 1.03rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.knowledge-page .knowledge-discussion-toolbar {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.knowledge-page .knowledge-discussion-toolbar-actions {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.knowledge-page .knowledge-discussion-toolbar-actions a {
+  flex: 0 1 auto;
+  white-space: nowrap;
+}
+
+.knowledge-page .knowledge-discussion-compose {
+  min-width: 0;
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.knowledge-discussion-compose-heading h3,
+.knowledge-discussion-comments-section h4 {
+  margin: 0;
+  color: var(--bbs-shell-text);
+  font: 700 0.96rem / 1.5 var(--font-ui);
+}
+
+.knowledge-discussion-compose-heading p,
+.knowledge-discussion-form-status,
+.knowledge-discussion-empty-copy {
+  margin: 6px 0 0;
+  color: var(--bbs-shell-muted);
+  font: 400 0.76rem / 1.6 var(--font-ui);
+  overflow-wrap: anywhere;
+}
+
+.knowledge-discussion-form-status:empty {
+  display: none;
+}
+
+.knowledge-discussion-form-status.is-error {
+  color: var(--course-warning-text);
+}
+
+.knowledge-discussion-login {
+  justify-self: start;
+  color: var(--course-accent);
+  font: 600 0.78rem / 1.6 var(--font-ui);
+  text-underline-offset: 3px;
+}
+
+.knowledge-page .knowledge-chat-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
+.knowledge-page .knowledge-chat-prompts button {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.knowledge-discussion-compose form,
+.knowledge-discussion-comment-form {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.knowledge-discussion-compose label,
+.knowledge-discussion-comment-form label {
+  display: block;
+  color: var(--bbs-shell-muted);
+  font: 600 0.75rem / 1.4 var(--font-ui);
+}
+
+.knowledge-discussion-compose input,
+.knowledge-discussion-compose textarea,
+.knowledge-discussion-comment-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--course-line-strong);
+  border-radius: 6px;
+  background: var(--course-surface-solid);
+  color: var(--bbs-shell-text);
+  font: 400 0.86rem / 1.6 var(--font-ui);
+}
+
+.knowledge-discussion-compose textarea,
+.knowledge-discussion-comment-form textarea {
+  resize: vertical;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+}
+
+.knowledge-discussion-compose textarea {
+  min-height: 180px;
+  margin-top: 8px;
+}
+
+.knowledge-discussion-compose button,
+.knowledge-discussion-comment-form button,
+.knowledge-discussion-comment-meta button,
+.knowledge-discussion-empty button {
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--course-line-strong);
+  border-radius: 6px;
+  background: var(--course-surface-solid);
+  color: var(--bbs-shell-text);
+  font: 600 0.76rem / 1.4 var(--font-ui);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.knowledge-discussion-compose button:hover,
+.knowledge-discussion-comment-form button:hover,
+.knowledge-discussion-comment-meta button:hover,
+.knowledge-discussion-empty button:hover {
+  border-color: var(--course-accent);
+  background: var(--course-accent-soft);
+}
+
+.knowledge-discussion-compose :is(button, input, textarea):focus-visible,
+.knowledge-discussion-comment-form :is(button, textarea):focus-visible,
+.knowledge-discussion-comment-meta button:focus-visible,
+.knowledge-discussion-empty button:focus-visible {
+  outline: 2px solid var(--course-accent);
+  outline-offset: 2px;
+}
+
+.knowledge-discussion-compose button:disabled,
+.knowledge-discussion-comment-form button:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+.knowledge-discussion-compose-modes {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.knowledge-discussion-compose-modes button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--bbs-shell-muted);
+}
+
+.knowledge-discussion-compose-modes button[aria-pressed='true'] {
+  background: var(--course-accent-soft);
+  color: var(--course-accent);
+}
+
+#knowledge-discussion-compose-preview-pane {
+  min-height: 180px;
+  padding: 14px 0;
+  overflow-wrap: anywhere;
+}
+
+.knowledge-discussion-compose:not([hidden]) #knowledge-discussion-compose-preview:empty::before {
+  content: '写下正文后，可以在这里预览。';
+  color: var(--bbs-shell-muted);
+  font: 400 0.8rem / 1.6 var(--font-ui);
+}
+
+.knowledge-discussion-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.knowledge-discussion-form-actions .knowledge-discussion-publish,
+.knowledge-page #knowledge-discussion-compose-toggle {
+  border-color: var(--course-accent);
+  background: var(--course-accent-soft);
+  color: var(--course-accent);
+}
+
+.knowledge-discussion-comments-section {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--course-line);
+}
+
+.knowledge-discussion-comment {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--course-line);
+}
+
+.knowledge-discussion-comment-meta,
+.knowledge-discussion-comment-target {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--bbs-shell-muted);
+  font: 400 0.71rem / 1.5 var(--font-ui);
+  overflow-wrap: anywhere;
+}
+
+.knowledge-discussion-comment-meta strong {
+  color: var(--bbs-shell-text);
+  font-weight: 600;
+}
+
+.knowledge-discussion-comment-meta button {
+  min-height: 30px;
+  margin-left: auto;
+  padding: 4px 8px;
+  border-color: transparent;
+  color: var(--course-accent);
+}
+
+.knowledge-discussion-comment-parent {
+  margin: 8px 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--course-line-strong);
+  color: var(--bbs-shell-muted);
+  font-size: 0.74rem;
+}
+
+.knowledge-discussion-comment .discussion-markdown-body {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.knowledge-discussion-comment .discussion-markdown-body > :first-child {
+  margin-top: 0;
+}
+
+.knowledge-discussion-comment-target {
+  justify-content: space-between;
+  padding: 8px;
+  background: var(--course-accent-soft);
+}
+
+@media (max-width: 920px) {
+  .knowledge-workbench .knowledge-chat,
+  .knowledge-workbench.is-interaction-open .knowledge-chat {
+    grid-column: 2 / -1;
+    position: static;
+    inset: auto;
+    z-index: auto;
+    width: 100%;
+    height: min(70dvh, 640px);
+    min-height: 400px;
+    margin-top: 12px;
+  }
+
+  .knowledge-workbench .knowledge-chat-panel {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    border-radius: 12px;
+    box-shadow: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .knowledge-page #knowledge-title {
+    font-size: 1.5rem;
+  }
+
+  .knowledge-discussion-compose input,
+  .knowledge-discussion-compose textarea,
+  .knowledge-discussion-comment-form textarea {
+    font-size: 16px;
+  }
+
+  .knowledge-discussion-compose button,
+  .knowledge-discussion-comment-form button,
+  .knowledge-discussion-comment-meta button,
+  .knowledge-page .knowledge-discussion-toolbar-actions :is(button, a) {
+    min-height: 40px;
+  }
+
+  .knowledge-editor {
+    gap: 12px;
+    padding-top: 18px;
+  }
+
+  .knowledge-edit-toggle,
+  .knowledge-editor button {
+    min-height: 44px;
+  }
+
+  .knowledge-editor-toolbar button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .knowledge-editor-source-label {
+    padding-left: 12px;
+  }
+
+  #knowledge-editor-source {
+    min-height: 320px;
+    padding-right: 12px;
+    padding-left: 12px;
+    font-size: 16px;
+  }
+
+  .knowledge-editor-preview-pane {
+    padding: 16px 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .knowledge-edit-toggle,
+  .knowledge-editor button {
+    transition: none;
+  }
+}

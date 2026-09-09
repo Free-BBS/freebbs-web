@@ -523,6 +523,177 @@ test(
     );
 
     await t.test(
+      'course owners edit knowledge sections atomically with shared revisions and preserved maps',
+      async (editorTest) => {
+        const nodeId = 'EDITOR-001';
+        const route = `/courses/${course.slug}/map/nodes/${nodeId}`;
+        await api(`/courses/${course.slug}/map/nodes`, {
+          token: legacy.token,
+          method: 'POST',
+          body: {
+            id: nodeId,
+            title: '原地编辑测试',
+            summary: '保留标题、简介和地图位置',
+            position: { x: 160, y: 280 },
+          },
+          expected: 201,
+        });
+        const initial = await api(route, { token: legacy.token });
+        assert.equal(initial.course.canEditMap, true, 'an assigned student may edit');
+        assert.match(initial.node.revision, /^[a-f0-9]{64}$/);
+        assert.equal((await api(route)).course.canEditMap, false);
+        assert.equal((await api(route, { token: outsider.token })).course.canEditMap, false);
+        const initialMap = await api(`/courses/${course.slug}/map`);
+        const sections = {
+          knowledgeMarkdown: '## 卷积\n\n**正文**与 $y(t)$。\n\n![示意图](/assets/logo.png)',
+          basicInfoMarkdown: '建议学习时长：20 分钟。',
+          applicationsMarkdown: '用于分析滤波器。',
+        };
+        for (const token of [undefined, outsider.token]) {
+          await api(`${route}/document`, {
+            token,
+            method: 'PUT',
+            body: { sections, expectedRevision: initial.node.revision },
+            expected: token ? 403 : 401,
+          });
+        }
+        async function ragRevision() {
+          const [[row]] = await db.query(
+            'SELECT requested_revision FROM rag_index_state WHERE id = 1',
+          );
+          return Number(row.requested_revision);
+        }
+        const beforeRevision = await ragRevision();
+        const saved = await api(`${route}/document`, {
+          token: legacy.token,
+          method: 'PUT',
+          body: { sections, expectedRevision: initial.node.revision },
+        });
+        assert.deepEqual(saved.sections, sections);
+        assert.deepEqual(saved.node.sections, sections);
+        assert.equal(saved.revision, saved.node.revision);
+        assert.notEqual(saved.revision, initial.node.revision);
+        assert.equal(await ragRevision(), beforeRevision + 1);
+        const reread = await api(route);
+        assert.deepEqual(reread.node.sections, sections);
+        assert.equal(reread.node.revision, saved.revision);
+        assert.equal(reread.node.title, initial.node.title);
+        assert.equal(reread.node.summary, initial.node.summary);
+        assert.deepEqual(reread.node.position, initial.node.position);
+        const map = await api(`/courses/${course.slug}/map`);
+        assert.deepEqual(map.edges, initialMap.edges);
+        assert.deepEqual(
+          map.nodes.map(({ id, position }) => ({ id, position })),
+          initialMap.nodes.map(({ id, position }) => ({ id, position })),
+        );
+        const stale = await api(`${route}/document`, {
+          token: legacy.token,
+          method: 'PUT',
+          body: {
+            sections: { knowledgeMarkdown: '过期正文' },
+            expectedRevision: initial.node.revision,
+          },
+          expected: 409,
+        });
+        assert.equal(stale.code, 'revision_conflict');
+        assert.deepEqual((await api(route)).node.sections, sections);
+        assert.equal(await ragRevision(), beforeRevision + 1);
+
+        const partial = await api(`${route}/document`, {
+          token: legacy.token,
+          method: 'PUT',
+          body: { sections: { knowledgeMarkdown: '只更新正文' }, expectedRevision: saved.revision },
+        });
+        assert.deepEqual(partial.sections, { ...sections, knowledgeMarkdown: '只更新正文' });
+        const compatible = await api(`${route}/document`, {
+          token: legacy.token,
+          method: 'PUT',
+          body: { markdown: '旧版地图编辑器仍可保存' },
+        });
+        assert.deepEqual(compatible.sections, {
+          ...sections,
+          knowledgeMarkdown: '旧版地图编辑器仍可保存',
+        });
+
+        const issued = await api('/course-upload/tokens', {
+          token: legacy.token,
+          method: 'POST',
+          body: { name: 'editor conflict test', expiresInDays: 1 },
+          expected: 201,
+        });
+        editorTest.after(async () => {
+          await db.execute(
+            'UPDATE course_upload_tokens SET revoked_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [issued.id],
+          );
+          await db.query('DROP TRIGGER IF EXISTS reject_editor_rag_update');
+        });
+        const agentRoute = `/course-upload/courses/${course.slug}/nodes/${nodeId}`;
+        const agentRead = await api(agentRoute, { token: issued.token });
+        assert.equal(
+          agentRead.node.revision,
+          compatible.revision,
+          'browser and Agent revisions agree',
+        );
+        const agentSaved = await api(agentRoute, {
+          token: issued.token,
+          method: 'PUT',
+          body: {
+            sections: { applicationsMarkdown: 'Agent 补充的应用' },
+            expectedRevision: compatible.revision,
+          },
+        });
+        await api(`${route}/document`, {
+          token: legacy.token,
+          method: 'PUT',
+          body: { sections, expectedRevision: compatible.revision },
+          expected: 409,
+        });
+        assert.deepEqual((await api(route)).node.sections, agentSaved.node.sections);
+
+        const concurrentResults = await Promise.all(
+          ['同时保存甲', '同时保存乙'].map(async (markdown) => {
+            const response = await fetch(`${base}${route}/document`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${legacy.token}`,
+              },
+              body: JSON.stringify({
+                sections: { knowledgeMarkdown: markdown },
+                expectedRevision: agentSaved.node.revision,
+              }),
+            });
+            return { status: response.status, body: await response.json() };
+          }),
+        );
+        assert.deepEqual(concurrentResults.map(({ status }) => status).sort(), [200, 409]);
+        const winner = concurrentResults.find(({ status }) => status === 200).body;
+        assert.deepEqual((await api(route)).node.sections, winner.sections);
+
+        const beforeFailure = await ragRevision();
+        await db.query(
+          "CREATE TRIGGER reject_editor_rag_update BEFORE UPDATE ON rag_index_state FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'editor rollback test'",
+        );
+        await api(`${route}/document`, {
+          token: admin.token,
+          method: 'PUT',
+          body: { sections, expectedRevision: winner.revision },
+          expected: 500,
+        });
+        await db.query('DROP TRIGGER reject_editor_rag_update');
+        assert.deepEqual((await api(route)).node.sections, winner.sections);
+        assert.equal((await api(route)).node.revision, winner.revision);
+        assert.equal(await ragRevision(), beforeFailure);
+        const [[stored]] = await db.query(
+          'SELECT document_markdown FROM course_map_nodes WHERE course_id = ? AND node_id = ?',
+          [course.id, nodeId],
+        );
+        assert.equal(stored.document_markdown, winner.sections.knowledgeMarkdown);
+      },
+    );
+
+    await t.test(
       'announcements, reply and reaction notifications preserve recipients and queue email',
       async () => {
         await api('/admin/notifications', {
