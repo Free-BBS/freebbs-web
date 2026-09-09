@@ -4,6 +4,8 @@ const {
   COMMUNITY_AGREEMENT_VERSION,
   assertCommunityAgreement,
   generateBandChallenge,
+  generateWienChallenge,
+  generateAuthChallenge,
   consumeRegistrationChallenge,
   consumeLoginChallenge,
 } = require('./registration-guard');
@@ -46,7 +48,8 @@ test('oscillating bands have energy peaks and valleys with four separated positi
     const { carrier, objective, band } = publicChallenge;
     combinations.add(`${carrier}:${objective}`);
     answers.add(answerK.toFixed(2));
-    assert.deepEqual(Object.keys(publicChallenge).sort(), ['band', 'carrier', 'objective']);
+    assert.deepEqual(Object.keys(publicChallenge).sort(), ['band', 'carrier', 'objective', 'type']);
+    assert.equal(publicChallenge.type, 'band');
     assert.deepEqual(Object.keys(band).sort(), ['candidates', 'kMax', 'kMin', 'points']);
     assert.equal(band.points.length, 161);
     assert.equal(band.points[0].k, band.kMin);
@@ -104,6 +107,142 @@ test('oscillating bands have energy peaks and valleys with four separated positi
   assert.equal(combinations.size, 4);
   assert.deepEqual([...answerIndices].sort(), [0, 1, 2, 3]);
   assert.ok(answers.size > 40, 'answer positions must vary materially');
+});
+
+test('Wien challenges vary components and leave a usable strict startup |Q| interval', () => {
+  const wienModel = require('../public/wien-oscillator-model');
+  const combinations = new Set();
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const generated = generateWienChallenge();
+    const { publicChallenge, circuitParameters: p } = generated;
+    assert.deepEqual(Object.keys(publicChallenge).sort(), ['oscillator', 'type']);
+    assert.equal(publicChallenge.type, 'wien');
+    assert.equal(publicChallenge.oscillator, p);
+    assert.equal(generated.answerK, 2, 'legacy band verification must fail closed');
+    assert.equal(generated.tolerance, 0);
+    assert.equal(wienModel.validParameters(p), true);
+    assert.equal(wienModel.evaluate(p, p.rfInitialOhms).starts, false);
+    assert.equal(wienModel.evaluate(p, p.rfMaxOhms).satisfies, false);
+    assert.equal(wienModel.evaluate(p, p.rgOhms * (2 + 0.5 / p.qMin)).satisfies, true);
+    assert.ok(p.rgOhms / p.qMin / (p.rfMaxOhms - p.rfMinOhms) >= 0.12);
+    assert.ok(p.rfMinOhms < 2 * p.rgOhms);
+    assert.ok(p.rfMaxOhms > (2 + 1 / p.qMin) * p.rgOhms);
+    combinations.add(JSON.stringify(p));
+  }
+  assert.ok(combinations.size > 40);
+  const types = new Set(
+    Array.from({ length: 80 }, () => generateAuthChallenge().publicChallenge.type),
+  );
+  assert.deepEqual([...types].sort(), ['band', 'wien']);
+});
+
+test('both authentication modes recompute Wien startup and strict |Q| from stored parameters', async () => {
+  const id = 'c'.repeat(64);
+  const parameters = {
+    rgOhms: 10000,
+    rOhms: 10000,
+    cFarads: 1e-8,
+    rfMinOhms: 17000,
+    rfMaxOhms: 25000,
+    rfInitialOhms: 17000,
+    qMin: 5,
+  };
+  for (const [purpose, consume, prefix] of [
+    ['register', consumeRegistrationChallenge, 'registration'],
+    ['login', consumeLoginChallenge, 'login'],
+  ]) {
+    for (const [resistanceOhms, accepted] of [
+      [undefined, false],
+      ['21000', false],
+      [null, false],
+      [NaN, false],
+      [Infinity, false],
+      [{ value: 21000 }, false],
+      [0, false],
+      [17000, false],
+      [19999, false],
+      [20000, false],
+      [20000.01, true],
+      [21000, true],
+      [21999.99, true],
+      [22000, false],
+      [22000.01, false],
+      [25000, false],
+      [50000, false],
+    ]) {
+      const record = {
+        email: 'student@example.invalid',
+        purpose,
+        answer_k: 2,
+        tolerance: 0,
+        expired: 0,
+        consumed_at: null,
+        circuit_id: id,
+        circuit_parameters: JSON.stringify(parameters),
+      };
+      let writes = 0;
+      const connection = {
+        async execute(sql) {
+          if (sql.startsWith('SELECT')) return [[record]];
+          record.consumed_at = new Date();
+          writes += 1;
+          return [{ affectedRows: 1 }];
+        },
+      };
+      const answer = {
+        challengeId: id,
+        resistanceOhms,
+        // These client assertions cannot change the stored task or its threshold.
+        type: 'band',
+        k: 2,
+        q: 99999,
+        gain: 3.01,
+        oscillator: { ...parameters, qMin: 0.1 },
+      };
+      const result = await consume(connection, record.email, answer);
+      assert.equal(
+        result?.code ?? null,
+        accepted ? null : `${prefix}_captcha_incorrect`,
+        `${purpose}: ${String(resistanceOhms)}`,
+      );
+      assert.equal(writes, 1);
+      assert.equal(
+        (await consume(connection, record.email, { challengeId: id, resistanceOhms: 21000 })).code,
+        `${prefix}_captcha_used`,
+      );
+      assert.equal(writes, 1);
+    }
+    for (const stored of [null, '{}', '{malformed', { ...parameters, qMin: '5' }]) {
+      const connection = {
+        async execute(sql) {
+          if (!sql.startsWith('SELECT')) return [{ affectedRows: 1 }];
+          return [
+            [
+              {
+                email: 'student@example.invalid',
+                purpose,
+                answer_k: 2,
+                tolerance: 0,
+                expired: 0,
+                consumed_at: null,
+                circuit_id: id,
+                circuit_parameters: stored,
+              },
+            ],
+          ];
+        },
+      };
+      assert.equal(
+        (
+          await consume(connection, 'student@example.invalid', {
+            challengeId: id,
+            resistanceOhms: 21000,
+          })
+        ).code,
+        `${prefix}_captcha_incorrect`,
+      );
+    }
+  }
 });
 
 test('login and registration accept free positions through the inclusive tolerance boundary', async () => {

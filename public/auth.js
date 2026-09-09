@@ -179,7 +179,7 @@ async function handleAuthSubmit(event) {
         identifier: document.getElementById('auth-identifier').value.trim(),
         password: document.getElementById('auth-password').value,
       };
-      setMessage('请在弹窗中完成能带验证');
+      setMessage('请在弹窗中完成实验验证');
       payload = await window.freeBbsAuthChallenge.run({
         mode: 'login',
         identity: credentials.identifier,
@@ -218,7 +218,7 @@ async function handleAuthSubmit(event) {
         communityAgreementAccepted: true,
         communityAgreementVersion: agreement.dataset.version,
       };
-      setMessage('请在弹窗中完成能带验证');
+      setMessage('请在弹窗中完成实验验证');
       payload = await window.freeBbsAuthChallenge.run({
         mode: 'register',
         identity: registration.email,

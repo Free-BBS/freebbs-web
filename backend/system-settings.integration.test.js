@@ -8,7 +8,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const test = require('node:test');
 const mysql = require('mysql2/promise');
-const { solveBandChallenge } = require('./test-helpers/auth');
+const { solveAuthChallenge } = require('./test-helpers/auth');
 
 const projectRoot = path.resolve(__dirname, '..');
 const shouldRun = process.env.RUN_SYSTEM_SETTINGS_INTEGRATION === '1';
@@ -200,7 +200,7 @@ test(
         body: JSON.stringify({
           identifier,
           password,
-          captcha: solveBandChallenge(challenge.body),
+          captcha: solveAuthChallenge(challenge.body),
         }),
       });
     }

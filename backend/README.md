@@ -69,23 +69,30 @@ npm run start:backend
   `*_REQUIRED=true` 且依赖未就绪时返回 `503`
 - `POST /api/auth/send-email-code`
 - `POST /api/auth/registration-challenge`：传入 `{ "email": "student@example.edu" }` 获取
-  5 分钟内有效、绑定邮箱的一次性能带题。返回 `challengeId`、`expiresAt`、`carrier`
-  （`electron` / `hole`）、`objective`（`maximum` / `minimum`）、`band.points` 中的
-  `{ k, energy }` 采样点、`band.candidates` 中的 4 个 `{ k }` 标记位置、
-  `band.kMin` / `band.kMax` 和 `communityAgreementVersion`。
+  5 分钟内有效、绑定邮箱的一次性互动题。能带和文氏振荡器各有 50% 的出现概率；每次由
+  服务端随机选择，客户端不能指定题型。共同字段为 `challengeId`、`expiresAt`、`type`
+  和 `communityAgreementVersion`。
+  `type: "band"` 返回 `carrier`（`electron` / `hole`）、`objective`（`maximum` / `minimum`）、
+  `band.points` 中的 `{ k, energy }` 采样点、`band.candidates` 中的 4 个 `{ k }` 标记位置，
+  以及 `band.kMin` / `band.kMax`。
+  `type: "wien"` 返回 `oscillator: { rgOhms, rOhms, cFarads, rfMinOhms, rfMaxOhms, rfInitialOhms, qMin }`。
+  两个选频电阻均为 `rOhms`，两个选频电容均为 `cFarads`；`rgOhms` 是固定负反馈接地电阻，
+  滑动变阻器调节总反馈电阻 `Rf`，范围与初值由 `rf*Ohms` 字段给出。
   每 15 分钟最多向同一邮箱发放 12 题，同一来源 IP 最多 60 题，配额与题目均保存在 MySQL。
 - `POST /api/auth/register`：在原有身份、密码和邮箱验证码字段外，必须传入
   `communityAgreementAccepted: true`、`communityAgreementVersion: "2026-09-09"`，以及
-  `captcha: { challengeId, k }`（`k` 必须是数值）。服务端校验曲线答案，答错即消耗该题；
+  能带题提交 `captcha: { challengeId, k }`，文氏题提交 `captcha: { challengeId, resistanceOhms }`。
+  阻值单位为 Ω；两种答案均必须是数值，服务端根据保存的题型和参数重新计算，忽略客户端的
+  `type`、`gain`、`q` 等断言。答错即消耗该题；
   重试时重新获取题目。通过验证后，建号、白名单领取、邮箱验证码消费、题目消费和公约版本／
   同意时间记录在同一事务中提交，其他注册错误会回滚。公约未勾选或版本过时会返回
-  `community_agreement_required` / `community_agreement_version_mismatch`；能带验证错误码
+  `community_agreement_required` / `community_agreement_version_mismatch`；互动验证错误码
   使用 `registration_captcha_` 前缀。旧用户不追溯生成同意记录。
 - `POST /api/auth/login-challenge`：传入 `{ "identifier": "用户名或邮箱" }`，返回与注册题
-  相同的能带数据。题目绑定该用户名／邮箱和登录用途，无法与注册题交叉使用；每个登录标识
+  相同的随机题型数据。题目绑定该用户名／邮箱和登录用途，无法与注册题交叉使用；每个登录标识
   每 15 分钟最多发放 12 题，来源 IP 的 60 题配额与注册共享。
-- `POST /api/auth/login`：在 `identifier`、`password` 外必须提交 `captcha: { challengeId, k }`。
-  无论密码正确与否，每题仅允许一次尝试；密码错误后必须重新获取题目。能带错误码使用
+- `POST /api/auth/login`：在 `identifier`、`password` 外必须按题型提交上述 `captcha` 答案。
+  无论密码正确与否，每题仅允许一次尝试；密码错误后必须重新获取题目。互动验证错误码使用
   `login_captcha_` 前缀。登录不要求已有用户补签注册公约。
 - `GET /api/auth/me`
 - `GET /api/workbench/summary`：返回当前用户的重要事项、可见通知和本周已确认日程
@@ -120,7 +127,24 @@ npm run start:backend
 电子／空穴可沿能带自由拖动，松手后保留当前位置；登录和注册均接受正确标记附近
 `|k − answer_k| ≤ 0.05` 的位置（能带总宽度为 `2`，即标记左右各 `2.5%` 的小范围），
 无需精确对齐标记，也不会自动吸附；超出范围或靠近错误标记仍会验证失败。
-数据库迁移为 `database/migrations/030_registration_guard.sql`，后端启动时会自动幂等建表。
+
+文氏题使用等值 RC 选频网络和同相放大器，`A = 1 + Rf / Rg`、选频网络在
+`f₀ = 1 / (2πRC)` 处的反馈系数为 `1/3`。小信号特征方程为
+`(sRC)² + (3 − A)sRC + 1 = 0`；本题以 `3 < A < 5` 的右半平面共轭极点作为
+振荡起振条件，并要求起振极点幅值 `|Q| = 1 / |3 − A| > qMin`。
+在起振一侧有符号的阻尼参数为负，因此这里的 `|Q|` 是题目明确采用的小信号极点指标，
+不是无源文氏选频网络的 `Q = 1/3`，也不代表非线性稳幅后的振荡器品质因数或失真。
+选定 `qMin > 0.5` 后，允许的总反馈电阻严格满足
+`2Rg < Rf < (2 + 1/qMin)Rg`，且必须位于滑块量程内；起振和 `|Q|` 的等号边界均不通过。
+参数每题随机生成，可通过范围至少占滑块全程的 14%，滑块初始位置不满足起振条件。
+电路拓扑和起振条件参考 [Analog Devices AN-580](https://www.analog.com/AN-580)；
+二阶极点参数参考 [A Filter Primer](https://www.analog.com/en/resources/technical-articles/a-filter-primer.html)。
+上述起振一侧的 `|Q|` 定义由特征方程推导，未把传统稳定滤波器的正 `Q` 直接套用到不稳定状态。
+
+数据库迁移为 `database/migrations/030_registration_guard.sql` 和
+`database/migrations/031_auth_circuit_challenges.sql`，后端启动时会自动幂等建表。
+文氏题参数保存于 `registration_challenge_circuits` 子表，随题目删除而级联清理；旧能带题
+无需改写。文氏题的旧答案字段保存量程外的 `answer_k = 2`，回退到仅支持能带的版本时会拒绝该题。
 
 也可以在仓库根目录直接生成一次可复核的连接器证据：
 

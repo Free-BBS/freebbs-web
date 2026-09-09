@@ -11,7 +11,7 @@
       aria-describedby="band-challenge-task"
     >
       <div class="band-challenge-heading">
-        <span class="band-challenge-eyebrow">身份验证 · 能带实验</span>
+        <span class="band-challenge-eyebrow">身份验证 · 物理实验</span>
         <button
           class="band-challenge-close"
           id="band-challenge-close"
@@ -21,8 +21,8 @@
           ×
         </button>
       </div>
-      <h2 id="band-challenge-title">移动一个粒子，完成验证</h2>
-      <p id="band-challenge-task">正在准备能带…</p>
+      <h2 id="band-challenge-title">完成一次实验验证</h2>
+      <p id="band-challenge-task">正在准备验证实验…</p>
       <div class="band-challenge-plot" id="band-challenge-plot" hidden>
         <div class="band-challenge-legend">
           <span id="band-challenge-band-label"></span><span>示意能带 · 任意单位</span>
@@ -69,13 +69,81 @@
           沿能带自由拖动粒子，停在目标标记附近的小范围内即可；也可用下方滑块或方向键微调。
         </p>
       </div>
-      <details class="band-challenge-hint">
+      <div class="band-challenge-plot wien-challenge-plot" id="wien-challenge-plot" hidden>
+        <div class="band-challenge-legend wien-challenge-legend">
+          <span>文氏桥 · 等值 RC</span><span id="wien-challenge-components"></span>
+        </div>
+        <svg
+          id="wien-challenge-graph"
+          viewBox="0 0 600 380"
+          role="img"
+          aria-label="文氏桥振荡器电路：输出经串联 RC 接同相端，同相端经并联 RC 接地；反相端经 Rg 接地，输出经滑动变阻器 Rf 反馈到反相端。拖动下方滑片调节 Rf。"
+        >
+          <g class="wien-wire" aria-hidden="true">
+            <path d="M400 210H550V45H480 M430 45H390 M380 45H208V180H272" />
+            <path d="M88 124V100H208 M150 100V142 M88 170V210H150V154 M120 210V225" />
+            <path d="M272 240H195V275 M195 321V340 M245 240V320H263 M289 320H300 M500 320H550V210" />
+            <path d="M108 225H132 M112 232H128 M116 239H124 M183 340H207 M187 347H203 M191 354H199" />
+            <path d="M380 31V59 M390 31V59 M136 142H164 M136 154H164" />
+            <path class="wien-amplifier" d="M272 150L400 210L272 270Z" />
+            <rect x="430" y="35" width="50" height="20" />
+            <rect x="78" y="124" width="20" height="46" />
+            <rect x="185" y="275" width="20" height="46" />
+            <rect x="263" y="310" width="26" height="20" />
+            <rect class="wien-rheostat-track" x="300" y="310" width="200" height="20" rx="2" />
+            <path class="wien-wiper-wire" id="wien-challenge-wiper-wire" />
+            <circle class="wien-junction" cx="208" cy="100" r="4" />
+            <circle class="wien-junction" cx="245" cy="240" r="4" />
+            <circle class="wien-junction" cx="550" cy="210" r="4" />
+          </g>
+          <g class="wien-circuit-label" aria-hidden="true">
+            <text x="455" y="23" text-anchor="middle">R</text>
+            <text x="385" y="23" text-anchor="middle">C</text>
+            <text x="55" y="155">R</text>
+            <text x="174" y="155">C</text>
+            <text x="286" y="188">+</text>
+            <text x="286" y="249">−</text>
+            <text class="wien-gain-symbol" x="325" y="220" text-anchor="middle">A</text>
+            <text x="480" y="193">输出</text>
+            <text x="145" y="307">R<tspan dy="5" font-size="16">g</tspan></text>
+            <text x="273" y="360" text-anchor="middle">R<tspan dy="5" font-size="16">0</tspan></text>
+            <text x="415" y="362" text-anchor="middle">R<tspan dy="5" font-size="16">v</tspan><tspan dy="-5"> · 拖动滑片</tspan></text>
+          </g>
+          <g id="wien-challenge-wiper" class="wien-wiper" aria-hidden="true">
+            <circle class="wien-wiper-halo" cy="285" r="28" />
+            <circle class="wien-wiper-handle" cy="285" r="15" />
+            <path class="wien-wiper-arrow" d="M0 299V306 M-6 304L0 311L6 304" />
+            <path class="wien-wiper-grip" d="M-4 280V290 M4 280V290" />
+          </g>
+        </svg>
+        <div class="band-position-heading">
+          <label for="wien-challenge-position">反馈电阻 Rf = R0 + Rv</label>
+          <output id="wien-challenge-position-value" for="wien-challenge-position"></output>
+        </div>
+        <input id="wien-challenge-position" type="range" min="0" max="1" step="0.001" value="0" aria-describedby="wien-challenge-controls" />
+        <p class="band-challenge-controls" id="wien-challenge-controls">
+          拖动滑片，或用滑块 / 方向键微调。
+        </p>
+        <dl class="wien-challenge-readings">
+          <div><dt>放大倍数 A</dt><dd id="wien-challenge-gain"></dd></div>
+          <div><dt>起振等效 |Q|</dt><dd id="wien-challenge-q"></dd></div>
+        </dl>
+        <p class="wien-challenge-state" id="wien-challenge-state" aria-live="polite"></p>
+        <p class="band-challenge-controls" id="wien-challenge-frequency"></p>
+      </div>
+      <details class="band-challenge-hint" id="band-challenge-hint" hidden>
         <summary>一点物理提示</summary>
         <p>
           有效质量与能带曲率的绝对值成反比：弯曲越缓，质量越大；弯曲越急，质量越小。判断的是二阶导数，不是斜率。
         </p>
         <p id="band-challenge-formula"></p>
         <p>只比较标记点处的正有效质量。完整能带包含波峰、波谷和拐点；可选点避开了有效质量发散的零曲率位置。</p>
+      </details>
+      <details class="band-challenge-hint" id="wien-challenge-hint" hidden>
+        <summary>一点电路提示</summary>
+        <p>理想等值 RC 电路中，A = 1 + Rf / Rg，振荡频率 f₀ = 1 / (2πRC)。让 A 略大于 3，即可开始振荡；本题要求 3 &lt; A &lt; 5。</p>
+        <p>本题的起振等效 |Q| = 1 / |3 − A|，取自小信号极点；它不是无源文氏桥的 Q，也不是稳态波形的纯度。A = 3 是临界状态，不能自行起振。</p>
+        <p>起振时通常定义的有符号 Q 为负，因此这里比较其绝对值。电路未加入稳幅环节，满足起振条件表示振幅开始增长。</p>
       </details>
       <p
         class="band-challenge-status"
@@ -98,6 +166,9 @@
   const element = (suffix) => document.getElementById(`band-challenge-${suffix}`);
   const graph = element('graph');
   const slider = element('position');
+  const wienElement = (suffix) => document.getElementById(`wien-challenge-${suffix}`);
+  const wienGraph = wienElement('graph');
+  const wienSlider = wienElement('position');
   const confirmButton = element('confirm');
   const refreshButton = element('refresh');
   const closeButton = element('close');
@@ -106,6 +177,11 @@
   let generation = 0;
   let expiryTimer = null;
   let dragging = false;
+  let draggingWiper = false;
+
+  function isWien() {
+    return session?.challenge?.type === 'wien';
+  }
 
   function isExpired() {
     return !session?.challenge || Date.now() >= Date.parse(session.challenge.expiresAt);
@@ -113,12 +189,15 @@
 
   function updateControls() {
     const busy = !session || session.loading || session.submitting;
-    slider.disabled = busy || isExpired();
+    slider.disabled = busy || isExpired() || isWien();
+    wienSlider.disabled = busy || isExpired() || !isWien();
     confirmButton.disabled = busy || !session?.moved || isExpired();
     refreshButton.disabled = busy;
     closeButton.disabled = Boolean(session?.submitting);
     const action = session?.mode === 'login' ? '登录' : '注册';
-    confirmButton.textContent = session?.submitting ? `正在${action}…` : `确认位置并${action}`;
+    confirmButton.textContent = session?.submitting
+      ? `正在${action}…`
+      : `确认${isWien() ? '阻值' : '位置'}并${action}`;
   }
 
   function finish(value, error) {
@@ -127,6 +206,7 @@
     session = null;
     generation += 1;
     dragging = false;
+    draggingWiper = false;
     window.clearInterval(expiryTimer);
     dialog.close();
     if (error) active.reject(error);
@@ -153,7 +233,8 @@
   }
 
   function setPosition(value, moved = true) {
-    if (!session?.challenge || session.loading || session.submitting || isExpired()) return;
+    if (!session?.challenge || isWien() || session.loading || session.submitting || isExpired())
+      return;
     if (!Number.isFinite(Number(value))) return;
     const { kMin, kMax } = session.challenge.band;
     const k = Math.min(kMax, Math.max(kMin, Number(value)));
@@ -171,6 +252,51 @@
     updateControls();
   }
 
+  function formatResistance(value) {
+    return value >= 1000 ? `${(value / 1000).toFixed(3)} kΩ` : `${value.toFixed(1)} Ω`;
+  }
+
+  function setResistance(value, moved = true) {
+    if (!isWien() || session.loading || session.submitting || isExpired()) return;
+    if (!Number.isFinite(Number(value))) return;
+    const parameters = session.challenge.oscillator;
+    const resistanceOhms = Math.min(
+      parameters.rfMaxOhms,
+      Math.max(parameters.rfMinOhms, Number(value)),
+    );
+    const state = window.freeBbsWienModel.evaluate(parameters, resistanceOhms);
+    const position =
+      300 +
+      ((resistanceOhms - parameters.rfMinOhms) / (parameters.rfMaxOhms - parameters.rfMinOhms)) *
+        200;
+    session.resistanceOhms = resistanceOhms;
+    session.moved ||= moved;
+    wienSlider.value = String(resistanceOhms);
+    wienSlider.setAttribute('aria-valuetext', `反馈电阻 ${formatResistance(resistanceOhms)}`);
+    wienElement('position-value').textContent = formatResistance(resistanceOhms);
+    wienElement('wiper').setAttribute('transform', `translate(${position}, 0)`);
+    wienElement('wiper-wire').setAttribute('d', `M550 320V285H${position}`);
+    wienElement('gain').textContent = state.gain.toFixed(3);
+    wienElement('q').textContent = Number.isFinite(state.q) ? state.q.toFixed(2) : '∞（临界）';
+    wienElement('state').classList.toggle('is-satisfied', state.satisfies);
+    let stateDescription;
+    if (state.satisfies) {
+      stateDescription = `已起振，且 |Q| > ${parameters.qMin}，满足要求`;
+    } else if (!Number.isFinite(state.q)) {
+      stateDescription = '临界未起振：请略微增大反馈电阻';
+    } else if (state.starts) {
+      stateDescription = `已起振，需继续调整至 |Q| > ${parameters.qMin}`;
+    } else if (state.gain <= 3) {
+      stateDescription = '尚未起振：请增大反馈电阻';
+    } else {
+      stateDescription = '增益过大，未形成振荡：请减小反馈电阻';
+    }
+    wienElement('state').textContent = stateDescription;
+    if (moved)
+      status.textContent = `阻值已选择，确认后继续${session.mode === 'login' ? '登录' : '注册'}。`;
+    updateControls();
+  }
+
   function updateExpiry() {
     if (!session?.challenge || session.loading) return;
     const seconds = Math.max(
@@ -183,7 +309,34 @@
     updateControls();
   }
 
+  function renderWienChallenge() {
+    const { oscillator } = session.challenge;
+    const state = window.freeBbsWienModel.evaluate(oscillator, oscillator.rfInitialOhms);
+    element('title').textContent = '让文氏振荡器起振';
+    dialog.querySelector('.band-challenge-eyebrow').textContent =
+      `${session.mode === 'login' ? '登录' : '注册'}验证 · 电路实验`;
+    element('task').textContent =
+      `拖动反馈电阻的滑片，使电路起振，且起振等效 |Q| > ${oscillator.qMin}。`;
+    wienElement('components').textContent =
+      `R = ${formatResistance(oscillator.rOhms)} · C = ${(oscillator.cFarads * 1e9).toFixed(1)} nF`;
+    wienElement('frequency').textContent =
+      `Rg = ${formatResistance(oscillator.rgOhms)} · R0 = ${formatResistance(oscillator.rfMinOhms)}；` +
+      `f₀ ≈ ${state.frequencyHz >= 1000 ? `${(state.frequencyHz / 1000).toFixed(2)} kHz` : `${state.frequencyHz.toFixed(1)} Hz`}`;
+    wienSlider.min = String(oscillator.rfMinOhms);
+    wienSlider.max = String(oscillator.rfMaxOhms);
+    wienSlider.step = String((oscillator.rfMaxOhms - oscillator.rfMinOhms) / 2000);
+    setResistance(oscillator.rfInitialOhms, false);
+    wienElement('plot').hidden = false;
+    wienElement('hint').hidden = false;
+    updateExpiry();
+    wienSlider.focus({ preventScroll: true });
+  }
+
   function renderChallenge() {
+    if (isWien()) {
+      renderWienChallenge();
+      return;
+    }
     const { challenge } = session;
     const { band } = challenge;
     const isHole = challenge.carrier === 'hole';
@@ -236,6 +389,7 @@
     slider.step = String((band.kMax - band.kMin) / 2000);
     setPosition((band.kMin + band.kMax) / 2, false);
     element('plot').hidden = false;
+    element('hint').hidden = false;
     updateExpiry();
     slider.focus({ preventScroll: true });
   }
@@ -248,10 +402,19 @@
     active.loading = true;
     active.moved = false;
     active.challenge = null;
+    active.k = null;
+    active.resistanceOhms = null;
     dragging = false;
+    draggingWiper = false;
     element('plot').hidden = true;
+    element('hint').hidden = true;
+    wienElement('plot').hidden = true;
+    wienElement('hint').hidden = true;
+    element('title').textContent = '完成一次实验验证';
+    element('task').textContent = '正在准备验证实验…';
+    dialog.querySelector('.band-challenge-eyebrow').textContent = '身份验证 · 物理实验';
     element('expiry').textContent = '';
-    status.textContent = message || '正在准备能带…';
+    status.textContent = message || '正在准备验证实验…';
     updateControls();
     try {
       const challenge = await active.request(
@@ -270,19 +433,29 @@
       ) {
         throw new Error('社区公约已更新，请刷新注册页面并重新阅读、确认。');
       }
-      if (
-        !Array.isArray(challenge.band?.points) ||
-        challenge.band.points.length < 3 ||
-        !Array.isArray(challenge.band.candidates) ||
-        challenge.band.candidates.length < 2 ||
-        !challenge.band.candidates.every((point) => Number.isFinite(point.k)) ||
-        !Number.isFinite(Date.parse(challenge.expiresAt))
-      ) {
-        throw new Error('能带题目加载失败，请换一道题重试。');
-      }
+      const wienChallenge = challenge.type === 'wien';
+      const bandChallenge = challenge.type === undefined || challenge.type === 'band';
+      const validBand =
+        bandChallenge &&
+        Number.isFinite(challenge.band?.kMin) &&
+        Number.isFinite(challenge.band?.kMax) &&
+        challenge.band.kMin < challenge.band.kMax &&
+        Array.isArray(challenge.band.points) &&
+        challenge.band.points.length >= 3 &&
+        challenge.band.points.every(
+          (point) => Number.isFinite(point.k) && Number.isFinite(point.energy),
+        ) &&
+        Array.isArray(challenge.band.candidates) &&
+        challenge.band.candidates.length >= 2 &&
+        challenge.band.candidates.every((point) => Number.isFinite(point.k));
+      const validWien =
+        wienChallenge && window.freeBbsWienModel?.validParameters(challenge.oscillator);
+      if ((!validBand && !validWien) || !Number.isFinite(Date.parse(challenge.expiresAt)))
+        throw new Error('验证题目加载失败，请换一道题重试。');
       active.challenge = challenge;
       active.loading = false;
-      status.textContent = message || '拖动粒子，选择你的位置。';
+      status.textContent =
+        message || (wienChallenge ? '拖动滑片，调节反馈电阻。' : '拖动粒子，选择你的位置。');
       renderChallenge();
     } catch (error) {
       if (session !== active || currentGeneration !== generation) return;
@@ -296,7 +469,7 @@
   }
 
   function setPointerPosition(event) {
-    if (!session?.challenge) return;
+    if (!session?.challenge || isWien()) return;
     const matrix = graph.getScreenCTM();
     if (!matrix) return;
     const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
@@ -327,6 +500,44 @@
   slider.addEventListener('input', () => {
     setPosition(slider.value);
   });
+
+  function wienPointerPosition(event) {
+    const matrix = wienGraph.getScreenCTM();
+    if (!matrix) return null;
+    return new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+  }
+
+  function setWiperPosition(event) {
+    if (!isWien()) return;
+    const point = wienPointerPosition(event);
+    if (!point) return;
+    const { rfMinOhms, rfMaxOhms } = session.challenge.oscillator;
+    setResistance(rfMinOhms + ((point.x - 300) / 200) * (rfMaxOhms - rfMinOhms));
+  }
+
+  wienGraph.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 || wienSlider.disabled) return;
+    const point = wienPointerPosition(event);
+    if (!point || point.y < 258 || point.y > 350 || point.x < 272 || point.x > 528) return;
+    event.preventDefault();
+    draggingWiper = true;
+    wienGraph.setPointerCapture(event.pointerId);
+    setWiperPosition(event);
+  });
+  wienGraph.addEventListener('pointermove', (event) => {
+    if (draggingWiper) setWiperPosition(event);
+  });
+  wienGraph.addEventListener('pointerup', (event) => {
+    if (draggingWiper) setWiperPosition(event);
+    draggingWiper = false;
+  });
+  wienGraph.addEventListener('pointercancel', () => {
+    draggingWiper = false;
+  });
+  wienGraph.addEventListener('lostpointercapture', () => {
+    draggingWiper = false;
+  });
+  wienSlider.addEventListener('input', () => setResistance(wienSlider.value));
   refreshButton.addEventListener('click', () => loadChallenge());
   closeButton.addEventListener('click', () => finish(null));
   dialog.addEventListener('cancel', (event) => {
@@ -343,15 +554,13 @@
     status.textContent = active.mode === 'login' ? '正在验证并登录…' : '正在验证并创建账号…';
     updateControls();
     try {
-      const payload = await active.submit({
-        challengeId: active.challenge.challengeId,
-        k: active.k,
-      });
+      const answer = isWien() ? { resistanceOhms: active.resistanceOhms } : { k: active.k };
+      const payload = await active.submit({ challengeId: active.challenge.challengeId, ...answer });
       finish(payload);
     } catch (error) {
       active.submitting = false;
       if (/^(registration|login)_captcha_/.test(String(error.code || ''))) {
-        await loadChallenge(`${error.message} 请在新能带上重试。`);
+        await loadChallenge(`${error.message} 请完成新的验证题目。`);
       } else {
         finish(null, error);
       }
