@@ -1,0 +1,467 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const test = require('node:test');
+const vm = require('node:vm');
+const engine = require('../public/circuit-engine');
+const protocol = require('../public/circuit-ai-actions');
+const { validateCircuitAssistantInput } = require('../backend/circuit-assistant');
+
+const source = fs.readFileSync(path.join(__dirname, '../public/circuit.js'), 'utf8');
+const bridgeSource = source.slice(
+  source.indexOf('  function notifyCircuitEditor()'),
+  source.indexOf('  function renderMeters()'),
+);
+const changeSource = source.slice(
+  source.indexOf('  function changed('),
+  source.indexOf('  function currentFrame()'),
+);
+const resultSource = source.slice(
+  source.indexOf('  function showResult('),
+  source.indexOf('  function runSimulation()'),
+);
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const endpoint = (componentId, pin = 0) => ({ componentId, pin });
+
+function fixture(resistorCount = 1) {
+  const resistors = Array.from({ length: resistorCount }, (_, index) => ({
+    id: `R${index + 1}`,
+    type: 'resistor',
+    x: 240 + index * 100,
+    y: 160,
+    params: { resistance: (index + 1) * 1000 },
+  }));
+  return engine.validateDocument({
+    version: 1,
+    components: [
+      { id: 'V1', type: 'voltage', x: 100, y: 160, params: { dc: 5 } },
+      ...resistors,
+      { id: 'G1', type: 'ground', x: 100, y: 360 },
+    ],
+    wires: [
+      { id: 'w1', from: endpoint('V1', 1), to: endpoint('G1') },
+      ...resistors.flatMap((component, index) => [
+        { id: `w${2 * index + 2}`, from: endpoint('V1'), to: endpoint(component.id) },
+        { id: `w${2 * index + 3}`, from: endpoint(component.id, 1), to: endpoint('G1') },
+      ]),
+    ],
+    analysis: { type: 'dc' },
+  });
+}
+
+function node(dataset = {}) {
+  const classes = new Set();
+  return {
+    dataset,
+    checked: false,
+    scrolls: 0,
+    textContent: '',
+    classes,
+    classList: {
+      toggle(name, enabled) {
+        if (enabled) classes.add(name);
+        else classes.delete(name);
+      },
+    },
+    scrollIntoView() {
+      this.scrolls += 1;
+    },
+    querySelectorAll() {
+      return [];
+    },
+  };
+}
+
+function harness({ document = fixture(), measured = true } = {}) {
+  const state = {
+    document,
+    cid: '',
+    revision: 0,
+    dirty: true,
+    editable: true,
+    saving: false,
+    editVersion: 7,
+    selectedId: 'R1',
+    selectedWire: '',
+    wireStart: null,
+    wirePoints: [],
+    result: measured ? engine.simulate(document) : null,
+    traceIds: ['V:R1'],
+    frame: 0,
+    aiUndo: null,
+    aiHighlightedComponents: [],
+    aiHighlightedTraces: [],
+    aiPendingTraces: null,
+  };
+  const calls = {
+    persisted: 0,
+    runs: 0,
+    analysis: 0,
+    inspector: 0,
+    schematic: 0,
+    waveform: 0,
+    meters: 0,
+    events: [],
+    statuses: [],
+  };
+  const components = document.components.map((component) => node({ componentId: component.id }));
+  const allTraceIds = document.components
+    .filter((component) => !['ground', 'junction'].includes(component.type))
+    .flatMap((component) => [`V:${component.id}`, `I:${component.id}`]);
+  const checks = allTraceIds.map((id) => node({ trace: id }));
+  const charts = allTraceIds.map((id) => node({ traceId: id }));
+  const grouped = node({ traceIds: JSON.stringify(['V:R1', 'V:V1']) });
+  const elements = {
+    stage: node(),
+    traces: node(),
+    waveform: node(),
+    'show-phase': node(),
+    results: node(),
+    'phase-control': node(),
+    frame: node(),
+    play: node(),
+    playback: node(),
+    warnings: node(),
+  };
+  elements.stage.querySelectorAll = () => components;
+  elements.traces.querySelectorAll = () => checks;
+  elements.waveform.querySelectorAll = (selector) =>
+    selector === '[data-trace-id]' ? charts : [grouped];
+  const context = {
+    Object,
+    JSON,
+    Array,
+    Set,
+    Map,
+    Number,
+    Math,
+    state,
+    engine,
+    clone,
+    listPage: false,
+    $: (id) => {
+      assert.ok(elements[id], `unexpected UI dependency: ${id}`);
+      return elements[id];
+    },
+    metadata: () => ({ title: '尚未保存的并联电路', description: '草稿中的电阻值' }),
+    escapeHtml: (value) => String(value),
+    setFrame: (index) => {
+      state.frame = index;
+    },
+    renderer: {
+      renderWaveform: () => {
+        calls.waveform += 1;
+      },
+    },
+    window: {
+      CircuitAIActions: protocol,
+      FreeBbsCircuitEditor: {},
+      dispatchEvent: (event) => calls.events.push(clone(event)),
+    },
+    CustomEvent: class CustomEvent {
+      constructor(type, options) {
+        this.type = type;
+        this.detail = options.detail;
+      }
+    },
+    updateControls: () => {},
+    persistDraft: () => {
+      calls.persisted += 1;
+    },
+    invalidateResult: () => {
+      state.result = null;
+      state.traceIds = [];
+    },
+    renderAnalysis: () => {
+      calls.analysis += 1;
+    },
+    renderInspector: () => {
+      calls.inspector += 1;
+    },
+    renderSchematic: () => {
+      calls.schematic += 1;
+      context.applySchematicHighlights();
+    },
+    renderMeters: () => {
+      calls.meters += 1;
+    },
+    setStatus: (...args) => {
+      calls.statuses.push(args);
+    },
+    runSimulation: () => {
+      calls.runs += 1;
+      context.showResult(engine.simulate(state.document));
+    },
+  };
+  vm.runInNewContext(`${changeSource}\n${bridgeSource}\n${resultSource}`, context, {
+    filename: 'circuit.js:editor-ai-bridge',
+  });
+  return { context, state, calls, components, checks, charts, grouped, elements };
+}
+
+test('editor snapshot carries an independent unsaved document and a bounded, backend-valid simulation summary', () => {
+  const document = fixture(16);
+  document.components.find((component) => component.id === 'R1').params.resistance = 2200;
+  document.analysis = { type: 'transient', stop: 0.01, step: 0.00001, initial: 'operating-point' };
+  const { context, state } = harness({ document });
+  state.cid = 'c_0123456789abcdef01234567';
+  state.revision = 3;
+  state.selectedWire = 'w2';
+  state.traceIds = ['I:R16'];
+  state.result.warnings = Array.from({ length: 18 }, (_, index) => `提示 ${index}`);
+  const resultBefore = clone(state.result);
+  const snapshot = clone(context.getAssistantSnapshot());
+  assert.equal(
+    snapshot.document.components.find((component) => component.id === 'R1').params.resistance,
+    2200,
+  );
+  assert.equal(snapshot.title, '尚未保存的并联电路');
+  assert.equal(snapshot.cid, state.cid);
+  assert.equal(snapshot.canEdit, true);
+  assert.equal(snapshot.editVersion, 7);
+  assert.deepEqual(snapshot.selection, { componentId: 'R1', wireId: 'w2' });
+  assert.equal(snapshot.simulation.sampleCount, 1001);
+  assert.equal(snapshot.simulation.traces.length, 24);
+  assert.equal(snapshot.simulation.traces[0].id, 'I:R16');
+  assert.equal(snapshot.simulation.warnings.length, 12);
+  snapshot.simulation.traces.forEach((trace) => {
+    assert.equal(trace.samples.length, 64);
+    assert.equal(trace.samples[0].x, 0);
+    assert.equal(trace.samples.at(-1).x, 0.01);
+    assert.ok([trace.min, trace.max, trace.latest].every(Number.isFinite));
+    assert.equal(trace.values, undefined);
+  });
+  assert.equal(snapshot.simulation.frames, undefined);
+  const payload = validateCircuitAssistantInput({
+    question: '分析当前草稿',
+    document: snapshot.document,
+    selection: snapshot.selection,
+    simulation: snapshot.simulation,
+  });
+  assert.equal(
+    payload.document.components.find((component) => component.id === 'R1').params.resistance,
+    2200,
+  );
+  snapshot.document.components[0].params.dc = 100;
+  snapshot.simulation.traces[0].samples[0].value = 100;
+  assert.equal(state.document.components[0].params.dc, 5);
+  assert.deepEqual(state.result, resultBefore);
+});
+
+test('stale suggestions of every type are rejected without changes or a simulation run', () => {
+  const { context, state, calls } = harness();
+  const before = clone(state);
+  const proposals = [
+    [{ type: 'set_parameter', componentId: 'R1', parameter: 'resistance', value: 2000 }],
+    [{ type: 'highlight_components', componentIds: ['R1'] }],
+    [{ type: 'show_traces', traceIds: ['I:R1'] }],
+    [{ type: 'run_simulation' }],
+  ];
+  proposals.forEach((actions) =>
+    assert.throws(() => context.applyAssistantActions(actions, { expectedVersion: 6 }), /变化/),
+  );
+  assert.deepEqual(clone(state), before);
+  assert.equal(calls.runs, 0);
+  assert.equal(calls.persisted, 0);
+});
+
+test('snapshot omits unavailable statistics and bounds long solver warnings before the request', () => {
+  const { context, state } = harness();
+  state.result.x = [0, 1, 2];
+  state.result.traces = state.result.traces.map((trace) => ({ ...trace, values: [1, 2, 3] }));
+  state.frame = 0;
+  assert.equal(context.getAssistantSnapshot().simulation.traces[0].latest, 3);
+  state.result.traces = state.result.traces.map((trace) => ({ ...trace, values: [NaN] }));
+  state.result.warnings = ['多个周期源的参数提示：'.repeat(100)];
+  const snapshot = clone(context.getAssistantSnapshot());
+  snapshot.simulation.traces.forEach((trace) => {
+    assert.equal(Object.hasOwn(trace, 'min'), false);
+    assert.equal(Object.hasOwn(trace, 'max'), false);
+    assert.equal(Object.hasOwn(trace, 'latest'), false);
+    assert.deepEqual(trace.samples, []);
+  });
+  assert.ok(snapshot.simulation.warnings[0].length <= 500);
+  assert.doesNotThrow(() =>
+    validateCircuitAssistantInput({
+      question: '解释结果',
+      document: snapshot.document,
+      simulation: snapshot.simulation,
+    }),
+  );
+});
+
+test('read-only and saving drafts reject edits while read-only viewing still permits current highlights', () => {
+  const { context, state, calls, components } = harness();
+  const action = { type: 'set_parameter', componentId: 'R1', parameter: 'resistance', value: 2000 };
+  state.editable = false;
+  const before = clone(state.document);
+  assert.throws(() => context.applyAssistantActions([action], { expectedVersion: 7 }), /只读|保存/);
+  context.applyAssistantActions([{ type: 'highlight_components', componentIds: ['R1'] }], {
+    expectedVersion: 7,
+  });
+  assert.ok(
+    components
+      .find((component) => component.dataset.componentId === 'R1')
+      .classes.has('is-ai-highlighted'),
+  );
+  assert.deepEqual(state.document, before);
+  assert.equal(calls.persisted, 0);
+  state.editable = true;
+  state.saving = true;
+  assert.throws(() => context.applyAssistantActions([action], { expectedVersion: 7 }), /只读|保存/);
+  assert.deepEqual(state.document, before);
+});
+
+test('invalid mixed action batches cannot partially edit, highlight or run the circuit', () => {
+  const { context, state, calls, components } = harness();
+  const before = clone(state);
+  assert.throws(
+    () =>
+      context.applyAssistantActions(
+        [
+          { type: 'highlight_components', componentIds: ['R1'] },
+          { type: 'set_parameter', componentId: 'R1', parameter: 'resistance', value: 2000 },
+          { type: 'run_simulation' },
+          { type: 'move_component', componentId: 'R1', x: 100001, y: 0 },
+        ],
+        { expectedVersion: 7 },
+      ),
+    /画布范围/,
+  );
+  assert.deepEqual(clone(state), before);
+  assert.ok(components.every((component) => !component.classes.has('is-ai-highlighted')));
+  assert.equal(calls.runs, 0);
+  assert.equal(calls.persisted, 0);
+  assert.equal(calls.events.length, 0);
+  assert.throws(
+    () =>
+      context.applyAssistantActions(
+        [
+          { type: 'set_parameter', componentId: 'R1', parameter: 'resistance', value: 2000 },
+          { type: 'show_traces', traceIds: ['I:R1'] },
+        ],
+        { expectedVersion: 7 },
+      ),
+    /运行仿真/,
+  );
+  assert.deepEqual(clone(state), before);
+});
+
+test('a reviewed batch updates the draft once, runs the new circuit and can be undone as one edit', () => {
+  const { context, state, calls, components } = harness();
+  const original = clone(state.document);
+  const snapshot = context.applyAssistantActions(
+    [
+      { type: 'set_parameter', componentId: 'R1', parameter: 'resistance', value: 2000 },
+      { type: 'transform_component', componentId: 'R1', rotation: 90, mirrorX: true },
+      { type: 'highlight_components', componentIds: ['R1'] },
+      { type: 'show_traces', traceIds: ['I:R1'] },
+      { type: 'run_simulation' },
+    ],
+    { expectedVersion: 7 },
+  );
+  assert.equal(snapshot.editVersion, 8);
+  assert.equal(snapshot.canUndoAi, true);
+  assert.equal(calls.persisted, 1);
+  assert.equal(calls.runs, 1);
+  const resistor = state.document.components.find((component) => component.id === 'R1');
+  assert.equal(resistor.params.resistance, 2000);
+  assert.equal(resistor.rotation, 90);
+  assert.equal(resistor.mirrorX, true);
+  assert.equal(state.result.traces.find((trace) => trace.id === 'I:R1').values[0], 0.0025);
+  assert.deepEqual(clone(state.traceIds), ['I:R1']);
+  assert.deepEqual(clone(state.aiHighlightedTraces), ['I:R1']);
+  assert.ok(
+    components
+      .find((component) => component.dataset.componentId === 'R1')
+      .classes.has('is-ai-highlighted'),
+  );
+  assert.equal(state.selectedId, '');
+  assert.equal(calls.events.at(-1).detail.canUndoAi, true);
+  const undone = context.undoAssistantActions();
+  assert.deepEqual(state.document, original);
+  assert.equal(undone.editVersion, 9);
+  assert.equal(undone.canUndoAi, false);
+  assert.equal(state.result, null);
+  assert.equal(state.aiUndo, null);
+  assert.equal(calls.persisted, 2);
+  assert.ok(components.every((component) => !component.classes.has('is-ai-highlighted')));
+  assert.throws(() => context.undoAssistantActions(), /无法撤销/);
+});
+
+test('manual changes and unfinished wire drawing prevent stale AI editing or undo', () => {
+  const { context, state } = harness();
+  state.wireStart = endpoint('R1');
+  assert.throws(
+    () =>
+      context.applyAssistantActions(
+        [{ type: 'move_component', componentId: 'R1', x: 300, y: 160 }],
+        { expectedVersion: 7 },
+      ),
+    /导线/,
+  );
+  state.wireStart = null;
+  context.applyAssistantActions([{ type: 'move_component', componentId: 'R1', x: 300, y: 160 }], {
+    expectedVersion: 7,
+  });
+  assert.ok(state.result, 'moving geometry keeps the existing measurements');
+  context.changed({ electrical: false });
+  assert.throws(() => context.undoAssistantActions(), /无法撤销/);
+  assert.equal(context.getAssistantSnapshot().canUndoAi, false);
+});
+
+test('visual requests update component and waveform classes, trace checkboxes and clearing without draft writes', () => {
+  const { context, state, calls, components, checks, charts, grouped } = harness();
+  const before = clone(state.document);
+  context.applyAssistantActions(
+    [
+      { type: 'highlight_components', componentIds: ['R1'] },
+      { type: 'show_traces', traceIds: ['V:R1'] },
+    ],
+    { expectedVersion: 7 },
+  );
+  assert.ok(
+    components
+      .find((component) => component.dataset.componentId === 'R1')
+      .classes.has('is-ai-highlighted'),
+  );
+  assert.equal(checks.find((check) => check.dataset.trace === 'V:R1').checked, true);
+  assert.equal(checks.find((check) => check.dataset.trace === 'I:R1').checked, false);
+  assert.ok(
+    charts.find((chart) => chart.dataset.traceId === 'V:R1').classes.has('is-ai-highlighted'),
+  );
+  assert.ok(grouped.classes.has('is-ai-highlighted'));
+  assert.deepEqual(state.document, before);
+  assert.equal(state.editVersion, 7);
+  assert.equal(calls.persisted, 0);
+  assert.equal(calls.runs, 0);
+  context.clearAiHighlights();
+  assert.ok(
+    [...components, ...charts, grouped].every(
+      (element) => !element.classes.has('is-ai-highlighted'),
+    ),
+  );
+  assert.deepEqual(clone(state.aiHighlightedTraces), []);
+  state.result = null;
+  context.applyAssistantActions([{ type: 'show_traces', traceIds: [] }], { expectedVersion: 7 });
+  assert.deepEqual(clone(state.traceIds), []);
+});
+
+test('simulation results honor an explicit empty pending trace choice and restore defaults only when no choice was requested', () => {
+  const { context, state, calls, elements } = harness();
+  context.applyAssistantActions(
+    [{ type: 'show_traces', traceIds: [] }, { type: 'run_simulation' }],
+    { expectedVersion: 7 },
+  );
+  assert.equal(calls.runs, 1);
+  assert.deepEqual(clone(state.traceIds), []);
+  assert.equal(state.aiPendingTraces, null);
+  assert.match(elements.waveform.textContent, /选择至少一条曲线/);
+  assert.doesNotMatch(elements.traces.innerHTML, / checked/);
+  context.applyAssistantActions([{ type: 'run_simulation' }], { expectedVersion: 7 });
+  assert.equal(calls.runs, 2);
+  assert.deepEqual(clone(state.traceIds), ['V:V1', 'V:R1']);
+  assert.equal(state.aiPendingTraces, null);
+  assert.match(elements.traces.innerHTML, /data-trace="V:R1" checked/);
+  assert.equal(calls.persisted, 0);
+});

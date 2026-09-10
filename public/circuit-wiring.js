@@ -90,7 +90,7 @@
     return visited;
   }
 
-  function connectToWire(input, wireId, position, { fromEndpoint } = {}) {
+  function connectToWire(input, wireId, position, { fromEndpoint, points } = {}) {
     if (!input || !Array.isArray(input.components) || !Array.isArray(input.wires))
       throw new Error('电路数据无效，无法连接导线。');
     const target = input.wires.find((wire) => wire.id === wireId);
@@ -175,7 +175,12 @@
           (sameEndpoint(wire.to, fromEndpoint) && sameEndpoint(wire.from, endpoint)),
       )
     )
-      document.wires.push({ id: uniqueId('w'), from: clone(fromEndpoint), to: { ...endpoint } });
+      document.wires.push({
+        id: uniqueId('w'),
+        from: clone(fromEndpoint),
+        to: { ...endpoint },
+        ...(points === undefined ? {} : { points: clone(points) }),
+      });
     if (document.components.length > 80)
       throw new Error('每个电路最多 80 个元件，无法添加导线连接点。');
     if (document.wires.length > 200) throw new Error('每个电路最多 200 条导线，无法完成连接。');
