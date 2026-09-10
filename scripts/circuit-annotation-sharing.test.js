@@ -57,6 +57,7 @@ function document() {
           traceId: 'M:M1',
           at: 0.25,
           text: '差值采样峰值\n请检查放大倍数',
+          marker: 'vertical',
           mode: 'xy',
           axis: 'value',
           xTraceId: 'V:S1',
@@ -67,6 +68,18 @@ function document() {
           traceId: 'M:M1',
           at: 0.75,
           text: '差值采样谷值',
+          marker: 'horizontal',
+          mode: 'xy',
+          axis: 'value',
+          xTraceId: 'V:S1',
+          analysisKey: 'transient',
+        },
+        {
+          id: 'A3',
+          traceId: 'M:M1',
+          at: 0.5,
+          text: '过零采样点',
+          marker: 'point',
           mode: 'xy',
           axis: 'value',
           xTraceId: 'V:S1',
@@ -189,7 +202,7 @@ function prepared(source) {
   return { result: plot.buildResult(base, display).result, display };
 }
 
-test('HTTP revisions and shared Max context retain original annotations after note edits, deletion, mathematics and mode changes', async (t) => {
+test('HTTP revisions and shared Max context retain original marker styles after note edits, deletion, mathematics and mode changes', async (t) => {
   const { origin, pool, send, get } = await serverFor(t);
   const original = document();
   const createdResponse = await send('/', 'POST', { title: '差值曲线标记', document: original });
@@ -201,7 +214,13 @@ test('HTTP revisions and shared Max context retain original annotations after no
   changed.display.math[0].expression = 'CH1+CH2';
   changed.display.ranges = { xMin: 0, xMax: 1, yMin: -16, yMax: 16 };
   changed.display.annotations = [
-    { ...changed.display.annotations[0], text: '相加后的采样峰值', mode: 'xt', xTraceId: null },
+    {
+      ...changed.display.annotations[0],
+      text: '相加后的采样峰值',
+      marker: 'horizontal',
+      mode: 'xt',
+      xTraceId: null,
+    },
   ];
   const updatedResponse = await send(`/${created.cid}`, 'PUT', {
     title: '相加曲线标记',
@@ -252,6 +271,14 @@ test('HTTP revisions and shared Max context retain original annotations after no
   assert.match(context.messages.at(-1).content, /差值采样峰值/);
   assert.doesNotMatch(context.messages.at(-1).content, /相加后的采样峰值/);
   assert.match(context.messages.at(-1).content, /未经过本次仿真验证/);
+  const latestContext = await enrichAgentCircuitContext(
+    { messages: [{ role: 'user', content: `/circuit?cid=${created.cid}` }] },
+    { pool, publicWebUrl: origin },
+  );
+  assert.deepEqual(
+    latestContext.context.circuits[0].display.annotations,
+    changed.display.annotations,
+  );
   const conflict = await send(`/${created.cid}`, 'PUT', {
     title: '冲突版本',
     document: original,
@@ -299,6 +326,22 @@ test('saved anchors remain recoverable when hidden or resampled, and old documen
     original.display.annotations,
   );
   assert.deepEqual((await get(circuit.cid, 1)).document, stored);
+  const legacyPoints = document();
+  for (const annotation of legacyPoints.display.annotations) delete annotation.marker;
+  const legacyPointsResponse = await send('/', 'POST', {
+    title: '未指定样式的旧标记',
+    document: legacyPoints,
+  });
+  assert.equal(legacyPointsResponse.status, 201);
+  const { circuit: legacyPointsCircuit } = await legacyPointsResponse.json();
+  assert.deepEqual(legacyPointsCircuit.document, legacyPoints);
+  const importedPoints = engine.validateDocument(
+    JSON.parse(JSON.stringify((await get(legacyPointsCircuit.cid)).document)),
+  );
+  assert.deepEqual(importedPoints, legacyPoints);
+  assert.ok(
+    importedPoints.display.annotations.every((annotation) => !Object.hasOwn(annotation, 'marker')),
+  );
   const legacy = document();
   delete legacy.display.annotations;
   const legacyResponse = await send('/', 'POST', { title: '旧图像配置', document: legacy });
@@ -323,6 +366,9 @@ test('HTTP annotation validation rejects injected fields, invalid coordinates an
     [{ ...base, at: null }],
     [{ ...base, at: '0.25' }],
     [{ ...base, at: 1e16 }],
+    ...[null, '', {}, [], ['vertical'], 'diagonal', 'Vertical', 0].map((marker) => [
+      { ...base, marker },
+    ]),
     [{ ...base, text: '字'.repeat(161) }],
     [{ ...base, mode: 'xy', axis: 'phase' }],
     [{ ...base, mode: 'xt', xTraceId: 'V:S1' }],
@@ -347,6 +393,10 @@ test('HTTP annotation validation rejects injected fields, invalid coordinates an
       expectedRevision: 1,
     });
     assert.equal(response.status, 400, JSON.stringify(values));
+    if (Object.hasOwn(values[0], 'marker') && values[0].marker !== 'vertical') {
+      const createResponse = await send('/', 'POST', { title: '无效标记样式', document: source });
+      assert.equal(createResponse.status, 400, JSON.stringify(values));
+    }
   }
   const unchanged = await get(circuit.cid);
   assert.equal(unchanged.revision, 1);

@@ -1744,165 +1744,141 @@
     });
   }
 
-  function shortAnnotationText(value, maxWidth) {
-    let text = '';
-    let width = 0;
-    const characters = Array.from(
-      String(value || '')
-        .replace(/\s+/gu, ' ')
-        .trim(),
-    );
-    for (let index = 0; index < characters.length; index += 1) {
-      const character = characters[index];
-      const nextWidth = width + (character.codePointAt(0) > 255 ? 11 : 6.5);
-      if (nextWidth > maxWidth - 11) return { text: `${text}…`, width: width + 11 };
-      text += character;
-      width = nextWidth;
-    }
-    return { text, width };
-  }
-
-  function annotationPlacement(point, labelWidth, bounds, occupied) {
-    const labelHeight = 24;
-    const clampX = (x) => Math.max(bounds.left + 3, Math.min(bounds.right - labelWidth - 3, x));
-    const clampY = (y) => Math.max(bounds.top + 3, Math.min(bounds.bottom - labelHeight - 3, y));
-    const candidates = [];
-    const candidate = (x, y) => candidates.push({ x: clampX(x), y: clampY(y) });
-    candidate(point.x + 10, point.y - 34);
-    candidate(point.x - labelWidth - 10, point.y - 34);
-    candidate(point.x + 10, point.y + 10);
-    candidate(point.x - labelWidth - 10, point.y + 10);
-    // Search all remaining rows so coincident samples still get distinct badges.
-    for (let y = bounds.top + 3; y <= bounds.bottom - labelHeight - 3; y += 28) {
-      candidate(point.x + 10, y);
-      candidate(point.x - labelWidth - 10, y);
-      for (let x = bounds.left + 3; x <= bounds.right - labelWidth - 3; x += labelWidth + 5)
-        candidate(x, y);
-    }
-    const available = candidates.filter((position) =>
-      occupied.every(
-        (box) =>
-          position.x + labelWidth + 3 <= box.x ||
-          position.x >= box.x + box.width + 3 ||
-          position.y + labelHeight + 3 <= box.y ||
-          position.y >= box.y + box.height + 3,
-      ),
-    );
-    available.sort(
-      (a, b) =>
-        (a.x + labelWidth / 2 - point.x) ** 2 +
-        (a.y + labelHeight / 2 - point.y) ** 2 -
-        ((b.x + labelWidth / 2 - point.x) ** 2 + (b.y + labelHeight / 2 - point.y) ** 2),
-    );
-    const position = available[0];
-    return position ? { ...position, width: labelWidth, height: labelHeight } : null;
+  function selectAnnotation(element, annotation, options, nativeButton = false) {
+    if (typeof options.onAnnotationSelect !== 'function') return;
+    element.addEventListener('click', (event) => {
+      event.stopPropagation?.();
+      options.onAnnotationSelect(annotation.id);
+    });
+    // Native buttons already synthesize clicks for Enter and Space.
+    if (nativeButton) return;
+    element.addEventListener('keydown', (event) => {
+      if (!['Enter', ' '].includes(event.key)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      options.onAnnotationSelect(annotation.id);
+    });
   }
 
   function renderAnnotations(svg, result, options, geometry) {
-    if (!Array.isArray(options.annotations) || !options.annotations.length) return;
+    if (!Array.isArray(options.annotations) || !options.annotations.length) return null;
     const api = annotationApi();
-    if (!api) return;
-    const { traces, phase = false, px, py, bounds } = geometry;
-    const occupied = [];
+    if (!api) return null;
+    const { traces, phase = false, px, py, bounds, clipPath } = geometry;
+    const editable = typeof options.onAnnotationSelect === 'function';
+    const legend = document.createElement('ol');
+    legend.className = 'circuit-wave-annotation-legend';
+    legend.setAttribute('aria-label', '波形标记图例');
     options.annotations.slice(0, 32).forEach((annotation, index) => {
       if ((annotation.axis === 'phase') !== phase) return;
-      const traceIndex = traces.findIndex((trace) => trace.id === annotation.traceId);
-      if (traceIndex < 0) return;
+      if (!traces.some((trace) => trace.id === annotation.traceId)) return;
       const resolved = api.resolve(annotation, result, options);
       if (resolved.error) return;
       const point = { x: px(resolved.x), y: py(resolved.y) };
-      if (!insidePlot(point, bounds)) return;
-      const color = traceColors[traceIndex % traceColors.length];
-      const shortened = shortAnnotationText(
-        options.annotations.length > 12 ? '' : annotation.text,
-        Math.min(144, (bounds.right - bounds.left) * 0.55),
-      );
-      let text = `${index + 1}${shortened.text ? ` · ${shortened.text}` : ''}`;
-      let box = annotationPlacement(
-        point,
-        25 + (shortened.text ? shortened.width + 10 : 0),
-        bounds,
-        occupied,
-      );
-      if (!box) {
-        text = String(index + 1);
-        box = annotationPlacement(point, 28, bounds, occupied);
-      }
-      if (!box) return;
-      occupied.push(box);
+      const type = annotation.marker || 'point';
+      // A reference line remains visible when its sampled point is clipped on
+      // the other axis. Its length belongs only to this trace's chart.
+      let visible = insidePlot(point, bounds);
+      if (type === 'vertical')
+        visible =
+          Number.isFinite(point.x) &&
+          point.x >= bounds.left - 1e-7 &&
+          point.x <= bounds.right + 1e-7;
+      else if (type === 'horizontal')
+        visible =
+          Number.isFinite(point.y) &&
+          point.y >= bounds.top - 1e-7 &&
+          point.y <= bounds.bottom + 1e-7;
+      if (!visible) return;
+      const color = traceColors[index % traceColors.length];
+      const shapeName = { point: '点', vertical: '竖线', horizontal: '横线' }[type];
       const coordinates = resolved.xTrace
         ? `X · ${resolved.xTrace.label}: ${formatValue(resolved.x, resolved.xUnit)} · Y · ${resolved.trace.label}: ${formatValue(resolved.y, resolved.yUnit)}`
         : `${resolved.trace.label}${phase ? ' · 相位' : ''}: ${formatValue(resolved.y, resolved.yUnit)}`;
-      const description = `标记 ${index + 1} · ${formatValue(resolved.at, result.xUnit || '')} · ${coordinates}${annotation.text ? ` · ${annotation.text}` : ''}`;
+      const sample = `${formatValue(resolved.at, result.xUnit || '')} · ${coordinates}`;
+      const description = `标记 ${index + 1} · ${shapeName} · ${sample}${annotation.text ? ` · ${annotation.text}` : ''}`;
       const marker = svgElement('g', {
         'data-annotation-id': annotation.id,
         'data-annotation-trace-id': annotation.traceId,
         'data-annotation-index': resolved.index,
-        role: typeof options.onAnnotationSelect === 'function' ? 'button' : 'note',
+        'data-annotation-marker': type,
+        'clip-path': clipPath,
+        role: editable ? 'button' : 'note',
         tabindex: 0,
         'aria-label': description,
       });
-      if (typeof options.onAnnotationSelect === 'function') marker.style.cursor = 'pointer';
+      if (editable) marker.style.cursor = 'pointer';
       marker.append(svgElement('title', {}, description));
-      marker.append(
-        svgElement('path', {
-          d: `M ${point.x} ${point.y} L ${Math.max(box.x, Math.min(box.x + box.width, point.x))} ${Math.max(box.y, Math.min(box.y + box.height, point.y))}`,
-          fill: 'none',
-          stroke: color,
-          'stroke-width': 1.2,
-          opacity: 0.8,
-        }),
-      );
-      marker.append(
-        svgElement('circle', {
-          cx: point.x,
-          cy: point.y,
-          r: 4.5,
-          'data-annotation-point': annotation.id,
-          fill: 'var(--circuit-surface,#102228)',
-          stroke: color,
-          'stroke-width': 2.2,
-        }),
-      );
-      marker.append(
-        svgElement('rect', {
-          x: box.x,
-          y: box.y,
-          width: box.width,
-          height: box.height,
-          rx: 4,
-          'data-annotation-label': annotation.id,
-          fill: 'var(--circuit-surface,#102228)',
-          stroke: color,
-          'stroke-width': 1,
-        }),
-      );
-      marker.append(
-        svgElement(
-          'text',
-          {
-            x: box.x + 8,
-            y: box.y + 16,
-            fill: 'var(--circuit-ink,#dfedf0)',
-            'font-size': 11,
-            'font-weight': 600,
-          },
-          text,
-        ),
-      );
-      marker.addEventListener('click', (event) => {
-        event.stopPropagation?.();
-        options.onAnnotationSelect?.(annotation.id);
-      });
-      marker.addEventListener('keydown', (event) => {
-        if (typeof options.onAnnotationSelect !== 'function' || !['Enter', ' '].includes(event.key))
-          return;
-        event.preventDefault();
-        event.stopPropagation();
-        options.onAnnotationSelect(annotation.id);
-      });
+      if (type === 'point') {
+        marker.append(
+          svgElement('circle', {
+            cx: point.x,
+            cy: point.y,
+            r: 12,
+            fill: 'transparent',
+            'data-annotation-hit': annotation.id,
+          }),
+          svgElement('circle', {
+            cx: point.x,
+            cy: point.y,
+            r: 4,
+            'data-annotation-point': annotation.id,
+            fill: 'none',
+            stroke: color,
+            'stroke-width': 1.75,
+            'vector-effect': 'non-scaling-stroke',
+          }),
+        );
+      } else {
+        const line =
+          type === 'vertical'
+            ? { x1: point.x, x2: point.x, y1: bounds.top, y2: bounds.bottom }
+            : { x1: bounds.left, x2: bounds.right, y1: point.y, y2: point.y };
+        marker.append(
+          svgElement('line', {
+            ...line,
+            stroke: 'transparent',
+            'stroke-width': 14,
+            'data-annotation-hit': annotation.id,
+          }),
+          svgElement('line', {
+            ...line,
+            'data-annotation-line': annotation.id,
+            stroke: color,
+            'stroke-width': 1.25,
+            'stroke-dasharray': '5 4',
+            'vector-effect': 'non-scaling-stroke',
+          }),
+        );
+      }
+      selectAnnotation(marker, annotation, options);
       svg.append(marker);
+
+      const entry = document.createElement('li');
+      const control = document.createElement(editable ? 'button' : 'div');
+      control.className = 'circuit-wave-annotation-entry';
+      control.setAttribute('data-annotation-legend-id', annotation.id);
+      if (editable) {
+        control.setAttribute('type', 'button');
+        control.setAttribute('aria-label', `编辑${description}`);
+      }
+      const swatch = document.createElement('span');
+      swatch.className = `circuit-wave-annotation-swatch is-${type}`;
+      swatch.style.color = color;
+      swatch.setAttribute('aria-hidden', 'true');
+      const details = document.createElement('span');
+      details.className = 'circuit-wave-annotation-details';
+      const label = document.createElement('strong');
+      label.textContent = `${index + 1} · ${shapeName}${annotation.text ? ` · ${annotation.text}` : ''}`;
+      const values = document.createElement('small');
+      values.textContent = sample;
+      details.append(label, values);
+      control.append(swatch, details);
+      selectAnnotation(control, annotation, options, editable);
+      entry.append(control);
+      legend.append(entry);
     });
+    return legend.children.length ? legend : null;
   }
 
   function renderXYWaveform(container, result, options) {
@@ -2121,13 +2097,14 @@
           }
         : null;
     });
-    renderAnnotations(
+    const annotationLegend = renderAnnotations(
       svg,
       result,
       { ...options, xyX: xTrace.id, xyY: yTrace.id },
-      { traces: [yTrace], px, py, bounds },
+      { traces: [yTrace], px, py, bounds, clipPath },
     );
     group.append(svg, readout);
+    if (annotationLegend) group.append(annotationLegend);
     container.append(group);
     return {
       destroy() {
@@ -2359,8 +2336,16 @@
             }
           : null;
       });
-      renderAnnotations(svg, result, options, { traces, phase, px, py, bounds });
+      const annotationLegend = renderAnnotations(svg, result, options, {
+        traces,
+        phase,
+        px,
+        py,
+        bounds,
+        clipPath,
+      });
       group.append(svg, readout);
+      if (annotationLegend) group.append(annotationLegend);
       container.append(group);
       charts.push(group);
     });

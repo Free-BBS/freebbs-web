@@ -292,3 +292,61 @@ test('single-point DC and typed numeric arrays work in standalone browser execut
   assert.equal(api.analysisKey({ type: 'ac' }), 'ac');
   assert.equal(api.analysisKey(null), null);
 });
+
+test('point, vertical and horizontal markers preserve saved styles without migrating legacy objects', () => {
+  const legacy = annotation();
+  assert.deepEqual(engine.normalizeAnnotation(legacy), legacy);
+  assert.equal(
+    Object.hasOwn(annotations.create(result(), display(), { at: 0.25 }), 'marker'),
+    false,
+  );
+  for (const marker of ['point', 'vertical', 'horizontal']) {
+    const created = annotations.create(result(), display(), { at: 0.3, marker });
+    assert.equal(created.at, 0.25);
+    assert.equal(created.marker, marker);
+    assert.equal(engine.normalizeAnnotation(created).marker, marker);
+    assert.equal(annotations.resolve(created, result(), display()).y, 2);
+  }
+  for (const marker of [null, '', 'diagonal', {}, [], 1, undefined]) {
+    const bad = annotation({ marker });
+    assert.throws(() => engine.normalizeAnnotation(bad), /样式/);
+    assert.ok(annotations.resolve(bad, result(), display()).error);
+  }
+});
+
+test('reference lines retain their visible axis when the anchored point is clipped on the other axis', () => {
+  const croppedY = display({ ranges: { xMin: 0, xMax: 1, yMin: -1, yMax: 1 } });
+  assert.match(annotations.resolve(annotation(), result(), croppedY).error, /范围之外/);
+  assert.equal(annotations.resolve(annotation({ marker: 'vertical' }), result(), croppedY).y, 2);
+  assert.match(
+    annotations.resolve(annotation({ marker: 'horizontal' }), result(), croppedY).error,
+    /范围之外/,
+  );
+  const croppedX = display({ ranges: { xMin: 0.5, xMax: 1, yMin: -3, yMax: 3 } });
+  assert.equal(
+    annotations.resolve(annotation({ marker: 'horizontal' }), result(), croppedX).x,
+    0.25,
+  );
+  assert.match(
+    annotations.resolve(annotation({ marker: 'vertical' }), result(), croppedX).error,
+    /范围之外/,
+  );
+  const xy = display({ mode: 'xy', ranges: { xMin: -1, xMax: 1, yMin: -1, yMax: 1 } });
+  const horizontal = annotations.create(result(), xy, { at: 0.25, marker: 'horizontal' });
+  assert.deepEqual(
+    [
+      annotations.resolve(horizontal, result(), xy).x,
+      annotations.resolve(horizontal, result(), xy).y,
+    ],
+    [2, 0],
+  );
+  assert.match(
+    annotations.resolve({ ...horizontal, marker: 'point' }, result(), xy).error,
+    /范围之外/,
+  );
+  const invalid = result({ traces: [{ id: 'V:S1', values: [0, NaN, 0, 0, 0], unit: 'V' }] });
+  assert.match(
+    annotations.resolve(annotation({ marker: 'vertical' }), invalid, croppedY).error,
+    /无有效数值/,
+  );
+});

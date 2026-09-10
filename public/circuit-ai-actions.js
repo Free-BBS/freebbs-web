@@ -316,6 +316,12 @@
           )
             throw new Error('标记必须引用当前显示模式、坐标轴和已显示的曲线。');
           const existingIndex = display.annotations.findIndex((item) => item.id === annotation.id);
+          if (
+            existingIndex >= 0 &&
+            !Object.hasOwn(annotation, 'marker') &&
+            Object.hasOwn(display.annotations[existingIndex], 'marker')
+          )
+            annotation.marker = display.annotations[existingIndex].marker;
           if (existingIndex === -1) display.annotations.push(annotation);
           else display.annotations[existingIndex] = annotation;
           draft.display = display;
@@ -566,7 +572,10 @@
         }[annotation.analysisKey] || ['扫描坐标', ''];
         const axis =
           annotation.mode === 'xy' ? 'X–Y' : { phase: '相位', value: '数值' }[annotation.axis];
-        return `设置标记 ${annotation.id}：${annotation.traceId}，${coordinate} ${annotation.at}${unit}，${axis}${annotation.text ? `，注释「${annotation.text}」` : '，无注释'}`;
+        const marker = { point: '点', vertical: '竖线', horizontal: '横线' }[
+          annotation.marker || 'point'
+        ];
+        return `设置标记 ${annotation.id}：${annotation.traceId}，${marker}，${coordinate} ${annotation.at}${unit}，${axis}${annotation.text ? `，注释「${annotation.text}」` : '，无注释'}`;
       }
       case 'delete_annotation':
         return `删除标记 ${action.annotationId} 及其注释`;
