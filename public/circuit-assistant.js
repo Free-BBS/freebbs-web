@@ -16,7 +16,9 @@
     history: [],
     proposals: [],
     runner: null,
+    suggestionController: null,
     agentStep: 0,
+    progressMessage: '',
     agentArticles: new Map(),
     returnFocus: null,
     inertElements: [],
@@ -33,12 +35,12 @@
   }
 
   function updateRunbar() {
-    const active = Boolean(state.runner?.isRunning());
+    const active = Boolean(state.runner?.isRunning() || state.suggestionController);
     $('runbar').hidden = !active || state.open;
     $('header-stop').hidden = !active || state.tab === 'max';
-    $('runbar-status').textContent = state.agentStep
-      ? `Max 正在执行 · 第 ${state.agentStep} 步`
-      : 'Max 正在准备';
+    $('runbar-status').textContent =
+      state.progressMessage ||
+      (state.agentStep ? `Max 正在执行 · 第 ${state.agentStep} 步` : 'Max 正在准备');
     $('toggle').classList.toggle('is-agent-running', active);
   }
 
@@ -298,6 +300,7 @@
   function agentEvent(event) {
     if (event.type === 'step') {
       state.agentStep = event.step;
+      state.progressMessage = '';
       const article = appendMessage('assistant', '正在读取当前电路和操作结果…', {
         pending: true,
       });
@@ -309,9 +312,21 @@
       return;
     }
     const article = state.agentArticles.get(event.step);
+    if (event.type === 'progress' && article) {
+      if (typeof event.answer === 'string') {
+        article.querySelector('.circuit-ai-message-body').textContent = event.answer;
+        article.dataset.streamAnswer = 'true';
+      }
+      if (event.message) {
+        state.progressMessage = `第 ${event.step} 步 · ${event.message}`;
+        status(state.progressMessage);
+        updateRunbar();
+      }
+    }
     if (event.type === 'answer' && article) {
       renderContent(article.querySelector('.circuit-ai-message-body'), event.answer);
       article.classList.remove('is-pending');
+      delete article.dataset.streamAnswer;
     }
     if (event.type === 'actions' && article) {
       const section = document.createElement('section');
@@ -331,7 +346,9 @@
         : '正在执行…';
       section.append(list, outcome);
       article.append(section);
-      status(`第 ${event.step} 步 · 正在执行 ${event.actions.length} 项操作。`);
+      state.progressMessage = `第 ${event.step} 步 · 正在执行 ${event.actions.length} 项操作。`;
+      status(state.progressMessage);
+      updateRunbar();
     }
     if (event.type === 'observation' && article) {
       let outcome = article.querySelector('[data-agent-outcome]');
@@ -351,7 +368,8 @@
     if (event.type === 'finish') {
       if (article?.classList.contains('is-pending')) {
         article.classList.remove('is-pending');
-        article.querySelector('.circuit-ai-message-body').textContent = event.reason;
+        if (!article.dataset.streamAnswer)
+          article.querySelector('.circuit-ai-message-body').textContent = event.reason;
       }
       const note = document.createElement('p');
       note.className = 'circuit-agent-outcome';
@@ -364,32 +382,15 @@
     $('thread').scrollTop = $('thread').scrollHeight;
   }
 
-  async function requestAgentStep(payload, { signal }) {
-    const controller = new AbortController();
-    let timedOut = false;
-    const cancel = () => controller.abort(signal.reason);
-    if (signal.aborted) cancel();
-    else signal.addEventListener('abort', cancel, { once: true });
-    const timer = window.setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, 180000);
+  async function requestAgentStep(payload, { signal, onProgress }) {
     try {
-      return await app.callApi('/ai/circuit/chat', {
-        method: 'POST',
-        signal: controller.signal,
-        body: JSON.stringify(payload),
-      });
+      return await app.streamCircuitChatResponse(payload, { signal, onProgress });
     } catch (error) {
-      if (timedOut && !signal.aborted) throw new Error('等待 Max 回答超时，请稍后重试。');
       if (error.status === 401) {
         $('login').hidden = false;
         error.code = 'AGENT_STOPPED';
       }
       throw error;
-    } finally {
-      signal.removeEventListener('abort', cancel);
-      window.clearTimeout(timer);
     }
   }
 
@@ -400,6 +401,7 @@
     }
     state.sending = true;
     state.agentStep = 0;
+    state.progressMessage = '';
     state.agentArticles = new Map();
     $('input').disabled = true;
     $('send').hidden = true;
@@ -480,12 +482,15 @@
     const body = article.querySelector('.circuit-ai-message-body');
     status('Max 正在分析本次提问时的画布。');
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 180000);
+    state.suggestionController = controller;
+    state.agentStep = 0;
+    state.progressMessage = 'Max 正在分析当前画布';
+    $('send').hidden = true;
+    $('stop').hidden = false;
+    updateRunbar();
     try {
-      const response = await app.callApi('/ai/circuit/chat', {
-        method: 'POST',
-        signal: controller.signal,
-        body: JSON.stringify({
+      const response = await app.streamCircuitChatResponse(
+        {
           question,
           history: state.history.slice(-8).map((message) => ({
             role: message.role,
@@ -494,8 +499,21 @@
           document: snapshot.document,
           selection: snapshot.selection,
           simulation: snapshot.simulation,
-        }),
-      });
+        },
+        {
+          signal: controller.signal,
+          onProgress: (progress) => {
+            if (controller.signal.aborted || state.suggestionController !== controller) return;
+            if (progress.type === 'answer') body.textContent = progress.answer;
+            if (progress.type === 'status') {
+              state.progressMessage = progress.message;
+              status(progress.message);
+              updateRunbar();
+            }
+            $('thread').scrollTop = $('thread').scrollHeight;
+          },
+        },
+      );
       const answer = String(response.answer || '').trim();
       if (!answer) throw new Error('Max 暂时没有返回回答，请重试。');
       renderContent(body, answer);
@@ -514,23 +532,26 @@
         status('回答已保留，操作建议未通过检查，请重新提问。', true);
       }
     } catch (error) {
+      const stopped = error.code === 'AGENT_STOPPED' || error.name === 'AbortError';
       article.classList.remove('is-pending');
-      article.classList.add('is-error');
-      body.textContent =
-        error.name === 'AbortError'
-          ? '这次回答等待时间较长，请稍后重试。你的问题仍保留在输入框。'
-          : `暂时无法回答：${error.message || '请稍后重试。'}`;
-      status('问题已保留，可以直接重试。', true);
+      article.classList.toggle('is-error', !stopped);
+      body.textContent = stopped
+        ? '已停止回答，你的问题仍保留在输入框。'
+        : `暂时无法回答：${error.message || '请稍后重试。'}`;
+      status('问题已保留，可以直接重试。', !stopped);
       if (error.status === 401) $('login').hidden = false;
     } finally {
-      window.clearTimeout(timeout);
+      state.suggestionController = null;
       state.sending = false;
       updateMode();
       $('input').disabled = false;
       $('send').disabled = false;
+      $('send').hidden = false;
+      $('stop').hidden = true;
       $('send').textContent = '发送';
       $('thread').setAttribute('aria-busy', 'false');
       updateEditorState(editor().getSnapshot());
+      updateRunbar();
       $('thread').scrollTop = $('thread').scrollHeight;
     }
   }
@@ -561,7 +582,12 @@
       // Mode selection remains available without browser storage.
     }
   });
-  const stopAgent = () => state.runner?.stop('已停止自主执行，已完成的修改保留在草稿中，可撤销。');
+  const stopAgent = () => {
+    state.runner?.stop('已停止自主执行，已完成的修改保留在草稿中，可撤销。');
+    state.suggestionController?.abort(
+      Object.assign(new Error('已停止回答。'), { code: 'AGENT_STOPPED' }),
+    );
+  };
   $('stop').addEventListener('click', stopAgent);
   $('header-stop').addEventListener('click', stopAgent);
   $('runbar-stop').addEventListener('click', stopAgent);
@@ -570,6 +596,7 @@
   window.addEventListener('pagehide', () => {
     retainQuestion();
     state.runner?.stop('页面已离开，本轮执行已停止。');
+    state.suggestionController?.abort();
   });
   $('input').addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing) {

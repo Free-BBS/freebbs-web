@@ -116,6 +116,115 @@ function harness(overrides = {}) {
   return h;
 }
 
+test('streamed progress is presentation only and expires when its request or run finishes', async () => {
+  const pending = deferred();
+  let firstProgress;
+  let lastProgress;
+  const h = harness({
+    requestStep: (payload, { onProgress }) => {
+      if (payload.agent.step === 1) {
+        firstProgress = onProgress;
+        onProgress({ type: 'status', phase: 'thinking', message: '正在分析电路。' });
+        onProgress({ type: 'answer', answer: '先运行仿真。' });
+        onProgress({ type: 'result', actions: [simulate] });
+        return pending.promise;
+      }
+      lastProgress = onProgress;
+      firstProgress({ type: 'answer', answer: '已过期的上一轮片段。' });
+      onProgress({ type: 'answer', answer: '实测仿真已完成。' });
+      return { answer: '实测仿真已完成。', actions: [], done: true };
+    },
+  });
+  const running = h.runner.run('运行仿真');
+  await tick();
+  assert.equal(h.executions.length, 0);
+  assert.deepEqual(
+    h.events.filter((event) => event.type === 'progress'),
+    [
+      { type: 'progress', step: 1, phase: 'thinking', message: '正在分析电路。' },
+      { type: 'progress', step: 1, answer: '先运行仿真。' },
+    ],
+  );
+  pending.resolve({ answer: '先运行仿真。', actions: [simulate], done: false });
+  const result = await running;
+  assert.equal(result.status, 'complete');
+  assert.equal(h.executions.length, 1);
+  assert.deepEqual(h.events.filter((event) => event.type === 'progress').at(-1), {
+    type: 'progress',
+    step: 2,
+    answer: '实测仿真已完成。',
+  });
+  const count = h.events.length;
+  firstProgress({ type: 'answer', answer: '迟到片段。' });
+  lastProgress({ type: 'answer', answer: '结束后的片段。' });
+  assert.equal(h.events.length, count);
+});
+
+test('a streamed update detects an edited canvas immediately and aborts the pending request', async () => {
+  let progress;
+  let signal;
+  const h = harness({
+    requestStep: (payload, options) => {
+      progress = options.onProgress;
+      signal = options.signal;
+      return new Promise(() => {});
+    },
+  });
+  const running = h.runner.run('运行仿真');
+  await tick();
+  h.current.editVersion += 1;
+  progress({ type: 'answer', answer: '基于旧画布的回答。' });
+  const result = await running;
+  assert.equal(result.status, 'stale');
+  assert.equal(signal.aborted, true);
+  assert.equal(h.executions.length, 0);
+  assert.equal(h.events.filter((event) => event.type === 'progress').length, 0);
+});
+
+test('rapid stream updates avoid serializing the full waveform snapshot for every token', async () => {
+  let reads = 0;
+  const h = harness({
+    getSnapshot: () => {
+      reads += 1;
+      return copy(h.current);
+    },
+    requestStep: (payload, { onProgress }) => {
+      const before = reads;
+      for (let index = 0; index < 100; index += 1)
+        onProgress({ type: 'answer', answer: `已分析 ${index} 个采样点。` });
+      assert.ok(reads - before < 5, 'a burst should check the snapshot once, not for every token');
+      return { answer: '任务完成。', actions: [], done: true };
+    },
+  });
+  const result = await h.runner.run('分析结果');
+  assert.equal(result.status, 'complete');
+  assert.equal(h.events.filter((event) => event.type === 'progress').length, 100);
+  assert.ok(reads >= 3, 'the final result and final snapshot are still checked');
+});
+
+test('stopping a stream ignores queued progress and never executes a delayed final response', async () => {
+  const pending = deferred();
+  let progress;
+  const h = harness({
+    requestStep: (payload, { onProgress }) => {
+      progress = onProgress;
+      return pending.promise;
+    },
+  });
+  const running = h.runner.run('运行仿真');
+  await tick();
+  progress({ type: 'answer', answer: '正在准备。' });
+  h.runner.stop();
+  progress({ type: 'answer', answer: '停止后的片段。' });
+  const result = await running;
+  pending.resolve({ answer: '继续运行。', actions: [simulate], done: false });
+  await tick();
+  assert.equal(result.status, 'stopped');
+  assert.equal(h.executions.length, 0);
+  assert.equal(h.events.filter((event) => event.type === 'progress').length, 1);
+  assert.equal(h.events.at(-1).type, 'finish');
+});
+
 test('agent decides subsequent edits from the freshly completed simulation, preserving original history', async () => {
   const history = [{ role: 'user', content: '原来的讨论' }];
   const h = harness({
