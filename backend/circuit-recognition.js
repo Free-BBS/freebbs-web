@@ -7,6 +7,7 @@ const {
   validateEditorDocument,
 } = require('../public/circuit-ai-actions');
 const { validateCircuitInput } = require('./circuits');
+const { normalizeRecognizedCircuitLayout } = require('./circuit-recognition-layout');
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_IMAGE_PIXELS = 40000000;
@@ -114,10 +115,11 @@ function buildCircuitRecognitionPayload(input, model) {
           JSON.stringify(catalog),
           'components 每项仅 {id,type,x,y,rotation,mirrorX?,mirrorY?,params}。id 唯一，以英文字母开头，限字母数字下划线连字符，最长40字符；未标号可按 R1/C1/V1 等分配。x/y 是元件中心，用清晰、留出标值空间的20单位网格布局，尽量保留原图相对位置，绝对值不超过100000。rotation 为 0/90/180/270，mirrorX/mirrorY 是布尔值。',
           '编辑器默认 viewBox 为 [0,0,1000,640]。将元件中心安排在 x=100..900、y=80..540，导线中间拐点在 x=20..980、y=20..620；复杂图也应先合理紧凑排列，避免元件或导线超出初始画布。不要添加 viewBox、bounds 或任何扩展画布的文档字段。',
+          '排版保持横平竖直：同一竖直支路的元件中心使用相同 x，同一水平支路使用相同 y，成排元件使用一致间距。元件中心和主要走线通道采用20单位网格，给元件标值留出空间；不要改变原图的极性和电气连接来凑齐布局。',
           '所有参数使用 SI 数值（电阻Ω、电容F、电感H、电源V或A、频率Hz、时间s），不能写 1k 或 10u 等字符串。只在 params 写看清或用户明确给定的参数；未标注/看不清的参数必须省略，服务器会使用目录 defaults 并添加默认值提示。warnings 必须逐项指出不确定的读数、用户补充值和所用教学模型；不能把猜测写成确定数值。',
           'MOS/BJT 极性、二极管方向、源正负方向必须按图识别；不能确认时失败。运放是无独立电源引脚的三端教学模型，可将图中明确电源电压写入 railPositive/railNegative，并在 warnings 说明。开关、变压器、数字IC或其他未知元件不能静默替换；无法可靠表达则失败并说明。',
           'wires 每项仅 {id,from:{componentId,pin},to:{componentId,pin},points?:[{x,y}]}，id 唯一，端点必须为存在的元件引脚，不能同端自连。每条导线最多32个中间拐点。普通几何交叉不相连，多线相接用 junction 并用多段导线连接共同引脚。所有 ground 电气相通。图中没有地时不要擅自新增地，在 warnings 提示仿真前需要选择参考地。',
-          '引脚局部几何：通常双端 pin0=(-40,0),pin1=(40,0)；ground=(0,-28)；junction=(0,0)；bjt/mosfet 三端分别=(0,-40),(-40,0),(0,40)；opamp=(-40,-18),(-40,18),(40,0)；vcvs/vccs=(-40,0),(40,0),(-18,44),(18,44)；twoport/oscilloscope2=(-60,-22),(-60,22),(60,-22),(60,22)。先按本地X/Y镜像再旋转后平移到中心；90度时通常双端 pin0 在上、pin1 在下。连线走水平/竖直折线，绕开元件主体，points 只含中间拐点；省略则自动正交走线，[]为直线。',
+          '引脚局部几何：通常双端 pin0=(-40,0),pin1=(40,0)；ground=(0,-28)；junction=(0,0)；bjt/mosfet 三端分别=(0,-40),(-40,0),(0,40)；opamp=(-40,-18),(-40,18),(40,0)；vcvs/vccs=(-40,0),(40,0),(-18,44),(18,44)；twoport/oscilloscope2=(-60,-22),(-60,22),(60,-22),(60,22)。先按本地X/Y镜像再旋转后平移到中心；90度时通常双端 pin0 在上、pin1 在下。连线仅走水平/竖直折线，绕开元件主体，points 只含中间拐点；相邻两点必须共享 x 或 y，端点以真实引脚坐标为准。仅当两个引脚同轴时才可用 points:[]；省略 points 可交给自动正交走线。',
           'analysis 默认为 {type:"dc"}，仅表示初始编辑器分析设置，不能声称已验证可仿真、运行仿真或计算出结果。不要输出 display、保存、发布、CID、网页标签或任意脚本。',
         ].join('\n'),
       },
@@ -169,7 +171,8 @@ function parseCircuitRecognitionResponse(raw) {
     if (!Array.isArray(result.warnings) || result.warnings.length > 30)
       throw new Error('识别提示最多30项');
     const warnings = result.warnings.map((warning) => boundedText(warning, 500, '识别提示'));
-    const document = validateEditorDocument(result.circuit?.document);
+    const validatedDocument = validateEditorDocument(result.circuit?.document);
+    const document = validateEditorDocument(normalizeRecognizedCircuitLayout(validatedDocument));
     const circuit = validateCircuitInput({ ...result.circuit, document });
     if (!document.components.some(({ type }) => !['ground', 'junction'].includes(type)))
       throw new RecognitionError('图片中未识别到可用的电路元件。', 422, 'circuit_not_recognized');

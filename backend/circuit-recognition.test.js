@@ -6,7 +6,8 @@ const { once } = require('node:events');
 const { setTimeout: delay } = require('node:timers/promises');
 const express = require('express');
 const sharp = require('sharp');
-const { buildNets, simulate } = require('../public/circuit-engine');
+const { buildNets, simulate, validateDocument } = require('../public/circuit-engine');
+const { getWireRoute } = require('../public/circuit-renderer');
 const {
   MAX_IMAGE_BYTES,
   MAX_RESPONSE_BYTES,
@@ -201,6 +202,38 @@ test('valid result preserves topology, can simulate 4 V divider, and always disc
   );
 });
 
+test('recognized diagonal wire geometry becomes orthogonal while electrical data stays identical', () => {
+  const source = recognizedCircuit();
+  source.circuit.document.components[0].x += 7;
+  source.circuit.document.components[1].y -= 3;
+  source.circuit.document.wires.forEach((wire) => {
+    wire.points = [];
+  });
+  const original = validateDocument(source.circuit.document);
+  const { circuit } = parseCircuitRecognitionResponse(JSON.stringify(source));
+  const result = circuit.document;
+  assert.deepEqual(buildNets(result).pinNets, buildNets(original).pinNets);
+  assert.deepEqual(simulate(result).frames, simulate(original).frames);
+  assert.deepEqual(
+    result.components.map(({ x, y, ...component }) => component),
+    original.components.map(({ x, y, ...component }) => component),
+  );
+  result.components.forEach(({ x, y }) => {
+    assert.equal(x % 20, 0);
+    assert.equal(y % 20, 0);
+  });
+  result.wires.forEach((wire, index) => {
+    assert.deepEqual(wire.from, original.wires[index].from);
+    assert.deepEqual(wire.to, original.wires[index].to);
+    const route = getWireRoute(wire, result.components);
+    assert.ok(route.length >= 2);
+    route.slice(1).forEach((point, pointIndex) => {
+      const previous = route[pointIndex];
+      assert.ok(point.x === previous.x || point.y === previous.y, `${wire.id} contains a diagonal`);
+    });
+  });
+});
+
 test('model output enforces circuit metadata, strict editor fields, topology, bounds, and JSON safety', () => {
   const mutations = [
     (result) => {
@@ -226,6 +259,9 @@ test('model output enforces circuit metadata, strict editor fields, topology, bo
     },
     (result) => {
       result.circuit.document.components[0].rotation = 1;
+    },
+    (result) => {
+      result.circuit.document.components[0].x = 100001;
     },
     (result) => {
       result.circuit.document.components[0].params.extra = 1;
@@ -376,6 +412,13 @@ test('HTTP reads current secret model settings, passes actual image, and returns
   const result = await response.json();
   assert.equal(result.circuit.title, '分压电路');
   assert.equal(result.circuit.document.components.length, 4);
+  result.circuit.document.wires.forEach((wire) => {
+    assert.ok(Array.isArray(wire.points));
+    const route = getWireRoute(wire, result.circuit.document.components);
+    route.slice(1).forEach((point, index) => {
+      assert.ok(point.x === route[index].x || point.y === route[index].y);
+    });
+  });
   assert.equal(calls, 1);
 });
 
