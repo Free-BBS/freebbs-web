@@ -511,3 +511,78 @@ test('completed responses cannot include unobserved actions, and the next round 
   assert.equal(h.executions.length, 0);
   assert.equal(result.observations[0].status, 'error');
 });
+
+test('an unfinished empty step is corrected before executing and observing the actual next operation', async () => {
+  for (const completion of [{ done: false }, {}]) {
+    const h = harness({
+      requestStep: (payload) => {
+        if (payload.agent.step === 1)
+          return { answer: '先运行仿真获取实际数据。', actions: [], ...completion };
+        if (payload.agent.step === 2) {
+          assert.equal(payload.agent.observations[0].status, 'error');
+          assert.match(payload.agent.observations[0].summary, /未提供可执行操作/);
+          assert.equal(h.executions.length, 0);
+          return { answer: '运行仿真。', actions: [simulate], done: false };
+        }
+        assert.equal(payload.agent.observations[1].status, 'success');
+        assert.equal(payload.simulation.traces[0].latest, 0.005);
+        assert.equal(h.executions.length, 1);
+        return { answer: '仿真结果为 5 mA。', actions: [], done: true };
+      },
+    });
+    const result = await h.runner.run('仿真并分析');
+    assert.equal(result.status, 'complete');
+    assert.equal(result.step, 3);
+    assert.equal(result.answer, '仿真结果为 5 mA。');
+    assert.deepEqual(
+      result.observations.map((item) => item.status),
+      ['error', 'success'],
+    );
+    assert.deepEqual(h.endings, ['run-1']);
+  }
+});
+
+test('missing, malformed or empty final responses never silently complete', async () => {
+  for (const response of [
+    undefined,
+    null,
+    {},
+    { answer: '接下来运行仿真。', actions: [], done: false },
+    { answer: '完成', actions: [] },
+    { answer: '完成', actions: [], done: 'true' },
+    { answer: '完成', actions: [], done: null },
+    { actions: [], done: true },
+    { answer: ' \n\t ', actions: [], done: true },
+    { answer: {}, actions: [], done: true },
+  ]) {
+    const h = harness({ requestStep: () => response });
+    const result = await h.runner.run('执行');
+    assert.equal(result.status, 'error', JSON.stringify(response));
+    assert.equal(h.requests.length, 3);
+    assert.equal(h.executions.length, 0);
+    assert.equal(result.observations.length, 3);
+    assert.equal(
+      result.observations.every((item) => item.status === 'error'),
+      true,
+    );
+    assert.equal(
+      h.events.some((event) => event.type === 'finish' && event.status === 'complete'),
+      false,
+    );
+    assert.deepEqual(h.endings, ['run-1']);
+  }
+});
+
+test('an action-shaped code fence is never interpreted as an executable browser-side response', async () => {
+  const h = harness({
+    requestStep: () => ({
+      answer: '```json\n{"actions":[{"type":"run_simulation"}]}\n```',
+      actions: [],
+      done: false,
+    }),
+  });
+  const result = await h.runner.run('运行仿真');
+  assert.equal(result.status, 'error');
+  assert.equal(h.executions.length, 0);
+  assert.match(result.observations[0].summary, /未提供可执行操作/);
+});

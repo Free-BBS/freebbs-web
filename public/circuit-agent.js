@@ -244,7 +244,15 @@
               throw new Error('自主操作的完成状态必须为布尔值。');
             if (response.done === true && proposed.length)
               throw new Error('已完成的回答不能同时要求执行操作，请先执行并读取结果后结束。');
-            if (!proposed.length) break;
+            if (!proposed.length) {
+              if (response.done !== true)
+                throw new Error(
+                  '尚未确认任务完成，也未提供可执行操作。请返回下一步 actions；只有读取结果并完成任务后才能返回 done: true。',
+                );
+              if (typeof response.answer !== 'string' || !answer)
+                throw new Error('任务完成时必须提供非空的结果说明，不能返回空回答。');
+              break;
+            }
             const actions = protocol.validateActions(
               clone(proposed),
               snapshot.document,
