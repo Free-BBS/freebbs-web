@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="connect-src 'none'; form-action 'none'" />
+    <title>FREE-BBS · 头像上传独立验证</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/settings-avatar.css" />
+    <style>
+      body.avatar-fixture {
+        --bbs-shell-width: 0px;
+      }
+      body.avatar-fixture .main-content {
+        width: min(980px, 100%);
+        margin: 0 auto !important;
+        padding: 24px 16px 48px !important;
+      }
+      body.avatar-fixture .main-content::before {
+        display: none !important;
+      }
+      .fixture-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 20px 0;
+      }
+      .fixture-controls select,
+      .fixture-controls button {
+        min-height: 44px;
+        max-width: 100%;
+        padding: 8px 12px;
+      }
+      .fixture-heading {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+      .fixture-heading img {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+      }
+      .fixture-note {
+        line-height: 1.7;
+        overflow-wrap: anywhere;
+      }
+    </style>
+  </head>
+  <body class="avatar-fixture theme-light">
+    <main class="main-content">
+      <div class="fixture-heading">
+        <img id="fixture-header-avatar" alt="模拟顶部头像" />
+        <h1>头像上传独立验证</h1>
+      </div>
+      <p class="fixture-note">
+        只使用本页生成的几何图片与内存模拟响应，不连接
+        API、不修改账号或数据库。正常流程先预览，再确认。可先修改下方个人资料，再上传确认草稿不变。
+      </p>
+      <div class="fixture-controls">
+        <label
+          >字体
+          <select id="fixture-font">
+            <option value="transistor-lab">清晰阅读</option>
+            <option value="zhongsong-study">中宋书卷</option>
+            <option value="quantum-board">衬线标题</option>
+            <option value="night-oscilloscope">高对比代码</option>
+          </select></label
+        >
+        <label
+          >字号
+          <select id="fixture-scale">
+            <option value="standard">标准</option>
+            <option value="comfortable">舒适</option>
+            <option value="large">大字</option>
+          </select></label
+        >
+        <button type="button" id="fixture-theme">切换明暗</button>
+        <label
+          >模拟结果
+          <select id="fixture-result">
+            <option value="success">成功</option>
+            <option value="network">网络失败</option>
+            <option value="unauthorized">登录过期</option>
+            <option value="storage">上传成功但显示异常</option>
+          </select></label
+        >
+        <button type="button" id="fixture-valid">选择固定测试图片</button>
+        <button type="button" id="fixture-large">选择超限测试图片</button>
+        <button type="button" id="fixture-invalid">选择损坏测试图片</button>
+      </div>
+      <p id="fixture-request-count" role="status">模拟上传次数：0</p>
+      <section class="settings-profile" aria-label="模拟个人设置">
+        <form class="settings-form" id="settings-form">
+          <div class="settings-avatar-row settings-avatar-editor" id="settings-avatar-editor">
+            <div class="settings-avatar-preview">
+              <img class="settings-avatar-image" id="settings-avatar-image" alt="当前头像" />
+            </div>
+            <div class="settings-avatar-copy">
+              <h2>头像</h2>
+              <p id="settings-avatar-help">
+                支持 PNG、JPG、WEBP、GIF，大小不超过 5 MiB。上传后转为最长边 512 像素的 WEBP，GIF
+                使用静态首帧。
+              </p>
+              <div class="settings-avatar-actions">
+                <button class="settings-upload-button" type="button" data-avatar-action="choose">
+                  选择新头像
+                </button>
+                <button
+                  class="settings-upload-button"
+                  type="button"
+                  data-avatar-action="confirm"
+                  hidden
+                >
+                  确认上传
+                </button>
+                <button
+                  class="settings-upload-button"
+                  type="button"
+                  data-avatar-action="cancel"
+                  hidden
+                >
+                  取消
+                </button>
+              </div>
+              <input
+                class="settings-avatar-file-input"
+                id="settings-avatar-input"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                aria-label="选择新头像文件"
+                aria-describedby="settings-avatar-help"
+                tabindex="-1"
+              />
+              <div class="settings-avatar-pending" data-avatar-preview hidden>
+                <img id="settings-avatar-pending-image" alt="待上传的新头像预览" />
+                <div class="settings-avatar-pending-copy">
+                  <strong>待上传预览</strong>
+                  <p class="settings-avatar-file" data-avatar-file></p>
+                </div>
+              </div>
+              <p
+                class="settings-avatar-message"
+                data-avatar-message
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              ></p>
+            </div>
+          </div>
+          <div class="settings-grid">
+            <label class="auth-field"
+              ><span>姓名</span><input id="settings-full-name" value="测试姓名"
+            /></label>
+            <label class="auth-field"
+              ><span>个人网页</span
+              ><input id="settings-website-url" value="https://example.invalid"
+            /></label>
+          </div>
+          <label class="auth-field"
+            ><span>个人简介</span><textarea id="settings-bio">这是未保存的测试草稿。</textarea>
+          </label>
+        </form>
+      </section>
+    </main>
+    <script src="/typography.js"></script>
+    <script src="/settings-avatar.js"></script>
+    <script>
+      const canvas = document.createElement('canvas');
+      canvas.width = 96;
+      canvas.height = 96;
+      const context = canvas.getContext('2d');
+      context.fillStyle = '#084550';
+      context.fillRect(0, 0, 96, 96);
+      context.fillStyle = '#eed6a4';
+      context.fillRect(26, 26, 44, 44);
+      const original = canvas.toDataURL('image/png');
+      document.getElementById('settings-avatar-image').src = original;
+      document.getElementById('fixture-header-avatar').src = original;
+      context.fillStyle = '#70ced1';
+      context.beginPath();
+      context.arc(48, 48, 30, 0, 2 * Math.PI);
+      context.fill();
+      let requestCount = 0;
+      const controller = window.freeBbsAvatar.createController({
+        root: document.getElementById('settings-avatar-editor'),
+        upload: async (imageDataUrl) => {
+          requestCount += 1;
+          document.getElementById('fixture-request-count').textContent =
+            `模拟上传次数：${requestCount}`;
+          const mode = document.getElementById('fixture-result').value;
+          await new Promise((resolve) => setTimeout(resolve, 900));
+          if (mode === 'network') throw new Error('网络连接失败，请重试。');
+          if (mode === 'unauthorized') throw new Error('登录已过期，请重新登录。');
+          return { imageDataUrl, mode };
+        },
+        onSaved: ({ imageDataUrl, mode }) => {
+          if (mode === 'storage') throw new Error('模拟页面显示异常');
+          document.getElementById('settings-avatar-image').src = imageDataUrl;
+          document.getElementById('fixture-header-avatar').src = imageDataUrl;
+        },
+      });
+      document.getElementById('fixture-valid').addEventListener('click', () => {
+        canvas.toBlob(
+          (blob) =>
+            controller.selectFile(new File([blob], '固定几何图.png', { type: 'image/png' })),
+          'image/png',
+        );
+      });
+      document.getElementById('fixture-large').addEventListener('click', () => {
+        controller.selectFile(
+          new File([new Uint8Array(5 * 1024 * 1024 + 1)], '超限测试.png', { type: 'image/png' }),
+        );
+      });
+      document.getElementById('fixture-invalid').addEventListener('click', () => {
+        controller.selectFile(new File(['not an image'], '损坏测试.png', { type: 'image/png' }));
+      });
+      document
+        .getElementById('settings-form')
+        .addEventListener('submit', (event) => event.preventDefault());
+      const font = document.getElementById('fixture-font');
+      const scale = document.getElementById('fixture-scale');
+      function applyFixtureTypography() {
+        window.freeBbsTypography.applyPreferences({
+          fontPreset: font.value,
+          typeScale: scale.value,
+        });
+      }
+      font.addEventListener('change', applyFixtureTypography);
+      scale.addEventListener('change', applyFixtureTypography);
+      document
+        .getElementById('fixture-theme')
+        .addEventListener('click', () => document.body.classList.toggle('theme-light'));
+      applyFixtureTypography();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,249 @@
+/* Shop and inventory share content-sized cards; unused grid tracks stay empty. */
+.economy-page .shop-grid,
+.economy-page .inventory-list {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
+  align-items: stretch;
+  gap: 18px;
+}
+
+.economy-page .shop-item-card,
+.economy-page .inventory-item-row {
+  grid-template-rows: 128px 1fr auto;
+  aspect-ratio: auto;
+  min-width: 0;
+  padding: 16px;
+  gap: 16px;
+  border-radius: 18px;
+}
+
+body.economy-page .shop-item-image,
+body.economy-page .inventory-item-image,
+body.economy-page .shop-inspect-image {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ui-line);
+  border-radius: 12px;
+  background: var(--ui-surface-soft) !important;
+}
+
+body.economy-page .shop-item-image img,
+body.economy-page .inventory-item-image img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+/* Catalog artwork is dark line art, unlike the light currency icons. */
+body.economy-page.theme-dark .shop-item-image img,
+body.economy-page.theme-dark .inventory-item-image img,
+body.economy-page.theme-dark .shop-inspect-image img {
+  filter: brightness(0) invert(0.93) !important;
+}
+
+body.economy-page .asset-quantity-badge {
+  top: 24px;
+  right: 24px;
+  width: auto;
+  height: auto;
+  min-height: 26px;
+  padding: 3px 8px;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  background: var(--ui-surface) !important;
+  color: var(--ui-muted) !important;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.economy-page .shop-item-copy,
+.economy-page .inventory-item-copy {
+  align-content: start;
+  gap: 8px;
+}
+
+body.economy-page .shop-item-copy h2,
+body.economy-page .inventory-item-copy h2 {
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 1.12rem;
+  line-height: 1.5;
+  color: var(--ui-text);
+}
+
+body.economy-page .shop-item-copy p,
+body.economy-page .inventory-item-copy p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 3;
+}
+
+body.economy-page .shop-item-price,
+body.economy-page #shop-inspect-price {
+  color: var(--ui-accent);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.economy-page .inventory-item-actions {
+  grid-template-columns: 1fr;
+}
+
+body.economy-page:not(.auth-page-body) .electromagnetic-button {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 10px;
+  background: var(--ui-accent-soft) !important;
+  color: var(--ui-text) !important;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  white-space: normal;
+}
+
+body.economy-page .electromagnetic-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+body.economy-page .electromagnetic-button:focus-visible,
+body.economy-page .fortune-close:focus-visible,
+body.economy-page .inventory-gift-input:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 3px;
+}
+
+body.economy-page .shop-inspect-modal {
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  overscroll-behavior: contain;
+}
+
+body.economy-page .shop-inspect-panel {
+  width: min(760px, 100%);
+  margin: 0;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 56px 24px 24px;
+  border: 1px solid var(--ui-line-strong);
+  background: var(--ui-surface) !important;
+  color: var(--ui-text);
+}
+
+body.economy-page .shop-inspect-panel .fortune-close {
+  position: sticky;
+  top: 0;
+  right: auto;
+  z-index: 5;
+  display: block;
+  width: 44px;
+  height: 44px;
+  margin: -44px -12px 0 auto;
+  border-radius: 50%;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+
+.economy-page .shop-inspect-layout {
+  grid-template-columns: minmax(140px, 0.7fr) minmax(0, 1.3fr);
+  align-items: start;
+  gap: 24px;
+}
+
+body.economy-page .shop-inspect-image {
+  min-height: 180px;
+}
+
+.economy-page .shop-inspect-copy {
+  min-width: 0;
+}
+
+body.economy-page .shop-inspect-copy h2 {
+  color: var(--ui-text);
+  font-size: 1.65rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+body.economy-page .shop-inspect-copy p {
+  color: var(--ui-muted);
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.economy-page #shop-inspect-desc {
+  white-space: pre-line;
+}
+
+.economy-page .shop-inspect-actions {
+  grid-template-columns: 1fr;
+}
+
+.economy-page .economy-activation-button > span {
+  display: grid;
+  gap: 2px;
+}
+
+.economy-page .economy-activation-button small {
+  font-size: 0.8rem;
+}
+
+body.economy-page.theme-light .economy-activation-button img {
+  filter: brightness(0) saturate(100%);
+}
+
+body.economy-page .inventory-gift-input {
+  min-height: 44px;
+  border-color: var(--ui-line-strong) !important;
+  background: var(--ui-input) !important;
+  color: var(--ui-text) !important;
+}
+
+body.economy-page .inventory-gift-input::placeholder {
+  color: var(--ui-muted) !important;
+}
+
+@media (max-width: 600px) {
+  .economy-page .shop-grid,
+  .economy-page .inventory-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .economy-page .shop-item-card,
+  .economy-page .inventory-item-row {
+    grid-template-rows: 108px 1fr auto;
+    padding: 12px;
+    gap: 12px;
+  }
+
+  body.economy-page .asset-quantity-badge {
+    top: 18px;
+    right: 18px;
+  }
+
+  .economy-page .shop-inspect-layout {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  body.economy-page .shop-inspect-image {
+    min-height: 100px;
+  }
+
+  .economy-page .shop-inspect-image img {
+    width: 64px;
+  }
+}
+
+@media (max-width: 359px) {
+  .economy-page .shop-grid,
+  .economy-page .inventory-list {
+    grid-template-columns: 1fr;
+  }
+}

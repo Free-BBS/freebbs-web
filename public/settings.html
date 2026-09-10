@@ -15,6 +15,7 @@
     />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/settings-avatar.css" />
   </head>
   <body>
     <div class="page-shell page-shell-settings">
@@ -146,7 +147,7 @@
           </div>
           <section class="settings-profile" aria-label="个人设置内容">
             <form class="settings-form" id="settings-form">
-              <div class="settings-avatar-row">
+              <div class="settings-avatar-row settings-avatar-editor" id="settings-avatar-editor">
                 <div class="settings-avatar-preview">
                   <img
                     class="settings-avatar-image"
@@ -157,16 +158,58 @@
                 </div>
                 <div class="settings-avatar-copy">
                   <h2>头像</h2>
-                  <p>支持 PNG、JPG、WEBP、GIF，大小不超过 5MB。</p>
-                  <label class="settings-upload-button" for="settings-avatar-input"
-                    >上传新头像</label
-                  >
+                  <p id="settings-avatar-help">
+                    支持 PNG、JPG、WEBP、GIF，大小不超过 5 MiB。上传后转为最长边 512 像素的
+                    WEBP，GIF 使用静态首帧。
+                  </p>
+                  <div class="settings-avatar-actions">
+                    <button
+                      class="settings-upload-button"
+                      type="button"
+                      data-avatar-action="choose"
+                    >
+                      选择新头像
+                    </button>
+                    <button
+                      class="settings-upload-button"
+                      type="button"
+                      data-avatar-action="confirm"
+                      hidden
+                    >
+                      确认上传
+                    </button>
+                    <button
+                      class="settings-upload-button"
+                      type="button"
+                      data-avatar-action="cancel"
+                      hidden
+                    >
+                      取消
+                    </button>
+                  </div>
                   <input
-                    class="hidden"
+                    class="settings-avatar-file-input"
                     id="settings-avatar-input"
                     type="file"
                     accept="image/png,image/jpeg,image/webp,image/gif"
+                    aria-label="选择新头像文件"
+                    aria-describedby="settings-avatar-help"
+                    tabindex="-1"
                   />
+                  <div class="settings-avatar-pending" data-avatar-preview hidden>
+                    <img id="settings-avatar-pending-image" alt="待上传的新头像预览" />
+                    <div class="settings-avatar-pending-copy">
+                      <strong>待上传预览</strong>
+                      <p class="settings-avatar-file" data-avatar-file></p>
+                    </div>
+                  </div>
+                  <p
+                    class="settings-avatar-message"
+                    data-avatar-message
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                  ></p>
                 </div>
               </div>
 
@@ -302,6 +345,7 @@
     </div>
 
     <script src="/typography.js"></script>
+    <script src="/settings-avatar.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

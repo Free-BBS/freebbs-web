@@ -28,6 +28,9 @@ npm run test:public-pages
 echo "[ci] typography preferences tests"
 npm run test:typography
 
+echo "[ci] shop and settings tests"
+npm run test:shop-settings
+
 echo "[ci] admin users page tests"
 npm run test:admin-users
 
