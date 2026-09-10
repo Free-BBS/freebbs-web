@@ -323,3 +323,26 @@ test('invalid popover fields block submission first; fully valid forms leave the
   assert.equal(valid.context.validateParameterInputs(), true);
   assert.deepEqual(valid.calls.events, ['popover:report', 'sidebar:check']);
 });
+
+test('twoport matrix changes synchronize port equations, coefficient units and values across parameter forms', () => {
+  const h = harness();
+  const component = h.state.document.components[0];
+  component.type = 'twoport';
+  component.params = { ...engine.catalog.twoport.defaults };
+  h.context.renderInspector();
+  const target = input('parameterSet', 'ABCD', h.focusState);
+  h.context.updateParameter({ target }, { componentId: 'R1', popover: true });
+  const fields = h.context.parameterFieldsHtml(component);
+  assert.match(fields, /\[V₁, I₁\]ᵀ = ABCD \[V₂, −I₂\]ᵀ/);
+  assert.match(fields, /circuit-parameter-hint circuit-matrix-note/);
+  assert.match(fields, /B 实部 \/ Ω/);
+  assert.match(fields, /C 实部 \/ S/);
+  assert.ok(h.parameters.innerHTML.startsWith(fields));
+  assert.ok(h.calls.events.at(-1).snapshot.html.startsWith(fields));
+  h.context.updateParameter(
+    { target: input('m12', '123', h.focusState) },
+    { componentId: 'R1', popover: true },
+  );
+  assert.equal(component.params.m12, 123);
+  assert.match(h.calls.events.at(-1).snapshot.html, /data-parameter="m12"[^>]*value="123"/);
+});

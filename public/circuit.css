@@ -657,3 +657,87 @@
     grid-template-columns: 1fr;
   }
 }
+
+.circuit-plot-controls {
+  border-block: 1px solid var(--ui-line);
+  padding: 16px 0;
+  margin-bottom: 12px;
+}
+.circuit-plot-channels,
+.circuit-plot-ranges {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 12px;
+}
+.circuit-plot-controls label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--ui-muted);
+}
+.circuit-plot-controls input,
+.circuit-plot-controls select {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+}
+.circuit-plot-controls details {
+  margin-top: 14px;
+}
+.circuit-plot-controls summary {
+  cursor: pointer;
+  font-size: 13px;
+  padding-block: 4px;
+}
+.circuit-plot-ranges {
+  margin-top: 10px;
+}
+.circuit-math-row {
+  display: grid;
+  grid-template-columns: 28px minmax(70px, 0.8fr) minmax(120px, 2fr) minmax(55px, 0.6fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin-block: 12px;
+}
+.circuit-math-row strong {
+  align-self: center;
+  font:
+    12px ui-monospace,
+    monospace;
+}
+.circuit-math-expression input {
+  font-family: ui-monospace, monospace;
+}
+.circuit-math-row button {
+  min-height: 36px;
+}
+.circuit-matrix-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.circuit-matrix-note {
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .circuit-plot-channels {
+    grid-template-columns: 1fr 1fr;
+  }
+  .circuit-plot-channels > label:first-child {
+    grid-column: 1 / -1;
+  }
+  .circuit-math-row {
+    grid-template-columns: 28px minmax(0, 1fr) minmax(60px, 0.5fr) auto;
+  }
+  .circuit-math-expression {
+    grid-column: 2 / -1;
+    grid-row: 2;
+  }
+  .circuit-math-row strong {
+    grid-row: 1 / 3;
+  }
+}

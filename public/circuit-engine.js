@@ -65,6 +65,26 @@
     voltmeter: { label: '电压表', pins: twoPins, defaults: {} },
     ammeter: { label: '电流表', pins: twoPins, defaults: {} },
     oscilloscope: { label: '示波器', pins: twoPins, defaults: {} },
+    oscilloscope2: {
+      label: '双通道示波器',
+      pins: ['CH1 正', 'CH1 负', 'CH2 正', 'CH2 负'],
+      defaults: {},
+    },
+    twoport: {
+      label: '二端口网络',
+      pins: ['P1 正', 'P1 负', 'P2 正', 'P2 负'],
+      defaults: {
+        parameterSet: 'Z',
+        m11: 1000,
+        m12: 0,
+        m21: 0,
+        m22: 1000,
+        i11: 0,
+        i12: 0,
+        i21: 0,
+        i22: 0,
+      },
+    },
   };
   const positiveParameters = new Set([
     'resistance',
@@ -238,6 +258,8 @@
           throw new Error(`${component.id}.duty 必须在 0 与 1 之间。`);
       } else if (typeof value !== 'string') throw new Error(`${component.id}.${key} 必须是文本。`);
     }
+    if (component.type === 'twoport' && !['Z', 'Y', 'H', 'G', 'ABCD'].includes(params.parameterSet))
+      throw new Error('二端口参数类型只能为 Z、Y、H、G 或 ABCD。');
     if (params.waveform && !['dc', 'sine', 'pulse'].includes(params.waveform))
       throw new Error(`${component.id} 不支持此波形。`);
     if (params.waveform && params.waveform !== 'dc' && params.frequency <= 0)
@@ -307,6 +329,119 @@
     });
     if (start === stop) throw new Error('扫描起点与终点不能相同。');
     return { type, componentId: component.id, parameter: options.parameter, start, stop, points };
+  }
+  const physicalTracePattern = /^(V|I):([A-Za-z][A-Za-z0-9_-]{0,39})(?::(CH2|P2))?$/;
+  function traceComponentId(id) {
+    return typeof id === 'string' ? physicalTracePattern.exec(id)?.[2] || null : null;
+  }
+  function traceDescriptors(component) {
+    if (
+      !component ||
+      !Object.hasOwn(catalog, component.type) ||
+      ['ground', 'junction'].includes(component.type)
+    )
+      return [];
+    const port = { twoport: ' P1', oscilloscope2: ' CH1' }[component.type] || '';
+    const descriptors = ['V', 'I'].map((kind) => ({
+      id: `${kind}:${component.id}`,
+      label: `${component.id}${port} ${kind === 'V' ? '电压' : '电流'}`,
+      unit: kind === 'V' ? 'V' : 'A',
+    }));
+    if (component.type === 'oscilloscope2')
+      descriptors.push({
+        id: `V:${component.id}:CH2`,
+        label: `${component.id} CH2 电压`,
+        unit: 'V',
+      });
+    if (component.type === 'twoport') {
+      descriptors.push({ id: `V:${component.id}:P2`, label: `${component.id} P2 电压`, unit: 'V' });
+      descriptors.push({ id: `I:${component.id}:P2`, label: `${component.id} P2 电流`, unit: 'A' });
+    }
+    return descriptors;
+  }
+  function validTraceId(id, components) {
+    if (typeof id !== 'string') return false;
+    if (/^M:M[1-8]$/.test(id)) return true;
+    const match = physicalTracePattern.exec(id);
+    if (!match || (match[1] === 'I' && match[3] === 'CH2')) return false;
+    if (!components) return true;
+    const component = components.find((item) => item.id === match[2]);
+    return traceDescriptors(component).some((trace) => trace.id === id);
+  }
+  function normalizeDisplay(value = {}) {
+    function object(item, fields, label) {
+      if (
+        !item ||
+        typeof item !== 'object' ||
+        Array.isArray(item) ||
+        Object.keys(item).some((key) => !fields.includes(key))
+      )
+        throw new Error(`${label}格式不正确或含有不支持的字段。`);
+    }
+    object(
+      value,
+      ['version', 'mode', 'traceIds', 'ch1', 'ch2', 'xyX', 'xyY', 'math', 'phase', 'ranges'],
+      '图像设置',
+    );
+    if (value.version !== undefined && value.version !== 1)
+      throw new Error('图像设置版本必须为 1。');
+    const mode = value.mode ?? 'xt';
+    if (!['xt', 'xy'].includes(mode)) throw new Error('图像模式只能为 xt 或 xy。');
+    const traceIds = value.traceIds ?? [];
+    if (
+      !Array.isArray(traceIds) ||
+      traceIds.length > 32 ||
+      traceIds.some((id) => !validTraceId(id)) ||
+      new Set(traceIds).size !== traceIds.length
+    )
+      throw new Error('图像曲线列表必须包含至多 32 个不重复的有效曲线 ID。');
+    const channels = {};
+    for (const key of ['ch1', 'ch2', 'xyX', 'xyY']) {
+      const id = value[key] ?? null;
+      if (id !== null && !validTraceId(id)) throw new Error(`${key} 曲线 ID 不正确。`);
+      channels[key] = id;
+    }
+    const suppliedMath = value.math ?? [];
+    if (!Array.isArray(suppliedMath) || suppliedMath.length > 8)
+      throw new Error('最多设置 8 条数学曲线。');
+    const mathIds = new Set();
+    const math = suppliedMath.map((item) => {
+      object(item, ['id', 'label', 'expression', 'unit'], '数学曲线');
+      if (typeof item.id !== 'string' || !/^M[1-8]$/.test(item.id) || mathIds.has(item.id))
+        throw new Error('数学曲线 ID 必须是 M1 至 M8 且不可重复。');
+      mathIds.add(item.id);
+      if (
+        typeof item.expression !== 'string' ||
+        !item.expression.trim() ||
+        item.expression.length > 160
+      )
+        throw new Error('数学表达式必须为 1 至 160 个字符。');
+      const label = item.label ?? item.id;
+      const unit = item.unit ?? '';
+      if (
+        typeof label !== 'string' ||
+        label.length > 40 ||
+        typeof unit !== 'string' ||
+        unit.length > 12
+      )
+        throw new Error('数学曲线名称最多 40 字符，单位最多 12 字符。');
+      return { id: item.id, label, expression: item.expression, unit };
+    });
+    const phase = value.phase ?? false;
+    if (typeof phase !== 'boolean') throw new Error('相位显示设置必须为布尔值。');
+    const suppliedRanges = value.ranges ?? {};
+    object(suppliedRanges, ['xMin', 'xMax', 'yMin', 'yMax'], '坐标范围');
+    const ranges = {};
+    for (const key of ['xMin', 'xMax', 'yMin', 'yMax'])
+      ranges[key] = suppliedRanges[key] == null ? null : finite(suppliedRanges[key], key);
+    for (const axis of ['x', 'y'])
+      if (
+        ranges[`${axis}Min`] !== null &&
+        ranges[`${axis}Max`] !== null &&
+        ranges[`${axis}Min`] >= ranges[`${axis}Max`]
+      )
+        throw new Error('坐标范围下限必须小于上限。');
+    return { version: 1, mode, traceIds: [...traceIds], ...channels, math, phase, ranges };
   }
   function validateDocument(document) {
     if (
@@ -398,6 +533,7 @@
       components,
       wires,
       analysis: normalizeAnalysis(document.analysis || { type: 'dc' }, components),
+      ...(document.display === undefined ? {} : { display: normalizeDisplay(document.display) }),
     };
   }
   function normalizedSourceAdvice(document, analysis) {
@@ -586,9 +722,9 @@
         (_, pin) => indices.get(nets.pinNets[`${component.id}:${pin}`]) ?? -1,
       );
       const compiled = { ...component, pins, branch: -1 };
-      if (branchTypes.has(component.type)) {
+      if (branchTypes.has(component.type) || component.type === 'twoport') {
         compiled.branch = dimension;
-        dimension += 1;
+        dimension += component.type === 'twoport' ? 2 : 1;
       }
       if (component.type === 'nonlinear')
         compiled.expression = parseExpression(component.params.expression);
@@ -704,6 +840,50 @@
     });
     return { currents, derivatives };
   }
+  // Both currents enter their positive port terminals. ABCD uses [V2, -I2].
+  // Definitions: Analog Devices, university/courses/alm1k/circuits1/alm-cir-two-port-network.
+  // Stamp the two defining equations directly, so singular conversion matrices remain usable.
+  function twoportRows(params, imaginary = false) {
+    const prefix = imaginary ? 'i' : 'm';
+    const [a, b, c, d] = ['11', '12', '21', '22'].map((key) => params[`${prefix}${key}`]);
+    const one = imaginary ? 0 : 1;
+    if (params.parameterSet === 'Z')
+      return [
+        [one, 0, -a, -b],
+        [0, one, -c, -d],
+      ];
+    if (params.parameterSet === 'Y')
+      return [
+        [-a, -b, one, 0],
+        [-c, -d, 0, one],
+      ];
+    if (params.parameterSet === 'H')
+      return [
+        [one, -b, -a, 0],
+        [0, -d, -c, one],
+      ];
+    if (params.parameterSet === 'G')
+      return [
+        [-a, 0, one, -b],
+        [-c, one, 0, -d],
+      ];
+    return [
+      [one, -a, 0, b],
+      [0, -c, one, d],
+    ];
+  }
+  function stampTwoport(component, add, imaginary = false) {
+    const { branch, pins } = component;
+    twoportRows(component.params, imaginary).forEach((coefficients, index) => {
+      const row = branch + index;
+      add(row, pins[0], coefficients[0]);
+      add(row, pins[1], -coefficients[0]);
+      add(row, pins[2], coefficients[1]);
+      add(row, pins[3], -coefficients[1]);
+      add(row, branch, coefficients[2]);
+      add(row, branch + 1, coefficients[3]);
+    });
+  }
   function assemble(system, solution, context) {
     const n = system.dimension;
     const matrix = new Float64Array(n * n);
@@ -728,6 +908,22 @@
     for (const component of system.components) {
       const { type, pins, params: p, branch } = component;
       const [a, b] = pins;
+      if (type === 'twoport') {
+        [0, 1].forEach((port) => {
+          const currentIndex = branch + port;
+          inject(pins[2 * port], solution[currentIndex]);
+          inject(pins[2 * port + 1], -solution[currentIndex]);
+          add(pins[2 * port], currentIndex, 1);
+          add(pins[2 * port + 1], currentIndex, -1);
+        });
+        stampTwoport(component, (row, column, coefficient) => {
+          add(row, column, coefficient);
+          if (column >= 0) residual[row] += coefficient * solution[column];
+        });
+        tolerance[branch] = ['Y', 'G'].includes(p.parameterSet) ? 1e-10 : 1e-8;
+        tolerance[branch + 1] = ['Y', 'H', 'ABCD'].includes(p.parameterSet) ? 1e-10 : 1e-8;
+        continue;
+      }
       if (type === 'resistor') conductance(a, b, 1 / p.resistance);
       else if (type === 'current') {
         const current = sourceValue(p, context);
@@ -1014,6 +1210,11 @@
         componentCurrent(component, solution, context),
         `${component.id} 电流`,
       );
+      if (component.type === 'twoport')
+        currents[`${component.id}:P2`] = finite(
+          solution[component.branch + 1],
+          `${component.id} P2 电流`,
+        );
     });
     return { voltages, currents };
   }
@@ -1026,10 +1227,8 @@
     };
     const [xLabel, xUnit] = labels[analysis.type];
     const traces = system.components.flatMap((component) =>
-      ['V', 'I'].map((kind) => ({
-        id: `${kind}:${component.id}`,
-        label: `${component.id} ${kind === 'V' ? '电压' : '电流'}`,
-        unit: kind === 'V' ? 'V' : 'A',
+      traceDescriptors(component).map((descriptor) => ({
+        ...descriptor,
         values: [],
         ...(analysis.type === 'ac' ? { phase: [] } : {}),
       })),
@@ -1039,14 +1238,31 @@
   function appendTimeResult(result, system, solution, context, x) {
     result.x.push(x);
     result.frames.push(frameFor(system, solution, context));
-    system.components.forEach((component, index) => {
+    let traceIndex = 0;
+    function nextTrace() {
+      const trace = result.traces[traceIndex];
+      traceIndex += 1;
+      return trace;
+    }
+    system.components.forEach((component) => {
       const [a, b] = voltagePair(component);
-      result.traces[2 * index].values.push(
+      nextTrace().values.push(
         finite(voltageAt(solution, a) - voltageAt(solution, b), `${component.id} 电压`),
       );
-      result.traces[2 * index + 1].values.push(result.frames.at(-1).currents[component.id]);
+      nextTrace().values.push(result.frames.at(-1).currents[component.id]);
+      if (['twoport', 'oscilloscope2'].includes(component.type)) {
+        nextTrace().values.push(
+          finite(
+            voltageAt(solution, component.pins[2]) - voltageAt(solution, component.pins[3]),
+            `${component.id} 第二通道电压`,
+          ),
+        );
+        if (component.type === 'twoport')
+          nextTrace().values.push(result.frames.at(-1).currents[`${component.id}:P2`]);
+      }
     });
   }
+
   function sourcePhasor(params) {
     const angle = (params.phase * Math.PI) / 180;
     return [params.acAmplitude * Math.cos(angle), params.acAmplitude * Math.sin(angle)];
@@ -1154,6 +1370,14 @@
         if (pins[1] >= 0) im[branch * n + pins[1]] += omega * p.capacitance;
       }
       if (type === 'inductor') im[branch * n + branch] -= omega * p.inductance;
+      if (type === 'twoport')
+        stampTwoport(
+          component,
+          (row, column, value) => {
+            if (column >= 0) im[row * n + column] += value;
+          },
+          true,
+        );
     }
     return solveComplex(re, im, br, bi);
   }
@@ -1197,19 +1421,60 @@
       trace.values.push(magnitude);
       trace.phase.push(magnitude < 1e-30 ? 0 : (Math.atan2(phasor[1], phasor[0]) * 180) / Math.PI);
     }
-    system.components.forEach((component, index) => {
+    let traceIndex = 0;
+    function nextTrace() {
+      const trace = result.traces[traceIndex];
+      traceIndex += 1;
+      return trace;
+    }
+    system.components.forEach((component) => {
       const [a, b] = voltagePair(component);
-      append(result.traces[2 * index], [
+      append(nextTrace(), [
         voltageAt(solution.real, a) - voltageAt(solution.real, b),
         voltageAt(solution.imaginary, a) - voltageAt(solution.imaginary, b),
       ]);
-      append(result.traces[2 * index + 1], acCurrent(component, solution, operatingPoint));
+      append(nextTrace(), acCurrent(component, solution, operatingPoint));
+      if (['twoport', 'oscilloscope2'].includes(component.type)) {
+        append(nextTrace(), [
+          voltageAt(solution.real, component.pins[2]) - voltageAt(solution.real, component.pins[3]),
+          voltageAt(solution.imaginary, component.pins[2]) -
+            voltageAt(solution.imaginary, component.pins[3]),
+        ]);
+        if (component.type === 'twoport')
+          append(nextTrace(), [
+            solution.real[component.branch + 1],
+            solution.imaginary[component.branch + 1],
+          ]);
+      }
     });
   }
+
   function simulate(input, options) {
     const document = validateDocument(input);
     const analysis = normalizeAnalysis(options || document.analysis, document.components);
     const system = compile(document);
+    const complexTwoport = system.components.some(
+      (component) =>
+        component.type === 'twoport' &&
+        ['i11', 'i12', 'i21', 'i22'].some((key) => component.params[key] !== 0),
+    );
+    if (complexTwoport && analysis.type !== 'ac')
+      throw new Error('复数二端口矩阵仅定义交流相量关系，请使用 AC 分析，或将矩阵虚部设为 0。');
+    if (
+      analysis.type === 'sweep' &&
+      system.components.find((component) => component.id === analysis.componentId)?.type ===
+        'twoport' &&
+      ['i11', 'i12', 'i21', 'i22'].includes(analysis.parameter)
+    )
+      throw new Error('直流参数扫描不能扫描二端口矩阵虚部，请选择实部参数或 AC 分析。');
+    if (complexTwoport && system.nonlinear)
+      throw new Error(
+        '复数二端口未定义直流偏置，暂不能与晶体管、二极管、非线性元件或限幅运放共同进行 AC 分析；请使用实数矩阵或独立线性小信号电路。',
+      );
+    const traceCount = system.components.reduce(
+      (count, component) => count + traceDescriptors(component).length,
+      0,
+    );
     const points =
       analysis.type === 'transient'
         ? Math.ceil(analysis.stop / analysis.step - 1e-10) + 1
@@ -1217,9 +1482,12 @@
     if (points * system.dimension ** 3 * (analysis.type === 'ac' ? 4 : 1) > 6e8)
       throw new Error('计算量超过浏览器仿真限额；请减少扫描点数或简化电路。');
     const resultScalars =
-      points * (1 + system.components.length * (analysis.type === 'ac' ? 4 : 2)) +
+      points * (1 + traceCount * (analysis.type === 'ac' ? 2 : 1)) +
       (analysis.type === 'ac' ? 1 : points) *
-        (system.unknownNets.length + 1 + system.components.length);
+        (system.unknownNets.length +
+          1 +
+          system.components.length +
+          system.components.filter((component) => component.type === 'twoport').length);
     if (resultScalars > 8e6)
       throw new Error('结果数据量超过浏览器仿真限额；请减少采样点或元件数量。');
     const result = emptyResult(system, analysis);
@@ -1266,8 +1534,16 @@
         appendTimeResult(result, system, solution, context, value);
       }
     } else {
-      const operatingPoint = solvePoint(system, { kind: 'dc' });
-      result.frames.push(frameFor(system, operatingPoint, { kind: 'dc' }));
+      // A frequency-independent complex matrix has no defined DC equivalent. In a
+      // wholly linear circuit its AC Jacobian does not require an operating point.
+      const operatingPoint = complexTwoport
+        ? new Float64Array(system.dimension)
+        : solvePoint(system, { kind: 'dc' });
+      if (!complexTwoport) result.frames.push(frameFor(system, operatingPoint, { kind: 'dc' }));
+      else
+        result.warnings.push(
+          '复数二端口按频率无关的相量矩阵求解；未定义直流工作点，因此不显示直流仪表读数。',
+        );
       for (let index = 0; index < points; index += 1) {
         const ratio = index / (points - 1);
         const frequency =
@@ -1297,6 +1573,10 @@
     catalog,
     limits,
     validateDocument,
+    normalizeDisplay,
+    traceDescriptors,
+    traceComponentId,
+    validTraceId,
     sourceAnalysisAdvice,
     playbackFrameStep,
     buildNets,

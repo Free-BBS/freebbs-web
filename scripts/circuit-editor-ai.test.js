@@ -4,6 +4,7 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 const engine = require('../public/circuit-engine');
+const plot = require('../public/circuit-plot');
 const protocol = require('../public/circuit-ai-actions');
 const { validateCircuitAssistantInput } = require('../backend/circuit-assistant');
 
@@ -122,6 +123,8 @@ function harness({ document = fixture(), measured = true } = {}) {
     play: node(),
     playback: node(),
     warnings: node(),
+    'plot-status': node(),
+    'trace-picker': node(),
   };
   elements.stage.querySelectorAll = () => components;
   elements.traces.querySelectorAll = () => checks;
@@ -137,6 +140,7 @@ function harness({ document = fixture(), measured = true } = {}) {
     Math,
     state,
     engine,
+    plot,
     clone,
     listPage: false,
     $: (id) => {
@@ -447,7 +451,7 @@ test('visual requests update component and waveform classes, trace checkboxes an
   assert.deepEqual(clone(state.traceIds), []);
 });
 
-test('simulation results honor an explicit empty pending trace choice and restore defaults only when no choice was requested', () => {
+test('simulation reruns preserve an explicit empty trace choice and new documents use defaults', () => {
   const { context, state, calls, elements } = harness();
   context.applyAssistantActions(
     [{ type: 'show_traces', traceIds: [] }, { type: 'run_simulation' }],
@@ -460,8 +464,76 @@ test('simulation results honor an explicit empty pending trace choice and restor
   assert.doesNotMatch(elements.traces.innerHTML, / checked/);
   context.applyAssistantActions([{ type: 'run_simulation' }], { expectedVersion: 7 });
   assert.equal(calls.runs, 2);
+  assert.deepEqual(clone(state.traceIds), []);
+  state.plotDisplay = null;
+  context.showResult(engine.simulate(state.document));
   assert.deepEqual(clone(state.traceIds), ['V:V1', 'V:R1']);
   assert.equal(state.aiPendingTraces, null);
   assert.match(elements.traces.innerHTML, /data-trace="V:R1" checked/);
   assert.equal(calls.persisted, 0);
+});
+
+test('read-only local math and XY settings survive rerunning and remain out of the saved document', () => {
+  const { context, state, elements } = harness();
+  state.editable = false;
+  state.dirty = false;
+  const saved = JSON.stringify(state.document);
+  const display = engine.normalizeDisplay({
+    mode: 'xy',
+    ch1: 'V:V1',
+    ch2: 'V:R1',
+    xyX: 'V:V1',
+    xyY: 'M:M1',
+    traceIds: ['M:M1'],
+    math: [{ id: 'M1', expression: 'CH1-CH2' }],
+  });
+  context.updatePlot(display, { persist: true });
+  assert.equal(state.dirty, false);
+  assert.equal(state.plotModified, true);
+  assert.equal(JSON.stringify(state.document), saved);
+  context.showResult(engine.simulate(state.document));
+  assert.deepEqual(clone(state.plotDisplay), display);
+  assert.equal(elements['trace-picker'].hidden, true);
+  assert.deepEqual(clone(state.plotResult.traces.find((trace) => trace.id === 'M:M1').values), [0]);
+  assert.equal(context.getAssistantSnapshot().document.display.xyY, 'M:M1');
+});
+
+test('editable visual settings persist without invalidating physical results and are restored on rerun', () => {
+  const { context, state, calls } = harness();
+  const result = state.result;
+  const display = engine.normalizeDisplay({
+    mode: 'xt',
+    ch1: 'V:R1',
+    ch2: 'I:R1',
+    traceIds: ['M:M1'],
+    math: [{ id: 'M1', expression: 'CH1*CH2', unit: 'W' }],
+    ranges: { yMin: 0, yMax: 1 },
+  });
+  context.updatePlot(display, { persist: true });
+  assert.equal(state.result, result);
+  assert.deepEqual(clone(state.document.display), display);
+  assert.equal(calls.persisted, 1);
+  context.showResult(engine.simulate(state.document));
+  assert.deepEqual(clone(state.traceIds), ['M:M1']);
+  assert.equal(state.plotResult.traces.find((trace) => trace.id === 'M:M1').values[0], 0.025);
+});
+
+test('AI show/hide traces switches XY to the requested time curves and survives the next run', () => {
+  const { context, state, elements } = harness();
+  state.plotDisplay = engine.normalizeDisplay({
+    mode: 'xy',
+    ch1: 'V:V1',
+    ch2: 'V:R1',
+    traceIds: ['V:V1'],
+  });
+  context.applyAssistantActions([{ type: 'show_traces', traceIds: ['I:R1'] }], {
+    expectedVersion: 7,
+  });
+  assert.equal(state.plotDisplay.mode, 'xt');
+  assert.deepEqual(clone(state.plotDisplay.traceIds), ['I:R1']);
+  assert.equal(elements['trace-picker'].hidden, false);
+  context.showResult(engine.simulate(state.document));
+  assert.deepEqual(clone(state.traceIds), ['I:R1']);
+  context.applyAssistantActions([{ type: 'show_traces', traceIds: [] }], { expectedVersion: 7 });
+  assert.match(elements.waveform.textContent, /选择至少一条曲线/);
 });

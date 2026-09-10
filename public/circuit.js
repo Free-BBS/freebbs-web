@@ -5,6 +5,7 @@
   const engine = window.FreeBbsCircuitEngine;
   const renderer = window.FreeBbsCircuitRenderer;
   const wiring = window.FreeBbsCircuitWiring;
+  const plot = window.FreeBbsCircuitPlot;
   const params = new URLSearchParams(window.location.search);
   const listPage = window.location.pathname.replace(/\/$/, '') === '/circuits';
   const $ = (id) => document.getElementById(`circuit-${id}`);
@@ -28,6 +29,8 @@
     voltmeter: 'VM',
     ammeter: 'AM',
     oscilloscope: 'OS',
+    oscilloscope2: 'DS',
+    twoport: 'TP',
   };
   const parameterLabels = {
     resistance: '电阻 / Ω',
@@ -58,6 +61,7 @@
     railNegative: '负限幅 / V',
     expression: '伏安关系 i(u)',
     k: '特性系数 k',
+    parameterSet: '矩阵类型',
   };
   const state = {
     document: { version: 1, components: [], wires: [], analysis: { type: 'dc' } },
@@ -79,6 +83,11 @@
     aiPendingTraces: null,
     schematic: null,
     result: null,
+    plotResult: null,
+    plotDisplay: null,
+    plotModified: false,
+    plotControls: null,
+    chart: null,
     traceIds: [],
     frame: 0,
     playing: false,
@@ -196,8 +205,9 @@
   function updateControls() {
     $('save').disabled = state.saving || !state.editable;
     $('publish').hidden = !state.cid;
-    $('publish').disabled = state.dirty || state.saving;
-    $('publish').title = state.dirty ? '请先保存当前修改，再发表到讨论区' : '';
+    $('publish').disabled = state.dirty || state.plotModified || state.saving;
+    $('publish').title =
+      state.dirty || state.plotModified ? '请先保存当前修改，再发表到讨论区' : '';
     const saveLabel = state.cid ? `保存新版本${state.dirty ? ' · 有修改' : ''}` : '保存并获取 CID';
     $('save').textContent = state.saving ? '正在保存…' : saveLabel;
     $('title').readOnly = !state.editable;
@@ -241,15 +251,22 @@
       });
     page.querySelectorAll('[data-circuit-reference]').forEach((button) => {
       const control = button;
-      control.disabled = !state.cid;
-      control.title = state.cid ? `引用已保存的第 ${state.revision} 版` : '请先保存电路，获取 CID';
+      control.disabled = !state.cid || state.dirty || state.plotModified || state.saving;
+      control.title =
+        state.dirty || state.plotModified
+          ? '请先保存电路与图像设置'
+          : state.cid
+            ? `引用已保存的第 ${state.revision} 版`
+            : '请先保存电路，获取 CID';
     });
     let referenceHint = '请先保存电路，获取 CID 后即可复制引用。';
     if (!app.userState.isLoggedIn && !state.cid)
       referenceHint = '请先登录并保存电路，获取 CID 后即可复制引用。';
     if (state.cid) referenceHint = `引用指向已保存的第 ${state.revision} 版。`;
-    if (state.cid && state.dirty)
-      referenceHint += '当前有未保存修改；再次保存后，新的引用才会包含这些修改。';
+    if (state.cid && (state.dirty || state.plotModified))
+      referenceHint += state.editable
+        ? '请先保存当前电路与图像设置，再复制引用。'
+        : '图像设置已在本地修改；请复制为新电路并保存，再分享当前图像。';
     $('reference-hint').textContent = referenceHint;
     if (
       !state.cid ||
@@ -299,6 +316,11 @@
     stopSimulation();
     stopPlayback();
     state.result = null;
+    state.plotResult = null;
+    state.plotDisplay = null;
+    state.plotModified = false;
+    state.chart?.destroy?.();
+    state.chart = null;
     state.traceIds = [];
     $('results').hidden = true;
     setStatus('电路或分析参数已修改，请重新运行仿真。', '', 'run-status');
@@ -570,6 +592,14 @@
         ['sine', '正弦'],
         ['pulse', '脉冲'],
       ];
+    if (key === 'parameterSet')
+      options = [
+        ['Z', 'Z · 阻抗'],
+        ['Y', 'Y · 导纳'],
+        ['H', 'h · 混合'],
+        ['G', 'g · 逆混合'],
+        ['ABCD', 'ABCD · 传输'],
+      ];
     if (key === 'polarity')
       options =
         component.type === 'bjt'
@@ -592,6 +622,23 @@
       ? `<select data-parameter="${key}" ${state.editable ? '' : 'disabled'}>${options.map(([option, label]) => `<option value="${escapeHtml(option)}" ${option === value ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}</select>`
       : `<input data-parameter="${key}" type="${typeof value === 'number' ? 'number' : 'text'}" ${typeof value === 'number' ? 'step="any"' : 'maxlength="256"'} value="${escapeHtml(value)}" ${state.editable ? '' : 'readonly'} />`;
     let label = parameterLabels[key] || key;
+    if (component.type === 'twoport' && /^[mi][12][12]$/.test(key)) {
+      const symbols =
+        component.params.parameterSet === 'ABCD'
+          ? ['A', 'B', 'C', 'D']
+          : ['11', '12', '21', '22'].map(
+              (position) => `${component.params.parameterSet.toLowerCase()}${position}`,
+            );
+      const units = {
+        Z: ['Ω', 'Ω', 'Ω', 'Ω'],
+        Y: ['S', 'S', 'S', 'S'],
+        H: ['Ω', '1', '1', 'S'],
+        G: ['S', '1', '1', 'Ω'],
+        ABCD: ['1', 'Ω', 'S', '1'],
+      }[component.params.parameterSet];
+      const index = ['11', '12', '21', '22'].indexOf(key.slice(1));
+      label = `${symbols[index]} ${key[0] === 'i' ? '虚部' : '实部'} / ${units[index]}`;
+    }
     if (['voltage', 'current'].includes(component.type)) {
       const unit = component.type === 'voltage' ? 'V' : 'A';
       if (key === 'dc')
@@ -604,6 +651,22 @@
   }
 
   function parameterFieldsHtml(component) {
+    if (component.type === 'twoport') {
+      const equations = {
+        Z: '[V₁, V₂]ᵀ = Z [I₁, I₂]ᵀ',
+        Y: '[I₁, I₂]ᵀ = Y [V₁, V₂]ᵀ',
+        H: '[V₁, I₂]ᵀ = h [I₁, V₂]ᵀ',
+        G: '[I₁, V₂]ᵀ = g [V₁, I₂]ᵀ',
+        ABCD: '[V₁, I₁]ᵀ = ABCD [V₂, −I₂]ᵀ',
+      };
+      const cells = (prefix) =>
+        ['11', '12', '21', '22']
+          .map((key) => parameterInput(component, prefix + key, component.params[prefix + key]))
+          .join('');
+      return `${parameterInput(component, 'parameterSet', component.params.parameterSet)}<p class="circuit-parameter-hint circuit-matrix-note">${equations[component.params.parameterSet]}<br> V₁/V₂ = 端口 + 对 − 的电压，I₁/I₂ 均流入 + 端。切换类型后请按所选定义填写矩阵。</p><div class="circuit-matrix-fields">${cells('m')}</div><details><summary>复数矩阵 · AC 虚部</summary><div class="circuit-matrix-fields">${cells('i')}</div></details><p class="circuit-parameter-hint">系数为常数。非零虚部仅支持线性电路的 AC 分析；直流与瞬态须将虚部设为 0。</p>`;
+    }
+    if (component.type === 'oscilloscope2')
+      return '<p class="circuit-parameter-hint">CH1+ / CH1− 和 CH2+ / CH2− 分别测量两路差分电压，理想高输入阻抗。运行后在“波形与读数”中选择 X–T 或 X–Y 模式。</p>';
     return Object.entries(component.params)
       .filter(([key]) => {
         if (!['voltage', 'current'].includes(component.type)) return true;
@@ -733,9 +796,9 @@
     if (component.params[key] === value) return;
     component.params[key] = value;
     changed();
-    if (popover || key === 'waveform') {
+    if (popover || ['waveform', 'parameterSet'].includes(key)) {
       renderInspector();
-      if (!popover) $('parameters').querySelector('[data-parameter="waveform"]')?.focus();
+      if (!popover) $('parameters').querySelector(`[data-parameter="${key}"]`)?.focus();
     } else renderSourceParameterHint(component);
     renderSweepOptions();
     renderSchematic();
@@ -762,6 +825,7 @@
   }
 
   function validateParameterInputs() {
+    if (state.result && state.plotControls?.validate() === false) return false;
     if (window.FreeBbsCircuitParameterPopover?.reportValidity?.() === false) return false;
     if ($('parameters').checkValidity()) return true;
     window.FreeBbsCircuitSidebar?.open('parameters');
@@ -1073,6 +1137,7 @@
   async function saveExample(updating) {
     if (!isExampleAdmin() || !state.editable || state.exampleBusy || state.exampleLoading) return;
     if (!validateParameterInputs()) return;
+    capturePlotSettings();
     const target = updating ? state.loadedExample : null;
     if (updating && (!target || String(target.id) !== $('example').value)) return;
     const { generation } = state;
@@ -1185,7 +1250,7 @@
   }
 
   function publishToDiscussion() {
-    if (!state.cid || state.dirty || state.saving) return;
+    if (!state.cid || state.dirty || state.plotModified || state.saving) return;
     const query = new URLSearchParams({
       board: 'circuit',
       compose: 'circuit',
@@ -1253,7 +1318,9 @@
         }
       : null;
     return {
-      document: clone(state.document),
+      document: clone(
+        state.plotDisplay ? { ...state.document, display: state.plotDisplay } : state.document,
+      ),
       editVersion: state.editVersion,
       cid: state.cid,
       revision: state.revision,
@@ -1340,6 +1407,13 @@
         if (run) state.aiPendingTraces = [...action.traceIds];
         else if (state.result) {
           state.traceIds = [...action.traceIds];
+          state.plotDisplay = {
+            ...(state.plotDisplay || plot.resolveDisplay(state.result, state.document)),
+            mode: 'xt',
+            traceIds: [...action.traceIds],
+          };
+          state.plotModified = true;
+          updatePlot(state.plotDisplay);
           $('traces')
             .querySelectorAll('input[data-trace]')
             .forEach((input) => {
@@ -1378,13 +1452,57 @@
     return getAssistantSnapshot();
   }
 
+  function updatePlot(settings, { persist = false } = {}) {
+    if (!state.result) return;
+    const display = engine.normalizeDisplay(settings);
+    const prepared = plot.buildResult(state.result, display);
+    state.plotDisplay = display;
+    state.plotResult = prepared.result;
+    state.traceIds = display.traceIds.filter((id) =>
+      prepared.result.traces.some((trace) => trace.id === id),
+    );
+    if (persist) state.plotModified = true;
+    if (persist && state.editable) {
+      state.document.display = clone(display);
+      changed({ electrical: false });
+    }
+    $('plot-status').textContent = [
+      ...prepared.warnings,
+      ...(state.plotModified
+        ? [
+            state.editable
+              ? '图像设置已修改，保存后可分享。'
+              : '当前图像设置仅在本页生效；复制为新电路并保存后可分享。',
+          ]
+        : []),
+    ].join('；');
+    updateControls();
+    $('plot-status').classList.toggle('is-error', prepared.warnings.length > 0);
+    $('traces').innerHTML = prepared.result.traces
+      .map(
+        (trace) =>
+          `<label class="circuit-inline-check"><input type="checkbox" data-trace="${escapeHtml(trace.id)}" ${state.traceIds.includes(trace.id) ? 'checked' : ''} />${escapeHtml(trace.label)} / ${escapeHtml(trace.unit)}</label>`,
+      )
+      .join('');
+    $('trace-picker').hidden = display.mode === 'xy';
+    $('show-phase').checked = display.phase;
+    $('phase-control').hidden = state.document.analysis.type !== 'ac' || display.mode === 'xy';
+    state.plotControls?.update(prepared.result, display);
+    renderWaveform();
+    renderMeters();
+  }
+
   function renderWaveform() {
     if (!state.result) return;
-    if (!state.traceIds.length) {
+    state.chart?.destroy?.();
+    state.chart = null;
+    const display = state.plotDisplay || {};
+    if (!state.traceIds.length && display.mode !== 'xy') {
       $('waveform').textContent = '选择至少一条曲线查看结果。';
       return;
     }
-    renderer.renderWaveform($('waveform'), state.result, {
+    state.chart = renderer.renderWaveform($('waveform'), state.plotResult || state.result, {
+      ...display,
       traceIds: state.traceIds,
       phase: $('show-phase').checked,
       logX: state.document.analysis.type === 'ac' && state.document.analysis.scale === 'log',
@@ -1410,11 +1528,17 @@
   function renderMeters() {
     if (!state.result) return;
     const meterIds = state.document.components
-      .filter((item) => ['voltmeter', 'ammeter', 'oscilloscope'].includes(item.type))
-      .map((item) => `${item.type === 'ammeter' ? 'I' : 'V'}:${item.id}`);
+      .filter((item) =>
+        ['voltmeter', 'ammeter', 'oscilloscope', 'oscilloscope2'].includes(item.type),
+      )
+      .flatMap((item) =>
+        item.type === 'oscilloscope2'
+          ? [`V:${item.id}`, `V:${item.id}:CH2`]
+          : [`${item.type === 'ammeter' ? 'I' : 'V'}:${item.id}`],
+      );
     const selected = [...new Set([...meterIds, ...state.traceIds])];
     $('meters').innerHTML = selected
-      .map((id) => state.result.traces.find((trace) => trace.id === id))
+      .map((id) => (state.plotResult || state.result).traces.find((trace) => trace.id === id))
       .filter(Boolean)
       .map(
         (trace) =>
@@ -1434,30 +1558,20 @@
 
   function showResult(result) {
     state.result = result;
-    const instruments = state.document.components
-      .filter((item) => ['voltmeter', 'ammeter', 'oscilloscope'].includes(item.type))
-      .map((item) => `${item.type === 'ammeter' ? 'I' : 'V'}:${item.id}`);
-    state.traceIds = instruments.filter((id) => result.traces.some((trace) => trace.id === id));
-    if (!state.traceIds.length)
-      state.traceIds = result.traces
-        .filter((trace) => trace.id.startsWith('V:'))
-        .slice(0, 3)
-        .map((trace) => trace.id);
+    const display = plot.resolveDisplay(
+      result,
+      state.plotDisplay ? { ...state.document, display: state.plotDisplay } : state.document,
+    );
     if (state.aiPendingTraces !== null) {
-      state.traceIds = state.aiPendingTraces.filter((id) =>
+      display.mode = 'xt';
+      state.plotModified = true;
+      display.traceIds = state.aiPendingTraces.filter((id) =>
         result.traces.some((trace) => trace.id === id),
       );
       state.aiPendingTraces = null;
     }
-    $('traces').innerHTML = result.traces
-      .map(
-        (trace) =>
-          `<label class="circuit-inline-check"><input type="checkbox" data-trace="${escapeHtml(trace.id)}" ${state.traceIds.includes(trace.id) ? 'checked' : ''} />${escapeHtml(trace.label)} / ${escapeHtml(trace.unit)}</label>`,
-      )
-      .join('');
     $('results').hidden = false;
-    $('phase-control').hidden = state.document.analysis.type !== 'ac';
-    $('show-phase').checked = false;
+    updatePlot(display);
     $('frame').max = Math.max(0, result.x.length - 1);
     $('play').disabled = state.document.analysis.type !== 'transient' || result.frames.length <= 1;
     $('playback').hidden = result.x.length <= 1;
@@ -1476,6 +1590,7 @@
   function runSimulation() {
     if (state.worker) return;
     if (!validateParameterInputs()) return;
+    capturePlotSettings();
     try {
       if (state.editable) {
         const analysis = readAnalysis();
@@ -1533,9 +1648,27 @@
     }
   }
 
+  function capturePlotSettings() {
+    if (state.result && state.plotControls?.read && state.editable) {
+      const current = state.plotControls.read();
+      if (JSON.stringify(current) !== JSON.stringify(state.plotDisplay))
+        updatePlot(current, { persist: true });
+    }
+    if (
+      state.plotDisplay &&
+      state.plotModified &&
+      state.editable &&
+      JSON.stringify(state.document.display) !== JSON.stringify(state.plotDisplay)
+    ) {
+      state.document.display = clone(state.plotDisplay);
+      changed({ electrical: false });
+    }
+  }
+
   async function saveCircuit() {
     if (state.saving || !state.editable) return;
     if (!validateParameterInputs()) return;
+    capturePlotSettings();
     if (!app.userState.isLoggedIn) {
       state.dirty = true;
       persistDraft();
@@ -1584,7 +1717,11 @@
       state.owner = circuit.owner;
       state.editable = circuit.canEdit !== false;
       state.dirty = editVersion !== state.editVersion;
-      if (!state.dirty) state.document = circuit.document || doc;
+      if (!state.dirty) {
+        state.document = circuit.document || doc;
+        state.plotModified = false;
+        if (state.result) updatePlot(state.plotDisplay);
+      }
       removeDraft(oldCid);
       if (state.dirty) persistDraft();
       else removeDraft();
@@ -1623,6 +1760,7 @@
     state.owner = null;
     state.loadedExample = null;
     state.editable = true;
+    if (state.plotDisplay) state.document.display = clone(state.plotDisplay);
     $('title').value = `${$('title').value.replace(/ · 副本$/, '')} · 副本`.slice(0, 120);
     window.history.replaceState(null, '', '/circuit');
     changed({ electrical: false });
@@ -1633,6 +1771,13 @@
   }
 
   async function copyReference(view) {
+    if (state.dirty || state.plotModified)
+      return setStatus(
+        state.editable
+          ? '请先保存电路与图像设置，再复制此版本的引用。'
+          : '请复制为新电路并保存，以分享当前图像设置。',
+        'error',
+      );
     if (!state.cid) return setStatus('请先保存电路，获取 CID 后再复制引用。', 'error');
     const copiedRevision = state.revision;
     const unsavedHint = state.dirty ? '未保存的修改尚未包含在引用中。' : '';
@@ -1665,7 +1810,7 @@
 
   function exportCsv() {
     if (!state.result) return;
-    const { result } = state;
+    const result = state.plotResult || state.result;
     const columns = [{ label: `${result.xLabel} (${result.xUnit || ''})`, values: result.x }];
     result.traces.forEach((trace) => {
       columns.push({ label: `${trace.label} (${trace.unit})`, values: trace.values });
@@ -1674,7 +1819,11 @@
     const quote = (value) => `"${String(value).replace(/"/g, '""')}"`;
     const rows = [columns.map((column) => quote(column.label)).join(',')];
     result.x.forEach((_, index) =>
-      rows.push(columns.map((column) => column.values[index]).join(',')),
+      rows.push(
+        columns
+          .map((column) => (Number.isFinite(column.values[index]) ? column.values[index] : ''))
+          .join(','),
+      ),
     );
     download(`\uFEFF${rows.join('\r\n')}`, 'text/csv;charset=utf-8', 'csv');
   }
@@ -1711,6 +1860,7 @@
     const { generation } = state;
     state.editable = false;
     state.loadedExample = null;
+    invalidateResult();
     updateControls();
     setStatus('正在载入电路…');
     try {
@@ -1885,14 +2035,44 @@
     $('stop').addEventListener('click', () => stopSimulation('仿真已取消。'));
     $('save').addEventListener('click', saveCircuit);
     $('copy').addEventListener('click', copyCircuit);
+    state.plotControls = window.FreeBbsCircuitPlotControls.create($('plot-controls'), (display) =>
+      updatePlot(display, { persist: true }),
+    );
     $('traces').addEventListener('change', () => {
-      state.traceIds = [...$('traces').querySelectorAll('input:checked')].map(
+      if (state.plotControls?.validate() === false) {
+        $('traces')
+          .querySelectorAll('input')
+          .forEach((input) => {
+            const field = input;
+            field.checked = state.traceIds.includes(field.dataset.trace);
+          });
+        return;
+      }
+      const traceIds = [...$('traces').querySelectorAll('input:checked')].map(
         (input) => input.dataset.trace,
       );
-      renderWaveform();
-      renderMeters();
+      try {
+        updatePlot({ ...state.plotControls.read(), traceIds }, { persist: true });
+      } catch (error) {
+        setStatus(error.message, 'error', 'plot-status');
+        $('traces')
+          .querySelectorAll('input')
+          .forEach((input) => {
+            const field = input;
+            field.checked = state.traceIds.includes(field.dataset.trace);
+          });
+      }
     });
-    $('show-phase').addEventListener('change', renderWaveform);
+    $('show-phase').addEventListener('change', () => {
+      if (state.plotControls?.validate() === false) {
+        $('show-phase').checked = state.plotDisplay.phase;
+        return;
+      }
+      updatePlot(
+        { ...state.plotControls.read(), phase: $('show-phase').checked },
+        { persist: true },
+      );
+    });
     $('frame').addEventListener('input', (event) => {
       stopPlayback();
       renderSchematic();

@@ -57,6 +57,18 @@ test('every catalog pin keeps its terminal identity while all rotations and mirr
       [-18, 44],
       [18, 44],
     ],
+    oscilloscope2: [
+      [-60, -22],
+      [-60, 22],
+      [60, -22],
+      [60, 22],
+    ],
+    twoport: [
+      [-60, -22],
+      [-60, 22],
+      [60, -22],
+      [60, 22],
+    ],
   };
   for (const type of Object.keys(engine.catalog)) {
     const baseline = renderer.getPins(component(type));

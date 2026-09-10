@@ -36,7 +36,7 @@
       <details class="embed-waves" id="embed-waves" hidden>
         <summary>查看波形与测量通道</summary>
         <div class="embed-wave-content">
-          <details class="embed-channel-picker">
+          <details class="embed-channel-picker" id="embed-channel-picker">
             <summary id="embed-channel-summary">选择测量通道</summary>
             <fieldset id="embed-channels">
               <legend class="visually-hidden">测量通道</legend>
@@ -45,12 +45,14 @@
           <label class="embed-phase" id="embed-phase-label" hidden>
             <input id="embed-phase" type="checkbox" />同时显示相位
           </label>
+          <p class="embed-hint" id="embed-plot-settings"></p>
           <div id="embed-waveform"></div>
         </div>
       </details>
       <p class="embed-model" id="embed-model" hidden>教学模型仿真 · 使用此版本保存的分析设置</p>
     </main>
     <script src="/circuit-engine.js"></script>
+    <script src="/circuit-plot.js"></script>
     <script src="/circuit-renderer.js"></script>
     <script src="/circuit-embed.js"></script>
   </body>
