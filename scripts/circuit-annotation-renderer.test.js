@@ -515,3 +515,35 @@ test('shared embed lists only hidden annotations and preserves their recovery re
   assert.equal(hidden.children.length, 0);
   assert.equal(hidden.hidden, true);
 });
+
+test('SVG annotations do not intercept global modified shortcuts, IME confirmation or repeated activation', () => {
+  const selected = [];
+  const { container } = draw(result([trace('V:R1', [0, 1, 2])]), {
+    annotations: [saved()],
+    onAnnotationSelect: (id) => selected.push(id),
+  });
+  const marker = markers(container)[0];
+  for (const modifier of [
+    { ctrlKey: true },
+    { metaKey: true },
+    { altKey: true },
+    { isComposing: true },
+    { keyCode: 229 },
+    { getModifierState: (key) => key === 'AltGraph' },
+  ]) {
+    marker.emit('keydown', {
+      key: 'Enter',
+      ...modifier,
+      preventDefault() {
+        assert.fail('modified shortcuts must reach the global handler');
+      },
+      stopPropagation() {
+        assert.fail('modified shortcuts must continue bubbling');
+      },
+    });
+  }
+  marker.emit('keydown', { key: 'Enter', repeat: true });
+  assert.equal(selected.length, 0);
+  marker.emit('keydown', { key: 'Enter' });
+  assert.deepEqual(selected, ['A1']);
+});
