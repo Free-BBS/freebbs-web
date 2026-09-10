@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { once } = require('node:events');
+const { setTimeout: delay } = require('node:timers/promises');
 const express = require('express');
 const sharp = require('sharp');
 const { buildNets, simulate } = require('../public/circuit-engine');
@@ -515,4 +516,150 @@ test('timeout during settings lookup never starts a late billed vision request',
   });
   await settings;
   assert.equal(visionCalls, 0);
+});
+
+test('one invalid model document gets one repair with the same image and bounded validation feedback', async (t) => {
+  const invalid = recognizedCircuit();
+  invalid.circuit.document.components[0].rotation = -90;
+  const calls = [];
+  const signals = [];
+  let settingsReads = 0;
+  const post = await startServer(t, {
+    readModelSettings: async () => {
+      settingsReads += 1;
+      return { apiKey: 'private-key', baseUrl: 'https://models.example/v1', model: 'vision-model' };
+    },
+    fetchImpl: async (_url, options) => {
+      calls.push(JSON.parse(options.body));
+      signals.push(options.signal);
+      return completion(calls.length === 1 ? invalid : recognizedCircuit());
+    },
+  });
+  const response = await post({ instructions: '仅识别原图' });
+  const result = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(calls.length, 2);
+  assert.equal(settingsReads, 1);
+  assert.equal(signals[0], signals[1]);
+  assert.deepEqual(calls[1].messages.slice(0, 2), calls[0].messages);
+  const correction = calls[1].messages[2];
+  assert.equal(correction.role, 'user');
+  assert.match(correction.content, /唯一一次/);
+  assert.match(correction.content, /不得输出其他字段/);
+  const feedback = JSON.parse(correction.content.split('\n').at(-1));
+  assert.equal(feedback.previousResponse, JSON.stringify(invalid));
+  assert.match(feedback.validationIssue, /旋转角度/);
+  assert.ok(feedback.validationIssue.length <= 500);
+  assert.ok(
+    Math.abs(
+      simulate(result.circuit.document).traces.find(({ id }) => id === 'V:R2').values[0] - 4,
+    ) < 1e-9,
+  );
+  assert.doesNotMatch(JSON.stringify(result), /validationIssue|previousResponse|private-key/);
+});
+
+test('two invalid model contents stop after one repair without exposing raw data or accepting dangerous fields', async (t) => {
+  let calls = 0;
+  const post = await startServer(t, {
+    fetchImpl: async () => {
+      calls += 1;
+      if (calls === 1) return completion(null, { message: { content: '{broken-json raw-marker' } });
+      const bad = recognizedCircuit();
+      bad.circuit.document.components[0].execute = 'raw-marker-run()';
+      return completion(bad);
+    },
+  });
+  const response = await post();
+  const result = await response.json();
+  assert.equal(response.status, 502);
+  assert.equal(result.code, 'invalid_circuit_recognition_result');
+  assert.equal(calls, 2);
+  assert.doesNotMatch(JSON.stringify(result), /raw-marker|previousResponse|validationIssue/);
+});
+
+test('refusal, upstream errors, output bounds, and truncated transport do not trigger repair calls', async (t) => {
+  const responses = [
+    () => completion({ recognized: false, reason: '图片没有电路' }),
+    () => completion(null, { finish_reason: 'content_filter', message: { content: null } }),
+    () => new Response('upstream error', { status: 500 }),
+    () => new Response('bad credential', { status: 401 }),
+    () => completion(recognizedCircuit(), { finish_reason: 'length' }),
+    () => completion(null, { message: { content: 'x'.repeat(128 * 1024 + 1) } }),
+    () => new Response('x'.repeat(MAX_RESPONSE_BYTES + 1)),
+    () => new Response('{"choices":'),
+  ];
+  for (const makeResponse of responses) {
+    let calls = 0;
+    const post = await startServer(t, {
+      fetchImpl: async () => {
+        calls += 1;
+        return makeResponse();
+      },
+    });
+    assert.equal((await (await post()).json()).ok, false);
+    assert.equal(calls, 1);
+  }
+});
+
+test('cancelling during repair aborts its upstream request and keeps the concurrency lock until exit', async (t) => {
+  let notifyRepair;
+  const repairStarted = new Promise((resolve) => {
+    notifyRepair = resolve;
+  });
+  const signals = [];
+  let calls = 0;
+  const post = await startServer(t, {
+    heartbeatMs: 5,
+    maxConcurrent: 1,
+    fetchImpl: async (_url, { signal }) => {
+      calls += 1;
+      signals.push(signal);
+      if (calls === 1) return completion({ recognized: true, circuit: {} });
+      if (calls > 2) return completion();
+      notifyRepair();
+      return new Promise(() => {});
+    },
+  });
+  const controller = new AbortController();
+  const pending = post({}, { signal: controller.signal });
+  await repairStarted;
+  assert.equal((await post()).status, 429);
+  assert.equal((await post({}, { auth: 'user-2' })).status, 429);
+  assert.equal(signals[0], signals[1]);
+  const stopped = new Promise((resolve) => {
+    signals[1].addEventListener('abort', resolve, { once: true });
+  });
+  controller.abort();
+  await pending.then((response) => response.text()).catch(() => {});
+  await stopped;
+  assert.equal(calls, 2);
+  assert.equal(signals[1].aborted, true);
+  assert.equal((await (await post()).json()).circuit.title, '分压电路');
+});
+
+test('repair consumes the original timeout budget instead of starting a fresh deadline', async (t) => {
+  let calls = 0;
+  const signals = [];
+  const post = await startServer(t, {
+    heartbeatMs: 5,
+    requestTimeoutMs: 180,
+    fetchImpl: async (_url, { signal }) => {
+      calls += 1;
+      signals.push(signal);
+      if (calls === 1) {
+        await delay(70, undefined, { signal });
+        return completion({ recognized: true, circuit: {} });
+      }
+      await delay(140, undefined, { signal });
+      return completion();
+    },
+  });
+  const response = await post();
+  const result = await response.json();
+  assert.equal(response.status, 200, 'heartbeat already sent successful HTTP headers');
+  assert.equal(result.status, 504);
+  assert.equal(result.code, 'circuit_recognition_timeout');
+  assert.equal(calls, 2);
+  assert.equal(signals[0], signals[1]);
+  assert.equal(signals[1].aborted, true);
 });
