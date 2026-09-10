@@ -766,7 +766,23 @@
               请先<a id="circuit-recognition-login" href="/login">登录</a>，再使用图像识别。
             </p>
             <div id="circuit-recognition-drop" class="circuit-recognition-drop">
-              <button id="circuit-recognition-pick" type="button">选择电路图片</button>
+              <div class="circuit-recognition-upload-actions">
+                <button
+                  id="circuit-recognition-camera"
+                  class="circuit-recognition-camera"
+                  type="button"
+                >
+                  拍照识别
+                </button>
+                <button id="circuit-recognition-pick" type="button">选择电路图片</button>
+              </div>
+              <input
+                id="circuit-recognition-camera-file"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                hidden
+              />
               <input
                 id="circuit-recognition-file"
                 type="file"

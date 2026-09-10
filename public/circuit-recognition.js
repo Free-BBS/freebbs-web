@@ -52,6 +52,7 @@
       schematic: null,
       attempted: false,
       context: null,
+      cameraContext: null,
       uid: app.userState.isLoggedIn ? app.userState.uid : '',
     };
     const readFile =
@@ -77,6 +78,7 @@
       trigger.disabled = context.busy;
       get('auth').hidden = loggedIn;
       get('pick').disabled = busy || state.reading;
+      get('camera').disabled = busy || state.reading || context.busy;
       get('pick').textContent = state.imageDataUrl ? '更换图片' : '选择电路图片';
       get('instructions').disabled = busy;
       get('start').disabled =
@@ -109,7 +111,13 @@
       render();
     }
 
+    function resetCamera() {
+      state.cameraContext = null;
+      get('camera-file').value = '';
+    }
+
     function resetImage() {
+      resetCamera();
       state.fileVersion += 1;
       state.reading = false;
       state.imageDataUrl = '';
@@ -125,6 +133,7 @@
       cancel('');
       resetImage();
       const version = state.fileVersion;
+      const context = editor.getRecognitionContext();
       try {
         validateImageFile(file);
         state.reading = true;
@@ -132,6 +141,8 @@
         render();
         const imageDataUrl = await readFile(file);
         if (version !== state.fileVersion || !dialog.open) return;
+        if (!sameContext(context, editor.getRecognitionContext()))
+          throw new Error('读取图片期间电路已变化，请重新选择图片。');
         if (
           typeof imageDataUrl !== 'string' ||
           !/^data:image\/(?:png|jpeg|webp);base64,/.test(imageDataUrl)
@@ -249,6 +260,7 @@
     }
 
     function close() {
+      resetCamera();
       cancel('');
       state.fileVersion += 1;
       state.reading = false;
@@ -285,6 +297,7 @@
     function onEditorChange() {
       const context = editor.getRecognitionContext();
       if (dialog.open && state.context && !sameContext(state.context, context)) {
+        resetCamera();
         cancel('电路已变化，请重新识别后再生成草稿。');
         clearResult();
       }
@@ -305,6 +318,29 @@
 
     trigger.addEventListener('click', open);
     get('close').addEventListener('click', close);
+    get('camera').addEventListener('click', () => {
+      const context = editor.getRecognitionContext();
+      if (!dialog.open || state.controller || state.reading || context.busy) return;
+      get('camera-file').value = '';
+      state.cameraContext = context;
+      get('camera-file').click();
+    });
+    get('camera-file').addEventListener('change', () => {
+      const file = get('camera-file').files?.[0];
+      const context = state.cameraContext;
+      resetCamera();
+      if (
+        !file ||
+        !dialog.open ||
+        state.controller ||
+        state.reading ||
+        !sameContext(context, editor.getRecognitionContext()) ||
+        context.uid !== (app.userState.isLoggedIn ? app.userState.uid : '')
+      )
+        return;
+      selectFile(file);
+    });
+    get('camera-file').addEventListener('cancel', resetCamera);
     get('pick').addEventListener('click', () => get('file').click());
     get('file').addEventListener('change', () => {
       const file = get('file').files?.[0];
@@ -331,6 +367,7 @@
       close();
     });
     dialog.addEventListener('close', () => {
+      resetCamera();
       if (state.controller) cancel('');
       state.fileVersion += 1;
       state.reading = false;
@@ -366,7 +403,10 @@
     browser.addEventListener('freebbs:circuit-editor-change', onEditorChange);
     browser.addEventListener('freebbs:circuit-editor-ready', onEditorChange);
     browser.addEventListener('freebbs:session-change', onSessionChange);
-    browser.addEventListener('pagehide', () => cancel(''));
+    browser.addEventListener('pagehide', () => {
+      resetCamera();
+      cancel('');
+    });
     render();
     return { open, close, selectFile, start, cancel, apply };
   }

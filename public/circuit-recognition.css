@@ -47,6 +47,23 @@
   border-color: var(--ui-accent);
   background: var(--ui-accent-soft);
 }
+.circuit-recognition-upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+.circuit-recognition-camera {
+  display: none !important;
+}
+@media (max-width: 760px), (pointer: coarse) {
+  .circuit-recognition-camera {
+    display: inline-flex !important;
+  }
+  .circuit-recognition-upload-actions button {
+    min-height: 44px;
+  }
+}
 .circuit-recognition-drop img {
   display: block;
   max-width: 100%;

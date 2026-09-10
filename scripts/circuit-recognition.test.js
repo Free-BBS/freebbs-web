@@ -369,6 +369,111 @@ test('guests see the login action and never send recognition requests', async ()
   assert.equal(h.calls.requests.length, 0);
 });
 
+test('mobile camera capture requests the rear camera and preserves the separate gallery input', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../public/circuit.html'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '../public/circuit-recognition.css'), 'utf8');
+  const cameraInput = html.match(/<input\s+id="circuit-recognition-camera-file"[\s\S]*?\/>/)[0];
+  const galleryInput = html.match(/<input\s+id="circuit-recognition-file"[\s\S]*?\/>/)[0];
+  assert.match(html, /id="circuit-recognition-camera"[\s\S]*?>\s*拍照识别\s*<\/button>/);
+  assert.match(cameraInput, /type="file"/);
+  assert.match(cameraInput, /accept="image\/\*"/);
+  assert.match(cameraInput, /capture="environment"/);
+  assert.doesNotMatch(galleryInput, /capture=/);
+  assert.match(css, /@media \(max-width: 760px\), \(pointer: coarse\)/);
+});
+
+test('camera photos use the validated preview and recognition pipeline and permit same-name retakes', async () => {
+  const h = harness();
+  let opened = 0;
+  const camera = h.get('camera-file');
+  camera.addEventListener('click', () => {
+    opened += 1;
+  });
+  camera.value = 'old-camera-file';
+  h.get('camera').click();
+  assert.equal(opened, 1);
+  assert.equal(camera.value, '');
+  camera.files = [{ ...imageFile, name: 'camera.png' }];
+  camera.value = 'camera-file';
+  camera.emit('change');
+  await Promise.resolve();
+  assert.equal(camera.value, '');
+  assert.equal(h.get('image').src, imageDataUrl);
+  assert.match(h.get('filename').textContent, /camera.png/);
+  assert.equal(h.calls.requests.length, 0);
+  await h.api.start();
+  assert.equal(h.calls.requests.length, 1);
+  assert.equal(JSON.parse(h.calls.requests[0].options.body).imageDataUrl, imageDataUrl);
+  h.get('camera').click();
+  camera.emit('change');
+  await Promise.resolve();
+  assert.equal(opened, 2);
+  assert.equal(h.get('result').hidden, true);
+  assert.equal(h.get('image').src, imageDataUrl);
+});
+
+test('canceling the system camera keeps the selected image and completed recognition preview', async () => {
+  const h = harness();
+  await h.api.selectFile(imageFile);
+  await h.api.start();
+  h.get('camera').click();
+  h.get('camera-file').emit('cancel');
+  assert.equal(h.get('image').src, imageDataUrl);
+  assert.equal(h.get('result').hidden, false);
+  assert.equal(h.get('apply').hidden, false);
+  h.get('camera').click();
+  h.get('camera-file').files = [];
+  h.get('camera-file').emit('change');
+  assert.equal(h.get('image').src, imageDataUrl);
+  assert.equal(h.get('result').hidden, false);
+});
+
+test('camera cannot be opened while recognition is running', async () => {
+  const pending = deferred();
+  const h = harness({ callApi: () => pending.promise });
+  let opened = 0;
+  h.get('camera-file').addEventListener('click', () => {
+    opened += 1;
+  });
+  await h.api.selectFile(imageFile);
+  const request = h.api.start();
+  assert.equal(h.get('camera').disabled, true);
+  h.get('camera').click();
+  assert.equal(opened, 0);
+  h.api.cancel();
+  assert.equal(h.get('camera').disabled, false);
+  pending.resolve(response());
+  await request;
+});
+
+test('late camera results after closing, switching accounts or changing circuits are ignored', async () => {
+  for (const change of [
+    (h) => {
+      h.api.close();
+      h.api.open();
+    },
+    (h) => {
+      Object.assign(h.app, { userState: { isLoggedIn: true, uid: 'another-reader' } });
+      Object.assign(h.context, { uid: 'another-reader' });
+      h.browser.emit('freebbs:session-change');
+    },
+    (h) => {
+      Object.assign(h.context, { generation: h.context.generation + 1 });
+      h.browser.emit('freebbs:circuit-editor-change');
+    },
+  ]) {
+    const h = harness({ readImage: () => assert.fail('late camera files must not be read') });
+    h.get('camera').click();
+    change(h);
+    h.get('camera-file').files = [{ ...imageFile, name: 'late-camera.png' }];
+    h.get('camera-file').emit('change');
+    await Promise.resolve();
+    assert.ok(!h.get('image').src);
+    assert.equal(h.get('start').disabled, true);
+    assert.equal(h.calls.requests.length, 0);
+  }
+});
+
 function editorHarness({ storageFails = false } = {}) {
   const source = fs.readFileSync(path.join(__dirname, '../public/circuit.js'), 'utf8');
   const bridge = source.slice(
