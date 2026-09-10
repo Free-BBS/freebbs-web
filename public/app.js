@@ -2534,11 +2534,30 @@ async function callApi(path, options = {}) {
 
   const payload = await response.json().catch(() => ({}));
 
-  if (!response.ok) {
-    const error = new Error(
-      payload.detail ? `${payload.message}：${payload.detail}` : payload.message || '请求失败',
-    );
-    error.status = response.status;
+  const circuitFailure = path === '/ai/circuit/chat' && payload.ok === false;
+  if (!response.ok || circuitFailure) {
+    const status =
+      circuitFailure &&
+      Number.isInteger(payload.status) &&
+      payload.status >= 400 &&
+      payload.status <= 599
+        ? payload.status
+        : response.status;
+    const fallback =
+      {
+        401: '登录已失效，请重新登录。',
+        403: '请求被拒绝，请检查当前账号权限。',
+        413: '请求内容过大，请缩小电路或问题范围后重试。',
+        429: '请求过于频繁，请稍后重试。',
+        502: '服务连接失败，请稍后重试。',
+        503: '服务暂时不可用，请稍后重试。',
+        504: '服务器等待回答超时，请重试。',
+      }[status] || `请求失败（HTTP ${status}）。`;
+    const message =
+      typeof payload.message === 'string' && payload.message.trim() ? payload.message : fallback;
+    const detail = typeof payload.detail === 'string' ? payload.detail : '';
+    const error = new Error(detail ? `${message}：${detail}` : message);
+    error.status = status;
     error.code =
       typeof payload.code === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(payload.code)
         ? payload.code

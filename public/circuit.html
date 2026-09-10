@@ -484,6 +484,7 @@
                   <h2 id="circuit-ai-title">电路侧栏</h2>
                   <p>提问、查看与调整当前电路</p>
                 </div>
+                <button id="circuit-ai-header-stop" type="button" hidden>停止执行</button>
                 <button
                   id="circuit-ai-close"
                   type="button"
@@ -540,7 +541,7 @@
                   <div class="circuit-ai-intro" id="circuit-ai-intro">
                     <p>从电路本身，找到答案。</p>
                     <p>
-                      我能查看当前电路和仿真读数，帮你检查接线、计算数学曲线、切换示波器模式，或添加标记与注释。
+                      告诉我实验目标，我会修改电路、运行仿真，再根据结果继续分析、计算曲线和添加标记。
                     </p>
                     <div class="circuit-ai-starters" aria-label="开始提问">
                       <button
@@ -562,7 +563,9 @@
                         分析并标记波形
                       </button>
                     </div>
-                    <p class="circuit-ai-intro-note">提问时同步当前草稿。修改建议由你点选应用。</p>
+                    <p class="circuit-ai-intro-note">
+                      自主执行会连续调整当前草稿，可随时停止并撤销。保存电路后可分享结果。
+                    </p>
                   </div>
                 </div>
                 <div class="circuit-ai-tools">
@@ -570,17 +573,25 @@
                   <button id="circuit-ai-undo" type="button" disabled>撤销 AI 修改</button>
                 </div>
                 <form id="circuit-ai-form" class="circuit-ai-form">
+                  <div class="circuit-ai-mode-row">
+                    <label for="circuit-ai-mode">工作方式</label>
+                    <select id="circuit-ai-mode">
+                      <option value="agent">自主执行</option>
+                      <option value="suggest">仅给建议</option>
+                    </select>
+                  </div>
                   <label for="circuit-ai-input">围绕这张电路提问</label>
                   <textarea
                     id="circuit-ai-input"
                     rows="3"
                     maxlength="4000"
-                    placeholder="例如：为什么电容两端电压会这样变化？"
+                    placeholder="例如：运行仿真，计算两通道差值，再标记采样峰值。"
                     required
                   ></textarea>
                   <div class="circuit-ai-compose-actions">
                     <span>Ctrl / ⌘ + Enter 发送</span>
-                    <button id="circuit-ai-send" class="is-primary" type="submit">发送</button>
+                    <button id="circuit-ai-stop" type="button" hidden>停止执行</button>
+                    <button id="circuit-ai-send" class="is-primary" type="submit">开始</button>
                   </div>
                   <p
                     id="circuit-ai-status"
@@ -625,6 +636,11 @@
             </aside>
           </div>
           <div id="circuit-ai-backdrop" class="circuit-ai-backdrop" aria-hidden="true" hidden></div>
+          <div id="circuit-ai-runbar" class="circuit-ai-runbar" hidden>
+            <span id="circuit-ai-runbar-status" role="status">Max 正在执行</span>
+            <button id="circuit-ai-runbar-open" type="button">查看过程</button>
+            <button id="circuit-ai-runbar-stop" type="button">停止</button>
+          </div>
         </section>
       </main>
     </div>
@@ -644,6 +660,7 @@
     <script src="/circuit-ai-actions.js"></script>
     <script src="/circuit-parameter-popover.js"></script>
     <script src="/circuit.js"></script>
+    <script src="/circuit-agent.js"></script>
     <script src="/circuit-assistant.js"></script>
     <script src="/notifications.js"></script>
   </body>
