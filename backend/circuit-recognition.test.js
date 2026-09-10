@@ -260,6 +260,49 @@ test('model output enforces circuit metadata, strict editor fields, topology, bo
   assert.throws(() => parseCircuitRecognitionResponse('Here is the circuit: {}'), { status: 502 });
 });
 
+test('verified provider warning nesting is normalized without losing warnings or relaxing document validation', () => {
+  const canonical = recognizedCircuit();
+  canonical.warnings = ['R1 标值请核对。'];
+  const nested = structuredClone(canonical);
+  nested.circuit.warnings = nested.warnings;
+  delete nested.warnings;
+  assert.deepEqual(
+    parseCircuitRecognitionResponse(JSON.stringify(nested)),
+    parseCircuitRecognitionResponse(JSON.stringify(canonical)),
+  );
+  const variants = [
+    (result) => {
+      result.circuit.warnings = 'not an array';
+    },
+    (result) => {
+      result.circuit.warnings = ['x'.repeat(501)];
+    },
+    (result) => {
+      result.circuit.extra = 'unknown field';
+    },
+    (result) => {
+      result.extra = 'unknown field';
+    },
+    (result) => {
+      result.warnings = ['ambiguous duplicate'];
+    },
+    (result) => {
+      result.circuit.document.components[0].params.injected = 1;
+    },
+    (result) => {
+      result.circuit.document.wires[0].to.pin = 100;
+    },
+  ];
+  for (const mutate of variants) {
+    const candidate = structuredClone(nested);
+    mutate(candidate);
+    assert.throws(() => parseCircuitRecognitionResponse(JSON.stringify(candidate)), {
+      status: 502,
+      code: 'invalid_circuit_recognition_result',
+    });
+  }
+});
+
 test('non-circuit refusal and empty recognition never fabricate a starter circuit', () => {
   assert.throws(
     () => parseCircuitRecognitionResponse('{"recognized":false,"reason":"图片是风景，没有电路"}'),
