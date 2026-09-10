@@ -22,6 +22,14 @@ const resultSource = source.slice(
   source.indexOf('  function showResult('),
   source.indexOf('  function runSimulation()'),
 );
+const workerSource = source.slice(
+  source.indexOf('  function runSimulation()'),
+  source.indexOf('  function capturePlotSettings()'),
+);
+const stopSource = source.slice(
+  source.indexOf('  function finishSimulation('),
+  source.indexOf('  function invalidateResult()'),
+);
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const endpoint = (componentId, pin = 0) => ({ componentId, pin });
 
@@ -74,7 +82,7 @@ function node(dataset = {}) {
   };
 }
 
-function harness({ document = fixture(), measured = true } = {}) {
+function harness({ document = fixture(), measured = true, realWorker = false } = {}) {
   const state = {
     document,
     cid: '',
@@ -83,6 +91,14 @@ function harness({ document = fixture(), measured = true } = {}) {
     editable: true,
     saving: false,
     editVersion: 7,
+    generation: 0,
+    sessionUid: 'test-reader',
+    worker: null,
+    simulationJob: null,
+    simulationError: null,
+    runId: 0,
+    agentRun: null,
+    agentRunCounter: 0,
     selectedId: 'R1',
     selectedWire: '',
     wireStart: null,
@@ -135,6 +151,7 @@ function harness({ document = fixture(), measured = true } = {}) {
     Object,
     JSON,
     Array,
+    Promise,
     Set,
     Map,
     Number,
@@ -172,10 +189,19 @@ function harness({ document = fixture(), measured = true } = {}) {
     },
     updateControls: () => {},
     validateParameterInputs: () => true,
+    capturePlotSettings: () => {},
+    readAnalysis: () => clone(state.document.analysis),
+    stopPlayback: () => {},
     persistDraft: () => {
       calls.persisted += 1;
     },
     invalidateResult: () => {
+      if (realWorker) {
+        context.stopSimulation();
+        state.plotResult = null;
+        state.plotDisplay = null;
+        state.simulationError = null;
+      }
       state.result = null;
       state.traceIds = [];
     },
@@ -200,10 +226,36 @@ function harness({ document = fixture(), measured = true } = {}) {
       context.showResult(engine.simulate(state.document));
     },
   };
-  vm.runInNewContext(`${changeSource}\n${bridgeSource}\n${resultSource}`, context, {
-    filename: 'circuit.js:editor-ai-bridge',
-  });
-  return { context, state, calls, components, checks, charts, grouped, elements };
+  const workers = [];
+  const timers = new Map();
+  context.window.setTimeout = (callback) => {
+    const id = timers.size + 1;
+    timers.set(id, callback);
+    return id;
+  };
+  context.window.clearTimeout = (id) => timers.delete(id);
+  context.Worker = function FakeWorker() {
+    workers.push(this);
+    calls.runs += 1;
+    this.terminated = false;
+    this.postMessage = (message) => {
+      this.request = clone(message);
+    };
+    this.terminate = () => {
+      this.terminated = true;
+    };
+    this.respond = (payload = { result: engine.simulate(this.request.document) }) => {
+      this.onmessage({ data: { id: this.request.id, ...payload } });
+    };
+  };
+  vm.runInNewContext(
+    `${changeSource}\n${bridgeSource}\n${resultSource}\n${realWorker ? `${stopSource}\n${workerSource}` : ''}`,
+    context,
+    {
+      filename: 'circuit.js:editor-ai-bridge',
+    },
+  );
+  return { context, state, calls, components, checks, charts, grouped, elements, workers, timers };
 }
 
 test('editor snapshot carries an independent unsaved document and a bounded, backend-valid simulation summary', () => {
@@ -706,4 +758,390 @@ test('Max receives derived waveform warnings alongside solver warnings', () => {
   const snapshot = clone(context.getAssistantSnapshot());
   assert.deepEqual(snapshot.simulation.warnings, state.plotResult.warnings);
   assert.deepEqual(state.result.warnings, ['原始仿真提示']);
+});
+
+test('autonomous steps wait for the worker, use its measurements for math and annotations, and undo the entire run', async () => {
+  const { context, state, workers, calls } = harness({ realWorker: true });
+  context.showResult(state.result);
+  const before = clone(context.getAssistantSnapshot().document);
+  const originalResult = state.result;
+  const { runId, snapshot } = context.beginAgentRun();
+  let completed = false;
+  const solving = context
+    .executeAgentActions(
+      [
+        { type: 'set_parameter', componentId: 'R1', parameter: 'resistance', value: 2000 },
+        { type: 'run_simulation' },
+      ],
+      { runId, expectedVersion: snapshot.editVersion },
+    )
+    .then((result) => {
+      completed = true;
+      return result;
+    });
+  await Promise.resolve();
+  assert.equal(completed, false);
+  assert.equal(context.getAssistantSnapshot().isSimulationRunning, true);
+  assert.equal(context.getAssistantSnapshot().simulation, null);
+  assert.equal(
+    workers[0].request.document.components.find((row) => row.id === 'R1').params.resistance,
+    2000,
+  );
+  workers[0].respond();
+  const measured = await solving;
+  assert.equal(measured.isSimulationRunning, false);
+  assert.equal(measured.simulation.traces.find((trace) => trace.id === 'I:R1').latest, 0.0025);
+  assert.equal(measured.canUndoAi, false);
+  const plotted = await context.executeAgentActions(
+    [
+      {
+        type: 'set_plot',
+        display: {
+          mode: 'xy',
+          ch1: 'V:V1',
+          ch2: 'I:R1',
+          xyX: 'V:V1',
+          xyY: 'M:M1',
+          traceIds: ['M:M1'],
+          math: [{ id: 'M1', expression: 'CH1*CH2', unit: 'W' }],
+        },
+      },
+    ],
+    { runId, expectedVersion: measured.editVersion },
+  );
+  const point = plotted.simulation.traces.find((trace) => trace.id === 'M:M1').maxPoint;
+  assert.equal(point.value, 0.0125);
+  const annotated = await context.executeAgentActions(
+    [
+      {
+        type: 'set_annotation',
+        annotation: {
+          id: 'A1',
+          traceId: 'M:M1',
+          at: point.x,
+          text: '计算后的功率',
+          mode: 'xy',
+          axis: 'value',
+          xTraceId: 'V:V1',
+          analysisKey: 'dc',
+        },
+      },
+    ],
+    { runId, expectedVersion: plotted.editVersion },
+  );
+  assert.equal(annotated.document.display.annotations[0].text, '计算后的功率');
+  assert.equal(calls.runs, 1);
+  assert.throws(() => context.undoAssistantActions(), /先停止/);
+  assert.equal(context.endAgentRun(runId).canUndoAi, true);
+  assert.deepEqual(clone(context.undoAssistantActions().document), before);
+  assert.equal(state.result, originalResult);
+  assert.equal(calls.runs, 1);
+});
+
+test('solver failure returns an actionable observation and permits a corrective next step', async () => {
+  const { context, state, workers } = harness({ realWorker: true });
+  const { runId, snapshot } = context.beginAgentRun();
+  const first = context.executeAgentActions(
+    [
+      { type: 'set_parameter', componentId: 'R1', parameter: 'resistance', value: 2000 },
+      { type: 'run_simulation' },
+    ],
+    { runId, expectedVersion: snapshot.editVersion },
+  );
+  workers[0].respond({ error: '矩阵奇异：请检查浮空节点与接地连接。' });
+  await assert.rejects(
+    first,
+    (error) => error.code === 'SIMULATION_FAILED' && /浮空节点/.test(error.message),
+  );
+  const failed = context.getAssistantSnapshot();
+  assert.match(failed.simulationError, /浮空节点/);
+  assert.equal(failed.simulation, null);
+  assert.equal(failed.isSimulationRunning, false);
+  assert.equal(state.document.components.find((row) => row.id === 'R1').params.resistance, 2000);
+  const retry = context.executeAgentActions([{ type: 'run_simulation' }], {
+    runId,
+    expectedVersion: failed.editVersion,
+  });
+  workers[1].respond();
+  const done = await retry;
+  assert.equal(done.simulationError, null);
+  assert.equal(done.simulation.traces.find((trace) => trace.id === 'I:R1').latest, 0.0025);
+  context.endAgentRun(runId);
+  assert.equal(
+    context.undoAssistantActions().document.components.find((row) => row.id === 'R1').params
+      .resistance,
+    1000,
+  );
+});
+
+test('stopping an agent cancels its worker, ignores late completion, and leaves one undo for completed edits', async () => {
+  const { context, state, workers } = harness({ realWorker: true });
+  const controller = new AbortController();
+  const { runId, snapshot } = context.beginAgentRun();
+  const pending = context.executeAgentActions(
+    [
+      { type: 'set_parameter', componentId: 'R1', parameter: 'resistance', value: 3000 },
+      { type: 'run_simulation' },
+    ],
+    { runId, expectedVersion: snapshot.editVersion, signal: controller.signal },
+  );
+  controller.abort();
+  await assert.rejects(pending, (error) => error.code === 'AGENT_STOPPED');
+  assert.equal(workers[0].terminated, true);
+  workers[0].respond();
+  assert.equal(state.result, null);
+  await assert.rejects(
+    context.executeAgentActions([{ type: 'run_simulation' }], {
+      runId,
+      expectedVersion: state.editVersion,
+    }),
+    (error) => error.code === 'AGENT_STOPPED',
+  );
+  context.endAgentRun(runId);
+  assert.equal(
+    context.undoAssistantActions().document.components.find((row) => row.id === 'R1').params
+      .resistance,
+    1000,
+  );
+});
+
+test('manual edits during a solve terminate the run and are never overwritten by end or late worker output', async () => {
+  const { context, state, workers } = harness({ realWorker: true });
+  const { runId, snapshot } = context.beginAgentRun();
+  const pending = context.executeAgentActions([{ type: 'run_simulation' }], {
+    runId,
+    expectedVersion: snapshot.editVersion,
+  });
+  state.document.components.find((row) => row.id === 'R1').params.resistance = 4700;
+  context.changed();
+  await assert.rejects(pending, (error) => error.code === 'AGENT_STALE');
+  assert.equal(workers[0].terminated, true);
+  workers[0].respond();
+  const ended = context.endAgentRun(runId);
+  assert.equal(ended.document.components.find((row) => row.id === 'R1').params.resistance, 4700);
+  assert.equal(ended.canUndoAi, false);
+  assert.equal(state.result, null);
+});
+
+test('loading a circuit or changing the account invalidates a waiting agent even without a change callback', async () => {
+  for (const change of [
+    (state) => {
+      state.generation += 1;
+    },
+    (state) => {
+      state.sessionUid = 'different-reader';
+    },
+    (state) => {
+      state.cid = 'c_abcdefabcdefabcdefabcdef';
+    },
+  ]) {
+    const { context, state, workers } = harness({ realWorker: true });
+    const { runId, snapshot } = context.beginAgentRun();
+    const pending = context.executeAgentActions([{ type: 'run_simulation' }], {
+      runId,
+      expectedVersion: snapshot.editVersion,
+    });
+    change(state);
+    context.notifyCircuitEditor();
+    await assert.rejects(pending, (error) => error.code === 'AGENT_STALE');
+    assert.equal(workers[0].terminated, true);
+    context.endAgentRun(runId);
+    assert.equal(state.aiUndo, null);
+  }
+});
+
+test('pending manual annotation edits are committed before checking the agent version', async () => {
+  const { context, state } = harness({ realWorker: true });
+  const { runId, snapshot } = context.beginAgentRun();
+  context.validateParameterInputs = () => {
+    state.document.components.find((row) => row.id === 'R1').params.resistance = 6800;
+    context.changed();
+    context.validateParameterInputs = () => true;
+    return true;
+  };
+  await assert.rejects(
+    context.executeAgentActions(
+      [{ type: 'set_parameter', componentId: 'R1', parameter: 'resistance', value: 2000 }],
+      { runId, expectedVersion: snapshot.editVersion },
+    ),
+    (error) => error.code === 'AGENT_STALE',
+  );
+  context.endAgentRun(runId);
+  assert.equal(state.document.components.find((row) => row.id === 'R1').params.resistance, 6800);
+  assert.equal(state.aiUndo, null);
+});
+
+test('agent worker timeouts and startup errors settle with retryable diagnostics', async () => {
+  for (const failure of ['timeout', 'thread']) {
+    const { context, state, workers, timers } = harness({ realWorker: true });
+    const { runId, snapshot } = context.beginAgentRun();
+    const pending = context.executeAgentActions([{ type: 'run_simulation' }], {
+      runId,
+      expectedVersion: snapshot.editVersion,
+    });
+    if (failure === 'timeout') [...timers.values()][0]();
+    else workers[0].onerror();
+    await assert.rejects(
+      pending,
+      (error) =>
+        error.code === (failure === 'timeout' ? 'SIMULATION_TIMEOUT' : 'SIMULATION_FAILED'),
+    );
+    assert.equal(state.worker, null);
+    assert.equal(timers.size, 0);
+    assert.match(
+      context.getAssistantSnapshot().simulationError,
+      failure === 'timeout' ? /20 秒/ : /线程/,
+    );
+    context.endAgentRun(runId);
+  }
+});
+
+test('empty or rejected runs preserve earlier undo and end is idempotent', async () => {
+  const { context, state } = harness({ realWorker: true });
+  context.applyAssistantActions([{ type: 'move_component', componentId: 'R1', x: 300, y: 160 }], {
+    expectedVersion: 7,
+  });
+  const priorUndo = state.aiUndo;
+  const { runId, snapshot } = context.beginAgentRun();
+  await assert.rejects(
+    context.executeAgentActions([{ type: 'move_component', componentId: 'R1', x: 100001, y: 0 }], {
+      runId,
+      expectedVersion: snapshot.editVersion,
+    }),
+    /范围/,
+  );
+  assert.equal(context.endAgentRun('obsolete-id').canUndoAi, false);
+  context.endAgentRun(runId);
+  assert.equal(state.aiUndo, priorUndo);
+  context.endAgentRun(runId);
+  assert.equal(state.aiUndo, priorUndo);
+  assert.equal(
+    context.undoAssistantActions().document.components.find((row) => row.id === 'R1').x,
+    240,
+  );
+});
+
+test('agent start rejects unfinished wires and ongoing work without replacing their state', () => {
+  const { context, state } = harness({ realWorker: true });
+  state.wireStart = endpoint('R1');
+  assert.throws(() => context.beginAgentRun(), /导线/);
+  state.wireStart = null;
+  state.saving = true;
+  assert.throws(
+    () => context.beginAgentRun(),
+    (error) => error.code === 'AGENT_BUSY',
+  );
+  state.saving = false;
+  const run = context.beginAgentRun();
+  assert.throws(
+    () => context.beginAgentRun(),
+    (error) => error.code === 'AGENT_BUSY',
+  );
+  context.endAgentRun(run.runId);
+});
+
+test('ending a waiting run releases its worker even without an abort signal', async () => {
+  const { context, state, workers } = harness({ realWorker: true });
+  const { runId, snapshot } = context.beginAgentRun();
+  const pending = context.executeAgentActions([{ type: 'run_simulation' }], {
+    runId,
+    expectedVersion: snapshot.editVersion,
+  });
+  context.endAgentRun(runId);
+  await assert.rejects(pending, (error) => error.code === 'AGENT_STOPPED');
+  assert.equal(workers[0].terminated, true);
+  workers[0].respond();
+  assert.equal(state.result, null);
+  const next = context.beginAgentRun();
+  const solving = context.executeAgentActions([{ type: 'run_simulation' }], {
+    runId: next.runId,
+    expectedVersion: next.snapshot.editVersion,
+  });
+  workers[0].respond();
+  assert.equal(state.result, null);
+  workers[1].respond();
+  assert.ok((await solving).simulation);
+  context.endAgentRun(next.runId);
+});
+
+test('manual simulation retains a handled completion promise and invalid parameter failures settle without a worker', async () => {
+  const { context, state, workers } = harness({ realWorker: true });
+  const pending = context.runSimulation();
+  workers[0].respond({ error: '电路没有参考地。' });
+  await assert.rejects(pending, /参考地/);
+  assert.match(state.simulationError, /参考地/);
+  context.validateParameterInputs = () => false;
+  await assert.rejects(
+    context.runSimulation(),
+    (error) => error.code === 'SIMULATION_FAILED' && /参数/.test(error.message),
+  );
+  assert.equal(workers.length, 1);
+  assert.equal(state.worker, null);
+});
+
+test('read-only autonomous waveform viewing never offers an unavailable draft undo', async () => {
+  const { context, state } = harness({ realWorker: true });
+  state.editable = false;
+  context.showResult(state.result);
+  const before = clone(state.document);
+  const { runId, snapshot } = context.beginAgentRun();
+  const viewed = await context.executeAgentActions([{ type: 'show_traces', traceIds: [] }], {
+    runId,
+    expectedVersion: snapshot.editVersion,
+  });
+  assert.deepEqual(clone(viewed.document.display.traceIds), []);
+  const ended = context.endAgentRun(runId);
+  assert.equal(ended.canEdit, false);
+  assert.equal(ended.canUndoAi, false);
+  assert.equal(state.aiUndo, null);
+  assert.deepEqual(clone(state.document), before);
+});
+
+test('starting an unfinished wire takes over from the agent and preserves the manual wire draft', async () => {
+  const { context, state } = harness({ realWorker: true });
+  const { runId, snapshot } = context.beginAgentRun();
+  await context.executeAgentActions(
+    [{ type: 'set_parameter', componentId: 'R1', parameter: 'resistance', value: 2000 }],
+    { runId, expectedVersion: snapshot.editVersion },
+  );
+  const wireStart = endpoint('R1');
+  state.wireStart = wireStart;
+  state.wirePoints = [{ x: 350, y: 160 }];
+  context.notifyCircuitEditor();
+  assert.equal(context.getAssistantSnapshot().isWiring, true);
+  await assert.rejects(
+    context.executeAgentActions([{ type: 'highlight_components', componentIds: ['R1'] }], {
+      runId,
+      expectedVersion: state.editVersion,
+    }),
+    (error) => error.code === 'AGENT_STALE',
+  );
+  const ended = context.endAgentRun(runId);
+  assert.equal(ended.canUndoAi, false);
+  assert.equal(state.wireStart, wireStart);
+  assert.deepEqual(state.wirePoints, [{ x: 350, y: 160 }]);
+  assert.equal(state.document.components.find((row) => row.id === 'R1').params.resistance, 2000);
+  assert.deepEqual(clone(state.aiHighlightedComponents), []);
+  assert.throws(() => context.undoAssistantActions(), /无法撤销/);
+  assert.equal(state.wireStart, wireStart);
+});
+
+test('a manual wire started during an agent solve cancels the worker and keeps its draft points', async () => {
+  const { context, state, workers } = harness({ realWorker: true });
+  const { runId, snapshot } = context.beginAgentRun();
+  const solving = context.executeAgentActions([{ type: 'run_simulation' }], {
+    runId,
+    expectedVersion: snapshot.editVersion,
+  });
+  state.wireStart = endpoint('V1');
+  state.wirePoints = [{ x: 150, y: 200 }];
+  context.notifyCircuitEditor();
+  await assert.rejects(solving, (error) => error.code === 'AGENT_STALE');
+  assert.equal(workers[0].terminated, true);
+  workers[0].respond();
+  assert.equal(state.result, null);
+  context.endAgentRun(runId);
+  assert.deepEqual(state.wireStart, endpoint('V1'));
+  assert.deepEqual(state.wirePoints, [{ x: 150, y: 200 }]);
+  assert.equal(state.aiUndo, null);
 });

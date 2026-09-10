@@ -79,6 +79,8 @@
     wireStart: null,
     wirePoints: [],
     aiUndo: null,
+    agentRun: null,
+    agentRunCounter: 0,
     aiHighlightedComponents: [],
     aiHighlightedTraces: [],
     aiPendingTraces: null,
@@ -97,6 +99,8 @@
     animation: 0,
     worker: null,
     workerTimer: 0,
+    simulationJob: null,
+    simulationError: null,
     resizeTimer: 0,
     runId: 0,
     saving: false,
@@ -308,7 +312,28 @@
     $('play').textContent = '播放';
   }
 
-  function stopSimulation(message = '') {
+  function finishSimulation(job, error, result) {
+    if (state.simulationJob !== job) return;
+    state.simulationJob = null;
+    if (state.worker) state.worker.terminate();
+    window.clearTimeout(state.workerTimer);
+    state.workerTimer = 0;
+    state.worker = null;
+    state.runId += 1;
+    if (error) job.reject(error);
+    else job.resolve(result);
+    updateControls();
+  }
+
+  function stopSimulation(message = '', error = null) {
+    if (state.simulationJob) {
+      finishSimulation(
+        state.simulationJob,
+        error || agentError('AGENT_STOPPED', message || '仿真已取消。'),
+      );
+      if (message) setStatus(message, '', 'run-status');
+      return;
+    }
     if (state.worker) state.worker.terminate();
     window.clearTimeout(state.workerTimer);
     state.workerTimer = 0;
@@ -323,6 +348,7 @@
     stopPlayback();
     state.result = null;
     state.plotResult = null;
+    state.simulationError = null;
     state.plotDisplay = null;
     state.plotModified = false;
     state.annotationPicking = false;
@@ -338,6 +364,7 @@
     state.dirty = true;
     state.editVersion += 1;
     state.aiUndo = null;
+    checkAgentRunContext();
     state.aiHighlightedComponents = [];
     state.aiHighlightedTraces = [];
     state.aiPendingTraces = null;
@@ -1270,13 +1297,19 @@
   }
 
   function notifyCircuitEditor() {
+    checkAgentRunContext();
     if (!window.FreeBbsCircuitEditor || listPage) return;
     window.dispatchEvent(
       new CustomEvent('freebbs:circuit-editor-change', {
         detail: {
           editVersion: state.editVersion,
           canEdit: state.editable && !state.saving,
-          canUndoAi: Boolean(state.aiUndo && state.aiUndo.editVersion === state.editVersion),
+          canUndoAi: Boolean(
+            state.editable &&
+            !state.agentRun &&
+            state.aiUndo &&
+            state.aiUndo.editVersion === state.editVersion,
+          ),
           cid: state.cid,
           revision: state.revision,
         },
@@ -1376,6 +1409,7 @@
         state.plotDisplay ? { ...state.document, display: state.plotDisplay } : state.document,
       ),
       editVersion: state.editVersion,
+      generation: state.generation,
       cid: state.cid,
       revision: state.revision,
       ...metadata(),
@@ -1384,8 +1418,16 @@
         ...(state.selectedWire ? { wireId: state.selectedWire } : {}),
       },
       simulation,
+      simulationError: state.simulationError || null,
+      isSimulationRunning: Boolean(state.worker),
+      isWiring: Boolean(state.wireStart),
       canEdit: state.editable && !state.saving,
-      canUndoAi: Boolean(state.aiUndo && state.aiUndo.editVersion === state.editVersion),
+      canUndoAi: Boolean(
+        state.editable &&
+        !state.agentRun &&
+        state.aiUndo &&
+        state.aiUndo.editVersion === state.editVersion,
+      ),
     };
   }
 
@@ -1408,7 +1450,143 @@
     renderWaveform();
   }
 
-  function applyAssistantActions(actions, { expectedVersion } = {}) {
+  function agentError(code, message) {
+    const error = new Error(message);
+    error.code = code;
+    return error;
+  }
+
+  function checkAgentRunContext() {
+    const run = state.agentRun;
+    if (!run || run.applying || run.error) return !run?.error;
+    if (
+      run.expectedVersion !== state.editVersion ||
+      run.generation !== state.generation ||
+      run.sessionUid !== state.sessionUid ||
+      run.cid !== state.cid ||
+      state.wireStart
+    ) {
+      run.error = agentError(
+        'AGENT_STALE',
+        '画布或登录状态已变化，Max 已停止；请根据当前电路重新开始。',
+      );
+      state.aiUndo = null;
+      if (state.simulationJob?.agentRunId === run.id) stopSimulation('', run.error);
+      return false;
+    }
+    return true;
+  }
+
+  function beginAgentRun() {
+    if (state.agentRun) throw agentError('AGENT_BUSY', 'Max 已在执行，请先停止当前任务。');
+    if (state.worker || state.saving)
+      throw agentError('AGENT_BUSY', '请等待当前仿真或保存完成，再让 Max 开始执行。');
+    if (state.wireStart) throw new Error('请先完成或取消正在绘制的导线。');
+    if (!validateParameterInputs()) throw new Error('请先修正当前参数或标记输入。');
+    capturePlotSettings();
+    const snapshot = getAssistantSnapshot();
+    state.agentRunCounter += 1;
+    const id = `agent-${state.agentRunCounter}`;
+    state.agentRun = {
+      id,
+      expectedVersion: state.editVersion,
+      generation: state.generation,
+      sessionUid: state.sessionUid,
+      cid: state.cid,
+      applying: false,
+      executing: false,
+      changed: false,
+      error: null,
+      priorUndo: state.aiUndo,
+      checkpoint: {
+        document: clone(snapshot.document),
+        result: state.result,
+        plotDisplay: state.plotDisplay ? clone(state.plotDisplay) : null,
+        plotModified: state.plotModified,
+        frame: state.frame,
+      },
+    };
+    notifyCircuitEditor();
+    return { runId: id, snapshot };
+  }
+
+  async function executeAgentActions(actions, { runId, expectedVersion, signal } = {}) {
+    const run = state.agentRun;
+    if (!run || run.id !== runId) throw agentError('AGENT_STOPPED', 'Max 本轮执行已结束。');
+    if (!checkAgentRunContext()) throw run.error;
+    if (expectedVersion !== run.expectedVersion)
+      throw agentError('AGENT_STALE', '操作依据的画布版本已过期，请重新读取当前电路。');
+    if (run.executing) throw agentError('AGENT_BUSY', '上一批操作尚未完成。');
+    if (state.worker) throw agentError('AGENT_BUSY', '仿真仍在运行，请等待结果。');
+    if (!validateParameterInputs()) throw new Error('请先修正当前参数或标记输入。');
+    if (!checkAgentRunContext()) throw run.error;
+    const abort = () => {
+      run.error = agentError('AGENT_STOPPED', 'Max 已停止，已完成的修改仍保留在草稿中。');
+      if (state.simulationJob?.agentRunId === run.id) stopSimulation('', run.error);
+    };
+    if (signal?.aborted) {
+      abort();
+      throw run.error;
+    }
+    signal?.addEventListener('abort', abort, { once: true });
+    run.executing = true;
+    let completion = null;
+    try {
+      run.applying = true;
+      try {
+        applyAssistantActions(actions, {
+          expectedVersion,
+          onSimulation: (pending) => {
+            completion = pending;
+          },
+        });
+      } finally {
+        run.applying = false;
+        run.expectedVersion = state.editVersion;
+        run.changed ||=
+          JSON.stringify(getAssistantSnapshot().document) !==
+          JSON.stringify(run.checkpoint.document);
+      }
+      if (completion) await completion;
+      if (state.agentRun !== run) throw agentError('AGENT_STOPPED', 'Max 本轮执行已结束。');
+      if (!checkAgentRunContext() || run.error) throw run.error;
+      return getAssistantSnapshot();
+    } finally {
+      run.executing = false;
+      signal?.removeEventListener('abort', abort);
+    }
+  }
+
+  function endAgentRun(runId) {
+    const run = state.agentRun;
+    if (!run || run.id !== runId) return getAssistantSnapshot();
+    checkAgentRunContext();
+    if (state.simulationJob?.agentRunId === run.id)
+      stopSimulation('', agentError('AGENT_STOPPED', 'Max 本轮执行已结束。'));
+    const unchangedContext =
+      run.expectedVersion === state.editVersion &&
+      run.generation === state.generation &&
+      run.sessionUid === state.sessionUid &&
+      run.cid === state.cid &&
+      !state.wireStart &&
+      run.error?.code !== 'AGENT_STALE';
+    if (unchangedContext && !state.editable) state.aiUndo = null;
+    if (unchangedContext && state.editable) {
+      state.aiUndo = run.changed
+        ? {
+            document: run.checkpoint.document,
+            checkpoint: run.checkpoint,
+            electrical: true,
+            editVersion: state.editVersion,
+          }
+        : run.priorUndo;
+    }
+    state.agentRun = null;
+    notifyCircuitEditor();
+    return getAssistantSnapshot();
+  }
+
+  function applyAssistantActions(actions, { expectedVersion, onSimulation } = {}) {
     const protocol = window.CircuitAIActions;
     if (!protocol) throw new Error('AI 操作模块尚未加载，请刷新后重试。');
     if (!Array.isArray(actions)) throw new Error('AI 操作列表无效。');
@@ -1514,12 +1692,16 @@
         } else if (action.traceIds.length) throw new Error('当前没有有效波形，请先运行仿真。');
       }
     });
-    if (run) runSimulation();
+    if (run) {
+      const completion = runSimulation();
+      onSimulation?.(completion);
+    }
     notifyCircuitEditor();
     return getAssistantSnapshot();
   }
 
   function undoAssistantActions() {
+    if (state.agentRun) throw new Error('请先停止 Max，再撤销本轮操作。');
     if (
       !state.editable ||
       state.saving ||
@@ -1527,14 +1709,23 @@
       state.aiUndo.editVersion !== state.editVersion
     )
       throw new Error('画布已继续编辑，无法撤销上一批 Max 操作。');
-    const electrical = state.aiUndo.electrical !== false;
-    state.document = clone(state.aiUndo.document);
+    const undo = state.aiUndo;
+    const electrical = undo.electrical !== false;
+    state.document = clone(undo.document);
     state.selectedId = '';
     state.selectedWire = '';
     state.wireStart = null;
     state.wirePoints = [];
     changed({ electrical });
-    if (!electrical && state.result) updatePlot(plot.resolveDisplay(state.result, state.document));
+    if (undo.checkpoint) {
+      state.plotDisplay = undo.checkpoint.plotDisplay ? clone(undo.checkpoint.plotDisplay) : null;
+      state.plotModified = undo.checkpoint.plotModified;
+      if (undo.checkpoint.result) {
+        showResult(undo.checkpoint.result);
+        setFrame(undo.checkpoint.frame);
+      }
+    } else if (!electrical && state.result)
+      updatePlot(plot.resolveDisplay(state.result, state.document));
     clearAiHighlights();
     renderAnalysis();
     renderInspector();
@@ -1685,10 +1876,17 @@
   }
 
   function runSimulation() {
-    if (state.worker) return;
-    if (!validateParameterInputs()) return;
-    capturePlotSettings();
+    let job = null;
+    const rejected = (error) => {
+      const pending = Promise.reject(error);
+      // Manual toolbar handlers intentionally do not await the worker.
+      pending.catch(() => {});
+      return pending;
+    };
+    if (state.worker) return rejected(agentError('AGENT_BUSY', '仿真仍在运行，请等待结果。'));
     try {
+      if (!validateParameterInputs()) throw new Error('请先修正当前参数或标记输入。');
+      capturePlotSettings();
       if (state.editable) {
         const analysis = readAnalysis();
         if (JSON.stringify(analysis) !== JSON.stringify(state.document.analysis)) {
@@ -1699,49 +1897,73 @@
       const doc = engine.validateDocument(state.document);
       stopPlayback();
       state.result = null;
+      state.plotResult = null;
+      state.simulationError = null;
       $('results').hidden = true;
       const worker = new Worker('/circuit-worker.js');
       state.worker = worker;
       state.runId += 1;
       const id = state.runId;
+      let resolve;
+      let reject;
+      const promise = new Promise((accept, fail) => {
+        resolve = accept;
+        reject = fail;
+      });
+      promise.catch(() => {});
+      job = {
+        id,
+        promise,
+        resolve,
+        reject,
+        agentRunId: state.agentRun?.applying ? state.agentRun.id : null,
+      };
+      state.simulationJob = job;
       updateControls();
       setStatus('正在求解电路…', '', 'run-status');
+      const fail = (message, code = 'SIMULATION_FAILED') => {
+        if (state.simulationJob !== job) return;
+        state.simulationError = String(message).slice(0, 1000);
+        finishSimulation(job, agentError(code, state.simulationError));
+        renderSchematic();
+        setStatus(state.simulationError, 'error', 'run-status');
+      };
       worker.onmessage = (event) => {
-        if (id !== state.runId || event.data.id !== id) return;
-        window.clearTimeout(state.workerTimer);
-        state.workerTimer = 0;
-        worker.terminate();
-        state.worker = null;
-        updateControls();
-        if (event.data.error) {
-          renderSchematic();
-          setStatus(event.data.error, 'error', 'run-status');
-        } else {
+        if (id !== state.runId || event.data.id !== id || state.simulationJob !== job) return;
+        if (job.agentRunId && !checkAgentRunContext()) return;
+        if (event.data.error) fail(event.data.error);
+        else {
           try {
             showResult(event.data.result);
+            finishSimulation(job, null, event.data.result);
           } catch (error) {
-            setStatus(`结果显示失败：${error.message}`, 'error', 'run-status');
+            state.result = null;
+            state.plotResult = null;
+            $('results').hidden = true;
+            fail(`结果显示失败：${error.message}`);
           }
         }
       };
       worker.onerror = () => {
         if (id !== state.runId) return;
-        stopSimulation();
-        setStatus('仿真线程启动或运行失败，请刷新后重试。', 'error', 'run-status');
+        fail('仿真线程启动或运行失败，请检查电路后重试。');
       };
       state.workerTimer = window.setTimeout(() => {
         if (id !== state.runId) return;
-        stopSimulation();
-        setStatus(
+        fail(
           '求解超过 20 秒，已停止仿真。请减少采样点、检查参数或简化电路后重试。',
-          'error',
-          'run-status',
+          'SIMULATION_TIMEOUT',
         );
       }, 20000);
       worker.postMessage({ id, document: doc, options: doc.analysis });
+      return promise;
     } catch (error) {
-      stopSimulation();
-      setStatus(error.message || '无法运行仿真。', 'error', 'run-status');
+      state.simulationError = error.message || '无法运行仿真。';
+      const failure = agentError('SIMULATION_FAILED', state.simulationError);
+      if (job) finishSimulation(job, failure);
+      else stopSimulation();
+      setStatus(state.simulationError, 'error', 'run-status');
+      return job?.promise || rejected(failure);
     }
   }
 
@@ -2391,6 +2613,9 @@
   window.FreeBbsCircuitEditor = {
     getSnapshot: getAssistantSnapshot,
     applyActions: applyAssistantActions,
+    beginAgentRun,
+    executeAgentActions,
+    endAgentRun,
     undoAiActions: undoAssistantActions,
     clearHighlights: clearAiHighlights,
   };

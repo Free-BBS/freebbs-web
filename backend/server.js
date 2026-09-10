@@ -1512,12 +1512,13 @@ function buildTrustedAgentHeaders(payload, user = null) {
     : {};
 }
 
-async function postAgentChat(payload, user = null) {
+async function postAgentChat(payload, user = null, { signal } = {}) {
   const enrichedPayload = await enrichAgentCircuitContext(payload, {
     pool,
     publicWebUrl: config.publicWebUrl,
   });
   const trustedHeaders = buildTrustedAgentHeaders(payload, user);
+  signal?.throwIfAborted();
 
   return fetch(`${config.agentBaseUrl.replace(/\/$/, '')}/api/v1/chat`, {
     method: 'POST',
@@ -1526,6 +1527,7 @@ async function postAgentChat(payload, user = null) {
       ...trustedHeaders,
     },
     body: JSON.stringify(enrichedPayload),
+    signal,
   });
 }
 

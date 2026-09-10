@@ -15,6 +15,9 @@
     sending: false,
     history: [],
     proposals: [],
+    runner: null,
+    agentStep: 0,
+    agentArticles: new Map(),
     returnFocus: null,
     inertElements: [],
   };
@@ -27,6 +30,22 @@
   function status(message = '', error = false) {
     $('status').textContent = message;
     $('status').classList.toggle('is-error', error);
+  }
+
+  function updateRunbar() {
+    const active = Boolean(state.runner?.isRunning());
+    $('runbar').hidden = !active || state.open;
+    $('header-stop').hidden = !active || state.tab === 'max';
+    $('runbar-status').textContent = state.agentStep
+      ? `Max 正在执行 · 第 ${state.agentStep} 步`
+      : 'Max 正在准备';
+    $('toggle').classList.toggle('is-agent-running', active);
+  }
+
+  function updateMode() {
+    const agent = $('mode').value === 'agent';
+    if (!state.sending) $('send').textContent = agent ? '开始' : '发送';
+    $('mode').disabled = state.sending;
   }
 
   function questionKey() {
@@ -88,6 +107,7 @@
   }
 
   function notifySidebar() {
+    updateRunbar();
     window.dispatchEvent(
       new CustomEvent('freebbs:circuit-sidebar-change', {
         detail: { open: state.open, tab: state.tab, modal: state.open && !desktop.matches },
@@ -171,11 +191,12 @@
       ? '当前画布 · 包含未保存的草稿'
       : '只读电路 · 可提问、查看高亮与波形';
     $('undo').disabled = !snapshot.canUndoAi || state.sending;
+    $('clear-highlights').disabled = state.sending;
     state.proposals.forEach((proposal) => {
       if (proposal.applied) return;
       const stale = proposal.editVersion !== snapshot.editVersion;
       const readOnly = proposal.editing && !snapshot.canEdit;
-      proposal.button.disabled = stale || readOnly || proposal.applying;
+      proposal.button.disabled = state.sending || stale || readOnly || proposal.applying;
       proposal.retry.hidden = !stale;
       proposal.note.textContent = stale
         ? '电路已变化，请基于当前草稿重新提问。'
@@ -234,6 +255,7 @@
       retry,
     };
     button.addEventListener('click', async () => {
+      if (state.sending) return;
       proposal.applying = true;
       button.disabled = true;
       try {
@@ -273,6 +295,155 @@
     updateEditorState(editor().getSnapshot());
   }
 
+  function agentEvent(event) {
+    if (event.type === 'step') {
+      state.agentStep = event.step;
+      const article = appendMessage('assistant', '正在读取当前电路和操作结果…', {
+        pending: true,
+      });
+      article.dataset.agentStep = event.step;
+      article.querySelector('.circuit-ai-message-author').textContent = `Max · 第 ${event.step} 步`;
+      state.agentArticles.set(event.step, article);
+      status(`第 ${event.step} 步 · 正在决定下一步操作。`);
+      updateRunbar();
+      return;
+    }
+    const article = state.agentArticles.get(event.step);
+    if (event.type === 'answer' && article) {
+      renderContent(article.querySelector('.circuit-ai-message-body'), event.answer);
+      article.classList.remove('is-pending');
+    }
+    if (event.type === 'actions' && article) {
+      const section = document.createElement('section');
+      section.className = 'circuit-agent-actions';
+      section.setAttribute('aria-label', 'Max 执行操作');
+      const list = document.createElement('ul');
+      event.actions.forEach((action) => {
+        const item = document.createElement('li');
+        item.textContent = window.CircuitAIActions.describeAction(action);
+        list.append(item);
+      });
+      const outcome = document.createElement('p');
+      outcome.className = 'circuit-agent-outcome';
+      outcome.dataset.agentOutcome = '';
+      outcome.textContent = event.actions.some((action) => action.type === 'run_simulation')
+        ? '正在执行并等待仿真结果…'
+        : '正在执行…';
+      section.append(list, outcome);
+      article.append(section);
+      status(`第 ${event.step} 步 · 正在执行 ${event.actions.length} 项操作。`);
+    }
+    if (event.type === 'observation' && article) {
+      let outcome = article.querySelector('[data-agent-outcome]');
+      if (!outcome) {
+        outcome = document.createElement('p');
+        outcome.className = 'circuit-agent-outcome';
+        outcome.dataset.agentOutcome = '';
+        article.append(outcome);
+      }
+      outcome.dataset.status = event.status;
+      outcome.textContent =
+        event.status === 'success' ? '操作已完成，正在读取结果并决定下一步。' : event.summary;
+      outcome.classList.toggle('is-error', event.status === 'error');
+      article.classList.remove('is-pending');
+      updateEditorState(editor().getSnapshot());
+    }
+    if (event.type === 'finish') {
+      if (article?.classList.contains('is-pending')) {
+        article.classList.remove('is-pending');
+        article.querySelector('.circuit-ai-message-body').textContent = event.reason;
+      }
+      const note = document.createElement('p');
+      note.className = 'circuit-agent-outcome';
+      note.dataset.agentFinish = event.status;
+      note.textContent = event.reason;
+      note.classList.toggle('is-error', event.status === 'error');
+      (article || $('thread')).append(note);
+      status(event.reason, ['error', 'stale', 'timeout'].includes(event.status));
+    }
+    $('thread').scrollTop = $('thread').scrollHeight;
+  }
+
+  async function requestAgentStep(payload, { signal }) {
+    const controller = new AbortController();
+    let timedOut = false;
+    const cancel = () => controller.abort(signal.reason);
+    if (signal.aborted) cancel();
+    else signal.addEventListener('abort', cancel, { once: true });
+    const timer = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 180000);
+    try {
+      return await app.callApi('/ai/circuit/chat', {
+        method: 'POST',
+        signal: controller.signal,
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      if (timedOut && !signal.aborted) throw new Error('等待 Max 回答超时，请稍后重试。');
+      if (error.status === 401) {
+        $('login').hidden = false;
+        error.code = 'AGENT_STOPPED';
+      }
+      throw error;
+    } finally {
+      signal.removeEventListener('abort', cancel);
+      window.clearTimeout(timer);
+    }
+  }
+
+  async function submitAgent(question) {
+    if (!window.FreeBbsCircuitAgent) {
+      status('自主执行模块尚未加载，请刷新后重试。', true);
+      return;
+    }
+    state.sending = true;
+    state.agentStep = 0;
+    state.agentArticles = new Map();
+    $('input').disabled = true;
+    $('send').hidden = true;
+    $('stop').hidden = false;
+    $('login').hidden = true;
+    $('thread').setAttribute('aria-busy', 'true');
+    updateMode();
+    appendMessage('user', question);
+    state.runner = window.FreeBbsCircuitAgent.create({
+      getSnapshot: () => editor().getSnapshot(),
+      beginRun: () => editor().beginAgentRun(),
+      endRun: (runId) => editor().endAgentRun(runId),
+      executeActions: (actions, options) => editor().executeAgentActions(actions, options),
+      requestStep: requestAgentStep,
+      onEvent: agentEvent,
+    });
+    try {
+      updateEditorState(editor().getSnapshot());
+      const running = state.runner.run(question, { history: state.history.slice(-8) });
+      updateRunbar();
+      const result = await running;
+      const outcome = [result.answer, result.reason].filter(Boolean).join('\n\n').slice(0, 4000);
+      state.history.push(
+        { role: 'user', content: question },
+        { role: 'assistant', content: outcome || '本轮执行已结束。' },
+      );
+      state.history = state.history.slice(-8);
+      if (result.status === 'complete') $('input').value = '';
+      retainQuestion();
+    } catch (error) {
+      status(error.message || '无法开始自主执行，请重试。', true);
+    } finally {
+      state.sending = false;
+      $('input').disabled = false;
+      $('send').hidden = false;
+      $('send').disabled = false;
+      $('stop').hidden = true;
+      $('thread').setAttribute('aria-busy', 'false');
+      updateMode();
+      updateRunbar();
+      updateEditorState(editor().getSnapshot());
+    }
+  }
+
   async function submit(event) {
     event.preventDefault();
     const question = $('input').value.trim();
@@ -292,7 +463,12 @@
       status(error.message, true);
       return;
     }
+    if ($('mode').value === 'agent') {
+      await submitAgent(question);
+      return;
+    }
     state.sending = true;
+    updateMode();
     $('input').disabled = true;
     $('send').disabled = true;
     $('send').textContent = '思考中…';
@@ -349,6 +525,7 @@
     } finally {
       window.clearTimeout(timeout);
       state.sending = false;
+      updateMode();
       $('input').disabled = false;
       $('send').disabled = false;
       $('send').textContent = '发送';
@@ -376,8 +553,24 @@
   $('close').addEventListener('click', () => setOpen(false, { focus: true }));
   $('backdrop').addEventListener('click', () => setOpen(false, { focus: true }));
   $('form').addEventListener('submit', submit);
+  $('mode').addEventListener('change', () => {
+    updateMode();
+    try {
+      localStorage.setItem('free_bbs_circuit_max_mode', $('mode').value);
+    } catch {
+      // Mode selection remains available without browser storage.
+    }
+  });
+  const stopAgent = () => state.runner?.stop('已停止自主执行，已完成的修改保留在草稿中，可撤销。');
+  $('stop').addEventListener('click', stopAgent);
+  $('header-stop').addEventListener('click', stopAgent);
+  $('runbar-stop').addEventListener('click', stopAgent);
+  $('runbar-open').addEventListener('click', () => setOpen(true, { focus: true, tab: 'max' }));
   $('input').addEventListener('input', retainQuestion);
-  window.addEventListener('pagehide', retainQuestion);
+  window.addEventListener('pagehide', () => {
+    retainQuestion();
+    state.runner?.stop('页面已离开，本轮执行已停止。');
+  });
   $('input').addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing) {
       event.preventDefault();
@@ -408,7 +601,7 @@
         proposal.button.textContent = '已撤销';
         proposal.note.textContent = '这批修改已撤销，电路已恢复。';
       }
-      status('已撤销最近一次 AI 修改。');
+      status('已撤销最近一轮 Max 修改。');
     } catch (error) {
       status(error.message, true);
     }
@@ -461,6 +654,13 @@
     open: () => setOpen(true, { focus: true, tab: 'max' }),
   };
   if (window.FreeBbsCircuitEditor) updateEditorState(editor().getSnapshot());
+  try {
+    if (localStorage.getItem('free_bbs_circuit_max_mode') === 'suggest')
+      $('mode').value = 'suggest';
+  } catch {
+    // Autonomous execution is the default when storage is unavailable.
+  }
+  updateMode();
   restoreQuestion();
   setOpen(desktop.matches);
 })();
