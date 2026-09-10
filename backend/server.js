@@ -7,6 +7,7 @@ const pool = require('./db');
 const config = require('./config');
 const { buildAiDialogExport, buildAiDialogExportFileName } = require('./ai-dialog-export');
 const { enrichAgentCircuitContext } = require('./agent-circuits');
+const { createCircuitAssistantRouter } = require('./circuit-assistant');
 const { getDiscussionPreview } = require('./discussion-preview');
 const { buildBackendHealth } = require('./health');
 const { hashPassword, verifyPassword } = require('./password');
@@ -2353,6 +2354,11 @@ app.post('/api/ai/chat', async (request, response) => {
     });
   }
 });
+
+app.use(
+  '/api/ai/circuit',
+  createCircuitAssistantRouter({ requireAuth, postAgentChat, buildAgentChatPayload }),
+);
 
 app.post('/api/ai/knowledge/chat', async (request, response) => {
   const user = await requireAuth(request, response);

@@ -41,6 +41,17 @@
     return `${Number((value / factor).toPrecision(4))} ${prefix}${unit}`.trim();
   }
 
+  // Mirror in local symbol axes, then rotate. This changes geometry, never pin identity.
+  function transformPoint(component, x, y) {
+    const localX = x * (component.mirrorX ? -1 : 1);
+    const localY = y * (component.mirrorY ? -1 : 1);
+    const angle = ((Number(component.rotation) || 0) * Math.PI) / 180;
+    return {
+      x: Math.round(localX * Math.cos(angle) - localY * Math.sin(angle)),
+      y: Math.round(localX * Math.sin(angle) + localY * Math.cos(angle)),
+    };
+  }
+
   function getPins(component) {
     let offsets = [
       [-40, 0, '+'],
@@ -73,14 +84,16 @@
         [-18, 44, 'C+'],
         [18, 44, 'C−'],
       ];
-    const angle = ((Number(component.rotation) || 0) * Math.PI) / 180;
-    return offsets.map(([x, y, label], pin) => ({
-      componentId: component.id,
-      pin,
-      label,
-      x: Number(component.x) + Math.round(x * Math.cos(angle) - y * Math.sin(angle)),
-      y: Number(component.y) + Math.round(x * Math.sin(angle) + y * Math.cos(angle)),
-    }));
+    return offsets.map(([x, y, label], pin) => {
+      const position = transformPoint(component, x, y);
+      return {
+        componentId: component.id,
+        pin,
+        label,
+        x: (Number(component.x) || 0) + position.x,
+        y: (Number(component.y) || 0) + position.y,
+      };
+    });
   }
 
   function getWireRoute(wire, componentList) {
@@ -178,6 +191,81 @@
     return labels[component.type] || component.type;
   }
 
+  function componentLabelLayout(component) {
+    const transistor = ['bjt', 'mosfet'].includes(component.type);
+    // Bounds include terminal dots and the current indicator, so text stays clear
+    // of asymmetric shapes and extra control terminals at every orientation.
+    let bounds = [-44, -26, 44, 40];
+    if (transistor) bounds = [-44, -44, 20, 44];
+    else if (component.type === 'ground') bounds = [-19, -32, 19, 16];
+    else if (component.type === 'opamp') bounds = [-44, -37, 44, 54];
+    else if (['vcvs', 'vccs'].includes(component.type)) bounds = [-44, -26, 44, 64];
+    const [left, top, right, bottom] = bounds;
+    const corners = [
+      transformPoint(component, left, top),
+      transformPoint(component, right, top),
+      transformPoint(component, right, bottom),
+      transformPoint(component, left, bottom),
+    ];
+    const box = {
+      left: Math.min(...corners.map((point) => point.x)),
+      right: Math.max(...corners.map((point) => point.x)),
+      top: Math.min(...corners.map((point) => point.y)),
+      bottom: Math.max(...corners.map((point) => point.y)),
+    };
+    const sideLabel = transistor || component.type === 'ground';
+    const normal = transformPoint(component, sideLabel ? 1 : 0, sideLabel ? 0 : -1);
+    const count = sourceValueLines(component)?.length || 1;
+    let side = 'top';
+    let x = 0;
+    let y = box.top - 20 - count * 14;
+    let anchor = 'middle';
+    if (normal.x) {
+      side = normal.x > 0 ? 'right' : 'left';
+      x = normal.x > 0 ? box.right + 12 : box.left - 12;
+      y = -4 - (count - 1) * 7;
+      anchor = normal.x > 0 ? 'start' : 'end';
+    } else if (normal.y > 0) {
+      side = 'bottom';
+      y = box.bottom + 28;
+    }
+    return { x, nameY: y, valueY: y + 18, anchor, side, bounds: box };
+  }
+
+  function currentIndicatorGeometry(component, current = 1) {
+    let points = [
+      [-13, 34],
+      [13, 34],
+    ];
+    if (['bjt', 'mosfet'].includes(component.type))
+      points = [
+        [14, -13],
+        [14, 13],
+      ];
+    else if (component.type === 'opamp')
+      points = [
+        [13, 48],
+        [-13, 48],
+      ];
+    else if (['vcvs', 'vccs'].includes(component.type))
+      points = [
+        [-13, 58],
+        [13, 58],
+      ];
+    const transformed = points.map(([x, y]) => transformPoint(component, x, y));
+    if (current < 0) transformed.reverse();
+    const [from, to] = transformed;
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    const dx = (to.x - from.x) / length;
+    const dy = (to.y - from.y) / length;
+    return {
+      from,
+      to,
+      path: `M ${from.x} ${from.y} L ${to.x} ${to.y}`,
+      arrow: `M ${to.x - dx * 6 - dy * 4} ${to.y - dy * 6 + dx * 4} L ${to.x} ${to.y} L ${to.x - dx * 6 + dy * 4} ${to.y - dy * 6 - dx * 4}`,
+    };
+  }
+
   function addSymbol(group, component) {
     const line = (d) => group.append(svgElement('path', { d, fill: 'none' }));
     const circle = (r) =>
@@ -189,8 +277,10 @@
         svgElement(
           'text',
           {
-            x,
-            y,
+            x: 0,
+            y: size * 0.35,
+            // Keep glyphs readable while their anchors follow the transformed symbol.
+            transform: `translate(${x} ${y - size * 0.35}) scale(${component.mirrorX ? -1 : 1} ${component.mirrorY ? -1 : 1}) rotate(${-(component.rotation || 0)})`,
             'font-size': size,
             'text-anchor': 'middle',
             stroke: 'none',
@@ -240,8 +330,8 @@
       else voltageMarks();
       if (['vcvs', 'vccs'].includes(type)) {
         line('M -18 44 V 32 M 18 44 V 32');
-        text('C+', -18, 30, 9);
-        text('C−', 18, 30, 9);
+        text('C+', -18, 26, 9);
+        text('C−', 18, 26, 9);
       }
     } else if (type === 'nonlinear') {
       line('M -40 0 H -23 M 23 0 H 40');
@@ -368,7 +458,13 @@
       fill: 'var(--circuit-accent,#48b6bd)',
       'stroke-width': 2,
     });
-    connectionLayer.append(connectionHighlight, connectionPath, connectionLanding);
+    const connectionCorners = svgElement('g', { 'data-draft-corners': '' });
+    connectionLayer.append(
+      connectionHighlight,
+      connectionPath,
+      connectionLanding,
+      connectionCorners,
+    );
     svg.append(connectionLayer);
     let pinDrag = null;
 
@@ -431,9 +527,25 @@
       if (!from) return clearConnectionPreview();
       const target = connectionTarget(position, origin);
       const to = target?.position || position;
-      const middleX = (from.x + to.x) / 2;
+      const points = origin === options.wireStart ? options.wirePoints || [] : [];
+      const route = [from, ...points, to];
       connectionLayer.setAttribute('visibility', 'visible');
-      connectionPath.setAttribute('d', `M ${from.x} ${from.y} H ${middleX} V ${to.y} H ${to.x}`);
+      connectionPath.setAttribute(
+        'd',
+        route.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' '),
+      );
+      connectionCorners.replaceChildren();
+      points.forEach((point) =>
+        connectionCorners.append(
+          svgElement('circle', {
+            cx: point.x,
+            cy: point.y,
+            r: 4,
+            fill: 'var(--circuit-accent,#48b6bd)',
+            'data-draft-corner': '',
+          }),
+        ),
+      );
       connectionHighlight.setAttribute(
         'd',
         target?.wireId ? wirePath(wires.find(({ wire }) => wire.id === target.wireId).wire) : '',
@@ -885,7 +997,25 @@
         if (options.wireStart && !pinDrag) previewConnection(pointerPosition(event));
       });
       svg.addEventListener('pointerleave', () => {
-        if (!pinDrag) clearConnectionPreview();
+        if (!pinDrag && !options.wireStart) clearConnectionPreview();
+      });
+      svg.addEventListener('click', (event) => {
+        if (
+          !options.wireStart ||
+          event.defaultPrevented ||
+          event.target.closest('.circuit-node, .circuit-wire-hit, .circuit-wire-controls')
+        )
+          return;
+        const position = pointerPosition(event);
+        const target = connectionTarget(position, options.wireStart);
+        if (target)
+          options.onConnect?.(
+            options.wireStart,
+            target.endpoint
+              ? { endpoint: target.endpoint }
+              : { wireId: target.wireId, position: target.position },
+          );
+        else options.onCanvasPoint?.(position);
       });
     }
 
@@ -905,13 +1035,14 @@
         );
       }
       group.append(svgElement('title', {}, `${component.id} · ${componentValue(component)}`));
+      const label = componentLabelLayout(component);
       if (component.type !== 'junction')
         group.append(
           svgElement('rect', {
-            x: -54,
-            y: -54,
-            width: 108,
-            height: 114,
+            x: label.bounds.left - 9,
+            y: label.bounds.top - 9,
+            width: label.bounds.right - label.bounds.left + 18,
+            height: label.bounds.bottom - label.bounds.top + 18,
             rx: 7,
             class: 'circuit-selection',
             fill: 'transparent',
@@ -922,47 +1053,47 @@
           }),
         );
       const symbol = svgElement('g', {
-        transform: `rotate(${component.rotation || 0})`,
+        transform: `rotate(${component.rotation || 0}) scale(${component.mirrorX ? -1 : 1} ${component.mirrorY ? -1 : 1})`,
+        'data-component-symbol': component.id,
         stroke: 'currentColor',
         fill: 'none',
       });
       addSymbol(symbol, component);
       group.append(symbol);
-      const labelX = ['bjt', 'mosfet'].includes(component.type) ? 25 : 0;
-      const labelY = ['bjt', 'mosfet'].includes(component.type) ? -14 : -33;
       if (component.type !== 'junction')
         group.append(
           svgElement(
             'text',
             {
-              x: labelX,
-              y: labelY,
+              x: label.x,
+              y: label.nameY,
+              'data-component-label': 'name',
               fill: 'currentColor',
               'font-size': 14,
               'font-weight': 600,
-              'text-anchor': labelX ? 'start' : 'middle',
+              'text-anchor': label.anchor,
               stroke: 'none',
             },
             component.id,
           ),
         );
       const sourceLines = sourceValueLines(component);
-      const readingY = ['vcvs', 'vccs'].includes(component.type) ? 68 : 58;
       const reading = svgElement(
         'text',
         {
-          x: 0,
-          y: sourceLines ? 42 : readingY,
+          x: label.x,
+          y: label.valueY,
+          'data-component-label': 'value',
           fill: 'var(--circuit-muted,#9db4bb)',
           'font-size': 12,
-          'text-anchor': 'middle',
+          'text-anchor': label.anchor,
           stroke: 'none',
         },
         sourceLines ? undefined : componentValue(component),
       );
       if (sourceLines)
         sourceLines.forEach((value, index) =>
-          reading.append(svgElement('tspan', { x: 0, dy: index ? 14 : 0 }, value)),
+          reading.append(svgElement('tspan', { x: label.x, dy: index ? 14 : 0 }, value)),
         );
       if (component.type !== 'junction') group.append(reading);
       const pins = [];
@@ -1083,6 +1214,8 @@
                   ? { endpoint: target.endpoint }
                   : { wireId: target.wireId, position: target.position },
               );
+            else if (moved && component.type !== 'junction')
+              options.onWireDraftStart?.(endpoint, pointerPosition(event));
           });
           hit.addEventListener('pointercancel', (event) => {
             if (pinDrag?.hit !== hit || pinDrag.pointerId !== event.pointerId) return;
@@ -1117,14 +1250,23 @@
         pins.push({ dot, net: netMap[`${component.id}:${pin.pin}`] });
       });
       const indicator = svgElement('path', {
-        d: 'M -13 27 H 13',
+        d: currentIndicatorGeometry(component).path,
+        'data-current-indicator': component.id,
         fill: 'none',
         stroke: 'var(--circuit-accent,#48b6bd)',
         'stroke-width': 3,
         visibility: 'hidden',
       });
-      if (component.type !== 'junction') group.append(indicator);
-      nodes.push({ component, reading, pins, indicator });
+      const currentArrow = svgElement('path', {
+        d: currentIndicatorGeometry(component).arrow,
+        'data-current-arrow': component.id,
+        fill: 'none',
+        stroke: 'var(--circuit-accent,#48b6bd)',
+        'stroke-width': 2,
+        visibility: 'hidden',
+      });
+      if (component.type !== 'junction') group.append(indicator, currentArrow);
+      nodes.push({ component, reading, pins, indicator, currentArrow });
       nodeLayer.append(group);
       if (options.selectable && !options.interactive) {
         group.addEventListener('click', () => options.onComponentClick?.(component.id));
@@ -1217,7 +1359,7 @@
         ),
       );
       nodes.forEach((node) => {
-        const { component, reading, pins, indicator } = node;
+        const { component, reading, pins, indicator, currentArrow } = node;
         pins.forEach(({ dot, net }) => dot.setAttribute('stroke', color(net)));
         if (frame && ['voltmeter', 'oscilloscope'].includes(component.type)) {
           const a = voltages[netMap[`${component.id}:0`]] || 0;
@@ -1228,19 +1370,25 @@
         else if (!frame && !sourceValueLines(component))
           reading.textContent = componentValue(component);
         const current = frame?.currents?.[component.id] || 0;
-        indicator.setAttribute(
-          'visibility',
+        const geometry = currentIndicatorGeometry(component, current);
+        indicator.setAttribute('d', geometry.path);
+        currentArrow.setAttribute('d', geometry.arrow);
+        const visibility =
           options.animate &&
-            Math.abs(current) > 1e-12 &&
-            !['ground', 'junction'].includes(component.type)
+          Math.abs(current) > 1e-12 &&
+          !['ground', 'junction'].includes(component.type)
             ? 'visible'
-            : 'hidden',
-        );
+            : 'hidden';
+        indicator.setAttribute('visibility', visibility);
+        currentArrow.setAttribute('visibility', visibility);
         indicator.setAttribute('class', options.animate ? 'circuit-current' : '');
-        indicator.style.animationDirection = current < 0 ? 'reverse' : 'normal';
+        // The actual path reverses with signed current; dashes always move toward its end.
+        indicator.style.animationDirection = 'normal';
       });
     }
     container.append(svg);
+    if (options.wireStart && options.wirePoints?.length)
+      previewConnection(options.wirePoints.at(-1));
     const focusRequest = wireFocusRequests.get(container);
     wireFocusRequests.delete(container);
     if (focusRequest) {
@@ -1344,12 +1492,14 @@
       );
       const group = document.createElement('section');
       group.className = 'circuit-wave-group';
+      group.setAttribute('data-trace-ids', JSON.stringify(traces.map((trace) => trace.id)));
       const heading = document.createElement('div');
       heading.className = 'circuit-wave-legend';
       heading.style.cssText =
         'display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;padding:8px 0';
       traces.forEach((trace, index) => {
         const item = document.createElement('span');
+        item.setAttribute('data-trace-id', trace.id);
         item.style.color = traceColors[index % traceColors.length];
         item.textContent = `${trace.label}${unit === '°' ? ' · 相位' : ''}`;
         heading.append(item);
@@ -1457,6 +1607,7 @@
               cx: px(xValues[0]),
               cy: py(values[0]),
               r: 4,
+              'data-trace-id': trace.id,
               fill: traceColors[traceIndex % traceColors.length],
             }),
           );
@@ -1464,6 +1615,7 @@
           svg.append(
             svgElement('path', {
               d: path,
+              'data-trace-id': trace.id,
               fill: 'none',
               stroke: traceColors[traceIndex % traceColors.length],
               'stroke-width': 2.2,
@@ -1509,6 +1661,9 @@
 
   const exported = {
     getPins,
+    transformPoint,
+    componentLabelLayout,
+    currentIndicatorGeometry,
     getWireRoute,
     insertWirePoint,
     formatValue,

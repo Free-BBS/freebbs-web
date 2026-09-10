@@ -5,6 +5,9 @@
 `{version:1, components:[], wires:[], analysis:{type:'transient', stop:0.01, step:0.00001, initial:'zero'}}`
 
 元件：`{id:'R1', type:'resistor', x:240, y:160, rotation:0, params:{resistance:1000}}`。
+可选 `mirrorX`、`mirrorY` 为布尔值，分别翻转元件的局部 X、Y 坐标，先镜像再按 `rotation` 旋转；省略与 `false` 均表示不镜像，旧文档不会自动补入字段。符号、引脚、电流箭头和极性标识共享变换，引脚索引及电气连接不变。画布水平/竖直镜像在 90/270 度旋转时应交换局部镜像轴。元件名称、参数以及符号内的文字保持正向可读，标注移至变换后的符号及引脚外侧。
+编辑器连线交互：点击引脚拿起导线，点击空白画布按 10 单位网格添加拐点，点击目标引脚或已有导线完成；从引脚拖到空白处松开也会进入此模式。Backspace 或“撤回拐点”撤回末点，Esc 取消。完成前仅显示草稿，连接确认后才提交导线及中间连接点；没有拐点的新线显式保存 `points: []`。
+
 导线：`{id:'w1', from:{componentId:'R1',pin:0}, to:{componentId:'V1',pin:0}, points:[{x:300,y:160}]}`。可选 `points` 只存中间拐点，最多32个；省略时自动正交走线，显式空数组表示直线。端点由引脚确定，移动元件不会改变拐点坐标。pin 为从0开始的索引。导线端点均为引脚，导线中途接线通过 junction 元件表示：目标导线分成两段并共用该连接点。普通交叉不产生连接。所有 ground 的引脚为同一零电位。坐标以画布 SVG viewBox 为准，rotation 为 0/90/180/270。最多80元件、200导线。
 
 类型和引脚顺序：
@@ -34,6 +37,8 @@
 分析：`{type:'dc'}`；`{type:'transient',stop,step,initial:'zero'|'operating-point'}`；`{type:'sweep',componentId:'V1',parameter:'dc',start:0,stop:5,points:101}`；`{type:'ac',start:10,stop:1e5,points:101,scale:'log'|'linear'}`。扫描参数也支持 beta、w、l、k 等数值参数。瞬态最多100001点，参数和AC扫描最多2000点，非收敛/浮空/非法公式须可读报错。
 
 结果：`{analysis, x:[], xLabel, xUnit, traces:[{id,label,unit,values:[],phase?:[]}], frames:[{voltages:{net:value},currents:{componentId:value}}], warnings:[]}`。每个元件都有 `V:<id>`（正负引脚压差；晶体管取首末引脚）和 `I:<id>` 的 trace，ground除外。AC values 为幅值，phase为角度；frames可以只包含直流工作点，动态图只播放时域帧。仪表无独立电流量测时为理想开路，电流表串接0V源。所有值必须有限。
+
+电流动画与 `I:<id>` 的符号一致：两端元件正向为 pin 0→1，BJT 为集电极→发射极，MOS 为漏极→源极；运放正向为流入输出端的支路电流（输出端→内部参考地）。负值同时反转流动路径和箭头。旋转、镜像只改变这些方向在画布上的朝向，不改变仿真读数；独立电流源符号内箭头表示参数的正参考方向，实际负电流由动画反向表示。
 
 工作线程 `public/circuit-worker.js` 接收 `{id,document,options}` 并发送 `{id,result}` 或 `{id,error}`；主线程可terminate取消。
 

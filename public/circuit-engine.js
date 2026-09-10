@@ -339,12 +339,19 @@
       const rotation = component.rotation ?? 0;
       if (Math.abs(x) > 100000 || Math.abs(y) > 100000 || ![0, 90, 180, 270].includes(rotation))
         throw new Error('元件坐标超出画布范围，或旋转角度不是 0/90/180/270。');
+      const mirrors = {};
+      for (const axis of ['mirrorX', 'mirrorY']) {
+        if (!Object.hasOwn(component, axis)) continue;
+        if (typeof component[axis] !== 'boolean') throw new Error('元件镜像设置必须为布尔值。');
+        mirrors[axis] = component[axis];
+      }
       return {
         id: component.id,
         type: component.type,
         x,
         y,
         rotation,
+        ...mirrors,
         params: validateParameters(component),
       };
     });

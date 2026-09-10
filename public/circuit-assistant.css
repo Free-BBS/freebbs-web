@@ -1,0 +1,504 @@
+.circuit-editor-layout,
+.circuit-editor-content {
+  min-width: 0;
+}
+
+.circuit-main #circuit-ai-toggle {
+  gap: 7px;
+  color: var(--ui-accent);
+  border-color: var(--ui-accent);
+}
+
+#circuit-ai-toggle img {
+  width: 17px;
+  height: 17px;
+}
+
+.theme-dark #circuit-ai-toggle img {
+  filter: brightness(0) invert(1);
+}
+
+.circuit-main #circuit-ai-toggle[aria-expanded='true'] {
+  background: var(--ui-accent-soft);
+}
+
+.circuit-main :where(#circuit-mirror-x, #circuit-mirror-y)[aria-pressed='true'] {
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+  border-color: var(--ui-accent);
+}
+
+.circuit-node.is-ai-highlighted .circuit-selection {
+  stroke: var(--ui-accent);
+  stroke-width: 3;
+  fill: var(--ui-accent-soft);
+}
+
+.circuit-node.is-ai-highlighted circle {
+  stroke: var(--ui-accent);
+}
+
+.circuit-wave-group.is-ai-highlighted {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+  background: var(--ui-accent-soft);
+}
+
+[data-trace-id].is-ai-highlighted {
+  color: var(--ui-accent);
+  font-weight: 700;
+}
+
+svg path[data-trace-id].is-ai-highlighted,
+svg .is-ai-highlighted path[data-trace-id] {
+  stroke-width: 3.5;
+}
+
+.circuit-ai-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  overflow: hidden;
+}
+
+.circuit-ai-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 16px 14px;
+}
+
+.circuit-ai-heading > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.circuit-ai-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.circuit-main #circuit-ai-title {
+  font-family: var(--font-ui);
+  font-size: 1.03rem;
+  line-height: 1.5;
+  font-weight: 700;
+}
+
+#circuit-ai-title span {
+  margin-left: 5px;
+  color: var(--ui-muted);
+  font-family: var(--font-zh-body, var(--font-ui));
+  font-size: 0.77rem;
+  font-weight: 500;
+}
+
+.circuit-ai-heading p {
+  margin-top: 2px;
+  color: var(--ui-muted);
+  font-size: 0.71rem;
+  line-height: 1.6;
+}
+
+.circuit-main #circuit-ai-close {
+  align-self: flex-start;
+  flex: 0 0 32px;
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--ui-muted);
+  font: 400 1.45rem / 1 var(--font-ui);
+}
+
+.circuit-main .circuit-ai-context {
+  padding: 9px 16px;
+  border-top: 1px solid var(--ui-line);
+  border-bottom: 1px solid var(--ui-line);
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+  font-size: 0.72rem;
+  line-height: 1.65;
+}
+
+.circuit-ai-thread {
+  flex: 1 1 auto;
+  min-height: 180px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scroll-padding-block: 16px;
+}
+
+.circuit-ai-intro {
+  padding: 27px 18px 22px;
+}
+
+.circuit-ai-intro > p:first-child {
+  margin-bottom: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-wrap: pretty;
+}
+
+.circuit-ai-intro > p:nth-child(2) {
+  color: var(--ui-muted);
+  font-size: 0.81rem;
+  line-height: 1.85;
+  text-wrap: pretty;
+}
+
+.circuit-ai-starters {
+  display: grid;
+  margin-top: 22px;
+  gap: 0;
+}
+
+.circuit-main .circuit-ai-starters button {
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--ui-line);
+  border-radius: 0;
+  background: transparent;
+  font-size: 0.79rem;
+  text-align: left;
+}
+
+.circuit-ai-starters button::after {
+  content: '↗';
+  color: var(--ui-accent);
+  font-size: 1rem;
+}
+
+.circuit-main .circuit-ai-starters button:hover {
+  color: var(--ui-accent);
+  border-color: var(--ui-accent);
+}
+
+.circuit-main .circuit-ai-intro-note {
+  margin-top: 18px;
+  color: var(--ui-muted);
+  font-size: 0.7rem;
+  line-height: 1.8;
+}
+
+.circuit-ai-message {
+  padding: 18px 16px;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.circuit-ai-message.is-user {
+  background: var(--ui-page);
+}
+
+.circuit-ai-message-author {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--ui-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.circuit-ai-message.is-assistant .circuit-ai-message-author {
+  color: var(--ui-accent);
+}
+
+.circuit-main .circuit-ai-message-body {
+  min-width: 0;
+  color: var(--ui-text);
+  font-size: 0.82rem;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+}
+
+.circuit-ai-message.is-user .circuit-ai-message-body {
+  white-space: pre-wrap;
+}
+
+.circuit-main .circuit-ai-message-body :where(p, ul, ol, pre, blockquote, table) {
+  margin: 0 0 10px;
+}
+
+.circuit-main .circuit-ai-message-body > :last-child {
+  margin-bottom: 0;
+}
+
+.circuit-main .circuit-ai-message-body :where(h1, h2, h3, h4) {
+  margin: 16px 0 7px;
+  font-size: 0.9rem;
+}
+
+.circuit-main .circuit-ai-message-body :where(ul, ol) {
+  padding-left: 1.4em;
+}
+
+.circuit-ai-message-body :where(pre, table, .katex-display) {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.circuit-ai-message-body img {
+  max-width: 100%;
+  height: auto;
+}
+
+.circuit-ai-message.is-pending .circuit-ai-message-body {
+  color: var(--ui-muted);
+  animation: circuit-ai-thinking 1.6s ease-in-out infinite;
+}
+
+.circuit-ai-message.is-error .circuit-ai-message-body {
+  color: var(--ui-danger);
+}
+
+.circuit-ai-proposal {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ui-line-strong);
+}
+
+.circuit-main .circuit-ai-proposal h3 {
+  margin-bottom: 8px;
+  font-size: 0.78rem;
+}
+
+.circuit-ai-proposal ul {
+  margin: 0 0 13px;
+  padding-left: 1.3em;
+  color: var(--ui-muted);
+  font-size: 0.75rem;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.circuit-main .circuit-ai-apply {
+  min-height: 36px;
+  padding: 8px 12px;
+  border-color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+  font-size: 0.76rem;
+}
+
+.circuit-main .circuit-ai-reask {
+  margin-left: 8px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 0.76rem;
+}
+
+.circuit-main .circuit-ai-proposal-note {
+  margin-top: 9px;
+  color: var(--ui-muted);
+  font-size: 0.69rem;
+  line-height: 1.75;
+}
+
+.circuit-ai-tools {
+  display: flex;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  gap: 8px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--ui-line);
+}
+
+.circuit-main .circuit-ai-tools button {
+  min-height: 32px;
+  padding: 4px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--ui-muted);
+  font-size: 0.69rem;
+}
+
+.circuit-ai-form {
+  flex: 0 0 auto;
+  padding: 8px 16px 16px;
+}
+
+.circuit-ai-form > label {
+  margin-bottom: 7px;
+  color: var(--ui-text);
+  font-size: 0.74rem;
+}
+
+.circuit-main #circuit-ai-input {
+  min-height: 88px;
+  max-height: 150px;
+  resize: vertical;
+  font-size: 0.8rem;
+  line-height: 1.7;
+  background: var(--ui-page);
+}
+
+.circuit-ai-compose-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.circuit-ai-compose-actions > span {
+  color: var(--ui-muted);
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
+}
+
+.circuit-main #circuit-ai-send {
+  min-width: 62px;
+  min-height: 34px;
+  padding: 7px 12px;
+  font-size: 0.76rem;
+}
+
+.circuit-main #circuit-ai-status {
+  margin-top: 10px;
+  font-size: 0.72rem;
+}
+
+.circuit-main .circuit-ai-login {
+  margin-top: 8px;
+  font-size: 0.75rem;
+}
+
+.circuit-ai-panel button {
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.circuit-ai-panel button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+@keyframes circuit-ai-thinking {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (min-width: 1250px) {
+  .circuit-editor-layout.has-assistant {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 310px;
+    align-items: start;
+    gap: 18px;
+  }
+
+  .circuit-ai-panel {
+    position: sticky;
+    top: 104px;
+    height: min(760px, calc(100dvh - 120px));
+  }
+
+  .has-assistant .circuit-workspace {
+    grid-template-columns: 136px minmax(0, 1fr);
+  }
+
+  .has-assistant .circuit-inspector {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid var(--ui-line);
+  }
+
+  .has-assistant #circuit-parameters,
+  .has-assistant #circuit-connections {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .has-assistant .circuit-section-heading {
+    gap: 12px;
+  }
+}
+
+@media (min-width: 1600px) {
+  .circuit-editor-layout.has-assistant {
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 22px;
+  }
+}
+
+@media (max-width: 1249px) {
+  body.circuit-ai-drawer-open {
+    overflow: hidden;
+  }
+
+  .circuit-ai-panel {
+    position: fixed;
+    inset: 14px 14px 14px auto;
+    z-index: 301;
+    width: min(410px, calc(100vw - 28px));
+    max-height: calc(100dvh - 28px);
+    box-shadow: -12px 0 40px color-mix(in srgb, var(--ui-text) 14%, transparent);
+  }
+
+  .circuit-ai-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    background: rgba(12, 30, 35, 0.4);
+  }
+
+  .circuit-ai-thread {
+    min-height: 80px;
+  }
+}
+
+@media (max-width: 900px) {
+  .circuit-ai-panel {
+    top: max(10px, env(safe-area-inset-top, 0px));
+    bottom: var(--mobile-nav-clearance, 72px);
+    right: 10px;
+    width: min(410px, calc(100vw - 20px));
+    max-height: calc(100dvh - var(--mobile-nav-clearance, 72px) - 10px);
+  }
+
+  .circuit-ai-heading {
+    padding-top: 13px;
+    padding-bottom: 11px;
+  }
+
+  .circuit-main #circuit-ai-input {
+    font-size: 16px;
+    min-height: 78px;
+    max-height: 100px;
+  }
+
+  .circuit-ai-form {
+    padding-bottom: 12px;
+  }
+
+  .circuit-main #circuit-ai-close {
+    width: 38px;
+    min-height: 38px;
+    flex-basis: 38px;
+  }
+
+  .circuit-main #circuit-ai-send {
+    min-height: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .circuit-ai-panel *,
+  .circuit-ai-panel *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

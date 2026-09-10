@@ -424,6 +424,63 @@ test('pending wire origins preview without mutating the stored wire or creating 
   assert.equal(state.changes.length, 0);
 });
 
+test('pending wires follow clicked corners and blank canvas clicks add another corner without committing', () => {
+  const document = sample();
+  const before = JSON.stringify(document);
+  const corners = [];
+  const connections = [];
+  const state = harness(document, {
+    wireStart: { componentId: 'V1', pin: 0 },
+    wirePoints: [
+      { x: 60, y: 200 },
+      { x: 500, y: 200 },
+    ],
+    onCanvasPoint: (point) => corners.push(point),
+    onConnect: (...args) => connections.push(args),
+  });
+  state.rendered.svg.dispatch('pointermove', { clientX: 600, clientY: 500 });
+  const preview = state.find('data-connection-preview', '');
+  assert.equal(preview.children[1].getAttribute('d'), 'M 60 100 L 60 200 L 500 200 L 600 500');
+  assert.equal(state.find('data-draft-corners', '').children.length, 2);
+  state.rendered.svg.dispatch('click', {
+    clientX: 600,
+    clientY: 500,
+    target: { closest: () => null },
+  });
+  assert.equal(JSON.stringify(corners), '[{"x":600,"y":500}]');
+  assert.equal(connections.length, 0);
+  assert.equal(JSON.stringify(document), before);
+  state.rendered.svg.dispatch('pointerleave');
+  assert.equal(preview.getAttribute('visibility'), 'visible');
+});
+
+test('dropping a dragged wire on blank canvas starts a corner draft; cancellation does not', () => {
+  for (const finish of ['pointerup', 'pointercancel', 'Escape']) {
+    const drafts = [];
+    const connections = [];
+    const state = harness(sample(), {
+      onWireDraftStart: (endpoint, point) => drafts.push({ endpoint, point }),
+      onConnect: (...args) => connections.push(args),
+    });
+    const before = JSON.stringify(state.document);
+    const pin = pinHit(state, 'V1', 0);
+    pin.dispatch('pointerdown', { clientX: 60, clientY: 100 });
+    pin.dispatch('pointermove', { clientX: 600, clientY: 500 });
+    if (finish === 'Escape') pin.dispatch('keydown', { key: 'Escape' });
+    else pin.dispatch(finish, { clientX: 600, clientY: 500 });
+    if (finish !== 'pointerup') pin.dispatch('pointerup', { clientX: 600, clientY: 500 });
+    pin.dispatch('click');
+    assert.equal(connections.length, 0);
+    assert.equal(drafts.length, finish === 'pointerup' ? 1 : 0);
+    if (drafts.length)
+      assert.equal(
+        JSON.stringify(drafts[0]),
+        '{"endpoint":{"componentId":"V1","pin":0},"point":{"x":600,"y":500}}',
+      );
+    assert.equal(JSON.stringify(state.document), before);
+  }
+});
+
 test('mouse and touch pin drags connect to wires or pins once on release while light clicks retain their behavior', () => {
   for (const pointerType of ['mouse', 'touch']) {
     const connections = [];

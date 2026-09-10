@@ -72,6 +72,11 @@
     selectedWire: '',
     wireAnchor: null,
     wireStart: null,
+    wirePoints: [],
+    aiUndo: null,
+    aiHighlightedComponents: [],
+    aiHighlightedTraces: [],
+    aiPendingTraces: null,
     schematic: null,
     result: null,
     traceIds: [],
@@ -193,11 +198,6 @@
     $('publish').hidden = !state.cid;
     $('publish').disabled = state.dirty || state.saving;
     $('publish').title = state.dirty ? '请先保存当前修改，再发表到讨论区' : '';
-    $('ask-max').hidden = !state.cid;
-    $('ask-max').disabled = state.dirty || state.saving;
-    $('ask-max').title = state.dirty
-      ? '请先保存当前修改，再请 Max 分析'
-      : `请 Max 读取并分析第 ${state.revision} 版电路`;
     const saveLabel = state.cid ? `保存新版本${state.dirty ? ' · 有修改' : ''}` : '保存并获取 CID';
     $('save').textContent = state.saving ? '正在保存…' : saveLabel;
     $('title').readOnly = !state.editable;
@@ -208,6 +208,20 @@
     $('load-example').disabled = !state.editable;
     $('import-json').disabled = !state.editable;
     $('rotate').disabled = !state.editable || !state.selectedId;
+    $('mirror-x').disabled = !state.editable || !state.selectedId;
+    $('mirror-y').disabled = !state.editable || !state.selectedId;
+    const selection = state.document.components.find(
+      (component) => component.id === state.selectedId,
+    );
+    const sideways = selection && selection.rotation % 180 !== 0;
+    $('mirror-x').setAttribute(
+      'aria-pressed',
+      String(Boolean(selection?.[sideways ? 'mirrorY' : 'mirrorX'])),
+    );
+    $('mirror-y').setAttribute(
+      'aria-pressed',
+      String(Boolean(selection?.[sideways ? 'mirrorX' : 'mirrorY'])),
+    );
     $('delete').disabled = !state.editable || (!state.selectedId && !state.selectedWire);
     $('reset-wire').hidden = !state.selectedWire;
     $('reset-wire').disabled = !state.editable;
@@ -252,13 +266,16 @@
     const mode = state.editable ? '保存后可通过 CID 公开访问' : '只读视图 · 可复制为新电路';
     $('document-meta').textContent = `${identifier}${owner} · ${mode}`;
     $('cancel-wire').hidden = !state.wireStart;
-    let help = '从引脚拖到另一引脚或导线即可接通；也可依次点击连线。';
+    $('undo-wire').hidden = !state.wireStart;
+    $('undo-wire').disabled = !state.wirePoints.length;
+    let help = '点引脚拿起导线，点画布设置拐点，再点目标引脚或导线完成。';
     if (state.wireStart)
-      help = `${state.wireStart.wireId ? `从导线 ${state.wireStart.wireId}` : `从 ${state.wireStart.componentId} 的引脚 ${state.wireStart.pin + 1}`} 连线：点击目标引脚或导线，Esc 取消。`;
+      help = `${state.wireStart.wireId ? `从导线 ${state.wireStart.wireId}` : `从 ${state.wireStart.componentId} 的引脚 ${state.wireStart.pin + 1}`} 连线 · ${state.wirePoints.length} 个拐点：点画布放拐点，点目标接通；退格撤回，Esc 取消。`;
     if (!state.editable) help = '只读预览，可选中元件查看参数；复制后继续编辑。';
     $('canvas-help').textContent = help;
     updateExampleControls();
     renderSourceAdvice();
+    notifyCircuitEditor();
   }
 
   function stopPlayback() {
@@ -290,6 +307,10 @@
   function changed({ electrical = true } = {}) {
     state.dirty = true;
     state.editVersion += 1;
+    state.aiUndo = null;
+    state.aiHighlightedComponents = [];
+    state.aiHighlightedTraces = [];
+    state.aiPendingTraces = null;
     if (electrical) invalidateResult();
     updateControls();
     persistDraft();
@@ -309,9 +330,16 @@
       selectable: true,
       selectedId: state.selectedId || state.selectedWire,
       wireStart: state.wireStart,
+      wirePoints: state.wirePoints,
       frame: currentFrame(),
       animate: state.playing && state.document.analysis.type === 'transient',
       onPinClick: connectPin,
+      onCanvasPoint: addConnectionPoint,
+      onWireDraftStart(endpoint, position) {
+        state.wireStart = endpoint;
+        state.wirePoints = [];
+        addConnectionPoint(position);
+      },
       onComponentClick(id) {
         state.selectedId = id;
         state.selectedWire = '';
@@ -356,6 +384,7 @@
         renderSchematic();
       },
     });
+    applySchematicHighlights();
   }
 
   function uniqueId(prefix) {
@@ -400,6 +429,7 @@
     const target = { componentId: endpoint.componentId, pin: endpoint.pin };
     if (!state.wireStart) {
       state.wireStart = target;
+      state.wirePoints = [];
     } else {
       completeConnection(state.wireStart, { endpoint: target });
       return;
@@ -409,11 +439,46 @@
     renderSchematic();
   }
 
+  function addConnectionPoint(position) {
+    if (!state.editable || !state.wireStart) return;
+    if (!Number.isFinite(position?.x) || !Number.isFinite(position?.y)) return;
+    const point = {
+      x: Math.max(0, Math.min(1000, Math.round(position.x / 10) * 10)),
+      y: Math.max(0, Math.min(640, Math.round(position.y / 10) * 10)),
+    };
+    const last = state.wirePoints.at(-1);
+    if (last && point.x === last.x && point.y === last.y) return;
+    if (state.wirePoints.length >= 32) {
+      setStatus('每条导线最多 32 个拐点；请连接目标，或撤回上一拐点。', 'error');
+      return;
+    }
+    state.wirePoints.push(point);
+    updateControls();
+    renderSchematic();
+  }
+
+  function cancelConnection() {
+    state.wireStart = null;
+    state.wirePoints = [];
+    updateControls();
+    renderInspector();
+    renderSchematic();
+  }
+
+  function undoConnectionPoint() {
+    if (!state.wireStart || !state.wirePoints.length) return;
+    state.wirePoints.pop();
+    updateControls();
+    renderSchematic();
+  }
+
   function completeConnection(origin, target) {
     if (!state.editable) return;
+    const draftPoints = origin === state.wireStart ? state.wirePoints || [] : [];
     try {
       if (origin.wireId && origin.wireId === target.wireId) {
         setStatus('已取消：起点和终点位于同一条导线。');
+        cancelConnection();
         return;
       }
       let { document } = state;
@@ -426,12 +491,14 @@
       if (target.wireId) {
         document = wiring.connectToWire(document, target.wireId, target.position, {
           fromEndpoint: from,
+          points: draftPoints,
         }).document;
       } else {
         const to = target.endpoint;
         const samePin = (a, b) => a.componentId === b.componentId && a.pin === b.pin;
         if (samePin(from, to)) {
           setStatus('已取消连线。');
+          cancelConnection();
           return;
         }
         const duplicate = document.wires.some(
@@ -441,6 +508,7 @@
         );
         if (duplicate) {
           setStatus('这两个连接点已经接通。');
+          cancelConnection();
           return;
         }
         if (document.wires.length >= 200) throw new Error('每个电路最多 200 条导线。');
@@ -448,17 +516,18 @@
         const ids = new Set([...document.components, ...document.wires].map((item) => item.id));
         let index = 1;
         while (ids.has(`w${index}`)) index += 1;
-        document.wires.push({ id: `w${index}`, from, to });
+        document.wires.push({ id: `w${index}`, from, to, points: clone(draftPoints) });
       }
-      state.document = document;
+      state.document = engine.validateDocument(document);
       state.selectedId = '';
       state.selectedWire = '';
+      state.wireStart = null;
+      state.wirePoints = [];
       changed();
       setStatus('导线已接通；实心圆点表示电气连接。');
     } catch (error) {
       setStatus(error.message, 'error');
     } finally {
-      state.wireStart = null;
       updateControls();
       renderInspector();
       renderSchematic();
@@ -471,6 +540,7 @@
     const route = renderer.getWireRoute(wire, state.document.components);
     const position = state.wireAnchor || route[Math.floor(route.length / 2)];
     state.wireStart = { wireId: wire.id, position };
+    state.wirePoints = [];
     updateControls();
     renderInspector();
     renderSchematic();
@@ -931,8 +1001,12 @@
       state.selectedId = '';
       state.selectedWire = '';
       state.wireStart = null;
+      state.wirePoints = [];
       if (!initial) changed();
-      else invalidateResult();
+      else {
+        state.editVersion += 1;
+        invalidateResult();
+      }
       renderAnalysis();
       renderInspector();
       renderSchematic();
@@ -1075,15 +1149,187 @@
     window.location.assign(`/discussion?${query}`);
   }
 
-  function askMaxAboutCircuit() {
-    if (!state.cid || state.dirty || state.saving) return;
-    const reference = new URLSearchParams({
+  function notifyCircuitEditor() {
+    if (!window.FreeBbsCircuitEditor || listPage) return;
+    window.dispatchEvent(
+      new CustomEvent('freebbs:circuit-editor-change', {
+        detail: {
+          editVersion: state.editVersion,
+          canEdit: state.editable && !state.saving,
+          canUndoAi: Boolean(state.aiUndo && state.aiUndo.editVersion === state.editVersion),
+          cid: state.cid,
+          revision: state.revision,
+        },
+      }),
+    );
+  }
+
+  function getAssistantSnapshot() {
+    const simulation = state.result
+      ? {
+          analysis: clone(state.result.analysis),
+          sampleCount: state.result.x.length,
+          warnings: (state.result.warnings || [])
+            .slice(0, 12)
+            .map((message) => String(message).slice(0, 500)),
+          traces: [...state.result.traces]
+            .sort(
+              (a, b) =>
+                Number(state.traceIds.includes(b.id)) - Number(state.traceIds.includes(a.id)),
+            )
+            .slice(0, 24)
+            .map((trace) => {
+              let min = Infinity;
+              let max = -Infinity;
+              trace.values.forEach((value) => {
+                if (Number.isFinite(value)) {
+                  min = Math.min(min, value);
+                  max = Math.max(max, value);
+                }
+              });
+              const count = Math.min(64, trace.values.length);
+              const samples = Array.from({ length: count }, (_, index) => {
+                const at =
+                  count === 1 ? 0 : Math.round((index * (trace.values.length - 1)) / (count - 1));
+                return { x: state.result.x[at], value: trace.values[at] };
+              }).filter((sample) => Number.isFinite(sample.x) && Number.isFinite(sample.value));
+              const latest = trace.values.at(-1);
+              return {
+                id: trace.id,
+                label: trace.label,
+                unit: trace.unit,
+                ...(Number.isFinite(min) ? { min } : {}),
+                ...(Number.isFinite(max) ? { max } : {}),
+                ...(Number.isFinite(latest) ? { latest } : {}),
+                samples,
+              };
+            }),
+        }
+      : null;
+    return {
+      document: clone(state.document),
+      editVersion: state.editVersion,
       cid: state.cid,
-      revision: String(state.revision),
-      view: 'schematic',
+      revision: state.revision,
+      ...metadata(),
+      selection: {
+        ...(state.selectedId ? { componentId: state.selectedId } : {}),
+        ...(state.selectedWire ? { wireId: state.selectedWire } : {}),
+      },
+      simulation,
+      canEdit: state.editable && !state.saving,
+      canUndoAi: Boolean(state.aiUndo && state.aiUndo.editVersion === state.editVersion),
+    };
+  }
+
+  function applySchematicHighlights() {
+    $('stage')
+      .querySelectorAll('[data-component-id]')
+      .forEach((element) => {
+        element.classList.toggle(
+          'is-ai-highlighted',
+          state.aiHighlightedComponents.includes(element.dataset.componentId),
+        );
+      });
+  }
+
+  function clearAiHighlights() {
+    state.aiHighlightedComponents = [];
+    state.aiHighlightedTraces = [];
+    state.aiPendingTraces = null;
+    applySchematicHighlights();
+    renderWaveform();
+  }
+
+  function applyAssistantActions(actions, { expectedVersion } = {}) {
+    const protocol = window.CircuitAIActions;
+    if (!protocol) throw new Error('AI 操作模块尚未加载，请刷新后重试。');
+    if (!Array.isArray(actions)) throw new Error('AI 操作列表无效。');
+    const editing = actions.some((action) => protocol.isEditingAction(action));
+    if (editing && (!state.editable || state.saving))
+      throw new Error('当前电路只读或正在保存，无法修改草稿。');
+    if (expectedVersion !== state.editVersion)
+      throw new Error('画布已变化，请让 Max 根据当前电路重新给出建议。');
+    if (state.wireStart && editing) throw new Error('请先完成或取消正在绘制的导线。');
+    const valid = protocol.validateActions(
+      actions,
+      state.document,
+      (state.result?.traces || []).map((trace) => trace.id),
+    );
+    // Validate the complete batch before applying any edit or visual effect.
+    const next = protocol.applyActions(state.document, valid);
+    const electrical = valid.some(
+      (action) =>
+        protocol.isEditingAction(action) &&
+        !['move_component', 'transform_component'].includes(action.type),
+    );
+    const run = valid.some((action) => action.type === 'run_simulation');
+    if (
+      valid.some((action) => action.type === 'show_traces' && action.traceIds.length) &&
+      !run &&
+      (electrical || !state.result)
+    )
+      throw new Error('此操作需要重新运行仿真后才能查看有效波形。');
+    if (editing) {
+      const previous = clone(state.document);
+      state.document = next;
+      state.selectedId = '';
+      state.selectedWire = '';
+      changed({ electrical });
+      state.aiUndo = { document: previous, editVersion: state.editVersion };
+      renderAnalysis();
+      renderInspector();
+      renderSchematic();
+      setStatus('已应用 Max 建议到当前草稿，可在右侧撤销。', 'success');
+    }
+    valid.forEach((action) => {
+      if (action.type === 'highlight_components') {
+        state.aiHighlightedComponents = [...action.componentIds];
+        applySchematicHighlights();
+        $('stage').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      if (action.type === 'show_traces') {
+        state.aiHighlightedTraces = [...action.traceIds];
+        if (!action.traceIds.length) state.traceIds = [];
+        if (run) state.aiPendingTraces = [...action.traceIds];
+        else if (state.result) {
+          state.traceIds = [...action.traceIds];
+          $('traces')
+            .querySelectorAll('input[data-trace]')
+            .forEach((input) => {
+              input.checked = state.traceIds.includes(input.dataset.trace);
+            });
+          renderWaveform();
+          renderMeters();
+          $('waveform').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else if (action.traceIds.length) throw new Error('当前没有有效波形，请先运行仿真。');
+      }
     });
-    const prompt = `请帮我分析这张电路图的工作原理，检查元件参数和接线：\n[电路图](/circuit?${reference})`;
-    window.location.assign(`/aichat?${new URLSearchParams({ prompt })}`);
+    if (run) runSimulation();
+    notifyCircuitEditor();
+    return getAssistantSnapshot();
+  }
+
+  function undoAssistantActions() {
+    if (
+      !state.editable ||
+      state.saving ||
+      !state.aiUndo ||
+      state.aiUndo.editVersion !== state.editVersion
+    )
+      throw new Error('画布已继续编辑，无法撤销上一批 Max 操作。');
+    state.document = clone(state.aiUndo.document);
+    state.selectedId = '';
+    state.selectedWire = '';
+    state.wireStart = null;
+    state.wirePoints = [];
+    changed();
+    clearAiHighlights();
+    renderAnalysis();
+    renderInspector();
+    renderSchematic();
+    setStatus('已撤销上一批 Max 修改。');
+    return getAssistantSnapshot();
   }
 
   function renderWaveform() {
@@ -1097,6 +1343,22 @@
       phase: $('show-phase').checked,
       logX: state.document.analysis.type === 'ac' && state.document.analysis.scale === 'log',
     });
+    $('waveform')
+      .querySelectorAll('[data-trace-id]')
+      .forEach((chart) => {
+        chart.classList.toggle(
+          'is-ai-highlighted',
+          state.aiHighlightedTraces.includes(chart.dataset.traceId),
+        );
+      });
+    $('waveform')
+      .querySelectorAll('[data-trace-ids]')
+      .forEach((chart) => {
+        chart.classList.toggle(
+          'is-ai-highlighted',
+          JSON.parse(chart.dataset.traceIds).some((id) => state.aiHighlightedTraces.includes(id)),
+        );
+      });
   }
 
   function renderMeters() {
@@ -1135,6 +1397,12 @@
         .filter((trace) => trace.id.startsWith('V:'))
         .slice(0, 3)
         .map((trace) => trace.id);
+    if (state.aiPendingTraces !== null) {
+      state.traceIds = state.aiPendingTraces.filter((id) =>
+        result.traces.some((trace) => trace.id === id),
+      );
+      state.aiPendingTraces = null;
+    }
     $('traces').innerHTML = result.traces
       .map(
         (trace) =>
@@ -1156,6 +1424,7 @@
       'success',
       'run-status',
     );
+    notifyCircuitEditor();
   }
 
   function runSimulation() {
@@ -1299,6 +1568,8 @@
   function copyCircuit() {
     stopSimulation();
     state.generation += 1;
+    state.editVersion += 1;
+    state.aiUndo = null;
     state.saving = false;
     state.cid = '';
     state.revision = 0;
@@ -1389,6 +1660,8 @@
 
   async function loadCircuit(cid, revision = '') {
     state.generation += 1;
+    state.editVersion += 1;
+    state.aiUndo = null;
     const { generation } = state;
     state.editable = false;
     state.loadedExample = null;
@@ -1402,6 +1675,8 @@
       if (generation !== state.generation) return;
       const { circuit } = payload;
       state.document = engine.validateDocument(circuit.document);
+      state.editVersion += 1;
+      state.aiUndo = null;
       state.cid = circuit.cid;
       state.revision = circuit.revision;
       state.latestRevision = circuit.latestRevision || circuit.revision;
@@ -1509,13 +1784,21 @@
       changed({ electrical: false });
       renderSchematic();
     });
+    ['x', 'y'].forEach((axis) =>
+      $(`mirror-${axis}`).addEventListener('click', () => {
+        const selected = state.document.components.find((item) => item.id === state.selectedId);
+        if (!selected || !state.editable) return;
+        const localAxis = selected.rotation % 180 === 0 ? axis : axis === 'x' ? 'y' : 'x';
+        const key = localAxis === 'x' ? 'mirrorX' : 'mirrorY';
+        selected[key] = !selected[key];
+        changed({ electrical: false });
+        renderInspector();
+        renderSchematic();
+      }),
+    );
     $('delete').addEventListener('click', removeSelection);
-    $('cancel-wire').addEventListener('click', () => {
-      state.wireStart = null;
-      $('canvas-help').textContent = '拖动元件调整位置；依次点击两个引脚连线。';
-      updateControls();
-      renderSchematic();
-    });
+    $('cancel-wire').addEventListener('click', cancelConnection);
+    $('undo-wire').addEventListener('click', undoConnectionPoint);
     $('load-example').addEventListener('click', loadExample);
     $('start-wire').addEventListener('click', startFromWire);
     $('reset-wire').addEventListener('click', () => {
@@ -1540,7 +1823,6 @@
       updateExampleControls();
     });
     $('publish').addEventListener('click', publishToDiscussion);
-    $('ask-max').addEventListener('click', askMaxAboutCircuit);
     $('analysis-form').addEventListener('submit', (event) => event.preventDefault());
     $('analysis-form').addEventListener('change', (event) => {
       if (event.target === $('sweep-component')) renderSweepOptions();
@@ -1616,10 +1898,13 @@
         saveCircuit();
       }
       if (event.target.closest('input,textarea,select,[contenteditable]')) return;
+      if (state.wireStart && event.key === 'Backspace') {
+        event.preventDefault();
+        undoConnectionPoint();
+        return;
+      }
       if (event.key === 'Escape') {
-        state.wireStart = null;
-        updateControls();
-        renderSchematic();
+        cancelConnection();
       }
       if (['Delete', 'Backspace'].includes(event.key) && (state.selectedId || state.selectedWire)) {
         event.preventDefault();
@@ -1653,6 +1938,8 @@
       const previous = state.sessionUid;
       state.sessionUid = uid;
       state.generation += 1;
+      state.editVersion += 1;
+      state.aiUndo = null;
       state.listLoading = false;
       state.saving = false;
       state.exampleBusy = false;
@@ -1733,5 +2020,16 @@
     }
   }
 
-  initialize();
+  window.FreeBbsCircuitEditor = {
+    getSnapshot: getAssistantSnapshot,
+    applyActions: applyAssistantActions,
+    undoAiActions: undoAssistantActions,
+    clearHighlights: clearAiHighlights,
+  };
+  initialize().then(() => {
+    if (!listPage) {
+      window.dispatchEvent(new CustomEvent('freebbs:circuit-editor-ready'));
+      notifyCircuitEditor();
+    }
+  });
 })();

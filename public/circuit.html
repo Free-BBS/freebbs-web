@@ -21,6 +21,9 @@
     <link rel="stylesheet" href="/course-upload.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/circuit.css" />
+    <link rel="stylesheet" href="/circuit-assistant.css" />
+    <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css" />
+    <link rel="stylesheet" href="/vendor/@highlightjs/cdn-assets/styles/github-dark.min.css" />
   </head>
   <body class="circuit-page">
     <div class="page-shell page-shell-settings">
@@ -171,7 +174,14 @@
               ><button id="circuit-copy" type="button">复制为新电路</button
               ><button class="is-primary" id="circuit-save" type="button">保存并获取 CID</button
               ><button id="circuit-publish" type="button" hidden>发表到讨论区</button
-              ><button id="circuit-ask-max" type="button" hidden>问问 Max</button>
+              ><button
+                id="circuit-ai-toggle"
+                type="button"
+                aria-expanded="false"
+                aria-controls="circuit-ai-panel"
+              >
+                <img src="/assets/icons/ai.svg" alt="" aria-hidden="true" />Max 助手
+              </button>
             </div>
           </header>
           <section class="circuit-document-heading" aria-label="电路文档">
@@ -191,264 +201,384 @@
             <a id="circuit-login" href="/login" hidden>登录后返回此页保存，当前草稿会保留</a>
           </section>
 
-          <section class="circuit-workspace" aria-label="电路绘图工作台">
-            <aside class="circuit-palette" aria-labelledby="circuit-palette-title">
-              <h2 id="circuit-palette-title">元件</h2>
-              <p>点击添加到画布</p>
-              <div id="circuit-palette"></div>
-              <label class="circuit-example-label"
-                >从示例开始<select id="circuit-example">
-                  <option value="blank">空白电路</option>
-                </select></label
+          <div class="circuit-editor-layout" id="circuit-editor-layout">
+            <div class="circuit-editor-content">
+              <section class="circuit-workspace" aria-label="电路绘图工作台">
+                <aside class="circuit-palette" aria-labelledby="circuit-palette-title">
+                  <h2 id="circuit-palette-title">元件</h2>
+                  <p>点击添加到画布</p>
+                  <div id="circuit-palette"></div>
+                  <label class="circuit-example-label"
+                    >从示例开始<select id="circuit-example">
+                      <option value="blank">空白电路</option>
+                    </select></label
+                  >
+                  <button id="circuit-load-example" type="button">载入示例</button>
+                  <p
+                    id="circuit-example-status"
+                    class="circuit-status"
+                    role="status"
+                    aria-live="polite"
+                  ></p>
+                  <button id="circuit-retry-examples" type="button" hidden>重新读取示例</button>
+                  <details id="circuit-example-admin" class="circuit-example-admin" hidden>
+                    <summary>管理示例</summary>
+                    <p>载入示例后，修改电路名称、说明或元件，再保存示例修改。</p>
+                    <button id="circuit-example-create" type="button">当前电路添加为示例</button>
+                    <button id="circuit-example-update" type="button" disabled>保存示例修改</button>
+                    <p id="circuit-example-target" class="circuit-example-target"></p>
+                    <button id="circuit-example-delete" type="button" disabled>删除所选示例</button>
+                    <div
+                      id="circuit-example-delete-confirm"
+                      class="circuit-example-delete-confirm"
+                      hidden
+                    >
+                      <p id="circuit-example-delete-message"></p>
+                      <button id="circuit-example-delete-yes" type="button">确认删除示例</button>
+                      <button id="circuit-example-delete-no" type="button">取消</button>
+                    </div>
+                  </details>
+                </aside>
+                <div class="circuit-canvas-panel">
+                  <div class="circuit-canvas-toolbar">
+                    <p id="circuit-canvas-help">
+                      点引脚拿起导线，点画布设置拐点，再点目标引脚或导线完成。
+                    </p>
+                    <button id="circuit-undo-wire" type="button" hidden>撤回拐点</button>
+                    <button id="circuit-cancel-wire" type="button" hidden>取消连线</button
+                    ><span id="circuit-count">0 个元件</span>
+                  </div>
+                  <div class="circuit-stage" id="circuit-stage" aria-label="电路原理图"></div>
+                  <p class="circuit-canvas-note">
+                    连线过程中，每次点画布会放置一个拐点；点目标引脚或导线接通。
+                    退格撤回上一拐点，Esc 取消。普通交叉不接通。
+                  </p>
+                </div>
+                <aside class="circuit-inspector" aria-labelledby="circuit-inspector-title">
+                  <h2 id="circuit-inspector-title">元件参数</h2>
+                  <p id="circuit-selection-empty">选中一个元件，查看参数和连接。</p>
+                  <div id="circuit-selection" hidden>
+                    <p class="circuit-selected-name" id="circuit-selected-name"></p>
+                    <div class="circuit-selection-actions">
+                      <button id="circuit-rotate" type="button">旋转 90°</button
+                      ><button id="circuit-mirror-x" type="button" aria-pressed="false">
+                        左右镜像</button
+                      ><button id="circuit-mirror-y" type="button" aria-pressed="false">
+                        上下镜像</button
+                      ><button id="circuit-delete" type="button">删除元件</button
+                      ><button id="circuit-reset-wire" type="button" hidden>恢复自动走线</button>
+                      <button id="circuit-start-wire" type="button" hidden>从此处连线</button>
+                    </div>
+                    <form id="circuit-parameters" novalidate></form>
+                    <h3>引脚与连接</h3>
+                    <div id="circuit-connections"></div>
+                  </div>
+                </aside>
+              </section>
+
+              <section class="circuit-analysis" aria-labelledby="circuit-analysis-title">
+                <div class="circuit-section-heading">
+                  <div>
+                    <p class="circuit-kicker">分析</p>
+                    <h2 id="circuit-analysis-title">运行实验</h2>
+                  </div>
+                  <div class="circuit-actions">
+                    <button id="circuit-run" class="is-primary" type="button">运行仿真</button
+                    ><button id="circuit-stop" type="button" disabled>取消</button>
+                  </div>
+                </div>
+                <form id="circuit-analysis-form" novalidate>
+                  <label
+                    >分析类型<select id="circuit-analysis-type">
+                      <option value="dc">直流工作点 DC</option>
+                      <option value="transient">瞬态响应</option>
+                      <option value="sweep">参数扫描</option>
+                      <option value="ac">交流小信号 AC</option>
+                    </select></label
+                  >
+                  <div class="circuit-analysis-fields" data-analysis="transient" hidden>
+                    <label
+                      >截止时间 / s<input
+                        id="circuit-transient-stop"
+                        type="number"
+                        step="any"
+                        min="0"
+                        value="0.01"
+                    /></label>
+                    <label
+                      >时间步长 / s<input
+                        id="circuit-transient-step"
+                        type="number"
+                        step="any"
+                        min="0"
+                        value="0.00002"
+                    /></label>
+                    <label
+                      >初始状态<select id="circuit-transient-initial">
+                        <option value="zero">零初始储能</option>
+                        <option value="operating-point">直流工作点</option>
+                      </select></label
+                    >
+                  </div>
+                  <div class="circuit-analysis-fields" data-analysis="sweep" hidden>
+                    <label>扫描元件<select id="circuit-sweep-component"></select></label
+                    ><label>扫描参数<select id="circuit-sweep-parameter"></select></label>
+                    <label
+                      >起点<input
+                        id="circuit-sweep-start"
+                        type="number"
+                        step="any"
+                        value="0" /></label
+                    ><label
+                      >终点<input
+                        id="circuit-sweep-stop"
+                        type="number"
+                        step="any"
+                        value="5" /></label
+                    ><label
+                      >采样点数<input
+                        id="circuit-sweep-points"
+                        type="number"
+                        min="2"
+                        max="2000"
+                        value="101"
+                    /></label>
+                  </div>
+                  <div class="circuit-analysis-fields" data-analysis="ac" hidden>
+                    <label
+                      >起始频率 / Hz<input
+                        id="circuit-ac-start"
+                        type="number"
+                        step="any"
+                        min="0"
+                        value="10" /></label
+                    ><label
+                      >截止频率 / Hz<input
+                        id="circuit-ac-stop"
+                        type="number"
+                        step="any"
+                        min="0"
+                        value="100000" /></label
+                    ><label
+                      >采样点数<input
+                        id="circuit-ac-points"
+                        type="number"
+                        min="2"
+                        max="2000"
+                        value="101" /></label
+                    ><label
+                      >频率间隔<select id="circuit-ac-scale">
+                        <option value="log">对数</option>
+                        <option value="linear">线性</option>
+                      </select></label
+                    >
+                  </div>
+                </form>
+                <p id="circuit-sampling-count" class="circuit-parameter-hint"></p>
+                <div id="circuit-source-advice" class="circuit-source-advice" hidden>
+                  <p id="circuit-source-advice-text" role="status"></p>
+                  <button id="circuit-source-transient" type="button" hidden>
+                    设置合适的瞬态采样
+                  </button>
+                </div>
+                <p id="circuit-run-status" class="circuit-status" role="status" aria-live="polite">
+                  选择分析方式，然后运行仿真。
+                </p>
+              </section>
+
+              <section
+                class="circuit-results"
+                id="circuit-results"
+                aria-labelledby="circuit-results-title"
+                hidden
               >
-              <button id="circuit-load-example" type="button">载入示例</button>
-              <p
-                id="circuit-example-status"
-                class="circuit-status"
-                role="status"
-                aria-live="polite"
-              ></p>
-              <button id="circuit-retry-examples" type="button" hidden>重新读取示例</button>
-              <details id="circuit-example-admin" class="circuit-example-admin" hidden>
-                <summary>管理示例</summary>
-                <p>载入示例后，修改电路名称、说明或元件，再保存示例修改。</p>
-                <button id="circuit-example-create" type="button">当前电路添加为示例</button>
-                <button id="circuit-example-update" type="button" disabled>保存示例修改</button>
-                <p id="circuit-example-target" class="circuit-example-target"></p>
-                <button id="circuit-example-delete" type="button" disabled>删除所选示例</button>
-                <div
-                  id="circuit-example-delete-confirm"
-                  class="circuit-example-delete-confirm"
+                <div class="circuit-section-heading">
+                  <div>
+                    <p class="circuit-kicker">测量</p>
+                    <h2 id="circuit-results-title">波形与读数</h2>
+                  </div>
+                  <div class="circuit-actions">
+                    <button id="circuit-export-csv" type="button">导出 CSV</button
+                    ><label class="circuit-inline-check" id="circuit-phase-control" hidden
+                      ><input id="circuit-show-phase" type="checkbox" />显示相位</label
+                    >
+                  </div>
+                </div>
+                <fieldset class="circuit-traces">
+                  <legend>显示曲线</legend>
+                  <div id="circuit-traces"></div>
+                </fieldset>
+                <div class="circuit-waveform" id="circuit-waveform"></div>
+                <div class="circuit-playback" id="circuit-playback">
+                  <button id="circuit-play" type="button">播放</button
+                  ><label for="circuit-frame">查看采样点</label
+                  ><input id="circuit-frame" type="range" min="0" max="0" value="0" /><output
+                    id="circuit-frame-label"
+                    >0</output
+                  >
+                </div>
+                <div class="circuit-meters" id="circuit-meters"></div>
+                <p class="circuit-status" id="circuit-warnings"></p>
+              </section>
+
+              <section class="circuit-sharing" aria-labelledby="circuit-sharing-title">
+                <div>
+                  <h2 id="circuit-sharing-title">把实验带到讨论里</h2>
+                  <p>
+                    复制已保存版本的 Markdown
+                    引用，读者可以查看电路与仿真。未保存的修改不会改变既有引用。
+                  </p>
+                </div>
+                <div class="circuit-actions">
+                  <button type="button" data-circuit-reference="live">复制动态图引用</button
+                  ><button type="button" data-circuit-reference="waveform">复制波形引用</button
+                  ><button type="button" data-circuit-reference="schematic">复制原理图引用</button
+                  ><button id="circuit-export-json" type="button">导出 JSON</button
+                  ><button id="circuit-import-json" type="button">导入 JSON</button
+                  ><input
+                    id="circuit-import-file"
+                    type="file"
+                    accept="application/json,.json"
+                    hidden
+                  />
+                </div>
+                <p id="circuit-reference-hint" class="circuit-reference-hint" role="status"></p>
+                <textarea
+                  id="circuit-reference-text"
+                  rows="3"
+                  aria-label="电路 Markdown 引用"
+                  readonly
                   hidden
-                >
-                  <p id="circuit-example-delete-message"></p>
-                  <button id="circuit-example-delete-yes" type="button">确认删除示例</button>
-                  <button id="circuit-example-delete-no" type="button">取消</button>
-                </div>
+                ></textarea>
+              </section>
+              <details class="circuit-model-notes">
+                <summary>模型范围与使用说明</summary>
+                <p>
+                  本实验室采用用于教学的电路数值模型：MNA、非线性迭代、二极管 Shockley、BJT
+                  Ebers–Moll、MOS 长沟道平方律，以及有限增益和限幅运放。它不是完整工艺 SPICE 模型。
+                </p>
+                <p>
+                  参数使用 SI 单位，例如 1 kΩ 输入 1000，1 μF 输入 1e-6。最多 80 个元件、200
+                  条导线； 瞬态最多 100001 个采样点，参数扫描和 AC 扫描最多 2000 点。
+                  仿真遇到浮空节点、非收敛或非法表达式时会报告错误，不生成替代曲线。非线性元件可填写
+                  i=k*u^3 等安全数学表达式。
+                </p>
+                <p>
+                  AC 为工作点附近的小信号线性化；动态图只播放瞬态帧。参考
+                  <a
+                    href="https://ngspice.sourceforge.io/docs/ngspice-manual.pdf"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >ngspice 用户手册</a
+                  >了解分析语义。
+                </p>
               </details>
-            </aside>
-            <div class="circuit-canvas-panel">
-              <div class="circuit-canvas-toolbar">
-                <p id="circuit-canvas-help">从引脚拖到另一引脚或导线即可接通；也可依次点击连线。</p>
-                <button id="circuit-cancel-wire" type="button" hidden>取消连线</button
-                ><span id="circuit-count">0 个元件</span>
-              </div>
-              <div class="circuit-stage" id="circuit-stage" aria-label="电路原理图"></div>
-              <p class="circuit-canvas-note">
-                拖动引脚即可连线，落在导线上会生成实心连接点。选中导线可从该处继续连线；
-                拖动圆点调整形状，点击 + 添加拐点。普通交叉不接通，实心圆点才表示连接。
-              </p>
             </div>
-            <aside class="circuit-inspector" aria-labelledby="circuit-inspector-title">
-              <h2 id="circuit-inspector-title">元件参数</h2>
-              <p id="circuit-selection-empty">选中一个元件，查看参数和连接。</p>
-              <div id="circuit-selection" hidden>
-                <p class="circuit-selected-name" id="circuit-selected-name"></p>
-                <div class="circuit-selection-actions">
-                  <button id="circuit-rotate" type="button">旋转 90°</button
-                  ><button id="circuit-delete" type="button">删除元件</button
-                  ><button id="circuit-reset-wire" type="button" hidden>恢复自动走线</button>
-                  <button id="circuit-start-wire" type="button" hidden>从此处连线</button>
-                </div>
-                <form id="circuit-parameters" novalidate></form>
-                <h3>引脚与连接</h3>
-                <div id="circuit-connections"></div>
-              </div>
-            </aside>
-          </section>
-
-          <section class="circuit-analysis" aria-labelledby="circuit-analysis-title">
-            <div class="circuit-section-heading">
-              <div>
-                <p class="circuit-kicker">分析</p>
-                <h2 id="circuit-analysis-title">运行实验</h2>
-              </div>
-              <div class="circuit-actions">
-                <button id="circuit-run" class="is-primary" type="button">运行仿真</button
-                ><button id="circuit-stop" type="button" disabled>取消</button>
-              </div>
-            </div>
-            <form id="circuit-analysis-form" novalidate>
-              <label
-                >分析类型<select id="circuit-analysis-type">
-                  <option value="dc">直流工作点 DC</option>
-                  <option value="transient">瞬态响应</option>
-                  <option value="sweep">参数扫描</option>
-                  <option value="ac">交流小信号 AC</option>
-                </select></label
-              >
-              <div class="circuit-analysis-fields" data-analysis="transient" hidden>
-                <label
-                  >截止时间 / s<input
-                    id="circuit-transient-stop"
-                    type="number"
-                    step="any"
-                    min="0"
-                    value="0.01"
-                /></label>
-                <label
-                  >时间步长 / s<input
-                    id="circuit-transient-step"
-                    type="number"
-                    step="any"
-                    min="0"
-                    value="0.00002"
-                /></label>
-                <label
-                  >初始状态<select id="circuit-transient-initial">
-                    <option value="zero">零初始储能</option>
-                    <option value="operating-point">直流工作点</option>
-                  </select></label
-                >
-              </div>
-              <div class="circuit-analysis-fields" data-analysis="sweep" hidden>
-                <label>扫描元件<select id="circuit-sweep-component"></select></label
-                ><label>扫描参数<select id="circuit-sweep-parameter"></select></label>
-                <label
-                  >起点<input id="circuit-sweep-start" type="number" step="any" value="0" /></label
-                ><label
-                  >终点<input id="circuit-sweep-stop" type="number" step="any" value="5" /></label
-                ><label
-                  >采样点数<input
-                    id="circuit-sweep-points"
-                    type="number"
-                    min="2"
-                    max="2000"
-                    value="101"
-                /></label>
-              </div>
-              <div class="circuit-analysis-fields" data-analysis="ac" hidden>
-                <label
-                  >起始频率 / Hz<input
-                    id="circuit-ac-start"
-                    type="number"
-                    step="any"
-                    min="0"
-                    value="10" /></label
-                ><label
-                  >截止频率 / Hz<input
-                    id="circuit-ac-stop"
-                    type="number"
-                    step="any"
-                    min="0"
-                    value="100000" /></label
-                ><label
-                  >采样点数<input
-                    id="circuit-ac-points"
-                    type="number"
-                    min="2"
-                    max="2000"
-                    value="101" /></label
-                ><label
-                  >频率间隔<select id="circuit-ac-scale">
-                    <option value="log">对数</option>
-                    <option value="linear">线性</option>
-                  </select></label
-                >
-              </div>
-            </form>
-            <p id="circuit-sampling-count" class="circuit-parameter-hint"></p>
-            <div id="circuit-source-advice" class="circuit-source-advice" hidden>
-              <p id="circuit-source-advice-text" role="status"></p>
-              <button id="circuit-source-transient" type="button" hidden>设置合适的瞬态采样</button>
-            </div>
-            <p id="circuit-run-status" class="circuit-status" role="status" aria-live="polite">
-              选择分析方式，然后运行仿真。
-            </p>
-          </section>
-
-          <section
-            class="circuit-results"
-            id="circuit-results"
-            aria-labelledby="circuit-results-title"
-            hidden
-          >
-            <div class="circuit-section-heading">
-              <div>
-                <p class="circuit-kicker">测量</p>
-                <h2 id="circuit-results-title">波形与读数</h2>
-              </div>
-              <div class="circuit-actions">
-                <button id="circuit-export-csv" type="button">导出 CSV</button
-                ><label class="circuit-inline-check" id="circuit-phase-control" hidden
-                  ><input id="circuit-show-phase" type="checkbox" />显示相位</label
-                >
-              </div>
-            </div>
-            <fieldset class="circuit-traces">
-              <legend>显示曲线</legend>
-              <div id="circuit-traces"></div>
-            </fieldset>
-            <div class="circuit-waveform" id="circuit-waveform"></div>
-            <div class="circuit-playback" id="circuit-playback">
-              <button id="circuit-play" type="button">播放</button
-              ><label for="circuit-frame">查看采样点</label
-              ><input id="circuit-frame" type="range" min="0" max="0" value="0" /><output
-                id="circuit-frame-label"
-                >0</output
-              >
-            </div>
-            <div class="circuit-meters" id="circuit-meters"></div>
-            <p class="circuit-status" id="circuit-warnings"></p>
-          </section>
-
-          <section class="circuit-sharing" aria-labelledby="circuit-sharing-title">
-            <div>
-              <h2 id="circuit-sharing-title">把实验带到讨论里</h2>
-              <p>
-                复制已保存版本的 Markdown
-                引用，读者可以查看电路与仿真。未保存的修改不会改变既有引用。
-              </p>
-            </div>
-            <div class="circuit-actions">
-              <button type="button" data-circuit-reference="live">复制动态图引用</button
-              ><button type="button" data-circuit-reference="waveform">复制波形引用</button
-              ><button type="button" data-circuit-reference="schematic">复制原理图引用</button
-              ><button id="circuit-export-json" type="button">导出 JSON</button
-              ><button id="circuit-import-json" type="button">导入 JSON</button
-              ><input id="circuit-import-file" type="file" accept="application/json,.json" hidden />
-            </div>
-            <p id="circuit-reference-hint" class="circuit-reference-hint" role="status"></p>
-            <textarea
-              id="circuit-reference-text"
-              rows="3"
-              aria-label="电路 Markdown 引用"
-              readonly
+            <aside
+              class="circuit-ai-panel"
+              id="circuit-ai-panel"
+              aria-labelledby="circuit-ai-title"
+              tabindex="-1"
               hidden
-            ></textarea>
-          </section>
-          <details class="circuit-model-notes">
-            <summary>模型范围与使用说明</summary>
-            <p>
-              本实验室采用用于教学的电路数值模型：MNA、非线性迭代、二极管 Shockley、BJT
-              Ebers–Moll、MOS 长沟道平方律，以及有限增益和限幅运放。它不是完整工艺 SPICE 模型。
-            </p>
-            <p>
-              参数使用 SI 单位，例如 1 kΩ 输入 1000，1 μF 输入 1e-6。最多 80 个元件、200 条导线；
-              瞬态最多 100001 个采样点，参数扫描和 AC 扫描最多 2000 点。
-              仿真遇到浮空节点、非收敛或非法表达式时会报告错误，不生成替代曲线。非线性元件可填写
-              i=k*u^3 等安全数学表达式。
-            </p>
-            <p>
-              AC 为工作点附近的小信号线性化；动态图只播放瞬态帧。参考
-              <a
-                href="https://ngspice.sourceforge.io/docs/ngspice-manual.pdf"
-                target="_blank"
-                rel="noopener noreferrer"
-                >ngspice 用户手册</a
-              >了解分析语义。
-            </p>
-          </details>
+            >
+              <header class="circuit-ai-heading">
+                <img class="circuit-ai-avatar" src="/assets/max_the_agent_avatar.webp" alt="" />
+                <div>
+                  <h2 id="circuit-ai-title">Max <span>电路助手</span></h2>
+                  <p>和你一起理解每一次变化</p>
+                </div>
+                <button
+                  id="circuit-ai-close"
+                  type="button"
+                  aria-label="收起 Max 助手"
+                  title="收起 Max 助手"
+                >
+                  ×
+                </button>
+              </header>
+              <p id="circuit-ai-context" class="circuit-ai-context">当前画布 · 包含未保存的草稿</p>
+              <div
+                class="circuit-ai-thread"
+                id="circuit-ai-thread"
+                role="log"
+                aria-label="与 Max 的电路对话"
+                aria-live="polite"
+                aria-relevant="additions text"
+                tabindex="0"
+              >
+                <div class="circuit-ai-intro" id="circuit-ai-intro">
+                  <p>从电路本身，找到答案。</p>
+                  <p>
+                    我能查看当前元件、连接和仿真读数，帮你检查接线、解释波形，或提出可以应用的修改。
+                  </p>
+                  <div class="circuit-ai-starters" aria-label="开始提问">
+                    <button
+                      type="button"
+                      data-circuit-ai-question="请解释当前电路的工作原理，并高亮关键元件。"
+                    >
+                      解释这张电路
+                    </button>
+                    <button
+                      type="button"
+                      data-circuit-ai-question="请检查当前电路的连接和参数，指出可能的问题并高亮相关元件。"
+                    >
+                      帮我检查接线
+                    </button>
+                    <button
+                      type="button"
+                      data-circuit-ai-question="请分析当前仿真结果，显示关键波形并解释其变化。如果还没有结果，请建议合适的仿真设置。"
+                    >
+                      一起看波形
+                    </button>
+                  </div>
+                  <p class="circuit-ai-intro-note">提问时同步当前草稿。修改建议由你点选应用。</p>
+                </div>
+              </div>
+              <div class="circuit-ai-tools">
+                <button id="circuit-ai-clear-highlights" type="button">清除高亮</button>
+                <button id="circuit-ai-undo" type="button" disabled>撤销 AI 修改</button>
+              </div>
+              <form id="circuit-ai-form" class="circuit-ai-form">
+                <label for="circuit-ai-input">围绕这张电路提问</label>
+                <textarea
+                  id="circuit-ai-input"
+                  rows="3"
+                  maxlength="4000"
+                  placeholder="例如：为什么电容两端电压会这样变化？"
+                  required
+                ></textarea>
+                <div class="circuit-ai-compose-actions">
+                  <span>Ctrl / ⌘ + Enter 发送</span>
+                  <button id="circuit-ai-send" class="is-primary" type="submit">发送</button>
+                </div>
+                <p
+                  id="circuit-ai-status"
+                  class="circuit-status"
+                  role="status"
+                  aria-live="polite"
+                ></p>
+                <button id="circuit-ai-login" class="circuit-ai-login" type="button" hidden>
+                  登录后继续提问
+                </button>
+              </form>
+            </aside>
+          </div>
+          <div id="circuit-ai-backdrop" class="circuit-ai-backdrop" aria-hidden="true" hidden></div>
         </section>
       </main>
     </div>
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
+    <script src="/vendor/marked/lib/marked.umd.js"></script>
+    <script src="/vendor/@highlightjs/cdn-assets/highlight.min.js"></script>
+    <script src="/vendor/katex/dist/katex.min.js"></script>
     <script src="/app.js"></script>
     <script src="/circuit-engine.js"></script>
     <script src="/circuit-renderer.js"></script>
     <script src="/circuit-wiring.js"></script>
+    <script src="/circuit-ai-actions.js"></script>
     <script src="/circuit.js"></script>
+    <script src="/circuit-assistant.js"></script>
     <script src="/notifications.js"></script>
   </body>
 </html>
