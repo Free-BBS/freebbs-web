@@ -61,7 +61,20 @@
 .circuit-main :where(button, .circuit-button).is-primary {
   background: var(--ui-accent);
   border-color: var(--ui-accent);
-  color: var(--ui-on-accent, #fff);
+  color: var(--ui-accent-contrast);
+}
+.circuit-main :where(button, .circuit-button).is-primary:hover:not(:disabled) {
+  background: var(--ui-accent-hover);
+  border-color: var(--ui-accent-hover);
+}
+/* The shared shell forces button/link text colors with !important. Keep only
+ * filled circuit actions paired with their theme's accent foreground. */
+body.circuit-page .circuit-main :where(button, .circuit-button).is-primary,
+body.circuit-page
+  .circuit-main
+  :where(button, .circuit-button).is-primary
+  :where(span, strong, small) {
+  color: var(--ui-accent-contrast) !important;
 }
 .circuit-main button:disabled {
   cursor: not-allowed;

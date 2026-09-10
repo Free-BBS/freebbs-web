@@ -99,7 +99,7 @@ test('custom bends, exact corner splits and automatic routes preserve their visi
   assert.deepEqual(split.wires[1].points, input.wires[0].points.slice(2));
   assert.deepEqual(
     { x: split.components.at(-1).x, y: split.components.at(-1).y },
-    { x: 250, y: 200 },
+    { x: 260, y: 200 },
   );
   const corner = connectToWire(input, 'w1', { x: 150, y: 200 }).document;
   assert.deepEqual(corner.wires[0].points, [{ x: 150, y: 100 }]);
@@ -292,4 +292,40 @@ test('the browser build exposes the same immutable connection API', () => {
     JSON.parse(JSON.stringify(result)),
     connectToWire(input, 'w1', { x: 300, y: 100 }),
   );
+});
+
+test('branch splits use the same snapped landing as the preview and retain precise non-grid geometry', () => {
+  const input = fixture();
+  input.components[0].y = 103;
+  input.components[1].y = 103;
+  const wire = input.wires[0];
+  const raw = { x: 307, y: 108 };
+  const preview = renderer.snapWirePoint(wire, input.components, raw).point;
+  assert.deepEqual(preview, { x: 300, y: 103 });
+  const result = connectToWire(input, wire.id, raw, { fromEndpoint: endpoint('R2') });
+  const junction = result.document.components.at(-1);
+  assert.deepEqual({ x: junction.x, y: junction.y }, preview);
+  assert.deepEqual(
+    connectToWire(input, wire.id, preview, { fromEndpoint: endpoint('R2') }),
+    result,
+  );
+  input.components[0].x = 107;
+  assert.deepEqual(connectToWire(input, wire.id, { x: 73, y: 103 }).endpoint, endpoint('V1'));
+  input.components[1].y = 303;
+  const diagonal = renderer.snapWirePoint(wire, input.components, raw).point;
+  const attached = connectToWire(input, wire.id, diagonal).document.components.at(-1);
+  assert.deepEqual({ x: attached.x, y: attached.y }, diagonal);
+});
+
+test('an explicitly connected pin at an off-grid crossing is reused exactly rather than creating a shifted junction', () => {
+  const input = fixture();
+  input.components[2].x = 347;
+  input.components[2].y = 100;
+  const result = connectToWire(input, 'w1', { x: 307, y: 100 }, { fromEndpoint: endpoint('R2') });
+  assert.deepEqual(result.endpoint, endpoint('R2'));
+  assert.equal(result.document.components.length, input.components.length);
+  assert.equal(result.document.wires[0].to.componentId, 'R2');
+  assert.equal(result.document.wires[1].from.componentId, 'R2');
+  const nets = engine.buildNets(result.document).pinNets;
+  assert.equal(nets['R2:0'], nets['V1:0']);
 });

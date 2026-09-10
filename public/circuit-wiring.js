@@ -21,44 +21,6 @@
     return { x: pin.x, y: pin.y };
   }
 
-  function wireRoute(document, wire) {
-    const from = pinPosition(document, wire.from);
-    const to = pinPosition(document, wire.to);
-    const middle = Math.round((from.x + to.x) / 40) * 20;
-    const custom = Array.isArray(wire.points);
-    const points = custom
-      ? wire.points
-      : [
-          { x: middle, y: from.y },
-          { x: middle, y: to.y },
-        ];
-    const route = [from, ...points, to];
-    return custom
-      ? route
-      : route.filter((point, index) => !index || !samePoint(point, route[index - 1]));
-  }
-
-  function nearestPoint(route, position) {
-    let nearest;
-    for (let index = 0; index < route.length - 1; index += 1) {
-      const a = route[index];
-      const b = route[index + 1];
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const squaredLength = dx * dx + dy * dy;
-      const fraction = squaredLength
-        ? Math.max(
-            0,
-            Math.min(1, ((position.x - a.x) * dx + (position.y - a.y) * dy) / squaredLength),
-          )
-        : 0;
-      const point = { x: a.x + fraction * dx, y: a.y + fraction * dy };
-      const distance = Math.hypot(position.x - point.x, position.y - point.y);
-      if (!nearest || distance < nearest.distance) nearest = { index, point, distance };
-    }
-    return nearest || { index: 0, point: route[0], distance: 0 };
-  }
-
   function connectedEndpoints(document, endpoint) {
     const neighbors = new Map();
     const join = (left, right) => {
@@ -98,8 +60,12 @@
     if (!Number.isFinite(position?.x) || !Number.isFinite(position?.y))
       throw new Error('连接位置无效，请重新点击导线。');
     const fromPosition = fromEndpoint ? pinPosition(input, fromEndpoint) : null;
-    const route = wireRoute(input, target);
-    const projected = nearestPoint(route, position);
+    pinPosition(input, target.from);
+    pinPosition(input, target.to);
+    const route = renderer.getWireRoute(target, input.components);
+    const projected = renderer.snapWirePoint(target, input.components, position, {
+      anchor: fromPosition,
+    });
     let endpoint;
     const endpoints = [
       { value: target.from, position: route[0] },
