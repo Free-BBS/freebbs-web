@@ -126,7 +126,7 @@ function wienChallenge(overrides = {}) {
   };
 }
 
-function harness(mode = 'register') {
+function harness(mode = 'register', next = '') {
   const page = readPublic(mode === 'register' ? 'register.html' : `${mode}.html`);
   const elements = new Map();
   for (const [, id] of page.matchAll(/\bid="([^"]+)"/g)) elements.set(id, createElement());
@@ -152,11 +152,17 @@ function harness(mode = 'register') {
     getItem: (key) => storage.get(key) ?? null,
     setItem: (key, value) => storage.set(key, value),
   };
+  const authLinks = ['/login', '/register', '/remake'].map((href) => ({
+    href,
+    getAttribute() {
+      return this.href;
+    },
+  }));
   const document = {
     body: createElement(),
     getElementById: (id) => element(id) || null,
     querySelector: () => null,
-    querySelectorAll: () => [],
+    querySelectorAll: (selector) => (selector === '.auth-page-switch a' ? authLinks : []),
     createElement,
     createElementNS(namespace, tagName) {
       assert.equal(namespace, 'http://www.w3.org/2000/svg');
@@ -183,6 +189,7 @@ function harness(mode = 'register') {
       port: '',
       origin: 'https://free-bbs.test',
       href: `/${mode}`,
+      search: next ? `?next=${encodeURIComponent(next)}` : '',
     },
     setInterval(callback) {
       intervals.add(callback);
@@ -191,6 +198,8 @@ function harness(mode = 'register') {
     clearInterval: (callback) => intervals.delete(callback),
   };
   const context = vm.createContext({
+    URL,
+    URLSearchParams,
     document,
     window,
     localStorage,
@@ -222,6 +231,7 @@ function harness(mode = 'register') {
   }
   return {
     element,
+    authLinks,
     window,
     storage,
     requests,
@@ -774,3 +784,41 @@ test('malformed or unknown challenge types fail closed and can be refreshed', as
     await submission;
   }
 });
+
+for (const mode of ['login', 'register', 'remake']) {
+  test(`${mode} preserves the activity return address across auth links and successful submission`, async () => {
+    const next = '/surveys?id=activity-123#lookup';
+    const h = harness(mode, next);
+    h.authLinks.forEach((link) => {
+      assert.equal(new URL(link.href, h.window.location.origin).searchParams.get('next'), next);
+    });
+    if (mode === 'remake') {
+      h.responses.push({ body: { token: 'new-token', user: {} } });
+      await h.submit();
+    } else {
+      const { submission } = await openChallenge(h);
+      h.element('band-challenge-position').value = '0.413';
+      await h.element('band-challenge-position').dispatch('input');
+      h.responses.push({ body: { token: 'new-token', user: {} } });
+      await h.element('band-challenge-confirm').dispatch('click');
+      await submission;
+    }
+    assert.equal(h.window.location.href, next);
+  });
+}
+for (const next of [
+  'https://evil.test/surveys',
+  '//evil.test/surveys',
+  // eslint-disable-next-line no-script-url -- Reject executable return URLs.
+  'javascript:alert(1)',
+  '/adminusers',
+  'http://[bad',
+]) {
+  test(`authentication rejects unsafe or unrelated return path: ${next}`, async () => {
+    const h = harness('remake', next);
+    h.responses.push({ body: { token: 'new-token', user: {} } });
+    await h.submit();
+    assert.equal(h.window.location.href, '/');
+    assert.ok(h.authLinks.every((link) => !link.href.includes('next=')));
+  });
+}

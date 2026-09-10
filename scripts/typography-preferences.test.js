@@ -142,6 +142,8 @@ function createHarness({ raw, storage = new Map(), failReads = false, failWrites
     setInterval() {},
   };
   const context = vm.createContext({
+    URL,
+    URLSearchParams,
     document,
     window,
     localStorage,

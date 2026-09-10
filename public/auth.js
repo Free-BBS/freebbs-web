@@ -236,11 +236,18 @@ async function handleAuthSubmit(event) {
       setMessage('已取消验证，填写内容已保留。');
       return;
     }
+    if (localStorage.getItem(STORAGE_KEY) !== payload.token) {
+      try {
+        sessionStorage.removeItem('freebbs_activity_receipts_v2');
+      } catch {
+        /* Storage may be blocked. */
+      }
+    }
     localStorage.setItem(STORAGE_KEY, payload.token);
     if (payload.user?.requiresUsernameChange) {
       await window.freeBbsAccount.requireValidUsername(payload.user);
     }
-    window.location.href = '/';
+    window.location.href = activityReturnPath() || '/';
   } catch (error) {
     setMessage(error.message);
   } finally {
@@ -303,6 +310,33 @@ async function handleSendEmailCode() {
   }
 }
 
+function activityReturnPath() {
+  try {
+    const value = new URLSearchParams(window.location.search).get('next');
+    if (!value) return '';
+    const next = new URL(value, window.location.origin);
+    return next.origin === window.location.origin && next.pathname === '/surveys'
+      ? `${next.pathname}${next.search}${next.hash}`
+      : '';
+  } catch {
+    return '';
+  }
+}
+function initializeAuthReturnLinks() {
+  const next = activityReturnPath();
+  if (!next) return;
+  document.querySelectorAll('.auth-page-switch a').forEach((link) => {
+    const destination = new URL(link.getAttribute('href'), window.location.origin);
+    if (
+      destination.origin === window.location.origin &&
+      ['/login', '/register', '/remake'].includes(destination.pathname)
+    ) {
+      destination.searchParams.set('next', next);
+      link.href = `${destination.pathname}${destination.search}`;
+    }
+  });
+}
+initializeAuthReturnLinks();
 authForm?.addEventListener('submit', handleAuthSubmit);
 sendEmailCodeButton?.addEventListener('click', handleSendEmailCode);
 authMajorFixed?.addEventListener('click', () => {
