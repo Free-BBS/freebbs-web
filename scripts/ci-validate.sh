@@ -29,6 +29,8 @@ node --check public/circuit-discussion.js
 node --check public/circuit-engine.js
 node --check public/circuit-plot.js
 node --check public/circuit-plot-controls.js
+node --check public/circuit-annotations.js
+node --check public/circuit-annotation-controls.js
 node --check public/circuit-worker.js
 node --check public/circuit-renderer.js
 node --check public/circuit-wiring.js

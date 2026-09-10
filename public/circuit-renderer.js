@@ -1636,6 +1636,275 @@
     return `url(#${id})`;
   }
 
+  function annotationApi() {
+    if (globalThis.FreeBbsCircuitAnnotations) return globalThis.FreeBbsCircuitAnnotations;
+    if (typeof module !== 'undefined' && module.exports) return require('./circuit-annotations');
+    return null;
+  }
+
+  function plotPointer(svg, event, chartWidth) {
+    const box = svg.getBoundingClientRect();
+    if (!box.width || !box.height) return null;
+    return {
+      x: ((event.clientX - box.left) / box.width) * chartWidth,
+      y: ((event.clientY - box.top) / box.height) * 310,
+    };
+  }
+
+  function insidePlot(point, bounds) {
+    return (
+      Number.isFinite(point.x) &&
+      Number.isFinite(point.y) &&
+      point.x >= bounds.left - 1e-7 &&
+      point.x <= bounds.right + 1e-7 &&
+      point.y >= bounds.top - 1e-7 &&
+      point.y <= bounds.bottom + 1e-7
+    );
+  }
+
+  // Pick from original samples, including spikes discarded by SVG downsampling.
+  // Both distance and visibility are measured in screen space (also on log axes).
+  function nearestPlotPoint(result, traces, xValues, valuesOf, px, py, pointer, bounds) {
+    let nearest = null;
+    let distance = Infinity;
+    traces.forEach((trace) => {
+      const values = valuesOf(trace);
+      const count = Math.min(result.x?.length || 0, xValues.length, values.length);
+      for (let index = 0; index < count; index += 1) {
+        if (
+          !Number.isFinite(result.x[index]) ||
+          !Number.isFinite(xValues[index]) ||
+          !Number.isFinite(values[index])
+        )
+          continue;
+        const point = { x: px(xValues[index]), y: py(values[index]) };
+        if (!insidePlot(point, bounds)) continue;
+        const candidate = (point.x - pointer.x) ** 2 + (point.y - pointer.y) ** 2;
+        if (candidate < distance) {
+          distance = candidate;
+          nearest = { trace, index };
+        }
+      }
+    });
+    return nearest;
+  }
+
+  function annotationTarget(target, svg) {
+    for (let node = target; node && node !== svg; node = node.parentNode || node.parent) {
+      if (node.getAttribute?.('data-annotation-id')) return true;
+    }
+    return false;
+  }
+
+  function bindPlotPointer(svg, options, inspect, pick) {
+    let gesture = null;
+    const enabled = options.annotationPicking && typeof options.onPointPick === 'function';
+    if (enabled) Object.assign(svg.style, { cursor: 'crosshair' });
+    svg.addEventListener('pointerdown', (event) => {
+      inspect(event);
+      gesture = null;
+      if (
+        !enabled ||
+        (event.button !== undefined && event.button !== 0) ||
+        event.isPrimary === false ||
+        annotationTarget(event.target, svg)
+      )
+        return;
+      gesture = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        cancelled: false,
+      };
+    });
+    svg.addEventListener('pointermove', (event) => {
+      inspect(event);
+      if (!gesture || gesture.id !== event.pointerId) return;
+      if (Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 7)
+        gesture.cancelled = true;
+    });
+    svg.addEventListener('pointerup', (event) => {
+      const start = gesture;
+      gesture = null;
+      if (
+        !start ||
+        start.cancelled ||
+        start.id !== event.pointerId ||
+        Math.hypot(event.clientX - start.x, event.clientY - start.y) > 7 ||
+        annotationTarget(event.target, svg)
+      )
+        return;
+      const point = pick(event);
+      if (point) options.onPointPick(point);
+    });
+    ['pointercancel', 'pointerleave'].forEach((type) => {
+      svg.addEventListener(type, () => {
+        gesture = null;
+      });
+    });
+  }
+
+  function shortAnnotationText(value, maxWidth) {
+    let text = '';
+    let width = 0;
+    const characters = Array.from(
+      String(value || '')
+        .replace(/\s+/gu, ' ')
+        .trim(),
+    );
+    for (let index = 0; index < characters.length; index += 1) {
+      const character = characters[index];
+      const nextWidth = width + (character.codePointAt(0) > 255 ? 11 : 6.5);
+      if (nextWidth > maxWidth - 11) return { text: `${text}…`, width: width + 11 };
+      text += character;
+      width = nextWidth;
+    }
+    return { text, width };
+  }
+
+  function annotationPlacement(point, labelWidth, bounds, occupied) {
+    const labelHeight = 24;
+    const clampX = (x) => Math.max(bounds.left + 3, Math.min(bounds.right - labelWidth - 3, x));
+    const clampY = (y) => Math.max(bounds.top + 3, Math.min(bounds.bottom - labelHeight - 3, y));
+    const candidates = [];
+    const candidate = (x, y) => candidates.push({ x: clampX(x), y: clampY(y) });
+    candidate(point.x + 10, point.y - 34);
+    candidate(point.x - labelWidth - 10, point.y - 34);
+    candidate(point.x + 10, point.y + 10);
+    candidate(point.x - labelWidth - 10, point.y + 10);
+    // Search all remaining rows so coincident samples still get distinct badges.
+    for (let y = bounds.top + 3; y <= bounds.bottom - labelHeight - 3; y += 28) {
+      candidate(point.x + 10, y);
+      candidate(point.x - labelWidth - 10, y);
+      for (let x = bounds.left + 3; x <= bounds.right - labelWidth - 3; x += labelWidth + 5)
+        candidate(x, y);
+    }
+    const available = candidates.filter((position) =>
+      occupied.every(
+        (box) =>
+          position.x + labelWidth + 3 <= box.x ||
+          position.x >= box.x + box.width + 3 ||
+          position.y + labelHeight + 3 <= box.y ||
+          position.y >= box.y + box.height + 3,
+      ),
+    );
+    available.sort(
+      (a, b) =>
+        (a.x + labelWidth / 2 - point.x) ** 2 +
+        (a.y + labelHeight / 2 - point.y) ** 2 -
+        ((b.x + labelWidth / 2 - point.x) ** 2 + (b.y + labelHeight / 2 - point.y) ** 2),
+    );
+    const position = available[0];
+    return position ? { ...position, width: labelWidth, height: labelHeight } : null;
+  }
+
+  function renderAnnotations(svg, result, options, geometry) {
+    if (!Array.isArray(options.annotations) || !options.annotations.length) return;
+    const api = annotationApi();
+    if (!api) return;
+    const { traces, phase = false, px, py, bounds } = geometry;
+    const occupied = [];
+    options.annotations.slice(0, 32).forEach((annotation, index) => {
+      if ((annotation.axis === 'phase') !== phase) return;
+      const traceIndex = traces.findIndex((trace) => trace.id === annotation.traceId);
+      if (traceIndex < 0) return;
+      const resolved = api.resolve(annotation, result, options);
+      if (resolved.error) return;
+      const point = { x: px(resolved.x), y: py(resolved.y) };
+      if (!insidePlot(point, bounds)) return;
+      const color = traceColors[traceIndex % traceColors.length];
+      const shortened = shortAnnotationText(
+        options.annotations.length > 12 ? '' : annotation.text,
+        Math.min(144, (bounds.right - bounds.left) * 0.55),
+      );
+      let text = `${index + 1}${shortened.text ? ` · ${shortened.text}` : ''}`;
+      let box = annotationPlacement(
+        point,
+        25 + (shortened.text ? shortened.width + 10 : 0),
+        bounds,
+        occupied,
+      );
+      if (!box) {
+        text = String(index + 1);
+        box = annotationPlacement(point, 28, bounds, occupied);
+      }
+      if (!box) return;
+      occupied.push(box);
+      const coordinates = resolved.xTrace
+        ? `X · ${resolved.xTrace.label}: ${formatValue(resolved.x, resolved.xUnit)} · Y · ${resolved.trace.label}: ${formatValue(resolved.y, resolved.yUnit)}`
+        : `${resolved.trace.label}${phase ? ' · 相位' : ''}: ${formatValue(resolved.y, resolved.yUnit)}`;
+      const description = `标记 ${index + 1} · ${formatValue(resolved.at, result.xUnit || '')} · ${coordinates}${annotation.text ? ` · ${annotation.text}` : ''}`;
+      const marker = svgElement('g', {
+        'data-annotation-id': annotation.id,
+        'data-annotation-trace-id': annotation.traceId,
+        'data-annotation-index': resolved.index,
+        role: typeof options.onAnnotationSelect === 'function' ? 'button' : 'note',
+        tabindex: 0,
+        'aria-label': description,
+      });
+      if (typeof options.onAnnotationSelect === 'function') marker.style.cursor = 'pointer';
+      marker.append(svgElement('title', {}, description));
+      marker.append(
+        svgElement('path', {
+          d: `M ${point.x} ${point.y} L ${Math.max(box.x, Math.min(box.x + box.width, point.x))} ${Math.max(box.y, Math.min(box.y + box.height, point.y))}`,
+          fill: 'none',
+          stroke: color,
+          'stroke-width': 1.2,
+          opacity: 0.8,
+        }),
+      );
+      marker.append(
+        svgElement('circle', {
+          cx: point.x,
+          cy: point.y,
+          r: 4.5,
+          'data-annotation-point': annotation.id,
+          fill: 'var(--circuit-surface,#102228)',
+          stroke: color,
+          'stroke-width': 2.2,
+        }),
+      );
+      marker.append(
+        svgElement('rect', {
+          x: box.x,
+          y: box.y,
+          width: box.width,
+          height: box.height,
+          rx: 4,
+          'data-annotation-label': annotation.id,
+          fill: 'var(--circuit-surface,#102228)',
+          stroke: color,
+          'stroke-width': 1,
+        }),
+      );
+      marker.append(
+        svgElement(
+          'text',
+          {
+            x: box.x + 8,
+            y: box.y + 16,
+            fill: 'var(--circuit-ink,#dfedf0)',
+            'font-size': 11,
+            'font-weight': 600,
+          },
+          text,
+        ),
+      );
+      marker.addEventListener('click', (event) => {
+        event.stopPropagation?.();
+        options.onAnnotationSelect?.(annotation.id);
+      });
+      marker.addEventListener('keydown', (event) => {
+        if (typeof options.onAnnotationSelect !== 'function' || !['Enter', ' '].includes(event.key))
+          return;
+        event.preventDefault();
+        event.stopPropagation();
+        options.onAnnotationSelect(annotation.id);
+      });
+      svg.append(marker);
+    });
+  }
+
   function renderXYWaveform(container, result, options) {
     container.replaceChildren();
     const xTrace = result.traces.find((trace) => trace.id === (options.xyX || options.ch1));
@@ -1799,9 +2068,10 @@
     const readout = document.createElement('p');
     readout.style.cssText =
       'font-size:12px;font-variant-numeric:tabular-nums;min-height:1.5em;margin:4px 0;color:var(--circuit-muted,#9db4bb)';
-    readout.textContent = path
-      ? '移动指针或触摸曲线查看同一采样时刻的 X、Y 值。'
-      : '这两个通道没有可绘制的有效采样值。';
+    const inspectionHint = options.annotationPicking
+      ? '点击曲线添加标记；滑动不会添加。'
+      : '移动指针或触摸曲线查看同一采样时刻的 X、Y 值。';
+    readout.textContent = path ? inspectionHint : '这两个通道没有可绘制的有效采样值。';
     function inspect(event) {
       const box = svg.getBoundingClientRect();
       if (!box.width || !box.height) return;
@@ -1827,8 +2097,36 @@
         : '';
       readout.textContent = `${sample}X · ${xTrace.label}: ${formatValue(xValues[nearest], xTrace.unit || '')} · Y · ${yTrace.label}: ${formatValue(yValues[nearest], yTrace.unit || '')}`;
     }
-    svg.addEventListener('pointermove', inspect);
-    svg.addEventListener('pointerdown', inspect);
+    const bounds = { left, top, right: left + width, bottom: top + height };
+    bindPlotPointer(svg, options, inspect, (event) => {
+      const pointer = plotPointer(svg, event, chartWidth);
+      if (!pointer || !insidePlot(pointer, bounds)) return null;
+      const nearest = nearestPlotPoint(
+        result,
+        [yTrace],
+        xValues,
+        (trace) => trace.values,
+        px,
+        py,
+        pointer,
+        bounds,
+      );
+      return nearest
+        ? {
+            traceId: yTrace.id,
+            at: result.x[nearest.index],
+            axis: 'value',
+            mode: 'xy',
+            xTraceId: xTrace.id,
+          }
+        : null;
+    });
+    renderAnnotations(
+      svg,
+      result,
+      { ...options, xyX: xTrace.id, xyY: yTrace.id },
+      { traces: [yTrace], px, py, bounds },
+    );
     group.append(svg, readout);
     container.append(group);
     return {
@@ -2022,7 +2320,9 @@
       const readout = document.createElement('p');
       readout.style.cssText =
         'font-size:12px;font-variant-numeric:tabular-nums;min-height:1.5em;margin:4px 0;color:var(--circuit-muted,#9db4bb)';
-      readout.textContent = '移动指针或触摸曲线查看采样值。';
+      readout.textContent = options.annotationPicking
+        ? '点击曲线添加标记；滑动不会添加。'
+        : '移动指针或触摸曲线查看采样值。';
       function inspect(event) {
         const box = svg.getBoundingClientRect();
         const ratio = Math.min(
@@ -2035,8 +2335,31 @@
         cursor.setAttribute('d', `M ${px(xValues[nearest])} ${top} V ${top + height}`);
         readout.textContent = `${formatValue(xValues[nearest], result.xUnit || '')} · ${traces.map((trace) => `${trace.label}: ${formatValue(valuesOf(trace)[nearest], unit)}`).join(' · ')}`;
       }
-      svg.addEventListener('pointermove', inspect);
-      svg.addEventListener('pointerdown', inspect);
+      const bounds = { left, top, right: left + width, bottom: top + height };
+      bindPlotPointer(svg, options, inspect, (event) => {
+        const pointer = plotPointer(svg, event, chartWidth);
+        if (!pointer || !insidePlot(pointer, bounds)) return null;
+        const nearest = nearestPlotPoint(
+          result,
+          traces,
+          xValues,
+          valuesOf,
+          px,
+          py,
+          pointer,
+          bounds,
+        );
+        return nearest
+          ? {
+              traceId: nearest.trace.id,
+              at: xValues[nearest.index],
+              axis: phase ? 'phase' : 'value',
+              mode: 'xt',
+              xTraceId: null,
+            }
+          : null;
+      });
+      renderAnnotations(svg, result, options, { traces, phase, px, py, bounds });
       group.append(svg, readout);
       container.append(group);
       charts.push(group);

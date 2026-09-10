@@ -395,7 +395,17 @@
                   <legend>显示曲线</legend>
                   <div id="circuit-traces"></div>
                 </fieldset>
+                <div class="circuit-annotation-toolbar">
+                  <button id="circuit-annotation-pick" type="button" aria-pressed="false">
+                    在波形上添加标记</button
+                  ><span id="circuit-annotation-pick-hint" class="circuit-parameter-hint"></span>
+                </div>
                 <div class="circuit-waveform" id="circuit-waveform"></div>
+                <section
+                  id="circuit-annotations"
+                  class="circuit-annotations"
+                  aria-label="波形标记与注释"
+                ></section>
                 <div class="circuit-playback" id="circuit-playback">
                   <button id="circuit-play" type="button">播放</button
                   ><label for="circuit-frame">查看采样点</label
@@ -530,7 +540,7 @@
                   <div class="circuit-ai-intro" id="circuit-ai-intro">
                     <p>从电路本身，找到答案。</p>
                     <p>
-                      我能查看当前元件、连接和仿真读数，帮你检查接线、解释波形，或提出可以应用的修改。
+                      我能查看当前电路和仿真读数，帮你检查接线、计算数学曲线、切换示波器模式，或添加标记与注释。
                     </p>
                     <div class="circuit-ai-starters" aria-label="开始提问">
                       <button
@@ -547,9 +557,9 @@
                       </button>
                       <button
                         type="button"
-                        data-circuit-ai-question="请分析当前仿真结果，显示关键波形并解释其变化。如果还没有结果，请建议合适的仿真设置。"
+                        data-circuit-ai-question="请分析当前仿真结果，显示关键波形并标记采样峰值、添加注释。如果需要比较信号，可以建议数学运算或 X–Y / X–T 模式。如果还没有结果，请先建议合适的仿真设置。"
                       >
-                        一起看波形
+                        分析并标记波形
                       </button>
                     </div>
                     <p class="circuit-ai-intro-note">提问时同步当前草稿。修改建议由你点选应用。</p>
@@ -627,6 +637,8 @@
     <script src="/circuit-engine.js"></script>
     <script src="/circuit-plot.js"></script>
     <script src="/circuit-plot-controls.js"></script>
+    <script src="/circuit-annotations.js"></script>
+    <script src="/circuit-annotation-controls.js"></script>
     <script src="/circuit-renderer.js"></script>
     <script src="/circuit-wiring.js"></script>
     <script src="/circuit-ai-actions.js"></script>

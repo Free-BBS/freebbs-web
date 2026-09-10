@@ -368,6 +368,48 @@
     const component = components.find((item) => item.id === match[2]);
     return traceDescriptors(component).some((trace) => trace.id === id);
   }
+  function normalizeAnnotation(value) {
+    const fields = ['id', 'traceId', 'at', 'text', 'mode', 'axis', 'xTraceId', 'analysisKey'];
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
+      Object.keys(value).some((key) => !fields.includes(key)) ||
+      fields.some((key) => !Object.hasOwn(value, key))
+    )
+      throw new Error('波形标记格式不正确或含有不支持的字段。');
+    if (typeof value.id !== 'string' || !/^[A-Za-z][A-Za-z0-9_-]{0,39}$/.test(value.id))
+      throw new Error('波形标记 ID 必须以字母开头，且最多 40 个字符。');
+    if (!validTraceId(value.traceId)) throw new Error('波形标记曲线 ID 不正确。');
+    const at = finite(value.at, '波形标记坐标');
+    if (typeof value.text !== 'string' || value.text.length > 160)
+      throw new Error('波形标记注释最多 160 个字符。');
+    if (!['xt', 'xy'].includes(value.mode) || !['value', 'phase'].includes(value.axis))
+      throw new Error('波形标记的模式或坐标类型不正确。');
+    if (
+      typeof value.analysisKey !== 'string' ||
+      !/^(?:dc|transient|ac|sweep:[A-Za-z][A-Za-z0-9_-]{0,39}:[A-Za-z][A-Za-z0-9_]{0,39})$/.test(
+        value.analysisKey,
+      )
+    )
+      throw new Error('波形标记的分析类型不正确。');
+    if (
+      (value.mode === 'xt' && value.xTraceId !== null) ||
+      (value.mode === 'xy' && (value.axis !== 'value' || !validTraceId(value.xTraceId))) ||
+      (value.axis === 'phase' && (value.mode !== 'xt' || value.analysisKey !== 'ac'))
+    )
+      throw new Error('X–Y 标记需要横轴曲线；相位标记仅支持交流 X–T 图像。');
+    return {
+      id: value.id,
+      traceId: value.traceId,
+      at,
+      text: value.text,
+      mode: value.mode,
+      axis: value.axis,
+      xTraceId: value.xTraceId,
+      analysisKey: value.analysisKey,
+    };
+  }
   function normalizeDisplay(value = {}) {
     function object(item, fields, label) {
       if (
@@ -380,7 +422,19 @@
     }
     object(
       value,
-      ['version', 'mode', 'traceIds', 'ch1', 'ch2', 'xyX', 'xyY', 'math', 'phase', 'ranges'],
+      [
+        'version',
+        'mode',
+        'traceIds',
+        'ch1',
+        'ch2',
+        'xyX',
+        'xyY',
+        'math',
+        'phase',
+        'ranges',
+        'annotations',
+      ],
       '图像设置',
     );
     if (value.version !== undefined && value.version !== 1)
@@ -441,7 +495,24 @@
         ranges[`${axis}Min`] >= ranges[`${axis}Max`]
       )
         throw new Error('坐标范围下限必须小于上限。');
-    return { version: 1, mode, traceIds: [...traceIds], ...channels, math, phase, ranges };
+    const annotations = {};
+    if (value.annotations !== undefined) {
+      if (!Array.isArray(value.annotations) || value.annotations.length > 32)
+        throw new Error('每张图像最多设置 32 个波形标记。');
+      annotations.annotations = value.annotations.map(normalizeAnnotation);
+      if (new Set(annotations.annotations.map((item) => item.id)).size !== value.annotations.length)
+        throw new Error('波形标记 ID 不可重复。');
+    }
+    return {
+      version: 1,
+      mode,
+      traceIds: [...traceIds],
+      ...channels,
+      math,
+      phase,
+      ranges,
+      ...annotations,
+    };
   }
   function validateDocument(document) {
     if (
@@ -1574,6 +1645,7 @@
     limits,
     validateDocument,
     normalizeDisplay,
+    normalizeAnnotation,
     traceDescriptors,
     traceComponentId,
     validTraceId,

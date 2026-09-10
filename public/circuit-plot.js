@@ -367,6 +367,9 @@
       math: Array.isArray(saved.math) ? saved.math.map((row) => ({ ...row })) : [],
       phase: saved.phase === true,
       ranges,
+      ...(Array.isArray(saved.annotations)
+        ? { annotations: saved.annotations.map((annotation) => ({ ...annotation })) }
+        : {}),
     };
   }
 

@@ -161,6 +161,173 @@ test('malformed, mixed valid/invalid, unclosed and unsupported proposals produce
   assert.equal({}.polluted, undefined);
 });
 
+test('bounded summaries preserve full-sample extrema and AC phase coordinates for Max markers', () => {
+  const body = requestBody();
+  body.document.analysis = { type: 'ac', start: 10, stop: 10000, points: 101, scale: 'log' };
+  body.simulation.analysis = body.document.analysis;
+  body.simulation.sampleCount = 101;
+  body.simulation.traces[0] = {
+    id: 'I:R1',
+    min: 0.001,
+    max: 0.003,
+    latest: 0.002,
+    minPoint: { x: 10, value: 0.001 },
+    maxPoint: { x: 251.19, value: 0.003 },
+    phaseMinPoint: { x: 10, value: -89 },
+    phaseMaxPoint: { x: 10000, value: 5 },
+    samples: [
+      { x: 10, value: 0.001, phase: -89 },
+      { x: 10000, value: 0.002, phase: 5 },
+    ],
+  };
+  const input = validateCircuitAssistantInput(body);
+  assert.deepEqual(input.simulation.traces[0], body.simulation.traces[0]);
+  const prompt = buildCircuitAssistantPayload(input).messages.at(-1).content;
+  assert.match(prompt, /maxPoint\/minPoint/);
+  assert.match(prompt, /即使 X–Y 图像也不能把横轴电压当作 at/);
+  assert.match(prompt, /samples 只是最多 64 点的稀疏摘要/);
+  assert.match(prompt, /不能宣称连续函数的解析极值/);
+  for (const patch of [
+    { minPoint: { x: 0, value: 0.001 } },
+    { maxPoint: { x: 10001, value: 0.003 } },
+    { maxPoint: { x: 251.19, value: 0.004 } },
+    { minPoint: { x: 10, value: Infinity } },
+    { phaseMinPoint: { x: 10, value: 6 } },
+    { phaseMinPoint: { x: 10, value: -89, instruction: 'x' } },
+    { samples: [{ x: 10, value: 0.001, phase: NaN }] },
+    { samples: [{ x: 10, value: 0.001, phase: 0, instructions: 'x' }] },
+  ]) {
+    const changed = structuredClone(body);
+    Object.assign(changed.simulation.traces[0], patch);
+    assert.throws(() => validateCircuitAssistantInput(changed), JSON.stringify(patch));
+  }
+  const stale = structuredClone(body);
+  stale.simulation.analysis.stop = 20000;
+  // Clone aliased analysis independently so only the summary becomes stale.
+  stale.document.analysis = { ...body.document.analysis, stop: 10000 };
+  assert.throws(() => validateCircuitAssistantInput(stale), /已过期/);
+  const zero = structuredClone(body);
+  zero.simulation.sampleCount = 0;
+  assert.throws(() => validateCircuitAssistantInput(zero), /无采样结果/);
+  const nonAc = requestBody();
+  nonAc.simulation.traces[0].phaseMinPoint = { x: 0, value: -90 };
+  assert.throws(() => validateCircuitAssistantInput(nonAc), /相位极值/);
+  delete nonAc.simulation.traces[0].phaseMinPoint;
+  nonAc.simulation.traces[0].samples[0].phase = -90;
+  assert.throws(() => validateCircuitAssistantInput(nonAc), /相位采样/);
+});
+
+test('Max receives configured mathematics and annotation context and returns only valid current-plot actions', () => {
+  const body = requestBody();
+  body.document.display = {
+    mode: 'xt',
+    traceIds: ['M:M1'],
+    ch1: 'I:R1',
+    math: [{ id: 'M1', label: '电流平方', expression: 'CH1 ^ 2', unit: 'A²' }],
+    annotations: [],
+  };
+  body.simulation.traces = [
+    {
+      id: 'M:M1',
+      min: 0.000001,
+      max: 0.000001,
+      minPoint: { x: 0, value: 0.000001 },
+      maxPoint: { x: 0, value: 0.000001 },
+      samples: [{ x: 0, value: 0.000001 }],
+    },
+  ];
+  const input = validateCircuitAssistantInput(body);
+  const annotation = {
+    id: 'A1',
+    traceId: 'M:M1',
+    at: 0,
+    text: '工作点',
+    mode: 'xt',
+    axis: 'value',
+    xTraceId: null,
+    analysisKey: 'dc',
+  };
+  const actions = [{ type: 'set_annotation', annotation }];
+  const payload = buildCircuitAssistantPayload(input);
+  assert.deepEqual(payload.context.circuitEditor.document.display.annotations, []);
+  assert.match(payload.messages.at(-1).content, /set_annotation/);
+  assert.match(payload.messages.at(-1).content, /delete_annotation/);
+  assert.match(payload.messages.at(-1).content, /待用户再次提问后根据新结果标记/);
+  const responseFor = (proposed) =>
+    parseCircuitAssistantResponse(
+      {
+        answer: `已整理。\n\`\`\`circuit-actions\n${JSON.stringify({ actions: proposed })}\n\`\`\``,
+      },
+      input,
+    );
+  assert.deepEqual(responseFor(actions).actions, actions);
+  assert.deepEqual(responseFor([...actions, { type: 'run_simulation' }]).actions, []);
+  assert.match(
+    responseFor([...actions, { type: 'run_simulation' }]).actionWarning,
+    /先完成电路修改/,
+  );
+  assert.deepEqual(
+    responseFor([{ type: 'set_annotation', annotation: { ...annotation, traceId: 'M:M2' } }])
+      .actions,
+    [],
+  );
+  const missing = structuredClone(body);
+  missing.document.display.math = [];
+  assert.throws(() => validateCircuitAssistantInput(missing), /不存在的波形/);
+  const invalid = structuredClone(body);
+  invalid.document.display.math[0].expression = 'constructor()';
+  assert.throws(() => validateCircuitAssistantInput(invalid), /不存在的波形/);
+  const availableOnly = structuredClone(input);
+  availableOnly.simulation.traces = [];
+  assert.deepEqual(
+    parseCircuitAssistantResponse(
+      { answer: `\`\`\`circuit-actions\n${JSON.stringify({ actions })}\n\`\`\`` },
+      availableOnly,
+    ).actions,
+    [],
+  );
+});
+
+test('Max response can invoke math and change the scope mode before marking the resulting curve', () => {
+  const body = requestBody();
+  body.document.display = { mode: 'xt', ch1: 'I:R1', traceIds: ['I:R1'] };
+  const input = validateCircuitAssistantInput(body);
+  const actions = [
+    {
+      type: 'set_plot',
+      display: {
+        math: [{ id: 'M1', expression: 'pow(CH1, 2)', label: '电流平方', unit: 'A²' }],
+        mode: 'xy',
+        xyX: 'I:R1',
+        xyY: 'M:M1',
+        traceIds: ['M:M1'],
+      },
+    },
+    {
+      type: 'set_annotation',
+      annotation: {
+        id: 'A1',
+        traceId: 'M:M1',
+        at: 0,
+        text: '工作点',
+        mode: 'xy',
+        axis: 'value',
+        xTraceId: 'I:R1',
+        analysisKey: 'dc',
+      },
+    },
+  ];
+  const answer = `配置电流平方的 X–Y 图并标记工作点。\n\`\`\`circuit-actions\n${JSON.stringify({ actions })}\n\`\`\``;
+  const response = parseCircuitAssistantResponse({ answer }, input);
+  assert.deepEqual(response.actions, actions);
+  assert.equal(response.actionWarning, undefined);
+  const prompt = buildCircuitAssistantPayload(input).messages.at(-1).content;
+  assert.match(prompt, /set_plot/);
+  assert.match(prompt, /diff\/derivative、integral/);
+  assert.match(prompt, /后续可引用刚设置的数学曲线/);
+  assert.match(prompt, /新数学曲线的极值尚未提供时/);
+});
+
 test('circuit assistant HTTP route authenticates, validates before forwarding and handles bounded upstream responses', async (t) => {
   const requests = [];
   let upstreamAnswer = {

@@ -241,3 +241,19 @@ summary {
     gap: 6px;
   }
 }
+
+.embed-annotations {
+  padding-left: 22px;
+  margin: 12px 0;
+}
+.embed-annotations li {
+  margin-block: 8px;
+  overflow-wrap: anywhere;
+}
+.embed-annotations p {
+  margin: 2px 0;
+  white-space: pre-wrap;
+}
+.embed-annotations small {
+  color: var(--circuit-muted);
+}

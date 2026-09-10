@@ -8,6 +8,7 @@
   const engine = globalThis.FreeBbsCircuitEngine;
   const renderer = globalThis.FreeBbsCircuitRenderer;
   const plot = globalThis.FreeBbsCircuitPlot;
+  const annotations = globalThis.FreeBbsCircuitAnnotations;
   const root = document.getElementById('circuit-embed');
   const status = document.getElementById('embed-status');
   const retry = document.getElementById('embed-retry');
@@ -141,6 +142,27 @@
         state.circuit.document.analysis.type === 'ac' &&
         state.circuit.document.analysis.scale === 'log',
     });
+    const list = document.getElementById('embed-annotations');
+    list.replaceChildren();
+    (state.display.annotations || []).forEach((annotation) => {
+      const item = document.createElement('li');
+      const heading = document.createElement('strong');
+      heading.textContent = `${annotation.id} · ${annotation.traceId}${annotation.axis === 'phase' ? ' · 相位' : ''}`;
+      const note = document.createElement('p');
+      note.textContent = annotation.text || '无注释';
+      const coordinate = document.createElement('small');
+      const point = annotations.resolve(annotation, state.result, {
+        ...state.display,
+        traceIds: Array.from(state.traceIds),
+        phase: phase.checked,
+      });
+      coordinate.textContent =
+        point.error ||
+        `${renderer.formatValue(point.at, state.result.xUnit)} · ${annotation.mode === 'xy' ? `X ${renderer.formatValue(point.x, point.xUnit)} · ` : ''}${renderer.formatValue(point.y, point.yUnit)}`;
+      item.append(heading, note, coordinate);
+      list.append(item);
+    });
+    list.hidden = !list.children.length;
     reportHeight();
   }
   function setupChannels() {
@@ -396,6 +418,7 @@
     Number(revision) <= 4294967295 &&
     Object.hasOwn(names, view);
   if (!valid) setStatus('电路引用格式无效：需要合法 CID、版本号和展示方式。', true);
-  else if (!engine || !renderer || !plot) setStatus('电路模块未能加载，请刷新页面后重试。', true);
+  else if (!engine || !renderer || !plot || !annotations)
+    setStatus('电路模块未能加载，请刷新页面后重试。', true);
   else loadCircuit();
 })();

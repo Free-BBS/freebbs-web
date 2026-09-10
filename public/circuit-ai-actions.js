@@ -4,6 +4,10 @@
     typeof module !== 'undefined' && module.exports
       ? require('./circuit-engine')
       : root.FreeBbsCircuitEngine;
+  const plot =
+    typeof module !== 'undefined' && module.exports
+      ? require('./circuit-plot')
+      : root.FreeBbsCircuitPlot;
   const actionFields = Object.freeze({
     highlight_components: ['componentIds'],
     show_traces: ['traceIds'],
@@ -14,6 +18,9 @@
     transform_component: ['componentId', 'rotation', 'mirrorX', 'mirrorY'],
     move_component: ['componentId', 'x', 'y'],
     delete_component: ['componentId'],
+    set_annotation: ['annotation'],
+    delete_annotation: ['annotationId'],
+    set_plot: ['display'],
     run_simulation: [],
   });
   const analysisFields = {
@@ -24,6 +31,13 @@
   };
   const componentFields = ['id', 'type', 'x', 'y', 'rotation', 'mirrorX', 'mirrorY', 'params'];
   const nonEditing = new Set(['highlight_components', 'show_traces', 'run_simulation']);
+  const nonElectrical = new Set([
+    'move_component',
+    'transform_component',
+    'set_annotation',
+    'delete_annotation',
+    'set_plot',
+  ]);
   const maxActions = 12;
 
   function assertSafeJson(value) {
@@ -115,6 +129,55 @@
     );
   }
 
+  function isElectricalAction(action) {
+    return isEditingAction(action) && !nonElectrical.has(action.type);
+  }
+
+  function analysisKeyFor(analysis) {
+    return analysis.type === 'sweep'
+      ? `sweep:${analysis.componentId}:${analysis.parameter}`
+      : analysis.type;
+  }
+
+  function coordinateInAnalysis(at, analysis) {
+    if (typeof at !== 'number' || !Number.isFinite(at)) return false;
+    const start = ['ac', 'sweep'].includes(analysis.type) ? analysis.start : 0;
+    const stop = analysis.type === 'dc' ? 0 : analysis.stop;
+    const tolerance = Math.max(Math.abs(start), Math.abs(stop), Number.MIN_VALUE) * 1e-12;
+    return at >= Math.min(start, stop) - tolerance && at <= Math.max(start, stop) + tolerance;
+  }
+
+  function validDocumentTraceId(id, document) {
+    if (!engine.validTraceId(id, document.components)) return false;
+    if (engine.traceComponentId(id)) return true;
+    const { display } = document;
+    if (!display || !plot) return false;
+    const variables = new Set();
+    for (const channel of ['ch1', 'ch2'])
+      if (
+        engine.traceComponentId(display[channel]) &&
+        engine.validTraceId(display[channel], document.components)
+      )
+        variables.add(channel.toUpperCase());
+    for (const row of display.math) {
+      try {
+        const compiled = plot.compileExpression(row.expression);
+        if (compiled.dependencies.some((dependency) => !variables.has(dependency))) continue;
+        if (compiled.usesCalculus && document.analysis.type !== 'transient') continue;
+        if (
+          document.analysis.type === 'ac' &&
+          /"name":"(?:min|max)"/.test(JSON.stringify(compiled.ast))
+        )
+          continue;
+        variables.add(row.id);
+        if (id === `M:${row.id}`) return true;
+      } catch {
+        // An invalid expression never creates a selectable or annotatable curve.
+      }
+    }
+    return false;
+  }
+
   function idList(value, label) {
     if (!Array.isArray(value) || value.length > 80 || value.some((id) => typeof id !== 'string'))
       throw new Error(`${label}必须是最多 80 项的 ID 列表。`);
@@ -128,11 +191,24 @@
     if (JSON.stringify(actions).length > 32000) throw new Error('AI 操作数据过大。');
     let draft = validateEditorDocument(document);
     const clonedActions = JSON.parse(JSON.stringify(actions));
-    const allowedTraces = availableTraceIds === null ? null : new Set(availableTraceIds);
+    let allowedTraces = availableTraceIds === null ? null : new Set(availableTraceIds);
+    const physicalTraces =
+      allowedTraces === null ? null : new Set([...allowedTraces].filter(engine.traceComponentId));
+    if (
+      clonedActions.some((action) => ['set_annotation', 'set_plot'].includes(action?.type)) &&
+      clonedActions.some(
+        (action) => isElectricalAction(action) || action?.type === 'run_simulation',
+      )
+    )
+      throw new Error(
+        '图像设置和标记必须基于当前仿真结果；请先完成电路修改并运行仿真，再单独设置图像或添加标记。',
+      );
     for (const action of clonedActions) {
       if (!action || typeof action.type !== 'string' || !Object.hasOwn(actionFields, action.type))
         throw new Error('AI 提出了不支持的操作。');
       assertFields(action, ['type', ...actionFields[action.type]], 'AI 操作');
+      const actionDocument = draft;
+      const actionTraces = allowedTraces;
       const componentList = draft.components;
       const findComponent = (id) => {
         const component = componentList.find((item) => item.id === id);
@@ -147,16 +223,121 @@
         case 'show_traces':
           idList(action.traceIds, '波形');
           action.traceIds.forEach((id) => {
-            const componentId = engine.traceComponentId(id);
-            const component = componentId && findComponent(componentId);
             if (
-              !component ||
-              !engine.validTraceId(id, componentList) ||
-              (allowedTraces && !allowedTraces.has(id))
+              !validDocumentTraceId(id, actionDocument) ||
+              (actionTraces && !actionTraces.has(id))
             )
               throw new Error(`波形 ${id.slice(0, 48)} 不存在，请先运行仿真。`);
           });
           break;
+        case 'set_plot': {
+          assertFields(
+            action.display,
+            ['mode', 'traceIds', 'ch1', 'ch2', 'xyX', 'xyY', 'math', 'phase', 'ranges'],
+            '图像操作',
+          );
+          if (!Object.keys(action.display).length) throw new Error('图像操作缺少要修改的设置。');
+          if (physicalTraces && !physicalTraces.size) throw new Error('请先运行仿真后再设置图像。');
+          const previous = engine.normalizeDisplay(draft.display);
+          if (action.display.ranges !== undefined)
+            assertFields(action.display.ranges, ['xMin', 'xMax', 'yMin', 'yMax'], '坐标范围');
+          const display = engine.normalizeDisplay({
+            ...previous,
+            ...action.display,
+            ranges: { ...previous.ranges, ...action.display.ranges },
+          });
+          const nextDocument = { ...draft, display };
+          for (const channel of ['ch1', 'ch2']) {
+            const id = display[channel];
+            if (
+              id !== null &&
+              (!engine.traceComponentId(id) ||
+                !engine.validTraceId(id, componentList) ||
+                (physicalTraces && !physicalTraces.has(id)))
+            )
+              throw new Error(`${channel.toUpperCase()} 必须引用当前仿真的物理通道。`);
+          }
+          for (const row of display.math) {
+            plot.compileExpression(row.expression);
+            if (!validDocumentTraceId(`M:${row.id}`, nextDocument))
+              throw new Error(`数学曲线 ${row.id} 不能计算，请检查通道、前序公式和当前分析类型。`);
+          }
+          if (display.phase && draft.analysis.type !== 'ac')
+            throw new Error('相位图仅支持交流分析。');
+          const nextAllowed =
+            physicalTraces === null
+              ? null
+              : new Set([...physicalTraces, ...display.math.map((row) => `M:${row.id}`)]);
+          const chosen = [...display.traceIds];
+          if (display.mode === 'xy') chosen.push(display.xyX, display.xyY);
+          if (
+            chosen.some(
+              (id) =>
+                !validDocumentTraceId(id, nextDocument) || (nextAllowed && !nextAllowed.has(id)),
+            )
+          )
+            throw new Error('图像设置引用了不存在或尚未计算的曲线。');
+          draft.display = display;
+          allowedTraces = nextAllowed;
+          break;
+        }
+        case 'set_annotation': {
+          const display = engine.normalizeDisplay(draft.display);
+          display.annotations ||= [];
+          const annotation = engine.normalizeDisplay({
+            ...display,
+            annotations: [action.annotation],
+          }).annotations[0];
+          const requiredTraces = [annotation.traceId];
+          if (annotation.mode === 'xy') requiredTraces.push(annotation.xTraceId);
+          if (
+            requiredTraces.some(
+              (id) =>
+                !validDocumentTraceId(id, actionDocument) ||
+                (actionTraces && !actionTraces.has(id)),
+            )
+          )
+            throw new Error('标记引用的波形不存在，请先运行仿真。');
+          if (
+            annotation.analysisKey !== analysisKeyFor(draft.analysis) ||
+            !coordinateInAnalysis(annotation.at, draft.analysis)
+          )
+            throw new Error('标记坐标或分析类型与当前仿真不符。');
+          if (
+            annotation.mode !== display.mode ||
+            (annotation.mode === 'xy' &&
+              (annotation.axis !== 'value' ||
+                annotation.xTraceId !== display.xyX ||
+                annotation.traceId !== display.xyY)) ||
+            (annotation.mode === 'xt' &&
+              ((annotation.axis === 'phase' && !display.phase) ||
+                !display.traceIds.includes(annotation.traceId))) ||
+            (annotation.axis === 'phase' && draft.analysis.type !== 'ac')
+          )
+            throw new Error('标记必须引用当前显示模式、坐标轴和已显示的曲线。');
+          const existingIndex = display.annotations.findIndex((item) => item.id === annotation.id);
+          if (existingIndex === -1) display.annotations.push(annotation);
+          else display.annotations[existingIndex] = annotation;
+          draft.display = display;
+          action.annotation = annotation;
+          break;
+        }
+        case 'delete_annotation': {
+          if (
+            typeof action.annotationId !== 'string' ||
+            !/^[A-Za-z][A-Za-z0-9_-]{0,39}$/.test(action.annotationId)
+          )
+            throw new Error('标记 ID 不正确。');
+          const display = engine.normalizeDisplay(draft.display);
+          display.annotations ||= [];
+          if (!display.annotations.some((item) => item.id === action.annotationId))
+            throw new Error('要删除的标记不存在。');
+          display.annotations = display.annotations.filter(
+            (item) => item.id !== action.annotationId,
+          );
+          draft.display = display;
+          break;
+        }
         case 'set_parameter': {
           const component = findComponent(action.componentId);
           if (
@@ -240,22 +421,30 @@
     }
     // Display operations are carried out after the edit batch, so their targets must survive it.
     for (const action of clonedActions) {
-      const targets =
-        action.type === 'highlight_components'
-          ? action.componentIds
-          : action.type === 'show_traces'
-            ? action.traceIds.map((id) => engine.traceComponentId(id))
-            : [];
-      if (targets.some((id) => !draft.components.some((component) => component.id === id)))
+      if (
+        (action.type === 'highlight_components' &&
+          action.componentIds.some(
+            (id) => !draft.components.some((component) => component.id === id),
+          )) ||
+        (action.type === 'show_traces' &&
+          action.traceIds.some((id) => !validDocumentTraceId(id, draft)))
+      )
         throw new Error('高亮或波形目标已被本次操作删除。');
+      if (action.type === 'set_annotation') {
+        const remaining = draft.display?.annotations?.find(
+          (item) => item.id === action.annotation.id,
+        );
+        if (
+          remaining &&
+          (!validDocumentTraceId(remaining.traceId, draft) ||
+            (remaining.mode === 'xy' && !validDocumentTraceId(remaining.xTraceId, draft)))
+        )
+          throw new Error('标记引用的曲线已被本次操作删除。');
+      }
     }
     if (
       clonedActions.some((action) => action.type === 'show_traces' && action.traceIds.length) &&
-      clonedActions.some(
-        (action) =>
-          isEditingAction(action) &&
-          !['move_component', 'transform_component'].includes(action.type),
-      ) &&
+      clonedActions.some(isElectricalAction) &&
       !clonedActions.some((action) => action.type === 'run_simulation')
     )
       throw new Error('修改电路后查看波形需要在同一批操作中运行仿真。');
@@ -342,7 +531,7 @@
           : '清除元件高亮';
       case 'show_traces':
         return action.traceIds.length
-          ? `显示波形 ${action.traceIds.map((id) => `${id.slice(2)} ${id.startsWith('V:') ? '电压' : '电流'}`).join('、')}`
+          ? `显示波形 ${action.traceIds.map((id) => `${id.slice(2)} ${{ V: '电压', I: '电流', M: '数学曲线' }[id[0]]}`).join('、')}`
           : '隐藏波形';
       case 'set_parameter':
         return `设置 ${action.componentId} 的${describeParameter(action.parameter, action.value)}`;
@@ -368,6 +557,51 @@
         return `移动 ${action.componentId} 到 (${action.x}, ${action.y})`;
       case 'delete_component':
         return `删除 ${action.componentId} 及连接到它的导线`;
+      case 'set_annotation': {
+        const { annotation } = action;
+        const [coordinate, unit] = {
+          transient: ['时间', ' s'],
+          ac: ['频率', ' Hz'],
+          dc: ['工作点坐标', ''],
+        }[annotation.analysisKey] || ['扫描坐标', ''];
+        const axis =
+          annotation.mode === 'xy' ? 'X–Y' : { phase: '相位', value: '数值' }[annotation.axis];
+        return `设置标记 ${annotation.id}：${annotation.traceId}，${coordinate} ${annotation.at}${unit}，${axis}${annotation.text ? `，注释「${annotation.text}」` : '，无注释'}`;
+      }
+      case 'delete_annotation':
+        return `删除标记 ${action.annotationId} 及其注释`;
+      case 'set_plot': {
+        const settings = action.display;
+        const details = [];
+        if (settings.mode) details.push(settings.mode === 'xy' ? 'X–Y 模式' : 'X–T 模式');
+        for (const key of ['ch1', 'ch2', 'xyX', 'xyY'])
+          if (Object.hasOwn(settings, key))
+            details.push(
+              `${{ ch1: 'CH1', ch2: 'CH2', xyX: 'X 轴', xyY: 'Y 轴' }[key]} ${settings[key] || '未选择'}`,
+            );
+        if (settings.traceIds)
+          details.push(
+            settings.traceIds.length ? `显示 ${settings.traceIds.join('、')}` : '隐藏曲线',
+          );
+        if (settings.math)
+          details.push(
+            settings.math.length
+              ? settings.math.map((row) => `${row.id} = ${row.expression}`).join('，')
+              : '清除数学公式',
+          );
+        if (Object.hasOwn(settings, 'phase'))
+          details.push(settings.phase ? '显示相位图' : '隐藏相位图');
+        if (settings.ranges)
+          details.push(
+            Object.entries(settings.ranges)
+              .map(
+                ([key, value]) =>
+                  `${{ xMin: 'X 下限', xMax: 'X 上限', yMin: 'Y 下限', yMax: 'Y 上限' }[key]} ${value ?? '自动'}`,
+              )
+              .join('，'),
+          );
+        return `设置图像：${details.join('；')}`;
+      }
       case 'run_simulation':
         return '运行当前电路仿真';
       default:
@@ -381,6 +615,10 @@
     applyActions,
     describeAction,
     isEditingAction,
+    isElectricalAction,
+    validDocumentTraceId,
+    analysisKeyFor,
+    coordinateInAnalysis,
     validateEditorDocument,
     assertSafeJson,
     assertFields,

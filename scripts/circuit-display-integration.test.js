@@ -284,7 +284,7 @@ test('AI accepts actual CH2/P2 measurements and complete display settings, and p
 test('AI rejects invented physical channels, absent traces, stale targets, and nested display injection', () => {
   const source = document();
   const available = ['V:S1:CH2', 'I:N1:P2'];
-  for (const id of ['I:S1:CH2', 'V:RL:P2', 'V:N1:CH2', 'V:Missing:P2', 'M:M1']) {
+  for (const id of ['I:S1:CH2', 'V:RL:P2', 'V:N1:CH2', 'V:Missing:P2', 'M:M2']) {
     assert.throws(() =>
       validateCircuitAssistantInput({
         question: '分析',
@@ -322,4 +322,31 @@ test('AI rejects invented physical channels, absent traces, stale targets, and n
     assert.throws(() => actions.validateEditorDocument(invalid));
   }
   assert.equal({}.polluted, undefined);
+});
+
+test('AI accepts configured mathematical measurements and still rejects missing definitions', () => {
+  const source = document();
+  const result = plot.buildResult(engine.simulate(source), source.display).result;
+  const mathematical = result.traces.find((trace) => trace.id === 'M:M1');
+  const summary = {
+    sampleCount: result.x.length,
+    traces: [{ id: mathematical.id, samples: [{ x: result.x[1], value: mathematical.values[1] }] }],
+  };
+  const input = validateCircuitAssistantInput({
+    question: '分析电压差',
+    document: source,
+    simulation: summary,
+  });
+  assert.equal(input.simulation.traces[0].id, 'M:M1');
+  const show = [{ type: 'show_traces', traceIds: ['M:M1'] }];
+  assert.deepEqual(actions.validateActions(show, source, ['M:M1']), show);
+  const missing = structuredClone(source);
+  missing.display.math = [];
+  assert.throws(
+    () =>
+      validateCircuitAssistantInput({ question: '分析', document: missing, simulation: summary }),
+    /不存在的波形/,
+  );
+  assert.throws(() => actions.validateActions(show, missing, ['M:M1']), /不存在/);
+  assert.throws(() => actions.validateActions(show, source, []), /先运行仿真/);
 });
