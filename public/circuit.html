@@ -21,6 +21,7 @@
     <link rel="stylesheet" href="/course-upload.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/circuit.css" />
+    <link rel="stylesheet" href="/circuit-shortcuts.css" />
     <link rel="stylesheet" href="/circuit-assistant.css" />
     <link rel="stylesheet" href="/circuit-parameter-popover.css" />
     <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css" />
@@ -173,13 +174,22 @@
             <div class="circuit-heading-actions">
               <a class="circuit-button" href="/circuit">新建</a
               ><button id="circuit-copy" type="button">复制为新电路</button
-              ><button class="is-primary" id="circuit-save" type="button">保存并获取 CID</button
+              ><button
+                class="is-primary"
+                id="circuit-save"
+                type="button"
+                title="保存电路（⌘/Ctrl+S）"
+                aria-keyshortcuts="Control+s Meta+s"
+              >
+                保存并获取 CID</button
               ><button id="circuit-publish" type="button" hidden>发表到讨论区</button
               ><button
                 id="circuit-ai-toggle"
                 type="button"
                 aria-expanded="false"
                 aria-controls="circuit-ai-panel"
+                title="打开 Max 侧栏（M）"
+                aria-keyshortcuts="m"
               >
                 <img src="/assets/icons/ai.svg" alt="" aria-hidden="true" />侧栏
               </button>
@@ -245,8 +255,54 @@
                     <p id="circuit-canvas-help">
                       点引脚拿起导线，点画布设置拐点，再点目标引脚或导线完成。
                     </p>
-                    <button id="circuit-undo-wire" type="button" hidden>撤回拐点</button>
-                    <button id="circuit-cancel-wire" type="button" hidden>取消连线</button
+                    <div class="circuit-shortcut-actions" aria-label="编辑与快捷键">
+                      <button
+                        id="circuit-undo"
+                        type="button"
+                        title="撤销（⌘/Ctrl+Z）；连线时撤回拐点"
+                        aria-keyshortcuts="Control+z Meta+z"
+                        disabled
+                      >
+                        撤销
+                      </button>
+                      <button
+                        id="circuit-redo"
+                        type="button"
+                        title="重做（⌘/Ctrl+Shift+Z，或 Ctrl+Y）"
+                        aria-keyshortcuts="Control+Shift+z Meta+Shift+z Control+y"
+                        disabled
+                      >
+                        重做
+                      </button>
+                      <button
+                        id="circuit-shortcuts"
+                        type="button"
+                        title="查看快捷键（?）"
+                        aria-keyshortcuts="?"
+                        aria-controls="circuit-shortcuts-dialog"
+                        aria-expanded="false"
+                        aria-haspopup="dialog"
+                      >
+                        快捷键
+                      </button>
+                    </div>
+                    <button
+                      id="circuit-undo-wire"
+                      type="button"
+                      title="撤回拐点（Backspace 或 ⌘/Ctrl+Z）"
+                      aria-keyshortcuts="Backspace Control+z Meta+z"
+                      hidden
+                    >
+                      撤回拐点
+                    </button>
+                    <button
+                      id="circuit-cancel-wire"
+                      type="button"
+                      title="取消连线（Esc）"
+                      aria-keyshortcuts="Escape"
+                      hidden
+                    >
+                      取消连线</button
                     ><span id="circuit-count">0 个元件</span>
                   </div>
                   <div class="circuit-stage" id="circuit-stage" aria-label="电路原理图"></div>
@@ -264,7 +320,14 @@
                     <h2 id="circuit-analysis-title">运行实验</h2>
                   </div>
                   <div class="circuit-actions">
-                    <button id="circuit-run" class="is-primary" type="button">运行仿真</button
+                    <button
+                      id="circuit-run"
+                      class="is-primary"
+                      type="button"
+                      title="运行仿真（⌘/Ctrl+Enter）"
+                      aria-keyshortcuts="Control+Enter Meta+Enter"
+                    >
+                      运行仿真</button
                     ><button id="circuit-stop" type="button" disabled>取消</button>
                   </div>
                 </div>
@@ -618,14 +681,53 @@
                   <div id="circuit-selection" hidden>
                     <p class="circuit-selected-name" id="circuit-selected-name"></p>
                     <div class="circuit-selection-actions">
-                      <button id="circuit-rotate" type="button">旋转 90°</button
-                      ><button id="circuit-mirror-x" type="button" aria-pressed="false">
+                      <button
+                        id="circuit-rotate"
+                        type="button"
+                        title="旋转 90°（R）；Shift+R 反向旋转"
+                        aria-keyshortcuts="r Shift+r"
+                      >
+                        旋转 90°</button
+                      ><button
+                        id="circuit-mirror-x"
+                        type="button"
+                        aria-pressed="false"
+                        title="左右镜像（X）"
+                        aria-keyshortcuts="x"
+                      >
                         左右镜像</button
-                      ><button id="circuit-mirror-y" type="button" aria-pressed="false">
+                      ><button
+                        id="circuit-mirror-y"
+                        type="button"
+                        aria-pressed="false"
+                        title="上下镜像（Y）"
+                        aria-keyshortcuts="y"
+                      >
                         上下镜像</button
-                      ><button id="circuit-delete" type="button">删除元件</button
+                      ><button
+                        id="circuit-duplicate"
+                        type="button"
+                        title="复制选中元件（D 或 ⌘/Ctrl+D）"
+                        aria-keyshortcuts="d Control+d Meta+d"
+                      >
+                        复制元件</button
+                      ><button
+                        id="circuit-delete"
+                        type="button"
+                        title="删除选中元件或导线（Delete / Backspace）"
+                        aria-keyshortcuts="Delete Backspace"
+                      >
+                        删除元件</button
                       ><button id="circuit-reset-wire" type="button" hidden>恢复自动走线</button>
-                      <button id="circuit-start-wire" type="button" hidden>从此处连线</button>
+                      <button
+                        id="circuit-start-wire"
+                        type="button"
+                        title="从选中元件或导线开始连线（W）"
+                        aria-keyshortcuts="w"
+                        hidden
+                      >
+                        从此处连线
+                      </button>
                     </div>
                     <form id="circuit-parameters" novalidate></form>
                     <h3>引脚与连接</h3>
@@ -641,6 +743,92 @@
             <button id="circuit-ai-runbar-open" type="button">查看过程</button>
             <button id="circuit-ai-runbar-stop" type="button">停止</button>
           </div>
+          <dialog
+            id="circuit-shortcuts-dialog"
+            class="circuit-shortcuts-dialog"
+            aria-labelledby="circuit-shortcuts-title"
+            aria-describedby="circuit-shortcuts-description"
+          >
+            <header class="circuit-shortcuts-heading">
+              <h2 id="circuit-shortcuts-title">电路快捷键</h2>
+              <button
+                type="button"
+                data-circuit-shortcuts-close
+                aria-label="关闭快捷键帮助"
+                title="关闭（Esc）"
+              >
+                关闭
+              </button>
+            </header>
+            <p id="circuit-shortcuts-description">
+              在画布或工具按钮上使用。输入框内保留输入和原生撤销，保存快捷键仍然可用。
+            </p>
+            <p>Mac 使用 ⌘，Windows / Linux 使用 Ctrl。</p>
+            <dl class="circuit-shortcuts-list">
+              <div>
+                <dt><kbd>⌘ / Ctrl</kbd> + <kbd>S</kbd></dt>
+                <dd>保存电路</dd>
+              </div>
+              <div>
+                <dt><kbd>⌘ / Ctrl</kbd> + <kbd>Enter</kbd></dt>
+                <dd>运行仿真</dd>
+              </div>
+              <div>
+                <dt><kbd>⌘ / Ctrl</kbd> + <kbd>Z</kbd></dt>
+                <dd>撤销；连线时撤回拐点</dd>
+              </div>
+              <div>
+                <dt>
+                  <kbd>⌘ / Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd><br />或 <kbd>Ctrl</kbd> +
+                  <kbd>Y</kbd>
+                </dt>
+                <dd>重做</dd>
+              </div>
+              <div>
+                <dt><kbd>R</kbd> / <kbd>Shift</kbd> + <kbd>R</kbd></dt>
+                <dd>旋转选中元件 90° / 反向旋转</dd>
+              </div>
+              <div>
+                <dt><kbd>X</kbd> / <kbd>Y</kbd></dt>
+                <dd>左右镜像 / 上下镜像</dd>
+              </div>
+              <div>
+                <dt><kbd>D</kbd> 或 <kbd>⌘ / Ctrl</kbd> + <kbd>D</kbd></dt>
+                <dd>复制选中元件</dd>
+              </div>
+              <div>
+                <dt><kbd>Delete</kbd> / <kbd>Backspace</kbd></dt>
+                <dd>删除选中元件或导线</dd>
+              </div>
+              <div>
+                <dt><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd></dt>
+                <dd>移动选中元件；加 Shift 移动 5 格</dd>
+              </div>
+              <div>
+                <dt><kbd>W</kbd></dt>
+                <dd>从选中元件或导线开始连线</dd>
+              </div>
+              <div>
+                <dt><kbd>Backspace</kbd></dt>
+                <dd>连线时撤回上一拐点</dd>
+              </div>
+              <div>
+                <dt><kbd>Esc</kbd></dt>
+                <dd>取消当前操作或关闭帮助</dd>
+              </div>
+              <div>
+                <dt><kbd>M</kbd></dt>
+                <dd>打开 Max</dd>
+              </div>
+              <div>
+                <dt><kbd>?</kbd></dt>
+                <dd>查看快捷键</dd>
+              </div>
+            </dl>
+            <p class="circuit-shortcuts-note">
+              聚焦导线拐点时，方向键移动该拐点，Delete / Backspace 删除该拐点。
+            </p>
+          </dialog>
         </section>
       </main>
     </div>
@@ -659,6 +847,8 @@
     <script src="/circuit-wiring.js"></script>
     <script src="/circuit-ai-actions.js"></script>
     <script src="/circuit-parameter-popover.js"></script>
+    <script src="/circuit-history.js"></script>
+    <script src="/circuit-shortcuts.js"></script>
     <script src="/circuit.js"></script>
     <script src="/circuit-agent.js"></script>
     <script src="/circuit-chat.js"></script>

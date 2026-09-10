@@ -105,7 +105,7 @@ function harness({ selectedId = 'R1', editable = true, listPage = false } = {}) 
       return this.valid;
     },
   };
-  const elements = { parameters };
+  const elements = { parameters, stage: { contains: () => false } };
   const popover = {
     valid: true,
     show(snapshot, options) {
@@ -126,6 +126,7 @@ function harness({ selectedId = 'R1', editable = true, listPage = false } = {}) 
     state,
     engine,
     listPage,
+    document: focusState,
     window: {
       FreeBbsCircuitParameterPopover: popover,
       FreeBbsCircuitSidebar: { open: (tab) => calls.events.push(`sidebar:open:${tab}`) },

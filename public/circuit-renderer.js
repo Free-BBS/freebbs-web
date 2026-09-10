@@ -1,5 +1,67 @@
 (() => {
   const NS = 'http://www.w3.org/2000/svg';
+  const gridSize = 20;
+
+  function isLocalKey(event) {
+    return !(
+      event.isComposing ||
+      event.keyCode === 229 ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey ||
+      event.getModifierState?.('AltGraph')
+    );
+  }
+
+  function activateWithKeyboard(event, keys, activate) {
+    if (!isLocalKey(event) || !keys.includes(event.key)) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!event.repeat) activate();
+    return true;
+  }
+
+  function snapPoint(point, bounds) {
+    const snap = (value, axis) => {
+      let coordinate = Math.round(value / gridSize) * gridSize;
+      if (Object.is(coordinate, -0)) coordinate = 0;
+      if (!bounds) return coordinate;
+      const start = bounds[axis];
+      const end = start + bounds[axis + 2];
+      const minimum = Math.ceil(start / gridSize) * gridSize;
+      const maximum = Math.floor(end / gridSize) * gridSize;
+      return minimum <= maximum
+        ? Math.max(minimum, Math.min(maximum, coordinate))
+        : Math.max(start, Math.min(end, coordinate));
+    };
+    return { x: snap(point.x, 0), y: snap(point.y, 1) };
+  }
+
+  function projectSegmentPoint(a, b, position) {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lengthSquared = dx * dx + dy * dy;
+    const ratio = lengthSquared
+      ? Math.max(
+          0,
+          Math.min(1, ((position.x - a.x) * dx + (position.y - a.y) * dy) / lengthSquared),
+        )
+      : 0;
+    return { x: a.x + ratio * dx, y: a.y + ratio * dy };
+  }
+
+  function snapSegmentPoint(a, b, position) {
+    const point = projectSegmentPoint(a, b, position);
+    // Imported corners and endpoints can be off-grid. Keep exact topology when
+    // landing on one, and never round a diagonal point away from its wire.
+    if (Math.hypot(point.x - a.x, point.y - a.y) < 1e-7) return { x: a.x, y: a.y };
+    if (Math.hypot(point.x - b.x, point.y - b.y) < 1e-7) return { x: b.x, y: b.y };
+    if (a.x === b.x)
+      point.y = Math.max(Math.min(a.y, b.y), Math.min(Math.max(a.y, b.y), snapPoint(point).y));
+    else if (a.y === b.y)
+      point.x = Math.max(Math.min(a.x, b.x), Math.min(Math.max(a.x, b.x), snapPoint(point).x));
+    return point;
+  }
   const labels = {
     ground: '接地',
     junction: '连接点',
@@ -119,7 +181,7 @@
     const b = getPins(to)[wire.to.pin];
     if (!a || !b) return [];
     const custom = Array.isArray(wire.points);
-    const mid = Math.round((a.x + b.x) / 40) * 20;
+    const mid = snapPoint({ x: (a.x + b.x) / 2, y: 0 }).x;
     const points = custom
       ? wire.points
       : [
@@ -137,29 +199,72 @@
         );
   }
 
-  function insertWirePoint(wire, components, position) {
+  function snapWirePoint(wire, components, position, { anchor, endpointTolerance = 10 } = {}) {
     const route = getWireRoute(wire, components);
-    if (route.length < 2 || route.length - 2 >= 32) return null;
-    let nearest;
+    let nearest = null;
     for (let index = 0; index < route.length - 1; index += 1) {
-      const a = route[index];
-      const b = route[index + 1];
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const denominator = dx * dx + dy * dy;
-      const t = denominator
-        ? Math.max(
-            0,
-            Math.min(1, ((position.x - a.x) * dx + (position.y - a.y) * dy) / denominator),
-          )
-        : 0;
-      const point = { x: a.x + t * dx, y: a.y + t * dy };
+      const point = projectSegmentPoint(route[index], route[index + 1], position);
       const distance = Math.hypot(position.x - point.x, position.y - point.y);
       if (!nearest || distance < nearest.distance) nearest = { index, point, distance };
     }
+    if (!nearest) return null;
+    // Actual pins and a deliberately selected crossing take precedence over the
+    // grid, including asymmetric symbols with 18/22/28 px pin offsets.
+    const endpoint = [route[0], route.at(-1)]
+      .map((point) => ({
+        point,
+        distance: Math.hypot(point.x - nearest.point.x, point.y - nearest.point.y),
+      }))
+      .sort((a, b) => a.distance - b.distance)[0];
+    if (endpoint.distance <= endpointTolerance)
+      nearest.point = { x: endpoint.point.x, y: endpoint.point.y };
+    else if (anchor && Math.hypot(anchor.x - nearest.point.x, anchor.y - nearest.point.y) < 1e-7)
+      nearest.point = { x: anchor.x, y: anchor.y };
+    else
+      nearest.point = snapSegmentPoint(
+        route[nearest.index],
+        route[nearest.index + 1],
+        nearest.point,
+      );
+    return nearest;
+  }
+
+  function insertWirePoint(wire, components, position) {
+    const route = getWireRoute(wire, components);
+    if (route.length < 2 || route.length - 2 >= 32) return null;
+    const nearest = snapWirePoint(wire, components, position, { endpointTolerance: 0 });
     const points = route.slice(1, -1);
     points.splice(nearest.index, 0, nearest.point);
     return { points, index: nearest.index };
+  }
+
+  function moveWireSegment(wire, components, index, offset, bounds = [0, 0, 1000, 640]) {
+    const route = getWireRoute(wire, components);
+    const a = route[index];
+    const b = route[index + 1];
+    if (!a || !b) return null;
+    const target = snapPoint({ x: a.x + offset.x, y: a.y + offset.y }, bounds);
+    let dx = a.y === b.y ? 0 : target.x - a.x;
+    let dy = a.x === b.x ? 0 : target.y - a.y;
+    // Translate the chosen segment without rotating it. Endpoints attached to
+    // components stay exact; outer segments acquire elbows rather than detaching.
+    const limit = (value, low, high) => (low <= high ? Math.max(low, Math.min(high, value)) : 0);
+    if (a.y !== b.y)
+      dx = limit(dx, bounds[0] - Math.min(a.x, b.x), bounds[0] + bounds[2] - Math.max(a.x, b.x));
+    if (a.x !== b.x)
+      dy = limit(dy, bounds[1] - Math.min(a.y, b.y), bounds[1] + bounds[3] - Math.max(a.y, b.y));
+    const moved = [
+      ...route.slice(0, index),
+      { x: a.x + dx, y: a.y + dy },
+      { x: b.x + dx, y: b.y + dy },
+      ...route.slice(index + 2),
+    ];
+    if (index === 0) moved.unshift(route[0]);
+    if (index + 1 === route.length - 1) moved.push(route.at(-1));
+    const points = moved
+      .filter((point, i) => !i || point.x !== moved[i - 1].x || point.y !== moved[i - 1].y)
+      .slice(1, -1);
+    return points.length <= 32 ? points : null;
   }
 
   const wireFocusRequests = new WeakMap();
@@ -457,9 +562,16 @@
     svg.append(background);
     const grid = svgElement('path', {
       d:
-        Array.from({ length: 51 }, (_, i) => `M ${i * 20} 0 V 640`).join(' ') +
-        Array.from({ length: 33 }, (_, i) => `M 0 ${i * 20} H 1000`).join(' '),
+        Array.from(
+          { length: Math.floor(1000 / gridSize) + 1 },
+          (_, i) => `M ${i * gridSize} 0 V 640`,
+        ).join(' ') +
+        Array.from(
+          { length: Math.floor(640 / gridSize) + 1 },
+          (_, i) => `M 0 ${i * gridSize} H 1000`,
+        ).join(' '),
       stroke: 'var(--circuit-grid,#283e44)',
+      'data-grid-size': gridSize,
       'stroke-width': 0.7,
       opacity: 0.4,
       fill: 'none',
@@ -514,29 +626,11 @@
     svg.append(connectionLayer);
     let pinDrag = null;
 
-    function nearestWirePosition(wire, position) {
-      const route = getWireRoute(wire, components);
-      let nearest;
-      for (let index = 1; index < route.length; index += 1) {
-        const from = route[index - 1];
-        const to = route[index];
-        const dx = to.x - from.x;
-        const dy = to.y - from.y;
-        const lengthSquared = dx * dx + dy * dy;
-        const ratio = lengthSquared
-          ? Math.max(
-              0,
-              Math.min(
-                1,
-                ((position.x - from.x) * dx + (position.y - from.y) * dy) / lengthSquared,
-              ),
-            )
-          : 0;
-        const point = { x: from.x + ratio * dx, y: from.y + ratio * dy };
-        const distance = Math.hypot(point.x - position.x, point.y - position.y);
-        if (!nearest || distance < nearest.distance) nearest = { position: point, distance };
-      }
-      return nearest;
+    function nearestWirePosition(wire, position, anchor) {
+      const nearest = snapWirePoint(wire, components, position, { anchor });
+      return (
+        nearest && { position: nearest.point, distance: nearest.distance, index: nearest.index }
+      );
     }
 
     function connectionTarget(position, origin) {
@@ -554,8 +648,10 @@
         });
       });
       if (closest) return closest;
+      const component = components.get(origin?.componentId);
+      const anchor = origin?.wireId ? origin.position : component && getPins(component)[origin.pin];
       wires.forEach(({ wire }) => {
-        const point = nearestWirePosition(wire, position);
+        const point = nearestWirePosition(wire, position, anchor);
         if (point?.distance <= 12 && (!closest || point.distance < closest.distance))
           closest = { wireId: wire.id, ...point };
       });
@@ -572,7 +668,7 @@
       const from = origin?.wireId ? origin.position : component && getPins(component)[origin.pin];
       if (!from) return clearConnectionPreview();
       const target = connectionTarget(position, origin);
-      const to = target?.position || position;
+      const to = target?.position || snapPoint(position, editBounds);
       const points = origin === options.wireStart ? options.wirePoints || [] : [];
       const route = [from, ...points, to];
       connectionLayer.setAttribute('visibility', 'visible');
@@ -598,17 +694,12 @@
       );
       connectionLanding.setAttribute('cx', to.x);
       connectionLanding.setAttribute('cy', to.y);
-      connectionLanding.setAttribute('visibility', target ? 'visible' : 'hidden');
+      connectionLanding.setAttribute('visibility', 'visible');
       return target;
     }
 
     const copyPoints = (points) => points.map(({ x, y }) => ({ x, y }));
     const editBounds = options.viewBox || [0, 0, 1000, 640];
-    const bounded = (value, axis = 'x') => {
-      const start = editBounds[axis === 'x' ? 0 : 1];
-      const length = editBounds[axis === 'x' ? 2 : 3];
-      return Math.max(start, Math.min(start + length, value));
-    };
     const deleteButtonTransform = (point) => {
       const x = Math.max(
         editBounds[0] + 8,
@@ -662,10 +753,11 @@
       const route = controlRoute(entry);
       entry.addButtons?.forEach((button, index) => {
         if (!route[index + 1]) return;
-        button.setAttribute(
-          'transform',
-          `translate(${(route[index].x + route[index + 1].x) / 2} ${(route[index].y + route[index + 1].y) / 2})`,
-        );
+        const point = snapSegmentPoint(route[index], route[index + 1], {
+          x: (route[index].x + route[index + 1].x) / 2,
+          y: (route[index].y + route[index + 1].y) / 2,
+        });
+        button.setAttribute('transform', `translate(${point.x} ${point.y})`);
       });
     }
 
@@ -732,7 +824,7 @@
       };
       button.addEventListener('click', remove);
       button.addEventListener('keydown', (event) => {
-        if (['Enter', ' ', 'Delete', 'Backspace'].includes(event.key)) remove(event);
+        activateWithKeyboard(event, ['Enter', ' ', 'Delete', 'Backspace'], () => remove(event));
       });
       entry.controlsGroup.append(button);
       entry.deleteControl = button;
@@ -744,11 +836,14 @@
       target?.focus({ preventScroll: true });
     }
 
-    function commitWirePoints(storedEntry, points, focusIndex) {
+    function commitWirePoints(storedEntry, points, focusIndex, detail) {
       const entry = storedEntry;
-      entry.wire.points = copyPoints(points);
       wireFocusRequests.set(container, { wireId: entry.wire.id, index: focusIndex });
-      options.onWireChange?.(entry.wire.id, copyPoints(points));
+      if (options.onWireChange?.(entry.wire.id, copyPoints(points), detail) === false) {
+        wireFocusRequests.delete(container);
+        return;
+      }
+      entry.wire.points = copyPoints(points);
       // The owner normally rerenders after updating its document. Keep the
       // renderer functional for callers that keep this SVG mounted instead.
       if (svg.parentNode) {
@@ -761,7 +856,8 @@
     function cancelWireDrag(storedEntry) {
       const entry = storedEntry;
       if (!entry.drag) return;
-      const { originalPoints, pointerId, hit } = entry.drag;
+      const { originalPoints, pointerId, hit, kind } = entry.drag;
+      if (kind === 'segment') entry.suppressClick = true;
       entry.drag = null;
       if (originalPoints === undefined) delete entry.wire.points;
       else entry.wire.points = copyPoints(originalPoints);
@@ -797,7 +893,10 @@
         route.slice(0, -1).forEach((point, index) => {
           const next = route[index + 1];
           if (Math.hypot(next.x - point.x, next.y - point.y) < 34) return;
-          const midpoint = { x: (point.x + next.x) / 2, y: (point.y + next.y) / 2 };
+          const midpoint = snapSegmentPoint(point, next, {
+            x: (point.x + next.x) / 2,
+            y: (point.y + next.y) / 2,
+          });
           const button = svgElement('g', {
             transform: `translate(${midpoint.x} ${midpoint.y})`,
             class: 'circuit-wire-add',
@@ -836,7 +935,7 @@
           };
           button.addEventListener('click', add);
           button.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' || event.key === ' ') add(event);
+            activateWithKeyboard(event, ['Enter', ' '], () => add(event));
           });
           group.append(button);
           entry.addButtons[index] = button;
@@ -909,10 +1008,13 @@
           if (Math.hypot(dx, dy) < 4 && !drag.moved) return;
           drag.moved = true;
           const updated = copyPoints(drag.startPoints);
-          updated[index] = {
-            x: bounded(Math.round((drag.startPoints[index].x + dx) / 10) * 10),
-            y: bounded(Math.round((drag.startPoints[index].y + dy) / 10) * 10, 'y'),
-          };
+          updated[index] = snapPoint(
+            {
+              x: drag.startPoints[index].x + dx,
+              y: drag.startPoints[index].y + dy,
+            },
+            editBounds,
+          );
           entry.wire.points = updated;
           updateWireGeometry(entry);
         });
@@ -931,6 +1033,7 @@
         hit.addEventListener('pointercancel', cancel);
         hit.addEventListener('lostpointercapture', cancel);
         hit.addEventListener('keydown', (event) => {
+          if (!isLocalKey(event)) return;
           const delta = {
             ArrowLeft: [-1, 0],
             ArrowRight: [1, 0],
@@ -945,15 +1048,24 @@
           } else if (delta || event.key === 'Delete' || event.key === 'Backspace') {
             event.preventDefault();
             event.stopPropagation();
+            if (!delta && event.repeat) return;
             if (entry.drag) cancelWireDrag(entry);
             const updated = editablePoints(entry);
             if (delta)
-              updated[index] = {
-                x: bounded(updated[index].x + delta[0] * (event.shiftKey ? 10 : 1)),
-                y: bounded(updated[index].y + delta[1] * (event.shiftKey ? 10 : 1), 'y'),
-              };
+              updated[index] = snapPoint(
+                {
+                  x: updated[index].x + delta[0] * gridSize * (event.shiftKey ? 5 : 1),
+                  y: updated[index].y + delta[1] * gridSize * (event.shiftKey ? 5 : 1),
+                },
+                editBounds,
+              );
             else updated.splice(index, 1);
-            commitWirePoints(entry, updated, Math.min(index, updated.length - 1));
+            commitWirePoints(
+              entry,
+              updated,
+              Math.min(index, updated.length - 1),
+              delta ? { source: 'keyboard' } : undefined,
+            );
           }
         });
         group.append(hit, dot);
@@ -982,21 +1094,98 @@
           class: 'circuit-wire-hit',
           tabindex: 0,
           role: 'button',
-          'aria-label': `选择导线 ${wire.id}${entry.selected ? '，双击添加拐点' : ''}`,
+          'aria-label': `选择导线 ${wire.id}${entry.selected ? '，拖动线段调整，双击添加拐点' : ''}`,
           'data-wire-hit': wire.id,
         });
         entry.hit = hit;
         const choose = (event) => {
           event.preventDefault();
           event.stopPropagation();
+          if (entry.suppressClick) {
+            entry.suppressClick = false;
+            if (event.type === 'click') return;
+          }
           const route = getWireRoute(wire, components);
           const position =
             Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
               ? pointerPosition(event)
               : route[Math.floor(route.length / 2)];
-          options.onWireClick?.(wire.id, nearestWirePosition(wire, position)?.position || position);
+          const originComponent = components.get(options.wireStart?.componentId);
+          const anchor = options.wireStart?.wireId
+            ? options.wireStart.position
+            : originComponent && getPins(originComponent)[options.wireStart.pin];
+          options.onWireClick?.(
+            wire.id,
+            nearestWirePosition(wire, position, anchor)?.position || position,
+            { source: event.type === 'keydown' ? 'keyboard' : 'pointer' },
+          );
         };
         hit.addEventListener('click', choose);
+        if (entry.selected && !options.wireStart && typeof options.onWireChange === 'function') {
+          hit.style.touchAction = 'none';
+          hit.addEventListener('touchstart', (event) => event.preventDefault(), { passive: false });
+          hit.addEventListener('pointerdown', (event) => {
+            if (event.button !== 0 || event.isPrimary === false) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const start = pointerPosition(event);
+            const nearest = snapWirePoint(wire, components, start, { endpointTolerance: 0 });
+            if (!nearest) return;
+            entry.suppressClick = false;
+            entry.drag = {
+              kind: 'segment',
+              pointerId: event.pointerId,
+              hit,
+              start,
+              index: nearest.index,
+              startWire: {
+                ...wire,
+                ...(wire.points === undefined ? {} : { points: copyPoints(wire.points) }),
+              },
+              originalPoints: wire.points === undefined ? undefined : copyPoints(wire.points),
+              moved: false,
+            };
+            hit.focus({ preventScroll: true });
+            hit.setPointerCapture?.(event.pointerId);
+          });
+          hit.addEventListener('pointermove', (event) => {
+            const { drag } = entry;
+            if (drag?.kind !== 'segment' || drag.pointerId !== event.pointerId) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const position = pointerPosition(event);
+            const offset = { x: position.x - drag.start.x, y: position.y - drag.start.y };
+            if (Math.hypot(offset.x, offset.y) < 4 && !drag.moved) return;
+            const points = moveWireSegment(
+              drag.startWire,
+              components,
+              drag.index,
+              offset,
+              editBounds,
+            );
+            if (!points) return;
+            drag.moved = true;
+            entry.suppressClick = true;
+            entry.wire.points = points;
+            updateWireGeometry(entry);
+          });
+          hit.addEventListener('pointerup', (event) => {
+            const { drag } = entry;
+            if (drag?.kind !== 'segment' || drag.pointerId !== event.pointerId) return;
+            event.preventDefault();
+            event.stopPropagation();
+            entry.drag = null;
+            if (hit.hasPointerCapture?.(event.pointerId))
+              hit.releasePointerCapture(event.pointerId);
+            if (drag.moved) commitWirePoints(entry, entry.wire.points, drag.index);
+          });
+          ['pointercancel', 'lostpointercapture'].forEach((type) =>
+            hit.addEventListener(type, (event) => {
+              if (entry.drag?.kind === 'segment' && entry.drag.pointerId === event.pointerId)
+                cancelWireDrag(entry);
+            }),
+          );
+        }
         hit.addEventListener('dblclick', (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -1005,10 +1194,10 @@
           else choose(event);
         });
         hit.addEventListener('keydown', (event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
+          activateWithKeyboard(event, ['Enter', ' '], () => {
             choose(event);
             if (entry.selected && !options.wireStart) focusPoint(entry, 0);
-          }
+          });
         });
         wireLayer.append(hit);
       }
@@ -1017,6 +1206,7 @@
     });
 
     svg.addEventListener('keydown', (event) => {
+      if (!isLocalKey(event)) return;
       if (event.key === 'Escape' && pinDrag) {
         const { hit, pointerId } = pinDrag;
         pinDrag.cancel();
@@ -1061,7 +1251,7 @@
               ? { endpoint: target.endpoint }
               : { wireId: target.wireId, position: target.position },
           );
-        else options.onCanvasPoint?.(position);
+        else options.onCanvasPoint?.(snapPoint(position, editBounds));
       });
     }
 
@@ -1225,12 +1415,15 @@
             suppressClick = true;
             wireEditLayer.setAttribute('visibility', 'hidden');
             if (component.type === 'junction') {
-              component.x = bounded(
-                Math.round((pinDrag.originalPosition.x + position.x - pinDrag.origin.x) / 10) * 10,
-              );
-              component.y = bounded(
-                Math.round((pinDrag.originalPosition.y + position.y - pinDrag.origin.y) / 10) * 10,
-                'y',
+              Object.assign(
+                component,
+                snapPoint(
+                  {
+                    x: pinDrag.originalPosition.x + position.x - pinDrag.origin.x,
+                    y: pinDrag.originalPosition.y + position.y - pinDrag.origin.y,
+                  },
+                  editBounds,
+                ),
               );
               group.setAttribute('transform', `translate(${component.x} ${component.y})`);
               wires.forEach(updateWireGeometry);
@@ -1261,7 +1454,7 @@
                   : { wireId: target.wireId, position: target.position },
               );
             else if (moved && component.type !== 'junction')
-              options.onWireDraftStart?.(endpoint, pointerPosition(event));
+              options.onWireDraftStart?.(endpoint, snapPoint(pointerPosition(event), editBounds));
           });
           hit.addEventListener('pointercancel', (event) => {
             if (pinDrag?.hit !== hit || pinDrag.pointerId !== event.pointerId) return;
@@ -1285,11 +1478,9 @@
             options.onPinClick?.(endpoint);
           });
           hit.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              event.stopPropagation();
-              options.onPinClick?.({ componentId: component.id, pin: pin.pin });
-            }
+            activateWithKeyboard(event, ['Enter', ' '], () =>
+              options.onPinClick?.({ componentId: component.id, pin: pin.pin }),
+            );
           });
           group.append(hit);
         }
@@ -1317,10 +1508,10 @@
       if (options.selectable && !options.interactive) {
         group.addEventListener('click', () => options.onComponentClick?.(component.id));
         group.addEventListener('keydown', (event) => {
-          if (event.target === group && (event.key === 'Enter' || event.key === ' ')) {
-            event.preventDefault();
-            options.onComponentClick?.(component.id, { focus: true });
-          }
+          if (event.target !== group) return;
+          activateWithKeyboard(event, ['Enter', ' '], () =>
+            options.onComponentClick?.(component.id, { focus: true }),
+          );
         });
       }
       if (options.interactive) {
@@ -1338,13 +1529,15 @@
           const point = pointerPosition(event);
           if (Math.hypot(point.x - drag.x, point.y - drag.y) < 4 && !drag.moved) return;
           drag.moved = true;
-          component.x = Math.min(
-            940,
-            Math.max(60, Math.round((drag.startX + point.x - drag.x) / 10) * 10),
-          );
-          component.y = Math.min(
-            560,
-            Math.max(60, Math.round((drag.startY + point.y - drag.y) / 10) * 10),
+          Object.assign(
+            component,
+            snapPoint(
+              {
+                x: drag.startX + point.x - drag.x,
+                y: drag.startY + point.y - drag.y,
+              },
+              [60, 60, 880, 500],
+            ),
           );
           group.setAttribute('transform', `translate(${component.x} ${component.y})`);
           wires.forEach(updateWireGeometry);
@@ -1363,24 +1556,29 @@
           drag = null;
         });
         group.addEventListener('keydown', (event) => {
-          if (event.target !== group) return;
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            options.onComponentClick?.(component.id, { focus: true });
-          }
+          if (event.target !== group || !isLocalKey(event)) return;
+          if (
+            activateWithKeyboard(event, ['Enter', ' '], () =>
+              options.onComponentClick?.(component.id, { focus: true }),
+            )
+          )
+            return;
           const delta = {
-            ArrowLeft: [-10, 0],
-            ArrowRight: [10, 0],
-            ArrowUp: [0, -10],
-            ArrowDown: [0, 10],
+            ArrowLeft: [-1, 0],
+            ArrowRight: [1, 0],
+            ArrowUp: [0, -1],
+            ArrowDown: [0, 1],
           }[event.key];
           if (delta) {
             event.preventDefault();
-            options.onMove?.(
-              component.id,
-              Math.min(940, Math.max(60, component.x + delta[0])),
-              Math.min(560, Math.max(60, component.y + delta[1])),
+            const point = snapPoint(
+              {
+                x: component.x + delta[0] * gridSize * (event.shiftKey ? 5 : 1),
+                y: component.y + delta[1] * gridSize * (event.shiftKey ? 5 : 1),
+              },
+              component.type === 'junction' ? editBounds : [60, 60, 880, 500],
             );
+            options.onMove?.(component.id, point.x, point.y, { source: 'keyboard' });
           }
         });
       }
@@ -1753,10 +1951,7 @@
     // Native buttons already synthesize clicks for Enter and Space.
     if (nativeButton) return;
     element.addEventListener('keydown', (event) => {
-      if (!['Enter', ' '].includes(event.key)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      options.onAnnotationSelect(annotation.id);
+      activateWithKeyboard(event, ['Enter', ' '], () => options.onAnnotationSelect(annotation.id));
     });
   }
 
@@ -2357,6 +2552,10 @@
   }
 
   const exported = {
+    gridSize,
+    snapPoint,
+    snapWirePoint,
+    moveWireSegment,
     getPins,
     transformPoint,
     componentLabelLayout,

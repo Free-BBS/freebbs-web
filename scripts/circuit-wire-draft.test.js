@@ -102,13 +102,13 @@ test('canvas draft points snap, clamp, deduplicate and undo without changing sav
   for (const invalid of [null, {}, { x: NaN, y: 2 }, { x: 2, y: Infinity }])
     h.addConnectionPoint(invalid);
   assert.deepEqual(copy(h.state.wirePoints), [
-    { x: 180, y: 210 },
+    { x: 180, y: 200 },
     { x: 0, y: 640 },
     { x: 1000, y: 0 },
   ]);
   h.undoConnectionPoint();
   assert.deepEqual(copy(h.state.wirePoints), [
-    { x: 180, y: 210 },
+    { x: 180, y: 200 },
     { x: 0, y: 640 },
   ]);
   h.undoConnectionPoint();
@@ -118,7 +118,8 @@ test('canvas draft points snap, clamp, deduplicate and undo without changing sav
   assert.deepEqual(copy(h.state.wireStart), endpoint('R1', 1));
   assert.deepEqual(h.state.document, before);
   assert.equal(h.calls.changed, 0);
-  for (let index = 0; index < 33; index += 1) h.addConnectionPoint({ x: index * 10, y: 40 });
+  for (let index = 0; index < 33; index += 1)
+    h.addConnectionPoint({ x: index * renderer.gridSize, y: 40 });
   assert.equal(h.state.wirePoints.length, 32);
   assert.match(h.statuses.at(-1).message, /32/);
   assert.equal(h.statuses.at(-1).kind, 'error');
@@ -129,7 +130,7 @@ test('finishing pin-to-pin commits the exact ordered corners once and clears the
     [],
     [
       { x: 600, y: 120 },
-      { x: 650, y: 240 },
+      { x: 660, y: 240 },
       { x: 600, y: 300 },
     ],
   ]) {
@@ -204,7 +205,7 @@ test('wire-to-wire drafts leave both wires untouched until completion and retain
   const points = [
     { x: 280, y: 240 },
     { x: 300, y: 240 },
-    { x: 300, y: 350 },
+    { x: 300, y: 360 },
   ];
   points.forEach(h.addConnectionPoint);
   assert.deepEqual(h.state.document, before);

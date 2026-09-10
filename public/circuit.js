@@ -115,6 +115,8 @@
     exampleRequest: 0,
     exampleLoadRequest: 0,
     deleteExample: null,
+    history: null,
+    shortcuts: null,
   };
 
   function escapeHtml(value) {
@@ -240,6 +242,21 @@
       String(Boolean(selection?.[sideways ? 'mirrorX' : 'mirrorY'])),
     );
     $('delete').disabled = !state.editable || (!state.selectedId && !state.selectedWire);
+    if ($('duplicate'))
+      $('duplicate').disabled = !state.editable || state.saving || !state.selectedId;
+    if ($('undo'))
+      $('undo').disabled =
+        !state.editable ||
+        state.saving ||
+        Boolean(state.agentRun) ||
+        (!state.wireStart && !state.history?.canUndo());
+    if ($('redo'))
+      $('redo').disabled =
+        !state.editable ||
+        state.saving ||
+        Boolean(state.agentRun) ||
+        Boolean(state.wireStart) ||
+        !state.history?.canRedo();
     $('reset-wire').hidden = !state.selectedWire;
     $('reset-wire').disabled = !state.editable;
     $('start-wire').hidden = !state.selectedWire || Boolean(state.wireStart);
@@ -292,7 +309,7 @@
     $('cancel-wire').hidden = !state.wireStart;
     $('undo-wire').hidden = !state.wireStart;
     $('undo-wire').disabled = !state.wirePoints.length;
-    let help = '点引脚拿起导线，点画布设置拐点，再点目标引脚或导线完成。';
+    let help = '点引脚拿起导线，点画布按格点设置拐点，再点目标接通；选中导线可拖动线段或拐点。';
     if (state.wireStart)
       help = `${state.wireStart.wireId ? `从导线 ${state.wireStart.wireId}` : `从 ${state.wireStart.componentId} 的引脚 ${state.wireStart.pin + 1}`} 连线 · ${state.wirePoints.length} 个拐点：点画布放拐点，点目标接通；退格撤回，Esc 取消。`;
     if (!state.editable) help = '只读预览，可选中元件查看参数；复制后继续编辑。';
@@ -360,7 +377,9 @@
     setStatus('电路或分析参数已修改，请重新运行仿真。', '', 'run-status');
   }
 
-  function changed({ electrical = true } = {}) {
+  function changed({ electrical = true, history = true, historyGroup } = {}) {
+    if (history)
+      state.history?.record(historySnapshot(), { group: historyGroup ?? historyInputGroup() });
     state.dirty = true;
     state.editVersion += 1;
     state.aiUndo = null;
@@ -373,6 +392,65 @@
     persistDraft();
   }
 
+  function historySnapshot() {
+    return {
+      document: state.document,
+      title: $('title').value,
+      description: $('description').value,
+      loadedExample: state.loadedExample,
+    };
+  }
+
+  function historyInputGroup() {
+    const input = document.activeElement;
+    if (!input?.matches?.('input,textarea')) return null;
+    return input;
+  }
+
+  function resetHistory() {
+    state.history?.reset(historySnapshot());
+  }
+
+  function restoreHistory(direction) {
+    if (!state.editable || state.saving || state.agentRun) return false;
+    if (state.wireStart) {
+      if (direction === 'undo') {
+        if (state.wirePoints.length) undoConnectionPoint();
+        else cancelConnection();
+      }
+      return true;
+    }
+    const snapshot = state.history?.[direction]();
+    if (!snapshot) return false;
+    const electrical =
+      window.FreeBbsCircuitHistory.electricalKey(state.document) !==
+      window.FreeBbsCircuitHistory.electricalKey(snapshot.document);
+    state.document = snapshot.document;
+    $('title').value = snapshot.title;
+    $('description').value = snapshot.description;
+    state.loadedExample = snapshot.loadedExample;
+    if (!state.document.components.some((item) => item.id === state.selectedId))
+      state.selectedId = '';
+    if (!state.document.wires.some((item) => item.id === state.selectedWire))
+      state.selectedWire = '';
+    state.wireAnchor = null;
+    state.wireStart = null;
+    state.wirePoints = [];
+    state.annotationControls?.cancelPicking();
+    window.FreeBbsCircuitParameterPopover?.hide();
+    changed({ electrical, history: false });
+    if (!electrical && state.result) {
+      state.plotDisplay = null;
+      state.plotModified = true;
+      updatePlot(plot.resolveDisplay(state.result, state.document));
+    }
+    renderAnalysis();
+    renderInspector();
+    renderSchematic();
+    setStatus(direction === 'undo' ? '已撤销上一步修改。' : '已重做修改。');
+    return true;
+  }
+
   function currentFrame() {
     if (!state.result?.frames?.length) return null;
     return state.result.frames.length === state.result.x.length
@@ -381,6 +459,14 @@
   }
 
   function renderSchematic() {
+    const focused = document.activeElement;
+    const focusedComponent = $('stage').contains(focused)
+      ? focused.closest?.('[data-component-id]')?.dataset.componentId
+      : null;
+    const focusedPin = focusedComponent ? focused.dataset.pin : undefined;
+    const focusedWire = $('stage').contains(focused)
+      ? focused.getAttribute?.('data-wire-hit')
+      : null;
     state.schematic?.destroy?.();
     state.schematic = renderer.renderSchematic($('stage'), state.document, {
       interactive: state.editable,
@@ -400,11 +486,12 @@
       onComponentClick(id, { focus = false } = {}) {
         state.selectedId = id;
         state.selectedWire = '';
+        state.wireAnchor = null;
         renderInspector();
         renderSchematic();
         syncParameterPopover({ show: true, focus });
       },
-      onWireClick(id, position) {
+      onWireClick(id, position, { source } = {}) {
         window.FreeBbsCircuitParameterPopover?.hide();
         if (state.wireStart) {
           completeConnection(state.wireStart, { wireId: id, position });
@@ -416,36 +503,65 @@
         state.wireAnchor = position;
         renderInspector();
         if (!wasSelected) renderSchematic();
-        window.FreeBbsCircuitSidebar?.open('parameters');
+        if (source !== 'keyboard') window.FreeBbsCircuitSidebar?.open('parameters');
       },
       onConnect(fromEndpoint, target) {
         completeConnection(fromEndpoint, target);
       },
-      onWireChange(id, points) {
+      onWireChange(id, points, { source } = {}) {
+        if (source === 'keyboard' && (state.saving || state.agentRun)) return false;
         if (!state.editable) return;
         const wire = state.document.wires.find((item) => item.id === id);
         if (!wire) return;
         wire.points = points.map((point) => ({ x: point.x, y: point.y }));
         state.selectedId = '';
         state.selectedWire = id;
-        changed({ electrical: false });
+        changed({
+          electrical: false,
+          historyGroup: source === 'keyboard' ? `wire-move:${id}` : undefined,
+        });
         renderInspector();
         renderSchematic();
       },
-      onMove(id, x, y) {
+      onMove(id, x, y, { source } = {}) {
+        if (source === 'keyboard' && (state.saving || state.agentRun)) return false;
         if (!state.editable) return;
         const component = state.document.components.find((item) => item.id === id);
         if (!component) return;
-        component.x = Math.round(x / 10) * 10;
-        component.y = Math.round(y / 10) * 10;
+        const point = renderer.snapPoint(
+          { x, y },
+          component.type === 'junction' ? [0, 0, 1000, 640] : [60, 60, 880, 500],
+        );
+        if (component.x === point.x && component.y === point.y) return;
+        component.x = point.x;
+        component.y = point.y;
         state.selectedId = id;
-        changed({ electrical: false });
+        state.selectedWire = '';
+        state.wireAnchor = null;
+        changed({
+          electrical: false,
+          historyGroup: source === 'keyboard' ? `move:${id}` : undefined,
+        });
         renderInspector();
         renderSchematic();
       },
     });
     applySchematicHighlights();
     syncParameterPopover();
+    if (focusedComponent) {
+      const component = [...$('stage').querySelectorAll('[data-component-id]')].find(
+        (node) => node.dataset.componentId === focusedComponent,
+      );
+      const target =
+        focusedPin === undefined
+          ? component
+          : component?.querySelector(`[data-pin="${focusedPin}"]`);
+      target?.focus({ preventScroll: true });
+    } else if (focusedWire && !document.activeElement?.closest?.('[data-wire-controls]')) {
+      [...$('stage').querySelectorAll('[data-wire-hit]')]
+        .find((node) => node.dataset.wireHit === focusedWire)
+        ?.focus({ preventScroll: true });
+    }
   }
 
   function uniqueId(prefix) {
@@ -465,7 +581,7 @@
     const component = {
       id: uniqueId(prefixes[type] || 'X'),
       type,
-      x: 180 + (count % 5) * 150,
+      x: 180 + (count % 5) * 160,
       y: 140 + (Math.floor(count / 5) % 4) * 120,
       rotation: 0,
       params: clone(engine.catalog[type].defaults),
@@ -504,10 +620,7 @@
   function addConnectionPoint(position) {
     if (!state.editable || !state.wireStart) return;
     if (!Number.isFinite(position?.x) || !Number.isFinite(position?.y)) return;
-    const point = {
-      x: Math.max(0, Math.min(1000, Math.round(position.x / 10) * 10)),
-      y: Math.max(0, Math.min(640, Math.round(position.y / 10) * 10)),
-    };
+    const point = renderer.snapPoint(position, [0, 0, 1000, 640]);
     const last = state.wirePoints.at(-1);
     if (last && point.x === last.x && point.y === last.y) return;
     if (state.wirePoints.length >= 32) {
@@ -600,7 +713,11 @@
     const wire = state.document.wires.find((item) => item.id === state.selectedWire);
     if (!wire || !state.editable) return;
     const route = renderer.getWireRoute(wire, state.document.components);
-    const position = state.wireAnchor || route[Math.floor(route.length / 2)];
+    const position = renderer.snapWirePoint(
+      wire,
+      state.document.components,
+      state.wireAnchor || route[Math.floor(route.length / 2)],
+    ).point;
     state.wireStart = { wireId: wire.id, position };
     state.wirePoints = [];
     window.FreeBbsCircuitSidebar?.close({ mobileOnly: true });
@@ -812,6 +929,146 @@
     renderInspector();
     renderSweepOptions();
     renderSchematic();
+  }
+
+  function rotateSelection(turns = 1) {
+    const selected = state.document.components.find((item) => item.id === state.selectedId);
+    if (!selected || !state.editable) return false;
+    selected.rotation = (selected.rotation + turns * 90 + 360) % 360;
+    changed({ electrical: false });
+    renderInspector();
+    renderSchematic();
+    return true;
+  }
+
+  function mirrorSelection(axis) {
+    const selected = state.document.components.find((item) => item.id === state.selectedId);
+    if (!selected || !state.editable) return false;
+    const localAxis = selected.rotation % 180 === 0 ? axis : axis === 'x' ? 'y' : 'x';
+    const key = localAxis === 'x' ? 'mirrorX' : 'mirrorY';
+    selected[key] = !selected[key];
+    changed({ electrical: false });
+    renderInspector();
+    renderSchematic();
+    return true;
+  }
+
+  function duplicateSelection() {
+    const selected = state.document.components.find((item) => item.id === state.selectedId);
+    if (!selected || !state.editable || state.saving || state.wireStart) return false;
+    if (state.document.components.length >= 80) {
+      setStatus('每个电路最多 80 个元件。', 'error');
+      return false;
+    }
+    const duplicate = clone(selected);
+    duplicate.id = uniqueId(prefixes[selected.type] || 'J');
+    const offset = renderer.gridSize * 2;
+    Object.assign(
+      duplicate,
+      renderer.snapPoint(
+        {
+          x: selected.x + (selected.x > 900 ? -offset : offset),
+          y: selected.y + (selected.y > 520 ? -offset : offset),
+        },
+        selected.type === 'junction' ? [0, 0, 1000, 640] : [60, 60, 880, 500],
+      ),
+    );
+    state.document.components.push(duplicate);
+    state.selectedId = duplicate.id;
+    state.selectedWire = '';
+    changed();
+    renderInspector();
+    renderSweepOptions();
+    renderSchematic();
+    focusSelectedComponent();
+    setStatus(`已复制 ${selected.id} 为 ${duplicate.id}，可继续移动或连接。`);
+    return true;
+  }
+
+  function focusSelectedComponent() {
+    [...$('stage').querySelectorAll('[data-component-id]')]
+      .find((node) => node.dataset.componentId === state.selectedId)
+      ?.focus({ preventScroll: true });
+  }
+
+  function moveSelection(dx, dy) {
+    const selected = state.document.components.find((item) => item.id === state.selectedId);
+    if (!selected || !state.editable) return false;
+    const bounds = selected.type === 'junction' ? [0, 0, 1000, 640] : [60, 60, 880, 500];
+    const point = renderer.snapPoint(
+      { x: selected.x + dx * renderer.gridSize, y: selected.y + dy * renderer.gridSize },
+      bounds,
+    );
+    if (point.x === selected.x && point.y === selected.y) return true;
+    Object.assign(selected, point);
+    state.selectedWire = '';
+    state.wireAnchor = null;
+    changed({ electrical: false, historyGroup: `move:${selected.id}` });
+    renderInspector();
+    renderSchematic();
+    if (!$('stage').contains(document.activeElement)) focusSelectedComponent();
+    return true;
+  }
+
+  function dispatchShortcut(action, detail = {}, event = {}) {
+    if (action === 'save') {
+      saveCircuit();
+      return true;
+    }
+    if (action === 'run') {
+      if (state.worker || state.agentRun) return false;
+      runSimulation();
+      return true;
+    }
+    if (action === 'max') {
+      window.FreeBbsCircuitSidebar?.open('max');
+      return true;
+    }
+    if (action === 'cancel') {
+      if (state.annotationPicking) state.annotationControls.cancelPicking();
+      else if (state.wireStart) cancelConnection();
+      else {
+        window.FreeBbsCircuitParameterPopover?.hide();
+        state.selectedId = '';
+        state.selectedWire = '';
+        renderInspector();
+        renderSchematic();
+      }
+      return true;
+    }
+    if (!state.editable || state.saving || state.agentRun) return false;
+    if (action === 'undo' || action === 'redo') return restoreHistory(action);
+    if (action === 'delete' && state.wireStart && event.key === 'Backspace') {
+      if (state.wirePoints.length) undoConnectionPoint();
+      else cancelConnection();
+      return true;
+    }
+    if (state.wireStart) return false;
+    if (action === 'rotate') return rotateSelection(detail.turns);
+    if (action === 'mirror') return mirrorSelection(detail.axis);
+    if (action === 'duplicate') return duplicateSelection();
+    if (action === 'move') return moveSelection(detail.dx, detail.dy);
+    if (action === 'delete') {
+      if (!state.selectedId && !state.selectedWire) return false;
+      removeSelection();
+      return true;
+    }
+    if (action === 'wire') {
+      if (state.selectedWire) startFromWire();
+      else if (state.selectedId) {
+        const selected = state.document.components.find((item) => item.id === state.selectedId);
+        if (!selected) return false;
+        const focusedPin = document.activeElement?.closest?.('[data-pin]');
+        const pin =
+          focusedPin?.closest('[data-component-id]')?.dataset.componentId === selected.id
+            ? Number(focusedPin.dataset.pin)
+            : 0;
+        window.FreeBbsCircuitParameterPopover?.hide();
+        connectPin({ componentId: selected.id, pin });
+      } else return false;
+      return true;
+    }
+    return false;
   }
 
   function updateParameter(event, { componentId = state.selectedId, popover = false } = {}) {
@@ -1152,6 +1409,7 @@
       else {
         state.editVersion += 1;
         invalidateResult();
+        resetHistory();
       }
       renderAnalysis();
       renderInspector();
@@ -1506,7 +1764,7 @@
         frame: state.frame,
       },
     };
-    notifyCircuitEditor();
+    updateControls();
     return { runId: id, snapshot };
   }
 
@@ -1582,7 +1840,7 @@
         : run.priorUndo;
     }
     state.agentRun = null;
-    notifyCircuitEditor();
+    updateControls();
     return getAssistantSnapshot();
   }
 
@@ -2040,6 +2298,7 @@
         state.document = circuit.document || doc;
         state.plotModified = false;
         if (state.result) updatePlot(state.plotDisplay);
+        state.history?.synchronize(historySnapshot());
       }
       removeDraft(oldCid);
       if (state.dirty) persistDraft();
@@ -2083,6 +2342,7 @@
     $('title').value = `${$('title').value.replace(/ · 副本$/, '')} · 副本`.slice(0, 120);
     window.history.replaceState(null, '', '/circuit');
     changed({ electrical: false });
+    resetHistory();
     renderAnalysis();
     renderInspector();
     renderSchematic();
@@ -2209,6 +2469,7 @@
           : '此电路为只读视图，可运行仿真或复制为新电路。';
       setStatus(state.editable ? '' : viewStatus);
       if (!revision) restoreDraft();
+      resetHistory();
       renderAnalysis();
       renderInspector();
       renderSchematic();
@@ -2267,6 +2528,10 @@
   }
 
   function bindEvents() {
+    state.history = window.FreeBbsCircuitHistory.create();
+    document.addEventListener('focusin', (event) => {
+      if (event.target.matches?.('input,textarea')) state.history.breakGroup();
+    });
     $('palette').addEventListener('click', (event) => {
       const button = event.target.closest('[data-add-component]');
       if (button) addComponent(button.dataset.addComponent);
@@ -2298,25 +2563,13 @@
       renderInspector();
       renderSchematic();
     });
-    $('rotate').addEventListener('click', () => {
-      const selected = state.document.components.find((item) => item.id === state.selectedId);
-      if (!selected || !state.editable) return;
-      selected.rotation = (selected.rotation + 90) % 360;
-      changed({ electrical: false });
-      renderSchematic();
-    });
+    $('rotate').addEventListener('click', () => rotateSelection());
     ['x', 'y'].forEach((axis) =>
-      $(`mirror-${axis}`).addEventListener('click', () => {
-        const selected = state.document.components.find((item) => item.id === state.selectedId);
-        if (!selected || !state.editable) return;
-        const localAxis = selected.rotation % 180 === 0 ? axis : axis === 'x' ? 'y' : 'x';
-        const key = localAxis === 'x' ? 'mirrorX' : 'mirrorY';
-        selected[key] = !selected[key];
-        changed({ electrical: false });
-        renderInspector();
-        renderSchematic();
-      }),
+      $(`mirror-${axis}`).addEventListener('click', () => mirrorSelection(axis)),
     );
+    $('duplicate').addEventListener('click', duplicateSelection);
+    $('undo').addEventListener('click', () => restoreHistory('undo'));
+    $('redo').addEventListener('click', () => restoreHistory('redo'));
     $('delete').addEventListener('click', removeSelection);
     $('cancel-wire').addEventListener('click', cancelConnection);
     $('undo-wire').addEventListener('click', undoConnectionPoint);
@@ -2476,30 +2729,13 @@
       input.value = '';
     });
     $('list-more').addEventListener('click', () => loadList());
-    document.addEventListener('keydown', (event) => {
-      if (listPage || event.defaultPrevented) return;
-      if (event.target.closest('[data-wire-controls]')) return;
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
-        event.preventDefault();
-        saveCircuit();
-      }
-      if (event.target.closest('input,textarea,select,[contenteditable]')) return;
-      if (event.key === 'Escape' && state.annotationPicking) {
-        state.annotationControls.cancelPicking();
-        return;
-      }
-      if (state.wireStart && event.key === 'Backspace') {
-        event.preventDefault();
-        undoConnectionPoint();
-        return;
-      }
-      if (event.key === 'Escape') {
-        cancelConnection();
-      }
-      if (['Delete', 'Backspace'].includes(event.key) && (state.selectedId || state.selectedWire)) {
-        event.preventDefault();
-        removeSelection();
-      }
+    state.shortcuts = window.FreeBbsCircuitShortcuts.bind({
+      target: document,
+      isActive: () => !listPage && !$('editor-page').hidden,
+      dispatch: dispatchShortcut,
+      helpButton: $('shortcuts'),
+      helpDialog: $('shortcuts-dialog'),
+      onHelpOpen: () => window.FreeBbsCircuitParameterPopover?.hide(),
     });
     window.addEventListener('beforeunload', (event) => {
       if (state.saving || (state.dirty && !persistDraft())) event.preventDefault();
@@ -2551,6 +2787,7 @@
           $('title').value = '未命名电路';
           $('description').value = '';
           state.selectedId = '';
+          resetHistory();
           renderAnalysis();
           renderInspector();
           renderSchematic();
@@ -2595,6 +2832,7 @@
       $('title').value = sample.title;
       $('description').value = sample.description;
       const restored = restoreDraft();
+      resetHistory();
       renderAnalysis();
       renderInspector();
       renderSchematic();
