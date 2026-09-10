@@ -33,6 +33,7 @@ node --check public/circuit-wiring.js
 node --check public/circuit.js
 node --check public/circuit-ai-actions.js
 node --check public/circuit-assistant.js
+node --check public/circuit-parameter-popover.js
 node --check public/circuit-embeds.js
 node --check public/circuit-embed.js
 node --check public/discussion-previews.js

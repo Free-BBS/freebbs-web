@@ -63,6 +63,7 @@ function harness(document = fixture()) {
   const statuses = [];
   const calls = { changed: 0, controls: 0, inspector: 0, schematic: 0 };
   const context = vm.createContext({
+    window: {},
     state,
     engine,
     renderer,

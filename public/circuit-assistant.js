@@ -6,8 +6,12 @@
   const app = window.freeBbsApp;
   const desktop = window.matchMedia('(min-width: 1250px)');
   const layout = document.getElementById('circuit-editor-layout');
+  const tabNames = ['max', 'parameters'];
+  const sidebarTab = (name) => document.getElementById(`circuit-sidebar-tab-${name}`);
+  const sidebarPanel = (name) => document.getElementById(`circuit-sidebar-panel-${name}`);
   const state = {
     open: false,
+    tab: 'max',
     sending: false,
     history: [],
     proposals: [],
@@ -83,25 +87,51 @@
     }
   }
 
-  function setOpen(open, { focus = false } = {}) {
+  function notifySidebar() {
+    window.dispatchEvent(
+      new CustomEvent('freebbs:circuit-sidebar-change', {
+        detail: { open: state.open, tab: state.tab, modal: state.open && !desktop.matches },
+      }),
+    );
+  }
+
+  function selectTab(name, { focus = false, notify = true } = {}) {
+    if (!tabNames.includes(name)) return;
+    state.tab = name;
+    tabNames.forEach((tabName) => {
+      const active = name === tabName;
+      sidebarTab(tabName).setAttribute('aria-selected', String(active));
+      sidebarTab(tabName).tabIndex = active ? 0 : -1;
+      sidebarPanel(tabName).hidden = !active;
+    });
+    if (focus) sidebarTab(name).focus({ preventScroll: true });
+    if (notify) notifySidebar();
+  }
+
+  function setOpen(open, { focus = false, tab } = {}) {
     if (open && !state.open) state.returnFocus = document.activeElement;
+    if (tab) selectTab(tab, { notify: false });
     state.open = open;
     panel.hidden = !open;
     layout.classList.toggle('has-assistant', open);
     $('toggle').setAttribute('aria-expanded', String(open));
+    $('toggle').setAttribute('aria-label', open ? '收起电路侧栏' : '打开电路侧栏');
     updateModalState();
     if (open && focus) {
-      ($('input').disabled ? panel : $('input')).focus({ preventScroll: true });
+      const target =
+        state.tab === 'max' && !$('input').disabled ? $('input') : sidebarTab(state.tab);
+      target.focus({ preventScroll: true });
       if (desktop.matches) panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     } else if (!open && focus) {
       const target = state.returnFocus?.isConnected ? state.returnFocus : $('toggle');
       target.focus({ preventScroll: true });
     }
+    notifySidebar();
     window.dispatchEvent(new Event('resize'));
   }
 
   function showQuestion(question) {
-    setOpen(true, { focus: true });
+    setOpen(true, { focus: true, tab: 'max' });
     if (state.sending) return;
     $('input').value = question;
     retainQuestion();
@@ -329,6 +359,20 @@
   }
 
   $('toggle').addEventListener('click', () => setOpen(!state.open, { focus: true }));
+  tabNames.forEach((name, index) => {
+    const tab = sidebarTab(name);
+    tab.addEventListener('click', () => selectTab(name));
+    tab.addEventListener('keydown', (event) => {
+      let next;
+      if (event.key === 'ArrowRight') next = (index + 1) % tabNames.length;
+      else if (event.key === 'ArrowLeft') next = (index - 1 + tabNames.length) % tabNames.length;
+      else if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = tabNames.length - 1;
+      if (next === undefined) return;
+      event.preventDefault();
+      selectTab(tabNames[next], { focus: true });
+    });
+  });
   $('close').addEventListener('click', () => setOpen(false, { focus: true }));
   $('backdrop').addEventListener('click', () => setOpen(false, { focus: true }));
   $('form').addEventListener('submit', submit);
@@ -376,8 +420,14 @@
       setOpen(false, { focus: true });
     }
     if (event.key !== 'Tab' || desktop.matches) return;
-    const targets = [...panel.querySelectorAll('button, textarea, a[href], [tabindex="0"]')].filter(
-      (element) => !element.disabled && !element.hidden && element.getClientRects().length,
+    const targets = [
+      ...panel.querySelectorAll('button, input, select, textarea, a[href], [tabindex]'),
+    ].filter(
+      (element) =>
+        !element.disabled &&
+        !element.hidden &&
+        element.tabIndex >= 0 &&
+        element.getClientRects().length,
     );
     const first = targets[0];
     const last = targets[targets.length - 1];
@@ -398,8 +448,17 @@
   window.addEventListener('freebbs:circuit-editor-change', (event) => {
     updateEditorState(event.detail);
   });
+  window.addEventListener('freebbs:circuit-sidebar-request', (event) => {
+    setOpen(true, { focus: true, tab: event.detail?.tab || 'max' });
+  });
+  window.FreeBbsCircuitSidebar = {
+    open: (tab = 'max') => setOpen(true, { focus: true, tab }),
+    close: ({ mobileOnly = false } = {}) => {
+      if (state.open && (!mobileOnly || !desktop.matches)) setOpen(false, { focus: true });
+    },
+  };
   window.FreeBbsCircuitAssistant = {
-    open: () => setOpen(true, { focus: true }),
+    open: () => setOpen(true, { focus: true, tab: 'max' }),
   };
   if (window.FreeBbsCircuitEditor) updateEditorState(editor().getSnapshot());
   restoreQuestion();

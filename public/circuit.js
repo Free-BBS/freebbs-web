@@ -340,13 +340,15 @@
         state.wirePoints = [];
         addConnectionPoint(position);
       },
-      onComponentClick(id) {
+      onComponentClick(id, { focus = false } = {}) {
         state.selectedId = id;
         state.selectedWire = '';
         renderInspector();
         renderSchematic();
+        syncParameterPopover({ show: true, focus });
       },
       onWireClick(id, position) {
+        window.FreeBbsCircuitParameterPopover?.hide();
         if (state.wireStart) {
           completeConnection(state.wireStart, { wireId: id, position });
           return;
@@ -357,6 +359,7 @@
         state.wireAnchor = position;
         renderInspector();
         if (!wasSelected) renderSchematic();
+        window.FreeBbsCircuitSidebar?.open('parameters');
       },
       onConnect(fromEndpoint, target) {
         completeConnection(fromEndpoint, target);
@@ -385,6 +388,7 @@
       },
     });
     applySchematicHighlights();
+    syncParameterPopover();
   }
 
   function uniqueId(prefix) {
@@ -421,6 +425,7 @@
     renderInspector();
     renderSweepOptions();
     renderSchematic();
+    syncParameterPopover({ show: true });
     setStatus(`已添加 ${engine.catalog[type].label} ${component.id}。`);
   }
 
@@ -541,6 +546,7 @@
     const position = state.wireAnchor || route[Math.floor(route.length / 2)];
     state.wireStart = { wireId: wire.id, position };
     state.wirePoints = [];
+    window.FreeBbsCircuitSidebar?.close({ mobileOnly: true });
     updateControls();
     renderInspector();
     renderSchematic();
@@ -597,6 +603,44 @@
     return `<label>${escapeHtml(label)}${field}</label>`;
   }
 
+  function parameterFieldsHtml(component) {
+    return Object.entries(component.params)
+      .filter(([key]) => {
+        if (!['voltage', 'current'].includes(component.type)) return true;
+        if (key === 'duty') return component.params.waveform === 'pulse';
+        return (
+          component.params.waveform !== 'dc' || !['amplitude', 'frequency', 'delay'].includes(key)
+        );
+      })
+      .map(([key, value]) => parameterInput(component, key, value))
+      .join('');
+  }
+
+  function syncParameterPopover({ show = false, focus = false } = {}) {
+    const popover = window.FreeBbsCircuitParameterPopover;
+    if (!popover) return;
+    const component = state.document.components.find((item) => item.id === state.selectedId);
+    if (!component || state.wireStart || listPage) {
+      popover.hide();
+      return;
+    }
+    let html = parameterFieldsHtml(component);
+    if (['voltage', 'current'].includes(component.type))
+      html += `<p class="circuit-parameter-hint">${escapeHtml(sourceParameterHint(component))}</p>`;
+    if (component.type === 'nonlinear')
+      html += '<p class="circuit-parameter-hint">使用 u、k、数学运算和函数，例如 i=k*u^3。</p>';
+    if (!html)
+      html = '<p class="circuit-parameter-hint">此元件没有可调参数，可在侧栏查看连接。</p>';
+    const snapshot = {
+      componentId: component.id,
+      title: `${component.id} · ${engine.catalog[component.type].label}`,
+      html,
+      editable: state.editable,
+    };
+    if (show) popover.show(snapshot, { focus });
+    else popover.update(snapshot, { preserveFocus: true });
+  }
+
   function wireLabel(wire) {
     const endpoint = (pin) => {
       const component = state.document.components.find((item) => item.id === pin.componentId);
@@ -614,19 +658,7 @@
     $('selected-name').textContent = component
       ? `${component.id} · ${engine.catalog[component.type].label}`
       : `导线 ${selectedWire.id}`;
-    $('parameters').innerHTML = component
-      ? Object.entries(component.params)
-          .filter(([key]) => {
-            if (!['voltage', 'current'].includes(component.type)) return true;
-            if (key === 'duty') return component.params.waveform === 'pulse';
-            return (
-              component.params.waveform !== 'dc' ||
-              !['amplitude', 'frequency', 'delay'].includes(key)
-            );
-          })
-          .map(([key, value]) => parameterInput(component, key, value))
-          .join('')
-      : '';
+    $('parameters').innerHTML = component ? parameterFieldsHtml(component) : '';
     if (component?.type === 'nonlinear')
       $('parameters').insertAdjacentHTML(
         'beforeend',
@@ -684,11 +716,12 @@
     renderSchematic();
   }
 
-  function updateParameter(event) {
+  function updateParameter(event, { componentId = state.selectedId, popover = false } = {}) {
     if (!state.editable) return;
     const key = event.target.dataset.parameter;
-    const component = state.document.components.find((item) => item.id === state.selectedId);
-    if (!key || !component) return;
+    if (componentId !== state.selectedId) return;
+    const component = state.document.components.find((item) => item.id === componentId);
+    if (!key || !component || !Object.hasOwn(component.params, key)) return;
     const value =
       typeof component.params[key] === 'number' ? Number(event.target.value) : event.target.value;
     if (typeof value === 'number' && (!event.target.value.trim() || !Number.isFinite(value))) {
@@ -697,20 +730,19 @@
       return;
     }
     event.target.setCustomValidity('');
+    if (component.params[key] === value) return;
     component.params[key] = value;
     changed();
-    if (key === 'waveform') {
+    if (popover || key === 'waveform') {
       renderInspector();
-      $('parameters').querySelector('[data-parameter="waveform"]')?.focus();
+      if (!popover) $('parameters').querySelector('[data-parameter="waveform"]')?.focus();
     } else renderSourceParameterHint(component);
     renderSweepOptions();
     renderSchematic();
     setStatus(`已更新 ${component.id} 的${parameterLabels[key] || key}。`);
   }
 
-  function renderSourceParameterHint(component) {
-    const hint = $('source-parameter-hint');
-    if (!hint || !['voltage', 'current'].includes(component.type)) return;
+  function sourceParameterHint(component) {
     const p = component.params;
     const unit = component.type === 'voltage' ? 'V' : 'A';
     let text = '直流值用于 DC 工作点。';
@@ -720,7 +752,21 @@
     } else if (p.waveform === 'pulse') {
       text = `脉冲在 ${formatNumber(p.dc, unit)} 与 ${formatNumber(p.dc + p.amplitude, unit)} 之间切换；占空比表示高电平占一个周期的比例。`;
     }
-    hint.textContent = `${text} 时间波形使用“瞬态响应”；“AC 小信号峰值”只用于交流小信号分析。相位单位为度。`;
+    return `${text} 时间波形使用“瞬态响应”；“AC 小信号峰值”只用于交流小信号分析。相位单位为度。`;
+  }
+
+  function renderSourceParameterHint(component) {
+    const hint = $('source-parameter-hint');
+    if (hint && ['voltage', 'current'].includes(component.type))
+      hint.textContent = sourceParameterHint(component);
+  }
+
+  function validateParameterInputs() {
+    if (window.FreeBbsCircuitParameterPopover?.reportValidity?.() === false) return false;
+    if ($('parameters').checkValidity()) return true;
+    window.FreeBbsCircuitSidebar?.open('parameters');
+    $('parameters').reportValidity();
+    return false;
   }
 
   function renderSourceAdvice() {
@@ -1026,7 +1072,7 @@
 
   async function saveExample(updating) {
     if (!isExampleAdmin() || !state.editable || state.exampleBusy || state.exampleLoading) return;
-    if (!$('parameters').reportValidity()) return;
+    if (!validateParameterInputs()) return;
     const target = updating ? state.loadedExample : null;
     if (updating && (!target || String(target.id) !== $('example').value)) return;
     const { generation } = state;
@@ -1429,7 +1475,7 @@
 
   function runSimulation() {
     if (state.worker) return;
-    if (!$('parameters').reportValidity()) return;
+    if (!validateParameterInputs()) return;
     try {
       if (state.editable) {
         const analysis = readAnalysis();
@@ -1489,7 +1535,7 @@
 
   async function saveCircuit() {
     if (state.saving || !state.editable) return;
-    if (!$('parameters').reportValidity()) return;
+    if (!validateParameterInputs()) return;
     if (!app.userState.isLoggedIn) {
       state.dirty = true;
       persistDraft();
@@ -1761,7 +1807,13 @@
         if (state.editable) changed({ electrical: false });
       }),
     );
-    $('parameters').addEventListener('input', updateParameter);
+    $('parameters').addEventListener('input', (event) => {
+      if (event.target.tagName !== 'SELECT') updateParameter(event);
+    });
+    window.addEventListener('freebbs:circuit-parameter-input', (event) => {
+      const { componentId, input } = event.detail || {};
+      if (input) updateParameter({ target: input }, { componentId, popover: true });
+    });
     $('parameters').addEventListener('change', (event) => {
       if (event.target.tagName === 'SELECT') updateParameter(event);
     });

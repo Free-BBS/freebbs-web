@@ -3,6 +3,10 @@
   min-width: 0;
 }
 
+.circuit-editor-layout .circuit-workspace {
+  grid-template-columns: 142px minmax(0, 1fr);
+}
+
 .circuit-main #circuit-ai-toggle {
   gap: 7px;
   color: var(--ui-accent);
@@ -77,26 +81,11 @@ svg .is-ai-highlighted path[data-trace-id] {
   min-width: 0;
 }
 
-.circuit-ai-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  object-fit: cover;
-}
-
 .circuit-main #circuit-ai-title {
   font-family: var(--font-ui);
   font-size: 1.03rem;
   line-height: 1.5;
   font-weight: 700;
-}
-
-#circuit-ai-title span {
-  margin-left: 5px;
-  color: var(--ui-muted);
-  font-family: var(--font-zh-body, var(--font-ui));
-  font-size: 0.77rem;
-  font-weight: 500;
 }
 
 .circuit-ai-heading p {
@@ -118,9 +107,76 @@ svg .is-ai-highlighted path[data-trace-id] {
   font: 400 1.45rem / 1 var(--font-ui);
 }
 
+.circuit-sidebar-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 18px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.circuit-main .circuit-sidebar-tabs button {
+  flex: 1;
+  gap: 7px;
+  min-height: 43px;
+  padding: 9px 2px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--ui-muted);
+  background: transparent;
+  font-size: 0.79rem;
+}
+
+.circuit-main .circuit-sidebar-tabs button[aria-selected='true'] {
+  border-bottom-color: var(--ui-accent);
+  color: var(--ui-accent);
+  font-weight: 700;
+}
+
+.circuit-sidebar-tab-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.circuit-sidebar-tabpanel {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.circuit-sidebar-max {
+  display: flex;
+  flex-direction: column;
+}
+
+.circuit-sidebar-parameters {
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scroll-padding-block: 16px;
+}
+
+.circuit-ai-panel .circuit-inspector {
+  padding: 18px 16px;
+  border: 0;
+}
+
+.circuit-ai-panel .circuit-selection-actions {
+  flex-wrap: wrap;
+}
+
+.circuit-ai-panel #circuit-parameters,
+.circuit-ai-panel #circuit-connections {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
 .circuit-main .circuit-ai-context {
   padding: 9px 16px;
-  border-top: 1px solid var(--ui-line);
   border-bottom: 1px solid var(--ui-line);
   background: var(--ui-accent-soft);
   color: var(--ui-accent);
@@ -406,19 +462,6 @@ svg .is-ai-highlighted path[data-trace-id] {
 
   .has-assistant .circuit-workspace {
     grid-template-columns: 136px minmax(0, 1fr);
-  }
-
-  .has-assistant .circuit-inspector {
-    grid-column: 1 / -1;
-    border-left: 0;
-    border-top: 1px solid var(--ui-line);
-  }
-
-  .has-assistant #circuit-parameters,
-  .has-assistant #circuit-connections {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
   }
 
   .has-assistant .circuit-section-heading {
