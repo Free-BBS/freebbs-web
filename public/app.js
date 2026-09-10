@@ -8698,6 +8698,17 @@ function initializeLandingMotion() {
   });
 }
 
+function streamCircuitChatResponse(payload, { signal, onProgress } = {}) {
+  if (!window.CircuitChat) throw new Error('流式回答组件未加载，请刷新后重试。');
+  return window.CircuitChat.request({
+    url: `${API_BASE_URL}/ai/circuit/chat`,
+    token: userState.token,
+    payload,
+    signal,
+    onProgress,
+  });
+}
+
 window.freeBbsApp = {
   callApi,
   clearSession,
@@ -8719,6 +8730,7 @@ window.freeBbsApp = {
   resolveAssetUrl,
   streamAiChatResponse,
   streamKnowledgeRagResponse,
+  streamCircuitChatResponse,
 };
 
 userName.addEventListener('click', handleAuthEntry);

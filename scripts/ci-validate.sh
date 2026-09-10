@@ -38,6 +38,7 @@ node --check public/circuit.js
 node --check public/circuit-ai-actions.js
 node --check public/circuit-assistant.js
 node --check public/circuit-agent.js
+node --check public/circuit-chat.js
 node --check public/circuit-parameter-popover.js
 node --check public/circuit-embeds.js
 node --check public/circuit-embed.js

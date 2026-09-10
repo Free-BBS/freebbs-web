@@ -233,7 +233,7 @@ test('the Max request contains the unsaved document, actual pins, selected targe
   const payload = buildCircuitAssistantPayload(input);
   assert.equal(payload.agent, 'general_chat');
   assert.equal(payload.execute_subagent, 'none');
-  assert.equal(payload.stream, false);
+  assert.equal(payload.stream, true);
   assert.equal(payload.source, 'circuit_editor');
   assert.equal(payload.context.circuitEditor.document.components[0].params.resistance, 1000);
   assert.equal(payload.context.circuitEditor.document.components[0].mirrorX, true);

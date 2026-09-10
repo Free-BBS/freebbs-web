@@ -224,13 +224,43 @@
                 observations: clone(observations),
               },
             };
-            response = await abortable(
-              Promise.resolve().then(() => {
-                guard();
-                return requestStep(payload, { signal });
-              }),
-              signal,
-            );
+            const requestStepNumber = step;
+            let progressOpen = true;
+            let progressCheckedAt = -Infinity;
+            const onProgress = (progress) => {
+              if (!progressOpen || context.ended || signal.aborted) return;
+              try {
+                // Stream tokens need not repeatedly serialize the same waveform snapshot.
+                // The final response always performs a full check before any action executes.
+                if (Date.now() - progressCheckedAt >= 250) {
+                  checkCurrent();
+                  progressCheckedAt = Date.now();
+                }
+              } catch (error) {
+                context.controller.abort(error);
+                return;
+              }
+              if (progress?.type === 'answer' && typeof progress.answer === 'string')
+                emit({ type: 'progress', step: requestStepNumber, answer: progress.answer });
+              else if (progress?.type === 'status')
+                emit({
+                  type: 'progress',
+                  step: requestStepNumber,
+                  phase: progress.phase,
+                  message: String(progress.message || ''),
+                });
+            };
+            try {
+              response = await abortable(
+                Promise.resolve().then(() => {
+                  guard();
+                  return requestStep(payload, { signal, onProgress });
+                }),
+                signal,
+              );
+            } finally {
+              progressOpen = false;
+            }
             checkCurrent();
             if (!response || typeof response !== 'object')
               throw new Error('Max 返回了无效的操作结果。');
