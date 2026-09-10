@@ -81,7 +81,7 @@
           <a href="/surveys" target="_blank" rel="noopener">打开公开报名大厅 ↗</a>
         </header>
         <div id="message" role="status" aria-live="polite"></div>
-        <div id="admin-content" hidden>
+        <div id="admin-content" class="hidden" data-admin-content hidden>
           <div class="actions">
             <button id="new-survey">新建活动</button
             ><button id="refresh" class="secondary">刷新列表</button>
@@ -178,12 +178,17 @@
           <section>
             <h2>所有活动</h2>
             <div id="survey-list"></div>
+            <nav class="actions" aria-label="活动管理分页">
+              <button id="previous-page" class="secondary" disabled>上一页</button>
+              <span id="page-status" role="status"></span>
+              <button id="next-page" class="secondary" disabled>下一页</button>
+            </nav>
           </section>
           <section id="entries-panel" class="card" hidden>
             <h2>报名详情</h2>
             <p id="draw-audit" class="muted"></p>
             <div class="actions">
-              <button id="export">导出 CSV</button
+              <button id="export" disabled>导出 CSV</button
               ><button id="close-entries" class="secondary">关闭详情</button>
             </div>
             <div id="entries-table" class="table-wrap"></div>

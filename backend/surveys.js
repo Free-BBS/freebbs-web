@@ -114,12 +114,19 @@ async function ensureSurveyTables(pool) {
     path.join(__dirname, '../database/migrations/033_survey_login.sql'),
     'utf8',
   );
-  for (const statement of upgrade.split(';').filter((item) => item.trim())) {
-    try {
-      await pool.query(statement);
-    } catch (error) {
-      if (!['ER_DUP_FIELDNAME', 'ER_DUP_KEYNAME'].includes(error.code)) throw error;
+  // PREPARE and SQL user variables must stay on one connection.
+  const connection = await pool.getConnection();
+  try {
+    for (const statement of upgrade.split(';').filter((item) => item.trim())) {
+      try {
+        await connection.query(statement);
+      } catch (error) {
+        // Another backend may have just completed the same additive upgrade.
+        if (!['ER_DUP_FIELDNAME', 'ER_DUP_KEYNAME'].includes(error.code)) throw error;
+      }
     }
+  } finally {
+    connection.release();
   }
 }
 function publicSurvey(row) {
@@ -410,11 +417,15 @@ function createSurveysRouter({
   router.get(
     '/admin/surveys',
     route(async (req, res) => {
+      const page = Math.max(0, Math.min(100000, Number.parseInt(req.query.page, 10) || 0));
       const [rows] = await pool.query(
-        'SELECT s.*, (SELECT COUNT(*) FROM survey_entries e WHERE e.survey_id = s.id) AS entry_count FROM surveys s ORDER BY created_at DESC LIMIT 200',
+        'SELECT s.*, (SELECT COUNT(*) FROM survey_entries e WHERE e.survey_id = s.id) AS entry_count FROM surveys s ORDER BY created_at DESC, id DESC LIMIT 201 OFFSET ?',
+        [page * 200],
       );
       res.json({
-        surveys: rows.map((row) => ({
+        page,
+        nextPage: rows.length > 200 ? page + 1 : null,
+        surveys: rows.slice(0, 200).map((row) => ({
           ...publicSurvey(row),
           repeatDays: row.repeat_days,
           nextId: row.next_id,

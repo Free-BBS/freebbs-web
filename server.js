@@ -145,7 +145,7 @@ const server = http.createServer((request, response) => {
     request.url || '/',
     `http://${request.headers.host || `${host}:${port}`}`,
   );
-  if (requestUrl.pathname.startsWith('/api/')) {
+  if (requestUrl.pathname.startsWith('/api/') || requestUrl.pathname.startsWith('/uploads/')) {
     const upstream = http.request(
       {
         hostname:

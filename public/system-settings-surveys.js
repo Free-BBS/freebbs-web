@@ -1,7 +1,61 @@
 (() => {
   const { api, el, message, date, status, download } = window.SurveyUI;
-  const request = (path = '', method = 'GET', body = undefined) =>
-    api(`/admin/surveys${path}`, method, body, true);
+  function token() {
+    return localStorage.getItem('free_bbs_auth_token') || '';
+  }
+  let activeToken = token();
+  let epoch = 0;
+  let allowed = false;
+  let currentPage = 0;
+  let nextPage = null;
+  const capture = () => ({ epoch, token: token() });
+  const current = (context) => context.epoch === epoch && context.token === token();
+  function staleRequest() {
+    const error = new Error('登录身份已变化');
+    error.stale = true;
+    return error;
+  }
+  function clearEntries() {
+    document.getElementById('entries-panel').hidden = true;
+    document.getElementById('entries-table').replaceChildren();
+    document.getElementById('draw-audit').textContent = '';
+    const exporter = document.getElementById('export');
+    exporter.onclick = null;
+    exporter.disabled = true;
+  }
+  function clearAdmin() {
+    epoch += 1;
+    allowed = false;
+    currentPage = 0;
+    nextPage = null;
+    const panel = document.getElementById('admin-content');
+    panel.hidden = true;
+    panel.classList.add('hidden');
+    clearEntries();
+    document.getElementById('survey-list').replaceChildren();
+    document.getElementById('page-status').textContent = '';
+    document.getElementById('previous-page').disabled = true;
+    document.getElementById('next-page').disabled = true;
+    form.reset();
+    questions.replaceChildren();
+    editor.hidden = true;
+    editingId = null;
+  }
+  async function request(path = '', method = 'GET', body = undefined) {
+    const context = capture();
+    try {
+      const data = await api(`/admin/surveys${path}`, method, body);
+      if (!current(context)) throw staleRequest();
+      return data;
+    } catch (error) {
+      if (!current(context)) throw staleRequest();
+      if (error.status === 401 || error.status === 403) clearAdmin();
+      throw error;
+    }
+  }
+  function report(error) {
+    if (!error.stale) message(error.message);
+  }
   const form = document.getElementById('survey-form');
   const questions = document.getElementById('questions');
   const editor = document.getElementById('editor');
@@ -131,28 +185,25 @@
   }
   function button(text, action, secondary = true) {
     const node = el('button', text, secondary ? 'secondary' : '');
+    const context = capture();
     node.onclick = async () => {
+      if (!allowed || !current(context)) return;
       node.disabled = true;
       message('');
       try {
         await action();
       } catch (error) {
-        message(error.message);
+        report(error);
       } finally {
         node.disabled = false;
       }
     };
     return node;
   }
-  async function entries(s) {
-    const data = await request(`/${s.id}/entries`);
-    document.getElementById('entries-panel').hidden = false;
-    document.getElementById('draw-audit').textContent = s.drawnAt
-      ? `抽签时间：${date(s.drawnAt)} · 执行者：${s.drawnBy} · 中签 ${data.entries.filter((e) => e.winner).length} / 报名 ${data.entries.length}`
-      : '尚未抽签';
-    const rows = [
+  function entryRows(s, items) {
+    return [
       ['联系邮箱', '报名时间', '抽签结果', ...s.questions.map((q) => q.label)],
-      ...data.entries.map((entry) => [
+      ...items.map((entry) => [
         entry.contact,
         date(entry.created_at),
         s.status === 'drawn' ? (entry.winner ? '中签' : '未中签') : '待抽签',
@@ -162,6 +213,17 @@
         }),
       ]),
     ];
+  }
+  async function entries(s) {
+    const context = capture();
+    clearEntries();
+    const data = await request(`/${s.id}/entries`);
+    if (!allowed || !current(context)) return;
+    document.getElementById('entries-panel').hidden = false;
+    document.getElementById('draw-audit').textContent = s.drawnAt
+      ? `抽签时间：${date(s.drawnAt)} · 执行者：${s.drawnBy} · 中签 ${data.entries.filter((e) => e.winner).length} / 报名 ${data.entries.length}`
+      : '尚未抽签';
+    const rows = entryRows(s, data.entries);
     const table = el('table');
     rows.forEach((row, index) => {
       const tr = el('tr');
@@ -169,23 +231,48 @@
       table.append(tr);
     });
     document.getElementById('entries-table').replaceChildren(table);
-    document.getElementById('export').onclick = () => {
-      const cell = (value) => {
-        let text = String(value);
-        if (/^[\s]*[=+@-]/.test(text) || /^[\t\r\n]/.test(text)) text = `'${text}`;
-        return `"${text.replaceAll('"', '""')}"`;
-      };
-      download(
-        `活动-${s.id}.csv`,
-        `\ufeff${rows.map((row) => row.map(cell).join(',')).join('\r\n')}`,
-        'text/csv;charset=utf-8',
-      );
+    const exporter = document.getElementById('export');
+    exporter.disabled = false;
+    exporter.onclick = async () => {
+      if (!allowed || !current(context)) return;
+      exporter.disabled = true;
+      try {
+        // Recheck server permission instead of exporting a retained private snapshot.
+        const fresh = await request(`/${s.id}/entries`);
+        if (!allowed || !current(context)) return;
+        const cell = (value) => {
+          let text = String(value);
+          if (/^[\s]*[=+@-]/.test(text) || /^[\t\r\n]/.test(text)) text = `'${text}`;
+          return `"${text.replaceAll('"', '""')}"`;
+        };
+        download(
+          `活动-${s.id}.csv`,
+          `\ufeff${entryRows(s, fresh.entries)
+            .map((row) => row.map(cell).join(','))
+            .join('\r\n')}`,
+          'text/csv;charset=utf-8',
+        );
+      } catch (error) {
+        report(error);
+      } finally {
+        if (allowed && current(context)) exporter.disabled = false;
+      }
     };
     document.getElementById('entries-panel').scrollIntoView({ behavior: 'smooth' });
   }
-  async function load() {
-    const { surveys } = await request();
+  async function load(page = currentPage) {
+    const context = capture();
+    const data = await request(`?page=${page}`);
+    if (!current(context)) throw staleRequest();
+    const { surveys } = data;
+    allowed = true;
+    currentPage = data.page ?? page;
+    nextPage = data.nextPage ?? null;
+    document.getElementById('page-status').textContent = `第 ${currentPage + 1} 页`;
+    document.getElementById('previous-page').disabled = currentPage === 0;
+    document.getElementById('next-page').disabled = nextPage === null;
     document.getElementById('admin-content').hidden = false;
+    document.getElementById('admin-content').classList.remove('hidden');
     const list = document.getElementById('survey-list');
     list.replaceChildren();
     if (!surveys.length) list.append(el('p', '还没有活动。点击“新建活动”开始招募。'));
@@ -270,6 +357,8 @@
   }
   form.onsubmit = async (event) => {
     event.preventDefault();
+    const context = capture();
+    if (!allowed) return;
     const submit = form.querySelector('[type=submit]');
     submit.disabled = true;
     try {
@@ -279,24 +368,57 @@
       body.opensAt = new Date(body.opensAt).toISOString();
       body.closesAt = new Date(body.closesAt).toISOString();
       await request(editingId ? `/${editingId}` : '', editingId ? 'PUT' : 'POST', body);
+      if (!current(context)) return;
       editor.hidden = true;
-      await load();
+      await load(0);
       message('草稿已保存，检查后点击“发布活动”。');
     } catch (error) {
-      message(error.message);
+      report(error);
     } finally {
       submit.disabled = false;
     }
   };
-  document.getElementById('new-survey').onclick = () => edit();
+  document.getElementById('new-survey').onclick = () => {
+    if (allowed) edit();
+  };
   document.getElementById('add-question').onclick = () => question();
   document.getElementById('close-editor').onclick = () => {
     editor.hidden = true;
   };
-  document.getElementById('close-entries').onclick = () => {
-    document.getElementById('entries-panel').hidden = true;
+  document.getElementById('close-entries').onclick = clearEntries;
+  document.getElementById('refresh').onclick = () => load().catch(report);
+  document.getElementById('previous-page').onclick = () => {
+    if (allowed && currentPage > 0) {
+      clearEntries();
+      load(currentPage - 1).catch(report);
+    }
   };
-  document.getElementById('refresh').onclick = () =>
-    load().catch((error) => message(error.message));
-  load().catch((error) => message(`${error.message}。请使用管理员账号登录后访问此页。`));
+  document.getElementById('next-page').onclick = () => {
+    if (allowed && nextPage !== null) {
+      clearEntries();
+      load(nextPage).catch(report);
+    }
+  };
+  window.addEventListener('freebbs:session-change', (event) => {
+    const user = event.detail?.user;
+    const isAdmin = Boolean(user && (user.isAdmin || user.role === 'admin'));
+    if (activeToken !== token() || !isAdmin) {
+      clearAdmin();
+      activeToken = token();
+      if (activeToken && isAdmin) load(0).catch(report);
+    }
+  });
+  window.addEventListener('storage', (event) => {
+    if (event.key === 'free_bbs_auth_token' || event.key === null) {
+      clearAdmin();
+      activeToken = token();
+      if (activeToken) load(0).catch(report);
+    }
+  });
+  window.addEventListener('pagehide', clearAdmin);
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) load(0).catch(report);
+  });
+  clearAdmin();
+  load(0).catch(report);
 })();

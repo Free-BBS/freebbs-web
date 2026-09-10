@@ -1,5 +1,9 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const filePath = require('node:path');
+const { execFile } = require('node:child_process');
+const { promisify } = require('node:util');
 const { once } = require('node:events');
 const test = require('node:test');
 const express = require('express');
@@ -115,6 +119,37 @@ test(
     });
     await ensureSurveyTables(pool);
     await ensureSurveyTables(pool);
+    if (process.env.SURVEY_TEST_MYSQL_PORT) {
+      // Simulate production migrations after the backend already upgraded its own tables.
+      await pool.query(
+        'CREATE TABLE schema_migrations (version VARCHAR(255) PRIMARY KEY, executed_at DATETIME DEFAULT CURRENT_TIMESTAMP)',
+      );
+      const previous = fs
+        .readdirSync(filePath.join(__dirname, '../database/migrations'))
+        .filter(
+          (file) => file.endsWith('.sql') && !file.startsWith('032_') && !file.startsWith('033_'),
+        );
+      for (const version of previous)
+        await pool.execute('INSERT INTO schema_migrations (version) VALUES (?)', [version]);
+      const env = {
+        ...process.env,
+        PATH: `/usr/bin:${process.env.PATH}`,
+        BACKEND_IP: '127.0.0.1',
+        MYSQL_PORT: process.env.SURVEY_TEST_MYSQL_PORT,
+        MYSQL_USER: options.user,
+        MYSQL_PASSWORD: options.password,
+        MYSQL_DATABASE: database,
+      };
+      const run = promisify(execFile);
+      await run('bash', ['scripts/migrate.sh'], { cwd: filePath.join(__dirname, '..'), env });
+      await ensureSurveyTables(pool);
+      await run('bash', ['scripts/migrate.sh'], { cwd: filePath.join(__dirname, '..'), env });
+      const [versions] = await pool.query(
+        "SELECT version FROM schema_migrations WHERE version IN ('032_surveys.sql','033_survey_login.sql')",
+      );
+      assert.equal(versions.length, 2);
+    }
+
     const service = createSurveyService(pool);
     const app = express();
     app.use(express.json());
@@ -320,6 +355,32 @@ test(
       (await call(`/surveys/${restricted}/result`, 'POST', { receipt: loggedEntry.receipt })).data
         .result,
       'pending',
+    );
+    const extra = Array.from({ length: 201 }, () => [
+      crypto.randomUUID(),
+      '分页活动',
+      '',
+      '[]',
+      new Date(),
+      new Date(Date.now() + 60000),
+      1,
+      'manual',
+      1,
+    ]);
+    await pool.query(
+      'INSERT INTO surveys (id,title,description,questions,opens_at,closes_at,winner_count,draw_mode,created_by) VALUES ?',
+      [extra],
+    );
+    const pageOne = (await call('/admin/surveys?page=0', 'GET', undefined, true)).data;
+    const pageTwo = (await call('/admin/surveys?page=1', 'GET', undefined, true)).data;
+    assert.equal(pageOne.surveys.length, 200);
+    assert.equal(pageOne.nextPage, 1);
+    assert.equal(pageTwo.nextPage, null);
+    assert.ok(pageTwo.surveys.length > 0);
+    assert.ok([...pageOne.surveys, ...pageTwo.surveys].some((survey) => survey.id === id));
+    assert.equal(
+      new Set([...pageOne.surveys, ...pageTwo.surveys].map((survey) => survey.id)).size,
+      pageOne.surveys.length + pageTwo.surveys.length,
     );
   },
 );

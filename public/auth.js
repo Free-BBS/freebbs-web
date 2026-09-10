@@ -247,14 +247,7 @@ async function handleAuthSubmit(event) {
     if (payload.user?.requiresUsernameChange) {
       await window.freeBbsAccount.requireValidUsername(payload.user);
     }
-    const next = new URL(
-      new URLSearchParams(window.location.search).get('next') || '/',
-      window.location.origin,
-    );
-    window.location.href =
-      next.origin === window.location.origin && next.pathname === '/surveys'
-        ? `${next.pathname}${next.search}`
-        : '/';
+    window.location.href = activityReturnPath() || '/';
   } catch (error) {
     setMessage(error.message);
   } finally {
@@ -317,6 +310,33 @@ async function handleSendEmailCode() {
   }
 }
 
+function activityReturnPath() {
+  try {
+    const value = new URLSearchParams(window.location.search).get('next');
+    if (!value) return '';
+    const next = new URL(value, window.location.origin);
+    return next.origin === window.location.origin && next.pathname === '/surveys'
+      ? `${next.pathname}${next.search}${next.hash}`
+      : '';
+  } catch {
+    return '';
+  }
+}
+function initializeAuthReturnLinks() {
+  const next = activityReturnPath();
+  if (!next) return;
+  document.querySelectorAll('.auth-page-switch a').forEach((link) => {
+    const destination = new URL(link.getAttribute('href'), window.location.origin);
+    if (
+      destination.origin === window.location.origin &&
+      ['/login', '/register', '/remake'].includes(destination.pathname)
+    ) {
+      destination.searchParams.set('next', next);
+      link.href = `${destination.pathname}${destination.search}`;
+    }
+  });
+}
+initializeAuthReturnLinks();
 authForm?.addEventListener('submit', handleAuthSubmit);
 sendEmailCodeButton?.addEventListener('click', handleSendEmailCode);
 authMajorFixed?.addEventListener('click', () => {
