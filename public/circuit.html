@@ -22,6 +22,7 @@
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/circuit.css" />
     <link rel="stylesheet" href="/circuit-assistant.css" />
+    <link rel="stylesheet" href="/circuit-parameter-popover.css" />
     <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css" />
     <link rel="stylesheet" href="/vendor/@highlightjs/cdn-assets/styles/github-dark.min.css" />
   </head>
@@ -180,7 +181,7 @@
                 aria-expanded="false"
                 aria-controls="circuit-ai-panel"
               >
-                <img src="/assets/icons/ai.svg" alt="" aria-hidden="true" />Max 助手
+                <img src="/assets/icons/ai.svg" alt="" aria-hidden="true" />侧栏
               </button>
             </div>
           </header>
@@ -254,26 +255,6 @@
                     退格撤回上一拐点，Esc 取消。普通交叉不接通。
                   </p>
                 </div>
-                <aside class="circuit-inspector" aria-labelledby="circuit-inspector-title">
-                  <h2 id="circuit-inspector-title">元件参数</h2>
-                  <p id="circuit-selection-empty">选中一个元件，查看参数和连接。</p>
-                  <div id="circuit-selection" hidden>
-                    <p class="circuit-selected-name" id="circuit-selected-name"></p>
-                    <div class="circuit-selection-actions">
-                      <button id="circuit-rotate" type="button">旋转 90°</button
-                      ><button id="circuit-mirror-x" type="button" aria-pressed="false">
-                        左右镜像</button
-                      ><button id="circuit-mirror-y" type="button" aria-pressed="false">
-                        上下镜像</button
-                      ><button id="circuit-delete" type="button">删除元件</button
-                      ><button id="circuit-reset-wire" type="button" hidden>恢复自动走线</button>
-                      <button id="circuit-start-wire" type="button" hidden>从此处连线</button>
-                    </div>
-                    <form id="circuit-parameters" novalidate></form>
-                    <h3>引脚与连接</h3>
-                    <div id="circuit-connections"></div>
-                  </div>
-                </aside>
               </section>
 
               <section class="circuit-analysis" aria-labelledby="circuit-analysis-title">
@@ -482,85 +463,148 @@
               hidden
             >
               <header class="circuit-ai-heading">
-                <img class="circuit-ai-avatar" src="/assets/max_the_agent_avatar.webp" alt="" />
                 <div>
-                  <h2 id="circuit-ai-title">Max <span>电路助手</span></h2>
-                  <p>和你一起理解每一次变化</p>
+                  <h2 id="circuit-ai-title">电路侧栏</h2>
+                  <p>提问、查看与调整当前电路</p>
                 </div>
                 <button
                   id="circuit-ai-close"
                   type="button"
-                  aria-label="收起 Max 助手"
-                  title="收起 Max 助手"
+                  aria-label="收起电路侧栏"
+                  title="收起电路侧栏"
                 >
                   ×
                 </button>
               </header>
-              <p id="circuit-ai-context" class="circuit-ai-context">当前画布 · 包含未保存的草稿</p>
-              <div
-                class="circuit-ai-thread"
-                id="circuit-ai-thread"
-                role="log"
-                aria-label="与 Max 的电路对话"
-                aria-live="polite"
-                aria-relevant="additions text"
-                tabindex="0"
-              >
-                <div class="circuit-ai-intro" id="circuit-ai-intro">
-                  <p>从电路本身，找到答案。</p>
-                  <p>
-                    我能查看当前元件、连接和仿真读数，帮你检查接线、解释波形，或提出可以应用的修改。
-                  </p>
-                  <div class="circuit-ai-starters" aria-label="开始提问">
-                    <button
-                      type="button"
-                      data-circuit-ai-question="请解释当前电路的工作原理，并高亮关键元件。"
-                    >
-                      解释这张电路
-                    </button>
-                    <button
-                      type="button"
-                      data-circuit-ai-question="请检查当前电路的连接和参数，指出可能的问题并高亮相关元件。"
-                    >
-                      帮我检查接线
-                    </button>
-                    <button
-                      type="button"
-                      data-circuit-ai-question="请分析当前仿真结果，显示关键波形并解释其变化。如果还没有结果，请建议合适的仿真设置。"
-                    >
-                      一起看波形
-                    </button>
-                  </div>
-                  <p class="circuit-ai-intro-note">提问时同步当前草稿。修改建议由你点选应用。</p>
-                </div>
-              </div>
-              <div class="circuit-ai-tools">
-                <button id="circuit-ai-clear-highlights" type="button">清除高亮</button>
-                <button id="circuit-ai-undo" type="button" disabled>撤销 AI 修改</button>
-              </div>
-              <form id="circuit-ai-form" class="circuit-ai-form">
-                <label for="circuit-ai-input">围绕这张电路提问</label>
-                <textarea
-                  id="circuit-ai-input"
-                  rows="3"
-                  maxlength="4000"
-                  placeholder="例如：为什么电容两端电压会这样变化？"
-                  required
-                ></textarea>
-                <div class="circuit-ai-compose-actions">
-                  <span>Ctrl / ⌘ + Enter 发送</span>
-                  <button id="circuit-ai-send" class="is-primary" type="submit">发送</button>
-                </div>
-                <p
-                  id="circuit-ai-status"
-                  class="circuit-status"
-                  role="status"
-                  aria-live="polite"
-                ></p>
-                <button id="circuit-ai-login" class="circuit-ai-login" type="button" hidden>
-                  登录后继续提问
+              <div class="circuit-sidebar-tabs" role="tablist" aria-label="侧栏内容">
+                <button
+                  id="circuit-sidebar-tab-max"
+                  type="button"
+                  role="tab"
+                  aria-selected="true"
+                  aria-controls="circuit-sidebar-panel-max"
+                  tabindex="0"
+                >
+                  <img
+                    class="circuit-sidebar-tab-avatar"
+                    src="/assets/max_the_agent_avatar.webp"
+                    alt=""
+                  />Max
                 </button>
-              </form>
+                <button
+                  id="circuit-sidebar-tab-parameters"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="circuit-sidebar-panel-parameters"
+                  tabindex="-1"
+                >
+                  元件参数
+                </button>
+              </div>
+              <section
+                id="circuit-sidebar-panel-max"
+                class="circuit-sidebar-tabpanel circuit-sidebar-max"
+                role="tabpanel"
+                aria-labelledby="circuit-sidebar-tab-max"
+              >
+                <p id="circuit-ai-context" class="circuit-ai-context">
+                  当前画布 · 包含未保存的草稿
+                </p>
+                <div
+                  class="circuit-ai-thread"
+                  id="circuit-ai-thread"
+                  role="log"
+                  aria-label="与 Max 的电路对话"
+                  aria-live="polite"
+                  aria-relevant="additions text"
+                  tabindex="0"
+                >
+                  <div class="circuit-ai-intro" id="circuit-ai-intro">
+                    <p>从电路本身，找到答案。</p>
+                    <p>
+                      我能查看当前元件、连接和仿真读数，帮你检查接线、解释波形，或提出可以应用的修改。
+                    </p>
+                    <div class="circuit-ai-starters" aria-label="开始提问">
+                      <button
+                        type="button"
+                        data-circuit-ai-question="请解释当前电路的工作原理，并高亮关键元件。"
+                      >
+                        解释这张电路
+                      </button>
+                      <button
+                        type="button"
+                        data-circuit-ai-question="请检查当前电路的连接和参数，指出可能的问题并高亮相关元件。"
+                      >
+                        帮我检查接线
+                      </button>
+                      <button
+                        type="button"
+                        data-circuit-ai-question="请分析当前仿真结果，显示关键波形并解释其变化。如果还没有结果，请建议合适的仿真设置。"
+                      >
+                        一起看波形
+                      </button>
+                    </div>
+                    <p class="circuit-ai-intro-note">提问时同步当前草稿。修改建议由你点选应用。</p>
+                  </div>
+                </div>
+                <div class="circuit-ai-tools">
+                  <button id="circuit-ai-clear-highlights" type="button">清除高亮</button>
+                  <button id="circuit-ai-undo" type="button" disabled>撤销 AI 修改</button>
+                </div>
+                <form id="circuit-ai-form" class="circuit-ai-form">
+                  <label for="circuit-ai-input">围绕这张电路提问</label>
+                  <textarea
+                    id="circuit-ai-input"
+                    rows="3"
+                    maxlength="4000"
+                    placeholder="例如：为什么电容两端电压会这样变化？"
+                    required
+                  ></textarea>
+                  <div class="circuit-ai-compose-actions">
+                    <span>Ctrl / ⌘ + Enter 发送</span>
+                    <button id="circuit-ai-send" class="is-primary" type="submit">发送</button>
+                  </div>
+                  <p
+                    id="circuit-ai-status"
+                    class="circuit-status"
+                    role="status"
+                    aria-live="polite"
+                  ></p>
+                  <button id="circuit-ai-login" class="circuit-ai-login" type="button" hidden>
+                    登录后继续提问
+                  </button>
+                </form>
+              </section>
+              <section
+                id="circuit-sidebar-panel-parameters"
+                class="circuit-sidebar-tabpanel circuit-sidebar-parameters"
+                role="tabpanel"
+                aria-labelledby="circuit-sidebar-tab-parameters"
+                tabindex="0"
+                hidden
+              >
+                <aside class="circuit-inspector" aria-labelledby="circuit-inspector-title">
+                  <h2 id="circuit-inspector-title">元件参数</h2>
+                  <p id="circuit-selection-empty">选中一个元件，查看参数和连接。</p>
+                  <div id="circuit-selection" hidden>
+                    <p class="circuit-selected-name" id="circuit-selected-name"></p>
+                    <div class="circuit-selection-actions">
+                      <button id="circuit-rotate" type="button">旋转 90°</button
+                      ><button id="circuit-mirror-x" type="button" aria-pressed="false">
+                        左右镜像</button
+                      ><button id="circuit-mirror-y" type="button" aria-pressed="false">
+                        上下镜像</button
+                      ><button id="circuit-delete" type="button">删除元件</button
+                      ><button id="circuit-reset-wire" type="button" hidden>恢复自动走线</button>
+                      <button id="circuit-start-wire" type="button" hidden>从此处连线</button>
+                    </div>
+                    <form id="circuit-parameters" novalidate></form>
+                    <h3>引脚与连接</h3>
+                    <div id="circuit-connections"></div>
+                  </div>
+                </aside>
+              </section>
             </aside>
           </div>
           <div id="circuit-ai-backdrop" class="circuit-ai-backdrop" aria-hidden="true" hidden></div>
@@ -577,6 +621,7 @@
     <script src="/circuit-renderer.js"></script>
     <script src="/circuit-wiring.js"></script>
     <script src="/circuit-ai-actions.js"></script>
+    <script src="/circuit-parameter-popover.js"></script>
     <script src="/circuit.js"></script>
     <script src="/circuit-assistant.js"></script>
     <script src="/notifications.js"></script>

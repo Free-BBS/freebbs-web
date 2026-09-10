@@ -1273,7 +1273,7 @@
         group.addEventListener('keydown', (event) => {
           if (event.target === group && (event.key === 'Enter' || event.key === ' ')) {
             event.preventDefault();
-            options.onComponentClick?.(component.id);
+            options.onComponentClick?.(component.id, { focus: true });
           }
         });
       }
@@ -1320,7 +1320,7 @@
           if (event.target !== group) return;
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
-            options.onComponentClick?.(component.id);
+            options.onComponentClick?.(component.id, { focus: true });
           }
           const delta = {
             ArrowLeft: [-10, 0],
