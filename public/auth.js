@@ -236,11 +236,25 @@ async function handleAuthSubmit(event) {
       setMessage('已取消验证，填写内容已保留。');
       return;
     }
+    if (localStorage.getItem(STORAGE_KEY) !== payload.token) {
+      try {
+        sessionStorage.removeItem('freebbs_activity_receipts_v2');
+      } catch {
+        /* Storage may be blocked. */
+      }
+    }
     localStorage.setItem(STORAGE_KEY, payload.token);
     if (payload.user?.requiresUsernameChange) {
       await window.freeBbsAccount.requireValidUsername(payload.user);
     }
-    window.location.href = '/';
+    const next = new URL(
+      new URLSearchParams(window.location.search).get('next') || '/',
+      window.location.origin,
+    );
+    window.location.href =
+      next.origin === window.location.origin && next.pathname === '/surveys'
+        ? `${next.pathname}${next.search}`
+        : '/';
   } catch (error) {
     setMessage(error.message);
   } finally {

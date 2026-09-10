@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>报名活动管理 · FREE-BBS</title>
+    <link rel="icon" href="/assets/favicon-v2-32.png" />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/username-guard.css" />
+    <link rel="stylesheet" href="/notifications.css" />
+    <link rel="stylesheet" href="/layout-fixes.css" />
+    <link rel="stylesheet" href="/surveys.css" />
+  </head>
+  <body class="activities-page">
+    <div class="page-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="FREE-BBS 首页">
+          <span class="brand-mark">FREE<br />BBS</span>
+        </a>
+
+        <nav class="nav-actions" aria-label="主导航">
+          <div class="user-panel" id="user-panel">
+            <div class="user-summary">
+              <button class="avatar" type="button" aria-label="用户头像">
+                <img
+                  class="avatar-image"
+                  id="avatar-image"
+                  src="/assets/avatar_placeholder.webp"
+                  alt="用户头像占位图"
+                />
+              </button>
+              <div class="user-actions" id="user-actions">
+                <button
+                  class="user-icon-button hidden"
+                  id="user-settings-button"
+                  type="button"
+                  aria-label="设置"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/gear.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>设置</span>
+                </button>
+                <button
+                  class="user-icon-button hidden"
+                  id="user-logout-button"
+                  type="button"
+                  aria-label="退出"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/exit.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>退出</span>
+                </button>
+              </div>
+              <div class="user-copy">
+                <button class="user-name" type="button" id="user-name">登录/注册</button>
+                <div class="user-role" id="user-role">学生</div>
+              </div>
+            </div>
+            <div class="user-status" id="user-status"></div>
+          </div>
+        </nav>
+      </header>
+
+      <nav class="mobile-nav" aria-label="手机底部导航"></nav>
+
+      <main class="main-content activities-main">
+        <header class="activity-hero">
+          <a href="/system-settings">← 系统设置</a>
+          <p class="kicker">ACTIVITY STUDIO / 活动管理</p>
+          <h1>让每一次招募，<br /><span>有序发生。</span></h1>
+          <p>创建活动，分享公开报名链接，按计划抽取测试名额。</p>
+          <a href="/surveys" target="_blank" rel="noopener">打开公开报名大厅 ↗</a>
+        </header>
+        <div id="message" role="status" aria-live="polite"></div>
+        <div id="admin-content" hidden>
+          <div class="actions">
+            <button id="new-survey">新建活动</button
+            ><button id="refresh" class="secondary">刷新列表</button>
+          </div>
+          <section id="editor" class="card" hidden>
+            <h2 id="editor-title">新建活动</h2>
+            <form id="survey-form">
+              <label>活动标题 *<input name="title" required maxlength="160" /></label
+              ><label
+                >报名说明<textarea
+                  name="description"
+                  maxlength="5000"
+                  placeholder="介绍测试内容、参与条件、预计用时及联系安排"
+                ></textarea>
+              </label>
+              <p class="muted">时间使用当前设备时区；发布后题目与时间锁定，可复制为下一期。</p>
+              <div class="grid">
+                <div class="activity-datetime-field">
+                  <label for="activity-opensAt">开放时间 *</label>
+                  <div class="activity-datetime-control">
+                    <input
+                      id="activity-opensAt"
+                      name="opensAt"
+                      type="datetime-local"
+                      required
+                    /><button
+                      type="button"
+                      class="secondary"
+                      data-datetime-picker="opensAt"
+                      aria-label="选择开放时间"
+                    >
+                      <img src="/assets/icons/calendar.svg" alt="" />选择时间
+                    </button>
+                  </div>
+                </div>
+                <div class="activity-datetime-field">
+                  <label for="activity-closesAt">截止时间 *</label>
+                  <div class="activity-datetime-control">
+                    <input
+                      id="activity-closesAt"
+                      name="closesAt"
+                      type="datetime-local"
+                      required
+                    /><button
+                      type="button"
+                      class="secondary"
+                      data-datetime-picker="closesAt"
+                      aria-label="选择截止时间"
+                    >
+                      <img src="/assets/icons/calendar.svg" alt="" />选择时间
+                    </button>
+                  </div>
+                </div>
+                <label
+                  >抽签名额 *<input
+                    name="winnerCount"
+                    type="number"
+                    min="1"
+                    max="10000"
+                    value="20"
+                    required /></label
+                ><label
+                  >抽签方式<select name="drawMode">
+                    <option value="auto">截止后自动抽签</option>
+                    <option value="manual">截止后管理员手动抽签</option>
+                  </select></label
+                ><label
+                  >重复发布间隔（天）<input
+                    name="repeatDays"
+                    type="number"
+                    min="0"
+                    max="365"
+                    value="0"
+                    required
+                  /><small>0 表示仅一期；如 7 表示每周同一时间。每期独立报名与抽签。</small></label
+                >
+              </div>
+              <label class="activity-login-setting"
+                ><input type="checkbox" name="requiresLogin" /> 需要登录后才能报名
+                <small
+                  >关闭时可免登录提交；开启时每个账号限报一次。活动列表和详情始终公开可见。</small
+                >
+              </label>
+              <h3>报名表设置</h3>
+              <p class="muted">联系邮箱已内置为必填项，不需要再添加。</p>
+              <div id="questions"></div>
+              <div class="actions">
+                <button type="button" id="add-question" class="secondary">＋ 添加题目</button
+                ><button type="submit">保存草稿</button
+                ><button type="button" id="close-editor" class="secondary">关闭编辑</button>
+              </div>
+            </form>
+          </section>
+          <section>
+            <h2>所有活动</h2>
+            <div id="survey-list"></div>
+          </section>
+          <section id="entries-panel" class="card" hidden>
+            <h2>报名详情</h2>
+            <p id="draw-audit" class="muted"></p>
+            <div class="actions">
+              <button id="export">导出 CSV</button
+              ><button id="close-entries" class="secondary">关闭详情</button>
+            </div>
+            <div id="entries-table" class="table-wrap"></div>
+          </section>
+        </div>
+      </main>
+    </div>
+    <script src="/typography.js"></script>
+    <script src="/username-guard.js"></script>
+    <script src="/surveys-common.js"></script>
+    <script src="/app.js"></script>
+    <script src="/notifications.js"></script>
+    <script src="/system-settings-surveys.js"></script>
+  </body>
+</html>

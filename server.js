@@ -7,6 +7,8 @@ const port = process.env.PORT || 3000;
 const publicDir = path.join(__dirname, 'public');
 const vendorDir = path.join(__dirname, 'node_modules');
 const pageRoutes = new Map([
+  ['/surveys', '/surveys.html'],
+  ['/system-settings/surveys', '/system-settings-surveys.html'],
   ['/adminusers', '/adminusers.html'],
   ['/aichat', '/aichat.html'],
   ['/course', '/course.html'],
@@ -143,6 +145,35 @@ const server = http.createServer((request, response) => {
     request.url || '/',
     `http://${request.headers.host || `${host}:${port}`}`,
   );
+  if (requestUrl.pathname.startsWith('/api/')) {
+    const upstream = http.request(
+      {
+        hostname:
+          process.env.API_HOST === '0.0.0.0' ? '127.0.0.1' : process.env.API_HOST || '127.0.0.1',
+        port: Number(process.env.API_PORT || 3001),
+        method: request.method,
+        path: request.url,
+        headers: {
+          ...request.headers,
+          'x-forwarded-for': request.socket.remoteAddress,
+          host: `127.0.0.1:${process.env.API_PORT || 3001}`,
+        },
+      },
+      (apiResponse) => {
+        response.writeHead(apiResponse.statusCode, apiResponse.headers);
+        apiResponse.pipe(response);
+      },
+    );
+    upstream.on('error', () => {
+      if (!response.headersSent) {
+        response.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
+        response.end(JSON.stringify({ message: '后端服务尚未就绪，请稍后重试' }));
+      } else response.destroy();
+    });
+    request.on('aborted', () => upstream.destroy());
+    request.pipe(upstream);
+    return;
+  }
   const cleanPath =
     requestUrl.pathname.endsWith('/') && requestUrl.pathname !== '/'
       ? requestUrl.pathname.slice(0, -1)

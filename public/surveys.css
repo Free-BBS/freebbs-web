@@ -1,0 +1,426 @@
+.activities-main {
+  --ink: var(--ui-text);
+  --muted: var(--ui-muted);
+  --sand: var(--ui-accent);
+  --line: var(--ui-line);
+  --bg-soft: var(--ui-surface-soft);
+  --glass-fill: var(--ui-accent-soft);
+  --accent: var(--ui-reward);
+  --activity-panel: var(--ui-surface);
+  --activity-field: var(--ui-input);
+  max-width: 1280px;
+  width: 100%;
+  min-width: 0;
+  padding-bottom: 64px;
+}
+.theme-light .activities-main {
+  --activity-panel: rgba(255, 255, 255, 0.82);
+  --activity-field: rgba(255, 255, 255, 0.9);
+}
+.activities-main .activity-hero {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(24px, 4vw, 52px);
+  margin-bottom: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(ellipse at 95% 10%, rgba(120, 217, 198, 0.17), transparent 55%),
+    radial-gradient(ellipse at 90% 100%, rgba(255, 211, 109, 0.12), transparent 50%),
+    var(--activity-panel);
+}
+.activities-main .activity-hero::after {
+  content: '';
+  position: absolute;
+  width: 280px;
+  height: 280px;
+  top: -125px;
+  right: -65px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 35px rgba(120, 217, 198, 0.035),
+    0 0 0 70px rgba(120, 217, 198, 0.025);
+  pointer-events: none;
+}
+.activities-main h1 {
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, calc(1.25rem + 1.5vw), 2.875rem);
+  line-height: 1.35;
+  margin: 18px 0;
+  letter-spacing: -0.025em;
+}
+.activities-main h1 span {
+  color: var(--sand);
+}
+.activities-main h2 {
+  font-size: 1.5rem;
+  margin: 0 0 16px;
+}
+.activities-main h3 {
+  font-size: 1.25rem;
+  margin: 12px 0;
+}
+.activities-main p {
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.activities-main .activity-hero > p:not(.kicker) {
+  max-width: 680px;
+  color: var(--muted);
+}
+.activities-main .kicker,
+.activities-main .activity-eyebrow {
+  font: 0.75rem var(--font-zh-ui);
+  letter-spacing: 0.13em;
+  color: var(--sand);
+}
+.activities-main .kicker {
+  margin-top: 20px;
+}
+.activities-main .activity-hero-links {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 26px;
+}
+.activities-main .card,
+.activities-main fieldset {
+  background: var(--activity-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: clamp(20px, 3vw, 30px);
+  margin: 18px 0;
+  min-width: 0;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.05);
+}
+.activities-main .activity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.activities-main .activity-grid .card {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  transition:
+    border-color 0.2s,
+    transform 0.2s;
+}
+.activities-main .activity-grid .card:hover {
+  border-color: var(--sand);
+  transform: translateY(-3px);
+}
+.activities-main .activity-card-heading {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.activities-main .activity-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 99px;
+  padding: 5px 12px;
+  background: rgba(120, 217, 198, 0.1);
+  color: var(--sand);
+  font: 0.75rem var(--font-zh-ui);
+}
+.activities-main .activity-badge[data-state='报名中'] {
+  background: rgba(255, 211, 109, 0.14);
+  color: var(--accent);
+}
+.activities-main .activity-card-description {
+  color: var(--muted);
+  flex: 1;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.activities-main .activity-meta {
+  display: grid;
+  gap: 6px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.activities-main .activity-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 0 0 24px;
+}
+.activities-main .activity-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.activities-main .activity-filters button[aria-pressed='true'] {
+  background: var(--sand);
+  color: var(--ui-accent-contrast);
+}
+.activities-main .activity-empty {
+  padding: 48px 24px;
+  text-align: center;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-md);
+  color: var(--muted);
+}
+.activities-main label {
+  display: block;
+  margin: 16px 0;
+  font-family: var(--font-ui);
+}
+.activities-main input:not([type='checkbox']):not([type='radio']),
+.activities-main textarea,
+.activities-main select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font: inherit;
+  background: var(--activity-field);
+  color: var(--ink);
+  margin-top: 8px;
+  color-scheme: dark;
+}
+.theme-light .activities-main input,
+.theme-light .activities-main select,
+.theme-light .activities-main textarea {
+  color-scheme: light;
+}
+.activities-main select option {
+  background: var(--bg-soft);
+  color: var(--ink);
+}
+.activities-main input[type='checkbox'],
+.activities-main input[type='radio'] {
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
+  margin-right: 10px;
+  accent-color: var(--sand);
+}
+.activities-main textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+.activities-main button,
+.activities-main .button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  background: var(--sand);
+  color: var(--ui-accent-contrast);
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 11px 18px;
+  font: 600 0.875rem/1.5 var(--font-zh-ui);
+  cursor: pointer;
+  text-decoration: none;
+}
+.activities-main button.secondary {
+  background: var(--glass-fill);
+  color: var(--ink);
+  border-color: var(--line);
+}
+.activities-main button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.activities-main .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+.activities-main .grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+}
+.activities-main .muted,
+.activities-main small {
+  color: var(--muted);
+  line-height: 1.7;
+}
+.activities-main #message {
+  position: sticky;
+  top: 10px;
+  z-index: 3;
+  white-space: pre-wrap;
+}
+.activities-main #message:not(:empty) {
+  padding: 16px 20px;
+  background: var(--bg-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 14px;
+  margin-bottom: 20px;
+}
+.activities-main [hidden] {
+  display: none !important;
+}
+.activities-main legend {
+  font: 600 1rem/1.6 var(--font-zh-ui);
+  padding: 0 10px;
+  overflow-wrap: anywhere;
+}
+.activities-main .receipt {
+  overflow-wrap: anywhere;
+  font-family: var(--font-code);
+  user-select: all;
+  background: var(--activity-field);
+  padding: 16px;
+  border-radius: 12px;
+}
+.activities-main .table-wrap {
+  overflow-x: auto;
+}
+.activities-main table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.activities-main th,
+.activities-main td {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  white-space: pre-wrap;
+  min-width: 100px;
+}
+.activities-main :focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+.activities-main .activity-login-setting {
+  padding: 20px;
+  background: var(--glass-fill);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.activities-main .activity-login-setting small {
+  display: block;
+  margin: 8px 0 0 30px;
+}
+@media (max-width: 760px) {
+  .activities-main .grid,
+  .activities-main .activity-grid {
+    grid-template-columns: 1fr;
+  }
+  .activities-main .activity-hero-links {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .activities-main .activity-grid .card {
+    transition: none;
+  }
+  .activities-main .activity-grid .card:hover {
+    transform: none;
+  }
+}
+
+body.activities-page .activities-main a.button {
+  color: var(--ui-accent-contrast) !important;
+}
+
+.activities-main {
+  font-size: 1rem;
+  align-content: start;
+}
+.activities-main .activity-hero p {
+  white-space: normal;
+}
+.activities-main .activity-hero .kicker {
+  font-family: var(--font-zh-ui);
+}
+.activities-main .activity-eyebrow {
+  font-family: var(--font-latin);
+}
+.activities-main #message:empty {
+  display: none;
+}
+.activities-main h2,
+.activities-main h3 {
+  overflow-wrap: anywhere;
+}
+.activities-main .activity-card-description {
+  font-weight: var(--font-zh-body-weight, 400);
+}
+.activities-main button,
+.activities-main .button {
+  min-height: 2.75rem;
+}
+body.activities-page .activities-main button:not(.secondary),
+body.activities-page .activities-main .activity-filters button[aria-pressed='true'] {
+  color: var(--ui-accent-contrast) !important;
+}
+
+.activities-main .activity-datetime-field {
+  min-width: 0;
+  margin: 16px 0;
+}
+.activities-main .activity-datetime-field > label {
+  margin: 0 0 8px;
+}
+.activities-main .activity-datetime-control {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+.activities-main .activity-datetime-control input {
+  flex: 1 1 12rem;
+  min-width: 0;
+  margin: 0;
+  appearance: auto;
+}
+.activities-main .activity-datetime-control button {
+  flex: 0 0 auto;
+}
+.activities-main .activity-datetime-control img {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+.activities-main select {
+  appearance: auto;
+}
+.activities-main input::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  cursor: pointer;
+}
+.activities-main .activity-result-link {
+  margin-top: 12px;
+  background: var(--ui-surface-soft);
+  border-color: var(--line);
+}
+body.activities-page .activities-main a.activity-result-link {
+  color: var(--ui-accent) !important;
+}
+.activities-main #lookup {
+  scroll-margin-top: 110px;
+}
+.activities-main #result:not(:empty) {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+  background: var(--ui-accent-soft);
+}
+.activities-main #result[data-result='won'] {
+  border-color: var(--ui-accent);
+}
+.activities-main #result small {
+  display: block;
+  margin-top: 8px;
+}
