@@ -212,6 +212,11 @@
   }
 
   function updateControls() {
+    if ($('recognize')) $('recognize').disabled = getRecognitionContext().busy;
+    if ($('recognition-restore')) {
+      $('recognition-restore').hidden = !getRecognitionContext().hasBackup;
+      $('recognition-restore').disabled = getRecognitionContext().busy;
+    }
     $('save').disabled = state.saving || !state.editable;
     $('publish').hidden = !state.cid;
     $('publish').disabled = state.dirty || state.plotModified || state.saving;
@@ -2349,6 +2354,138 @@
     setStatus('已复制为新的本地草稿，保存后获得新的 CID。');
   }
 
+  function recognitionBackupKey(uid = state.sessionUid) {
+    return `free_bbs_circuit_recognition_backup_v1:${uid || 'guest'}`;
+  }
+
+  function getRecognitionContext() {
+    let hasBackup = false;
+    try {
+      hasBackup = Boolean(sessionStorage.getItem(recognitionBackupKey()));
+    } catch {
+      /* Import will report storage failures before replacing a draft. */
+    }
+    return {
+      generation: state.generation,
+      editVersion: state.editVersion,
+      uid: state.sessionUid,
+      dirty: state.dirty || state.plotModified,
+      busy: state.saving || Boolean(state.agentRun) || state.exampleBusy || state.exampleLoading,
+      hasBackup,
+    };
+  }
+
+  function recognitionDraftSnapshot() {
+    return {
+      ...metadata(),
+      document: state.plotDisplay
+        ? { ...state.document, display: clone(state.plotDisplay) }
+        : state.document,
+      uid: state.sessionUid,
+      cid: state.cid,
+      revision: state.revision,
+      latestRevision: state.latestRevision,
+      owner: state.owner,
+      editable: state.editable,
+      dirty: state.dirty || state.plotModified,
+      loadedExample: state.loadedExample,
+    };
+  }
+
+  function replaceWithRecognitionDraft(draft) {
+    const validated = engine.validateDocument(draft.document);
+    try {
+      sessionStorage.setItem(recognitionBackupKey(), JSON.stringify(recognitionDraftSnapshot()));
+    } catch {
+      throw new Error('无法保留当前草稿，请先导出 JSON 或保存当前电路，再重试。');
+    }
+    persistDraft();
+    state.generation += 1;
+    state.editVersion += 1;
+    state.exampleLoadRequest += 1;
+    state.aiUndo = null;
+    state.aiHighlightedComponents = [];
+    state.aiHighlightedTraces = [];
+    state.aiPendingTraces = null;
+    state.cid = draft.cid || '';
+    state.revision = draft.revision || 0;
+    state.latestRevision = draft.latestRevision || 0;
+    state.owner = draft.owner || null;
+    state.loadedExample = draft.loadedExample || null;
+    state.editable = draft.editable !== false;
+    state.dirty = Boolean(draft.dirty);
+    state.document = validated;
+    state.selectedId = '';
+    state.selectedWire = '';
+    state.wireAnchor = null;
+    state.wireStart = null;
+    state.wirePoints = [];
+    window.FreeBbsCircuitParameterPopover?.hide();
+    invalidateResult();
+    $('title').value = String(draft.title || '识别的电路').slice(0, 120);
+    $('description').value = String(draft.description || '').slice(0, 2000);
+    window.history.replaceState(
+      null,
+      '',
+      state.cid
+        ? `/circuit?cid=${encodeURIComponent(state.cid)}${state.editable && state.revision === state.latestRevision ? '' : `&revision=${state.revision}`}`
+        : '/circuit',
+    );
+    resetHistory();
+    renderAnalysis();
+    renderInspector();
+    renderSchematic();
+    updateControls();
+    return persistDraft();
+  }
+
+  function importRecognizedCircuit(circuit, context) {
+    const current = getRecognitionContext();
+    if (
+      listPage ||
+      current.busy ||
+      !current.uid ||
+      !context ||
+      context.uid !== current.uid ||
+      context.generation !== current.generation ||
+      context.editVersion !== current.editVersion
+    )
+      throw new Error('当前账号或电路已变化，请重新识别后再生成草稿。');
+    const persisted = replaceWithRecognitionDraft({
+      title: circuit.title,
+      description: circuit.description,
+      document: circuit.document,
+      dirty: true,
+      editable: true,
+    });
+    setStatus(
+      persisted
+        ? '已生成新电路草稿。核对后点击“保存并获取 CID”；上一份草稿可通过“恢复上一份草稿”找回。'
+        : '已生成电路，上一份草稿已备份；当前浏览器存储空间不足，请及时保存或导出新电路。',
+      persisted ? 'success' : 'error',
+    );
+    return true;
+  }
+
+  function restoreRecognitionDraft() {
+    if (getRecognitionContext().busy || !confirmDraftReplacement('恢复上一份草稿')) return false;
+    try {
+      const draft = JSON.parse(sessionStorage.getItem(recognitionBackupKey()) || 'null');
+      if (!draft || draft.uid !== state.sessionUid) throw new Error('没有可恢复的草稿。');
+      const persisted = replaceWithRecognitionDraft(draft);
+      setStatus(
+        persisted
+          ? '已恢复上一份草稿，刚才的电路也已备份，可再次切换。'
+          : '已恢复上一份草稿，请及时保存或导出当前电路。',
+        persisted ? 'success' : 'error',
+      );
+      return true;
+    } catch (error) {
+      setStatus(error.message || '无法恢复草稿。', 'error');
+      return false;
+    }
+  }
+
   async function copyReference(view) {
     if (state.dirty || state.plotModified)
       return setStatus(
@@ -2607,6 +2744,7 @@
     $('stop').addEventListener('click', () => stopSimulation('仿真已取消。'));
     $('save').addEventListener('click', saveCircuit);
     $('copy').addEventListener('click', copyCircuit);
+    $('recognition-restore')?.addEventListener('click', restoreRecognitionDraft);
     state.plotControls = window.FreeBbsCircuitPlotControls.create($('plot-controls'), (display) => {
       if (state.annotationControls?.commitPending() === false)
         throw new Error('请先完成或取消标记输入。');
@@ -2731,7 +2869,7 @@
     $('list-more').addEventListener('click', () => loadList());
     state.shortcuts = window.FreeBbsCircuitShortcuts.bind({
       target: document,
-      isActive: () => !listPage && !$('editor-page').hidden,
+      isActive: () => !listPage && !$('editor-page').hidden && !$('recognition-dialog')?.open,
       dispatch: dispatchShortcut,
       helpButton: $('shortcuts'),
       helpDialog: $('shortcuts-dialog'),
@@ -2762,6 +2900,13 @@
         return;
       }
       const previous = state.sessionUid;
+      if (previous) {
+        try {
+          sessionStorage.removeItem(recognitionBackupKey(previous));
+        } catch {
+          /* Account-specific keys prevent restoring another user's draft. */
+        }
+      }
       state.sessionUid = uid;
       state.generation += 1;
       state.editVersion += 1;
@@ -2849,6 +2994,8 @@
   }
 
   window.FreeBbsCircuitEditor = {
+    getRecognitionContext,
+    importRecognizedCircuit,
     getSnapshot: getAssistantSnapshot,
     applyActions: applyAssistantActions,
     beginAgentRun,

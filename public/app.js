@@ -2534,7 +2534,8 @@ async function callApi(path, options = {}) {
 
   const payload = await response.json().catch(() => ({}));
 
-  const circuitFailure = path === '/ai/circuit/chat' && payload.ok === false;
+  const circuitFailure =
+    ['/ai/circuit/chat', '/ai/circuit/recognize'].includes(path) && payload.ok === false;
   if (!response.ok || circuitFailure) {
     const status =
       circuitFailure &&

@@ -8,6 +8,7 @@ const config = require('./config');
 const { buildAiDialogExport, buildAiDialogExportFileName } = require('./ai-dialog-export');
 const { enrichAgentCircuitContext } = require('./agent-circuits');
 const { createCircuitAssistantRouter } = require('./circuit-assistant');
+const { createCircuitRecognitionRouter } = require('./circuit-recognition');
 const { getDiscussionPreview } = require('./discussion-preview');
 const { buildBackendHealth } = require('./health');
 const { hashPassword, verifyPassword } = require('./password');
@@ -2360,6 +2361,15 @@ app.post('/api/ai/chat', async (request, response) => {
 app.use(
   '/api/ai/circuit',
   createCircuitAssistantRouter({ requireAuth, postAgentChat, buildAgentChatPayload }),
+);
+
+app.use(
+  '/api/ai/circuit',
+  createCircuitRecognitionRouter({
+    requireAuth,
+    readModelSettings: () => systemSettingsStore.readSettings({ includeSecret: true }),
+    visionModel: config.circuitVisionModel,
+  }),
 );
 
 app.post('/api/ai/knowledge/chat', async (request, response) => {

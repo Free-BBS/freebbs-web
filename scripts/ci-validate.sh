@@ -23,6 +23,7 @@ node --check public/markdown-editor.js
 node --check public/world.js
 node --check backend/circuits.js
 node --check backend/circuit-assistant.js
+node --check backend/circuit-recognition.js
 node --check backend/circuit-examples.js
 node --check public/circuit-default-examples.js
 node --check public/circuit-discussion.js
@@ -35,6 +36,7 @@ node --check public/circuit-worker.js
 node --check public/circuit-renderer.js
 node --check public/circuit-wiring.js
 node --check public/circuit.js
+node --check public/circuit-recognition.js
 node --check public/circuit-ai-actions.js
 node --check public/circuit-assistant.js
 node --check public/circuit-agent.js
