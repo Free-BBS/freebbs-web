@@ -22,6 +22,7 @@
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/circuit.css" />
     <link rel="stylesheet" href="/circuit-shortcuts.css" />
+    <link rel="stylesheet" href="/circuit-recognition.css" />
     <link rel="stylesheet" href="/circuit-assistant.css" />
     <link rel="stylesheet" href="/circuit-parameter-popover.css" />
     <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css" />
@@ -173,6 +174,9 @@
             </div>
             <div class="circuit-heading-actions">
               <a class="circuit-button" href="/circuit">新建</a
+              ><button id="circuit-recognize" type="button" aria-haspopup="dialog" disabled>
+                识别电路图</button
+              ><button id="circuit-recognition-restore" type="button" hidden>恢复上一份草稿</button
               ><button id="circuit-copy" type="button">复制为新电路</button
               ><button
                 class="is-primary"
@@ -744,6 +748,78 @@
             <button id="circuit-ai-runbar-stop" type="button">停止</button>
           </div>
           <dialog
+            id="circuit-recognition-dialog"
+            class="circuit-recognition-dialog"
+            aria-labelledby="circuit-recognition-heading"
+            aria-describedby="circuit-recognition-intro"
+          >
+            <header class="circuit-recognition-heading">
+              <h2 id="circuit-recognition-heading">识别电路图</h2>
+              <button id="circuit-recognition-close" type="button" aria-label="关闭电路图识别">
+                关闭
+              </button>
+            </header>
+            <p id="circuit-recognition-intro">
+              上传清晰的电路原理图，识别元件、参数和连接关系，确认后生成可编辑的电路。
+            </p>
+            <p id="circuit-recognition-auth" hidden>
+              请先<a id="circuit-recognition-login" href="/login">登录</a>，再使用图像识别。
+            </p>
+            <div id="circuit-recognition-drop" class="circuit-recognition-drop">
+              <button id="circuit-recognition-pick" type="button">选择电路图片</button>
+              <input
+                id="circuit-recognition-file"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                hidden
+              />
+              <p>或拖入图片、粘贴截图 · PNG / JPEG / WebP，最大 8 MiB</p>
+              <img id="circuit-recognition-image" alt="待识别的电路图片" hidden />
+              <p id="circuit-recognition-filename" class="circuit-recognition-caption"></p>
+            </div>
+            <label class="circuit-recognition-instructions" for="circuit-recognition-instructions">
+              补充说明（可选）
+              <textarea
+                id="circuit-recognition-instructions"
+                rows="2"
+                maxlength="2000"
+                placeholder="例如：R1 的标注是 10 kΩ；希望进行直流分析。"
+              ></textarea>
+            </label>
+            <p
+              id="circuit-recognition-status"
+              class="circuit-status"
+              role="status"
+              aria-live="polite"
+            ></p>
+            <section
+              id="circuit-recognition-result"
+              class="circuit-recognition-result"
+              aria-label="识别结果预览"
+              hidden
+            >
+              <h3 id="circuit-recognition-title"></h3>
+              <p id="circuit-recognition-summary"></p>
+              <div id="circuit-recognition-preview" class="circuit-recognition-preview"></div>
+              <div class="circuit-recognition-review">
+                <strong>请核对元件参数与连线</strong>
+                <p>模糊标注和交叉导线可能存在识别偏差，可在生成后继续修正。</p>
+                <ul id="circuit-recognition-warnings"></ul>
+              </div>
+              <p id="circuit-recognition-draft-note"></p>
+            </section>
+            <footer class="circuit-recognition-actions">
+              <button id="circuit-recognition-cancel" type="button" hidden>取消识别</button>
+              <button id="circuit-recognition-start" class="is-primary" type="button" disabled>
+                开始识别
+              </button>
+              <button id="circuit-recognition-apply" class="is-primary" type="button" hidden>
+                生成新电路草稿
+              </button>
+            </footer>
+          </dialog>
+
+          <dialog
             id="circuit-shortcuts-dialog"
             class="circuit-shortcuts-dialog"
             aria-labelledby="circuit-shortcuts-title"
@@ -850,6 +926,7 @@
     <script src="/circuit-history.js"></script>
     <script src="/circuit-shortcuts.js"></script>
     <script src="/circuit.js"></script>
+    <script src="/circuit-recognition.js"></script>
     <script src="/circuit-agent.js"></script>
     <script src="/circuit-chat.js"></script>
     <script src="/circuit-assistant.js"></script>

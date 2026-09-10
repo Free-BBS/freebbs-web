@@ -34,6 +34,7 @@ module.exports = {
   settingsEncryptionKey: process.env.SETTINGS_ENCRYPTION_KEY || '',
   llmBaseUrl: process.env.LLM_BASE_URL || 'https://cloud.infini-ai.com/maas/v1',
   llmModel: process.env.LLM_MODEL || 'glm-5.1',
+  circuitVisionModel: process.env.CIRCUIT_VISION_MODEL || '',
   courseMaterialsRoot: process.env.COURSE_MATERIALS_ROOT || '',
   courseMaterialsAllowedRoot: process.env.COURSE_MATERIALS_ALLOWED_ROOT || '',
   sandboxBaseUrl: process.env.SANDBOX_URL || 'http://127.0.0.1:8000',

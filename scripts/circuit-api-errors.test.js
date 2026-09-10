@@ -62,6 +62,26 @@ test('successful circuit responses and unrelated payloads remain compatible', as
   assert.deepEqual(await api({ ok: true, status: 200, json: async () => other })('/other'), other);
 });
 
+test('image recognition propagates an error after JSON heartbeat headers', async () => {
+  const call = api({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      ok: false,
+      status: 422,
+      message: '未在图片中识别到电路',
+      code: 'circuit_not_recognized',
+    }),
+  });
+  await assert.rejects(
+    call('/ai/circuit/recognize'),
+    (error) =>
+      error.status === 422 &&
+      error.code === 'circuit_not_recognized' &&
+      error.message === '未在图片中识别到电路',
+  );
+});
+
 test('backend validation messages remain actionable and no HTML body is echoed', async () => {
   const call = api({
     ok: false,

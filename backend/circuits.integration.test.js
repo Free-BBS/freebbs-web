@@ -9,6 +9,8 @@ const { spawn } = require('node:child_process');
 const { once } = require('node:events');
 const test = require('node:test');
 const mysql = require('mysql2/promise');
+const sharp = require('sharp');
+const engine = require('../public/circuit-engine');
 const { hashPassword } = require('./password');
 const { solveAuthChallenge } = require('./test-helpers/auth');
 
@@ -55,11 +57,70 @@ test(
     };
     const db = await mysql.createConnection(mysqlOptions);
     const agentRequests = [];
+    let recognitionCircuit = {
+      title: '图像识别分压电路',
+      description: 'V1=6V，R1=1kΩ，R2=2kΩ',
+      document: {
+        version: 1,
+        components: [
+          { id: 'V1', type: 'voltage', x: 200, y: 300, rotation: 90, params: { dc: 6 } },
+          {
+            id: 'R1',
+            type: 'resistor',
+            x: 500,
+            y: 200,
+            rotation: 90,
+            params: { resistance: 1000 },
+          },
+          {
+            id: 'R2',
+            type: 'resistor',
+            x: 500,
+            y: 400,
+            rotation: 90,
+            params: { resistance: 2000 },
+          },
+          { id: 'G1', type: 'ground', x: 500, y: 540, params: {} },
+        ],
+        wires: [
+          { id: 'w1', from: { componentId: 'V1', pin: 0 }, to: { componentId: 'R1', pin: 0 } },
+          { id: 'w2', from: { componentId: 'R1', pin: 1 }, to: { componentId: 'R2', pin: 0 } },
+          { id: 'w3', from: { componentId: 'R2', pin: 1 }, to: { componentId: 'G1', pin: 0 } },
+          { id: 'w4', from: { componentId: 'V1', pin: 1 }, to: { componentId: 'G1', pin: 0 } },
+        ],
+        analysis: { type: 'dc' },
+      },
+    };
+    if (process.env.CIRCUIT_RECOGNITION_RESULT) {
+      const recognized = JSON.parse(
+        await fs.readFile(process.env.CIRCUIT_RECOGNITION_RESULT, 'utf8'),
+      );
+      recognitionCircuit = recognized.circuit;
+    }
     const agent = http.createServer(async (request, response) => {
       let body = '';
       for await (const chunk of request) body += chunk;
       agentRequests.push(JSON.parse(body));
       response.writeHead(200, { 'Content-Type': 'application/json' });
+      if (request.url === '/v1/chat/completions') {
+        response.end(
+          JSON.stringify({
+            choices: [
+              {
+                finish_reason: 'stop',
+                message: {
+                  content: JSON.stringify({
+                    recognized: true,
+                    circuit: recognitionCircuit,
+                    warnings: [],
+                  }),
+                },
+              },
+            ],
+          }),
+        );
+        return;
+      }
       response.end(JSON.stringify({ answer: '已根据保存版本读取电路。' }));
     });
     agent.listen(0, '127.0.0.1');
@@ -97,6 +158,10 @@ test(
         MYSQL_DATABASE: database,
         MYSQL_SOCKET: '',
         AUTH_SECRET: crypto.randomBytes(32).toString('hex'),
+        SETTINGS_ENCRYPTION_KEY: crypto.randomBytes(32).toString('hex'),
+        LLM_BASE_URL: `http://127.0.0.1:${agent.address().port}/v1`,
+        LLM_MODEL: 'test-vision-model',
+        CIRCUIT_VISION_MODEL: 'test-recognition-model',
         UPLOAD_DIR: path.join(temp, 'uploads'),
         AGENT_URL: `http://127.0.0.1:${agent.address().port}`,
         AGENT_SERVICE_TOKEN: '',
@@ -480,6 +545,61 @@ test(
         assert.equal(
           (await api(`/circuits/${otherCircuit.cid}`, { token: other.token })).circuit.canEdit,
           true,
+        );
+      },
+    );
+
+    await t.test(
+      'image recognition returns an editable circuit that saves and reads back with correct simulation',
+      async () => {
+        await api('/ai/circuit/recognize', { method: 'POST', body: {}, expected: 401 });
+        await api('/admin/system-settings/model', {
+          token: admin.token,
+          method: 'PATCH',
+          body: { apiKey: 'isolated-vision-key' },
+        });
+        const png = await sharp({
+          create: { width: 320, height: 240, channels: 3, background: 'white' },
+        })
+          .png()
+          .toBuffer();
+        const [[before]] = await db.query('SELECT COUNT(*) AS count FROM circuits');
+        const recognized = await api('/ai/circuit/recognize', {
+          token: other.token,
+          method: 'POST',
+          body: { imageDataUrl: `data:image/png;base64,${png.toString('base64')}` },
+        });
+        const [[after]] = await db.query('SELECT COUNT(*) AS count FROM circuits');
+        assert.equal(
+          after.count,
+          before.count,
+          'recognition does not automatically publish a circuit',
+        );
+        const modelRequest = agentRequests.at(-1);
+        assert.equal(modelRequest.model, 'test-recognition-model');
+        assert.match(
+          modelRequest.messages[1].content[1].image_url.url,
+          /^data:image\/jpeg;base64,/,
+        );
+        assert.ok(recognized.warnings.length);
+        const saved = (
+          await api('/circuits', {
+            token: other.token,
+            method: 'POST',
+            body: recognized.circuit,
+            expected: 201,
+          })
+        ).circuit;
+        assert.match(saved.cid, /^c_[0-9a-f]{24}$/);
+        assert.equal(saved.owner.uid, other.user.uid);
+        const read = (await api(`/circuits/${saved.cid}?revision=1`)).circuit;
+        assert.deepEqual(read.document, recognized.circuit.document);
+        const result = engine.simulate(read.document);
+        assert.ok(
+          Math.abs(result.traces.find((trace) => trace.id === 'V:R2').values[0] - 4) < 1e-8,
+        );
+        assert.ok(
+          Math.abs(result.traces.find((trace) => trace.id === 'I:R1').values[0] - 0.002) < 1e-8,
         );
       },
     );
