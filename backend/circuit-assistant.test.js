@@ -1037,3 +1037,112 @@ test('stopping a circuit request after its first heartbeat aborts upstream execu
   await assert.rejects(reader.read(), { name: 'AbortError' });
   await aborted;
 });
+
+test('agent action envelopes are extracted from ordinary code fences and independent JSON', () => {
+  const input = validateCircuitAssistantInput(agentBody());
+  const actions = [{ type: 'run_simulation' }];
+  const json = JSON.stringify({ actions });
+  for (const raw of [
+    `先运行仿真获取实际数据，再设置比例曲线和标记。\n\n\`\`\`json\n${json}\n\`\`\``,
+    `说明。\n\`\`\`\n${json}\n\`\`\``,
+    `说明。\n~~~JSON\r\n${json}\r\n~~~`,
+    `说明。\n\`\`\`\`json\n${json}\n\`\`\`\``,
+    `说明。\n    \`\`\`json\n    ${json}\n    \`\`\``,
+    `说明。\n\`\`\`javascript\n${json}\n\`\`\``,
+    json,
+    `\`\`\`json ${json}\`\`\``,
+    `\`\`\`circuit-actions${json}\`\`\``,
+    `说明。\n${json}\n继续等待结果。`,
+  ]) {
+    const parsed = parseCircuitAssistantResponse({ answer: raw }, input);
+    assert.deepEqual(parsed.actions, actions, raw);
+    assert.equal(parsed.done, false, raw);
+    assert.equal(parsed.actionWarning, undefined, raw);
+    assert.doesNotMatch(parsed.answer, /"actions"|```|~~~/, raw);
+  }
+  const legacy = parseCircuitAssistantResponse(
+    { answer: `\`\`\`json\n${json}\n\`\`\`` },
+    validateCircuitAssistantInput(requestBody()),
+  );
+  assert.deepEqual(legacy.actions, actions);
+  assert.equal(legacy.done, undefined);
+});
+
+test('damaged, duplicate and invalid generic action blocks request repair instead of completing', () => {
+  const input = validateCircuitAssistantInput(agentBody());
+  const json = '{"actions":[{"type":"run_simulation"}]}';
+  const blocks = [
+    `${json} ${json}`,
+    `${json}.map(console.log)`,
+    '```json\n{"actions":[\n```',
+    '```json {"actions":[{ "type":"run_simulation" }] }',
+    '```json\n{ // 不合法的 JSON\n"actions":[{ "type":"run_simulation" }] }\n```',
+    `\`\`\`json\n${json}`,
+    '```circuit-actions',
+    '{"actions":[{"type":"run_simulation"}',
+    `\`\`\`json\n${json}\n\`\`\`\n\`\`\`circuit-actions\n${json}\n\`\`\``,
+    `\`\`\`json\n${json}\n\`\`\`\n${json}`,
+    '```json\n{"actions":[{"type":"eval","code":"alert(1)"}]}\n```',
+    '```json\n{"actions":[],"__proto__":{"polluted":true}}\n```',
+    '```json\n{"actions":[],"unexpected":true}\n```',
+    '```json\n{"actions":[{"type":"run_simulation"}],"done":true}\n```',
+  ];
+  for (const raw of blocks) {
+    const parsed = parseCircuitAssistantResponse({ answer: raw }, input);
+    assert.deepEqual(parsed.actions, [], raw);
+    assert.equal(parsed.done, false, raw);
+    assert.match(parsed.actionWarning, /未执行任何修改/, raw);
+    assert.doesNotMatch(parsed.answer, /"actions"|```/, raw);
+  }
+  assert.equal({}.polluted, undefined);
+});
+
+test('ordinary JSON and quoted nested examples remain visible and are not executed', () => {
+  const input = validateCircuitAssistantInput(agentBody());
+  for (const raw of [
+    '测量配置：\n```json\n{"analysis":{"type":"dc"}}\n```',
+    '[\n{"actions":[{"type":"run_simulation"}],"done":false}\n]',
+    '这是数据：\n```json\n{"example":{"actions":[{"type":"run_simulation"}]}}\n```',
+    '```javascript\nconst sample = {"actions":[{"type":"run_simulation"}]};\n```',
+    '````markdown\n```circuit-actions\n{"actions":[{"type":"run_simulation"}]}\n```\n````',
+  ]) {
+    const parsed = parseCircuitAssistantResponse({ answer: raw }, input);
+    assert.deepEqual(parsed.actions, [], raw);
+    assert.equal(parsed.answer, raw);
+    assert.equal(parsed.done, true);
+  }
+  const final = parseCircuitAssistantResponse(
+    { answer: '说明。\n```json\n{"actions":[],"done":true}\n```' },
+    input,
+  );
+  assert.equal(final.answer, '说明。');
+  assert.equal(final.done, true);
+});
+
+test('unfenced annotation strings containing braces and escaped quotes do not break action extraction', () => {
+  const source = agentBody();
+  source.document.display = { mode: 'xt', traceIds: ['I:R1'] };
+  const input = validateCircuitAssistantInput(source);
+  const actions = [
+    {
+      type: 'set_annotation',
+      annotation: {
+        id: 'A1',
+        traceId: 'I:R1',
+        at: 0,
+        text: '花括号 { }、引号 " 及 ``` 都是文字',
+        mode: 'xt',
+        axis: 'value',
+        xTraceId: null,
+        analysisKey: 'dc',
+      },
+    },
+  ];
+  const parsed = parseCircuitAssistantResponse(
+    { answer: `说明。\n${JSON.stringify({ actions, done: false })}\n等待标记结果。` },
+    input,
+  );
+  assert.deepEqual(parsed.actions, actions);
+  assert.equal(parsed.answer, '说明。\n\n等待标记结果。');
+  assert.equal(parsed.done, false);
+});
