@@ -1079,6 +1079,12 @@
         }
       }
     }
+    if (context.startupConductance) {
+      // Temporary shunts make an all-off transistor initial Jacobian solvable.
+      // They are used only to find an initial guess, never in a returned result.
+      for (let pin = 0; pin < system.unknownNets.length; pin += 1)
+        conductance(pin, -1, context.startupConductance);
+    }
     if (
       matrix.some((value) => !Number.isFinite(value)) ||
       residual.some((value) => !Number.isFinite(value))
@@ -1250,7 +1256,32 @@
           solution = newton(system, { ...context, sourceScale: step / 20 }, solution);
         return solution;
       } catch {
-        throw original;
+        try {
+          // Source stepping alone cannot start a current-fed MOS network: at
+          // zero bias every channel is off, including when all sources are zero.
+          // Remove the temporary conductances progressively, then solve the
+          // unmodified equations again. Floating circuits must still fail there.
+          let solution = newton(system, { ...context, startupConductance: 1e-3 });
+          let exponent = -3;
+          let step = 1;
+          for (let attempt = 0; exponent > -12 && attempt < 64; attempt += 1) {
+            const next = Math.max(-12, exponent - step);
+            try {
+              solution = newton(system, { ...context, startupConductance: 10 ** next }, solution);
+              exponent = next;
+              step = Math.min(1, step * 1.5);
+            } catch (error) {
+              // Region transitions can need smaller continuation steps even
+              // though nearby points all have a valid operating point.
+              step /= 2;
+              if (step < 1 / 1024) throw error;
+            }
+          }
+          if (exponent > -12) throw original;
+          return newton(system, context, solution);
+        } catch {
+          throw original;
+        }
       }
     }
   }
