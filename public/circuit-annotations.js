@@ -23,7 +23,7 @@
       value &&
       typeof value === 'object' &&
       !Array.isArray(value) &&
-      Object.keys(value).every((key) => fields.includes(key)) &&
+      Object.keys(value).every((key) => fields.includes(key) || key === 'marker') &&
       fields.every((key) => Object.hasOwn(value, key)) &&
       typeof value.id === 'string' &&
       identifier.test(value.id) &&
@@ -33,6 +33,8 @@
       Math.abs(value.at) <= 1e15 &&
       typeof value.text === 'string' &&
       value.text.length <= 160 &&
+      (!Object.hasOwn(value, 'marker') ||
+        ['point', 'vertical', 'horizontal'].includes(value.marker)) &&
       ['xt', 'xy'].includes(value.mode) &&
       ['value', 'phase'].includes(value.axis) &&
       typeof value.analysisKey === 'string' &&
@@ -104,11 +106,14 @@
     if (!Number.isFinite(x) || !Number.isFinite(y))
       return { error: '该采样点无有效数值，标记暂时隐藏。' };
     const ranges = display.ranges || {};
+    const marker = annotation.marker || 'point';
     if (
-      (Number.isFinite(ranges.xMin) && x < ranges.xMin) ||
-      (Number.isFinite(ranges.xMax) && x > ranges.xMax) ||
-      (Number.isFinite(ranges.yMin) && y < ranges.yMin) ||
-      (Number.isFinite(ranges.yMax) && y > ranges.yMax)
+      (marker !== 'horizontal' &&
+        ((Number.isFinite(ranges.xMin) && x < ranges.xMin) ||
+          (Number.isFinite(ranges.xMax) && x > ranges.xMax))) ||
+      (marker !== 'vertical' &&
+        ((Number.isFinite(ranges.yMin) && y < ranges.yMin) ||
+          (Number.isFinite(ranges.yMax) && y > ranges.yMax)))
     )
       return { error: '标记位于当前坐标显示范围之外。' };
     return {
@@ -140,6 +145,7 @@
       axis: options.axis ?? 'value',
       xTraceId: mode === 'xy' ? display.xyX : null,
       analysisKey: analysisKey(result?.analysis),
+      ...(options.marker === undefined ? {} : { marker: options.marker }),
     };
     const point = resolve(annotation, result, display);
     if (point.error) throw new Error(point.error);

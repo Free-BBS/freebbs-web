@@ -265,10 +265,10 @@ function annotation(overrides = {}) {
   };
 }
 
-test('annotation actions upsert and remove persisted comments without changing electrical results', () => {
+test('annotation actions create and change vertical, horizontal and point markers without changing electrical results', () => {
   const input = annotationFixture();
   const before = structuredClone(input);
-  const add = { type: 'set_annotation', annotation: annotation() };
+  const add = { type: 'set_annotation', annotation: annotation({ marker: 'vertical' }) };
   const validated = validateActions([add], input, ['V:R1']);
   const added = applyActions(input, validated);
   assert.deepEqual(input, before);
@@ -277,13 +277,26 @@ test('annotation actions upsert and remove persisted comments without changing e
   assert.equal(actionsApi.isElectricalAction(add), false);
   assert.deepEqual(engine.simulate(added), engine.simulate(input));
   assert.match(actionsApi.describeAction(add), /A1.*V:R1.*时间 0.005 s.*采样峰值/);
-  const update = { type: 'set_annotation', annotation: annotation({ at: 0.006, text: '' }) };
+  const update = {
+    type: 'set_annotation',
+    annotation: annotation({ at: 0.006, text: '', marker: 'horizontal' }),
+  };
   const updated = applyActions(added, validateActions([update], added, ['V:R1']));
   assert.equal(updated.display.annotations.length, 1);
   assert.equal(updated.display.annotations[0].text, '');
   assert.equal(updated.display.annotations[0].at, 0.006);
+  assert.equal(updated.display.annotations[0].marker, 'horizontal');
+  const textOnly = { type: 'set_annotation', annotation: annotation({ text: '仅修改说明' }) };
+  const relabeled = applyActions(updated, validateActions([textOnly], updated, ['V:R1']));
+  assert.deepEqual(relabeled.display.annotations, [
+    { ...textOnly.annotation, marker: 'horizontal' },
+  ]);
+  const point = { type: 'set_annotation', annotation: annotation({ marker: 'point' }) };
+  const pointed = applyActions(relabeled, validateActions([point], relabeled, ['V:R1']));
+  assert.deepEqual(pointed.display.annotations, [point.annotation]);
+  assert.deepEqual(engine.simulate(pointed), engine.simulate(input));
   const remove = { type: 'delete_annotation', annotationId: 'A1' };
-  const removed = applyActions(updated, validateActions([remove], updated, []));
+  const removed = applyActions(pointed, validateActions([remove], pointed, []));
   assert.deepEqual(removed.display.annotations, []);
   assert.equal(actionsApi.isEditingAction(remove), true);
   assert.equal(actionsApi.isElectricalAction(remove), false);
@@ -307,17 +320,31 @@ test('annotation validation rejects unknown fields, missing traces and mismatche
     annotation({ mode: 'xy', xTraceId: 'I:R1' }),
     annotation({ axis: 'phase' }),
     annotation({ traceId: 'I:R1' }),
+    ...[null, '', {}, [], ['vertical'], 'diagonal', 'Vertical', 0].map((marker) =>
+      annotation({ marker }),
+    ),
     { ...annotation(), value: 1000 },
     { ...annotation(), html: '<script>test</script>' },
   ];
-  for (const value of invalid)
+  for (const value of invalid) {
     assert.throws(
       () =>
         validateActions([{ type: 'set_annotation', annotation: value }], input, ['V:R1', 'I:R1']),
       JSON.stringify(value),
     );
+    if (Object.hasOwn(value, 'marker'))
+      assert.throws(
+        () => applyActions(input, [{ type: 'set_annotation', annotation: value }]),
+        JSON.stringify(value),
+      );
+  }
   assert.throws(
-    () => validateActions([{ type: 'set_annotation', annotation: annotation() }], input, []),
+    () =>
+      validateActions(
+        [{ type: 'set_annotation', annotation: annotation({ marker: 'horizontal' }) }],
+        input,
+        [],
+      ),
     /先运行仿真/,
   );
   assert.throws(
@@ -341,7 +368,7 @@ test('annotation validation rejects unknown fields, missing traces and mismatche
 
 test('annotation batches may include geometry but cannot use results from electrical edits or queued simulations', () => {
   const input = annotationFixture();
-  const add = { type: 'set_annotation', annotation: annotation() };
+  const add = { type: 'set_annotation', annotation: annotation({ marker: 'vertical' }) };
   const electrical = [
     { type: 'set_parameter', componentId: 'R1', parameter: 'resistance', value: 2000 },
     { type: 'set_analysis', analysis: { type: 'dc' } },
@@ -394,7 +421,7 @@ test('Max can show and annotate configured mathematics but cannot invent rows or
   input.display.traceIds = ['M:M1'];
   const actions = [
     { type: 'show_traces', traceIds: ['M:M1'] },
-    { type: 'set_annotation', annotation: annotation({ traceId: 'M:M1' }) },
+    { type: 'set_annotation', annotation: annotation({ traceId: 'M:M1', marker: 'horizontal' }) },
   ];
   assert.deepEqual(validateActions(actions, input, ['M:M1']), actions);
   assert.match(actionsApi.describeAction(actions[0]), /M1 数学曲线/);
@@ -430,7 +457,10 @@ test('XY annotations retain the underlying time coordinate and phase markers req
   input.display.mode = 'xy';
   input.display.xyX = 'I:R1';
   input.display.xyY = 'V:R1';
-  const xy = { type: 'set_annotation', annotation: annotation({ mode: 'xy', xTraceId: 'I:R1' }) };
+  const xy = {
+    type: 'set_annotation',
+    annotation: annotation({ mode: 'xy', xTraceId: 'I:R1', marker: 'vertical' }),
+  };
   assert.deepEqual(validateActions([xy], input, ['V:R1', 'I:R1']), [xy]);
   assert.throws(() => validateActions([xy], input, ['V:R1']), /先运行仿真/);
   input.analysis = { type: 'ac', start: 10, stop: 10000, points: 101, scale: 'log' };
@@ -438,7 +468,7 @@ test('XY annotations retain the underlying time coordinate and phase markers req
   input.display.phase = true;
   const phase = {
     type: 'set_annotation',
-    annotation: annotation({ axis: 'phase', at: 100, analysisKey: 'ac' }),
+    annotation: annotation({ axis: 'phase', at: 100, analysisKey: 'ac', marker: 'horizontal' }),
   };
   assert.deepEqual(validateActions([phase], input, ['V:R1']), [phase]);
   const magnitude = {

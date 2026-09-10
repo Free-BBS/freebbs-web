@@ -374,7 +374,7 @@
       !value ||
       typeof value !== 'object' ||
       Array.isArray(value) ||
-      Object.keys(value).some((key) => !fields.includes(key)) ||
+      Object.keys(value).some((key) => !fields.includes(key) && key !== 'marker') ||
       fields.some((key) => !Object.hasOwn(value, key))
     )
       throw new Error('波形标记格式不正确或含有不支持的字段。');
@@ -384,6 +384,11 @@
     const at = finite(value.at, '波形标记坐标');
     if (typeof value.text !== 'string' || value.text.length > 160)
       throw new Error('波形标记注释最多 160 个字符。');
+    if (
+      Object.hasOwn(value, 'marker') &&
+      !['point', 'vertical', 'horizontal'].includes(value.marker)
+    )
+      throw new Error('波形标记样式须为点、竖线或横线。');
     if (!['xt', 'xy'].includes(value.mode) || !['value', 'phase'].includes(value.axis))
       throw new Error('波形标记的模式或坐标类型不正确。');
     if (
@@ -408,6 +413,7 @@
       axis: value.axis,
       xTraceId: value.xTraceId,
       analysisKey: value.analysisKey,
+      ...(Object.hasOwn(value, 'marker') ? { marker: value.marker } : {}),
     };
   }
   function normalizeDisplay(value = {}) {

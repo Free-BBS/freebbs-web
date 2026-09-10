@@ -16,7 +16,7 @@
     let selectedSnapshot = '';
     let pendingListAction = null;
     let deferredChange = false;
-    container.innerHTML = `<div class="circuit-section-heading"><h3>标记与注释</h3><div class="circuit-actions"><button type="button" data-annotation-pick aria-pressed="false">在图上选点</button><button type="button" data-annotation-new>按坐标添加</button></div></div><p data-annotation-help class="circuit-parameter-hint">点击“在图上选点”，再点击或轻触曲线。标记保留真实采样点，注释随图像一起保存。</p><p data-annotation-error class="circuit-status is-error" role="status" hidden></p><form data-annotation-form hidden><div class="circuit-annotation-fields"><label>标记曲线<select data-annotation-field="traceId"></select></label><label><span data-annotation-coordinate>采样坐标</span><input type="number" step="any" data-annotation-field="at" required /></label><label>测量类型<select data-annotation-field="axis"><option value="value">数值 / 幅值</option><option value="phase">相位</option></select></label></div><label>注释（可留空）<textarea data-annotation-field="text" maxlength="160" rows="2" placeholder="例如：输出峰值、开始衰减、相位交点"></textarea></label><div class="circuit-actions"><button type="submit" data-annotation-apply>添加标记</button><button type="button" data-annotation-cancel>完成</button></div></form><ol data-annotation-list class="circuit-annotation-list"></ol>`;
+    container.innerHTML = `<div class="circuit-section-heading"><h3>标记与注释</h3><div class="circuit-actions"><button type="button" data-annotation-pick aria-pressed="false">在图上选点</button><button type="button" data-annotation-new>按坐标添加</button></div></div><p data-annotation-help class="circuit-parameter-hint">点击“在图上选点”，再点击或轻触曲线。点、竖线和横线绑定真实采样点，说明文字显示在图例中并随图像保存。</p><p data-annotation-error class="circuit-status is-error" role="status" hidden></p><form data-annotation-form hidden><div class="circuit-annotation-fields"><label>标记曲线<select data-annotation-field="traceId"></select></label><label><span data-annotation-coordinate>采样坐标</span><input type="number" step="any" data-annotation-field="at" required /></label><label>测量类型<select data-annotation-field="axis"><option value="value">数值 / 幅值</option><option value="phase">相位</option></select></label><label>标记样式<select data-annotation-field="marker"><option value="point">点</option><option value="vertical">竖线</option><option value="horizontal">横线</option></select></label></div><label>图例说明（可留空）<textarea data-annotation-field="text" maxlength="160" rows="2" placeholder="例如：输出峰值、开始衰减、相位交点"></textarea></label><div class="circuit-actions"><button type="submit" data-annotation-apply>添加标记</button><button type="button" data-annotation-cancel>完成</button></div></form><ol data-annotation-list class="circuit-annotation-list"></ol>`;
     const field = (key) => container.querySelector(`[data-annotation-field="${key}"]`);
     const form = container.querySelector('[data-annotation-form]');
     const pickButton = container.querySelector('[data-annotation-pick]');
@@ -34,8 +34,8 @@
       container.querySelector('[data-annotation-help]').textContent = !editable
         ? '复制为新电路后可添加或修改标记。'
         : picking
-          ? '点击或轻触图中的采样点添加标记；拖动画面不会添加。按 Esc 取消。'
-          : '标记绑定真实采样点；修改图像或采样范围后，无法显示的标记会在下方说明原因。';
+          ? '点击或轻触曲线添加采样点，随后可改为竖线或横线；说明文字显示在图例中。拖动画面不会添加，按 Esc 取消。'
+          : '点、竖线和横线绑定真实采样点，说明文字显示在图例中；修改图像或采样范围后，无法显示的标记会在下方说明原因。';
       if (changed) callbacks.onPickingChange?.(picking);
     }
     function setEditable(value) {
@@ -58,6 +58,9 @@
     function format(value, unit = '') {
       return globalThis.FreeBbsCircuitRenderer.formatValue(value, unit);
     }
+    function markerLabel(marker) {
+      return { vertical: '竖线', horizontal: '横线' }[marker] || '点';
+    }
     function redrawList() {
       list.innerHTML = (display.annotations || [])
         .map((item, index) => {
@@ -65,7 +68,7 @@
           const coordinates = point.error
             ? point.error
             : `${format(point.at, result.xUnit)} · ${item.mode === 'xy' ? `X ${format(point.x, point.xUnit)} · ` : ''}${format(point.y, point.yUnit)}`;
-          return `<li data-annotation-row="${escape(item.id)}"><button type="button" data-annotation-select="${escape(item.id)}" aria-label="编辑标记 ${escape(item.id)}" class="circuit-annotation-entry"><strong>${index + 1}. ${escape(item.id)} · ${escape(item.traceId)}${item.axis === 'phase' ? ' · 相位' : ''}</strong><span>${escape(item.text || '无注释')}</span><small class="${point.error ? 'is-error' : ''}">${escape(coordinates)}</small></button><button type="button" data-annotation-delete="${escape(item.id)}" aria-label="删除标记 ${escape(item.id)}" ${editable ? '' : 'disabled'}>删除</button></li>`;
+          return `<li data-annotation-row="${escape(item.id)}"><button type="button" data-annotation-select="${escape(item.id)}" aria-label="编辑标记 ${escape(item.id)}" class="circuit-annotation-entry"><strong>${index + 1}. ${escape(item.id)} · ${markerLabel(item.marker)} · ${escape(item.traceId)}${item.axis === 'phase' ? ' · 相位' : ''}</strong><span>${escape(item.text || '无注释')}</span><small class="${point.error ? 'is-error' : ''}">${escape(coordinates)}</small></button><button type="button" data-annotation-delete="${escape(item.id)}" aria-label="删除标记 ${escape(item.id)}" ${editable ? '' : 'disabled'}>删除</button></li>`;
         })
         .join('');
     }
@@ -93,6 +96,7 @@
       };
       setValue('at', item?.at ?? result.x[0] ?? 0);
       setValue('axis', item?.axis || 'value');
+      setValue('marker', item?.marker || 'point');
       field('axis').querySelector('[value="phase"]').disabled = !(
         result.analysis.type === 'ac' &&
         display.mode === 'xt' &&
@@ -103,7 +107,7 @@
         `${result.xLabel || '采样坐标'}${result.xUnit ? ` / ${result.xUnit}` : ''}${display.mode === 'xy' ? '（原始采样轴）' : ''}`;
       container.querySelector('[data-annotation-apply]').textContent = adding
         ? '添加标记'
-        : '保存注释';
+        : '保存标记';
       container.querySelector('[data-annotation-cancel]').textContent = adding ? '取消' : '完成';
       selectedSnapshot = item ? JSON.stringify(item) : '';
       form.hidden = false;
@@ -155,6 +159,11 @@
         throw new Error('请填写有效的采样坐标，注释最多 160 字。');
       }
       const previous = (display.annotations || []).find((item) => item.id === selectedId);
+      // Omitted marker styles on older documents already mean point. Keep that
+      // omission until the style changes so inspecting or editing text is not a
+      // separate style migration, and moving a line back to point remains explicit.
+      const marker = field('marker').value;
+      const markerOptions = marker !== 'point' || previous?.marker ? { marker } : {};
       const sameAnchor =
         previous &&
         previous.traceId === field('traceId').value &&
@@ -163,10 +172,12 @@
       const item = sameAnchor
         ? globalThis.FreeBbsCircuitEngine.normalizeAnnotation({
             ...previous,
+            ...markerOptions,
             text: field('text').value,
           })
         : model.create(result, display, {
             id: selectedId || nextId(),
+            ...markerOptions,
             traceId: field('traceId').value,
             at: Number(field('at').value),
             text: field('text').value,
@@ -276,7 +287,7 @@
     field('text').addEventListener('input', () => {
       if (!adding) commitPending();
     });
-    ['traceId', 'at', 'axis'].forEach((key) =>
+    ['traceId', 'at', 'axis', 'marker'].forEach((key) =>
       field(key).addEventListener('change', () => {
         if (pendingListAction) {
           deferredChange = true;

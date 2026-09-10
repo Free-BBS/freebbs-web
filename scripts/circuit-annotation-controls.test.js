@@ -597,3 +597,144 @@ test('cancelled or released-outside list gestures flush coordinate changes witho
   h.input('at', '0.25', 'change');
   assert.equal(h.display.annotations[0].at, 0.25);
 });
+
+test('legacy point markers remain unchanged on inspection and text edits do not add a default style', () => {
+  const h = harness({ annotations: [marker()] });
+  h.controls.select('A1');
+  assert.equal(h.field('marker').value, 'point');
+  assert.deepEqual(
+    h
+      .field('marker')
+      .querySelectorAll('option')
+      .map((option) => option.getAttribute('value')),
+    ['point', 'vertical', 'horizontal'],
+  );
+  assert.equal(h.controls.commitPending(), true);
+  h.click('[data-annotation-cancel]');
+  assert.equal(h.changes.length, 0, 'opening and closing a legacy marker does not dirty it');
+  h.controls.select('A1');
+  h.input('text', '显示在图例里的说明');
+  assert.equal(h.changes.length, 1);
+  assert.equal(Object.hasOwn(h.display.annotations[0], 'marker'), false);
+  assert.match(h.container.querySelector('[data-annotation-list]').innerHTML, /A1 · 点 · V:S1/);
+  assert.match(h.container.querySelector('[data-annotation-help]').textContent, /图例/);
+});
+
+test('changing a marker style preserves hidden sample anchors and supports returning from a line to a point', () => {
+  const hidden = marker({
+    mode: 'xy',
+    xTraceId: 'V:S1:CH2',
+    traceId: 'M:M1',
+    at: 123,
+    analysisKey: 'ac',
+  });
+  const h = harness({ annotations: [hidden] });
+  h.controls.select('A1');
+  for (const [style, label] of [
+    ['vertical', '竖线'],
+    ['horizontal', '横线'],
+    ['point', '点'],
+  ]) {
+    h.input('marker', style, 'change');
+    assert.deepEqual(h.display.annotations[0], { ...hidden, marker: style });
+    assert.equal(h.field('marker').value, style);
+    assert.match(
+      h.container.querySelector('[data-annotation-list]').innerHTML,
+      new RegExp(`A1 · ${label} · M:M1`),
+    );
+    assert.equal(h.error.hidden, true);
+  }
+  assert.equal(h.changes.length, 3);
+  h.controls.commitPending();
+  assert.equal(h.changes.length, 3, 'unchanged save does not repeat the style edit');
+});
+
+test('line drafts survive redraws, cancel cleanly, and snap the sample only when saved', () => {
+  const h = harness();
+  h.click('[data-annotation-new]');
+  assert.equal(h.field('marker').value, 'point');
+  h.input('marker', 'vertical', 'change');
+  h.input('at', '0.49');
+  h.input('text', '阈值');
+  h.update(h.display);
+  assert.equal(h.field('marker').value, 'vertical');
+  assert.equal(h.field('at').value, '0.49');
+  assert.equal(h.changes.length, 0);
+  h.click('[data-annotation-cancel]');
+  assert.equal(h.changes.length, 0);
+  h.click('[data-annotation-new]');
+  assert.equal(h.field('marker').value, 'point', 'a new draft starts with a point');
+  h.input('marker', 'horizontal', 'change');
+  h.input('at', '0.49');
+  h.input('text', '输出阈值');
+  h.dispatch('submit', h.form);
+  assert.equal(h.changes.length, 1);
+  assert.equal(h.display.annotations[0].marker, 'horizontal');
+  assert.equal(h.display.annotations[0].at, 0.5);
+  assert.equal(h.display.annotations[0].text, '输出阈值');
+  assert.equal(h.field('at').value, '0.5');
+  assert.equal(h.field('marker').value, 'horizontal');
+});
+
+test('picked points can become reference lines and undo or external updates restore the selected style', () => {
+  const h = harness();
+  h.controls.togglePicking();
+  h.controls.pick({ traceId: 'V:S1', at: 0.49, axis: 'value' });
+  const pointState = clone(h.display);
+  assert.equal(h.field('marker').value, 'point');
+  h.input('marker', 'vertical', 'change');
+  assert.equal(h.display.annotations[0].at, 0.5);
+  assert.equal(h.display.annotations[0].marker, 'vertical');
+  h.update(pointState);
+  assert.equal(h.field('marker').value, 'point', 'parent undo restores the style in the form');
+  assert.equal(h.controls.commitPending(), true);
+  assert.equal(h.changes.length, 2, 'undo restoration does not write a stale style back');
+  h.update({ ...h.display, annotations: [marker({ marker: 'horizontal' })] });
+  assert.equal(h.field('marker').value, 'horizontal');
+  assert.equal(h.controls.commitPending(), true);
+  assert.equal(h.changes.length, 2);
+  h.update({ ...h.display, annotations: [] });
+  assert.equal(h.form.hidden, true, 'undoing creation closes the selected marker form');
+});
+
+test('read-only marker styles are inspectable but cannot be changed through form events', () => {
+  const h = harness({ annotations: [marker({ marker: 'horizontal' })] }, { editable: false });
+  h.controls.select('A1');
+  assert.equal(h.field('marker').value, 'horizontal');
+  assert.equal(h.field('marker').disabled, true);
+  h.input('marker', 'vertical', 'change');
+  h.dispatch('submit', h.form);
+  assert.equal(h.display.annotations[0].marker, 'horizontal');
+  assert.equal(h.changes.length, 0);
+});
+
+test('rejected style edits retain the draft for retry without changing the sample anchor', () => {
+  const h = harness({ annotations: [marker()] }, { failChange: true });
+  h.controls.select('A1');
+  h.input('marker', 'vertical', 'change');
+  assert.equal(h.changes.length, 0);
+  assert.equal(h.field('marker').value, 'vertical');
+  assert.match(h.error.textContent, /父级拒绝/);
+  h.update(h.display);
+  assert.equal(h.field('marker').value, 'vertical');
+  h.reject(false);
+  assert.equal(h.controls.commitPending(), true);
+  assert.deepEqual(h.display.annotations[0], marker({ marker: 'vertical' }));
+  assert.equal(h.error.hidden, true);
+});
+
+test('a pending list click commits its deferred style edit before switching the selected marker', () => {
+  const h = harness({ annotations: [marker(), marker({ id: 'A2', marker: 'horizontal' })] });
+  h.controls.select('A1');
+  h.field('marker').value = 'vertical';
+  const selectButton = h.container.querySelector('[data-annotation-select="A2"]');
+  h.dispatch('pointerdown', selectButton, { button: 0 });
+  h.dispatch('change', h.field('marker'));
+  assert.equal(h.changes.length, 0);
+  assert.equal(h.container.querySelector('[data-annotation-select="A2"]'), selectButton);
+  h.dispatch('click', selectButton);
+  assert.equal(h.changes.length, 1);
+  assert.equal(h.display.annotations[0].marker, 'vertical');
+  assert.equal(h.display.annotations[0].at, 0.5);
+  assert.equal(h.field('marker').value, 'horizontal');
+});

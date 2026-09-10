@@ -144,22 +144,23 @@
     });
     const list = document.getElementById('embed-annotations');
     list.replaceChildren();
-    (state.display.annotations || []).forEach((annotation) => {
-      const item = document.createElement('li');
-      const heading = document.createElement('strong');
-      heading.textContent = `${annotation.id} · ${annotation.traceId}${annotation.axis === 'phase' ? ' · 相位' : ''}`;
-      const note = document.createElement('p');
-      note.textContent = annotation.text || '无注释';
-      const coordinate = document.createElement('small');
+    (state.display.annotations || []).forEach((annotation, index) => {
       const point = annotations.resolve(annotation, state.result, {
         ...state.display,
         traceIds: Array.from(state.traceIds),
         phase: phase.checked,
       });
-      coordinate.textContent =
-        point.error ||
-        `${renderer.formatValue(point.at, state.result.xUnit)} · ${annotation.mode === 'xy' ? `X ${renderer.formatValue(point.x, point.xUnit)} · ` : ''}${renderer.formatValue(point.y, point.yUnit)}`;
-      item.append(heading, note, coordinate);
+      // Visible annotations already have a complete legend beside their chart.
+      // Keep only hidden items here, with the reason needed to recover them.
+      if (!point.error) return;
+      const item = document.createElement('li');
+      const heading = document.createElement('strong');
+      heading.textContent = `标记 ${index + 1} · ${annotation.traceId}${annotation.axis === 'phase' ? ' · 相位' : ''}`;
+      const note = document.createElement('p');
+      note.textContent = annotation.text || '无注释';
+      const reason = document.createElement('small');
+      reason.textContent = point.error;
+      item.append(heading, note, reason);
       list.append(item);
     });
     list.hidden = !list.children.length;

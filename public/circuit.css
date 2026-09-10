@@ -828,3 +828,82 @@
     gap: 8px;
   }
 }
+
+/* Annotation text stays below the SVG so it cannot cover a waveform. */
+.circuit-wave-group .circuit-wave-annotation-legend {
+  display: grid;
+  gap: 3px;
+  margin: 10px 0 16px;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--circuit-grid);
+  list-style: none;
+  min-width: 0;
+}
+.circuit-wave-annotation-legend > li {
+  min-width: 0;
+}
+.circuit-wave-group .circuit-wave-annotation-entry {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: 100%;
+  min-width: 0;
+  gap: 8px;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--circuit-ink);
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.circuit-wave-group button.circuit-wave-annotation-entry:hover {
+  background: var(--circuit-surface);
+}
+.circuit-wave-group button.circuit-wave-annotation-entry:focus-visible {
+  outline: 2px solid var(--circuit-accent);
+  outline-offset: 1px;
+}
+.circuit-wave-annotation-details {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.circuit-wave-annotation-details strong {
+  font-weight: 500;
+  white-space: pre-wrap;
+}
+.circuit-wave-annotation-details small {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--circuit-muted);
+}
+.circuit-wave-annotation-swatch {
+  position: relative;
+  flex: 0 0 20px;
+  height: 20px;
+}
+.circuit-wave-annotation-swatch::after {
+  content: '';
+  position: absolute;
+}
+.circuit-wave-annotation-swatch.is-point::after {
+  inset: 6px;
+  border: 1.75px solid currentColor;
+  border-radius: 50%;
+}
+.circuit-wave-annotation-swatch.is-vertical::after {
+  inset: 1px auto 1px 9px;
+  border-left: 1.5px dashed currentColor;
+}
+.circuit-wave-annotation-swatch.is-horizontal::after {
+  inset: 9px 1px auto;
+  border-top: 1.5px dashed currentColor;
+}
+.circuit-wave-group [data-annotation-id]:focus-visible {
+  outline: 1px solid var(--circuit-accent);
+  outline-offset: 3px;
+}

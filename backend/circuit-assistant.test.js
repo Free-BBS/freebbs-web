@@ -204,7 +204,9 @@ test('autonomous responses distinguish actionable progress, terminal answers and
 });
 
 test('read-only autonomous requests can inspect and simulate but cannot alter drafts or annotations', () => {
-  const input = validateCircuitAssistantInput(agentBody({ canEdit: false }));
+  const source = agentBody({ canEdit: false });
+  source.document.display = { mode: 'xt', traceIds: ['I:R1'] };
+  const input = validateCircuitAssistantInput(source);
   const permitted = [
     { type: 'highlight_components', componentIds: ['R1'] },
     { type: 'show_traces', traceIds: ['I:R1'] },
@@ -218,6 +220,20 @@ test('read-only autonomous requests can inspect and simulate but cannot alter dr
     { type: 'set_parameter', componentId: 'R1', parameter: 'resistance', value: 2000 },
     { type: 'move_component', componentId: 'R1', x: 20, y: 20 },
     { type: 'set_plot', display: { mode: 'xt', traceIds: ['I:R1'] } },
+    ...['point', 'vertical', 'horizontal'].map((marker) => ({
+      type: 'set_annotation',
+      annotation: {
+        id: 'A1',
+        traceId: 'I:R1',
+        at: 0,
+        text: '只读标记',
+        marker,
+        mode: 'xt',
+        axis: 'value',
+        xTraceId: null,
+        analysisKey: 'dc',
+      },
+    })),
   ]) {
     const response = parseCircuitAssistantResponse(actionAnswer([action]), input);
     assert.deepEqual(response.actions, []);
@@ -419,6 +435,7 @@ test('Max receives configured mathematics and annotation context and returns onl
     traceId: 'M:M1',
     at: 0,
     text: '工作点',
+    marker: 'vertical',
     mode: 'xt',
     axis: 'value',
     xTraceId: null,
@@ -438,6 +455,42 @@ test('Max receives configured mathematics and annotation context and returns onl
       input,
     );
   assert.deepEqual(responseFor(actions).actions, actions);
+  let currentInput = input;
+  for (const marker of ['vertical', 'horizontal', 'point']) {
+    const proposed = [{ type: 'set_annotation', annotation: { ...annotation, marker } }];
+    const parsed = parseCircuitAssistantResponse(actionAnswer(proposed), currentInput);
+    assert.equal(parsed.actionWarning, undefined);
+    assert.deepEqual(parsed.actions, proposed);
+    const document = applyActions(currentInput.document, parsed.actions);
+    currentInput = validateCircuitAssistantInput({ ...body, document });
+    assert.deepEqual(
+      buildCircuitAssistantPayload(currentInput).context.circuitEditor.document.display.annotations,
+      [proposed[0].annotation],
+    );
+    const textOnly = { ...annotation, text: '只修改图例说明' };
+    delete textOnly.marker;
+    const relabeled = parseCircuitAssistantResponse(
+      actionAnswer([{ type: 'set_annotation', annotation: textOnly }]),
+      currentInput,
+    );
+    assert.equal(relabeled.actionWarning, undefined);
+    const editedDocument = applyActions(currentInput.document, relabeled.actions);
+    currentInput = validateCircuitAssistantInput({ ...body, document: editedDocument });
+    assert.deepEqual(
+      buildCircuitAssistantPayload(currentInput).context.circuitEditor.document.display.annotations,
+      [{ ...textOnly, marker }],
+    );
+  }
+  for (const marker of [null, '', {}, [], ['vertical'], 'diagonal', 'Vertical', 0]) {
+    const response = responseFor([
+      { type: 'set_annotation', annotation: { ...annotation, marker } },
+    ]);
+    assert.deepEqual(response.actions, [], JSON.stringify(marker));
+    assert.match(response.actionWarning, /未执行/);
+    const invalidDocument = structuredClone(body);
+    invalidDocument.document.display.annotations = [{ ...annotation, marker }];
+    assert.throws(() => validateCircuitAssistantInput(invalidDocument), JSON.stringify(marker));
+  }
   assert.deepEqual(responseFor([...actions, { type: 'run_simulation' }]).actions, []);
   assert.match(
     responseFor([...actions, { type: 'run_simulation' }]).actionWarning,
@@ -487,6 +540,7 @@ test('Max response can invoke math and change the scope mode before marking the 
         traceId: 'M:M1',
         at: 0,
         text: '工作点',
+        marker: 'horizontal',
         mode: 'xy',
         axis: 'value',
         xTraceId: 'I:R1',
