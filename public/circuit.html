@@ -385,7 +385,13 @@
                     >
                   </div>
                 </div>
-                <fieldset class="circuit-traces">
+                <div
+                  id="circuit-plot-controls"
+                  class="circuit-plot-controls"
+                  aria-label="示波器与图像设置"
+                ></div>
+                <p id="circuit-plot-status" class="circuit-status" role="status"></p>
+                <fieldset class="circuit-traces" id="circuit-trace-picker">
                   <legend>显示曲线</legend>
                   <div id="circuit-traces"></div>
                 </fieldset>
@@ -407,7 +413,8 @@
                   <h2 id="circuit-sharing-title">把实验带到讨论里</h2>
                   <p>
                     复制已保存版本的 Markdown
-                    引用，读者可以查看电路与仿真。未保存的修改不会改变既有引用。
+                    引用，读者可以查看电路与仿真，以及此版本保存的通道、数学运算、X–Y / X–T
+                    模式和坐标范围。先保存图像设置，再复制引用。
                   </p>
                 </div>
                 <div class="circuit-actions">
@@ -618,6 +625,8 @@
     <script src="/vendor/katex/dist/katex.min.js"></script>
     <script src="/app.js"></script>
     <script src="/circuit-engine.js"></script>
+    <script src="/circuit-plot.js"></script>
+    <script src="/circuit-plot-controls.js"></script>
     <script src="/circuit-renderer.js"></script>
     <script src="/circuit-wiring.js"></script>
     <script src="/circuit-ai-actions.js"></script>

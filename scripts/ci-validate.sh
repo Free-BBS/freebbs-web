@@ -27,6 +27,8 @@ node --check backend/circuit-examples.js
 node --check public/circuit-default-examples.js
 node --check public/circuit-discussion.js
 node --check public/circuit-engine.js
+node --check public/circuit-plot.js
+node --check public/circuit-plot-controls.js
 node --check public/circuit-worker.js
 node --check public/circuit-renderer.js
 node --check public/circuit-wiring.js

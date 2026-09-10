@@ -95,7 +95,7 @@
 
   function validateEditorDocument(document) {
     assertSafeJson(document);
-    assertFields(document, ['version', 'components', 'wires', 'analysis'], '电路文档');
+    assertFields(document, ['version', 'components', 'wires', 'analysis', 'display'], '电路文档');
     if (!Array.isArray(document.components) || !Array.isArray(document.wires))
       throw new Error('电路文档缺少元件或导线列表。');
     document.components.forEach(assertComponent);
@@ -147,11 +147,11 @@
         case 'show_traces':
           idList(action.traceIds, '波形');
           action.traceIds.forEach((id) => {
-            const match = /^(V|I):([A-Za-z][A-Za-z0-9_-]{0,39})$/.exec(id);
-            const component = match && findComponent(match[2]);
+            const componentId = engine.traceComponentId(id);
+            const component = componentId && findComponent(componentId);
             if (
               !component ||
-              ['ground', 'junction'].includes(component.type) ||
+              !engine.validTraceId(id, componentList) ||
               (allowedTraces && !allowedTraces.has(id))
             )
               throw new Error(`波形 ${id.slice(0, 48)} 不存在，请先运行仿真。`);
@@ -244,7 +244,7 @@
         action.type === 'highlight_components'
           ? action.componentIds
           : action.type === 'show_traces'
-            ? action.traceIds.map((id) => id.slice(2))
+            ? action.traceIds.map((id) => engine.traceComponentId(id))
             : [];
       if (targets.some((id) => !draft.components.some((component) => component.id === id)))
         throw new Error('高亮或波形目标已被本次操作删除。');

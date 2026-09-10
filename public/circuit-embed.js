@@ -7,6 +7,7 @@
   if (['light', 'dark'].includes(theme)) document.documentElement.dataset.theme = theme;
   const engine = globalThis.FreeBbsCircuitEngine;
   const renderer = globalThis.FreeBbsCircuitRenderer;
+  const plot = globalThis.FreeBbsCircuitPlot;
   const root = document.getElementById('circuit-embed');
   const status = document.getElementById('embed-status');
   const retry = document.getElementById('embed-retry');
@@ -30,6 +31,7 @@
     schematic: null,
     chart: null,
     result: null,
+    display: null,
     playing: false,
     animation: null,
     frame: 0,
@@ -132,6 +134,7 @@
     state.chartWidth = width;
     state.chart?.destroy();
     state.chart = renderer.renderWaveform(waveform, state.result, {
+      ...state.display,
       traceIds: Array.from(state.traceIds),
       phase: phase.checked,
       logX:
@@ -142,19 +145,17 @@
   }
   function setupChannels() {
     channels.replaceChildren();
-    const components = new Map(state.circuit.document.components.map((item) => [item.id, item]));
-    const preferred = state.result.traces.filter((trace) => {
-      const component = components.get(trace.id.slice(2));
-      return (
-        component &&
-        ((['voltmeter', 'oscilloscope'].includes(component.type) && trace.unit === 'V') ||
-          (component.type === 'ammeter' && trace.unit === 'A'))
-      );
-    });
-    const chosen = preferred.length
-      ? preferred
-      : state.result.traces.filter((trace) => trace.unit === 'V').slice(0, 2);
-    state.traceIds = new Set(chosen.slice(0, 6).map((trace) => trace.id));
+    state.traceIds = new Set(
+      state.display.traceIds.filter((id) => state.result.traces.some((trace) => trace.id === id)),
+    );
+    phase.checked = state.display.phase;
+    document.getElementById('embed-channel-picker').hidden = state.display.mode === 'xy';
+    const settings = document.getElementById('embed-plot-settings');
+    const mode =
+      state.display.mode === 'xy'
+        ? `X–Y · X: ${state.display.xyX || state.display.ch1} · Y: ${state.display.xyY || state.display.ch2}`
+        : 'X–T · 随时间 / 扫描量';
+    settings.textContent = `${mode}${state.display.math.length ? ` · ${state.display.math.map((item) => `${item.label || item.id} = ${item.expression}`).join('；')}` : ''} · 使用分享时保存的图像设置`;
     state.result.traces.forEach((trace) => {
       const label = document.createElement('label');
       const input = document.createElement('input');
@@ -170,7 +171,7 @@
       channels.append(label);
     });
     document.getElementById('embed-phase-label').hidden =
-      state.circuit.document.analysis.type !== 'ac';
+      state.circuit.document.analysis.type !== 'ac' || state.display.mode === 'xy';
     redrawWaveform();
   }
   function acceptResult(result) {
@@ -183,7 +184,9 @@
     ) {
       throw new Error('仿真结果不完整，请重试或在电路编辑器中检查电路。');
     }
-    state.result = result;
+    state.display = plot.resolveDisplay(result, state.circuit.document);
+    const prepared = plot.buildResult(result, state.display);
+    state.result = prepared.result;
     const transient =
       state.circuit.document.analysis.type === 'transient' && result.frames.length > 1;
     timeline.hidden = view !== 'live' || !transient;
@@ -197,7 +200,7 @@
     const kind = { dc: '直流工作点', transient: '瞬态分析', sweep: '参数扫描', ac: '频率扫描' }[
       state.circuit.document.analysis.type
     ];
-    const warnings = Array.isArray(result.warnings) ? result.warnings.join('；') : '';
+    const warnings = [...(result.warnings || []), ...prepared.warnings].join('；');
     const hint = view === 'live' && !transient ? '；当前分析以静态工作点显示，可展开查看波形' : '';
     setStatus(`${kind} · ${result.x.length} 个采样点${hint}`);
     document.getElementById('embed-model').textContent =
@@ -393,6 +396,6 @@
     Number(revision) <= 4294967295 &&
     Object.hasOwn(names, view);
   if (!valid) setStatus('电路引用格式无效：需要合法 CID、版本号和展示方式。', true);
-  else if (!engine || !renderer) setStatus('电路模块未能加载，请刷新页面后重试。', true);
+  else if (!engine || !renderer || !plot) setStatus('电路模块未能加载，请刷新页面后重试。', true);
   else loadCircuit();
 })();

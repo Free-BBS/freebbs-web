@@ -1,5 +1,5 @@
 const express = require('express');
-const { buildNets, catalog } = require('../public/circuit-engine');
+const { buildNets, catalog, validTraceId, traceComponentId } = require('../public/circuit-engine');
 const {
   assertSafeJson,
   assertFields,
@@ -36,10 +36,8 @@ function normalizeSimulation(simulation, document) {
   const ids = new Set();
   const traces = simulation.traces.map((trace) => {
     assertFields(trace, ['id', 'label', 'unit', 'min', 'max', 'latest', 'samples'], '波形摘要');
-    const id = boundedText(trace.id, 42, '波形 ID');
-    const match = /^(V|I):([A-Za-z][A-Za-z0-9_-]{0,39})$/.exec(id);
-    const component = match && document.components.find((item) => item.id === match[2]);
-    if (!component || ['ground', 'junction'].includes(component.type) || ids.has(id))
+    const id = boundedText(trace.id, 46, '波形 ID');
+    if (!traceComponentId(id) || !validTraceId(id, document.components) || ids.has(id))
       throw new Error('仿真摘要含重复或不存在的波形。');
     ids.add(id);
     const next = { id };
@@ -146,6 +144,7 @@ function buildCircuitAssistantPayload(input) {
     '需要操作时，在文字说明后恰好输出一个 circuit-actions 代码块，内容必须是 JSON 对象 {"actions":[...]}，最多 12 项。没有操作时不输出代码块。不要输出 JavaScript、命令、URL 请求或 HTML 操作。',
     '操作对象仅支持以下字段，type 必填。每一步都必须使电路文档有效，按执行顺序排列；不要创造未知元件、参数或波形 ID。',
     '{"type":"highlight_components","componentIds":["R1"]}；空数组清除高亮。',
+    '二端口 twoport 的 I1、I2 均流入 + 端，ABCD 定义 [V1,I1]=ABCD[V2,-I2]；复数矩阵仅用于线性 AC。oscilloscope2 的 V:ID 与 V:ID:CH2 是 CH1、CH2，twoport 的 V:ID:P2/I:ID:P2 是第二端口。document.display 是保存的通道、运算公式及坐标模式；数学曲线不代表新增物理元件。',
     '{"type":"show_traces","traceIds":["V:R1","I:R1"]}；仅可引用本次 simulation.traces 的 ID，空数组隐藏波形。尚未仿真时可只建议 run_simulation，待用户运行后再分析波形。',
     '{"type":"set_parameter","componentId":"R1","parameter":"resistance","value":2000}',
     '{"type":"set_analysis","analysis":{"type":"transient","stop":0.01,"step":0.00001,"initial":"zero"}}；其他分析：{"type":"dc"}、{"type":"sweep","componentId":"V1","parameter":"dc","start":0,"stop":5,"points":101}、{"type":"ac","start":10,"stop":100000,"points":101,"scale":"log"}。瞬态最多 100001 点，扫描最多 2000 点。',
