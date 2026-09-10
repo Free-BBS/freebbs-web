@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
+const http = require('node:http');
 const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
@@ -53,6 +54,16 @@ test(
       multipleStatements: true,
     };
     const db = await mysql.createConnection(mysqlOptions);
+    const agentRequests = [];
+    const agent = http.createServer(async (request, response) => {
+      let body = '';
+      for await (const chunk of request) body += chunk;
+      agentRequests.push(JSON.parse(body));
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ answer: '已根据保存版本读取电路。' }));
+    });
+    agent.listen(0, '127.0.0.1');
+    await once(agent, 'listening');
     let backend;
     let logs = '';
     t.after(async () => {
@@ -62,6 +73,9 @@ test(
       }
       await db.query(`DROP DATABASE IF EXISTS \`${database}\``);
       await db.end();
+      await new Promise((resolve) => {
+        agent.close(resolve);
+      });
       await fs.rm(temp, { recursive: true, force: true });
     });
     for (const file of ['schema.sql', 'seed.sql']) {
@@ -84,6 +98,7 @@ test(
         MYSQL_SOCKET: '',
         AUTH_SECRET: crypto.randomBytes(32).toString('hex'),
         UPLOAD_DIR: path.join(temp, 'uploads'),
+        AGENT_URL: `http://127.0.0.1:${agent.address().port}`,
         AGENT_SERVICE_TOKEN: '',
         AGENT_SETTINGS_REQUIRED: 'false',
         TSINGHUA_CONNECTOR_REQUIRED: 'false',
@@ -289,6 +304,71 @@ test(
           revisions.map((row) => row.revision),
           [1, 2, 3],
         );
+      },
+    );
+
+    await t.test(
+      'direct Max chat and discussion @max send saved circuit versions to the agent',
+      async () => {
+        const circuitLink = `/circuit?cid=${original.cid}&revision=2&view=schematic`;
+        const direct = await api('/ai/chat', {
+          token: owner.token,
+          method: 'POST',
+          body: {
+            messages: [
+              { role: 'user', content: `分析 ${circuitLink}` },
+              { role: 'assistant', content: '想了解什么？' },
+              { role: 'user', content: '电阻值和连接情况？' },
+            ],
+          },
+        });
+        assert.equal(direct.answer, '已根据保存版本读取电路。');
+        const directRequest = agentRequests.at(-1);
+        assert.equal(directRequest.agent, 'navigation');
+        assert.equal(directRequest.context.circuits[0].revision, 2);
+        assert.equal(directRequest.context.circuits[0].latestRevision, 3);
+        assert.equal(directRequest.context.circuits[0].components[0].params.resistance, 2200);
+        assert.match(directRequest.messages.at(-1).content, /"resistance":2200/);
+
+        const { post } = await api('/discussion/posts', {
+          token: owner.token,
+          method: 'POST',
+          expected: 201,
+          body: {
+            boardSlug: 'circuit',
+            title: '请 Max 读电路',
+            contentMarkdown: `[第二版电路](${circuitLink})`,
+          },
+        });
+        const preview = { type: 'circuit', cid: original.cid, revision: 2, view: 'schematic' };
+        assert.deepEqual(post.preview, preview);
+        const { posts } = await api('/discussion/posts?board=circuit');
+        const summary = posts.find((item) => item.id === post.id);
+        assert.deepEqual(summary.preview, preview);
+        assert.equal(Object.hasOwn(summary, 'contentMarkdown'), false);
+        const trigger = await api(`/discussion/posts/${post.id}/comments`, {
+          token: other.token,
+          method: 'POST',
+          expected: 201,
+          body: { contentMarkdown: '@max 读取正文电路，告诉我元件参数。' },
+        });
+        assert.equal(trigger.maxPending, true);
+        let reply;
+        for (let attempt = 0; attempt < 50; attempt += 1) {
+          const { comments } = await api(`/discussion/posts/${post.id}/comments`);
+          reply = comments.find((comment) => comment.author.username === 'max_the_agent');
+          if (reply) break;
+          await new Promise((resolve) => {
+            setTimeout(resolve, 100);
+          });
+        }
+        assert.ok(reply, logs);
+        assert.equal(reply.parentCommentId, trigger.comment.id);
+        assert.equal(reply.contentMarkdown, '已根据保存版本读取电路。');
+        const mentionRequest = agentRequests.find((request) => request.agent === 'comment_mention');
+        assert.equal(mentionRequest.context.circuits[0].cid, original.cid);
+        assert.equal(mentionRequest.context.circuits[0].revision, 2);
+        assert.match(mentionRequest.message, /"resistance":2200/);
       },
     );
 

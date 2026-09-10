@@ -193,6 +193,11 @@
     $('publish').hidden = !state.cid;
     $('publish').disabled = state.dirty || state.saving;
     $('publish').title = state.dirty ? '请先保存当前修改，再发表到讨论区' : '';
+    $('ask-max').hidden = !state.cid;
+    $('ask-max').disabled = state.dirty || state.saving;
+    $('ask-max').title = state.dirty
+      ? '请先保存当前修改，再请 Max 分析'
+      : `请 Max 读取并分析第 ${state.revision} 版电路`;
     const saveLabel = state.cid ? `保存新版本${state.dirty ? ' · 有修改' : ''}` : '保存并获取 CID';
     $('save').textContent = state.saving ? '正在保存…' : saveLabel;
     $('title').readOnly = !state.editable;
@@ -1070,6 +1075,17 @@
     window.location.assign(`/discussion?${query}`);
   }
 
+  function askMaxAboutCircuit() {
+    if (!state.cid || state.dirty || state.saving) return;
+    const reference = new URLSearchParams({
+      cid: state.cid,
+      revision: String(state.revision),
+      view: 'schematic',
+    });
+    const prompt = `请帮我分析这张电路图的工作原理，检查元件参数和接线：\n[电路图](/circuit?${reference})`;
+    window.location.assign(`/aichat?${new URLSearchParams({ prompt })}`);
+  }
+
   function renderWaveform() {
     if (!state.result) return;
     if (!state.traceIds.length) {
@@ -1524,6 +1540,7 @@
       updateExampleControls();
     });
     $('publish').addEventListener('click', publishToDiscussion);
+    $('ask-max').addEventListener('click', askMaxAboutCircuit);
     $('analysis-form').addEventListener('submit', (event) => event.preventDefault());
     $('analysis-form').addEventListener('change', (event) => {
       if (event.target === $('sweep-component')) renderSweepOptions();

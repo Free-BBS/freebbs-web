@@ -1196,11 +1196,13 @@ html body.auth-page-body.theme-dark .auth-submit:hover {
   :root {
     --bbs-shell-width: 0px;
     --bbs-content-gutter: 14px;
-    --mobile-nav-space: calc(92px + env(safe-area-inset-bottom, 0px));
+    --mobile-nav-height: calc(56px + env(safe-area-inset-bottom, 0px));
+    --mobile-nav-clearance: calc(var(--mobile-nav-height) + 12px);
+    --mobile-nav-space: var(--mobile-nav-clearance);
   }
 
   body:not(.auth-page-body) .page-shell {
-    padding: 0 0 var(--mobile-nav-space) !important;
+    padding: 0 0 var(--mobile-nav-clearance) !important;
   }
 
   body:not(.auth-page-body) .topbar,
@@ -1358,27 +1360,33 @@ html body.auth-page-body.theme-dark .auth-submit:hover {
   }
 
   body:not(.auth-page-body) .mobile-nav {
-    left: calc(10px + env(safe-area-inset-left, 0px));
-    right: calc(10px + env(safe-area-inset-right, 0px));
-    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    left: 0;
+    right: 0;
+    bottom: 0;
     width: auto;
-    max-width: 680px;
-    min-height: 68px;
+    max-width: none;
+    height: var(--mobile-nav-height);
+    min-height: var(--mobile-nav-height);
     display: flex !important;
-    gap: 3px;
-    padding: 6px;
+    flex-wrap: nowrap;
+    gap: 0;
+    padding: 5px max(8px, env(safe-area-inset-right, 0px))
+      calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
     overflow-x: auto;
-    margin-inline: auto;
+    overflow-y: hidden;
+    margin: 0;
     transform: none;
-    border-radius: 18px !important;
+    border-radius: 0 !important;
     scrollbar-width: none;
     scroll-snap-type: x proximity;
+    scroll-padding-inline: 8px;
   }
 
   body:not(.auth-page-body) .mobile-nav {
-    border: 1px solid var(--ui-line) !important;
+    border: 0 !important;
+    border-top: 1px solid var(--ui-line) !important;
     background: var(--ui-surface-raised) !important;
-    box-shadow: var(--ui-shadow) !important;
+    box-shadow: none !important;
   }
 
   body:not(.auth-page-body) .mobile-nav::-webkit-scrollbar {
@@ -1387,18 +1395,24 @@ html body.auth-page-body.theme-dark .auth-submit:hover {
 
   body:not(.auth-page-body) .mobile-nav .nav-link {
     width: auto !important;
-    min-width: 72px;
-    min-height: 54px;
-    flex: 0 0 72px !important;
+    min-width: 64px;
+    height: 44px;
+    min-height: 44px;
+    flex: 1 0 64px !important;
     flex-direction: column;
     justify-content: center;
-    gap: 4px;
-    padding: 5px 4px;
-    border-radius: 12px !important;
-    font-size: 0.75rem;
-    line-height: 1.05;
+    gap: 2px;
+    padding: 3px 4px;
+    border-radius: 8px !important;
+    font-size: 0.6875rem;
+    line-height: 1.2;
     text-align: center;
+    white-space: nowrap;
     scroll-snap-align: center;
+  }
+
+  body:not(.auth-page-body) .mobile-nav .nav-link.hidden {
+    display: none !important;
   }
 
   body:not(.auth-page-body) .mobile-nav .nav-link {
@@ -1412,9 +1426,22 @@ html body.auth-page-body.theme-dark .auth-submit:hover {
   }
 
   body:not(.auth-page-body) .mobile-nav .nav-icon {
-    width: 21px;
-    height: 21px;
+    width: 19px;
+    height: 19px;
     opacity: 0.9 !important;
+  }
+
+  body.aichat-page .main-content,
+  body.aichat-page .settings-main {
+    height: calc(100dvh - var(--mobile-nav-height));
+  }
+
+  body.aichat-page .main-content .aichat-dialog-backdrop {
+    bottom: var(--mobile-nav-height);
+  }
+
+  body.aichat-page .main-content .aichat-dialogs {
+    bottom: var(--mobile-nav-clearance);
   }
 
   body.theme-light:not(.auth-page-body) .mobile-nav .nav-icon {

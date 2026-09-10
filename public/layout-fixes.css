@@ -14,40 +14,6 @@ body.course-map-editor-page .course-map-studio-bar {
   transform: none;
 }
 
-@media (max-width: 560px) {
-  body:not(.auth-page-body) .mobile-nav {
-    display: grid !important;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    grid-auto-flow: row;
-    min-height: 0;
-    gap: 3px;
-    padding: 6px;
-    overflow: visible;
-  }
-
-  body:not(.auth-page-body) .mobile-nav .nav-link {
-    min-width: 0 !important;
-    width: 100%;
-    min-height: 46px;
-    padding: 4px 2px;
-    font-size: 0.7rem;
-    gap: 3px;
-  }
-
-  body:not(.auth-page-body) .mobile-nav .nav-link.hidden {
-    display: none !important;
-  }
-
-  body:not(.auth-page-body) .mobile-nav .nav-icon {
-    width: 18px;
-    height: 18px;
-  }
-
-  body:not(.auth-page-body) .page-shell {
-    padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px)) !important;
-  }
-}
-
 body:not(.auth-page-body) .user-copy {
   min-width: 0;
   max-width: 160px;

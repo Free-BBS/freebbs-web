@@ -6,6 +6,8 @@ const sharp = require('sharp');
 const pool = require('./db');
 const config = require('./config');
 const { buildAiDialogExport, buildAiDialogExportFileName } = require('./ai-dialog-export');
+const { enrichAgentCircuitContext } = require('./agent-circuits');
+const { getDiscussionPreview } = require('./discussion-preview');
 const { buildBackendHealth } = require('./health');
 const { hashPassword, verifyPassword } = require('./password');
 const { sign, verify } = require('./token');
@@ -1356,6 +1358,7 @@ function toDiscussionPostSummary(row) {
     id: row.pid || String(row.id),
     pid: row.pid || String(row.id),
     title: isDeleted ? '已删除的帖子' : row.title,
+    preview: isDeleted ? null : getDiscussionPreview(row.content_markdown, config.publicWebUrl),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     board: {
@@ -1509,6 +1512,10 @@ function buildTrustedAgentHeaders(payload, user = null) {
 }
 
 async function postAgentChat(payload, user = null) {
+  const enrichedPayload = await enrichAgentCircuitContext(payload, {
+    pool,
+    publicWebUrl: config.publicWebUrl,
+  });
   const trustedHeaders = buildTrustedAgentHeaders(payload, user);
 
   return fetch(`${config.agentBaseUrl.replace(/\/$/, '')}/api/v1/chat`, {
@@ -1517,7 +1524,7 @@ async function postAgentChat(payload, user = null) {
       'Content-Type': 'application/json',
       ...trustedHeaders,
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(enrichedPayload),
   });
 }
 
@@ -3498,7 +3505,7 @@ app.get('/api/discussion/posts', async (request, response) => {
     }
 
     const [rows] = await pool.execute(
-      `SELECT p.id, p.pid, p.title, p.created_at, p.updated_at, p.user_id,
+      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
               p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.deleted_at,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
@@ -3523,7 +3530,7 @@ app.get('/api/discussion/posts', async (request, response) => {
        LEFT JOIN discussion_post_likes my_light ON my_light.post_id = p.id AND my_light.reaction_type = 'light' AND my_light.user_id = ${currentUser ? '?' : '0'}
        LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? '?' : '0'}
        ${where}
-       GROUP BY p.id, p.pid, p.title, p.created_at, p.updated_at, p.user_id, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.deleted_at,
+       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.deleted_at,
                 b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        ORDER BY ${orderBy}
       LIMIT ${limit}`,

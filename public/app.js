@@ -3196,6 +3196,10 @@ function renderDiscussionPosts() {
   discussionPostList.innerHTML = visiblePosts
     .map((post) => {
       const excerpt = createDiscussionPostExcerpt(post);
+      const preview =
+        window.FreeBbsDiscussionPreviews?.markup(post.preview, post.id, {
+          resolveAssetUrl,
+        }) || '';
       const replyCount = Number(post.commentCount || 0);
       const replyLabel = replyCount > 0 ? `${replyCount} 条回复` : '待回复';
 
@@ -3208,7 +3212,7 @@ function renderDiscussionPosts() {
       <div class="discussion-post-author">
         ${renderAuthorProfileLink(post.author, 'discussion-author-link discussion-author-link-avatar', true)}
       </div>
-      <div class="discussion-post-card-main">
+      <div class="discussion-post-card-main ${preview ? 'has-preview' : ''}">
         <div class="discussion-post-source">
           <span class="discussion-post-board">r/${escapeHtml(post.board.name)}</span>
           ${post.isPinned ? `<span class="discussion-pin-badge">置顶</span>` : ''}
@@ -3228,6 +3232,7 @@ function renderDiscussionPosts() {
           </button>
         </h3>
         ${excerpt ? `<p class="discussion-post-excerpt">${escapeHtml(excerpt)}</p>` : ''}
+        ${preview}
         <div class="discussion-post-actions">
           <span class="discussion-comment-count" title="评论">
             <img src="/assets/icons/chats.svg" alt="" aria-hidden="true" />
@@ -3246,6 +3251,7 @@ function renderDiscussionPosts() {
   `;
     })
     .join('');
+  window.FreeBbsDiscussionPreviews?.enhance(discussionPostList, { apiBase: API_BASE_URL });
 }
 
 function handleDiscussionFilterClick(event) {
@@ -4028,13 +4034,14 @@ function renderAiWelcomeMessage() {
         <img class="aichat-avatar-image" src="${escapeHtml(MAX_AGENT_AVATAR)}" alt="Max 的头像" />
       </div>
       <div class="aichat-bubble discussion-markdown-body">
-        <p>你好，我是 Max。可以问我课程、推导、代码或讨论区里适合展开的问题。</p>
+        <p>你好，我是 Max。可以问我课程、推导或代码，也可以粘贴本站电路链接，让我分析元件、接线和工作原理。</p>
       </div>
     </article>
   `;
   const welcome = aiChatThread.querySelector('.aichat-message-assistant');
   if (welcome) {
-    welcome.dataset.markdown = '你好，我是 Max。可以问我课程、推导、代码或讨论区里适合展开的问题。';
+    welcome.dataset.markdown =
+      '你好，我是 Max。可以问我课程、推导或代码，也可以粘贴本站电路链接，让我分析元件、接线和工作原理。';
     addAiMessageCopyControls(welcome);
   }
 }
@@ -5302,7 +5309,7 @@ function renderDiscussionDetail(post) {
         ${renderDiscussionCommentComposerFields({
           postId: post.id,
           rows: 4,
-          placeholder: '写一条评论，支持 Markdown 和 KaTeX',
+          placeholder: '写评论，或 @max 请教问题（可读取本站电路链接）',
           ariaLabel: '评论内容',
           inputId: 'discussion-comment-input',
         })}

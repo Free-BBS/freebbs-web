@@ -312,4 +312,4 @@ function createCircuitsRouter({ pool, requireAuth }) {
   return router;
 }
 
-module.exports = { createCircuitsRouter, ensureCircuitTables, validateCircuitInput };
+module.exports = { createCircuitsRouter, ensureCircuitTables, readCircuit, validateCircuitInput };

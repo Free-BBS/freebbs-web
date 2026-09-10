@@ -32,6 +32,9 @@ node --check public/circuit-wiring.js
 node --check public/circuit.js
 node --check public/circuit-embeds.js
 node --check public/circuit-embed.js
+node --check public/discussion-previews.js
+node --check backend/discussion-preview.js
+node --check backend/agent-circuits.js
 
 echo "[ci] course map tests"
 npm run test:course-maps
@@ -50,6 +53,9 @@ npm run test:admin-users
 
 echo "[ci] discussion Markdown and LaTeX tests"
 npm run test:discussion-markdown
+
+echo "[ci] Max agent and circuit context tests"
+npm run test:agent-surfaces
 
 echo "[ci] registration, notifications, username and course API tests"
 npm run test:community
