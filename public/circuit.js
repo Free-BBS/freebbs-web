@@ -6,6 +6,7 @@
   const renderer = window.FreeBbsCircuitRenderer;
   const wiring = window.FreeBbsCircuitWiring;
   const plot = window.FreeBbsCircuitPlot;
+  const annotationModel = window.FreeBbsCircuitAnnotations;
   const params = new URLSearchParams(window.location.search);
   const listPage = window.location.pathname.replace(/\/$/, '') === '/circuits';
   const $ = (id) => document.getElementById(`circuit-${id}`);
@@ -87,6 +88,8 @@
     plotDisplay: null,
     plotModified: false,
     plotControls: null,
+    annotationControls: null,
+    annotationPicking: false,
     chart: null,
     traceIds: [],
     frame: 0,
@@ -290,6 +293,9 @@
       help = `${state.wireStart.wireId ? `从导线 ${state.wireStart.wireId}` : `从 ${state.wireStart.componentId} 的引脚 ${state.wireStart.pin + 1}`} 连线 · ${state.wirePoints.length} 个拐点：点画布放拐点，点目标接通；退格撤回，Esc 取消。`;
     if (!state.editable) help = '只读预览，可选中元件查看参数；复制后继续编辑。';
     $('canvas-help').textContent = help;
+    state.annotationControls?.setEditable(state.editable && !state.saving);
+    if ($('annotation-pick'))
+      $('annotation-pick').disabled = !state.editable || state.saving || !state.result;
     updateExampleControls();
     renderSourceAdvice();
     notifyCircuitEditor();
@@ -319,6 +325,8 @@
     state.plotResult = null;
     state.plotDisplay = null;
     state.plotModified = false;
+    state.annotationPicking = false;
+    state.annotationControls?.reset();
     state.chart?.destroy?.();
     state.chart = null;
     state.traceIds = [];
@@ -826,6 +834,7 @@
 
   function validateParameterInputs() {
     if (state.result && state.plotControls?.validate() === false) return false;
+    if (state.result && state.annotationControls?.commitPending() === false) return false;
     if (window.FreeBbsCircuitParameterPopover?.reportValidity?.() === false) return false;
     if ($('parameters').checkValidity()) return true;
     window.FreeBbsCircuitSidebar?.open('parameters');
@@ -1276,39 +1285,84 @@
   }
 
   function getAssistantSnapshot() {
+    const measured = state.plotResult || state.result;
+    const required = new Set([
+      state.plotDisplay?.ch1,
+      state.plotDisplay?.ch2,
+      state.plotDisplay?.xyX,
+      state.plotDisplay?.xyY,
+    ]);
+    const preferred = new Set([
+      ...state.traceIds,
+      ...(state.plotDisplay?.mode === 'xy' ? [state.plotDisplay.xyX, state.plotDisplay.xyY] : []),
+    ]);
     const simulation = state.result
       ? {
           analysis: clone(state.result.analysis),
           sampleCount: state.result.x.length,
-          warnings: (state.result.warnings || [])
+          warnings: (measured.warnings || [])
             .slice(0, 12)
             .map((message) => String(message).slice(0, 500)),
-          traces: [...state.result.traces]
+          traces: [...measured.traces]
             .sort(
               (a, b) =>
-                Number(state.traceIds.includes(b.id)) - Number(state.traceIds.includes(a.id)),
+                Number(required.has(b.id)) * 4 +
+                Number(preferred.has(b.id)) * (b.id.startsWith('M:') ? 2 : 1) -
+                (Number(required.has(a.id)) * 4 +
+                  Number(preferred.has(a.id)) * (a.id.startsWith('M:') ? 2 : 1)),
             )
             .slice(0, 24)
             .map((trace) => {
               let min = Infinity;
               let max = -Infinity;
-              trace.values.forEach((value) => {
+              let minIndex = -1;
+              let maxIndex = -1;
+              trace.values.forEach((value, index) => {
                 if (Number.isFinite(value)) {
-                  min = Math.min(min, value);
-                  max = Math.max(max, value);
+                  if (value < min) {
+                    min = value;
+                    minIndex = index;
+                  }
+                  if (value > max) {
+                    max = value;
+                    maxIndex = index;
+                  }
                 }
               });
               const count = Math.min(64, trace.values.length);
               const samples = Array.from({ length: count }, (_, index) => {
                 const at =
                   count === 1 ? 0 : Math.round((index * (trace.values.length - 1)) / (count - 1));
-                return { x: state.result.x[at], value: trace.values[at] };
+                return {
+                  x: state.result.x[at],
+                  value: trace.values[at],
+                  ...(Number.isFinite(trace.phase?.[at]) ? { phase: trace.phase[at] } : {}),
+                };
               }).filter((sample) => Number.isFinite(sample.x) && Number.isFinite(sample.value));
               const latest = trace.values.at(-1);
+              const point = (index, values = trace.values) => ({
+                x: state.result.x[index],
+                value: values[index],
+              });
+              const phasePoints = {};
+              if (trace.phase) {
+                let low = -1;
+                let high = -1;
+                trace.phase.forEach((value, index) => {
+                  if (!Number.isFinite(value)) return;
+                  if (low < 0 || value < trace.phase[low]) low = index;
+                  if (high < 0 || value > trace.phase[high]) high = index;
+                });
+                if (low >= 0) phasePoints.phaseMinPoint = point(low, trace.phase);
+                if (high >= 0) phasePoints.phaseMaxPoint = point(high, trace.phase);
+              }
               return {
                 id: trace.id,
-                label: trace.label,
-                unit: trace.unit,
+                label: trace.label.slice(0, 120),
+                unit: trace.unit.slice(0, 24),
+                ...(minIndex >= 0 ? { minPoint: point(minIndex) } : {}),
+                ...(maxIndex >= 0 ? { maxPoint: point(maxIndex) } : {}),
+                ...phasePoints,
                 ...(Number.isFinite(min) ? { min } : {}),
                 ...(Number.isFinite(max) ? { max } : {}),
                 ...(Number.isFinite(latest) ? { latest } : {}),
@@ -1361,21 +1415,55 @@
     const editing = actions.some((action) => protocol.isEditingAction(action));
     if (editing && (!state.editable || state.saving))
       throw new Error('当前电路只读或正在保存，无法修改草稿。');
+    if (!validateParameterInputs()) throw new Error('请先修正当前参数或标记输入。');
     if (expectedVersion !== state.editVersion)
       throw new Error('画布已变化，请让 Max 根据当前电路重新给出建议。');
     if (state.wireStart && editing) throw new Error('请先完成或取消正在绘制的导线。');
+    const actionDocument = clone(
+      state.plotDisplay ? { ...state.document, display: state.plotDisplay } : state.document,
+    );
+    const availableResult = state.plotResult || state.result;
+    let previewDocument = clone(actionDocument);
+    let previewResult = availableResult;
+    const checkedActions = [];
+    for (const action of actions) {
+      let checked = action;
+      if (action.type === 'set_plot') {
+        if (!state.result) throw new Error('请先运行仿真，再配置图像。');
+        previewDocument = protocol.applyActions(previewDocument, [action]);
+        const prepared = plot.buildResult(state.result, previewDocument.display);
+        for (const row of previewDocument.display.math) {
+          const trace = prepared.result.traces.find((item) => item.id === `M:${row.id}`);
+          if (!trace || !trace.values.some(Number.isFinite))
+            throw new Error(
+              `数学曲线 ${row.id} 无法计算有效采样值：${prepared.warnings.join('；')}`,
+            );
+        }
+        previewResult = prepared.result;
+      } else {
+        if (action.type === 'set_annotation') {
+          if (!previewResult) throw new Error('请先运行仿真，再标记真实采样点。');
+          const annotation = engine.normalizeAnnotation(action.annotation);
+          const point = annotationModel.resolve(
+            annotation,
+            previewResult,
+            previewDocument.display || {},
+          );
+          if (point.error) throw new Error(`无法添加标记：${point.error}`);
+          checked = { ...action, annotation: { ...annotation, at: point.at } };
+        }
+        previewDocument = protocol.applyActions(previewDocument, clone([checked]));
+      }
+      checkedActions.push(clone(checked));
+    }
     const valid = protocol.validateActions(
-      actions,
-      state.document,
-      (state.result?.traces || []).map((trace) => trace.id),
+      checkedActions,
+      actionDocument,
+      (availableResult?.traces || []).map((trace) => trace.id),
     );
     // Validate the complete batch before applying any edit or visual effect.
-    const next = protocol.applyActions(state.document, valid);
-    const electrical = valid.some(
-      (action) =>
-        protocol.isEditingAction(action) &&
-        !['move_component', 'transform_component'].includes(action.type),
-    );
+    const next = protocol.applyActions(actionDocument, valid);
+    const electrical = valid.some((action) => protocol.isElectricalAction(action));
     const run = valid.some((action) => action.type === 'run_simulation');
     if (
       valid.some((action) => action.type === 'show_traces' && action.traceIds.length) &&
@@ -1384,12 +1472,13 @@
     )
       throw new Error('此操作需要重新运行仿真后才能查看有效波形。');
     if (editing) {
-      const previous = clone(state.document);
+      const previous = clone(actionDocument);
       state.document = next;
       state.selectedId = '';
       state.selectedWire = '';
       changed({ electrical });
-      state.aiUndo = { document: previous, editVersion: state.editVersion };
+      state.aiUndo = { document: previous, editVersion: state.editVersion, electrical };
+      if (!electrical && state.result && next.display) updatePlot(next.display);
       renderAnalysis();
       renderInspector();
       renderSchematic();
@@ -1438,12 +1527,14 @@
       state.aiUndo.editVersion !== state.editVersion
     )
       throw new Error('画布已继续编辑，无法撤销上一批 Max 操作。');
+    const electrical = state.aiUndo.electrical !== false;
     state.document = clone(state.aiUndo.document);
     state.selectedId = '';
     state.selectedWire = '';
     state.wireStart = null;
     state.wirePoints = [];
-    changed();
+    changed({ electrical });
+    if (!electrical && state.result) updatePlot(plot.resolveDisplay(state.result, state.document));
     clearAiHighlights();
     renderAnalysis();
     renderInspector();
@@ -1488,6 +1579,9 @@
     $('show-phase').checked = display.phase;
     $('phase-control').hidden = state.document.analysis.type !== 'ac' || display.mode === 'xy';
     state.plotControls?.update(prepared.result, display);
+    state.annotationControls?.update(prepared.result, display, {
+      editable: state.editable && !state.saving,
+    });
     renderWaveform();
     renderMeters();
   }
@@ -1503,6 +1597,9 @@
     }
     state.chart = renderer.renderWaveform($('waveform'), state.plotResult || state.result, {
       ...display,
+      annotationPicking: state.annotationPicking,
+      onPointPick: (point) => state.annotationControls?.pick(point),
+      onAnnotationSelect: (id) => state.annotationControls?.select(id),
       traceIds: state.traceIds,
       phase: $('show-phase').checked,
       logX: state.document.analysis.type === 'ac' && state.document.analysis.scale === 'log',
@@ -2035,11 +2132,43 @@
     $('stop').addEventListener('click', () => stopSimulation('仿真已取消。'));
     $('save').addEventListener('click', saveCircuit);
     $('copy').addEventListener('click', copyCircuit);
-    state.plotControls = window.FreeBbsCircuitPlotControls.create($('plot-controls'), (display) =>
-      updatePlot(display, { persist: true }),
-    );
+    state.plotControls = window.FreeBbsCircuitPlotControls.create($('plot-controls'), (display) => {
+      if (state.annotationControls?.commitPending() === false)
+        throw new Error('请先完成或取消标记输入。');
+      updatePlot(
+        {
+          ...display,
+          ...(state.plotDisplay?.annotations ? { annotations: state.plotDisplay.annotations } : {}),
+        },
+        { persist: true },
+      );
+    });
+    state.annotationControls = window.FreeBbsCircuitAnnotationControls.create($('annotations'), {
+      onChange: (display) => {
+        if (!state.editable || state.saving) throw new Error('当前电路只读或正在保存。');
+        if (state.plotControls.validate() === false) throw new Error('请先修正图像设置中的输入。');
+        updatePlot(
+          { ...state.plotControls.read(), annotations: display.annotations },
+          { persist: true },
+        );
+      },
+      onPickingChange: (picking) => {
+        state.annotationPicking = picking;
+        $('annotation-pick').setAttribute('aria-pressed', String(picking));
+        $('annotation-pick').textContent = picking ? '取消选点' : '在波形上添加标记';
+        $('annotation-pick-hint').textContent = picking ? '点击或轻触曲线添加标记，Esc 取消。' : '';
+        $('waveform').classList.toggle('is-annotation-picking', picking);
+        renderWaveform();
+      },
+    });
+    $('annotation-pick').addEventListener('click', () => {
+      if (state.plotControls.validate()) state.annotationControls.togglePicking();
+    });
     $('traces').addEventListener('change', () => {
-      if (state.plotControls?.validate() === false) {
+      if (
+        state.plotControls?.validate() === false ||
+        state.annotationControls?.commitPending() === false
+      ) {
         $('traces')
           .querySelectorAll('input')
           .forEach((input) => {
@@ -2064,7 +2193,10 @@
       }
     });
     $('show-phase').addEventListener('change', () => {
-      if (state.plotControls?.validate() === false) {
+      if (
+        state.plotControls?.validate() === false ||
+        state.annotationControls?.commitPending() === false
+      ) {
         $('show-phase').checked = state.plotDisplay.phase;
         return;
       }
@@ -2130,6 +2262,10 @@
         saveCircuit();
       }
       if (event.target.closest('input,textarea,select,[contenteditable]')) return;
+      if (event.key === 'Escape' && state.annotationPicking) {
+        state.annotationControls.cancelPicking();
+        return;
+      }
       if (state.wireStart && event.key === 'Backspace') {
         event.preventDefault();
         undoConnectionPoint();

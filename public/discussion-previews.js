@@ -89,6 +89,7 @@
           document.head.append(script);
         });
       rendererLoader = load('/circuit-engine.js', 'FreeBbsCircuitEngine')
+        .then(() => load('/circuit-annotations.js', 'FreeBbsCircuitAnnotations'))
         .then(() => load('/circuit-renderer.js', 'FreeBbsCircuitRenderer'))
         .catch((error) => {
           rendererLoader = null;

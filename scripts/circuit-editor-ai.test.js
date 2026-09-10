@@ -5,6 +5,7 @@ const test = require('node:test');
 const vm = require('node:vm');
 const engine = require('../public/circuit-engine');
 const plot = require('../public/circuit-plot');
+const annotationModel = require('../public/circuit-annotations');
 const protocol = require('../public/circuit-ai-actions');
 const { validateCircuitAssistantInput } = require('../backend/circuit-assistant');
 
@@ -141,6 +142,7 @@ function harness({ document = fixture(), measured = true } = {}) {
     state,
     engine,
     plot,
+    annotationModel,
     clone,
     listPage: false,
     $: (id) => {
@@ -169,6 +171,7 @@ function harness({ document = fixture(), measured = true } = {}) {
       }
     },
     updateControls: () => {},
+    validateParameterInputs: () => true,
     persistDraft: () => {
       calls.persisted += 1;
     },
@@ -536,4 +539,171 @@ test('AI show/hide traces switches XY to the requested time curves and survives 
   assert.deepEqual(clone(state.traceIds), ['I:R1']);
   context.applyAssistantActions([{ type: 'show_traces', traceIds: [] }], { expectedVersion: 7 });
   assert.match(elements.waveform.textContent, /选择至少一条曲线/);
+});
+
+test('Max configures mathematical XY curves and annotates the new result atomically without rerunning, with one-step undo', () => {
+  const { context, state, calls } = harness();
+  context.showResult(state.result);
+  const previous = clone(state.plotDisplay);
+  const physicalResult = state.result;
+  const actions = [
+    {
+      type: 'set_plot',
+      display: {
+        mode: 'xy',
+        ch1: 'V:V1',
+        ch2: 'I:R1',
+        xyX: 'V:V1',
+        xyY: 'M:M1',
+        traceIds: ['V:V1', 'M:M1'],
+        math: [{ id: 'M1', expression: 'CH1*CH2', unit: 'W' }],
+      },
+    },
+    {
+      type: 'set_annotation',
+      annotation: {
+        id: 'A1',
+        traceId: 'M:M1',
+        at: 0,
+        text: '电阻消耗功率',
+        mode: 'xy',
+        axis: 'value',
+        xTraceId: 'V:V1',
+        analysisKey: 'dc',
+      },
+    },
+  ];
+  context.applyAssistantActions(actions, { expectedVersion: state.editVersion });
+  assert.equal(state.result, physicalResult);
+  assert.equal(calls.runs, 0);
+  assert.equal(state.plotDisplay.mode, 'xy');
+  assert.equal(state.document.display.annotations[0].text, '电阻消耗功率');
+  assert.equal(state.plotResult.traces.find((trace) => trace.id === 'M:M1').values[0], 0.025);
+  const snapshot = clone(context.getAssistantSnapshot());
+  assert.equal(
+    snapshot.simulation.traces.find((trace) => trace.id === 'M:M1').maxPoint.value,
+    0.025,
+  );
+  assert.doesNotThrow(() =>
+    validateCircuitAssistantInput({
+      question: '解释标记的功率',
+      document: snapshot.document,
+      simulation: snapshot.simulation,
+    }),
+  );
+  context.undoAssistantActions();
+  assert.equal(state.result, physicalResult);
+  assert.deepEqual(clone(state.plotDisplay), previous);
+  assert.equal(state.plotDisplay.annotations, undefined);
+});
+
+test('bad math or an invalid new annotation rolls back the entire Max plot batch', () => {
+  for (const actions of [
+    [
+      {
+        type: 'set_plot',
+        display: { ch1: 'V:V1', ch2: 'V:R1', math: [{ id: 'M1', expression: 'CH1/0' }] },
+      },
+    ],
+    [
+      {
+        type: 'set_plot',
+        display: { mode: 'xy', ch1: 'V:V1', ch2: 'I:R1', xyX: 'V:V1', xyY: 'I:R1' },
+      },
+      {
+        type: 'set_annotation',
+        annotation: {
+          id: 'A1',
+          traceId: 'I:R1',
+          at: 100,
+          text: '无效点',
+          mode: 'xy',
+          axis: 'value',
+          xTraceId: 'V:V1',
+          analysisKey: 'dc',
+        },
+      },
+    ],
+  ]) {
+    const { context, state, calls } = harness();
+    context.showResult(state.result);
+    const before = clone({
+      document: state.document,
+      display: state.plotDisplay,
+      editVersion: state.editVersion,
+    });
+    assert.throws(
+      () => context.applyAssistantActions(actions, { expectedVersion: state.editVersion }),
+      /无法|有效|范围/,
+    );
+    assert.deepEqual(
+      clone({
+        document: state.document,
+        display: state.plotDisplay,
+        editVersion: state.editVersion,
+      }),
+      before,
+    );
+    assert.equal(calls.persisted, 0);
+    assert.equal(state.aiUndo, null);
+  }
+});
+
+test('annotation-only Max edits and deletion keep existing simulations available and undo safely', () => {
+  const { context, state } = harness();
+  context.showResult(state.result);
+  const original = state.result;
+  const annotation = annotationModel.create(state.result, state.plotDisplay, {
+    id: 'A1',
+    traceId: 'V:R1',
+    at: 0,
+    text: '5 V',
+  });
+  context.applyAssistantActions([{ type: 'set_annotation', annotation }], {
+    expectedVersion: state.editVersion,
+  });
+  assert.equal(state.result, original);
+  assert.equal(state.document.display.annotations.length, 1);
+  context.applyAssistantActions([{ type: 'delete_annotation', annotationId: 'A1' }], {
+    expectedVersion: state.editVersion,
+  });
+  assert.deepEqual(clone(state.document.display.annotations), []);
+  context.undoAssistantActions();
+  assert.equal(state.result, original);
+  assert.equal(state.document.display.annotations[0].text, '5 V');
+});
+
+test('Max receives actual extrema positions and phase samples instead of inferred peak locations', () => {
+  const document = fixture();
+  document.analysis = { type: 'ac', start: 10, stop: 1000, points: 100, scale: 'log' };
+  const { context, state } = harness({ document });
+  const trace = state.result.traces.find((item) => item.id === 'V:R1');
+  trace.values[47] = 17;
+  trace.phase[47] = -90;
+  context.showResult(state.result);
+  const snapshot = clone(context.getAssistantSnapshot());
+  const summary = snapshot.simulation.traces.find((item) => item.id === trace.id);
+  assert.deepEqual(summary.maxPoint, { x: state.result.x[47], value: 17 });
+  assert.deepEqual(summary.phaseMinPoint, { x: state.result.x[47], value: -90 });
+  assert.ok(summary.samples.some((sample) => typeof sample.phase === 'number'));
+  assert.equal(summary.samples.length, 64);
+  assert.doesNotThrow(() =>
+    validateCircuitAssistantInput({
+      question: '标注真实峰值',
+      document: snapshot.document,
+      simulation: snapshot.simulation,
+    }),
+  );
+});
+
+test('Max receives derived waveform warnings alongside solver warnings', () => {
+  const { context, state } = harness();
+  state.result.warnings = ['原始仿真提示'];
+  state.plotResult = {
+    ...state.result,
+    warnings: ['原始仿真提示', 'M1 有 2 个无效采样点，已显示为断点。'],
+  };
+  const snapshot = clone(context.getAssistantSnapshot());
+  assert.deepEqual(snapshot.simulation.warnings, state.plotResult.warnings);
+  assert.deepEqual(state.result.warnings, ['原始仿真提示']);
 });
