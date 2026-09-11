@@ -25,6 +25,7 @@
     <link rel="stylesheet" href="/username-guard.css" />
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
+    <link rel="stylesheet" href="/home.css" />
   </head>
   <body class="home-page">
     <div class="page-shell">
@@ -32,11 +33,6 @@
         <a class="brand" href="/" aria-label="FREE-BBS 首页">
           <span class="brand-mark">FREE<br />BBS</span>
         </a>
-
-        <form class="searchbar" role="search">
-          <span class="search-symbol" aria-hidden="true">⌕</span>
-          <input type="search" placeholder="搜索课程、讨论、资料、地图坐标" aria-label="搜索" />
-        </form>
 
         <nav class="nav-actions" aria-label="顶部导航">
           <a class="nav-link" href="/">
@@ -147,7 +143,132 @@
       </nav>
 
       <main class="main-content home-dashboard-main">
-        <h1 class="visually-hidden">FREE-BBS 社区首页</h1>
+        <header class="home-welcome">
+          <div>
+            <p class="home-eyebrow">FREE BBS · 电子系学习发展共同体</p>
+            <h1>让学习<span>自由而不孤独。</span></h1>
+          </div>
+          <p class="home-welcome-note">学生主导 · 长期公益<br />独立于评价体系</p>
+        </header>
+
+        <section class="home-actions" aria-label="下一步行动">
+          <article class="home-learning" aria-labelledby="home-learning-title">
+            <div class="home-learning-copy">
+              <p class="home-eyebrow">FREE LEARNING / 自主学习</p>
+              <h2 id="home-learning-title">今天，<br />想弄懂什么？</h2>
+              <p class="home-learning-description">
+                从一个知识点出发，<br />看见一门课的来龙去脉。
+              </p>
+              <a class="home-primary-link" id="home-learning-link" href="/world"
+                >进入学习世界 <span aria-hidden="true">↗</span></a
+              >
+              <p class="home-resume-note" id="home-resume-note" role="status" aria-live="polite">
+                选择一门课程，从知识地图开始。
+              </p>
+              <a class="home-world-link" id="home-world-link" href="/world" hidden
+                >也可以探索其他课程 →</a
+              >
+            </div>
+            <div class="home-islands" aria-hidden="true">
+              <span class="home-orbit home-orbit-one"></span>
+              <span class="home-orbit home-orbit-two"></span>
+              <img
+                class="home-island-small"
+                src="/assets/math_island_mobile.webp"
+                alt=""
+                width="600"
+                height="600"
+              />
+              <picture>
+                <source media="(max-width: 600px)" srcset="/assets/signals_island_mobile.webp" />
+                <img
+                  class="home-island-main"
+                  src="/assets/signals_island.webp"
+                  alt=""
+                  width="900"
+                  height="900"
+                  fetchpriority="high"
+                />
+              </picture>
+            </div>
+            <nav class="home-course-shortcuts" aria-label="已开放课程快捷入口">
+              <span>从这里出发</span>
+              <a href="/course?course=math">高等微积分 <span aria-hidden="true">↗</span></a>
+              <a href="/course?course=circuits"
+                >电子电路与系统基础 <span aria-hidden="true">↗</span></a
+              >
+              <a href="/course?course=signals">信号与系统 <span aria-hidden="true">↗</span></a>
+            </nav>
+          </article>
+
+          <nav class="home-quick-actions" aria-label="讨论、工作台与 Max">
+            <a class="home-action-card" href="/discussion">
+              <span class="home-action-icon" aria-hidden="true"
+                ><img src="/assets/icons/people.svg" alt=""
+              /></span>
+              <span
+                ><small>一起想明白</small><strong>进入讨论区</strong
+                ><span class="home-action-description">分享疑问，也接住别人的思考。</span></span
+              >
+              <span class="home-action-arrow" aria-hidden="true">↗</span>
+            </a>
+            <a class="home-action-card" href="/workbench">
+              <span class="home-action-icon" aria-hidden="true"
+                ><img src="/assets/icons/calendar.svg" alt=""
+              /></span>
+              <span
+                ><small>安排自己的节奏</small><strong>我的工作台</strong
+                ><span class="home-action-description">查看通知，让信息回到手边。</span></span
+              >
+              <span class="home-action-arrow" aria-hidden="true">↗</span>
+            </a>
+            <a class="home-action-card home-max-card" href="/aichat">
+              <span class="home-action-icon" aria-hidden="true"
+                ><img src="/assets/icons/ai.svg" alt=""
+              /></span>
+              <span
+                ><small>带着问题来</small><strong>问问 Max</strong
+                ><span class="home-action-description">解释、追问，再回到知识中验证。</span></span
+              >
+              <span class="home-action-arrow" aria-hidden="true">↗</span>
+            </a>
+          </nav>
+        </section>
+
+        <section class="home-principles" aria-label="三个 FREE">
+          <div>
+            <span class="home-principle-number" aria-hidden="true">01</span>
+            <div>
+              <h2>自主学习</h2>
+              <p>不只记住结论，更理解知识的联系。</p>
+            </div>
+            <span class="home-principle-label">FREE LEARNING</span>
+          </div>
+          <div>
+            <span class="home-principle-number" aria-hidden="true">02</span>
+            <div>
+              <h2>自主讨论</h2>
+              <p>在解释与交流中，形成自己的判断。</p>
+            </div>
+            <span class="home-principle-label">FREE DISCUSSION</span>
+          </div>
+          <div>
+            <span class="home-principle-number" aria-hidden="true">03</span>
+            <div>
+              <h2>自主探索</h2>
+              <p>把所学变成尝试，让想法经得起验证。</p>
+            </div>
+            <a class="home-principle-label" href="/circuit">试试电路实验室 ↗</a>
+          </div>
+        </section>
+
+        <header class="home-community-heading">
+          <div>
+            <p class="home-eyebrow">GROW TOGETHER / 一起生长</p>
+            <h2>接上彼此的思考</h2>
+          </div>
+          <p>一个人的经验，可以成为后来者的起点。</p>
+        </header>
 
         <div class="home-dashboard">
           <section class="home-dashboard-panel home-feed-panel" aria-labelledby="home-feed-title">
@@ -260,13 +381,14 @@
             <header class="home-panel-header">
               <div>
                 <p class="home-panel-kicker">Heat</p>
-                <h2 id="home-heat-title">热力榜前五</h2>
+                <h2 id="home-heat-title">热力贡献</h2>
               </div>
             </header>
 
             <p class="visually-hidden" id="home-heat-status" role="status" aria-live="polite">
               正在加载热力榜…
             </p>
+            <p class="home-heat-explainer">热力反映社区参与贡献，不代表学习能力或综合表现。</p>
             <ol
               class="home-heat-list"
               id="landing-heat-list"
@@ -302,6 +424,23 @@
             </ol>
           </section>
         </div>
+
+        <section class="home-notice-link" aria-label="活动与系内资讯">
+          <div>
+            <p class="home-eyebrow">BEYOND THE CLASSROOM</p>
+            <h2>学习之外，也别错过新的可能。</h2>
+            <p>活动与系内资讯，在工作台集中查看。</p>
+          </div>
+          <a href="/workbench">查看工作台通知 <span aria-hidden="true">↗</span></a>
+        </section>
+        <details class="home-about" id="about-freebbs">
+          <summary>关于FREE BBS <span>正在施工</span></summary>
+          <p>正在施工</p>
+        </details>
+        <details class="home-about" id="freebbs-staff">
+          <summary>FREE BBS工作人员名单 <span>正在施工</span></summary>
+          <p>正在施工</p>
+        </details>
       </main>
 
       <footer class="site-footer">
@@ -311,7 +450,8 @@
 
         <div class="footer-block footer-center">
           <div class="footer-links">
-            <a href="#staff">工作人员名单</a>
+            <a href="#about-freebbs">关于FREE BBS</a>
+            <a href="#freebbs-staff">FREE BBS工作人员名单</a>
             <a href="https://www.ee.tsinghua.edu.cn/" target="_blank" rel="noreferrer"
               >清华大学电子系</a
             >
@@ -319,16 +459,13 @@
           </div>
           <p>&lt;京ICP备2025155858号-2&gt;</p>
         </div>
-
-        <div class="footer-block footer-right">
-          <p><a href="mailto:feedback@free-bbs.cn">反馈：feedback@free-bbs.cn</a></p>
-        </div>
       </footer>
     </div>
 
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
     <script src="/app.js"></script>
+    <script src="/home.js"></script>
     <script src="/notifications.js"></script>
   </body>
 </html>

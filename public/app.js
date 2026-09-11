@@ -161,6 +161,11 @@ const aiChatDialogClose = document.querySelector('.aichat-dialog-close');
 const aiChatMain = document.querySelector('.aichat-main');
 const aiChatDrawerMedia = window.matchMedia('(max-width: 900px)');
 const discussionState = {
+  scope: 'public',
+  sessionVersion: 0,
+  initialized: false,
+  sessionStale: false,
+  nextMyCursor: '',
   boards: [],
   posts: [],
   postsByBoard: new Map(),
@@ -2816,6 +2821,7 @@ function setPublicProfileMessage(message) {
 function getDiscussionQueryState() {
   const params = new URLSearchParams(window.location.search);
   return {
+    scope: params.get('scope') === 'mine' ? 'mine' : 'public',
     board:
       String(params.get('board') || 'all')
         .trim()
@@ -2830,6 +2836,8 @@ function updateDiscussionQuery({ board, postId } = {}) {
   }
 
   const url = new URL(window.location.href);
+  if (discussionState.scope === 'mine') url.searchParams.set('scope', 'mine');
+  else url.searchParams.delete('scope');
 
   if (board && board !== 'all') {
     url.searchParams.set('board', board);
@@ -3010,7 +3018,7 @@ function renderHomeBoardActivity(boards) {
 
 function useFallbackDiscussionData() {
   discussionState.boards = FALLBACK_DISCUSSION_BOARDS;
-  discussionState.posts = [FALLBACK_DISCUSSION_POST];
+  discussionState.posts = [];
   discussionState.activeBoard = 'daily';
   discussionState.isFallback = true;
 }
@@ -3143,7 +3151,7 @@ function applyDiscussionPostsPayload(boardSlug, payload) {
     return;
   }
 
-  const posts = payload.posts || [];
+  const posts = (payload.posts || []).filter((post) => !post.isDeleted);
   discussionState.posts = posts;
   discussionState.postsByBoard.set(boardSlug, posts);
   discussionState.postsHashByBoard[boardSlug] = payload.hash || '';
@@ -3198,7 +3206,9 @@ function updateCachedDiscussionPost(postId, updates) {
 
 function getDiscussionVisiblePosts() {
   const mode = discussionState.viewMode;
-  let posts = [...discussionState.posts];
+  let posts = discussionState.posts.filter(
+    (post) => !post.isDeleted && (discussionState.scope === 'mine' || !post.isHidden),
+  );
 
   if (mode === 'unanswered') {
     posts = posts.filter((post) => Number(post.commentCount || 0) === 0);
@@ -3236,6 +3246,20 @@ function getDiscussionViewLabel(mode) {
 }
 
 function updateDiscussionFilterControls(visibleCount) {
+  const moreButton = document.getElementById('discussion-my-more');
+  if (moreButton)
+    moreButton.hidden = discussionState.scope !== 'mine' || !discussionState.nextMyCursor;
+  document.querySelectorAll('[data-discussion-scope]').forEach((control) => {
+    const active = control.dataset.discussionScope === discussionState.scope;
+    control.classList.toggle('is-active', active);
+    control.setAttribute('aria-pressed', String(active));
+  });
+  const scopeHint = document.getElementById('discussion-scope-hint');
+  if (scopeHint)
+    scopeHint.textContent =
+      discussionState.scope === 'mine'
+        ? '自己的公开与隐藏帖子；隐藏帖子仅自己可见。可按版块筛选。'
+        : '查看公开讨论。';
   discussionFilterControls.forEach((control) => {
     const isActive = control.dataset.discussionSort === discussionState.viewMode;
     control.classList.toggle('is-active', isActive);
@@ -3278,7 +3302,7 @@ function renderDiscussionPosts() {
   if (!discussionState.posts.length) {
     discussionPostList.innerHTML = `
       <article class="discussion-empty" role="listitem">
-        <strong>这个版块还没有帖子</strong>
+        <strong>${discussionState.scope === 'mine' ? '此范围内还没有自己的帖子' : '这个版块还没有帖子'}</strong>
         <p>可以发布第一个问题，或切换到其他版块继续浏览。</p>
       </article>
     `;
@@ -3323,6 +3347,7 @@ function renderDiscussionPosts() {
           ${renderAuthorProfileLink(post.author, 'discussion-author-link')}
           <span>${escapeHtml(formatDateOnly(post.createdAt))}</span>
           <span class="discussion-post-reply-state">${escapeHtml(replyLabel)}</span>
+          ${post.isHidden ? '<span class="discussion-hidden-badge">已隐藏 · 仅自己可见</span>' : ''}
         </div>
         <h3>
           <button
@@ -3401,6 +3426,7 @@ function renderDiscussionReactionButton(post, reactionType) {
       data-post-id="${escapeHtml(post.id)}"
       aria-label="${escapeHtml(reaction.label)}"
       aria-pressed="${active ? 'true' : 'false'}"
+      ${post.isHidden ? 'disabled' : ''}
       title="${escapeHtml(reaction.label)}"
     >
       <img src="${escapeHtml(icon)}" alt="" aria-hidden="true" />
@@ -5269,6 +5295,7 @@ function mountDiscussionReplyForm(slot, postId, commentId, authorName, { focus =
 }
 
 function restoreOpenDiscussionReplyComposer() {
+  if (discussionState.activePost?.isHidden) return;
   const postId = String(discussionState.activePostId || '');
   const commentId = discussionOpenReplyByPost.get(postId);
 
@@ -5316,7 +5343,7 @@ function renderDiscussionComments() {
         <div class="discussion-comment-meta">
           ${renderAuthorProfileLink(comment.author, 'discussion-author-link')}
           <span>${escapeHtml(formatDateTime(comment.createdAt))}</span>
-          <button class="discussion-comment-reply-button" type="button" data-action="reply-comment" data-comment-id="${comment.id}" data-author-name="${escapeHtml(comment.author?.displayName || comment.author?.fullName || comment.author?.username || '匿名用户')}">回复</button>
+          ${discussionState.activePost?.isHidden ? '' : `<button class="discussion-comment-reply-button" type="button" data-action="reply-comment" data-comment-id="${comment.id}" data-author-name="${escapeHtml(comment.author?.displayName || comment.author?.fullName || comment.author?.username || '匿名用户')}">回复</button>`}
         </div>
         <div class="discussion-comment-content discussion-markdown-body">${renderMarkdownContent(comment.contentMarkdown)}</div>
         <div class="discussion-comment-reply-slot" data-reply-slot="${comment.id}"></div>
@@ -5371,9 +5398,10 @@ function renderDiscussionDetail(post) {
           <span>返回帖子</span>
         </button>
         ${
-          post.canPin || post.canFeature || post.canDelete
+          post.canPin || post.canFeature || post.canDelete || post.canHide
             ? `
           <div class="discussion-moderator-actions">
+            ${post.canHide ? `<button class="discussion-visibility-button" type="button" data-action="toggle-visibility" data-post-id="${escapeHtml(post.id)}" data-hidden="${post.isHidden ? '1' : '0'}">${post.isHidden ? '恢复公开' : '隐藏帖子'}</button>` : ''}
             ${post.canPin ? `<button class="discussion-detail-pin ${post.isPinned ? 'is-active' : ''}" type="button" data-action="toggle-pin" data-post-id="${escapeHtml(post.id)}" data-pinned="${post.isPinned ? '1' : '0'}"><img class="discussion-action-icon" src="/assets/icons/top.svg" alt="" aria-hidden="true" /><span>${post.isPinned ? '取消置顶' : '置顶文章'}</span></button>` : ''}
             ${post.canFeature ? `<button class="discussion-detail-feature ${post.isFeatured ? 'is-active' : ''}" type="button" data-action="toggle-feature" data-post-id="${escapeHtml(post.id)}" data-featured="${post.isFeatured ? '1' : '0'}"><img class="discussion-action-icon" src="/assets/icons/star.svg" alt="" aria-hidden="true" /><span>${post.isFeatured ? '取消精华' : '加精华'}</span></button>` : ''}
             ${post.canDelete ? `<button class="discussion-detail-delete" type="button" data-action="delete-post" data-post-id="${escapeHtml(post.id)}"><img class="discussion-action-icon" src="/assets/icons/trash.svg" alt="" aria-hidden="true" /><span>删除帖子</span></button>` : ''}
@@ -5383,6 +5411,7 @@ function renderDiscussionDetail(post) {
         }
       </div>
       <h2 id="discussion-detail-title" tabindex="-1">${escapeHtml(post.title)}</h2>
+      ${post.isHidden ? '<p class="discussion-privacy-note" role="status">已隐藏 · 仅自己可见。恢复公开后可继续评论与回应。</p>' : ''}
       <div class="discussion-detail-meta">
         <span class="discussion-detail-board">#${escapeHtml(post.board.name)}</span>
         ${renderAuthorProfileLink(post.author, 'discussion-author-link')}
@@ -5406,6 +5435,7 @@ function renderDiscussionDetail(post) {
       <form
         class="discussion-comment-form"
         id="discussion-comment-form"
+        ${post.isHidden ? 'hidden' : ''}
         data-post-id="${escapeHtml(post.id)}"
         data-parent-comment-id=""
       >
@@ -5621,15 +5651,25 @@ async function loadDiscussionStats() {
 }
 
 async function loadDiscussionComments(postId) {
+  if (discussionState.sessionStale) return;
+  const version = discussionState.sessionVersion;
+  const detailRequest = discussionState.postRequestId;
+  let comments = [];
   try {
     const payload = await callApi(`/discussion/posts/${encodeURIComponent(postId)}/comments`, {
       method: 'GET',
     });
-    discussionState.comments = payload.comments || [];
+    comments = payload.comments || [];
   } catch {
-    discussionState.comments = [];
+    // Fail closed: never retain comments from a previous post or user.
   }
-
+  if (
+    version !== discussionState.sessionVersion ||
+    detailRequest !== discussionState.postRequestId ||
+    String(postId) !== String(discussionState.activePostId)
+  )
+    return;
+  discussionState.comments = comments;
   renderDiscussionComments();
 }
 
@@ -5718,73 +5758,50 @@ async function toggleDiscussionReaction(postId, reactionType = 'smile') {
 }
 
 async function loadDiscussionDetail(postId) {
-  if (!discussionDetail || !postId) {
-    return;
-  }
-
-  if (postId === FALLBACK_DISCUSSION_POST.id) {
-    discussionState.activePostId = FALLBACK_DISCUSSION_POST.id;
-    renderDiscussionPosts();
-    renderDiscussionDetail(FALLBACK_DISCUSSION_POST);
-    discussionDetail.scrollIntoView({
-      behavior: 'smooth',
-      block: 'start',
-    });
-    updateDiscussionQuery({
-      board: discussionState.activeBoard,
-      postId: discussionState.activePostId,
-    });
-    return;
-  }
-
+  if (discussionState.sessionStale) return;
+  if (!discussionDetail || !postId) return;
   const requestId = discussionState.postRequestId + 1;
   discussionState.postRequestId = requestId;
+  const version = discussionState.sessionVersion;
   const requestedBoard = discussionState.activeBoard;
-  const cachedPost = discussionState.postCache.get(postId);
-  if (cachedPost) {
-    discussionState.activePostId = cachedPost.id;
-    renderDiscussionPosts();
-    renderDiscussionDetail(cachedPost);
-    updateDiscussionQuery({
-      board: discussionState.activeBoard,
-      postId: discussionState.activePostId,
+  discussionState.activePostId = String(postId);
+  discussionState.activePost = null;
+  discussionState.comments = [];
+  // Revalidate visibility before rendering; cached content may have been hidden/deleted.
+  setDiscussionDetailView(true);
+  discussionDetail.classList.remove('hidden');
+  discussionDetail.innerHTML =
+    '<div class="discussion-detail-empty"><p>正在加载帖子详情...</p></div>';
+  try {
+    const payload = await callApi(`/discussion/posts/${encodeURIComponent(postId)}`, {
+      method: 'GET',
     });
-  } else {
-    setDiscussionDetailView(true);
-    discussionDetail.classList.remove('hidden');
-    discussionDetail.innerHTML = `
-      <div class="discussion-detail-empty">
-        <p>正在加载帖子详情...</p>
-      </div>
-    `;
+    if (
+      requestId !== discussionState.postRequestId ||
+      version !== discussionState.sessionVersion ||
+      requestedBoard !== discussionState.activeBoard
+    )
+      return;
+    if (!payload.post || payload.post.isDeleted) throw new Error('帖子不存在或暂不可见');
+    discussionState.activePostId = payload.post.id;
+    discussionState.postCache.set(payload.post.id, payload.post);
+    renderDiscussionPosts();
+    renderDiscussionDetail(payload.post);
+    discussionDetail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    updateDiscussionQuery({ board: discussionState.activeBoard, postId: payload.post.id });
+  } catch {
+    if (requestId !== discussionState.postRequestId || version !== discussionState.sessionVersion)
+      return;
+    discussionState.postCache.delete(postId);
+    discussionState.activePost = null;
+    discussionState.comments = [];
+    discussionDetail.innerHTML =
+      '<button class="discussion-detail-back" type="button" data-action="close-detail">返回帖子列表</button><p role="status">帖子不存在、暂不可见或加载失败，请返回列表刷新后重试。</p>';
   }
-
-  const payload = await callApi(`/discussion/posts/${encodeURIComponent(postId)}`, {
-    method: 'GET',
-  });
-
-  if (
-    requestId !== discussionState.postRequestId ||
-    requestedBoard !== discussionState.activeBoard
-  ) {
-    return;
-  }
-
-  discussionState.activePostId = payload.post.id;
-  discussionState.postCache.set(payload.post.id, payload.post);
-  renderDiscussionPosts();
-  renderDiscussionDetail(payload.post);
-  discussionDetail.scrollIntoView({
-    behavior: 'smooth',
-    block: 'start',
-  });
-  updateDiscussionQuery({
-    board: discussionState.activeBoard,
-    postId: discussionState.activePostId,
-  });
 }
 
-async function loadDiscussionPosts({ autoOpen = false } = {}) {
+async function loadDiscussionPosts({ autoOpen = false, more = false } = {}) {
+  if (discussionState.sessionStale) return;
   if (!discussionPostList) {
     return;
   }
@@ -5808,8 +5825,12 @@ async function loadDiscussionPosts({ autoOpen = false } = {}) {
   try {
     const query = new URLSearchParams({
       board: activeBoard,
-      limit: '30',
+      limit: '50',
+      scope: discussionState.scope,
     });
+    if (more && discussionState.scope === 'mine' && discussionState.nextMyCursor) {
+      query.set('cursor', discussionState.nextMyCursor);
+    }
 
     if (currentHash) {
       query.set('hash', currentHash);
@@ -5824,13 +5845,29 @@ async function loadDiscussionPosts({ autoOpen = false } = {}) {
       return;
     }
 
+    if (more) {
+      payload.posts = [
+        ...new Map(
+          [...discussionState.posts, ...(payload.posts || [])].map((post) => [post.id, post]),
+        ).values(),
+      ];
+      payload.hash = '';
+    }
+    discussionState.nextMyCursor = payload.nextCursor || '';
     applyDiscussionPostsPayload(activeBoard, payload);
   } catch {
     if (requestId !== discussionState.postsRequestId) {
       return;
     }
 
-    useFallbackDiscussionData();
+    discussionState.posts = [];
+    discussionState.postsByBoard.clear();
+    discussionState.postsHashByBoard = {};
+    renderDiscussionDetail(null);
+    discussionPostList.innerHTML =
+      '<article class="discussion-empty" role="status"><p>帖子加载失败；查看自己的帖子需要先登录。请重新选择帖子范围或刷新重试。</p></article>';
+    discussionPostList.setAttribute('aria-busy', 'false');
+    return;
   }
 
   if (
@@ -5872,46 +5909,101 @@ async function loadDiscussionPosts({ autoOpen = false } = {}) {
 }
 
 async function initializeDiscussionPage() {
-  if (!isDiscussionPage()) {
-    return;
-  }
-
+  if (!isDiscussionPage()) return;
+  await sessionReady;
+  const version = discussionState.sessionVersion;
   try {
     await loadDiscussionBoards();
-
+    if (version !== discussionState.sessionVersion) return;
     const query = getDiscussionQueryState();
-    const validBoard =
-      query.board === 'all' || discussionState.boards.some((board) => board.slug === query.board);
-    discussionState.activeBoard = validBoard ? query.board : 'all';
+    discussionState.scope = query.scope;
+    discussionState.activeBoard =
+      query.board === 'all' || discussionState.boards.some((board) => board.slug === query.board)
+        ? query.board
+        : 'all';
     discussionState.activePostId = '';
-
-    if (query.postId) {
-      try {
-        const payload = await callApi(`/discussion/posts/${encodeURIComponent(query.postId)}`, {
-          method: 'GET',
-        });
-        discussionState.activePostId = payload.post.id;
-        discussionState.activeBoard = payload.post.board.slug;
-        renderDiscussionDetail(payload.post);
-      } catch {
-        discussionState.activePostId = FALLBACK_DISCUSSION_POST.id;
-        discussionState.activeBoard = FALLBACK_DISCUSSION_POST.board.slug;
-        renderDiscussionDetail(FALLBACK_DISCUSSION_POST);
-      }
-    }
-
-    await loadDiscussionPosts({
-      autoOpen: Boolean(discussionState.activePostId),
-    });
+    await loadDiscussionPosts({ autoOpen: false });
+    if (version !== discussionState.sessionVersion) return;
+    if (query.postId) await loadDiscussionDetail(query.postId);
   } catch {
-    useFallbackDiscussionData();
-    discussionState.activePostId = FALLBACK_DISCUSSION_POST.id;
-    renderDiscussionBoards();
-    renderDiscussionComposeBoards();
-    renderDiscussionPosts();
-    renderDiscussionDetail(FALLBACK_DISCUSSION_POST);
+    if (version !== discussionState.sessionVersion) return;
+    discussionState.posts = [];
+    renderDiscussionDetail(null);
+    if (discussionPostList)
+      discussionPostList.innerHTML =
+        '<article class="discussion-empty" role="status"><p>讨论区加载失败，请刷新重试。</p></article>';
+  } finally {
+    if (version === discussionState.sessionVersion) discussionState.initialized = true;
   }
   return { boards: discussionState.boards, isFallback: discussionState.isFallback };
+}
+
+function resetDiscussionData() {
+  discussionState.nextMyCursor = '';
+  discussionState.sessionVersion += 1;
+  discussionState.postsRequestId += 1;
+  discussionState.postRequestId += 1;
+  discussionState.posts = [];
+  discussionState.comments = [];
+  discussionState.activePostId = '';
+  discussionState.postsByBoard.clear();
+  discussionState.postsHashByBoard = {};
+  discussionState.postCache.clear();
+  discussionCommentDrafts.clear();
+  discussionOpenReplyByPost.clear();
+  renderDiscussionDetail(null);
+  renderDiscussionPosts();
+}
+
+async function changeDiscussionScope(scope) {
+  if (discussionState.sessionStale) {
+    window.alert('登录状态已变化，请刷新页面后继续。');
+    return;
+  }
+  if (scope === 'mine' && !userState.isLoggedIn) {
+    openModal('login');
+    return;
+  }
+  resetDiscussionData();
+  discussionState.scope = scope === 'mine' ? 'mine' : 'public';
+  updateDiscussionQuery({ board: discussionState.activeBoard, postId: '' });
+  renderDiscussionPosts();
+  await loadDiscussionPosts();
+}
+
+async function toggleDiscussionVisibility(button) {
+  if (discussionState.sessionStale) return;
+  if (!userState.isLoggedIn || button.disabled) return;
+  const postId = button.dataset.postId;
+  const hidden = button.dataset.hidden !== '1';
+  const prompt = hidden
+    ? '隐藏后只有自己可见，暂停评论和回应，并取消置顶与精华。已被他人阅读或收取的邮件无法撤回。确认隐藏？'
+    : '确认恢复公开？所有人将可重新阅读这篇帖子及其评论。';
+  if (!window.confirm(prompt)) return;
+  const version = discussionState.sessionVersion;
+  button.disabled = true;
+  try {
+    await callApi(`/discussion/posts/${encodeURIComponent(postId)}/visibility`, {
+      method: 'PATCH',
+      body: JSON.stringify({ hidden }),
+    });
+    if (version !== discussionState.sessionVersion) return;
+    resetDiscussionData();
+    discussionState.scope = 'mine';
+    const refreshedVersion = discussionState.sessionVersion;
+    updateDiscussionQuery({ board: discussionState.activeBoard, postId: '' });
+    await loadDiscussionPosts();
+    if (
+      refreshedVersion === discussionState.sessionVersion &&
+      userState.isLoggedIn &&
+      discussionState.scope === 'mine'
+    )
+      await loadDiscussionDetail(postId);
+  } catch (error) {
+    if (version === discussionState.sessionVersion) window.alert(error.message);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function loadPublicProfile() {
@@ -7119,6 +7211,7 @@ async function handleDiscussionBoardClick(event) {
   }
 
   discussionState.activeBoard = button.dataset.boardSlug || 'all';
+  discussionState.nextMyCursor = '';
   discussionState.activePostId = '';
   discussionState.postRequestId += 1;
   renderDiscussionDetail(null);
@@ -7211,22 +7304,15 @@ async function deleteDiscussionPost(postId) {
     return;
   }
 
+  const version = discussionState.sessionVersion;
   try {
     await callApi(`/discussion/posts/${encodeURIComponent(postId)}`, {
       method: 'DELETE',
     });
 
-    discussionState.postCache.delete(postId);
-    delete discussionState.postsHashByBoard[discussionState.activeBoard || 'all'];
-    discussionState.posts = userState.isAdmin
-      ? discussionState.posts.map((post) =>
-          post.id === postId
-            ? { ...post, title: '已删除的帖子', isDeleted: true, canDelete: false }
-            : post,
-        )
-      : discussionState.posts.filter((post) => post.id !== postId);
-
-    if (discussionState.activePostId === postId) {
+    if (version !== discussionState.sessionVersion) return;
+    resetDiscussionData();
+    if (!discussionState.activePostId) {
       discussionState.activePostId = '';
       renderDiscussionDetail(null);
       updateDiscussionQuery({
@@ -7572,6 +7658,11 @@ async function toggleBoardModerator(button) {
 }
 
 async function handleDiscussionDetailClick(event) {
+  const visibilityButton = event.target.closest('[data-action="toggle-visibility"]');
+  if (visibilityButton) {
+    await toggleDiscussionVisibility(visibilityButton);
+    return;
+  }
   const replyButton = event.target.closest("[data-action='reply-comment']");
 
   if (replyButton) {
@@ -8830,6 +8921,40 @@ discussionBoardList?.addEventListener('click', (event) => {
 });
 discussionFilterControls.forEach((control) => {
   control.addEventListener('click', handleDiscussionFilterClick);
+});
+document.querySelectorAll('[data-discussion-scope]').forEach((control) => {
+  control.addEventListener('click', () => changeDiscussionScope(control.dataset.discussionScope));
+});
+document.getElementById('discussion-my-more')?.addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    await loadDiscussionPosts({ more: true });
+  } finally {
+    button.disabled = false;
+  }
+});
+window.addEventListener('freebbs:session-change', () => {
+  if (!isDiscussionPage()) return;
+  resetDiscussionData();
+  discussionState.sessionStale = false;
+  if (!discussionState.initialized) return;
+  discussionState.scope = 'public';
+  updateDiscussionQuery({ board: discussionState.activeBoard, postId: '' });
+  loadDiscussionPosts();
+});
+window.addEventListener('storage', (event) => {
+  if (!isDiscussionPage() || (event.key !== STORAGE_KEY && event.key !== null)) return;
+  // Do not retain a hidden post after another tab logs out/switches accounts.
+  resetDiscussionData();
+  discussionState.sessionStale = true;
+  discussionPostList.innerHTML = '<p role="status">登录状态已变化，请刷新页面后继续。</p>';
+});
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted && isDiscussionPage()) {
+    resetDiscussionData();
+    window.location.reload();
+  }
 });
 discussionPostList?.addEventListener('click', (event) => {
   handleDiscussionPostClick(event);

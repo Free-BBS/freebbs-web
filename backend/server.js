@@ -16,6 +16,12 @@ const { enrichAgentCircuitContext } = require('./agent-circuits');
 const { createCircuitAssistantRouter } = require('./circuit-assistant');
 const { createCircuitRecognitionRouter } = require('./circuit-recognition');
 const { getDiscussionPreview } = require('./discussion-preview');
+const {
+  canReadPost,
+  lockPublicPost,
+  setPostVisibility,
+  deleteVisiblePost,
+} = require('./discussion-visibility');
 const { buildBackendHealth } = require('./health');
 const { hashPassword, verifyPassword } = require('./password');
 const { sign, verify } = require('./token');
@@ -552,6 +558,7 @@ async function ensureDiscussionTables() {
       featured_at DATETIME NULL,
       featured_by BIGINT NULL,
       is_deleted TINYINT(1) NOT NULL DEFAULT 0,
+      is_hidden TINYINT(1) NOT NULL DEFAULT 0,
       deleted_at DATETIME NULL,
       deleted_by BIGINT NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -669,6 +676,10 @@ async function ensureDiscussionTables() {
     [
       'is_deleted',
       'ALTER TABLE discussion_posts ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0 AFTER featured_by',
+    ],
+    [
+      'is_hidden',
+      'ALTER TABLE discussion_posts ADD COLUMN is_hidden TINYINT(1) NOT NULL DEFAULT 0 AFTER is_deleted',
     ],
     [
       'deleted_at',
@@ -1362,7 +1373,7 @@ function toDiscussionBoard(row) {
   };
 }
 
-function toDiscussionPostSummary(row) {
+function toDiscussionPostSummary(row, viewerId = 0) {
   const isDeleted = Boolean(row.is_deleted);
   return {
     id: row.pid || String(row.id),
@@ -1380,9 +1391,11 @@ function toDiscussionPostSummary(row) {
     isFeatured: Boolean(row.is_featured),
     featuredAt: row.featured_at || null,
     isDeleted,
+    isHidden: Boolean(row.is_hidden),
+    canHide: !isDeleted && Number(row.user_id) === Number(viewerId),
     deletedAt: row.deleted_at || null,
-    canFeature: !isDeleted && Boolean(row.can_feature),
-    canPin: !isDeleted && Boolean(row.can_pin),
+    canFeature: !isDeleted && !row.is_hidden && Boolean(row.can_feature),
+    canPin: !isDeleted && !row.is_hidden && Boolean(row.can_pin),
     canDelete: !isDeleted && Boolean(row.can_delete),
     author: {
       id: row.user_id,
@@ -1420,10 +1433,10 @@ function toDiscussionComment(row) {
   };
 }
 
-function toDiscussionPostDetail(row) {
+function toDiscussionPostDetail(row, viewerId = 0) {
   const isDeleted = Boolean(row.is_deleted);
   return {
-    ...toDiscussionPostSummary(row),
+    ...toDiscussionPostSummary(row, viewerId),
     contentMarkdown: isDeleted ? '这篇帖子已被删除。' : row.content_markdown || '',
   };
 }
@@ -1730,7 +1743,7 @@ async function createMaxDiscussionReply(postId, triggerComment) {
      FROM discussion_posts p
      INNER JOIN discussion_boards b ON b.id = p.board_id
      INNER JOIN users u ON u.id = p.user_id
-     WHERE p.id = ?
+     WHERE p.id = ? AND p.is_deleted = 0 AND p.is_hidden = 0
      LIMIT 1`,
     [postId],
   );
@@ -1791,6 +1804,7 @@ async function createMaxDiscussionReply(postId, triggerComment) {
   }
 
   const result = await withDatabaseTransaction(async (connection) => {
+    await lockPublicPost(connection, postId);
     const [inserted] = await connection.execute(
       `INSERT INTO discussion_comments (post_id, parent_comment_id, user_id, author_student_id, content_markdown)
        VALUES (?, ?, ?, ?, ?)`,
@@ -2010,7 +2024,7 @@ async function getDiscussionPostByPublicId(value) {
   }
 
   const [rows] = await pool.execute(
-    `SELECT id, pid, board_id, user_id, title, is_deleted
+    `SELECT id, pid, board_id, user_id, title, is_deleted, is_hidden
      FROM discussion_posts
      WHERE pid = ?${legacyCondition}
      LIMIT 1`,
@@ -3402,7 +3416,7 @@ app.get('/api/discussion/stats', async (request, response) => {
               COALESCE(SUM(c.comment_count), 0)
                 + COALESCE(SUM(l.reaction_count), 0) AS interaction_count
        FROM discussion_boards b
-       LEFT JOIN discussion_posts p ON p.board_id = b.id AND p.is_deleted = 0
+       LEFT JOIN discussion_posts p ON p.board_id = b.id AND p.is_deleted = 0 AND p.is_hidden = 0
        LEFT JOIN (
          SELECT post_id, COUNT(*) AS comment_count
          FROM discussion_comments
@@ -3461,12 +3475,28 @@ app.get('/api/discussion/posts', async (request, response) => {
       }
     }
 
-    const visibilityCondition = currentUser?.is_admin ? '' : ' AND p.is_deleted = 0';
+    response.set('Cache-Control', 'private, no-store');
+    const scope = request.query.scope === 'mine' ? 'mine' : 'public';
+    const cursor = scope === 'mine' ? String(request.query.cursor || '') : '';
+    if (cursor && !/^[1-9]\d{0,18}$/.test(cursor)) {
+      response.status(400).json({ message: '无效的帖子分页位置' });
+      return;
+    }
+    if (scope === 'mine' && !currentUser) {
+      response.status(401).json({ message: '请登录后查看自己的帖子' });
+      return;
+    }
+    const visibilityCondition =
+      scope === 'mine'
+        ? ` AND p.is_deleted = 0 AND p.user_id = ?${cursor ? ' AND p.id < ?' : ''}`
+        : ' AND p.is_deleted = 0 AND p.is_hidden = 0';
     const where =
       boardSlug === 'all'
         ? `WHERE b.is_active = 1${visibilityCondition}`
         : `WHERE b.is_active = 1 AND b.slug = ?${visibilityCondition}`;
     const params = boardSlug === 'all' ? [] : [boardSlug];
+    if (scope === 'mine') params.push(currentUser.id);
+    if (cursor) params.push(cursor);
     let orderBy = 'p.is_pinned DESC, p.pinned_at DESC, p.created_at DESC, p.id DESC';
     if (sortMode === 'hot') {
       orderBy = `p.is_pinned DESC,
@@ -3500,13 +3530,16 @@ app.get('/api/discussion/posts', async (request, response) => {
     );
     const postsHash = [
       sortMode,
+      boardSlug,
+      scope,
+      currentUser?.id || 0,
       Number(hashRows[0]?.post_count || 0),
       Number(hashRows[0]?.comment_count || 0),
       Number(hashRows[0]?.reaction_count || 0),
       Number(hashRows[0]?.newest_change || 0),
     ].join(':');
 
-    if (clientHash && clientHash === postsHash) {
+    if (scope !== 'mine' && clientHash && clientHash === postsHash) {
       response.json({
         hash: postsHash,
         notModified: true,
@@ -3517,7 +3550,7 @@ app.get('/api/discussion/posts', async (request, response) => {
 
     const [rows] = await pool.execute(
       `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
-              p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.deleted_at,
+              p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
               u.student_id, u.uid, u.username, u.full_name, u.avatar_path,
@@ -3541,10 +3574,10 @@ app.get('/api/discussion/posts', async (request, response) => {
        LEFT JOIN discussion_post_likes my_light ON my_light.post_id = p.id AND my_light.reaction_type = 'light' AND my_light.user_id = ${currentUser ? '?' : '0'}
        LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? '?' : '0'}
        ${where}
-       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.deleted_at,
+       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
                 b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
-       ORDER BY ${orderBy}
-      LIMIT ${limit}`,
+       ORDER BY ${scope === 'mine' ? 'p.id DESC' : orderBy}
+      LIMIT ${scope === 'mine' ? limit + 1 : limit}`,
       currentUser
         ? [
             currentUser.is_admin ? 1 : 0,
@@ -3563,7 +3596,8 @@ app.get('/api/discussion/posts', async (request, response) => {
     response.json({
       hash: postsHash,
       notModified: false,
-      posts: rows.map(toDiscussionPostSummary),
+      posts: rows.slice(0, limit).map((row) => toDiscussionPostSummary(row, currentUser?.id)),
+      nextCursor: scope === 'mine' && rows.length > limit ? String(rows[limit - 1].id) : null,
     });
   } catch (error) {
     console.error('Failed to list discussion posts', error);
@@ -3577,14 +3611,15 @@ app.get('/api/discussion/posts/:id', async (request, response) => {
     const currentUser = await getOptionalAuthUser(request);
     const post = await getDiscussionPostByPublicId(request.params.id);
 
-    if (!post) {
+    response.set('Cache-Control', 'private, no-store');
+    if (!canReadPost(post, currentUser)) {
       response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
     const [rows] = await pool.execute(
       `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
-              p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.deleted_at,
+              p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
               u.student_id, u.uid, u.username, u.full_name, u.avatar_path,
@@ -3609,8 +3644,8 @@ app.get('/api/discussion/posts/:id', async (request, response) => {
        LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? '?' : '0'}
        WHERE p.id = ?
          AND b.is_active = 1
-         AND (? = 1 OR p.is_deleted = 0)
-       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.deleted_at,
+         AND p.is_deleted = 0 AND (p.is_hidden = 0 OR p.user_id = ?)
+       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
                 b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        LIMIT 1`,
       currentUser
@@ -3624,9 +3659,9 @@ app.get('/api/discussion/posts/:id', async (request, response) => {
             currentUser.id,
             currentUser.id,
             post.id,
-            currentUser.is_admin ? 1 : 0,
+            currentUser.id,
           ]
-        : ['', '', '', 0, 0, post.id, ''],
+        : ['', '', '', 0, 0, post.id, 0],
     );
 
     if (!rows[0]) {
@@ -3635,7 +3670,7 @@ app.get('/api/discussion/posts/:id', async (request, response) => {
     }
 
     response.json({
-      post: toDiscussionPostDetail(rows[0]),
+      post: toDiscussionPostDetail(rows[0], currentUser?.id),
     });
   } catch (error) {
     response.status(500).json({ message: '获取帖子详情失败', detail: error.message });
@@ -3728,10 +3763,32 @@ app.post('/api/discussion/posts', async (request, response) => {
 
     response.status(201).json({
       message: '帖子发布成功',
-      post: toDiscussionPostDetail(rows[0]),
+      post: toDiscussionPostDetail(rows[0], user.id),
     });
   } catch (error) {
     response.status(500).json({ message: '发布帖子失败', detail: error.message });
+  }
+});
+
+app.patch('/api/discussion/posts/:id/visibility', async (request, response) => {
+  try {
+    const user = await requireAuth(request, response);
+    if (!user) return;
+    await ensureDiscussionTables();
+    await ensureNotificationTables(pool);
+    const post = await getDiscussionPostByPublicId(request.params.id);
+    if (!canReadPost(post, user)) {
+      response.status(404).json({ message: '帖子不存在或暂不可见' });
+      return;
+    }
+    const result = await withDatabaseTransaction((connection) =>
+      setPostVisibility(connection, post, user, request.body?.hidden),
+    );
+    response.set('Cache-Control', 'private, no-store').json(result);
+  } catch (error) {
+    response.status(error.status || 500).json({
+      message: error.status ? error.message : '更新帖子可见范围失败，请稍后重试',
+    });
   }
 });
 
@@ -3753,7 +3810,7 @@ app.patch('/api/discussion/posts/:id/pin', async (request, response) => {
       return;
     }
 
-    if (post.is_deleted) {
+    if (post.is_deleted || post.is_hidden) {
       response.status(404).json({ message: '帖子不存在' });
       return;
     }
@@ -3762,15 +3819,19 @@ app.patch('/api/discussion/posts/:id/pin', async (request, response) => {
       return;
     }
 
-    await pool.execute(
+    const [result] = await pool.execute(
       `UPDATE discussion_posts
        SET is_pinned = ?,
            pinned_at = ${pinned ? 'NOW()' : 'NULL'},
            pinned_by = ?
-       WHERE id = ?`,
+       WHERE id = ? AND is_deleted = 0 AND is_hidden = 0`,
       [pinned ? 1 : 0, pinned ? user.id : null, post.id],
     );
 
+    if (!result.affectedRows) {
+      response.status(404).json({ message: '帖子不存在或暂不可见' });
+      return;
+    }
     response.json({
       ok: true,
       isPinned: pinned,
@@ -3798,7 +3859,7 @@ app.patch('/api/discussion/posts/:id/feature', async (request, response) => {
       return;
     }
 
-    if (post.is_deleted) {
+    if (post.is_deleted || post.is_hidden) {
       response.status(404).json({ message: '帖子不存在' });
       return;
     }
@@ -3807,15 +3868,19 @@ app.patch('/api/discussion/posts/:id/feature', async (request, response) => {
       return;
     }
 
-    await pool.execute(
+    const [result] = await pool.execute(
       `UPDATE discussion_posts
        SET is_featured = ?,
            featured_at = ${featured ? 'NOW()' : 'NULL'},
            featured_by = ?
-       WHERE id = ?`,
+       WHERE id = ? AND is_deleted = 0 AND is_hidden = 0`,
       [featured ? 1 : 0, featured ? user.id : null, post.id],
     );
 
+    if (!result.affectedRows) {
+      response.status(404).json({ message: '帖子不存在或暂不可见' });
+      return;
+    }
     response.json({
       ok: true,
       isFeatured: featured,
@@ -3851,15 +3916,13 @@ app.post('/api/discussion/posts/:id/like', async (request, response) => {
       return;
     }
 
-    if (post.is_deleted) {
+    if (!canReadPost(post, null)) {
       response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
     const active = await withDatabaseTransaction(async (connection) => {
-      await connection.execute('SELECT id FROM discussion_posts WHERE id = ? FOR UPDATE', [
-        post.id,
-      ]);
+      await lockPublicPost(connection, post.id);
       const [existing] = await connection.execute(
         `SELECT post_id FROM discussion_post_likes
          WHERE post_id = ? AND user_id = ? AND reaction_type = ? LIMIT 1`,
@@ -3908,7 +3971,9 @@ app.post('/api/discussion/posts/:id/like', async (request, response) => {
       fireworksCount: counts.fireworks || 0,
     });
   } catch (error) {
-    response.status(500).json({ message: '更新点赞失败', detail: error.message });
+    response
+      .status(error.status || 500)
+      .json({ message: error.status ? error.message : '更新点赞失败' });
   }
 });
 
@@ -3918,12 +3983,13 @@ app.get('/api/discussion/posts/:id/comments', async (request, response) => {
     const currentUser = await getOptionalAuthUser(request);
     const post = await getDiscussionPostByPublicId(request.params.id);
 
-    if (!post) {
+    response.set('Cache-Control', 'private, no-store');
+    if (!canReadPost(post, currentUser)) {
       response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
-    if (post.is_deleted && !currentUser?.is_admin) {
+    if (post.is_deleted) {
       response.status(404).json({ message: '帖子不存在' });
       return;
     }
@@ -3934,9 +4000,10 @@ app.get('/api/discussion/posts/:id/comments', async (request, response) => {
               u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        FROM discussion_comments c
        INNER JOIN users u ON u.id = c.user_id
-       WHERE c.post_id = ?
+       INNER JOIN discussion_posts p ON p.id = c.post_id
+       WHERE c.post_id = ? AND p.is_deleted = 0 AND (p.is_hidden = 0 OR p.user_id = ?)
        ORDER BY c.created_at ASC, c.id ASC`,
-      [post.id],
+      [post.id, currentUser?.id || 0],
     );
 
     response.json({
@@ -3972,12 +4039,13 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
       return;
     }
 
-    if (post.is_deleted) {
+    if (!canReadPost(post, null)) {
       response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
     const result = await withDatabaseTransaction(async (connection) => {
+      await lockPublicPost(connection, post.id);
       let parentAuthorId = null;
       if (parentCommentId) {
         const [parentRows] = await connection.execute(
@@ -4049,7 +4117,7 @@ app.delete('/api/discussion/posts/:id', async (request, response) => {
 
     const post = await getDiscussionPostByPublicId(request.params.id);
 
-    if (!post) {
+    if (!canReadPost(post, user)) {
       response.status(404).json({ message: '帖子不存在' });
       return;
     }
@@ -4059,24 +4127,14 @@ app.delete('/api/discussion/posts/:id', async (request, response) => {
       return;
     }
 
-    await pool.execute(
-      `UPDATE discussion_posts
-       SET is_deleted = 1,
-           deleted_at = NOW(),
-           deleted_by = ?,
-           is_pinned = 0,
-           pinned_at = NULL,
-           pinned_by = NULL,
-           is_featured = 0,
-           featured_at = NULL,
-           featured_by = NULL
-       WHERE id = ?`,
-      [user.id, post.id],
-    );
+    await ensureNotificationTables(pool);
+    await withDatabaseTransaction((connection) => deleteVisiblePost(connection, post, user));
 
     response.json({ ok: true });
   } catch (error) {
-    response.status(500).json({ message: '删除帖子失败', detail: error.message });
+    response
+      .status(error.status || 500)
+      .json({ message: error.status ? error.message : '删除帖子失败' });
   }
 });
 
@@ -4092,34 +4150,19 @@ app.delete('/api/admin/discussion/posts/:id', async (request, response) => {
 
     const post = await getDiscussionPostByPublicId(request.params.id);
 
-    if (!post) {
+    if (!canReadPost(post, adminUser)) {
       response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
-    const [result] = await pool.execute(
-      `UPDATE discussion_posts
-       SET is_deleted = 1,
-           deleted_at = NOW(),
-           deleted_by = ?,
-           is_pinned = 0,
-           pinned_at = NULL,
-           pinned_by = NULL,
-           is_featured = 0,
-           featured_at = NULL,
-           featured_by = NULL
-       WHERE id = ?`,
-      [adminUser.id, post.id],
-    );
-
-    if (result.affectedRows === 0) {
-      response.status(404).json({ message: '帖子不存在' });
-      return;
-    }
+    await ensureNotificationTables(pool);
+    await withDatabaseTransaction((connection) => deleteVisiblePost(connection, post, adminUser));
 
     response.json({ ok: true });
   } catch (error) {
-    response.status(500).json({ message: '删除帖子失败', detail: error.message });
+    response
+      .status(error.status || 500)
+      .json({ message: error.status ? error.message : '删除帖子失败' });
   }
 });
 
@@ -4560,10 +4603,10 @@ app.get('/api/users/:uid/public-profile', async (request, response) => {
     const studentId = user.student_id;
     const [statsRows] = await pool.execute(
       `SELECT
-         (SELECT COUNT(*) FROM discussion_posts WHERE author_student_id = ?) AS post_count,
+         (SELECT COUNT(*) FROM discussion_posts WHERE author_student_id = ? AND is_deleted = 0 AND is_hidden = 0) AS post_count,
 	         (SELECT COUNT(*) FROM discussion_post_likes l
 	            INNER JOIN discussion_posts p ON p.id = l.post_id
-	            WHERE p.author_student_id = ? AND l.reaction_type = 'smile') AS like_count`,
+	            WHERE p.author_student_id = ? AND p.is_deleted = 0 AND p.is_hidden = 0 AND l.reaction_type = 'smile') AS like_count`,
       [studentId, studentId],
     );
 
