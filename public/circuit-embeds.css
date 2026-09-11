@@ -1,0 +1,36 @@
+.circuit-reference {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 1.3em 0;
+  border: 1px solid var(--course-line, var(--bbs-shell-line, #31515a));
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--course-surface-solid, var(--bbs-shell-panel, #102228));
+}
+
+.circuit-reference iframe {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  border: 0;
+  color-scheme: normal;
+}
+
+.circuit-reference figcaption {
+  padding: 8px 12px;
+  border-top: 1px solid var(--course-line, var(--bbs-shell-line, #31515a));
+  font: 400 12px / 1.6 var(--font-ui, sans-serif);
+  overflow-wrap: anywhere;
+}
+
+.circuit-reference figcaption a {
+  color: var(--course-accent, var(--bbs-shell-accent, #38a5b0));
+  text-decoration: none;
+}
+
+.circuit-reference figcaption a:hover {
+  text-decoration: underline;
+}

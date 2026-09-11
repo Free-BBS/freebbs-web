@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta
       name="description"
-      content="FREE-BBS 管理员系统设置入口，用于管理模型密钥、用户权限和课程资料目录。"
+      content="FREE-BBS 管理员系统设置入口，用于管理模型密钥、用户权限、课程资料目录和公告。"
     />
     <title>FREE-BBS - 系统设置</title>
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
@@ -19,6 +19,9 @@
     />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/username-guard.css" />
+    <link rel="stylesheet" href="/notifications.css" />
+    <link rel="stylesheet" href="/layout-fixes.css" />
   </head>
   <body class="system-settings-page system-settings-index-page">
     <div class="page-shell page-shell-settings">
@@ -155,13 +158,32 @@
               </span>
               <span class="system-settings-menu-arrow" aria-hidden="true">→</span>
             </a>
+
+            <a
+              class="system-settings-menu-item"
+              href="/system-settings/announcements"
+              aria-describedby="system-settings-announcements-description"
+            >
+              <span class="system-settings-menu-icon" aria-hidden="true">
+                <img src="/assets/icons/mail.svg" alt="" />
+              </span>
+              <span class="system-settings-menu-copy">
+                <strong>公告管理</strong>
+                <small id="system-settings-announcements-description"
+                  >向指定用户、课程群组或全体用户发布公告。</small
+                >
+              </span>
+              <span class="system-settings-menu-arrow" aria-hidden="true">→</span>
+            </a>
           </nav>
         </section>
       </main>
     </div>
 
     <script src="/typography.js"></script>
+    <script src="/username-guard.js"></script>
     <script src="/app.js"></script>
     <script src="/system-settings.js"></script>
+    <script src="/notifications.js"></script>
   </body>
 </html>

@@ -8,6 +8,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const test = require('node:test');
 const mysql = require('mysql2/promise');
+const { solveAuthChallenge } = require('./test-helpers/auth');
 
 const projectRoot = path.resolve(__dirname, '..');
 const shouldRun = process.env.RUN_SYSTEM_SETTINGS_INTEGRATION === '1';
@@ -186,14 +187,24 @@ test(
     const socketMode = (await fs.promises.stat(socketPath)).mode & 0o777;
     assert.equal(socketMode, 0o660);
 
-    const login = await fetchJson(`http://127.0.0.1:${apiPort}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        identifier: 'admin',
-        password: 'free-bbs',
-      }),
-    });
+    async function loginUser(identifier, password) {
+      const challenge = await fetchJson(`http://127.0.0.1:${apiPort}/api/auth/login-challenge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier }),
+      });
+      assert.equal(challenge.response.status, 200);
+      return fetchJson(`http://127.0.0.1:${apiPort}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identifier,
+          password,
+          captcha: solveAuthChallenge(challenge.body),
+        }),
+      });
+    }
+    const login = await loginUser('admin', 'free-bbs');
     assert.equal(login.response.status, 200);
     const authorization = `Bearer ${login.body.token}`;
     const adminHeaders = {
@@ -216,14 +227,7 @@ test(
     assert.equal(createdTeacher.response.status, 201);
     assert.equal(createdTeacher.body.user.role, 'teacher');
 
-    const teacherLogin = await fetchJson(`http://127.0.0.1:${apiPort}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        identifier: 'integration_teacher',
-        password: 'integration-password',
-      }),
-    });
+    const teacherLogin = await loginUser('integration_teacher', 'integration-password');
     assert.equal(teacherLogin.response.status, 200);
     const forbiddenSettings = await fetch(
       `http://127.0.0.1:${apiPort}/api/admin/system-settings/model`,
@@ -351,14 +355,7 @@ test(
     });
     assert.equal(createdAdmin.response.status, 201);
 
-    const secondAdminLogin = await fetchJson(`http://127.0.0.1:${apiPort}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        identifier: 'integration_admin_two',
-        password: 'integration-password',
-      }),
-    });
+    const secondAdminLogin = await loginUser('integration_admin_two', 'integration-password');
     assert.equal(secondAdminLogin.response.status, 200);
 
     await Promise.all([

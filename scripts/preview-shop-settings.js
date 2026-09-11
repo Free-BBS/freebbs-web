@@ -65,6 +65,14 @@ function patchAppForPreview(source) {
   return source.replace(initialization, "const API_BASE_URL = '/api';");
 }
 
+function patchSharedApiForPreview(source, pathname) {
+  const variable = pathname === '/notifications.js' ? 'apiBase' : 'api';
+  const initialization = new RegExp(`^  const ${variable} = local \\?[^;\\r\\n]+;`, 'm');
+  if (!initialization.test(source))
+    throw new Error('Shared API initializer changed; preview fails closed');
+  return source.replace(initialization, `  const ${variable} = '/api';`);
+}
+
 function bootstrapPreview() {
   if (window.location.hostname !== '127.0.0.1' || window.location.port !== '3106') {
     throw new Error('QA bootstrap only runs on 127.0.0.1:3106');
@@ -182,7 +190,7 @@ function createPreviewServer() {
   const user = {
     id: 999999,
     uid: 'QA-LOCAL-ONLY',
-    username: 'qa-preview',
+    username: 'qa_preview',
     fullName: '隔离测试用户',
     studentId: 'QA-NOT-REAL',
     role: 'student',
@@ -270,6 +278,18 @@ function createPreviewServer() {
         send(200, { fortuneBonusEnabled: false });
         return;
       }
+      if (pathname === '/api/notifications/unread-count') {
+        send(200, { unreadCount: 0 });
+        return;
+      }
+      if (pathname === '/api/notifications') {
+        send(200, { items: [], unreadCount: 0, nextCursor: null });
+        return;
+      }
+      if (pathname === '/api/course-upload/tokens') {
+        send(200, { tokens: [] });
+        return;
+      }
       if (pathname === '/api/checkin') {
         send(200, { checkedInToday: false, streak: 0, leaderboard: [] });
         return;
@@ -330,6 +350,9 @@ function createPreviewServer() {
       let content = await fs.promises.readFile(realFile);
       if (path.extname(realFile) === '.html') content = prepareHtml(content.toString('utf8'));
       if (pathname === '/app.js') content = patchAppForPreview(content.toString('utf8'));
+      if (pathname === '/notifications.js' || pathname === '/username-guard.js') {
+        content = patchSharedApiForPreview(content.toString('utf8'), pathname);
+      }
       send(200, content, MIME[path.extname(realFile)]);
     } catch (error) {
       send(error.status || 400, { message: error.message || 'Preview request failed' });

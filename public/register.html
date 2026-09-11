@@ -15,11 +15,17 @@
     />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/username-guard.css" />
+    <link rel="stylesheet" href="/layout-fixes.css" />
+    <link rel="stylesheet" href="/registration.css" />
   </head>
   <body class="auth-page-body">
     <main class="auth-page-shell">
       <section class="auth-page-panel" aria-labelledby="auth-page-title">
         <h1 class="auth-page-title" id="auth-page-title">注册</h1>
+        <p class="registration-note">
+          仅限注册白名单内的成员。请填写与名单一致的学号、姓名和邮箱。
+        </p>
         <form class="auth-form auth-form-register" id="auth-page-form" data-auth-mode="register">
           <div class="auth-grid-row auth-grid-row-four">
             <label class="auth-field">
@@ -35,6 +41,9 @@
               <input
                 id="auth-username"
                 name="username"
+                pattern="[A-Za-z0-9_]+"
+                title="仅可使用英文字母、数字和下划线"
+                placeholder="英文字母、数字或下划线"
                 type="text"
                 minlength="3"
                 maxlength="64"
@@ -98,7 +107,14 @@
                 />
                 <span>邮箱</span>
               </span>
-              <input id="auth-email" name="email" type="email" autocomplete="email" required />
+              <input
+                id="auth-email"
+                name="email"
+                type="email"
+                autocomplete="email"
+                maxlength="128"
+                required
+              />
             </label>
 
             <label class="auth-field">
@@ -168,8 +184,60 @@
             </label>
           </div>
 
-          <p class="auth-message" id="auth-message"></p>
-          <button class="auth-submit" id="auth-submit" type="submit">注册</button>
+          <section class="community-agreement" aria-labelledby="community-agreement-title">
+            <div class="community-agreement-heading">
+              <h2 id="community-agreement-title">加入之前，先约定</h2>
+              <span>FREE BBS 社区公约</span>
+            </div>
+            <ol class="community-agreement-rules">
+              <li><strong>尊重他人</strong><span>不得辱骂、骚扰、挂人或泄露他人信息。</span></li>
+              <li>
+                <strong>真实交流</strong
+                ><span>不得伪造资料来源、刷帖、抄袭或重复发布相同内容。</span>
+              </li>
+              <li>
+                <strong>昵称不免责</strong
+                ><span>讨论区前台显示昵称、后台实名；使用昵称不免除公约责任。</span>
+              </li>
+              <li>
+                <strong>遵守学习规范</strong
+                ><span>不得上传未获授权的课程资料，不得发布考试违规内容。</span>
+              </li>
+              <li>
+                <strong>合理使用 AI</strong
+                ><span>Agent 回答不是课程组正式结论；引用前应核对内容和来源。</span>
+              </li>
+            </ol>
+            <details class="community-moderation">
+              <summary>平台怎样处理违规内容</summary>
+              <ol>
+                <li>
+                  <strong>识别风险：</strong>监管 Agent 标记可疑内容，只向管理员提出审核建议。
+                </li>
+                <li>
+                  <strong>人工复核：</strong>课程管理员处理课程讨论；总管理员处理跨课程和全站内容。
+                </li>
+                <li><strong>作出处理：</strong>管理员根据情况警告、隐藏、删除或限制权限。</li>
+                <li>
+                  <strong>通知与申诉：</strong
+                  >通知用户处理结果并保留记录；如有异议，可通过页面底部的反馈邮箱联系管理员。
+                </li>
+              </ol>
+              <p>Agent 不直接删除内容，最终处理决定由获得授权的管理员作出。</p>
+            </details>
+            <label class="community-agreement-consent" for="auth-community-agreement">
+              <input
+                id="auth-community-agreement"
+                name="communityAgreementAccepted"
+                type="checkbox"
+                data-version="2026-09-09"
+                required
+              />
+              <span>我已阅读并同意以上社区公约</span>
+            </label>
+          </section>
+          <p class="auth-message" id="auth-message" role="status"></p>
+          <button class="auth-submit" id="auth-submit" type="submit">同意公约并注册</button>
         </form>
         <p class="auth-page-switch">已经有账号？<a href="/login">去登录</a></p>
       </section>
@@ -195,6 +263,9 @@
       </div>
     </footer>
     <script src="/typography.js"></script>
+    <script src="/username-guard.js"></script>
+    <script src="/wien-oscillator-model.js"></script>
+    <script src="/auth-challenge.js"></script>
     <script src="/auth.js"></script>
   </body>
 </html>

@@ -1,0 +1,78 @@
+.circuit-shortcut-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.circuit-shortcut-actions button {
+  padding: 6px 8px;
+  white-space: nowrap;
+  font-size: 0.74rem;
+}
+.circuit-shortcuts-dialog {
+  width: min(640px, calc(100vw - 28px));
+  max-height: min(760px, calc(100dvh - 40px));
+  margin: auto;
+  padding: 22px;
+  overflow-y: auto;
+  border: 1px solid var(--ui-line, #d8dddf);
+  border-radius: 12px;
+  background: var(--ui-surface, #fff);
+  color: var(--ui-text, #142125);
+}
+.circuit-shortcuts-dialog::backdrop {
+  background: rgb(16 25 30 / 35%);
+}
+.circuit-shortcuts-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.circuit-shortcuts-heading h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.circuit-shortcuts-dialog p {
+  margin: 8px 0;
+  font-size: 0.82rem;
+  line-height: 1.65;
+  color: var(--ui-muted, #59666b);
+}
+.circuit-shortcuts-list {
+  margin: 18px 0;
+}
+.circuit-shortcuts-list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--ui-line, #d8dddf);
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+.circuit-shortcuts-list dd {
+  margin: 0;
+}
+.circuit-shortcuts-list kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid var(--ui-line, #d8dddf);
+  border-radius: 4px;
+  background: var(--ui-page, #f4f6f7);
+  font-family: inherit;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .circuit-shortcuts-dialog {
+    padding: 16px;
+  }
+  .circuit-shortcuts-list > div {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+}

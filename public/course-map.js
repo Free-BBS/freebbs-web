@@ -423,11 +423,19 @@
     ]
       .filter(Boolean)
       .join(' ');
+    const nodeRelations = isNeighbor
+      ? viewModel.focusedEdges.filter((edge) => edge.source === node.id || edge.target === node.id)
+      : [];
     const relationLabel = isFocused
       ? '当前聚焦'
       : isNeighbor
         ? '直接关联'
         : `${viewModel.nodeDegrees.get(node.id) || 0} 条关联`;
+
+    const relationSummary = (edge) =>
+      edge.type === 'ordered'
+        ? `学习顺序：${edge.source} → ${edge.target}`
+        : `补充关联：${edge.source} — ${edge.target}`;
 
     return `
       <article class="${classNames}">
@@ -443,6 +451,7 @@
             ${renderNodeTags(node.id)}
           </span>
           <strong>${escapeHtml(node.title)}</strong>
+          ${nodeRelations.map((edge) => `<span class="course-reader-relation" title="${escapeHtml(readerEdgeDescription(edge))}">${escapeHtml(relationSummary(edge))}</span>`).join('')}
           <span class="course-map-topic-meta">
             ${isLearning ? '<b>正在学习</b>' : ''}
             <i>${relationLabel}</i>
@@ -495,7 +504,7 @@
         >
           <span class="course-map-chapter-orbit" aria-hidden="true"><i></i></span>
           <span class="course-map-chapter-copy">
-            <small>${escapeHtml(chapter.id)} · Chapter</small>
+            <small>${escapeHtml(chapter.id)} · 章节</small>
             <strong>${escapeHtml(chapter.title)}</strong>
             <span>
               ${
@@ -554,6 +563,26 @@
     `;
   }
 
+  function renderChapterIndex(viewModel, activeChapterId) {
+    return `
+      <aside class="course-map-index-sidebar" aria-label="章节索引">
+        <header class="course-map-index-heading">
+          <strong>章节目录</strong>
+          <span>${viewModel.chapters.length} 个章节</span>
+        </header>
+        <label class="course-reader-chapter-picker">
+          <span>选择章节</span>
+          <select data-course-reader-chapter aria-label="选择章节">
+            ${viewModel.chapters.map((chapter) => `<option value="${escapeHtml(chapter.id)}" ${chapter.id === activeChapterId ? 'selected' : ''}>${escapeHtml(chapter.id.split('-').at(-1))} · ${escapeHtml(chapter.title)}（${chapter.nodes.length}）</option>`).join('')}
+          </select>
+        </label>
+        <div class="course-map-index-list">
+          ${viewModel.chapters.map((chapter) => renderDirectoryChapter(chapter, chapter.id === activeChapterId)).join('')}
+        </div>
+      </aside>
+    `;
+  }
+
   function renderDirectoryView(viewModel) {
     const fallbackChapter = viewModel.chapters[0] || null;
     const activeChapter =
@@ -574,23 +603,12 @@
 
     return `
       <div class="course-map-directory-layout">
-        <aside class="course-map-index-sidebar" aria-label="章节索引">
-          <header class="course-map-index-heading">
-            <small>COURSE INDEX</small>
-            <strong>章节索引</strong>
-            <span>${state.nodes.length} 个知识点 · ${viewModel.chapters.length} 个章节</span>
-          </header>
-          <div class="course-map-index-list">
-            ${viewModel.chapters
-              .map((chapter) => renderDirectoryChapter(chapter, chapter.id === activeChapter.id))
-              .join('')}
-          </div>
-        </aside>
+        ${renderChapterIndex(viewModel, activeChapter.id)}
 
         <section class="course-map-directory-panel" aria-labelledby="course-map-directory-title">
           <header class="course-map-directory-heading">
             <span>
-              <small>${escapeHtml(activeChapter.id)} · CHAPTER</small>
+              <small>${escapeHtml(activeChapter.id)} · 章节</small>
               <strong id="course-map-directory-title">${escapeHtml(activeChapter.title)}</strong>
               <i>${activeChapter.nodes.length} 个知识点</i>
             </span>
@@ -602,7 +620,7 @@
               ? `<div class="course-map-directory-current${learningNode ? ' is-learning' : ''}">
                   ${renderDirectoryNodeTags(primaryNode.id)}
                   <div class="course-map-directory-current-copy">
-                    <small>${learningNode ? 'CURRENT LEARNING · 正在学习' : 'CHAPTER START · 本章起点'}</small>
+                    <small>${learningNode ? '继续学习' : '从这里开始'}</small>
                     <span>${escapeHtml(primaryNode.id)}</span>
                     <h2>${escapeHtml(primaryNode.title)}</h2>
                     <p>${escapeHtml(primaryNode.summary || '从这个知识点进入学习，或查看它与课程中其他知识点的关系。')}</p>
@@ -613,15 +631,17 @@
                   </div>
                   <div class="course-map-directory-current-actions">
                     <button type="button" data-reader-node-id="${escapeHtml(primaryNode.id)}">查看知识关联</button>
-                    <a href="${knowledgeHref(primaryNode.id)}">进入学习 ↗</a>
+                    <a href="${knowledgeHref(primaryNode.id)}">进入学习</a>
                   </div>
                 </div>`
               : ''
           }
 
+          ${
+            remainingNodes.length
+              ? `
           <div class="course-map-directory-section-heading">
             <span>
-              <small>CHAPTER CONTENTS</small>
               <strong>${primaryNode ? '本章其他知识点' : '本章知识点'}</strong>
             </span>
             <i>${remainingNodes.length} 项</i>
@@ -629,6 +649,9 @@
           <div class="course-map-directory-nodes">
             ${remainingNodes.map((node) => renderReaderNode(node, viewModel)).join('')}
           </div>
+          `
+              : ''
+          }
         </section>
       </div>
     `;
@@ -652,21 +675,36 @@
         <header class="course-map-focused-heading">
           <span class="course-map-chapter-orbit" aria-hidden="true"><i></i></span>
           <span class="course-map-chapter-copy">
-            <small>${escapeHtml(chapter.id)} · RELATION FOCUS</small>
+            <small>${escapeHtml(chapter.id)} · 知识关联</small>
             <strong>${escapeHtml(chapter.title)}</strong>
-            <span>${viewModel.sameChapterNeighborNodes.length} 个同章直接关联 · ${hiddenNodeCount} 个无关知识点已折叠</span>
+            <span>${viewModel.sameChapterNeighborNodes.length} 个同章直接关联${hiddenNodeCount ? ` · ${hiddenNodeCount} 个其他知识点已折叠` : ''}</span>
           </span>
         </header>
-        <div class="course-map-focus-stage">
-          <div class="course-map-focus-side is-left" aria-label="同章前置关联知识点">
-            ${leftNodes.map((node) => renderReaderNode(node, viewModel)).join('')}
-          </div>
+        <div class="course-map-focus-stage${leftNodes.length && rightNodes.length ? '' : ' has-single-side'}">
           <div class="course-map-focus-center">
             ${renderReaderNode(focusedNode, viewModel)}
+            <a class="course-reader-study-link" href="${knowledgeHref(focusedNode.id)}">进入学习 →</a>
           </div>
-          <div class="course-map-focus-side is-right" aria-label="同章后续关联知识点">
-            ${rightNodes.map((node) => renderReaderNode(node, viewModel)).join('')}
-          </div>
+          ${
+            leftNodes.length
+              ? `
+            <div class="course-map-focus-side is-left" aria-label="同章前置关联知识点">
+              <h3>前置与输入关联 <span>${leftNodes.length}</span></h3>
+              ${leftNodes.map((node) => renderReaderNode(node, viewModel)).join('')}
+            </div>`
+              : ''
+          }
+          ${
+            rightNodes.length
+              ? `
+            <div class="course-map-focus-side is-right" aria-label="同章后续关联知识点">
+              <h3>后续与输出关联 <span>${rightNodes.length}</span></h3>
+              ${rightNodes.map((node) => renderReaderNode(node, viewModel)).join('')}
+            </div>`
+              : ''
+          }
+          ${leftNodes.length || rightNodes.length ? '' : '<p class="course-reader-empty">本章暂无其他直接关联。</p>'}
+
         </div>
         <footer class="course-map-focus-summary">
           <div class="course-map-focus-notes" aria-label="关联说明">
@@ -678,17 +716,17 @@
                 aria-expanded="false"
                 aria-controls="course-map-arrow-help"
                 aria-haspopup="dialog"
-              >关联箭头解析</a>
+              >知识关系说明</a>
               <div
                 class="course-map-focus-arrow-help-panel hidden"
                 id="course-map-arrow-help"
                 data-course-map-arrow-help-panel
                 role="dialog"
-                aria-label="关联箭头解析"
+                aria-label="知识关系说明"
               >
                 <div class="course-map-focus-arrow-help-heading">
-                  <strong>关联箭头解析</strong>
-                  <button type="button" data-course-map-arrow-help-close aria-label="关闭关联箭头解析">×</button>
+                  <strong>知识关系说明</strong>
+                  <button type="button" data-course-map-arrow-help-close aria-label="关闭知识关系说明">×</button>
                 </div>
                 <section class="course-map-focus-arrow-help-legend" aria-labelledby="course-map-arrow-help-legend-title">
                   <h4 id="course-map-arrow-help-legend-title">6类设定的知识点关系</h4>
@@ -719,7 +757,7 @@
                     </div>
                   </dl>
                 </section>
-                <p class="course-map-focus-arrow-help-hint">将鼠标停留在图中的连线上，可查看当前两个知识点的实际关系。</p>
+                <p class="course-map-focus-arrow-help-hint">关联知识点下方会注明两者的实际关系；点击知识点可继续查看其关联。</p>
               </div>
             </div>
             <span class="course-map-focus-helper">再次点击可打开知识点正文</span>
@@ -903,7 +941,6 @@
     return `
       <section class="course-map-cross-relations is-${direction}" aria-label="${isIncoming ? '跨章节前置关联' : '跨章节后续关联'}">
         <header>
-          <small>${isIncoming ? 'INCOMING RELATIONS' : 'OUTGOING RELATIONS'}</small>
           <strong>${isIncoming ? '跨章节前置关联' : '跨章节后续关联'}</strong>
           <span>${chapters.length} 个章节 · ${relationCount} 个知识点</span>
         </header>
@@ -935,40 +972,22 @@
     const chapterIndex = new Map(viewModel.chapters.map((chapter, index) => [chapter.id, index]));
     const chapterContent = focusedChapter
       ? `
-        <div class="course-map-focus-workspace${incomingCrossChapters.length || outgoingCrossChapters.length ? '' : ' has-no-external'}">
-          ${renderCrossRelations(
-            'incoming',
-            incomingCrossChapters,
-            viewModel.crossIncomingNodesByChapter,
-            chapterIndex,
-            viewModel,
-          )}
-          ${renderFocusedChapter(focusedChapter, viewModel)}
-          ${renderCrossRelations(
-            'outgoing',
-            outgoingCrossChapters,
-            viewModel.crossOutgoingNodesByChapter,
-            chapterIndex,
-            viewModel,
-          )}
+        <div class="course-map-directory-layout">
+          ${renderChapterIndex(viewModel, focusedChapter.id)}
+          <div class="course-map-focus-workspace${incomingCrossChapters.length || outgoingCrossChapters.length ? '' : ' has-no-external'}">
+            ${renderFocusedChapter(focusedChapter, viewModel)}
+            ${renderCrossRelations('incoming', incomingCrossChapters, viewModel.crossIncomingNodesByChapter, chapterIndex, viewModel)}
+            ${renderCrossRelations('outgoing', outgoingCrossChapters, viewModel.crossOutgoingNodesByChapter, chapterIndex, viewModel)}
+          </div>
         </div>
       `
-      : `
-        ${renderDirectoryView(viewModel)}
-      `;
+      : renderDirectoryView(viewModel);
     canvas.classList.remove('is-reader-fit');
     scroller?.classList.remove('is-reader-fit');
     canvas.style.width = '100%';
     canvas.style.height = 'auto';
     hideReaderEdgeTooltip();
-    canvas.innerHTML = `
-      <div class="course-map-background" aria-hidden="true"></div>
-      <div class="course-map-grid" aria-hidden="true"></div>
-      <svg class="course-map-edges course-map-reader-edges" aria-hidden="true"></svg>
-      <svg class="course-map-edges course-map-reader-edge-hits" aria-hidden="true"></svg>
-      ${chapterContent}
-    `;
-    setBackgroundSurface();
+    canvas.innerHTML = chapterContent;
     renderReaderHeader();
     queueReaderEdges();
 
@@ -1230,7 +1249,28 @@
   }
 
   function renderReaderHeader() {
-    document.title = `FREE-BBS - ${state.course.name}知识地图`;
+    document.title = `FREE-BBS - ${state.course.name}`;
+    document.getElementById('course-reader-title').textContent = state.course.name;
+    const summary = document.getElementById('course-reader-summary');
+    summary.textContent = state.course.summary || state.course.description || '';
+    summary.classList.toggle('hidden', !summary.textContent);
+    const learnedCount = state.nodes.filter((node) =>
+      getNodeTags(node.id).some((tag) => tag.key === 'learned'),
+    ).length;
+    const meta = document.getElementById('course-reader-meta');
+    meta.replaceChildren();
+    [
+      state.course.code,
+      `${courseChapters().length} 个章节`,
+      `${state.nodes.length} 个知识点`,
+      learnedCount ? `已学习 ${learnedCount} 个` : '',
+    ].forEach((value, index) => {
+      if (!value) return;
+      const item = document.createElement('span');
+      item.textContent = value;
+      if (index === 0) item.className = 'course-reader-code';
+      meta.append(item);
+    });
     const editLink = document.getElementById('course-map-edit-link');
     const directoryLink = document.getElementById('course-map-directory-link');
     editLink.href = mapEditorHref();
@@ -1241,6 +1281,9 @@
       directoryLink.href = returnToDirectory ? courseDirectoryHref() : '/world';
       directoryLink.setAttribute('aria-label', label);
       directoryLink.title = label;
+      document.getElementById('course-reader-back-label').textContent = returnToDirectory
+        ? '返回章节'
+        : '学习世界';
     }
   }
 
@@ -1887,6 +1930,11 @@
         state.manualExpandedChapters.add(chapterId);
       }
       renderMap();
+      const activeButton = [...canvas.querySelectorAll('[data-chapter-toggle]')].find(
+        (button) => button.dataset.chapterToggle === chapterId,
+      );
+      if (window.matchMedia('(min-width: 901px)').matches)
+        activeButton?.focus({ preventScroll: true });
     };
 
     const resetReaderView = () => {
@@ -1896,8 +1944,16 @@
       state.manualExpandedChapters.clear();
       state.manuallyCollapsedChapters.clear();
       renderMap();
-      scroller?.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      mapPage.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
+
+    canvas.addEventListener('change', (event) => {
+      if (event.target.matches('[data-course-reader-chapter]')) {
+        state.focusedNodeId = '';
+        toggleChapter(event.target.value);
+        canvas.querySelector('[data-course-reader-chapter]')?.focus({ preventScroll: true });
+      }
+    });
 
     canvas.addEventListener('pointermove', (event) => {
       const target = event.target instanceof Element ? event.target : null;
@@ -1969,6 +2025,12 @@
       }
     });
 
+    document.getElementById('course-map-directory-link')?.addEventListener('click', (event) => {
+      if (!state.focusedNodeId) return;
+      event.preventDefault();
+      restoreFocusedChapter();
+      document.querySelector('.course-map-directory-heading')?.scrollIntoView({ block: 'start' });
+    });
     document.getElementById('course-map-reset-view')?.addEventListener('click', resetReaderView);
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
@@ -2044,6 +2106,9 @@
       setSaveState(editorPage ? '所有修改会自动保存' : '');
       setStatus(state.nodes.length ? '' : `「${state.course.name}」的知识地图还没有录入知识点。`);
     } catch (error) {
+      if (mapPage && !state.course) {
+        document.getElementById('course-reader-title').textContent = '课程暂时无法加载';
+      }
       setStatus(error.message, true);
     }
   }

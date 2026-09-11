@@ -76,13 +76,14 @@ function splitLeadingLegacyMetadata(markdown) {
   const lines = String(markdown || '').split('\n');
   const openingFence = lines[0]?.trim() === '---';
   if (openingFence) {
-    const closingFenceIndex = lines.findIndex(
-      (line, index) => index > 0 && line.trim() === '---',
-    );
+    const closingFenceIndex = lines.findIndex((line, index) => index > 0 && line.trim() === '---');
     if (closingFenceIndex > 1) {
       const metadata = lines.slice(1, closingFenceIndex);
       const metadataFieldCount = metadata.filter((line) => getLegacyMetadataLabel(line)).length;
-      const knowledgeMarkdown = lines.slice(closingFenceIndex + 1).join('\n').trim();
+      const knowledgeMarkdown = lines
+        .slice(closingFenceIndex + 1)
+        .join('\n')
+        .trim();
       if (metadataFieldCount >= 4 && knowledgeMarkdown) {
         return {
           knowledgeMarkdown,
@@ -294,9 +295,22 @@ function toMapNode(row, includeMarkdown = false) {
       ? {
           markdown: sections.knowledgeMarkdown,
           sections,
+          revision: getKnowledgeNodeRevision(row),
         }
       : {}),
   };
+}
+
+function getKnowledgeNodeRevision(row) {
+  // Keep the same content fingerprint as the personal course-upload API.
+  const node = {
+    id: row.node_id,
+    title: row.title,
+    summary: row.summary || '',
+    position: { x: Number(row.position_x), y: Number(row.position_y) },
+    sections: resolveKnowledgeSections(row),
+  };
+  return crypto.createHash('sha256').update(JSON.stringify(node)).digest('hex');
 }
 
 function toMapEdge(row) {
@@ -489,6 +503,21 @@ async function getCourseBySlug(pool, slug) {
   return rows[0] || null;
 }
 
+async function getKnowledgeNode(pool, courseId, nodeId, forUpdate = false) {
+  const [rows] = await pool.execute(
+    `SELECT n.node_id, n.title, n.summary, n.position_x, n.position_y,
+            n.document_markdown, n.updated_at,
+            s.knowledge_markdown, s.basic_info_markdown, s.applications_markdown
+     FROM course_map_nodes n
+     LEFT JOIN course_map_node_sections s
+       ON s.course_id = n.course_id AND s.node_id = n.node_id
+     WHERE n.course_id = ? AND n.node_id = ?
+     LIMIT 1${forUpdate ? ' FOR UPDATE' : ''}`,
+    [courseId, nodeId],
+  );
+  return rows[0] || null;
+}
+
 async function canManageCourse(pool, user, courseId) {
   if (!user || !courseId) {
     return false;
@@ -613,18 +642,8 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
         return;
       }
       const nodeId = normalizeNodeId(request.params.nodeId);
-      const [rows] = await pool.execute(
-        `SELECT n.node_id, n.title, n.summary, n.position_x, n.position_y,
-                n.document_markdown, n.updated_at,
-                s.knowledge_markdown, s.basic_info_markdown, s.applications_markdown
-         FROM course_map_nodes n
-         LEFT JOIN course_map_node_sections s
-           ON s.course_id = n.course_id AND s.node_id = n.node_id
-         WHERE n.course_id = ? AND n.node_id = ?
-         LIMIT 1`,
-        [course.id, nodeId],
-      );
-      if (!rows[0]) {
+      const node = await getKnowledgeNode(pool, course.id, nodeId);
+      if (!node) {
         response.status(404).json({ message: '知识结点不存在' });
         return;
       }
@@ -634,7 +653,7 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
           ...toCourse(course),
           canEditMap: await canManageCourse(pool, currentUser, course.id),
         },
-        node: toMapNode(rows[0], true),
+        node: toMapNode(node, true),
       });
     } catch (error) {
       sendCourseError(response, error, '获取知识结点失败');
@@ -720,6 +739,7 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
   });
 
   router.put('/:slug/map/nodes/:nodeId/document', async (request, response) => {
+    let connection;
     try {
       await ensureCourseMapTables(pool);
       const access = await requireCourseManager(request, response);
@@ -728,70 +748,87 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
       }
       const nodeId = normalizeNodeId(request.params.nodeId);
       const requestedSections = request.body.sections;
-      const usesStructuredSections = requestedSections && typeof requestedSections === 'object';
-      const sections = usesStructuredSections
-        ? {
-            knowledgeMarkdown: String(requestedSections.knowledgeMarkdown || ''),
-            basicInfoMarkdown: String(requestedSections.basicInfoMarkdown || ''),
-            applicationsMarkdown: String(requestedSections.applicationsMarkdown || ''),
-          }
-        : {
-            knowledgeMarkdown: String(request.body.markdown || ''),
-            basicInfoMarkdown: '',
-            applicationsMarkdown: '',
-          };
-      if (Object.values(sections).some((markdown) => markdown.length > MAX_MARKDOWN_LENGTH)) {
+      const usesStructuredSections = requestedSections !== undefined;
+      const sectionKeys = ['knowledgeMarkdown', 'basicInfoMarkdown', 'applicationsMarkdown'];
+      if (
+        usesStructuredSections &&
+        (!requestedSections ||
+          typeof requestedSections !== 'object' ||
+          Array.isArray(requestedSections) ||
+          Object.entries(requestedSections).some(
+            ([key, value]) => !sectionKeys.includes(key) || typeof value !== 'string',
+          ))
+      ) {
+        response.status(400).json({ message: '请提供有效的 Markdown 分区文本' });
+        return;
+      }
+      const changes = usesStructuredSections
+        ? requestedSections
+        : { knowledgeMarkdown: String(request.body.markdown || '') };
+      if (Object.values(changes).some((markdown) => markdown.length > MAX_MARKDOWN_LENGTH)) {
         response.status(400).json({ message: '每个 Markdown 分区不能超过 500000 个字符' });
         return;
       }
-      const [nodeRows] = await pool.execute(
-        `SELECT 1 FROM course_map_nodes WHERE course_id = ? AND node_id = ? LIMIT 1`,
-        [access.course.id, nodeId],
-      );
-      if (!nodeRows[0]) {
+      const { expectedRevision } = request.body;
+      if (
+        expectedRevision !== undefined &&
+        (typeof expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(expectedRevision))
+      ) {
+        response.status(400).json({ message: '知识点版本格式不正确' });
+        return;
+      }
+      connection = await pool.getConnection();
+      await connection.beginTransaction();
+      const current = await getKnowledgeNode(connection, access.course.id, nodeId, true);
+      if (!current) {
+        await connection.rollback();
         response.status(404).json({ message: '知识结点不存在' });
         return;
       }
-      if (usesStructuredSections) {
-        await pool.execute(
-          `INSERT INTO course_map_node_sections (
-            course_id, node_id, knowledge_markdown, basic_info_markdown, applications_markdown
-          ) VALUES (?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE
-            knowledge_markdown = VALUES(knowledge_markdown),
-            basic_info_markdown = VALUES(basic_info_markdown),
-            applications_markdown = VALUES(applications_markdown)`,
-          [
-            access.course.id,
-            nodeId,
-            sections.knowledgeMarkdown,
-            sections.basicInfoMarkdown,
-            sections.applicationsMarkdown,
-          ],
-        );
-      } else {
-        await pool.execute(
-          `INSERT INTO course_map_node_sections (course_id, node_id, knowledge_markdown)
-           VALUES (?, ?, ?)
-           ON DUPLICATE KEY UPDATE knowledge_markdown = VALUES(knowledge_markdown)`,
-          [access.course.id, nodeId, sections.knowledgeMarkdown],
-        );
+      if (
+        expectedRevision !== undefined &&
+        expectedRevision !== getKnowledgeNodeRevision(current)
+      ) {
+        await connection.rollback();
+        response.status(409).json({
+          message: '知识点已被修改，请重新读取后合并内容',
+          code: 'revision_conflict',
+        });
+        return;
       }
-      await pool.execute(
+      const sections = { ...resolveKnowledgeSections(current), ...changes };
+      await connection.execute(
+        `INSERT INTO course_map_node_sections (
+          course_id, node_id, knowledge_markdown, basic_info_markdown, applications_markdown
+        ) VALUES (?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          knowledge_markdown = VALUES(knowledge_markdown),
+          basic_info_markdown = VALUES(basic_info_markdown),
+          applications_markdown = VALUES(applications_markdown)`,
+        [access.course.id, nodeId, ...sectionKeys.map((key) => sections[key])],
+      );
+      await connection.execute(
         `UPDATE course_map_nodes
-         SET document_markdown = ?, updated_by = ?
+         SET document_markdown = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
          WHERE course_id = ? AND node_id = ?`,
         [sections.knowledgeMarkdown, access.user.id, access.course.id, nodeId],
       );
-      await markRagIndexDirty(pool);
+      await markRagIndexDirty(connection);
+      const node = toMapNode(await getKnowledgeNode(connection, access.course.id, nodeId), true);
+      await connection.commit();
       response.json({
         ok: true,
         nodeId,
-        hasDocument: Boolean(sections.knowledgeMarkdown.trim()),
-        sections,
+        hasDocument: node.hasDocument,
+        sections: node.sections,
+        revision: node.revision,
+        node,
       });
     } catch (error) {
+      if (connection) await connection.rollback();
       sendCourseError(response, error, '保存 Markdown 文档失败');
+    } finally {
+      if (connection) connection.release();
     }
   });
 

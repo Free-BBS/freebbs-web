@@ -1,0 +1,175 @@
+.circuit-main .circuit-parameter-popover {
+  position: fixed;
+  z-index: 250;
+  display: flex;
+  flex-direction: column;
+  width: 288px;
+  min-width: 0;
+  isolation: isolate;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 10px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  box-shadow: 0 12px 36px color-mix(in srgb, var(--ui-text) 15%, transparent);
+}
+
+.circuit-parameter-popover-arrow {
+  position: absolute;
+  z-index: -1;
+  width: 10px;
+  height: 10px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-line-strong);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.circuit-parameter-popover[data-side='right'] .circuit-parameter-popover-arrow {
+  left: -6px;
+  top: calc(var(--popover-arrow-y) - 5px);
+  border-right: 0;
+  border-top: 0;
+}
+
+.circuit-parameter-popover[data-side='left'] .circuit-parameter-popover-arrow {
+  right: -6px;
+  top: calc(var(--popover-arrow-y) - 5px);
+  border-left: 0;
+  border-bottom: 0;
+}
+
+.circuit-parameter-popover[data-side='bottom'] .circuit-parameter-popover-arrow {
+  top: -6px;
+  left: calc(var(--popover-arrow-x) - 5px);
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.circuit-parameter-popover[data-side='top'] .circuit-parameter-popover-arrow {
+  bottom: -6px;
+  left: calc(var(--popover-arrow-x) - 5px);
+  border-left: 0;
+  border-top: 0;
+}
+
+.circuit-parameter-popover-heading {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 12px 10px 14px;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.circuit-parameter-popover-heading > div {
+  min-width: 0;
+}
+
+.circuit-main .circuit-parameter-popover-heading p {
+  margin-bottom: 3px;
+  color: var(--ui-muted);
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+
+.circuit-main .circuit-parameter-popover-heading h3 {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.circuit-main .circuit-parameter-popover-close {
+  flex: 0 0 30px;
+  min-height: 30px;
+  width: 30px;
+  padding: 0;
+  border-color: transparent;
+  color: var(--ui-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.circuit-parameter-popover-fields {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  min-height: 0;
+  margin: 0;
+  padding: 13px 14px 15px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.circuit-main .circuit-parameter-popover-fields label {
+  gap: 5px;
+  color: var(--ui-muted);
+  font-size: 0.72rem;
+}
+
+.circuit-main .circuit-parameter-popover-fields :where(input, select) {
+  min-height: 38px;
+  padding: 7px 9px;
+  font-size: 0.82rem;
+}
+
+.circuit-main .circuit-parameter-popover-fields .circuit-parameter-hint {
+  margin: 0;
+  color: var(--ui-muted);
+  font-size: 0.7rem;
+  line-height: 1.7;
+}
+
+.circuit-parameter-popover-footer {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 8px 14px;
+  border-top: 1px solid var(--ui-line);
+  color: var(--ui-muted);
+  font-size: 0.66rem;
+}
+
+.circuit-main .circuit-parameter-popover-status {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 8px 14px;
+  border-top: 1px solid var(--ui-line);
+  color: var(--ui-danger, #bc4b40);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.circuit-main .circuit-parameter-popover-fields [aria-invalid='true'] {
+  border-color: var(--ui-danger, #bc4b40);
+}
+
+.circuit-main .circuit-parameter-popover-sidebar {
+  min-height: 30px;
+  padding: 4px 6px;
+  border-color: transparent;
+  color: var(--ui-accent);
+  font-size: 0.69rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .circuit-main .circuit-parameter-popover-fields :where(input, select) {
+    min-height: 42px;
+    font-size: 16px;
+  }
+
+  .circuit-main .circuit-parameter-popover-close {
+    min-height: 36px;
+    width: 36px;
+    flex-basis: 36px;
+  }
+
+  .circuit-main .circuit-parameter-popover-sidebar {
+    min-height: 36px;
+  }
+}

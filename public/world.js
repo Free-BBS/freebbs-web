@@ -341,7 +341,7 @@ function createCoursePlanet(course, index) {
   link.setAttribute('aria-label', `进入课程：${course.name}`);
 
   const code = document.createElement('small');
-  code.textContent = course.code;
+  code.textContent = course.code.replace(/^COURSE\s*/i, '课程 ');
   const name = document.createElement('strong');
   name.textContent = course.name;
   const description = document.createElement('span');
@@ -401,7 +401,7 @@ function rotateCourseOrbit(step) {
 }
 
 function renderCourseStage(world) {
-  elements.courseCode.textContent = `${world.code} · COURSE SYSTEM`;
+  elements.courseCode.textContent = `知识岛 · ${world.courses.length} 门课程`;
   elements.courseTitle.textContent = world.name;
   elements.courseDescription.textContent = world.description;
   elements.courseOrbit.style.setProperty('--world-course-island-image', `url("${world.image}")`);

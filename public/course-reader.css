@@ -1,0 +1,751 @@
+/* Course reading uses the same shell, typography and surfaces as the rest of the site.
+ * The map editor keeps its independent canvas and visual tools in course.css. */
+body.course-reader-page .course-reader-main {
+  --map-bg: var(--ui-page);
+  --map-bg-deep: var(--ui-page);
+  --map-card: var(--ui-surface);
+  --map-card-hover: var(--ui-surface-soft);
+  --map-card-border: var(--ui-line);
+  --map-card-border-active: var(--ui-line-strong);
+  --map-text: var(--ui-text);
+  --map-muted: var(--ui-muted);
+  --map-beacon: var(--ui-accent);
+  --map-learning: var(--ui-accent);
+  --map-learning-soft: var(--ui-accent-soft);
+  --map-signal-start: var(--ui-accent);
+  --map-signal-middle: var(--ui-accent);
+  --map-signal-end: var(--ui-accent);
+  --course-map-primary-heading-size: 1.2rem;
+  --course-map-index-marker-size: 26px;
+  --course-map-index-marker-font-size: 0.78rem;
+  --course-map-index-item-title-size: 0.9rem;
+  --course-map-index-meta-size: 0.76rem;
+  --course-map-chapter-title-size: 1rem;
+  --course-map-chapter-meta-size: 0.8rem;
+  --course-map-topic-title-size: 1rem;
+  --course-map-topic-meta-size: 0.76rem;
+  --course-map-relation-heading-size: 1.05rem;
+  --course-map-relation-meta-size: 0.8rem;
+  --course-map-relation-helper-size: 0.8rem;
+  --course-map-relation-preview-title-size: 1rem;
+  --course-map-overline-size-step: 0px;
+  --course-map-action-size-step: 0px;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 1480px;
+  margin: 0 auto;
+  font-family: var(--font-zh-body, var(--font-ui));
+}
+
+body.course-reader-page .course-reader-main :where(button, a, select) {
+  font-family: var(--font-zh-ui, var(--font-ui));
+}
+
+body.course-reader-page .course-reader-main :where(h1, h2, h3, strong) {
+  font-family: var(--font-zh-title, var(--font-ui));
+  letter-spacing: 0;
+  text-wrap: pretty;
+}
+
+body.course-reader-page .course-reader-main :where(button, a, select):focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 3px;
+}
+
+body.course-reader-page .course-reader-heading {
+  margin: 0;
+  padding: 0;
+}
+
+body.course-reader-page .course-reader-heading h1 {
+  margin: 6px 0 12px;
+  font-size: clamp(1.6rem, 2.5vw, 2.1rem);
+  line-height: 1.35;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+body.course-reader-page .course-reader-kicker {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--ui-accent) !important;
+}
+
+body.course-reader-page .course-reader-summary {
+  max-width: 65ch;
+  margin: 0 0 12px;
+  font-size: 0.92rem;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+body.course-reader-page .course-reader-meta {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+}
+
+body.course-reader-page .course-map-reader-controls {
+  position: static;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 22px 0 26px;
+}
+
+body.course-reader-page .course-map-reader-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: auto;
+  min-height: 40px;
+  height: auto;
+  padding: 8px 13px;
+  border: 1px solid var(--ui-line);
+  border-radius: 7px;
+  background: var(--ui-surface);
+  color: var(--ui-text) !important;
+  font-size: 0.85rem;
+  font-weight: 500;
+  line-height: 1.4;
+  text-decoration: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transform: none;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+body.course-reader-page .course-map-reader-control:hover {
+  border-color: var(--ui-line-strong);
+  background: var(--ui-surface-soft);
+}
+
+body.course-reader-page
+  .course-reader-main
+  :where(.course-map-panel, .course-map-scroller, .course-map-canvas) {
+  height: auto;
+  min-height: 0;
+  width: 100%;
+  min-width: 0;
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+body.course-reader-page .course-map-status {
+  position: static;
+  width: auto;
+  max-width: 100%;
+  margin: 0;
+  padding: 28px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-line);
+  border-radius: 9px;
+  color: var(--ui-muted);
+  text-align: left;
+  transform: none;
+  box-shadow: none;
+}
+
+body.course-reader-page .course-map-status.is-error {
+  color: var(--ui-danger);
+}
+
+body.course-reader-page .course-map-directory-layout {
+  grid-template-columns: minmax(200px, 230px) minmax(0, 1fr);
+  gap: 28px;
+  width: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+
+body.course-reader-page
+  .course-reader-main
+  :where(
+    .course-map-index-sidebar,
+    .course-map-directory-panel,
+    .course-map-focused-chapter,
+    .course-map-chapter-card
+  ) {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transform: none;
+}
+
+body.course-reader-page .course-map-index-sidebar {
+  position: sticky;
+  top: 112px;
+}
+
+body.course-reader-page .course-map-index-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+body.course-reader-page .course-map-index-heading strong {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+body.course-reader-page .course-map-index-heading span {
+  font-size: 0.76rem;
+  color: var(--ui-muted) !important;
+}
+
+body.course-reader-page .course-map-index-list {
+  gap: 4px;
+  max-height: calc(100dvh - 176px);
+  overflow-y: auto;
+  padding: 12px 0;
+  scrollbar-width: thin;
+}
+
+body.course-reader-page .course-map-index-item {
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 8px;
+  min-height: 58px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 6px;
+  transform: none;
+  box-shadow: none;
+}
+
+body.course-reader-page .course-map-index-item:is(:hover, .is-active) {
+  background: var(--ui-accent-soft);
+}
+
+body.course-reader-page .course-map-index-number,
+body.course-reader-page .course-map-index-item.is-active .course-map-index-number {
+  border: 0;
+  background: transparent;
+  color: var(--ui-accent) !important;
+  font-family: var(--font-code, monospace);
+  font-weight: 500;
+}
+
+body.course-reader-page .course-map-index-copy strong {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  font-weight: 500;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+body.course-reader-page .course-map-index-copy span {
+  color: var(--ui-muted) !important;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+body.course-reader-page .course-reader-chapter-picker,
+body.course-reader-page .course-map-index-copy small,
+body.course-reader-page .course-map-index-item > i,
+body.course-reader-page .course-map-index-item::after,
+body.course-reader-page .course-map-chapter-orbit {
+  display: none;
+}
+
+body.course-reader-page .course-map-directory-heading,
+body.course-reader-page .course-map-focused-heading {
+  position: static;
+  display: block;
+  min-height: 0;
+  padding: 0 0 18px;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+body.course-reader-page .course-map-directory-heading > span {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0;
+  gap: 4px 12px;
+}
+
+body.course-reader-page .course-map-directory-heading small {
+  grid-column: 1 / -1;
+  font-size: 0.76rem;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+body.course-reader-page .course-map-directory-heading strong,
+body.course-reader-page .course-map-focused-chapter .course-map-chapter-copy strong {
+  font-size: 1.2rem;
+  line-height: 1.5;
+  font-weight: 600;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+body.course-reader-page .course-map-directory-heading p {
+  position: static;
+  max-width: none;
+  margin: 7px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  text-align: left;
+}
+
+body.course-reader-page .course-map-directory-current,
+body.course-reader-page .course-map-directory-current.is-learning {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  margin: 20px 0;
+  padding: 22px;
+  border: 0;
+  border-left: 3px solid var(--ui-accent);
+  border-radius: 0 7px 7px 0;
+  background: var(--ui-surface);
+  box-shadow: none;
+}
+
+body.course-reader-page .course-map-directory-current-copy {
+  gap: 5px;
+}
+
+body.course-reader-page .course-map-directory-current-copy > small {
+  font-size: 0.8rem;
+  letter-spacing: 0;
+  font-weight: 600;
+  color: var(--ui-accent) !important;
+}
+
+body.course-reader-page .course-map-directory-current-copy > span {
+  font-size: 0.73rem;
+  letter-spacing: 0;
+}
+
+body.course-reader-page .course-map-directory-current-copy h2 {
+  margin: 5px 0;
+  font-size: 1.24rem;
+  line-height: 1.5;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+body.course-reader-page .course-map-directory-current-copy p {
+  margin: 0;
+  max-width: 65ch;
+  font-size: 0.86rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+body.course-reader-page .course-map-directory-current-copy > div,
+body.course-reader-page .course-map-directory-current-copy > div :is(b, i) {
+  font-size: 0.76rem;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+body.course-reader-page .course-map-directory-current-tags {
+  position: static;
+  justify-self: start;
+  margin: 0;
+}
+
+body.course-reader-page .course-map-directory-current-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+body.course-reader-page .course-map-directory-current-actions :is(button, a),
+body.course-reader-page .course-reader-study-link {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 40px;
+  padding: 9px 13px;
+  border: 1px solid var(--ui-line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-text) !important;
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-decoration: none;
+  box-shadow: none;
+  transform: none;
+}
+
+body.course-reader-page .course-map-directory-current-actions a,
+body.course-reader-page .course-reader-study-link {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent);
+  color: var(--ui-accent-contrast) !important;
+}
+
+body.course-reader-page .course-map-directory-section-heading {
+  margin: 26px 0 12px;
+  padding: 0;
+}
+
+body.course-reader-page .course-map-directory-section-heading strong {
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+body.course-reader-page .course-map-directory-nodes {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  border-top: 1px solid var(--ui-line);
+}
+
+body.course-reader-page .course-reader-main .course-map-topic {
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--ui-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+body.course-reader-page .course-map-topic:hover {
+  background: var(--ui-surface-soft);
+}
+
+body.course-reader-page .course-reader-main .course-map-topic-main {
+  min-height: 0;
+  gap: 6px;
+  padding: 15px 10px;
+  scroll-margin-block: 145px;
+}
+
+body.course-reader-page .course-reader-main .course-map-topic-main strong {
+  display: block;
+  font-size: 1rem;
+  line-height: 1.55;
+  font-weight: 550;
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: unset;
+}
+
+body.course-reader-page .course-reader-main .course-map-topic-code {
+  color: var(--ui-muted) !important;
+  font-family: var(--font-code, monospace);
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+body.course-reader-page .course-reader-main .course-map-topic-meta :is(b, i) {
+  font-size: 0.74rem;
+  font-weight: 400;
+  color: var(--ui-muted) !important;
+}
+
+body.course-reader-page .course-reader-main .course-map-topic-tag {
+  width: 21px;
+  height: 21px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent) !important;
+  font-size: 0.7rem;
+  box-shadow: none;
+}
+
+body.course-reader-page .course-map-focus-workspace {
+  width: 100%;
+  gap: 28px;
+  margin: 0;
+  padding: 0;
+}
+
+body.course-reader-page .course-map-focus-stage {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 22px;
+  min-height: 0;
+  padding: 20px 0 0;
+}
+
+body.course-reader-page .course-map-focus-center {
+  grid-column: 1 / -1;
+  order: 0;
+  text-align: left;
+  padding: 0 0 20px;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+body.course-reader-page .course-map-focus-center .course-map-topic {
+  border: 0;
+  background: var(--ui-surface);
+}
+
+body.course-reader-page .course-reader-study-link {
+  justify-self: start;
+}
+
+body.course-reader-page .course-map-focus-side {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  width: 100%;
+  order: 1;
+  justify-items: stretch;
+}
+
+body.course-reader-page .course-map-focus-side h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 10px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+body.course-reader-page .course-map-focus-side h3 span,
+body.course-reader-page .course-reader-empty {
+  font-size: 0.78rem;
+  color: var(--ui-muted) !important;
+}
+
+body.course-reader-page .course-reader-main .course-reader-relation {
+  color: var(--ui-muted) !important;
+  font-size: 0.8rem;
+  line-height: 1.65;
+}
+
+body.course-reader-page .course-map-focus-summary {
+  padding: 22px 0 0;
+}
+
+body.course-reader-page .course-map-focus-arrow-help-panel {
+  flex: 1 1 100%;
+  min-width: 0;
+  max-height: none;
+  background: var(--ui-surface);
+  border-color: var(--ui-line);
+  box-shadow: none;
+}
+
+body.course-reader-page .course-map-focus-arrow-help-panel :is(h4, dt, dd) {
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+body.course-reader-page
+  .course-map-focus-arrow-help-panel
+  .course-map-focus-arrow-help-heading
+  > button {
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 6px;
+}
+
+body.course-reader-page .course-map-cross-relations > header {
+  gap: 5px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--ui-line);
+  text-align: left;
+}
+
+body.course-reader-page .course-map-cross-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+
+body.course-reader-page .course-reader-main .course-map-chapter-toggle {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  min-height: 0;
+  padding: 10px 0;
+  border-radius: 0;
+}
+
+body.course-reader-page .course-map-chapter-copy small,
+body.course-reader-page .course-map-chapter-copy > span {
+  font-size: 0.76rem;
+  font-weight: 400;
+  line-height: 1.6;
+  letter-spacing: 0;
+}
+
+body.course-reader-page .course-map-chapter-copy strong {
+  line-height: 1.5;
+}
+
+body.course-reader-page .course-map-chapter-action {
+  max-width: none;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+body.course-reader-page .course-map-preview-context {
+  margin: 0;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+body.course-reader-page .course-map-preview-context span i {
+  display: none;
+}
+
+body.course-reader-page .course-map-preview-context button {
+  min-width: 44px;
+  min-height: 40px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+body.course-reader-page .course-map-chapter-nodes.is-preview-list {
+  gap: 0;
+  padding: 0;
+}
+
+@media (max-width: 1100px) {
+  body.course-reader-page .course-map-directory-layout {
+    grid-template-columns: 190px minmax(0, 1fr);
+    gap: 20px;
+  }
+}
+
+@media (max-width: 900px) {
+  body.course-reader-page .course-map-directory-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+
+  body.course-reader-page .course-map-index-sidebar {
+    position: static;
+  }
+
+  body.course-reader-page .course-map-index-heading,
+  body.course-reader-page .course-map-index-list {
+    display: none;
+  }
+
+  body.course-reader-page .course-reader-chapter-picker {
+    display: grid;
+    gap: 8px;
+    font-size: 0.82rem;
+  }
+
+  body.course-reader-page .course-reader-chapter-picker select {
+    width: 100%;
+    min-width: 0;
+    min-height: 46px;
+    padding: 10px;
+    border: 1px solid var(--ui-line);
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+
+  body.course-reader-page .course-map-directory-current {
+    padding: 18px;
+  }
+
+  body.course-reader-page .course-map-reader-controls {
+    margin: 18px 0 24px;
+    gap: 7px;
+  }
+
+  body.course-reader-page .course-map-reader-control {
+    min-height: 44px;
+    padding: 8px 11px;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 560px) {
+  body.course-reader-page .course-map-focus-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.course-reader-page .course-map-directory-heading > span {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.course-reader-page .course-map-directory-current,
+  body.course-reader-page .course-map-directory-current.is-learning {
+    padding: 17px;
+  }
+
+  body.course-reader-page .course-map-directory-current-copy h2 {
+    font-size: 1.12rem;
+  }
+
+  body.course-reader-page .course-map-directory-current-actions :is(button, a) {
+    flex: 1 1 auto;
+    min-height: 44px;
+    padding-inline: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.course-reader-page .course-reader-main * {
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+body.course-reader-page .course-reader-main .course-map-directory-current::before,
+body.course-reader-page .course-reader-main .course-map-topic.is-learning::before,
+body.course-reader-page .course-reader-main .course-map-chapter-card::before {
+  display: none;
+}
+
+body.course-reader-page .course-reader-main .course-map-directory-current-actions a,
+body.course-reader-page .course-reader-main .course-reader-study-link {
+  color: var(--ui-accent-contrast) !important;
+}
+
+body.course-reader-page .course-reader-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+body.course-reader-page .course-reader-meta > span {
+  white-space: nowrap;
+  color: var(--ui-muted) !important;
+}
+
+@media (max-width: 560px) {
+  body.course-reader-page .course-map-reader-control {
+    flex: 1 1 calc(50% - 8px);
+  }
+
+  body.course-reader-page .course-reader-meta > .course-reader-code {
+    display: none;
+  }
+}
+
+body.course-reader-page .course-map-focus-stage.has-single-side {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body.course-reader-page .course-map-directory-heading {
+  scroll-margin-top: 145px;
+}

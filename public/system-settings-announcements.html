@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="向指定用户、课程群组或全体用户发布 FREE-BBS 公告。" />
+    <title>FREE-BBS - 公告管理</title>
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-v2-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/freebbs-apple-touch-v2.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Noto+Serif+SC:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/username-guard.css" />
+    <link rel="stylesheet" href="/notifications.css" />
+    <link rel="stylesheet" href="/layout-fixes.css" />
+  </head>
+  <body class="system-settings-page system-settings-announcements-page">
+    <div class="page-shell page-shell-settings">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="FREE-BBS 首页">
+          <span class="brand-mark">FREE<br />BBS</span>
+        </a>
+
+        <nav class="nav-actions" aria-label="主导航">
+          <div class="user-panel" id="user-panel">
+            <div class="user-summary">
+              <button class="avatar" type="button" aria-label="登录或注册">
+                <img
+                  class="avatar-image"
+                  src="/assets/avatar_placeholder.webp"
+                  alt="当前用户头像"
+                />
+              </button>
+              <div class="user-actions" id="user-actions">
+                <button
+                  class="user-icon-button hidden"
+                  id="user-settings-button"
+                  type="button"
+                  aria-label="个人设置"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/gear.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>设置</span>
+                </button>
+                <button
+                  class="user-icon-button hidden"
+                  id="user-logout-button"
+                  type="button"
+                  aria-label="退出"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/exit.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>退出</span>
+                </button>
+              </div>
+              <div class="user-copy">
+                <button class="user-name" type="button" id="user-name">登录/注册</button>
+                <div class="user-role" id="user-role">学生</div>
+              </div>
+            </div>
+            <div class="user-status" id="user-status" aria-label="账户资产">
+              <span class="currency currency-electric" aria-label="电元">
+                <img class="currency-icon" src="/assets/icons/electron.svg" alt="" />
+                <span class="currency-value">-</span>
+              </span>
+              <span class="currency currency-magnetic" aria-label="磁元">
+                <img class="currency-icon" src="/assets/icons/magnetron.svg" alt="" />
+                <span class="currency-value">-</span>
+              </span>
+              <span class="currency currency-heat" aria-label="热力">
+                <img class="currency-icon" src="/assets/icons/flame.svg" alt="" />
+                <span class="currency-value">-</span>
+              </span>
+            </div>
+          </div>
+        </nav>
+      </header>
+
+      <nav class="mobile-nav" aria-label="手机底部导航"></nav>
+
+      <main
+        class="main-content settings-main system-settings-main hidden"
+        id="system-settings-content"
+        data-admin-content
+      >
+        <section
+          class="system-settings-shell system-settings-detail-shell"
+          aria-labelledby="system-announcements-title"
+        >
+          <a class="system-settings-back" href="/system-settings">← 返回系统设置</a>
+
+          <header class="system-settings-intro">
+            <p class="system-settings-kicker">Announcements</p>
+            <h1 class="visually-hidden" id="system-announcements-title">公告管理</h1>
+            <p>选择指定用户、课程群组或全体用户，填写标题和内容后发布公告。</p>
+          </header>
+
+          <div id="announcement-publisher" data-notification-admin></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/typography.js"></script>
+    <script src="/username-guard.js"></script>
+    <script src="/app.js"></script>
+    <script src="/system-settings.js"></script>
+    <script src="/notifications.js"></script>
+  </body>
+</html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>电路引用 · FREE-BBS</title>
+    <link rel="icon" href="/assets/favicon-v2-32.png" />
+    <link rel="stylesheet" href="/circuit-embed.css" />
+  </head>
+  <body>
+    <main class="circuit-embed" id="circuit-embed" aria-label="电路引用">
+      <header class="embed-header">
+        <div class="embed-heading">
+          <span class="embed-kind" id="embed-kind">电路</span>
+          <h1 id="embed-title">正在读取电路…</h1>
+          <p class="embed-meta" id="embed-meta"></p>
+        </div>
+        <a id="embed-open" target="_blank" rel="noopener noreferrer" hidden>打开电路 ↗</a>
+      </header>
+      <div class="embed-feedback">
+        <p id="embed-status" role="status" aria-live="polite">正在加载公开电路版本。</p>
+        <button id="embed-retry" type="button" hidden>重试</button>
+        <button id="embed-cancel" type="button" hidden>取消计算</button>
+      </div>
+      <div class="embed-schematic" id="embed-schematic" hidden></div>
+      <div class="embed-timeline" id="embed-timeline" hidden>
+        <button id="embed-play" type="button" aria-pressed="false">播放</button>
+        <label for="embed-position" class="visually-hidden">选择瞬态回放时间</label>
+        <input id="embed-position" type="range" min="0" max="0" value="0" step="1" />
+        <output id="embed-time" for="embed-position">t = 0 s</output>
+      </div>
+      <p class="embed-hint" id="embed-live-hint" hidden>
+        导线颜色表示节点电压，流动方向表示元件电流正负；回放速度经过缩放。
+      </p>
+      <details class="embed-waves" id="embed-waves" hidden>
+        <summary>查看波形与测量通道</summary>
+        <div class="embed-wave-content">
+          <details class="embed-channel-picker" id="embed-channel-picker">
+            <summary id="embed-channel-summary">选择测量通道</summary>
+            <fieldset id="embed-channels">
+              <legend class="visually-hidden">测量通道</legend>
+            </fieldset>
+          </details>
+          <label class="embed-phase" id="embed-phase-label" hidden>
+            <input id="embed-phase" type="checkbox" />同时显示相位
+          </label>
+          <p class="embed-hint" id="embed-plot-settings"></p>
+          <div id="embed-waveform"></div>
+          <ol id="embed-annotations" class="embed-annotations" aria-label="波形标记与注释"></ol>
+        </div>
+      </details>
+      <p class="embed-model" id="embed-model" hidden>教学模型仿真 · 使用此版本保存的分析设置</p>
+    </main>
+    <script src="/circuit-engine.js"></script>
+    <script src="/circuit-plot.js"></script>
+    <script src="/circuit-annotations.js"></script>
+    <script src="/circuit-renderer.js"></script>
+    <script src="/circuit-embed.js"></script>
+  </body>
+</html>

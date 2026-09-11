@@ -53,6 +53,22 @@ test('isolated preview serves mock APIs and processes avatars only in memory', a
       assert.match(await response.text(), /id="settings-avatar-input"/);
       assert.ok((await (await get('/app.js')).text()).startsWith("const API_BASE_URL = '/api';"));
       assert.equal((await (await get('/api/auth/me')).json()).user.uid, 'QA-LOCAL-ONLY');
+      assert.match(
+        (await (await get('/api/auth/me')).json()).user.username,
+        /^[A-Za-z0-9_]{3,64}$/,
+      );
+      for (const [file, variable] of [
+        ['notifications.js', 'apiBase'],
+        ['username-guard.js', 'api'],
+      ]) {
+        const source = fs.readFileSync(path.join(__dirname, '../public', file), 'utf8');
+        const script = await (await get(`/${file}`)).text();
+        assert.match(script, new RegExp(`const ${variable} = '/api';`));
+        assert.doesNotMatch(script, /:3001\/api/);
+        assert.equal(fs.readFileSync(path.join(__dirname, '../public', file), 'utf8'), source);
+      }
+      assert.equal((await (await get('/api/notifications/unread-count')).json()).unreadCount, 0);
+      assert.deepEqual((await (await get('/api/course-upload/tokens')).json()).tokens, []);
     },
   );
 

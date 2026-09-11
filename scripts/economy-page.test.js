@@ -197,6 +197,15 @@ test('scoped CSS removes ratio stretch, bounds dialogs and follows theme variabl
   for (const file of ['electromagnetic.html', 'inventory.html']) {
     const html = fs.readFileSync(path.join(publicDir, file), 'utf8');
     assert.ok(html.indexOf('/economy.css') > html.indexOf('/ui-polish.css'));
+    assert.ok(html.indexOf('/economy.css') > html.indexOf('/layout-fixes.css'));
+    for (const sharedAsset of [
+      'username-guard.css',
+      'notifications.css',
+      'username-guard.js',
+      'notifications.js',
+    ]) {
+      assert.ok(html.includes(`/${sharedAsset}`), `${file} keeps ${sharedAsset}`);
+    }
   }
   assert.match(source, /role="dialog" aria-modal="true" aria-labelledby="shop-inspect-title"/);
   assert.match(source, /id="shop-inspect-message" role="status"/);

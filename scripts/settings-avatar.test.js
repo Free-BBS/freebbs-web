@@ -263,6 +263,17 @@ test('settings integration preserves unsaved profile fields and never persists a
 test('production settings loads controller before app and exposes local live feedback', () => {
   const html = fs.readFileSync(path.join(__dirname, '../public/settings.html'), 'utf8');
   assert.ok(html.indexOf('/settings-avatar.js') < html.indexOf('/app.js'));
+  for (const sharedAsset of [
+    'username-guard.js',
+    'notifications.js',
+    'course-upload.js',
+    'layout-fixes.css',
+  ]) {
+    assert.ok(html.includes(`/${sharedAsset}`), `settings keeps ${sharedAsset}`);
+  }
+  assert.ok(html.indexOf('/username-guard.js') < html.indexOf('/app.js'));
+  assert.ok(html.indexOf('/course-upload.js') > html.indexOf('/app.js'));
+  assert.ok(html.indexOf('/settings-avatar.css') > html.indexOf('/layout-fixes.css'));
   assert.match(html, /<button[^>]*type="button"[^>]*data-avatar-action="choose"/);
   assert.match(html, /data-avatar-message[\s\S]*?role="status"[\s\S]*?aria-live="polite"/);
   assert.match(html, /aria-describedby="settings-avatar-help"/);

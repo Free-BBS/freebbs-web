@@ -56,6 +56,7 @@ let adminPermissionCatalog = { boards: [], courses: [] };
 let adminExpandedUserId = '';
 let adminMessageTimer = 0;
 let sessionReady = Promise.resolve();
+let discussionReady = Promise.resolve();
 
 const userName = document.getElementById('user-name');
 const userRole = document.getElementById('user-role');
@@ -373,6 +374,8 @@ function initializeDashboardShell() {
     '/course': '课程',
     '/knowledge': '知识点',
     '/discussion': '讨论区',
+    '/circuits': '电路实验室',
+    '/circuit': '电路仿真',
     '/workbench': '我的工作台',
     '/aichat': '问问 Max',
     '/development': '发展端',
@@ -380,6 +383,7 @@ function initializeDashboardShell() {
     '/profile': '个人主页',
     '/adminusers': '用户管理',
     '/system-settings': '系统设置',
+    '/system-settings/announcements': '公告管理',
     '/system-settings/model': '模型与密钥',
     '/system-settings/course-materials': '课程资料',
     '/electromagnetic': '电磁场',
@@ -392,6 +396,7 @@ function initializeDashboardShell() {
     { href: '/', icon: 'home', label: '首页' },
     { href: '/world', icon: 'map', label: '学习世界' },
     { href: '/discussion', icon: 'people', label: '讨论区' },
+    { href: '/circuits', icon: 'circuit', label: '电路实验室' },
     { href: '/workbench', icon: 'run', label: '我的工作台' },
     { href: '/aichat', icon: 'ai', label: '问问 Max' },
     { href: '/development', icon: 'star', label: '发展端' },
@@ -408,6 +413,8 @@ function initializeDashboardShell() {
     activePath = '/system-settings';
   } else if (['/course', '/knowledge'].includes(path)) {
     activePath = '/world';
+  } else if (path === '/circuit') {
+    activePath = '/circuits';
   }
 
   document.body.dataset.pageTitle = pageTitles[path] || 'FREE-BBS';
@@ -2425,6 +2432,7 @@ function renderUser() {
 
   if (!userState.isLoggedIn) {
     userName.textContent = '登录/注册';
+    userName.title = '';
     userName.disabled = false;
     if (userRole) {
       userRole.textContent = '学生';
@@ -2451,7 +2459,8 @@ function renderUser() {
     return;
   }
 
-  userName.textContent = userState.fullName || userState.username;
+  userName.textContent = userState.username;
+  userName.title = userState.username;
   userName.disabled = true;
   if (userRole) {
     userRole.textContent = userState.isAdmin
@@ -2539,6 +2548,11 @@ function saveSession(token, user) {
   userState.heat = user.heat ?? 0;
   localStorage.setItem(STORAGE_KEY, token);
   renderUser();
+  window.dispatchEvent(new CustomEvent('freebbs:session-change', { detail: { user } }));
+  if (user.requiresUsernameChange) {
+    window.freeBbsAccount?.requireValidUsername(user);
+    return;
+  }
   loadAiDialogs();
   renderSettingsForm();
   renderAdminSection();
@@ -2560,6 +2574,7 @@ function clearSession() {
   userState.manetrons = 0;
   userState.heat = 0;
   localStorage.removeItem(STORAGE_KEY);
+  window.dispatchEvent(new CustomEvent('freebbs:session-change', { detail: { user: null } }));
   setCheckinShortcutState(false);
   aiChatState.currentDid = '';
   aiChatState.dialogs = [];
@@ -2585,11 +2600,31 @@ async function callApi(path, options = {}) {
 
   const payload = await response.json().catch(() => ({}));
 
-  if (!response.ok) {
-    const error = new Error(
-      payload.detail ? `${payload.message}：${payload.detail}` : payload.message || '请求失败',
-    );
-    error.status = response.status;
+  const circuitFailure =
+    ['/ai/circuit/chat', '/ai/circuit/recognize'].includes(path) && payload.ok === false;
+  if (!response.ok || circuitFailure) {
+    const status =
+      circuitFailure &&
+      Number.isInteger(payload.status) &&
+      payload.status >= 400 &&
+      payload.status <= 599
+        ? payload.status
+        : response.status;
+    const fallback =
+      {
+        401: '登录已失效，请重新登录。',
+        403: '请求被拒绝，请检查当前账号权限。',
+        413: '请求内容过大，请缩小电路或问题范围后重试。',
+        429: '请求过于频繁，请稍后重试。',
+        502: '服务连接失败，请稍后重试。',
+        503: '服务暂时不可用，请稍后重试。',
+        504: '服务器等待回答超时，请重试。',
+      }[status] || `请求失败（HTTP ${status}）。`;
+    const message =
+      typeof payload.message === 'string' && payload.message.trim() ? payload.message : fallback;
+    const detail = typeof payload.detail === 'string' ? payload.detail : '';
+    const error = new Error(detail ? `${message}：${detail}` : message);
+    error.status = status;
     error.code =
       typeof payload.code === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(payload.code)
         ? payload.code
@@ -3046,6 +3081,7 @@ function renderDiscussionComposeBoards() {
     return;
   }
 
+  const previousBoard = discussionComposeBoard.value;
   const availableBoards = discussionState.boards.filter(
     (board) => board.slug !== 'changelog' || userState.isAdmin,
   );
@@ -3066,6 +3102,12 @@ function renderDiscussionComposeBoards() {
 
   if (preferredBoard) {
     discussionComposeBoard.value = preferredBoard;
+  }
+  if (
+    discussionComposeForm?.dataset.circuitHandoff &&
+    availableBoards.some((board) => board.slug === previousBoard)
+  ) {
+    discussionComposeBoard.value = previousBoard;
   }
 }
 
@@ -3240,6 +3282,10 @@ function renderDiscussionPosts() {
   discussionPostList.innerHTML = visiblePosts
     .map((post) => {
       const excerpt = createDiscussionPostExcerpt(post);
+      const preview =
+        window.FreeBbsDiscussionPreviews?.markup(post.preview, post.id, {
+          resolveAssetUrl,
+        }) || '';
       const replyCount = Number(post.commentCount || 0);
       const replyLabel = replyCount > 0 ? `${replyCount} 条回复` : '待回复';
 
@@ -3252,7 +3298,7 @@ function renderDiscussionPosts() {
       <div class="discussion-post-author">
         ${renderAuthorProfileLink(post.author, 'discussion-author-link discussion-author-link-avatar', true)}
       </div>
-      <div class="discussion-post-card-main">
+      <div class="discussion-post-card-main ${preview ? 'has-preview' : ''}">
         <div class="discussion-post-source">
           <span class="discussion-post-board">r/${escapeHtml(post.board.name)}</span>
           ${post.isPinned ? `<span class="discussion-pin-badge">置顶</span>` : ''}
@@ -3272,6 +3318,7 @@ function renderDiscussionPosts() {
           </button>
         </h3>
         ${excerpt ? `<p class="discussion-post-excerpt">${escapeHtml(excerpt)}</p>` : ''}
+        ${preview}
         <div class="discussion-post-actions">
           <span class="discussion-comment-count" title="评论">
             <img src="/assets/icons/chats.svg" alt="" aria-hidden="true" />
@@ -3290,6 +3337,7 @@ function renderDiscussionPosts() {
   `;
     })
     .join('');
+  window.FreeBbsDiscussionPreviews?.enhance(discussionPostList, { apiBase: API_BASE_URL });
 }
 
 function handleDiscussionFilterClick(event) {
@@ -3855,6 +3903,35 @@ function addCodeRunButtons(root) {
   });
 }
 
+let circuitReferenceLoader;
+
+function enhanceCircuitReferences(root) {
+  if (!root.querySelector('a[href*="/circuit?"]')) return;
+  if (window.FreeBbsCircuitEmbeds) {
+    window.FreeBbsCircuitEmbeds.enhance(root);
+    return;
+  }
+  if (!circuitReferenceLoader) {
+    circuitReferenceLoader = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = '/circuit-embeds.js';
+      script.async = true;
+      script.onload = resolve;
+      script.onerror = () => {
+        script.remove();
+        circuitReferenceLoader = null;
+        reject(new Error('电路引用组件载入失败'));
+      };
+      document.head.append(script);
+    });
+  }
+  circuitReferenceLoader
+    .then(() => window.FreeBbsCircuitEmbeds?.enhance(root))
+    .catch(() => {
+      // The ordinary circuit link remains available if the optional preview cannot load.
+    });
+}
+
 function enhanceMarkdownContent(root, { interactiveCodeControls = true } = {}) {
   if (!root) {
     return;
@@ -3879,6 +3956,7 @@ function enhanceMarkdownContent(root, { interactiveCodeControls = true } = {}) {
     image.decoding = 'async';
     image.referrerPolicy = 'no-referrer';
   });
+  enhanceCircuitReferences(root);
 }
 
 function setAiChatStatus(message) {
@@ -4042,13 +4120,14 @@ function renderAiWelcomeMessage() {
         <img class="aichat-avatar-image" src="${escapeHtml(MAX_AGENT_AVATAR)}" alt="Max 的头像" />
       </div>
       <div class="aichat-bubble discussion-markdown-body">
-        <p>你好，我是 Max。可以问我课程、推导、代码或讨论区里适合展开的问题。</p>
+        <p>你好，我是 Max。可以问我课程、推导或代码，也可以粘贴本站电路链接，让我分析元件、接线和工作原理。</p>
       </div>
     </article>
   `;
   const welcome = aiChatThread.querySelector('.aichat-message-assistant');
   if (welcome) {
-    welcome.dataset.markdown = '你好，我是 Max。可以问我课程、推导、代码或讨论区里适合展开的问题。';
+    welcome.dataset.markdown =
+      '你好，我是 Max。可以问我课程、推导或代码，也可以粘贴本站电路链接，让我分析元件、接线和工作原理。';
     addAiMessageCopyControls(welcome);
   }
 }
@@ -5214,7 +5293,7 @@ function renderDiscussionComments() {
     const displayDepth = Math.min(depth, 4);
 
     const current = `
-    <article class="discussion-comment ${depth > 0 ? 'discussion-comment-reply' : ''}" data-comment-id="${comment.id}" data-comment-depth="${displayDepth}" style="--comment-depth: ${displayDepth}">
+    <article id="comment-${comment.id}" class="discussion-comment ${depth > 0 ? 'discussion-comment-reply' : ''}" data-comment-id="${comment.id}" data-comment-depth="${displayDepth}" style="--comment-depth: ${displayDepth}">
       ${renderAuthorProfileLink(comment.author, 'discussion-comment-author-link', true)}
       <div class="discussion-comment-body">
         <div class="discussion-comment-meta">
@@ -5239,6 +5318,14 @@ function renderDiscussionComments() {
     .querySelectorAll('.discussion-comment-content')
     .forEach((node) => enhanceMarkdownContent(node));
   restoreOpenDiscussionReplyComposer();
+  const commentAnchor = window.location.hash;
+  if (/^#comment-\d+$/.test(commentAnchor) && list.dataset.scrolledAnchor !== commentAnchor) {
+    const target = document.getElementById(commentAnchor.slice(1));
+    if (target) {
+      target.scrollIntoView({ block: 'center' });
+      list.dataset.scrolledAnchor = commentAnchor;
+    }
+  }
 }
 
 function renderDiscussionDetail(post) {
@@ -5308,7 +5395,7 @@ function renderDiscussionDetail(post) {
         ${renderDiscussionCommentComposerFields({
           postId: post.id,
           rows: 4,
-          placeholder: '写一条评论，支持 Markdown 和 KaTeX',
+          placeholder: '写评论，或 @max 请教问题（可读取本站电路链接）',
           ariaLabel: '评论内容',
           inputId: 'discussion-comment-input',
         })}
@@ -5342,7 +5429,9 @@ function renderDiscussionComposerState() {
 
   discussionCreateToggle.textContent = '登录后发帖';
   discussionCreateToggle.disabled = false;
-  discussionComposeForm.classList.add('hidden');
+  if (!discussionComposeForm.dataset.circuitHandoff) {
+    discussionComposeForm.classList.add('hidden');
+  }
 }
 
 async function loadHomeDiscussionPosts(mode = homeDashboardState.feedMode, { force = false } = {}) {
@@ -5805,6 +5894,7 @@ async function initializeDiscussionPage() {
     renderDiscussionPosts();
     renderDiscussionDetail(FALLBACK_DISCUSSION_POST);
   }
+  return { boards: discussionState.boards, isFallback: discussionState.isFallback };
 }
 
 async function loadPublicProfile() {
@@ -6611,6 +6701,12 @@ async function handleAdminAiDialogExport() {
 
 function renderAdminSection() {
   const isAdmin = userState.isLoggedIn && userState.isAdmin;
+  if (isAdmin && isAdminUsersPage()) {
+    window.initRegistrationWhitelist?.({
+      apiBaseUrl: API_BASE_URL,
+      getToken: () => userState.token,
+    });
+  }
   const showEconomyNavigation = userState.isLoggedIn;
   const shouldHideEconomyLink = (link) =>
     !showEconomyNavigation && !link.hasAttribute('data-workbench-economy-entry');
@@ -7694,6 +7790,7 @@ async function handleDiscussionComposeSubmit(event) {
   }
 
   event.preventDefault();
+  if (discussionComposeForm.dataset.submitting === 'true') return;
 
   if (!userState.isLoggedIn) {
     openModal('login');
@@ -7706,6 +7803,11 @@ async function handleDiscussionComposeSubmit(event) {
   }
 
   setDiscussionMessage('正在发布帖子...');
+  const submittedUid = userState.uid;
+  const submitButton = discussionComposeForm.querySelector('button[type="submit"]');
+  discussionComposeForm.dataset.submitting = 'true';
+  discussionComposeForm.setAttribute('aria-busy', 'true');
+  if (submitButton) submitButton.disabled = true;
 
   try {
     const payload = await callApi('/discussion/posts', {
@@ -7717,7 +7819,11 @@ async function handleDiscussionComposeSubmit(event) {
       }),
     });
 
+    if (!userState.isLoggedIn || userState.uid !== submittedUid) return;
     setDiscussionMessage(payload.message || '帖子发布成功');
+    discussionComposeForm.dispatchEvent(
+      new CustomEvent('discussion:published', { detail: { post: payload.post } }),
+    );
     discussionComposeForm.reset();
     discussionComposeForm.classList.add('hidden');
     discussionState.activeBoard = payload.post.board.slug;
@@ -7731,8 +7837,13 @@ async function handleDiscussionComposeSubmit(event) {
       postId: discussionState.activePostId,
     });
   } catch (error) {
+    if (!userState.isLoggedIn || userState.uid !== submittedUid) return;
     setDiscussionMessage(error.message);
     discussionComposeForm.classList.remove('hidden');
+  } finally {
+    delete discussionComposeForm.dataset.submitting;
+    discussionComposeForm.removeAttribute('aria-busy');
+    if (submitButton) submitButton.disabled = false;
   }
 }
 
@@ -8631,12 +8742,26 @@ function initializeLandingMotion() {
   });
 }
 
+function streamCircuitChatResponse(payload, { signal, onProgress } = {}) {
+  if (!window.CircuitChat) throw new Error('流式回答组件未加载，请刷新后重试。');
+  return window.CircuitChat.request({
+    url: `${API_BASE_URL}/ai/circuit/chat`,
+    token: userState.token,
+    payload,
+    signal,
+    onProgress,
+  });
+}
+
 window.freeBbsApp = {
   callApi,
   clearSession,
   enhanceMarkdownContent,
   get sessionReady() {
     return sessionReady;
+  },
+  get discussionReady() {
+    return discussionReady;
   },
   getStoredTypographyPreferences,
   applyTypographyPreferences,
@@ -8649,6 +8774,7 @@ window.freeBbsApp = {
   resolveAssetUrl,
   streamAiChatResponse,
   streamKnowledgeRagResponse,
+  streamCircuitChatResponse,
 };
 
 userName.addEventListener('click', handleAuthEntry);
@@ -8766,6 +8892,10 @@ loadHomeDiscussionPosts();
 loadHomeBoardActivityForViewport();
 loadHeatLeaderboard();
 initializeLandingMotion();
-initializeDiscussionPage();
+discussionReady = initializeDiscussionPage();
 initializeAiChatPage();
 loadPublicProfile();
+
+window.addEventListener('freebbs:username-updated', (event) => {
+  saveSession(event.detail.token, event.detail.user);
+});

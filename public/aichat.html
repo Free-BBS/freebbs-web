@@ -17,6 +17,9 @@
     <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css" />
     <link rel="stylesheet" href="/vendor/@highlightjs/cdn-assets/styles/github-dark.min.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/username-guard.css" />
+    <link rel="stylesheet" href="/notifications.css" />
+    <link rel="stylesheet" href="/layout-fixes.css" />
   </head>
   <body class="aichat-page">
     <div class="page-shell page-shell-settings">
@@ -142,7 +145,7 @@
           />
           <p class="aichat-kicker">MAX · AI STUDY PARTNER</p>
           <h1>登录后，继续和 Max 对话</h1>
-          <p>课程、推导、代码或讨论区里的问题，都可以从这里开始。</p>
+          <p>课程、推导、代码或电路图里的问题，都可以从这里开始。</p>
           <a class="aichat-auth-link" href="/login">登录 / 注册</a>
         </section>
 
@@ -195,10 +198,10 @@
                 <div>
                   <p class="aichat-kicker">MAX · STUDY PARTNER</p>
                   <h2>问问 Max</h2>
-                  <p>专注课程、推导与代码问题</p>
+                  <p>课程答疑、推导与电路分析</p>
                 </div>
               </div>
-              <p class="aichat-presence">课程 / 推导 / 代码</p>
+              <p class="aichat-presence">课程 / 推导 / 电路</p>
             </header>
             <div class="aichat-thread" id="aichat-thread" aria-live="polite" aria-atomic="false">
               <article class="aichat-message aichat-message-assistant">
@@ -210,7 +213,10 @@
                   />
                 </div>
                 <div class="aichat-bubble discussion-markdown-body">
-                  <p>你好，我是 Max。可以问我课程、推导、代码或讨论区里适合展开的问题。</p>
+                  <p>
+                    你好，我是
+                    Max。可以问我课程、推导或代码，也可以粘贴本站电路链接，让我分析元件、接线和工作原理。
+                  </p>
                 </div>
               </article>
             </div>
@@ -218,7 +224,7 @@
               <textarea
                 id="aichat-input"
                 rows="1"
-                placeholder="问问 Max..."
+                placeholder="输入问题，或粘贴本站电路链接…"
                 aria-label="输入给 Max 的问题"
                 maxlength="12000"
                 required
@@ -267,6 +273,8 @@
     <script src="/vendor/katex/dist/katex.min.js"></script>
     <script src="/vendor/katex/dist/contrib/auto-render.min.js"></script>
     <script src="/typography.js"></script>
+    <script src="/username-guard.js"></script>
     <script src="/app.js"></script>
+    <script src="/notifications.js"></script>
   </body>
 </html>

@@ -16,8 +16,13 @@
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/course.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/username-guard.css" />
+    <link rel="stylesheet" href="/notifications.css" />
+    <link rel="stylesheet" href="/course-upload.css" />
+    <link rel="stylesheet" href="/layout-fixes.css" />
+    <link rel="stylesheet" href="/course-reader.css" />
   </head>
-  <body class="course-page">
+  <body class="course-page course-reader-page">
     <div class="page-shell page-shell-settings">
       <header class="topbar">
         <a class="brand" href="/" aria-label="FREE-BBS 首页">
@@ -137,15 +142,25 @@
         </a>
       </nav>
 
-      <main class="course-main course-map-main course-map-immersive" data-course-map-page>
-        <nav class="course-map-reader-controls" aria-label="地图操作">
+      <main
+        class="main-content course-main course-map-main course-reader-main"
+        data-course-map-page
+      >
+        <header class="course-reader-heading">
+          <p class="course-reader-kicker">课程学习</p>
+          <h1 id="course-reader-title">正在载入课程…</h1>
+          <p id="course-reader-summary" class="course-reader-summary"></p>
+          <p id="course-reader-meta" class="course-reader-meta"></p>
+        </header>
+        <nav class="course-map-reader-controls" aria-label="课程操作">
           <a
             class="course-map-reader-control"
             id="course-map-directory-link"
             href="/world"
             aria-label="返回学习世界"
             title="返回学习世界"
-            >←</a
+            ><span aria-hidden="true">←</span>
+            <span id="course-reader-back-label">学习世界</span></a
           >
           <button
             class="course-map-reader-control"
@@ -154,18 +169,18 @@
             aria-label="回到章节总览"
             title="回到章节总览"
           >
-            ◎
+            章节总览
           </button>
           <a
             class="course-map-reader-control hidden"
             id="course-map-edit-link"
             href="/course-map-editor"
             aria-label="编辑知识地图"
-            >✎</a
+            >编辑课程</a
           >
         </nav>
-        <section class="course-map-panel" aria-label="知识地图">
-          <p class="course-map-status" id="course-map-status">正在载入知识地图…</p>
+        <section class="course-map-panel" aria-label="课程章节与知识点">
+          <p class="course-map-status" id="course-map-status" role="status">正在载入课程内容…</p>
           <div class="course-map-scroller" id="course-map-scroller">
             <div class="course-map-canvas" id="course-map-canvas"></div>
           </div>
@@ -174,7 +189,10 @@
     </div>
 
     <script src="/typography.js"></script>
+    <script src="/username-guard.js"></script>
     <script src="/app.js"></script>
     <script src="/course-map.js"></script>
+    <script src="/notifications.js"></script>
+    <script src="/course-upload.js"></script>
   </body>
 </html>

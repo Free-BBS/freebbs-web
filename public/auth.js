@@ -137,6 +137,7 @@ async function callApi(path, options = {}) {
       payload.detail ? `${payload.message}：${payload.detail}` : payload.message || '请求失败',
     );
     error.status = response.status;
+    error.code = payload.code;
     throw error;
   }
 
@@ -147,6 +148,7 @@ async function handleAuthSubmit(event) {
   event.preventDefault();
 
   const mode = authForm.dataset.authMode;
+  if (authSubmit.disabled) return;
   authSubmit.disabled = true;
   setMessage(
     mode === 'login' ? '正在登录...' : mode === 'remake' ? '正在重设密码...' : '正在注册...',
@@ -170,12 +172,23 @@ async function handleAuthSubmit(event) {
     let payload;
 
     if (mode === 'login') {
-      payload = await callApi('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({
-          identifier: document.getElementById('auth-identifier').value.trim(),
-          password: document.getElementById('auth-password').value,
-        }),
+      if (!window.freeBbsAuthChallenge) {
+        throw new Error('登录验证未加载，请刷新页面后重试');
+      }
+      const credentials = {
+        identifier: document.getElementById('auth-identifier').value.trim(),
+        password: document.getElementById('auth-password').value,
+      };
+      setMessage('请在弹窗中完成实验验证');
+      payload = await window.freeBbsAuthChallenge.run({
+        mode: 'login',
+        identity: credentials.identifier,
+        request: callApi,
+        submit: (captcha) =>
+          callApi('/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ ...credentials, captcha }),
+          }),
       });
     } else if (mode === 'remake') {
       payload = await callApi('/auth/reset-password', {
@@ -188,20 +201,45 @@ async function handleAuthSubmit(event) {
         }),
       });
     } else {
-      payload = await callApi('/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({
-          username: document.getElementById('auth-username').value.trim(),
-          fullName: document.getElementById('auth-full-name').value.trim(),
-          studentId: document.getElementById('auth-student-id').value.trim(),
-          email: document.getElementById('auth-email').value.trim(),
-          emailCode: document.getElementById('auth-email-code').value.trim(),
-          password: document.getElementById('auth-password').value,
-        }),
+      const agreement = document.getElementById('auth-community-agreement');
+      if (!agreement?.checked) {
+        throw new Error('请先阅读并同意社区公约');
+      }
+      if (!window.freeBbsAuthChallenge) {
+        throw new Error('注册验证未加载，请刷新页面后重试');
+      }
+      const registration = {
+        username: document.getElementById('auth-username').value.trim(),
+        fullName: document.getElementById('auth-full-name').value.trim(),
+        studentId: document.getElementById('auth-student-id').value.trim(),
+        email: document.getElementById('auth-email').value.trim(),
+        emailCode: document.getElementById('auth-email-code').value.trim(),
+        password: document.getElementById('auth-password').value,
+        communityAgreementAccepted: true,
+        communityAgreementVersion: agreement.dataset.version,
+      };
+      setMessage('请在弹窗中完成实验验证');
+      payload = await window.freeBbsAuthChallenge.run({
+        mode: 'register',
+        identity: registration.email,
+        agreementVersion: registration.communityAgreementVersion,
+        request: callApi,
+        submit: (captcha) =>
+          callApi('/auth/register', {
+            method: 'POST',
+            body: JSON.stringify({ ...registration, captcha }),
+          }),
       });
     }
 
+    if (!payload) {
+      setMessage('已取消验证，填写内容已保留。');
+      return;
+    }
     localStorage.setItem(STORAGE_KEY, payload.token);
+    if (payload.user?.requiresUsernameChange) {
+      await window.freeBbsAccount.requireValidUsername(payload.user);
+    }
     window.location.href = '/';
   } catch (error) {
     setMessage(error.message);
@@ -239,7 +277,10 @@ async function handleSendEmailCode() {
         method: 'POST',
         body: JSON.stringify({
           email: emailInput.value.trim(),
-          ...(mode === 'remake' ? { studentId: studentIdInput.value.trim() } : {}),
+          studentId: studentIdInput?.value.trim() || '',
+          ...(mode === 'register'
+            ? { fullName: document.getElementById('auth-full-name').value.trim() }
+            : {}),
         }),
       },
     );

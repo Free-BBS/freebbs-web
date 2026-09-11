@@ -14,16 +14,17 @@ const planetStyleSource = fs.readFileSync(
   'utf8',
 );
 
-function extractStudyWorlds() {
+function extractStudyWorlds(source = scriptSource) {
+  const normalizedSource = source.replace(/\r\n/g, '\n');
   const startMarker = 'const studyWorlds = ';
   const endMarker = '\n\nconst HIDDEN_ORBIT_SLOTS';
-  const start = scriptSource.indexOf(startMarker);
-  const end = scriptSource.indexOf(endMarker, start);
+  const start = normalizedSource.indexOf(startMarker);
+  const end = normalizedSource.indexOf(endMarker, start);
 
   assert.notEqual(start, -1, 'world.js should declare studyWorlds');
   assert.notEqual(end, -1, 'world.js should declare orbit constants after studyWorlds');
 
-  const literal = scriptSource
+  const literal = normalizedSource
     .slice(start + startMarker.length, end)
     .trim()
     .replace(/;$/, '');
@@ -50,6 +51,12 @@ function attributeValue(tag, name) {
 
 const studyWorlds = extractStudyWorlds();
 const hiddenSlots = extractHiddenSlots();
+
+test('learning world data extraction accepts both LF and Windows CRLF checkouts', () => {
+  const lfSource = scriptSource.replace(/\r\n/g, '\n');
+  assert.deepEqual(extractStudyWorlds(lfSource), studyWorlds);
+  assert.deepEqual(extractStudyWorlds(lfSource.replace(/\n/g, '\r\n')), studyWorlds);
+});
 
 test('learning world declares exactly six subject islands in data and markup', () => {
   assert.equal(studyWorlds.length, 6);
@@ -622,6 +629,27 @@ test('course planet illustrations have transparent responsive assets without sph
       }
     }
   }
+});
+
+test('shared world refinements shade transparent course art without a rectangular shadow', () => {
+  const refinements = fs.readFileSync(
+    path.join(projectRoot, 'public/world-refinements.css'),
+    'utf8',
+  );
+  const rule = refinements.match(/body\.world-page \.island-course-planet::before\s*\{([^}]+)\}/);
+  assert.ok(rule, 'shared course artwork refinement should be present');
+  assert.match(rule[1], /box-shadow:\s*none;/);
+  assert.match(rule[1], /filter:[^;]*drop-shadow\(/);
+  assert.match(refinements, /--course-label-shift:\s*-35px/);
+  assert.match(refinements, /--course-label-shift:\s*35px/);
+  assert.match(refinements, /translateX\(calc\(-50% \+ var\(--course-label-shift, 0px\)\)\)/);
+  assert.match(
+    refinements,
+    /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.island-course-node:nth-child\(n\)[\s\S]*transition: none;/,
+  );
+  assert.ok(
+    pageSource.indexOf('/world-refinements.css') > pageSource.indexOf('/planet-materials.css'),
+  );
 });
 
 test('real island clicks render each course route, accessible identity and separate central island', () => {
