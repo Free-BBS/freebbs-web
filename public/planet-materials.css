@@ -235,8 +235,7 @@ body.world-page .world-orbit .world-core strong {
 }
 
 body.world-page .island-course-planet {
-  --course-terrain-light: rgba(80, 162, 162, 0.58);
-  --course-terrain-dark: rgba(31, 58, 96, 0.38);
+  --course-art-image: none;
   padding: 0;
   border: 0;
   background: none;
@@ -247,55 +246,53 @@ body.world-page .island-course-planet {
 
 body.world-page .island-course-planet::before {
   content: '';
+  inset: 0;
   width: auto;
   height: auto;
   border: 0;
-  background-image:
-    radial-gradient(ellipse at 26% 24%, rgba(252, 250, 215, 0.28), transparent 51%),
-    radial-gradient(ellipse at 27% 26%, transparent 34%, rgba(25, 67, 75, 0.14) 64%, #244552 97%),
-    linear-gradient(140deg, var(--course-terrain-light), var(--course-terrain-dark)),
-    url('/assets/planet-course-terrain-v1.webp');
-  background-blend-mode: normal;
+  /* Keep domes, towers and waterfalls intact instead of cropping to a sphere. */
+  border-radius: 0;
+  background: var(--course-art-image) center / contain no-repeat;
+  box-shadow: none;
   transform: none;
-  filter: contrast(0.93) brightness(1.12) saturate(1.2);
+  filter: drop-shadow(0 7px 9px rgba(5, 49, 55, 0.24));
 }
 
 body.world-page .island-course-planet::after {
-  z-index: 2;
-  inset: 0;
-  background: var(--course-surface-symbol, none) center / cover no-repeat;
-  box-shadow:
-    inset 1px 1px 3px rgba(228, 255, 226, 0.36),
-    0 0 16px color-mix(in srgb, var(--course-accent) 22%, transparent);
-  opacity: 0.86;
-  mask-image: radial-gradient(
-    ellipse at 50% 37%,
-    #000 32%,
-    rgba(0, 0, 0, 0.8) 53%,
-    transparent 73%
-  );
-  pointer-events: none;
+  /* The course-specific symbols now belong to the illustrated terrain itself. */
+  content: none;
+  background: none;
+  box-shadow: none;
+  mask-image: none;
 }
 
 body.world-page .island-course-planet[data-course-slug='math'] {
-  --course-terrain-light: rgba(104, 197, 126, 0.72);
-  --course-terrain-dark: rgba(28, 70, 55, 0.56);
   --course-accent: #9dddab;
-  --course-surface-symbol: url('/assets/planet-math-markings.svg');
+  --course-art-image: url('/assets/course-planet-math-v2.webp');
 }
 
 body.world-page .island-course-planet[data-course-slug='circuits'] {
-  --course-terrain-light: rgba(231, 178, 72, 0.74);
-  --course-terrain-dark: rgba(87, 67, 33, 0.53);
   --course-accent: #e9c679;
-  --course-surface-symbol: url('/assets/planet-circuits-markings.svg');
+  --course-art-image: url('/assets/course-planet-circuits-v2.webp');
 }
 
 body.world-page .island-course-planet[data-course-slug='signals'] {
-  --course-terrain-light: rgba(67, 184, 203, 0.72);
-  --course-terrain-dark: rgba(65, 53, 139, 0.58);
   --course-accent: #91dcee;
-  --course-surface-symbol: url('/assets/planet-signals-markings.svg');
+  --course-art-image: url('/assets/course-planet-signals-v2.webp');
+}
+
+@media (max-width: 640px) {
+  body.world-page .island-course-planet[data-course-slug='math'] {
+    --course-art-image: url('/assets/course-planet-math-v2-mobile.webp');
+  }
+
+  body.world-page .island-course-planet[data-course-slug='circuits'] {
+    --course-art-image: url('/assets/course-planet-circuits-v2-mobile.webp');
+  }
+
+  body.world-page .island-course-planet[data-course-slug='signals'] {
+    --course-art-image: url('/assets/course-planet-signals-v2-mobile.webp');
+  }
 }
 
 body.world-page .island-course-planet > .island-course-identity {

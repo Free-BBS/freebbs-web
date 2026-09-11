@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -79,7 +80,7 @@ class ClientTest(unittest.TestCase):
         self.client.request("GET", "/courses")
         self.assertEqual(Handler.requests[-1][2], "Bearer " + TOKEN)
         self.assertNotIn(TOKEN, Handler.requests[-1][1])
-        result = subprocess.run(["python3", str(HELPER), "courses"], env={**os.environ, "FREEBBS_BASE_URL": self.origin, "FREEBBS_UPLOAD_TOKEN": TOKEN}, capture_output=True, text=True, check=True)
+        result = subprocess.run([sys.executable, str(HELPER), "courses"], env={**os.environ, "FREEBBS_BASE_URL": self.origin, "FREEBBS_UPLOAD_TOKEN": TOKEN}, capture_output=True, text=True, check=True)
         self.assertIn("signals", result.stdout)
         self.assertNotIn(TOKEN, result.stdout + result.stderr)
 
@@ -104,7 +105,7 @@ class ClientTest(unittest.TestCase):
             self.assertEqual(uploaded["file"]["size"], len("# 正文".encode()))
 
     def run_cli(self, *arguments):
-        return subprocess.run(["python3", str(HELPER), *arguments],
+        return subprocess.run([sys.executable, str(HELPER), *arguments],
                               env={**os.environ, "FREEBBS_BASE_URL": self.origin, "FREEBBS_UPLOAD_TOKEN": TOKEN},
                               capture_output=True, text=True, check=False)
 

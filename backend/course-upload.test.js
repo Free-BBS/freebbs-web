@@ -428,7 +428,8 @@ test('image uploads decode and transcode WebP, disallow invalid bytes and curren
   });
   assert.equal(result.status, 201);
   const body = await result.json();
-  const image = await sharp(path.join(dir, 'uploads', path.basename(body.url))).metadata();
+  const imageBytes = await fs.promises.readFile(path.join(dir, 'uploads', path.basename(body.url)));
+  const image = await sharp(imageBytes).metadata();
   assert.equal(image.format, 'webp');
   assert.equal(
     (

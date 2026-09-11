@@ -218,11 +218,9 @@ body.world-page .island-course-orbit::after {
 }
 
 body.world-page .island-course-planet::before {
-  filter: contrast(0.9) brightness(1.08) saturate(0.75);
-  box-shadow:
-    inset 4px 4px 12px rgba(237, 242, 216, 0.3),
-    inset -8px -5px 16px rgba(20, 50, 56, 0.24),
-    0 6px 12px rgba(15, 40, 43, 0.16);
+  /* Follow the transparent illustration outline instead of shading a rectangular box. */
+  filter: contrast(0.9) brightness(1.08) saturate(0.75) drop-shadow(0 7px 9px rgba(5, 49, 55, 0.24));
+  box-shadow: none;
 }
 
 body.world-page .island-course-planet::after {
@@ -408,6 +406,29 @@ body.world-page .world-modal-visual {
     width: 150px;
     padding: 9px 10px;
     text-align: left;
+    /* The label is wider than the 80px planet; keep edge slots inside the viewport. */
+    transform: translateX(calc(-50% + var(--course-label-shift, 0px)));
+    transition: transform 520ms ease;
+  }
+
+  body.world-page .island-course-node:is([data-course-slot='0'], [data-course-slot='5']) {
+    --course-label-shift: -35px;
+  }
+
+  body.world-page .island-course-node:is([data-course-slot='2'], [data-course-slot='3']) {
+    --course-label-shift: 35px;
+  }
+
+  body.world-page .island-course-node:only-child {
+    --course-label-shift: 0px;
+  }
+
+  body.world-page .island-course-node:only-child[data-course-slot='0'] {
+    --course-label-shift: -35px;
+  }
+
+  body.world-page .island-course-node:only-child[data-course-slot='3'] {
+    --course-label-shift: 35px;
   }
 
   body.world-page .island-course-identity > strong {
@@ -488,6 +509,11 @@ body.world-page .world-modal-visual {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  body.world-page .island-course-node:nth-child(n),
+  body.world-page .island-course-planet > .island-course-identity {
+    transition: none;
+  }
+
   body.world-page .island-orbit-visual,
   body.world-page .world-core-ring {
     animation: none;

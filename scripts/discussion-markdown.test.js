@@ -6,9 +6,12 @@ const vm = require('node:vm');
 const { marked } = require('marked');
 
 const root = path.join(__dirname, '..');
-const appSource = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
+const appSource = fs
+  .readFileSync(path.join(root, 'public', 'app.js'), 'utf8')
+  .replace(/\r\n/g, '\n');
 const functionStart = appSource.indexOf('function protectMarkdownMath');
 const functionEnd = appSource.indexOf('\n\nfunction renderMarkdownContent', functionStart);
+assert.ok(functionStart !== -1 && functionEnd > functionStart, 'Markdown function bounds exist');
 const functionSource = appSource.slice(functionStart, functionEnd);
 
 function protect(markdown) {
@@ -74,6 +77,10 @@ test('切回已有哈希的分区时恢复该分区缓存，而不是保留当�
     '\n\nfunction getDiscussionVisiblePosts',
     cacheFunctionStart,
   );
+  assert.ok(
+    cacheFunctionStart !== -1 && cacheFunctionEnd > cacheFunctionStart,
+    'Discussion cache function bounds exist',
+  );
   const cacheFunctionSource = appSource.slice(cacheFunctionStart, cacheFunctionEnd);
   const discussionState = {
     posts: [],
@@ -109,6 +116,10 @@ test('切换版块时只显示目标缓存，未缓存时显示加载态', () =>
     '\n\nfunction updateCachedDiscussionPost',
     restoreFunctionStart,
   );
+  assert.ok(
+    restoreFunctionStart !== -1 && restoreFunctionEnd > restoreFunctionStart,
+    'Discussion restore function bounds exist',
+  );
   const restoreFunctionSource = appSource.slice(restoreFunctionStart, restoreFunctionEnd);
   const discussionState = {
     posts: [{ id: 'previous-board-post' }],
@@ -139,6 +150,10 @@ test('置顶和精华状态同步所有帖子缓存并使哈希失效', () => {
   const updateFunctionEnd = appSource.indexOf(
     '\n\nfunction getDiscussionVisiblePosts',
     updateFunctionStart,
+  );
+  assert.ok(
+    updateFunctionStart !== -1 && updateFunctionEnd > updateFunctionStart,
+    'Discussion update function bounds exist',
   );
   const updateFunctionSource = appSource.slice(updateFunctionStart, updateFunctionEnd);
   const discussionState = {

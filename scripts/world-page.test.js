@@ -3,22 +3,28 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const sharp = require('sharp');
 
 const projectRoot = path.resolve(__dirname, '..');
 const pageSource = fs.readFileSync(path.join(projectRoot, 'public', 'world.html'), 'utf8');
 const scriptSource = fs.readFileSync(path.join(projectRoot, 'public', 'world.js'), 'utf8');
 const styleSource = fs.readFileSync(path.join(projectRoot, 'public', 'world.css'), 'utf8');
+const planetStyleSource = fs.readFileSync(
+  path.join(projectRoot, 'public', 'planet-materials.css'),
+  'utf8',
+);
 
-function extractStudyWorlds() {
+function extractStudyWorlds(source = scriptSource) {
+  const normalizedSource = source.replace(/\r\n/g, '\n');
   const startMarker = 'const studyWorlds = ';
   const endMarker = '\n\nconst HIDDEN_ORBIT_SLOTS';
-  const start = scriptSource.indexOf(startMarker);
-  const end = scriptSource.indexOf(endMarker, start);
+  const start = normalizedSource.indexOf(startMarker);
+  const end = normalizedSource.indexOf(endMarker, start);
 
   assert.notEqual(start, -1, 'world.js should declare studyWorlds');
   assert.notEqual(end, -1, 'world.js should declare orbit constants after studyWorlds');
 
-  const literal = scriptSource
+  const literal = normalizedSource
     .slice(start + startMarker.length, end)
     .trim()
     .replace(/;$/, '');
@@ -45,6 +51,12 @@ function attributeValue(tag, name) {
 
 const studyWorlds = extractStudyWorlds();
 const hiddenSlots = extractHiddenSlots();
+
+test('learning world data extraction accepts both LF and Windows CRLF checkouts', () => {
+  const lfSource = scriptSource.replace(/\r\n/g, '\n');
+  assert.deepEqual(extractStudyWorlds(lfSource), studyWorlds);
+  assert.deepEqual(extractStudyWorlds(lfSource.replace(/\n/g, '\r\n')), studyWorlds);
+});
 
 test('learning world declares exactly six subject islands in data and markup', () => {
   assert.equal(studyWorlds.length, 6);
@@ -566,6 +578,78 @@ test('active islands open a course-planet layer with the three real course route
   assert.match(scriptSource, /world\.courses\.map\(\(course, index\) => createCoursePlanet/);
   assert.match(scriptSource, /--world-course-island-image/);
   assert.match(styleSource, /background:\s*var\(--world-course-island-image\)/);
+});
+
+test('course planet illustrations have transparent responsive assets without spherical clipping or duplicate markings', async () => {
+  assert.match(pageSource, /href="\/planet-materials\.css"/);
+  assert.match(
+    planetStyleSource,
+    /body\.world-page \.island-course-planet::before\s*\{[^}]*border-radius:\s*0;[^}]*background:\s*var\(--course-art-image\) center \/ contain no-repeat;/,
+  );
+  assert.match(
+    planetStyleSource,
+    /body\.world-page \.island-course-planet::after\s*\{[^}]*content:\s*none;/,
+  );
+  assert.doesNotMatch(
+    planetStyleSource,
+    /planet-course-terrain-v1|planet-(math|circuits|signals)-markings\.svg/,
+  );
+
+  for (const slug of ['math', 'circuits', 'signals']) {
+    for (const [size, suffix] of [
+      [768, ''],
+      [512, '-mobile'],
+    ]) {
+      const filename = `course-planet-${slug}-v2${suffix}.webp`;
+      assert.ok(planetStyleSource.includes(`/assets/${filename}`));
+      const asset = path.join(projectRoot, 'public', 'assets', filename);
+      const metadata = await sharp(asset).metadata();
+      assert.equal(metadata.width, size, filename);
+      assert.equal(metadata.height, size, filename);
+      assert.equal(metadata.channels, 4, filename);
+      assert.equal(metadata.hasAlpha, true, filename);
+      const stats = await sharp(asset).stats();
+      assert.equal(
+        stats.channels[3].min,
+        0,
+        `${filename} must have genuinely transparent exterior`,
+      );
+      assert.equal(stats.channels[3].max, 255, `${filename} must retain opaque artwork`);
+      const corner = await sharp(asset)
+        .extract({ left: 0, top: 0, width: 50, height: 25 })
+        .ensureAlpha()
+        .raw()
+        .toBuffer();
+      for (let offset = 3; offset < corner.length; offset += 4) {
+        assert.equal(
+          corner[offset],
+          0,
+          `${filename} must not retain detached top-left background speckles`,
+        );
+      }
+    }
+  }
+});
+
+test('shared world refinements shade transparent course art without a rectangular shadow', () => {
+  const refinements = fs.readFileSync(
+    path.join(projectRoot, 'public/world-refinements.css'),
+    'utf8',
+  );
+  const rule = refinements.match(/body\.world-page \.island-course-planet::before\s*\{([^}]+)\}/);
+  assert.ok(rule, 'shared course artwork refinement should be present');
+  assert.match(rule[1], /box-shadow:\s*none;/);
+  assert.match(rule[1], /filter:[^;]*drop-shadow\(/);
+  assert.match(refinements, /--course-label-shift:\s*-35px/);
+  assert.match(refinements, /--course-label-shift:\s*35px/);
+  assert.match(refinements, /translateX\(calc\(-50% \+ var\(--course-label-shift, 0px\)\)\)/);
+  assert.match(
+    refinements,
+    /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.island-course-node:nth-child\(n\)[\s\S]*transition: none;/,
+  );
+  assert.ok(
+    pageSource.indexOf('/world-refinements.css') > pageSource.indexOf('/planet-materials.css'),
+  );
 });
 
 test('real island clicks render each course route, accessible identity and separate central island', () => {

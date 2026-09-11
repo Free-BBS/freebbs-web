@@ -87,7 +87,6 @@ const settingsMessage = document.getElementById('settings-message');
 const settingsFullName = document.getElementById('settings-full-name');
 const settingsBio = document.getElementById('settings-bio');
 const settingsWebsiteUrl = document.getElementById('settings-website-url');
-const settingsAvatarInput = document.getElementById('settings-avatar-input');
 const settingsAvatarImage = document.getElementById('settings-avatar-image');
 const settingsLogoutButton = document.getElementById('settings-logout-button');
 const settingsPasswordForm = document.getElementById('settings-password-form');
@@ -1127,7 +1126,7 @@ function renderShopCost(cost = {}) {
     parts.push(`${Number(cost.magnetic)} 磁元`);
   }
 
-  return parts.join(' / ') || '未定价';
+  return parts.join(' 或 ') || '未定价';
 }
 
 function ensureShopInspectModal() {
@@ -1142,7 +1141,7 @@ function ensureShopInspectModal() {
   modal.className = 'fortune-modal shop-inspect-modal hidden';
   modal.innerHTML = `
     <div class="fortune-backdrop" data-action="close-shop-inspect"></div>
-    <section class="fortune-panel shop-inspect-panel" aria-labelledby="shop-inspect-title">
+    <section class="fortune-panel shop-inspect-panel" role="dialog" aria-modal="true" aria-labelledby="shop-inspect-title" tabindex="-1">
       <button class="fortune-close" type="button" data-action="close-shop-inspect" aria-label="关闭">×</button>
       <div class="shop-inspect-layout">
         <div class="shop-inspect-image">
@@ -1154,13 +1153,59 @@ function ensureShopInspectModal() {
           <p id="shop-inspect-desc"></p>
           <strong id="shop-inspect-price"></strong>
           <div class="shop-inspect-actions" id="shop-inspect-actions"></div>
-          <p class="discussion-message" id="shop-inspect-message"></p>
+          <p class="discussion-message" id="shop-inspect-message" role="status" aria-live="polite"></p>
         </div>
       </div>
     </section>
   `;
+  modal.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeShopInspectModal();
+      event.stopPropagation();
+    }
+    if (event.key !== 'Tab') return;
+    const controls = [...modal.querySelectorAll('button:not(:disabled), input:not(:disabled)')];
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+  });
   document.body.append(modal);
   return modal;
+}
+
+function showShopInspectModal(modal) {
+  if (modal.classList.contains('hidden')) modal.returnFocus = document.activeElement;
+  modal.classList.remove('hidden');
+  modal.querySelector('.fortune-close').focus();
+}
+
+function closeShopInspectModal() {
+  const modal = document.getElementById('shop-inspect-modal');
+  if (!modal || modal.classList.contains('hidden')) return;
+  modal.classList.add('hidden');
+  if (modal.returnFocus?.isConnected) modal.returnFocus.focus();
+  else {
+    // Buying or using an item re-renders the cards, replacing the original trigger.
+    const triggerData = modal.returnFocus?.dataset;
+    const replacement = [
+      ...document.querySelectorAll(
+        '[data-action="inspect-item"], [data-action="inspect-inventory-item"]',
+      ),
+    ].find(
+      (element) =>
+        triggerData &&
+        element.dataset.action === triggerData.action &&
+        element.dataset.itemKey === triggerData.itemKey &&
+        element.dataset.assetKey === triggerData.assetKey,
+    );
+    replacement?.focus();
+  }
 }
 
 function getCurrencyOwned(currency) {
@@ -1184,6 +1229,7 @@ function renderActivationButton(item, currency) {
 
   const icon = currency === 'electric' ? 'electron' : 'magnetron';
   const label = currency === 'electric' ? '电激发' : '磁激发';
+  const unit = currency === 'electric' ? '电元' : '磁元';
   const owned = getCurrencyOwned(currency);
 
   return `
@@ -1192,12 +1238,11 @@ function renderActivationButton(item, currency) {
       data-action="purchase-item"
       data-item-key="${escapeHtml(item.key)}"
       data-currency="${currency}"
-      data-tooltip="${label}：消耗 ${price}，当前持有 ${owned}"
-      title="${label}：${price}/${owned}"
+      ${owned < price ? 'disabled' : ''}
       type="button"
     >
       <img src="/assets/icons/${icon}.svg" alt="" aria-hidden="true" />
-      <span>${price}/${owned}</span>
+      <span><b>${label} · ${price} ${unit}</b><small>持有 ${owned}${owned < price ? ' · 余额不足' : ''}</small></span>
     </button>
   `;
 }
@@ -1245,6 +1290,7 @@ function openShopInspectModal(itemKey) {
   }
 
   const modal = ensureShopInspectModal();
+  modal.dataset.itemKey = item.key;
   modal.querySelector('#shop-inspect-image').src = item.image || '/assets/icons/battery.svg';
   modal.querySelector('#shop-inspect-class').textContent =
     item.class === 'useless' ? '无用类' : '资产';
@@ -1255,7 +1301,7 @@ function openShopInspectModal(itemKey) {
   modal.querySelector('#shop-inspect-actions').innerHTML =
     [renderActivationButton(item, 'electric'), renderActivationButton(item, 'magnetic')].join('') ||
     `<p class="fortune-record-empty">这个物品暂时无法激发。</p>`;
-  modal.classList.remove('hidden');
+  showShopInspectModal(modal);
 }
 
 function openInventoryInspectModal(asset) {
@@ -1268,6 +1314,7 @@ function openInventoryInspectModal(asset) {
   );
   const item = catalogItem || asset.item || asset.metadata || {};
   const modal = ensureShopInspectModal();
+  modal.dataset.itemKey = '';
   modal.querySelector('#shop-inspect-image').src = item.image || '/assets/icons/inventory.svg';
   modal.querySelector('#shop-inspect-class').textContent =
     item.class === 'useless' ? '无用类' : '资产';
@@ -1287,7 +1334,7 @@ function openInventoryInspectModal(asset) {
   const giftActions = canGift
     ? `
       <div class="inventory-gift-form" data-gift-asset-key="${escapeHtml(asset.key)}">
-        <input class="inventory-gift-input" type="text" placeholder="输入 UID 或昵称" maxlength="64" />
+        <input class="inventory-gift-input" type="text" aria-label="接收者 UID 或昵称" placeholder="输入 UID 或昵称" maxlength="64" />
         <button class="electromagnetic-button" data-action="gift-inventory-item" data-asset-key="${escapeHtml(asset.key)}" type="button">赠与</button>
       </div>
     `
@@ -1295,13 +1342,13 @@ function openInventoryInspectModal(asset) {
   modal.querySelector('#shop-inspect-actions').innerHTML = [converterActions, giftActions]
     .filter(Boolean)
     .join('');
-  modal.classList.remove('hidden');
+  showShopInspectModal(modal);
 }
 
 function refreshOpenShopInspectActions(itemKey) {
   const modal = document.getElementById('shop-inspect-modal');
 
-  if (!modal || modal.classList.contains('hidden')) {
+  if (!modal || modal.classList.contains('hidden') || modal.dataset.itemKey !== itemKey) {
     return;
   }
 
@@ -1312,9 +1359,17 @@ function refreshOpenShopInspectActions(itemKey) {
     return;
   }
 
+  const focusedCurrency = document.activeElement?.closest?.('[data-action="purchase-item"]')
+    ?.dataset.currency;
   actions.innerHTML =
     [renderActivationButton(item, 'electric'), renderActivationButton(item, 'magnetic')].join('') ||
     `<p class="fortune-record-empty">这个物品暂时无法激发。</p>`;
+  if (focusedCurrency) {
+    const next = [...actions.querySelectorAll('button:not(:disabled)')].find(
+      (element) => element.dataset.currency === focusedCurrency,
+    );
+    (next || modal.querySelector('.fortune-close')).focus();
+  }
 }
 
 async function loadElectromagneticPage() {
@@ -1352,16 +1407,17 @@ async function loadElectromagneticPage() {
           .map(
             (item) => `
         <article class="shop-item-card" data-item-key="${escapeHtml(item.key)}">
-          <span class="asset-quantity-badge">${assetQuantityByKey.get(item.assetKey || item.key) || 0}</span>
+          <span class="asset-quantity-badge">已拥有 ${assetQuantityByKey.get(item.assetKey || item.key) || 0}</span>
           <div class="shop-item-image">
             <img src="${escapeHtml(item.image || '/assets/icons/battery.svg')}" alt="" aria-hidden="true" />
           </div>
           <div class="shop-item-copy">
-            <p class="discussion-kicker">Asset</p>
             <h2>${escapeHtml(item.name)}</h2>
+            <p>${escapeHtml(item.description || '查看详情，了解这个物品。')}</p>
+            <strong class="shop-item-price">${escapeHtml(renderShopCost(item.cost))}</strong>
           </div>
           <div class="shop-item-actions">
-            <button class="electromagnetic-button" data-action="inspect-item" data-item-key="${escapeHtml(item.key)}" type="button">端详</button>
+            <button class="electromagnetic-button" data-action="inspect-item" data-item-key="${escapeHtml(item.key)}" type="button" aria-label="查看${escapeHtml(item.name)}详情">端详物品</button>
           </div>
         </article>
       `,
@@ -1428,15 +1484,16 @@ async function loadInventoryPage() {
             const item = asset.item || asset.metadata || {};
             return `
           <article class="inventory-item-row" data-asset-key="${escapeHtml(asset.key)}">
-            <span class="asset-quantity-badge">${Number(asset.quantity || 0)}</span>
+            <span class="asset-quantity-badge">已拥有 ${Number(asset.quantity || 0)}</span>
             <div class="inventory-item-image">
               <img src="${escapeHtml(item.image || '/assets/icons/inventory.svg')}" alt="" aria-hidden="true" />
             </div>
             <div class="inventory-item-copy">
               <h2>${escapeHtml(item.name || asset.key)}</h2>
+              <p>${escapeHtml(item.description || '查看物品详情与可用操作。')}</p>
             </div>
             <div class="inventory-item-actions">
-              <button class="electromagnetic-button" data-action="inspect-inventory-item" data-asset-key="${escapeHtml(asset.key)}" type="button">端详</button>
+              <button class="electromagnetic-button" data-action="inspect-inventory-item" data-asset-key="${escapeHtml(asset.key)}" type="button" aria-label="查看${escapeHtml(item.name || asset.key)}详情">端详物品</button>
             </div>
           </article>
         `;
@@ -1456,31 +1513,38 @@ async function loadInventoryPage() {
 async function handleElectromagneticPageClick(event) {
   const closeInspect = event.target.closest("[data-action='close-shop-inspect']");
   if (closeInspect) {
-    ensureShopInspectModal().classList.add('hidden');
+    closeShopInspectModal();
     return;
   }
 
   const button = event.target.closest('[data-action]');
 
-  if (!button || !isElectromagneticPage()) {
+  if (
+    !button ||
+    button.disabled ||
+    !isElectromagneticPage() ||
+    !['inspect-item', 'purchase-item'].includes(button.dataset.action)
+  ) {
     return;
   }
 
   const message = document.getElementById('economy-message');
-  button.disabled = true;
+  if (button.dataset.action === 'inspect-item') {
+    openShopInspectModal(button.dataset.itemKey || '');
+    return;
+  }
+  const inspectModal = ensureShopInspectModal();
+  if (inspectModal.dataset.purchasing === 'true') return;
+  inspectModal.dataset.purchasing = 'true';
+  inspectModal.querySelectorAll('[data-action="purchase-item"]').forEach((action) => {
+    action.disabled = true;
+  });
+  inspectModal.querySelector('#shop-inspect-message').textContent = '正在激发...';
   if (message) {
     message.textContent = '处理中...';
   }
 
   try {
-    if (button.dataset.action === 'inspect-item') {
-      openShopInspectModal(button.dataset.itemKey || '');
-      if (message) {
-        message.textContent = '';
-      }
-      return;
-    }
-
     if (button.dataset.action === 'purchase-item') {
       const itemKey = button.dataset.itemKey || '';
       const payload = await callApi(
@@ -1493,14 +1557,12 @@ async function handleElectromagneticPageClick(event) {
       if (payload.user) {
         saveSession(userState.token, payload.user);
       }
-      refreshOpenShopInspectActions(itemKey);
       await loadElectromagneticPage();
       const modal = document.getElementById('shop-inspect-modal');
       const modalMessage = modal?.querySelector('#shop-inspect-message');
-      if (modalMessage) {
+      if (modalMessage && modal.dataset.itemKey === itemKey) {
         modalMessage.textContent = '已激发';
       }
-      refreshOpenShopInspectActions(itemKey);
     }
 
     if (message) {
@@ -1510,15 +1572,19 @@ async function handleElectromagneticPageClick(event) {
     if (message) {
       message.textContent = error.message;
     }
+    if (inspectModal.dataset.itemKey === button.dataset.itemKey) {
+      inspectModal.querySelector('#shop-inspect-message').textContent = error.message;
+    }
   } finally {
-    button.disabled = false;
+    delete inspectModal.dataset.purchasing;
+    refreshOpenShopInspectActions(inspectModal.dataset.itemKey);
   }
 }
 
 async function handleInventoryPageClick(event) {
   const closeInspect = event.target.closest("[data-action='close-shop-inspect']");
   if (closeInspect) {
-    ensureShopInspectModal().classList.add('hidden');
+    closeShopInspectModal();
     return;
   }
 
@@ -6833,46 +6899,23 @@ async function handleSettingsPasswordSubmit(event) {
   }
 }
 
-async function handleAvatarUpload(event) {
-  if (!isSettingsPage()) {
-    return;
-  }
+function initializeAvatarUpload() {
+  const root = document.getElementById('settings-avatar-editor');
+  if (!root || !window.freeBbsAvatar) return;
 
-  const file = event.target.files?.[0];
-
-  if (!file) {
-    return;
-  }
-
-  if (!file.type.startsWith('image/')) {
-    setSettingsMessage('请选择图片文件');
-    event.target.value = '';
-    return;
-  }
-
-  setSettingsMessage('正在上传头像...');
-
-  try {
-    const imageDataUrl = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ''));
-      reader.onerror = () => reject(new Error('读取头像文件失败'));
-      reader.readAsDataURL(file);
-    });
-
-    const payload = await callApi('/profile/avatar', {
-      method: 'POST',
-      body: JSON.stringify({ imageDataUrl }),
-    });
-
-    saveSession(userState.token, payload.user);
-    renderSettingsForm();
-    setSettingsMessage(payload.message || '头像上传成功');
-  } catch (error) {
-    setSettingsMessage(error.message);
-  } finally {
-    event.target.value = '';
-  }
+  window.freeBbsAvatar.createController({
+    root,
+    upload: (imageDataUrl) =>
+      callApi('/profile/avatar', {
+        method: 'POST',
+        body: JSON.stringify({ imageDataUrl }),
+      }),
+    onSaved: (payload) => {
+      // Updating an avatar does not save the profile draft or change the auth token.
+      userState.avatarPath = payload.user.avatarPath || '';
+      renderUser();
+    },
+  });
 }
 
 async function handleAdminUsersClick(event) {
@@ -8781,7 +8824,7 @@ adminUserScopeFilter?.addEventListener('change', updateAdminUserListFilters);
 fortuneBonusToggle?.addEventListener('change', handleFortuneBonusToggle);
 settingsForm?.addEventListener('submit', handleSettingsSubmit);
 settingsPasswordForm?.addEventListener('submit', handleSettingsPasswordSubmit);
-settingsAvatarInput?.addEventListener('change', handleAvatarUpload);
+initializeAvatarUpload();
 settingsLogoutButton?.addEventListener('click', handleSettingsLogout);
 discussionBoardList?.addEventListener('click', (event) => {
   handleDiscussionBoardClick(event);

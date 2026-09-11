@@ -30,7 +30,9 @@ const highResolutionDocument = sample();
 const highResolutionResult = engine.simulate(highResolutionDocument);
 
 function source(filename) {
-  return fs.readFileSync(path.join(__dirname, '../public', filename), 'utf8');
+  return fs
+    .readFileSync(path.join(__dirname, '../public', filename), 'utf8')
+    .replace(/\r\n/g, '\n');
 }
 
 test('editor playback shows both sine half-cycles with 100001 points instead of locking to one phase', () => {

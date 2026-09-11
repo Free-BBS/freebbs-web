@@ -6,6 +6,11 @@ const sharp = require('sharp');
 const { ensureSurveyTables, createSurveyService, createSurveysRouter } = require('./surveys');
 const pool = require('./db');
 const config = require('./config');
+const {
+  AvatarUploadError,
+  createAvatarUploadService,
+  createMysqlAvatarStore,
+} = require('./avatar-upload');
 const { buildAiDialogExport, buildAiDialogExportFileName } = require('./ai-dialog-export');
 const { enrichAgentCircuitContext } = require('./agent-circuits');
 const { createCircuitAssistantRouter } = require('./circuit-assistant');
@@ -2265,35 +2270,16 @@ function sanitizeWebsiteUrl(value) {
   }
 }
 
-function buildAvatarFileName(userId, mimeType) {
-  const extensionMap = {
-    'image/jpeg': '.jpg',
-    'image/png': '.png',
-    'image/webp': '.webp',
-    'image/gif': '.gif',
-  };
-  const extension = extensionMap[mimeType];
-
-  if (!extension) {
-    return null;
-  }
-
-  return `user-${userId}-${Date.now()}${extension}`;
-}
-
 function buildDiscussionImageFileName(userId) {
   const suffix = crypto.randomBytes(8).toString('hex');
   return `discussion-${userId}-${Date.now()}-${suffix}.webp`;
 }
 
-function removeStoredAvatar(avatarPath) {
-  if (!avatarPath) {
-    return;
-  }
-
-  const fileName = path.basename(avatarPath);
-  fs.promises.unlink(path.join(config.uploadDir, fileName)).catch(() => {});
-}
+const uploadProfileAvatar = createAvatarUploadService({
+  uploadDir: config.uploadDir,
+  store: createMysqlAvatarStore({ pool, createUserUid: createUniqueUserUid }),
+  onCleanupError: (error) => console.warn('Avatar cleanup deferred', error.code || 'unavailable'),
+});
 
 app.get('/api/health', async (_request, response) => {
   try {
@@ -4711,49 +4697,22 @@ app.post('/api/profile/avatar', async (request, response) => {
       return;
     }
 
-    const imageDataUrl = String(request.body.imageDataUrl || '');
-    const match = imageDataUrl.match(
-      /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/,
-    );
-
-    if (!match) {
-      response.status(400).json({ message: '请上传 PNG、JPG、WEBP 或 GIF 图片' });
-      return;
-    }
-
-    const mimeType = match[1];
-    const fileName = buildAvatarFileName(user.id, mimeType);
-
-    if (!fileName) {
-      response.status(400).json({ message: '不支持的头像格式' });
-      return;
-    }
-
-    const fileBuffer = Buffer.from(match[2], 'base64');
-
-    if (!fileBuffer.length || fileBuffer.length > 5 * 1024 * 1024) {
-      response.status(400).json({ message: '头像大小需在 5MB 以内' });
-      return;
-    }
-
-    const avatarPath = `/uploads/${fileName}`;
-    await fs.promises.writeFile(path.join(config.uploadDir, fileName), fileBuffer);
-    await pool.execute(
-      `UPDATE users
-       SET uid = COALESCE(NULLIF(uid, ''), ?),
-           avatar_path = ?
-       WHERE id = ?`,
-      [await createUniqueUserUid(), avatarPath, user.id],
-    );
-
-    removeStoredAvatar(user.avatar_path);
+    const result = await uploadProfileAvatar({
+      userId: user.id,
+      imageDataUrl: request.body?.imageDataUrl,
+    });
 
     response.json({
-      message: '头像上传成功',
-      user: toUserProfile(await getUserById(user.id)),
+      message: result.animated ? '头像上传成功（动图已转换为静态头像）' : '头像上传成功',
+      user: toUserProfile(result.user),
     });
   } catch (error) {
-    response.status(500).json({ message: '头像上传失败', detail: error.message });
+    if (error instanceof AvatarUploadError) {
+      response.status(error.status).json({ message: error.message });
+      return;
+    }
+    console.error('Avatar upload failed', error.code || error.name);
+    response.status(500).json({ message: '头像上传失败，请稍后重试' });
   }
 });
 
