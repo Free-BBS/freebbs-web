@@ -54,6 +54,7 @@
 .knowledge-edit-notice[hidden],
 .knowledge-editor[hidden],
 .course-material-reader.is-editing #knowledge-overview,
+.course-material-reader.is-editing #knowledge-history,
 .course-material-reader.is-editing #knowledge-reading,
 .course-material-reader.is-editing .knowledge-sequence-navigation {
   display: none !important;

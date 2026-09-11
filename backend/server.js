@@ -24,6 +24,7 @@ const {
   isValidUsername,
   enforceUsername,
   createUsernameRouter,
+  ensureUsernameChangeTables,
 } = require('./username-policy');
 const { createCourseMapsRouter, ensureCourseMapTables } = require('./course-maps');
 const { createCircuitsRouter, ensureCircuitTables } = require('./circuits');
@@ -4597,12 +4598,11 @@ app.patch('/api/profile', async (request, response) => {
       return;
     }
 
-    const fullName = String(request.body.fullName || '').trim();
     const bio = String(request.body.bio || '').trim();
     const websiteUrl = sanitizeWebsiteUrl(request.body.websiteUrl || '');
 
-    if (!fullName || fullName.length > 64) {
-      response.status(400).json({ message: '姓名不能为空，且长度不超过 64 个字符' });
+    if (Object.hasOwn(request.body, 'fullName') && request.body.fullName !== user.full_name) {
+      response.status(403).json({ message: '姓名仅可由管理员在用户管理中修改' });
       return;
     }
 
@@ -4619,11 +4619,10 @@ app.patch('/api/profile', async (request, response) => {
     await pool.execute(
       `UPDATE users
        SET uid = COALESCE(NULLIF(uid, ''), ?),
-           full_name = ?,
            bio = ?,
            website_url = ?
        WHERE id = ?`,
-      [await createUniqueUserUid(), fullName, bio || null, websiteUrl || null, user.id],
+      [await createUniqueUserUid(), bio || null, websiteUrl || null, user.id],
     );
 
     response.json({
@@ -5333,6 +5332,7 @@ async function startAgentSettingsInternalApi() {
 
 async function start() {
   await ensureUsersUidColumn();
+  await ensureUsernameChangeTables(pool);
   await ensureAppSettingsTable();
   await ensureSystemSecretSettingsTable(pool);
   await ensureDiscussionTables();

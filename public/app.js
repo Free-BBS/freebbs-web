@@ -6846,7 +6846,6 @@ async function handleSettingsSubmit(event) {
     const payload = await callApi('/profile', {
       method: 'PATCH',
       body: JSON.stringify({
-        fullName: settingsFullName.value.trim(),
         bio: settingsBio.value.trim(),
         websiteUrl: settingsWebsiteUrl.value.trim(),
       }),
@@ -8914,7 +8913,16 @@ initializeAiChatPage();
 loadPublicProfile();
 
 window.addEventListener('freebbs:username-updated', (event) => {
-  saveSession(event.detail.token, event.detail.user);
+  // A nickname change must not overwrite an unsaved profile draft.
+  const draft = settingsForm ? { bio: settingsBio.value, website: settingsWebsiteUrl.value } : null;
+  try {
+    saveSession(event.detail.token, event.detail.user);
+  } finally {
+    if (draft) {
+      settingsBio.value = draft.bio;
+      settingsWebsiteUrl.value = draft.website;
+    }
+  }
 });
 
 window.addEventListener('storage', (event) => {

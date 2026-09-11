@@ -64,6 +64,9 @@ npm run test:auth
 echo "[ci] shop and settings tests"
 npm run test:shop-settings
 
+echo "[ci] nickname policy and knowledge learning usability tests"
+npm run test:profile-learning
+
 echo "[ci] activity registration and administration tests"
 npm run test:surveys
 

@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="/course-upload.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/settings-avatar.css" />
+    <link rel="stylesheet" href="/settings-username.css" />
   </head>
   <body>
     <div class="page-shell page-shell-settings">
@@ -220,7 +221,16 @@
               <div class="settings-grid">
                 <label class="auth-field">
                   <span>姓名</span>
-                  <input id="settings-full-name" type="text" maxlength="64" required />
+                  <input
+                    id="settings-full-name"
+                    type="text"
+                    maxlength="64"
+                    readonly
+                    aria-describedby="settings-name-rule"
+                  />
+                  <small id="settings-name-rule"
+                    >姓名仅可由管理员修改，如需更正请联系管理员。</small
+                  >
                 </label>
 
                 <label class="auth-field">
@@ -241,6 +251,52 @@
 
               <p class="auth-message settings-message" id="settings-message"></p>
               <button class="auth-submit" type="submit">保存设置</button>
+            </form>
+
+            <form
+              class="settings-form settings-username-form"
+              id="settings-username-form"
+              novalidate
+            >
+              <div class="settings-section-heading">
+                <h2>修改昵称</h2>
+                <p>
+                  昵称同时用作登录用户名。每 3 个自然月可免费修改一次，其余修改每次需要 10 磁元。
+                </p>
+              </div>
+              <label class="auth-field" for="settings-username">
+                <span>新昵称（登录用户名）</span>
+                <input
+                  id="settings-username"
+                  type="text"
+                  autocomplete="username"
+                  minlength="3"
+                  maxlength="64"
+                  pattern="[A-Za-z0-9_]+"
+                  aria-describedby="settings-username-rule settings-username-policy"
+                  required
+                />
+                <small id="settings-username-rule"
+                  >3–64 位英文字母、数字或下划线。修改后请使用新昵称或邮箱登录。</small
+                >
+              </label>
+              <p id="settings-username-policy">正在读取改名信息…</p>
+              <label class="settings-username-payment" id="settings-username-payment" hidden>
+                <input id="settings-username-paid" type="checkbox" />
+                <span>我确认本次支付 10 磁元；付费改名不会推迟下次免费时间。</span>
+              </label>
+              <p
+                class="auth-message settings-message"
+                id="settings-username-message"
+                role="status"
+                aria-live="polite"
+              ></p>
+              <div class="settings-username-actions">
+                <button class="auth-submit" id="settings-username-submit" type="submit" disabled>
+                  修改昵称
+                </button>
+                <button id="settings-username-refresh" type="button">刷新改名信息</button>
+              </div>
             </form>
 
             <section
@@ -352,6 +408,7 @@
     <script src="/settings-avatar.js"></script>
     <script src="/username-guard.js"></script>
     <script src="/app.js"></script>
+    <script src="/settings-username.js"></script>
     <script src="/notifications.js"></script>
     <script src="/course-upload.js"></script>
   </body>

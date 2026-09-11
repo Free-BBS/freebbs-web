@@ -457,7 +457,9 @@
     if (tooltip) {
       tooltip.textContent = state.chatOpen ? '关闭交互区' : '打开交互区';
     }
-    if (state.chatOpen && focus) {
+    if (!state.chatOpen && focus) {
+      toggle.focus();
+    } else if (state.chatOpen && focus) {
       const focusTarget =
         state.chatTab === 'max'
           ? input
