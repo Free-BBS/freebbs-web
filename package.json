@@ -34,7 +34,8 @@
     "check": "npm run lint && npm run format:check",
     "test:community": "node --test backend/username-policy.test.js backend/registration-guard.test.js backend/registration-whitelist.test.js backend/notifications.test.js backend/course-upload.test.js backend/community.integration.test.js",
     "test:community:integration": "RUN_COMMUNITY_INTEGRATION=1 WHITELIST_TEST_MYSQL=1 NOTIFICATIONS_MYSQL_TEST=1 npm run test:community",
-    "test:auth": "node --test backend/registration-guard.test.js scripts/wien-oscillator-model.test.js scripts/registration-page.test.js scripts/typography-preferences.test.js"
+    "test:auth": "node --test backend/registration-guard.test.js scripts/wien-oscillator-model.test.js scripts/registration-page.test.js scripts/typography-preferences.test.js",
+    "test:surveys": "node --test backend/surveys.test.js scripts/activities-page.test.js scripts/activities-admin.test.js scripts/activities-server.test.js scripts/survey-receipts.test.js"
   },
   "dependencies": {
     "@highlightjs/cdn-assets": "^11.11.1",

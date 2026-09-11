@@ -1,4 +1,5 @@
 const API_BASE_URL = (() => {
+  if (window.FREEBBS_API_BASE) return window.FREEBBS_API_BASE;
   const isLocalFrontend =
     window.location.protocol === 'file:' ||
     ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname) ||
@@ -378,6 +379,9 @@ function initializeDashboardShell() {
     '/circuit': '电路仿真',
     '/workbench': '我的工作台',
     '/aichat': '问问 Max',
+    '/surveys': '活动报名',
+    '/surveys.html': '活动报名',
+    '/system-settings/surveys': '活动报名管理',
     '/development': '发展端',
     '/settings': '设置',
     '/profile': '个人主页',
@@ -399,6 +403,7 @@ function initializeDashboardShell() {
     { href: '/circuits', icon: 'circuit', label: '电路实验室' },
     { href: '/workbench', icon: 'run', label: '我的工作台' },
     { href: '/aichat', icon: 'ai', label: '问问 Max' },
+    { href: '/surveys', icon: 'calendar', label: '活动报名' },
     { href: '/development', icon: 'star', label: '发展端' },
     { href: '/settings', icon: 'gear', label: '设置' },
     {
@@ -408,7 +413,7 @@ function initializeDashboardShell() {
       className: 'system-settings-link hidden',
     },
   ];
-  let activePath = path;
+  let activePath = path === '/surveys.html' ? '/surveys' : path;
   if (path.startsWith('/system-settings') || path === '/adminusers') {
     activePath = '/system-settings';
   } else if (['/course', '/knowledge'].includes(path)) {
@@ -2546,6 +2551,13 @@ function saveSession(token, user) {
   userState.electrons = user.electrons ?? 0;
   userState.manetrons = user.manetrons ?? 0;
   userState.heat = user.heat ?? 0;
+  if (localStorage.getItem(STORAGE_KEY) !== token) {
+    try {
+      sessionStorage.removeItem('freebbs_activity_receipts_v2');
+    } catch {
+      /* Storage may be blocked. */
+    }
+  }
   localStorage.setItem(STORAGE_KEY, token);
   renderUser();
   window.dispatchEvent(new CustomEvent('freebbs:session-change', { detail: { user } }));
@@ -2573,6 +2585,11 @@ function clearSession() {
   userState.electrons = 0;
   userState.manetrons = 0;
   userState.heat = 0;
+  try {
+    sessionStorage.removeItem('freebbs_activity_receipts_v2');
+  } catch {
+    /* Storage may be blocked. */
+  }
   localStorage.removeItem(STORAGE_KEY);
   window.dispatchEvent(new CustomEvent('freebbs:session-change', { detail: { user: null } }));
   setCheckinShortcutState(false);
@@ -8898,4 +8915,14 @@ loadPublicProfile();
 
 window.addEventListener('freebbs:username-updated', (event) => {
   saveSession(event.detail.token, event.detail.user);
+});
+
+window.addEventListener('storage', (event) => {
+  if (event.key === STORAGE_KEY || event.key === null) {
+    try {
+      sessionStorage.removeItem('freebbs_activity_receipts_v2');
+    } catch {
+      /* Storage may be blocked. */
+    }
+  }
 });

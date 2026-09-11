@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+const { ensureSurveyTables, createSurveyService, createSurveysRouter } = require('./surveys');
 const pool = require('./db');
 const config = require('./config');
 const {
@@ -145,6 +146,7 @@ const systemSettingsStore = createSystemSettingsStore({
   defaultModel: config.llmModel,
   courseMaterialsAllowedRoot: config.courseMaterialsAllowedRoot,
 });
+const surveyService = createSurveyService(pool);
 const notifications = createNotificationService({ pool, publicWebUrl: config.publicWebUrl });
 
 async function withDatabaseTransaction(callback) {
@@ -2134,6 +2136,10 @@ app.use(
 app.use(
   '/api',
   createNotificationsRouter({ pool, requireAuth, requireAdmin, service: notifications }),
+);
+app.use(
+  '/api',
+  createSurveysRouter({ pool, requireAdmin, getOptionalAuthUser, service: surveyService }),
 );
 app.use('/api/circuits', createCircuitsRouter({ pool, requireAuth }));
 app.use('/api/circuit-examples', createCircuitExamplesRouter({ pool, requireAuth }));
@@ -5339,6 +5345,7 @@ async function start() {
   await ensureRegistrationWhitelistTables(pool);
   await ensureRegistrationGuardTables(pool);
   await ensureNotificationTables(pool);
+  await ensureSurveyTables(pool);
   await ensureCourseUploadTables(pool);
   await ensureCircuitTables(pool);
   await ensureCircuitExampleTables(pool);
@@ -5360,6 +5367,7 @@ async function start() {
 
   console.log(`FREE-BBS backend running at http://${config.apiHost}:${config.apiPort}`);
   notifications.startWorker();
+  surveyService.startWorker();
   console.log(`MySQL target: ${config.db.host}:${config.db.port}/${config.db.database}`);
 }
 
