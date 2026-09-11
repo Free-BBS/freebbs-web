@@ -211,6 +211,11 @@
     const reading = document.getElementById('knowledge-reading');
     overview?.classList.toggle('hidden', nextView !== 'overview');
     reading?.classList.toggle('hidden', nextView !== 'reading');
+    page.dispatchEvent(
+      new CustomEvent('knowledge:view-change', {
+        detail: { view: nextView, activateContent: focus },
+      }),
+    );
 
     if (focus) {
       const target = nextView === 'reading' ? reading : overview;

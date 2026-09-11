@@ -425,16 +425,6 @@
                 </div>
               </div>
             </section>
-            <aside
-              class="knowledge-history"
-              id="knowledge-history"
-              aria-labelledby="knowledge-history-title"
-            >
-              <p class="course-kicker">Knowledge origins</p>
-              <h2 id="knowledge-history-title">我们为什么要学习这个知识点？</h2>
-              <p class="knowledge-history-question">为了解决什么问题，出现了这个知识？</p>
-              <div class="knowledge-history-placeholder" role="status">正在开发</div>
-            </aside>
             <section class="course-material-section knowledge-overview" id="knowledge-overview">
               <header class="course-material-section-heading">
                 <div>
@@ -507,6 +497,28 @@
                   </button>
                 </div>
               </header>
+              <aside
+                class="knowledge-history"
+                id="knowledge-history"
+                aria-label="知识起源与学习动机"
+              >
+                <button
+                  class="knowledge-history-toggle"
+                  id="knowledge-history-toggle"
+                  type="button"
+                  aria-expanded="true"
+                  aria-controls="knowledge-history-content"
+                  aria-label="收起知识起源说明"
+                >
+                  <span>知识起源</span>
+                  <span id="knowledge-history-toggle-label" aria-hidden="true">收起 −</span>
+                </button>
+                <div class="knowledge-history-content" id="knowledge-history-content">
+                  <h2>我们为什么要学习这个知识点？</h2>
+                  <p class="knowledge-history-question">为了解决什么问题，出现了这个知识？</p>
+                  <div class="knowledge-history-placeholder" role="status">正在开发</div>
+                </div>
+              </aside>
               <div class="discussion-markdown-body course-material-body" id="knowledge-body"></div>
             </section>
             <nav class="knowledge-sequence-navigation" aria-label="前后知识点导航">
@@ -875,6 +887,7 @@
     <script src="/username-guard.js"></script>
     <script src="/app.js"></script>
     <script src="/knowledge.js"></script>
+    <script src="/knowledge-history.js"></script>
     <script src="/knowledge-editor.js"></script>
     <script src="/notifications.js"></script>
   </body>

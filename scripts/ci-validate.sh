@@ -19,6 +19,7 @@ node --check backend/registration-guard.js
 node --check public/typography.js
 node --check public/course-map.js
 node --check public/knowledge.js
+node --check public/knowledge-history.js
 node --check public/markdown-editor.js
 node --check public/world.js
 node --check backend/circuits.js
