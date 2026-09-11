@@ -6,6 +6,28 @@ const vm = require('node:vm');
 
 const root = path.join(__dirname, '..');
 
+function sourceSection(source, startMarker, endMarker) {
+  // Git for Windows may check out CRLF; never evaluate the rest of the application
+  // merely because an LF-only end marker was not found.
+  const normalized = source.replace(/\r\n/g, '\n');
+  const start = normalized.indexOf(startMarker);
+  const end = normalized.indexOf(endMarker, start);
+  assert.ok(start >= 0 && end > start, `Missing source boundary: ${startMarker}`);
+  return normalized.slice(start, end);
+}
+
+test('source extraction accepts LF and CRLF and rejects missing boundaries', () => {
+  const source = 'function first() {}\n\nfunction second() {}';
+  for (const value of [source, source.replace(/\n/g, '\r\n')]) {
+    assert.equal(
+      sourceSection(value, 'function first', '\n\nfunction second'),
+      'function first() {}',
+    );
+    assert.throws(() => sourceSection(value, 'function absent', '\n\nfunction second'));
+    assert.throws(() => sourceSection(value, 'function first', '\n\nfunction absent'));
+  }
+});
+
 test('问问 Max 组合普通聊天与 Navigation，并渲染白名单路由按钮', () => {
   const appSource = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
   const backendSource = fs.readFileSync(path.join(root, 'backend', 'server.js'), 'utf8');
@@ -78,9 +100,11 @@ test('Navigation 导引按钮随对话保存并在重新进入页面时恢复', 
 
 test('RAG 文档来源会以受限快照保存到对话历史', () => {
   const backendSource = fs.readFileSync(path.join(root, 'backend', 'server.js'), 'utf8');
-  const functionStart = backendSource.indexOf('function normalizeAiDialogRag');
-  const functionEnd = backendSource.indexOf('\n\nfunction normalizeAiMessages', functionStart);
-  const functionSource = backendSource.slice(functionStart, functionEnd);
+  const functionSource = sourceSection(
+    backendSource,
+    'function normalizeAiDialogRag',
+    '\n\nfunction normalizeAiMessages',
+  );
   const context = {};
 
   vm.runInNewContext(functionSource, context);
@@ -105,9 +129,11 @@ test('RAG 文档来源会以受限快照保存到对话历史', () => {
 
 test('RAG 历史快照在 subagent 缺少课程时回退到 course_context', () => {
   const appSource = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
-  const functionStart = appSource.indexOf('function createAiRagSnapshot');
-  const functionEnd = appSource.indexOf('\n\nfunction wrapMaxAnswerPanel', functionStart);
-  const functionSource = appSource.slice(functionStart, functionEnd);
+  const functionSource = sourceSection(
+    appSource,
+    'function createAiRagSnapshot',
+    '\n\nfunction wrapMaxAnswerPanel',
+  );
   const context = {};
 
   vm.runInNewContext(functionSource, context);
@@ -126,9 +152,11 @@ test('RAG 历史快照在 subagent 缺少课程时回退到 course_context', () 
 
 test('对话历史将 Agent 绝对路由保存为白名单站内路径', () => {
   const backendSource = fs.readFileSync(path.join(root, 'backend', 'server.js'), 'utf8');
-  const functionStart = backendSource.indexOf('const AI_DIALOG_NAVIGATION_PATHS');
-  const functionEnd = backendSource.indexOf('\n\nfunction normalizeAiMessages', functionStart);
-  const functionSource = backendSource.slice(functionStart, functionEnd);
+  const functionSource = sourceSection(
+    backendSource,
+    'const AI_DIALOG_NAVIGATION_PATHS',
+    '\n\nfunction normalizeAiMessages',
+  );
   const context = { URL };
 
   vm.runInNewContext(functionSource, context);
@@ -174,9 +202,11 @@ test('对话历史将 Agent 绝对路由保存为白名单站内路径', () => {
 
 test('Navigation 接受 Agent 内部域名，但只保留白名单站内路径', () => {
   const appSource = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
-  const functionStart = appSource.indexOf('function normalizeMaxNavigationUrl');
-  const functionEnd = appSource.indexOf('\n\nfunction createAiNavigationSnapshot', functionStart);
-  const functionSource = appSource.slice(functionStart, functionEnd);
+  const functionSource = sourceSection(
+    appSource,
+    'function normalizeMaxNavigationUrl',
+    '\n\nfunction createAiNavigationSnapshot',
+  );
   const context = {
     URL,
     MAX_NAVIGATION_PATHS: new Set([
@@ -203,9 +233,11 @@ test('Navigation 接受 Agent 内部域名，但只保留白名单站内路径',
 
 test('课程名与 RAG 课程上下文会细化课程和讨论入口，泛化请求保持总入口', async () => {
   const appSource = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
-  const functionStart = appSource.indexOf('function normalizeCourseMention');
-  const functionEnd = appSource.indexOf('\n\nfunction infoResultItems', functionStart);
-  const functionSource = appSource.slice(functionStart, functionEnd);
+  const functionSource = sourceSection(
+    appSource,
+    'function normalizeCourseMention',
+    '\n\nfunction infoResultItems',
+  );
   const context = {
     userState: { token: 'test-token' },
     callApi: async () => ({

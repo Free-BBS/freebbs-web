@@ -8,14 +8,17 @@
   let allowed = false;
   let currentPage = 0;
   let nextPage = null;
+  let listRevision = 0;
+  let entriesRevision = 0;
   const capture = () => ({ epoch, token: token() });
   const current = (context) => context.epoch === epoch && context.token === token();
   function staleRequest() {
-    const error = new Error('登录身份已变化');
+    const error = new Error('当前请求已失效');
     error.stale = true;
     return error;
   }
   function clearEntries() {
+    entriesRevision += 1;
     document.getElementById('entries-panel').hidden = true;
     document.getElementById('entries-table').replaceChildren();
     document.getElementById('draw-audit').textContent = '';
@@ -25,6 +28,7 @@
   }
   function clearAdmin() {
     epoch += 1;
+    listRevision += 1;
     allowed = false;
     currentPage = 0;
     nextPage = null;
@@ -41,15 +45,20 @@
     editor.hidden = true;
     editingId = null;
   }
-  async function request(path = '', method = 'GET', body = undefined) {
+  async function request(path = '', method = 'GET', body = undefined, isLatest = () => true) {
     const context = capture();
     try {
       const data = await api(`/admin/surveys${path}`, method, body);
-      if (!current(context)) throw staleRequest();
+      if (!current(context) || !isLatest()) throw staleRequest();
       return data;
     } catch (error) {
       if (!current(context)) throw staleRequest();
-      if (error.status === 401 || error.status === 403) clearAdmin();
+      if (error.status === 401 || error.status === 403) {
+        // Permission loss still clears private data even for an older navigation.
+        clearAdmin();
+        throw error;
+      }
+      if (!isLatest()) throw staleRequest();
       throw error;
     }
   }
@@ -217,8 +226,10 @@
   async function entries(s) {
     const context = capture();
     clearEntries();
-    const data = await request(`/${s.id}/entries`);
-    if (!allowed || !current(context)) return;
+    const revision = entriesRevision;
+    const isLatest = () => revision === entriesRevision;
+    const data = await request(`/${s.id}/entries`, 'GET', undefined, isLatest);
+    if (!allowed || !current(context) || !isLatest()) return;
     document.getElementById('entries-panel').hidden = false;
     document.getElementById('draw-audit').textContent = s.drawnAt
       ? `抽签时间：${date(s.drawnAt)} · 执行者：${s.drawnBy} · 中签 ${data.entries.filter((e) => e.winner).length} / 报名 ${data.entries.length}`
@@ -234,12 +245,12 @@
     const exporter = document.getElementById('export');
     exporter.disabled = false;
     exporter.onclick = async () => {
-      if (!allowed || !current(context)) return;
+      if (!allowed || !current(context) || !isLatest()) return;
       exporter.disabled = true;
       try {
         // Recheck server permission instead of exporting a retained private snapshot.
-        const fresh = await request(`/${s.id}/entries`);
-        if (!allowed || !current(context)) return;
+        const fresh = await request(`/${s.id}/entries`, 'GET', undefined, isLatest);
+        if (!allowed || !current(context) || !isLatest()) return;
         const cell = (value) => {
           let text = String(value);
           if (/^[\s]*[=+@-]/.test(text) || /^[\t\r\n]/.test(text)) text = `'${text}`;
@@ -255,15 +266,22 @@
       } catch (error) {
         report(error);
       } finally {
-        if (allowed && current(context)) exporter.disabled = false;
+        if (allowed && current(context) && isLatest()) exporter.disabled = false;
       }
     };
     document.getElementById('entries-panel').scrollIntoView({ behavior: 'smooth' });
   }
   async function load(page = currentPage) {
     const context = capture();
-    const data = await request(`?page=${page}`);
-    if (!current(context)) throw staleRequest();
+    // Navigation order is independent of the login-session epoch.
+    listRevision += 1;
+    const revision = listRevision;
+    const isLatest = () => revision === listRevision;
+    clearEntries();
+    const data = await request(`?page=${page}`, 'GET', undefined, isLatest);
+    if (!current(context) || !isLatest()) throw staleRequest();
+    // Also invalidate details opened from the old list while loading this page.
+    clearEntries();
     const { surveys } = data;
     allowed = true;
     currentPage = data.page ?? page;
@@ -389,13 +407,11 @@
   document.getElementById('refresh').onclick = () => load().catch(report);
   document.getElementById('previous-page').onclick = () => {
     if (allowed && currentPage > 0) {
-      clearEntries();
       load(currentPage - 1).catch(report);
     }
   };
   document.getElementById('next-page').onclick = () => {
     if (allowed && nextPage !== null) {
-      clearEntries();
       load(nextPage).catch(report);
     }
   };

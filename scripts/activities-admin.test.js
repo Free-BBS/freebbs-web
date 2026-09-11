@@ -80,6 +80,7 @@ function harness() {
   let token = 'admin';
   let reject = false;
   let deferred = null;
+  const pendingResponses = new Map();
   const window = {
     location: { origin: 'https://site.test' },
     addEventListener: (event, handler) => listeners.set(event, handler),
@@ -91,6 +92,8 @@ function harness() {
           error.status = 403;
           throw error;
         }
+        const pending = pendingResponses.get(path)?.shift();
+        if (pending) return pending;
         if (path.endsWith('/entries')) return deferred || privateEntries;
         const page = Number(new URL(path, 'https://site.test').searchParams.get('page') || 0);
         return {
@@ -116,12 +119,10 @@ function harness() {
     URL,
     navigator: {},
   });
-  function button(label) {
+  function button(label, index = 0) {
     const search = (node) =>
-      node.tag === 'button' && node.textContent === label
-        ? node
-        : node.children.map(search).find(Boolean);
-    return search(get('survey-list'));
+      node.tag === 'button' && node.textContent === label ? [node] : node.children.flatMap(search);
+    return search(get('survey-list'))[index];
   }
   const change = (value) => {
     token = value;
@@ -146,6 +147,18 @@ function harness() {
     requests,
     assertCleared,
     listeners,
+    defer(path) {
+      let resolve;
+      let rejectResponse;
+      const promise = new Promise((done, fail) => {
+        resolve = done;
+        rejectResponse = fail;
+      });
+      const queue = pendingResponses.get(path) || [];
+      queue.push(promise);
+      pendingResponses.set(path, queue);
+      return { resolve, reject: rejectResponse };
+    },
     deny: () => {
       reject = true;
     },
@@ -228,3 +241,147 @@ test('management content participates in the shared permission container', () =>
     /id="admin-content"[^>]*data-admin-content/,
   );
 });
+
+function pageData(page, surveys = [{ ...activity, id: `page-${page}`, title: `活动页 ${page}` }]) {
+  return { surveys, page, nextPage: page < 2 ? page + 1 : null };
+}
+
+test('the last navigation wins when next and previous page responses arrive out of order', async () => {
+  const h = harness();
+  await flush();
+  const second = h.defer('/admin/surveys?page=1');
+  h.get('next-page').onclick();
+  second.resolve(pageData(1));
+  await flush();
+  const older = h.defer('/admin/surveys?page=2');
+  h.get('next-page').onclick();
+  const latest = h.defer('/admin/surveys?page=0');
+  h.get('previous-page').onclick();
+  latest.resolve(pageData(0));
+  await flush();
+  older.resolve(pageData(2));
+  await flush();
+  assert.equal(h.get('page-status').textContent, '第 1 页');
+  assert.match(h.get('survey-list').textContent, /活动页 0/);
+  assert.equal(h.get('previous-page').disabled, true);
+  assert.equal(h.get('next-page').disabled, false);
+});
+
+test('a failed latest navigation does not allow an older response to take over', async () => {
+  const h = harness();
+  await flush();
+  const older = h.defer('/admin/surveys?page=1');
+  h.get('next-page').onclick();
+  const latest = h.defer('/admin/surveys?page=0');
+  const refresh = h.get('refresh').onclick();
+  latest.reject(new Error('刷新失败，请重试'));
+  await refresh;
+  older.resolve(pageData(1));
+  await flush();
+  assert.equal(h.get('page-status').textContent, '第 1 页');
+  assert.match(h.get('message').textContent, /刷新失败/);
+  await h.get('refresh').onclick();
+  assert.match(h.get('survey-list').textContent, /测试活动/);
+});
+
+test('obsolete ordinary errors are quiet but an obsolete 403 still clears private data', async () => {
+  for (const status of [500, 403]) {
+    const h = harness();
+    await flush();
+    await h.button('查看中签名单 / 导出').onclick();
+    const older = h.defer('/admin/surveys?page=0');
+    const first = h.get('refresh').onclick();
+    await h.get('refresh').onclick();
+    older.reject(Object.assign(new Error('OLD_RESPONSE_ERROR'), { status }));
+    await first;
+    if (status === 403) h.assertCleared();
+    else {
+      assert.equal(h.get('admin-content').hidden, false);
+      assert.doesNotMatch(h.get('message').textContent, /OLD_RESPONSE_ERROR/);
+    }
+  }
+});
+
+for (const action of ['close-entries', 'next-page', 'refresh']) {
+  test(`${action} invalidates late details and their errors`, async () => {
+    for (const fail of [false, true]) {
+      const h = harness();
+      await flush();
+      const response = h.defer('/admin/surveys/one/entries');
+      const pending = h.button('查看中签名单 / 导出').onclick();
+      await h.get(action).onclick();
+      await flush();
+      if (fail) response.reject(new Error('OLD_DETAILS_ERROR'));
+      else response.resolve(privateEntries);
+      await pending;
+      assert.equal(h.get('entries-panel').hidden, true);
+      assert.equal(h.get('entries-table').textContent, '');
+      assert.equal(h.get('export').onclick, null);
+      assert.doesNotMatch(h.get('message').textContent, /OLD_DETAILS_ERROR/);
+    }
+  });
+}
+
+test('selecting a second activity prevents the first details from overwriting it', async () => {
+  const h = harness();
+  await flush();
+  const list = h.defer('/admin/surveys?page=0');
+  const refresh = h.get('refresh').onclick();
+  list.resolve(pageData(0, [activity, { ...activity, id: 'two', title: '第二个活动' }]));
+  await refresh;
+  const first = h.defer('/admin/surveys/one/entries');
+  const second = h.defer('/admin/surveys/two/entries');
+  const oldDetails = h.button('查看中签名单 / 导出', 0).onclick();
+  const newDetails = h.button('查看中签名单 / 导出', 1).onclick();
+  const newEntries = {
+    entries: [{ ...privateEntries.entries[0], answers: { q1: 'SECOND_ANSWER' } }],
+  };
+  second.resolve(newEntries);
+  await newDetails;
+  first.resolve(privateEntries);
+  await oldDetails;
+  assert.match(h.get('entries-table').textContent, /SECOND_ANSWER/);
+  assert.doesNotMatch(h.get('entries-table').textContent, /PRIVATE_ANSWER/);
+  const exportResponse = h.defer('/admin/surveys/two/entries');
+  const exporting = h.get('export').onclick();
+  exportResponse.resolve(newEntries);
+  await exporting;
+  assert.equal(h.downloads[0][0], '活动-two.csv');
+  assert.match(h.downloads[0][1], /SECOND_ANSWER/);
+});
+
+test('details opened from the old list while paging cannot reappear after the new list arrives', async () => {
+  const h = harness();
+  await flush();
+  const page = h.defer('/admin/surveys?page=1');
+  h.get('next-page').onclick();
+  const details = h.defer('/admin/surveys/one/entries');
+  const pending = h.button('查看中签名单 / 导出').onclick();
+  page.resolve(pageData(1));
+  await flush();
+  details.resolve(privateEntries);
+  await pending;
+  assert.equal(h.get('page-status').textContent, '第 2 页');
+  assert.equal(h.get('entries-panel').hidden, true);
+  assert.equal(h.get('entries-table').textContent, '');
+});
+
+for (const action of ['close-entries', 'next-page', 'refresh']) {
+  test(`${action} invalidates pending exports and retained callbacks`, async () => {
+    const h = harness();
+    await flush();
+    await h.button('查看中签名单 / 导出').onclick();
+    const oldExport = h.get('export').onclick;
+    const response = h.defer('/admin/surveys/one/entries');
+    const pending = oldExport();
+    await h.get(action).onclick();
+    await flush();
+    response.resolve(privateEntries);
+    await pending;
+    const requestCount = h.requests.length;
+    assert.equal(h.get('export').disabled, true);
+    await oldExport();
+    assert.equal(h.requests.length, requestCount);
+    assert.equal(h.downloads.length, 0);
+  });
+}
