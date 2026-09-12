@@ -348,7 +348,8 @@ test('beautification rotates horizontal or reversed two-pin branches without swa
         const snapshot = structuredClone(before);
         const after = normalizeRecognizedCircuitLayout(before);
         const part = after.components[0];
-        assert.equal(part.rotation, horizontal ? (mirrorX ? 180 : 0) : mirrorX ? 270 : 90);
+        const expectedRotation = (horizontal ? 0 : 90) + (mirrorX ? 180 : 0);
+        assert.equal(part.rotation, expectedRotation);
         assert.equal(part.mirrorX, mirrorX);
         assert.deepEqual(part.params, before.components[0].params);
         assert.deepEqual(buildNets(after), buildNets(before));

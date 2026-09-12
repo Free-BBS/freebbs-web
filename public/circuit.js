@@ -789,11 +789,12 @@
   }
 
   function renderPalette() {
+    const powerSymbols = { vcc: '↑', vdd: '↑', vss: '↓', vee: '↓', fixed_voltage: '⎓' };
     $('palette').innerHTML = Object.entries(engine.catalog)
       .filter(([type]) => type !== 'junction')
       .map(
         ([type, item]) =>
-          `<button type="button" data-add-component="${escapeHtml(type)}"><span class="circuit-palette-symbol" aria-hidden="true">${escapeHtml(prefixes[type])}</span>${escapeHtml(item.label)}</button>`,
+          `<button type="button" data-add-component="${escapeHtml(type)}"><span class="circuit-palette-symbol" aria-hidden="true">${escapeHtml(powerSymbols[type] || prefixes[type])}</span>${escapeHtml(item.label)}</button>`,
       )
       .join('');
   }
