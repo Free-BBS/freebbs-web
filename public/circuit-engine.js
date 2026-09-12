@@ -13,9 +13,18 @@
     acAmplitude: 1,
   };
   const twoPins = ['正', '负'];
+  const powerRails = ['vcc', 'vdd', 'vss', 'vee'];
+  const netSymbols = ['ground', 'junction', ...powerRails];
   const catalog = {
     ground: { label: '参考地', pins: ['地'], defaults: {} },
     junction: { label: '连接点', pins: ['连接点'], defaults: {} },
+    ...Object.fromEntries(
+      powerRails.map((type) => [
+        type,
+        { label: type.toUpperCase(), pins: [type.toUpperCase()], defaults: {} },
+      ]),
+    ),
+    fixed_voltage: { label: '固定电平', pins: ['电平'], defaults: { dc: 5 } },
     resistor: { label: '电阻', pins: twoPins, defaults: { resistance: 1000 } },
     capacitor: { label: '电容', pins: twoPins, defaults: { capacitance: 0.000001 } },
     inductor: { label: '电感', pins: twoPins, defaults: { inductance: 0.001 } },
@@ -338,7 +347,7 @@
     if (
       !component ||
       !Object.hasOwn(catalog, component.type) ||
-      ['ground', 'junction'].includes(component.type)
+      netSymbols.includes(component.type)
     )
       return [];
     const port = { twoport: ' P1', oscilloscope2: ' CH1' }[component.type] || '';
@@ -746,6 +755,11 @@
     }
     const join = (a, b) => parent.set(find(a), find(b));
     document.wires.forEach((wire) => join(key(wire.from), key(wire.to)));
+    // Rail names identify global nets; their names do not prescribe a voltage.
+    for (const type of powerRails) {
+      const rails = document.components.filter((component) => component.type === type);
+      rails.slice(1).forEach((component) => join(`${component.id}:0`, `${rails[0].id}:0`));
+    }
     const grounds = document.components.filter((component) => component.type === 'ground');
     grounds.slice(1).forEach((component) => join(`${component.id}:0`, `${grounds[0].id}:0`));
     const groundRoot = grounds.length ? find(`${grounds[0].id}:0`) : null;
@@ -778,13 +792,15 @@
   ]);
   const nonlinearTypes = new Set(['diode', 'bjt', 'mosfet', 'nonlinear']);
   function compile(document) {
-    if (!document.components.some((component) => component.type === 'ground'))
+    if (
+      !document.components.some((component) => ['ground', 'fixed_voltage'].includes(component.type))
+    )
       throw new Error('电路缺少参考地；请放置参考地并连接电源或公共节点。');
-    if (!document.components.some((component) => !['ground', 'junction'].includes(component.type)))
+    if (!document.components.some((component) => !netSymbols.includes(component.type)))
       throw new Error('请先添加元件并连接电路。');
     const nets = netsFor(document);
     const electricalComponents = document.components.filter(
-      (component) => !['ground', 'junction'].includes(component.type),
+      (component) => !netSymbols.includes(component.type),
     );
     const electricalNets = new Set(
       electricalComponents.flatMap((component) =>
@@ -798,8 +814,18 @@
       const pins = catalog[component.type].pins.map(
         (_, pin) => indices.get(nets.pinNets[`${component.id}:${pin}`]) ?? -1,
       );
-      const compiled = { ...component, pins, branch: -1 };
-      if (branchTypes.has(component.type) || component.type === 'twoport') {
+      // A fixed level is an ideal DC source whose return is the implicit reference.
+      const compiled =
+        component.type === 'fixed_voltage'
+          ? {
+              ...component,
+              type: 'voltage',
+              pins: [...pins, -1],
+              params: { ...sourceDefaults, ...component.params, acAmplitude: 0 },
+              branch: -1,
+            }
+          : { ...component, pins, branch: -1 };
+      if (branchTypes.has(compiled.type) || component.type === 'twoport') {
         compiled.branch = dimension;
         dimension += component.type === 'twoport' ? 2 : 1;
       }
@@ -1679,6 +1705,8 @@
 
   const exported = {
     catalog,
+    powerRails,
+    netSymbols,
     limits,
     validateDocument,
     normalizeDisplay,

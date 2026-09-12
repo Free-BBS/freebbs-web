@@ -137,6 +137,15 @@ body.circuit-page
   flex-wrap: wrap;
   align-items: center;
 }
+.circuit-editor-actions > :is(button, a) {
+  white-space: nowrap;
+  gap: 8px;
+}
+.circuit-editor-actions svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
 .circuit-document-heading {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(260px, 2fr);
@@ -591,6 +600,28 @@ body.circuit-page
   }
   .circuit-heading-actions > * {
     flex: 1;
+  }
+  .circuit-editor-actions {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .circuit-editor-actions > :is(button, a) {
+    min-width: 0;
+    height: 48px;
+    padding: 0;
+    border-radius: 8px;
+  }
+  .circuit-editor-actions .circuit-action-label {
+    display: none;
+  }
+  .circuit-editor-actions svg,
+  .circuit-editor-actions #circuit-ai-toggle img {
+    width: 22px;
+    height: 22px;
+  }
+  .circuit-editor-actions > :is(a, #circuit-copy, #circuit-ai-toggle) {
+    background: transparent;
   }
   .circuit-document-heading {
     grid-template-columns: 1fr;

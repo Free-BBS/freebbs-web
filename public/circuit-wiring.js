@@ -32,12 +32,14 @@
       neighbors.get(b).push(a);
     };
     document.wires.forEach((wire) => join(wire.from, wire.to));
-    const grounds = document.components.filter((component) => component.type === 'ground');
-    grounds
-      .slice(1)
-      .forEach((component) =>
-        join({ componentId: grounds[0].id, pin: 0 }, { componentId: component.id, pin: 0 }),
-      );
+    for (const type of ['ground', 'vcc', 'vdd', 'vss', 'vee']) {
+      const symbols = document.components.filter((component) => component.type === type);
+      symbols
+        .slice(1)
+        .forEach((component) =>
+          join({ componentId: symbols[0].id, pin: 0 }, { componentId: component.id, pin: 0 }),
+        );
+    }
     const visited = new Set([endpointKey(endpoint)]);
     const pending = [...visited];
     while (pending.length) {

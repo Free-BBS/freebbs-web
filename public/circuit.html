@@ -156,7 +156,7 @@
               <h1>我的电路</h1>
               <p>搭建、仿真，并把可复现的实验嵌入课程讨论。</p>
             </div>
-            <a class="circuit-button is-primary" href="/circuit">新建电路</a>
+            <a class="circuit-button is-primary" href="/circuit?new=1">新建电路</a>
           </header>
           <p id="circuit-list-status" class="circuit-status" role="status"></p>
           <div class="circuit-list" id="circuit-list"></div>
@@ -172,22 +172,86 @@
               <h1>电路实验室</h1>
               <p>从一个元件开始，观察每一次连接带来的变化。</p>
             </div>
-            <div class="circuit-heading-actions">
-              <a class="circuit-button" href="/circuit">新建</a
-              ><button id="circuit-recognize" type="button" aria-haspopup="dialog" disabled>
-                识别电路图</button
-              ><button id="circuit-recognition-restore" type="button" hidden>恢复上一份草稿</button
-              ><button id="circuit-copy" type="button">复制为新电路</button
-              ><button
+            <div
+              class="circuit-heading-actions circuit-editor-actions"
+              role="group"
+              aria-label="电路操作"
+            >
+              <a class="circuit-button" href="/circuit?new=1" aria-label="新建电路" title="新建电路"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 5v14M5 12h14" /></svg
+                ><span class="circuit-action-label">新建</span></a
+              >
+              <button
+                id="circuit-recognize"
+                type="button"
+                aria-label="识别电路图"
+                title="拍照或上传图片识别电路"
+                aria-haspopup="dialog"
+                disabled
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m8 6 2-3h4l2 3h4v14H4V6Z" />
+                  <circle cx="12" cy="12" r="4" /></svg
+                ><span class="circuit-action-label">识别电路</span>
+              </button>
+              <button
+                id="circuit-copy"
+                type="button"
+                aria-label="复制为新电路"
+                title="复制为新电路"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="8" y="8" width="12" height="12" rx="2" />
+                  <path d="M16 8V4H4v12h4" /></svg
+                ><span class="circuit-action-label">复制电路</span>
+              </button>
+              <button
                 class="is-primary"
                 id="circuit-save"
                 type="button"
-                title="保存电路（⌘/Ctrl+S）"
+                aria-label="保存电路"
+                title="保存电路并获取 CID（⌘/Ctrl+S）"
                 aria-keyshortcuts="Control+s Meta+s"
               >
-                保存并获取 CID</button
-              ><button id="circuit-publish" type="button" hidden>发表到讨论区</button
-              ><button
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M4 4h13l3 3v13H4Z" />
+                  <path d="M8 4v6h8V4M8 20v-6h8v6" /></svg
+                ><span class="circuit-action-label" data-action-label>保存电路</span>
+              </button>
+              <button
                 id="circuit-ai-toggle"
                 type="button"
                 aria-expanded="false"
@@ -195,7 +259,49 @@
                 title="打开 Max 侧栏（M）"
                 aria-keyshortcuts="m"
               >
-                <img src="/assets/icons/ai.svg" alt="" aria-hidden="true" />侧栏
+                <img src="/assets/icons/ai.svg" alt="" aria-hidden="true" /><span
+                  class="circuit-action-label"
+                  >侧栏</span
+                >
+              </button>
+              <button
+                id="circuit-recognition-restore"
+                type="button"
+                aria-label="恢复上一份草稿"
+                title="恢复上一份草稿"
+                hidden
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 10a9 9 0 1 1 2 9M3 4v6h6" /></svg
+                ><span class="circuit-action-label">恢复上一份草稿</span>
+              </button>
+              <button
+                id="circuit-publish"
+                type="button"
+                aria-label="发表到讨论区"
+                title="发表到讨论区"
+                hidden
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m3 3 18 9-18 9 4-9Z" />
+                  <path d="M7 12h14" /></svg
+                ><span class="circuit-action-label">发表到讨论区</span>
               </button>
             </div>
           </header>
@@ -263,7 +369,7 @@
                       <button
                         id="circuit-beautify"
                         type="button"
-                        title="对齐元件、整理导线，可撤销"
+                        title="调整元件朝向、对齐布局并整理导线，可撤销"
                       >
                         一键美化
                       </button>
