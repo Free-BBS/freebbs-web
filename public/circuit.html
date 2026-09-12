@@ -261,6 +261,13 @@
                     </p>
                     <div class="circuit-shortcut-actions" aria-label="编辑与快捷键">
                       <button
+                        id="circuit-beautify"
+                        type="button"
+                        title="对齐元件、整理导线，可撤销"
+                      >
+                        一键美化
+                      </button>
+                      <button
                         id="circuit-undo"
                         type="button"
                         title="撤销（⌘/Ctrl+Z）；连线时撤回拐点"
@@ -936,6 +943,7 @@
     <script src="/circuit-annotations.js"></script>
     <script src="/circuit-annotation-controls.js"></script>
     <script src="/circuit-renderer.js"></script>
+    <script src="/circuit-layout.js"></script>
     <script src="/circuit-wiring.js"></script>
     <script src="/circuit-ai-actions.js"></script>
     <script src="/circuit-parameter-popover.js"></script>

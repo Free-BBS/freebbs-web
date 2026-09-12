@@ -178,6 +178,7 @@ function harness({ document = fixture(), measured = true, realWorker = false } =
     },
     window: {
       CircuitAIActions: protocol,
+      FreeBbsCircuitLayout: require('../public/circuit-layout'),
       FreeBbsCircuitEditor: {},
       dispatchEvent: (event) => calls.events.push(clone(event)),
     },
@@ -1144,4 +1145,78 @@ test('a manual wire started during an agent solve cancels the worker and keeps i
   assert.deepEqual(state.wireStart, endpoint('V1'));
   assert.deepEqual(state.wirePoints, [{ x: 150, y: 200 }]);
   assert.equal(state.aiUndo, null);
+});
+
+test('Max generation beautifies the entire batch before simulation and undo restores the pre-generation draft', async () => {
+  const empty = engine.validateDocument({ version: 1, components: [], wires: [] });
+  const { context, state, workers } = harness({
+    document: empty,
+    measured: false,
+    realWorker: true,
+  });
+  const { runId, snapshot } = context.beginAgentRun();
+  const blueprint = fixture();
+  const actions = [
+    ...blueprint.components.map((component) => ({
+      type: 'add_component',
+      component: { ...component, x: component.x + 7 },
+    })),
+    ...blueprint.wires.map(({ from, to }) => ({ type: 'connect', from, to, points: [] })),
+    { type: 'run_simulation' },
+  ];
+  const pending = context.executeAgentActions(actions, {
+    runId,
+    expectedVersion: snapshot.editVersion,
+  });
+  assert.equal(workers.length, 1);
+  const simulated = workers[0].request.document;
+  const { getWireRoute } = require('../public/circuit-renderer');
+  simulated.components.forEach(({ x, y }) => {
+    assert.equal(x % 20, 0);
+    assert.equal(y % 20, 0);
+  });
+  simulated.wires.forEach((wire) => {
+    const route = getWireRoute(wire, simulated.components);
+    assert.ok(
+      route.every((point, i) => !i || point.x === route[i - 1].x || point.y === route[i - 1].y),
+    );
+  });
+  assert.deepEqual(clone(state.document), simulated);
+  workers[0].respond();
+  await pending;
+  context.endAgentRun(runId);
+  assert.equal(state.result.traces.find((trace) => trace.id === 'V:R1').values[0], 5);
+  assert.deepEqual(clone(context.undoAssistantActions().document), empty);
+});
+
+test('automatic beautification failure cannot partially apply Max edits or visual effects', () => {
+  const { context, state, calls } = harness();
+  const before = clone(state);
+  context.window.FreeBbsCircuitLayout = {
+    normalizeCircuitLayout() {
+      throw new Error('layout failed');
+    },
+  };
+  assert.throws(
+    () =>
+      context.applyAssistantActions(
+        [
+          { type: 'set_parameter', componentId: 'R1', parameter: 'resistance', value: 2000 },
+          { type: 'highlight_components', componentIds: ['R1'] },
+        ],
+        { expectedVersion: 7 },
+      ),
+    /layout failed/,
+  );
+  assert.deepEqual(clone(state), before);
+  assert.equal(calls.persisted, 0);
+  assert.equal(calls.events.length, 0);
+  context.applyAssistantActions([{ type: 'highlight_components', componentIds: ['R1'] }], {
+    expectedVersion: 7,
+  });
+  assert.deepEqual(
+    clone(state.document),
+    before.document,
+    'view-only Max actions do not invoke layout',
+  );
 });
