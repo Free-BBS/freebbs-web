@@ -184,6 +184,25 @@
                   ></div>
                 </section>
 
+                <div class="discussion-scope" role="group" aria-label="帖子范围">
+                  <button
+                    class="discussion-filter-chip is-active"
+                    type="button"
+                    data-discussion-scope="public"
+                    aria-pressed="true"
+                  >
+                    全部帖子
+                  </button>
+                  <button
+                    class="discussion-filter-chip"
+                    type="button"
+                    data-discussion-scope="mine"
+                    aria-pressed="false"
+                  >
+                    我的帖子
+                  </button>
+                  <p id="discussion-scope-hint">查看公开讨论。</p>
+                </div>
                 <div class="discussion-feed-toolbar">
                   <div class="discussion-filter-group" role="group" aria-label="帖子筛选">
                     <button
@@ -346,6 +365,14 @@
                     <span class="discussion-loading-copy"></span>
                   </article>
                 </div>
+                <button
+                  id="discussion-my-more"
+                  class="discussion-visibility-button"
+                  type="button"
+                  hidden
+                >
+                  查看更多我的帖子
+                </button>
               </section>
 
               <article class="discussion-detail" id="discussion-detail"></article>
