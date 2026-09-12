@@ -22,7 +22,10 @@
   function obstacle(component) {
     if (component.type === 'junction') return null;
     let bounds = [-23, -23, 23, 23];
-    if (component.type === 'ground') bounds = [-15, 0, 15, 12];
+    if (['vcc', 'vdd'].includes(component.type)) bounds = [-13, -13, 13, 3];
+    else if (['vss', 'vee'].includes(component.type)) bounds = [-13, -3, 13, 13];
+    else if (component.type === 'fixed_voltage') bounds = [-17, -9, 17, 1];
+    else if (component.type === 'ground') bounds = [-15, 0, 15, 12];
     else if (component.type === 'resistor') bounds = [-25, -10, 25, 10];
     else if (component.type === 'capacitor') bounds = [-7, -18, 7, 18];
     else if (component.type === 'inductor') bounds = [-25, -20, 25, 2];
@@ -51,6 +54,15 @@
   function placementBox(component) {
     const pins = getPins(component);
     const body = obstacle(component);
+    // Reserve either orientation for two-terminal parts. Placement then stays
+    // independent of rotation and a second beautification is a true no-op.
+    if (pins.length === 2)
+      return {
+        left: component.x - 50,
+        right: component.x + 50,
+        top: component.y - 50,
+        bottom: component.y + 50,
+      };
     return {
       left: Math.min(body?.left ?? component.x, ...pins.map((p) => p.x)) - 10,
       right: Math.max(body?.right ?? component.x, ...pins.map((p) => p.x)) + 10,
@@ -190,7 +202,8 @@
 
   function direction(component, pin) {
     let local = pin === 0 ? [-1, 0] : [1, 0];
-    if (component.type === 'ground') local = [0, -1];
+    if (['vcc', 'vdd', 'fixed_voltage'].includes(component.type)) local = [0, 1];
+    else if (['ground', 'vss', 'vee'].includes(component.type)) local = [0, -1];
     else if (component.type === 'junction') return null;
     else if (['bjt', 'mosfet'].includes(component.type))
       local = [
@@ -399,8 +412,55 @@
     return null;
   }
 
+  // Orient two-terminal branches toward their neighbours. Use centres rather than
+  // the neighbours' current pins so simultaneous rotations cannot chase each other.
+  // Ambiguous branches and multi-terminal devices retain the author's orientation.
+  function orientComponents(components, wires) {
+    const byId = new Map(components.map((component) => [component.id, component]));
+    return components.map((component) => {
+      if (getPins(component).length !== 2) return component;
+      const targets = [[], []];
+      for (const wire of wires) {
+        for (const [from, to] of [
+          [wire.from, wire.to],
+          [wire.to, wire.from],
+        ]) {
+          if (from.componentId !== component.id || to.componentId === component.id) continue;
+          const other = byId.get(to.componentId);
+          const dx = other.x - component.x;
+          const dy = other.y - component.y;
+          const length = Math.hypot(dx, dy);
+          if (length) targets[from.pin].push({ x: dx / length, y: dy / length });
+        }
+      }
+      if (targets.some((items) => !items.length)) return component;
+      const vectors = targets.map((items) => ({
+        x: items.reduce((sum, point) => sum + point.x, 0) / items.length,
+        y: items.reduce((sum, point) => sum + point.y, 0) / items.length,
+      }));
+      if (vectors[0].x * vectors[1].x + vectors[0].y * vectors[1].y > -0.25) return component;
+      const score = (candidate) =>
+        vectors.reduce((sum, vector, pin) => {
+          const normal = direction(candidate, pin);
+          return sum + vector.x * normal.x + vector.y * normal.y;
+        }, 0);
+      let best = component;
+      let bestScore = score(component);
+      for (const rotation of [0, 90, 180, 270]) {
+        const candidate = { ...component, rotation };
+        const candidateScore = score(candidate);
+        // Keep small differences and ties stable, including mirrored/polarized parts.
+        if (candidateScore > bestScore + 0.25) {
+          best = candidate;
+          bestScore = candidateScore;
+        }
+      }
+      return best;
+    });
+  }
+
   function normalizeCircuitLayout(document) {
-    const components = arrangeComponents(document.components);
+    const components = orientComponents(arrangeComponents(document.components), document.wires);
     const componentMap = new Map(components.map((component) => [component.id, component]));
     const pins = new Map(components.map((component) => [component.id, getPins(component)]));
     const { pinNets } = buildNets(document);

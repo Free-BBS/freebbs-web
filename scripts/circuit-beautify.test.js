@@ -16,7 +16,7 @@ function fixture() {
     components: [
       { id: 'V1', type: 'voltage', x: 203, y: 307, rotation: 90, params: { dc: 6 } },
       { id: 'R1', type: 'resistor', x: 500, y: 200, rotation: 90, params: { resistance: 1000 } },
-      { id: 'R2', type: 'resistor', x: 500, y: 400, rotation: 90, params: { resistance: 2000 } },
+      { id: 'R2', type: 'resistor', x: 500, y: 400, rotation: 0, params: { resistance: 2000 } },
       { id: 'G1', type: 'ground', x: 500, y: 540 },
     ],
     wires: [
@@ -95,6 +95,7 @@ test('one-click beautification is one undoable geometry edit and preserves measu
   assert.equal(context.beautifyCircuit(), true);
   const after = clone(state.document);
   assert.notDeepEqual(after, before);
+  assert.equal(after.components.find(({ id }) => id === 'R2').rotation, 90);
   assert.deepEqual(engine.buildNets(after), engine.buildNets(before));
   assert.deepEqual(engine.simulate(after).frames, engine.simulate(before).frames);
   assert.equal(state.result, result);

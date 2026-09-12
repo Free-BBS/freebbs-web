@@ -64,6 +64,11 @@
   }
   const labels = {
     ground: '接地',
+    vcc: 'VCC',
+    vdd: 'VDD',
+    vss: 'VSS',
+    vee: 'VEE',
+    fixed_voltage: '固定电平',
     junction: '连接点',
     resistor: '电阻',
     capacitor: '电容',
@@ -122,6 +127,9 @@
       [40, 0, '−'],
     ];
     if (component.type === 'ground') offsets = [[0, -28, 'GND']];
+    if (['vcc', 'vdd', 'fixed_voltage'].includes(component.type))
+      offsets = [[0, 40, labels[component.type]]];
+    if (['vss', 'vee'].includes(component.type)) offsets = [[0, -40, labels[component.type]]];
     if (component.type === 'junction') offsets = [[0, 0, '连接点']];
     if (component.type === 'bjt')
       offsets = [
@@ -297,7 +305,8 @@
     if (component.type === 'resistor') return formatValue(Number(p.resistance), 'Ω');
     if (component.type === 'capacitor') return formatValue(Number(p.capacitance), 'F');
     if (component.type === 'inductor') return formatValue(Number(p.inductance), 'H');
-    if (component.type === 'voltage') return formatValue(Number(p.dc), 'V');
+    if (['voltage', 'fixed_voltage'].includes(component.type))
+      return formatValue(Number(p.dc), 'V');
     if (component.type === 'current') return formatValue(Number(p.dc), 'A');
     if (component.type === 'bjt') return `${p.polarity || 'npn'} · β=${p.beta}`;
     if (component.type === 'mosfet')
@@ -310,9 +319,12 @@
 
   function componentLabelLayout(component) {
     const transistor = ['bjt', 'mosfet'].includes(component.type);
+    const powerSymbol = ['vcc', 'vdd', 'vss', 'vee', 'fixed_voltage'].includes(component.type);
     // Bounds include terminal dots and the current indicator, so text stays clear
     // of asymmetric shapes and extra control terminals at every orientation.
     let bounds = [-44, -26, 44, 40];
+    if (powerSymbol) bounds = [-20, -20, 20, 44];
+    if (['vss', 'vee'].includes(component.type)) bounds = [-20, -44, 20, 20];
     if (transistor) bounds = [-44, -44, 20, 44];
     else if (component.type === 'ground') bounds = [-19, -32, 19, 16];
     else if (component.type === 'opamp') bounds = [-44, -37, 44, 54];
@@ -331,7 +343,7 @@
       top: Math.min(...corners.map((point) => point.y)),
       bottom: Math.max(...corners.map((point) => point.y)),
     };
-    const sideLabel = transistor || component.type === 'ground';
+    const sideLabel = transistor || component.type === 'ground' || powerSymbol;
     const normal = transformPoint(component, sideLabel ? 1 : 0, sideLabel ? 0 : -1);
     const count = sourceValueLines(component)?.length || 1;
     let side = 'top';
@@ -423,6 +435,12 @@
       group.append(svgElement('circle', { cx: 0, cy: 0, r: 5, fill: 'currentColor' }));
     } else if (type === 'ground') {
       line('M 0 -28 V 0 M -15 0 H 15 M -10 6 H 10 M -5 12 H 5');
+    } else if (['vcc', 'vdd'].includes(type)) {
+      line('M 0 40 V -12 M -12 2 L 0 -12 L 12 2');
+    } else if (['vss', 'vee'].includes(type)) {
+      line('M 0 -40 V 12 M -12 -2 L 0 12 L 12 -2');
+    } else if (type === 'fixed_voltage') {
+      line('M 0 40 V 0 M -16 0 H 16 M -10 -8 H 10');
     } else if (type === 'resistor') {
       line('M -40 0 H -25 L -20 -9 L -12 9 L -4 -9 L 4 9 L 12 -9 L 20 9 L 25 0 H 40');
     } else if (type === 'capacitor') {
@@ -1628,7 +1646,9 @@
         const visibility =
           options.animate &&
           Math.abs(current) > 1e-12 &&
-          !['ground', 'junction'].includes(component.type)
+          !['ground', 'junction', 'vcc', 'vdd', 'vss', 'vee', 'fixed_voltage'].includes(
+            component.type,
+          )
             ? 'visible'
             : 'hidden';
         indicator.setAttribute('visibility', visibility);

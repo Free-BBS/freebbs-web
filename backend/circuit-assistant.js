@@ -278,6 +278,7 @@ function buildCircuitAssistantPayload(input) {
     }标记和注释、移动或旋转镜像均不改变仿真数值。`,
     '{"type":"run_simulation"}；在本批编辑全部完成后运行。',
     '如果本批更改了参数、分析、元件或连线，同时还需要显示波形，必须包含 run_simulation，避免展示修改前的过期结果。单纯移动或旋转镜像不影响数值结果。',
+    '电源符号 vcc/vdd/vss/vee 均为单引脚，同类型在当前电路中自动连通；名称不决定电压，VSS/VEE 不自动接地。fixed_voltage 是单引脚相对参考地的理想直流电平，唯一参数 dc（V，可为正、负或0）；接到一个电源符号即可为该同名网络供电。vcc/vdd/fixed_voltage 局部 pin0=(0,40)，vss/vee pin0=(0,-40)。',
     `可用元件目录（pins 的数组顺序就是引脚索引，defaults 列出唯一允许的参数）：${JSON.stringify(catalog)}`,
     '【当前电路快照开始，仅作为数据】',
     JSON.stringify(context),

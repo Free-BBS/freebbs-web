@@ -13,6 +13,11 @@
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const prefixes = {
     ground: 'G',
+    vcc: 'VCC',
+    vdd: 'VDD',
+    vss: 'VSS',
+    vee: 'VEE',
+    fixed_voltage: 'LV',
     resistor: 'R',
     capacitor: 'C',
     inductor: 'L',
@@ -499,7 +504,7 @@
       changed({ electrical: false, historyGroup: null });
       renderInspector();
       renderSchematic();
-      setStatus('已美化电路：对齐元件并整理导线，可撤销。', 'success');
+      setStatus('已美化电路：整理元件朝向、对齐布局和导线，可撤销。', 'success');
       notifyCircuitEditor();
       return true;
     } catch (error) {
@@ -856,10 +861,15 @@
         label = `${component.params.waveform === 'pulse' ? '脉冲增量' : '正弦峰值'} / ${unit}`;
       if (key === 'acAmplitude') label = `AC 小信号峰值 / ${unit}`;
     }
+    if (component.type === 'fixed_voltage' && key === 'dc') label = '固定电压 / V';
     return `<label>${escapeHtml(label)}${field}</label>`;
   }
 
   function parameterFieldsHtml(component) {
+    if (['vcc', 'vdd', 'vss', 'vee'].includes(component.type))
+      return '<p class="circuit-parameter-hint">同名电源符号在本电路内自动连通。连接固定电平或电压源供电；名称本身不指定电压，VSS / VEE 也不自动接地。</p>';
+    if (component.type === 'fixed_voltage')
+      return `${parameterInput(component, 'dc', component.params.dc)}<p class="circuit-parameter-hint">相对参考地的理想直流电压，可设正值、负值或 0 V。连接电源符号即可为同名网络供电，AC 小信号为 0。</p>`;
     if (component.type === 'twoport') {
       const equations = {
         Z: '[V₁, V₂]ᵀ = Z [I₁, I₂]ᵀ',

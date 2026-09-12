@@ -301,8 +301,8 @@ test('80 parts / 200 wires remain deterministic, valid, and bounded even at coor
     assert.deepEqual(normalizeRecognizedCircuitLayout(before), after);
     assert.deepEqual(normalizeRecognizedCircuitLayout(after), after);
     assert.deepEqual(
-      after.components.map(({ x, y, ...rest }) => rest),
-      before.components.map(({ x, y, ...rest }) => rest),
+      after.components.map(({ x, y, rotation, ...rest }) => rest),
+      before.components.map(({ x, y, rotation, ...rest }) => rest),
     );
   }
 });
@@ -331,4 +331,32 @@ test('existing maximum-corner diagonal hints can be replaced without exceeding 3
   const local = transformPoint(after.components[1], -40, -18);
   assert.equal(pin.x, after.components[1].x + local.x);
   assert.equal(pin.y, after.components[1].y + local.y);
+});
+
+test('beautification rotates horizontal or reversed two-pin branches without swapping polarized terminals', () => {
+  for (const type of ['resistor', 'capacitor', 'inductor', 'diode', 'voltage', 'current']) {
+    for (const mirrorX of [false, true]) {
+      for (const horizontal of [false, true]) {
+        const before = document(
+          [
+            { ...component('X', type, 400, 300, horizontal ? 90 : 0), mirrorX },
+            component('A', 'junction', horizontal ? 160 : 400, horizontal ? 300 : 100),
+            component('B', 'junction', horizontal ? 640 : 400, horizontal ? 300 : 500),
+          ],
+          [wire('a', 'A', 0, 'X', 0), wire('b', 'X', 1, 'B', 0)],
+        );
+        const snapshot = structuredClone(before);
+        const after = normalizeRecognizedCircuitLayout(before);
+        const part = after.components[0];
+        assert.equal(part.rotation, horizontal ? (mirrorX ? 180 : 0) : mirrorX ? 270 : 90);
+        assert.equal(part.mirrorX, mirrorX);
+        assert.deepEqual(part.params, before.components[0].params);
+        assert.deepEqual(buildNets(after), buildNets(before));
+        assert.deepEqual(before, snapshot);
+        assertOrthogonal(after);
+        after.wires.forEach((entry) => assert.equal(entry.points.length, 0));
+        assert.deepEqual(normalizeRecognizedCircuitLayout(after), after);
+      }
+    }
+  }
 });
