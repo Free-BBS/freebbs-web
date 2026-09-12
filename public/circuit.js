@@ -237,8 +237,9 @@
     $('publish').disabled = state.dirty || state.plotModified || state.saving;
     $('publish').title =
       state.dirty || state.plotModified ? '请先保存当前修改，再发表到讨论区' : '';
-    const saveLabel = state.cid ? `保存新版本${state.dirty ? ' · 有修改' : ''}` : '保存并获取 CID';
-    $('save').textContent = state.saving ? '正在保存…' : saveLabel;
+    const saveLabel = state.cid ? '保存新版本' : '保存电路';
+    const saveText = $('save').querySelector?.('[data-action-label]') || $('save');
+    saveText.textContent = state.saving ? '正在保存…' : saveLabel;
     $('title').readOnly = !state.editable;
     $('description').readOnly = !state.editable;
     $('login').hidden = Boolean(app?.userState?.isLoggedIn);
@@ -2539,7 +2540,7 @@
     });
     setStatus(
       persisted
-        ? '已生成新电路草稿。核对后点击“保存并获取 CID”；上一份草稿可通过“恢复上一份草稿”找回。'
+        ? '已生成新电路草稿。核对后点击“保存电路”；上一份草稿可通过“恢复上一份草稿”找回。'
         : '已生成电路，上一份草稿已备份；当前浏览器存储空间不足，请及时保存或导出新电路。',
       persisted ? 'success' : 'error',
     );
@@ -2699,7 +2700,7 @@
     if (state.listLoading) return;
     if (!app.userState.isLoggedIn) {
       $('list').innerHTML =
-        '<div class="circuit-empty">登录后查看自己的电路。<br /><a href="/login">前往登录</a>，也可以先<a href="/circuit">新建本地电路</a>。</div>';
+        '<div class="circuit-empty">登录后查看自己的电路。<br /><a href="/login">前往登录</a>，也可以先<a href="/circuit?new=1">新建本地电路</a>。</div>';
       $('list-more').hidden = true;
       return;
     }
@@ -3056,17 +3057,19 @@
       state.document = sample.document;
       $('title').value = sample.title;
       $('description').value = sample.description;
-      const restored = restoreDraft();
+      if (params.get('new') === '1') {
+        removeDraft();
+        params.delete('new');
+        const query = params.toString();
+        window.history.replaceState({}, '', `/circuit${query ? `?${query}` : ''}`);
+      } else restoreDraft();
       resetHistory();
       renderAnalysis();
       renderInspector();
       renderSchematic();
       updateControls();
       await examplesReady;
-      if (!restored && !state.dirty && state.examples.length) {
-        $('example').value = String(state.examples[0].id);
-        await loadExample({ initial: true });
-      } else if (state.loadedExample) {
+      if (state.loadedExample) {
         $('example').value = String(state.loadedExample.id);
         updateExampleControls();
       }
