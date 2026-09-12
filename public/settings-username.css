@@ -1,0 +1,52 @@
+.settings-username-form [hidden] {
+  display: none !important;
+}
+
+.settings-username-form p,
+#settings-name-rule,
+#settings-username-rule {
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+#settings-full-name[readonly] {
+  opacity: 0.8;
+  cursor: not-allowed;
+}
+
+.settings-username-payment {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--bbs-shell-line);
+  border-radius: 10px;
+  line-height: 1.7;
+}
+
+.settings-username-payment input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 3px;
+}
+
+.settings-username-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.settings-username-actions button {
+  min-height: 44px;
+  font-family: var(--font-ui);
+}
+
+#settings-username-refresh {
+  padding: 10px 16px;
+  border: 1px solid var(--bbs-shell-line);
+  border-radius: 12px;
+  color: var(--bbs-shell-text);
+  background: var(--bbs-shell-page);
+  cursor: pointer;
+}

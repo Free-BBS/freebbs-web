@@ -19,6 +19,7 @@ node --check backend/registration-guard.js
 node --check public/typography.js
 node --check public/course-map.js
 node --check public/knowledge.js
+node --check public/knowledge-history.js
 node --check public/markdown-editor.js
 node --check public/world.js
 node --check backend/circuits.js
@@ -63,6 +64,9 @@ npm run test:auth
 
 echo "[ci] shop and settings tests"
 npm run test:shop-settings
+
+echo "[ci] nickname policy and knowledge learning usability tests"
+npm run test:profile-learning
 
 echo "[ci] activity registration and administration tests"
 npm run test:surveys

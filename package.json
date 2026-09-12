@@ -19,6 +19,7 @@
     "test:discussion-markdown": "node --test scripts/discussion-markdown.test.js scripts/discussion-previews.test.js backend/discussion-preview.test.js",
     "test:public-pages": "node --test scripts/development-navigation.test.js scripts/world-page.test.js",
     "test:typography": "node --test scripts/typography-preferences.test.js",
+    "test:profile-learning": "node --test backend/username-changes.test.js scripts/settings-username.test.js scripts/knowledge-discussion.test.js scripts/knowledge-history.test.js",
     "test:shop-settings": "node --test scripts/economy-page.test.js scripts/settings-avatar.test.js backend/avatar-upload.test.js scripts/preview-shop-settings.test.js",
     "test:course-maps": "node --test backend/course-maps.test.js backend/rag-course-snapshot.test.js scripts/course-map-pages.test.js scripts/knowledge-editor.test.js scripts/knowledge-discussion.test.js",
     "test:circuits": "node --test scripts/circuit-*.test.js backend/circuit*.test.js",

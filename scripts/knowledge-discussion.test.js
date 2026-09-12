@@ -323,3 +323,30 @@ test('logging out invalidates pending detail requests and clears the previous vi
     0,
   );
 });
+
+test('returning to the list invalidates a long-post request without clearing the list scroll', async () => {
+  const fixture = harness();
+  fixture.get('list-view').scrollTop = 480;
+  let finish;
+  fixture.api.detailWait = new Promise((resolve) => {
+    finish = resolve;
+  });
+  const pending = fixture.context.openDiscussionPost('PUBLIC01');
+  fixture.context.showDiscussionList({ focus: true });
+  finish();
+  await pending;
+  assert.equal(fixture.get('detail').hidden, true);
+  assert.equal(fixture.get('list-view').scrollTop, 480);
+  assert.equal(fixture.state.discussionActivePostId, '');
+});
+
+test('knowledge origins is a reading-only development placeholder outside editable Markdown', () => {
+  assert.match(html, /id="knowledge-history"/);
+  assert.match(html, /为了解决什么问题，出现了这个知识？/);
+  assert.match(html, /class="knowledge-history-placeholder"[^>]*>正在开发<\/div>/);
+  assert.ok(html.indexOf('id="knowledge-history"') > html.indexOf('id="knowledge-reading"'));
+  assert.ok(html.indexOf('id="knowledge-history"') < html.indexOf('id="knowledge-body"'));
+  const css = fs.readFileSync(path.join(publicDir, 'course.css'), 'utf8');
+  assert.match(css, /\.knowledge-discussion-detail-actions\s*\{[^}]*position: sticky/);
+  assert.match(css, /\.knowledge-chat-fab\.is-active\s*\{[^}]*visibility: hidden/);
+});
