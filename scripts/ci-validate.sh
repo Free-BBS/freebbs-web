@@ -26,6 +26,7 @@ node --check backend/circuits.js
 node --check backend/circuit-assistant.js
 node --check backend/circuit-recognition.js
 node --check backend/circuit-recognition-layout.js
+node --check public/circuit-layout.js
 node --check backend/circuit-examples.js
 node --check public/circuit-default-examples.js
 node --check public/circuit-discussion.js

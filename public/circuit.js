@@ -213,6 +213,16 @@
 
   function updateControls() {
     if ($('recognize')) $('recognize').disabled = getRecognitionContext().busy;
+    if ($('beautify'))
+      $('beautify').disabled =
+        !state.editable ||
+        state.saving ||
+        Boolean(state.agentRun) ||
+        Boolean(state.worker) ||
+        Boolean(state.wireStart) ||
+        state.exampleBusy ||
+        state.exampleLoading ||
+        !state.document.components.length;
     if ($('recognition-restore')) {
       $('recognition-restore').hidden = !getRecognitionContext().hasBackup;
       $('recognition-restore').disabled = getRecognitionContext().busy;
@@ -454,6 +464,48 @@
     renderSchematic();
     setStatus(direction === 'undo' ? '已撤销上一步修改。' : '已重做修改。');
     return true;
+  }
+
+  function beautifiedDocument(document) {
+    const layout = window.FreeBbsCircuitLayout;
+    if (!layout) throw new Error('布局模块尚未加载，请刷新后重试。');
+    return engine.validateDocument(
+      layout.normalizeCircuitLayout(engine.validateDocument(document)),
+    );
+  }
+
+  function beautifyCircuit() {
+    if (
+      !state.editable ||
+      state.saving ||
+      state.agentRun ||
+      state.worker ||
+      state.wireStart ||
+      state.exampleBusy ||
+      state.exampleLoading ||
+      !state.document.components.length
+    )
+      return false;
+    if (!validateParameterInputs()) return false;
+    try {
+      const next = beautifiedDocument(state.document);
+      if (JSON.stringify(next) === JSON.stringify(state.document)) {
+        setStatus('当前布局已整理，无需调整。');
+        return false;
+      }
+      state.document = next;
+      state.wireAnchor = null;
+      window.FreeBbsCircuitParameterPopover?.hide();
+      changed({ electrical: false, historyGroup: null });
+      renderInspector();
+      renderSchematic();
+      setStatus('已美化电路：对齐元件并整理导线，可撤销。', 'success');
+      notifyCircuitEditor();
+      return true;
+    } catch (error) {
+      setStatus(`美化未完成：${error.message || '请稍后重试'}`, 'error');
+      return false;
+    }
   }
 
   function currentFrame() {
@@ -1903,7 +1955,18 @@
       (availableResult?.traces || []).map((trace) => trace.id),
     );
     // Validate the complete batch before applying any edit or visual effect.
-    const next = protocol.applyActions(actionDocument, valid);
+    let next = protocol.applyActions(actionDocument, valid);
+    const autoBeautify = valid.some((action) =>
+      [
+        'add_component',
+        'connect',
+        'delete_component',
+        'move_component',
+        'transform_component',
+        'set_parameter',
+      ].includes(action.type),
+    );
+    if (autoBeautify) next = beautifiedDocument(next);
     const electrical = valid.some((action) => protocol.isElectricalAction(action));
     const run = valid.some((action) => action.type === 'run_simulation');
     if (
@@ -1923,7 +1986,12 @@
       renderAnalysis();
       renderInspector();
       renderSchematic();
-      setStatus('已应用 Max 建议到当前草稿，可在右侧撤销。', 'success');
+      setStatus(
+        autoBeautify
+          ? '已应用 Max 建议并自动美化电路，可在右侧撤销。'
+          : '已应用 Max 建议到当前草稿，可在右侧撤销。',
+        'success',
+      );
     }
     valid.forEach((action) => {
       if (action.type === 'highlight_components') {
@@ -2706,6 +2774,7 @@
     );
     $('duplicate').addEventListener('click', duplicateSelection);
     $('undo').addEventListener('click', () => restoreHistory('undo'));
+    $('beautify').addEventListener('click', beautifyCircuit);
     $('redo').addEventListener('click', () => restoreHistory('redo'));
     $('delete').addEventListener('click', removeSelection);
     $('cancel-wire').addEventListener('click', cancelConnection);
@@ -2996,6 +3065,7 @@
   window.FreeBbsCircuitEditor = {
     getRecognitionContext,
     importRecognizedCircuit,
+    beautify: beautifyCircuit,
     getSnapshot: getAssistantSnapshot,
     applyActions: applyAssistantActions,
     beginAgentRun,
