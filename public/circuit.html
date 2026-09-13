@@ -152,7 +152,6 @@
         <section id="circuit-list-page" hidden>
           <header class="circuit-heading">
             <div>
-              <p class="circuit-kicker">电路实验室</p>
               <h1>我的电路</h1>
               <p>搭建、仿真，并把可复现的实验嵌入课程讨论。</p>
             </div>
@@ -422,10 +421,87 @@
                       取消连线</button
                     ><span id="circuit-count">0 个元件</span>
                   </div>
+                  <div class="circuit-viewport-controls" role="group" aria-label="画布缩放与移动">
+                    <button
+                      id="circuit-zoom-out"
+                      type="button"
+                      aria-label="缩小画布"
+                      title="缩小画布"
+                    >
+                      −
+                    </button>
+                    <output id="circuit-zoom-value" aria-live="polite" aria-label="画布缩放比例"
+                      >100%</output
+                    >
+                    <button
+                      id="circuit-zoom-in"
+                      type="button"
+                      aria-label="放大画布"
+                      title="放大画布"
+                    >
+                      +
+                    </button>
+                    <button
+                      id="circuit-zoom-reset"
+                      type="button"
+                      aria-label="复位画布"
+                      title="复位画布"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        aria-hidden="true"
+                      >
+                        <path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5" />
+                        <rect x="7" y="7" width="10" height="10" rx="1" />
+                      </svg>
+                    </button>
+                    <button
+                      id="circuit-pan"
+                      type="button"
+                      aria-label="拖动画布"
+                      title="拖动画布（再次点击恢复编辑）"
+                      aria-pressed="false"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      id="circuit-expand-canvas"
+                      type="button"
+                      aria-label="展开画布区域"
+                      title="展开画布区域"
+                      aria-pressed="false"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5M3 3l6 6M21 3l-6 6M3 21l6-6M21 21l-6-6"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                   <div class="circuit-stage" id="circuit-stage" aria-label="电路原理图"></div>
                   <p class="circuit-canvas-note">
                     连线过程中，每次点画布会放置一个拐点；点目标引脚或导线接通。
-                    退格撤回上一拐点，Esc 取消。普通交叉不接通。
+                    退格撤回上一拐点，Esc 取消。普通交叉不接通。 双指缩放、移动画布；电脑按 Ctrl / ⌘
+                    滚轮缩放，按住鼠标中键拖动。
                   </p>
                 </div>
               </section>
@@ -433,7 +509,6 @@
               <section class="circuit-analysis" aria-labelledby="circuit-analysis-title">
                 <div class="circuit-section-heading">
                   <div>
-                    <p class="circuit-kicker">分析</p>
                     <h2 id="circuit-analysis-title">运行实验</h2>
                   </div>
                   <div class="circuit-actions">
@@ -555,7 +630,6 @@
               >
                 <div class="circuit-section-heading">
                   <div>
-                    <p class="circuit-kicker">测量</p>
                     <h2 id="circuit-results-title">波形与读数</h2>
                   </div>
                   <div class="circuit-actions">
@@ -1055,6 +1129,7 @@
     <script src="/circuit-parameter-popover.js"></script>
     <script src="/circuit-history.js"></script>
     <script src="/circuit-shortcuts.js"></script>
+    <script src="/circuit-viewport.js"></script>
     <script src="/circuit.js"></script>
     <script src="/circuit-recognition.js"></script>
     <script src="/circuit-agent.js"></script>

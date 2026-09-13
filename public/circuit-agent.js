@@ -99,13 +99,13 @@
     requestStep,
     onEvent = () => {},
     maxSteps = 12,
-    timeoutMs = 600000,
+    timeoutMs = 300000,
   }) {
     [getSnapshot, beginRun, endRun, executeActions, requestStep].forEach((callback) => {
       if (typeof callback !== 'function') throw new Error('自主执行缺少编辑器接口。');
     });
     const stepLimit = Math.max(1, Math.min(12, Math.floor(Number(maxSteps) || 12)));
-    const timeLimit = Math.max(1, Math.min(600000, Number(timeoutMs) || 600000));
+    const timeLimit = Math.max(1, Math.min(300000, Number(timeoutMs) || 300000));
     let active = null;
 
     function emit(event) {
@@ -148,9 +148,7 @@
       let failures = 0;
       let status = 'complete';
       let reason = 'Max 已完成本轮自主执行。';
-      const timer = setTimeout(() => {
-        context.controller.abort(interrupted('自主执行已达到 10 分钟时限。', 'AGENT_TIMEOUT'));
-      }, timeLimit);
+      let timer;
 
       function guard() {
         if (signal.aborted) throw signal.reason;
@@ -206,6 +204,15 @@
         snapshot = clone(opened.snapshot);
         guard();
         for (step = 1; step <= stepLimit; step += 1) {
+          const timedStep = step;
+          timer = setTimeout(() => {
+            context.controller.abort(
+              interrupted(
+                `第 ${timedStep} 轮执行超过 5 分钟，已停止。当前草稿与执行结果已保留。`,
+                'AGENT_TIMEOUT',
+              ),
+            );
+          }, timeLimit);
           snapshot = checkCurrent();
           emit({ type: 'step', step, maxSteps: stepLimit });
           let response;
@@ -353,6 +360,8 @@
               reason = '连续 3 轮未能完成操作，Max 已停止。可查看执行记录后调整任务。';
               break;
             }
+          } finally {
+            clearTimeout(timer);
           }
         }
         if (step > stepLimit) {

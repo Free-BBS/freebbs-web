@@ -267,6 +267,32 @@ test('notifications join a supplied comment transaction and rollback when email 
   assert.equal(pool.data.outbox.length, 0);
 });
 
+test('comment likes notify their author once, skip self/unlike, and roll back when queueing fails', async () => {
+  const pool = createDatabase();
+  const service = createNotificationService({ pool });
+  const event = {
+    actor: { id: 3, username: 'reader' },
+    post: { id: 9, pid: 'p_example', title: '帖子' },
+    comment: { id: 12, user_id: 2, content_markdown: '评论内容' },
+    active: true,
+  };
+  await service.notifyCommentReaction(event);
+  await service.notifyCommentReaction({ ...event, active: false });
+  await service.notifyCommentReaction(event);
+  await service.notifyCommentReaction({ ...event, actor: { id: 2 } });
+  assert.equal(pool.data.notifications.length, 1);
+  assert.equal(pool.data.notifications[0].recipient_id, 2);
+  assert.equal(pool.data.notifications[0].kind, 'comment_like');
+  assert.match(pool.data.notifications[0].link, /#comment-12$/);
+  assert.equal(pool.data.outbox.length, 1);
+  pool.failOutbox = true;
+  await assert.rejects(
+    service.notifyCommentReaction({ ...event, comment: { ...event.comment, id: 13 } }),
+    /outbox failure/,
+  );
+  assert.equal(pool.data.notifications.length, 1);
+});
+
 test('reaction cancellations, repeated toggles and self reactions do not create duplicate notifications', async () => {
   const pool = createDatabase();
   const service = createNotificationService({ pool });
