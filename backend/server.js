@@ -2369,11 +2369,11 @@ app.post('/api/ai/chat', async (request, response) => {
       user,
       {
         ...payload,
-        // “问问 Max”始终使用自适应路由：课程知识问题交给 RAG，
-        // 普通对话仍由 General Chat 回答。不要依赖浏览器传入这些策略字段。
-        agent: 'navigation',
-        execute_subagent: 'auto',
-        combine_general_chat: true,
+        // 报告编辑直接处理用户提供的文稿；普通聊天沿用自适应路由。
+        // 路由策略由服务端确定，不接受客户端 agent / subagent 覆盖。
+        ...(payload.source === 'circuit_report'
+          ? { agent: 'general_chat', execute_subagent: 'none', combine_general_chat: false }
+          : { agent: 'navigation', execute_subagent: 'auto', combine_general_chat: true }),
       },
       {
         source: 'direct_chat',
@@ -3378,57 +3378,60 @@ app.patch('/api/discussion/boards/:slug/moderators/:userId', async (request, res
   }
 });
 
-app.post('/api/discussion/uploads/images', async (request, response) => {
-  try {
-    const user = await requireAuth(request, response);
+app.post(
+  ['/api/discussion/uploads/images', '/api/circuit-report/uploads/images'],
+  async (request, response) => {
+    try {
+      const user = await requireAuth(request, response);
 
-    if (!user) {
-      return;
+      if (!user) {
+        return;
+      }
+
+      const imageDataUrl = String(request.body.imageDataUrl || '');
+      const match = imageDataUrl.match(
+        /^data:(image\/(?:png|jpeg|jpg|webp|gif|avif|heic|heif|bmp|tiff|svg\+xml));base64,([A-Za-z0-9+/=]+)$/i,
+      );
+
+      if (!match) {
+        response.status(400).json({ message: '请上传图片文件' });
+        return;
+      }
+
+      const fileBuffer = Buffer.from(match[2], 'base64');
+
+      if (!fileBuffer.length || fileBuffer.length > 20 * 1024 * 1024) {
+        response.status(400).json({ message: '图片大小需在 20MB 以内' });
+        return;
+      }
+
+      const outputBuffer = await sharp(fileBuffer, { animated: false })
+        .rotate()
+        .resize({
+          width: 1600,
+          height: 1600,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .webp({ quality: 82 })
+        .toBuffer();
+
+      if (!outputBuffer.length || outputBuffer.length > 4 * 1024 * 1024) {
+        response.status(400).json({ message: '图片转换后仍超过 4MB，请换一张更小的图片' });
+        return;
+      }
+
+      const fileName = buildDiscussionImageFileName(user.id);
+      await fs.promises.writeFile(path.join(config.uploadDir, fileName), outputBuffer);
+
+      response.status(201).json({
+        url: `/uploads/${fileName}`,
+      });
+    } catch (error) {
+      response.status(500).json({ message: '上传图片失败', detail: error.message });
     }
-
-    const imageDataUrl = String(request.body.imageDataUrl || '');
-    const match = imageDataUrl.match(
-      /^data:(image\/(?:png|jpeg|jpg|webp|gif|avif|heic|heif|bmp|tiff|svg\+xml));base64,([A-Za-z0-9+/=]+)$/i,
-    );
-
-    if (!match) {
-      response.status(400).json({ message: '请上传图片文件' });
-      return;
-    }
-
-    const fileBuffer = Buffer.from(match[2], 'base64');
-
-    if (!fileBuffer.length || fileBuffer.length > 20 * 1024 * 1024) {
-      response.status(400).json({ message: '图片大小需在 20MB 以内' });
-      return;
-    }
-
-    const outputBuffer = await sharp(fileBuffer, { animated: false })
-      .rotate()
-      .resize({
-        width: 1600,
-        height: 1600,
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
-      .webp({ quality: 82 })
-      .toBuffer();
-
-    if (!outputBuffer.length || outputBuffer.length > 4 * 1024 * 1024) {
-      response.status(400).json({ message: '图片转换后仍超过 4MB，请换一张更小的图片' });
-      return;
-    }
-
-    const fileName = buildDiscussionImageFileName(user.id);
-    await fs.promises.writeFile(path.join(config.uploadDir, fileName), outputBuffer);
-
-    response.status(201).json({
-      url: `/uploads/${fileName}`,
-    });
-  } catch (error) {
-    response.status(500).json({ message: '上传图片失败', detail: error.message });
-  }
-});
+  },
+);
 
 registerDiscussionInteractions(app, {
   pool,

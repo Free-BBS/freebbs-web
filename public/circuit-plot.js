@@ -1,3 +1,4 @@
+/* eslint-disable no-bitwise -- radix-2 FFT bit reversal */
 /* Shared waveform mathematics. Expressions are parsed, never executed as JavaScript. */
 (function circuitPlotModule(root) {
   const limits = Object.freeze({ expression: 160, nodes: 96, depth: 32, rows: 8, work: 25000000 });
@@ -15,6 +16,7 @@
     'diff',
     'derivative',
     'integral',
+    'fft',
   ]);
   const calculus = new Set(['diff', 'derivative', 'integral']);
   const isArray = (value) => Array.isArray(value) || ArrayBuffer.isView(value);
@@ -137,6 +139,8 @@
       usesCalculus: calculusNodes.length > 0,
       calculusNodes: Object.freeze(calculusNodes),
       evaluate(variables = {}) {
+        if (containsFunction(ast, new Set(['fft'])))
+          throw new Error('FFT 需要完整的瞬态时间序列。');
         if (calculusNodes.length) throw new Error('微分和积分需要瞬态波形及其时间轴。');
         const value = evaluateReal(ast, (name) => {
           if (!Object.hasOwn(variables, name)) throw new Error(`缺少通道 ${name}。`);
@@ -287,7 +291,7 @@
       return unit === '1'
         ? '1'
         : `(${unit})^${node.args[1].type === 'number' ? node.args[1].value : '?'}`;
-    if (['abs', 'min', 'max'].includes(node.name)) return unit;
+    if (['abs', 'min', 'max', 'fft'].includes(node.name)) return unit;
     return '1';
   }
 
@@ -357,6 +361,11 @@
     for (const key of ['xMin', 'xMax', 'yMin', 'yMax'])
       ranges[key] = Number.isFinite(saved.ranges?.[key]) ? saved.ranges[key] : null;
     return {
+      ...Object.fromEntries(
+        ['xScale', 'yScale', 'rightScale', 'rightTraceIds', 'plots', 'title']
+          .filter((key) => saved[key] !== undefined)
+          .map((key) => [key, JSON.parse(JSON.stringify(saved[key]))]),
+      ),
       version: 1,
       mode: saved.mode === 'xy' ? 'xy' : 'xt',
       traceIds: Array.isArray(saved.traceIds) ? [...saved.traceIds] : preferred.slice(0, 32),
@@ -371,6 +380,62 @@
         ? { annotations: saved.annotations.map((annotation) => ({ ...annotation })) }
         : {}),
     };
+  }
+
+  // Radix-2 FFT, one-sided peak-amplitude spectrum. Zero padding does not
+  // change amplitude normalization: divide by the original sample count.
+  function fft(values, time) {
+    const count = values.length;
+    if (
+      count < 2 ||
+      count !== time.length ||
+      count > 100001 ||
+      values.some((v) => !Number.isFinite(v))
+    )
+      throw new Error('FFT 需要至少 2 个有限的瞬态采样值。');
+    const dt = (time.at(-1) - time[0]) / (count - 1);
+    if (
+      !Number.isFinite(dt) ||
+      dt <= 0 ||
+      time.some((v, i) => !Number.isFinite(v) || Math.abs(v - time[0] - i * dt) > dt * 1e-5)
+    )
+      throw new Error('FFT 需要等间隔、递增的时间采样。');
+    const size = 2 ** Math.ceil(Math.log2(count));
+    const re = new Float64Array(size);
+    const im = new Float64Array(size);
+    re.set(values);
+    for (let i = 1, j = 0; i < size; i += 1) {
+      let bit = size >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      if (i < j) [re[i], re[j]] = [re[j], re[i]];
+    }
+    for (let length = 2; length <= size; length *= 2) {
+      const angle = (-2 * Math.PI) / length;
+      for (let start = 0; start < size; start += length) {
+        for (let j = 0; j < length / 2; j += 1) {
+          const a = start + j;
+          const b = a + length / 2;
+          const c = Math.cos(angle * j);
+          const d = Math.sin(angle * j);
+          const r = re[b] * c - im[b] * d;
+          const v = re[b] * d + im[b] * c;
+          re[b] = re[a] - r;
+          im[b] = im[a] - v;
+          re[a] += r;
+          im[a] += v;
+        }
+      }
+    }
+    const x = [];
+    const amplitude = [];
+    const phase = [];
+    for (let i = 0; i <= size / 2; i += 1) {
+      x.push(i / (size * dt));
+      amplitude.push((Math.hypot(re[i], im[i]) / count) * (i === 0 || i === size / 2 ? 1 : 2));
+      phase.push((Math.atan2(im[i], re[i]) * 180) / Math.PI);
+    }
+    return { x, values: amplitude, phase, xUnit: 'Hz', xLabel: '频率 / Hz', domain: 'frequency' };
   }
 
   function buildResult(baseResult, display = {}) {
@@ -403,6 +468,8 @@
         const compiled = compileExpression(row.expression);
         for (const name of compiled.dependencies) {
           if (!variables[name]) throw new Error(`缺少 ${name}，或引用了自身、后面的数学曲线。`);
+          if (variables[name].domain === 'frequency')
+            throw new Error('频谱通道不能与时域表达式混算；请用 fft(CH1-CH2) 先运算再变换。');
           if (!isArray(variables[name].values) || variables[name].values.length !== count)
             throw new Error(`${name} 与当前仿真的采样数量不一致。`);
           if (ac && (!isArray(variables[name].phase) || variables[name].phase.length !== count))
@@ -424,6 +491,31 @@
         if (work + rowWork > limits.work)
           throw new Error('数学运算量过大，请简化表达式或减少仿真采样点。');
         work += rowWork;
+        if (containsFunction(compiled.ast, new Set(['fft']))) {
+          if (
+            baseResult.analysis?.type !== 'transient' ||
+            compiled.ast.type !== 'call' ||
+            compiled.ast.name !== 'fft' ||
+            containsFunction(compiled.ast.args[0], new Set(['fft', ...calculus]))
+          )
+            throw new Error(
+              '使用 fft(CH1) 或 fft(CH1-CH2)；FFT 必须是最外层函数，输入为瞬态表达式。',
+            );
+          const input = Array.from(baseResult.x, (_, index) =>
+            evaluateReal(compiled.ast.args[0], (name) => variables[name].values[index]),
+          );
+          const spectrum = fft(input, baseResult.x);
+          const trace = {
+            id: `M:${id}`,
+            label: `${id} ${row.label || row.expression}`,
+            unit: row.unit || inferUnit(compiled.ast, variables),
+            expression: row.expression,
+            ...spectrum,
+          };
+          variables[id] = trace;
+          traces.push(trace);
+          return;
+        }
         const cached = new Map();
         for (const call of compiled.calculusNodes) {
           const values = Float64Array.from(baseResult.x, (_, index) =>
@@ -505,7 +597,7 @@
     };
   }
 
-  const api = Object.freeze({ limits, compileExpression, resolveDisplay, buildResult });
+  const api = Object.freeze({ limits, compileExpression, resolveDisplay, buildResult, fft });
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FreeBbsCircuitPlot = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
