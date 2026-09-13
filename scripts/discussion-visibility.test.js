@@ -16,10 +16,12 @@ function extract(start, end) {
 }
 function deferred() {
   let resolve;
-  const promise = new Promise((done) => {
+  let reject;
+  const promise = new Promise((done, fail) => {
     resolve = done;
+    reject = fail;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 function harness() {
   const state = {
@@ -31,6 +33,7 @@ function harness() {
     activeBoard: 'all',
     activePostId: 'P1',
     activePost: null,
+    nextMyCursor: '',
     comments: [],
     posts: [],
     postCache: new Map(),
@@ -39,10 +42,17 @@ function harness() {
   };
   const requests = [];
   const rendered = [];
+  const listAttributes = {};
   const context = {
     discussionState: state,
     discussionDetail: { innerHTML: '', classList: { remove() {} }, scrollIntoView() {} },
-    discussionPostList: { innerHTML: '', setAttribute() {} },
+    discussionPostList: {
+      innerHTML: '',
+      setAttribute(name, value) {
+        listAttributes[name] = value;
+      },
+    },
+    discussionFilterStatus: { textContent: '' },
     discussionCommentDrafts: new Map(),
     discussionOpenReplyByPost: new Map(),
     renderDiscussionDetail: (post) => {
@@ -76,7 +86,7 @@ function harness() {
     extract('function resetDiscussionData(', 'async function loadPublicProfile('),
   ].join('\n');
   vm.runInNewContext(snippets, context);
-  return { state, context, requests, rendered };
+  return { state, context, requests, rendered, listAttributes };
 }
 
 test('author metadata is centered and my posts is a keyboard-accessible scope control', () => {
@@ -197,3 +207,136 @@ test('stale session after another tab changes login cannot fetch private content
   assert.equal(h.requests.length, 0);
   assert.match(source, /event\.persisted && isDiscussionPage\(\)/);
 });
+
+async function loadFirstMyPage(h) {
+  const { state } = h;
+  state.scope = 'mine';
+  const posts = Array.from({ length: 50 }, (_, index) => ({
+    id: String(55 - index),
+    isHidden: index === 0,
+  }));
+  const pending = h.context.loadDiscussionPosts();
+  h.requests.at(-1).resolve({ posts, nextCursor: '6', hash: '' });
+  await pending;
+  return posts;
+}
+
+for (const failure of ['network', 'server']) {
+  test(`second my-posts page ${failure} failure preserves 50 posts and retry yields all 55`, async () => {
+    const h = harness();
+    const firstPage = await loadFirstMyPage(h);
+    const cached = h.state.postsByBoard.get('all');
+    const hashes = { ...h.state.postsHashByBoard };
+    const [firstPost] = firstPage;
+    h.state.activePost = firstPost;
+    h.state.activePostId = firstPost.id;
+    h.state.comments = [{ contentMarkdown: 'keep the open detail' }];
+    const renderedBefore = h.rendered.length;
+    // Two consecutive failures must not consume the cursor or remove existing content.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const pending = h.context.loadDiscussionPosts({ more: true });
+      assert.equal(new URL(h.requests.at(-1).url, 'http://local').searchParams.get('cursor'), '6');
+      assert.equal(h.listAttributes['aria-busy'], 'true');
+      h.requests
+        .at(-1)
+        .reject(
+          failure === 'network'
+            ? new TypeError('Failed to fetch')
+            : Object.assign(new Error('Unavailable'), { status: 503 }),
+        );
+      await pending;
+      assert.deepEqual(
+        Array.from(h.state.posts, (post) => post.id),
+        firstPage.map((post) => post.id),
+      );
+      assert.equal(h.state.postsByBoard.get('all'), cached);
+      assert.deepEqual({ ...h.state.postsHashByBoard }, hashes);
+      assert.equal(h.state.postCache.size, 50);
+      assert.equal(h.state.nextMyCursor, '6');
+      assert.equal(h.state.activePost, firstPage[0]);
+      assert.equal(h.state.comments.length, 1);
+      assert.equal(h.rendered.length, renderedBefore);
+      assert.equal(h.listAttributes['aria-busy'], 'false');
+      assert.match(h.context.discussionFilterStatus.textContent, /加载更多.*重试/);
+    }
+    const retry = h.context.loadDiscussionPosts({ more: true });
+    assert.equal(new URL(h.requests.at(-1).url, 'http://local').searchParams.get('cursor'), '6');
+    h.requests.at(-1).resolve({
+      posts: Array.from({ length: 5 }, (_, index) => ({ id: String(5 - index) })),
+      nextCursor: '',
+    });
+    await retry;
+    const ids = Array.from(h.state.posts, (post) => post.id);
+    assert.deepEqual(
+      ids,
+      Array.from({ length: 55 }, (_, index) => String(55 - index)),
+    );
+    assert.equal(h.state.postCache.size, 55);
+    assert.equal(h.state.postsByBoard.get('all').length, 55);
+    assert.equal(h.state.nextMyCursor, '');
+    assert.equal(h.listAttributes['aria-busy'], 'false');
+  });
+}
+
+test('a failed first-page refresh clears its old cursor and the next request starts at page one', async () => {
+  const h = harness();
+  await loadFirstMyPage(h);
+  const pending = h.context.loadDiscussionPosts();
+  assert.equal(new URL(h.requests.at(-1).url, 'http://local').searchParams.has('cursor'), false);
+  h.requests.at(-1).reject(new Error('Failed to fetch'));
+  await pending;
+  assert.equal(h.state.posts.length, 0);
+  assert.equal(h.state.postsByBoard.size, 0);
+  assert.equal(h.state.postCache.size, 0);
+  assert.equal(h.state.nextMyCursor, '');
+  assert.equal(h.listAttributes['aria-busy'], 'false');
+  const retry = h.context.loadDiscussionPosts({ more: true });
+  assert.equal(new URL(h.requests.at(-1).url, 'http://local').searchParams.has('cursor'), false);
+  h.requests.at(-1).resolve({ posts: [{ id: '55' }], nextCursor: '55' });
+  await retry;
+  assert.deepEqual(
+    Array.from(h.state.posts, (post) => post.id),
+    ['55'],
+  );
+});
+
+for (const status of [401, 403]) {
+  test(`my-posts pagination ${status} does not retain private posts or an old cursor`, async () => {
+    const h = harness();
+    await loadFirstMyPage(h);
+    const pending = h.context.loadDiscussionPosts({ more: true });
+    h.requests.at(-1).reject(Object.assign(new Error('Access denied'), { status }));
+    await pending;
+    assert.equal(h.state.posts.length, 0);
+    assert.equal(h.state.postCache.size, 0);
+    assert.equal(h.state.postsByBoard.size, 0);
+    assert.equal(h.state.nextMyCursor, '');
+    assert.match(h.context.discussionPostList.innerHTML, /加载失败/);
+  });
+}
+
+for (const change of ['account', 'scope']) {
+  test(`late pagination failure cannot restore private posts after ${change} change`, async () => {
+    const h = harness();
+    await loadFirstMyPage(h);
+    const pending = h.context.loadDiscussionPosts({ more: true });
+    const oldRequest = h.requests.at(-1);
+    if (change === 'account') h.context.resetDiscussionData();
+    else {
+      const current = h.context.changeDiscussionScope('public');
+      h.requests.at(-1).resolve({ posts: [{ id: 'PUBLIC' }], hash: 'public' });
+      await current;
+    }
+    const before = Array.from(h.state.posts, (post) => post.id);
+    h.context.discussionFilterStatus.textContent = 'current view';
+    oldRequest.reject(new Error('Late network error'));
+    await pending;
+    assert.deepEqual(
+      Array.from(h.state.posts, (post) => post.id),
+      before,
+    );
+    assert.equal(h.state.postCache.has('55'), false);
+    assert.equal(h.state.nextMyCursor, '');
+    assert.equal(h.context.discussionFilterStatus.textContent, 'current view');
+  });
+}

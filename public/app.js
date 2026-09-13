@@ -5813,6 +5813,7 @@ async function loadDiscussionPosts({ autoOpen = false, more = false } = {}) {
   const activeBoard = discussionState.activeBoard || 'all';
   const hasCachedPosts = discussionState.postsByBoard.has(activeBoard);
   const currentHash = hasCachedPosts ? discussionState.postsHashByBoard[activeBoard] || '' : '';
+  const append = Boolean(more && discussionState.scope === 'mine' && discussionState.nextMyCursor);
 
   if (!discussionState.posts.length) {
     discussionPostList.innerHTML = `
@@ -5828,7 +5829,7 @@ async function loadDiscussionPosts({ autoOpen = false, more = false } = {}) {
       limit: '50',
       scope: discussionState.scope,
     });
-    if (more && discussionState.scope === 'mine' && discussionState.nextMyCursor) {
+    if (append) {
       query.set('cursor', discussionState.nextMyCursor);
     }
 
@@ -5845,7 +5846,7 @@ async function loadDiscussionPosts({ autoOpen = false, more = false } = {}) {
       return;
     }
 
-    if (more) {
+    if (append) {
       payload.posts = [
         ...new Map(
           [...discussionState.posts, ...(payload.posts || [])].map((post) => [post.id, post]),
@@ -5855,15 +5856,31 @@ async function loadDiscussionPosts({ autoOpen = false, more = false } = {}) {
     }
     discussionState.nextMyCursor = payload.nextCursor || '';
     applyDiscussionPostsPayload(activeBoard, payload);
-  } catch {
+  } catch (error) {
     if (requestId !== discussionState.postsRequestId) {
       return;
     }
 
+    // Retrying a later page must not discard the pages already on screen.
+    // Access failures still clear private content rather than retaining stale access.
+    if (append && error.status !== 401 && error.status !== 403) {
+      if (discussionFilterStatus)
+        discussionFilterStatus.textContent =
+          '更多帖子加载失败，已保留当前列表。请点击“加载更多”重试。';
+      discussionPostList.setAttribute('aria-busy', 'false');
+      return;
+    }
+
+    discussionState.nextMyCursor = '';
     discussionState.posts = [];
     discussionState.postsByBoard.clear();
     discussionState.postsHashByBoard = {};
+    discussionState.postCache.clear();
+    discussionState.postRequestId += 1;
+    discussionState.activePostId = '';
+    discussionState.comments = [];
     renderDiscussionDetail(null);
+    renderDiscussionPosts();
     discussionPostList.innerHTML =
       '<article class="discussion-empty" role="status"><p>帖子加载失败；查看自己的帖子需要先登录。请重新选择帖子范围或刷新重试。</p></article>';
     discussionPostList.setAttribute('aria-busy', 'false');
