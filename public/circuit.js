@@ -10,6 +10,16 @@
   const params = new URLSearchParams(window.location.search);
   const listPage = window.location.pathname.replace(/\/$/, '') === '/circuits';
   const $ = (id) => document.getElementById(`circuit-${id}`);
+  const viewport =
+    !listPage &&
+    window.FreeBbsCircuitViewport?.create($('stage'), {
+      in: $('zoom-in'),
+      out: $('zoom-out'),
+      reset: $('zoom-reset'),
+      pan: $('pan'),
+      value: $('zoom-value'),
+      expand: $('expand-canvas'),
+    });
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const prefixes = {
     ground: 'G',
@@ -70,6 +80,7 @@
     parameterSet: '矩阵类型',
   };
   const state = {
+    viewport,
     document: { version: 1, components: [], wires: [], analysis: { type: 'dc' } },
     cid: '',
     revision: 0,
@@ -609,6 +620,7 @@
         renderSchematic();
       },
     });
+    state.viewport?.attach();
     applySchematicHighlights();
     syncParameterPopover();
     if (focusedComponent) {

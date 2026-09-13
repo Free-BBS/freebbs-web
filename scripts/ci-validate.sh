@@ -38,6 +38,7 @@ node --check public/circuit-annotation-controls.js
 node --check public/circuit-worker.js
 node --check public/circuit-renderer.js
 node --check public/circuit-wiring.js
+node --check public/circuit-viewport.js
 node --check public/circuit.js
 node --check public/circuit-recognition.js
 node --check public/circuit-ai-actions.js
@@ -49,6 +50,7 @@ node --check public/circuit-embeds.js
 node --check public/circuit-embed.js
 node --check public/discussion-previews.js
 node --check backend/discussion-preview.js
+node --check backend/discussion-interactions.js
 node --check backend/agent-circuits.js
 
 echo "[ci] course map tests"

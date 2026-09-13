@@ -45,7 +45,7 @@
     signal,
     onProgress = () => {},
     fetchImpl = root.fetch.bind(root),
-    timeoutMs = 360000,
+    timeoutMs = 300000,
     idleTimeoutMs = 60000,
   }) {
     const controller = new AbortController();

@@ -36,7 +36,7 @@ test(
   'community features work together against the full existing MySQL schema',
   {
     skip: process.env.RUN_COMMUNITY_INTEGRATION !== '1',
-    timeout: 60000,
+    timeout: 120000,
   },
   async (t) => {
     const database = `freebbs_community_test_${crypto.randomBytes(6).toString('hex')}`;
@@ -1389,6 +1389,215 @@ test(
         assert.equal(Number(queued.count), 3);
         const [[original]] = await db.query('SELECT COUNT(*) AS count FROM notifications');
         assert.ok(original.count > 0, 'existing workbench notifications remain intact');
+      },
+    );
+
+    await t.test(
+      'anonymous daily posts, comment interactions and deleted-post visibility enforce privacy and ownership',
+      async () => {
+        const created = await api('/discussion/posts', {
+          token: legacy.token,
+          method: 'POST',
+          expected: 201,
+          body: {
+            boardSlug: 'daily',
+            title: '匿名回归测试',
+            contentMarkdown: '公开正文',
+            isAnonymous: true,
+          },
+        });
+        const migration = await fs.readFile(
+          path.join(__dirname, '../database/migrations/035_discussion_interactions.sql'),
+          'utf8',
+        );
+        await db.query(migration);
+        await db.query(migration);
+        const postId = created.post.id;
+        const assertAnonymous = (post) => {
+          assert.equal(post.isAnonymous, true);
+          assert.deepEqual(post.author, {
+            id: null,
+            uid: '',
+            username: '匿名用户',
+            fullName: '',
+            displayName: '匿名用户',
+            avatarPath: '',
+          });
+        };
+        assertAnonymous(created.post);
+        for (const token of [undefined, outsider.token, legacy.token, admin.token]) {
+          assertAnonymous((await api(`/discussion/posts/${postId}`, { token })).post);
+          const list = await api('/discussion/posts?board=daily&limit=50', { token });
+          assertAnonymous(list.posts.find((post) => post.id === postId));
+        }
+        await api(`/admin/discussion/posts/${postId}/author`, {
+          token: outsider.token,
+          expected: 403,
+        });
+        await api(`/admin/discussion/posts/${postId}/author`, { expected: 401 });
+        const identity = await api(`/admin/discussion/posts/${postId}/author`, {
+          token: admin.token,
+        });
+        assert.equal(Number(identity.author.id), legacy.id);
+        const boards = await api('/discussion/boards');
+        const otherBoard = boards.boards.find(
+          (board) => !['daily', 'changelog'].includes(board.slug),
+        );
+        await api('/discussion/posts', {
+          token: legacy.token,
+          method: 'POST',
+          expected: 400,
+          body: {
+            boardSlug: otherBoard.slug,
+            title: '禁止跨区匿名',
+            contentMarkdown: '正文',
+            isAnonymous: true,
+          },
+        });
+        await api('/discussion/posts', {
+          token: legacy.token,
+          method: 'POST',
+          expected: 400,
+          body: {
+            boardSlug: 'daily',
+            title: '错误参数',
+            contentMarkdown: '正文',
+            isAnonymous: 'true',
+          },
+        });
+        const root = (
+          await api(`/discussion/posts/${postId}/comments`, {
+            token: outsider.token,
+            method: 'POST',
+            expected: 201,
+            body: { contentMarkdown: '待删除的根评论' },
+          })
+        ).comment;
+        const reply = (
+          await api(`/discussion/posts/${postId}/comments`, {
+            token: legacy.token,
+            method: 'POST',
+            expected: 201,
+            body: { contentMarkdown: '保留的回复', parentCommentId: root.id },
+          })
+        ).comment;
+        const rootNotices = (
+          await api('/notifications', { token: outsider.token })
+        ).notifications.filter((item) => item.link.endsWith(`#comment-${reply.id}`));
+        assert.equal(rootNotices.length, 1);
+        assert.equal(rootNotices[0].kind, 'reply');
+        await api(`/discussion/comments/${reply.id}/like`, { method: 'POST', expected: 401 });
+        for (const active of [true, false, true]) {
+          const result = await api(`/discussion/comments/${reply.id}/like`, {
+            token: outsider.token,
+            method: 'POST',
+          });
+          assert.equal(result.active, active);
+          assert.equal(result.likeCount, active ? 1 : 0);
+        }
+        const likeNotices = (
+          await api('/notifications', { token: legacy.token })
+        ).notifications.filter(
+          (item) => item.kind === 'comment_like' && item.link.endsWith(`#comment-${reply.id}`),
+        );
+        assert.equal(likeNotices.length, 1, 'repeated unlike/re-like does not spam');
+        await api(`/discussion/comments/${root.id}/like`, {
+          token: outsider.token,
+          method: 'POST',
+        });
+        assert.equal(
+          (await api('/notifications', { token: outsider.token })).notifications.filter(
+            (item) => item.kind === 'comment_like' && item.link.endsWith(`#comment-${root.id}`),
+          ).length,
+          0,
+        );
+        const comments = (
+          await api(`/discussion/posts/${postId}/comments`, { token: outsider.token })
+        ).comments;
+        assert.equal(comments.find((c) => c.id === root.id).canDelete, true);
+        assert.equal(comments.find((c) => c.id === reply.id).canDelete, false);
+        assert.equal(comments.find((c) => c.id === reply.id).likedByMe, true);
+        await api(`/discussion/comments/${reply.id}`, {
+          token: outsider.token,
+          method: 'DELETE',
+          expected: 403,
+        });
+        await api(`/discussion/comments/${root.id}`, { token: outsider.token, method: 'DELETE' });
+        const remaining = (await api(`/discussion/posts/${postId}/comments`)).comments;
+        assert.equal(remaining.length, 2);
+        assert.equal(remaining[0].isDeleted, true);
+        assert.equal(remaining[0].author.id, null);
+        assert.equal(remaining[0].contentMarkdown, '该评论已删除');
+        assert.equal(remaining[1].contentMarkdown, '保留的回复');
+        assert.equal((await api(`/discussion/posts/${postId}`)).post.commentCount, 1);
+        await api(`/discussion/comments/${root.id}/like`, {
+          token: legacy.token,
+          method: 'POST',
+          expected: 404,
+        });
+        await api(`/discussion/posts/${postId}/comments`, {
+          token: legacy.token,
+          method: 'POST',
+          expected: 404,
+          body: { contentMarkdown: '不能回复已删除评论', parentCommentId: root.id },
+        });
+        await api(`/discussion/comments/${reply.id}`, { token: admin.token, method: 'DELETE' });
+        assert.equal((await api(`/discussion/posts/${postId}/comments`)).comments.length, 0);
+        const mine = (
+          await api(`/discussion/posts/${postId}/comments`, {
+            token: legacy.token,
+            method: 'POST',
+            expected: 201,
+            body: { contentMarkdown: '本人删除' },
+          })
+        ).comment;
+        await api(`/discussion/comments/${mine.id}`, { token: legacy.token, method: 'DELETE' });
+        await api(`/discussion/posts/${postId}`, { token: legacy.token, method: 'DELETE' });
+        for (const token of [undefined, outsider.token, admin.token]) {
+          assert.equal(
+            (await api('/discussion/posts?board=daily&limit=50', { token })).posts.some(
+              (post) => post.id === postId,
+            ),
+            false,
+          );
+        }
+        assert.equal(
+          (
+            await api('/discussion/posts?board=daily&includeDeleted=1&limit=50', {
+              token: outsider.token,
+            })
+          ).posts.some((post) => post.id === postId),
+          false,
+        );
+        const deleted = (
+          await api('/discussion/posts?board=daily&includeDeleted=1&limit=50', {
+            token: admin.token,
+          })
+        ).posts.find((post) => post.id === postId);
+        assert.equal(deleted.isDeleted, true);
+        assert.equal(deleted.title, '匿名回归测试');
+        const revealed = (
+          await api(`/discussion/posts/${postId}?includeDeleted=1`, { token: admin.token })
+        ).post;
+        assert.equal(revealed.contentMarkdown, '公开正文');
+        assert.equal(revealed.title, '匿名回归测试');
+        assertAnonymous(revealed);
+        assert.equal(
+          (await api(`/discussion/posts/${postId}`, { token: admin.token })).post.contentMarkdown,
+          '这篇帖子已被删除。',
+        );
+        await api(`/discussion/posts/${postId}?includeDeleted=1`, {
+          token: outsider.token,
+          expected: 404,
+        });
+        assertAnonymous(deleted);
+        await api(`/discussion/posts/${postId}`, { token: outsider.token, expected: 404 });
+        const [[stored]] = await db.execute(
+          'SELECT user_id, is_anonymous FROM discussion_posts WHERE pid = ?',
+          [postId],
+        );
+        assert.equal(Number(stored.user_id), legacy.id);
+        assert.equal(stored.is_anonymous, 1);
       },
     );
   },

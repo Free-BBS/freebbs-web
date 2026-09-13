@@ -152,6 +152,7 @@ function connectSubmission(fixture, callApi) {
     setDiscussionMessage: (message) => messages.push(message),
     loadDiscussionPosts: async () => {},
     renderDiscussionDetail() {},
+    syncDiscussionAnonymousOption() {},
     updateDiscussionQuery() {},
     openModal() {},
     CustomEvent: class CustomEvent {
@@ -435,6 +436,7 @@ test('manual publish sends the edited fields once, then clears the persisted han
         title: fixture.title.value,
         contentMarkdown: fixture.content.value,
         boardSlug: 'math',
+        isAnonymous: false,
       },
     },
   ]);

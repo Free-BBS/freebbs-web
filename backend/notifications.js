@@ -282,6 +282,20 @@ function createNotificationService({
     );
   }
 
+  async function notifyCommentReaction({ actor, post, comment, active }, connection) {
+    if (!active || Number(actor.id) === Number(comment.user_id)) return 0;
+    return inTransaction(pool, connection, (database) =>
+      insertNotifications(database, [comment.user_id], {
+        actorId: actor.id,
+        kind: 'comment_like',
+        title: `${actor.username || '用户'} 点赞了你的评论`.slice(0, 160),
+        body: `《${post.title || '讨论'}》\n${String(comment.content_markdown || '').slice(0, 1500)}`,
+        link: `/discussion?post=${encodeURIComponent(post.pid || post.id)}#comment-${comment.id}`,
+        eventKey: `comment-like:${comment.id}:${actor.id}`,
+      }),
+    );
+  }
+
   async function processOutbox() {
     if (working) return { processed: 0 };
     working = true;
@@ -359,7 +373,14 @@ function createNotificationService({
     };
   }
 
-  return { publish, notifyReply, notifyReaction, processOutbox, startWorker };
+  return {
+    publish,
+    notifyReply,
+    notifyReaction,
+    notifyCommentReaction,
+    processOutbox,
+    startWorker,
+  };
 }
 
 function createNotificationsRouter({ pool, requireAuth, requireAdmin, service }) {

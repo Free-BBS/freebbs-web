@@ -695,3 +695,47 @@ test('an action-shaped code fence is never interpreted as an executable browser-
   assert.equal(h.executions.length, 0);
   assert.match(result.observations[0].summary, /未提供可执行操作/);
 });
+
+test('each round gets five minutes and the task can continue past ten minutes', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const pending = [];
+  const h = harness({
+    requestStep: () => {
+      const next = deferred();
+      pending.push(next);
+      return next.promise;
+    },
+  });
+  const running = h.runner.run('多轮执行');
+  for (let round = 0; round < 3; round += 1) {
+    await tick();
+    assert.equal(pending.length, round + 1);
+    t.mock.timers.tick(240000);
+    pending[round].resolve(
+      round === 2
+        ? { answer: '完成', actions: [], done: true }
+        : { answer: '调整', actions: [setResistance(2000 + round)] },
+    );
+  }
+  assert.equal((await running).status, 'complete');
+  assert.deepEqual(h.endings, ['run-1']);
+});
+
+test('a single round exceeding five minutes aborts its request and releases the editor', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let requestSignal;
+  const h = harness({
+    requestStep: (_payload, { signal }) => {
+      requestSignal = signal;
+      return new Promise(() => {});
+    },
+  });
+  const running = h.runner.run('等待');
+  await tick();
+  t.mock.timers.tick(299999);
+  assert.equal(requestSignal.aborted, false);
+  t.mock.timers.tick(1);
+  assert.equal((await running).status, 'timeout');
+  assert.equal(requestSignal.aborted, true);
+  assert.deepEqual(h.endings, ['run-1']);
+});
