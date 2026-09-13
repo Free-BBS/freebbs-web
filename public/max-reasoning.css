@@ -1,0 +1,53 @@
+.max-reasoning {
+  min-width: 0;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-line, #385057);
+  border-radius: 8px;
+  color: var(--ui-muted, #9db4bb);
+  background: var(--ui-page, transparent);
+  font-size: 0.8rem;
+  line-height: 1.65;
+}
+.max-reasoning > summary {
+  cursor: pointer;
+  min-height: 24px;
+}
+.max-reasoning-content {
+  max-height: 240px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  margin-top: 8px;
+}
+.max-reasoning-part {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.max-reasoning-part + .max-reasoning-part {
+  border-top: 1px solid var(--ui-line, #385057);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+body.aichat-page .aichat-message-assistant > .max-reasoning {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
+}
+body.aichat-page .aichat-message-assistant:has(> .max-reasoning) > .aichat-bubble {
+  grid-column: 2;
+  grid-row: 2;
+}
+@media (max-width: 700px) {
+  .max-reasoning > summary {
+    min-height: 32px;
+  }
+  .max-reasoning-content {
+    max-height: 180px;
+  }
+}
+body.aichat-page
+  .aichat-message-assistant:has(> .max-reasoning)
+  > .aichat-bubble:has(.aichat-thinking-inline) {
+  display: none;
+}

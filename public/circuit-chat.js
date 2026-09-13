@@ -132,7 +132,7 @@
         event = '';
         data = [];
         eventSize = 0;
-        if (!['status', 'answer', 'result', 'error'].includes(eventName)) return;
+        if (!['status', 'reasoning', 'answer', 'result', 'error'].includes(eventName)) return;
         let value;
         try {
           value = JSON.parse(raw);
@@ -145,6 +145,8 @@
           return;
         }
         guard();
+        if (eventName === 'reasoning' && typeof value?.delta === 'string')
+          onProgress({ type: 'reasoning', id: String(value.id || '1'), delta: value.delta });
         if (eventName === 'answer' && typeof value?.answer === 'string')
           onProgress({ type: 'answer', answer: value.answer });
         if (

@@ -125,12 +125,14 @@ test('streamed progress is presentation only and expires when its request or run
       if (payload.agent.step === 1) {
         firstProgress = onProgress;
         onProgress({ type: 'status', phase: 'thinking', message: '正在分析电路。' });
+        onProgress({ type: 'reasoning', id: '1', delta: '先分析，不执行。' });
         onProgress({ type: 'answer', answer: '先运行仿真。' });
         onProgress({ type: 'result', actions: [simulate] });
         return pending.promise;
       }
       lastProgress = onProgress;
       firstProgress({ type: 'answer', answer: '已过期的上一轮片段。' });
+      firstProgress({ type: 'reasoning', id: '1', delta: '过期思考' });
       onProgress({ type: 'answer', answer: '实测仿真已完成。' });
       return { answer: '实测仿真已完成。', actions: [], done: true };
     },
@@ -138,6 +140,10 @@ test('streamed progress is presentation only and expires when its request or run
   const running = h.runner.run('运行仿真');
   await tick();
   assert.equal(h.executions.length, 0);
+  assert.deepEqual(
+    h.events.filter((event) => event.type === 'reasoning'),
+    [{ type: 'reasoning', step: 1, id: '1', delta: '先分析，不执行。' }],
+  );
   assert.deepEqual(
     h.events.filter((event) => event.type === 'progress'),
     [
