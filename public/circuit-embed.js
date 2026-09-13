@@ -136,6 +136,7 @@
     state.chart?.destroy();
     state.chart = renderer.renderWaveform(waveform, state.result, {
       ...state.display,
+      renderAllPlots: true,
       traceIds: Array.from(state.traceIds),
       phase: phase.checked,
       logX:

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const visibility = require('./discussion-visibility');
+const { anonymousAuthor, visibleComments } = require('./discussion-interactions');
 
 const source = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
 const author = { id: 7, username: 'author', student_id: 'student7' };
@@ -37,14 +38,17 @@ function harness(records = [post(1)]) {
   );
   function filtered(sql, params) {
     return records.filter((row) => {
-      if (row.is_deleted) return false;
+      const includeDeleted = sql.includes('(? = 1 OR p.is_deleted = 0)')
+        ? Boolean(params.at(-2))
+        : !sql.includes('p.is_deleted = 0');
+      if (row.is_deleted && !includeDeleted) return false;
       if (sql.includes('AND p.user_id = ?')) {
         if (row.user_id !== viewer?.id) return false;
       } else if (sql.includes('(p.is_hidden = 0 OR p.user_id = ?)')) {
-        if (!visibility.canReadPost(row, viewer)) return false;
+        if (!visibility.canReadPost(row, viewer, includeDeleted)) return false;
       } else if (sql.includes('p.is_hidden = 0') && row.is_hidden) return false;
       if (sql.includes('b.slug = ?') && row.board_slug !== 'signals') return false;
-      if (sql.includes('WHERE p.id = ?') && row.id !== params.at(-2)) return false;
+      if (sql.includes('WHERE p.id = ?') && row.id !== params.at(-3)) return false;
       if (sql.includes('AND p.id < ?') && row.id >= Number(params.at(-1))) return false;
       return true;
     });
@@ -91,10 +95,10 @@ function harness(records = [post(1)]) {
       if (sql.includes('FROM discussion_comments c')) {
         return [
           visibility.canReadPost(
-            records.find((row) => row.id === params[0]),
+            records.find((row) => row.id === params.at(-2)),
             viewer,
           )
-            ? [{ id: 30, post_id: params[0], user_id: 8, content_markdown: 'Reply' }]
+            ? [{ id: 30, post_id: params.at(-2), user_id: 8, content_markdown: 'Reply' }]
             : [],
         ];
       }
@@ -105,6 +109,8 @@ function harness(records = [post(1)]) {
     app,
     pool: connection,
     ...visibility,
+    anonymousAuthor,
+    visibleComments,
     ensureDiscussionTables: async () => {},
     ensureNotificationTables: async () => {},
     getOptionalAuthUser: async () => viewer,
@@ -125,10 +131,10 @@ function harness(records = [post(1)]) {
     normalizeLimit: (value, fallback, max) => Math.min(max, Number(value) || fallback),
     getDiscussionPreview: () => null,
     config: { publicWebUrl: 'http://127.0.0.1' },
-    canModerateBoard: async (user) => Boolean(user.is_admin),
+    canModerateBoard: async (user) => Boolean(user?.is_admin),
     requireDiscussionBoardModerator: async (user, _board, response) => {
       if (!user.is_admin) response.status(403).json({ message: '无权访问' });
-      return Boolean(user.is_admin);
+      return Boolean(user?.is_admin);
     },
     withDatabaseTransaction: async (callback) => callback(connection),
     DISCUSSION_REACTION_TYPES: new Set(['smile', 'light', 'fireworks']),
@@ -372,4 +378,68 @@ test('public counts and asynchronous Max reply use public-only visibility', () =
   assert.match(max, /WHERE p\.id = \? AND p\.is_deleted = 0 AND p\.is_hidden = 0/);
   assert.match(max, /await lockPublicPost\(connection, postId\)/);
   assert.ok(max.indexOf('await lockPublicPost(') < max.indexOf('INSERT INTO discussion_comments'));
+});
+
+test('explicit administrator inspection includes deleted public posts but never hidden posts', async () => {
+  const h = harness([
+    post(1),
+    post(2, { is_deleted: 1 }),
+    post(3, { is_hidden: 1 }),
+    post(4, { is_hidden: 1, is_deleted: 1 }),
+  ]);
+  for (const user of [null, author, peer, admin]) {
+    const response = await h.request('get', '/discussion/posts', {
+      user,
+      query: { includeDeleted: '1' },
+    });
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(
+      Array.from(response.payload.posts, (p) => p.id),
+      user === admin ? ['PUBLIC1', 'PUBLIC2'] : ['PUBLIC1'],
+    );
+    for (const id of ['PUBLIC2', 'PUBLIC3', 'PUBLIC4']) {
+      const detail = await h.request('get', '/discussion/posts/:id', {
+        user,
+        id,
+        query: { includeDeleted: '1' },
+      });
+      const allowed = (user === admin && id === 'PUBLIC2') || (user === author && id === 'PUBLIC3');
+      assert.equal(detail.statusCode, allowed ? 200 : 404);
+      if (user === admin && id === 'PUBLIC2')
+        assert.equal(detail.payload.post.contentMarkdown, 'Private-capable body');
+    }
+  }
+  const mine = await h.request('get', '/discussion/posts', {
+    user: admin,
+    query: { scope: 'mine', includeDeleted: '1' },
+  });
+  assert.equal(mine.payload.posts.length, 0);
+});
+
+test('anonymous hidden posts preserve author controls without revealing author identity', async () => {
+  const h = harness([post(1, { is_hidden: 1, is_anonymous: 1 })]);
+  const response = await h.request('get', '/discussion/posts/:id', { user: author });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.payload.post.canHide, true);
+  assert.equal(response.payload.post.isAnonymous, true);
+  assert.equal(response.payload.post.isHidden, true);
+  assert.equal(response.payload.post.author.id, null);
+  assert.equal(response.payload.post.author.username, '匿名用户');
+});
+
+test('notification redaction includes comment likes with anchored links for hide and delete', async () => {
+  for (const deleting of [false, true]) {
+    const h = harness();
+    await h.request(
+      deleting ? 'delete' : 'patch',
+      deleting ? '/discussion/posts/:id' : '/discussion/posts/:id/visibility',
+      { user: author, body: { hidden: true } },
+    );
+    const { sql, params } = h.queries.find((q) =>
+      q.sql.startsWith('UPDATE community_notifications'),
+    );
+    assert.match(sql, /'comment_like'/);
+    assert.match(sql, /SUBSTRING_INDEX\(SUBSTRING_INDEX\(link, 'post=', -1\), '#', 1\)/);
+    assert.deepEqual(params, ['PUBLIC1', '1']);
+  }
 });

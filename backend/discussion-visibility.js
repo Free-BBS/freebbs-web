@@ -1,8 +1,8 @@
 // The author is the only reader of a hidden post; administrators have no bypass.
-function canReadPost(post, user) {
+function canReadPost(post, user, includeDeleted = false) {
   return Boolean(
     post &&
-    !Number(post.is_deleted) &&
+    (!Number(post.is_deleted) || (includeDeleted && user?.is_admin)) &&
     (!Number(post.is_hidden) || (user?.id && Number(post.user_id) === Number(user.id))),
   );
 }
@@ -26,7 +26,7 @@ async function redactPostNotifications(connection, post) {
   await connection.execute(
     `UPDATE community_notifications
      SET title = '讨论状态已更新', body = '这篇讨论已删除或暂不可见。', link = '/discussion'
-     WHERE kind IN ('reply', 'reaction') AND link LIKE '/discussion?post=%'
+     WHERE kind IN ('reply', 'reaction', 'comment_like') AND link LIKE '/discussion?post=%'
        AND SUBSTRING_INDEX(SUBSTRING_INDEX(link, 'post=', -1), '#', 1) IN (?, ?)`,
     [encodeURIComponent(post.pid || String(post.id)), String(post.id)],
   );

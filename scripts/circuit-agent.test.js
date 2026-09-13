@@ -125,12 +125,14 @@ test('streamed progress is presentation only and expires when its request or run
       if (payload.agent.step === 1) {
         firstProgress = onProgress;
         onProgress({ type: 'status', phase: 'thinking', message: '正在分析电路。' });
+        onProgress({ type: 'reasoning', id: '1', delta: '先分析，不执行。' });
         onProgress({ type: 'answer', answer: '先运行仿真。' });
         onProgress({ type: 'result', actions: [simulate] });
         return pending.promise;
       }
       lastProgress = onProgress;
       firstProgress({ type: 'answer', answer: '已过期的上一轮片段。' });
+      firstProgress({ type: 'reasoning', id: '1', delta: '过期思考' });
       onProgress({ type: 'answer', answer: '实测仿真已完成。' });
       return { answer: '实测仿真已完成。', actions: [], done: true };
     },
@@ -138,6 +140,10 @@ test('streamed progress is presentation only and expires when its request or run
   const running = h.runner.run('运行仿真');
   await tick();
   assert.equal(h.executions.length, 0);
+  assert.deepEqual(
+    h.events.filter((event) => event.type === 'reasoning'),
+    [{ type: 'reasoning', step: 1, id: '1', delta: '先分析，不执行。' }],
+  );
   assert.deepEqual(
     h.events.filter((event) => event.type === 'progress'),
     [
@@ -694,4 +700,48 @@ test('an action-shaped code fence is never interpreted as an executable browser-
   assert.equal(result.status, 'error');
   assert.equal(h.executions.length, 0);
   assert.match(result.observations[0].summary, /未提供可执行操作/);
+});
+
+test('each round gets five minutes and the task can continue past ten minutes', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const pending = [];
+  const h = harness({
+    requestStep: () => {
+      const next = deferred();
+      pending.push(next);
+      return next.promise;
+    },
+  });
+  const running = h.runner.run('多轮执行');
+  for (let round = 0; round < 3; round += 1) {
+    await tick();
+    assert.equal(pending.length, round + 1);
+    t.mock.timers.tick(240000);
+    pending[round].resolve(
+      round === 2
+        ? { answer: '完成', actions: [], done: true }
+        : { answer: '调整', actions: [setResistance(2000 + round)] },
+    );
+  }
+  assert.equal((await running).status, 'complete');
+  assert.deepEqual(h.endings, ['run-1']);
+});
+
+test('a single round exceeding five minutes aborts its request and releases the editor', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let requestSignal;
+  const h = harness({
+    requestStep: (_payload, { signal }) => {
+      requestSignal = signal;
+      return new Promise(() => {});
+    },
+  });
+  const running = h.runner.run('等待');
+  await tick();
+  t.mock.timers.tick(299999);
+  assert.equal(requestSignal.aborted, false);
+  t.mock.timers.tick(1);
+  assert.equal((await running).status, 'timeout');
+  assert.equal(requestSignal.aborted, true);
+  assert.deepEqual(h.endings, ['run-1']);
 });

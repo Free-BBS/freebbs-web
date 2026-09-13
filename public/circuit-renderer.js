@@ -64,6 +64,11 @@
   }
   const labels = {
     ground: '接地',
+    vcc: 'VCC',
+    vdd: 'VDD',
+    vss: 'VSS',
+    vee: 'VEE',
+    fixed_voltage: '固定电平',
     junction: '连接点',
     resistor: '电阻',
     capacitor: '电容',
@@ -122,6 +127,9 @@
       [40, 0, '−'],
     ];
     if (component.type === 'ground') offsets = [[0, -28, 'GND']];
+    if (['vcc', 'vdd', 'fixed_voltage'].includes(component.type))
+      offsets = [[0, 40, labels[component.type]]];
+    if (['vss', 'vee'].includes(component.type)) offsets = [[0, -40, labels[component.type]]];
     if (component.type === 'junction') offsets = [[0, 0, '连接点']];
     if (component.type === 'bjt')
       offsets = [
@@ -280,6 +288,12 @@
 
   function sourceValueLines(component) {
     const p = component.params || {};
+    if (['voltage', 'current'].includes(component.type) && p.waveform === 'arbitrary')
+      return [
+        '任意波形',
+        p.repeat === 'repeat' ? '循环播放' : '单次播放',
+        `偏置 ${formatValue(Number(p.dc), component.type === 'voltage' ? 'V' : 'A')}`,
+      ];
     if (!['voltage', 'current'].includes(component.type) || !['sine', 'pulse'].includes(p.waveform))
       return null;
     const unit = component.type === 'voltage' ? 'V' : 'A';
@@ -297,7 +311,8 @@
     if (component.type === 'resistor') return formatValue(Number(p.resistance), 'Ω');
     if (component.type === 'capacitor') return formatValue(Number(p.capacitance), 'F');
     if (component.type === 'inductor') return formatValue(Number(p.inductance), 'H');
-    if (component.type === 'voltage') return formatValue(Number(p.dc), 'V');
+    if (['voltage', 'fixed_voltage'].includes(component.type))
+      return formatValue(Number(p.dc), 'V');
     if (component.type === 'current') return formatValue(Number(p.dc), 'A');
     if (component.type === 'bjt') return `${p.polarity || 'npn'} · β=${p.beta}`;
     if (component.type === 'mosfet')
@@ -310,9 +325,12 @@
 
   function componentLabelLayout(component) {
     const transistor = ['bjt', 'mosfet'].includes(component.type);
+    const powerSymbol = ['vcc', 'vdd', 'vss', 'vee', 'fixed_voltage'].includes(component.type);
     // Bounds include terminal dots and the current indicator, so text stays clear
     // of asymmetric shapes and extra control terminals at every orientation.
     let bounds = [-44, -26, 44, 40];
+    if (powerSymbol) bounds = [-20, -20, 20, 44];
+    if (['vss', 'vee'].includes(component.type)) bounds = [-20, -44, 20, 20];
     if (transistor) bounds = [-44, -44, 20, 44];
     else if (component.type === 'ground') bounds = [-19, -32, 19, 16];
     else if (component.type === 'opamp') bounds = [-44, -37, 44, 54];
@@ -331,7 +349,7 @@
       top: Math.min(...corners.map((point) => point.y)),
       bottom: Math.max(...corners.map((point) => point.y)),
     };
-    const sideLabel = transistor || component.type === 'ground';
+    const sideLabel = transistor || component.type === 'ground' || powerSymbol;
     const normal = transformPoint(component, sideLabel ? 1 : 0, sideLabel ? 0 : -1);
     const count = sourceValueLines(component)?.length || 1;
     let side = 'top';
@@ -417,12 +435,18 @@
       line('M -12 -4 V 4 M -16 0 H -8 M 8 0 H 16');
     };
     const sourceWaveform = component.params?.waveform;
-    const varyingSource = ['sine', 'pulse'].includes(sourceWaveform);
+    const varyingSource = ['sine', 'pulse', 'arbitrary'].includes(sourceWaveform);
     const { type } = component;
     if (type === 'junction') {
       group.append(svgElement('circle', { cx: 0, cy: 0, r: 5, fill: 'currentColor' }));
     } else if (type === 'ground') {
       line('M 0 -28 V 0 M -15 0 H 15 M -10 6 H 10 M -5 12 H 5');
+    } else if (['vcc', 'vdd'].includes(type)) {
+      line('M 0 40 V -12 M -12 2 L 0 -12 L 12 2');
+    } else if (['vss', 'vee'].includes(type)) {
+      line('M 0 -40 V 12 M -12 -2 L 0 12 L 12 -2');
+    } else if (type === 'fixed_voltage') {
+      line('M 0 40 V 0 M -16 0 H 16 M -10 -8 H 10');
     } else if (type === 'resistor') {
       line('M -40 0 H -25 L -20 -9 L -12 9 L -4 -9 L 4 9 L 12 -9 L 20 9 L 25 0 H 40');
     } else if (type === 'capacitor') {
@@ -504,18 +528,22 @@
         if (varyingSource) {
           line('M -9 -17 V -11 M -12 -14 H -6 M 6 -14 H 12');
           line(
-            sourceWaveform === 'sine'
-              ? 'M -15 2 C -10 -11 -5 -11 0 2 C 5 15 10 15 15 2'
-              : 'M -15 7 H -9 V -5 H 0 V 7 H 8 V -5 H 15',
+            sourceWaveform === 'arbitrary'
+              ? 'M -14 4 L -8 -7 L -1 1 L 6 -3 L 14 7'
+              : sourceWaveform === 'sine'
+                ? 'M -15 2 C -10 -11 -5 -11 0 2 C 5 15 10 15 15 2'
+                : 'M -15 7 H -9 V -5 H 0 V 7 H 8 V -5 H 15',
           );
         } else voltageMarks();
       } else if (type === 'current') {
         currentArrow();
         if (varyingSource)
           line(
-            sourceWaveform === 'sine'
-              ? 'M -12 -12 C -8 -16 -4 -16 0 -12 C 4 -8 8 -8 12 -12'
-              : 'M -12 -9 H -7 V -15 H 0 V -9 H 7 V -15 H 12',
+            sourceWaveform === 'arbitrary'
+              ? 'M -14 4 L -8 -7 L -1 1 L 6 -3 L 14 7'
+              : sourceWaveform === 'sine'
+                ? 'M -12 -12 C -8 -16 -4 -16 0 -12 C 4 -8 8 -8 12 -12'
+                : 'M -12 -9 H -7 V -15 H 0 V -9 H 7 V -15 H 12',
           );
       } else if (type === 'voltmeter') text('V');
       else if (type === 'ammeter') text('A');
@@ -1628,7 +1656,9 @@
         const visibility =
           options.animate &&
           Math.abs(current) > 1e-12 &&
-          !['ground', 'junction'].includes(component.type)
+          !['ground', 'junction', 'vcc', 'vdd', 'vss', 'vee', 'fixed_voltage'].includes(
+            component.type,
+          )
             ? 'visible'
             : 'hidden';
         indicator.setAttribute('visibility', visibility);
@@ -1666,7 +1696,7 @@
     const buckets = Math.max(1, Math.floor(pixelWidth) || 1);
     if (count <= buckets * 4) return Array.from({ length: count }, (_, index) => index);
     const project = (value) => (logX ? Math.log10(value) : value);
-    const start = project(xValues[0]);
+    const start = project(xValues.find((x) => Number.isFinite(project(x))) ?? 1);
     const span = project(xValues[count - 1]) - start || 1;
     const indices = [];
     let bucket = -1;
@@ -1679,7 +1709,7 @@
         indices.push(...[...new Set([first, minimum, maximum, last])].sort((a, b) => a - b));
     };
     for (let index = 0; index < count; index += 1) {
-      if (!Number.isFinite(values[index]) || !Number.isFinite(xValues[index])) {
+      if (!Number.isFinite(values[index]) || !Number.isFinite(project(xValues[index]))) {
         flush();
         if (first !== undefined || !indices.length) indices.push(index);
         first = undefined;
@@ -1796,7 +1826,12 @@
     let drawing = false;
     return indices
       .map((index) => {
-        if (!Number.isFinite(xValues[index]) || !Number.isFinite(yValues[index])) {
+        if (
+          !Number.isFinite(xValues[index]) ||
+          !Number.isFinite(yValues[index]) ||
+          !Number.isFinite(px(xValues[index])) ||
+          !Number.isFinite(py(yValues[index]))
+        ) {
           drawing = false;
           return '';
         }
@@ -1820,6 +1855,33 @@
       else max = min + span;
     }
     return [min, max];
+  }
+
+  function coordinateAxis(values, scale, fixedMin, fixedMax, pad = true) {
+    const log = scale === 'log';
+    const project = (v) => (log ? (v > 0 ? Math.log10(v) : NaN) : v);
+    const inverse = (v) => (log ? 10 ** v : v);
+    let low = Infinity;
+    let high = -Infinity;
+    for (const v of values) {
+      const n = project(v);
+      if (Number.isFinite(n)) {
+        low = Math.min(low, n);
+        high = Math.max(high, n);
+      }
+    }
+    if (!Number.isFinite(low)) {
+      low = log ? 0 : -1;
+      high = 1;
+    }
+    const [min, max] = axisBounds(
+      low,
+      high,
+      Number.isFinite(fixedMin) ? project(fixedMin) : undefined,
+      Number.isFinite(fixedMax) ? project(fixedMax) : undefined,
+      pad,
+    );
+    return { min, max, project, inverse };
   }
 
   let plotSequence = 0;
@@ -1880,7 +1942,7 @@
         const candidate = (point.x - pointer.x) ** 2 + (point.y - pointer.y) ** 2;
         if (candidate < distance) {
           distance = candidate;
-          nearest = { trace, index };
+          nearest = { trace, index, distance: candidate };
         }
       }
     });
@@ -2111,22 +2173,13 @@
     const height = 232;
     const xValues = xTrace.values;
     const yValues = yTrace.values;
-    let lowX = Infinity;
-    let highX = -Infinity;
-    let lowY = Infinity;
-    let highY = -Infinity;
-    for (let index = 0; index < Math.min(xValues.length, yValues.length); index += 1) {
-      if (!Number.isFinite(xValues[index]) || !Number.isFinite(yValues[index])) continue;
-      lowX = Math.min(lowX, xValues[index]);
-      highX = Math.max(highX, xValues[index]);
-      lowY = Math.min(lowY, yValues[index]);
-      highY = Math.max(highY, yValues[index]);
-    }
     const ranges = options.ranges || {};
-    const [xMin, xMax] = axisBounds(lowX, highX, ranges.xMin, ranges.xMax);
-    const [yMin, yMax] = axisBounds(lowY, highY, ranges.yMin, ranges.yMax);
-    const px = (x) => left + ((x - xMin) / (xMax - xMin)) * width;
-    const py = (y) => top + (1 - (y - yMin) / (yMax - yMin)) * height;
+    const xAxis = coordinateAxis(xValues, options.xScale, ranges.xMin, ranges.xMax);
+    const yAxis = coordinateAxis(yValues, options.yScale, ranges.yMin, ranges.yMax);
+    const { min: xMin, max: xMax } = xAxis;
+    const { min: yMin, max: yMax } = yAxis;
+    const px = (x) => left + ((xAxis.project(x) - xMin) / (xMax - xMin)) * width;
+    const py = (y) => top + (1 - (yAxis.project(y) - yMin) / (yMax - yMin)) * height;
     const svg = svgElement('svg', {
       viewBox: `0 0 ${chartWidth} 310`,
       width: '100%',
@@ -2159,7 +2212,7 @@
             'text-anchor': 'middle',
             'font-size': 12,
           },
-          formatValue(xMin + ((xMax - xMin) * index) / ticks, xTrace.unit || ''),
+          formatValue(xAxis.inverse(xMin + ((xMax - xMin) * index) / ticks), xTrace.unit || ''),
         ),
       );
       svg.append(
@@ -2172,14 +2225,16 @@
             'text-anchor': 'end',
             'font-size': 12,
           },
-          formatValue(yMax - ((yMax - yMin) * index) / ticks, yTrace.unit || ''),
+          formatValue(yAxis.inverse(yMax - ((yMax - yMin) * index) / ticks), yTrace.unit || ''),
         ),
       );
     }
     // Explicit zero axes make negative quadrants readable, including closed loops.
     const zeroAxes = [];
-    if (xMin < 0 && xMax > 0) zeroAxes.push(`M ${px(0)} ${top} V ${top + height}`);
-    if (yMin < 0 && yMax > 0) zeroAxes.push(`M ${left} ${py(0)} H ${left + width}`);
+    if (options.xScale !== 'log' && xMin < 0 && xMax > 0)
+      zeroAxes.push(`M ${px(0)} ${top} V ${top + height}`);
+    if (options.yScale !== 'log' && yMin < 0 && yMax > 0)
+      zeroAxes.push(`M ${left} ${py(0)} H ${left + width}`);
     svg.append(
       svgElement('path', {
         d: zeroAxes.join(' '),
@@ -2252,8 +2307,8 @@
       const y =
         yMax - ((((event.clientY - box.top) / box.height) * 310 - top) / height) * (yMax - yMin);
       const nearest = nearestXYSample(
-        xValues,
-        yValues,
+        xValues.map(xAxis.project),
+        yValues.map(yAxis.project),
         x,
         y,
         width / (xMax - xMin),
@@ -2309,13 +2364,104 @@
   }
 
   function renderWaveform(container, result, options = {}) {
-    if (options.mode === 'xy') return renderXYWaveform(container, result, options);
+    if (options.renderAllPlots && options.plots?.length) {
+      container.replaceChildren();
+      const handles = [];
+      for (const settings of [options, ...options.plots]) {
+        const section = document.createElement('section');
+        container.append(section);
+        const title = document.createElement('h3');
+        title.textContent = settings.title || `图 ${handles.length + 1}`;
+        section.append(title);
+        const chart = document.createElement('div');
+        section.append(chart);
+        const math =
+          globalThis.FreeBbsCircuitPlot ||
+          (typeof module !== 'undefined' ? require('./circuit-plot') : null);
+        const prepared = math ? math.buildResult(result, settings).result : result;
+        handles.push(
+          renderWaveform(chart, prepared, { ...settings, renderAllPlots: false, plots: [] }),
+        );
+      }
+      return {
+        destroy() {
+          handles.forEach((h) => h.destroy());
+          container.replaceChildren();
+        },
+      };
+    }
+    if (options.mode === 'xy') {
+      const a = result.traces.find((t) => t.id === (options.xyX || options.ch1));
+      const b = result.traces.find((t) => t.id === (options.xyY || options.ch2));
+      if (
+        a &&
+        b &&
+        ((a.domain || 'base') !== (b.domain || 'base') || a.values.length !== b.values.length)
+      ) {
+        container.textContent = 'X–Y 两个通道必须使用相同的采样坐标，不能混合时域与频谱。';
+        return { destroy() {} };
+      }
+      return renderXYWaveform(container, result, options);
+    }
+    const spectra = result.traces.filter(
+      (t) => t.domain === 'frequency' && (!options.traceIds || options.traceIds.includes(t.id)),
+    );
+    if (spectra.length && !options.spectrum) {
+      container.replaceChildren();
+      const handles = [];
+      const regular = result.traces.filter((t) => t.domain !== 'frequency');
+      if (regular.some((t) => !options.traceIds || options.traceIds.includes(t.id))) {
+        const panel = document.createElement('div');
+        container.append(panel);
+        handles.push(renderWaveform(panel, { ...result, traces: regular }, options));
+      }
+      const panel = document.createElement('div');
+      container.append(panel);
+      handles.push(
+        renderWaveform(
+          panel,
+          {
+            ...result,
+            x: spectra[0].x,
+            xLabel: 'FFT · 频率 / Hz · 单边峰值幅度',
+            xUnit: 'Hz',
+            traces: spectra,
+          },
+          {
+            ...options,
+            spectrum: true,
+            annotations: [],
+            annotationPicking: false,
+            onPointPick: undefined,
+            ranges: {},
+            logX: false,
+          },
+        ),
+      );
+      return {
+        destroy() {
+          handles.forEach((h) => h.destroy());
+          container.replaceChildren();
+        },
+      };
+    }
     container.replaceChildren();
     const selected = result.traces.filter(
       (trace) => !options.traceIds || options.traceIds.includes(trace.id),
     );
     const charts = [];
-    const units = [...new Set(selected.map((trace) => trace.unit))].map((unit) => ({
+    const dual = options.rightTraceIds?.some((id) => selected.some((t) => t.id === id));
+    const units = (
+      dual
+        ? [
+            selected
+              .filter((t) => !options.rightTraceIds.includes(t.id))
+              .map((t) => t.unit)
+              .filter((u, i, a) => a.indexOf(u) === i)
+              .join(' / ') || '左轴',
+          ]
+        : [...new Set(selected.map((trace) => trace.unit))]
+    ).map((unit) => ({
       unit,
       phase: false,
     }));
@@ -2328,7 +2474,7 @@
     }
     units.forEach(({ unit, phase }) => {
       const traces = selected.filter((trace) =>
-        phase ? Array.isArray(trace.phase) : trace.unit === unit,
+        phase ? Array.isArray(trace.phase) : dual || trace.unit === unit,
       );
       const group = document.createElement('section');
       group.className = 'circuit-wave-group';
@@ -2341,7 +2487,7 @@
         const item = document.createElement('span');
         item.setAttribute('data-trace-id', trace.id);
         item.style.color = traceColors[index % traceColors.length];
-        item.textContent = `${trace.label}${phase ? ' · 相位' : ''}`;
+        item.textContent = `${trace.label}${phase ? ' · 相位' : dual ? (options.rightTraceIds.includes(trace.id) ? ' · 右轴' : ' · 左轴') : ''}`;
         heading.append(item);
       });
       group.append(heading);
@@ -2357,47 +2503,40 @@
         'display:block;background:var(--circuit-surface,#102228);color:var(--circuit-ink,#dfedf0)';
       const left = chartWidth < 500 ? 65 : 76;
       const top = 20;
-      const width = chartWidth - left - 24;
+      const width = chartWidth - left - (dual && !phase ? left : 24);
       const height = 232;
       const xValues = result.x || [];
       const ranges = options.ranges || {};
-      const logX = Boolean(
-        options.logX &&
-        xValues.every((x) => x > 0) &&
-        (!Number.isFinite(ranges.xMin) || ranges.xMin > 0) &&
-        (!Number.isFinite(ranges.xMax) || ranges.xMax > 0),
-      );
-      const projectX = (x) => (logX ? Math.log10(x) : x);
-      const [axisMin, axisMax] = axisBounds(
-        xValues[0] ?? 0,
-        xValues.at(-1) ?? 1,
+      const logX = options.xScale ? options.xScale === 'log' : Boolean(options.logX);
+      const xAxis = coordinateAxis(
+        xValues,
+        logX ? 'log' : 'linear',
         ranges.xMin,
         ranges.xMax,
         false,
       );
-      // Sweep endpoints define scan direction. Keep a descending scan descending,
-      // including when fixed numeric limits narrow its visible interval.
       const descending = xValues.at(-1) < xValues[0];
-      const xMin = projectX(descending ? axisMax : axisMin);
-      const xMax = projectX(descending ? axisMin : axisMax);
+      const xMin = descending ? xAxis.max : xAxis.min;
+      const xMax = descending ? xAxis.min : xAxis.max;
       const valuesOf = (trace) => (phase ? trace.phase : trace.values);
-      let yMin = Infinity;
-      let yMax = -Infinity;
-      traces.forEach((trace) =>
-        valuesOf(trace).forEach((value) => {
-          if (Number.isFinite(value)) {
-            yMin = Math.min(yMin, value);
-            yMax = Math.max(yMax, value);
-          }
-        }),
+      const isRight = (trace) => dual && !phase && options.rightTraceIds.includes(trace.id);
+      const yAxis = coordinateAxis(
+        traces.filter((t) => !isRight(t)).flatMap((t) => Array.from(valuesOf(t))),
+        phase ? 'linear' : options.yScale,
+        ranges.yMin,
+        ranges.yMax,
       );
-      if (!Number.isFinite(yMin) || !Number.isFinite(yMax)) {
-        yMin = -1;
-        yMax = 1;
-      }
-      [yMin, yMax] = axisBounds(yMin, yMax, ranges.yMin, ranges.yMax);
-      const px = (x) => left + ((projectX(x) - xMin) / (xMax - xMin || 1)) * width;
-      const py = (y) => top + (1 - (y - yMin) / (yMax - yMin)) * height;
+      const rightAxis = coordinateAxis(
+        traces.filter(isRight).flatMap((t) => Array.from(valuesOf(t))),
+        options.rightScale,
+      );
+      const px = (x) => left + ((xAxis.project(x) - xMin) / (xMax - xMin)) * width;
+      const pyFor = (trace) => {
+        const axis = isRight(trace) ? rightAxis : yAxis;
+        return (y) => top + (1 - (axis.project(y) - axis.min) / (axis.max - axis.min)) * height;
+      };
+      const py = (y) =>
+        top + (1 - (yAxis.project(y) - yAxis.min) / (yAxis.max - yAxis.min)) * height;
       const clipPath = plotClip(svg, left, top, width, height);
       const ticks = chartWidth < 500 ? 3 : 5;
       for (let index = 0; index <= ticks; index += 1) {
@@ -2431,9 +2570,28 @@
           svgElement(
             'text',
             { x: left - 9, y: y + 4, fill: 'currentColor', 'text-anchor': 'end', 'font-size': 12 },
-            formatValue(yMax - ((yMax - yMin) * index) / ticks, unit),
+            formatValue(yAxis.inverse(yAxis.max - ((yAxis.max - yAxis.min) * index) / ticks), unit),
           ),
         );
+      }
+      if (dual && !phase) {
+        const rightUnit = [...new Set(traces.filter(isRight).map((t) => t.unit))].join(' / ');
+        for (let i = 0; i <= ticks; i += 1)
+          svg.append(
+            svgElement(
+              'text',
+              {
+                x: left + width + 8,
+                y: top + (i / ticks) * height + 4,
+                fill: 'currentColor',
+                'font-size': 11,
+              },
+              formatValue(
+                rightAxis.inverse(rightAxis.max - (i / ticks) * (rightAxis.max - rightAxis.min)),
+                rightUnit,
+              ),
+            ),
+          );
       }
       svg.append(
         svgElement(
@@ -2450,18 +2608,23 @@
       );
       traces.forEach((trace, traceIndex) => {
         const values = valuesOf(trace);
+        const tracePy = pyFor(trace);
         const path = samplePath(
           waveformSampleIndices(xValues, values, width, logX),
           xValues,
           values,
           px,
-          py,
+          tracePy,
         );
-        if (values.length === 1 && Number.isFinite(values[0]) && Number.isFinite(xValues[0]))
+        if (
+          values.length === 1 &&
+          Number.isFinite(tracePy(values[0])) &&
+          Number.isFinite(px(xValues[0]))
+        )
           svg.append(
             svgElement('circle', {
               cx: px(xValues[0]),
-              cy: py(values[0]),
+              cy: tracePy(values[0]),
               r: 4,
               'data-trace-id': trace.id,
               fill: traceColors[traceIndex % traceColors.length],
@@ -2505,22 +2668,18 @@
         const nearest = nearestWaveformSample(xValues, value, logX);
         if (nearest < 0) return;
         cursor.setAttribute('d', `M ${px(xValues[nearest])} ${top} V ${top + height}`);
-        readout.textContent = `${formatValue(xValues[nearest], result.xUnit || '')} · ${traces.map((trace) => `${trace.label}: ${formatValue(valuesOf(trace)[nearest], unit)}`).join(' · ')}`;
+        readout.textContent = `${formatValue(xValues[nearest], result.xUnit || '')} · ${traces.map((trace) => `${trace.label}: ${formatValue(valuesOf(trace)[nearest], phase ? '°' : trace.unit)}`).join(' · ')}`;
       }
       const bounds = { left, top, right: left + width, bottom: top + height };
       bindPlotPointer(svg, options, inspect, (event) => {
         const pointer = plotPointer(svg, event, chartWidth);
         if (!pointer || !insidePlot(pointer, bounds)) return null;
-        const nearest = nearestPlotPoint(
-          result,
-          traces,
-          xValues,
-          valuesOf,
-          px,
-          py,
-          pointer,
-          bounds,
-        );
+        const nearest = traces
+          .map((trace) =>
+            nearestPlotPoint(result, [trace], xValues, valuesOf, px, pyFor(trace), pointer, bounds),
+          )
+          .filter(Boolean)
+          .sort((a, b) => a.distance - b.distance)[0];
         return nearest
           ? {
               traceId: nearest.trace.id,
@@ -2532,14 +2691,26 @@
           : null;
       });
       const annotationLegend = renderAnnotations(svg, result, options, {
-        traces,
+        traces: traces.filter((t) => !isRight(t)),
         phase,
         px,
         py,
         bounds,
         clipPath,
       });
+      const rightLegend =
+        dual && !phase
+          ? renderAnnotations(svg, result, options, {
+              traces: traces.filter(isRight),
+              phase,
+              px,
+              py: pyFor(traces.find(isRight)),
+              bounds,
+              clipPath,
+            })
+          : null;
       group.append(svg, readout);
+      if (rightLegend) group.append(rightLegend);
       if (annotationLegend) group.append(annotationLegend);
       container.append(group);
       charts.push(group);
@@ -2552,6 +2723,7 @@
   }
 
   const exported = {
+    coordinateAxis,
     gridSize,
     snapPoint,
     snapWirePoint,

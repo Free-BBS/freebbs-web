@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/course-upload.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
+    <link rel="stylesheet" href="/circuit-workbench.css" />
     <link rel="stylesheet" href="/circuit.css" />
     <link rel="stylesheet" href="/circuit-shortcuts.css" />
     <link rel="stylesheet" href="/circuit-recognition.css" />
@@ -27,6 +28,7 @@
     <link rel="stylesheet" href="/circuit-parameter-popover.css" />
     <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css" />
     <link rel="stylesheet" href="/vendor/@highlightjs/cdn-assets/styles/github-dark.min.css" />
+    <link rel="stylesheet" href="/max-reasoning.css" />
   </head>
   <body class="circuit-page">
     <div class="page-shell page-shell-settings">
@@ -152,11 +154,10 @@
         <section id="circuit-list-page" hidden>
           <header class="circuit-heading">
             <div>
-              <p class="circuit-kicker">电路实验室</p>
               <h1>我的电路</h1>
               <p>搭建、仿真，并把可复现的实验嵌入课程讨论。</p>
             </div>
-            <a class="circuit-button is-primary" href="/circuit">新建电路</a>
+            <a class="circuit-button is-primary" href="/circuit?new=1">新建电路</a>
           </header>
           <p id="circuit-list-status" class="circuit-status" role="status"></p>
           <div class="circuit-list" id="circuit-list"></div>
@@ -172,22 +173,86 @@
               <h1>电路实验室</h1>
               <p>从一个元件开始，观察每一次连接带来的变化。</p>
             </div>
-            <div class="circuit-heading-actions">
-              <a class="circuit-button" href="/circuit">新建</a
-              ><button id="circuit-recognize" type="button" aria-haspopup="dialog" disabled>
-                识别电路图</button
-              ><button id="circuit-recognition-restore" type="button" hidden>恢复上一份草稿</button
-              ><button id="circuit-copy" type="button">复制为新电路</button
-              ><button
+            <div
+              class="circuit-heading-actions circuit-editor-actions"
+              role="group"
+              aria-label="电路操作"
+            >
+              <a class="circuit-button" href="/circuit?new=1" aria-label="新建电路" title="新建电路"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 5v14M5 12h14" /></svg
+                ><span class="circuit-action-label">新建</span></a
+              >
+              <button
+                id="circuit-recognize"
+                type="button"
+                aria-label="识别电路图"
+                title="拍照或上传图片识别电路"
+                aria-haspopup="dialog"
+                disabled
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m8 6 2-3h4l2 3h4v14H4V6Z" />
+                  <circle cx="12" cy="12" r="4" /></svg
+                ><span class="circuit-action-label">识别电路</span>
+              </button>
+              <button
+                id="circuit-copy"
+                type="button"
+                aria-label="复制为新电路"
+                title="复制为新电路"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="8" y="8" width="12" height="12" rx="2" />
+                  <path d="M16 8V4H4v12h4" /></svg
+                ><span class="circuit-action-label">复制电路</span>
+              </button>
+              <button
                 class="is-primary"
                 id="circuit-save"
                 type="button"
-                title="保存电路（⌘/Ctrl+S）"
+                aria-label="保存电路"
+                title="保存电路并获取 CID（⌘/Ctrl+S）"
                 aria-keyshortcuts="Control+s Meta+s"
               >
-                保存并获取 CID</button
-              ><button id="circuit-publish" type="button" hidden>发表到讨论区</button
-              ><button
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M4 4h13l3 3v13H4Z" />
+                  <path d="M8 4v6h8V4M8 20v-6h8v6" /></svg
+                ><span class="circuit-action-label" data-action-label>保存电路</span>
+              </button>
+              <button
                 id="circuit-ai-toggle"
                 type="button"
                 aria-expanded="false"
@@ -195,7 +260,49 @@
                 title="打开 Max 侧栏（M）"
                 aria-keyshortcuts="m"
               >
-                <img src="/assets/icons/ai.svg" alt="" aria-hidden="true" />侧栏
+                <img src="/assets/icons/ai.svg" alt="" aria-hidden="true" /><span
+                  class="circuit-action-label"
+                  >侧栏</span
+                >
+              </button>
+              <button
+                id="circuit-recognition-restore"
+                type="button"
+                aria-label="恢复上一份草稿"
+                title="恢复上一份草稿"
+                hidden
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 10a9 9 0 1 1 2 9M3 4v6h6" /></svg
+                ><span class="circuit-action-label">恢复上一份草稿</span>
+              </button>
+              <button
+                id="circuit-publish"
+                type="button"
+                aria-label="发表到讨论区"
+                title="发表到讨论区"
+                hidden
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m3 3 18 9-18 9 4-9Z" />
+                  <path d="M7 12h14" /></svg
+                ><span class="circuit-action-label">发表到讨论区</span>
               </button>
             </div>
           </header>
@@ -261,6 +368,13 @@
                     </p>
                     <div class="circuit-shortcut-actions" aria-label="编辑与快捷键">
                       <button
+                        id="circuit-beautify"
+                        type="button"
+                        title="调整元件朝向、对齐布局并整理导线，可撤销"
+                      >
+                        一键美化
+                      </button>
+                      <button
                         id="circuit-undo"
                         type="button"
                         title="撤销（⌘/Ctrl+Z）；连线时撤回拐点"
@@ -309,10 +423,87 @@
                       取消连线</button
                     ><span id="circuit-count">0 个元件</span>
                   </div>
+                  <div class="circuit-viewport-controls" role="group" aria-label="画布缩放与移动">
+                    <button
+                      id="circuit-zoom-out"
+                      type="button"
+                      aria-label="缩小画布"
+                      title="缩小画布"
+                    >
+                      −
+                    </button>
+                    <output id="circuit-zoom-value" aria-live="polite" aria-label="画布缩放比例"
+                      >100%</output
+                    >
+                    <button
+                      id="circuit-zoom-in"
+                      type="button"
+                      aria-label="放大画布"
+                      title="放大画布"
+                    >
+                      +
+                    </button>
+                    <button
+                      id="circuit-zoom-reset"
+                      type="button"
+                      aria-label="复位画布"
+                      title="复位画布"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        aria-hidden="true"
+                      >
+                        <path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5" />
+                        <rect x="7" y="7" width="10" height="10" rx="1" />
+                      </svg>
+                    </button>
+                    <button
+                      id="circuit-pan"
+                      type="button"
+                      aria-label="拖动画布"
+                      title="拖动画布（再次点击恢复编辑）"
+                      aria-pressed="false"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      id="circuit-expand-canvas"
+                      type="button"
+                      aria-label="展开画布区域"
+                      title="展开画布区域"
+                      aria-pressed="false"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5M3 3l6 6M21 3l-6 6M3 21l6-6M21 21l-6-6"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                   <div class="circuit-stage" id="circuit-stage" aria-label="电路原理图"></div>
                   <p class="circuit-canvas-note">
                     连线过程中，每次点画布会放置一个拐点；点目标引脚或导线接通。
-                    退格撤回上一拐点，Esc 取消。普通交叉不接通。
+                    退格撤回上一拐点，Esc 取消。普通交叉不接通。 双指缩放、移动画布；电脑按 Ctrl / ⌘
+                    滚轮缩放，按住鼠标中键拖动。
                   </p>
                 </div>
               </section>
@@ -320,7 +511,6 @@
               <section class="circuit-analysis" aria-labelledby="circuit-analysis-title">
                 <div class="circuit-section-heading">
                   <div>
-                    <p class="circuit-kicker">分析</p>
                     <h2 id="circuit-analysis-title">运行实验</h2>
                   </div>
                   <div class="circuit-actions">
@@ -434,6 +624,11 @@
                 </p>
               </section>
 
+              <div class="circuit-workbench-actions circuit-actions">
+                <button id="circuit-history-open" type="button">版本历史 / Fork</button>
+                <button id="circuit-report-open" type="button">报告编辑器</button>
+                <button id="circuit-report-generate" type="button">一键生成报告</button>
+              </div>
               <section
                 class="circuit-results"
                 id="circuit-results"
@@ -442,7 +637,6 @@
               >
                 <div class="circuit-section-heading">
                   <div>
-                    <p class="circuit-kicker">测量</p>
                     <h2 id="circuit-results-title">波形与读数</h2>
                   </div>
                   <div class="circuit-actions">
@@ -468,6 +662,8 @@
                   ><span id="circuit-annotation-pick-hint" class="circuit-parameter-hint"></span>
                 </div>
                 <div class="circuit-waveform" id="circuit-waveform"></div>
+                <div id="circuit-extra-plots"></div>
+                <button id="circuit-add-plot" type="button">＋ 添加一张图</button>
                 <section
                   id="circuit-annotations"
                   class="circuit-annotations"
@@ -924,11 +1120,41 @@
         </section>
       </main>
     </div>
+    <dialog id="circuit-source-dialog" class="circuit-workbench-dialog">
+      <header>
+        <h2>导入任意波形</h2>
+        <button data-close type="button">关闭</button>
+      </header>
+      <p>时间单位为秒，波形单位为 V / A；最多 4096 点。</p>
+      <label>选择数据文件<input type="file" data-file accept=".csv,.txt,.mat,.m" /></label>
+      <div data-mapping hidden>
+        <label>时间列<select data-time></select></label
+        ><label>波形列<select data-values></select></label
+        ><button data-apply type="button">应用波形</button>
+      </div>
+      <p data-status role="status"></p>
+    </dialog>
+    <dialog id="circuit-history-dialog" class="circuit-workbench-dialog">
+      <header>
+        <h2>版本历史</h2>
+        <button data-close type="button">关闭</button>
+      </header>
+      <div class="circuit-actions">
+        <label
+          >存档说明<input data-message maxlength="240" placeholder="如：加入测试电阻前" /></label
+        ><button data-checkpoint type="button">保存存档</button>
+      </div>
+      <p data-status role="status"></p>
+      <ol data-log class="circuit-version-log"></ol>
+      <button data-more type="button" hidden>更早的版本</button>
+      <div data-branches></div>
+    </dialog>
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
     <script src="/vendor/marked/lib/marked.umd.js"></script>
     <script src="/vendor/@highlightjs/cdn-assets/highlight.min.js"></script>
     <script src="/vendor/katex/dist/katex.min.js"></script>
+    <script src="/max-reasoning.js"></script>
     <script src="/app.js"></script>
     <script src="/circuit-engine.js"></script>
     <script src="/circuit-plot.js"></script>
@@ -936,12 +1162,17 @@
     <script src="/circuit-annotations.js"></script>
     <script src="/circuit-annotation-controls.js"></script>
     <script src="/circuit-renderer.js"></script>
+    <script src="/circuit-layout.js"></script>
     <script src="/circuit-wiring.js"></script>
     <script src="/circuit-ai-actions.js"></script>
     <script src="/circuit-parameter-popover.js"></script>
     <script src="/circuit-history.js"></script>
     <script src="/circuit-shortcuts.js"></script>
+    <script src="/circuit-viewport.js"></script>
+    <script src="/circuit-waveform-import.js"></script>
     <script src="/circuit.js"></script>
+    <script src="/circuit-workbench.js"></script>
+    <script src="/circuit-report.js"></script>
     <script src="/circuit-recognition.js"></script>
     <script src="/circuit-agent.js"></script>
     <script src="/circuit-chat.js"></script>

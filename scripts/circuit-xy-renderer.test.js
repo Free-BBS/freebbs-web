@@ -312,3 +312,56 @@ test('MOS arrows sit on the source lead and follow its outward/inward direction 
     }
   }
 });
+
+test('log axes draw geometric coordinates and omit non-positive samples without invalid SVG', () => {
+  const { renderer, container } = harness();
+  const data = { x: [0, 1, 10, 100], traces: [trace('V:R1', [-1, 1, 10, 100])] };
+  renderer.renderWaveform(container, data, {
+    xScale: 'log',
+    yScale: 'log',
+    ranges: { xMin: 1, xMax: 100, yMin: 1, yMax: 100 },
+  });
+  const path = waveformPath(container).getAttribute('d');
+  assert.doesNotMatch(path, /NaN|Infinity/);
+  assert.equal(path.trim(), 'M 76.000 252.000 L 486.000 136.000 L 896.000 20.000');
+  renderer.renderWaveform(container, data, {
+    mode: 'xy',
+    xyX: 'V:R1',
+    xyY: 'V:R1',
+    xScale: 'log',
+    yScale: 'log',
+    ranges: { xMin: 1, xMax: 100, yMin: 1, yMax: 100 },
+  });
+  assert.equal(waveformPath(container).getAttribute('d').trim(), path.trim());
+});
+
+test('mixed Y axes scale volts and microamps independently in one chart', () => {
+  const { renderer, container } = harness();
+  renderer.renderWaveform(
+    container,
+    { x: [0, 1, 2], traces: [trace('V:R1', [1, 2, 3]), trace('I:R1', [1e-6, 2e-6, 3e-6], 'A')] },
+    { rightTraceIds: ['I:R1'] },
+  );
+  assert.equal(container.all((el) => el.tagName === 'svg').length, 1);
+  const paths = container.all((el) => el.getAttribute('vector-effect') === 'non-scaling-stroke');
+  assert.equal(paths.length, 2);
+  assert.equal(paths[0].getAttribute('d'), paths[1].getAttribute('d'));
+  assert.match(container.textContent, /右轴/);
+  assert.match(container.textContent, /µA/);
+});
+
+test('FFT and transient traces render with separate horizontal axes and reject mixed XY', () => {
+  const { renderer, container } = harness();
+  const spectrum = {
+    ...trace('M:M1', [0, 1, 0]),
+    domain: 'frequency',
+    x: [0, 100, 200],
+    xUnit: 'Hz',
+  };
+  const result = { x: [0, 0.001, 0.002], xUnit: 's', traces: [trace('V:R1', [0, 1, 0]), spectrum] };
+  renderer.renderWaveform(container, result);
+  assert.equal(container.all((el) => el.tagName === 'svg').length, 2);
+  assert.match(container.textContent, /频率 \/ Hz/);
+  renderer.renderWaveform(container, result, { mode: 'xy', xyX: 'V:R1', xyY: 'M:M1' });
+  assert.match(container.textContent, /不能混合时域与频谱/);
+});

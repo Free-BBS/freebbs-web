@@ -11,11 +11,23 @@
     duty: 0.5,
     delay: 0,
     acAmplitude: 1,
+    samples: '',
+    interpolation: 'linear',
+    repeat: 'hold',
   };
   const twoPins = ['正', '负'];
+  const powerRails = ['vcc', 'vdd', 'vss', 'vee'];
+  const netSymbols = ['ground', 'junction', ...powerRails];
   const catalog = {
     ground: { label: '参考地', pins: ['地'], defaults: {} },
     junction: { label: '连接点', pins: ['连接点'], defaults: {} },
+    ...Object.fromEntries(
+      powerRails.map((type) => [
+        type,
+        { label: type.toUpperCase(), pins: [type.toUpperCase()], defaults: {} },
+      ]),
+    ),
+    fixed_voltage: { label: '固定电平', pins: ['电平'], defaults: { dc: 5 } },
     resistor: { label: '电阻', pins: twoPins, defaults: { resistance: 1000 } },
     capacitor: { label: '电容', pins: twoPins, defaults: { capacitance: 0.000001 } },
     inductor: { label: '电感', pins: twoPins, defaults: { inductance: 0.001 } },
@@ -260,10 +272,20 @@
     }
     if (component.type === 'twoport' && !['Z', 'Y', 'H', 'G', 'ABCD'].includes(params.parameterSet))
       throw new Error('二端口参数类型只能为 Z、Y、H、G 或 ABCD。');
-    if (params.waveform && !['dc', 'sine', 'pulse'].includes(params.waveform))
+    if (params.waveform && !['dc', 'sine', 'pulse', 'arbitrary'].includes(params.waveform))
       throw new Error(`${component.id} 不支持此波形。`);
-    if (params.waveform && params.waveform !== 'dc' && params.frequency <= 0)
+    if (params.waveform && ['sine', 'pulse'].includes(params.waveform) && params.frequency <= 0)
       throw new Error(`${component.id} 的周期波形频率必须大于 0。`);
+    if (['voltage', 'current'].includes(component.type)) {
+      if (
+        !['linear', 'step'].includes(params.interpolation) ||
+        !['hold', 'repeat'].includes(params.repeat)
+      )
+        throw new Error('任意波形插值或播放方式无效。');
+      if (params.samples) parseSourceSamples(params.samples);
+      if (params.waveform === 'arbitrary' && !params.samples)
+        throw new Error('请先导入任意波形数据。');
+    }
     if (component.type === 'bjt' && !['npn', 'pnp'].includes(params.polarity))
       throw new Error('BJT 极性只能为 npn 或 pnp。');
     if (component.type === 'mosfet' && !['n', 'p'].includes(params.polarity))
@@ -338,7 +360,7 @@
     if (
       !component ||
       !Object.hasOwn(catalog, component.type) ||
-      ['ground', 'junction'].includes(component.type)
+      netSymbols.includes(component.type)
     )
       return [];
     const port = { twoport: ' P1', oscilloscope2: ' CH1' }[component.type] || '';
@@ -416,7 +438,7 @@
       ...(Object.hasOwn(value, 'marker') ? { marker: value.marker } : {}),
     };
   }
-  function normalizeDisplay(value = {}) {
+  function normalizeDisplay(value = {}, nested = false) {
     function object(item, fields, label) {
       if (
         !item ||
@@ -440,6 +462,12 @@
         'phase',
         'ranges',
         'annotations',
+        'xScale',
+        'yScale',
+        'rightScale',
+        'rightTraceIds',
+        'plots',
+        'title',
       ],
       '图像设置',
     );
@@ -501,6 +529,42 @@
         ranges[`${axis}Min`] >= ranges[`${axis}Max`]
       )
         throw new Error('坐标范围下限必须小于上限。');
+    const extra = {};
+    for (const key of ['xScale', 'yScale', 'rightScale']) {
+      if (value[key] !== undefined) {
+        if (!['linear', 'log'].includes(value[key]))
+          throw new Error('坐标刻度只能是 linear 或 log。');
+        extra[key] = value[key];
+      }
+    }
+    for (const axis of ['x', 'y']) {
+      if (
+        extra[`${axis}Scale`] === 'log' &&
+        ['Min', 'Max'].some(
+          (suffix) => ranges[axis + suffix] !== null && ranges[axis + suffix] <= 0,
+        )
+      )
+        throw new Error('log 坐标的固定上下限必须大于 0。');
+    }
+    if (value.rightTraceIds !== undefined) {
+      if (
+        !Array.isArray(value.rightTraceIds) ||
+        value.rightTraceIds.length > 32 ||
+        value.rightTraceIds.some((id) => !validTraceId(id))
+      )
+        throw new Error('右轴曲线列表无效。');
+      extra.rightTraceIds = [...new Set(value.rightTraceIds)];
+    }
+    if (value.title !== undefined) {
+      if (typeof value.title !== 'string' || value.title.length > 80)
+        throw new Error('图标题最多 80 字。');
+      extra.title = value.title;
+    }
+    if (value.plots !== undefined) {
+      if (nested || !Array.isArray(value.plots) || value.plots.length > 5)
+        throw new Error('最多绘制 6 张图，图像不能嵌套。');
+      extra.plots = value.plots.map((item) => normalizeDisplay(item, true));
+    }
     const annotations = {};
     if (value.annotations !== undefined) {
       if (!Array.isArray(value.annotations) || value.annotations.length > 32)
@@ -518,6 +582,7 @@
       phase,
       ranges,
       ...annotations,
+      ...extra,
     };
   }
   function validateDocument(document) {
@@ -746,6 +811,11 @@
     }
     const join = (a, b) => parent.set(find(a), find(b));
     document.wires.forEach((wire) => join(key(wire.from), key(wire.to)));
+    // Rail names identify global nets; their names do not prescribe a voltage.
+    for (const type of powerRails) {
+      const rails = document.components.filter((component) => component.type === type);
+      rails.slice(1).forEach((component) => join(`${component.id}:0`, `${rails[0].id}:0`));
+    }
     const grounds = document.components.filter((component) => component.type === 'ground');
     grounds.slice(1).forEach((component) => join(`${component.id}:0`, `${grounds[0].id}:0`));
     const groundRoot = grounds.length ? find(`${grounds[0].id}:0`) : null;
@@ -778,13 +848,15 @@
   ]);
   const nonlinearTypes = new Set(['diode', 'bjt', 'mosfet', 'nonlinear']);
   function compile(document) {
-    if (!document.components.some((component) => component.type === 'ground'))
+    if (
+      !document.components.some((component) => ['ground', 'fixed_voltage'].includes(component.type))
+    )
       throw new Error('电路缺少参考地；请放置参考地并连接电源或公共节点。');
-    if (!document.components.some((component) => !['ground', 'junction'].includes(component.type)))
+    if (!document.components.some((component) => !netSymbols.includes(component.type)))
       throw new Error('请先添加元件并连接电路。');
     const nets = netsFor(document);
     const electricalComponents = document.components.filter(
-      (component) => !['ground', 'junction'].includes(component.type),
+      (component) => !netSymbols.includes(component.type),
     );
     const electricalNets = new Set(
       electricalComponents.flatMap((component) =>
@@ -798,8 +870,18 @@
       const pins = catalog[component.type].pins.map(
         (_, pin) => indices.get(nets.pinNets[`${component.id}:${pin}`]) ?? -1,
       );
-      const compiled = { ...component, pins, branch: -1 };
-      if (branchTypes.has(component.type) || component.type === 'twoport') {
+      // A fixed level is an ideal DC source whose return is the implicit reference.
+      const compiled =
+        component.type === 'fixed_voltage'
+          ? {
+              ...component,
+              type: 'voltage',
+              pins: [...pins, -1],
+              params: { ...sourceDefaults, ...component.params, acAmplitude: 0 },
+              branch: -1,
+            }
+          : { ...component, pins, branch: -1 };
+      if (branchTypes.has(compiled.type) || component.type === 'twoport') {
         compiled.branch = dimension;
         dimension += component.type === 'twoport' ? 2 : 1;
       }
@@ -828,10 +910,63 @@
     };
   }
   const voltageAt = (solution, pin) => (pin < 0 ? 0 : solution[pin]);
+  const sampleCache = new WeakMap();
+  function parseSourceSamples(text) {
+    if (typeof text !== 'string' || text.length > 180000)
+      throw new Error('单个任意波形数据不能超过 180 KB。');
+    let samples;
+    try {
+      samples = JSON.parse(text);
+    } catch {
+      throw new Error('波形数据必须是时间 / 数值数组。');
+    }
+    if (
+      !Array.isArray(samples) ||
+      samples.length < 2 ||
+      samples.length > 4096 ||
+      samples.some(
+        (row, index) =>
+          !Array.isArray(row) ||
+          row.length !== 2 ||
+          !row.every(Number.isFinite) ||
+          row[0] < 0 ||
+          (index > 0 && row[0] <= samples[index - 1][0]),
+      )
+    )
+      throw new Error('任意波形须有 2–4096 个采样点，时间（秒）非负且严格递增，数值有限。');
+    return samples;
+  }
+  function arbitraryValue(params, time) {
+    let samples = sampleCache.get(params);
+    if (!samples) {
+      samples = parseSourceSamples(params.samples);
+      sampleCache.set(params, samples);
+    }
+    const first = samples[0][0];
+    const end = samples.at(-1)[0];
+    let at = time;
+    if (params.repeat === 'repeat' && at >= first) at = first + ((at - first) % (end - first));
+    if (at <= first) return samples[0][1];
+    if (at >= end) return samples.at(-1)[1];
+    let lo = 0;
+    let hi = samples.length - 1;
+    while (hi - lo > 1) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (samples[mid][0] <= at) lo = mid;
+      else hi = mid;
+    }
+    if (params.interpolation === 'step') return samples[lo][1];
+    return (
+      samples[lo][1] +
+      ((samples[hi][1] - samples[lo][1]) * (at - samples[lo][0])) /
+        (samples[hi][0] - samples[lo][0])
+    );
+  }
   function sourceValue(params, context) {
     if (context.kind === 'dc') return params.dc * (context.sourceScale ?? 1);
     const time = context.time - params.delay;
     if (params.waveform === 'dc' || time < 0) return params.dc;
+    if (params.waveform === 'arbitrary') return params.dc + arbitraryValue(params, time);
     const cycle = time * params.frequency + params.phase / 360;
     if (params.waveform === 'sine')
       return params.dc + params.amplitude * Math.sin(2 * Math.PI * cycle);
@@ -1679,9 +1814,13 @@
 
   const exported = {
     catalog,
+    powerRails,
+    netSymbols,
     limits,
     validateDocument,
     normalizeDisplay,
+    parseSourceSamples,
+    sourceValue,
     normalizeAnnotation,
     traceDescriptors,
     traceComponentId,

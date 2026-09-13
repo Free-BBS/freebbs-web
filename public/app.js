@@ -57,6 +57,7 @@ let adminPermissionCatalog = { boards: [], courses: [] };
 let adminExpandedUserId = '';
 let adminMessageTimer = 0;
 let sessionReady = Promise.resolve();
+let sessionRestored = false;
 let discussionReady = Promise.resolve();
 
 const userName = document.getElementById('user-name');
@@ -179,6 +180,8 @@ const discussionState = {
   activePost: null,
   comments: [],
   viewMode: 'latest',
+  showDeleted: false,
+  commentActionsPending: new Set(),
 };
 
 function createDiscussionRequestSignal() {
@@ -3101,6 +3104,17 @@ function renderDiscussionBoardAbout() {
   }
 }
 
+function syncDiscussionAnonymousOption() {
+  const input = document.getElementById('discussion-anonymous');
+  const option = document.getElementById('discussion-anonymous-option');
+  const allowed = discussionComposeBoard?.value === 'daily';
+  option?.classList.toggle('hidden', !allowed);
+  if (input) {
+    input.disabled = !allowed;
+    if (!allowed) input.checked = false;
+  }
+}
+
 function renderDiscussionComposeBoards() {
   if (!discussionComposeBoard) {
     return;
@@ -3134,6 +3148,7 @@ function renderDiscussionComposeBoards() {
   ) {
     discussionComposeBoard.value = previousBoard;
   }
+  syncDiscussionAnonymousOption();
 }
 
 function getDiscussionPostEngagement(post) {
@@ -3151,7 +3166,11 @@ function applyDiscussionPostsPayload(boardSlug, payload) {
     return;
   }
 
-  const posts = (payload.posts || []).filter((post) => !post.isDeleted);
+  const posts = (payload.posts || []).filter(
+    (post) =>
+      !post.isDeleted ||
+      (userState.isAdmin && discussionState.showDeleted && discussionState.scope === 'public'),
+  );
   discussionState.posts = posts;
   discussionState.postsByBoard.set(boardSlug, posts);
   discussionState.postsHashByBoard[boardSlug] = payload.hash || '';
@@ -3207,7 +3226,10 @@ function updateCachedDiscussionPost(postId, updates) {
 function getDiscussionVisiblePosts() {
   const mode = discussionState.viewMode;
   let posts = discussionState.posts.filter(
-    (post) => !post.isDeleted && (discussionState.scope === 'mine' || !post.isHidden),
+    (post) =>
+      (!post.isDeleted ||
+        (userState.isAdmin && discussionState.showDeleted && discussionState.scope === 'public')) &&
+      (discussionState.scope === 'mine' || !post.isHidden),
   );
 
   if (mode === 'unanswered') {
@@ -3260,6 +3282,9 @@ function updateDiscussionFilterControls(visibleCount) {
       discussionState.scope === 'mine'
         ? '自己的公开与隐藏帖子；隐藏帖子仅自己可见。可按版块筛选。'
         : '查看公开讨论。';
+  const deletedFilter = document.getElementById('discussion-deleted-filter');
+  deletedFilter?.classList.toggle('hidden', !userState.isAdmin || discussionState.scope === 'mine');
+  if (!userState.isAdmin) discussionState.showDeleted = false;
   discussionFilterControls.forEach((control) => {
     const isActive = control.dataset.discussionSort === discussionState.viewMode;
     control.classList.toggle('is-active', isActive);
@@ -3332,7 +3357,7 @@ function renderDiscussionPosts() {
 
       return `
     <article
-      class="discussion-post-card ${discussionState.activePostId === post.id ? 'is-active' : ''} ${replyCount > 0 ? 'is-answered' : 'is-unanswered'}"
+      class="discussion-post-card ${post.isDeleted ? 'is-deleted' : ''} ${discussionState.activePostId === post.id ? 'is-active' : ''} ${replyCount > 0 ? 'is-answered' : 'is-unanswered'}"
       data-post-id="${escapeHtml(post.id)}"
       role="listitem"
     >
@@ -3342,6 +3367,7 @@ function renderDiscussionPosts() {
       <div class="discussion-post-card-main ${preview ? 'has-preview' : ''}">
         <div class="discussion-post-source">
           <span class="discussion-post-board">r/${escapeHtml(post.board.name)}</span>
+          ${post.isDeleted ? '<span class="discussion-deleted-badge">已删除</span>' : ''}
           ${post.isPinned ? `<span class="discussion-pin-badge">置顶</span>` : ''}
           ${post.isFeatured ? `<span class="discussion-feature-badge">精华</span>` : ''}
           ${renderAuthorProfileLink(post.author, 'discussion-author-link')}
@@ -3426,8 +3452,8 @@ function renderDiscussionReactionButton(post, reactionType) {
       data-post-id="${escapeHtml(post.id)}"
       aria-label="${escapeHtml(reaction.label)}"
       aria-pressed="${active ? 'true' : 'false'}"
-      ${post.isHidden ? 'disabled' : ''}
       title="${escapeHtml(reaction.label)}"
+      ${post.isDeleted || post.isHidden ? 'disabled' : ''}
     >
       <img src="${escapeHtml(icon)}" alt="" aria-hidden="true" />
       <strong>${post[reaction.countKey] || 0}</strong>
@@ -4651,30 +4677,14 @@ async function pollInfoJob(article, navigationResult) {
   }
 }
 
-async function requestMaxNavigation(payload) {
-  if (!userState.token) {
-    throw new Error('请先登录后再使用问问 Max');
-  }
-
-  const response = await fetch(`${API_BASE_URL}/ai/chat`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${userState.token}`,
-    },
-    body: JSON.stringify({ ...payload, stream: false }),
+async function requestMaxNavigation(payload, onReasoning) {
+  if (!userState.token) throw new Error('请先登录后再使用问问 Max');
+  return window.FreeBbsReasoning.request({
+    url: `${API_BASE_URL}/ai/chat`,
+    token: userState.token,
+    payload,
+    onReasoning,
   });
-  const result = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(
-      result.detail
-        ? `${result.message || 'Navigation 请求失败'}：${result.detail}`
-        : result.error?.message || result.message || 'Navigation 请求失败',
-    );
-  }
-
-  return result;
 }
 
 function getAiDialogTitle(messages = aiChatState.messages) {
@@ -4929,7 +4939,10 @@ async function handleAiChatSubmit(event) {
   let assistantContent = '';
 
   try {
-    const rawResult = await requestMaxNavigation(buildAiChatPayload(userMessage));
+    const rawResult = await requestMaxNavigation(buildAiChatPayload(userMessage), (progress) => {
+      window.FreeBbsReasoning.update(assistantArticle, progress);
+    });
+    window.FreeBbsReasoning.finish(assistantArticle);
     const result = await addMentionedCourseMapRoute(rawResult, userMessage);
     window.clearTimeout(bubbleTimer);
     assistantContent = String(result.answer || '').trim() || 'Max 暂时没有生成回答。';
@@ -4953,6 +4966,7 @@ async function handleAiChatSubmit(event) {
     await saveAiDialog();
   } catch (error) {
     window.clearTimeout(bubbleTimer);
+    window.FreeBbsReasoning?.finish(assistantArticle, { stopped: true });
     updateAiChatMessage(assistantArticle, `请求失败：${error.message}`);
     stopAiChatThinkingStatus('AI 服务不可用，请确认 freebbs-agent 已启动。');
   } finally {
@@ -5343,7 +5357,19 @@ function renderDiscussionComments() {
         <div class="discussion-comment-meta">
           ${renderAuthorProfileLink(comment.author, 'discussion-author-link')}
           <span>${escapeHtml(formatDateTime(comment.createdAt))}</span>
-          ${discussionState.activePost?.isHidden ? '' : `<button class="discussion-comment-reply-button" type="button" data-action="reply-comment" data-comment-id="${comment.id}" data-author-name="${escapeHtml(comment.author?.displayName || comment.author?.fullName || comment.author?.username || '匿名用户')}">回复</button>`}
+          ${
+            comment.isDeleted ||
+            discussionState.activePost?.isDeleted ||
+            discussionState.activePost?.isHidden
+              ? ''
+              : `<div class="discussion-comment-actions">
+            <button class="discussion-comment-action ${comment.likedByMe ? 'is-active' : ''}" type="button" data-action="like-comment" data-comment-id="${comment.id}" aria-pressed="${Boolean(comment.likedByMe)}" aria-label="${comment.likedByMe ? '取消点赞评论' : '点赞评论'}" ${discussionState.commentActionsPending?.has(comment.id) ? 'disabled' : ''}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M7 10v11H3V10Zm0 0 5-8c3 0 3 3 1 7h7l-2 12H7"/></svg><span>${Number(comment.likeCount || 0)}</span>
+            </button>
+            <button class="discussion-comment-reply-button" type="button" data-action="reply-comment" data-comment-id="${comment.id}" data-author-name="${escapeHtml(comment.author?.displayName || comment.author?.username || '匿名用户')}">回复</button>
+            ${comment.canDelete ? `<button class="discussion-comment-action" type="button" data-action="delete-comment" data-comment-id="${comment.id}">删除</button>` : ''}
+          </div>`
+          }
         </div>
         <div class="discussion-comment-content discussion-markdown-body">${renderMarkdownContent(comment.contentMarkdown)}</div>
         <div class="discussion-comment-reply-slot" data-reply-slot="${comment.id}"></div>
@@ -5392,6 +5418,7 @@ function renderDiscussionDetail(post) {
   discussionState.activePost = post;
   discussionDetail.innerHTML = `
     <header class="discussion-detail-head">
+      ${post.isDeleted ? '<p class="discussion-deleted-notice"><strong>已删除</strong> · 以下为原始内容，仅管理员可见</p>' : ''}
       <div class="discussion-detail-toolbar">
         <button class="discussion-detail-back" type="button" data-action="close-detail">
           <img class="discussion-action-icon" src="/assets/icons/return.svg" alt="" aria-hidden="true" />
@@ -5415,25 +5442,26 @@ function renderDiscussionDetail(post) {
       <div class="discussion-detail-meta">
         <span class="discussion-detail-board">#${escapeHtml(post.board.name)}</span>
         ${renderAuthorProfileLink(post.author, 'discussion-author-link')}
-        <span>${escapeHtml(formatDateTime(post.createdAt))}</span>
+        ${post.isAnonymous && userState.isAdmin ? '<button class="discussion-comment-action" type="button" data-action="inspect-anonymous-author">查询发帖人（管理）</button><span id="discussion-anonymous-author-result" role="status"></span>' : ''}
+        <span class="discussion-detail-time">${escapeHtml(formatDateTime(post.createdAt))}</span>
         <div class="discussion-detail-reactions">
           ${renderDiscussionReactionButton(post, 'smile')}
           ${renderDiscussionReactionButton(post, 'light')}
           ${renderDiscussionReactionButton(post, 'fireworks')}
-        </div>
         <span class="discussion-comment-count" title="评论">
           <img src="/assets/icons/chats.svg" alt="" aria-hidden="true" />
           <strong>${post.commentCount || 0}</strong>
         </span>
+        </div>
       </div>
     </header>
     <div class="discussion-markdown-body" id="discussion-markdown-body">${renderMarkdownContent(post.contentMarkdown)}</div>
     <section class="discussion-comments" aria-label="评论">
       <div class="discussion-comments-head">
-        <h3>评论</h3>
+        <h3>评论</h3><p id="discussion-comment-action-status" role="status" aria-live="polite"></p>
       </div>
       <form
-        class="discussion-comment-form"
+        class="discussion-comment-form ${post.isDeleted ? 'hidden' : ''}"
         id="discussion-comment-form"
         ${post.isHidden ? 'hidden' : ''}
         data-post-id="${escapeHtml(post.id)}"
@@ -5773,16 +5801,24 @@ async function loadDiscussionDetail(postId) {
   discussionDetail.innerHTML =
     '<div class="discussion-detail-empty"><p>正在加载帖子详情...</p></div>';
   try {
-    const payload = await callApi(`/discussion/posts/${encodeURIComponent(postId)}`, {
-      method: 'GET',
-    });
+    const payload = await callApi(
+      `/discussion/posts/${encodeURIComponent(postId)}${userState.isAdmin && discussionState.showDeleted && discussionState.scope === 'public' ? '?includeDeleted=1' : ''}`,
+      {
+        method: 'GET',
+      },
+    );
     if (
       requestId !== discussionState.postRequestId ||
       version !== discussionState.sessionVersion ||
       requestedBoard !== discussionState.activeBoard
     )
       return;
-    if (!payload.post || payload.post.isDeleted) throw new Error('帖子不存在或暂不可见');
+    if (
+      !payload.post ||
+      (payload.post.isDeleted &&
+        !(userState.isAdmin && discussionState.showDeleted && discussionState.scope === 'public'))
+    )
+      throw new Error('帖子不存在或暂不可见');
     discussionState.activePostId = payload.post.id;
     discussionState.postCache.set(payload.post.id, payload.post);
     renderDiscussionPosts();
@@ -5832,6 +5868,9 @@ async function loadDiscussionPosts({ autoOpen = false, more = false } = {}) {
     if (append) {
       query.set('cursor', discussionState.nextMyCursor);
     }
+
+    if (userState.isAdmin && discussionState.showDeleted && discussionState.scope === 'public')
+      query.set('includeDeleted', '1');
 
     if (currentHash) {
       query.set('hash', currentHash);
@@ -5930,6 +5969,7 @@ async function initializeDiscussionPage() {
   await sessionReady;
   const version = discussionState.sessionVersion;
   try {
+    await sessionReady;
     await loadDiscussionBoards();
     if (version !== discussionState.sessionVersion) return;
     const query = getDiscussionQueryState();
@@ -7674,10 +7714,92 @@ async function toggleBoardModerator(button) {
   }
 }
 
+async function handleDiscussionCommentAction(button) {
+  if (!userState.isLoggedIn) {
+    openModal('login');
+    return;
+  }
+  const commentId = Number(button.dataset.commentId);
+  const deleting = button.dataset.action === 'delete-comment';
+  const postId = discussionState.activePostId;
+  const uid = userState.uid;
+  if (discussionState.commentActionsPending.has(commentId)) return;
+  if (deleting && !window.confirm('删除这条评论？已有回复会保留。')) return;
+  discussionState.commentActionsPending.add(commentId);
+  button.disabled = true;
+  try {
+    const payload = await callApi(`/discussion/comments/${commentId}${deleting ? '' : '/like'}`, {
+      method: deleting ? 'DELETE' : 'POST',
+    });
+    if (postId !== discussionState.activePostId || uid !== userState.uid) return;
+    if (deleting) {
+      discussionOpenReplyByPost.delete(String(postId));
+      const count = Number(payload.commentCount);
+      updateCachedDiscussionPost(postId, { commentCount: count });
+      if (discussionState.activePost) discussionState.activePost.commentCount = count;
+      const countNode = discussionDetail.querySelector('.discussion-comment-count strong');
+      if (countNode) countNode.textContent = count;
+      await loadDiscussionComments(postId);
+      renderDiscussionPosts();
+      loadDiscussionStats();
+    } else {
+      discussionState.comments = discussionState.comments.map((comment) =>
+        comment.id === commentId
+          ? { ...comment, likedByMe: payload.active, likeCount: payload.likeCount }
+          : comment,
+      );
+    }
+    const message = document.getElementById('discussion-comment-action-status');
+    if (message) message.textContent = deleting ? '评论已删除，已有回复保留。' : '';
+  } catch (error) {
+    if (postId === discussionState.activePostId && uid === userState.uid) {
+      const message = document.getElementById('discussion-comment-action-status');
+      if (message) message.textContent = error.message;
+    }
+  } finally {
+    discussionState.commentActionsPending.delete(commentId);
+    button.disabled = false;
+    if (postId === discussionState.activePostId && uid === userState.uid)
+      renderDiscussionComments();
+  }
+}
+
 async function handleDiscussionDetailClick(event) {
   const visibilityButton = event.target.closest('[data-action="toggle-visibility"]');
   if (visibilityButton) {
     await toggleDiscussionVisibility(visibilityButton);
+    return;
+  }
+  const commentAction = event.target.closest(
+    '[data-action="like-comment"], [data-action="delete-comment"]',
+  );
+  if (commentAction) {
+    await handleDiscussionCommentAction(commentAction);
+    return;
+  }
+  const inspect = event.target.closest('[data-action="inspect-anonymous-author"]');
+  if (inspect) {
+    const postId = discussionState.activePostId;
+    const uid = userState.uid;
+    inspect.disabled = true;
+    try {
+      const payload = await callApi(
+        `/admin/discussion/posts/${encodeURIComponent(postId)}/author`,
+        { method: 'GET' },
+      );
+      if (postId !== discussionState.activePostId || uid !== userState.uid || !userState.isAdmin)
+        return;
+      const node = document.getElementById('discussion-anonymous-author-result');
+      if (node)
+        node.textContent = `${payload.author.username} · ${payload.author.uid} · ${payload.author.student_id || ''}`;
+    } catch (error) {
+      if (postId === discussionState.activePostId) {
+        const node = document.getElementById('discussion-anonymous-author-result');
+        if (node) node.textContent = error.message;
+      }
+    } finally {
+      inspect.disabled = false;
+    }
     return;
   }
   const replyButton = event.target.closest("[data-action='reply-comment']");
@@ -7938,6 +8060,9 @@ async function handleDiscussionComposeSubmit(event) {
       method: 'POST',
       body: JSON.stringify({
         boardSlug: discussionComposeBoard.value,
+        isAnonymous:
+          discussionComposeBoard.value === 'daily' &&
+          Boolean(document.getElementById('discussion-anonymous')?.checked),
         title: discussionComposeTitle.value.trim(),
         contentMarkdown: discussionComposeContent.value,
       }),
@@ -7949,6 +8074,7 @@ async function handleDiscussionComposeSubmit(event) {
       new CustomEvent('discussion:published', { detail: { post: payload.post } }),
     );
     discussionComposeForm.reset();
+    syncDiscussionAnonymousOption();
     discussionComposeForm.classList.add('hidden');
     discussionState.activeBoard = payload.post.board.slug;
     discussionState.activePostId = payload.post.id;
@@ -8983,6 +9109,19 @@ discussionDetail?.addEventListener('compositionstart', handleDiscussionCommentCo
 discussionDetail?.addEventListener('compositionend', handleDiscussionCommentCompositionEnd);
 discussionCreateToggle?.addEventListener('click', handleDiscussionCreateToggle);
 discussionComposeForm?.addEventListener('submit', handleDiscussionComposeSubmit);
+discussionComposeBoard?.addEventListener('change', syncDiscussionAnonymousOption);
+document.getElementById('discussion-show-deleted')?.addEventListener('change', async (event) => {
+  discussionState.showDeleted = userState.isAdmin && event.target.checked;
+  discussionState.postsByBoard.clear();
+  discussionState.postCache.clear();
+  discussionState.postsHashByBoard = {};
+  if (discussionState.activePost?.isDeleted && !discussionState.showDeleted) {
+    discussionState.activePostId = '';
+    renderDiscussionDetail(null);
+  }
+  await loadDiscussionPosts({ autoOpen: false });
+  if (discussionState.activePostId) await loadDiscussionDetail(discussionState.activePostId);
+});
 discussionBoardEdit?.addEventListener('click', editActiveBoardDescription);
 discussionBoardModerators?.addEventListener('click', openBoardModeratorsPanel);
 discussionBoardAboutBody?.addEventListener('click', (event) => {
@@ -9032,6 +9171,7 @@ recordRecentLearningRoute();
 renderUser();
 loadFortuneConfig();
 sessionReady = restoreSession().finally(() => {
+  sessionRestored = true;
   renderAdminSection();
   loadCheckinShortcutState();
   loadElectromagneticPage();
@@ -9053,6 +9193,25 @@ initializeLandingMotion();
 discussionReady = initializeDiscussionPage();
 initializeAiChatPage();
 loadPublicProfile();
+
+window.addEventListener('freebbs:session-change', () => {
+  if (!isDiscussionPage() || !sessionRestored) return;
+  // Never keep admin-only content or identities visible across account changes.
+  const identity = document.getElementById('discussion-anonymous-author-result');
+  if (identity) identity.textContent = '';
+  discussionState.showDeleted = false;
+  const toggle = document.getElementById('discussion-show-deleted');
+  if (toggle) toggle.checked = false;
+  discussionState.postsByBoard.clear();
+  discussionState.postCache.clear();
+  discussionState.postsHashByBoard = {};
+  discussionState.posts = [];
+  discussionState.postRequestId += 1;
+  discussionState.activePostId = '';
+  renderDiscussionDetail(null);
+  renderDiscussionPosts();
+  loadDiscussionPosts({ autoOpen: false });
+});
 
 window.addEventListener('freebbs:username-updated', (event) => {
   // A nickname change must not overwrite an unsaved profile draft.

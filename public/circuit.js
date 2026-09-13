@@ -10,9 +10,24 @@
   const params = new URLSearchParams(window.location.search);
   const listPage = window.location.pathname.replace(/\/$/, '') === '/circuits';
   const $ = (id) => document.getElementById(`circuit-${id}`);
+  const viewport =
+    !listPage &&
+    window.FreeBbsCircuitViewport?.create($('stage'), {
+      in: $('zoom-in'),
+      out: $('zoom-out'),
+      reset: $('zoom-reset'),
+      pan: $('pan'),
+      value: $('zoom-value'),
+      expand: $('expand-canvas'),
+    });
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const prefixes = {
     ground: 'G',
+    vcc: 'VCC',
+    vdd: 'VDD',
+    vss: 'VSS',
+    vee: 'VEE',
+    fixed_voltage: 'LV',
     resistor: 'R',
     capacitor: 'C',
     inductor: 'L',
@@ -63,8 +78,11 @@
     expression: '伏安关系 i(u)',
     k: '特性系数 k',
     parameterSet: '矩阵类型',
+    interpolation: '插值方式',
+    repeat: '播放方式',
   };
   const state = {
+    viewport,
     document: { version: 1, components: [], wires: [], analysis: { type: 'dc' } },
     cid: '',
     revision: 0,
@@ -213,6 +231,16 @@
 
   function updateControls() {
     if ($('recognize')) $('recognize').disabled = getRecognitionContext().busy;
+    if ($('beautify'))
+      $('beautify').disabled =
+        !state.editable ||
+        state.saving ||
+        Boolean(state.agentRun) ||
+        Boolean(state.worker) ||
+        Boolean(state.wireStart) ||
+        state.exampleBusy ||
+        state.exampleLoading ||
+        !state.document.components.length;
     if ($('recognition-restore')) {
       $('recognition-restore').hidden = !getRecognitionContext().hasBackup;
       $('recognition-restore').disabled = getRecognitionContext().busy;
@@ -222,8 +250,9 @@
     $('publish').disabled = state.dirty || state.plotModified || state.saving;
     $('publish').title =
       state.dirty || state.plotModified ? '请先保存当前修改，再发表到讨论区' : '';
-    const saveLabel = state.cid ? `保存新版本${state.dirty ? ' · 有修改' : ''}` : '保存并获取 CID';
-    $('save').textContent = state.saving ? '正在保存…' : saveLabel;
+    const saveLabel = state.cid ? '保存新版本' : '保存电路';
+    const saveText = $('save').querySelector?.('[data-action-label]') || $('save');
+    saveText.textContent = state.saving ? '正在保存…' : saveLabel;
     $('title').readOnly = !state.editable;
     $('description').readOnly = !state.editable;
     $('login').hidden = Boolean(app?.userState?.isLoggedIn);
@@ -456,6 +485,48 @@
     return true;
   }
 
+  function beautifiedDocument(document) {
+    const layout = window.FreeBbsCircuitLayout;
+    if (!layout) throw new Error('布局模块尚未加载，请刷新后重试。');
+    return engine.validateDocument(
+      layout.normalizeCircuitLayout(engine.validateDocument(document)),
+    );
+  }
+
+  function beautifyCircuit() {
+    if (
+      !state.editable ||
+      state.saving ||
+      state.agentRun ||
+      state.worker ||
+      state.wireStart ||
+      state.exampleBusy ||
+      state.exampleLoading ||
+      !state.document.components.length
+    )
+      return false;
+    if (!validateParameterInputs()) return false;
+    try {
+      const next = beautifiedDocument(state.document);
+      if (JSON.stringify(next) === JSON.stringify(state.document)) {
+        setStatus('当前布局已整理，无需调整。');
+        return false;
+      }
+      state.document = next;
+      state.wireAnchor = null;
+      window.FreeBbsCircuitParameterPopover?.hide();
+      changed({ electrical: false, historyGroup: null });
+      renderInspector();
+      renderSchematic();
+      setStatus('已美化电路：整理元件朝向、对齐布局和导线，可撤销。', 'success');
+      notifyCircuitEditor();
+      return true;
+    } catch (error) {
+      setStatus(`美化未完成：${error.message || '请稍后重试'}`, 'error');
+      return false;
+    }
+  }
+
   function currentFrame() {
     if (!state.result?.frames?.length) return null;
     return state.result.frames.length === state.result.x.length
@@ -551,6 +622,7 @@
         renderSchematic();
       },
     });
+    state.viewport?.attach();
     applySchematicHighlights();
     syncParameterPopover();
     if (focusedComponent) {
@@ -732,11 +804,12 @@
   }
 
   function renderPalette() {
+    const powerSymbols = { vcc: '↑', vdd: '↑', vss: '↓', vee: '↓', fixed_voltage: '⎓' };
     $('palette').innerHTML = Object.entries(engine.catalog)
       .filter(([type]) => type !== 'junction')
       .map(
         ([type, item]) =>
-          `<button type="button" data-add-component="${escapeHtml(type)}"><span class="circuit-palette-symbol" aria-hidden="true">${escapeHtml(prefixes[type])}</span>${escapeHtml(item.label)}</button>`,
+          `<button type="button" data-add-component="${escapeHtml(type)}"><span class="circuit-palette-symbol" aria-hidden="true">${escapeHtml(powerSymbols[type] || prefixes[type])}</span>${escapeHtml(item.label)}</button>`,
       )
       .join('');
   }
@@ -748,6 +821,17 @@
         ['dc', '直流'],
         ['sine', '正弦'],
         ['pulse', '脉冲'],
+        ['arbitrary', '任意波形 / 文件'],
+      ];
+    if (key === 'interpolation')
+      options = [
+        ['linear', '线性插值'],
+        ['step', '阶梯保持'],
+      ];
+    if (key === 'repeat')
+      options = [
+        ['hold', '单次 · 末值保持'],
+        ['repeat', '循环播放'],
       ];
     if (key === 'parameterSet')
       options = [
@@ -804,10 +888,15 @@
         label = `${component.params.waveform === 'pulse' ? '脉冲增量' : '正弦峰值'} / ${unit}`;
       if (key === 'acAmplitude') label = `AC 小信号峰值 / ${unit}`;
     }
+    if (component.type === 'fixed_voltage' && key === 'dc') label = '固定电压 / V';
     return `<label>${escapeHtml(label)}${field}</label>`;
   }
 
   function parameterFieldsHtml(component) {
+    if (['vcc', 'vdd', 'vss', 'vee'].includes(component.type))
+      return '<p class="circuit-parameter-hint">同名电源符号在本电路内自动连通。连接固定电平或电压源供电；名称本身不指定电压，VSS / VEE 也不自动接地。</p>';
+    if (component.type === 'fixed_voltage')
+      return `${parameterInput(component, 'dc', component.params.dc)}<p class="circuit-parameter-hint">相对参考地的理想直流电压，可设正值、负值或 0 V。连接电源符号即可为同名网络供电，AC 小信号为 0。</p>`;
     if (component.type === 'twoport') {
       const equations = {
         Z: '[V₁, V₂]ᵀ = Z [I₁, I₂]ᵀ',
@@ -824,16 +913,29 @@
     }
     if (component.type === 'oscilloscope2')
       return '<p class="circuit-parameter-hint">CH1+ / CH1− 和 CH2+ / CH2− 分别测量两路差分电压，理想高输入阻抗。运行后在“波形与读数”中选择 X–T 或 X–Y 模式。</p>';
-    return Object.entries(component.params)
-      .filter(([key]) => {
-        if (!['voltage', 'current'].includes(component.type)) return true;
-        if (key === 'duty') return component.params.waveform === 'pulse';
-        return (
-          component.params.waveform !== 'dc' || !['amplitude', 'frequency', 'delay'].includes(key)
-        );
-      })
-      .map(([key, value]) => parameterInput(component, key, value))
-      .join('');
+    return (
+      Object.entries(component.params)
+        .filter(([key]) => {
+          if (!['voltage', 'current'].includes(component.type)) return true;
+          if (key === 'samples') return false;
+          if (['interpolation', 'repeat'].includes(key))
+            return component.params.waveform === 'arbitrary';
+          if (
+            component.params.waveform === 'arbitrary' &&
+            ['amplitude', 'frequency', 'phase', 'duty'].includes(key)
+          )
+            return false;
+          if (key === 'duty') return component.params.waveform === 'pulse';
+          return (
+            component.params.waveform !== 'dc' || !['amplitude', 'frequency', 'delay'].includes(key)
+          );
+        })
+        .map(([key, value]) => parameterInput(component, key, value))
+        .join('') +
+      (['voltage', 'current'].includes(component.type)
+        ? `<button type="button" data-import-source="${escapeHtml(component.id)}" ${state.editable ? '' : 'disabled'}>导入 CSV / MATLAB 波形</button><p class="circuit-parameter-hint">${component.params.samples ? `${JSON.parse(component.params.samples).length} 个波形点已随电路保存。` : '支持 CSV、MAT v6/v7、.m 数值数组。'}任意波形值叠加直流偏置；DC / AC 分析仍使用直流值 / AC 幅值。</p>`
+        : '')
+    );
   }
 
   function syncParameterPopover({ show = false, focus = false } = {}) {
@@ -1109,6 +1211,9 @@
     if (p.waveform === 'sine') {
       const amplitude = Math.abs(p.amplitude);
       text = `正弦输出 = 直流偏置 + 峰值 × sin(2π × 频率 × (t − 延迟) + 相位)。范围 ${formatNumber(p.dc - amplitude, unit)} 至 ${formatNumber(p.dc + amplitude, unit)}；不需要占空比。`;
+    } else if (p.waveform === 'arbitrary') {
+      text =
+        '文件波形叠加直流偏置，按时间列插值。循环周期为首末时间之差，单次播放在结束后保持末值。';
     } else if (p.waveform === 'pulse') {
       text = `脉冲在 ${formatNumber(p.dc, unit)} 与 ${formatNumber(p.dc + p.amplitude, unit)} 之间切换；占空比表示高电平占一个周期的比例。`;
     }
@@ -1123,6 +1228,7 @@
 
   function validateParameterInputs() {
     if (state.result && state.plotControls?.validate() === false) return false;
+    if (state.result && window.FreeBbsCircuitPanels?.validate() === false) return false;
     if (state.result && state.annotationControls?.commitPending() === false) return false;
     if (window.FreeBbsCircuitParameterPopover?.reportValidity?.() === false) return false;
     if ($('parameters').checkValidity()) return true;
@@ -1630,14 +1736,14 @@
                 const at =
                   count === 1 ? 0 : Math.round((index * (trace.values.length - 1)) / (count - 1));
                 return {
-                  x: state.result.x[at],
+                  x: (trace.x || state.result.x)[at],
                   value: trace.values[at],
                   ...(Number.isFinite(trace.phase?.[at]) ? { phase: trace.phase[at] } : {}),
                 };
               }).filter((sample) => Number.isFinite(sample.x) && Number.isFinite(sample.value));
               const latest = trace.values.at(-1);
               const point = (index, values = trace.values) => ({
-                x: state.result.x[index],
+                x: (trace.x || state.result.x)[index],
                 value: values[index],
               });
               const phasePoints = {};
@@ -1654,7 +1760,11 @@
               }
               return {
                 id: trace.id,
-                label: trace.label.slice(0, 120),
+                label:
+                  `${trace.label}${trace.domain === 'frequency' ? '（FFT · 横轴 Hz）' : ''}`.slice(
+                    0,
+                    120,
+                  ),
                 unit: trace.unit.slice(0, 24),
                 ...(minIndex >= 0 ? { minPoint: point(minIndex) } : {}),
                 ...(maxIndex >= 0 ? { maxPoint: point(maxIndex) } : {}),
@@ -1675,6 +1785,7 @@
       generation: state.generation,
       cid: state.cid,
       revision: state.revision,
+      dirty: state.dirty || state.plotModified,
       ...metadata(),
       selection: {
         ...(state.selectedId ? { componentId: state.selectedId } : {}),
@@ -1903,7 +2014,18 @@
       (availableResult?.traces || []).map((trace) => trace.id),
     );
     // Validate the complete batch before applying any edit or visual effect.
-    const next = protocol.applyActions(actionDocument, valid);
+    let next = protocol.applyActions(actionDocument, valid);
+    const autoBeautify = valid.some((action) =>
+      [
+        'add_component',
+        'connect',
+        'delete_component',
+        'move_component',
+        'transform_component',
+        'set_parameter',
+      ].includes(action.type),
+    );
+    if (autoBeautify) next = beautifiedDocument(next);
     const electrical = valid.some((action) => protocol.isElectricalAction(action));
     const run = valid.some((action) => action.type === 'run_simulation');
     if (
@@ -1923,7 +2045,12 @@
       renderAnalysis();
       renderInspector();
       renderSchematic();
-      setStatus('已应用 Max 建议到当前草稿，可在右侧撤销。', 'success');
+      setStatus(
+        autoBeautify
+          ? '已应用 Max 建议并自动美化电路，可在右侧撤销。'
+          : '已应用 Max 建议到当前草稿，可在右侧撤销。',
+        'success',
+      );
     }
     valid.forEach((action) => {
       if (action.type === 'highlight_components') {
@@ -2047,6 +2174,7 @@
     const display = state.plotDisplay || {};
     if (!state.traceIds.length && display.mode !== 'xy') {
       $('waveform').textContent = '选择至少一条曲线查看结果。';
+      window.FreeBbsCircuitPanels?.update(state.result, display);
       return;
     }
     state.chart = renderer.renderWaveform($('waveform'), state.plotResult || state.result, {
@@ -2056,8 +2184,11 @@
       onAnnotationSelect: (id) => state.annotationControls?.select(id),
       traceIds: state.traceIds,
       phase: $('show-phase').checked,
-      logX: state.document.analysis.type === 'ac' && state.document.analysis.scale === 'log',
+      logX: display.xScale
+        ? display.xScale === 'log'
+        : state.document.analysis.type === 'ac' && state.document.analysis.scale === 'log',
     });
+    window.FreeBbsCircuitPanels?.update(state.result, display);
     $('waveform')
       .querySelectorAll('[data-trace-id]')
       .forEach((chart) => {
@@ -2233,6 +2364,8 @@
   function capturePlotSettings() {
     if (state.result && state.plotControls?.read && state.editable) {
       const current = state.plotControls.read();
+      if (window.FreeBbsCircuitPanels && current.plots)
+        current.plots = window.FreeBbsCircuitPanels.read();
       if (JSON.stringify(current) !== JSON.stringify(state.plotDisplay))
         updatePlot(current, { persist: true });
     }
@@ -2247,7 +2380,7 @@
     }
   }
 
-  async function saveCircuit() {
+  async function saveCircuit({ message } = {}) {
     if (state.saving || !state.editable) return;
     if (!validateParameterInputs()) return;
     capturePlotSettings();
@@ -2286,6 +2419,7 @@
           body: JSON.stringify({
             title,
             description,
+            ...(message ? { message } : {}),
             document: doc,
             ...(state.cid ? { expectedRevision: state.revision } : {}),
           }),
@@ -2313,6 +2447,7 @@
         `已保存公开版本 ${state.revision}${state.dirty ? '；保存期间的新修改仍在草稿中' : '，可复制 Markdown 引用'}。`,
         'success',
       );
+      return circuit;
     } catch (error) {
       if (generation !== state.generation) return;
       state.dirty = true;
@@ -2460,7 +2595,7 @@
     });
     setStatus(
       persisted
-        ? '已生成新电路草稿。核对后点击“保存并获取 CID”；上一份草稿可通过“恢复上一份草稿”找回。'
+        ? '已生成新电路草稿。核对后点击“保存电路”；上一份草稿可通过“恢复上一份草稿”找回。'
         : '已生成电路，上一份草稿已备份；当前浏览器存储空间不足，请及时保存或导出新电路。',
       persisted ? 'success' : 'error',
     );
@@ -2529,12 +2664,13 @@
     const result = state.plotResult || state.result;
     const columns = [{ label: `${result.xLabel} (${result.xUnit || ''})`, values: result.x }];
     result.traces.forEach((trace) => {
+      if (trace.x) columns.push({ label: `${trace.label} 频率 (Hz)`, values: trace.x });
       columns.push({ label: `${trace.label} (${trace.unit})`, values: trace.values });
       if (trace.phase) columns.push({ label: `${trace.label} 相位 (°)`, values: trace.phase });
     });
     const quote = (value) => `"${String(value).replace(/"/g, '""')}"`;
     const rows = [columns.map((column) => quote(column.label)).join(',')];
-    result.x.forEach((_, index) =>
+    Array.from({ length: Math.max(...columns.map((c) => c.values.length)) }).forEach((_, index) =>
       rows.push(
         columns
           .map((column) => (Number.isFinite(column.values[index]) ? column.values[index] : ''))
@@ -2620,7 +2756,7 @@
     if (state.listLoading) return;
     if (!app.userState.isLoggedIn) {
       $('list').innerHTML =
-        '<div class="circuit-empty">登录后查看自己的电路。<br /><a href="/login">前往登录</a>，也可以先<a href="/circuit">新建本地电路</a>。</div>';
+        '<div class="circuit-empty">登录后查看自己的电路。<br /><a href="/login">前往登录</a>，也可以先<a href="/circuit?new=1">新建本地电路</a>。</div>';
       $('list-more').hidden = true;
       return;
     }
@@ -2706,6 +2842,7 @@
     );
     $('duplicate').addEventListener('click', duplicateSelection);
     $('undo').addEventListener('click', () => restoreHistory('undo'));
+    $('beautify').addEventListener('click', beautifyCircuit);
     $('redo').addEventListener('click', () => restoreHistory('redo'));
     $('delete').addEventListener('click', removeSelection);
     $('cancel-wire').addEventListener('click', cancelConnection);
@@ -2976,17 +3113,19 @@
       state.document = sample.document;
       $('title').value = sample.title;
       $('description').value = sample.description;
-      const restored = restoreDraft();
+      if (params.get('new') === '1') {
+        removeDraft();
+        params.delete('new');
+        const query = params.toString();
+        window.history.replaceState({}, '', `/circuit${query ? `?${query}` : ''}`);
+      } else restoreDraft();
       resetHistory();
       renderAnalysis();
       renderInspector();
       renderSchematic();
       updateControls();
       await examplesReady;
-      if (!restored && !state.dirty && state.examples.length) {
-        $('example').value = String(state.examples[0].id);
-        await loadExample({ initial: true });
-      } else if (state.loadedExample) {
+      if (state.loadedExample) {
         $('example').value = String(state.loadedExample.id);
         updateExampleControls();
       }
@@ -2994,8 +3133,33 @@
   }
 
   window.FreeBbsCircuitEditor = {
+    importSource(id, samples, snapshot) {
+      if (
+        !state.editable ||
+        state.saving ||
+        state.agentRun ||
+        snapshot.generation !== state.generation ||
+        snapshot.editVersion !== state.editVersion
+      )
+        throw new Error('电路已更改，请重新导入波形。');
+      engine.parseSourceSamples(samples);
+      const component = state.document.components.find(
+        (item) => item.id === id && ['voltage', 'current'].includes(item.type),
+      );
+      if (!component) throw new Error('电源不存在。');
+      component.params = { ...component.params, waveform: 'arbitrary', samples, dc: 0 };
+      changed();
+      renderInspector();
+      renderSchematic();
+      setStatus('任意波形已导入；直流偏置设为 0，切换瞬态分析后运行。');
+    },
+    getResult: () => state.result,
+    updateDisplay: (display) => updatePlot(display, { persist: true }),
+    save: saveCircuit,
+    reload: loadCircuit,
     getRecognitionContext,
     importRecognizedCircuit,
+    beautify: beautifyCircuit,
     getSnapshot: getAssistantSnapshot,
     applyActions: applyAssistantActions,
     beginAgentRun,

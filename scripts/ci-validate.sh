@@ -26,28 +26,36 @@ node --check backend/circuits.js
 node --check backend/circuit-assistant.js
 node --check backend/circuit-recognition.js
 node --check backend/circuit-recognition-layout.js
+node --check public/circuit-layout.js
 node --check backend/circuit-examples.js
 node --check public/circuit-default-examples.js
 node --check public/circuit-discussion.js
 node --check public/circuit-engine.js
 node --check public/circuit-plot.js
+node --check public/circuit-workbench.js
+node --check public/circuit-report.js
+node --check public/circuit-waveform-import.js
+node --check backend/circuit-workbench.js
 node --check public/circuit-plot-controls.js
 node --check public/circuit-annotations.js
 node --check public/circuit-annotation-controls.js
 node --check public/circuit-worker.js
 node --check public/circuit-renderer.js
 node --check public/circuit-wiring.js
+node --check public/circuit-viewport.js
 node --check public/circuit.js
 node --check public/circuit-recognition.js
 node --check public/circuit-ai-actions.js
 node --check public/circuit-assistant.js
 node --check public/circuit-agent.js
 node --check public/circuit-chat.js
+node --check public/max-reasoning.js
 node --check public/circuit-parameter-popover.js
 node --check public/circuit-embeds.js
 node --check public/circuit-embed.js
 node --check public/discussion-previews.js
 node --check backend/discussion-preview.js
+node --check backend/discussion-interactions.js
 node --check backend/agent-circuits.js
 
 echo "[ci] course map tests"
@@ -79,6 +87,7 @@ npm run test:discussion-markdown
 
 echo "[ci] Max agent and circuit context tests"
 npm run test:agent-surfaces
+npm run test:aichat-navigation
 
 echo "[ci] registration, notifications, username and course API tests"
 npm run test:community

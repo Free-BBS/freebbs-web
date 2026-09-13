@@ -120,6 +120,7 @@ function buildCircuitRecognitionPayload(input, model) {
           'MOS/BJT 极性、二极管方向、源正负方向必须按图识别；不能确认时失败。运放是无独立电源引脚的三端教学模型，可将图中明确电源电压写入 railPositive/railNegative，并在 warnings 说明。开关、变压器、数字IC或其他未知元件不能静默替换；无法可靠表达则失败并说明。',
           'wires 每项仅 {id,from:{componentId,pin},to:{componentId,pin},points?:[{x,y}]}，id 唯一，端点必须为存在的元件引脚，不能同端自连。每条导线最多32个中间拐点。普通几何交叉不相连，多线相接用 junction 并用多段导线连接共同引脚。所有 ground 电气相通。图中没有地时不要擅自新增地，在 warnings 提示仿真前需要选择参考地。',
           '引脚局部几何：通常双端 pin0=(-40,0),pin1=(40,0)；ground=(0,-28)；junction=(0,0)；bjt/mosfet 三端分别=(0,-40),(-40,0),(0,40)；opamp=(-40,-18),(-40,18),(40,0)；vcvs/vccs=(-40,0),(40,0),(-18,44),(18,44)；twoport/oscilloscope2=(-60,-22),(-60,22),(60,-22),(60,22)。先按本地X/Y镜像再旋转后平移到中心；90度时通常双端 pin0 在上、pin1 在下。连线仅走水平/竖直折线，绕开元件主体，points 只含中间拐点；相邻两点必须共享 x 或 y，端点以真实引脚坐标为准。仅当两个引脚同轴时才可用 points:[]；省略 points 可交给自动正交走线。',
+          '电源符号 vcc/vdd/vss/vee 都只有 pin0，同类型在本电路内自动电气连通，不自带电压，VSS/VEE 不等于地。固定电平 fixed_voltage 只有 pin0，params.dc 是相对参考地的理想直流电压；仅在图中明确标出固定电压时使用，不能按 VCC/VDD 名称猜测电压。局部 pin0：vcc/vdd/fixed_voltage=(0,40)，vss/vee=(0,-40)。',
           'analysis 默认为 {type:"dc"}，仅表示初始编辑器分析设置，不能声称已验证可仿真、运行仿真或计算出结果。不要输出 display、保存、发布、CID、网页标签或任意脚本。',
         ].join('\n'),
       },
@@ -174,7 +175,11 @@ function parseCircuitRecognitionResponse(raw) {
     const validatedDocument = validateEditorDocument(result.circuit?.document);
     const document = validateEditorDocument(normalizeRecognizedCircuitLayout(validatedDocument));
     const circuit = validateCircuitInput({ ...result.circuit, document });
-    if (!document.components.some(({ type }) => !['ground', 'junction'].includes(type)))
+    if (
+      !document.components.some(
+        ({ type }) => !['ground', 'junction', 'vcc', 'vdd', 'vss', 'vee'].includes(type),
+      )
+    )
       throw new RecognitionError('图片中未识别到可用的电路元件。', 422, 'circuit_not_recognized');
     for (const component of result.circuit.document.components) {
       const missing = Object.entries(catalog[component.type].defaults).filter(
@@ -185,7 +190,7 @@ function parseCircuitRecognitionResponse(raw) {
           `${component.id} 未识别参数采用教学默认值（SI 单位）：${missing.map(([key, value]) => `${key}=${value}`).join('，')}。请核对。`,
         );
     }
-    if (!document.components.some(({ type }) => type === 'ground'))
+    if (!document.components.some(({ type }) => ['ground', 'fixed_voltage'].includes(type)))
       warnings.push('原图未识别到参考地；已保留原始连接，仿真前请确认并设置参考地。');
     warnings.push('识别结果为待核对草稿，请检查元件、标值、极性和交叉连接；尚未运行仿真。');
     return { circuit, warnings: [...new Set(warnings)] };

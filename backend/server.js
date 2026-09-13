@@ -3,6 +3,12 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+const {
+  anonymousAuthor,
+  ensureDiscussionInteractions,
+  visibleComments,
+  registerDiscussionInteractions,
+} = require('./discussion-interactions');
 const { ensureSurveyTables, createSurveyService, createSurveysRouter } = require('./surveys');
 const pool = require('./db');
 const config = require('./config');
@@ -803,6 +809,8 @@ async function ensureDiscussionTables() {
     );
   }
 
+  await ensureDiscussionInteractions(pool);
+
   for (const board of DISCUSSION_BOARD_SEEDS) {
     await pool.execute(
       `INSERT INTO discussion_boards (slug, name, description, description_markdown, sort_order, is_active)
@@ -1378,8 +1386,11 @@ function toDiscussionPostSummary(row, viewerId = 0) {
   return {
     id: row.pid || String(row.id),
     pid: row.pid || String(row.id),
-    title: isDeleted ? '已删除的帖子' : row.title,
-    preview: isDeleted ? null : getDiscussionPreview(row.content_markdown, config.publicWebUrl),
+    title: isDeleted && !row.reveal_deleted ? '已删除的帖子' : row.title,
+    preview:
+      isDeleted && !row.reveal_deleted
+        ? null
+        : getDiscussionPreview(row.content_markdown, config.publicWebUrl),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     board: {
@@ -1393,18 +1404,21 @@ function toDiscussionPostSummary(row, viewerId = 0) {
     isDeleted,
     isHidden: Boolean(row.is_hidden),
     canHide: !isDeleted && Number(row.user_id) === Number(viewerId),
+    isAnonymous: Boolean(row.is_anonymous),
     deletedAt: row.deleted_at || null,
     canFeature: !isDeleted && !row.is_hidden && Boolean(row.can_feature),
     canPin: !isDeleted && !row.is_hidden && Boolean(row.can_pin),
     canDelete: !isDeleted && Boolean(row.can_delete),
-    author: {
-      id: row.user_id,
-      uid: row.uid || '',
-      username: row.username,
-      fullName: '',
-      displayName: row.username || '匿名用户',
-      avatarPath: row.avatar_path || '',
-    },
+    author: row.is_anonymous
+      ? anonymousAuthor()
+      : {
+          id: row.user_id,
+          uid: row.uid || '',
+          username: row.username,
+          fullName: '',
+          displayName: row.username || '匿名用户',
+          avatarPath: row.avatar_path || '',
+        },
     likeCount: Number(row.like_count || 0),
     lightCount: Number(row.light_count || 0),
     fireworksCount: Number(row.fireworks_count || 0),
@@ -1419,17 +1433,23 @@ function toDiscussionComment(row) {
   return {
     id: row.id,
     parentCommentId: row.parent_comment_id ? Number(row.parent_comment_id) : null,
-    contentMarkdown: row.content_markdown || '',
+    isDeleted: Boolean(row.is_deleted),
+    canDelete: !row.is_deleted && Boolean(row.can_delete),
+    likeCount: row.is_deleted ? 0 : Number(row.like_count || 0),
+    likedByMe: !row.is_deleted && Boolean(row.liked_by_me),
+    contentMarkdown: row.is_deleted ? '该评论已删除' : row.content_markdown || '',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    author: {
-      id: row.user_id,
-      uid: row.uid || '',
-      username: row.username,
-      fullName: '',
-      displayName: row.username || '匿名用户',
-      avatarPath: row.avatar_path || '',
-    },
+    author: row.is_deleted
+      ? { ...anonymousAuthor(), username: '已删除', displayName: '已删除' }
+      : {
+          id: row.user_id,
+          uid: row.uid || '',
+          username: row.username,
+          fullName: '',
+          displayName: row.username || '匿名用户',
+          avatarPath: row.avatar_path || '',
+        },
   };
 }
 
@@ -1437,13 +1457,14 @@ function toDiscussionPostDetail(row, viewerId = 0) {
   const isDeleted = Boolean(row.is_deleted);
   return {
     ...toDiscussionPostSummary(row, viewerId),
-    contentMarkdown: isDeleted ? '这篇帖子已被删除。' : row.content_markdown || '',
+    contentMarkdown:
+      isDeleted && !row.reveal_deleted ? '这篇帖子已被删除。' : row.content_markdown || '',
   };
 }
 
 async function getDiscussionCommentById(commentId) {
   const [rows] = await pool.execute(
-    `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at,
+    `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at, c.is_deleted,
             COALESCE(c.author_student_id, u.student_id) AS author_student_id,
             u.student_id, u.uid, u.username, u.full_name, u.avatar_path
      FROM discussion_comments c
@@ -1623,8 +1644,9 @@ async function relayAgentChatResponse(agentResponse, response, stream) {
   if (stream) {
     response.status(agentResponse.status);
     response.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-    response.setHeader('Cache-Control', 'no-cache');
+    response.setHeader('Cache-Control', 'no-store, no-transform');
     response.setHeader('X-Accel-Buffering', 'no');
+    response.flushHeaders();
 
     if (!agentResponse.body) {
       response.end();
@@ -1632,6 +1654,7 @@ async function relayAgentChatResponse(agentResponse, response, stream) {
     }
 
     for await (const chunk of agentResponse.body) {
+      if (response.destroyed) break;
       response.write(chunk);
     }
     response.end();
@@ -1725,7 +1748,7 @@ async function createMaxDiscussionReply(postId, triggerComment) {
   await ensureMaxAgentUser();
 
   const [postRows] = await pool.execute(
-    `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
+    `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous,
             p.is_pinned, p.pinned_at, p.is_featured, p.featured_at,
             b.slug AS board_slug, b.name AS board_name,
             COALESCE(p.author_student_id, u.student_id) AS author_student_id,
@@ -1753,12 +1776,12 @@ async function createMaxDiscussionReply(postId, triggerComment) {
   }
 
   const [commentRows] = await pool.execute(
-    `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at,
+    `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at, c.is_deleted,
             COALESCE(c.author_student_id, u.student_id) AS author_student_id,
             u.student_id, u.uid, u.username, u.full_name, u.avatar_path
      FROM discussion_comments c
      INNER JOIN users u ON u.id = c.user_id
-     WHERE c.post_id = ?
+     WHERE c.post_id = ? AND c.is_deleted = 0
      ORDER BY c.created_at ASC, c.id ASC`,
     [postId],
   );
@@ -1805,6 +1828,11 @@ async function createMaxDiscussionReply(postId, triggerComment) {
 
   const result = await withDatabaseTransaction(async (connection) => {
     await lockPublicPost(connection, postId);
+    const [lockedComment] = await connection.execute(
+      'SELECT is_deleted FROM discussion_comments WHERE id = ? FOR UPDATE',
+      [triggerComment.id],
+    );
+    if (!lockedComment[0] || lockedComment[0].is_deleted) return null;
     const [inserted] = await connection.execute(
       `INSERT INTO discussion_comments (post_id, parent_comment_id, user_id, author_student_id, content_markdown)
        VALUES (?, ?, ?, ?, ?)`,
@@ -1823,7 +1851,7 @@ async function createMaxDiscussionReply(postId, triggerComment) {
     return inserted;
   });
 
-  return getDiscussionCommentById(result.insertId);
+  return result ? getDiscussionCommentById(result.insertId) : null;
 }
 
 function toAiDialogSummary(row) {
@@ -2335,16 +2363,21 @@ app.post('/api/ai/chat', async (request, response) => {
     return;
   }
 
+  const controller = new AbortController();
+  const cancel = () => {
+    if (!response.writableEnded) controller.abort();
+  };
+  response.once('close', cancel);
   try {
     const agentPayload = buildAgentChatPayload(
       user,
       {
         ...payload,
-        // “问问 Max”始终使用自适应路由：课程知识问题交给 RAG，
-        // 普通对话仍由 General Chat 回答。不要依赖浏览器传入这些策略字段。
-        agent: 'navigation',
-        execute_subagent: 'auto',
-        combine_general_chat: true,
+        // 报告编辑直接处理用户提供的文稿；普通聊天沿用自适应路由。
+        // 路由策略由服务端确定，不接受客户端 agent / subagent 覆盖。
+        ...(payload.source === 'circuit_report'
+          ? { agent: 'general_chat', execute_subagent: 'none', combine_general_chat: false }
+          : { agent: 'navigation', execute_subagent: 'auto', combine_general_chat: true }),
       },
       {
         source: 'direct_chat',
@@ -2354,14 +2387,23 @@ app.post('/api/ai/chat', async (request, response) => {
         },
       },
     );
-    const agentResponse = await postAgentChat(agentPayload, user);
+    const agentResponse = await postAgentChat(agentPayload, user, { signal: controller.signal });
 
     await relayAgentChatResponse(agentResponse, response, payload.stream === true);
   } catch (error) {
+    if (response.destroyed) return;
+    if (response.headersSent) {
+      response.end(
+        `data: ${JSON.stringify({ error: { message: 'Max 回答连接中断，请重试。' } })}\n\n`,
+      );
+      return;
+    }
     response.status(502).json({
       message: 'AI 服务暂时不可用',
       detail: error.message,
     });
+  } finally {
+    response.removeListener('close', cancel);
   }
 });
 
@@ -3340,56 +3382,70 @@ app.patch('/api/discussion/boards/:slug/moderators/:userId', async (request, res
   }
 });
 
-app.post('/api/discussion/uploads/images', async (request, response) => {
-  try {
-    const user = await requireAuth(request, response);
+app.post(
+  ['/api/discussion/uploads/images', '/api/circuit-report/uploads/images'],
+  async (request, response) => {
+    try {
+      const user = await requireAuth(request, response);
 
-    if (!user) {
-      return;
+      if (!user) {
+        return;
+      }
+
+      const imageDataUrl = String(request.body.imageDataUrl || '');
+      const match = imageDataUrl.match(
+        /^data:(image\/(?:png|jpeg|jpg|webp|gif|avif|heic|heif|bmp|tiff|svg\+xml));base64,([A-Za-z0-9+/=]+)$/i,
+      );
+
+      if (!match) {
+        response.status(400).json({ message: '请上传图片文件' });
+        return;
+      }
+
+      const fileBuffer = Buffer.from(match[2], 'base64');
+
+      if (!fileBuffer.length || fileBuffer.length > 20 * 1024 * 1024) {
+        response.status(400).json({ message: '图片大小需在 20MB 以内' });
+        return;
+      }
+
+      const outputBuffer = await sharp(fileBuffer, { animated: false })
+        .rotate()
+        .resize({
+          width: 1600,
+          height: 1600,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .webp({ quality: 82 })
+        .toBuffer();
+
+      if (!outputBuffer.length || outputBuffer.length > 4 * 1024 * 1024) {
+        response.status(400).json({ message: '图片转换后仍超过 4MB，请换一张更小的图片' });
+        return;
+      }
+
+      const fileName = buildDiscussionImageFileName(user.id);
+      await fs.promises.writeFile(path.join(config.uploadDir, fileName), outputBuffer);
+
+      response.status(201).json({
+        url: `/uploads/${fileName}`,
+      });
+    } catch (error) {
+      response.status(500).json({ message: '上传图片失败', detail: error.message });
     }
+  },
+);
 
-    const imageDataUrl = String(request.body.imageDataUrl || '');
-    const match = imageDataUrl.match(
-      /^data:(image\/(?:png|jpeg|jpg|webp|gif|avif|heic|heif|bmp|tiff|svg\+xml));base64,([A-Za-z0-9+/=]+)$/i,
-    );
-
-    if (!match) {
-      response.status(400).json({ message: '请上传图片文件' });
-      return;
-    }
-
-    const fileBuffer = Buffer.from(match[2], 'base64');
-
-    if (!fileBuffer.length || fileBuffer.length > 20 * 1024 * 1024) {
-      response.status(400).json({ message: '图片大小需在 20MB 以内' });
-      return;
-    }
-
-    const outputBuffer = await sharp(fileBuffer, { animated: false })
-      .rotate()
-      .resize({
-        width: 1600,
-        height: 1600,
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
-      .webp({ quality: 82 })
-      .toBuffer();
-
-    if (!outputBuffer.length || outputBuffer.length > 4 * 1024 * 1024) {
-      response.status(400).json({ message: '图片转换后仍超过 4MB，请换一张更小的图片' });
-      return;
-    }
-
-    const fileName = buildDiscussionImageFileName(user.id);
-    await fs.promises.writeFile(path.join(config.uploadDir, fileName), outputBuffer);
-
-    response.status(201).json({
-      url: `/uploads/${fileName}`,
-    });
-  } catch (error) {
-    response.status(500).json({ message: '上传图片失败', detail: error.message });
-  }
+registerDiscussionInteractions(app, {
+  pool,
+  requireAuth,
+  requireAdmin,
+  ensureDiscussionTables,
+  withDatabaseTransaction,
+  canModerateBoard,
+  getDiscussionPostByPublicId,
+  notifications,
 });
 
 app.get('/api/discussion/stats', async (request, response) => {
@@ -3420,6 +3476,7 @@ app.get('/api/discussion/stats', async (request, response) => {
        LEFT JOIN (
          SELECT post_id, COUNT(*) AS comment_count
          FROM discussion_comments
+         WHERE is_deleted = 0
          GROUP BY post_id
        ) c ON c.post_id = p.id
        LEFT JOIN (
@@ -3486,10 +3543,14 @@ app.get('/api/discussion/posts', async (request, response) => {
       response.status(401).json({ message: '请登录后查看自己的帖子' });
       return;
     }
+    const includeDeleted =
+      scope === 'public' && Boolean(currentUser?.is_admin) && request.query.includeDeleted === '1';
     const visibilityCondition =
       scope === 'mine'
         ? ` AND p.is_deleted = 0 AND p.user_id = ?${cursor ? ' AND p.id < ?' : ''}`
-        : ' AND p.is_deleted = 0 AND p.is_hidden = 0';
+        : includeDeleted
+          ? ' AND p.is_hidden = 0'
+          : ' AND p.is_deleted = 0 AND p.is_hidden = 0';
     const where =
       boardSlug === 'all'
         ? `WHERE b.is_active = 1${visibilityCondition}`
@@ -3501,7 +3562,7 @@ app.get('/api/discussion/posts', async (request, response) => {
     if (sortMode === 'hot') {
       orderBy = `p.is_pinned DESC,
                  (
-                   COUNT(DISTINCT c.id) * 3
+                   COUNT(DISTINCT CASE WHEN c.is_deleted = 0 THEN c.id END) * 3
                    + COUNT(DISTINCT CONCAT(l.post_id, ':', l.user_id, ':', l.reaction_type))
                  ) DESC,
                  p.created_at DESC,
@@ -3512,7 +3573,7 @@ app.get('/api/discussion/posts', async (request, response) => {
     }
     const [hashRows] = await pool.execute(
       `SELECT COUNT(DISTINCT p.id) AS post_count,
-              COUNT(DISTINCT c.id) AS comment_count,
+              COUNT(DISTINCT CASE WHEN c.is_deleted = 0 THEN c.id END) AS comment_count,
               COUNT(DISTINCT CONCAT(l.post_id, ':', l.user_id, ':', l.reaction_type)) AS reaction_count,
               COALESCE(MAX(UNIX_TIMESTAMP(GREATEST(
                 p.created_at,
@@ -3532,6 +3593,7 @@ app.get('/api/discussion/posts', async (request, response) => {
       sortMode,
       boardSlug,
       scope,
+      includeDeleted,
       currentUser?.id || 0,
       Number(hashRows[0]?.post_count || 0),
       Number(hashRows[0]?.comment_count || 0),
@@ -3549,7 +3611,7 @@ app.get('/api/discussion/posts', async (request, response) => {
     }
 
     const [rows] = await pool.execute(
-      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
+      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous,
               p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
@@ -3557,7 +3619,7 @@ app.get('/api/discussion/posts', async (request, response) => {
               COUNT(DISTINCT CASE WHEN l.reaction_type = 'smile' THEN l.user_id END) AS like_count,
               COUNT(DISTINCT CASE WHEN l.reaction_type = 'light' THEN l.user_id END) AS light_count,
               COUNT(DISTINCT CASE WHEN l.reaction_type = 'fireworks' THEN l.user_id END) AS fireworks_count,
-              COUNT(DISTINCT c.id) AS comment_count,
+              COUNT(DISTINCT CASE WHEN c.is_deleted = 0 THEN c.id END) AS comment_count,
               MAX(CASE WHEN my_smile.user_id IS NULL THEN 0 ELSE 1 END) AS liked_by_me,
               MAX(CASE WHEN my_light.user_id IS NULL THEN 0 ELSE 1 END) AS lighted_by_me,
               MAX(CASE WHEN my_fireworks.user_id IS NULL THEN 0 ELSE 1 END) AS fireworks_by_me,
@@ -3574,7 +3636,7 @@ app.get('/api/discussion/posts', async (request, response) => {
        LEFT JOIN discussion_post_likes my_light ON my_light.post_id = p.id AND my_light.reaction_type = 'light' AND my_light.user_id = ${currentUser ? '?' : '0'}
        LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? '?' : '0'}
        ${where}
-       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
+       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
                 b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        ORDER BY ${scope === 'mine' ? 'p.id DESC' : orderBy}
       LIMIT ${scope === 'mine' ? limit + 1 : limit}`,
@@ -3596,7 +3658,11 @@ app.get('/api/discussion/posts', async (request, response) => {
     response.json({
       hash: postsHash,
       notModified: false,
-      posts: rows.slice(0, limit).map((row) => toDiscussionPostSummary(row, currentUser?.id)),
+      posts: rows
+        .slice(0, limit)
+        .map((row) =>
+          toDiscussionPostSummary({ ...row, reveal_deleted: includeDeleted }, currentUser?.id),
+        ),
       nextCursor: scope === 'mine' && rows.length > limit ? String(rows[limit - 1].id) : null,
     });
   } catch (error) {
@@ -3611,14 +3677,15 @@ app.get('/api/discussion/posts/:id', async (request, response) => {
     const currentUser = await getOptionalAuthUser(request);
     const post = await getDiscussionPostByPublicId(request.params.id);
 
+    const includeDeleted = Boolean(currentUser?.is_admin) && request.query.includeDeleted === '1';
     response.set('Cache-Control', 'private, no-store');
-    if (!canReadPost(post, currentUser)) {
+    if (!canReadPost(post, currentUser, includeDeleted)) {
       response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
     const [rows] = await pool.execute(
-      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
+      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous,
               p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
@@ -3626,7 +3693,7 @@ app.get('/api/discussion/posts/:id', async (request, response) => {
               COUNT(DISTINCT CASE WHEN l.reaction_type = 'smile' THEN l.user_id END) AS like_count,
               COUNT(DISTINCT CASE WHEN l.reaction_type = 'light' THEN l.user_id END) AS light_count,
               COUNT(DISTINCT CASE WHEN l.reaction_type = 'fireworks' THEN l.user_id END) AS fireworks_count,
-              COUNT(DISTINCT c.id) AS comment_count,
+              COUNT(DISTINCT CASE WHEN c.is_deleted = 0 THEN c.id END) AS comment_count,
               MAX(CASE WHEN my_smile.user_id IS NULL THEN 0 ELSE 1 END) AS liked_by_me,
               MAX(CASE WHEN my_light.user_id IS NULL THEN 0 ELSE 1 END) AS lighted_by_me,
               MAX(CASE WHEN my_fireworks.user_id IS NULL THEN 0 ELSE 1 END) AS fireworks_by_me,
@@ -3644,8 +3711,8 @@ app.get('/api/discussion/posts/:id', async (request, response) => {
        LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? '?' : '0'}
        WHERE p.id = ?
          AND b.is_active = 1
-         AND p.is_deleted = 0 AND (p.is_hidden = 0 OR p.user_id = ?)
-       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
+         AND (? = 1 OR p.is_deleted = 0) AND (p.is_hidden = 0 OR p.user_id = ?)
+       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
                 b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        LIMIT 1`,
       currentUser
@@ -3659,9 +3726,10 @@ app.get('/api/discussion/posts/:id', async (request, response) => {
             currentUser.id,
             currentUser.id,
             post.id,
+            includeDeleted ? 1 : 0,
             currentUser.id,
           ]
-        : ['', '', '', 0, 0, post.id, 0],
+        : ['', '', '', 0, 0, post.id, 0, 0],
     );
 
     if (!rows[0]) {
@@ -3670,7 +3738,7 @@ app.get('/api/discussion/posts/:id', async (request, response) => {
     }
 
     response.json({
-      post: toDiscussionPostDetail(rows[0], currentUser?.id),
+      post: toDiscussionPostDetail({ ...rows[0], reveal_deleted: includeDeleted }, currentUser?.id),
     });
   } catch (error) {
     response.status(500).json({ message: '获取帖子详情失败', detail: error.message });
@@ -3720,13 +3788,23 @@ app.post('/api/discussion/posts', async (request, response) => {
       return;
     }
 
+    if (request.body.isAnonymous !== undefined && typeof request.body.isAnonymous !== 'boolean') {
+      response.status(400).json({ message: '匿名选项必须为布尔值' });
+      return;
+    }
+    const isAnonymous = request.body.isAnonymous === true;
+    if (isAnonymous && board.slug !== 'daily') {
+      response.status(400).json({ message: '仅日常分区支持匿名发帖' });
+      return;
+    }
+
     const canFeatureCreatedPost = await canModerateBoard(user, board.id);
 
     const postPid = await createUniqueDiscussionPostPid();
     const [result] = await pool.execute(
-      `INSERT INTO discussion_posts (pid, board_id, user_id, author_student_id, title, content_markdown)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [postPid, board.id, user.id, user.student_id, title, contentMarkdown],
+      `INSERT INTO discussion_posts (pid, board_id, user_id, author_student_id, title, content_markdown, is_anonymous)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [postPid, board.id, user.id, user.student_id, title, contentMarkdown, isAnonymous ? 1 : 0],
     );
     await pool.execute(
       `UPDATE users
@@ -3736,7 +3814,7 @@ app.post('/api/discussion/posts', async (request, response) => {
     );
 
     const [rows] = await pool.execute(
-      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id,
+      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous,
               p.is_pinned, p.pinned_at, p.is_featured, p.featured_at,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
@@ -3994,20 +4072,30 @@ app.get('/api/discussion/posts/:id/comments', async (request, response) => {
       return;
     }
 
+    const canModerate = await canModerateBoard(currentUser, post.board_id);
     const [rows] = await pool.execute(
-      `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at,
+      `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at, c.is_deleted,
               COALESCE(c.author_student_id, u.student_id) AS author_student_id,
-              u.student_id, u.uid, u.username, u.full_name, u.avatar_path
+              u.student_id, u.uid, u.username, u.full_name, u.avatar_path,
+              (SELECT COUNT(*) FROM discussion_comment_likes cl WHERE cl.comment_id = c.id) AS like_count,
+              EXISTS(SELECT 1 FROM discussion_comment_likes cl WHERE cl.comment_id = c.id AND cl.user_id = ?) AS liked_by_me,
+              (? = 1 OR c.user_id = ?) AS can_delete
        FROM discussion_comments c
        INNER JOIN users u ON u.id = c.user_id
        INNER JOIN discussion_posts p ON p.id = c.post_id
        WHERE c.post_id = ? AND p.is_deleted = 0 AND (p.is_hidden = 0 OR p.user_id = ?)
        ORDER BY c.created_at ASC, c.id ASC`,
-      [post.id, currentUser?.id || 0],
+      [
+        currentUser?.id || 0,
+        canModerate ? 1 : 0,
+        currentUser?.id || 0,
+        post.id,
+        currentUser?.id || 0,
+      ],
     );
 
     response.json({
-      comments: rows.map(toDiscussionComment),
+      comments: visibleComments(rows.map(toDiscussionComment)),
     });
   } catch (error) {
     response.status(500).json({ message: '获取评论失败', detail: error.message });
@@ -4026,6 +4114,11 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
 
     const parentCommentId = Number(request.body.parentCommentId || 0);
     const contentMarkdown = String(request.body.contentMarkdown || '').trim();
+
+    if (!Number.isSafeInteger(parentCommentId) || parentCommentId < 0) {
+      response.status(400).json({ message: '回复目标无效' });
+      return;
+    }
 
     if (!contentMarkdown || contentMarkdown.length > 5000) {
       response.status(400).json({ message: '评论不能为空，且长度不能超过 5000 个字符' });
@@ -4049,7 +4142,7 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
       let parentAuthorId = null;
       if (parentCommentId) {
         const [parentRows] = await connection.execute(
-          'SELECT id, user_id FROM discussion_comments WHERE id = ? AND post_id = ? LIMIT 1 FOR UPDATE',
+          'SELECT id, user_id FROM discussion_comments WHERE id = ? AND post_id = ? AND is_deleted = 0 LIMIT 1 FOR UPDATE',
           [parentCommentId, post.id],
         );
         if (!parentRows[0]) {
@@ -4072,7 +4165,7 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
     });
 
     const [rows] = await pool.execute(
-      `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at,
+      `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at, c.is_deleted,
               COALESCE(c.author_student_id, u.student_id) AS author_student_id,
               u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        FROM discussion_comments c
@@ -4082,7 +4175,7 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
       [result.insertId],
     );
 
-    const comment = toDiscussionComment(rows[0]);
+    const comment = toDiscussionComment({ ...rows[0], can_delete: true });
     const maxPending = user.username !== MAX_AGENT_USER.username && shouldAskMax(contentMarkdown);
 
     if (maxPending) {

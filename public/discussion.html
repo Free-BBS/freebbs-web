@@ -146,7 +146,6 @@
         <section class="settings-shell" aria-label="讨论">
           <header class="discussion-page-heading">
             <div>
-              <p class="discussion-page-eyebrow">Community Commons</p>
               <h1>讨论区</h1>
               <p>把问题、思路和经验沉淀下来，也为后来者留下可以继续追问的上下文。</p>
             </div>
@@ -239,6 +238,9 @@
                     </button>
                   </div>
                   <div class="discussion-feed-toolbar-actions">
+                    <label id="discussion-deleted-filter" class="discussion-option hidden"
+                      ><input id="discussion-show-deleted" type="checkbox" />显示已删除帖子</label
+                    >
                     <p
                       id="discussion-filter-status"
                       role="status"
@@ -331,6 +333,10 @@
                       required
                     ></textarea>
                   </label>
+                  <label id="discussion-anonymous-option" class="discussion-option hidden">
+                    <input id="discussion-anonymous" type="checkbox" />匿名发帖
+                    <small>仅日常分区 · 公开显示“匿名用户”，管理员可查真实作者</small>
+                  </label>
                   <div class="discussion-compose-actions">
                     <p
                       class="discussion-message"
@@ -383,19 +389,16 @@
                 aria-label="讨论统计"
               >
                 <section class="discussion-stats-section">
-                  <p class="discussion-kicker">Boards</p>
                   <h2>版块</h2>
                   <div class="discussion-board-list" id="discussion-board-list"></div>
                 </section>
 
                 <section class="discussion-stats-section">
-                  <p class="discussion-kicker">Posts</p>
                   <h2>发帖统计</h2>
                   <strong class="discussion-stats-number" id="discussion-stats-posts">-</strong>
                 </section>
 
                 <section class="discussion-stats-section">
-                  <p class="discussion-kicker">Likes</p>
                   <h2>获赞统计</h2>
                   <strong class="discussion-stats-number" id="discussion-stats-likes">-</strong>
                 </section>

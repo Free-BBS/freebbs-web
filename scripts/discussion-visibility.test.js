@@ -340,3 +340,36 @@ for (const change of ['account', 'scope']) {
     assert.equal(h.context.discussionFilterStatus.textContent, 'current view');
   });
 }
+
+test('administrator deleted-post inspection survives list caching and detail revalidation', async () => {
+  const h = harness();
+  h.context.userState.isAdmin = true;
+  h.state.showDeleted = true;
+  const pending = h.context.loadDiscussionPosts();
+  assert.equal(
+    new URL(h.requests.at(-1).url, 'http://local').searchParams.get('includeDeleted'),
+    '1',
+  );
+  h.requests.at(-1).resolve({ posts: [{ id: 'DELETED', isDeleted: true }], hash: 'admin' });
+  await pending;
+  assert.equal(h.state.postCache.has('DELETED'), true);
+  const detail = h.context.loadDiscussionDetail('DELETED');
+  assert.equal(
+    new URL(h.requests.at(-1).url, 'http://local').searchParams.get('includeDeleted'),
+    '1',
+  );
+  h.requests
+    .at(-1)
+    .resolve({ post: { id: 'DELETED', isDeleted: true, contentMarkdown: 'original' } });
+  await detail;
+  assert.equal(h.state.activePost.contentMarkdown, 'original');
+  h.state.scope = 'mine';
+  const mine = h.context.loadDiscussionPosts();
+  assert.equal(
+    new URL(h.requests.at(-1).url, 'http://local').searchParams.has('includeDeleted'),
+    false,
+  );
+  h.requests.at(-1).resolve({ posts: [{ id: 'DELETED', isDeleted: true }] });
+  await mine;
+  assert.equal(h.state.posts.length, 0);
+});

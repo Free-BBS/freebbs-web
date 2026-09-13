@@ -29,6 +29,11 @@ function rotate(point, orientation) {
 test('every catalog pin keeps its terminal identity while all rotations and mirrors move its coordinates', () => {
   const special = {
     ground: [[0, -28]],
+    vcc: [[0, 40]],
+    vdd: [[0, 40]],
+    vss: [[0, -40]],
+    vee: [[0, -40]],
+    fixed_voltage: [[0, 40]],
     junction: [[0, 0]],
     bjt: [
       [0, -40],
@@ -263,7 +268,7 @@ test('rotated and mirrored names/values stay upright and outside the full symbol
 
 test('signed current arrows and moving paths follow terminal direction through every mirror and rotation', () => {
   for (const type of Object.keys(engine.catalog).filter(
-    (value) => !['ground', 'junction'].includes(value),
+    (value) => engine.catalog[value].pins.length > 1,
   )) {
     for (const orientation of orientations) {
       const part = component(type, orientation);

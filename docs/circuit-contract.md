@@ -14,6 +14,8 @@
 
 - junction: [连接点]，params={}，引脚位于元件坐标原点，无支路和独立测量通道。
 - ground: [地]
+- vcc / vdd / vss / vee: 单引脚网络符号，同类型在当前文档内合并网络，不指定电压、不自动接地；无参数。
+- fixed_voltage: [电平]，唯一参数 dc（默认 5 V），理想直流电源相对隐含参考地；AC 幅值为 0。
 - resistor, capacitor, inductor, voltage, current, diode, nonlinear, voltmeter, ammeter, oscilloscope: [正,负]；二极管正端为阳极。
 - vcvs, vccs: [输出正,输出负,控制正,控制负]
 - ccvs, cccs: [输出正,输出负]；params.control 为电压源或电流表元件 ID，对应该元件正端流向负端的电流。
@@ -36,7 +38,7 @@
 
 分析：`{type:'dc'}`；`{type:'transient',stop,step,initial:'zero'|'operating-point'}`；`{type:'sweep',componentId:'V1',parameter:'dc',start:0,stop:5,points:101}`；`{type:'ac',start:10,stop:1e5,points:101,scale:'log'|'linear'}`。扫描参数也支持 beta、w、l、k 等数值参数。瞬态最多100001点，参数和AC扫描最多2000点，非收敛/浮空/非法公式须可读报错。
 
-结果：`{analysis, x:[], xLabel, xUnit, traces:[{id,label,unit,values:[],phase?:[]}], frames:[{voltages:{net:value},currents:{componentId:value}}], warnings:[]}`。每个元件都有 `V:<id>`（正负引脚压差；晶体管取首末引脚）和 `I:<id>` 的 trace，ground除外。AC values 为幅值，phase为角度；frames可以只包含直流工作点，动态图只播放时域帧。仪表无独立电流量测时为理想开路，电流表串接0V源。所有值必须有限。
+结果：`{analysis, x:[], xLabel, xUnit, traces:[{id,label,unit,values:[],phase?:[]}], frames:[{voltages:{net:value},currents:{componentId:value}}], warnings:[]}`。每个元件都有 `V:<id>`（正负引脚压差；晶体管取首末引脚）和 `I:<id>` 的 trace，ground、junction 和电源网络符号除外。AC values 为幅值，phase为角度；frames可以只包含直流工作点，动态图只播放时域帧。仪表无独立电流量测时为理想开路，电流表串接0V源。所有值必须有限。
 
 电流动画与 `I:<id>` 的符号一致：两端元件正向为 pin 0→1，BJT 为集电极→发射极，MOS 为漏极→源极；运放正向为流入输出端的支路电流（输出端→内部参考地）。负值同时反转流动路径和箭头。旋转、镜像只改变这些方向在画布上的朝向，不改变仿真读数；独立电流源符号内箭头表示参数的正参考方向，实际负电流由动画反向表示。
 
