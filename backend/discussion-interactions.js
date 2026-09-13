@@ -1,3 +1,5 @@
+const { canReadPost } = require('./discussion-visibility');
+
 const schemaReady = new WeakMap();
 const anonymousAuthor = () => ({
   id: null,
@@ -96,11 +98,11 @@ function registerDiscussionInteractions(app, dependencies) {
       const result = await withDatabaseTransaction(async (connection) => {
         // Use the same post -> comment lock order as reply creation/deletion.
         const [posts] = await connection.execute(
-          'SELECT id, pid, title, board_id, is_deleted FROM discussion_posts WHERE id = ? FOR UPDATE',
+          'SELECT id, pid, title, board_id, is_deleted, is_hidden FROM discussion_posts WHERE id = ? FOR UPDATE',
           [found[0].post_id],
         );
         const post = posts[0];
-        if (!post || post.is_deleted) throw fail('帖子不存在', 404);
+        if (!post || post.is_deleted || post.is_hidden) throw fail('帖子不存在', 404);
         const [rows] = await connection.execute(
           'SELECT id, user_id, is_deleted, content_markdown FROM discussion_comments WHERE id = ? FOR UPDATE',
           [id],
@@ -171,7 +173,7 @@ function registerDiscussionInteractions(app, dependencies) {
       if (!admin) return;
       await ensureDiscussionTables();
       const post = await getDiscussionPostByPublicId(request.params.id);
-      if (!post) throw fail('帖子不存在', 404);
+      if (!canReadPost(post, admin, true)) throw fail('帖子不存在', 404);
       const [rows] = await pool.execute(
         'SELECT u.id, u.uid, u.username, u.student_id FROM users u WHERE u.id = ?',
         [post.user_id],

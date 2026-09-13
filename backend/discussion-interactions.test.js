@@ -82,3 +82,121 @@ test('deleted comments redact content and identity and only retain ancestors of 
   assert.deepEqual(visibleComments(comments.map((c) => ({ ...c, isDeleted: true }))), []);
   assert.deepEqual(comments, before);
 });
+
+function interactionHarness({ hidden = 0, deleted = 0, user = { id: 8 }, raceHide = false } = {}) {
+  const { registerDiscussionInteractions } = require('./discussion-interactions');
+  const routes = new Map();
+  const queries = [];
+  let notified = false;
+  const post = {
+    id: 1,
+    pid: 'PUBLIC1',
+    user_id: 7,
+    board_id: 1,
+    is_hidden: hidden,
+    is_deleted: deleted,
+  };
+  const database = {
+    async execute(sql, params) {
+      queries.push({ sql, params });
+      assert.equal((sql.match(/\?/g) || []).length, params.length);
+      if (sql.startsWith('SELECT post_id')) return [[{ post_id: 1 }]];
+      if (sql.includes('FROM discussion_posts') && sql.includes('FOR UPDATE')) {
+        if (raceHide) post.is_hidden = 1;
+        assert.match(sql, /is_hidden/);
+        return [[post]];
+      }
+      if (sql.startsWith('SELECT id, user_id'))
+        return [[{ id: 30, user_id: 8, is_deleted: 0, content_markdown: 'private comment' }]];
+      if (sql.startsWith('SELECT user_id')) return [[]];
+      if (sql.startsWith('SELECT COUNT')) return [[{ total: 1 }]];
+      if (sql.includes('FROM users')) return [[{ id: 7, username: 'author' }]];
+      return [{ affectedRows: 1 }];
+    },
+  };
+  registerDiscussionInteractions(
+    Object.fromEntries(
+      ['get', 'post', 'delete'].map((method) => [
+        method,
+        (url, fn) => routes.set(`${method} ${url}`, fn),
+      ]),
+    ),
+    {
+      pool: database,
+      requireAuth: async () => user,
+      requireAdmin: async () => user,
+      ensureDiscussionTables: async () => {},
+      withDatabaseTransaction: (fn) => fn(database),
+      canModerateBoard: async () => Boolean(user.is_admin),
+      getDiscussionPostByPublicId: async () => post,
+      notifications: {
+        notifyCommentReaction: async () => {
+          notified = true;
+        },
+      },
+    },
+  );
+  return {
+    queries,
+    get notified() {
+      return notified;
+    },
+    async request(method, route) {
+      const response = {
+        statusCode: 200,
+        status(code) {
+          this.statusCode = code;
+          return this;
+        },
+        set() {
+          return this;
+        },
+        json(data) {
+          this.data = data;
+          return this;
+        },
+      };
+      await routes.get(`${method} /api${route}`)({ params: { id: '30' } }, response);
+      return response;
+    },
+  };
+}
+
+for (const user of [{ id: 7 }, { id: 8 }, { id: 9, is_admin: true }]) {
+  for (const [method, route] of [
+    ['post', '/discussion/comments/:id/like'],
+    ['delete', '/discussion/comments/:id'],
+  ]) {
+    test(`hidden comment ${method} denies user ${user.id} under the post lock`, async () => {
+      for (const options of [{ hidden: 1 }, { raceHide: true }, { deleted: 1 }]) {
+        const h = interactionHarness({ ...options, user });
+        assert.equal((await h.request(method, route)).statusCode, 404);
+        assert.equal(h.notified, false);
+        assert.equal(
+          h.queries.some((q) => /^(INSERT|UPDATE|DELETE)/.test(q.sql)),
+          false,
+        );
+      }
+    });
+  }
+}
+
+test('public comment likes and author deletion still work', async () => {
+  for (const [method, route] of [
+    ['post', '/discussion/comments/:id/like'],
+    ['delete', '/discussion/comments/:id'],
+  ]) {
+    const h = interactionHarness();
+    assert.equal((await h.request(method, route)).statusCode, 200);
+    assert.equal(h.notified, method === 'post');
+    assert.ok(h.queries.some((q) => /^(INSERT|UPDATE)/.test(q.sql)));
+  }
+});
+
+test('administrator author inspection cannot bypass hidden posts, including deleted ones', async () => {
+  for (const deleted of [0, 1]) {
+    const h = interactionHarness({ hidden: 1, deleted, user: { id: 9, is_admin: true } });
+    assert.equal((await h.request('get', '/admin/discussion/posts/:id/author')).statusCode, 404);
+    assert.equal(h.queries.length, 0);
+  }
+});

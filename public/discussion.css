@@ -18,6 +18,66 @@ body.discussion-page {
   font-family: var(--discussion-font-sans);
 }
 
+/* Keep author, board, date and reaction controls centered on the same row. */
+body.discussion-page .discussion-detail-meta {
+  align-items: center;
+}
+
+body.discussion-page .discussion-detail-meta > .discussion-author-link {
+  align-self: center;
+  margin-block: 0;
+}
+
+body.discussion-page .discussion-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+body.discussion-page .discussion-scope p {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--discussion-muted);
+  font-size: 0.9rem;
+}
+
+body.discussion-page .discussion-scope button,
+body.discussion-page .discussion-visibility-button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--discussion-line-strong);
+  border-radius: 12px;
+  background: var(--discussion-accent-soft);
+  color: var(--discussion-text);
+  font: 600 1rem/1.5 var(--font-ui);
+  cursor: pointer;
+}
+
+body.discussion-page .discussion-hidden-badge,
+body.discussion-page .discussion-privacy-note {
+  padding: 8px 12px;
+  border: 1px solid var(--discussion-line-strong);
+  border-radius: 12px;
+  background: var(--discussion-accent-soft);
+  color: var(--discussion-text);
+  font: 500 0.9rem/1.6 var(--font-ui);
+}
+
+body.discussion-page .discussion-comment-form[hidden] {
+  display: none;
+}
+
+body.discussion-page #discussion-my-more[hidden] {
+  display: none;
+}
+
+body.discussion-page #discussion-my-more {
+  margin-top: 18px;
+  align-self: start;
+}
+
 body.discussion-page .discussion-page-heading h1,
 body.discussion-page .discussion-board-about h2,
 body.discussion-page .discussion-stats-section h2,
