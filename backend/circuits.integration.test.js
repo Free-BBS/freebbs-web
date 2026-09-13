@@ -603,5 +603,108 @@ test(
         );
       },
     );
+    await t.test('workbench history, forks, restore conflicts and private reports', async () => {
+      const workbenchOwner = await createUser('workbench_owner', '2026000599');
+      await api('/ai/chat', {
+        token: workbenchOwner.token,
+        method: 'POST',
+        body: { source: 'circuit_report', message: '完善这份实验报告', agent: 'navigation' },
+      });
+      assert.equal(agentRequests.at(-1).agent, 'general_chat');
+      assert.equal(agentRequests.at(-1).execute_subagent, 'none');
+      const first = (
+        await api('/circuits', {
+          token: workbenchOwner.token,
+          method: 'POST',
+          expected: 201,
+          body: { ...draft('存档测试'), message: '基线' },
+        })
+      ).circuit;
+      const second = (
+        await api(`/circuits/${first.cid}`, {
+          token: workbenchOwner.token,
+          method: 'PUT',
+          body: { ...draft('测试元件'), expectedRevision: 1, message: '加入测试元件' },
+        })
+      ).circuit;
+      const fork = (
+        await api(`/circuits/${first.cid}/fork`, {
+          token: other.token,
+          method: 'POST',
+          expected: 201,
+          body: { revision: 1 },
+        })
+      ).circuit;
+      assert.notEqual(fork.cid, first.cid);
+      assert.equal(fork.owner.uid, other.user.uid);
+      assert.deepEqual(fork.document, first.document);
+      const log = await api(`/circuits/${first.cid}/history`);
+      assert.equal(log.entries[0].message, '加入测试元件');
+      assert.equal(log.branches[0].cid, fork.cid);
+      const branchLog = await api(`/circuits/${fork.cid}/history`);
+      assert.equal(branchLog.entries[0].sourceCid, first.cid);
+      await api(`/circuits/${first.cid}/restore`, {
+        token: other.token,
+        method: 'POST',
+        expected: 403,
+        body: { revision: 1, expectedRevision: 2 },
+      });
+      await api(`/circuits/${first.cid}/restore`, {
+        token: workbenchOwner.token,
+        method: 'POST',
+        expected: 409,
+        body: { revision: 1, expectedRevision: 1 },
+      });
+      const restored = (
+        await api(`/circuits/${first.cid}/restore`, {
+          token: workbenchOwner.token,
+          method: 'POST',
+          body: { revision: 1, expectedRevision: 2 },
+        })
+      ).circuit;
+      assert.equal(restored.revision, 3);
+      assert.equal(restored.title, first.title);
+      assert.equal((await api(`/circuits/${first.cid}?revision=2`)).circuit.title, second.title);
+      const reportBody = {
+        title: '实验报告',
+        markdown: '# 原始数据\n![图像](/uploads/test.webp)',
+        circuitRevision: 1,
+      };
+      const report = (
+        await api(`/circuits/${first.cid}/reports`, {
+          token: workbenchOwner.token,
+          method: 'POST',
+          expected: 201,
+          body: reportBody,
+        })
+      ).report;
+      await api(`/circuits/${first.cid}/reports/${report.id}`, {
+        token: other.token,
+        expected: 404,
+      });
+      assert.deepEqual(
+        (await api(`/circuits/${first.cid}/reports`, { token: other.token })).reports,
+        [],
+      );
+      const edited = (
+        await api(`/circuits/${first.cid}/reports/${report.id}`, {
+          token: workbenchOwner.token,
+          method: 'PUT',
+          body: { ...reportBody, markdown: '# 编辑后', expectedVersion: 1 },
+        })
+      ).report;
+      assert.equal(edited.version, 2);
+      await api(`/circuits/${first.cid}/reports/${report.id}`, {
+        token: workbenchOwner.token,
+        method: 'PUT',
+        expected: 409,
+        body: { ...reportBody, expectedVersion: 1 },
+      });
+      assert.equal(
+        (await api(`/circuits/${first.cid}/reports/${report.id}`, { token: workbenchOwner.token }))
+          .report.markdown,
+        '# 编辑后',
+      );
+    });
   },
 );

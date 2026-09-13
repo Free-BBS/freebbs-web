@@ -32,6 +32,10 @@ node --check public/circuit-default-examples.js
 node --check public/circuit-discussion.js
 node --check public/circuit-engine.js
 node --check public/circuit-plot.js
+node --check public/circuit-workbench.js
+node --check public/circuit-report.js
+node --check public/circuit-waveform-import.js
+node --check backend/circuit-workbench.js
 node --check public/circuit-plot-controls.js
 node --check public/circuit-annotations.js
 node --check public/circuit-annotation-controls.js

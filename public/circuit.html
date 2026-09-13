@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/course-upload.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
+    <link rel="stylesheet" href="/circuit-workbench.css" />
     <link rel="stylesheet" href="/circuit.css" />
     <link rel="stylesheet" href="/circuit-shortcuts.css" />
     <link rel="stylesheet" href="/circuit-recognition.css" />
@@ -623,6 +624,11 @@
                 </p>
               </section>
 
+              <div class="circuit-workbench-actions circuit-actions">
+                <button id="circuit-history-open" type="button">版本历史 / Fork</button>
+                <button id="circuit-report-open" type="button">报告编辑器</button>
+                <button id="circuit-report-generate" type="button">一键生成报告</button>
+              </div>
               <section
                 class="circuit-results"
                 id="circuit-results"
@@ -656,6 +662,8 @@
                   ><span id="circuit-annotation-pick-hint" class="circuit-parameter-hint"></span>
                 </div>
                 <div class="circuit-waveform" id="circuit-waveform"></div>
+                <div id="circuit-extra-plots"></div>
+                <button id="circuit-add-plot" type="button">＋ 添加一张图</button>
                 <section
                   id="circuit-annotations"
                   class="circuit-annotations"
@@ -1112,6 +1120,35 @@
         </section>
       </main>
     </div>
+    <dialog id="circuit-source-dialog" class="circuit-workbench-dialog">
+      <header>
+        <h2>导入任意波形</h2>
+        <button data-close type="button">关闭</button>
+      </header>
+      <p>时间单位为秒，波形单位为 V / A；最多 4096 点。</p>
+      <label>选择数据文件<input type="file" data-file accept=".csv,.txt,.mat,.m" /></label>
+      <div data-mapping hidden>
+        <label>时间列<select data-time></select></label
+        ><label>波形列<select data-values></select></label
+        ><button data-apply type="button">应用波形</button>
+      </div>
+      <p data-status role="status"></p>
+    </dialog>
+    <dialog id="circuit-history-dialog" class="circuit-workbench-dialog">
+      <header>
+        <h2>版本历史</h2>
+        <button data-close type="button">关闭</button>
+      </header>
+      <div class="circuit-actions">
+        <label
+          >存档说明<input data-message maxlength="240" placeholder="如：加入测试电阻前" /></label
+        ><button data-checkpoint type="button">保存存档</button>
+      </div>
+      <p data-status role="status"></p>
+      <ol data-log class="circuit-version-log"></ol>
+      <button data-more type="button" hidden>更早的版本</button>
+      <div data-branches></div>
+    </dialog>
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
     <script src="/vendor/marked/lib/marked.umd.js"></script>
@@ -1132,7 +1169,10 @@
     <script src="/circuit-history.js"></script>
     <script src="/circuit-shortcuts.js"></script>
     <script src="/circuit-viewport.js"></script>
+    <script src="/circuit-waveform-import.js"></script>
     <script src="/circuit.js"></script>
+    <script src="/circuit-workbench.js"></script>
+    <script src="/circuit-report.js"></script>
     <script src="/circuit-recognition.js"></script>
     <script src="/circuit-agent.js"></script>
     <script src="/circuit-chat.js"></script>

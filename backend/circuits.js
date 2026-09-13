@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+const { ensureWorkbenchTables, registerWorkbench } = require('./circuit-workbench');
 const express = require('express');
 const { validateDocument } = require('../public/circuit-engine');
 
@@ -36,6 +37,7 @@ async function ensureCircuitTables(pool) {
     CONSTRAINT fk_circuit_revisions_circuit FOREIGN KEY (cid) REFERENCES circuits (cid) ON DELETE CASCADE,
     CONSTRAINT fk_circuit_revisions_author FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL
   )`);
+  await ensureWorkbenchTables(pool);
 }
 
 function assertSafeJson(value) {
@@ -65,7 +67,9 @@ function validateCircuitInput(body, { updating = false } = {}) {
   if (!body || Array.isArray(body) || typeof body !== 'object') {
     throw new CircuitError('请提供电路标题、说明和文档');
   }
-  const fields = new Set(['title', 'description', 'document']);
+  const fields = new Set(['title', 'description', 'document', 'message']);
+  if (body.message !== undefined && (typeof body.message !== 'string' || body.message.length > 240))
+    throw new CircuitError('存档说明最多 240 字。');
   if (updating) fields.add('expectedRevision');
   if (Object.keys(body).some((key) => !fields.has(key))) {
     throw new CircuitError('电路请求包含不支持的字段');
@@ -105,6 +109,7 @@ function validateCircuitInput(body, { updating = false } = {}) {
     throw new CircuitError(error.message || '电路文档无效');
   }
   return {
+    ...(body.message === undefined ? {} : { message: body.message.trim() }),
     title: body.title.trim(),
     description: description.trim(),
     document,
@@ -187,6 +192,11 @@ async function insertRevision(connection, cid, revision, data, userId) {
      VALUES (?, ?, ?, ?, ?, ?)`,
     [cid, revision, data.title, data.description, JSON.stringify(data.document), userId],
   );
+  if (data.message)
+    await connection.execute(
+      'INSERT INTO circuit_revision_events (cid, revision, kind, message) VALUES (?, ?, ?, ?)',
+      [cid, revision, 'save', data.message],
+    );
 }
 
 function createCircuitsRouter({ pool, requireAuth }) {
@@ -309,6 +319,18 @@ function createCircuitsRouter({ pool, requireAuth }) {
       response.json({ circuit });
     }),
   );
+  registerWorkbench(router, {
+    pool,
+    requireAuth,
+    handle,
+    CircuitError,
+    validateCid,
+    readIntegerQuery,
+    readCircuit,
+    withTransaction,
+    insertRevision,
+    canEditCircuit,
+  });
   return router;
 }
 

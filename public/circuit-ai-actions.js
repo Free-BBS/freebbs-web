@@ -233,7 +233,23 @@
         case 'set_plot': {
           assertFields(
             action.display,
-            ['mode', 'traceIds', 'ch1', 'ch2', 'xyX', 'xyY', 'math', 'phase', 'ranges'],
+            [
+              'mode',
+              'traceIds',
+              'ch1',
+              'ch2',
+              'xyX',
+              'xyY',
+              'math',
+              'phase',
+              'ranges',
+              'xScale',
+              'yScale',
+              'rightScale',
+              'rightTraceIds',
+              'plots',
+              'title',
+            ],
             '图像操作',
           );
           if (!Object.keys(action.display).length) throw new Error('图像操作缺少要修改的设置。');
@@ -582,6 +598,11 @@
       case 'set_plot': {
         const settings = action.display;
         const details = [];
+        for (const axis of ['xScale', 'yScale', 'rightScale'])
+          if (settings[axis]) details.push(`${axis}: ${settings[axis]}`);
+        if (settings.plots) details.push(`附加 ${settings.plots.length} 张图`);
+        if (settings.rightTraceIds)
+          details.push(`右轴 ${settings.rightTraceIds.join('、') || '无'}`);
         if (settings.mode) details.push(settings.mode === 'xy' ? 'X–Y 模式' : 'X–T 模式');
         for (const key of ['ch1', 'ch2', 'xyX', 'xyY'])
           if (Object.hasOwn(settings, key))

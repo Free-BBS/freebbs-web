@@ -78,6 +78,8 @@
     expression: '伏安关系 i(u)',
     k: '特性系数 k',
     parameterSet: '矩阵类型',
+    interpolation: '插值方式',
+    repeat: '播放方式',
   };
   const state = {
     viewport,
@@ -819,6 +821,17 @@
         ['dc', '直流'],
         ['sine', '正弦'],
         ['pulse', '脉冲'],
+        ['arbitrary', '任意波形 / 文件'],
+      ];
+    if (key === 'interpolation')
+      options = [
+        ['linear', '线性插值'],
+        ['step', '阶梯保持'],
+      ];
+    if (key === 'repeat')
+      options = [
+        ['hold', '单次 · 末值保持'],
+        ['repeat', '循环播放'],
       ];
     if (key === 'parameterSet')
       options = [
@@ -900,16 +913,29 @@
     }
     if (component.type === 'oscilloscope2')
       return '<p class="circuit-parameter-hint">CH1+ / CH1− 和 CH2+ / CH2− 分别测量两路差分电压，理想高输入阻抗。运行后在“波形与读数”中选择 X–T 或 X–Y 模式。</p>';
-    return Object.entries(component.params)
-      .filter(([key]) => {
-        if (!['voltage', 'current'].includes(component.type)) return true;
-        if (key === 'duty') return component.params.waveform === 'pulse';
-        return (
-          component.params.waveform !== 'dc' || !['amplitude', 'frequency', 'delay'].includes(key)
-        );
-      })
-      .map(([key, value]) => parameterInput(component, key, value))
-      .join('');
+    return (
+      Object.entries(component.params)
+        .filter(([key]) => {
+          if (!['voltage', 'current'].includes(component.type)) return true;
+          if (key === 'samples') return false;
+          if (['interpolation', 'repeat'].includes(key))
+            return component.params.waveform === 'arbitrary';
+          if (
+            component.params.waveform === 'arbitrary' &&
+            ['amplitude', 'frequency', 'phase', 'duty'].includes(key)
+          )
+            return false;
+          if (key === 'duty') return component.params.waveform === 'pulse';
+          return (
+            component.params.waveform !== 'dc' || !['amplitude', 'frequency', 'delay'].includes(key)
+          );
+        })
+        .map(([key, value]) => parameterInput(component, key, value))
+        .join('') +
+      (['voltage', 'current'].includes(component.type)
+        ? `<button type="button" data-import-source="${escapeHtml(component.id)}" ${state.editable ? '' : 'disabled'}>导入 CSV / MATLAB 波形</button><p class="circuit-parameter-hint">${component.params.samples ? `${JSON.parse(component.params.samples).length} 个波形点已随电路保存。` : '支持 CSV、MAT v6/v7、.m 数值数组。'}任意波形值叠加直流偏置；DC / AC 分析仍使用直流值 / AC 幅值。</p>`
+        : '')
+    );
   }
 
   function syncParameterPopover({ show = false, focus = false } = {}) {
@@ -1185,6 +1211,9 @@
     if (p.waveform === 'sine') {
       const amplitude = Math.abs(p.amplitude);
       text = `正弦输出 = 直流偏置 + 峰值 × sin(2π × 频率 × (t − 延迟) + 相位)。范围 ${formatNumber(p.dc - amplitude, unit)} 至 ${formatNumber(p.dc + amplitude, unit)}；不需要占空比。`;
+    } else if (p.waveform === 'arbitrary') {
+      text =
+        '文件波形叠加直流偏置，按时间列插值。循环周期为首末时间之差，单次播放在结束后保持末值。';
     } else if (p.waveform === 'pulse') {
       text = `脉冲在 ${formatNumber(p.dc, unit)} 与 ${formatNumber(p.dc + p.amplitude, unit)} 之间切换；占空比表示高电平占一个周期的比例。`;
     }
@@ -1199,6 +1228,7 @@
 
   function validateParameterInputs() {
     if (state.result && state.plotControls?.validate() === false) return false;
+    if (state.result && window.FreeBbsCircuitPanels?.validate() === false) return false;
     if (state.result && state.annotationControls?.commitPending() === false) return false;
     if (window.FreeBbsCircuitParameterPopover?.reportValidity?.() === false) return false;
     if ($('parameters').checkValidity()) return true;
@@ -1706,14 +1736,14 @@
                 const at =
                   count === 1 ? 0 : Math.round((index * (trace.values.length - 1)) / (count - 1));
                 return {
-                  x: state.result.x[at],
+                  x: (trace.x || state.result.x)[at],
                   value: trace.values[at],
                   ...(Number.isFinite(trace.phase?.[at]) ? { phase: trace.phase[at] } : {}),
                 };
               }).filter((sample) => Number.isFinite(sample.x) && Number.isFinite(sample.value));
               const latest = trace.values.at(-1);
               const point = (index, values = trace.values) => ({
-                x: state.result.x[index],
+                x: (trace.x || state.result.x)[index],
                 value: values[index],
               });
               const phasePoints = {};
@@ -1730,7 +1760,11 @@
               }
               return {
                 id: trace.id,
-                label: trace.label.slice(0, 120),
+                label:
+                  `${trace.label}${trace.domain === 'frequency' ? '（FFT · 横轴 Hz）' : ''}`.slice(
+                    0,
+                    120,
+                  ),
                 unit: trace.unit.slice(0, 24),
                 ...(minIndex >= 0 ? { minPoint: point(minIndex) } : {}),
                 ...(maxIndex >= 0 ? { maxPoint: point(maxIndex) } : {}),
@@ -1751,6 +1785,7 @@
       generation: state.generation,
       cid: state.cid,
       revision: state.revision,
+      dirty: state.dirty || state.plotModified,
       ...metadata(),
       selection: {
         ...(state.selectedId ? { componentId: state.selectedId } : {}),
@@ -2139,6 +2174,7 @@
     const display = state.plotDisplay || {};
     if (!state.traceIds.length && display.mode !== 'xy') {
       $('waveform').textContent = '选择至少一条曲线查看结果。';
+      window.FreeBbsCircuitPanels?.update(state.result, display);
       return;
     }
     state.chart = renderer.renderWaveform($('waveform'), state.plotResult || state.result, {
@@ -2148,8 +2184,11 @@
       onAnnotationSelect: (id) => state.annotationControls?.select(id),
       traceIds: state.traceIds,
       phase: $('show-phase').checked,
-      logX: state.document.analysis.type === 'ac' && state.document.analysis.scale === 'log',
+      logX: display.xScale
+        ? display.xScale === 'log'
+        : state.document.analysis.type === 'ac' && state.document.analysis.scale === 'log',
     });
+    window.FreeBbsCircuitPanels?.update(state.result, display);
     $('waveform')
       .querySelectorAll('[data-trace-id]')
       .forEach((chart) => {
@@ -2325,6 +2364,8 @@
   function capturePlotSettings() {
     if (state.result && state.plotControls?.read && state.editable) {
       const current = state.plotControls.read();
+      if (window.FreeBbsCircuitPanels && current.plots)
+        current.plots = window.FreeBbsCircuitPanels.read();
       if (JSON.stringify(current) !== JSON.stringify(state.plotDisplay))
         updatePlot(current, { persist: true });
     }
@@ -2339,7 +2380,7 @@
     }
   }
 
-  async function saveCircuit() {
+  async function saveCircuit({ message } = {}) {
     if (state.saving || !state.editable) return;
     if (!validateParameterInputs()) return;
     capturePlotSettings();
@@ -2378,6 +2419,7 @@
           body: JSON.stringify({
             title,
             description,
+            ...(message ? { message } : {}),
             document: doc,
             ...(state.cid ? { expectedRevision: state.revision } : {}),
           }),
@@ -2405,6 +2447,7 @@
         `已保存公开版本 ${state.revision}${state.dirty ? '；保存期间的新修改仍在草稿中' : '，可复制 Markdown 引用'}。`,
         'success',
       );
+      return circuit;
     } catch (error) {
       if (generation !== state.generation) return;
       state.dirty = true;
@@ -2621,12 +2664,13 @@
     const result = state.plotResult || state.result;
     const columns = [{ label: `${result.xLabel} (${result.xUnit || ''})`, values: result.x }];
     result.traces.forEach((trace) => {
+      if (trace.x) columns.push({ label: `${trace.label} 频率 (Hz)`, values: trace.x });
       columns.push({ label: `${trace.label} (${trace.unit})`, values: trace.values });
       if (trace.phase) columns.push({ label: `${trace.label} 相位 (°)`, values: trace.phase });
     });
     const quote = (value) => `"${String(value).replace(/"/g, '""')}"`;
     const rows = [columns.map((column) => quote(column.label)).join(',')];
-    result.x.forEach((_, index) =>
+    Array.from({ length: Math.max(...columns.map((c) => c.values.length)) }).forEach((_, index) =>
       rows.push(
         columns
           .map((column) => (Number.isFinite(column.values[index]) ? column.values[index] : ''))
@@ -3089,6 +3133,30 @@
   }
 
   window.FreeBbsCircuitEditor = {
+    importSource(id, samples, snapshot) {
+      if (
+        !state.editable ||
+        state.saving ||
+        state.agentRun ||
+        snapshot.generation !== state.generation ||
+        snapshot.editVersion !== state.editVersion
+      )
+        throw new Error('电路已更改，请重新导入波形。');
+      engine.parseSourceSamples(samples);
+      const component = state.document.components.find(
+        (item) => item.id === id && ['voltage', 'current'].includes(item.type),
+      );
+      if (!component) throw new Error('电源不存在。');
+      component.params = { ...component.params, waveform: 'arbitrary', samples, dc: 0 };
+      changed();
+      renderInspector();
+      renderSchematic();
+      setStatus('任意波形已导入；直流偏置设为 0，切换瞬态分析后运行。');
+    },
+    getResult: () => state.result,
+    updateDisplay: (display) => updatePlot(display, { persist: true }),
+    save: saveCircuit,
+    reload: loadCircuit,
     getRecognitionContext,
     importRecognizedCircuit,
     beautify: beautifyCircuit,

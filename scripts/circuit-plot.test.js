@@ -327,6 +327,7 @@ test('the same standalone module works inside browser sandboxes without CommonJS
   assert.deepEqual(Object.keys(context.FreeBbsCircuitPlot).sort(), [
     'buildResult',
     'compileExpression',
+    'fft',
     'limits',
     'resolveDisplay',
   ]);
