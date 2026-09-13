@@ -290,6 +290,7 @@ function buildCircuitAssistantPayload(input) {
     execute_subagent: 'none',
     combine_general_chat: false,
     stream: true,
+    reasoning_stream: true,
     source: 'circuit_editor',
     channel: 'circuit_assistant',
     messages: [...input.history, { role: 'user', content: instructions }],
@@ -448,7 +449,10 @@ function parseCircuitAssistantResponse(payload, input) {
   };
 }
 
-async function readAgentResponse(response, { onProgress, onActivity, signal }) {
+async function readAgentResponse(
+  response,
+  { onProgress, onReasoning = () => {}, onActivity, signal },
+) {
   if (!response.ok) throw new Error(`AI 服务返回 ${response.status}。`);
   if (!response.body) throw new Error('AI 服务返回空响应。');
   const streaming = /\btext\/event-stream\b/i.test(response.headers.get('content-type') || '');
@@ -456,6 +460,7 @@ async function readAgentResponse(response, { onProgress, onActivity, signal }) {
   const decoder = new TextDecoder('utf-8', { fatal: true });
   let bytes = 0;
   let answerBytes = 0;
+  let reasoningBytes = 0;
   let buffer = '';
   let data = [];
   let answer = '';
@@ -475,6 +480,14 @@ async function readAgentResponse(response, { onProgress, onActivity, signal }) {
     if (event.error) throw new Error(event.error.message || 'AI 服务生成失败。');
     if (event.delta !== undefined && typeof event.delta !== 'string')
       throw new Error('AI 服务返回了无效的流式文字。');
+    if (event.reasoning_delta !== undefined && typeof event.reasoning_delta !== 'string')
+      throw new Error('AI 服务返回了无效的思考文字。');
+    if (event.reasoning_delta) {
+      onActivity();
+      const delta = event.reasoning_delta.slice(0, Math.max(0, 64000 - reasoningBytes));
+      reasoningBytes += delta.length;
+      if (delta) onReasoning({ id: String(event.reasoning_id || '1').slice(0, 80), delta });
+    }
     if (event.delta) {
       answerBytes += Buffer.byteLength(event.delta, 'utf8');
       if (answerBytes > MAX_RESPONSE_BYTES) throw new Error('AI 回答过长，请缩小问题范围。');
@@ -583,6 +596,7 @@ function createCircuitAssistantRouter({
     let previewTimer;
     let latestAnswer = '';
     let lastPreview = '';
+    const pendingReasoning = new Map();
     let generating = false;
     const streaming =
       Boolean(request.accepts('text/event-stream')) &&
@@ -601,6 +615,8 @@ function createCircuitAssistantRouter({
     };
     const flushPreview = () => {
       previewTimer = undefined;
+      for (const [id, delta] of pendingReasoning) send('reasoning', { id, delta });
+      pendingReasoning.clear();
       const answer = streamingAnswerPreview(latestAnswer);
       if (answer && answer !== lastPreview && response.writableLength < 64 * 1024) {
         send('answer', { answer });
@@ -650,6 +666,11 @@ function createCircuitAssistantRouter({
           const raw = await readAgentResponse(upstream, {
             signal: controller.signal,
             onProgress,
+            onReasoning: ({ id, delta }) => {
+              if (!streaming || controller.signal.aborted) return;
+              pendingReasoning.set(id, (pendingReasoning.get(id) || '') + delta);
+              if (!previewTimer) previewTimer = setTimeout(flushPreview, 100);
+            },
             onActivity: resetIdle,
           });
           controller.signal.throwIfAborted();

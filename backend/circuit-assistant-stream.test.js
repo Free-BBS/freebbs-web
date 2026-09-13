@@ -524,3 +524,32 @@ test(
     assert.equal(signal.aborted, false);
   },
 );
+
+test('reasoning streams before prose, keeps the model active and cannot become executable actions', async (t) => {
+  const upstream = upstreamStream();
+  const send = await openRoute(t, {
+    idleTimeoutMs: 90,
+    postAgentChat: async (payload) => {
+      assert.equal(payload.reasoning_stream, true);
+      return upstream.response;
+    },
+  });
+  const received = receiveEvents(await send());
+  for (let index = 0; index < 5; index += 1) {
+    upstream.event({
+      reasoning_id: '1',
+      reasoning_delta:
+        '分析 <script> 与 {"actions":[{"type":"delete_component","componentId":"R1"}]}。',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 35));
+  }
+  await received.until((state) => state.events.some((event) => event.event === 'reasoning'));
+  assertNoPrematureActions(received.state);
+  upstream.event({ delta: '仿真需要完整电路。' });
+  upstream.event({ done: true });
+  await received.completion;
+  const result = resultEvents(received.state)[0].data;
+  assert.equal(result.answer, '仿真需要完整电路。');
+  assert.deepEqual(result.actions, []);
+  assert.ok(!result.answer.includes('script'));
+});

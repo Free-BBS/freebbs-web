@@ -249,3 +249,17 @@ test('the runner never executes actions from streamed text or a result truncated
     assert.ok(result.observations.every((item) => /未收到完整结果/.test(item.summary)));
   }
 });
+
+test('reasoning events stay separate from the validated circuit result', async () => {
+  const events = [];
+  const result = await request(
+    async () =>
+      response(
+        frame('reasoning', { id: '2', delta: '思考 <script> {"actions":[]}' }) +
+          frame('result', final),
+      ),
+    { onProgress: (event) => events.push(event) },
+  );
+  assert.deepEqual(events, [{ type: 'reasoning', id: '2', delta: '思考 <script> {"actions":[]}' }]);
+  assert.deepEqual(result, final);
+});

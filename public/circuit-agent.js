@@ -247,7 +247,14 @@
                 context.controller.abort(error);
                 return;
               }
-              if (progress?.type === 'answer' && typeof progress.answer === 'string')
+              if (progress?.type === 'reasoning' && typeof progress.delta === 'string')
+                emit({
+                  type: 'reasoning',
+                  step: requestStepNumber,
+                  id: progress.id,
+                  delta: progress.delta,
+                });
+              else if (progress?.type === 'answer' && typeof progress.answer === 'string')
                 emit({ type: 'progress', step: requestStepNumber, answer: progress.answer });
               else if (progress?.type === 'status')
                 emit({

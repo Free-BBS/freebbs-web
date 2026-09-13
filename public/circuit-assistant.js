@@ -312,8 +312,10 @@
       return;
     }
     const article = state.agentArticles.get(event.step);
+    if (event.type === 'reasoning' && article) window.FreeBbsReasoning?.update(article, event);
     if (event.type === 'progress' && article) {
       if (typeof event.answer === 'string') {
+        window.FreeBbsReasoning?.finish(article);
         article.querySelector('.circuit-ai-message-body').textContent = event.answer;
         article.dataset.streamAnswer = 'true';
       }
@@ -324,6 +326,7 @@
       }
     }
     if (event.type === 'answer' && article) {
+      window.FreeBbsReasoning?.finish(article);
       renderContent(article.querySelector('.circuit-ai-message-body'), event.answer);
       article.classList.remove('is-pending');
       delete article.dataset.streamAnswer;
@@ -366,6 +369,7 @@
       updateEditorState(editor().getSnapshot());
     }
     if (event.type === 'finish') {
+      window.FreeBbsReasoning?.finish(article, { stopped: event.status !== 'complete' });
       if (article?.classList.contains('is-pending')) {
         article.classList.remove('is-pending');
         if (!article.dataset.streamAnswer)
@@ -504,7 +508,11 @@
           signal: controller.signal,
           onProgress: (progress) => {
             if (controller.signal.aborted || state.suggestionController !== controller) return;
-            if (progress.type === 'answer') body.textContent = progress.answer;
+            if (progress.type === 'reasoning') window.FreeBbsReasoning?.update(article, progress);
+            if (progress.type === 'answer') {
+              window.FreeBbsReasoning?.finish(article);
+              body.textContent = progress.answer;
+            }
             if (progress.type === 'status') {
               state.progressMessage = progress.message;
               status(progress.message);
@@ -516,6 +524,7 @@
       );
       const answer = String(response.answer || '').trim();
       if (!answer) throw new Error('Max 暂时没有返回回答，请重试。');
+      window.FreeBbsReasoning?.finish(article);
       renderContent(body, answer);
       article.classList.remove('is-pending');
       state.history.push(
@@ -532,6 +541,7 @@
         status('回答已保留，操作建议未通过检查，请重新提问。', true);
       }
     } catch (error) {
+      window.FreeBbsReasoning?.finish(article, { stopped: true });
       const stopped = error.code === 'AGENT_STOPPED' || error.name === 'AbortError';
       article.classList.remove('is-pending');
       article.classList.toggle('is-error', !stopped);

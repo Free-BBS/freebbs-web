@@ -1631,8 +1631,9 @@ async function relayAgentChatResponse(agentResponse, response, stream) {
   if (stream) {
     response.status(agentResponse.status);
     response.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-    response.setHeader('Cache-Control', 'no-cache');
+    response.setHeader('Cache-Control', 'no-store, no-transform');
     response.setHeader('X-Accel-Buffering', 'no');
+    response.flushHeaders();
 
     if (!agentResponse.body) {
       response.end();
@@ -1640,6 +1641,7 @@ async function relayAgentChatResponse(agentResponse, response, stream) {
     }
 
     for await (const chunk of agentResponse.body) {
+      if (response.destroyed) break;
       response.write(chunk);
     }
     response.end();
@@ -2357,6 +2359,11 @@ app.post('/api/ai/chat', async (request, response) => {
     return;
   }
 
+  const controller = new AbortController();
+  const cancel = () => {
+    if (!response.writableEnded) controller.abort();
+  };
+  response.once('close', cancel);
   try {
     const agentPayload = buildAgentChatPayload(
       user,
@@ -2376,14 +2383,23 @@ app.post('/api/ai/chat', async (request, response) => {
         },
       },
     );
-    const agentResponse = await postAgentChat(agentPayload, user);
+    const agentResponse = await postAgentChat(agentPayload, user, { signal: controller.signal });
 
     await relayAgentChatResponse(agentResponse, response, payload.stream === true);
   } catch (error) {
+    if (response.destroyed) return;
+    if (response.headersSent) {
+      response.end(
+        `data: ${JSON.stringify({ error: { message: 'Max 回答连接中断，请重试。' } })}\n\n`,
+      );
+      return;
+    }
     response.status(502).json({
       message: 'AI 服务暂时不可用',
       detail: error.message,
     });
+  } finally {
+    response.removeListener('close', cancel);
   }
 });
 

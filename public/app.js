@@ -4647,30 +4647,14 @@ async function pollInfoJob(article, navigationResult) {
   }
 }
 
-async function requestMaxNavigation(payload) {
-  if (!userState.token) {
-    throw new Error('请先登录后再使用问问 Max');
-  }
-
-  const response = await fetch(`${API_BASE_URL}/ai/chat`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${userState.token}`,
-    },
-    body: JSON.stringify({ ...payload, stream: false }),
+async function requestMaxNavigation(payload, onReasoning) {
+  if (!userState.token) throw new Error('请先登录后再使用问问 Max');
+  return window.FreeBbsReasoning.request({
+    url: `${API_BASE_URL}/ai/chat`,
+    token: userState.token,
+    payload,
+    onReasoning,
   });
-  const result = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(
-      result.detail
-        ? `${result.message || 'Navigation 请求失败'}：${result.detail}`
-        : result.error?.message || result.message || 'Navigation 请求失败',
-    );
-  }
-
-  return result;
 }
 
 function getAiDialogTitle(messages = aiChatState.messages) {
@@ -4925,7 +4909,10 @@ async function handleAiChatSubmit(event) {
   let assistantContent = '';
 
   try {
-    const rawResult = await requestMaxNavigation(buildAiChatPayload(userMessage));
+    const rawResult = await requestMaxNavigation(buildAiChatPayload(userMessage), (progress) => {
+      window.FreeBbsReasoning.update(assistantArticle, progress);
+    });
+    window.FreeBbsReasoning.finish(assistantArticle);
     const result = await addMentionedCourseMapRoute(rawResult, userMessage);
     window.clearTimeout(bubbleTimer);
     assistantContent = String(result.answer || '').trim() || 'Max 暂时没有生成回答。';
@@ -4949,6 +4936,7 @@ async function handleAiChatSubmit(event) {
     await saveAiDialog();
   } catch (error) {
     window.clearTimeout(bubbleTimer);
+    window.FreeBbsReasoning?.finish(assistantArticle, { stopped: true });
     updateAiChatMessage(assistantArticle, `请求失败：${error.message}`);
     stopAiChatThinkingStatus('AI 服务不可用，请确认 freebbs-agent 已启动。');
   } finally {

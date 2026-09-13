@@ -45,6 +45,7 @@ node --check public/circuit-ai-actions.js
 node --check public/circuit-assistant.js
 node --check public/circuit-agent.js
 node --check public/circuit-chat.js
+node --check public/max-reasoning.js
 node --check public/circuit-parameter-popover.js
 node --check public/circuit-embeds.js
 node --check public/circuit-embed.js
@@ -82,6 +83,7 @@ npm run test:discussion-markdown
 
 echo "[ci] Max agent and circuit context tests"
 npm run test:agent-surfaces
+npm run test:aichat-navigation
 
 echo "[ci] registration, notifications, username and course API tests"
 npm run test:community
