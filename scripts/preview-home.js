@@ -66,7 +66,7 @@ function patchScript(source, pathname) {
     pathname === '/app.js'
       ? /^const API_BASE_URL = \(\(\) => \{[\s\S]*?\r?\n\}\)\(\);/
       : new RegExp(
-          `^  const ${pathname === '/notifications.js' ? 'apiBase' : 'api'} = local \\?[^;\\r\\n]+;`,
+          `^  const ${pathname === '/notifications.js' ? 'apiBase' : 'api'} =\\s*window\\.FREEBBS_API_BASE \\|\\|[^;]+;`,
           'm',
         );
   if (!pattern.test(source))

@@ -67,7 +67,10 @@ function patchAppForPreview(source) {
 
 function patchSharedApiForPreview(source, pathname) {
   const variable = pathname === '/notifications.js' ? 'apiBase' : 'api';
-  const initialization = new RegExp(`^  const ${variable} = local \\?[^;\\r\\n]+;`, 'm');
+  const initialization = new RegExp(
+    `^  const ${variable} =\\s*window\\.FREEBBS_API_BASE \\|\\|[^;]+;`,
+    'm',
+  );
   if (!initialization.test(source))
     throw new Error('Shared API initializer changed; preview fails closed');
   return source.replace(initialization, `  const ${variable} = '/api';`);

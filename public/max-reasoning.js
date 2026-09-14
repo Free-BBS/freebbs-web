@@ -1,12 +1,42 @@
 ((root) => {
   const states = new WeakMap();
+  const preferenceKey = 'free_bbs_max_reasoning_expanded';
+  let expanded = false;
+  try {
+    expanded = root.localStorage?.getItem(preferenceKey) === 'true';
+  } catch {
+    /* Use the collapsed default if storage is unavailable. */
+  }
+  function setExpanded(value) {
+    expanded = Boolean(value);
+    try {
+      root.localStorage?.setItem(preferenceKey, String(expanded));
+    } catch {
+      /* Keep the in-page choice. */
+    }
+    root.document?.querySelectorAll('.max-reasoning').forEach((panel) => {
+      panel.open = expanded;
+    });
+    root.document?.querySelectorAll('[data-max-reasoning-expanded]').forEach((input) => {
+      input.checked = expanded;
+    });
+  }
+  function initializePreference() {
+    root.document?.querySelectorAll('[data-max-reasoning-expanded]').forEach((input) => {
+      input.checked = expanded;
+      input.addEventListener('change', () => setExpanded(input.checked));
+    });
+  }
+  if (root.document?.readyState === 'loading')
+    root.document.addEventListener('DOMContentLoaded', initializePreference);
+  else initializePreference();
   function update(article, { id = '1', delta } = {}) {
     if (!article || typeof delta !== 'string' || !delta) return;
     let state = states.get(article);
     if (!state) {
       const panel = document.createElement('details');
       panel.className = 'max-reasoning';
-      panel.open = true;
+      panel.open = expanded;
       const summary = document.createElement('summary');
       summary.textContent = '正在思考…';
       const body = document.createElement('div');
@@ -40,7 +70,7 @@
     if (!state || state.finished) return;
     state.finished = true;
     state.summary.textContent = stopped ? '思考已停止' : '思考完成';
-    state.panel.open = false;
+    // Keep the user’s expansion choice when the answer finishes.
   }
   async function request({
     url,
@@ -127,7 +157,7 @@
       controller.abort();
     }
   }
-  const api = { update, finish, request };
+  const api = { update, finish, request, setExpanded };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FreeBbsReasoning = api;
 })(typeof window === 'object' ? window : globalThis);

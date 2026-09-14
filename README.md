@@ -95,7 +95,9 @@ HOST=0.0.0.0 PORT=3000 npm run start:frontend
 
 ### 4. 单独启动后端 API
 
-前端会按当前浏览器地址推导 API 地址：本地开发时通常请求 `http://127.0.0.1:3001/api` 或同主机 `3001` 端口；生产同域访问时请求 `/api`。
+前端在本地与生产环境均使用当前页面同源的 `/api`。本地 `server.js` 自动转发到后端，生产反向代理也必须转发 `/api/`，浏览器无需直接访问 3001 端口。直接以 `file:` 打开页面时仍回退到本机 3001；自定义部署可在页面脚本加载前设置 `window.FREEBBS_API_BASE`。
+
+Max 图片聊天的代理、请求大小和发布顺序见 [部署说明](docs/max-image-chat-deployment.md)。
 
 `npm run start:backend` 不会自动读取 `backend/.env`。如果使用该文件，先显式加载：
 

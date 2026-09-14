@@ -64,6 +64,7 @@
         .filter(Boolean)
         .join(' · ');
     }
+    window.dispatchEvent(new CustomEvent('freebbs:max-model-change', { detail: chosen }));
   }
   async function ready() {
     const token = user()?.token;
@@ -211,6 +212,14 @@
   async function chatOptions(payload) {
     const chosen = await selection();
     const options = await circuitOptions(chosen);
+    const attachments = payload.vision_images || [];
+    if (attachments.length && !chosen.vision)
+      throw new Error('请切换到视觉模型，或移除已添加的图片。');
+    if (attachments.length) {
+      options.vision_images = [...attachments, ...(options.vision_images || [])];
+      if (options.vision_images.length > 13) throw new Error('单次最多发送 13 张图片。');
+      return options;
+    }
     if (!chosen.vision || options.vision_images?.length) return options;
     const message =
       payload.message ||
