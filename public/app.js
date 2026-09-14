@@ -4682,7 +4682,10 @@ async function requestMaxNavigation(payload, onReasoning) {
   return window.FreeBbsReasoning.request({
     url: `${API_BASE_URL}/ai/chat`,
     token: userState.token,
-    payload,
+    payload: {
+      ...payload,
+      ...(window.FreeBbsMaxModels ? await window.FreeBbsMaxModels.chatOptions(payload) : {}),
+    },
     onReasoning,
   });
 }

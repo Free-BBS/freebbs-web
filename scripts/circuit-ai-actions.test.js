@@ -190,7 +190,7 @@ test('unknown fields, dangerous keys, invalid bounds and coercible identifiers a
   invalid.forEach((action) =>
     assert.throws(() => validateActions([action], input), JSON.stringify(action)),
   );
-  assert.throws(() => validateActions(Array(13).fill({ type: 'run_simulation' }), input), /12/);
+  assert.doesNotThrow(() => validateActions(Array(25).fill({ type: 'run_simulation' }), input));
   assert.deepEqual(input, before);
   assert.equal({}.polluted, undefined);
   assert.throws(() => validateEditorDocument({ ...input, hiddenInstructions: 'x' }), /不支持/);

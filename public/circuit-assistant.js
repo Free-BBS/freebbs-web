@@ -388,7 +388,12 @@
 
   async function requestAgentStep(payload, { signal, onProgress }) {
     try {
-      return await app.streamCircuitChatResponse(payload, { signal, onProgress });
+      const options = await window.FreeBbsMaxModels.circuitOptions(state.modelChoice);
+      signal.throwIfAborted();
+      return await app.streamCircuitChatResponse(
+        { ...payload, ...options },
+        { signal, onProgress },
+      );
     } catch (error) {
       if (error.status === 401) {
         $('login').hidden = false;
@@ -401,6 +406,13 @@
   async function submitAgent(question) {
     if (!window.FreeBbsCircuitAgent) {
       status('自主执行模块尚未加载，请刷新后重试。', true);
+      return;
+    }
+    try {
+      state.modelChoice = await window.FreeBbsMaxModels.selection();
+      if (state.sending) return;
+    } catch (error) {
+      status(error.message, true);
       return;
     }
     state.sending = true;
@@ -495,6 +507,7 @@
     try {
       const response = await app.streamCircuitChatResponse(
         {
+          ...(await window.FreeBbsMaxModels.circuitOptions()),
           question,
           history: state.history.slice(-8).map((message) => ({
             role: message.role,

@@ -84,7 +84,7 @@ test('autonomous requests strictly bound steps, ordered outcomes, permissions an
     null,
     {},
     { step: 0 },
-    { step: 13 },
+    { step: Number.MAX_SAFE_INTEGER + 1 },
     { step: 1.5 },
     { step: '1' },
     { canEdit: 1 },
@@ -139,7 +139,7 @@ test('autonomous prompt exposes observations and governs the next action using r
   assert.match(prompt, /仿真失败则草稿修改可能已生效/);
   assert.match(prompt, /"canEdit":false/);
   assert.match(prompt, /只读|false 时仅可高亮/);
-  assert.match(prompt, /最多 12 轮/);
+  assert.match(prompt, /没有固定轮数/);
   assert.match(prompt, /电路未接地，仿真失败/);
   assert.match(prompt, /不要输出任意代码/);
   assert.doesNotMatch(prompt, /所有操作均需用户点击|待用户运行后|待用户再次提问后/);
@@ -1036,7 +1036,7 @@ test('authentication and input errors finish without starting circuit heartbeats
   assert.equal(unauthenticated.headers.get('x-accel-buffering'), null);
   assert.match(await unauthenticated.text(), /^\{/);
   authenticated = true;
-  const invalid = await send(agentBody({ step: 13 }));
+  const invalid = await send(agentBody({ step: 0 }));
   assert.equal(invalid.status, 400);
   assert.equal(invalid.headers.get('x-accel-buffering'), null);
   assert.equal((await invalid.json()).code, 'invalid_circuit_assistant_input');

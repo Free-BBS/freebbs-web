@@ -38,7 +38,6 @@
     'delete_annotation',
     'set_plot',
   ]);
-  const maxActions = 12;
 
   function assertSafeJson(value) {
     let count = 0;
@@ -186,8 +185,7 @@
 
   function processActions(actions, document, availableTraceIds) {
     assertSafeJson(actions);
-    if (!Array.isArray(actions) || actions.length > maxActions)
-      throw new Error(`每次最多提出 ${maxActions} 项电路操作。`);
+    if (!Array.isArray(actions)) throw new Error('电路操作必须为数组。');
     if (JSON.stringify(actions).length > 32000) throw new Error('AI 操作数据过大。');
     let draft = validateEditorDocument(document);
     const clonedActions = JSON.parse(JSON.stringify(actions));
@@ -640,7 +638,6 @@
   }
 
   const api = {
-    maxActions,
     validateActions,
     applyActions,
     describeAction,

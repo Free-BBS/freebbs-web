@@ -1,0 +1,33 @@
+.max-model-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 8px 12px;
+  margin: 8px 0 12px;
+  width: 100%;
+}
+.max-model-picker label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  min-width: 0;
+}
+.max-model-picker select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 6px 9px;
+  border: 1px solid var(--border, #39545b);
+  border-radius: 8px;
+  background: var(--panel, #14292f);
+  color: var(--text, #e7f4f5);
+  font: inherit;
+  font-size: 13px;
+}
+.max-model-picker small {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  opacity: 0.72;
+  line-height: 1.5;
+}

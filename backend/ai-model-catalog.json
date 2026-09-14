@@ -1,0 +1,128 @@
+[
+  {
+    "id": "glm-5.2",
+    "label": "GLM-5.2",
+    "vision": false,
+    "efforts": ["off", "high", "max"],
+    "defaultEffort": "high",
+    "kind": "glm_effort",
+    "note": ""
+  },
+  {
+    "id": "glm-5.3",
+    "label": "GLM-5.3",
+    "vision": false,
+    "efforts": ["auto"],
+    "defaultEffort": "auto",
+    "kind": "provider",
+    "note": "服务商尚未明确公开强度档位，使用模型默认设置"
+  },
+  {
+    "id": "glm-5.1",
+    "label": "GLM-5.1",
+    "vision": false,
+    "efforts": ["off", "auto"],
+    "defaultEffort": "auto",
+    "kind": "thinking",
+    "note": ""
+  },
+  {
+    "id": "deepseek-v4-pro",
+    "label": "DeepSeek V4 Pro",
+    "vision": false,
+    "efforts": ["off", "low", "high", "max"],
+    "defaultEffort": "high",
+    "kind": "deepseek",
+    "note": ""
+  },
+  {
+    "id": "deepseek-v4-flash",
+    "label": "DeepSeek V4 Flash",
+    "vision": false,
+    "efforts": ["off", "low", "high", "max"],
+    "defaultEffort": "high",
+    "kind": "deepseek",
+    "note": ""
+  },
+  {
+    "id": "deepseek-v4-pro-0813",
+    "label": "DeepSeek V4 Pro · 0813",
+    "vision": false,
+    "efforts": ["off", "low", "high", "max"],
+    "defaultEffort": "high",
+    "kind": "deepseek",
+    "note": ""
+  },
+  {
+    "id": "deepseek-v4-flash-0731",
+    "label": "DeepSeek V4 Flash · 0731",
+    "vision": false,
+    "efforts": ["off", "low", "high", "max"],
+    "defaultEffort": "high",
+    "kind": "deepseek",
+    "note": ""
+  },
+  {
+    "id": "deepseek-v4.1-flash",
+    "label": "DeepSeek V4.1 Flash",
+    "vision": true,
+    "efforts": ["auto"],
+    "defaultEffort": "auto",
+    "kind": "provider",
+    "note": "服务商尚未明确公开强度档位，使用模型默认设置"
+  },
+  {
+    "id": "kimi-k2.6",
+    "label": "Kimi K2.6",
+    "vision": true,
+    "efforts": ["off", "auto"],
+    "defaultEffort": "auto",
+    "kind": "thinking",
+    "note": ""
+  },
+  {
+    "id": "kimi-k2.7-code",
+    "label": "Kimi K2.7 Code",
+    "vision": true,
+    "efforts": ["auto"],
+    "defaultEffort": "auto",
+    "kind": "fixed",
+    "note": "固定开启思考"
+  },
+  {
+    "id": "qwen3.6-27b",
+    "label": "Qwen3.6 · 27B",
+    "vision": false,
+    "efforts": ["off", "auto"],
+    "defaultEffort": "auto",
+    "kind": "qwen",
+    "note": "当前服务商接口拒绝图像输入，暂使用电路与仿真数据"
+  },
+  {
+    "id": "qwen3.6-35b-a3b",
+    "label": "Qwen3.6 · 35B A3B",
+    "vision": false,
+    "efforts": ["off", "auto"],
+    "defaultEffort": "auto",
+    "kind": "qwen",
+    "note": "当前服务商接口拒绝图像输入，暂使用电路与仿真数据"
+  },
+  {
+    "id": "minimax-m2.7",
+    "label": "MiniMax M2.7",
+    "vision": false,
+    "efforts": ["auto"],
+    "defaultEffort": "auto",
+    "kind": "minimax",
+    "note": "固定开启思考"
+  },
+  {
+    "id": "mimo-v2.5-pro",
+    "label": "MiMo V2.5 Pro",
+    "vision": false,
+    "efforts": ["off", "auto"],
+    "defaultEffort": "auto",
+    "kind": "thinking",
+    "note": ""
+  }
+]
