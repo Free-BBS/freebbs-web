@@ -50,6 +50,9 @@ node --check public/circuit-assistant.js
 node --check public/circuit-agent.js
 node --check public/circuit-chat.js
 node --check public/max-reasoning.js
+node --check public/max-models.js
+node --check backend/ai-models.js
+node --test backend/ai-models.test.js
 node --check public/circuit-parameter-popover.js
 node --check public/circuit-embeds.js
 node --check public/circuit-embed.js

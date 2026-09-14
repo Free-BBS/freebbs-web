@@ -461,18 +461,19 @@ test('model step limits are enforced even when every operation changes the draft
   assert.equal(h.executions.length, 2);
 });
 
-test('the hard upper bound remains twelve model rounds even if a larger limit is configured', async () => {
+test('runs beyond twelve rounds and keeps a rolling request context', async () => {
   const h = harness({
-    maxSteps: 100,
-    requestStep: (payload) => ({
-      answer: '继续',
-      actions: [setResistance(1000 + payload.agent.step)],
-    }),
+    requestStep: (payload) => {
+      assert.ok(payload.agent.observations.length <= 24);
+      return payload.agent.step === 40 ? { answer: '完成', actions: [], done: true } : {
+        answer: '继续', actions: [setResistance(1000 + payload.agent.step)],
+      };
+    },
   });
   const result = await h.runner.run('不停调整');
-  assert.equal(result.status, 'limit');
-  assert.equal(result.step, 12);
-  assert.equal(h.requests.length, 12);
+  assert.equal(result.status, 'complete');
+  assert.equal(result.step, 40);
+  assert.equal(h.requests.length, 40);
   assert.equal(
     result.observations.every((item) => item.summary.length <= 4000),
     true,

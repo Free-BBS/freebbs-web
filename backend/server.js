@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+const { modelCatalog, resolveModelOptions } = require('./ai-models');
 const {
   anonymousAuthor,
   ensureDiscussionInteractions,
@@ -1556,10 +1557,17 @@ function buildTrustedAgentHeaders(payload, user = null) {
 }
 
 async function postAgentChat(payload, user = null, { signal } = {}) {
-  const enrichedPayload = await enrichAgentCircuitContext(payload, {
-    pool,
-    publicWebUrl: config.publicWebUrl,
-  });
+  const selectedOptions = await resolveModelOptions(
+    payload,
+    await systemSettingsStore.readSettings(),
+  );
+  const enrichedPayload = await enrichAgentCircuitContext(
+    { ...payload, ...selectedOptions },
+    {
+      pool,
+      publicWebUrl: config.publicWebUrl,
+    },
+  );
   const trustedHeaders = buildTrustedAgentHeaders(payload, user);
   signal?.throwIfAborted();
 
@@ -2349,6 +2357,16 @@ app.get('/api/health', async (_request, response) => {
   }
 });
 
+app.get('/api/ai/models', async (request, response) => {
+  if (!(await requireAuth(request, response))) return;
+  try {
+    response.setHeader('Cache-Control', 'no-store');
+    response.json(modelCatalog(await systemSettingsStore.readSettings()));
+  } catch {
+    response.status(503).json({ message: '模型列表暂时不可用。' });
+  }
+});
+
 app.post('/api/ai/chat', async (request, response) => {
   const user = await requireAuth(request, response);
 
@@ -2360,6 +2378,16 @@ app.post('/api/ai/chat', async (request, response) => {
 
   if (!payload || typeof payload !== 'object') {
     response.status(400).json({ message: '请求体必须是 JSON 对象' });
+    return;
+  }
+
+  try {
+    Object.assign(
+      payload,
+      await resolveModelOptions(payload, await systemSettingsStore.readSettings()),
+    );
+  } catch (error) {
+    response.status(400).json({ message: error.message });
     return;
   }
 

@@ -98,13 +98,13 @@
     executeActions,
     requestStep,
     onEvent = () => {},
-    maxSteps = 12,
+    maxSteps = Infinity,
     timeoutMs = 300000,
   }) {
     [getSnapshot, beginRun, endRun, executeActions, requestStep].forEach((callback) => {
       if (typeof callback !== 'function') throw new Error('自主执行缺少编辑器接口。');
     });
-    const stepLimit = Math.max(1, Math.min(12, Math.floor(Number(maxSteps) || 12)));
+    const stepLimit = Number.isFinite(maxSteps) ? Math.max(1, Math.floor(maxSteps)) : Infinity;
     const timeLimit = Math.max(1, Math.min(300000, Number(timeoutMs) || 300000));
     let active = null;
 
@@ -228,7 +228,7 @@
               agent: {
                 step,
                 canEdit: snapshot.canEdit === true,
-                observations: clone(observations),
+                observations: clone(observations.slice(-24)),
               },
             };
             const requestStepNumber = step;
