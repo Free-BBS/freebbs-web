@@ -137,7 +137,7 @@
       <div class="ranch-owner-controls">
       ${own ? (ranch.adopted ? `<button type="button" data-extra-action="feed" ${own.fish < 1 || remaining > 29 * 86400000 ? 'disabled' : ''}>喂一条鱼 · 饱腹 24 小时 · 剩余 ${own.fish} 条</button><a href="/electromagnetic">去找小鱼 ↗</a>` : '<a href="/electromagnetic">请 Max 搬进来 · 10 电元＋10 磁元 ↗</a>') : '<span>这是主人的小牧场，访客可以在这里看看风景。</span>'}
       </div>
-      ${own ? '<details class="ranch-rules"><summary>喂养与纪念规则</summary><p>每条鱼增加 24 小时饱腹时间，最多累计 30 天，容量不足一天不扣鱼。当天祥瑞时每次喂养产生黄金鱼骨，否则产生普通鱼骨，不同时发放。累计购买 10 个坚硬鱼骨，拥有至少 3 个黄金鱼骨和 10 个普通鱼骨，自动解锁「鱼骨达人」；不消耗鱼骨。Max 饿时趴下，不死亡、不丢失。</p></details>' : ''}
+      ${own ? '<details class="ranch-rules"><summary>喂养与纪念规则</summary><p>每条鱼增加 24 小时饱腹时间，最多累计 30 天，容量不足一天不扣鱼。按北京时间，每个祥瑞日首次喂养产生 1 个黄金鱼骨，每日限 1 个；当天后续喂养及其他运势下的喂养均产生 1 个普通鱼骨。累计购买 10 个坚硬鱼骨，拥有至少 3 个黄金鱼骨和 10 个普通鱼骨，自动解锁「鱼骨达人」；不消耗鱼骨。Max 饿时趴下，不死亡、不丢失。</p></details>' : ''}
       <p id="profile-extras-message" role="status" aria-live="polite"></p>`;
     actor = ranch.adopted
       ? window.FreeBbsMaxRanch.mount(root.querySelector('[data-max-actor]'), { ...motion, hungry })

@@ -114,12 +114,13 @@ test('purchased Max activation is idempotent and does not charge again', async (
   assert.equal(store.account().magnetic, 10000);
   assert.deepEqual(store.account().assets, before);
 });
-test('all auspicious feeds give gold; hard bone holdings and shop counts are independent', async () => {
+test('only the first auspicious feed per Beijing day gives gold; holdings and shop counts are independent', async () => {
   const { act, store } = setup();
   assert.equal((await act('feed')).bone, 'golden_fishbone');
-  assert.equal((await act('feed')).bone, 'golden_fishbone');
+  assert.equal((await act('feed')).bone, 'ordinary_fishbone');
   assert.equal(store.account().assets.fish, 1);
-  assert.equal(store.account().assets.golden_fishbone, 2);
+  assert.equal(store.account().assets.golden_fishbone, 1);
+  assert.equal(store.account().assets.ordinary_fishbone, 1);
   assert.equal(store.account().assets.fishbone, 2);
   assert.deepEqual(store.account().counts, {});
 });
@@ -132,11 +133,12 @@ test('same feed request replay consumes only one fish, including simultaneous re
   assert.equal(store.account().assets.golden_fishbone, 1);
   await assert.rejects(act('adopt', { requestKey }), /编号已使用/);
 });
-test('concurrent distinct auspicious feeds each grant one gold within capacity', async () => {
+test('concurrent distinct auspicious feeds grant only one gold and the remaining ordinary bones', async () => {
   const { act, store } = setup();
   await Promise.all([act('feed'), act('feed'), act('feed')]);
   assert.equal(store.account().assets.fish, 0);
-  assert.equal(store.account().assets.golden_fishbone, 3);
+  assert.equal(store.account().assets.golden_fishbone, 1);
+  assert.equal(store.account().assets.ordinary_fishbone, 2);
   assert.equal(store.account().assets.fishbone, 2);
   await assert.rejects(act('feed'), /没有鱼/);
 });
@@ -157,6 +159,50 @@ test('a new Beijing day may produce a new golden bone', async () => {
     requestKey: crypto.randomUUID(),
   });
   assert.equal(store.account().assets.golden_fishbone, 2);
+});
+test('ordinary feeding does not consume the daily golden opportunity', async () => {
+  const { act, store } = setup({ score: 70 });
+  assert.equal((await act('feed')).bone, 'ordinary_fishbone');
+  store.account().fortunes[beijingDay(fixed)] = 95;
+  assert.equal((await act('feed')).bone, 'golden_fishbone');
+  assert.equal((await act('feed')).bone, 'ordinary_fishbone');
+});
+
+test('daily golden receipt survives a new service instance and changes in bone holdings', async () => {
+  const { act, store } = setup();
+  await act('feed');
+  store.account().assets.golden_fishbone = 0;
+  const restarted = createProfileExtras(store, { now: () => fixed });
+  const next = await restarted.act({ userId: 1, action: 'feed', requestKey: crypto.randomUUID() });
+  assert.equal(next.bone, 'ordinary_fishbone');
+  assert.equal(store.account().assets.golden_fishbone, 0);
+});
+
+test("Beijing midnight renews the quota; replaying yesterday does not use today's quota", async () => {
+  const { store } = setup({ fish: 4 });
+  let clock = Date.parse('2026-09-14T15:59:59Z');
+  const service = createProfileExtras(store, { now: () => clock });
+  const oldKey = crypto.randomUUID();
+  const feed = (requestKey = crypto.randomUUID()) =>
+    service.act({ userId: 1, action: 'feed', requestKey });
+  assert.equal((await feed(oldKey)).bone, 'golden_fishbone');
+  assert.equal((await feed()).bone, 'ordinary_fishbone');
+  clock = Date.parse('2026-09-14T16:00:00Z');
+  store.account().fortunes[beijingDay(clock)] = 90;
+  assert.equal((await feed(oldKey)).replayed, true);
+  assert.equal(store.account().assets.fish, 2);
+  assert.equal((await feed()).bone, 'golden_fishbone');
+  assert.equal((await feed()).bone, 'ordinary_fishbone');
+  assert.equal(store.account().assets.golden_fishbone, 2);
+});
+
+test('insufficient feeding capacity does not consume the daily golden opportunity', async () => {
+  const { act, store } = setup();
+  store.account().fedUntilMs = fixed + 30 * 86400000;
+  await assert.rejects(act('feed'), /容量不足/);
+  assert.equal(store.account().profileActions.length, 0);
+  store.account().fedUntilMs = 0;
+  assert.equal((await act('feed')).bone, 'golden_fishbone');
 });
 for (const options of [{ adopted: false }, { fish: 0 }, { score: null }]) {
   test(`unavailable feeding leaves assets unchanged: ${JSON.stringify(options)}`, async () => {

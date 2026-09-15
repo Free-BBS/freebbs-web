@@ -70,17 +70,18 @@ for (const failure of ['consume', 'extras', 'profile_record', 'commit']) {
     assert.deepEqual(store.account(), before);
   });
 }
-test('all auspicious feeds are gold, not ordinary; both holdings gate the achievement', async () => {
-  const { store, act, day } = setup();
+test('three auspicious days and ten ordinary bones are required for the fishbone achievement', async () => {
+  const { store, act, clock } = setup();
   store.account().counts.fishbone = 10;
-  store.account().fortunes[day] = 90;
-  for (let i = 0; i < 3; i += 1) await act('feed');
+  for (let i = 0; i < 3; i += 1) {
+    if (i) clock.value += DAY_MS;
+    store.account().fortunes[beijingDay(clock.value)] = 90;
+    assert.equal((await act('feed')).bone, 'golden_fishbone');
+    for (let j = 0; j < 3; j += 1) assert.equal((await act('feed')).bone, 'ordinary_fishbone');
+    assert.equal(store.account().assets.plate_fishbone_master, undefined);
+  }
   assert.equal(store.account().assets.golden_fishbone, 3);
-  assert.equal(store.account().assets.ordinary_fishbone, undefined);
-  assert.equal(store.account().assets.plate_fishbone_master, undefined);
-  store.account().fortunes[day] = 70;
-  for (let i = 0; i < 9; i += 1) await act('feed');
-  assert.equal(store.account().assets.plate_fishbone_master, undefined);
+  assert.equal(store.account().assets.ordinary_fishbone, 9);
   assert.deepEqual((await act('feed')).unlocked, ['plate_fishbone_master']);
 });
 for (const direction of ['electric_to_magnetic', 'magnetic_to_electric']) {

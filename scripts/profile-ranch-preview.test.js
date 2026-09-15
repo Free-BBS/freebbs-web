@@ -59,8 +59,9 @@ test('preview fortune, check-in and feeding work across Beijing midnight without
       clock = Date.parse('2026-09-16T16:01:00Z');
     }
     const extra = await api('/profile/extras', { action: 'feed', requestKey: randomUUID() });
-    assert.equal(extra.result.bone, 'golden_fishbone');
-    assert.equal(store.account().assets.golden_fishbone, 3);
+    assert.equal(extra.result.bone, 'ordinary_fishbone');
+    assert.equal(store.account().assets.golden_fishbone, 2);
+    assert.equal(store.account().assets.ordinary_fishbone, 1);
     const settings = await fetch(`${base}/settings`);
     assert.equal(settings.status, 200);
     const html = await settings.text();

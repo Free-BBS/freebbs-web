@@ -137,20 +137,25 @@ function createProfileExtras(store, { now = Date.now } = {}) {
             throw new ProfileExtrasError('请先在商店购买 Max');
           if (!(state.assets.fish > 0))
             throw new ProfileExtrasError('仓库里没有鱼了，可以先去商城看看');
-          const day = beijingDay(now());
+          const fedAt = now();
+          const day = beijingDay(fedAt);
           const fortune = effectiveFortune(
             await tx.readFortune(userId, day),
             state.luckUntilMs,
-            now(),
+            fedAt,
           );
           if (fortune === null) throw new ProfileExtrasError('请先在今日运势中抽取今天的运势');
           let nextFeed;
           try {
-            nextFeed = feedUntil(state.fedUntilMs, now());
+            nextFeed = feedUntil(state.fedUntilMs, fedAt);
           } catch (error) {
             throw new ProfileExtrasError(error.message);
           }
-          const golden = Number(fortune) >= 90;
+          // A daily receipt is independent of ordinary feeds and current bone holdings.
+          // The account lock, delivery and receipt share one transaction.
+          const goldenDayKey = `golden-bone:${day}`;
+          const golden =
+            Number(fortune) >= 90 && !(await tx.findProfileAction(userId, goldenDayKey));
           if (!(await tx.consumeFish(userId)))
             throw new ProfileExtrasError('鱼的数量已变化，请刷新');
           const key = golden ? 'golden_fishbone' : 'ordinary_fishbone';
@@ -161,6 +166,11 @@ function createProfileExtras(store, { now = Date.now } = {}) {
             image: '/assets/icons/fishbone.svg',
             isGift: !golden,
           });
+          if (golden)
+            await tx.recordProfileAction(userId, goldenDayKey, 'daily-golden-bone', {
+              action: 'golden_bone',
+              day,
+            });
           state.lastFeedDay = day;
           state.adopted = true;
           state.fedUntilMs = nextFeed;
