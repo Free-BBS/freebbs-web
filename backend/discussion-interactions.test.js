@@ -110,13 +110,15 @@ function interactionHarness({ hidden = 0, deleted = 0, user = { id: 8 }, raceHid
         return [[{ id: 30, user_id: 8, is_deleted: 0, content_markdown: 'private comment' }]];
       if (sql.startsWith('SELECT user_id')) return [[]];
       if (sql.startsWith('SELECT COUNT')) return [[{ total: 1 }]];
+      if (sql.startsWith('SELECT amount')) return [[]];
+      if (sql.includes('SUM(amount)')) return [[{ total: 0 }]];
       if (sql.includes('FROM users')) return [[{ id: 7, username: 'author' }]];
       return [{ affectedRows: 1 }];
     },
   };
   registerDiscussionInteractions(
     Object.fromEntries(
-      ['get', 'post', 'delete'].map((method) => [
+      ['get', 'post', 'delete', 'patch'].map((method) => [
         method,
         (url, fn) => routes.set(`${method} ${url}`, fn),
       ]),
@@ -141,7 +143,7 @@ function interactionHarness({ hidden = 0, deleted = 0, user = { id: 8 }, raceHid
     get notified() {
       return notified;
     },
-    async request(method, route) {
+    async request(method, route, body = {}) {
       const response = {
         statusCode: 200,
         status(code) {
@@ -156,7 +158,7 @@ function interactionHarness({ hidden = 0, deleted = 0, user = { id: 8 }, raceHid
           return this;
         },
       };
-      await routes.get(`${method} /api${route}`)({ params: { id: '30' } }, response);
+      await routes.get(`${method} /api${route}`)({ params: { id: '30' }, body }, response);
       return response;
     },
   };
@@ -199,4 +201,32 @@ test('administrator author inspection cannot bypass hidden posts, including dele
     assert.equal((await h.request('get', '/admin/discussion/posts/:id/author')).statusCode, 404);
     assert.equal(h.queries.length, 0);
   }
+});
+test('feature replies is administrator-only, requires a boolean and cannot feature hidden content', async () => {
+  for (const user of [{ id: 8 }, { id: 8, role: 'student' }]) {
+    const h = interactionHarness({ user });
+    const response = await h.request('patch', '/discussion/comments/:id/feature', {
+      featured: true,
+    });
+    assert.equal(response.statusCode, 403);
+    assert.ok(!h.queries.some((q) => q.sql.startsWith('UPDATE discussion_comments')));
+  }
+  const admin = interactionHarness({ user: { id: 9, is_admin: true } });
+  assert.equal(
+    (await admin.request('patch', '/discussion/comments/:id/feature', { featured: 'false' }))
+      .statusCode,
+    400,
+  );
+  const response = await admin.request('patch', '/discussion/comments/:id/feature', {
+    featured: true,
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.data.isFeatured, true);
+  assert.equal(response.data.reward, 5);
+  const hidden = interactionHarness({ user: { id: 9, is_admin: true }, raceHide: true });
+  assert.equal(
+    (await hidden.request('patch', '/discussion/comments/:id/feature', { featured: true }))
+      .statusCode,
+    404,
+  );
 });

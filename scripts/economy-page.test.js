@@ -3,6 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
+const crypto = require('node:crypto');
+const { fragmentOffer } = require('../backend/economy-shop');
 
 const publicDir = path.join(__dirname, '..', 'public');
 const source = fs.readFileSync(path.join(publicDir, 'app.js'), 'utf8');
@@ -42,7 +44,7 @@ function setup(overrides = {}) {
   const context = vm.createContext({
     console,
     Map,
-    window: {},
+    window: { crypto },
     userState: { isLoggedIn: true, token: 'mock', electrons: 2, manetrons: 0 },
     economyShopItems: [],
     document: { getElementById: node, activeElement: null },
@@ -73,11 +75,43 @@ test('alternative currency prices are explicit, and unavailable pricing is not z
   assert.equal(context.renderShopCost({}), '未定价');
 });
 
+test('shop groups all enabled products into four ordered sections without changing the catalog', async () => {
+  const catalog = JSON.parse(fs.readFileSync(path.join(publicDir, 'data/shop-items.json'))).items;
+  const before = JSON.stringify(catalog);
+  const { context, node } = setup({ callApi: async () => ({ assets: [], shopItems: catalog }) });
+  const groups = JSON.parse(JSON.stringify(context.groupShopItems(catalog)));
+  assert.deepEqual(
+    groups.map((group) => group.title),
+    ['装扮', '收藏', '消耗品', '伙伴'],
+  );
+  assert.deepEqual(
+    groups.map((group) => group.items.map((entry) => entry.key)),
+    [
+      ['frame_orbit', 'frame_aurora', 'card_blueprint', 'card_twilight', 'plate_observer', 'laser'],
+      [
+        'mysterious_fragment',
+        'maxwell_spectacles',
+        'faraday_ring',
+        'shannon_coin',
+        'hertz_resonator',
+      ],
+      ['differential_converter', 'fortune_bag'],
+      ['max_pet', 'fish', 'fishbone'],
+    ],
+  );
+  assert.equal(JSON.stringify(catalog), before);
+  await context.loadElectromagneticPage();
+  const html = node('shop-grid').innerHTML;
+  assert.equal((html.match(/data-shop-section=/g) || []).length, 4);
+  assert.equal((html.match(/class="shop-item-card"/g) || []).length, 16);
+  assert.doesNotMatch(html, /data-item-key="plate_maxwell"/);
+});
+
 test('activation buttons expose cost and balance and disable insufficient currency', () => {
   const { context } = setup();
   const available = context.renderActivationButton(item, 'electric');
   const unavailable = context.renderActivationButton(item, 'magnetic');
-  assert.match(available, /电激发 · 1 电元/);
+  assert.match(available, /电元购买 · 1 电元/);
   assert.match(available, /持有 2/);
   assert.doesNotMatch(available, /disabled/);
   assert.match(unavailable, /disabled/);
@@ -209,4 +243,203 @@ test('scoped CSS removes ratio stretch, bounds dialogs and follows theme variabl
   }
   assert.match(source, /role="dialog" aria-modal="true" aria-labelledby="shop-inspect-title"/);
   assert.match(source, /id="shop-inspect-message" role="status"/);
+});
+
+function fragment(count) {
+  const purchasePolicy = fragmentOffer(count);
+  return {
+    key: 'mysterious_fragment',
+    requiresPersonalPrice: true,
+    assetKey: 'mysterious_fragment',
+    name: '神秘的碎片',
+    cost: purchasePolicy.soldOut ? {} : { electric: purchasePolicy.nextPrice },
+    purchasePolicy,
+  };
+}
+
+test('personalized price twenty wins over stale static price five and shows purchase count', async () => {
+  const { context, node } = setup({
+    callApi: async () => ({
+      shopItems: [fragment(2)],
+      assets: [{ key: 'mysterious_fragment', requiresPersonalPrice: true, quantity: 2 }],
+    }),
+    fetch: async () => {
+      throw new Error('static JSON must not override account prices');
+    },
+  });
+  await context.loadElectromagneticPage();
+  const html = node('shop-grid').innerHTML;
+  assert.match(html, /20 电元/);
+  assert.match(html, /累计计数 2 \/ 10/);
+  assert.match(html, /下次购买第 3 个/);
+  assert.doesNotMatch(html, /5 电元/);
+});
+
+test('the tenth tier costs 777 and fully purchased fragments remain viewable without a buy button', async () => {
+  const { context, node } = setup({ callApi: async () => ({ shopItems: [fragment(10)] }) });
+  assert.equal(context.renderShopItemPrice(fragment(9)), '777 电元');
+  await context.loadElectromagneticPage();
+  assert.match(node('shop-grid').innerHTML, /已达购买上限/);
+  assert.equal(context.renderActivationButton(fragment(10), 'electric'), '');
+  assert.match(context.renderShopPurchaseActions(fragment(10)), /已有物品仍保留/);
+});
+
+test('missing private pricing never enables buying fragments at the static starting price', async () => {
+  const { context } = setup({
+    callApi: async () => ({ assets: [] }),
+    fetch: async () => ({
+      ok: true,
+      json: async () => ({
+        items: [{ key: 'mysterious_fragment', requiresPersonalPrice: true, cost: { electric: 5 } }],
+      }),
+    }),
+  });
+  await context.loadElectromagneticPage();
+  const personalItem = context.economyShopItems[0];
+  assert.equal(context.renderActivationButton(personalItem, 'electric'), '');
+  assert.equal(context.renderShopItemPrice(personalItem), '请刷新以获取账号价格');
+});
+
+test('inventory distinguishes current holdings from the initialized purchase counter', async () => {
+  const { context, node } = setup({
+    callApi: async () => ({
+      shopItems: [fragment(2)],
+      assets: [{ key: 'mysterious_fragment', requiresPersonalPrice: true, quantity: 7 }],
+    }),
+  });
+  await context.loadInventoryPage();
+  assert.match(node('inventory-list').innerHTML, /已拥有 7/);
+  assert.match(node('inventory-list').innerHTML, /累计计数 2 \/ 10/);
+});
+
+function purchaseSetup(overrides = {}) {
+  const result = setup({ economyShopItems: [fragment(2)], ...overrides });
+  const { context, node } = result;
+  const button = {
+    disabled: false,
+    dataset: { action: 'purchase-item', itemKey: 'mysterious_fragment', currency: 'electric' },
+  };
+  const modal = node('shop-inspect-modal');
+  modal.dataset.itemKey = 'mysterious_fragment';
+  modal.querySelector = node;
+  modal.querySelectorAll = () => [button];
+  context.ensureShopInspectModal = () => modal;
+  const click = () =>
+    context.handleElectromagneticPageClick({
+      target: { closest: (selector) => (selector === '[data-action]' ? button : null) },
+    });
+  return { ...result, button, modal, click };
+}
+
+test('ambiguous request failure retries the same purchase id without trusting a client price', async () => {
+  const bodies = [];
+  const { click, button, node } = purchaseSetup({
+    callApi: async (route, options) => {
+      if (options.method === 'POST') {
+        bodies.push(JSON.parse(options.body));
+        if (bodies.length === 1) throw new Error('模拟响应丢失');
+        return {
+          shopItems: [fragment(3)],
+          purchase: { purchaseNumber: 3, amount: 20, replayed: true },
+        };
+      }
+      return { shopItems: [fragment(3)], assets: [] };
+    },
+  });
+  await click();
+  button.disabled = false;
+  await click();
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[0].requestKey, bodies[1].requestKey);
+  assert.equal(bodies[0].expectedPurchaseCount, 2);
+  assert.equal(bodies[0].currency, 'electric');
+  assert.equal(bodies[0].amount, undefined);
+  assert.match(node('#shop-inspect-message').textContent, /未重复扣款/);
+});
+
+test('stale quote refreshes without automatically buying at a higher price', async () => {
+  let purchases = 0;
+  const { click, context, node, modal } = purchaseSetup({
+    callApi: async (route, options) => {
+      if (options.method === 'POST') {
+        purchases += 1;
+        throw Object.assign(new Error('购买次数已变化，请确认后再购买'), { status: 409 });
+      }
+      return { shopItems: [fragment(3)] };
+    },
+  });
+  modal.classList.remove('hidden');
+  await click();
+  assert.equal(purchases, 1);
+  assert.equal(context.economyShopItems[0].cost.electric, 30);
+  assert.equal(node('#shop-inspect-price').textContent, '30 电元');
+  assert.match(node('#shop-inspect-message').textContent, /请确认后再购买/);
+});
+
+test('an account change invalidates an in-flight personalized catalog response', async () => {
+  let release;
+  const { context, node } = setup({
+    callApi: () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  });
+  const pending = context.loadElectromagneticPage();
+  context.userState.token = 'another-account';
+  release({ shopItems: [fragment(9)] });
+  await pending;
+  assert.equal(node('shop-grid').innerHTML, '');
+  assert.equal(context.economyShopItems.length, 0);
+});
+
+test('relic price uses plus and has exactly one combined buy button', () => {
+  const { context } = setup({ userState: { electrons: 120, manetrons: 600 } });
+  const relic = {
+    key: 'maxwell_spectacles',
+    priceMode: 'combined',
+    cost: { electric: 120, magnetic: 600 },
+  };
+  assert.equal(context.renderShopCost(relic.cost, relic.priceMode), '120 电元 ＋ 600 磁元');
+  const actions = context.renderShopPurchaseActions(relic);
+  assert.equal((actions.match(/data-action="purchase-item"/g) || []).length, 1);
+  assert.match(actions, /data-currency="combined"/);
+  assert.doesNotMatch(actions, /disabled/);
+  context.userState.manetrons = 599;
+  assert.match(context.renderShopPurchaseActions(relic), /disabled/);
+});
+test('laser controls clearly show dual-currency daily price, expiry and extension', () => {
+  const { context } = setup();
+  const html = context.renderLaserControls({
+    key: 'laser',
+    laser: { owned: true, expiresAtMs: 100000, serverNowMs: 0, dailyPrice: 1, dailyMagnetic: 1 },
+  });
+  assert.match(html, /柔光已开启/);
+  assert.match(html, /电元＋1 磁元激发 24 小时/);
+  assert.match(html, /可累加时长/);
+  assert.doesNotMatch(html, /不自动扣款/);
+  assert.match(html, /磁元/);
+});
+
+test('catalog rules use positive user-facing copy and concise cosmetic instructions', () => {
+  const { items } = JSON.parse(fs.readFileSync(path.join(publicDir, 'data/shop-items.json')));
+  for (const entry of items) {
+    assert.doesNotMatch(entry.rules, /不|不能|禁止/);
+    if (['avatar_frame', 'profile_card', 'nameplate'].includes(entry.class))
+      assert.equal(entry.rules, `${entry.cost.magnetic} 磁元，限购1件，可在个人主页装扮。`);
+  }
+  const laser = items.find((entry) => entry.key === 'laser');
+  assert.equal(
+    laser.desc,
+    '一只总想闪亮登场的小家伙。\n外壳上贴着一张微微卷边的便笺：「请给我一点电，我有一个光明的想法。」',
+  );
+  assert.match(laser.rules, /每1 电元＋1 磁元激发24小时/);
+  assert.doesNotMatch(source, /学者收藏 · 后续提供实物/);
+});
+test('flavor text is distinct from transaction rules and relic prices are not alternatives', () => {
+  const { context } = setup();
+  const catalog = JSON.parse(fs.readFileSync(path.join(publicDir, 'data/shop-items.json')));
+  for (const entry of catalog.items.filter((i) => i.rules)) {
+    assert.doesNotMatch(entry.desc, /购买|充值|限购|电元|磁元|累计/);
+    assert.match(context.renderShopRules(entry), /购买与使用说明/);
+  }
 });

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <linearGradient id="silk" x1="20" y1="165" x2="166" y2="25" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#65d8cd"/><stop offset=".46" stop-color="#b5a1ed"/><stop offset="1" stop-color="#efb8e8"/>
+    </linearGradient>
+  </defs>
+  <path d="M28 132C-1 70 57 11 99 17M101 183C150 193 199 133 175 77" stroke="url(#silk)" stroke-width="4" stroke-linecap="round"/>
+  <path d="M19 110C9 54 64 15 108 24M94 176C148 187 189 135 183 98" stroke="url(#silk)" stroke-width="1.5"/>
+  <path d="m140 9 4 10 10 4-10 4-4 10-4-10-10-4 10-4Z" fill="#d6c5ff" stroke="#8d74bf" stroke-width="1"/>
+  <path d="m165 31 3 7 7 3-7 3-3 7-3-7-7-3 7-3Z" fill="#b4eee0" stroke="#71a99f" stroke-width="1"/>
+  <path d="m117 7 2 5 5 2-5 2-2 5-2-5-5-2 5-2Z" fill="#f2d1e8"/>
+  <path d="m38 158 3 8 8 3-8 3-3 8-3-8-8-3 8-3Z" fill="#c8ece7" stroke="#83b9b1" stroke-width="1"/>
+  <circle cx="22" cy="144" r="2.5" fill="#e5c4e7"/>
+</svg>
