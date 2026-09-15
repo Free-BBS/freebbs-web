@@ -1923,6 +1923,9 @@ async function handleElectromagneticPageClick(event) {
   }
 }
 
+// Keep unresolved gift intents across modal closes/reopens, scoped to the login session.
+const inventoryGiftIntents = new Map();
+let inventoryGiftSession = null;
 async function handleInventoryPageClick(event) {
   const closeInspect = event.target.closest("[data-action='close-shop-inspect']");
   if (closeInspect) {
@@ -1953,6 +1956,12 @@ async function handleInventoryPageClick(event) {
   }
 
   if (button.dataset.action === 'gift-inventory-item') {
+    const sessionToken = userState.token;
+    if (!userState.isLoggedIn) return;
+    if (inventoryGiftSession !== sessionToken) {
+      inventoryGiftIntents.clear();
+      inventoryGiftSession = sessionToken;
+    }
     const modal = document.getElementById('shop-inspect-modal');
     const modalMessage = modal?.querySelector('#shop-inspect-message');
     const targetInput = modal?.querySelector('.inventory-gift-input');
@@ -1965,6 +1974,15 @@ async function handleInventoryPageClick(event) {
       return;
     }
 
+    const assetKey = button.dataset.assetKey || '';
+    const scope = JSON.stringify([assetKey, target]);
+    let intent = inventoryGiftIntents.get(scope);
+    if (!intent) {
+      intent = { requestKey: window.crypto.randomUUID(), pending: false };
+      inventoryGiftIntents.set(scope, intent);
+    }
+    if (intent.pending) return;
+    intent.pending = true;
     button.disabled = true;
     if (message) {
       message.textContent = '正在赠与...';
@@ -1974,18 +1992,16 @@ async function handleInventoryPageClick(event) {
     }
 
     try {
-      const assetKey = button.dataset.assetKey || '';
-      let payload;
-      try {
-        payload = await callApi(`/electromagnetic/assets/${encodeURIComponent(assetKey)}/gift`, {
+      const payload = await callApi(
+        `/electromagnetic/assets/${encodeURIComponent(assetKey)}/gift`,
+        {
           method: 'POST',
-          body: JSON.stringify({ target }),
-        });
-      } catch (error) {
-        const fetchFailed = error.message === 'Failed to fetch' || error.message === '请求失败';
-        throw new Error(fetchFailed ? '赠与接口不可用，请确认后端已加载最新代码' : error.message);
-      }
+          body: JSON.stringify({ target, requestKey: intent.requestKey }),
+        },
+      );
+      if (sessionToken !== userState.token || !userState.isLoggedIn) return;
       await loadInventoryPage();
+      if (sessionToken !== userState.token || !userState.isLoggedIn) return;
       const assets = window.freeBbsInventoryAssets || [];
       const activeAsset = assets.find((asset) => asset.key === assetKey);
       if (activeAsset) {
@@ -2001,7 +2017,10 @@ async function handleInventoryPageClick(event) {
       if (refreshedMessage) {
         refreshedMessage.textContent = `已赠与给 ${recipient}`;
       }
+      // Only a confirmed, displayed success starts a new gift intent.
+      inventoryGiftIntents.delete(scope);
     } catch (error) {
+      if (sessionToken !== userState.token || !userState.isLoggedIn) return;
       if (message) {
         message.textContent = error.message;
       }
@@ -2009,6 +2028,7 @@ async function handleInventoryPageClick(event) {
         modalMessage.textContent = error.message;
       }
     } finally {
+      intent.pending = false;
       button.disabled = false;
     }
     return;

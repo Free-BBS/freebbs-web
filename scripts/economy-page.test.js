@@ -220,6 +220,85 @@ test('purchase feedback stays in the open detail and parallel activation is prev
   assert.equal(modal.dataset.purchasing, undefined);
 });
 
+function giftSetup() {
+  const h = setup();
+  const input = { value: 'receiver' };
+  const modal = h.node('shop-inspect-modal');
+  modal.querySelector = (selector) =>
+    selector === '.inventory-gift-input' ? input : h.node('shop-inspect-message');
+  h.context.loadInventoryPage = async () => {};
+  const button = { disabled: false, dataset: { action: 'gift-inventory-item', assetKey: 'fish' } };
+  const click = (targetButton = button) =>
+    h.context.handleInventoryPageClick({
+      target: { closest: (selector) => (selector === '[data-action]' ? targetButton : null) },
+    });
+  return { ...h, input, button, click };
+}
+
+test('gift UI reuses its ID after network failure; a confirmed success allows a new gift', async () => {
+  const h = giftSetup();
+  const bodies = [];
+  h.context.callApi = async (_url, options) => {
+    bodies.push(JSON.parse(options.body));
+    if (bodies.length === 1) throw new Error('Failed to fetch');
+    return { recipient: { username: 'receiver' } };
+  };
+  await h.click();
+  await h.click({ ...h.button, disabled: false }); // A reopened modal has a new button.
+  await h.click();
+  assert.equal(bodies[0].requestKey, bodies[1].requestKey);
+  assert.notEqual(bodies[1].requestKey, bodies[2].requestKey);
+});
+
+test('gift UI blocks concurrent activation and isolates IDs by recipient and session', async () => {
+  const h = giftSetup();
+  let reject;
+  const bodies = [];
+  h.context.callApi = async (_url, options) => {
+    bodies.push(JSON.parse(options.body));
+    return new Promise((_resolve, fail) => {
+      reject = fail;
+    });
+  };
+  const first = h.click();
+  await h.click({ ...h.button, disabled: false });
+  assert.equal(bodies.length, 1);
+  reject(new Error('timeout'));
+  await first;
+  h.context.callApi = async (_url, options) => {
+    bodies.push(JSON.parse(options.body));
+    throw new Error('timeout');
+  };
+  h.input.value = 'third';
+  await h.click();
+  h.input.value = 'receiver';
+  await h.click();
+  assert.equal(bodies[0].requestKey, bodies[2].requestKey);
+  assert.notEqual(bodies[0].requestKey, bodies[1].requestKey);
+  h.context.userState.token = 'another-login';
+  await h.click();
+  assert.notEqual(bodies[0].requestKey, bodies[3].requestKey);
+});
+
+test('gift UI ignores a late response from a previous login', async () => {
+  const h = giftSetup();
+  let resolve;
+  let reloads = 0;
+  h.context.loadInventoryPage = async () => {
+    reloads += 1;
+  };
+  h.context.callApi = () =>
+    new Promise((done) => {
+      resolve = done;
+    });
+  const pending = h.click();
+  h.context.userState.token = 'another-login';
+  resolve({ recipient: { username: 'receiver' } });
+  await pending;
+  assert.equal(reloads, 0);
+  assert.doesNotMatch(h.node('inventory-message').textContent, /已赠与/);
+});
+
 test('scoped CSS removes ratio stretch, bounds dialogs and follows theme variables', () => {
   const css = fs.readFileSync(path.join(publicDir, 'economy.css'), 'utf8');
   assert.match(css, /repeat\(auto-fill/);

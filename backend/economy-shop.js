@@ -81,6 +81,7 @@ function createEconomyShop(store, { now = Date.now } = {}) {
       quotedDailyPrice,
       quotedDailyMagnetic,
       quotedCost,
+      legacyConverter = false,
     }) {
       const charging = action === 'charge';
       if (
@@ -109,7 +110,13 @@ function createEconomyShop(store, { now = Date.now } = {}) {
           quotedDailyPrice < 1)
       )
         throw new ShopPurchaseError('充值天数为 1～30 天，请确认日费', 'INVALID_PURCHASE');
-      if (!charging && (!Number.isSafeInteger(expectedPurchaseCount) || expectedPurchaseCount < 0))
+      if (legacyConverter && (charging || item.key !== 'differential_converter'))
+        throw new ShopPurchaseError('无效购买入口', 'INVALID_PURCHASE');
+      if (
+        !charging &&
+        !legacyConverter &&
+        (!Number.isSafeInteger(expectedPurchaseCount) || expectedPurchaseCount < 0)
+      )
         throw new ShopPurchaseError('请刷新商品，确认购买次数后再试', 'INVALID_PURCHASE');
       const quote = !charging
         ? { electric: quotedCost?.electric, magnetic: quotedCost?.magnetic }
@@ -120,7 +127,9 @@ function createEconomyShop(store, { now = Date.now } = {}) {
         currency,
         ...(charging
           ? { days, quotedDailyPrice, quotedDailyMagnetic }
-          : { expectedPurchaseCount, quote }),
+          : legacyConverter
+            ? { legacyConverter: true }
+            : { expectedPurchaseCount, quote }),
       });
       return store.transaction(async (tx) => {
         // Serialize the whole account: both currencies, inventory, lease and receipt commit together.
@@ -154,7 +163,7 @@ function createEconomyShop(store, { now = Date.now } = {}) {
           const offer = purchaseOffer(item, count);
           if (offer.soldOut || laser?.owned)
             throw new ShopPurchaseError('已达到该物品的购买上限', 'PURCHASE_LIMIT', 409);
-          if (count !== expectedPurchaseCount)
+          if (!legacyConverter && count !== expectedPurchaseCount)
             throw new ShopPurchaseError('购买次数已变化，请刷新确认后再购买', 'PRICE_CHANGED', 409);
           cost = combined
             ? { electric: item.cost?.electric, magnetic: item.cost?.magnetic }
@@ -169,7 +178,11 @@ function createEconomyShop(store, { now = Date.now } = {}) {
         }
         if (Object.values(cost).some((amount) => !Number.isSafeInteger(amount) || amount <= 0))
           throw new ShopPurchaseError('商品价格暂不可用', 'INVALID_PRICE');
-        if (!charging && Object.entries(cost).some(([unit, amount]) => quote[unit] !== amount))
+        if (
+          !charging &&
+          !legacyConverter &&
+          Object.entries(cost).some(([unit, amount]) => quote[unit] !== amount)
+        )
           throw new ShopPurchaseError('价格已变化，请刷新确认后再购买', 'PRICE_CHANGED', 409);
         for (const [unit, amount] of Object.entries(cost)) {
           if (!(await tx.debit(userId, amount, unit)))

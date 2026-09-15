@@ -25,6 +25,7 @@ const {
   createProfileExtras,
   ProfileExtrasError,
   ensureProfileExtrasTables,
+  mysqlProfileMethods,
   beijingDay,
 } = require('./profile-extras');
 
@@ -2915,17 +2916,15 @@ async function purchaseShopItem(request, response, itemKey) {
       return;
     }
 
-    // Keep the old converter shortcut usable; modern purchases require a quoted count and request ID.
+    // Legacy intent has no client quote. Resolve its stable receipt before reading mutable counts.
     const legacy = !request.params.itemKey && item.key === 'differential_converter';
-    const count = legacy
-      ? (await economyShop.decorate([item], user.id))[0].purchasePolicy.purchasedCount
-      : request.body.expectedPurchaseCount;
     const purchase = await economyShop.purchase({
       userId: user.id,
       currency: request.body.currency === 'combined' ? 'combined' : currency,
       item,
-      requestKey: request.body.requestKey || (legacy ? crypto.randomUUID() : undefined),
-      expectedPurchaseCount: count,
+      requestKey: request.body.requestKey,
+      legacyConverter: legacy,
+      expectedPurchaseCount: request.body.expectedPurchaseCount,
       quotedCost: legacy ? item.cost : request.body.quotedCost,
     });
     response.json({
@@ -3037,6 +3036,7 @@ app.post('/api/electromagnetic/convert', async (request, response) => {
 });
 
 app.post('/api/electromagnetic/assets/:assetKey/gift', async (request, response) => {
+  response.set('Cache-Control', 'private, no-store');
   let connection;
 
   try {
@@ -3048,14 +3048,38 @@ app.post('/api/electromagnetic/assets/:assetKey/gift', async (request, response)
 
     const requestedAssetKey = String(request.params.assetKey || '').trim();
     const target = String(request.body.target || '').trim();
+    const requestKey = request.body.requestKey;
 
-    if (!requestedAssetKey) {
+    if (!requestedAssetKey || requestedAssetKey.length > 64) {
       response.status(400).json({ message: '无效资产' });
       return;
     }
 
-    if (!target) {
+    if (!target || target.length > 128) {
       response.status(400).json({ message: '请输入接收者 UID 或昵称' });
+      return;
+    }
+
+    if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestKey || '')) {
+      response.status(400).json({ message: '请刷新页面后重新确认赠与' });
+      return;
+    }
+    const fingerprint = JSON.stringify({ action: 'gift', assetKey: requestedAssetKey, target });
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    // Share the account lock and action receipts with feeding/conversion.
+    await connection.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [user.id]);
+    const actions = mysqlProfileMethods(connection);
+    const previous = await actions.findProfileAction(user.id, requestKey);
+    if (previous) {
+      if (previous.fingerprint !== fingerprint) {
+        response.status(409).json({ message: '操作编号已用于另一笔操作，请重新确认' });
+        return;
+      }
+      await connection.commit();
+      connection.release();
+      connection = null;
+      response.json({ ...previous.result, replayed: true, assets: await getUserAssets(user.id) });
       return;
     }
 
@@ -3073,7 +3097,7 @@ app.post('/api/electromagnetic/assets/:assetKey/gift', async (request, response)
 
     const assetKey = item.assetKey || item.key;
 
-    const [targetRows] = await pool.execute(
+    const [targetRows] = await connection.execute(
       `SELECT id, uid, username, full_name, student_id
        FROM users
        WHERE uid = ?
@@ -3102,9 +3126,6 @@ app.post('/api/electromagnetic/assets/:assetKey/gift', async (request, response)
       response.status(400).json({ message: '不能赠与给自己' });
       return;
     }
-
-    connection = await pool.getConnection();
-    await connection.beginTransaction();
 
     const [assetRows] = await connection.execute(
       `SELECT asset_key, quantity, metadata_json
@@ -3146,23 +3167,28 @@ app.post('/api/electromagnetic/assets/:assetKey/gift', async (request, response)
       ],
     );
 
-    await connection.commit();
-
-    response.json({
+    const result = {
       ok: true,
+      replayed: false,
       recipient: {
         uid: targetUser.uid || '',
         username: targetUser.username,
         fullName: targetUser.full_name || '',
       },
-      assets: await getUserAssets(user.id),
-    });
+    };
+    await actions.recordProfileAction(user.id, requestKey, fingerprint, result);
+    await connection.commit();
+    connection.release();
+    connection = null;
+    response.json({ ...result, assets: await getUserAssets(user.id) });
   } catch (error) {
     if (connection) {
       await connection.rollback().catch(() => {});
     }
     response.status(500).json({ message: '赠与失败', detail: error.message });
   } finally {
+    // Also release locks on validation/receipt-conflict early returns.
+    if (connection) await connection.rollback().catch(() => {});
     connection?.release();
   }
 });
