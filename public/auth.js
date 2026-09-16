@@ -1,19 +1,7 @@
 const API_BASE_URL = (() => {
-  const isLocalFrontend =
-    window.location.protocol === 'file:' ||
-    ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname) ||
-    window.location.port === '3000';
-
-  if (isLocalFrontend) {
-    const host =
-      window.location.hostname &&
-      window.location.protocol !== 'file:' &&
-      window.location.hostname !== '0.0.0.0'
-        ? window.location.hostname
-        : '127.0.0.1';
-    return `http://${host}:3001/api`;
-  }
-
+  if (window.FREEBBS_API_BASE) return window.FREEBBS_API_BASE;
+  if (window.location.protocol === 'file:') return 'http://127.0.0.1:3001/api';
+  // The frontend server forwards /api to the backend, including local development.
   return `${window.location.origin}/api`;
 })();
 

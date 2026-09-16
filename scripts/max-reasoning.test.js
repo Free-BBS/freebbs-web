@@ -56,3 +56,61 @@ test('partial or failed streams never appear as a completed answer', async () =>
   await assert.rejects(request(event({ done: true })), /完整/);
   await assert.rejects(request(event({ error: { message: '模型不可用' } })), /模型不可用/);
 });
+
+test('reasoning starts collapsed, remembers the preference, and preserves manual toggles on completion', () => {
+  const fs = require('node:fs');
+  const vm = require('node:vm');
+  const source = fs.readFileSync(require.resolve('../public/max-reasoning'), 'utf8');
+  const panels = [];
+  const storage = new Map();
+  const checkbox = {
+    addEventListener(name, fn) {
+      this[name] = fn;
+    },
+  };
+  const element = () => ({
+    open: false,
+    children: [],
+    scrollHeight: 0,
+    scrollTop: 0,
+    clientHeight: 100,
+    append(...children) {
+      this.children.push(...children);
+    },
+    setAttribute() {},
+  });
+  const document = {
+    readyState: 'complete',
+    createElement: element,
+    createTextNode: (text) => text,
+    querySelectorAll: (selector) => (selector === '.max-reasoning' ? panels : [checkbox]),
+  };
+  const window = {
+    document,
+    localStorage: {
+      getItem: (key) => storage.get(key),
+      setItem: (key, value) => storage.set(key, value),
+    },
+  };
+  vm.runInNewContext(source, { window, document });
+  const api = window.FreeBbsReasoning;
+  const article = () => ({ querySelector: () => null, append: (panel) => panels.push(panel) });
+  const first = article();
+  api.update(first, { delta: '测试思考' });
+  assert.equal(panels[0].open, false);
+  checkbox.checked = true;
+  checkbox.change();
+  assert.equal(panels[0].open, true);
+  assert.equal(storage.get('free_bbs_max_reasoning_expanded'), 'true');
+  const second = article();
+  api.update(second, { delta: '新回复' });
+  assert.equal(panels[1].open, true);
+  panels[1].open = false;
+  api.update(second, { delta: '继续' });
+  api.finish(second);
+  assert.equal(panels[1].open, false);
+  api.finish(first);
+  assert.equal(panels[0].open, true);
+  vm.runInNewContext(source, { window, document });
+  assert.equal(checkbox.checked, true);
+});

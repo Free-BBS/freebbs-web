@@ -1,20 +1,7 @@
 const API_BASE_URL = (() => {
   if (window.FREEBBS_API_BASE) return window.FREEBBS_API_BASE;
-  const isLocalFrontend =
-    window.location.protocol === 'file:' ||
-    ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname) ||
-    window.location.port === '3000';
-
-  if (isLocalFrontend) {
-    const host =
-      window.location.hostname &&
-      window.location.protocol !== 'file:' &&
-      window.location.hostname !== '0.0.0.0'
-        ? window.location.hostname
-        : '127.0.0.1';
-    return `http://${host}:3001/api`;
-  }
-
+  if (window.location.protocol === 'file:') return 'http://127.0.0.1:3001/api';
+  // The frontend server forwards /api to the backend, including local development.
   return `${window.location.origin}/api`;
 })();
 const API_ROOT = API_BASE_URL.replace(/\/api$/, '');
@@ -201,6 +188,7 @@ const homeDashboardState = {
 };
 const aiChatState = {
   currentDid: '',
+  pendingSend: null,
   dialogs: [],
   messages: [],
   isSending: false,
@@ -2991,6 +2979,7 @@ function clearSession() {
   aiChatState.currentDid = '';
   aiChatState.dialogs = [];
   aiChatState.messages = [];
+  aiChatState.pendingSend = null;
   renderUser();
   renderAiChatThread();
   renderSettingsForm();
@@ -4602,6 +4591,9 @@ function renderAiChatThread() {
   renderAiWelcomeMessage();
   aiChatState.messages.forEach((message) => {
     const article = appendAiChatMessage(message.role, message.content);
+    if (message.role === 'user') {
+      window.FreeBbsMaxImages?.show(article?.querySelector('.aichat-bubble'), message.images || []);
+    }
     if (message.role === 'assistant' && message.navigation) {
       renderMaxNavigationRoutes(article, message.navigation);
     }
@@ -4632,7 +4624,7 @@ function updateAiChatMessage(article, content) {
 }
 
 function buildAiChatPayload(userMessage) {
-  const recentMessages = aiChatState.messages.slice(-13);
+  const recentMessages = aiChatState.messages.slice(-13).map(({ images, ...message }) => message);
 
   return {
     agent: 'navigation',
@@ -5163,13 +5155,15 @@ async function loadAiDialogs() {
   }
 }
 
-async function saveAiDialog() {
+async function saveAiDialog({ throwOnError = false } = {}) {
   if (!userState.token || !aiChatState.messages.length) {
     renderAiDialogList();
     return;
   }
 
   try {
+    // Keep the same identity if the server saved the dialog but its response was lost.
+    aiChatState.currentDid ||= window.crypto.randomUUID();
     const payload = await callApi('/ai/dialogs', {
       method: 'POST',
       body: JSON.stringify({
@@ -5186,6 +5180,7 @@ async function saveAiDialog() {
     renderAiDialogList();
   } catch (error) {
     setAiChatStatus(`对话未保存：${error.message}`);
+    if (throwOnError) throw new Error(`对话未保存：${error.message}`);
   }
 }
 
@@ -5199,8 +5194,10 @@ async function loadAiDialog(did, { updateUrl = true } = {}) {
     const payload = await callApi(`/ai/dialogs/${encodeURIComponent(did)}`, {
       method: 'GET',
     });
+    window.FreeBbsMaxImages?.clear();
     aiChatState.currentDid = payload.dialog.did;
     aiChatState.messages = payload.dialog.messages || [];
+    aiChatState.pendingSend = null;
     if (updateUrl) {
       updateAiDialogUrl(aiChatState.currentDid);
     }
@@ -5218,8 +5215,10 @@ function startNewAiDialog() {
   }
 
   clearAiChatStatusTimer();
+  window.FreeBbsMaxImages?.clear();
   aiChatState.currentDid = '';
   aiChatState.messages = [];
+  aiChatState.pendingSend = null;
   updateAiDialogUrl('');
   renderAiChatThread();
   renderAiDialogList();
@@ -5309,20 +5308,44 @@ async function handleAiChatSubmit(event) {
     return;
   }
 
-  const userMessage = aiChatInput.value.trim();
+  let images;
+  try {
+    images = window.FreeBbsMaxImages?.snapshot() || [];
+  } catch (error) {
+    setAiChatStatus(error.message);
+    return;
+  }
+  const userMessage = aiChatInput.value.trim() || (images.length ? '请帮我分析这些图片。' : '');
 
   if (!userMessage) {
     return;
   }
 
   aiChatState.isSending = true;
+  window.FreeBbsMaxImages?.setBusy(true);
   aiChatInput.value = '';
   resizeAiChatInput();
   aiChatInput.disabled = true;
   if (aiChatSend) {
     aiChatSend.disabled = true;
   }
-  appendAiChatMessage('user', userMessage);
+  const previousAttempt = aiChatState.pendingSend;
+  const retrying =
+    previousAttempt &&
+    aiChatState.messages.at(-1) === previousAttempt.message &&
+    previousAttempt.message.content === userMessage &&
+    JSON.stringify(previousAttempt.message.images || []) === JSON.stringify(images);
+  if (retrying) {
+    // Re-render the stored user turn and discard the previous error placeholder.
+    renderAiChatThread();
+  } else {
+    const requestPayload = { ...buildAiChatPayload(userMessage), vision_images: images };
+    const message = { role: 'user', content: userMessage, ...(images.length ? { images } : {}) };
+    aiChatState.messages.push(message);
+    aiChatState.pendingSend = { message, requestPayload };
+    const userArticle = appendAiChatMessage('user', userMessage);
+    window.FreeBbsMaxImages?.show(userArticle?.querySelector('.aichat-bubble'), images);
+  }
   const assistantArticle = appendAiChatMessage('assistant', '');
   startAiChatThinkingStatus();
   setAiChatThinkingBubble(assistantArticle, 'Max 正在思考......');
@@ -5335,13 +5358,21 @@ async function handleAiChatSubmit(event) {
   let assistantContent = '';
 
   try {
-    const rawResult = await requestMaxNavigation(buildAiChatPayload(userMessage), (progress) => {
+    const { requestPayload } = aiChatState.pendingSend;
+    await saveAiDialog({ throwOnError: true });
+    requestPayload.did = aiChatState.currentDid || '';
+    const rawResult = await requestMaxNavigation(requestPayload, (progress) => {
       window.FreeBbsReasoning.update(assistantArticle, progress);
     });
     window.FreeBbsReasoning.finish(assistantArticle);
     const result = await addMentionedCourseMapRoute(rawResult, userMessage);
     window.clearTimeout(bubbleTimer);
     assistantContent = String(result.answer || '').trim() || 'Max 暂时没有生成回答。';
+    const replyModel =
+      typeof result.model === 'string' && /^[A-Za-z0-9_./:+-]{1,120}$/.test(result.model)
+        ? result.model
+        : '未返回模型信息';
+    assistantContent += `\n\n---\n\n回复模型：${replyModel}`;
     updateAiChatMessage(assistantArticle, assistantContent);
     const navigation = createAiNavigationSnapshot(result);
     const rag = createAiRagSnapshot(result);
@@ -5351,22 +5382,26 @@ async function handleAiChatSubmit(event) {
       pollInfoJob(assistantArticle, result);
     }
 
-    aiChatState.messages.push({ role: 'user', content: userMessage });
     aiChatState.messages.push({
       role: 'assistant',
       content: assistantContent,
       navigation,
       rag,
     });
+    aiChatState.pendingSend = null;
+    window.FreeBbsMaxImages?.clear();
     stopAiChatThinkingStatus();
     await saveAiDialog();
   } catch (error) {
     window.clearTimeout(bubbleTimer);
     window.FreeBbsReasoning?.finish(assistantArticle, { stopped: true });
     updateAiChatMessage(assistantArticle, `请求失败：${error.message}`);
-    stopAiChatThinkingStatus('AI 服务不可用，请确认 freebbs-agent 已启动。');
+    aiChatInput.value = userMessage;
+    resizeAiChatInput();
+    stopAiChatThinkingStatus(error.message);
   } finally {
     aiChatState.isSending = false;
+    window.FreeBbsMaxImages?.setBusy(false);
     aiChatInput.disabled = false;
     if (aiChatSend) {
       aiChatSend.disabled = false;
@@ -5428,6 +5463,7 @@ function initializeAiChatPage() {
     } else {
       aiChatState.currentDid = '';
       aiChatState.messages = [];
+      aiChatState.pendingSend = null;
       renderAiChatThread();
       renderAiDialogList();
     }
