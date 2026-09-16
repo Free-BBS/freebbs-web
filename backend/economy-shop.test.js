@@ -231,6 +231,26 @@ test('public decoration excludes anonymous and deleted posts and unrelated accou
   assert.equal(rows[2].laser, null);
   assert.equal(rows[3].laser, null);
 });
+test('one author lease applies to historical/new posts and replies on another author post', async () => {
+  const { buy, charge, shop, clock } = setup([{ id: 1 }, { id: 2 }]);
+  const content = [
+    { user_id: 1, created_at: '2020-01-01' },
+    { user_id: 1, created_at: '2026-09-14' },
+    { user_id: 1, post_id: 2, parent_comment_id: 99, created_at: '2020-01-01' },
+    { user_id: 2 },
+  ];
+  await buy('laser');
+  assert.ok((await shop.decoratePosts(content)).every((row) => !row.laser.active));
+  await charge();
+  let rows = await shop.decoratePosts(content);
+  assert.ok(rows.slice(0, 3).every((row) => row.laser.active));
+  assert.equal(new Set(rows.slice(0, 3).map((row) => row.laser.expiresAtMs)).size, 1);
+  assert.equal(rows[3].laser.active, false);
+  clock.value = rows[0].laser.expiresAtMs;
+  rows = await shop.decoratePosts(content);
+  assert.ok(rows.every((row) => !row.laser.active));
+});
+
 test('public collection only contains owned scholar relics, not wallet or other assets', async () => {
   const { shop } = setup([
     { id: 1, assets: { mysterious_fragment: 2, laser: 1, maxwell_spectacles: 1 } },

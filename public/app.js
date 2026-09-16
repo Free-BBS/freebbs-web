@@ -3728,7 +3728,7 @@ function renderDiscussionPosts() {
     <article
       class="discussion-post-card ${post.isDeleted ? 'is-deleted' : ''} ${discussionState.activePostId === post.id ? 'is-active' : ''} ${replyCount > 0 ? 'is-answered' : 'is-unanswered'}"
       data-post-id="${escapeHtml(post.id)}"
-      ${window.FreeBbsPostLaser?.attributes(post.laser) || ''}
+      ${window.FreeBbsPostLaser?.attributes(post.laser, post.author?.id) || ''}
       role="listitem"
     >
       <div class="discussion-post-author">
@@ -5724,7 +5724,7 @@ function renderDiscussionComments() {
     const displayDepth = Math.min(depth, 4);
 
     const current = `
-    <article id="comment-${comment.id}" class="discussion-comment ${depth > 0 ? 'discussion-comment-reply' : ''}" data-comment-id="${comment.id}" data-comment-depth="${displayDepth}" style="--comment-depth: ${displayDepth}">
+    <article id="comment-${comment.id}" class="discussion-comment ${depth > 0 ? 'discussion-comment-reply' : ''}" data-comment-id="${comment.id}" data-comment-depth="${displayDepth}" style="--comment-depth: ${displayDepth}" ${!comment.isDeleted ? window.FreeBbsPostLaser?.attributes(comment.laser, comment.author?.id) || '' : ''}>
       ${renderAuthorProfileLink(comment.author, 'discussion-comment-author-link', true)}
       <div class="discussion-comment-body">
         <div class="discussion-comment-meta">
@@ -5795,10 +5795,8 @@ function renderDiscussionDetail(post) {
   discussionState.activePost = post;
   delete discussionDetail.dataset.laserExpires;
   discussionDetail.classList.remove('has-laser-glow');
-  if (window.FreeBbsPostLaser?.attributes(post.laser)) {
-    discussionDetail.dataset.laserExpires = String(post.laser.expiresAtMs);
-  }
   discussionDetail.innerHTML = `
+    <div class="discussion-post-surface" ${!post.isDeleted ? window.FreeBbsPostLaser?.attributes(post.laser, post.author?.id) || '' : ''}>
     <header class="discussion-detail-head">
       ${post.isDeleted ? '<p class="discussion-deleted-notice"><strong>已删除</strong> · 以下为原始内容，仅管理员可见</p>' : ''}
       <div class="discussion-detail-toolbar">
@@ -5838,6 +5836,7 @@ function renderDiscussionDetail(post) {
       </div>
     </header>
     <div class="discussion-markdown-body" id="discussion-markdown-body">${renderMarkdownContent(post.contentMarkdown)}</div>
+    </div>
     <section class="discussion-comments" aria-label="评论">
       <div class="discussion-comments-head">
         <h3>评论</h3><p id="discussion-comment-action-status" role="status" aria-live="polite"></p>

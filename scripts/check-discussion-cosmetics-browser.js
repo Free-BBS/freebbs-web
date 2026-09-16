@@ -112,8 +112,32 @@ const { createEconomyPreview } = require('./preview-economy');
       }
       await page.setViewportSize({ width: 1440, height: 1000 });
       await card.locator('[data-action="open-post"]').click();
-      const detail = page.locator('#discussion-detail');
+      const detail = page.locator('#discussion-detail .discussion-post-surface');
       await page.locator('#discussion-markdown-body').waitFor();
+      await page.locator('#comment-1001.has-laser-glow').waitFor();
+      assert.equal(await page.locator('#comment-1002.has-laser-glow').count(), 0);
+      assert.equal(await page.locator('#comment-1003.has-laser-glow').count(), 1);
+      assert.equal(await page.locator('#discussion-detail.has-laser-glow').count(), 0);
+      assert.equal(await detail.locator('.discussion-comments').count(), 0);
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: 1000 });
+        assert.ok(
+          await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 2),
+        );
+        assert.match(
+          await page
+            .locator('#comment-1001')
+            .evaluate((el) => getComputedStyle(el).backgroundImage),
+          /laser-starlight/,
+        );
+        assert.doesNotMatch(
+          await page
+            .locator('#comment-1002')
+            .evaluate((el) => getComputedStyle(el).backgroundImage),
+          /laser-starlight/,
+        );
+      }
+      await page.setViewportSize({ width: 1440, height: 1000 });
       assert.equal(
         await detail.evaluate((el) => getComputedStyle(el).animationName),
         'laser-halo-flow',
@@ -144,6 +168,29 @@ const { createEconomyPreview } = require('./preview-economy');
         /laser-starlight/,
       );
       await detail.locator('[data-action="close-detail"]').click();
+      await page
+        .locator('.discussion-post-card[data-post-id="2"] [data-action="open-post"]')
+        .click();
+      await page.locator('#comment-1001.has-laser-glow').waitFor();
+      assert.equal(await page.locator('.discussion-post-surface.has-laser-glow').count(), 0);
+      assert.equal(await page.locator('#comment-1002.has-laser-glow').count(), 0);
+      assert.equal(await page.locator('#comment-1003.has-laser-glow').count(), 1);
+      if (process.env.COSMETIC_SCREENSHOT_DIR)
+        await page.locator('#discussion-detail').screenshot({
+          path: path.join(process.env.COSMETIC_SCREENSHOT_DIR, `reply-isolation-${mode}.png`),
+        });
+      await page.evaluate(() => {
+        window.FreeBbsPostLaser.sync({
+          comments: [
+            {
+              author: { id: 1 },
+              laser: { active: false, expiresAtMs: 1, serverNowMs: Date.now() },
+            },
+          ],
+        });
+      });
+      assert.equal(await page.locator('#discussion-detail .has-laser-glow').count(), 0);
+      await page.locator('#discussion-detail [data-action="close-detail"]').click();
       await card.locator('.discussion-author-link-avatar').click();
       await page.waitForURL('**/profile?uid=u_preview01');
       await page.locator('#public-profile-avatar[data-avatar-frame="frame_aurora"]').waitFor();

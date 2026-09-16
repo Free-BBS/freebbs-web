@@ -1471,6 +1471,7 @@ function toDiscussionPostSummary(row, viewerId = 0) {
 function toDiscussionComment(row) {
   return {
     id: row.id,
+    laser: !row.is_deleted && !row.is_anonymous ? row.laser || null : null,
     parentCommentId: row.parent_comment_id ? Number(row.parent_comment_id) : null,
     isDeleted: Boolean(row.is_deleted),
     canDelete: !row.is_deleted && Boolean(row.can_delete),
@@ -1515,7 +1516,7 @@ async function getDiscussionCommentById(commentId) {
     [commentId],
   );
 
-  return rows[0] ? toDiscussionComment(rows[0]) : null;
+  return rows[0] ? toDiscussionComment((await economyShop.decoratePosts([rows[0]]))[0]) : null;
 }
 
 function shouldAskMax(contentMarkdown) {
@@ -4206,7 +4207,7 @@ app.get('/api/discussion/posts/:id/comments', async (request, response) => {
 
     response.json({
       comments: visibleComments(
-        rows.map((row) =>
+        (await economyShop.decoratePosts(rows)).map((row) =>
           toDiscussionComment({
             ...row,
             can_feature: Boolean(currentUser?.is_admin || currentUser?.role === 'admin'),
@@ -4292,7 +4293,10 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
       [result.insertId],
     );
 
-    const comment = toDiscussionComment({ ...rows[0], can_delete: true });
+    const comment = toDiscussionComment({
+      ...(await economyShop.decoratePosts([rows[0]]))[0],
+      can_delete: true,
+    });
     const maxPending = user.username !== MAX_AGENT_USER.username && shouldAskMax(contentMarkdown);
 
     if (maxPending) {

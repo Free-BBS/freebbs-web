@@ -253,8 +253,32 @@ function createEconomyPreview({ now = Date.now, showcase = false } = {}) {
       }
       if (route === '/api/discussion/posts')
         return send(200, { posts: await posts(), nextCursor: null });
-      if (/^\/api\/discussion\/posts\/\d+\/comments$/.test(route))
-        return send(200, { comments: [] });
+      if (/^\/api\/discussion\/posts\/\d+\/comments$/.test(route)) {
+        const rows = showcase
+          ? await shop.decoratePosts([
+              { id: 1001, user_id: 1, parentCommentId: null },
+              { id: 1002, user_id: 2, parentCommentId: 1001 },
+              { id: 1003, user_id: 1, parentCommentId: 1002 },
+            ])
+          : [];
+        return send(200, {
+          comments: rows.map((row) => ({
+            id: row.id,
+            parentCommentId: row.parentCommentId,
+            author: {
+              id: row.user_id,
+              uid: `u_preview0${row.user_id}`,
+              username: row.user_id === 1 ? 'NotingSr_preview' : 'another_student',
+            },
+            contentMarkdown:
+              row.user_id === 1
+                ? '这是我以前发布的回帖，柔光跟随我的激光器。'
+                : '我的回帖保持自己的状态。',
+            createdAt: '2020-01-01T08:00:00Z',
+            laser: row.laser,
+          })),
+        });
+      }
       if (/^\/api\/discussion\/posts\/\d+$/.test(route))
         return send(200, { post: (await posts()).find((p) => p.id === route.split('/').pop()) });
       if (route === '/api/discussion/boards')

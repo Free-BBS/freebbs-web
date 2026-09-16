@@ -39,7 +39,7 @@ function setup() {
       now = value;
     },
     tick: () => callback(),
-    add(until) {
+    add(until, authorId) {
       const node = {
         dataset: { laserExpires: String(until) },
         classList: {
@@ -48,6 +48,7 @@ function setup() {
           },
         },
       };
+      if (authorId) node.dataset.laserAuthor = String(authorId);
       elements.push(node);
       return node;
     },
@@ -89,8 +90,65 @@ test('glow flows outside list/detail cards with reduced-motion and forced-colors
   assert.match(css, /forced-colors/);
   assert.match(css, /prefers-reduced-motion/);
   assert.match(css, /animation: laser-halo-flow/);
-  assert.match(css, /\.discussion-post-card, \.discussion-detail/);
+  assert.match(css, /\.discussion-post-card,\s*\.discussion-post-surface,\s*\.discussion-comment/);
+  assert.doesNotMatch(css, /\.discussion-detail\)\.has-laser-glow/);
   assert.match(css, /laser-starlight\.svg/);
   assert.match(css, /--laser-wash/);
   assert.doesNotMatch(css, /text-shadow:|filter:|::before|::after/);
+});
+
+test('comment payloads synchronize server time and expire independently', () => {
+  const c = setup();
+  c.api.sync({ comments: [{ laser: { active: true, serverNowMs: 1000, expiresAtMs: 1020 } }] });
+  const a = c.add(1020);
+  const b = c.add(1040);
+  c.api.refresh();
+  assert.equal(a.active, true);
+  assert.equal(b.active, true);
+  c.setNow(100025);
+  c.tick();
+  assert.equal(a.active, false);
+  assert.equal(b.active, true);
+  c.api.sync({ comment: { laser: { serverNowMs: 1050 } } });
+  assert.equal(b.active, false);
+});
+
+test('new author state updates historical cards and replies together without changing another author', () => {
+  const c = setup();
+  const oldPost = c.add(0, 1);
+  const reply = c.add(0, 1);
+  const peer = c.add(100100, 2);
+  c.api.sync({
+    comments: [
+      {
+        author: { id: 1 },
+        laser: { active: true, expiresAtMs: 100050, serverNowMs: 100000 },
+      },
+    ],
+  });
+  assert.equal(oldPost.active, true);
+  assert.equal(reply.active, true);
+  assert.equal(peer.active, true);
+  c.setNow(100051);
+  c.tick();
+  assert.equal(oldPost.active, false);
+  assert.equal(reply.active, false);
+  assert.equal(peer.active, true);
+  c.api.sync({
+    user: { id: 1 },
+    shopItems: [
+      {
+        key: 'laser',
+        laser: { active: true, expiresAtMs: 100200, serverNowMs: 100051 },
+      },
+    ],
+  });
+  assert.equal(oldPost.active, true);
+  assert.equal(reply.active, true);
+  assert.equal(peer.dataset.laserExpires, '100100');
+  assert.match(
+    c.api.attributes({ active: false, expiresAtMs: 0, serverNowMs: 99999 }, 1),
+    /100200/,
+  );
+  assert.equal(c.api.attributes(null, 1), '', 'redacted content never inherits author decoration');
 });
