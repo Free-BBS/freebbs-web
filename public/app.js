@@ -188,6 +188,7 @@ const homeDashboardState = {
 };
 const aiChatState = {
   currentDid: '',
+  pendingSend: null,
   dialogs: [],
   messages: [],
   isSending: false,
@@ -2955,6 +2956,7 @@ function clearSession() {
   aiChatState.currentDid = '';
   aiChatState.dialogs = [];
   aiChatState.messages = [];
+  aiChatState.pendingSend = null;
   renderUser();
   renderAiChatThread();
   renderSettingsForm();
@@ -5137,6 +5139,8 @@ async function saveAiDialog({ throwOnError = false } = {}) {
   }
 
   try {
+    // Keep the same identity if the server saved the dialog but its response was lost.
+    aiChatState.currentDid ||= window.crypto.randomUUID();
     const payload = await callApi('/ai/dialogs', {
       method: 'POST',
       body: JSON.stringify({
@@ -5170,6 +5174,7 @@ async function loadAiDialog(did, { updateUrl = true } = {}) {
     window.FreeBbsMaxImages?.clear();
     aiChatState.currentDid = payload.dialog.did;
     aiChatState.messages = payload.dialog.messages || [];
+    aiChatState.pendingSend = null;
     if (updateUrl) {
       updateAiDialogUrl(aiChatState.currentDid);
     }
@@ -5190,6 +5195,7 @@ function startNewAiDialog() {
   window.FreeBbsMaxImages?.clear();
   aiChatState.currentDid = '';
   aiChatState.messages = [];
+  aiChatState.pendingSend = null;
   updateAiDialogUrl('');
   renderAiChatThread();
   renderAiDialogList();
@@ -5300,8 +5306,23 @@ async function handleAiChatSubmit(event) {
   if (aiChatSend) {
     aiChatSend.disabled = true;
   }
-  const userArticle = appendAiChatMessage('user', userMessage);
-  window.FreeBbsMaxImages?.show(userArticle?.querySelector('.aichat-bubble'), images);
+  const previousAttempt = aiChatState.pendingSend;
+  const retrying =
+    previousAttempt &&
+    aiChatState.messages.at(-1) === previousAttempt.message &&
+    previousAttempt.message.content === userMessage &&
+    JSON.stringify(previousAttempt.message.images || []) === JSON.stringify(images);
+  if (retrying) {
+    // Re-render the stored user turn and discard the previous error placeholder.
+    renderAiChatThread();
+  } else {
+    const requestPayload = { ...buildAiChatPayload(userMessage), vision_images: images };
+    const message = { role: 'user', content: userMessage, ...(images.length ? { images } : {}) };
+    aiChatState.messages.push(message);
+    aiChatState.pendingSend = { message, requestPayload };
+    const userArticle = appendAiChatMessage('user', userMessage);
+    window.FreeBbsMaxImages?.show(userArticle?.querySelector('.aichat-bubble'), images);
+  }
   const assistantArticle = appendAiChatMessage('assistant', '');
   startAiChatThinkingStatus();
   setAiChatThinkingBubble(assistantArticle, 'Max 正在思考......');
@@ -5314,12 +5335,7 @@ async function handleAiChatSubmit(event) {
   let assistantContent = '';
 
   try {
-    const requestPayload = { ...buildAiChatPayload(userMessage), vision_images: images };
-    aiChatState.messages.push({
-      role: 'user',
-      content: userMessage,
-      ...(images.length ? { images } : {}),
-    });
+    const { requestPayload } = aiChatState.pendingSend;
     await saveAiDialog({ throwOnError: true });
     requestPayload.did = aiChatState.currentDid || '';
     const rawResult = await requestMaxNavigation(requestPayload, (progress) => {
@@ -5349,6 +5365,7 @@ async function handleAiChatSubmit(event) {
       navigation,
       rag,
     });
+    aiChatState.pendingSend = null;
     window.FreeBbsMaxImages?.clear();
     stopAiChatThinkingStatus();
     await saveAiDialog();
@@ -5423,6 +5440,7 @@ function initializeAiChatPage() {
     } else {
       aiChatState.currentDid = '';
       aiChatState.messages = [];
+      aiChatState.pendingSend = null;
       renderAiChatThread();
       renderAiDialogList();
     }
