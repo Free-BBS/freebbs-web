@@ -1,4 +1,5 @@
 const { canReadPost } = require('./discussion-visibility');
+const { awardMagnetic } = require('./economy-rewards');
 
 const schemaReady = new WeakMap();
 const anonymousAuthor = () => ({
@@ -23,6 +24,9 @@ async function ensureDiscussionInteractions(pool) {
               is_deleted: 'TINYINT(1) NOT NULL DEFAULT 0',
               deleted_at: 'DATETIME NULL',
               deleted_by: 'BIGINT NULL',
+              is_featured: 'TINYINT(1) NOT NULL DEFAULT 0',
+              featured_by: 'BIGINT NULL',
+              featured_at: 'DATETIME NULL',
             },
           ],
         ]) {
@@ -84,7 +88,7 @@ function registerDiscussionInteractions(app, dependencies) {
     notifications,
   } = dependencies;
   const fail = (message, status) => Object.assign(new Error(message), { status });
-  async function changeComment(request, response, deleting) {
+  async function changeComment(request, response, deleting, featuring = false) {
     try {
       await ensureDiscussionTables();
       const user = await requireAuth(request, response);
@@ -109,6 +113,20 @@ function registerDiscussionInteractions(app, dependencies) {
         );
         const comment = rows[0];
         if (!comment || comment.is_deleted) throw fail('评论不存在或已删除', 404);
+        if (featuring) {
+          if (!(user.is_admin || user.role === 'admin'))
+            throw fail('仅管理员可以设置精华回帖', 403);
+          if (typeof request.body.featured !== 'boolean') throw fail('精华状态必须是布尔值', 400);
+          const { featured } = request.body;
+          await connection.execute(
+            'UPDATE discussion_comments SET is_featured = ?, featured_by = ?, featured_at = IF(?, NOW(), NULL) WHERE id = ?',
+            [featured ? 1 : 0, featured ? user.id : null, featured ? 1 : 0, id],
+          );
+          const reward = featured
+            ? await awardMagnetic(connection, comment.user_id, `featured-comment:${id}`, 5)
+            : 0;
+          return { isFeatured: featured, reward };
+        }
         if (deleting) {
           if (
             Number(comment.user_id) !== Number(user.id) &&
@@ -147,6 +165,15 @@ function registerDiscussionInteractions(app, dependencies) {
           { actor: user, post, comment, active },
           connection,
         );
+        if (active && Number(comment.user_id) !== Number(user.id))
+          await awardMagnetic(
+            connection,
+            comment.user_id,
+            `comment-like:${id}:${user.id}`,
+            1,
+            undefined,
+            'community',
+          );
         const [[count]] = await connection.execute(
           'SELECT COUNT(*) AS total FROM discussion_comment_likes WHERE comment_id = ?',
           [id],
@@ -163,6 +190,9 @@ function registerDiscussionInteractions(app, dependencies) {
   }
   app.post('/api/discussion/comments/:id/like', (request, response) =>
     changeComment(request, response, false),
+  );
+  app.patch('/api/discussion/comments/:id/feature', (request, response) =>
+    changeComment(request, response, false, true),
   );
   app.delete('/api/discussion/comments/:id', (request, response) =>
     changeComment(request, response, true),

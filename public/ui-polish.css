@@ -991,7 +991,6 @@ body.theme-dark.economy-page .shop-inspect-image {
 
 body.theme-dark.economy-page .shop-item-image img,
 body.theme-dark.economy-page .inventory-item-image img,
-body.theme-dark.economy-page .economy-inventory-link img,
 body.theme-dark.economy-page .shop-inspect-image img {
   filter: none !important;
 }
@@ -1886,4 +1885,44 @@ body:not(.auth-page-body) .settings-typography-preview {
   font-family: var(--font-zh-body) !important;
   font-size: 0.92rem;
   line-height: 1.65;
+}
+/* Wallet help is reachable from the two balance buttons on every page. */
+body .currency-guide-panel {
+  background: var(--ui-surface) !important;
+  color: var(--ui-text) !important;
+  width: min(680px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+body .currency-guide-panel :is(h2, h3, p, li) {
+  color: var(--ui-text) !important;
+}
+body .currency-guide-panel #electromagnetic-balances {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+body .currency-guide-panel .electromagnetic-section,
+body .currency-guide-panel .electromagnetic-section :is(h3, p, ul, li),
+body .currency-guide-panel #electromagnetic-message {
+  text-align: left;
+}
+.currency-guide-list {
+  padding-left: 1.4em;
+  margin: 12px 0;
+}
+.currency-guide-list li {
+  margin: 8px 0;
+  line-height: 1.75;
+}
+#user-status button[data-currency-guide] {
+  font: inherit;
+  cursor: pointer;
+}
+#user-status button[data-currency-guide]:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 3px;
 }

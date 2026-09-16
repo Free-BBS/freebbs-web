@@ -1,35 +1,289 @@
 {
   "items": [
     {
+      "key": "frame_orbit",
+      "assetKey": "frame_orbit",
+      "name": "环流轨道",
+      "class": "avatar_frame",
+      "description": "给头像留一圈自己的风景。",
+      "desc": "绕了很远的路，才发现圆心一直是你。",
+      "image": "/assets/icons/frame_orbit.svg",
+      "cost": {
+        "magnetic": 20
+      },
+      "purchaseLimit": 1,
+      "requiresPersonalPrice": true,
+      "isgift": false,
+      "rules": "20 磁元，限购1件，可在个人主页装扮。"
+    },
+    {
+      "key": "frame_aurora",
+      "assetKey": "frame_aurora",
+      "name": "极光回路",
+      "class": "avatar_frame",
+      "description": "把凌晨的天空留在身边。",
+      "desc": "有人把凌晨三点的天空折成一个圆，藏起了最后一盏实验室的灯。",
+      "image": "/assets/icons/frame_aurora.svg",
+      "cost": {
+        "magnetic": 40
+      },
+      "purchaseLimit": 1,
+      "requiresPersonalPrice": true,
+      "isgift": false,
+      "rules": "40 磁元，限购1件，可在个人主页装扮。"
+    },
+    {
+      "key": "plate_maxwell",
+      "assetKey": "plate_maxwell",
+      "name": "麦克斯韦亲传",
+      "class": "nameplate",
+      "description": "为名字附上一点奇妙的注脚。",
+      "desc": "证书上的签名已经模糊。电子羊仔细闻了闻，说墨水里有一点电磁场的味道。",
+      "image": "/assets/icons/plate_maxwell.svg",
+      "cost": {
+        "magnetic": 60
+      },
+      "purchaseLimit": 1,
+      "requiresPersonalPrice": true,
+      "isgift": false,
+      "rules": "60 磁元，限购1件，可在个人主页装扮。",
+      "enabled": false
+    },
+    {
+      "key": "plate_observer",
+      "assetKey": "plate_observer",
+      "name": "BBS见习观察员",
+      "class": "nameplate",
+      "description": "今天也发现了一点新鲜事。",
+      "desc": "望远镜还没调好，工作证先到了。第一项任务：在 BBS 里，认真听完一个不同的想法。",
+      "image": "/assets/icons/plate_observer.svg",
+      "cost": {
+        "magnetic": 20
+      },
+      "purchaseLimit": 1,
+      "requiresPersonalPrice": true,
+      "isgift": false,
+      "rules": "20 磁元，限购1件，可在个人主页装扮。"
+    },
+    {
+      "key": "card_blueprint",
+      "assetKey": "card_blueprint",
+      "name": "未完成的蓝图",
+      "class": "profile_card",
+      "description": "给明天的好主意留个位置。",
+      "desc": "纸角留着一杯咖啡的印子。那些还没连上的线，正等着一个好主意。",
+      "image": "/assets/icons/card_blueprint.svg",
+      "cost": {
+        "magnetic": 50
+      },
+      "purchaseLimit": 1,
+      "requiresPersonalPrice": true,
+      "isgift": false,
+      "rules": "50 磁元，限购1件，可在个人主页装扮。"
+    },
+    {
+      "key": "card_twilight",
+      "assetKey": "card_twilight",
+      "name": "暮色实验室",
+      "class": "profile_card",
+      "description": "日落以后，灵感也可以慢一点。",
+      "desc": "日落把最后一束光存进窗台。今天没想明白的事情，明天也会有位置。",
+      "image": "/assets/icons/card_twilight.svg",
+      "cost": {
+        "magnetic": 50
+      },
+      "purchaseLimit": 1,
+      "requiresPersonalPrice": true,
+      "isgift": false,
+      "rules": "50 磁元，限购1件，可在个人主页装扮。"
+    },
+    {
+      "key": "fish",
+      "assetKey": "fish",
+      "name": "小鱼",
+      "class": "pet_food",
+      "description": "Max 好像闻到了什么。",
+      "desc": "它看起来十分镇定，直到远处传来电子羊的脚步声——羊会吃鱼吗？这是它的最后一个想法。",
+      "image": "/assets/icons/fish.svg",
+      "cost": {
+        "magnetic": 2
+      },
+      "requiresPersonalPrice": true,
+      "isgift": true,
+      "rules": "2 磁元一条，可在个人牧场喂养 Max。每条增加24小时饱腹时间，最多累计30天；预留至少24小时饱腹容量即可喂养。按北京时间，每个祥瑞日首次喂养产出1个黄金鱼骨，每日限1个；当天后续喂养及其他运势下的喂养均产出1个普通鱼骨。"
+    },
+    {
       "key": "differential_converter",
       "assetKey": "differential_converter",
       "name": "微分器",
       "class": "converter",
-      "description": "一次性转换资产。",
+      "description": "有些变化，需要一点代价。",
       "desc": "上帝说：\n【此处省略四行】。\n于是便有了光。",
       "image": "/assets/icons/battery.svg",
       "cost": {
-        "electric": 1,
-        "magnetic": 1
+        "electric": 4,
+        "magnetic": 4
       },
       "use": {
         "type": "currency_converter",
-        "amount": 5
+        "amount": 10
       },
-      "isgift": false
+      "isgift": false,
+      "requiresPersonalPrice": true,
+      "rules": "4 电元或4 磁元购买1个微分器，作为一次转换的手续费。使用时消耗1个微分器和10个源货币，获得10个目标货币；支持电元与磁元双向转换，备齐微分器与源货币即可使用。"
     },
     {
       "key": "fishbone",
       "assetKey": "fishbone",
-      "name": "鱼骨头",
-      "class": "useless",
-      "description": "一个鱼骨头",
-      "desc": "一个鱼骨头，没有人知道是哪里来的。也许是某个不小心吃鱼时掉落的，也可能是某个不小心吃鱼时捡到的。总之它就是一个鱼骨头，没有什么用处。",
+      "name": "坚硬的鱼骨头",
+      "class": "decoration",
+      "description": "一段刻骨铭心的记忆",
+      "desc": "一个鱼骨头，没有人知道是哪里来的。也许是某个不小心吃鱼时掉落的，也可能是某个不小心吃鱼时捡到的。总之它就是一个鱼骨头，除了硬似乎没有什么用处。",
       "image": "/assets/icons/fishbone.svg",
       "cost": {
         "electric": 5
       },
-      "isgift": true
+      "requiresPersonalPrice": true,
+      "isgift": true,
+      "rules": "5 电元一个，累计限购10个，可在个人牧场展示数量、收集成就。已有鱼骨归为坚硬的鱼骨头，持有数量计入初始购买进度，上限10次。"
+    },
+    {
+      "key": "mysterious_fragment",
+      "assetKey": "mysterious_fragment",
+      "name": "神秘的碎片",
+      "class": "collectible",
+      "description": "一枚尚未读懂的碎片。",
+      "desc": "掌心里多了一枚来历不明的碎片。\n边缘并不锋利，却总像刚刚从某个梦里剥落。你试着翻到背面——背面也很神秘。",
+      "image": "/assets/icons/mysterious-fragment.svg",
+      "cost": {
+        "electric": 5
+      },
+      "requiresPersonalPrice": true,
+      "isgift": false,
+      "rules": "可供本人收藏，累计限购10枚。第1～10枚价格依次为5、10、20、30、50、75、100、150、200、777 电元，付款前可查看本次价格和累计购买进度。"
+    },
+    {
+      "key": "laser",
+      "assetKey": "laser",
+      "name": "激光器",
+      "class": "device",
+      "description": "一束光，正在等你点头。",
+      "desc": "一只总想闪亮登场的小家伙。\n外壳上贴着一张微微卷边的便笺：「请给我一点电，我有一个光明的想法。」",
+      "image": "/assets/icons/laser.svg",
+      "cost": {
+        "electric": 25
+      },
+      "purchaseLimit": 1,
+      "requiresPersonalPrice": true,
+      "isgift": false,
+      "rules": "25 电元购买本体，限购1件。购买后可在仓库激发，每1 电元＋1 磁元激发24小时，让自己公开署名的讨论区帖子与回帖统一显示柔光，历史内容同样生效；时长可累加，到期后可再次激发。"
+    },
+    {
+      "key": "maxwell_spectacles",
+      "assetKey": "maxwell_spectacles",
+      "name": "麦克斯韦的眼镜",
+      "class": "scholar_relic",
+      "description": "透过另一副眼镜，重新观察熟悉的世界。",
+      "desc": "镜架有些旧，镜片却像刚擦过一样。\n你戴上它，房间没有变化。摘下来再看，似乎又少了什么。\n盒子里压着一张纸条：「别急着眨眼，世界正在整理它的思路。」",
+      "image": "/assets/icons/maxwell_spectacles.svg",
+      "cost": {
+        "electric": 200,
+        "magnetic": 200
+      },
+      "priceMode": "combined",
+      "purchaseLimit": 1,
+      "requiresPersonalPrice": true,
+      "isgift": false,
+      "rules": "200 电元＋200 磁元，限购1件，可在个人收藏中展示。购买后，后续会提供对应实物，具体领取安排另行通知。"
+    },
+    {
+      "key": "faraday_ring",
+      "assetKey": "faraday_ring",
+      "name": "法拉第的感应环",
+      "class": "scholar_relic",
+      "description": "收藏一份关于连接与发现的想象。",
+      "desc": "一只安静得有些过分的圆环。\n你绕着它走了一圈，什么也没发生。又走一圈，桌上的笔不知为何滚到了另一边。\n当然，也可能只是桌子没放平。",
+      "image": "/assets/icons/faraday_ring.svg",
+      "cost": {
+        "electric": 200,
+        "magnetic": 200
+      },
+      "priceMode": "combined",
+      "purchaseLimit": 1,
+      "requiresPersonalPrice": true,
+      "isgift": false,
+      "rules": "200 电元＋200 磁元，限购1件，可在个人收藏中展示。购买后，后续会提供对应实物，具体领取安排另行通知。"
+    },
+    {
+      "key": "shannon_coin",
+      "assetKey": "shannon_coin",
+      "name": "香农的幸运硬币",
+      "class": "scholar_relic",
+      "description": "把未知留在掌心，把好奇留给明天。",
+      "desc": "硬币的正面写着「也许」，反面写着「再想想」。\n你想用它做个决定，它却偏偏站在了桌面上。\n这显然不是一枚愿意替你省事的硬币。",
+      "image": "/assets/icons/shannon_coin.svg",
+      "cost": {
+        "electric": 200,
+        "magnetic": 200
+      },
+      "priceMode": "combined",
+      "purchaseLimit": 1,
+      "requiresPersonalPrice": true,
+      "isgift": false,
+      "rules": "200 电元＋200 磁元，限购1件，可在个人收藏中展示。购买后，后续会提供对应实物，具体领取安排另行通知。"
+    },
+    {
+      "key": "hertz_resonator",
+      "assetKey": "hertz_resonator",
+      "name": "赫兹的共振器",
+      "class": "scholar_relic",
+      "description": "为每一次灵光乍现留下回响。",
+      "desc": "它已经很久没有说话了。\n深夜把耳朵凑近，偶尔会听见一声极轻的「收到」。\n至于在回复谁，包装盒上没有写。",
+      "image": "/assets/icons/hertz_resonator.svg",
+      "cost": {
+        "electric": 200,
+        "magnetic": 200
+      },
+      "priceMode": "combined",
+      "purchaseLimit": 1,
+      "requiresPersonalPrice": true,
+      "isgift": false,
+      "rules": "200 电元＋200 磁元，限购1件，可在个人收藏中展示。购买后，后续会提供对应实物，具体领取安排另行通知。"
+    },
+    {
+      "key": "max_pet",
+      "assetKey": "max_pet",
+      "class": "pet",
+      "image": "/assets/icons/max-sheep.svg",
+      "priceMode": "combined",
+      "requiresPersonalPrice": true,
+      "isgift": false,
+      "purchaseLimit": 1,
+      "cost": {
+        "electric": 10,
+        "magnetic": 10
+      },
+      "name": "电子仿生羊 Max",
+      "description": "草地已经准备好迎接新邻居。",
+      "desc": "它带着四只蹄子和一肚子好奇心来了。行李很少，只有一张写着「BBS兴，电子羊」的小纸条。记得不要让它饿着！",
+      "rules": "10 电元＋10 磁元，限购1只，购买后入住个人牧场。首次喂食即可恢复活力，每条小鱼提供24小时饱腹时间，最多累计30天；饥饿时会趴在草地上等你喂食。"
+    },
+    {
+      "key": "fortune_bag",
+      "assetKey": "fortune_bag",
+      "class": "consumable",
+      "image": "/assets/icons/fortune_bag.svg",
+      "priceMode": "combined",
+      "requiresPersonalPrice": true,
+      "isgift": false,
+      "cost": {
+        "electric": 20,
+        "magnetic": 20
+      },
+      "name": "我命由我不由天",
+      "description": "把一句不服气，系在袋口。",
+      "desc": "袋子轻得像一句悄悄话。你把耳朵凑过去，里面有人小声却坚定地说：「再试一次。」",
+      "rules": "20 电元＋20 磁元一个，可在仓库使用。从使用当天起，连续7个北京时间自然日的运势至少为大吉，原有更高运势继续保留；当天已抽出的较低运势也会提升。效果结束后可使用下一个福袋。"
     }
   ]
 }

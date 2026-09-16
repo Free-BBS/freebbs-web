@@ -7,15 +7,30 @@ const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '../public/app.js'), 'utf8');
 const start = source.indexOf('async function callApi(');
 const end = source.indexOf('\n}', start) + 2;
-function api(response) {
+function api(response, globals = {}) {
   const context = {
     API_BASE_URL: 'https://example.test/api',
     userState: { token: 'test-token' },
     fetch: async () => response,
+    ...globals,
   };
   vm.runInNewContext(source.slice(start, end), context);
   return context.callApi;
 }
+
+test('optional browser laser integration preserves successful responses with or without the component', async () => {
+  const data = { answer: 'done' };
+  const response = { ok: true, status: 200, json: async () => data };
+  assert.deepEqual(await api(response, { window: {} })('/other'), data);
+  const seen = [];
+  assert.deepEqual(
+    await api(response, {
+      window: { FreeBbsPostLaser: { sync: (payload) => seen.push(payload) } },
+    })('/other'),
+    data,
+  );
+  assert.deepEqual(seen, [data]);
+});
 
 test('a proxy HTML 504 produces a readable timeout with its HTTP status', async () => {
   const call = api({

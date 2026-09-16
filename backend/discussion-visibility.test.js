@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const visibility = require('./discussion-visibility');
 const { anonymousAuthor, visibleComments } = require('./discussion-interactions');
+const { createEconomyShop } = require('./economy-shop');
 
 const source = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
 const author = { id: 7, username: 'author', student_id: 'student7' };
@@ -25,7 +26,7 @@ const post = (id, extra = {}) => ({
   ...extra,
 });
 
-function harness(records = [post(1)]) {
+function harness(records = [post(1)], { replyRows, lasers = {} } = {}) {
   const routes = new Map();
   const queries = [];
   let viewer = null;
@@ -98,7 +99,9 @@ function harness(records = [post(1)]) {
             records.find((row) => row.id === params.at(-2)),
             viewer,
           )
-            ? [{ id: 30, post_id: params.at(-2), user_id: 8, content_markdown: 'Reply' }]
+            ? replyRows || [
+                { id: 30, post_id: params.at(-2), user_id: 8, content_markdown: 'Reply' },
+              ]
             : [],
         ];
       }
@@ -108,6 +111,11 @@ function harness(records = [post(1)]) {
   const context = {
     app,
     pool: connection,
+    economyShop: createEconomyShop({
+      async readPublicLasers() {
+        return lasers;
+      },
+    }),
     ...visibility,
     anonymousAuthor,
     visibleComments,
@@ -177,6 +185,24 @@ function harness(records = [post(1)]) {
     },
   };
 }
+
+test('comments use their own author lease, including historical and nested replies; deleted comments are redacted', async () => {
+  const h = harness([post(1)], {
+    lasers: { 8: Date.now() + 60000 },
+    replyRows: [
+      { id: 30, user_id: 8, content_markdown: 'Old reply', created_at: '2020-01-01' },
+      { id: 31, user_id: 7, parent_comment_id: 30, content_markdown: 'No laser' },
+      { id: 32, user_id: 8, parent_comment_id: 30, is_deleted: 1 },
+      { id: 33, user_id: 7, parent_comment_id: 32, content_markdown: 'Surviving child' },
+    ],
+  });
+  const res = await h.request('get', '/discussion/posts/:id/comments');
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.comments[0].laser.active, true);
+  assert.equal(res.payload.comments[1].laser.active, false);
+  assert.equal(res.payload.comments[2].laser, null);
+  assert.equal(res.payload.comments[3].laser.active, false);
+});
 
 for (const user of [null, author, peer, admin]) {
   test(`public feed omits hidden and deleted posts for ${user?.username || 'guest'}`, async () => {
