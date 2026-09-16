@@ -136,18 +136,16 @@ function rewardsConnection() {
     state,
     async execute(sql, args) {
       if (sql.startsWith('SELECT id')) return [[{ id: args[0] }]];
-      if (sql.startsWith('SELECT amount'))
-        return [[...state.rewards.values()].filter((r) => r.key === args[1])];
-      if (sql.includes('SUM(amount)'))
+      if (sql.startsWith('SELECT amount')) {
+        assert.match(sql, /FOR UPDATE$/);
         return [
-          [
-            {
-              total: [...state.rewards.values()]
-                .filter((r) => r.day === args[1] && r.category === 'community')
-                .reduce((s, r) => s + r.amount, 0),
-            },
-          ],
+          [...state.rewards.values()].filter((r) =>
+            sql.includes('reward_day')
+              ? r.day === args[1] && r.category === 'community'
+              : r.key === args[1],
+          ),
         ];
+      }
       if (sql.startsWith('INSERT INTO economy_rewards')) {
         state.rewards.set(args[1], {
           key: args[1],

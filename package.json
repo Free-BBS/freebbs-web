@@ -40,7 +40,8 @@
     "test:auth": "node --test backend/registration-guard.test.js scripts/wien-oscillator-model.test.js scripts/registration-page.test.js scripts/typography-preferences.test.js",
     "test:surveys": "node --test backend/surveys.test.js scripts/activities-page.test.js scripts/activities-admin.test.js scripts/activities-server.test.js scripts/survey-receipts.test.js",
     "test:economy:browser": "node scripts/check-economy-v2-browser.js && node scripts/check-profile-themes-browser.js",
-    "test:economy-retry": "node --test backend/economy-retry.test.js"
+    "test:economy-retry": "node --test backend/economy-retry.test.js",
+    "test:economy-mysql": "node --test backend/economy-rewards.mysql.test.js"
   },
   "dependencies": {
     "@highlightjs/cdn-assets": "^11.11.1",

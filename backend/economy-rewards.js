@@ -14,17 +14,20 @@ async function awardMagnetic(
   if (!userId || !Number.isSafeInteger(requested) || requested <= 0) return 0;
   await connection.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [userId]);
   const [existing] = await connection.execute(
-    'SELECT amount FROM economy_rewards WHERE user_id = ? AND source_key = ?',
+    'SELECT amount FROM economy_rewards WHERE user_id = ? AND source_key = ? FOR UPDATE',
     [userId, sourceKey],
   );
   if (existing.length) return 0;
   let amount = requested;
   if (category === 'community') {
-    const [[row]] = await connection.execute(
-      "SELECT COALESCE(SUM(amount), 0) AS total FROM economy_rewards WHERE user_id = ? AND reward_day = ? AND category = 'community'",
+    // A caller may already have a REPEATABLE READ snapshot before taking the account lock.
+    // Locking reads see committed rewards from preceding lock holders, not that old snapshot.
+    const [rows] = await connection.execute(
+      "SELECT amount FROM economy_rewards WHERE user_id = ? AND reward_day = ? AND category = 'community' FOR UPDATE",
       [userId, day],
     );
-    amount = Math.max(0, Math.min(requested, 3 - Number(row.total)));
+    const total = rows.reduce((sum, row) => sum + Number(row.amount), 0);
+    amount = Math.max(0, Math.min(requested, 3 - total));
   }
   // Record zero too: deleting/re-adding an interaction on a later day cannot farm it.
   await connection.execute(

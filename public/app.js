@@ -2988,7 +2988,7 @@ async function callApi(path, options = {}) {
   });
 
   const payload = await response.json().catch(() => ({}));
-  window.FreeBbsPostLaser?.sync(payload);
+  if (typeof window !== 'undefined') window.FreeBbsPostLaser?.sync(payload);
 
   const circuitFailure =
     ['/ai/circuit/chat', '/ai/circuit/recognize'].includes(path) && payload.ok === false;
