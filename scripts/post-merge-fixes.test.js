@@ -2,7 +2,22 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const { hashPassword, verifyPassword } = require('../backend/password');
+const { hashPassword, verifyPasswordAsync } = require('../backend/password');
+const { clientIpForBackend } = require('../proxy-client-ip');
+
+test('login password verification leaves the event loop responsive', async () => {
+  const stored = hashPassword('correct');
+  let completed = false;
+  const verification = verifyPasswordAsync('correct', stored).then((matches) => {
+    completed = true;
+    return matches;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(completed, false);
+  assert.equal(await verification, true);
+  assert.equal(await verifyPasswordAsync('wrong', stored), false);
+  assert.equal(await verifyPasswordAsync('correct', 'malformed'), false);
+});
 
 const server = fs.readFileSync(require.resolve('../backend/server'), 'utf8');
 const app = fs.readFileSync(require.resolve('../public/app'), 'utf8');
@@ -81,7 +96,12 @@ test('production login accepts password alone, rejects invalid credentials and m
         ];
       },
     },
-    verifyPassword,
+    verifyPasswordAsync,
+    loginRateLimiter: {
+      consumeIp: async () => ({ allowed: true }),
+      consumeAccount: async () => ({ allowed: true }),
+      resetAccount: async () => {},
+    },
     toUserProfile: (row) => ({ username: row.username }),
     issueToken: () => 'verified-token',
   });
@@ -113,4 +133,105 @@ test('production login accepts password alone, rejects invalid credentials and m
     server.indexOf("app.post('/api/auth/login',"),
   );
   assert.match(registration, /consumeRegistrationChallenge/);
+});
+
+test('login rejects repeated guesses before password verification and accepts login after cooldown', async () => {
+  let handler;
+  let now = 0;
+  let hashes = 0;
+  let lookups = 0;
+  let accountAttempts = 0;
+  let accountExpiresAt = 0;
+  const ctx = vm.createContext({
+    app: {
+      post: (_route, callback) => {
+        handler = callback;
+      },
+    },
+    pool: {
+      execute: async (_sql, [identifier]) => {
+        lookups += 1;
+        return [
+          [
+            ['reader', 'reader@example.test'].includes(identifier.toLowerCase())
+              ? { id: 7, username: 'reader', password_hash: 'stored' }
+              : null,
+          ].filter(Boolean),
+        ];
+      },
+    },
+    loginRateLimiter: {
+      consumeIp: async () => ({ allowed: true }),
+      consumeAccount: async (row) => {
+        assert.equal(row.id, 7);
+        if (now >= accountExpiresAt) {
+          accountAttempts = 0;
+          accountExpiresAt = now + 60_000;
+        }
+        if (accountAttempts >= 5) return { allowed: false, retryAfterSeconds: 60 };
+        accountAttempts += 1;
+        return { allowed: true };
+      },
+      resetAccount: async () => {
+        accountAttempts = 0;
+      },
+    },
+    verifyPasswordAsync: async (password) => {
+      hashes += 1;
+      return password === 'correct';
+    },
+    toUserProfile: (row) => ({ username: row.username }),
+    issueToken: () => 'verified-token',
+  });
+  vm.runInContext(loginCode, ctx);
+  const call = async (identifier, password) => {
+    const headers = {};
+    const response = {
+      code: 200,
+      set(name, value) {
+        headers[name] = value;
+        return this;
+      },
+      status(code) {
+        this.code = code;
+        return this;
+      },
+      json(payload) {
+        this.payload = payload;
+      },
+    };
+    await handler({ body: { identifier, password }, ip: '203.0.113.5' }, response);
+    return { ...response, headers };
+  };
+  for (const identifier of [
+    'reader',
+    'reader@example.test',
+    'READER',
+    'reader',
+    'reader@example.test',
+  ]) {
+    assert.equal((await call(identifier, 'wrong')).code, 401);
+  }
+  const blocked = await call('reader', 'correct');
+  assert.equal(blocked.code, 429);
+  assert.equal(blocked.payload.code, 'login_rate_limited');
+  assert.equal(blocked.headers['Retry-After'], '60');
+  assert.equal(hashes, 5);
+  assert.equal(lookups, 6);
+  now = 60_001;
+  assert.equal((await call('reader@example.test', 'correct')).payload.token, 'verified-token');
+  assert.equal((await call('reader', 'wrong')).code, 401);
+});
+
+test('frontend proxy keeps the closest trusted client IP and ignores forged forwarded headers', () => {
+  const request = (remoteAddress, forwarded) => ({
+    socket: { remoteAddress },
+    headers: { 'x-forwarded-for': forwarded },
+  });
+  assert.equal(
+    clientIpForBackend(request('127.0.0.1', '203.0.113.99, 198.51.100.12')),
+    '198.51.100.12',
+  );
+  assert.equal(clientIpForBackend(request('198.51.100.12', '203.0.113.99')), '198.51.100.12');
+  assert.equal(clientIpForBackend(request('::1', 'not-an-ip')), '::1');
 });

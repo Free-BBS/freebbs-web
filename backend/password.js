@@ -28,7 +28,25 @@ function verifyPassword(password, storedHash) {
   return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
+async function verifyPasswordAsync(password, storedHash) {
+  const [algorithm, iterations, salt, hash] = String(storedHash || '').split('$');
+
+  if (algorithm !== ALGORITHM || !iterations || !salt || !hash) {
+    return false;
+  }
+
+  const derived = await new Promise((resolve, reject) => {
+    crypto.pbkdf2(password, salt, Number(iterations), KEY_LENGTH, DIGEST, (error, key) => {
+      if (error) reject(error);
+      else resolve(key);
+    });
+  });
+  const stored = Buffer.from(hash, 'hex');
+  return derived.length === stored.length && crypto.timingSafeEqual(derived, stored);
+}
+
 module.exports = {
   hashPassword,
   verifyPassword,
+  verifyPasswordAsync,
 };

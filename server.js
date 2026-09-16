@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { clientIpForBackend } = require('./proxy-client-ip');
 
 const host = process.env.HOST || '127.0.0.1';
 const port = process.env.PORT || 3000;
@@ -159,7 +160,7 @@ const server = http.createServer((request, response) => {
         path: request.url,
         headers: {
           ...request.headers,
-          'x-forwarded-for': request.socket.remoteAddress,
+          'x-forwarded-for': clientIpForBackend(request),
           host: `127.0.0.1:${process.env.API_PORT || 3001}`,
         },
       },

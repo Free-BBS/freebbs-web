@@ -55,7 +55,8 @@ const {
   deleteVisiblePost,
 } = require('./discussion-visibility');
 const { buildBackendHealth } = require('./health');
-const { hashPassword, verifyPassword } = require('./password');
+const { hashPassword, verifyPassword, verifyPasswordAsync } = require('./password');
+const { createLoginRateLimiter } = require('./login-rate-limit');
 const { sign, verify } = require('./token');
 const {
   USERNAME_MESSAGE,
@@ -116,6 +117,7 @@ const {
 
 const app = express();
 app.set('trust proxy', 'loopback');
+const loginRateLimiter = createLoginRateLimiter({ pool });
 const internalApp = express();
 const applyCampusConnectorCors = createCampusConnectorCorsPolicy(config.publicWebUrl);
 const tsinghuaConnectorRuntimeConfig = loadTsinghuaConnectorRuntimeConfig();
@@ -4691,6 +4693,15 @@ app.post('/api/auth/login', async (request, response) => {
   }
 
   try {
+    const ipBudget = await loginRateLimiter.consumeIp(request);
+    if (!ipBudget.allowed) {
+      response.set('Retry-After', String(ipBudget.retryAfterSeconds));
+      response.status(429).json({
+        code: 'login_rate_limited',
+        message: '登录尝试过于频繁，请稍后再试',
+      });
+      return;
+    }
     const [rows] = await pool.execute(
       `SELECT id, uid, username, full_name, student_id, email, email_verified_at, password_hash, role, is_admin, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
        FROM users
@@ -4700,12 +4711,21 @@ app.post('/api/auth/login', async (request, response) => {
     );
 
     const row = rows[0];
-
-    if (!row || !verifyPassword(password, row.password_hash)) {
+    const accountBudget = await loginRateLimiter.consumeAccount(row, identifier);
+    if (!accountBudget.allowed) {
+      response.set('Retry-After', String(accountBudget.retryAfterSeconds));
+      response.status(429).json({
+        code: 'login_rate_limited',
+        message: '登录尝试过于频繁，请稍后再试',
+      });
+      return;
+    }
+    if (!row || !(await verifyPasswordAsync(password, row.password_hash))) {
       response.status(401).json({ message: '用户名/邮箱或密码错误' });
       return;
     }
 
+    await loginRateLimiter.resetAccount(row);
     const user = toUserProfile(row);
 
     response.json({

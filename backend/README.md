@@ -90,12 +90,12 @@ npm run start:backend
   同意时间记录在同一事务中提交，其他注册错误会回滚。公约未勾选或版本过时会返回
   `community_agreement_required` / `community_agreement_version_mismatch`；互动验证错误码
   使用 `registration_captcha_` 前缀。旧用户不追溯生成同意记录。
-- `POST /api/auth/login-challenge`：传入 `{ "identifier": "用户名或邮箱" }`，返回与注册题
-  相同的随机题型数据。题目绑定该用户名／邮箱和登录用途，无法与注册题交叉使用；
-  获取和更换题目不按登录标识或来源 IP 限制频率，历史配额记录不会影响新请求。
-- `POST /api/auth/login`：在 `identifier`、`password` 外必须按题型提交上述 `captcha` 答案。
-  无论密码正确与否，每题仅允许一次尝试；密码错误后必须重新获取题目。互动验证错误码使用
-  `login_captcha_` 前缀。登录不要求已有用户补签注册公约。
+- `POST /api/auth/login-challenge`：保留供旧客户端调用；登录已不再要求提交题目答案。
+- `POST /api/auth/login`：提交 `identifier`（用户名或邮箱）和 `password` 即可登录。
+  同一账号（用户名、邮箱及大小写别名共用）15 分钟内最多尝试 5 次，同一来源 IP
+  最多尝试 300 次；超过限制返回 `429 login_rate_limited` 和 `Retry-After`。
+  成功登录会清除该账号的尝试计数。配额存于数据库，多个后端进程共用。
+  登录不要求已有用户补签注册公约。
 - `GET /api/auth/me`
 - `GET /api/workbench/summary`：返回当前用户的重要事项、可见通知和本周已确认日程
 - `GET|POST /api/workbench/important-items`
