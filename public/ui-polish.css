@@ -541,8 +541,8 @@ body.not-found-page:not(.auth-page-body) {
 
 body.discussion-page .settings-shell,
 body.aichat-page .aichat-shell {
-  width: min(100%, 1320px);
-  max-width: 1320px !important;
+  width: 100% !important;
+  max-width: none !important;
 }
 
 body.discussion-page .main-content .discussion-detail-head h2 {
@@ -1925,4 +1925,78 @@ body .currency-guide-panel #electromagnetic-message {
 #user-status button[data-currency-guide]:focus-visible {
   outline: 2px solid var(--ui-accent);
   outline-offset: 3px;
+}
+
+/* One shared 2 × 3 economy grid: actions above their aligned balance cells. */
+body:not(.auth-page-body) .user-economy-stack {
+  width: 312px;
+  max-width: none;
+  gap: 6px;
+}
+body:not(.auth-page-body) .user-economy-stack :is(.economy-shortcuts, .user-status) {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100% !important;
+  gap: 8px;
+}
+body:not(.auth-page-body) .user-economy-stack :is(.economy-shortcut, .currency) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  justify-content: center;
+  padding: 6px 8px;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+body:not(.auth-page-body) .user-economy-stack .currency-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+body.theme-dark:not(.auth-page-body) .economy-shortcut-shop .economy-shortcut-icon {
+  filter: brightness(0) invert(1) !important;
+}
+@media (min-width: 901px) {
+  body:not(.auth-page-body) .user-panel {
+    top: 4px;
+    height: 86px;
+  }
+  body:not(.auth-page-body) .main-content::before {
+    padding-right: min(55vw, 590px);
+  }
+}
+@media (min-width: 901px) and (max-width: 1200px) {
+  body:not(.auth-page-body) .user-economy-stack {
+    width: 270px;
+  }
+  body:not(.auth-page-body) .user-name {
+    max-width: 80px;
+  }
+}
+@media (max-width: 900px) {
+  body:not(.auth-page-body) .user-economy-stack {
+    top: calc(64px + env(safe-area-inset-top, 0px));
+    left: calc(14px + env(safe-area-inset-left, 0px));
+    right: calc(14px + env(safe-area-inset-right, 0px));
+    width: auto;
+    display: flex !important;
+    padding-block: 6px 10px;
+    background: var(--ui-page);
+  }
+  body:not(.auth-page-body) .user-economy-stack :is(.economy-shortcut, .currency) {
+    height: auto;
+    min-height: 40px;
+    border-radius: 12px !important;
+    font-size: 0.84rem;
+  }
+  body:not(.auth-page-body) .user-economy-stack .economy-shortcut span {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+  }
+  body:not(.auth-page-body) .main-content {
+    padding-top: calc(184px + env(safe-area-inset-top, 0px)) !important;
+  }
 }

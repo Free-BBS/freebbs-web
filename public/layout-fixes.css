@@ -44,7 +44,7 @@ body:not(.auth-page-body) .user-summary {
 
 @media (min-width: 901px) and (max-width: 1180px) {
   body:not(.auth-page-body) .user-economy-stack .user-status {
-    display: none !important;
+    display: grid !important;
   }
 
   body:not(.auth-page-body) .user-copy {
@@ -60,12 +60,7 @@ body:not(.auth-page-body) .user-summary {
   }
 
   body:not(.auth-page-body) .user-copy {
-    position: fixed;
-    top: calc(69px + env(safe-area-inset-top, 0px));
-    left: calc(14px + env(safe-area-inset-left, 0px));
-    display: block !important;
-    width: calc(100vw - 184px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
-    max-width: 260px;
+    display: none !important;
   }
 
   body:not(.auth-page-body) .user-name {
@@ -75,27 +70,27 @@ body:not(.auth-page-body) .user-summary {
   }
 
   body:not(.auth-page-body) .user-economy-stack {
-    top: calc(61px + env(safe-area-inset-top, 0px));
-    right: calc(66px + env(safe-area-inset-right, 0px));
+    top: calc(64px + env(safe-area-inset-top, 0px));
+    right: calc(14px + env(safe-area-inset-right, 0px));
   }
 
   body:not(.auth-page-body) .user-actions .mobile-theme-toggle {
-    top: calc(61px + env(safe-area-inset-top, 0px));
-    right: calc(14px + env(safe-area-inset-right, 0px));
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    right: calc(118px + env(safe-area-inset-right, 0px));
   }
 
   body:not(.auth-page-body) .main-content::before {
     box-sizing: border-box;
     right: calc(14px + env(safe-area-inset-right, 0px));
-    height: 116px;
-    padding-right: 106px;
-    padding-bottom: 54px;
+    height: 166px;
+    padding-right: 154px;
+    padding-bottom: 102px;
     font-size: clamp(1.3rem, 5.5vw, 1.7rem);
   }
 
   body:not(.auth-page-body) .main-content,
   body.home-page .landing-main {
-    padding-top: calc(132px + env(safe-area-inset-top, 0px)) !important;
+    padding-top: calc(184px + env(safe-area-inset-top, 0px)) !important;
     min-width: 0;
   }
 

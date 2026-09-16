@@ -712,7 +712,7 @@ body.world-page .world-modal-topics {
     transform 180ms ease;
 }
 
-.world-modal-action-discussion {
+.world-modal-action-enter {
   border-color: var(--world-paper);
   background: var(--world-paper);
   color: var(--world-ink) !important;
@@ -723,7 +723,7 @@ body.world-page .world-modal-topics {
   background: color-mix(in srgb, var(--world-paper) 10%, transparent);
 }
 
-.world-modal-action-discussion:hover {
+.world-modal-action-enter:hover {
   background: color-mix(in srgb, var(--world-paper) 88%, white);
 }
 
@@ -1953,7 +1953,6 @@ body.world-page .island-course-status {
 
 button.world-modal-action {
   appearance: none;
-  background: transparent;
   cursor: pointer;
 }
 

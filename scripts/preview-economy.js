@@ -32,7 +32,8 @@ const pages = {
   '/profile': 'profile.html',
   '/settings': 'settings.html',
 };
-function createEconomyPreview({ now = Date.now, showcase = false } = {}) {
+function createEconomyPreview({ now = Date.now, showcase = false, extraPages = {} } = {}) {
+  const previewPages = { ...pages, ...extraPages };
   const store = createEconomyMemoryStore([
     { id: 1, assets: { fishbone: 2 }, counts: { fishbone: 2 }, checkins: {} },
     { id: 2 },
@@ -288,6 +289,8 @@ function createEconomyPreview({ now = Date.now, showcase = false } = {}) {
       if (route.startsWith('/api/notifications')) return send(200, { items: [], unreadCount: 0 });
       if (route === '/api/fortune-config') return send(200, { fortuneBonusEnabled: false });
       if (route === '/api/checkin') return send(200, checkinSummary());
+      if (route === '/api/rewards') return send(200, { rewards: [], nextCursor: null });
+      if (route === '/api/wallet/ledger') return send(200, { entries: [], nextCursor: null });
       if (route === '/api/fortune') {
         const today = todayFortune();
         return send(200, {
@@ -302,14 +305,14 @@ function createEconomyPreview({ now = Date.now, showcase = false } = {}) {
       if (route.startsWith('/api/')) return send(404, { message: '该功能未接入本地模拟' });
       if (route.includes('\\') || route.includes('\0') || route.split('/').includes('..'))
         return send(400, { message: 'Invalid path' });
-      const file = await fs.promises.realpath(path.join(root, pages[route] || route.slice(1)));
+      const file = await fs.promises.realpath(path.join(root, previewPages[route] || route.slice(1)));
       const realRoot = await fs.promises.realpath(root);
       const relative = path.relative(realRoot, file);
       if (relative.startsWith('..') || path.isAbsolute(relative) || !mime[path.extname(file)])
         return send(403, { message: 'Preview static assets only' });
       let content = await fs.promises.readFile(file);
       if (path.extname(file) === '.html') {
-        if (!pages[route]) return send(404, { message: '此页面不在本轮预览范围内' });
+        if (!previewPages[route]) return send(404, { message: '此页面不在本轮预览范围内' });
         content = content
           .toString()
           .replace(/<link\b[^>]*href=["']https?:\/\/[^>]*>/gi, '')

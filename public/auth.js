@@ -160,23 +160,13 @@ async function handleAuthSubmit(event) {
     let payload;
 
     if (mode === 'login') {
-      if (!window.freeBbsAuthChallenge) {
-        throw new Error('登录验证未加载，请刷新页面后重试');
-      }
       const credentials = {
         identifier: document.getElementById('auth-identifier').value.trim(),
         password: document.getElementById('auth-password').value,
       };
-      setMessage('请在弹窗中完成实验验证');
-      payload = await window.freeBbsAuthChallenge.run({
-        mode: 'login',
-        identity: credentials.identifier,
-        request: callApi,
-        submit: (captcha) =>
-          callApi('/auth/login', {
-            method: 'POST',
-            body: JSON.stringify({ ...credentials, captcha }),
-          }),
+      payload = await callApi('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify(credentials),
       });
     } else if (mode === 'remake') {
       payload = await callApi('/auth/reset-password', {

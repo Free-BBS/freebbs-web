@@ -499,160 +499,37 @@ test(
       },
     );
 
-    await t.test(
-      'login requires a separate one-use challenge even after an incorrect password',
-      async () => {
-        async function loginPayload(identifier = 'admin') {
-          const challenge = await challengeFor('login', identifier, 'band');
-          return { identifier, password: 'free-bbs', captcha: solveChallenge(challenge) };
-        }
-        assert.equal(
-          (
-            await api('/auth/login', {
-              method: 'POST',
-              body: { identifier: 'admin', password: 'free-bbs' },
-              expected: 400,
-            })
-          ).code,
-          'login_captcha_required',
-        );
-        const wrongChallenge = await challengeFor('login', 'admin', 'band');
-        const wrong = {
+    await t.test('login checks credentials without an experiment challenge', async () => {
+      const result = await api('/auth/login', {
+        method: 'POST',
+        body: { identifier: 'admin', password: 'free-bbs' },
+      });
+      assert.ok(result.token);
+      await api('/auth/login', {
+        method: 'POST',
+        body: { identifier: 'admin', password: 'incorrect-password' },
+        expected: 401,
+      });
+      await api('/auth/login', {
+        method: 'POST',
+        body: { identifier: 'unknown-account', password: 'free-bbs' },
+        expected: 401,
+      });
+      await api('/auth/login', {
+        method: 'POST',
+        body: { identifier: 'admin' },
+        expected: 400,
+      });
+      const retry = await api('/auth/login', {
+        method: 'POST',
+        body: {
           identifier: 'admin',
           password: 'free-bbs',
-          captcha: solveChallenge(wrongChallenge),
-        };
-        assert.equal(
-          (
-            await api('/auth/login', {
-              method: 'POST',
-              body: {
-                ...wrong,
-                captcha: {
-                  ...wrong.captcha,
-                  k: wrongChallenge.band.candidates.find(
-                    (candidate) => candidate.k !== wrong.captcha.k,
-                  ).k,
-                },
-              },
-              expected: 400,
-            })
-          ).code,
-          'login_captcha_incorrect',
-        );
-        assert.equal(
-          (await api('/auth/login', { method: 'POST', body: wrong, expected: 400 })).code,
-          'login_captcha_used',
-        );
-        const outsideTolerance = await loginPayload();
-        outsideTolerance.captcha.k += outsideTolerance.captcha.k > 0 ? -0.050001 : 0.050001;
-        assert.equal(
-          (
-            await api('/auth/login', {
-              method: 'POST',
-              body: outsideTolerance,
-              expected: 400,
-            })
-          ).code,
-          'login_captcha_incorrect',
-          'free dragging just beyond the accepted range must fail',
-        );
-        const wrongPassword = await loginPayload();
-        wrongPassword.captcha.k += wrongPassword.captcha.k > 0 ? -0.04 : 0.04;
-        await api('/auth/login', {
-          method: 'POST',
-          body: { ...wrongPassword, password: 'incorrect-password' },
-          expected: 401,
-        });
-        assert.equal(
-          (await api('/auth/login', { method: 'POST', body: wrongPassword, expected: 400 })).code,
-          'login_captcha_used',
-        );
-        const expired = await loginPayload();
-        await db.execute(
-          'UPDATE registration_challenges SET expires_at = NOW() - INTERVAL 1 SECOND WHERE id = ?',
-          [expired.captcha.challengeId],
-        );
-        assert.equal(
-          (await api('/auth/login', { method: 'POST', body: expired, expected: 400 })).code,
-          'login_captcha_expired',
-        );
-        const boundIdentity = await loginPayload();
-        // Identity binding also applies when dropping at the inclusive boundary.
-        boundIdentity.captcha.k += boundIdentity.captcha.k > 0 ? -0.05 : 0.05;
-        assert.equal(
-          (
-            await api('/auth/login', {
-              method: 'POST',
-              body: { ...boundIdentity, identifier: 'outside_user' },
-              expected: 400,
-            })
-          ).code,
-          'login_captcha_invalid',
-        );
-        await api('/auth/login', {
-          method: 'POST',
-          body: { ...boundIdentity, identifier: ' ADMIN ' },
-        });
-        const email = '2026000102@example.invalid';
-        const registrationChallenge = await api('/auth/registration-challenge', {
-          method: 'POST',
-          body: { email },
-        });
-        assert.equal(
-          (
-            await api('/auth/login', {
-              method: 'POST',
-              body: {
-                identifier: email,
-                password: 'free-bbs',
-                captcha: solveChallenge(registrationChallenge),
-              },
-              expected: 400,
-            })
-          ).code,
-          'login_captcha_invalid',
-        );
-        const loginChallenge = await loginPayload(email);
-        assert.equal(
-          (
-            await api('/auth/register', {
-              method: 'POST',
-              body: {
-                username: 'cross_purpose',
-                studentId: '2026000111',
-                fullName: '验证用途测试',
-                email,
-                password: 'free-bbs',
-                emailCode: '123456',
-                communityAgreementAccepted: true,
-                communityAgreementVersion: COMMUNITY_AGREEMENT_VERSION,
-                captcha: loginChallenge.captcha,
-              },
-              expected: 400,
-              rawRegistration: true,
-            })
-          ).code,
-          'registration_captcha_invalid',
-        );
-        const concurrent = await loginPayload();
-        const outcomes = await Promise.all(
-          [0, 1].map(async () => {
-            const response = await fetch(`${base}/auth/login`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(concurrent),
-            });
-            return { status: response.status, body: await response.json() };
-          }),
-        );
-        assert.deepEqual(outcomes.map((outcome) => outcome.status).sort(), [200, 400]);
-        assert.equal(
-          outcomes.find((outcome) => outcome.status === 400).body.code,
-          'login_captcha_used',
-        );
-      },
-    );
+          captcha: { challengeId: 'expired' },
+        },
+      });
+      assert.ok(retry.token);
+    });
 
     await t.test(
       'login and registration issue fresh challenges beyond former identity and shared IP quotas',
@@ -724,7 +601,7 @@ test(
     );
 
     await t.test(
-      'Wien challenges verify startup and strict pole |Q| for registration and login',
+      'Wien challenges verify startup and strict pole |Q| for registration',
       async () => {
         const identity = {
           username: 'wien_student',
@@ -749,137 +626,94 @@ test(
           'INSERT INTO email_verification_codes (email,code_hash,expires_at) VALUES (?,?,DATE_ADD(NOW(),INTERVAL 10 MINUTE))',
           [identity.email, hashCode(identity.email, identity.emailCode)],
         );
-        for (const purpose of ['register', 'login']) {
-          const identifier = purpose === 'register' ? identity.email : 'admin';
-          const route = `/auth/${purpose === 'register' ? 'register' : 'login'}`;
-          const prefix = purpose === 'register' ? 'registration' : 'login';
-          const body = purpose === 'register' ? identity : { identifier, password: 'free-bbs' };
-          for (const answer of [
-            (p) => ({ resistanceOhms: p.rfInitialOhms }),
-            (p) => ({ resistanceOhms: 2 * p.rgOhms }),
-            (p) => ({ resistanceOhms: p.rfMaxOhms }),
-            (p) => ({ resistanceOhms: (2 + 1 / p.qMin) * p.rgOhms }),
-            (p) => ({ resistanceOhms: String((2 + 0.5 / p.qMin) * p.rgOhms) }),
-            () => ({ type: 'band', k: 2, q: 999999, gain: 3.001, starts: true }),
-          ]) {
-            const challenge = await challengeFor(purpose, identifier, 'wien');
-            const captcha = { challengeId: challenge.challengeId, ...answer(challenge.oscillator) };
-            assert.equal(
-              (
-                await api(route, {
-                  method: 'POST',
-                  body: { ...body, captcha },
-                  expected: 400,
-                  rawRegistration: true,
-                })
-              ).code,
-              `${prefix}_captcha_incorrect`,
-            );
-            assert.equal(
-              (
-                await api(route, {
-                  method: 'POST',
-                  body: { ...body, captcha: solveChallenge(challenge) },
-                  expected: 400,
-                  rawRegistration: true,
-                })
-              ).code,
-              `${prefix}_captcha_used`,
-            );
-          }
-          const challenge = await challengeFor(purpose, identifier, 'wien');
-          const captcha = solveChallenge(challenge);
+        for (const answer of [
+          (p) => ({ resistanceOhms: p.rfInitialOhms }),
+          (p) => ({ resistanceOhms: 2 * p.rgOhms }),
+          (p) => ({ resistanceOhms: p.rfMaxOhms }),
+          (p) => ({ resistanceOhms: (2 + 1 / p.qMin) * p.rgOhms }),
+          (p) => ({ resistanceOhms: String((2 + 0.5 / p.qMin) * p.rgOhms) }),
+          () => ({ type: 'band', k: 2, q: 999999, gain: 3.001, starts: true }),
+        ]) {
+          const challenge = await challengeFor('register', identity.email, 'wien');
+          const captcha = { challengeId: challenge.challengeId, ...answer(challenge.oscillator) };
           assert.equal(
             (
-              await api(route, {
+              await api('/auth/register', {
                 method: 'POST',
-                body: {
-                  ...body,
-                  ...(purpose === 'register'
-                    ? { email: 'wrong@example.invalid' }
-                    : { identifier: 'outside_user' }),
-                  captcha,
-                },
+                body: { ...identity, captcha },
                 expected: 400,
                 rawRegistration: true,
               })
             ).code,
-            `${prefix}_captcha_invalid`,
+            'registration_captcha_incorrect',
           );
-          if (purpose === 'register') {
-            await api(route, {
-              method: 'POST',
-              body: { ...body, username: 'admin', captcha },
-              expected: 409,
-              rawRegistration: true,
-            });
-            const [[unconsumed]] = await db.execute(
-              'SELECT consumed_at FROM registration_challenges WHERE id = ?',
-              [challenge.challengeId],
-            );
-            assert.equal(
-              unconsumed.consumed_at,
-              null,
-              'correct Wien answer rolls back with other registration errors',
-            );
-          }
-          const success = await api(route, {
-            method: 'POST',
-            body: { ...body, captcha },
-            expected: purpose === 'register' ? 201 : 200,
-            rawRegistration: true,
-          });
-          assert.ok(success.token);
-          if (purpose === 'register') {
-            const [[agreement]] = await db.execute(
-              'SELECT agreement_version FROM user_community_agreements WHERE user_id = ?',
-              [success.user.id],
-            );
-            assert.equal(agreement.agreement_version, COMMUNITY_AGREEMENT_VERSION);
-          }
           assert.equal(
             (
-              await api(route, {
+              await api('/auth/register', {
                 method: 'POST',
-                body: { ...body, captcha },
+                body: { ...identity, captcha: solveChallenge(challenge) },
                 expected: 400,
                 rawRegistration: true,
               })
             ).code,
-            `${prefix}_captcha_used`,
+            'registration_captcha_used',
           );
         }
-        const expired = await challengeFor('login', 'admin', 'wien');
+        const challenge = await challengeFor('register', identity.email, 'wien');
+        const captcha = solveChallenge(challenge);
+        assert.equal(
+          (
+            await api('/auth/register', {
+              method: 'POST',
+              body: { ...identity, email: 'wrong@example.invalid', captcha },
+              expected: 400,
+              rawRegistration: true,
+            })
+          ).code,
+          'registration_captcha_invalid',
+        );
+        await api('/auth/register', {
+          method: 'POST',
+          body: { ...identity, username: 'admin', captcha },
+          expected: 409,
+          rawRegistration: true,
+        });
+        const [[unconsumed]] = await db.execute(
+          'SELECT consumed_at FROM registration_challenges WHERE id = ?',
+          [challenge.challengeId],
+        );
+        assert.equal(
+          unconsumed.consumed_at,
+          null,
+          'correct Wien answer rolls back with other registration errors',
+        );
+        const success = await api('/auth/register', {
+          method: 'POST',
+          body: { ...identity, captcha },
+          expected: 201,
+          rawRegistration: true,
+        });
+        assert.ok(success.token);
+        const [[agreement]] = await db.execute(
+          'SELECT agreement_version FROM user_community_agreements WHERE user_id = ?',
+          [success.user.id],
+        );
+        assert.equal(agreement.agreement_version, COMMUNITY_AGREEMENT_VERSION);
+        assert.equal(
+          (
+            await api('/auth/register', {
+              method: 'POST',
+              body: { ...identity, captcha },
+              expected: 400,
+              rawRegistration: true,
+            })
+          ).code,
+          'registration_captcha_used',
+        );
+        const expired = await challengeFor('register', 'admin@example.invalid', 'wien');
         await db.execute(
           'UPDATE registration_challenges SET expires_at = NOW() - INTERVAL 1 SECOND WHERE id = ?',
           [expired.challengeId],
-        );
-        assert.equal(
-          (
-            await api('/auth/login', {
-              method: 'POST',
-              body: { identifier: 'admin', password: 'free-bbs', captcha: solveChallenge(expired) },
-              expected: 400,
-            })
-          ).code,
-          'login_captcha_expired',
-        );
-        const wrongPassword = await challengeFor('login', 'admin', 'wien');
-        const loginBody = {
-          identifier: 'admin',
-          password: 'wrong-password',
-          captcha: solveChallenge(wrongPassword),
-        };
-        await api('/auth/login', { method: 'POST', body: loginBody, expected: 401 });
-        assert.equal(
-          (
-            await api('/auth/login', {
-              method: 'POST',
-              body: { ...loginBody, password: 'free-bbs' },
-              expected: 400,
-            })
-          ).code,
-          'login_captcha_used',
         );
         // Expired challenge cleanup must cascade, leaving no orphaned circuit data.
         await db.execute('DELETE FROM registration_challenges WHERE id = ?', [expired.challengeId]);
@@ -1465,7 +1299,7 @@ test(
             isAnonymous: 'true',
           },
         });
-        const root = (
+        const rootComment = (
           await api(`/discussion/posts/${postId}/comments`, {
             token: outsider.token,
             method: 'POST',
@@ -1478,7 +1312,7 @@ test(
             token: legacy.token,
             method: 'POST',
             expected: 201,
-            body: { contentMarkdown: '保留的回复', parentCommentId: root.id },
+            body: { contentMarkdown: '保留的回复', parentCommentId: rootComment.id },
           })
         ).comment;
         const rootNotices = (
@@ -1501,20 +1335,21 @@ test(
           (item) => item.kind === 'comment_like' && item.link.endsWith(`#comment-${reply.id}`),
         );
         assert.equal(likeNotices.length, 1, 'repeated unlike/re-like does not spam');
-        await api(`/discussion/comments/${root.id}/like`, {
+        await api(`/discussion/comments/${rootComment.id}/like`, {
           token: outsider.token,
           method: 'POST',
         });
         assert.equal(
           (await api('/notifications', { token: outsider.token })).notifications.filter(
-            (item) => item.kind === 'comment_like' && item.link.endsWith(`#comment-${root.id}`),
+            (item) =>
+              item.kind === 'comment_like' && item.link.endsWith(`#comment-${rootComment.id}`),
           ).length,
           0,
         );
         const comments = (
           await api(`/discussion/posts/${postId}/comments`, { token: outsider.token })
         ).comments;
-        assert.equal(comments.find((c) => c.id === root.id).canDelete, true);
+        assert.equal(comments.find((c) => c.id === rootComment.id).canDelete, true);
         assert.equal(comments.find((c) => c.id === reply.id).canDelete, false);
         assert.equal(comments.find((c) => c.id === reply.id).likedByMe, true);
         await api(`/discussion/comments/${reply.id}`, {
@@ -1522,7 +1357,10 @@ test(
           method: 'DELETE',
           expected: 403,
         });
-        await api(`/discussion/comments/${root.id}`, { token: outsider.token, method: 'DELETE' });
+        await api(`/discussion/comments/${rootComment.id}`, {
+          token: outsider.token,
+          method: 'DELETE',
+        });
         const remaining = (await api(`/discussion/posts/${postId}/comments`)).comments;
         assert.equal(remaining.length, 2);
         assert.equal(remaining[0].isDeleted, true);
@@ -1530,7 +1368,7 @@ test(
         assert.equal(remaining[0].contentMarkdown, '该评论已删除');
         assert.equal(remaining[1].contentMarkdown, '保留的回复');
         assert.equal((await api(`/discussion/posts/${postId}`)).post.commentCount, 1);
-        await api(`/discussion/comments/${root.id}/like`, {
+        await api(`/discussion/comments/${rootComment.id}/like`, {
           token: legacy.token,
           method: 'POST',
           expected: 404,
@@ -1539,7 +1377,7 @@ test(
           token: legacy.token,
           method: 'POST',
           expected: 404,
-          body: { contentMarkdown: '不能回复已删除评论', parentCommentId: root.id },
+          body: { contentMarkdown: '不能回复已删除评论', parentCommentId: rootComment.id },
         });
         await api(`/discussion/comments/${reply.id}`, { token: admin.token, method: 'DELETE' });
         assert.equal((await api(`/discussion/posts/${postId}/comments`)).comments.length, 0);

@@ -167,12 +167,18 @@ const catalog = require('../public/data/shop-items.json').items.filter((i) => i.
     await buy('fish');
     await page.goto(`${base}/profile?uid=u_preview01`);
     await page.locator('[data-max-actor][data-pose="hungry"]').waitFor();
+    assert.equal(await page.locator('[data-max-tears]').getAttribute('visibility'), 'visible');
+    assert.equal(await page.locator('[data-max-face]').getAttribute('fill'), '#d9bd95');
+    assert.match(await page.locator('.ranch-owner-sign').textContent(), /NotingSr_preview/);
+    assert.equal(await page.locator('.ranch-hut').count(), 1);
+    assert.equal(await page.locator('.ranch-cabin').count(), 0);
     assert.equal(await page.locator('.ranch-bone-count').count(), 3);
     await page.locator('[data-extra-action="feed"]').click();
     await page.waitForFunction(() =>
       document.querySelector('#profile-extras-message').textContent.includes('金色'),
     );
     assert.equal(store.account().assets.golden_fishbone, 1);
+    assert.equal(await page.locator('[data-max-tears]').getAttribute('visibility'), 'hidden');
     assert.equal(store.account().assets.ordinary_fishbone, undefined);
     await page
       .locator('[data-max-actor][data-pose="walk"], [data-max-actor][data-pose="greet"]')
@@ -186,7 +192,7 @@ const catalog = require('../public/data/shop-items.json').items.filter((i) => i.
       await page.reload();
       await page.locator('.ranch-bone-count').nth(2).waitFor();
       await theme(mode);
-      await contrast('.ranch-bone-count, .ranch-satiety');
+      await contrast('.ranch-bone-count, .ranch-satiety, .ranch-owner-sign');
       assert.equal(await page.locator('.ranch-bone-count').count(), 3);
       if (out)
         await page

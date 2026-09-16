@@ -147,7 +147,7 @@ body.theme-light.discussion-page .main-content .discussion-markdown-body pre cod
 }
 
 body.discussion-page .main-content.settings-main {
-  width: min(100%, 1380px);
+  width: 100%;
   max-width: none;
   margin-inline: auto;
   padding: 116px clamp(24px, 3.4vw, 56px) 96px;

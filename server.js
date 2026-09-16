@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { clientIpForBackend } = require('./proxy-client-ip');
 
 const host = process.env.HOST || '127.0.0.1';
 const port = process.env.PORT || 3000;
@@ -29,6 +30,7 @@ const pageRoutes = new Map([
   ['/settings', '/settings.html'],
   ['/system-settings', '/system-settings.html'],
   ['/system-settings/announcements', '/system-settings-announcements.html'],
+  ['/system-settings/rewards', '/system-settings-rewards.html'],
   ['/system-settings/course-materials', '/system-settings-course-materials.html'],
   ['/system-settings/model', '/system-settings-model.html'],
   ['/workbench', '/workbench.html'],
@@ -54,6 +56,7 @@ const htmlRedirects = new Map([
   ['/remake.html', '/remake'],
   ['/settings.html', '/settings'],
   ['/system-settings-announcements.html', '/system-settings/announcements'],
+  ['/system-settings-rewards.html', '/system-settings/rewards'],
   ['/system-settings-course-materials.html', '/system-settings/course-materials'],
   ['/system-settings-model.html', '/system-settings/model'],
   ['/system-settings.html', '/system-settings'],
@@ -114,6 +117,8 @@ function sendFile(filePath, response, options = {}) {
     const ext = path.extname(filePath).toLowerCase();
     const headers = {
       'Content-Type': mimeTypes[ext] || 'application/octet-stream',
+      // Unversioned application files must revalidate after deployments.
+      'Cache-Control': 'no-cache',
     };
 
     if (
@@ -155,7 +160,7 @@ const server = http.createServer((request, response) => {
         path: request.url,
         headers: {
           ...request.headers,
-          'x-forwarded-for': request.socket.remoteAddress,
+          'x-forwarded-for': clientIpForBackend(request),
           host: `127.0.0.1:${process.env.API_PORT || 3001}`,
         },
       },
