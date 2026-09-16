@@ -1,0 +1,118 @@
+/* Background-only light and star/moon art: never layered above text or controls. */
+/* The main post surface excludes the comments; each reply owns its own light. */
+.discussion-post-surface {
+  padding: 16px;
+  margin: -16px -16px 20px;
+  border-radius: 18px;
+}
+@property --laser-x {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: -7px;
+}
+@property --laser-y {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: -4px;
+}
+body.discussion-page
+  .main-content
+  :is(.discussion-post-card, .discussion-post-surface, .discussion-comment).has-laser-glow {
+  --laser-halo: rgb(233 190 75 / 18%);
+  --laser-flow: rgb(240 197 84 / 30%);
+  --laser-wash: rgb(245 219 147 / 11%);
+  --laser-edge: rgb(243 208 108 / 20%);
+  background-image:
+    url('/assets/cosmetics/laser-starlight.svg'),
+    radial-gradient(ellipse at 95% 10%, var(--laser-edge), transparent 65%),
+    linear-gradient(var(--laser-wash), var(--laser-wash)) !important;
+  background-repeat: no-repeat !important;
+  background-size:
+    260px 180px,
+    100% 100%,
+    100% 100% !important;
+  background-position:
+    calc(100% + var(--laser-x, -7px)) var(--laser-y, -4px),
+    center,
+    center !important;
+  box-shadow:
+    inset 0 0 44px var(--laser-edge),
+    0 0 20px 2px var(--laser-halo),
+    var(--laser-x, -7px) var(--laser-y, -4px) 24px 1px var(--laser-flow) !important;
+  animation: laser-halo-flow 12s ease-in-out infinite;
+}
+body.theme-dark.discussion-page
+  :is(.discussion-post-card, .discussion-post-surface, .discussion-comment).has-laser-glow {
+  --laser-halo: rgb(255 219 123 / 12%);
+  --laser-flow: rgb(255 216 112 / 22%);
+  --laser-wash: rgb(255 215 119 / 4%);
+  --laser-edge: rgb(255 210 99 / 10%);
+}
+@media (max-width: 600px) {
+  body.discussion-page
+    .main-content
+    :is(.discussion-post-card, .discussion-post-surface, .discussion-comment).has-laser-glow {
+    background-size:
+      140px 100px,
+      100% 100%,
+      100% 100% !important;
+  }
+}
+@keyframes laser-halo-flow {
+  0%,
+  100% {
+    --laser-x: -7px;
+    --laser-y: -4px;
+  }
+  25% {
+    --laser-x: 7px;
+    --laser-y: -4px;
+  }
+  50% {
+    --laser-x: 7px;
+    --laser-y: 4px;
+  }
+  75% {
+    --laser-x: -7px;
+    --laser-y: 4px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.discussion-page
+    .main-content
+    :is(.discussion-post-card, .discussion-post-surface, .discussion-comment).has-laser-glow {
+    animation: none;
+  }
+}
+.scholar-collection {
+  margin-block: 28px;
+}
+.scholar-collection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+}
+.scholar-collection figure {
+  margin: 0;
+  padding: 20px;
+  border: 1px solid var(--line, #ced9da);
+  border-radius: 18px;
+  text-align: center;
+}
+.scholar-collection img {
+  width: 80px;
+  height: 80px;
+}
+.scholar-collection figcaption {
+  font-weight: 700;
+  margin-top: 10px;
+}
+@media (forced-colors: active) {
+  body.discussion-page
+    .main-content
+    :is(.discussion-post-card, .discussion-post-surface, .discussion-comment).has-laser-glow {
+    animation: none;
+    box-shadow: none !important;
+    background-image: none !important;
+  }
+}

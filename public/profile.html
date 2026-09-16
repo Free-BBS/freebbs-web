@@ -18,8 +18,9 @@
     <link rel="stylesheet" href="/username-guard.css" />
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
+    <link rel="stylesheet" href="/profile-extras.css" />
   </head>
-  <body>
+  <body class="public-profile-page">
     <div class="page-shell page-shell-settings">
       <header class="topbar">
         <a class="brand" href="/" aria-label="FREE-BBS 首页">
@@ -157,9 +158,14 @@
               </div>
               <div class="public-profile-copy">
                 <h2 id="public-profile-name">加载中...</h2>
+                <div id="public-profile-nameplate"></div>
                 <div class="public-profile-meta">
                   <span id="public-profile-student-id">-</span>
                   <span id="public-profile-major">-</span>
+                </div>
+                <div class="public-profile-website-row">
+                  <span>个人网页</span>
+                  <p id="public-profile-website">-</p>
                 </div>
               </div>
             </div>
@@ -180,13 +186,23 @@
                 <span>简介</span>
                 <p id="public-profile-bio">正在加载...</p>
               </div>
-              <div class="auth-field public-profile-field">
-                <span>个人网页</span>
-                <p id="public-profile-website">-</p>
-              </div>
             </div>
 
             <p class="auth-message settings-message" id="public-profile-message"></p>
+            <section class="profile-additions" aria-label="装扮管理与收藏">
+              <section class="profile-wardrobe" id="public-profile-wardrobe" hidden></section>
+              <section
+                id="public-profile-collectibles"
+                class="profile-collectibles"
+                hidden
+                aria-label="个人收藏"
+              ></section>
+            </section>
+            <section
+              class="profile-ranch"
+              id="public-profile-ranch"
+              aria-label="个人牧场"
+            ></section>
           </section>
         </section>
       </main>
@@ -215,6 +231,8 @@
 
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
+    <script src="/max-ranch.js"></script>
+    <script src="/profile-extras.js"></script>
     <script src="/app.js"></script>
     <script src="/notifications.js"></script>
   </body>

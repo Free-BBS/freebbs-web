@@ -75,6 +75,8 @@ npm run test:auth
 
 echo "[ci] shop and settings tests"
 npm run test:shop-settings
+npm run test:economy-retry
+npm run test:economy-mysql
 
 echo "[ci] nickname policy and knowledge learning usability tests"
 npm run test:profile-learning

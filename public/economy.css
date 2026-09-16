@@ -1,4 +1,36 @@
 /* Shop and inventory share content-sized cards; unused grid tracks stay empty. */
+body.economy-page .shop-sections {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 36px;
+}
+body.economy-page .shop-section {
+  min-width: 0;
+}
+body.economy-page .shop-section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 18px;
+  margin-bottom: 18px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--ui-line);
+}
+body.economy-page .shop-section-heading h2 {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.4;
+  color: var(--ui-text) !important;
+}
+body.economy-page .shop-section-heading p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--ui-muted) !important;
+}
+body.economy-page.theme-dark .economy-inventory-link img {
+  filter: brightness(0) invert(0.93);
+}
 .economy-page .shop-grid,
 .economy-page .inventory-list {
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
@@ -33,10 +65,15 @@ body.economy-page .inventory-item-image img {
   object-fit: contain;
 }
 
-/* Catalog artwork is dark line art, unlike the light currency icons. */
-body.economy-page.theme-dark .shop-item-image img,
-body.economy-page.theme-dark .inventory-item-image img,
-body.economy-page.theme-dark .shop-inspect-image img {
+/* Only legacy monochrome artwork needs inversion. Keep colored SVGs intact. */
+body.economy-page .shop-item-image img,
+body.economy-page .inventory-item-image img,
+body.economy-page .shop-inspect-image img {
+  filter: none !important;
+}
+body.economy-page.theme-dark
+  :is(.shop-item-image, .inventory-item-image, .shop-inspect-image)
+  img:is([src$='/battery.svg'], [src$='/fishbone.svg']) {
   filter: brightness(0) invert(0.93) !important;
 }
 
@@ -163,6 +200,17 @@ body.economy-page .shop-inspect-image {
   min-width: 0;
 }
 
+.economy-page .shop-purchase-progress {
+  padding: 8px 10px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 10px;
+  background: var(--ui-input);
+  color: var(--ui-text);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
 body.economy-page .shop-inspect-copy h2 {
   color: var(--ui-text);
   font-size: 1.65rem;
@@ -245,5 +293,117 @@ body.economy-page .inventory-gift-input::placeholder {
   .economy-page .shop-grid,
   .economy-page .inventory-list {
     grid-template-columns: 1fr;
+  }
+}
+.laser-controls {
+  width: 100%;
+  padding: 18px;
+  border-radius: 16px;
+  background: var(--panel-soft, #eef5f5);
+  color: var(--text, #12343b);
+}
+.laser-controls > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.laser-controls p {
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+.shop-trade-rules {
+  flex-basis: 100%;
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+.shop-trade-rules summary {
+  cursor: pointer;
+}
+.shop-trade-rules p {
+  white-space: pre-line;
+}
+body.theme-dark .laser-controls {
+  background: #19343b;
+  color: #dfedef;
+}
+/* Product gallery: consistent readable surfaces, semantic art and calm spacing. */
+body.economy-page .shop-item-card {
+  --product-tint: #e8f2f1;
+  background: var(--ui-surface) !important;
+  border: 1px solid var(--ui-line);
+  box-shadow: 0 8px 24px rgb(24 58 65 / 5%);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+body.economy-page .shop-item-card:hover {
+  border-color: var(--ui-accent);
+  box-shadow: 0 10px 28px rgb(24 58 65 / 12%);
+}
+body.economy-page .shop-item-card[data-product-class='scholar_relic'] {
+  --product-tint: #f5ead9;
+}
+body.economy-page .shop-item-card[data-product-class='profile_card'],
+body.economy-page .shop-item-card[data-product-class='nameplate'] {
+  --product-tint: #eee8f6;
+}
+body.economy-page .shop-item-card[data-product-class='pet'],
+body.economy-page .shop-item-card[data-product-class='pet_food'] {
+  --product-tint: #e5efdc;
+}
+body.economy-page.theme-dark .shop-item-card {
+  --product-tint: #19343d;
+}
+body.economy-page.theme-dark .shop-item-card[data-product-class='scholar_relic'] {
+  --product-tint: #393226;
+}
+body.economy-page.theme-dark .shop-item-card[data-product-class='profile_card'],
+body.economy-page.theme-dark .shop-item-card[data-product-class='nameplate'] {
+  --product-tint: #302c43;
+}
+body.economy-page.theme-dark .shop-item-card[data-product-class='pet'],
+body.economy-page.theme-dark .shop-item-card[data-product-class='pet_food'] {
+  --product-tint: #26392d;
+}
+body.economy-page .shop-item-card .shop-item-image {
+  background: var(--product-tint) !important;
+}
+body.economy-page .shop-item-card .shop-item-image img {
+  width: 92px;
+  height: 92px;
+}
+body.economy-page .shop-category {
+  font-size: 0.78rem;
+  color: var(--ui-muted);
+  letter-spacing: 0.04em;
+}
+body.economy-page .shop-item-price {
+  color: var(--ui-text);
+  font-variant-numeric: tabular-nums;
+}
+body.economy-page .shop-inspect-panel {
+  background: var(--ui-surface) !important;
+  color: var(--ui-text) !important;
+}
+body.economy-page .shop-trade-rules {
+  padding: 12px 16px;
+  border: 1px solid var(--ui-line);
+  border-radius: 14px;
+  background: var(--ui-surface-soft);
+  color: var(--ui-text);
+}
+body.economy-page .shop-trade-rules p {
+  color: var(--ui-text) !important;
+  font-size: 0.9rem;
+  line-height: 1.75;
+}
+body.economy-page #shop-inspect-desc {
+  color: var(--ui-muted) !important;
+  line-height: 1.85;
+  white-space: pre-line;
+}
+@media (prefers-reduced-motion: reduce) {
+  body.economy-page .shop-item-card {
+    transition: none;
   }
 }

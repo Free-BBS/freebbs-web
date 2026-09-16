@@ -1,0 +1,904 @@
+/* Paid cosmetics and earned nameplates are distinct; neither grants role or permissions. */
+/* Decorative motion is local to equipped cosmetics; identity text stays still. */
+body.public-profile-page:not(.auth-page-body) .main-content {
+  padding-inline: var(--bbs-content-gutter, 24px) !important;
+}
+body.public-profile-page:not(.auth-page-body) .settings-shell,
+body.public-profile-page:not(.auth-page-body) .public-profile-shell {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  margin-inline: 0;
+  justify-self: stretch;
+}
+.public-profile-shell {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+.public-profile-shell > :not(.profile-ambience) {
+  position: relative;
+  z-index: 1;
+}
+.profile-ambience {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  color: var(--ui-accent);
+}
+.public-profile-shell[data-profile-card]:not([data-profile-card='']) > .profile-ambience {
+  display: block;
+}
+.profile-ambience::before {
+  content: '';
+  position: absolute;
+  width: 480px;
+  height: 300px;
+  right: -100px;
+  top: -100px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, var(--profile-glow), transparent 70%);
+  animation: profile-aura-drift 14s ease-in-out infinite alternate;
+}
+.profile-constellation {
+  position: absolute;
+  width: min(68%, 560px);
+  right: -10px;
+  top: 16px;
+  stroke: currentColor;
+  stroke-width: 1;
+  opacity: 0.14;
+}
+.profile-constellation circle {
+  fill: currentColor;
+}
+.public-profile-shell[data-profile-card='card_blueprint'] .profile-constellation path {
+  stroke-dasharray: 6 7;
+  animation: profile-circuit-flow 32s linear infinite;
+}
+.public-profile-shell[data-profile-card='card_twilight'] .profile-constellation {
+  opacity: 0.08;
+}
+.profile-star {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+  animation: profile-star-breathe 5s ease-in-out infinite alternate;
+  opacity: 0.3;
+}
+.star-one {
+  top: 42px;
+  right: 12%;
+}
+.star-two {
+  top: 140px;
+  right: 30%;
+  width: 8px;
+  height: 8px;
+  animation-delay: -2s;
+}
+.star-three {
+  top: 215px;
+  right: 7%;
+  animation-delay: -3s;
+}
+.star-four {
+  bottom: 45px;
+  right: 18%;
+  width: 9px;
+  height: 9px;
+  animation-delay: -1s;
+}
+:is(.public-profile-avatar-wrap, .discussion-avatar-frame) {
+  position: relative;
+  flex-shrink: 0;
+  --frame-glint: #568e8e;
+}
+:is(.public-profile-avatar-wrap, .discussion-avatar-frame)[data-frame='frame_aurora'] {
+  --frame-glint: #a179c7;
+}
+:is(.public-profile-avatar-wrap, .discussion-avatar-frame)[data-frame]:not(
+    [data-frame='']
+  )::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  padding: 2px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 20deg,
+    transparent 5%,
+    var(--frame-glint) 23%,
+    transparent 38%,
+    #d3b56f 53%,
+    transparent 70%,
+    var(--frame-glint) 85%,
+    transparent
+  );
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: profile-orbit 20s linear infinite;
+  pointer-events: none;
+}
+:is(.public-profile-avatar-wrap, .discussion-avatar-frame)[data-frame]:not([data-frame=''])::after {
+  content: '✦';
+  position: absolute;
+  right: -7px;
+  top: 12px;
+  color: var(--frame-glint);
+  font: 24px/1 serif;
+  text-shadow: 0 0 12px var(--frame-glint);
+  animation: profile-star-breathe 4s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+body.theme-dark
+  :is(.public-profile-avatar-wrap, .discussion-avatar-frame)[data-frame='frame_orbit'] {
+  --frame-glint: #8ddbd0;
+}
+body.theme-dark
+  :is(.public-profile-avatar-wrap, .discussion-avatar-frame)[data-frame='frame_aurora'] {
+  --frame-glint: #d0aff5;
+}
+/* The avatar link hides its text label; keep only the decorative wrapper visible. */
+.discussion-author-link-avatar .discussion-avatar-frame {
+  display: inline-flex;
+  border-radius: 50%;
+  line-height: 0;
+}
+.discussion-avatar-frame[data-frame]:not([data-frame=''])::before {
+  inset: -4px;
+  padding: 1.5px;
+}
+.discussion-avatar-frame[data-frame]:not([data-frame=''])::after {
+  top: 0;
+  right: -5px;
+  font-size: 12px;
+  text-shadow: 0 0 6px var(--frame-glint);
+}
+/* Aurora is a silk-like light curtain with a star crown, not a recoloured orbit. */
+:is(.public-profile-avatar-wrap, .discussion-avatar-frame)[data-frame='frame_aurora']:not(
+    [data-frame='']
+  )::before {
+  inset: -8px;
+  padding: 6px;
+  border-radius: 46% 54% 49% 51%;
+  background: linear-gradient(135deg, #69d8cc, #a994e8 28%, #f2bedf 48%, #99e8e0 65%, #ac90e3);
+  background-size: 260% 260%;
+  opacity: 0.8;
+  animation: aurora-curtain 9s ease-in-out infinite alternate;
+}
+:is(.public-profile-avatar-wrap, .discussion-avatar-frame)[data-frame='frame_aurora']:not(
+    [data-frame='']
+  )::after {
+  content: '';
+  inset: -17%;
+  background: url('/assets/cosmetics/aurora-crown.svg') center / contain no-repeat;
+  animation: aurora-starlight 6s ease-in-out infinite alternate;
+  text-shadow: none;
+}
+.discussion-author-link-avatar
+  .discussion-avatar-frame[data-frame='frame_aurora']:not([data-frame=''])::before {
+  inset: -5px;
+  padding: 3px;
+}
+@keyframes aurora-curtain {
+  from {
+    background-position: 0% 30%;
+    border-radius: 46% 54% 49% 51%;
+  }
+  to {
+    background-position: 100% 70%;
+    border-radius: 53% 47% 51% 49%;
+  }
+}
+@keyframes aurora-starlight {
+  from {
+    opacity: 0.72;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+.cosmetic-nameplate::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(110deg, transparent 30%, #ffffff38 48%, transparent 66%);
+  background-size: 300% 100%;
+  animation: profile-plate-sheen 9s ease-in-out infinite;
+  pointer-events: none;
+}
+.cosmetic-nameplate .nameplate-crest {
+  box-shadow:
+    inset 0 0 8px #ffffff18,
+    0 0 8px #b9a1dc20;
+}
+@keyframes profile-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes profile-star-breathe {
+  from {
+    opacity: 0.22;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 0.64;
+    transform: scale(1.12);
+  }
+}
+@keyframes profile-aura-drift {
+  to {
+    transform: translate(-40px, 30px) scale(1.12);
+  }
+}
+@keyframes profile-circuit-flow {
+  to {
+    stroke-dashoffset: -104;
+  }
+}
+@keyframes profile-plate-sheen {
+  0%,
+  65% {
+    background-position: 100% 0;
+    opacity: 0;
+  }
+  75% {
+    opacity: 0.55;
+  }
+  100% {
+    background-position: 0 0;
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .profile-ambience::before,
+  .profile-constellation path,
+  .profile-star,
+  .public-profile-avatar-wrap::before,
+  .public-profile-avatar-wrap::after,
+  .discussion-avatar-frame::before,
+  .discussion-avatar-frame::after,
+  .cosmetic-nameplate::after {
+    animation: none !important;
+  }
+}
+[data-avatar-frame='frame_orbit'] {
+  border: 3px solid #358d96 !important;
+  outline: 2px solid #d6b366;
+  outline-offset: 3px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 7px rgba(55, 143, 152, 0.12);
+}
+[data-avatar-frame='frame_aurora'] {
+  border: 3px solid #ac8cd8 !important;
+  outline: 1px solid #d6c6ef;
+  outline-offset: 3px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 7px rgba(141, 109, 193, 0.14);
+}
+.cosmetic-nameplate {
+  --plate-ink: #205460;
+  --plate-bg: #e4f1ee;
+  --plate-edge: #7aa99f;
+  --plate-accent: #956b28;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55em;
+  position: relative;
+  vertical-align: middle;
+  margin: 0.25em 0.35em 0.25em 0;
+  padding: 0.32em 0.8em 0.32em 0.38em;
+  border: 1px solid var(--plate-edge);
+  border-radius: 10px 18px 18px 10px;
+  color: var(--plate-ink);
+  background-color: var(--plate-bg);
+  background-image: linear-gradient(115deg, #ffffff25, transparent 65%);
+  box-shadow:
+    inset 0 0 0 3px #ffffff20,
+    0 2px 5px #1026260a;
+  font: 600 0.84rem/1.35 var(--font-zh-ui, sans-serif);
+  letter-spacing: 0.04em;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.cosmetic-nameplate .nameplate-crest {
+  flex: 0 0 auto;
+  width: 2.1em;
+  height: 2.1em;
+  padding: 2px;
+  color: var(--plate-accent);
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  border-radius: 50%;
+  border: 1px solid var(--plate-edge);
+  filter: none !important;
+}
+body .cosmetic-nameplate .nameplate-label {
+  color: var(--plate-ink);
+  font: inherit;
+}
+.cosmetic-nameplate small {
+  font: 500 0.68em/1.3 var(--font-zh-ui, sans-serif);
+  letter-spacing: 0.08em;
+  color: var(--plate-ink);
+  border-left: 1px solid var(--plate-edge);
+  padding-left: 0.7em;
+  white-space: nowrap;
+}
+.cosmetic-nameplate.plate_observer {
+  --plate-bg: #eee9f7;
+  --plate-ink: #55416f;
+  --plate-edge: #b1a0ca;
+  --plate-accent: #716095;
+}
+.cosmetic-nameplate.plate_fishbone_master {
+  --plate-bg: #faf0d8;
+  --plate-ink: #6d491a;
+  --plate-edge: #c7a258;
+  --plate-accent: #98621b;
+}
+body.theme-dark .cosmetic-nameplate {
+  --plate-bg: #193d42;
+  --plate-ink: #c6ece1;
+  --plate-edge: #51887e;
+  --plate-accent: #e7c880;
+}
+body.theme-dark .cosmetic-nameplate.plate_observer {
+  --plate-bg: #322c46;
+  --plate-ink: #e4d6fb;
+  --plate-edge: #8975a9;
+  --plate-accent: #c9b6eb;
+}
+body.theme-dark .cosmetic-nameplate.plate_fishbone_master {
+  --plate-bg: #3c301c;
+  --plate-ink: #f5dfae;
+  --plate-edge: #a1854a;
+  --plate-accent: #ecc779;
+}
+.profile-decoration-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  border-radius: 20px;
+  padding: 24px;
+  gap: 24px;
+  border: 1px solid var(--ui-line);
+  color: var(--ui-text);
+}
+.profile-decoration-preview > div {
+  min-width: 0;
+  max-width: 100%;
+}
+.profile-decoration-preview strong {
+  overflow-wrap: anywhere;
+  white-space: normal;
+  color: inherit;
+}
+.profile-decoration-preview img {
+  width: 76px;
+  height: 76px;
+  object-fit: cover;
+  border-radius: 50%;
+  filter: none !important;
+}
+.profile-decoration-preview[data-profile-card='card_blueprint'] {
+  background-color: #e1eeef;
+  background-image:
+    linear-gradient(rgba(28, 105, 118, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(28, 105, 118, 0.09) 1px, transparent 1px);
+  background-size: 24px 24px;
+  border: 1px solid #a5c7cc;
+}
+.profile-decoration-preview[data-profile-card='card_twilight'] {
+  background:
+    radial-gradient(ellipse at 95% 10%, #e5c59c80, transparent 55%),
+    linear-gradient(120deg, #ece5f4, #e8edf4);
+  border: 1px solid #c7b2d7;
+}
+body.theme-dark .profile-decoration-preview[data-profile-card='card_blueprint'] {
+  background-color: #19343c;
+  border-color: #3d6570;
+}
+body.theme-dark .profile-decoration-preview[data-profile-card='card_twilight'] {
+  background:
+    radial-gradient(ellipse at 95% 10%, #72594f60, transparent 55%),
+    linear-gradient(120deg, #352d48, #213640);
+  border-color: #655279;
+}
+.profile-ranch,
+.profile-wardrobe {
+  margin-top: 26px;
+  padding: 24px;
+  border: 1px solid var(--ui-line);
+  border-radius: 20px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+body .profile-ranch :is(h2, h3, p, span),
+body .profile-wardrobe :is(h2, h3, p) {
+  color: inherit;
+}
+.profile-ranch h2,
+.profile-wardrobe h2 {
+  margin: 4px 0 12px;
+  font-size: 1.4rem;
+}
+.profile-ranch p,
+.profile-wardrobe p {
+  font-size: 1rem;
+  line-height: 1.7;
+}
+.ranch-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.ranch-kicker {
+  font: 600 0.7rem/1.6 system-ui;
+  letter-spacing: 0.16em;
+}
+.ranch-intro {
+  margin: 0 0 18px;
+  opacity: 0.85;
+}
+.ranch-scene {
+  position: relative;
+  height: 310px;
+  overflow: hidden;
+  border-radius: 16px;
+  background: linear-gradient(#dcefeb, #f3f1d8);
+  isolation: isolate;
+}
+.ranch-sun {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: #f3d58e;
+  left: 13%;
+  top: 26px;
+  box-shadow: 0 0 0 12px #f3d58e22;
+}
+.ranch-cloud {
+  position: absolute;
+  background: #ffffff99;
+  border-radius: 80%;
+  width: 120px;
+  height: 25px;
+  left: 48%;
+  top: 60px;
+}
+.ranch-hill {
+  position: absolute;
+  width: 130%;
+  height: 220px;
+  border-radius: 50% 50% 0 0;
+  background: #7fb096;
+  bottom: -65px;
+  left: -16%;
+}
+.ranch-hill-back {
+  background: #a7c8aa;
+  bottom: -10px;
+  left: 20%;
+}
+.ranch-cabin {
+  position: absolute;
+  right: 9%;
+  bottom: 106px;
+  width: 70px;
+  height: 55px;
+  background: #dbbf90;
+  border: 4px solid #a98c63;
+  border-top: 12px solid #708f77;
+  border-radius: 6px;
+  text-align: center;
+  padding-top: 10px;
+  color: #463c2d !important;
+  font: 700 12px system-ui;
+}
+.ranch-ground {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 42px;
+  background: #71937b;
+  border-top: 5px solid #85ab88;
+}
+.ranch-bone {
+  position: absolute;
+  bottom: 26px;
+  width: 34px;
+  height: 25px;
+  color: #fff5d7 !important;
+  transform: rotate(-28deg);
+}
+.ranch-bone svg {
+  width: 100%;
+  height: 100%;
+}
+/* Original settings styles color all spans; isolate the illustration's own palette. */
+body:not(.auth-page-body) .profile-ranch .ranch-bone svg {
+  color: #fff5d7 !important;
+}
+body:not(.auth-page-body) .profile-ranch .ranch-bone.is-golden svg {
+  color: #ffdb75 !important;
+}
+.ranch-bone.is-golden {
+  color: #ffdb75 !important;
+  text-shadow: 0 0 8px #e7ca56;
+}
+.ranch-pet-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 26px;
+  height: 180px;
+}
+[data-max-actor] {
+  width: 180px;
+  height: 180px;
+}
+[data-max-actor] svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: none !important;
+}
+.ranch-empty {
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  top: 115px;
+  text-align: center;
+  color: #244f46 !important;
+}
+body.theme-dark .ranch-scene {
+  background: linear-gradient(#172f3d, #37505c);
+}
+body.theme-dark .ranch-sun {
+  background: #ddd8bb;
+  box-shadow: 10px -7px 0 0 #233c49;
+}
+body.theme-dark .ranch-hill {
+  background: #375f55;
+}
+body.theme-dark .ranch-hill-back {
+  background: #426f69;
+}
+body.theme-dark .ranch-ground {
+  background: #324a40;
+  border-color: #527c64;
+}
+body.theme-dark .ranch-empty {
+  color: #e4f2e6 !important;
+}
+.ranch-owner-controls,
+.extra-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+body :is(.profile-ranch, .profile-wardrobe) button {
+  padding: 10px 14px;
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--ui-line);
+  background: var(--ui-surface-soft);
+  color: var(--ui-text);
+  font: 600 0.9rem/1.5 var(--font-zh-ui, sans-serif);
+  cursor: pointer;
+}
+body :is(.profile-ranch, .profile-wardrobe) button:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 3px;
+}
+body :is(.profile-ranch, .profile-wardrobe) button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+body .profile-wardrobe button[aria-pressed='true'] {
+  border-color: var(--ui-accent);
+  box-shadow: inset 0 0 0 1px var(--ui-accent);
+}
+.ranch-rules {
+  margin-top: 16px;
+  line-height: 1.7;
+}
+.wardrobe-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 16px;
+  margin: 18px 0;
+}
+.wardrobe-slots section {
+  padding: 14px;
+  background: var(--ui-surface-soft);
+  border-radius: 12px;
+}
+.wardrobe-slots button {
+  margin: 4px 4px 4px 0;
+}
+.profile-extras-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(330px, 1fr);
+  align-items: start;
+  gap: 28px;
+  margin-bottom: 28px;
+}
+.settings-form .profile-extras-top {
+  grid-template-columns: minmax(0, 1fr);
+}
+.profile-extras-top > .profile-ranch {
+  margin-top: 0;
+  min-width: 0;
+  padding: 18px;
+}
+.profile-extras-top .ranch-scene {
+  height: 230px;
+}
+.profile-extras-top .ranch-intro,
+.profile-extras-top .ranch-inventory {
+  font-size: 0.88rem;
+  margin: 10px 0;
+}
+.profile-extras-top .ranch-heading h2 {
+  font-size: 1.2rem;
+}
+.profile-extras-top .ranch-owner-controls {
+  margin-top: 10px;
+  gap: 8px;
+}
+.profile-extras-top .ranch-rules {
+  margin-top: 10px;
+  font-size: 0.88rem;
+}
+#profile-extras-message:empty {
+  margin: 0;
+}
+.profile-additions {
+  margin-top: 28px;
+}
+.profile-additions > h2 {
+  color: var(--ui-text);
+  font-size: 1.4rem;
+}
+.profile-collectibles figure {
+  display: inline-grid;
+  justify-items: center;
+  gap: 12px;
+  margin: 12px;
+  padding: 18px;
+  max-width: 100%;
+  background: var(--ui-surface-soft);
+  border-radius: 14px;
+  color: var(--ui-text);
+}
+.profile-collectibles img {
+  width: 80px;
+  height: 80px;
+  filter: none !important;
+}
+@media (max-width: 1200px) {
+  .profile-extras-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .profile-ranch,
+  .profile-wardrobe {
+    padding: 16px;
+  }
+  .ranch-scene {
+    height: 270px;
+  }
+  .profile-decoration-preview {
+    padding: 20px 14px;
+  }
+}
+
+/* Public owner's skin, independent of the visitor's own equipped card.
+   Only colors/textures change: existing typography and layout stay intact. */
+body[data-public-profile-theme='card_blueprint'] {
+  background: #eaf2f1 !important;
+}
+body[data-public-profile-theme='card_twilight'] {
+  background: #f0ebf4 !important;
+}
+body.theme-dark[data-public-profile-theme='card_blueprint'] {
+  background: #10282f !important;
+}
+body.theme-dark[data-public-profile-theme='card_twilight'] {
+  background: #201c2d !important;
+}
+.public-profile-shell[data-profile-card='card_blueprint'] {
+  --ui-text: #214c55;
+  --ui-text-muted: #4a6b71;
+  --ui-surface: #f1f8f6;
+  --ui-surface-soft: #dcece8;
+  --ui-surface-raised: #edf5f3;
+  --ui-line: #afccc7;
+  --ui-accent: #226b72;
+  --profile-grid: #427d8110;
+  --profile-glow: #b1dacf44;
+  --ranch-sky: linear-gradient(#d8eeef, #ecf5e6);
+  --ranch-hill: #6caaa0;
+  --ranch-hill-back: #a0c9bd;
+  --ranch-ground: #537f76;
+  --ranch-grass: #84b8a1;
+}
+.public-profile-shell[data-profile-card='card_twilight'] {
+  --ui-text: #4d3b60;
+  --ui-text-muted: #6e5b7c;
+  --ui-surface: #f8f3fa;
+  --ui-surface-soft: #eae0ef;
+  --ui-surface-raised: #f4edf7;
+  --ui-line: #cbb7d7;
+  --ui-accent: #73518c;
+  --profile-grid: transparent;
+  --profile-glow: #ebc79760;
+  --ranch-sky: linear-gradient(#dad3f0, #f3ddcb);
+  --ranch-hill: #a39cba;
+  --ranch-hill-back: #c4b7d4;
+  --ranch-ground: #7f7896;
+  --ranch-grass: #b3a6c2;
+}
+body.theme-dark .public-profile-shell[data-profile-card='card_blueprint'] {
+  --ui-text: #cde7e3;
+  --ui-text-muted: #aac8c5;
+  --ui-surface: #162e36;
+  --ui-surface-soft: #213e47;
+  --ui-surface-raised: #1b343c;
+  --ui-line: #3e6870;
+  --ui-accent: #a8d9d4;
+  --profile-grid: #96c8c310;
+  --profile-glow: #375f7733;
+  --ranch-sky: linear-gradient(#153643, #31616a);
+  --ranch-hill: #345e60;
+  --ranch-hill-back: #4a7d7a;
+  --ranch-ground: #294846;
+  --ranch-grass: #547f73;
+}
+body.theme-dark .public-profile-shell[data-profile-card='card_twilight'] {
+  --ui-text: #e8ddef;
+  --ui-text-muted: #c7b9d4;
+  --ui-surface: #2d263c;
+  --ui-surface-soft: #40344e;
+  --ui-surface-raised: #352d45;
+  --ui-line: #695677;
+  --ui-accent: #dac1ed;
+  --profile-grid: transparent;
+  --profile-glow: #c0804933;
+  --ranch-sky: linear-gradient(#2a2744, #655065);
+  --ranch-hill: #58536e;
+  --ranch-hill-back: #77708a;
+  --ranch-ground: #423c52;
+  --ranch-grass: #79708c;
+}
+body:not(.auth-page-body) .public-profile-shell[data-profile-card]:not([data-profile-card='']) {
+  background-color: var(--ui-surface) !important;
+  background-image:
+    radial-gradient(ellipse at 95% 0%, var(--profile-glow), transparent 45%),
+    linear-gradient(var(--profile-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--profile-grid) 1px, transparent 1px) !important;
+  background-size:
+    100% 100%,
+    32px 32px,
+    32px 32px !important;
+  color: var(--ui-text);
+  border: 1px solid var(--ui-line) !important;
+}
+.public-profile-shell[data-profile-card]:not([data-profile-card='']) .ranch-scene {
+  background: var(--ranch-sky);
+}
+.public-profile-shell[data-profile-card]:not([data-profile-card='']) .ranch-hill {
+  background: var(--ranch-hill);
+}
+.public-profile-shell[data-profile-card]:not([data-profile-card='']) .ranch-hill-back {
+  background: var(--ranch-hill-back);
+}
+.public-profile-shell[data-profile-card]:not([data-profile-card='']) .ranch-ground {
+  background: var(--ranch-ground);
+  border-color: var(--ranch-grass);
+}
+body.theme-dark .public-profile-shell[data-profile-card]:not([data-profile-card='']) .ranch-sun {
+  box-shadow: none;
+  background: #f3ddaf;
+}
+.profile-public-link {
+  display: inline-block;
+  margin: 12px 0 0 16px;
+}
+
+/* Keep the website with identity details; reserve the complete lower row for the bio. */
+.public-profile-website-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  margin-top: 12px;
+  max-width: 100%;
+}
+.public-profile-website-row > p {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.public-profile-website-row a {
+  color: var(--ui-accent);
+  overflow-wrap: anywhere;
+}
+body:not(.auth-page-body) .public-profile-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+#public-profile-bio {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* A fixed-size three-category counter replaces quantity-sized scene decorations. */
+.ranch-bone-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-block: 14px;
+}
+.ranch-bone-count {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 12px 4px;
+  border: 1px solid var(--ui-line);
+  border-radius: 14px;
+  background: var(--ui-surface-soft);
+  color: var(--ui-text);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ranch-bone-count svg {
+  width: 42px;
+  height: 28px;
+  color: #906319;
+}
+.ranch-bone-count.is-hard svg {
+  color: #626d7c;
+}
+.ranch-bone-count.is-ordinary svg {
+  color: #7c7969;
+}
+body.theme-dark .ranch-bone-count.is-golden svg {
+  color: #f1cc75;
+}
+body.theme-dark .ranch-bone-count.is-hard svg {
+  color: #becce0;
+}
+body.theme-dark .ranch-bone-count.is-ordinary svg {
+  color: #e0dcc9;
+}
+.ranch-bone-count span {
+  font-size: 0.85em;
+}
+.ranch-satiety {
+  color: var(--ui-text);
+}

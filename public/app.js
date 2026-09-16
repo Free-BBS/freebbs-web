@@ -604,7 +604,8 @@ function initializeUserEconomyShortcuts() {
       }
     });
 
-    shortcuts.append(checkinLink, inventoryLink);
+    if (!isPublicProfilePage()) shortcuts.append(checkinLink);
+    shortcuts.append(inventoryLink);
     stack.append(shortcuts, status);
     panel.insertBefore(stack, panel.querySelector('.user-summary'));
     economyShortcutLinks.push(checkinLink, inventoryLink);
@@ -922,7 +923,15 @@ async function openFortuneModal() {
     userState.fortuneBonusEnabled = Boolean(payload.fortuneBonusEnabled);
     setCheckinShortcutState(payload.checkedInToday);
     if (payload.user) {
+      const draft =
+        settingsForm && userState.uid === payload.user.uid
+          ? { bio: settingsBio.value, website: settingsWebsiteUrl.value }
+          : null;
       saveSession(userState.token, payload.user);
+      if (draft) {
+        settingsBio.value = draft.bio;
+        settingsWebsiteUrl.value = draft.website;
+      }
     }
     const today = payload.today || payload.todayFortune;
     const result = getFortuneResult(Number(today?.fortuneScore ?? today?.score ?? 0), today?.date);
@@ -933,7 +942,11 @@ async function openFortuneModal() {
     score.textContent = `今日运势 ${result.score}`;
     tagline.textContent = result.tagline;
     checkinButton.disabled = Boolean(payload.checkedInToday);
-    checkinButton.textContent = payload.checkedInToday ? '今日已签到' : '签到领取电元';
+    checkinButton.textContent = payload.checkedInToday
+      ? '今日已签到'
+      : result.date >= '2026-09-16'
+        ? '签到领取磁元'
+        : '签到领取电元';
     records.innerHTML = (payload.records || []).length
       ? payload.records
           .map(
@@ -941,7 +954,7 @@ async function openFortuneModal() {
           <div class="fortune-record-row">
             <span>${escapeHtml(item.date)}</span>
             <strong>连续 ${Number(item.streak || 0)} 天</strong>
-            <span>+${Number(item.rewardElectrons || 0)} 电元</span>
+            <span>${item.rewardMagnetic ? `+${Number(item.rewardMagnetic)} 磁元` : `+${Number(item.rewardElectrons || 0)} 电元（历史）`}</span>
           </div>
         `,
           )
@@ -955,15 +968,16 @@ async function openFortuneModal() {
     checkinButton.onclick = async () => {
       checkinButton.disabled = true;
       checkinButton.textContent = '签到中';
-      const nextPayload = await callApi('/checkin', { method: 'POST' });
-      renderCheckinPayload(
-        nextPayload.summary
-          ? {
-              ...nextPayload.summary,
-              user: nextPayload.user,
-            }
-          : nextPayload,
-      );
+      try {
+        const nextPayload = await callApi('/checkin', { method: 'POST' });
+        renderCheckinPayload(
+          nextPayload.summary ? { ...nextPayload.summary, user: nextPayload.user } : nextPayload,
+        );
+      } catch (error) {
+        tagline.textContent = error.message || '签到未完成，请重试';
+        checkinButton.disabled = false;
+        checkinButton.textContent = '重试签到';
+      }
     };
   } catch (error) {
     badge.className = 'fortune-badge fortune-awful';
@@ -971,6 +985,7 @@ async function openFortuneModal() {
     tagline.textContent = error.message || '获取签到失败';
     checkinButton.disabled = false;
     checkinButton.textContent = '重试';
+    checkinButton.onclick = () => openFortuneModal();
   }
 }
 
@@ -986,44 +1001,80 @@ function ensureElectromagneticModal() {
   modal.className = 'fortune-modal electromagnetic-modal hidden';
   modal.innerHTML = `
     <div class="fortune-backdrop" data-action="close"></div>
-    <section class="fortune-panel electromagnetic-panel" aria-labelledby="electromagnetic-title">
+    <section class="fortune-panel electromagnetic-panel currency-guide-panel" role="dialog" aria-modal="true" aria-labelledby="electromagnetic-title">
       <button class="fortune-close" type="button" data-action="close" aria-label="关闭">×</button>
-      <h2 class="fortune-title" id="electromagnetic-title">电磁场</h2>
-      <p class="fortune-tagline">购买资产会消耗电元或磁元，并把消耗值加入热力。</p>
+      <h2 class="fortune-title" id="electromagnetic-title">电磁场系统</h2>
+      <p class="fortune-tagline">把认真探索和日常陪伴，变成一点点积累。</p>
       <div class="electromagnetic-balances" id="electromagnetic-balances"></div>
       <section class="electromagnetic-section">
-        <h3>商店</h3>
-        <article class="electromagnetic-shop-item">
-          <div>
-            <strong>微分器</strong>
-            <p>消耗 1 个电元或 1 个磁元购买。拥有后可在电元和磁元之间按 5:5 转换。</p>
-          </div>
-          <div class="electromagnetic-actions">
-            <button class="electromagnetic-button" data-action="buy-differentiator" data-currency="electric" type="button">电元购买</button>
-            <button class="electromagnetic-button" data-action="buy-differentiator" data-currency="magnetic" type="button">磁元购买</button>
-          </div>
-        </article>
+        <h3>磁元 · 日常参与</h3>
+        <ul class="currency-guide-list">
+          <li>连续签到第1、2、3天分别获得1、2、3磁元，之后每天3磁元；中断后从第1天重新累计。</li>
+          <li>当天运势为大吉或祥瑞时，签到额外获得1磁元。</li>
+          <li>日常讨论：发帖会获得1磁元，收到他人点击“令人高兴”或“恭喜”时帖子作者获得1磁元，收到“有启发性”时帖子作者获得2磁元，日常讨论每日最多累计获得3磁元。</li>
+          <li>帖子或回帖被管理员设为精华，每篇获得5磁元，独立于日常参与奖励。</li>
+        </ul>
       </section>
       <section class="electromagnetic-section">
-        <h3>资产</h3>
-        <div id="electromagnetic-assets"></div>
-        <div class="electromagnetic-actions">
-          <button class="electromagnetic-button" data-action="convert" data-direction="electric_to_magnetic" type="button">5 电元 → 5 磁元</button>
-          <button class="electromagnetic-button" data-action="convert" data-direction="magnetic_to_electric" type="button">5 磁元 → 5 电元</button>
-        </div>
+        <h3>电元 · 探索与贡献</h3>
+        <ul class="currency-guide-list">
+          <li>公测期间，发现并提交有价值的问题，经审核可获得5–50电元奖励。</li>
+          <li>后续课程配套入驻后，将开放学习内容相关的电元奖励，具体获取方式随课程公布。</li>
+        </ul>
+      </section>
+      <section class="electromagnetic-section">
+        <h3>热力 · 你的活跃度</h3>
+        <ul class="currency-guide-list">
+          <li>花费电元或磁元时，会产生对应大小的热力，热力值每天减半。</li>
+        </ul>
+      </section>
+      <section class="electromagnetic-section">
+        <h3>使用与转换</h3>
+        <p>电元和磁元可在商城购买装扮、收藏、消耗品与伙伴。每个微分器可将10电元转换为10磁元，或将10磁元转换为10电元，但会收取4电元或4磁元的手续费。</p>
+        <a class="electromagnetic-button" href="/electromagnetic">前往商城</a>
+        <a class="electromagnetic-button" href="/inventory">打开仓库</a>
       </section>
       <p class="discussion-message" id="electromagnetic-message"></p>
     </section>
   `;
   document.body.append(modal);
   modal.addEventListener('click', handleElectromagneticModalClick);
+  modal.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeElectromagneticModal();
+    } else if (event.key === 'Tab') {
+      const focusable = [...modal.querySelectorAll('button, a[href]')].filter(
+        (el) => !el.disabled && el.getClientRects().length,
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  });
   return modal;
+}
+
+let currencyGuideTrigger;
+let currencyGuideUnit;
+function closeElectromagneticModal() {
+  document.getElementById('electromagnetic-modal')?.classList.add('hidden');
+  if (currencyGuideTrigger?.isConnected) currencyGuideTrigger.focus();
+  else if (currencyGuideUnit)
+    document
+      .querySelector(`#user-status .currency-${currencyGuideUnit}[data-currency-guide]`)
+      ?.focus();
 }
 
 function renderElectromagneticModal(payload) {
   const modal = ensureElectromagneticModal();
   const balances = modal.querySelector('#electromagnetic-balances');
-  const assets = modal.querySelector('#electromagnetic-assets');
 
   if (payload.user) {
     saveSession(userState.token, payload.user);
@@ -1034,12 +1085,6 @@ function renderElectromagneticModal(payload) {
     renderCurrency('magnetic', userState.manetrons),
     renderCurrency('heat', userState.heat),
   ].join('');
-
-  const assetRows = payload.assets || [];
-  const differentiator = assetRows.find((item) => item.key === 'differential_converter');
-  assets.innerHTML = differentiator
-    ? `<p>微分器 × ${Number(differentiator.quantity || 0)}</p>`
-    : `<p>还没有资产。</p>`;
 }
 
 async function openElectromagneticModal() {
@@ -1050,7 +1095,12 @@ async function openElectromagneticModal() {
 
   const modal = ensureElectromagneticModal();
   const message = modal.querySelector('#electromagnetic-message');
+  currencyGuideTrigger = document.activeElement;
+  currencyGuideUnit = currencyGuideTrigger?.classList.contains('currency-electric')
+    ? 'electric'
+    : 'magnetic';
   modal.classList.remove('hidden');
+  modal.querySelector('.fortune-close').focus();
   message.textContent = '正在加载...';
 
   try {
@@ -1065,7 +1115,7 @@ async function openElectromagneticModal() {
 async function handleElectromagneticModalClick(event) {
   const close = event.target.closest("[data-action='close']");
   if (close) {
-    ensureElectromagneticModal().classList.add('hidden');
+    closeElectromagneticModal();
     return;
   }
 
@@ -1085,13 +1135,21 @@ async function handleElectromagneticModalClick(event) {
     if (action === 'buy-differentiator') {
       payload = await callApi('/electromagnetic/shop/differential-converter', {
         method: 'POST',
-        body: JSON.stringify({ currency: button.dataset.currency }),
+        body: JSON.stringify({
+          currency: button.dataset.currency,
+          requestKey: getEconomyIntent(`converter-buy:${button.dataset.currency}`),
+        }),
       });
+      economyIntents.delete(`converter-buy:${button.dataset.currency}`);
     } else if (action === 'convert') {
       payload = await callApi('/electromagnetic/convert', {
         method: 'POST',
-        body: JSON.stringify({ direction: button.dataset.direction }),
+        body: JSON.stringify({
+          direction: button.dataset.direction,
+          requestKey: getEconomyIntent(`convert:${button.dataset.direction}`),
+        }),
       });
+      economyIntents.delete(`convert:${button.dataset.direction}`);
     }
 
     if (payload) {
@@ -1106,6 +1164,13 @@ async function handleElectromagneticModalClick(event) {
   }
 }
 
+const economyIntents = new Map();
+function getEconomyIntent(action) {
+  const existing = economyIntents.get(action);
+  if (!existing || existing.token !== userState.token)
+    economyIntents.set(action, { token: userState.token, key: crypto.randomUUID() });
+  return economyIntents.get(action).key;
+}
 async function getCurrentAssets() {
   const payload = await callApi('/electromagnetic', { method: 'GET' });
   return payload.assets || [];
@@ -1123,7 +1188,7 @@ function renderEconomyBalances(target, user = userState) {
   ].join('');
 }
 
-function renderShopCost(cost = {}) {
+function renderShopCost(cost = {}, priceMode = 'alternative') {
   const parts = [];
 
   if (Number(cost.electric || 0) > 0) {
@@ -1134,7 +1199,7 @@ function renderShopCost(cost = {}) {
     parts.push(`${Number(cost.magnetic)} 磁元`);
   }
 
-  return parts.join(' 或 ') || '未定价';
+  return parts.join(priceMode === 'combined' ? ' ＋ ' : ' 或 ') || '未定价';
 }
 
 function ensureShopInspectModal() {
@@ -1229,6 +1294,17 @@ function getCurrencyOwned(currency) {
 }
 
 function renderActivationButton(item, currency) {
+  if ((item.requiresPersonalPrice && !item.purchasePolicy) || item.purchasePolicy?.soldOut)
+    return '';
+  if (item.priceMode === 'combined') {
+    if (currency !== 'electric') return '';
+    const electric = Number(item.cost?.electric || 0);
+    const magnetic = Number(item.cost?.magnetic || 0);
+    if (!electric || !magnetic) return '';
+    const disabled =
+      getCurrencyOwned('electric') < electric || getCurrencyOwned('magnetic') < magnetic;
+    return `<button class="electromagnetic-button economy-activation-button" data-action="purchase-item" data-item-key="${escapeHtml(item.key)}" data-currency="combined" type="button" ${disabled ? 'disabled' : ''}><span><b>合价购买 · ${electric} 电元 ＋ ${magnetic} 磁元</b><small>同时支付两种货币${disabled ? ' · 余额不足' : ''}</small></span></button>`;
+  }
   const price = Number(item.cost?.[currency] || 0);
 
   if (!price) {
@@ -1236,7 +1312,7 @@ function renderActivationButton(item, currency) {
   }
 
   const icon = currency === 'electric' ? 'electron' : 'magnetron';
-  const label = currency === 'electric' ? '电激发' : '磁激发';
+  const label = currency === 'electric' ? '电元购买' : '磁元购买';
   const unit = currency === 'electric' ? '电元' : '磁元';
   const owned = getCurrencyOwned(currency);
 
@@ -1268,8 +1344,46 @@ function normalizeShopCatalogItem(item) {
     desc: String(item?.desc || item?.description || '').trim(),
     image: String(item?.image || '').trim(),
     isGift: !(item?.isgift === false || item?.is_gift === false || item?.isGift === false),
-    cost: item?.cost && typeof item.cost === 'object' ? item.cost : {},
+    cost:
+      item?.requiresPersonalPrice && !item?.purchasePolicy
+        ? {}
+        : item?.cost && typeof item.cost === 'object'
+          ? item.cost
+          : {},
   };
+}
+
+function renderShopItemPrice(item) {
+  if (item.requiresPersonalPrice && !item.purchasePolicy) return '请刷新以获取账号价格';
+  if (item.purchasePolicy?.soldOut) return '已达购买上限';
+  return renderShopCost(item.cost, item.priceMode);
+}
+
+function renderPurchaseProgress(item) {
+  if (!item.purchasePolicy || item.purchasePolicy.purchaseLimit === null) return '';
+  const { purchasedCount, purchaseLimit, soldOut } = item.purchasePolicy;
+  return `<p class="shop-purchase-progress">累计计数 ${Number(purchasedCount)} / ${Number(purchaseLimit)}${soldOut ? ' · 不可再购买' : ` · 下次购买第 ${Number(purchasedCount) + 1} 个`}</p>`;
+}
+
+function renderShopPurchaseActions(item) {
+  if (item.key === 'laser' && item.laser?.owned)
+    return '<p class="fortune-record-empty">已拥有激光器。<a href="/inventory">前往仓库充值</a></p>';
+  return (
+    [renderActivationButton(item, 'electric'), renderActivationButton(item, 'magnetic')].join('') ||
+    `<p class="fortune-record-empty">${item.purchasePolicy?.soldOut ? '已达到该物品的购买上限，已有物品仍保留在仓库。' : '商品价格暂不可用，请刷新后再试。'}</p>`
+  );
+}
+
+function renderShopRules(item) {
+  return item.rules
+    ? `<details class="shop-trade-rules" open><summary>购买与使用说明</summary><p>${escapeHtml(item.rules)}</p></details>`
+    : '';
+}
+
+async function resolveShopCatalog(payload) {
+  // Personalized prices and sold-out state must not be overwritten by the static JSON catalog.
+  if (Array.isArray(payload.shopItems)) return payload.shopItems.map(normalizeShopCatalogItem);
+  return loadShopCatalogFromJson();
 }
 
 async function loadShopCatalogFromJson() {
@@ -1284,7 +1398,10 @@ async function loadShopCatalogFromJson() {
 
     const payload = await response.json();
     const items = Array.isArray(payload.items) ? payload.items : [];
-    return items.map(normalizeShopCatalogItem).filter((item) => item.key);
+    return items
+      .filter((item) => item.enabled !== false)
+      .map(normalizeShopCatalogItem)
+      .filter((item) => item.key);
   } catch {
     return [];
   }
@@ -1304,12 +1421,105 @@ function openShopInspectModal(itemKey) {
     item.class === 'useless' ? '无用类' : '资产';
   modal.querySelector('#shop-inspect-title').textContent = item.name || item.key;
   modal.querySelector('#shop-inspect-desc').textContent = item.desc || item.description || '';
-  modal.querySelector('#shop-inspect-price').textContent = renderShopCost(item.cost);
+  modal.querySelector('#shop-inspect-price').textContent = renderShopItemPrice(item);
   modal.querySelector('#shop-inspect-message').textContent = '';
   modal.querySelector('#shop-inspect-actions').innerHTML =
-    [renderActivationButton(item, 'electric'), renderActivationButton(item, 'magnetic')].join('') ||
-    `<p class="fortune-record-empty">这个物品暂时无法激发。</p>`;
+    renderShopRules(item) + renderPurchaseProgress(item) + renderShopPurchaseActions(item);
   showShopInspectModal(modal);
+}
+
+function renderLaserControls(item) {
+  if (item.key !== 'laser') return '';
+  const { laser } = item;
+  if (!laser?.owned) return '<p>请刷新仓库以获取激光器状态。</p>';
+  const end = new Date(laser.expiresAtMs).toLocaleString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    hour12: false,
+  });
+  const active = laser.expiresAtMs > laser.serverNowMs;
+  return `<section class="laser-controls" aria-label="激光器充值">
+    <strong>${active ? '柔光已开启' : '激光器待充电'}</strong>
+    <p>${active ? `发光至 ${escapeHtml(end)}（北京时间）` : '激发后即可开启柔光。'}<br />每 ${Number(laser.dailyPrice)} 电元＋${Number(laser.dailyMagnetic)} 磁元激发 24 小时，可累加时长。</p>
+    <div>${[1, 7, 30]
+      .map(
+        (days) => `<button class="electromagnetic-button" type="button"
+      data-action="charge-laser" data-days="${days}" ${getCurrencyOwned('electric') < days * laser.dailyPrice || getCurrencyOwned('magnetic') < days * laser.dailyMagnetic ? 'disabled' : ''}>
+      激发 ${days} 天 · ${days * laser.dailyPrice} 电元＋${days * laser.dailyMagnetic} 磁元</button>`,
+      )
+      .join('')}</div>
+    <p>提前充值会延长到期时间；停止充值不会消耗钱包余额。</p>
+  </section>`;
+}
+
+async function handleLaserCharge(button) {
+  const modal = ensureShopInspectModal();
+  if (modal.dataset.charging === 'true') return;
+  const item = economyShopItems.find((entry) => entry.key === 'laser');
+  if (!item?.laser?.owned) return;
+  const days = Number(button.dataset.days);
+  const { dailyPrice, dailyMagnetic } = item.laser;
+  const { token } = userState;
+  // Retain the same request after an ambiguous failure, even if the modal is reopened.
+  const scope = `${days}:${dailyPrice}:${dailyMagnetic}`;
+  if (modal.laserIntent?.scope !== scope || modal.laserIntent?.token !== token)
+    modal.laserIntent = { scope, token, key: window.crypto.randomUUID() };
+  if (
+    !window.confirm(
+      `确认支付 ${days * dailyPrice} 电元＋${days * dailyMagnetic} 磁元，激发 ${days} 天？不会自动续费。`,
+    )
+  )
+    return;
+  modal.dataset.charging = 'true';
+  modal.querySelectorAll('[data-action="charge-laser"]').forEach((node) => {
+    node.disabled = true;
+  });
+  const message = modal.querySelector('#shop-inspect-message');
+  message.textContent = '正在充值…';
+  try {
+    const payload = await callApi('/electromagnetic/laser/charge', {
+      method: 'POST',
+      body: JSON.stringify({
+        currency: 'combined',
+        days,
+        quotedDailyPrice: dailyPrice,
+        quotedDailyMagnetic: dailyMagnetic,
+        requestKey: modal.laserIntent.key,
+      }),
+    });
+    if (token !== userState.token || !userState.isLoggedIn) return;
+    if (payload.user) saveSession(token, payload.user);
+    if (Array.isArray(payload.shopItems))
+      economyShopItems = payload.shopItems.map(normalizeShopCatalogItem);
+    delete modal.laserIntent;
+    await loadInventoryPage();
+    if (token !== userState.token || !userState.isLoggedIn) return;
+    const asset = (window.freeBbsInventoryAssets || []).find((entry) => entry.key === 'laser');
+    if (asset && modal.dataset.assetKey === 'laser' && !modal.classList.contains('hidden')) {
+      openInventoryInspectModal(asset);
+      modal.querySelector('#shop-inspect-message').textContent = payload.purchase.replayed
+        ? '已确认原订单，没有重复扣款。'
+        : '充值成功，发光时间已更新。';
+    }
+  } catch (error) {
+    if (token !== userState.token || !userState.isLoggedIn) return;
+    if (error.status === 409) {
+      await loadInventoryPage();
+      delete modal.laserIntent;
+    }
+    if (modal.dataset.assetKey === 'laser') message.textContent = error.message;
+  } finally {
+    delete modal.dataset.charging;
+    if (token === userState.token) {
+      modal.querySelectorAll('[data-action="charge-laser"]').forEach((node) => {
+        node.disabled =
+          getCurrencyOwned('magnetic') < Number(node.dataset.days) * dailyMagnetic ||
+          getCurrencyOwned('electric') <
+            Number(node.dataset.days) *
+              (economyShopItems.find((entry) => entry.key === 'laser')?.laser?.dailyPrice ||
+                dailyPrice);
+      });
+    }
+  }
 }
 
 function openInventoryInspectModal(asset) {
@@ -1323,6 +1533,7 @@ function openInventoryInspectModal(asset) {
   const item = catalogItem || asset.item || asset.metadata || {};
   const modal = ensureShopInspectModal();
   modal.dataset.itemKey = '';
+  modal.dataset.assetKey = asset.key;
   modal.querySelector('#shop-inspect-image').src = item.image || '/assets/icons/inventory.svg';
   modal.querySelector('#shop-inspect-class').textContent =
     item.class === 'useless' ? '无用类' : '资产';
@@ -1335,8 +1546,8 @@ function openInventoryInspectModal(asset) {
   const converterActions =
     asset.key === 'differential_converter'
       ? `
-      <button class="electromagnetic-button" data-action="convert" data-direction="electric_to_magnetic" type="button" title="5 电元转 5 磁元">电 → 磁</button>
-      <button class="electromagnetic-button" data-action="convert" data-direction="magnetic_to_electric" type="button" title="5 磁元转 5 电元">磁 → 电</button>
+      <button class="electromagnetic-button" data-action="convert" data-direction="electric_to_magnetic" type="button" title="10 电元转 10 磁元">电 → 磁</button>
+      <button class="electromagnetic-button" data-action="convert" data-direction="magnetic_to_electric" type="button" title="10 磁元转 10 电元">磁 → 电</button>
     `
       : '';
   const giftActions = canGift
@@ -1347,7 +1558,14 @@ function openInventoryInspectModal(asset) {
       </div>
     `
     : `<p class="fortune-record-empty">这个资产不能赠与。</p>`;
-  modal.querySelector('#shop-inspect-actions').innerHTML = [converterActions, giftActions]
+  modal.querySelector('#shop-inspect-actions').innerHTML = [
+    renderShopRules(item),
+    renderPurchaseProgress(item),
+    renderLaserControls(item),
+    window.FreeBbsProfileExtras?.inventoryActions(asset.key),
+    converterActions,
+    giftActions,
+  ]
     .filter(Boolean)
     .join('');
   showShopInspectModal(modal);
@@ -1369,15 +1587,79 @@ function refreshOpenShopInspectActions(itemKey) {
 
   const focusedCurrency = document.activeElement?.closest?.('[data-action="purchase-item"]')
     ?.dataset.currency;
+  modal.querySelector('#shop-inspect-price').textContent = renderShopItemPrice(item);
   actions.innerHTML =
-    [renderActivationButton(item, 'electric'), renderActivationButton(item, 'magnetic')].join('') ||
-    `<p class="fortune-record-empty">这个物品暂时无法激发。</p>`;
+    renderShopRules(item) + renderPurchaseProgress(item) + renderShopPurchaseActions(item);
   if (focusedCurrency) {
     const next = [...actions.querySelectorAll('button:not(:disabled)')].find(
       (element) => element.dataset.currency === focusedCurrency,
     );
     (next || modal.querySelector('.fortune-close')).focus();
   }
+}
+
+function groupShopItems(items) {
+  const groups = [
+    {
+      key: 'appearance',
+      title: '装扮',
+      description: '给每一次相遇，添一点自己的颜色。',
+      items: [],
+    },
+    {
+      key: 'collection',
+      title: '收藏',
+      description: '把好奇与发现，留在自己的收藏里。',
+      items: [],
+    },
+    {
+      key: 'consumables',
+      title: '消耗品',
+      description: '为下一次尝试，准备一点小小的助力。',
+      items: [],
+    },
+    { key: 'companions', title: '伙伴', description: '一位新邻居，和草地上的小日常。', items: [] },
+  ];
+  const classes = {
+    avatar_frame: 0,
+    profile_card: 0,
+    nameplate: 0,
+    device: 0,
+    collectible: 1,
+    scholar_relic: 1,
+    converter: 2,
+    consumable: 2,
+    pet: 3,
+    pet_food: 3,
+    decoration: 3,
+  };
+  const order = [
+    'frame_orbit',
+    'frame_aurora',
+    'card_blueprint',
+    'card_twilight',
+    'plate_observer',
+    'plate_maxwell',
+    'laser',
+    'mysterious_fragment',
+    'maxwell_spectacles',
+    'faraday_ring',
+    'shannon_coin',
+    'hertz_resonator',
+    'differential_converter',
+    'fortune_bag',
+    'max_pet',
+    'fish',
+    'fishbone',
+  ];
+  const rank = (item) => (order.includes(item.key) ? order.indexOf(item.key) : order.length);
+  items
+    .filter((item) => item.enabled !== false)
+    .forEach((item) => {
+      groups[classes[item.class] ?? 2].items.push(item);
+    });
+  groups.forEach((group) => group.items.sort((a, b) => rank(a) - rank(b)));
+  return groups.filter((group) => group.items.length);
 }
 
 async function loadElectromagneticPage() {
@@ -1393,42 +1675,58 @@ async function loadElectromagneticPage() {
     return;
   }
 
+  const sessionToken = userState.token;
   try {
     if (message) {
       message.textContent = '正在加载商店...';
     }
     const payload = await callApi('/electromagnetic', { method: 'GET' });
+    if (sessionToken !== userState.token || !userState.isLoggedIn) return;
     if (payload.user) {
       saveSession(userState.token, payload.user);
     }
-    const staticShopItems = await loadShopCatalogFromJson();
-    economyShopItems = staticShopItems.length
-      ? staticShopItems
-      : (payload.shopItems || []).map(normalizeShopCatalogItem);
+    const catalog = await resolveShopCatalog(payload);
+    if (sessionToken !== userState.token || !userState.isLoggedIn) return;
+    economyShopItems = catalog;
     const assetQuantityByKey = new Map(
       (payload.assets || []).map((asset) => [asset.key, Number(asset.quantity || 0)]),
     );
     renderEconomyBalances(balances);
     if (grid) {
       grid.innerHTML =
-        economyShopItems
+        groupShopItems(economyShopItems)
+          .map(
+            (group) => `
+        <section class="shop-section" data-shop-section="${group.key}" aria-labelledby="shop-section-${group.key}">
+          <header class="shop-section-heading">
+            <h2 id="shop-section-${group.key}">${group.title}</h2>
+            <p>${group.description}</p>
+          </header>
+          <div class="shop-grid">
+        ${group.items
           .map(
             (item) => `
-        <article class="shop-item-card" data-item-key="${escapeHtml(item.key)}">
+        <article class="shop-item-card" data-item-key="${escapeHtml(item.key)}" data-product-class="${escapeHtml(item.class)}">
           <span class="asset-quantity-badge">已拥有 ${assetQuantityByKey.get(item.assetKey || item.key) || 0}</span>
           <div class="shop-item-image">
             <img src="${escapeHtml(item.image || '/assets/icons/battery.svg')}" alt="" aria-hidden="true" />
           </div>
           <div class="shop-item-copy">
+            <span class="shop-category">${escapeHtml({ avatar_frame: '头像框', nameplate: '铭牌', profile_card: '主页主题', pet: '牧场伙伴', pet_food: '牧场食物', scholar_relic: '学者收藏', collectible: '神秘收藏', decoration: '牧场纪念', device: '发光设备', converter: '货币转换', consumable: '消耗品' }[item.class] || '小物件')}</span>
             <h2>${escapeHtml(item.name)}</h2>
             <p>${escapeHtml(item.description || '查看详情，了解这个物品。')}</p>
-            <strong class="shop-item-price">${escapeHtml(renderShopCost(item.cost))}</strong>
+            <strong class="shop-item-price">${escapeHtml(renderShopItemPrice(item))}</strong>
+            ${renderPurchaseProgress(item)}
           </div>
           <div class="shop-item-actions">
             <button class="electromagnetic-button" data-action="inspect-item" data-item-key="${escapeHtml(item.key)}" type="button" aria-label="查看${escapeHtml(item.name)}详情">端详物品</button>
           </div>
         </article>
       `,
+          )
+          .join('')}
+          </div>
+        </section>`,
           )
           .join('') || `<p class="fortune-record-empty">暂无商品。</p>`;
     }
@@ -1455,18 +1753,19 @@ async function loadInventoryPage() {
     return;
   }
 
+  const sessionToken = userState.token;
   try {
     if (message) {
       message.textContent = '正在加载仓库...';
     }
     const payload = await callApi('/electromagnetic', { method: 'GET' });
+    if (sessionToken !== userState.token || !userState.isLoggedIn) return;
     if (payload.user) {
       saveSession(userState.token, payload.user);
     }
-    const staticShopItems = await loadShopCatalogFromJson();
-    economyShopItems = staticShopItems.length
-      ? staticShopItems
-      : (payload.shopItems || economyShopItems).map(normalizeShopCatalogItem);
+    const catalog = await resolveShopCatalog(payload);
+    if (sessionToken !== userState.token || !userState.isLoggedIn) return;
+    economyShopItems = catalog;
     const shopItemByAsset = new Map(
       economyShopItems.flatMap((item) => [
         [item.assetKey || item.key, item],
@@ -1499,6 +1798,7 @@ async function loadInventoryPage() {
             <div class="inventory-item-copy">
               <h2>${escapeHtml(item.name || asset.key)}</h2>
               <p>${escapeHtml(item.description || '查看物品详情与可用操作。')}</p>
+              ${renderPurchaseProgress(item)}
             </div>
             <div class="inventory-item-actions">
               <button class="electromagnetic-button" data-action="inspect-inventory-item" data-asset-key="${escapeHtml(asset.key)}" type="button" aria-label="查看${escapeHtml(item.name || asset.key)}详情">端详物品</button>
@@ -1552,24 +1852,52 @@ async function handleElectromagneticPageClick(event) {
     message.textContent = '处理中...';
   }
 
+  const sessionToken = userState.token;
   try {
     if (button.dataset.action === 'purchase-item') {
       const itemKey = button.dataset.itemKey || '';
+      const body = { currency: button.dataset.currency };
+      const item = economyShopItems.find((entry) => entry.key === itemKey);
+      if (item?.requiresPersonalPrice || item?.purchasePolicy) {
+        if (!item?.purchasePolicy || item.purchasePolicy.soldOut) {
+          throw new Error('请刷新商品，确认购买次数和价格后再试');
+        }
+        body.expectedPurchaseCount = item.purchasePolicy.purchasedCount;
+        body.quotedCost = item.cost;
+        const scope = `${itemKey}:${body.currency}:${body.expectedPurchaseCount}:${JSON.stringify(item.cost)}`;
+        if (
+          inspectModal.dataset.purchaseScope !== scope ||
+          inspectModal.purchaseSession !== sessionToken
+        ) {
+          inspectModal.dataset.purchaseScope = scope;
+          inspectModal.dataset.purchaseRequestKey = window.crypto.randomUUID();
+          inspectModal.purchaseSession = sessionToken;
+        }
+        body.requestKey = inspectModal.dataset.purchaseRequestKey;
+      }
       const payload = await callApi(
         `/electromagnetic/shop/${encodeURIComponent(itemKey)}/purchase`,
         {
           method: 'POST',
-          body: JSON.stringify({ currency: button.dataset.currency }),
+          body: JSON.stringify(body),
         },
       );
+      if (sessionToken !== userState.token || !userState.isLoggedIn) return;
       if (payload.user) {
         saveSession(userState.token, payload.user);
       }
+      if (Array.isArray(payload.shopItems))
+        economyShopItems = payload.shopItems.map(normalizeShopCatalogItem);
       await loadElectromagneticPage();
+      if (sessionToken !== userState.token || !userState.isLoggedIn) return;
       const modal = document.getElementById('shop-inspect-modal');
       const modalMessage = modal?.querySelector('#shop-inspect-message');
       if (modalMessage && modal.dataset.itemKey === itemKey) {
-        modalMessage.textContent = '已激发';
+        modalMessage.textContent = payload.purchase
+          ? `${item?.name || '物品'}已到账，花费 ${renderShopCost(payload.purchase.cost || { electric: payload.purchase.amount }, 'combined')}${payload.purchase.replayed ? '（已确认原订单，未重复扣款）' : ''}`
+          : '已激发';
+        if (payload.purchase?.unlocked?.includes('plate_fishbone_master'))
+          modalMessage.textContent += ' 已解锁成就铭牌「鱼骨达人」，可前往个人主页佩戴。';
       }
     }
 
@@ -1577,6 +1905,11 @@ async function handleElectromagneticPageClick(event) {
       message.textContent = '已更新';
     }
   } catch (error) {
+    if (sessionToken !== userState.token || !userState.isLoggedIn) return;
+    if (error.status === 409) {
+      await loadElectromagneticPage();
+      if (sessionToken !== userState.token || !userState.isLoggedIn) return;
+    }
     if (message) {
       message.textContent = error.message;
     }
@@ -1585,10 +1918,14 @@ async function handleElectromagneticPageClick(event) {
     }
   } finally {
     delete inspectModal.dataset.purchasing;
-    refreshOpenShopInspectActions(inspectModal.dataset.itemKey);
+    if (sessionToken === userState.token && userState.isLoggedIn)
+      refreshOpenShopInspectActions(inspectModal.dataset.itemKey);
   }
 }
 
+// Keep unresolved gift intents across modal closes/reopens, scoped to the login session.
+const inventoryGiftIntents = new Map();
+let inventoryGiftSession = null;
 async function handleInventoryPageClick(event) {
   const closeInspect = event.target.closest("[data-action='close-shop-inspect']");
   if (closeInspect) {
@@ -1598,7 +1935,7 @@ async function handleInventoryPageClick(event) {
 
   const button = event.target.closest('[data-action]');
 
-  if (!button || !isInventoryPage()) {
+  if (!button || button.disabled || !isInventoryPage()) {
     return;
   }
 
@@ -1613,7 +1950,18 @@ async function handleInventoryPageClick(event) {
     return;
   }
 
+  if (button.dataset.action === 'charge-laser') {
+    await handleLaserCharge(button);
+    return;
+  }
+
   if (button.dataset.action === 'gift-inventory-item') {
+    const sessionToken = userState.token;
+    if (!userState.isLoggedIn) return;
+    if (inventoryGiftSession !== sessionToken) {
+      inventoryGiftIntents.clear();
+      inventoryGiftSession = sessionToken;
+    }
     const modal = document.getElementById('shop-inspect-modal');
     const modalMessage = modal?.querySelector('#shop-inspect-message');
     const targetInput = modal?.querySelector('.inventory-gift-input');
@@ -1626,6 +1974,15 @@ async function handleInventoryPageClick(event) {
       return;
     }
 
+    const assetKey = button.dataset.assetKey || '';
+    const scope = JSON.stringify([assetKey, target]);
+    let intent = inventoryGiftIntents.get(scope);
+    if (!intent) {
+      intent = { requestKey: window.crypto.randomUUID(), pending: false };
+      inventoryGiftIntents.set(scope, intent);
+    }
+    if (intent.pending) return;
+    intent.pending = true;
     button.disabled = true;
     if (message) {
       message.textContent = '正在赠与...';
@@ -1635,18 +1992,16 @@ async function handleInventoryPageClick(event) {
     }
 
     try {
-      const assetKey = button.dataset.assetKey || '';
-      let payload;
-      try {
-        payload = await callApi(`/electromagnetic/assets/${encodeURIComponent(assetKey)}/gift`, {
+      const payload = await callApi(
+        `/electromagnetic/assets/${encodeURIComponent(assetKey)}/gift`,
+        {
           method: 'POST',
-          body: JSON.stringify({ target }),
-        });
-      } catch (error) {
-        const fetchFailed = error.message === 'Failed to fetch' || error.message === '请求失败';
-        throw new Error(fetchFailed ? '赠与接口不可用，请确认后端已加载最新代码' : error.message);
-      }
+          body: JSON.stringify({ target, requestKey: intent.requestKey }),
+        },
+      );
+      if (sessionToken !== userState.token || !userState.isLoggedIn) return;
       await loadInventoryPage();
+      if (sessionToken !== userState.token || !userState.isLoggedIn) return;
       const assets = window.freeBbsInventoryAssets || [];
       const activeAsset = assets.find((asset) => asset.key === assetKey);
       if (activeAsset) {
@@ -1662,7 +2017,10 @@ async function handleInventoryPageClick(event) {
       if (refreshedMessage) {
         refreshedMessage.textContent = `已赠与给 ${recipient}`;
       }
+      // Only a confirmed, displayed success starts a new gift intent.
+      inventoryGiftIntents.delete(scope);
     } catch (error) {
+      if (sessionToken !== userState.token || !userState.isLoggedIn) return;
       if (message) {
         message.textContent = error.message;
       }
@@ -1670,6 +2028,7 @@ async function handleInventoryPageClick(event) {
         modalMessage.textContent = error.message;
       }
     } finally {
+      intent.pending = false;
       button.disabled = false;
     }
     return;
@@ -1687,8 +2046,12 @@ async function handleInventoryPageClick(event) {
   try {
     await callApi('/electromagnetic/convert', {
       method: 'POST',
-      body: JSON.stringify({ direction: button.dataset.direction }),
+      body: JSON.stringify({
+        direction: button.dataset.direction,
+        requestKey: getEconomyIntent(`convert:${button.dataset.direction}`),
+      }),
     });
+    economyIntents.delete(`convert:${button.dataset.direction}`);
     await loadInventoryPage();
     const modal = document.getElementById('shop-inspect-modal');
     const activeAssetKey =
@@ -1851,7 +2214,7 @@ function showCopySuccessPopup(format) {
   );
 }
 
-function renderCurrency(type, value) {
+function renderCurrency(type, value, interactive = false) {
   const iconMap = {
     electric: 'electron',
     magnetic: 'magnetron',
@@ -1865,11 +2228,12 @@ function renderCurrency(type, value) {
   const icon = iconMap[type] || 'electron';
   const label = labelMap[type] || '电元';
 
+  const tag = interactive && type !== 'heat' ? 'button' : 'span';
   return `
-    <span class="currency currency-${type}" data-tooltip="${label}" aria-label="${label}">
+    <${tag} ${tag === 'button' ? 'type="button" data-currency-guide aria-haspopup="dialog"' : ''} class="currency currency-${type}" data-tooltip="${label}" aria-label="${label}${tag === 'button' ? '：查看获取与使用规则' : ''}">
       <img class="currency-icon" src="/assets/icons/${icon}.svg" alt="${label}" />
       <span class="currency-value">${value}</span>
-    </span>
+    </${tag}>
   `;
 }
 
@@ -2483,15 +2847,15 @@ function renderUser() {
   userSettingsButton?.classList.remove('hidden');
   userLogoutButton?.classList.remove('hidden');
   userStatus.innerHTML = [
-    renderCurrency('electric', userState.electrons),
-    renderCurrency('magnetic', userState.manetrons),
+    renderCurrency('electric', userState.electrons, true),
+    renderCurrency('magnetic', userState.manetrons, true),
     renderCurrency('heat', userState.heat),
   ].join('');
   avatarImages.forEach((image) => {
     image.src = getAvatarUrl(userState.avatarPath);
   });
   avatarButtons.forEach((button) => {
-    button.setAttribute('aria-label', '打开账户设置');
+    button.setAttribute('aria-label', '打开我的个人主页');
   });
   document.querySelectorAll('.aichat-message-user .aichat-avatar-image').forEach((image) => {
     image.src = getAvatarUrl(userState.avatarPath);
@@ -2624,6 +2988,7 @@ async function callApi(path, options = {}) {
   });
 
   const payload = await response.json().catch(() => ({}));
+  if (typeof window !== 'undefined') window.FreeBbsPostLaser?.sync(payload);
 
   const circuitFailure =
     ['/ai/circuit/chat', '/ai/circuit/recognize'].includes(path) && payload.ok === false;
@@ -2777,6 +3142,8 @@ function renderAuthorProfileLink(author, className, includeAvatar = false) {
     author?.displayName || author?.fullName || author?.username || '匿名用户',
   );
   const profileHref = getProfileHref(author?.uid);
+  const frame = window.FreeBbsProfileExtras?.frame(author?.cosmetics) || '';
+  const nameplate = window.FreeBbsProfileExtras?.badge(author?.cosmetics?.nameplate) || '';
 
   if (!profileHref) {
     return includeAvatar
@@ -2792,11 +3159,13 @@ function renderAuthorProfileLink(author, className, includeAvatar = false) {
   return includeAvatar
     ? `
       <a class="${className}" data-action="open-profile" href="${profileHref}">
-        <img class="discussion-post-avatar" src="${escapeHtml(getAvatarUrl(author?.avatarPath))}" alt="${displayName} 的头像" />
+        <span class="discussion-avatar-frame" data-frame="${frame}">
+          <img class="discussion-post-avatar" data-avatar-frame="${frame}" src="${escapeHtml(getAvatarUrl(author?.avatarPath))}" alt="${displayName} 的头像" />
+        </span>
         <span>${displayName}</span>
       </a>
     `
-    : `<a class="${className}" data-action="open-profile" href="${profileHref}">${displayName}</a>`;
+    : `<a class="${className}" data-action="open-profile" href="${profileHref}">${displayName}${nameplate}</a>`;
 }
 
 function normalizeWebsiteUrl(value) {
@@ -3359,6 +3728,7 @@ function renderDiscussionPosts() {
     <article
       class="discussion-post-card ${post.isDeleted ? 'is-deleted' : ''} ${discussionState.activePostId === post.id ? 'is-active' : ''} ${replyCount > 0 ? 'is-answered' : 'is-unanswered'}"
       data-post-id="${escapeHtml(post.id)}"
+      ${window.FreeBbsPostLaser?.attributes(post.laser, post.author?.id) || ''}
       role="listitem"
     >
       <div class="discussion-post-author">
@@ -5354,12 +5724,13 @@ function renderDiscussionComments() {
     const displayDepth = Math.min(depth, 4);
 
     const current = `
-    <article id="comment-${comment.id}" class="discussion-comment ${depth > 0 ? 'discussion-comment-reply' : ''}" data-comment-id="${comment.id}" data-comment-depth="${displayDepth}" style="--comment-depth: ${displayDepth}">
+    <article id="comment-${comment.id}" class="discussion-comment ${depth > 0 ? 'discussion-comment-reply' : ''}" data-comment-id="${comment.id}" data-comment-depth="${displayDepth}" style="--comment-depth: ${displayDepth}" ${!comment.isDeleted ? window.FreeBbsPostLaser?.attributes(comment.laser, comment.author?.id) || '' : ''}>
       ${renderAuthorProfileLink(comment.author, 'discussion-comment-author-link', true)}
       <div class="discussion-comment-body">
         <div class="discussion-comment-meta">
           ${renderAuthorProfileLink(comment.author, 'discussion-author-link')}
           <span>${escapeHtml(formatDateTime(comment.createdAt))}</span>
+          ${comment.isFeatured && !comment.isDeleted ? '<span class="discussion-feature-badge">精华回帖</span>' : ''}
           ${
             comment.isDeleted ||
             discussionState.activePost?.isDeleted ||
@@ -5371,6 +5742,7 @@ function renderDiscussionComments() {
             </button>
             <button class="discussion-comment-reply-button" type="button" data-action="reply-comment" data-comment-id="${comment.id}" data-author-name="${escapeHtml(comment.author?.displayName || comment.author?.username || '匿名用户')}">回复</button>
             ${comment.canDelete ? `<button class="discussion-comment-action" type="button" data-action="delete-comment" data-comment-id="${comment.id}">删除</button>` : ''}
+            ${comment.canFeature ? `<button class="discussion-comment-action" type="button" data-action="feature-comment" data-featured="${comment.isFeatured ? '1' : '0'}" data-comment-id="${comment.id}">${comment.isFeatured ? '取消精华' : '设为精华'}</button>` : ''}
           </div>`
           }
         </div>
@@ -5410,6 +5782,8 @@ function renderDiscussionDetail(post) {
     setDiscussionDetailView(false);
     discussionDetail.classList.add('hidden');
     discussionDetail.innerHTML = '';
+    delete discussionDetail.dataset.laserExpires;
+    discussionDetail.classList.remove('has-laser-glow');
     discussionState.activePost = null;
     discussionState.comments = [];
     return;
@@ -5419,7 +5793,10 @@ function renderDiscussionDetail(post) {
   discussionDetail.classList.remove('hidden');
   discussionDetail.dataset.postId = String(post.id);
   discussionState.activePost = post;
+  delete discussionDetail.dataset.laserExpires;
+  discussionDetail.classList.remove('has-laser-glow');
   discussionDetail.innerHTML = `
+    <div class="discussion-post-surface" ${!post.isDeleted ? window.FreeBbsPostLaser?.attributes(post.laser, post.author?.id) || '' : ''}>
     <header class="discussion-detail-head">
       ${post.isDeleted ? '<p class="discussion-deleted-notice"><strong>已删除</strong> · 以下为原始内容，仅管理员可见</p>' : ''}
       <div class="discussion-detail-toolbar">
@@ -5459,6 +5836,7 @@ function renderDiscussionDetail(post) {
       </div>
     </header>
     <div class="discussion-markdown-body" id="discussion-markdown-body">${renderMarkdownContent(post.contentMarkdown)}</div>
+    </div>
     <section class="discussion-comments" aria-label="评论">
       <div class="discussion-comments-head">
         <h3>评论</h3><p id="discussion-comment-action-status" role="status" aria-live="polite"></p>
@@ -6034,7 +6412,7 @@ async function changeDiscussionScope(scope) {
 async function toggleDiscussionVisibility(button) {
   if (discussionState.sessionStale) return;
   if (!userState.isLoggedIn || button.disabled) return;
-  const postId = button.dataset.postId;
+  const { postId } = button.dataset;
   const hidden = button.dataset.hidden !== '1';
   const prompt = hidden
     ? '隐藏后只有自己可见，暂停评论和回应，并取消置顶与精华。已被他人阅读或收取的邮件无法撤回。确认隐藏？'
@@ -6124,6 +6502,7 @@ async function loadPublicProfile() {
     }
 
     setPublicProfileMessage('');
+    await window.FreeBbsProfileExtras?.renderProfile(profile);
   } catch (error) {
     if (publicProfileName) {
       publicProfileName.textContent = '加载失败';
@@ -6893,7 +7272,7 @@ function renderAdminSection() {
   });
 
   fortuneLinks.forEach((link) => {
-    link.classList.toggle('hidden', shouldHideEconomyLink(link));
+    link.classList.toggle('hidden', isPublicProfilePage() || shouldHideEconomyLink(link));
   });
 
   electromagneticLinks.forEach((link) => {
@@ -6945,9 +7324,8 @@ function handleAvatarEntry() {
     return;
   }
 
-  if (!isSettingsPage()) {
-    window.location.href = '/settings';
-  }
+  const href = getProfileHref(userState.uid);
+  if (href) window.location.href = href;
 }
 
 function handleUserSettingsClick() {
@@ -7093,7 +7471,7 @@ async function handleAdminUsersClick(event) {
     return;
   }
 
-  const action = button.dataset.action;
+  const { action } = button.dataset;
 
   if (action === 'cancel') {
     card.remove();
@@ -7724,18 +8102,29 @@ async function handleDiscussionCommentAction(button) {
   }
   const commentId = Number(button.dataset.commentId);
   const deleting = button.dataset.action === 'delete-comment';
+  const featuring = button.dataset.action === 'feature-comment';
   const postId = discussionState.activePostId;
-  const uid = userState.uid;
+  const { uid } = userState;
   if (discussionState.commentActionsPending.has(commentId)) return;
   if (deleting && !window.confirm('删除这条评论？已有回复会保留。')) return;
   discussionState.commentActionsPending.add(commentId);
   button.disabled = true;
   try {
-    const payload = await callApi(`/discussion/comments/${commentId}${deleting ? '' : '/like'}`, {
-      method: deleting ? 'DELETE' : 'POST',
-    });
+    const payload = await callApi(
+      `/discussion/comments/${commentId}${featuring ? '/feature' : deleting ? '' : '/like'}`,
+      {
+        method: featuring ? 'PATCH' : deleting ? 'DELETE' : 'POST',
+        ...(featuring
+          ? { body: JSON.stringify({ featured: button.dataset.featured !== '1' }) }
+          : {}),
+      },
+    );
     if (postId !== discussionState.activePostId || uid !== userState.uid) return;
-    if (deleting) {
+    if (featuring) {
+      discussionState.comments = discussionState.comments.map((comment) =>
+        comment.id === commentId ? { ...comment, isFeatured: payload.isFeatured } : comment,
+      );
+    } else if (deleting) {
       discussionOpenReplyByPost.delete(String(postId));
       const count = Number(payload.commentCount);
       updateCachedDiscussionPost(postId, { commentCount: count });
@@ -7774,7 +8163,7 @@ async function handleDiscussionDetailClick(event) {
     return;
   }
   const commentAction = event.target.closest(
-    '[data-action="like-comment"], [data-action="delete-comment"]',
+    '[data-action="like-comment"], [data-action="delete-comment"], [data-action="feature-comment"]',
   );
   if (commentAction) {
     await handleDiscussionCommentAction(commentAction);
@@ -7783,7 +8172,7 @@ async function handleDiscussionDetailClick(event) {
   const inspect = event.target.closest('[data-action="inspect-anonymous-author"]');
   if (inspect) {
     const postId = discussionState.activePostId;
-    const uid = userState.uid;
+    const { uid } = userState;
     inspect.disabled = true;
     try {
       const payload = await callApi(
@@ -9008,6 +9397,9 @@ function streamCircuitChatResponse(payload, { signal, onProgress } = {}) {
 
 window.freeBbsApp = {
   callApi,
+  refreshEconomy: loadInventoryPage,
+  toggleThemeMode,
+  openFortuneModal,
   clearSession,
   enhanceMarkdownContent,
   get sessionReady() {
@@ -9032,6 +9424,9 @@ window.freeBbsApp = {
 
 userName.addEventListener('click', handleAuthEntry);
 avatarButtons.forEach((button) => button.addEventListener('click', handleAvatarEntry));
+userStatus?.addEventListener('click', (event) => {
+  if (event.target.closest('[data-currency-guide]')) openElectromagneticModal();
+});
 userSettingsButton?.addEventListener('click', handleUserSettingsClick);
 userLogoutButton?.addEventListener('click', handleUserLogoutClick);
 fortuneLinks.forEach((link) => {
@@ -9196,6 +9591,13 @@ initializeLandingMotion();
 discussionReady = initializeDiscussionPage();
 initializeAiChatPage();
 loadPublicProfile();
+sessionReady.then(() => {
+  const link = document.getElementById('inventory-profile-link');
+  if (link && userState.isLoggedIn && isValidPublicUid(userState.uid)) {
+    link.href = getProfileHref(userState.uid);
+    link.hidden = false;
+  }
+});
 
 window.addEventListener('freebbs:session-change', () => {
   if (!isDiscussionPage() || !sessionRestored) return;

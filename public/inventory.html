@@ -19,7 +19,9 @@
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/economy.css" />
+    <link rel="stylesheet" href="/profile-extras.css" />
   </head>
+  <!-- Shared cosmetics keep the same theme tokens as the surrounding page. -->
   <body class="inventory-page economy-page">
     <div class="page-shell page-shell-settings">
       <header class="topbar">
@@ -163,6 +165,7 @@
             </a>
           </header>
           <div class="economy-balance-row" id="inventory-balance-row"></div>
+          <p><a id="inventory-profile-link" hidden>我的主页 · 装扮与牧场 ↗</a></p>
           <p id="inventory-message" class="discussion-message"></p>
           <div class="inventory-list" id="inventory-list"></div>
         </section>
@@ -170,6 +173,7 @@
     </div>
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
+    <script src="/profile-extras.js"></script>
     <script src="/app.js"></script>
     <script src="/notifications.js"></script>
   </body>
