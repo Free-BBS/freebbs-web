@@ -500,20 +500,45 @@ body .profile-wardrobe :is(h2, h3, p) {
   bottom: -10px;
   left: 20%;
 }
-.ranch-cabin {
+.ranch-home {
   position: absolute;
-  right: 9%;
-  bottom: 106px;
-  width: 70px;
-  height: 55px;
-  background: #dbbf90;
-  border: 4px solid #a98c63;
-  border-top: 12px solid #708f77;
-  border-radius: 6px;
+  right: 5%;
+  bottom: 70px;
+  width: clamp(115px, 26%, 170px);
+  pointer-events: none;
+}
+.ranch-hut {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.ranch-owner-sign {
+  position: absolute;
+  right: -4px;
+  bottom: -10px;
+  max-width: 150px;
+  padding: 5px 9px;
+  border: 2px solid #735130;
+  border-radius: 4px;
+  background: repeating-linear-gradient(3deg, #d7b47e 0 8px, #cfa66c 9px 10px);
+  background-color: #d7b47e;
+  color: #402c1c !important;
+  box-shadow: 0 3px 0 #735130;
   text-align: center;
-  padding-top: 10px;
-  color: #463c2d !important;
+  overflow-wrap: anywhere;
   font: 700 12px system-ui;
+}
+body:not(.auth-page-body) #public-profile-ranch .ranch-owner-sign {
+  color: #402c1c !important;
+}
+.ranch-owner-sign::after {
+  content: '';
+  position: absolute;
+  left: 48%;
+  top: 100%;
+  width: 7px;
+  height: 16px;
+  background: #735130;
 }
 .ranch-ground {
   position: absolute;

@@ -1,5 +1,5 @@
 (() => {
-  if (!['login', 'register'].includes(document.getElementById('auth-page-form')?.dataset.authMode))
+  if (document.getElementById('auth-page-form')?.dataset.authMode !== 'register')
     return;
   document.body.insertAdjacentHTML(
     'beforeend',

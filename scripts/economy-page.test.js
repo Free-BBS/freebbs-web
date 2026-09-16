@@ -154,6 +154,24 @@ test('inventory cards retain quantity and detail action with a readable descript
   assert.match(node('inventory-list').innerHTML, /inspect-inventory-item/);
 });
 
+test('ordinary bones are hidden from inventory without dropping ranch/achievement assets', async () => {
+  const assets = [
+    { key: 'ordinary_fishbone', quantity: 10 },
+    { key: 'golden_fishbone', quantity: 3 },
+    { key: 'fishbone', quantity: 10 },
+  ];
+  const { context, node } = setup({ callApi: async () => ({ assets, shopItems: [] }) });
+  await context.loadInventoryPage();
+  assert.doesNotMatch(node('inventory-list').innerHTML, /data-asset-key="ordinary_fishbone"/);
+  assert.match(node('inventory-list').innerHTML, /data-asset-key="golden_fishbone"/);
+  assert.match(node('inventory-list').innerHTML, /data-asset-key="fishbone"/);
+  assert.equal(context.window.freeBbsInventoryAssets.length, 3);
+  assert.equal(assets[0].quantity, 10);
+  const only = setup({ callApi: async () => ({ assets: assets.slice(0, 1), shopItems: [] }) });
+  await only.context.loadInventoryPage();
+  assert.match(only.node('inventory-list').innerHTML, /仓库里还没有物品/);
+});
+
 test('catalog fetch failure uses backend catalog; API failure shows a message', async () => {
   const { context, node } = setup({
     fetch: async () => {

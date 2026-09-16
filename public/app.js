@@ -396,6 +396,7 @@ function initializeDashboardShell() {
     '/adminusers': '用户管理',
     '/system-settings': '系统设置',
     '/system-settings/announcements': '公告管理',
+    '/system-settings/rewards': '奖励方案',
     '/system-settings/model': '模型与密钥',
     '/system-settings/course-materials': '课程资料',
     '/electromagnetic': '电磁场',
@@ -604,11 +605,23 @@ function initializeUserEconomyShortcuts() {
       }
     });
 
-    if (!isPublicProfilePage()) shortcuts.append(checkinLink);
-    shortcuts.append(inventoryLink);
+    const shopLink = createEconomyShortcut({
+      href: '/electromagnetic',
+      icon: 'shop',
+      text: '商店',
+      className: 'economy-shortcut-shop',
+    });
+    shopLink.addEventListener('click', (event) => {
+      if (!userState.isLoggedIn) {
+        event.preventDefault();
+        openModal('login');
+      }
+    });
+
+    shortcuts.append(checkinLink, inventoryLink, shopLink);
     stack.append(shortcuts, status);
     panel.insertBefore(stack, panel.querySelector('.user-summary'));
-    economyShortcutLinks.push(checkinLink, inventoryLink);
+    economyShortcutLinks.push(checkinLink, inventoryLink, shopLink);
   }
 
   setCheckinShortcutState(false);
@@ -893,6 +906,15 @@ function drawFortuneChart(canvas, history) {
   context.fillText(lastDate, width - padding.right, height - 20);
 }
 
+function formatCheckinReward(item) {
+  const magnetic = Number(item.rewardMagnetic || 0);
+  const electric = Number(item.rewardElectrons || 0);
+  if (magnetic > 0) return `+${magnetic} 磁元`;
+  if (electric > 0) return `+${electric} 电元（历史）`;
+  // Never invent a reward from the streak or mislabel a magnetic record as electric.
+  return item.date >= '2026-09-16' ? '磁元奖励待核对' : '+0 电元（历史）';
+}
+
 async function openFortuneModal() {
   if (!userState.isLoggedIn) {
     openModal('login');
@@ -954,7 +976,7 @@ async function openFortuneModal() {
           <div class="fortune-record-row">
             <span>${escapeHtml(item.date)}</span>
             <strong>连续 ${Number(item.streak || 0)} 天</strong>
-            <span>${item.rewardMagnetic ? `+${Number(item.rewardMagnetic)} 磁元` : `+${Number(item.rewardElectrons || 0)} 电元（历史）`}</span>
+            <span>${formatCheckinReward(item)}</span>
           </div>
         `,
           )
@@ -1787,6 +1809,7 @@ async function loadInventoryPage() {
     if (list) {
       list.innerHTML =
         assets
+          .filter((asset) => asset.key !== 'ordinary_fishbone')
           .map((asset) => {
             const item = asset.item || asset.metadata || {};
             return `
@@ -6173,6 +6196,13 @@ async function loadDiscussionDetail(postId) {
   discussionState.postRequestId = requestId;
   const version = discussionState.sessionVersion;
   const requestedBoard = discussionState.activeBoard;
+  if (!discussionState.activePostId) {
+    discussionState.listReturnPosition = {
+      board: requestedBoard,
+      scope: discussionState.scope,
+      top: window.scrollY,
+    };
+  }
   discussionState.activePostId = String(postId);
   discussionState.activePost = null;
   discussionState.comments = [];
@@ -8278,6 +8308,8 @@ async function handleDiscussionDetailClick(event) {
   }
 
   const previousPostId = String(discussionState.activePostId || '');
+  const returnPosition = discussionState.listReturnPosition;
+  discussionState.postRequestId += 1;
   discussionState.activePostId = '';
   renderDiscussionPosts();
   renderDiscussionDetail(null);
@@ -8285,11 +8317,16 @@ async function handleDiscussionDetailClick(event) {
     board: discussionState.activeBoard,
     postId: '',
   });
-  discussionLayout?.scrollIntoView({
-    behavior: 'smooth',
-    block: 'start',
-  });
   window.requestAnimationFrame(() => {
+    if (
+      returnPosition &&
+      returnPosition.board === discussionState.activeBoard &&
+      returnPosition.scope === discussionState.scope
+    ) {
+      window.scrollTo({ top: returnPosition.top, behavior: 'instant' });
+    } else {
+      discussionLayout?.scrollIntoView({ behavior: 'instant', block: 'start' });
+    }
     const titleButton = Array.from(
       discussionPostList?.querySelectorAll('.discussion-post-title') || [],
     ).find((candidate) => candidate.dataset.postId === previousPostId);

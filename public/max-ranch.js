@@ -115,12 +115,16 @@
           <path d="M128 74q-17-15-23-5q-3 10 15 14m26-11q13-14 18-5q3 7-11 15" fill="#b8b9a3" stroke="#53685e" stroke-width="2"/>
           <path d="M126 77q-10-15-1-19q10-3 13 10" fill="#cfad75" stroke="#826f50" stroke-width="2"/>
           <path d="M147 74q12-14 7-20q-8-6-13 8" fill="#cfad75" stroke="#826f50" stroke-width="2"/>
-          <path d="M120 78q0-19 19-19q18 0 20 17l-3 26q-17 17-33-1Z" fill="#61766a" stroke="#334f49" stroke-width="2"/>
+          <path data-max-face d="M120 78q0-19 19-19q18 0 20 17l-3 26q-17 17-33-1Z" fill="#d9bd95" stroke="#705a45" stroke-width="2"/>
           <path d="M119 79q-6-10 2-15q1-10 11-7q8-9 14-1q13-1 14 11q8 10-3 14q-5-10-11-5q-9 6-12-1q-7 8-15 4" fill="#fff7e1" stroke="#53685e" stroke-width="2"/>
-          <ellipse cx="139" cy="97" rx="13" ry="10" fill="#9eafa0"/>
+          <ellipse cx="139" cy="97" rx="13" ry="10" fill="#eddbc1"/>
           <ellipse cx="129" cy="85" rx="3" ry="4" fill="#203d38"/><ellipse cx="149" cy="85" rx="3" ry="4" fill="#203d38"/>
           <circle cx="130" cy="84" r="1" fill="white"/><circle cx="150" cy="84" r="1" fill="white"/>
-          <path d="m136 94 4 2 3-2m-3 2v4m-6 0q6 6 12 0" fill="none" stroke="#304d45" stroke-width="1.7" stroke-linecap="round"/>
+          <path data-max-mouth d="m136 94 4 2 3-2m-3 2v4m-6 0q6 6 12 0" fill="none" stroke="#705a45" stroke-width="1.7" stroke-linecap="round"/>
+          <g data-max-tears visibility="hidden">
+            <path d="M127 88q-4 8-2 13q3 4 5 0l-1-13M150 88q4 8 2 13q-3 4-5 0l1-13" fill="#87cbea" stroke="#4c96b5" stroke-width="0.8"/>
+            <path d="m125 80 7-2m14 0 7 2" fill="none" stroke="#705a45" stroke-width="1.8" stroke-linecap="round"/>
+          </g>
           <circle cx="125" cy="95" r="3" fill="#d5a58a" opacity=".7"/><circle cx="154" cy="95" r="3" fill="#d5a58a" opacity=".7"/>
           <path d="m122 111 13 3 17-4" fill="none" stroke="#2d8e90" stroke-width="5"/>
           <rect x="133" y="114" width="10" height="9" rx="3" fill="#ecd184" stroke="#627767" stroke-width="1"/>
@@ -134,6 +138,11 @@
     if (!element) return null;
     element.innerHTML = markup();
     const hungry = Boolean(previous.hungry);
+    element
+      .querySelector('[data-max-tears]')
+      .setAttribute('visibility', hungry ? 'visible' : 'hidden');
+    if (hungry)
+      element.querySelector('[data-max-mouth]').setAttribute('d', 'm136 94 4 2 3-2m-8 10q5-7 10 0');
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
     let paused = Boolean(previous?.paused);
     let x = previous?.x || 12;

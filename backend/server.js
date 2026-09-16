@@ -4,6 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
 const { awardMagnetic, ensureEconomyPolicy } = require('./economy-rewards');
+const { createAdminRewardsRouter, ensureAdminRewardTables } = require('./admin-rewards');
+const { createWalletLedgerRouter, ensureWalletLedger } = require('./wallet-ledger');
 const {
   LASER_POLICY,
   createEconomyShop,
@@ -74,7 +76,6 @@ const {
   issueRegistrationChallenge,
   issueLoginChallenge,
   consumeRegistrationChallenge,
-  consumeLoginChallenge,
   recordCommunityAgreement,
 } = require('./registration-guard');
 const {
@@ -2229,6 +2230,8 @@ app.use(
   '/api',
   createNotificationsRouter({ pool, requireAuth, requireAdmin, service: notifications }),
 );
+app.use('/api', createAdminRewardsRouter({ pool, requireAuth, requireAdmin, notifications }));
+app.use('/api', createWalletLedgerRouter({ pool, requireAuth }));
 app.use(
   '/api',
   createSurveysRouter({ pool, requireAdmin, getOptionalAuthUser, service: surveyService }),
@@ -4651,12 +4654,6 @@ app.post('/api/auth/login', async (request, response) => {
   }
 
   try {
-    // Commit the one attempt before checking credentials: an incorrect password
-    // must never turn a solved challenge into a reusable password-guessing token.
-    const challengeError = await withDatabaseTransaction((connection) =>
-      consumeLoginChallenge(connection, identifier, request.body.captcha),
-    );
-    if (challengeError) throw challengeError;
     const [rows] = await pool.execute(
       `SELECT id, uid, username, full_name, student_id, email, email_verified_at, password_hash, role, is_admin, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
        FROM users
@@ -5608,6 +5605,8 @@ async function start() {
   await ensureRegistrationGuardTables(pool);
   await ensureNotificationTables(pool);
   await ensureSurveyTables(pool);
+  await ensureAdminRewardTables(pool);
+  await ensureWalletLedger(pool);
   await ensureCourseUploadTables(pool);
   await ensureCircuitTables(pool);
   await ensureCircuitExampleTables(pool);

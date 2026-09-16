@@ -212,10 +212,12 @@ async function insertNotifications(connection, recipients, notification) {
       ],
     );
     // INSERT IGNORE targets only the outbox primary key; both rows share the transaction.
-    await connection.execute(
-      'INSERT IGNORE INTO notification_email_outbox (notification_id) VALUES (?)',
-      [result.insertId],
-    );
+    if (notification.email !== false) {
+      await connection.execute(
+        'INSERT IGNORE INTO notification_email_outbox (notification_id) VALUES (?)',
+        [result.insertId],
+      );
+    }
     count += 1;
   }
   return count;
@@ -292,6 +294,26 @@ function createNotificationService({
         body: `《${post.title || '讨论'}》\n${String(comment.content_markdown || '').slice(0, 1500)}`,
         link: `/discussion?post=${encodeURIComponent(post.pid || post.id)}#comment-${comment.id}`,
         eventKey: `comment-like:${comment.id}:${actor.id}`,
+      }),
+    );
+  }
+
+  async function notifyReward(
+    { actor, batchId, recipients, title, reason, electric, magnetic },
+    connection,
+  ) {
+    const amounts = [electric ? `${electric} 电元` : '', magnetic ? `${magnetic} 磁元` : '']
+      .filter(Boolean)
+      .join(' + ');
+    return inTransaction(pool, connection, (database) =>
+      insertNotifications(database, recipients, {
+        actorId: actor.id,
+        kind: 'reward',
+        title: `奖励到账：${title}`,
+        body: `你获得了 ${amounts}。\n奖励原因：${reason}\n感谢你的参与和贡献！可在仓库账本查看本次奖励。`,
+        link: '/inventory#wallet-ledger',
+        eventKey: `admin-reward:${batchId}`,
+        email: false,
       }),
     );
   }
@@ -378,6 +400,7 @@ function createNotificationService({
     notifyReply,
     notifyReaction,
     notifyCommentReaction,
+    notifyReward,
     processOutbox,
     startWorker,
   };

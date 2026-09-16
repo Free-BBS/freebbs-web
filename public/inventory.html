@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="/username-guard.css" />
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
+    <link rel="stylesheet" href="/admin-rewards.css" />
     <link rel="stylesheet" href="/economy.css" />
     <link rel="stylesheet" href="/profile-extras.css" />
   </head>
@@ -167,7 +168,26 @@
           <div class="economy-balance-row" id="inventory-balance-row"></div>
           <p><a id="inventory-profile-link" hidden>我的主页 · 装扮与牧场 ↗</a></p>
           <p id="inventory-message" class="discussion-message"></p>
+          <p><a href="#wallet-ledger">查看钱包账本 ↓</a></p>
           <div class="inventory-list" id="inventory-list"></div>
+          <section class="reward-history" id="wallet-ledger" aria-labelledby="wallet-ledger-title">
+            <h2 id="wallet-ledger-title">钱包账本</h2>
+            <p>
+              记录本次启用后的电元、磁元收支，以及变动前后余额。管理员奖励同时显示奖励名称与原因。
+            </p>
+            <label
+              >筛选币种
+              <select id="wallet-ledger-currency">
+                <option value="all">全部收支</option>
+                <option value="electric">电元</option>
+                <option value="magnetic">磁元</option>
+              </select>
+            </label>
+            <p id="wallet-ledger-status" role="status"></p>
+            <div id="wallet-ledger-list"></div>
+            <button id="wallet-ledger-refresh" type="button">刷新账本</button>
+            <button id="wallet-ledger-more" type="button" hidden>加载更早记录</button>
+          </section>
         </section>
       </main>
     </div>
@@ -176,5 +196,6 @@
     <script src="/profile-extras.js"></script>
     <script src="/app.js"></script>
     <script src="/notifications.js"></script>
+    <script src="/wallet-ledger.js"></script>
   </body>
 </html>

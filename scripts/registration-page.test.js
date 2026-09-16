@@ -326,44 +326,33 @@ for (const cancelEvent of ['click', 'cancel']) {
   });
 }
 
-test('login requires a challenge and submits captured credentials without registration consent', async () => {
+test('login submits credentials directly without loading a challenge', async () => {
   const h = harness('login');
-  const { submission } = await openChallenge(h);
-  assert.equal(h.requests.length, 1);
-  assert.ok(h.requests[0].url.endsWith('/auth/login-challenge'));
-  assert.deepEqual(h.requests[0].body, { identifier: 'reader' });
-  assert.match(h.element('band-challenge-confirm').textContent, /登录/);
-  assert.equal(h.element('band-challenge-confirm').disabled, true);
-  assert.equal(h.element('auth-submit').disabled, true);
-  h.element('auth-identifier').value = 'edited';
-  h.element('auth-password').value = 'edited password';
-  h.element('band-challenge-position').value = '-0.673';
-  await h.element('band-challenge-position').dispatch('input');
   h.responses.push({ body: { token: 'login-token', user: {} } });
-  await h.element('band-challenge-confirm').dispatch('click');
-  await submission;
-  assert.ok(h.requests[1].url.endsWith('/auth/login'));
-  assert.deepEqual(h.requests[1].body, {
+  await h.submit();
+  assert.equal(h.requests.length, 1);
+  assert.ok(h.requests[0].url.endsWith('/auth/login'));
+  assert.deepEqual(h.requests[0].body, {
     identifier: 'reader',
     password: 'password for tests',
-    captcha: { challengeId: 'challenge-1', k: -0.673 },
   });
   assert.equal(h.storage.get(tokenKey), 'login-token');
   assert.equal(h.window.location.href, '/');
   assert.equal(h.element('auth-submit').disabled, false);
 });
 
-test('canceling login preserves existing credentials and authentication token', async () => {
+test('failed login keeps credentials and allows retry without a quiz', async () => {
   const h = harness('login');
-  const { submission } = await openChallenge(h);
-  await h.element('band-challenge').dispatch('cancel');
-  await submission;
-  assert.equal(h.requests.length, 1);
-  assert.equal(h.element('auth-identifier').value, ' reader ');
-  assert.equal(h.element('auth-password').value, 'password for tests');
+  h.responses.push({ status: 401, body: { message: '用户名/邮箱或密码错误' } });
+  await h.submit();
   assert.equal(h.storage.get(tokenKey), 'existing-token');
   assert.equal(h.window.location.href, '/login');
+  assert.equal(h.element('auth-password').value, 'password for tests');
   assert.equal(h.element('auth-submit').disabled, false);
+  h.responses.push({ body: { token: 'retry-token', user: {} } });
+  await h.submit();
+  assert.equal(h.requests.length, 2);
+  assert.equal(h.storage.get(tokenKey), 'retry-token');
 });
 
 test('password reset still submits directly without registration consent or captcha', async () => {
@@ -400,7 +389,7 @@ test('a failed challenge request can be retried inside the open dialog', async (
   await submission;
 });
 
-for (const mode of ['register', 'login']) {
+for (const mode of ['register']) {
   test(`${mode}: a rejected answer loads a fresh challenge and requires another selection`, async () => {
     const h = harness(mode);
     const { submission } = await openChallenge(h);
@@ -578,7 +567,7 @@ test('Wien resistor values are labelled in the circuit without live gain, Q, or 
   assert.match(source, /小信号瞬态 · 幅值归一化/);
 });
 
-for (const mode of ['login', 'register']) {
+for (const mode of ['register']) {
   test(`${mode}: Wien movement updates resistance labels without numeric metrics or pass hints`, async () => {
     const h = harness(mode);
     const { submission } = await openChallenge(h, wienChallenge());
@@ -641,7 +630,7 @@ for (const mode of ['login', 'register']) {
 }
 
 test('refresh can switch question types and cannot reuse a previous answer', async () => {
-  const h = harness('login');
+  const h = harness('register');
   const { submission } = await openChallenge(h, wienChallenge());
   h.element('wien-challenge-position').value = '21000';
   await h.element('wien-challenge-position').dispatch('input');
@@ -676,7 +665,7 @@ test('refresh can switch question types and cannot reuse a previous answer', asy
 });
 
 test('a rejected Wien answer loads new circuit values and requires a fresh resistance selection', async () => {
-  const h = harness('login');
+  const h = harness('register');
   const { submission } = await openChallenge(h, wienChallenge());
   const slider = h.element('wien-challenge-position');
   slider.value = '23000';
@@ -684,7 +673,7 @@ test('a rejected Wien answer loads new circuit values and requires a fresh resis
   h.responses.push(
     {
       status: 400,
-      body: { message: '阻值不符合要求', code: 'login_captcha_incorrect' },
+      body: { message: '阻值不符合要求', code: 'registration_captcha_incorrect' },
     },
     {
       body: wienChallenge({
@@ -745,7 +734,7 @@ test('Wien expiry and cancellation preserve the authentication form', async () =
 });
 
 test('Wien wiper drags continuously over its full range and retains the released resistance', async () => {
-  const h = harness('login');
+  const h = harness('register');
   const { submission } = await openChallenge(h, wienChallenge());
   const graph = h.element('wien-challenge-graph');
   const slider = h.element('wien-challenge-position');
@@ -769,7 +758,8 @@ test('Wien wiper drags continuously over its full range and retains the released
 
 test('malformed or unknown challenge types fail closed and can be refreshed', async () => {
   for (const data of [wienChallenge({ oscillator: {} }), challenge({ type: 'unknown' })]) {
-    const h = harness('login');
+    const h = harness('register');
+    h.element('auth-community-agreement').checked = true;
     h.responses.push({ body: data });
     const submission = h.submit();
     await flush();
@@ -792,7 +782,7 @@ for (const mode of ['login', 'register', 'remake']) {
     h.authLinks.forEach((link) => {
       assert.equal(new URL(link.href, h.window.location.origin).searchParams.get('next'), next);
     });
-    if (mode === 'remake') {
+    if (mode !== 'register') {
       h.responses.push({ body: { token: 'new-token', user: {} } });
       await h.submit();
     } else {

@@ -1,0 +1,187 @@
+/* Four palettes. Expiry removes has-laser-glow and restores the ordinary palette. */
+body.discussion-page
+  .main-content
+  :is(.discussion-post-card, .discussion-post-surface, .discussion-comment) {
+  --discussion-surface-mode: normal-light;
+  --surface-paper: #ffffff;
+  --surface-ink: #172b33;
+  --surface-muted: #57666e;
+  --surface-link: #096775;
+  --surface-line: #dce4e8;
+  --surface-control: #f1f4f6;
+  --surface-hover: #e3ebef;
+  --surface-selected: #d5e9ee;
+  --surface-selected-ink: #124c59;
+  --surface-focus: #18798a;
+}
+
+body.theme-dark.discussion-page
+  .main-content
+  :is(.discussion-post-card, .discussion-post-surface, .discussion-comment) {
+  --discussion-surface-mode: normal-dark;
+  --surface-paper: #17262e;
+  --surface-ink: #edf4f7;
+  --surface-muted: #bfccd3;
+  --surface-link: #9cdeea;
+  --surface-line: #425862;
+  --surface-control: #253a45;
+  --surface-hover: #334c59;
+  --surface-selected: #3a606e;
+  --surface-selected-ink: #ffffff;
+  --surface-focus: #a4e2ed;
+}
+
+body.discussion-page
+  .main-content
+  :is(.discussion-post-card, .discussion-post-surface, .discussion-comment).has-laser-glow {
+  --discussion-surface-mode: laser-light;
+  --surface-paper: #fffdf6;
+  --surface-ink: #392e19;
+  --surface-muted: #746044;
+  --surface-link: #795719;
+  --surface-line: #e5d3a0;
+  --surface-control: #fff3cf;
+  --surface-hover: #f8e4ab;
+  --surface-selected: #efd181;
+  --surface-selected-ink: #4d3810;
+  --surface-focus: #947025;
+}
+
+body.theme-dark.discussion-page
+  .main-content
+  :is(.discussion-post-card, .discussion-post-surface, .discussion-comment).has-laser-glow {
+  --discussion-surface-mode: laser-dark;
+  --surface-paper: #29271f;
+  --surface-ink: #fff5dc;
+  --surface-muted: #d9cba9;
+  --surface-link: #f1d28a;
+  --surface-line: #75623a;
+  --surface-control: #403722;
+  --surface-hover: #57482b;
+  --surface-selected: #6b542a;
+  --surface-selected-ink: #fff3c9;
+  --surface-focus: #f6d789;
+}
+
+body.discussion-page
+  .main-content
+  :is(.discussion-post-card, .discussion-post-surface, .discussion-comment) {
+  background-color: var(--surface-paper) !important;
+  border-color: var(--surface-line) !important;
+  color: var(--surface-ink) !important;
+}
+
+body.discussion-page
+  .main-content
+  :is(.discussion-post-card, .discussion-post-surface, .discussion-comment)
+  :is(.discussion-post-title, .discussion-comment-content, .discussion-detail-head h2) {
+  color: var(--surface-ink) !important;
+}
+
+body.discussion-page
+  .main-content
+  :is(.discussion-post-card, .discussion-post-surface, .discussion-comment)
+  :is(.discussion-post-source, .discussion-detail-meta, .discussion-comment-meta, time) {
+  color: var(--surface-muted) !important;
+}
+
+body.discussion-page
+  .main-content
+  :is(.discussion-post-card, .discussion-post-surface, .discussion-comment)
+  :is(
+    .discussion-author-link,
+    .discussion-comment-author-link,
+    .discussion-post-board,
+    .discussion-detail-board
+  ) {
+  color: var(--surface-link) !important;
+}
+
+body.discussion-page
+  .main-content
+  :is(.discussion-post-card, .discussion-post-surface, .discussion-comment)
+  :is(
+    .discussion-reaction-button,
+    .discussion-comment-count,
+    .discussion-post-reply-state,
+    .discussion-comment-actions button,
+    .discussion-moderator-actions button,
+    .discussion-detail-back,
+    .discussion-delete-action
+  ) {
+  border-color: var(--surface-line) !important;
+  background: var(--surface-control) !important;
+  color: var(--surface-ink) !important;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+body.discussion-page
+  .main-content
+  :is(.discussion-post-card, .discussion-post-surface, .discussion-comment)
+  :is(
+    .discussion-reaction-button,
+    .discussion-comment-count,
+    .discussion-comment-actions button,
+    .discussion-moderator-actions button,
+    .discussion-detail-back,
+    .discussion-delete-action
+  )
+  :is(strong, span) {
+  color: inherit !important;
+}
+
+body.discussion-page
+  .main-content
+  :is(.discussion-post-card, .discussion-post-surface, .discussion-comment)
+  :is(
+    .discussion-reaction-button,
+    .discussion-comment-actions button,
+    .discussion-moderator-actions button,
+    .discussion-detail-back,
+    .discussion-delete-action
+  ):hover {
+  background: var(--surface-hover) !important;
+}
+
+body.discussion-page
+  .main-content
+  :is(.discussion-post-card, .discussion-post-surface, .discussion-comment)
+  :is(.discussion-reaction-button.is-reacted, button[aria-pressed='true']) {
+  color: var(--surface-selected-ink) !important;
+  background: var(--surface-selected) !important;
+  border-color: var(--surface-focus) !important;
+  box-shadow: inset 0 0 0 1px var(--surface-focus);
+}
+
+body.discussion-page
+  .main-content
+  :is(.discussion-post-card, .discussion-post-surface, .discussion-comment)
+  button:focus-visible {
+  outline: 2px solid var(--surface-focus);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.discussion-page .main-content .discussion-reaction-button {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  body.discussion-page
+    .main-content
+    :is(.discussion-post-card, .discussion-post-surface, .discussion-comment) {
+    --surface-paper: Canvas;
+    --surface-ink: CanvasText;
+    --surface-muted: CanvasText;
+    --surface-link: LinkText;
+    --surface-line: ButtonText;
+    --surface-control: ButtonFace;
+    --surface-hover: ButtonFace;
+    --surface-selected: Highlight;
+    --surface-selected-ink: HighlightText;
+    --surface-focus: Highlight;
+  }
+}

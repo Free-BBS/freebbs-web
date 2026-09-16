@@ -1,0 +1,85 @@
+/* Shared controls remain mounted when folded, preserving selected model and images. */
+body.aichat-page .main-content {
+  box-sizing: border-box;
+  height: 100dvh;
+  min-height: 0;
+  padding-top: 104px !important;
+  padding-bottom: 12px !important;
+}
+body.aichat-page .main-content .aichat-shell {
+  height: 100%;
+  min-height: 0;
+  align-items: stretch;
+}
+body.aichat-page .main-content .aichat-main {
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  overflow: hidden;
+}
+body.aichat-page .site-footer {
+  display: none;
+}
+.max-composer-tools {
+  min-width: 0;
+  max-height: min(34dvh, 270px);
+  overflow: auto;
+  border-top: 1px solid var(--ui-line);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.max-composer-tools > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 6px 20px;
+  list-style: none;
+  cursor: pointer;
+  font: 0.82rem var(--font-ui);
+}
+.max-composer-tools > summary::-webkit-details-marker {
+  display: none;
+}
+.max-composer-tools > summary > :first-child {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.max-composer-tools-state {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ui-muted);
+}
+.max-composer-tools-hint {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--ui-accent);
+}
+.max-composer-tools > summary:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: -3px;
+}
+.max-composer-tools > [data-max-model-picker] {
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+.max-composer-tools .max-model-picker select {
+  background: var(--ui-input);
+  color: var(--ui-text);
+  border-color: var(--ui-line);
+}
+@media (max-width: 900px) {
+  body.aichat-page .main-content {
+    height: calc(100dvh - var(--mobile-nav-space));
+    padding-top: calc(176px + env(safe-area-inset-top, 0px)) !important;
+    padding-bottom: 8px !important;
+  }
+  .max-composer-tools > summary {
+    padding-inline: 12px;
+    gap: 6px;
+    font-size: 0.76rem;
+  }
+  .max-composer-tools {
+    max-height: 30dvh;
+  }
+}

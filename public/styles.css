@@ -10667,6 +10667,19 @@ body.theme-light:not(.home-page) .code-run-output-label {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* Fixed proportions keep current magnetic and longer legacy rewards aligned. */
+.fortune-record-row {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.85fr) minmax(0, 1.5fr);
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+.fortune-record-row > * {
+  min-width: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
 .fortune-record-empty,
 .electromagnetic-section p,
 .electromagnetic-shop-item p {

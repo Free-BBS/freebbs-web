@@ -77,6 +77,10 @@ echo "[ci] shop and settings tests"
 npm run test:shop-settings
 npm run test:economy-retry
 npm run test:economy-mysql
+node --test backend/admin-rewards.test.js backend/admin-rewards.mysql.test.js
+node --test backend/wallet-ledger.test.js
+node --check public/max-composer.js
+node --check public/wallet-ledger.js
 
 echo "[ci] nickname policy and knowledge learning usability tests"
 npm run test:profile-learning
@@ -95,6 +99,7 @@ npm run test:agent-surfaces
 npm run test:aichat-navigation
 
 echo "[ci] registration, notifications, username and course API tests"
+node --test scripts/post-merge-fixes.test.js
 npm run test:community
 python3 -B backend/course-upload-client.test.py
 

@@ -244,10 +244,29 @@ const { createEconomyPreview } = require('./preview-economy');
     }
     assert.equal(
       await page
-        .locator('[data-ranch-fortune], .economy-shortcut-checkin, .fortune-link:visible')
+        .locator(
+          '.main-content [data-ranch-fortune], .main-content .economy-shortcut-checkin, .main-content .fortune-link:visible',
+        )
         .count(),
       0,
     );
+    assert.equal(await page.locator('#user-panel .economy-shortcut-checkin:visible').count(), 1);
+    await page.locator('#user-panel .economy-shortcut-checkin').click();
+    await page.locator('#fortune-checkin-button:not([disabled])').waitFor();
+    await page.locator('#fortune-checkin-button').click();
+    await page.waitForFunction(
+      () => document.getElementById('fortune-checkin-button').textContent === '今日已签到',
+    );
+    assert.equal(Object.keys(store.account(1).checkins).length, 1);
+    assert.equal(Object.keys(store.account(2).checkins || {}).length, 0);
+    await page.locator('.fortune-close').click();
+    await page.goto(`${base}/profile?uid=u_preview02`);
+    await page.locator('#user-panel .economy-shortcut-checkin').click();
+    await page.waitForFunction(
+      () => document.getElementById('fortune-checkin-button').textContent === '今日已签到',
+    );
+    assert.equal(Object.keys(store.account(2).checkins || {}).length, 0);
+    await page.locator('.fortune-close').click();
     await page.locator('.settings-nav-link:visible').first().click();
     await page.waitForURL('**/settings');
     await page.locator('#settings-form').waitFor();

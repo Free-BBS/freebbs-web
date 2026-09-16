@@ -125,7 +125,20 @@
       <div class="ranch-scene ${hungry ? 'is-hungry' : ''}" aria-label="${ranch.adopted ? (hungry ? 'Max 饿了，趴在地上等一条鱼' : '电子仿生羊 Max 在草地上漫步') : '等待 Max 入住的牧场'}">
         <span class="ranch-sun" aria-hidden="true"></span><span class="ranch-cloud" aria-hidden="true"></span>
         <span class="ranch-hill ranch-hill-back" aria-hidden="true"></span><span class="ranch-hill" aria-hidden="true"></span>
-        <span class="ranch-cabin" aria-hidden="true">MAX</span>
+        <div class="ranch-home">
+          <svg class="ranch-hut" viewBox="0 0 160 135" aria-hidden="true">
+            <ellipse cx="82" cy="124" rx="70" ry="9" fill="#3f553d" opacity=".18"/>
+            <path d="M29 58h100v64H29Z" fill="#e2c397" stroke="#795c3d" stroke-width="3"/>
+            <path d="M40 66h10m58 0h9M33 105h17m64 0h12" stroke="#b38c59" stroke-width="2"/>
+            <path d="M16 62 52 15q27-13 56 0l38 47-30-4-20 5-19-5-27 5Z" fill="#c99b4e" stroke="#806035" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M56 19 30 54m38-39L48 56m30-44L69 56m18-43 2 43m9-38 15 37m-8-29 26 29" stroke="#efd085" stroke-width="4" stroke-linecap="round"/>
+            <path d="M63 122V87q18-23 35 0v35" fill="#6b4932" stroke="#795c3d" stroke-width="3"/>
+            <circle cx="89" cy="102" r="3" fill="#e6c177"/>
+            <path d="M37 77h16v19H37Z" fill="#9cc6c6" stroke="#795c3d" stroke-width="3"/>
+            <path d="M45 77v19m-8-10h16" stroke="#795c3d" stroke-width="2"/>
+          </svg>
+          <span class="ranch-owner-sign"></span>
+        </div>
         ${ranch.adopted ? '<div class="ranch-pet-track"><div data-max-actor></div></div>' : '<p class="ranch-empty">草已经长好了，等一位新朋友。</p>'}
         <div class="ranch-ground"></div>
       </div>
@@ -139,6 +152,9 @@
       </div>
       ${own ? '<details class="ranch-rules"><summary>喂养与纪念规则</summary><p>每条鱼增加 24 小时饱腹时间，最多累计 30 天，容量不足一天不扣鱼。按北京时间，每个祥瑞日首次喂养产生 1 个黄金鱼骨，每日限 1 个；当天后续喂养及其他运势下的喂养均产生 1 个普通鱼骨。累计购买 10 个坚硬鱼骨，拥有至少 3 个黄金鱼骨和 10 个普通鱼骨，自动解锁「鱼骨达人」；不消耗鱼骨。Max 饿时趴下，不死亡、不丢失。</p></details>' : ''}
       <p id="profile-extras-message" role="status" aria-live="polite"></p>`;
+    const ownerSign = root.querySelector('.ranch-owner-sign');
+    ownerSign.textContent = profileData?.username || '牧场主人';
+    ownerSign.title = ownerSign.textContent;
     actor = ranch.adopted
       ? window.FreeBbsMaxRanch.mount(root.querySelector('[data-max-actor]'), { ...motion, hungry })
       : null;
