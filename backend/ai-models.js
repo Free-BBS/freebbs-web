@@ -26,8 +26,7 @@ function selectModel(body, settings) {
   return { model, reasoning_effort: effort, profile };
 }
 function validateVisionImages(images = []) {
-  if (!Array.isArray(images) || images.length > 13)
-    throw new Error('最多附带一张电路图和六组波形图。');
+  if (!Array.isArray(images) || images.length > 13) throw new Error('单次最多附带 13 张图片。');
   return images.map((image) => {
     if (
       !image ||
@@ -37,14 +36,11 @@ function validateVisionImages(images = []) {
       image.dataUrl.length > 1400000 ||
       !/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(image.dataUrl)
     )
-      throw new Error('电路或波形图像格式无效，单图须小于 1 MiB。');
+      throw new Error('图片格式无效，单图须小于 1 MiB。');
     return { label: image.label, dataUrl: image.dataUrl };
   });
 }
-async function resolveModelOptions(body, settings) {
-  const { profile, ...options } = selectModel(body, settings);
-  const images = validateVisionImages(body.vision_images);
-  if (images.length && !profile.vision) throw new Error('所选模型不支持视觉输入，请切换视觉模型。');
+async function validateImageContents(images) {
   for (const image of images) {
     const buffer = Buffer.from(image.dataUrl.split(',')[1], 'base64');
     const meta = await sharp(buffer, { limitInputPixels: 8000000 }).metadata();
@@ -57,8 +53,20 @@ async function resolveModelOptions(body, settings) {
       meta.width * meta.height > 8000000 ||
       (meta.pages || 1) !== 1
     )
-      throw new Error('电路或波形图像尺寸无效。');
+      throw new Error('图片尺寸无效。');
   }
+}
+async function resolveModelOptions(body, settings) {
+  const { profile, ...options } = selectModel(body, settings);
+  const images = validateVisionImages(body.vision_images);
+  if (images.length && !profile.vision) throw new Error('所选模型不支持视觉输入，请切换视觉模型。');
+  await validateImageContents(images);
   return { ...options, ...(images.length ? { vision_images: images } : {}) };
 }
-module.exports = { modelCatalog, selectModel, resolveModelOptions, validateVisionImages };
+module.exports = {
+  modelCatalog,
+  selectModel,
+  resolveModelOptions,
+  validateVisionImages,
+  validateImageContents,
+};

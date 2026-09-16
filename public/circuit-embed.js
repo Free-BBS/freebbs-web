@@ -306,12 +306,7 @@
     state.controller = controller;
     const timeout = window.setTimeout(() => controller.abort(), 12000);
     try {
-      const local =
-        ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname) &&
-        window.location.port === '3000';
-      const base = local
-        ? `${window.location.protocol}//${window.location.hostname}:3001/api`
-        : '/api';
+      const base = window.FREEBBS_API_BASE || '/api';
       const response = await fetch(`${base}/circuits/${cid}?revision=${revision}`, {
         signal: controller.signal,
         credentials: 'omit',

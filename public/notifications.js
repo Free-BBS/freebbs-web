@@ -1,16 +1,10 @@
 (() => {
   const storageKey = 'free_bbs_auth_token';
-  const local =
-    window.location.protocol === 'file:' ||
-    ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname) ||
-    window.location.port === '3000';
-  const host =
-    window.location.hostname &&
-    window.location.protocol !== 'file:' &&
-    window.location.hostname !== '0.0.0.0'
-      ? window.location.hostname
-      : '127.0.0.1';
-  const apiBase = local ? `http://${host}:3001/api` : `${window.location.origin}/api`;
+  const apiBase =
+    window.FREEBBS_API_BASE ||
+    (window.location.protocol === 'file:'
+      ? 'http://127.0.0.1:3001/api'
+      : `${window.location.origin}/api`);
   const state = {
     user: null,
     token: '',

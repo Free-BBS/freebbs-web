@@ -3,6 +3,12 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+const {
+  modelCatalog,
+  resolveModelOptions,
+  validateVisionImages,
+  validateImageContents,
+} = require('./ai-models');
 const { awardMagnetic, ensureEconomyPolicy } = require('./economy-rewards');
 const {
   LASER_POLICY,
@@ -11,7 +17,6 @@ const {
   ensureShopPurchaseTables,
   ShopPurchaseError,
 } = require('./economy-shop');
-const { modelCatalog, resolveModelOptions } = require('./ai-models');
 const {
   anonymousAuthor,
   ensureDiscussionInteractions,
@@ -273,6 +278,13 @@ app.use(
   }),
 );
 app.use(express.json({ limit: '28mb' }));
+app.use((error, _request, response, next) => {
+  if (error.type === 'entity.too.large') {
+    response.status(413).json({ message: '请求内容过大，请减少图片或新建对话。' });
+    return;
+  }
+  next(error);
+});
 
 // Apply the same decoding and normalization as the static server before guarding documents.
 app.use(
@@ -2035,6 +2047,10 @@ function normalizeAiMessages(value) {
       role,
       content: content.slice(0, 20000),
     };
+    if (role === 'user' && message.images !== undefined) {
+      normalizedMessage.images = validateVisionImages(message.images);
+      if (normalizedMessage.images.length > 4) throw new Error('每条消息最多保存 4 张图片。');
+    }
     const navigation =
       role === 'assistant' ? normalizeAiDialogNavigation(message.navigation) : null;
     if (navigation) {
@@ -2719,7 +2735,22 @@ app.post('/api/ai/dialogs', async (request, response) => {
       return;
     }
 
-    const messages = normalizeAiMessages(request.body.messages);
+    if (Buffer.byteLength(JSON.stringify(request.body.messages || []), 'utf8') > 24 * 1024 * 1024) {
+      response
+        .status(413)
+        .json({ message: '当前对话包含的图片和文字已超过 24 MiB，请新建对话后继续。' });
+      return;
+    }
+    let messages;
+    try {
+      messages = normalizeAiMessages(request.body.messages);
+      for (const message of messages || []) {
+        await validateImageContents(message.images || []);
+      }
+    } catch (error) {
+      response.status(400).json({ message: `对话图片无效：${error.message}` });
+      return;
+    }
 
     if (!messages || !messages.length) {
       response.status(400).json({ message: '对话内容不能为空' });
@@ -2729,6 +2760,12 @@ app.post('/api/ai/dialogs', async (request, response) => {
     const did = String(request.body.did || '').trim() || crypto.randomUUID();
     const title = buildAiDialogTitle(request.body.title, messages);
     const messagesJson = JSON.stringify(messages);
+    if (Buffer.byteLength(messagesJson, 'utf8') > 24 * 1024 * 1024) {
+      response
+        .status(413)
+        .json({ message: '当前对话包含的图片和文字已超过 24 MiB，请新建对话后继续。' });
+      return;
+    }
 
     const [existing] = await pool.execute(
       `SELECT did

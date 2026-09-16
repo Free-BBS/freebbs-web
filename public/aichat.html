@@ -220,7 +220,25 @@
                 </div>
               </article>
             </div>
-            <div data-max-model-picker></div>
+            <div class="aichat-options">
+              <div data-max-model-picker></div>
+              <label class="max-reasoning-preference">
+                <input type="checkbox" data-max-reasoning-expanded />
+                展开 Agent 思考过程
+              </label>
+              <div id="aichat-images" class="max-images">
+                <button type="button" data-image-add disabled>添加图片</button>
+                <input
+                  data-image-input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  multiple
+                  hidden
+                />
+                <small data-image-status role="status">选择视觉模型后可添加图片</small>
+                <div data-image-previews class="max-image-previews"></div>
+              </div>
+            </div>
             <form class="aichat-composer" id="aichat-form">
               <textarea
                 id="aichat-input"
@@ -228,7 +246,6 @@
                 placeholder="输入问题，或粘贴本站电路链接…"
                 aria-label="输入给 Max 的问题"
                 maxlength="12000"
-                required
               ></textarea>
               <button class="aichat-send" id="aichat-send" type="submit">
                 <span>发送</span>
@@ -277,6 +294,7 @@
     <script src="/username-guard.js"></script>
     <script src="/max-reasoning.js"></script>
     <script src="/max-models.js"></script>
+    <script src="/max-images.js"></script>
     <script src="/app.js"></script>
     <script src="/notifications.js"></script>
   </body>

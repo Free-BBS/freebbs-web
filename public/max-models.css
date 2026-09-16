@@ -31,3 +31,220 @@
   opacity: 0.72;
   line-height: 1.5;
 }
+
+/* Keep the chat controls compact, aligned with the composer. */
+body.aichat-page .main-content .aichat-main {
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+}
+.aichat-options {
+  padding: 0 20px;
+  min-width: 0;
+}
+.aichat-options .max-model-picker {
+  grid-template-columns: minmax(0, 220px) minmax(0, 110px);
+  width: min(100%, 342px);
+  margin: 8px 0;
+}
+.aichat-options .max-model-picker select {
+  min-height: 32px;
+  background: var(--bg, #fff);
+  color: inherit;
+  border-color: var(--minimal-line, #d8dfe0);
+}
+.max-images {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 10px;
+}
+.max-images button {
+  border: 1px solid var(--minimal-line, #d8dfe0);
+  border-radius: 8px;
+  padding: 5px 10px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.max-images button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.max-images small {
+  font-size: 11px;
+  opacity: 0.72;
+}
+.max-image-previews {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+}
+.max-images .max-image-previews:not(:empty) {
+  flex-basis: 100%;
+}
+.max-image-previews > div {
+  position: relative;
+}
+.max-image-previews img {
+  display: block;
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid var(--minimal-line, #d8dfe0);
+}
+.max-image-previews button {
+  position: absolute;
+  right: 0;
+  top: 0;
+  background: #fff;
+  color: #172d32;
+  padding: 0 6px;
+}
+@media (max-width: 600px) {
+  .aichat-options {
+    padding: 0 13px;
+  }
+}
+
+.max-image-previews .max-image-open {
+  position: static;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: zoom-in;
+}
+.max-image-open:focus-visible {
+  outline: 2px solid #117b8d;
+  outline-offset: 3px;
+}
+.max-image-viewer {
+  box-sizing: border-box;
+  width: min(1200px, 96vw);
+  height: 90dvh;
+  max-width: 96vw;
+  max-height: 94dvh;
+  margin: auto;
+  padding: 0;
+  border: 1px solid #45545e;
+  border-radius: 14px;
+  background: #152028;
+  color: #f2f6f7;
+  overflow: hidden;
+}
+.max-image-viewer[open] {
+  display: flex;
+  flex-direction: column;
+}
+.max-image-viewer::backdrop {
+  background: rgba(0, 0, 0, 0.78);
+}
+.max-image-viewer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  gap: 8px 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #45545e;
+  font: 14px sans-serif;
+}
+.max-image-viewer-toolbar > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.max-image-viewer-toolbar > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.max-image-viewer-toolbar button {
+  min-height: 34px;
+  padding: 5px 10px;
+  border: 1px solid #63747e;
+  border-radius: 6px;
+  background: #253641;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+.max-image-viewer-toolbar output {
+  min-width: 42px;
+  text-align: center;
+}
+.max-image-viewer-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+}
+.max-image-viewer-stage img {
+  display: block;
+  max-width: none;
+  max-height: none;
+  height: auto;
+  margin: auto;
+}
+
+body.aichat-page .main-content .aichat-main.is-image-dragging {
+  outline: 3px dashed #117b8d;
+  outline-offset: -5px;
+}
+
+.max-images .max-image-previews {
+  padding-top: 6px;
+  padding-right: 6px;
+  gap: 14px;
+}
+.max-images .max-image-previews .max-image-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #233b43;
+  color: #fff;
+  box-shadow: 0 1px 5px #0004;
+  cursor: pointer;
+}
+.max-image-remove svg {
+  display: block;
+  pointer-events: none;
+}
+.max-image-remove:focus-visible {
+  outline: 2px solid #117b8d;
+  outline-offset: 2px;
+}
+.max-reasoning-preference {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.max-reasoning-preference input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: #117b8d;
+}
