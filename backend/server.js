@@ -3,6 +3,14 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+const { awardMagnetic, ensureEconomyPolicy } = require('./economy-rewards');
+const {
+  LASER_POLICY,
+  createEconomyShop,
+  createMysqlEconomyStore,
+  ensureShopPurchaseTables,
+  ShopPurchaseError,
+} = require('./economy-shop');
 const { modelCatalog, resolveModelOptions } = require('./ai-models');
 const {
   anonymousAuthor,
@@ -13,6 +21,16 @@ const {
 const { ensureSurveyTables, createSurveyService, createSurveysRouter } = require('./surveys');
 const pool = require('./db');
 const config = require('./config');
+const {
+  createProfileExtras,
+  ProfileExtrasError,
+  ensureProfileExtrasTables,
+  mysqlProfileMethods,
+  beijingDay,
+} = require('./profile-extras');
+
+const economyShop = createEconomyShop(createMysqlEconomyStore(pool));
+const profileExtras = createProfileExtras(createMysqlEconomyStore(pool));
 const {
   AvatarUploadError,
   createAvatarUploadService,
@@ -137,7 +155,8 @@ const FORTUNE_BONUS_KEY = 'fortune_bonus_enabled';
 const HEAT_DECAY_DATE_KEY = 'heat_decay_last_date';
 const FORTUNE_LOOKBACK_DAYS = 30;
 const CHECKIN_LOOKBACK_DAYS = 14;
-const MAX_CHECKIN_STREAK_REWARD = 5;
+const { checkinReward } = require('./economy-policy');
+
 const SHOP_CATALOG_PATH = path.join(__dirname, '..', 'public', 'data', 'shop-items.json');
 const REACTION_MANETRON_REWARDS = {
   smile: 1,
@@ -1036,9 +1055,12 @@ function toDateKey(date) {
 }
 
 function addDays(date, days) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
+  return new Date(date.getTime() + days * 86400000);
+}
+
+// Fortune, check-in and feeding share Beijing natural days, independent of host timezone.
+function fortuneDateKey(date) {
+  return beijingDay(date.getTime());
 }
 
 function generateFortuneScore(fortuneBonusEnabled) {
@@ -1049,15 +1071,20 @@ async function ensureUserFortuneWindow(user, fortuneBonusEnabled) {
   await ensureFortuneTables();
 
   const today = new Date();
-  const todayKey = toDateKey(today);
+  const todayKey = fortuneDateKey(today);
   const dates = Array.from({ length: FORTUNE_LOOKBACK_DAYS }, (_, index) =>
-    toDateKey(addDays(today, index - FORTUNE_LOOKBACK_DAYS + 1)),
+    fortuneDateKey(addDays(today, index - FORTUNE_LOOKBACK_DAYS + 1)),
   );
 
   await pool.execute(
     `INSERT IGNORE INTO user_fortunes (user_id, fortune_date, score)
      VALUES (?, ?, ?)`,
     [user.id, todayKey, generateFortuneScore(fortuneBonusEnabled)],
+  );
+  await pool.execute(
+    `UPDATE user_fortunes f INNER JOIN economy_account_state s ON s.user_id = f.user_id
+    SET f.score = GREATEST(f.score, 70) WHERE f.user_id = ? AND f.fortune_date = ? AND s.luck_until_ms > ?`,
+    [user.id, todayKey, Date.now()],
   );
 
   const [rows] = await pool.execute(
@@ -1079,8 +1106,8 @@ async function getCheckinSummary(user, fortuneBonusEnabled) {
   await ensureEconomyReady();
 
   const today = new Date();
-  const todayKey = toDateKey(today);
-  const startKey = toDateKey(addDays(today, -CHECKIN_LOOKBACK_DAYS + 1));
+  const todayKey = fortuneDateKey(today);
+  const startKey = fortuneDateKey(addDays(today, -CHECKIN_LOOKBACK_DAYS + 1));
   const [rows] = await pool.execute(
     `SELECT DATE_FORMAT(checkin_date, '%Y-%m-%d') AS checkin_date,
             streak_count,
@@ -1093,6 +1120,11 @@ async function getCheckinSummary(user, fortuneBonusEnabled) {
     [user.id, startKey, todayKey],
   );
   const todayRow = rows.find((row) => row.checkin_date === todayKey);
+  const [rewards] = await pool.execute(
+    "SELECT DATE_FORMAT(reward_day, '%Y-%m-%d') AS day, SUM(amount) AS amount FROM economy_rewards WHERE user_id = ? AND category IN ('checkin', 'bonus') AND (source_key LIKE 'checkin:%' OR source_key LIKE 'luck:%') GROUP BY reward_day",
+    [user.id],
+  );
+  const rewardByDay = new Map(rewards.map((row) => [row.day, Number(row.amount)]));
   const fortuneHistory = await ensureUserFortuneWindow(user, fortuneBonusEnabled);
   const todayFortune = fortuneHistory.find((item) => item.date === todayKey);
 
@@ -1103,6 +1135,7 @@ async function getCheckinSummary(user, fortuneBonusEnabled) {
           date: todayRow.checkin_date,
           streak: Number(todayRow.streak_count || 0),
           rewardElectrons: Number(todayRow.reward_electrons || 0),
+          rewardMagnetic: rewardByDay.get(todayKey) || 0,
           fortuneScore: Number(todayRow.fortune_score ?? todayFortune?.score ?? 0),
         }
       : null,
@@ -1114,6 +1147,7 @@ async function getCheckinSummary(user, fortuneBonusEnabled) {
       date: row.checkin_date,
       streak: Number(row.streak_count || 0),
       rewardElectrons: Number(row.reward_electrons || 0),
+      rewardMagnetic: rewardByDay.get(row.checkin_date) || 0,
       fortuneScore: Number(row.fortune_score || 0),
     })),
   };
@@ -1121,59 +1155,52 @@ async function getCheckinSummary(user, fortuneBonusEnabled) {
 
 async function performDailyCheckin(user) {
   await ensureEconomyReady();
-
   const fortuneBonusEnabled = await getFortuneBonusEnabled();
-  const today = new Date();
-  const todayKey = toDateKey(today);
-  const yesterdayKey = toDateKey(addDays(today, -1));
-  const fortuneHistory = await ensureUserFortuneWindow(user, fortuneBonusEnabled);
-  const todayFortune = fortuneHistory.find((item) => item.date === todayKey);
-
-  const [existing] = await pool.execute(
-    `SELECT DATE_FORMAT(checkin_date, '%Y-%m-%d') AS checkin_date,
-            streak_count,
-            reward_electrons,
-            fortune_score
-     FROM user_checkins
-     WHERE user_id = ? AND checkin_date = ?
-     LIMIT 1`,
-    [user.id, todayKey],
-  );
-
-  if (existing[0]) {
-    return {
-      alreadyCheckedIn: true,
-      summary: await getCheckinSummary(user, fortuneBonusEnabled),
-    };
-  }
-
-  const [previousRows] = await pool.execute(
-    `SELECT streak_count
-     FROM user_checkins
-     WHERE user_id = ? AND checkin_date = ?
-     LIMIT 1`,
-    [user.id, yesterdayKey],
-  );
-  const streak = previousRows[0] ? Number(previousRows[0].streak_count || 0) + 1 : 1;
-  const rewardElectrons = Math.min(streak, MAX_CHECKIN_STREAK_REWARD);
-  const fortuneScore = Number(todayFortune?.score ?? generateFortuneScore(fortuneBonusEnabled));
-
-  await pool.execute(
-    `INSERT INTO user_checkins (user_id, checkin_date, streak_count, reward_electrons, fortune_score)
-     VALUES (?, ?, ?, ?, ?)`,
-    [user.id, todayKey, streak, rewardElectrons, fortuneScore],
-  );
-  await pool.execute(
-    `UPDATE users
-     SET electrons = electrons + ?
-     WHERE id = ?`,
-    [rewardElectrons, user.id],
-  );
-
-  return {
-    alreadyCheckedIn: false,
-    summary: await getCheckinSummary(user, fortuneBonusEnabled),
-  };
+  await ensureUserFortuneWindow(user, fortuneBonusEnabled);
+  const todayKey = beijingDay();
+  const yesterdayKey = beijingDay(Date.now() - 86400000);
+  const alreadyCheckedIn = await withDatabaseTransaction(async (connection) => {
+    await connection.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [user.id]);
+    const [existing] = await connection.execute(
+      'SELECT streak_count FROM user_checkins WHERE user_id = ? AND checkin_date = ?',
+      [user.id, todayKey],
+    );
+    const [fortunes] = await connection.execute(
+      'SELECT score FROM user_fortunes WHERE user_id = ? AND fortune_date = ?',
+      [user.id, todayKey],
+    );
+    const score = Number(fortunes[0]?.score || 0);
+    if (!existing.length) {
+      const [previous] = await connection.execute(
+        'SELECT streak_count FROM user_checkins WHERE user_id = ? AND checkin_date = ?',
+        [user.id, yesterdayKey],
+      );
+      const streak = Number(previous[0]?.streak_count || 0) + 1;
+      const reward = checkinReward(streak, score, todayKey);
+      await connection.execute(
+        'INSERT INTO user_checkins (user_id, checkin_date, streak_count, reward_electrons, fortune_score) VALUES (?, ?, ?, ?, ?)',
+        [user.id, todayKey, streak, reward.rewardElectrons, score],
+      );
+      if (reward.rewardElectrons)
+        await connection.execute('UPDATE users SET electrons = electrons + ? WHERE id = ?', [
+          reward.rewardElectrons,
+          user.id,
+        ]);
+      if (reward.rewardMagnetic)
+        await awardMagnetic(
+          connection,
+          user.id,
+          `checkin:${todayKey}`,
+          reward.rewardMagnetic,
+          todayKey,
+          'checkin',
+        );
+    }
+    if (checkinReward(1, score, todayKey).luckBonus)
+      await awardMagnetic(connection, user.id, `luck:${todayKey}`, 1, todayKey);
+    return existing.length > 0;
+  });
+  return { alreadyCheckedIn, summary: await getCheckinSummary(user, fortuneBonusEnabled) };
 }
 
 async function getUserAssets(userId) {
@@ -1228,23 +1255,32 @@ function getShopItems() {
 
         return {
           key,
+          enabled: item.enabled !== false,
+          fulfillmentPending: Boolean(item.fulfillmentPending),
           assetKey: String(item.assetKey || key).trim(),
           name: String(item.name || key).trim(),
           class: String(item.class || 'usable').trim(),
           description: String(item.description || '').trim(),
           desc: String(item.desc || item.description || '').trim(),
+          rules: String(item.rules || '').trim(),
           image: String(item.image || '').trim(),
           isGift: !(item.isgift === false || item.is_gift === false || item.isGift === false),
-          cost: Object.fromEntries(
-            Object.entries(cost)
-              .map(([currency, value]) => [normalizeCurrencyType(currency), Number(value)])
-              .filter(
-                ([currency, value]) =>
-                  ['electric', 'magnetic'].includes(currency) &&
-                  Number.isFinite(value) &&
-                  value > 0,
-              ),
-          ),
+          requiresPersonalPrice: true,
+          purchaseLimit: item.purchaseLimit || null,
+          priceMode: item.priceMode === 'combined' ? 'combined' : 'alternative',
+          cost:
+            key === 'laser'
+              ? { electric: LASER_POLICY.purchasePrice }
+              : Object.fromEntries(
+                  Object.entries(cost)
+                    .map(([currency, value]) => [normalizeCurrencyType(currency), Number(value)])
+                    .filter(
+                      ([currency, value]) =>
+                        ['electric', 'magnetic'].includes(currency) &&
+                        Number.isFinite(value) &&
+                        value > 0,
+                    ),
+                ),
           use: item.use && typeof item.use === 'object' ? item.use : null,
         };
       })
@@ -1406,6 +1442,7 @@ function toDiscussionPostSummary(row, viewerId = 0) {
     isHidden: Boolean(row.is_hidden),
     canHide: !isDeleted && Number(row.user_id) === Number(viewerId),
     isAnonymous: Boolean(row.is_anonymous),
+    laser: !row.is_anonymous && !isDeleted ? row.laser || null : null,
     deletedAt: row.deleted_at || null,
     canFeature: !isDeleted && !row.is_hidden && Boolean(row.can_feature),
     canPin: !isDeleted && !row.is_hidden && Boolean(row.can_pin),
@@ -1419,6 +1456,7 @@ function toDiscussionPostSummary(row, viewerId = 0) {
           fullName: '',
           displayName: row.username || '匿名用户',
           avatarPath: row.avatar_path || '',
+          cosmetics: !isDeleted ? row.cosmetics || {} : {},
         },
     likeCount: Number(row.like_count || 0),
     lightCount: Number(row.light_count || 0),
@@ -1436,6 +1474,8 @@ function toDiscussionComment(row) {
     parentCommentId: row.parent_comment_id ? Number(row.parent_comment_id) : null,
     isDeleted: Boolean(row.is_deleted),
     canDelete: !row.is_deleted && Boolean(row.can_delete),
+    isFeatured: !row.is_deleted && Boolean(row.is_featured),
+    canFeature: !row.is_deleted && Boolean(row.can_feature),
     likeCount: row.is_deleted ? 0 : Number(row.like_count || 0),
     likedByMe: !row.is_deleted && Boolean(row.liked_by_me),
     contentMarkdown: row.is_deleted ? '该评论已删除' : row.content_markdown || '',
@@ -1465,7 +1505,7 @@ function toDiscussionPostDetail(row, viewerId = 0) {
 
 async function getDiscussionCommentById(commentId) {
   const [rows] = await pool.execute(
-    `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at, c.is_deleted,
+    `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at, c.is_deleted, c.is_featured,
             COALESCE(c.author_student_id, u.student_id) AS author_student_id,
             u.student_id, u.uid, u.username, u.full_name, u.avatar_path
      FROM discussion_comments c
@@ -1784,7 +1824,7 @@ async function createMaxDiscussionReply(postId, triggerComment) {
   }
 
   const [commentRows] = await pool.execute(
-    `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at, c.is_deleted,
+    `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at, c.is_deleted, c.is_featured,
             COALESCE(c.author_student_id, u.student_id) AS author_student_id,
             u.student_id, u.uid, u.username, u.full_name, u.avatar_path
      FROM discussion_comments c
@@ -2748,7 +2788,7 @@ app.get('/api/fortune', async (request, response) => {
 
     const fortuneBonusEnabled = await getFortuneBonusEnabled();
     const history = await ensureUserFortuneWindow(user, fortuneBonusEnabled);
-    const todayKey = toDateKey(new Date());
+    const todayKey = fortuneDateKey(new Date());
     const today = history.find((item) => item.date === todayKey) || history[history.length - 1];
 
     response.json({
@@ -2802,6 +2842,7 @@ app.post('/api/checkin', async (request, response) => {
 });
 
 app.get('/api/electromagnetic', async (request, response) => {
+  response.set('Cache-Control', 'private, no-store');
   try {
     const user = await requireAuth(request, response);
 
@@ -2814,7 +2855,7 @@ app.get('/api/electromagnetic', async (request, response) => {
     response.json({
       user: toUserProfile(await getUserById(user.id)),
       assets: await getUserAssets(user.id),
-      shopItems: getShopItems(),
+      shopItems: await economyShop.decorate(getShopItems(), user.id),
     });
   } catch (error) {
     response.status(500).json({ message: '获取电磁场失败', detail: error.message });
@@ -2875,50 +2916,28 @@ async function purchaseShopItem(request, response, itemKey) {
       return;
     }
 
-    const cost = Number(item.cost[currency] || 0);
-
-    if (!cost) {
-      response.status(400).json({ message: '请选择电元或磁元购买' });
-      return;
-    }
-
-    const column = currencyColumn(currency);
-    const [result] = await pool.execute(
-      `UPDATE users
-       SET ${column} = ${column} - ?
-           , heat = heat + ?
-       WHERE id = ? AND ${column} >= ?`,
-      [cost, cost, user.id, cost],
-    );
-
-    if (!result.affectedRows) {
-      response.status(400).json({ message: '余额不足' });
-      return;
-    }
-
-    await pool.execute(
-      `INSERT INTO user_assets (user_id, asset_key, quantity, metadata_json)
-       VALUES (?, ?, 1, JSON_OBJECT('name', ?, 'description', ?, 'desc', ?, 'image', ?, 'class', ?, 'isgift', ?))
-       ON DUPLICATE KEY UPDATE
-         quantity = quantity + 1,
-         metadata_json = VALUES(metadata_json)`,
-      [
-        user.id,
-        item.assetKey,
-        item.name,
-        item.description,
-        item.desc,
-        item.image,
-        item.class,
-        item.isGift !== false,
-      ],
-    );
-
+    // Legacy intent has no client quote. Resolve its stable receipt before reading mutable counts.
+    const legacy = !request.params.itemKey && item.key === 'differential_converter';
+    const purchase = await economyShop.purchase({
+      userId: user.id,
+      currency: request.body.currency === 'combined' ? 'combined' : currency,
+      item,
+      requestKey: request.body.requestKey,
+      legacyConverter: legacy,
+      expectedPurchaseCount: request.body.expectedPurchaseCount,
+      quotedCost: legacy ? item.cost : request.body.quotedCost,
+    });
     response.json({
+      purchase,
       user: toUserProfile(await getUserById(user.id)),
       assets: await getUserAssets(user.id),
+      shopItems: await economyShop.decorate(getShopItems(), user.id),
     });
   } catch (error) {
+    if (error instanceof ShopPurchaseError) {
+      response.status(error.status).json({ message: error.message, code: error.code });
+      return;
+    }
     response.status(500).json({ message: '购买失败', detail: error.message });
   }
 }
@@ -2931,86 +2950,93 @@ app.post('/api/electromagnetic/shop/differential-converter', async (request, res
   await purchaseShopItem(request, response, 'differential_converter');
 });
 
-app.post('/api/electromagnetic/convert', async (request, response) => {
-  let connection;
-
+app.post('/api/electromagnetic/laser/charge', async (request, response) => {
+  response.set('Cache-Control', 'private, no-store');
   try {
     const user = await requireAuth(request, response);
-
-    if (!user) {
-      return;
-    }
-
-    const direction = String(request.body.direction || '')
-      .trim()
-      .toLowerCase();
-    const fromColumn =
-      direction === 'electric_to_magnetic'
-        ? 'electrons'
-        : direction === 'magnetic_to_electric'
-          ? 'manetrons'
-          : '';
-    const toColumn =
-      direction === 'electric_to_magnetic'
-        ? 'manetrons'
-        : direction === 'magnetic_to_electric'
-          ? 'electrons'
-          : '';
-
-    if (!fromColumn || !toColumn) {
-      response.status(400).json({ message: '无效转换方向' });
-      return;
-    }
-
-    connection = await pool.getConnection();
-    await connection.beginTransaction();
-
-    const [assetResult] = await connection.execute(
-      `UPDATE user_assets
-       SET quantity = quantity - 1
-       WHERE user_id = ?
-         AND asset_key = 'differential_converter'
-         AND quantity >= 1`,
-      [user.id],
-    );
-
-    if (!assetResult.affectedRows) {
-      await connection.rollback();
-      response.status(400).json({ message: '需要先拥有微分器' });
-      return;
-    }
-
-    const [result] = await connection.execute(
-      `UPDATE users
-       SET ${fromColumn} = ${fromColumn} - 5,
-           ${toColumn} = ${toColumn} + 5
-       WHERE id = ? AND ${fromColumn} >= 5`,
-      [user.id],
-    );
-
-    if (!result.affectedRows) {
-      await connection.rollback();
-      response.status(400).json({ message: '余额不足，至少需要 5 个' });
-      return;
-    }
-
-    await connection.commit();
-
+    if (!user) return;
+    const purchase = await economyShop.purchase({
+      userId: user.id,
+      item: getShopItem('laser'),
+      action: 'charge',
+      currency: request.body.currency,
+      days: request.body.days,
+      quotedDailyPrice: request.body.quotedDailyPrice,
+      quotedDailyMagnetic: request.body.quotedDailyMagnetic,
+      requestKey: request.body.requestKey,
+    });
     response.json({
+      purchase,
+      user: toUserProfile(await getUserById(user.id)),
+      assets: await getUserAssets(user.id),
+      shopItems: await economyShop.decorate(getShopItems(), user.id),
+    });
+  } catch (error) {
+    if (error instanceof ShopPurchaseError)
+      response.status(error.status).json({ message: error.message, code: error.code });
+    else response.status(500).json({ message: '充值失败，请重试确认原订单' });
+  }
+});
+
+app.get('/api/profile/extras', async (request, response) => {
+  response.set('Cache-Control', 'private, no-store');
+  try {
+    const user = await requireAuth(request, response);
+    if (!user) return;
+    response.json(await profileExtras.ownState(user.id));
+  } catch {
+    response.status(500).json({ message: '获取装扮与牧场失败' });
+  }
+});
+app.post('/api/profile/extras', async (request, response) => {
+  response.set('Cache-Control', 'private, no-store');
+  try {
+    const user = await requireAuth(request, response);
+    if (!user) return;
+    const result = await profileExtras.act({
+      userId: user.id,
+      action: request.body.action,
+      slot: request.body.slot,
+      itemKey: request.body.itemKey,
+      requestKey: request.body.requestKey,
+    });
+    response.json({
+      result,
+      ...(await profileExtras.ownState(user.id)),
+      user: toUserProfile(await getUserById(user.id)),
+    });
+  } catch (error) {
+    response.status(error instanceof ProfileExtrasError ? error.status : 500).json({
+      message: error instanceof ProfileExtrasError ? error.message : '操作未完成，请重试原操作',
+    });
+  }
+});
+
+app.post('/api/electromagnetic/convert', async (request, response) => {
+  response.set('Cache-Control', 'private, no-store');
+  try {
+    const user = await requireAuth(request, response);
+    if (!user) return;
+    const result = await profileExtras.act({
+      userId: user.id,
+      action: 'convert',
+      itemKey: request.body.direction,
+      requestKey: request.body.requestKey,
+    });
+    response.json({
+      result,
       user: toUserProfile(await getUserById(user.id)),
       assets: await getUserAssets(user.id),
     });
   } catch (error) {
-    if (connection) {
-      await connection.rollback().catch(() => {});
-    }
-    response.status(500).json({ message: '转换失败', detail: error.message });
-  } finally {
-    connection?.release();
+    response.status(error instanceof ProfileExtrasError ? error.status : 500).json({
+      message: error instanceof ProfileExtrasError ? error.message : '转换未确认，请重试原操作',
+    });
   }
 });
 
 app.post('/api/electromagnetic/assets/:assetKey/gift', async (request, response) => {
+  response.set('Cache-Control', 'private, no-store');
   let connection;
 
   try {
@@ -3022,14 +3048,38 @@ app.post('/api/electromagnetic/assets/:assetKey/gift', async (request, response)
 
     const requestedAssetKey = String(request.params.assetKey || '').trim();
     const target = String(request.body.target || '').trim();
+    const requestKey = request.body.requestKey;
 
-    if (!requestedAssetKey) {
+    if (!requestedAssetKey || requestedAssetKey.length > 64) {
       response.status(400).json({ message: '无效资产' });
       return;
     }
 
-    if (!target) {
+    if (!target || target.length > 128) {
       response.status(400).json({ message: '请输入接收者 UID 或昵称' });
+      return;
+    }
+
+    if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestKey || '')) {
+      response.status(400).json({ message: '请刷新页面后重新确认赠与' });
+      return;
+    }
+    const fingerprint = JSON.stringify({ action: 'gift', assetKey: requestedAssetKey, target });
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    // Share the account lock and action receipts with feeding/conversion.
+    await connection.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [user.id]);
+    const actions = mysqlProfileMethods(connection);
+    const previous = await actions.findProfileAction(user.id, requestKey);
+    if (previous) {
+      if (previous.fingerprint !== fingerprint) {
+        response.status(409).json({ message: '操作编号已用于另一笔操作，请重新确认' });
+        return;
+      }
+      await connection.commit();
+      connection.release();
+      connection = null;
+      response.json({ ...previous.result, replayed: true, assets: await getUserAssets(user.id) });
       return;
     }
 
@@ -3047,7 +3097,7 @@ app.post('/api/electromagnetic/assets/:assetKey/gift', async (request, response)
 
     const assetKey = item.assetKey || item.key;
 
-    const [targetRows] = await pool.execute(
+    const [targetRows] = await connection.execute(
       `SELECT id, uid, username, full_name, student_id
        FROM users
        WHERE uid = ?
@@ -3076,9 +3126,6 @@ app.post('/api/electromagnetic/assets/:assetKey/gift', async (request, response)
       response.status(400).json({ message: '不能赠与给自己' });
       return;
     }
-
-    connection = await pool.getConnection();
-    await connection.beginTransaction();
 
     const [assetRows] = await connection.execute(
       `SELECT asset_key, quantity, metadata_json
@@ -3120,23 +3167,28 @@ app.post('/api/electromagnetic/assets/:assetKey/gift', async (request, response)
       ],
     );
 
-    await connection.commit();
-
-    response.json({
+    const result = {
       ok: true,
+      replayed: false,
       recipient: {
         uid: targetUser.uid || '',
         username: targetUser.username,
         fullName: targetUser.full_name || '',
       },
-      assets: await getUserAssets(user.id),
-    });
+    };
+    await actions.recordProfileAction(user.id, requestKey, fingerprint, result);
+    await connection.commit();
+    connection.release();
+    connection = null;
+    response.json({ ...result, assets: await getUserAssets(user.id) });
   } catch (error) {
     if (connection) {
       await connection.rollback().catch(() => {});
     }
     response.status(500).json({ message: '赠与失败', detail: error.message });
   } finally {
+    // Also release locks on validation/receipt-conflict early returns.
+    if (connection) await connection.rollback().catch(() => {});
     connection?.release();
   }
 });
@@ -3601,6 +3653,8 @@ app.get('/api/discussion/posts', async (request, response) => {
     }
     const [hashRows] = await pool.execute(
       `SELECT COUNT(DISTINCT p.id) AS post_count,
+              COALESCE(SUM(CASE WHEN p.is_anonymous = 0 THEN laser.expires_at_ms ELSE 0 END), 0) AS laser_version,
+              COALESCE(SUM(CASE WHEN p.is_anonymous = 0 THEN presentation.revision ELSE 0 END), 0) AS presentation_version,
               COUNT(DISTINCT CASE WHEN c.is_deleted = 0 THEN c.id END) AS comment_count,
               COUNT(DISTINCT CONCAT(l.post_id, ':', l.user_id, ':', l.reaction_type)) AS reaction_count,
               COALESCE(MAX(UNIX_TIMESTAMP(GREATEST(
@@ -3612,6 +3666,8 @@ app.get('/api/discussion/posts', async (request, response) => {
               ))), 0) AS newest_change
        FROM discussion_posts p
        INNER JOIN discussion_boards b ON b.id = p.board_id
+       LEFT JOIN user_lasers laser ON laser.user_id = p.user_id
+       LEFT JOIN user_profile_extras presentation ON presentation.user_id = p.user_id
        LEFT JOIN discussion_comments c ON c.post_id = p.id
        LEFT JOIN discussion_post_likes l ON l.post_id = p.id
        ${where}`,
@@ -3623,6 +3679,8 @@ app.get('/api/discussion/posts', async (request, response) => {
       scope,
       includeDeleted,
       currentUser?.id || 0,
+      String(hashRows[0]?.laser_version || 0),
+      String(hashRows[0]?.presentation_version || 0),
       Number(hashRows[0]?.post_count || 0),
       Number(hashRows[0]?.comment_count || 0),
       Number(hashRows[0]?.reaction_count || 0),
@@ -3686,11 +3744,9 @@ app.get('/api/discussion/posts', async (request, response) => {
     response.json({
       hash: postsHash,
       notModified: false,
-      posts: rows
-        .slice(0, limit)
-        .map((row) =>
-          toDiscussionPostSummary({ ...row, reveal_deleted: includeDeleted }, currentUser?.id),
-        ),
+      posts: (await economyShop.decoratePosts(rows.slice(0, limit))).map((row) =>
+        toDiscussionPostSummary({ ...row, reveal_deleted: includeDeleted }, currentUser?.id),
+      ),
       nextCursor: scope === 'mine' && rows.length > limit ? String(rows[limit - 1].id) : null,
     });
   } catch (error) {
@@ -3766,7 +3822,10 @@ app.get('/api/discussion/posts/:id', async (request, response) => {
     }
 
     response.json({
-      post: toDiscussionPostDetail({ ...rows[0], reveal_deleted: includeDeleted }, currentUser?.id),
+      post: toDiscussionPostDetail(
+        { ...(await economyShop.decoratePosts([rows[0]]))[0], reveal_deleted: includeDeleted },
+        currentUser?.id,
+      ),
     });
   } catch (error) {
     response.status(500).json({ message: '获取帖子详情失败', detail: error.message });
@@ -3829,17 +3888,22 @@ app.post('/api/discussion/posts', async (request, response) => {
     const canFeatureCreatedPost = await canModerateBoard(user, board.id);
 
     const postPid = await createUniqueDiscussionPostPid();
-    const [result] = await pool.execute(
-      `INSERT INTO discussion_posts (pid, board_id, user_id, author_student_id, title, content_markdown, is_anonymous)
+    const result = await withDatabaseTransaction(async (connection) => {
+      const [created] = await connection.execute(
+        `INSERT INTO discussion_posts (pid, board_id, user_id, author_student_id, title, content_markdown, is_anonymous)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [postPid, board.id, user.id, user.student_id, title, contentMarkdown, isAnonymous ? 1 : 0],
-    );
-    await pool.execute(
-      `UPDATE users
-       SET manetrons = manetrons + 1
-       WHERE id = ?`,
-      [user.id],
-    );
+        [postPid, board.id, user.id, user.student_id, title, contentMarkdown, isAnonymous ? 1 : 0],
+      );
+      await awardMagnetic(
+        connection,
+        user.id,
+        `post:${created.insertId}`,
+        1,
+        undefined,
+        'community',
+      );
+      return created;
+    });
 
     const [rows] = await pool.execute(
       `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous,
@@ -3869,7 +3933,7 @@ app.post('/api/discussion/posts', async (request, response) => {
 
     response.status(201).json({
       message: '帖子发布成功',
-      post: toDiscussionPostDetail(rows[0], user.id),
+      post: toDiscussionPostDetail((await economyShop.decoratePosts([rows[0]]))[0], user.id),
     });
   } catch (error) {
     response.status(500).json({ message: '发布帖子失败', detail: error.message });
@@ -3957,7 +4021,11 @@ app.patch('/api/discussion/posts/:id/feature', async (request, response) => {
       return;
     }
 
-    const featured = Boolean(request.body.featured);
+    if (typeof request.body.featured !== 'boolean') {
+      response.status(400).json({ message: '精华状态必须是布尔值' });
+      return;
+    }
+    const { featured } = request.body;
     const post = await getDiscussionPostByPublicId(request.params.id);
 
     if (!post) {
@@ -3974,14 +4042,20 @@ app.patch('/api/discussion/posts/:id/feature', async (request, response) => {
       return;
     }
 
-    const [result] = await pool.execute(
-      `UPDATE discussion_posts
+    const result = await withDatabaseTransaction(async (connection) => {
+      await lockPublicPost(connection, post.id);
+      const [updated] = await connection.execute(
+        `UPDATE discussion_posts
        SET is_featured = ?,
            featured_at = ${featured ? 'NOW()' : 'NULL'},
            featured_by = ?
        WHERE id = ? AND is_deleted = 0 AND is_hidden = 0`,
-      [featured ? 1 : 0, featured ? user.id : null, post.id],
-    );
+        [featured ? 1 : 0, featured ? user.id : null, post.id],
+      );
+      if (updated.affectedRows && featured && (user.is_admin || user.role === 'admin'))
+        await awardMagnetic(connection, post.user_id, `featured-post:${post.id}`, 5);
+      return updated;
+    });
 
     if (!result.affectedRows) {
       response.status(404).json({ message: '帖子不存在或暂不可见' });
@@ -4048,7 +4122,15 @@ app.post('/api/discussion/posts/:id/like', async (request, response) => {
       }
       if (Number(post.user_id) !== Number(user.id)) {
         const reward = REACTION_MANETRON_REWARDS[reactionType] || 0;
-        await awardPostAuthorManetrons(post, added ? reward : -reward, connection);
+        if (added)
+          await awardMagnetic(
+            connection,
+            post.user_id,
+            `post-like:${post.id}:${user.id}:${reactionType}`,
+            reward,
+            undefined,
+            'community',
+          );
       }
       await notifications.notifyReaction(
         { actor: user, post, reactionType, active: added },
@@ -4102,7 +4184,7 @@ app.get('/api/discussion/posts/:id/comments', async (request, response) => {
 
     const canModerate = await canModerateBoard(currentUser, post.board_id);
     const [rows] = await pool.execute(
-      `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at, c.is_deleted,
+      `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at, c.is_deleted, c.is_featured,
               COALESCE(c.author_student_id, u.student_id) AS author_student_id,
               u.student_id, u.uid, u.username, u.full_name, u.avatar_path,
               (SELECT COUNT(*) FROM discussion_comment_likes cl WHERE cl.comment_id = c.id) AS like_count,
@@ -4123,7 +4205,14 @@ app.get('/api/discussion/posts/:id/comments', async (request, response) => {
     );
 
     response.json({
-      comments: visibleComments(rows.map(toDiscussionComment)),
+      comments: visibleComments(
+        rows.map((row) =>
+          toDiscussionComment({
+            ...row,
+            can_feature: Boolean(currentUser?.is_admin || currentUser?.role === 'admin'),
+          }),
+        ),
+      ),
     });
   } catch (error) {
     response.status(500).json({ message: '获取评论失败', detail: error.message });
@@ -4193,7 +4282,7 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
     });
 
     const [rows] = await pool.execute(
-      `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at, c.is_deleted,
+      `SELECT c.id, c.post_id, c.parent_comment_id, c.user_id, c.content_markdown, c.created_at, c.updated_at, c.is_deleted, c.is_featured,
               COALESCE(c.author_student_id, u.student_id) AS author_student_id,
               u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        FROM discussion_comments c
@@ -4747,6 +4836,8 @@ app.get('/api/users/:uid/public-profile', async (request, response) => {
         createdAt: user.created_at,
         postCount: Number(statsRows[0]?.post_count || 0),
         likeCount: Number(statsRows[0]?.like_count || 0),
+        collectibles: await economyShop.publicCollectibles(getShopItems(), user.id),
+        ...(await profileExtras.publicProfile(user.id)),
       },
     });
   } catch (error) {
@@ -5506,6 +5597,9 @@ async function start() {
   await ensureAiDialogTables();
   await ensureFortuneTables();
   await ensureEconomyTables();
+  await ensureShopPurchaseTables(pool);
+  await ensureProfileExtrasTables(pool);
+  await ensureEconomyPolicy(pool);
   await ensureRegistrationWhitelistTables(pool);
   await ensureRegistrationGuardTables(pool);
   await ensureNotificationTables(pool);

@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const visibility = require('./discussion-visibility');
 const { anonymousAuthor, visibleComments } = require('./discussion-interactions');
+const { createEconomyShop } = require('./economy-shop');
 
 const source = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
 const author = { id: 7, username: 'author', student_id: 'student7' };
@@ -108,6 +109,11 @@ function harness(records = [post(1)]) {
   const context = {
     app,
     pool: connection,
+    economyShop: createEconomyShop({
+      async readPublicLasers() {
+        return {};
+      },
+    }),
     ...visibility,
     anonymousAuthor,
     visibleComments,
