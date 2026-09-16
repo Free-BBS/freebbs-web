@@ -43,23 +43,15 @@
           ['electric', '电元'],
           ['magnetic', '磁元'],
         ]) {
-          const change = delta(entry[`${key  }_before`], entry[`${key  }_after`]);
+          const change = delta(entry[`${key}_before`], entry[`${key}_after`]);
           if (change === '0') continue;
           const chip = document.createElement('strong');
-          chip.textContent = `${change  } ${  label}`;
+          chip.textContent = `${change} ${label}`;
           chip.dataset.direction = change.startsWith('+') ? 'in' : 'out';
           amounts.append(chip);
         }
         const balances = document.createElement('p');
-        balances.textContent =
-          `电元 ${ 
-          entry.electric_before 
-          } → ${ 
-          entry.electric_after 
-          } · 磁元 ${ 
-          entry.magnetic_before 
-          } → ${ 
-          entry.magnetic_after}`;
+        balances.textContent = `电元 ${entry.electric_before} → ${entry.electric_after} · 磁元 ${entry.magnetic_before} → ${entry.magnetic_after}`;
         const time = document.createElement('time');
         time.textContent = new Date(entry.created_at).toLocaleString();
         const reason = document.createElement('p');
