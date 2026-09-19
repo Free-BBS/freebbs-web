@@ -98,7 +98,7 @@
       processing = true;
       render();
       try {
-        if (!vision) await requireVision(true);
+        await requireVision(true);
         vision = true;
         const prepared = [];
         for (const file of files) prepared.push(await prepareImage(file));

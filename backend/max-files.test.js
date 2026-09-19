@@ -31,7 +31,7 @@ test('XLS and XLSX retain worksheet labels, Chinese text and values', async () =
     assert.match(text, /1000,0.005/);
   }
 });
-test('DOCX and PPTX extract text without exposing XML and order slides numerically', async () => {
+test('DOCX and PPTX extract text in presentation order rather than slide filename order', async () => {
   const word = new JSZip();
   word.file(
     '[Content_Types].xml',
@@ -49,12 +49,11 @@ test('DOCX and PPTX extract text without exposing XML and order slides numerical
     await parseFile('lab.docx', await word.generateAsync({ type: 'nodebuffer' })),
     /电路实验/,
   );
-  const slides = new JSZip();
-  slides.file('ppt/slides/slide10.xml', '<a:t>结论 &amp; 分析</a:t>');
-  slides.file('ppt/slides/slide2.xml', '<a:t>方法</a:t>');
+  const slides = await presentationFixture();
   const text = await parseFile('lab.pptx', await slides.generateAsync({ type: 'nodebuffer' }));
-  assert.ok(text.indexOf('方法') < text.indexOf('结论'));
+  assert.ok(text.indexOf('实际第一页') < text.indexOf('实际第二页'));
   assert.match(text, /结论 & 分析/);
+  assert.doesNotMatch(text, /不应提取/);
 });
 test('legacy PPT extracts Unicode atoms from its compound stream', async () => {
   const cfb = XLSX.CFB.utils.cfb_new();
@@ -110,4 +109,42 @@ test('PDF text extraction reads a real text page', async () => {
     .map((offset) => `${String(offset).padStart(10, '0')} 00000 n `)
     .join('\n')}\ntrailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
   assert.match(await parseFile('experiment.pdf', Buffer.from(pdf)), /Circuit experiment/);
+});
+
+async function presentationFixture() {
+  const zip = new JSZip();
+  zip.file(
+    'ppt/presentation.xml',
+    '<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:rel="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:sldIdLst><p:sldId id="257" rel:id="rId2"/><p:sldId id="256" rel:id="rId1"/></p:sldIdLst></p:presentation>',
+  );
+  zip.file(
+    'ppt/_rels/presentation.xml.rels',
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="/ppt/slides/slide2.xml"/></Relationships>',
+  );
+  zip.file(
+    'ppt/slides/slide1.xml',
+    '<a:t xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">实际第二页：结论 &amp; 分析</a:t>',
+  );
+  zip.file(
+    'ppt/slides/slide2.xml',
+    '<drawing:t xmlns:drawing="http://schemas.openxmlformats.org/drawingml/2006/main">实际第一页</drawing:t>',
+  );
+  zip.file(
+    'ppt/slides/slide3.xml',
+    '<a:t xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">不应提取</a:t>',
+  );
+  return zip;
+}
+test('missing or external PPTX relationships fail explicitly instead of silently guessing page order', async () => {
+  const zip = await presentationFixture();
+  zip.remove('ppt/slides/slide2.xml');
+  await assert.rejects(
+    parseFile('missing.pptx', await zip.generateAsync({ type: 'nodebuffer' })),
+    /缺少/,
+  );
+  zip.remove('ppt/_rels/presentation.xml.rels');
+  await assert.rejects(
+    parseFile('missing.pptx', await zip.generateAsync({ type: 'nodebuffer' })),
+    /缺少/,
+  );
 });

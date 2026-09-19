@@ -71,7 +71,7 @@ body.aichat-page .site-footer {
 @media (max-width: 900px) {
   body.aichat-page .main-content {
     height: calc(100dvh - var(--mobile-nav-space));
-    padding-top: calc(176px + env(safe-area-inset-top, 0px)) !important;
+    padding-top: calc(128px + env(safe-area-inset-top, 0px)) !important;
     padding-bottom: 8px !important;
   }
   .max-composer-tools > summary {
@@ -82,4 +82,95 @@ body.aichat-page .site-footer {
   .max-composer-tools {
     max-height: 30dvh;
   }
+}
+
+/* Attachments stay with the message instead of disappearing inside options. */
+body.aichat-page .main-content .aichat-composer::before {
+  content: none;
+}
+body.aichat-page .main-content .aichat-composer textarea {
+  padding-top: 12px !important;
+}
+.aichat-attachments {
+  grid-column: 1 / -1;
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+.aichat-attachments .max-file-tools {
+  padding: 0;
+}
+.aichat-attachments .max-file-tools > small:empty {
+  display: none;
+}
+.aichat-attachments button[data-file-add],
+.aichat-attachments button[data-image-add] {
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 6px;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  cursor: pointer;
+}
+.aichat-attachments button:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+.aichat-attachments button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.aichat-attachments .max-file-tools ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.aichat-attachments .max-file-tools ul[hidden] {
+  display: none;
+}
+.max-file-chip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 10px;
+  padding: 8px 10px;
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 190px;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  background: var(--ui-surface);
+}
+.max-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.max-file-chip small {
+  min-width: 0;
+  grid-row: 2;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  color: var(--ui-muted);
+}
+.max-file-chip button {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
+  border: 0;
+  padding: 6px;
+  color: var(--ui-text);
+  background: transparent;
+  cursor: pointer;
+}
+.max-file-chip[data-state='error'] {
+  border-color: #c66754;
+}
+
+.aichat-attachments .max-file-tools ul {
+  max-height: 144px;
+  overflow-y: auto;
 }

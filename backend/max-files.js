@@ -1,5 +1,6 @@
 const { Worker, isMainThread, parentPort, workerData } = require('node:worker_threads');
 const path = require('node:path');
+const { DOMParser } = require('@xmldom/xmldom');
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_TEXT = 60000;
@@ -43,20 +44,52 @@ async function extract(name, buffer) {
     ).join('\n\n');
   } else if (ext === '.pptx') {
     const zip = await require('jszip').loadAsync(buffer);
-    const slides = Object.keys(zip.files)
-      .filter((key) => /^ppt\/slides\/slide\d+\.xml$/.test(key))
-      .sort((a, b) => Number(a.match(/\d+/)[0]) - Number(b.match(/\d+/)[0]));
+    const xmlDocument = async (entryName) => {
+      const file = zip.file(entryName);
+      if (!file) throw new Error(`PPTX 缺少 ${entryName}，无法确定幻灯片顺序。`);
+      return new DOMParser({
+        errorHandler: {
+          warning() {},
+          error() {
+            throw new Error('PPTX XML 格式无效。');
+          },
+          fatalError() {
+            throw new Error('PPTX XML 格式无效。');
+          },
+        },
+      }).parseFromString(await file.async('string'), 'application/xml');
+    };
+    const presentation = await xmlDocument('ppt/presentation.xml');
+    const relations = await xmlDocument('ppt/_rels/presentation.xml.rels');
+    const targets = new Map(
+      Array.from(relations.getElementsByTagNameNS('*', 'Relationship'))
+        .filter(
+          (node) =>
+            node.getAttribute('Type').endsWith('/slide') &&
+            node.getAttribute('TargetMode') !== 'External',
+        )
+        .map((node) => [node.getAttribute('Id'), node.getAttribute('Target')]),
+    );
+    const slides = Array.from(presentation.getElementsByTagNameNS('*', 'sldId'));
     const parts = [];
     for (const [index, slide] of slides.entries()) {
-      const xml = await zip.files[slide].async('string');
-      const words = [...xml.matchAll(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g)].map((match) =>
-        match[1]
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .replace(/&quot;/g, '"')
-          .replace(/&apos;/g, "'")
-          .replace(/&amp;/g, '&'),
+      const relationshipId = Array.from(slide.attributes).find(
+        (attribute) =>
+          attribute.localName === 'id' && attribute.namespaceURI?.endsWith('/relationships'),
+      )?.value;
+      const target = targets.get(relationshipId);
+      if (!target) throw new Error('PPTX 幻灯片关系缺失或指向外部文件。');
+      const fileName = path.posix.normalize(
+        target.startsWith('/') ? target.slice(1) : `ppt/${target}`,
       );
+      const xml = await xmlDocument(fileName);
+      const words = Array.from(xml.getElementsByTagNameNS('*', 't'))
+        .filter(
+          (node) =>
+            node.namespaceURI?.endsWith('/drawingml/2006/main') ||
+            node.namespaceURI?.endsWith('/drawingml/main'),
+        )
+        .map((node) => node.textContent);
       parts.push(`幻灯片 ${index + 1}\n${words.join('\n')}`);
     }
     text = parts.join('\n\n');

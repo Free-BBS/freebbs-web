@@ -118,8 +118,58 @@ test('square and noise sources run transient analyses with repeatable distinct s
     );
     const first = engine.simulate(doc);
     assert.deepEqual(first, engine.simulate(doc));
-    const {values} = first.traces.find((t) => t.id === 'V:R');
+    const { values } = first.traces.find((t) => t.id === 'V:R');
     assert.ok(new Set(values).size >= 2);
     assert.ok(values.every((v) => Math.abs(v) <= 5.00001));
   }
+});
+
+test('NOT and BUF solve with an unused floating B pin and preserve connected B networks', () => {
+  for (const gate of ['NOT', 'BUF'])
+    for (const dc of [0, 5])
+      for (const connected of [false, true]) {
+        const doc = circuit(
+          [
+            ['V', 'voltage', { dc }],
+            ['U', 'logic', { gate }],
+            ['B', 'voltage', { dc: 3 }],
+            ['G', 'ground'],
+          ],
+          [
+            ['V:0', 'U:0'],
+            ['V:1', 'G:0'],
+            ['U:3', 'G:0'],
+            ['B:1', 'G:0'],
+            ...(connected ? [['B:0', 'U:1']] : []),
+          ],
+        );
+        const result = engine.simulate(doc);
+        assert.ok(Math.abs(value(result, 'V:U') - (gate === 'BUF' ? dc : 5 - dc)) < 1e-6);
+        assert.ok(Math.abs(value(result, 'V:B') - 3) < 1e-6);
+      }
+});
+test('different noise components have separate repeatable streams after JSON round trips', () => {
+  const doc = circuit(
+    [
+      ['N1', 'noise'],
+      ['N2', 'noise'],
+      ['R', 'resistor'],
+      ['G', 'ground'],
+    ],
+    [
+      ['N1:1', 'G:0'],
+      ['N2:1', 'G:0'],
+      ['N1:0', 'R:0'],
+      ['N2:0', 'R:1'],
+    ],
+    { type: 'transient', stop: 0.01, step: 0.0001 },
+  );
+  const result = engine.simulate(doc);
+  assert.deepEqual(engine.simulate(JSON.parse(JSON.stringify(doc))), result);
+  const first = result.traces.find((trace) => trace.id === 'V:N1').values;
+  const second = result.traces.find((trace) => trace.id === 'V:N2').values;
+  assert.ok(first.some((v, index) => v !== second[index]));
+  assert.ok(
+    result.traces.find((trace) => trace.id === 'V:R').values.some((v) => Math.abs(v) > 0.01),
+  );
 });

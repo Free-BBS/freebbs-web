@@ -844,9 +844,9 @@
   function parameterInput(component, key, value) {
     let options = null;
     if (key === 'gate')
-      options = ['AND', 'OR', 'NOT', 'NAND', 'NOR', 'XOR', 'XNOR', 'BUF'].map((value) => [
-        value,
-        value,
+      options = ['AND', 'OR', 'NOT', 'NAND', 'NOR', 'XOR', 'XNOR', 'BUF'].map((gate) => [
+        gate,
+        gate,
       ]);
     if (key === 'waveform')
       options = [
@@ -894,7 +894,7 @@
       ];
     const field = options
       ? `<select data-parameter="${key}" ${state.editable ? '' : 'disabled'}>${options.map(([option, label]) => `<option value="${escapeHtml(option)}" ${option === value ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}</select>`
-      : `<input data-parameter="${key}" type="${typeof value === 'number' ? 'number' : 'text'}" ${typeof value === 'number' ? 'step="any"' : 'maxlength="256"'} value="${escapeHtml(value)}" ${state.editable ? '' : 'readonly'} />`;
+      : `<input data-parameter="${key}" type="text" ${typeof value === 'number' ? 'maxlength="64" spellcheck="false" title="支持 m、u、n、p、k、M，例如 4.7k、100n、2.2u；M 与 m 区分大小写"' : 'maxlength="256"'} value="${escapeHtml(value)}" ${state.editable ? '' : 'readonly'} />`;
     let label = parameterLabels[key] || key;
     if (component.type === 'twoport' && /^[mi][12][12]$/.test(key)) {
       const symbols =
@@ -914,11 +914,11 @@
       label = `${symbols[index]} ${key[0] === 'i' ? '虚部' : '实部'} / ${units[index]}`;
     }
     if (['voltage', 'current', 'square', 'noise'].includes(component.type)) {
-      const unit = component.type === 'voltage' ? 'V' : 'A';
+      const unit = component.type === 'current' ? 'A' : 'V';
       if (key === 'dc')
         label = `${component.params.waveform === 'dc' ? '直流值' : '直流偏置'} / ${unit}`;
       if (key === 'amplitude')
-        label = `${component.params.waveform === 'pulse' ? '脉冲增量' : '正弦峰值'} / ${unit}`;
+        label = `${component.params.waveform === 'pulse' ? '脉冲增量' : component.params.waveform === 'noise' ? '噪声峰值' : '正弦峰值'} / ${unit}`;
       if (key === 'acAmplitude') label = `AC 小信号峰值 / ${unit}`;
     }
     if (component.type === 'fixed_voltage' && key === 'dc') label = '固定电压 / V';
@@ -947,6 +947,9 @@
     if (component.type === 'oscilloscope2')
       return '<p class="circuit-parameter-hint">CH1+ / CH1− 和 CH2+ / CH2− 分别测量两路差分电压，理想高输入阻抗。运行后在“波形与读数”中选择 X–T 或 X–Y 模式。</p>';
     return (
+      (Object.values(component.params).some((value) => typeof value === 'number')
+        ? '<p class="circuit-parameter-hint">支持字头：m=10⁻³、u=10⁻⁶、n=10⁻⁹、p=10⁻¹²、k=10³、M=10⁶，例如 4.7k、100n。</p>'
+        : '') +
       Object.entries(component.params)
         .filter(([key]) => {
           if (!['voltage', 'current', 'square', 'noise'].includes(component.type)) return true;
@@ -1222,11 +1225,15 @@
     if (componentId !== state.selectedId) return;
     const component = state.document.components.find((item) => item.id === componentId);
     if (!key || !component || !Object.hasOwn(component.params, key)) return;
-    const value =
-      typeof component.params[key] === 'number' ? Number(event.target.value) : event.target.value;
-    if (typeof value === 'number' && (!event.target.value.trim() || !Number.isFinite(value))) {
+    let value;
+    try {
+      value =
+        typeof component.params[key] === 'number'
+          ? engine.parseParameterValue(event.target.value)
+          : event.target.value;
+    } catch {
       event.target.setCustomValidity('请填写有限数值。');
-      setStatus('参数必须填写有限数值，支持 1e-6 等科学计数法。', 'error');
+      setStatus('参数须为有限数值，支持 m、u、n、p、k、M 和 1e-6；M 与 m 区分大小写。', 'error');
       return;
     }
     event.target.setCustomValidity('');
@@ -1244,11 +1251,13 @@
 
   function sourceParameterHint(component) {
     const p = component.params;
-    const unit = component.type === 'voltage' ? 'V' : 'A';
+    const unit = component.type === 'current' ? 'A' : 'V';
     let text = '直流值用于 DC 工作点。';
     if (p.waveform === 'sine') {
       const amplitude = Math.abs(p.amplitude);
       text = `正弦输出 = 直流偏置 + 峰值 × sin(2π × 频率 × (t − 延迟) + 相位)。范围 ${formatNumber(p.dc - amplitude, unit)} 至 ${formatNumber(p.dc + amplitude, unit)}；不需要占空比。`;
+    } else if (p.waveform === 'noise') {
+      text = `噪声输出范围 ${formatNumber(p.dc - Math.abs(p.amplitude), unit)} 至 ${formatNumber(p.dc + Math.abs(p.amplitude), unit)}，同一元件重复仿真可复现，不同元件使用独立序列。`;
     } else if (p.waveform === 'arbitrary') {
       text =
         '文件波形叠加直流偏置，按时间列插值。循环周期为首末时间之差，单次播放在结束后保持末值。';

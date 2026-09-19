@@ -347,3 +347,54 @@ test('twoport matrix changes synchronize port equations, coefficient units and v
   assert.equal(component.params.m12, 123);
   assert.match(h.calls.events.at(-1).snapshot.html, /data-parameter="m12"[^>]*value="123"/);
 });
+
+test('SI prefixes parse into base units without changing string fields', () => {
+  const examples = [
+    ['1m', 1e-3],
+    ['2.2u', 2.2e-6],
+    ['100n', 1e-7],
+    ['47p', 47e-12],
+    ['4.7k', 4700],
+    ['2M', 2e6],
+    ['2m', 0.002],
+    ['-3.3m', -0.0033],
+    ['1e-3k', 1],
+    [' .5 u ', 5e-7],
+    ['1µ', 1e-6],
+    ['1μ', 1e-6],
+  ];
+  for (const [text, expected] of examples) {
+    assert.equal(engine.parseParameterValue(text), expected, text);
+    for (const popover of [false, true]) {
+      const h = harness();
+      h.context.updateParameter(
+        { target: input('resistance', text, h.focusState) },
+        { componentId: 'R1', popover },
+      );
+      assert.equal(h.state.document.components[0].params.resistance, expected);
+    }
+  }
+  for (const text of ['', 'k', '4k7', '1kk', '1K', '1Mfoo', 'Infinity', '0x10', '1e999', '1e15M'])
+    assert.throws(() => engine.parseParameterValue(text));
+  const h = harness();
+  const html = h.context.parameterInput(h.state.document.components[0], 'resistance', 1000);
+  assert.match(html, /type="text"/);
+  assert.match(html, /支持 m、u、n、p、k、M/);
+});
+test('square and noise parameters and hints consistently use voltage units', () => {
+  const h = harness();
+  for (const type of ['square', 'noise', 'voltage', 'current']) {
+    const component = {
+      id: 'S1',
+      type,
+      params: { ...engine.catalog[type].defaults, waveform: type === 'noise' ? 'noise' : 'pulse' },
+    };
+    const unit = type === 'current' ? 'A' : 'V';
+    for (const key of ['dc', 'amplitude', 'acAmplitude'])
+      assert.match(
+        h.context.parameterInput(component, key, component.params[key]),
+        new RegExp(`/ ${unit}`),
+      );
+    assert.match(h.context.sourceParameterHint(component), new RegExp(`5 ${unit}|1 ${unit}`));
+  }
+});

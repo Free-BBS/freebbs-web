@@ -161,6 +161,17 @@
       throw new Error(`${label}必须是有限数值，绝对值不能超过 10¹⁵。`);
     return value;
   };
+  function parseParameterValue(input) {
+    if (typeof input === 'number') return finite(input, '参数');
+    const match =
+      typeof input === 'string' &&
+      /^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)\s*([munpkMµμ]?)$/.exec(input.trim());
+    if (!match) throw new Error('请填写数值，可使用 m、u、n、p、k、M 或科学计数法。');
+    const exponent = { '': 0, m: -3, u: -6, µ: -6, μ: -6, n: -9, p: -12, k: 3, M: 6 }[match[2]];
+    // Merge exponents before conversion to avoid rounding 4.7k to 4700.000000000001.
+    const [mantissa, power = '0'] = match[1].toLowerCase().split('e');
+    return finite(Number(`${mantissa}e${Number(power) + exponent}`), '参数');
+  }
   function parseExpression(expression) {
     if (typeof expression !== 'string' || expression.length > 256)
       throw new Error('伏安公式须为不超过 256 个字符的数学表达式。');
@@ -896,7 +907,11 @@
     );
     const electricalNets = new Set(
       electricalComponents.flatMap((component) =>
-        catalog[component.type].pins.map((_, pin) => nets.pinNets[`${component.id}:${pin}`]),
+        catalog[component.type].pins.flatMap((_, pin) =>
+          component.type === 'logic' && ['NOT', 'BUF'].includes(component.params.gate) && pin === 1
+            ? []
+            : [nets.pinNets[`${component.id}:${pin}`]],
+        ),
       ),
     );
     const unknownNets = nets.nets.filter((net) => net !== '0' && electricalNets.has(net));
@@ -917,6 +932,14 @@
               branch: -1,
             }
           : { ...component, pins, branch: -1 };
+      if (compiled.params.waveform === 'noise')
+        compiled.params = {
+          ...compiled.params,
+          noiseSeed: Array.from(component.id).reduce(
+            (seed, character) => (seed * 31 + character.codePointAt(0)) % 4294967296,
+            2166136261,
+          ),
+        };
       if (['square', 'noise'].includes(compiled.type)) compiled.type = 'voltage';
       if (compiled.type === 'bulb') compiled.type = 'resistor';
       if (compiled.type === 'led') compiled.type = 'diode';
@@ -1010,7 +1033,7 @@
       // Seeded sample-and-hold noise: stable across Newton iterations and repeat runs.
       const sample = Math.floor(time * Math.max(1, params.frequency));
       /* eslint-disable no-bitwise -- Seeded integer noise hash. */
-      let hash = (sample + 1) | 0;
+      let hash = (sample + 1 + (params.noiseSeed || 0)) | 0;
       hash = Math.imul(hash ^ (hash >>> 16), 0x45d9f3b);
       hash = Math.imul(hash ^ (hash >>> 16), 0x45d9f3b);
       return params.dc + params.amplitude * (((hash ^ (hash >>> 16)) >>> 0) / 2147483648 - 1);
@@ -1891,6 +1914,7 @@
     powerRails,
     netSymbols,
     limits,
+    parseParameterValue,
     validateDocument,
     normalizeDisplay,
     parseSourceSamples,

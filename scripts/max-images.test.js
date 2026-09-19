@@ -78,6 +78,7 @@ test('processing blocks sending and clearing prevents a late attachment from ent
   const pending = c.select([file]);
   assert.throws(() => c.snapshot(), /正在处理/);
   c.clear();
+  await Promise.resolve();
   finish({ label: 'late', dataUrl: 'preview' });
   await pending;
   assert.deepEqual(c.snapshot(), []);
@@ -177,4 +178,21 @@ test('dropping files and pasting images share attachment handling without interc
   assert.equal(prevented, before);
   listeners.drop({ ...drag, dataTransfer: { types: ['text/plain'] } });
   assert.equal(prevented, before);
+});
+
+test('already-selected visual models are locked for every new image batch', async () => {
+  const calls = [];
+  global.document = { createElement: element };
+  const controller = createController({
+    root: { querySelector: element },
+    requireVision: async (value) => calls.push(value),
+    prepareImage: async () => ({ label: 'image', dataUrl: 'preview' }),
+  });
+  controller.setVision(true);
+  await controller.select([file]);
+  assert.deepEqual(calls, [true]);
+  controller.clear();
+  await controller.select([file]);
+  assert.deepEqual(calls, [true, false, true]);
+  assert.equal(controller.snapshot().length, 1);
 });
