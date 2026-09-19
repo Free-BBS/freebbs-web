@@ -47,7 +47,7 @@ const {
 } = require('./avatar-upload');
 const { buildAiDialogExport, buildAiDialogExportFileName } = require('./ai-dialog-export');
 const { enrichAgentCircuitContext } = require('./agent-circuits');
-const { enrichAgentSiteContext } = require('./agent-site');
+const { enrichAgentSiteContext, siteReferences } = require('./agent-site');
 const { createCircuitAssistantRouter } = require('./circuit-assistant');
 const { createCircuitRecognitionRouter } = require('./circuit-recognition');
 const { getDiscussionPreview } = require('./discussion-preview');
@@ -1449,6 +1449,18 @@ function toDiscussionPostSummary(row, viewerId = 0) {
     id: row.pid || String(row.id),
     pid: row.pid || String(row.id),
     title: isDeleted && !row.reveal_deleted ? '已删除的帖子' : row.title,
+    excerpt:
+      isDeleted && !row.reveal_deleted
+        ? ''
+        : String(row.content_markdown || '')
+            .replace(/```[\s\S]*?```/g, ' ')
+            .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+            .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+            .replace(/<[^>]*>/g, ' ')
+            .replace(/[#>*_`~$\\]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 240),
     preview:
       isDeleted && !row.reveal_deleted
         ? null
@@ -1643,7 +1655,7 @@ async function postAgentChat(payload, user = null, { signal } = {}) {
   const trustedHeaders = buildTrustedAgentHeaders(payload, user);
   signal?.throwIfAborted();
 
-  return fetch(`${config.agentBaseUrl.replace(/\/$/, '')}/api/v1/chat`, {
+  const upstream = await fetch(`${config.agentBaseUrl.replace(/\/$/, '')}/api/v1/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1652,6 +1664,8 @@ async function postAgentChat(payload, user = null, { signal } = {}) {
     body: JSON.stringify(enrichedPayload),
     signal,
   });
+  upstream.siteSources = siteReferences(enrichedPayload.context?.siteBrowse, config.publicWebUrl);
+  return upstream;
 }
 
 function normalizeKnowledgeRagText(value, maximumLength) {
@@ -1727,6 +1741,9 @@ async function relayAgentChatResponse(agentResponse, response, stream) {
     response.setHeader('Cache-Control', 'no-store, no-transform');
     response.setHeader('X-Accel-Buffering', 'no');
     response.flushHeaders();
+    if (agentResponse.ok && agentResponse.siteSources?.length) {
+      response.write(`data: ${JSON.stringify({ site_sources: agentResponse.siteSources })}\n\n`);
+    }
 
     if (!agentResponse.body) {
       response.end();
@@ -1747,6 +1764,17 @@ async function relayAgentChatResponse(agentResponse, response, stream) {
     'Content-Type',
     agentResponse.headers.get('content-type') || 'application/json; charset=utf-8',
   );
+  if (agentResponse.ok && agentResponse.siteSources?.length) {
+    try {
+      const data = JSON.parse(text);
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        response.json({ ...data, site_sources: agentResponse.siteSources });
+        return;
+      }
+    } catch {
+      /* Preserve non-JSON upstream responses. */
+    }
+  }
   response.send(text);
 }
 
@@ -4214,7 +4242,7 @@ app.post('/api/discussion/posts/:id/like', async (request, response) => {
       return;
     }
 
-    if (!canReadPost(post, null)) {
+    if (!canReadPost(post, user) || Number(post.is_hidden)) {
       response.status(404).json({ message: '帖子不存在' });
       return;
     }
@@ -4376,7 +4404,7 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
       return;
     }
 
-    if (!canReadPost(post, null)) {
+    if (!canReadPost(post, user) || Number(post.is_hidden)) {
       response.status(404).json({ message: '帖子不存在' });
       return;
     }

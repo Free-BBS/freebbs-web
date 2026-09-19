@@ -185,3 +185,21 @@ body.discussion-page
     --surface-focus: Highlight;
   }
 }
+
+/* Reactions are quiet icon-and-count actions, without painted tiles. */
+body.discussion-page
+  .main-content
+  :is(.discussion-post-card, .discussion-post-surface, .discussion-comment)
+  :is(.discussion-reaction-button[aria-pressed], .discussion-comment-count) {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  color: var(--surface-muted) !important;
+}
+body.discussion-page
+  .main-content
+  :is(.discussion-post-card, .discussion-post-surface, .discussion-comment)
+  .discussion-reaction-button[aria-pressed='true'] {
+  color: var(--ui-accent) !important;
+}

@@ -31,6 +31,8 @@ function harness(records = [post(1)], { replyRows, lasers = {} } = {}) {
   const queries = [];
   let viewer = null;
   let onLock = null;
+  let savedComment;
+  let liked = false;
   const app = Object.fromEntries(
     ['get', 'post', 'patch', 'delete'].map((method) => [
       method,
@@ -82,6 +84,32 @@ function harness(records = [post(1)], { replyRows, lasers = {} } = {}) {
         );
         return [{ insertId: id }];
       }
+      if (sql.includes('FROM discussion_comments') && sql.includes('FOR UPDATE'))
+        return [[{ id: 30, user_id: 7 }]];
+      if (sql.includes('INSERT INTO discussion_comments')) {
+        savedComment = {
+          id: 31,
+          post_id: params[0],
+          parent_comment_id: params[1],
+          user_id: params[2],
+          content_markdown: params[4],
+        };
+        return [{ insertId: 31 }];
+      }
+      if (sql.includes('FROM discussion_comments c') && sql.includes('WHERE c.id = ?'))
+        return [[savedComment]];
+      if (sql.includes('SELECT post_id FROM discussion_post_likes'))
+        return [liked ? [{ post_id: 1 }] : []];
+      if (sql.includes('INSERT INTO discussion_post_likes')) {
+        liked = true;
+        return [{ affectedRows: 1 }];
+      }
+      if (sql.includes('DELETE FROM discussion_post_likes')) {
+        liked = false;
+        return [{ affectedRows: 1 }];
+      }
+      if (sql.includes('SELECT reaction_type, COUNT(*)'))
+        return [liked ? [{ reaction_type: 'smile', reaction_count: 1 }] : []];
       if (sql.includes('FOR UPDATE')) {
         onLock?.();
         return [[records.find((row) => row.id === params[0])].filter(Boolean)];
@@ -171,6 +199,10 @@ function harness(records = [post(1)], { replyRows, lasers = {} } = {}) {
       return Boolean(user?.is_admin);
     },
     withDatabaseTransaction: async (callback) => callback(connection),
+    MAX_AGENT_USER: { username: 'max' },
+    shouldAskMax: () => false,
+    REACTION_MANETRON_REWARDS: { smile: 1 },
+    notifications: { notifyReply: async () => {}, notifyReaction: async () => {} },
     DISCUSSION_REACTION_TYPES: new Set(['smile', 'light', 'fireworks']),
     console: { error() {} },
   };
@@ -579,5 +611,40 @@ test('creating posts defaults to login-only and honors explicit public choice', 
     assert.equal(result.statusCode, 201);
     assert.equal(result.payload.post.loginRequired, loginRequired !== false);
     assert.equal(h.records.at(-1).login_required, loginRequired === false ? 0 : 1);
+  }
+});
+
+test('authenticated users can comment, reply and react on login-only posts; guests cannot', async () => {
+  for (const user of [author, peer, admin, null]) {
+    const h = harness([post(1, { login_required: 1 })]);
+    for (const parentCommentId of [0, 30]) {
+      const res = await h.request('post', '/discussion/posts/:id/comments', {
+        user,
+        body: { contentMarkdown: 'A new reply', parentCommentId },
+      });
+      assert.equal(res.statusCode, user ? 201 : 401, JSON.stringify(res.payload));
+      if (user) assert.equal(res.payload.comment.contentMarkdown, 'A new reply');
+    }
+    const reaction = await h.request('post', '/discussion/posts/:id/like', {
+      user,
+      body: { reactionType: 'smile' },
+    });
+    assert.equal(reaction.statusCode, user ? 200 : 401, JSON.stringify(reaction.payload));
+    if (user) assert.equal(reaction.payload.active, true);
+  }
+});
+
+test('hidden and deleted posts still reject authenticated comments and reactions', async () => {
+  for (const extra of [{ is_hidden: 1 }, { is_deleted: 1 }]) {
+    for (const user of [author, peer, admin]) {
+      const h = harness([post(1, { login_required: 1, ...extra })]);
+      for (const action of ['comments', 'like']) {
+        const res = await h.request('post', `/discussion/posts/:id/${action}`, {
+          user,
+          body: { contentMarkdown: 'Reply', reactionType: 'smile' },
+        });
+        assert.equal(res.statusCode, 404);
+      }
+    }
   }
 });

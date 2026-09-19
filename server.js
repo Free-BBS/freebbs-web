@@ -147,8 +147,14 @@ function sendFile(filePath, response, options = {}) {
       searchablePage
         ? data
             .toString()
-            .replace('</head>', '<link rel="stylesheet" href="/site-search.css"></head>')
-            .replace('</body>', '<script src="/site-search.js" defer></script></body>')
+            .replace(
+              '</head>',
+              '<link rel="stylesheet" href="/site-search.css"><link rel="stylesheet" href="/mobile-shell.css"></head>',
+            )
+            .replace(
+              '</body>',
+              '<script src="/site-search.js" defer></script><script src="/mobile-shell.js" defer></script></body>',
+            )
         : data,
     );
   });

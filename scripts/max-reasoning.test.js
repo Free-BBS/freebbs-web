@@ -114,3 +114,33 @@ test('reasoning starts collapsed, remembers the preference, and preserves manual
   vm.runInNewContext(source, { window, document });
   assert.equal(checkbox.checked, true);
 });
+
+test('site references survive streaming and become compact, persistent Markdown links', async () => {
+  const answer = await request(
+    event({
+      site_sources: [
+        { title: '滤波实验', url: '/discussion?post=p_one' },
+        { title: '知识点', url: '/knowledge?course=signals&point=SS-1' },
+      ],
+    }) + event({ done: true, result: { answer: '这个实验说明了滤波过程。', model: 'test' } }),
+  );
+  assert.match(answer.answer, /\[【1】\]\(\/discussion\?post=p_one/);
+  assert.match(answer.answer, /\[【2】\]\(\/knowledge/);
+  assert.equal(answer.model, 'test');
+});
+
+test('site references reject external or unsafe URLs and do not duplicate inline citations', async () => {
+  const original = '参考 [【1】](/discussion?post=one)。';
+  const answer = await request(
+    event({
+      site_sources: [
+        { url: '/discussion?post=one' },
+        { url: '//evil.test' },
+        { url: '/\\evil.test' },
+        { url: 'javascript:alert(1)' },
+        { url: '/x) injected' },
+      ],
+    }) + event({ done: true, result: { answer: original } }),
+  );
+  assert.equal(answer.answer, original);
+});

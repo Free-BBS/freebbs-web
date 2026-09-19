@@ -89,3 +89,48 @@ test('history can resolve a follow-up to a prior post link; report editing stays
   assert.equal(reads.length, 1);
   assert.match(result.messages[1].content, /实验说明/);
 });
+
+test('reference metadata is deduplicated, same-origin and respects requests without links', () => {
+  const { siteReferences } = require('./agent-site');
+  const site = {
+    documents: [{ title: 'One', url: '/discussion?post=one' }],
+    results: [
+      { title: 'One duplicate', url: '/discussion?post=one' },
+      { title: 'Bad', url: 'https://evil.test/' },
+      { title: 'Course', url: '/course?course=signals' },
+    ],
+  };
+  assert.deepEqual(
+    siteReferences(site, publicWebUrl).map((x) => x.url),
+    ['/discussion?post=one', '/course?course=signals'],
+  );
+  assert.deepEqual(siteReferences({ ...site, omitLinks: true }, publicWebUrl), []);
+  assert.deepEqual(siteReferences(null, publicWebUrl), []);
+});
+
+test('relay sends trusted site references before the upstream completion event', async () => {
+  const fs = require('node:fs');
+  const vm = require('node:vm');
+  const code = fs.readFileSync(require.resolve('./server'), 'utf8');
+  const start = code.indexOf('async function relayAgentChatResponse(');
+  const end = code.indexOf('function normalizeSandboxLanguage(', start);
+  const context = {};
+  vm.runInNewContext(code.slice(start, end), context);
+  const upstream = new Response('data: {"done":true,"result":{"answer":"Answer"}}\n\n');
+  upstream.siteSources = [{ title: 'One', url: '/discussion?post=one' }];
+  const chunks = [];
+  const response = {
+    status() {},
+    setHeader() {},
+    flushHeaders() {},
+    write(chunk) {
+      chunks.push(Buffer.from(chunk));
+    },
+    end() {},
+  };
+  await context.relayAgentChatResponse(upstream, response, true);
+  const text = Buffer.concat(chunks).toString();
+  assert.match(text, /"site_sources"/);
+  assert.ok(text.indexOf('site_sources') < text.indexOf('"done"'));
+  assert.match(text, /discussion\?post=one/);
+});

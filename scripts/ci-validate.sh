@@ -54,6 +54,7 @@ node --check public/max-models.js
 node --check public/max-images.js
 node --check public/max-files.js
 node --check public/site-search.js
+node --check public/mobile-shell.js
 node --check public/max-composer.js
 node --test backend/max-files.test.js backend/site-search.test.js backend/agent-site.test.js scripts/max-viewport.test.js
 node --check backend/ai-models.js
