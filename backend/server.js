@@ -34,6 +34,7 @@ const {
   ProfileExtrasError,
   ensureProfileExtrasTables,
   mysqlProfileMethods,
+  readPublicCosmetics,
   beijingDay,
 } = require('./profile-extras');
 
@@ -49,6 +50,7 @@ const { buildAiDialogExport, buildAiDialogExportFileName } = require('./ai-dialo
 const { enrichAgentCircuitContext } = require('./agent-circuits');
 const { enrichAgentSiteContext, siteReferences } = require('./agent-site');
 const { maxAgentRoute } = require('./agent-routing');
+const initializeOnce = require('./initialize-once');
 const { createCircuitAssistantRouter } = require('./circuit-assistant');
 const { createCircuitRecognitionRouter } = require('./circuit-recognition');
 const { getDiscussionPreview } = require('./discussion-preview');
@@ -264,7 +266,10 @@ app.use((request, response, next) => {
   if (!connectorCorsHandled) {
     response.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
   }
-  response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  response.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Upload-Id, X-Upload-Offset, X-Upload-Size',
+  );
   response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
 
   if (request.method === 'OPTIONS') {
@@ -286,6 +291,7 @@ app.use(
       process.env.NODE_ENV === 'production' || new URL(config.publicWebUrl).protocol === 'https:',
   }),
 );
+app.use('/api/ai/files/parse', express.raw({ type: 'application/octet-stream', limit: '8mb' }));
 app.use(express.json({ limit: '28mb' }));
 app.use((error, _request, response, next) => {
   if (error.type === 'entity.too.large') {
@@ -558,7 +564,9 @@ async function ensureUsersUidColumn() {
   }
 }
 
-async function ensureDiscussionTables() {
+const ensureDiscussionTables = initializeOnce(initializeDiscussionTables);
+
+async function initializeDiscussionTables() {
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS discussion_boards (
       id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -2100,6 +2108,11 @@ function normalizeAiMessages(value) {
       normalizedMessage.images = validateVisionImages(message.images);
       if (normalizedMessage.images.length > 4) throw new Error('每条消息最多保存 4 张图片。');
     }
+    if (role === 'user' && message.filePages !== undefined) {
+      normalizedMessage.filePages = validateVisionImages(message.filePages);
+      if (normalizedMessage.filePages.length > 12)
+        throw new Error('每条消息最多保存 12 页文件图片。');
+    }
     const navigation =
       role === 'assistant' ? normalizeAiDialogNavigation(message.navigation) : null;
     if (navigation) {
@@ -2803,6 +2816,7 @@ app.post('/api/ai/dialogs', async (request, response) => {
       messages = normalizeAiMessages(request.body.messages);
       for (const message of messages || []) {
         await validateImageContents(message.images || []);
+        await validateImageContents(message.filePages || []);
       }
     } catch (error) {
       response.status(400).json({ message: `对话图片无效：${error.message}` });
@@ -3738,8 +3752,7 @@ app.get('/api/discussion/posts', async (request, response) => {
     if (sortMode === 'hot') {
       orderBy = `p.is_pinned DESC,
                  (
-                   COUNT(DISTINCT CASE WHEN c.is_deleted = 0 THEN c.id END) * 3
-                   + COUNT(DISTINCT CONCAT(l.post_id, ':', l.user_id, ':', l.reaction_type))
+                   COALESCE(c.comment_count, 0) * 3 + COALESCE(l.reaction_count, 0)
                  ) DESC,
                  p.created_at DESC,
                  p.id DESC`;
@@ -3747,79 +3760,41 @@ app.get('/api/discussion/posts', async (request, response) => {
       orderBy =
         'p.is_pinned DESC, p.pinned_at DESC, p.is_featured DESC, p.featured_at DESC, p.created_at DESC, p.id DESC';
     }
-    const [hashRows] = await pool.execute(
-      `SELECT COUNT(DISTINCT p.id) AS post_count,
-              COALESCE(SUM(CASE WHEN p.is_anonymous = 0 THEN laser.expires_at_ms ELSE 0 END), 0) AS laser_version,
-              COALESCE(SUM(CASE WHEN p.is_anonymous = 0 THEN presentation.revision ELSE 0 END), 0) AS presentation_version,
-              COUNT(DISTINCT CASE WHEN c.is_deleted = 0 THEN c.id END) AS comment_count,
-              COUNT(DISTINCT CONCAT(l.post_id, ':', l.user_id, ':', l.reaction_type)) AS reaction_count,
-              COALESCE(MAX(UNIX_TIMESTAMP(GREATEST(
-                p.created_at,
-                p.updated_at,
-                COALESCE(p.deleted_at, p.updated_at),
-                COALESCE(c.updated_at, p.updated_at),
-                COALESCE(l.created_at, p.updated_at)
-              ))), 0) AS newest_change
-       FROM discussion_posts p
-       INNER JOIN discussion_boards b ON b.id = p.board_id
-       LEFT JOIN user_lasers laser ON laser.user_id = p.user_id
-       LEFT JOIN user_profile_extras presentation ON presentation.user_id = p.user_id
-       LEFT JOIN discussion_comments c ON c.post_id = p.id
-       LEFT JOIN discussion_post_likes l ON l.post_id = p.id
-       ${where}`,
-      params,
-    );
-    const postsHash = [
-      sortMode,
-      boardSlug,
-      scope,
-      includeDeleted,
-      currentUser?.id || 0,
-      String(hashRows[0]?.laser_version || 0),
-      String(hashRows[0]?.presentation_version || 0),
-      Number(hashRows[0]?.post_count || 0),
-      Number(hashRows[0]?.comment_count || 0),
-      Number(hashRows[0]?.reaction_count || 0),
-      Number(hashRows[0]?.newest_change || 0),
-    ].join(':');
-
-    if (scope !== 'mine' && clientHash && clientHash === postsHash) {
-      response.json({
-        hash: postsHash,
-        notModified: true,
-        posts: [],
-      });
-      return;
-    }
-
     const [rows] = await pool.execute(
       `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.login_required,
               p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
               u.student_id, u.uid, u.username, u.full_name, u.avatar_path,
-              COUNT(DISTINCT CASE WHEN l.reaction_type = 'smile' THEN l.user_id END) AS like_count,
-              COUNT(DISTINCT CASE WHEN l.reaction_type = 'light' THEN l.user_id END) AS light_count,
-              COUNT(DISTINCT CASE WHEN l.reaction_type = 'fireworks' THEN l.user_id END) AS fireworks_count,
-              COUNT(DISTINCT CASE WHEN c.is_deleted = 0 THEN c.id END) AS comment_count,
-              MAX(CASE WHEN my_smile.user_id IS NULL THEN 0 ELSE 1 END) AS liked_by_me,
-              MAX(CASE WHEN my_light.user_id IS NULL THEN 0 ELSE 1 END) AS lighted_by_me,
-              MAX(CASE WHEN my_fireworks.user_id IS NULL THEN 0 ELSE 1 END) AS fireworks_by_me,
-              MAX(CASE WHEN ? = 1 OR bm.user_id IS NOT NULL THEN 1 ELSE 0 END) AS can_feature,
-              MAX(CASE WHEN ? = 1 OR bm.user_id IS NOT NULL THEN 1 ELSE 0 END) AS can_pin,
-              MAX(CASE WHEN ? = 1 OR bm.user_id IS NOT NULL OR p.user_id = ? THEN 1 ELSE 0 END) AS can_delete
+              COALESCE(l.like_count, 0) AS like_count,
+              COALESCE(l.light_count, 0) AS light_count,
+              COALESCE(l.fireworks_count, 0) AS fireworks_count,
+              COALESCE(c.comment_count, 0) AS comment_count,
+              CASE WHEN my_smile.user_id IS NULL THEN 0 ELSE 1 END AS liked_by_me,
+              CASE WHEN my_light.user_id IS NULL THEN 0 ELSE 1 END AS lighted_by_me,
+              CASE WHEN my_fireworks.user_id IS NULL THEN 0 ELSE 1 END AS fireworks_by_me,
+              CASE WHEN ? = 1 OR bm.user_id IS NOT NULL THEN 1 ELSE 0 END AS can_feature,
+              CASE WHEN ? = 1 OR bm.user_id IS NOT NULL THEN 1 ELSE 0 END AS can_pin,
+              CASE WHEN ? = 1 OR bm.user_id IS NOT NULL OR p.user_id = ? THEN 1 ELSE 0 END AS can_delete
        FROM discussion_posts p
        INNER JOIN discussion_boards b ON b.id = p.board_id
        INNER JOIN users u ON u.id = p.user_id
-       LEFT JOIN discussion_post_likes l ON l.post_id = p.id
-       LEFT JOIN discussion_comments c ON c.post_id = p.id
+       LEFT JOIN (
+         SELECT post_id, COUNT(*) AS reaction_count,
+                SUM(reaction_type = 'smile') AS like_count,
+                SUM(reaction_type = 'light') AS light_count,
+                SUM(reaction_type = 'fireworks') AS fireworks_count
+         FROM discussion_post_likes GROUP BY post_id
+       ) l ON l.post_id = p.id
+       LEFT JOIN (
+         SELECT post_id, COUNT(*) AS comment_count
+         FROM discussion_comments WHERE is_deleted = 0 GROUP BY post_id
+       ) c ON c.post_id = p.id
        LEFT JOIN discussion_board_moderators bm ON bm.board_id = b.id AND bm.user_id = ?
        LEFT JOIN discussion_post_likes my_smile ON my_smile.post_id = p.id AND my_smile.reaction_type = 'smile' AND my_smile.user_id = ${currentUser ? '?' : '0'}
        LEFT JOIN discussion_post_likes my_light ON my_light.post_id = p.id AND my_light.reaction_type = 'light' AND my_light.user_id = ${currentUser ? '?' : '0'}
        LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? '?' : '0'}
        ${where}
-       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.login_required, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
-                b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        ORDER BY ${scope === 'mine' ? 'p.id DESC' : orderBy}
       LIMIT ${scope === 'mine' ? limit + 1 : limit}`,
       currentUser
@@ -3837,12 +3812,28 @@ app.get('/api/discussion/posts', async (request, response) => {
         : ['', '', '', 0, 0, ...params],
     );
 
+    const posts = (await economyShop.decoratePosts(rows.slice(0, limit))).map((row) =>
+      toDiscussionPostSummary({ ...row, reveal_deleted: includeDeleted }, currentUser?.id),
+    );
+    // Hash exactly the visible page, including edits, cosmetics and this viewer's permissions.
+    // Do not scan a second comments × reactions join merely to detect changes.
+    const postsHash = crypto
+      .createHash('sha256')
+      .update(
+        JSON.stringify(
+          [sortMode, boardSlug, scope, includeDeleted, currentUser?.id || 0, limit, posts],
+          (key, value) => (key === 'serverNowMs' ? undefined : value),
+        ),
+      )
+      .digest('hex');
+    if (scope !== 'mine' && clientHash === postsHash) {
+      response.json({ hash: postsHash, notModified: true, posts: [] });
+      return;
+    }
     response.json({
       hash: postsHash,
       notModified: false,
-      posts: (await economyShop.decoratePosts(rows.slice(0, limit))).map((row) =>
-        toDiscussionPostSummary({ ...row, reveal_deleted: includeDeleted }, currentUser?.id),
-      ),
+      posts,
       nextCursor: scope === 'mine' && rows.length > limit ? String(rows[limit - 1].id) : null,
     });
   } catch (error) {
@@ -4946,8 +4937,9 @@ app.get('/api/auth/me', async (request, response) => {
       return;
     }
 
+    const cosmetics = await readPublicCosmetics(pool, [user.id]);
     response.json({
-      user: toUserProfile(user),
+      user: { ...toUserProfile(user), cosmetics: cosmetics[user.id] || {} },
     });
   } catch (error) {
     response.status(500).json({ message: '获取用户信息失败', detail: error.message });

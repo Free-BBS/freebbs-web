@@ -5,7 +5,7 @@
   const area = document.createElement('div');
   area.className = 'max-file-tools';
   area.innerHTML =
-    '<button type="button" data-file-add title="Word / Excel / PPT / PDF / Markdown；最多 4 个，每个 10 MB"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m7 11 5-5a2 2 0 0 1 3 3l-6 6a3.5 3.5 0 0 1-5-5l6-6"/></svg>上传文件</button><input data-file-input type="file" hidden multiple accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,.md,.txt"><small data-file-status role="status"></small><ul aria-label="已选文件"></ul>';
+    '<button type="button" data-file-add title="Word / Excel / PPT / PDF / Markdown；最多 4 个，每个 100 MB"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m7 11 5-5a2 2 0 0 1 3 3l-6 6a3.5 3.5 0 0 1-5-5l6-6"/></svg>上传文件</button><input data-file-input type="file" hidden multiple accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,.md,.txt"><small data-file-status role="status"></small><ul aria-label="已选文件"></ul>';
   root.prepend(area);
   const button = area.querySelector('[data-file-add]');
   const input = area.querySelector('[data-file-input]');
@@ -32,10 +32,16 @@
       const info = document.createElement('small');
       info.textContent =
         file.state === 'ready'
-          ? `${file.text.length} 字 · 已就绪`
+          ? file.pages?.length
+            ? `${file.pages.length} 页 · 视觉读取`
+            : `${file.text.length} 字 · 已就绪`
           : file.state === 'error'
             ? file.error
-            : '正在解析…';
+            : file.progress === 100
+              ? '正在逐页解析…'
+              : file.progress
+                ? `上传中 ${file.progress}%`
+                : '正在上传…';
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.textContent = '×';
@@ -47,6 +53,19 @@
         status.textContent = '';
         render();
       });
+      if (file.state === 'ready') {
+        label.textContent = `预览文件 · ${file.name}`;
+        label.tabIndex = 0;
+        label.setAttribute('role', 'button');
+        const preview = () => window.FreeBbsFilePreview?.open(file, file.pages || []);
+        label.addEventListener('click', preview);
+        label.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            preview();
+          }
+        });
+      }
       li.append(label, info, remove);
       list.append(li);
     });
@@ -79,28 +98,43 @@
       if (version !== generation) break;
       if (!files.includes(item)) continue;
       try {
-        if (!file.size || file.size > 10 * 1024 * 1024)
-          throw new Error('单文件必须大于 0 且不超过 10 MB。');
-        const data = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result.split(',')[1]);
-          reader.onerror = () => reject(new Error('文件读取失败。'));
-          reader.readAsDataURL(file);
-        });
-        if (version !== generation) break;
-        if (!files.includes(item)) continue;
-        const response = await fetch(`${API_BASE_URL}/ai/files/parse`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ name: file.name, data }),
-          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(25000)]),
-        });
-        const result = await response.json();
+        if (!file.size || file.size > 100 * 1024 * 1024)
+          throw new Error('单文件必须大于 0 且不超过 100 MB。');
+        const uploadId = crypto.randomUUID();
+        let result;
+        let response;
+        for (let offset = 0; offset < file.size; offset += 8 * 1024 * 1024) {
+          if (version !== generation || !files.includes(item)) break;
+          response = await fetch(
+            `${API_BASE_URL}/ai/files/parse?${new URLSearchParams({ name: file.name })}`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/octet-stream',
+                Authorization: `Bearer ${token}`,
+                'X-Upload-Id': uploadId,
+                'X-Upload-Offset': String(offset),
+                'X-Upload-Size': String(file.size),
+              },
+              body: file.slice(offset, offset + 8 * 1024 * 1024),
+              signal: AbortSignal.any([controller.signal, AbortSignal.timeout(80000)]),
+            },
+          );
+          result = await response.json();
+          if (!response.ok) throw new Error(result.message || '上传失败');
+          item.progress = Math.min(100, Math.round(((offset + 8 * 1024 * 1024) / file.size) * 100));
+          render();
+        }
         if (version !== generation) break;
         if (!files.includes(item)) continue;
         if (!response.ok) throw new Error(result.message || '解析失败');
         if (files.reduce((sum, entry) => sum + entry.text.length, 0) + result.text.length > 60000)
           throw new Error('附件合计超过 6 万字，请分次发送。');
+        const pages = Array.isArray(result.pages) ? result.pages : [];
+        if (files.reduce((sum, entry) => sum + (entry.pages?.length || 0), 0) + pages.length > 12)
+          throw new Error('附件页面合计最多 12 页，请分次发送。');
+        if (pages.length) await window.FreeBbsMaxModels?.requireVision();
+        item.pages = pages;
         item.text = result.text;
         item.state = 'ready';
       } catch (error) {
@@ -137,6 +171,9 @@
       return files
         .map((file) => `\n\n--- 附件：${file.name} ---\n${file.text}\n--- 附件结束 ---`)
         .join('');
+    },
+    pages() {
+      return files.flatMap((file) => file.pages || []);
     },
     clear,
     setBusy(value) {

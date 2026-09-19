@@ -2837,6 +2837,7 @@ function renderUser() {
       image.src = DEFAULT_AVATAR;
     });
     avatarButtons.forEach((button) => {
+      delete button.dataset.avatarFrame;
       button.setAttribute('aria-label', '登录或注册');
     });
     document.querySelectorAll('.aichat-message-user .aichat-avatar-image').forEach((image) => {
@@ -2867,6 +2868,11 @@ function renderUser() {
     image.src = getAvatarUrl(userState.avatarPath);
   });
   avatarButtons.forEach((button) => {
+    button.dataset.avatarFrame = ['frame_orbit', 'frame_aurora'].includes(
+      userState.cosmetics?.frame,
+    )
+      ? userState.cosmetics.frame
+      : '';
     button.setAttribute('aria-label', '打开我的个人主页');
   });
   document.querySelectorAll('.aichat-message-user .aichat-avatar-image').forEach((image) => {
@@ -2921,6 +2927,7 @@ function openModal(mode = 'login') {
 }
 
 function saveSession(token, user) {
+  if (userState.uid !== (user.uid || '')) userState.cosmetics = {};
   userState.isLoggedIn = true;
   userState.token = token;
   userState.uid = user.uid || '';
@@ -2930,6 +2937,7 @@ function saveSession(token, user) {
   userState.role = user.role || 'student';
   userState.isAdmin = Boolean(user.isAdmin || user.role === 'admin');
   userState.avatarPath = user.avatarPath || '';
+  userState.cosmetics = user.cosmetics || userState.cosmetics || {};
   userState.bio = user.bio || '';
   userState.websiteUrl = user.websiteUrl || '';
   userState.electrons = user.electrons ?? 0;
@@ -2955,6 +2963,7 @@ function saveSession(token, user) {
 }
 
 function clearSession() {
+  userState.cosmetics = {};
   userState.isLoggedIn = false;
   userState.token = '';
   userState.uid = '';
@@ -3753,6 +3762,7 @@ function renderDiscussionPosts() {
           ${post.isDeleted ? '<span class="discussion-deleted-badge">已删除</span>' : ''}
           ${post.isPinned ? `<span class="discussion-pin-badge">置顶</span>` : ''}
           ${post.isFeatured ? `<span class="discussion-feature-badge">精华</span>` : ''}
+          <span class="discussion-feed-avatar">${renderAuthorProfileLink(post.author, 'discussion-author-link discussion-author-link-avatar', true)}</span>
           ${renderAuthorProfileLink(post.author, 'discussion-author-link')}
           <span>${escapeHtml(formatDateOnly(post.createdAt))}</span>
           <span class="discussion-post-reply-state">${escapeHtml(replyLabel)}</span>
@@ -3789,6 +3799,10 @@ function renderDiscussionPosts() {
     })
     .join('');
   window.FreeBbsDiscussionPreviews?.enhance(discussionPostList, { apiBase: API_BASE_URL });
+  window.FreeBbsMotion?.feed(
+    discussionPostList,
+    `${discussionState.scope}:${discussionState.activeBoard}:${discussionState.viewMode}`,
+  );
 }
 
 function handleDiscussionFilterClick(event) {
@@ -4593,6 +4607,11 @@ function renderAiChatThread() {
     const article = appendAiChatMessage(message.role, message.content);
     if (message.role === 'user') {
       window.FreeBbsMaxImages?.show(article?.querySelector('.aichat-bubble'), message.images || []);
+      window.FreeBbsFilePreview?.mount(
+        article?.querySelector('.aichat-bubble'),
+        window.FreeBbsFilePreview.split(message.content).files,
+        message.filePages || [],
+      );
     }
     if (message.role === 'assistant' && message.navigation) {
       renderMaxNavigationRoutes(article, message.navigation);
@@ -4614,8 +4633,12 @@ function updateAiChatMessage(article, content) {
 
   article.dataset.markdown = content || '';
   if (content) {
-    bubble.innerHTML = renderMarkdownContent(content);
+    const attachment = article.classList.contains('aichat-message-user')
+      ? window.FreeBbsFilePreview?.split(content)
+      : null;
+    bubble.innerHTML = renderMarkdownContent(attachment ? attachment.text : content);
     enhanceMarkdownContent(bubble);
+    if (attachment) window.FreeBbsFilePreview.mount(bubble, attachment.files);
   } else {
     bubble.innerHTML = `<span class="aichat-thinking-inline">Max 正在思考......</span>`;
   }
@@ -4624,7 +4647,9 @@ function updateAiChatMessage(article, content) {
 }
 
 function buildAiChatPayload(userMessage) {
-  const recentMessages = aiChatState.messages.slice(-13).map(({ images, ...message }) => message);
+  const recentMessages = aiChatState.messages
+    .slice(-13)
+    .map(({ images, filePages, ...message }) => message);
 
   return {
     agent: 'navigation',
@@ -5334,6 +5359,7 @@ async function handleAiChatSubmit(event) {
     setAiChatStatus(error.message);
     return;
   }
+  const filePages = window.FreeBbsMaxFiles?.pages() || [];
   const composerMessage = aiChatInput.value.trim();
   const userMessage =
     (composerMessage ||
@@ -5358,17 +5384,31 @@ async function handleAiChatSubmit(event) {
     previousAttempt &&
     aiChatState.messages.at(-1) === previousAttempt.message &&
     previousAttempt.message.content === userMessage &&
-    JSON.stringify(previousAttempt.message.images || []) === JSON.stringify(images);
+    JSON.stringify(previousAttempt.message.images || []) === JSON.stringify(images) &&
+    JSON.stringify(previousAttempt.message.filePages || []) === JSON.stringify(filePages);
   if (retrying) {
     // Re-render the stored user turn and discard the previous error placeholder.
     renderAiChatThread();
   } else {
-    const requestPayload = { ...buildAiChatPayload(userMessage), vision_images: images };
-    const message = { role: 'user', content: userMessage, ...(images.length ? { images } : {}) };
+    const requestPayload = {
+      ...buildAiChatPayload(userMessage),
+      vision_images: [...images, ...filePages],
+    };
+    const message = {
+      role: 'user',
+      content: userMessage,
+      ...(images.length ? { images } : {}),
+      ...(filePages.length ? { filePages } : {}),
+    };
     aiChatState.messages.push(message);
     aiChatState.pendingSend = { message, requestPayload };
     const userArticle = appendAiChatMessage('user', userMessage);
     window.FreeBbsMaxImages?.show(userArticle?.querySelector('.aichat-bubble'), images);
+    window.FreeBbsFilePreview?.mount(
+      userArticle?.querySelector('.aichat-bubble'),
+      window.FreeBbsFilePreview.split(userMessage).files,
+      filePages,
+    );
   }
   const assistantArticle = appendAiChatMessage('assistant', '');
   startAiChatThinkingStatus();
@@ -6459,17 +6499,12 @@ async function initializeDiscussionPage() {
   await sessionReady;
   const version = discussionState.sessionVersion;
   try {
-    await sessionReady;
-    await loadDiscussionBoards();
-    if (version !== discussionState.sessionVersion) return;
     const query = getDiscussionQueryState();
     discussionState.scope = query.scope;
-    discussionState.activeBoard =
-      query.board === 'all' || discussionState.boards.some((board) => board.slug === query.board)
-        ? query.board
-        : 'all';
+    discussionState.activeBoard = query.board || 'all';
     discussionState.activePostId = '';
-    await loadDiscussionPosts({ autoOpen: false });
+    // Both endpoints validate access independently; the feed need not wait for board metadata.
+    await Promise.all([loadDiscussionBoards(), loadDiscussionPosts({ autoOpen: false })]);
     if (version !== discussionState.sessionVersion) return;
     if (query.postId) await loadDiscussionDetail(query.postId);
   } catch {

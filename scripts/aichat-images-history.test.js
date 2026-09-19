@@ -76,3 +76,18 @@ test('stored images reject unsafe URLs, malformed data and excessive attachments
   );
   await assert.rejects(validateImageContents([invalid]));
 });
+
+test('document page images survive history but are excluded from plain text model messages', () => {
+  const filePages = [{ label: '课件.pdf · 第 1/1 页', dataUrl: 'data:image/jpeg;base64,YQ==' }];
+  const saved = normalize([{ role: 'user', content: '总结附件', filePages }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(saved))[0].filePages, filePages);
+  assert.throws(
+    () => normalize([{ role: 'user', content: 'x', filePages: Array(13).fill(filePages[0]) }]),
+    /12 页/,
+  );
+  const payload = vm.runInNewContext(
+    `${section(frontend, 'function buildAiChatPayload(', '\nconst MAX_NAVIGATION_PATHS')}\nbuildAiChatPayload('继续');`,
+    { aiChatState: { messages: saved, currentDid: 'saved' } },
+  );
+  assert.equal(payload.messages[0].filePages, undefined);
+});

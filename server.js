@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { sendStatic } = require('./static-response');
 const { clientIpForBackend } = require('./proxy-client-ip');
 
 const host = process.env.HOST || '127.0.0.1';
@@ -139,23 +140,22 @@ function sendFile(filePath, response, options = {}) {
       headers['Cache-Control'] = 'public, max-age=31536000, immutable';
     }
 
-    response.writeHead(200, {
-      ...headers,
-    });
     const searchablePage = ext === '.html' && !filePath.endsWith('circuit-embed.html');
-    response.end(
+    sendStatic(
+      response,
       searchablePage
         ? data
             .toString()
             .replace(
               '</head>',
-              '<link rel="stylesheet" href="/site-search.css"><link rel="stylesheet" href="/mobile-shell.css"></head>',
+              '<link rel="stylesheet" href="/site-search.css"><link rel="stylesheet" href="/mobile-shell.css"><link rel="stylesheet" href="/page-transitions.css"></head>',
             )
             .replace(
               '</body>',
-              '<script src="/site-search.js" defer></script><script src="/mobile-shell.js" defer></script></body>',
+              '<script src="/site-search.js" defer></script><script src="/mobile-shell.js" defer></script><script src="/page-transitions.js" defer></script></body>',
             )
         : data,
+      headers,
     );
   });
 }

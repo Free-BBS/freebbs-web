@@ -161,6 +161,7 @@ function harness(records = [post(1)], { replyRows, lasers = {} } = {}) {
     },
   };
   const context = {
+    crypto: require('node:crypto'),
     app,
     pool: connection,
     economyShop: createEconomyShop({
@@ -647,4 +648,30 @@ test('hidden and deleted posts still reject authenticated comments and reactions
       }
     }
   }
+});
+
+test('feed hashes reflect displayed edits and page size without a second aggregate scan', async () => {
+  const h = harness([post(1), post(2)]);
+  const first = await h.request('get', '/discussion/posts', { user: peer, query: { limit: 1 } });
+  assert.equal(first.statusCode, 200);
+  assert.equal(h.queries.filter(({ sql }) => sql.includes('FROM discussion_posts p')).length, 1);
+  assert.ok(!h.queries.some(({ sql }) => sql.includes('COUNT(DISTINCT')));
+  const same = await h.request('get', '/discussion/posts', {
+    user: peer,
+    query: { limit: 1, hash: first.payload.hash },
+  });
+  assert.equal(same.payload.notModified, true);
+  h.records[0].content_markdown = 'Updated without changing a timestamp';
+  const edited = await h.request('get', '/discussion/posts', {
+    user: peer,
+    query: { limit: 1, hash: first.payload.hash },
+  });
+  assert.equal(edited.payload.notModified, false);
+  assert.equal(edited.payload.posts[0].excerpt, 'Updated without changing a timestamp');
+  const larger = await h.request('get', '/discussion/posts', {
+    user: peer,
+    query: { limit: 2, hash: edited.payload.hash },
+  });
+  assert.equal(larger.payload.posts.length, 2);
+  assert.equal(larger.payload.notModified, false);
 });
