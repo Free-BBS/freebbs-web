@@ -5195,6 +5195,7 @@ async function loadAiDialog(did, { updateUrl = true } = {}) {
       method: 'GET',
     });
     window.FreeBbsMaxImages?.clear();
+    window.FreeBbsMaxFiles?.clear();
     aiChatState.currentDid = payload.dialog.did;
     aiChatState.messages = payload.dialog.messages || [];
     aiChatState.pendingSend = null;
@@ -5216,6 +5217,7 @@ function startNewAiDialog() {
 
   clearAiChatStatusTimer();
   window.FreeBbsMaxImages?.clear();
+  window.FreeBbsMaxFiles?.clear();
   aiChatState.currentDid = '';
   aiChatState.messages = [];
   aiChatState.pendingSend = null;
@@ -5315,7 +5317,18 @@ async function handleAiChatSubmit(event) {
     setAiChatStatus(error.message);
     return;
   }
-  const userMessage = aiChatInput.value.trim() || (images.length ? '请帮我分析这些图片。' : '');
+  let fileContext;
+  try {
+    fileContext = window.FreeBbsMaxFiles?.snapshot() || '';
+  } catch (error) {
+    setAiChatStatus(error.message);
+    return;
+  }
+  const composerMessage = aiChatInput.value.trim();
+  const userMessage =
+    (composerMessage ||
+      (images.length ? '请帮我分析这些图片。' : fileContext ? '请分析附件内容。' : '')) +
+    fileContext;
 
   if (!userMessage) {
     return;
@@ -5323,6 +5336,7 @@ async function handleAiChatSubmit(event) {
 
   aiChatState.isSending = true;
   window.FreeBbsMaxImages?.setBusy(true);
+  window.FreeBbsMaxFiles?.setBusy(true);
   aiChatInput.value = '';
   resizeAiChatInput();
   aiChatInput.disabled = true;
@@ -5390,18 +5404,20 @@ async function handleAiChatSubmit(event) {
     });
     aiChatState.pendingSend = null;
     window.FreeBbsMaxImages?.clear();
+    window.FreeBbsMaxFiles?.clear();
     stopAiChatThinkingStatus();
     await saveAiDialog();
   } catch (error) {
     window.clearTimeout(bubbleTimer);
     window.FreeBbsReasoning?.finish(assistantArticle, { stopped: true });
     updateAiChatMessage(assistantArticle, `请求失败：${error.message}`);
-    aiChatInput.value = userMessage;
+    aiChatInput.value = composerMessage;
     resizeAiChatInput();
     stopAiChatThinkingStatus(error.message);
   } finally {
     aiChatState.isSending = false;
     window.FreeBbsMaxImages?.setBusy(false);
+    window.FreeBbsMaxFiles?.setBusy(false);
     aiChatInput.disabled = false;
     if (aiChatSend) {
       aiChatSend.disabled = false;

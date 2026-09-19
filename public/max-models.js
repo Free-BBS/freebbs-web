@@ -8,6 +8,7 @@
   const user = () => window.freeBbsApp?.userState;
   const key = () => `free_bbs_max_model_v1:${user()?.uid || 'local'}`;
   let selected = {};
+  let visionRequired = false;
   function restore() {
     try {
       selected = JSON.parse(localStorage.getItem(key()) || '{}') || {};
@@ -41,8 +42,11 @@
       model.replaceChildren();
       effort.replaceChildren();
       if (!catalog) model.add(new Option(user()?.token ? '加载模型…' : '登录后选择模型', ''));
-      for (const item of catalog?.models || [])
-        model.add(new Option(`${item.label}${item.vision ? ' · 视觉' : ''}`, item.id));
+      for (const item of catalog?.models || []) {
+        const option = new Option(`${item.label}${item.vision ? ' · 视觉' : ''}`, item.id);
+        option.disabled = visionRequired && !item.vision;
+        model.add(option);
+      }
       model.value = chosen.model || '';
       const profile = catalog?.models.find((item) => item.id === chosen.model);
       for (const value of profile?.efforts || [])
@@ -94,6 +98,16 @@
         if (owner === token) pending = undefined;
       });
     return pending;
+  }
+  async function requireVision(required = true) {
+    await ready();
+    visionRequired = required;
+    if (required && !current().vision) {
+      const profile = catalog?.models.find((item) => item.vision);
+      if (!profile) throw new Error('当前没有可用视觉模型，请登录或联系管理员。');
+      selected = { model: profile.id };
+    }
+    render();
   }
   async function selection() {
     await ready();
@@ -210,6 +224,7 @@
     return options;
   }
   async function chatOptions(payload) {
+    if (payload.vision_images?.length) await requireVision();
     const chosen = await selection();
     const options = await circuitOptions(chosen);
     const attachments = payload.vision_images || [];
@@ -304,7 +319,14 @@
   function initialize() {
     document.querySelectorAll('[data-max-model-picker]').forEach(mount);
   }
-  window.FreeBbsMaxModels = { mount, selection, circuitOptions, chatOptions, raster };
+  window.FreeBbsMaxModels = {
+    requireVision,
+    mount,
+    selection,
+    circuitOptions,
+    chatOptions,
+    raster,
+  };
   window.addEventListener('freebbs:session-change', () => {
     owner = null;
     ready().catch(() => {});

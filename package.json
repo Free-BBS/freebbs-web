@@ -14,7 +14,7 @@
     "start:backend": "node backend/server.js",
     "testbench:fortune": "node test/testbench.js",
     "test:admin-users": "node --test backend/ai-dialog-export.test.js scripts/admin-users-page.test.js",
-    "test:aichat-navigation": "node --test scripts/aichat-navigation.test.js scripts/max-reasoning.test.js scripts/max-images.test.js scripts/aichat-images-history.test.js scripts/aichat-retry.test.js scripts/api-origin.test.js backend/ai-models.test.js",
+    "test:aichat-navigation": "node --test scripts/aichat-navigation.test.js scripts/max-reasoning.test.js scripts/max-images.test.js scripts/max-files.test.js scripts/aichat-images-history.test.js scripts/aichat-retry.test.js scripts/api-origin.test.js backend/ai-models.test.js",
     "test:agent-surfaces": "node --test scripts/agent-surface-integration.test.js backend/agent-circuits.test.js",
     "test:discussion-markdown": "node --test scripts/discussion-markdown.test.js scripts/discussion-previews.test.js backend/discussion-preview.test.js backend/discussion-visibility.test.js scripts/discussion-visibility.test.js",
     "test:public-pages": "node --test scripts/development-navigation.test.js scripts/world-page.test.js scripts/home-page.test.js",
@@ -45,17 +45,22 @@
   },
   "dependencies": {
     "@highlightjs/cdn-assets": "^11.11.1",
+    "@xmldom/xmldom": "^0.8.15",
     "exceljs": "^4.4.0",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "jszip": "^3.10.1",
     "katex": "^0.16.11",
+    "mammoth": "^1.12.3",
     "marked": "^16.4.1",
     "mysql2": "^3.14.1",
     "nodemailer": "^6.10.0",
+    "pdf-parse": "^2.4.5",
     "sharp": "^0.34.5",
     "sm-crypto": "^0.3.14",
-    "three": "^0.184.0"
+    "three": "^0.184.0",
+    "word-extractor": "^1.0.4",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "keywords": [
     "free-bbs",

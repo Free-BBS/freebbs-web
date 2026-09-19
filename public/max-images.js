@@ -29,7 +29,11 @@
       bitmap.close();
     }
   }
-  function createController({ root, prepareImage = prepare }) {
+  function createController({
+    root,
+    prepareImage = prepare,
+    requireVision = (value) => globalThis.window?.FreeBbsMaxModels?.requireVision(value),
+  }) {
     const add = root.querySelector('[data-image-add]');
     const input = root.querySelector('[data-image-input]');
     const status = root.querySelector('[data-image-status]');
@@ -42,11 +46,12 @@
     let error = '';
     function removeImage(index) {
       images.splice(index, 1);
+      if (!images.length) Promise.resolve(requireVision(false)).catch(() => {});
       error = '';
       render();
     }
     function render() {
-      add.disabled = !vision || busy || processing || images.length >= MAX_IMAGES;
+      add.disabled = busy || processing || images.length >= MAX_IMAGES;
       input.disabled = add.disabled;
       status.textContent =
         error ||
@@ -55,7 +60,7 @@
           : !vision
             ? images.length
               ? '请切换到视觉模型，或移除图片后发送。'
-              : '选择视觉模型后可添加图片'
+              : '粘贴、拖入或选择图片，将自动启用视觉模型'
             : '可拖入或粘贴图片，最多 4 张，每张 10 MB；发送后保存到对话记录。');
       previews.replaceChildren();
       for (const [index, item] of images.entries()) {
@@ -78,7 +83,7 @@
     }
     async function select(files) {
       if (!files.length) return;
-      if (!vision || busy || processing) {
+      if (busy || processing) {
         error = !vision ? '请先选择视觉模型，再添加图片。' : '正在处理或发送消息，请稍后添加图片。';
         render();
         return;
@@ -93,6 +98,8 @@
       processing = true;
       render();
       try {
+        await requireVision(true);
+        vision = true;
         const prepared = [];
         for (const file of files) prepared.push(await prepareImage(file));
         if (version === generation) images.push(...prepared);
@@ -100,6 +107,7 @@
         if (version === generation) error = failure.message || '图片读取失败，请重试。';
       } finally {
         processing = false;
+        if (!images.length) Promise.resolve(requireVision(false)).catch(() => {});
         input.value = '';
         render();
       }
@@ -121,6 +129,7 @@
       clear() {
         generation += 1;
         images = [];
+        Promise.resolve(requireVision(false)).catch(() => {});
         input.value = '';
         error = '';
         render();

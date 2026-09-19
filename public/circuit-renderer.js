@@ -63,6 +63,12 @@
     return point;
   }
   const labels = {
+    square: '方波源',
+    noise: '噪声源',
+    bulb: '灯泡',
+    led: 'LED',
+    switch: '压控开关',
+    logic: '逻辑芯片',
     ground: '接地',
     vcc: 'VCC',
     vdd: 'VDD',
@@ -149,7 +155,7 @@
         [-40, 18, '−'],
         [40, 0, 'OUT'],
       ];
-    if (['vcvs', 'vccs'].includes(component.type))
+    if (['vcvs', 'vccs', 'switch', 'logic'].includes(component.type))
       offsets = [
         [-40, 0, '+'],
         [40, 0, '−'],
@@ -165,6 +171,13 @@
         [60, 22, `${channels[1]}−`],
       ];
     }
+    if (component.type === 'logic')
+      offsets = [
+        [-40, -20, 'A'],
+        [-40, 20, 'B'],
+        [40, 0, 'Y'],
+        [0, 44, 'GND'],
+      ];
     return offsets.map(([x, y, label], pin) => {
       const position = transformPoint(component, x, y);
       return {
@@ -292,11 +305,14 @@
       return [
         '任意波形',
         p.repeat === 'repeat' ? '循环播放' : '单次播放',
-        `偏置 ${formatValue(Number(p.dc), component.type === 'voltage' ? 'V' : 'A')}`,
+        `偏置 ${formatValue(Number(p.dc), component.type !== 'current' ? 'V' : 'A')}`,
       ];
-    if (!['voltage', 'current'].includes(component.type) || !['sine', 'pulse'].includes(p.waveform))
+    if (
+      !['voltage', 'current', 'square', 'noise'].includes(component.type) ||
+      !['sine', 'pulse'].includes(p.waveform)
+    )
       return null;
-    const unit = component.type === 'voltage' ? 'V' : 'A';
+    const unit = component.type !== 'current' ? 'V' : 'A';
     return [
       `${p.waveform === 'sine' ? '正弦' : '脉冲'} ${formatValue(Number(p.amplitude), unit)}${p.waveform === 'sine' ? '峰值' : '增量'}`,
       formatValue(Number(p.frequency), 'Hz'),
@@ -308,7 +324,11 @@
     const p = component.params || {};
     const sourceLines = sourceValueLines(component);
     if (sourceLines) return sourceLines.join(' · ');
-    if (component.type === 'resistor') return formatValue(Number(p.resistance), 'Ω');
+    if (component.type === 'logic') return component.params.gate;
+    if (component.type === 'switch') return `≥ ${formatValue(Number(p.threshold), 'V')}`;
+    if (component.type === 'led') return formatValue(Number(p.ratedCurrent), 'A');
+    if (['resistor', 'bulb'].includes(component.type))
+      return formatValue(Number(p.resistance), 'Ω');
     if (component.type === 'capacitor') return formatValue(Number(p.capacitance), 'F');
     if (component.type === 'inductor') return formatValue(Number(p.inductance), 'H');
     if (['voltage', 'fixed_voltage'].includes(component.type))
@@ -334,7 +354,8 @@
     if (transistor) bounds = [-44, -44, 20, 44];
     else if (component.type === 'ground') bounds = [-19, -32, 19, 16];
     else if (component.type === 'opamp') bounds = [-44, -37, 44, 54];
-    else if (['vcvs', 'vccs'].includes(component.type)) bounds = [-44, -26, 44, 64];
+    else if (['vcvs', 'vccs', 'switch', 'logic'].includes(component.type))
+      bounds = [-44, -26, 44, 64];
     else if (['oscilloscope2', 'twoport'].includes(component.type)) bounds = [-80, -40, 64, 44];
     const [left, top, right, bottom] = bounds;
     const corners = [
@@ -378,12 +399,12 @@
         [14, -13],
         [14, 13],
       ];
-    else if (component.type === 'opamp')
+    else if (['opamp', 'logic'].includes(component.type))
       points = [
         [13, 48],
         [-13, 48],
       ];
-    else if (['vcvs', 'vccs'].includes(component.type))
+    else if (['vcvs', 'vccs', 'switch', 'logic'].includes(component.type))
       points = [
         [-13, 58],
         [13, 58],
@@ -437,7 +458,27 @@
     const sourceWaveform = component.params?.waveform;
     const varyingSource = ['sine', 'pulse', 'arbitrary'].includes(sourceWaveform);
     const { type } = component;
-    if (type === 'junction') {
+    if (['bulb', 'led'].includes(type)) {
+      line('M -40 0 H -20 M 20 0 H 40');
+      group.append(svgElement('circle', { cx: 0, cy: 0, r: 20, fill: 'none' }));
+      if (type === 'bulb') line('M -14 -14 L 14 14 M -14 14 L 14 -14');
+      else {
+        line('M -10 -12 L 10 0 L -10 12 Z M 10 -12 V 12 M 14 -24 L 24 -34 M 20 -34 H 24 V -30');
+      }
+    } else if (type === 'logic') {
+      line('M -26 -28 H 26 V 28 H -26 Z M -40 -20 H -26 M -40 20 H -26 M 26 0 H 40 M 0 28 V 44');
+      text(component.params.gate, 0, 0, 10);
+    } else if (type === 'switch') {
+      line('M -40 0 H -15 L 14 -16 M 16 0 H 40 M -18 44 V 28 H 18 V 44');
+    } else if (['noise', 'square'].includes(type)) {
+      line('M -40 0 H -24 M 24 0 H 40');
+      group.append(svgElement('circle', { cx: 0, cy: 0, r: 24, fill: 'none' }));
+      line(
+        type === 'square'
+          ? 'M -16 8 V -8 H 0 V 8 H 16 V -8'
+          : 'M -18 2 L -12 -8 L -6 12 L 0 -14 L 6 4 L 12 -4 L 18 6',
+      );
+    } else if (type === 'junction') {
       group.append(svgElement('circle', { cx: 0, cy: 0, r: 5, fill: 'currentColor' }));
     } else if (type === 'ground') {
       line('M 0 -28 V 0 M -15 0 H 15 M -10 6 H 10 M -5 12 H 5');
@@ -553,6 +594,8 @@
 
   function renderSchematic(container, circuit, options = {}) {
     container.replaceChildren();
+    if (container.id === 'circuit-stage')
+      document.body.style.setProperty('--circuit-lamp-glow', '0');
     const svg = svgElement('svg', {
       viewBox: (options.viewBox || [0, 0, 1000, 640]).join(' '),
       width: '100%',
@@ -1531,7 +1574,7 @@
         visibility: 'hidden',
       });
       if (component.type !== 'junction') group.append(indicator, currentArrow);
-      nodes.push({ component, reading, pins, indicator, currentArrow });
+      nodes.push({ component, group, reading, pins, indicator, currentArrow });
       nodeLayer.append(group);
       if (options.selectable && !options.interactive) {
         group.addEventListener('click', () => options.onComponentClick?.(component.id));
@@ -1619,8 +1662,8 @@
       const color = (net) => {
         if (!frame || !Number.isFinite(voltages[net])) return 'currentColor';
         const voltage = voltages[net];
-        if (Math.abs(voltage) < 1e-9) return 'var(--circuit-muted,#9db4bb)';
-        return `hsl(${voltage < 0 ? 28 : 184} 65% ${Math.round(45 + Math.min(1, Math.abs(voltage) / largest) * 18)}%)`;
+        if (Math.abs(voltage) < 1e-9) return 'hsl(184 0% 20%)';
+        return `hsl(${voltage < 0 ? 28 : 184} 65% ${Math.round(20 + Math.min(1, Math.abs(voltage) / largest) * 55)}%)`;
       };
       wires.forEach(({ wire, path, selected }) =>
         path.setAttribute(
@@ -1630,8 +1673,30 @@
             : color(netMap[`${wire.from.componentId}:${wire.from.pin}`]),
         ),
       );
+      let pageGlow = 0;
       nodes.forEach((node) => {
         const { component, reading, pins, indicator, currentArrow } = node;
+        if (['bulb', 'led'].includes(component.type)) {
+          const delta =
+            (voltages[netMap[`${component.id}:0`]] || 0) -
+            (voltages[netMap[`${component.id}:1`]] || 0);
+          const current = frame?.currents?.[component.id] || 0;
+          const light = frame
+            ? Math.min(
+                1,
+                component.type === 'bulb'
+                  ? (delta / component.params.ratedVoltage) ** 2
+                  : Math.max(0, current) / component.params.ratedCurrent,
+              )
+            : 0;
+          node.group.style.filter =
+            light > 0.001
+              ? `drop-shadow(0 0 ${4 + 22 * light}px ${component.type === 'bulb' ? '#ffdb80' : '#ff6655'})`
+              : '';
+          node.group.style.color =
+            light > 0.001 ? (component.type === 'bulb' ? '#ffdb80' : '#ff6655') : '';
+          if (component.type === 'bulb') pageGlow = Math.max(pageGlow, light);
+        }
         pins.forEach(({ dot, net }) => dot.setAttribute('stroke', color(net)));
         if (frame && ['voltmeter', 'oscilloscope'].includes(component.type)) {
           const a = voltages[netMap[`${component.id}:0`]] || 0;
@@ -1667,6 +1732,8 @@
         // The actual path reverses with signed current; dashes always move toward its end.
         indicator.style.animationDirection = 'normal';
       });
+      if (container.id === 'circuit-stage')
+        document.body.style.setProperty('--circuit-lamp-glow', String(pageGlow * 0.3));
     }
     container.append(svg);
     if (options.wireStart && options.wirePoints?.length)

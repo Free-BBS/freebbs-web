@@ -125,3 +125,62 @@ body:not(.auth-page-body) .user-summary {
     flex-shrink: 0;
   }
 }
+
+/* Compact mobile account actions and balances into one row. */
+@media (max-width: 900px) {
+  body:not(.auth-page-body) .user-economy-stack {
+    display: flex !important;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 4px 0;
+  }
+  body:not(.auth-page-body) .user-economy-stack :is(.economy-shortcuts, .user-status) {
+    display: contents !important;
+  }
+  body:not(.auth-page-body) .user-economy-stack :is(.economy-shortcut, .currency) {
+    width: auto;
+    min-width: max-content;
+    min-height: 32px;
+    height: 32px;
+    padding: 4px 6px;
+    gap: 3px;
+    flex: 1 0 auto;
+    font-size: 11px;
+    border-radius: 6px !important;
+  }
+  body:not(.auth-page-body) .user-economy-stack .currency {
+    border: 0 !important;
+    background: transparent !important;
+  }
+  body:not(.auth-page-body) .user-economy-stack :is(.economy-shortcut-icon, .currency-icon) {
+    width: 14px;
+    height: 14px;
+  }
+  body:not(.auth-page-body) .main-content::before {
+    height: 112px;
+    padding-bottom: 48px;
+  }
+  body:not(.auth-page-body) .main-content,
+  body.home-page .landing-main {
+    padding-top: calc(128px + env(safe-area-inset-top, 0px)) !important;
+  }
+}
+.max-file-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+.max-file-tools small {
+  flex: 1;
+  min-width: 180px;
+}
+.max-file-tools ul {
+  flex-basis: 100%;
+  margin: 0;
+  padding-left: 20px;
+  overflow-wrap: anywhere;
+}

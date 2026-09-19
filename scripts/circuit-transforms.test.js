@@ -28,6 +28,18 @@ function rotate(point, orientation) {
 
 test('every catalog pin keeps its terminal identity while all rotations and mirrors move its coordinates', () => {
   const special = {
+    switch: [
+      [-40, 0],
+      [40, 0],
+      [-18, 44],
+      [18, 44],
+    ],
+    logic: [
+      [-40, -20],
+      [-40, 20],
+      [40, 0],
+      [0, 44],
+    ],
     ground: [[0, -28]],
     vcc: [[0, 40]],
     vdd: [[0, 40]],
@@ -274,10 +286,9 @@ test('signed current arrows and moving paths follow terminal direction through e
       const part = component(type, orientation);
       const pins = renderer.getPins(part);
       const terminal = ['bjt', 'mosfet'].includes(type) ? 2 : 1;
-      const expected =
-        type === 'opamp'
-          ? rotate({ x: -1, y: 0 }, orientation)
-          : { x: pins[terminal].x - pins[0].x, y: pins[terminal].y - pins[0].y };
+      const expected = ['opamp', 'logic'].includes(type)
+        ? rotate({ x: -1, y: 0 }, orientation)
+        : { x: pins[terminal].x - pins[0].x, y: pins[terminal].y - pins[0].y };
       const { drawing, find } = render(part, { animate: true });
       const indicator = find('data-current-indicator', 'X1');
       const arrow = find('data-current-arrow', 'X1');

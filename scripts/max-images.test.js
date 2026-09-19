@@ -38,13 +38,10 @@ test('accepts supported image files and rejects unsupported, empty and oversized
   for (const invalid of [{ type: 'image/svg+xml' }, { size: 0 }, { size: 10485761 }])
     assert.throws(() => validateFile({ ...file, ...invalid }));
 });
-test('only vision models enable upload; switching to text blocks sending without losing attachments', async () => {
+test('adding images automatically enables vision; text-only sending remains blocked', async () => {
   const { controller: c, nodes } = harness();
   await c.select([file]);
-  assert.deepEqual(c.snapshot(), []);
-  assert.equal(nodes.get('[data-image-add]').disabled, true);
-  c.setVision(true);
-  await c.select([file]);
+  assert.equal(nodes.get('[data-image-add]').disabled, false);
   assert.equal(c.snapshot().length, 1);
   c.setVision(false);
   assert.throws(() => c.snapshot(), /视觉模型/);
@@ -81,6 +78,7 @@ test('processing blocks sending and clearing prevents a late attachment from ent
   const pending = c.select([file]);
   assert.throws(() => c.snapshot(), /正在处理/);
   c.clear();
+  await Promise.resolve();
   finish({ label: 'late', dataUrl: 'preview' });
   await pending;
   assert.deepEqual(c.snapshot(), []);
@@ -180,4 +178,21 @@ test('dropping files and pasting images share attachment handling without interc
   assert.equal(prevented, before);
   listeners.drop({ ...drag, dataTransfer: { types: ['text/plain'] } });
   assert.equal(prevented, before);
+});
+
+test('already-selected visual models are locked for every new image batch', async () => {
+  const calls = [];
+  global.document = { createElement: element };
+  const controller = createController({
+    root: { querySelector: element },
+    requireVision: async (value) => calls.push(value),
+    prepareImage: async () => ({ label: 'image', dataUrl: 'preview' }),
+  });
+  controller.setVision(true);
+  await controller.select([file]);
+  assert.deepEqual(calls, [true]);
+  controller.clear();
+  await controller.select([file]);
+  assert.deepEqual(calls, [true, false, true]);
+  assert.equal(controller.snapshot().length, 1);
 });
