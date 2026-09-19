@@ -39,10 +39,10 @@ test('workbench keeps accessible live regions for all personal summaries', () =>
 
 test('workbench keeps economy shortcuts visible and usable before sign-in', () => {
   assert.match(html, /class="workbench-economy-section"/);
-  assert.match(html, /id="workbench-checkin-entry"[\s\S]{0,160}<span>每日签到<\/span>/);
+  assert.match(html, /id="workbench-checkin-entry"[\s\S]{0,400}<span>每日签到<\/span>/);
   assert.match(html, /class="workbench-card workbench-card-button fortune-link"/);
-  assert.match(html, /id="workbench-electromagnetic-entry"[\s\S]{0,80}href="\/electromagnetic"/);
-  assert.match(html, /id="workbench-inventory-entry"[\s\S]{0,80}href="\/inventory"/);
+  assert.match(html, /id="workbench-electromagnetic-entry"[\s\S]{0,200}href="\/electromagnetic"/);
+  assert.match(html, /id="workbench-inventory-entry"[\s\S]{0,200}href="\/inventory"/);
   assert.match(html, /data-workbench-economy-entry/);
   assert.doesNotMatch(html, /workbench-(?:checkin|electromagnetic|inventory)-entry[^>]*hidden/);
   assert.match(app, /fortuneLinks\.forEach\([\s\S]*openFortuneModal\(\)/);
@@ -84,7 +84,7 @@ test('workbench provides authenticated CRUD controls and conflict confirmation',
   assert.match(html, /id="workbench-important-dialog"/);
   assert.match(html, /id="workbench-add-schedule"/);
   assert.match(html, /id="workbench-schedule-dialog"/);
-  assert.match(html, /src="\/workbench\.js\?v=20260803-sync-closure-1"/);
+  assert.match(html, /src="\/workbench\.js\?v=20260918-personal-schedule-1"/);
   assert.match(controller, /\/workbench\/important-items/);
   assert.match(controller, /\/workbench\/schedule-items\/conflicts/);
   assert.match(controller, /\/confirm/);
@@ -94,7 +94,46 @@ test('workbench provides authenticated CRUD controls and conflict confirmation',
   assert.match(controller, /confirm-important/);
   assert.match(controller, /status: 'confirmed'/);
   assert.match(controller, /24 小时内截止/u);
-  assert.match(controller, /不会自动占用时间表/u);
+  assert.match(controller, /课程作业截止时间仍可在重要事项中查看/u);
+  assert.match(controller, /DDL · 截止提醒/u);
+});
+
+test('workbench provides a navigable seven-day schedule and review-before-save AI planning', () => {
+  assert.doesNotMatch(html, /继续学习/u);
+  assert.doesNotMatch(html, /workbench-continue/);
+  for (const id of [
+    'workbench-week-grid',
+    'workbench-week-previous',
+    'workbench-week-today',
+    'workbench-week-next',
+    'workbench-view-toggle',
+    'workbench-agent-form',
+    'workbench-agent-preview',
+    'workbench-agent-confirm',
+  ]) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  assert.match(controller, /function renderWeekGrid\(/);
+  assert.match(controller, /\/workbench\/schedule-planner\/preview/);
+  assert.match(controller, /\/workbench\/schedule-planner\/confirm/);
+  assert.match(css, /\.workbench-week-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(7/);
+  assert.match(css, /body\.theme-light\.workbench-page/);
+});
+
+test('workbench separates plan and notifications while reusing the live publication inbox', () => {
+  assert.match(html, /id="workbench-plan-panel"/);
+  assert.match(html, /id="workbench-notifications-panel"[^>]*hidden/);
+  assert.match(html, /id="workbench-notifications-tab"/);
+  assert.match(html, /class="workbench-persistent-column"/);
+  assert.doesNotMatch(html, /workbench-agent-shortcut/);
+  assert.match(html, /data-notice-view="all"/);
+  assert.match(html, /data-notice-view="recommended"/);
+  assert.match(html, /data-notice-view="discussion"/);
+  assert.match(controller, /app\.callApi\('\/notifications\?limit=50'/);
+  assert.match(controller, /read-community-notification/);
+  assert.match(controller, /state\.communityNotifications/);
+  assert.match(controller, /window\.addEventListener\('popstate'/);
+  assert.match(css, /\.workbench-view-panel\[hidden\]\s*\{\s*display:\s*none/);
 });
 
 test('connector self-check targets the two primary portals without accepting arbitrary URLs', () => {
