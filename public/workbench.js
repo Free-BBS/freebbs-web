@@ -9,9 +9,32 @@
   const elements = {
     importantList: document.getElementById('workbench-priority-list'),
     notificationList: document.getElementById('workbench-notification-list'),
+    notificationCount: document.getElementById('workbench-notification-count'),
+    notificationSearch: document.getElementById('workbench-notification-search'),
+    notificationMore: document.getElementById('workbench-notification-more'),
+    notificationRefresh: document.getElementById('workbench-notification-refresh'),
+    noticeHint: document.getElementById('workbench-notice-hint'),
+    planPanel: document.getElementById('workbench-plan-panel'),
+    notificationsPanel: document.getElementById('workbench-notifications-panel'),
+    viewButtons: Array.from(document.querySelectorAll('[data-workbench-view]')),
+    noticeViewButtons: Array.from(document.querySelectorAll('[data-notice-view]')),
     scheduleList: document.getElementById('workbench-schedule-list'),
+    weekGrid: document.getElementById('workbench-week-grid'),
+    weekLabel: document.getElementById('workbench-week-label'),
+    weekScroll: document.querySelector('.workbench-week-scroll'),
+    weekPrevious: document.getElementById('workbench-week-previous'),
+    weekToday: document.getElementById('workbench-week-today'),
+    weekNext: document.getElementById('workbench-week-next'),
+    viewToggle: document.getElementById('workbench-view-toggle'),
     addImportant: document.getElementById('workbench-add-important'),
     addSchedule: document.getElementById('workbench-add-schedule'),
+    agentForm: document.getElementById('workbench-agent-form'),
+    agentMessage: document.getElementById('workbench-agent-message'),
+    agentGenerate: document.getElementById('workbench-agent-generate'),
+    agentStatus: document.getElementById('workbench-agent-status'),
+    agentPreview: document.getElementById('workbench-agent-preview'),
+    agentProposals: document.getElementById('workbench-agent-proposals'),
+    agentConfirm: document.getElementById('workbench-agent-confirm'),
     notificationCategory: document.getElementById('workbench-notification-category'),
     notificationFilters: Array.from(
       document.querySelectorAll('[data-workbench-notification-filter]'),
@@ -54,6 +77,7 @@
   };
 
   const CATEGORY_LABELS = {
+    announcement: '平台发布',
     course: '课程',
     organization: '组织',
     personal: '个人',
@@ -71,11 +95,38 @@
     requestVersion: 0,
     importantItems: [],
     notifications: [],
+    communityNotifications: [],
+    communityCursor: null,
+    communityUnreadCount: 0,
+    noticeView: 'all',
     scheduleItems: [],
-    notificationFilters: { category: '', unread: false, favorite: false },
+    weekStart: null,
+    listView: false,
+    proposals: [],
+    notificationFilters: { category: '', unread: false, favorite: false, search: '' },
     conflictAcknowledgement: '',
     campusSemesters: [],
   };
+
+  function switchWorkbenchView(view, { updateUrl = true } = {}) {
+    const next = view === 'notifications' ? 'notifications' : 'plan';
+    elements.planPanel.hidden = next !== 'plan';
+    elements.notificationsPanel.hidden = next !== 'notifications';
+    elements.viewButtons.forEach((button) => {
+      if (button.dataset.workbenchView === next) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+    if (updateUrl) {
+      const url = new URL(window.location.href);
+      if (next === 'notifications') url.searchParams.set('view', 'notifications');
+      else url.searchParams.delete('view');
+      window.history.pushState(
+        { workbenchView: next },
+        '',
+        `${url.pathname}${url.search}${url.hash}`,
+      );
+    }
+  }
 
   function getUser() {
     return app.userState || {};
@@ -318,6 +369,122 @@
     return Number.isNaN(date.getTime()) ? '' : date.toISOString();
   }
 
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+  function getWeekStart(value = new Date()) {
+    const date = toShanghaiInputValue(value).slice(0, 10);
+    const [year, month, day] = date.split('-').map(Number);
+    const localMidnight = Date.UTC(year, month - 1, day) - 8 * 60 * 60 * 1000;
+    const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+    return localMidnight - ((weekday + 6) % 7) * DAY_MS;
+  }
+
+  function formatDay(value) {
+    return new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      month: 'numeric',
+      day: 'numeric',
+    }).format(value);
+  }
+
+  function renderWeekGrid() {
+    if (!elements.weekGrid) return;
+    if (state.weekStart === null) state.weekStart = getWeekStart();
+    const weekEnd = state.weekStart + 7 * DAY_MS;
+    elements.weekLabel.textContent = `${formatDay(new Date(state.weekStart))} — ${formatDay(new Date(weekEnd - DAY_MS))} · 北京时间`;
+    const todayStart = getWeekStart(new Date());
+    elements.weekToday.disabled = state.weekStart === todayStart;
+    const days = [];
+    for (let index = 0; index < 7; index += 1) {
+      const dayStart = state.weekStart + index * DAY_MS;
+      const dayEnd = dayStart + DAY_MS;
+      const day = document.createElement('section');
+      day.className = 'workbench-week-day';
+      day.setAttribute('role', 'listitem');
+      day.setAttribute('aria-label', `${WEEKDAYS[index]} ${formatDay(new Date(dayStart))}`);
+      if (
+        getWeekStart(new Date(dayStart)) === todayStart &&
+        formatDay(new Date(dayStart)) === formatDay(new Date())
+      ) {
+        day.classList.add('is-today');
+      }
+      const header = document.createElement('header');
+      header.className = 'workbench-week-day-header';
+      const weekday = document.createElement('span');
+      weekday.textContent = WEEKDAYS[index];
+      const date = document.createElement('strong');
+      date.textContent = formatDay(new Date(dayStart));
+      header.append(weekday, date);
+      const allDay = document.createElement('div');
+      allDay.className = 'workbench-week-all-day';
+      const timeline = document.createElement('div');
+      timeline.className = 'workbench-week-timeline';
+      for (const hour of [0, 6, 12, 18]) {
+        const marker = document.createElement('span');
+        marker.className = 'workbench-week-hour';
+        marker.style.top = `${hour * 40}px`;
+        marker.textContent = `${String(hour).padStart(2, '0')}:00`;
+        timeline.append(marker);
+      }
+      const entries = state.scheduleItems
+        .filter(
+          (item) =>
+            new Date(item.startAt).getTime() < dayEnd && new Date(item.endAt).getTime() > dayStart,
+        )
+        .map((item) => ({
+          item,
+          start: Math.max(dayStart, new Date(item.startAt).getTime()),
+          end: Math.min(dayEnd, new Date(item.endAt).getTime()),
+        }))
+        .sort((left, right) => left.start - right.start || left.end - right.end);
+      const lanes = [];
+      const placed = entries
+        .filter(({ item }) => !item.allDay && item.kind !== 'deadline')
+        .map((entry) => {
+          let lane = lanes.findIndex((end) => end <= entry.start);
+          if (lane < 0) lane = lanes.length;
+          lanes[lane] = entry.end;
+          return { ...entry, lane };
+        });
+      for (const entry of entries) {
+        const block = document.createElement('button');
+        block.type = 'button';
+        block.dataset.workbenchAction = 'edit-schedule';
+        block.dataset.publicId = entry.item.publicId;
+        block.className = `workbench-week-event${entry.item.status === 'draft' ? ' is-draft' : ''}${entry.item.sourceType === 'agent' ? ' is-agent' : ''}${entry.item.kind === 'deadline' ? ' is-deadline' : ''}${entry.item.kind === 'weekly' ? ' is-weekly' : ''}`;
+        const title = document.createElement('strong');
+        let prefix = '';
+        if (entry.item.kind === 'deadline') prefix = '⏱ DDL · ';
+        if (entry.item.kind === 'weekly') prefix = '↻ 周常 · ';
+        title.textContent = `${prefix}${entry.item.title || '未命名日程'}`;
+        const time = document.createElement('small');
+        time.textContent = `${entry.item.sourceType === 'agent' ? 'Max · ' : ''}${toShanghaiInputValue(entry.item.startAt).slice(11)}–${toShanghaiInputValue(entry.item.endAt).slice(11)}`;
+        if (entry.item.allDay) time.textContent = '全天';
+        if (entry.item.kind === 'deadline') time.textContent = `截止 ${toShanghaiInputValue(entry.item.endAt).slice(11)}`;
+        block.append(title, time);
+        block.title = `${entry.item.title} · ${entry.item.kind === 'deadline' ? `截止 ${formatMoment(entry.item.endAt)}` : `${formatMoment(entry.item.startAt)} — ${formatMoment(entry.item.endAt)}`}${entry.item.updatedAt ? ` · 更新于 ${formatMoment(entry.item.updatedAt)}` : ''} · 点击编辑`;
+        if (entry.item.allDay || entry.item.kind === 'deadline') {
+          allDay.append(block);
+        } else {
+          const lane =
+            placed.find(
+              (candidate) => candidate.item === entry.item && candidate.start === entry.start,
+            )?.lane || 0;
+          const laneCount = Math.max(1, lanes.length);
+          block.style.top = `${Math.floor(((entry.start - dayStart) / (60 * 60 * 1000)) * 40)}px`;
+          block.style.height = `${Math.max(28, Math.ceil(((entry.end - entry.start) / (60 * 60 * 1000)) * 40))}px`;
+          block.style.left = `calc(${(lane / laneCount) * 100}% + 4px)`;
+          block.style.width = `calc(${100 / laneCount}% - 8px)`;
+          timeline.append(block);
+        }
+      }
+      day.append(header, allDay, timeline);
+      days.push(day);
+    }
+    elements.weekGrid.replaceChildren(...days);
+  }
+
   function makeAction(label, action, publicId, className = '') {
     const button = document.createElement('button');
     button.className = `workbench-item-action ${className}`.trim();
@@ -418,36 +585,87 @@
   }
 
   function renderNotifications() {
-    const items = state.notifications.slice(0, 30);
+    const discussionKinds = new Set(['reply', 'reaction', 'comment_like']);
+    const communityCategory = (kind) => {
+      if (kind === 'announcement') return 'announcement';
+      return discussionKinds.has(kind) ? 'discussion' : 'system';
+    };
+    const fromWorkbench = state.notifications.map((item) => ({
+      ...item,
+      origin: 'workbench',
+      moment: item.publishedAt,
+    }));
+    const fromCommunity = state.communityNotifications.map((item) => ({
+      ...item,
+      publicId: `cn_${item.id}`,
+      origin: 'community',
+      category: communityCategory(item.kind),
+      actionUrl: item.link,
+      publishedAt: item.createdAt,
+      moment: item.createdAt,
+      importance: 'normal',
+    }));
+    const filters = state.notificationFilters;
+    const search = filters.search.trim().toLocaleLowerCase();
+    const items = [...fromWorkbench, ...fromCommunity]
+      .filter((item) => {
+        const isDiscussion = item.origin === 'community' && discussionKinds.has(item.kind);
+        if (state.noticeView === 'discussion' ? !isDiscussion : isDiscussion) return false;
+        if (filters.category && item.category !== filters.category) return false;
+        if (filters.unread && item.readAt) return false;
+        if (filters.favorite && !item.favoritedAt) return false;
+        if (
+          search &&
+          !`${item.title || ''} ${item.body || ''}`.toLocaleLowerCase().includes(search)
+        )
+          return false;
+        return true;
+      })
+      .sort((left, right) => {
+        if (state.noticeView === 'recommended') {
+          const score = (item) => {
+            let importance = 0;
+            if (item.importance === 'urgent') importance = 4;
+            else if (item.importance === 'important') importance = 3;
+            return importance + (!item.readAt ? 2 : 0);
+          };
+          if (score(left) !== score(right)) return score(right) - score(left);
+        }
+        return new Date(right.moment || 0) - new Date(left.moment || 0);
+      });
+    const unreadWorkbench = state.notifications.filter((item) => !item.readAt).length;
+    const unreadTotal = unreadWorkbench + state.communityUnreadCount;
+    elements.notificationCount.hidden = !unreadTotal;
+    elements.notificationCount.textContent = unreadTotal > 99 ? '99+' : String(unreadTotal);
+    const hints = {
+      all: '全部通知按时间展示；讨论互动单独归类。',
+      recommended:
+        '推荐依据：重要程度和未读状态，其次按发布时间排序；所有通知仍可在“全部通知”查看。',
+      discussion: '回复与互动单独展示，不混入公共通知。',
+    };
+    elements.noticeHint.textContent = hints[state.noticeView];
     if (!items.length) {
-      const hasFilter = Boolean(
-        state.notificationFilters.category ||
-        state.notificationFilters.unread ||
-        state.notificationFilters.favorite,
-      );
+      const hasFilter = Boolean(filters.category || filters.unread || filters.favorite || search);
       renderState(
         elements.notificationList,
         '通知',
         hasFilter ? '当前筛选下没有通知' : '暂无课程通知',
         hasFilter
           ? '可以清除分类、“未读”或“收藏”筛选后再查看。'
-          : '连接并同步网络学堂后，课程公告会显示在这里。',
+          : '平台通知、讨论互动与课程公告会在这里显示。',
       );
       return;
     }
     elements.notificationList.replaceChildren(
       ...items.map((item) => {
-        const category = CATEGORY_LABELS[item.category] || '通知';
+        const category =
+          item.category === 'discussion' ? '讨论动态' : CATEGORY_LABELS[item.category] || '通知';
         const unread = !item.readAt;
-        return makeDataItem({
-          eyebrow: unread ? `未读 · ${category}` : category,
-          title: item.title || '未命名通知',
-          description: [item.publishedAt ? formatMoment(item.publishedAt) : '', truncate(item.body)]
-            .filter(Boolean)
-            .join(' · '),
-          href: item.actionUrl,
-          className: unread ? 'is-unread' : '',
-          actions: [
+        const actions = [];
+        if (item.origin === 'community' && unread) {
+          actions.push(makeAction('标为已读', 'read-community-notification', item.publicId));
+        } else if (item.origin === 'workbench') {
+          actions.push(
             makeAction(unread ? '标为已读' : '标为未读', 'toggle-notification-read', item.publicId),
             makeAction(
               item.favoritedAt ? '取消收藏' : '收藏',
@@ -455,7 +673,21 @@
               item.publicId,
               item.favoritedAt ? 'is-primary' : '',
             ),
-          ],
+          );
+        }
+        return makeDataItem({
+          eyebrow: unread ? `未读 · ${category}` : category,
+          title: item.title || '未命名通知',
+          description: [
+            item.origin === 'community' && item.kind === 'announcement' ? '平台发布' : '',
+            item.publishedAt ? formatMoment(item.publishedAt) : '',
+            truncate(item.body),
+          ]
+            .filter(Boolean)
+            .join(' · '),
+          href: item.actionUrl,
+          className: unread ? 'is-unread' : '',
+          actions,
         });
       }),
     );
@@ -463,22 +695,23 @@
   }
 
   function renderScheduleItems() {
+    renderWeekGrid();
     const items = state.scheduleItems.slice(0, 30);
     if (!items.length) {
       renderState(
         elements.scheduleList,
         '本周时间表',
         '本周暂无日程',
-        '作业截止时间会进入重要事项，不会自动占用时间表；你可以手动安排学习时段。',
+        '你可以添加日程、周常或 DDL；课程作业截止时间仍可在重要事项中查看。',
       );
       return;
     }
     elements.scheduleList.replaceChildren(
       ...items.map((item) => {
         const isDraft = item.status === 'draft';
-        const timeWindow = item.allDay
-          ? `${formatMoment(item.startAt, true)} · 全天`
-          : `${formatMoment(item.startAt)} — ${formatMoment(item.endAt)}`;
+        let timeWindow = `${formatMoment(item.startAt)} — ${formatMoment(item.endAt)}`;
+        if (item.allDay) timeWindow = `${formatMoment(item.startAt, true)} · 全天`;
+        if (item.kind === 'deadline') timeWindow = `截止 ${formatMoment(item.endAt)}`;
         const actions = [];
         if (isDraft) {
           actions.push(makeAction('确认加入', 'confirm-schedule', item.publicId, 'is-primary'));
@@ -487,13 +720,21 @@
           makeAction('编辑', 'edit-schedule', item.publicId),
           makeAction('删除', 'delete-schedule', item.publicId, 'is-danger'),
         );
-        let eyebrow = '已确认';
+        let eyebrow = item.sourceType === 'agent' ? 'Max 建议 · 已确认' : '已确认';
         if (isDraft) eyebrow = 'Agent 草稿 · 待确认';
+        else if (item.kind === 'deadline') eyebrow = '⏱ DDL · 截止提醒';
+        else if (item.kind === 'weekly') eyebrow = '↻ 周常 · 已确认';
         else if (item.allDay) eyebrow = '全天';
         return makeDataItem({
           eyebrow,
           title: item.title || '未命名日程',
-          description: [timeWindow, truncate(item.description)].filter(Boolean).join(' · '),
+          description: [
+            timeWindow,
+            truncate(item.description),
+            item.updatedAt ? `更新于 ${formatMoment(item.updatedAt)}` : '',
+          ]
+            .filter(Boolean)
+            .join(' · '),
           className: isDraft ? 'is-draft' : '',
           actions,
         });
@@ -503,11 +744,7 @@
   }
 
   function buildNotificationQuery() {
-    const query = new URLSearchParams({ limit: '30' });
-    const filters = state.notificationFilters;
-    if (filters.category) query.set('category', filters.category);
-    if (filters.unread) query.set('unread', 'true');
-    if (filters.favorite) query.set('favorite', 'true');
+    const query = new URLSearchParams({ limit: '50' });
     return query.toString();
   }
 
@@ -536,16 +773,24 @@
       busy: true,
     });
 
-    const [importantResult, notificationResult, scheduleResult] = await Promise.allSettled([
-      app.callApi('/workbench/important-items', { method: 'GET' }),
-      app.callApi(`/workbench/notifications?${buildNotificationQuery()}`, { method: 'GET' }),
-      app.callApi('/workbench/schedule-items', { method: 'GET' }),
-    ]);
+    const [importantResult, notificationResult, communityResult, scheduleResult] =
+      await Promise.allSettled([
+        app.callApi('/workbench/important-items', { method: 'GET' }),
+        app.callApi(`/workbench/notifications?${buildNotificationQuery()}`, { method: 'GET' }),
+        app.callApi('/notifications?limit=50', { method: 'GET' }),
+        app.callApi(
+          `/workbench/schedule-items?${new URLSearchParams({
+            from: new Date(state.weekStart ?? getWeekStart()).toISOString(),
+            to: new Date((state.weekStart ?? getWeekStart()) + 7 * DAY_MS).toISOString(),
+          })}`,
+          { method: 'GET' },
+        ),
+      ]);
     if (requestVersion !== state.requestVersion || !isLoggedIn() || getOwnerKey() !== ownerKey) {
       return;
     }
 
-    const results = [importantResult, notificationResult, scheduleResult];
+    const results = [importantResult, notificationResult, communityResult, scheduleResult];
     if (
       results.some((result) => result.status === 'rejected' && result.reason?.status === 401) &&
       typeof app.clearSession === 'function'
@@ -563,9 +808,29 @@
 
     if (notificationResult.status === 'fulfilled') {
       state.notifications = notificationResult.value.notifications || [];
-      renderNotifications();
     } else {
-      renderDataFailure(elements.notificationList, '通知', notificationResult.reason);
+      state.notifications = [];
+    }
+
+    if (communityResult.status === 'fulfilled') {
+      state.communityNotifications = communityResult.value.notifications || [];
+      state.communityCursor = communityResult.value.nextCursor || null;
+      state.communityUnreadCount = Number(communityResult.value.unreadCount) || 0;
+    } else {
+      state.communityNotifications = [];
+      state.communityCursor = null;
+      state.communityUnreadCount = 0;
+    }
+    elements.notificationMore.hidden = !state.communityCursor;
+    if (notificationResult.status === 'rejected' && communityResult.status === 'rejected') {
+      renderDataFailure(elements.notificationList, '通知', communityResult.reason);
+    } else {
+      renderNotifications();
+      if (communityResult.status === 'rejected') {
+        elements.noticeHint.textContent = '平台发布与讨论动态暂时无法加载；已显示个人计划通知。';
+      } else if (notificationResult.status === 'rejected') {
+        elements.noticeHint.textContent = '个人计划通知暂时无法加载；已显示平台发布与讨论动态。';
+      }
     }
 
     if (scheduleResult.status === 'fulfilled') {
@@ -573,6 +838,42 @@
       renderScheduleItems();
     } else {
       renderDataFailure(elements.scheduleList, '本周时间表', scheduleResult.reason);
+      elements.weekGrid.textContent =
+        scheduleResult.reason?.message || '本周日程暂时无法加载，请重试。';
+    }
+  }
+
+  async function loadMoreCommunityNotifications() {
+    if (!state.communityCursor || !isLoggedIn()) return;
+    const ownerKey = getOwnerKey();
+    const { requestVersion } = state;
+    const { communityCursor: cursor } = state;
+    elements.notificationMore.disabled = true;
+    try {
+      const result = await app.callApi(
+        `/notifications?limit=50&before=${encodeURIComponent(cursor)}`,
+        {
+          method: 'GET',
+        },
+      );
+      if (
+        ownerKey !== getOwnerKey() ||
+        requestVersion !== state.requestVersion ||
+        cursor !== state.communityCursor
+      )
+        return;
+      const known = new Set(state.communityNotifications.map((item) => String(item.id)));
+      state.communityNotifications.push(
+        ...(result.notifications || []).filter((item) => !known.has(String(item.id))),
+      );
+      state.communityCursor = result.nextCursor || null;
+      state.communityUnreadCount = Number(result.unreadCount) || 0;
+      elements.notificationMore.hidden = !state.communityCursor;
+      renderNotifications();
+    } catch (error) {
+      elements.noticeHint.textContent = error.message || '加载更多失败，可以重试。';
+    } finally {
+      elements.notificationMore.disabled = false;
     }
   }
 
@@ -634,7 +935,13 @@
     elements.scheduleStart.value = toShanghaiInputValue(item?.startAt || fallback.startAt);
     elements.scheduleEnd.value = toShanghaiInputValue(item?.endAt || fallback.endAt);
     elements.scheduleAllDay.checked = Boolean(item?.allDay);
+    const isDeadline = item?.kind === 'deadline';
+    elements.scheduleDialog.dataset.kind = isDeadline ? 'deadline' : 'event';
+    elements.scheduleStart.closest('label').hidden = isDeadline;
+    elements.scheduleEnd.closest('label').querySelector('span').textContent = isDeadline ? '截止时间' : '结束时间';
+    elements.scheduleAllDay.closest('label').hidden = isDeadline;
     elements.scheduleDialogTitle.textContent = item ? '编辑日程' : '新增日程';
+    if (isDeadline) elements.scheduleDialogTitle.textContent = '编辑 DDL';
     elements.scheduleFormStatus.textContent = '';
     resetConflictWarning();
     openDialog(elements.scheduleDialog);
@@ -695,8 +1002,11 @@
   async function submitSchedule(event) {
     event.preventDefault();
     const publicId = elements.scheduleId.value;
-    const startAt = shanghaiInputToIso(elements.scheduleStart.value);
     const endAt = shanghaiInputToIso(elements.scheduleEnd.value);
+    const isDeadline = elements.scheduleDialog.dataset.kind === 'deadline';
+    const startAt = isDeadline && endAt
+      ? new Date(new Date(endAt).getTime() - 60000).toISOString()
+      : shanghaiInputToIso(elements.scheduleStart.value);
     if (!startAt || !endAt || new Date(endAt) <= new Date(startAt)) {
       elements.scheduleFormStatus.textContent = '结束时间必须晚于开始时间。';
       return;
@@ -706,7 +1016,7 @@
     elements.scheduleSubmit.disabled = true;
     elements.scheduleFormStatus.textContent = '正在检查时间冲突…';
     try {
-      const conflicts = await checkScheduleConflicts({ publicId, startAt, endAt });
+      const conflicts = isDeadline ? [] : await checkScheduleConflicts({ publicId, startAt, endAt });
       if (conflicts.length && state.conflictAcknowledgement !== conflictKey) {
         state.conflictAcknowledgement = conflictKey;
         showConflicts(conflicts);
@@ -744,6 +1054,136 @@
     } finally {
       elements.scheduleSubmit.disabled = false;
     }
+  }
+
+  function renderAgentProposals() {
+    const cards = state.proposals.map((item, index) => {
+      const card = document.createElement('div');
+      card.className = `workbench-agent-proposal${item.kind === 'deadline' ? ' is-deadline' : ''}`;
+      card.dataset.kind = item.kind || 'event';
+      const number = document.createElement('span');
+      number.textContent = `安排 ${index + 1}`;
+      if (item.kind === 'weekly') number.textContent = `↻ 周常 · 第 ${item.occurrence || index + 1}/${item.totalWeeks || state.proposals.length} 周`;
+      if (item.kind === 'deadline') number.textContent = '⏱ DDL · 截止提醒';
+      const titleLabel = document.createElement('label');
+      titleLabel.textContent = '事项';
+      const titleInput = document.createElement('input');
+      titleInput.className = 'workbench-proposal-title';
+      titleInput.maxLength = 200;
+      titleInput.value = item.title;
+      titleLabel.append(titleInput);
+      const startLabel = document.createElement('label');
+      if (item.kind !== 'deadline') {
+        startLabel.textContent = '开始';
+        const startInput = document.createElement('input');
+        startInput.className = 'workbench-proposal-start';
+        startInput.type = 'datetime-local';
+        startInput.value = toShanghaiInputValue(item.startAt);
+        startLabel.append(startInput);
+      }
+      const endLabel = document.createElement('label');
+      endLabel.textContent = item.kind === 'deadline' ? '截止时间' : '结束';
+      const endInput = document.createElement('input');
+      endInput.className = 'workbench-proposal-end';
+      endInput.type = 'datetime-local';
+      endInput.value = toShanghaiInputValue(item.endAt);
+      endLabel.append(endInput);
+      card.append(number, titleLabel);
+      if (item.kind !== 'deadline') card.append(startLabel);
+      card.append(endLabel);
+      return card;
+    });
+    elements.agentProposals.replaceChildren(...cards);
+    elements.agentPreview.classList.toggle('hidden', !cards.length);
+  }
+
+  async function generateAgentPreview(event) {
+    event.preventDefault();
+    if (!requireLogin()) return;
+    const message = elements.agentMessage.value.trim();
+    if (!message) return;
+    elements.agentGenerate.disabled = true;
+    elements.agentStatus.textContent = 'Max 正在理解你的安排并检查空余时间…';
+    state.proposals = [];
+    renderAgentProposals();
+    try {
+      const result = await app.callApi('/workbench/schedule-planner/preview', {
+        method: 'POST',
+        body: JSON.stringify({ message }),
+      });
+      state.proposals = result.suggestions || [];
+      renderAgentProposals();
+      elements.agentStatus.textContent = `已生成 ${state.proposals.length} 段安排。请检查并确认，当前尚未写入。`;
+    } catch (error) {
+      elements.agentStatus.textContent = error.message || '生成失败，请补充日期与时长后重试。';
+    } finally {
+      elements.agentGenerate.disabled = false;
+    }
+  }
+
+  async function confirmAgentProposals() {
+    if (!requireLogin() || !state.proposals.length) return;
+    const cards = [...elements.agentProposals.querySelectorAll('.workbench-agent-proposal')];
+    const suggestions = cards.map((card, index) => {
+      const { kind } = card.dataset;
+      const endAt = shanghaiInputToIso(card.querySelector('.workbench-proposal-end').value);
+      return {
+        title: card.querySelector('.workbench-proposal-title').value.trim(),
+        description: state.proposals[index].description || '',
+        kind,
+        startAt: kind === 'deadline'
+          ? endAt && new Date(new Date(endAt).getTime() - 60000).toISOString()
+          : shanghaiInputToIso(card.querySelector('.workbench-proposal-start').value),
+        endAt,
+      };
+    });
+    if (
+      suggestions.some(
+        (item) =>
+          !item.title ||
+          !item.startAt ||
+          !item.endAt ||
+          new Date(item.endAt) <= new Date(item.startAt),
+      )
+    ) {
+      elements.agentStatus.textContent = '请检查每段安排的标题、开始和结束时间。';
+      return;
+    }
+    elements.agentConfirm.disabled = true;
+    elements.agentStatus.textContent = '正在再次检查冲突并保存…';
+    try {
+      const result = await app.callApi('/workbench/schedule-planner/confirm', {
+        method: 'POST',
+        body: JSON.stringify({ suggestions }),
+      });
+      state.proposals = [];
+      renderAgentProposals();
+      state.weekStart = getWeekStart(new Date(suggestions[0].startAt));
+      await loadWorkbenchData();
+      elements.agentStatus.textContent = `已加入 ${result.created} 段安排；你可在上方时间图中继续编辑。`;
+    } catch (error) {
+      elements.agentStatus.textContent =
+        error.status === 409
+          ? '已有日程发生变化或出现冲突；计划未写入，请重新生成。'
+          : error.message || '保存失败，请重试。';
+    } finally {
+      elements.agentConfirm.disabled = false;
+    }
+  }
+
+  function shiftWeek(days) {
+    state.weekStart = (state.weekStart ?? getWeekStart()) + days * DAY_MS;
+    state.scheduleItems = [];
+    renderWeekGrid();
+    if (isLoggedIn()) loadWorkbenchData();
+  }
+
+  function toggleScheduleView() {
+    state.listView = !state.listView;
+    elements.weekScroll.classList.toggle('hidden', state.listView);
+    elements.scheduleList.classList.toggle('hidden', !state.listView);
+    elements.viewToggle.setAttribute('aria-pressed', String(state.listView));
+    elements.viewToggle.textContent = state.listView ? '七天视图' : '列表视图';
   }
 
   async function mutate(action, publicId) {
@@ -789,6 +1229,13 @@
       await app.callApi(`/workbench/notifications/${encodeURIComponent(publicId)}/state`, {
         method: 'PATCH',
         body: JSON.stringify({ favorited: !notification.favoritedAt }),
+      });
+    } else if (action === 'read-community-notification') {
+      const community = state.communityNotifications.find((item) => `cn_${item.id}` === publicId);
+      if (!community || community.readAt) return;
+      await app.callApi(`/notifications/${encodeURIComponent(community.id)}/read`, {
+        method: 'POST',
+        body: '{}',
       });
     } else if (action === 'delete-schedule' && scheduleItem) {
       // eslint-disable-next-line no-alert
@@ -911,12 +1358,12 @@
       const status = document.createElement('time');
       status.textContent = '私有连接器';
       const title = document.createElement('span');
-      const implementationLabel =
-        connector.validationState === 'live_account_verified'
-          ? '抓取解析代码已通过真实账号同步验证'
-          : connector.validationState === 'fixture_only'
-            ? '抓取解析代码已实现（合成样例已验证）'
-            : '解析验证状态未知';
+      let implementationLabel = '解析验证状态未知';
+      if (connector.validationState === 'live_account_verified') {
+        implementationLabel = '抓取解析代码已通过真实账号同步验证';
+      } else if (connector.validationState === 'fixture_only') {
+        implementationLabel = '抓取解析代码已实现（合成样例已验证）';
+      }
       const liveSyncLabel =
         connector.liveSyncState === 'verified' ? '真实账号同步已验证' : '真实账号同步未验证';
       const authorizationLabel =
@@ -1009,11 +1456,13 @@
       const publicState = publicSource
         ? `公开样本 ${publicSource.itemCount} 条（${publicSource.cached ? '缓存' : '实时'}）`
         : '公开样本失败';
-      const connectorState = connector
-        ? connector.liveSyncState === 'verified'
-          ? '私有连接器：真实账号同步已验证'
-          : '私有连接器：合成样例已验证，真实账号同步未验证'
-        : '私有连接器能力声明失败';
+      let connectorState = '私有连接器能力声明失败';
+      if (connector) {
+        connectorState =
+          connector.liveSyncState === 'verified'
+            ? '私有连接器：真实账号同步已验证'
+            : '私有连接器：合成样例已验证，真实账号同步未验证';
+      }
       const completionState = failedChecks ? `自检部分完成（${failedChecks} 项失败）` : '自检完成';
       elements.sourceStatus.textContent = `${completionState} · ${portalState} · ${publicState} · ${connectorState}`;
     } catch (error) {
@@ -1029,7 +1478,11 @@
       elements.addImportant,
       elements.addSchedule,
       elements.notificationCategory,
+      elements.notificationRefresh,
       elements.sourceProbe,
+      elements.agentMessage,
+      elements.agentGenerate,
+      elements.agentConfirm,
       ...elements.notificationFilters,
     ]
       .filter(Boolean)
@@ -1050,31 +1503,80 @@
     state.ownerKey = ownerKey;
     state.importantItems = [];
     state.notifications = [];
+    state.communityNotifications = [];
+    state.communityCursor = null;
+    state.communityUnreadCount = 0;
+    elements.notificationCount.hidden = true;
+    elements.notificationMore.hidden = true;
     state.scheduleItems = [];
+    state.proposals = [];
+    renderAgentProposals();
+    renderWeekGrid();
     state.campusSemesters = [];
     closeDialog(elements.importantDialog);
     closeDialog(elements.scheduleDialog);
     if (ownerKey) {
       loadWorkbenchData();
       loadCampusSemesters();
+    } else {
+      renderState(elements.notificationList, '通知', '登录后查看', '登录后可查看属于你的通知。');
+      renderState(elements.importantList, '重要事项', '登录后查看', '登录后可查看个人事项。');
+      renderState(elements.scheduleList, '个人计划', '登录后查看', '登录后可查看个人日程。');
     }
   }
 
   elements.addImportant?.addEventListener('click', () => openImportantEditor());
   elements.addSchedule?.addEventListener('click', () => openScheduleEditor());
+  elements.weekPrevious?.addEventListener('click', () => shiftWeek(-7));
+  elements.weekNext?.addEventListener('click', () => shiftWeek(7));
+  elements.weekToday?.addEventListener('click', () => {
+    state.weekStart = getWeekStart();
+    if (isLoggedIn()) loadWorkbenchData();
+    else renderWeekGrid();
+  });
+  elements.viewToggle?.addEventListener('click', toggleScheduleView);
+  elements.agentForm?.addEventListener('submit', generateAgentPreview);
+  elements.agentConfirm?.addEventListener('click', confirmAgentProposals);
   elements.importantForm?.addEventListener('submit', submitImportant);
   elements.scheduleForm?.addEventListener('submit', submitSchedule);
   elements.scheduleForm?.addEventListener('input', resetConflictWarning);
   elements.notificationCategory?.addEventListener('change', () => {
     state.notificationFilters.category = elements.notificationCategory.value;
-    loadWorkbenchData();
+    renderNotifications();
+  });
+  elements.notificationSearch?.addEventListener('input', () => {
+    state.notificationFilters.search = elements.notificationSearch.value;
+    renderNotifications();
   });
   elements.notificationFilters.forEach((button) => {
     button.addEventListener('click', () => {
       const filter = button.dataset.workbenchNotificationFilter;
       state.notificationFilters[filter] = !state.notificationFilters[filter];
       button.setAttribute('aria-pressed', String(state.notificationFilters[filter]));
-      loadWorkbenchData();
+      renderNotifications();
+    });
+  });
+  elements.viewButtons.forEach((button) => {
+    button.addEventListener('click', () => switchWorkbenchView(button.dataset.workbenchView));
+  });
+  elements.noticeViewButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      state.noticeView = button.dataset.noticeView;
+      elements.noticeViewButtons.forEach((entry) =>
+        entry.setAttribute('aria-pressed', String(entry === button)),
+      );
+      if (state.noticeView === 'discussion') {
+        state.notificationFilters.category = '';
+        elements.notificationCategory.value = '';
+      }
+      renderNotifications();
+    });
+  });
+  elements.notificationMore?.addEventListener('click', loadMoreCommunityNotifications);
+  elements.notificationRefresh?.addEventListener('click', loadWorkbenchData);
+  window.addEventListener('popstate', () => {
+    switchWorkbenchView(new URL(window.location.href).searchParams.get('view'), {
+      updateUrl: false,
     });
   });
   elements.sourceProbe?.addEventListener('click', runSourceProbe);
@@ -1107,4 +1609,8 @@
   Promise.resolve(app.sessionReady)
     .catch(() => {})
     .finally(syncSession);
+  switchWorkbenchView(new URL(window.location.href).searchParams.get('view'), {
+    updateUrl: false,
+  });
+  renderWeekGrid();
 })();

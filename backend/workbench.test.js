@@ -388,6 +388,31 @@ test('only the owner can confirm an Agent-created schedule draft', async (t) => 
   assert.match(calls[0].sql, /status = 'draft'/);
 });
 
+test('editing a DDL keeps its one-minute deadline marker invariant', async (t) => {
+  const calls = [];
+  const start = new Date('2026-09-20T15:58:00.000Z');
+  const end = new Date('2026-09-20T15:59:00.000Z');
+  const baseUrl = await startTestServer(t, {
+    user: { id: 9, is_admin: false },
+    pool: {
+      async execute(statement) {
+        calls.push(statement);
+        if (statement.includes('FROM schedule_items')) return [[{
+          public_id: 'ws_deadline', title: '报告', start_at: start, end_at: end,
+          source_type: 'agent', source_reference: 'planner:deadline', version: 1,
+        }]];
+        throw new Error('DDL update should be rejected before writing');
+      },
+    },
+  });
+  const { response } = await requestJson(baseUrl, '/schedule-items/ws_deadline', {
+    method: 'PATCH',
+    body: JSON.stringify({ endAt: '2026-09-20T16:30:00.000Z' }),
+  });
+  assert.equal(response.status, 400);
+  assert.equal(calls.length, 1);
+});
+
 test('notification state changes require visibility to the current user', async (t) => {
   const calls = [];
   const baseUrl = await startTestServer(t, {
