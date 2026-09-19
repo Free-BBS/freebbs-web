@@ -107,6 +107,8 @@ function parseKnownScheduleMessage(message, now = new Date()) {
   const text = String(message || '').trim();
   const plan = /接下来\s*([一二两三四五六七八九十\d]+)\s*天[\s\S]*?([一二两三四五六七八九十\d]+(?:\.\d+)?)\s*(小时|分钟)/.exec(text);
   if (plan) {
+    // Let the Agent extract availability constraints instead of silently using 09:00–21:00.
+    if (/(?:凌晨|早上|上午|中午|下午|傍晚|晚上|夜间|白天|周末|工作日|每天|每日|每晚|只|避开|不要|不能|不超过|点|[:：])/.test(text)) return null;
     const days = smallNumber(plan[1]);
     const amount = smallNumber(plan[2]);
     const title = cleanTitle(text);

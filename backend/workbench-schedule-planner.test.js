@@ -14,6 +14,16 @@ const {
 const now = new Date('2026-09-18T00:00:00.000Z');
 const sept19 = new Date('2026-09-18T17:22:23.000Z');
 
+test('availability-constrained plans are delegated instead of scheduled in default hours', () => {
+  for (const message of [
+    '接下来3天只在晚上学习数学共6小时',
+    '接下来3天下午复习6小时',
+    '接下来3天19:00到21:00复习6小时',
+  ]) {
+    assert.equal(parseKnownScheduleMessage(message, now), null);
+  }
+});
+
 test('local preview respects the entered meeting instead of returning a canned event', () => {
   const parsed = parseKnownScheduleMessage('19号下午5点开会，持续时间2小时', sept19);
   assert.equal(parsed.title, '开会');
