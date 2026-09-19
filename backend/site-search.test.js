@@ -128,3 +128,23 @@ test('HTTP search validates arguments, returns no-store, and gives an explicit f
   assert.equal(fail.status, 503);
   assert.doesNotMatch(await fail.text(), /private database details/);
 });
+
+test('post search and direct reads use only server-authenticated visibility', async () => {
+  const queries = [];
+  const service = createSiteSearch({
+    execute: async ({ sql }) => {
+      queries.push(sql);
+      if (sql.includes('p.login_required = 0')) return [[]];
+      if (sql.includes('discussion_comments')) return [[{ text: 'private comment' }]];
+      return [[{ id: 1, pid: 'private', title: 'private title', body: 'private body', score: 1 }]];
+    },
+  });
+  assert.equal((await service.search({ type: 'post' })).results.length, 0);
+  await assert.rejects(service.read('/discussion?post=private', 'https://www.free-bbs.cn'));
+  assert.equal((await service.search({ type: 'post', user: { id: 7 } })).results.length, 1);
+  assert.equal(
+    (await service.read('/discussion?post=private', 'https://www.free-bbs.cn', { id: 7 })).text,
+    'private body',
+  );
+  assert.ok(queries.every((sql) => sql.includes('p.is_hidden = 0')));
+});

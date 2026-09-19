@@ -14,7 +14,7 @@
   host.classList.add('site-search');
   host.setAttribute('aria-label', '全站搜索');
   host.innerHTML =
-    '<form class="site-search-form" role="search"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 5 5"/></svg><input type="search" maxlength="120" placeholder="搜索帖子、知识点、课程…" aria-label="搜索全站" autocomplete="off"><button type="submit">搜索</button><button type="button" data-close aria-label="关闭搜索">×</button></form><nav class="site-search-types" aria-label="搜索分类"></nav><div class="site-search-status" role="status" aria-live="polite"></div><ol class="site-search-results"></ol><button type="button" class="site-search-more" hidden>加载更多</button><div class="site-search-footer"><span>搜索公开内容</span><a href="/search">打开搜索页面 ↗</a></div>';
+    '<form class="site-search-form" role="search"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 5 5"/></svg><input type="search" maxlength="120" placeholder="搜索帖子、知识点、课程…" aria-label="搜索全站" autocomplete="off"><button type="submit">搜索</button><button type="button" data-close aria-label="关闭搜索">×</button></form><nav class="site-search-types" aria-label="搜索分类"></nav><div class="site-search-status" role="status" aria-live="polite"></div><ol class="site-search-results"></ol><button type="button" class="site-search-more" hidden>加载更多</button><div class="site-search-footer"><span>搜索当前可见内容</span><a href="/search">打开搜索页面 ↗</a></div>';
   if (!fullPage) document.body.append(host);
   const input = host.querySelector('input');
   const form = host.querySelector('form');
@@ -93,7 +93,12 @@
     list.setAttribute('aria-busy', 'true');
     try {
       const base = window.FREEBBS_API_BASE || '/api';
-      const response = await fetch(`${base}/search?${query}`, { signal: controller.signal });
+      const response = await fetch(`${base}/search?${query}`, {
+        signal: controller.signal,
+        headers: window.freeBbsApp?.userState?.token
+          ? { Authorization: `Bearer ${window.freeBbsApp.userState.token}` }
+          : {},
+      });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || '搜索失败，请重试。');
       if (version !== generation) return;
@@ -179,12 +184,47 @@
   trigger.innerHTML =
     '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 5 5"/></svg><span>全站搜索</span>';
   trigger.addEventListener('click', open);
-  const actions = document.querySelector('.topbar .nav-actions');
+  const actions = document.querySelector('.topbar');
   if (actions) actions.prepend(trigger);
   else {
     trigger.classList.add('site-search-floating');
     document.body.append(trigger);
   }
+  // The shared shell draws its title in ::before. Measure the title and account
+  // controls instead of assuming a fixed gap, including custom text sizes/names.
+  const headerMain = document.querySelector('.main-content[data-page-title]');
+  const accountPanel = document.querySelector('.user-panel');
+  const measure = document.createElement('canvas').getContext('2d');
+  const placeTrigger = () => {
+    trigger.classList.remove('is-expanded');
+    trigger.style.removeProperty('left');
+    trigger.style.removeProperty('right');
+    trigger.style.removeProperty('width');
+    if (window.innerWidth <= 900 || !headerMain || !accountPanel || !measure) return;
+    const heading = getComputedStyle(headerMain, '::before');
+    measure.font = `${heading.fontWeight} ${heading.fontSize} ${heading.fontFamily}`;
+    const titleWidth =
+      parseFloat(heading.fontSize) === 0
+        ? 0
+        : measure.measureText(headerMain.dataset.pageTitle || '').width;
+    const left = parseFloat(heading.left) + titleWidth + 24;
+    const available = accountPanel.getBoundingClientRect().left - left - 20;
+    if (available >= 180) {
+      trigger.classList.add('is-expanded');
+      trigger.style.left = `${left}px`;
+      trigger.style.right = 'auto';
+      trigger.style.width = `${Math.min(240, available)}px`;
+    }
+  };
+  window.addEventListener('resize', placeTrigger);
+  if (accountPanel) new ResizeObserver(placeTrigger).observe(accountPanel);
+  if (headerMain)
+    new MutationObserver(placeTrigger).observe(headerMain, {
+      attributes: true,
+      attributeFilter: ['data-page-title'],
+    });
+  document.fonts?.ready.then(placeTrigger);
+  placeTrigger();
   document.addEventListener('keydown', (event) => {
     const typing = event.target.closest?.('input, textarea, select, [contenteditable="true"]');
     if (
@@ -201,6 +241,12 @@
       input.value = searchbar.querySelector('input')?.value || '';
       open();
     });
+  });
+  window.addEventListener('freebbs:session-change', () => {
+    generation += 1;
+    controller?.abort();
+    list.replaceChildren();
+    if (fullPage || host.open) search();
   });
   const resize = () =>
     host.style.setProperty(

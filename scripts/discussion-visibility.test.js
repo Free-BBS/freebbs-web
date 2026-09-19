@@ -78,6 +78,7 @@ function harness() {
     userState: { uid: 'USER1', isLoggedIn: true },
     window: { confirm: () => true, alert() {} },
     openModal() {},
+    showDiscussionLoginDialog() {},
   };
   const snippets = [
     extract('function applyDiscussionPostsPayload(', 'function restoreDiscussionBoardPosts('),
@@ -372,4 +373,52 @@ test('administrator deleted-post inspection survives list caching and detail rev
   h.requests.at(-1).resolve({ posts: [{ id: 'DELETED', isDeleted: true }] });
   await mine;
   assert.equal(h.state.posts.length, 0);
+});
+
+test('login-only link clears detail and opens login without exposing cached content', async () => {
+  const h = harness();
+  let opened = '';
+  h.context.showDiscussionLoginDialog = (name) => {
+    opened = name;
+  };
+  h.state.postCache.set('PRIVATE', { contentMarkdown: 'stale secret' });
+  const pending = h.context.loadDiscussionDetail('PRIVATE');
+  h.requests[0].reject(
+    Object.assign(new Error('login'), { status: 401, code: 'post_login_required' }),
+  );
+  await pending;
+  assert.equal(opened, 'PRIVATE');
+  assert.equal(h.state.postCache.has('PRIVATE'), false);
+  assert.equal(h.state.activePostId, 'PRIVATE');
+  assert.match(h.context.discussionDetail.innerHTML, /登录后可见/);
+  assert.doesNotMatch(h.context.discussionDetail.innerHTML, /stale secret/);
+});
+
+test('login return path accepts a post link but rejects external or arbitrary destinations', () => {
+  const auth = fs.readFileSync(path.join(__dirname, '../public/auth.js'), 'utf8');
+  const fn = auth.slice(
+    auth.indexOf('function activityReturnPath()'),
+    auth.indexOf('function initializeAuthReturnLinks()'),
+  );
+  for (const [next, expected] of [
+    ['/discussion?post=PRIVATE#comment-1', '/discussion?post=PRIVATE#comment-1'],
+    ['/surveys?survey=abc', '/surveys?survey=abc'],
+    ['https://evil.test/discussion?post=PRIVATE', ''],
+    ['//evil.test/discussion?post=PRIVATE', ''],
+    ['/settings', ''],
+    ['/discussion', ''],
+  ]) {
+    const context = {
+      URL,
+      URLSearchParams,
+      window: {
+        location: {
+          origin: 'https://www.free-bbs.cn',
+          search: `?${new URLSearchParams({ next })}`,
+        },
+      },
+    };
+    vm.runInNewContext(fn, context);
+    assert.equal(context.activityReturnPath(), expected);
+  }
 });

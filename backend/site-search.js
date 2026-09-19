@@ -140,7 +140,7 @@ const SOURCES = {
   },
 };
 function createSiteSearch(pool) {
-  async function querySource(type, terms, count, sort) {
+  async function querySource(type, terms, count, sort, user) {
     const source = SOURCES[type];
     const params = [];
     const score = terms.length
@@ -163,7 +163,7 @@ function createSiteSearch(pool) {
       {
         sql: `SELECT /*+ MAX_EXECUTION_TIME(2500) */ ${source.id} AS id, ${source.title} AS title, LEFT(${source.body}, 16000) AS body,
         ${source.section} AS section, ${source.updated} AS updatedAt, ${source.featured} AS featured, (${score}) AS score
-        FROM ${source.from} WHERE ${source.where}${match}
+        FROM ${source.from} WHERE ${source.where}${type === 'post' && !user?.id ? ' AND p.login_required = 0' : ''}${match}
         ORDER BY score DESC, ${sort === 'recommended' ? 'featured DESC,' : ''} updatedAt DESC, id ASC LIMIT ${count}`,
         timeout: 3500,
       },
@@ -188,6 +188,7 @@ function createSiteSearch(pool) {
     limit = 20,
     conversational = false,
     sort = 'relevance',
+    user = null,
   } = {}) {
     if (
       typeof q !== 'string' ||
@@ -220,7 +221,7 @@ function createSiteSearch(pool) {
     }
     const types = type === 'all' ? Object.keys(SOURCES) : SOURCES[type] ? [type] : [];
     const batches = await Promise.all(
-      types.map((kind) => querySource(kind, terms, offset + limit + 1, sort)),
+      types.map((kind) => querySource(kind, terms, offset + limit + 1, sort, user)),
     );
     results.push(...batches.flat());
     results.sort(
@@ -239,7 +240,7 @@ function createSiteSearch(pool) {
       limited: offset + limit > 480,
     };
   }
-  async function read(value, publicWebUrl) {
+  async function read(value, publicWebUrl, user = null) {
     const url = new URL(value, publicWebUrl);
     if (url.origin !== new URL(publicWebUrl).origin || url.username || url.password)
       throw new Error('仅能读取本站链接。');
@@ -250,7 +251,7 @@ function createSiteSearch(pool) {
         {
           sql: `SELECT p.id, p.pid, p.title, LEFT(p.content_markdown, 14000) AS body, b.name AS section
         FROM discussion_posts p JOIN discussion_boards b ON b.id = p.board_id
-        WHERE (p.pid = ? OR CAST(p.id AS CHAR) = ?) AND p.is_deleted = 0 AND p.is_hidden = 0 AND b.is_active = 1 LIMIT 1`,
+        WHERE (p.pid = ? OR CAST(p.id AS CHAR) = ?) AND p.is_deleted = 0 AND p.is_hidden = 0 AND b.is_active = 1 ${!user?.id ? 'AND p.login_required = 0' : ''} LIMIT 1`,
           timeout: 3500,
         },
         [id, id],
@@ -259,7 +260,7 @@ function createSiteSearch(pool) {
       const post = rows[0];
       const [comments] = await pool.execute(
         {
-          sql: `SELECT LEFT(content_markdown, 1200) AS text FROM discussion_comments WHERE post_id = ? AND is_deleted = 0 ORDER BY created_at DESC, id DESC LIMIT 5`,
+          sql: `SELECT LEFT(c.content_markdown, 1200) AS text FROM discussion_comments c JOIN discussion_posts p ON p.id = c.post_id WHERE c.post_id = ? AND c.is_deleted = 0 AND p.is_deleted = 0 AND p.is_hidden = 0 ${!user?.id ? 'AND p.login_required = 0' : ''} ORDER BY c.created_at DESC, c.id DESC LIMIT 5`,
           timeout: 3500,
         },
         [post.id],
@@ -299,7 +300,7 @@ function createSiteSearch(pool) {
   }
   return { search, read };
 }
-function createSiteSearchRouter(service) {
+function createSiteSearchRouter(service, getOptionalAuthUser = async () => null) {
   const router = express.Router();
   router.get('/', async (request, response) => {
     response.set('Cache-Control', 'no-store');
@@ -310,6 +311,7 @@ function createSiteSearchRouter(service) {
           type: request.query.type || 'all',
           offset: Number(request.query.offset || 0),
           limit: 20,
+          user: await getOptionalAuthUser(request),
         }),
       );
     } catch (error) {

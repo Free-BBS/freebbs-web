@@ -4572,14 +4572,13 @@ function renderAiWelcomeMessage() {
         <img class="aichat-avatar-image" src="${escapeHtml(MAX_AGENT_AVATAR)}" alt="Max 的头像" />
       </div>
       <div class="aichat-bubble discussion-markdown-body">
-        <p>你好，我是 Max。可以问我课程、推导或代码，也可以粘贴本站电路链接，让我分析元件、接线和工作原理。</p>
+        <p>有什么想一起解决的？</p>
       </div>
     </article>
   `;
   const welcome = aiChatThread.querySelector('.aichat-message-assistant');
   if (welcome) {
-    welcome.dataset.markdown =
-      '你好，我是 Max。可以问我课程、推导或代码，也可以粘贴本站电路链接，让我分析元件、接线和工作原理。';
+    welcome.dataset.markdown = '有什么想一起解决的？';
     addAiMessageCopyControls(welcome);
   }
 }
@@ -5891,9 +5890,10 @@ function renderDiscussionDetail(post) {
           <span>返回帖子</span>
         </button>
         ${
-          post.canPin || post.canFeature || post.canDelete || post.canHide
+          post.canPin || post.canFeature || post.canDelete || post.canHide || userState.isAdmin
             ? `
           <div class="discussion-moderator-actions">
+            ${!post.isDeleted && (post.canHide || userState.isAdmin) ? `<label class="discussion-option"><input type="checkbox" data-action="toggle-login-required" data-post-id="${escapeHtml(post.id)}" ${post.loginRequired ? 'checked' : ''} />登录后可见</label>` : ''}
             ${post.canHide ? `<button class="discussion-visibility-button" type="button" data-action="toggle-visibility" data-post-id="${escapeHtml(post.id)}" data-hidden="${post.isHidden ? '1' : '0'}">${post.isHidden ? '恢复公开' : '隐藏帖子'}</button>` : ''}
             ${post.canPin ? `<button class="discussion-detail-pin ${post.isPinned ? 'is-active' : ''}" type="button" data-action="toggle-pin" data-post-id="${escapeHtml(post.id)}" data-pinned="${post.isPinned ? '1' : '0'}"><img class="discussion-action-icon" src="/assets/icons/top.svg" alt="" aria-hidden="true" /><span>${post.isPinned ? '取消置顶' : '置顶文章'}</span></button>` : ''}
             ${post.canFeature ? `<button class="discussion-detail-feature ${post.isFeatured ? 'is-active' : ''}" type="button" data-action="toggle-feature" data-post-id="${escapeHtml(post.id)}" data-featured="${post.isFeatured ? '1' : '0'}"><img class="discussion-action-icon" src="/assets/icons/star.svg" alt="" aria-hidden="true" /><span>${post.isFeatured ? '取消精华' : '加精华'}</span></button>` : ''}
@@ -6252,6 +6252,14 @@ async function toggleDiscussionReaction(postId, reactionType = 'smile') {
   loadDiscussionStats();
 }
 
+function showDiscussionLoginDialog(postId) {
+  const dialog = document.getElementById('discussion-login-dialog');
+  if (!dialog) return;
+  const next = `/discussion?${new URLSearchParams({ post: postId })}`;
+  dialog.querySelector('a').href = `/login?${new URLSearchParams({ next })}`;
+  if (!dialog.open) dialog.showModal();
+}
+
 async function loadDiscussionDetail(postId) {
   if (discussionState.sessionStale) return;
   if (!discussionDetail || !postId) return;
@@ -6299,12 +6307,20 @@ async function loadDiscussionDetail(postId) {
     renderDiscussionDetail(payload.post);
     discussionDetail.scrollIntoView({ behavior: 'smooth', block: 'start' });
     updateDiscussionQuery({ board: discussionState.activeBoard, postId: payload.post.id });
-  } catch {
+  } catch (error) {
     if (requestId !== discussionState.postRequestId || version !== discussionState.sessionVersion)
       return;
     discussionState.postCache.delete(postId);
     discussionState.activePost = null;
     discussionState.comments = [];
+    if (error.status === 401 && error.code === 'post_login_required') {
+      discussionState.activePostId = postId;
+      updateDiscussionQuery({ board: discussionState.activeBoard, postId });
+      discussionDetail.innerHTML =
+        '<button class="discussion-detail-back" type="button" data-action="close-detail">返回帖子列表</button><p role="status">这篇帖子仅登录后可见。</p><button type="button" data-action="login-to-read">登录后阅读</button>';
+      showDiscussionLoginDialog(postId);
+      return;
+    }
     discussionDetail.innerHTML =
       '<button class="discussion-detail-back" type="button" data-action="close-detail">返回帖子列表</button><p role="status">帖子不存在、暂不可见或加载失败，请返回列表刷新后重试。</p>';
   }
@@ -8250,6 +8266,37 @@ async function handleDiscussionCommentAction(button) {
 }
 
 async function handleDiscussionDetailClick(event) {
+  const loginButton = event.target.closest('[data-action="login-to-read"]');
+  if (loginButton) {
+    showDiscussionLoginDialog(discussionState.activePostId);
+    return;
+  }
+  const loginRequiredInput = event.target.closest('[data-action="toggle-login-required"]');
+  if (loginRequiredInput) {
+    const version = discussionState.sessionVersion;
+    const postId = loginRequiredInput.dataset.postId;
+    const loginRequired = loginRequiredInput.checked;
+    loginRequiredInput.disabled = true;
+    try {
+      const payload = await callApi(
+        `/discussion/posts/${encodeURIComponent(postId)}/login-required`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ loginRequired }),
+        },
+      );
+      if (version !== discussionState.sessionVersion) return;
+      updateCachedDiscussionPost(postId, { loginRequired: payload.loginRequired });
+      if (discussionState.activePost?.id === postId)
+        discussionState.activePost.loginRequired = payload.loginRequired;
+    } catch (error) {
+      loginRequiredInput.checked = !loginRequired;
+      window.alert(error.message);
+    } finally {
+      loginRequiredInput.disabled = false;
+    }
+    return;
+  }
   const visibilityButton = event.target.closest('[data-action="toggle-visibility"]');
   if (visibilityButton) {
     await toggleDiscussionVisibility(visibilityButton);
@@ -8552,6 +8599,7 @@ async function handleDiscussionComposeSubmit(event) {
       method: 'POST',
       body: JSON.stringify({
         boardSlug: discussionComposeBoard.value,
+        loginRequired: document.getElementById('discussion-login-required')?.checked !== false,
         isAnonymous:
           discussionComposeBoard.value === 'daily' &&
           Boolean(document.getElementById('discussion-anonymous')?.checked),
@@ -9575,14 +9623,21 @@ document.getElementById('discussion-my-more')?.addEventListener('click', async (
     button.disabled = false;
   }
 });
-window.addEventListener('freebbs:session-change', () => {
+window.addEventListener('freebbs:session-change', async () => {
   if (!isDiscussionPage()) return;
+  const pendingPost = getDiscussionQueryState().postId;
+  discussionState.showDeleted = false;
+  const deletedToggle = document.getElementById('discussion-show-deleted');
+  if (deletedToggle) deletedToggle.checked = false;
   resetDiscussionData();
   discussionState.sessionStale = false;
   if (!discussionState.initialized) return;
   discussionState.scope = 'public';
-  updateDiscussionQuery({ board: discussionState.activeBoard, postId: '' });
-  loadDiscussionPosts();
+  updateDiscussionQuery({ board: discussionState.activeBoard, postId: pendingPost });
+  const version = discussionState.sessionVersion;
+  await loadDiscussionPosts();
+  if (version === discussionState.sessionVersion && pendingPost && userState.isLoggedIn)
+    await loadDiscussionDetail(pendingPost);
 });
 window.addEventListener('storage', (event) => {
   if (!isDiscussionPage() || (event.key !== STORAGE_KEY && event.key !== null)) return;
@@ -9697,25 +9752,6 @@ sessionReady.then(() => {
     link.href = getProfileHref(userState.uid);
     link.hidden = false;
   }
-});
-
-window.addEventListener('freebbs:session-change', () => {
-  if (!isDiscussionPage() || !sessionRestored) return;
-  // Never keep admin-only content or identities visible across account changes.
-  const identity = document.getElementById('discussion-anonymous-author-result');
-  if (identity) identity.textContent = '';
-  discussionState.showDeleted = false;
-  const toggle = document.getElementById('discussion-show-deleted');
-  if (toggle) toggle.checked = false;
-  discussionState.postsByBoard.clear();
-  discussionState.postCache.clear();
-  discussionState.postsHashByBoard = {};
-  discussionState.posts = [];
-  discussionState.postRequestId += 1;
-  discussionState.activePostId = '';
-  renderDiscussionDetail(null);
-  renderDiscussionPosts();
-  loadDiscussionPosts({ autoOpen: false });
 });
 
 window.addEventListener('freebbs:username-updated', (event) => {

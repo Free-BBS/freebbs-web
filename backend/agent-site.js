@@ -41,7 +41,7 @@ function appendContext(payload, contextText, site) {
 }
 const RESPONSE_STYLE =
   '回答方式：自然、直接地回答当前问题，不要例行附加导航、课程入口、延伸阅读或链接。只在用户要找页面、资料、推荐帖子，或确有必要核对来源时给少量相关链接，并说明用途。用户明确不要链接时不附链接。不需要每次提醒自己能做什么。';
-async function enrichAgentSiteContext(payload, { service, publicWebUrl }) {
+async function enrichAgentSiteContext(payload, { service, publicWebUrl, user = null }) {
   if (payload.source === 'circuit_report') return payload;
   const question = latestQuestion(payload);
   if (!question) return payload;
@@ -75,6 +75,7 @@ async function enrichAgentSiteContext(payload, { service, publicWebUrl }) {
       type: wantsPosts ? 'post' : 'all',
       limit: 8,
       conversational: true,
+      user,
       sort: wantsPosts && !/最新|最近/.test(question) ? 'recommended' : 'relevance',
     });
     site.results = result.results;
@@ -94,7 +95,7 @@ async function enrichAgentSiteContext(payload, { service, publicWebUrl }) {
     references.push(...site.results.slice(0, 3).map((result) => result.url));
   for (const url of references) {
     try {
-      const document = await service.read(url, publicWebUrl);
+      const document = await service.read(url, publicWebUrl, user);
       const bounded = {
         ...document,
         ...(typeof document.text === 'string' ? { text: document.text.slice(0, 4500) } : {}),

@@ -337,6 +337,10 @@
                       required
                     ></textarea>
                   </label>
+                  <label class="discussion-option">
+                    <input id="discussion-login-required" type="checkbox" checked />登录后可见
+                    <small>关闭后，未登录的访客也可阅读；作者和管理员可随时修改</small>
+                  </label>
                   <label id="discussion-anonymous-option" class="discussion-option hidden">
                     <input id="discussion-anonymous" type="checkbox" />匿名发帖
                     <small>仅日常分区 · 公开显示“匿名用户”，管理员可查真实作者</small>
@@ -434,6 +438,18 @@
       </footer>
     </div>
 
+    <dialog
+      id="discussion-login-dialog"
+      class="discussion-login-dialog"
+      aria-labelledby="discussion-login-title"
+      aria-describedby="discussion-login-description"
+    >
+      <h2 id="discussion-login-title">登录后阅读</h2>
+      <p id="discussion-login-description">作者设置了登录后可见。登录后即可继续查看这篇帖子。</p>
+      <form method="dialog">
+        <button type="submit">暂不登录</button><a href="/login">去登录</a>
+      </form>
+    </dialog>
     <script src="/vendor/marked/lib/marked.umd.js"></script>
     <script src="/vendor/@highlightjs/cdn-assets/highlight.min.js"></script>
     <script src="/vendor/@highlightjs/cdn-assets/languages/matlab.min.js"></script>

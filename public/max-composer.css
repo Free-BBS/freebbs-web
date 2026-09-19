@@ -12,61 +12,11 @@ body.aichat-page .main-content .aichat-shell {
   align-items: stretch;
 }
 body.aichat-page .main-content .aichat-main {
-  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   overflow: hidden;
 }
 body.aichat-page .site-footer {
   display: none;
-}
-.max-composer-tools {
-  min-width: 0;
-  max-height: min(34dvh, 270px);
-  overflow: auto;
-  border-top: 1px solid var(--ui-line);
-  background: var(--ui-surface);
-  color: var(--ui-text);
-}
-.max-composer-tools > summary {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 40px;
-  padding: 6px 20px;
-  list-style: none;
-  cursor: pointer;
-  font: 0.82rem var(--font-ui);
-}
-.max-composer-tools > summary::-webkit-details-marker {
-  display: none;
-}
-.max-composer-tools > summary > :first-child {
-  font-weight: 700;
-  white-space: nowrap;
-}
-.max-composer-tools-state {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--ui-muted);
-}
-.max-composer-tools-hint {
-  margin-left: auto;
-  flex-shrink: 0;
-  color: var(--ui-accent);
-}
-.max-composer-tools > summary:focus-visible {
-  outline: 2px solid var(--ui-accent);
-  outline-offset: -3px;
-}
-.max-composer-tools > [data-max-model-picker] {
-  padding: 0 20px;
-  box-sizing: border-box;
-}
-.max-composer-tools .max-model-picker select {
-  background: var(--ui-input);
-  color: var(--ui-text);
-  border-color: var(--ui-line);
 }
 @media (max-width: 900px) {
   body.aichat-page .main-content {
@@ -75,26 +25,18 @@ body.aichat-page .site-footer {
     padding-top: calc(128px + env(safe-area-inset-top, 0px)) !important;
     padding-bottom: 8px !important;
   }
-  .max-composer-tools > summary {
-    padding-inline: 12px;
-    gap: 6px;
-    font-size: 0.76rem;
-  }
-  .max-composer-tools {
-    max-height: 30dvh;
-  }
 }
 
 /* A single input surface: draft, selected attachments, then the action row. */
 body.aichat-page .main-content .aichat-composer {
-  grid-template-columns: auto auto minmax(0, 1fr) 40px;
+  grid-template-columns: 40px minmax(0, 1fr) 40px 40px;
   column-gap: 4px;
   row-gap: 0;
   align-items: center;
   margin: 4px 16px 8px;
-  padding: 6px !important;
+  padding: 4px !important;
   border: 1px solid var(--ui-line-strong) !important;
-  border-radius: 16px !important;
+  border-radius: 26px !important;
   background: var(--ui-input) !important;
   transition: border-color 160ms ease;
 }
@@ -105,12 +47,12 @@ body.aichat-page .main-content .aichat-composer::before {
   content: none;
 }
 body.aichat-page .main-content .aichat-composer textarea {
-  grid-column: 1 / -1;
-  grid-row: 1;
-  height: 36px;
-  min-height: 36px;
+  grid-column: 2;
+  grid-row: 4;
+  height: 40px;
+  min-height: 40px;
   max-height: min(180px, 24dvh);
-  padding: 4px 8px !important;
+  padding: 8px 2px !important;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
@@ -130,35 +72,7 @@ body.aichat-page .main-content .aichat-composer textarea::placeholder {
 }
 .aichat-attachments button[data-file-add],
 .aichat-attachments button[data-image-add] {
-  grid-row: 4;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 40px;
-  min-height: 40px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 8px;
-  color: var(--ui-muted);
-  background: transparent;
-  font: 500 13px var(--font-ui);
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    background 160ms ease,
-    color 160ms ease;
-}
-.aichat-attachments button[data-file-add] {
-  grid-column: 1;
-}
-.aichat-attachments button[data-image-add] {
-  grid-column: 2;
-}
-.aichat-attachments button[data-file-add]:hover,
-.aichat-attachments button[data-image-add]:hover {
-  color: var(--ui-text);
-  background: var(--ui-surface-soft);
+  display: none;
 }
 .aichat-attachments button:focus-visible,
 body.aichat-page .main-content .aichat-send:focus-visible {
@@ -264,7 +178,7 @@ body.aichat-page .main-content .aichat-send {
   height: 40px;
   min-height: 40px;
   padding: 0;
-  border-radius: 10px !important;
+  border-radius: 50% !important;
   box-shadow: none !important;
 }
 body.aichat-page .main-content .aichat-send > span:first-child {
@@ -292,24 +206,9 @@ body.aichat-page .main-content .aichat-shortcut kbd {
   background: transparent;
   color: inherit;
 }
-.max-composer-tools {
-  border-top: 0;
-}
-.max-composer-tools > summary {
-  min-height: 34px;
-  padding: 4px 24px;
-  font-size: 12px;
-}
-.max-composer-tools > summary > :first-child {
-  font-weight: 500;
-  color: var(--ui-muted);
-}
 @media (max-width: 900px) {
   body.aichat-page .main-content .aichat-composer {
     margin: 2px 10px 8px;
-  }
-  .max-composer-tools > summary {
-    padding-inline: 18px;
   }
   body.aichat-page .main-content .aichat-meta-row {
     padding: 0 18px;
@@ -374,8 +273,7 @@ body.aichat-page .main-content .aichat-main-header {
   border: 0 !important;
   background: transparent !important;
 }
-body.aichat-page .main-content .aichat-thread,
-body.aichat-page .main-content .max-composer-tools {
+body.aichat-page .main-content .aichat-thread {
   background: transparent !important;
 }
 
@@ -385,7 +283,6 @@ body.aichat-page .main-content .max-composer-tools {
   }
   body.aichat-page.max-input-active .topbar,
   body.aichat-page.max-input-active .mobile-nav,
-  body.aichat-page.max-input-active .main-content .max-composer-tools,
   body.aichat-page.max-input-active .main-content .aichat-meta-row {
     display: none !important;
   }
@@ -399,51 +296,162 @@ body.aichat-page .main-content .max-composer-tools {
     padding: 0 8px 4px !important;
   }
   body.aichat-page.max-input-active .main-content .aichat-main {
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr) auto;
   }
   body.aichat-page.max-input-active .main-content .aichat-composer {
-    grid-template-columns: 32px 32px minmax(0, 1fr) 36px;
     margin: 2px 0 0;
-    padding: 4px !important;
-    border-radius: 22px !important;
   }
-  body.aichat-page.max-input-active .main-content .aichat-composer textarea {
-    grid-row: 1;
-    grid-column: 3;
-    min-height: 40px;
-    height: 40px;
-    max-height: 100px;
-    padding: 8px 2px !important;
-  }
-  body.aichat-page.max-input-active .aichat-attachments button[data-file-add],
-  body.aichat-page.max-input-active .aichat-attachments button[data-image-add] {
-    grid-row: 1;
-    width: 32px;
-    padding: 0;
-    gap: 0;
-    font-size: 0;
-  }
-  body.aichat-page.max-input-active .aichat-attachments button svg {
-    flex-shrink: 0;
-    width: 19px;
-    height: 19px;
-  }
-  body.aichat-page.max-input-active .main-content .aichat-send {
-    grid-row: 1;
-    width: 36px;
-    height: 36px;
-    min-width: 36px;
-    min-height: 36px;
-    border-radius: 50% !important;
-  }
-  body.aichat-page.max-input-active .aichat-attachments .max-file-tools ul,
-  body.aichat-page.max-input-active .aichat-attachments .max-image-previews {
-    margin: 4px 0;
-  }
-}
-@media (max-width: 900px) {
   body.aichat-page.max-input-active .main-content::before,
   body.aichat-page.max-input-active .main-content::after {
     display: none !important;
   }
+}
+
+/* One compact row in every viewport; attachments occupy the rows above it. */
+body.aichat-page .main-content .aichat-composer {
+  position: relative;
+  overflow: visible;
+}
+.max-composer-menu {
+  grid-row: 4;
+  color: var(--ui-text);
+}
+.max-composer-add {
+  grid-column: 1;
+}
+.max-composer-tools {
+  grid-column: 3;
+}
+.max-composer-menu > summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  list-style: none;
+  cursor: pointer;
+}
+.max-composer-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.max-composer-menu > summary:hover,
+.max-composer-menu[open] > summary {
+  background: var(--ui-surface-soft);
+}
+.max-composer-menu > summary:focus-visible {
+  outline: 2px solid var(--ui-accent);
+}
+.max-composer-popover {
+  position: absolute;
+  z-index: 20;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: min(340px, 100%);
+  box-sizing: border-box;
+  padding: 8px;
+  max-height: min(320px, 55dvh);
+  overflow: auto;
+  border: 1px solid var(--ui-line);
+  border-radius: 16px;
+  background: var(--ui-surface);
+  box-shadow: 0 8px 28px #0002;
+}
+.max-composer-tools .max-composer-popover {
+  left: auto;
+  right: 0;
+}
+.max-composer-popover .aichat-options {
+  padding: 8px;
+  border: 0;
+  background: transparent;
+}
+.max-composer-popover .max-model-picker {
+  padding: 0;
+}
+.max-composer-popover select {
+  max-width: 100%;
+  font-size: 16px;
+}
+.max-composer-add .max-composer-popover {
+  width: 180px;
+}
+.max-composer-add .max-composer-popover button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.max-composer-add .max-composer-popover button:hover {
+  background: var(--ui-surface-soft);
+}
+.max-composer-add .max-composer-popover button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+@media (max-width: 900px) {
+  body.aichat-page .main-content .aichat-composer {
+    grid-template-columns: 36px minmax(0, 1fr) 36px 40px;
+    margin-inline: 0;
+  }
+  .max-composer-menu > summary {
+    width: 36px;
+  }
+}
+
+/* History lives in the mobile top bar, with no duplicate conversation title row. */
+@media (max-width: 900px) {
+  body.aichat-page .main-content::before {
+    font-size: 0 !important;
+  }
+  body.aichat-page .topbar > .aichat-dialog-toggle {
+    position: fixed;
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    left: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    z-index: 131;
+  }
+  body.aichat-page .topbar > .aichat-dialog-toggle span {
+    display: none;
+  }
+  body.aichat-page.max-input-active .topbar > .aichat-dialog-toggle {
+    display: none !important;
+  }
+}
+body.aichat-page .topbar > .aichat-dialog-toggle img {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+}
+
+body.aichat-page .main-content::before {
+  font-size: 0 !important;
+}
+
+body.aichat-page .topbar > .aichat-dialog-toggle {
+  background: transparent !important;
+  border: 0 !important;
+}
+body.aichat-page .topbar > .aichat-dialog-toggle img {
+  filter: brightness(0) invert(1);
+}
+body.aichat-page.theme-light .topbar > .aichat-dialog-toggle img {
+  filter: none;
 }

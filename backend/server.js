@@ -54,6 +54,7 @@ const { getDiscussionPreview } = require('./discussion-preview');
 const {
   canReadPost,
   lockPublicPost,
+  setPostLoginRequired,
   setPostVisibility,
   deleteVisiblePost,
 } = require('./discussion-visibility');
@@ -603,6 +604,7 @@ async function ensureDiscussionTables() {
       featured_by BIGINT NULL,
       is_deleted TINYINT(1) NOT NULL DEFAULT 0,
       is_hidden TINYINT(1) NOT NULL DEFAULT 0,
+      login_required TINYINT(1) NOT NULL DEFAULT 1,
       deleted_at DATETIME NULL,
       deleted_by BIGINT NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -720,6 +722,10 @@ async function ensureDiscussionTables() {
     [
       'is_deleted',
       'ALTER TABLE discussion_posts ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0 AFTER featured_by',
+    ],
+    [
+      'login_required',
+      'ALTER TABLE discussion_posts ADD COLUMN login_required TINYINT(1) NOT NULL DEFAULT 1',
     ],
     [
       'is_hidden',
@@ -1458,6 +1464,7 @@ function toDiscussionPostSummary(row, viewerId = 0) {
     featuredAt: row.featured_at || null,
     isDeleted,
     isHidden: Boolean(row.is_hidden),
+    loginRequired: Boolean(row.login_required),
     canHide: !isDeleted && Number(row.user_id) === Number(viewerId),
     isAnonymous: Boolean(row.is_anonymous),
     laser: !row.is_anonymous && !isDeleted ? row.laser || null : null,
@@ -1629,6 +1636,7 @@ async function postAgentChat(payload, user = null, { signal } = {}) {
   );
   const enrichedPayload = await enrichAgentSiteContext(circuitPayload, {
     service: siteSearch,
+    user,
     publicWebUrl: config.publicWebUrl,
   });
   const trustedHeaders = buildTrustedAgentHeaders(payload, user);
@@ -1819,7 +1827,7 @@ async function createMaxDiscussionReply(postId, triggerComment) {
   await ensureMaxAgentUser();
 
   const [postRows] = await pool.execute(
-    `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous,
+    `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.login_required,
             p.is_pinned, p.pinned_at, p.is_featured, p.featured_at,
             b.slug AS board_slug, b.name AS board_name,
             COALESCE(p.author_student_id, u.student_id) AS author_student_id,
@@ -2128,7 +2136,7 @@ async function getDiscussionPostByPublicId(value) {
   }
 
   const [rows] = await pool.execute(
-    `SELECT id, pid, board_id, user_id, title, is_deleted, is_hidden
+    `SELECT id, pid, board_id, user_id, title, is_deleted, is_hidden, login_required
      FROM discussion_posts
      WHERE pid = ?${legacyCondition}
      LIMIT 1`,
@@ -2439,7 +2447,7 @@ app.get('/api/ai/models', async (request, response) => {
 
 require('./max-files').registerMaxFiles(app, requireAuth);
 
-app.use('/api/search', createSiteSearchRouter(siteSearch));
+app.use('/api/search', createSiteSearchRouter(siteSearch, getOptionalAuthUser));
 
 app.post('/api/ai/chat', async (request, response) => {
   const user = await requireAuth(request, response);
@@ -3681,11 +3689,12 @@ app.get('/api/discussion/posts', async (request, response) => {
     const includeDeleted =
       scope === 'public' && Boolean(currentUser?.is_admin) && request.query.includeDeleted === '1';
     const visibilityCondition =
-      scope === 'mine'
+      (!currentUser ? ' AND p.login_required = 0' : '') +
+      (scope === 'mine'
         ? ` AND p.is_deleted = 0 AND p.user_id = ?${cursor ? ' AND p.id < ?' : ''}`
         : includeDeleted
           ? ' AND p.is_hidden = 0'
-          : ' AND p.is_deleted = 0 AND p.is_hidden = 0';
+          : ' AND p.is_deleted = 0 AND p.is_hidden = 0');
     const where =
       boardSlug === 'all'
         ? `WHERE b.is_active = 1${visibilityCondition}`
@@ -3752,7 +3761,7 @@ app.get('/api/discussion/posts', async (request, response) => {
     }
 
     const [rows] = await pool.execute(
-      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous,
+      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.login_required,
               p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
@@ -3777,7 +3786,7 @@ app.get('/api/discussion/posts', async (request, response) => {
        LEFT JOIN discussion_post_likes my_light ON my_light.post_id = p.id AND my_light.reaction_type = 'light' AND my_light.user_id = ${currentUser ? '?' : '0'}
        LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? '?' : '0'}
        ${where}
-       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
+       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.login_required, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
                 b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        ORDER BY ${scope === 'mine' ? 'p.id DESC' : orderBy}
       LIMIT ${scope === 'mine' ? limit + 1 : limit}`,
@@ -3818,13 +3827,22 @@ app.get('/api/discussion/posts/:id', async (request, response) => {
 
     const includeDeleted = Boolean(currentUser?.is_admin) && request.query.includeDeleted === '1';
     response.set('Cache-Control', 'private, no-store');
+    if (
+      !currentUser &&
+      Number(post?.login_required) &&
+      !Number(post.is_hidden) &&
+      !Number(post.is_deleted)
+    ) {
+      response.status(401).json({ code: 'post_login_required', message: '请登录后查看这篇帖子' });
+      return;
+    }
     if (!canReadPost(post, currentUser, includeDeleted)) {
       response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
     const [rows] = await pool.execute(
-      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous,
+      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.login_required,
               p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
@@ -3850,8 +3868,8 @@ app.get('/api/discussion/posts/:id', async (request, response) => {
        LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? '?' : '0'}
        WHERE p.id = ?
          AND b.is_active = 1
-         AND (? = 1 OR p.is_deleted = 0) AND (p.is_hidden = 0 OR p.user_id = ?)
-       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
+         AND ${currentUser ? '1 = 1' : 'p.login_required = 0'} AND (? = 1 OR p.is_deleted = 0) AND (p.is_hidden = 0 OR p.user_id = ?)
+       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.login_required, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
                 b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        LIMIT 1`,
       currentUser
@@ -3934,6 +3952,14 @@ app.post('/api/discussion/posts', async (request, response) => {
       response.status(400).json({ message: '匿名选项必须为布尔值' });
       return;
     }
+    if (
+      request.body.loginRequired !== undefined &&
+      typeof request.body.loginRequired !== 'boolean'
+    ) {
+      response.status(400).json({ message: '登录可见选项必须为布尔值' });
+      return;
+    }
+    const loginRequired = request.body.loginRequired !== false;
     const isAnonymous = request.body.isAnonymous === true;
     if (isAnonymous && board.slug !== 'daily') {
       response.status(400).json({ message: '仅日常分区支持匿名发帖' });
@@ -3945,9 +3971,18 @@ app.post('/api/discussion/posts', async (request, response) => {
     const postPid = await createUniqueDiscussionPostPid();
     const result = await withDatabaseTransaction(async (connection) => {
       const [created] = await connection.execute(
-        `INSERT INTO discussion_posts (pid, board_id, user_id, author_student_id, title, content_markdown, is_anonymous)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [postPid, board.id, user.id, user.student_id, title, contentMarkdown, isAnonymous ? 1 : 0],
+        `INSERT INTO discussion_posts (pid, board_id, user_id, author_student_id, title, content_markdown, is_anonymous, login_required)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          postPid,
+          board.id,
+          user.id,
+          user.student_id,
+          title,
+          contentMarkdown,
+          isAnonymous ? 1 : 0,
+          loginRequired ? 1 : 0,
+        ],
       );
       await awardMagnetic(
         connection,
@@ -3961,7 +3996,7 @@ app.post('/api/discussion/posts', async (request, response) => {
     });
 
     const [rows] = await pool.execute(
-      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous,
+      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.login_required,
               p.is_pinned, p.pinned_at, p.is_featured, p.featured_at,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
@@ -3992,6 +4027,29 @@ app.post('/api/discussion/posts', async (request, response) => {
     });
   } catch (error) {
     response.status(500).json({ message: '发布帖子失败', detail: error.message });
+  }
+});
+
+app.patch('/api/discussion/posts/:id/login-required', async (request, response) => {
+  response.set('Cache-Control', 'private, no-store');
+  try {
+    const user = await requireAuth(request, response);
+    if (!user) return;
+    await ensureDiscussionTables();
+    const post = await getDiscussionPostByPublicId(request.params.id);
+    if (!post || Number(post.is_deleted)) {
+      response.status(404).json({ message: '帖子不存在' });
+      return;
+    }
+    response.json(
+      await withDatabaseTransaction((connection) =>
+        setPostLoginRequired(connection, post, user, request.body?.loginRequired),
+      ),
+    );
+  } catch (error) {
+    response
+      .status(error.status || 500)
+      .json({ message: error.status ? error.message : '修改失败，请稍后重试' });
   }
 });
 
@@ -4227,6 +4285,15 @@ app.get('/api/discussion/posts/:id/comments', async (request, response) => {
     const post = await getDiscussionPostByPublicId(request.params.id);
 
     response.set('Cache-Control', 'private, no-store');
+    if (
+      !currentUser &&
+      Number(post?.login_required) &&
+      !Number(post.is_hidden) &&
+      !Number(post.is_deleted)
+    ) {
+      response.status(401).json({ code: 'post_login_required', message: '请登录后查看这篇帖子' });
+      return;
+    }
     if (!canReadPost(post, currentUser)) {
       response.status(404).json({ message: '帖子不存在' });
       return;
@@ -4248,7 +4315,7 @@ app.get('/api/discussion/posts/:id/comments', async (request, response) => {
        FROM discussion_comments c
        INNER JOIN users u ON u.id = c.user_id
        INNER JOIN discussion_posts p ON p.id = c.post_id
-       WHERE c.post_id = ? AND p.is_deleted = 0 AND (p.is_hidden = 0 OR p.user_id = ?)
+       WHERE c.post_id = ? AND ${currentUser ? '1 = 1' : 'p.login_required = 0'} AND p.is_deleted = 0 AND (p.is_hidden = 0 OR p.user_id = ?)
        ORDER BY c.created_at ASC, c.id ASC`,
       [
         currentUser?.id || 0,

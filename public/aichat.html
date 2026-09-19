@@ -27,6 +27,18 @@
   <body class="aichat-page">
     <div class="page-shell page-shell-settings">
       <header class="topbar">
+        <button
+          class="aichat-dialog-toggle"
+          id="aichat-dialog-toggle"
+          type="button"
+          aria-label="对话记录"
+          title="对话记录"
+          aria-controls="aichat-dialogs"
+          aria-expanded="false"
+        >
+          <img src="/assets/icons/chats.svg" alt="" aria-hidden="true" />
+          <span>对话记录</span>
+        </button>
         <a class="brand" href="/" aria-label="FREE-BBS 首页">
           <span class="brand-mark">FREE<br />BBS</span>
         </a>
@@ -179,31 +191,6 @@
           </aside>
 
           <section class="aichat-main" aria-label="当前对话">
-            <header class="aichat-main-header">
-              <div class="aichat-main-identity">
-                <img
-                  class="aichat-main-avatar"
-                  src="/assets/max_the_agent_avatar.webp"
-                  alt=""
-                  aria-hidden="true"
-                />
-                <div>
-                  <h2>问问 Max</h2>
-                  <p>课程答疑、推导与电路分析</p>
-                </div>
-              </div>
-              <button
-                class="aichat-dialog-toggle"
-                id="aichat-dialog-toggle"
-                type="button"
-                aria-controls="aichat-dialogs"
-                aria-expanded="false"
-              >
-                <img src="/assets/icons/chats.svg" alt="" aria-hidden="true" />
-                <span>对话记录</span>
-              </button>
-              <p class="aichat-presence">课程 / 推导 / 电路</p>
-            </header>
             <div class="aichat-thread" id="aichat-thread" aria-live="polite" aria-atomic="false">
               <article class="aichat-message aichat-message-assistant">
                 <div class="aichat-avatar">
@@ -214,10 +201,7 @@
                   />
                 </div>
                 <div class="aichat-bubble discussion-markdown-body">
-                  <p>
-                    你好，我是
-                    Max。可以问我课程、推导或代码，也可以粘贴本站电路链接，让我分析元件、接线和工作原理。
-                  </p>
+                  <p>有什么想一起解决的？</p>
                 </div>
               </article>
             </div>
@@ -266,7 +250,7 @@
               <textarea
                 id="aichat-input"
                 rows="1"
-                placeholder="输入问题，或粘贴图片…"
+                placeholder="输入问题…"
                 aria-label="输入给 Max 的问题"
                 maxlength="12000"
               ></textarea>

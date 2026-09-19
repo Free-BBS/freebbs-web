@@ -195,43 +195,57 @@ body.search-page .main-content {
     padding-inline: 10px;
   }
 }
-body:not(.auth-page-body) .topbar .nav-actions > .site-search-trigger {
-  display: inline-flex !important;
-}
-@media (max-width: 900px) {
-  body:not(.auth-page-body) .topbar .nav-actions > .site-search-trigger {
-    position: fixed;
-    top: calc(10px + env(safe-area-inset-top, 0px));
-    right: calc(168px + env(safe-area-inset-right, 0px));
-    width: 40px;
-    height: 44px;
-    z-index: 102;
-  }
-}
 
+/* The shell's navigation is a sidebar; search belongs to the horizontal page header. */
+body:not(.auth-page-body) .topbar > .site-search-trigger {
+  position: fixed;
+  top: 28px;
+  left: auto;
+  right: 24px;
+  z-index: 121;
+  display: inline-flex !important;
+  gap: 10px;
+  width: 40px;
+  height: 40px;
+  justify-content: center;
+  padding: 0;
+  font: 14px var(--font-ui);
+}
+.site-search-trigger span {
+  display: none;
+}
+.site-search-trigger.is-expanded span {
+  display: inline;
+}
+body:not(.auth-page-body) .topbar > .site-search-trigger.is-expanded {
+  justify-content: flex-start;
+  padding-inline: 14px;
+}
 .site-search-form:focus-within {
   box-shadow: inset 0 -2px var(--ui-accent, #0b5f6c);
 }
 .site-search .site-search-form input:focus-visible {
   outline: none !important;
 }
-
-.site-search-trigger span {
-  display: none;
-}
-@media (min-width: 901px) {
-  body:not(.auth-page-body) .topbar .nav-actions > .site-search-trigger {
-    width: 100%;
+@media (max-width: 900px) {
+  body:not(.auth-page-body) .topbar > .site-search-trigger {
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    right: calc(168px + env(safe-area-inset-right, 0px));
     height: 44px;
-    flex: 0 0 auto;
-    justify-content: flex-start;
-    gap: 10px;
-    padding: 10px 14px;
-    border: 0;
-    background: transparent;
-    font: inherit;
   }
-  .site-search-trigger span {
-    display: inline;
+  body.aichat-page.max-input-active .topbar > .site-search-trigger {
+    display: none !important;
+  }
+}
+
+@media (max-width: 900px) {
+  body:not(.auth-page-body) .main-content[data-page-title]::before {
+    display: block;
+    padding-right: 148px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 64px;
+    box-sizing: border-box;
   }
 }
