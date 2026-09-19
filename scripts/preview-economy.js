@@ -32,8 +32,9 @@ const pages = {
   '/profile': 'profile.html',
   '/settings': 'settings.html',
 };
-function createEconomyPreview({ now = Date.now, showcase = false, extraPages = {} } = {}) {
+function createEconomyPreview({ now = Date.now, showcase = false, extraPages = {}, previewApiHandler = null } = {}) {
   const previewPages = { ...pages, ...extraPages };
+  const isWorkbenchPreview = previewPages['/workbench'] === 'workbench.html';
   const store = createEconomyMemoryStore([
     { id: 1, assets: { fishbone: 2 }, counts: { fishbone: 2 }, checkins: {} },
     { id: 2 },
@@ -158,6 +159,30 @@ function createEconomyPreview({ now = Date.now, showcase = false, extraPages = {
       if (req.headers.host !== host) return send(403, { message: 'Loopback preview only' });
       const url = new URL(req.url, `http://${host}`);
       const route = decodeURIComponent(url.pathname);
+      if (
+        previewApiHandler &&
+        (route.startsWith('/api/workbench/') || route.startsWith('/api/notifications'))
+      ) {
+        if (
+          req.headers.authorization !== `Bearer ${TOKEN}` ||
+          (req.headers.origin && req.headers.origin !== `http://${host}`)
+        ) return send(403, { message: '仅限本地模拟操作' });
+        let raw = '';
+        if (!['GET', 'HEAD'].includes(req.method)) {
+          for await (const chunk of req) {
+            raw += chunk;
+            if (raw.length > 32768) throw new Error('请求过大');
+          }
+        }
+        const result = await previewApiHandler({
+          route,
+          url,
+          method: req.method,
+          body: raw ? JSON.parse(raw) : {},
+        });
+        if (result) return send(result.status || 200, result.body);
+        return send(404, { message: '该操作不在工作台预览范围内' });
+      }
       if (!['GET', 'HEAD'].includes(req.method)) {
         if (
           req.method !== 'POST' ||
@@ -239,7 +264,9 @@ function createEconomyPreview({ now = Date.now, showcase = false, extraPages = {
       if (route === '/api/profile/extras') return send(200, await extras.ownState(1));
       if (route.startsWith('/api/users/') && route.endsWith('/public-profile')) {
         const uid = route.split('/')[3];
-        const id = uid === 'u_preview01' ? 1 : uid === 'u_preview02' ? 2 : 0;
+        let id = 0;
+        if (uid === 'u_preview01') id = 1;
+        if (uid === 'u_preview02') id = 2;
         if (!id) return send(404, { message: '未找到模拟用户' });
         return send(200, {
           profile: {
@@ -323,7 +350,8 @@ function createEconomyPreview({ now = Date.now, showcase = false, extraPages = {
           .replace(
             '</body>',
             `<details data-preview-notice style="position:relative;margin:12px;padding:12px;max-width:calc(100vw - 24px);border-radius:14px;background:#133c45;color:white;font:14px/1.6 system-ui">
-            <summary>商城实验 · 模拟余额 · 未发布</summary>
+            <summary>${isWorkbenchPreview ? '工作台交互预览 · 模拟日程与通知 · 未发布' : '商城实验 · 模拟余额 · 未发布'}</summary>
+            ${isWorkbenchPreview ? '<p>个人计划、重要事项与通知使用内存模拟数据；常见时间表达可测试，但未连接真实 AI、数据库或校内系统。关闭预览后数据清空。</p>' : ''}
             ${showcase ? '<p>本预览已预置样例装扮、Max与小鱼，方便试穿；均为临时模拟数据。</p>' : ''}
             <p><a style="color:#b7f1f2" href="/electromagnetic">商城</a> · <a style="color:#b7f1f2" href="/inventory">仓库／充值</a> · <a style="color:#b7f1f2" href="/discussion">讨论区柔光</a> · <a style="color:#b7f1f2" href="/profile?uid=u_preview01">公开主页</a> · <a style="color:#b7f1f2" href="/settings">个人设置／牧场</a></p>
             <p>只使用内存中的 10000 电元＋10000 磁元，重启清空。<br>测试账号默认祥瑞，可验证喂养与福袋。<br>真实数据库、完整钱包账本仍需联验。</p>

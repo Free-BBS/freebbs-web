@@ -109,6 +109,9 @@ function toImportantItem(row) {
 }
 
 function toScheduleItem(row) {
+  let kind = 'event';
+  if (row.source_type === 'agent' && row.source_reference === 'planner:deadline') kind = 'deadline';
+  if (row.source_type === 'agent' && row.source_reference === 'planner:weekly') kind = 'weekly';
   return {
     publicId: row.public_id,
     title: row.title,
@@ -119,7 +122,9 @@ function toScheduleItem(row) {
     timezone: row.timezone || SHANGHAI_TIME_ZONE,
     status: row.status,
     sourceType: row.source_type,
+    kind,
     version: Number(row.version || 1),
+    updatedAt: toIsoString(row.updated_at),
     userConfirmedAt: toIsoString(row.user_confirmed_at),
     userOverriddenAt: toIsoString(row.user_overridden_at),
   };
@@ -435,7 +440,7 @@ function createWorkbenchRouter({
       );
       const [scheduleRows] = await pool.execute(
         `SELECT public_id, title, description, start_at, end_at, all_day, timezone,
-                status, source_type, version, user_confirmed_at, user_overridden_at
+                status, source_type, source_reference, version, updated_at, user_confirmed_at, user_overridden_at
          FROM schedule_items
          WHERE user_id = ?
            AND deleted_at IS NULL
@@ -983,7 +988,7 @@ function createWorkbenchRouter({
 
       const [rows] = await pool.execute(
         `SELECT public_id, title, description, start_at, end_at, all_day, timezone,
-                status, source_type, version, user_confirmed_at, user_overridden_at
+                status, source_type, source_reference, version, updated_at, user_confirmed_at, user_overridden_at
          FROM schedule_items
          WHERE user_id = ?
            AND deleted_at IS NULL
@@ -1031,11 +1036,12 @@ function createWorkbenchRouter({
 
       const [rows] = await pool.execute(
         `SELECT public_id, title, description, start_at, end_at, all_day, timezone,
-                status, source_type, version, user_confirmed_at, user_overridden_at
+                status, source_type, source_reference, version, user_confirmed_at, user_overridden_at
          FROM schedule_items
          WHERE user_id = ?
            AND deleted_at IS NULL
            AND status = 'confirmed'
+           AND (source_reference IS NULL OR source_reference <> 'planner:deadline')
            AND start_at < ?
            AND end_at > ?
            ${excludeCondition}
@@ -1100,7 +1106,7 @@ function createWorkbenchRouter({
       );
       const [rows] = await pool.execute(
         `SELECT public_id, title, description, start_at, end_at, all_day, timezone,
-                status, source_type, version, user_confirmed_at, user_overridden_at
+                status, source_type, source_reference, version, user_confirmed_at, user_overridden_at
          FROM schedule_items
          WHERE public_id = ? AND user_id = ? LIMIT 1`,
         [publicId, user.id],
@@ -1126,7 +1132,7 @@ function createWorkbenchRouter({
 
       const [existingRows] = await pool.execute(
         `SELECT public_id, title, description, start_at, end_at, all_day, timezone,
-                status, source_type, version, user_confirmed_at, user_overridden_at
+                status, source_type, source_reference, version, user_confirmed_at, user_overridden_at
          FROM schedule_items
          WHERE public_id = ? AND user_id = ? AND deleted_at IS NULL
          LIMIT 1`,
@@ -1183,6 +1189,14 @@ function createWorkbenchRouter({
       }
       if (nextEndAt <= nextStartAt) {
         response.status(400).json({ message: '结束时间必须晚于开始时间' });
+        return;
+      }
+      if (
+        existing.source_type === 'agent' &&
+        existing.source_reference === 'planner:deadline' &&
+        (nextEndAt.getTime() - nextStartAt.getTime() !== 60000 || body.allDay === true)
+      ) {
+        response.status(400).json({ message: 'DDL 请设置一个准确的截止时间。' });
         return;
       }
       if (Object.hasOwn(body, 'allDay')) {
@@ -1255,7 +1269,7 @@ function createWorkbenchRouter({
 
       const [rows] = await pool.execute(
         `SELECT public_id, title, description, start_at, end_at, all_day, timezone,
-                status, source_type, version, user_confirmed_at, user_overridden_at
+                status, source_type, source_reference, version, user_confirmed_at, user_overridden_at
          FROM schedule_items
          WHERE public_id = ? AND user_id = ? LIMIT 1`,
         [publicId, user.id],
@@ -1291,7 +1305,7 @@ function createWorkbenchRouter({
 
       const [rows] = await pool.execute(
         `SELECT public_id, title, description, start_at, end_at, all_day, timezone,
-                status, source_type, version, user_confirmed_at, user_overridden_at
+                status, source_type, source_reference, version, user_confirmed_at, user_overridden_at
          FROM schedule_items
          WHERE public_id = ? AND user_id = ? LIMIT 1`,
         [request.params.publicId, user.id],

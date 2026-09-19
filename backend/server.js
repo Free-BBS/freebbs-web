@@ -90,6 +90,7 @@ const {
   ensureNotificationTables,
 } = require('./notifications');
 const { createWorkbenchRouter, ensureWorkbenchTables } = require('./workbench');
+const { createSchedulePlannerRouter } = require('./workbench-schedule-planner');
 const { createCampusConnectorBroker } = require('./tsinghua-connectors/broker');
 const { createTsinghuaCasAdapter } = require('./tsinghua-connectors/cas-adapter');
 const { createCampusConnectorCorsPolicy } = require('./tsinghua-connectors/cors');
@@ -2282,6 +2283,10 @@ app.use(
     },
     getCampusConnectorStatus: (userId) => campusConnectorBroker.getStatus(userId),
   }),
+);
+app.use(
+  '/api/workbench/schedule-planner',
+  createSchedulePlannerRouter({ pool, requireAuth, postAgentChat, buildAgentChatPayload }),
 );
 
 class AdminUserUpdateError extends Error {
