@@ -40,3 +40,43 @@
   });
   update();
 })();
+
+// Safari keeps the layout viewport tall while the keyboard shrinks the visible viewport.
+(() => {
+  if (!document.body.classList.contains('aichat-page')) return;
+  const input = document.getElementById('aichat-input');
+  const form = document.getElementById('aichat-form');
+  const viewport = window.visualViewport;
+  const mobile = window.matchMedia('(max-width: 900px)');
+  if (!input || !form) return;
+  let frame;
+  let active = false;
+  function update() {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      const focused = document.activeElement;
+      const next = mobile.matches && (focused === input || (active && form.contains(focused)));
+      if (next && !active) {
+        const options = document.querySelector('.max-composer-tools');
+        if (options) options.open = false;
+      }
+      active = next;
+      document.body.classList.toggle('max-input-active', active);
+      document.documentElement.style.setProperty(
+        '--max-visible-height',
+        `${viewport?.height || window.innerHeight}px`,
+      );
+      document.documentElement.style.setProperty(
+        '--max-visible-top',
+        `${viewport?.offsetTop || 0}px`,
+      );
+    });
+  }
+  document.addEventListener('focusin', update);
+  document.addEventListener('focusout', update);
+  viewport?.addEventListener('resize', update);
+  viewport?.addEventListener('scroll', update);
+  window.addEventListener('resize', update);
+  mobile.addEventListener('change', update);
+  update();
+})();

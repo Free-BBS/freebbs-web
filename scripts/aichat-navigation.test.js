@@ -40,7 +40,8 @@ test('问问 Max 组合普通聊天与 Navigation，并渲染白名单路由按�
   assert.match(appSource, /function wrapMaxAnswerPanel/);
   assert.match(appSource, /Max 回答/);
   assert.match(appSource, /页面导航/);
-  assert.match(appSource, /title: '课程与知识图谱'/);
+  assert.doesNotMatch(appSource, /validRoutes\.push\(/);
+  assert.match(appSource, /if \(!validRoutes.length\) return/);
   assert.match(appSource, /MAX_NAVIGATION_PATHS/);
   assert.match(appSource, /'\/knowledge'/);
   assert.match(appSource, /'\/workbench'/);
@@ -250,7 +251,7 @@ test('课程名与 RAG 课程上下文会细化课程和讨论入口，泛化请
 
   const namedCourse = await context.addMentionedCourseMapRoute(
     { routes: [{ intent: 'course_graph', module: 'course_graph', url: '/course' }] },
-    '我想学习信号与系统课程',
+    '打开信号与系统课程',
   );
   assert.equal(namedCourse.routes[0].url, '/course?course=signals');
 
@@ -263,7 +264,13 @@ test('课程名与 RAG 课程上下文会细化课程和讨论入口，泛化请
     },
     '帮我理解傅里叶变换',
   );
-  assert.equal(ragCourse.routes[0].url, '/course?course=signals');
+  assert.equal(ragCourse.routes.length, 0);
+  assert.equal(ragCourse.navigation_routes.length, 0);
+  const noLinks = await context.addMentionedCourseMapRoute(
+    { routes: [{ url: '/course' }] },
+    '解释一下，不需要课程链接',
+  );
+  assert.equal(noLinks.routes.length, 0);
 
   const namedDiscussion = await context.addMentionedCourseMapRoute(
     { routes: [{ intent: 'course_discussion', url: '/discussion' }] },

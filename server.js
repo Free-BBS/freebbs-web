@@ -8,6 +8,7 @@ const port = process.env.PORT || 3000;
 const publicDir = path.join(__dirname, 'public');
 const vendorDir = path.join(__dirname, 'node_modules');
 const pageRoutes = new Map([
+  ['/search', '/search.html'],
   ['/surveys', '/surveys.html'],
   ['/system-settings/surveys', '/system-settings-surveys.html'],
   ['/adminusers', '/adminusers.html'],
@@ -141,7 +142,15 @@ function sendFile(filePath, response, options = {}) {
     response.writeHead(200, {
       ...headers,
     });
-    response.end(data);
+    const searchablePage = ext === '.html' && !filePath.endsWith('circuit-embed.html');
+    response.end(
+      searchablePage
+        ? data
+            .toString()
+            .replace('</head>', '<link rel="stylesheet" href="/site-search.css"></head>')
+            .replace('</body>', '<script src="/site-search.js" defer></script></body>')
+        : data,
+    );
   });
 }
 

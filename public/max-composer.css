@@ -378,3 +378,72 @@ body.aichat-page .main-content .aichat-thread,
 body.aichat-page .main-content .max-composer-tools {
   background: transparent !important;
 }
+
+@media (max-width: 900px) {
+  body.aichat-page.max-input-active {
+    overflow: hidden;
+  }
+  body.aichat-page.max-input-active .topbar,
+  body.aichat-page.max-input-active .mobile-nav,
+  body.aichat-page.max-input-active .main-content .max-composer-tools,
+  body.aichat-page.max-input-active .main-content .aichat-meta-row {
+    display: none !important;
+  }
+  body.aichat-page.max-input-active .main-content {
+    position: fixed;
+    inset: var(--max-visible-top, 0px) 0 auto;
+    z-index: 100;
+    width: 100%;
+    height: var(--max-visible-height, 100dvh);
+    margin: 0 !important;
+    padding: 0 8px 4px !important;
+  }
+  body.aichat-page.max-input-active .main-content .aichat-main {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+  body.aichat-page.max-input-active .main-content .aichat-composer {
+    grid-template-columns: 32px 32px minmax(0, 1fr) 36px;
+    margin: 2px 0 0;
+    padding: 4px !important;
+    border-radius: 22px !important;
+  }
+  body.aichat-page.max-input-active .main-content .aichat-composer textarea {
+    grid-row: 1;
+    grid-column: 3;
+    min-height: 40px;
+    height: 40px;
+    max-height: 100px;
+    padding: 8px 2px !important;
+  }
+  body.aichat-page.max-input-active .aichat-attachments button[data-file-add],
+  body.aichat-page.max-input-active .aichat-attachments button[data-image-add] {
+    grid-row: 1;
+    width: 32px;
+    padding: 0;
+    gap: 0;
+    font-size: 0;
+  }
+  body.aichat-page.max-input-active .aichat-attachments button svg {
+    flex-shrink: 0;
+    width: 19px;
+    height: 19px;
+  }
+  body.aichat-page.max-input-active .main-content .aichat-send {
+    grid-row: 1;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 50% !important;
+  }
+  body.aichat-page.max-input-active .aichat-attachments .max-file-tools ul,
+  body.aichat-page.max-input-active .aichat-attachments .max-image-previews {
+    margin: 4px 0;
+  }
+}
+@media (max-width: 900px) {
+  body.aichat-page.max-input-active .main-content::before,
+  body.aichat-page.max-input-active .main-content::after {
+    display: none !important;
+  }
+}

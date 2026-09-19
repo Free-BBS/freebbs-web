@@ -27,6 +27,7 @@ const {
 } = require('./discussion-interactions');
 const { ensureSurveyTables, createSurveyService, createSurveysRouter } = require('./surveys');
 const pool = require('./db');
+const { createSiteSearch, createSiteSearchRouter } = require('./site-search');
 const config = require('./config');
 const {
   createProfileExtras,
@@ -36,6 +37,7 @@ const {
   beijingDay,
 } = require('./profile-extras');
 
+const siteSearch = createSiteSearch(pool);
 const economyShop = createEconomyShop(createMysqlEconomyStore(pool));
 const profileExtras = createProfileExtras(createMysqlEconomyStore(pool));
 const {
@@ -45,6 +47,7 @@ const {
 } = require('./avatar-upload');
 const { buildAiDialogExport, buildAiDialogExportFileName } = require('./ai-dialog-export');
 const { enrichAgentCircuitContext } = require('./agent-circuits');
+const { enrichAgentSiteContext } = require('./agent-site');
 const { createCircuitAssistantRouter } = require('./circuit-assistant');
 const { createCircuitRecognitionRouter } = require('./circuit-recognition');
 const { getDiscussionPreview } = require('./discussion-preview');
@@ -1617,13 +1620,17 @@ async function postAgentChat(payload, user = null, { signal } = {}) {
     payload,
     await systemSettingsStore.readSettings(),
   );
-  const enrichedPayload = await enrichAgentCircuitContext(
+  const circuitPayload = await enrichAgentCircuitContext(
     { ...payload, ...selectedOptions },
     {
       pool,
       publicWebUrl: config.publicWebUrl,
     },
   );
+  const enrichedPayload = await enrichAgentSiteContext(circuitPayload, {
+    service: siteSearch,
+    publicWebUrl: config.publicWebUrl,
+  });
   const trustedHeaders = buildTrustedAgentHeaders(payload, user);
   signal?.throwIfAborted();
 
@@ -1928,6 +1935,7 @@ function toAiDialogSummary(row) {
 }
 
 const AI_DIALOG_NAVIGATION_PATHS = new Set([
+  '/search',
   '/knowledge',
   '/workbench',
   '/discussion',
@@ -2430,6 +2438,8 @@ app.get('/api/ai/models', async (request, response) => {
 });
 
 require('./max-files').registerMaxFiles(app, requireAuth);
+
+app.use('/api/search', createSiteSearchRouter(siteSearch));
 
 app.post('/api/ai/chat', async (request, response) => {
   const user = await requireAuth(request, response);

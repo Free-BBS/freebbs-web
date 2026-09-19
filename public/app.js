@@ -375,6 +375,7 @@ function initializeDashboardShell() {
     '/circuit': '电路仿真',
     '/workbench': '我的工作台',
     '/aichat': '问问 Max',
+    '/search': '全站搜索',
     '/surveys': '活动报名',
     '/surveys.html': '活动报名',
     '/system-settings/surveys': '活动报名管理',
@@ -4646,6 +4647,7 @@ function buildAiChatPayload(userMessage) {
 }
 
 const MAX_NAVIGATION_PATHS = new Set([
+  '/search',
   '/knowledge',
   '/workbench',
   '/discussion',
@@ -4774,13 +4776,7 @@ function renderMaxNavigationRoutes(article, navigationResult) {
   const navigation = createAiNavigationSnapshot(navigationResult);
   const validRoutes = [...navigation.routes];
 
-  if (!validRoutes.length) {
-    validRoutes.push({
-      title: '课程与知识图谱',
-      reason: '打开课程知识图谱，继续探索相关学习内容。',
-      url: '/course',
-    });
-  }
+  if (!validRoutes.length) return;
 
   wrapMaxAnswerPanel(bubble);
   bubble.querySelector(':scope > .aichat-response-navigation')?.remove();
@@ -4831,6 +4827,19 @@ function extractCourseMention(value) {
 }
 
 async function addMentionedCourseMapRoute(navigationResult, userMessage) {
+  const wantsLinks =
+    !/不(?:要|用|需要).{0,8}(?:链接|导航|入口)/.test(userMessage) &&
+    /导航|打开|进入|入口|链接|页面|在哪|哪里|怎么去|带我去|去.*(?:讨论区|课程)|推荐.*(?:帖|资料|课程)|找.*(?:帖|资料|课程)/.test(
+      userMessage,
+    );
+  if (!wantsLinks)
+    return {
+      ...navigationResult,
+      navigation_routes: [],
+      routes: [],
+      navigation: { routes: [] },
+      navigation_answer: '',
+    };
   const normalizedMessage = normalizeCourseMention(userMessage);
   if (!normalizedMessage) {
     return navigationResult;
