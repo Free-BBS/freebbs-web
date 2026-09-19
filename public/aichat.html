@@ -154,16 +154,6 @@
 
         <section class="aichat-shell" aria-label="问问 Max">
           <button
-            class="aichat-dialog-toggle"
-            id="aichat-dialog-toggle"
-            type="button"
-            aria-controls="aichat-dialogs"
-            aria-expanded="false"
-          >
-            <img src="/assets/icons/chats.svg" alt="" aria-hidden="true" />
-            <span>对话记录</span>
-          </button>
-          <button
             class="aichat-dialog-backdrop"
             type="button"
             aria-label="关闭对话记录"
@@ -202,6 +192,16 @@
                   <p>课程答疑、推导与电路分析</p>
                 </div>
               </div>
+              <button
+                class="aichat-dialog-toggle"
+                id="aichat-dialog-toggle"
+                type="button"
+                aria-controls="aichat-dialogs"
+                aria-expanded="false"
+              >
+                <img src="/assets/icons/chats.svg" alt="" aria-hidden="true" />
+                <span>对话记录</span>
+              </button>
               <p class="aichat-presence">课程 / 推导 / 电路</p>
             </header>
             <div class="aichat-thread" id="aichat-thread" aria-live="polite" aria-atomic="false">
@@ -231,7 +231,27 @@
             <form class="aichat-composer" id="aichat-form">
               <div id="aichat-attachments" class="aichat-attachments" aria-label="本条消息的附件">
                 <div id="aichat-images" class="max-images">
-                  <button type="button" data-image-add disabled>添加图片</button>
+                  <button
+                    type="button"
+                    data-image-add
+                    disabled
+                    title="粘贴、拖入或选择图片；最多 4 张，每张 10 MB，自动启用视觉模型"
+                  >
+                    <svg
+                      viewBox="0 0 20 20"
+                      width="16"
+                      height="16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="3" width="14" height="14" rx="3" />
+                      <circle cx="7.5" cy="7.5" r="1" />
+                      <path d="m4 15 4-4 3 3 2-2 3 3" />
+                    </svg>
+                    图片
+                  </button>
                   <input
                     data-image-input
                     type="file"
@@ -246,13 +266,13 @@
               <textarea
                 id="aichat-input"
                 rows="1"
-                placeholder="输入问题，或粘贴本站电路链接…"
+                placeholder="输入问题，或粘贴图片…"
                 aria-label="输入给 Max 的问题"
                 maxlength="12000"
               ></textarea>
-              <button class="aichat-send" id="aichat-send" type="submit">
+              <button class="aichat-send" id="aichat-send" type="submit" title="发送消息">
                 <span>发送</span>
-                <span class="aichat-send-arrow" aria-hidden="true">↗</span>
+                <span class="aichat-send-arrow" aria-hidden="true">↑</span>
               </button>
             </form>
             <div class="aichat-meta-row">

@@ -5,7 +5,7 @@
   const area = document.createElement('div');
   area.className = 'max-file-tools';
   area.innerHTML =
-    '<button type="button" data-file-add title="Word / Excel / PPT / PDF / Markdown；最多 4 个，每个 10 MB">上传文件</button><input data-file-input type="file" hidden multiple accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,.md,.txt"><small data-file-status role="status"></small><ul aria-label="已选文件"></ul>';
+    '<button type="button" data-file-add title="Word / Excel / PPT / PDF / Markdown；最多 4 个，每个 10 MB"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m7 11 5-5a2 2 0 0 1 3 3l-6 6a3.5 3.5 0 0 1-5-5l6-6"/></svg>上传文件</button><input data-file-input type="file" hidden multiple accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,.md,.txt"><small data-file-status role="status"></small><ul aria-label="已选文件"></ul>';
   root.prepend(area);
   const button = area.querySelector('[data-file-add]');
   const input = area.querySelector('[data-file-input]');
@@ -38,7 +38,8 @@
             : '正在解析…';
       const remove = document.createElement('button');
       remove.type = 'button';
-      remove.textContent = '移除';
+      remove.textContent = '×';
+      remove.title = `移除 ${file.name}`;
       remove.setAttribute('aria-label', `移除 ${file.name}`);
       remove.disabled = busy;
       remove.addEventListener('click', () => {
@@ -71,7 +72,7 @@
     const pending = chosen.map((file) => ({ name: file.name, state: 'processing', text: '' }));
     files.push(...pending);
     processing = true;
-    status.textContent = '正在解析附件，完成后可发送。';
+    status.textContent = '';
     render();
     for (const [index, file] of chosen.entries()) {
       const item = pending[index];
@@ -114,9 +115,7 @@
       upload = null;
       status.textContent = files.some((file) => file.state === 'error')
         ? '部分附件解析失败，请移除后重试。'
-        : files.length
-          ? '附件将随消息发送；仅包含文字及表格值。'
-          : '';
+        : '';
       render();
     }
   });

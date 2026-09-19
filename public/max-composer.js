@@ -19,13 +19,9 @@
   const update = () => {
     const model = controls.querySelector('[data-max-model]');
     const effort = controls.querySelector('[data-max-effort]');
-    const count = panel.querySelector('[data-image-previews]')?.children.length || 0;
-    const fileCount = panel.querySelectorAll('.max-file-chip').length;
     state.textContent = [
       model?.selectedOptions[0]?.textContent || '模型与图片',
       effort?.selectedOptions[0]?.textContent,
-      count ? `已附加 ${count} 张图片` : '',
-      fileCount ? `已附加 ${fileCount} 个文件` : '',
     ]
       .filter(Boolean)
       .join(' · ');
@@ -42,8 +38,5 @@
     subtree: true,
     characterData: true,
   });
-  const attachments = panel.querySelector('#aichat-attachments');
-  if (attachments)
-    new MutationObserver(update).observe(attachments, { childList: true, subtree: true });
   update();
 })();
