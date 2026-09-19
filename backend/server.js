@@ -27,15 +27,18 @@ const {
 } = require('./discussion-interactions');
 const { ensureSurveyTables, createSurveyService, createSurveysRouter } = require('./surveys');
 const pool = require('./db');
+const { createSiteSearch, createSiteSearchRouter } = require('./site-search');
 const config = require('./config');
 const {
   createProfileExtras,
   ProfileExtrasError,
   ensureProfileExtrasTables,
   mysqlProfileMethods,
+  readPublicCosmetics,
   beijingDay,
 } = require('./profile-extras');
 
+const siteSearch = createSiteSearch(pool);
 const economyShop = createEconomyShop(createMysqlEconomyStore(pool));
 const profileExtras = createProfileExtras(createMysqlEconomyStore(pool));
 const {
@@ -45,12 +48,16 @@ const {
 } = require('./avatar-upload');
 const { buildAiDialogExport, buildAiDialogExportFileName } = require('./ai-dialog-export');
 const { enrichAgentCircuitContext } = require('./agent-circuits');
+const { enrichAgentSiteContext, siteReferences } = require('./agent-site');
+const { maxAgentRoute } = require('./agent-routing');
+const initializeOnce = require('./initialize-once');
 const { createCircuitAssistantRouter } = require('./circuit-assistant');
 const { createCircuitRecognitionRouter } = require('./circuit-recognition');
 const { getDiscussionPreview } = require('./discussion-preview');
 const {
   canReadPost,
   lockPublicPost,
+  setPostLoginRequired,
   setPostVisibility,
   deleteVisiblePost,
 } = require('./discussion-visibility');
@@ -259,7 +266,10 @@ app.use((request, response, next) => {
   if (!connectorCorsHandled) {
     response.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
   }
-  response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  response.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Upload-Id, X-Upload-Offset, X-Upload-Size',
+  );
   response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
 
   if (request.method === 'OPTIONS') {
@@ -281,6 +291,7 @@ app.use(
       process.env.NODE_ENV === 'production' || new URL(config.publicWebUrl).protocol === 'https:',
   }),
 );
+app.use('/api/ai/files/parse', express.raw({ type: 'application/octet-stream', limit: '8mb' }));
 app.use(express.json({ limit: '28mb' }));
 app.use((error, _request, response, next) => {
   if (error.type === 'entity.too.large') {
@@ -553,7 +564,9 @@ async function ensureUsersUidColumn() {
   }
 }
 
-async function ensureDiscussionTables() {
+const ensureDiscussionTables = initializeOnce(initializeDiscussionTables);
+
+async function initializeDiscussionTables() {
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS discussion_boards (
       id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -601,6 +614,7 @@ async function ensureDiscussionTables() {
       featured_by BIGINT NULL,
       is_deleted TINYINT(1) NOT NULL DEFAULT 0,
       is_hidden TINYINT(1) NOT NULL DEFAULT 0,
+      login_required TINYINT(1) NOT NULL DEFAULT 1,
       deleted_at DATETIME NULL,
       deleted_by BIGINT NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -718,6 +732,10 @@ async function ensureDiscussionTables() {
     [
       'is_deleted',
       'ALTER TABLE discussion_posts ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0 AFTER featured_by',
+    ],
+    [
+      'login_required',
+      'ALTER TABLE discussion_posts ADD COLUMN login_required TINYINT(1) NOT NULL DEFAULT 1',
     ],
     [
       'is_hidden',
@@ -1440,6 +1458,18 @@ function toDiscussionPostSummary(row, viewerId = 0) {
     id: row.pid || String(row.id),
     pid: row.pid || String(row.id),
     title: isDeleted && !row.reveal_deleted ? '已删除的帖子' : row.title,
+    excerpt:
+      isDeleted && !row.reveal_deleted
+        ? ''
+        : String(row.content_markdown || '')
+            .replace(/```[\s\S]*?```/g, ' ')
+            .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+            .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+            .replace(/<[^>]*>/g, ' ')
+            .replace(/[#>*_`~$\\]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 240),
     preview:
       isDeleted && !row.reveal_deleted
         ? null
@@ -1456,6 +1486,7 @@ function toDiscussionPostSummary(row, viewerId = 0) {
     featuredAt: row.featured_at || null,
     isDeleted,
     isHidden: Boolean(row.is_hidden),
+    loginRequired: Boolean(row.login_required),
     canHide: !isDeleted && Number(row.user_id) === Number(viewerId),
     isAnonymous: Boolean(row.is_anonymous),
     laser: !row.is_anonymous && !isDeleted ? row.laser || null : null,
@@ -1618,17 +1649,22 @@ async function postAgentChat(payload, user = null, { signal } = {}) {
     payload,
     await systemSettingsStore.readSettings(),
   );
-  const enrichedPayload = await enrichAgentCircuitContext(
+  const circuitPayload = await enrichAgentCircuitContext(
     { ...payload, ...selectedOptions },
     {
       pool,
       publicWebUrl: config.publicWebUrl,
     },
   );
+  const enrichedPayload = await enrichAgentSiteContext(circuitPayload, {
+    service: siteSearch,
+    user,
+    publicWebUrl: config.publicWebUrl,
+  });
   const trustedHeaders = buildTrustedAgentHeaders(payload, user);
   signal?.throwIfAborted();
 
-  return fetch(`${config.agentBaseUrl.replace(/\/$/, '')}/api/v1/chat`, {
+  const upstream = await fetch(`${config.agentBaseUrl.replace(/\/$/, '')}/api/v1/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1637,6 +1673,8 @@ async function postAgentChat(payload, user = null, { signal } = {}) {
     body: JSON.stringify(enrichedPayload),
     signal,
   });
+  upstream.siteSources = siteReferences(enrichedPayload.context?.siteBrowse, config.publicWebUrl);
+  return upstream;
 }
 
 function normalizeKnowledgeRagText(value, maximumLength) {
@@ -1712,6 +1750,9 @@ async function relayAgentChatResponse(agentResponse, response, stream) {
     response.setHeader('Cache-Control', 'no-store, no-transform');
     response.setHeader('X-Accel-Buffering', 'no');
     response.flushHeaders();
+    if (agentResponse.ok && agentResponse.siteSources?.length) {
+      response.write(`data: ${JSON.stringify({ site_sources: agentResponse.siteSources })}\n\n`);
+    }
 
     if (!agentResponse.body) {
       response.end();
@@ -1732,6 +1773,17 @@ async function relayAgentChatResponse(agentResponse, response, stream) {
     'Content-Type',
     agentResponse.headers.get('content-type') || 'application/json; charset=utf-8',
   );
+  if (agentResponse.ok && agentResponse.siteSources?.length) {
+    try {
+      const data = JSON.parse(text);
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        response.json({ ...data, site_sources: agentResponse.siteSources });
+        return;
+      }
+    } catch {
+      /* Preserve non-JSON upstream responses. */
+    }
+  }
   response.send(text);
 }
 
@@ -1813,7 +1865,7 @@ async function createMaxDiscussionReply(postId, triggerComment) {
   await ensureMaxAgentUser();
 
   const [postRows] = await pool.execute(
-    `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous,
+    `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.login_required,
             p.is_pinned, p.pinned_at, p.is_featured, p.featured_at,
             b.slug AS board_slug, b.name AS board_name,
             COALESCE(p.author_student_id, u.student_id) AS author_student_id,
@@ -1929,6 +1981,7 @@ function toAiDialogSummary(row) {
 }
 
 const AI_DIALOG_NAVIGATION_PATHS = new Set([
+  '/search',
   '/knowledge',
   '/workbench',
   '/discussion',
@@ -2055,6 +2108,11 @@ function normalizeAiMessages(value) {
       normalizedMessage.images = validateVisionImages(message.images);
       if (normalizedMessage.images.length > 4) throw new Error('每条消息最多保存 4 张图片。');
     }
+    if (role === 'user' && message.filePages !== undefined) {
+      normalizedMessage.filePages = validateVisionImages(message.filePages);
+      if (normalizedMessage.filePages.length > 12)
+        throw new Error('每条消息最多保存 12 页文件图片。');
+    }
     const navigation =
       role === 'assistant' ? normalizeAiDialogNavigation(message.navigation) : null;
     if (navigation) {
@@ -2121,7 +2179,7 @@ async function getDiscussionPostByPublicId(value) {
   }
 
   const [rows] = await pool.execute(
-    `SELECT id, pid, board_id, user_id, title, is_deleted, is_hidden
+    `SELECT id, pid, board_id, user_id, title, is_deleted, is_hidden, login_required
      FROM discussion_posts
      WHERE pid = ?${legacyCondition}
      LIMIT 1`,
@@ -2436,6 +2494,8 @@ app.get('/api/ai/models', async (request, response) => {
 
 require('./max-files').registerMaxFiles(app, requireAuth);
 
+app.use('/api/search', createSiteSearchRouter(siteSearch, getOptionalAuthUser));
+
 app.post('/api/ai/chat', async (request, response) => {
   const user = await requireAuth(request, response);
 
@@ -2470,11 +2530,9 @@ app.post('/api/ai/chat', async (request, response) => {
       user,
       {
         ...payload,
-        // 报告编辑直接处理用户提供的文稿；普通聊天沿用自适应路由。
-        // 路由策略由服务端确定，不接受客户端 agent / subagent 覆盖。
-        ...(payload.source === 'circuit_report'
-          ? { agent: 'general_chat', execute_subagent: 'none', combine_general_chat: false }
-          : { agent: 'navigation', execute_subagent: 'auto', combine_general_chat: true }),
+        // 学习问题直接调用 RAG；其他对话保留自适应路由。
+        // 路由由服务端确定，不接受客户端 agent / subagent 覆盖。
+        ...maxAgentRoute(payload),
       },
       {
         source: 'direct_chat',
@@ -2758,6 +2816,7 @@ app.post('/api/ai/dialogs', async (request, response) => {
       messages = normalizeAiMessages(request.body.messages);
       for (const message of messages || []) {
         await validateImageContents(message.images || []);
+        await validateImageContents(message.filePages || []);
       }
     } catch (error) {
       response.status(400).json({ message: `对话图片无效：${error.message}` });
@@ -3676,11 +3735,12 @@ app.get('/api/discussion/posts', async (request, response) => {
     const includeDeleted =
       scope === 'public' && Boolean(currentUser?.is_admin) && request.query.includeDeleted === '1';
     const visibilityCondition =
-      scope === 'mine'
+      (!currentUser ? ' AND p.login_required = 0' : '') +
+      (scope === 'mine'
         ? ` AND p.is_deleted = 0 AND p.user_id = ?${cursor ? ' AND p.id < ?' : ''}`
         : includeDeleted
           ? ' AND p.is_hidden = 0'
-          : ' AND p.is_deleted = 0 AND p.is_hidden = 0';
+          : ' AND p.is_deleted = 0 AND p.is_hidden = 0');
     const where =
       boardSlug === 'all'
         ? `WHERE b.is_active = 1${visibilityCondition}`
@@ -3692,8 +3752,7 @@ app.get('/api/discussion/posts', async (request, response) => {
     if (sortMode === 'hot') {
       orderBy = `p.is_pinned DESC,
                  (
-                   COUNT(DISTINCT CASE WHEN c.is_deleted = 0 THEN c.id END) * 3
-                   + COUNT(DISTINCT CONCAT(l.post_id, ':', l.user_id, ':', l.reaction_type))
+                   COALESCE(c.comment_count, 0) * 3 + COALESCE(l.reaction_count, 0)
                  ) DESC,
                  p.created_at DESC,
                  p.id DESC`;
@@ -3701,79 +3760,41 @@ app.get('/api/discussion/posts', async (request, response) => {
       orderBy =
         'p.is_pinned DESC, p.pinned_at DESC, p.is_featured DESC, p.featured_at DESC, p.created_at DESC, p.id DESC';
     }
-    const [hashRows] = await pool.execute(
-      `SELECT COUNT(DISTINCT p.id) AS post_count,
-              COALESCE(SUM(CASE WHEN p.is_anonymous = 0 THEN laser.expires_at_ms ELSE 0 END), 0) AS laser_version,
-              COALESCE(SUM(CASE WHEN p.is_anonymous = 0 THEN presentation.revision ELSE 0 END), 0) AS presentation_version,
-              COUNT(DISTINCT CASE WHEN c.is_deleted = 0 THEN c.id END) AS comment_count,
-              COUNT(DISTINCT CONCAT(l.post_id, ':', l.user_id, ':', l.reaction_type)) AS reaction_count,
-              COALESCE(MAX(UNIX_TIMESTAMP(GREATEST(
-                p.created_at,
-                p.updated_at,
-                COALESCE(p.deleted_at, p.updated_at),
-                COALESCE(c.updated_at, p.updated_at),
-                COALESCE(l.created_at, p.updated_at)
-              ))), 0) AS newest_change
-       FROM discussion_posts p
-       INNER JOIN discussion_boards b ON b.id = p.board_id
-       LEFT JOIN user_lasers laser ON laser.user_id = p.user_id
-       LEFT JOIN user_profile_extras presentation ON presentation.user_id = p.user_id
-       LEFT JOIN discussion_comments c ON c.post_id = p.id
-       LEFT JOIN discussion_post_likes l ON l.post_id = p.id
-       ${where}`,
-      params,
-    );
-    const postsHash = [
-      sortMode,
-      boardSlug,
-      scope,
-      includeDeleted,
-      currentUser?.id || 0,
-      String(hashRows[0]?.laser_version || 0),
-      String(hashRows[0]?.presentation_version || 0),
-      Number(hashRows[0]?.post_count || 0),
-      Number(hashRows[0]?.comment_count || 0),
-      Number(hashRows[0]?.reaction_count || 0),
-      Number(hashRows[0]?.newest_change || 0),
-    ].join(':');
-
-    if (scope !== 'mine' && clientHash && clientHash === postsHash) {
-      response.json({
-        hash: postsHash,
-        notModified: true,
-        posts: [],
-      });
-      return;
-    }
-
     const [rows] = await pool.execute(
-      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous,
+      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.login_required,
               p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
               u.student_id, u.uid, u.username, u.full_name, u.avatar_path,
-              COUNT(DISTINCT CASE WHEN l.reaction_type = 'smile' THEN l.user_id END) AS like_count,
-              COUNT(DISTINCT CASE WHEN l.reaction_type = 'light' THEN l.user_id END) AS light_count,
-              COUNT(DISTINCT CASE WHEN l.reaction_type = 'fireworks' THEN l.user_id END) AS fireworks_count,
-              COUNT(DISTINCT CASE WHEN c.is_deleted = 0 THEN c.id END) AS comment_count,
-              MAX(CASE WHEN my_smile.user_id IS NULL THEN 0 ELSE 1 END) AS liked_by_me,
-              MAX(CASE WHEN my_light.user_id IS NULL THEN 0 ELSE 1 END) AS lighted_by_me,
-              MAX(CASE WHEN my_fireworks.user_id IS NULL THEN 0 ELSE 1 END) AS fireworks_by_me,
-              MAX(CASE WHEN ? = 1 OR bm.user_id IS NOT NULL THEN 1 ELSE 0 END) AS can_feature,
-              MAX(CASE WHEN ? = 1 OR bm.user_id IS NOT NULL THEN 1 ELSE 0 END) AS can_pin,
-              MAX(CASE WHEN ? = 1 OR bm.user_id IS NOT NULL OR p.user_id = ? THEN 1 ELSE 0 END) AS can_delete
+              COALESCE(l.like_count, 0) AS like_count,
+              COALESCE(l.light_count, 0) AS light_count,
+              COALESCE(l.fireworks_count, 0) AS fireworks_count,
+              COALESCE(c.comment_count, 0) AS comment_count,
+              CASE WHEN my_smile.user_id IS NULL THEN 0 ELSE 1 END AS liked_by_me,
+              CASE WHEN my_light.user_id IS NULL THEN 0 ELSE 1 END AS lighted_by_me,
+              CASE WHEN my_fireworks.user_id IS NULL THEN 0 ELSE 1 END AS fireworks_by_me,
+              CASE WHEN ? = 1 OR bm.user_id IS NOT NULL THEN 1 ELSE 0 END AS can_feature,
+              CASE WHEN ? = 1 OR bm.user_id IS NOT NULL THEN 1 ELSE 0 END AS can_pin,
+              CASE WHEN ? = 1 OR bm.user_id IS NOT NULL OR p.user_id = ? THEN 1 ELSE 0 END AS can_delete
        FROM discussion_posts p
        INNER JOIN discussion_boards b ON b.id = p.board_id
        INNER JOIN users u ON u.id = p.user_id
-       LEFT JOIN discussion_post_likes l ON l.post_id = p.id
-       LEFT JOIN discussion_comments c ON c.post_id = p.id
+       LEFT JOIN (
+         SELECT post_id, COUNT(*) AS reaction_count,
+                SUM(reaction_type = 'smile') AS like_count,
+                SUM(reaction_type = 'light') AS light_count,
+                SUM(reaction_type = 'fireworks') AS fireworks_count
+         FROM discussion_post_likes GROUP BY post_id
+       ) l ON l.post_id = p.id
+       LEFT JOIN (
+         SELECT post_id, COUNT(*) AS comment_count
+         FROM discussion_comments WHERE is_deleted = 0 GROUP BY post_id
+       ) c ON c.post_id = p.id
        LEFT JOIN discussion_board_moderators bm ON bm.board_id = b.id AND bm.user_id = ?
        LEFT JOIN discussion_post_likes my_smile ON my_smile.post_id = p.id AND my_smile.reaction_type = 'smile' AND my_smile.user_id = ${currentUser ? '?' : '0'}
        LEFT JOIN discussion_post_likes my_light ON my_light.post_id = p.id AND my_light.reaction_type = 'light' AND my_light.user_id = ${currentUser ? '?' : '0'}
        LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? '?' : '0'}
        ${where}
-       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
-                b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        ORDER BY ${scope === 'mine' ? 'p.id DESC' : orderBy}
       LIMIT ${scope === 'mine' ? limit + 1 : limit}`,
       currentUser
@@ -3791,12 +3812,28 @@ app.get('/api/discussion/posts', async (request, response) => {
         : ['', '', '', 0, 0, ...params],
     );
 
+    const posts = (await economyShop.decoratePosts(rows.slice(0, limit))).map((row) =>
+      toDiscussionPostSummary({ ...row, reveal_deleted: includeDeleted }, currentUser?.id),
+    );
+    // Hash exactly the visible page, including edits, cosmetics and this viewer's permissions.
+    // Do not scan a second comments × reactions join merely to detect changes.
+    const postsHash = crypto
+      .createHash('sha256')
+      .update(
+        JSON.stringify(
+          [sortMode, boardSlug, scope, includeDeleted, currentUser?.id || 0, limit, posts],
+          (key, value) => (key === 'serverNowMs' ? undefined : value),
+        ),
+      )
+      .digest('hex');
+    if (scope !== 'mine' && clientHash === postsHash) {
+      response.json({ hash: postsHash, notModified: true, posts: [] });
+      return;
+    }
     response.json({
       hash: postsHash,
       notModified: false,
-      posts: (await economyShop.decoratePosts(rows.slice(0, limit))).map((row) =>
-        toDiscussionPostSummary({ ...row, reveal_deleted: includeDeleted }, currentUser?.id),
-      ),
+      posts,
       nextCursor: scope === 'mine' && rows.length > limit ? String(rows[limit - 1].id) : null,
     });
   } catch (error) {
@@ -3813,13 +3850,22 @@ app.get('/api/discussion/posts/:id', async (request, response) => {
 
     const includeDeleted = Boolean(currentUser?.is_admin) && request.query.includeDeleted === '1';
     response.set('Cache-Control', 'private, no-store');
+    if (
+      !currentUser &&
+      Number(post?.login_required) &&
+      !Number(post.is_hidden) &&
+      !Number(post.is_deleted)
+    ) {
+      response.status(401).json({ code: 'post_login_required', message: '请登录后查看这篇帖子' });
+      return;
+    }
     if (!canReadPost(post, currentUser, includeDeleted)) {
       response.status(404).json({ message: '帖子不存在' });
       return;
     }
 
     const [rows] = await pool.execute(
-      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous,
+      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.login_required,
               p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
@@ -3845,8 +3891,8 @@ app.get('/api/discussion/posts/:id', async (request, response) => {
        LEFT JOIN discussion_post_likes my_fireworks ON my_fireworks.post_id = p.id AND my_fireworks.reaction_type = 'fireworks' AND my_fireworks.user_id = ${currentUser ? '?' : '0'}
        WHERE p.id = ?
          AND b.is_active = 1
-         AND (? = 1 OR p.is_deleted = 0) AND (p.is_hidden = 0 OR p.user_id = ?)
-       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
+         AND ${currentUser ? '1 = 1' : 'p.login_required = 0'} AND (? = 1 OR p.is_deleted = 0) AND (p.is_hidden = 0 OR p.user_id = ?)
+       GROUP BY p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.login_required, p.is_pinned, p.pinned_at, p.is_featured, p.featured_at, p.is_deleted, p.is_hidden, p.deleted_at,
                 b.slug, b.name, p.author_student_id, u.student_id, u.uid, u.username, u.full_name, u.avatar_path
        LIMIT 1`,
       currentUser
@@ -3929,6 +3975,14 @@ app.post('/api/discussion/posts', async (request, response) => {
       response.status(400).json({ message: '匿名选项必须为布尔值' });
       return;
     }
+    if (
+      request.body.loginRequired !== undefined &&
+      typeof request.body.loginRequired !== 'boolean'
+    ) {
+      response.status(400).json({ message: '登录可见选项必须为布尔值' });
+      return;
+    }
+    const loginRequired = request.body.loginRequired !== false;
     const isAnonymous = request.body.isAnonymous === true;
     if (isAnonymous && board.slug !== 'daily') {
       response.status(400).json({ message: '仅日常分区支持匿名发帖' });
@@ -3940,9 +3994,18 @@ app.post('/api/discussion/posts', async (request, response) => {
     const postPid = await createUniqueDiscussionPostPid();
     const result = await withDatabaseTransaction(async (connection) => {
       const [created] = await connection.execute(
-        `INSERT INTO discussion_posts (pid, board_id, user_id, author_student_id, title, content_markdown, is_anonymous)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [postPid, board.id, user.id, user.student_id, title, contentMarkdown, isAnonymous ? 1 : 0],
+        `INSERT INTO discussion_posts (pid, board_id, user_id, author_student_id, title, content_markdown, is_anonymous, login_required)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          postPid,
+          board.id,
+          user.id,
+          user.student_id,
+          title,
+          contentMarkdown,
+          isAnonymous ? 1 : 0,
+          loginRequired ? 1 : 0,
+        ],
       );
       await awardMagnetic(
         connection,
@@ -3956,7 +4019,7 @@ app.post('/api/discussion/posts', async (request, response) => {
     });
 
     const [rows] = await pool.execute(
-      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous,
+      `SELECT p.id, p.pid, p.title, p.content_markdown, p.created_at, p.updated_at, p.user_id, p.is_anonymous, p.login_required,
               p.is_pinned, p.pinned_at, p.is_featured, p.featured_at,
               b.slug AS board_slug, b.name AS board_name,
               COALESCE(p.author_student_id, u.student_id) AS author_student_id,
@@ -3987,6 +4050,29 @@ app.post('/api/discussion/posts', async (request, response) => {
     });
   } catch (error) {
     response.status(500).json({ message: '发布帖子失败', detail: error.message });
+  }
+});
+
+app.patch('/api/discussion/posts/:id/login-required', async (request, response) => {
+  response.set('Cache-Control', 'private, no-store');
+  try {
+    const user = await requireAuth(request, response);
+    if (!user) return;
+    await ensureDiscussionTables();
+    const post = await getDiscussionPostByPublicId(request.params.id);
+    if (!post || Number(post.is_deleted)) {
+      response.status(404).json({ message: '帖子不存在' });
+      return;
+    }
+    response.json(
+      await withDatabaseTransaction((connection) =>
+        setPostLoginRequired(connection, post, user, request.body?.loginRequired),
+      ),
+    );
+  } catch (error) {
+    response
+      .status(error.status || 500)
+      .json({ message: error.status ? error.message : '修改失败，请稍后重试' });
   }
 });
 
@@ -4146,7 +4232,7 @@ app.post('/api/discussion/posts/:id/like', async (request, response) => {
       return;
     }
 
-    if (!canReadPost(post, null)) {
+    if (!canReadPost(post, user) || Number(post.is_hidden)) {
       response.status(404).json({ message: '帖子不存在' });
       return;
     }
@@ -4222,6 +4308,15 @@ app.get('/api/discussion/posts/:id/comments', async (request, response) => {
     const post = await getDiscussionPostByPublicId(request.params.id);
 
     response.set('Cache-Control', 'private, no-store');
+    if (
+      !currentUser &&
+      Number(post?.login_required) &&
+      !Number(post.is_hidden) &&
+      !Number(post.is_deleted)
+    ) {
+      response.status(401).json({ code: 'post_login_required', message: '请登录后查看这篇帖子' });
+      return;
+    }
     if (!canReadPost(post, currentUser)) {
       response.status(404).json({ message: '帖子不存在' });
       return;
@@ -4243,7 +4338,7 @@ app.get('/api/discussion/posts/:id/comments', async (request, response) => {
        FROM discussion_comments c
        INNER JOIN users u ON u.id = c.user_id
        INNER JOIN discussion_posts p ON p.id = c.post_id
-       WHERE c.post_id = ? AND p.is_deleted = 0 AND (p.is_hidden = 0 OR p.user_id = ?)
+       WHERE c.post_id = ? AND ${currentUser ? '1 = 1' : 'p.login_required = 0'} AND p.is_deleted = 0 AND (p.is_hidden = 0 OR p.user_id = ?)
        ORDER BY c.created_at ASC, c.id ASC`,
       [
         currentUser?.id || 0,
@@ -4299,7 +4394,7 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
       return;
     }
 
-    if (!canReadPost(post, null)) {
+    if (!canReadPost(post, user) || Number(post.is_hidden)) {
       response.status(404).json({ message: '帖子不存在' });
       return;
     }
@@ -4842,8 +4937,9 @@ app.get('/api/auth/me', async (request, response) => {
       return;
     }
 
+    const cosmetics = await readPublicCosmetics(pool, [user.id]);
     response.json({
-      user: toUserProfile(user),
+      user: { ...toUserProfile(user), cosmetics: cosmetics[user.id] || {} },
     });
   } catch (error) {
     response.status(500).json({ message: '获取用户信息失败', detail: error.message });

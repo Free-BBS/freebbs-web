@@ -72,6 +72,27 @@
     state.summary.textContent = stopped ? '思考已停止' : '思考完成';
     // Keep the user’s expansion choice when the answer finishes.
   }
+  function withSiteReferences(result, sources) {
+    const links = [];
+    const seen = new Set();
+    for (const source of sources.slice(0, 5)) {
+      if (
+        typeof source?.url !== 'string' ||
+        !/^\/(?![\/\\])/.test(source.url) ||
+        /[\s<>"()\\]/.test(source.url)
+      )
+        continue;
+      if (seen.has(source.url) || result.answer.includes(`](${source.url}`)) continue;
+      seen.add(source.url);
+      const title = String(source.title || '站内来源')
+        .replace(/["\\\r\n]/g, ' ')
+        .slice(0, 160);
+      links.push(`[【${links.length + 1}】](${source.url} "${title}")`);
+    }
+    return links.length
+      ? { ...result, answer: `${result.answer}\n\n站内参考：${links.join(' ')}` }
+      : result;
+  }
   async function request({
     url,
     token,
@@ -115,6 +136,7 @@
       let bytes = 0;
       let skipLf = false;
       let result;
+      let siteSources = [];
       const dispatch = () => {
         if (!data.length) return;
         const event = JSON.parse(data.join('\n'));
@@ -122,6 +144,7 @@
         if (event.error) throw new Error(event.error.message || 'Max 回答失败，请重试。');
         if (typeof event.reasoning_delta === 'string')
           onReasoning({ id: String(event.reasoning_id || '1'), delta: event.reasoning_delta });
+        if (Array.isArray(event.site_sources)) siteSources = event.site_sources;
         if (event.done === true) {
           if (!event.result || typeof event.result.answer !== 'string')
             throw new Error('未收到完整的 Max 回答，请重试。');
@@ -149,7 +172,11 @@
           if (result) break;
         }
       }
-      return result;
+      // Direct learning routes retain the same source/history UI as delegated RAG.
+      if (result.agent === 'rag' && !result.subagent) {
+        result = { ...result, response_mode: 'rag', subagent: { ...result } };
+      }
+      return withSiteReferences(result, siteSources);
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener('abort', cancel);

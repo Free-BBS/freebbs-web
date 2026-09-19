@@ -57,6 +57,8 @@ function harness(fetch) {
   vm.runInNewContext(fs.readFileSync(require.resolve('../public/max-files'), 'utf8'), {
     window,
     API_BASE_URL: '/api',
+    crypto: require('node:crypto'),
+    URLSearchParams,
     AbortController,
     AbortSignal,
     fetch,
@@ -84,7 +86,7 @@ function harness(fetch) {
     },
   };
 }
-const file = (name) => ({ name, size: 100 });
+const file = (name) => ({ name, size: 100, slice: () => new Uint8Array(100) });
 const response = (text) => ({ ok: true, json: async () => ({ text }) });
 const tick = () =>
   new Promise((resolve) => {
@@ -101,7 +103,7 @@ test('upload is mounted in the composer and pending/ready attachments remain vis
   assert.match(h.area.markup, /上传文件/);
   const pending = h.select([file('report.md')]);
   assert.equal(h.list.children[0].children[0].textContent, 'report.md');
-  assert.match(h.list.children[0].children[1].textContent, /正在解析/);
+  assert.match(h.list.children[0].children[1].textContent, /正在上传/);
   assert.throws(() => h.controller.snapshot(), /正在解析/);
   await tick();
   finish(response('解析后的实验内容'));

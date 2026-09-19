@@ -1410,3 +1410,48 @@ body.discussion-page #discussion-anonymous-author-result:empty {
 body.discussion-page #discussion-detail .discussion-deleted-notice strong {
   color: inherit !important;
 }
+
+.discussion-login-dialog {
+  width: min(360px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 24px;
+  border: 1px solid var(--ui-line);
+  border-radius: 16px;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+}
+.discussion-login-dialog::backdrop {
+  background: #0008;
+}
+.discussion-login-dialog h2 {
+  font-size: 20px;
+  margin: 0 0 12px;
+}
+.discussion-login-dialog p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--ui-muted);
+}
+.discussion-login-dialog form {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+.discussion-login-dialog button,
+.discussion-login-dialog a {
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 16px;
+  min-height: 44px;
+  font: inherit;
+  font-size: 14px;
+  text-decoration: none;
+  color: var(--ui-text);
+  background: var(--ui-surface-soft);
+  cursor: pointer;
+}
+.discussion-login-dialog a {
+  background: var(--ui-accent);
+  color: #fff;
+}
