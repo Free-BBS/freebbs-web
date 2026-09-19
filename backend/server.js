@@ -48,6 +48,7 @@ const {
 const { buildAiDialogExport, buildAiDialogExportFileName } = require('./ai-dialog-export');
 const { enrichAgentCircuitContext } = require('./agent-circuits');
 const { enrichAgentSiteContext, siteReferences } = require('./agent-site');
+const { maxAgentRoute } = require('./agent-routing');
 const { createCircuitAssistantRouter } = require('./circuit-assistant');
 const { createCircuitRecognitionRouter } = require('./circuit-recognition');
 const { getDiscussionPreview } = require('./discussion-preview');
@@ -2516,11 +2517,9 @@ app.post('/api/ai/chat', async (request, response) => {
       user,
       {
         ...payload,
-        // 报告编辑直接处理用户提供的文稿；普通聊天沿用自适应路由。
-        // 路由策略由服务端确定，不接受客户端 agent / subagent 覆盖。
-        ...(payload.source === 'circuit_report'
-          ? { agent: 'general_chat', execute_subagent: 'none', combine_general_chat: false }
-          : { agent: 'navigation', execute_subagent: 'auto', combine_general_chat: true }),
+        // 学习问题直接调用 RAG；其他对话保留自适应路由。
+        // 路由由服务端确定，不接受客户端 agent / subagent 覆盖。
+        ...maxAgentRoute(payload),
       },
       {
         source: 'direct_chat',

@@ -144,3 +144,16 @@ test('site references reject external or unsafe URLs and do not duplicate inline
   );
   assert.equal(answer.answer, original);
 });
+
+test('direct RAG learning replies preserve sources for rendering and conversation history', async () => {
+  const result = {
+    agent: 'rag',
+    answer: '卷积解释',
+    sources: [{ doc_id: 'signals', source: '课程讲义' }],
+    course: { name: '信号与系统' },
+  };
+  const received = await request(event({ done: true, result }));
+  assert.deepEqual(received.subagent, result);
+  assert.equal(received.response_mode, 'rag');
+  assert.equal(received.answer, result.answer);
+});

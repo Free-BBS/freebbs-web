@@ -46,7 +46,11 @@ test('问问 Max 组合普通聊天与 Navigation，并渲染白名单路由按�
   assert.match(appSource, /'\/knowledge'/);
   assert.match(appSource, /'\/workbench'/);
   assert.match(appSource, /'\/discussion'/);
-  assert.match(backendSource, /agent: 'navigation'/);
+  assert.match(backendSource, /maxAgentRoute\(payload\)/);
+  assert.equal(
+    require('../backend/agent-routing').maxAgentRoute({ message: '你好' }).agent,
+    'navigation',
+  );
   assert.match(backendSource, /combine_general_chat: payload\.combine_general_chat === true/);
   assert.match(backendSource, /X-FreeBBS-Internal-Token/);
   assert.match(backendSource, /X-FreeBBS-UID/);

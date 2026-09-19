@@ -172,6 +172,10 @@
           if (result) break;
         }
       }
+      // Direct learning routes retain the same source/history UI as delegated RAG.
+      if (result.agent === 'rag' && !result.subagent) {
+        result = { ...result, response_mode: 'rag', subagent: { ...result } };
+      }
       return withSiteReferences(result, siteSources);
     } finally {
       clearTimeout(timer);
