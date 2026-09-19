@@ -362,3 +362,19 @@ body.aichat-page .main-content .aichat-shortcut kbd {
     display: none;
   }
 }
+
+/* The conversation is the page, not another card inside it. */
+body.aichat-page .main-content .aichat-main {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+body.aichat-page .main-content .aichat-main-header {
+  border: 0 !important;
+  background: transparent !important;
+}
+body.aichat-page .main-content .aichat-thread,
+body.aichat-page .main-content .max-composer-tools {
+  background: transparent !important;
+}
