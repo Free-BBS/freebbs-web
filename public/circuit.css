@@ -1060,14 +1060,13 @@ body.circuit-page
 .circuit-component-grid button {
   min-height: 44px;
 }
-body.circuit-page::after {
-  content: '';
+.circuit-page-glow {
   position: fixed;
   inset: 0;
   background: radial-gradient(ellipse at center, #ffe7a1, #ffd06b66);
   opacity: var(--circuit-lamp-glow, 0);
   pointer-events: none;
-  z-index: 100;
+  z-index: 2001;
   transition: opacity 100ms linear;
 }
 @media (max-width: 600px) {
