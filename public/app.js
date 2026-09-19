@@ -4976,9 +4976,10 @@ function renderMaxSubagentResult(article, navigationResult) {
       navigationResult.course_context?.name || subagent.course?.name || '',
     ).trim();
 
+    if (!sources.length) return null;
     panel.classList.add('is-rag');
     panel.innerHTML = `
-      <header><strong>RAG · 已检索课程资料</strong><span>${sources.length ? `${sources.length} 个来源` : '课程索引'}</span></header>
+      <details><summary>参考资料（${sources.length}）</summary>
       <p>${escapeHtml(courseName ? `本回答优先参考了「${courseName}」的已索引资料。` : '本回答优先参考了当前课程知识库。')}</p>
       ${
         sources.length
@@ -4994,6 +4995,7 @@ function renderMaxSubagentResult(article, navigationResult) {
               .join('')}</ul>`
           : ''
       }
+      </details>
     `;
     bubble.append(panel);
     return panel;
