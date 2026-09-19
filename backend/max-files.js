@@ -1,0 +1,155 @@
+const { Worker, isMainThread, parentPort, workerData } = require('node:worker_threads');
+const path = require('node:path');
+
+const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_TEXT = 60000;
+const extensions = new Set([
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.ppt',
+  '.pptx',
+  '.pdf',
+  '.md',
+  '.txt',
+]);
+async function extract(name, buffer) {
+  const ext = path.extname(name).toLowerCase();
+  let text;
+  if (!extensions.has(ext)) throw new Error('不支持此文件格式。');
+  if (ext === '.md' || ext === '.txt') text = buffer.toString('utf8');
+  else if (ext === '.docx') text = (await require('mammoth').extractRawText({ buffer })).value;
+  else if (ext === '.doc')
+    text = (await new (require('word-extractor'))().extract(buffer)).getBody();
+  else if (ext === '.pdf') {
+    const { PDFParse } = require('pdf-parse');
+    const parser = new PDFParse({ data: new Uint8Array(buffer), isEvalSupported: false });
+    try {
+      text = (await parser.getText({ pageJoiner: '\n\n' })).text;
+    } finally {
+      await parser.destroy();
+    }
+  } else if (ext === '.xlsx' || ext === '.xls') {
+    const xlsx = require('xlsx');
+    const book = xlsx.read(buffer, { type: 'buffer', sheetRows: 3000 });
+    for (const sheet of book.SheetNames) {
+      const ref = book.Sheets[sheet]['!fullref'];
+      if (ref && xlsx.utils.decode_range(ref).e.r >= 3000)
+        throw new Error('工作表超过 3000 行，请拆分后上传。');
+    }
+    text = book.SheetNames.map(
+      (sheet) => `工作表：${sheet}\n${xlsx.utils.sheet_to_csv(book.Sheets[sheet])}`,
+    ).join('\n\n');
+  } else if (ext === '.pptx') {
+    const zip = await require('jszip').loadAsync(buffer);
+    const slides = Object.keys(zip.files)
+      .filter((key) => /^ppt\/slides\/slide\d+\.xml$/.test(key))
+      .sort((a, b) => Number(a.match(/\d+/)[0]) - Number(b.match(/\d+/)[0]));
+    const parts = [];
+    for (const [index, slide] of slides.entries()) {
+      const xml = await zip.files[slide].async('string');
+      const words = [...xml.matchAll(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g)].map((match) =>
+        match[1]
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&apos;/g, "'")
+          .replace(/&amp;/g, '&'),
+      );
+      parts.push(`幻灯片 ${index + 1}\n${words.join('\n')}`);
+    }
+    text = parts.join('\n\n');
+  } else if (ext === '.ppt') {
+    const cfb = require('xlsx').CFB;
+    const file = cfb.read(buffer, { type: 'buffer' });
+    const stream = cfb.find(file, 'PowerPoint Document');
+    if (!stream) throw new Error('无法读取 PPT，请检查文件是否加密。');
+    const bytes = Buffer.from(stream.content);
+    const parts = [];
+    // MS-PPT TextCharsAtom (4000) and TextBytesAtom (4008).
+    const records = (start, end, depth = 0) => {
+      if (depth > 50) throw new Error('PPT 层级过深。');
+      for (let at = start; at + 8 <= end;) {
+        const version = bytes.readUInt16LE(at) % 16;
+        const type = bytes.readUInt16LE(at + 2);
+        const stop = at + 8 + bytes.readUInt32LE(at + 4);
+        if (stop > end) throw new Error('PPT 数据损坏。');
+        if (version === 15) records(at + 8, stop, depth + 1);
+        else if (type === 4000 || type === 4008)
+          parts.push(bytes.subarray(at + 8, stop).toString(type === 4000 ? 'utf16le' : 'latin1'));
+        at = stop;
+      }
+    };
+    records(0, bytes.length);
+    text = parts.join('\n');
+  }
+  text = String(text || '')
+    .split(String.fromCharCode(0))
+    .join('')
+    .trim();
+  if (!text) throw new Error('未提取到文字；扫描版 PDF 请将页面作为图片发送。');
+  if (text.length > MAX_TEXT) throw new Error('文件文字超过 6 万字，请拆分文件后上传。');
+  return text;
+}
+function parseFile(name, buffer) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(__filename, {
+      workerData: { name, buffer },
+      resourceLimits: { maxOldGenerationSizeMb: 192 },
+    });
+    const timer = setTimeout(() => {
+      worker.terminate();
+      reject(new Error('文件解析超时，请拆分后重试。'));
+    }, 15000);
+    worker.once('message', (result) => {
+      clearTimeout(timer);
+      worker.terminate();
+      if (result.error) reject(new Error(result.error));
+      else resolve(result.text);
+    });
+    worker.once('error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    worker.once('exit', (code) => {
+      clearTimeout(timer);
+      if (code) reject(new Error('文件解析失败，请检查文件格式。'));
+    });
+  });
+}
+function registerMaxFiles(app, requireAuth) {
+  let active = 0;
+  app.post('/api/ai/files/parse', async (request, response) => {
+    if (!(await requireAuth(request, response))) return;
+    const { name, data } = request.body || {};
+    if (
+      typeof name !== 'string' ||
+      name.length > 180 ||
+      !extensions.has(path.extname(name).toLowerCase()) ||
+      typeof data !== 'string' ||
+      data.length > Math.ceil(MAX_BYTES / 3) * 4 ||
+      !/^[A-Za-z0-9+/]*={0,2}$/.test(data)
+    )
+      return response
+        .status(400)
+        .json({ message: '支持 Word、Excel、PPT、PDF、Markdown；单文件最多 10 MB。' });
+    const buffer = Buffer.from(data, 'base64');
+    if (!buffer.length || buffer.length > MAX_BYTES)
+      return response.status(400).json({ message: '文件大小无效。' });
+    if (active >= 2) return response.status(429).json({ message: '文件解析繁忙，请稍后重试。' });
+    active += 1;
+    try {
+      return response.json({ name, text: await parseFile(name, buffer) });
+    } catch (error) {
+      return response.status(422).json({ message: error.message || '文件解析失败。' });
+    } finally {
+      active -= 1;
+    }
+  });
+}
+if (!isMainThread)
+  extract(workerData.name, Buffer.from(workerData.buffer))
+    .then((text) => parentPort.postMessage({ text }))
+    .catch((error) => parentPort.postMessage({ error: error.message }));
+module.exports = { registerMaxFiles, extract, parseFile };

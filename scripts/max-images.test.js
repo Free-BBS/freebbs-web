@@ -38,13 +38,10 @@ test('accepts supported image files and rejects unsupported, empty and oversized
   for (const invalid of [{ type: 'image/svg+xml' }, { size: 0 }, { size: 10485761 }])
     assert.throws(() => validateFile({ ...file, ...invalid }));
 });
-test('only vision models enable upload; switching to text blocks sending without losing attachments', async () => {
+test('adding images automatically enables vision; text-only sending remains blocked', async () => {
   const { controller: c, nodes } = harness();
   await c.select([file]);
-  assert.deepEqual(c.snapshot(), []);
-  assert.equal(nodes.get('[data-image-add]').disabled, true);
-  c.setVision(true);
-  await c.select([file]);
+  assert.equal(nodes.get('[data-image-add]').disabled, false);
   assert.equal(c.snapshot().length, 1);
   c.setVision(false);
   assert.throws(() => c.snapshot(), /视觉模型/);

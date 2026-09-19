@@ -1030,3 +1030,48 @@ body.circuit-page
     display: none;
   }
 }
+
+#circuit-component-menu {
+  width: min(680px, 94vw);
+  max-height: 82dvh;
+  overflow: auto;
+  color: var(--circuit-ink);
+  background: var(--circuit-surface, #102228);
+  border: 1px solid #456069;
+  border-radius: 16px;
+  padding: 20px;
+}
+#circuit-component-menu::backdrop {
+  background: #0009;
+}
+#circuit-component-menu header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+#circuit-palette {
+  display: block;
+}
+.circuit-component-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.circuit-component-grid button {
+  min-height: 44px;
+}
+body.circuit-page::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at center, #ffe7a1, #ffd06b66);
+  opacity: var(--circuit-lamp-glow, 0);
+  pointer-events: none;
+  z-index: 100;
+  transition: opacity 100ms linear;
+}
+@media (max-width: 600px) {
+  .circuit-component-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

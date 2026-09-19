@@ -35,6 +35,7 @@
     if (event.shiftKey) return null;
     if (key === 'x' || key === 'y') return { action: 'mirror', detail: { axis: key } };
     const actions = {
+      i: 'add',
       d: 'duplicate',
       delete: 'delete',
       backspace: 'delete',

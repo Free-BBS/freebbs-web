@@ -50,12 +50,16 @@
     "jsonwebtoken": "^9.0.2",
     "jszip": "^3.10.1",
     "katex": "^0.16.11",
+    "mammoth": "^1.12.3",
     "marked": "^16.4.1",
     "mysql2": "^3.14.1",
     "nodemailer": "^6.10.0",
+    "pdf-parse": "^2.4.5",
     "sharp": "^0.34.5",
     "sm-crypto": "^0.3.14",
-    "three": "^0.184.0"
+    "three": "^0.184.0",
+    "word-extractor": "^1.0.4",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "keywords": [
     "free-bbs",

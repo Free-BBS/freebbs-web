@@ -19,6 +19,32 @@
   const powerRails = ['vcc', 'vdd', 'vss', 'vee'];
   const netSymbols = ['ground', 'junction', ...powerRails];
   const catalog = {
+    square: {
+      label: '方波源',
+      pins: twoPins,
+      defaults: { ...sourceDefaults, dc: 0, amplitude: 5, waveform: 'pulse' },
+    },
+    noise: {
+      label: '噪声源',
+      pins: twoPins,
+      defaults: { ...sourceDefaults, dc: 0, waveform: 'noise' },
+    },
+    bulb: { label: '灯泡', pins: twoPins, defaults: { resistance: 100, ratedVoltage: 5 } },
+    led: {
+      label: '发光 LED',
+      pins: ['阳极', '阴极'],
+      defaults: { is: 1e-20, n: 2, thermalVoltage: 0.02585, ratedCurrent: 0.02 },
+    },
+    switch: {
+      label: '压控开关',
+      pins: ['正', '负', '控制正', '控制负'],
+      defaults: { threshold: 2.5, onResistance: 1, offResistance: 1e9 },
+    },
+    logic: {
+      label: '组合逻辑芯片',
+      pins: ['输入 A', '输入 B', '输出 Y', '地'],
+      defaults: { gate: 'AND', threshold: 2.5, highVoltage: 5, outputResistance: 20 },
+    },
     ground: { label: '参考地', pins: ['地'], defaults: {} },
     junction: { label: '连接点', pins: ['连接点'], defaults: {} },
     ...Object.fromEntries(
@@ -99,6 +125,11 @@
     },
   };
   const positiveParameters = new Set([
+    'ratedVoltage',
+    'ratedCurrent',
+    'onResistance',
+    'offResistance',
+    'outputResistance',
     'resistance',
     'capacitance',
     'inductance',
@@ -270,13 +301,18 @@
           throw new Error(`${component.id}.duty 必须在 0 与 1 之间。`);
       } else if (typeof value !== 'string') throw new Error(`${component.id}.${key} 必须是文本。`);
     }
+    if (
+      component.type === 'logic' &&
+      !['AND', 'OR', 'NOT', 'NAND', 'NOR', 'XOR', 'XNOR', 'BUF'].includes(params.gate)
+    )
+      throw new Error('不支持此逻辑门。');
     if (component.type === 'twoport' && !['Z', 'Y', 'H', 'G', 'ABCD'].includes(params.parameterSet))
       throw new Error('二端口参数类型只能为 Z、Y、H、G 或 ABCD。');
-    if (params.waveform && !['dc', 'sine', 'pulse', 'arbitrary'].includes(params.waveform))
+    if (params.waveform && !['dc', 'sine', 'pulse', 'arbitrary', 'noise'].includes(params.waveform))
       throw new Error(`${component.id} 不支持此波形。`);
     if (params.waveform && ['sine', 'pulse'].includes(params.waveform) && params.frequency <= 0)
       throw new Error(`${component.id} 的周期波形频率必须大于 0。`);
-    if (['voltage', 'current'].includes(component.type)) {
+    if (['voltage', 'current', 'square', 'noise'].includes(component.type)) {
       if (
         !['linear', 'step'].includes(params.interpolation) ||
         !['hold', 'repeat'].includes(params.repeat)
@@ -681,7 +717,7 @@
   function normalizedSourceAdvice(document, analysis) {
     const sources = document.components.filter(
       ({ type, params }) =>
-        ['voltage', 'current'].includes(type) &&
+        ['voltage', 'current', 'square', 'noise'].includes(type) &&
         ['sine', 'pulse'].includes(params.waveform) &&
         params.amplitude !== 0,
     );
@@ -779,7 +815,7 @@
     const frequencies = document.components
       .filter(
         ({ type, params }) =>
-          ['voltage', 'current'].includes(type) &&
+          ['voltage', 'current', 'square', 'noise'].includes(type) &&
           ['sine', 'pulse'].includes(params.waveform) &&
           params.amplitude !== 0,
       )
@@ -846,7 +882,7 @@
     'ccvs',
     'opamp',
   ]);
-  const nonlinearTypes = new Set(['diode', 'bjt', 'mosfet', 'nonlinear']);
+  const nonlinearTypes = new Set(['diode', 'bjt', 'mosfet', 'nonlinear', 'switch', 'logic']);
   function compile(document) {
     if (
       !document.components.some((component) => ['ground', 'fixed_voltage'].includes(component.type))
@@ -881,6 +917,9 @@
               branch: -1,
             }
           : { ...component, pins, branch: -1 };
+      if (['square', 'noise'].includes(compiled.type)) compiled.type = 'voltage';
+      if (compiled.type === 'bulb') compiled.type = 'resistor';
+      if (compiled.type === 'led') compiled.type = 'diode';
       if (branchTypes.has(compiled.type) || component.type === 'twoport') {
         compiled.branch = dimension;
         dimension += component.type === 'twoport' ? 2 : 1;
@@ -967,6 +1006,16 @@
     const time = context.time - params.delay;
     if (params.waveform === 'dc' || time < 0) return params.dc;
     if (params.waveform === 'arbitrary') return params.dc + arbitraryValue(params, time);
+    if (params.waveform === 'noise') {
+      // Seeded sample-and-hold noise: stable across Newton iterations and repeat runs.
+      const sample = Math.floor(time * Math.max(1, params.frequency));
+      /* eslint-disable no-bitwise -- Seeded integer noise hash. */
+      let hash = (sample + 1) | 0;
+      hash = Math.imul(hash ^ (hash >>> 16), 0x45d9f3b);
+      hash = Math.imul(hash ^ (hash >>> 16), 0x45d9f3b);
+      return params.dc + params.amplitude * (((hash ^ (hash >>> 16)) >>> 0) / 2147483648 - 1);
+    }
+    /* eslint-enable no-bitwise */
     const cycle = time * params.frequency + params.phase / 360;
     if (params.waveform === 'sine')
       return params.dc + params.amplitude * Math.sin(2 * Math.PI * cycle);
@@ -981,6 +1030,29 @@
   }
   function terminalCurrents(component, voltages) {
     const p = component.params;
+    if (component.type === 'switch') {
+      const resistance =
+        voltages[2] - voltages[3] >= p.threshold ? p.onResistance : p.offResistance;
+      const current = (voltages[0] - voltages[1]) / resistance;
+      return [current, -current, 0, 0];
+    }
+    if (component.type === 'logic') {
+      // Smooth threshold transition keeps cascaded combinational gates solvable by Newton.
+      const a = (1 + Math.tanh(10 * (voltages[0] - voltages[3] - p.threshold))) / 2;
+      const b = (1 + Math.tanh(10 * (voltages[1] - voltages[3] - p.threshold))) / 2;
+      const high = {
+        AND: a * b,
+        OR: a + b - a * b,
+        NOT: 1 - a,
+        NAND: 1 - a * b,
+        NOR: (1 - a) * (1 - b),
+        XOR: a + b - 2 * a * b,
+        XNOR: 1 - a - b + 2 * a * b,
+        BUF: a,
+      }[p.gate];
+      const current = (voltages[2] - voltages[3] - high * p.highVoltage) / p.outputResistance;
+      return [0, 0, current, -current];
+    }
     if (component.type === 'diode') {
       const current = shockleyCurrent(p.is, (voltages[0] - voltages[1]) / (p.n * p.thermalVoltage));
       return [current, -current];
@@ -1427,6 +1499,7 @@
     }
   }
   function voltagePair(component) {
+    if (component.type === 'logic') return [component.pins[2], component.pins[3]];
     if (component.type === 'opamp') return [component.pins[2], -1];
     if (['bjt', 'mosfet'].includes(component.type)) return [component.pins[0], component.pins[2]];
     return component.pins.slice(0, 2);
@@ -1439,7 +1512,8 @@
     if (type === 'current') return sourceValue(p, context);
     if (type === 'vccs') return p.gain * (v(pins[2]) - v(pins[3]));
     if (type === 'cccs') return p.gain * solution[component.controlBranch];
-    if (nonlinearTypes.has(type)) return terminalCurrents(component, pins.map(v))[0];
+    if (nonlinearTypes.has(type))
+      return terminalCurrents(component, pins.map(v))[type === 'logic' ? 2 : 0];
     return 0;
   }
   function frameFor(system, solution, context) {
@@ -1649,8 +1723,8 @@
       );
       return pins.reduce(
         (total, pin, index) => [
-          total[0] + linear.derivatives[index][0] * real(pin),
-          total[1] + linear.derivatives[index][0] * imaginary(pin),
+          total[0] + linear.derivatives[index][type === 'logic' ? 2 : 0] * real(pin),
+          total[1] + linear.derivatives[index][type === 'logic' ? 2 : 0] * imaginary(pin),
         ],
         [0, 0],
       );

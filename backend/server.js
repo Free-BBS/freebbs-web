@@ -2048,7 +2048,7 @@ function normalizeAiMessages(value) {
 
     const normalizedMessage = {
       role,
-      content: content.slice(0, 20000),
+      content: content.slice(0, 80000),
     };
     if (role === 'user' && message.images !== undefined) {
       normalizedMessage.images = validateVisionImages(message.images);
@@ -2428,6 +2428,8 @@ app.get('/api/ai/models', async (request, response) => {
     response.status(503).json({ message: '模型列表暂时不可用。' });
   }
 });
+
+require('./max-files').registerMaxFiles(app, requireAuth);
 
 app.post('/api/ai/chat', async (request, response) => {
   const user = await requireAuth(request, response);

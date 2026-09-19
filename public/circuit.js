@@ -22,6 +22,12 @@
     });
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const prefixes = {
+    square: 'SQ',
+    noise: 'NS',
+    bulb: 'LP',
+    led: 'LED',
+    switch: 'SW',
+    logic: 'IC',
     ground: 'G',
     vcc: 'VCC',
     vdd: 'VDD',
@@ -49,6 +55,14 @@
     twoport: 'TP',
   };
   const parameterLabels = {
+    ratedVoltage: '额定电压 / V',
+    ratedCurrent: '额定电流 / A',
+    threshold: '逻辑阈值 / V',
+    highVoltage: '高电平 / V',
+    outputResistance: '输出电阻 / Ω',
+    onResistance: '导通电阻 / Ω',
+    offResistance: '关断电阻 / Ω',
+    gate: '逻辑功能',
     resistance: '电阻 / Ω',
     capacitance: '电容 / F',
     inductance: '电感 / H',
@@ -245,6 +259,7 @@
       $('recognition-restore').hidden = !getRecognitionContext().hasBackup;
       $('recognition-restore').disabled = getRecognitionContext().busy;
     }
+    $('component-add').disabled = !state.editable;
     $('save').disabled = state.saving || !state.editable;
     $('publish').hidden = !state.cid;
     $('publish').disabled = state.dirty || state.plotModified || state.saving;
@@ -805,19 +820,37 @@
 
   function renderPalette() {
     const powerSymbols = { vcc: '↑', vdd: '↑', vss: '↓', vee: '↓', fixed_voltage: '⎓' };
-    $('palette').innerHTML = Object.entries(engine.catalog)
-      .filter(([type]) => type !== 'junction')
+    const groups = {
+      电源与信号: ['voltage', 'current', 'square', 'noise', 'fixed_voltage'],
+      无源与发光: ['resistor', 'capacitor', 'inductor', 'bulb', 'led'],
+      半导体与逻辑: ['diode', 'bjt', 'mosfet', 'opamp', 'switch', 'logic', 'nonlinear'],
+      受控源与网络: ['vcvs', 'vccs', 'ccvs', 'cccs', 'twoport'],
+      测量仪器: ['voltmeter', 'ammeter', 'oscilloscope', 'oscilloscope2'],
+      电源网络: ['ground', 'vcc', 'vdd', 'vss', 'vee'],
+    };
+    $('palette').innerHTML = Object.entries(groups)
       .map(
-        ([type, item]) =>
-          `<button type="button" data-add-component="${escapeHtml(type)}"><span class="circuit-palette-symbol" aria-hidden="true">${escapeHtml(powerSymbols[type] || prefixes[type])}</span>${escapeHtml(item.label)}</button>`,
+        ([label, types]) =>
+          `<section><h3>${label}</h3><div class="circuit-component-grid">${types
+            .map(
+              (type) =>
+                `<button type="button" data-add-component="${type}"><span class="circuit-palette-symbol" aria-hidden="true">${escapeHtml(powerSymbols[type] || prefixes[type])}</span>${escapeHtml(engine.catalog[type].label)}</button>`,
+            )
+            .join('')}</div></section>`,
       )
       .join('');
   }
 
   function parameterInput(component, key, value) {
     let options = null;
+    if (key === 'gate')
+      options = ['AND', 'OR', 'NOT', 'NAND', 'NOR', 'XOR', 'XNOR', 'BUF'].map((value) => [
+        value,
+        value,
+      ]);
     if (key === 'waveform')
       options = [
+        ['noise', '噪声'],
         ['dc', '直流'],
         ['sine', '正弦'],
         ['pulse', '脉冲'],
@@ -880,7 +913,7 @@
       const index = ['11', '12', '21', '22'].indexOf(key.slice(1));
       label = `${symbols[index]} ${key[0] === 'i' ? '虚部' : '实部'} / ${units[index]}`;
     }
-    if (['voltage', 'current'].includes(component.type)) {
+    if (['voltage', 'current', 'square', 'noise'].includes(component.type)) {
       const unit = component.type === 'voltage' ? 'V' : 'A';
       if (key === 'dc')
         label = `${component.params.waveform === 'dc' ? '直流值' : '直流偏置'} / ${unit}`;
@@ -916,7 +949,7 @@
     return (
       Object.entries(component.params)
         .filter(([key]) => {
-          if (!['voltage', 'current'].includes(component.type)) return true;
+          if (!['voltage', 'current', 'square', 'noise'].includes(component.type)) return true;
           if (key === 'samples') return false;
           if (['interpolation', 'repeat'].includes(key))
             return component.params.waveform === 'arbitrary';
@@ -932,7 +965,7 @@
         })
         .map(([key, value]) => parameterInput(component, key, value))
         .join('') +
-      (['voltage', 'current'].includes(component.type)
+      (['voltage', 'current', 'square', 'noise'].includes(component.type)
         ? `<button type="button" data-import-source="${escapeHtml(component.id)}" ${state.editable ? '' : 'disabled'}>导入 CSV / MATLAB 波形</button><p class="circuit-parameter-hint">${component.params.samples ? `${JSON.parse(component.params.samples).length} 个波形点已随电路保存。` : '支持 CSV、MAT v6/v7、.m 数值数组。'}任意波形值叠加直流偏置；DC / AC 分析仍使用直流值 / AC 幅值。</p>`
         : '')
     );
@@ -947,7 +980,7 @@
       return;
     }
     let html = parameterFieldsHtml(component);
-    if (['voltage', 'current'].includes(component.type))
+    if (['voltage', 'current', 'square', 'noise'].includes(component.type))
       html += `<p class="circuit-parameter-hint">${escapeHtml(sourceParameterHint(component))}</p>`;
     if (component.type === 'nonlinear')
       html += '<p class="circuit-parameter-hint">使用 u、k、数学运算和函数，例如 i=k*u^3。</p>';
@@ -986,7 +1019,7 @@
         'beforeend',
         '<p class="circuit-parameter-hint">使用 u、k、数学运算和函数，例如 i=k*u^3。参数变化后可再次扫描特性。</p>',
       );
-    if (component && ['voltage', 'current'].includes(component.type)) {
+    if (component && ['voltage', 'current', 'square', 'noise'].includes(component.type)) {
       $('parameters').insertAdjacentHTML(
         'beforeend',
         '<p id="circuit-source-parameter-hint" class="circuit-parameter-hint"></p>',
@@ -1118,6 +1151,11 @@
   }
 
   function dispatchShortcut(action, detail = {}, event = {}) {
+    if (action === 'add') {
+      if (!state.editable) return false;
+      $('component-menu').showModal();
+      return true;
+    }
     if (action === 'save') {
       saveCircuit();
       return true;
@@ -1222,7 +1260,7 @@
 
   function renderSourceParameterHint(component) {
     const hint = $('source-parameter-hint');
-    if (hint && ['voltage', 'current'].includes(component.type))
+    if (hint && ['voltage', 'current', 'square', 'noise'].includes(component.type))
       hint.textContent = sourceParameterHint(component);
   }
 
@@ -2805,9 +2843,14 @@
     document.addEventListener('focusin', (event) => {
       if (event.target.matches?.('input,textarea')) state.history.breakGroup();
     });
+    $('component-add').addEventListener('click', () => dispatchShortcut('add'));
+    $('component-close').addEventListener('click', () => $('component-menu').close());
     $('palette').addEventListener('click', (event) => {
       const button = event.target.closest('[data-add-component]');
-      if (button) addComponent(button.dataset.addComponent);
+      if (button) {
+        addComponent(button.dataset.addComponent);
+        $('component-menu').close();
+      }
     });
     ['title', 'description'].forEach((id) =>
       $(id).addEventListener('input', () => {
@@ -3006,7 +3049,11 @@
     $('list-more').addEventListener('click', () => loadList());
     state.shortcuts = window.FreeBbsCircuitShortcuts.bind({
       target: document,
-      isActive: () => !listPage && !$('editor-page').hidden && !$('recognition-dialog')?.open,
+      isActive: () =>
+        !listPage &&
+        !$('editor-page').hidden &&
+        !$('recognition-dialog')?.open &&
+        !$('component-menu')?.open,
       dispatch: dispatchShortcut,
       helpButton: $('shortcuts'),
       helpDialog: $('shortcuts-dialog'),
@@ -3144,7 +3191,7 @@
         throw new Error('电路已更改，请重新导入波形。');
       engine.parseSourceSamples(samples);
       const component = state.document.components.find(
-        (item) => item.id === id && ['voltage', 'current'].includes(item.type),
+        (item) => item.id === id && ['voltage', 'current', 'square', 'noise'].includes(item.type),
       );
       if (!component) throw new Error('电源不存在。');
       component.params = { ...component.params, waveform: 'arbitrary', samples, dc: 0 };

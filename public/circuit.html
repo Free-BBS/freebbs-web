@@ -329,8 +329,15 @@
               <section class="circuit-workspace" aria-label="电路绘图工作台">
                 <aside class="circuit-palette" aria-labelledby="circuit-palette-title">
                   <h2 id="circuit-palette-title">元件</h2>
-                  <p>点击添加到画布</p>
-                  <div id="circuit-palette"></div>
+                  <button id="circuit-component-add" type="button">＋ 添加 <kbd>I</kbd></button>
+                  <p>亮度=电压大小，颜色表示正负<br />青色为正，橙色为负。</p>
+                  <dialog id="circuit-component-menu" aria-labelledby="circuit-component-title">
+                    <header>
+                      <h2 id="circuit-component-title">选择元件</h2>
+                      <button id="circuit-component-close" type="button">关闭</button>
+                    </header>
+                    <div id="circuit-palette"></div>
+                  </dialog>
                   <label class="circuit-example-label"
                     >从示例开始<select id="circuit-example">
                       <option value="blank">空白电路</option>
@@ -1093,6 +1100,10 @@
               <div>
                 <dt><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd></dt>
                 <dd>移动选中元件；加 Shift 移动 5 格</dd>
+              </div>
+              <div>
+                <dt><kbd>I</kbd></dt>
+                <dd>打开分类元件菜单</dd>
               </div>
               <div>
                 <dt><kbd>W</kbd></dt>
