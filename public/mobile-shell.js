@@ -22,7 +22,7 @@
   function link([href, icon, label], className) {
     const node = document.createElement('a');
     node.href = href;
-    node.className = className + (href === '/publish' ? ' mobile-publish' : '');
+    node.className = className;
     node.innerHTML = `<img src="/assets/icons/${icon}.svg" alt="" aria-hidden="true"><span>${label}</span>`;
     if (href === activePath) {
       node.classList.add('is-active');
@@ -48,7 +48,7 @@
   createMenu.setAttribute('role', 'menu');
   createMenu.hidden = true;
   for (const item of [
-    ['/publish', 'plus', '发帖'],
+    ['/publish', 'compose', '发帖'],
     ['/aichat', 'ai', '问问 Max'],
   ]) {
     const node = link(item, 'mobile-tool-link');
