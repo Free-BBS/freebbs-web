@@ -5802,6 +5802,7 @@ async function start() {
 
   console.log(`FREE-BBS backend running at http://${config.apiHost}:${config.apiPort}`);
   notifications.startWorker();
+  notifications.startWeeklyDigestWorker();
   surveyService.startWorker();
   console.log(`MySQL target: ${config.db.host}:${config.db.port}/${config.db.database}`);
 }

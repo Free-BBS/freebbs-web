@@ -149,7 +149,7 @@ function sendFile(filePath, response, options = {}) {
             .toString()
             .replace(
               '</head>',
-              '<link rel="stylesheet" href="/site-search.css"><link rel="stylesheet" href="/mobile-shell.css"><link rel="stylesheet" href="/page-transitions.css"></head>',
+              '<link rel="stylesheet" href="/site-search.css"><link rel="stylesheet" href="/mobile-shell.css"><link rel="stylesheet" href="/desktop-elegant.css"><link rel="stylesheet" href="/page-transitions.css"></head>',
             )
             .replace(
               '</body>',

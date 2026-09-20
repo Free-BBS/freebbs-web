@@ -12,7 +12,92 @@ const SCHEMA = fs
   .filter(Boolean);
 const ROLE_LABELS = { student: '学生', ta: '助教', teacher: '教师', admin: '管理员' };
 const REACTION_LABELS = { smile: '点赞', light: '点亮', fireworks: '送上烟花' };
+const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const schemaPromises = new WeakMap();
+
+function escapeEmailHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function getWeeklyDigestWindow(now = new Date()) {
+  const shanghai = new Date(now.getTime() + SHANGHAI_OFFSET_MS);
+  const weekday = shanghai.getUTCDay();
+  const hour = shanghai.getUTCHours();
+  if (weekday !== 1 || hour < 8) return null;
+  const currentMondayUtc =
+    Date.UTC(shanghai.getUTCFullYear(), shanghai.getUTCMonth(), shanghai.getUTCDate()) -
+    SHANGHAI_OFFSET_MS;
+  const start = new Date(currentMondayUtc - WEEK_MS);
+  const end = new Date(currentMondayUtc);
+  const localStart = new Date(start.getTime() + SHANGHAI_OFFSET_MS);
+  const weekKey = [
+    localStart.getUTCFullYear(),
+    String(localStart.getUTCMonth() + 1).padStart(2, '0'),
+    String(localStart.getUTCDate()).padStart(2, '0'),
+  ].join('-');
+  return { weekKey, start, end };
+}
+
+function weeklyDigestBody(posts) {
+  const intro = '过去一周，大家在这些讨论里留下了最多回应。';
+  return [
+    intro,
+    ...posts.map(
+      (post, index) =>
+        `${index + 1}. ${String(post.title || '未命名讨论').replaceAll('\n', ' ')}\n${post.board_name || '讨论区'} · ${Number(post.comment_count || 0)} 条评论 · ${Number(post.reaction_count || 0)} 次互动\n/discussion?post=${encodeURIComponent(post.pid || post.id)}`,
+    ),
+  ].join('\n\n');
+}
+
+function parseWeeklyDigestBody(body) {
+  const [intro = '', ...blocks] = String(body || '').split(/\n\n+/);
+  const posts = blocks
+    .map((block) => {
+      const [heading = '', meta = '', link = ''] = block.split('\n');
+      const title = heading.replace(/^\d+\.\s*/, '').trim();
+      try {
+        return title ? { title, meta: meta.trim(), link: normalizeNotificationLink(link) } : null;
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+  return { intro, posts };
+}
+
+function renderNotificationEmail(item, publicUrl) {
+  const link = normalizeNotificationLink(item.link);
+  const url = new URL(link || '/', publicUrl.origin).href;
+  const title = escapeEmailHtml(item.title);
+  const body = String(item.body || '');
+  const isWeekly = item.kind === 'weekly_digest';
+  const weekly = isWeekly ? parseWeeklyDigestBody(body) : null;
+  const content = isWeekly
+    ? `<p style="margin:0 0 22px;color:#506268;line-height:1.75">${escapeEmailHtml(weekly.intro)}</p>${weekly.posts
+        .map((post) => {
+          const postUrl = new URL(post.link, publicUrl.origin).href;
+          return `<a href="${escapeEmailHtml(postUrl)}" style="display:block;margin:0 0 12px;padding:18px 20px;border:1px solid #dce5e7;border-radius:14px;color:#071317;text-decoration:none;background:#ffffff"><strong style="display:block;margin-bottom:7px;font-size:16px;line-height:1.45">${escapeEmailHtml(post.title)}</strong><span style="color:#6a7b80;font-size:13px">${escapeEmailHtml(post.meta)}</span></a>`;
+        })
+        .join('')}`
+    : `<div style="padding:20px;border:1px solid #dce5e7;border-radius:14px;background:#ffffff;color:#36484e;line-height:1.75">${body
+        .split('\n')
+        .map((line) => escapeEmailHtml(line) || '&nbsp;')
+        .join('<br>')}</div>`;
+  const label = isWeekly ? '每周热帖' : '站内通知';
+  const action = isWeekly ? '查看全部讨论' : '查看通知';
+  const html = `<!doctype html><html><body style="margin:0;background:#edf2f3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;color:#071317"><div style="display:none;max-height:0;overflow:hidden">${title}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:36px 16px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;margin:auto"><tr><td style="padding:0 4px 20px"><div style="font-size:13px;font-weight:700;letter-spacing:.12em;color:#075d68">FREE-BBS · ${label}</div></td></tr><tr><td style="padding:32px;border-radius:20px;background:#f9fbfb;border:1px solid #dce5e7"><h1 style="margin:0 0 22px;font-size:26px;line-height:1.3;letter-spacing:-.02em">${title}</h1>${content}<a href="${escapeEmailHtml(url)}" style="display:inline-block;margin-top:22px;padding:12px 18px;border-radius:10px;background:#075d68;color:#fff;text-decoration:none;font-weight:700">${action} →</a></td></tr><tr><td style="padding:20px 4px;color:#7a8b90;font-size:12px;line-height:1.7">这封邮件由 FREE-BBS 自动发送。你也可以直接登录网站，在通知中心查看内容。</td></tr></table></td></tr></table></body></html>`;
+  return {
+    html,
+    text: `${item.title}\n\n${body}\n\n${action}：${url}`,
+    url,
+  };
+}
 
 function ensureNotificationTables(pool) {
   if (!schemaPromises.has(pool)) {
@@ -144,13 +229,13 @@ function createNotificationEmailSender({
         socketTimeout: 30000,
       });
     }
-    const link = normalizeNotificationLink(item.link);
-    const url = new URL(link || '/', publicUrl.origin).href;
+    const rendered = renderNotificationEmail(item, publicUrl);
     await transporter.sendMail({
       from: mail.from,
       to: item.email,
       subject: `FREE-BBS · ${item.title}`,
-      text: `${item.title}\n\n${item.body}\n\n查看通知：${url}`,
+      text: rendered.text,
+      html: rendered.html,
       // Keep a stable Message-ID across retries. Delivery is at-least-once.
       messageId: `<notification-${item.notification_id}@${publicUrl.hostname}>`,
     });
@@ -231,6 +316,8 @@ function createNotificationService({
 }) {
   let working = false;
   let timer = null;
+  let weeklyTimer = null;
+  let weeklyWorking = false;
 
   async function publish(actor, body) {
     const publication = validatePublication(body);
@@ -340,7 +427,7 @@ function createNotificationService({
         );
         if (!claimed.affectedRows) continue;
         const [items] = await pool.execute(
-          `SELECT o.notification_id, o.attempts, n.title, n.body, n.link, u.email
+          `SELECT o.notification_id, o.attempts, n.kind, n.title, n.body, n.link, u.email
            FROM notification_email_outbox o JOIN community_notifications n ON n.id = o.notification_id
            JOIN users u ON u.id = n.recipient_id
            WHERE o.notification_id = ? AND o.lease_token = ?`,
@@ -395,6 +482,84 @@ function createNotificationService({
     };
   }
 
+  async function queueWeeklyDigest(now = new Date()) {
+    const window = getWeeklyDigestWindow(now);
+    if (!window || weeklyWorking) return { queued: 0, skipped: true };
+    weeklyWorking = true;
+    try {
+      const [posts] = await pool.execute(
+        `SELECT p.id, p.pid, p.title, b.name AS board_name,
+                COALESCE(c.comment_count, 0) AS comment_count,
+                COALESCE(l.reaction_count, 0) AS reaction_count
+         FROM discussion_posts p
+         INNER JOIN discussion_boards b ON b.id = p.board_id AND b.is_active = 1
+         LEFT JOIN (
+           SELECT post_id, COUNT(*) AS comment_count FROM discussion_comments
+           WHERE is_deleted = 0 AND created_at >= ? AND created_at < ? GROUP BY post_id
+         ) c ON c.post_id = p.id
+         LEFT JOIN (
+           SELECT post_id, COUNT(*) AS reaction_count FROM discussion_post_likes
+           WHERE created_at >= ? AND created_at < ? GROUP BY post_id
+         ) l ON l.post_id = p.id
+         WHERE p.is_deleted = 0 AND p.is_hidden = 0
+           AND (p.created_at >= ? AND p.created_at < ?
+                OR COALESCE(c.comment_count, 0) > 0 OR COALESCE(l.reaction_count, 0) > 0)
+         ORDER BY (COALESCE(c.comment_count, 0) * 3 + COALESCE(l.reaction_count, 0)) DESC,
+                  p.is_featured DESC, p.created_at DESC, p.id DESC
+         LIMIT 5`,
+        [window.start, window.end, window.start, window.end, window.start, window.end],
+      );
+      if (!posts.length) return { queued: 0, skipped: true };
+      const [recipients] = await pool.execute(
+        `SELECT id FROM users
+         WHERE email IS NOT NULL AND email <> '' AND email_verified_at IS NOT NULL`,
+      );
+      if (!recipients.length) return { queued: 0, skipped: true };
+      const body = weeklyDigestBody(posts);
+      const startLabel = window.start.toLocaleDateString('zh-CN', {
+        timeZone: 'Asia/Shanghai',
+        month: 'numeric',
+        day: 'numeric',
+      });
+      const endLabel = new Date(window.end.getTime() - 1).toLocaleDateString('zh-CN', {
+        timeZone: 'Asia/Shanghai',
+        month: 'numeric',
+        day: 'numeric',
+      });
+      const queued = await inTransaction(pool, null, (connection) =>
+        insertNotifications(
+          connection,
+          recipients.map((recipient) => recipient.id),
+          {
+            actorId: null,
+            kind: 'weekly_digest',
+            title: `上周热帖 · ${startLabel}–${endLabel}`,
+            body,
+            link: '/discussion?sort=hot',
+            eventKey: `weekly-digest:${window.weekKey}`,
+          },
+        ),
+      );
+      return { queued, skipped: false, weekKey: window.weekKey };
+    } finally {
+      weeklyWorking = false;
+    }
+  }
+
+  function startWeeklyDigestWorker() {
+    if (!weeklyTimer) {
+      const tick = () =>
+        queueWeeklyDigest().catch(() => logger.error('Weekly digest scheduler unavailable'));
+      weeklyTimer = setInterval(tick, 15 * 60 * 1000);
+      weeklyTimer.unref?.();
+      tick();
+    }
+    return () => {
+      clearInterval(weeklyTimer);
+      weeklyTimer = null;
+    };
+  }
+
   return {
     publish,
     notifyReply,
@@ -403,6 +568,8 @@ function createNotificationService({
     notifyReward,
     processOutbox,
     startWorker,
+    queueWeeklyDigest,
+    startWeeklyDigestWorker,
   };
 }
 
@@ -553,4 +720,8 @@ module.exports = {
   createNotificationEmailSender,
   normalizeNotificationLink,
   validatePublication,
+  getWeeklyDigestWindow,
+  weeklyDigestBody,
+  parseWeeklyDigestBody,
+  renderNotificationEmail,
 };
