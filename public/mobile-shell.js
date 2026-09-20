@@ -78,6 +78,35 @@
     button.setAttribute('aria-expanded', 'false');
     if (restore) button.focus();
   };
+  const action = (label, icon, handler) => {
+    const node = document.createElement('button');
+    node.type = 'button';
+    node.className = 'mobile-tool-link mobile-tool-action';
+    node.setAttribute('role', 'menuitem');
+    node.innerHTML = '<img src="/assets/icons/' + icon + '.svg" alt=""><span>' + label + '</span>';
+    node.addEventListener('click', (event) => {
+      event.stopPropagation();
+      close();
+      handler(event);
+    });
+    menu.append(node);
+    return node;
+  };
+  const theme = action('切换明亮 / 黑暗', 'moon', (event) =>
+    window.freeBbsApp?.toggleThemeMode(event),
+  );
+  const inbox = action('通知中心', 'chats', () => {
+    if (!window.freeBbsApp?.userState?.isLoggedIn) {
+      location.href = '/login';
+      return;
+    }
+    window.dispatchEvent(new CustomEvent('freebbs:open-notifications'));
+  });
+  window.addEventListener('freebbs:notification-count', (event) => {
+    const count = Number(event.detail?.count) || 0;
+    inbox.querySelector('span').textContent = count ? '通知中心 · ' + count + ' 未读' : '通知中心';
+    button.classList.toggle('has-unread', count > 0);
+  });
   button.addEventListener('click', () => {
     menu.hidden = !menu.hidden;
     button.setAttribute('aria-expanded', String(!menu.hidden));
@@ -92,7 +121,7 @@
     event.preventDefault();
     menu.hidden = false;
     button.setAttribute('aria-expanded', 'true');
-    const items = [...menu.querySelectorAll('a')];
+    const items = [...menu.querySelectorAll('[role="menuitem"]')];
     const index = items.indexOf(document.activeElement);
     const next =
       event.key === 'Home'

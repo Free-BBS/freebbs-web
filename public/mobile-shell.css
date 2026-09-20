@@ -639,3 +639,41 @@ body.discussion-page .discussion-comment-author-link .discussion-avatar-frame {
     display: none !important;
   }
 }
+@media (max-width: 900px) {
+  body .mobile-theme-toggle,
+  body .notification-bell {
+    display: none !important;
+  }
+  .mobile-tool-action {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+  }
+  .mobile-tools-menu {
+    max-height: calc(100dvh - 110px);
+    overflow-y: auto;
+  }
+  .mobile-tools-toggle.has-unread::after {
+    content: '';
+    position: absolute;
+    top: 5px;
+    right: 20%;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ui-accent);
+  }
+  body.discussion-page .topbar > .site-search-trigger {
+    right: calc(70px + env(safe-area-inset-right, 0px)) !important;
+  }
+}
+@media (max-width: 900px) {
+  body .page-shell .topbar .user-panel {
+    right: calc(16px + env(safe-area-inset-right, 0px)) !important;
+  }
+  body.discussion-page .topbar > .site-search-trigger {
+    right: calc(78px + env(safe-area-inset-right, 0px)) !important;
+  }
+}

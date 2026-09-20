@@ -377,3 +377,50 @@ body.discussion-page.post-reading .discussion-detail-head {
 body.discussion-page.post-reading .discussion-detail-toolbar {
   width: 100%;
 }
+body.discussion-page .discussion-comment,
+body.discussion-page .discussion-comment-body,
+body.discussion-page .discussion-comment-reply,
+body.discussion-page .discussion-comment-content,
+body.discussion-page .discussion-comment-actions,
+body.discussion-page .discussion-comment-reply-slot {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+body.discussion-page
+  .discussion-comment
+  :is(.discussion-comment-action, .discussion-comment-reply-button) {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 4px 6px !important;
+  min-width: 0 !important;
+  font-size: 12px !important;
+  color: var(--ui-muted);
+}
+body.discussion-page .discussion-comment .discussion-comment-action.is-active {
+  color: var(--ui-accent);
+}
+body.discussion-page .discussion-comment-reply {
+  border-left: 0 !important;
+}
+body.discussion-page #discussion-detail .discussion-comment,
+body.discussion-page #discussion-detail .discussion-comment-body,
+body.discussion-page #discussion-detail .discussion-comment-content,
+body.discussion-page #discussion-detail .discussion-comment-actions,
+body.discussion-page #discussion-detail .discussion-comment-reply-slot,
+body.discussion-page
+  #discussion-detail
+  .discussion-comment
+  :is(.discussion-comment-action, .discussion-comment-reply-button) {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+body.discussion-page
+  #discussion-detail
+  .discussion-comment
+  :is(.discussion-comment-action, .discussion-comment-reply-button) {
+  border: 0 !important;
+}
