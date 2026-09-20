@@ -677,3 +677,25 @@ body.discussion-page .discussion-comment-author-link .discussion-avatar-frame {
     right: calc(78px + env(safe-area-inset-right, 0px)) !important;
   }
 }
+@media (max-width: 900px) {
+  body.mobile-guest .topbar .avatar .avatar-image {
+    display: none !important;
+  }
+  body.mobile-guest .topbar .avatar {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    border: 0 !important;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+    outline: none !important;
+    background: var(--ui-surface-soft) !important;
+    color: var(--ui-accent) !important;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  body.mobile-guest .topbar .avatar::after {
+    content: '登录';
+    font: 600 14px/1.4 var(--font-ui);
+  }
+}

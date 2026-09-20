@@ -3,7 +3,9 @@
     matchMedia('(max-width: 900px)').matches &&
     ['/', '/index.html'].includes(location.pathname)
   ) {
-    location.replace('/discussion' + location.search + location.hash);
+    Promise.resolve(window.freeBbsApp?.sessionReady).finally(() => {
+      location.replace('/discussion' + location.search + location.hash);
+    });
     return;
   }
   const nav = document.querySelector('.mobile-nav');
@@ -62,6 +64,16 @@
     menu.append(node);
   }
   const syncAdmin = () => {
+    const loggedIn = Boolean(window.freeBbsApp?.userState?.isLoggedIn);
+    document.body.classList.toggle('mobile-guest', !loggedIn);
+    menu.querySelector('[data-login-tool]')?.remove();
+    if (!loggedIn) {
+      const entry = link(['/login', 'people', '登录 / 注册'], 'mobile-tool-link');
+      entry.dataset.loginTool = 'true';
+      entry.setAttribute('role', 'menuitem');
+      menu.prepend(entry);
+    }
+
     menu.querySelector('[data-admin-tool]')?.remove();
     if (window.freeBbsApp?.userState?.isAdmin) {
       const node = link(['/system-settings', 'gear', '系统设置'], 'mobile-tool-link');

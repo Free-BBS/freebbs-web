@@ -3061,17 +3061,26 @@ async function restoreSession() {
     return;
   }
 
+  const restoringToken = userState.token;
   try {
     const payload = await callApi('/auth/me', {
       method: 'GET',
     });
 
-    saveSession(userState.token, payload.user);
+    if (localStorage.getItem(STORAGE_KEY) !== restoringToken) return;
+    saveSession(restoringToken, payload.user);
 
     if (isAdminManagementPage() && !userState.isAdmin) {
       window.location.replace('/');
     }
-  } catch {
+  } catch (error) {
+    // A navigation abort or temporary outage does not invalidate a saved credential.
+    // Ignore stale responses after another tab/account has changed the token.
+    if (localStorage.getItem(STORAGE_KEY) !== restoringToken) return;
+    if (error.status !== 401) {
+      userName.title = '登录状态暂未确认，请刷新重试';
+      return;
+    }
     clearSession();
     if (isSettingsPage() || isAdminManagementPage()) {
       window.location.replace('/login');

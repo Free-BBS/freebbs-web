@@ -225,7 +225,9 @@ async function handleAuthSubmit(event) {
     if (payload.user?.requiresUsernameChange) {
       await window.freeBbsAccount.requireValidUsername(payload.user);
     }
-    window.location.href = activityReturnPath() || '/';
+    window.location.href =
+      activityReturnPath() ||
+      (window.matchMedia?.('(max-width: 900px)').matches ? '/discussion' : '/');
   } catch (error) {
     setMessage(error.message);
   } finally {
