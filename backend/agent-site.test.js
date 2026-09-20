@@ -1,6 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { enrichAgentSiteContext, linksIn } = require('./agent-site');
+const { enrichAgentSiteContext: enrich, linksIn } = require('./agent-site');
+const enrichAgentSiteContext = (payload, options) =>
+  enrich(payload, {
+    githubReader: async () => ({ commits: [] }),
+    githubCodeReader: async () => ({ files: [] }),
+    ...options,
+  });
 
 const publicWebUrl = 'https://www.free-bbs.cn';
 

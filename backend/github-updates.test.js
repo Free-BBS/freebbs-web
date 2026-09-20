@@ -28,6 +28,7 @@ test('GitHub updates use fixed public URLs, bounded content and shared cache', a
 test('ordinary questions do not fetch GitHub; update questions receive citations and failure is explicit', async () => {
   assert.equal(wantsGithubUpdates('解释电场'), false);
   const options = {
+    githubCodeReader: async () => ({ files: [] }),
     publicWebUrl: 'https://www.free-bbs.cn',
     service: {},
     githubReader: async () => ({

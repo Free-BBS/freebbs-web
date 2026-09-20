@@ -13,7 +13,7 @@ node --check server.js
 node --check public/page-transitions.js
 node --check public/publish.js
 node --check public/post-reader.js
-node --test backend/github-updates.test.js
+node --test backend/github-updates.test.js backend/github-code.test.js
 node --test scripts/session-restore.test.js
 node --check public/mobile-shell.js
 node --test backend/initialize-once.test.js scripts/static-response.test.js
