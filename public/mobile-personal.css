@@ -316,3 +316,172 @@
     display: none;
   }
 }
+.personal-overview {
+  display: none;
+}
+@media (max-width: 900px) {
+  body.personal-settings-page .settings-shell {
+    display: flex !important;
+    flex-direction: column;
+  }
+  .personal-overview {
+    display: block;
+    padding: 20px 0 22px;
+  }
+  .personal-identity {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+  }
+  body.personal-settings-page .personal-avatar {
+    width: 78px !important;
+    height: 78px !important;
+    flex: 0 0 78px;
+    display: block !important;
+  }
+  .personal-avatar img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  .personal-identity h2 {
+    margin: 0 0 10px;
+    font-size: 23px;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+  .personal-profile-link {
+    color: var(--ui-muted);
+    text-decoration: none;
+    font-size: 13px;
+  }
+  .personal-bio {
+    margin: 22px 0;
+    font-size: 14px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .personal-balances {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .personal-balances span {
+    display: grid;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--ui-muted);
+    text-align: center;
+  }
+  .personal-balances strong {
+    color: var(--ui-text);
+    font-size: 22px;
+    font-variant-numeric: tabular-nums;
+  }
+  .personal-balances button {
+    background: transparent;
+    border: 1px solid var(--ui-accent);
+    color: var(--ui-accent);
+    border-radius: 24px;
+    padding: 10px 15px;
+    font: inherit;
+    font-size: 13px;
+  }
+  body.personal-settings-page .settings-account-actions {
+    order: 3;
+    padding: 18px 0 !important;
+  }
+  body.personal-settings-page .settings-profile {
+    gap: 0 !important;
+  }
+  .personal-fold {
+    scroll-margin-top: 76px;
+  }
+  .personal-fold > summary {
+    min-height: 60px;
+    justify-content: flex-start;
+    gap: 14px;
+    font-weight: 500;
+  }
+  .personal-fold > summary img {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+  }
+  body.theme-light .personal-fold > summary img {
+    filter: brightness(0);
+  }
+  .personal-fold > summary::after {
+    content: '›';
+    margin-left: auto;
+    font-size: 25px;
+    opacity: 0.55;
+  }
+  .personal-fold[open] > summary::after {
+    content: '›';
+    transform: rotate(90deg);
+  }
+  body.personal-workbench-page .page-shell .workbench-economy-section {
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 18px 0 !important;
+  }
+  body.personal-workbench-page .workbench-economy-section > header p {
+    display: none;
+  }
+  body.personal-workbench-page .workbench-economy-section h2 {
+    font-size: 17px !important;
+  }
+  body.personal-workbench-page .page-shell .workbench-economy-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+  }
+  body.personal-workbench-page .page-shell .workbench-economy-grid .workbench-card {
+    display: flex !important;
+    align-items: center;
+    padding: 16px 0 !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    border-bottom: 1px solid var(--ui-line) !important;
+    text-align: left;
+  }
+  body.personal-workbench-page .workbench-economy-grid .workbench-card :is(strong, small) {
+    display: none;
+  }
+  body.personal-workbench-page .workbench-economy-grid .workbench-card span {
+    font-size: 15px !important;
+    color: var(--ui-text);
+  }
+  body.personal-workbench-page .workbench-economy-grid .workbench-card::after {
+    content: '›';
+    margin-left: auto;
+    font-size: 24px;
+    color: var(--ui-muted);
+  }
+}
+@media (max-width: 900px) {
+  body.personal-settings-page .page-shell .personal-overview {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  body.personal-settings-page .page-shell .personal-balances {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+    width: 100%;
+  }
+  body.personal-settings-page .page-shell .personal-balances button {
+    margin-left: 12px;
+  }
+}
+@media (max-width: 900px) {
+  body.personal-settings-page .page-shell :is(.settings-profile, .settings-account-actions) {
+    width: 100% !important;
+    box-sizing: border-box;
+  }
+}
