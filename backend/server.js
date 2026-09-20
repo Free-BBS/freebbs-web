@@ -2310,7 +2310,16 @@ app.use(
   '/api',
   createNotificationsRouter({ pool, requireAuth, requireAdmin, service: notifications }),
 );
-app.use('/api', createAdminRewardsRouter({ pool, requireAuth, requireAdmin, notifications }));
+app.use(
+  '/api',
+  createAdminRewardsRouter({
+    pool,
+    requireAuth,
+    requireAdmin,
+    notifications,
+    getPost: getDiscussionPostByPublicId,
+  }),
+);
 app.use('/api', createWalletLedgerRouter({ pool, requireAuth }));
 app.use(
   '/api',

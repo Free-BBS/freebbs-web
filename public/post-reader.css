@@ -424,3 +424,74 @@ body.discussion-page
   :is(.discussion-comment-action, .discussion-comment-reply-button) {
   border: 0 !important;
 }
+.post-reward-dialog {
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 40px);
+  box-sizing: border-box;
+  padding: 22px;
+  border: 1px solid var(--ui-line);
+  border-radius: 16px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.post-reward-dialog::backdrop {
+  background: #0006;
+}
+.post-reward-dialog header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.post-reward-dialog h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.post-reward-dialog header button {
+  border: 0;
+  background: transparent;
+  color: var(--ui-muted);
+  font-size: 26px;
+  cursor: pointer;
+}
+.post-reward-target,
+.post-reward-dialog [role='status'] {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ui-muted);
+}
+.post-reward-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  margin-block: 14px;
+}
+.post-reward-amounts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.post-reward-dialog input,
+.post-reward-dialog textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  font-size: 16px;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  background: var(--ui-input);
+  color: var(--ui-text);
+}
+.post-reward-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+}
+.post-reward-dialog [type='submit'] {
+  border: 0;
+  border-radius: 20px;
+  background: var(--ui-accent);
+  color: var(--ui-page);
+  padding: 10px 20px;
+  cursor: pointer;
+}

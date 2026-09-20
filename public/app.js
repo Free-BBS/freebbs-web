@@ -5992,6 +5992,7 @@ function renderDiscussionDetail(post) {
           post.canPin || post.canFeature || post.canDelete || post.canHide || userState.isAdmin
             ? `
           <details class="post-manage-menu"><summary aria-label="帖子管理">•••</summary><div class="discussion-moderator-actions">
+            ${userState.isAdmin && !post.isDeleted ? `<button type="button" class="discussion-visibility-button" data-action="reward-post-author" data-post-id="${escapeHtml(post.id)}">奖励作者</button>` : ''}
             ${!post.isDeleted && (post.canHide || userState.isAdmin) ? `<label class="discussion-option"><input type="checkbox" data-action="toggle-login-required" data-post-id="${escapeHtml(post.id)}" ${post.loginRequired ? 'checked' : ''} />登录后可见</label>` : ''}
             ${post.canHide ? `<button class="discussion-visibility-button" type="button" data-action="toggle-visibility" data-post-id="${escapeHtml(post.id)}" data-hidden="${post.isHidden ? '1' : '0'}">${post.isHidden ? '恢复公开' : '隐藏帖子'}</button>` : ''}
             ${post.canPin ? `<button class="discussion-detail-pin ${post.isPinned ? 'is-active' : ''}" type="button" data-action="toggle-pin" data-post-id="${escapeHtml(post.id)}" data-pinned="${post.isPinned ? '1' : '0'}"><img class="discussion-action-icon" src="/assets/icons/top.svg" alt="" aria-hidden="true" /><span>${post.isPinned ? '取消置顶' : '置顶文章'}</span></button>` : ''}
