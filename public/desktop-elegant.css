@@ -261,6 +261,27 @@
   }
 
   /* Discussion and Max use line-based separation instead of card stacks. */
+  body.discussion-page .main-content,
+  body.discussion-page .main-content > .settings-shell,
+  body.discussion-page .main-content .discussion-shell {
+    width: 100% !important;
+    max-width: none !important;
+    margin-inline: 0 !important;
+  }
+
+  body.discussion-page .main-content::before {
+    max-width: none;
+    margin-inline: 0;
+  }
+
+  body.discussion-page .discussion-layout,
+  body.discussion-page .discussion-layout:not(.is-detail-view) {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas:
+      'stats'
+      'feed';
+  }
+
   body.discussion-page .discussion-page-heading {
     padding-bottom: 26px;
     border-bottom: 1px solid var(--ui-line);
