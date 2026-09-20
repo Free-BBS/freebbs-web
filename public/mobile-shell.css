@@ -699,3 +699,36 @@ body.discussion-page .discussion-comment-author-link .discussion-avatar-frame {
     font: 600 14px/1.4 var(--font-ui);
   }
 }
+@media (max-width: 900px) {
+  .mobile-create {
+    position: relative;
+    min-width: 0;
+  }
+  body:not(.auth-page-body) .mobile-nav-compact .mobile-create .mobile-publish img {
+    width: 30px !important;
+    height: 30px !important;
+    padding: 12px 17px !important;
+    border-radius: 26px !important;
+    filter: none !important;
+  }
+  .mobile-create-menu {
+    right: 50%;
+    transform: translateX(50%);
+    width: 172px;
+  }
+  .mobile-create-menu::after {
+    right: calc(50% - 4px);
+  }
+  .mobile-create-menu .mobile-tool-link img {
+    filter: brightness(0) !important;
+  }
+  body:not(.theme-light) .mobile-create-menu .mobile-tool-link img {
+    filter: brightness(0) invert(1) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  body.theme-light .mobile-create-menu .mobile-tool-link img {
+    filter: brightness(0) !important;
+  }
+}

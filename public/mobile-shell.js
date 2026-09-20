@@ -1,20 +1,11 @@
 (() => {
-  if (
-    matchMedia('(max-width: 900px)').matches &&
-    ['/', '/index.html'].includes(location.pathname)
-  ) {
-    Promise.resolve(window.freeBbsApp?.sessionReady).finally(() => {
-      location.replace('/discussion' + location.search + location.hash);
-    });
-    return;
-  }
   const nav = document.querySelector('.mobile-nav');
   if (!nav) return;
   const path = location.pathname.replace(/\/$/, '') || '/';
   const primary = [
-    ['/discussion', 'people', '讨论区'],
-    ['/aichat', 'ai', 'Max'],
-    ['/publish', 'plus', '发表'],
+    ['/', 'home', '首页'],
+    ['/discussion', 'people', '讨论'],
+    ['/publish', 'plus', ''],
     ['/world', 'map', '学习世界'],
   ];
   const tools = [
@@ -41,6 +32,72 @@
   }
   nav.classList.add('mobile-nav-compact');
   nav.replaceChildren(...primary.map((item) => link(item, 'nav-link mobile-primary')));
+  const createGroup = document.createElement('div');
+  createGroup.className = 'mobile-create';
+  const createButton = document.createElement('button');
+  createButton.type = 'button';
+  createButton.className = 'mobile-primary mobile-publish';
+  createButton.innerHTML = '<img src="/assets/icons/plus.svg" alt="" aria-hidden="true">';
+  createButton.setAttribute('aria-label', '发帖或问问 Max');
+  createButton.setAttribute('aria-haspopup', 'menu');
+  createButton.setAttribute('aria-expanded', 'false');
+  createButton.setAttribute('aria-controls', 'mobile-create-menu');
+  const createMenu = document.createElement('div');
+  createMenu.id = 'mobile-create-menu';
+  createMenu.className = 'mobile-tools-menu mobile-create-menu';
+  createMenu.setAttribute('role', 'menu');
+  createMenu.hidden = true;
+  for (const item of [
+    ['/publish', 'plus', '发帖'],
+    ['/aichat', 'ai', '问问 Max'],
+  ]) {
+    const node = link(item, 'mobile-tool-link');
+    node.setAttribute('role', 'menuitem');
+    createMenu.append(node);
+  }
+  const closeCreate = (focus = false) => {
+    createMenu.hidden = true;
+    createButton.setAttribute('aria-expanded', 'false');
+    if (focus) createButton.focus();
+  };
+  createButton.addEventListener('click', () => {
+    close();
+    createMenu.hidden = !createMenu.hidden;
+    createButton.setAttribute('aria-expanded', String(!createMenu.hidden));
+  });
+  createGroup.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeCreate(true);
+      event.preventDefault();
+    }
+    if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+      event.preventDefault();
+      close();
+      createMenu.hidden = false;
+      createButton.setAttribute('aria-expanded', 'true');
+      const items = [...createMenu.querySelectorAll('a')];
+      const index = items.indexOf(document.activeElement);
+      items[
+        event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? items.length - 1
+            : (index + (event.key === 'ArrowUp' ? -1 : 1) + items.length) % items.length
+      ].focus();
+    }
+  });
+  document.addEventListener('pointerdown', (event) => {
+    if (!createGroup.contains(event.target)) closeCreate();
+  });
+  createGroup.addEventListener('focusout', (event) => {
+    if (!createGroup.contains(event.relatedTarget)) closeCreate();
+  });
+  createMenu.addEventListener('click', () => closeCreate());
+  window.addEventListener('resize', () => {
+    if (innerWidth > 900) closeCreate();
+  });
+  createGroup.append(createButton, createMenu);
+  nav.children[2].replaceWith(createGroup);
   const group = document.createElement('div');
   group.className = 'mobile-tools';
   const button = document.createElement('button');
@@ -120,6 +177,7 @@
     button.classList.toggle('has-unread', count > 0);
   });
   button.addEventListener('click', () => {
+    closeCreate();
     menu.hidden = !menu.hidden;
     button.setAttribute('aria-expanded', String(!menu.hidden));
   });
