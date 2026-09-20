@@ -5589,6 +5589,8 @@ function initializeAiChatPage() {
 
 function setDiscussionDetailView(isDetailView) {
   discussionLayout?.classList.toggle('is-detail-view', Boolean(isDetailView));
+  document.body.classList.toggle('post-reading', Boolean(isDetailView));
+  if (!isDetailView) window.FreeBbsPostReader?.close();
 }
 
 function renderDiscussionStats(stats) {
@@ -5980,13 +5982,13 @@ function renderDiscussionDetail(post) {
         ${
           post.canPin || post.canFeature || post.canDelete || post.canHide || userState.isAdmin
             ? `
-          <div class="discussion-moderator-actions">
+          <details class="post-manage-menu"><summary aria-label="帖子管理">•••</summary><div class="discussion-moderator-actions">
             ${!post.isDeleted && (post.canHide || userState.isAdmin) ? `<label class="discussion-option"><input type="checkbox" data-action="toggle-login-required" data-post-id="${escapeHtml(post.id)}" ${post.loginRequired ? 'checked' : ''} />登录后可见</label>` : ''}
             ${post.canHide ? `<button class="discussion-visibility-button" type="button" data-action="toggle-visibility" data-post-id="${escapeHtml(post.id)}" data-hidden="${post.isHidden ? '1' : '0'}">${post.isHidden ? '恢复公开' : '隐藏帖子'}</button>` : ''}
             ${post.canPin ? `<button class="discussion-detail-pin ${post.isPinned ? 'is-active' : ''}" type="button" data-action="toggle-pin" data-post-id="${escapeHtml(post.id)}" data-pinned="${post.isPinned ? '1' : '0'}"><img class="discussion-action-icon" src="/assets/icons/top.svg" alt="" aria-hidden="true" /><span>${post.isPinned ? '取消置顶' : '置顶文章'}</span></button>` : ''}
             ${post.canFeature ? `<button class="discussion-detail-feature ${post.isFeatured ? 'is-active' : ''}" type="button" data-action="toggle-feature" data-post-id="${escapeHtml(post.id)}" data-featured="${post.isFeatured ? '1' : '0'}"><img class="discussion-action-icon" src="/assets/icons/star.svg" alt="" aria-hidden="true" /><span>${post.isFeatured ? '取消精华' : '加精华'}</span></button>` : ''}
             ${post.canDelete ? `<button class="discussion-detail-delete" type="button" data-action="delete-post" data-post-id="${escapeHtml(post.id)}"><img class="discussion-action-icon" src="/assets/icons/trash.svg" alt="" aria-hidden="true" /><span>删除帖子</span></button>` : ''}
-          </div>
+          </div></details>
         `
             : ''
         }
@@ -5994,6 +5996,7 @@ function renderDiscussionDetail(post) {
       <h2 id="discussion-detail-title" tabindex="-1">${escapeHtml(post.title)}</h2>
       ${post.isHidden ? '<p class="discussion-privacy-note" role="status">已隐藏 · 仅自己可见。恢复公开后可继续评论与回应。</p>' : ''}
       <div class="discussion-detail-meta">
+        <span class="post-author-avatar">${renderAuthorProfileLink(post.author, 'discussion-author-link', true)}</span>
         <span class="discussion-detail-board">#${escapeHtml(post.board.name)}</span>
         ${renderAuthorProfileLink(post.author, 'discussion-author-link')}
         ${post.isAnonymous && userState.isAdmin ? '<button class="discussion-comment-action" type="button" data-action="inspect-anonymous-author">查询发帖人（管理）</button><span id="discussion-anonymous-author-result" role="status"></span>' : ''}
@@ -6043,6 +6046,7 @@ function renderDiscussionDetail(post) {
   const markdownBody = document.getElementById('discussion-markdown-body');
   enhanceMarkdownContent(markdownBody);
   initializeDiscussionCommentComposer(document.getElementById('discussion-comment-form'));
+  window.FreeBbsPostReader?.mount(discussionDetail, post);
   loadDiscussionComments(post.id);
 }
 
@@ -8607,6 +8611,7 @@ async function handleDiscussionCommentSubmit(event) {
         : post,
     );
     clearDiscussionCommentComposer(form);
+    form.dispatchEvent(new CustomEvent('discussion:comment-published', { bubbles: true }));
     if (parentCommentId) {
       discussionOpenReplyByPost.delete(postId);
     }
