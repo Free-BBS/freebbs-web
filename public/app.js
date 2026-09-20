@@ -4611,6 +4611,7 @@ function renderAiChatThread() {
         article?.querySelector('.aichat-bubble'),
         window.FreeBbsFilePreview.split(message.content).files,
         message.filePages || [],
+        message.documents || [],
       );
     }
     if (message.role === 'assistant' && message.navigation) {
@@ -4649,7 +4650,7 @@ function updateAiChatMessage(article, content) {
 function buildAiChatPayload(userMessage) {
   const recentMessages = aiChatState.messages
     .slice(-13)
-    .map(({ images, filePages, ...message }) => message);
+    .map(({ images, filePages, documents, ...message }) => message);
 
   return {
     agent: 'navigation',
@@ -5097,16 +5098,46 @@ async function pollInfoJob(article, navigationResult) {
   }
 }
 
-async function requestMaxNavigation(payload, onReasoning) {
+async function requestMaxNavigation(payload, onReasoning, onProgress = () => {}) {
   if (!userState.token) throw new Error('请先登录后再使用问问 Max');
-  return window.FreeBbsReasoning.request({
-    url: `${API_BASE_URL}/ai/chat`,
-    token: userState.token,
-    payload: {
-      ...payload,
-      ...(window.FreeBbsMaxModels ? await window.FreeBbsMaxModels.chatOptions(payload) : {}),
+  const token = userState.token;
+  const checkSession = () => {
+    if (userState.token !== token) throw new Error('登录状态已改变，文件读取已停止。');
+  };
+  const request = async (body, final = true) => {
+    checkSession();
+    const result = await window.FreeBbsReasoning.request({
+      url: `${API_BASE_URL}/ai/chat`,
+      token,
+      payload: {
+        ...body,
+        ...(window.FreeBbsMaxModels ? await window.FreeBbsMaxModels.chatOptions(body) : {}),
+      },
+      onReasoning: final ? onReasoning : () => {},
+    });
+    checkSession();
+    return result;
+  };
+  if (!payload.documents?.length) return request(payload);
+  return window.FreeBbsDocumentReader.read({
+    payload,
+    documents: payload.documents,
+    request,
+    onProgress,
+    fetchPages: async (id, start, count) => {
+      checkSession();
+      const response = await fetch(
+        `${API_BASE_URL}/ai/files/${encodeURIComponent(id)}/pages?start=${start}&count=${count}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(80000),
+        },
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || '页面读取失败');
+      checkSession();
+      return data;
     },
-    onReasoning,
   });
 }
 
@@ -5360,6 +5391,7 @@ async function handleAiChatSubmit(event) {
     return;
   }
   const filePages = window.FreeBbsMaxFiles?.pages() || [];
+  const documents = window.FreeBbsMaxFiles?.documents?.() || [];
   const composerMessage = aiChatInput.value.trim();
   const userMessage =
     (composerMessage ||
@@ -5385,7 +5417,8 @@ async function handleAiChatSubmit(event) {
     aiChatState.messages.at(-1) === previousAttempt.message &&
     previousAttempt.message.content === userMessage &&
     JSON.stringify(previousAttempt.message.images || []) === JSON.stringify(images) &&
-    JSON.stringify(previousAttempt.message.filePages || []) === JSON.stringify(filePages);
+    JSON.stringify(previousAttempt.message.filePages || []) === JSON.stringify(filePages) &&
+    JSON.stringify(previousAttempt.message.documents || []) === JSON.stringify(documents);
   if (retrying) {
     // Re-render the stored user turn and discard the previous error placeholder.
     renderAiChatThread();
@@ -5393,12 +5426,18 @@ async function handleAiChatSubmit(event) {
     const requestPayload = {
       ...buildAiChatPayload(userMessage),
       vision_images: [...images, ...filePages],
+      documents: documents.length
+        ? documents
+        : aiChatState.messages.findLast(
+            (message) => message.role === 'user' && message.documents?.length,
+          )?.documents || [],
     };
     const message = {
       role: 'user',
       content: userMessage,
       ...(images.length ? { images } : {}),
       ...(filePages.length ? { filePages } : {}),
+      ...(documents.length ? { documents } : {}),
     };
     aiChatState.messages.push(message);
     aiChatState.pendingSend = { message, requestPayload };
@@ -5408,6 +5447,7 @@ async function handleAiChatSubmit(event) {
       userArticle?.querySelector('.aichat-bubble'),
       window.FreeBbsFilePreview.split(userMessage).files,
       filePages,
+      documents,
     );
   }
   const assistantArticle = appendAiChatMessage('assistant', '');
@@ -5425,9 +5465,17 @@ async function handleAiChatSubmit(event) {
     const { requestPayload } = aiChatState.pendingSend;
     await saveAiDialog({ throwOnError: true });
     requestPayload.did = aiChatState.currentDid || '';
-    const rawResult = await requestMaxNavigation(requestPayload, (progress) => {
-      window.FreeBbsReasoning.update(assistantArticle, progress);
-    });
+    const rawResult = await requestMaxNavigation(
+      requestPayload,
+      (progress) => {
+        window.FreeBbsReasoning.update(assistantArticle, progress);
+      },
+      (message) => {
+        window.clearTimeout(bubbleTimer);
+        setAiChatThinkingBubble(assistantArticle, message);
+        setAiChatStatus(message);
+      },
+    );
     window.FreeBbsReasoning.finish(assistantArticle);
     const result = await addMentionedCourseMapRoute(rawResult, userMessage);
     window.clearTimeout(bubbleTimer);

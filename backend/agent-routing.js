@@ -30,7 +30,7 @@ function isLearningQuestion(text) {
   return STUDY.test(text) || (SUBJECT.test(text) && (QUESTION.test(text) || text.length < 40));
 }
 function maxAgentRoute(payload) {
-  if (payload.source === 'circuit_report') {
+  if (['circuit_report', 'document_read'].includes(payload.source)) {
     return { agent: 'general_chat', execute_subagent: 'none', combine_general_chat: false };
   }
   const turns = (Array.isArray(payload.messages) ? payload.messages : [])

@@ -56,6 +56,8 @@ node --check public/max-models.js
 node --check public/max-images.js
 node --check public/max-files.js
 node --check public/max-file-preview.js
+node --check public/max-document-reader.js
+node --test backend/max-documents.test.js scripts/max-document-reader.test.js
 node --check services/document-converter/server.js
 node --check public/site-search.js
 node --check public/mobile-shell.js

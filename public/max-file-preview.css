@@ -87,3 +87,35 @@
   font-size: 12px;
   color: var(--ui-muted);
 }
+.max-file-page-controls {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 12px;
+  background: var(--ui-surface, white);
+}
+.max-file-page-controls button {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--ui-line);
+  border-radius: 6px;
+  background: var(--ui-surface-soft);
+  color: inherit;
+  cursor: pointer;
+}
+.max-file-page-controls input {
+  width: 70px;
+  min-height: 36px;
+  color: inherit;
+  background: var(--ui-input);
+  border: 1px solid var(--ui-line);
+  border-radius: 6px;
+  text-align: center;
+}
+.max-file-page-controls span {
+  font-size: 12px;
+  color: var(--ui-muted);
+}

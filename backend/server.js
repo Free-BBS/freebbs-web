@@ -50,6 +50,7 @@ const { buildAiDialogExport, buildAiDialogExportFileName } = require('./ai-dialo
 const { enrichAgentCircuitContext } = require('./agent-circuits');
 const { enrichAgentSiteContext, siteReferences } = require('./agent-site');
 const { maxAgentRoute } = require('./agent-routing');
+const { normalizeDocuments } = require('./max-documents');
 const initializeOnce = require('./initialize-once');
 const { createCircuitAssistantRouter } = require('./circuit-assistant');
 const { createCircuitRecognitionRouter } = require('./circuit-recognition');
@@ -308,7 +309,7 @@ app.use(
     try {
       const uploadPath = path.posix.normalize(decodeURIComponent(request.path).replace(/\\/g, '/'));
       const directory = uploadPath.split('/').filter(Boolean)[0]?.toLowerCase();
-      if (directory === 'course-agent-files') {
+      if (directory === 'course-agent-files' || directory === '.max-documents') {
         response.sendStatus(404);
         return;
       }
@@ -2108,6 +2109,8 @@ function normalizeAiMessages(value) {
       normalizedMessage.images = validateVisionImages(message.images);
       if (normalizedMessage.images.length > 4) throw new Error('每条消息最多保存 4 张图片。');
     }
+    if (role === 'user' && message.documents !== undefined)
+      normalizedMessage.documents = normalizeDocuments(message.documents);
     if (role === 'user' && message.filePages !== undefined) {
       normalizedMessage.filePages = validateVisionImages(message.filePages);
       if (normalizedMessage.filePages.length > 12)
@@ -2492,7 +2495,9 @@ app.get('/api/ai/models', async (request, response) => {
   }
 });
 
-require('./max-files').registerMaxFiles(app, requireAuth);
+require('./max-files').registerMaxFiles(app, requireAuth, {
+  directory: path.join(config.uploadDir, '.max-documents'),
+});
 
 app.use('/api/search', createSiteSearchRouter(siteSearch, getOptionalAuthUser));
 

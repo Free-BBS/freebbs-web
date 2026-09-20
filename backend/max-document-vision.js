@@ -1,11 +1,10 @@
 const path = require('node:path');
 const sharp = require('sharp');
 const { PDFParse } = require('pdf-parse');
-const MAX_PAGES = 12;
-async function renderDocument(name, input) {
+async function prepareDocument(name, input, alreadyPdf = false) {
   const extension = path.extname(name).toLowerCase();
   let buffer = input;
-  if (extension !== '.pdf') {
+  if (!alreadyPdf && extension !== '.pdf') {
     const response = await fetch(
       `${process.env.DOCUMENT_CONVERTER_URL || 'http://172.30.77.2:8080'}/convert`,
       {
@@ -25,10 +24,26 @@ async function renderDocument(name, input) {
   const parser = new PDFParse({ data: new Uint8Array(buffer), isEvalSupported: false });
   try {
     const info = await parser.getInfo();
-    if (!info.total || info.total > MAX_PAGES)
-      throw new Error('视觉文件最多 12 页，请拆分 PDF / PPT 后上传；不会静默省略后面的页面。');
+    if (!Number.isSafeInteger(info.total) || info.total < 1)
+      throw new Error('文件没有可读取的页面。');
+    return { pdf: buffer, pageCount: info.total };
+  } finally {
+    await parser.destroy();
+  }
+}
+async function renderDocument(name, input, range = {}) {
+  const prepared = await prepareDocument(name, input, range.pdf);
+  const parser = new PDFParse({ data: new Uint8Array(prepared.pdf), isEvalSupported: false });
+  try {
+    const total = prepared.pageCount;
+    const start = range.start || 1;
+    const end = range.end || Math.min(total, start + 3);
+    if (start < 1 || end > total || end < start || end - start >= 4)
+      throw new Error('分页请求无效。');
     const pages = [];
-    for (let page = 1; page <= info.total; page += 1) {
+    const partial = [];
+    for (let page = start; page <= end; page += 1) {
+      partial.push(page);
       const result = await parser.getScreenshot({
         partial: [page],
         desiredWidth: 1100,
@@ -43,19 +58,16 @@ async function renderDocument(name, input) {
         .toBuffer();
       if (jpeg.length > 1024 * 1024) throw new Error(`第 ${page} 页图片过大，请降低文档分辨率。`);
       pages.push({
-        label: `${name.slice(0, 90)} · 第 ${page}/${info.total} 页`,
+        label: `${name.slice(0, 90)} · 第 ${page}/${total} 页`,
         dataUrl: `data:image/jpeg;base64,${jpeg.toString('base64')}`,
       });
     }
-    const text = (await parser.getText({ pageJoiner: '\n-- 第 page_number 页 --\n' })).text.trim();
-    if (text.length > 60000) throw new Error('文件文字超过 6 万字，请拆分后上传。');
-    return {
-      text: text || '此文件为扫描或图片文档，请逐页查看附带的页面图片。',
-      pages,
-      pageCount: info.total,
-    };
+    const text = (
+      await parser.getText({ partial, pageJoiner: '\n-- 第 page_number 页 --\n' })
+    ).text.trim();
+    return { text, pages, pageCount: total, start, end };
   } finally {
     await parser.destroy();
   }
 }
-module.exports = { renderDocument };
+module.exports = { renderDocument, prepareDocument };

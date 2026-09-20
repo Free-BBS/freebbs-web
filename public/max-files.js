@@ -32,8 +32,8 @@
       const info = document.createElement('small');
       info.textContent =
         file.state === 'ready'
-          ? file.pages?.length
-            ? `${file.pages.length} 页 · 视觉读取`
+          ? file.document
+            ? `${file.document.pageCount} 页 · 分批视觉读取`
             : `${file.text.length} 字 · 已就绪`
           : file.state === 'error'
             ? file.error
@@ -131,9 +131,8 @@
         if (files.reduce((sum, entry) => sum + entry.text.length, 0) + result.text.length > 60000)
           throw new Error('附件合计超过 6 万字，请分次发送。');
         const pages = Array.isArray(result.pages) ? result.pages : [];
-        if (files.reduce((sum, entry) => sum + (entry.pages?.length || 0), 0) + pages.length > 12)
-          throw new Error('附件页面合计最多 12 页，请分次发送。');
-        if (pages.length) await window.FreeBbsMaxModels?.requireVision();
+        if (result.document || pages.length) await window.FreeBbsMaxModels?.requireVision();
+        item.document = result.document;
         item.pages = pages;
         item.text = result.text;
         item.state = 'ready';
@@ -171,6 +170,9 @@
       return files
         .map((file) => `\n\n--- 附件：${file.name} ---\n${file.text}\n--- 附件结束 ---`)
         .join('');
+    },
+    documents() {
+      return files.flatMap((file) => (file.document ? [file.document] : []));
     },
     pages() {
       return files.flatMap((file) => file.pages || []);

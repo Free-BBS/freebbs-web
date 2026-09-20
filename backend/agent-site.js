@@ -42,7 +42,7 @@ function appendContext(payload, contextText, site) {
 const RESPONSE_STYLE =
   '回答方式：自然、直接地回答当前问题，不要例行附加导航、课程入口、延伸阅读或链接。使用本站资料回答时必须在相应内容旁附来源链接，格式为 [【1】](本站地址)，不要只写标题或声称无法提供链接。普通聊天没有使用本站资料时无需链接。用户明确不要链接时不附链接。不需要每次提醒自己能做什么。';
 async function enrichAgentSiteContext(payload, { service, publicWebUrl, user = null }) {
-  if (payload.source === 'circuit_report') return payload;
+  if (['circuit_report', 'document_read'].includes(payload.source)) return payload;
   const question = latestQuestion(payload);
   if (!question) return payload;
   const previous = (Array.isArray(payload.messages) ? payload.messages : [])

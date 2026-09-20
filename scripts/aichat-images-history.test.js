@@ -18,6 +18,7 @@ const normalize = vm.runInNewContext(
   `${section(backend, 'function normalizeAiMessages(', '\nfunction buildAiDialogTitle(')}\nnormalizeAiMessages`,
   {
     validateVisionImages,
+    normalizeDocuments: require('../backend/max-documents').normalizeDocuments,
     normalizeAiDialogNavigation: () => null,
     normalizeAiDialogRag: () => null,
   },
@@ -90,4 +91,15 @@ test('document page images survive history but are excluded from plain text mode
     { aiChatState: { messages: saved, currentDid: 'saved' } },
   );
   assert.equal(payload.messages[0].filePages, undefined);
+});
+
+test('long document references survive history without embedding page images', () => {
+  const documents = [
+    { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: '课件.pdf', pageCount: 257 },
+  ];
+  const restored = JSON.parse(
+    JSON.stringify(normalize([{ role: 'user', content: '总结课件', documents }])),
+  );
+  assert.deepEqual(restored[0].documents, documents);
+  assert.equal(restored[0].filePages, undefined);
 });

@@ -154,9 +154,34 @@ function parseFile(name, buffer, visual = false) {
     });
   });
 }
-function registerMaxFiles(app, requireAuth) {
+function registerMaxFiles(app, requireAuth, { directory } = {}) {
+  const documents = require('./max-documents').createDocumentStore(
+    directory || path.join(require('node:os').tmpdir(), 'freebbs-documents'),
+    parseFile,
+  );
   let active = 0;
   const receive = createUploads();
+  app.get('/api/ai/files/:id/pages', async (request, response) => {
+    const user = await requireAuth(request, response);
+    if (!user) return;
+    if (active >= 2) return response.status(429).json({ message: '文件渲染繁忙，请稍后重试。' });
+    active += 1;
+    try {
+      response.setHeader('Cache-Control', 'private, no-store');
+      return response.json(
+        await documents.pages(
+          user.id,
+          request.params.id,
+          Number(request.query.start || 1),
+          Number(request.query.count || 4),
+        ),
+      );
+    } catch (error) {
+      return response.status(422).json({ message: error.message });
+    } finally {
+      active -= 1;
+    }
+  });
   app.post('/api/ai/files/parse', async (request, response) => {
     const user = await requireAuth(request, response);
     if (!user) return;
@@ -191,7 +216,9 @@ function registerMaxFiles(app, requireAuth) {
     active += 1;
     try {
       const visual = ['.pdf', '.ppt', '.pptx'].includes(path.extname(name).toLowerCase());
-      const parsed = await parseFile(name, buffer, visual);
+      const parsed = visual
+        ? await documents.create(user.id, name, buffer)
+        : await parseFile(name, buffer);
       return response.json({ name, ...(visual ? parsed : { text: parsed }) });
     } catch (error) {
       return response.status(422).json({ message: error.message || '文件解析失败。' });
@@ -202,10 +229,16 @@ function registerMaxFiles(app, requireAuth) {
 }
 if (!isMainThread) {
   const task = workerData.visual
-    ? require('./max-document-vision').renderDocument(
-        workerData.name,
-        Buffer.from(workerData.buffer),
-      )
+    ? workerData.visual === 'prepare'
+      ? require('./max-document-vision').prepareDocument(
+          workerData.name,
+          Buffer.from(workerData.buffer),
+        )
+      : require('./max-document-vision').renderDocument(
+          workerData.name,
+          Buffer.from(workerData.buffer),
+          typeof workerData.visual === 'object' ? workerData.visual : {},
+        )
     : extract(workerData.name, Buffer.from(workerData.buffer));
   task
     .then((value) =>

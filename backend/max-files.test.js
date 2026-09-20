@@ -67,6 +67,7 @@ test('legacy PPT extracts Unicode atoms from its compound stream', async () => {
 test('file endpoint requires authentication and rejects unsupported input', async () => {
   let route;
   const app = {
+    get() {},
     post(path, handler) {
       route = handler;
     },
