@@ -1,12 +1,19 @@
 (() => {
+  if (
+    matchMedia('(max-width: 900px)').matches &&
+    ['/', '/index.html'].includes(location.pathname)
+  ) {
+    location.replace('/discussion' + location.search + location.hash);
+    return;
+  }
   const nav = document.querySelector('.mobile-nav');
   if (!nav) return;
   const path = location.pathname.replace(/\/$/, '') || '/';
   const primary = [
-    ['/', 'home', '首页'],
+    ['/discussion', 'people', '讨论区'],
+    ['/aichat', 'ai', 'Max'],
+    ['/publish', 'plus', '发表'],
     ['/world', 'map', '学习世界'],
-    ['/aichat', 'ai', '问问 Max'],
-    ['/discussion', 'people', '讨论'],
   ];
   const tools = [
     ['/circuits', 'circuit', '电路实验室'],
@@ -22,7 +29,7 @@
   function link([href, icon, label], className) {
     const node = document.createElement('a');
     node.href = href;
-    node.className = className;
+    node.className = className + (href === '/publish' ? ' mobile-publish' : '');
     node.innerHTML = `<img src="/assets/icons/${icon}.svg" alt="" aria-hidden="true"><span>${label}</span>`;
     if (href === activePath) {
       node.classList.add('is-active');
@@ -38,7 +45,7 @@
   button.type = 'button';
   button.className = 'mobile-primary mobile-tools-toggle';
   button.innerHTML =
-    '<img src="/assets/icons/gear.svg" alt="" aria-hidden="true"><span>工具</span>';
+    '<img src="/assets/icons/wrench.svg" alt="" aria-hidden="true"><span>工具</span>';
   button.setAttribute('aria-expanded', 'false');
   button.setAttribute('aria-haspopup', 'menu');
   button.setAttribute('aria-controls', 'mobile-tools-menu');
@@ -54,6 +61,18 @@
     node.setAttribute('role', 'menuitem');
     menu.append(node);
   }
+  const syncAdmin = () => {
+    menu.querySelector('[data-admin-tool]')?.remove();
+    if (window.freeBbsApp?.userState?.isAdmin) {
+      const node = link(['/system-settings', 'gear', '系统设置'], 'mobile-tool-link');
+      node.dataset.adminTool = 'true';
+      node.setAttribute('role', 'menuitem');
+      menu.append(node);
+    }
+  };
+  window.addEventListener('freebbs:session-change', syncAdmin);
+  window.freeBbsApp?.sessionReady?.then(syncAdmin);
+  syncAdmin();
   const close = (restore = false) => {
     menu.hidden = true;
     button.setAttribute('aria-expanded', 'false');

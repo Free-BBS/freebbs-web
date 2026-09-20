@@ -618,3 +618,24 @@ body.discussion-page .discussion-comment-author-link .discussion-avatar-frame {
   overflow: visible;
   border-radius: 50%;
 }
+@media (max-width: 900px) {
+  body:not(.auth-page-body) .mobile-nav-compact .mobile-publish img {
+    width: 30px;
+    height: 30px;
+    padding: 5px 14px;
+    box-sizing: content-box;
+    border-radius: 24px;
+    background: var(--ui-accent);
+    opacity: 1;
+    filter: none !important;
+  }
+  body:not(.auth-page-body) .mobile-nav-compact .mobile-publish {
+    gap: 1px;
+  }
+  body.discussion-page .main-content .discussion-scope .discussion-create-toggle {
+    display: none !important;
+  }
+  body.publish-page .mobile-nav.mobile-nav-compact {
+    display: none !important;
+  }
+}

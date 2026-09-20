@@ -11,6 +11,8 @@ echo "[ci] syntax check"
 bash -n scripts/*.sh
 node --check server.js
 node --check public/page-transitions.js
+node --check public/publish.js
+node --check public/mobile-shell.js
 node --test backend/initialize-once.test.js scripts/static-response.test.js
 node --check backend/server.js
 node --check public/app.js

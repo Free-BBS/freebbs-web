@@ -294,6 +294,7 @@ function activityReturnPath() {
     if (!value) return '';
     const next = new URL(value, window.location.origin);
     const allowed =
+      next.pathname === '/publish' ||
       next.pathname === '/surveys' ||
       (next.pathname === '/discussion' &&
         /^[a-zA-Z0-9_-]{1,80}$/.test(next.searchParams.get('post') || ''));

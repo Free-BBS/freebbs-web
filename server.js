@@ -21,6 +21,7 @@ const pageRoutes = new Map([
   ['/circuit-embed', '/circuit-embed.html'],
   ['/development', '/development.html'],
   ['/discussion', '/discussion.html'],
+  ['/publish', '/publish.html'],
   ['/electromagnetic', '/electromagnetic.html'],
   ['/inventory', '/inventory.html'],
   ['/knowledge', '/knowledge.html'],

@@ -6543,7 +6543,17 @@ async function loadDiscussionPosts({ autoOpen = false, more = false } = {}) {
 }
 
 async function initializeDiscussionPage() {
+  if (isCurrentPath('/publish')) {
+    await sessionReady;
+    discussionState.activeBoard = new URLSearchParams(location.search).get('board') || 'daily';
+    await loadDiscussionBoards();
+    return { boards: discussionState.boards, isFallback: discussionState.isFallback };
+  }
   if (!isDiscussionPage()) return;
+  if (new URLSearchParams(location.search).get('compose') === 'circuit') {
+    location.replace('/publish' + location.search);
+    return;
+  }
   await sessionReady;
   const version = discussionState.sessionVersion;
   try {
@@ -8625,6 +8635,10 @@ async function handleDiscussionCommentSubmit(event) {
 }
 
 async function handleDiscussionCreateToggle() {
+  if (!isCurrentPath('/publish')) {
+    location.href = '/publish?board=' + encodeURIComponent(discussionState.activeBoard);
+    return;
+  }
   if (!discussionComposeForm) {
     return;
   }
@@ -8672,7 +8686,9 @@ async function handleDiscussionComposeSubmit(event) {
 
   setDiscussionMessage('正在发布帖子...');
   const submittedUid = userState.uid;
-  const submitButton = discussionComposeForm.querySelector('button[type="submit"]');
+  const submitButton =
+    discussionComposeForm.querySelector('button[type="submit"]') ||
+    document.querySelector('button[form="discussion-compose-form"]');
   discussionComposeForm.dataset.submitting = 'true';
   discussionComposeForm.setAttribute('aria-busy', 'true');
   if (submitButton) submitButton.disabled = true;
@@ -8697,6 +8713,14 @@ async function handleDiscussionComposeSubmit(event) {
       new CustomEvent('discussion:published', { detail: { post: payload.post } }),
     );
     discussionComposeForm.reset();
+    if (isCurrentPath('/publish')) {
+      location.href =
+        '/discussion?post=' +
+        encodeURIComponent(payload.post.id) +
+        '&board=' +
+        encodeURIComponent(payload.post.board.slug);
+      return;
+    }
     syncDiscussionAnonymousOption();
     discussionComposeForm.classList.add('hidden');
     discussionState.activeBoard = payload.post.board.slug;
