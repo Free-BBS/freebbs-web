@@ -119,8 +119,6 @@ const discussionBoardAboutTitle = document.getElementById('discussion-board-abou
 const discussionBoardAboutBody = document.getElementById('discussion-board-about-body');
 const discussionBoardEdit = document.getElementById('discussion-board-edit');
 const discussionBoardModerators = document.getElementById('discussion-board-moderators');
-const discussionStatsPosts = document.getElementById('discussion-stats-posts');
-const discussionStatsLikes = document.getElementById('discussion-stats-likes');
 const discussionFilterControls = Array.from(document.querySelectorAll('[data-discussion-sort]'));
 const discussionFilterStatus = document.getElementById('discussion-filter-status');
 const workbenchGreeting = document.getElementById('workbench-greeting');
@@ -5602,18 +5600,6 @@ function setDiscussionDetailView(isDetailView) {
   if (!isDetailView) window.FreeBbsPostReader?.close();
 }
 
-function renderDiscussionStats(stats) {
-  if (discussionStatsPosts) {
-    discussionStatsPosts.textContent = String(
-      stats?.postCount ?? discussionState.posts.length ?? 0,
-    );
-  }
-
-  if (discussionStatsLikes) {
-    discussionStatsLikes.textContent = String(stats?.likeCount ?? 0);
-  }
-}
-
 function getDiscussionCommentDraftKey(postId, parentCommentId = 0) {
   return JSON.stringify([String(postId || ''), Number(parentCommentId || 0)]);
 }
@@ -6231,22 +6217,6 @@ async function loadDiscussionBoards() {
   renderDiscussionComposerState();
 }
 
-async function loadDiscussionStats() {
-  if (!discussionStatsPosts && !discussionStatsLikes) {
-    return;
-  }
-
-  try {
-    const payload = await callApi('/discussion/stats', {
-      method: 'GET',
-      signal: createDiscussionRequestSignal(),
-    });
-    renderDiscussionStats(payload);
-  } catch {
-    renderDiscussionStats(null);
-  }
-}
-
 async function loadDiscussionComments(postId) {
   if (discussionState.sessionStale) return;
   const version = discussionState.sessionVersion;
@@ -6350,8 +6320,6 @@ async function toggleDiscussionReaction(postId, reactionType = 'smile') {
   if (discussionState.activePost?.id === postId) {
     renderDiscussionDetail(discussionState.activePost);
   }
-
-  loadDiscussionStats();
 }
 
 function showDiscussionLoginDialog(postId) {
@@ -6529,7 +6497,6 @@ async function loadDiscussionPosts({ autoOpen = false, more = false } = {}) {
   renderDiscussionComposeBoards();
   renderDiscussionPosts();
   discussionPostList.setAttribute('aria-busy', 'false');
-  loadDiscussionStats();
 
   if (!autoOpen) {
     updateDiscussionQuery({
@@ -8349,7 +8316,6 @@ async function handleDiscussionCommentAction(button) {
       if (countNode) countNode.textContent = count;
       await loadDiscussionComments(postId);
       renderDiscussionPosts();
-      loadDiscussionStats();
     } else {
       discussionState.comments = discussionState.comments.map((comment) =>
         comment.id === commentId

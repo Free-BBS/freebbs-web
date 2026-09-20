@@ -161,6 +161,17 @@
           </header>
           <section class="discussion-shell" aria-label="讨论区">
             <section class="discussion-layout">
+              <nav
+                class="discussion-stats-sidebar"
+                id="discussion-stats-sidebar"
+                aria-label="讨论版块"
+              >
+                <section class="discussion-stats-section">
+                  <h2>版块</h2>
+                  <div class="discussion-board-list" id="discussion-board-list"></div>
+                </section>
+              </nav>
+
               <section class="discussion-feed" aria-label="帖子列表">
                 <section class="discussion-board-about" id="discussion-board-about">
                   <div class="discussion-board-about-head">
@@ -391,27 +402,6 @@
               </section>
 
               <article class="discussion-detail" id="discussion-detail"></article>
-
-              <aside
-                class="discussion-stats-sidebar"
-                id="discussion-stats-sidebar"
-                aria-label="讨论统计"
-              >
-                <section class="discussion-stats-section">
-                  <h2>版块</h2>
-                  <div class="discussion-board-list" id="discussion-board-list"></div>
-                </section>
-
-                <section class="discussion-stats-section">
-                  <h2>发帖统计</h2>
-                  <strong class="discussion-stats-number" id="discussion-stats-posts">-</strong>
-                </section>
-
-                <section class="discussion-stats-section">
-                  <h2>获赞统计</h2>
-                  <strong class="discussion-stats-number" id="discussion-stats-likes">-</strong>
-                </section>
-              </aside>
             </section>
           </section>
         </section>

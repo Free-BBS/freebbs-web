@@ -266,6 +266,81 @@
     border-bottom: 1px solid var(--ui-line);
   }
 
+  body.discussion-page
+    .main-content
+    .discussion-layout:not(.is-detail-view)
+    .discussion-stats-sidebar {
+    position: static;
+    display: block;
+    width: 100%;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  body.discussion-page .discussion-stats-sidebar .discussion-stats-section {
+    padding: 0;
+    border: 0;
+  }
+
+  body.discussion-page .discussion-stats-sidebar h2 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  body.discussion-page .main-content .discussion-board-list {
+    gap: 20px !important;
+  }
+
+  body.discussion-page .main-content .discussion-board-chip {
+    width: auto !important;
+    min-width: auto !important;
+    min-height: 44px;
+    padding: 8px 2px !important;
+    border: 0 !important;
+    border-bottom: 2px solid transparent !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  body.discussion-page .main-content .discussion-board-chip:hover,
+  body.discussion-page .main-content .discussion-board-chip.is-active {
+    border-bottom-color: var(--discussion-accent-strong) !important;
+    background: transparent !important;
+  }
+
+  body.discussion-page .main-content .discussion-board-about {
+    margin-bottom: 18px;
+    padding: 18px 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--discussion-line) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  body.discussion-page .discussion-feed-toolbar-actions #discussion-deleted-filter {
+    display: inline-flex;
+    grid-template-columns: none;
+    align-items: center;
+    gap: 7px;
+    min-width: max-content;
+    white-space: nowrap;
+  }
+
+  body.discussion-page .discussion-feed-toolbar-actions #discussion-deleted-filter.hidden {
+    display: none !important;
+  }
+
   body.discussion-page .discussion-post-card {
     border-inline: 0 !important;
     border-top: 0 !important;
