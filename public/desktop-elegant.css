@@ -209,7 +209,8 @@
   body.personal-settings-page .settings-profile {
     display: grid !important;
     gap: 0 !important;
-    padding: 0 !important;
+    padding: 0 clamp(20px, 2vw, 28px) !important;
+    box-sizing: border-box;
     border: 0 !important;
     border-radius: 0 !important;
     background: transparent !important;
@@ -228,7 +229,8 @@
   body.personal-settings-page .settings-account-actions {
     grid-column: 2;
     margin: 0 !important;
-    padding: 22px 0 !important;
+    padding: 22px clamp(20px, 2vw, 28px) !important;
+    box-sizing: border-box;
     border-top: 1px solid var(--ui-line);
   }
 
