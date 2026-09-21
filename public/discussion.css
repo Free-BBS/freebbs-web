@@ -146,6 +146,88 @@ body.theme-light.discussion-page .main-content .discussion-markdown-body pre cod
   color: #edf7f8 !important;
 }
 
+body.discussion-page .main-content .discussion-table-scroll {
+  width: 100%;
+  max-width: 100%;
+  margin: 1.4em 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--discussion-line-strong) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+body.discussion-page .main-content .discussion-table-scroll:focus-visible {
+  outline: 2px solid var(--discussion-accent-strong);
+  outline-offset: 3px;
+}
+
+body.discussion-page .main-content .discussion-markdown-body .discussion-table-scroll table {
+  display: table;
+  width: 100%;
+  min-width: 100%;
+  max-width: none;
+  margin: 0;
+  border-collapse: collapse;
+  border-spacing: 0;
+  table-layout: auto;
+  font-size: 0.93em;
+  line-height: 1.55;
+}
+
+body.discussion-page .main-content .discussion-markdown-body .discussion-table-scroll th,
+body.discussion-page .main-content .discussion-markdown-body .discussion-table-scroll td {
+  min-width: 7rem;
+  padding: 10px 14px;
+  border: 1px solid var(--discussion-line-strong);
+  background: transparent;
+  color: var(--discussion-text);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+body.discussion-page .main-content .discussion-markdown-body .discussion-table-scroll th {
+  background: var(--discussion-panel-soft);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+body.discussion-page
+  .main-content
+  .discussion-markdown-body
+  .discussion-table-scroll
+  :is(th, td)[align='center'] {
+  text-align: center;
+}
+
+body.discussion-page
+  .main-content
+  .discussion-markdown-body
+  .discussion-table-scroll
+  :is(th, td)[align='right'] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+body.discussion-page
+  .main-content
+  .discussion-markdown-body
+  .discussion-table-scroll
+  :is(th, td)
+  > :first-child {
+  margin-top: 0;
+}
+
+body.discussion-page
+  .main-content
+  .discussion-markdown-body
+  .discussion-table-scroll
+  :is(th, td)
+  > :last-child {
+  margin-bottom: 0;
+}
+
 body.discussion-page .main-content.settings-main {
   width: 100%;
   max-width: none;
@@ -232,8 +314,10 @@ body.discussion-page .discussion-shell {
 body.discussion-page .discussion-layout,
 body.discussion-page .discussion-layout:not(.is-detail-view) {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(196px, 230px) !important;
-  grid-template-areas: 'feed stats';
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-areas:
+    'stats'
+    'feed';
   align-items: start;
   gap: clamp(20px, 2.3vw, 34px);
 }
@@ -245,16 +329,14 @@ body.discussion-page .discussion-layout:not(.is-detail-view) .discussion-feed {
 
 body.discussion-page .discussion-layout:not(.is-detail-view) .discussion-stats-sidebar {
   grid-area: stats;
-  position: sticky;
-  top: 104px;
-  display: grid;
-  gap: 12px;
+  position: static;
+  display: block;
   min-width: 0;
-  padding: 16px;
-  background: var(--discussion-panel);
-  border: 1px solid var(--discussion-line);
-  border-radius: 20px;
-  box-shadow: 0 18px 50px rgba(2, 14, 17, 0.16);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 /* Keep the page-scoped palette authoritative over legacy light surfaces. */
@@ -580,26 +662,38 @@ body.discussion-page .discussion-stats-section h2 {
 }
 
 body.discussion-page .discussion-board-list {
-  display: grid;
-  gap: 6px;
-  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin: 0;
+  padding: 0 0 3px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--discussion-line);
+  scrollbar-width: none;
+}
+
+body.discussion-page .discussion-board-list::-webkit-scrollbar {
+  display: none;
 }
 
 body.discussion-page .discussion-board-chip {
-  min-height: 40px;
-  padding: 9px 11px;
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 8px 2px;
   color: var(--discussion-muted);
-  text-align: left;
+  text-align: center;
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: 11px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  white-space: nowrap;
 }
 
 body.discussion-page .discussion-board-chip:hover,
 body.discussion-page .discussion-board-chip.is-active {
-  color: var(--discussion-text);
-  background: var(--discussion-accent-soft);
-  border-color: var(--discussion-line);
+  color: var(--discussion-accent-strong);
+  background: transparent;
+  border-bottom-color: var(--discussion-accent-strong);
 }
 
 body.discussion-page .discussion-stats-number {
@@ -1093,7 +1187,7 @@ body.discussion-page .discussion-post-preview-circuit {
 
   body.discussion-page .main-content .discussion-markdown-body th,
   body.discussion-page .main-content .discussion-markdown-body td {
-    padding: 9px 12px;
+    padding: 9px 11px;
   }
 
   body.discussion-page .discussion-comments {
@@ -1409,4 +1503,49 @@ body.discussion-page #discussion-anonymous-author-result:empty {
 
 body.discussion-page #discussion-detail .discussion-deleted-notice strong {
   color: inherit !important;
+}
+
+.discussion-login-dialog {
+  width: min(360px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 24px;
+  border: 1px solid var(--ui-line);
+  border-radius: 16px;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+}
+.discussion-login-dialog::backdrop {
+  background: #0008;
+}
+.discussion-login-dialog h2 {
+  font-size: 20px;
+  margin: 0 0 12px;
+}
+.discussion-login-dialog p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--ui-muted);
+}
+.discussion-login-dialog form {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+.discussion-login-dialog button,
+.discussion-login-dialog a {
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 16px;
+  min-height: 44px;
+  font: inherit;
+  font-size: 14px;
+  text-decoration: none;
+  color: var(--ui-text);
+  background: var(--ui-surface-soft);
+  cursor: pointer;
+}
+.discussion-login-dialog a {
+  background: var(--ui-accent);
+  color: #fff;
 }

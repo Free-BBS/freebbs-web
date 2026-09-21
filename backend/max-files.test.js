@@ -67,6 +67,7 @@ test('legacy PPT extracts Unicode atoms from its compound stream', async () => {
 test('file endpoint requires authentication and rejects unsupported input', async () => {
   let route;
   const app = {
+    get() {},
     post(path, handler) {
       route = handler;
     },
@@ -109,6 +110,11 @@ test('PDF text extraction reads a real text page', async () => {
     .map((offset) => `${String(offset).padStart(10, '0')} 00000 n `)
     .join('\n')}\ntrailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
   assert.match(await parseFile('experiment.pdf', Buffer.from(pdf)), /Circuit experiment/);
+  const visual = await parseFile('experiment.pdf', Buffer.from(pdf), true);
+  assert.equal(visual.pages.length, 1);
+  assert.match(visual.pages[0].dataUrl, /^data:image\/jpeg;base64,/);
+  assert.match(visual.pages[0].label, /第 1\/1 页/);
+  assert.match(visual.text, /Circuit experiment/);
 });
 
 async function presentationFixture() {

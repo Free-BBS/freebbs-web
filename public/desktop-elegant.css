@@ -1,0 +1,403 @@
+/* Desktop refinement shared by every full-page surface. */
+@media (min-width: 901px) {
+  :root {
+    --desktop-content-width: 1240px;
+    --desktop-section-gap: 28px;
+    --desktop-radius: 14px;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body:not(.auth-page-body) .main-content {
+    width: min(100%, calc(var(--desktop-content-width) + 2 * var(--bbs-content-gutter)));
+    margin-inline: auto;
+    box-sizing: border-box;
+  }
+
+  body:not(.auth-page-body) .main-content::before {
+    max-width: var(--desktop-content-width);
+    margin-inline: auto;
+  }
+
+  body:not(.auth-page-body) .main-content > :where(section, article, header) {
+    animation: desktop-section-enter 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  body:not(.auth-page-body) .main-content > :where(section, article):nth-child(2) {
+    animation-delay: 35ms;
+  }
+
+  body:not(.auth-page-body) .main-content > :where(section, article):nth-child(3) {
+    animation-delay: 70ms;
+  }
+
+  body:not(.auth-page-body)
+    :where(
+      .settings-profile,
+      .settings-card,
+      .workbench-card,
+      .workbench-economy-section,
+      .discussion-board-about,
+      .discussion-compose,
+      .discussion-detail,
+      .discussion-stats-sidebar,
+      .discussion-post-card,
+      .aichat-dialogs,
+      .aichat-main,
+      .aichat-auth-required,
+      .economy-auth-required,
+      .economy-heat-panel,
+      .shop-item-card,
+      .inventory-item-row,
+      .home-dashboard-panel,
+      .public-profile-stat,
+      .admin-user-row,
+      .system-settings-menu,
+      .system-settings-form,
+      .course-hero,
+      .course-overview,
+      .course-toolbar,
+      .course-card,
+      .knowledge-sidebar,
+      .knowledge-content,
+      .knowledge-section,
+      .knowledge-rag-thread
+    ) {
+    box-shadow: none !important;
+  }
+
+  body:not(.auth-page-body)
+    :where(
+      .settings-card,
+      .workbench-card,
+      .discussion-post-card,
+      .inventory-item-row,
+      .admin-user-row,
+      .course-card,
+      .shop-item-card
+    ) {
+    border-radius: 10px !important;
+  }
+
+  body:not(.auth-page-body) :where(a, button, input, textarea, select, summary) {
+    transition:
+      color 180ms ease,
+      background-color 180ms ease,
+      border-color 180ms ease,
+      box-shadow 180ms ease,
+      transform 180ms ease,
+      opacity 180ms ease;
+  }
+
+  body:not(.auth-page-body) :where(a, button, summary):active {
+    transform: translateY(1px);
+  }
+
+  body:not(.auth-page-body) .topbar .nav-link:hover {
+    transform: translateX(2px);
+  }
+
+  body:not(.auth-page-body) .main-content :where(h1, h2, h3) {
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }
+
+  body:not(.auth-page-body) .main-content :where(p, li, dd) {
+    text-wrap: pretty;
+  }
+
+  body:not(.auth-page-body)
+    .main-content
+    :where(.home-dashboard, .settings-shell, .discussion-shell, .aichat-shell, .workbench-shell) {
+    width: min(100%, var(--desktop-content-width));
+    margin-inline: auto;
+  }
+
+  /* Settings follows the same profile-first hierarchy as mobile. */
+  body.personal-settings-page .settings-shell {
+    display: grid !important;
+    grid-template-columns: minmax(260px, 0.72fr) minmax(540px, 1.65fr) !important;
+    gap: 38px !important;
+    align-items: start !important;
+  }
+
+  body.personal-settings-page .settings-header {
+    display: none !important;
+  }
+
+  body.personal-settings-page .personal-overview {
+    display: block;
+    position: sticky;
+    top: 116px;
+    padding: 8px 4px 24px;
+  }
+
+  body.personal-settings-page .personal-identity {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  body.personal-settings-page .personal-avatar {
+    display: block !important;
+    width: 86px !important;
+    height: 86px !important;
+    flex: 0 0 86px;
+  }
+
+  body.personal-settings-page .personal-avatar img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  body.personal-settings-page .personal-identity h2 {
+    margin: 0 0 9px;
+    font-size: clamp(1.45rem, 2vw, 1.9rem);
+  }
+
+  body.personal-settings-page .personal-profile-link {
+    color: var(--ui-muted);
+    font-size: 0.86rem;
+    text-decoration: none;
+  }
+
+  body.personal-settings-page .personal-bio {
+    max-width: 34ch;
+    margin: 24px 0;
+    color: var(--ui-muted);
+    line-height: 1.75;
+    white-space: pre-wrap;
+  }
+
+  body.personal-settings-page .personal-balances {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    padding-block: 18px;
+    border-block: 1px solid var(--ui-line);
+  }
+
+  body.personal-settings-page .personal-balances span {
+    display: grid;
+    gap: 5px;
+    color: var(--ui-muted);
+    font-size: 0.76rem;
+  }
+
+  body.personal-settings-page .personal-balances strong {
+    color: var(--ui-text);
+    font-size: 1.35rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  body.personal-settings-page .personal-balances button {
+    grid-column: 1 / -1;
+    justify-self: start;
+    padding: 9px 15px;
+    border: 1px solid var(--ui-accent);
+    border-radius: 9px;
+    background: transparent;
+    color: var(--ui-accent);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  body.personal-settings-page .settings-profile {
+    display: grid !important;
+    gap: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+
+  body.personal-settings-page .settings-form,
+  body.personal-settings-page .course-token-settings {
+    padding: 28px 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--ui-line) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  body.personal-settings-page .settings-account-actions {
+    grid-column: 2;
+    margin: 0 !important;
+    padding: 22px 0 !important;
+    border-top: 1px solid var(--ui-line);
+  }
+
+  /* Workbench keeps information dense while dropping nested card chrome. */
+  body.personal-workbench-page .workbench-shell {
+    gap: var(--desktop-section-gap) !important;
+  }
+
+  body.personal-workbench-page .workbench-hero {
+    padding: 4px 0 24px !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--ui-line) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  body.personal-workbench-page .workbench-dashboard-card,
+  body.personal-workbench-page .workbench-economy-section,
+  body.personal-workbench-page .workbench-quick-section {
+    border-color: var(--ui-line) !important;
+    background: var(--ui-surface) !important;
+    box-shadow: none !important;
+  }
+
+  body.personal-workbench-page .workbench-card:hover,
+  body:not(.auth-page-body) :where(.discussion-post-card, .course-card, .shop-item-card):hover {
+    border-color: var(--ui-line-strong) !important;
+    transform: translateY(-2px);
+  }
+
+  /* Discussion and Max use line-based separation instead of card stacks. */
+  body.discussion-page .main-content,
+  body.discussion-page .main-content > .settings-shell,
+  body.discussion-page .main-content .discussion-shell {
+    width: 100% !important;
+    max-width: none !important;
+    margin-inline: 0 !important;
+  }
+
+  body.discussion-page .main-content::before {
+    max-width: none;
+    margin-inline: 0;
+  }
+
+  body.discussion-page .discussion-layout,
+  body.discussion-page .discussion-layout:not(.is-detail-view) {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas:
+      'stats'
+      'feed';
+  }
+
+  body.discussion-page .discussion-page-heading {
+    padding-bottom: 26px;
+    border-bottom: 1px solid var(--ui-line);
+  }
+
+  body.discussion-page
+    .main-content
+    .discussion-layout:not(.is-detail-view)
+    .discussion-stats-sidebar {
+    position: static;
+    display: block;
+    width: 100%;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  body.discussion-page .discussion-stats-sidebar .discussion-stats-section {
+    padding: 0;
+    border: 0;
+  }
+
+  body.discussion-page .discussion-stats-sidebar h2 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  body.discussion-page .main-content .discussion-board-list {
+    gap: 20px !important;
+  }
+
+  body.discussion-page .main-content .discussion-board-chip {
+    width: auto !important;
+    min-width: auto !important;
+    min-height: 44px;
+    padding: 8px 2px !important;
+    border: 0 !important;
+    border-bottom: 2px solid transparent !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  body.discussion-page .main-content .discussion-board-chip:hover,
+  body.discussion-page .main-content .discussion-board-chip.is-active {
+    border-bottom-color: var(--discussion-accent-strong) !important;
+    background: transparent !important;
+  }
+
+  body.discussion-page .main-content .discussion-board-about {
+    margin-bottom: 18px;
+    padding: 18px 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--discussion-line) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  body.discussion-page .discussion-feed-toolbar-actions #discussion-deleted-filter {
+    display: inline-flex;
+    grid-template-columns: none;
+    align-items: center;
+    gap: 7px;
+    min-width: max-content;
+    white-space: nowrap;
+  }
+
+  body.discussion-page .discussion-feed-toolbar-actions #discussion-deleted-filter.hidden {
+    display: none !important;
+  }
+
+  body.discussion-page .discussion-post-card {
+    border-inline: 0 !important;
+    border-top: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+
+  body.aichat-page .aichat-main,
+  body.aichat-page .aichat-dialogs {
+    border-radius: var(--desktop-radius) !important;
+    box-shadow: none !important;
+  }
+
+  body.home-page .home-dashboard-panel,
+  body.home-page .home-action-card {
+    box-shadow: none !important;
+  }
+
+  body.home-page .home-action-card:hover {
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body:not(.auth-page-body) .main-content > :where(section, article, header) {
+    animation: none !important;
+  }
+}
+
+@keyframes desktop-section-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

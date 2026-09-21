@@ -446,28 +446,34 @@ test('deadline exits hung requests distinctly and releases the editor lease', as
   assert.equal(h.runner.isRunning(), false);
 });
 
-test('model step limits are enforced even when every operation changes the draft', async () => {
+test('legacy model step limits are ignored and execution ends only on a terminal answer', async () => {
   const h = harness({
     maxSteps: 2,
-    requestStep: (payload) => ({
-      answer: '继续',
-      actions: [setResistance(1000 + payload.agent.step)],
-    }),
+    requestStep: (payload) =>
+      payload.agent.step === 4
+        ? { answer: '完成', actions: [], done: true }
+        : {
+            answer: '继续',
+            actions: [setResistance(1000 + payload.agent.step)],
+          },
   });
   const result = await h.runner.run('不停调整');
-  assert.equal(result.status, 'limit');
-  assert.equal(result.step, 2);
-  assert.equal(h.requests.length, 2);
-  assert.equal(h.executions.length, 2);
+  assert.equal(result.status, 'complete');
+  assert.equal(result.step, 4);
+  assert.equal(h.requests.length, 4);
+  assert.equal(h.executions.length, 3);
 });
 
 test('runs beyond twelve rounds and keeps a rolling request context', async () => {
   const h = harness({
     requestStep: (payload) => {
       assert.ok(payload.agent.observations.length <= 24);
-      return payload.agent.step === 40 ? { answer: '完成', actions: [], done: true } : {
-        answer: '继续', actions: [setResistance(1000 + payload.agent.step)],
-      };
+      return payload.agent.step === 40
+        ? { answer: '完成', actions: [], done: true }
+        : {
+            answer: '继续',
+            actions: [setResistance(1000 + payload.agent.step)],
+          };
     },
   });
   const result = await h.runner.run('不停调整');

@@ -10,7 +10,20 @@ npm ci
 echo "[ci] syntax check"
 bash -n scripts/*.sh
 node --check server.js
+node --check public/page-transitions.js
+node --check public/publish.js
+node --check public/post-reader.js
+node --check public/post-reward.js
+node --test backend/github-updates.test.js backend/github-code.test.js
+node --test scripts/session-restore.test.js
+node --check public/mobile-shell.js
+node --check public/mobile-personal.js
+test -s public/desktop-elegant.css
+node --test backend/weekly-digest.test.js backend/mailer.test.js
+node --test backend/initialize-once.test.js scripts/static-response.test.js
 node --check backend/server.js
+node --check backend/background-tasks.js
+node --test backend/background-tasks.test.js
 node --check public/app.js
 node --check public/auth.js
 node --check public/auth-challenge.js
@@ -53,7 +66,15 @@ node --check public/max-reasoning.js
 node --check public/max-models.js
 node --check public/max-images.js
 node --check public/max-files.js
-node --test backend/max-files.test.js
+node --check public/max-file-preview.js
+node --check public/max-document-reader.js
+node --test backend/max-documents.test.js scripts/max-document-reader.test.js
+node --check services/document-converter/server.js
+node --check public/site-search.js
+node --check public/mobile-shell.js
+node --check public/mobile-personal.js
+node --check public/max-composer.js
+node --test backend/max-file-uploads.test.js scripts/max-file-preview.test.js backend/agent-routing.test.js backend/max-files.test.js backend/site-search.test.js backend/agent-site.test.js scripts/max-viewport.test.js
 node --check backend/ai-models.js
 node --test backend/ai-models.test.js
 node --check public/circuit-parameter-popover.js

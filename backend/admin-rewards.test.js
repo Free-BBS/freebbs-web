@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const express = require('express');
 const {
+  postAuthorReward,
   validateReward,
   createAdminRewardsService,
   createAdminRewardsRouter,
@@ -237,6 +238,7 @@ test('admin routes reject anonymous and nonadmin callers; recipient history is s
     const base = `http://127.0.0.1:${server.address().port}`;
     for (const [method, route] of [
       ['POST', '/admin/rewards'],
+      ['POST', '/admin/discussion/posts/p_example/reward'],
       ['GET', '/admin/rewards'],
       ['GET', '/admin/rewards/1'],
     ]) {
@@ -258,4 +260,22 @@ test('admin routes reject anonymous and nonadmin callers; recipient history is s
       server.close(resolve);
     });
   }
+});
+
+test('post rewards derive recipients from the post and preserve anonymous author privacy', () => {
+  const result = postAuthorReward(
+    { user_id: 9, pid: 'p_example', title: '匿名反馈' },
+    {
+      ...reward(),
+      userIds: [999],
+      reason: '有效反馈',
+    },
+  );
+  assert.deepEqual(result.userIds, [9]);
+  assert.equal(result.title, '帖子奖励 · 匿名反馈');
+  assert.match(result.reason, /discussion\?post=p_example/);
+  assert.equal(validateReward(result).electric, 20);
+  assert.throws(() => postAuthorReward(null, reward()), /不存在/);
+  assert.throws(() => postAuthorReward({ is_deleted: 1 }, reward()), /不存在/);
+  assert.throws(() => postAuthorReward({ user_id: 9 }, { ...reward(), reason: '' }), /原因/);
 });

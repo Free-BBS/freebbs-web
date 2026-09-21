@@ -1,0 +1,487 @@
+@media (max-width: 900px) {
+  body.personal-settings-page .page-shell .settings-shell,
+  body.personal-settings-page .page-shell .settings-profile,
+  body.personal-workbench-page .page-shell .workbench-shell {
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    gap: 18px !important;
+  }
+  body.personal-settings-page .page-shell .settings-form,
+  body.personal-workbench-page .page-shell .workbench-dashboard-card {
+    padding: 18px 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--ui-line) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    min-width: 0 !important;
+  }
+  body.personal-settings-page .settings-header {
+    display: none !important;
+  }
+  body.personal-settings-page .settings-account-actions {
+    margin: 0 !important;
+    padding: 0 0 12px !important;
+  }
+  body.personal-settings-page .settings-avatar-row {
+    display: flex !important;
+    gap: 16px !important;
+    align-items: flex-start !important;
+  }
+  body.personal-settings-page .settings-avatar-preview {
+    flex: 0 0 58px;
+    width: 58px !important;
+    height: 58px !important;
+  }
+  body.personal-settings-page #settings-avatar-image {
+    width: 58px !important;
+    height: 58px !important;
+  }
+  body.personal-settings-page .settings-avatar-copy {
+    min-width: 0;
+    flex: 1;
+  }
+  body.personal-settings-page .settings-avatar-copy h2 {
+    font-size: 15px !important;
+    margin: 0 0 10px !important;
+  }
+  body.personal-settings-page #settings-avatar-help {
+    display: none;
+  }
+  body.personal-settings-page .settings-avatar-actions {
+    gap: 6px !important;
+    flex-wrap: wrap;
+  }
+  body.personal-settings-page .settings-upload-button {
+    padding: 7px 10px !important;
+    font-size: 12px !important;
+    min-height: 36px !important;
+  }
+  body.personal-settings-page .settings-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 14px !important;
+  }
+  body.personal-settings-page .auth-field {
+    gap: 6px !important;
+    font-size: 13px !important;
+  }
+  body.personal-settings-page .auth-field :is(input, select, textarea) {
+    font-size: 16px !important;
+    padding: 10px 12px !important;
+    min-height: 44px;
+    border-radius: 10px !important;
+  }
+  body.personal-settings-page .settings-form > .auth-submit {
+    width: auto !important;
+    padding: 10px 22px !important;
+    min-height: 42px !important;
+    font-size: 14px !important;
+    border-radius: 22px !important;
+  }
+  .personal-fold {
+    border-bottom: 1px solid var(--ui-line);
+    padding: 0;
+    min-width: 0;
+  }
+  .personal-fold > summary {
+    cursor: pointer;
+    min-height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    list-style: none;
+    color: var(--ui-text);
+  }
+  .personal-fold > summary::-webkit-details-marker {
+    display: none;
+  }
+  .personal-fold > summary::after {
+    content: '＋';
+    color: var(--ui-muted);
+    font-size: 18px;
+    font-weight: 400;
+  }
+  .personal-fold[open] > summary::after {
+    content: '−';
+  }
+  body.personal-settings-page .personal-fold .settings-form {
+    border: 0 !important;
+    padding-top: 0 !important;
+  }
+  .personal-fold .settings-section-heading h2 {
+    display: none;
+  }
+  body.personal-workbench-page .workbench-hero {
+    padding: 0 0 14px !important;
+    border: 0 !important;
+    background: transparent !important;
+    display: block !important;
+    min-height: 0 !important;
+  }
+  body.personal-workbench-page #workbench-greeting {
+    font-size: 21px !important;
+    line-height: 1.45 !important;
+    margin: 0 0 6px !important;
+  }
+  body.personal-workbench-page .workbench-intro-copy {
+    display: none;
+  }
+  body.personal-workbench-page .workbench-date {
+    font-size: 13px !important;
+    margin: 0 !important;
+  }
+  body.personal-workbench-page .workbench-session-state {
+    font-size: 12px !important;
+    margin: 6px 0 0 !important;
+  }
+  body.personal-workbench-page
+    :is(.workbench-view-layout, .workbench-dashboard-grid, .workbench-campus-courses-layout) {
+    display: flex !important;
+    flex-direction: column;
+    gap: 0 !important;
+    min-width: 0;
+  }
+  body.personal-workbench-page .workbench-persistent-column {
+    display: none !important;
+  }
+  body.personal-workbench-page .workbench-view-switch {
+    gap: 18px !important;
+    padding: 0 !important;
+    border-bottom: 1px solid var(--ui-line);
+    background: transparent !important;
+    border-radius: 0 !important;
+  }
+  body.personal-workbench-page .workbench-view-switch button {
+    padding: 10px 2px !important;
+    min-height: 42px !important;
+    border: 0 !important;
+    border-bottom: 2px solid transparent !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    font-size: 14px !important;
+  }
+  body.personal-workbench-page .workbench-view-switch [aria-current='page'] {
+    border-bottom-color: var(--ui-accent) !important;
+    color: var(--ui-accent);
+  }
+  body.personal-workbench-page .workbench-card-header {
+    gap: 12px !important;
+    flex-wrap: wrap;
+  }
+  body.personal-workbench-page .workbench-card-header h2 {
+    font-size: 17px !important;
+    margin: 0 !important;
+  }
+  body.personal-workbench-page .workbench-card-tools {
+    gap: 6px !important;
+    flex-wrap: wrap;
+  }
+  body.personal-workbench-page :is(.workbench-week-control, .workbench-compact-action) {
+    min-height: 36px !important;
+    padding: 7px 10px !important;
+    font-size: 12px !important;
+    border-radius: 8px !important;
+  }
+  body.personal-workbench-page .workbench-state-item {
+    padding: 12px 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--ui-line) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+  body.personal-workbench-page .personal-fold .workbench-dashboard-card {
+    border: 0 !important;
+    padding: 0 0 18px !important;
+  }
+  body.personal-workbench-page .personal-fold .workbench-dashboard-card > div:first-child > h2 {
+    display: none;
+  }
+  body.personal-workbench-page .workbench-economy-grid,
+  body.personal-workbench-page .workbench-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+  body.personal-workbench-page .workbench-card {
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 12px !important;
+    border-radius: 10px !important;
+    min-height: 0 !important;
+  }
+  body.personal-workbench-page .workbench-card span {
+    font-size: 12px !important;
+  }
+  body.personal-workbench-page .workbench-quick-section > header {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  body:is(.personal-settings-page, .personal-workbench-page) .user-economy-stack,
+  body:is(.personal-settings-page, .personal-workbench-page)
+    .user-panel
+    .user-actions
+    .mobile-theme-toggle {
+    display: none !important;
+  }
+  body:is(.personal-settings-page, .personal-workbench-page) .page-shell .main-content {
+    padding-top: calc(76px + env(safe-area-inset-top, 0px)) !important;
+  }
+  body:is(.personal-settings-page, .personal-workbench-page).theme-light {
+    --ui-page: #fff;
+    --bbs-shell-page: #fff;
+    background: #fff !important;
+  }
+  body.personal-settings-page .page-shell #settings-form {
+    display: flex !important;
+    flex-direction: column;
+    gap: 18px !important;
+  }
+  body.personal-settings-page .profile-extras-top {
+    margin: 0 !important;
+    gap: 12px !important;
+  }
+  body.personal-settings-page .settings-avatar-row {
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+  }
+  body.personal-settings-page .settings-avatar-preview {
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: none !important;
+  }
+  body.personal-settings-page .settings-avatar-message:empty {
+    display: none !important;
+  }
+  body.personal-settings-page #settings-bio {
+    height: 100px !important;
+    min-height: 100px !important;
+  }
+  body.personal-workbench-page .workbench-hero {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+  body.personal-workbench-page .workbench-hero::after {
+    display: none !important;
+  }
+  body.personal-workbench-page .workbench-session-state {
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+  body.personal-workbench-page .workbench-view-switch {
+    border: 0 !important;
+    border-bottom: 1px solid var(--ui-line) !important;
+    width: 100% !important;
+    margin-bottom: 4px !important;
+  }
+  body.personal-workbench-page .workbench-view-switch button {
+    box-shadow: none !important;
+  }
+  body.personal-workbench-page .workbench-priority-card .workbench-card-status {
+    display: none;
+  }
+  body.personal-workbench-page .workbench-state-item > span {
+    font-size: 12px !important;
+  }
+  body.personal-workbench-page .workbench-state-item > strong {
+    font-size: 15px !important;
+  }
+  body.personal-workbench-page .workbench-state-item > small {
+    font-size: 12px !important;
+    line-height: 1.6;
+  }
+}
+
+@media (max-width: 900px) {
+  body:is(.personal-settings-page, .personal-workbench-page) .main-content::before {
+    height: 64px !important;
+    min-height: 0 !important;
+  }
+  body.personal-settings-page .page-shell #settings-form > .auth-submit {
+    width: auto !important;
+    align-self: flex-start;
+  }
+  body.personal-settings-page #settings-message:empty {
+    display: none;
+  }
+}
+.personal-overview {
+  display: none;
+}
+@media (max-width: 900px) {
+  body.personal-settings-page .settings-shell {
+    display: flex !important;
+    flex-direction: column;
+  }
+  .personal-overview {
+    display: block;
+    padding: 20px 0 22px;
+  }
+  .personal-identity {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+  }
+  body.personal-settings-page .personal-avatar {
+    width: 78px !important;
+    height: 78px !important;
+    flex: 0 0 78px;
+    display: block !important;
+  }
+  .personal-avatar img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  .personal-identity h2 {
+    margin: 0 0 10px;
+    font-size: 23px;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+  .personal-profile-link {
+    color: var(--ui-muted);
+    text-decoration: none;
+    font-size: 13px;
+  }
+  .personal-bio {
+    margin: 22px 0;
+    font-size: 14px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .personal-balances {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .personal-balances span {
+    display: grid;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--ui-muted);
+    text-align: center;
+  }
+  .personal-balances strong {
+    color: var(--ui-text);
+    font-size: 22px;
+    font-variant-numeric: tabular-nums;
+  }
+  .personal-balances button {
+    background: transparent;
+    border: 1px solid var(--ui-accent);
+    color: var(--ui-accent);
+    border-radius: 24px;
+    padding: 10px 15px;
+    font: inherit;
+    font-size: 13px;
+  }
+  body.personal-settings-page .settings-account-actions {
+    order: 3;
+    padding: 18px 0 !important;
+  }
+  body.personal-settings-page .settings-profile {
+    gap: 0 !important;
+  }
+  .personal-fold {
+    scroll-margin-top: 76px;
+  }
+  .personal-fold > summary {
+    min-height: 60px;
+    justify-content: flex-start;
+    gap: 14px;
+    font-weight: 500;
+  }
+  .personal-fold > summary img {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+  }
+  body.theme-light .personal-fold > summary img {
+    filter: brightness(0);
+  }
+  .personal-fold > summary::after {
+    content: '›';
+    margin-left: auto;
+    font-size: 25px;
+    opacity: 0.55;
+  }
+  .personal-fold[open] > summary::after {
+    content: '›';
+    transform: rotate(90deg);
+  }
+  body.personal-workbench-page .page-shell .workbench-economy-section {
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 18px 0 !important;
+  }
+  body.personal-workbench-page .workbench-economy-section > header p {
+    display: none;
+  }
+  body.personal-workbench-page .workbench-economy-section h2 {
+    font-size: 17px !important;
+  }
+  body.personal-workbench-page .page-shell .workbench-economy-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+  }
+  body.personal-workbench-page .page-shell .workbench-economy-grid .workbench-card {
+    display: flex !important;
+    align-items: center;
+    padding: 16px 0 !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    border-bottom: 1px solid var(--ui-line) !important;
+    text-align: left;
+  }
+  body.personal-workbench-page .workbench-economy-grid .workbench-card :is(strong, small) {
+    display: none;
+  }
+  body.personal-workbench-page .workbench-economy-grid .workbench-card span {
+    font-size: 15px !important;
+    color: var(--ui-text);
+  }
+  body.personal-workbench-page .workbench-economy-grid .workbench-card::after {
+    content: '›';
+    margin-left: auto;
+    font-size: 24px;
+    color: var(--ui-muted);
+  }
+}
+@media (max-width: 900px) {
+  body.personal-settings-page .page-shell .personal-overview {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  body.personal-settings-page .page-shell .personal-balances {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+    width: 100%;
+  }
+  body.personal-settings-page .page-shell .personal-balances button {
+    margin-left: 12px;
+  }
+}
+@media (max-width: 900px) {
+  body.personal-settings-page .page-shell :is(.settings-profile, .settings-account-actions) {
+    width: 100% !important;
+    box-sizing: border-box;
+  }
+}

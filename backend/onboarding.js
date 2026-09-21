@@ -110,7 +110,7 @@ async function ensureOnboardingTable(pool) {
   if (!initialization.has(pool)) {
     const pending = (async () => {
       const sql = fs.readFileSync(
-        path.join(__dirname, '../database/migrations/043_user_onboarding.sql'),
+        path.join(__dirname, '../database/migrations/045_user_onboarding.sql'),
         'utf8',
       );
       await pool.query(sql);

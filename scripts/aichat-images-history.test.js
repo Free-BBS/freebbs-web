@@ -18,6 +18,7 @@ const normalize = vm.runInNewContext(
   `${section(backend, 'function normalizeAiMessages(', '\nfunction buildAiDialogTitle(')}\nnormalizeAiMessages`,
   {
     validateVisionImages,
+    normalizeDocuments: require('../backend/max-documents').normalizeDocuments,
     normalizeAiDialogNavigation: () => null,
     normalizeAiDialogRag: () => null,
   },
@@ -75,4 +76,30 @@ test('stored images reject unsafe URLs, malformed data and excessive attachments
     /4 张/,
   );
   await assert.rejects(validateImageContents([invalid]));
+});
+
+test('document page images survive history but are excluded from plain text model messages', () => {
+  const filePages = [{ label: '课件.pdf · 第 1/1 页', dataUrl: 'data:image/jpeg;base64,YQ==' }];
+  const saved = normalize([{ role: 'user', content: '总结附件', filePages }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(saved))[0].filePages, filePages);
+  assert.throws(
+    () => normalize([{ role: 'user', content: 'x', filePages: Array(13).fill(filePages[0]) }]),
+    /12 页/,
+  );
+  const payload = vm.runInNewContext(
+    `${section(frontend, 'function buildAiChatPayload(', '\nconst MAX_NAVIGATION_PATHS')}\nbuildAiChatPayload('继续');`,
+    { aiChatState: { messages: saved, currentDid: 'saved' } },
+  );
+  assert.equal(payload.messages[0].filePages, undefined);
+});
+
+test('long document references survive history without embedding page images', () => {
+  const documents = [
+    { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: '课件.pdf', pageCount: 257 },
+  ];
+  const restored = JSON.parse(
+    JSON.stringify(normalize([{ role: 'user', content: '总结课件', documents }])),
+  );
+  assert.deepEqual(restored[0].documents, documents);
+  assert.equal(restored[0].filePages, undefined);
 });

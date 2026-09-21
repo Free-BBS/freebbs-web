@@ -390,7 +390,7 @@ function mysqlProfileMethods(connection) {
   };
 }
 async function ensureProfileExtrasTables(pool) {
-  for (const migration of ['038_profile_extras.sql', '044_ranch_wool.sql']) {
+  for (const migration of ['038_profile_extras.sql', '046_ranch_wool.sql']) {
     const sql = fs.readFileSync(path.join(__dirname, '../database/migrations', migration), 'utf8');
     for (const statement of sql
       .replace(/^\s*--.*$/gm, '')
