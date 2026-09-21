@@ -22,6 +22,8 @@ test -s public/desktop-elegant.css
 node --test backend/weekly-digest.test.js backend/mailer.test.js
 node --test backend/initialize-once.test.js scripts/static-response.test.js
 node --check backend/server.js
+node --check backend/background-tasks.js
+node --test backend/background-tasks.test.js
 node --check public/app.js
 node --check public/auth.js
 node --check public/auth-challenge.js

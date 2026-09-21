@@ -20,6 +20,7 @@
     agentStep: 0,
     progressMessage: '',
     agentArticles: new Map(),
+    backgroundTaskId: '',
     returnFocus: null,
     inertElements: [],
   };
@@ -35,7 +36,9 @@
   }
 
   function updateRunbar() {
-    const active = Boolean(state.runner?.isRunning() || state.suggestionController);
+    const active = Boolean(
+      state.runner?.isRunning() || state.suggestionController || state.backgroundTaskId,
+    );
     $('runbar').hidden = !active || state.open;
     $('header-stop').hidden = !active || state.tab === 'max';
     $('runbar-status').textContent =
@@ -403,11 +406,119 @@
     }
   }
 
-  async function submitAgent(question) {
-    if (!window.FreeBbsCircuitAgent) {
-      status('自主执行模块尚未加载，请刷新后重试。', true);
-      return;
+  function circuitTaskScope(snapshot = editor().getSnapshot()) {
+    return snapshot.cid || `draft:${app?.userState?.uid || 'user'}`;
+  }
+
+  async function waitForCircuitTask(task) {
+    state.backgroundTaskId = task.id;
+    let current = task;
+    while (['queued', 'running'].includes(current.status)) {
+      state.progressMessage = current.progress?.message || 'Max 正在后台运行，离开页面也会继续…';
+      status(state.progressMessage);
+      updateRunbar();
+      await new Promise((resolve) => {
+        window.setTimeout(resolve, 1500);
+      });
+      current = await app.getAiBackgroundTask(current.id, { watching: !document.hidden });
     }
+    return current;
+  }
+
+  async function waitUntilVisible() {
+    if (!document.hidden) return;
+    await new Promise((resolve) => {
+      const visible = () => {
+        if (document.hidden) return;
+        document.removeEventListener('visibilitychange', visible);
+        resolve();
+      };
+      document.addEventListener('visibilitychange', visible);
+    });
+  }
+
+  async function continueCircuitAgentTask(task, fallbackQuestion = '') {
+    let current = task;
+    let finalAnswer = '';
+    while (true) {
+      current = await waitForCircuitTask(current);
+      if (current.status === 'failed') {
+        await app.acknowledgeAiBackgroundTask(current.id).catch(() => {});
+        state.backgroundTaskId = '';
+        throw new Error(current.error || '电路后台任务失败。');
+      }
+      if (current.status === 'completed') {
+        finalAnswer = String(current.result?.answer || '本轮自主执行已完成。');
+        const article = appendMessage('assistant', finalAnswer);
+        article.dataset.agentFinish = 'complete';
+        await app.acknowledgeAiBackgroundTask(current.id).catch(() => {});
+        state.backgroundTaskId = '';
+        return finalAnswer;
+      }
+      if (current.status !== 'waiting' || !current.result?.actions?.length)
+        throw new Error('电路后台任务返回了无效状态。');
+      await waitUntilVisible();
+      await app.setAiBackgroundTaskPresence(current.id, true).catch(() => {});
+      const result = current.result;
+      if (
+        result.expectedDocument &&
+        JSON.stringify(editor().getSnapshot().document) !== JSON.stringify(result.expectedDocument)
+      ) {
+        await app.cancelAiBackgroundTask(current.id).catch(() => {});
+        await app.acknowledgeAiBackgroundTask(current.id).catch(() => {});
+        state.backgroundTaskId = '';
+        throw new Error('画布在任务等待期间已经变化，未执行后台生成的修改。请重新发起任务。');
+      }
+      agentEvent({ type: 'step', step: result.step });
+      agentEvent({ type: 'answer', step: result.step, answer: result.answer });
+      agentEvent({ type: 'actions', step: result.step, actions: result.actions });
+      const opened = editor().beginAgentRun();
+      let snapshot;
+      try {
+        snapshot = await editor().executeAgentActions(result.actions, {
+          runId: opened.runId,
+          expectedVersion: opened.snapshot.editVersion,
+        });
+      } finally {
+        editor().endAgentRun(opened.runId);
+      }
+      const changed =
+        JSON.stringify(opened.snapshot.document) !== JSON.stringify(snapshot.document);
+      const observation = {
+        step: result.step,
+        status: 'success',
+        summary: `操作已在用户返回页面后执行；${changed ? '画布已更新' : '画布状态未改变'}。`,
+      };
+      agentEvent({ type: 'observation', ...observation });
+      const continuation = result.continuation || {};
+      const observations = [...(continuation.observations || []), observation].slice(-24);
+      const nextRequest = {
+        question: continuation.question || fallbackQuestion,
+        history: continuation.history || state.history.slice(-8),
+        ...(continuation.model ? { model: continuation.model } : {}),
+        ...(continuation.reasoning_effort
+          ? { reasoning_effort: continuation.reasoning_effort }
+          : {}),
+        ...(continuation.vision_images?.length
+          ? { vision_images: continuation.vision_images }
+          : {}),
+        document: snapshot.document,
+        selection: snapshot.selection,
+        simulation: snapshot.simulation,
+        agent: {
+          step: result.step + 1,
+          canEdit: snapshot.canEdit === true,
+          observations,
+        },
+      };
+      current = await app.resumeAiBackgroundTask(current.id, {
+        request: nextRequest,
+        batches: [...(result.batches || []), result.actions].slice(-200),
+      });
+    }
+  }
+
+  async function submitAgent(question) {
     try {
       state.modelChoice = await window.FreeBbsMaxModels.selection();
       if (state.sending) return;
@@ -426,29 +537,91 @@
     $('thread').setAttribute('aria-busy', 'true');
     updateMode();
     appendMessage('user', question);
-    state.runner = window.FreeBbsCircuitAgent.create({
-      getSnapshot: () => editor().getSnapshot(),
-      beginRun: () => editor().beginAgentRun(),
-      endRun: (runId) => editor().endAgentRun(runId),
-      executeActions: (actions, options) => editor().executeAgentActions(actions, options),
-      requestStep: requestAgentStep,
-      onEvent: agentEvent,
-    });
     try {
-      updateEditorState(editor().getSnapshot());
-      const running = state.runner.run(question, { history: state.history.slice(-8) });
+      const snapshot = editor().getSnapshot();
+      const options = await window.FreeBbsMaxModels.circuitOptions(state.modelChoice);
+      const task = await app.startAiBackgroundTask('circuit_agent', circuitTaskScope(snapshot), {
+        request: {
+          ...options,
+          question,
+          history: state.history.slice(-8),
+          document: snapshot.document,
+          selection: snapshot.selection,
+          simulation: snapshot.simulation,
+          agent: { step: 1, canEdit: snapshot.canEdit === true, observations: [] },
+        },
+        batches: [],
+      });
       updateRunbar();
-      const result = await running;
-      const outcome = [result.answer, result.reason].filter(Boolean).join('\n\n').slice(0, 4000);
+      const answer = await continueCircuitAgentTask(task, question);
       state.history.push(
         { role: 'user', content: question },
-        { role: 'assistant', content: outcome || '本轮执行已结束。' },
+        { role: 'assistant', content: answer.slice(0, 4000) },
       );
       state.history = state.history.slice(-8);
-      if (result.status === 'complete') $('input').value = '';
+      $('input').value = '';
       retainQuestion();
     } catch (error) {
-      status(error.message || '无法开始自主执行，请重试。', true);
+      status(error.message || '无法继续自主执行，请重试。', true);
+    } finally {
+      state.sending = false;
+      $('input').disabled = false;
+      $('send').hidden = false;
+      $('send').disabled = false;
+      $('stop').hidden = true;
+      $('thread').setAttribute('aria-busy', 'false');
+      updateMode();
+      updateRunbar();
+      updateEditorState(editor().getSnapshot());
+    }
+  }
+
+  async function restoreCircuitBackgroundTask() {
+    if (state.sending || !app?.userState?.token) return;
+    let task;
+    const scope = circuitTaskScope();
+    try {
+      task = await app.getLatestAiBackgroundTask('circuit_agent', scope);
+      if (!task) task = await app.getLatestAiBackgroundTask('circuit_suggest', scope);
+    } catch {
+      return;
+    }
+    if (!task || task.acknowledged) return;
+    state.sending = true;
+    state.backgroundTaskId = task.id;
+    $('input').disabled = true;
+    $('send').hidden = true;
+    $('stop').hidden = false;
+    $('thread').setAttribute('aria-busy', 'true');
+    updateMode();
+    updateRunbar();
+    try {
+      if (task.kind === 'circuit_agent') {
+        const answer = await continueCircuitAgentTask(
+          task,
+          task.result?.continuation?.question || '继续电路任务',
+        );
+        state.history.push({ role: 'assistant', content: answer.slice(0, 4000) });
+      } else {
+        const finished = await waitForCircuitTask(task);
+        if (finished.status !== 'completed')
+          throw new Error(finished.error || '电路后台分析未能完成。');
+        const result = finished.result || {};
+        const snapshot = editor().getSnapshot();
+        const article = appendMessage('assistant', result.answer || '分析已完成。');
+        if (
+          result.expectedDocument &&
+          JSON.stringify(snapshot.document) === JSON.stringify(result.expectedDocument)
+        ) {
+          renderActions(article, result.actions, snapshot, '恢复后台分析');
+        } else if (result.actions?.length) {
+          status('画布已变化，回答已恢复，但旧操作建议不会应用。');
+        }
+        await app.acknowledgeAiBackgroundTask(finished.id).catch(() => {});
+        state.backgroundTaskId = '';
+      }
+    } catch (error) {
+      status(error.message || '恢复后台任务失败。', true);
     } finally {
       state.sending = false;
       $('input').disabled = false;
@@ -505,8 +678,8 @@
     $('stop').hidden = false;
     updateRunbar();
     try {
-      const response = await app.streamCircuitChatResponse(
-        {
+      const task = await app.startAiBackgroundTask('circuit_suggest', circuitTaskScope(snapshot), {
+        request: {
           ...(await window.FreeBbsMaxModels.circuitOptions()),
           question,
           history: state.history.slice(-8).map((message) => ({
@@ -517,24 +690,13 @@
           selection: snapshot.selection,
           simulation: snapshot.simulation,
         },
-        {
-          signal: controller.signal,
-          onProgress: (progress) => {
-            if (controller.signal.aborted || state.suggestionController !== controller) return;
-            if (progress.type === 'reasoning') window.FreeBbsReasoning?.update(article, progress);
-            if (progress.type === 'answer') {
-              window.FreeBbsReasoning?.finish(article);
-              body.textContent = progress.answer;
-            }
-            if (progress.type === 'status') {
-              state.progressMessage = progress.message;
-              status(progress.message);
-              updateRunbar();
-            }
-            $('thread').scrollTop = $('thread').scrollHeight;
-          },
-        },
-      );
+      });
+      const finished = await waitForCircuitTask(task);
+      if (finished.status !== 'completed')
+        throw new Error(finished.error || '电路后台分析未能完成。');
+      const response = finished.result || {};
+      await app.acknowledgeAiBackgroundTask(finished.id).catch(() => {});
+      state.backgroundTaskId = '';
       const answer = String(response.answer || '').trim();
       if (!answer) throw new Error('Max 暂时没有返回回答，请重试。');
       window.FreeBbsReasoning?.finish(article);
@@ -610,6 +772,12 @@
     state.suggestionController?.abort(
       Object.assign(new Error('已停止回答。'), { code: 'AGENT_STOPPED' }),
     );
+    if (state.backgroundTaskId) {
+      app
+        ?.cancelAiBackgroundTask(state.backgroundTaskId)
+        .then(() => status('后台任务已停止；已经应用的画布修改仍保留。'))
+        .catch((error) => status(error.message || '暂时无法停止后台任务。', true));
+    }
   };
   $('stop').addEventListener('click', stopAgent);
   $('header-stop').addEventListener('click', stopAgent);
@@ -618,8 +786,12 @@
   $('input').addEventListener('input', retainQuestion);
   window.addEventListener('pagehide', () => {
     retainQuestion();
-    state.runner?.stop('页面已离开，本轮执行已停止。');
-    state.suggestionController?.abort();
+    app?.leaveAiBackgroundTask(state.backgroundTaskId);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (!state.backgroundTaskId) return;
+    if (document.hidden) app?.leaveAiBackgroundTask(state.backgroundTaskId);
+    else app?.setAiBackgroundTaskPresence(state.backgroundTaskId, true).catch(() => {});
   });
   $('input').addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing) {
@@ -687,6 +859,7 @@
   });
   window.addEventListener('freebbs:circuit-editor-ready', () => {
     updateEditorState(editor().getSnapshot());
+    restoreCircuitBackgroundTask();
   });
   window.addEventListener('freebbs:circuit-editor-change', (event) => {
     updateEditorState(event.detail);
@@ -703,7 +876,10 @@
   window.FreeBbsCircuitAssistant = {
     open: () => setOpen(true, { focus: true, tab: 'max' }),
   };
-  if (window.FreeBbsCircuitEditor) updateEditorState(editor().getSnapshot());
+  if (window.FreeBbsCircuitEditor) {
+    updateEditorState(editor().getSnapshot());
+    restoreCircuitBackgroundTask();
+  }
   try {
     if (localStorage.getItem('free_bbs_circuit_max_mode') === 'suggest')
       $('mode').value = 'suggest';

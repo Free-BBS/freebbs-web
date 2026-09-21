@@ -154,11 +154,13 @@ function parseFile(name, buffer, visual = false) {
     });
   });
 }
-function registerMaxFiles(app, requireAuth, { directory } = {}) {
-  const documents = require('./max-documents').createDocumentStore(
-    directory || path.join(require('node:os').tmpdir(), 'freebbs-documents'),
-    parseFile,
-  );
+function registerMaxFiles(app, requireAuth, { directory, documentStore } = {}) {
+  const documents =
+    documentStore ||
+    require('./max-documents').createDocumentStore(
+      directory || path.join(require('node:os').tmpdir(), 'freebbs-documents'),
+      parseFile,
+    );
   let active = 0;
   const receive = createUploads();
   app.get('/api/ai/files/:id/pages', async (request, response) => {
@@ -226,6 +228,7 @@ function registerMaxFiles(app, requireAuth, { directory } = {}) {
       active -= 1;
     }
   });
+  return documents;
 }
 if (!isMainThread) {
   const task = workerData.visual

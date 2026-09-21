@@ -747,5 +747,6 @@ module.exports = {
   validateCircuitAssistantInput,
   buildCircuitAssistantPayload,
   parseCircuitAssistantResponse,
+  readAgentResponse,
   createCircuitAssistantRouter,
 };

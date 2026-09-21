@@ -191,6 +191,7 @@ const aiChatState = {
   messages: [],
   isSending: false,
   statusTimer: 0,
+  backgroundTaskId: '',
 };
 
 function getStoredThemeMode() {
@@ -5123,45 +5124,108 @@ async function pollInfoJob(article, navigationResult) {
 
 async function requestMaxNavigation(payload, onReasoning, onProgress = () => {}) {
   if (!userState.token) throw new Error('请先登录后再使用问问 Max');
-  const token = userState.token;
-  const checkSession = () => {
-    if (userState.token !== token) throw new Error('登录状态已改变，文件读取已停止。');
+  const body = {
+    ...payload,
+    ...(window.FreeBbsMaxModels ? await window.FreeBbsMaxModels.chatOptions(payload) : {}),
   };
-  const request = async (body, final = true) => {
-    checkSession();
-    const result = await window.FreeBbsReasoning.request({
-      url: `${API_BASE_URL}/ai/chat`,
-      token,
-      payload: {
-        ...body,
-        ...(window.FreeBbsMaxModels ? await window.FreeBbsMaxModels.chatOptions(body) : {}),
-      },
-      onReasoning: final ? onReasoning : () => {},
+  let task = await startAiBackgroundTask('max', payload.did || '', body);
+  rememberMaxBackgroundTask(task.id);
+  while (['queued', 'running'].includes(task.status)) {
+    onProgress(task.progress?.message || 'Max 正在后台思考，离开页面也会继续…');
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 1500);
     });
-    checkSession();
-    return result;
-  };
-  if (!payload.documents?.length) return request(payload);
-  return window.FreeBbsDocumentReader.read({
-    payload,
-    documents: payload.documents,
-    request,
-    onProgress,
-    fetchPages: async (id, start, count) => {
-      checkSession();
-      const response = await fetch(
-        `${API_BASE_URL}/ai/files/${encodeURIComponent(id)}/pages?start=${start}&count=${count}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: AbortSignal.timeout(80000),
-        },
-      );
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || '页面读取失败');
-      checkSession();
-      return data;
-    },
-  });
+    task = await getAiBackgroundTask(task.id, { watching: !document.hidden });
+  }
+  if (task.status !== 'completed') throw new Error(task.error || 'Max 后台任务未能完成。');
+  onReasoning({ done: true });
+  return { ...(task.result || {}), background_task_id: task.id };
+}
+
+function maxBackgroundTaskKey() {
+  return `free_bbs_max_background_task_v1:${userState.uid || 'user'}`;
+}
+
+function rememberMaxBackgroundTask(id) {
+  aiChatState.backgroundTaskId = id || '';
+  try {
+    if (id) localStorage.setItem(maxBackgroundTaskKey(), id);
+    else localStorage.removeItem(maxBackgroundTaskKey());
+  } catch {
+    // Server persistence remains authoritative when local storage is unavailable.
+  }
+}
+
+async function waitForMaxBackgroundTask(task, assistantArticle) {
+  rememberMaxBackgroundTask(task.id);
+  let current = task;
+  while (['queued', 'running'].includes(current.status)) {
+    const message = current.progress?.message || 'Max 正在后台思考，离开页面也会继续…';
+    setAiChatThinkingBubble(assistantArticle, message);
+    setAiChatStatus(message);
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 1500);
+    });
+    current = await getAiBackgroundTask(current.id, { watching: !document.hidden });
+  }
+  if (current.status !== 'completed') {
+    throw new Error(current.error || 'Max 后台任务未能完成。');
+  }
+  return current;
+}
+
+async function applyMaxBackgroundResult(task, assistantArticle, userMessage) {
+  const result = await addMentionedCourseMapRoute(task.result || {}, userMessage);
+  const replyModel =
+    typeof result.model === 'string' && /^[A-Za-z0-9_./:+-]{1,120}$/.test(result.model)
+      ? result.model
+      : '未返回模型信息';
+  const assistantContent = `${String(result.answer || '').trim() || 'Max 暂时没有生成回答。'}\n\n---\n\n回复模型：${replyModel}`;
+  window.FreeBbsReasoning?.finish(assistantArticle);
+  updateAiChatMessage(assistantArticle, assistantContent);
+  const navigation = createAiNavigationSnapshot(result);
+  const rag = createAiRagSnapshot(result);
+  renderMaxNavigationRoutes(assistantArticle, navigation);
+  renderMaxSubagentResult(assistantArticle, result);
+  if (result.subagent?.status === 'pending') pollInfoJob(assistantArticle, result);
+  aiChatState.messages.push({ role: 'assistant', content: assistantContent, navigation, rag });
+  aiChatState.pendingSend = null;
+  window.FreeBbsMaxImages?.clear();
+  window.FreeBbsMaxFiles?.clear();
+  stopAiChatThinkingStatus();
+  await saveAiDialog();
+  await acknowledgeAiBackgroundTask(task.id).catch(() => {});
+  rememberMaxBackgroundTask('');
+}
+
+async function resumeMaxBackgroundTask() {
+  if (!isAiChatPage() || !userState.token || aiChatState.isSending) return;
+  const did = getAiDialogIdFromUrl() || aiChatState.currentDid;
+  if (!did) return;
+  let task;
+  try {
+    task = await getLatestAiBackgroundTask('max', did);
+  } catch {
+    return;
+  }
+  if (!task || task.acknowledged) return;
+  aiChatState.isSending = true;
+  const userMessage =
+    aiChatState.messages.findLast((message) => message.role === 'user')?.content ||
+    '继续之前的问题';
+  const assistantArticle = appendAiChatMessage('assistant', '正在恢复后台任务…');
+  startAiChatThinkingStatus();
+  try {
+    const finished = await waitForMaxBackgroundTask(task, assistantArticle);
+    await applyMaxBackgroundResult(finished, assistantArticle, userMessage);
+  } catch (error) {
+    updateAiChatMessage(assistantArticle, `后台任务未完成：${error.message}`);
+    stopAiChatThinkingStatus(error.message);
+    if (task?.id) await acknowledgeAiBackgroundTask(task.id).catch(() => {});
+    rememberMaxBackgroundTask('');
+  } finally {
+    aiChatState.isSending = false;
+  }
 }
 
 function getAiDialogTitle(messages = aiChatState.messages) {
@@ -5482,8 +5546,6 @@ async function handleAiChatSubmit(event) {
     },
     1000 + Math.floor(Math.random() * 4001),
   );
-  let assistantContent = '';
-
   try {
     const { requestPayload } = aiChatState.pendingSend;
     await saveAiDialog({ throwOnError: true });
@@ -5502,7 +5564,7 @@ async function handleAiChatSubmit(event) {
     window.FreeBbsReasoning.finish(assistantArticle);
     const result = await addMentionedCourseMapRoute(rawResult, userMessage);
     window.clearTimeout(bubbleTimer);
-    assistantContent = String(result.answer || '').trim() || 'Max 暂时没有生成回答。';
+    let assistantContent = String(result.answer || '').trim() || 'Max 暂时没有生成回答。';
     const replyModel =
       typeof result.model === 'string' && /^[A-Za-z0-9_./:+-]{1,120}$/.test(result.model)
         ? result.model
@@ -5513,10 +5575,7 @@ async function handleAiChatSubmit(event) {
     const rag = createAiRagSnapshot(result);
     renderMaxNavigationRoutes(assistantArticle, navigation);
     renderMaxSubagentResult(assistantArticle, result);
-    if (result.subagent?.status === 'pending') {
-      pollInfoJob(assistantArticle, result);
-    }
-
+    if (result.subagent?.status === 'pending') pollInfoJob(assistantArticle, result);
     aiChatState.messages.push({
       role: 'assistant',
       content: assistantContent,
@@ -5528,6 +5587,10 @@ async function handleAiChatSubmit(event) {
     window.FreeBbsMaxFiles?.clear();
     stopAiChatThinkingStatus();
     await saveAiDialog();
+    if (result.background_task_id) {
+      await acknowledgeAiBackgroundTask(result.background_task_id).catch(() => {});
+      rememberMaxBackgroundTask('');
+    }
   } catch (error) {
     window.clearTimeout(bubbleTimer);
     window.FreeBbsReasoning?.finish(assistantArticle, { stopped: true });
@@ -5605,8 +5668,16 @@ function initializeAiChatPage() {
       renderAiDialogList();
     }
   });
+  window.addEventListener('pagehide', () => {
+    leaveAiBackgroundTask(aiChatState.backgroundTaskId);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (!aiChatState.backgroundTaskId) return;
+    if (document.hidden) leaveAiBackgroundTask(aiChatState.backgroundTaskId);
+    else setAiBackgroundTaskPresence(aiChatState.backgroundTaskId, true).catch(() => {});
+  });
   renderAiChatThread();
-  loadAiDialogs();
+  loadAiDialogs().then(() => resumeMaxBackgroundTask());
   resizeAiChatInput();
 }
 
@@ -9655,6 +9726,74 @@ function streamCircuitChatResponse(payload, { signal, onProgress } = {}) {
   });
 }
 
+async function startAiBackgroundTask(kind, scopeId, payload) {
+  return (
+    await callApi('/ai/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ kind, scopeId: scopeId || '', payload }),
+    })
+  ).task;
+}
+
+async function getAiBackgroundTask(id, { watching = true } = {}) {
+  return (
+    await callApi(`/ai/tasks/${encodeURIComponent(id)}?watching=${watching ? '1' : '0'}`, {
+      method: 'GET',
+    })
+  ).task;
+}
+
+async function getLatestAiBackgroundTask(kind, scopeId = '') {
+  const query = new URLSearchParams({ kind, scopeId });
+  return (await callApi(`/ai/tasks/latest?${query}`, { method: 'GET' })).task;
+}
+
+async function setAiBackgroundTaskPresence(id, watching) {
+  if (!id || !userState.token) return;
+  await callApi(`/ai/tasks/${encodeURIComponent(id)}/presence`, {
+    method: 'POST',
+    body: JSON.stringify({ watching }),
+  });
+}
+
+function leaveAiBackgroundTask(id) {
+  if (!id || !userState.token) return;
+  fetch(`${API_BASE_URL}/ai/tasks/${encodeURIComponent(id)}/presence`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${userState.token}`,
+    },
+    body: JSON.stringify({ watching: false }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
+async function acknowledgeAiBackgroundTask(id) {
+  if (!id) return;
+  await callApi(`/ai/tasks/${encodeURIComponent(id)}/acknowledge`, {
+    method: 'POST',
+    body: '{}',
+  });
+}
+
+async function resumeAiBackgroundTask(id, payload) {
+  return (
+    await callApi(`/ai/tasks/${encodeURIComponent(id)}/resume`, {
+      method: 'POST',
+      body: JSON.stringify({ payload }),
+    })
+  ).task;
+}
+
+async function cancelAiBackgroundTask(id) {
+  if (!id) return;
+  await callApi(`/ai/tasks/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+    body: '{}',
+  });
+}
+
 window.freeBbsApp = {
   callApi,
   refreshEconomy: loadInventoryPage,
@@ -9680,6 +9819,14 @@ window.freeBbsApp = {
   streamAiChatResponse,
   streamKnowledgeRagResponse,
   streamCircuitChatResponse,
+  startAiBackgroundTask,
+  getAiBackgroundTask,
+  getLatestAiBackgroundTask,
+  setAiBackgroundTaskPresence,
+  leaveAiBackgroundTask,
+  acknowledgeAiBackgroundTask,
+  resumeAiBackgroundTask,
+  cancelAiBackgroundTask,
 };
 
 userName.addEventListener('click', handleAuthEntry);

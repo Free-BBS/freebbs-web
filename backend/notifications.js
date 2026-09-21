@@ -405,6 +405,37 @@ function createNotificationService({
     );
   }
 
+  async function notifyBackgroundTask({ userId, task }) {
+    const failed = task.status === 'failed';
+    const waiting = task.status === 'waiting';
+    const circuit = task.kind.startsWith('circuit_');
+    const title = failed
+      ? `${circuit ? '电路助手' : 'Max'}任务已结束`
+      : waiting
+        ? '电路助手正在等你回来'
+        : `${circuit ? '电路助手' : 'Max'}已完成`;
+    const link = circuit
+      ? `/circuit${/^c_[a-f0-9]{24}$/.test(task.scopeId) ? `?cid=${encodeURIComponent(task.scopeId)}` : ''}`
+      : `/aichat${task.scopeId ? `?did=${encodeURIComponent(task.scopeId)}` : ''}`;
+    const body = failed
+      ? `任务没有完成：${String(task.error || '服务暂时不可用，请稍后重试。').slice(0, 800)}`
+      : waiting
+        ? '后台推理已准备好下一步。为避免无人时改动画布，操作已暂停；返回原电路且画布未变化时才会继续。'
+        : circuit
+          ? '电路分析已经完成。返回电路实验室即可查看结果；任何画布修改都会等你回到页面后再执行。'
+          : 'Max 已经完成回答。返回对话即可继续查看。';
+    return inTransaction(pool, null, (database) =>
+      insertNotifications(database, [userId], {
+        actorId: null,
+        kind: 'ai_task',
+        title,
+        body,
+        link,
+        eventKey: `ai-task:${task.id}:${task.status}`,
+      }),
+    );
+  }
+
   async function processOutbox() {
     if (working) return { processed: 0 };
     working = true;
@@ -566,6 +597,7 @@ function createNotificationService({
     notifyReaction,
     notifyCommentReaction,
     notifyReward,
+    notifyBackgroundTask,
     processOutbox,
     startWorker,
     queueWeeklyDigest,
