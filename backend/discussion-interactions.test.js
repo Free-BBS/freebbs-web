@@ -87,6 +87,7 @@ function interactionHarness({ hidden = 0, deleted = 0, user = { id: 8 }, raceHid
   const { registerDiscussionInteractions } = require('./discussion-interactions');
   const routes = new Map();
   const queries = [];
+  const ledger = [];
   let notified = false;
   const post = {
     id: 1,
@@ -111,6 +112,23 @@ function interactionHarness({ hidden = 0, deleted = 0, user = { id: 8 }, raceHid
       if (sql.startsWith('SELECT user_id')) return [[]];
       if (sql.startsWith('SELECT COUNT')) return [[{ total: 1 }]];
       if (sql.startsWith('SELECT amount')) return [[]];
+      if (sql.startsWith('SELECT CAST(id AS CHAR) AS id FROM wallet_ledger'))
+        return [ledger.length ? [{ id: ledger.at(-1).id }] : []];
+      if (sql.startsWith('UPDATE users')) {
+        ledger.push({ id: String(ledger.length + 1), user_id: params[1], source_key: null });
+        return [{ affectedRows: 1 }];
+      }
+      if (sql.startsWith('UPDATE wallet_ledger')) {
+        const [sourceKey, title, reason, userId, afterId] = params;
+        const row = ledger.findLast(
+          (entry) =>
+            entry.user_id === userId &&
+            BigInt(entry.id) > BigInt(afterId) &&
+            entry.source_key === null,
+        );
+        if (row) Object.assign(row, { source_key: sourceKey, title, reason });
+        return [{ affectedRows: row ? 1 : 0 }];
+      }
       if (sql.includes('SUM(amount)')) return [[{ total: 0 }]];
       if (sql.includes('FROM users')) return [[{ id: 7, username: 'author' }]];
       return [{ affectedRows: 1 }];
@@ -140,6 +158,7 @@ function interactionHarness({ hidden = 0, deleted = 0, user = { id: 8 }, raceHid
   );
   return {
     queries,
+    ledger,
     get notified() {
       return notified;
     },
@@ -223,10 +242,25 @@ test('feature replies is administrator-only, requires a boolean and cannot featu
   assert.equal(response.statusCode, 200);
   assert.equal(response.data.isFeatured, true);
   assert.equal(response.data.reward, 5);
+  assert.equal(admin.ledger.length, 1);
+  assert.equal(admin.ledger[0].source_key, 'reward:featured-comment:30');
+  assert.equal(admin.ledger[0].title, '精华评论奖励');
+  assert.match(admin.ledger[0].reason, /评论（编号 30）.*5 磁元/);
   const hidden = interactionHarness({ user: { id: 9, is_admin: true }, raceHide: true });
   assert.equal(
     (await hidden.request('patch', '/discussion/comments/:id/feature', { featured: true }))
       .statusCode,
     404,
   );
+});
+
+test('liking another account comment records the actual recipient and a readable reward reason', async () => {
+  const h = interactionHarness({ user: { id: 9 } });
+  const response = await h.request('post', '/discussion/comments/:id/like');
+  assert.equal(response.statusCode, 200);
+  assert.equal(h.ledger.length, 1);
+  assert.equal(h.ledger[0].user_id, 8);
+  assert.equal(h.ledger[0].source_key, 'reward:comment-like:30:9');
+  assert.equal(h.ledger[0].title, '评论获赞奖励');
+  assert.match(h.ledger[0].reason, /评论（编号 30）.*点赞.*1 磁元/);
 });

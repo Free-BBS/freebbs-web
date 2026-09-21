@@ -259,6 +259,102 @@ test('guide versions resolve only declared full/release catalogues and every rel
   }
 });
 
+test('community guide additions preserve published base indexes and the original release receipt', () => {
+  const publishedIds = [
+    'home-launchpad',
+    'home-handbook',
+    'world-atlas',
+    'world-coming-islands',
+    'world-mathematics',
+    'world-island-overview',
+    'world-course-orbit',
+    'course-directory',
+    'course-relations',
+    'course-enter-knowledge',
+    'knowledge-overview',
+    'knowledge-reading',
+    'knowledge-tools-status',
+    'knowledge-companions',
+    'discussion-filters',
+    'discussion-open-post',
+    'discussion-detail',
+    'discussion-reply-max',
+    'discussion-composer',
+    'max-conversation',
+    'max-composer',
+    'max-options',
+    'max-history',
+    'workbench-week',
+    'workbench-ai-plan',
+    'workbench-priorities',
+    'workbench-notifications',
+    'shop-catalog',
+    'shop-item-details',
+    'inventory-assets',
+    'inventory-recycling',
+    'inventory-ledger-entry',
+    'inventory-ledger-filters',
+    'inventory-ledger',
+    'settings-reading',
+    'settings-security',
+    'settings-profile-entry',
+    'profile-identity',
+    'profile-wardrobe',
+    'profile-ranch',
+    'profile-wool',
+    'handbook-missions',
+    'handbook-future',
+  ];
+  assert.equal(VERSION, 'max-v2');
+  assert.deepEqual(
+    STEPS.slice(0, publishedIds.length).map((step) => step.id),
+    publishedIds,
+  );
+  const original = RELEASES.find((release) => release.id === 'guide-depth-2026-09');
+  assert.deepEqual(original.stepIds, [
+    'world-atlas',
+    'world-mathematics',
+    'world-island-overview',
+    'workbench-ai-plan',
+    'inventory-recycling',
+    'inventory-ledger-entry',
+    'inventory-ledger',
+    'profile-ranch',
+    'profile-wool',
+  ]);
+  assert.notEqual(LATEST_RELEASE.id, original.id);
+  assert.deepEqual(
+    STEPS.slice(publishedIds.length).map((step) => step.id),
+    LATEST_RELEASE.stepIds,
+  );
+  const completed = normalizeProgress({ ...emptyProgress(), status: 'completed', step: 42 });
+  assert.equal(completed.status, 'completed');
+  assert.equal(completed.step, 42);
+  const originalProgress = normalizeProgress(
+    { ...emptyProgress(original.id), status: 'in_progress', step: 6 },
+    original.id,
+  );
+  assert.equal(stepsFor(original.id)[originalProgress.step].id, 'inventory-ledger');
+});
+
+test('development and activity steps use compact public targets and never act on signup forms', () => {
+  const additions = stepsFor(LATEST_RELEASE.id);
+  assert.deepEqual(
+    additions.map((step) => step.station),
+    ['development', 'development', 'activities', 'activities', 'activities'],
+  );
+  for (const step of additions) {
+    assert.equal(step.action, undefined);
+    assert.equal(step.prepare, undefined);
+    assert.equal(step.target.includes('form'), false);
+    assert.equal(['.main-content', '#content', '.development-hero'].includes(step.target), false);
+  }
+  assert.match(additions[1].body, /独立入口.*发展端上线后.*整合进入发展端.*尚未完成整合/);
+  assert.match(additions[2].body, /独立.*发展端上线后.*整合进入发展端/);
+  assert.match(additions.at(-1).body, /下载.*回执.*查询结果/);
+  assert.equal(additions.at(-1).emptyTarget, '.activity-hero-links');
+});
+
 test('safe guide links reject off-origin and wrong-route destinations without losing course deep links', () => {
   const origin = 'https://www.free-bbs.cn';
   for (const href of [
@@ -306,15 +402,16 @@ test('safe guide links reject off-origin and wrong-route destinations without lo
   assert.equal(knowledge.searchParams.get('point'), 'MA-01-1');
   assert.equal(knowledge.searchParams.get('course'), 'math');
   assert.equal(knowledge.hash, '#section-2');
-  const releaseSteps = stepsFor(LATEST_RELEASE.id);
+  const releaseVersion = 'guide-depth-2026-09';
+  const releaseSteps = stepsFor(releaseVersion);
   const releaseIndex = releaseSteps.findIndex((step) => step.route === '/world');
   const release = new URL(
-    tourUrl(releaseIndex, LATEST_RELEASE.id, {
+    tourUrl(releaseIndex, releaseVersion, {
       '/world': '/world?view=orbit&guideTour=0&guideVersion=unknown',
     }),
     origin,
   );
-  assert.equal(release.searchParams.get('guideVersion'), LATEST_RELEASE.id);
+  assert.equal(release.searchParams.get('guideVersion'), releaseVersion);
   assert.equal(release.searchParams.get('guideTour'), '1');
   assert.equal(release.searchParams.get('view'), 'orbit');
   const profile = new URL(
@@ -343,6 +440,8 @@ test('station actions and preparation are restricted to an audited read-only vie
     '#knowledge-return-overview',
     '#knowledge-start-reading',
     '#knowledge-chat-tab-discussion',
+    '#knowledge-chat-toggle',
+    '#knowledge-chat-close',
     '#discussion-post-list .discussion-post-card:has(.discussion-pin-badge) [data-action="open-post"], #discussion-post-list:not(:has(.discussion-pin-badge)) [data-action="open-post"]',
     '[data-action="close-detail"]',
     '#discussion-create-toggle',
@@ -363,18 +462,30 @@ test('station actions and preparation are restricted to an audited read-only vie
     assert.ok(stationIds.has(step.station));
     assert.equal(step.route, STATIONS.find((station) => station.id === step.station).route);
     assert.ok(step.target && step.title && step.body && step.caption);
-    for (const action of step.prepare || []) {
-      assert.ok(readControls.has(action.selector), `unaudited prepare control: ${action.selector}`);
-      assert.ok(
-        action.whenMissing,
-        'prepare clicks must be guarded to avoid toggling a ready view shut',
-      );
+    for (const view of [step, step.reveal].filter(Boolean)) {
+      for (const action of view.prepare || []) {
+        assert.ok(
+          readControls.has(action.selector),
+          `unaudited prepare control: ${action.selector}`,
+        );
+        assert.ok(
+          action.whenMissing,
+          'prepare clicks must be guarded to avoid toggling a ready view shut',
+        );
+      }
+      if (!view.action) continue;
+      assert.ok(['click', 'link'].includes(view.action.kind));
+      if (view.action.kind === 'click')
+        assert.ok(
+          readControls.has(view.action.selector),
+          `unaudited click: ${view.action.selector}`,
+        );
+      else assert.equal(readLinks.get(view.action.selector), STEPS[index + 1].route);
+      if (view.action.alternateSelector) {
+        assert.equal(view.action.kind, 'click');
+        assert.ok(readControls.has(view.action.alternateSelector));
+      }
     }
-    if (!step.action) continue;
-    assert.ok(['click', 'link'].includes(step.action.kind));
-    if (step.action.kind === 'click')
-      assert.ok(readControls.has(step.action.selector), `unaudited click: ${step.action.selector}`);
-    else assert.equal(readLinks.get(step.action.selector), STEPS[index + 1].route);
   }
 });
 

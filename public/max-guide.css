@@ -628,6 +628,9 @@ body.theme-dark {
 }
 
 /* Native modal owns focus; four curtains leave the current feature illuminated. */
+.max-tour-focus-hidden {
+  visibility: hidden !important;
+}
 .max-tour [hidden],
 .guide-main [hidden] {
   display: none !important;

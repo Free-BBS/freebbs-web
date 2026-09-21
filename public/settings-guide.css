@@ -4,6 +4,13 @@ body.settings-page .settings-shell {
   min-width: 0;
   grid-template-columns: minmax(0, 1fr);
 }
+/* Keep the profile-link layout when the shared desktop stylesheet loads later. */
+body.settings-page.personal-settings-page .settings-shell {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+body.settings-page.personal-settings-page .settings-account-actions {
+  grid-column: 1 / -1 !important;
+}
 body.settings-page .settings-profile,
 body.settings-page .settings-form {
   width: 100%;

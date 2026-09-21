@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 const {
   settingsProfileHref,
   createSettingsProfileLink,
@@ -103,5 +104,67 @@ test('settings keeps its real editors and account controls while exposing one si
     /body\.settings-page \.settings-shell\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\)/,
   );
   assert.match(css, /body\.settings-page \.settings-profile-link\s*\{[^}]*margin-left: auto/);
+  assert.match(
+    css,
+    /body\.settings-page\.personal-settings-page \.settings-shell\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) !important/,
+  );
+  assert.match(
+    css,
+    /body\.settings-page\.personal-settings-page \.settings-account-actions\s*\{\s*grid-column: 1 \/ -1 !important;\s*\}/,
+  );
   assert.doesNotMatch(css, /font-family:|body\.public-profile-page/);
+});
+
+test('the profile entry replaces the legacy overview without removing mobile editor folds', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../public/mobile-personal.js'), 'utf8');
+  for (const mobile of [false, true]) {
+    const folds = [];
+    const classes = [];
+    let restored = 0;
+    let resize;
+    const media = {
+      matches: mobile,
+      addEventListener(event, handler) {
+        assert.equal(event, 'change');
+        resize = handler;
+      },
+    };
+    const editor = { before() {} };
+    const document = {
+      body: { classList: { add: (name) => classes.push(name) } },
+      getElementById: () => editor,
+      querySelector: () => editor,
+      addEventListener() {},
+      createTextNode: (text) => ({ text }),
+      createComment: () => ({ after() {}, replaceWith() {} }),
+      createElement(tag) {
+        assert.notEqual(tag, 'section', 'the legacy overview must not be recreated');
+        const element = {
+          children: [],
+          append(...children) {
+            this.children.push(...children);
+          },
+          remove() {
+            restored += 1;
+          },
+        };
+        if (tag === 'details') folds.push(element);
+        return element;
+      },
+    };
+    vm.runInNewContext(source, {
+      document,
+      location: { pathname: '/settings' },
+      matchMedia: () => media,
+    });
+    assert.deepEqual(classes, ['personal-settings-page']);
+    assert.equal(folds.length, mobile ? 5 : 0);
+    for (const fold of folds) {
+      assert.equal(fold.className, 'personal-fold');
+      assert.equal(fold.children[1], editor);
+    }
+    media.matches = false;
+    resize();
+    assert.equal(restored, mobile ? 5 : 0, 'desktop restores the existing editor nodes');
+  }
 });

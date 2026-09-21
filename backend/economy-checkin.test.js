@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const { awardMagnetic } = require('./economy-rewards');
 const { beijingDay, checkinReward } = require('./economy-policy');
+const { walletLedgerCheckpoint, annotateWalletLedger } = require('./wallet-ledger');
 
 const source = fs.readFileSync(require.resolve('./server'), 'utf8');
 const code = source.slice(
@@ -23,10 +24,20 @@ function harness({
     electric: 0,
     checkins: previous ? { [yesterday]: { streak_count: previous } } : {},
     rewards: {},
+    ledger: [],
   };
   let queue = Promise.resolve();
   const connection = {
     async execute(sql, args) {
+      if (sql.startsWith('SELECT CAST(id AS CHAR) AS id FROM wallet_ledger')) {
+        return [state.ledger.slice(-1).map((row) => ({ id: String(row.id) }))];
+      }
+      if (sql.startsWith('UPDATE wallet_ledger')) {
+        const row = state.ledger.find((item) => item.id > Number(args[4]) && !item.source_key);
+        if (!row) return [{ affectedRows: 0 }];
+        Object.assign(row, { source_key: args[0], title: args[1], reason: args[2] });
+        return [{ affectedRows: 1 }];
+      }
       if (sql.startsWith('SELECT id')) return [[{ id: 1 }]];
       if (sql.startsWith('SELECT streak_count'))
         return [state.checkins[args[1]] ? [state.checkins[args[1]]] : []];
@@ -43,8 +54,18 @@ function harness({
       }
       if (sql.startsWith('UPDATE users')) {
         if (fail) throw new Error('injected wallet failure');
+        const previousElectric = state.electric;
+        const previousMagnetic = state.balance;
         if (sql.includes('electrons =')) state.electric += args[0];
         else state.balance += args[0];
+        state.ledger.push({
+          id: state.ledger.length + 1,
+          source_key: null,
+          electric_before: previousElectric,
+          electric_after: state.electric,
+          magnetic_before: previousMagnetic,
+          magnetic_after: state.balance,
+        });
         return [{ affectedRows: 1 }];
       }
       throw new Error(sql);
@@ -63,6 +84,8 @@ function harness({
     ensureUserFortuneWindow: async () => [],
     getCheckinSummary: async () => state,
     awardMagnetic,
+    walletLedgerCheckpoint,
+    annotateWalletLedger,
     withDatabaseTransaction: async (work) => {
       const previousTask = queue;
       let release;
@@ -113,6 +136,9 @@ test('rollout keeps legacy electric rewards before Beijing Sep 16 and carries ol
   await old.act();
   assert.equal(old.state().electric, 4);
   assert.equal(old.state().balance, 0);
+  assert.equal(old.state().ledger[0].source_key, 'legacy-checkin:2026-09-15');
+  assert.equal(old.state().ledger[0].title, '每日签到（历史规则）');
+  assert.match(old.state().ledger[0].reason, /第 4 天.*4 电元/);
   const next = harness({ previous: 3, score: 69 });
   await next.act();
   assert.equal(next.state().balance, 3);

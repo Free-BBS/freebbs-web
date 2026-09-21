@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { readExtras, readPublicCosmetics, mysqlProfileMethods } = require('./profile-extras');
 const { unlockFishboneMaster } = require('./economy-achievements');
+const { walletLedgerCheckpoint, annotateWalletLedger } = require('./wallet-ledger');
 
 const FRAGMENT_PRICES = Object.freeze([5, 10, 20, 30, 50, 75, 100, 150, 200, 777]);
 const DAY_MS = 86400000;
@@ -185,7 +186,15 @@ function createEconomyShop(store, { now = Date.now } = {}) {
         )
           throw new ShopPurchaseError('价格已变化，请刷新确认后再购买', 'PRICE_CHANGED', 409);
         for (const [unit, amount] of Object.entries(cost)) {
-          if (!(await tx.debit(userId, amount, unit)))
+          const unitName = unit === 'electric' ? '电元' : '磁元';
+          const details = {
+            sourceKey: `shop:${requestKey}:${unit}`,
+            title: charging ? '激光器充值' : '商城购买',
+            reason: charging
+              ? `为激光器充值 ${days} 天，支付 ${amount} ${unitName}（日费 ${LASER_POLICY.dailyPrice} 电元 + ${LASER_POLICY.dailyMagnetic} 磁元）`
+              : `购买「${item.name || item.key}」× 1，支付 ${amount} ${unitName}`,
+          };
+          if (!(await tx.debit(userId, amount, unit, true, details)))
             throw new ShopPurchaseError('余额不足，未扣款', 'INSUFFICIENT_BALANCE');
         }
         const receipt = {
@@ -364,14 +373,17 @@ function createMysqlEconomyStore(pool) {
               [id, expiresAtMs],
             );
           },
-          async debit(id, amount, currency, spending = true) {
+          async debit(id, amount, currency, spending = true, details = {}) {
+            const checkpoint = await walletLedgerCheckpoint(connection, id);
             const column = currency === 'electric' ? 'electrons' : 'manetrons';
             const [result] = await connection.execute(
               `UPDATE users SET ${column} = ${column} - ?,
             heat = heat + ? WHERE id = ? AND ${column} >= ?`,
               [amount, spending ? amount : 0, id, amount],
             );
-            return result.affectedRows === 1;
+            if (result.affectedRows !== 1) return false;
+            await annotateWalletLedger(connection, id, checkpoint, details);
+            return true;
           },
           async consumeSaleAssets(id, key, quantity) {
             const [result] = await connection.execute(
@@ -389,6 +401,7 @@ function createMysqlEconomyStore(pool) {
             return String(rows[0]?.quantity || '0');
           },
           async creditBoneSale(id, amount, { sourceKey, title, reason }) {
+            const checkpoint = await walletLedgerCheckpoint(connection, id);
             // Credit is income: heat and electric balance remain unchanged.
             const [result] = await connection.execute(
               `UPDATE users SET manetrons = manetrons + ?
@@ -399,11 +412,7 @@ function createMysqlEconomyStore(pool) {
               throw new ShopPurchaseError('账户余额超出安全范围，本次未出售', 'BALANCE_LIMIT', 409);
             }
             // The trigger and annotation are in this transaction under the user's row lock.
-            const [annotated] = await connection.execute(
-              'UPDATE wallet_ledger SET source_key = ?, title = ?, reason = ? WHERE user_id = ? ORDER BY id DESC LIMIT 1',
-              [sourceKey, title, reason, id],
-            );
-            if (annotated.affectedRows !== 1) throw new Error('Bone sale ledger entry missing');
+            await annotateWalletLedger(connection, id, checkpoint, { sourceKey, title, reason });
             const [rows] = await connection.execute(
               `SELECT CAST(electrons AS CHAR) AS electric, CAST(manetrons AS CHAR) AS magnetic,
                CAST(heat AS CHAR) AS heat FROM users WHERE id = ?`,
