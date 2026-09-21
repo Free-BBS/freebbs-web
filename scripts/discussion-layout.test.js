@@ -7,6 +7,7 @@ const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'public/discussion.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public/discussion.css'), 'utf8');
 const desktopCss = fs.readFileSync(path.join(root, 'public/desktop-elegant.css'), 'utf8');
+const postReaderCss = fs.readFileSync(path.join(root, 'public/post-reader.css'), 'utf8');
 
 test('discussion boards precede the feed and obsolete personal statistics are absent', () => {
   const boards = html.indexOf('id="discussion-board-list"');
@@ -34,5 +35,16 @@ test('desktop discussion content fills the space beside the navigation rail', ()
   assert.match(
     desktopCss,
     /body\.discussion-page \.discussion-layout:not\(\.is-detail-view\)[^{]*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)\s*!important;/s,
+  );
+});
+
+test('desktop post reader uses a wide technical-content column while mobile remains fluid', () => {
+  assert.match(
+    postReaderCss,
+    /body\.discussion-page\.post-reading \.discussion-detail\s*{[^}]*max-width:\s*1280px;[^}]*width:\s*100%;/s,
+  );
+  assert.match(
+    postReaderCss,
+    /@media \(max-width:\s*900px\)[\s\S]*?body\.discussion-page\.post-reading \.discussion-detail\s*{[^}]*padding:\s*0\s*!important;/s,
   );
 });
