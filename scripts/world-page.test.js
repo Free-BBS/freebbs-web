@@ -631,6 +631,39 @@ test('course planet illustrations have transparent responsive assets without sph
   }
 });
 
+test('central knowledge island uses the warm Max palette asset with real transparency', async () => {
+  const filename = 'planet-bbs-hub-warm-v4.webp';
+  assert.match(
+    planetStyleSource,
+    /\.world-core-surface\s*\{[^}]*background: url\('\/assets\/planet-bbs-hub-warm-v4\.webp'\) center \/ contain no-repeat;/,
+  );
+  const asset = path.join(projectRoot, 'public', 'assets', filename);
+  const metadata = await sharp(asset).metadata();
+  assert.equal(metadata.width, 900);
+  assert.equal(metadata.height, 900);
+  assert.equal(metadata.hasAlpha, true);
+  const stats = await sharp(asset).stats();
+  assert.equal(stats.channels[3].min, 0, 'exterior remains transparent on both themes');
+  assert.equal(stats.channels[3].max, 255, 'buildings remain opaque');
+  const corners = [
+    { left: 0, top: 0 },
+    { left: 875, top: 0 },
+    { left: 0, top: 875 },
+    { left: 875, top: 875 },
+  ];
+  for (const corner of corners) {
+    const pixels = await sharp(asset)
+      .extract({ ...corner, width: 25, height: 25 })
+      .ensureAlpha()
+      .raw()
+      .toBuffer();
+    for (let offset = 3; offset < pixels.length; offset += 4) {
+      assert.equal(pixels[offset], 0, 'no opaque rectangular backdrop');
+    }
+  }
+  assert.ok(fs.statSync(asset).size < 300 * 1024, 'keep the decorative web sprite lightweight');
+});
+
 test('shared world refinements shade transparent course art without a rectangular shadow', () => {
   const refinements = fs.readFileSync(
     path.join(projectRoot, 'public/world-refinements.css'),

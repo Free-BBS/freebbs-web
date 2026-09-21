@@ -58,6 +58,7 @@ test('onboarding preview uses real local pages, account progress and transaction
         '/settings',
         '/profile?uid=u_preview01',
         '/discussion',
+        '/publish?board=daily',
         '/electromagnetic',
         '/circuit',
         '/circuits',
@@ -89,6 +90,98 @@ test('onboarding preview uses real local pages, account progress and transaction
       );
       assert.equal((await fetch(`${origin}/backend/config.js`)).status >= 400, true);
       assert.equal((await fetch(`${origin}/vendor/express/index.js`)).status >= 400, true);
+    },
+  );
+
+  await t.test(
+    'preview loads the production shell in the same order for responsive guide QA',
+    async () => {
+      const production = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+      const styles = ['site-search', 'mobile-shell', 'desktop-elegant', 'page-transitions'];
+      const scripts = ['site-search', 'mobile-shell', 'page-transitions'];
+      const head = styles.map((name) => `<link rel="stylesheet" href="/${name}.css">`).join('');
+      const body = scripts.map((name) => `<script src="/${name}.js" defer></script>`).join('');
+      assert.ok(
+        production.includes(head),
+        'Keep the preview aligned with the production CSS order',
+      );
+      assert.ok(
+        production.includes(body),
+        'Keep the preview aligned with the production shell scripts',
+      );
+      for (const route of ['/settings', '/guide', '/world', '/discussion', '/aichat']) {
+        const html = await (await fetch(origin + route)).text();
+        assert.ok(html.includes(`${head}</head>`), `${route}: shell CSS must follow page CSS`);
+        assert.ok(
+          html.includes(`${body}</body>`),
+          `${route}: shell scripts must follow page scripts`,
+        );
+        assert.equal(html.split('href="/desktop-elegant.css"').length - 1, 1, route);
+      }
+      for (const asset of [
+        ...styles.map((name) => `/${name}.css`),
+        ...scripts.map((name) => `/${name}.js`),
+      ]) {
+        assert.equal((await fetch(origin + asset)).status, 200, asset);
+      }
+    },
+  );
+
+  await t.test('Max guide anchors match the actual local conversation page', async () => {
+    const html = await (await fetch(`${origin}/aichat`)).text();
+    for (const id of ['max-conversation', 'max-composer', 'max-history']) {
+      const step = STEPS.find((entry) => entry.id === id);
+      assert.match(step.target, /^#[a-z][a-z0-9-]*$/);
+      assert.ok(html.includes(`id="${step.target.slice(1)}"`), `${id}: ${step.target}`);
+    }
+    assert.ok(html.includes('class="aichat-auth-required"'));
+    assert.ok(html.includes('id="aichat-dialog-toggle"'));
+    assert.ok(html.includes('src="/max-composer.js"'), 'The dynamic options menu must be loaded');
+  });
+
+  await t.test(
+    'discussion browsing reaches the real local editor without publishing content',
+    async () => {
+      const { boards } = await api('/api/discussion/boards');
+      assert.ok(boards.some((board) => board.slug === 'daily'));
+      const { posts } = await api('/api/discussion/posts?board=daily');
+      const pinned = posts.find((post) => post.isPinned);
+      assert.ok(pinned, 'The guide can open an actual pinned fixture');
+      const { post } = await api(`/api/discussion/posts/${pinned.id}`);
+      assert.match(post.contentMarkdown, /@Max/);
+      const { comments } = await api(`/api/discussion/posts/${pinned.id}/comments`);
+      assert.ok(comments.length > 0);
+
+      // Follow the URL used by the real discussion create button, whose editor
+      // now lives on a separate page rather than inside the discussion list.
+      const client = fs.readFileSync(path.join(__dirname, '../public/app.js'), 'utf8');
+      const editorRoute = client.match(/location\.href = '(\/publish\?board=)'/);
+      assert.ok(editorRoute, 'The discussion button must expose its editor URL');
+      const response = await fetch(origin + editorRoute[1] + encodeURIComponent(post.board.slug));
+      assert.equal(response.status, 200);
+      const html = await response.text();
+      assert.match(html, /id="discussion-compose-form"/);
+      assert.match(html, /src="\/publish\.js"/);
+      assert.match(html, /window\.FREEBBS_API_BASE='\/api'/);
+      assert.equal((await fetch(`${origin}/publish.js`)).status, 200);
+      assert.equal((await fetch(`${origin}/publish.css`)).status, 200);
+
+      const rejected = await fetch(`${origin}/api/discussion/posts`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${TOKEN}`,
+          'Content-Type': 'application/json',
+          Origin: origin,
+        },
+        body: JSON.stringify({
+          boardSlug: 'daily',
+          title: 'Preview only',
+          contentMarkdown: '@Max',
+        }),
+      });
+      assert.equal(rejected.status, 405);
+      assert.match((await rejected.json()).message, /没有连接真实系统/);
+      assert.deepEqual((await api('/api/discussion/posts?board=daily')).posts, posts);
     },
   );
 
@@ -247,7 +340,7 @@ test('onboarding preview uses real local pages, account progress and transaction
       assert.equal(ledger.entries[0].magnetic_before, '84');
       assert.equal(ledger.entries[0].magnetic_after, '104');
       assert.match(ledger.entries[0].reason, /黄金鱼骨 × 2/);
-      assert.match(ledger.entries[1].reason, /购买 小鱼/);
+      assert.match(ledger.entries[1].reason, /购买「小鱼」/);
       assert.equal(store.account().ledger.length, 38);
       assert.equal(ledger.entries.length, 30);
       assert.ok(ledger.nextCursor);
@@ -287,7 +380,7 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
   const sandbox = { window: {} };
   vm.runInNewContext(source, sandbox);
   assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.FreeBbsGuideStations.STEPS)), STEPS);
-  assert.ok(STEPS.length >= 30 && STEPS.length <= 45);
+  assert.ok(STEPS.length >= 30 && STEPS.length <= 201);
   assert.equal(new Set(STEPS.map((step) => step.id)).size, STEPS.length);
   assert.equal(new Set(STATIONS.map((station) => station.id)).size, STATIONS.length);
   const routes = new Map(STATIONS.map((station) => [station.id, station.route]));
@@ -308,6 +401,8 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
     '#knowledge-return-overview',
     '#knowledge-start-reading',
     '#knowledge-chat-tab-discussion',
+    '#knowledge-chat-close',
+    '#knowledge-chat-toggle',
     '[data-action="close-detail"]',
     '#discussion-create-toggle',
     '.max-composer-tools > summary',
@@ -324,18 +419,21 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
     for (const field of ['id', 'target', 'label', 'title', 'body', 'caption'])
       assert.ok(step[field], `${step.id}: ${field}`);
     assert.ok(Object.isFrozen(step));
-    for (const control of [...(step.prepare || []), ...(step.action ? [step.action] : [])]) {
-      assert.ok(
-        auditedControls.has(control.selector),
-        `New auto-click needs review: ${control.selector}`,
-      );
-      assert.ok(Object.isFrozen(control));
+    for (const view of [step, step.reveal].filter(Boolean)) {
+      for (const control of [...(view.prepare || []), ...(view.action ? [view.action] : [])]) {
+        assert.ok(
+          auditedControls.has(control.selector),
+          `New auto-click needs review: ${control.selector}`,
+        );
+        assert.ok(Object.isFrozen(control));
+        if (control.alternateSelector) assert.ok(auditedControls.has(control.alternateSelector));
+      }
+      if (view.action) assert.ok(['click', 'link'].includes(view.action.kind));
     }
-    if (step.action) assert.ok(['click', 'link'].includes(step.action.kind));
   }
-  assert.equal(STEPS.length, 43);
-  assert.equal(STATIONS.length, 12);
-  assert.equal(RELEASE_STEP_IDS.length, 9);
+  assert.equal(STEPS.length, 48);
+  assert.equal(STATIONS.length, 14);
+  assert.equal(RELEASE_STEP_IDS.length, 5);
   assert.deepEqual(LATEST_RELEASE.stepIds, RELEASE_STEP_IDS);
   for (const id of RELEASE_STEP_IDS) {
     const step = STEPS.find((entry) => entry.id === id);
@@ -349,6 +447,11 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
   assert.equal(step('world-atlas').target, '.world-orbit-shell');
   assert.equal(step('world-atlas').focus.fit, 'overview');
   assert.equal(step('course-directory').focus.fit, 'overview');
+  assert.equal(step('knowledge-companions').target, '#knowledge-chat-toggle');
+  assert.equal(step('knowledge-companions').reveal.target, '#knowledge-chat-panel');
+  assert.equal(step('discussion-composer').target, '#discussion-create-toggle');
+  assert.equal(step('discussion-composer').prepare, undefined);
+  assert.equal(step('discussion-composer').action, undefined);
   assert.equal(step('inventory-ledger-filters').target, '#wallet-ledger[open] .wallet-toolbar');
   assert.equal(
     step('inventory-ledger').target,
@@ -520,7 +623,7 @@ test('preview rubber rod purchase uses the real price, one-item limit and idempo
   assert.equal(store.account().magnetic, 79);
   assert.equal(store.account().assets.rubber_rod, 1);
   const ledger = await (await fetch(`${origin}/api/wallet/ledger`, { headers })).json();
-  assert.match(ledger.entries[0].reason, /购买 橡胶棒/);
+  assert.match(ledger.entries[0].reason, /购买「橡胶棒」/);
   assert.equal(ledger.entries[0].magnetic_after, '79');
   const icon = await fetch(`${origin}/assets/icons/rubber-rod.svg`);
   assert.equal(icon.status, 200);

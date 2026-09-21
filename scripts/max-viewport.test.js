@@ -3,6 +3,77 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
+test('guide controls preserve the illustrated menu while normal outside clicks and Escape still close it', () => {
+  const source = fs.readFileSync(require.resolve('../public/max-composer'), 'utf8');
+  const start = source.indexOf("  document.addEventListener('pointerdown'");
+  const end = source.indexOf('  const update = () => {', start);
+  assert.ok(start >= 0 && end > start, 'Composer dismissal listeners must be present');
+  const listeners = {};
+  const menuContent = {};
+  let focused = false;
+  const menu = {
+    open: true,
+    contains: (target) => target === menuContent,
+    querySelector: () => ({
+      focus: () => {
+        focused = true;
+      },
+    }),
+  };
+  const document = {
+    addEventListener: (name, listener) => {
+      listeners[name] = listener;
+    },
+  };
+  const form = {
+    querySelectorAll: () => [menu],
+    querySelector: () => (menu.open ? menu : null),
+    addEventListener: (name, listener) => {
+      listeners[name] = listener;
+    },
+  };
+  vm.runInNewContext(source.slice(start, end), { document, form });
+
+  let guideOpen = true;
+  const guideDialog = { open: true };
+  const guideControl = {
+    closest(selector) {
+      assert.equal(selector, 'dialog.max-tour[open]');
+      return guideOpen ? guideDialog : null;
+    },
+  };
+  listeners.pointerdown({ target: guideControl });
+  assert.equal(menu.open, true, 'Expanding or operating the guide must preserve the shown menu');
+  listeners.pointerdown({ target: menuContent });
+  assert.equal(menu.open, true, 'Interaction inside the menu must still keep it open');
+  listeners.pointerdown({ target: { closest: () => null } });
+  assert.equal(menu.open, false, 'Ordinary page clicks must still dismiss the menu');
+  menu.open = true;
+  guideOpen = false;
+  listeners.pointerdown({ target: guideControl });
+  assert.equal(menu.open, false, 'A closed guide must not exempt ordinary outside clicks');
+
+  menu.open = true;
+  let prevented = false;
+  listeners.keydown({
+    key: 'Enter',
+    preventDefault: () => {
+      prevented = true;
+    },
+  });
+  assert.equal(menu.open, true);
+  assert.equal(prevented, false);
+  listeners.keydown({
+    key: 'Escape',
+    preventDefault: () => {
+      prevented = true;
+    },
+  });
+  assert.equal(menu.open, false);
+  assert.equal(focused, true, 'Escape must return focus to the menu summary');
+  assert.equal(prevented, true);
+});
+
 test('mobile input uses visible viewport, folds options, and restores layout after blur', () => {
   const classes = new Set(['aichat-page']);
   const properties = {};
