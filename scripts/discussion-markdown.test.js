@@ -71,6 +71,23 @@ test('讨论区明亮模式下的深色代码框使用浅色文字', () => {
   );
 });
 
+test('讨论区表格保留语义结构并使用独立滚动容器与完整表格线', () => {
+  const discussionStyles = fs.readFileSync(path.join(root, 'public', 'discussion.css'), 'utf8');
+
+  assert.match(
+    appSource,
+    /resultTemplate\.content\.querySelectorAll\('table'\)[\s\S]*?discussion-table-scroll[\s\S]*?scroller\.append\(table\);/,
+  );
+  assert.match(
+    discussionStyles,
+    /\.discussion-table-scroll table\s*{[^}]*display:\s*table;[^}]*border-collapse:\s*collapse;/s,
+  );
+  assert.match(
+    discussionStyles,
+    /\.discussion-table-scroll th,[^{]*\.discussion-table-scroll td\s*{[^}]*min-width:\s*7rem;[^}]*border:\s*1px solid var\(--discussion-line-strong\);/s,
+  );
+});
+
 test('切回已有哈希的分区时恢复该分区缓存，而不是保留当前分区帖子', () => {
   const cacheFunctionStart = appSource.indexOf('function applyDiscussionPostsPayload');
   const cacheFunctionEnd = appSource.indexOf(

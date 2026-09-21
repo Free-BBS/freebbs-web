@@ -3997,6 +3997,22 @@ function renderMarkdownContent(markdown) {
     textNode.replaceWith(replacement);
   });
 
+  resultTemplate.content.querySelectorAll('table').forEach((table) => {
+    const scroller = document.createElement('div');
+    const headings = Array.from(table.querySelectorAll('thead th'))
+      .map((cell) => String(cell.textContent || '').trim())
+      .filter(Boolean)
+      .slice(0, 3)
+      .join('、');
+
+    scroller.className = 'discussion-table-scroll';
+    scroller.tabIndex = 0;
+    scroller.setAttribute('role', 'region');
+    scroller.setAttribute('aria-label', headings ? `表格：${headings}` : '表格，可横向滚动');
+    table.replaceWith(scroller);
+    scroller.append(table);
+  });
+
   return resultTemplate.innerHTML;
 }
 

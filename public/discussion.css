@@ -146,6 +146,88 @@ body.theme-light.discussion-page .main-content .discussion-markdown-body pre cod
   color: #edf7f8 !important;
 }
 
+body.discussion-page .main-content .discussion-table-scroll {
+  width: 100%;
+  max-width: 100%;
+  margin: 1.4em 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--discussion-line-strong) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+body.discussion-page .main-content .discussion-table-scroll:focus-visible {
+  outline: 2px solid var(--discussion-accent-strong);
+  outline-offset: 3px;
+}
+
+body.discussion-page .main-content .discussion-markdown-body .discussion-table-scroll table {
+  display: table;
+  width: 100%;
+  min-width: 100%;
+  max-width: none;
+  margin: 0;
+  border-collapse: collapse;
+  border-spacing: 0;
+  table-layout: auto;
+  font-size: 0.93em;
+  line-height: 1.55;
+}
+
+body.discussion-page .main-content .discussion-markdown-body .discussion-table-scroll th,
+body.discussion-page .main-content .discussion-markdown-body .discussion-table-scroll td {
+  min-width: 7rem;
+  padding: 10px 14px;
+  border: 1px solid var(--discussion-line-strong);
+  background: transparent;
+  color: var(--discussion-text);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+body.discussion-page .main-content .discussion-markdown-body .discussion-table-scroll th {
+  background: var(--discussion-panel-soft);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+body.discussion-page
+  .main-content
+  .discussion-markdown-body
+  .discussion-table-scroll
+  :is(th, td)[align='center'] {
+  text-align: center;
+}
+
+body.discussion-page
+  .main-content
+  .discussion-markdown-body
+  .discussion-table-scroll
+  :is(th, td)[align='right'] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+body.discussion-page
+  .main-content
+  .discussion-markdown-body
+  .discussion-table-scroll
+  :is(th, td)
+  > :first-child {
+  margin-top: 0;
+}
+
+body.discussion-page
+  .main-content
+  .discussion-markdown-body
+  .discussion-table-scroll
+  :is(th, td)
+  > :last-child {
+  margin-bottom: 0;
+}
+
 body.discussion-page .main-content.settings-main {
   width: 100%;
   max-width: none;
@@ -1105,7 +1187,7 @@ body.discussion-page .discussion-post-preview-circuit {
 
   body.discussion-page .main-content .discussion-markdown-body th,
   body.discussion-page .main-content .discussion-markdown-body td {
-    padding: 9px 12px;
+    padding: 9px 11px;
   }
 
   body.discussion-page .discussion-comments {
