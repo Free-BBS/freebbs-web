@@ -19,6 +19,7 @@ const {
 } = require('./wallet-ledger');
 const { createBoneSalesRouter } = require('./economy-sales');
 const { registerOnboarding } = require('./onboarding');
+const { registerOnboardingReward } = require('./onboarding-reward');
 const {
   LASER_POLICY,
   createEconomyShop,
@@ -2501,6 +2502,7 @@ app.use(
 app.use('/api', createWalletLedgerRouter({ pool, requireAuth }));
 app.use('/api', createBoneSalesRouter({ pool, requireAuth }));
 registerOnboarding(app, { pool, requireAuth });
+registerOnboardingReward(app, { pool, requireAuth });
 app.use(
   '/api',
   createSurveysRouter({ pool, requireAdmin, getOptionalAuthUser, service: surveyService }),

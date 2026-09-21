@@ -16,6 +16,7 @@ const {
   tourGeometry,
   stepsFor,
   createProgressClient,
+  createRewardClient,
   createController,
 } = require('../public/max-guide');
 const { GUIDE_VERSION, TASK_IDS, mergeProgress } = require('../backend/onboarding');
@@ -33,6 +34,55 @@ const deferred = () => {
   });
   return { promise, resolve, reject };
 };
+
+test('reward requests coalesce duplicate claims and reject stale responses after token changes', async () => {
+  let owner = { key: 'member', token: 'first-token' };
+  const pending = deferred();
+  const calls = [];
+  const reward = createRewardClient({
+    identity: () => owner,
+    request(method, account) {
+      calls.push({ method, account });
+      return pending.promise;
+    },
+  });
+  const first = reward.claim();
+  const same = reward.claim();
+  assert.equal(first, same);
+  const rejected = assert.rejects(first, { name: 'AbortError' });
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(calls.length, 1);
+  owner = { key: 'member', token: 'second-token' };
+  pending.resolve({ eligible: true, claimed: true, awarded: true });
+  await rejected;
+  assert.equal(reward.snapshot(), null);
+  assert.equal(calls[0].account.token, 'first-token');
+});
+
+test('reward clients keep GET read-only, reject incomplete grant confirmations and never call as guests', async () => {
+  let owner = { key: 'member', token: 'token' };
+  let response = { eligible: true, claimed: false, claimedAt: null };
+  const calls = [];
+  const reward = createRewardClient({
+    identity: () => owner,
+    async request(method) {
+      calls.push(method);
+      return response;
+    },
+  });
+  await reward.load();
+  assert.deepEqual(calls, ['GET']);
+  await assert.rejects(reward.claim(), /奖励状态暂未确认/);
+  assert.equal(reward.snapshot().claimed, false);
+  response = { eligible: true, claimed: true, awarded: false };
+  await reward.claim();
+  assert.equal(reward.snapshot().claimed, true);
+  owner = { key: 'guest', token: '' };
+  assert.equal(reward.snapshot(), null);
+  await assert.rejects(reward.claim(), { name: 'AbortError' });
+  assert.deepEqual(calls, ['GET', 'POST', 'POST']);
+});
 
 test('guide paths are fixed same-origin routes and exploration tasks match the account API', () => {
   assert.equal(VERSION, GUIDE_VERSION);

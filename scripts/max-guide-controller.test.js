@@ -292,6 +292,7 @@ function fixture({
   for (const [version, value] of Object.entries(states)) {
     if (!server.has(version)) server.set(version, { ...emptyProgress(version), ...value });
   }
+  const rewardReceipts = new Map();
   const app = {
     userState: member ? { isLoggedIn: true, uid: 'member', token: 'member-token' } : {},
     sessionReady,
@@ -301,9 +302,40 @@ function fixture({
       const patch = options.body ? JSON.parse(options.body) : null;
       events.push({ type: 'request', route, method, version, patch });
       await beforeRequest?.({ route, method, version, patch, options });
+      const token = options.headers?.Authorization?.replace(/^Bearer /, '');
+      if (route === '/onboarding/reward') {
+        const eligible = [VERSION, 'max-v1'].some((id) => Boolean(server.get(id)?.completedAt));
+        const awarded = method === 'POST' && !rewardReceipts.has(token);
+        if (method === 'POST') {
+          assert.deepEqual(patch, {}, 'the server alone chooses the owner and reward amounts');
+          if (!eligible) throw Object.assign(new Error('完整导览尚未完成'), { status: 409 });
+          if (awarded) rewardReceipts.set(token, stamp);
+        }
+        return {
+          eligible,
+          claimed: rewardReceipts.has(token),
+          claimedAt: rewardReceipts.get(token) || null,
+          amounts: { electric: 10, magnetic: 10 },
+          ...(method === 'POST' ? { awarded } : {}),
+        };
+      }
+      if (route === '/auth/me')
+        return {
+          user: {
+            uid: token.replace(/-token$/, ''),
+            electrons: rewardReceipts.has(token) ? 10 : 0,
+            manetrons: rewardReceipts.has(token) ? 10 : 0,
+          },
+        };
       if (!server.has(version)) server.set(version, emptyProgress(version));
       if (method === 'PATCH') server.set(version, mergeProgress(server.get(version), patch, fixed));
       return structuredClone(server.get(version));
+    },
+    syncWallet(user, token) {
+      if (app.userState.uid !== user.uid || app.userState.token !== token) return false;
+      events.push({ type: 'sync-wallet', user, token });
+      Object.assign(app.userState, user);
+      return true;
     },
   };
   const value = {
@@ -314,6 +346,7 @@ function fixture({
     nodes,
     selectors,
     server,
+    rewardReceipts,
     memory,
     listeners,
     node(selector, { tag = 'div', click, rect } = {}) {
@@ -344,6 +377,362 @@ function fixture({
   value.controller = createController(win, doc, app);
   return value;
 }
+
+function rewardCard(view) {
+  view.node('#guide-reward-status');
+  const button = view.node('#guide-reward-claim', { tag: 'button' });
+  button.dataset.guideRewardClaim = '';
+}
+function claimReward(view) {
+  view.listeners.get('document:click')({
+    target: view.doc.getElementById('guide-reward-claim'),
+    preventDefault() {},
+  });
+}
+function finalStepFixture(options = {}) {
+  const step = STEPS.length - 1;
+  return fixture({
+    href: `${STEPS[step].route}?guideTour=1`,
+    states: { [VERSION]: { status: 'in_progress', step } },
+    ...options,
+    setup(value) {
+      value.node(STEPS[step].target);
+      options.setup?.(value);
+    },
+  });
+}
+const rewardWrites = (view) =>
+  view.events.filter(
+    (event) =>
+      event.type === 'request' && event.route === '/onboarding/reward' && event.method === 'POST',
+  );
+
+test('full guide completion saves first, claims once and refreshes the top bar from fresh account data', async () => {
+  const view = finalStepFixture();
+  await settle();
+  view.next.click();
+  view.next.click();
+  await settle();
+  assert.equal(view.server.get(VERSION).status, 'completed');
+  assert.equal(rewardWrites(view).length, 1);
+  const saved = view.events.findIndex(
+    (event) => event.version === VERSION && event.patch?.status === 'completed',
+  );
+  const claimed = view.events.indexOf(rewardWrites(view)[0]);
+  const refreshed = view.events.findIndex((event) => event.route === '/auth/me');
+  assert.ok(saved < claimed && claimed < refreshed);
+  assert.deepEqual(rewardWrites(view)[0].patch, {});
+  assert.equal(view.app.userState.electrons, 10);
+  assert.equal(view.app.userState.manetrons, 10);
+  assert.equal(view.events.filter((event) => event.type === 'sync-wallet').length, 1);
+  assert.equal(view.dialog.open, false);
+});
+
+test('failed completion saves never claim and retry waits for the acknowledged full record', async () => {
+  let fail = true;
+  const view = finalStepFixture({
+    beforeRequest({ version, patch }) {
+      if (version === VERSION && patch?.status === 'completed' && fail)
+        throw new Error('save offline');
+    },
+  });
+  await settle();
+  view.next.click();
+  await settle();
+  assert.equal(view.server.get(VERSION).completedAt, null);
+  assert.equal(rewardWrites(view).length, 0);
+  assert.equal(view.retry.hidden, false);
+  fail = false;
+  view.retry.click();
+  await settle();
+  assert.equal(rewardWrites(view).length, 1);
+  assert.equal(view.dialog.open, false);
+});
+
+test('failed reward claims keep completed progress and expose an explicit retry without optimistic balances', async () => {
+  let fail = true;
+  const view = finalStepFixture({
+    beforeRequest({ route, method }) {
+      if (route === '/onboarding/reward' && method === 'POST' && fail)
+        throw new Error('reward offline');
+    },
+  });
+  await settle();
+  view.next.click();
+  await settle();
+  assert.equal(view.server.get(VERSION).status, 'completed');
+  assert.equal(view.rewardReceipts.size, 0);
+  assert.equal(view.app.userState.electrons, undefined);
+  assert.equal(view.dialog.open, true);
+  assert.equal(view.retry.hidden, false);
+  assert.match(
+    view.nodes.find((node) => node.classList.contains('max-tour-status')).textContent,
+    /尚未确认/,
+  );
+  fail = false;
+  view.retry.click();
+  await settle();
+  assert.equal(view.rewardReceipts.size, 1);
+  assert.equal(view.app.userState.electrons, 10);
+  assert.equal(view.dialog.open, false);
+});
+
+test('a lost award response can be retried idempotently and replays keep a single receipt', async () => {
+  let value;
+  let loseResponse = true;
+  const view = finalStepFixture({
+    setup(next) {
+      value = next;
+    },
+    beforeRequest({ route, method }) {
+      if (route === '/onboarding/reward' && method === 'POST' && loseResponse) {
+        value.rewardReceipts.set('member-token', stamp);
+        loseResponse = false;
+        throw new Error('response lost after commit');
+      }
+    },
+  });
+  await settle();
+  view.next.click();
+  await settle();
+  assert.equal(view.app.userState.electrons, undefined);
+  assert.equal(view.retry.hidden, false);
+  view.retry.click();
+  await settle();
+  assert.equal(rewardWrites(view).length, 2);
+  assert.equal(view.rewardReceipts.size, 1);
+  assert.equal(view.app.userState.electrons, 10);
+  assert.equal(view.dialog.open, false);
+  const replay = finalStepFixture({
+    states: { [VERSION]: { status: 'in_progress', step: STEPS.length - 1, completedAt: stamp } },
+    setup(next) {
+      next.rewardReceipts.set('member-token', stamp);
+    },
+  });
+  await settle();
+  replay.next.click();
+  await settle();
+  assert.equal(replay.rewardReceipts.size, 1);
+  assert.equal(replay.app.userState.electrons, 10);
+  assert.equal(replay.dialog.open, false);
+});
+
+test('legacy completed members can claim from the guide card while GET remains read-only', async () => {
+  const view = fixture({
+    states: { 'max-v1': { status: 'completed', completedAt: stamp, seenAt: stamp } },
+    setup: rewardCard,
+  });
+  await settle();
+  const status = view.doc.getElementById('guide-reward-status');
+  const button = view.doc.getElementById('guide-reward-claim');
+  assert.match(status.textContent, /老用户同样可领取/);
+  assert.equal(button.disabled, false);
+  assert.equal(view.rewardReceipts.size, 0);
+  assert.equal(rewardWrites(view).length, 0);
+  claimReward(view);
+  claimReward(view);
+  await settle();
+  assert.equal(rewardWrites(view).length, 1);
+  assert.equal(view.rewardReceipts.size, 1);
+  assert.match(status.textContent, /已领取 10 电元 \+ 10 磁元/);
+  assert.equal(button.disabled, true);
+  await view.controller.refresh();
+  assert.equal(rewardWrites(view).length, 1, 'refresh only reads the existing receipt');
+});
+
+test('all five visit ticks alone do not enable the reward', async () => {
+  const view = fixture({
+    states: {
+      [VERSION]: {
+        completedTasks: [
+          'explore_world',
+          'visit_discussion',
+          'meet_max',
+          'open_workbench',
+          'visit_inventory',
+        ],
+      },
+    },
+    setup: rewardCard,
+  });
+  await settle();
+  assert.equal(view.doc.getElementById('guide-reward-claim').disabled, true);
+  assert.match(view.doc.getElementById('guide-reward-status').textContent, /完成完整新手导览后/);
+  assert.equal(view.rewardReceipts.size, 0);
+});
+
+test('reward query and wallet failures have distinct retries and never repeat a confirmed grant', async () => {
+  let failQuery = true;
+  let failWallet = true;
+  const view = fixture({
+    states: { [VERSION]: { status: 'completed', completedAt: stamp } },
+    setup: rewardCard,
+    beforeRequest({ route, method }) {
+      if (route === '/onboarding/reward' && method === 'GET' && failQuery)
+        throw new Error('query offline');
+      if (route === '/auth/me' && failWallet) throw new Error('wallet offline');
+    },
+  });
+  await settle();
+  const button = view.doc.getElementById('guide-reward-claim');
+  assert.equal(button.textContent, '重试查询');
+  failQuery = false;
+  claimReward(view);
+  await settle();
+  assert.equal(rewardWrites(view).length, 0);
+  claimReward(view);
+  await settle();
+  assert.equal(view.rewardReceipts.size, 1);
+  assert.equal(button.textContent, '刷新余额');
+  assert.match(view.doc.getElementById('guide-reward-status').textContent, /奖励已领取.*尚未刷新/);
+  assert.equal(view.app.userState.electrons, undefined);
+  failWallet = false;
+  claimReward(view);
+  await settle();
+  assert.equal(rewardWrites(view).length, 1);
+  assert.equal(view.app.userState.electrons, 10);
+});
+
+test('a stalled post-award balance read times out and its retry never posts another reward', async (t) => {
+  let holdWallet = true;
+  let signal;
+  const view = finalStepFixture({
+    beforeRequest({ route, options }) {
+      if (route === '/auth/me' && holdWallet) {
+        signal = options.signal;
+        return new Promise(() => {});
+      }
+      return undefined;
+    },
+  });
+  await settle();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  view.next.click();
+  await settle();
+  assert.equal(view.rewardReceipts.size, 1);
+  assert.equal(view.next.disabled, true);
+  t.mock.timers.tick(10000);
+  await settle();
+  assert.equal(signal.aborted, true);
+  assert.equal(view.next.disabled, false);
+  assert.equal(view.retry.hidden, false);
+  assert.match(
+    view.nodes.find((node) => node.classList.contains('max-tour-status')).textContent,
+    /已领取.*尚未刷新/,
+  );
+  holdWallet = false;
+  view.retry.click();
+  await settle();
+  assert.equal(rewardWrites(view).length, 1);
+  assert.equal(view.app.userState.electrons, 10);
+  assert.equal(view.dialog.open, false);
+});
+
+test('guests completing the full guide and members completing a short release never claim', async () => {
+  const step = STEPS.length - 1;
+  const guest = finalStepFixture({
+    member: false,
+    setup(value) {
+      value.memory.set(
+        `freebbs_guide_guest_${VERSION}`,
+        JSON.stringify({ ...emptyProgress(), status: 'in_progress', step, seenAt: stamp }),
+      );
+    },
+  });
+  await settle();
+  guest.next.click();
+  await settle();
+  assert.equal(JSON.parse(guest.memory.get(`freebbs_guide_guest_${VERSION}`)).status, 'completed');
+  assert.equal(
+    guest.events.some((event) => event.type === 'request'),
+    false,
+  );
+  const releaseSteps = stepsFor(LATEST_RELEASE.id);
+  const last = releaseSteps.length - 1;
+  const member = fixture({
+    href: `${releaseSteps[last].route}?guideTour=1&guideVersion=${LATEST_RELEASE.id}`,
+    states: { [LATEST_RELEASE.id]: { status: 'in_progress', step: last } },
+    setup: (value) => value.node(releaseSteps[last].target),
+  });
+  await settle();
+  member.next.click();
+  await settle();
+  assert.equal(member.server.get(LATEST_RELEASE.id).status, 'completed');
+  assert.equal(member.server.get(VERSION).completedAt, null);
+  assert.equal(rewardWrites(member).length, 0);
+});
+
+test('skipping the final station pauses without fabricating full completion or reward eligibility', async () => {
+  const view = finalStepFixture();
+  await settle();
+  view.nodes.find((node) => node.textContent === '跳过此站').click();
+  await settle();
+  assert.equal(view.server.get(VERSION).status, 'skipped');
+  assert.equal(view.server.get(VERSION).completedAt, null);
+  assert.equal(rewardWrites(view).length, 0);
+  assert.equal(view.dialog.open, false);
+});
+
+test('an account switch while a reward POST is pending isolates the old receipt and UI', async () => {
+  const post = deferred();
+  const view = fixture({
+    states: { [VERSION]: { status: 'completed', completedAt: stamp } },
+    setup: rewardCard,
+    beforeRequest({ route, method }) {
+      if (route === '/onboarding/reward' && method === 'POST') return post.promise;
+      return undefined;
+    },
+  });
+  await settle();
+  claimReward(view);
+  await settle();
+  view.app.userState = { isLoggedIn: true, uid: 'next', token: 'next-token' };
+  view.listeners.get('freebbs:session-change')();
+  await settle();
+  post.resolve();
+  await settle();
+  assert.equal(view.rewardReceipts.has('member-token'), true);
+  assert.equal(view.rewardReceipts.has('next-token'), false);
+  assert.match(view.doc.getElementById('guide-reward-status').textContent, /可以领取/);
+  assert.equal(
+    view.events.some((event) => event.type === 'sync-wallet'),
+    false,
+  );
+  assert.equal(
+    view.events.some((event) => event.route === '/auth/me'),
+    false,
+  );
+});
+
+test('cross-tab credential changes discard pending reward queries and balance replies', async () => {
+  for (const heldRoute of ['/onboarding/reward', '/auth/me']) {
+    const pending = deferred();
+    let hold = heldRoute === '/onboarding/reward';
+    const view = fixture({
+      states: { [VERSION]: { status: 'completed', completedAt: stamp } },
+      setup: rewardCard,
+      beforeRequest({ route }) {
+        if (route === heldRoute && hold) return pending.promise;
+        return undefined;
+      },
+    });
+    await settle();
+    if (heldRoute === '/auth/me') {
+      hold = true;
+      claimReward(view);
+      await settle();
+    }
+    view.listeners.get('storage')({ key: 'free_bbs_auth_token', newValue: 'other-token' });
+    pending.resolve();
+    await settle();
+    assert.equal(view.doc.getElementById('guide-reward-claim').hidden, true);
+    assert.match(view.doc.getElementById('guide-reward-status').textContent, /账号已变化/);
+    assert.equal(
+      view.events.some((event) => event.type === 'sync-wallet'),
+      false,
+    );
+  }
+});
 
 test('a dynamically rendered station button keeps its station when its nested title is clicked', async () => {
   const view = fixture({ setup: (value) => value.node('#guide-station-list') });

@@ -6,10 +6,12 @@ const { createWorkbenchPreviewApi } = require('./workbench-preview-api');
 const { createBoneSales } = require('../backend/economy-sales');
 const {
   GUIDE_VERSION,
+  LEGACY_GUIDE_VERSIONS,
   emptyProgress,
   resolveGuideVersion,
   createOnboardingService,
 } = require('../backend/onboarding');
+const { ONBOARDING_REWARD_AMOUNTS } = require('../backend/onboarding-reward');
 const catalog = require('../public/data/shop-items.json');
 
 const PREVIEW_PAGES = {
@@ -229,6 +231,41 @@ function createOnboardingPreview({ now = Date.now } = {}) {
     },
     async extraApi(context) {
       const { route, method, body, url, store } = context;
+      if (route === '/api/onboarding/reward') {
+        const rewardState = () => {
+          const claimedAt = store.account().onboardingRewardClaimedAt || null;
+          return {
+            eligible:
+              Boolean(claimedAt) ||
+              [GUIDE_VERSION, ...LEGACY_GUIDE_VERSIONS].some((version) =>
+                Boolean(readProgress(version).completedAt),
+              ),
+            claimed: Boolean(claimedAt),
+            claimedAt,
+            amounts: { ...ONBOARDING_REWARD_AMOUNTS },
+          };
+        };
+        if (method === 'GET') return result(rewardState());
+        if (method !== 'POST') return result({ message: '仅支持读取或领取导引奖励' }, 405);
+        if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length)
+          return result({ message: '领取奖励不接受自定义金额或账号' }, 400);
+        return store.transaction(async () => {
+          const state = rewardState();
+          if (state.claimed) return result({ ...state, awarded: false });
+          if (!state.eligible) return result({ message: '完成完整新手导引后才能领取奖励' }, 403);
+          const account = store.account();
+          const before = { electric: account.electric, magnetic: account.magnetic };
+          account.electric += ONBOARDING_REWARD_AMOUNTS.electric;
+          account.magnetic += ONBOARDING_REWARD_AMOUNTS.magnetic;
+          store.recordLedger(1, before, {
+            sourceKey: 'onboarding-reward',
+            title: '新手导引完成奖励',
+            reason: '完成完整新手导引，获得 10 电元和 10 磁元；每个账号仅限一次，新老用户同享。',
+          });
+          account.onboardingRewardClaimedAt = new Date(now()).toISOString();
+          return result({ ...rewardState(), awarded: true });
+        });
+      }
       if (route === '/api/onboarding') {
         if (method === 'GET')
           return result(await onboarding.read(1, url.searchParams.get('version') ?? undefined));

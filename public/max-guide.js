@@ -259,6 +259,78 @@
     };
   }
 
+  function createRewardClient({ identity, request }) {
+    let generation = 0;
+    let queue = Promise.resolve();
+    let state = null;
+    let stateOwner = null;
+    const active = new Set();
+    const pending = new Map();
+    const sameOwner = (owner) =>
+      owner && owner.key === identity().key && owner.token === identity().token;
+    function enqueue(method) {
+      const owner = { ...identity() };
+      const epoch = generation;
+      if (!owner.token) return Promise.reject(abortError());
+      const key = JSON.stringify([epoch, owner.key, owner.token, method]);
+      if (pending.has(key)) return pending.get(key);
+      const valid = () => epoch === generation && sameOwner(owner);
+      const promise = queue
+        .catch(() => {})
+        .then(async () => {
+          if (!valid()) throw abortError();
+          const controller = new AbortController();
+          active.add(controller);
+          let timer;
+          try {
+            const next = await Promise.race([
+              request(method, owner, controller.signal),
+              new Promise((resolve, reject) => {
+                timer = setTimeout(() => {
+                  reject(new Error('奖励同步超时，请重试确认。'));
+                  controller.abort();
+                }, 10000);
+              }),
+            ]);
+            if (!valid()) throw abortError();
+            if (
+              typeof next?.eligible !== 'boolean' ||
+              typeof next?.claimed !== 'boolean' ||
+              (method === 'POST' && (typeof next.awarded !== 'boolean' || !next.claimed))
+            )
+              throw new Error('奖励状态暂未确认，请重试。');
+            state = structuredClone(next);
+            stateOwner = owner;
+            return structuredClone(state);
+          } finally {
+            clearTimeout(timer);
+            active.delete(controller);
+          }
+        });
+      pending.set(key, promise);
+      queue = promise.catch(() => {});
+      promise.then(
+        () => pending.delete(key),
+        () => pending.delete(key),
+      );
+      return promise;
+    }
+    return {
+      load: () => enqueue('GET'),
+      claim: () => enqueue('POST'),
+      snapshot: () => (sameOwner(stateOwner) ? structuredClone(state) : null),
+      reset() {
+        generation += 1;
+        active.forEach((controller) => controller.abort());
+        active.clear();
+        pending.clear();
+        queue = Promise.resolve();
+        state = null;
+        stateOwner = null;
+      },
+    };
+  }
+
   function createController(win, doc, app) {
     const pageBody = doc.body;
     let blockedSession = false;
@@ -313,6 +385,25 @@
       return clients.get(version);
     }
     const baseClient = progressClient(VERSION);
+    const rewardClient = createRewardClient({
+      identity,
+      request(method, account, signal) {
+        return app.callApi('/onboarding/reward', {
+          method,
+          signal,
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${account.token}`,
+          },
+          ...(method === 'POST' ? { body: '{}' } : {}),
+        });
+      },
+    });
+    let rewardEpoch = 0;
+    let rewardBusy = false;
+    let rewardError = '';
+    let rewardRetry = 'load';
+    let rewardWalletController = null;
     let version = VERSION;
     let client = baseClient;
     let steps = stepsFor(version);
@@ -386,6 +477,112 @@
         JSON.stringify({ ...routeContext(), [url.pathname]: safe }),
       );
     }
+    function renderReward() {
+      const status = doc.getElementById('guide-reward-status');
+      const button = doc.getElementById('guide-reward-claim');
+      const state = rewardClient.snapshot();
+      let message = '登录后完成完整新手导览，即可领取一次奖励。';
+      let label = '完成导览后领取';
+      if (isMember()) {
+        if (rewardError) {
+          message = rewardError;
+          label = { load: '重试查询', claim: '重试领取', wallet: '刷新余额' }[rewardRetry];
+        } else if (rewardBusy) {
+          message = '正在确认奖励状态，请稍候…';
+          label = '正在同步…';
+        } else if (state?.claimed) {
+          message = '已领取 10 电元 + 10 磁元。每个账号仅一次，重看或更新导览不会重复发放。';
+          label = '奖励已领取';
+        } else if (state?.eligible) {
+          message = '已完成完整导览，可以领取 10 电元 + 10 磁元。老用户同样可领取。';
+          label = '领取 10 电元 + 10 磁元';
+        } else {
+          message = state
+            ? '完成完整新手导览后自动领取；也可回到这里确认或重试。'
+            : '正在查询奖励资格…';
+        }
+      }
+      if (blockedSession) message = '账号已变化，请刷新后查看奖励。';
+      if (status) status.textContent = message;
+      if (button) {
+        button.textContent = label;
+        button.hidden = !isMember();
+        button.disabled = rewardBusy || (!rewardError && (!state?.eligible || state?.claimed));
+        button.setAttribute('aria-busy', String(rewardBusy));
+      }
+    }
+    function resetReward() {
+      rewardEpoch += 1;
+      rewardClient.reset();
+      rewardWalletController?.abort();
+      rewardWalletController = null;
+      rewardBusy = false;
+      rewardError = '';
+      rewardRetry = 'load';
+      renderReward();
+    }
+    async function updateReward(action = 'load') {
+      if (rewardBusy || !isMember()) return false;
+      const account = { ...identity() };
+      const epoch = rewardEpoch;
+      const valid = () =>
+        epoch === rewardEpoch &&
+        account.key === identity().key &&
+        account.token === identity().token;
+      rewardBusy = true;
+      rewardError = '';
+      rewardRetry = action;
+      renderReward();
+      try {
+        if (action !== 'wallet') await rewardClient[action]();
+        if (!valid()) throw abortError();
+        if (action === 'claim' || action === 'wallet') {
+          // Read current balances after the receipt, including idempotent retries.
+          // syncWallet checks the account again before updating the top bar.
+          rewardRetry = 'wallet';
+          const controller = new AbortController();
+          rewardWalletController = controller;
+          let timer;
+          let payload;
+          try {
+            payload = await Promise.race([
+              app.callApi('/auth/me', {
+                method: 'GET',
+                signal: controller.signal,
+                headers: { Authorization: `Bearer ${account.token}` },
+              }),
+              new Promise((resolve, reject) => {
+                timer = setTimeout(() => {
+                  reject(new Error('余额同步超时'));
+                  controller.abort();
+                }, 10000);
+              }),
+            ]);
+          } finally {
+            clearTimeout(timer);
+            if (rewardWalletController === controller) rewardWalletController = null;
+          }
+          if (!valid()) throw abortError();
+          if (!payload?.user || app.syncWallet?.(payload.user, account.token) !== true)
+            throw new Error('余额暂未同步');
+        }
+        return true;
+      } catch (error) {
+        if (valid() && error.name !== 'AbortError') {
+          if (rewardRetry === 'wallet')
+            rewardError = '奖励已领取，顶部余额尚未刷新，请重试刷新余额。';
+          else if (action === 'claim')
+            rewardError = '导览已完成，奖励领取尚未确认。请重试领取；每个账号仅发放一次。';
+          else rewardError = '暂时无法查询奖励状态，请重试查询。';
+        }
+        return false;
+      } finally {
+        if (valid()) {
+          rewardBusy = false;
+          renderReward();
+        }
+      }
+    }
     function renderTasks() {
       const progress = baseClient.snapshot();
       const count = progress.completedTasks.length;
@@ -424,6 +621,7 @@
               ? '本次更新可以继续查看'
               : '新功能专门导览 · 与完整导览分别保存';
       }
+      renderReward();
     }
     function installEntries() {
       if (!doc.querySelector('link[href="/max-guide.css"]')) {
@@ -1126,12 +1324,13 @@
       const next = steps.findIndex(
         (entry, index) => index > activeIndex && entry.station !== steps[activeIndex].station,
       );
-      if (next < 0) await complete();
+      if (next < 0) await pause();
       else await goTo(next);
     }
     async function complete() {
       await runUi(async (valid) => {
         await save({ status: 'completed', step: steps.length - 1 });
+        if (!valid()) return;
         if (version === VERSION && releases.LATEST_RELEASE) {
           const latest = progressClient(releases.LATEST_RELEASE.id);
           if (!latest.isLoaded()) await latest.load();
@@ -1142,6 +1341,13 @@
           });
         }
         if (!valid()) return;
+        if (version === VERSION && isMember()) {
+          const confirmed = await updateReward(
+            rewardClient.snapshot()?.claimed ? 'wallet' : 'claim',
+          );
+          if (!valid()) return;
+          if (!confirmed) throw new Error(rewardError || '奖励同步中，请稍后重试确认。');
+        }
         closeUi();
         stripTourFlag();
         renderTasks();
@@ -1254,8 +1460,10 @@
         closeUi();
         stripTourFlag();
         clients.forEach((entry) => entry.reset());
+        resetReward();
       }
       owner = current;
+      if (doc.getElementById('guide-reward-status') && isMember()) updateReward();
       pendingTask = taskForPath(path());
       clearError();
       try {
@@ -1308,7 +1516,10 @@
     doc.addEventListener('click', (event) => {
       const release = event.target.closest('[data-guide-release]');
       const station = event.target.closest('[data-guide-station]');
-      if (release) {
+      if (event.target.closest('[data-guide-reward-claim]')) {
+        event.preventDefault();
+        updateReward(rewardError ? rewardRetry : 'claim');
+      } else if (release) {
         event.preventDefault();
         openManual(releases.LATEST_RELEASE?.id);
       } else if (station) {
@@ -1331,6 +1542,7 @@
       initEpoch += 1;
       closeUi();
       clients.forEach((entry) => entry.reset());
+      resetReward();
       owner = '';
       initialize();
     });
@@ -1341,6 +1553,7 @@
       closeUi();
       stripTourFlag();
       clients.forEach((entry) => entry.reset());
+      resetReward();
       owner = '';
       pendingTask = null;
       showError(new Error('账号已变化，请刷新后继续。'), () => win.location.reload());
@@ -1349,6 +1562,7 @@
       if (!event.persisted) return;
       closeUi();
       clients.forEach((entry) => entry.reset());
+      resetReward();
       owner = '';
       initialize();
     });
@@ -1382,6 +1596,7 @@
       tourGeometry,
       stepsFor,
       createProgressClient,
+      createRewardClient,
       createController,
     };
   }
