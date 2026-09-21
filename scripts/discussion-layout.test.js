@@ -64,3 +64,20 @@ test('mobile child comments name their parent and retain a bounded thread guide'
     /@media \(max-width:\s*900px\)[\s\S]*?#discussion-detail \.discussion-comment-reply\s*{[^}]*margin-left:\s*min\(calc\(var\(--comment-depth, 1\) \* 12px\), 36px\)\s*!important;[^}]*border-left:\s*2px solid/s,
   );
 });
+
+test('reply threads show one reply by default and expose a flat expand control', () => {
+  assert.match(
+    appSource,
+    /const flattenReplies = \(parentId, depth = 1\) =>[\s\S]*?\.\.\.flattenReplies\(reply\.id, depth \+ 1\)/,
+  );
+  assert.match(appSource, /renderComment\(comment, depth, \{ hidden: !expanded && index > 0 \}\)/);
+  assert.match(
+    appSource,
+    /data-action="toggle-comment-thread"[\s\S]*?aria-expanded="\$\{expanded\}"/,
+  );
+  assert.match(appSource, /`展开全部 \$\{replies\.length\} 条回复`/);
+  assert.match(
+    postReaderCss,
+    /\.discussion-comment-thread-toggle\s*{[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s,
+  );
+});

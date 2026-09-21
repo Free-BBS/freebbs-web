@@ -167,6 +167,7 @@ const discussionState = {
   viewMode: 'latest',
   showDeleted: false,
   commentActionsPending: new Set(),
+  expandedReplyThreads: new Set(),
 };
 
 function createDiscussionRequestSignal() {
@@ -5906,6 +5907,30 @@ function getDiscussionCommentAuthorName(comment) {
   );
 }
 
+function getDiscussionReplyThreadKey(rootCommentId) {
+  return `${discussionState.activePostId}:${Number(rootCommentId)}`;
+}
+
+function getDiscussionRootCommentId(commentId, commentsById = null) {
+  const lookup =
+    commentsById || new Map(discussionState.comments.map((comment) => [comment.id, comment]));
+  let comment = lookup.get(Number(commentId));
+  const visited = new Set();
+  while (comment?.parentCommentId && !visited.has(comment.id)) {
+    visited.add(comment.id);
+    const parent = lookup.get(Number(comment.parentCommentId));
+    if (!parent) break;
+    comment = parent;
+  }
+  return comment?.id || Number(commentId) || 0;
+}
+
+function expandDiscussionReplyThreadForComment(commentId) {
+  const rootCommentId = getDiscussionRootCommentId(commentId);
+  if (rootCommentId)
+    discussionState.expandedReplyThreads.add(getDiscussionReplyThreadKey(rootCommentId));
+}
+
 function renderDiscussionReplyForm(postId, commentId, authorName) {
   return `
     <form
@@ -5971,13 +5996,30 @@ function renderDiscussionComments() {
   }
 
   const commentsByParent = new Map();
+  const commentsById = new Map();
   discussionState.comments.forEach((comment) => {
     const parentId = comment.parentCommentId || 0;
     commentsByParent.set(parentId, [...(commentsByParent.get(parentId) || []), comment]);
+    commentsById.set(comment.id, comment);
   });
 
-  const renderComment = (comment, depth = 0) => {
-    const replies = commentsByParent.get(comment.id) || [];
+  const commentAnchor = window.location.hash;
+  const anchoredCommentId = /^#comment-(\d+)$/.exec(commentAnchor)?.[1];
+  if (anchoredCommentId) {
+    const rootCommentId = getDiscussionRootCommentId(anchoredCommentId, commentsById);
+    if (rootCommentId !== Number(anchoredCommentId))
+      discussionState.expandedReplyThreads.add(getDiscussionReplyThreadKey(rootCommentId));
+  }
+  const openReplyCommentId = discussionOpenReplyByPost.get(
+    String(discussionState.activePostId || ''),
+  );
+  if (openReplyCommentId) {
+    const rootCommentId = getDiscussionRootCommentId(openReplyCommentId, commentsById);
+    if (rootCommentId !== Number(openReplyCommentId))
+      discussionState.expandedReplyThreads.add(getDiscussionReplyThreadKey(rootCommentId));
+  }
+
+  const renderComment = (comment, depth = 0, { hidden = false } = {}) => {
     const displayDepth = Math.min(depth, 4);
     const parentComment = depth > 0 ? getDiscussionCommentById(comment.parentCommentId) : null;
     const parentAuthorName = parentComment?.author
@@ -5988,7 +6030,7 @@ function renderDiscussionComments() {
       : '';
 
     const current = `
-    <article id="comment-${comment.id}" class="discussion-comment ${depth > 0 ? 'discussion-comment-reply' : ''}" data-comment-id="${comment.id}" data-parent-comment-id="${Number(comment.parentCommentId || 0)}" data-comment-depth="${displayDepth}" style="--comment-depth: ${displayDepth}" ${!comment.isDeleted ? window.FreeBbsPostLaser?.attributes(comment.laser, comment.author?.id) || '' : ''}>
+    <article id="comment-${comment.id}" class="discussion-comment ${depth > 0 ? 'discussion-comment-reply' : ''}" data-comment-id="${comment.id}" data-parent-comment-id="${Number(comment.parentCommentId || 0)}" data-comment-depth="${displayDepth}" style="--comment-depth: ${displayDepth}" ${hidden ? 'hidden' : ''} ${!comment.isDeleted ? window.FreeBbsPostLaser?.attributes(comment.laser, comment.author?.id) || '' : ''}>
       ${renderAuthorProfileLink(comment.author, 'discussion-comment-author-link', true)}
       <div class="discussion-comment-body">
         <div class="discussion-comment-meta">
@@ -6017,18 +6059,38 @@ function renderDiscussionComments() {
     </article>
   `;
 
-    return [current, ...replies.map((reply) => renderComment(reply, depth + 1))].join('');
+    return current;
   };
 
-  list.innerHTML = (commentsByParent.get(0) || [])
-    .map((comment) => renderComment(comment))
-    .join('');
+  const flattenReplies = (parentId, depth = 1) =>
+    (commentsByParent.get(parentId) || []).flatMap((reply) => [
+      { comment: reply, depth },
+      ...flattenReplies(reply.id, depth + 1),
+    ]);
+
+  const renderThread = (rootComment) => {
+    const replies = flattenReplies(rootComment.id);
+    if (!replies.length) return renderComment(rootComment);
+    const threadKey = getDiscussionReplyThreadKey(rootComment.id);
+    const expanded = discussionState.expandedReplyThreads.has(threadKey);
+    const replyMarkup = replies
+      .map(({ comment, depth }, index) =>
+        renderComment(comment, depth, { hidden: !expanded && index > 0 }),
+      )
+      .join('');
+    const toggle =
+      replies.length > 1
+        ? `<button class="discussion-comment-thread-toggle" type="button" data-action="toggle-comment-thread" data-thread-root="${Number(rootComment.id)}" aria-expanded="${expanded}" aria-controls="comment-thread-${Number(rootComment.id)}"><span>${expanded ? '收起回复' : `展开全部 ${replies.length} 条回复`}</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>`
+        : '';
+    return `${renderComment(rootComment)}<div id="comment-thread-${Number(rootComment.id)}" class="discussion-comment-replies" data-comment-thread-root="${Number(rootComment.id)}">${replyMarkup}</div>${toggle}`;
+  };
+
+  list.innerHTML = (commentsByParent.get(0) || []).map((comment) => renderThread(comment)).join('');
 
   list
     .querySelectorAll('.discussion-comment-content')
     .forEach((node) => enhanceMarkdownContent(node));
   restoreOpenDiscussionReplyComposer();
-  const commentAnchor = window.location.hash;
   if (/^#comment-\d+$/.test(commentAnchor) && list.dataset.scrolledAnchor !== commentAnchor) {
     const target = document.getElementById(commentAnchor.slice(1));
     if (target) {
@@ -6439,6 +6501,8 @@ async function loadDiscussionDetail(postId) {
       top: window.scrollY,
     };
   }
+  if (String(discussionState.activePostId || '') !== String(postId))
+    discussionState.expandedReplyThreads?.clear();
   discussionState.activePostId = String(postId);
   discussionState.activePost = null;
   discussionState.comments = [];
@@ -6667,6 +6731,7 @@ function resetDiscussionData() {
   discussionState.postCache.clear();
   discussionCommentDrafts.clear();
   discussionOpenReplyByPost.clear();
+  discussionState.expandedReplyThreads?.clear();
   renderDiscussionDetail(null);
   renderDiscussionPosts();
 }
@@ -8470,6 +8535,24 @@ async function handleDiscussionDetailClick(event) {
     await toggleDiscussionVisibility(visibilityButton);
     return;
   }
+  const threadToggle = event.target.closest('[data-action="toggle-comment-thread"]');
+  if (threadToggle) {
+    const rootCommentId = Number(threadToggle.dataset.threadRoot || 0);
+    const thread = discussionDetail.querySelector(`[data-comment-thread-root="${rootCommentId}"]`);
+    if (!thread || !rootCommentId) return;
+    const expanded = threadToggle.getAttribute('aria-expanded') !== 'true';
+    const threadKey = getDiscussionReplyThreadKey(rootCommentId);
+    if (expanded) discussionState.expandedReplyThreads.add(threadKey);
+    else discussionState.expandedReplyThreads.delete(threadKey);
+    thread.querySelectorAll('.discussion-comment-reply').forEach((reply, index) => {
+      reply.hidden = !expanded && index > 0;
+    });
+    threadToggle.setAttribute('aria-expanded', String(expanded));
+    const label = threadToggle.querySelector('span');
+    const count = thread.querySelectorAll('.discussion-comment-reply').length;
+    if (label) label.textContent = expanded ? '收起回复' : `展开全部 ${count} 条回复`;
+    return;
+  }
   const commentAction = event.target.closest(
     '[data-action="like-comment"], [data-action="delete-comment"], [data-action="feature-comment"]',
   );
@@ -8685,6 +8768,7 @@ async function handleDiscussionCommentSubmit(event) {
     form.dispatchEvent(new CustomEvent('discussion:comment-published', { bubbles: true }));
     if (parentCommentId) {
       discussionOpenReplyByPost.delete(postId);
+      expandDiscussionReplyThreadForComment(parentCommentId);
     }
     if (message) {
       message.textContent = payload.message || (parentCommentId ? '回复已发布' : '评论已发布');
