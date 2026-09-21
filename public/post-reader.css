@@ -405,6 +405,33 @@ body.discussion-page .discussion-comment .discussion-comment-action.is-active {
 body.discussion-page .discussion-comment-reply {
   border-left: 0 !important;
 }
+
+body.discussion-page .discussion-comment-parent {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  width: fit-content;
+  margin-top: 3px;
+  color: var(--ui-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+body.discussion-page .discussion-comment-parent::before {
+  content: '↳';
+  color: var(--ui-accent);
+}
+
+body.discussion-page .discussion-comment-parent strong {
+  color: var(--ui-accent);
+  font-weight: 600;
+}
+
+body.discussion-page .discussion-comment-parent:hover strong {
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
 body.discussion-page #discussion-detail .discussion-comment,
 body.discussion-page #discussion-detail .discussion-comment-body,
 body.discussion-page #discussion-detail .discussion-comment-content,
@@ -423,6 +450,25 @@ body.discussion-page
   .discussion-comment
   :is(.discussion-comment-action, .discussion-comment-reply-button) {
   border: 0 !important;
+}
+
+@media (max-width: 900px) {
+  body.discussion-page.post-reading #discussion-detail .discussion-comment-reply {
+    margin-left: min(calc(var(--comment-depth, 1) * 12px), 36px) !important;
+    padding-left: 12px !important;
+    border-left: 2px solid var(--discussion-line-strong) !important;
+    border-left-color: color-mix(
+      in srgb,
+      var(--discussion-accent-strong) 46%,
+      transparent
+    ) !important;
+  }
+
+  body.discussion-page.post-reading #discussion-detail .discussion-comment-parent {
+    margin-top: 1px;
+    margin-bottom: 2px;
+    font-size: 0.72rem;
+  }
 }
 .post-reward-dialog {
   width: min(440px, calc(100vw - 32px));

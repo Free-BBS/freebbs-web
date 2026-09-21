@@ -5908,9 +5908,16 @@ function renderDiscussionComments() {
   const renderComment = (comment, depth = 0) => {
     const replies = commentsByParent.get(comment.id) || [];
     const displayDepth = Math.min(depth, 4);
+    const parentComment = depth > 0 ? getDiscussionCommentById(comment.parentCommentId) : null;
+    const parentAuthorName = parentComment?.author
+      ? `@${getDiscussionCommentAuthorName(parentComment)}`
+      : '上一条评论';
+    const replyContext = parentComment
+      ? `<a class="discussion-comment-parent" href="#comment-${Number(parentComment.id)}" aria-label="查看所回复的评论"><span>回复</span><strong>${escapeHtml(parentAuthorName)}</strong></a>`
+      : '';
 
     const current = `
-    <article id="comment-${comment.id}" class="discussion-comment ${depth > 0 ? 'discussion-comment-reply' : ''}" data-comment-id="${comment.id}" data-comment-depth="${displayDepth}" style="--comment-depth: ${displayDepth}" ${!comment.isDeleted ? window.FreeBbsPostLaser?.attributes(comment.laser, comment.author?.id) || '' : ''}>
+    <article id="comment-${comment.id}" class="discussion-comment ${depth > 0 ? 'discussion-comment-reply' : ''}" data-comment-id="${comment.id}" data-parent-comment-id="${Number(comment.parentCommentId || 0)}" data-comment-depth="${displayDepth}" style="--comment-depth: ${displayDepth}" ${!comment.isDeleted ? window.FreeBbsPostLaser?.attributes(comment.laser, comment.author?.id) || '' : ''}>
       ${renderAuthorProfileLink(comment.author, 'discussion-comment-author-link', true)}
       <div class="discussion-comment-body">
         <div class="discussion-comment-meta">
@@ -5932,6 +5939,7 @@ function renderDiscussionComments() {
           </div>`
           }
         </div>
+        ${replyContext}
         <div class="discussion-comment-content discussion-markdown-body">${renderMarkdownContent(comment.contentMarkdown)}</div>
         <div class="discussion-comment-reply-slot" data-reply-slot="${comment.id}"></div>
       </div>

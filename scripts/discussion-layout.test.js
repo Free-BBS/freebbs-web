@@ -8,6 +8,7 @@ const html = fs.readFileSync(path.join(root, 'public/discussion.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public/discussion.css'), 'utf8');
 const desktopCss = fs.readFileSync(path.join(root, 'public/desktop-elegant.css'), 'utf8');
 const postReaderCss = fs.readFileSync(path.join(root, 'public/post-reader.css'), 'utf8');
+const appSource = fs.readFileSync(path.join(root, 'public/app.js'), 'utf8');
 
 test('discussion boards precede the feed and obsolete personal statistics are absent', () => {
   const boards = html.indexOf('id="discussion-board-list"');
@@ -46,5 +47,20 @@ test('desktop post reader uses a wide technical-content column while mobile rema
   assert.match(
     postReaderCss,
     /@media \(max-width:\s*900px\)[\s\S]*?body\.discussion-page\.post-reading \.discussion-detail\s*{[^}]*padding:\s*0\s*!important;/s,
+  );
+});
+
+test('mobile child comments name their parent and retain a bounded thread guide', () => {
+  assert.match(
+    appSource,
+    /class="discussion-comment-parent" href="#comment-\$\{Number\(parentComment\.id\)\}"/,
+  );
+  assert.match(
+    appSource,
+    /data-parent-comment-id="\$\{Number\(comment\.parentCommentId \|\| 0\)\}"/,
+  );
+  assert.match(
+    postReaderCss,
+    /@media \(max-width:\s*900px\)[\s\S]*?#discussion-detail \.discussion-comment-reply\s*{[^}]*margin-left:\s*min\(calc\(var\(--comment-depth, 1\) \* 12px\), 36px\)\s*!important;[^}]*border-left:\s*2px solid/s,
   );
 });
