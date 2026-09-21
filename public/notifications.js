@@ -69,6 +69,9 @@
 
   function updateCount(count) {
     state.unreadCount = Number(count) || 0;
+    window.dispatchEvent(
+      new CustomEvent('freebbs:notification-count', { detail: { count: state.unreadCount } }),
+    );
     badge.hidden = !state.unreadCount;
     badge.textContent = state.unreadCount > 99 ? '99+' : String(state.unreadCount);
     bell.setAttribute(
@@ -81,7 +84,12 @@
   function closePanel(restoreFocus = false) {
     panel.hidden = true;
     bell.setAttribute('aria-expanded', 'false');
-    if (restoreFocus) bell.focus();
+    if (restoreFocus) {
+      const target = matchMedia('(max-width: 900px)').matches
+        ? document.querySelector('.mobile-tools-toggle')
+        : bell;
+      target?.focus();
+    }
   }
 
   function canLoad() {
@@ -422,6 +430,13 @@
     }
   }
 
+  window.addEventListener('freebbs:open-notifications', () => {
+    if (!state.token || widget.hidden) return;
+    panel.hidden = false;
+    bell.setAttribute('aria-expanded', 'true');
+    widget.querySelector('.notification-close').focus();
+    loadInbox();
+  });
   bell.addEventListener('click', () => {
     if (!panel.hidden) {
       closePanel();

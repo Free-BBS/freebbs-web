@@ -119,8 +119,6 @@ const discussionBoardAboutTitle = document.getElementById('discussion-board-abou
 const discussionBoardAboutBody = document.getElementById('discussion-board-about-body');
 const discussionBoardEdit = document.getElementById('discussion-board-edit');
 const discussionBoardModerators = document.getElementById('discussion-board-moderators');
-const discussionStatsPosts = document.getElementById('discussion-stats-posts');
-const discussionStatsLikes = document.getElementById('discussion-stats-likes');
 const discussionFilterControls = Array.from(document.querySelectorAll('[data-discussion-sort]'));
 const discussionFilterStatus = document.getElementById('discussion-filter-status');
 const workbenchGreeting = document.getElementById('workbench-greeting');
@@ -169,6 +167,7 @@ const discussionState = {
   viewMode: 'latest',
   showDeleted: false,
   commentActionsPending: new Set(),
+  expandedReplyThreads: new Set(),
 };
 
 function createDiscussionRequestSignal() {
@@ -193,6 +192,7 @@ const aiChatState = {
   messages: [],
   isSending: false,
   statusTimer: 0,
+  backgroundTaskId: '',
 };
 
 function getStoredThemeMode() {
@@ -375,6 +375,7 @@ function initializeDashboardShell() {
     '/circuit': '电路仿真',
     '/workbench': '我的工作台',
     '/aichat': '问问 Max',
+    '/search': '全站搜索',
     '/surveys': '活动报名',
     '/surveys.html': '活动报名',
     '/system-settings/surveys': '活动报名管理',
@@ -389,6 +390,7 @@ function initializeDashboardShell() {
     '/system-settings/course-materials': '课程资料',
     '/electromagnetic': '电磁场',
     '/inventory': '仓库',
+    '/guide': 'Max 的探索手册',
     '/login': '登录',
     '/register': '注册',
     '/remake': '找回密码',
@@ -1029,6 +1031,7 @@ function ensureElectromagneticModal() {
         <h3>电元 · 探索与贡献</h3>
         <ul class="currency-guide-list">
           <li>公测期间，发现并提交有价值的问题，经审核可获得5–50电元奖励。</li>
+          <li>照顾 Max：每喂食5条小鱼长出1份羊毛，按北京时间每天最多剪一份。剪下后用橡胶棒摩擦，每份获得2电元。橡胶棒7磁元购买，可反复使用。</li>
           <li>后续课程配套入驻后，将开放学习内容相关的电元奖励，具体获取方式随课程公布。</li>
         </ul>
       </section>
@@ -1641,6 +1644,7 @@ function groupShopItems(items) {
     consumable: 2,
     pet: 3,
     pet_food: 3,
+    pet_tool: 3,
     decoration: 3,
   };
   const order = [
@@ -1722,7 +1726,7 @@ async function loadElectromagneticPage() {
             <img src="${escapeHtml(item.image || '/assets/icons/battery.svg')}" alt="" aria-hidden="true" />
           </div>
           <div class="shop-item-copy">
-            <span class="shop-category">${escapeHtml({ avatar_frame: '头像框', nameplate: '铭牌', profile_card: '主页主题', pet: '牧场伙伴', pet_food: '牧场食物', scholar_relic: '学者收藏', collectible: '神秘收藏', decoration: '牧场纪念', device: '发光设备', converter: '货币转换', consumable: '消耗品' }[item.class] || '小物件')}</span>
+            <span class="shop-category">${escapeHtml({ avatar_frame: '头像框', nameplate: '铭牌', profile_card: '主页主题', pet: '牧场伙伴', pet_food: '牧场食物', pet_tool: '牧场工具', scholar_relic: '学者收藏', collectible: '神秘收藏', decoration: '牧场纪念', device: '发光设备', converter: '货币转换', consumable: '消耗品' }[item.class] || '小物件')}</span>
             <h2>${escapeHtml(item.name)}</h2>
             <p>${escapeHtml(item.description || '查看详情，了解这个物品。')}</p>
             <strong class="shop-item-price">${escapeHtml(renderShopItemPrice(item))}</strong>
@@ -1793,11 +1797,13 @@ async function loadInventoryPage() {
         : asset;
     });
     window.freeBbsInventoryAssets = assets;
+    window.dispatchEvent(new CustomEvent('freebbs:inventory-change', { detail: { assets } }));
     renderEconomyBalances(balances);
     if (list) {
       list.innerHTML =
         assets
-          .filter((asset) => asset.key !== 'ordinary_fishbone')
+          // Earned bones have their own quantity/quote controls in the recycling section.
+          .filter((asset) => !['ordinary_fishbone', 'golden_fishbone'].includes(asset.key))
           .map((asset) => {
             const item = asset.item || asset.metadata || {};
             return `
@@ -2836,6 +2842,7 @@ function renderUser() {
       image.src = DEFAULT_AVATAR;
     });
     avatarButtons.forEach((button) => {
+      delete button.dataset.avatarFrame;
       button.setAttribute('aria-label', '登录或注册');
     });
     document.querySelectorAll('.aichat-message-user .aichat-avatar-image').forEach((image) => {
@@ -2866,6 +2873,11 @@ function renderUser() {
     image.src = getAvatarUrl(userState.avatarPath);
   });
   avatarButtons.forEach((button) => {
+    button.dataset.avatarFrame = ['frame_orbit', 'frame_aurora'].includes(
+      userState.cosmetics?.frame,
+    )
+      ? userState.cosmetics.frame
+      : '';
     button.setAttribute('aria-label', '打开我的个人主页');
   });
   document.querySelectorAll('.aichat-message-user .aichat-avatar-image').forEach((image) => {
@@ -2920,6 +2932,7 @@ function openModal(mode = 'login') {
 }
 
 function saveSession(token, user) {
+  if (userState.uid !== (user.uid || '')) userState.cosmetics = {};
   userState.isLoggedIn = true;
   userState.token = token;
   userState.uid = user.uid || '';
@@ -2929,6 +2942,7 @@ function saveSession(token, user) {
   userState.role = user.role || 'student';
   userState.isAdmin = Boolean(user.isAdmin || user.role === 'admin');
   userState.avatarPath = user.avatarPath || '';
+  userState.cosmetics = user.cosmetics || userState.cosmetics || {};
   userState.bio = user.bio || '';
   userState.websiteUrl = user.websiteUrl || '';
   userState.electrons = user.electrons ?? 0;
@@ -2954,6 +2968,7 @@ function saveSession(token, user) {
 }
 
 function clearSession() {
+  userState.cosmetics = {};
   userState.isLoggedIn = false;
   userState.token = '';
   userState.uid = '';
@@ -3051,17 +3066,26 @@ async function restoreSession() {
     return;
   }
 
+  const restoringToken = userState.token;
   try {
     const payload = await callApi('/auth/me', {
       method: 'GET',
     });
 
-    saveSession(userState.token, payload.user);
+    if (localStorage.getItem(STORAGE_KEY) !== restoringToken) return;
+    saveSession(restoringToken, payload.user);
 
     if (isAdminManagementPage() && !userState.isAdmin) {
       window.location.replace('/');
     }
-  } catch {
+  } catch (error) {
+    // A navigation abort or temporary outage does not invalidate a saved credential.
+    // Ignore stale responses after another tab/account has changed the token.
+    if (localStorage.getItem(STORAGE_KEY) !== restoringToken) return;
+    if (error.status !== 401) {
+      userName.title = '登录状态暂未确认，请刷新重试';
+      return;
+    }
     clearSession();
     if (isSettingsPage() || isAdminManagementPage()) {
       window.location.replace('/login');
@@ -3752,6 +3776,7 @@ function renderDiscussionPosts() {
           ${post.isDeleted ? '<span class="discussion-deleted-badge">已删除</span>' : ''}
           ${post.isPinned ? `<span class="discussion-pin-badge">置顶</span>` : ''}
           ${post.isFeatured ? `<span class="discussion-feature-badge">精华</span>` : ''}
+          <span class="discussion-feed-avatar">${renderAuthorProfileLink(post.author, 'discussion-author-link discussion-author-link-avatar', true)}</span>
           ${renderAuthorProfileLink(post.author, 'discussion-author-link')}
           <span>${escapeHtml(formatDateOnly(post.createdAt))}</span>
           <span class="discussion-post-reply-state">${escapeHtml(replyLabel)}</span>
@@ -3788,6 +3813,10 @@ function renderDiscussionPosts() {
     })
     .join('');
   window.FreeBbsDiscussionPreviews?.enhance(discussionPostList, { apiBase: API_BASE_URL });
+  window.FreeBbsMotion?.feed(
+    discussionPostList,
+    `${discussionState.scope}:${discussionState.activeBoard}:${discussionState.viewMode}`,
+  );
 }
 
 function handleDiscussionFilterClick(event) {
@@ -3973,6 +4002,22 @@ function renderMarkdownContent(markdown) {
 
     replacement.append(document.createTextNode(text.slice(previousIndex)));
     textNode.replaceWith(replacement);
+  });
+
+  resultTemplate.content.querySelectorAll('table').forEach((table) => {
+    const scroller = document.createElement('div');
+    const headings = Array.from(table.querySelectorAll('thead th'))
+      .map((cell) => String(cell.textContent || '').trim())
+      .filter(Boolean)
+      .slice(0, 3)
+      .join('、');
+
+    scroller.className = 'discussion-table-scroll';
+    scroller.tabIndex = 0;
+    scroller.setAttribute('role', 'region');
+    scroller.setAttribute('aria-label', headings ? `表格：${headings}` : '表格，可横向滚动');
+    table.replaceWith(scroller);
+    scroller.append(table);
   });
 
   return resultTemplate.innerHTML;
@@ -4571,14 +4616,13 @@ function renderAiWelcomeMessage() {
         <img class="aichat-avatar-image" src="${escapeHtml(MAX_AGENT_AVATAR)}" alt="Max 的头像" />
       </div>
       <div class="aichat-bubble discussion-markdown-body">
-        <p>你好，我是 Max。可以问我课程、推导或代码，也可以粘贴本站电路链接，让我分析元件、接线和工作原理。</p>
+        <p>有什么想一起解决的？</p>
       </div>
     </article>
   `;
   const welcome = aiChatThread.querySelector('.aichat-message-assistant');
   if (welcome) {
-    welcome.dataset.markdown =
-      '你好，我是 Max。可以问我课程、推导或代码，也可以粘贴本站电路链接，让我分析元件、接线和工作原理。';
+    welcome.dataset.markdown = '有什么想一起解决的？';
     addAiMessageCopyControls(welcome);
   }
 }
@@ -4593,6 +4637,12 @@ function renderAiChatThread() {
     const article = appendAiChatMessage(message.role, message.content);
     if (message.role === 'user') {
       window.FreeBbsMaxImages?.show(article?.querySelector('.aichat-bubble'), message.images || []);
+      window.FreeBbsFilePreview?.mount(
+        article?.querySelector('.aichat-bubble'),
+        window.FreeBbsFilePreview.split(message.content).files,
+        message.filePages || [],
+        message.documents || [],
+      );
     }
     if (message.role === 'assistant' && message.navigation) {
       renderMaxNavigationRoutes(article, message.navigation);
@@ -4614,8 +4664,12 @@ function updateAiChatMessage(article, content) {
 
   article.dataset.markdown = content || '';
   if (content) {
-    bubble.innerHTML = renderMarkdownContent(content);
+    const attachment = article.classList.contains('aichat-message-user')
+      ? window.FreeBbsFilePreview?.split(content)
+      : null;
+    bubble.innerHTML = renderMarkdownContent(attachment ? attachment.text : content);
     enhanceMarkdownContent(bubble);
+    if (attachment) window.FreeBbsFilePreview.mount(bubble, attachment.files);
   } else {
     bubble.innerHTML = `<span class="aichat-thinking-inline">Max 正在思考......</span>`;
   }
@@ -4624,7 +4678,9 @@ function updateAiChatMessage(article, content) {
 }
 
 function buildAiChatPayload(userMessage) {
-  const recentMessages = aiChatState.messages.slice(-13).map(({ images, ...message }) => message);
+  const recentMessages = aiChatState.messages
+    .slice(-13)
+    .map(({ images, filePages, documents, ...message }) => message);
 
   return {
     agent: 'navigation',
@@ -4646,6 +4702,7 @@ function buildAiChatPayload(userMessage) {
 }
 
 const MAX_NAVIGATION_PATHS = new Set([
+  '/search',
   '/knowledge',
   '/workbench',
   '/discussion',
@@ -4774,13 +4831,7 @@ function renderMaxNavigationRoutes(article, navigationResult) {
   const navigation = createAiNavigationSnapshot(navigationResult);
   const validRoutes = [...navigation.routes];
 
-  if (!validRoutes.length) {
-    validRoutes.push({
-      title: '课程与知识图谱',
-      reason: '打开课程知识图谱，继续探索相关学习内容。',
-      url: '/course',
-    });
-  }
+  if (!validRoutes.length) return;
 
   wrapMaxAnswerPanel(bubble);
   bubble.querySelector(':scope > .aichat-response-navigation')?.remove();
@@ -4831,6 +4882,19 @@ function extractCourseMention(value) {
 }
 
 async function addMentionedCourseMapRoute(navigationResult, userMessage) {
+  const wantsLinks =
+    !/不(?:要|用|需要).{0,8}(?:链接|导航|入口)/.test(userMessage) &&
+    /导航|打开|进入|入口|链接|页面|在哪|哪里|怎么去|带我去|去.*(?:讨论区|课程)|推荐.*(?:帖|资料|课程)|找.*(?:帖|资料|课程)/.test(
+      userMessage,
+    );
+  if (!wantsLinks)
+    return {
+      ...navigationResult,
+      navigation_routes: [],
+      routes: [],
+      navigation: { routes: [] },
+      navigation_answer: '',
+    };
   const normalizedMessage = normalizeCourseMention(userMessage);
   if (!normalizedMessage) {
     return navigationResult;
@@ -4967,9 +5031,10 @@ function renderMaxSubagentResult(article, navigationResult) {
       navigationResult.course_context?.name || subagent.course?.name || '',
     ).trim();
 
+    if (!sources.length) return null;
     panel.classList.add('is-rag');
     panel.innerHTML = `
-      <header><strong>RAG · 已检索课程资料</strong><span>${sources.length ? `${sources.length} 个来源` : '课程索引'}</span></header>
+      <details><summary>参考资料（${sources.length}）</summary>
       <p>${escapeHtml(courseName ? `本回答优先参考了「${courseName}」的已索引资料。` : '本回答优先参考了当前课程知识库。')}</p>
       ${
         sources.length
@@ -4985,6 +5050,7 @@ function renderMaxSubagentResult(article, navigationResult) {
               .join('')}</ul>`
           : ''
       }
+      </details>
     `;
     bubble.append(panel);
     return panel;
@@ -5062,17 +5128,110 @@ async function pollInfoJob(article, navigationResult) {
   }
 }
 
-async function requestMaxNavigation(payload, onReasoning) {
+async function requestMaxNavigation(payload, onReasoning, onProgress = () => {}) {
   if (!userState.token) throw new Error('请先登录后再使用问问 Max');
-  return window.FreeBbsReasoning.request({
-    url: `${API_BASE_URL}/ai/chat`,
-    token: userState.token,
-    payload: {
-      ...payload,
-      ...(window.FreeBbsMaxModels ? await window.FreeBbsMaxModels.chatOptions(payload) : {}),
-    },
-    onReasoning,
-  });
+  const body = {
+    ...payload,
+    ...(window.FreeBbsMaxModels ? await window.FreeBbsMaxModels.chatOptions(payload) : {}),
+  };
+  let task = await startAiBackgroundTask('max', payload.did || '', body);
+  rememberMaxBackgroundTask(task.id);
+  while (['queued', 'running'].includes(task.status)) {
+    onProgress(task.progress?.message || 'Max 正在后台思考，离开页面也会继续…');
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 1500);
+    });
+    task = await getAiBackgroundTask(task.id, { watching: !document.hidden });
+  }
+  if (task.status !== 'completed') throw new Error(task.error || 'Max 后台任务未能完成。');
+  onReasoning({ done: true });
+  return { ...(task.result || {}), background_task_id: task.id };
+}
+
+function maxBackgroundTaskKey() {
+  return `free_bbs_max_background_task_v1:${userState.uid || 'user'}`;
+}
+
+function rememberMaxBackgroundTask(id) {
+  aiChatState.backgroundTaskId = id || '';
+  try {
+    if (id) localStorage.setItem(maxBackgroundTaskKey(), id);
+    else localStorage.removeItem(maxBackgroundTaskKey());
+  } catch {
+    // Server persistence remains authoritative when local storage is unavailable.
+  }
+}
+
+async function waitForMaxBackgroundTask(task, assistantArticle) {
+  rememberMaxBackgroundTask(task.id);
+  let current = task;
+  while (['queued', 'running'].includes(current.status)) {
+    const message = current.progress?.message || 'Max 正在后台思考，离开页面也会继续…';
+    setAiChatThinkingBubble(assistantArticle, message);
+    setAiChatStatus(message);
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 1500);
+    });
+    current = await getAiBackgroundTask(current.id, { watching: !document.hidden });
+  }
+  if (current.status !== 'completed') {
+    throw new Error(current.error || 'Max 后台任务未能完成。');
+  }
+  return current;
+}
+
+async function applyMaxBackgroundResult(task, assistantArticle, userMessage) {
+  const result = await addMentionedCourseMapRoute(task.result || {}, userMessage);
+  const replyModel =
+    typeof result.model === 'string' && /^[A-Za-z0-9_./:+-]{1,120}$/.test(result.model)
+      ? result.model
+      : '未返回模型信息';
+  const assistantContent = `${String(result.answer || '').trim() || 'Max 暂时没有生成回答。'}\n\n---\n\n回复模型：${replyModel}`;
+  window.FreeBbsReasoning?.finish(assistantArticle);
+  updateAiChatMessage(assistantArticle, assistantContent);
+  const navigation = createAiNavigationSnapshot(result);
+  const rag = createAiRagSnapshot(result);
+  renderMaxNavigationRoutes(assistantArticle, navigation);
+  renderMaxSubagentResult(assistantArticle, result);
+  if (result.subagent?.status === 'pending') pollInfoJob(assistantArticle, result);
+  aiChatState.messages.push({ role: 'assistant', content: assistantContent, navigation, rag });
+  aiChatState.pendingSend = null;
+  window.FreeBbsMaxImages?.clear();
+  window.FreeBbsMaxFiles?.clear();
+  stopAiChatThinkingStatus();
+  await saveAiDialog();
+  await acknowledgeAiBackgroundTask(task.id).catch(() => {});
+  rememberMaxBackgroundTask('');
+}
+
+async function resumeMaxBackgroundTask() {
+  if (!isAiChatPage() || !userState.token || aiChatState.isSending) return;
+  const did = getAiDialogIdFromUrl() || aiChatState.currentDid;
+  if (!did) return;
+  let task;
+  try {
+    task = await getLatestAiBackgroundTask('max', did);
+  } catch {
+    return;
+  }
+  if (!task || task.acknowledged) return;
+  aiChatState.isSending = true;
+  const userMessage =
+    aiChatState.messages.findLast((message) => message.role === 'user')?.content ||
+    '继续之前的问题';
+  const assistantArticle = appendAiChatMessage('assistant', '正在恢复后台任务…');
+  startAiChatThinkingStatus();
+  try {
+    const finished = await waitForMaxBackgroundTask(task, assistantArticle);
+    await applyMaxBackgroundResult(finished, assistantArticle, userMessage);
+  } catch (error) {
+    updateAiChatMessage(assistantArticle, `后台任务未完成：${error.message}`);
+    stopAiChatThinkingStatus(error.message);
+    if (task?.id) await acknowledgeAiBackgroundTask(task.id).catch(() => {});
+    rememberMaxBackgroundTask('');
+  } finally {
+    aiChatState.isSending = false;
+  }
 }
 
 function getAiDialogTitle(messages = aiChatState.messages) {
@@ -5324,6 +5483,8 @@ async function handleAiChatSubmit(event) {
     setAiChatStatus(error.message);
     return;
   }
+  const filePages = window.FreeBbsMaxFiles?.pages() || [];
+  const documents = window.FreeBbsMaxFiles?.documents?.() || [];
   const composerMessage = aiChatInput.value.trim();
   const userMessage =
     (composerMessage ||
@@ -5348,17 +5509,39 @@ async function handleAiChatSubmit(event) {
     previousAttempt &&
     aiChatState.messages.at(-1) === previousAttempt.message &&
     previousAttempt.message.content === userMessage &&
-    JSON.stringify(previousAttempt.message.images || []) === JSON.stringify(images);
+    JSON.stringify(previousAttempt.message.images || []) === JSON.stringify(images) &&
+    JSON.stringify(previousAttempt.message.filePages || []) === JSON.stringify(filePages) &&
+    JSON.stringify(previousAttempt.message.documents || []) === JSON.stringify(documents);
   if (retrying) {
     // Re-render the stored user turn and discard the previous error placeholder.
     renderAiChatThread();
   } else {
-    const requestPayload = { ...buildAiChatPayload(userMessage), vision_images: images };
-    const message = { role: 'user', content: userMessage, ...(images.length ? { images } : {}) };
+    const requestPayload = {
+      ...buildAiChatPayload(userMessage),
+      vision_images: [...images, ...filePages],
+      documents: documents.length
+        ? documents
+        : aiChatState.messages.findLast(
+            (message) => message.role === 'user' && message.documents?.length,
+          )?.documents || [],
+    };
+    const message = {
+      role: 'user',
+      content: userMessage,
+      ...(images.length ? { images } : {}),
+      ...(filePages.length ? { filePages } : {}),
+      ...(documents.length ? { documents } : {}),
+    };
     aiChatState.messages.push(message);
     aiChatState.pendingSend = { message, requestPayload };
     const userArticle = appendAiChatMessage('user', userMessage);
     window.FreeBbsMaxImages?.show(userArticle?.querySelector('.aichat-bubble'), images);
+    window.FreeBbsFilePreview?.mount(
+      userArticle?.querySelector('.aichat-bubble'),
+      window.FreeBbsFilePreview.split(userMessage).files,
+      filePages,
+      documents,
+    );
   }
   const assistantArticle = appendAiChatMessage('assistant', '');
   startAiChatThinkingStatus();
@@ -5369,19 +5552,25 @@ async function handleAiChatSubmit(event) {
     },
     1000 + Math.floor(Math.random() * 4001),
   );
-  let assistantContent = '';
-
   try {
     const { requestPayload } = aiChatState.pendingSend;
     await saveAiDialog({ throwOnError: true });
     requestPayload.did = aiChatState.currentDid || '';
-    const rawResult = await requestMaxNavigation(requestPayload, (progress) => {
-      window.FreeBbsReasoning.update(assistantArticle, progress);
-    });
+    const rawResult = await requestMaxNavigation(
+      requestPayload,
+      (progress) => {
+        window.FreeBbsReasoning.update(assistantArticle, progress);
+      },
+      (message) => {
+        window.clearTimeout(bubbleTimer);
+        setAiChatThinkingBubble(assistantArticle, message);
+        setAiChatStatus(message);
+      },
+    );
     window.FreeBbsReasoning.finish(assistantArticle);
     const result = await addMentionedCourseMapRoute(rawResult, userMessage);
     window.clearTimeout(bubbleTimer);
-    assistantContent = String(result.answer || '').trim() || 'Max 暂时没有生成回答。';
+    let assistantContent = String(result.answer || '').trim() || 'Max 暂时没有生成回答。';
     const replyModel =
       typeof result.model === 'string' && /^[A-Za-z0-9_./:+-]{1,120}$/.test(result.model)
         ? result.model
@@ -5392,10 +5581,7 @@ async function handleAiChatSubmit(event) {
     const rag = createAiRagSnapshot(result);
     renderMaxNavigationRoutes(assistantArticle, navigation);
     renderMaxSubagentResult(assistantArticle, result);
-    if (result.subagent?.status === 'pending') {
-      pollInfoJob(assistantArticle, result);
-    }
-
+    if (result.subagent?.status === 'pending') pollInfoJob(assistantArticle, result);
     aiChatState.messages.push({
       role: 'assistant',
       content: assistantContent,
@@ -5407,6 +5593,10 @@ async function handleAiChatSubmit(event) {
     window.FreeBbsMaxFiles?.clear();
     stopAiChatThinkingStatus();
     await saveAiDialog();
+    if (result.background_task_id) {
+      await acknowledgeAiBackgroundTask(result.background_task_id).catch(() => {});
+      rememberMaxBackgroundTask('');
+    }
   } catch (error) {
     window.clearTimeout(bubbleTimer);
     window.FreeBbsReasoning?.finish(assistantArticle, { stopped: true });
@@ -5484,25 +5674,23 @@ function initializeAiChatPage() {
       renderAiDialogList();
     }
   });
+  window.addEventListener('pagehide', () => {
+    leaveAiBackgroundTask(aiChatState.backgroundTaskId);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (!aiChatState.backgroundTaskId) return;
+    if (document.hidden) leaveAiBackgroundTask(aiChatState.backgroundTaskId);
+    else setAiBackgroundTaskPresence(aiChatState.backgroundTaskId, true).catch(() => {});
+  });
   renderAiChatThread();
-  loadAiDialogs();
+  loadAiDialogs().then(() => resumeMaxBackgroundTask());
   resizeAiChatInput();
 }
 
 function setDiscussionDetailView(isDetailView) {
   discussionLayout?.classList.toggle('is-detail-view', Boolean(isDetailView));
-}
-
-function renderDiscussionStats(stats) {
-  if (discussionStatsPosts) {
-    discussionStatsPosts.textContent = String(
-      stats?.postCount ?? discussionState.posts.length ?? 0,
-    );
-  }
-
-  if (discussionStatsLikes) {
-    discussionStatsLikes.textContent = String(stats?.likeCount ?? 0);
-  }
+  document.body.classList.toggle('post-reading', Boolean(isDetailView));
+  if (!isDetailView) window.FreeBbsPostReader?.close();
 }
 
 function getDiscussionCommentDraftKey(postId, parentCommentId = 0) {
@@ -5724,6 +5912,30 @@ function getDiscussionCommentAuthorName(comment) {
   );
 }
 
+function getDiscussionReplyThreadKey(rootCommentId) {
+  return `${discussionState.activePostId}:${Number(rootCommentId)}`;
+}
+
+function getDiscussionRootCommentId(commentId, commentsById = null) {
+  const lookup =
+    commentsById || new Map(discussionState.comments.map((comment) => [comment.id, comment]));
+  let comment = lookup.get(Number(commentId));
+  const visited = new Set();
+  while (comment?.parentCommentId && !visited.has(comment.id)) {
+    visited.add(comment.id);
+    const parent = lookup.get(Number(comment.parentCommentId));
+    if (!parent) break;
+    comment = parent;
+  }
+  return comment?.id || Number(commentId) || 0;
+}
+
+function expandDiscussionReplyThreadForComment(commentId) {
+  const rootCommentId = getDiscussionRootCommentId(commentId);
+  if (rootCommentId)
+    discussionState.expandedReplyThreads.add(getDiscussionReplyThreadKey(rootCommentId));
+}
+
 function renderDiscussionReplyForm(postId, commentId, authorName) {
   return `
     <form
@@ -5789,17 +6001,41 @@ function renderDiscussionComments() {
   }
 
   const commentsByParent = new Map();
+  const commentsById = new Map();
   discussionState.comments.forEach((comment) => {
     const parentId = comment.parentCommentId || 0;
     commentsByParent.set(parentId, [...(commentsByParent.get(parentId) || []), comment]);
+    commentsById.set(comment.id, comment);
   });
 
-  const renderComment = (comment, depth = 0) => {
-    const replies = commentsByParent.get(comment.id) || [];
+  const commentAnchor = window.location.hash;
+  const anchoredCommentId = /^#comment-(\d+)$/.exec(commentAnchor)?.[1];
+  if (anchoredCommentId) {
+    const rootCommentId = getDiscussionRootCommentId(anchoredCommentId, commentsById);
+    if (rootCommentId !== Number(anchoredCommentId))
+      discussionState.expandedReplyThreads.add(getDiscussionReplyThreadKey(rootCommentId));
+  }
+  const openReplyCommentId = discussionOpenReplyByPost.get(
+    String(discussionState.activePostId || ''),
+  );
+  if (openReplyCommentId) {
+    const rootCommentId = getDiscussionRootCommentId(openReplyCommentId, commentsById);
+    if (rootCommentId !== Number(openReplyCommentId))
+      discussionState.expandedReplyThreads.add(getDiscussionReplyThreadKey(rootCommentId));
+  }
+
+  const renderComment = (comment, depth = 0, { hidden = false } = {}) => {
     const displayDepth = Math.min(depth, 4);
+    const parentComment = depth > 0 ? getDiscussionCommentById(comment.parentCommentId) : null;
+    const parentAuthorName = parentComment?.author
+      ? `@${getDiscussionCommentAuthorName(parentComment)}`
+      : '上一条评论';
+    const replyContext = parentComment
+      ? `<a class="discussion-comment-parent" href="#comment-${Number(parentComment.id)}" aria-label="查看所回复的评论"><span>回复</span><strong>${escapeHtml(parentAuthorName)}</strong></a>`
+      : '';
 
     const current = `
-    <article id="comment-${comment.id}" class="discussion-comment ${depth > 0 ? 'discussion-comment-reply' : ''}" data-comment-id="${comment.id}" data-comment-depth="${displayDepth}" style="--comment-depth: ${displayDepth}" ${!comment.isDeleted ? window.FreeBbsPostLaser?.attributes(comment.laser, comment.author?.id) || '' : ''}>
+    <article id="comment-${comment.id}" class="discussion-comment ${depth > 0 ? 'discussion-comment-reply' : ''}" data-comment-id="${comment.id}" data-parent-comment-id="${Number(comment.parentCommentId || 0)}" data-comment-depth="${displayDepth}" style="--comment-depth: ${displayDepth}" ${hidden ? 'hidden' : ''} ${!comment.isDeleted ? window.FreeBbsPostLaser?.attributes(comment.laser, comment.author?.id) || '' : ''}>
       ${renderAuthorProfileLink(comment.author, 'discussion-comment-author-link', true)}
       <div class="discussion-comment-body">
         <div class="discussion-comment-meta">
@@ -5821,24 +6057,45 @@ function renderDiscussionComments() {
           </div>`
           }
         </div>
+        ${replyContext}
         <div class="discussion-comment-content discussion-markdown-body">${renderMarkdownContent(comment.contentMarkdown)}</div>
         <div class="discussion-comment-reply-slot" data-reply-slot="${comment.id}"></div>
       </div>
     </article>
   `;
 
-    return [current, ...replies.map((reply) => renderComment(reply, depth + 1))].join('');
+    return current;
   };
 
-  list.innerHTML = (commentsByParent.get(0) || [])
-    .map((comment) => renderComment(comment))
-    .join('');
+  const flattenReplies = (parentId, depth = 1) =>
+    (commentsByParent.get(parentId) || []).flatMap((reply) => [
+      { comment: reply, depth },
+      ...flattenReplies(reply.id, depth + 1),
+    ]);
+
+  const renderThread = (rootComment) => {
+    const replies = flattenReplies(rootComment.id);
+    if (!replies.length) return renderComment(rootComment);
+    const threadKey = getDiscussionReplyThreadKey(rootComment.id);
+    const expanded = discussionState.expandedReplyThreads.has(threadKey);
+    const replyMarkup = replies
+      .map(({ comment, depth }, index) =>
+        renderComment(comment, depth, { hidden: !expanded && index > 0 }),
+      )
+      .join('');
+    const toggle =
+      replies.length > 1
+        ? `<button class="discussion-comment-thread-toggle" type="button" data-action="toggle-comment-thread" data-thread-root="${Number(rootComment.id)}" aria-expanded="${expanded}" aria-controls="comment-thread-${Number(rootComment.id)}"><span>${expanded ? '收起回复' : `展开全部 ${replies.length} 条回复`}</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>`
+        : '';
+    return `${renderComment(rootComment)}<div id="comment-thread-${Number(rootComment.id)}" class="discussion-comment-replies" data-comment-thread-root="${Number(rootComment.id)}">${replyMarkup}</div>${toggle}`;
+  };
+
+  list.innerHTML = (commentsByParent.get(0) || []).map((comment) => renderThread(comment)).join('');
 
   list
     .querySelectorAll('.discussion-comment-content')
     .forEach((node) => enhanceMarkdownContent(node));
   restoreOpenDiscussionReplyComposer();
-  const commentAnchor = window.location.hash;
   if (/^#comment-\d+$/.test(commentAnchor) && list.dataset.scrolledAnchor !== commentAnchor) {
     const target = document.getElementById(commentAnchor.slice(1));
     if (target) {
@@ -5880,14 +6137,16 @@ function renderDiscussionDetail(post) {
           <span>返回帖子</span>
         </button>
         ${
-          post.canPin || post.canFeature || post.canDelete || post.canHide
+          post.canPin || post.canFeature || post.canDelete || post.canHide || userState.isAdmin
             ? `
-          <div class="discussion-moderator-actions">
+          <details class="post-manage-menu"><summary aria-label="帖子管理">•••</summary><div class="discussion-moderator-actions">
+            ${userState.isAdmin && !post.isDeleted ? `<button type="button" class="discussion-visibility-button" data-action="reward-post-author" data-post-id="${escapeHtml(post.id)}">奖励作者</button>` : ''}
+            ${!post.isDeleted && (post.canHide || userState.isAdmin) ? `<label class="discussion-option"><input type="checkbox" data-action="toggle-login-required" data-post-id="${escapeHtml(post.id)}" ${post.loginRequired ? 'checked' : ''} />登录后可见</label>` : ''}
             ${post.canHide ? `<button class="discussion-visibility-button" type="button" data-action="toggle-visibility" data-post-id="${escapeHtml(post.id)}" data-hidden="${post.isHidden ? '1' : '0'}">${post.isHidden ? '恢复公开' : '隐藏帖子'}</button>` : ''}
             ${post.canPin ? `<button class="discussion-detail-pin ${post.isPinned ? 'is-active' : ''}" type="button" data-action="toggle-pin" data-post-id="${escapeHtml(post.id)}" data-pinned="${post.isPinned ? '1' : '0'}"><img class="discussion-action-icon" src="/assets/icons/top.svg" alt="" aria-hidden="true" /><span>${post.isPinned ? '取消置顶' : '置顶文章'}</span></button>` : ''}
             ${post.canFeature ? `<button class="discussion-detail-feature ${post.isFeatured ? 'is-active' : ''}" type="button" data-action="toggle-feature" data-post-id="${escapeHtml(post.id)}" data-featured="${post.isFeatured ? '1' : '0'}"><img class="discussion-action-icon" src="/assets/icons/star.svg" alt="" aria-hidden="true" /><span>${post.isFeatured ? '取消精华' : '加精华'}</span></button>` : ''}
             ${post.canDelete ? `<button class="discussion-detail-delete" type="button" data-action="delete-post" data-post-id="${escapeHtml(post.id)}"><img class="discussion-action-icon" src="/assets/icons/trash.svg" alt="" aria-hidden="true" /><span>删除帖子</span></button>` : ''}
-          </div>
+          </div></details>
         `
             : ''
         }
@@ -5895,6 +6154,7 @@ function renderDiscussionDetail(post) {
       <h2 id="discussion-detail-title" tabindex="-1">${escapeHtml(post.title)}</h2>
       ${post.isHidden ? '<p class="discussion-privacy-note" role="status">已隐藏 · 仅自己可见。恢复公开后可继续评论与回应。</p>' : ''}
       <div class="discussion-detail-meta">
+        <span class="post-author-avatar">${renderAuthorProfileLink(post.author, 'discussion-author-link', true)}</span>
         <span class="discussion-detail-board">#${escapeHtml(post.board.name)}</span>
         ${renderAuthorProfileLink(post.author, 'discussion-author-link')}
         ${post.isAnonymous && userState.isAdmin ? '<button class="discussion-comment-action" type="button" data-action="inspect-anonymous-author">查询发帖人（管理）</button><span id="discussion-anonymous-author-result" role="status"></span>' : ''}
@@ -5944,6 +6204,7 @@ function renderDiscussionDetail(post) {
   const markdownBody = document.getElementById('discussion-markdown-body');
   enhanceMarkdownContent(markdownBody);
   initializeDiscussionCommentComposer(document.getElementById('discussion-comment-form'));
+  window.FreeBbsPostReader?.mount(discussionDetail, post);
   loadDiscussionComments(post.id);
 }
 
@@ -6118,22 +6379,6 @@ async function loadDiscussionBoards() {
   renderDiscussionComposerState();
 }
 
-async function loadDiscussionStats() {
-  if (!discussionStatsPosts && !discussionStatsLikes) {
-    return;
-  }
-
-  try {
-    const payload = await callApi('/discussion/stats', {
-      method: 'GET',
-      signal: createDiscussionRequestSignal(),
-    });
-    renderDiscussionStats(payload);
-  } catch {
-    renderDiscussionStats(null);
-  }
-}
-
 async function loadDiscussionComments(postId) {
   if (discussionState.sessionStale) return;
   const version = discussionState.sessionVersion;
@@ -6237,8 +6482,14 @@ async function toggleDiscussionReaction(postId, reactionType = 'smile') {
   if (discussionState.activePost?.id === postId) {
     renderDiscussionDetail(discussionState.activePost);
   }
+}
 
-  loadDiscussionStats();
+function showDiscussionLoginDialog(postId) {
+  const dialog = document.getElementById('discussion-login-dialog');
+  if (!dialog) return;
+  const next = `/discussion?${new URLSearchParams({ post: postId })}`;
+  dialog.querySelector('a').href = `/login?${new URLSearchParams({ next })}`;
+  if (!dialog.open) dialog.showModal();
 }
 
 async function loadDiscussionDetail(postId) {
@@ -6255,6 +6506,8 @@ async function loadDiscussionDetail(postId) {
       top: window.scrollY,
     };
   }
+  if (String(discussionState.activePostId || '') !== String(postId))
+    discussionState.expandedReplyThreads?.clear();
   discussionState.activePostId = String(postId);
   discussionState.activePost = null;
   discussionState.comments = [];
@@ -6288,12 +6541,20 @@ async function loadDiscussionDetail(postId) {
     renderDiscussionDetail(payload.post);
     discussionDetail.scrollIntoView({ behavior: 'smooth', block: 'start' });
     updateDiscussionQuery({ board: discussionState.activeBoard, postId: payload.post.id });
-  } catch {
+  } catch (error) {
     if (requestId !== discussionState.postRequestId || version !== discussionState.sessionVersion)
       return;
     discussionState.postCache.delete(postId);
     discussionState.activePost = null;
     discussionState.comments = [];
+    if (error.status === 401 && error.code === 'post_login_required') {
+      discussionState.activePostId = postId;
+      updateDiscussionQuery({ board: discussionState.activeBoard, postId });
+      discussionDetail.innerHTML =
+        '<button class="discussion-detail-back" type="button" data-action="close-detail">返回帖子列表</button><p role="status">这篇帖子仅登录后可见。</p><button type="button" data-action="login-to-read">登录后阅读</button>';
+      showDiscussionLoginDialog(postId);
+      return;
+    }
     discussionDetail.innerHTML =
       '<button class="discussion-detail-back" type="button" data-action="close-detail">返回帖子列表</button><p role="status">帖子不存在、暂不可见或加载失败，请返回列表刷新后重试。</p>';
   }
@@ -6400,7 +6661,6 @@ async function loadDiscussionPosts({ autoOpen = false, more = false } = {}) {
   renderDiscussionComposeBoards();
   renderDiscussionPosts();
   discussionPostList.setAttribute('aria-busy', 'false');
-  loadDiscussionStats();
 
   if (!autoOpen) {
     updateDiscussionQuery({
@@ -6428,21 +6688,26 @@ async function loadDiscussionPosts({ autoOpen = false, more = false } = {}) {
 }
 
 async function initializeDiscussionPage() {
+  if (isCurrentPath('/publish')) {
+    await sessionReady;
+    discussionState.activeBoard = new URLSearchParams(location.search).get('board') || 'daily';
+    await loadDiscussionBoards();
+    return { boards: discussionState.boards, isFallback: discussionState.isFallback };
+  }
   if (!isDiscussionPage()) return;
+  if (new URLSearchParams(location.search).get('compose') === 'circuit') {
+    location.replace('/publish' + location.search);
+    return;
+  }
   await sessionReady;
   const version = discussionState.sessionVersion;
   try {
-    await sessionReady;
-    await loadDiscussionBoards();
-    if (version !== discussionState.sessionVersion) return;
     const query = getDiscussionQueryState();
     discussionState.scope = query.scope;
-    discussionState.activeBoard =
-      query.board === 'all' || discussionState.boards.some((board) => board.slug === query.board)
-        ? query.board
-        : 'all';
+    discussionState.activeBoard = query.board || 'all';
     discussionState.activePostId = '';
-    await loadDiscussionPosts({ autoOpen: false });
+    // Both endpoints validate access independently; the feed need not wait for board metadata.
+    await Promise.all([loadDiscussionBoards(), loadDiscussionPosts({ autoOpen: false })]);
     if (version !== discussionState.sessionVersion) return;
     if (query.postId) await loadDiscussionDetail(query.postId);
   } catch {
@@ -6471,6 +6736,7 @@ function resetDiscussionData() {
   discussionState.postCache.clear();
   discussionCommentDrafts.clear();
   discussionOpenReplyByPost.clear();
+  discussionState.expandedReplyThreads?.clear();
   renderDiscussionDetail(null);
   renderDiscussionPosts();
 }
@@ -8215,7 +8481,6 @@ async function handleDiscussionCommentAction(button) {
       if (countNode) countNode.textContent = count;
       await loadDiscussionComments(postId);
       renderDiscussionPosts();
-      loadDiscussionStats();
     } else {
       discussionState.comments = discussionState.comments.map((comment) =>
         comment.id === commentId
@@ -8239,9 +8504,58 @@ async function handleDiscussionCommentAction(button) {
 }
 
 async function handleDiscussionDetailClick(event) {
+  const loginButton = event.target.closest('[data-action="login-to-read"]');
+  if (loginButton) {
+    showDiscussionLoginDialog(discussionState.activePostId);
+    return;
+  }
+  const loginRequiredInput = event.target.closest('[data-action="toggle-login-required"]');
+  if (loginRequiredInput) {
+    const version = discussionState.sessionVersion;
+    const postId = loginRequiredInput.dataset.postId;
+    const loginRequired = loginRequiredInput.checked;
+    loginRequiredInput.disabled = true;
+    try {
+      const payload = await callApi(
+        `/discussion/posts/${encodeURIComponent(postId)}/login-required`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ loginRequired }),
+        },
+      );
+      if (version !== discussionState.sessionVersion) return;
+      updateCachedDiscussionPost(postId, { loginRequired: payload.loginRequired });
+      if (discussionState.activePost?.id === postId)
+        discussionState.activePost.loginRequired = payload.loginRequired;
+    } catch (error) {
+      loginRequiredInput.checked = !loginRequired;
+      window.alert(error.message);
+    } finally {
+      loginRequiredInput.disabled = false;
+    }
+    return;
+  }
   const visibilityButton = event.target.closest('[data-action="toggle-visibility"]');
   if (visibilityButton) {
     await toggleDiscussionVisibility(visibilityButton);
+    return;
+  }
+  const threadToggle = event.target.closest('[data-action="toggle-comment-thread"]');
+  if (threadToggle) {
+    const rootCommentId = Number(threadToggle.dataset.threadRoot || 0);
+    const thread = discussionDetail.querySelector(`[data-comment-thread-root="${rootCommentId}"]`);
+    if (!thread || !rootCommentId) return;
+    const expanded = threadToggle.getAttribute('aria-expanded') !== 'true';
+    const threadKey = getDiscussionReplyThreadKey(rootCommentId);
+    if (expanded) discussionState.expandedReplyThreads.add(threadKey);
+    else discussionState.expandedReplyThreads.delete(threadKey);
+    thread.querySelectorAll('.discussion-comment-reply').forEach((reply, index) => {
+      reply.hidden = !expanded && index > 0;
+    });
+    threadToggle.setAttribute('aria-expanded', String(expanded));
+    const label = threadToggle.querySelector('span');
+    const count = thread.querySelectorAll('.discussion-comment-reply').length;
+    if (label) label.textContent = expanded ? '收起回复' : `展开全部 ${count} 条回复`;
     return;
   }
   const commentAction = event.target.closest(
@@ -8456,8 +8770,10 @@ async function handleDiscussionCommentSubmit(event) {
         : post,
     );
     clearDiscussionCommentComposer(form);
+    form.dispatchEvent(new CustomEvent('discussion:comment-published', { bubbles: true }));
     if (parentCommentId) {
       discussionOpenReplyByPost.delete(postId);
+      expandDiscussionReplyThreadForComment(parentCommentId);
     }
     if (message) {
       message.textContent = payload.message || (parentCommentId ? '回复已发布' : '评论已发布');
@@ -8484,6 +8800,10 @@ async function handleDiscussionCommentSubmit(event) {
 }
 
 async function handleDiscussionCreateToggle() {
+  if (!isCurrentPath('/publish')) {
+    location.href = '/publish?board=' + encodeURIComponent(discussionState.activeBoard);
+    return;
+  }
   if (!discussionComposeForm) {
     return;
   }
@@ -8531,7 +8851,9 @@ async function handleDiscussionComposeSubmit(event) {
 
   setDiscussionMessage('正在发布帖子...');
   const submittedUid = userState.uid;
-  const submitButton = discussionComposeForm.querySelector('button[type="submit"]');
+  const submitButton =
+    discussionComposeForm.querySelector('button[type="submit"]') ||
+    document.querySelector('button[form="discussion-compose-form"]');
   discussionComposeForm.dataset.submitting = 'true';
   discussionComposeForm.setAttribute('aria-busy', 'true');
   if (submitButton) submitButton.disabled = true;
@@ -8541,6 +8863,7 @@ async function handleDiscussionComposeSubmit(event) {
       method: 'POST',
       body: JSON.stringify({
         boardSlug: discussionComposeBoard.value,
+        loginRequired: document.getElementById('discussion-login-required')?.checked !== false,
         isAnonymous:
           discussionComposeBoard.value === 'daily' &&
           Boolean(document.getElementById('discussion-anonymous')?.checked),
@@ -8555,6 +8878,14 @@ async function handleDiscussionComposeSubmit(event) {
       new CustomEvent('discussion:published', { detail: { post: payload.post } }),
     );
     discussionComposeForm.reset();
+    if (isCurrentPath('/publish')) {
+      location.href =
+        '/discussion?post=' +
+        encodeURIComponent(payload.post.id) +
+        '&board=' +
+        encodeURIComponent(payload.post.board.slug);
+      return;
+    }
     syncDiscussionAnonymousOption();
     discussionComposeForm.classList.add('hidden');
     discussionState.activeBoard = payload.post.board.slug;
@@ -9484,9 +9815,103 @@ function streamCircuitChatResponse(payload, { signal, onProgress } = {}) {
   });
 }
 
+async function startAiBackgroundTask(kind, scopeId, payload) {
+  return (
+    await callApi('/ai/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ kind, scopeId: scopeId || '', payload }),
+    })
+  ).task;
+}
+
+async function getAiBackgroundTask(id, { watching = true } = {}) {
+  return (
+    await callApi(`/ai/tasks/${encodeURIComponent(id)}?watching=${watching ? '1' : '0'}`, {
+      method: 'GET',
+    })
+  ).task;
+}
+
+async function getLatestAiBackgroundTask(kind, scopeId = '') {
+  const query = new URLSearchParams({ kind, scopeId });
+  return (await callApi(`/ai/tasks/latest?${query}`, { method: 'GET' })).task;
+}
+
+async function setAiBackgroundTaskPresence(id, watching) {
+  if (!id || !userState.token) return;
+  await callApi(`/ai/tasks/${encodeURIComponent(id)}/presence`, {
+    method: 'POST',
+    body: JSON.stringify({ watching }),
+  });
+}
+
+function leaveAiBackgroundTask(id) {
+  if (!id || !userState.token) return;
+  fetch(`${API_BASE_URL}/ai/tasks/${encodeURIComponent(id)}/presence`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${userState.token}`,
+    },
+    body: JSON.stringify({ watching: false }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
+async function acknowledgeAiBackgroundTask(id) {
+  if (!id) return;
+  await callApi(`/ai/tasks/${encodeURIComponent(id)}/acknowledge`, {
+    method: 'POST',
+    body: '{}',
+  });
+}
+
+async function resumeAiBackgroundTask(id, payload) {
+  return (
+    await callApi(`/ai/tasks/${encodeURIComponent(id)}/resume`, {
+      method: 'POST',
+      body: JSON.stringify({ payload }),
+    })
+  ).task;
+}
+
+async function cancelAiBackgroundTask(id) {
+  if (!id) return;
+  await callApi(`/ai/tasks/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+    body: '{}',
+  });
+}
+
 window.freeBbsApp = {
   callApi,
   refreshEconomy: loadInventoryPage,
+  syncWallet: (() => {
+    let blocked = false;
+    window.addEventListener('storage', (event) => {
+      if (event.key === STORAGE_KEY || event.key === null) blocked = true;
+    });
+    window.addEventListener('freebbs:session-change', () => {
+      blocked = false;
+    });
+    return (user, token) => {
+      // Use the fresh response user, never a replayed transaction's old balance snapshot.
+      // A cross-tab credential change invalidates even an unchanged in-memory token.
+      if (
+        blocked ||
+        !userState.isLoggedIn ||
+        token !== userState.token ||
+        user?.uid !== userState.uid
+      )
+        return false;
+      for (const field of ['electrons', 'manetrons', 'heat']) {
+        const value = Number(user[field]);
+        if (Number.isFinite(value) && value >= 0) userState[field] = value;
+      }
+      renderUser();
+      return true;
+    };
+  })(),
   toggleThemeMode,
   openFortuneModal,
   clearSession,
@@ -9509,6 +9934,14 @@ window.freeBbsApp = {
   streamAiChatResponse,
   streamKnowledgeRagResponse,
   streamCircuitChatResponse,
+  startAiBackgroundTask,
+  getAiBackgroundTask,
+  getLatestAiBackgroundTask,
+  setAiBackgroundTaskPresence,
+  leaveAiBackgroundTask,
+  acknowledgeAiBackgroundTask,
+  resumeAiBackgroundTask,
+  cancelAiBackgroundTask,
 };
 
 userName.addEventListener('click', handleAuthEntry);
@@ -9564,14 +9997,21 @@ document.getElementById('discussion-my-more')?.addEventListener('click', async (
     button.disabled = false;
   }
 });
-window.addEventListener('freebbs:session-change', () => {
+window.addEventListener('freebbs:session-change', async () => {
   if (!isDiscussionPage()) return;
+  const pendingPost = getDiscussionQueryState().postId;
+  discussionState.showDeleted = false;
+  const deletedToggle = document.getElementById('discussion-show-deleted');
+  if (deletedToggle) deletedToggle.checked = false;
   resetDiscussionData();
   discussionState.sessionStale = false;
   if (!discussionState.initialized) return;
   discussionState.scope = 'public';
-  updateDiscussionQuery({ board: discussionState.activeBoard, postId: '' });
-  loadDiscussionPosts();
+  updateDiscussionQuery({ board: discussionState.activeBoard, postId: pendingPost });
+  const version = discussionState.sessionVersion;
+  await loadDiscussionPosts();
+  if (version === discussionState.sessionVersion && pendingPost && userState.isLoggedIn)
+    await loadDiscussionDetail(pendingPost);
 });
 window.addEventListener('storage', (event) => {
   if (!isDiscussionPage() || (event.key !== STORAGE_KEY && event.key !== null)) return;
@@ -9672,6 +10112,37 @@ initializeThemeMode();
 initializeTypographyPreferences();
 initializeEconomyNavigation();
 initializeUserEconomyShortcuts();
+// One shared guide controller follows the user across existing pages.
+async function loadMaxGuide() {
+  const loadScript = (source) =>
+    new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      const timer = setTimeout(() => {
+        script.remove();
+        reject(new Error('Guide module loading timed out'));
+      }, 10000);
+      script.src = source;
+      script.onload = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      script.onerror = () => {
+        clearTimeout(timer);
+        script.remove();
+        reject(new Error('Guide module unavailable'));
+      };
+      document.head.append(script);
+    });
+  // Independent data/geometry modules download together; only the controller waits.
+  await Promise.all(
+    ['/max-guide-releases.js', '/max-guide-stations.js', '/max-guide-geometry.js'].map(loadScript),
+  );
+  await loadScript('/max-guide.js');
+}
+loadMaxGuide().catch(() => {
+  const status = document.getElementById('guide-sync-status');
+  if (status) status.textContent = '导览暂未加载，请刷新后重试；其他功能可以照常使用。';
+});
 renderAdminSection();
 loadHomeDiscussionPosts();
 loadHomeBoardActivityForViewport();
@@ -9686,25 +10157,6 @@ sessionReady.then(() => {
     link.href = getProfileHref(userState.uid);
     link.hidden = false;
   }
-});
-
-window.addEventListener('freebbs:session-change', () => {
-  if (!isDiscussionPage() || !sessionRestored) return;
-  // Never keep admin-only content or identities visible across account changes.
-  const identity = document.getElementById('discussion-anonymous-author-result');
-  if (identity) identity.textContent = '';
-  discussionState.showDeleted = false;
-  const toggle = document.getElementById('discussion-show-deleted');
-  if (toggle) toggle.checked = false;
-  discussionState.postsByBoard.clear();
-  discussionState.postCache.clear();
-  discussionState.postsHashByBoard = {};
-  discussionState.posts = [];
-  discussionState.postRequestId += 1;
-  discussionState.activePostId = '';
-  renderDiscussionDetail(null);
-  renderDiscussionPosts();
-  loadDiscussionPosts({ autoOpen: false });
 });
 
 window.addEventListener('freebbs:username-updated', (event) => {

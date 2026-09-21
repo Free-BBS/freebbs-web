@@ -44,7 +44,13 @@ function setup(overrides = {}) {
   const context = vm.createContext({
     console,
     Map,
-    window: { crypto },
+    window: { crypto, dispatchEvent() {} },
+    CustomEvent: class {
+      constructor(type, options) {
+        this.type = type;
+        this.detail = options?.detail;
+      }
+    },
     userState: { isLoggedIn: true, token: 'mock', electrons: 2, manetrons: 0 },
     economyShopItems: [],
     document: { getElementById: node, activeElement: null },
@@ -96,14 +102,14 @@ test('shop groups all enabled products into four ordered sections without changi
         'hertz_resonator',
       ],
       ['differential_converter', 'fortune_bag'],
-      ['max_pet', 'fish', 'fishbone'],
+      ['max_pet', 'fish', 'fishbone', 'rubber_rod'],
     ],
   );
   assert.equal(JSON.stringify(catalog), before);
   await context.loadElectromagneticPage();
   const html = node('shop-grid').innerHTML;
   assert.equal((html.match(/data-shop-section=/g) || []).length, 4);
-  assert.equal((html.match(/class="shop-item-card"/g) || []).length, 16);
+  assert.equal((html.match(/class="shop-item-card"/g) || []).length, 17);
   assert.doesNotMatch(html, /data-item-key="plate_maxwell"/);
 });
 
@@ -154,7 +160,7 @@ test('inventory cards retain quantity and detail action with a readable descript
   assert.match(node('inventory-list').innerHTML, /inspect-inventory-item/);
 });
 
-test('ordinary bones are hidden from inventory without dropping ranch/achievement assets', async () => {
+test('earned bones use the recycling section without dropping ranch/achievement assets', async () => {
   const assets = [
     { key: 'ordinary_fishbone', quantity: 10 },
     { key: 'golden_fishbone', quantity: 3 },
@@ -163,7 +169,7 @@ test('ordinary bones are hidden from inventory without dropping ranch/achievemen
   const { context, node } = setup({ callApi: async () => ({ assets, shopItems: [] }) });
   await context.loadInventoryPage();
   assert.doesNotMatch(node('inventory-list').innerHTML, /data-asset-key="ordinary_fishbone"/);
-  assert.match(node('inventory-list').innerHTML, /data-asset-key="golden_fishbone"/);
+  assert.doesNotMatch(node('inventory-list').innerHTML, /data-asset-key="golden_fishbone"/);
   assert.match(node('inventory-list').innerHTML, /data-asset-key="fishbone"/);
   assert.equal(context.window.freeBbsInventoryAssets.length, 3);
   assert.equal(assets[0].quantity, 10);

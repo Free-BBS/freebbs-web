@@ -60,8 +60,8 @@
           : !vision
             ? images.length
               ? '请切换到视觉模型，或移除图片后发送。'
-              : '粘贴、拖入或选择图片，将自动启用视觉模型'
-            : '可拖入或粘贴图片，最多 4 张，每张 10 MB；发送后保存到对话记录。');
+              : ''
+            : '');
       previews.replaceChildren();
       for (const [index, item] of images.entries()) {
         const card = document.createElement('div');

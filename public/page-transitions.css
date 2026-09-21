@@ -1,0 +1,51 @@
+@view-transition {
+  navigation: auto;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 120ms;
+  animation-timing-function: ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  @view-transition {
+    navigation: none;
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+@keyframes menu-appear {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mobile-tools-menu:not([hidden]),
+  .discussion-filter-menu[open] .discussion-filter-popover {
+    animation: menu-appear 160ms cubic-bezier(0.2, 0.65, 0.3, 1);
+    transform-origin: bottom right;
+  }
+  .mobile-nav .mobile-primary,
+  .discussion-board-chip,
+  .discussion-filter-chip,
+  .discussion-reaction-button,
+  .settings-logout-button {
+    transition:
+      color 140ms ease,
+      background-color 140ms ease,
+      transform 140ms ease;
+  }
+  .mobile-nav .mobile-primary:active,
+  .discussion-board-chip:active,
+  .discussion-filter-chip:active,
+  .discussion-reaction-button:active,
+  .settings-logout-button:active {
+    transform: scale(0.96);
+  }
+}

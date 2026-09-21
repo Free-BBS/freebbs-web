@@ -369,16 +369,15 @@ const { createEconomyPreview } = require('./preview-economy');
         .screenshot({ path: path.join(process.env.ECONOMY_SCREENSHOT_DIR, 'max-walking.png') });
     await page.locator('[data-ranch-greet]').click();
     await page.waitForTimeout(1750);
-    for (const i of [0, 2])
+    for (const i of [0, 1, 2, 3])
       assert.equal(
         Number(await page.locator(`[data-leg="${i}"]`).getAttribute('data-foot-y')),
         164,
       );
-    assert.ok(Number(await page.locator('[data-leg="3"]').getAttribute('data-foot-y')) < 70);
     if (process.env.ECONOMY_SCREENSHOT_DIR)
       await page
         .locator('.ranch-scene')
-        .screenshot({ path: path.join(process.env.ECONOMY_SCREENSHOT_DIR, 'max-standing.png') });
+        .screenshot({ path: path.join(process.env.ECONOMY_SCREENSHOT_DIR, 'max-greeting.png') });
     await page.locator('[data-ranch-pause]').click();
     const frozen = await page.locator('[data-max-actor]').innerHTML();
     await page.waitForTimeout(200);

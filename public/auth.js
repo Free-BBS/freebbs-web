@@ -225,7 +225,9 @@ async function handleAuthSubmit(event) {
     if (payload.user?.requiresUsernameChange) {
       await window.freeBbsAccount.requireValidUsername(payload.user);
     }
-    window.location.href = activityReturnPath() || '/';
+    window.location.href =
+      activityReturnPath() ||
+      (window.matchMedia?.('(max-width: 900px)').matches ? '/discussion' : '/');
   } catch (error) {
     setMessage(error.message);
   } finally {
@@ -293,7 +295,12 @@ function activityReturnPath() {
     const value = new URLSearchParams(window.location.search).get('next');
     if (!value) return '';
     const next = new URL(value, window.location.origin);
-    return next.origin === window.location.origin && next.pathname === '/surveys'
+    const allowed =
+      next.pathname === '/publish' ||
+      next.pathname === '/surveys' ||
+      (next.pathname === '/discussion' &&
+        /^[a-zA-Z0-9_-]{1,80}$/.test(next.searchParams.get('post') || ''));
+    return next.origin === window.location.origin && allowed
       ? `${next.pathname}${next.search}${next.hash}`
       : '';
   } catch {

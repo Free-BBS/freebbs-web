@@ -142,6 +142,7 @@ function connectSubmission(fixture, callApi) {
     },
   });
   const context = vm.createContext({
+    document: { getElementById: () => null },
     discussionComposeForm: fixture.form,
     discussionComposeBoard: fixture.board,
     discussionComposeTitle: fixture.title,
@@ -436,6 +437,7 @@ test('manual publish sends the edited fields once, then clears the persisted han
         title: fixture.title.value,
         contentMarkdown: fixture.content.value,
         boardSlug: 'math',
+        loginRequired: true,
         isAnonymous: false,
       },
     },

@@ -1,0 +1,49 @@
+/* Settings has one content column; public-profile layout is intentionally separate. */
+body.settings-page .settings-shell {
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+body.settings-page .settings-profile,
+body.settings-page .settings-form {
+  width: 100%;
+  min-width: 0;
+}
+body.settings-page .settings-form .profile-extras-top {
+  grid-template-columns: minmax(0, 1fr);
+}
+body.settings-page .settings-header {
+  flex-wrap: wrap;
+}
+body.settings-page .settings-profile-link {
+  --bbs-shell-text: var(--ui-accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-left: auto;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--ui-line);
+  border-radius: 12px;
+  background: var(--ui-surface);
+  color: var(--ui-accent) !important;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  font-weight: 600;
+  text-decoration: none;
+}
+body.settings-page .settings-profile-link span {
+  color: inherit !important;
+}
+body.settings-page .settings-profile-link:hover {
+  background: var(--ui-surface-soft);
+  border-color: var(--ui-accent);
+}
+body.settings-page .settings-profile-link:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 3px;
+}
+body.settings-page .settings-profile-link[hidden] {
+  display: none !important;
+}

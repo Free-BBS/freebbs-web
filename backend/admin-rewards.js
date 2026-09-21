@@ -187,7 +187,24 @@ function createAdminRewardsService({ pool, notifications }) {
   return { grant };
 }
 
-function createAdminRewardsRouter({ pool, requireAdmin, requireAuth, notifications }) {
+function postAuthorReward(post, body = {}) {
+  if (!body || typeof body !== 'object') throw fail('奖励参数无效');
+  if (!post || post.is_deleted) throw fail('帖子不存在或已删除', 404);
+  if (typeof body.reason !== 'string' || !body.reason.trim() || body.reason.trim().length > 800)
+    throw fail('请填写 1–800 字的奖励原因');
+  return {
+    requestId: body.requestId,
+    userIds: [post.user_id],
+    electric: body.electric,
+    magnetic: body.magnetic,
+    title: ('帖子奖励 · ' + post.title).slice(0, 80),
+    reason:
+      body.reason.trim() +
+      '\n关联帖子：/discussion?post=' +
+      encodeURIComponent(post.pid || post.id),
+  };
+}
+function createAdminRewardsRouter({ pool, requireAdmin, requireAuth, notifications, getPost }) {
   const router = express.Router();
   const service = createAdminRewardsService({ pool, notifications });
   const route = (admin, handler) => async (request, response) => {
@@ -211,6 +228,14 @@ function createAdminRewardsRouter({ pool, requireAdmin, requireAuth, notificatio
       throw fail('分页位置无效');
     return Number(value);
   };
+  router.post(
+    '/admin/discussion/posts/:id/reward',
+    route(true, async (request, response, user) => {
+      const post = await getPost(request.params.id);
+      const result = await service.grant(user, postAuthorReward(post, request.body));
+      response.status(result.replayed ? 200 : 201).json(result);
+    }),
+  );
   router.post(
     '/admin/rewards',
     route(true, async (request, response, user) => {
@@ -266,6 +291,7 @@ function createAdminRewardsRouter({ pool, requireAdmin, requireAuth, notificatio
   return router;
 }
 module.exports = {
+  postAuthorReward,
   validateReward,
   ensureAdminRewardTables,
   createAdminRewardsService,

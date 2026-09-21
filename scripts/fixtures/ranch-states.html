@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Max 的三种小模样 · 仅本地视觉预览</title>
+    <link rel="stylesheet" href="/profile-extras.css" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 24px 32px;
+        background: #f6f2e9;
+        color: #524631;
+        font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+      }
+      body.theme-dark {
+        background: #22292d;
+        color: #efe5d3;
+      }
+      main {
+        max-width: 1260px;
+        margin: auto;
+      }
+      .preview-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 20px;
+        margin-bottom: 20px;
+      }
+      .preview-kicker {
+        display: block;
+        color: #92734c;
+        font: 600 11px/1.5 system-ui;
+        letter-spacing: 0.16em;
+      }
+      h1 {
+        margin: 5px 0 8px;
+        font-size: 29px;
+        font-weight: 650;
+        letter-spacing: 0.02em;
+      }
+      .preview-heading p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.7;
+        opacity: 0.76;
+      }
+      button {
+        padding: 9px 13px;
+        border: 1px solid #cfc0a4;
+        border-radius: 11px;
+        color: #695238;
+        background: #fffaf0;
+        font-family: inherit;
+        font-size: 13px;
+        line-height: 1.5;
+        cursor: pointer;
+      }
+      button:focus-visible {
+        outline: 3px solid #578a84;
+        outline-offset: 3px;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      .state-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+      }
+      .state-card {
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid #ddd2bd;
+        border-radius: 24px;
+        background: #fffcf6;
+        box-shadow: 0 7px 24px #57482e07;
+      }
+      .state-title {
+        padding: 19px 20px 0;
+      }
+      .state-title small {
+        color: #9c805b;
+        font: 600 11px/1.5 system-ui;
+        letter-spacing: 0.1em;
+      }
+      .state-title h2 {
+        margin: 4px 0 6px;
+        font-size: 21px;
+        font-weight: 650;
+      }
+      .state-title p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.65;
+        opacity: 0.76;
+      }
+      .state-card .ranch-scene {
+        height: 320px;
+        margin-top: 16px;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      .state-card .ranch-pet-track {
+        height: 320px;
+        inset-inline: 0;
+        bottom: 26px;
+        justify-content: center;
+      }
+      .state-card [data-max-actor] {
+        width: min(320px, 100%);
+      }
+      .state-card .ranch-ground {
+        height: 56px;
+      }
+      .state-card .ranch-sun {
+        width: 31px;
+        height: 31px;
+        top: 31px;
+        left: 17%;
+      }
+      .state-caption {
+        display: flex;
+        min-height: 73px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 13px 18px;
+      }
+      .state-caption p {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.7;
+        opacity: 0.8;
+      }
+      .state-caption button {
+        white-space: nowrap;
+        flex: 0 0 auto;
+      }
+      .preview-note {
+        margin: 17px 2px 0;
+        font-size: 12px;
+        line-height: 1.8;
+        opacity: 0.72;
+      }
+      body.theme-dark .state-card {
+        background: #303638;
+        border-color: #5a5c51;
+      }
+      body.theme-dark :is(.preview-kicker, .state-title small) {
+        color: #d7bc91;
+      }
+      body.theme-dark button {
+        background: #42463e;
+        border-color: #787560;
+        color: #f0dfbe;
+      }
+      @media (max-width: 900px) {
+        body {
+          padding: 22px 16px;
+        }
+        .state-grid {
+          grid-template-columns: 1fr;
+          max-width: 440px;
+          margin: auto;
+        }
+        .preview-heading {
+          align-items: flex-start;
+        }
+        h1 {
+          font-size: 24px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="preview-heading">
+        <div>
+          <span class="preview-kicker">MAX · LITTLE MOMENTS</span>
+          <h1>Max 的三种小模样</h1>
+          <p>当前真实牧场组件 · 仅本地视觉预览，不是账号里的实际状态</p>
+        </div>
+        <button type="button" id="theme-toggle" aria-pressed="false">看看夜色</button>
+      </header>
+      <section class="state-grid" aria-label="Max 外观状态对照">
+        <article class="state-card" data-state="normal">
+          <div class="state-title">
+            <small>01 / SOFT &amp; COZY</small>
+            <h2>日常 · 短软绒</h2>
+            <p>吃饱了的小羊，脸圆圆，身上软绒绒。</p>
+          </div>
+          <div class="ranch-scene" aria-label="吃饱的 Max，短软绒状态">
+            <div class="ranch-pet-track"><div data-max-actor></div></div>
+            <div class="ranch-ground"></div>
+          </div>
+          <div class="state-caption">
+            <p>日常／今天刚剪过毛<br />剪毛后也不是光秃秃的。</p>
+            <button type="button" data-greet>看实际招呼</button>
+          </div>
+        </article>
+        <article class="state-card" data-state="fluffy">
+          <div class="state-title">
+            <small>02 / EXTRA FLUFFY</small>
+            <h2>蓬松 · 羊毛长好了</h2>
+            <p>多了一整圈奶油卷毛，像一团小云朵。</p>
+          </div>
+          <div class="ranch-scene" aria-label="吃饱的 Max，未剪的蓬松长毛状态">
+            <div class="ranch-pet-track"><div data-max-actor></div></div>
+            <div class="ranch-ground"></div>
+          </div>
+          <div class="state-caption">
+            <p>有待剪羊毛，今天还没剪<br />身形会明显更蓬松。</p>
+            <button type="button" data-greet>看实际招呼</button>
+          </div>
+        </article>
+        <article class="state-card" data-state="hungry">
+          <div class="state-title">
+            <small>03 / A LITTLE HUNGRY</small>
+            <h2>饿了 · 委屈趴趴</h2>
+            <p>眼里挂着小泪滴，安静等你带一条鱼。</p>
+          </div>
+          <div class="ranch-scene is-hungry" aria-label="饥饿的 Max 趴在草地上，带着哭脸">
+            <div class="ranch-pet-track"><div data-max-actor></div></div>
+            <div class="ranch-ground"></div>
+          </div>
+          <div class="state-caption">
+            <p>这是当前真实的静态饥饿姿势。<br />不会死亡，也不会丢失。</p>
+          </div>
+        </article>
+      </section>
+      <p class="preview-note">
+        默认暂停漫步，便于看清表情；前两张可播放现有的四足歪头、摇尾招呼。此页不读取账号、不喂鱼、不剪毛、不发放收益，也不会改动任何账号或演示数据。系统开启“减少动态效果”时，招呼也会以静态姿势呈现。
+      </p>
+    </main>
+    <script src="/max-ranch.js"></script>
+    <script>
+      (() => {
+        const options = {
+          normal: { hungry: false, woolReady: 0, shearedToday: true },
+          fluffy: { hungry: false, woolReady: 1, shearedToday: false },
+          hungry: { hungry: true, woolReady: 0, shearedToday: false },
+        };
+        const actors = [];
+        const timers = new Set();
+        const scenery = `<span class="ranch-sun" aria-hidden="true"></span><svg class="ranch-landscape" viewBox="0 0 1000 360" preserveAspectRatio="none" aria-hidden="true"><g class="ranch-clouds" fill="currentColor"><path d="M654 44q10-11 22-7q13-19 30-4q17-2 22 11Z"/></g><path class="ranch-distant" d="M0 193Q91 120 182 158Q260 76 365 149Q477 88 585 158Q696 106 801 164Q889 106 1000 155V360H0Z"/><path class="ranch-hill ranch-hill-back" d="M0 229Q116 152 280 206Q423 245 560 192Q726 126 1000 219V360H0Z"/><path class="ranch-hill" d="M0 268Q205 208 372 245Q532 291 697 243Q871 192 1000 246V360H0Z"/><path class="ranch-meadow-light" d="M0 282Q164 248 326 270T634 285Q815 254 1000 283V360H0Z"/></svg>`;
+        for (const card of document.querySelectorAll('[data-state]')) {
+          card.querySelector('.ranch-scene').insertAdjacentHTML('afterbegin', scenery);
+          const actor = window.FreeBbsMaxRanch.mount(card.querySelector('[data-max-actor]'), {
+            ...options[card.dataset.state],
+            paused: true,
+            x: 0,
+          });
+          actors.push(actor);
+          const button = card.querySelector('[data-greet]');
+          button?.addEventListener('click', () => {
+            button.disabled = true;
+            actor.pause(false);
+            actor.greet();
+            const timer = window.setTimeout(() => {
+              actor.pause(true);
+              button.disabled = false;
+              timers.delete(timer);
+            }, 3400);
+            timers.add(timer);
+          });
+        }
+        const toggle = document.querySelector('#theme-toggle');
+        const setTheme = (dark) => {
+          document.body.classList.toggle('theme-dark', dark);
+          toggle.setAttribute('aria-pressed', String(dark));
+          toggle.textContent = dark ? '回到白天' : '看看夜色';
+        };
+        setTheme(new URLSearchParams(window.location.search).get('theme') === 'dark');
+        toggle.addEventListener('click', () =>
+          setTheme(!document.body.classList.contains('theme-dark')),
+        );
+        window.addEventListener(
+          'pagehide',
+          () => {
+            timers.forEach((timer) => window.clearTimeout(timer));
+            actors.forEach((actor) => actor.destroy());
+          },
+          { once: true },
+        );
+      })();
+    </script>
+  </body>
+</html>

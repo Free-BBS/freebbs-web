@@ -24,6 +24,7 @@
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/profile-extras.css" />
     <link rel="stylesheet" href="/discussion-surfaces.css" />
+    <link rel="stylesheet" href="/post-reader.css" />
   </head>
   <!-- Shared cosmetics keep the same theme tokens as the surrounding page. -->
   <body class="discussion-page">
@@ -160,6 +161,17 @@
           </header>
           <section class="discussion-shell" aria-label="讨论区">
             <section class="discussion-layout">
+              <nav
+                class="discussion-stats-sidebar"
+                id="discussion-stats-sidebar"
+                aria-label="讨论版块"
+              >
+                <section class="discussion-stats-section">
+                  <h2>版块</h2>
+                  <div class="discussion-board-list" id="discussion-board-list"></div>
+                </section>
+              </nav>
+
               <section class="discussion-feed" aria-label="帖子列表">
                 <section class="discussion-board-about" id="discussion-board-about">
                   <div class="discussion-board-about-head">
@@ -337,6 +349,10 @@
                       required
                     ></textarea>
                   </label>
+                  <label class="discussion-option">
+                    <input id="discussion-login-required" type="checkbox" checked />登录后可见
+                    <small>关闭后，未登录的访客也可阅读；作者和管理员可随时修改</small>
+                  </label>
                   <label id="discussion-anonymous-option" class="discussion-option hidden">
                     <input id="discussion-anonymous" type="checkbox" />匿名发帖
                     <small>仅日常分区 · 公开显示“匿名用户”，管理员可查真实作者</small>
@@ -386,27 +402,6 @@
               </section>
 
               <article class="discussion-detail" id="discussion-detail"></article>
-
-              <aside
-                class="discussion-stats-sidebar"
-                id="discussion-stats-sidebar"
-                aria-label="讨论统计"
-              >
-                <section class="discussion-stats-section">
-                  <h2>版块</h2>
-                  <div class="discussion-board-list" id="discussion-board-list"></div>
-                </section>
-
-                <section class="discussion-stats-section">
-                  <h2>发帖统计</h2>
-                  <strong class="discussion-stats-number" id="discussion-stats-posts">-</strong>
-                </section>
-
-                <section class="discussion-stats-section">
-                  <h2>获赞统计</h2>
-                  <strong class="discussion-stats-number" id="discussion-stats-likes">-</strong>
-                </section>
-              </aside>
             </section>
           </section>
         </section>
@@ -434,6 +429,18 @@
       </footer>
     </div>
 
+    <dialog
+      id="discussion-login-dialog"
+      class="discussion-login-dialog"
+      aria-labelledby="discussion-login-title"
+      aria-describedby="discussion-login-description"
+    >
+      <h2 id="discussion-login-title">登录后阅读</h2>
+      <p id="discussion-login-description">作者设置了登录后可见。登录后即可继续查看这篇帖子。</p>
+      <form method="dialog">
+        <button type="submit">暂不登录</button><a href="/login">去登录</a>
+      </form>
+    </dialog>
     <script src="/vendor/marked/lib/marked.umd.js"></script>
     <script src="/vendor/@highlightjs/cdn-assets/highlight.min.js"></script>
     <script src="/vendor/@highlightjs/cdn-assets/languages/matlab.min.js"></script>
@@ -444,6 +451,8 @@
     <script src="/discussion-previews.js"></script>
     <script src="/post-laser.js"></script>
     <script src="/profile-extras.js"></script>
+    <script src="/post-reward.js"></script>
+    <script src="/post-reader.js"></script>
     <script src="/app.js"></script>
     <script src="/circuit-discussion.js"></script>
     <script src="/notifications.js"></script>

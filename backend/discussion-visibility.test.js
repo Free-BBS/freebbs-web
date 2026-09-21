@@ -31,6 +31,8 @@ function harness(records = [post(1)], { replyRows, lasers = {} } = {}) {
   const queries = [];
   let viewer = null;
   let onLock = null;
+  let savedComment;
+  let liked = false;
   const app = Object.fromEntries(
     ['get', 'post', 'patch', 'delete'].map((method) => [
       method,
@@ -43,13 +45,18 @@ function harness(records = [post(1)], { replyRows, lasers = {} } = {}) {
         ? Boolean(params.at(-2))
         : !sql.includes('p.is_deleted = 0');
       if (row.is_deleted && !includeDeleted) return false;
+      if (sql.includes('p.login_required = 0') && row.login_required) return false;
       if (sql.includes('AND p.user_id = ?')) {
         if (row.user_id !== viewer?.id) return false;
       } else if (sql.includes('(p.is_hidden = 0 OR p.user_id = ?)')) {
         if (!visibility.canReadPost(row, viewer, includeDeleted)) return false;
       } else if (sql.includes('p.is_hidden = 0') && row.is_hidden) return false;
       if (sql.includes('b.slug = ?') && row.board_slug !== 'signals') return false;
-      if (sql.includes('WHERE p.id = ?') && row.id !== params.at(-3)) return false;
+      if (
+        sql.includes('WHERE p.id = ?') &&
+        row.id !== (params.length === 1 ? params[0] : params.at(-3))
+      )
+        return false;
       if (sql.includes('AND p.id < ?') && row.id >= Number(params.at(-1))) return false;
       return true;
     });
@@ -62,9 +69,54 @@ function harness(records = [post(1)], { replyRows, lasers = {} } = {}) {
         params.length + (sql.includes("LIKE '/discussion?post=%'") ? 1 : 0),
         'all SQL placeholders are bound',
       );
+      if (sql.includes('INSERT INTO discussion_posts')) {
+        const id = records.length + 1;
+        records.push(
+          post(id, {
+            pid: params[0],
+            board_id: params[1],
+            user_id: params[2],
+            title: params[4],
+            content_markdown: params[5],
+            is_anonymous: params[6],
+            login_required: params[7],
+          }),
+        );
+        return [{ insertId: id }];
+      }
+      if (sql.includes('FROM discussion_comments') && sql.includes('FOR UPDATE'))
+        return [[{ id: 30, user_id: 7 }]];
+      if (sql.includes('INSERT INTO discussion_comments')) {
+        savedComment = {
+          id: 31,
+          post_id: params[0],
+          parent_comment_id: params[1],
+          user_id: params[2],
+          content_markdown: params[4],
+        };
+        return [{ insertId: 31 }];
+      }
+      if (sql.includes('FROM discussion_comments c') && sql.includes('WHERE c.id = ?'))
+        return [[savedComment]];
+      if (sql.includes('SELECT post_id FROM discussion_post_likes'))
+        return [liked ? [{ post_id: 1 }] : []];
+      if (sql.includes('INSERT INTO discussion_post_likes')) {
+        liked = true;
+        return [{ affectedRows: 1 }];
+      }
+      if (sql.includes('DELETE FROM discussion_post_likes')) {
+        liked = false;
+        return [{ affectedRows: 1 }];
+      }
+      if (sql.includes('SELECT reaction_type, COUNT(*)'))
+        return [liked ? [{ reaction_type: 'smile', reaction_count: 1 }] : []];
       if (sql.includes('FOR UPDATE')) {
         onLock?.();
         return [[records.find((row) => row.id === params[0])].filter(Boolean)];
+      }
+      if (sql.startsWith('UPDATE discussion_posts SET login_required')) {
+        records.find((item) => item.id === params[1]).login_required = params[0];
+        return [{ affectedRows: 1 }];
       }
       if (sql.startsWith('UPDATE discussion_posts SET is_hidden')) {
         const row = records.find((item) => item.id === params[1]);
@@ -109,6 +161,7 @@ function harness(records = [post(1)], { replyRows, lasers = {} } = {}) {
     },
   };
   const context = {
+    crypto: require('node:crypto'),
     app,
     pool: connection,
     economyShop: createEconomyShop({
@@ -119,6 +172,8 @@ function harness(records = [post(1)], { replyRows, lasers = {} } = {}) {
     ...visibility,
     anonymousAuthor,
     visibleComments,
+    createUniqueDiscussionPostPid: async () => 'NEW_POST',
+    awardMagnetic: async () => {},
     ensureDiscussionTables: async () => {},
     ensureNotificationTables: async () => {},
     getOptionalAuthUser: async () => viewer,
@@ -145,6 +200,10 @@ function harness(records = [post(1)], { replyRows, lasers = {} } = {}) {
       return Boolean(user?.is_admin);
     },
     withDatabaseTransaction: async (callback) => callback(connection),
+    MAX_AGENT_USER: { username: 'max' },
+    shouldAskMax: () => false,
+    REACTION_MANETRON_REWARDS: { smile: 1 },
+    notifications: { notifyReply: async () => {}, notifyReaction: async () => {} },
     DISCUSSION_REACTION_TYPES: new Set(['smile', 'light', 'fireworks']),
     console: { error() {} },
   };
@@ -468,4 +527,151 @@ test('notification redaction includes comment likes with anchored links for hide
     assert.match(sql, /SUBSTRING_INDEX\(SUBSTRING_INDEX\(link, 'post=', -1\), '#', 1\)/);
     assert.deepEqual(params, ['PUBLIC1', '1']);
   }
+});
+
+test('login-only post detail and comments reject guests without disclosing content', async () => {
+  const h = harness([post(1, { login_required: 1 })]);
+  for (const route of ['/discussion/posts/:id', '/discussion/posts/:id/comments']) {
+    const guest = await h.request('get', route);
+    assert.equal(guest.statusCode, 401);
+    assert.equal(guest.payload.code, 'post_login_required');
+    assert.equal(JSON.stringify(guest.payload).includes('Private-capable body'), false);
+    assert.equal((await h.request('get', route, { user: peer })).statusCode, 200);
+  }
+});
+
+test('guest lists exclude login-only posts and authenticated lists include them', async () => {
+  const h = harness([post(1, { login_required: 1 }), post(2, { login_required: 0 })]);
+  assert.deepEqual(
+    Array.from((await h.request('get', '/discussion/posts')).payload.posts, (p) => p.id),
+    ['PUBLIC2'],
+  );
+  assert.equal(
+    (await h.request('get', '/discussion/posts', { user: peer })).payload.posts.length,
+    2,
+  );
+  const publicPost = await h.request('get', '/discussion/posts/:id', { id: 'PUBLIC2' });
+  assert.equal(publicPost.statusCode, 200);
+  assert.equal(publicPost.payload.post.loginRequired, false);
+});
+
+test('author and admin may change login requirement; other users cannot', async () => {
+  for (const user of [author, admin, peer, null]) {
+    const h = harness([post(1, { login_required: 1 })]);
+    const result = await h.request('patch', '/discussion/posts/:id/login-required', {
+      user,
+      body: { loginRequired: false },
+    });
+    assert.equal(result.statusCode, !user ? 401 : user === peer ? 403 : 200);
+    assert.equal(h.records[0].login_required, user === author || user === admin ? 0 : 1);
+  }
+});
+
+test('login requirement validates boolean values and does not resurrect deleted posts', async () => {
+  for (const loginRequired of [undefined, null, 0, 'false', {}]) {
+    const h = harness([post(1, { login_required: 1 })]);
+    assert.equal(
+      (
+        await h.request('patch', '/discussion/posts/:id/login-required', {
+          user: author,
+          body: { loginRequired },
+        })
+      ).statusCode,
+      400,
+    );
+    assert.equal(h.records[0].login_required, 1);
+  }
+  const h = harness([post(1, { is_deleted: 1, login_required: 1 })]);
+  assert.equal(
+    (
+      await h.request('patch', '/discussion/posts/:id/login-required', {
+        user: admin,
+        body: { loginRequired: false },
+      })
+    ).statusCode,
+    404,
+  );
+});
+
+test('login requirement does not reveal hidden/deleted posts and does not block authenticated interactions', async () => {
+  for (const extra of [{ is_hidden: 1 }, { is_deleted: 1 }]) {
+    const h = harness([post(1, { login_required: 1, ...extra })]);
+    assert.equal((await h.request('get', '/discussion/posts/:id')).statusCode, 404);
+  }
+  const h = harness([post(1, { login_required: 1 })]);
+  await visibility.lockPublicPost(h.connection, 1);
+});
+
+test('creating posts defaults to login-only and honors explicit public choice', async () => {
+  for (const loginRequired of [undefined, true, false]) {
+    const h = harness();
+    const result = await h.request('post', '/discussion/posts', {
+      user: author,
+      body: { boardSlug: 'signals', title: 'Test post', contentMarkdown: 'body', loginRequired },
+    });
+    assert.equal(result.statusCode, 201);
+    assert.equal(result.payload.post.loginRequired, loginRequired !== false);
+    assert.equal(h.records.at(-1).login_required, loginRequired === false ? 0 : 1);
+  }
+});
+
+test('authenticated users can comment, reply and react on login-only posts; guests cannot', async () => {
+  for (const user of [author, peer, admin, null]) {
+    const h = harness([post(1, { login_required: 1 })]);
+    for (const parentCommentId of [0, 30]) {
+      const res = await h.request('post', '/discussion/posts/:id/comments', {
+        user,
+        body: { contentMarkdown: 'A new reply', parentCommentId },
+      });
+      assert.equal(res.statusCode, user ? 201 : 401, JSON.stringify(res.payload));
+      if (user) assert.equal(res.payload.comment.contentMarkdown, 'A new reply');
+    }
+    const reaction = await h.request('post', '/discussion/posts/:id/like', {
+      user,
+      body: { reactionType: 'smile' },
+    });
+    assert.equal(reaction.statusCode, user ? 200 : 401, JSON.stringify(reaction.payload));
+    if (user) assert.equal(reaction.payload.active, true);
+  }
+});
+
+test('hidden and deleted posts still reject authenticated comments and reactions', async () => {
+  for (const extra of [{ is_hidden: 1 }, { is_deleted: 1 }]) {
+    for (const user of [author, peer, admin]) {
+      const h = harness([post(1, { login_required: 1, ...extra })]);
+      for (const action of ['comments', 'like']) {
+        const res = await h.request('post', `/discussion/posts/:id/${action}`, {
+          user,
+          body: { contentMarkdown: 'Reply', reactionType: 'smile' },
+        });
+        assert.equal(res.statusCode, 404);
+      }
+    }
+  }
+});
+
+test('feed hashes reflect displayed edits and page size without a second aggregate scan', async () => {
+  const h = harness([post(1), post(2)]);
+  const first = await h.request('get', '/discussion/posts', { user: peer, query: { limit: 1 } });
+  assert.equal(first.statusCode, 200);
+  assert.equal(h.queries.filter(({ sql }) => sql.includes('FROM discussion_posts p')).length, 1);
+  assert.ok(!h.queries.some(({ sql }) => sql.includes('COUNT(DISTINCT')));
+  const same = await h.request('get', '/discussion/posts', {
+    user: peer,
+    query: { limit: 1, hash: first.payload.hash },
+  });
+  assert.equal(same.payload.notModified, true);
+  h.records[0].content_markdown = 'Updated without changing a timestamp';
+  const edited = await h.request('get', '/discussion/posts', {
+    user: peer,
+    query: { limit: 1, hash: first.payload.hash },
+  });
+  assert.equal(edited.payload.notModified, false);
+  assert.equal(edited.payload.posts[0].excerpt, 'Updated without changing a timestamp');
+  const larger = await h.request('get', '/discussion/posts', {
+    user: peer,
+    query: { limit: 2, hash: edited.payload.hash },
+  });
+  assert.equal(larger.payload.posts.length, 2);
+  assert.equal(larger.payload.notModified, false);
 });

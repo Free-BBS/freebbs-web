@@ -1,4 +1,4 @@
-/* Bounded execution loop: every decision receives the actual current editor state. */
+/* Execution loop: every decision receives the actual current editor state. */
 (function circuitAgentModule(root) {
   const protocol =
     typeof module !== 'undefined' && module.exports
@@ -98,13 +98,11 @@
     executeActions,
     requestStep,
     onEvent = () => {},
-    maxSteps = Infinity,
     timeoutMs = 300000,
   }) {
     [getSnapshot, beginRun, endRun, executeActions, requestStep].forEach((callback) => {
       if (typeof callback !== 'function') throw new Error('自主执行缺少编辑器接口。');
     });
-    const stepLimit = Number.isFinite(maxSteps) ? Math.max(1, Math.floor(maxSteps)) : Infinity;
     const timeLimit = Math.max(1, Math.min(300000, Number(timeoutMs) || 300000));
     let active = null;
 
@@ -203,7 +201,7 @@
         context.runId = opened.runId;
         snapshot = clone(opened.snapshot);
         guard();
-        for (step = 1; step <= stepLimit; step += 1) {
+        for (step = 1; ; step += 1) {
           const timedStep = step;
           timer = setTimeout(() => {
             context.controller.abort(
@@ -214,7 +212,7 @@
             );
           }, timeLimit);
           snapshot = checkCurrent();
-          emit({ type: 'step', step, maxSteps: stepLimit });
+          emit({ type: 'step', step });
           let response;
           let attemptedActions;
           try {
@@ -370,11 +368,6 @@
           } finally {
             clearTimeout(timer);
           }
-        }
-        if (step > stepLimit) {
-          step = stepLimit;
-          status = 'limit';
-          reason = `自主执行已达到 ${stepLimit} 轮上限。当前草稿与执行结果已保留。`;
         }
       } catch (error) {
         const code = signal.aborted ? signal.reason?.code : error.code;

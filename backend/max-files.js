@@ -2,7 +2,7 @@ const { Worker, isMainThread, parentPort, workerData } = require('node:worker_th
 const path = require('node:path');
 const { DOMParser } = require('@xmldom/xmldom');
 
-const MAX_BYTES = 10 * 1024 * 1024;
+const { createUploads, MAX_BYTES } = require('./max-file-uploads');
 const MAX_TEXT = 60000;
 const extensions = new Set([
   '.doc',
@@ -125,21 +125,24 @@ async function extract(name, buffer) {
   if (text.length > MAX_TEXT) throw new Error('文件文字超过 6 万字，请拆分文件后上传。');
   return text;
 }
-function parseFile(name, buffer) {
+function parseFile(name, buffer, visual = false) {
   return new Promise((resolve, reject) => {
     const worker = new Worker(__filename, {
-      workerData: { name, buffer },
-      resourceLimits: { maxOldGenerationSizeMb: 192 },
+      workerData: { name, buffer, visual },
+      resourceLimits: { maxOldGenerationSizeMb: 256 },
     });
-    const timer = setTimeout(() => {
-      worker.terminate();
-      reject(new Error('文件解析超时，请拆分后重试。'));
-    }, 15000);
+    const timer = setTimeout(
+      () => {
+        worker.terminate();
+        reject(new Error('文件解析超时，请拆分后重试。'));
+      },
+      visual ? 70000 : 15000,
+    );
     worker.once('message', (result) => {
       clearTimeout(timer);
       worker.terminate();
       if (result.error) reject(new Error(result.error));
-      else resolve(result.text);
+      else resolve(visual ? result.document : result.text);
     });
     worker.once('error', (error) => {
       clearTimeout(timer);
@@ -151,38 +154,99 @@ function parseFile(name, buffer) {
     });
   });
 }
-function registerMaxFiles(app, requireAuth) {
+function registerMaxFiles(app, requireAuth, { directory, documentStore } = {}) {
+  const documents =
+    documentStore ||
+    require('./max-documents').createDocumentStore(
+      directory || path.join(require('node:os').tmpdir(), 'freebbs-documents'),
+      parseFile,
+    );
   let active = 0;
+  const receive = createUploads();
+  app.get('/api/ai/files/:id/pages', async (request, response) => {
+    const user = await requireAuth(request, response);
+    if (!user) return;
+    if (active >= 2) return response.status(429).json({ message: '文件渲染繁忙，请稍后重试。' });
+    active += 1;
+    try {
+      response.setHeader('Cache-Control', 'private, no-store');
+      return response.json(
+        await documents.pages(
+          user.id,
+          request.params.id,
+          Number(request.query.start || 1),
+          Number(request.query.count || 4),
+        ),
+      );
+    } catch (error) {
+      return response.status(422).json({ message: error.message });
+    } finally {
+      active -= 1;
+    }
+  });
   app.post('/api/ai/files/parse', async (request, response) => {
-    if (!(await requireAuth(request, response))) return;
-    const { name, data } = request.body || {};
+    const user = await requireAuth(request, response);
+    if (!user) return;
+    const binary = Buffer.isBuffer(request.body);
+    const name = binary ? request.query.name : request.body?.name;
+    const data = binary ? null : request.body?.data;
     if (
       typeof name !== 'string' ||
       name.length > 180 ||
       !extensions.has(path.extname(name).toLowerCase()) ||
-      typeof data !== 'string' ||
-      data.length > Math.ceil(MAX_BYTES / 3) * 4 ||
-      !/^[A-Za-z0-9+/]*={0,2}$/.test(data)
+      (!binary &&
+        (typeof data !== 'string' ||
+          data.length > Math.ceil(MAX_BYTES / 3) * 4 ||
+          !/^[A-Za-z0-9+/]*={0,2}$/.test(data)))
     )
       return response
         .status(400)
-        .json({ message: '支持 Word、Excel、PPT、PDF、Markdown；单文件最多 10 MB。' });
-    const buffer = Buffer.from(data, 'base64');
+        .json({ message: '支持 Word、Excel、PPT、PDF、Markdown；单文件最多 100 MB。' });
+    let buffer = binary ? request.body : Buffer.from(data, 'base64');
+    if (binary && request.headers['x-upload-id']) {
+      try {
+        const received = await receive(user.id, request.headers, name, buffer);
+        if (received.uploading) return response.json(received);
+        buffer = received.buffer;
+      } catch (error) {
+        return response.status(400).json({ message: error.message });
+      }
+    }
     if (!buffer.length || buffer.length > MAX_BYTES)
-      return response.status(400).json({ message: '文件大小无效。' });
+      return response.status(400).json({ message: '文件大小无效；最多 100 MB。' });
     if (active >= 2) return response.status(429).json({ message: '文件解析繁忙，请稍后重试。' });
     active += 1;
     try {
-      return response.json({ name, text: await parseFile(name, buffer) });
+      const visual = ['.pdf', '.ppt', '.pptx'].includes(path.extname(name).toLowerCase());
+      const parsed = visual
+        ? await documents.create(user.id, name, buffer)
+        : await parseFile(name, buffer);
+      return response.json({ name, ...(visual ? parsed : { text: parsed }) });
     } catch (error) {
       return response.status(422).json({ message: error.message || '文件解析失败。' });
     } finally {
       active -= 1;
     }
   });
+  return documents;
 }
-if (!isMainThread)
-  extract(workerData.name, Buffer.from(workerData.buffer))
-    .then((text) => parentPort.postMessage({ text }))
+if (!isMainThread) {
+  const task = workerData.visual
+    ? workerData.visual === 'prepare'
+      ? require('./max-document-vision').prepareDocument(
+          workerData.name,
+          Buffer.from(workerData.buffer),
+        )
+      : require('./max-document-vision').renderDocument(
+          workerData.name,
+          Buffer.from(workerData.buffer),
+          typeof workerData.visual === 'object' ? workerData.visual : {},
+        )
+    : extract(workerData.name, Buffer.from(workerData.buffer));
+  task
+    .then((value) =>
+      parentPort.postMessage(workerData.visual ? { document: value } : { text: value }),
+    )
     .catch((error) => parentPort.postMessage({ error: error.message }));
+}
 module.exports = { registerMaxFiles, extract, parseFile };

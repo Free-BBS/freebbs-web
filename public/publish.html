@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>FREE-BBS - 发表</title>
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-v2-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/freebbs-apple-touch-v2.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=Noto+Serif+SC:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css" />
+    <link rel="stylesheet" href="/vendor/@highlightjs/cdn-assets/styles/github-dark.min.css" />
+    <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/discussion.css" />
+    <link rel="stylesheet" href="/shop-effects.css" />
+    <link rel="stylesheet" href="/username-guard.css" />
+    <link rel="stylesheet" href="/notifications.css" />
+    <link rel="stylesheet" href="/layout-fixes.css" />
+    <link rel="stylesheet" href="/profile-extras.css" />
+    <link rel="stylesheet" href="/discussion-surfaces.css" />
+    <link rel="stylesheet" href="/publish.css" />
+  </head>
+
+  <body class="publish-page">
+    <div hidden>
+      <button id="user-name" type="button"></button>
+      <div id="user-status"></div>
+    </div>
+    <main class="publish-editor">
+      <header class="publish-header">
+        <a href="/discussion" aria-label="返回讨论区" class="publish-back">×</a
+        ><span id="publish-draft-status" role="status">发表帖子</span
+        ><button class="publish-submit" type="submit" form="discussion-compose-form">发布</button>
+      </header>
+      <section
+        class="discussion-compose hidden"
+        id="circuit-discussion-handoff"
+        aria-label="电路发帖草稿"
+      >
+        <p
+          class="discussion-message"
+          id="circuit-discussion-status"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <div class="discussion-compose-actions">
+          <button
+            class="discussion-editor-button"
+            id="circuit-discussion-append"
+            type="button"
+            hidden
+          >
+            将电路引用追加到草稿
+          </button>
+          <a class="discussion-editor-button" id="circuit-discussion-login" href="/login" hidden
+            >登录后返回此页继续</a
+          >
+          <button class="discussion-editor-button" id="circuit-discussion-dismiss" type="button">
+            关闭提示
+          </button>
+        </div>
+      </section>
+      <form class="discussion-compose" id="discussion-compose-form">
+        <div class="discussion-compose-grid">
+          <label class="auth-field">
+            <span>版块</span>
+            <select id="discussion-compose-board" required></select>
+          </label>
+          <label class="auth-field">
+            <span class="sr-only">标题</span>
+            <input
+              placeholder="标题"
+              aria-label="标题"
+              id="discussion-compose-title"
+              type="text"
+              maxlength="120"
+              required
+            />
+          </label>
+        </div>
+        <label class="auth-field">
+          <span class="sr-only">正文</span>
+          <div class="discussion-editor-toolbar">
+            <button
+              class="discussion-editor-button"
+              aria-label="插入图片"
+              id="discussion-insert-image"
+              type="button"
+            >
+              插入图片
+            </button>
+            <input
+              class="hidden"
+              id="discussion-image-input"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              multiple
+            />
+          </div>
+          <textarea
+            id="discussion-compose-content"
+            rows="10"
+            aria-label="正文"
+            maxlength="20000"
+            placeholder="分享你的想法，或提出一个问题…"
+            required
+          ></textarea>
+        </label>
+        <details class="publish-options">
+          <summary>发布设置 · 默认登录后可见</summary>
+          <label class="discussion-option">
+            <input id="discussion-login-required" type="checkbox" checked />登录后可见
+            <small>关闭后，未登录的访客也可阅读；作者和管理员可随时修改</small>
+          </label>
+          <label id="discussion-anonymous-option" class="discussion-option hidden">
+            <input id="discussion-anonymous" type="checkbox" />匿名发帖
+            <small>仅日常分区 · 公开显示“匿名用户”，管理员可查真实作者</small>
+          </label>
+        </details>
+        <div class="discussion-compose-actions">
+          <p
+            class="discussion-message"
+            id="discussion-compose-message"
+            role="status"
+            aria-live="polite"
+          ></p>
+        </div>
+      </form>
+      <p class="publish-help">支持 Markdown 与数学公式；图片上传后可在正文中调整位置。</p>
+    </main>
+    <nav class="mobile-nav" aria-label="主导航"></nav>
+    <script src="/typography.js"></script>
+    <script src="/username-guard.js"></script>
+    <script src="/app.js"></script>
+    <script src="/publish.js"></script>
+    <script src="/circuit-discussion.js"></script>
+  </body>
+</html>
