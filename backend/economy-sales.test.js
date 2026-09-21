@@ -259,11 +259,10 @@ test('MySQL adapter guards inventory and annotates income in the balance transac
   });
   assert.match(calls[1].sql, /quantity >= \?/);
   assert.deepEqual(calls[1].params, [2, 7, 'golden_fishbone', 2]);
-  assert.match(calls[2].sql, /SELECT CAST\(id AS CHAR\) AS id FROM wallet_ledger.*FOR UPDATE/);
-  assert.match(calls[3].sql, /SET manetrons = manetrons \+ \?/);
-  assert.doesNotMatch(calls[3].sql, /heat/);
-  assert.deepEqual(calls[3].params, [20, 7, Number.MAX_SAFE_INTEGER - 20]);
-  assert.match(calls[4].sql, /UPDATE wallet_ledger/);
+  assert.match(calls[2].sql, /SET manetrons = manetrons \+ \?/);
+  assert.doesNotMatch(calls[2].sql, /heat/);
+  assert.deepEqual(calls[2].params, [20, 7, Number.MAX_SAFE_INTEGER - 20]);
+  assert.match(calls[3].sql, /UPDATE wallet_ledger/);
   assert.deepEqual(calls.slice(-2), ['commit', 'release']);
 });
 

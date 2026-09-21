@@ -101,7 +101,8 @@ echo "[ci] shop and settings tests"
 npm run test:shop-settings
 npm run test:economy-retry
 npm run test:economy-mysql
-npm run test:wallet-reasons
+node --test backend/admin-rewards.test.js backend/admin-rewards.mysql.test.js
+node --test backend/wallet-ledger.test.js
 node --check public/max-composer.js
 node --check public/wallet-ledger.js
 node --check public/max-guide-releases.js

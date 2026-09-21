@@ -162,8 +162,6 @@ function fixture({
 
     matches(selector) {
       if (selector === 'dialog[open]') return this.tagName === 'DIALOG' && this.open;
-      if (selector === 'details.personal-fold')
-        return this.tagName === 'DETAILS' && this.classList.contains('personal-fold');
       if (selector.startsWith('#')) return this.id === selector.slice(1);
       if (/^\.[\w-]+$/.test(selector)) return this.classList.contains(selector.slice(1));
       const data = selector.match(/^\[data-([\w-]+)\]$/);
@@ -176,12 +174,7 @@ function fixture({
     }
 
     getBoundingClientRect() {
-      const fold = this.closest('details.personal-fold');
-      if (
-        this.hidden ||
-        (this.tagName === 'DIALOG' && !this.open) ||
-        (fold && fold !== this && !fold.open && this.tagName !== 'SUMMARY')
-      )
+      if (this.hidden || (this.tagName === 'DIALOG' && !this.open))
         return { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
       return this.rect || { left: 40, top: 80, right: 400, bottom: 240, width: 360, height: 160 };
     }
@@ -345,49 +338,6 @@ function fixture({
   return value;
 }
 
-test('a dynamically rendered station button keeps its station when its nested title is clicked', async () => {
-  const view = fixture({ setup: (value) => value.node('#guide-station-list') });
-  await settle();
-  const button = view.doc
-    .querySelectorAll('[data-guide-station]')
-    .find((node) => node.dataset.guideStation === 'world');
-  assert.ok(button);
-  view.listeners.get('document:click')({ target: button.children[0], preventDefault() {} });
-  await settle();
-  const navigation = view.events.find((event) => event.type === 'navigate');
-  assert.equal(new URL(navigation.url, view.win.location.origin).pathname, '/world');
-  assert.equal(view.server.get(VERSION).step, indexOf('world-atlas'));
-});
-
-test('a station chosen while the login session restores waits and saves to the restored member', async () => {
-  const ready = deferred();
-  const view = fixture({
-    member: false,
-    sessionReady: ready.promise,
-    states: { [VERSION]: { seenAt: null }, [LATEST_RELEASE.id]: { seenAt: null } },
-    setup: (value) => value.node('#guide-station-list'),
-  });
-  const button = view.doc
-    .querySelectorAll('[data-guide-station]')
-    .find((node) => node.dataset.guideStation === 'world');
-  view.listeners.get('document:click')({ target: button.children[0], preventDefault() {} });
-  await settle();
-  assert.equal(
-    view.events.some((event) => event.type === 'navigate'),
-    false,
-    'do not navigate with guest progress while a member session is still restoring',
-  );
-  view.app.userState = { isLoggedIn: true, uid: 'member', token: 'member-token' };
-  view.listeners.get('freebbs:session-change')();
-  ready.resolve();
-  await settle();
-  const navigation = view.events.find((event) => event.type === 'navigate');
-  assert.equal(new URL(navigation.url, view.win.location.origin).pathname, '/world');
-  assert.equal(view.server.get(VERSION).step, indexOf('world-atlas'));
-  assert.equal(view.server.get(VERSION).status, 'in_progress');
-  assert.equal(view.memory.has(`freebbs_guide_guest_${VERSION}`), false);
-});
-
 test('native tour advances an actual course link only after its progress is acknowledged', async () => {
   const id = 'world-course-orbit';
   const index = indexOf(id);
@@ -439,310 +389,6 @@ test('native tour advances an actual course link only after its progress is ackn
     1,
     'the engine navigates the validated link, not the underlying arbitrary click handler',
   );
-});
-
-test('math spotlight preserves the entire island and restores its overlapping hub after leaving', async () => {
-  const index = indexOf('world-mathematics');
-  const step = STEPS[index];
-  const rect = { left: 400, top: 200, right: 700, bottom: 600, width: 300, height: 400 };
-  for (const leave of ['pause', 'next']) {
-    let mathClicks = 0;
-    const view = fixture({
-      href: '/world?guideTour=1',
-      states: { [VERSION]: { status: 'in_progress', step: index } },
-      setup(value) {
-        value.node(step.target, {
-          tag: 'button',
-          rect,
-          click: () => {
-            mathClicks += 1;
-          },
-        });
-        const core = value.node('#world-core');
-        core.className = 'world-core';
-        for (const prepare of step.prepare) value.node(prepare.whenMissing);
-        const next = STEPS[index + 1];
-        value.node(next.target);
-        for (const prepare of next.prepare) value.node(prepare.whenMissing);
-      },
-    });
-    await settle();
-    view.flushFrames();
-    const core = view.doc.querySelector('#world-core');
-    const island = view.doc.querySelector(step.target);
-    const spotlight = view.doc.querySelector('.max-tour-spotlight');
-    assert.equal(core.classList.contains('max-tour-focus-hidden'), true);
-    assert.deepEqual(island.getBoundingClientRect(), rect, 'orbit geometry must remain unchanged');
-    assert.equal(spotlight.style.top, '192px');
-    assert.equal(spotlight.style.height, '416px', 'the full island and label remain illuminated');
-    assert.equal(mathClicks, 0, 'framing the island cannot activate it');
-    if (leave === 'pause') await view.controller.pause();
-    else view.next.click();
-    await settle();
-    assert.equal(core.className, 'world-core', `${leave} must restore the hub`);
-    assert.equal(mathClicks, leave === 'next' ? 1 : 0);
-  }
-});
-
-test('knowledge companions explains its small toggle before opening and closing the real panel', async () => {
-  const index = indexOf('knowledge-companions');
-  const step = STEPS[index];
-  let panel;
-  let toggle;
-  const clicks = [];
-  const view = fixture({
-    href: '/knowledge?course=math&node=MA-01-1&guideTour=1',
-    states: { [VERSION]: { status: 'in_progress', step: index } },
-    setup(value) {
-      panel = value.node('#knowledge-chat-panel', {
-        rect: { left: 700, top: 100, right: 1200, bottom: 800, width: 500, height: 700 },
-      });
-      toggle = value.node('#knowledge-chat-toggle', {
-        tag: 'button',
-        rect: { left: 1300, top: 500, right: 1350, bottom: 550, width: 50, height: 50 },
-        click: () => {
-          clicks.push('toggle');
-          panel.hidden = !panel.hidden;
-          toggle.setAttribute('aria-expanded', String(!panel.hidden));
-        },
-      });
-      const close = value.node('#knowledge-chat-close', {
-        tag: 'button',
-        click: () => {
-          clicks.push('close');
-          panel.hidden = true;
-          toggle.setAttribute('aria-expanded', 'false');
-        },
-      });
-      panel.append(close);
-      value.selectors.set('#knowledge-chat-toggle[aria-expanded="false"]', () =>
-        panel.hidden ? [toggle] : [],
-      );
-    },
-  });
-  await settle();
-  view.flushFrames();
-  assert.equal(panel.hidden, true, 'the entry button is introduced with the panel collapsed');
-  assert.equal(view.doc.querySelector('.max-tour-spotlight').style.width, '66px');
-  assert.equal(view.next.textContent, '打开学习面板');
-  const writes = view.events.filter((event) => event.method === 'PATCH').length;
-  view.next.click();
-  await settle();
-  view.flushFrames();
-  assert.equal(panel.hidden, false);
-  assert.equal(view.controller.activeStep, index, 'opening stays within the published step');
-  assert.equal(view.server.get(VERSION).step, index);
-  assert.equal(view.events.filter((event) => event.method === 'PATCH').length, writes);
-  assert.equal(
-    view.events.some((event) => event.type === 'navigate'),
-    false,
-  );
-  assert.equal(view.doc.querySelector('.max-tour-spotlight').style.width, '516px');
-  assert.equal(view.next.textContent, '收起面板，继续导览');
-  assert.deepEqual(clicks, ['close', 'toggle']);
-  for (const selector of ['.is-alternate', '.max-tour-target-action']) {
-    const closeControl = view.doc.querySelector(selector);
-    assert.equal(closeControl.hidden, false);
-    closeControl.click();
-    await settle();
-    view.flushFrames();
-    assert.equal(panel.hidden, true, 'both visible close controls must close the real panel');
-    assert.equal(
-      view.controller.activeStep,
-      index,
-      'closing the panel does not force a new station',
-    );
-    assert.equal(view.doc.querySelector('.max-tour-spotlight').style.width, '66px');
-    assert.equal(view.next.textContent, '打开学习面板');
-    assert.equal(
-      view.events.some((event) => event.type === 'navigate'),
-      false,
-    );
-    view.next.click();
-    await settle();
-    view.flushFrames();
-    assert.equal(panel.hidden, false, 'the same entry remains usable after closing');
-  }
-  assert.equal(view.events.filter((event) => event.method === 'PATCH').length, writes);
-  view.next.click();
-  await settle();
-  assert.equal(panel.hidden, true);
-  assert.deepEqual(clicks, ['close', 'toggle', 'toggle', 'toggle', 'close', 'toggle', 'close']);
-  assert.equal(view.server.get(VERSION).step, index + 1);
-  const navigation = view.events.find((event) => event.type === 'navigate');
-  assert.equal(new URL(navigation.url, view.win.location.origin).pathname, '/discussion');
-  assert.equal(step.reveal.target, '#knowledge-chat-panel');
-});
-
-test('discussion composer introduces its entry without triggering unmarked navigation to publish', async () => {
-  const index = indexOf('discussion-composer');
-  const step = STEPS[index];
-  const view = fixture({
-    href: '/discussion?guideTour=1',
-    states: { [VERSION]: { status: 'in_progress', step: index } },
-    setup(value) {
-      value.node('#discussion-create-toggle', {
-        tag: 'button',
-        click: () => assert.fail('the introduction must not navigate or create a publish draft'),
-      });
-    },
-  });
-  await settle();
-  assert.equal(step.target, '#discussion-create-toggle');
-  assert.equal(step.prepare, undefined);
-  assert.equal(step.action, undefined);
-  assert.equal(view.controller.activeStep, index);
-  assert.equal(view.dialog.open, true);
-  assert.equal(view.next.textContent, '下一步 →');
-  assert.equal(
-    view.events.some((event) => event.type === 'navigate'),
-    false,
-  );
-  view.next.click();
-  await settle();
-  const navigation = view.events.find((event) => event.type === 'navigate');
-  const url = new URL(navigation.url, view.win.location.origin);
-  assert.equal(url.pathname, '/aichat');
-  assert.equal(url.searchParams.get('guideTour'), '1');
-});
-
-test('a late list scroll restoration is reframed once below the fixed header unless the tour was paused', async () => {
-  const index = indexOf('discussion-reply-max');
-  const step = STEPS[index];
-  for (const paused of [false, true]) {
-    let scrollY = 0;
-    let framingCalls = 0;
-    let composer;
-    const view = fixture({
-      href: '/discussion?guideTour=1',
-      states: { [VERSION]: { status: 'in_progress', step: index } },
-      setup(value) {
-        value.node('.main-content');
-        const { win } = value;
-        win.getComputedStyle = (node, pseudo) =>
-          pseudo === '::before'
-            ? { position: 'fixed', display: 'block', height: '72px', borderBottomWidth: '0px' }
-            : { display: 'block', visibility: 'visible' };
-        win.scrollBy = ({ top }) => {
-          scrollY += top;
-        };
-        value.node(step.target);
-        for (const prepare of step.prepare) value.node(prepare.whenMissing);
-        value.node(step.action.selector, {
-          tag: 'button',
-          click: () => {
-            win.requestAnimationFrame(() => {
-              scrollY = 575;
-            });
-          },
-        });
-        composer = value.node('#discussion-create-toggle', { tag: 'button' });
-        composer.getBoundingClientRect = () => ({
-          left: 1134,
-          right: 1228,
-          top: 597 - scrollY,
-          bottom: 641 - scrollY,
-          width: 94,
-          height: 44,
-        });
-        composer.scrollIntoView = () => {
-          framingCalls += 1;
-          scrollY = 169;
-        };
-      },
-    });
-    await settle();
-    view.flushFrames();
-    view.next.click();
-    await settle();
-    assert.equal(view.controller.activeStep, index + 1);
-    assert.equal(framingCalls, 1);
-    if (paused) await view.controller.pause();
-    view.flushFrames();
-    if (paused) {
-      assert.equal(scrollY, 575, 'a paused tour must not fight the page scroll restoration');
-      assert.equal(framingCalls, 1);
-    } else {
-      const rect = composer.getBoundingClientRect();
-      assert.ok(rect.top >= 90, 'the real entry must remain below the fixed 72px header');
-      assert.equal(framingCalls, 2, 'frame again after the page restores its list position');
-      assert.equal(view.doc.querySelector('.max-tour-spotlight').style.top, `${rect.top - 8}px`);
-      view.listeners.get('scroll')();
-      view.flushFrames();
-      assert.equal(framingCalls, 2, 'ordinary scroll updates must not repeatedly force framing');
-    }
-  }
-});
-
-test('mobile personal folds open only for the current target and preserve their original state when leaving', async () => {
-  const index = indexOf('settings-reading');
-  for (const originallyOpen of [false, true]) {
-    for (const leave of ['next', 'pause']) {
-      let readingFold;
-      let passwordFold;
-      let unrelatedFold;
-      let fontChoice;
-      const view = fixture({
-        href: '/settings?guideTour=1',
-        states: { [VERSION]: { status: 'in_progress', step: index } },
-        setup(value) {
-          readingFold = value.node('#reading-fold', { tag: 'details' });
-          readingFold.className = 'personal-fold';
-          readingFold.open = originallyOpen;
-          const reading = value.node(STEPS[index].target, {
-            tag: 'form',
-            click: () => assert.fail('a tour must not click or submit the reading form'),
-          });
-          fontChoice = value.node('#font-choice', { tag: 'select' });
-          fontChoice.value = 'existing-font';
-          reading.append(fontChoice);
-          readingFold.append(reading);
-          passwordFold = value.node('#password-fold', { tag: 'details' });
-          passwordFold.className = 'personal-fold';
-          passwordFold.append(
-            value.node(STEPS[index + 1].target, {
-              tag: 'form',
-              click: () => assert.fail('a tour must not click or submit the password form'),
-            }),
-          );
-          unrelatedFold = value.node('#unrelated-fold', { tag: 'details' });
-          unrelatedFold.className = 'personal-fold';
-        },
-      });
-      await settle();
-      view.flushFrames();
-      assert.equal(readingFold.open, true, 'a closed target fold must reveal its real content');
-      assert.equal(passwordFold.open, false, 'future targets must stay in their existing state');
-      assert.equal(unrelatedFold.open, false);
-      assert.equal(view.doc.querySelector('.max-tour-spotlight').hidden, false);
-      view.listeners.get('resize')();
-      view.flushFrames();
-      assert.equal(readingFold.open, true, 'geometry remeasurement must not undo the reveal');
-      if (leave === 'next') {
-        view.next.click();
-        await settle();
-        view.flushFrames();
-        assert.equal(view.controller.activeStep, index + 1);
-        assert.equal(passwordFold.open, true, 'only the newly selected target fold opens');
-        assert.equal(readingFold.open, originallyOpen);
-      }
-      await view.controller.pause();
-      assert.equal(
-        readingFold.open,
-        originallyOpen,
-        `${leave} must preserve the original fold state`,
-      );
-      assert.equal(passwordFold.open, false);
-      assert.equal(unrelatedFold.open, false);
-      assert.equal(fontChoice.value, 'existing-font');
-      assert.equal(
-        view.events.filter((event) => event.type === 'click' && event.node !== 'guide-primary')
-          .length,
-        0,
-        'fold preparation must not click form controls',
-      );
-    }
-  }
 });
 
 test('unsafe target hrefs neither advance saved progress nor navigate', async () => {
@@ -916,49 +562,20 @@ test('manual welcome load errors can be retried while its native dialog remains 
   assert.equal(view.controller.snapshot().version, LATEST_RELEASE.id);
 });
 
-test('a manually selected release wins over a delayed first-account automatic welcome', async () => {
-  const initialRead = deferred();
-  const view = fixture({
-    states: {
-      [VERSION]: { seenAt: null },
-      [LATEST_RELEASE.id]: { seenAt: null },
-    },
-    async beforeRequest({ method, version }) {
-      if (method === 'GET' && version === VERSION) await initialRead.promise;
-    },
-  });
-  await settle();
-  await view.controller.start(LATEST_RELEASE.id);
-  assert.equal(view.doc.getElementById('max-tour-title').textContent, LATEST_RELEASE.title);
-  initialRead.resolve();
-  await settle();
-  assert.equal(view.controller.snapshot().version, LATEST_RELEASE.id);
-  assert.equal(view.doc.getElementById('max-tour-title').textContent, LATEST_RELEASE.title);
-  view.next.click();
-  await settle();
-  const navigation = view.events.find((event) => event.type === 'navigate');
-  const destination = new URL(navigation.url, view.win.location.origin);
-  assert.equal(destination.pathname, '/development');
-  assert.equal(destination.searchParams.get('guideVersion'), LATEST_RELEASE.id);
-  assert.equal(view.server.get(VERSION).status, 'not_started');
-  assert.equal(view.server.get(VERSION).seenAt, null);
-});
-
 test('release replay uses its own step indexes and never changes the acknowledged full-tour position', async () => {
-  const release = 'guide-depth-2026-09';
-  const releaseIndex = indexOf('inventory-ledger-entry', release);
+  const releaseIndex = indexOf('inventory-ledger-entry', LATEST_RELEASE.id);
   const fullIndex = indexOf('course-relations');
-  const step = stepsFor(release)[releaseIndex];
+  const step = stepsFor(LATEST_RELEASE.id)[releaseIndex];
   let ledger;
   const view = fixture({
-    href: `/inventory?guideTour=1&guideVersion=${release}`,
+    href: `/inventory?guideTour=1&guideVersion=${LATEST_RELEASE.id}`,
     states: {
       [VERSION]: { status: 'in_progress', step: fullIndex, completedTasks: ['visit_inventory'] },
-      [release]: { status: 'in_progress', step: releaseIndex },
+      [LATEST_RELEASE.id]: { status: 'in_progress', step: releaseIndex },
     },
     setup(value) {
       ledger = value.node('#wallet-ledger', { tag: 'dialog' });
-      const next = stepsFor(release)[releaseIndex + 1];
+      const next = stepsFor(LATEST_RELEASE.id)[releaseIndex + 1];
       const contents = value.node(next.target);
       ledger.append(contents);
       value.selectors.set(next.target, () => (ledger.open ? [contents] : []));
@@ -972,14 +589,14 @@ test('release replay uses its own step indexes and never changes the acknowledge
     },
   });
   await settle();
-  assert.equal(view.controller.snapshot().version, release);
+  assert.equal(view.controller.snapshot().version, LATEST_RELEASE.id);
   view.next.click();
   await settle();
   assert.equal(view.controller.activeStep, releaseIndex + 1);
   assert.equal(ledger.open, true);
-  assert.equal(view.server.get(release).step, releaseIndex + 1);
+  assert.equal(view.server.get(LATEST_RELEASE.id).step, releaseIndex + 1);
   assert.equal(view.server.get(VERSION).step, fullIndex);
-  assert.deepEqual(view.server.get(release).completedTasks, []);
+  assert.deepEqual(view.server.get(LATEST_RELEASE.id).completedTasks, []);
   assert.equal(
     view.events.filter((event) => event.type === 'click' && event.node === 'wallet-ledger-open')
       .length,
@@ -989,18 +606,17 @@ test('release replay uses its own step indexes and never changes the acknowledge
 });
 
 test('the short release keeps its prepared ledger open while the first row loads late', async () => {
-  const release = 'guide-depth-2026-09';
-  const index = indexOf('inventory-ledger-entry', release);
-  const entry = stepsFor(release)[index];
-  const details = stepsFor(release)[index + 1];
+  const index = indexOf('inventory-ledger-entry', LATEST_RELEASE.id);
+  const entry = stepsFor(LATEST_RELEASE.id)[index];
+  const details = stepsFor(LATEST_RELEASE.id)[index + 1];
   const pendingTimers = [];
   let ledger;
   let loaded = false;
   const view = fixture({
-    href: `/inventory?guideTour=1&guideVersion=${release}`,
+    href: `/inventory?guideTour=1&guideVersion=${LATEST_RELEASE.id}`,
     states: {
       [VERSION]: { completedTasks: ['visit_inventory'] },
-      [release]: { status: 'in_progress', step: index },
+      [LATEST_RELEASE.id]: { status: 'in_progress', step: index },
     },
     setup(value) {
       Object.assign(value.win, { setTimeout: (callback) => pendingTimers.push(callback) });
@@ -1095,13 +711,8 @@ test('leaving the ledger closes its tour-opened dialog but preserves unrelated u
 
 test('an unseen release invites an existing member once, then remains manually resumable after dismissal', async () => {
   const base = { status: 'in_progress', step: indexOf('course-relations'), seenAt: stamp };
-  const previousRelease = { status: 'completed', step: 8, seenAt: stamp, completedAt: stamp };
   const first = fixture({
-    states: {
-      [VERSION]: base,
-      'guide-depth-2026-09': previousRelease,
-      [LATEST_RELEASE.id]: { seenAt: null },
-    },
+    states: { [VERSION]: base, [LATEST_RELEASE.id]: { seenAt: null } },
   });
   await settle();
   assert.equal(first.dialog.open, true);
@@ -1109,8 +720,6 @@ test('an unseen release invites an existing member once, then remains manually r
   assert.equal(first.doc.getElementById('max-tour-title').textContent, LATEST_RELEASE.title);
   assert.equal(first.server.get(LATEST_RELEASE.id).seenAt, stamp);
   assert.equal(first.server.get(VERSION).step, base.step);
-  assert.equal(first.server.get('guide-depth-2026-09').status, 'completed');
-  assert.equal(first.server.get('guide-depth-2026-09').step, previousRelease.step);
   await first.controller.pause();
   assert.equal(first.server.get(LATEST_RELEASE.id).status, 'skipped');
   const second = fixture({ states: Object.fromEntries(first.server) });
@@ -1129,59 +738,6 @@ test('an unseen release invites an existing member once, then remains manually r
     completed.events.some((event) => event.type === 'request' && event.method === 'PATCH'),
     false,
   );
-});
-
-test('the community release crosses into activities and completes without changing prior receipts or signing up', async () => {
-  const release = LATEST_RELEASE.id;
-  const previous = {
-    [VERSION]: { status: 'completed', step: 42, completedAt: stamp },
-    'guide-depth-2026-09': { status: 'completed', step: 8, completedAt: stamp },
-    [release]: { status: 'in_progress', step: 1 },
-  };
-  const development = fixture({
-    href: `/development?guideTour=1&guideVersion=${release}`,
-    states: previous,
-    setup(value) {
-      value.node(stepsFor(release)[1].target);
-    },
-  });
-  await settle();
-  development.next.click();
-  await settle();
-  const navigation = development.events.find((event) => event.type === 'navigate');
-  const destination = new URL(navigation.url, development.win.location.origin);
-  assert.equal(destination.pathname, '/surveys');
-  assert.equal(destination.searchParams.get('guideVersion'), release);
-  assert.equal(destination.searchParams.has('id'), false);
-  const activities = fixture({
-    href: navigation.url,
-    states: Object.fromEntries(development.server),
-    setup(value) {
-      stepsFor(release)
-        .filter((step) => step.station === 'activities')
-        .forEach((step) => value.node(step.target));
-      value.node('#content form button', {
-        tag: 'button',
-        click: () => assert.fail('the guide must never submit an activity registration'),
-      });
-    },
-  });
-  await settle();
-  for (let step = 2; step < stepsFor(release).length; step += 1) {
-    assert.equal(activities.controller.activeStep, step);
-    activities.next.click();
-    await settle();
-  }
-  assert.equal(activities.server.get(release).status, 'completed');
-  assert.equal(activities.server.get(VERSION).status, 'completed');
-  assert.equal(activities.server.get(VERSION).step, 42);
-  assert.equal(activities.server.get('guide-depth-2026-09').step, 8);
-  assert.equal(activities.dialog.open, false);
-  const writes = [...development.events, ...activities.events].filter(
-    (event) => event.type === 'request' && event.method !== 'GET',
-  );
-  assert.ok(writes.length > 0);
-  assert.ok(writes.every((event) => event.version === release));
 });
 
 test('a returning legacy member is invited to the new release rather than repeating the full welcome', async () => {

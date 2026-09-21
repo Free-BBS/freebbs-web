@@ -83,8 +83,6 @@
     attachments.body.append(button);
   });
   document.addEventListener('pointerdown', (event) => {
-    // The modal tour owns its controls while illustrating this open menu.
-    if (event.target.closest?.('dialog.max-tour[open]')) return;
     form.querySelectorAll('.max-composer-menu').forEach((details) => {
       if (!details.contains(event.target)) details.open = false;
     });

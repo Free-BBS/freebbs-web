@@ -1,29 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { beijingDay } = require('./economy-policy');
-const { walletLedgerCheckpoint, annotateWalletLedger } = require('./wallet-ledger');
-
-function magneticRewardDetails(sourceKey, amount, category) {
-  const [kind, subject, , reaction] = sourceKey.split(':');
-  const reactions = { smile: '令人高兴', light: '有启发性', fireworks: '恭喜' };
-  const descriptions = {
-    checkin: ['每日签到', `${subject} 完成每日签到`],
-    luck: ['签到运势奖励', `${subject} 已签到且今日运势达到 70 分`],
-    post: ['发帖奖励', `发布帖子（编号 ${subject}）`],
-    'post-like': [
-      '帖子互动奖励',
-      `帖子（编号 ${subject}）收到${reactions[reaction] ? `“${reactions[reaction]}”` : ''}互动`,
-    ],
-    'comment-like': ['评论获赞奖励', `评论（编号 ${subject}）收到点赞`],
-    'featured-post': ['精华帖子奖励', `帖子（编号 ${subject}）被设为精华`],
-    'featured-comment': ['精华评论奖励', `评论（编号 ${subject}）被设为精华`],
-  };
-  let fallback = ['磁元奖励', '获得平台磁元奖励'];
-  if (category === 'community') fallback = ['社区互动奖励', '参与社区互动'];
-  if (category === 'checkin') fallback = ['每日签到', '完成每日签到'];
-  const [title, event] = descriptions[kind] || fallback;
-  return { sourceKey: `reward:${sourceKey}`, title, reason: `${event}，获得 ${amount} 磁元` };
-}
 
 // Caller supplies an open transaction. Locking the account serializes all reward sources.
 async function awardMagnetic(
@@ -57,19 +34,11 @@ async function awardMagnetic(
     'INSERT INTO economy_rewards (user_id, source_key, reward_day, amount, category) VALUES (?, ?, ?, ?, ?)',
     [userId, sourceKey, day, amount, category],
   );
-  if (amount) {
-    const ledgerBefore = await walletLedgerCheckpoint(connection, userId);
+  if (amount)
     await connection.execute('UPDATE users SET manetrons = manetrons + ? WHERE id = ?', [
       amount,
       userId,
     ]);
-    await annotateWalletLedger(
-      connection,
-      userId,
-      ledgerBefore,
-      magneticRewardDetails(sourceKey, amount, category),
-    );
-  }
   return amount;
 }
 

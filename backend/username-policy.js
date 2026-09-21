@@ -1,6 +1,4 @@
 const express = require('express');
-const crypto = require('node:crypto');
-const { walletLedgerCheckpoint, annotateWalletLedger } = require('./wallet-ledger');
 
 const USERNAME_MESSAGE = '用户名须为 3 至 64 位英文字母、数字或下划线';
 const RENAME_COST = 10;
@@ -72,7 +70,6 @@ async function changeUsername({ pool, userId, username, expectedUsername, allowP
     if (policy.cost && policy.balance < policy.cost) {
       throw usernameError(409, 'insufficient_magnetic', '磁元不足，本次改名需要 10 磁元');
     }
-    const ledgerBefore = policy.cost ? await walletLedgerCheckpoint(connection, userId) : null;
     await connection.execute(
       'UPDATE users SET username = ?, manetrons = manetrons - ? WHERE id = ?',
       [username, policy.cost, userId],
@@ -89,13 +86,6 @@ async function changeUsername({ pool, userId, username, expectedUsername, allowP
         policy.cost,
       ],
     );
-    if (policy.cost) {
-      await annotateWalletLedger(connection, userId, ledgerBefore, {
-        sourceKey: `username-change:${crypto.randomUUID()}`,
-        title: '修改昵称',
-        reason: `将昵称从 ${user.username} 改为 ${username}，支付 ${policy.cost} 磁元`,
-      });
-    }
     const updated = { ...user, username, manetrons: policy.balance - policy.cost };
     const updatedPolicy = await getUsernameChangePolicy(connection, updated);
     await connection.commit();

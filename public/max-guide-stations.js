@@ -83,22 +83,6 @@
       route: '/guide',
       fallbackRoute: '/guide',
     },
-    {
-      id: 'development',
-      label: '发展端',
-      title: '发展端：认识正在建设的新空间',
-      description: '了解建设状态，以及活动报名今后的整合方向。',
-      route: '/development',
-      fallbackRoute: '/development',
-    },
-    {
-      id: 'activities',
-      label: '活动报名',
-      title: '活动报名：从浏览到回执',
-      description: '认识当前独立入口、报名条件与结果查询方式。',
-      route: '/surveys',
-      fallbackRoute: '/surveys',
-    },
   ];
   const stationById = new Map(STATIONS.map((station) => [station.id, station]));
   const click = (selector, label) => ({ selector, label, kind: 'click' });
@@ -134,9 +118,6 @@
     settings: '已有阅读样式与账号设置；实际可改范围以字段和权限为准，导览不改资料或密码。',
     profile: '已有装扮、藏品与牧场按账号状态展示；未拥有的物品不会自动发放或装备。',
     handbook: '未来计划不是上线承诺，具体开放情况会持续更新。',
-    development: '发展端仍在建设；活动报名当前有独立入口，发展端上线后将整合进入发展端。',
-    activities:
-      '活动报名当前通过独立入口使用，发展端上线后将整合进入发展端；导览不填写或提交报名。',
   };
   const steps = [];
   function step(station, id, target, title, body, extra = {}) {
@@ -195,13 +176,7 @@
     mathPlanet,
     '今天，就从数学岛落脚。',
     '先点一座岛，不会直接把你扔进公式海洋。我会先展示领域概览，帮你确认它讲什么、有哪些课程。',
-    {
-      prepare: worldReady,
-      // The transparent island sprite overlaps the hub's label in the orbit.
-      // Hide that background only while this complete island is spotlighted.
-      focus: { hide: '#world-core' },
-      action: click(mathPlanet, '看看数学岛'),
-    },
+    { prepare: worldReady, action: click(mathPlanet, '看看数学岛') },
   );
   step(
     'world',
@@ -307,25 +282,10 @@
   step(
     'knowledge',
     'knowledge-companions',
-    '#knowledge-chat-toggle',
-    '需要搭把手？点亮这个小按钮。',
-    '点击右侧这个「AI」小按钮，就能打开课程学习面板。需要收起时，点面板右上角的「×」，小按钮就会重新出现；需要 Max 或课程讨论时，随时可以再点它打开。',
-    {
-      prepare: [ready('#knowledge-chat-close', '#knowledge-chat-toggle[aria-expanded="false"]')],
-      action: click('#knowledge-chat-toggle', '打开学习面板'),
-      caption: '这里只演示面板的打开与收起，不发送问题或发表评论。',
-      // Two views of one existing step: no persisted progress indices change.
-      reveal: {
-        target: '#knowledge-chat-panel',
-        dismissToEntry: true,
-        title: 'Max 和课程讨论，都在这里。',
-        body: '面板里有「Max」与「课程讨论」两个标签页：可以围绕当前知识点提问，也能查看相关版块的帖子。点面板右上角的「×」可以收起面板，回到完整的正文视野；「AI」小按钮会重新出现，方便你随时再打开。',
-        action: {
-          ...click('#knowledge-chat-close', '收起面板，继续导览'),
-          alternateSelector: '#knowledge-chat-toggle',
-        },
-      },
-    },
+    '#knowledge-chat-panel',
+    '卡住时，不必一个人打转。',
+    '知识点旁边有 Max 与课程讨论两个标签页：可以围绕当前内容提问，也能查看相关版块的帖子。现在只切换看看讨论，不发送问题。',
+    { action: click('#knowledge-chat-tab-discussion', '看看课程讨论') },
   );
 
   step(
@@ -375,11 +335,12 @@
   step(
     'discussion',
     'discussion-composer',
-    '#discussion-create-toggle',
-    '想发一个问题？从这个按钮进入。',
-    '结束或暂停导览后，可以点右上角的「发帖」按钮，进入独立的编辑页面。选好版块、写标题和正文，再检查表达是否清楚；有背景、有过程的讨论更容易得到帮助。这一步先认识入口，点击「下一步」会继续参观。',
+    '#discussion-compose-form:not(.hidden)',
+    '好问题，也值得一个舒服的编辑器。',
+    '选好版块、写标题和正文，再检查表达是否清楚；有背景、有过程的讨论更容易得到帮助。这里只打开编辑器看看，不创建草稿内容，也不发布。',
     {
-      emptyTarget: '.discussion-feed-toolbar',
+      prepare: [ready('#discussion-create-toggle', '#discussion-compose-form:not(.hidden)')],
+      emptyTarget: '#discussion-create-toggle',
       emptyBody: '发帖编辑器需要登录，或当前账号暂无可发帖版块。你仍然可以阅读已开放的讨论。',
     },
   );
@@ -387,10 +348,9 @@
   step(
     'max',
     'max-conversation',
-    '#aichat-thread',
+    '.aichat-main-header',
     '轮到我正式上场啦。',
     '课程答疑、推导思路、代码和本站电路链接，都可以带来一起讨论。我的回答可能出错，关键步骤和结论记得回到课程资料核对。',
-    { guestTarget: '.aichat-auth-required' },
   );
   step(
     'max',
@@ -403,7 +363,7 @@
   step(
     'max',
     'max-options',
-    '.max-composer-tools[open] .max-composer-popover',
+    '.max-composer-tools',
     '对话选项藏在这只小抽屉。',
     '展开后可以查看当前可用模型、推理选项和相关说明。能力与可选项由站点实际配置决定，不是所有模型都支持同一种附件。',
     {
@@ -627,55 +587,6 @@
     { caption: '以后有新版导览，可以从固定入口主动打开；走过的任务仍然属于你。' },
   );
 
-  // max-v2 already shipped with 43 steps. Append only: numeric saved progress
-  // must keep identifying the same feature for returning users.
-  step(
-    'development',
-    'development-status',
-    '.development-release',
-    '课表之外，也在建设新的空间。',
-    '发展端面向电子系同学与团学组织，目前仍在开发与联调。这里展示的是建设状态与目标版本，具体开放时间和范围以实际发布为准；可以从全站导航的「发展端」随时回来查看。',
-  );
-  step(
-    'development',
-    'development-activities-plan',
-    '.development-card-student .development-card-heading',
-    '活动报名，今后会在这里相遇。',
-    '发展端规划连接通知与活动、资源开放、意见反馈、个人活动记录和组织协作。活动报名目前已通过全站导航的「活动报名」独立入口开放；发展端上线后，这项功能将整合进入发展端，目前尚未完成整合。',
-  );
-  step(
-    'activities',
-    'activities-entry',
-    '.activity-hero-links',
-    '想参与什么？先来这里看看。',
-    '这里是当前独立的活动报名入口。活动可以公开浏览，是否需要登录报名由主办方设置；今后发展端上线后，活动报名将整合进入发展端。现在可以从全站导航直接找到「活动报名」。',
-  );
-  step(
-    'activities',
-    'activities-browse',
-    '.activity-filters',
-    '先看报名状态，再安排自己的时间。',
-    '列表可以按全部、报名中、即将开放或已结束筛选。每张活动卡会说明开放与截止时间、名额和抽签方式；具体是否可以报名，以活动当前状态与要求为准。',
-    {
-      emptyTarget: '.activity-hero-links',
-      emptyBody:
-        '活动列表暂时未显示，或你正在查看某项活动。可在结束导览后用「浏览全部活动」返回列表，按报名状态查找；不必为完成导览报名。',
-    },
-  );
-  step(
-    'activities',
-    'activities-receipt',
-    '.activity-grid .card:first-child .activity-meta',
-    '看清要求，把自己的回执收好。',
-    '打开具体活动后，可以查看详情与报名要求。决定参与时，由你填写并提交；报名成功后请下载、妥善保存个人回执，用它在该活动的「查看我的抽签结果」入口查询结果。名额与抽签安排以主办方设置为准，回执不要分享给他人。',
-    {
-      emptyTarget: '.activity-hero-links',
-      emptyBody:
-        '当前没有可展示的活动卡片。活动发布后，可以查看时间、名额与报名条件；自行提交成功后，记得下载并保管个人回执，再到该活动查询抽签结果。导览不会生成报名或回执。',
-      caption: '这里只认识报名与查签流程，不填写邮箱、读取回执或提交任何表单。',
-    },
-  );
-
   function freeze(value) {
     if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
     Object.values(value).forEach(freeze);
@@ -683,11 +594,15 @@
   }
   // Independent short replay: no course/node ids or paid/write actions required.
   const RELEASE_STEP_IDS = [
-    'development-status',
-    'development-activities-plan',
-    'activities-entry',
-    'activities-browse',
-    'activities-receipt',
+    'world-atlas',
+    'world-mathematics',
+    'world-island-overview',
+    'workbench-ai-plan',
+    'inventory-recycling',
+    'inventory-ledger-entry',
+    'inventory-ledger',
+    'profile-ranch',
+    'profile-wool',
   ];
   const catalogue = freeze({ STATIONS, STEPS: steps, RELEASE_STEP_IDS });
   if (typeof module !== 'undefined' && module.exports) module.exports = catalogue;

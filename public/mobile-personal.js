@@ -23,7 +23,7 @@
     });
   }
   let overview;
-  if (settings && !document.getElementById('settings-profile-link')) {
+  if (settings) {
     overview = document.createElement('section');
     overview.className = 'personal-overview';
     overview.setAttribute('aria-label', '我的资料');

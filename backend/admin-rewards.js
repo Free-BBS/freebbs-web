@@ -3,11 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
 const { ensureNotificationTables } = require('./notifications');
-const {
-  ensureWalletLedger,
-  walletLedgerCheckpoint,
-  annotateWalletLedger,
-} = require('./wallet-ledger');
+const { ensureWalletLedger } = require('./wallet-ledger');
 
 const MAX_RECIPIENTS = 100;
 const MAX_AMOUNT = 1000000;
@@ -128,16 +124,16 @@ function createAdminRewardsService({ pool, notifications }) {
           ].every((amount) => Number.isSafeInteger(amount) && amount >= 0)
         )
           throw fail('部分账户余额超出安全范围，本批未发放，请先核对账户');
-        const checkpoint = await walletLedgerCheckpoint(connection, user.id);
         await connection.execute(
           'UPDATE users SET electrons = electrons + ?, manetrons = manetrons + ? WHERE id = ?',
           [reward.electric, reward.magnetic, user.id],
         );
-        await annotateWalletLedger(connection, user.id, checkpoint, {
-          sourceKey: `admin-reward:${batch.id}`,
-          title: reward.title,
-          reason: reward.reason,
-        });
+        // The user's FOR UPDATE lock is still held: their latest ledger row is this credit.
+        const [annotated] = await connection.execute(
+          'UPDATE wallet_ledger SET source_key = ?, title = ?, reason = ? WHERE user_id = ? ORDER BY id DESC LIMIT 1',
+          [`admin-reward:${batch.id}`, reward.title, reward.reason, user.id],
+        );
+        if (annotated.affectedRows !== 1) throw new Error('Reward ledger entry missing');
         await connection.execute(
           `INSERT INTO admin_reward_entries
            (batch_id, user_id, username, full_name, student_id, electric_before, electric_after, magnetic_before, magnetic_after)

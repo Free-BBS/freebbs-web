@@ -318,7 +318,6 @@
     let steps = stepsFor(version);
     let owner = '';
     let initEpoch = 0;
-    let manualEpoch = 0;
     let viewEpoch = 0;
     let activeIndex = null;
     let mode = 'welcome';
@@ -328,8 +327,6 @@
     let spotlight;
     let controls;
     let target;
-    let displayedStep;
-    let pendingTargetFrame = false;
     let previousFocus;
     let oldOverflow;
     let busy = false;
@@ -346,7 +343,6 @@
     let expanded = false;
     let targetMissing = false;
     let restoreTarget = null;
-    const openedTargetFolds = new Set();
     const openedDialogs = new Set();
     const path = () => win.location.pathname.replace(/\/$/, '') || '/';
     const isMember = () => Boolean(identity().token);
@@ -503,42 +499,10 @@
         visible(step.emptyTarget)
       );
     }
-    function revealTargetFold(node) {
-      const fold = node?.closest('details.personal-fold');
-      if (!fold || fold.open) return false;
-      openedTargetFolds.add(fold);
-      fold.open = true;
-      return true;
-    }
-    function prepareTargetFold(step) {
-      for (const selector of [
-        !isMember() && step.guestTarget,
-        step.target,
-        step.emptyTarget,
-      ].filter(Boolean)) {
-        if (visible(selector)) return;
-        if (revealTargetFold(doc.querySelector(selector))) return;
-      }
-    }
-    function restoreTargetFolds() {
-      for (const fold of openedTargetFolds) fold.open = false;
-      openedTargetFolds.clear();
-    }
     function frameTarget(step) {
       restoreTarget?.();
       restoreTarget = null;
       if (!target) return;
-      revealTargetFold(target);
-      const restorations = [];
-      restoreTarget = () => restorations.forEach((restore) => restore());
-      if (step.focus?.hide) {
-        for (const background of doc.querySelectorAll(step.focus.hide)) {
-          if (background === target || background.contains(target)) continue;
-          if (background.classList.contains('max-tour-focus-hidden')) continue;
-          background.classList.add('max-tour-focus-hidden');
-          restorations.push(() => background.classList.remove('max-tour-focus-hidden'));
-        }
-      }
       const main = doc.querySelector('.main-content');
       const heading = main && win.getComputedStyle(main, '::before');
       const safeTop =
@@ -561,9 +525,9 @@
           const feature = target;
           target.style.transformOrigin = 'top center';
           target.style.transform = `${original.transform || ''} scale(${scale})`;
-          restorations.push(() => {
+          restoreTarget = () => {
             Object.assign(feature.style, original);
-          });
+          };
         }
       }
       target.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
@@ -589,15 +553,8 @@
     function layout() {
       if (!dialog?.open) return;
       const viewport = { width: win.innerWidth, height: win.innerHeight };
-      const step = displayedStep;
-      if (target?.isConnected && revealTargetFold(target)) pendingTargetFrame = true;
-      if (pendingTargetFrame) {
-        pendingTargetFrame = false;
-        // View controls may restore their previous scroll in an animation frame.
-        // Reframe once after that restoration, before painting the spotlight.
-        if (target?.isConnected && step) frameTarget(step);
-      }
       const rect = target?.isConnected ? target.getBoundingClientRect() : null;
+      const step = steps[activeIndex];
       card.classList.toggle('is-centered', mode === 'welcome');
       card.classList.remove('is-compact');
       let size = card.getBoundingClientRect();
@@ -624,23 +581,19 @@
         setBox(spotlight, box.hole);
         spotlight.style.borderRadius = `${step?.focus?.radius ?? 18}px`;
       }
-      for (const [control, selector] of [
-        [controls.targetAction, step?.action?.selector],
-        [controls.alternateAction, step?.action?.alternateSelector],
-      ]) {
-        const action = visible(selector);
-        control.hidden = mode !== 'tour' || !box.hole || !action || targetMissing || busy;
-        if (control.hidden) continue;
+      const action = step?.action && visible(step.action.selector);
+      controls.targetAction.hidden =
+        mode !== 'tour' || !box.hole || !action || targetMissing || busy;
+      if (!controls.targetAction.hidden) {
         const r = action.getBoundingClientRect();
-        setBox(control, {
+        setBox(controls.targetAction, {
           x: Math.max(0, r.left),
           y: Math.max(0, r.top),
           width: Math.min(r.right, viewport.width) - Math.max(0, r.left),
           height: Math.min(r.bottom, viewport.height) - Math.max(0, r.top),
         });
-        const label = step.dismissToEntry ? '收起学习面板' : step.action.label || '进入这个功能';
-        control.setAttribute('aria-label', label);
-        control.title = label;
+        controls.targetAction.setAttribute('aria-label', step.action.label || '进入这个功能');
+        controls.targetAction.title = step.action.label || '点击进入';
       }
     }
     function scheduleLayout() {
@@ -659,7 +612,6 @@
         controls.skip,
         controls.stations,
         controls.targetAction,
-        controls.alternateAction,
       ].forEach((button) => {
         button.disabled = value;
       });
@@ -693,15 +645,12 @@
     function closeUi() {
       restoreTarget?.();
       restoreTarget = null;
-      restoreTargetFolds();
       stopDeferredPresentation();
       viewEpoch += 1;
       if (dialog?.open) dialog.close();
       observer?.disconnect();
       domObserver?.disconnect();
       target = null;
-      displayedStep = null;
-      pendingTargetFrame = false;
       activeIndex = null;
       if (oldOverflow !== undefined) {
         pageBody.style.overflow = oldOverflow;
@@ -735,10 +684,7 @@
       spotlight.setAttribute('aria-hidden', 'true');
       const targetAction = element('button', 'max-tour-target-action');
       targetAction.type = 'button';
-      targetAction.addEventListener('click', () => advance('target'));
-      const alternateAction = element('button', 'max-tour-target-action is-alternate');
-      alternateAction.type = 'button';
-      alternateAction.addEventListener('click', () => advance('alternate'));
+      targetAction.addEventListener('click', advance);
       card = element('section', 'max-tour-card');
       const mascot = element('img', 'max-tour-mascot');
       mascot.src = '/assets/max-guide-v1.webp';
@@ -784,7 +730,7 @@
       row.append(exit, back, restart, next);
       secondary.append(stationSelect, skip, expand);
       card.append(mascot, kicker, title, body, caption, row, secondary, progress, status, retry);
-      dialog.append(...curtains, spotlight, targetAction, alternateAction, card);
+      dialog.append(...curtains, spotlight, targetAction, card);
       doc.body.append(dialog);
       controls = {
         title,
@@ -803,7 +749,6 @@
         progress,
         status,
         targetAction,
-        alternateAction,
       };
       dialog.addEventListener('cancel', (event) => {
         event.preventDefault();
@@ -833,13 +778,10 @@
     }
     function welcome() {
       ensureDialog();
-      restoreTargetFolds();
       viewEpoch += 1;
       mode = 'welcome';
       activeIndex = null;
       target = null;
-      displayedStep = null;
-      pendingTargetFrame = false;
       expanded = false;
       const p = client.snapshot();
       const resumable = ['in_progress', 'skipped'].includes(p.status) && p.step > 0;
@@ -877,19 +819,16 @@
       for (const node of doc.querySelectorAll('dialog[open]'))
         if (node !== dialog && !before.has(node)) openedDialogs.add(node);
     }
-    async function waitVisible(selector, epoch, duration = 2400, prepareVisibility = null) {
+    async function waitVisible(selector, epoch, duration = 2400) {
       const start = Date.now();
       while (Date.now() - start < duration) {
         if (epoch !== viewEpoch || blockedSession) return null;
-        prepareVisibility?.();
         const node = visible(selector);
         if (node) return node;
         await new Promise((resolve) => {
           win.setTimeout(resolve, 80);
         });
       }
-      if (epoch !== viewEpoch || blockedSession) return null;
-      prepareVisibility?.();
       return visible(selector);
     }
     async function prepareStep(step, epoch) {
@@ -920,37 +859,29 @@
           node.close();
       }
     }
-    async function showStep(index, reveal = false) {
+    async function showStep(index) {
       ensureDialog();
       restoreTarget?.();
       restoreTarget = null;
-      restoreTargetFolds();
-      pendingTargetFrame = false;
       viewEpoch += 1;
       const epoch = viewEpoch;
       activeIndex = index;
       mode = 'tour';
       expanded = false;
       targetMissing = false;
-      const baseStep = steps[index];
-      const step =
-        reveal && baseStep.reveal
-          ? { ...baseStep, ...baseStep.reveal, prepare: [], reveal: null }
-          : baseStep;
+      const step = steps[index];
       if (dialog.open) dialog.close();
       closeIrrelevantDialogs(step);
       await prepareStep(step, epoch);
       if (epoch !== viewEpoch) return;
-      await waitVisible(step.target, epoch, 2400, () => prepareTargetFold(step));
+      await waitVisible(step.target, epoch);
       if (epoch !== viewEpoch) return;
-      displayedStep = step;
       target = visibleTarget(step);
       targetMissing = !target || Boolean(step.emptyTarget && target === visible(step.emptyTarget));
       observer?.disconnect();
       domObserver?.disconnect();
       if (target) {
         frameTarget(step);
-        pendingTargetFrame = true;
         observer?.observe(target);
       }
       card.classList.remove('is-welcome');
@@ -1024,7 +955,6 @@
         await showStep(index);
         return;
       }
-      restoreTargetFolds();
       const context = routeContext();
       if ((step.route === '/course' || step.route === '/knowledge') && !context[step.route]) {
         const fallback =
@@ -1065,7 +995,7 @@
         () => goTo(index),
       );
     }
-    async function advance(actionSource) {
+    async function advance() {
       if (mode === 'welcome') {
         await begin(welcomeChoice, client.snapshot().status === 'completed');
         return;
@@ -1074,31 +1004,14 @@
         await complete();
         return;
       }
-      const step = displayedStep || steps[activeIndex];
-      const actionSelector =
-        actionSource === 'alternate' ? step.action?.alternateSelector : step.action?.selector;
-      const dismissToEntry = step.dismissToEntry && ['target', 'alternate'].includes(actionSource);
-      if (step.reveal || dismissToEntry) {
-        // Opening a feature is still this step, so progress is saved only when
-        // the user finishes its revealed view and moves on to the next step.
-        await runUi(async (valid) => {
-          const button = visible(actionSelector);
-          if (!button) throw new Error('这个入口暂不可用，请重试或跳过此站。');
-          if (dialog.open) dialog.close();
-          const before = new Set(doc.querySelectorAll('dialog[open]'));
-          button.click();
-          rememberOpenDialogs(before);
-          if (valid()) await showStep(activeIndex, !dismissToEntry);
-        }, advance);
-        return;
-      }
+      const step = steps[activeIndex];
       if (!step.action) {
         await goTo(activeIndex + 1);
         return;
       }
       const index = activeIndex + 1;
       await runUi(async (valid) => {
-        const button = visible(actionSelector);
+        const button = visible(step.action.selector);
         if (!button) throw new Error('这个入口暂不可用，请重试或跳过此站。');
         let href;
         if (step.action.kind === 'link')
@@ -1110,7 +1023,6 @@
         await save({ status: 'in_progress', step: index });
         if (!valid()) return;
         if (href) {
-          restoreTargetFolds();
           rememberRoute(href);
           win.location.assign(tourUrl(index, version, routeContext()));
           return;
@@ -1149,24 +1061,7 @@
     }
     async function openManual(requestedVersion = VERSION, stationId = null) {
       if (dialog?.open || hasBlockingModal(doc, win, dialog)) return;
-      manualEpoch += 1;
-      const request = manualEpoch;
-      // A pending account read must not replace the user's chosen tour with an
-      // automatic welcome when it eventually returns.
-      initEpoch += 1;
       stopDeferredPresentation();
-      // Entries render before login restoration finishes. Saving as a guest
-      // here would lose the chosen station on the destination's member session.
-      await Promise.resolve(app.sessionReady).catch(() => {});
-      if (
-        request !== manualEpoch ||
-        blockedSession ||
-        dialog?.open ||
-        hasBlockingModal(doc, win, dialog)
-      )
-        return;
-      // Session restoration can have queued another automatic initialization.
-      initEpoch += 1;
       chooseVersion(requestedVersion);
       welcome();
       await runUi(

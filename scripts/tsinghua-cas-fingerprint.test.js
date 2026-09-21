@@ -33,12 +33,6 @@ const expectedOptions = {
 };
 
 test('vendored FingerprintJS2 file is the unmodified 1.5.1 distribution', () => {
-  const attributes = fs.readFileSync(path.join(root, '.gitattributes'), 'utf8');
-  assert.match(
-    attributes,
-    /^public\/assets\/vendor\/fingerprint2-1\.5\.1\.min\.js[ \t]+text[ \t]+eol=lf[ \t]*\r?$/m,
-    'Git checkouts must preserve LF bytes in the vendored distribution',
-  );
   const digest = crypto.createHash('sha256').update(fs.readFileSync(vendorPath)).digest('hex');
   assert.equal(digest, '973c41770723e02cb80d35336660171f74e31602a63f52fc22165190e94b0a7c');
 

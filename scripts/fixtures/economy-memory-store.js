@@ -3,7 +3,7 @@ const { MAGNETIC_CHECKIN_START } = require('../../backend/economy-policy');
 
 function createEconomyMemoryStore(
   accounts = [{ id: 1 }],
-  { recordLedger = false, now = Date.now } = {},
+  { recordLedger = false, now = Date.now, itemNames = {} } = {},
 ) {
   let state = new Map(
     accounts.map((a) => [
@@ -40,11 +40,7 @@ function createEconomyMemoryStore(
   const store = {
     failAt: '',
     account: (id = 1) => state.get(id),
-    recordLedger(
-      id,
-      before,
-      { sourceKey, title = '本地资产演示', reason = '仅限本地模拟账户' } = {},
-    ) {
+    recordLedger(id, before, { title = '本地资产演示', reason = '仅限本地模拟账户' } = {}) {
       const account = state.get(id);
       if (
         !recordLedger ||
@@ -58,7 +54,6 @@ function createEconomyMemoryStore(
         electric_after: String(account.electric),
         magnetic_before: String(before.magnetic),
         magnetic_after: String(account.magnetic),
-        source_key: sourceKey || null,
         title,
         reason,
         created_at: new Date(now()).toISOString(),
@@ -92,6 +87,7 @@ function createEconomyMemoryStore(
       });
       await previous;
       const snapshot = structuredClone(state);
+      const ledgerDetails = new Map();
       function fail(stage) {
         if (store.failAt === stage) throw new Error(`simulated ${stage}`);
       }
@@ -116,22 +112,18 @@ function createEconomyMemoryStore(
             state.get(id).assets[key] -= 1;
             return true;
           },
-          async credit(id, amount, currency, details) {
+          async credit(id, amount, currency) {
             fail('credit');
-            const before = { ...state.get(id) };
             state.get(id)[currency] += amount;
-            fail('ledger');
-            store.recordLedger(id, before, details);
           },
           async creditWool(id, details) {
             fail('credit');
             const account = state.get(id);
-            const before = { ...account };
             if (!Number.isSafeInteger(account.electric + 2) || account.electric < 0)
               throw new Error('Balance limit');
             account.electric += 2;
             fail('ledger');
-            store.recordLedger(id, before, details);
+            ledgerDetails.set(id, details);
             return {
               electric: String(account.electric),
               magnetic: String(account.magnetic),
@@ -150,11 +142,9 @@ function createEconomyMemoryStore(
           async creditBoneSale(id, amount, details) {
             fail('credit');
             const account = state.get(id);
-            const before = { ...account };
             if (!Number.isSafeInteger(account.magnetic + amount)) throw new Error('Balance limit');
             account.magnetic += amount;
-            fail('ledger');
-            store.recordLedger(id, before, details);
+            ledgerDetails.set(id, details);
             return {
               electric: String(account.electric),
               magnetic: String(account.magnetic),
@@ -163,18 +153,11 @@ function createEconomyMemoryStore(
           },
           async boostFortune(id, day) {
             const a = state.get(id);
-            const before = { ...a };
             a.fortunes[day] = Math.max(a.fortunes[day] || 0, 70);
             if (day >= MAGNETIC_CHECKIN_START && a.checkins?.[day] && !a.rewards[`luck:${day}`]) {
               a.magnetic += 1;
               a.rewards[`luck:${day}`] = 1;
               a.checkins[day].rewardMagnetic = (a.checkins[day].rewardMagnetic || 0) + 1;
-              fail('ledger');
-              store.recordLedger(id, before, {
-                sourceKey: `reward:luck:${day}`,
-                title: '签到好运奖励',
-                reason: `${day} 已签到，使用福袋达到好运条件，补发 1 磁元（每天最多一次）`,
-              });
             }
           },
           async saveExtras(id, value) {
@@ -211,15 +194,12 @@ function createEconomyMemoryStore(
             fail('lease');
             state.get(id).expiresAtMs = expiry;
           },
-          async debit(id, amount, currency, spending = true, details = {}) {
+          async debit(id, amount, currency, spending = true) {
             fail(`debit_${currency}`);
             const account = state.get(id);
-            const before = { ...account };
             if (account[currency] < amount) return false;
             account[currency] -= amount;
             if (spending) account.heat += amount;
-            fail('ledger');
-            store.recordLedger(id, before, details);
             return true;
           },
           async deliver(id, item) {
@@ -237,6 +217,22 @@ function createEconomyMemoryStore(
           },
         });
         fail('commit');
+        if (recordLedger) {
+          for (const id of state.keys()) {
+            const before = snapshot.get(id);
+            const item = result?.itemKey;
+            let title = '本地资产变动';
+            if (result?.action === 'purchase') title = '本地商城购买';
+            if (result?.action === 'charge') title = '本地激光器充值';
+            const details = ledgerDetails.get(id) || {
+              title,
+              reason: item
+                ? `本地预览：${result.action === 'charge' ? '充值' : '购买'} ${itemNames[item] || item}`
+                : `本地预览：${result?.action === 'convert' ? '电磁转换' : '道具操作'}`,
+            };
+            if (before) store.recordLedger(id, before, details);
+          }
+        }
         return result;
       } catch (error) {
         state = snapshot;

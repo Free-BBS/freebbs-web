@@ -37,7 +37,6 @@ function harness() {
   const pool = {
     calls: [],
     failNotification: false,
-    skipLedgerTrigger: false,
     get data() {
       return data;
     },
@@ -49,13 +48,8 @@ function harness() {
       pool.calls.push({ sql: s, args });
       if (s.startsWith('CREATE TABLE')) return [];
       if (s.includes('information_schema.TRIGGERS')) return [[{ TRIGGER_NAME: args[0] }]];
-      if (s.startsWith('SELECT CAST(id AS CHAR) AS id FROM wallet_ledger'))
-        return [data.ledger.filter((r) => r.user_id === args[0]).slice(-1)];
       if (s.startsWith('UPDATE wallet_ledger')) {
-        const entry = data.ledger
-          .filter((r) => r.user_id === args[3] && r.id > Number(args[4]) && !r.source_key)
-          .at(-1);
-        if (!entry) return [{ affectedRows: 0 }];
+        const entry = data.ledger.filter((r) => r.user_id === args[3]).at(-1);
         Object.assign(entry, { source_key: args[0], title: args[1], reason: args[2] });
         return [{ affectedRows: 1 }];
       }
@@ -76,15 +70,13 @@ function harness() {
         return [data.users.filter((u) => args.includes(u.id))];
       if (s.startsWith('UPDATE users')) {
         const user = data.users.find((u) => u.id === args[2]);
-        if (!pool.skipLedgerTrigger)
-          data.ledger.push({
-            id: data.ledger.length + 1,
-            user_id: user.id,
-            electric_before: user.electrons,
-            electric_after: user.electrons + args[0],
-            magnetic_before: user.manetrons,
-            magnetic_after: user.manetrons + args[1],
-          });
+        data.ledger.push({
+          user_id: user.id,
+          electric_before: user.electrons,
+          electric_after: user.electrons + args[0],
+          magnetic_before: user.manetrons,
+          magnetic_after: user.manetrons + args[1],
+        });
         user.electrons += args[0];
         user.manetrons += args[1];
         return [{ affectedRows: 1 }];
@@ -195,20 +187,6 @@ test('simultaneous retries and reordered recipients return one committed batch',
   assert.equal(pool.data.notifications.length, 2);
   await assert.rejects(service.grant({ id: 1 }, reward({ electric: 50 })), { status: 409 });
   assert.equal(pool.data.users[0].electrons, 30);
-});
-
-test('a missing reward trigger never relabels old unexplained money and rolls back the batch', async () => {
-  const { pool, service } = harness();
-  pool.data.ledger.push({ id: 1, user_id: 2, source_key: null, title: null, reason: null });
-  pool.skipLedgerTrigger = true;
-  await assert.rejects(service.grant({ id: 1 }, reward()), /Wallet ledger entry missing/);
-  assert.equal(pool.data.users[0].electrons, 10);
-  assert.equal(pool.data.users[0].manetrons, 5);
-  assert.equal(pool.data.batches.length, 0);
-  assert.equal(pool.data.notifications.length, 0);
-  assert.deepEqual(pool.data.ledger, [
-    { id: 1, user_id: 2, source_key: null, title: null, reason: null },
-  ]);
 });
 test('notifications failure, missing recipients and unsafe balances roll back the entire batch', async () => {
   const { pool, service } = harness();

@@ -7,7 +7,6 @@
     "node": ">=24"
   },
   "scripts": {
-    "test:wallet-reasons": "node --test backend/wallet-ledger.test.js backend/legacy-wallet-reasons.test.js backend/economy-shop.test.js backend/economy-policy.test.js backend/economy-checkin.test.js backend/economy-rewards.mysql.test.js backend/admin-rewards.test.js backend/admin-rewards.mysql.test.js backend/username-changes.test.js backend/discussion-interactions.test.js backend/profile-extras.test.js backend/ranch-wool.test.js backend/economy-sales.test.js backend/economy-sales.mysql.test.js",
     "start": "node server.js",
     "start:local": "bash scripts/start-local.sh",
     "start:local:rag": "bash scripts/start-local-rag.sh",

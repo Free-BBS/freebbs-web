@@ -29,24 +29,6 @@
         '认识牧场羊毛、永久橡胶棒与摩擦换电元',
       ]),
     }),
-    Object.freeze({
-      id: 'guide-community-2026-09',
-      title: '跟 Max 认识发展端与活动报名',
-      description: '了解发展端建设状态、活动报名的当前入口，以及上线后的整合方向。',
-      publishedAt: '2026-09-21',
-      stepIds: Object.freeze([
-        'development-status',
-        'development-activities-plan',
-        'activities-entry',
-        'activities-browse',
-        'activities-receipt',
-      ]),
-      highlights: Object.freeze([
-        '认识仍在建设的发展端与规划中的同学服务',
-        '找到当前独立的活动报名入口，了解报名条件与回执查询',
-        '明确发展端上线后，活动报名将整合进入发展端',
-      ]),
-    }),
   ]);
   const manifest = Object.freeze({
     GUIDE_VERSION,

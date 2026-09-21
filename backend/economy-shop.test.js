@@ -17,8 +17,8 @@ const items = require('../public/data/shop-items.json').items.map((item) => ({
   isGift: item.isgift !== false,
 }));
 
-function setup(accounts, options) {
-  const store = createEconomyMemoryStore(accounts, options);
+function setup(accounts) {
+  const store = createEconomyMemoryStore(accounts);
   const clock = { value: Date.parse('2026-09-14T02:00:00Z') };
   const shop = createEconomyShop(store, { now: () => clock.value });
   const buy = async (key, extra = {}) => {
@@ -57,93 +57,6 @@ test('fragment ladder is exact, capped at ten, and independent from fishbones', 
   assert.equal(store.account().electric, 10000 - 1417);
   assert.equal(store.account().assets.fishbone, 99);
   await assert.rejects(buy('mysterious_fragment'), { code: 'PURCHASE_LIMIT' });
-});
-
-test('rubber rod purchase records its real reason and same receipt never duplicates the debit', async () => {
-  const { buy, store } = setup([{ id: 1, electric: 31, magnetic: 10 }], { recordLedger: true });
-  const requestKey = crypto.randomUUID();
-  const args = {
-    currency: 'magnetic',
-    requestKey,
-    expectedPurchaseCount: 0,
-    quotedCost: { magnetic: 7 },
-  };
-  await buy('rubber_rod', args);
-  assert.equal((await buy('rubber_rod', args)).replayed, true);
-  const [row] = store.account().ledger;
-  assert.equal(store.account().ledger.length, 1);
-  assert.equal(row.title, '商城购买');
-  assert.match(row.reason, /橡胶棒.*7 磁元/);
-  assert.equal(row.source_key, `shop:${requestKey}:magnetic`);
-  assert.deepEqual(
-    [row.electric_after, row.magnetic_before, row.magnetic_after],
-    ['31', '10', '3'],
-  );
-});
-
-test('combined purchases and laser charges explain every currency row with contiguous balances', async () => {
-  const { buy, charge, store } = setup(undefined, { recordLedger: true });
-  await buy('maxwell_spectacles');
-  await buy('laser');
-  await charge({ days: 3 });
-  const rows = store.account().ledger;
-  assert.equal(rows.length, 5);
-  assert.ok(rows.every((r) => r.source_key && r.title && r.reason));
-  assert.equal(new Set(rows.map((r) => r.source_key)).size, rows.length);
-  for (let i = 1; i < rows.length; i += 1) {
-    assert.equal(rows[i].electric_before, rows[i - 1].electric_after);
-    assert.equal(rows[i].magnetic_before, rows[i - 1].magnetic_after);
-  }
-  assert.match(rows[3].reason, /充值 3 天.*3 电元/);
-  assert.match(rows[4].reason, /充值 3 天.*3 磁元/);
-});
-
-test('missing shop ledger annotation rolls back debit, heat, delivery and receipt', async () => {
-  const { buy, store } = setup(undefined, { recordLedger: true });
-  const before = structuredClone(store.account());
-  store.failAt = 'ledger';
-  await assert.rejects(buy('fish', { currency: 'magnetic' }), /simulated ledger/);
-  assert.deepEqual(store.account(), before);
-});
-
-test('MySQL debit annotates only the newly triggered row and rolls back when it is missing', async () => {
-  for (const annotationRows of [1, 0]) {
-    const calls = [];
-    const connection = {
-      async beginTransaction() {
-        calls.push('begin');
-      },
-      async commit() {
-        calls.push('commit');
-      },
-      async rollback() {
-        calls.push('rollback');
-      },
-      release() {
-        calls.push('release');
-      },
-      async execute(sql, params) {
-        calls.push({ sql, params });
-        if (sql.startsWith('SELECT CAST(id AS CHAR) AS id FROM wallet_ledger'))
-          return [[{ id: '91' }]];
-        return [{ affectedRows: sql.startsWith('UPDATE wallet_ledger') ? annotationRows : 1 }];
-      },
-    };
-    const store = createMysqlEconomyStore({ getConnection: async () => connection });
-    const operation = store.transaction((tx) =>
-      tx.debit(1, 7, 'magnetic', true, {
-        sourceKey: 'shop:rod',
-        title: '商城购买',
-        reason: '购买橡胶棒，支付 7 磁元',
-      }),
-    );
-    if (annotationRows) assert.equal(await operation, true);
-    else await assert.rejects(operation, /entry missing/);
-    assert.equal(calls.at(-2), annotationRows ? 'commit' : 'rollback');
-    const annotation = calls.find((c) => c.sql?.startsWith('UPDATE wallet_ledger'));
-    assert.deepEqual(annotation.params.slice(3), [1, '91']);
-    assert.match(annotation.sql, /id > \? AND source_key IS NULL/);
-  }
 });
 test('legacy fishbones do not seed counters; fixed-price new purchases stop at ten', async () => {
   const { buy, store } = setup([{ id: 1, assets: { fishbone: 2 } }]);

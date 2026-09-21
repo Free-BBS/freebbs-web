@@ -1,7 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { FISHBONE_MASTER, unlockFishboneMaster } = require('./economy-achievements');
-const { walletLedgerCheckpoint, annotateWalletLedger } = require('./wallet-ledger');
 const {
   beijingDay,
   effectiveFortune,
@@ -147,23 +146,9 @@ function createProfileExtras(store, { now = Date.now } = {}) {
           if (!(await tx.consumeAsset(userId, 'differential_converter')))
             throw new ProfileExtrasError('请先购买微分器：4 电元或 4 磁元');
           const from = itemKey === 'electric_to_magnetic' ? 'electric' : 'magnetic';
-          const to = from === 'electric' ? 'magnetic' : 'electric';
-          const fromName = from === 'electric' ? '电元' : '磁元';
-          const toName = to === 'electric' ? '电元' : '磁元';
-          const conversion = `使用微分器将 10 ${fromName}兑换为 10 ${toName}`;
-          if (
-            !(await tx.debit(userId, 10, from, false, {
-              sourceKey: `converter:${requestKey}:debit`,
-              title: '微分器兑换',
-              reason: `${conversion}，扣除 10 ${fromName}本金`,
-            }))
-          )
+          if (!(await tx.debit(userId, 10, from, false)))
             throw new ProfileExtrasError('转换本金不足，需要 10 个');
-          await tx.credit(userId, 10, to, {
-            sourceKey: `converter:${requestKey}:credit`,
-            title: '微分器兑换',
-            reason: `${conversion}，收入 10 ${toName}`,
-          });
+          await tx.credit(userId, 10, from === 'electric' ? 'magnetic' : 'electric');
           result.direction = itemKey;
         } else if (action === 'use_bag') {
           if (Number(state.luckUntilMs) > now())
@@ -335,23 +320,28 @@ function mysqlProfileMethods(connection) {
       );
       return result.affectedRows === 1;
     },
-    async credit(id, amount, currency, ledgerDetails) {
+    async credit(id, amount, currency) {
       const col = currency === 'electric' ? 'electrons' : 'manetrons';
-      const ledgerBefore = await walletLedgerCheckpoint(connection, id);
       await connection.execute(`UPDATE users SET ${col} = ${col} + ? WHERE id = ?`, [amount, id]);
-      await annotateWalletLedger(connection, id, ledgerBefore, ledgerDetails);
     },
     async creditWool(id, { sourceKey, title, reason }) {
       // Keep the real balance trigger as the sole creator of ledger snapshots.
       // The account row lock serializes this watermark, credit and annotation.
-      const ledgerBefore = await walletLedgerCheckpoint(connection, id);
+      const [before] = await connection.execute(
+        'SELECT COALESCE(MAX(id), 0) AS last_id FROM wallet_ledger WHERE user_id = ?',
+        [id],
+      );
       const [credited] = await connection.execute(
         'UPDATE users SET electrons = electrons + ? WHERE id = ? AND electrons >= 0 AND electrons <= ?',
         [WOOL_ELECTRIC_REWARD, id, Number.MAX_SAFE_INTEGER - WOOL_ELECTRIC_REWARD],
       );
       if (credited.affectedRows !== 1)
         throw new ProfileExtrasError('账户余额超出安全范围，本次未消耗羊毛', 409);
-      await annotateWalletLedger(connection, id, ledgerBefore, { sourceKey, title, reason });
+      const [annotated] = await connection.execute(
+        'UPDATE wallet_ledger SET source_key = ?, title = ?, reason = ? WHERE user_id = ? AND id > ? ORDER BY id DESC LIMIT 1',
+        [sourceKey, title, reason, id, before[0].last_id],
+      );
+      if (annotated.affectedRows !== 1) throw new Error('Wool credit ledger entry missing');
       const [rows] = await connection.execute(
         'SELECT CAST(electrons AS CHAR) AS electric, CAST(manetrons AS CHAR) AS magnetic, CAST(heat AS CHAR) AS heat FROM users WHERE id = ?',
         [id],

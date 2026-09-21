@@ -1,7 +1,5 @@
 # Max 新手导览、鱼骨出售与钱包账本
 
-本文保留已发布版本的开发与验收记录。2026-09-21 后续导览补充已将完整导览扩展为 14 站、48 步，并追加 `guide-community-2026-09` 五步短游；原前 43 步与 `guide-depth-2026-09` 九步发布记录保持不变。当前功能清单见 [max-guide-stations.md](max-guide-stations.md)，下文旧版验收结果不自动覆盖新增步骤。
-
 本次开发分支为 `feat/max-onboarding-wallet`，独立目录为 `freebbs-web-onboarding`，基于远端 `main` 的 `6ea4a047177045888a430a4cb26ce5d48aad3dea`。学习区仍在 `freebbs-web` 的 `feat/learning-workspace-v1`；本分支不包含该学习区的实验改动。
 
 ## 用 Git Bash 拉取并隔离开发
@@ -77,7 +75,7 @@ V1.0 纲要还要求首次年级/课程/方向设置、完整学习闭环引导�
 
 发布清单位于 `public/max-guide-releases.js`，完整站点位于 `public/max-guide-stations.js`。已有发布进度使用稳定 release ID 保存，不要复用旧 ID 冒充新发布：
 
-`guide-depth-2026-09` 已正式发布，包含开发阶段追加的 `profile-ranch` 与 `profile-wool`，共 9 步；后续不可再以开发阶段为由重排该发布记录。已发布版本按以下约定保持稳定。
+本次 `guide-depth-2026-09` 尚未正式发布，在开发阶段追加了 `profile-ranch` 与 `profile-wool` 两步，形成当前9步短游；这不是更改已经发给真实用户的历史发布记录。正式发布后的版本按以下约定保持稳定。
 
 1. 在站点配置中定义真实可用、带稳定 ID 的新步骤；实质改变旧步骤含义时新增步骤 ID，不挪用旧 ID。
 2. 在 `RELEASES` 尾部追加新记录，填写新的 `id`、标题、说明、日期、亮点，以及该版显式且固定顺序的 `stepIds`。当前 `guide-depth-2026-09` 已固定自己的 9 个 ID，不再依赖以后可能变化的通用 `RELEASE_STEP_IDS`。

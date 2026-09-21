@@ -344,7 +344,6 @@ test('invalid action IDs, balances and counter limits fail without consuming woo
 
 function mysqlFixture({ missingLedger = false, failReceipt = false } = {}) {
   const calls = [];
-  const ledger = [{ id: '12', user_id: 1, source_key: null }];
   const connection = {
     async beginTransaction() {
       calls.push({ sql: 'BEGIN' });
@@ -368,25 +367,8 @@ function mysqlFixture({ missingLedger = false, failReceipt = false } = {}) {
       if (sql.includes('FROM economy_account_state')) return [[]];
       if (sql.includes('FROM user_ranch_wool'))
         return [[{ feed_progress: 3, wool_ready: 2, wool_stored: 1 }]];
-      if (sql.startsWith('SELECT CAST(id AS CHAR) AS id FROM wallet_ledger')) {
-        assert.match(sql, /ORDER BY id DESC LIMIT 1 FOR UPDATE$/);
-        return [[{ id: ledger.at(-1).id }]];
-      }
-      if (sql.startsWith('UPDATE users')) {
-        if (!missingLedger) ledger.push({ id: '13', user_id: 1, source_key: null });
-        return [{ affectedRows: 1 }];
-      }
-      if (sql.startsWith('UPDATE wallet_ledger')) {
-        const [sourceKey, title, reason, userId, afterId] = values;
-        const row = ledger.findLast(
-          (entry) =>
-            entry.user_id === userId &&
-            BigInt(entry.id) > BigInt(afterId) &&
-            entry.source_key === null,
-        );
-        if (row) Object.assign(row, { source_key: sourceKey, title, reason });
-        return [{ affectedRows: row ? 1 : 0 }];
-      }
+      if (sql.startsWith('SELECT COALESCE(MAX(id)')) return [[{ last_id: '12' }]];
+      if (sql.startsWith('UPDATE wallet_ledger')) return [{ affectedRows: missingLedger ? 0 : 1 }];
       if (sql.startsWith('SELECT CAST(electrons'))
         return [[{ electric: '122', magnetic: '86', heat: '24' }]];
       if (failReceipt && sql.startsWith('INSERT INTO user_profile_actions'))
@@ -395,11 +377,11 @@ function mysqlFixture({ missingLedger = false, failReceipt = false } = {}) {
     },
   };
   const pool = { getConnection: async () => connection };
-  return { calls, connection, pool, ledger };
+  return { calls, connection, pool };
 }
 
 test('MySQL wool action locks the account before reading state, annotates only its new trigger row and commits one receipt', async () => {
-  const { calls, pool, ledger } = mysqlFixture();
+  const { calls, pool } = mysqlFixture();
   const requestKey = randomUUID();
   const service = createProfileExtras(createMysqlEconomyStore(pool), { now: () => fixed });
   const result = await service.act({ userId: 1, action: 'rub_wool', requestKey });
@@ -413,11 +395,8 @@ test('MySQL wool action locks the account before reading state, annotates only i
   assert.deepEqual(credit.values, [2, 1, Number.MAX_SAFE_INTEGER - 2]);
   const annotated = calls.find((entry) => entry.sql.startsWith('UPDATE wallet_ledger'));
   assert.match(annotated.sql, /user_id = \? AND id > \?.*ORDER BY id DESC LIMIT 1/);
-  assert.match(annotated.sql, /source_key IS NULL/);
   assert.deepEqual(annotated.values.slice(-2), [1, '12']);
   assert.equal(annotated.values[0], `ranch-wool:${requestKey}`);
-  assert.equal(ledger[0].source_key, null);
-  assert.equal(ledger[1].source_key, `ranch-wool:${requestKey}`);
   assert.equal(
     calls.some((entry) => entry.sql.startsWith('INSERT INTO wallet_ledger')),
     false,

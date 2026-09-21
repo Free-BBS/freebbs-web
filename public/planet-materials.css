@@ -56,9 +56,9 @@ body.world-page .world-core::after {
 
 .world-core-surface {
   border-radius: 0;
-  background: url('/assets/planet-bbs-hub-warm-v4.webp') center / contain no-repeat;
+  background: url('/assets/planet-bbs-hub-v3.webp') center / contain no-repeat;
   box-shadow: none;
-  filter: drop-shadow(0 10px 12px rgba(113, 79, 45, 0.19));
+  filter: drop-shadow(0 10px 12px rgba(5, 49, 55, 0.23));
 }
 
 /* Two halves of one tilted ring: the far arc goes behind the opaque globe. */
@@ -72,16 +72,16 @@ body.world-page .world-core::after {
   background: radial-gradient(
     ellipse at center,
     transparent 51%,
-    rgba(172, 131, 85, 0.4) 52%,
-    rgba(232, 203, 152, 0.7) 54%,
-    rgba(193, 157, 106, 0.75) 56%,
-    rgba(255, 234, 190, 0.82) 58%,
-    rgba(174, 143, 99, 0.72) 59%,
-    rgba(241, 213, 161, 0.86) 61%,
+    rgba(95, 128, 121, 0.45) 52%,
+    rgba(192, 191, 157, 0.72) 54%,
+    rgba(127, 146, 129, 0.8) 56%,
+    rgba(226, 220, 178, 0.82) 58%,
+    rgba(97, 125, 112, 0.8) 59%,
+    rgba(219, 212, 170, 0.9) 61%,
     transparent 62%,
     transparent 64%,
-    rgba(204, 178, 135, 0.6) 65%,
-    rgba(249, 229, 192, 0.76) 68%,
+    rgba(173, 184, 153, 0.64) 65%,
+    rgba(228, 222, 187, 0.78) 68%,
     transparent 69%
   );
   transform: rotate(-20deg);
