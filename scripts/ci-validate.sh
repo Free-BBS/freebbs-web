@@ -84,6 +84,15 @@ node --test backend/admin-rewards.test.js backend/admin-rewards.mysql.test.js
 node --test backend/wallet-ledger.test.js
 node --check public/max-composer.js
 node --check public/wallet-ledger.js
+node --check public/max-guide-releases.js
+node --check public/max-guide-stations.js
+node --check public/max-guide-geometry.js
+node --check public/max-guide.js
+node --check public/settings-profile-link.js
+node --check public/inventory-sales.js
+
+echo "[ci] Max onboarding, bone sales and wallet UI tests"
+npm run test:onboarding
 
 echo "[ci] nickname policy and knowledge learning usability tests"
 npm run test:profile-learning

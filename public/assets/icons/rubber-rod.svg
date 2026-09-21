@@ -1,0 +1,47 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 128 128"
+  role="img"
+  aria-labelledby="title desc"
+>
+  <title id="title">橡胶棒</title>
+  <desc id="desc">一根深色橡胶棒和蓬松羊毛，周围的小减号表示摩擦后带负电。</desc>
+  <defs>
+    <linearGradient id="rubber" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#4b5264" />
+      <stop offset="1" stop-color="#252d3b" />
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="30" fill="#e8f0eb" />
+  <ellipse cx="65" cy="102" rx="37" ry="7" fill="#ccdcd5" />
+  <path
+    d="M81 82c-7-8-17-3-17 5-10 1-11 15-1 18 2 10 16 12 22 6 8 5 20 0 21-9 10-5 6-18-3-19-4-9-16-10-22-1Z"
+    fill="#fff8e7"
+    stroke="#d7c9aa"
+    stroke-width="2"
+  />
+  <path
+    d="M79 90c-5-3-9 3-5 6m11 7c-1-6 7-7 9-2m0-17c5-1 7 5 3 7"
+    fill="none"
+    stroke="#ddceb0"
+    stroke-linecap="round"
+    stroke-width="2"
+  />
+  <g transform="rotate(-38 64 64)">
+    <rect x="17" y="54" width="94" height="21" rx="10.5" fill="url(#rubber)" />
+    <path d="M29 59h66" stroke="#78899a" stroke-width="3" stroke-linecap="round" />
+    <path d="M26 66v3m7-3v3m7-3v3" stroke="#526b75" stroke-width="2" stroke-linecap="round" />
+  </g>
+  <g fill="#397f89">
+    <circle cx="27" cy="31" r="10" fill="#c7e4dc" />
+    <circle cx="87" cy="17" r="8" fill="#c7e4dc" />
+    <circle cx="112" cy="57" r="8" fill="#c7e4dc" />
+  </g>
+  <path d="M23 31h8m53-14h6m19 40h6" stroke="#347c87" stroke-linecap="round" stroke-width="2.5" />
+  <path
+    d="m57 30 3-7m-8 11-6-1m58 35 5 4"
+    stroke="#b7a174"
+    stroke-linecap="round"
+    stroke-width="2"
+  />
+</svg>

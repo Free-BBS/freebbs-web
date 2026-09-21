@@ -22,8 +22,9 @@
     <link rel="stylesheet" href="/settings-avatar.css" />
     <link rel="stylesheet" href="/profile-extras.css" />
     <link rel="stylesheet" href="/settings-username.css" />
+    <link rel="stylesheet" href="/settings-guide.css" />
   </head>
-  <body>
+  <body class="settings-page">
     <div class="page-shell page-shell-settings">
       <header class="topbar">
         <a class="brand" href="/" aria-label="FREE-BBS 首页">
@@ -150,6 +151,9 @@
             <button class="settings-logout-button" id="settings-logout-button" type="button">
               退出
             </button>
+            <a class="settings-profile-link" id="settings-profile-link" hidden>
+              前往我的主页 <span aria-hidden="true">↗</span>
+            </a>
           </div>
           <section class="settings-profile" aria-label="个人设置内容">
             <form class="settings-form" id="settings-form">
@@ -413,6 +417,7 @@
     <script src="/profile-extras.js"></script>
     <script src="/app.js"></script>
     <script src="/settings-username.js"></script>
+    <script src="/settings-profile-link.js"></script>
     <script src="/notifications.js"></script>
     <script src="/course-upload.js"></script>
   </body>

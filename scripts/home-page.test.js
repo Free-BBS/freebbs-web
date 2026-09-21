@@ -46,18 +46,20 @@ test('homepage retains all original data hooks, with each id unique', () => {
   assert.ok(html.indexOf('href="/home.css"') > html.indexOf('href="/layout-fixes.css"'));
 });
 
-test('homepage defers feedback and shows about and staff construction sections', () => {
+test('homepage introduces FREE BBS with a permanent guide and keeps the staff placeholder', () => {
   assert.doesNotMatch(html, /feedback|mailto:/i);
-  for (const [id, title] of [
-    ['about-freebbs', '关于FREE BBS'],
-    ['freebbs-staff', 'FREE BBS工作人员名单'],
-  ]) {
+  for (const id of ['about-freebbs', 'freebbs-staff']) {
     assert.ok(html.includes(`href="#${id}"`));
-    const section = html.split(`id="${id}">`)[1].split('</details>')[0];
-    assert.ok(section.includes(title));
-    assert.match(section, /<span>正在施工<\/span>/);
-    assert.match(section, /<p>正在施工<\/p>/);
   }
+  const about = html.split('id="about-freebbs">')[1].split('</details>')[0];
+  assert.match(about, /关于\s*FREE BBS/);
+  assert.match(about, /学生主导、长期公益/);
+  assert.match(about, /href="\/guide"/);
+  assert.doesNotMatch(about, /正在施工/);
+  const staff = html.split('id="freebbs-staff">')[1].split('</details>')[0];
+  assert.match(staff, /FREE BBS工作人员名单/);
+  assert.match(staff, /<span>正在施工<\/span>/);
+  assert.match(staff, /<p>正在施工<\/p>/);
 });
 
 test('all homepage local images, icons and styles exist; app links have real routes', () => {

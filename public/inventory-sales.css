@@ -1,0 +1,309 @@
+body.bone-sale-open {
+  overflow: hidden;
+}
+.bone-recycling {
+  margin: 28px 0;
+  padding: 25px;
+  border: 1px solid var(--ui-line);
+  border-radius: 22px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.bone-recycling-heading,
+.bone-sale-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 15px;
+}
+.bone-eyebrow {
+  color: var(--ui-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+body.inventory-page .bone-recycling h2 {
+  margin: 7px 0;
+  font-size: 20px;
+  color: var(--ui-text);
+}
+body.inventory-page .bone-recycling-heading p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--ui-muted);
+}
+.bone-text-button {
+  border: 1px solid var(--ui-line);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.bone-recycling-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 19px;
+}
+.bone-recycling-card {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--ui-line);
+  border-radius: 16px;
+  background: var(--ui-surface-soft);
+}
+.bone-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  flex-shrink: 0;
+  border-radius: 16px;
+  background: #f2ece0;
+}
+.bone-art img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  filter: none !important;
+}
+.bone-art span {
+  position: absolute;
+  top: -7px;
+  right: 0;
+  color: #9b6814;
+  font-size: 24px;
+}
+.is-golden .bone-art {
+  background: #ffdfa0;
+}
+.is-golden .bone-art img {
+  filter: sepia(1) saturate(1.8) !important;
+}
+.bone-recycling-copy {
+  min-width: 0;
+  flex: 1;
+}
+body.inventory-page .bone-recycling-copy h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--ui-text);
+}
+body.inventory-page .bone-recycling-copy p {
+  margin: 0 0 5px;
+  color: var(--ui-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.bone-recycling-copy strong {
+  color: var(--ui-accent);
+}
+.bone-recycling-copy > span {
+  display: block;
+  font-size: 11px;
+  color: var(--ui-muted);
+}
+.bone-sell-button {
+  border: 1px solid transparent;
+  padding: 10px 14px;
+  border-radius: 11px;
+  background: var(--ui-accent);
+  color: var(--ui-accent-contrast);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+/* Scope above the legacy main-content !important rules without changing the shell. */
+body.inventory-page .main-content .bone-sell-button,
+body.inventory-page .bone-sale-dialog .bone-sell-button {
+  color: var(--ui-accent-contrast) !important;
+}
+body.inventory-page .main-content .bone-eyebrow,
+body.inventory-page .main-content .bone-recycling-copy strong,
+body.inventory-page .main-content #bone-recycling-status {
+  color: var(--ui-accent) !important;
+}
+body.inventory-page .main-content .bone-recycling-heading p,
+body.inventory-page .main-content .bone-recycling-copy p,
+body.inventory-page .main-content .bone-recycling-copy > span,
+body.inventory-page .main-content .bone-recycling-note {
+  color: var(--ui-muted) !important;
+}
+body.inventory-page .main-content .bone-art span {
+  color: #9b6814 !important;
+}
+.bone-sell-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+body.inventory-page .bone-recycling-note {
+  margin: 15px 0 0;
+  color: var(--ui-muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+#bone-recycling-status {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ui-accent);
+  line-height: 1.8;
+}
+#bone-recycling-status:not(:empty) {
+  margin-top: 12px;
+}
+.bone-sale-dialog {
+  width: min(440px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  margin: auto;
+  border: 1px solid var(--ui-line);
+  border-radius: 25px;
+  padding: 26px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  box-shadow: 0 24px 90px #0005;
+}
+.bone-sale-heading {
+  align-items: center;
+}
+.bone-sale-dialog h2 {
+  margin: 12px 0 10px;
+  font-size: 24px;
+  color: var(--ui-text);
+}
+#bone-sale-description {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ui-muted);
+}
+.bone-sale-dialog label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  margin-top: 24px;
+  margin-bottom: 11px;
+}
+#bone-sale-available {
+  color: var(--ui-muted);
+}
+.bone-quantity-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bone-quantity-control input {
+  width: 0;
+  min-width: 0;
+  flex: 1;
+  padding: 11px 5px;
+  text-align: center;
+  appearance: textfield;
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  background: var(--ui-surface-soft);
+  color: var(--ui-text);
+  font-size: 17px;
+  font-weight: 600;
+}
+.bone-quantity-control input::-webkit-inner-spin-button {
+  appearance: none;
+}
+.bone-quantity-control button {
+  min-width: 36px;
+  height: 42px;
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+#bone-sale-all {
+  font-size: 11px;
+  padding: 0 11px;
+}
+.bone-sale-receipt {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 18px 16px;
+  margin: 22px 0 12px;
+  border-radius: 14px;
+  background: var(--ui-surface-soft);
+}
+.bone-sale-receipt span {
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+.bone-sale-receipt strong {
+  font-size: 22px;
+  color: var(--ui-accent);
+  font-variant-numeric: tabular-nums;
+}
+.bone-sale-warning {
+  color: var(--ui-muted);
+  font-size: 11px;
+  line-height: 1.8;
+}
+#bone-sale-status {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--ui-accent);
+}
+.bone-sale-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+.bone-sale-actions button {
+  padding: 11px 18px;
+}
+.bone-sale-dialog button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+@media (max-width: 760px) {
+  .bone-recycling-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 480px) {
+  .bone-recycling {
+    padding: 19px 16px;
+  }
+  .bone-recycling-heading {
+    flex-wrap: wrap;
+    gap: 9px;
+  }
+  .bone-recycling-card {
+    padding: 14px 12px;
+    gap: 10px;
+  }
+  .bone-art {
+    width: 44px;
+    height: 48px;
+  }
+  .bone-art img {
+    width: 38px;
+    height: 38px;
+  }
+  .bone-sale-dialog {
+    padding: 22px;
+  }
+}

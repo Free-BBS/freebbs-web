@@ -373,6 +373,44 @@ function createMysqlEconomyStore(pool) {
             );
             return result.affectedRows === 1;
           },
+          async consumeSaleAssets(id, key, quantity) {
+            const [result] = await connection.execute(
+              `UPDATE user_assets SET quantity = quantity - ?
+               WHERE user_id = ? AND asset_key = ? AND quantity >= ?`,
+              [quantity, id, key, quantity],
+            );
+            return result.affectedRows === 1;
+          },
+          async saleAssetQuantity(id, key) {
+            const [rows] = await connection.execute(
+              'SELECT CAST(quantity AS CHAR) AS quantity FROM user_assets WHERE user_id = ? AND asset_key = ?',
+              [id, key],
+            );
+            return String(rows[0]?.quantity || '0');
+          },
+          async creditBoneSale(id, amount, { sourceKey, title, reason }) {
+            // Credit is income: heat and electric balance remain unchanged.
+            const [result] = await connection.execute(
+              `UPDATE users SET manetrons = manetrons + ?
+               WHERE id = ? AND manetrons >= 0 AND manetrons <= ?`,
+              [amount, id, Number.MAX_SAFE_INTEGER - amount],
+            );
+            if (result.affectedRows !== 1) {
+              throw new ShopPurchaseError('账户余额超出安全范围，本次未出售', 'BALANCE_LIMIT', 409);
+            }
+            // The trigger and annotation are in this transaction under the user's row lock.
+            const [annotated] = await connection.execute(
+              'UPDATE wallet_ledger SET source_key = ?, title = ?, reason = ? WHERE user_id = ? ORDER BY id DESC LIMIT 1',
+              [sourceKey, title, reason, id],
+            );
+            if (annotated.affectedRows !== 1) throw new Error('Bone sale ledger entry missing');
+            const [rows] = await connection.execute(
+              `SELECT CAST(electrons AS CHAR) AS electric, CAST(manetrons AS CHAR) AS magnetic,
+               CAST(heat AS CHAR) AS heat FROM users WHERE id = ?`,
+              [id],
+            );
+            return rows[0];
+          },
           async deliver(id, item) {
             await connection.execute(
               `INSERT INTO user_assets (user_id, asset_key, quantity, metadata_json)

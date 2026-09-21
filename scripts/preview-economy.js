@@ -32,13 +32,30 @@ const pages = {
   '/profile': 'profile.html',
   '/settings': 'settings.html',
 };
-function createEconomyPreview({ now = Date.now, showcase = false, extraPages = {}, previewApiHandler = null } = {}) {
+function createEconomyPreview({
+  now = Date.now,
+  showcase = false,
+  extraPages = {},
+  previewApiHandler = null,
+  extraApi = null,
+  accounts = null,
+  storeOptions = {},
+  previewNotice = '',
+  transformHtml = null,
+  allowVendor = false,
+} = {}) {
   const previewPages = { ...pages, ...extraPages };
   const isWorkbenchPreview = previewPages['/workbench'] === 'workbench.html';
-  const store = createEconomyMemoryStore([
-    { id: 1, assets: { fishbone: 2 }, counts: { fishbone: 2 }, checkins: {} },
-    { id: 2 },
-  ]);
+  let previewTitle = '商城实验 · 模拟余额 · 未发布';
+  if (isWorkbenchPreview) previewTitle = '工作台交互预览 · 模拟日程与通知 · 未发布';
+  if (previewNotice) previewTitle = 'Max 新手导览实验 · 本地模拟 · 未发布';
+  const store = createEconomyMemoryStore(
+    accounts || [
+      { id: 1, assets: { fishbone: 2 }, counts: { fishbone: 2 }, checkins: {} },
+      { id: 2 },
+    ],
+    storeOptions,
+  );
   if (showcase) {
     // Demo-only assets: no purchase, reward or production account is involved.
     for (const id of [1, 2]) {
@@ -159,6 +176,37 @@ function createEconomyPreview({ now = Date.now, showcase = false, extraPages = {
       if (req.headers.host !== host) return send(403, { message: 'Loopback preview only' });
       const url = new URL(req.url, `http://${host}`);
       const route = decodeURIComponent(url.pathname);
+      let requestBody;
+      if (extraApi && route.startsWith('/api/')) {
+        if (
+          !['GET', 'HEAD', 'POST', 'PATCH', 'DELETE'].includes(req.method) ||
+          req.headers.authorization !== `Bearer ${TOKEN}` ||
+          (req.headers.origin && req.headers.origin !== `http://${host}`)
+        )
+          return send(403, { message: '仅限本地模拟操作' });
+        let raw = '';
+        if (!['GET', 'HEAD'].includes(req.method)) {
+          for await (const chunk of req) {
+            raw += chunk;
+            if (raw.length > 32768) return send(413, { message: '请求过大' });
+          }
+        }
+        requestBody = raw ? JSON.parse(raw) : {};
+        const result = await extraApi({
+          route,
+          url,
+          method: req.method,
+          body: requestBody,
+          store,
+          shop,
+          extras,
+          items,
+          user,
+          economy,
+          now,
+        });
+        if (result) return send(result.status || 200, result.body);
+      }
       if (
         previewApiHandler &&
         (route.startsWith('/api/workbench/') || route.startsWith('/api/notifications'))
@@ -166,9 +214,10 @@ function createEconomyPreview({ now = Date.now, showcase = false, extraPages = {
         if (
           req.headers.authorization !== `Bearer ${TOKEN}` ||
           (req.headers.origin && req.headers.origin !== `http://${host}`)
-        ) return send(403, { message: '仅限本地模拟操作' });
+        )
+          return send(403, { message: '仅限本地模拟操作' });
         let raw = '';
-        if (!['GET', 'HEAD'].includes(req.method)) {
+        if (requestBody === undefined && !['GET', 'HEAD'].includes(req.method)) {
           for await (const chunk of req) {
             raw += chunk;
             if (raw.length > 32768) throw new Error('请求过大');
@@ -178,7 +227,7 @@ function createEconomyPreview({ now = Date.now, showcase = false, extraPages = {
           route,
           url,
           method: req.method,
-          body: raw ? JSON.parse(raw) : {},
+          body: requestBody || (raw ? JSON.parse(raw) : {}),
         });
         if (result) return send(result.status || 200, result.body);
         return send(404, { message: '该操作不在工作台预览范围内' });
@@ -191,11 +240,13 @@ function createEconomyPreview({ now = Date.now, showcase = false, extraPages = {
         )
           return send(403, { message: '仅限本地模拟操作' });
         let raw = '';
-        for await (const chunk of req) {
-          raw += chunk;
-          if (raw.length > 32768) throw new Error('请求过大');
+        if (requestBody === undefined) {
+          for await (const chunk of req) {
+            raw += chunk;
+            if (raw.length > 32768) throw new Error('请求过大');
+          }
         }
-        const body = JSON.parse(raw || '{}');
+        const body = requestBody || JSON.parse(raw || '{}');
         if (route === '/api/checkin') {
           const fortune = todayFortune();
           const account = store.account();
@@ -213,8 +264,13 @@ function createEconomyPreview({ now = Date.now, showcase = false, extraPages = {
               rewardElectrons: reward.rewardElectrons,
               fortuneScore: fortune.score,
             };
+            const before = { electric: account.electric, magnetic: account.magnetic };
             account.magnetic += rewardMagnetic;
             account.electric += reward.rewardElectrons;
+            store.recordLedger?.(1, before, {
+              title: '本地签到演示',
+              reason: '本地预览的每日签到，无真实资产变化',
+            });
             if (bonus) account.rewards[`luck:${fortune.date}`] = 1;
           }
           return send(200, { alreadyCheckedIn, summary: checkinSummary(), user: user() });
@@ -332,8 +388,19 @@ function createEconomyPreview({ now = Date.now, showcase = false, extraPages = {
       if (route.startsWith('/api/')) return send(404, { message: '该功能未接入本地模拟' });
       if (route.includes('\\') || route.includes('\0') || route.split('/').includes('..'))
         return send(400, { message: 'Invalid path' });
-      const file = await fs.promises.realpath(path.join(root, previewPages[route] || route.slice(1)));
-      const realRoot = await fs.promises.realpath(root);
+      const vendor =
+        allowVendor &&
+        /^\/vendor\/(marked\/lib\/|@highlightjs\/cdn-assets\/|katex\/dist\/|three\/build\/)/.test(
+          route,
+        );
+      const staticRoot = vendor ? path.resolve(__dirname, '../node_modules') : root;
+      const file = await fs.promises.realpath(
+        path.join(
+          staticRoot,
+          vendor ? route.slice('/vendor/'.length) : previewPages[route] || route.slice(1),
+        ),
+      );
+      const realRoot = await fs.promises.realpath(staticRoot);
       const relative = path.relative(realRoot, file);
       if (relative.startsWith('..') || path.isAbsolute(relative) || !mime[path.extname(file)])
         return send(403, { message: 'Preview static assets only' });
@@ -350,15 +417,17 @@ function createEconomyPreview({ now = Date.now, showcase = false, extraPages = {
           .replace(
             '</body>',
             `<details data-preview-notice style="position:relative;margin:12px;padding:12px;max-width:calc(100vw - 24px);border-radius:14px;background:#133c45;color:white;font:14px/1.6 system-ui">
-            <summary>${isWorkbenchPreview ? '工作台交互预览 · 模拟日程与通知 · 未发布' : '商城实验 · 模拟余额 · 未发布'}</summary>
+            <summary>${previewTitle}</summary>
+            ${previewNotice ? `<p>${previewNotice}</p>` : ''}
             ${isWorkbenchPreview ? '<p>个人计划、重要事项与通知使用内存模拟数据；常见时间表达可测试，但未连接真实 AI、数据库或校内系统。关闭预览后数据清空。</p>' : ''}
             ${showcase ? '<p>本预览已预置样例装扮、Max与小鱼，方便试穿；均为临时模拟数据。</p>' : ''}
             <p><a style="color:#b7f1f2" href="/electromagnetic">商城</a> · <a style="color:#b7f1f2" href="/inventory">仓库／充值</a> · <a style="color:#b7f1f2" href="/discussion">讨论区柔光</a> · <a style="color:#b7f1f2" href="/profile?uid=u_preview01">公开主页</a> · <a style="color:#b7f1f2" href="/settings">个人设置／牧场</a></p>
-            <p>只使用内存中的 10000 电元＋10000 磁元，重启清空。<br>测试账号默认祥瑞，可验证喂养与福袋。<br>真实数据库、完整钱包账本仍需联验。</p>
+            ${previewNotice ? '<p>所有余额、账本和导览进度仅存在本地内存中，重启后清空。未连接生产账号、数据库、真实 AI 或校内服务。</p>' : '<p>只使用内存中的 10000 电元＋10000 磁元，重启清空。<br>测试账号默认祥瑞，可验证喂养与福袋。<br>真实数据库、完整钱包账本仍需联验。</p>'}
             <button onclick="fetch('/__qa/expire',{method:'POST',headers:{Authorization:'Bearer ${TOKEN}'}}).then(()=>location.href='/discussion')">测试 10 秒后熄灭（须先买激光器）</button>
             <button data-preview-theme onclick="window.freeBbsApp.toggleThemeMode(event)">切换明暗</button>
           </details></body>`,
           );
+        if (transformHtml) content = transformHtml(content, route);
       }
       if (route === '/notifications.js' || route === '/username-guard.js') {
         const variable = route === '/notifications.js' ? 'apiBase' : 'api';
@@ -374,7 +443,7 @@ function createEconomyPreview({ now = Date.now, showcase = false, extraPages = {
       return send(error.status || 400, { message: error.message, code: error.code });
     }
   });
-  return { server, store, shop };
+  return { server, store, shop, extras };
 }
 if (require.main === module) {
   const port = Number(process.env.ECONOMY_PREVIEW_PORT || 3112);
@@ -387,4 +456,4 @@ if (require.main === module) {
       ),
   );
 }
-module.exports = { createEconomyPreview };
+module.exports = { createEconomyPreview, TOKEN };

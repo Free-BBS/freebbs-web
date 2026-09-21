@@ -12,6 +12,8 @@ const {
 const { awardMagnetic, ensureEconomyPolicy } = require('./economy-rewards');
 const { createAdminRewardsRouter, ensureAdminRewardTables } = require('./admin-rewards');
 const { createWalletLedgerRouter, ensureWalletLedger } = require('./wallet-ledger');
+const { createBoneSalesRouter } = require('./economy-sales');
+const { registerOnboarding } = require('./onboarding');
 const {
   LASER_POLICY,
   createEconomyShop,
@@ -2251,6 +2253,8 @@ app.use(
 );
 app.use('/api', createAdminRewardsRouter({ pool, requireAuth, requireAdmin, notifications }));
 app.use('/api', createWalletLedgerRouter({ pool, requireAuth }));
+app.use('/api', createBoneSalesRouter({ pool, requireAuth }));
+registerOnboarding(app, { pool, requireAuth });
 app.use(
   '/api',
   createSurveysRouter({ pool, requireAdmin, getOptionalAuthUser, service: surveyService }),

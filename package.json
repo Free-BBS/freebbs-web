@@ -20,6 +20,8 @@
     "test:public-pages": "node --test scripts/development-navigation.test.js scripts/world-page.test.js scripts/home-page.test.js",
     "preview:home": "node scripts/preview-home.js",
     "preview:economy": "node scripts/preview-economy.js",
+    "preview:onboarding": "node scripts/preview-onboarding.js",
+    "test:onboarding": "node --test backend/onboarding.test.js backend/ranch-wool.test.js backend/economy-sales.test.js backend/economy-sales.mysql.test.js scripts/max-guide.test.js scripts/max-guide-controller.test.js scripts/max-guide-geometry.test.js scripts/max-guide-loader.test.js scripts/ranch-wool-ui.test.js scripts/max-ranch.test.js scripts/ranch-states-preview.test.js scripts/settings-profile-link.test.js scripts/wallet-ui.test.js scripts/preview-onboarding.test.js",
     "preview:workbench": "node scripts/check-workbench-schedule-browser.js --interactive",
     "test:workbench:browser": "node scripts/check-workbench-schedule-browser.js",
     "test:typography": "node --test scripts/typography-preferences.test.js",

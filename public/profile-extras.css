@@ -459,53 +459,83 @@ body .profile-wardrobe :is(h2, h3, p) {
   margin: 0 0 18px;
   opacity: 0.85;
 }
+#public-profile-ranch {
+  scroll-margin-top: 110px;
+}
 .ranch-scene {
   position: relative;
-  height: 310px;
+  height: 340px;
   overflow: hidden;
-  border-radius: 16px;
-  background: linear-gradient(#dcefeb, #f3f1d8);
+  border: 1px solid #b2bc9a55;
+  border-radius: 22px;
+  background: var(--ranch-sky, linear-gradient(170deg, #edf1dc 0%, #e7ecda 38%, #f8edce 75%));
+  box-shadow: inset 0 1px 0 #fff9;
   isolation: isolate;
+}
+.ranch-scene::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 19% 10%, #fff7d955, transparent 56%);
 }
 .ranch-sun {
   position: absolute;
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  background: #f3d58e;
-  left: 13%;
-  top: 26px;
-  box-shadow: 0 0 0 12px #f3d58e22;
+  background: #f5d992;
+  left: 17%;
+  top: 31px;
+  box-shadow:
+    0 0 0 13px #f6dea424,
+    0 0 52px 16px #fff0ba55;
 }
-.ranch-cloud {
+.ranch-landscape {
   position: absolute;
-  background: #ffffff99;
-  border-radius: 80%;
-  width: 120px;
-  height: 25px;
-  left: 48%;
-  top: 60px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  filter: none !important;
+}
+.ranch-clouds {
+  color: #fffdf0;
+  opacity: 0.72;
+}
+.ranch-distant {
+  fill: var(--ranch-distant, #c0ccb3);
 }
 .ranch-hill {
-  position: absolute;
-  width: 130%;
-  height: 220px;
-  border-radius: 50% 50% 0 0;
-  background: #7fb096;
-  bottom: -65px;
-  left: -16%;
+  fill: var(--ranch-hill, #9caf83);
 }
 .ranch-hill-back {
-  background: #a7c8aa;
-  bottom: -10px;
-  left: 20%;
+  fill: var(--ranch-hill-back, #b0c299);
+}
+.ranch-meadow-light {
+  fill: var(--ranch-meadow, #b8c493);
+  opacity: 0.65;
+}
+.ranch-meadow-path {
+  fill: var(--ranch-path, #d4cfaa);
+  opacity: 0.52;
+}
+.ranch-distant-tree {
+  color: var(--ranch-tree, #8fa583);
+}
+.ranch-meadow-marks {
+  color: #738f67;
+  opacity: 0.48;
 }
 .ranch-home {
   position: absolute;
-  right: 5%;
-  bottom: 70px;
-  width: clamp(115px, 26%, 170px);
+  z-index: 2;
+  right: 7%;
+  bottom: 75px;
+  width: clamp(138px, 24%, 186px);
   pointer-events: none;
+  filter: drop-shadow(0 5px 7px #46644214);
 }
 .ranch-hut {
   display: block;
@@ -514,16 +544,18 @@ body .profile-wardrobe :is(h2, h3, p) {
 }
 .ranch-owner-sign {
   position: absolute;
-  right: -4px;
-  bottom: -10px;
+  right: -5px;
+  bottom: -6px;
   max-width: 150px;
-  padding: 5px 9px;
-  border: 2px solid #735130;
-  border-radius: 4px;
-  background: repeating-linear-gradient(3deg, #d7b47e 0 8px, #cfa66c 9px 10px);
-  background-color: #d7b47e;
+  padding: 5px 10px;
+  border: 1px solid #a18056;
+  border-radius: 5px 7px 5px 6px;
+  background: repeating-linear-gradient(2deg, #dfc49b 0 8px, #d5b88b 9px 10px);
+  background-color: #dfc49b;
   color: #402c1c !important;
-  box-shadow: 0 3px 0 #735130;
+  box-shadow:
+    0 2px 0 #a18056,
+    0 4px 5px #485b3920;
   text-align: center;
   overflow-wrap: anywhere;
   font: 700 12px system-ui;
@@ -538,16 +570,27 @@ body:not(.auth-page-body) #public-profile-ranch .ranch-owner-sign {
   top: 100%;
   width: 7px;
   height: 16px;
-  background: #735130;
+  background: #a18056;
 }
 .ranch-ground {
   position: absolute;
+  z-index: 4;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 42px;
-  background: #71937b;
-  border-top: 5px solid #85ab88;
+  height: 40px;
+  background: linear-gradient(#9aac7b00, var(--ranch-ground, #98aa7a) 38%);
+  border: 0;
+  pointer-events: none;
+}
+.ranch-wildflowers {
+  position: absolute;
+  z-index: 5;
+  inset: auto 0 0;
+  width: 100%;
+  height: 60px;
+  pointer-events: none;
+  filter: none !important;
 }
 .ranch-bone {
   position: absolute;
@@ -574,14 +617,18 @@ body:not(.auth-page-body) .profile-ranch .ranch-bone.is-golden svg {
 }
 .ranch-pet-track {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 26px;
-  height: 180px;
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  left: 12px;
+  right: 12px;
+  bottom: 24px;
+  height: 216px;
 }
 [data-max-actor] {
-  width: 180px;
-  height: 180px;
+  flex: 0 0 auto;
+  width: min(216px, 100%);
+  aspect-ratio: 1;
 }
 [data-max-actor] svg {
   display: block;
@@ -594,26 +641,64 @@ body:not(.auth-page-body) .profile-ranch .ranch-bone.is-golden svg {
   position: absolute;
   left: 5%;
   right: 5%;
-  top: 115px;
+  top: 82px;
+  z-index: 2;
   text-align: center;
   color: #244f46 !important;
 }
 body.theme-dark .ranch-scene {
-  background: linear-gradient(#172f3d, #37505c);
+  background: var(--ranch-sky, linear-gradient(165deg, #243941, #4b6060 64%, #7c8165));
+  border-color: #a8bc9929;
+  box-shadow: inset 0 1px 0 #c1d3c615;
+}
+body.theme-dark .ranch-scene::before {
+  background: radial-gradient(ellipse at 18% 15%, #e5d9b511, transparent 55%);
 }
 body.theme-dark .ranch-sun {
-  background: #ddd8bb;
-  box-shadow: 10px -7px 0 0 #233c49;
+  background: #e6dfbf;
+  box-shadow:
+    0 0 0 11px #eee6c00a,
+    0 0 40px 7px #eee6c022;
+}
+body.theme-dark .ranch-clouds {
+  color: #b7c6bf;
+  opacity: 0.2;
+}
+body.theme-dark .ranch-distant {
+  fill: var(--ranch-distant, #506b68);
 }
 body.theme-dark .ranch-hill {
-  background: #375f55;
+  fill: var(--ranch-hill, #526e57);
 }
 body.theme-dark .ranch-hill-back {
-  background: #426f69;
+  fill: var(--ranch-hill-back, #607a65);
+}
+body.theme-dark .ranch-meadow-light {
+  fill: var(--ranch-meadow, #708362);
+}
+body.theme-dark .ranch-meadow-path {
+  fill: var(--ranch-path, #a6a085);
+  opacity: 0.26;
+}
+body.theme-dark .ranch-distant-tree {
+  color: var(--ranch-tree, #506956);
+}
+body.theme-dark .ranch-meadow-marks {
+  color: #a2b48b;
+  opacity: 0.23;
 }
 body.theme-dark .ranch-ground {
-  background: #324a40;
-  border-color: #527c64;
+  background: linear-gradient(#49614e00, var(--ranch-ground, #4c654e) 45%);
+}
+body.theme-dark .ranch-home {
+  filter: brightness(0.85) saturate(0.82) drop-shadow(0 5px 8px #152c3140);
+}
+body.theme-dark .ranch-window {
+  fill: #f8d88b;
+  filter: drop-shadow(0 0 5px #ffe6a590);
+}
+body.theme-dark .ranch-wildflowers {
+  opacity: 0.85;
 }
 body.theme-dark .ranch-empty {
   color: #e4f2e6 !important;
@@ -624,6 +709,127 @@ body.theme-dark .ranch-empty {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+}
+.ranch-wool {
+  --wool-bg: #fffaf0;
+  --wool-line: #dfcaa4;
+  --wool-ink: #614828;
+  --wool-fill: #b88636;
+  margin-top: 22px;
+  padding: clamp(18px, 3vw, 28px);
+  border: 1px solid var(--wool-line);
+  border-radius: 20px;
+  background: radial-gradient(ellipse at top right, #ecca8130, transparent 70%), var(--wool-bg);
+  color: var(--wool-ink);
+}
+body.theme-dark .ranch-wool {
+  --wool-bg: #292a2e;
+  --wool-line: #66553d;
+  --wool-ink: #f0dcc0;
+  --wool-fill: #e0b86e;
+}
+.ranch-wool-heading {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+.ranch-wool-art {
+  width: 110px;
+  height: 68px;
+  flex: 0 0 auto;
+}
+.ranch-wool h3 {
+  margin: 4px 0;
+  font-size: 1.2rem;
+}
+.ranch-wool-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0 20px;
+  font-size: 0.86rem;
+}
+.ranch-wool-progress progress {
+  flex: 1 1 90px;
+  min-width: 70px;
+  height: 9px;
+  appearance: none;
+  border: 0;
+  border-radius: 12px;
+  background: var(--ui-surface-soft);
+  accent-color: var(--wool-fill);
+}
+.ranch-wool-progress progress::-webkit-progress-bar {
+  background: var(--ui-surface-soft);
+  border-radius: 12px;
+}
+.ranch-wool-progress progress::-webkit-progress-value {
+  background: var(--wool-fill);
+  border-radius: 12px;
+}
+.ranch-wool-progress progress::-moz-progress-bar {
+  background: var(--wool-fill);
+  border-radius: 12px;
+}
+.ranch-wool-stages {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.ranch-wool-stages > div {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid var(--wool-line);
+  border-radius: 14px;
+  background: var(--ui-surface);
+}
+.ranch-wool-stages strong {
+  font: 650 1.8rem/1.4 var(--font-zh-ui, sans-serif);
+  color: var(--wool-ink);
+}
+.ranch-wool-stages small {
+  font-size: 0.84rem;
+  font-weight: 400;
+}
+body .profile-ranch .ranch-wool-stages button {
+  background: var(--wool-bg);
+  border-color: var(--wool-line);
+  color: var(--wool-ink);
+}
+.ranch-wool-tool a {
+  color: var(--wool-ink) !important;
+  font-weight: 650;
+  text-underline-offset: 4px;
+}
+.profile-ranch .ranch-wool-note {
+  font-size: 0.85rem;
+  margin-bottom: 0;
+  opacity: 0.85;
+}
+.ranch-wool-rest {
+  border-left: 3px solid var(--wool-fill);
+  padding: 8px 14px;
+  background: var(--ui-surface);
+  border-radius: 4px 12px 12px 4px;
+}
+.ranch-wool-rest small {
+  display: block;
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+@media (max-width: 520px) {
+  .ranch-wool-stages {
+    grid-template-columns: 1fr;
+  }
+  .ranch-wool-art {
+    width: 76px;
+  }
+  .ranch-wool h3 {
+    font-size: 1.05rem;
+  }
 }
 body :is(.profile-ranch, .profile-wardrobe) button {
   padding: 10px 14px;
@@ -681,7 +887,7 @@ body .profile-wardrobe button[aria-pressed='true'] {
   padding: 18px;
 }
 .profile-extras-top .ranch-scene {
-  height: 230px;
+  height: 320px;
 }
 .profile-extras-top .ranch-intro,
 .profile-extras-top .ranch-inventory {
@@ -736,7 +942,15 @@ body .profile-wardrobe button[aria-pressed='true'] {
     padding: 16px;
   }
   .ranch-scene {
-    height: 270px;
+    height: 300px;
+  }
+  .profile-extras-top .ranch-scene {
+    height: 300px;
+  }
+  .ranch-home {
+    right: 3%;
+    bottom: 87px;
+    width: 142px;
   }
   .profile-decoration-preview {
     padding: 20px 14px;
@@ -772,6 +986,10 @@ body.theme-dark[data-public-profile-theme='card_twilight'] {
   --ranch-hill-back: #a0c9bd;
   --ranch-ground: #537f76;
   --ranch-grass: #84b8a1;
+  --ranch-distant: #c0d9cc;
+  --ranch-tree: #76a496;
+  --ranch-meadow: #a4c4a0;
+  --ranch-path: #d0d8b6;
 }
 .public-profile-shell[data-profile-card='card_twilight'] {
   --ui-text: #4d3b60;
@@ -788,6 +1006,10 @@ body.theme-dark[data-public-profile-theme='card_twilight'] {
   --ranch-hill-back: #c4b7d4;
   --ranch-ground: #7f7896;
   --ranch-grass: #b3a6c2;
+  --ranch-distant: #d7cad2;
+  --ranch-tree: #a397af;
+  --ranch-meadow: #b3adc0;
+  --ranch-path: #ddd1c0;
 }
 body.theme-dark .public-profile-shell[data-profile-card='card_blueprint'] {
   --ui-text: #cde7e3;
@@ -804,6 +1026,10 @@ body.theme-dark .public-profile-shell[data-profile-card='card_blueprint'] {
   --ranch-hill-back: #4a7d7a;
   --ranch-ground: #294846;
   --ranch-grass: #547f73;
+  --ranch-distant: #426968;
+  --ranch-tree: #365853;
+  --ranch-meadow: #577e64;
+  --ranch-path: #93a39c;
 }
 body.theme-dark .public-profile-shell[data-profile-card='card_twilight'] {
   --ui-text: #e8ddef;
@@ -820,6 +1046,10 @@ body.theme-dark .public-profile-shell[data-profile-card='card_twilight'] {
   --ranch-hill-back: #77708a;
   --ranch-ground: #423c52;
   --ranch-grass: #79708c;
+  --ranch-distant: #74677b;
+  --ranch-tree: #655e79;
+  --ranch-meadow: #817687;
+  --ranch-path: #b0a19b;
 }
 body:not(.auth-page-body) .public-profile-shell[data-profile-card]:not([data-profile-card='']) {
   background-color: var(--ui-surface) !important;
@@ -844,8 +1074,7 @@ body:not(.auth-page-body) .public-profile-shell[data-profile-card]:not([data-pro
   background: var(--ranch-hill-back);
 }
 .public-profile-shell[data-profile-card]:not([data-profile-card='']) .ranch-ground {
-  background: var(--ranch-ground);
-  border-color: var(--ranch-grass);
+  background: linear-gradient(transparent, var(--ranch-ground) 45%);
 }
 body.theme-dark .public-profile-shell[data-profile-card]:not([data-profile-card='']) .ranch-sun {
   box-shadow: none;

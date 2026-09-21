@@ -18,9 +18,10 @@
     <link rel="stylesheet" href="/username-guard.css" />
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
-    <link rel="stylesheet" href="/admin-rewards.css" />
     <link rel="stylesheet" href="/economy.css" />
     <link rel="stylesheet" href="/profile-extras.css" />
+    <link rel="stylesheet" href="/wallet-ledger.css" />
+    <link rel="stylesheet" href="/inventory-sales.css" />
   </head>
   <!-- Shared cosmetics keep the same theme tokens as the surrounding page. -->
   <body class="inventory-page economy-page">
@@ -168,34 +169,201 @@
           <div class="economy-balance-row" id="inventory-balance-row"></div>
           <p><a id="inventory-profile-link" hidden>我的主页 · 装扮与牧场 ↗</a></p>
           <p id="inventory-message" class="discussion-message"></p>
-          <p><a href="#wallet-ledger">查看钱包账本 ↓</a></p>
-          <div class="inventory-list" id="inventory-list"></div>
-          <section class="reward-history" id="wallet-ledger" aria-labelledby="wallet-ledger-title">
-            <h2 id="wallet-ledger-title">钱包账本</h2>
-            <p>
-              记录本次启用后的电元、磁元收支，以及变动前后余额。管理员奖励同时显示奖励名称与原因。
+          <button
+            class="wallet-launch"
+            id="wallet-ledger-open"
+            type="button"
+            aria-haspopup="dialog"
+            aria-controls="wallet-ledger"
+          >
+            <span class="wallet-launch-icon" aria-hidden="true">↗</span>
+            <span class="wallet-launch-copy"
+              ><small>我的资产足迹</small><strong>打开钱包账本</strong
+              ><span>每一笔收支，都有来处。</span></span
+            >
+            <span class="wallet-launch-arrow" aria-hidden="true">→</span>
+          </button>
+          <section
+            class="bone-recycling"
+            id="bone-recycling"
+            aria-labelledby="bone-recycling-title"
+          >
+            <header class="bone-recycling-heading">
+              <div>
+                <span class="bone-eyebrow">MAX 的回收小站</span>
+                <h2 id="bone-recycling-title">小鱼骨，也有新去处</h2>
+                <p>把牧场里攒下的鱼骨，换成下一次探索的磁元。</p>
+              </div>
+              <button id="bone-recycling-refresh" class="bone-text-button" type="button">
+                刷新库存
+              </button>
+            </header>
+            <p id="bone-recycling-status" role="status">正在查看鱼骨库存…</p>
+            <div class="bone-recycling-grid">
+              <article class="bone-recycling-card" data-recycle-item="ordinary_fishbone">
+                <div class="bone-art" aria-hidden="true">
+                  <img src="/assets/icons/fishbone.svg" alt="" />
+                </div>
+                <div class="bone-recycling-copy">
+                  <h3>普通鱼骨</h3>
+                  <p>每根可换 <strong>1 磁元</strong></p>
+                  <span data-bone-quantity="ordinary_fishbone">库存读取中</span>
+                </div>
+                <button
+                  class="bone-sell-button"
+                  data-sell-bone="ordinary_fishbone"
+                  type="button"
+                  disabled
+                >
+                  出售
+                </button>
+              </article>
+              <article class="bone-recycling-card is-golden" data-recycle-item="golden_fishbone">
+                <div class="bone-art" aria-hidden="true">
+                  <img src="/assets/icons/fishbone.svg" alt="" /><span>✦</span>
+                </div>
+                <div class="bone-recycling-copy">
+                  <h3>黄金鱼骨</h3>
+                  <p>每根可换 <strong>10 磁元</strong></p>
+                  <span data-bone-quantity="golden_fishbone">库存读取中</span>
+                </div>
+                <button
+                  class="bone-sell-button"
+                  data-sell-bone="golden_fishbone"
+                  type="button"
+                  disabled
+                >
+                  出售
+                </button>
+              </article>
+            </div>
+            <p class="bone-recycling-note">
+              出售会消耗对应鱼骨；商城的「坚硬的鱼骨头」是收藏品，不在此回收。
             </p>
-            <label
-              >筛选币种
-              <select id="wallet-ledger-currency">
-                <option value="all">全部收支</option>
-                <option value="electric">电元</option>
-                <option value="magnetic">磁元</option>
-              </select>
-            </label>
-            <p id="wallet-ledger-status" role="status"></p>
-            <div id="wallet-ledger-list"></div>
-            <button id="wallet-ledger-refresh" type="button">刷新账本</button>
-            <button id="wallet-ledger-more" type="button" hidden>加载更早记录</button>
           </section>
+          <div class="inventory-list" id="inventory-list"></div>
         </section>
       </main>
     </div>
+    <dialog
+      class="wallet-dialog"
+      id="wallet-ledger"
+      aria-labelledby="wallet-ledger-title"
+      aria-describedby="wallet-ledger-description"
+    >
+      <div class="wallet-dialog-layout">
+        <header class="wallet-dialog-header">
+          <div class="wallet-dialog-heading">
+            <div>
+              <span class="wallet-eyebrow">每一步，都记得</span>
+              <h2 id="wallet-ledger-title">钱包账本</h2>
+            </div>
+            <button
+              class="wallet-icon-button"
+              id="wallet-ledger-close"
+              type="button"
+              aria-label="关闭钱包账本"
+              autofocus
+            >
+              ×
+            </button>
+          </div>
+          <p id="wallet-ledger-description">让每笔收支都有迹可循。以下记录按时间由近到远排列。</p>
+          <div class="wallet-current-balances" aria-label="当前资产">
+            <div>
+              <span class="currency-electric"
+                ><img class="currency-icon" src="/assets/icons/electron.svg" alt="" />当前电元</span
+              ><strong id="wallet-balance-electric">—</strong>
+            </div>
+            <div>
+              <span class="currency-magnetic"
+                ><img
+                  class="currency-icon"
+                  src="/assets/icons/magnetron.svg"
+                  alt=""
+                />当前磁元</span
+              ><strong id="wallet-balance-magnetic">—</strong>
+            </div>
+          </div>
+        </header>
+        <div class="wallet-toolbar">
+          <label for="wallet-ledger-currency">查看收支</label
+          ><select id="wallet-ledger-currency">
+            <option value="all">全部币种</option>
+            <option value="electric">仅电元</option>
+            <option value="magnetic">仅磁元</option></select
+          ><button id="wallet-ledger-refresh" type="button">刷新</button>
+        </div>
+        <div
+          class="wallet-scroll"
+          id="wallet-ledger-scroll"
+          tabindex="0"
+          role="region"
+          aria-label="可滚动的收支记录"
+        >
+          <p class="wallet-state" id="wallet-ledger-status" role="status"></p>
+          <div id="wallet-ledger-list" role="list" aria-label="收支明细"></div>
+          <button id="wallet-ledger-more" class="wallet-more" type="button" hidden>
+            加载更早记录
+          </button>
+        </div>
+        <footer class="wallet-dialog-footer">
+          <span aria-hidden="true">◷</span>
+          每笔记录保留交易后的电元与磁元余额；更早的历史以已启用的账本记录为准。
+        </footer>
+      </div>
+    </dialog>
+    <dialog
+      class="bone-sale-dialog"
+      id="bone-sale-dialog"
+      aria-labelledby="bone-sale-title"
+      aria-describedby="bone-sale-description"
+    >
+      <form id="bone-sale-form">
+        <div class="bone-sale-heading">
+          <span class="bone-eyebrow">让小收藏继续发光</span
+          ><button
+            class="wallet-icon-button"
+            id="bone-sale-close"
+            type="button"
+            aria-label="关闭出售确认"
+          >
+            ×
+          </button>
+        </div>
+        <h2 id="bone-sale-title">出售鱼骨</h2>
+        <p id="bone-sale-description">确认数量后，磁元会存入你的钱包。</p>
+        <label for="bone-sale-quantity">出售数量 <span id="bone-sale-available"></span></label>
+        <div class="bone-quantity-control">
+          <button id="bone-sale-minus" type="button" aria-label="减少出售数量">−</button
+          ><input
+            id="bone-sale-quantity"
+            type="number"
+            inputmode="numeric"
+            min="1"
+            step="1"
+            value="1"
+            required
+          /><button id="bone-sale-plus" type="button" aria-label="增加出售数量">+</button
+          ><button id="bone-sale-all" type="button">全部</button>
+        </div>
+        <div class="bone-sale-receipt">
+          <span>将获得</span><strong id="bone-sale-total">—</strong>
+        </div>
+        <p class="bone-sale-warning">确认后将扣除对应鱼骨，这笔收入会记录在钱包账本里。</p>
+        <p id="bone-sale-status" role="status"></p>
+        <div class="bone-sale-actions">
+          <button id="bone-sale-cancel" class="bone-text-button" type="button">先留着</button
+          ><button id="bone-sale-submit" class="bone-sell-button" type="submit">确认出售</button>
+        </div>
+      </form>
+    </dialog>
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
     <script src="/profile-extras.js"></script>
     <script src="/app.js"></script>
     <script src="/notifications.js"></script>
     <script src="/wallet-ledger.js"></script>
+    <script src="/inventory-sales.js"></script>
   </body>
 </html>

@@ -389,6 +389,7 @@ function initializeDashboardShell() {
     '/system-settings/course-materials': '课程资料',
     '/electromagnetic': '电磁场',
     '/inventory': '仓库',
+    '/guide': 'Max 的探索手册',
     '/login': '登录',
     '/register': '注册',
     '/remake': '找回密码',
@@ -1029,6 +1030,7 @@ function ensureElectromagneticModal() {
         <h3>电元 · 探索与贡献</h3>
         <ul class="currency-guide-list">
           <li>公测期间，发现并提交有价值的问题，经审核可获得5–50电元奖励。</li>
+          <li>照顾 Max：每喂食5条小鱼长出1份羊毛，按北京时间每天最多剪一份。剪下后用橡胶棒摩擦，每份获得2电元。橡胶棒7磁元购买，可反复使用。</li>
           <li>后续课程配套入驻后，将开放学习内容相关的电元奖励，具体获取方式随课程公布。</li>
         </ul>
       </section>
@@ -1641,6 +1643,7 @@ function groupShopItems(items) {
     consumable: 2,
     pet: 3,
     pet_food: 3,
+    pet_tool: 3,
     decoration: 3,
   };
   const order = [
@@ -1722,7 +1725,7 @@ async function loadElectromagneticPage() {
             <img src="${escapeHtml(item.image || '/assets/icons/battery.svg')}" alt="" aria-hidden="true" />
           </div>
           <div class="shop-item-copy">
-            <span class="shop-category">${escapeHtml({ avatar_frame: '头像框', nameplate: '铭牌', profile_card: '主页主题', pet: '牧场伙伴', pet_food: '牧场食物', scholar_relic: '学者收藏', collectible: '神秘收藏', decoration: '牧场纪念', device: '发光设备', converter: '货币转换', consumable: '消耗品' }[item.class] || '小物件')}</span>
+            <span class="shop-category">${escapeHtml({ avatar_frame: '头像框', nameplate: '铭牌', profile_card: '主页主题', pet: '牧场伙伴', pet_food: '牧场食物', pet_tool: '牧场工具', scholar_relic: '学者收藏', collectible: '神秘收藏', decoration: '牧场纪念', device: '发光设备', converter: '货币转换', consumable: '消耗品' }[item.class] || '小物件')}</span>
             <h2>${escapeHtml(item.name)}</h2>
             <p>${escapeHtml(item.description || '查看详情，了解这个物品。')}</p>
             <strong class="shop-item-price">${escapeHtml(renderShopItemPrice(item))}</strong>
@@ -1793,11 +1796,13 @@ async function loadInventoryPage() {
         : asset;
     });
     window.freeBbsInventoryAssets = assets;
+    window.dispatchEvent(new CustomEvent('freebbs:inventory-change', { detail: { assets } }));
     renderEconomyBalances(balances);
     if (list) {
       list.innerHTML =
         assets
-          .filter((asset) => asset.key !== 'ordinary_fishbone')
+          // Earned bones have their own quantity/quote controls in the recycling section.
+          .filter((asset) => !['ordinary_fishbone', 'golden_fishbone'].includes(asset.key))
           .map((asset) => {
             const item = asset.item || asset.metadata || {};
             return `
@@ -9487,6 +9492,32 @@ function streamCircuitChatResponse(payload, { signal, onProgress } = {}) {
 window.freeBbsApp = {
   callApi,
   refreshEconomy: loadInventoryPage,
+  syncWallet: (() => {
+    let blocked = false;
+    window.addEventListener('storage', (event) => {
+      if (event.key === STORAGE_KEY || event.key === null) blocked = true;
+    });
+    window.addEventListener('freebbs:session-change', () => {
+      blocked = false;
+    });
+    return (user, token) => {
+      // Use the fresh response user, never a replayed transaction's old balance snapshot.
+      // A cross-tab credential change invalidates even an unchanged in-memory token.
+      if (
+        blocked ||
+        !userState.isLoggedIn ||
+        token !== userState.token ||
+        user?.uid !== userState.uid
+      )
+        return false;
+      for (const field of ['electrons', 'manetrons', 'heat']) {
+        const value = Number(user[field]);
+        if (Number.isFinite(value) && value >= 0) userState[field] = value;
+      }
+      renderUser();
+      return true;
+    };
+  })(),
   toggleThemeMode,
   openFortuneModal,
   clearSession,
@@ -9672,6 +9703,37 @@ initializeThemeMode();
 initializeTypographyPreferences();
 initializeEconomyNavigation();
 initializeUserEconomyShortcuts();
+// One shared guide controller follows the user across existing pages.
+async function loadMaxGuide() {
+  const loadScript = (source) =>
+    new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      const timer = setTimeout(() => {
+        script.remove();
+        reject(new Error('Guide module loading timed out'));
+      }, 10000);
+      script.src = source;
+      script.onload = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      script.onerror = () => {
+        clearTimeout(timer);
+        script.remove();
+        reject(new Error('Guide module unavailable'));
+      };
+      document.head.append(script);
+    });
+  // Independent data/geometry modules download together; only the controller waits.
+  await Promise.all(
+    ['/max-guide-releases.js', '/max-guide-stations.js', '/max-guide-geometry.js'].map(loadScript),
+  );
+  await loadScript('/max-guide.js');
+}
+loadMaxGuide().catch(() => {
+  const status = document.getElementById('guide-sync-status');
+  if (status) status.textContent = '导览暂未加载，请刷新后重试；其他功能可以照常使用。';
+});
 renderAdminSection();
 loadHomeDiscussionPosts();
 loadHomeBoardActivityForViewport();

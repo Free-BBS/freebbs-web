@@ -235,10 +235,15 @@ test('visitor presentation excludes wallet, fish, daily fortune and private acti
     'adopted',
     'bones',
     'fedUntilMs',
+    'feedProgress',
     'goldenBones',
     'hardBones',
     'hungry',
+    'nextShearAtMs',
     'serverNowMs',
+    'shearedToday',
+    'woolReady',
+    'woolStored',
   ]);
   const posts = await createEconomyShop(store).decoratePosts([
     { user_id: 1 },
