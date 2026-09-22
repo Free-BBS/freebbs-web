@@ -20,7 +20,7 @@ function ensureWalletLedger(pool) {
         // Database triggers participate in the balance transaction, including legacy/admin paths.
         // Startup intentionally fails if TRIGGER privilege is missing; never silently lose entries.
         for (const event of ['UPDATE', 'INSERT']) {
-          const name = `freebbs_wallet_after_${  event.toLowerCase()}`;
+          const name = `freebbs_wallet_after_${event.toLowerCase()}`;
           const [rows] = await pool.execute(
             'SELECT TRIGGER_NAME FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE() AND TRIGGER_NAME = ?',
             [name],
@@ -44,6 +44,35 @@ function ensureWalletLedger(pool) {
     );
   return ready.get(pool);
 }
+// Call inside the balance transaction, after locking the account. A current read is
+// essential: the caller may already have an older REPEATABLE READ snapshot.
+async function walletLedgerCheckpoint(connection, userId) {
+  const [rows] = await connection.execute(
+    'SELECT CAST(id AS CHAR) AS id FROM wallet_ledger WHERE user_id = ? ORDER BY id DESC LIMIT 1 FOR UPDATE',
+    [userId],
+  );
+  return String(rows[0]?.id || '0');
+}
+
+// One balance UPDATE/INSERT produces one trigger row. Never label an older row
+// when the trigger is missing, or when an operation made no balance change.
+async function annotateWalletLedger(connection, userId, afterId, { sourceKey, title, reason }) {
+  for (const [value, limit] of [
+    [sourceKey, 160],
+    [title, 100],
+    [reason, 1000],
+  ]) {
+    if (typeof value !== 'string' || !value.trim() || value.length > limit)
+      throw new Error('Invalid wallet ledger details');
+  }
+  const [result] = await connection.execute(
+    `UPDATE wallet_ledger SET source_key = ?, title = ?, reason = ?
+     WHERE user_id = ? AND id > ? AND source_key IS NULL ORDER BY id DESC LIMIT 1`,
+    [sourceKey, title, reason, userId, afterId],
+  );
+  if (result.affectedRows !== 1) throw new Error('Wallet ledger entry missing');
+}
+
 function createWalletLedgerRouter({ pool, requireAuth }) {
   const router = express.Router();
   router.get('/wallet/ledger', async (req, res) => {
@@ -85,4 +114,9 @@ function createWalletLedgerRouter({ pool, requireAuth }) {
   });
   return router;
 }
-module.exports = { ensureWalletLedger, createWalletLedgerRouter };
+module.exports = {
+  ensureWalletLedger,
+  createWalletLedgerRouter,
+  walletLedgerCheckpoint,
+  annotateWalletLedger,
+};

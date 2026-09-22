@@ -6,10 +6,12 @@ const { createWorkbenchPreviewApi } = require('./workbench-preview-api');
 const { createBoneSales } = require('../backend/economy-sales');
 const {
   GUIDE_VERSION,
+  LEGACY_GUIDE_VERSIONS,
   emptyProgress,
   resolveGuideVersion,
   createOnboardingService,
 } = require('../backend/onboarding');
+const { ONBOARDING_REWARD_AMOUNTS } = require('../backend/onboarding-reward');
 const catalog = require('../public/data/shop-items.json');
 
 const PREVIEW_PAGES = {
@@ -18,6 +20,7 @@ const PREVIEW_PAGES = {
   '/world': 'world.html',
   '/course': 'course.html',
   '/knowledge': 'knowledge.html',
+  '/publish': 'publish.html',
   '/aichat': 'aichat.html',
   '/workbench': 'workbench.html',
   '/circuit': 'circuit.html',
@@ -207,8 +210,19 @@ function createOnboardingPreview({ now = Date.now } = {}) {
     previewNotice:
       '从首页开始认识 FREE BBS，跟着 Max 逐站探索。预置 120 电元、86 磁元、10 条小鱼、12 根普通鱼骨与 3 根黄金鱼骨；Max 已入住，可自行购买橡胶棒体验羊毛摩擦。所有变化只在本地模拟账本中保存。',
     transformHtml(html, route) {
-      if (route !== '/aichat') return html;
-      return html
+      // Match the shared shell appended by the production static server. Missing
+      // these layers makes guide geometry and responsive QA differ from the site.
+      const page = html
+        .replace(
+          '</head>',
+          '<link rel="stylesheet" href="/site-search.css"><link rel="stylesheet" href="/mobile-shell.css"><link rel="stylesheet" href="/desktop-elegant.css"><link rel="stylesheet" href="/page-transitions.css"></head>',
+        )
+        .replace(
+          '</body>',
+          '<script src="/site-search.js" defer></script><script src="/mobile-shell.js" defer></script><script src="/page-transitions.js" defer></script></body>',
+        );
+      if (route !== '/aichat') return page;
+      return page
         .replace('<p>课程答疑、推导与电路分析</p>', '<p>本地仅演示界面 · 未连接真实 AI</p>')
         .replace(
           'placeholder="输入问题，或粘贴本站电路链接…"',
@@ -217,6 +231,41 @@ function createOnboardingPreview({ now = Date.now } = {}) {
     },
     async extraApi(context) {
       const { route, method, body, url, store } = context;
+      if (route === '/api/onboarding/reward') {
+        const rewardState = () => {
+          const claimedAt = store.account().onboardingRewardClaimedAt || null;
+          return {
+            eligible:
+              Boolean(claimedAt) ||
+              [GUIDE_VERSION, ...LEGACY_GUIDE_VERSIONS].some((version) =>
+                Boolean(readProgress(version).completedAt),
+              ),
+            claimed: Boolean(claimedAt),
+            claimedAt,
+            amounts: { ...ONBOARDING_REWARD_AMOUNTS },
+          };
+        };
+        if (method === 'GET') return result(rewardState());
+        if (method !== 'POST') return result({ message: '仅支持读取或领取导引奖励' }, 405);
+        if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length)
+          return result({ message: '领取奖励不接受自定义金额或账号' }, 400);
+        return store.transaction(async () => {
+          const state = rewardState();
+          if (state.claimed) return result({ ...state, awarded: false });
+          if (!state.eligible) return result({ message: '完成完整新手导引后才能领取奖励' }, 403);
+          const account = store.account();
+          const before = { electric: account.electric, magnetic: account.magnetic };
+          account.electric += ONBOARDING_REWARD_AMOUNTS.electric;
+          account.magnetic += ONBOARDING_REWARD_AMOUNTS.magnetic;
+          store.recordLedger(1, before, {
+            sourceKey: 'onboarding-reward',
+            title: '新手导引完成奖励',
+            reason: '完成完整新手导引，获得 10 电元和 10 磁元；每个账号仅限一次，新老用户同享。',
+          });
+          account.onboardingRewardClaimedAt = new Date(now()).toISOString();
+          return result({ ...rewardState(), awarded: true });
+        });
+      }
       if (route === '/api/onboarding') {
         if (method === 'GET')
           return result(await onboarding.read(1, url.searchParams.get('version') ?? undefined));

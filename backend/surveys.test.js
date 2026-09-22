@@ -96,15 +96,30 @@ test('drawing produces distinct eligible winners without mutating the pool', () 
 
 test(
   'MySQL: public lifecycle, permissions, concurrent submissions/draws and recurring recovery',
-  { skip: !process.env.SURVEY_TEST_MYSQL_SOCKET, timeout: 30000 },
+  {
+    skip: !process.env.FREEBBS_TEST_MYSQL_SOCKET && !process.env.SURVEY_TEST_MYSQL_SOCKET,
+    timeout: 30000,
+  },
   async (t) => {
+    const { isolatedMysqlConfig, assertIsolatedMysql } = require('./test-helpers/isolated-mysql');
+    const isolated = Boolean(process.env.FREEBBS_TEST_MYSQL_SOCKET);
     const database = `survey_test_${crypto.randomBytes(6).toString('hex')}`;
-    const options = {
-      socketPath: process.env.SURVEY_TEST_MYSQL_SOCKET,
-      user: process.env.SURVEY_TEST_MYSQL_USER || 'root',
-      password: process.env.SURVEY_TEST_MYSQL_PASSWORD || '',
-    };
+    const options = isolated
+      ? isolatedMysqlConfig('SURVEY_TEST_MYSQL_SOCKET')
+      : {
+          socketPath: process.env.SURVEY_TEST_MYSQL_SOCKET,
+          user: process.env.SURVEY_TEST_MYSQL_USER || 'root',
+          password: process.env.SURVEY_TEST_MYSQL_PASSWORD || '',
+        };
     const root = await mysql.createConnection(options);
+    if (isolated) {
+      try {
+        await assertIsolatedMysql(root);
+      } catch (error) {
+        await root.end();
+        throw error;
+      }
+    }
     await root.query(`CREATE DATABASE \`${database}\``);
     const pool = mysql.createPool({ ...options, database, connectionLimit: 8 });
     let server;

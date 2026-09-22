@@ -108,10 +108,9 @@ test(
   'isolated MySQL atomically limits accounts across limiter instances',
   { skip: process.env.RUN_LOGIN_RATE_MYSQL !== '1', timeout: 30000 },
   async (t) => {
-    const socketPath = process.env.LOGIN_RATE_MYSQL_SOCKET;
-    assert.ok(socketPath, 'an isolated MySQL socket is required');
+    const { isolatedMysqlConfig } = require('./test-helpers/isolated-mysql');
     const mysql = require('mysql2/promise');
-    const config = { socketPath, user: 'root', password: '' };
+    const config = isolatedMysqlConfig('LOGIN_RATE_MYSQL_SOCKET');
     const root = await mysql.createConnection(config);
     const database = `login_rate_test_${randomUUID().replaceAll('-', '')}`;
     let databaseCreated = false;

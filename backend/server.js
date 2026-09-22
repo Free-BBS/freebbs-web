@@ -12,9 +12,15 @@ const {
 } = require('./ai-models');
 const { awardMagnetic, ensureEconomyPolicy } = require('./economy-rewards');
 const { createAdminRewardsRouter, ensureAdminRewardTables } = require('./admin-rewards');
-const { createWalletLedgerRouter, ensureWalletLedger } = require('./wallet-ledger');
+const {
+  createWalletLedgerRouter,
+  ensureWalletLedger,
+  walletLedgerCheckpoint,
+  annotateWalletLedger,
+} = require('./wallet-ledger');
 const { createBoneSalesRouter } = require('./economy-sales');
 const { registerOnboarding } = require('./onboarding');
+const { registerOnboardingReward } = require('./onboarding-reward');
 const {
   LASER_POLICY,
   createEconomyShop,
@@ -1246,11 +1252,18 @@ async function performDailyCheckin(user) {
         'INSERT INTO user_checkins (user_id, checkin_date, streak_count, reward_electrons, fortune_score) VALUES (?, ?, ?, ?, ?)',
         [user.id, todayKey, streak, reward.rewardElectrons, score],
       );
-      if (reward.rewardElectrons)
+      if (reward.rewardElectrons) {
+        const ledgerBefore = await walletLedgerCheckpoint(connection, user.id);
         await connection.execute('UPDATE users SET electrons = electrons + ? WHERE id = ?', [
           reward.rewardElectrons,
           user.id,
         ]);
+        await annotateWalletLedger(connection, user.id, ledgerBefore, {
+          sourceKey: `legacy-checkin:${todayKey}`,
+          title: '每日签到（历史规则）',
+          reason: `${todayKey} 连续签到第 ${streak} 天，获得 ${reward.rewardElectrons} 电元`,
+        });
+      }
       if (reward.rewardMagnetic)
         await awardMagnetic(
           connection,
@@ -1431,19 +1444,6 @@ function currencyColumn(currency) {
   }
 
   return 'manetrons';
-}
-
-async function awardPostAuthorManetrons(post, delta, connection = pool) {
-  if (!post?.user_id || !delta) {
-    return;
-  }
-
-  await connection.execute(
-    `UPDATE users
-     SET manetrons = GREATEST(0, manetrons + ?)
-     WHERE id = ?`,
-    [delta, post.user_id],
-  );
 }
 
 function toUserProfile(row) {
@@ -2671,6 +2671,7 @@ app.use(
 app.use('/api', createWalletLedgerRouter({ pool, requireAuth }));
 app.use('/api', createBoneSalesRouter({ pool, requireAuth }));
 registerOnboarding(app, { pool, requireAuth });
+registerOnboardingReward(app, { pool, requireAuth });
 app.use(
   '/api',
   createSurveysRouter({ pool, requireAdmin, getOptionalAuthUser, service: surveyService }),
@@ -2732,7 +2733,7 @@ async function lockAdminStateAndTarget(connection, actorId, targetId) {
   }
 
   const [targetRows] = await connection.execute(
-    `SELECT id, role, is_admin
+    `SELECT id, role, is_admin, electrons, manetrons
      FROM users
      WHERE id = ?
      LIMIT 1
@@ -3366,13 +3367,25 @@ app.post('/api/electromagnetic/heat', async (request, response) => {
     }
 
     const column = currencyColumn(currency);
-    const [result] = await pool.execute(
-      `UPDATE users
-       SET ${column} = ${column} - 1,
-           heat = heat + 1
-       WHERE id = ? AND ${column} >= 1`,
-      [user.id],
-    );
+    const result = await withDatabaseTransaction(async (connection) => {
+      await connection.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [user.id]);
+      const ledgerBefore = await walletLedgerCheckpoint(connection, user.id);
+      const [updated] = await connection.execute(
+        `UPDATE users
+         SET ${column} = ${column} - 1,
+             heat = heat + 1
+         WHERE id = ? AND ${column} >= 1`,
+        [user.id],
+      );
+      if (updated.affectedRows) {
+        await annotateWalletLedger(connection, user.id, ledgerBefore, {
+          sourceKey: `heat-exchange:${crypto.randomUUID()}`,
+          title: '兑换热力',
+          reason: `花费 1 ${currency === 'electric' ? '电元' : '磁元'}，获得 1 热力`,
+        });
+      }
+      return updated;
+    });
 
     if (!result.affectedRows) {
       response.status(400).json({ message: '余额不足' });
@@ -5864,27 +5877,41 @@ app.post('/api/admin/users', async (request, response) => {
     const grade = studentId.slice(0, 4);
     const major = '电子信息科学与技术';
 
-    const [result] = await pool.execute(
-      `INSERT INTO users (
-        uid, username, full_name, student_id, email, password_hash, email_verified_at,
-        role, is_admin, electrons, manetrons, heat, grade, major
-      ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        await createUniqueUserUid(),
-        username,
-        fullName,
-        studentId,
-        email,
-        hashPassword(password),
-        role,
-        isAdmin ? 1 : 0,
-        Number.isFinite(electrons) ? electrons : 0,
-        Number.isFinite(manetrons) ? manetrons : 0,
-        Number.isFinite(heat) ? heat : 0,
-        grade,
-        major,
-      ],
-    );
+    const initialElectric = Number.isFinite(electrons) ? electrons : 0;
+    const initialMagnetic = Number.isFinite(manetrons) ? manetrons : 0;
+    const userUid = await createUniqueUserUid();
+    const passwordHash = hashPassword(password);
+    const result = await withDatabaseTransaction(async (connection) => {
+      const [created] = await connection.execute(
+        `INSERT INTO users (
+          uid, username, full_name, student_id, email, password_hash, email_verified_at,
+          role, is_admin, electrons, manetrons, heat, grade, major
+        ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          userUid,
+          username,
+          fullName,
+          studentId,
+          email,
+          passwordHash,
+          role,
+          isAdmin ? 1 : 0,
+          initialElectric,
+          initialMagnetic,
+          Number.isFinite(heat) ? heat : 0,
+          grade,
+          major,
+        ],
+      );
+      if (initialElectric || initialMagnetic) {
+        await annotateWalletLedger(connection, created.insertId, '0', {
+          sourceKey: `admin-create:${crypto.randomUUID()}`,
+          title: '账户初始余额',
+          reason: `管理员 ${adminUser.username || adminUser.uid || adminUser.id} 创建账户，设置 ${initialElectric} 电元、${initialMagnetic} 磁元的初始余额`,
+        });
+      }
+      return created;
+    });
 
     const user = await getUserById(result.insertId);
 
@@ -5941,7 +5968,19 @@ app.patch('/api/admin/users/:id', async (request, response) => {
     await ensureCourseMapTables(pool);
     connection = await pool.getConnection();
     await connection.beginTransaction();
-    await lockAndValidateRoleChange(connection, adminUser.id, targetId, role, isAdmin);
+    const previousUser = await lockAndValidateRoleChange(
+      connection,
+      adminUser.id,
+      targetId,
+      role,
+      isAdmin,
+    );
+    const nextElectric = Number.isFinite(electrons) ? electrons : 0;
+    const nextMagnetic = Number.isFinite(manetrons) ? manetrons : 0;
+    const previousElectric = Number(previousUser.electrons || 0);
+    const previousMagnetic = Number(previousUser.manetrons || 0);
+    const walletChanged = previousElectric !== nextElectric || previousMagnetic !== nextMagnetic;
+    const ledgerBefore = walletChanged ? await walletLedgerCheckpoint(connection, targetId) : null;
     await connection.execute(
       `UPDATE users
        SET uid = COALESCE(NULLIF(uid, ''), ?),
@@ -5957,12 +5996,19 @@ app.patch('/api/admin/users/:id', async (request, response) => {
         fullName,
         role,
         isAdmin ? 1 : 0,
-        Number.isFinite(electrons) ? electrons : 0,
-        Number.isFinite(manetrons) ? manetrons : 0,
+        nextElectric,
+        nextMagnetic,
         Number.isFinite(heat) ? heat : 0,
         targetId,
       ],
     );
+    if (walletChanged) {
+      await annotateWalletLedger(connection, targetId, ledgerBefore, {
+        sourceKey: `admin-adjustment:${crypto.randomUUID()}`,
+        title: '管理员调整余额',
+        reason: `管理员 ${adminUser.username || adminUser.uid || adminUser.id} 将余额由 ${previousElectric} 电元、${previousMagnetic} 磁元调整为 ${nextElectric} 电元、${nextMagnetic} 磁元`,
+      });
+    }
     await replaceUserResponsibilities(
       connection,
       targetId,

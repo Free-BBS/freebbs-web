@@ -639,17 +639,29 @@ test('only administrators can publish or inspect audience and delivery state', a
 test(
   'MySQL: full existing schema coexists with inbox, deduplication, transactions and outbox retry',
   {
-    skip: process.env.NOTIFICATIONS_MYSQL_TEST !== '1',
+    skip: !process.env.FREEBBS_TEST_MYSQL_SOCKET && process.env.NOTIFICATIONS_MYSQL_TEST !== '1',
   },
   async (t) => {
+    const { isolatedMysqlConfig, assertIsolatedMysql } = require('./test-helpers/isolated-mysql');
+    const isolated = Boolean(process.env.FREEBBS_TEST_MYSQL_SOCKET);
     const database = `freebbs_notifications_test_${crypto.randomBytes(8).toString('hex')}`;
-    const credentials = {
-      host: process.env.NOTIFICATIONS_MYSQL_HOST || '127.0.0.1',
-      port: Number(process.env.NOTIFICATIONS_MYSQL_PORT || 3306),
-      user: process.env.NOTIFICATIONS_MYSQL_USER || 'root',
-      password: process.env.NOTIFICATIONS_MYSQL_PASSWORD || '',
-    };
+    const credentials = isolated
+      ? isolatedMysqlConfig('NOTIFICATIONS_MYSQL_SOCKET')
+      : {
+          host: process.env.NOTIFICATIONS_MYSQL_HOST || '127.0.0.1',
+          port: Number(process.env.NOTIFICATIONS_MYSQL_PORT || 3306),
+          user: process.env.NOTIFICATIONS_MYSQL_USER || 'root',
+          password: process.env.NOTIFICATIONS_MYSQL_PASSWORD || '',
+        };
     const admin = await mysql.createConnection(credentials);
+    if (isolated) {
+      try {
+        await assertIsolatedMysql(admin);
+      } catch (error) {
+        await admin.end();
+        throw error;
+      }
+    }
     let pool;
     t.after(async () => {
       if (pool) await pool.end();
