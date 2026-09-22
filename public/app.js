@@ -6424,6 +6424,9 @@ function pollDiscussionCommentsForMax(
   { imageGeneration = false } = {},
 ) {
   let attempts = 0;
+  const latestCommentId = imageGeneration
+    ? Math.max(0, ...discussionState.comments.map((comment) => Number(comment.id) || 0))
+    : 0;
   if (messageNode && imageGeneration) {
     messageNode.textContent = 'Max 已开始生成图片，完成后会显示在评论区…';
   }
@@ -6433,10 +6436,20 @@ function pollDiscussionCommentsForMax(
     try {
       await loadDiscussionComments(postId);
 
-      if (discussionState.comments.length > baselineCount) {
+      const maxReply = imageGeneration
+        ? discussionState.comments.find(
+            (comment) =>
+              Number(comment.id) > latestCommentId && comment.author?.username === 'max_the_agent',
+          )
+        : null;
+      if (maxReply || (!imageGeneration && discussionState.comments.length > baselineCount)) {
         window.clearInterval(timer);
         if (messageNode) {
-          messageNode.textContent = imageGeneration ? 'Max 的图片已生成' : 'Max 已回复';
+          messageNode.textContent = imageGeneration
+            ? /\/uploads\/max-image-/.test(maxReply.contentMarkdown)
+              ? 'Max 的图片已生成，见下方评论'
+              : 'Max 已回复，但没有生成图片，请查看评论'
+            : 'Max 已回复';
         }
         return;
       }
