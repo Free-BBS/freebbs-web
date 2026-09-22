@@ -32,7 +32,9 @@
       KEYS.map((key) => [key, form.querySelector(`[data-notification-preference="${key}"]`)]),
     );
     let values = Object.fromEntries(KEYS.map((key) => [key, true]));
+    let savedValues = { ...values };
     let busy = false;
+    let loaded = false;
     let revision = 0;
 
     function render() {
@@ -41,13 +43,17 @@
         if (inputs[key]) inputs[key].checked = Boolean(values[key]);
         if (inputs[key]) inputs[key].disabled = busy;
       }
-      if (submit) submit.disabled = busy;
+      const dirty = KEYS.some((key) => values[key] !== savedValues[key]);
+      if (submit) submit.disabled = busy || !loaded || !dirty;
+      if (message && busy && !message.textContent) message.textContent = '正在读取邮件通知设置…';
     }
 
     function reset() {
       revision += 1;
       busy = false;
       values = Object.fromEntries(KEYS.map((key) => [key, true]));
+      savedValues = { ...values };
+      loaded = false;
       if (message) message.textContent = '';
       render();
     }
@@ -62,6 +68,8 @@
         const payload = await callApi('/notifications/email-preferences', { method: 'GET' });
         if (request !== revision || session !== getSession()) return;
         values = { ...values, ...(payload.preferences || {}) };
+        savedValues = { ...values };
+        loaded = true;
         if (message) message.textContent = '';
       } catch (error) {
         if (request !== revision || session !== getSession()) return;
@@ -89,6 +97,7 @@
         });
         if (request !== revision || session !== getSession()) return;
         values = { ...values, ...(payload.preferences || {}) };
+        savedValues = { ...values };
         if (message) message.textContent = '邮件通知偏好已保存';
       } catch (error) {
         if (request !== revision || session !== getSession()) return;
@@ -101,7 +110,11 @@
       }
     }
 
-    for (const input of Object.values(inputs)) input?.addEventListener('change', render);
+    for (const [key, input] of Object.entries(inputs))
+      input?.addEventListener('change', () => {
+        values[key] = Boolean(input.checked);
+        render();
+      });
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       save();
