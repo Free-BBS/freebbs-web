@@ -76,6 +76,7 @@ const {
   persistGeneratedSsePayload,
   stripGeneratedImages,
 } = require('./max-images');
+const { readMaxBackgroundStream } = require('./max-background-stream');
 const {
   canReadPost,
   lockPublicPost,
@@ -210,6 +211,7 @@ const MAX_AGENT_USER = {
 };
 const USER_ROLES = new Set(['student', 'ta', 'teacher', 'admin']);
 const maxImageGenerationGate = createImageGenerationGate();
+const maxDiscussionProgress = new Map();
 const systemSettingsStore = createSystemSettingsStore({
   pool,
   encryptionKey: config.settingsEncryptionKey,
@@ -1906,11 +1908,16 @@ async function requestMaxBackgroundAnswer(
   user,
   payload,
   signal,
-  { allowImageGeneration = false } = {},
+  { allowImageGeneration = false, onImageGeneration } = {},
 ) {
   const agentPayload = buildAgentChatPayload(
     user,
-    { ...payload, ...maxAgentRoute(payload), stream: false },
+    {
+      ...payload,
+      ...maxAgentRoute(payload),
+      stream: allowImageGeneration,
+      reasoning_stream: allowImageGeneration,
+    },
     {
       source: payload.source || 'direct_chat',
       channel: 'aichat',
@@ -1920,7 +1927,9 @@ async function requestMaxBackgroundAnswer(
   );
   const upstream = await postAgentChat(agentPayload, user, { signal });
   if (!upstream.ok) throw new Error(`AI 服务返回 ${upstream.status}。`);
-  const result = await upstream.json();
+  const result = allowImageGeneration
+    ? await readMaxBackgroundStream(upstream, { onImageGeneration })
+    : await upstream.json();
   if (!result || typeof result !== 'object' || Array.isArray(result))
     throw new Error('AI 服务返回了无效回答。');
   if (upstream.siteSources?.length) result.site_sources = upstream.siteSources;
@@ -1953,6 +1962,8 @@ async function runMaxBackgroundTask({ user, payload, progress, signal }) {
       await progress({ phase: 'thinking', message: 'Max 正在后台思考…' });
       const result = await requestMaxBackgroundAnswer(user, payload, requestSignal, {
         allowImageGeneration: imageReservation.allowed,
+        onImageGeneration: () =>
+          progress({ phase: 'image_generating', message: 'Max 已开始生成图片…' }),
       });
       return { result: await finalize(result) };
     }
@@ -2003,7 +2014,11 @@ async function runMaxBackgroundTask({ user, payload, progress, signal }) {
         ],
       },
       requestSignal,
-      { allowImageGeneration: imageReservation.allowed },
+      {
+        allowImageGeneration: imageReservation.allowed,
+        onImageGeneration: () =>
+          progress({ phase: 'image_generating', message: 'Max 已开始生成图片…' }),
+      },
     );
     await progress({ phase: 'saving', message: '正在保存 Max 的回答…' });
     return { result: await finalize(result) };
@@ -2217,6 +2232,8 @@ async function createMaxDiscussionReply(postId, triggerComment) {
       channel: 'discussion_comment',
       message: prompt,
       temperature: 0.5,
+      stream: imageReservation.allowed,
+      reasoning_stream: imageReservation.allowed,
       allow_image_generation: imageReservation.allowed,
       context: {
         post: {
@@ -2232,13 +2249,24 @@ async function createMaxDiscussionReply(postId, triggerComment) {
       },
     });
 
-    agentPayload = await agentResponse.json().catch(() => ({}));
-
     if (!agentResponse.ok) {
-      throw new Error(agentPayload?.error?.message || agentPayload.message || 'Max 暂时无法回复');
+      const errorPayload = await agentResponse.json().catch(() => ({}));
+      throw new Error(errorPayload?.error?.message || errorPayload.message || 'Max 暂时无法回复');
     }
+    agentPayload = imageReservation.allowed
+      ? await readMaxBackgroundStream(agentResponse, {
+          onImageGeneration: () => {
+            const pending = maxDiscussionProgress.get(triggerComment.id);
+            if (pending) pending.phase = 'image_generating';
+          },
+        })
+      : await agentResponse.json();
 
     try {
+      if (agentPayload?.generated_images?.length) {
+        const pending = maxDiscussionProgress.get(triggerComment.id);
+        if (pending) pending.phase = 'saving_image';
+      }
       const persisted = await persistGeneratedImages(agentPayload, {
         ownerId: triggerComment.author.id,
         uploadDir: config.uploadDir,
@@ -4708,6 +4736,15 @@ app.get('/api/discussion/posts/:id/comments', async (request, response) => {
           }),
         ),
       ),
+      maxProgress: [...maxDiscussionProgress]
+        .filter(([, state]) => {
+          if (Date.now() - state.startedAt > 5 * 60 * 1000) {
+            maxDiscussionProgress.delete(state.commentId);
+            return false;
+          }
+          return state.postId === post.id;
+        })
+        .map(([commentId, state]) => ({ commentId, phase: state.phase })),
     });
   } catch (error) {
     response.status(500).json({ message: '获取评论失败', detail: error.message });
@@ -4794,10 +4831,16 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
     const maxPending = user.username !== MAX_AGENT_USER.username && shouldAskMax(contentMarkdown);
 
     if (maxPending) {
+      maxDiscussionProgress.set(comment.id, {
+        commentId: comment.id,
+        postId: post.id,
+        phase: 'thinking',
+        startedAt: Date.now(),
+      });
       setImmediate(() => {
-        createMaxDiscussionReply(post.id, comment).catch((error) => {
-          console.error('Failed to create Max discussion reply', error);
-        });
+        createMaxDiscussionReply(post.id, comment)
+          .catch((error) => console.error('Failed to create Max discussion reply', error))
+          .finally(() => maxDiscussionProgress.delete(comment.id));
       });
     }
 

@@ -164,6 +164,7 @@ const discussionState = {
   isFallback: false,
   activePost: null,
   comments: [],
+  maxProgress: [],
   viewMode: 'latest',
   showDeleted: false,
   commentActionsPending: new Set(),
@@ -4666,6 +4667,7 @@ function updateAiChatMessage(article, content) {
     return;
   }
 
+  window.FreeBbsMaxTetris?.dispose(article);
   article.dataset.markdown = content || '';
   if (content) {
     const attachment = article.classList.contains('aichat-message-user')
@@ -5142,7 +5144,10 @@ async function requestMaxNavigation(payload, onReasoning, onProgress = () => {})
   let task = await startAiBackgroundTask('max', payload.did || '', body);
   rememberMaxBackgroundTask(task.id);
   while (['queued', 'running'].includes(task.status)) {
-    onProgress(task.progress?.message || 'Max 正在后台思考，离开页面也会继续…');
+    onProgress(
+      task.progress?.message || 'Max 正在后台思考，离开页面也会继续…',
+      task.progress?.phase,
+    );
     await new Promise((resolve) => {
       window.setTimeout(resolve, 1500);
     });
@@ -5170,10 +5175,14 @@ function rememberMaxBackgroundTask(id) {
 async function waitForMaxBackgroundTask(task, assistantArticle, { imageGeneration = false } = {}) {
   rememberMaxBackgroundTask(task.id);
   let current = task;
+  let showingImage = imageGeneration;
   while (['queued', 'running'].includes(current.status)) {
     const message = current.progress?.message || 'Max 正在后台思考，离开页面也会继续…';
-    setAiChatThinkingBubble(assistantArticle, message, { imageGeneration });
-    setAiChatStatus(imageGeneration ? '正在生成图片…' : message);
+    showingImage ||= Boolean(
+      window.FreeBbsMaxImageResults?.isGenerationPhase(current.progress?.phase),
+    );
+    setAiChatThinkingBubble(assistantArticle, message, { imageGeneration: showingImage });
+    setAiChatStatus(showingImage ? '正在生成图片…' : message);
     await new Promise((resolve) => {
       window.setTimeout(resolve, 1500);
     });
@@ -5552,7 +5561,7 @@ async function handleAiChatSubmit(event) {
     );
   }
   const assistantArticle = appendAiChatMessage('assistant', '');
-  const imageGeneration = Boolean(window.FreeBbsMaxImageResults?.isRequest(userMessage));
+  let imageGeneration = Boolean(window.FreeBbsMaxImageResults?.isRequest(userMessage));
   startAiChatThinkingStatus();
   setAiChatThinkingBubble(assistantArticle, 'Max 正在思考......', { imageGeneration });
   if (imageGeneration) setAiChatStatus('正在生成图片…');
@@ -5571,8 +5580,9 @@ async function handleAiChatSubmit(event) {
       (progress) => {
         window.FreeBbsReasoning.update(assistantArticle, progress);
       },
-      (message) => {
+      (message, phase) => {
         window.clearTimeout(bubbleTimer);
+        imageGeneration ||= Boolean(window.FreeBbsMaxImageResults?.isGenerationPhase(phase));
         setAiChatThinkingBubble(assistantArticle, message, { imageGeneration });
         setAiChatStatus(imageGeneration ? '正在生成图片…' : message);
       },
@@ -6399,11 +6409,13 @@ async function loadDiscussionComments(postId) {
   const version = discussionState.sessionVersion;
   const detailRequest = discussionState.postRequestId;
   let comments = [];
+  let maxProgress = [];
   try {
     const payload = await callApi(`/discussion/posts/${encodeURIComponent(postId)}/comments`, {
       method: 'GET',
     });
     comments = payload.comments || [];
+    maxProgress = payload.maxProgress || [];
   } catch {
     // Fail closed: never retain comments from a previous post or user.
   }
@@ -6414,42 +6426,77 @@ async function loadDiscussionComments(postId) {
   )
     return;
   discussionState.comments = comments;
+  discussionState.maxProgress = maxProgress;
   renderDiscussionComments();
 }
 
 function pollDiscussionCommentsForMax(
   postId,
-  baselineCount,
+  triggerCommentId,
   messageNode,
   { imageGeneration = false } = {},
 ) {
   let attempts = 0;
-  const latestCommentId = imageGeneration
-    ? Math.max(0, ...discussionState.comments.map((comment) => Number(comment.id) || 0))
-    : 0;
-  if (messageNode && imageGeneration) {
-    messageNode.textContent = 'Max 已开始生成图片，完成后会显示在评论区…';
-  }
+  const latestCommentId = Math.max(
+    0,
+    ...discussionState.comments.map((comment) => Number(comment.id) || 0),
+  );
+  let showingImage = imageGeneration;
+  let placeholder = null;
+  const showPlaceholder = (message) => {
+    if (messageNode) messageNode.textContent = message;
+    const list = document.getElementById('discussion-comment-list');
+    if (list && !placeholder) {
+      placeholder = document.createElement('article');
+      placeholder.className = 'max-image-discussion-pending';
+      placeholder.innerHTML = '<div class="aichat-bubble"></div>';
+      list.before(placeholder);
+    }
+    if (placeholder) window.FreeBbsMaxImageResults?.showProgress(placeholder, message);
+  };
+  if (imageGeneration) showPlaceholder('Max 正在思考…');
+  const clearPlaceholder = () => {
+    window.FreeBbsMaxTetris?.dispose(placeholder);
+    placeholder?.remove();
+  };
   const timer = window.setInterval(async () => {
     attempts += 1;
+    if (String(postId) !== String(discussionState.activePostId)) {
+      window.clearInterval(timer);
+      clearPlaceholder();
+      return;
+    }
 
     try {
       await loadDiscussionComments(postId);
-
-      const maxReply = imageGeneration
-        ? discussionState.comments.find(
-            (comment) =>
-              Number(comment.id) > latestCommentId && comment.author?.username === 'max_the_agent',
-          )
-        : null;
-      if (maxReply || (!imageGeneration && discussionState.comments.length > baselineCount)) {
+      const phase = discussionState.maxProgress.find(
+        (item) => Number(item.commentId) === Number(triggerCommentId),
+      )?.phase;
+      if (!showingImage && window.FreeBbsMaxImageResults?.isGenerationPhase(phase)) {
+        showingImage = true;
+      }
+      if (showingImage) {
+        showPlaceholder(
+          phase === 'saving_image'
+            ? '图片已经生成，正在保存到评论…'
+            : phase === 'image_generating'
+              ? 'Max 已开始生成图片…'
+              : 'Max 正在思考…',
+        );
+      }
+      const maxReply = discussionState.comments.find(
+        (comment) =>
+          Number(comment.id) > latestCommentId && comment.author?.username === 'max_the_agent',
+      );
+      if (maxReply) {
         window.clearInterval(timer);
+        clearPlaceholder();
         if (messageNode) {
-          messageNode.textContent = imageGeneration
-            ? /\/uploads\/max-image-/.test(maxReply.contentMarkdown)
-              ? 'Max 的图片已生成，见下方评论'
-              : 'Max 已回复，但没有生成图片，请查看评论'
-            : 'Max 已回复';
+          messageNode.textContent = /\/uploads\/max-image-/.test(maxReply.contentMarkdown)
+            ? 'Max 的图片已生成，见下方评论'
+            : showingImage
+              ? 'Max 已回复，但没有生成图片，请查看评论'
+              : 'Max 已回复';
         }
         return;
       }
@@ -6457,8 +6504,9 @@ function pollDiscussionCommentsForMax(
       // loadDiscussionComments already handles display fallback.
     }
 
-    if (attempts >= (imageGeneration ? 48 : 12)) {
+    if (attempts >= 48) {
       window.clearInterval(timer);
+      clearPlaceholder();
       if (messageNode) {
         messageNode.textContent = '评论已发布，Max 可能稍后回复';
       }
@@ -8789,7 +8837,6 @@ async function handleDiscussionCommentSubmit(event) {
       },
     );
 
-    const baselineCommentCount = discussionState.comments.length;
     const newComments = [payload.comment].filter(Boolean);
     discussionState.comments = [...discussionState.comments, ...newComments];
     const addedCommentCount = newComments.length;
@@ -8817,12 +8864,9 @@ async function handleDiscussionCommentSubmit(event) {
     renderDiscussionComments();
     renderDiscussionPosts();
     if (payload.maxPending || shouldWaitForMaxReply(contentMarkdown)) {
-      pollDiscussionCommentsForMax(
-        discussionState.activePostId,
-        baselineCommentCount + addedCommentCount,
-        message,
-        { imageGeneration: window.FreeBbsMaxImageResults?.isRequest(contentMarkdown) },
-      );
+      pollDiscussionCommentsForMax(discussionState.activePostId, payload.comment?.id, message, {
+        imageGeneration: window.FreeBbsMaxImageResults?.isRequest(contentMarkdown),
+      });
     }
   } catch (error) {
     if (message) {
