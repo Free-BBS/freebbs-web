@@ -100,9 +100,15 @@
     const caption = document.createElement('figcaption');
     const state = document.createElement('span');
     state.className = 'max-generated-image-state';
-    state.textContent = '图片已生成';
+    state.dataset.state = 'loading';
+    state.textContent = '正在加载图片';
     const actions = document.createElement('span');
     actions.className = 'max-generated-image-actions';
+    const error = document.createElement('p');
+    error.className = 'max-generated-image-load-error';
+    error.hidden = true;
+    error.setAttribute('role', 'alert');
+    error.textContent = '图片文件未能加载，可能是生成或保存失败。';
     const open = document.createElement('a');
     open.href = image.currentSrc || image.src;
     open.target = '_blank';
@@ -112,11 +118,58 @@
     download.href = image.currentSrc || image.src;
     download.download = '';
     download.textContent = '下载';
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'max-generated-image-retry';
+    retry.textContent = '重新加载';
+    const originalSource = image.currentSrc || image.src;
+    let automaticallyRetried = false;
+
+    const markReady = () => {
+      figure.classList.remove('is-image-unavailable');
+      error.hidden = true;
+      state.dataset.state = 'ready';
+      state.textContent = '图片已生成';
+      actions.replaceChildren(open, download);
+    };
+    const markUnavailable = () => {
+      if (!automaticallyRetried) {
+        automaticallyRetried = true;
+        reload();
+        return;
+      }
+      figure.classList.add('is-image-unavailable');
+      error.hidden = false;
+      state.dataset.state = 'error';
+      state.textContent = '图片未能加载';
+      actions.replaceChildren(retry);
+    };
+    const reload = () => {
+      figure.classList.remove('is-image-unavailable');
+      error.hidden = true;
+      state.dataset.state = 'loading';
+      state.textContent = '正在重新加载';
+      actions.replaceChildren();
+      const url = new URL(originalSource, root.location?.origin || 'https://free-bbs.cn');
+      url.searchParams.set('reload', String(Date.now()));
+      image.src = url.href;
+    };
+    image.addEventListener('load', markReady);
+    image.addEventListener('error', markUnavailable);
+    retry.addEventListener('click', () => {
+      automaticallyRetried = true;
+      reload();
+    });
     actions.append(open, download);
     caption.append(state, actions);
     image.loading = 'eager';
     image.decoding = 'async';
-    figure.append(image, caption);
+    figure.append(image, error, caption);
+    // An image may already have completed before its Markdown is decorated.
+    if (image.complete) {
+      if (image.naturalWidth > 0) markReady();
+      else markUnavailable();
+    }
     return figure;
   }
 
