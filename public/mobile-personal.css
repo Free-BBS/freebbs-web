@@ -146,6 +146,7 @@
     display: flex !important;
     flex-direction: column;
     gap: 0 !important;
+    align-items: stretch;
     min-width: 0;
   }
   body.personal-workbench-page .workbench-persistent-column {

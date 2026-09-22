@@ -157,6 +157,10 @@ test('normalizes HTML to inert text and parses Shanghai timestamps explicitly', 
   assert.equal(normalizeHtmlText('&lt;img src=x onerror=steal()&gt;safe'), 'safe');
   assert.equal(normalizeShanghaiDate('2026-08-03 23:59:00'), '2026-08-03T15:59:00.000Z');
   assert.equal(normalizeShanghaiDate('2026-02-30 12:00:00'), null);
+  assert.equal(normalizeShanghaiDate('2026-08-03 23:59:00.0'), '2026-08-03T15:59:00.000Z');
+  assert.equal(normalizeShanghaiDate('2026-08-03 23:59:00.123'), '2026-08-03T15:59:00.123Z');
+  assert.equal(normalizeShanghaiDate(Date.parse('2026-08-03T15:59:00Z')), '2026-08-03T15:59:00.000Z');
+  assert.equal(normalizeShanghaiDate('2026-02-30 12:00:00.0'), null);
 });
 
 test('rejects arbitrary hosts and paths before invoking the authorized channel', async () => {
@@ -364,7 +368,7 @@ test('fails closed when a required upstream schema landmark disappears', async (
   );
 });
 
-test('fails closed when every notice or homework row has an invalid deadline', () => {
+test('rejects invalid notices but preserves homework with an unverified deadline', () => {
   const course = {
     providerCourseId: 'course_1',
     sourceReference: 'learn:course:test',
@@ -380,17 +384,17 @@ test('fails closed when every notice or homework row has an invalid deadline', (
       ),
     (error) => error.code === 'parser_schema_mismatch' && error.resource === 'notices',
   );
-  assert.throws(
-    () =>
-      parseHomework(
-        {
-          object: { aaData: [{ zyid: 'homework_1', bt: 'Homework', jzsj: 'not-a-date' }] },
-        },
-        course,
-        'unsubmitted',
-      ),
-    (error) => error.code === 'parser_schema_mismatch' && error.resource === 'homework',
+  const parsed = parseHomework(
+    { object: { aaData: [{ zyid: 'homework_1', bt: 'Homework', jzsj: 'not-a-date' }] } },
+    course,
+    'submitted',
   );
+  assert.equal(parsed.homework.length, 1);
+  assert.equal(parsed.homework[0].dueAt, null);
+  assert.equal(parsed.homework[0].deadlineUnverified, true);
+  assert.equal(parsed.homework[0].status, 'submitted');
+  assert.equal(parsed.warnings[0].code, 'homework_deadline_unrecognized');
+  assert.equal(parsed.importantItems.length, 0);
 });
 
 test('prefers the most advanced homework status and removes stale drafts', async () => {
@@ -473,4 +477,23 @@ test('advertises implemented and blocked connector boundaries honestly', () => {
   });
   assert.equal(verifiedCapability.validationState, 'live_account_verified');
   assert.equal(verifiedCapability.liveSyncState, 'verified');
+});
+
+
+test('sync retains submitted homework with unknown dates and reports a partial snapshot', async () => {
+  const fixture = createFixtureFetch();
+  const snapshot = await syncTsinghuaLearn({
+    minimumRequestIntervalMs: 0,
+    authorizedFetch: async (url, options) => {
+      if (url.pathname.endsWith('/zyListYjwg')) return jsonResponse({
+        object: { aaData: [{ zyid: 'submitted1', xszyid: 'student1', bt: '作业', jzsj: '待定' }] },
+      });
+      return fixture(url, options);
+    },
+  });
+  assert.equal(snapshot.status, 'partial');
+  assert.equal(snapshot.homework.length, 2);
+  assert.equal(snapshot.homework.find((item) => item.status === 'submitted').deadlineUnverified, true);
+  assert.equal(snapshot.errors.length, 0);
+  assert.equal(snapshot.warnings[0].code, 'homework_deadline_unrecognized');
 });

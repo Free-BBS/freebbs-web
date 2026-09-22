@@ -151,6 +151,46 @@ test('claimRun cancels a queued run whose connection generation changed', async 
   );
 });
 
+test('homework snapshots retain upstream ids and belong to the claimed user and generation', async () => {
+  const finishedAt = new Date('2026-09-22T08:05:00Z');
+  const pool = createTransactionalPool(async (sql) => {
+    if (sql.startsWith('SELECT r.id AS run_id')) return [[runningRow()], []];
+    return [{ affectedRows: 1 }, []];
+  });
+  const homework = [
+    {
+      sourceReference: 'learn:homework:one',
+      providerHomeworkId: 'base-id',
+      providerStudentHomeworkId: 'student-id',
+      submissionType: 2,
+      completionType: 1,
+    },
+  ];
+  await createTsinghuaSyncStore(pool).completeRun(
+    claimedRun(),
+    {
+      semesterId: '2026-2027-1',
+      homework,
+      courses: [],
+      notifications: [],
+      importantItems: [],
+      status: 'partial',
+    },
+    finishedAt,
+  );
+  const write = pool.calls.find(({ sql }) =>
+    sql.startsWith('INSERT INTO campus_homework_snapshots'),
+  );
+  assert.deepEqual(write.parameters, [
+    7,
+    3,
+    '2026-2027-1',
+    JSON.stringify(homework),
+    finishedAt,
+    'partial',
+  ]);
+});
+
 test('a complete snapshot reconciles untouched drafts and can revive auto-cancelled items', async () => {
   const finishedAt = new Date('2026-08-02T08:05:00.000Z');
   const pool = createTransactionalPool(async (sql) => {

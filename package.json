@@ -32,6 +32,7 @@
     "test:circuits:integration": "RUN_CIRCUITS_INTEGRATION=1 RUN_CIRCUIT_EXAMPLES_INTEGRATION=1 npm run test:circuits",
     "test:workbench": "node --test backend/health.test.js backend/workbench.test.js backend/workbench-schedule-planner.test.js backend/public-source-probe.test.js backend/portal-boundary-probe.test.js backend/tsinghua-learn-connector.test.js scripts/workbench-page.test.js scripts/workbench-connector-page.test.js scripts/tsinghua-cas-fingerprint.test.js",
     "test:tsinghua-authorization": "node --test backend/tsinghua-connectors/*.test.js",
+    "test:homework": "node --test backend/homework-schedule.test.js backend/tsinghua-connectors/homework-*.test.js backend/tsinghua-connectors/cas-adapter.test.js backend/tsinghua-connectors/sync-store.test.js backend/tsinghua-connectors/schema.test.js backend/tsinghua-learn-connector.test.js",
     "test:tsinghua-connectors": "node --test backend/health.test.js backend/public-source-probe.test.js backend/portal-boundary-probe.test.js backend/tsinghua-learn-connector.test.js backend/tsinghua-connectors/*.test.js",
     "probe:public-source": "node scripts/probe-public-source.js",
     "lint": "eslint .",
@@ -50,6 +51,7 @@
   "dependencies": {
     "@highlightjs/cdn-assets": "^11.11.1",
     "@xmldom/xmldom": "^0.8.15",
+    "cheerio": "1.0.0",
     "exceljs": "^4.4.0",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",

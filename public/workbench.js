@@ -161,6 +161,7 @@
   }
 
   function renderCampusSemester(semester) {
+    window.dispatchEvent(new CustomEvent('freebbs:campus-semester', { detail: semester }));
     elements.campusCourseList.replaceChildren();
     elements.campusNoticeList.replaceChildren();
     const courses = Array.isArray(semester?.courses) ? semester.courses : [];
@@ -182,6 +183,17 @@
         [course.teacher, course.scheduleText, course.locationText].filter(Boolean).join(' · ') ||
         '暂无教师与上课地点信息';
       item.append(title, detail);
+      const homeworkButton = document.createElement('button');
+      homeworkButton.type = 'button';
+      homeworkButton.textContent = '查看课程作业';
+      homeworkButton.addEventListener('click', () => {
+        window.dispatchEvent(
+          new CustomEvent('freebbs:campus-course-homework', {
+            detail: { courseReference: course.sourceReference },
+          }),
+        );
+      });
+      item.append(homeworkButton);
       elements.campusCourseList.append(item);
     });
 
@@ -216,12 +228,15 @@
 
   async function loadCampusSemester(semesterId) {
     if (!semesterId) return;
+    const sessionToken = app.userState.token;
     elements.campusCoursesStatus.textContent = '正在读取该学期课程与公告…';
     try {
       const payload = await app.callApi(
         `/workbench/campus/semesters/${encodeURIComponent(semesterId)}`,
         { method: 'GET' },
       );
+      if (sessionToken !== app.userState.token || elements.campusSemester.value !== semesterId)
+        return;
       renderCampusSemester(payload.semester);
     } catch (error) {
       elements.campusCoursesStatus.textContent = error.message || '读取学期数据失败';
@@ -428,9 +443,11 @@
         timeline.append(marker);
       }
       const entries = state.scheduleItems
-        .filter(
-          (item) =>
-            new Date(item.startAt).getTime() < dayEnd && new Date(item.endAt).getTime() > dayStart,
+        .filter((item) =>
+          item.kind === 'deadline'
+            ? new Date(item.endAt).getTime() >= dayStart && new Date(item.endAt).getTime() < dayEnd
+            : new Date(item.startAt).getTime() < dayEnd &&
+              new Date(item.endAt).getTime() > dayStart,
         )
         .map((item) => ({
           item,
@@ -450,20 +467,29 @@
       for (const entry of entries) {
         const block = document.createElement('button');
         block.type = 'button';
-        block.dataset.workbenchAction = 'edit-schedule';
+        block.dataset.workbenchAction = entry.item.homeworkReference
+          ? 'toggle-homework-completion'
+          : 'edit-schedule';
         block.dataset.publicId = entry.item.publicId;
         block.className = `workbench-week-event${entry.item.status === 'draft' ? ' is-draft' : ''}${entry.item.sourceType === 'agent' ? ' is-agent' : ''}${entry.item.kind === 'deadline' ? ' is-deadline' : ''}${entry.item.kind === 'weekly' ? ' is-weekly' : ''}`;
+        if (entry.item.completed) block.classList.add('is-completed');
         const title = document.createElement('strong');
         let prefix = '';
         if (entry.item.kind === 'deadline') prefix = '⏱ DDL · ';
         if (entry.item.kind === 'weekly') prefix = '↻ 周常 · ';
-        title.textContent = `${prefix}${entry.item.title || '未命名日程'}`;
+        title.textContent = `${entry.item.completed ? '✓ 已完成 · ' : prefix}${entry.item.title || '未命名日程'}`;
         const time = document.createElement('small');
         time.textContent = `${entry.item.sourceType === 'agent' ? 'Max · ' : ''}${toShanghaiInputValue(entry.item.startAt).slice(11)}–${toShanghaiInputValue(entry.item.endAt).slice(11)}`;
         if (entry.item.allDay) time.textContent = '全天';
-        if (entry.item.kind === 'deadline') time.textContent = `截止 ${toShanghaiInputValue(entry.item.endAt).slice(11)}`;
+        if (entry.item.kind === 'deadline')
+          time.textContent = `截止 ${toShanghaiInputValue(entry.item.endAt).slice(11)}`;
+        if (entry.item.homeworkReference) {
+          time.textContent += entry.item.completed ? ' · 点击恢复未完成' : ' · 点击标记已完成';
+          block.setAttribute('aria-pressed', String(entry.item.completed));
+        }
         block.append(title, time);
-        block.title = `${entry.item.title} · ${entry.item.kind === 'deadline' ? `截止 ${formatMoment(entry.item.endAt)}` : `${formatMoment(entry.item.startAt)} — ${formatMoment(entry.item.endAt)}`}${entry.item.updatedAt ? ` · 更新于 ${formatMoment(entry.item.updatedAt)}` : ''} · 点击编辑`;
+        const calendarAction = entry.item.completed ? '恢复未完成' : '标记已完成';
+        block.title = `${entry.item.title} · ${entry.item.kind === 'deadline' ? `截止 ${formatMoment(entry.item.endAt)}` : `${formatMoment(entry.item.startAt)} — ${formatMoment(entry.item.endAt)}`}${entry.item.updatedAt ? ` · 更新于 ${formatMoment(entry.item.updatedAt)}` : ''} · ${entry.item.homeworkReference ? calendarAction : '点击编辑'}`;
         if (entry.item.allDay || entry.item.kind === 'deadline') {
           allDay.append(block);
         } else {
@@ -702,7 +728,7 @@
         elements.scheduleList,
         '本周时间表',
         '本周暂无日程',
-        '你可以添加日程、周常或 DDL；课程作业截止时间仍可在重要事项中查看。',
+        '你可以添加日程、周常或 DDL；同步后的课程作业截止时间会自动显示在对应日期。',
       );
       return;
     }
@@ -716,15 +742,27 @@
         if (isDraft) {
           actions.push(makeAction('确认加入', 'confirm-schedule', item.publicId, 'is-primary'));
         }
-        actions.push(
-          makeAction('编辑', 'edit-schedule', item.publicId),
-          makeAction('删除', 'delete-schedule', item.publicId, 'is-danger'),
-        );
+        if (item.homeworkReference) {
+          actions.push(
+            makeAction(
+              item.completed ? '恢复未完成' : '标记已完成',
+              'toggle-homework-completion',
+              item.publicId,
+            ),
+          );
+        } else {
+          actions.push(
+            makeAction('编辑', 'edit-schedule', item.publicId),
+            makeAction('删除', 'delete-schedule', item.publicId, 'is-danger'),
+          );
+        }
         let eyebrow = item.sourceType === 'agent' ? 'Max 建议 · 已确认' : '已确认';
         if (isDraft) eyebrow = 'Agent 草稿 · 待确认';
         else if (item.kind === 'deadline') eyebrow = '⏱ DDL · 截止提醒';
         else if (item.kind === 'weekly') eyebrow = '↻ 周常 · 已确认';
         else if (item.allDay) eyebrow = '全天';
+        if (item.homeworkReference)
+          eyebrow = item.completed ? '✓ 课程作业 · 已完成' : '⏱ 课程作业 · 未完成';
         return makeDataItem({
           eyebrow,
           title: item.title || '未命名日程',
@@ -735,7 +773,9 @@
           ]
             .filter(Boolean)
             .join(' · '),
-          className: isDraft ? 'is-draft' : '',
+          className: [item.completed && 'is-completed', isDraft && 'is-draft']
+            .filter(Boolean)
+            .join(' '),
           actions,
         });
       }),
@@ -938,7 +978,9 @@
     const isDeadline = item?.kind === 'deadline';
     elements.scheduleDialog.dataset.kind = isDeadline ? 'deadline' : 'event';
     elements.scheduleStart.closest('label').hidden = isDeadline;
-    elements.scheduleEnd.closest('label').querySelector('span').textContent = isDeadline ? '截止时间' : '结束时间';
+    elements.scheduleEnd.closest('label').querySelector('span').textContent = isDeadline
+      ? '截止时间'
+      : '结束时间';
     elements.scheduleAllDay.closest('label').hidden = isDeadline;
     elements.scheduleDialogTitle.textContent = item ? '编辑日程' : '新增日程';
     if (isDeadline) elements.scheduleDialogTitle.textContent = '编辑 DDL';
@@ -1004,9 +1046,10 @@
     const publicId = elements.scheduleId.value;
     const endAt = shanghaiInputToIso(elements.scheduleEnd.value);
     const isDeadline = elements.scheduleDialog.dataset.kind === 'deadline';
-    const startAt = isDeadline && endAt
-      ? new Date(new Date(endAt).getTime() - 60000).toISOString()
-      : shanghaiInputToIso(elements.scheduleStart.value);
+    const startAt =
+      isDeadline && endAt
+        ? new Date(new Date(endAt).getTime() - 60000).toISOString()
+        : shanghaiInputToIso(elements.scheduleStart.value);
     if (!startAt || !endAt || new Date(endAt) <= new Date(startAt)) {
       elements.scheduleFormStatus.textContent = '结束时间必须晚于开始时间。';
       return;
@@ -1016,7 +1059,9 @@
     elements.scheduleSubmit.disabled = true;
     elements.scheduleFormStatus.textContent = '正在检查时间冲突…';
     try {
-      const conflicts = isDeadline ? [] : await checkScheduleConflicts({ publicId, startAt, endAt });
+      const conflicts = isDeadline
+        ? []
+        : await checkScheduleConflicts({ publicId, startAt, endAt });
       if (conflicts.length && state.conflictAcknowledgement !== conflictKey) {
         state.conflictAcknowledgement = conflictKey;
         showConflicts(conflicts);
@@ -1063,7 +1108,8 @@
       card.dataset.kind = item.kind || 'event';
       const number = document.createElement('span');
       number.textContent = `安排 ${index + 1}`;
-      if (item.kind === 'weekly') number.textContent = `↻ 周常 · 第 ${item.occurrence || index + 1}/${item.totalWeeks || state.proposals.length} 周`;
+      if (item.kind === 'weekly')
+        number.textContent = `↻ 周常 · 第 ${item.occurrence || index + 1}/${item.totalWeeks || state.proposals.length} 周`;
       if (item.kind === 'deadline') number.textContent = '⏱ DDL · 截止提醒';
       const titleLabel = document.createElement('label');
       titleLabel.textContent = '事项';
@@ -1131,9 +1177,10 @@
         title: card.querySelector('.workbench-proposal-title').value.trim(),
         description: state.proposals[index].description || '',
         kind,
-        startAt: kind === 'deadline'
-          ? endAt && new Date(new Date(endAt).getTime() - 60000).toISOString()
-          : shanghaiInputToIso(card.querySelector('.workbench-proposal-start').value),
+        startAt:
+          kind === 'deadline'
+            ? endAt && new Date(new Date(endAt).getTime() - 60000).toISOString()
+            : shanghaiInputToIso(card.querySelector('.workbench-proposal-start').value),
         endAt,
       };
     });
@@ -1190,6 +1237,18 @@
     const importantItem = state.importantItems.find((item) => item.publicId === publicId);
     const notification = state.notifications.find((item) => item.publicId === publicId);
     const scheduleItem = state.scheduleItems.find((item) => item.publicId === publicId);
+
+    if (action === 'toggle-homework-completion' && scheduleItem?.homeworkReference) {
+      await app.callApi(
+        `/workbench/homework-deadlines/${encodeURIComponent(scheduleItem.homeworkReference)}/completion`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ completed: !scheduleItem.completed }),
+        },
+      );
+      await loadWorkbenchData();
+      return;
+    }
 
     if (action === 'edit-important' && importantItem) {
       openImportantEditor(importantItem);
@@ -1596,6 +1655,12 @@
       if (event.target === dialog) closeDialog(dialog);
     });
   });
+
+  for (const event of ['freebbs:homework-changed', 'freebbs:campus-disconnected']) {
+    window.addEventListener(event, () => {
+      if (isLoggedIn()) loadWorkbenchData();
+    });
+  }
 
   window.addEventListener('freebbs:workbench-refresh', () => {
     if (isLoggedIn()) {

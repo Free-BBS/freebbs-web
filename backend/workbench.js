@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const express = require('express');
+const { listHomeworkDeadlines, setHomeworkCompletion } = require('./homework-schedule');
 const { probePrimaryTsinghuaPortals } = require('./portal-boundary-probe');
 const { probePublicNoticeSource } = require('./public-source-probe');
 const { getLearnConnectorCapabilities } = require('./tsinghua-learn-connector');
@@ -966,6 +967,26 @@ function createWorkbenchRouter({
     }
   });
 
+  router.patch('/homework-deadlines/:reference/completion', async (request, response) => {
+    try {
+      const user = await requireAuth(request, response);
+      if (!user) return;
+      const reference = String(request.params.reference || '');
+      if (!/^[A-Za-z0-9._:-]{1,128}$/.test(reference) || typeof request.body?.completed !== 'boolean') {
+        response.status(400).json({ message: '作业完成状态无效' });
+        return;
+      }
+      const found = await setHomeworkCompletion(pool, user.id, reference, request.body.completed);
+      if (!found) {
+        response.status(404).json({ message: '没有找到该作业，请重新同步' });
+        return;
+      }
+      response.json({ completed: request.body.completed });
+    } catch (error) {
+      sendWorkbenchError(response, error, '更新作业完成状态失败');
+    }
+  });
+
   router.get('/schedule-items', async (request, response) => {
     try {
       const user = await requireAuth(request, response);
@@ -975,7 +996,7 @@ function createWorkbenchRouter({
 
       const range = parseRange(request.query);
       const status = String(request.query.status || '').trim();
-      if (!range || (status && !SCHEDULE_STATUSES.has(status))) {
+      if (!range || (status && !new Set([...SCHEDULE_STATUSES, 'completed']).has(status))) {
         response.status(400).json({ message: '日程筛选条件无效' });
         return;
       }
@@ -999,8 +1020,10 @@ function createWorkbenchRouter({
          LIMIT 200`,
         parameters,
       );
+      const homework = await listHomeworkDeadlines(pool, user.id, range, status);
       response.json({
-        scheduleItems: rows.map(toScheduleItem),
+        scheduleItems: [...rows.map(toScheduleItem), ...homework]
+          .sort((a, b) => new Date(a.endAt) - new Date(b.endAt)),
         range: {
           start: range.start.toISOString(),
           end: range.end.toISOString(),

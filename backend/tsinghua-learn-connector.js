@@ -140,13 +140,18 @@ function normalizeShanghaiDate(value) {
     return null;
   }
 
+  // Accept epoch milliseconds without interpreting them as Shanghai wall-clock text.
+  if (/^\d{13}$/.test(raw)) {
+    return new Date(Number(raw)).toISOString();
+  }
+
   if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw)) {
     const parsed = new Date(raw);
     return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
   }
 
   const match = raw.match(
-    /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/,
+    /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?$/,
   );
   if (!match) {
     return null;
@@ -172,7 +177,7 @@ function normalizeShanghaiDate(value) {
   ) {
     return null;
   }
-  return new Date(utcMilliseconds).toISOString();
+  return new Date(utcMilliseconds + Number((match[7] || '').padEnd(3, '0'))).toISOString();
 }
 
 function buildLearnActionUrl(path, parameters) {
@@ -695,11 +700,13 @@ function parseHomework(payload, course, status) {
       seen.add(sourceReference);
       const dueAtSource = normalizeText(row?.jzsj, 64);
       const dueAt = normalizeShanghaiDate(dueAtSource);
-      if (dueAtSource && !dueAt) {
-        throw new TsinghuaConnectorError(
-          'parser_record_rejected',
-          '网络学堂作业截止时间不符合预期',
-        );
+      const deadlineUnverified = Boolean(dueAtSource && !dueAt);
+      if (deadlineUnverified) {
+        warnings.push({
+          code: 'homework_deadline_unrecognized',
+          resource: 'homework',
+          courseReference: course.sourceReference,
+        });
       }
       const actionUrl = buildLearnActionUrl('/f/wlxt/kczy/zy/student/tijiao', {
         wlkcid: course.providerCourseId,
@@ -707,6 +714,17 @@ function parseHomework(payload, course, status) {
       });
       const normalized = {
         recordType: 'homework',
+        providerHomeworkId: row?.zyid ? remoteId : null,
+        providerStudentHomeworkId: row?.xszyid ? studentHomeworkId : null,
+        providerCourseId: course.providerCourseId,
+        submissionType: row?.zytjfs == null ? null : Number(row.zytjfs),
+        completionType: row?.zywcfs == null ? null : Number(row.zywcfs),
+        lateDueAt: normalizeShanghaiDate(row?.bjjzsj),
+        submittedAt: normalizeShanghaiDate(row?.scsj),
+        submittedFileId: normalizeText(row?.zyfjid, 256),
+        submittedFileName: normalizeText(row?.wjmc, 255),
+        grade: row?.cj == null ? null : normalizeText(row.cj, 64),
+        feedback: normalizeHtmlText(row?.pynr, 4000),
         sourceType: 'network_classroom',
         sourceReference,
         courseReference: course.sourceReference,
@@ -715,6 +733,7 @@ function parseHomework(payload, course, status) {
         actionUrl,
         startsAt: normalizeShanghaiDate(row?.kssj),
         dueAt,
+        deadlineUnverified,
         status,
       };
       homework.push(normalized);

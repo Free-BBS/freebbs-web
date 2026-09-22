@@ -1555,3 +1555,255 @@ body.workbench-page .workbench-dialog-submit {
     flex-direction: column;
   }
 }
+/* Homework is a full-width dashboard section, just like the course catalog. */
+body.workbench-page .workbench-homework-card {
+  grid-column: 1 / -1;
+}
+
+body.workbench-page .workbench-homework-card > h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+body.workbench-page .workbench-homework-card > p,
+body.workbench-page .workbench-homework-item p,
+body.workbench-page #homework-detail-message {
+  color: var(--workbench-muted);
+  font-size: 0.85rem;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+body.workbench-page .workbench-homework-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 0.45fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin: 20px 0 14px;
+}
+
+body.workbench-page .workbench-homework-filters label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--workbench-muted);
+  font-size: 0.78rem;
+}
+
+body.workbench-page .workbench-homework-filters select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  color: var(--workbench-text);
+  font: inherit;
+  background: var(--workbench-panel-soft);
+  border: 1px solid var(--workbench-line-strong);
+  border-radius: 10px;
+  text-overflow: ellipsis;
+}
+
+body.workbench-page .workbench-homework-filters option {
+  color: var(--workbench-text);
+  background: var(--workbench-panel-strong);
+}
+
+body.workbench-page .workbench-homework-dialog > header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+body.workbench-page .workbench-homework-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 1rem;
+}
+
+body.workbench-page .workbench-homework-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--workbench-line);
+  border-radius: 12px;
+  background: var(--workbench-panel-soft);
+  overflow-wrap: anywhere;
+}
+
+body.workbench-page .workbench-homework-item strong {
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+body.workbench-page .workbench-homework-item button {
+  margin-top: auto;
+}
+
+body.workbench-page .workbench-homework-dialog {
+  box-sizing: border-box;
+  width: min(760px, calc(100vw - 32px));
+  max-height: 85dvh;
+  overflow: auto;
+  color: var(--workbench-text);
+  background: var(--workbench-panel-strong);
+  border: 1px solid var(--workbench-line);
+  border-radius: 16px;
+  padding: 1.5rem;
+  font-family: var(--workbench-font-sans);
+  line-height: 1.65;
+  box-shadow: 0 28px 90px rgba(0, 8, 10, 0.35);
+}
+
+body.workbench-page .workbench-homework-dialog::backdrop {
+  background: #0008;
+  backdrop-filter: blur(6px);
+}
+
+body.workbench-page .workbench-homework-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+body.workbench-page #homework-detail > button,
+body.workbench-page #homework-detail > a {
+  display: block;
+  margin: 0.75rem 0;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+body.workbench-page #homework-detail > a {
+  color: var(--workbench-accent-strong);
+}
+
+body.workbench-page #homework-detail h3 {
+  margin: 18px 0 8px;
+  font-size: 0.95rem;
+}
+
+body.workbench-page #homework-detail section p {
+  margin: 0 0 14px;
+  font-size: 0.9rem;
+}
+
+body.workbench-page .workbench-homework-form,
+body.workbench-page .workbench-homework-form label {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  min-width: 0;
+}
+
+body.workbench-page .workbench-homework-form label {
+  color: var(--workbench-muted);
+  font-size: 0.82rem;
+}
+
+body.workbench-page .workbench-homework-form input[type='file'] {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  color: var(--workbench-text);
+  font: inherit;
+  border: 1px solid var(--workbench-line-strong);
+  border-radius: 10px;
+  padding: 8px;
+}
+
+body.workbench-page .workbench-homework-dialog input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  margin: 0 8px 0 0;
+  vertical-align: middle;
+  accent-color: var(--workbench-accent);
+}
+
+body.workbench-page .workbench-homework-dialog > header h2 {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  margin: 0;
+  font-size: 1.3rem;
+  line-height: 1.5;
+}
+
+body.workbench-page .workbench-homework-dialog button,
+body.workbench-page .workbench-homework-card button,
+body.workbench-page .workbench-campus-course button,
+body.workbench-page .workbench-homework-form input::file-selector-button {
+  border: 1px solid var(--workbench-line-strong);
+  border-radius: 8px;
+  padding: 0.5rem 0.8rem;
+  color: var(--workbench-text);
+  background: var(--workbench-accent-soft);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  min-height: 44px;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+body.workbench-page .workbench-homework-form input::file-selector-button {
+  min-height: 34px;
+  margin-right: 10px;
+}
+
+body.workbench-page .workbench-homework-form button[type='submit'] {
+  color: #fff;
+  background: #087b85;
+  border-color: transparent;
+}
+
+body.workbench-page .workbench-homework-dialog button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+body.workbench-page .workbench-homework-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font: inherit;
+  color: var(--workbench-text);
+  background: var(--workbench-panel-soft);
+  border: 1px solid var(--workbench-line-strong);
+  border-radius: 10px;
+  padding: 12px;
+  min-height: 140px;
+  line-height: 1.65;
+}
+
+body.workbench-page .workbench-homework-form label:has(input[type='checkbox']) {
+  display: block;
+}
+
+@media (max-width: 600px) {
+  body.workbench-page .workbench-homework-filters {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  body.workbench-page .workbench-homework-dialog {
+    padding: 20px;
+  }
+}
+
+body.workbench-page .workbench-week-event.is-completed {
+  border-color: #519d75;
+  background: var(--workbench-panel);
+}
+
+body.workbench-page .workbench-week-event.is-completed strong {
+  text-decoration: line-through;
+  opacity: 0.75;
+}

@@ -58,6 +58,8 @@ const CREATE_SEQUENCE = [
   'create:user_campus_connectors',
   'create:campus_connector_auth_flows',
   'create:campus_connector_sync_runs',
+  'create:campus_homework_calendar_states',
+  'create:campus_homework_snapshots',
 ];
 
 test('does not ALTER core tables when every additive field and index already exists', async () => {

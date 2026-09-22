@@ -354,6 +354,23 @@ function createTsinghuaSyncStore(pool) {
         await upsertNotification(connection, current.user_id, notification, finishedAt);
       }
       await upsertSemesterSnapshot(connection, current.user_id, snapshot, finishedAt);
+      if (snapshot.semesterId) {
+        await connection.execute(
+          `INSERT INTO campus_homework_snapshots
+           (user_id, connector_generation, semester_id, homework_json, fetched_at, sync_status)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE homework_json = VALUES(homework_json),
+             fetched_at = VALUES(fetched_at), sync_status = VALUES(sync_status)`,
+          [
+            current.user_id,
+            claimed.connector_generation,
+            snapshot.semesterId,
+            JSON.stringify(snapshot.homework || []),
+            finishedAt,
+            snapshot.status === 'partial' ? 'partial' : 'complete',
+          ],
+        );
+      }
       await upsertSemesterCatalog(connection, current.user_id, snapshot, finishedAt);
       for (const item of snapshot.importantItems || []) {
         await upsertImportantItem(connection, current.user_id, item);

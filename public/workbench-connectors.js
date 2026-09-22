@@ -701,6 +701,7 @@
     setMessage('正在解除连接…');
     try {
       await app.callApi('/workbench/connectors/tsinghua/connection', { method: 'DELETE' });
+      window.dispatchEvent(new CustomEvent('freebbs:campus-disconnected'));
       setMessage('连接已解除，已有导入数据已保留。', 'succeeded');
       autoSyncRequested = false;
       await loadStatus();
