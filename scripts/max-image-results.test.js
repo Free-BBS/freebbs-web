@@ -37,4 +37,11 @@ test('Ask Max and discussions load and use the image result UI', () => {
   assert.match(app, /FreeBbsMaxImageResults\.showProgress/);
   assert.match(app, /FreeBbsMaxImageResults\?\.finish/);
   assert.match(app, /Max 正在思考…/);
+  assert.match(resultsSource(), /图片未能加载/);
+  assert.match(resultsSource(), /image\.addEventListener\('error', markUnavailable\)/);
+  assert.match(resultsSource(), /重新加载/);
 });
+
+function resultsSource() {
+  return fs.readFileSync(require.resolve('../public/max-image-results'), 'utf8');
+}
