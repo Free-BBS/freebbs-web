@@ -69,6 +69,7 @@
       fold(document.getElementById('settings-form'), '编辑资料', 'compose');
       fold(document.getElementById('settings-username-form'), '修改昵称', 'username');
       fold(document.querySelector('.settings-typography-form'), '阅读样式', 'subject');
+      fold(document.getElementById('settings-notification-form'), '邮件通知', 'mail');
       fold(document.getElementById('settings-password-form'), '修改密码', 'key');
       fold(document.querySelector('.course-token-settings'), '课程组 Agent 接入', 'ai');
       return;
