@@ -158,13 +158,13 @@ test('the profile entry replaces the legacy overview without removing mobile edi
       matchMedia: () => media,
     });
     assert.deepEqual(classes, ['personal-settings-page']);
-    assert.equal(folds.length, mobile ? 5 : 0);
+    assert.equal(folds.length, mobile ? 6 : 0);
     for (const fold of folds) {
       assert.equal(fold.className, 'personal-fold');
       assert.equal(fold.children[1], editor);
     }
     media.matches = false;
     resize();
-    assert.equal(restored, mobile ? 5 : 0, 'desktop restores the existing editor nodes');
+    assert.equal(restored, mobile ? 6 : 0, 'desktop restores the existing editor nodes');
   }
 });
