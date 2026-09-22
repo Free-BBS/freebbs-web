@@ -4489,14 +4489,18 @@ function stopAiChatThinkingStatus(message = '') {
   setAiChatStatus(message);
 }
 
-function setAiChatThinkingBubble(article, message) {
+function setAiChatThinkingBubble(article, message, { imageGeneration = false } = {}) {
   const bubble = article?.querySelector('.aichat-bubble');
 
   if (!bubble || article?.dataset.markdown) {
     return;
   }
 
-  bubble.innerHTML = `<span class="aichat-thinking-inline">${escapeHtml(message)}</span>`;
+  if (imageGeneration && window.FreeBbsMaxImageResults) {
+    window.FreeBbsMaxImageResults.showProgress(article, message);
+  } else {
+    bubble.innerHTML = `<span class="aichat-thinking-inline">${escapeHtml(message)}</span>`;
+  }
   scrollAiChatToBottom();
 }
 
@@ -4669,6 +4673,7 @@ function updateAiChatMessage(article, content) {
       : null;
     bubble.innerHTML = renderMarkdownContent(attachment ? attachment.text : content);
     enhanceMarkdownContent(bubble);
+    window.FreeBbsMaxImageResults?.decorate(article);
     if (attachment) window.FreeBbsFilePreview.mount(bubble, attachment.files);
   } else {
     bubble.innerHTML = `<span class="aichat-thinking-inline">Max 正在思考......</span>`;
@@ -5162,13 +5167,13 @@ function rememberMaxBackgroundTask(id) {
   }
 }
 
-async function waitForMaxBackgroundTask(task, assistantArticle) {
+async function waitForMaxBackgroundTask(task, assistantArticle, { imageGeneration = false } = {}) {
   rememberMaxBackgroundTask(task.id);
   let current = task;
   while (['queued', 'running'].includes(current.status)) {
     const message = current.progress?.message || 'Max 正在后台思考，离开页面也会继续…';
-    setAiChatThinkingBubble(assistantArticle, message);
-    setAiChatStatus(message);
+    setAiChatThinkingBubble(assistantArticle, message, { imageGeneration });
+    setAiChatStatus(imageGeneration ? '正在生成图片…' : message);
     await new Promise((resolve) => {
       window.setTimeout(resolve, 1500);
     });
@@ -5189,6 +5194,7 @@ async function applyMaxBackgroundResult(task, assistantArticle, userMessage) {
   const assistantContent = `${String(result.answer || '').trim() || 'Max 暂时没有生成回答。'}\n\n---\n\n回复模型：${replyModel}`;
   window.FreeBbsReasoning?.finish(assistantArticle);
   updateAiChatMessage(assistantArticle, assistantContent);
+  window.FreeBbsMaxImageResults?.finish(assistantArticle, result);
   const navigation = createAiNavigationSnapshot(result);
   const rag = createAiRagSnapshot(result);
   renderMaxNavigationRoutes(assistantArticle, navigation);
@@ -5219,10 +5225,12 @@ async function resumeMaxBackgroundTask() {
   const userMessage =
     aiChatState.messages.findLast((message) => message.role === 'user')?.content ||
     '继续之前的问题';
-  const assistantArticle = appendAiChatMessage('assistant', '正在恢复后台任务…');
+  const assistantArticle = appendAiChatMessage('assistant', '');
   startAiChatThinkingStatus();
   try {
-    const finished = await waitForMaxBackgroundTask(task, assistantArticle);
+    const finished = await waitForMaxBackgroundTask(task, assistantArticle, {
+      imageGeneration: window.FreeBbsMaxImageResults?.isRequest(userMessage),
+    });
     await applyMaxBackgroundResult(finished, assistantArticle, userMessage);
   } catch (error) {
     updateAiChatMessage(assistantArticle, `后台任务未完成：${error.message}`);
@@ -5544,11 +5552,13 @@ async function handleAiChatSubmit(event) {
     );
   }
   const assistantArticle = appendAiChatMessage('assistant', '');
+  const imageGeneration = Boolean(window.FreeBbsMaxImageResults?.isRequest(userMessage));
   startAiChatThinkingStatus();
-  setAiChatThinkingBubble(assistantArticle, 'Max 正在思考......');
+  setAiChatThinkingBubble(assistantArticle, 'Max 正在思考......', { imageGeneration });
+  if (imageGeneration) setAiChatStatus('正在生成图片…');
   const bubbleTimer = window.setTimeout(
     () => {
-      setAiChatThinkingBubble(assistantArticle, 'Max 正在输入......');
+      setAiChatThinkingBubble(assistantArticle, 'Max 正在输入......', { imageGeneration });
     },
     1000 + Math.floor(Math.random() * 4001),
   );
@@ -5563,8 +5573,8 @@ async function handleAiChatSubmit(event) {
       },
       (message) => {
         window.clearTimeout(bubbleTimer);
-        setAiChatThinkingBubble(assistantArticle, message);
-        setAiChatStatus(message);
+        setAiChatThinkingBubble(assistantArticle, message, { imageGeneration });
+        setAiChatStatus(imageGeneration ? '正在生成图片…' : message);
       },
     );
     window.FreeBbsReasoning.finish(assistantArticle);
@@ -5577,6 +5587,7 @@ async function handleAiChatSubmit(event) {
         : '未返回模型信息';
     assistantContent += `\n\n---\n\n回复模型：${replyModel}`;
     updateAiChatMessage(assistantArticle, assistantContent);
+    window.FreeBbsMaxImageResults?.finish(assistantArticle, result);
     const navigation = createAiNavigationSnapshot(result);
     const rag = createAiRagSnapshot(result);
     renderMaxNavigationRoutes(assistantArticle, navigation);
@@ -6095,6 +6106,9 @@ function renderDiscussionComments() {
   list
     .querySelectorAll('.discussion-comment-content')
     .forEach((node) => enhanceMarkdownContent(node));
+  list
+    .querySelectorAll('.discussion-comment')
+    .forEach((article) => window.FreeBbsMaxImageResults?.decorate(article));
   restoreOpenDiscussionReplyComposer();
   if (/^#comment-\d+$/.test(commentAnchor) && list.dataset.scrolledAnchor !== commentAnchor) {
     const target = document.getElementById(commentAnchor.slice(1));
@@ -6203,6 +6217,7 @@ function renderDiscussionDetail(post) {
 
   const markdownBody = document.getElementById('discussion-markdown-body');
   enhanceMarkdownContent(markdownBody);
+  window.FreeBbsMaxImageResults?.decorate(discussionDetail);
   initializeDiscussionCommentComposer(document.getElementById('discussion-comment-form'));
   window.FreeBbsPostReader?.mount(discussionDetail, post);
   loadDiscussionComments(post.id);
@@ -6402,18 +6417,39 @@ async function loadDiscussionComments(postId) {
   renderDiscussionComments();
 }
 
-function pollDiscussionCommentsForMax(postId, baselineCount, messageNode) {
+function pollDiscussionCommentsForMax(
+  postId,
+  baselineCount,
+  messageNode,
+  { imageGeneration = false } = {},
+) {
   let attempts = 0;
+  const latestCommentId = imageGeneration
+    ? Math.max(0, ...discussionState.comments.map((comment) => Number(comment.id) || 0))
+    : 0;
+  if (messageNode && imageGeneration) {
+    messageNode.textContent = 'Max 已开始生成图片，完成后会显示在评论区…';
+  }
   const timer = window.setInterval(async () => {
     attempts += 1;
 
     try {
       await loadDiscussionComments(postId);
 
-      if (discussionState.comments.length > baselineCount) {
+      const maxReply = imageGeneration
+        ? discussionState.comments.find(
+            (comment) =>
+              Number(comment.id) > latestCommentId && comment.author?.username === 'max_the_agent',
+          )
+        : null;
+      if (maxReply || (!imageGeneration && discussionState.comments.length > baselineCount)) {
         window.clearInterval(timer);
         if (messageNode) {
-          messageNode.textContent = 'Max 已回复';
+          messageNode.textContent = imageGeneration
+            ? /\/uploads\/max-image-/.test(maxReply.contentMarkdown)
+              ? 'Max 的图片已生成，见下方评论'
+              : 'Max 已回复，但没有生成图片，请查看评论'
+            : 'Max 已回复';
         }
         return;
       }
@@ -6421,7 +6457,7 @@ function pollDiscussionCommentsForMax(postId, baselineCount, messageNode) {
       // loadDiscussionComments already handles display fallback.
     }
 
-    if (attempts >= 12) {
+    if (attempts >= (imageGeneration ? 48 : 12)) {
       window.clearInterval(timer);
       if (messageNode) {
         messageNode.textContent = '评论已发布，Max 可能稍后回复';
@@ -8785,6 +8821,7 @@ async function handleDiscussionCommentSubmit(event) {
         discussionState.activePostId,
         baselineCommentCount + addedCommentCount,
         message,
+        { imageGeneration: window.FreeBbsMaxImageResults?.isRequest(contentMarkdown) },
       );
     }
   } catch (error) {

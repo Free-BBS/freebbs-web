@@ -14,7 +14,7 @@
     "start:backend": "node backend/server.js",
     "testbench:fortune": "node test/testbench.js",
     "test:admin-users": "node --test backend/ai-dialog-export.test.js scripts/admin-users-page.test.js",
-    "test:aichat-navigation": "node --test scripts/aichat-navigation.test.js scripts/max-reasoning.test.js scripts/max-images.test.js scripts/max-files.test.js scripts/aichat-images-history.test.js scripts/aichat-retry.test.js scripts/api-origin.test.js backend/ai-models.test.js",
+    "test:aichat-navigation": "node --test scripts/aichat-navigation.test.js scripts/max-reasoning.test.js scripts/max-image-results.test.js scripts/max-images.test.js scripts/max-files.test.js scripts/aichat-images-history.test.js scripts/aichat-retry.test.js scripts/api-origin.test.js backend/ai-models.test.js",
     "test:agent-surfaces": "node --test scripts/agent-surface-integration.test.js backend/agent-circuits.test.js",
     "test:discussion-markdown": "node --test scripts/discussion-layout.test.js scripts/discussion-markdown.test.js scripts/discussion-previews.test.js backend/discussion-preview.test.js backend/discussion-visibility.test.js scripts/discussion-visibility.test.js",
     "test:public-pages": "node --test scripts/development-navigation.test.js scripts/world-page.test.js scripts/home-page.test.js",

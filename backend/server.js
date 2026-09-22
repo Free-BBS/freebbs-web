@@ -1902,13 +1902,19 @@ async function relayAgentChatResponse(agentResponse, response, stream, imageCont
   return generatedCount;
 }
 
-async function requestMaxBackgroundAnswer(user, payload, signal) {
+async function requestMaxBackgroundAnswer(
+  user,
+  payload,
+  signal,
+  { allowImageGeneration = false } = {},
+) {
   const agentPayload = buildAgentChatPayload(
     user,
     { ...payload, ...maxAgentRoute(payload), stream: false },
     {
       source: payload.source || 'direct_chat',
       channel: 'aichat',
+      allowImageGeneration,
       context: { dialogId: payload.did || '' },
     },
   );
@@ -1929,10 +1935,26 @@ async function runMaxBackgroundTask({ user, payload, progress, signal }) {
   const requestSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
   const timeout = setTimeout(() => controller.abort(), 30 * 60 * 1000);
   timeout.unref?.();
+  const imageReservation = maxImageGenerationGate.acquire(`user:${user.id}`);
+  let generatedImageCount = 0;
+  const finalize = async (result) => {
+    if (!Array.isArray(result?.generated_images) || !result.generated_images.length) return result;
+    await progress({ phase: 'saving_image', message: '图片已经生成，正在保存到对话…' });
+    const persisted = await persistGeneratedImages(result, {
+      ownerId: user.id,
+      uploadDir: config.uploadDir,
+    });
+    generatedImageCount = persisted.generatedCount;
+    await progress({ phase: 'image_ready', message: '图片已保存，正在整理回复…' });
+    return persisted.payload;
+  };
   try {
     if (!documents.length) {
       await progress({ phase: 'thinking', message: 'Max 正在后台思考…' });
-      return { result: await requestMaxBackgroundAnswer(user, payload, requestSignal) };
+      const result = await requestMaxBackgroundAnswer(user, payload, requestSignal, {
+        allowImageGeneration: imageReservation.allowed,
+      });
+      return { result: await finalize(result) };
     }
     if (!maxDocumentStore) throw new Error('文件视觉读取服务尚未就绪。');
     const question =
@@ -1981,11 +2003,13 @@ async function runMaxBackgroundTask({ user, payload, progress, signal }) {
         ],
       },
       requestSignal,
+      { allowImageGeneration: imageReservation.allowed },
     );
     await progress({ phase: 'saving', message: '正在保存 Max 的回答…' });
-    return { result };
+    return { result: await finalize(result) };
   } finally {
     clearTimeout(timeout);
+    imageReservation.release(generatedImageCount > 0);
   }
 }
 
