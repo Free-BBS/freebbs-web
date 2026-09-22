@@ -94,6 +94,10 @@ test('real chat endpoint sends learning requests to RAG with model, images and h
     requireAuth: async () => ({ uid: 'test-user' }),
     resolveModelOptions: async () => ({ model: 'vision-test' }),
     systemSettingsStore: { readSettings: async () => ({}) },
+    maxImageGenerationGate: {
+      acquire: () => ({ allowed: true, release() {} }),
+    },
+    config: { uploadDir: '/tmp/test-uploads' },
     AbortController,
     buildAgentChatPayload: (user, payload) => payload,
     maxAgentRoute,
