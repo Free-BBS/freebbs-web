@@ -5,13 +5,30 @@ const express = require('express');
 const nodemailer = require('nodemailer');
 const config = require('./config');
 
-const SCHEMA = fs
-  .readFileSync(path.join(__dirname, '../database/migrations/026_notifications.sql'), 'utf8')
-  .split(';')
+const SCHEMA = ['026_notifications.sql', '047_notification_email_preferences.sql']
+  .flatMap((fileName) =>
+    fs.readFileSync(path.join(__dirname, '../database/migrations', fileName), 'utf8').split(';'),
+  )
   .map((sql) => sql.trim())
   .filter(Boolean);
 const ROLE_LABELS = { student: '学生', ta: '助教', teacher: '教师', admin: '管理员' };
 const REACTION_LABELS = { smile: '点赞', light: '点亮', fireworks: '送上烟花' };
+const EMAIL_PREFERENCE_KEYS = Object.freeze([
+  'reply',
+  'reaction',
+  'commentLike',
+  'announcement',
+  'weeklyDigest',
+  'aiTask',
+]);
+const EMAIL_PREFERENCE_COLUMNS = Object.freeze({
+  reply: 'email_reply',
+  reaction: 'email_reaction',
+  commentLike: 'email_comment_like',
+  announcement: 'email_announcement',
+  weeklyDigest: 'email_weekly_digest',
+  aiTask: 'email_ai_task',
+});
 const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const schemaPromises = new WeakMap();
@@ -280,8 +297,27 @@ async function resolveAudience(connection, audience) {
 }
 
 async function insertNotifications(connection, recipients, notification) {
+  const recipientIds = [...new Set(recipients.map(Number).filter(positiveId))];
+  if (!recipientIds.length) return { recipientCount: 0, emailQueued: 0 };
+  const [preferenceRows] = await connection.execute(
+    `SELECT user_id, email_reply, email_reaction, email_comment_like,
+            email_announcement, email_weekly_digest, email_ai_task
+       FROM user_notification_email_preferences
+      WHERE user_id IN (${recipientIds.map(() => '?').join(', ')})`,
+    recipientIds,
+  );
+  const preferences = new Map(preferenceRows.map((row) => [Number(row.user_id), row]));
+  const preferenceKey = {
+    reply: 'email_reply',
+    reaction: 'email_reaction',
+    comment_like: 'email_comment_like',
+    announcement: 'email_announcement',
+    weekly_digest: 'email_weekly_digest',
+    ai_task: 'email_ai_task',
+  }[notification.kind];
   let count = 0;
-  for (const recipientId of new Set(recipients.map(Number).filter(positiveId))) {
+  let emailQueued = 0;
+  for (const recipientId of recipientIds) {
     const [result] = await connection.execute(
       `INSERT INTO community_notifications (recipient_id, actor_id, kind, title, body, link, event_key)
        VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -297,15 +333,29 @@ async function insertNotifications(connection, recipients, notification) {
       ],
     );
     // INSERT IGNORE targets only the outbox primary key; both rows share the transaction.
-    if (notification.email !== false) {
+    if (notification.email !== false && preferences.get(recipientId)?.[preferenceKey] !== 0) {
       await connection.execute(
         'INSERT IGNORE INTO notification_email_outbox (notification_id) VALUES (?)',
         [result.insertId],
       );
+      emailQueued += 1;
     }
     count += 1;
   }
-  return count;
+  return { recipientCount: count, emailQueued };
+}
+
+function defaultEmailPreferences() {
+  return Object.fromEntries(EMAIL_PREFERENCE_KEYS.map((key) => [key, true]));
+}
+
+function serializeEmailPreferences(row) {
+  const defaults = defaultEmailPreferences();
+  for (const key of EMAIL_PREFERENCE_KEYS) {
+    const column = EMAIL_PREFERENCE_COLUMNS[key];
+    if (row && Object.hasOwn(row, column)) defaults[key] = row[column] !== 0;
+  }
+  return defaults;
 }
 
 function createNotificationService({
@@ -329,7 +379,7 @@ function createNotificationService({
         kind: 'announcement',
         eventKey: `announcement:${actor.id}:${publication.requestId}`,
       });
-      return { recipientCount, emailQueued: recipientCount };
+      return recipientCount;
     });
   }
 
@@ -434,6 +484,35 @@ function createNotificationService({
         eventKey: `ai-task:${task.id}:${task.status}`,
       }),
     );
+  }
+
+  async function getEmailPreferences(userId) {
+    const [rows] = await pool.execute(
+      `SELECT user_id, email_reply, email_reaction, email_comment_like,
+              email_announcement, email_weekly_digest, email_ai_task
+         FROM user_notification_email_preferences WHERE user_id = ? LIMIT 1`,
+      [userId],
+    );
+    return serializeEmailPreferences(rows[0]);
+  }
+
+  async function updateEmailPreferences(userId, input) {
+    const current = await getEmailPreferences(userId);
+    const next = { ...current };
+    for (const key of EMAIL_PREFERENCE_KEYS) {
+      if (Object.hasOwn(input || {}, key)) {
+        if (typeof input[key] !== 'boolean') throw notificationError('通知开关必须是布尔值');
+        next[key] = input[key];
+      }
+    }
+    const columns = EMAIL_PREFERENCE_KEYS.map((key) => EMAIL_PREFERENCE_COLUMNS[key]);
+    await pool.execute(
+      `INSERT INTO user_notification_email_preferences
+        (user_id, ${columns.join(', ')}) VALUES (?, ${columns.map(() => '?').join(', ')})
+       ON DUPLICATE KEY UPDATE ${columns.map((column) => `${column} = VALUES(${column})`).join(', ')}`,
+      [userId, ...EMAIL_PREFERENCE_KEYS.map((key) => (next[key] ? 1 : 0))],
+    );
+    return next;
   }
 
   async function processOutbox() {
@@ -571,7 +650,7 @@ function createNotificationService({
           },
         ),
       );
-      return { queued, skipped: false, weekKey: window.weekKey };
+      return { queued: queued.recipientCount, skipped: false, weekKey: window.weekKey };
     } finally {
       weeklyWorking = false;
     }
@@ -598,6 +677,8 @@ function createNotificationService({
     notifyCommentReaction,
     notifyReward,
     notifyBackgroundTask,
+    getEmailPreferences,
+    updateEmailPreferences,
     processOutbox,
     startWorker,
     queueWeeklyDigest,
@@ -622,6 +703,20 @@ function createNotificationsRouter({ pool, requireAuth, requireAdmin, service })
     };
   }
 
+  router.get(
+    '/notifications/email-preferences',
+    route(async (_request, response, user) => {
+      response.json({ preferences: await service.getEmailPreferences(user.id) });
+    }),
+  );
+  router.patch(
+    '/notifications/email-preferences',
+    route(async (request, response, user) => {
+      response.json({
+        preferences: await service.updateEmailPreferences(user.id, request.body || {}),
+      });
+    }),
+  );
   router.get(
     '/notifications/unread-count',
     route(async (_request, response, user) => {

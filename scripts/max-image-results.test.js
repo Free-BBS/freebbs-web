@@ -42,6 +42,18 @@ test('Ask Max and discussions load and use the image result UI', () => {
   assert.match(resultsSource(), /重新加载/);
 });
 
+test('settings exposes persistent email notification preferences', () => {
+  const html = fs.readFileSync(require.resolve('../public/settings.html'), 'utf8');
+  const controller = fs.readFileSync(
+    require.resolve('../public/settings-notification-preferences'),
+    'utf8',
+  );
+  assert.match(html, /settings-notification-form/);
+  assert.match(html, /data-notification-preference="weeklyDigest"/);
+  assert.match(controller, /notifications\/email-preferences/);
+  assert.match(controller, /method: 'PATCH'/);
+});
+
 function resultsSource() {
   return fs.readFileSync(require.resolve('../public/max-image-results'), 'utf8');
 }

@@ -36,6 +36,7 @@ function createDigestDatabase() {
         ];
       }
       if (sql.startsWith('SELECT id FROM users WHERE email')) return [[{ id: 2 }, { id: 3 }]];
+      if (sql.startsWith('SELECT user_id, email_reply')) return [[]];
       if (sql.startsWith('INSERT INTO community_notifications')) {
         const [recipient, actor, kind, title, body, link, eventKey] = args;
         let row = notifications.find(

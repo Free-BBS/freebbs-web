@@ -847,6 +847,87 @@ h3,
   color: var(--muted);
 }
 
+.settings-notification-form {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.settings-notification-list {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-notification-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.settings-notification-row > span {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-notification-row strong {
+  font-size: 0.95rem;
+}
+
+.settings-notification-row small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.settings-notification-row input {
+  appearance: none;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 24px;
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.settings-notification-row input::before {
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin: 2px;
+  border-radius: 50%;
+  background: #fff;
+  content: '';
+  transition: transform 160ms ease;
+}
+
+.settings-notification-row input:checked {
+  border-color: #69d7c0;
+  background: #287f70;
+}
+
+.settings-notification-row input:checked::before {
+  transform: translateX(20px);
+}
+
+.settings-notification-row input:focus-visible {
+  outline: 2px solid #69d7c0;
+  outline-offset: 3px;
+}
+
+.settings-notification-row input:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
 .settings-avatar-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

@@ -68,6 +68,7 @@ function harness() {
         return [data.batches.filter((b) => b.actor_id === args[0] && b.request_id === args[1])];
       if (s.startsWith('SELECT id, username'))
         return [data.users.filter((u) => args.includes(u.id))];
+      if (s.startsWith('SELECT user_id, email_reply')) return [[]];
       if (s.startsWith('UPDATE users')) {
         const user = data.users.find((u) => u.id === args[2]);
         data.ledger.push({
