@@ -41,19 +41,10 @@ jobs:
       FRONTEND_SERVICE_NAME: ${{ vars.FRONTEND_SERVICE_NAME || 'free-bbs-frontend' }}
       BACKEND_SERVICE_NAME: ${{ vars.BACKEND_SERVICE_NAME || 'free-bbs-backend' }}
       HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL || 'http://127.0.0.1:3001/api/health' }}
+      GITHUB_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Package release
-        run: |
-          set -euo pipefail
-          ARCHIVE_PATH="/tmp/free-bbs-${GITHUB_SHA}.tar.gz"
-          tar \
-            --exclude='.git' \
-            --exclude='node_modules' \
-            --exclude='database/uploads' \
-            -czf "$ARCHIVE_PATH" .
 
       - name: Configure SSH
         run: |
@@ -65,15 +56,10 @@ jobs:
           ssh-keyscan -p "$DEPLOY_PORT" "$DEPLOY_HOST" >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
-      - name: Upload release artifact
-        run: |
-          set -euo pipefail
-          ARCHIVE_PATH="/tmp/free-bbs-${GITHUB_SHA}.tar.gz"
-          scp -P "$DEPLOY_PORT" "$ARCHIVE_PATH" "$DEPLOY_USER@$DEPLOY_HOST:/tmp/free-bbs-${GITHUB_SHA}.tar.gz"
-
       - name: Deploy on app server
         run: |
           set -euo pipefail
+          printf 'header = "Authorization: Bearer %s"\n' "$GITHUB_TOKEN" | \
           ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -euo pipefail; \
              RELEASE_DIR=/tmp/free-bbs-release-${GITHUB_SHA}; \
@@ -81,7 +67,10 @@ jobs:
              trap 'rm -rf \"\$RELEASE_DIR\" \"\$ARCHIVE_PATH\"' EXIT; \
              rm -rf \"\$RELEASE_DIR\"; \
              mkdir -p \"\$RELEASE_DIR\"; \
-             tar -xzf \"\$ARCHIVE_PATH\" -C \"\$RELEASE_DIR\"; \
+             curl --config - --fail --location --silent --show-error \
+               'https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}' \
+               --output \"\$ARCHIVE_PATH\"; \
+             tar -xzf \"\$ARCHIVE_PATH\" --strip-components=1 -C \"\$RELEASE_DIR\"; \
              cd \"\$RELEASE_DIR\"; \
              DEPLOY_DIR='$DEPLOY_PATH' \
              FRONTEND_SERVICE_NAME='$FRONTEND_SERVICE_NAME' \
