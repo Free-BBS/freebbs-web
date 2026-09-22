@@ -872,6 +872,20 @@ h3,
     border-color 160ms ease;
 }
 
+.settings-notification-state {
+  min-width: 3.8em;
+  color: #9ff0dd;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.settings-notification-state.is-off {
+  color: var(--ui-muted, #a5adb7);
+}
+
 .settings-notification-row:hover {
   border-color: var(--ui-line-strong, rgba(255, 255, 255, 0.28));
   background: color-mix(in srgb, var(--ui-surface, rgba(255, 255, 255, 0.08)) 92%, transparent);

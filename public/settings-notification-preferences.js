@@ -31,6 +31,9 @@
     const inputs = Object.fromEntries(
       KEYS.map((key) => [key, form.querySelector(`[data-notification-preference="${key}"]`)]),
     );
+    const states = Object.fromEntries(
+      KEYS.map((key) => [key, form.querySelector(`[data-notification-state="${key}"]`)]),
+    );
     let values = Object.fromEntries(KEYS.map((key) => [key, true]));
     let savedValues = { ...values };
     let busy = false;
@@ -42,6 +45,10 @@
       for (const key of KEYS) {
         if (inputs[key]) inputs[key].checked = Boolean(values[key]);
         if (inputs[key]) inputs[key].disabled = busy;
+        if (states[key]) {
+          states[key].textContent = values[key] ? '已开启' : '已关闭';
+          states[key].classList.toggle('is-off', !values[key]);
+        }
       }
       const dirty = KEYS.some((key) => values[key] !== savedValues[key]);
       if (submit) submit.disabled = busy || !loaded || !dirty;
