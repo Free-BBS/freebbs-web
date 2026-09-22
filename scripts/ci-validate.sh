@@ -77,6 +77,8 @@ node --check public/max-composer.js
 node --test backend/max-file-uploads.test.js scripts/max-file-preview.test.js backend/agent-routing.test.js backend/max-files.test.js backend/site-search.test.js backend/agent-site.test.js scripts/max-viewport.test.js
 node --check backend/ai-models.js
 node --test backend/ai-models.test.js
+node --check backend/max-images.js
+node --test backend/max-images.test.js
 node --check public/circuit-parameter-popover.js
 node --check public/circuit-embeds.js
 node --check public/circuit-embed.js
