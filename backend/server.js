@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { StringDecoder } = require('node:string_decoder');
 const sharp = require('sharp');
 const { modelCatalog, resolveModelOptions } = require('./ai-models');
 const {
@@ -23,6 +24,13 @@ const { enrichAgentCircuitContext } = require('./agent-circuits');
 const { createCircuitAssistantRouter } = require('./circuit-assistant');
 const { createCircuitRecognitionRouter } = require('./circuit-recognition');
 const { getDiscussionPreview } = require('./discussion-preview');
+const {
+  MAX_RESPONSE_BYTES: MAX_AGENT_IMAGE_RESPONSE_BYTES,
+  createImageGenerationGate,
+  persistGeneratedImages,
+  persistGeneratedSsePayload,
+  stripGeneratedImages,
+} = require('./max-images');
 const {
   canReadPost,
   lockPublicPost,
@@ -152,6 +160,7 @@ const MAX_AGENT_USER = {
   avatarPath: '/assets/max_the_agent_avatar.webp',
 };
 const USER_ROLES = new Set(['student', 'ta', 'teacher', 'admin']);
+const maxImageGenerationGate = createImageGenerationGate();
 const systemSettingsStore = createSystemSettingsStore({
   pool,
   encryptionKey: config.settingsEncryptionKey,
@@ -1526,13 +1535,17 @@ function buildAgentChatPayload(user, payload, defaults = {}) {
   const requestedAgent = String(payload.agent || defaults.agent || 'navigation').trim();
   const requestedSubagent = String(payload.execute_subagent || 'none').trim();
 
+  const safePayload = { ...payload };
+  delete safePayload.allow_image_generation;
+
   return {
-    ...payload,
+    ...safePayload,
     agent: allowedAgents.has(requestedAgent) ? requestedAgent : 'navigation',
     execute_subagent: ['none', 'auto', 'rag', 'info'].includes(requestedSubagent)
       ? requestedSubagent
       : 'none',
     combine_general_chat: payload.combine_general_chat === true,
+    allow_image_generation: defaults.allowImageGeneration === true,
     source: payload.source || defaults.source || 'direct_chat',
     channel:
       payload.channel || defaults.channel || payload.source || defaults.source || 'direct_chat',
@@ -1648,7 +1661,7 @@ function buildKnowledgeRagChatPayload(user, payload) {
   );
 }
 
-async function relayAgentChatResponse(agentResponse, response, stream) {
+async function relayAgentChatResponse(agentResponse, response, stream, imageContext = null) {
   if (stream) {
     response.status(agentResponse.status);
     response.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -1658,24 +1671,107 @@ async function relayAgentChatResponse(agentResponse, response, stream) {
 
     if (!agentResponse.body) {
       response.end();
-      return;
+      return 0;
     }
 
+    if (!imageContext) {
+      for await (const chunk of agentResponse.body) {
+        if (response.destroyed) break;
+        response.write(chunk);
+      }
+      response.end();
+      return 0;
+    }
+
+    const decoder = new StringDecoder('utf8');
+    let buffer = '';
+    let bufferedBytes = 0;
+    let generatedCount = 0;
+    let oversized = false;
     for await (const chunk of agentResponse.body) {
       if (response.destroyed) break;
-      response.write(chunk);
+      const decoded = decoder.write(Buffer.from(chunk));
+      buffer += decoded;
+      bufferedBytes += Buffer.byteLength(decoded, 'utf8');
+      if (bufferedBytes > MAX_AGENT_IMAGE_RESPONSE_BYTES) {
+        oversized = true;
+        break;
+      }
+      let separator = buffer.match(/\r?\n\r?\n/);
+      while (separator) {
+        const frame = buffer.slice(0, separator.index);
+        buffer = buffer.slice(separator.index + separator[0].length);
+        bufferedBytes = Buffer.byteLength(buffer, 'utf8');
+        const data = frame
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.slice(5).replace(/^ /, ''))
+          .join('\n');
+        if (!data) {
+          response.write(`${frame}\n\n`);
+        } else {
+          try {
+            const transformed = await persistGeneratedSsePayload(JSON.parse(data), imageContext);
+            if (transformed.error)
+              console.error('Failed to persist Max streamed image', transformed.error.message);
+            generatedCount += transformed.generatedCount;
+            response.write(`data: ${JSON.stringify(transformed.event)}\n\n`);
+          } catch {
+            response.write(
+              `data: ${JSON.stringify({ error: { message: 'Max 流式响应无法处理，请重试。' } })}\n\n`,
+            );
+          }
+        }
+        separator = buffer.match(/\r?\n\r?\n/);
+      }
+    }
+    buffer += decoder.end();
+    if (oversized) {
+      response.write(
+        `data: ${JSON.stringify({ error: { message: 'Max 图片响应过大，请调整描述后重试。' } })}\n\n`,
+      );
+    } else if (buffer && !response.destroyed) {
+      response.write(
+        `data: ${JSON.stringify({ error: { message: 'Max 流式响应不完整，请重试。' } })}\n\n`,
+      );
     }
     response.end();
-    return;
+    return generatedCount;
   }
 
   const text = await agentResponse.text();
+  let body = text;
+  let generatedCount = 0;
+  if (imageContext && agentResponse.ok) {
+    const responseBytes = Buffer.byteLength(text, 'utf8');
+    try {
+      const parsed = JSON.parse(text);
+      if (responseBytes > MAX_AGENT_IMAGE_RESPONSE_BYTES) {
+        body = JSON.stringify(
+          stripGeneratedImages(parsed, '> 图片生成结果过大，请调整描述后重试。'),
+        );
+      } else {
+        const persisted = await persistGeneratedImages(parsed, imageContext);
+        body = JSON.stringify(persisted.payload);
+        generatedCount = persisted.generatedCount;
+      }
+    } catch (error) {
+      console.error('Failed to persist Max generated image', error.message);
+      try {
+        const parsed = JSON.parse(text);
+        body = JSON.stringify(stripGeneratedImages(parsed));
+      } catch {
+        body = JSON.stringify({ message: 'Max 图片响应无法处理，请稍后再试。' });
+      }
+    }
+  }
   response.status(agentResponse.status);
   response.setHeader(
     'Content-Type',
     agentResponse.headers.get('content-type') || 'application/json; charset=utf-8',
   );
-  response.send(text);
+  response.send(body);
+  return generatedCount;
 }
 
 function normalizeSandboxLanguage(language) {
@@ -1797,30 +1893,52 @@ async function createMaxDiscussionReply(postId, triggerComment) {
   const post = toDiscussionPostDetail(postRows[0]);
   const comments = commentRows.map(toDiscussionComment);
   const prompt = buildMaxDiscussionPrompt(post, comments, triggerComment);
-  const agentResponse = await postAgentChat({
-    agent: 'comment_mention',
-    source: 'comment',
-    channel: 'discussion_comment',
-    message: prompt,
-    temperature: 0.5,
-    context: {
-      post: {
-        id: post.id,
-        pid: post.pid,
-        title: post.title,
-        board: post.board,
-        author: post.author,
-        contentMarkdown: post.contentMarkdown,
+  const imageReservation = maxImageGenerationGate.acquire(
+    `discussion-user:${triggerComment.author.id}`,
+  );
+  let generatedImageCount = 0;
+  let agentPayload;
+  try {
+    const agentResponse = await postAgentChat({
+      agent: 'comment_mention',
+      source: 'comment',
+      channel: 'discussion_comment',
+      message: prompt,
+      temperature: 0.5,
+      allow_image_generation: imageReservation.allowed,
+      context: {
+        post: {
+          id: post.id,
+          pid: post.pid,
+          title: post.title,
+          board: post.board,
+          author: post.author,
+          contentMarkdown: post.contentMarkdown,
+        },
+        triggerComment,
+        comments,
       },
-      triggerComment,
-      comments,
-    },
-  });
+    });
 
-  const agentPayload = await agentResponse.json().catch(() => ({}));
+    agentPayload = await agentResponse.json().catch(() => ({}));
 
-  if (!agentResponse.ok) {
-    throw new Error(agentPayload?.error?.message || agentPayload.message || 'Max 暂时无法回复');
+    if (!agentResponse.ok) {
+      throw new Error(agentPayload?.error?.message || agentPayload.message || 'Max 暂时无法回复');
+    }
+
+    try {
+      const persisted = await persistGeneratedImages(agentPayload, {
+        ownerId: triggerComment.author.id,
+        uploadDir: config.uploadDir,
+      });
+      agentPayload = persisted.payload;
+      generatedImageCount = persisted.generatedCount;
+    } catch (error) {
+      console.error('Failed to persist Max discussion image', error.message);
+      agentPayload = stripGeneratedImages(agentPayload);
+    }
+  } finally {
+    imageReservation.release(generatedImageCount > 0);
   }
 
   const answer = String(agentPayload.answer || agentPayload.content || '').trim();
@@ -2392,6 +2510,8 @@ app.post('/api/ai/chat', async (request, response) => {
   }
 
   const controller = new AbortController();
+  const imageReservation = maxImageGenerationGate.acquire(`user:${user.id}`);
+  let generatedImageCount = 0;
   const cancel = () => {
     if (!response.writableEnded) controller.abort();
   };
@@ -2410,6 +2530,7 @@ app.post('/api/ai/chat', async (request, response) => {
       {
         source: 'direct_chat',
         channel: 'aichat',
+        allowImageGeneration: imageReservation.allowed && payload.source !== 'circuit_report',
         context: {
           dialogId: payload.did || payload.conversationId || payload.conversation_id || '',
         },
@@ -2417,7 +2538,12 @@ app.post('/api/ai/chat', async (request, response) => {
     );
     const agentResponse = await postAgentChat(agentPayload, user, { signal: controller.signal });
 
-    await relayAgentChatResponse(agentResponse, response, payload.stream === true);
+    generatedImageCount = await relayAgentChatResponse(
+      agentResponse,
+      response,
+      payload.stream === true,
+      { ownerId: user.id, uploadDir: config.uploadDir },
+    );
   } catch (error) {
     if (response.destroyed) return;
     if (response.headersSent) {
@@ -2431,6 +2557,7 @@ app.post('/api/ai/chat', async (request, response) => {
       detail: error.message,
     });
   } finally {
+    imageReservation.release(generatedImageCount > 0);
     response.removeListener('close', cancel);
   }
 });
