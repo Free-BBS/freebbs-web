@@ -95,3 +95,14 @@ test('persists generated images inside the final reasoning SSE payload', async (
   assert.match(persisted.event.result.answer, /\/uploads\/max-image-7-/);
   assert.equal(Object.hasOwn(persisted.event.result, 'generated_images'), false);
 });
+
+test('background Ask Max enables and persists generated images', () => {
+  const server = fs.readFileSync(require.resolve('./server'), 'utf8');
+  const start = server.indexOf('async function runMaxBackgroundTask');
+  const end = server.indexOf('async function requestCircuitBackgroundRound', start);
+  const source = server.slice(start, end);
+  assert.match(source, /allowImageGeneration: imageReservation\.allowed/);
+  assert.match(source, /persistGeneratedImages\(result/);
+  assert.match(source, /phase: 'saving_image'/);
+  assert.match(source, /imageReservation\.release\(generatedImageCount > 0\)/);
+});
