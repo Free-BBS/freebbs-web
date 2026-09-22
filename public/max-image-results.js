@@ -9,6 +9,10 @@
     return Boolean(value && imageRequestPattern.test(value) && !negatedPattern.test(value));
   }
 
+  function isGenerationPhase(phase) {
+    return ['image_generating', 'saving_image', 'image_ready'].includes(phase);
+  }
+
   function statusCopy(message) {
     const value = String(message || 'Max 已收到描述，正在生成画面…');
     if (/保存|整理/.test(value)) {
@@ -16,6 +20,13 @@
     }
     if (/阅读|分析/.test(value)) {
       return { title: '正在理解你的描述', detail: value, step: 1 };
+    }
+    if (/思考|输入|排队/.test(value)) {
+      return {
+        title: 'Max 正在构思',
+        detail: 'Max 正在理解你的描述。准备好画面后，会在这里显示生成进度。',
+        step: 1,
+      };
     }
     return {
       title: '正在生成图片',
@@ -30,6 +41,13 @@
     const copy = statusCopy(message);
     article.classList.add('is-image-generation');
     article.setAttribute('aria-busy', 'true');
+    const existing = bubble.querySelector('.max-image-generation-status');
+    if (existing) {
+      existing.querySelector('.max-image-generation-copy strong').textContent = copy.title;
+      existing.querySelector('.max-image-generation-copy > span').textContent = copy.detail;
+      existing.querySelector('.max-image-generation-track').dataset.step = String(copy.step);
+      return;
+    }
     bubble.innerHTML = `
       <section class="max-image-generation-status" role="status" aria-live="polite">
         <span class="max-image-generation-mark" aria-hidden="true"><i></i></span>
@@ -43,7 +61,37 @@
         <span class="max-image-generation-steps" aria-hidden="true">
           <small>理解描述</small><small>生成画面</small><small>保存结果</small>
         </span>
+      </section>
+      <section class="max-image-placeholder" tabindex="0" aria-label="图片生成中，可玩俄罗斯方块">
+        <button type="button" class="max-image-placeholder-activate">
+          <span class="max-image-placeholder-squares" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+          <strong>图片生成中</strong>
+          <span>点这里玩一局俄罗斯方块</span>
+          <small>生成完成后，图片会出现在这个位置</small>
+        </button>
+        <div class="max-tetris-game" hidden>
+          <div class="max-tetris-heading">
+            <span>等待画面的小游戏</span>
+            <span>得分 <b data-tetris-score>0</b>　消行 <b data-tetris-lines>0</b></span>
+          </div>
+          <div class="max-tetris-layout">
+            <canvas width="240" height="384" role="img" aria-label="俄罗斯方块游戏区域"></canvas>
+            <div class="max-tetris-side">
+              <p data-tetris-message>← → 移动 · ↑ 旋转 · ↓ 加速 · 空格落下</p>
+              <button type="button" data-tetris-action="pause">暂停</button>
+              <div class="max-tetris-controls" aria-label="触屏游戏控制">
+                <button type="button" data-tetris-action="left" aria-label="左移">←</button>
+                <button type="button" data-tetris-action="rotate" aria-label="旋转">↻</button>
+                <button type="button" data-tetris-action="right" aria-label="右移">→</button>
+                <button type="button" data-tetris-action="down" aria-label="下移">↓</button>
+                <button type="button" data-tetris-action="drop" aria-label="直接落下">落下</button>
+              </div>
+              <small>图片完成时，游戏会自动结束并显示作品。</small>
+            </div>
+          </div>
+        </div>
       </section>`;
+    root.FreeBbsMaxTetris?.mount(bubble.querySelector('.max-image-placeholder'));
   }
 
   function buildResultFrame(image) {
@@ -74,6 +122,7 @@
 
   function decorate(article) {
     if (!article) return 0;
+    root.FreeBbsMaxTetris?.dispose(article);
     article.classList.remove('is-image-generation');
     article.removeAttribute('aria-busy');
     const bubble = article.querySelector?.('.aichat-bubble, .discussion-markdown-body');
@@ -119,7 +168,7 @@
     return count;
   }
 
-  const api = { decorate, finish, isRequest, showProgress, statusCopy };
+  const api = { decorate, finish, isGenerationPhase, isRequest, showProgress, statusCopy };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FreeBbsMaxImageResults = api;
 })(typeof window === 'object' ? window : globalThis);
