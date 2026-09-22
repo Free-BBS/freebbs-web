@@ -345,6 +345,55 @@
               ></p>
             </section>
 
+            <form
+              class="settings-form settings-notification-form"
+              id="settings-notification-form"
+              aria-labelledby="settings-notification-title"
+            >
+              <div class="settings-section-heading">
+                <h2 id="settings-notification-title">邮件通知</h2>
+                <p>站内通知仍会保留；关闭后只是不再向你的邮箱发送对应类型的提醒。</p>
+              </div>
+              <div class="settings-notification-list">
+                <label class="settings-notification-row">
+                  <span><strong>讨论回复</strong><small>有人回复你的帖子或评论时通知</small></span>
+                  <input type="checkbox" data-notification-preference="reply" checked />
+                </label>
+                <label class="settings-notification-row">
+                  <span><strong>帖子互动</strong><small>有人点赞、点亮或送烟花时通知</small></span>
+                  <input type="checkbox" data-notification-preference="reaction" checked />
+                </label>
+                <label class="settings-notification-row">
+                  <span><strong>评论点赞</strong><small>有人点赞你的评论时通知</small></span>
+                  <input type="checkbox" data-notification-preference="commentLike" checked />
+                </label>
+                <label class="settings-notification-row">
+                  <span
+                    ><strong>平台公告</strong><small>管理员发布与你相关的公告时通知</small></span
+                  >
+                  <input type="checkbox" data-notification-preference="announcement" checked />
+                </label>
+                <label class="settings-notification-row">
+                  <span><strong>每周热帖</strong><small>每周收到社区热门讨论摘要</small></span>
+                  <input type="checkbox" data-notification-preference="weeklyDigest" checked />
+                </label>
+                <label class="settings-notification-row">
+                  <span
+                    ><strong>后台任务</strong
+                    ><small>Max 或电路助手后台任务完成、暂停或失败时通知</small></span
+                  >
+                  <input type="checkbox" data-notification-preference="aiTask" checked />
+                </label>
+              </div>
+              <p
+                class="auth-message settings-message"
+                data-notification-preferences-message
+                role="status"
+                aria-live="polite"
+              ></p>
+              <button class="auth-submit" type="submit">保存邮件通知</button>
+            </form>
+
             <form class="settings-form settings-password-form" id="settings-password-form">
               <div class="settings-section-heading">
                 <h2>修改密码</h2>
@@ -423,6 +472,7 @@
     <script src="/settings-username.js"></script>
     <script src="/settings-profile-link.js"></script>
     <script src="/notifications.js"></script>
+    <script src="/settings-notification-preferences.js"></script>
     <script src="/course-upload.js"></script>
     <script src="/mobile-personal.js"></script>
   </body>

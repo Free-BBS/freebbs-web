@@ -1863,6 +1863,19 @@ body:not(.auth-page-body) .settings-typography-form {
   border-top: 1px solid var(--ui-line);
 }
 
+body:not(.auth-page-body) .settings-notification-form {
+  border-top-color: var(--ui-line);
+}
+
+body:not(.auth-page-body) .settings-notification-row {
+  border-color: var(--ui-line);
+  background: color-mix(in srgb, var(--ui-surface) 80%, transparent);
+}
+
+body:not(.auth-page-body) .settings-notification-row small {
+  color: var(--ui-muted);
+}
+
 body:not(.auth-page-body) .settings-typography-form select {
   min-height: 44px;
   border: 1px solid var(--ui-line-strong) !important;
