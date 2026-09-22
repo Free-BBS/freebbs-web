@@ -125,15 +125,9 @@ test(
     timeout: 30000,
   },
   async (t) => {
-    const socketPath = process.env.ADMIN_REWARDS_MYSQL_SOCKET;
-    assert.equal(
-      socketPath,
-      [`${String.fromCharCode(92).repeat(2)}.`, 'pipe', 'freebbs-admin-rewards-qa'].join(
-        String.fromCharCode(92),
-      ),
-    );
+    const { isolatedMysqlConfig } = require('./test-helpers/isolated-mysql');
     const mysql = require('mysql2/promise');
-    const config = { socketPath, user: 'root', password: '' };
+    const config = isolatedMysqlConfig('ADMIN_REWARDS_MYSQL_SOCKET');
     const conn = await mysql.createConnection(config);
     t.after(() => conn.end());
     const [[server]] = await conn.query('SELECT @@skip_networking AS isolated');

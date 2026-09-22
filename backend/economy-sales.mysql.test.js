@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
+const { isolatedMysqlConfig } = require('./test-helpers/isolated-mysql');
 const { createBoneSales } = require('./economy-sales');
 const {
   createMysqlEconomyStore,
@@ -18,10 +19,8 @@ test(
     timeout: 30000,
   },
   async (t) => {
-    const socketPath = process.env.BONE_SALES_MYSQL_SOCKET;
-    assert.ok(socketPath?.startsWith('\\\\.\\pipe\\'), 'explicit disposable local pipe required');
     const mysql = require('mysql2/promise');
-    const config = { socketPath, user: 'root', password: '' };
+    const config = isolatedMysqlConfig('BONE_SALES_MYSQL_SOCKET');
     const database = `bone_sales_test_${randomUUID().replaceAll('-', '')}`;
     assert.match(database, /^bone_sales_test_[a-f0-9]{32}$/);
     const connection = await mysql.createConnection(config);

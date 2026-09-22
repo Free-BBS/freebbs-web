@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
+const { isolatedMysqlConfig } = require('./test-helpers/isolated-mysql');
 const { GUIDE_VERSION, LEGACY_GUIDE_VERSIONS } = require('./onboarding');
 const { RELEASES } = require('../public/max-guide-releases');
 const { ensureWalletLedger } = require('./wallet-ledger');
@@ -13,15 +14,8 @@ test(
   'isolated MySQL: permanent concurrent claim, legacy eligibility, ledger trigger and transactional rollback',
   { skip: process.env.RUN_ONBOARDING_REWARD_MYSQL !== '1', timeout: 30000 },
   async (t) => {
-    const socketPath = process.env.ONBOARDING_REWARD_MYSQL_SOCKET;
-    const separator = String.fromCharCode(92);
-    assert.equal(
-      socketPath,
-      [`${separator.repeat(2)}.`, 'pipe', 'freebbs-onboarding-reward-qa'].join(separator),
-      'only the explicit disposable local named pipe may be used; never application DB config',
-    );
     const mysql = require('mysql2/promise');
-    const config = { socketPath, user: 'root', password: '' };
+    const config = isolatedMysqlConfig('ONBOARDING_REWARD_MYSQL_SOCKET');
     const admin = await mysql.createConnection(config);
     t.after(() => admin.end());
     const [[server]] = await admin.query('SELECT @@skip_networking AS isolated');

@@ -18,6 +18,7 @@ const {
   generateWienChallenge,
 } = require('./registration-guard');
 const { solveAuthChallenge: solveChallenge } = require('./test-helpers/auth');
+const { isolatedMysqlConfig, assertIsolatedMysql } = require('./test-helpers/isolated-mysql');
 
 const runProgram = promisify(execFile);
 
@@ -41,26 +42,42 @@ test(
   async (t) => {
     const database = `freebbs_community_test_${crypto.randomBytes(6).toString('hex')}`;
     const root = path.resolve(__dirname, '..');
-    const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'freebbs-community-'));
-    const mysqlOptions = {
+    const isolated = Boolean(process.env.FREEBBS_TEST_MYSQL_SOCKET);
+    // Keep legacy TCP settings separate from the verified socket configuration;
+    // the isolated runner must use the same disposable server for both clients.
+    const backendMysqlOptions = {
       host: process.env.BACKEND_IP || '127.0.0.1',
       port: Number(process.env.MYSQL_PORT || 3306),
       user: process.env.MYSQL_USER || 'root',
       password: process.env.MYSQL_PASSWORD || '',
+    };
+    const mysqlOptions = {
+      ...(isolated ? isolatedMysqlConfig('COMMUNITY_MYSQL_SOCKET') : backendMysqlOptions),
       multipleStatements: true,
     };
-    const db = await mysql.createConnection(mysqlOptions);
+    const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'freebbs-community-'));
+    let db;
+    let databaseInitialized = false;
     let backend;
     let logs = '';
     t.after(async () => {
-      if (backend && backend.exitCode === null) {
-        backend.kill('SIGTERM');
-        await once(backend, 'exit');
+      try {
+        if (backend && backend.exitCode === null) {
+          backend.kill('SIGTERM');
+          await once(backend, 'exit');
+        }
+        if (db && databaseInitialized) await db.query(`DROP DATABASE IF EXISTS \`${database}\``);
+      } finally {
+        try {
+          if (db) await db.end();
+        } finally {
+          await fs.rm(temp, { recursive: true, force: true });
+        }
       }
-      await db.query(`DROP DATABASE IF EXISTS \`${database}\``);
-      await db.end();
-      await fs.rm(temp, { recursive: true, force: true });
     });
+    db = await mysql.createConnection(mysqlOptions);
+    if (isolated) await assertIsolatedMysql(db);
+    databaseInitialized = true;
     for (const file of ['schema.sql', 'seed.sql']) {
       const source = await fs.readFile(path.join(root, 'database', file), 'utf8');
       await db.query(source.replaceAll('free_bbs', database));
@@ -73,10 +90,11 @@ test(
         NODE_ENV: 'test',
         API_HOST: '127.0.0.1',
         API_PORT: String(port),
-        BACKEND_IP: mysqlOptions.host,
-        MYSQL_PORT: String(mysqlOptions.port),
+        BACKEND_IP: backendMysqlOptions.host,
+        MYSQL_PORT: String(backendMysqlOptions.port),
         MYSQL_USER: mysqlOptions.user,
         MYSQL_PASSWORD: mysqlOptions.password,
+        ...(isolated ? { MYSQL_SOCKET: mysqlOptions.socketPath } : {}),
         MYSQL_DATABASE: database,
         AUTH_SECRET: crypto.randomBytes(32).toString('hex'),
         UPLOAD_DIR: path.join(temp, 'uploads'),
@@ -845,6 +863,8 @@ test(
                 cwd: root,
                 env: {
                   ...process.env,
+                  PYTHONUTF8: '1',
+                  PYTHONIOENCODING: 'utf-8',
                   FREEBBS_BASE_URL: base.replace(/\/api$/, ''),
                   FREEBBS_UPLOAD_TOKEN: token,
                   NO_PROXY: '127.0.0.1,localhost',
@@ -1259,7 +1279,23 @@ test(
           });
         };
         assertAnonymous(created.post);
-        for (const token of [undefined, outsider.token, legacy.token, admin.token]) {
+        assert.equal(created.post.loginRequired, true);
+        for (const route of [
+          `/discussion/posts/${postId}`,
+          `/discussion/posts/${postId}/comments`,
+        ]) {
+          const blocked = await api(route, { expected: 401 });
+          assert.equal(blocked.code, 'post_login_required');
+          assert.equal(blocked.post, undefined);
+          assert.equal(blocked.comments, undefined);
+          assert.equal(JSON.stringify(blocked).includes('公开正文'), false);
+        }
+        const guestList = await api('/discussion/posts?board=daily&limit=50');
+        assert.equal(
+          guestList.posts.some((post) => post.id === postId),
+          false,
+        );
+        for (const token of [outsider.token, legacy.token, admin.token]) {
           assertAnonymous((await api(`/discussion/posts/${postId}`, { token })).post);
           const list = await api('/discussion/posts?board=daily&limit=50', { token });
           assertAnonymous(list.posts.find((post) => post.id === postId));
@@ -1361,13 +1397,18 @@ test(
           token: outsider.token,
           method: 'DELETE',
         });
-        const remaining = (await api(`/discussion/posts/${postId}/comments`)).comments;
+        const remaining = (
+          await api(`/discussion/posts/${postId}/comments`, { token: outsider.token })
+        ).comments;
         assert.equal(remaining.length, 2);
         assert.equal(remaining[0].isDeleted, true);
         assert.equal(remaining[0].author.id, null);
         assert.equal(remaining[0].contentMarkdown, '该评论已删除');
         assert.equal(remaining[1].contentMarkdown, '保留的回复');
-        assert.equal((await api(`/discussion/posts/${postId}`)).post.commentCount, 1);
+        assert.equal(
+          (await api(`/discussion/posts/${postId}`, { token: outsider.token })).post.commentCount,
+          1,
+        );
         await api(`/discussion/comments/${rootComment.id}/like`, {
           token: legacy.token,
           method: 'POST',
@@ -1380,7 +1421,11 @@ test(
           body: { contentMarkdown: '不能回复已删除评论', parentCommentId: rootComment.id },
         });
         await api(`/discussion/comments/${reply.id}`, { token: admin.token, method: 'DELETE' });
-        assert.equal((await api(`/discussion/posts/${postId}/comments`)).comments.length, 0);
+        assert.equal(
+          (await api(`/discussion/posts/${postId}/comments`, { token: outsider.token })).comments
+            .length,
+          0,
+        );
         const mine = (
           await api(`/discussion/posts/${postId}/comments`, {
             token: legacy.token,
@@ -1420,10 +1465,7 @@ test(
         assert.equal(revealed.contentMarkdown, '公开正文');
         assert.equal(revealed.title, '匿名回归测试');
         assertAnonymous(revealed);
-        assert.equal(
-          (await api(`/discussion/posts/${postId}`, { token: admin.token })).post.contentMarkdown,
-          '这篇帖子已被删除。',
-        );
+        await api(`/discussion/posts/${postId}`, { token: admin.token, expected: 404 });
         await api(`/discussion/posts/${postId}?includeDeleted=1`, {
           token: outsider.token,
           expected: 404,

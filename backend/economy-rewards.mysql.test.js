@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const fs = require('node:fs');
+const { isolatedMysqlConfig } = require('./test-helpers/isolated-mysql');
 const { awardMagnetic } = require('./economy-rewards');
 const { ensureWalletLedger } = require('./wallet-ledger');
 const { createMysqlEconomyStore } = require('./economy-shop');
@@ -11,7 +12,7 @@ const {
   mysqlProfileMethods,
 } = require('./profile-extras');
 
-// Explicitly targets a local disposable MySQL named pipe, never the application's DB config.
+// Explicitly targets a disposable local MySQL socket, never the application's DB config.
 test(
   'REPEATABLE READ reward cap and deduplication use current data after an earlier snapshot',
   {
@@ -19,13 +20,8 @@ test(
     timeout: 30000,
   },
   async (t) => {
-    const socketPath = process.env.ECONOMY_MYSQL_SOCKET;
-    assert.ok(
-      socketPath && socketPath.startsWith('\\\\.\\pipe\\'),
-      'a disposable local named pipe is required',
-    );
     const mysql = require('mysql2/promise');
-    const config = { socketPath, user: 'root', password: '' };
+    const config = isolatedMysqlConfig('ECONOMY_MYSQL_SOCKET');
     const admin = await mysql.createConnection(config);
     t.after(() => admin.end());
     const [[server]] = await admin.query('SELECT @@skip_networking AS isolated');

@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
+const { isolatedMysqlConfig } = require('./test-helpers/isolated-mysql');
 const { createAdminRewardsService, ensureAdminRewardTables } = require('./admin-rewards');
 const { createNotificationService } = require('./notifications');
 
@@ -11,10 +12,8 @@ test(
     timeout: 30000,
   },
   async (t) => {
-    const socketPath = process.env.ADMIN_REWARDS_MYSQL_SOCKET;
-    assert.ok(socketPath?.startsWith('\\\\.\\pipe\\'), 'explicit disposable local pipe required');
     const mysql = require('mysql2/promise');
-    const config = { socketPath, user: 'root', password: '' };
+    const config = isolatedMysqlConfig('ADMIN_REWARDS_MYSQL_SOCKET');
     const connection = await mysql.createConnection(config);
     t.after(() => connection.end());
     const [[server]] = await connection.query('SELECT @@skip_networking AS isolated');

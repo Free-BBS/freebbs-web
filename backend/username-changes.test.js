@@ -351,26 +351,39 @@ test('profile endpoint rejects forged name updates but preserves ordinary bio sa
 test(
   'isolated MySQL validates migration, calendar boundaries and concurrent billing',
   {
-    skip: process.env.RUN_USERNAME_INTEGRATION !== '1',
+    skip: !process.env.FREEBBS_TEST_MYSQL_SOCKET && process.env.RUN_USERNAME_INTEGRATION !== '1',
     timeout: 30000,
   },
   async (t) => {
     const mysql = require('mysql2/promise');
     const crypto = require('node:crypto');
     const { ensureUsernameChangeTables } = require('./username-policy');
+    const { isolatedMysqlConfig, assertIsolatedMysql } = require('./test-helpers/isolated-mysql');
+    const isolated = Boolean(process.env.FREEBBS_TEST_MYSQL_SOCKET);
     const database = `freebbs_username_test_${crypto.randomBytes(8).toString('hex')}`;
-    // No application config is imported. This test requires an explicit opt-in test DB account.
-    assert.ok(
-      process.env.USERNAME_TEST_MYSQL_USER,
-      'Set a disposable MySQL test account explicitly',
-    );
-    const options = {
-      host: process.env.USERNAME_TEST_MYSQL_HOST || '127.0.0.1',
-      port: Number(process.env.USERNAME_TEST_MYSQL_PORT || 3306),
-      user: process.env.USERNAME_TEST_MYSQL_USER,
-      password: process.env.USERNAME_TEST_MYSQL_PASSWORD || '',
-    };
+    // Use the isolated runner, or an explicit opt-in test account; never application config.
+    if (!isolated)
+      assert.ok(
+        process.env.USERNAME_TEST_MYSQL_USER,
+        'Set a disposable MySQL test account explicitly',
+      );
+    const options = isolated
+      ? isolatedMysqlConfig('USERNAME_TEST_MYSQL_SOCKET')
+      : {
+          host: process.env.USERNAME_TEST_MYSQL_HOST || '127.0.0.1',
+          port: Number(process.env.USERNAME_TEST_MYSQL_PORT || 3306),
+          user: process.env.USERNAME_TEST_MYSQL_USER,
+          password: process.env.USERNAME_TEST_MYSQL_PASSWORD || '',
+        };
     const admin = await mysql.createConnection(options);
+    if (isolated) {
+      try {
+        await assertIsolatedMysql(admin);
+      } catch (error) {
+        await admin.end();
+        throw error;
+      }
+    }
     let pool;
     let created = false;
     t.after(async () => {

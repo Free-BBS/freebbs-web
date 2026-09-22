@@ -6,6 +6,7 @@ const MINUTE_MS = 60 * 1000;
 const MAX_PLAN_DAYS = 30;
 const MAX_HORIZON_DAYS = 371;
 const MAX_SUGGESTIONS = 52;
+// Inline this server-owned limit: mysql2 execute() binds JS numbers as DOUBLE.
 const MAX_EVENTS = 500;
 const MAX_PROMPT_LENGTH = 600;
 const SHANGHAI_OFFSET_MS = 8 * 60 * MINUTE_MS;
@@ -17,7 +18,19 @@ const COURSE_SECTIONS = Object.freeze({
   5: ['17:10', '18:45'],
   6: ['19:20', '21:45'],
 });
-const CHINESE_DIGITS = Object.freeze({ 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 });
+const CHINESE_DIGITS = Object.freeze({
+  一: 1,
+  二: 2,
+  两: 2,
+  三: 3,
+  四: 4,
+  五: 5,
+  六: 6,
+  七: 7,
+  八: 8,
+  九: 9,
+  十: 10,
+});
 const WEEKDAYS = Object.freeze({ 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 7, 天: 7 });
 
 function smallNumber(value) {
@@ -26,13 +39,19 @@ function smallNumber(value) {
   if (value === '十') return 10;
   if (String(value).startsWith('十')) return 10 + (CHINESE_DIGITS[String(value).slice(1)] || 0);
   if (String(value).endsWith('十')) return (CHINESE_DIGITS[String(value)[0]] || 0) * 10;
-  if (/^[二三四五]十[一二三四五六七八九]$/.test(String(value))) return CHINESE_DIGITS[String(value)[0]] * 10 + CHINESE_DIGITS[String(value)[2]];
+  if (/^[二三四五]十[一二三四五六七八九]$/.test(String(value)))
+    return CHINESE_DIGITS[String(value)[0]] * 10 + CHINESE_DIGITS[String(value)[2]];
   return CHINESE_DIGITS[value] || null;
 }
 
 function dateKeyFromParts(year, month, day) {
   const parsed = new Date(Date.UTC(year, month - 1, day));
-  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) return null;
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  )
+    return null;
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
@@ -43,11 +62,15 @@ function parseMentionedDate(message, now) {
   if (full) {
     const specifiedYear = full[1] ? Number(full[1]) : year;
     let key = dateKeyFromParts(specifiedYear, Number(full[2]), Number(full[3]));
-    if (!full[1] && key && key < todayKey) key = dateKeyFromParts(specifiedYear + 1, Number(full[2]), Number(full[3]));
+    if (!full[1] && key && key < todayKey)
+      key = dateKeyFromParts(specifiedYear + 1, Number(full[2]), Number(full[3]));
     return key;
   }
   const relative = /(今天|明天|后天)/.exec(message);
-  if (relative) return localDateKey(new Date(shanghaiMidnight(todayKey) + ({ 今天: 0, 明天: 1, 后天: 2 })[relative[1]] * DAY_MS));
+  if (relative)
+    return localDateKey(
+      new Date(shanghaiMidnight(todayKey) + { 今天: 0, 明天: 1, 后天: 2 }[relative[1]] * DAY_MS),
+    );
   const numberedDay = /(?:^|\D)(\d{1,2})[日号]/.exec(message);
   if (numberedDay) {
     const target = Number(numberedDay[1]);
@@ -60,7 +83,8 @@ function parseMentionedDate(message, now) {
   }
   const weekly = /(?:每周|每星期|周常)([一二三四五六日天])/.exec(message);
   if (weekly) {
-    const todayWeekday = (new Date(shanghaiMidnight(todayKey) + SHANGHAI_OFFSET_MS).getUTCDay() + 6) % 7 + 1;
+    const todayWeekday =
+      ((new Date(shanghaiMidnight(todayKey) + SHANGHAI_OFFSET_MS).getUTCDay() + 6) % 7) + 1;
     const offset = (WEEKDAYS[weekly[1]] - todayWeekday + 7) % 7;
     return localDateKey(new Date(shanghaiMidnight(todayKey) + offset * DAY_MS));
   }
@@ -73,7 +97,10 @@ function parseMentionedTime(message) {
     const [start, end] = COURSE_SECTIONS[smallNumber(section[1])];
     return { startMinutes: parseClock(start), endMinutes: parseClock(end) };
   }
-  const clock = /(凌晨|早上|上午|中午|下午|傍晚|晚上)?\s*(\d{1,2})(?::(\d{2})|点(?:(半)|(\d{1,2})分?)?)/.exec(message);
+  const clock =
+    /(凌晨|早上|上午|中午|下午|傍晚|晚上)?\s*(\d{1,2})(?::(\d{2})|点(?:(半)|(\d{1,2})分?)?)/.exec(
+      message,
+    );
   if (!clock) return null;
   let hour = Number(clock[2]);
   let minute = Number(clock[5] || 0);
@@ -93,7 +120,10 @@ function cleanTitle(message) {
     .replace(/(?:之后)?(?:每周|每星期|周常)(?:都有)?/g, '')
     .replace(/(?:\d{4}年)?\d{1,2}月\d{1,2}[日号]?|\d{1,2}[日号]|今天|明天|后天/g, '')
     .replace(/第[一二三四五六1-6]大节/g, '')
-    .replace(/(?:凌晨|早上|上午|中午|下午|傍晚|晚上)?\s*\d{1,2}(?::\d{2}|点(?:半|\d{1,2}分?)?)/g, '')
+    .replace(
+      /(?:凌晨|早上|上午|中午|下午|傍晚|晚上)?\s*\d{1,2}(?::\d{2}|点(?:半|\d{1,2}分?)?)/g,
+      '',
+    )
     .replace(/(?:持续时间|持续|共计|约)\s*[一二两三四五六七八九十\d.]+\s*(?:小时|分钟)/g, '')
     .replace(/[一二两三四五六七八九十\d.]+\s*(?:小时|分钟)/g, '')
     .replace(/^(?:在|于|安排)\s*/, '')
@@ -105,14 +135,23 @@ function cleanTitle(message) {
 
 function parseKnownScheduleMessage(message, now = new Date()) {
   const text = String(message || '').trim();
-  const plan = /接下来\s*([一二两三四五六七八九十\d]+)\s*天[\s\S]*?([一二两三四五六七八九十\d]+(?:\.\d+)?)\s*(小时|分钟)/.exec(text);
+  const plan =
+    /接下来\s*([一二两三四五六七八九十\d]+)\s*天[\s\S]*?([一二两三四五六七八九十\d]+(?:\.\d+)?)\s*(小时|分钟)/.exec(
+      text,
+    );
   if (plan) {
     // Let the Agent extract availability constraints instead of silently using 09:00–21:00.
-    if (/(?:凌晨|早上|上午|中午|下午|傍晚|晚上|夜间|白天|周末|工作日|每天|每日|每晚|只|避开|不要|不能|不超过|点|[:：])/.test(text)) return null;
+    if (
+      /(?:凌晨|早上|上午|中午|下午|傍晚|晚上|夜间|白天|周末|工作日|每天|每日|每晚|只|避开|不要|不能|不超过|点|[:：])/.test(
+        text,
+      )
+    )
+      return null;
     const days = smallNumber(plan[1]);
     const amount = smallNumber(plan[2]);
     const title = cleanTitle(text);
-    if (days && amount && title) return { kind: 'plan', title, days, totalMinutes: amount * (plan[3] === '小时' ? 60 : 1) };
+    if (days && amount && title)
+      return { kind: 'plan', title, days, totalMinutes: amount * (plan[3] === '小时' ? 60 : 1) };
   }
   const dateKey = parseMentionedDate(text, now);
   const clock = parseMentionedTime(text);
@@ -122,9 +161,18 @@ function parseKnownScheduleMessage(message, now = new Date()) {
   let start = shanghaiMidnight(dateKey) + clock.startMinutes * MINUTE_MS;
   const deadline = /(?:之前|以前|截止|ddl|DDL)/.test(text);
   if (deadline) {
-    return { kind: 'deadline', title, description: '截止时间', startAt: new Date(start - MINUTE_MS).toISOString(), endAt: new Date(start).toISOString() };
+    return {
+      kind: 'deadline',
+      title,
+      description: '截止时间',
+      startAt: new Date(start - MINUTE_MS).toISOString(),
+      endAt: new Date(start).toISOString(),
+    };
   }
-  const duration = /(?:持续(?:时间)?|共计|约)?\s*(\d+(?:\.\d+)?|[一二两三四五六七八九十]+)\s*(小时|分钟)/.exec(text);
+  const duration =
+    /(?:持续(?:时间)?|共计|约)?\s*(\d+(?:\.\d+)?|[一二两三四五六七八九十]+)\s*(小时|分钟)/.exec(
+      text,
+    );
   const minutes = duration ? smallNumber(duration[1]) * (duration[2] === '小时' ? 60 : 1) : null;
   const endMinutes = clock.endMinutes ?? (minutes ? clock.startMinutes + minutes : null);
   if (!endMinutes) return null;
@@ -133,9 +181,20 @@ function parseKnownScheduleMessage(message, now = new Date()) {
     const count = /(?:持续|连续|共)\s*([一二两三四五六七八九十\d]+)\s*周/.exec(text);
     if (!count) return null;
     if (start <= now.getTime()) start += 7 * DAY_MS;
-    return { kind: 'weekly', title, startAt: new Date(start).toISOString(), endAt: new Date(start + (endMinutes - clock.startMinutes) * MINUTE_MS).toISOString(), weeks: smallNumber(count[1]) };
+    return {
+      kind: 'weekly',
+      title,
+      startAt: new Date(start).toISOString(),
+      endAt: new Date(start + (endMinutes - clock.startMinutes) * MINUTE_MS).toISOString(),
+      weeks: smallNumber(count[1]),
+    };
   }
-  return { kind: 'event', title, startAt: new Date(start).toISOString(), endAt: new Date(shanghaiMidnight(dateKey) + endMinutes * MINUTE_MS).toISOString() };
+  return {
+    kind: 'event',
+    title,
+    startAt: new Date(start).toISOString(),
+    endAt: new Date(shanghaiMidnight(dateKey) + endMinutes * MINUTE_MS).toISOString(),
+  };
 }
 
 function localDateKey(value) {
@@ -319,12 +378,15 @@ function buildPreview(extraction, existing, now = new Date()) {
     const first = validateSuggestion(extraction, now);
     suggestions = Array.from({ length: weeks }, (_, index) => {
       const offset = index * 7 * DAY_MS;
-      const item = validateSuggestion({
-        ...first,
-        description: `周常 · 第 ${index + 1}/${weeks} 周${extraction.description ? ` · ${extraction.description}` : ''}`,
-        startAt: new Date(new Date(first.startAt).getTime() + offset).toISOString(),
-        endAt: new Date(new Date(first.endAt).getTime() + offset).toISOString(),
-      }, now);
+      const item = validateSuggestion(
+        {
+          ...first,
+          description: `周常 · 第 ${index + 1}/${weeks} 周${extraction.description ? ` · ${extraction.description}` : ''}`,
+          startAt: new Date(new Date(first.startAt).getTime() + offset).toISOString(),
+          endAt: new Date(new Date(first.endAt).getTime() + offset).toISOString(),
+        },
+        now,
+      );
       return { ...item, occurrence: index + 1, totalWeeks: weeks };
     });
   } else if (kind === 'plan') {
@@ -336,13 +398,15 @@ function buildPreview(extraction, existing, now = new Date()) {
   }
   if (
     suggestions.length > MAX_SUGGESTIONS ||
-    suggestions.some((item) =>
-      item.kind !== 'deadline' && existing.some((busy) =>
-        overlaps(item, {
-          startAt: busy.startAt || busy.start_at,
-          endAt: busy.endAt || busy.end_at,
-        }),
-      ),
+    suggestions.some(
+      (item) =>
+        item.kind !== 'deadline' &&
+        existing.some((busy) =>
+          overlaps(item, {
+            startAt: busy.startAt || busy.start_at,
+            endAt: busy.endAt || busy.end_at,
+          }),
+        ),
     )
   ) {
     throw Object.assign(new Error('建议时间与已有安排冲突，请调整描述后重试。'), { status: 409 });
@@ -388,8 +452,8 @@ function createSchedulePlannerRouter({ pool, requireAuth, postAgentChat, buildAg
         `SELECT start_at, end_at FROM schedule_items
          WHERE user_id = ? AND deleted_at IS NULL AND status IN ('draft', 'confirmed')
            AND (source_reference IS NULL OR source_reference <> 'planner:deadline')
-           AND start_at < ? AND end_at > ? ORDER BY start_at LIMIT ?`,
-        [user.id, end, now, MAX_EVENTS + 1],
+           AND start_at < ? AND end_at > ? ORDER BY start_at LIMIT ${MAX_EVENTS + 1}`,
+        [user.id, end, now],
       );
       if (rows.length > MAX_EVENTS) {
         response.status(422).json({ message: '现有日程过多，暂时无法安全规划。' });
@@ -444,7 +508,12 @@ function createSchedulePlannerRouter({ pool, requireAuth, postAgentChat, buildAg
       const suggestions = values.map((item) => validateSuggestion(item));
       if (
         suggestions.some((item, index) =>
-          suggestions.slice(index + 1).some((other) => item.kind !== 'deadline' && other.kind !== 'deadline' && overlaps(item, other)),
+          suggestions
+            .slice(index + 1)
+            .some(
+              (other) =>
+                item.kind !== 'deadline' && other.kind !== 'deadline' && overlaps(item, other),
+            ),
         )
       ) {
         response.status(409).json({ message: '待确认计划之间有时间冲突。' });
@@ -461,18 +530,20 @@ function createSchedulePlannerRouter({ pool, requireAuth, postAgentChat, buildAg
         `SELECT start_at, end_at FROM schedule_items
          WHERE user_id = ? AND deleted_at IS NULL AND status IN ('draft', 'confirmed')
            AND (source_reference IS NULL OR source_reference <> 'planner:deadline')
-           AND start_at < ? AND end_at > ? LIMIT ?`,
-        [user.id, end, start, MAX_EVENTS + 1],
+           AND start_at < ? AND end_at > ? LIMIT ${MAX_EVENTS + 1}`,
+        [user.id, end, start],
       );
       if (
         busy.length > MAX_EVENTS ||
-        suggestions.some((item) =>
-          item.kind !== 'deadline' && busy.some((occupied) =>
-            overlaps(item, {
-              startAt: occupied.start_at,
-              endAt: occupied.end_at,
-            }),
-          ),
+        suggestions.some(
+          (item) =>
+            item.kind !== 'deadline' &&
+            busy.some((occupied) =>
+              overlaps(item, {
+                startAt: occupied.start_at,
+                endAt: occupied.end_at,
+              }),
+            ),
         )
       ) {
         await connection.rollback();
