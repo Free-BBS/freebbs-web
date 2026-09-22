@@ -352,37 +352,62 @@
             >
               <div class="settings-section-heading">
                 <h2 id="settings-notification-title">邮件通知</h2>
-                <p>站内通知仍会保留；关闭后只是不再向你的邮箱发送对应类型的提醒。</p>
+                <p>选择你想接收的邮件。站内通知不会受到影响。</p>
               </div>
               <div class="settings-notification-list">
                 <label class="settings-notification-row">
-                  <span><strong>讨论回复</strong><small>有人回复你的帖子或评论时通知</small></span>
-                  <input type="checkbox" data-notification-preference="reply" checked />
+                  <span><strong>讨论回复</strong><small>有人回复你的帖子或评论</small></span>
+                  <span class="settings-notification-control"
+                    ><input type="checkbox" data-notification-preference="reply" checked /><span
+                      aria-hidden="true"
+                    ></span
+                  ></span>
                 </label>
                 <label class="settings-notification-row">
-                  <span><strong>帖子互动</strong><small>有人点赞、点亮或送烟花时通知</small></span>
-                  <input type="checkbox" data-notification-preference="reaction" checked />
+                  <span><strong>帖子互动</strong><small>有人点赞、点亮或送烟花</small></span>
+                  <span class="settings-notification-control"
+                    ><input type="checkbox" data-notification-preference="reaction" checked /><span
+                      aria-hidden="true"
+                    ></span
+                  ></span>
                 </label>
                 <label class="settings-notification-row">
-                  <span><strong>评论点赞</strong><small>有人点赞你的评论时通知</small></span>
-                  <input type="checkbox" data-notification-preference="commentLike" checked />
+                  <span><strong>评论点赞</strong><small>有人点赞你的评论</small></span>
+                  <span class="settings-notification-control"
+                    ><input
+                      type="checkbox"
+                      data-notification-preference="commentLike"
+                      checked /><span aria-hidden="true"></span
+                  ></span>
                 </label>
                 <label class="settings-notification-row">
-                  <span
-                    ><strong>平台公告</strong><small>管理员发布与你相关的公告时通知</small></span
-                  >
-                  <input type="checkbox" data-notification-preference="announcement" checked />
+                  <span><strong>平台公告</strong><small>管理员发布新的平台公告</small></span>
+                  <span class="settings-notification-control"
+                    ><input
+                      type="checkbox"
+                      data-notification-preference="announcement"
+                      checked /><span aria-hidden="true"></span
+                  ></span>
                 </label>
                 <label class="settings-notification-row">
                   <span><strong>每周热帖</strong><small>每周收到社区热门讨论摘要</small></span>
-                  <input type="checkbox" data-notification-preference="weeklyDigest" checked />
+                  <span class="settings-notification-control"
+                    ><input
+                      type="checkbox"
+                      data-notification-preference="weeklyDigest"
+                      checked /><span aria-hidden="true"></span
+                  ></span>
                 </label>
                 <label class="settings-notification-row">
                   <span
                     ><strong>后台任务</strong
-                    ><small>Max 或电路助手后台任务完成、暂停或失败时通知</small></span
+                    ><small>Max 或电路助手任务完成、暂停或失败</small></span
                   >
-                  <input type="checkbox" data-notification-preference="aiTask" checked />
+                  <span class="settings-notification-control"
+                    ><input type="checkbox" data-notification-preference="aiTask" checked /><span
+                      aria-hidden="true"
+                    ></span
+                  ></span>
                 </label>
               </div>
               <p
@@ -391,7 +416,7 @@
                 role="status"
                 aria-live="polite"
               ></p>
-              <button class="auth-submit" type="submit">保存邮件通知</button>
+              <button class="auth-submit" type="submit" disabled>保存更改</button>
             </form>
 
             <form class="settings-form settings-password-form" id="settings-password-form">

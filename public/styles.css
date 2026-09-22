@@ -867,6 +867,14 @@ h3,
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 12px;
   cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.settings-notification-row:hover {
+  border-color: var(--ui-line-strong, rgba(255, 255, 255, 0.28));
+  background: color-mix(in srgb, var(--ui-surface, rgba(255, 255, 255, 0.08)) 92%, transparent);
 }
 
 .settings-notification-row > span {
@@ -883,9 +891,18 @@ h3,
   line-height: 1.45;
 }
 
-.settings-notification-row input {
-  appearance: none;
+.settings-notification-control {
+  position: relative;
   flex: 0 0 auto;
+  width: 44px;
+  height: 24px;
+}
+
+.settings-notification-control input {
+  appearance: none;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   width: 44px;
   height: 24px;
   margin: 0;
@@ -898,32 +915,33 @@ h3,
     border-color 160ms ease;
 }
 
-.settings-notification-row input::before {
+.settings-notification-control > span {
   display: block;
+  position: absolute;
+  top: 3px;
+  left: 3px;
   width: 18px;
   height: 18px;
-  margin: 2px;
   border-radius: 50%;
   background: #fff;
-  content: '';
   transition: transform 160ms ease;
 }
 
-.settings-notification-row input:checked {
+.settings-notification-control input:checked {
   border-color: #69d7c0;
   background: #287f70;
 }
 
-.settings-notification-row input:checked::before {
+.settings-notification-control input:checked + span {
   transform: translateX(20px);
 }
 
-.settings-notification-row input:focus-visible {
+.settings-notification-control input:focus-visible {
   outline: 2px solid #69d7c0;
   outline-offset: 3px;
 }
 
-.settings-notification-row input:disabled {
+.settings-notification-control input:disabled {
   cursor: wait;
   opacity: 0.55;
 }
