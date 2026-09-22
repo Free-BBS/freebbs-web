@@ -898,6 +898,23 @@ h3,
   height: 24px;
 }
 
+.settings-notification-control::before {
+  position: absolute;
+  top: 0;
+  right: 7px;
+  bottom: 0;
+  left: auto;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  color: var(--ui-muted, rgba(255, 255, 255, 0.72));
+  content: '关';
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
 .settings-notification-control input {
   appearance: none;
   position: absolute;
@@ -930,6 +947,13 @@ h3,
 .settings-notification-control input:checked {
   border-color: #69d7c0;
   background: #287f70;
+}
+
+.settings-notification-control:has(input:checked)::before {
+  right: auto;
+  left: 7px;
+  color: #d8fff5;
+  content: '开';
 }
 
 .settings-notification-control input:checked + span {
