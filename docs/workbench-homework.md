@@ -18,8 +18,8 @@
 ## 数据与运行
 
 - 使用 Node.js 24+ 和已有 direct_cas 配置。
-- `047_campus_homework.sql` 创建按用户、连接 generation、学期隔离的作业快照表。
-- `048_homework_calendar.sql` 创建按用户、作业标识隔离的本地完成状态表。
+- `048_campus_homework.sql` 创建按用户、连接 generation、学期隔离的作业快照表。
+- `049_homework_calendar.sql` 创建按用户、作业标识隔离的本地完成状态表。
 - 后端启动会幂等创建这些表。旧测试版本已经创建的提交记录表不再被代码使用，不主动删除历史数据。
 - 重新连接后需同步新连接的作业；解绑后旧连接的作业不再显示。
 
