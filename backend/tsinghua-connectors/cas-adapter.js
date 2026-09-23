@@ -190,7 +190,48 @@ function cookieMatches(cookie, url, nowMilliseconds) {
   return domainMatches && pathMatches && (!cookie.secure || url.protocol === 'https:');
 }
 
-function createAuthorizedFetch(opaqueGrant, { fetchImpl = globalThis.fetch, now = Date.now } = {}) {
+function validateHomeworkTarget(rawUrl, method) {
+  const url = new URL(rawUrl);
+  const identifier = /^[A-Za-z0-9._:-]{1,256}$/;
+  if (url.origin !== LEARN_ORIGIN || url.username || url.password || url.hash || url.port) {
+    throw targetBlocked();
+  }
+  const query = new URLSearchParams(url.search);
+  const csrf = query.get('_csrf');
+  if (csrf !== null && !/^[A-Za-z0-9._~-]{8,512}$/.test(csrf)) throw targetBlocked();
+  if (query.getAll('_csrf').length > 1) throw targetBlocked();
+  query.delete('_csrf');
+  if (method === 'GET' && /^\/f\/wlxt\/kczy\/zy\/student\/(viewCj)$/.test(url.pathname)) {
+    if (
+      query.size !== 2 ||
+      !identifier.test(query.get('wlkcid') || '') ||
+      !identifier.test(query.get('xszyid') || '')
+    )
+      throw targetBlocked();
+    return url;
+  }
+  if (query.size) throw targetBlocked();
+  if (method === 'GET' && url.pathname === '/f/wlxt/index/course/student/') return url;
+  if (
+    method === 'GET' &&
+    /^\/b\/wlxt\/kczy\/zy\/student\/downloadFile\/[A-Za-z0-9._:-]{1,128}\/[A-Za-z0-9._:-]{1,256}$/.test(
+      url.pathname,
+    )
+  )
+    return url;
+  if (
+    method === 'POST' &&
+    /^\/b\/wlxt\/kczy\/zy\/student\/(detail|zyListWj|zyListYjwg|zyListYpg)$/.test(url.pathname)
+  )
+    return url;
+  throw targetBlocked();
+}
+
+function createCookieFetch(
+  opaqueGrant,
+  validateTarget,
+  { fetchImpl = globalThis.fetch, now = Date.now } = {},
+) {
   if (typeof fetchImpl !== 'function') throw new TypeError('fetchImpl must be a function');
   if (typeof now !== 'function') throw new TypeError('now must be a function');
   const grant = parseOpaqueGrant(opaqueGrant);
@@ -200,7 +241,7 @@ function createAuthorizedFetch(opaqueGrant, { fetchImpl = globalThis.fetch, now 
     if (!['GET', 'POST'].includes(method)) {
       throw connectorError('connector_method_blocked', '授权会话仅允许网络学堂只读同步请求。', 400);
     }
-    const url = validateSyncTarget(rawUrl, method);
+    const url = validateTarget(rawUrl, method);
     const currentTime = now();
     if (!Number.isFinite(currentTime)) throw new TypeError('now must return a finite timestamp');
 
@@ -248,6 +289,14 @@ function createAuthorizedFetch(opaqueGrant, { fetchImpl = globalThis.fetch, now 
   };
 }
 
+function createAuthorizedFetch(opaqueGrant, options) {
+  return createCookieFetch(opaqueGrant, validateSyncTarget, options);
+}
+
+function createHomeworkFetch(opaqueGrant, options) {
+  return createCookieFetch(opaqueGrant, validateHomeworkTarget, options);
+}
+
 function createTsinghuaCasAdapter({ fetchImpl = globalThis.fetch, now = Date.now } = {}) {
   const directCasClient = createDirectCasClient({ fetchImpl, now });
   return Object.freeze({
@@ -260,6 +309,9 @@ function createTsinghuaCasAdapter({ fetchImpl = globalThis.fetch, now = Date.now
     createAuthorizedFetch(opaqueGrant) {
       return createAuthorizedFetch(opaqueGrant, { fetchImpl, now });
     },
+    createHomeworkFetch(opaqueGrant) {
+      return createHomeworkFetch(opaqueGrant, { fetchImpl, now });
+    },
     async revoke() {
       return undefined;
     },
@@ -270,6 +322,7 @@ module.exports = {
   ADAPTER_ID,
   ADAPTER_VERSION,
   createAuthorizedFetch,
+  createHomeworkFetch,
   createTsinghuaCasAdapter,
   parseOpaqueGrant,
 };

@@ -84,7 +84,7 @@ test('workbench provides authenticated CRUD controls and conflict confirmation',
   assert.match(html, /id="workbench-important-dialog"/);
   assert.match(html, /id="workbench-add-schedule"/);
   assert.match(html, /id="workbench-schedule-dialog"/);
-  assert.match(html, /src="\/workbench\.js\?v=20260918-personal-schedule-1"/);
+  assert.match(html, /src="\/workbench\.js\?v=20260922-homework-calendar-1"/);
   assert.match(controller, /\/workbench\/important-items/);
   assert.match(controller, /\/workbench\/schedule-items\/conflicts/);
   assert.match(controller, /\/confirm/);
@@ -94,7 +94,7 @@ test('workbench provides authenticated CRUD controls and conflict confirmation',
   assert.match(controller, /confirm-important/);
   assert.match(controller, /status: 'confirmed'/);
   assert.match(controller, /24 小时内截止/u);
-  assert.match(controller, /课程作业截止时间仍可在重要事项中查看/u);
+  assert.match(controller, /同步后的课程作业截止时间会自动显示在对应日期/u);
   assert.match(controller, /DDL · 截止提醒/u);
 });
 

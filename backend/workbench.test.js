@@ -438,3 +438,35 @@ test('notification state changes require visibility to the current user', async 
   assert.match(calls[0].sql, /recipient_user_id = \?/);
   assert.equal(calls.length, 1);
 });
+
+test('calendar exposes owned homework and persists completion without modifying upstream homework', async (t) => {
+  let completed;
+  const pool = {
+    async execute(sql, parameters) {
+      assert.equal(parameters[0], 7);
+      if (sql.includes('FROM schedule_items')) return [[]];
+      if (sql.includes('FROM campus_homework_snapshots')) return [[{ homework_json: [{
+        sourceReference: 'learn:homework:one', title: '作业', dueAt: '2026-09-22T15:59:00Z', status: 'unsubmitted',
+      }] }]];
+      if (sql.startsWith('SELECT homework_reference')) return [completed === undefined ? [] : [{ homework_reference: 'learn:homework:one', completed }]];
+      if (sql.includes('INSERT INTO campus_homework_calendar_states')) { completed = parameters[2]; return [{ affectedRows: 1 }]; }
+      throw new Error(sql);
+    },
+  };
+  const base = await startTestServer(t, { pool, user: { id: 7 } });
+  const path = '/schedule-items?from=2026-09-20T16:00:00Z&to=2026-09-27T16:00:00Z';
+  let result = await requestJson(base, path);
+  assert.equal(result.response.status, 200);
+  assert.equal(result.payload.scheduleItems[0].completed, false);
+  const completionPath = '/homework-deadlines/learn%3Ahomework%3Aone/completion';
+  result = await requestJson(base, completionPath, { method: 'PATCH', body: JSON.stringify({ completed: true }) });
+  assert.equal(result.response.status, 200);
+  result = await requestJson(base, path);
+  assert.equal(result.payload.scheduleItems[0].status, 'completed');
+  result = await requestJson(base, completionPath, { method: 'PATCH', body: JSON.stringify({ completed: 'true' }) });
+  assert.equal(result.response.status, 400);
+  result = await requestJson(base, '/homework-deadlines/foreign/completion', { method: 'PATCH', body: JSON.stringify({ completed: true }) });
+  assert.equal(result.response.status, 404);
+  result = await requestJson(base, completionPath, { method: 'PATCH', auth: false, body: JSON.stringify({ completed: true }) });
+  assert.equal(result.response.status, 401);
+});

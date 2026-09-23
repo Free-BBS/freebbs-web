@@ -9965,6 +9965,7 @@ async function cancelAiBackgroundTask(id) {
 }
 
 window.freeBbsApp = {
+  apiBaseUrl: API_BASE_URL,
   callApi,
   refreshEconomy: loadInventoryPage,
   syncWallet: (() => {

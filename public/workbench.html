@@ -15,12 +15,12 @@
     />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
-    <link rel="stylesheet" href="/workbench.css" />
+    <link rel="stylesheet" href="/workbench.css?v=20260922-homework-calendar-1" />
     <link rel="stylesheet" href="/workbench-connectors.css" />
     <link rel="stylesheet" href="/username-guard.css" />
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
-    <link rel="stylesheet" href="/mobile-personal.css" />
+    <link rel="stylesheet" href="/mobile-personal.css?v=20260922-workbench-width-2" />
   </head>
   <body class="workbench-page" data-workbench-controller="standalone">
     <div class="page-shell page-shell-settings">
@@ -387,6 +387,38 @@
                         ></div>
                       </section>
                     </div>
+                  </article>
+
+                  <article
+                    class="workbench-dashboard-card workbench-homework-card"
+                    id="workbench-homework"
+                  >
+                    <h2>课程作业</h2>
+                    <p>
+                      查看当前学期的作业、检测完成状态并下载附件。本站不提供作业提交功能。
+                    </p>
+                    <div class="workbench-homework-filters">
+                      <label
+                        >课程
+                        <select id="homework-course">
+                          <option value="">全部课程</option>
+                        </select></label
+                      >
+                      <label
+                        >状态
+                        <select id="homework-status-filter">
+                          <option value="">全部状态</option>
+                          <option value="unsubmitted">未交</option>
+                          <option value="submitted">已交</option>
+                          <option value="graded">已批</option>
+                        </select></label
+                      >
+                      <button type="button" id="homework-refresh">刷新列表</button>
+                    </div>
+                    <p id="homework-message" role="status" aria-live="polite">
+                      连接学堂并同步学期后显示作业。
+                    </p>
+                    <div id="homework-list" class="workbench-homework-list"></div>
                   </article>
 
                   <article class="workbench-dashboard-card workbench-source-card">
@@ -863,11 +895,24 @@
     <script src="/vendor/marked/lib/marked.umd.js"></script>
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
-    <script src="/app.js?v=20260803-cas-fix-3"></script>
-    <script src="/workbench.js?v=20260918-personal-schedule-1"></script>
+    <script src="/app.js?v=20260922-homework-1"></script>
+    <dialog
+      id="homework-dialog"
+      class="workbench-homework-dialog"
+      aria-labelledby="homework-dialog-title"
+    >
+      <header>
+        <h2 id="homework-dialog-title">作业详情</h2>
+        <button type="button" id="homework-close" aria-label="关闭作业详情">关闭</button>
+      </header>
+      <p id="homework-detail-message" role="status" aria-live="polite"></p>
+      <div id="homework-detail"></div>
+    </dialog>
+    <script src="/workbench-homework.js?v=20260922-readonly-1"></script>
+    <script src="/workbench.js?v=20260922-homework-calendar-1"></script>
     <script src="/assets/vendor/fingerprint2-1.5.1.min.js"></script>
     <script src="/tsinghua-cas-fingerprint.js"></script>
-    <script src="/workbench-connectors.js?v=20260806-credential-expiry-1"></script>
+    <script src="/workbench-connectors.js?v=20260922-homework-1"></script>
     <script src="/notifications.js"></script>
     <script src="/mobile-personal.js"></script>
   </body>

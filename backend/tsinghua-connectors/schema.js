@@ -1,3 +1,5 @@
+const { HOMEWORK_TABLES } = require('./homework-schema');
+
 const CREATE_TABLE_STATEMENTS = Object.freeze([
   `CREATE TABLE IF NOT EXISTS campus_learn_semester_catalogs (
     user_id BIGINT PRIMARY KEY,
@@ -180,6 +182,9 @@ async function ensureCampusConnectorTables(pool) {
   }
 
   for (const statement of CREATE_TABLE_STATEMENTS) {
+    await pool.execute(statement);
+  }
+  for (const statement of HOMEWORK_TABLES) {
     await pool.execute(statement);
   }
 

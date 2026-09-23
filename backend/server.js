@@ -137,6 +137,8 @@ const { loadTsinghuaConnectorRuntimeConfig } = require('./tsinghua-connectors/ru
 const { ensureCampusConnectorTables } = require('./tsinghua-connectors/schema');
 const { createTsinghuaSyncDispatcher } = require('./tsinghua-connectors/sync-dispatcher');
 const { createTsinghuaSyncStore } = require('./tsinghua-connectors/sync-store');
+const { createHomeworkService } = require('./tsinghua-connectors/homework-service');
+const { createHomeworkRouter } = require('./tsinghua-connectors/homework-router');
 const {
   SystemSettingsError,
   createSystemSettingsStore,
@@ -317,6 +319,19 @@ app.use((request, response, next) => {
   next();
 });
 
+app.use(
+  '/api/workbench/connectors/tsinghua/homework',
+  createHomeworkRouter({
+    service: createHomeworkService({
+      pool,
+      store: campusConnectorStore,
+      vault: campusConnectorVault,
+      adapter: campusConnectorAdapter,
+    }),
+    requireAuth,
+    frontendBaseUrl: config.publicWebUrl,
+  }),
+);
 app.use(
   '/api/workbench/connectors/tsinghua',
   createCampusConnectorRouter({

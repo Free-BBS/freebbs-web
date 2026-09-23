@@ -119,6 +119,7 @@ npm run start:backend
   `fingerprint`。登录名、密码和指纹仅用于本次认证请求，不持久化、不写日志、不在响应中回显
 - `POST /api/workbench/connectors/tsinghua/sync-runs`：使用服务端加密会话创建网络学堂同步任务
 - `DELETE /api/workbench/connectors/tsinghua/connection`：销毁当前用户的加密会话并停止后续同步
+- `/api/workbench/connectors/tsinghua/homework`：按课程查看作业、检测状态并下载附件（只读，不允许提交），见 [工作台课程作业](../docs/workbench-homework.md)。
 
 以上工作台接口均从 Bearer Token 解析用户身份，不接受客户端传入的 `user_id`。
 

@@ -24,8 +24,8 @@ test('workbench exposes a distinct campus account status card', () => {
     html,
     /id="workbench-campus-credential-expiry"[\s\S]*?aria-live="polite"[\s\S]*?hidden/,
   );
-  assert.match(html, /src="\/workbench-connectors\.js\?v=20260806-credential-expiry-1"/);
-  assert.match(html, /src="\/app\.js\?v=20260803-cas-fix-3"/);
+  assert.match(html, /src="\/workbench-connectors\.js\?v=20260922-homework-1"/);
+  assert.match(html, /src="\/app\.js\?v=20260922-homework-1"/);
   assert.match(html, /href="\/workbench-connectors\.css"/);
   const fingerprintVendorIndex = html.indexOf('src="/assets/vendor/fingerprint2-1.5.1.min.js"');
   const fingerprintWrapperIndex = html.indexOf('src="/tsinghua-cas-fingerprint.js"');
