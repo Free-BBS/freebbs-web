@@ -91,6 +91,37 @@
           </div>
         </section>
 
+        <section class="guide-reward" aria-labelledby="guide-reward-title">
+          <div>
+            <p class="guide-eyebrow">MAX · 给探索的第一份礼物</p>
+            <h2 id="guide-reward-title">完整走一遍，收下 10 电元 + 10 磁元。</h2>
+            <p>
+              登录后完成完整新手导览，每个账号可领取一次。已完成的老用户同样可领取；重看导览或完成新功能短导览不会重复发放。
+            </p>
+            <p class="guide-small">
+              五站访问足迹只记录你认识了哪些入口，不作为奖励资格或学习成果的证明。
+            </p>
+            <p
+              id="guide-reward-status"
+              class="guide-reward-status"
+              role="status"
+              aria-live="polite"
+            >
+              登录后可查看奖励资格与领取状态。
+            </p>
+          </div>
+          <button
+            class="guide-primary"
+            id="guide-reward-claim"
+            type="button"
+            data-guide-reward-claim
+            disabled
+            hidden
+          >
+            领取 10 电元 + 10 磁元
+          </button>
+        </section>
+
         <section class="guide-manifesto" aria-labelledby="guide-why">
           <p class="guide-eyebrow">01 / 我们为什么在这里</p>
           <h2 id="guide-why">让学习自由而不孤独。</h2>
@@ -134,9 +165,9 @@
           <article id="guide-latest-release" class="guide-release-card">
             <div>
               <p class="guide-eyebrow">WHAT'S NEW · 本次更新</p>
-              <h3>不重走老路，只认识新功能。</h3>
+              <h3>认识发展端与活动报名。</h3>
               <p>
-                逐层探索学习世界，认识计划助手、鱼骨回收与更清晰的钱包账本。以后每次功能更新，都有独立的新版指引。
+                了解发展端的建设状态，再看看活动报名的独立入口与回执流程。发展端上线后，活动报名将整合进入发展端；本次指引单独保存进度。
               </p>
               <p id="guide-release-status" role="status">新功能专门导览 · 与完整导览分别保存</p>
             </div>
@@ -149,7 +180,7 @@
               <p class="guide-eyebrow">02 / 已经可以出发的地方</p>
               <h2 id="guide-atlas-title">一张地图，很多种好奇。</h2>
             </div>
-            <p>下面这些入口，今天就可以使用。</p>
+            <p>已开放的入口可以直接使用；建设中的功能会单独标明。</p>
           </div>
           <div class="guide-atlas-grid">
             <article class="guide-place guide-place-world">
@@ -213,12 +244,24 @@
               <div class="guide-place-top">
                 <span class="guide-place-icon">⌘</span><span class="guide-tag">已开放</span>
               </div>
-              <h3>活动与发展</h3>
+              <h3>活动报名</h3>
               <p class="guide-quote">“世界很大，课表之外也有新的坐标。”</p>
               <p>
-                活动报名页查看已发布的活动，工作台集中阅读通知。发展端正在建设，后续将进一步连接组织工作与同学服务。
+                当前通过独立入口浏览活动，查看时间、名额与报名条件。自行报名成功后保存回执，查询抽签结果。发展端上线后，活动报名将整合进入发展端。
               </p>
-              <a href="/surveys">发现新的可能 ↗</a>
+              <a href="/surveys">查看活动报名 ↗</a>
+            </article>
+            <article class="guide-place">
+              <div class="guide-place-top">
+                <span class="guide-place-icon">✦</span>
+                <span class="guide-tag guide-tag-future">建设中</span>
+              </div>
+              <h3>发展端</h3>
+              <p class="guide-quote">“新的空间，也在一点点长出来。”</p>
+              <p>
+                面向同学与团学组织，规划通知与活动、资源开放、意见反馈、个人活动记录和组织协作。当前展示建设进度与规划，实际功能以发布为准。
+              </p>
+              <a href="/development">了解发展端建设进展 ↗</a>
             </article>
           </div>
         </section>
@@ -236,7 +279,7 @@
             <span class="guide-progress-label" id="guide-task-progress">0 / 5 已探索</span>
           </div>
           <p>
-            打开这些页面，就能留下你的探索足迹。它们记录你认识了哪些入口；学习成果由实际学习功能另行记录。
+            打开这些页面，就能留下你的探索足迹。足迹勾选不作为奖励资格；完成完整新手导览可领取一次奖励，学习成果由实际学习功能另行记录。
           </p>
           <div class="guide-progress-track"><span id="guide-task-bar"></span></div>
           <div id="guide-task-list" class="guide-task-list"></div>
@@ -283,6 +326,7 @@
               来自连续签到、运势加成、日常讨论与精华奖励。点击顶部资产数字查看完整规则。
             </p>
             <p><strong>热力</strong> · 花费电元或磁元产生，每天减半，反映社区参与。</p>
+            <p>完整新手导览奖励：每个账号一次 10 电元 + 10 磁元，老用户完成后同样可领取。</p>
             <p>
               商店里有装扮、收藏、消耗品与伙伴。头像框、铭牌和主页主题在个人主页佩戴；仓库可查看收支账本，普通鱼骨与黄金鱼骨也可换成磁元。
             </p>

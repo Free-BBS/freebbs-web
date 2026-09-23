@@ -35,8 +35,12 @@ test('local preview respects the entered meeting instead of returning a canned e
 test('six course sections use the exact Beijing-time knowledge mapping', () => {
   const expected = Object.values(COURSE_SECTIONS);
   assert.deepEqual(expected, [
-    ['08:00', '09:35'], ['09:50', '12:15'], ['13:30', '15:05'],
-    ['15:20', '16:55'], ['17:10', '18:45'], ['19:20', '21:45'],
+    ['08:00', '09:35'],
+    ['09:50', '12:15'],
+    ['13:30', '15:05'],
+    ['15:20', '16:55'],
+    ['17:10', '18:45'],
+    ['19:20', '21:45'],
   ]);
   const names = ['一', '二', '三', '四', '五', '六'];
   for (let index = 0; index < names.length; index += 1) {
@@ -44,8 +48,16 @@ test('six course sections use the exact Beijing-time knowledge mapping', () => {
     const start = new Date(parsed.startAt);
     const end = new Date(parsed.endAt);
     const [hour, minute] = expected[index][0].split(':').map(Number);
-    assert.equal(start.toISOString(), new Date(Date.UTC(2026, 8, 20, hour, minute) - 8 * 3600000).toISOString());
-    assert.equal((end - start) / 60000, (Number(expected[index][1].slice(0, 2)) * 60 + Number(expected[index][1].slice(3))) - (Number(expected[index][0].slice(0, 2)) * 60 + Number(expected[index][0].slice(3))));
+    assert.equal(
+      start.toISOString(),
+      new Date(Date.UTC(2026, 8, 20, hour, minute) - 8 * 3600000).toISOString(),
+    );
+    assert.equal(
+      (end - start) / 60000,
+      Number(expected[index][1].slice(0, 2)) * 60 +
+        Number(expected[index][1].slice(3)) -
+        (Number(expected[index][0].slice(0, 2)) * 60 + Number(expected[index][0].slice(3))),
+    );
   }
 });
 
@@ -56,7 +68,10 @@ test('weekly course section expands into exactly X future weeks and checks every
   assert.equal(proposal.suggestions[0].startAt, '2026-09-23T05:30:00.000Z');
   assert.equal(proposal.suggestions[0].endAt, '2026-09-23T07:05:00.000Z');
   assert.equal(proposal.suggestions[7].description, '周常 · 第 8/8 周');
-  assert.equal(new Date(proposal.suggestions[1].startAt) - new Date(proposal.suggestions[0].startAt), 7 * 86400000);
+  assert.equal(
+    new Date(proposal.suggestions[1].startAt) - new Date(proposal.suggestions[0].startAt),
+    7 * 86400000,
+  );
   assert.throws(() => buildPreview(parsed, [proposal.suggestions[4]], sept19), /冲突/);
 });
 
@@ -74,7 +89,11 @@ test('DDL is an exact one-minute marker and does not occupy the prior study peri
   assert.equal(parsed.title, '完成报告');
   assert.equal(parsed.endAt, '2026-09-19T15:59:00.000Z');
   assert.equal(new Date(parsed.endAt) - new Date(parsed.startAt), 60000);
-  assert.equal(buildPreview(parsed, [{ startAt: parsed.startAt, endAt: parsed.endAt }], sept19).suggestions.length, 1);
+  assert.equal(
+    buildPreview(parsed, [{ startAt: parsed.startAt, endAt: parsed.endAt }], sept19).suggestions
+      .length,
+    1,
+  );
 });
 
 test('AI answer must contain structured JSON', () => {
@@ -250,6 +269,11 @@ test('planner preview only reads authenticated user schedule and does not write'
   assert.equal((await response.json()).suggestions.length > 0, true);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].parameters[0], 17);
+  assert.match(calls[0].sql, /ORDER BY start_at LIMIT 501$/);
+  assert.doesNotMatch(calls[0].sql, /LIMIT\s+\?/i);
+  assert.equal(calls[0].parameters.length, 3);
+  assert.ok(calls[0].parameters[1] instanceof Date);
+  assert.ok(calls[0].parameters[2] instanceof Date);
   assert.doesNotMatch(calls[0].sql, /INSERT/i);
 });
 
@@ -291,7 +315,10 @@ test('planner API uses the entered fixed-time sentence without requiring a canne
   assert.equal(response.status, 200);
   const payload = await response.json();
   assert.equal(payload.suggestions[0].title, '开会');
-  assert.equal(new Date(payload.suggestions[0].endAt) - new Date(payload.suggestions[0].startAt), 2 * 3600000);
+  assert.equal(
+    new Date(payload.suggestions[0].endAt) - new Date(payload.suggestions[0].startAt),
+    2 * 3600000,
+  );
 });
 
 test('confirmation rechecks conflicts and rolls back without partial inserts', async (t) => {
@@ -327,6 +354,10 @@ test('explicit confirmation writes agent-sourced events in one transaction', asy
   assert.equal(response.status, 201);
   assert.equal((await response.json()).created, 1);
   assert.ok(calls.includes('commit'));
+  const scheduleRead = calls.find((call) => call.sql?.includes('FROM schedule_items'));
+  assert.match(scheduleRead.sql, /LIMIT 501$/);
+  assert.doesNotMatch(scheduleRead.sql, /LIMIT\s+\?/i);
+  assert.deepEqual(scheduleRead.parameters, [17, new Date(endAt), new Date(startAt)]);
   assert.match(
     calls.find((call) => call.sql?.includes('INSERT INTO schedule_items')).sql,
     /'agent'[\s\S]*'confirmed'/,
@@ -340,8 +371,77 @@ test('confirmed DDL keeps a durable deadline marker instead of becoming a normal
   const response = await fetch(`${base}/confirm`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ suggestions: [{ kind: 'deadline', title: '完成报告', startAt, endAt }] }),
+    body: JSON.stringify({
+      suggestions: [{ kind: 'deadline', title: '完成报告', startAt, endAt }],
+    }),
   });
   assert.equal(response.status, 201);
-  assert.equal(calls.find((call) => call.sql?.includes('INSERT INTO schedule_items')).parameters[3], 'planner:deadline');
+  assert.equal(
+    calls.find((call) => call.sql?.includes('INSERT INTO schedule_items')).parameters[3],
+    'planner:deadline',
+  );
+});
+
+test('preview keeps the 500-event safety boundary and never accepts a client-supplied limit', async (t) => {
+  for (const count of [500, 501]) {
+    const { base, calls } = await startServer(t, {
+      busy: Array.from({ length: count }, () => ({
+        start_at: new Date(Date.now() + 35 * 86400000),
+        end_at: new Date(Date.now() + 35 * 86400000 + 3600000),
+      })),
+    });
+    const response = await fetch(`${base}/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: '明天下午5点开会，持续时间2小时',
+        limit: '1; DROP TABLE schedule_items',
+      }),
+    });
+    assert.equal(response.status, count === 500 ? 200 : 422);
+    assert.match(calls[0].sql, /LIMIT 501$/);
+    assert.equal(calls[0].parameters.length, 3);
+    assert.equal(
+      calls.some((call) => call.agentPayload || call.sql?.includes('INSERT')),
+      false,
+    );
+  }
+});
+
+test('confirmation rejects the 501st event atomically without changing the server query limit', async (t) => {
+  for (const count of [500, 501]) {
+    const start = Date.now() + 3 * 3600000;
+    const { base, calls } = await startServer(t, {
+      busy: Array.from({ length: count }, () => ({
+        start_at: new Date(start - 3600000),
+        end_at: new Date(start + 3600000),
+      })),
+    });
+    const response = await fetch(`${base}/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        suggestions: [
+          {
+            kind: 'deadline',
+            title: '复习',
+            startAt: new Date(start).toISOString(),
+            endAt: new Date(start + 60000).toISOString(),
+          },
+        ],
+        limit: 9999,
+      }),
+    });
+    assert.equal(response.status, count === 500 ? 201 : 409);
+    const scheduleRead = calls.find((call) => call.sql?.includes('FROM schedule_items'));
+    assert.match(scheduleRead.sql, /LIMIT 501$/);
+    assert.equal(scheduleRead.parameters.length, 3);
+    assert.equal(calls.includes('commit'), count === 500);
+    assert.equal(calls.includes('rollback'), count === 501);
+    assert.equal(
+      calls.some((call) => call.sql?.includes('INSERT INTO schedule_items')),
+      count === 500,
+    );
+    assert.equal(calls.at(-1), 'release');
+  }
 });

@@ -18,6 +18,7 @@ function store({ username = 'old_name', balance = 20, free = true } = {}) {
     user: { id: 7, username, full_name: '真实姓名', manetrons: balance },
     free,
     logs: [],
+    ledger: [],
     events: [],
   };
   let tail = Promise.resolve();
@@ -32,10 +33,28 @@ function store({ username = 'old_name', balance = 20, free = true } = {}) {
             unlock = resolve;
           });
           await previous;
-          backup = structuredClone({ user: state.user, free: state.free, logs: state.logs });
+          backup = structuredClone({
+            user: state.user,
+            free: state.free,
+            logs: state.logs,
+            ledger: state.ledger,
+          });
           state.events.push('begin');
         },
         async execute(sql, args) {
+          if (sql.startsWith('SELECT CAST(id AS CHAR) AS id FROM wallet_ledger')) {
+            assert.match(sql, /FOR UPDATE/);
+            assert.equal(args[0], 7);
+            return [state.ledger.slice(-1).map((row) => ({ id: String(row.id) }))];
+          }
+          if (sql.startsWith('UPDATE wallet_ledger')) {
+            if (state.failLedger) throw new Error('ledger annotation failed');
+            const row = state.ledger.find((item) => item.id > Number(args[4]) && !item.source_key);
+            if (!row) return [{ affectedRows: 0 }];
+            assert.equal(args[3], 7);
+            Object.assign(row, { source_key: args[0], title: args[1], reason: args[2] });
+            return [{ affectedRows: 1 }];
+          }
           if (sql.startsWith('SELECT * FROM users')) {
             assert.match(sql, /FOR UPDATE/);
             assert.equal(args[0], 7);
@@ -59,6 +78,14 @@ function store({ username = 'old_name', balance = 20, free = true } = {}) {
             state.events.push('update');
             if (args[0] === 'taken_name')
               throw Object.assign(new Error('duplicate'), { code: 'ER_DUP_ENTRY' });
+            if (args[1] && !state.missingLedger) {
+              state.ledger.push({
+                id: state.ledger.length + 1,
+                magnetic_before: state.user.manetrons,
+                magnetic_after: state.user.manetrons - args[1],
+                source_key: null,
+              });
+            }
             state.user.username = args[0];
             state.user.manetrons -= args[1];
             return [{ affectedRows: 1 }];
@@ -113,6 +140,7 @@ test('first voluntary rename is free and logs the free period only after success
   assert.equal(f.state.user.manetrons, 20);
   assert.equal(f.state.logs[0][3], 'free');
   assert.equal(f.state.user.full_name, '真实姓名');
+  assert.equal(f.state.ledger.length, 0);
   assert.ok(f.state.events.indexOf('lock') < f.state.events.indexOf('update'));
 });
 
@@ -127,6 +155,11 @@ test('paid rename requires explicit boolean consent and deducts exactly ten', as
   assert.equal(f.state.user.manetrons, 10);
   assert.equal(f.state.logs[0][3], 'paid');
   assert.equal(result.policy.nextFreeAt, '2026-12-11T00:00:00.000000Z');
+  assert.equal(f.state.ledger.length, 1);
+  assert.match(f.state.ledger[0].source_key, /^username-change:/);
+  assert.equal(f.state.ledger[0].title, '修改昵称');
+  assert.equal(f.state.ledger[0].reason, '将昵称从 old_name 改为 new_name，支付 10 磁元');
+  assert.equal(f.state.ledger[0].magnetic_after, 10);
 });
 
 test('free eligibility is preferred even if the client previously consented to payment', async () => {
@@ -167,6 +200,20 @@ test('same-name retries never charge twice or consume another free turn', async 
     [10, 0],
   );
   assert.equal(f.state.logs.length, 1);
+  assert.equal(f.state.ledger.length, 1);
+});
+
+test('paid rename rolls back the name, balance and log when its ledger annotation fails', async () => {
+  for (const flag of ['failLedger', 'missingLedger']) {
+    const f = store({ free: false });
+    f.state[flag] = true;
+    await assert.rejects(f.change({ allowPaid: true }), /ledger/i);
+    assert.equal(f.state.user.username, 'old_name');
+    assert.equal(f.state.user.manetrons, 20);
+    assert.equal(f.state.logs.length, 0);
+    assert.equal(f.state.ledger.length, 0);
+    assert.ok(f.state.events.includes('rollback'));
+  }
 });
 
 test('two different concurrent names cannot both spend the same free turn', async () => {
@@ -304,26 +351,39 @@ test('profile endpoint rejects forged name updates but preserves ordinary bio sa
 test(
   'isolated MySQL validates migration, calendar boundaries and concurrent billing',
   {
-    skip: process.env.RUN_USERNAME_INTEGRATION !== '1',
+    skip: !process.env.FREEBBS_TEST_MYSQL_SOCKET && process.env.RUN_USERNAME_INTEGRATION !== '1',
     timeout: 30000,
   },
   async (t) => {
     const mysql = require('mysql2/promise');
     const crypto = require('node:crypto');
     const { ensureUsernameChangeTables } = require('./username-policy');
+    const { isolatedMysqlConfig, assertIsolatedMysql } = require('./test-helpers/isolated-mysql');
+    const isolated = Boolean(process.env.FREEBBS_TEST_MYSQL_SOCKET);
     const database = `freebbs_username_test_${crypto.randomBytes(8).toString('hex')}`;
-    // No application config is imported. This test requires an explicit opt-in test DB account.
-    assert.ok(
-      process.env.USERNAME_TEST_MYSQL_USER,
-      'Set a disposable MySQL test account explicitly',
-    );
-    const options = {
-      host: process.env.USERNAME_TEST_MYSQL_HOST || '127.0.0.1',
-      port: Number(process.env.USERNAME_TEST_MYSQL_PORT || 3306),
-      user: process.env.USERNAME_TEST_MYSQL_USER,
-      password: process.env.USERNAME_TEST_MYSQL_PASSWORD || '',
-    };
+    // Use the isolated runner, or an explicit opt-in test account; never application config.
+    if (!isolated)
+      assert.ok(
+        process.env.USERNAME_TEST_MYSQL_USER,
+        'Set a disposable MySQL test account explicitly',
+      );
+    const options = isolated
+      ? isolatedMysqlConfig('USERNAME_TEST_MYSQL_SOCKET')
+      : {
+          host: process.env.USERNAME_TEST_MYSQL_HOST || '127.0.0.1',
+          port: Number(process.env.USERNAME_TEST_MYSQL_PORT || 3306),
+          user: process.env.USERNAME_TEST_MYSQL_USER,
+          password: process.env.USERNAME_TEST_MYSQL_PASSWORD || '',
+        };
     const admin = await mysql.createConnection(options);
+    if (isolated) {
+      try {
+        await assertIsolatedMysql(admin);
+      } catch (error) {
+        await admin.end();
+        throw error;
+      }
+    }
     let pool;
     let created = false;
     t.after(async () => {
@@ -341,7 +401,8 @@ test(
     pool = mysql.createPool({ ...options, database, connectionLimit: 4 });
     await pool.query(`CREATE TABLE users (
     id BIGINT PRIMARY KEY, username VARCHAR(64) UNIQUE NOT NULL,
-    full_name VARCHAR(64) NOT NULL, manetrons BIGINT NOT NULL DEFAULT 20
+    full_name VARCHAR(64) NOT NULL, electrons BIGINT NOT NULL DEFAULT 0,
+    manetrons BIGINT NOT NULL DEFAULT 20
   ) ENGINE=InnoDB`);
     const migration = fs.readFileSync(
       path.join(__dirname, '../database/migrations/034_username_changes.sql'),
@@ -350,6 +411,7 @@ test(
     await pool.query(migration);
     await pool.query(migration);
     await ensureUsernameChangeTables(pool);
+    await require('./wallet-ledger').ensureWalletLedger(pool);
     await pool.execute(
       "INSERT INTO users (id, username, full_name) VALUES (7, 'old_name', 'Original'), (8, 'taken_name', 'Other')",
     );
@@ -381,6 +443,14 @@ test(
     });
     assert.equal(paid.user.manetrons, 10);
     assert.equal(paid.policy.nextFreeAt, before.nextFreeAt);
+    const [ledger] = await pool.execute(
+      "SELECT source_key, title, reason, magnetic_before, magnetic_after FROM wallet_ledger WHERE user_id = 7 AND source_key LIKE 'username-change:%'",
+    );
+    assert.equal(ledger.length, 1);
+    assert.equal(ledger[0].title, '修改昵称');
+    assert.match(ledger[0].reason, /paid_name.*10 磁元/);
+    assert.equal(Number(ledger[0].magnetic_before), 20);
+    assert.equal(Number(ledger[0].magnetic_after), 10);
     assert.equal(
       (await change({ username: 'paid_name', expectedUsername: saved.username, allowPaid: true }))
         .charged,

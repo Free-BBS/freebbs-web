@@ -16,7 +16,7 @@ const {
 } = require('./notifications');
 
 function createDatabase() {
-  let data = { notifications: [], outbox: [] };
+  let data = { notifications: [], outbox: [], preferences: new Map() };
   let snapshot;
   const users = [
     { id: 1, username: 'admin', full_name: '管理员', role: 'teacher', is_admin: 1 },
@@ -60,6 +60,25 @@ function createDatabase() {
         else if (sql.includes('is_admin = 1')) rows = users.filter((user) => user.is_admin);
         else if (sql.includes('role = ?')) rows = users.filter((user) => user.role === args[0]);
         return [rows];
+      }
+      if (sql.startsWith('SELECT user_id, email_reply')) {
+        return [[...data.preferences.entries()].map(([user_id, row]) => ({ user_id, ...row }))];
+      }
+      if (sql.startsWith('INSERT INTO user_notification_email_preferences')) {
+        const [userId, ...flags] = args;
+        const columns = [
+          'email_reply',
+          'email_reaction',
+          'email_comment_like',
+          'email_announcement',
+          'email_weekly_digest',
+          'email_ai_task',
+        ];
+        data.preferences.set(
+          userId,
+          Object.fromEntries(columns.map((column, index) => [column, flags[index]])),
+        );
+        return [{ affectedRows: 1 }];
       }
       if (sql.startsWith('INSERT INTO community_notifications')) {
         const [recipient, actor, kind, title, body, link, eventKey] = args;
@@ -247,6 +266,22 @@ test('replies deduplicate authors, skip self and persist inbox plus outbox in on
   assert.equal(pool.data.notifications.length, 1);
   await service.notifyReply({ actor, post, commentId: 12, parentAuthorId: 1 });
   assert.equal(pool.data.notifications.length, 3);
+});
+
+test('disabled email preferences keep the in-app notification but skip the email outbox', async () => {
+  const pool = createDatabase();
+  pool.data.preferences.set(2, {
+    email_reply: 0,
+    email_reaction: 1,
+    email_comment_like: 1,
+    email_announcement: 1,
+    email_weekly_digest: 1,
+    email_ai_task: 1,
+  });
+  const service = createNotificationService({ pool });
+  await service.notifyReply({ actor, post, commentId: 91, parentAuthorId: 2 });
+  assert.equal(pool.data.notifications.length, 1);
+  assert.equal(pool.data.outbox.length, 0);
 });
 
 test('notifications join a supplied comment transaction and rollback when email enqueue fails', async () => {
@@ -604,17 +639,29 @@ test('only administrators can publish or inspect audience and delivery state', a
 test(
   'MySQL: full existing schema coexists with inbox, deduplication, transactions and outbox retry',
   {
-    skip: process.env.NOTIFICATIONS_MYSQL_TEST !== '1',
+    skip: !process.env.FREEBBS_TEST_MYSQL_SOCKET && process.env.NOTIFICATIONS_MYSQL_TEST !== '1',
   },
   async (t) => {
+    const { isolatedMysqlConfig, assertIsolatedMysql } = require('./test-helpers/isolated-mysql');
+    const isolated = Boolean(process.env.FREEBBS_TEST_MYSQL_SOCKET);
     const database = `freebbs_notifications_test_${crypto.randomBytes(8).toString('hex')}`;
-    const credentials = {
-      host: process.env.NOTIFICATIONS_MYSQL_HOST || '127.0.0.1',
-      port: Number(process.env.NOTIFICATIONS_MYSQL_PORT || 3306),
-      user: process.env.NOTIFICATIONS_MYSQL_USER || 'root',
-      password: process.env.NOTIFICATIONS_MYSQL_PASSWORD || '',
-    };
+    const credentials = isolated
+      ? isolatedMysqlConfig('NOTIFICATIONS_MYSQL_SOCKET')
+      : {
+          host: process.env.NOTIFICATIONS_MYSQL_HOST || '127.0.0.1',
+          port: Number(process.env.NOTIFICATIONS_MYSQL_PORT || 3306),
+          user: process.env.NOTIFICATIONS_MYSQL_USER || 'root',
+          password: process.env.NOTIFICATIONS_MYSQL_PASSWORD || '',
+        };
     const admin = await mysql.createConnection(credentials);
+    if (isolated) {
+      try {
+        await assertIsolatedMysql(admin);
+      } catch (error) {
+        await admin.end();
+        throw error;
+      }
+    }
     let pool;
     t.after(async () => {
       if (pool) await pool.end();

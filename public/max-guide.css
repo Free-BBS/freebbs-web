@@ -193,6 +193,39 @@ body.theme-dark {
   font-size: 0.8rem;
   color: var(--guide-muted);
 }
+.guide-reward {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px 32px;
+  margin-top: 24px;
+  padding: clamp(22px, 3vw, 36px);
+  border: 1px solid var(--guide-line);
+  border-radius: 22px;
+  background: var(--guide-gold-soft);
+}
+.guide-reward > div {
+  flex: 1 1 420px;
+  min-width: 0;
+}
+.guide-reward .guide-eyebrow {
+  margin-bottom: 8px;
+}
+.guide-reward h2 {
+  margin: 0;
+  font-size: clamp(1.25rem, 2vw, 1.8rem);
+}
+.guide-reward p {
+  margin: 10px 0 0;
+}
+.guide-reward .guide-reward-status {
+  color: var(--guide-ink);
+  font-weight: 600;
+}
+.guide-reward [hidden] {
+  display: none;
+}
 .guide-mascot-scene {
   position: relative;
   min-height: 490px;
@@ -628,6 +661,9 @@ body.theme-dark {
 }
 
 /* Native modal owns focus; four curtains leave the current feature illuminated. */
+.max-tour-focus-hidden {
+  visibility: hidden !important;
+}
 .max-tour [hidden],
 .guide-main [hidden] {
   display: none !important;

@@ -847,6 +847,143 @@ h3,
   color: var(--muted);
 }
 
+.settings-notification-form {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.settings-notification-list {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-notification-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.settings-notification-state {
+  min-width: 3.8em;
+  color: #9ff0dd;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.settings-notification-state.is-off {
+  color: var(--ui-muted, #a5adb7);
+}
+
+.settings-notification-row:hover {
+  border-color: var(--ui-line-strong, rgba(255, 255, 255, 0.28));
+  background: color-mix(in srgb, var(--ui-surface, rgba(255, 255, 255, 0.08)) 92%, transparent);
+}
+
+.settings-notification-row > span {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-notification-row strong {
+  font-size: 0.95rem;
+}
+
+.settings-notification-row small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.settings-notification-control {
+  position: relative;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 24px;
+}
+
+.settings-notification-control::before {
+  position: absolute;
+  top: 0;
+  right: 7px;
+  bottom: 0;
+  left: auto;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  color: var(--ui-muted, rgba(255, 255, 255, 0.72));
+  content: '关';
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.settings-notification-control input {
+  appearance: none;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 44px;
+  height: 24px;
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.settings-notification-control > span {
+  display: block;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 160ms ease;
+}
+
+.settings-notification-control input:checked {
+  border-color: #69d7c0;
+  background: #287f70;
+}
+
+.settings-notification-control:has(input:checked)::before {
+  right: auto;
+  left: 7px;
+  color: #d8fff5;
+  content: '开';
+}
+
+.settings-notification-control input:checked + span {
+  transform: translateX(20px);
+}
+
+.settings-notification-control input:focus-visible {
+  outline: 2px solid #69d7c0;
+  outline-offset: 3px;
+}
+
+.settings-notification-control input:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
 .settings-avatar-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -14490,6 +14627,175 @@ body.aichat-page .aichat-message.is-image-generation .aichat-copy-control {
   text-align: right;
 }
 
+.max-image-placeholder {
+  width: min(100%, 720px);
+  min-height: 338px;
+  margin: 0 18px 18px;
+  overflow: hidden;
+  border: 1px solid #cbd2d5;
+  border-radius: 12px;
+  background: #e5e9eb;
+  color: #34434a;
+}
+
+.max-image-discussion-pending {
+  width: min(100%, 760px);
+  margin: 18px 0;
+  overflow: hidden;
+  border: 1px solid #d4dadc;
+  border-radius: 12px;
+  background: #f8fafa;
+}
+
+.max-image-placeholder:focus-visible,
+.max-image-placeholder button:focus-visible {
+  outline: 2px solid #075f72;
+  outline-offset: 2px;
+}
+
+.max-image-placeholder [hidden] {
+  display: none !important;
+}
+
+.max-image-placeholder-activate {
+  width: 100%;
+  min-height: 338px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 30px 22px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition: background 180ms ease;
+}
+
+.max-image-placeholder-activate:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.max-image-placeholder-activate strong {
+  margin-top: 12px;
+  color: #283d45 !important;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.max-image-placeholder-activate span:not(.max-image-placeholder-squares) {
+  color: #075f72 !important;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.max-image-placeholder-activate small {
+  color: #68767c !important;
+  font-size: 0.76rem;
+}
+
+.max-image-placeholder-squares {
+  display: grid;
+  grid-template-columns: repeat(3, 17px);
+  grid-template-rows: repeat(2, 17px);
+  gap: 3px;
+  transform: rotate(-8deg);
+}
+
+.max-image-placeholder-squares i {
+  border: 1px solid #86999e;
+  border-radius: 2px;
+  background: #b7c5c8;
+  box-shadow: inset 0 2px rgba(255, 255, 255, 0.4);
+}
+
+.max-image-placeholder-squares i:first-child {
+  grid-column: 2;
+}
+
+.max-tetris-game {
+  padding: 15px;
+}
+
+.max-tetris-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 16px;
+  margin-bottom: 12px;
+  color: #415158;
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.max-tetris-heading b {
+  color: #243b44;
+}
+
+.max-tetris-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+  align-items: start;
+  gap: 18px;
+}
+
+.max-tetris-layout canvas {
+  display: block;
+  width: 100%;
+  max-width: 240px;
+  height: auto;
+  border: 1px solid #aebcc0;
+  border-radius: 5px;
+  background: #eef0f0;
+}
+
+.max-tetris-side {
+  display: grid;
+  align-content: start;
+  gap: 15px;
+  color: #586a71;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.max-tetris-side p {
+  margin: 0;
+}
+
+.max-tetris-side > button,
+.max-tetris-controls button {
+  min-height: 42px;
+  border: 1px solid #b2c1c4;
+  border-radius: 7px;
+  background: #f5f7f7;
+  color: #25434b;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.max-tetris-side > button:hover,
+.max-tetris-controls button:hover {
+  background: #fff;
+}
+
+.max-tetris-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.max-tetris-controls button:last-child {
+  grid-column: span 2;
+}
+
+.max-tetris-side small {
+  color: #69787e;
+}
+
 .max-generated-image {
   width: min(100%, 720px);
   margin: 18px 0 10px;
@@ -14506,6 +14812,18 @@ body.aichat-page .aichat-message.is-image-generation .aichat-copy-control {
   max-height: min(68vh, 720px);
   object-fit: contain;
   background: #edf2f2;
+}
+
+.max-generated-image.is-image-unavailable img {
+  display: none;
+}
+
+.max-generated-image-load-error {
+  margin: 0;
+  padding: 28px 16px;
+  color: #704020 !important;
+  font-size: 0.88rem;
+  text-align: center;
 }
 
 .max-generated-image figcaption {
@@ -14536,6 +14854,16 @@ body.aichat-page .aichat-message.is-image-generation .aichat-copy-control {
   box-shadow: 0 0 0 3px rgba(40, 127, 112, 0.11);
 }
 
+.max-generated-image-state[data-state='loading']::before {
+  background: #8a9aa0;
+  box-shadow: 0 0 0 3px rgba(92, 110, 117, 0.12);
+}
+
+.max-generated-image-state[data-state='error']::before {
+  background: #a9663c;
+  box-shadow: 0 0 0 3px rgba(169, 102, 60, 0.12);
+}
+
 .max-generated-image-actions {
   display: inline-flex;
   align-items: center;
@@ -14555,6 +14883,27 @@ body.aichat-page .aichat-message.is-image-generation .aichat-copy-control {
 }
 
 .max-generated-image-actions a:focus-visible {
+  outline: 2px solid rgba(7, 95, 114, 0.55);
+  outline-offset: 3px;
+}
+
+.max-generated-image-retry {
+  border: 0;
+  padding: 0;
+  color: #075f72;
+  background: transparent;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.max-generated-image-retry:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.max-generated-image-retry:focus-visible {
   outline: 2px solid rgba(7, 95, 114, 0.55);
   outline-offset: 3px;
 }
@@ -14596,6 +14945,25 @@ body.aichat-page .aichat-message.is-image-generation .aichat-copy-control {
   .max-image-generation-mark {
     width: 38px;
     height: 38px;
+  }
+
+  .max-image-placeholder {
+    width: calc(100% - 24px);
+    min-height: 290px;
+    margin: 0 12px 12px;
+  }
+
+  .max-image-placeholder-activate {
+    min-height: 290px;
+  }
+
+  .max-tetris-layout {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+
+  .max-tetris-side {
+    width: 100%;
   }
 
   .max-generated-image figcaption {

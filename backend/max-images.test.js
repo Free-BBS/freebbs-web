@@ -38,6 +38,10 @@ test('persists one generated image and replaces private payload data with Markdo
   assert.match(result.payload.answer, /!\[示意图\]\(\/uploads\/max-image-42-/);
   assert.match(result.payload.chat_answer, /\/uploads\/max-image-42-/);
   assert.equal((await fs.promises.readdir(uploadDir)).length, 1);
+  assert.equal(
+    (await fs.promises.readdir(uploadDir)).some((fileName) => fileName.endsWith('.uploading')),
+    false,
+  );
   const metadata = await sharp(path.join(uploadDir, result.files[0])).metadata();
   assert.equal(metadata.format, 'webp');
 });

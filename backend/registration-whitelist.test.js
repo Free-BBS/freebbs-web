@@ -221,18 +221,30 @@ test('all admin whitelist endpoints authenticate before accessing files or datab
 test(
   'MySQL transactions preserve claims, roll back imports, and serialize registrations',
   {
-    skip: process.env.WHITELIST_TEST_MYSQL !== '1',
+    skip: !process.env.FREEBBS_TEST_MYSQL_SOCKET && process.env.WHITELIST_TEST_MYSQL !== '1',
   },
   async (context) => {
+    const { isolatedMysqlConfig, assertIsolatedMysql } = require('./test-helpers/isolated-mysql');
+    const isolated = Boolean(process.env.FREEBBS_TEST_MYSQL_SOCKET);
     const database = `freebbs_whitelist_test_${crypto.randomBytes(6).toString('hex')}`;
-    const config = {
-      host: '127.0.0.1',
-      port: 3306,
-      user: 'root',
-      password: '',
-      connectionLimit: 4,
-    };
+    const config = isolated
+      ? { ...isolatedMysqlConfig('WHITELIST_TEST_MYSQL_SOCKET'), connectionLimit: 4 }
+      : {
+          host: '127.0.0.1',
+          port: 3306,
+          user: 'root',
+          password: '',
+          connectionLimit: 4,
+        };
     const control = await mysql.createConnection(config);
+    if (isolated) {
+      try {
+        await assertIsolatedMysql(control);
+      } catch (error) {
+        await control.end();
+        throw error;
+      }
+    }
     await control.query(`CREATE DATABASE ${database} CHARACTER SET utf8mb4`);
     const pool = mysql.createPool({ ...config, database });
     context.after(async () => {
@@ -262,10 +274,13 @@ test(
       await first.beginTransaction();
       await assertRegistrationWhitelisted(first, identity, { lock: true });
       await second.beginTransaction();
-      const contested = assertRegistrationWhitelisted(second, identity, { lock: true });
+      const contested = assert.rejects(
+        assertRegistrationWhitelisted(second, identity, { lock: true }),
+        /不在可注册白名单/,
+      );
       await claimRegistrationWhitelist(first, identity, 88);
       await first.commit();
-      await assert.rejects(contested, /不在可注册白名单/);
+      await contested;
       await second.rollback();
     } finally {
       first.release();

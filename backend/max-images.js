@@ -58,9 +58,29 @@ async function persistOneImage(image, { ownerId, uploadDir }) {
     .toBuffer();
   if (!output.length || output.length > 6 * 1024 * 1024) throw new Error('生成图片转换后过大');
 
+  // Do not publish a file merely because the encoder returned bytes. Re-opening
+  // the final WebP catches malformed output before the client receives its URL.
+  const outputMetadata = await sharp(output, { limitInputPixels: 20_000_000 }).metadata();
+  if (
+    outputMetadata.format !== 'webp' ||
+    !outputMetadata.width ||
+    !outputMetadata.height ||
+    outputMetadata.width > 2560 ||
+    outputMetadata.height > 2560
+  )
+    throw new Error('生成图片转换结果无效');
+
   await fs.promises.mkdir(uploadDir, { recursive: true });
   const fileName = createGeneratedImageFileName(ownerId);
-  await fs.promises.writeFile(path.join(uploadDir, fileName), output, { flag: 'wx' });
+  const destination = path.join(uploadDir, fileName);
+  const temporary = `${destination}.uploading`;
+  try {
+    await fs.promises.writeFile(temporary, output, { flag: 'wx' });
+    await fs.promises.rename(temporary, destination);
+  } catch (error) {
+    await fs.promises.unlink(temporary).catch(() => {});
+    throw error;
+  }
   return {
     placeholder: image.placeholder,
     markdown: `![${safeAlt(image.alt)}](/uploads/${fileName})`,

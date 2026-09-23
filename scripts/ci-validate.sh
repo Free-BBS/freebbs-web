@@ -8,7 +8,10 @@ echo "[ci] installing dependencies"
 npm ci
 
 echo "[ci] syntax check"
-bash -n scripts/*.sh
+for script in scripts/*.sh; do
+  bash -n "$script"
+done
+node --test scripts/pr-validation-workflow.test.js scripts/mysql-isolation.test.js
 node --check server.js
 node --check public/page-transitions.js
 node --check public/publish.js
@@ -23,6 +26,7 @@ node --test backend/weekly-digest.test.js backend/mailer.test.js
 node --test backend/initialize-once.test.js scripts/static-response.test.js
 node --check backend/server.js
 node --check backend/background-tasks.js
+node --check backend/workbench-schedule-planner.js
 node --test backend/background-tasks.test.js
 node --check public/app.js
 node --check public/auth.js
@@ -99,12 +103,14 @@ npm run test:public-pages
 echo "[ci] authentication and typography preferences tests"
 npm run test:auth
 
+echo "[ci] workbench and schedule planner tests"
+npm run test:workbench
+
 echo "[ci] shop and settings tests"
 npm run test:shop-settings
 npm run test:economy-retry
 npm run test:economy-mysql
-node --test backend/admin-rewards.test.js backend/admin-rewards.mysql.test.js
-node --test backend/wallet-ledger.test.js
+npm run test:wallet-reasons
 node --check public/max-composer.js
 node --check public/wallet-ledger.js
 node --check public/max-guide-releases.js

@@ -172,6 +172,7 @@ function harness(records = [post(1)], { replyRows, lasers = {} } = {}) {
     ...visibility,
     anonymousAuthor,
     visibleComments,
+    maxDiscussionProgress: new Map(),
     createUniqueDiscussionPostPid: async () => 'NEW_POST',
     awardMagnetic: async () => {},
     ensureDiscussionTables: async () => {},

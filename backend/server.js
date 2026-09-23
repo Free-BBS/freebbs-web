@@ -12,9 +12,15 @@ const {
 } = require('./ai-models');
 const { awardMagnetic, ensureEconomyPolicy } = require('./economy-rewards');
 const { createAdminRewardsRouter, ensureAdminRewardTables } = require('./admin-rewards');
-const { createWalletLedgerRouter, ensureWalletLedger } = require('./wallet-ledger');
+const {
+  createWalletLedgerRouter,
+  ensureWalletLedger,
+  walletLedgerCheckpoint,
+  annotateWalletLedger,
+} = require('./wallet-ledger');
 const { createBoneSalesRouter } = require('./economy-sales');
 const { registerOnboarding } = require('./onboarding');
+const { registerOnboardingReward } = require('./onboarding-reward');
 const {
   LASER_POLICY,
   createEconomyShop,
@@ -76,6 +82,7 @@ const {
   persistGeneratedSsePayload,
   stripGeneratedImages,
 } = require('./max-images');
+const { readMaxBackgroundStream } = require('./max-background-stream');
 const {
   canReadPost,
   lockPublicPost,
@@ -212,6 +219,7 @@ const MAX_AGENT_USER = {
 };
 const USER_ROLES = new Set(['student', 'ta', 'teacher', 'admin']);
 const maxImageGenerationGate = createImageGenerationGate();
+const maxDiscussionProgress = new Map();
 const systemSettingsStore = createSystemSettingsStore({
   pool,
   encryptionKey: config.settingsEncryptionKey,
@@ -1259,11 +1267,18 @@ async function performDailyCheckin(user) {
         'INSERT INTO user_checkins (user_id, checkin_date, streak_count, reward_electrons, fortune_score) VALUES (?, ?, ?, ?, ?)',
         [user.id, todayKey, streak, reward.rewardElectrons, score],
       );
-      if (reward.rewardElectrons)
+      if (reward.rewardElectrons) {
+        const ledgerBefore = await walletLedgerCheckpoint(connection, user.id);
         await connection.execute('UPDATE users SET electrons = electrons + ? WHERE id = ?', [
           reward.rewardElectrons,
           user.id,
         ]);
+        await annotateWalletLedger(connection, user.id, ledgerBefore, {
+          sourceKey: `legacy-checkin:${todayKey}`,
+          title: '每日签到（历史规则）',
+          reason: `${todayKey} 连续签到第 ${streak} 天，获得 ${reward.rewardElectrons} 电元`,
+        });
+      }
       if (reward.rewardMagnetic)
         await awardMagnetic(
           connection,
@@ -1444,19 +1459,6 @@ function currencyColumn(currency) {
   }
 
   return 'manetrons';
-}
-
-async function awardPostAuthorManetrons(post, delta, connection = pool) {
-  if (!post?.user_id || !delta) {
-    return;
-  }
-
-  await connection.execute(
-    `UPDATE users
-     SET manetrons = GREATEST(0, manetrons + ?)
-     WHERE id = ?`,
-    [delta, post.user_id],
-  );
 }
 
 function toUserProfile(row) {
@@ -1921,11 +1923,16 @@ async function requestMaxBackgroundAnswer(
   user,
   payload,
   signal,
-  { allowImageGeneration = false } = {},
+  { allowImageGeneration = false, onImageGeneration } = {},
 ) {
   const agentPayload = buildAgentChatPayload(
     user,
-    { ...payload, ...maxAgentRoute(payload), stream: false },
+    {
+      ...payload,
+      ...maxAgentRoute(payload),
+      stream: allowImageGeneration,
+      reasoning_stream: allowImageGeneration,
+    },
     {
       source: payload.source || 'direct_chat',
       channel: 'aichat',
@@ -1935,7 +1942,9 @@ async function requestMaxBackgroundAnswer(
   );
   const upstream = await postAgentChat(agentPayload, user, { signal });
   if (!upstream.ok) throw new Error(`AI 服务返回 ${upstream.status}。`);
-  const result = await upstream.json();
+  const result = allowImageGeneration
+    ? await readMaxBackgroundStream(upstream, { onImageGeneration })
+    : await upstream.json();
   if (!result || typeof result !== 'object' || Array.isArray(result))
     throw new Error('AI 服务返回了无效回答。');
   if (upstream.siteSources?.length) result.site_sources = upstream.siteSources;
@@ -1968,6 +1977,8 @@ async function runMaxBackgroundTask({ user, payload, progress, signal }) {
       await progress({ phase: 'thinking', message: 'Max 正在后台思考…' });
       const result = await requestMaxBackgroundAnswer(user, payload, requestSignal, {
         allowImageGeneration: imageReservation.allowed,
+        onImageGeneration: () =>
+          progress({ phase: 'image_generating', message: 'Max 已开始生成图片…' }),
       });
       return { result: await finalize(result) };
     }
@@ -2018,7 +2029,11 @@ async function runMaxBackgroundTask({ user, payload, progress, signal }) {
         ],
       },
       requestSignal,
-      { allowImageGeneration: imageReservation.allowed },
+      {
+        allowImageGeneration: imageReservation.allowed,
+        onImageGeneration: () =>
+          progress({ phase: 'image_generating', message: 'Max 已开始生成图片…' }),
+      },
     );
     await progress({ phase: 'saving', message: '正在保存 Max 的回答…' });
     return { result: await finalize(result) };
@@ -2232,6 +2247,8 @@ async function createMaxDiscussionReply(postId, triggerComment) {
       channel: 'discussion_comment',
       message: prompt,
       temperature: 0.5,
+      stream: imageReservation.allowed,
+      reasoning_stream: imageReservation.allowed,
       allow_image_generation: imageReservation.allowed,
       context: {
         post: {
@@ -2247,13 +2264,24 @@ async function createMaxDiscussionReply(postId, triggerComment) {
       },
     });
 
-    agentPayload = await agentResponse.json().catch(() => ({}));
-
     if (!agentResponse.ok) {
-      throw new Error(agentPayload?.error?.message || agentPayload.message || 'Max 暂时无法回复');
+      const errorPayload = await agentResponse.json().catch(() => ({}));
+      throw new Error(errorPayload?.error?.message || errorPayload.message || 'Max 暂时无法回复');
     }
+    agentPayload = imageReservation.allowed
+      ? await readMaxBackgroundStream(agentResponse, {
+          onImageGeneration: () => {
+            const pending = maxDiscussionProgress.get(triggerComment.id);
+            if (pending) pending.phase = 'image_generating';
+          },
+        })
+      : await agentResponse.json();
 
     try {
+      if (agentPayload?.generated_images?.length) {
+        const pending = maxDiscussionProgress.get(triggerComment.id);
+        if (pending) pending.phase = 'saving_image';
+      }
       const persisted = await persistGeneratedImages(agentPayload, {
         ownerId: triggerComment.author.id,
         uploadDir: config.uploadDir,
@@ -2658,6 +2686,7 @@ app.use(
 app.use('/api', createWalletLedgerRouter({ pool, requireAuth }));
 app.use('/api', createBoneSalesRouter({ pool, requireAuth }));
 registerOnboarding(app, { pool, requireAuth });
+registerOnboardingReward(app, { pool, requireAuth });
 app.use(
   '/api',
   createSurveysRouter({ pool, requireAdmin, getOptionalAuthUser, service: surveyService }),
@@ -2719,7 +2748,7 @@ async function lockAdminStateAndTarget(connection, actorId, targetId) {
   }
 
   const [targetRows] = await connection.execute(
-    `SELECT id, role, is_admin
+    `SELECT id, role, is_admin, electrons, manetrons
      FROM users
      WHERE id = ?
      LIMIT 1
@@ -3353,13 +3382,25 @@ app.post('/api/electromagnetic/heat', async (request, response) => {
     }
 
     const column = currencyColumn(currency);
-    const [result] = await pool.execute(
-      `UPDATE users
-       SET ${column} = ${column} - 1,
-           heat = heat + 1
-       WHERE id = ? AND ${column} >= 1`,
-      [user.id],
-    );
+    const result = await withDatabaseTransaction(async (connection) => {
+      await connection.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [user.id]);
+      const ledgerBefore = await walletLedgerCheckpoint(connection, user.id);
+      const [updated] = await connection.execute(
+        `UPDATE users
+         SET ${column} = ${column} - 1,
+             heat = heat + 1
+         WHERE id = ? AND ${column} >= 1`,
+        [user.id],
+      );
+      if (updated.affectedRows) {
+        await annotateWalletLedger(connection, user.id, ledgerBefore, {
+          sourceKey: `heat-exchange:${crypto.randomUUID()}`,
+          title: '兑换热力',
+          reason: `花费 1 ${currency === 'electric' ? '电元' : '磁元'}，获得 1 热力`,
+        });
+      }
+      return updated;
+    });
 
     if (!result.affectedRows) {
       response.status(400).json({ message: '余额不足' });
@@ -4723,6 +4764,15 @@ app.get('/api/discussion/posts/:id/comments', async (request, response) => {
           }),
         ),
       ),
+      maxProgress: [...maxDiscussionProgress]
+        .filter(([, state]) => {
+          if (Date.now() - state.startedAt > 5 * 60 * 1000) {
+            maxDiscussionProgress.delete(state.commentId);
+            return false;
+          }
+          return state.postId === post.id;
+        })
+        .map(([commentId, state]) => ({ commentId, phase: state.phase })),
     });
   } catch (error) {
     response.status(500).json({ message: '获取评论失败', detail: error.message });
@@ -4809,10 +4859,16 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
     const maxPending = user.username !== MAX_AGENT_USER.username && shouldAskMax(contentMarkdown);
 
     if (maxPending) {
+      maxDiscussionProgress.set(comment.id, {
+        commentId: comment.id,
+        postId: post.id,
+        phase: 'thinking',
+        startedAt: Date.now(),
+      });
       setImmediate(() => {
-        createMaxDiscussionReply(post.id, comment).catch((error) => {
-          console.error('Failed to create Max discussion reply', error);
-        });
+        createMaxDiscussionReply(post.id, comment)
+          .catch((error) => console.error('Failed to create Max discussion reply', error))
+          .finally(() => maxDiscussionProgress.delete(comment.id));
       });
     }
 
@@ -5836,27 +5892,41 @@ app.post('/api/admin/users', async (request, response) => {
     const grade = studentId.slice(0, 4);
     const major = '电子信息科学与技术';
 
-    const [result] = await pool.execute(
-      `INSERT INTO users (
-        uid, username, full_name, student_id, email, password_hash, email_verified_at,
-        role, is_admin, electrons, manetrons, heat, grade, major
-      ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        await createUniqueUserUid(),
-        username,
-        fullName,
-        studentId,
-        email,
-        hashPassword(password),
-        role,
-        isAdmin ? 1 : 0,
-        Number.isFinite(electrons) ? electrons : 0,
-        Number.isFinite(manetrons) ? manetrons : 0,
-        Number.isFinite(heat) ? heat : 0,
-        grade,
-        major,
-      ],
-    );
+    const initialElectric = Number.isFinite(electrons) ? electrons : 0;
+    const initialMagnetic = Number.isFinite(manetrons) ? manetrons : 0;
+    const userUid = await createUniqueUserUid();
+    const passwordHash = hashPassword(password);
+    const result = await withDatabaseTransaction(async (connection) => {
+      const [created] = await connection.execute(
+        `INSERT INTO users (
+          uid, username, full_name, student_id, email, password_hash, email_verified_at,
+          role, is_admin, electrons, manetrons, heat, grade, major
+        ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          userUid,
+          username,
+          fullName,
+          studentId,
+          email,
+          passwordHash,
+          role,
+          isAdmin ? 1 : 0,
+          initialElectric,
+          initialMagnetic,
+          Number.isFinite(heat) ? heat : 0,
+          grade,
+          major,
+        ],
+      );
+      if (initialElectric || initialMagnetic) {
+        await annotateWalletLedger(connection, created.insertId, '0', {
+          sourceKey: `admin-create:${crypto.randomUUID()}`,
+          title: '账户初始余额',
+          reason: `管理员 ${adminUser.username || adminUser.uid || adminUser.id} 创建账户，设置 ${initialElectric} 电元、${initialMagnetic} 磁元的初始余额`,
+        });
+      }
+      return created;
+    });
 
     const user = await getUserById(result.insertId);
 
@@ -5913,7 +5983,19 @@ app.patch('/api/admin/users/:id', async (request, response) => {
     await ensureCourseMapTables(pool);
     connection = await pool.getConnection();
     await connection.beginTransaction();
-    await lockAndValidateRoleChange(connection, adminUser.id, targetId, role, isAdmin);
+    const previousUser = await lockAndValidateRoleChange(
+      connection,
+      adminUser.id,
+      targetId,
+      role,
+      isAdmin,
+    );
+    const nextElectric = Number.isFinite(electrons) ? electrons : 0;
+    const nextMagnetic = Number.isFinite(manetrons) ? manetrons : 0;
+    const previousElectric = Number(previousUser.electrons || 0);
+    const previousMagnetic = Number(previousUser.manetrons || 0);
+    const walletChanged = previousElectric !== nextElectric || previousMagnetic !== nextMagnetic;
+    const ledgerBefore = walletChanged ? await walletLedgerCheckpoint(connection, targetId) : null;
     await connection.execute(
       `UPDATE users
        SET uid = COALESCE(NULLIF(uid, ''), ?),
@@ -5929,12 +6011,19 @@ app.patch('/api/admin/users/:id', async (request, response) => {
         fullName,
         role,
         isAdmin ? 1 : 0,
-        Number.isFinite(electrons) ? electrons : 0,
-        Number.isFinite(manetrons) ? manetrons : 0,
+        nextElectric,
+        nextMagnetic,
         Number.isFinite(heat) ? heat : 0,
         targetId,
       ],
     );
+    if (walletChanged) {
+      await annotateWalletLedger(connection, targetId, ledgerBefore, {
+        sourceKey: `admin-adjustment:${crypto.randomUUID()}`,
+        title: '管理员调整余额',
+        reason: `管理员 ${adminUser.username || adminUser.uid || adminUser.id} 将余额由 ${previousElectric} 电元、${previousMagnetic} 磁元调整为 ${nextElectric} 电元、${nextMagnetic} 磁元`,
+      });
+    }
     await replaceUserResponsibilities(
       connection,
       targetId,
