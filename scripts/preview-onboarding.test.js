@@ -393,8 +393,9 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
     '#world-enter-island',
     '#world-modal[open] [data-close-modal]',
     '#island-course-back',
+    '#world-orbit',
     'a.island-course-planet[data-course-slug="math"]',
-    '#course-map-directory-link',
+    '#course-map-reset-view',
     '[data-reader-node-id]',
     '[data-course-map-arrow-help-toggle]',
     '.course-reader-study-link',
@@ -449,7 +450,7 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
   assert.equal(step('course-directory').focus.fit, 'overview');
   assert.equal(step('knowledge-companions').target, '#knowledge-chat-toggle');
   assert.equal(step('knowledge-companions').reveal.target, '#knowledge-chat-panel');
-  assert.equal(step('discussion-composer').target, '#discussion-create-toggle');
+  assert.equal(step('discussion-composer').target, '#discussion-create-toggle, .mobile-publish');
   assert.equal(step('discussion-composer').prepare, undefined);
   assert.equal(step('discussion-composer').action, undefined);
   assert.equal(step('inventory-ledger-filters').target, '#wallet-ledger[open] .wallet-toolbar');

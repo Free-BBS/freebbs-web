@@ -105,14 +105,37 @@
   const link = (selector, label) => ({ selector, label, kind: 'link' });
   const ready = (selector, whenMissing) => ({ selector, whenMissing });
   const mathPlanet = '.island-orbit-item[data-world-id="mathematics"]';
+  const physicsPlanet = '.island-orbit-item[data-world-id="physics"]';
+  // A closed dialog has no visible box. Readiness is checked through a visible
+  // body sentinel rather than waiting for the hidden dialog itself to appear.
+  const worldModalClosed = 'body:not(:has(#world-modal[open]))';
   const worldReady = [
-    ready('#world-modal[open] [data-close-modal]', '#world-modal:not([open])'),
+    ready('#world-modal[open] [data-close-modal]', worldModalClosed),
     ready('#island-course-back', '#world-explorer:not([hidden])'),
+    {
+      ...ready(
+        '#world-orbit',
+        `#world-orbit:has(${mathPlanet}:not([aria-hidden="true"])):has(${physicsPlanet}:not([aria-hidden="true"]))`,
+      ),
+      key: 'Home',
+    },
   ];
-  const openMath = [ready(mathPlanet, '#world-modal[open]')];
+  // Resuming the overview may find another island's modal or course stage.
+  // Close only view UI, restore visible orbit targets, then open mathematics.
+  const openMath = [...worldReady, ready(mathPlanet, '#world-modal[open]')];
+  const mathCourseOrbit = '#island-course-orbit[data-world-id="mathematics"]';
   const mathStage = [
-    ready(mathPlanet, '#island-course-stage:not([hidden])'),
-    ready('#world-enter-island', '#island-course-stage:not([hidden])'),
+    // A resumed tour may find a different island's courses already open.
+    // Return using view controls, then select mathematics explicitly. An
+    // existing mathematics course stage is left untouched.
+    ready('#island-course-back', `#world-explorer:not([hidden]), ${mathCourseOrbit}`),
+    ready('#world-modal[open] [data-close-modal]', `${worldModalClosed}, ${mathCourseOrbit}`),
+    {
+      ...ready('#world-orbit', `${mathPlanet}:not([aria-hidden="true"]), ${mathCourseOrbit}`),
+      key: 'Home',
+    },
+    ready(mathPlanet, `#world-modal[open], ${mathCourseOrbit}`),
+    ready('#world-enter-island', mathCourseOrbit),
   ];
   const focusedNode = [ready('[data-reader-node-id]', '.course-reader-study-link')];
   const reading = [ready('#knowledge-start-reading', '#knowledge-reading:not(.hidden)')];
@@ -184,7 +207,7 @@
   step(
     'world',
     'world-coming-islands',
-    '.island-orbit-item[data-world-id="physics"]',
+    physicsPlanet,
     '有些星球，还在慢慢点亮。',
     '这颗物理星球标着「建设中」。计算机与实验岛也还在准备，点开能了解规划，但暂时没有开放课程轨道；不必为了完成导览寻找尚不存在的内容。',
     { prepare: worldReady, emptyTarget: '#world-explorer' },
@@ -218,7 +241,7 @@
   step(
     'world',
     'world-course-orbit',
-    '#island-course-orbit',
+    mathCourseOrbit,
     '一颗小星球，就是一门课程。',
     '数学岛的高等微积分已经有独立课程入口。点课程星球，就能打开它实际的课程知识地图；左上角随时能返回知识岛。',
     {
@@ -232,11 +255,15 @@
   step(
     'course',
     'course-directory',
-    '#course-map-canvas',
+    '.course-map-directory-layout:has(.course-map-directory-panel)',
     '课程不是一长串文件。',
     '这里按章节组织知识点，显示课程简介、知识点数量和学习标记。先选一个知识点查看关联，就能知道它和前后的内容怎样接上。',
     {
-      prepare: [ready('#course-map-directory-link', '.course-map-directory-layout')],
+      // The back link points to /world until a knowledge node is focused, and
+      // its handler is installed only after the asynchronous map fetch. Never
+      // auto-click that link while loading. This button cannot navigate away;
+      // the directory-only panel also distinguishes it from the focused view.
+      prepare: [ready('#course-map-reset-view', '.course-map-directory-panel')],
       focus: { fit: 'overview', radius: 24 },
       action: click('[data-reader-node-id]', '查看一个知识点的关联'),
       emptyTarget: '#course-map-status',
@@ -361,10 +388,13 @@
   step(
     'discussion',
     'discussion-reply-max',
-    '#discussion-comment-form',
+    '.post-write-comment',
     '想邀请我一起想？在评论里 @Max。',
-    '发表一条包含独立「@Max」的评论或回复，就能请我结合帖文和评论上下文回应，也可以附上本站电路链接。回复仍需等待实际 AI 服务，并不保证结论正确。',
+    '从「写评论…」进入编辑器，发表一条包含独立「@Max」的评论或回复，就能请我结合帖文和评论上下文回应，也可以附上本站电路链接。回复仍需等待实际 AI 服务，并不保证结论正确。',
     {
+      // Mobile readers move the hidden inline form into a sheet only after a
+      // user chooses to comment. Highlight its shared entry without opening a
+      // keyboard or redirecting guests to login during a read-only tour.
       prepare: [ready(preferredPost, '#discussion-detail-title')],
       action: click('[data-action="close-detail"]', '回到帖子列表'),
       emptyTarget: '#discussion-detail',
@@ -375,9 +405,9 @@
   step(
     'discussion',
     'discussion-composer',
-    '#discussion-create-toggle',
+    '#discussion-create-toggle, .mobile-publish',
     '想发一个问题？从这个按钮进入。',
-    '结束或暂停导览后，可以点右上角的「发帖」按钮，进入独立的编辑页面。选好版块、写标题和正文，再检查表达是否清楚；有背景、有过程的讨论更容易得到帮助。这一步先认识入口，点击「下一步」会继续参观。',
+    '结束或暂停导览后，电脑上点右上角的「发帖」；手机上先点底部「＋」，再选「发帖」，就能进入独立的编辑页面。选好版块、写标题和正文，再检查表达是否清楚；有背景、有过程的讨论更容易得到帮助。这一步先认识入口，点击「下一步」会继续参观。',
     {
       emptyTarget: '.discussion-feed-toolbar',
       emptyBody: '发帖编辑器需要登录，或当前账号暂无可发帖版块。你仍然可以阅读已开放的讨论。',
@@ -426,9 +456,9 @@
   step(
     'workbench',
     'workbench-week',
-    '#workbench-week-grid',
+    '#workbench-week-grid, #workbench-schedule-list',
     '把一周摊开，会轻松一点。',
-    '个人计划可以按周浏览、切换日期，并用列表查看安排。新增和编辑都是你自己的决定；我先帮你认清位置，不往日程里塞任务。',
+    '个人计划可以按周浏览、切换日期。手机默认显示列表，点「七天视图」可切回时间图。新增和编辑都是你自己的决定；我先帮你认清位置，不往日程里塞任务。',
     { prepare: plan, emptyTarget: '#workbench-plan-panel' },
   );
   step(

@@ -1,5 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const nodePath = require('node:path');
+const vm = require('node:vm');
 const {
   VERSION,
   FLOATING_PATHS,
@@ -478,13 +481,237 @@ test('safe guide links reject off-origin and wrong-route destinations without lo
   assert.equal(profile.searchParams.get('uid'), 'my-user');
 });
 
+test('world overview stations reset concealed planets and never reuse a different island modal', () => {
+  const math = '.island-orbit-item[data-world-id="mathematics"]';
+  const physics = '.island-orbit-item[data-world-id="physics"]';
+  const visiblePlanets = `#world-orbit:has(${math}:not([aria-hidden="true"])):has(${physics}:not([aria-hidden="true"]))`;
+  for (const id of ['world-coming-islands', 'world-mathematics', 'world-island-overview']) {
+    const step = STEPS.find((entry) => entry.id === id);
+    for (const initial of [
+      { stage: true, modal: false, hidden: true, world: 'signals' },
+      { stage: false, modal: true, hidden: true, world: 'signals' },
+      { stage: false, modal: true, hidden: false, world: 'mathematics' },
+    ]) {
+      const state = { ...initial };
+      const visible = (selector) => {
+        if (selector === 'body:not(:has(#world-modal[open]))') return !state.modal;
+        if (selector === '#world-explorer:not([hidden])' || selector === '#world-orbit')
+          return !state.stage;
+        if (selector === visiblePlanets) return !state.stage && !state.hidden;
+        if (selector === '#island-course-back') return state.stage;
+        if (
+          selector === '#world-modal[open] [data-close-modal]' ||
+          selector === '#world-modal[open]'
+        )
+          return state.modal;
+        if (selector === math) return !state.stage && !state.hidden;
+        return false;
+      };
+      const actions = [];
+      for (const action of step.prepare) {
+        if (visible(action.whenMissing)) continue;
+        assert.ok(visible(action.selector), `${id}: missing ${action.selector}`);
+        actions.push(action.selector);
+        if (action.selector === '#world-modal[open] [data-close-modal]') state.modal = false;
+        else if (action.selector === '#island-course-back') state.stage = false;
+        else if (action.selector === '#world-orbit') {
+          assert.equal(action.key, 'Home');
+          state.hidden = false;
+        } else if (action.selector === math)
+          Object.assign(state, { modal: true, world: 'mathematics' });
+        assert.ok(visible(action.whenMissing));
+      }
+      assert.equal(state.stage, false);
+      assert.equal(state.hidden, false);
+      assert.equal(state.modal, id === 'world-island-overview');
+      if (state.modal) assert.equal(state.world, 'mathematics');
+      assert.equal(actions.includes('#world-orbit'), initial.hidden);
+    }
+  }
+});
+
+test('workbench guidance follows the visible week or mobile list without changing the chosen view', () => {
+  const step = STEPS.find((entry) => entry.id === 'workbench-week');
+  assert.equal(step.target, '#workbench-week-grid, #workbench-schedule-list');
+  assert.match(step.body, /手机默认显示列表.*七天视图/);
+  assert.equal(step.action, undefined);
+  assert.ok(!step.prepare.some((action) => action.selector === '#workbench-view-toggle'));
+  const mobile = fs.readFileSync(nodePath.join(__dirname, '../public/mobile-personal.js'), 'utf8');
+  const workbench = fs.readFileSync(nodePath.join(__dirname, '../public/workbench.js'), 'utf8');
+  assert.match(mobile, /media\.matches[\s\S]*workbench-view-toggle[\s\S]*toggle\.click\(\)/);
+  assert.match(workbench, /state\.listView \? '七天视图' : '列表视图'/);
+});
+
+test('resumed mathematics course step returns from another island instead of accepting its course stage', () => {
+  const step = STEPS.find((entry) => entry.id === 'world-course-orbit');
+  const mathOrbit = '#island-course-orbit[data-world-id="mathematics"]';
+  const mathPlanet = '.island-orbit-item[data-world-id="mathematics"]';
+  for (const initial of [
+    { stage: true, world: 'circuits', modal: false },
+    { stage: true, world: 'circuits', modal: false, hidden: true },
+    { stage: true, world: 'mathematics', modal: false },
+    { stage: false, world: 'signals', modal: true },
+  ]) {
+    const state = { ...initial };
+    const clicked = [];
+    const visible = (selector) =>
+      selector.split(',').some((part) => {
+        switch (part.trim()) {
+          case '#world-explorer:not([hidden])':
+          case '#world-orbit':
+            return !state.stage;
+          case 'body:not(:has(#world-modal[open]))':
+            return !state.modal;
+          case '#world-modal:not([open])':
+            return false; // Closed native dialogs never have a visible box.
+          case '#world-modal[open]':
+          case '#world-modal[open] [data-close-modal]':
+          case '#world-enter-island':
+            return state.modal;
+          case '#island-course-back':
+          case '#island-course-stage:not([hidden])':
+          case '#island-course-orbit':
+            return state.stage;
+          case mathOrbit:
+            return state.stage && state.world === 'mathematics';
+          case mathPlanet:
+          case `${mathPlanet}:not([aria-hidden="true"])`:
+            return !state.stage && !state.hidden;
+          default:
+            return false;
+        }
+      });
+    for (const action of step.prepare) {
+      if (visible(action.whenMissing)) continue;
+      assert.ok(visible(action.selector), `missing view control: ${action.selector}`);
+      clicked.push(action.selector);
+      if (action.selector === '#island-course-back') state.stage = false;
+      else if (action.selector === '#world-orbit') {
+        assert.equal(action.key, 'Home');
+        state.hidden = false;
+      } else if (action.selector === '#world-modal[open] [data-close-modal]') state.modal = false;
+      else if (action.selector === mathPlanet)
+        Object.assign(state, { world: 'mathematics', modal: true });
+      else if (action.selector === '#world-enter-island')
+        Object.assign(state, { stage: true, modal: false });
+      assert.ok(
+        visible(action.whenMissing),
+        'each preparation must finish its own view transition',
+      );
+    }
+    assert.equal(state.world, 'mathematics');
+    assert.equal(state.stage, true);
+    assert.equal(step.target, mathOrbit);
+    assert.ok(visible(step.target));
+    if (initial.stage && initial.world === 'mathematics') assert.deepEqual(clicked, []);
+    else assert.ok(clicked.includes(mathPlanet));
+    if (initial.stage && initial.world !== 'mathematics')
+      assert.equal(clicked[0], '#island-course-back');
+    if (initial.hidden) assert.ok(clicked.includes('#world-orbit'));
+    else assert.ok(!clicked.includes('#world-orbit'), 'visible math should not rotate needlessly');
+  }
+});
+
+test('comment guidance highlights the shared entry instead of a desktop-only inline editor', () => {
+  const step = STEPS.find((entry) => entry.id === 'discussion-reply-max');
+  const style = fs.readFileSync(nodePath.join(__dirname, '../public/post-reader.css'), 'utf8');
+  const reader = fs.readFileSync(nodePath.join(__dirname, '../public/post-reader.js'), 'utf8');
+  assert.match(style, /\.discussion-comments > #discussion-comment-form\s*\{\s*display: none;/);
+  assert.match(reader, /write\.className = 'post-write-comment'/);
+  assert.equal(step.target, '.post-write-comment');
+  assert.match(step.body, /从「写评论…」进入编辑器/);
+  assert.ok(step.prepare.every((action) => action.selector !== step.target));
+  assert.equal(step.action.selector, '[data-action="close-detail"]');
+});
+
+test('publishing guidance includes the mobile create menu without navigating or auto-opening it', () => {
+  const step = STEPS.find((entry) => entry.id === 'discussion-composer');
+  assert.equal(step.target, '#discussion-create-toggle, .mobile-publish');
+  assert.match(step.body, /手机上先点底部「＋」，再选「发帖」/);
+  assert.equal(step.action, undefined);
+  assert.equal(step.prepare, undefined);
+});
+
+test('course guide preparation cannot navigate away while the real map API is pending', async () => {
+  const html = fs.readFileSync(nodePath.join(__dirname, '../public/course.html'), 'utf8');
+  const source = fs.readFileSync(nodePath.join(__dirname, '../public/course-map.js'), 'utf8');
+  const location = new URL('https://www.free-bbs.cn/course?course=math&guideTour=1');
+  const pendingMap = deferred();
+  const requests = [];
+  const controls = new Map();
+  // Model native defaults from the actual HTML, not an already-hydrated preview.
+  // In particular, an unbound anchor follows href when the guide clicks it.
+  for (const match of html.matchAll(/<(a|button)\b([^>]*\bid="([^"]+)"[^>]*)>/g)) {
+    const [, tag, attributes, id] = match;
+    const handlers = [];
+    controls.set(id, {
+      addEventListener(type, handler) {
+        if (type === 'click') handlers.push(handler);
+      },
+      click() {
+        const event = {
+          prevented: false,
+          preventDefault() {
+            this.prevented = true;
+          },
+        };
+        handlers.forEach((handler) => handler(event));
+        if (tag === 'a' && !event.prevented) {
+          const href = attributes.match(/\bhref="([^"]+)"/)?.[1];
+          if (href) location.href = new URL(href, location).href;
+        }
+      },
+    });
+  }
+  const doc = {
+    querySelector: (selector) => (selector === '[data-course-map-page]' ? {} : null),
+    getElementById: (id) => controls.get(id) || {},
+  };
+  const app = {
+    sessionReady: Promise.resolve(),
+    callApi(route) {
+      requests.push(route);
+      return pendingMap.promise;
+    },
+  };
+  vm.runInNewContext(source, {
+    window: { location, freeBbsApp: app },
+    document: doc,
+    URLSearchParams,
+  });
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+  assert.deepEqual(requests, ['/courses/math/map']);
+  const step = STEPS.find((entry) => entry.id === 'course-directory');
+  for (const action of step.prepare) {
+    assert.equal(doc.querySelector(action.whenMissing), null, 'map has not rendered yet');
+    const control = controls.get(action.selector.replace(/^#/, ''));
+    assert.ok(control, `preparation must use an existing view control: ${action.selector}`);
+    control.click();
+  }
+  assert.equal(location.pathname, '/course', 'loading must never click the /world fallback link');
+  assert.equal(location.searchParams.get('course'), 'math');
+  assert.equal(location.searchParams.get('guideTour'), '1');
+});
+
+test('course overview readiness distinguishes the rendered directory from a focused map or empty canvas', () => {
+  const step = STEPS.find((entry) => entry.id === 'course-directory');
+  assert.equal(step.target, '.course-map-directory-layout:has(.course-map-directory-panel)');
+  assert.deepEqual(step.prepare, [
+    { selector: '#course-map-reset-view', whenMissing: '.course-map-directory-panel' },
+  ]);
+  assert.notEqual(step.target, '#course-map-canvas', 'the empty loading shell is not a ready map');
+});
+
 test('station actions and preparation are restricted to an audited read-only view allowlist', () => {
   const readControls = new Set([
     '.island-orbit-item[data-world-id="mathematics"]',
     '#world-enter-island',
     '#world-modal[open] [data-close-modal]',
     '#island-course-back',
-    '#course-map-directory-link',
+    '#world-orbit',
+    '#course-map-reset-view',
     '[data-reader-node-id]',
     '[data-course-map-arrow-help-toggle]',
     '#knowledge-return-overview',
@@ -522,6 +749,10 @@ test('station actions and preparation are restricted to an audited read-only vie
           action.whenMissing,
           'prepare clicks must be guarded to avoid toggling a ready view shut',
         );
+        if (action.key) {
+          assert.equal(action.selector, '#world-orbit');
+          assert.equal(action.key, 'Home', 'only the read-only orbit reset key is audited');
+        }
       }
       if (!view.action) continue;
       assert.ok(['click', 'link'].includes(view.action.kind));

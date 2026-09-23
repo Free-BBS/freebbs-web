@@ -103,6 +103,37 @@ test('AI answer must contain structured JSON', () => {
   assert.throws(() => parseAgentAnswer({ answer: 'I think tomorrow' }), /可用的时间信息/);
 });
 
+test('known event, weekly, deadline and study-plan previews preserve the single optional notes field', () => {
+  const notes = '六教 6A201；带电脑\n讨论 x < 5 的情形';
+  for (const message of [
+    '9月20日下午5点开会，持续时间2小时',
+    '每周三第三大节上课，持续3周',
+    '9月20日23:59之前完成报告',
+    '接下来3天复习6小时',
+  ]) {
+    const parsed = parseKnownScheduleMessage(`${message}，地点/备注：${notes}`, sept19);
+    assert.equal(parsed.description, notes);
+    const preview = buildPreview(parsed, [], sept19);
+    assert.ok(preview.suggestions.every((item) => item.description === notes));
+  }
+  const parsed = parseKnownScheduleMessage('每周三第三大节上课，持续3周', sept19);
+  const preview = buildPreview({ ...parsed, description: '地'.repeat(4000) }, [], sept19);
+  assert.ok(preview.suggestions.every((item) => item.description.length === 4000));
+});
+
+test('AI study plans retain provided notes and reject malformed or excessive notes', () => {
+  const plan = { kind: 'plan', title: '复习', days: 3, totalMinutes: 120 };
+  const description = '图书馆二层；携带习题册';
+  assert.ok(
+    buildPreview({ ...plan, description }, [], now).suggestions.every(
+      (item) => item.description === description,
+    ),
+  );
+  for (const invalid of [{ text: '地点' }, ['地点'], true, 42, '字'.repeat(4001)]) {
+    assert.throws(() => buildPreview({ ...plan, description: invalid }, [], now), { status: 422 });
+  }
+});
+
 test('multi-day plan fills free time without touching existing events', () => {
   const existing = [
     { startAt: '2026-09-18T01:00:00.000Z', endAt: '2026-09-18T02:00:00.000Z' },
@@ -380,6 +411,52 @@ test('confirmed DDL keeps a durable deadline marker instead of becoming a normal
     calls.find((call) => call.sql?.includes('INSERT INTO schedule_items')).parameters[3],
     'planner:deadline',
   );
+});
+
+test('confirmation saves edited notes as bound text and accepts clearing the optional field', async (t) => {
+  const { base, calls } = await startServer(t);
+  for (const description of ['主楼 101\n<script>window.notesXss = true</script>', '']) {
+    const response = await fetch(`${base}/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        suggestions: [
+          {
+            title: '开会',
+            description,
+            startAt: new Date(Date.now() + 3600000).toISOString(),
+            endAt: new Date(Date.now() + 7200000).toISOString(),
+          },
+        ],
+      }),
+    });
+    assert.equal(response.status, 201);
+    const saved = calls.filter((call) => call.sql?.includes('INSERT INTO schedule_items')).at(-1);
+    assert.equal(saved.parameters[5], description);
+    assert.doesNotMatch(saved.sql, /主楼|<script>/);
+  }
+});
+
+test('confirmation rejects non-text or excessive notes before starting a transaction', async (t) => {
+  const { base, calls } = await startServer(t);
+  for (const description of [{ value: '六教' }, [], 42, false, '字'.repeat(4001)]) {
+    const response = await fetch(`${base}/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        suggestions: [
+          {
+            title: '开会',
+            description,
+            startAt: new Date(Date.now() + 3600000).toISOString(),
+            endAt: new Date(Date.now() + 7200000).toISOString(),
+          },
+        ],
+      }),
+    });
+    assert.equal(response.status, 400);
+  }
+  assert.equal(calls.length, 0);
 });
 
 test('preview keeps the 500-event safety boundary and never accepts a client-supplied limit', async (t) => {

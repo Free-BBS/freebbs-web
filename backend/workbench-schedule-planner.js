@@ -135,6 +135,11 @@ function cleanTitle(message) {
 
 function parseKnownScheduleMessage(message, now = new Date()) {
   const text = String(message || '').trim();
+  const notes = /(?:^|[，,；;\n])\s*(?:地点\/备注|地点|备注|说明)\s*[：:]\s*([\s\S]+)$/.exec(text);
+  if (notes) {
+    const known = parseKnownScheduleMessage(text.slice(0, notes.index), now);
+    return known ? { ...known, description: notes[1].trim() } : null;
+  }
   const plan =
     /接下来\s*([一二两三四五六七八九十\d]+)\s*天[\s\S]*?([一二两三四五六七八九十\d]+(?:\.\d+)?)\s*(小时|分钟)/.exec(
       text,
@@ -258,6 +263,7 @@ function validateSuggestion(value, now = new Date()) {
   if (
     !title ||
     title.length > 200 ||
+    (value?.description != null && typeof value.description !== 'string') ||
     description.length > 4000 ||
     !Number.isFinite(start.getTime()) ||
     !Number.isFinite(end.getTime()) ||
@@ -280,6 +286,10 @@ function validateSuggestion(value, now = new Date()) {
 
 function buildPlan(extraction, existing, now = new Date()) {
   const title = typeof extraction?.title === 'string' ? extraction.title.trim() : '';
+  const description =
+    typeof extraction?.description === 'string'
+      ? extraction.description.trim()
+      : '由工作台 Max 根据现有日程空档建议。';
   const days = Number(extraction?.days);
   const totalMinutes = Number(extraction?.totalMinutes);
   const dayStart = parseClock(extraction?.dayStart, '09:00');
@@ -287,6 +297,8 @@ function buildPlan(extraction, existing, now = new Date()) {
   if (
     !title ||
     title.length > 200 ||
+    (extraction?.description != null && typeof extraction.description !== 'string') ||
+    description.length > 4000 ||
     !Number.isInteger(days) ||
     days < 1 ||
     days > MAX_PLAN_DAYS ||
@@ -346,7 +358,7 @@ function buildPlan(extraction, existing, now = new Date()) {
       }
       const item = {
         title,
-        description: '由工作台 Max 根据现有日程空档建议。',
+        description,
         startAt: new Date(cursor).toISOString(),
         endAt: new Date(cursor + minutes * MINUTE_MS).toISOString(),
       };
@@ -381,7 +393,7 @@ function buildPreview(extraction, existing, now = new Date()) {
       const item = validateSuggestion(
         {
           ...first,
-          description: `周常 · 第 ${index + 1}/${weeks} 周${extraction.description ? ` · ${extraction.description}` : ''}`,
+          description: first.description || `周常 · 第 ${index + 1}/${weeks} 周`,
           startAt: new Date(new Date(first.startAt).getTime() + offset).toISOString(),
           endAt: new Date(new Date(first.endAt).getTime() + offset).toISOString(),
         },
@@ -425,6 +437,7 @@ function buildPrompt(message, now) {
     '若是“某日某时之前完成/截止”之类的 DDL，输出 {"kind":"deadline","title":"要完成的事","startAt":"截止时间提前1分钟的ISO时间","endAt":"截止时间的ISO时间"}。DDL 是时间点，不是要占满此前时段。',
     '若用户希望在接下来 N 天内完成 X 小时某事，输出 {"kind":"plan","title":"...","days":N,"totalMinutes":X乘60,"dayStart":"09:00","dayEnd":"21:00"}。若用户限定上午/下午/晚上，调整 dayStart/dayEnd。',
     '不要自己排列空档，服务器会避开已有日程。缺少日期、时长等必要信息时输出 {"kind":"clarify","question":"需要补充什么"}。不要编造。',
+    '所有安排类型都可包含 description 字符串，作为一个可选的“地点/备注”字段：保留用户给出的地点及备注，没有则留空；不要另设 location 字段或编造地点。',
     `用户的话：${message}`,
   ].join('\n');
 }

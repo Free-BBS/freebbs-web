@@ -1965,6 +1965,7 @@ body:not(.auth-page-body) .user-economy-stack :is(.economy-shortcut, .currency) 
 body:not(.auth-page-body) .user-economy-stack .currency-value {
   min-width: 0;
   overflow-wrap: anywhere;
+  font-weight: 700;
 }
 body.theme-dark:not(.auth-page-body) .economy-shortcut-shop .economy-shortcut-icon {
   filter: brightness(0) invert(1) !important;

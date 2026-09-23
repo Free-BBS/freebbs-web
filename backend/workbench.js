@@ -972,7 +972,10 @@ function createWorkbenchRouter({
       const user = await requireAuth(request, response);
       if (!user) return;
       const reference = String(request.params.reference || '');
-      if (!/^[A-Za-z0-9._:-]{1,128}$/.test(reference) || typeof request.body?.completed !== 'boolean') {
+      if (
+        !/^[A-Za-z0-9._:-]{1,128}$/.test(reference) ||
+        typeof request.body?.completed !== 'boolean'
+      ) {
         response.status(400).json({ message: '作业完成状态无效' });
         return;
       }
@@ -1022,8 +1025,9 @@ function createWorkbenchRouter({
       );
       const homework = await listHomeworkDeadlines(pool, user.id, range, status);
       response.json({
-        scheduleItems: [...rows.map(toScheduleItem), ...homework]
-          .sort((a, b) => new Date(a.endAt) - new Date(b.endAt)),
+        scheduleItems: [...rows.map(toScheduleItem), ...homework].sort(
+          (a, b) => new Date(a.endAt) - new Date(b.endAt),
+        ),
         range: {
           start: range.start.toISOString(),
           end: range.end.toISOString(),
@@ -1096,6 +1100,7 @@ function createWorkbenchRouter({
       if (
         !title ||
         description === null ||
+        (body.description != null && typeof body.description !== 'string') ||
         !startAt ||
         !endAt ||
         endAt <= startAt ||
@@ -1185,8 +1190,11 @@ function createWorkbenchRouter({
       }
       if (Object.hasOwn(body, 'description')) {
         const description = normalizeText(body.description, 4000);
-        if (description === null) {
-          response.status(400).json({ message: '日程说明无效' });
+        if (
+          description === null ||
+          (body.description != null && typeof body.description !== 'string')
+        ) {
+          response.status(400).json({ message: '日程备注无效，最多 4000 字' });
           return;
         }
         updates.push("description = NULLIF(?, '')");
