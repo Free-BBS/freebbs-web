@@ -428,6 +428,7 @@
     let retryAction = null;
     let welcomeChoice = 0;
     let lastFrame = 0;
+    let layoutViewport = '';
     let observer;
     let domObserver;
     let pendingTask = null;
@@ -436,6 +437,8 @@
     let deferredPresentation = false;
     let expanded = false;
     let targetMissing = false;
+    let targetLoading = false;
+    let targetError = false;
     let restoreTarget = null;
     const openedTargetFolds = new Set();
     const openedDialogs = new Set();
@@ -786,6 +789,10 @@
     }
     function layout() {
       if (!dialog?.open) return;
+      // Native dialog autofocus can scroll an overflow:hidden fallback. The
+      // overlay uses viewport coordinates; only the inner card may scroll.
+      dialog.scrollTop = 0;
+      dialog.scrollLeft = 0;
       const viewport = { width: win.innerWidth, height: win.innerHeight };
       const step = displayedStep;
       if (target?.isConnected && revealTargetFold(target)) pendingTargetFrame = true;
@@ -797,9 +804,18 @@
       }
       const rect = target?.isConnected ? target.getBoundingClientRect() : null;
       card.classList.toggle('is-centered', mode === 'welcome');
-      card.classList.remove('is-compact');
+      const viewportKey = `${viewport.width}:${viewport.height}`;
+      // Once this step needs a compact card, keep that decision while its
+      // viewport is unchanged. Repeatedly removing/reapplying compact inside
+      // ResizeObserver can alternate two heights forever and move click targets.
+      if (mode === 'welcome' || expanded || viewportKey !== layoutViewport)
+        card.classList.remove('is-compact');
+      layoutViewport = viewportKey;
       let size = card.getBoundingClientRect();
-      let box = tourGeometry(mode === 'welcome' ? null : rect, viewport, size, step?.focus || {});
+      let box = tourGeometry(mode === 'welcome' ? null : rect, viewport, size, {
+        ...step?.focus,
+        compact: card.classList.contains('is-compact'),
+      });
       if (mode === 'tour' && box.needsCompact && !expanded) {
         card.classList.add('is-compact');
         size = card.getBoundingClientRect();
@@ -809,6 +825,14 @@
         mode === 'welcome' ||
         (!box.needsCompact && !expanded && !card.classList.contains('is-compact'));
       controls.expand.textContent = expanded ? '收起说明' : '展开说明';
+      // The expansion control and late font layout can change the measured
+      // height. Position from the final visible content in this frame, not a
+      // previous card size that can push its bottom outside the viewport.
+      size = card.getBoundingClientRect();
+      box = tourGeometry(mode === 'welcome' ? null : rect, viewport, size, {
+        ...step?.focus,
+        compact: card.classList.contains('is-compact'),
+      });
       card.classList.toggle('is-overview', box.layout === 'overview');
       if (mode !== 'welcome')
         Object.assign(card.style, { left: `${box.card.x}px`, top: `${box.card.y}px` });
@@ -861,6 +885,7 @@
       ].forEach((button) => {
         button.disabled = value;
       });
+      controls.next.disabled = value || targetLoading;
       card.setAttribute('aria-busy', String(value));
     }
     function showError(error, retry) {
@@ -901,6 +926,8 @@
       displayedStep = null;
       pendingTargetFrame = false;
       activeIndex = null;
+      targetLoading = false;
+      targetError = false;
       if (oldOverflow !== undefined) {
         pageBody.style.overflow = oldOverflow;
         oldOverflow = undefined;
@@ -1027,6 +1054,8 @@
       }
       observer?.observe(card);
       controls.title.focus({ preventScroll: true });
+      dialog.scrollTop = 0;
+      dialog.scrollLeft = 0;
       scheduleLayout();
     }
     function welcome() {
@@ -1075,12 +1104,18 @@
       for (const node of doc.querySelectorAll('dialog[open]'))
         if (node !== dialog && !before.has(node)) openedDialogs.add(node);
     }
-    async function waitVisible(selector, epoch, duration = 2400, prepareVisibility = null) {
+    async function waitVisible(
+      selector,
+      epoch,
+      duration = 10000,
+      prepareVisibility = null,
+      readySelector = null,
+    ) {
       const start = Date.now();
       while (Date.now() - start < duration) {
         if (epoch !== viewEpoch || blockedSession) return null;
         prepareVisibility?.();
-        const node = visible(selector);
+        const node = visible(readySelector) || visible(selector);
         if (node) return node;
         await new Promise((resolve) => {
           win.setTimeout(resolve, 80);
@@ -1088,19 +1123,92 @@
       }
       if (epoch !== viewEpoch || blockedSession) return null;
       prepareVisibility?.();
-      return visible(selector);
+      return visible(readySelector) || visible(selector);
     }
-    async function prepareStep(step, epoch) {
+    async function prepareStep(step, epoch, deadline) {
       // Only reversible view controls declared by this release may be opened.
       for (const action of step.prepare || []) {
         if (visible(action.whenMissing)) continue;
-        const button = await waitVisible(action.selector, epoch);
+        // The requested view may become ready while its opener stays hidden.
+        // Wait for either state, then check again before clicking anything.
+        await waitVisible(
+          action.selector,
+          epoch,
+          Math.max(0, deadline - Date.now()),
+          null,
+          action.whenMissing,
+        );
+        if (epoch !== viewEpoch || blockedSession) return;
+        if (visible(action.whenMissing)) continue;
+        const button = visible(action.selector);
         if (!button || epoch !== viewEpoch) return;
         const before = new Set(doc.querySelectorAll('dialog[open]'));
-        button.click();
+        if (action.key) {
+          // The world's documented Home shortcut restores a visible first island.
+          // No arbitrary keyboard commands or hidden-element clicks are allowed.
+          if (action.selector !== '#world-orbit' || action.key !== 'Home')
+            throw new Error('此导览准备操作暂不可用。');
+          button.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+        } else button.click();
         rememberOpenDialogs(before);
-        await waitVisible(action.whenMissing, epoch);
+        // Keep pause/skip usable while the feature's newly opened modal loads.
+        // showModal puts that feature above us until the guide is reopened.
+        if (dialog.open) dialog.close();
+        showDialog();
+        await waitVisible(action.whenMissing, epoch, Math.max(0, deadline - Date.now()));
       }
+    }
+    function refreshStepTarget(step, index) {
+      if (targetLoading || mode !== 'tour' || activeIndex !== index || displayedStep !== step)
+        return;
+      prepareTargetFold(step);
+      const next = visibleTarget(step);
+      const missing = !next || Boolean(step.emptyTarget && next === visible(step.emptyTarget));
+      if (next === target && missing === targetMissing) return;
+      restoreTarget?.();
+      restoreTarget = null;
+      observer?.disconnect();
+      target = next;
+      targetMissing = missing;
+      observer?.observe(card);
+      if (target) {
+        frameTarget(step);
+        pendingTargetFrame = true;
+        observer?.observe(target);
+      }
+      controls.body.textContent = missing
+        ? step.emptyBody || '这里暂时还没有加载完成。你可以重试，也可以先跳过这一站。'
+        : step.body;
+      controls.caption.textContent = missing
+        ? '不会用无关区域代替高亮，也不会替你创建内容。'
+        : step.caption || '跟着亮起的区域，一步步看看。';
+      if (missing && !syncError) {
+        showError(new Error('该区域暂不可用。'), () => showStep(index));
+        targetError = true;
+      } else if (!missing && targetError) {
+        targetError = false;
+        clearError();
+      }
+    }
+    function hasPageMutation(records) {
+      // Updating our own captions/layout must not schedule another layout. A
+      // textContent assignment itself creates a childList mutation in browsers.
+      return (
+        !records ||
+        records.some((record) => {
+          if (dialog?.contains(record.target)) return false;
+          if (record.attributeName !== 'class') return true;
+          // Reframing temporarily hides scenic decoration; ignore only our own
+          // class so genuine page visibility changes can still recover a target.
+          const pageClasses = (value) =>
+            String(value || '')
+              .split(/\s+/)
+              .filter((name) => name && name !== 'max-tour-focus-hidden')
+              .sort()
+              .join(' ');
+          return pageClasses(record.oldValue) !== pageClasses(record.target.getAttribute('class'));
+        })
+      );
     }
     function closeIrrelevantDialogs(step) {
       const expected = doc.querySelector(step.target);
@@ -1126,32 +1234,26 @@
       pendingTargetFrame = false;
       viewEpoch += 1;
       const epoch = viewEpoch;
+      const deadline = Date.now() + 10000;
       activeIndex = index;
       mode = 'tour';
       expanded = false;
       targetMissing = false;
+      targetLoading = true;
+      targetError = false;
       const baseStep = steps[index];
       const step =
         reveal && baseStep.reveal
           ? { ...baseStep, ...baseStep.reveal, prepare: [], reveal: null }
           : baseStep;
       if (dialog.open) dialog.close();
-      closeIrrelevantDialogs(step);
-      await prepareStep(step, epoch);
-      if (epoch !== viewEpoch) return;
-      await waitVisible(step.target, epoch, 2400, () => prepareTargetFold(step));
-      if (epoch !== viewEpoch) return;
-      displayedStep = step;
-      target = visibleTarget(step);
-      targetMissing = !target || Boolean(step.emptyTarget && target === visible(step.emptyTarget));
       observer?.disconnect();
       domObserver?.disconnect();
-      if (target) {
-        frameTarget(step);
-        pendingTargetFrame = true;
-        observer?.observe(target);
-      }
+      target = null;
+      displayedStep = step;
+      closeIrrelevantDialogs(step);
       card.classList.remove('is-welcome');
+      card.classList.remove('is-compact');
       const stationSteps = steps.filter((entry) => entry.station === step.station);
       const local = stationSteps.findIndex((entry) => entry.id === step.id) + 1;
       controls.kicker.textContent = `${step.label} · ${local}/${stationSteps.length}`;
@@ -1186,13 +1288,47 @@
       );
       setBusy(false);
       clearError();
+      controls.body.textContent = '正在加载这一区域…';
+      controls.status.textContent = '正在等待页面内容，可以稍后继续或跳过此站。';
       showDialog();
-      if (targetMissing) showError(new Error('该区域暂不可用。'), () => showStep(index));
+      await prepareStep(step, epoch, deadline);
+      if (epoch !== viewEpoch || blockedSession) return;
+      await waitVisible(
+        (!isMember() && step.guestTarget) || step.target,
+        epoch,
+        Math.max(0, deadline - Date.now()),
+        () => prepareTargetFold(step),
+      );
+      if (epoch !== viewEpoch || blockedSession) return;
+      targetLoading = false;
+      clearError();
+      // Force initial rendering, even if no target exists yet.
+      targetMissing = true;
+      refreshStepTarget(step, index);
+      if (!target) {
+        controls.body.textContent =
+          step.emptyBody ||
+          '这里目前还没有可展示的内容，或页面尚未加载完成。你可以重试打开，也可以先跳过这一站。';
+        showError(new Error('该区域暂不可用。'), () => showStep(index));
+        targetError = true;
+      }
+      setBusy(false);
+      // A feature may have opened its own modal above the loading guide.
+      if (dialog.open) dialog.close();
+      showDialog();
       if (typeof win.MutationObserver === 'function') {
-        domObserver = new win.MutationObserver(() => {
+        domObserver = new win.MutationObserver((records) => {
+          if (epoch !== viewEpoch || !hasPageMutation(records)) return;
+          refreshStepTarget(step, index);
           scheduleLayout();
         });
-        domObserver.observe(doc.body, { subtree: true, childList: true });
+        domObserver.observe(doc.body, {
+          subtree: true,
+          childList: true,
+          attributes: true,
+          attributeOldValue: true,
+          attributeFilter: ['class', 'hidden', 'open', 'aria-hidden'],
+        });
       }
     }
     async function runUi(operation, retry) {
@@ -1217,6 +1353,7 @@
       return next;
     }
     async function navigateOrShow(index) {
+      const epoch = viewEpoch;
       const step = steps[index];
       if (path() === step.route) {
         await showStep(index);
@@ -1232,9 +1369,12 @@
           steps.findIndex((entry) => entry.route === fallback),
         );
         await client.save({ status: 'in_progress', step: start });
+        if (epoch !== viewEpoch || blockedSession) return;
+        closeUi();
         win.location.assign(tourUrl(start, version, context));
         return;
       }
+      closeUi();
       win.location.assign(tourUrl(index, version, context));
     }
     async function begin(index, restart = false) {
@@ -1255,6 +1395,10 @@
     }
     async function goTo(index) {
       if (!Number.isInteger(index) || !steps[index]) return;
+      if (targetLoading && !busy) {
+        viewEpoch += 1;
+        targetLoading = false;
+      }
       await runUi(
         async (valid) => {
           await save({ status: 'in_progress', step: index });
@@ -1264,6 +1408,7 @@
       );
     }
     async function advance(actionSource) {
+      if (targetLoading) return;
       if (mode === 'welcome') {
         await begin(welcomeChoice, client.snapshot().status === 'completed');
         return;
@@ -1310,6 +1455,7 @@
         if (href) {
           restoreTargetFolds();
           rememberRoute(href);
+          closeUi();
           win.location.assign(tourUrl(index, version, routeContext()));
           return;
         }
@@ -1446,7 +1592,14 @@
       if (!deferredPresentation || blockedSession) return;
       win.cancelAnimationFrame(deferredFrame);
       deferredFrame = win.requestAnimationFrame(() => {
-        if (!hasBlockingModal(doc, win, dialog) && doc.visibilityState !== 'hidden') refresh();
+        deferredFrame = 0;
+        if (!deferredPresentation || blockedSession) return;
+        if (!hasBlockingModal(doc, win, dialog) && doc.visibilityState !== 'hidden') {
+          // Stop observing before refresh writes task/reward text. Otherwise the
+          // observer restarts initialization every frame and starves its requests.
+          stopDeferredPresentation();
+          refresh();
+        }
       });
     }
     async function initialize() {
@@ -1505,7 +1658,9 @@
         const progress = client.isLoaded() ? client.snapshot() : await client.load();
         if (epoch !== initEpoch) return;
         await present(progress, { automatic });
-        clearError();
+        if (epoch !== initEpoch) return;
+        // present() may outlive a user's pause/skip/retry. It must not erase an
+        // error produced by that newer action when its old target wait ends.
         renderTasks();
       } catch (error) {
         if (epoch === initEpoch && error.name !== 'AbortError') showError(error, refresh);
@@ -1538,7 +1693,13 @@
     win.addEventListener('scroll', scheduleLayout, { passive: true });
     win.visualViewport?.addEventListener('resize', scheduleLayout);
     win.addEventListener('freebbs:session-change', () => {
+      const wasBlocked = blockedSession;
       blockedSession = false;
+      const current = `${identity().key}:${identity().token}`;
+      // Check-in, wallet and profile updates also emit this event. They are not
+      // account changes and must not cancel a tour or an in-flight reward read.
+      if (!wasBlocked && current === owner) return;
+      if (wasBlocked || owner) stripTourFlag();
       initEpoch += 1;
       closeUi();
       clients.forEach((entry) => entry.reset());

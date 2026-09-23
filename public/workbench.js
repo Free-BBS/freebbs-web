@@ -1,8 +1,9 @@
 (() => {
   const shell = document.querySelector('.workbench-shell');
   const app = window.freeBbsApp;
+  const hoursModel = window.FreeBbsWorkbenchHours;
 
-  if (!shell || !app) {
+  if (!shell || !app || !hoursModel) {
     return;
   }
 
@@ -22,6 +23,11 @@
     weekGrid: document.getElementById('workbench-week-grid'),
     weekLabel: document.getElementById('workbench-week-label'),
     weekScroll: document.querySelector('.workbench-week-scroll'),
+    hoursForm: document.getElementById('workbench-hours-form'),
+    hoursStart: document.getElementById('workbench-hours-start'),
+    hoursEnd: document.getElementById('workbench-hours-end'),
+    hoursStatus: document.getElementById('workbench-hours-status'),
+    hoursOutside: document.getElementById('workbench-hours-outside'),
     weekPrevious: document.getElementById('workbench-week-previous'),
     weekToday: document.getElementById('workbench-week-today'),
     weekNext: document.getElementById('workbench-week-next'),
@@ -101,6 +107,7 @@
     noticeView: 'all',
     scheduleItems: [],
     weekStart: null,
+    hours: { ...hoursModel.DEFAULT_HOURS },
     listView: false,
     proposals: [],
     notificationFilters: { category: '', unread: false, favorite: false, search: '' },
@@ -139,6 +146,44 @@
 
   function isLoggedIn() {
     return Boolean(getUser().isLoggedIn && getOwnerKey());
+  }
+
+  function hoursStorage() {
+    try {
+      return window.localStorage;
+    } catch {
+      return null;
+    }
+  }
+
+  function renderHoursControls() {
+    elements.hoursStart.value = String(state.hours.start);
+    elements.hoursEnd.value = String(state.hours.end);
+    elements.hoursStatus.textContent =
+      '按账号保存在本浏览器；仅裁切时间图，不删除日程。全天与 DDL 始终显示。';
+    [...elements.hoursForm.elements].forEach((control) => {
+      control.toggleAttribute('disabled', !isLoggedIn() || !getUser().uid);
+    });
+  }
+
+  function applyHours(event) {
+    event.preventDefault();
+    if (!isLoggedIn() || !getUser().uid) return;
+    const hours = hoursModel.normalizeHours({
+      start: elements.hoursStart.value,
+      end: elements.hoursEnd.value,
+    });
+    if (!hours) {
+      elements.hoursStatus.textContent = '请选择整点，结束时间必须严格晚于开始时间。';
+      return;
+    }
+    state.hours = hours;
+    const saved = hoursModel.saveHours(hoursStorage(), getUser().uid, hours);
+    renderHoursControls();
+    if (!saved)
+      elements.hoursStatus.textContent =
+        '浏览器未允许保存；本次页面已应用，仅裁切时间图，不删除日程。';
+    renderWeekGrid();
   }
 
   function safeActionUrl(value) {
@@ -411,9 +456,11 @@
     const todayStart = getWeekStart(new Date());
     elements.weekToday.disabled = state.weekStart === todayStart;
     const days = [];
+    const outsideIds = new Set();
+    const clippedIds = new Set();
+    const visibleIds = new Set();
     for (let index = 0; index < 7; index += 1) {
       const dayStart = state.weekStart + index * DAY_MS;
-      const dayEnd = dayStart + DAY_MS;
       const day = document.createElement('section');
       day.className = 'workbench-week-day';
       day.setAttribute('role', 'listitem');
@@ -435,26 +482,29 @@
       allDay.className = 'workbench-week-all-day';
       const timeline = document.createElement('div');
       timeline.className = 'workbench-week-timeline';
-      for (const hour of [0, 6, 12, 18]) {
+      const timelineHeight = (state.hours.end - state.hours.start) * 40;
+      timeline.style.height = `${timelineHeight}px`;
+      timeline.setAttribute(
+        'aria-label',
+        `${String(state.hours.start).padStart(2, '0')}:00–${String(state.hours.end).padStart(2, '0')}:00`,
+      );
+      for (let hour = state.hours.start; hour < state.hours.end; hour += 1) {
         const marker = document.createElement('span');
         marker.className = 'workbench-week-hour';
-        marker.style.top = `${hour * 40}px`;
+        marker.style.top = `${(hour - state.hours.start) * 40}px`;
         marker.textContent = `${String(hour).padStart(2, '0')}:00`;
         timeline.append(marker);
       }
-      const entries = state.scheduleItems
-        .filter((item) =>
-          item.kind === 'deadline'
-            ? new Date(item.endAt).getTime() >= dayStart && new Date(item.endAt).getTime() < dayEnd
-            : new Date(item.startAt).getTime() < dayEnd &&
-              new Date(item.endAt).getTime() > dayStart,
-        )
-        .map((item) => ({
-          item,
-          start: Math.max(dayStart, new Date(item.startAt).getTime()),
-          end: Math.min(dayEnd, new Date(item.endAt).getTime()),
-        }))
-        .sort((left, right) => left.start - right.start || left.end - right.end);
+      const { entries, outside, windowStart } = hoursModel.layoutDay(
+        state.scheduleItems,
+        dayStart,
+        state.hours,
+      );
+      outside.forEach((item) => outsideIds.add(item.publicId));
+      entries.forEach(({ item, clipped }) => {
+        visibleIds.add(item.publicId);
+        if (clipped) clippedIds.add(item.publicId);
+      });
       const lanes = [];
       const placed = entries
         .filter(({ item }) => !item.allDay && item.kind !== 'deadline')
@@ -483,13 +533,20 @@
         if (entry.item.allDay) time.textContent = '全天';
         if (entry.item.kind === 'deadline')
           time.textContent = `截止 ${toShanghaiInputValue(entry.item.endAt).slice(11)}`;
+        if (entry.clipped) time.textContent += ' · 部分在范围外';
         if (entry.item.homeworkReference) {
           time.textContent += entry.item.completed ? ' · 点击恢复未完成' : ' · 点击标记已完成';
           block.setAttribute('aria-pressed', String(entry.item.completed));
         }
         block.append(title, time);
+        if (entry.item.description) {
+          const notes = document.createElement('small');
+          notes.className = 'workbench-week-notes';
+          notes.textContent = entry.item.description;
+          block.append(notes);
+        }
         const calendarAction = entry.item.completed ? '恢复未完成' : '标记已完成';
-        block.title = `${entry.item.title} · ${entry.item.kind === 'deadline' ? `截止 ${formatMoment(entry.item.endAt)}` : `${formatMoment(entry.item.startAt)} — ${formatMoment(entry.item.endAt)}`}${entry.item.updatedAt ? ` · 更新于 ${formatMoment(entry.item.updatedAt)}` : ''} · ${entry.item.homeworkReference ? calendarAction : '点击编辑'}`;
+        block.title = `${entry.item.title} · ${entry.item.kind === 'deadline' ? `截止 ${formatMoment(entry.item.endAt)}` : `${formatMoment(entry.item.startAt)} — ${formatMoment(entry.item.endAt)}`}${entry.item.description ? `\n地点/备注：${entry.item.description}` : ''}${entry.item.updatedAt ? `\n更新于 ${formatMoment(entry.item.updatedAt)}` : ''} · ${entry.item.homeworkReference ? calendarAction : '点击编辑'}`;
         if (entry.item.allDay || entry.item.kind === 'deadline') {
           allDay.append(block);
         } else {
@@ -498,8 +555,9 @@
               (candidate) => candidate.item === entry.item && candidate.start === entry.start,
             )?.lane || 0;
           const laneCount = Math.max(1, lanes.length);
-          block.style.top = `${Math.floor(((entry.start - dayStart) / (60 * 60 * 1000)) * 40)}px`;
-          block.style.height = `${Math.max(28, Math.ceil(((entry.end - entry.start) / (60 * 60 * 1000)) * 40))}px`;
+          const top = Math.floor(((entry.start - windowStart) / (60 * 60 * 1000)) * 40);
+          block.style.top = `${top}px`;
+          block.style.height = `${Math.min(timelineHeight - top, Math.max(28, Math.ceil(((entry.end - entry.start) / (60 * 60 * 1000)) * 40)))}px`;
           block.style.left = `calc(${(lane / laneCount) * 100}% + 4px)`;
           block.style.width = `calc(${100 / laneCount}% - 8px)`;
           timeline.append(block);
@@ -509,6 +567,12 @@
       days.push(day);
     }
     elements.weekGrid.replaceChildren(...days);
+    for (const id of outsideIds) {
+      if (visibleIds.has(id)) clippedIds.add(id);
+    }
+    const hiddenCount = [...outsideIds].filter((id) => !visibleIds.has(id)).length;
+    elements.hoursOutside.hidden = !hiddenCount && !clippedIds.size;
+    elements.hoursOutside.textContent = `本周有 ${hiddenCount} 项日程完全在显示范围外，${clippedIds.size} 项仅显示部分时段。切换“列表视图”可查看完整日程，原时间均未改变。`;
   }
 
   function makeAction(label, action, publicId, className = '') {
@@ -722,7 +786,7 @@
 
   function renderScheduleItems() {
     renderWeekGrid();
-    const items = state.scheduleItems.slice(0, 30);
+    const items = state.scheduleItems;
     if (!items.length) {
       renderState(
         elements.scheduleList,
@@ -768,7 +832,7 @@
           title: item.title || '未命名日程',
           description: [
             timeWindow,
-            truncate(item.description),
+            item.description ? `地点/备注：${truncate(item.description)}` : '',
             item.updatedAt ? `更新于 ${formatMoment(item.updatedAt)}` : '',
           ]
             .filter(Boolean)
@@ -1134,9 +1198,18 @@
       endInput.type = 'datetime-local';
       endInput.value = toShanghaiInputValue(item.endAt);
       endLabel.append(endInput);
+      const notesLabel = document.createElement('label');
+      notesLabel.textContent = '地点/备注（选填）';
+      const notesInput = document.createElement('textarea');
+      notesInput.className = 'workbench-proposal-description';
+      notesInput.maxLength = 4000;
+      notesInput.rows = 2;
+      notesInput.placeholder = '例如：六教 6A201；带电脑与实验记录';
+      notesInput.value = item.description || '';
+      notesLabel.append(notesInput);
       card.append(number, titleLabel);
       if (item.kind !== 'deadline') card.append(startLabel);
-      card.append(endLabel);
+      card.append(endLabel, notesLabel);
       return card;
     });
     elements.agentProposals.replaceChildren(...cards);
@@ -1170,12 +1243,12 @@
   async function confirmAgentProposals() {
     if (!requireLogin() || !state.proposals.length) return;
     const cards = [...elements.agentProposals.querySelectorAll('.workbench-agent-proposal')];
-    const suggestions = cards.map((card, index) => {
+    const suggestions = cards.map((card) => {
       const { kind } = card.dataset;
       const endAt = shanghaiInputToIso(card.querySelector('.workbench-proposal-end').value);
       return {
         title: card.querySelector('.workbench-proposal-title').value.trim(),
-        description: state.proposals[index].description || '',
+        description: card.querySelector('.workbench-proposal-description').value.trim(),
         kind,
         startAt:
           kind === 'deadline'
@@ -1188,12 +1261,13 @@
       suggestions.some(
         (item) =>
           !item.title ||
+          item.description.length > 4000 ||
           !item.startAt ||
           !item.endAt ||
           new Date(item.endAt) <= new Date(item.startAt),
       )
     ) {
-      elements.agentStatus.textContent = '请检查每段安排的标题、开始和结束时间。';
+      elements.agentStatus.textContent = '请检查标题、开始和结束时间；地点/备注最多 4000 字。';
       return;
     }
     elements.agentConfirm.disabled = true;
@@ -1560,6 +1634,8 @@
     if (ownerKey === state.ownerKey) return;
     state.requestVersion += 1;
     state.ownerKey = ownerKey;
+    state.hours = hoursModel.readHours(hoursStorage(), ownerKey ? getUser().uid : null);
+    renderHoursControls();
     state.importantItems = [];
     state.notifications = [];
     state.communityNotifications = [];
@@ -1594,6 +1670,7 @@
     else renderWeekGrid();
   });
   elements.viewToggle?.addEventListener('click', toggleScheduleView);
+  elements.hoursForm?.addEventListener('submit', applyHours);
   elements.agentForm?.addEventListener('submit', generateAgentPreview);
   elements.agentConfirm?.addEventListener('click', confirmAgentProposals);
   elements.importantForm?.addEventListener('submit', submitImportant);
@@ -1670,6 +1747,7 @@
   });
 
   const authObserver = new MutationObserver(syncSession);
+  window.addEventListener('freebbs:session-change', syncSession);
   authObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
   Promise.resolve(app.sessionReady)
     .catch(() => {})
@@ -1677,5 +1755,17 @@
   switchWorkbenchView(new URL(window.location.href).searchParams.get('view'), {
     updateUrl: false,
   });
+  for (const [select, first, last] of [
+    [elements.hoursStart, 0, 23],
+    [elements.hoursEnd, 1, 24],
+  ]) {
+    for (let hour = first; hour <= last; hour += 1) {
+      const option = document.createElement('option');
+      option.value = String(hour);
+      option.textContent = `${String(hour).padStart(2, '0')}:00`;
+      select.append(option);
+    }
+  }
+  renderHoursControls();
   renderWeekGrid();
 })();

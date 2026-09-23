@@ -23,7 +23,7 @@ body.theme-dark {
   max-width: none;
   padding: 120px clamp(20px, 3.4vw, 60px) 40px !important;
   color: var(--guide-ink);
-  font-family: var(--font-ui, sans-serif);
+  font-family: var(--font-body, sans-serif);
 }
 .guide-main h1,
 .guide-main h2,
@@ -681,7 +681,21 @@ body.theme-dark {
   background: transparent;
   color: var(--guide-ink);
   overflow: hidden;
+  /* Unlike hidden, clip also prevents focus/scrollIntoView from scrolling the
+   * full-screen overlay and moving viewport-positioned controls underneath it. */
+  overflow: clip;
+  font-family: var(--font-body, sans-serif);
+}
+/* The same guide is mounted on both scenic and ordinary pages. Keep its
+ * typography roles independent of page-specific world/title overrides. */
+.max-tour :is(.max-tour-body, .max-tour-caption, .max-tour-status) {
+  font-family: var(--font-body, sans-serif);
+}
+.max-tour :is(button, select, option, .max-tour-kicker) {
   font-family: var(--font-ui, sans-serif);
+}
+.max-tour #max-tour-title {
+  font-family: var(--font-display, var(--font-body, sans-serif)) !important;
 }
 .max-tour::backdrop {
   background: transparent;

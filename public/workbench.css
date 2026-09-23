@@ -392,6 +392,18 @@ body.workbench-page .workbench-week-day {
   border-right: 1px solid var(--workbench-line);
 }
 
+@supports (grid-template-rows: subgrid) {
+  body.workbench-page .workbench-week-grid {
+    grid-template-rows: auto auto auto;
+  }
+
+  body.workbench-page .workbench-week-day {
+    display: grid;
+    grid-row: span 3;
+    grid-template-rows: subgrid;
+  }
+}
+
 body.workbench-page .workbench-week-day:last-child {
   border-right: 0;
 }
@@ -426,6 +438,7 @@ body.workbench-page .workbench-week-day.is-today .workbench-week-day-header stro
 
 body.workbench-page .workbench-week-all-day {
   display: grid;
+  align-content: start;
   gap: 4px;
   min-height: 35px;
   padding: 4px;
@@ -434,7 +447,8 @@ body.workbench-page .workbench-week-all-day {
 
 body.workbench-page .workbench-week-timeline {
   position: relative;
-  height: 960px;
+  height: 720px;
+  overflow: hidden;
   background-image: repeating-linear-gradient(
     to bottom,
     transparent 0,
@@ -521,6 +535,61 @@ body.workbench-page .workbench-week-event small {
   font-size: 0.6rem;
 }
 
+body.workbench-page .workbench-hours-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+  color: var(--workbench-muted);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+}
+
+body.workbench-page .workbench-hours-form label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+body.workbench-page .workbench-hours-form select {
+  min-height: 36px;
+  padding: 6px 8px;
+  color: var(--workbench-text);
+  background: var(--workbench-panel);
+  border: 1px solid var(--workbench-line-strong);
+  border-radius: 8px;
+  font: inherit;
+  font-family: var(--font-ui);
+}
+
+body.workbench-page .workbench-hours-form option {
+  font-family: var(--font-ui);
+}
+
+body.workbench-page .workbench-hours-form small {
+  flex-basis: 100%;
+  line-height: 1.5;
+}
+
+body.workbench-page .workbench-hours-hint {
+  margin: 0 0 12px;
+  color: var(--workbench-muted);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+body.workbench-page .workbench-hours-hint[hidden] {
+  display: none;
+}
+
+body.workbench-page .workbench-week-notes {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 body.workbench-page .workbench-week-all-day .workbench-week-event {
   position: static;
   width: 100%;
@@ -559,7 +628,8 @@ body.workbench-page #workbench-schedule-form label[hidden] {
 }
 
 body.workbench-page .workbench-agent-form textarea,
-body.workbench-page .workbench-agent-proposal input {
+body.workbench-page .workbench-agent-proposal input,
+body.workbench-page .workbench-agent-proposal textarea {
   width: 100%;
   min-width: 0;
   padding: 11px 12px;
@@ -574,6 +644,20 @@ body.workbench-page .workbench-agent-proposal input {
 body.workbench-page .workbench-agent-form textarea {
   min-height: 94px;
   resize: vertical;
+}
+
+body.workbench-page .workbench-agent-proposal textarea {
+  resize: vertical;
+}
+
+body.workbench-page #workbench-schedule-description,
+body.workbench-page .workbench-proposal-description {
+  font-family: var(--font-body);
+}
+
+body.workbench-page #workbench-schedule-description::placeholder,
+body.workbench-page .workbench-proposal-description::placeholder {
+  font-family: inherit;
 }
 
 body.workbench-page .workbench-agent-form-footer {

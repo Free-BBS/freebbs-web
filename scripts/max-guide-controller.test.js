@@ -42,6 +42,7 @@ function fixture({
   beforeRequest,
   setup,
   sessionReady = Promise.resolve(),
+  observeMutations = false,
 } = {}) {
   const events = [];
   const nodes = [];
@@ -49,8 +50,34 @@ function fixture({
   const memory = new Map();
   const listeners = new Map();
   const frames = new Map();
+  const observers = [];
   let frameId = 0;
   let doc;
+  function mutate(record) {
+    if (!observeMutations) return;
+    for (const observer of observers) {
+      if (!observer.mutation || !observer.active) continue;
+      if (
+        !observer.targets.some(
+          ({ node, options }) =>
+            (record.target === node || (options.subtree && node.contains(record.target))) &&
+            (record.type === 'childList' ? options.childList : options.attributes) &&
+            (record.type !== 'attributes' ||
+              !options.attributeFilter ||
+              options.attributeFilter.includes(record.attributeName)),
+        )
+      )
+        continue;
+      observer.records.push(record);
+      if (observer.queued) continue;
+      observer.queued = true;
+      queueMicrotask(() => {
+        observer.queued = false;
+        const records = observer.records.splice(0);
+        if (observer.active && records.length) observer.callback(records);
+      });
+    }
+  }
   class Node {
     constructor(tag = 'div') {
       this.tagName = tag.toUpperCase();
@@ -64,18 +91,23 @@ function fixture({
       this.disabled = false;
       this.open = false;
       this.isConnected = true;
+      this.nodeType = 1;
       this.classList = {
         contains: (name) => this.className.split(' ').includes(name),
         add: (...names) => {
+          const oldValue = this.className;
           this.className = [...new Set([...this.className.split(' '), ...names])]
             .filter(Boolean)
             .join(' ');
+          mutate({ type: 'attributes', target: this, attributeName: 'class', oldValue });
         },
         remove: (...names) => {
+          const oldValue = this.className;
           this.className = this.className
             .split(' ')
             .filter((name) => !names.includes(name))
             .join(' ');
+          mutate({ type: 'attributes', target: this, attributeName: 'class', oldValue });
         },
         toggle: (name, force) => {
           const enabled = force ?? !this.classList.contains(name);
@@ -86,11 +118,25 @@ function fixture({
       nodes.push(this);
     }
 
+    get parentElement() {
+      return this.parent || null;
+    }
+
+    get textContent() {
+      return this.text;
+    }
+
+    set textContent(value) {
+      this.text = value;
+      mutate({ type: 'childList', target: this, addedNodes: [], removedNodes: [] });
+    }
+
     append(...children) {
       children.forEach((child) => {
         Object.assign(child, { parent: this });
         this.children.push(child);
       });
+      mutate({ type: 'childList', target: this, addedNodes: children, removedNodes: [] });
     }
 
     replaceChildren(...children) {
@@ -108,9 +154,11 @@ function fixture({
 
     setAttribute(key, value) {
       this.attributes.set(key, value);
+      mutate({ type: 'attributes', target: this, attributeName: key });
     }
 
     getAttribute(key) {
+      if (key === 'class') return this.className;
       return this.attributes.get(key) ?? this[key] ?? null;
     }
 
@@ -141,6 +189,11 @@ function fixture({
       events.push({ type: 'click', node: this.id || this.className });
       this.onClick?.();
       this.fire('click');
+    }
+
+    dispatchEvent(event) {
+      events.push({ type: 'dispatch', node: this.id || this.className, key: event.key });
+      return !this.fire(event.type, event).prevented;
     }
 
     contains(other) {
@@ -212,7 +265,7 @@ function fixture({
     activeElement: new Node('button'),
     visibilityState: 'visible',
     createElement: (tag) => new Node(tag),
-    getElementById: (id) => nodes.find((node) => node.id === id) || null,
+    getElementById: (id) => nodes.find((node) => node.isConnected && node.id === id) || null,
     querySelectorAll(selector) {
       if (selectors.has(selector)) {
         const value = selectors.get(selector);
@@ -240,14 +293,27 @@ function fixture({
     constructor(callback) {
       this.callback = callback;
       this.active = false;
+      this.targets = [];
+      this.records = [];
+      this.queued = false;
+      observers.push(this);
     }
 
-    observe() {
+    observe(node, options = {}) {
       this.active = true;
+      this.targets.push({ node, options });
     }
 
     disconnect() {
       this.active = false;
+      this.targets = [];
+      this.records = [];
+    }
+  }
+  class MutationObserver extends Observer {
+    constructor(callback) {
+      super(callback);
+      this.mutation = true;
     }
   }
   const win = {
@@ -280,8 +346,14 @@ function fixture({
     },
     scrollBy() {},
     setTimeout,
-    MutationObserver: Observer,
+    MutationObserver,
     ResizeObserver: Observer,
+    KeyboardEvent: class KeyboardEvent {
+      constructor(type, options) {
+        this.type = type;
+        Object.assign(this, options);
+      }
+    },
   };
   const server = new Map(
     [VERSION, LATEST_RELEASE.id].map((version) => [
@@ -349,6 +421,9 @@ function fixture({
     rewardReceipts,
     memory,
     listeners,
+    frames,
+    observers,
+    mutate,
     node(selector, { tag = 'div', click, rect } = {}) {
       const node = new Node(tag);
       if (selector.startsWith('#') && /^#[\w-]+$/.test(selector)) node.id = selector.slice(1);
@@ -406,6 +481,459 @@ const rewardWrites = (view) =>
     (event) =>
       event.type === 'request' && event.route === '/onboarding/reward' && event.method === 'POST',
   );
+
+test('a target arriving after three seconds is highlighted without the old premature unavailable state', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
+  const index = indexOf('home-handbook');
+  let ready = false;
+  const view = fixture({
+    href: '/?guideTour=1',
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+    setup(value) {
+      const target = value.node(STEPS[index].target);
+      value.selectors.set(STEPS[index].target, () => (ready ? [target] : []));
+    },
+  });
+  t.after(() => view.controller.pause());
+  await settle();
+  t.mock.timers.tick(3000);
+  await settle();
+  assert.equal(view.dialog.open, true, 'the guide remains visible while the page data arrives');
+  assert.equal(view.retry.hidden, true, 'three seconds is still within the target loading budget');
+  assert.match(
+    view.nodes
+      .filter((node) => /max-tour-(?:body|status|caption)/.test(node.className))
+      .map((node) => node.textContent)
+      .join(' '),
+    /正在|加载|等待|准备/,
+  );
+  ready = true;
+  t.mock.timers.tick(100);
+  await settle();
+  view.flushFrames();
+  assert.equal(view.controller.activeStep, index);
+  assert.equal(view.retry.hidden, true);
+  assert.equal(view.doc.getElementById('max-tour-body').textContent, STEPS[index].body);
+  assert.equal(view.doc.querySelector('.max-tour-spotlight').hidden, false);
+});
+
+test('a waiting guide immediately presents progress and keeps its pause button available', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
+  const index = indexOf('home-handbook');
+  const view = fixture({
+    href: '/?guideTour=1',
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+  });
+  t.after(() => view.controller.pause());
+  await settle();
+  assert.equal(view.dialog.open, true);
+  const exit = view.nodes.find((node) => node.textContent === '稍后继续');
+  assert.equal(exit.disabled, false);
+  assert.equal(
+    view.next.disabled,
+    true,
+    'an unavailable target cannot be advanced as if it loaded',
+  );
+  exit.click();
+  await settle();
+  assert.equal(view.dialog.open, false);
+  assert.equal(view.server.get(VERSION).status, 'skipped');
+  t.mock.timers.tick(11000);
+  await settle();
+  assert.equal(view.dialog.open, false, 'a late wait continuation cannot reopen a paused tour');
+  assert.equal(
+    view.events.some((event) => event.type === 'navigate'),
+    false,
+  );
+});
+
+test('a waiting guide can save and navigate to another station without reviving its old wait', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
+  const index = indexOf('home-handbook');
+  const view = fixture({
+    href: '/?guideTour=1',
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+  });
+  t.after(() => view.controller.pause());
+  await settle();
+  assert.equal(view.dialog.open, true);
+  const skip = view.nodes.find((node) => node.textContent === '跳过此站');
+  assert.equal(skip.hidden, false);
+  assert.equal(skip.disabled, false);
+  skip.click();
+  await settle();
+  assert.equal(view.server.get(VERSION).step, indexOf('world-atlas'));
+  const navigation = view.events.filter((event) => event.type === 'navigate');
+  assert.equal(navigation.length, 1);
+  const destination = new URL(navigation[0].url, view.win.location.origin);
+  assert.equal(destination.pathname, '/world');
+  assert.equal(destination.searchParams.get('guideTour'), '1');
+  view.node(STEPS[index].target);
+  t.mock.timers.tick(11000);
+  await settle();
+  assert.equal(view.dialog.open, false, 'the old page cannot reopen its guide while navigating');
+  assert.equal(view.controller.activeStep, null);
+  assert.equal(view.events.filter((event) => event.type === 'navigate').length, 1);
+});
+
+test('a cancelled target wait cannot clear the retry for a failed station change', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
+  const index = indexOf('home-handbook');
+  const view = fixture({
+    href: '/?guideTour=1',
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+    beforeRequest({ method, patch }) {
+      if (method === 'PATCH' && patch.step === indexOf('world-atlas'))
+        throw new Error('站点同步失败，请重试');
+    },
+  });
+  t.after(() => view.controller.pause());
+  await settle();
+  view.nodes.find((node) => node.textContent === '跳过此站').click();
+  await settle();
+  assert.equal(view.retry.hidden, false);
+  t.mock.timers.tick(80);
+  await settle();
+  assert.equal(view.retry.hidden, false, 'finishing the cancelled initialization preserves retry');
+  assert.match(view.doc.querySelector('.max-tour-status').textContent, /站点同步失败/);
+  assert.equal(view.server.get(VERSION).step, index);
+  assert.equal(
+    view.events.some((event) => event.type === 'navigate'),
+    false,
+  );
+});
+
+test('a missing page region reaches one deadline and keeps retry and skip visible until recovery', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
+  const index = indexOf('home-handbook');
+  const view = fixture({
+    href: '/?guideTour=1',
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+  });
+  t.after(() => view.controller.pause());
+  await settle();
+  t.mock.timers.tick(11000);
+  await settle();
+  assert.equal(view.dialog.open, true);
+  assert.equal(view.retry.hidden, false, 'initialization must not erase the target load failure');
+  assert.match(
+    view.doc.querySelector('.max-tour-status').textContent,
+    /不可用|未能|超时|失败|暂无/,
+  );
+  const skip = view.nodes.find((node) => node.textContent === '跳过此站');
+  assert.equal(skip.hidden, false);
+  assert.equal(skip.disabled, false);
+  assert.equal(view.server.get(VERSION).step, index);
+  assert.equal(rewardWrites(view).length, 0);
+  view.node(STEPS[index].target);
+  view.retry.click();
+  await settle();
+  view.flushFrames();
+  assert.equal(view.retry.hidden, true);
+  assert.equal(view.doc.getElementById('max-tour-body').textContent, STEPS[index].body);
+  assert.equal(view.doc.querySelector('.max-tour-spotlight').hidden, false);
+});
+
+test('opening a late native feature and loading its contents share one ten-second deadline', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
+  const index = indexOf('inventory-ledger');
+  let ledger;
+  const view = fixture({
+    href: '/inventory?guideTour=1',
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+    setup(value) {
+      ledger = value.node('#wallet-ledger', { tag: 'dialog' });
+      value.selectors.set('#wallet-ledger[open]', () => (ledger.open ? [ledger] : []));
+    },
+  });
+  t.after(() => view.controller.pause());
+  await settle();
+  t.mock.timers.tick(8000);
+  await settle();
+  assert.equal(view.retry.hidden, true);
+  view.node('#wallet-ledger-open', { tag: 'button', click: () => ledger.showModal() });
+  t.mock.timers.tick(80);
+  await settle();
+  assert.equal(ledger.open, true, 'the real feature opened after its entry arrived');
+  assert.equal(view.retry.hidden, true, 'the contents still have the remaining loading budget');
+  t.mock.timers.tick(1921);
+  await settle();
+  assert.equal(view.retry.hidden, false, 'preparing the feature must not reset the deadline');
+  assert.match(view.doc.querySelector('.max-tour-status').textContent, /不可用|超时|失败|暂无/);
+  assert.equal(view.nodes.find((node) => node.textContent === '跳过此站').disabled, false);
+  assert.equal(view.events.filter((event) => event.type === 'click').length, 1);
+});
+
+test('the loading guide stays above a prepared native modal while its rows are still pending', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
+  const index = indexOf('inventory-ledger');
+  let ledger;
+  const view = fixture({
+    href: '/inventory?guideTour=1',
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+    setup(value) {
+      ledger = value.node('#wallet-ledger', { tag: 'dialog' });
+      value.selectors.set('#wallet-ledger[open]', () => (ledger.open ? [ledger] : []));
+      value.node('#wallet-ledger-open', { tag: 'button', click: () => ledger.showModal() });
+    },
+  });
+  t.after(() => view.controller.pause());
+  await settle();
+  assert.equal(ledger.open, true);
+  assert.equal(view.dialog.open, true);
+  assert.equal(view.next.disabled, true);
+  assert.equal(
+    view.events.filter((event) => event.type === 'show-modal').at(-1).node,
+    'max-tour',
+    'loading controls must remain in the top modal, not inert behind the prepared feature',
+  );
+  view.nodes.find((node) => node.textContent === '稍后继续').click();
+  await settle();
+  view.node(STEPS[index].target);
+  t.mock.timers.tick(11000);
+  await settle();
+  assert.equal(view.dialog.open, false);
+});
+
+test('a missing target that arrives after the deadline recovers without another navigation or save', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
+  const index = indexOf('home-handbook');
+  const view = fixture({
+    href: '/?guideTour=1',
+    observeMutations: true,
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+  });
+  t.after(() => view.controller.pause());
+  await settle();
+  t.mock.timers.tick(11000);
+  await settle();
+  assert.equal(view.retry.hidden, false);
+  const requests = view.events.filter((event) => event.type === 'request').length;
+  view.node(STEPS[index].target);
+  await settle();
+  view.flushFrames();
+  assert.equal(view.retry.hidden, true);
+  assert.equal(view.doc.getElementById('max-tour-body').textContent, STEPS[index].body);
+  assert.equal(view.doc.querySelector('.max-tour-spotlight').hidden, false);
+  assert.equal(view.events.filter((event) => event.type === 'request').length, requests);
+  assert.equal(
+    view.events.some((event) => event.type === 'navigate'),
+    false,
+  );
+});
+
+test('a late page class change can reveal an existing target after the loading deadline', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
+  const index = indexOf('home-handbook');
+  let target;
+  const view = fixture({
+    href: '/?guideTour=1',
+    observeMutations: true,
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+    setup(value) {
+      target = value.node(STEPS[index].target);
+      target.classList.add('hidden');
+    },
+  });
+  t.after(() => view.controller.pause());
+  await settle();
+  t.mock.timers.tick(11000);
+  await settle();
+  view.flushFrames();
+  assert.equal(view.retry.hidden, false);
+  target.classList.remove('hidden');
+  await settle();
+  view.flushFrames();
+  assert.equal(view.retry.hidden, true, 'revealing page content need not replace its DOM node');
+  assert.equal(view.doc.querySelector('.max-tour-spotlight').hidden, false);
+});
+
+test('replacing a highlighted DOM target rebinds its spotlight and resize observation', async (t) => {
+  const index = indexOf('home-handbook');
+  let original;
+  const view = fixture({
+    href: '/?guideTour=1',
+    observeMutations: true,
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+    setup(value) {
+      original = value.node(STEPS[index].target);
+    },
+  });
+  t.after(() => view.controller.pause());
+  await settle();
+  view.flushFrames();
+  original.isConnected = false;
+  const replacement = view.node(STEPS[index].target, {
+    rect: { left: 700, top: 400, right: 1000, bottom: 600, width: 300, height: 200 },
+  });
+  await settle();
+  view.flushFrames();
+  await settle();
+  view.flushFrames();
+  const spotlight = view.doc.querySelector('.max-tour-spotlight');
+  assert.equal(spotlight.hidden, false);
+  assert.ok(parseFloat(spotlight.style.left) > 600, 'the spotlight moves to the replacement');
+  assert.ok(
+    view.observers.some(
+      (observer) =>
+        !observer.mutation &&
+        observer.active &&
+        observer.targets.some(({ node }) => node === replacement),
+    ),
+  );
+});
+
+test('mutations produced by the guide dialog do not schedule an endless animation frame loop', async (t) => {
+  const index = indexOf('home-handbook');
+  const view = fixture({
+    href: '/?guideTour=1',
+    observeMutations: true,
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+    setup: (value) => value.node(STEPS[index].target),
+  });
+  t.after(() => view.controller.pause());
+  await settle();
+  for (let i = 0; i < 4; i += 1) {
+    view.flushFrames();
+    await settle();
+  }
+  assert.equal(view.frames.size, 0, 'layout text must not cause layout to schedule itself');
+  const expand = view.doc.querySelector('.max-tour-expand');
+  const unchangedCaption = expand.textContent;
+  expand.textContent = unchangedCaption;
+  await settle();
+  assert.equal(view.frames.size, 0, 'dialog-owned childList records are ignored');
+});
+
+test('expanding the explanation positions from its final visible height in the same frame', async (t) => {
+  const index = indexOf('home-handbook');
+  const view = fixture({
+    href: '/?guideTour=1',
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+    setup(value) {
+      const { win } = value;
+      win.innerWidth = 400;
+      win.innerHeight = 600;
+      value.node(STEPS[index].target, {
+        rect: { left: 20, top: 20, right: 380, bottom: 520, width: 360, height: 500 },
+      });
+    },
+  });
+  t.after(() => view.controller.pause());
+  await settle();
+  const card = view.doc.querySelector('.max-tour-card');
+  const expand = view.doc.querySelector('.max-tour-expand');
+  card.getBoundingClientRect = () => {
+    // The final label/font wrapping adds height after the compact class changes.
+    if (card.classList.contains('is-compact')) return { width: 360, height: 180 };
+    return { width: 360, height: expand.textContent === '收起说明' ? 360 : 260 };
+  };
+  view.dialog.scrollTop = 132;
+  view.dialog.scrollLeft = 24;
+  view.flushFrames();
+  assert.equal(view.dialog.scrollTop, 0, 'native dialog scroll cannot offset viewport geometry');
+  assert.equal(view.dialog.scrollLeft, 0);
+  assert.equal(card.classList.contains('is-compact'), true);
+  assert.equal(expand.hidden, false);
+  view.dialog.scrollTop = 84;
+  view.dialog.scrollLeft = 12;
+  expand.click();
+  view.flushFrames();
+  assert.equal(view.dialog.scrollTop, 0, 'expanding resets any renewed wrapper scroll');
+  assert.equal(view.dialog.scrollLeft, 0);
+  assert.equal(card.classList.contains('is-compact'), false);
+  assert.equal(expand.textContent, '收起说明');
+  assert.equal(card.style.top, '224px');
+  assert.ok(parseFloat(card.style.top) + card.getBoundingClientRect().height <= 584);
+  expand.click();
+  view.flushFrames();
+  assert.equal(card.classList.contains('is-compact'), true);
+  assert.equal(card.style.top, '404px');
+});
+
+test('compact layout remains stable across repeated frames until explicit expansion or viewport change', async (t) => {
+  const index = indexOf('home-handbook');
+  const view = fixture({
+    href: '/?guideTour=1',
+    observeMutations: true,
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+    setup(value) {
+      const { win } = value;
+      win.innerWidth = 400;
+      win.innerHeight = 600;
+      value.node(STEPS[index].target, {
+        rect: { left: 20, top: 20, right: 380, bottom: 220, width: 360, height: 200 },
+      });
+    },
+  });
+  t.after(() => view.controller.pause());
+  await settle();
+  const card = view.doc.querySelector('.max-tour-card');
+  const expand = view.doc.querySelector('.max-tour-expand');
+  const measuredCompact = [];
+  let normalHeight = 491;
+  card.getBoundingClientRect = () => {
+    const compact = card.classList.contains('is-compact');
+    measuredCompact.push(compact);
+    return { width: 360, height: compact ? 206 : normalHeight };
+  };
+  view.flushFrames();
+  assert.equal(card.classList.contains('is-compact'), true);
+  const compactTop = card.style.top;
+  const resizeObserver = view.observers.find(
+    (observer) => !observer.mutation && observer.targets.some(({ node }) => node === card),
+  );
+  // Changing late content measurements must not make every ResizeObserver frame
+  // alternate full/compact and move the user's click target.
+  normalHeight = 100;
+  measuredCompact.length = 0;
+  for (let i = 0; i < 4; i += 1) {
+    resizeObserver.callback();
+    view.flushFrames();
+    await settle();
+    assert.equal(card.classList.contains('is-compact'), true);
+    assert.equal(card.style.top, compactTop);
+  }
+  assert.ok(measuredCompact.length > 0);
+  assert.ok(measuredCompact.every(Boolean), 'stable frames must not temporarily measure full mode');
+  assert.equal(view.frames.size, 0);
+  expand.click();
+  view.flushFrames();
+  assert.equal(card.classList.contains('is-compact'), false);
+  assert.equal(expand.textContent, '收起说明');
+  assert.equal(measuredCompact.at(-1), false, 'explicit expansion remeasures full content');
+  normalHeight = 491;
+  expand.click();
+  view.flushFrames();
+  assert.equal(card.classList.contains('is-compact'), true);
+  normalHeight = 100;
+  view.win.innerWidth = 420;
+  view.listeners.get('resize')();
+  view.flushFrames();
+  assert.equal(card.classList.contains('is-compact'), false);
+  assert.equal(measuredCompact.at(-1), false, 'a changed viewport reconsiders full-size layout');
+});
+
+test('changing account while a target is loading clears the old tour request and delayed UI', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
+  const index = indexOf('home-handbook');
+  const view = fixture({
+    href: '/?guideTour=1',
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+  });
+  t.after(() => view.controller.pause());
+  await settle();
+  view.app.userState = { isLoggedIn: true, uid: 'new-member', token: 'new-token' };
+  view.listeners.get('freebbs:session-change')();
+  await settle();
+  view.node(STEPS[index].target);
+  t.mock.timers.tick(11000);
+  await settle();
+  assert.equal(view.dialog.open, false);
+  assert.equal(new URL(view.win.location.href).searchParams.has('guideTour'), false);
+  assert.equal(view.controller.activeStep, null);
+  assert.equal(rewardWrites(view).length, 0);
+});
 
 test('full guide completion saves first, claims once and refreshes the top bar from fresh account data', async () => {
   const view = finalStepFixture();
@@ -830,6 +1358,71 @@ test('native tour advances an actual course link only after its progress is ackn
   );
 });
 
+test('a rotated world restores mathematics with only the approved Home shortcut before entering its course stage', async (t) => {
+  const index = indexOf('world-course-orbit');
+  const step = STEPS[index];
+  const keyAction = step.prepare.find((action) => action.key);
+  assert.equal(keyAction.selector, '#world-orbit');
+  assert.equal(keyAction.key, 'Home');
+  let mathematics;
+  let courseStage;
+  const view = fixture({
+    href: '/world?guideTour=1',
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+    setup(value) {
+      for (const action of step.prepare.slice(0, 2)) value.node(action.whenMissing);
+      courseStage = value.node(step.target);
+      courseStage.hidden = true;
+      const openAction = step.prepare[3];
+      let overviewOpen = false;
+      const overview = value.node('#world-modal', { tag: 'dialog' });
+      mathematics = value.node(openAction.selector, {
+        tag: 'button',
+        click: () => {
+          assert.equal(mathematics.hidden, false, 'the guide never clicks an off-orbit island');
+          overviewOpen = true;
+        },
+      });
+      mathematics.hidden = true;
+      value.selectors.set(keyAction.whenMissing, () => (mathematics.hidden ? [] : [mathematics]));
+      value.selectors.set(openAction.whenMissing, () => (overviewOpen ? [overview] : []));
+      overview.getBoundingClientRect = () => ({ width: overviewOpen ? 400 : 0, height: 300 });
+      const enterAction = step.prepare[4];
+      value.node(enterAction.selector, {
+        tag: 'button',
+        click: () => {
+          assert.equal(overviewOpen, true);
+          courseStage.hidden = false;
+        },
+      });
+      value.selectors.set(enterAction.whenMissing, () => (courseStage.hidden ? [] : [courseStage]));
+      const orbit = value.node('#world-orbit');
+      orbit.addEventListener('keydown', (event) => {
+        assert.equal(event.key, 'Home');
+        assert.equal(event.bubbles, true);
+        mathematics.hidden = false;
+      });
+    },
+  });
+  t.after(() => view.controller.pause());
+  await settle();
+  view.flushFrames();
+  assert.equal(mathematics.hidden, false);
+  assert.equal(courseStage.hidden, false);
+  assert.equal(view.retry.hidden, true);
+  assert.equal(view.doc.querySelector('.max-tour-spotlight').hidden, false);
+  assert.deepEqual(
+    view.events.filter((event) => event.type === 'dispatch'),
+    [{ type: 'dispatch', node: 'world-orbit', key: 'Home' }],
+  );
+  assert.equal(view.events.filter((event) => event.type === 'click').length, 2);
+  assert.equal(
+    view.events.some((event) => event.type === 'navigate'),
+    false,
+  );
+  assert.equal(rewardWrites(view).length, 0);
+});
+
 test('math spotlight preserves the entire island and restores its overlapping hub after leaving', async () => {
   const index = indexOf('world-mathematics');
   const step = STEPS[index];
@@ -838,6 +1431,7 @@ test('math spotlight preserves the entire island and restores its overlapping hu
     let mathClicks = 0;
     const view = fixture({
       href: '/world?guideTour=1',
+      observeMutations: true,
       states: { [VERSION]: { status: 'in_progress', step: index } },
       setup(value) {
         value.node(step.target, {
@@ -865,6 +1459,12 @@ test('math spotlight preserves the entire island and restores its overlapping hu
     assert.equal(spotlight.style.top, '192px');
     assert.equal(spotlight.style.height, '416px', 'the full island and label remain illuminated');
     assert.equal(mathClicks, 0, 'framing the island cannot activate it');
+    for (let i = 0; i < 3; i += 1) {
+      await settle();
+      view.flushFrames();
+    }
+    await settle();
+    assert.equal(view.frames.size, 0, 'guide-owned focus classes cannot schedule an endless RAF');
     if (leave === 'pause') await view.controller.pause();
     else view.next.click();
     await settle();
@@ -963,36 +1563,62 @@ test('knowledge companions explains its small toggle before opening and closing 
   assert.equal(step.reveal.target, '#knowledge-chat-panel');
 });
 
-test('discussion composer introduces its entry without triggering unmarked navigation to publish', async () => {
+test('desktop and mobile discussion composer entries are highlighted without publishing or unmarked navigation', async () => {
   const index = indexOf('discussion-composer');
   const step = STEPS[index];
-  const view = fixture({
-    href: '/discussion?guideTour=1',
-    states: { [VERSION]: { status: 'in_progress', step: index } },
-    setup(value) {
-      value.node('#discussion-create-toggle', {
-        tag: 'button',
-        click: () => assert.fail('the introduction must not navigate or create a publish draft'),
-      });
-    },
-  });
-  await settle();
-  assert.equal(step.target, '#discussion-create-toggle');
+  assert.equal(step.target, '#discussion-create-toggle, .mobile-publish');
   assert.equal(step.prepare, undefined);
   assert.equal(step.action, undefined);
-  assert.equal(view.controller.activeStep, index);
-  assert.equal(view.dialog.open, true);
-  assert.equal(view.next.textContent, '下一步 →');
-  assert.equal(
-    view.events.some((event) => event.type === 'navigate'),
-    false,
-  );
-  view.next.click();
-  await settle();
-  const navigation = view.events.find((event) => event.type === 'navigate');
-  const url = new URL(navigation.url, view.win.location.origin);
-  assert.equal(url.pathname, '/aichat');
-  assert.equal(url.searchParams.get('guideTour'), '1');
+  for (const mobile of [false, true]) {
+    let entry;
+    const view = fixture({
+      href: '/discussion?guideTour=1',
+      states: { [VERSION]: { status: 'in_progress', step: index } },
+      setup(value) {
+        const options = {
+          tag: 'button',
+          click: () => assert.fail('the introduction must not navigate or create a publish draft'),
+        };
+        const desktop = value.node('#discussion-create-toggle', options);
+        const phone = value.node('.mobile-publish', options);
+        desktop.hidden = mobile;
+        phone.hidden = !mobile;
+        value.selectors.set(step.target, () => [desktop, phone]);
+        entry = mobile ? phone : desktop;
+      },
+    });
+    await settle();
+    view.flushFrames();
+    assert.equal(view.controller.activeStep, index);
+    assert.equal(view.dialog.open, true);
+    assert.equal(view.next.textContent, '下一步 →');
+    assert.equal(view.doc.querySelector('.max-tour-spotlight').hidden, false);
+    assert.ok(
+      view.observers.some(
+        (observer) => !observer.mutation && observer.targets.some(({ node }) => node === entry),
+      ),
+      'the first visible desktop/mobile candidate is the actual observed target',
+    );
+    assert.equal(
+      view.events.some((event) => event.type === 'navigate'),
+      false,
+    );
+    assert.equal(
+      view.events.some((event) => event.type === 'click'),
+      false,
+    );
+    view.next.click();
+    await settle();
+    const navigation = view.events.find((event) => event.type === 'navigate');
+    const url = new URL(navigation.url, view.win.location.origin);
+    assert.equal(url.pathname, '/aichat');
+    assert.equal(url.searchParams.get('guideTour'), '1');
+    assert.equal(view.events.filter((event) => event.type === 'navigate').length, 1);
+    assert.deepEqual(
+      view.events.filter((event) => event.type === 'click').map((event) => event.node),
+      ['guide-primary'],
+    );
+  }
 });
 
 test('a late list scroll restoration is reframed once below the fixed header unless the tour was paused', async () => {
@@ -1026,6 +1652,7 @@ test('a late list scroll restoration is reframed once below the fixed header unl
           },
         });
         composer = value.node('#discussion-create-toggle', { tag: 'button' });
+        value.selectors.set(STEPS[index + 1].target, composer);
         composer.getBoundingClientRect = () => ({
           left: 1134,
           right: 1228,
@@ -1169,7 +1796,7 @@ test('unsafe target hrefs neither advance saved progress nor navigate', async ()
   assert.equal(view.dialog.open, false, 'an invalid link must never trap the user in the overlay');
 });
 
-test('resuming the ledger step prepares its real native dialog before showing Max and does not toggle it twice', async () => {
+test('resuming the ledger shows loading first then its real dialog with Max on top without toggling twice', async () => {
   const index = indexOf('inventory-ledger');
   const step = STEPS[index];
   let ledger;
@@ -1201,7 +1828,7 @@ test('resuming the ledger step prepares its real native dialog before showing Ma
   const opens = view.events.filter((event) => event.type === 'show-modal');
   assert.deepEqual(
     opens.map((event) => event.node),
-    ['wallet-ledger', 'max-tour'],
+    ['max-tour', 'wallet-ledger', 'max-tour', 'max-tour'],
   );
   assert.equal(view.controller.activeStep, index);
   view.flushFrames();

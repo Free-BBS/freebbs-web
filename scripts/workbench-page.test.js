@@ -84,7 +84,7 @@ test('workbench provides authenticated CRUD controls and conflict confirmation',
   assert.match(html, /id="workbench-important-dialog"/);
   assert.match(html, /id="workbench-add-schedule"/);
   assert.match(html, /id="workbench-schedule-dialog"/);
-  assert.match(html, /src="\/workbench\.js\?v=20260922-homework-calendar-1"/);
+  assert.match(html, /src="\/workbench\.js\?v=20260924-schedule-notes-1"/);
   assert.match(controller, /\/workbench\/important-items/);
   assert.match(controller, /\/workbench\/schedule-items\/conflicts/);
   assert.match(controller, /\/confirm/);
@@ -120,6 +120,22 @@ test('workbench provides a navigable seven-day schedule and review-before-save A
   assert.match(css, /body\.theme-light\.workbench-page/);
 });
 
+test('manual and AI plans share one optional location/notes field without changing homework controls', () => {
+  assert.match(html, /地点\/备注（选填）<\/span>[\s\S]{0,180}id="workbench-schedule-description"/);
+  assert.doesNotMatch(html, /workbench-schedule-location|name="location"/);
+  assert.match(controller, /notesInput\.className = 'workbench-proposal-description'/);
+  assert.match(controller, /notesInput\.maxLength = 4000/);
+  assert.match(
+    controller,
+    /description: card\.querySelector\('\.workbench-proposal-description'\)\.value\.trim\(\)/,
+  );
+  assert.match(controller, /notes\.textContent = entry\.item\.description/);
+  assert.match(
+    controller,
+    /if \(item\.homeworkReference\)[\s\S]*?'toggle-homework-completion'[\s\S]*?else \{[\s\S]*?'edit-schedule'/,
+  );
+});
+
 test('workbench separates plan and notifications while reusing the live publication inbox', () => {
   assert.match(html, /id="workbench-plan-panel"/);
   assert.match(html, /id="workbench-notifications-panel"[^>]*hidden/);
@@ -134,6 +150,22 @@ test('workbench separates plan and notifications while reusing the live publicat
   assert.match(controller, /state\.communityNotifications/);
   assert.match(controller, /window\.addEventListener\('popstate'/);
   assert.match(css, /\.workbench-view-panel\[hidden\]\s*\{\s*display:\s*none/);
+});
+
+test('display-hour preferences are uid-scoped, change only layout and keep complete list access', () => {
+  assert.match(html, /workbench-hours\.js\?v=/);
+  assert.match(html, /id="workbench-hours-start"/);
+  assert.match(html, /id="workbench-hours-end"/);
+  assert.match(html, /按账号保存在本浏览器/);
+  assert.match(controller, /hoursModel\.saveHours\(hoursStorage\(\), getUser\(\)\.uid, hours\)/);
+  assert.match(
+    controller,
+    /hoursModel\.readHours\(hoursStorage\(\), ownerKey \? getUser\(\)\.uid : null\)/,
+  );
+  assert.match(controller, /window\.addEventListener\('freebbs:session-change', syncSession\)/);
+  assert.match(controller, /hoursModel\.layoutDay/);
+  assert.doesNotMatch(controller, /state\.scheduleItems\.slice/);
+  assert.match(controller, /结束时间必须严格晚于开始时间/);
 });
 
 test('connector self-check targets the two primary portals without accepting arbitrary URLs', () => {

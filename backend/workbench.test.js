@@ -397,10 +397,20 @@ test('editing a DDL keeps its one-minute deadline marker invariant', async (t) =
     pool: {
       async execute(statement) {
         calls.push(statement);
-        if (statement.includes('FROM schedule_items')) return [[{
-          public_id: 'ws_deadline', title: '报告', start_at: start, end_at: end,
-          source_type: 'agent', source_reference: 'planner:deadline', version: 1,
-        }]];
+        if (statement.includes('FROM schedule_items'))
+          return [
+            [
+              {
+                public_id: 'ws_deadline',
+                title: '报告',
+                start_at: start,
+                end_at: end,
+                source_type: 'agent',
+                source_reference: 'planner:deadline',
+                version: 1,
+              },
+            ],
+          ];
         throw new Error('DDL update should be rejected before writing');
       },
     },
@@ -445,11 +455,29 @@ test('calendar exposes owned homework and persists completion without modifying 
     async execute(sql, parameters) {
       assert.equal(parameters[0], 7);
       if (sql.includes('FROM schedule_items')) return [[]];
-      if (sql.includes('FROM campus_homework_snapshots')) return [[{ homework_json: [{
-        sourceReference: 'learn:homework:one', title: '作业', dueAt: '2026-09-22T15:59:00Z', status: 'unsubmitted',
-      }] }]];
-      if (sql.startsWith('SELECT homework_reference')) return [completed === undefined ? [] : [{ homework_reference: 'learn:homework:one', completed }]];
-      if (sql.includes('INSERT INTO campus_homework_calendar_states')) { completed = parameters[2]; return [{ affectedRows: 1 }]; }
+      if (sql.includes('FROM campus_homework_snapshots'))
+        return [
+          [
+            {
+              homework_json: [
+                {
+                  sourceReference: 'learn:homework:one',
+                  title: '作业',
+                  dueAt: '2026-09-22T15:59:00Z',
+                  status: 'unsubmitted',
+                },
+              ],
+            },
+          ],
+        ];
+      if (sql.startsWith('SELECT homework_reference'))
+        return [
+          completed === undefined ? [] : [{ homework_reference: 'learn:homework:one', completed }],
+        ];
+      if (sql.includes('INSERT INTO campus_homework_calendar_states')) {
+        completed = parameters[2];
+        return [{ affectedRows: 1 }];
+      }
       throw new Error(sql);
     },
   };
@@ -459,14 +487,144 @@ test('calendar exposes owned homework and persists completion without modifying 
   assert.equal(result.response.status, 200);
   assert.equal(result.payload.scheduleItems[0].completed, false);
   const completionPath = '/homework-deadlines/learn%3Ahomework%3Aone/completion';
-  result = await requestJson(base, completionPath, { method: 'PATCH', body: JSON.stringify({ completed: true }) });
+  result = await requestJson(base, completionPath, {
+    method: 'PATCH',
+    body: JSON.stringify({ completed: true }),
+  });
   assert.equal(result.response.status, 200);
   result = await requestJson(base, path);
   assert.equal(result.payload.scheduleItems[0].status, 'completed');
-  result = await requestJson(base, completionPath, { method: 'PATCH', body: JSON.stringify({ completed: 'true' }) });
+  result = await requestJson(base, completionPath, {
+    method: 'PATCH',
+    body: JSON.stringify({ completed: 'true' }),
+  });
   assert.equal(result.response.status, 400);
-  result = await requestJson(base, '/homework-deadlines/foreign/completion', { method: 'PATCH', body: JSON.stringify({ completed: true }) });
+  result = await requestJson(base, '/homework-deadlines/foreign/completion', {
+    method: 'PATCH',
+    body: JSON.stringify({ completed: true }),
+  });
   assert.equal(result.response.status, 404);
-  result = await requestJson(base, completionPath, { method: 'PATCH', auth: false, body: JSON.stringify({ completed: true }) });
+  result = await requestJson(base, completionPath, {
+    method: 'PATCH',
+    auth: false,
+    body: JSON.stringify({ completed: true }),
+  });
   assert.equal(result.response.status, 401);
+});
+
+test('manual schedule notes round-trip, remain optional, and can be edited or cleared', async (t) => {
+  let row;
+  const calls = [];
+  const pool = {
+    async execute(sql, parameters) {
+      calls.push({ sql, parameters });
+      if (sql.includes('INSERT INTO schedule_items')) {
+        row = {
+          public_id: parameters[0],
+          title: parameters[3],
+          description: parameters[4] || null,
+          start_at: parameters[5],
+          end_at: parameters[6],
+          status: 'confirmed',
+          source_type: 'manual',
+          version: 1,
+        };
+        assert.deepEqual(parameters.slice(1, 3), [7, 7]);
+        return [{ affectedRows: 1 }];
+      }
+      if (sql.includes('UPDATE schedule_items')) {
+        assert.match(sql, /WHERE public_id = \? AND user_id = \?/);
+        assert.deepEqual(parameters.slice(-3), [row.public_id, 7, row.version]);
+        row.description = parameters[0] || null;
+        row.version += 1;
+        return [{ affectedRows: 1 }];
+      }
+      assert.match(sql, /FROM schedule_items/);
+      assert.deepEqual(parameters, [row.public_id, 7]);
+      return [[row]];
+    },
+  };
+  const base = await startTestServer(t, { pool, user: { id: 7 } });
+  const event = {
+    title: '例会',
+    startAt: '2026-10-01T09:00:00Z',
+    endAt: '2026-10-01T10:00:00Z',
+  };
+  let result = await requestJson(base, '/schedule-items', {
+    method: 'POST',
+    body: JSON.stringify(event),
+  });
+  assert.equal(result.response.status, 201);
+  assert.equal(result.payload.scheduleItem.description, '');
+  for (const description of ['六教 6A201\n带电脑 <script>notes</script>', '']) {
+    result = await requestJson(base, `/schedule-items/${row.public_id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ description, version: row.version }),
+    });
+    assert.equal(result.response.status, 200);
+    assert.equal(result.payload.scheduleItem.description, description);
+  }
+  result = await requestJson(base, '/schedule-items', {
+    method: 'POST',
+    body: JSON.stringify({ ...event, description: '图书馆二层；带书' }),
+  });
+  assert.equal(result.response.status, 201);
+  assert.equal(result.payload.scheduleItem.description, '图书馆二层；带书');
+  assert.ok(calls.every((call) => !call.sql.includes('<script>')));
+});
+
+test('manual schedule APIs reject malformed notes and cannot edit another user or synced homework', async (t) => {
+  const calls = [];
+  const base = await startTestServer(t, {
+    user: { id: 7 },
+    pool: {
+      async execute(sql, parameters) {
+        calls.push({ sql, parameters });
+        assert.match(sql, /SELECT .*description[\s\S]*FROM schedule_items/);
+        assert.match(sql, /WHERE public_id = \? AND user_id = \?/);
+        if (parameters[0] !== 'ws_own') return [[]];
+        return [
+          [
+            {
+              public_id: 'ws_own',
+              title: '旧日程',
+              description: null,
+              start_at: new Date('2026-10-01T09:00:00Z'),
+              end_at: new Date('2026-10-01T10:00:00Z'),
+              status: 'confirmed',
+              source_type: 'manual',
+              version: 1,
+            },
+          ],
+        ];
+      },
+    },
+  });
+  for (const description of [{ text: '地点' }, [], false, 42, '字'.repeat(4001)]) {
+    const event = {
+      title: '例会',
+      description,
+      startAt: '2026-10-01T09:00:00Z',
+      endAt: '2026-10-01T10:00:00Z',
+    };
+    const created = await requestJson(base, '/schedule-items', {
+      method: 'POST',
+      body: JSON.stringify(event),
+    });
+    assert.equal(created.response.status, 400);
+    const edited = await requestJson(base, '/schedule-items/ws_own', {
+      method: 'PATCH',
+      body: JSON.stringify({ description }),
+    });
+    assert.equal(edited.response.status, 400);
+  }
+  for (const id of ['ws_another_user', 'hw_readonly']) {
+    const result = await requestJson(base, `/schedule-items/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ description: '不能修改同步来源' }),
+    });
+    assert.equal(result.response.status, 404);
+    assert.deepEqual(calls.at(-1).parameters, [id, 7]);
+  }
+  assert.ok(calls.every((call) => !/UPDATE|INSERT|DELETE/.test(call.sql)));
 });

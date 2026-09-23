@@ -81,12 +81,13 @@ test(
         },
         body: JSON.stringify(body),
       });
-    const message = '明天下午5点开会，持续时间2小时';
+    const message = '明天下午5点开会，持续时间2小时，地点/备注：六教 6A201；带电脑';
     assert.equal((await post('preview', { message }, false)).status, 401);
     const preview = await post('preview', { message });
     assert.equal(preview.status, 200, await preview.clone().text());
     const { suggestions } = await preview.json();
     assert.equal(suggestions.length, 1);
+    assert.equal(suggestions[0].description, '六教 6A201；带电脑');
     const [[empty]] = await pool.query('SELECT COUNT(*) AS count FROM schedule_items');
     assert.equal(Number(empty.count), 0, 'preview must not write a schedule');
 
@@ -98,17 +99,19 @@ test(
     );
     const ownPreview = await post('preview', { message, userId: 2, limit: 0 });
     assert.equal(ownPreview.status, 200, 'another account must not create a conflict');
+    suggestions[0].description = '主楼 101\n预览修改后携带实验记录';
     const confirmed = await post('confirm', { suggestions, userId: 2, limit: 0 });
     assert.equal(confirmed.status, 201, await confirmed.clone().text());
     assert.deepEqual(await confirmed.json(), { created: 1 });
     const [saved] =
-      await pool.query(`SELECT user_id, created_by_user_id, source_type, title, status,
+      await pool.query(`SELECT user_id, created_by_user_id, source_type, title, description, status,
       start_at, end_at FROM schedule_items WHERE user_id = 1`);
     assert.equal(saved.length, 1);
     assert.equal(Number(saved[0].user_id), 1);
     assert.equal(Number(saved[0].created_by_user_id), 1);
     assert.equal(saved[0].source_type, 'agent');
     assert.equal(saved[0].title, '开会');
+    assert.equal(saved[0].description, suggestions[0].description);
     assert.equal(saved[0].status, 'confirmed');
     assert.equal(saved[0].start_at.toISOString(), suggestions[0].startAt);
     assert.equal(saved[0].end_at.toISOString(), suggestions[0].endAt);
