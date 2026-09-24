@@ -30,4 +30,33 @@ describe('store configuration', () => {
       }),
     ).toThrow('MYSQL_PORT');
   });
+
+  it('supports the passwordless Unix socket used by isolated tests without weakening production', () => {
+    expect(
+      loadMySqlConfig({
+        NODE_ENV: 'test',
+        MYSQL_HOST: '127.0.0.1',
+        MYSQL_PORT: '3306',
+        MYSQL_USER: 'root',
+        MYSQL_PASSWORD: '',
+        MYSQL_DATABASE: 'free_bbs_test',
+        MYSQL_SOCKET: '/tmp/freebbs-test.sock',
+      }),
+    ).toMatchObject({
+      password: '',
+      socketPath: '/tmp/freebbs-test.sock',
+    });
+
+    expect(() =>
+      loadMySqlConfig({
+        NODE_ENV: 'production',
+        MYSQL_HOST: '127.0.0.1',
+        MYSQL_PORT: '3306',
+        MYSQL_USER: 'root',
+        MYSQL_PASSWORD: '',
+        MYSQL_DATABASE: 'free_bbs',
+        MYSQL_SOCKET: '/tmp/freebbs.sock',
+      }),
+    ).toThrow('MYSQL_PASSWORD');
+  });
 });

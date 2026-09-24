@@ -23,6 +23,7 @@ export interface MySqlConfig {
   user: string;
   password: string;
   database: string;
+  socketPath?: string;
 }
 
 export function calculateChecksum(contents: string): string {
@@ -53,12 +54,21 @@ export function loadMySqlConfig(environment: NodeJS.ProcessEnv = process.env): M
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error('MYSQL_PORT must be an integer between 1 and 65535');
   }
+  const host = requireEnvironment(environment, 'MYSQL_HOST');
+  const user = requireEnvironment(environment, 'MYSQL_USER');
+  const database = requireEnvironment(environment, 'MYSQL_DATABASE');
+  const socketPath = environment.MYSQL_SOCKET?.trim() || undefined;
+  const password =
+    environment.NODE_ENV === 'test' && socketPath && environment.MYSQL_PASSWORD !== undefined
+      ? environment.MYSQL_PASSWORD
+      : requireEnvironment(environment, 'MYSQL_PASSWORD');
   return {
-    host: requireEnvironment(environment, 'MYSQL_HOST'),
+    host,
     port,
-    user: requireEnvironment(environment, 'MYSQL_USER'),
-    password: requireEnvironment(environment, 'MYSQL_PASSWORD'),
-    database: requireEnvironment(environment, 'MYSQL_DATABASE'),
+    user,
+    password,
+    database,
+    ...(socketPath ? { socketPath } : {}),
   };
 }
 
