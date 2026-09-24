@@ -160,7 +160,7 @@
       hiddenComponentIds: ['GND'],
       hiddenWireIds: ['fixed_input_ground', 'fixed_output_ground'],
       terminalPorts: {
-        V_IN: { side: 'left', label: 'IN' },
+        V_IN: { side: 'left', positiveLabel: 'IN +', negativeLabel: 'IN − · GND' },
         OUT: { side: 'right', label: 'OUT' },
       },
       onPinClick: connectPin,
@@ -348,7 +348,7 @@
     $('cancel-wire').hidden = !state.wireStart;
     $('canvas-help').textContent = state.wireStart
       ? '选择另一个引脚或导线完成连接，按 Esc 取消。'
-      : '左侧两线输入，右侧两线输出；画布内提供公共 VCC 与 VEE。拖动端点完成连线。';
+      : 'IN− 默认接地；VCC / VEE 是可选公共电源，不使用也可。拖动端点完成连线。';
     $('run').disabled = state.busy || (!state.challenge && !state.adminMode);
     $('reset').disabled = state.busy || !state.original;
     $('admin-save').disabled = state.busy;

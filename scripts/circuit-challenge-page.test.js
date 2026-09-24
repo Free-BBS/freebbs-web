@@ -23,7 +23,8 @@ test('circuit challenge page exposes player, leaderboard, and administrator surf
   assert.match(script, /\/circuit-challenges\/\$\{state\.challenge\.id\}\/submissions/);
   assert.match(script, /new Worker\('\/circuit-worker\.js'\)/);
   assert.match(script, /terminalPorts:\s*\{/);
-  assert.match(script, /V_IN: \{ side: 'left', label: 'IN' \}/);
+  assert.match(script, /positiveLabel: 'IN \+'/);
+  assert.match(script, /negativeLabel: 'IN − · GND'/);
   assert.match(script, /OUT: \{ side: 'right', label: 'OUT' \}/);
   assert.match(server, /\['\/circuit-challenge', '\/circuit-challenge\.html'\]/);
 });

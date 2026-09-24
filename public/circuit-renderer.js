@@ -1420,6 +1420,10 @@
         const end = left ? 0 : 120;
         const textX = left ? -108 : 108;
         const anchor = left ? 'start' : 'end';
+        const positiveLabel =
+          terminalPort.positiveLabel || `${terminalPort.label || component.id} +`;
+        const negativeLabel =
+          terminalPort.negativeLabel || `${terminalPort.label || component.id} −`;
         const port = svgElement('g', {
           class: 'circuit-terminal-port',
           'data-terminal-side': terminalPort.side,
@@ -1442,7 +1446,7 @@
               'font-weight': 700,
               'text-anchor': anchor,
             },
-            `${terminalPort.label || component.id} +`,
+            positiveLabel,
           ),
           svgElement(
             'text',
@@ -1455,7 +1459,7 @@
               'font-weight': 700,
               'text-anchor': anchor,
             },
-            `${terminalPort.label || component.id} −`,
+            negativeLabel,
           ),
         );
         group.insertBefore(port, group.firstChild);

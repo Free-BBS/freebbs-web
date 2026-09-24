@@ -161,7 +161,9 @@ test('challenge terminal ports render as two parallel horizontal leads and can h
       ],
     },
     {
-      terminalPorts: { V_IN: { side: 'left', label: 'IN' } },
+      terminalPorts: {
+        V_IN: { side: 'left', positiveLabel: 'IN +', negativeLabel: 'IN − · GND' },
+      },
       hiddenComponentIds: ['GND'],
       hiddenWireIds: ['fixed_input_ground'],
     },
@@ -171,7 +173,7 @@ test('challenge terminal ports render as two parallel horizontal leads and can h
   assert.ok(port.all((item) => item.getAttribute('d') === 'M -120 -40 H 0 M -120 40 H 0')[0]);
   assert.deepEqual(
     port.all((item) => item.tagName === 'text').map((item) => item.textContent),
-    ['IN +', 'IN −'],
+    ['IN +', 'IN − · GND'],
   );
   assert.equal(container.all((item) => item.getAttribute('data-component-id') === 'GND').length, 0);
   assert.equal(
