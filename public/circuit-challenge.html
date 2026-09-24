@@ -191,6 +191,10 @@
                   <dd id="challenge-tolerance">-</dd>
                 </div>
                 <div>
+                  <dt>通关奖励</dt>
+                  <dd id="challenge-reward">0 电元</dd>
+                </div>
+                <div>
                   <dt>当前用量</dt>
                   <dd id="challenge-component-count">0 个</dd>
                 </div>
@@ -234,6 +238,15 @@
                   max="25"
                   step="0.1"
                   value="6"
+              /></label>
+              <label
+                >每份奖励 / 电元<input
+                  id="challenge-admin-reward"
+                  type="number"
+                  min="0"
+                  max="1000000"
+                  step="1"
+                  value="20"
               /></label>
               <label class="challenge-checkbox"
                 ><input id="challenge-admin-active" type="checkbox" checked />立即上线</label
@@ -307,7 +320,9 @@
               <span>元件优先</span>
             </div>
             <div id="challenge-leaderboard" class="challenge-leaderboard"></div>
-            <p class="challenge-ranking-note">同元件数时，输出误差更小者靠前。</p>
+            <p class="challenge-ranking-note">
+              同元件数时误差更小者靠前；每次严格刷新全关最低元件数，再奖励一份。
+            </p>
           </aside>
         </section>
       </main>

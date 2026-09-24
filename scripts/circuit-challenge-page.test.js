@@ -17,11 +17,15 @@ test('circuit challenge page exposes player, leaderboard, and administrator surf
     'challenge-submit',
     'challenge-leaderboard',
     'challenge-admin-form',
+    'challenge-admin-reward',
     'challenge-admin-save',
   ])
     assert.match(html, new RegExp(`id="${id}"`));
   assert.match(script, /\/circuit-challenges\/\$\{state\.challenge\.id\}\/submissions/);
   assert.match(script, /new Worker\('\/circuit-worker\.js'\)/);
+  assert.match(script, /rewardElectric: Number\(\$\('admin-reward'\)\.value\)/);
+  assert.match(script, /刷新最低纪录/);
+  assert.match(script, /syncWallet\(payload\.balance/);
   assert.match(script, /terminalPorts:\s*\{/);
   assert.match(script, /positiveLabel: 'IN \+'/);
   assert.match(script, /negativeLabel: 'IN − · GND'/);

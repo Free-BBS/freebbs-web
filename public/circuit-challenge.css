@@ -194,7 +194,7 @@
 }
 .challenge-facts {
   display: grid;
-  grid-template-columns: repeat(3, auto);
+  grid-template-columns: repeat(4, auto);
   gap: 24px;
   flex: 0 0 auto;
 }
@@ -553,7 +553,7 @@
     border-bottom: 0;
   }
   .challenge-facts {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
   }
   .challenge-admin-form {

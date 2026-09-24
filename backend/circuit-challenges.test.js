@@ -2,12 +2,33 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const engine = require('../public/circuit-engine');
 const {
+  ensureCircuitChallengeTables,
   outputFrom,
   readChallengeInput,
+  rewardBreakdown,
   starterDocument,
   validateChallengeDocument,
   waveformError,
 } = require('./circuit-challenges');
+
+test('challenge schema upgrades existing tables with reward columns', async () => {
+  const alters = [];
+  const pool = {
+    async execute(sql) {
+      if (sql.includes('information_schema.COLUMNS')) return [[]];
+      return [[]];
+    },
+    async query(sql) {
+      alters.push(sql);
+      return [[]];
+    },
+  };
+  await ensureCircuitChallengeTables(pool);
+  assert.equal(alters.length, 3);
+  assert.ok(alters.some((sql) => sql.includes('reward_electric')));
+  assert.ok(alters.some((sql) => sql.includes('completion_reward')));
+  assert.ok(alters.some((sql) => sql.includes('record_reward')));
+});
 
 function solution() {
   const component = (id, type, x, y, params = {}, rotation = 0) => ({
@@ -55,13 +76,60 @@ test('challenge authoring derives the target output from the admin circuit', () 
     title: '半幅正弦波',
     description: '把输入幅值降为一半。',
     tolerance: 0.06,
+    rewardElectric: 25,
     document: solution(),
   });
+  assert.equal(data.rewardElectric, 25);
   assert.equal(data.target.values.length, 201);
   const input = engine.simulate(data.document).traces.find((trace) => trace.id === 'V:V_IN');
   const output = data.target.values;
   output.forEach((value, index) => assert.ok(Math.abs(value - input.values[index] / 2) < 1e-8));
   assert.equal(waveformError(data.target, data.target), 0);
+});
+
+test('completion rewards pay once while every strict component record pays again', () => {
+  assert.deepEqual(
+    rewardBreakdown({
+      rewardElectric: 25,
+      hasCompleted: false,
+      bestCount: null,
+      componentCount: 8,
+    }),
+    { completion: 25, record: 25, total: 50, newRecord: true },
+  );
+  assert.deepEqual(
+    rewardBreakdown({
+      rewardElectric: 25,
+      hasCompleted: true,
+      bestCount: 8,
+      componentCount: 7,
+    }),
+    { completion: 0, record: 25, total: 25, newRecord: true },
+  );
+  assert.deepEqual(
+    rewardBreakdown({
+      rewardElectric: 25,
+      hasCompleted: true,
+      bestCount: 7,
+      componentCount: 7,
+    }),
+    { completion: 0, record: 0, total: 0, newRecord: false },
+  );
+});
+
+test('challenge reward must be a bounded nonnegative integer', () => {
+  for (const rewardElectric of [-1, 1.5, 1000001])
+    assert.throws(
+      () =>
+        readChallengeInput({
+          title: '奖励测试',
+          description: '',
+          tolerance: 0.06,
+          rewardElectric,
+          document: solution(),
+        }),
+      /电元奖励/,
+    );
 });
 
 test('player starter keeps fixed ports and their ground returns but hides the solution', () => {

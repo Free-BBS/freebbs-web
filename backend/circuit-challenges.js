@@ -1,5 +1,6 @@
 const express = require('express');
 const { validateDocument, simulate, catalog, buildNets } = require('../public/circuit-engine');
+const { walletLedgerCheckpoint, annotateWalletLedger } = require('./wallet-ledger');
 
 const FIXED_IDS = Object.freeze({
   source: 'V_IN',
@@ -19,6 +20,7 @@ const ALLOWED_TYPES = new Set([
   'junction',
 ]);
 const MAX_BODY_BYTES = 256 * 1024;
+const MAX_REWARD_ELECTRIC = 1000000;
 
 class CircuitChallengeError extends Error {
   constructor(message, status = 400, code = 'invalid_circuit_challenge') {
@@ -36,6 +38,7 @@ async function ensureCircuitChallengeTables(pool) {
     document_json MEDIUMTEXT NOT NULL,
     target_json MEDIUMTEXT NOT NULL,
     tolerance DOUBLE NOT NULL DEFAULT 0.06,
+    reward_electric INT UNSIGNED NOT NULL DEFAULT 0,
     revision INT UNSIGNED NOT NULL DEFAULT 1,
     is_active TINYINT(1) NOT NULL DEFAULT 1,
     created_by BIGINT NULL,
@@ -53,6 +56,8 @@ async function ensureCircuitChallengeTables(pool) {
     user_id BIGINT NOT NULL,
     component_count SMALLINT UNSIGNED NOT NULL,
     error_score DOUBLE NOT NULL,
+    completion_reward INT UNSIGNED NOT NULL DEFAULT 0,
+    record_reward INT UNSIGNED NOT NULL DEFAULT 0,
     document_json MEDIUMTEXT NOT NULL,
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     CONSTRAINT fk_circuit_challenge_submissions_challenge FOREIGN KEY (challenge_id) REFERENCES circuit_challenges (id) ON DELETE CASCADE,
@@ -60,6 +65,31 @@ async function ensureCircuitChallengeTables(pool) {
     INDEX idx_circuit_challenge_rank (challenge_id, challenge_revision, component_count, error_score, created_at),
     INDEX idx_circuit_challenge_user (user_id, created_at)
   )`);
+  for (const [table, column, definition] of [
+    ['circuit_challenges', 'reward_electric', 'INT UNSIGNED NOT NULL DEFAULT 0 AFTER tolerance'],
+    [
+      'circuit_challenge_submissions',
+      'completion_reward',
+      'INT UNSIGNED NOT NULL DEFAULT 0 AFTER error_score',
+    ],
+    [
+      'circuit_challenge_submissions',
+      'record_reward',
+      'INT UNSIGNED NOT NULL DEFAULT 0 AFTER completion_reward',
+    ],
+  ]) {
+    const [rows] = await pool.execute(
+      `SELECT 1 FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1`,
+      [table, column],
+    );
+    if (rows.length) continue;
+    try {
+      await pool.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    } catch (error) {
+      if (error.code !== 'ER_DUP_FIELDNAME') throw error;
+    }
+  }
 }
 
 function parseId(value, label = '题目') {
@@ -181,11 +211,29 @@ function waveformError(actual, target) {
   return Math.sqrt(squaredError / target.values.length) / scale;
 }
 
+function rewardBreakdown({ rewardElectric, hasCompleted, bestCount, componentCount }) {
+  const reward = Number(rewardElectric) || 0;
+  const newRecord = bestCount === null || componentCount < bestCount;
+  return {
+    completion: hasCompleted ? 0 : reward,
+    record: newRecord ? reward : 0,
+    total: (hasCompleted ? 0 : reward) + (newRecord ? reward : 0),
+    newRecord,
+  };
+}
+
 function readChallengeInput(body, { updating = false } = {}) {
   if (!body || Array.isArray(body) || typeof body !== 'object') {
     throw new CircuitChallengeError('请提供题目名称、说明和电路');
   }
-  const allowed = new Set(['title', 'description', 'document', 'tolerance', 'isActive']);
+  const allowed = new Set([
+    'title',
+    'description',
+    'document',
+    'tolerance',
+    'rewardElectric',
+    'isActive',
+  ]);
   if (updating) allowed.add('expectedRevision');
   if (Object.keys(body).some((key) => !allowed.has(key))) {
     throw new CircuitChallengeError('题目请求包含不支持的字段');
@@ -193,10 +241,18 @@ function readChallengeInput(body, { updating = false } = {}) {
   const title = typeof body.title === 'string' ? body.title.trim() : '';
   const description = typeof body.description === 'string' ? body.description.trim() : '';
   const tolerance = Number(body.tolerance ?? 0.06);
+  const rewardElectric = Number(body.rewardElectric ?? 0);
   if (!title || title.length > 120) throw new CircuitChallengeError('题目名称须为 1 至 120 个字符');
   if (description.length > 2000) throw new CircuitChallengeError('题目说明不能超过 2000 个字符');
   if (!Number.isFinite(tolerance) || tolerance < 0.005 || tolerance > 0.25) {
     throw new CircuitChallengeError('允许误差须在 0.5% 至 25% 之间');
+  }
+  if (
+    !Number.isSafeInteger(rewardElectric) ||
+    rewardElectric < 0 ||
+    rewardElectric > MAX_REWARD_ELECTRIC
+  ) {
+    throw new CircuitChallengeError('电元奖励须为 0 至 1000000 的整数');
   }
   if (updating && (!Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 1)) {
     throw new CircuitChallengeError('修改题目时必须提供有效版本号');
@@ -207,6 +263,7 @@ function readChallengeInput(body, { updating = false } = {}) {
     title,
     description,
     tolerance,
+    rewardElectric,
     document,
     target,
     isActive: body.isActive !== false,
@@ -236,6 +293,7 @@ function challengeSummary(row) {
     description: row.description,
     revision: Number(row.revision),
     tolerance: Number(row.tolerance),
+    rewardElectric: Number(row.reward_electric),
     isActive: Boolean(row.is_active),
     input: {
       waveform: source.params.waveform,
@@ -259,7 +317,8 @@ function challengeDetail(row, canManage) {
 
 async function readRow(pool, id, { includeInactive = false } = {}) {
   const [rows] = await pool.execute(
-    `SELECT id, title, description, document_json, target_json, tolerance, revision, is_active
+    `SELECT id, title, description, document_json, target_json, tolerance, reward_electric,
+     revision, is_active
      FROM circuit_challenges WHERE id = ? ${includeInactive ? '' : 'AND is_active = 1'} LIMIT 1`,
     [id],
   );
@@ -303,7 +362,8 @@ function createCircuitChallengesRouter({ pool, requireAuth }) {
       if (request.headers.authorization && !user) return;
       const showAll = request.query.manage === '1' && isAdmin(user);
       const [rows] = await pool.execute(
-        `SELECT id, title, description, document_json, target_json, tolerance, revision, is_active
+        `SELECT id, title, description, document_json, target_json, tolerance, reward_electric,
+        revision, is_active
        FROM circuit_challenges ${showAll ? '' : 'WHERE is_active = 1'} ORDER BY id ASC`,
       );
       response.json({ challenges: rows.map(challengeSummary), canManage: isAdmin(user) });
@@ -394,13 +454,113 @@ function createCircuitChallengesRouter({ pool, requireAuth }) {
         (component) =>
           !Object.values(FIXED_IDS).includes(component.id) && component.type !== 'junction',
       ).length;
-      await pool.execute(
-        `INSERT INTO circuit_challenge_submissions
-       (challenge_id, challenge_revision, user_id, component_count, error_score, document_json)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-        [id, row.revision, user.id, componentCount, errorScore, JSON.stringify(document)],
-      );
-      response.status(201).json({ passed: true, componentCount, error: errorScore });
+      const connection = await pool.getConnection();
+      let rewards;
+      let balance;
+      try {
+        await connection.beginTransaction();
+        const [[lockedChallenge]] = await connection.execute(
+          `SELECT id, title, revision, is_active, reward_electric
+           FROM circuit_challenges WHERE id = ? FOR UPDATE`,
+          [id],
+        );
+        if (!lockedChallenge || !lockedChallenge.is_active) {
+          throw new CircuitChallengeError('题目不存在或已下架', 404, 'challenge_not_found');
+        }
+        if (Number(lockedChallenge.revision) !== Number(row.revision)) {
+          throw new CircuitChallengeError(
+            '题目已更新，请重新载入后再提交',
+            409,
+            'revision_conflict',
+          );
+        }
+        const [[history]] = await connection.execute(
+          `SELECT MIN(component_count) AS best_count,
+           MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS has_completed
+           FROM circuit_challenge_submissions
+           WHERE challenge_id = ? AND challenge_revision = ?`,
+          [user.id, id, row.revision],
+        );
+        rewards = rewardBreakdown({
+          rewardElectric: lockedChallenge.reward_electric,
+          hasCompleted: Number(history?.has_completed) > 0,
+          bestCount:
+            history?.best_count === null || history?.best_count === undefined
+              ? null
+              : Number(history.best_count),
+          componentCount,
+        });
+        const [submission] = await connection.execute(
+          `INSERT INTO circuit_challenge_submissions
+           (challenge_id, challenge_revision, user_id, component_count, error_score,
+            completion_reward, record_reward, document_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            id,
+            row.revision,
+            user.id,
+            componentCount,
+            errorScore,
+            rewards.completion,
+            rewards.record,
+            JSON.stringify(document),
+          ],
+        );
+        if (rewards.total) {
+          const [[account]] = await connection.execute(
+            `SELECT uid, CAST(electrons AS CHAR) AS electrons,
+             CAST(manetrons AS CHAR) AS manetrons, CAST(heat AS CHAR) AS heat
+             FROM users WHERE id = ? FOR UPDATE`,
+            [user.id],
+          );
+          const electricBefore = Number(account?.electrons);
+          if (
+            !account ||
+            !Number.isSafeInteger(electricBefore) ||
+            electricBefore < 0 ||
+            electricBefore + rewards.total > Number.MAX_SAFE_INTEGER
+          ) {
+            throw new CircuitChallengeError('账户余额异常，奖励暂未发放', 409, 'wallet_invalid');
+          }
+          const checkpoint = await walletLedgerCheckpoint(connection, user.id);
+          const [credit] = await connection.execute(
+            'UPDATE users SET electrons = electrons + ? WHERE id = ? AND electrons <= ?',
+            [rewards.total, user.id, Number.MAX_SAFE_INTEGER - rewards.total],
+          );
+          if (credit.affectedRows !== 1) {
+            throw new CircuitChallengeError('账户余额异常，奖励暂未发放', 409, 'wallet_invalid');
+          }
+          const parts = [];
+          if (rewards.completion) parts.push(`首次通关 ${rewards.completion} 电元`);
+          if (rewards.record) parts.push(`刷新最低元件纪录 ${rewards.record} 电元`);
+          await annotateWalletLedger(connection, user.id, checkpoint, {
+            sourceKey: `circuit-challenge:${id}:${row.revision}:${submission.insertId}`,
+            title: `电路闯关 · ${String(lockedChallenge.title).slice(0, 70)}`,
+            reason: `${parts.join('；')}。使用 ${componentCount} 个元件，误差 ${(
+              errorScore * 100
+            ).toFixed(2)}%。`,
+          });
+          balance = {
+            uid: account.uid,
+            electrons: electricBefore + rewards.total,
+            manetrons: Number(account.manetrons),
+            heat: Number(account.heat),
+          };
+        }
+        await connection.commit();
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
+      response.status(201).json({
+        passed: true,
+        componentCount,
+        error: errorScore,
+        rewards,
+        ...(balance ? { balance } : {}),
+      });
     }),
   );
 
@@ -412,14 +572,16 @@ function createCircuitChallengesRouter({ pool, requireAuth }) {
       const data = readChallengeInput(request.body);
       const [result] = await pool.execute(
         `INSERT INTO circuit_challenges
-       (title, description, document_json, target_json, tolerance, is_active, created_by, updated_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (title, description, document_json, target_json, tolerance, reward_electric, is_active,
+        created_by, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           data.title,
           data.description,
           JSON.stringify(data.document),
           JSON.stringify(data.target),
           data.tolerance,
+          data.rewardElectric,
           data.isActive ? 1 : 0,
           user.id,
           user.id,
@@ -439,7 +601,7 @@ function createCircuitChallengesRouter({ pool, requireAuth }) {
       const data = readChallengeInput(request.body, { updating: true });
       const [result] = await pool.execute(
         `UPDATE circuit_challenges SET title = ?, description = ?, document_json = ?, target_json = ?,
-       tolerance = ?, is_active = ?, revision = revision + 1, updated_by = ?,
+       tolerance = ?, reward_electric = ?, is_active = ?, revision = revision + 1, updated_by = ?,
        updated_at = CURRENT_TIMESTAMP(3) WHERE id = ? AND revision = ?`,
         [
           data.title,
@@ -447,6 +609,7 @@ function createCircuitChallengesRouter({ pool, requireAuth }) {
           JSON.stringify(data.document),
           JSON.stringify(data.target),
           data.tolerance,
+          data.rewardElectric,
           data.isActive ? 1 : 0,
           user.id,
           id,
@@ -471,6 +634,7 @@ module.exports = {
   ensureCircuitChallengeTables,
   outputFrom,
   readChallengeInput,
+  rewardBreakdown,
   starterDocument,
   validateChallengeDocument,
   waveformError,

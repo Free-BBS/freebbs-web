@@ -526,7 +526,7 @@
       ? state.challenges
           .map(
             (challenge) =>
-              `<button class="challenge-level ${challenge.id === state.challenge?.id ? 'is-active' : ''}" data-challenge-id="${challenge.id}" type="button"><span><strong>${escapeHtml(challenge.title)}</strong><small>${waveformName(challenge.input.waveform)} / ${challenge.input.frequency} Hz</small></span></button>`,
+              `<button class="challenge-level ${challenge.id === state.challenge?.id ? 'is-active' : ''}" data-challenge-id="${challenge.id}" type="button"><span><strong>${escapeHtml(challenge.title)}</strong><small>${waveformName(challenge.input.waveform)} / ${challenge.input.frequency} Hz · ${Number(challenge.rewardElectric) || 0} 电元</small></span></button>`,
           )
           .join('')
       : '<p class="challenge-empty">还没有上线的关卡。</p>';
@@ -599,6 +599,9 @@
     if (challenge) tolerance = `${(challenge.tolerance * 100).toFixed(1)}%`;
     else if (state.adminMode) tolerance = `${$('admin-tolerance').value}%`;
     $('tolerance').textContent = tolerance;
+    $('reward').textContent = challenge
+      ? `${Number(challenge.rewardElectric) || 0} 电元`
+      : '0 电元';
     $('component-count').textContent = `${componentCount()} 个`;
     $('admin-form').hidden = !state.adminMode;
     $('admin-save').hidden = !state.adminMode;
@@ -657,7 +660,13 @@
         body: JSON.stringify({ revision: state.challenge.revision, document: state.document }),
       });
       $('result-title').textContent = `通关，使用 ${payload.componentCount} 个元件`;
-      $('run-status').textContent = `成绩已进入榜单，误差 ${(payload.error * 100).toFixed(2)}%。`;
+      const rewardNotes = [];
+      if (payload.rewards?.completion)
+        rewardNotes.push(`首次通关 +${payload.rewards.completion} 电元`);
+      if (payload.rewards?.record) rewardNotes.push(`刷新最低纪录 +${payload.rewards.record} 电元`);
+      $('run-status').textContent =
+        `成绩已进入榜单，误差 ${(payload.error * 100).toFixed(2)}%${rewardNotes.length ? `；${rewardNotes.join('，')}` : ''}。`;
+      if (payload.balance) app.syncWallet(payload.balance, app.userState.token);
       await loadLeaderboard();
     } catch (error) {
       setStatus(error.message || '提交失败', true, 'run-status');
@@ -698,6 +707,7 @@
     $('admin-frequency').value = source.params.frequency;
     $('admin-dc').value = source.params.dc;
     $('admin-tolerance').value = editing ? state.challenge.tolerance * 100 : 6;
+    $('admin-reward').value = editing ? state.challenge.rewardElectric : 20;
     $('admin-active').checked = editing ? state.challenge.isActive : true;
     state.selectedId = '';
     state.selectedWire = '';
@@ -721,6 +731,7 @@
             title: $('admin-title').value,
             description: $('admin-description').value,
             tolerance: Number($('admin-tolerance').value) / 100,
+            rewardElectric: Number($('admin-reward').value),
             isActive: $('admin-active').checked,
             document: state.document,
             ...(editing ? { expectedRevision: editing.revision } : {}),
