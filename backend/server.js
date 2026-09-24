@@ -104,6 +104,10 @@ const {
 const { createCourseMapsRouter, ensureCourseMapTables } = require('./course-maps');
 const { createCircuitsRouter, ensureCircuitTables } = require('./circuits');
 const { createCircuitExamplesRouter, ensureCircuitExampleTables } = require('./circuit-examples');
+const {
+  createCircuitChallengesRouter,
+  ensureCircuitChallengeTables,
+} = require('./circuit-challenges');
 const { readRagCourseSnapshot } = require('./rag-course-snapshot');
 const { createCourseUploadRouter, ensureCourseUploadTables } = require('./course-upload');
 const {
@@ -2693,6 +2697,7 @@ app.use(
 );
 app.use('/api/circuits', createCircuitsRouter({ pool, requireAuth }));
 app.use('/api/circuit-examples', createCircuitExamplesRouter({ pool, requireAuth }));
+app.use('/api/circuit-challenges', createCircuitChallengesRouter({ pool, requireAuth }));
 app.use(
   '/api/course-upload',
   createCourseUploadRouter({ pool, requireAuth, uploadDir: config.uploadDir, isValidUsername }),
@@ -6225,6 +6230,7 @@ async function start() {
   await ensureCourseUploadTables(pool);
   await ensureCircuitTables(pool);
   await ensureCircuitExampleTables(pool);
+  await ensureCircuitChallengeTables(pool);
   await decayHeatIfNeeded(new Date());
   scheduleNextHeatDecay();
 

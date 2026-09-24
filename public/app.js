@@ -374,6 +374,7 @@ function initializeDashboardShell() {
     '/discussion': '讨论区',
     '/circuits': '电路实验室',
     '/circuit': '电路仿真',
+    '/circuit-challenge': '电路闯关',
     '/workbench': '我的工作台',
     '/aichat': '问问 Max',
     '/search': '全站搜索',
