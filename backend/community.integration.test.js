@@ -86,20 +86,18 @@ test(
       const source = await fs.readFile(path.join(root, 'database', file), 'utf8');
       await db.query(source.replaceAll('free_bbs', database));
     }
-    await db.query(
-      `CREATE DATABASE \`${developmentDatabase}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci`,
-    );
-    await runProgram(process.execPath, ['development/apps/api/dist/core/database/migrate.js'], {
+    await runProgram('bash', ['scripts/migrate-development.sh'], {
       cwd: root,
       env: {
         ...process.env,
+        NODE_BINARY: process.execPath,
         NODE_ENV: 'test',
-        DATA_MODE: 'mysql',
-        MYSQL_HOST: backendMysqlOptions.host,
+        BACKEND_IP: backendMysqlOptions.host,
         MYSQL_PORT: String(backendMysqlOptions.port),
         MYSQL_USER: mysqlOptions.user,
         MYSQL_PASSWORD: mysqlOptions.password,
-        MYSQL_DATABASE: developmentDatabase,
+        MYSQL_DATABASE: database,
+        DEVELOPMENT_MYSQL_DATABASE: developmentDatabase,
         ...(isolated ? { MYSQL_SOCKET: mysqlOptions.socketPath } : {}),
       },
     });

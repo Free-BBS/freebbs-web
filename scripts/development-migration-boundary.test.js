@@ -9,6 +9,10 @@ const runtime = fs.readFileSync(
   'utf8',
 );
 const migrate = fs.readFileSync(path.join(root, 'scripts/migrate.sh'), 'utf8');
+const developmentMigrate = fs.readFileSync(
+  path.join(root, 'scripts/migrate-development.sh'),
+  'utf8',
+);
 const deploy = fs.readFileSync(path.join(root, 'scripts/deploy.sh'), 'utf8');
 const mysqlIntegration = fs.readFileSync(
   path.join(root, 'backend/community.integration.test.js'),
@@ -21,8 +25,9 @@ test('ordinary development runtime startup verifies schema without applying DDL'
 });
 
 test('the controlled migration command applies development migrations', () => {
-  assert.match(migrate, /development\/apps\/api\/dist\/core\/database\/migrate\.js/);
-  assert.match(migrate, /DEVELOPMENT_MYSQL_DATABASE/);
+  assert.match(migrate, /bash scripts\/migrate-development\.sh/);
+  assert.match(developmentMigrate, /development\/apps\/api\/dist\/core\/database\/migrate\.js/);
+  assert.match(developmentMigrate, /DEVELOPMENT_MYSQL_DATABASE/);
 });
 
 test('deployment invokes all migrations only behind RUN_DB_MIGRATIONS=1', () => {
@@ -37,9 +42,7 @@ test('deployment invokes all migrations only behind RUN_DB_MIGRATIONS=1', () => 
 });
 
 test('isolated MySQL prepares the development schema before starting the integrated backend', () => {
-  const migration = mysqlIntegration.indexOf(
-    "'development/apps/api/dist/core/database/migrate.js'",
-  );
+  const migration = mysqlIntegration.indexOf("'scripts/migrate-development.sh'");
   const startup = mysqlIntegration.indexOf("spawn(process.execPath, ['backend/server.js']");
   assert.ok(migration >= 0 && startup > migration);
 });
