@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+  mysql-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: test-only-root-password
+          MYSQL_DATABASE: free_bbs_development
+          MYSQL_USER: freebbs_development
+          MYSQL_PASSWORD: test-only-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --user=root --password=test-only-root-password --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      DATA_MODE: mysql
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: free_bbs_development
+      MYSQL_USER: freebbs_development
+      MYSQL_PASSWORD: test-only-password
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mysql
+  e2e-memory:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:contracts
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+      - name: Preserve browser test report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-report-${{ github.run_attempt }}
+          path: playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  e2e-production:
+    needs: [verify, mysql-integration]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: test-only-root-password
+          MYSQL_DATABASE: free_bbs_development
+          MYSQL_USER: freebbs_development
+          MYSQL_PASSWORD: test-only-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --user=root --password=test-only-root-password --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      NODE_ENV: test
+      DATA_MODE: mysql
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: free_bbs_development
+      MYSQL_USER: freebbs_development
+      MYSQL_PASSWORD: test-only-password
+      MYSQL_ROOT_PASSWORD: test-only-root-password
+      ALLOW_DEMO_SEED: true
+      PRODUCTION_E2E_SHUTDOWN_DB: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:contracts
+      - run: npm run db:migrate
+      - run: npm run db:seed
+      - name: Bootstrap production-shape administrator
+        env:
+          NODE_ENV: production
+        run: >-
+          npm run admin:bootstrap --
+          --uid demo-admin
+          --confirm BOOTSTRAP_SUPER_ADMIN:demo-admin
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --config playwright.production.config.ts
+      - name: Preserve production-shape browser report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-production-${{ github.run_attempt }}
+          path: playwright-report/production-shape/
+          if-no-files-found: ignore
+          retention-days: 7

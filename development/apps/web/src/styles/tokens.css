@@ -1,0 +1,138 @@
+:root {
+  color-scheme: light;
+
+  --surface-page: #f4f6f8;
+  --surface-raised: #ffffff;
+  --surface-muted: #eef3f4;
+  --border-subtle: #d8e2e5;
+  --action-primary: #075d68;
+  --action-primary-text: #ffffff;
+  --nav-link-hover-background: #175267;
+  --nav-link-hover-text: #ffffff;
+  --nav-link-active-background: #075d68;
+  --nav-link-active-text: #ffffff;
+  --color-sidebar: #103744;
+  --color-sidebar-deep: #0b2934;
+  --color-active: #075d68;
+  --color-accent: #d59a25;
+  --color-page: var(--surface-page);
+  --color-line: var(--border-subtle);
+  --color-text: #14242b;
+  --color-muted: #617178;
+  --color-sidebar-text: #f7fbf9;
+  --color-paper: var(--surface-raised);
+  --color-paper-muted: var(--surface-muted);
+  --color-focus: #168c9e;
+  --color-danger: #a23d38;
+  --color-warning: #825707;
+  --color-success: #176b56;
+  --glass-fill: var(--surface-raised);
+  --glass-stroke: var(--border-subtle);
+  --glass-blur: none;
+  --gradient-deep: var(--color-sidebar);
+  --gradient-page: var(--surface-page);
+
+  --font-display: 'Syne', 'Noto Serif SC', 'Songti SC', serif;
+  --font-ui:
+    'Syne', 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', sans-serif;
+  --font-serif: 'Noto Serif SC', 'Songti SC', SimSun, serif;
+
+  --sidebar-width: 216px;
+  --titlebar-height: 68px;
+  --content-max-width: 1240px;
+  --mobile-nav-height: 76px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  --radius-sm: 12px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --shadow-card: 0 1px 2px rgba(23, 34, 32, 0.04);
+  --shadow-raised: 0 16px 36px rgba(23, 34, 32, 0.16);
+  --transition-fast: 140ms ease;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--gradient-page);
+  font-family: var(--font-ui);
+  scroll-behavior: smooth;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--gradient-page);
+  color: var(--color-text);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: rgba(39, 136, 152, 0.24);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@media (forced-colors: active) {
+  :root {
+    --color-line: CanvasText;
+  }
+
+  :focus-visible {
+    outline-color: Highlight;
+  }
+}

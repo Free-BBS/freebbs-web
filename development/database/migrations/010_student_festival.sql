@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS festival_submissions (
+  id VARCHAR(64) PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  description TEXT NOT NULL,
+  author_name VARCHAR(255) NOT NULL,
+  display_consent BOOLEAN NOT NULL DEFAULT FALSE,
+  mime_type VARCHAR(128) NOT NULL,
+  size_bytes BIGINT UNSIGNED NOT NULL,
+  storage_key VARCHAR(255) NOT NULL,
+  reviewer_uid VARCHAR(128) NULL,
+  reviewed_at DATETIME(3) NULL,
+  review_note TEXT NOT NULL,
+  status ENUM('private', 'pending', 'approved', 'rejected') NOT NULL,
+  owner_uid VARCHAR(128) NOT NULL,
+  scope_type VARCHAR(64) NOT NULL,
+  scope_id VARCHAR(128) NOT NULL,
+  created_at DATETIME(3) NOT NULL,
+  updated_at DATETIME(3) NOT NULL,
+  UNIQUE KEY uq_festival_submissions_storage_key (storage_key),
+  INDEX idx_festival_submissions_showcase (status, display_consent, created_at, id),
+  INDEX idx_festival_submissions_owner (owner_uid, created_at, id),
+  INDEX idx_festival_submissions_scope_status (scope_type, scope_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

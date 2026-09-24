@@ -6,6 +6,10 @@ cd "$ROOT_DIR"
 
 echo "[ci] installing dependencies"
 npm ci
+npm ci --prefix development
+
+echo "[ci] validating development center"
+npm run check --prefix development
 
 echo "[ci] syntax check"
 for script in scripts/*.sh; do

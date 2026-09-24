@@ -1,0 +1,15 @@
+.worktrees/
+.superpowers/
+node_modules/
+.npm-cache/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+!apps/web/.env.development
+test-results/
+playwright-report/
+blob-report/
+.data/

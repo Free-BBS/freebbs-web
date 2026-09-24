@@ -1,0 +1,95 @@
+const path = require('node:path');
+const { pathToFileURL } = require('node:url');
+
+function profileToDevelopmentIdentity(profile) {
+  return {
+    uid: profile.uid,
+    username: profile.username || null,
+    studentId: profile.studentId || null,
+    displayName: profile.username || profile.fullName || profile.uid,
+    avatarUrl: profile.avatarPath || null,
+    baseRole: 'student',
+    roles: [],
+    tags: [],
+  };
+}
+
+function createDevelopmentAuthClient({ verifyToken, getUserById, toUserProfile }) {
+  return {
+    async introspect(token) {
+      const payload = verifyToken(token);
+      if (!payload || !payload.sub) return null;
+      const row = await getUserById(payload.sub);
+      return row ? profileToDevelopmentIdentity(toUserProfile(row)) : null;
+    },
+  };
+}
+
+function createDevelopmentUserDirectory(pool) {
+  function map(row) {
+    return {
+      uid: row.uid,
+      username: row.username,
+      displayName: row.username || row.full_name || row.uid,
+      studentId: row.student_id || null,
+      avatarUrl: row.avatar_path || null,
+    };
+  }
+
+  return {
+    async list(query = '') {
+      const normalized = String(query).trim().slice(0, 80);
+      const like = `%${normalized.replace(/[!%_]/g, '!$&')}%`;
+      const [rows] = await pool.execute(
+        `SELECT uid, username, full_name, student_id, avatar_path
+         FROM users
+         WHERE uid IS NOT NULL AND uid <> ''
+           AND (? = '' OR username LIKE ? ESCAPE '!' OR full_name LIKE ? ESCAPE '!'
+             OR student_id LIKE ? ESCAPE '!' OR uid LIKE ? ESCAPE '!')
+         ORDER BY username ASC, id ASC
+         LIMIT 2000`,
+        [normalized, like, like, like, like],
+      );
+      return rows.map(map);
+    },
+    async get(uid) {
+      const [rows] = await pool.execute(
+        `SELECT uid, username, full_name, student_id, avatar_path
+         FROM users WHERE uid = ? LIMIT 1`,
+        [String(uid)],
+      );
+      return rows[0] ? map(rows[0]) : null;
+    },
+  };
+}
+
+async function loadDevelopmentRuntime({
+  repositoryRoot,
+  authClient,
+  userDirectory,
+  database,
+  uploadDirectory,
+}) {
+  const modulePath = path.join(
+    repositoryRoot,
+    'development',
+    'apps',
+    'api',
+    'dist',
+    'integrated-runtime.js',
+  );
+  const { createIntegratedDevelopmentRuntime } = await import(pathToFileURL(modulePath).href);
+  return createIntegratedDevelopmentRuntime({
+    authClient,
+    userDirectory,
+    database,
+    uploadDirectory,
+  });
+}
+
+module.exports = {
+  createDevelopmentAuthClient,
+  createDevelopmentUserDirectory,
+  loadDevelopmentRuntime,
+  profileToDevelopmentIdentity,
+};

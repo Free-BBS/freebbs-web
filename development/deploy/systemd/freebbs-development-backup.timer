@@ -1,0 +1,11 @@
+[Unit]
+Description=Schedule FreeBBS Development database backups
+
+[Timer]
+OnCalendar=*-*-* 03:20:00 UTC
+RandomizedDelaySec=20m
+Persistent=true
+Unit=freebbs-development-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,117 @@
+:root {
+  color-scheme: dark;
+}
+
+html:has(body.theme-light) {
+  color-scheme: light;
+  background: #f4f6f8;
+}
+
+html:has(body.theme-dark) {
+  color-scheme: dark;
+  background: #0d181d;
+}
+
+body.theme-dark,
+body:not(.theme-light) {
+  --surface-page: #0d181d;
+  --surface-raised: #14242b;
+  --surface-muted: #1c3139;
+  --border-subtle: rgba(223, 242, 244, 0.13);
+  --action-primary: #78d9c6;
+  --action-primary-text: #0b2934;
+  --nav-link-hover-background: #175267;
+  --nav-link-hover-text: #ffffff;
+  --nav-link-active-background: #287a8b;
+  --nav-link-active-text: #ffffff;
+  --color-sidebar: #063641;
+  --color-sidebar-deep: #0a2833;
+  --color-active: var(--action-primary);
+  --color-accent: #ffd36d;
+  --color-page: var(--surface-page);
+  --color-line: var(--border-subtle);
+  --color-text: #edf6f7;
+  --color-muted: rgba(237, 246, 247, 0.68);
+  --color-sidebar-text: #f5fbfd;
+  --color-paper: var(--surface-raised);
+  --color-paper-muted: var(--surface-muted);
+  --color-focus: #78d9c6;
+  --color-danger: #ff9b8f;
+  --color-warning: #ffd36d;
+  --color-success: #7ee0c4;
+  --glass-fill: var(--surface-raised);
+  --glass-stroke: var(--border-subtle);
+  --glass-blur: none;
+  --gradient-deep: var(--color-sidebar);
+  --gradient-page: var(--surface-page);
+  --grid-line: rgba(244, 240, 223, 0.028);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-raised: 0 24px 70px rgba(0, 0, 0, 0.34);
+}
+
+body.theme-light {
+  color-scheme: light;
+  --surface-page: #f4f6f8;
+  --surface-raised: #ffffff;
+  --surface-muted: #edf2f3;
+  --border-subtle: rgba(7, 19, 23, 0.12);
+  --action-primary: #075d68;
+  --action-primary-text: #ffffff;
+  --nav-link-hover-background: #175267;
+  --nav-link-hover-text: #ffffff;
+  --nav-link-active-background: #075d68;
+  --nav-link-active-text: #ffffff;
+  --color-sidebar: #063641;
+  --color-sidebar-deep: #0b2934;
+  --color-active: var(--action-primary);
+  --color-accent: #a66f11;
+  --color-page: var(--surface-page);
+  --color-line: var(--border-subtle);
+  --color-text: #071317;
+  --color-muted: rgba(7, 19, 23, 0.62);
+  --color-sidebar-text: #f5fbfd;
+  --color-paper: var(--surface-raised);
+  --color-paper-muted: var(--surface-muted);
+  --color-focus: #146b71;
+  --color-danger: #9d3932;
+  --color-warning: #7c560a;
+  --color-success: #176b56;
+  --glass-fill: var(--surface-raised);
+  --glass-stroke: var(--border-subtle);
+  --gradient-deep: var(--color-sidebar);
+  --gradient-page: var(--surface-page);
+  --grid-line: rgba(17, 19, 21, 0.035);
+  --shadow-card: 0 1px 2px rgba(12, 19, 32, 0.04);
+  --shadow-raised: 0 24px 70px rgba(5, 10, 18, 0.22);
+}
+
+body.theme-dark .dialog-form,
+body:not(.theme-light) .dialog-form {
+  background: rgba(16, 27, 35, 0.97);
+}
+
+body.theme-dark .dialog-form-actions,
+body:not(.theme-light) .dialog-form-actions {
+  background: rgba(16, 27, 35, 0.94);
+}
+
+body.theme-dark .module-icon img,
+body:not(.theme-light) .module-icon img {
+  filter: brightness(0) invert(1);
+}
+
+body.theme-dark .admin-governance-page,
+body:not(.theme-light) .admin-governance-page {
+  --admin-paper: rgba(244, 240, 223, 0.07);
+  --admin-paper-deep: rgba(244, 240, 223, 0.045);
+  --admin-ink: #f4f0df;
+  --admin-gold: #ffd36d;
+  --admin-gold-soft: rgba(255, 211, 109, 0.12);
+  --admin-red: #ff9b8f;
+  --admin-surface-end: rgba(244, 240, 223, 0.12);
+  --admin-tab-surface: rgba(16, 27, 35, 0.94);
+  --admin-tab-ink: rgba(244, 240, 223, 0.72);
+  --admin-hover-surface: rgba(244, 240, 223, 0.1);
+  --admin-action-ink: #ffd36d;
+  --admin-card-end: rgba(244, 240, 223, 0.1);
+}
