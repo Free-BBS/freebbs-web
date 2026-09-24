@@ -5,6 +5,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { SportsMatchesPage } from './SportsMatchesPage.js';
 
+const endedToday = () => {
+  const endsAt = new Date();
+  const startsAt = new Date(endsAt);
+  startsAt.setHours(0, 0, 0, 0);
+  return { startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() };
+};
+
 describe('SportsMatchesPage', () => {
   it('shows the date timeline and creation entry for a sports member', async () => {
     const user = userEvent.setup();
@@ -38,13 +45,13 @@ describe('SportsMatchesPage', () => {
   });
 
   it('shows an optional result on an ended match', async () => {
+    const times = endedToday();
     const request = vi.fn().mockResolvedValue([
       {
         id: 'ended-match',
         title: '马杯篮球决赛',
         coverUrl: null,
-        startsAt: new Date(Date.now() - 7_200_000).toISOString(),
-        endsAt: new Date(Date.now() - 3_600_000).toISOString(),
+        ...times,
         location: '篮球馆',
         liveUrl: null,
         replayUrl: null,
@@ -70,12 +77,12 @@ describe('SportsMatchesPage', () => {
 
   it('lets the match owner update an ended result', async () => {
     const user = userEvent.setup();
+    const times = endedToday();
     const match = {
       id: 'ended-match',
       title: '马杯篮球决赛',
       coverUrl: null,
-      startsAt: new Date(Date.now() - 7_200_000).toISOString(),
-      endsAt: new Date(Date.now() - 3_600_000).toISOString(),
+      ...times,
       location: '篮球馆',
       liveUrl: null,
       replayUrl: null,
