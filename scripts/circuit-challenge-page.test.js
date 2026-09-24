@@ -10,6 +10,7 @@ const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
 test('circuit challenge page exposes player, leaderboard, and administrator surfaces', () => {
   for (const id of [
     'challenge-level-list',
+    'challenge-empty',
     'challenge-waveform',
     'challenge-stage',
     'challenge-palette',
@@ -22,4 +23,12 @@ test('circuit challenge page exposes player, leaderboard, and administrator surf
   assert.match(script, /\/circuit-challenges\/\$\{state\.challenge\.id\}\/submissions/);
   assert.match(script, /new Worker\('\/circuit-worker\.js'\)/);
   assert.match(server, /\['\/circuit-challenge', '\/circuit-challenge\.html'\]/);
+});
+
+test('circuit challenge page uses the complete responsive site navigation', () => {
+  assert.match(html, /class="searchbar"/);
+  assert.match(html, /href="\/aichat"/);
+  assert.match(html, /class="mobile-nav"/);
+  assert.match(html, /id="user-settings-button"/);
+  assert.match(html, /id="user-logout-button"/);
 });

@@ -341,7 +341,7 @@
       .querySelectorAll('button')
       .forEach((button) => {
         const control = button;
-        control.disabled = state.busy;
+        control.disabled = state.busy || (!state.challenge && !state.adminMode);
       });
   }
 
@@ -563,6 +563,9 @@
 
   function renderChallenge() {
     const { challenge } = state;
+    const empty = !challenge && !state.adminMode;
+    root.classList.toggle('is-empty', empty);
+    $('empty').hidden = !empty;
     $('title').textContent =
       challenge?.title || (state.adminMode ? '新建闯关题目' : '选择一个关卡');
     $('description').textContent =

@@ -17,20 +17,41 @@
   <body class="circuit-page circuit-challenge-page">
     <div class="page-shell page-shell-settings">
       <header class="topbar">
-        <a class="brand" href="/" aria-label="FREE-BBS 首页"
-          ><span class="brand-mark">FREE<br />BBS</span></a
-        >
-        <nav class="challenge-breadcrumb" aria-label="页面导航">
-          <a href="/circuits">电路实验室</a><span aria-hidden="true">/</span
-          ><strong>闯关模式</strong>
-        </nav>
+        <a class="brand" href="/" aria-label="FREE-BBS 首页">
+          <span class="brand-mark">FREE<br />BBS</span>
+        </a>
+
+        <form class="searchbar" role="search">
+          <span class="search-symbol" aria-hidden="true">⌕</span>
+          <input type="search" placeholder="搜索课程、讨论、资料、地图坐标" aria-label="搜索" />
+        </form>
+
         <nav class="nav-actions" aria-label="顶部导航">
-          <a class="nav-link" href="/world"
-            ><img class="nav-icon" src="/assets/icons/map.svg" alt="" /><span>学习世界</span></a
-          >
-          <a class="nav-link" href="/discussion"
-            ><img class="nav-icon" src="/assets/icons/people.svg" alt="" /><span>讨论</span></a
-          >
+          <a class="nav-link" href="/">
+            <img class="nav-icon" src="/assets/icons/home.svg" alt="" aria-hidden="true" />
+            <span>主页</span>
+          </a>
+          <a class="nav-link" href="/world">
+            <img class="nav-icon" src="/assets/icons/map.svg" alt="" aria-hidden="true" />
+            <span>学习世界</span>
+          </a>
+          <a class="nav-link" href="/discussion">
+            <img class="nav-icon" src="/assets/icons/people.svg" alt="" aria-hidden="true" />
+            <span>讨论</span>
+          </a>
+          <a class="nav-link" href="/aichat">
+            <img class="nav-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
+            <span>问问 Max</span>
+          </a>
+          <a class="nav-link fortune-link hidden" href="#">
+            <img class="nav-icon" src="/assets/icons/yunshi.svg" alt="" aria-hidden="true" />
+            <span>今日运势</span>
+          </a>
+          <a class="nav-link manage-link hidden" href="/adminusers">
+            <img class="nav-icon" src="/assets/icons/gear.svg" alt="" aria-hidden="true" />
+            <span>管理</span>
+          </a>
+
           <div class="user-panel" id="user-panel">
             <div class="user-summary">
               <button class="avatar" type="button" aria-label="用户头像">
@@ -38,17 +59,80 @@
                   class="avatar-image"
                   id="avatar-image"
                   src="/assets/avatar_placeholder.webp"
-                  alt="用户头像"
+                  alt="用户头像占位图"
                 />
               </button>
+              <div class="user-actions" id="user-actions">
+                <button
+                  class="user-icon-button hidden"
+                  id="user-settings-button"
+                  type="button"
+                  aria-label="设置"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/gear.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>设置</span>
+                </button>
+                <button
+                  class="user-icon-button hidden"
+                  id="user-logout-button"
+                  type="button"
+                  aria-label="退出"
+                >
+                  <img
+                    class="user-action-icon"
+                    src="/assets/icons/exit.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>退出</span>
+                </button>
+              </div>
               <div class="user-copy">
                 <button class="user-name" type="button" id="user-name">登录/注册</button>
                 <div class="user-role" id="user-role">学生</div>
               </div>
             </div>
+            <div class="user-status" id="user-status">
+              <span class="currency currency-electric" data-tooltip="电元" aria-label="电元">
+                <img class="currency-icon" src="/assets/icons/electron.svg" alt="电元" />
+                <span class="currency-value">-</span>
+              </span>
+              <span class="currency currency-magnetic" data-tooltip="磁元" aria-label="磁元">
+                <img class="currency-icon" src="/assets/icons/magnetron.svg" alt="磁元" />
+                <span class="currency-value">-</span>
+              </span>
+            </div>
           </div>
         </nav>
       </header>
+
+      <nav class="mobile-nav" aria-label="手机底部导航">
+        <a class="nav-link" href="/world">
+          <img class="nav-icon" src="/assets/icons/map.svg" alt="" aria-hidden="true" />
+          <span>学习世界</span>
+        </a>
+        <a class="nav-link" href="/discussion">
+          <img class="nav-icon" src="/assets/icons/people.svg" alt="" aria-hidden="true" />
+          <span>讨论</span>
+        </a>
+        <a class="nav-link" href="/aichat">
+          <img class="nav-icon" src="/assets/icons/ai.svg" alt="" aria-hidden="true" />
+          <span>问问 Max</span>
+        </a>
+        <a class="nav-link fortune-link hidden" href="#">
+          <img class="nav-icon" src="/assets/icons/yunshi.svg" alt="" aria-hidden="true" />
+          <span>今日运势</span>
+        </a>
+        <a class="nav-link manage-link hidden" href="/adminusers">
+          <img class="nav-icon" src="/assets/icons/gear.svg" alt="" aria-hidden="true" />
+          <span>管理</span>
+        </a>
+      </nav>
 
       <main class="challenge-main" data-circuit-challenge-page>
         <header class="challenge-header">
@@ -60,7 +144,7 @@
           <div class="challenge-header-actions">
             <button id="challenge-admin-new" type="button" hidden>新建题目</button>
             <button id="challenge-admin-edit" type="button" hidden>编辑当前题目</button>
-            <a class="challenge-button" href="/circuit">自由实验</a>
+            <a class="challenge-button" href="/circuits">返回实验室</a>
           </div>
         </header>
 
@@ -80,6 +164,15 @@
             <div id="challenge-level-list" class="challenge-level-list" aria-live="polite"></div>
             <button id="challenge-retry" type="button" hidden>重新读取</button>
           </aside>
+
+          <section id="challenge-empty" class="challenge-empty-state" hidden>
+            <div class="challenge-empty-mark" aria-hidden="true">V<sub>OUT</sub></div>
+            <div>
+              <h2>关卡正在准备中</h2>
+              <p>管理员发布题目后，这里会显示输入波形、目标输出和可编辑电路画布。</p>
+            </div>
+            <a class="challenge-button" href="/circuit">先去自由实验</a>
+          </section>
 
           <section class="challenge-workbench" aria-labelledby="challenge-title">
             <div class="challenge-brief">
