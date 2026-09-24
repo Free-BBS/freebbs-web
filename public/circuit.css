@@ -146,6 +146,17 @@ body.circuit-page
   height: 18px;
   flex: none;
 }
+.circuit-main .circuit-challenge-entry {
+  border-color: #74d6a4;
+  background: color-mix(in srgb, #74d6a4 10%, var(--ui-surface));
+  color: #74d6a4;
+  font-weight: 700;
+}
+.circuit-main .circuit-challenge-entry:hover {
+  border-color: #8ee8ba;
+  background: color-mix(in srgb, #74d6a4 18%, var(--ui-surface));
+  color: #8ee8ba;
+}
 .circuit-document-heading {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(260px, 2fr);
@@ -600,6 +611,10 @@ body.circuit-page
   }
   .circuit-heading-actions > * {
     flex: 1;
+  }
+  .circuit-list-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
   .circuit-editor-actions {
     display: grid;

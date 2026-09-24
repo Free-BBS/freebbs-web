@@ -159,7 +159,16 @@
               <h1>我的电路</h1>
               <p>搭建、仿真，并把可复现的实验嵌入课程讨论。</p>
             </div>
-            <a class="circuit-button is-primary" href="/circuit?new=1">新建电路</a>
+            <div
+              class="circuit-heading-actions circuit-list-actions"
+              role="group"
+              aria-label="电路入口"
+            >
+              <a class="circuit-button circuit-challenge-entry" href="/circuit-challenge"
+                >进入闯关模式</a
+              >
+              <a class="circuit-button is-primary" href="/circuit?new=1">新建电路</a>
+            </div>
           </header>
           <p id="circuit-list-status" class="circuit-status" role="status"></p>
           <div class="circuit-list" id="circuit-list"></div>

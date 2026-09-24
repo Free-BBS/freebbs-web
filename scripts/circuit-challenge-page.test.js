@@ -4,6 +4,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const html = fs.readFileSync(path.join(__dirname, '../public/circuit-challenge.html'), 'utf8');
+const circuitHtml = fs.readFileSync(path.join(__dirname, '../public/circuit.html'), 'utf8');
 const script = fs.readFileSync(path.join(__dirname, '../public/circuit-challenge.js'), 'utf8');
 const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
 
@@ -39,4 +40,12 @@ test('circuit challenge page uses the complete responsive site navigation', () =
   assert.match(html, /class="mobile-nav"/);
   assert.match(html, /id="user-settings-button"/);
   assert.match(html, /id="user-logout-button"/);
+});
+
+test('circuit library exposes a prominent challenge entry beside new circuit', () => {
+  const listPage =
+    circuitHtml.match(/<section id="circuit-list-page"[\s\S]*?<\/section>/)?.[0] || '';
+  assert.match(listPage, /href="\/circuit-challenge"/);
+  assert.match(listPage, />进入闯关模式</);
+  assert.match(listPage, /href="\/circuit\?new=1"/);
 });
