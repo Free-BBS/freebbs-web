@@ -14,6 +14,23 @@ function profileToDevelopmentIdentity(profile) {
   };
 }
 
+function createDevelopmentDatabaseConfig(mainDatabase, environment = process.env) {
+  const socketPath =
+    environment.DEVELOPMENT_MYSQL_SOCKET?.trim() || mainDatabase.socketPath || undefined;
+  return {
+    host: environment.DEVELOPMENT_MYSQL_HOST?.trim() || mainDatabase.host,
+    port: Number(environment.DEVELOPMENT_MYSQL_PORT || mainDatabase.port),
+    user: environment.DEVELOPMENT_MYSQL_USER?.trim() || mainDatabase.user,
+    password:
+      environment.DEVELOPMENT_MYSQL_PASSWORD !== undefined
+        ? environment.DEVELOPMENT_MYSQL_PASSWORD
+        : mainDatabase.password,
+    database:
+      environment.DEVELOPMENT_MYSQL_DATABASE?.trim() || `${mainDatabase.database}_development`,
+    ...(socketPath ? { socketPath } : {}),
+  };
+}
+
 function createDevelopmentAuthClient({ verifyToken, getUserById, toUserProfile }) {
   return {
     async introspect(token) {
@@ -89,6 +106,7 @@ async function loadDevelopmentRuntime({
 
 module.exports = {
   createDevelopmentAuthClient,
+  createDevelopmentDatabaseConfig,
   createDevelopmentUserDirectory,
   loadDevelopmentRuntime,
   profileToDevelopmentIdentity,

@@ -3,8 +3,43 @@ const test = require('node:test');
 
 const {
   createDevelopmentAuthClient,
+  createDevelopmentDatabaseConfig,
   createDevelopmentUserDirectory,
 } = require('./development-integration');
+
+test('development data uses a peer database schema while inheriting the main server connection', () => {
+  const main = {
+    host: 'mysql.internal',
+    port: 3306,
+    user: 'freebbs',
+    password: 'secret',
+    database: 'free_bbs',
+    socketPath: '/run/mysqld/mysqld.sock',
+  };
+
+  assert.deepEqual(createDevelopmentDatabaseConfig(main, {}), {
+    ...main,
+    database: 'free_bbs_development',
+  });
+  assert.deepEqual(
+    createDevelopmentDatabaseConfig(main, {
+      DEVELOPMENT_MYSQL_HOST: 'development-db.internal',
+      DEVELOPMENT_MYSQL_PORT: '3307',
+      DEVELOPMENT_MYSQL_USER: 'development',
+      DEVELOPMENT_MYSQL_PASSWORD: 'development-secret',
+      DEVELOPMENT_MYSQL_DATABASE: 'development_data',
+      DEVELOPMENT_MYSQL_SOCKET: '/tmp/development.sock',
+    }),
+    {
+      host: 'development-db.internal',
+      port: 3307,
+      user: 'development',
+      password: 'development-secret',
+      database: 'development_data',
+      socketPath: '/tmp/development.sock',
+    },
+  );
+});
 
 test('development auth adapter accepts only a verified main-site account', async () => {
   const client = createDevelopmentAuthClient({

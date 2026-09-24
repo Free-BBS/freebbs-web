@@ -41,6 +41,7 @@ test(
   },
   async (t) => {
     const database = `freebbs_community_test_${crypto.randomBytes(6).toString('hex')}`;
+    const developmentDatabase = `${database}_development`;
     const root = path.resolve(__dirname, '..');
     const isolated = Boolean(process.env.FREEBBS_TEST_MYSQL_SOCKET);
     // Keep legacy TCP settings separate from the verified socket configuration;
@@ -66,7 +67,10 @@ test(
           backend.kill('SIGTERM');
           await once(backend, 'exit');
         }
-        if (db && databaseInitialized) await db.query(`DROP DATABASE IF EXISTS \`${database}\``);
+        if (db && databaseInitialized) {
+          await db.query(`DROP DATABASE IF EXISTS \`${developmentDatabase}\``);
+          await db.query(`DROP DATABASE IF EXISTS \`${database}\``);
+        }
       } finally {
         try {
           if (db) await db.end();
@@ -82,6 +86,9 @@ test(
       const source = await fs.readFile(path.join(root, 'database', file), 'utf8');
       await db.query(source.replaceAll('free_bbs', database));
     }
+    await db.query(
+      `CREATE DATABASE \`${developmentDatabase}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci`,
+    );
     const port = await reservePort();
     backend = spawn(process.execPath, ['backend/server.js'], {
       cwd: root,
@@ -96,6 +103,7 @@ test(
         MYSQL_PASSWORD: mysqlOptions.password,
         ...(isolated ? { MYSQL_SOCKET: mysqlOptions.socketPath } : {}),
         MYSQL_DATABASE: database,
+        DEVELOPMENT_MYSQL_DATABASE: developmentDatabase,
         AUTH_SECRET: crypto.randomBytes(32).toString('hex'),
         UPLOAD_DIR: path.join(temp, 'uploads'),
         AGENT_SERVICE_TOKEN: '',
