@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { createPool, type Pool, type PoolConnection, type RowDataPacket } from 'mysql2/promise';
 
@@ -191,6 +191,10 @@ export interface MigrationOptions {
   environment?: NodeJS.ProcessEnv;
 }
 
+export function defaultMigrationsDirectory(): string {
+  return fileURLToPath(new URL('../../../../../database/migrations/', import.meta.url));
+}
+
 export async function runMigrations(options: MigrationOptions = {}): Promise<string[]> {
   const ownPool = !options.pool;
   const pool =
@@ -204,8 +208,7 @@ export async function runMigrations(options: MigrationOptions = {}): Promise<str
         applied_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
     `);
-    const defaultDirectory = resolve(process.cwd(), 'database/migrations');
-    const migrations = await discoverMigrations(options.directory ?? defaultDirectory);
+    const migrations = await discoverMigrations(options.directory ?? defaultMigrationsDirectory());
     for (const migration of migrations) await applyMigration(connection, migration);
     return migrations.map(({ name }) => name);
   } finally {
