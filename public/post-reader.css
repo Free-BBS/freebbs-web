@@ -476,7 +476,8 @@ body.discussion-page .discussion-comment-parent:hover strong {
   text-decoration: underline;
   text-underline-offset: 0.16em;
 }
-body.discussion-page #discussion-detail .discussion-comment,
+/* Active leases keep the laser surface; ordinary and expired replies stay flat. */
+body.discussion-page #discussion-detail .discussion-comment:not(.has-laser-glow),
 body.discussion-page #discussion-detail .discussion-comment-body,
 body.discussion-page #discussion-detail .discussion-comment-content,
 body.discussion-page #discussion-detail .discussion-comment-actions,
@@ -497,6 +498,11 @@ body.discussion-page
 }
 
 @media (max-width: 900px) {
+  body.discussion-page.post-reading .discussion-detail-meta > .discussion-author-link {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+
   body.discussion-page .discussion-comment-thread-toggle {
     margin-left: 40px;
     margin-bottom: 10px;

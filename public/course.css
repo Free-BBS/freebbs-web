@@ -7216,7 +7216,7 @@ a.knowledge-route-node:focus-visible {
   border: 1px solid var(--course-line);
 }
 
-/* Keep the sticky shell within the full reading section, not a single grid row. */
+/* Keep the sticky introduction within the full reading section, flush to the viewport top. */
 #knowledge-reading:not(.hidden) {
   display: block;
 }
@@ -7228,7 +7228,7 @@ a.knowledge-route-node:focus-visible {
   --history-muted: #65517f;
   --history-inset: #faf7ff;
   position: sticky;
-  top: 128px;
+  top: 0;
   z-index: 12;
   width: 100%;
   margin: 20px 0 20px auto;

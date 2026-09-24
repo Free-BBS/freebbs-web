@@ -1,0 +1,9 @@
+[
+  {
+    "key": "fish",
+    "source": "D:/CodexData/.codex/generated_images/01a051d2-b779-7f90-a787-8e58ca25305c/exec-72cba3d5-fec4-4c2b-bdff-081e62b873ee.png",
+    "mode": "built-in image_gen edit",
+    "target": "public/assets/shop/max-cartoon-v1/fish.webp",
+    "prompt": "Use case: precise-object-edit. Asset type: FREE BBS game shop pet-food icon. Image 1 is the edit target and rendering-style reference. Replace the fancy ornamental tropical fish with ONE modest ordinary small silver-gray sardine, clearly a plain feeding fish for the pet Max, NOT an aquarium pet. Preserve the refined hand-painted cartoon game-item rendering quality, clean warm outlines, subtle dimensional shading, balanced centered square composition and genuinely transparent alpha background. Subject should have a normal slender fish silhouette, compact ordinary triangular fins and forked tail, muted slate-gray back, silvery pale underside, very small neutral fish eye and closed simple mouth. No oversized cute sparkling eye, no smile, no eyelashes, no multicolored scales, no coral/aqua fancy fins, no iridescence, no bubbles, no magic sparkle, no text, no bowl, no additional fish. Not gore or grotesque, not realistic photo, not flat stick-figure or simplistic vector; restrained good-looking detailed painterly food-item illustration. Whole fish visible with margin, single horizontal gently curved silhouette."
+  }
+]

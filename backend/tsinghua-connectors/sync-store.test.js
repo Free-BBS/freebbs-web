@@ -286,6 +286,75 @@ test('completeRun stores normalized courses and notices by semester', async () =
   assert.equal(upsert.parameters[1], '2026-2027-1');
   assert.equal(JSON.parse(upsert.parameters[2])[0].title, '信号与系统');
   assert.equal(JSON.parse(upsert.parameters[3])[0].courseReference, 'course:a');
+  assert.equal(upsert.parameters[6], 3);
+});
+
+test('partial course snapshots preserve omitted and unparseable prior courses within the same identity generation', async () => {
+  const old = [
+    {
+      sourceReference: 'course:a',
+      title: 'A',
+      scheduleText: '1-16周 周一第1大节',
+      locationText: '101',
+    },
+    { sourceReference: 'course:b', title: 'B', scheduleText: '1-8周 周二第2大节' },
+    { sourceReference: 'course:c', title: 'C', scheduleText: '1-8周 周三第3大节' },
+  ];
+  const pool = createTransactionalPool(async (sql, parameters) => {
+    if (sql.startsWith('SELECT r.id AS run_id')) return [[runningRow()], []];
+    if (sql.startsWith('SELECT s.courses_json')) {
+      assert.deepEqual(parameters, [7, '2026-2027-1', 3]);
+      assert.match(sql, /c.generation = s.connector_generation/);
+      assert.match(sql, /s.fetched_at >= c.connected_at/);
+      return [[{ courses_json: old }]];
+    }
+    return [{ affectedRows: 1 }, []];
+  });
+  await createTsinghuaSyncStore(pool).completeRun(
+    claimedRun(),
+    {
+      status: 'partial',
+      semesterId: '2026-2027-1',
+      courses: [
+        { ...old[0], scheduleText: '', locationText: '201' },
+        { ...old[2], scheduleText: '1-8周 周五第4大节', locationText: '301' },
+      ],
+    },
+    new Date('2026-09-22T02:00:00Z'),
+  );
+  const stored = pool.calls.find(({ sql }) =>
+    sql.startsWith('INSERT INTO campus_learn_semester_snapshots'),
+  );
+  const courses = JSON.parse(stored.parameters[2]);
+  assert.equal(courses.length, 3);
+  assert.equal(courses[0].scheduleText, old[0].scheduleText);
+  assert.equal(courses[0].locationText, '201');
+  assert.match(courses[0].calendarSyncWarning, /保留/);
+  assert.equal(courses[1].sourceReference, 'course:b');
+  assert.equal(courses[2].scheduleText, '1-8周 周五第4大节');
+  assert.equal(courses[2].calendarSyncWarning, undefined);
+});
+
+test('complete course snapshots replace removed courses without retaining stale arrangements', async () => {
+  const pool = createTransactionalPool(async (sql) => {
+    if (sql.startsWith('SELECT r.id AS run_id')) return [[runningRow()], []];
+    if (sql.startsWith('SELECT s.courses_json'))
+      assert.fail('complete snapshots do not retain old courses');
+    return [{ affectedRows: 1 }, []];
+  });
+  await createTsinghuaSyncStore(pool).completeRun(
+    claimedRun(),
+    {
+      status: 'complete',
+      semesterId: '2026-2027-1',
+      courses: [],
+    },
+    new Date('2026-09-22T02:00:00Z'),
+  );
+  const stored = pool.calls.find(({ sql }) =>
+    sql.startsWith('INSERT INTO campus_learn_semester_snapshots'),
+  );
+  assert.deepEqual(JSON.parse(stored.parameters[2]), []);
 });
 
 test('a partial snapshot never cancels items omitted from that snapshot', async () => {

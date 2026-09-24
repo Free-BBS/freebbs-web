@@ -24,6 +24,7 @@ const TEST_FILES = [
   'backend/surveys.test.js',
   'backend/community.integration.test.js',
   'backend/workbench-schedule-planner.mysql.test.js',
+  'backend/course-schedule.mysql.test.js',
 ];
 
 function testEnvironment(socketPath, original = process.env) {
@@ -76,6 +77,7 @@ const REQUIRED_MYSQL_TESTS = [
   'isolated MySQL validates migration',
   'MySQL ledger captures',
   'isolated MySQL: planner preview',
+  'isolated MySQL: course migration, settings, resync and connector generation',
 ];
 
 function validateMysqlTestOutput(output) {

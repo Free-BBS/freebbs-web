@@ -1,6 +1,11 @@
 const crypto = require('crypto');
 const express = require('express');
 const { listHomeworkDeadlines, setHomeworkCompletion } = require('./homework-schedule');
+const {
+  listCourseSchedules,
+  readCourseCalendar,
+  saveCourseCalendar,
+} = require('./course-schedule');
 const { probePrimaryTsinghuaPortals } = require('./portal-boundary-probe');
 const { probePublicNoticeSource } = require('./public-source-probe');
 const { getLearnConnectorCapabilities } = require('./tsinghua-learn-connector');
@@ -453,10 +458,13 @@ function createWorkbenchRouter({
         [user.id, range.end, range.start],
       );
 
+      const courses = await listCourseSchedules(pool, user.id, range, 'confirmed');
       response.json({
         importantItems: importantRows.map(toImportantItem),
         notifications: notificationRows.map(toNotification),
-        scheduleItems: scheduleRows.map(toScheduleItem),
+        scheduleItems: [...scheduleRows.map(toScheduleItem), ...courses]
+          .sort((a, b) => new Date(a.startAt) - new Date(b.startAt))
+          .slice(0, 4),
         range: {
           start: range.start.toISOString(),
           end: range.end.toISOString(),
@@ -465,6 +473,29 @@ function createWorkbenchRouter({
       });
     } catch (error) {
       sendWorkbenchError(response, error, '读取个人工作台失败');
+    }
+  });
+
+  router.get('/campus/course-calendar', async (request, response) => {
+    try {
+      const user = await requireAuth(request, response);
+      if (!user) return;
+      response.json(await readCourseCalendar(pool, user.id, request.query.semester));
+    } catch (error) {
+      if (error.status === 400) response.status(400).json({ message: error.message });
+      else sendWorkbenchError(response, error, '读取课程课表失败');
+    }
+  });
+
+  router.put('/campus/course-calendar', async (request, response) => {
+    try {
+      const user = await requireAuth(request, response);
+      if (!user) return;
+      response.json(await saveCourseCalendar(pool, user.id, request.body || {}));
+    } catch (error) {
+      if ([400, 409].includes(error.status))
+        response.status(error.status).json({ message: error.message });
+      else sendWorkbenchError(response, error, '保存课程校历失败');
     }
   });
 
@@ -1024,8 +1055,9 @@ function createWorkbenchRouter({
         parameters,
       );
       const homework = await listHomeworkDeadlines(pool, user.id, range, status);
+      const courses = await listCourseSchedules(pool, user.id, range, status);
       response.json({
-        scheduleItems: [...rows.map(toScheduleItem), ...homework].sort(
+        scheduleItems: [...rows.map(toScheduleItem), ...homework, ...courses].sort(
           (a, b) => new Date(a.endAt) - new Date(b.endAt),
         ),
         range: {
@@ -1075,7 +1107,13 @@ function createWorkbenchRouter({
          ORDER BY start_at ASC`,
         parameters,
       );
-      response.json({ conflicts: rows.map(toScheduleItem) });
+      const courses = await listCourseSchedules(
+        pool,
+        user.id,
+        { start: startAt, end: endAt },
+        'confirmed',
+      );
+      response.json({ conflicts: [...rows.map(toScheduleItem), ...courses] });
     } catch (error) {
       sendWorkbenchError(response, error, '检查日程冲突失败');
     }

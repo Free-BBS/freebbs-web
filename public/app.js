@@ -1217,6 +1217,14 @@ function renderShopCost(cost = {}, priceMode = 'alternative') {
   return parts.join(priceMode === 'combined' ? ' ＋ ' : ' 或 ') || '未定价';
 }
 
+function renderShopItemMedia(item, { id = '', fallback = '/assets/icons/battery.svg' } = {}) {
+  const extras = window.FreeBbsProfileExtras;
+  const preview =
+    item.key === 'max_pet' ? extras?.ranchPreview?.() : extras?.cosmeticPreview?.(item.key);
+  if (preview) return preview;
+  return `<img ${id ? `id="${escapeHtml(id)}"` : ''} src="${escapeHtml(item.image || fallback)}" alt="" aria-hidden="true" loading="lazy" decoding="async" width="512" height="512" />`;
+}
+
 function ensureShopInspectModal() {
   let modal = document.getElementById('shop-inspect-modal');
 
@@ -1431,7 +1439,9 @@ function openShopInspectModal(itemKey) {
 
   const modal = ensureShopInspectModal();
   modal.dataset.itemKey = item.key;
-  modal.querySelector('#shop-inspect-image').src = item.image || '/assets/icons/battery.svg';
+  modal.querySelector('.shop-inspect-image').innerHTML = renderShopItemMedia(item, {
+    id: 'shop-inspect-image',
+  });
   modal.querySelector('#shop-inspect-class').textContent =
     item.class === 'useless' ? '无用类' : '资产';
   modal.querySelector('#shop-inspect-title').textContent = item.name || item.key;
@@ -1549,7 +1559,10 @@ function openInventoryInspectModal(asset) {
   const modal = ensureShopInspectModal();
   modal.dataset.itemKey = '';
   modal.dataset.assetKey = asset.key;
-  modal.querySelector('#shop-inspect-image').src = item.image || '/assets/icons/inventory.svg';
+  modal.querySelector('.shop-inspect-image').innerHTML = renderShopItemMedia(
+    { ...item, key: item.key || asset.key },
+    { id: 'shop-inspect-image', fallback: '/assets/icons/inventory.svg' },
+  );
   modal.querySelector('#shop-inspect-class').textContent =
     item.class === 'useless' ? '无用类' : '资产';
   modal.querySelector('#shop-inspect-title').textContent = item.name || asset.key || '资产';
@@ -1725,7 +1738,7 @@ async function loadElectromagneticPage() {
         <article class="shop-item-card" data-item-key="${escapeHtml(item.key)}" data-product-class="${escapeHtml(item.class)}">
           <span class="asset-quantity-badge">已拥有 ${assetQuantityByKey.get(item.assetKey || item.key) || 0}</span>
           <div class="shop-item-image">
-            <img src="${escapeHtml(item.image || '/assets/icons/battery.svg')}" alt="" aria-hidden="true" />
+            ${renderShopItemMedia(item)}
           </div>
           <div class="shop-item-copy">
             <span class="shop-category">${escapeHtml({ avatar_frame: '头像框', nameplate: '铭牌', profile_card: '主页主题', pet: '牧场伙伴', pet_food: '牧场食物', pet_tool: '牧场工具', scholar_relic: '学者收藏', collectible: '神秘收藏', decoration: '牧场纪念', device: '发光设备', converter: '货币转换', consumable: '消耗品' }[item.class] || '小物件')}</span>
@@ -1812,7 +1825,7 @@ async function loadInventoryPage() {
           <article class="inventory-item-row" data-asset-key="${escapeHtml(asset.key)}">
             <span class="asset-quantity-badge">已拥有 ${Number(asset.quantity || 0)}</span>
             <div class="inventory-item-image">
-              <img src="${escapeHtml(item.image || '/assets/icons/inventory.svg')}" alt="" aria-hidden="true" />
+              ${renderShopItemMedia({ ...item, key: item.key || asset.key }, { fallback: '/assets/icons/inventory.svg' })}
             </div>
             <div class="inventory-item-copy">
               <h2>${escapeHtml(item.name || asset.key)}</h2>

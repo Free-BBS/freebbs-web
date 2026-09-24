@@ -329,8 +329,8 @@ body.theme-dark
   border: 1px solid var(--plate-edge);
   filter: none !important;
 }
-body .cosmetic-nameplate .nameplate-label {
-  color: var(--plate-ink);
+body .cosmetic-nameplate[class] .nameplate-label {
+  color: var(--plate-ink) !important;
   font: inherit;
 }
 .cosmetic-nameplate small {
@@ -340,6 +340,9 @@ body .cosmetic-nameplate .nameplate-label {
   border-left: 1px solid var(--plate-edge);
   padding-left: 0.7em;
   white-space: nowrap;
+}
+body .cosmetic-nameplate[class] small {
+  color: var(--plate-ink) !important;
 }
 .cosmetic-nameplate.plate_observer {
   --plate-bg: #eee9f7;
@@ -956,6 +959,13 @@ body .profile-wardrobe button[aria-pressed='true'] {
     padding: 20px 14px;
   }
 }
+@media (max-width: 1100px) {
+  /* Allow the final product action to scroll above the guide launcher and the
+     mobile navigation, without changing the guide's position on other pages. */
+  body.economy-page:is(.electromagnetic-page, .inventory-page):not(.auth-page-body) .main-content {
+    padding-bottom: calc(190px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
 
 /* Public owner's skin, independent of the visitor's own equipped card.
    Only colors/textures change: existing typography and layout stay intact. */
@@ -1155,4 +1165,272 @@ body.theme-dark .ranch-bone-count.is-ordinary svg {
 }
 .ranch-satiety {
   color: var(--ui-text);
+}
+
+/* Storefront samples reuse the equipped cosmetic selectors above. The stage is
+   presentation only; it never changes the visitor's equipped items or theme. */
+body .shop-cosmetic-preview,
+body .shop-ranch-preview {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding: 30px 12px 14px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: inherit;
+  background: radial-gradient(ellipse at 50% 35%, #ffffffc9, transparent 70%), #eeeae2;
+}
+body.theme-dark .shop-cosmetic-preview,
+body.theme-dark .shop-ranch-preview {
+  background: radial-gradient(ellipse at 50% 35%, #57756844, transparent 75%), #26312f;
+}
+body .shop-cosmetic-preview .shop-preview-caption,
+body .shop-ranch-preview .shop-preview-caption {
+  align-self: flex-start;
+  color: var(--ui-text-muted, #667875) !important;
+  font: 600 9px/1.4 var(--font-zh-ui, sans-serif);
+  letter-spacing: 0.05em;
+}
+body .shop-cosmetic-preview .shop-preview-footnote,
+body .shop-ranch-preview .shop-preview-footnote {
+  color: var(--ui-text-muted, #667875) !important;
+  font: 400 10px/1.5 var(--font-zh-ui, sans-serif);
+  text-align: center;
+}
+body .shop-cosmetic-preview .public-profile-avatar-wrap {
+  flex: 0 0 auto;
+  width: 86px;
+  height: 86px;
+  padding: 6px;
+  box-sizing: border-box;
+  margin: 9px 0;
+}
+body .shop-cosmetic-preview img.public-profile-avatar {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  aspect-ratio: 1;
+  object-fit: cover !important;
+  border-radius: 50%;
+  filter: none !important;
+}
+body .shop-cosmetic-preview .shop-preview-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+body .shop-cosmetic-preview .shop-preview-identity img {
+  flex: 0 0 42px;
+  width: 42px !important;
+  height: 42px !important;
+}
+body .shop-cosmetic-preview .shop-preview-identity strong {
+  display: block;
+  color: var(--ui-text) !important;
+  font: 700 15px/1.5 var(--font-zh-ui, sans-serif);
+}
+body .shop-cosmetic-preview .shop-preview-identity span {
+  display: block;
+  color: var(--ui-text-muted) !important;
+  font: 400 10px/1.5 var(--font-zh-ui, sans-serif);
+}
+body .shop-cosmetic-preview .cosmetic-nameplate {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 11px;
+}
+body .shop-cosmetic-preview .cosmetic-nameplate .nameplate-label,
+body .shop-cosmetic-preview .cosmetic-nameplate small {
+  color: var(--plate-ink) !important;
+}
+body .shop-cosmetic-preview.is-theme {
+  padding: 0;
+  background: none;
+}
+body .shop-cosmetic-preview .shop-preview-profile {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding: 30px 13px 14px;
+  box-sizing: border-box;
+  border-radius: inherit;
+}
+body .shop-cosmetic-preview .profile-constellation {
+  width: 100%;
+  top: 15%;
+}
+body .shop-cosmetic-preview .shop-preview-profile-note {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid var(--ui-line);
+  border-radius: 9px;
+  background: var(--ui-surface-raised);
+}
+body .shop-cosmetic-preview .shop-preview-profile-note strong {
+  color: var(--ui-text) !important;
+  font: 600 10px/1.5 var(--font-zh-ui, sans-serif);
+}
+body .shop-cosmetic-preview .shop-preview-profile-note span,
+body .shop-cosmetic-preview .shop-preview-profile-stats span {
+  color: var(--ui-text-muted) !important;
+  font: 400 9px/1.5 var(--font-zh-ui, sans-serif);
+}
+body .shop-cosmetic-preview .shop-preview-profile-stats {
+  display: flex;
+  justify-content: space-around;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--ui-line);
+}
+body .shop-cosmetic-preview .shop-preview-profile-stats > span {
+  display: grid;
+  gap: 2px;
+}
+body .shop-ranch-preview {
+  background: radial-gradient(ellipse at 45% 30%, #fff5d899, transparent 65%), #e9efdf;
+}
+body.theme-dark .shop-ranch-preview {
+  background: radial-gradient(ellipse at 45% 30%, #78988433, transparent 65%), #293b32;
+}
+body .shop-ranch-pet {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 1 1 0;
+  width: min(100%, 230px);
+  min-width: 0;
+  min-height: 0;
+}
+body .shop-ranch-pet > svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: none !important;
+}
+body .shop-inspect-image:has(.shop-cosmetic-preview, .shop-ranch-preview) {
+  overflow: hidden;
+}
+body .shop-inspect-image .shop-ranch-preview {
+  gap: 6px;
+  padding: 16px;
+}
+body .shop-inspect-image .shop-ranch-preview .shop-preview-footnote {
+  display: none;
+}
+body .inventory-item-image .shop-cosmetic-preview,
+body .inventory-item-image .shop-ranch-preview,
+body .inventory-item-image .shop-preview-profile {
+  gap: 8px;
+  padding: 14px;
+}
+body .inventory-item-image .shop-preview-caption,
+body .inventory-item-image .shop-preview-footnote,
+body .inventory-item-image .shop-preview-profile-note,
+body .inventory-item-image .shop-preview-profile-stats,
+body .inventory-item-image .shop-preview-identity span {
+  display: none;
+}
+body .inventory-item-image .shop-cosmetic-preview.is-theme {
+  padding: 0;
+}
+body .inventory-item-image .public-profile-avatar-wrap {
+  width: 62px;
+  height: 62px;
+  margin: 0;
+}
+body .inventory-item-image .shop-cosmetic-preview.is-nameplate {
+  padding: 8px;
+}
+body .inventory-item-image .shop-cosmetic-preview .cosmetic-nameplate {
+  font-size: 9px;
+}
+body .inventory-item-image .shop-ranch-pet {
+  max-width: 160px;
+}
+body.electromagnetic-page .shop-item-image {
+  container-type: inline-size;
+}
+body.electromagnetic-page .shop-item-image .shop-preview-footnote,
+body.electromagnetic-page .shop-item-image .shop-preview-profile-stats {
+  display: none;
+}
+body.electromagnetic-page .shop-item-image .shop-cosmetic-preview,
+body.electromagnetic-page .shop-item-image .shop-ranch-preview,
+body.electromagnetic-page .shop-item-image .shop-preview-profile {
+  gap: 8px;
+  padding: 26px 10px 10px;
+}
+body.electromagnetic-page .shop-item-image .shop-cosmetic-preview.is-theme {
+  padding: 0;
+}
+body.electromagnetic-page .shop-item-image .public-profile-avatar-wrap {
+  width: clamp(56px, 42cqw, 100px);
+  height: auto;
+  aspect-ratio: 1;
+  margin: 7px 0;
+}
+body.electromagnetic-page .shop-item-image .shop-preview-identity img {
+  flex-basis: clamp(28px, 20cqw, 42px);
+  width: clamp(28px, 20cqw, 42px) !important;
+  height: clamp(28px, 20cqw, 42px) !important;
+}
+body.electromagnetic-page .shop-item-image .cosmetic-nameplate {
+  font-size: clamp(8px, 5cqw, 12px);
+}
+body.electromagnetic-page .shop-item-image .shop-preview-profile-note {
+  padding: 6px 8px;
+}
+body.electromagnetic-page .shop-category-nav .shop-category-sample {
+  display: block;
+  grid-row: span 2;
+  width: 46px;
+  height: 46px;
+}
+body.electromagnetic-page :is(.shop-category-sample, .shop-hero-art) .shop-preview-caption,
+body.electromagnetic-page :is(.shop-category-sample, .shop-hero-art) .shop-preview-footnote {
+  display: none;
+}
+body.electromagnetic-page :is(.shop-category-sample, .shop-hero-art) .shop-cosmetic-preview,
+body.electromagnetic-page :is(.shop-category-sample, .shop-hero-art) .shop-ranch-preview {
+  gap: 0;
+  padding: 8px;
+  background: transparent;
+  overflow: visible;
+}
+body.electromagnetic-page :is(.shop-category-sample, .shop-hero-art) .public-profile-avatar-wrap {
+  width: 75%;
+  height: auto;
+  aspect-ratio: 1;
+  padding: 2px;
+  margin: 0;
+}
+body.electromagnetic-page .shop-category-sample .shop-cosmetic-preview {
+  padding: 2px;
+}
+body.electromagnetic-page .shop-category-sample .shop-ranch-preview {
+  padding: 0;
+}
+@media (max-width: 600px) {
+  body.electromagnetic-page .shop-category-nav .shop-category-sample {
+    grid-row: 1;
+    width: 36px;
+    height: 36px;
+  }
 }

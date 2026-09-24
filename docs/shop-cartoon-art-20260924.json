@@ -1,0 +1,119 @@
+{
+  "generator": "built-in image_gen",
+  "date": "2026-09-24",
+  "reference": "public/assets/max-guide-v1.webp",
+  "delivery": {
+    "directory": "public/assets/shop/max-cartoon-v1",
+    "format": "WebP",
+    "width": 512,
+    "height": 512,
+    "quality": 86,
+    "alphaQuality": 100,
+    "alpha": "preserved",
+    "note": "Only mechanical fit/format optimization; old SVG files retained. Product illustration only, not a modification to equipped effects or ranch animations."
+  },
+  "items": [
+    {
+      "key": "frame_orbit",
+      "asset": "public/assets/shop/max-cartoon-v1/frame_orbit.webp",
+      "original": "exec-56a02ea9-259a-4492-a8f2-d8cd968c4ad9.png",
+      "prompt": "Use case: stylized-concept. Asset type: ONE square illustrated game-shop collectible, FREE BBS. Reference image is STYLE reference ONLY: match its beautifully polished hand-drawn anime cartoon rendering, expressive rounded shapes, warm crisp outline, soft painterly cel-shading, little highlights and tactile materials. NOT a flat vector pictogram, NOT photorealism or plastic 3D. Each product has its OWN appropriate distinctive colors; do not force Max's color palette. Centered object fills 75% of square, complete silhouette with generous safe margins. GENUINELY transparent alpha background, no flat square background, no backdrop scene, no watermark. No text except explicitly requested. This is a new separate product illustration, not an edit of reference. Subject: a premium beautiful oval orbital avatar frame, polished turquoise and brass rings gently orbit a cream medallion with a tiny relief of Max the spectacled ram face in the middle, small golden electron beads and two twinkling stars, slight three-quarter perspective, looks like an enamel collectible avatar frame. No words."
+    },
+    {
+      "key": "frame_aurora",
+      "asset": "public/assets/shop/max-cartoon-v1/frame_aurora.webp",
+      "original": "exec-8e929eff-9764-4af2-b947-afcf379e5f66.png",
+      "prompt": "Use case: stylized-concept. Asset type: ONE square illustrated game-shop collectible, FREE BBS. Reference image is STYLE reference ONLY: match its beautifully polished hand-drawn anime cartoon rendering, expressive rounded shapes, warm crisp outline, soft painterly cel-shading, little highlights and tactile materials. NOT a flat vector pictogram, NOT photorealism or plastic 3D. Each product has its OWN appropriate distinctive colors; do not force Max's color palette. Centered object fills 75% of square, complete silhouette with generous safe margins. GENUINELY transparent alpha background, no flat square background, no backdrop scene, no watermark. No text except explicitly requested. This is a new separate product illustration, not an edit of reference. Subject: a magical ornate round avatar frame: flowing translucent violet-blue aurora ribbons form a circular ring, silver little stars and cyan gem accents, a soft pale portrait placeholder in the center with an understated little sheep silhouette. Jewel-like polished material with richly layered soft shading. An elegant blue-purple night-sky color scheme. No words."
+    },
+    {
+      "key": "plate_observer",
+      "asset": "public/assets/shop/max-cartoon-v1/plate_observer.webp",
+      "original": "exec-2ed84672-6da1-45d6-bbab-ae7e43e2a3d7.png",
+      "prompt": "Use case: stylized-concept. Asset type: ONE square illustrated game-shop collectible, FREE BBS. Reference image is STYLE reference ONLY: match its beautifully polished hand-drawn anime cartoon rendering, expressive rounded shapes, warm crisp outline, soft painterly cel-shading, little highlights and tactile materials. NOT a flat vector pictogram, NOT photorealism or plastic 3D. Each product has its OWN appropriate distinctive colors; do not force Max's color palette. Centered object fills 75% of square, complete silhouette with generous safe margins. GENUINELY transparent alpha background, no flat square background, no backdrop scene, no watermark. No text except explicitly requested. This is a new separate product illustration, not an edit of reference. Subject: a charming illustrated observer's nameplate: rounded leather-and-enamel badge with a tiny brass telescope mounted along its upper edge, indigo velvet inset, two small stars and cream stitching, a small embossed ram-horn seal. A single physical collectible badge, not a UI. The central plate has exactly the clear letters 'BBS' and no other writing. Three-quarter view, clear silhouette. Indigo, lavender, warm brass colors."
+    },
+    {
+      "key": "card_blueprint",
+      "asset": "public/assets/shop/max-cartoon-v1/card_blueprint.webp",
+      "original": "exec-f240b929-1c12-4b67-ad5f-e91845b8907c.png",
+      "prompt": "Use case: stylized-concept. Asset type: ONE square illustrated game-shop collectible, FREE BBS. Reference image is STYLE reference ONLY: match its beautifully polished hand-drawn anime cartoon rendering, expressive rounded shapes, warm crisp outline, soft painterly cel-shading, little highlights and tactile materials. NOT a flat vector pictogram, NOT photorealism or plastic 3D. Each product has its OWN appropriate distinctive colors; do not force Max's color palette. Centered object fills 75% of square, complete silhouette with generous safe margins. GENUINELY transparent alpha background, no flat square background, no backdrop scene, no watermark. No text except explicitly requested. This is a new separate product illustration, not an edit of reference. Subject: a small magical diorama of an unfinished architect's blueprint on a cream wooden drafting board: curled teal-blue paper, delicately drawn white circuit lines, brass pencil and tiny ivory gear, round drafting compass, a cup ring in one corner. Visually an illustrated profile-theme collectible plaque, not an interface screenshot. Charming thoughtful miniature, blue cyan brass palette. No words or letters, no equations."
+    },
+    {
+      "key": "card_twilight",
+      "asset": "public/assets/shop/max-cartoon-v1/card_twilight.webp",
+      "original": "exec-f8e61964-910f-4101-8fda-9413b2022f27.png",
+      "prompt": "Use case: stylized-concept. Asset type: ONE square illustrated game-shop collectible, FREE BBS. Reference image is STYLE reference ONLY: match its beautifully polished hand-drawn anime cartoon rendering, expressive rounded shapes, warm crisp outline, soft painterly cel-shading, little highlights and tactile materials. NOT a flat vector pictogram, NOT photorealism or plastic 3D. Each product has its OWN appropriate distinctive colors; do not force Max's color palette. Centered object fills 75% of square, complete silhouette with generous safe margins. GENUINELY transparent alpha background, no flat square background, no backdrop scene, no watermark. No text except explicitly requested. This is a new separate product illustration, not an edit of reference. Subject: a charming palm-sized miniature 'twilight laboratory' enclosed in a rounded walnut picture-frame collectible plaque: an arched window showing peach pink lavender sunset, small oak lab desk, brass lamp, glass flask and oscilloscope, one tiny wise owl taking flight over the window. Rich dusk purple and warm amber glowing windows, cozy scientific discovery mood, readable simple shapes. Keep entire framed diorama visible. No text."
+    },
+    {
+      "key": "fish",
+      "asset": "public/assets/shop/max-cartoon-v1/fish.webp",
+      "original": "exec-e926b721-05ae-4636-8ca6-5b8429b0df71.png",
+      "prompt": "Use case: stylized-concept. Asset type: ONE square illustrated game-shop collectible, FREE BBS. Reference image is STYLE reference ONLY: match its beautifully polished hand-drawn anime cartoon rendering, expressive rounded shapes, warm crisp outline, soft painterly cel-shading, little highlights and tactile materials. NOT a flat vector pictogram, NOT photorealism or plastic 3D. Each product has its OWN appropriate distinctive colors; do not force Max's color palette. Centered object fills 75% of square, complete silhouette with generous safe margins. GENUINELY transparent alpha background, no flat square background, no backdrop scene, no watermark. No text except explicitly requested. This is a new separate product illustration, not an edit of reference. Subject: one friendly plump little fish with iridescent turquoise and coral fins, a soft ivory belly, one curious amber eye, delicately hand-painted scales, tiny smile, whimsical but still clearly a fish animal. Swimming three-quarter profile, entire tail and fins visible, no water or bubbles, no extra accessories, no words. Cute polished cartoon game pet-food illustration, retain graceful fish anatomy."
+    },
+    {
+      "key": "rubber_rod",
+      "asset": "public/assets/shop/max-cartoon-v1/rubber_rod.webp",
+      "original": "exec-49b2006a-a6d3-4b28-b380-e76d8f263bc5.png",
+      "prompt": "Use case: stylized-concept. Asset type: ONE square illustrated game-shop collectible, FREE BBS. Reference image is STYLE reference ONLY: match its beautifully polished hand-drawn anime cartoon rendering, expressive rounded shapes, warm crisp outline, soft painterly cel-shading, little highlights and tactile materials. NOT a flat vector pictogram, NOT photorealism or plastic 3D. Each product has its OWN appropriate distinctive colors; do not force Max's color palette. Centered object fills 75% of square, complete silhouette with generous safe margins. GENUINELY transparent alpha background, no flat square background, no backdrop scene, no watermark. No text except explicitly requested. This is a new separate product illustration, not an edit of reference. Subject: one smooth charcoal-black rubber rod with a rounded teal handle tip resting diagonally against a small fluffy tuft of cream sheep wool. A few tiny cyan static-electric sparks and two discreet minus symbols beside the rod convey negative charge. Warm brown outlines, tactile soft rubber, cozy illustrated physics experiment. Not a weapon, not a wand, not a battery. Whole objects visible, no hands, no text."
+    },
+    {
+      "key": "differential_converter",
+      "asset": "public/assets/shop/max-cartoon-v1/differential_converter.webp",
+      "original": "exec-0cba8628-2303-489a-ad77-fef62579127d.png",
+      "prompt": "Use case: stylized-concept. Asset type: ONE square illustrated game-shop collectible, FREE BBS. Reference image is STYLE reference ONLY: match its beautifully polished hand-drawn anime cartoon rendering, expressive rounded shapes, warm crisp outline, soft painterly cel-shading, little highlights and tactile materials. NOT a flat vector pictogram, NOT photorealism or plastic 3D. Each product has its OWN appropriate distinctive colors; do not force Max's color palette. Centered object fills 75% of square, complete silhouette with generous safe margins. GENUINELY transparent alpha background, no flat square background, no backdrop scene, no watermark. No text except explicitly requested. This is a new separate product illustration, not an edit of reference. Subject: a small delightful tabletop electronic currency-converter instrument: rounded pale turquoise metal case on tiny rubber feet, a warm brass analog gauge, two orange and cyan circular ports with a curved bidirectional arrow motif between them, one cream knob, a tiny electric spark motif. Charmingly hand-built science gadget, not a battery, not a robot with a face, no money banknotes. No letters or numbers. Teal orange ivory colorway."
+    },
+    {
+      "key": "fishbone",
+      "asset": "public/assets/shop/max-cartoon-v1/fishbone.webp",
+      "original": "exec-3034c5c3-4fb6-4644-8be5-47c123d030d6.png",
+      "prompt": "Use case: stylized-concept. Asset type: ONE square illustrated game-shop collectible, FREE BBS. Reference image is STYLE reference ONLY: match its beautifully polished hand-drawn anime cartoon rendering, expressive rounded shapes, warm crisp outline, soft painterly cel-shading, little highlights and tactile materials. NOT a flat vector pictogram, NOT photorealism or plastic 3D. Each product has its OWN appropriate distinctive colors; do not force Max's color palette. Centered object fills 75% of square, complete silhouette with generous safe margins. GENUINELY transparent alpha background, no flat square background, no backdrop scene, no watermark. No text except explicitly requested. This is a new separate product illustration, not an edit of reference. Subject: one clean ivory fish skeleton collectible, gently curved spine with neat rounded ribs, broad tail fin and a rounded friendly fish skull, no flesh, no gore, no scary teeth. Slight polished fossil texture and warm shadows, a tiny gold twinkle at the tail. A lighthearted beautiful cartoon bone, diagonal dynamic silhouette, no pedestal or scene, no text."
+    },
+    {
+      "key": "mysterious_fragment",
+      "asset": "public/assets/shop/max-cartoon-v1/mysterious_fragment.webp",
+      "original": "exec-b387ab99-cbb3-4b90-ba95-d32b15f0f559.png",
+      "prompt": "Use case: stylized-concept. Asset type: ONE square illustrated game-shop collectible, FREE BBS. Reference image is STYLE reference ONLY: match its beautifully polished hand-drawn anime cartoon rendering, expressive rounded shapes, warm crisp outline, soft painterly cel-shading, little highlights and tactile materials. NOT a flat vector pictogram, NOT photorealism or plastic 3D. Each product has its OWN appropriate distinctive colors; do not force Max's color palette. Centered object fills 75% of square, complete silhouette with generous safe margins. GENUINELY transparent alpha background, no flat square background, no backdrop scene, no watermark. No text except explicitly requested. This is a new separate product illustration, not an edit of reference. Subject: one mysterious irregular gemstone fragment, faceted midnight violet outside with glowing rose and cyan inner fractures, smoothly chipped edges, a delicate tiny brass corner clasp and three restrained floating specks of light, beautiful readable crystalline volume, not an octahedral flat logo, no letters, no runes, no text. Purple magenta turquoise colors."
+    },
+    {
+      "key": "laser",
+      "asset": "public/assets/shop/max-cartoon-v1/laser.webp",
+      "original": "exec-4de67fee-9991-4d7c-bc67-639ee18345e2.png",
+      "prompt": "Use case: stylized-concept. Asset type: ONE square illustrated game-shop collectible, FREE BBS. Reference image is STYLE reference ONLY: match its beautifully polished hand-drawn anime cartoon rendering, expressive rounded shapes, warm crisp outline, soft painterly cel-shading, little highlights and tactile materials. NOT a flat vector pictogram, NOT photorealism or plastic 3D. Each product has its OWN appropriate distinctive colors; do not force Max's color palette. Centered object fills 75% of square, complete silhouette with generous safe margins. GENUINELY transparent alpha background, no flat square background, no backdrop scene, no watermark. No text except explicitly requested. This is a new separate product illustration, not an edit of reference. Subject: one adorable little tabletop laser instrument with a rounded coral-red and ivory metal housing, visible blue glass optical lens in a brass circular mount, a tiny side knob and dark rubber feet, small warm-yellow indicator lamp, a short soft cyan beam leaving the lens. Whimsical sophisticated lab equipment, no face, no gun shape, not a weapon, not a robot. Polished hand-drawn game shop object, no letters, no text."
+    },
+    {
+      "key": "maxwell_spectacles",
+      "asset": "public/assets/shop/max-cartoon-v1/maxwell_spectacles.webp",
+      "original": "exec-e2226a77-6ec0-4af3-9189-53844ab88918.png",
+      "prompt": "Use case: stylized-concept. Asset type: ONE square illustrated game-shop collectible, FREE BBS. Reference image is STYLE reference ONLY: match its beautifully polished hand-drawn anime cartoon rendering, expressive rounded shapes, warm crisp outline, soft painterly cel-shading, little highlights and tactile materials. NOT a flat vector pictogram, NOT photorealism or plastic 3D. Each product has its OWN appropriate distinctive colors; do not force Max's color palette. Centered object fills 75% of square, complete silhouette with generous safe margins. GENUINELY transparent alpha background, no flat square background, no backdrop scene, no watermark. No text except explicitly requested. This is a new separate product illustration, not an edit of reference. Subject: a treasured pair of antique round brass spectacles, delicately curved temples, clear pale blue lenses reflecting a small rainbow and a few star glints, resting on an open deep navy velvet eyeglass case with warm reddish leather edges. An elegant scholar's keepsake, soft hand-painted worn metal, unmistakably glasses. No face, no person, no book, no words."
+    },
+    {
+      "key": "faraday_ring",
+      "asset": "public/assets/shop/max-cartoon-v1/faraday_ring.webp",
+      "original": "exec-1fea0cc3-2244-4985-ae64-7014c05d5c86.png",
+      "prompt": "Use case: stylized-concept. Asset type: ONE square illustrated game-shop collectible, FREE BBS. Reference image is STYLE reference ONLY: match its beautifully polished hand-drawn anime cartoon rendering, expressive rounded shapes, warm crisp outline, soft painterly cel-shading, little highlights and tactile materials. NOT a flat vector pictogram, NOT photorealism or plastic 3D. Each product has its OWN appropriate distinctive colors; do not force Max's color palette. Centered object fills 75% of square, complete silhouette with generous safe margins. GENUINELY transparent alpha background, no flat square background, no backdrop scene, no watermark. No text except explicitly requested. This is a new separate product illustration, not an edit of reference. Subject: a charming miniature Faraday induction-ring experiment: one thick dark iron torus with TWO distinctly separate copper wire coils wound on opposite sides, emerald insulated connecting leads curling neatly beside a little polished walnut stand. Physically readable electromagnetic apparatus, tactile copper turns and deep emerald accents, softened cartoon rounded edges, brass small feet. Do not make wedding jewelry. No letters, equations, or numbers."
+    },
+    {
+      "key": "shannon_coin",
+      "asset": "public/assets/shop/max-cartoon-v1/shannon_coin.webp",
+      "original": "exec-4b25071f-de3c-47cc-9abb-afc02ef8b69c.png",
+      "prompt": "Use case: stylized-concept. Asset type: ONE square illustrated game-shop collectible, FREE BBS. Reference image is STYLE reference ONLY: match its beautifully polished hand-drawn anime cartoon rendering, expressive rounded shapes, warm crisp outline, soft painterly cel-shading, little highlights and tactile materials. NOT a flat vector pictogram, NOT photorealism or plastic 3D. Each product has its OWN appropriate distinctive colors; do not force Max's color palette. Centered object fills 75% of square, complete silhouette with generous safe margins. GENUINELY transparent alpha background, no flat square background, no backdrop scene, no watermark. No text except explicitly requested. This is a new separate product illustration, not an edit of reference. Subject: one treasured thick gold coin standing slightly tilted in a small burgundy velvet collector's holder, warm engraved rim with tiny binary 0 and 1 motifs, one side embossed with a stylized balanced branching information tree, one tiny four-point sparkle. Rich amber gold and deep burgundy, polished illustrated metal with hand-drawn outlines, simple readable silhouette. No portrait, no currency dollar symbols, no extra words."
+    },
+    {
+      "key": "hertz_resonator",
+      "asset": "public/assets/shop/max-cartoon-v1/hertz_resonator.webp",
+      "original": "exec-9b5be285-8710-4d63-94a3-b626cf77f545.png",
+      "prompt": "Use case: stylized-concept. Asset type: ONE square illustrated game-shop collectible, FREE BBS. Reference image is STYLE reference ONLY: match its beautifully polished hand-drawn anime cartoon rendering, expressive rounded shapes, warm crisp outline, soft painterly cel-shading, little highlights and tactile materials. NOT a flat vector pictogram, NOT photorealism or plastic 3D. Each product has its OWN appropriate distinctive colors; do not force Max's color palette. Centered object fills 75% of square, complete silhouette with generous safe margins. GENUINELY transparent alpha background, no flat square background, no backdrop scene, no watermark. No text except explicitly requested. This is a new separate product illustration, not an edit of reference. Subject: an elegant miniature Hertz resonator: a warm copper almost-circular open loop, clearly visible tiny spark gap between two rounded brass bead electrodes at the top, supported by a small dark walnut pedestal, one tiny cool-blue spark in the gap and two faint curved wave marks around the loop. Accurate recognizable scientific keepsake, not a magnifying glass and no glass lens, no surrounding other equipment, no letters or text. Copper walnut azure palette."
+    },
+    {
+      "key": "max_pet",
+      "asset": "public/assets/shop/max-cartoon-v1/max_pet.webp",
+      "original": "exec-c998430a-f4e4-42ea-bc8e-cd444d83fb31.png",
+      "prompt": "Use case: stylized-concept. Asset type: single square e-commerce game item illustration for FREE BBS's warm Max-themed shop. Reference image 1 is STYLE AND IDENTITY reference only, not an edit target. Create a lovely quadrupedal cartoon ram called Max, with fluffy ivory cream wool, rounded short warm-peach face, curled amber-brown horns, small round thin bronze spectacles, friendly amber eyes, four small dark hooves, a tiny teal neckerchief. It must look like a sheep animal, not a person in a costume, no hoodie, no hands, no upright posture. Match the reference's polished hand-drawn anime cartoon linework, warm brown outlines, soft painted highlights and gentle shading; charming and smart, not babyish. Single centered animal, three-quarter standing pose, whole body visible with wide 12% safe margins, fills 72% square canvas. Genuine transparent background with clean alpha, no background scene, no square colored plate, no text, no letters, no watermark. High-quality standalone game inventory art, readable at 180px. Save the generated image as a local file."
+    },
+    {
+      "key": "fortune_bag",
+      "asset": "public/assets/shop/max-cartoon-v1/fortune_bag.webp",
+      "original": "exec-4a670ee7-3fc3-4237-8b49-ad4e7b651806.png",
+      "prompt": "Use case: stylized-concept. Asset type: ONE square illustrated game-shop collectible, FREE BBS. Reference image is STYLE reference ONLY: match its beautifully polished hand-drawn anime cartoon rendering, expressive rounded shapes, warm crisp outline, soft painterly cel-shading, little highlights and tactile materials. NOT a flat vector pictogram, NOT photorealism or plastic 3D. Each product has its OWN appropriate distinctive colors; do not force Max's color palette. Centered object fills 75% of square, complete silhouette with generous safe margins. GENUINELY transparent alpha background, no flat square background, no backdrop scene, no watermark. No text except explicitly requested. This is a new separate product illustration, not an edit of reference. Subject: one lovely little lucky drawstring pouch, sumptuous berry-red brocade fabric with subtle embroidered gold clouds, a plump rounded shape, champagne-gold braided ties and two tassels, a tiny shining star-shaped brass charm. Handmade stitched texture and soft folds, cozy cartoon talisman, no written Chinese characters, no logo, no extra objects. Coral pink berry red warm gold palette."
+    }
+  ]
+}

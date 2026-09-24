@@ -58,6 +58,7 @@ const CREATE_SEQUENCE = [
   'create:user_campus_connectors',
   'create:campus_connector_auth_flows',
   'create:campus_connector_sync_runs',
+  'create:campus_course_calendar_settings',
   'create:campus_homework_calendar_states',
   'create:campus_homework_snapshots',
 ];
@@ -65,6 +66,7 @@ const CREATE_SEQUENCE = [
 test('does not ALTER core tables when every additive field and index already exists', async () => {
   const pool = createFakePool({
     columns: [
+      'campus_learn_semester_snapshots.connector_generation',
       'campus_connector_sync_runs.target_semester_id',
       'notifications.dedupe_key',
       'important_items.action_url',
@@ -76,6 +78,7 @@ test('does not ALTER core tables when every additive field and index already exi
 
   assert.deepEqual(pool.calls.map(describeCall), [
     ...CREATE_SEQUENCE,
+    'check-column:campus_learn_semester_snapshots.connector_generation',
     'check-column:campus_connector_sync_runs.target_semester_id',
     'check-column:notifications.dedupe_key',
     'check-index:notifications.uq_notifications_recipient_dedupe',
@@ -94,6 +97,8 @@ test('adds missing core fields and the unique index in dependency order', async 
 
   assert.deepEqual(pool.calls.map(describeCall), [
     ...CREATE_SEQUENCE,
+    'check-column:campus_learn_semester_snapshots.connector_generation',
+    'ALTER TABLE campus_learn_semester_snapshots ADD COLUMN connector_generation INT UNSIGNED NULL AFTER semester_id',
     'check-column:campus_connector_sync_runs.target_semester_id',
     'ALTER TABLE campus_connector_sync_runs ADD COLUMN target_semester_id VARCHAR(32) NULL AFTER trigger_type',
     'check-column:notifications.dedupe_key',

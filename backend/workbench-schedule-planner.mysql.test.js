@@ -4,7 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const express = require('express');
-const { createSchedulePlannerRouter } = require('./workbench-schedule-planner');
+const { createSchedulePlannerRouter, localDateKey } = require('./workbench-schedule-planner');
+const { ensureCampusConnectorTables } = require('./tsinghua-connectors/schema');
 
 test(
   'isolated MySQL: planner preview and confirmation use executable limits and preserve schedule isolation',
@@ -47,6 +48,7 @@ test(
       .filter(Boolean)) {
       await pool.query(statement);
     }
+    await ensureCampusConnectorTables(pool);
 
     const app = express();
     app.use(express.json());
@@ -120,6 +122,71 @@ test(
       'SELECT COUNT(*) AS count FROM schedule_items WHERE user_id = 1',
     );
     assert.equal(Number(afterConflict.count), 1, 'conflicting confirmation must roll back');
+
+    const courseMessage = '后天第一大节课程冲突测试';
+    const coursePreview = await post('preview', { message: courseMessage });
+    assert.equal(coursePreview.status, 200, await coursePreview.clone().text());
+    const courseSuggestions = (await coursePreview.json()).suggestions;
+    const lessonDate = new Date(
+      `${localDateKey(new Date(courseSuggestions[0].startAt))}T00:00:00Z`,
+    );
+    const weekday = ((lessonDate.getUTCDay() + 6) % 7) + 1;
+    const firstWeekMonday = new Date(lessonDate.getTime() - (weekday - 1) * 86400000)
+      .toISOString()
+      .slice(0, 10);
+    const connectedAt = new Date(Date.now() - 86400000);
+    const fetchedAt = new Date();
+    for (const userId of [2, 1]) {
+      await pool.execute(
+        `INSERT INTO user_campus_connectors
+         (public_id, user_id, provider, adapter_id, adapter_version, status, generation, connected_at)
+         VALUES (?, ?, 'tsinghua-learn', 'cas', '1', 'active_verified', 1, ?)`,
+        [randomUUID(), userId, connectedAt],
+      );
+      await pool.execute(
+        `INSERT INTO campus_learn_semester_snapshots
+         (user_id, semester_id, connector_generation, courses_json, notifications_json, sync_status, fetched_at)
+         VALUES (?, 'planner-fixture', 1, ?, '[]', 'complete', ?)`,
+        [
+          userId,
+          JSON.stringify([
+            {
+              sourceReference: `course-${userId}`,
+              title: '同步课程',
+              scheduleText: `第1周 周${['一', '二', '三', '四', '五', '六', '日'][weekday - 1]} 第1大节`,
+              locationText: '六教101',
+            },
+          ]),
+          fetchedAt,
+        ],
+      );
+      await pool.execute(
+        `INSERT INTO campus_course_calendar_settings
+         (user_id, semester_id, connector_generation, first_week_monday)
+         VALUES (?, 'planner-fixture', 1, ?)`,
+        [userId, firstWeekMonday],
+      );
+      const withCourses = await post('preview', { message: courseMessage });
+      assert.equal(
+        withCourses.status,
+        userId === 2 ? 200 : 409,
+        'only authenticated-account synchronized classes may occupy its calendar',
+      );
+    }
+    const afterCourseSync = await post('confirm', { suggestions: courseSuggestions });
+    assert.equal(
+      afterCourseSync.status,
+      409,
+      'confirmation must recheck courses synchronized after preview',
+    );
+    const [[afterCourseConflict]] = await pool.query(
+      'SELECT COUNT(*) AS count FROM schedule_items WHERE user_id = 1',
+    );
+    assert.equal(
+      Number(afterCourseConflict.count),
+      1,
+      'course conflict must not persist any proposed event',
+    );
 
     const crowdedStart = new Date(Math.floor((Date.now() + 35 * 86400000) / 1000) * 1000);
     const crowdedEnd = new Date(crowdedStart.getTime() + 3600000);

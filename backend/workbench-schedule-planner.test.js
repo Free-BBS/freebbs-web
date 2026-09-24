@@ -209,8 +209,13 @@ test('fixed AI event cannot silently overwrite an existing event', () => {
   );
 });
 
-async function startServer(t, { busy = [], answer, authenticated = true } = {}) {
+async function startServer(
+  t,
+  { busy = [], answer, authenticated = true, insertFailureAt, courses = [], courseError } = {},
+) {
   const calls = [];
+  const courseCalls = [];
+  let insertCount = 0;
   const connection = {
     async beginTransaction() {
       calls.push('begin');
@@ -227,6 +232,10 @@ async function startServer(t, { busy = [], answer, authenticated = true } = {}) 
     async execute(sql, parameters) {
       calls.push({ sql, parameters });
       if (sql.includes('FROM schedule_items')) return [busy];
+      if (sql.includes('INSERT INTO schedule_items')) insertCount += 1;
+      if (sql.includes('INSERT INTO schedule_items') && insertCount === insertFailureAt) {
+        throw Object.assign(new Error('Simulated insert failure'), { code: 'ER_TEST_INSERT' });
+      }
       return [{ affectedRows: 1 }];
     },
   };
@@ -245,6 +254,15 @@ async function startServer(t, { busy = [], answer, authenticated = true } = {}) 
     '/api/workbench/schedule-planner',
     createSchedulePlannerRouter({
       pool,
+      listCourseSchedules: async (executor, userId, range) => {
+        courseCalls.push({
+          executor: executor === connection ? 'transaction' : 'pool',
+          userId,
+          ...range,
+        });
+        if (courseError) throw courseError;
+        return courses;
+      },
       requireAuth: async (request, response) => {
         if (!authenticated) {
           response.status(401).json({ message: '请先登录' });
@@ -273,6 +291,7 @@ async function startServer(t, { busy = [], answer, authenticated = true } = {}) 
   return {
     base: `http://127.0.0.1:${server.address().port}/api/workbench/schedule-planner`,
     calls,
+    courseCalls,
   };
 }
 
@@ -285,6 +304,454 @@ test('planner preview requires login before reading private schedule', async (t)
   });
   assert.equal(response.status, 401);
   assert.equal(calls.length, 0);
+});
+
+const sept24Afternoon = new Date('2026-09-24T06:00:00.000Z');
+const twoMeetings =
+  '我今天晚上9点要开书记会，罗姆楼5103；10点要开支书例会，罗姆楼10-206，两个会都是1小时';
+
+test('two meetings inherit Beijing date, evening and shared duration without mixing titles or locations', () => {
+  const parsed = parseKnownScheduleMessage(twoMeetings, sept24Afternoon);
+  assert.deepEqual(parsed, {
+    kind: 'batch',
+    tasks: [
+      {
+        kind: 'event',
+        title: '书记会',
+        description: '罗姆楼5103',
+        startAt: '2026-09-24T13:00:00.000Z',
+        endAt: '2026-09-24T14:00:00.000Z',
+      },
+      {
+        kind: 'event',
+        title: '支书例会',
+        description: '罗姆楼10-206',
+        startAt: '2026-09-24T14:00:00.000Z',
+        endAt: '2026-09-24T15:00:00.000Z',
+      },
+    ],
+  });
+  const preview = buildPreview(parsed, [], sept24Afternoon);
+  assert.equal(preview.kind, 'batch');
+  assert.equal(preview.taskCount, 2);
+  assert.equal(preview.suggestions.length, 2);
+});
+
+test('three tasks preserve individual durations and explicit date or period overrides', () => {
+  const parsed = parseKnownScheduleMessage(
+    '今天晚上9点开会30分钟；明天上午10点讨论；下午3点读书，三个任务各1小时',
+    sept24Afternoon,
+  );
+  assert.equal(parsed.tasks.length, 3);
+  assert.deepEqual(
+    parsed.tasks.map(({ startAt, endAt }) => [startAt, endAt]),
+    [
+      ['2026-09-24T13:00:00.000Z', '2026-09-24T13:30:00.000Z'],
+      ['2026-09-25T02:00:00.000Z', '2026-09-25T03:00:00.000Z'],
+      ['2026-09-25T07:00:00.000Z', '2026-09-25T08:00:00.000Z'],
+    ],
+  );
+  const crossDate = parseKnownScheduleMessage(
+    '今天晚上9点开会1小时；明天10点讨论1小时',
+    sept24Afternoon,
+  );
+  assert.equal(crossDate.tasks[1].startAt, '2026-09-25T02:00:00.000Z');
+  const inherited = parseKnownScheduleMessage(
+    '今天下午3点开会，4点复习，5点读书，各1小时',
+    sept24Afternoon,
+  );
+  assert.deepEqual(
+    inherited.tasks.map((item) => item.startAt),
+    ['2026-09-24T07:00:00.000Z', '2026-09-24T08:00:00.000Z', '2026-09-24T09:00:00.000Z'],
+  );
+});
+
+test('each task retains its own explicit description and notes punctuation', () => {
+  const parsed = parseKnownScheduleMessage(
+    '明天9点开会1小时，地点/备注：主楼101；带电脑；11点读书1小时，地点/备注：图书馆；带书',
+    sept24Afternoon,
+  );
+  assert.equal(parsed.tasks[0].description, '主楼101；带电脑');
+  assert.equal(parsed.tasks[1].description, '图书馆；带书');
+});
+
+test('ambiguous multi-task requests delegate the entire sentence instead of returning the first event', () => {
+  for (const message of [
+    '明天9点开会1小时；10点讨论',
+    '明天9点开会；10点讨论1小时',
+    '明天9点开会1小时，还有写报告',
+    '明天9点开会1小时还有写报告',
+    '明天9点开会，写报告，各1小时',
+    '明天9点开会1小时；明天写报告',
+    '明天9点开会1小时；2月30日10点讨论1小时',
+    '接下来3天复习6小时，写报告2小时',
+    '明天9点到10点开会；11点读书1小时',
+  ])
+    assert.equal(parseKnownScheduleMessage(message, sept24Afternoon), null, message);
+});
+
+test('more than three independent tasks are rejected without truncating', () => {
+  assert.throws(
+    () =>
+      parseKnownScheduleMessage(
+        '明天9点开会；10点读书；11点讨论；下午2点写作，各1小时',
+        sept24Afternoon,
+      ),
+    { status: 422 },
+  );
+});
+
+test('batch extraction rejects missing, excessive, nested and incomplete tasks', () => {
+  const task = parseKnownScheduleMessage('明天9点开会1小时', sept24Afternoon);
+  for (const tasks of [
+    undefined,
+    {},
+    [],
+    [task, task, task, task],
+    [{ kind: 'batch', tasks: [task] }],
+    [task, { kind: 'clarify' }],
+  ]) {
+    assert.throws(() => buildPreview({ kind: 'batch', tasks }, [], sept24Afternoon), {
+      status: 422,
+    });
+  }
+  assert.throws(
+    () =>
+      buildPreview(
+        { kind: 'batch', tasks: [task, { kind: 'event', title: '未知日期' }] },
+        [],
+        sept24Afternoon,
+      ),
+    { status: 400 },
+  );
+});
+
+test('batch previews reject internal or existing conflicts and still allow adjacent events', () => {
+  const parsed = parseKnownScheduleMessage(twoMeetings, sept24Afternoon);
+  assert.equal(buildPreview(parsed, [], sept24Afternoon).suggestions.length, 2);
+  assert.throws(
+    () =>
+      buildPreview(
+        {
+          kind: 'batch',
+          tasks: [parsed.tasks[0], { ...parsed.tasks[1], startAt: '2026-09-24T13:30:00.000Z' }],
+        },
+        [],
+        sept24Afternoon,
+      ),
+    { status: 409 },
+  );
+  assert.throws(() => buildPreview(parsed, [parsed.tasks[1]], sept24Afternoon), { status: 409 });
+});
+
+test('plans avoid all fixed events and other plans in the batch regardless of task order', () => {
+  const fixed = {
+    kind: 'event',
+    title: '开会',
+    startAt: '2026-09-18T01:00:00.000Z',
+    endAt: '2026-09-18T02:00:00.000Z',
+  };
+  const firstPlan = {
+    kind: 'plan',
+    title: '阅读',
+    days: 1,
+    totalMinutes: 60,
+    dayStart: '09:00',
+    dayEnd: '13:00',
+  };
+  const secondPlan = { ...firstPlan, title: '写作' };
+  const preview = buildPreview({ kind: 'batch', tasks: [firstPlan, fixed, secondPlan] }, [], now);
+  assert.equal(preview.taskCount, 3);
+  assert.deepEqual(
+    preview.suggestions.map((item) => item.title),
+    ['阅读', '开会', '写作'],
+  );
+  assert.equal(preview.suggestions[0].startAt, fixed.endAt);
+  assert.ok(
+    preview.suggestions.every((item, index) =>
+      preview.suggestions.slice(index + 1).every((other) => !overlaps(item, other)),
+    ),
+  );
+  assert.throws(
+    () =>
+      buildPreview(
+        { kind: 'batch', tasks: [firstPlan, fixed, { ...secondPlan, dayEnd: '11:00' }] },
+        [],
+        now,
+      ),
+    { status: 422 },
+  );
+});
+
+test('three-intent limit does not limit weekly expansion and aggregate limit remains 52 segments', () => {
+  const weekly = parseKnownScheduleMessage('每周三第三大节上课，持续52周', sept19);
+  assert.equal(buildPreview({ kind: 'batch', tasks: [weekly] }, [], sept19).suggestions.length, 52);
+  const deadline = parseKnownScheduleMessage('明天23:59之前完成报告', sept19);
+  assert.equal(
+    buildPreview({ kind: 'batch', tasks: [{ ...weekly, weeks: 51 }, deadline] }, [], sept19)
+      .suggestions.length,
+    52,
+  );
+  assert.throws(() => buildPreview({ kind: 'batch', tasks: [weekly, deadline] }, [], sept19), {
+    status: 422,
+  });
+});
+
+test('deadline markers do not occupy batch plan availability', () => {
+  const deadline = {
+    kind: 'deadline',
+    title: '截止',
+    startAt: '2026-09-18T01:59:00.000Z',
+    endAt: '2026-09-18T02:00:00.000Z',
+  };
+  const plan = {
+    kind: 'plan',
+    title: '写作',
+    days: 1,
+    totalMinutes: 60,
+    dayStart: '09:00',
+    dayEnd: '10:00',
+  };
+  assert.equal(
+    buildPreview({ kind: 'batch', tasks: [deadline, plan] }, [], now).suggestions.length,
+    2,
+  );
+});
+
+test('batch preview API recognizes 2 or 3 tasks without invoking a real or canned Agent', async (t) => {
+  const { base, calls } = await startServer(t, { answer: 'invalid JSON' });
+  for (const [count, message] of [
+    [2, twoMeetings.replace('今天', '明天')],
+    [3, '明天上午9点开会；10点读书；11点讨论，各1小时'],
+  ]) {
+    const response = await fetch(`${base}/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    });
+    assert.equal(response.status, 200);
+    const preview = await response.json();
+    assert.equal(preview.taskCount, count);
+    assert.equal(preview.suggestions.length, count);
+  }
+  assert.equal(
+    calls.some((call) => call.agentPayload),
+    false,
+  );
+  const response = await fetch(`${base}/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: '明天9点开会；10点读书；11点讨论；下午2点写作，各1小时' }),
+  });
+  assert.equal(response.status, 422);
+  assert.match((await response.json()).message, /最多.*3/);
+});
+
+test('Agent batch previews retain every task and prompt requires scoped inheritance and descriptions', async (t) => {
+  const task = {
+    kind: 'event',
+    title: '读书',
+    startAt: new Date(Date.now() + 86400000).toISOString(),
+    endAt: new Date(Date.now() + 90000000).toISOString(),
+    description: '图书馆',
+  };
+  const { base, calls } = await startServer(t, {
+    answer: {
+      kind: 'batch',
+      tasks: [
+        task,
+        {
+          ...task,
+          title: '写作',
+          startAt: task.endAt,
+          endAt: new Date(Date.now() + 93600000).toISOString(),
+        },
+      ],
+    },
+  });
+  const response = await fetch(`${base}/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: '替我安排读书和写作这两件事' }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).taskCount, 2);
+  const prompt = calls.find((call) => call.agentPayload).agentPayload.message;
+  assert.match(prompt, /"kind":"batch"/);
+  assert.match(prompt, /1–3 项/);
+  assert.match(prompt, /绝不能只返回第一件/);
+  assert.match(prompt, /description/);
+});
+
+test('Agent cannot silently drop an incomplete task from an explicitly multi-task request', async (t) => {
+  for (const answer of [
+    {
+      kind: 'event',
+      title: '开会',
+      startAt: new Date(Date.now() + 86400000).toISOString(),
+      endAt: new Date(Date.now() + 90000000).toISOString(),
+    },
+    { kind: 'batch', tasks: [] },
+    { kind: 'clarify', question: '请补充讨论的时长。' },
+  ]) {
+    const { base, calls } = await startServer(t, { answer });
+    const response = await fetch(`${base}/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: '明天9点开会1小时；10点讨论' }),
+    });
+    assert.equal(response.status, 422);
+    assert.ok(calls.some((call) => call.agentPayload));
+    assert.equal(
+      calls.some((call) => call.sql?.includes('INSERT')),
+      false,
+    );
+  }
+});
+
+function futureSuggestions(count) {
+  const start = Date.now() + 86400000;
+  return Array.from({ length: count }, (_, index) => ({
+    kind: 'event',
+    title: `任务${index + 1}`,
+    description: `地点${index + 1}`,
+    startAt: new Date(start + index * 3600000).toISOString(),
+    endAt: new Date(start + (index + 1) * 3600000).toISOString(),
+  }));
+}
+
+test('confirmation saves two or three events and their descriptions in one transaction', async (t) => {
+  for (const count of [2, 3]) {
+    const { base, calls } = await startServer(t);
+    const suggestions = futureSuggestions(count);
+    const response = await fetch(`${base}/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ suggestions }),
+    });
+    assert.equal(response.status, 201);
+    assert.equal((await response.json()).created, count);
+    assert.equal(calls.filter((call) => call === 'begin').length, 1);
+    assert.equal(calls.filter((call) => call === 'commit').length, 1);
+    assert.deepEqual(
+      calls.filter((call) => call.sql?.includes('INSERT')).map((call) => call.parameters[5]),
+      suggestions.map((item) => item.description),
+    );
+    assert.equal(calls.at(-1), 'release');
+  }
+});
+
+test('confirmation rejects a batch conflict before opening a transaction', async (t) => {
+  const { base, calls } = await startServer(t);
+  const suggestions = futureSuggestions(2);
+  suggestions[1].startAt = suggestions[0].startAt;
+  const response = await fetch(`${base}/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ suggestions }),
+  });
+  assert.equal(response.status, 409);
+  assert.equal(calls.length, 0);
+});
+
+test('confirmation rechecks the final batch item against current events before any insert', async (t) => {
+  const suggestions = futureSuggestions(3);
+  const { base, calls } = await startServer(t, {
+    busy: [{ start_at: suggestions[2].startAt, end_at: suggestions[2].endAt }],
+  });
+  const response = await fetch(`${base}/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ suggestions }),
+  });
+  assert.equal(response.status, 409);
+  assert.ok(calls.includes('rollback'));
+  assert.equal(
+    calls.some((call) => call.sql?.includes('INSERT')),
+    false,
+  );
+});
+
+test('an insert failure rolls back the entire batch and never commits partial success', async (t) => {
+  const { base, calls } = await startServer(t, { insertFailureAt: 2 });
+  const response = await fetch(`${base}/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ suggestions: futureSuggestions(3) }),
+  });
+  assert.equal(response.status, 500);
+  assert.equal(calls.filter((call) => call.sql?.includes('INSERT')).length, 2);
+  assert.ok(calls.includes('rollback'));
+  assert.equal(calls.includes('commit'), false);
+  assert.equal(calls.at(-1), 'release');
+});
+
+test('planner preview avoids synchronized classes across its full planning horizon', async (t) => {
+  const { base, courseCalls } = await startServer(t, {
+    courses: [
+      {
+        startAt: new Date(Date.now() - 60000).toISOString(),
+        endAt: new Date(Date.now() + 3 * 86400000).toISOString(),
+      },
+    ],
+  });
+  const response = await fetch(`${base}/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: '明天下午5点开会1小时' }),
+  });
+  assert.equal(response.status, 409);
+  assert.equal(courseCalls.length, 1);
+  assert.equal(courseCalls[0].executor, 'pool');
+  assert.equal(courseCalls[0].userId, 17);
+  assert.ok(courseCalls[0].end - courseCalls[0].start > 370 * 86400000);
+});
+
+test('planner confirmation rechecks synchronized classes inside the save transaction', async (t) => {
+  const suggestions = futureSuggestions(2);
+  const { base, calls, courseCalls } = await startServer(t, { courses: [suggestions[1]] });
+  const response = await fetch(`${base}/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ suggestions }),
+  });
+  assert.equal(response.status, 409);
+  assert.deepEqual(courseCalls, [
+    {
+      executor: 'transaction',
+      userId: 17,
+      start: new Date(suggestions[0].startAt),
+      end: new Date(suggestions[1].endAt),
+    },
+  ]);
+  assert.ok(calls.includes('rollback'));
+  assert.equal(
+    calls.some((call) => call.sql?.includes('INSERT')),
+    false,
+  );
+});
+
+test('unavailable course occupancy fails both preview and confirmation without saving any events', async (t) => {
+  const { base, calls } = await startServer(t, {
+    courseError: Object.assign(new Error('Unavailable'), { code: 'ER_TEST_COURSES' }),
+  });
+  for (const [route, payload] of [
+    ['preview', { message: '明天9点开会1小时' }],
+    ['confirm', { suggestions: futureSuggestions(2) }],
+  ]) {
+    const response = await fetch(`${base}/${route}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    assert.equal(response.status, 500);
+  }
+  assert.ok(calls.includes('rollback'));
+  assert.equal(
+    calls.some((call) => call.sql?.includes('INSERT')),
+    false,
+  );
+  assert.equal(calls.includes('commit'), false);
 });
 
 test('planner preview only reads authenticated user schedule and does not write', async (t) => {

@@ -117,8 +117,12 @@
     };
     return `M ${hip.x} ${hip.y} Q ${knee.x} ${knee.y} ${foot.x} ${foot.y - 4}`;
   }
-  const limbMarkup = (i) =>
-    `<g data-leg="${i}"><path data-limb fill="none" stroke="${i < 2 ? '#bca181' : '#ebd5b5'}" stroke-width="${i < 2 ? 7 : 8}" stroke-linecap="round"/><path data-hoof fill="${i < 2 ? '#725d49' : '#997556'}" stroke="#6f5039" stroke-width="1.1" stroke-linejoin="round"/><path data-hoof-split fill="none" stroke="#d3b795" stroke-width="1.1" stroke-linecap="round"/></g>`;
+  const hoofPath = (x, y) => `M${x - 5} ${y - 8}q5-2 10 0l2 5q1 3-3 3h-9q-3 0-2-3Z`;
+  const hoofSplitPath = (x, y) => `M${x + 1} ${y - 4}v3`;
+  const limbMarkup = (i) => {
+    const leg = { hip: hips[i], foot: { x: hips[i].x, y: GROUND } };
+    return `<g data-leg="${i}"><path data-limb d="${legPath(leg, i)}" fill="none" stroke="${i < 2 ? '#bca181' : '#ebd5b5'}" stroke-width="${i < 2 ? 7 : 8}" stroke-linecap="round"/><path data-hoof d="${hoofPath(leg.foot.x, leg.foot.y)}" fill="${i < 2 ? '#725d49' : '#997556'}" stroke="#6f5039" stroke-width="1.1" stroke-linejoin="round"/><path data-hoof-split d="${hoofSplitPath(leg.foot.x, leg.foot.y)}" fill="none" stroke="#d3b795" stroke-width="1.1" stroke-linecap="round"/></g>`;
+  };
   const markup =
     () => `<svg viewBox="0 0 180 180" role="img" aria-label="Max：戴眼镜的暖米色电子仿生羊">
     <g data-facing>
@@ -289,8 +293,8 @@
         const { node, limb, hoof, split } = legs[i];
         limb.setAttribute('d', legPath(leg, i));
         const { x: fx, y: fy } = leg.foot;
-        hoof.setAttribute('d', `M${fx - 5} ${fy - 8}q5-2 10 0l2 5q1 3-3 3h-9q-3 0-2-3Z`);
-        split.setAttribute('d', `M${fx + 1} ${fy - 4}v3`);
+        hoof.setAttribute('d', hoofPath(fx, fy));
+        split.setAttribute('d', hoofSplitPath(fx, fy));
         node.dataset.planted = String(leg.planted);
         node.dataset.footX = String(fx);
         node.dataset.footY = String(fy);
@@ -422,5 +426,7 @@
       },
     };
   }
-  return { GROUND, SPEED, walkPose, standPose, greetPose, blend, legPath, mount };
+  // Shop previews use the very same animal, without installing a second animation loop.
+  const previewMarkup = () => markup().replace('viewBox="0 0 180 180"', 'viewBox="8 54 166 118"');
+  return { GROUND, SPEED, walkPose, standPose, greetPose, blend, legPath, mount, previewMarkup };
 });

@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const express = require('express');
+const sharp = require('sharp');
 const { createBoneSales, createBoneSalesRouter } = require('../backend/economy-sales');
 const { createOnboardingPreview } = require('./preview-onboarding');
 const { TOKEN } = require('./preview-economy');
@@ -537,7 +538,7 @@ test('the actual inventory client sale URL reaches both production router and lo
   assert.equal(preview.store.account().magnetic, 87);
 });
 
-test('rubber rod catalogue preserves permanent ownership, partner classification and native artwork', () => {
+test('rubber rod catalogue preserves permanent ownership, partner classification and local artwork', async () => {
   const { items } = JSON.parse(
     fs.readFileSync(path.join(__dirname, '../public/data/shop-items.json'), 'utf8'),
   );
@@ -563,7 +564,17 @@ test('rubber rod catalogue preserves permanent ownership, partner classification
     items.some((item) => /wool|羊毛/.test(`${item.key} ${item.assetKey} ${item.name}`)),
     false,
   );
-  const svg = fs.readFileSync(path.join(__dirname, '../public', rod.image), 'utf8');
+  assert.equal(rod.image, '/assets/shop/max-cartoon-v1/rubber_rod.webp');
+  const art = await sharp(path.join(__dirname, '../public', rod.image)).metadata();
+  assert.equal(art.format, 'webp');
+  assert.equal(art.width, 512);
+  assert.equal(art.height, 512);
+  assert.equal(art.hasAlpha, true);
+  // Keep the former vector available to cached pages and older deployments.
+  const svg = fs.readFileSync(
+    path.join(__dirname, '../public/assets/icons/rubber-rod.svg'),
+    'utf8',
+  );
   assert.match(svg, /<svg[^>]+viewBox="0 0 128 128"/);
   assert.match(svg, /<title[^>]*>橡胶棒<\/title>/);
   assert.doesNotMatch(svg, /<script|<foreignObject|\b(?:href|onload)\s*=/i);
