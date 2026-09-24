@@ -63,9 +63,13 @@ test('the MySQL job installs dependencies before running a local socket-only dis
   assert.equal(job.services, undefined);
   assert.equal(job.container, undefined);
   assert.doesNotMatch(JSON.stringify(job), /"ports"\s*:/);
-  const install = job.steps.findIndex((step) => step.run === 'npm ci');
+  const install = job.steps.findIndex(
+    (step) => typeof step.run === 'string' && /^npm ci$/m.test(step.run),
+  );
   const run = job.steps.findIndex((step) => step.run === 'npm run test:mysql:isolated');
   assert.ok(install >= 0 && run > install);
+  assert.match(job.steps[install].run, /^npm ci --prefix development$/m);
+  assert.match(job.steps[install].run, /^npm run build --prefix development$/m);
   assert.equal(job.steps[run].env?.MYSQLD_BIN, '/usr/sbin/mysqld');
   const node = job.steps.find((step) => step.uses?.startsWith('actions/setup-node@'));
   assert.equal(node?.with?.['node-version-file'], '.nvmrc');
