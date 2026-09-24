@@ -1,0 +1,215 @@
+name: Production release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: ${{ github.ref == 'refs/heads/main' && github.ref_protected == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+  mysql-integration:
+    if: ${{ github.ref == 'refs/heads/main' && github.ref_protected == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: test-only-root-password
+          MYSQL_DATABASE: free_bbs_development
+          MYSQL_USER: freebbs_development
+          MYSQL_PASSWORD: test-only-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --user=root --password=test-only-root-password --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      DATA_MODE: mysql
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: free_bbs_development
+      MYSQL_USER: freebbs_development
+      MYSQL_PASSWORD: test-only-password
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mysql
+
+  e2e-memory:
+    needs: verify
+    if: ${{ github.ref == 'refs/heads/main' && github.ref_protected == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:contracts
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+      - name: Preserve memory browser report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-memory-${{ github.run_attempt }}
+          path: playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  e2e-production:
+    needs: [verify, mysql-integration]
+    if: ${{ github.ref == 'refs/heads/main' && github.ref_protected == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: test-only-root-password
+          MYSQL_DATABASE: free_bbs_development
+          MYSQL_USER: freebbs_development
+          MYSQL_PASSWORD: test-only-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --user=root --password=test-only-root-password --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      NODE_ENV: test
+      DATA_MODE: mysql
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: free_bbs_development
+      MYSQL_USER: freebbs_development
+      MYSQL_PASSWORD: test-only-password
+      MYSQL_ROOT_PASSWORD: test-only-root-password
+      ALLOW_DEMO_SEED: true
+      PRODUCTION_E2E_SHUTDOWN_DB: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:contracts
+      - run: npm run db:migrate
+      - run: npm run db:seed
+      - name: Bootstrap production-shape administrator
+        env:
+          NODE_ENV: production
+        run: >-
+          npm run admin:bootstrap --
+          --uid demo-admin
+          --confirm BOOTSTRAP_SUPER_ADMIN:demo-admin
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --config playwright.production.config.ts
+      - name: Preserve production-shape browser report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-production-${{ github.run_attempt }}
+          path: playwright-report/production-shape/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  release:
+    needs: [verify, mysql-integration, e2e-memory, e2e-production]
+    if: ${{ github.ref == 'refs/heads/main' && github.ref_protected == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Build immutable release archive
+        shell: bash
+        run: >-
+          bash scripts/create-release-archive.sh
+          --sha "${GITHUB_SHA}"
+          --output "freebbs-development-${GITHUB_SHA}.tar.gz"
+      - name: Preserve release archive
+        uses: actions/upload-artifact@v5
+        with:
+          name: freebbs-development-${{ github.sha }}
+          path: freebbs-development-${{ github.sha }}.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+      - name: Install SSH credentials
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          for required in DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
+            if [[ -z "${!required}" ]]; then
+              echo "Required production secret is not configured: ${required}" >&2
+              exit 1
+            fi
+          done
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 0600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Publish verified release
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          FREEBBS_DOMAIN: ${{ vars.FREEBBS_DOMAIN }}
+        shell: bash
+        run: |
+          for required in DEPLOY_HOST DEPLOY_USER FREEBBS_DOMAIN; do
+            if [[ -z "${!required}" ]]; then
+              echo "Required production setting is not configured: ${required}" >&2
+              exit 1
+            fi
+          done
+          if [[ ${#FREEBBS_DOMAIN} -gt 253 ||
+                ! $FREEBBS_DOMAIN =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]]; then
+            echo 'FREEBBS_DOMAIN must be a fully qualified DNS name' >&2
+            exit 1
+          fi
+          FREEBBS_DOMAIN=${FREEBBS_DOMAIN,,}
+          archive="freebbs-development-${GITHUB_SHA}.tar.gz"
+          remote_archive="/tmp/${archive}"
+          scp -o BatchMode=yes "$archive" "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_archive}"
+          ssh -o BatchMode=yes "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "sudo /usr/local/sbin/deploy-freebbs-development --archive '${remote_archive}' --sha '${GITHUB_SHA}' --domain '${FREEBBS_DOMAIN}'"

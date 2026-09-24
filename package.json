@@ -20,6 +20,7 @@
     "test:agent-surfaces": "node --test scripts/agent-surface-integration.test.js backend/agent-circuits.test.js",
     "test:discussion-markdown": "node --test scripts/discussion-layout.test.js scripts/discussion-markdown.test.js scripts/discussion-previews.test.js backend/discussion-preview.test.js backend/discussion-visibility.test.js scripts/discussion-visibility.test.js",
     "test:public-pages": "node --test scripts/development-navigation.test.js scripts/world-page.test.js scripts/home-page.test.js",
+    "test:development-integration": "node --test backend/development-integration.test.js scripts/development-entry.test.js scripts/development-static.test.js",
     "preview:home": "node scripts/preview-home.js",
     "preview:economy": "node scripts/preview-economy.js",
     "preview:onboarding": "node scripts/preview-onboarding.js",

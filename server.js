@@ -8,6 +8,7 @@ const host = process.env.HOST || '127.0.0.1';
 const port = process.env.PORT || 3000;
 const publicDir = path.join(__dirname, 'public');
 const vendorDir = path.join(__dirname, 'node_modules');
+const developmentDir = path.join(__dirname, 'development', 'apps', 'web', 'dist');
 const pageRoutes = new Map([
   ['/search', '/search.html'],
   ['/surveys', '/surveys.html'],
@@ -197,6 +198,24 @@ const server = http.createServer((request, response) => {
     });
     request.on('aborted', () => upstream.destroy());
     request.pipe(upstream);
+    return;
+  }
+
+  if (requestUrl.pathname.startsWith('/development/')) {
+    const relativeUrlPath = requestUrl.pathname.slice('/development/'.length);
+    const normalized = path.posix.normalize(`/${relativeUrlPath}`).replace(/^\/+/, '');
+    const requestedPath = path.resolve(developmentDir, normalized);
+    const withinDevelopment =
+      requestedPath === developmentDir || requestedPath.startsWith(`${developmentDir}${path.sep}`);
+    if (!withinDevelopment) {
+      response.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+      response.end('403 Forbidden');
+      return;
+    }
+    const extension = path.extname(requestedPath);
+    sendFile(extension ? requestedPath : path.join(developmentDir, 'index.html'), response, {
+      htmlNotFound: !extension,
+    });
     return;
   }
   const cleanPath =

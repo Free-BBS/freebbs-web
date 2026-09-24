@@ -1,0 +1,7 @@
+node_modules/
+dist/
+coverage/
+README.md
+docs/README.md
+docs/overall-technical-design.md
+docs/superpowers/plans/2026-07-22-development-platform-mvp.md

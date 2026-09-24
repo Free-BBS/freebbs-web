@@ -298,6 +298,7 @@ function activityReturnPath() {
     const allowed =
       next.pathname === '/publish' ||
       next.pathname === '/surveys' ||
+      next.pathname.startsWith('/development/') ||
       (next.pathname === '/discussion' &&
         /^[a-zA-Z0-9_-]{1,80}$/.test(next.searchParams.get('post') || ''));
     return next.origin === window.location.origin && allowed

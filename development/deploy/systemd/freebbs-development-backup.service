@@ -1,0 +1,33 @@
+[Unit]
+Description=Back up the FreeBBS Development MySQL database
+After=network-online.target
+Wants=network-online.target
+ConditionPathIsSymbolicLink=/opt/freebbs-development/current
+ConditionPathExists=/etc/freebbs-development/backup.env
+
+[Service]
+Type=oneshot
+User=freebbs-development
+Group=freebbs-development
+WorkingDirectory=/opt/freebbs-development/current
+EnvironmentFile=/etc/freebbs-development/backup.env
+ExecStart=/bin/sh -c 'set -eu; output=/var/backups/freebbs-development/freebbs-development-$(date -u +%%Y%%m%%dT%%H%%M%%SZ).sql; /bin/sh scripts/backup.sh "$output"; sha256sum "$output" >"$output.sha256"; find /var/backups/freebbs-development -type f -mtime +"${BACKUP_RETENTION_DAYS:-14}" -delete'
+UMask=0027
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectKernelLogs=true
+ProtectClock=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+SystemCallArchitectures=native
+ReadWritePaths=/var/backups/freebbs-development

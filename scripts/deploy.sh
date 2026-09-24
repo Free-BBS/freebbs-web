@@ -85,6 +85,11 @@ cd "$DEPLOY_DIR"
 echo "[deploy] installing dependencies"
 "$NPM_BINARY" ci --omit=dev
 
+echo "[deploy] building development center"
+"$NPM_BINARY" ci --prefix development
+"$NPM_BINARY" run build --prefix development
+"$NPM_BINARY" prune --omit=dev --prefix development
+
 if [[ "$RUN_DB_MIGRATIONS" == "1" ]]; then
   if [[ ! -r "$ENV_FILE" ]]; then
     echo "[deploy] migration environment is not readable: $ENV_FILE" >&2
