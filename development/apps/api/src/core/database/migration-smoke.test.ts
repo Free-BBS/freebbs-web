@@ -3,11 +3,23 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { calculateChecksum, discoverMigrations, splitSqlStatements } from './migrate.js';
+import {
+  calculateChecksum,
+  defaultMigrationsDirectory,
+  discoverMigrations,
+  splitSqlStatements,
+} from './migrate.js';
 
 const databaseDirectory = fileURLToPath(new URL('../../../../../database/', import.meta.url));
+const migrationsDirectory = fileURLToPath(
+  new URL('../../../../../database/migrations/', import.meta.url),
+);
 
 describe('database migrations', () => {
+  it('resolves the development migration directory independently of the caller cwd', () => {
+    expect(defaultMigrationsDirectory()).toBe(migrationsDirectory);
+  });
+
   it('defines every core and domain table in explicit migrations', async () => {
     const migrations = await discoverMigrations(`${databaseDirectory}/migrations`);
     expect(migrations.map(({ name }) => name)).toEqual([
