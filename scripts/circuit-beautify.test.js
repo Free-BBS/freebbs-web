@@ -161,3 +161,18 @@ test('browser module and recognition backend use the identical deterministic lay
   assert.match(html, /id="circuit-beautify"/);
   assert.match(source, /\$\('beautify'\)\.addEventListener\('click', beautifyCircuit\)/);
 });
+
+test('locked challenge terminals keep their position and orientation during beautification', () => {
+  const input = fixture();
+  const before = new Map(
+    input.components
+      .filter(({ id }) => ['V1', 'G1'].includes(id))
+      .map(({ id, x, y, rotation }) => [id, { x, y, rotation }]),
+  );
+  const after = layout.normalizeCircuitLayout(input, { lockedComponentIds: ['V1', 'G1'] });
+  for (const [id, placement] of before) {
+    const component = after.components.find((item) => item.id === id);
+    assert.deepEqual({ x: component.x, y: component.y, rotation: component.rotation }, placement);
+  }
+  assert.deepEqual(engine.buildNets(after), engine.buildNets(input));
+});

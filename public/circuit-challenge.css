@@ -321,11 +321,27 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
   min-height: 43px;
   padding: 7px 12px;
   border-bottom: 1px solid var(--ui-line);
   color: var(--ui-muted);
   font-size: 0.66rem;
+}
+.challenge-canvas-toolbar > span {
+  flex: 1 1 280px;
+}
+.challenge-canvas-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+.challenge-canvas-actions button {
+  min-height: 30px;
+  padding: 5px 8px;
+  font-size: 0.67rem;
 }
 .challenge-stage {
   min-height: 470px;
@@ -358,6 +374,80 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
+}
+.challenge-shortcuts-dialog {
+  width: min(620px, calc(100vw - 28px));
+  max-height: min(720px, calc(100dvh - 28px));
+  box-sizing: border-box;
+  padding: 20px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 10px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  box-shadow: 0 24px 70px color-mix(in srgb, var(--ui-page) 70%, transparent);
+}
+.challenge-shortcuts-dialog::backdrop {
+  background: color-mix(in srgb, var(--ui-page) 76%, transparent);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+}
+.challenge-shortcuts-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.challenge-shortcuts-heading h2,
+.challenge-shortcuts-dialog p,
+.challenge-shortcuts-dialog dl {
+  margin: 0;
+}
+.challenge-shortcuts-dialog > p {
+  margin-top: 10px;
+  color: var(--ui-muted);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+.challenge-shortcuts-dialog dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 16px;
+  overflow: hidden;
+  border: 1px solid var(--ui-line);
+  border-radius: 7px;
+  background: var(--ui-line);
+}
+.challenge-shortcuts-dialog dl div {
+  display: grid;
+  gap: 5px;
+  padding: 11px;
+  background: var(--ui-page);
+}
+.challenge-shortcuts-dialog dt {
+  font-size: 0.72rem;
+}
+.challenge-shortcuts-dialog dd {
+  margin: 0;
+  color: var(--ui-muted);
+  font-size: 0.7rem;
+}
+.challenge-shortcuts-dialog kbd {
+  padding: 2px 5px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 4px;
+  background: var(--ui-surface);
+  font: 600 0.68rem var(--font-code, monospace);
+}
+.challenge-shortcuts-dialog button {
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 6px;
+  background: var(--ui-page);
+  color: var(--ui-text);
+  font: inherit;
+  cursor: pointer;
 }
 .challenge-runbar {
   position: sticky;
@@ -570,6 +660,14 @@
   }
   .challenge-stage {
     min-height: 360px;
+  }
+  .challenge-canvas-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .challenge-shortcuts-dialog dl {
+    grid-template-columns: 1fr;
   }
   .challenge-empty-state {
     grid-template-columns: 1fr;

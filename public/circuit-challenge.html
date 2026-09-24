@@ -277,7 +277,31 @@
                   <span id="challenge-canvas-help"
                     >IN− 默认接地；公共 VCC / VEE 可选，不接也可。</span
                   >
-                  <button id="challenge-cancel-wire" type="button" hidden>取消连线</button>
+                  <div class="challenge-canvas-actions" aria-label="画布编辑工具">
+                    <button id="challenge-beautify" type="button" title="整理元件和导线，可撤销">
+                      一键美化
+                    </button>
+                    <button id="challenge-undo" type="button" aria-keyshortcuts="Control+z Meta+z">
+                      撤销
+                    </button>
+                    <button
+                      id="challenge-redo"
+                      type="button"
+                      aria-keyshortcuts="Control+Shift+z Meta+Shift+z Control+y"
+                    >
+                      重做
+                    </button>
+                    <button
+                      id="challenge-shortcuts"
+                      type="button"
+                      aria-haspopup="dialog"
+                      aria-expanded="false"
+                    >
+                      快捷键
+                    </button>
+                    <button id="challenge-undo-wire" type="button" hidden>撤回拐点</button>
+                    <button id="challenge-cancel-wire" type="button" hidden>取消连线</button>
+                  </div>
                 </div>
                 <div id="challenge-stage" class="challenge-stage" aria-label="闯关电路画布"></div>
               </div>
@@ -290,6 +314,8 @@
                   <div class="challenge-inspector-actions">
                     <button id="challenge-rotate" type="button">旋转</button>
                     <button id="challenge-delete" type="button">删除</button>
+                    <button id="challenge-start-wire" type="button" hidden>从导线连线</button>
+                    <button id="challenge-reset-wire" type="button" hidden>恢复自动走线</button>
                   </div>
                 </div>
               </aside>
@@ -327,12 +353,69 @@
         </section>
       </main>
     </div>
+    <dialog id="challenge-shortcuts-dialog" class="challenge-shortcuts-dialog">
+      <div class="challenge-shortcuts-heading">
+        <h2>电路快捷键</h2>
+        <button type="button" data-circuit-shortcuts-close aria-label="关闭快捷键帮助">关闭</button>
+      </div>
+      <p>与电路实验室一致。输入框内保留原生输入操作。</p>
+      <dl>
+        <div>
+          <dt><kbd>⌘ / Ctrl</kbd> + <kbd>Enter</kbd></dt>
+          <dd>测试波形</dd>
+        </div>
+        <div>
+          <dt><kbd>⌘ / Ctrl</kbd> + <kbd>Z</kbd></dt>
+          <dd>撤销；连线时撤回拐点</dd>
+        </div>
+        <div>
+          <dt><kbd>⌘ / Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd></dt>
+          <dd>重做</dd>
+        </div>
+        <div>
+          <dt><kbd>R</kbd></dt>
+          <dd>旋转选中元件</dd>
+        </div>
+        <div>
+          <dt><kbd>X</kbd> / <kbd>Y</kbd></dt>
+          <dd>镜像选中元件</dd>
+        </div>
+        <div>
+          <dt><kbd>D</kbd></dt>
+          <dd>复制选中元件</dd>
+        </div>
+        <div>
+          <dt><kbd>W</kbd></dt>
+          <dd>从选中元件或导线开始连线</dd>
+        </div>
+        <div>
+          <dt><kbd>方向键</kbd></dt>
+          <dd>移动选中元件；Shift 加速</dd>
+        </div>
+        <div>
+          <dt><kbd>Delete</kbd> / <kbd>Backspace</kbd></dt>
+          <dd>删除；连线时撤回拐点</dd>
+        </div>
+        <div>
+          <dt><kbd>Esc</kbd></dt>
+          <dd>取消连线或清除选择</dd>
+        </div>
+        <div>
+          <dt><kbd>?</kbd></dt>
+          <dd>打开本帮助</dd>
+        </div>
+      </dl>
+      <p>选中导线后可拖动线段和拐点；双击导线增加拐点，方向键微调。</p>
+    </dialog>
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
     <script src="/app.js"></script>
     <script src="/circuit-engine.js"></script>
     <script src="/circuit-renderer.js"></script>
     <script src="/circuit-wiring.js"></script>
+    <script src="/circuit-layout.js"></script>
+    <script src="/circuit-history.js"></script>
+    <script src="/circuit-shortcuts.js"></script>
     <script src="/circuit-challenge.js"></script>
     <script src="/notifications.js"></script>
   </body>

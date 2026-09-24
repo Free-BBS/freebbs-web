@@ -75,12 +75,19 @@
     return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
   }
 
-  function arrangeComponents(components) {
+  function arrangeComponents(components, lockedComponentIds = new Set()) {
     const placed = [];
     const boxes = [];
-    const originalOrder = [...components].sort((a, b) => a.y - b.y || a.x - b.x);
+    const originalOrder = [...components].sort(
+      (a, b) =>
+        Number(lockedComponentIds.has(b.id)) - Number(lockedComponentIds.has(a.id)) ||
+        a.y - b.y ||
+        a.x - b.x,
+    );
     originalOrder.forEach((component) => {
-      const start = { ...component, x: snap(component.x), y: snap(component.y) };
+      const start = lockedComponentIds.has(component.id)
+        ? { ...component }
+        : { ...component, x: snap(component.x), y: snap(component.y) };
       const startBox = placementBox(start);
       const free = (candidate) => {
         const dx = candidate.x - start.x;
@@ -94,7 +101,7 @@
         return !boxes.some((box) => intersects(bounds, box));
       };
       let best = start;
-      if (!free(start)) {
+      if (!lockedComponentIds.has(component.id) && !free(start)) {
         // Search nearby grid positions, never rescale/reorder the whole diagram.
         // A ring is finite, and 100 rings comfortably fit all 80 supported symbols.
         let bestCost = Infinity;
@@ -415,9 +422,10 @@
   // Orient two-terminal branches toward their neighbours. Use centres rather than
   // the neighbours' current pins so simultaneous rotations cannot chase each other.
   // Ambiguous branches and multi-terminal devices retain the author's orientation.
-  function orientComponents(components, wires) {
+  function orientComponents(components, wires, lockedComponentIds = new Set()) {
     const byId = new Map(components.map((component) => [component.id, component]));
     return components.map((component) => {
+      if (lockedComponentIds.has(component.id)) return component;
       if (getPins(component).length !== 2) return component;
       const targets = [[], []];
       for (const wire of wires) {
@@ -459,8 +467,13 @@
     });
   }
 
-  function normalizeCircuitLayout(document) {
-    const components = orientComponents(arrangeComponents(document.components), document.wires);
+  function normalizeCircuitLayout(document, { lockedComponentIds = [] } = {}) {
+    const locked = new Set(lockedComponentIds);
+    const components = orientComponents(
+      arrangeComponents(document.components, locked),
+      document.wires,
+      locked,
+    );
     const componentMap = new Map(components.map((component) => [component.id, component]));
     const pins = new Map(components.map((component) => [component.id, getPins(component)]));
     const { pinNets } = buildNets(document);

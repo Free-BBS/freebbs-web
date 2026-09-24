@@ -20,6 +20,14 @@ test('circuit challenge page exposes player, leaderboard, and administrator surf
     'challenge-admin-form',
     'challenge-admin-reward',
     'challenge-admin-save',
+    'challenge-beautify',
+    'challenge-undo',
+    'challenge-redo',
+    'challenge-shortcuts',
+    'challenge-shortcuts-dialog',
+    'challenge-undo-wire',
+    'challenge-start-wire',
+    'challenge-reset-wire',
   ])
     assert.match(html, new RegExp(`id="${id}"`));
   assert.match(script, /\/circuit-challenges\/\$\{state\.challenge\.id\}\/submissions/);
@@ -31,6 +39,13 @@ test('circuit challenge page exposes player, leaderboard, and administrator surf
   assert.match(script, /positiveLabel: 'IN \+'/);
   assert.match(script, /negativeLabel: 'IN − · GND'/);
   assert.match(script, /OUT: \{ side: 'right', label: 'OUT' \}/);
+  assert.match(script, /wirePoints: state\.wirePoints/);
+  assert.match(script, /onCanvasPoint: addConnectionPoint/);
+  assert.match(script, /shortcuts\.bind\(\{/);
+  assert.match(script, /layout\.normalizeCircuitLayout/);
+  assert.match(script, /lockedComponentIds: \[\.\.\.fixedIds\]/);
+  for (const module of ['circuit-layout.js', 'circuit-history.js', 'circuit-shortcuts.js'])
+    assert.match(html, new RegExp(`src="/${module.replace('.', '\\.')}`));
   assert.match(server, /\['\/circuit-challenge', '\/circuit-challenge\.html'\]/);
 });
 
