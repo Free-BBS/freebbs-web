@@ -10,7 +10,16 @@
   const shortcuts = window.FreeBbsCircuitShortcuts;
   const $ = (id) => document.getElementById(`challenge-${id}`);
   const clone = (value) => JSON.parse(JSON.stringify(value));
-  const allowed = ['resistor', 'capacitor', 'inductor', 'opamp', 'diode', 'bjt', 'mosfet'];
+  const allowed = [
+    'resistor',
+    'capacitor',
+    'inductor',
+    'opamp',
+    'diode',
+    'bjt',
+    'mosfet',
+    'ground',
+  ];
   const fixedIds = new Set(['V_IN', 'OUT', 'GND', 'VCC', 'VEE']);
   const prefixes = {
     resistor: 'R',
@@ -20,6 +29,7 @@
     diode: 'D',
     bjt: 'Q',
     mosfet: 'M',
+    ground: 'G',
     junction: 'J',
   };
   const parameterLabels = {
@@ -55,6 +65,9 @@
     schematic: null,
     history: null,
     shortcuts: null,
+    celebrated: false,
+    celebrationFrame: 0,
+    celebrationTimer: 0,
     adminMode: false,
     adminEditing: null,
     busy: false,
@@ -296,6 +309,7 @@
   function changed(electrical = true, { history = true, historyGroup = null } = {}) {
     if (history) state.history?.record({ document: state.document }, { group: historyGroup });
     if (electrical) state.result = null;
+    state.celebrated = false;
     $('component-count').textContent = `${componentCount()} 个`;
     $('submit').disabled = true;
     $('result-title').textContent = '电路已修改';
@@ -622,6 +636,105 @@
     context.setLineDash([]);
   }
 
+  function clearCelebration() {
+    window.cancelAnimationFrame(state.celebrationFrame);
+    window.clearTimeout(state.celebrationTimer);
+    state.celebrationFrame = 0;
+    state.celebrationTimer = 0;
+    const celebration = $('celebration');
+    celebration.classList.remove('is-active');
+    celebration.hidden = true;
+  }
+
+  function launchFireworks() {
+    clearCelebration();
+    const celebration = $('celebration');
+    const canvas = $('fireworks');
+    celebration.hidden = false;
+    celebration.classList.add('is-active');
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reducedMotion) {
+      state.celebrationTimer = window.setTimeout(clearCelebration, 1900);
+      return;
+    }
+    const ratio = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    const context = canvas.getContext('2d');
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    const styles = getComputedStyle(root);
+    const colors = [
+      styles.getPropertyValue('--challenge-accent').trim() || '#74d6a4',
+      styles.getPropertyValue('--challenge-target').trim() || '#f1c66d',
+      styles.getPropertyValue('--challenge-input').trim() || '#8398ad',
+      '#ef8f78',
+      '#d7a8ef',
+    ];
+    const bursts = [
+      { x: 0.2, y: 0.34, delay: 0 },
+      { x: 0.78, y: 0.3, delay: 170 },
+      { x: 0.38, y: 0.2, delay: 340 },
+      { x: 0.64, y: 0.42, delay: 510 },
+      { x: 0.5, y: 0.27, delay: 720 },
+    ];
+    const particles = [];
+    const started = performance.now();
+    let previous = started;
+    const createBurst = (burst) => {
+      const count = width < 600 ? 24 : 38;
+      for (let index = 0; index < count; index += 1) {
+        const angle = (Math.PI * 2 * index) / count + Math.random() * 0.12;
+        const speed = 2.5 + Math.random() * 4.2;
+        const life = 850 + Math.random() * 650;
+        particles.push({
+          x: burst.x * width,
+          y: burst.y * height,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life,
+          total: life,
+          color: colors[(index + Math.floor(burst.delay / 170)) % colors.length],
+          size: 1.5 + Math.random() * 1.9,
+        });
+      }
+    };
+    const animate = (now) => {
+      const elapsed = now - started;
+      const step = Math.min(2, (now - previous) / 16.67);
+      previous = now;
+      for (const burst of bursts) {
+        if (burst.fired || elapsed < burst.delay) continue;
+        createBurst(burst);
+        burst.fired = true;
+      }
+      context.clearRect(0, 0, width, height);
+      context.globalCompositeOperation = 'lighter';
+      for (const particle of particles) {
+        particle.x += particle.vx * step;
+        particle.y += particle.vy * step;
+        particle.vy += 0.075 * step;
+        particle.vx *= 0.994;
+        particle.life -= now - (particle.updated || previous);
+        particle.updated = now;
+        if (particle.life <= 0) continue;
+        context.globalAlpha = Math.max(0, particle.life / particle.total);
+        context.fillStyle = particle.color;
+        context.beginPath();
+        context.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+        context.fill();
+      }
+      context.globalAlpha = 1;
+      for (let index = particles.length - 1; index >= 0; index -= 1)
+        if (particles[index].life <= 0) particles.splice(index, 1);
+      if (elapsed < 2200 || particles.length)
+        state.celebrationFrame = window.requestAnimationFrame(animate);
+      else clearCelebration();
+    };
+    state.celebrationFrame = window.requestAnimationFrame(animate);
+  }
+
   function localError(result) {
     const actual = result?.traces?.find((trace) => trace.id === 'V:OUT')?.values;
     const target = state.challenge?.target?.values;
@@ -672,6 +785,10 @@
       }
       const error = localError(state.result);
       const passed = error <= state.challenge.tolerance;
+      if (passed && !state.celebrated) {
+        state.celebrated = true;
+        launchFireworks();
+      }
       $('result-title').textContent = passed ? '波形匹配，可以提交' : '还差一点';
       $('run-status').textContent =
         `归一化误差 ${(error * 100).toFixed(2)}%，要求不超过 ${(state.challenge.tolerance * 100).toFixed(1)}%。`;
@@ -742,6 +859,7 @@
       state.document = clone(payload.challenge.document);
       state.original = clone(state.document);
       state.result = null;
+      state.celebrated = false;
       state.adminMode = false;
       state.adminEditing = null;
       state.selectedId = '';
@@ -870,6 +988,7 @@
     state.document.analysis.stop = periods / source.params.frequency;
     state.document.analysis.step = 1 / (source.params.frequency * 100);
     state.result = null;
+    state.celebrated = false;
     renderChallenge();
   }
 
@@ -923,6 +1042,8 @@
       );
       state.adminMode = false;
       state.adminEditing = null;
+      state.busy = false;
+      updateControls();
       setStatus('题目已保存，目标波形由标准答案自动生成。');
       await loadChallenges(payload.challenge.id);
     } catch (error) {
@@ -1066,6 +1187,7 @@
       helpDialog: $('shortcuts-dialog'),
     });
     window.addEventListener('pagehide', () => {
+      clearCelebration();
       state.shortcuts?.destroy?.();
       state.schematic?.destroy?.();
     });

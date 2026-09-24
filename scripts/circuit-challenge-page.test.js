@@ -20,6 +20,8 @@ test('circuit challenge page exposes player, leaderboard, and administrator surf
     'challenge-admin-form',
     'challenge-admin-reward',
     'challenge-admin-save',
+    'challenge-celebration',
+    'challenge-fireworks',
     'challenge-beautify',
     'challenge-undo',
     'challenge-redo',
@@ -44,6 +46,17 @@ test('circuit challenge page exposes player, leaderboard, and administrator surf
   assert.match(script, /shortcuts\.bind\(\{/);
   assert.match(script, /layout\.normalizeCircuitLayout/);
   assert.match(script, /lockedComponentIds: \[\.\.\.fixedIds\]/);
+  assert.match(script, /'ground'/);
+  assert.match(script, /if \(passed && !state\.celebrated\)/);
+  assert.match(script, /launchFireworks\(\)/);
+  const saveAdmin = script.slice(
+    script.indexOf('async function saveAdmin()'),
+    script.indexOf('function reset()'),
+  );
+  assert.ok(
+    saveAdmin.indexOf('state.busy = false') < saveAdmin.indexOf('await loadChallenges'),
+    'admin save must leave the busy state before reloading the saved challenge',
+  );
   for (const module of ['circuit-layout.js', 'circuit-history.js', 'circuit-shortcuts.js'])
     assert.match(html, new RegExp(`src="/${module.replace('.', '\\.')}`));
   assert.match(server, /\['\/circuit-challenge', '\/circuit-challenge\.html'\]/);

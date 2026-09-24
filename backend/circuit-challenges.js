@@ -17,6 +17,7 @@ const ALLOWED_TYPES = new Set([
   'diode',
   'bjt',
   'mosfet',
+  'ground',
   'junction',
 ]);
 const MAX_BODY_BYTES = 256 * 1024;

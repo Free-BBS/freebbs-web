@@ -449,6 +449,68 @@
   font: inherit;
   cursor: pointer;
 }
+.challenge-celebration {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.challenge-celebration[hidden] {
+  display: none;
+}
+.challenge-celebration canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.challenge-celebration-message {
+  position: absolute;
+  top: max(72px, 12vh);
+  left: 50%;
+  display: grid;
+  gap: 4px;
+  min-width: min(300px, calc(100vw - 32px));
+  padding: 13px 18px;
+  border: 1px solid color-mix(in srgb, var(--challenge-accent, #74d6a4) 66%, white);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ui-surface) 91%, transparent);
+  color: var(--ui-text);
+  text-align: center;
+  box-shadow: 0 16px 42px color-mix(in srgb, var(--ui-page) 60%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  transform: translate(-50%, -12px) scale(0.96);
+}
+.challenge-celebration.is-active .challenge-celebration-message {
+  animation: challenge-success-message 1.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.challenge-celebration-message strong {
+  color: var(--challenge-accent, #74d6a4);
+  font-size: 1.02rem;
+  letter-spacing: 0.04em;
+}
+.challenge-celebration-message span {
+  color: var(--ui-muted);
+  font-size: 0.72rem;
+}
+@keyframes challenge-success-message {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -12px) scale(0.96);
+  }
+  14%,
+  72% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -5px) scale(0.99);
+  }
+}
 .challenge-runbar {
   position: sticky;
   z-index: 2;
@@ -686,5 +748,10 @@
   .challenge-main * {
     scroll-behavior: auto !important;
     transition: none !important;
+  }
+  .challenge-celebration.is-active .challenge-celebration-message {
+    animation: none;
+    opacity: 1;
+    transform: translate(-50%, 0);
   }
 }

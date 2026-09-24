@@ -145,6 +145,15 @@ test('player starter keeps fixed ports and their ground returns but hides the so
 });
 
 test('challenge validation permits only the requested component families and periodic inputs', () => {
+  const withGround = solution();
+  withGround.components.push({
+    id: 'G2',
+    type: 'ground',
+    x: 700,
+    y: 500,
+    params: engine.catalog.ground.defaults,
+  });
+  assert.doesNotThrow(() => validateChallengeDocument(withGround));
   const invalidSource = solution();
   invalidSource.components[0].params.waveform = 'dc';
   assert.throws(() => validateChallengeDocument(invalidSource), /正弦波或方波/);
