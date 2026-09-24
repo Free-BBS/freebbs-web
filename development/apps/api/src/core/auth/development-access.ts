@@ -10,9 +10,9 @@ const publicScope = { type: 'public', id: '*' } as const;
 
 function sameIdentity(record: DevelopmentAccessRecord, identity: UserContext): boolean {
   if (record.status !== 'active') return false;
-  if (record.subjectUid && record.subjectUid === identity.uid) return true;
-  if (record.studentId && identity.studentId && record.studentId === identity.studentId)
-    return true;
+  if (record.subjectUid) return record.subjectUid === identity.uid;
+  if (record.studentId)
+    return Boolean(identity.studentId && record.studentId === identity.studentId);
   return Boolean(
     record.username &&
     identity.username &&

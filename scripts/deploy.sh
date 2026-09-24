@@ -103,7 +103,7 @@ if [[ "$RUN_DB_MIGRATIONS" == "1" ]]; then
     # shellcheck disable=SC1090
     source "$ENV_FILE"
     set +a
-    bash scripts/migrate.sh
+    NODE_BINARY="$NODE_BINARY" bash scripts/migrate.sh
   )
 else
   echo "[deploy] skipping database migrations; backend secrets are not loaded"

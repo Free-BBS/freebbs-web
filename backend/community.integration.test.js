@@ -89,6 +89,20 @@ test(
     await db.query(
       `CREATE DATABASE \`${developmentDatabase}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci`,
     );
+    await runProgram(process.execPath, ['development/apps/api/dist/core/database/migrate.js'], {
+      cwd: root,
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        DATA_MODE: 'mysql',
+        MYSQL_HOST: backendMysqlOptions.host,
+        MYSQL_PORT: String(backendMysqlOptions.port),
+        MYSQL_USER: mysqlOptions.user,
+        MYSQL_PASSWORD: mysqlOptions.password,
+        MYSQL_DATABASE: developmentDatabase,
+        ...(isolated ? { MYSQL_SOCKET: mysqlOptions.socketPath } : {}),
+      },
+    });
     const port = await reservePort();
     backend = spawn(process.execPath, ['backend/server.js'], {
       cwd: root,

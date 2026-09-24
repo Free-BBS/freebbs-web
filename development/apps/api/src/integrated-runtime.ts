@@ -1,10 +1,7 @@
-import { fileURLToPath } from 'node:url';
-
 import { createApp } from './app.js';
 import type { AuthClient } from './core/auth/auth-client.js';
 import type { UserDirectory } from './core/auth/user-directory.js';
 import { createMySqlStore } from './core/database/mysql-store.js';
-import { runMigrations } from './core/database/migrate.js';
 
 export interface IntegratedDatabaseConfig {
   host: string;
@@ -42,11 +39,13 @@ export async function createIntegratedDevelopmentRuntime(
     MYSQL_DATABASE: options.database.database,
     ...(options.database.socketPath ? { MYSQL_SOCKET: options.database.socketPath } : {}),
   };
-  const migrationDirectory = fileURLToPath(
-    new URL('../../../database/migrations/', import.meta.url),
-  );
-  await runMigrations({ environment, directory: migrationDirectory });
   const handle = createMySqlStore({ environment });
+  try {
+    await handle.checkReadiness();
+  } catch (error) {
+    await handle.close();
+    throw error;
+  }
   const app = createApp({
     store: handle.store,
     databaseMode: 'mysql',
