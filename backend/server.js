@@ -40,6 +40,7 @@ const { createSiteSearch, createSiteSearchRouter } = require('./site-search');
 const config = require('./config');
 const {
   createDevelopmentAuthClient,
+  createDevelopmentDatabaseConfig,
   createDevelopmentUserDirectory,
   loadDevelopmentRuntime,
 } = require('./development-integration');
@@ -6255,7 +6256,7 @@ async function start() {
       toUserProfile,
     }),
     userDirectory: createDevelopmentUserDirectory(pool),
-    database: config.db,
+    database: createDevelopmentDatabaseConfig(config.db),
     uploadDirectory: path.join(config.uploadDir, 'development', 'festival'),
   });
   await decayHeatIfNeeded(new Date());
