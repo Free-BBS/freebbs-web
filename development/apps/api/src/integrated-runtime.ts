@@ -12,6 +12,7 @@ export interface IntegratedDatabaseConfig {
   user: string;
   password: string;
   database: string;
+  socketPath?: string;
 }
 
 export interface IntegratedRuntimeOptions {
@@ -39,6 +40,7 @@ export async function createIntegratedDevelopmentRuntime(
     MYSQL_USER: options.database.user,
     MYSQL_PASSWORD: options.database.password,
     MYSQL_DATABASE: options.database.database,
+    ...(options.database.socketPath ? { MYSQL_SOCKET: options.database.socketPath } : {}),
   };
   const migrationDirectory = fileURLToPath(
     new URL('../../../database/migrations/', import.meta.url),
