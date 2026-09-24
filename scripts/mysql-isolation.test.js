@@ -131,6 +131,7 @@ test('the isolated runner removes inherited database targets and Node hooks with
   assert.equal(env.PYTHON, original.PYTHON);
   assert.equal(env.PYTHONUTF8, '1');
   assert.equal(env.PYTHONIOENCODING, 'utf-8');
+  assert.equal(env.NODE_ENV, 'test');
   assert.equal(env.FREEBBS_TEST_MYSQL_SOCKET, unixSocket);
   assert.equal(env.MYSQL_SOCKET, unixSocket);
   assert.equal(env.MYSQL_USER, 'root');
