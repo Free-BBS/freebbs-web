@@ -10,12 +10,12 @@ const {
 } = require('./circuit-challenges');
 
 function solution() {
-  const component = (id, type, x, y, params = {}) => ({
+  const component = (id, type, x, y, params = {}, rotation = 0) => ({
     id,
     type,
     x,
     y,
-    rotation: 0,
+    rotation,
     params: { ...engine.catalog[type].defaults, ...params },
   });
   return {
@@ -29,6 +29,8 @@ function solution() {
       }),
       component('OUT', 'oscilloscope', 910, 260),
       component('GND', 'ground', 500, 560),
+      component('VCC', 'fixed_voltage', 360, 100, { dc: 12 }),
+      component('VEE', 'fixed_voltage', 640, 540, { dc: -12 }, 180),
       component('R1', 'resistor', 350, 220, { resistance: 1000 }),
       component('R2', 'resistor', 650, 360, { resistance: 1000 }),
     ],
@@ -66,10 +68,12 @@ test('player starter keeps fixed ports and their ground returns but hides the so
   const starter = starterDocument(validateChallengeDocument(solution()));
   assert.deepEqual(
     starter.components.map((item) => item.id),
-    ['V_IN', 'OUT', 'GND'],
+    ['V_IN', 'OUT', 'GND', 'VCC', 'VEE'],
   );
   assert.equal(starter.wires.length, 2);
   assert.ok(starter.wires.every((wire) => ['V_IN', 'OUT', 'GND'].includes(wire.from.componentId)));
+  assert.equal(starter.components.find((item) => item.id === 'VCC').params.dc, 12);
+  assert.equal(starter.components.find((item) => item.id === 'VEE').params.dc, -12);
 });
 
 test('challenge validation permits only the requested component families and periodic inputs', () => {
@@ -88,6 +92,9 @@ test('challenge validation permits only the requested component families and per
   const missingGroundReturn = solution();
   missingGroundReturn.wires = missingGroundReturn.wires.filter((wire) => wire.id !== 'w2');
   assert.throws(() => validateChallengeDocument(missingGroundReturn), /输出负端必须连接固定参考地/);
+  const invalidRails = solution();
+  invalidRails.components.find((item) => item.id === 'VEE').params.dc = 12;
+  assert.throws(() => validateChallengeDocument(invalidRails), /正 VCC 与负 VEE/);
 });
 
 test('waveform comparison is normalized and rejects mismatched sample counts', () => {

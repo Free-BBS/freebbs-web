@@ -652,6 +652,8 @@
     const components = new Map(
       (circuit.components || []).map((component) => [component.id, { ...component }]),
     );
+    const hiddenComponentIds = new Set(options.hiddenComponentIds || []);
+    const hiddenWireIds = new Set(options.hiddenWireIds || []);
     const wires = [];
     const nodes = [];
     let { frame } = options;
@@ -707,6 +709,7 @@
     function connectionTarget(position, origin) {
       let closest;
       components.forEach((component) => {
+        if (hiddenComponentIds.has(component.id)) return;
         getPins(component).forEach((pin) => {
           if (pin.componentId === origin.componentId && pin.pin === origin.pin) return;
           const distance = Math.hypot(pin.x - position.x, pin.y - position.y);
@@ -1146,6 +1149,7 @@
     }
 
     (circuit.wires || []).forEach((storedWire) => {
+      if (hiddenWireIds.has(storedWire.id)) return;
       const wire = {
         ...storedWire,
         ...(storedWire.points === undefined ? {} : { points: copyPoints(storedWire.points) }),
@@ -1328,6 +1332,7 @@
 
     components.forEach((storedComponent) => {
       const component = storedComponent;
+      if (hiddenComponentIds.has(component.id)) return;
       const group = svgElement('g', {
         transform: `translate(${component.x} ${component.y})`,
         'data-component-id': component.id,
@@ -1403,6 +1408,58 @@
           reading.append(svgElement('tspan', { x: label.x, dy: index ? 14 : 0 }, value)),
         );
       if (component.type !== 'junction') group.append(reading);
+      const terminalPort = options.terminalPorts?.[component.id];
+      if (terminalPort) {
+        group
+          .querySelectorAll(
+            '.circuit-selection, [data-component-symbol], [data-component-label="name"], [data-component-label="value"]',
+          )
+          .forEach((element) => element.setAttribute('visibility', 'hidden'));
+        const left = terminalPort.side === 'left';
+        const start = left ? -120 : 0;
+        const end = left ? 0 : 120;
+        const textX = left ? -108 : 108;
+        const anchor = left ? 'start' : 'end';
+        const port = svgElement('g', {
+          class: 'circuit-terminal-port',
+          'data-terminal-side': terminalPort.side,
+          stroke: 'currentColor',
+          fill: 'none',
+        });
+        port.append(
+          svgElement('path', {
+            d: `M ${start} -40 H ${end} M ${start} 40 H ${end}`,
+            'stroke-width': 3,
+          }),
+          svgElement(
+            'text',
+            {
+              x: textX,
+              y: -49,
+              fill: 'var(--circuit-muted,#9db4bb)',
+              stroke: 'none',
+              'font-size': 12,
+              'font-weight': 700,
+              'text-anchor': anchor,
+            },
+            `${terminalPort.label || component.id} +`,
+          ),
+          svgElement(
+            'text',
+            {
+              x: textX,
+              y: 31,
+              fill: 'var(--circuit-muted,#9db4bb)',
+              stroke: 'none',
+              'font-size': 12,
+              'font-weight': 700,
+              'text-anchor': anchor,
+            },
+            `${terminalPort.label || component.id} −`,
+          ),
+        );
+        group.insertBefore(port, group.firstChild);
+      }
       const pins = [];
       getPins(component).forEach((pin) => {
         const x = pin.x - component.x;

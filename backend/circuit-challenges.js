@@ -1,7 +1,13 @@
 const express = require('express');
 const { validateDocument, simulate, catalog, buildNets } = require('../public/circuit-engine');
 
-const FIXED_IDS = Object.freeze({ source: 'V_IN', output: 'OUT', ground: 'GND' });
+const FIXED_IDS = Object.freeze({
+  source: 'V_IN',
+  output: 'OUT',
+  ground: 'GND',
+  vcc: 'VCC',
+  vee: 'VEE',
+});
 const ALLOWED_TYPES = new Set([
   'resistor',
   'capacitor',
@@ -89,11 +95,16 @@ function validateChallengeDocument(input) {
   const source = requiredComponent(document, FIXED_IDS.source, 'voltage');
   requiredComponent(document, FIXED_IDS.output, 'oscilloscope');
   requiredComponent(document, FIXED_IDS.ground, 'ground');
+  const vcc = requiredComponent(document, FIXED_IDS.vcc, 'fixed_voltage');
+  const vee = requiredComponent(document, FIXED_IDS.vee, 'fixed_voltage');
   if (!['sine', 'pulse'].includes(source.params.waveform)) {
     throw new CircuitChallengeError('输入端口只支持正弦波或方波');
   }
   if (document.analysis.type !== 'transient') {
     throw new CircuitChallengeError('闯关题目必须使用瞬态分析');
+  }
+  if (!(vcc.params.dc > 0) || !(vee.params.dc < 0)) {
+    throw new CircuitChallengeError('公共电源必须保留正 VCC 与负 VEE');
   }
   const { pinNets } = buildNets(document);
   if (

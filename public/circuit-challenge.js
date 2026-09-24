@@ -8,7 +8,7 @@
   const $ = (id) => document.getElementById(`challenge-${id}`);
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const allowed = ['resistor', 'capacitor', 'inductor', 'opamp', 'diode', 'bjt', 'mosfet'];
-  const fixedIds = new Set(['V_IN', 'OUT', 'GND']);
+  const fixedIds = new Set(['V_IN', 'OUT', 'GND', 'VCC', 'VEE']);
   const prefixes = {
     resistor: 'R',
     capacitor: 'C',
@@ -63,28 +63,37 @@
   }
 
   function baseDocument() {
-    const component = (id, type, x, y, params = {}) => ({
+    const component = (id, type, x, y, params = {}, rotation = 0) => ({
       id,
       type,
       x,
       y,
-      rotation: 0,
+      rotation,
       params: { ...(engine?.catalog?.[type]?.defaults || {}), ...params },
     });
     return {
       version: 1,
       components: [
-        component('V_IN', 'voltage', 90, 260, {
-          dc: 0,
-          waveform: 'sine',
-          amplitude: 2,
-          frequency: 1000,
-          phase: 0,
-          duty: 0.5,
-          delay: 0,
-        }),
-        component('OUT', 'oscilloscope', 910, 260),
+        component(
+          'V_IN',
+          'voltage',
+          140,
+          300,
+          {
+            dc: 0,
+            waveform: 'sine',
+            amplitude: 2,
+            frequency: 1000,
+            phase: 0,
+            duty: 0.5,
+            delay: 0,
+          },
+          90,
+        ),
+        component('OUT', 'oscilloscope', 860, 300, {}, 90),
         component('GND', 'ground', 500, 560),
+        component('VCC', 'fixed_voltage', 360, 100, { dc: 12 }),
+        component('VEE', 'fixed_voltage', 640, 540, { dc: -12 }, 180),
       ],
       wires: [
         {
@@ -148,6 +157,12 @@
       wireStart: state.wireStart,
       frame: state.result?.frames?.at(-1) || null,
       viewBox: [0, 0, 1000, 640],
+      hiddenComponentIds: ['GND'],
+      hiddenWireIds: ['fixed_input_ground', 'fixed_output_ground'],
+      terminalPorts: {
+        V_IN: { side: 'left', label: 'IN' },
+        OUT: { side: 'right', label: 'OUT' },
+      },
       onPinClick: connectPin,
       onComponentClick(id) {
         state.selectedId = id;
@@ -333,7 +348,7 @@
     $('cancel-wire').hidden = !state.wireStart;
     $('canvas-help').textContent = state.wireStart
       ? '选择另一个引脚或导线完成连接，按 Esc 取消。'
-      : '左侧 V_IN 是输入，右侧 OUT 是输出。拖动引脚完成连线。';
+      : '左侧两线输入，右侧两线输出；画布内提供公共 VCC 与 VEE。拖动端点完成连线。';
     $('run').disabled = state.busy || (!state.challenge && !state.adminMode);
     $('reset').disabled = state.busy || !state.original;
     $('admin-save').disabled = state.busy;

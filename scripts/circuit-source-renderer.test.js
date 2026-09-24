@@ -41,6 +41,23 @@ class Element {
     this.children.push(...children);
   }
 
+  insertBefore(child, before) {
+    const index = this.children.indexOf(before);
+    this.children.splice(index < 0 ? 0 : index, 0, child);
+  }
+
+  querySelectorAll(selector) {
+    const selectors = selector.split(',').map((value) => value.trim());
+    return this.all((element) =>
+      selectors.some((value) => {
+        if (value.startsWith('.'))
+          return (element.getAttribute('class') || '').split(/\s+/).includes(value.slice(1));
+        const match = value.match(/^\[([^=]+)="([^"]+)"\]$/);
+        return Boolean(match && element.getAttribute(match[1]) === match[2]);
+      }),
+    );
+  }
+
   replaceChildren(...children) {
     this.content = '';
     this.children = children;
@@ -125,6 +142,42 @@ test('source symbols retain polarity and current direction; multiline labels sur
     assert.notEqual(symbols.get('dc'), symbols.get('sine'));
     assert.notEqual(symbols.get('sine'), symbols.get('pulse'));
   }
+});
+
+test('challenge terminal ports render as two parallel horizontal leads and can hide internal references', () => {
+  const { renderer, container } = harness();
+  const input = { ...source('voltage', 'sine'), id: 'V_IN', x: 140, y: 300, rotation: 90 };
+  const ground = { id: 'GND', type: 'ground', x: 500, y: 560, rotation: 0, params: {} };
+  renderer.renderSchematic(
+    container,
+    {
+      components: [input, ground],
+      wires: [
+        {
+          id: 'fixed_input_ground',
+          from: { componentId: 'V_IN', pin: 1 },
+          to: { componentId: 'GND', pin: 0 },
+        },
+      ],
+    },
+    {
+      terminalPorts: { V_IN: { side: 'left', label: 'IN' } },
+      hiddenComponentIds: ['GND'],
+      hiddenWireIds: ['fixed_input_ground'],
+    },
+  );
+  const port = container.all((item) => item.getAttribute('data-terminal-side') === 'left')[0];
+  assert.ok(port);
+  assert.ok(port.all((item) => item.getAttribute('d') === 'M -120 -40 H 0 M -120 40 H 0')[0]);
+  assert.deepEqual(
+    port.all((item) => item.tagName === 'text').map((item) => item.textContent),
+    ['IN +', 'IN −'],
+  );
+  assert.equal(container.all((item) => item.getAttribute('data-component-id') === 'GND').length, 0);
+  assert.equal(
+    container.all((item) => item.getAttribute('data-wire-id') === 'fixed_input_ground').length,
+    0,
+  );
 });
 
 test('small and single-point waveforms retain all original vertices', () => {
