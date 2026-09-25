@@ -7,6 +7,27 @@ import { createMemoryStore } from './core/database/memory-store.js';
 import { createApp } from './app.js';
 
 describe('development API core', () => {
+  it('uses an injected environment instead of inheriting the host process bind address', async () => {
+    const app = createApp({
+      environment: {
+        NODE_ENV: 'production',
+        AUTH_MODE: 'main',
+        HOST: '127.0.0.1',
+        ALLOWED_ORIGINS: 'https://www.free-bbs.cn',
+      },
+      store: createMemoryStore(),
+      authMode: 'main',
+      authClient: { introspect: async () => null },
+    });
+
+    const response = await request(app)
+      .get('/api/development/v1/health')
+      .set('Origin', 'https://www.free-bbs.cn')
+      .expect(200);
+
+    expect(response.headers['access-control-allow-origin']).toBe('https://www.free-bbs.cn');
+  });
+
   it('protects main-mode identity and module metadata with the production preview list', async () => {
     const app = createApp({
       store: createMemoryStore({ seed: false }),
