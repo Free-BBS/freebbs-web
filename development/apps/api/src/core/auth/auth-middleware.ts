@@ -2,10 +2,16 @@ import { IdentityProviderUnavailableError } from './auth-client.js';
 
 import type { UserContext } from '@freebbs-development/contracts';
 import { loadAuthorizationContext } from '../authorization/load-authorization-context.js';
+import { ROLE_PERMISSION_CATALOG } from '../authorization/permission-catalog.js';
 import type { AuthorizationContext } from '../authorization/policy.js';
+import { ensurePlatformDefinitions } from '../bootstrap/bootstrap-service.js';
 import type { DevelopmentStore, SubjectRecord } from '../database/types.js';
 import type { AuthClient } from './auth-client.js';
-import { ensureDevelopmentLeadAssignment, resolveDevelopmentAccess } from './development-access.js';
+import {
+  ensureDevelopmentLeadAssignment,
+  hasConfiguredDevelopmentLead,
+  resolveDevelopmentAccess,
+} from './development-access.js';
 import { directoryUserContext, type UserDirectory } from './user-directory.js';
 
 export type AuthHeaders = Readonly<Record<string, string | string[] | undefined>>;
@@ -19,7 +25,8 @@ export type AuthenticationResult =
         | 'invalid_identity'
         | 'preview_access_denied'
         | 'preview_identity_denied'
-        | 'identity_provider_unavailable';
+        | 'identity_provider_unavailable'
+        | 'development_backend_unavailable';
       message: string;
     };
 
@@ -30,6 +37,7 @@ export interface AuthMiddlewareOptions {
   allowedUids?: readonly string[];
   userDirectory?: UserDirectory;
   now?: () => Date;
+  reportError?: (message: string, error: unknown) => void;
 }
 
 function firstHeader(headers: AuthHeaders, name: string): string | undefined {
@@ -99,6 +107,21 @@ function emptyAuthorizationContext(identity: UserContext): AuthorizationContext 
   return { ...identity, roles: [], tags: [], policies: [] };
 }
 
+function temporarySuperAdminContext(context: AuthorizationContext): AuthorizationContext {
+  return {
+    ...context,
+    roles: [...new Set([...context.roles, 'platform.super_admin' as const])],
+    policies: [
+      ...(context.policies ?? []),
+      ...ROLE_PERMISSION_CATALOG['platform.super_admin'].map((rule, index) => ({
+        ...rule,
+        id: `main-site-admin-bootstrap:${index}`,
+        effect: 'allow' as const,
+      })),
+    ],
+  };
+}
+
 export function createAuthMiddleware(options: AuthMiddlewareOptions) {
   const allowedUids = options.allowedUids && new Set(options.allowedUids);
   return async (headers: AuthHeaders): Promise<AuthenticationResult> => {
@@ -117,14 +140,24 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
       const now = (options.now ?? (() => new Date()))();
       let identity = viewerIdentity;
       let accessLevel: 'member' | 'lead' | null = null;
+      let accessGrant: Awaited<ReturnType<typeof resolveDevelopmentAccess>> = null;
+      let bootstrapAdministrator = false;
       let previewing = false;
 
       if (options.mode === 'main') {
-        if (allowedUids?.has(viewerIdentity.uid)) accessLevel = 'member';
-        else if (options.store) {
-          accessLevel =
-            (await resolveDevelopmentAccess(options.store, viewerIdentity))?.accessLevel ?? null;
+        if (options.store) {
+          accessGrant = await resolveDevelopmentAccess(options.store, viewerIdentity);
+          accessLevel = accessGrant?.accessLevel ?? null;
+          if (
+            accessLevel === null &&
+            viewerIdentity.mainSiteAdmin === true &&
+            !(await hasConfiguredDevelopmentLead(options.store))
+          ) {
+            accessLevel = 'lead';
+            bootstrapAdministrator = true;
+          }
         }
+        if (accessLevel === null && allowedUids?.has(viewerIdentity.uid)) accessLevel = 'member';
         if (accessLevel === null) {
           return {
             status: 403,
@@ -161,12 +194,18 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
       if (options.mode === 'main') {
         await synchronizeSubject(options.store, viewerIdentity, now);
         if (accessLevel === 'lead') {
-          const grant = await resolveDevelopmentAccess(options.store, viewerIdentity);
-          if (grant) await ensureDevelopmentLeadAssignment(options.store, viewerIdentity, grant);
+          await ensurePlatformDefinitions(options.store, viewerIdentity.uid);
+          if (accessGrant) {
+            await ensureDevelopmentLeadAssignment(options.store, viewerIdentity, accessGrant);
+          }
         }
         await synchronizeSubject(options.store, identity, now);
       }
-      const user = await loadAuthorizationContext(options.store, identity, now);
+      const storedUser = await loadAuthorizationContext(options.store, identity, now);
+      const user =
+        bootstrapAdministrator && !previewing
+          ? temporarySuperAdminContext(storedUser)
+          : storedUser;
       return {
         status: 200,
         user:
@@ -184,17 +223,18 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
             : user,
       };
     } catch (error) {
-      if (error instanceof IdentityProviderUnavailableError || error instanceof Error) {
+      if (error instanceof IdentityProviderUnavailableError) {
         return {
           status: 503,
           code: 'identity_provider_unavailable',
           message: 'Identity provider is temporarily unavailable',
         };
       }
+      (options.reportError ?? console.error)('[development] authentication failed', error);
       return {
         status: 503,
-        code: 'identity_provider_unavailable',
-        message: 'Identity provider is temporarily unavailable',
+        code: 'development_backend_unavailable',
+        message: 'Development service is temporarily unavailable',
       };
     }
   };

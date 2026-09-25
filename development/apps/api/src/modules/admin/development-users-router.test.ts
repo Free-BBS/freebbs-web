@@ -5,6 +5,74 @@ import { createApp } from '../../app.js';
 import { createMemoryStore } from '../../core/database/memory-store.js';
 
 describe('development access administration', () => {
+  it('lets a main-site administrator configure the first development lead and then closes fallback access', async () => {
+    const store = createMemoryStore({ seed: false });
+    const users = [
+      {
+        uid: 'u_main_admin',
+        username: 'MainAdmin',
+        displayName: 'Main administrator',
+        studentId: '2023000001',
+        avatarUrl: null,
+      },
+      {
+        uid: 'u_development_lead',
+        username: 'DevelopmentLead',
+        displayName: 'Development lead',
+        studentId: '2023000002',
+        avatarUrl: null,
+      },
+    ];
+    const app = createApp({
+      store,
+      authMode: 'main',
+      authClient: {
+        introspect: async (token) => {
+          const user = users.find((candidate) =>
+            token === 'main-admin'
+              ? candidate.uid === 'u_main_admin'
+              : token === 'development-lead'
+                ? candidate.uid === 'u_development_lead'
+                : false,
+          );
+          return user
+            ? {
+                ...user,
+                baseRole: 'student',
+                roles: [],
+                tags: [],
+                mainSiteAdmin: user.uid === 'u_main_admin',
+              }
+            : null;
+        },
+      },
+      userDirectory: {
+        list: async () => users,
+        get: async (uid) => users.find((candidate) => candidate.uid === uid) ?? null,
+      },
+    });
+
+    await request(app)
+      .put('/api/development/v1/admin/development-users/u_development_lead')
+      .set('Authorization', 'Bearer main-admin')
+      .send({ accessLevel: 'lead', roles: [], captainTeamIds: [] })
+      .expect(200);
+
+    await request(app)
+      .get('/api/development/v1/me')
+      .set('Authorization', 'Bearer main-admin')
+      .expect(403);
+    const lead = await request(app)
+      .get('/api/development/v1/me')
+      .set('Authorization', 'Bearer development-lead')
+      .expect(200);
+    expect(lead.body.data).toMatchObject({
+      uid: 'u_development_lead',
+      roles: ['platform.super_admin'],
+      developmentAccess: 'lead',
+    });
+  });
+
   it('lists main-site users and atomically assigns access and development roles', async () => {
     const store = createMemoryStore();
     await store.developmentAccess.create({

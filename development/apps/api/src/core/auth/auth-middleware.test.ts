@@ -108,6 +108,136 @@ describe('authentication middleware', () => {
       user: { uid: 'u_allowed' },
     });
   });
+
+  it('temporarily grants an unlisted main-site administrator access until a lead is configured', async () => {
+    const store = createMemoryStore({ seed: false });
+    const authenticate = createAuthMiddleware({
+      authClient: {
+        introspect: async () => ({
+          uid: 'u_main_admin',
+          displayName: 'Main administrator',
+          avatarUrl: null,
+          baseRole: 'student',
+          roles: [],
+          tags: [],
+          mainSiteAdmin: true,
+        }),
+      },
+      mode: 'main',
+      store,
+    });
+
+    await expect(authenticate({ authorization: 'Bearer admin' })).resolves.toMatchObject({
+      status: 200,
+      user: {
+        uid: 'u_main_admin',
+        roles: ['platform.super_admin'],
+        developmentAccess: 'lead',
+        viewer: { canManageDevelopment: true },
+      },
+    });
+    expect(await store.developmentAccess.list()).toEqual([]);
+    expect(await store.roleAssignments.list()).toEqual([]);
+
+    await store.developmentAccess.create({
+      subjectUid: 'u_configured_lead',
+      studentId: '2023000001',
+      username: 'ConfiguredLead',
+      accessLevel: 'lead',
+      status: 'active',
+      ownerUid: 'u_main_admin',
+      scope: { type: 'public', id: '*' },
+    });
+    await expect(authenticate({ authorization: 'Bearer admin' })).resolves.toMatchObject({
+      status: 403,
+      code: 'preview_access_denied',
+    });
+  });
+
+  it('does not grant bootstrap access to an ordinary main-site user', async () => {
+    const store = createMemoryStore({ seed: false });
+    const authenticate = createAuthMiddleware({
+      authClient: {
+        introspect: async () => ({
+          uid: 'u_student',
+          displayName: 'Student',
+          avatarUrl: null,
+          baseRole: 'student',
+          roles: [],
+          tags: [],
+          mainSiteAdmin: false,
+        }),
+      },
+      mode: 'main',
+      store,
+    });
+
+    await expect(authenticate({ authorization: 'Bearer student' })).resolves.toMatchObject({
+      status: 403,
+      code: 'preview_access_denied',
+    });
+  });
+
+  it('initializes definitions before activating a seeded development lead', async () => {
+    const store = createMemoryStore({ seed: false });
+    await store.developmentAccess.create({
+      subjectUid: null,
+      studentId: '2023010567',
+      username: 'Yuchong',
+      accessLevel: 'lead',
+      status: 'active',
+      ownerUid: 'system',
+      scope: { type: 'public', id: '*' },
+    });
+    const authenticate = createAuthMiddleware({
+      authClient: {
+        introspect: async () => ({
+          uid: 'u_yuchong',
+          username: 'Yuchong',
+          studentId: '2023010567',
+          displayName: 'Yuchong',
+          avatarUrl: null,
+          baseRole: 'student',
+          roles: [],
+          tags: [],
+          mainSiteAdmin: true,
+        }),
+      },
+      mode: 'main',
+      store,
+    });
+
+    await expect(authenticate({ authorization: 'Bearer yuchong' })).resolves.toMatchObject({
+      status: 200,
+      user: { roles: ['platform.super_admin'], developmentAccess: 'lead' },
+    });
+  });
+
+  it('distinguishes development data failures from identity-provider failures', async () => {
+    const store = createMemoryStore({ seed: false });
+    vi.spyOn(store.developmentAccess, 'list').mockRejectedValue(new Error('database offline'));
+    const authenticate = createAuthMiddleware({
+      authClient: {
+        introspect: async () => ({
+          uid: 'u_admin',
+          displayName: 'Admin',
+          avatarUrl: null,
+          baseRole: 'student',
+          roles: [],
+          tags: [],
+          mainSiteAdmin: true,
+        }),
+      },
+      mode: 'main',
+      store,
+      reportError: () => undefined,
+    });
+
+    await expect(authenticate({ authorization: 'Bearer admin' })).resolves.toMatchObject({
+      status: 503,
+      code: 'development_backend_unavailable',
+    });
+  });
   it('returns 401 for a missing bearer token without calling the provider', async () => {
     const introspect = vi.fn<AuthClient['introspect']>();
     const authenticate = createAuthMiddleware({ authClient: { introspect }, mode: 'main' });

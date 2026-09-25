@@ -20,6 +20,16 @@ function sameIdentity(record: DevelopmentAccessRecord, identity: UserContext): b
   );
 }
 
+export async function hasConfiguredDevelopmentLead(store: DevelopmentStore): Promise<boolean> {
+  return (await store.developmentAccess.list()).some(
+    (record) =>
+      record.status === 'active' &&
+      record.accessLevel === 'lead' &&
+      record.ownerUid.trim().length > 0 &&
+      record.ownerUid !== 'system',
+  );
+}
+
 export async function ensureDevelopmentLeadAssignment(
   store: DevelopmentStore,
   identity: UserContext,

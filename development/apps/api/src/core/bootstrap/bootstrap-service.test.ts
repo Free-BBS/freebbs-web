@@ -17,7 +17,7 @@ import {
   BUILT_IN_TAG_DEFINITIONS,
   BUILT_IN_TAG_PERMISSIONS,
 } from './built-in-definitions.js';
-import { bootstrapPlatform } from './bootstrap-service.js';
+import { bootstrapPlatform, ensurePlatformDefinitions } from './bootstrap-service.js';
 
 const now = new Date('2026-07-27T08:30:00.000Z');
 const publicScope = { type: 'public', id: '*' };
@@ -140,6 +140,18 @@ function failingAuditStore(store: DevelopmentStore): DevelopmentStore {
 }
 
 describe('production governance bootstrap', () => {
+  it('reconciles platform definitions without assigning a permanent administrator', async () => {
+    const store = createMemoryStore({ seed: false });
+
+    await ensurePlatformDefinitions(store, 'u_main_admin');
+
+    expect(await store.roles.list()).toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: 'platform.super_admin' })]),
+    );
+    expect(await store.permissions.list()).not.toHaveLength(0);
+    expect(await store.modules.list()).not.toHaveLength(0);
+    expect(await store.roleAssignments.list()).toEqual([]);
+  });
   it('defines the exact built-in governance catalog', () => {
     expect(BUILT_IN_ROLES.map(({ key }) => key)).toEqual(ROLE_KEYS);
     expect(BUILT_IN_MODULES.map(({ moduleId }) => moduleId)).toEqual(MODULE_IDS);

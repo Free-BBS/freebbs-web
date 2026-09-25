@@ -292,6 +292,15 @@ async function ensureBuiltInDefinitions(
   return changes;
 }
 
+export async function ensurePlatformDefinitions(
+  store: DevelopmentStore,
+  ownerUid: string,
+): Promise<void> {
+  await store.transaction(async (transactionStore) => {
+    await ensureBuiltInDefinitions(transactionStore, ownerUid, true);
+  });
+}
+
 export async function bootstrapPlatform(
   store: DevelopmentStore,
   input: BootstrapInput,
