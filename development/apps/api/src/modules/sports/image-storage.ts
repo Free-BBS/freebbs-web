@@ -3,18 +3,30 @@ import { mkdirSync, readFileSync, unlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import multer from 'multer';
 
-export const sportsImageDirectory = resolve(
-  process.env.SPORTS_UPLOAD_DIRECTORY ?? join(process.cwd(), 'var', 'sports-images'),
-);
-mkdirSync(sportsImageDirectory, { recursive: true });
+export function createSportsImageStorage(uploadDirectory?: string) {
+  const directory = resolve(
+    uploadDirectory ??
+      process.env.SPORTS_UPLOAD_DIRECTORY ??
+      join(process.cwd(), 'var', 'sports-images'),
+  );
+  mkdirSync(directory, { recursive: true });
+  const upload = multer({
+    storage: multer.diskStorage({
+      destination: directory,
+      filename: (_request, _file, callback) => callback(null, `${randomUUID()}.image`),
+    }),
+    limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  }).single('image');
 
-export const sportsImageUpload = multer({
-  storage: multer.diskStorage({
-    destination: sportsImageDirectory,
-    filename: (_request, _file, callback) => callback(null, `${randomUUID()}.image`),
-  }),
-  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
-}).single('image');
+  return {
+    directory,
+    upload,
+    imagePath(fileId: string): string {
+      if (!/^[0-9a-f-]{36}\.image$/.test(fileId)) throw new Error('invalid_image');
+      return join(directory, fileId);
+    },
+  };
+}
 
 export function inspectSportsImage(path: string): string {
   const bytes = readFileSync(path).subarray(0, 12);
@@ -25,9 +37,4 @@ export function inspectSportsImage(path: string): string {
     return 'image/webp';
   unlinkSync(path);
   throw new Error('unsupported_image');
-}
-
-export function sportsImagePath(fileId: string): string {
-  if (!/^[0-9a-f-]{36}\.image$/.test(fileId)) throw new Error('invalid_image');
-  return join(sportsImageDirectory, fileId);
 }

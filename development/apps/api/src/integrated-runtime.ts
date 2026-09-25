@@ -17,6 +17,7 @@ export interface IntegratedRuntimeOptions {
   userDirectory: UserDirectory;
   database: IntegratedDatabaseConfig;
   uploadDirectory: string;
+  sportsUploadDirectory?: string;
 }
 
 export interface IntegratedRuntime {
@@ -27,19 +28,7 @@ export interface IntegratedRuntime {
 export async function createIntegratedDevelopmentRuntime(
   options: IntegratedRuntimeOptions,
 ): Promise<IntegratedRuntime> {
-  const environment: NodeJS.ProcessEnv = {
-    ...process.env,
-    NODE_ENV: process.env.NODE_ENV ?? 'production',
-    AUTH_MODE: 'main',
-    DATA_MODE: 'mysql',
-    MYSQL_HOST: options.database.host,
-    MYSQL_PORT: String(options.database.port),
-    MYSQL_USER: options.database.user,
-    MYSQL_PASSWORD: options.database.password,
-    MYSQL_DATABASE: options.database.database,
-    ...(options.database.socketPath ? { MYSQL_SOCKET: options.database.socketPath } : {}),
-  };
-  const handle = createMySqlStore({ environment });
+  const handle = createMySqlStore({ config: options.database });
   try {
     await handle.checkReadiness();
   } catch (error) {
@@ -55,6 +44,9 @@ export async function createIntegratedDevelopmentRuntime(
     authClient: options.authClient,
     userDirectory: options.userDirectory,
     festivalUploadDirectory: options.uploadDirectory,
+    ...(options.sportsUploadDirectory
+      ? { sportsUploadDirectory: options.sportsUploadDirectory }
+      : {}),
   });
   return { app, close: handle.close };
 }

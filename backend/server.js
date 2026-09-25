@@ -42,7 +42,7 @@ const {
   createDevelopmentAuthClient,
   createDevelopmentDatabaseConfig,
   createDevelopmentUserDirectory,
-  loadDevelopmentRuntime,
+  initializeDevelopmentRuntime,
 } = require('./development-integration');
 const {
   createProfileExtras,
@@ -6248,7 +6248,7 @@ async function start() {
   await ensureCircuitTables(pool);
   await ensureCircuitExampleTables(pool);
   await ensureCircuitChallengeTables(pool);
-  developmentRuntime = await loadDevelopmentRuntime({
+  developmentRuntime = await initializeDevelopmentRuntime({
     repositoryRoot: path.join(__dirname, '..'),
     authClient: createDevelopmentAuthClient({
       verifyToken: verify,
@@ -6258,6 +6258,7 @@ async function start() {
     userDirectory: createDevelopmentUserDirectory(pool),
     database: createDevelopmentDatabaseConfig(config.db),
     uploadDirectory: path.join(config.uploadDir, 'development', 'festival'),
+    sportsUploadDirectory: path.join(config.uploadDir, 'development', 'sports'),
   });
   await decayHeatIfNeeded(new Date());
   scheduleNextHeatDecay();

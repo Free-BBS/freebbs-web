@@ -64,6 +64,7 @@ export interface CreateAppOptions {
   version?: string;
   festivalUploadDirectory?: string;
   festivalMaxUploadBytes?: number;
+  sportsUploadDirectory?: string;
 }
 
 function requestId(response: Response): string {
@@ -240,7 +241,14 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use(`${API_BASE_PATH}/knowledge`, createKnowledgeRouter({ store, authenticate }));
   app.use(`${API_BASE_PATH}/information`, createInformationRouter({ store, authenticate }));
   app.use(`${API_BASE_PATH}/liaison`, createLiaisonRouter({ store, authenticate }));
-  app.use(`${API_BASE_PATH}/sports`, createSportsRouter({ store, authenticate }));
+  app.use(
+    `${API_BASE_PATH}/sports`,
+    createSportsRouter({
+      store,
+      authenticate,
+      ...(options.sportsUploadDirectory ? { uploadDirectory: options.sportsUploadDirectory } : {}),
+    }),
+  );
 
   app.use((_request, _response, next) => {
     next(new HttpError(404, 'not_found', 'Route not found'));

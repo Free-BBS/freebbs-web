@@ -86,6 +86,7 @@ async function loadDevelopmentRuntime({
   userDirectory,
   database,
   uploadDirectory,
+  sportsUploadDirectory,
 }) {
   const modulePath = path.join(
     repositoryRoot,
@@ -101,13 +102,30 @@ async function loadDevelopmentRuntime({
     userDirectory,
     database,
     uploadDirectory,
+    sportsUploadDirectory,
   });
+}
+
+async function initializeDevelopmentRuntime(options, dependencies = {}) {
+  const loader = dependencies.loader || loadDevelopmentRuntime;
+  const reportError = dependencies.reportError || console.error;
+
+  try {
+    return await loader(options);
+  } catch (error) {
+    reportError(
+      '[development] runtime initialization failed; development API will remain unavailable',
+      error,
+    );
+    return null;
+  }
 }
 
 module.exports = {
   createDevelopmentAuthClient,
   createDevelopmentDatabaseConfig,
   createDevelopmentUserDirectory,
+  initializeDevelopmentRuntime,
   loadDevelopmentRuntime,
   profileToDevelopmentIdentity,
 };
