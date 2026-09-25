@@ -1,5 +1,8 @@
--- Legacy snapshots stay NULL until the next authorized sync. Never backfill them
+-- Legacy catalogs and snapshots stay NULL until the next authorized sync. Never backfill them
 -- to the current connector generation, which may belong to a rebound identity.
+ALTER TABLE campus_learn_semester_catalogs
+    ADD COLUMN connector_generation INT UNSIGNED NULL AFTER user_id;
+
 ALTER TABLE campus_learn_semester_snapshots
     ADD COLUMN connector_generation INT UNSIGNED NULL AFTER semester_id;
 

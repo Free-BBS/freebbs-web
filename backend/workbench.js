@@ -99,6 +99,77 @@ function parseJsonArray(value) {
   }
 }
 
+async function listCampusSemesters(pool, userId) {
+  const [rows] = await pool.execute(
+    `SELECT catalog.current_semester_id, catalog.semesters_json,
+            catalog.fetched_at AS catalog_fetched_at,
+            snapshot.semester_id, snapshot.courses_json, snapshot.notifications_json,
+            snapshot.sync_status, snapshot.fetched_at AS snapshot_fetched_at
+     FROM user_campus_connectors connector
+     LEFT JOIN campus_learn_semester_catalogs catalog
+       ON catalog.user_id = connector.user_id
+       AND connector.generation = catalog.connector_generation
+       AND catalog.fetched_at >= connector.connected_at
+     LEFT JOIN campus_learn_semester_snapshots snapshot
+       ON snapshot.user_id = connector.user_id
+       AND connector.generation = snapshot.connector_generation
+       AND snapshot.fetched_at >= connector.connected_at
+     WHERE connector.user_id = ? AND connector.provider = 'tsinghua-learn'
+       AND connector.status IN ('active_verified', 'active_unverified', 'reauthorization_required')
+       AND connector.connected_at IS NOT NULL
+     ORDER BY snapshot.semester_id DESC`,
+    [userId],
+  );
+  const catalog = rows.find((row) => row.catalog_fetched_at) || null;
+  const snapshotRows = rows.filter((row) => row.semester_id);
+  const snapshots = new Map(snapshotRows.map((row) => [row.semester_id, row]));
+  const available = parseJsonArray(catalog?.semesters_json);
+  const semesterEntries = available.length
+    ? available
+    : snapshotRows.map((row) => ({ id: row.semester_id, label: row.semester_id }));
+  return {
+    currentSemesterId: catalog?.current_semester_id || null,
+    semesters: semesterEntries.map((semester) => {
+      const row = snapshots.get(semester.id);
+      return {
+        id: semester.id,
+        label: semester.label || semester.id,
+        synced: Boolean(row),
+        courseCount: parseJsonArray(row?.courses_json).length,
+        notificationCount: parseJsonArray(row?.notifications_json).length,
+        syncStatus: row?.sync_status || null,
+        fetchedAt: toIsoString(row?.snapshot_fetched_at),
+      };
+    }),
+  };
+}
+
+async function readCampusSemester(pool, userId, semesterId) {
+  const [rows] = await pool.execute(
+    `SELECT snapshot.semester_id, snapshot.courses_json, snapshot.notifications_json,
+            snapshot.sync_status, snapshot.fetched_at
+     FROM user_campus_connectors connector
+     INNER JOIN campus_learn_semester_snapshots snapshot
+       ON snapshot.user_id = connector.user_id
+       AND connector.generation = snapshot.connector_generation
+       AND snapshot.fetched_at >= connector.connected_at
+     WHERE connector.user_id = ? AND connector.provider = 'tsinghua-learn'
+       AND connector.status IN ('active_verified', 'active_unverified', 'reauthorization_required')
+       AND connector.connected_at IS NOT NULL AND snapshot.semester_id = ?
+     LIMIT 1`,
+    [userId, semesterId],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: row.semester_id,
+    courses: parseJsonArray(row.courses_json),
+    notifications: parseJsonArray(row.notifications_json),
+    syncStatus: row.sync_status,
+    fetchedAt: toIsoString(row.fetched_at),
+  };
+}
+
 function toImportantItem(row) {
   return {
     publicId: row.public_id,
@@ -504,41 +575,7 @@ function createWorkbenchRouter({
       const user = await requireAuth(request, response);
       if (!user) return;
 
-      const [catalogRows] = await pool.execute(
-        `SELECT current_semester_id, semesters_json, fetched_at
-         FROM campus_learn_semester_catalogs
-         WHERE user_id = ?
-         LIMIT 1`,
-        [user.id],
-      );
-      const [rows] = await pool.execute(
-        `SELECT semester_id, courses_json, notifications_json, sync_status, fetched_at
-         FROM campus_learn_semester_snapshots
-         WHERE user_id = ?
-         ORDER BY semester_id DESC`,
-        [user.id],
-      );
-      const snapshots = new Map(rows.map((row) => [row.semester_id, row]));
-      const catalog = catalogRows[0];
-      const available = parseJsonArray(catalog?.semesters_json);
-      const semesterEntries = available.length
-        ? available
-        : rows.map((row) => ({ id: row.semester_id, label: row.semester_id }));
-      response.json({
-        currentSemesterId: catalog?.current_semester_id || null,
-        semesters: semesterEntries.map((semester) => {
-          const row = snapshots.get(semester.id);
-          return {
-            id: semester.id,
-            label: semester.label || semester.id,
-            synced: Boolean(row),
-            courseCount: parseJsonArray(row?.courses_json).length,
-            notificationCount: parseJsonArray(row?.notifications_json).length,
-            syncStatus: row?.sync_status || null,
-            fetchedAt: toIsoString(row?.fetched_at),
-          };
-        }),
-      });
+      response.json(await listCampusSemesters(pool, user.id));
     } catch (error) {
       sendWorkbenchError(response, error, '读取网络学堂学期失败');
     }
@@ -554,27 +591,12 @@ function createWorkbenchRouter({
         return;
       }
 
-      const [rows] = await pool.execute(
-        `SELECT semester_id, courses_json, notifications_json, sync_status, fetched_at
-         FROM campus_learn_semester_snapshots
-         WHERE user_id = ? AND semester_id = ?
-         LIMIT 1`,
-        [user.id, semesterId],
-      );
-      const row = rows[0];
-      if (!row) {
+      const semester = await readCampusSemester(pool, user.id, semesterId);
+      if (!semester) {
         response.status(404).json({ message: '尚未同步该学期' });
         return;
       }
-      response.json({
-        semester: {
-          id: row.semester_id,
-          courses: parseJsonArray(row.courses_json),
-          notifications: parseJsonArray(row.notifications_json),
-          syncStatus: row.sync_status,
-          fetchedAt: toIsoString(row.fetched_at),
-        },
-      });
+      response.json({ semester });
     } catch (error) {
       sendWorkbenchError(response, error, '读取网络学堂课程失败');
     }
@@ -1420,9 +1442,11 @@ module.exports = {
   ensureWorkbenchTables,
   generatePublicId,
   getDefaultWeekRange,
+  listCampusSemesters,
   normalizeText,
   parseDateValue,
   parseRange,
+  readCampusSemester,
   toImportantItem,
   toNotification,
   toScheduleItem,

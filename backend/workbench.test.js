@@ -347,7 +347,26 @@ test('campus semesters expose only the authenticated user normalized snapshot', 
       async execute(statement, parameters = []) {
         const sql = statement.replace(/\s+/g, ' ').trim();
         calls.push({ sql, parameters });
-        if (sql.includes('FROM campus_learn_semester_catalogs')) return [[]];
+        if (sql.includes('LEFT JOIN campus_learn_semester_catalogs')) {
+          return [
+            [
+              {
+                current_semester_id: '2026-2027-1',
+                semesters_json: JSON.stringify([{ id: '2026-2027-1', label: '2026—2027 秋' }]),
+                catalog_fetched_at: new Date('2026-08-02T08:00:00.000Z'),
+                semester_id: '2026-2027-1',
+                courses_json: JSON.stringify([
+                  { sourceReference: 'course:a', title: '信号与系统' },
+                ]),
+                notifications_json: JSON.stringify([
+                  { sourceReference: 'notice:a', courseReference: 'course:a', title: '第一讲' },
+                ]),
+                sync_status: 'complete',
+                snapshot_fetched_at: new Date('2026-08-02T08:00:00.000Z'),
+              },
+            ],
+          ];
+        }
         return [
           [
             {
@@ -367,6 +386,8 @@ test('campus semesters expose only the authenticated user normalized snapshot', 
 
   const list = await requestJson(baseUrl, '/campus/semesters');
   assert.equal(list.response.status, 200);
+  assert.equal(list.payload.currentSemesterId, '2026-2027-1');
+  assert.equal(list.payload.semesters[0].label, '2026—2027 秋');
   assert.equal(list.payload.semesters[0].courseCount, 1);
   assert.equal(list.payload.semesters[0].notificationCount, 1);
 
@@ -374,7 +395,40 @@ test('campus semesters expose only the authenticated user normalized snapshot', 
   assert.equal(detail.response.status, 200);
   assert.equal(detail.payload.semester.courses[0].title, '信号与系统');
   assert.deepEqual(calls[0].parameters, [21]);
-  assert.deepEqual(calls[2].parameters, [21, '2026-2027-1']);
+  assert.deepEqual(calls[1].parameters, [21, '2026-2027-1']);
+  for (const { sql } of calls) {
+    assert.match(sql, /connector\.generation = (?:catalog|snapshot)\.connector_generation/u);
+    assert.match(sql, /fetched_at >= connector\.connected_at/u);
+    assert.match(
+      sql,
+      /connector\.status IN \('active_verified', 'active_unverified', 'reauthorization_required'\)/u,
+    );
+    assert.match(sql, /connector\.connected_at IS NOT NULL/u);
+  }
+});
+
+test('campus semester routes hide every snapshot outside the current connection boundary', async (t) => {
+  const calls = [];
+  const baseUrl = await startTestServer(t, {
+    user: { id: 22, is_admin: false },
+    pool: {
+      async execute(statement, parameters = []) {
+        calls.push({ sql: statement.replace(/\s+/g, ' ').trim(), parameters });
+        return [[]];
+      },
+    },
+  });
+
+  const list = await requestJson(baseUrl, '/campus/semesters');
+  assert.equal(list.response.status, 200);
+  assert.deepEqual(list.payload, { currentSemesterId: null, semesters: [] });
+  const detail = await requestJson(baseUrl, '/campus/semesters/2026-2027-1');
+  assert.equal(detail.response.status, 404);
+  assert.equal(detail.payload.message, '尚未同步该学期');
+  assert.deepEqual(
+    calls.map(({ parameters }) => parameters),
+    [[22], [22, '2026-2027-1']],
+  );
 });
 
 test('notification limits are clamped before being embedded in the query', async (t) => {

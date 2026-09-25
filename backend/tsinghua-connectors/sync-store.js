@@ -317,18 +317,20 @@ function createTsinghuaSyncStore(pool) {
     );
   }
 
-  async function upsertSemesterCatalog(connection, userId, snapshot, syncedAt) {
+  async function upsertSemesterCatalog(connection, userId, generation, snapshot, syncedAt) {
     if (!Array.isArray(snapshot.availableSemesters)) return;
     await connection.execute(
       `INSERT INTO campus_learn_semester_catalogs (
-        user_id, current_semester_id, semesters_json, fetched_at
-      ) VALUES (?, ?, ?, ?)
+        user_id, connector_generation, current_semester_id, semesters_json, fetched_at
+      ) VALUES (?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
+        connector_generation = VALUES(connector_generation),
         current_semester_id = VALUES(current_semester_id),
         semesters_json = VALUES(semesters_json),
         fetched_at = VALUES(fetched_at)`,
       [
         userId,
+        generation,
         String(snapshot.currentSemesterId || '').slice(0, 32) || null,
         JSON.stringify(snapshot.availableSemesters),
         normalizeDate(snapshot.fetchedAt) || syncedAt,
@@ -424,7 +426,13 @@ function createTsinghuaSyncStore(pool) {
           ],
         );
       }
-      await upsertSemesterCatalog(connection, current.user_id, snapshot, finishedAt);
+      await upsertSemesterCatalog(
+        connection,
+        current.user_id,
+        claimed.connector_generation,
+        snapshot,
+        finishedAt,
+      );
       for (const item of snapshot.importantItems || []) {
         await upsertImportantItem(connection, current.user_id, item);
       }

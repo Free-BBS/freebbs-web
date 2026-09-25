@@ -3,6 +3,7 @@ const { HOMEWORK_TABLES } = require('./homework-schema');
 const CREATE_TABLE_STATEMENTS = Object.freeze([
   `CREATE TABLE IF NOT EXISTS campus_learn_semester_catalogs (
     user_id BIGINT PRIMARY KEY,
+    connector_generation INT UNSIGNED NULL,
     current_semester_id VARCHAR(32) NULL,
     semesters_json JSON NOT NULL,
     fetched_at DATETIME NOT NULL,
@@ -196,6 +197,20 @@ async function ensureCampusConnectorTables(pool) {
   }
   for (const statement of HOMEWORK_TABLES) {
     await pool.execute(statement);
+  }
+
+  const catalogGenerationExists = await informationSchemaEntryExists(
+    pool,
+    COLUMN_EXISTS_SQL,
+    'campus_learn_semester_catalogs',
+    'connector_generation',
+  );
+  if (!catalogGenerationExists) {
+    await executeAdditiveAlter(
+      pool,
+      `ALTER TABLE campus_learn_semester_catalogs
+      ADD COLUMN connector_generation INT UNSIGNED NULL AFTER user_id`,
+    );
   }
 
   const courseGenerationExists = await informationSchemaEntryExists(

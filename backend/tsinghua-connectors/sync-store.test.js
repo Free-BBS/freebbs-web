@@ -264,6 +264,8 @@ test('completeRun stores normalized courses and notices by semester', async () =
     {
       status: 'complete',
       semesterId: '2026-2027-1',
+      currentSemesterId: '2026-2027-1',
+      availableSemesters: [{ id: '2026-2027-1', label: '2026—2027 秋' }],
       fetchedAt: finishedAt.toISOString(),
       courses: [{ sourceReference: 'course:a', title: '信号与系统' }],
       notifications: [
@@ -287,6 +289,13 @@ test('completeRun stores normalized courses and notices by semester', async () =
   assert.equal(JSON.parse(upsert.parameters[2])[0].title, '信号与系统');
   assert.equal(JSON.parse(upsert.parameters[3])[0].courseReference, 'course:a');
   assert.equal(upsert.parameters[6], 3);
+  const catalogUpsert = pool.calls.find(({ sql }) =>
+    sql.startsWith('INSERT INTO campus_learn_semester_catalogs'),
+  );
+  assert.ok(catalogUpsert);
+  assert.match(catalogUpsert.sql, /connector_generation = VALUES\(connector_generation\)/u);
+  assert.deepEqual(catalogUpsert.parameters.slice(0, 3), [7, 3, '2026-2027-1']);
+  assert.equal(JSON.parse(catalogUpsert.parameters[3])[0].id, '2026-2027-1');
 });
 
 test('partial course snapshots preserve omitted and unparseable prior courses within the same identity generation', async () => {
