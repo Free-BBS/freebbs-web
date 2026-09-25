@@ -5,6 +5,7 @@ const {
   createDevelopmentAuthClient,
   createDevelopmentDatabaseConfig,
   createDevelopmentUserDirectory,
+  initializeDevelopmentRuntime,
 } = require('./development-integration');
 
 test('development data uses a peer database schema while inheriting the main server connection', () => {
@@ -112,4 +113,24 @@ test('development directory exposes a read-only user projection with escaped sea
   ]);
   assert.match(captured.sql, /LIMIT 2000/);
   assert.doesNotMatch(captured.sql, /email|password|is_admin/i);
+});
+
+test('development initialization failure does not prevent the main backend from starting', async () => {
+  const failure = new Error('development database is not ready');
+  const reports = [];
+
+  const runtime = await initializeDevelopmentRuntime(
+    { repositoryRoot: '/srv/free-bbs' },
+    {
+      loader: async () => {
+        throw failure;
+      },
+      reportError: (...arguments_) => reports.push(arguments_),
+    },
+  );
+
+  assert.equal(runtime, null);
+  assert.equal(reports.length, 1);
+  assert.match(reports[0][0], /development API will remain unavailable/);
+  assert.equal(reports[0][1], failure);
 });

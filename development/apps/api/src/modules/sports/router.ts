@@ -13,7 +13,7 @@ import { RosterCsvError } from './csv-roster.js';
 import { RosterImportService } from './roster-import-service.js';
 import { SportsService } from './service.js';
 import { WuSportsService } from './wu-sports-service.js';
-import { inspectSportsImage, sportsImagePath, sportsImageUpload } from './image-storage.js';
+import { createSportsImageStorage, inspectSportsImage } from './image-storage.js';
 
 import type { Request, Response } from 'express';
 
@@ -21,6 +21,7 @@ type Authenticate = (headers: AuthHeaders) => Promise<AuthenticationResult>;
 export interface SportsRouterOptions {
   store: DevelopmentStore;
   authenticate: Authenticate;
+  uploadDirectory?: string;
 }
 interface ErrorData {
   error: { code: string; message: string };
@@ -180,6 +181,7 @@ export function createSportsRouter(options: SportsRouterOptions): Router {
   const service = new SportsService(options.store);
   const wuSports = new WuSportsService(options.store);
   const rosterImport = new RosterImportService(options.store);
+  const imageStorage = createSportsImageStorage(options.uploadDirectory);
 
   router.use(async (_request, response, next) => {
     try {
@@ -218,7 +220,7 @@ export function createSportsRouter(options: SportsRouterOptions): Router {
       authorize(actor, { action: 'sports.match.create', resource: 'sports_match' }).allowed ||
       actor.tags.some(({ key }) => key === 'sports.team_captain');
     if (!mayUpload) return forbid(response);
-    sportsImageUpload(request, response, (error) => {
+    imageStorage.upload(request, response, (error) => {
       if (error) return next(new HttpError(400, 'invalid_image', 'Image upload failed'));
       if (!request.file) return next(new HttpError(400, 'invalid_image', 'An image is required'));
       try {
@@ -236,7 +238,7 @@ export function createSportsRouter(options: SportsRouterOptions): Router {
   router.get('/media/images/:fileId', async (request, response, next) => {
     try {
       response.setHeader('Cache-Control', 'private, max-age=3600');
-      response.sendFile(sportsImagePath(String(request.params.fileId)));
+      response.sendFile(imageStorage.imagePath(String(request.params.fileId)));
     } catch {
       next(new HttpError(404, 'sports_image_not_found', 'Sports image not found'));
     }
