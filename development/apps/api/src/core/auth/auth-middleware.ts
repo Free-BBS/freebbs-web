@@ -203,9 +203,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
       }
       const storedUser = await loadAuthorizationContext(options.store, identity, now);
       const user =
-        bootstrapAdministrator && !previewing
-          ? temporarySuperAdminContext(storedUser)
-          : storedUser;
+        bootstrapAdministrator && !previewing ? temporarySuperAdminContext(storedUser) : storedUser;
       return {
         status: 200,
         user:

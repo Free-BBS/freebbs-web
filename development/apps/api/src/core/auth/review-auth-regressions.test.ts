@@ -70,6 +70,7 @@ describe('review regressions: main-site identity contract', () => {
       baseRole: 'student',
       roles: [],
       tags: [],
+      mainSiteAdmin: false,
     });
     expect(
       authorize(user as AuthorizationContext, {

@@ -393,9 +393,11 @@ describe('main-site identity adapter', () => {
   it('does not coerce an admin-like value returned by the identity endpoint', async () => {
     const client = new MainSiteAuthClient({
       apiBaseUrl: 'https://www.free-bbs.cn',
-      fetch: vi.fn<typeof fetch>().mockResolvedValue(
-        new Response(JSON.stringify({ uid: 'main-uid-43', isAdmin: 'true' }), { status: 200 }),
-      ),
+      fetch: vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ uid: 'main-uid-43', isAdmin: 'true' }), { status: 200 }),
+        ),
     });
 
     await expect(client.introspect('opaque-token')).resolves.toMatchObject({

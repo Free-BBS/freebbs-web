@@ -21,6 +21,7 @@
 ### Task 1: Trusted main-site administrator identity
 
 **Files:**
+
 - Modify: `development/packages/contracts/src/auth.ts`
 - Modify: `backend/development-integration.js`
 - Test: `backend/development-integration.test.js`
@@ -28,6 +29,7 @@
 - Test: `development/apps/api/src/core/auth/auth-middleware.test.ts`
 
 **Interfaces:**
+
 - Produces: `UserContext.mainSiteAdmin?: boolean` populated only by authenticated server adapters.
 - Consumes: main profile `isAdmin: boolean` and remote `/api/auth/me` boolean `isAdmin`.
 
@@ -52,6 +54,7 @@ Expected: both commands PASS.
 ### Task 2: Temporary bootstrap authorization and automatic cutoff
 
 **Files:**
+
 - Modify: `development/apps/api/src/core/bootstrap/bootstrap-service.ts`
 - Test: `development/apps/api/src/core/bootstrap/bootstrap-service.test.ts`
 - Modify: `development/apps/api/src/core/auth/development-access.ts`
@@ -60,6 +63,7 @@ Expected: both commands PASS.
 - Test: `development/apps/api/src/core/auth/auth-middleware.test.ts`
 
 **Interfaces:**
+
 - Produces: `ensurePlatformDefinitions(store, ownerUid): Promise<void>`.
 - Produces: `hasConfiguredDevelopmentLead(store): Promise<boolean>`.
 - Produces: `temporarySuperAdminContext(context): AuthorizationContext` local to auth middleware.
@@ -98,11 +102,13 @@ Expected: all focused Vitest files PASS.
 ### Task 3: Construction-page feedback
 
 **Files:**
+
 - Modify: `public/development-entry.js`
 - Test: `scripts/development-entry.test.js`
-- Modify: `development.html`
+- Modify: `public/development.html`
 
 **Interfaces:**
+
 - Produces: `checkDevelopmentAccess({ token, fetchImplementation, navigate, reportStatus })` with status callbacks `checking`, `denied`, and `unavailable`.
 - Consumes: `/api/development/v1/me` HTTP status and JSON error envelope.
 
@@ -127,9 +133,11 @@ Expected: PASS.
 ### Task 4: Full verification and review-ready commit
 
 **Files:**
+
 - Verify all modified files.
 
 **Interfaces:**
+
 - Consumes: Tasks 1-3.
 - Produces: a branch ready to rebase on the latest remote main and submit as a pull request.
 
