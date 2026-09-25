@@ -51,6 +51,7 @@ export type ReadinessCheck = () => Promise<void>;
 export type AppliedMigrationCountProvider = () => Promise<number>;
 
 export interface CreateAppOptions {
+  environment?: NodeJS.ProcessEnv;
   store?: DevelopmentStore;
   databaseMode?: DataMode;
   appliedMigrationCount?: number;
@@ -100,7 +101,8 @@ function resolveAuthClient(mode: AuthMode, options: CreateAppOptions): AuthClien
 }
 
 export function createApp(options: CreateAppOptions = {}) {
-  const environment = loadEnvironment();
+  const environmentSource = options.environment ?? process.env;
+  const environment = loadEnvironment(environmentSource);
   const store = options.store ?? createMemoryStore();
   const databaseMode = options.databaseMode ?? 'memory';
   const getAppliedMigrationCount =
@@ -124,7 +126,7 @@ export function createApp(options: CreateAppOptions = {}) {
     userDirectory: options.userDirectory,
   });
   const allowedOrigins = new Set(
-    options.allowedOrigins ?? parseAllowedOrigins(process.env.ALLOWED_ORIGINS),
+    options.allowedOrigins ?? parseAllowedOrigins(environmentSource.ALLOWED_ORIGINS),
   );
   const app = express();
 

@@ -36,6 +36,12 @@ export async function createIntegratedDevelopmentRuntime(
     throw error;
   }
   const app = createApp({
+    environment: {
+      ...process.env,
+      NODE_ENV: process.env.NODE_ENV ?? 'production',
+      AUTH_MODE: 'main',
+      HOST: '127.0.0.1',
+    },
     store: handle.store,
     databaseMode: 'mysql',
     getAppliedMigrationCount: handle.getAppliedMigrationCount,
