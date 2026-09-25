@@ -89,6 +89,58 @@
       <button type="button" class="electromagnetic-button" data-extra-action="equip" data-slot="${items[key][0]}" data-item="">卸下同类装扮</button></div>`;
     return '';
   }
+  function profileAmbience() {
+    return '<svg class="profile-constellation" viewBox="0 0 560 230" fill="none"><path d="M20 155h85l35-80h125l42 67h104l62-103h57M140 75l68 127h160l43-60"/><g><circle cx="105" cy="155" r="4"/><circle cx="140" cy="75" r="5"/><circle cx="265" cy="75" r="4"/><circle cx="307" cy="142" r="5"/><circle cx="411" cy="142" r="4"/><circle cx="473" cy="39" r="5"/></g></svg><i class="profile-star star-one"></i><i class="profile-star star-two"></i><i class="profile-star star-three"></i><i class="profile-star star-four"></i>';
+  }
+  // These are the actual equipped classes and the same nameplate renderer, not an
+  // illustration of a different product. Only known local keys become markup.
+  function cosmeticPreview(key) {
+    const slot = items[key]?.[0];
+    if (!slot) return '';
+    const avatar =
+      '<img class="public-profile-avatar" src="/assets/avatar_placeholder.webp" alt="" loading="lazy" decoding="async" width="116" height="116" />';
+    if (slot === 'frame') {
+      return `<div class="shop-cosmetic-preview is-frame" data-cosmetic-preview="${key}" role="img" aria-label="${items[key][1]}实际佩戴效果">
+        <span class="shop-preview-caption">实际佩戴效果</span>
+        <div class="public-profile-avatar-wrap" data-frame="${key}">${avatar.replace('class="public-profile-avatar"', `class="public-profile-avatar" data-avatar-frame="${key}"`)}</div>
+        <span class="shop-preview-footnote">与个人主页、讨论区使用同一头像框</span>
+      </div>`;
+    }
+    if (slot === 'nameplate') {
+      return `<div class="shop-cosmetic-preview is-nameplate" data-cosmetic-preview="${key}" role="img" aria-label="${items[key][1]}实际铭牌效果">
+        <span class="shop-preview-caption">实际佩戴效果</span>
+        <div class="shop-preview-identity">${avatar}<strong>Max</strong></div>
+        ${badge(key)}
+        <span class="shop-preview-footnote">真实铭牌样式 · 不是身份认证</span>
+      </div>`;
+    }
+    return `<div class="shop-cosmetic-preview is-theme" data-cosmetic-preview="${key}" role="img" aria-label="${items[key][1]}实际主页主题效果">
+      <section class="public-profile-shell shop-preview-profile" data-profile-card="${key}">
+        <div class="profile-ambience" aria-hidden="true">${profileAmbience()}</div>
+        <span class="shop-preview-caption">主页主题实景</span>
+        <div class="shop-preview-identity">${avatar}<div><strong>Max</strong><span>欢迎来到我的主页</span></div></div>
+        <div class="shop-preview-profile-note"><strong>记录灵光，珍藏好奇。</strong><span>把今天的小小发现留在这里。</span></div>
+        <div class="shop-preview-profile-stats"><span>学习<span>始于好奇</span></span><span>讨论<span>共同探索</span></span></div>
+      </section>
+    </div>`;
+  }
+  function ranchPreview() {
+    const sheep = window.FreeBbsMaxRanch?.previewMarkup?.();
+    if (!sheep) return '';
+    return `<div class="shop-ranch-preview" role="img" aria-label="与个人牧场相同的电子仿生羊 Max">
+      <span class="shop-preview-caption">牧场里的 Max</span>
+      <div class="shop-ranch-pet" aria-hidden="true">${sheep}</div>
+      <span class="shop-preview-footnote">一位戴眼镜、会长羊毛的小伙伴</span>
+    </div>`;
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-shop-cosmetic-preview]').forEach((node) => {
+      node.innerHTML = cosmeticPreview(node.dataset.shopCosmeticPreview);
+    });
+    document.querySelectorAll('[data-shop-ranch-preview]').forEach((node) => {
+      node.innerHTML = ranchPreview();
+    });
+  });
   function applyPresentation(cosmetics = {}) {
     const header = document.querySelector('.public-profile-shell');
     const avatar = document.getElementById('public-profile-avatar');
@@ -101,8 +153,7 @@
         const ambience = document.createElement('div');
         ambience.className = 'profile-ambience';
         ambience.setAttribute('aria-hidden', 'true');
-        ambience.innerHTML =
-          '<svg class="profile-constellation" viewBox="0 0 560 230" fill="none"><path d="M20 155h85l35-80h125l42 67h104l62-103h57M140 75l68 127h160l43-60"/><g><circle cx="105" cy="155" r="4"/><circle cx="140" cy="75" r="5"/><circle cx="265" cy="75" r="4"/><circle cx="307" cy="142" r="5"/><circle cx="411" cy="142" r="4"/><circle cx="473" cy="39" r="5"/></g></svg><i class="profile-star star-one"></i><i class="profile-star star-two"></i><i class="profile-star star-three"></i><i class="profile-star star-four"></i>';
+        ambience.innerHTML = profileAmbience();
         header.prepend(ambience);
       }
     }
@@ -528,6 +579,8 @@
   });
   window.FreeBbsProfileExtras = {
     badge,
+    cosmeticPreview,
+    ranchPreview,
     inventoryActions,
     woolPanel,
     renderProfile,

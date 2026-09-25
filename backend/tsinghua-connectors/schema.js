@@ -3,6 +3,7 @@ const { HOMEWORK_TABLES } = require('./homework-schema');
 const CREATE_TABLE_STATEMENTS = Object.freeze([
   `CREATE TABLE IF NOT EXISTS campus_learn_semester_catalogs (
     user_id BIGINT PRIMARY KEY,
+    connector_generation INT UNSIGNED NULL,
     current_semester_id VARCHAR(32) NULL,
     semesters_json JSON NOT NULL,
     fetched_at DATETIME NOT NULL,
@@ -14,6 +15,7 @@ const CREATE_TABLE_STATEMENTS = Object.freeze([
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     user_id BIGINT NOT NULL,
     semester_id VARCHAR(32) NOT NULL,
+    connector_generation INT UNSIGNED NULL,
     courses_json JSON NOT NULL,
     notifications_json JSON NOT NULL,
     sync_status ENUM('complete', 'partial') NOT NULL DEFAULT 'complete',
@@ -144,6 +146,15 @@ const CREATE_TABLE_STATEMENTS = Object.freeze([
     INDEX idx_campus_connector_sync_runs_requested_by
         (requested_by_user_id, created_at DESC)
 )`,
+  `CREATE TABLE IF NOT EXISTS campus_course_calendar_settings (
+    user_id BIGINT NOT NULL,
+    semester_id VARCHAR(32) NOT NULL,
+    connector_generation INT UNSIGNED NOT NULL,
+    first_week_monday DATE NOT NULL,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, semester_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+)`,
 ]);
 
 const COLUMN_EXISTS_SQL = `SELECT 1 AS present
@@ -186,6 +197,34 @@ async function ensureCampusConnectorTables(pool) {
   }
   for (const statement of HOMEWORK_TABLES) {
     await pool.execute(statement);
+  }
+
+  const catalogGenerationExists = await informationSchemaEntryExists(
+    pool,
+    COLUMN_EXISTS_SQL,
+    'campus_learn_semester_catalogs',
+    'connector_generation',
+  );
+  if (!catalogGenerationExists) {
+    await executeAdditiveAlter(
+      pool,
+      `ALTER TABLE campus_learn_semester_catalogs
+      ADD COLUMN connector_generation INT UNSIGNED NULL AFTER user_id`,
+    );
+  }
+
+  const courseGenerationExists = await informationSchemaEntryExists(
+    pool,
+    COLUMN_EXISTS_SQL,
+    'campus_learn_semester_snapshots',
+    'connector_generation',
+  );
+  if (!courseGenerationExists) {
+    await executeAdditiveAlter(
+      pool,
+      `ALTER TABLE campus_learn_semester_snapshots
+      ADD COLUMN connector_generation INT UNSIGNED NULL AFTER semester_id`,
+    );
   }
 
   const targetSemesterColumnExists = await informationSchemaEntryExists(

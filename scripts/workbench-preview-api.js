@@ -4,30 +4,57 @@ const {
   parseKnownScheduleMessage,
   validateSuggestion,
 } = require('../backend/workbench-schedule-planner');
+const { projectCourseSchedules, normalizeMonday } = require('../backend/course-schedule');
 
-function createWorkbenchPreviewApi({ now = Date.now } = {}) {
-  const events = [{
-    publicId: 'ws_existing',
-    title: '实验室例会',
-    description: '仅供工作台预览',
-    startAt: new Date(now() + 2 * 3600000).toISOString(),
-    endAt: new Date(now() + 3 * 3600000).toISOString(),
-    allDay: false,
-    status: 'confirmed',
-    sourceType: 'manual',
-    kind: 'event',
-    version: 1,
-  }];
-  const importantItems = [{
-    publicId: 'wi_preview_1',
-    title: '查看本周计划',
-    description: '这是一条本地模拟事项，可编辑或删除。',
-    dueAt: new Date(now() + 24 * 3600000).toISOString(),
-    priority: 'normal',
-    status: 'confirmed',
-    sourceType: 'manual',
-    version: 1,
-  }];
+function createWorkbenchPreviewApi({
+  now = Date.now,
+  campusCourses = [],
+  semesterId = 'preview-semester',
+} = {}) {
+  let firstWeekMonday = null;
+  const courseProjection = () =>
+    projectCourseSchedules(campusCourses, {
+      semesterId,
+      firstWeekMonday,
+      fetchedAt: new Date(now()).toISOString(),
+    });
+  const calendarStatus = () => {
+    const projection = courseProjection();
+    return {
+      semesterId,
+      firstWeekMonday,
+      issues: projection.issues,
+      parsedCourses: projection.parsedCourses,
+      totalCourses: projection.totalCourses,
+      scheduledLessons: projection.events.length,
+    };
+  };
+  const events = [
+    {
+      publicId: 'ws_existing',
+      title: '实验室例会',
+      description: '仅供工作台预览',
+      startAt: new Date(now() + 2 * 3600000).toISOString(),
+      endAt: new Date(now() + 3 * 3600000).toISOString(),
+      allDay: false,
+      status: 'confirmed',
+      sourceType: 'manual',
+      kind: 'event',
+      version: 1,
+    },
+  ];
+  const importantItems = [
+    {
+      publicId: 'wi_preview_1',
+      title: '查看本周计划',
+      description: '这是一条本地模拟事项，可编辑或删除。',
+      dueAt: new Date(now() + 24 * 3600000).toISOString(),
+      priority: 'normal',
+      status: 'confirmed',
+      sourceType: 'manual',
+      version: 1,
+    },
+  ];
   const communityNotices = [
     {
       id: '12',
@@ -70,10 +97,48 @@ function createWorkbenchPreviewApi({ now = Date.now } = {}) {
     }
     if (route === '/api/workbench/notifications') return result({ notifications: [] });
     if (route === '/api/workbench/campus/semesters') {
-      return result({ semesters: [], currentSemesterId: null });
+      return result({
+        semesters: campusCourses.length
+          ? [
+              {
+                id: semesterId,
+                label: '模拟学期（仅本地）',
+                synced: true,
+                courseCount: campusCourses.length,
+              },
+            ]
+          : [],
+        currentSemesterId: campusCourses.length ? semesterId : null,
+      });
+    }
+    if (route === `/api/workbench/campus/semesters/${semesterId}` && method === 'GET') {
+      return result({
+        semester: {
+          id: semesterId,
+          courses: campusCourses,
+          notifications: [],
+          fetchedAt: new Date(now()).toISOString(),
+          syncStatus: 'complete',
+        },
+      });
+    }
+    if (route === '/api/workbench/campus/course-calendar') {
+      const requested = method === 'GET' ? url.searchParams.get('semester') : body?.semesterId;
+      if (requested !== semesterId || !campusCourses.length)
+        return result({ message: '请先同步该学期课程。' }, 404);
+      if (method === 'PUT') {
+        if (!normalizeMonday(body.firstWeekMonday))
+          return result({ message: '第一教学周必须是周一日期。' }, 400);
+        firstWeekMonday = body.firstWeekMonday;
+      }
+      if (method === 'GET' || method === 'PUT') return result(calendarStatus());
     }
     if (route === '/api/workbench/summary') {
-      return result({ importantItems, notifications: [], scheduleItems: events });
+      return result({
+        importantItems,
+        notifications: [],
+        scheduleItems: [...events, ...courseProjection().events],
+      });
     }
     if (route === '/api/workbench/important-items') {
       if (method === 'GET') return result({ importantItems });
@@ -99,7 +164,11 @@ function createWorkbenchPreviewApi({ now = Date.now } = {}) {
         return result({ deleted: true });
       }
       if (method === 'PATCH') {
-        importantItems[index] = { ...importantItems[index], ...body, version: importantItems[index].version + 1 };
+        importantItems[index] = {
+          ...importantItems[index],
+          ...body,
+          version: importantItems[index].version + 1,
+        };
         return result({ importantItem: importantItems[index] });
       }
     }
@@ -107,7 +176,12 @@ function createWorkbenchPreviewApi({ now = Date.now } = {}) {
       if (method === 'GET') {
         const from = new Date(url.searchParams.get('from') || 0).getTime();
         const to = new Date(url.searchParams.get('to') || 0).getTime();
-        return result({ scheduleItems: events.filter((item) => new Date(item.startAt).getTime() < to && new Date(item.endAt).getTime() > from) });
+        return result({
+          scheduleItems: [...events, ...courseProjection().events].filter(
+            (item) =>
+              new Date(item.startAt).getTime() < to && new Date(item.endAt).getTime() > from,
+          ),
+        });
       }
       if (method === 'POST') {
         nextId += 1;
@@ -127,7 +201,14 @@ function createWorkbenchPreviewApi({ now = Date.now } = {}) {
       const startAt = url.searchParams.get('startAt');
       const endAt = url.searchParams.get('endAt');
       const exclude = url.searchParams.get('excludePublicId');
-      return result({ conflicts: events.filter((item) => item.publicId !== exclude && item.kind !== 'deadline' && overlaps({ startAt, endAt }, item)) });
+      return result({
+        conflicts: [...events, ...courseProjection().events].filter(
+          (item) =>
+            item.publicId !== exclude &&
+            item.kind !== 'deadline' &&
+            overlaps({ startAt, endAt }, item),
+        ),
+      });
     }
     const scheduleMatch = /^\/api\/workbench\/schedule-items\/([^/]+)(?:\/(confirm))?$/.exec(route);
     if (scheduleMatch) {
@@ -147,26 +228,50 @@ function createWorkbenchPreviewApi({ now = Date.now } = {}) {
       }
     }
     if (route === '/api/workbench/schedule-planner/preview' && method === 'POST') {
-      const extraction = parseKnownScheduleMessage(body?.message, new Date(now()));
-      if (!extraction) {
-        return result({ message: '本地预览暂时无法解析这句话；请补充日期、时间和时长，或连接真实 AI 服务。' }, 422);
-      }
       try {
-        return result(buildPreview(extraction, events.filter((item) => item.kind !== 'deadline'), new Date(now())));
+        const extraction = parseKnownScheduleMessage(body?.message, new Date(now()));
+        if (!extraction) {
+          return result(
+            {
+              message:
+                '本地预览暂时无法完整解析这句话；请补充每件事的日期、时间和时长，或连接真实 AI 服务。',
+            },
+            422,
+          );
+        }
+        return result(
+          buildPreview(
+            extraction,
+            [...events, ...courseProjection().events].filter((item) => item.kind !== 'deadline'),
+            new Date(now()),
+          ),
+        );
       } catch (error) {
         return result({ message: error.message }, error.status || 422);
       }
     }
     if (route === '/api/workbench/schedule-planner/confirm' && method === 'POST') {
       try {
-        if (!Array.isArray(body.suggestions) || body.suggestions.length < 1 || body.suggestions.length > 52) {
+        if (
+          !Array.isArray(body.suggestions) ||
+          body.suggestions.length < 1 ||
+          body.suggestions.length > 52
+        ) {
           return result({ message: '请选择 1–52 项计划再确认。' }, 400);
         }
-        const suggestions = body.suggestions.map((item) => validateSuggestion(item, new Date(now())));
-        const conflict = suggestions.some((item, index) => item.kind !== 'deadline' && (
-          events.some((busy) => busy.kind !== 'deadline' && overlaps(item, busy)) ||
-          suggestions.slice(index + 1).some((other) => other.kind !== 'deadline' && overlaps(item, other))
-        ));
+        const suggestions = body.suggestions.map((item) =>
+          validateSuggestion(item, new Date(now())),
+        );
+        const conflict = suggestions.some(
+          (item, index) =>
+            item.kind !== 'deadline' &&
+            ([...events, ...courseProjection().events].some(
+              (busy) => busy.kind !== 'deadline' && overlaps(item, busy),
+            ) ||
+              suggestions
+                .slice(index + 1)
+                .some((other) => other.kind !== 'deadline' && overlaps(item, other))),
+        );
         if (conflict) return result({ message: '与已有日程冲突，请重新生成。' }, 409);
         for (const item of suggestions) {
           nextId += 1;
@@ -192,7 +297,11 @@ function createWorkbenchPreviewApi({ now = Date.now } = {}) {
     events,
     importantItems,
     communityNotices,
-    setCommunityUnavailable(value) { communityUnavailable = Boolean(value); },
+    campusCourses,
+    courseProjection,
+    setCommunityUnavailable(value) {
+      communityUnavailable = Boolean(value);
+    },
   };
 }
 

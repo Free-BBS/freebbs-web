@@ -1,0 +1,58 @@
+[
+  {
+    "key": "mysterious_fragment",
+    "source": "D:/CodexData/.codex/generated_images/01a051d2-b779-7f90-a787-8e58ca25305c/exec-91f2fe0f-689d-4821-88ff-390f22227ff2.png",
+    "mode": "built-in image_gen edit",
+    "target": "public/assets/shop/max-cartoon-v1/mysterious_fragment.webp",
+    "prompt": "Use case: precise-object-edit. Asset type: FREE BBS game shop collectible icon. Image 1 is the edit target. Make the mysterious fragment quieter, scholarly and believable: a small irregular dark-violet mineral with subtle blue-violet reflections. Preserve its identity, one centered object and detailed hand-painted cartoon texture. Remove orbiting shards, neon cracks, galaxy texture and gold mount. Transparent background; no text, watermark or simplistic flat-vector rendering."
+  },
+  {
+    "key": "maxwell_spectacles",
+    "source": "D:/CodexData/.codex/generated_images/01a051d2-b779-7f90-a787-8e58ca25305c/exec-06e26445-614f-4eef-b52c-ddfe3713f08c.png",
+    "mode": "built-in image_gen edit",
+    "target": "public/assets/shop/max-cartoon-v1/maxwell_spectacles.webp",
+    "prompt": "Use case: precise-object-edit. Asset type: FREE BBS scholarly collectible icon. Image 1 is the edit target. Restyle as restrained historical scientific keepsake: round aged-brass spectacles with clear neutral lenses in a simple worn-leather, dark-blue cloth-lined case. Preserve the object and refined hand-painted cartoon quality. Remove rainbow reflections, sparkles, saturated luxury colors and excessive gold trim. Transparent background; no text or watermark."
+  },
+  {
+    "key": "hertz_resonator",
+    "source": "D:/CodexData/.codex/generated_images/01a051d2-b779-7f90-a787-8e58ca25305c/exec-fedda258-815d-4be9-96bc-808bae4b3099.png",
+    "mode": "built-in image_gen edit",
+    "target": "public/assets/shop/max-cartoon-v1/hertz_resonator.webp",
+    "prompt": "Use case: precise-object-edit. Asset type: FREE BBS scholarly collectible icon. Image 1 is the edit target. Restyle as a restrained nineteenth-century apparatus: dark iron circular resonator, aged copper coils, plain walnut base, small brass terminals and muted dark-green insulated wire. Preserve recognizability and detailed hand-painted cartoon quality. Remove energy arcs, saturated cables and ornamental shine. Transparent background; no text or watermark."
+  },
+  {
+    "key": "shannon_coin",
+    "source": "D:/CodexData/.codex/generated_images/01a051d2-b779-7f90-a787-8e58ca25305c/exec-f671e1eb-73d4-4e83-b830-14c34723c105.png",
+    "mode": "built-in image_gen edit",
+    "target": "public/assets/shop/max-cartoon-v1/shannon_coin.webp",
+    "prompt": "Use case: precise-object-edit. Asset type: FREE BBS scholarly collectible icon. Image 1 is the edit target. Restyle as an aged-brass academic keepsake with subtle information-tree relief on a plain dark-wood stand. Preserve the coin identity and refined hand-painted cartoon quality. Remove binary decoration, red velvet, sparkles, bright trophy gold and luxury presentation. Transparent background; no readable text or watermark."
+  },
+  {
+    "key": "faraday_ring",
+    "source": "D:/CodexData/.codex/generated_images/01a051d2-b779-7f90-a787-8e58ca25305c/exec-23c3b854-8205-47c5-a6f2-859c1aa5e56c.png",
+    "mode": "built-in image_gen edit",
+    "target": "public/assets/shop/max-cartoon-v1/faraday_ring.webp",
+    "prompt": "Use case: precise-object-edit. Asset type: FREE BBS scholarly collectible icon. Image 1 is the edit target. Restyle the Faraday induction ring as a quiet historical apparatus: dark iron toroid, twin aged-copper windings, short tidy dark wires, brass terminals and a simple walnut base. Preserve the object identity and refined hand-painted cartoon quality. Remove glossy luxury polish, bright green cables and gold feet. Transparent background; no glow, text or watermark."
+  },
+  {
+    "key": "differential_converter",
+    "source": "D:/CodexData/.codex/generated_images/01a051d2-b779-7f90-a787-8e58ca25305c/exec-0513d76c-fd37-4b4c-af9d-b9ccd0620819.png",
+    "mode": "built-in image_gen edit",
+    "target": "public/assets/shop/max-cartoon-v1/differential_converter.webp",
+    "prompt": "Use case: precise-object-edit. Asset type: FREE BBS converter icon. Image 1 is the edit target. Restyle as a compact classroom electronics instrument: muted blue-gray metal enclosure, one analog meter, two binding posts, practical knob and black feet. Preserve its converter identity and refined hand-painted cartoon quality. Remove suitcase handle, colorful arrows, lightning symbol, bright candy colors and gold trim. Transparent background; no text or watermark."
+  },
+  {
+    "key": "fortune_bag",
+    "source": "D:/CodexData/.codex/generated_images/01a051d2-b779-7f90-a787-8e58ca25305c/exec-ec22c94c-3bb3-43dc-b436-f38fd828db57.png",
+    "mode": "built-in image_gen edit",
+    "target": "public/assets/shop/max-cartoon-v1/fortune_bag.webp",
+    "prompt": "Use case: precise-object-edit. Asset type: FREE BBS consumable icon. Image 1 is the edit target. Restyle as a small modest brick-red cotton sachet tied with a simple beige cord and tiny plain brass tag. Preserve the pouch identity and refined hand-painted cartoon quality. Remove cloud patterns, oversized bows, long tassels, sparkle and ceremonial luxury. Transparent background; no text or watermark."
+  },
+  {
+    "key": "laser",
+    "source": "D:/CodexData/.codex/generated_images/01a051d2-b779-7f90-a787-8e58ca25305c/exec-90e608cc-9b7a-49d8-9ad3-ed1f8f513ea3.png",
+    "mode": "built-in image_gen edit",
+    "target": "public/assets/shop/max-cartoon-v1/laser.webp",
+    "prompt": "Use case: precise-object-edit. Asset type: FREE BBS laser-device icon. Image 1 is the edit target. Restyle as an understated laboratory diode-laser head on a stable adjustable mount. Preserve emitter, lens, adjustment knob, mount and four feet. Use matte charcoal and warm off-white metal with one muted-teal accent. Remove red toy casing, gold trim, oversized glowing lens and emitted beam. Transparent background; no text or watermark."
+  }
+]

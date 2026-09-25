@@ -190,40 +190,172 @@
     trigger.classList.add('site-search-floating');
     document.body.append(trigger);
   }
-  // The shared shell draws its title in ::before. Measure the title and account
-  // controls instead of assuming a fixed gap, including custom text sizes/names.
+  // Page CSS may replace the shell title (for example, the home breadcrumb).
+  // Measure the rendered content with its real typography, not just the dataset.
   const headerMain = document.querySelector('.main-content[data-page-title]');
   const accountPanel = document.querySelector('.user-panel');
-  const measure = document.createElement('canvas').getContext('2d');
+  const titleMeasure = document.createElement('span');
+  titleMeasure.className = 'site-search-title-measure';
+  titleMeasure.setAttribute('aria-hidden', 'true');
+  document.body.append(titleMeasure);
+  const measureTitle = (heading) => {
+    if (
+      heading.display === 'none' ||
+      heading.content === 'none' ||
+      heading.content === 'normal' ||
+      parseFloat(heading.fontSize) === 0
+    )
+      return 0;
+    const quoted = heading.content.match(/^(["'])([\s\S]*)\1$/);
+    titleMeasure.textContent = quoted
+      ? quoted[2].replace(/\\([\da-f]{1,6})\s?|\\(.)/gi, (_, hex, escaped) =>
+          hex ? String.fromCodePoint(parseInt(hex, 16) || 0xfffd) : escaped,
+        )
+      : headerMain.dataset.pageTitle || '';
+    [
+      'fontFamily',
+      'fontSize',
+      'fontStyle',
+      'fontWeight',
+      'fontStretch',
+      'fontVariant',
+      'fontKerning',
+      'fontFeatureSettings',
+      'fontVariationSettings',
+      'letterSpacing',
+      'wordSpacing',
+      'textTransform',
+    ].forEach((property) => {
+      titleMeasure.style[property] = heading[property];
+    });
+    titleMeasure.style.width = 'max-content';
+    titleMeasure.style.whiteSpace = 'pre';
+    return titleMeasure.getBoundingClientRect().width;
+  };
   const placeTrigger = () => {
     trigger.classList.remove('is-expanded');
     trigger.style.removeProperty('left');
     trigger.style.removeProperty('right');
     trigger.style.removeProperty('width');
-    if (window.innerWidth <= 900 || !headerMain || !accountPanel || !measure) return;
+    if (
+      !actions ||
+      !headerMain ||
+      !accountPanel ||
+      document.body.classList.contains('auth-page-body')
+    )
+      return;
+    const mobile = window.innerWidth <= 900;
+    delete headerMain.dataset.searchWrappedTitle;
+    delete document.body.dataset.searchWrappedTitle;
+    delete document.body.dataset.searchCompactAccount;
     const heading = getComputedStyle(headerMain, '::before');
-    measure.font = `${heading.fontWeight} ${heading.fontSize} ${heading.fontFamily}`;
-    const titleWidth =
-      parseFloat(heading.fontSize) === 0
-        ? 0
-        : measure.measureText(headerMain.dataset.pageTitle || '').width;
-    const left = parseFloat(heading.left) + titleWidth + 24;
-    const available = accountPanel.getBoundingClientRect().left - left - 20;
-    if (available >= 180) {
+    const titleLeft = (parseFloat(heading.left) || 0) + (parseFloat(heading.paddingLeft) || 0);
+    const titleWidth = measureTitle(heading);
+    let right = accountPanel.getBoundingClientRect().left - (mobile ? 12 : 20);
+    // A username is optional header detail; the complete page title is not.
+    if (!mobile && right - 40 < titleLeft + titleWidth + 24) {
+      document.body.dataset.searchCompactAccount = '';
+      right = accountPanel.getBoundingClientRect().left - 20;
+    }
+    const expandedLeft = titleLeft + titleWidth + 24;
+    const available = right - expandedLeft;
+    let left = right - 40;
+    let width = 40;
+    if (!mobile && available >= 180) {
       trigger.classList.add('is-expanded');
-      trigger.style.left = `${left}px`;
-      trigger.style.right = 'auto';
-      trigger.style.width = `${Math.min(240, available)}px`;
+      width = Math.min(240, available);
+      left = right - width;
+    }
+    trigger.style.left = `${left}px`;
+    trigger.style.right = 'auto';
+    trigger.style.width = `${width}px`;
+    // Some pages retain a separate mobile theme button to the left of search.
+    // Reserve every visible control in the title row, not the balance row below.
+    const titleTop =
+      (parseFloat(heading.top) || 0) +
+      (parseFloat(heading.borderTopWidth) || 0) +
+      (parseFloat(heading.paddingTop) || 0);
+    const baseHeaderHeight = parseFloat(heading.height) || (mobile ? 64 : 92);
+    const titleBottom = titleTop + baseHeaderHeight;
+    let controlsLeft = trigger.getBoundingClientRect().left;
+    [
+      accountPanel,
+      ...document.querySelectorAll('.mobile-theme-toggle, .notification-bell'),
+    ].forEach((control) => {
+      const rect = control.getBoundingClientRect();
+      const style = getComputedStyle(control);
+      if (
+        rect.width > 0 &&
+        rect.height > 0 &&
+        rect.right > titleLeft &&
+        rect.top < titleBottom &&
+        rect.bottom > titleTop &&
+        style.visibility === 'visible' &&
+        style.opacity !== '0'
+      )
+        controlsLeft = Math.min(controlsLeft, rect.left);
+    });
+    // Discussion's mobile search keeps its wide layout and hides its title.
+    const reserve =
+      window.innerWidth - (parseFloat(heading.right) || 0) - controlsLeft + (mobile ? 12 : 24);
+    headerMain.style.setProperty('--site-search-title-reserve', `${Math.max(0, reserve)}px`);
+    const titleAvailable = Math.max(1, controlsLeft - (mobile ? 12 : 24) - titleLeft);
+    if (titleWidth > titleAvailable) {
+      // Measure wrapped text with the exact title typography. Never infer fit
+      // from an already clipped pseudo-element (which hid the original bug).
+      titleMeasure.style.whiteSpace = 'normal';
+      titleMeasure.style.overflowWrap = 'anywhere';
+      titleMeasure.style.lineHeight = heading.lineHeight;
+      titleMeasure.style.width = `${titleAvailable}px`;
+      const extra = Math.max(
+        0,
+        Math.ceil(titleMeasure.getBoundingClientRect().height + 24 - baseHeaderHeight),
+      );
+      if (extra > 0) {
+        headerMain.style.setProperty('--site-search-base-header-height', `${baseHeaderHeight}px`);
+        headerMain.style.setProperty(
+          '--site-search-base-main-padding',
+          getComputedStyle(headerMain).paddingTop,
+        );
+        headerMain.style.setProperty('--site-search-header-extra', `${extra}px`);
+        document.body.style.setProperty('--site-search-header-extra', `${extra}px`);
+        headerMain.dataset.searchWrappedTitle = '';
+        document.body.dataset.searchWrappedTitle = '';
+      }
     }
   };
-  window.addEventListener('resize', placeTrigger);
-  if (accountPanel) new ResizeObserver(placeTrigger).observe(accountPanel);
-  if (headerMain)
-    new MutationObserver(placeTrigger).observe(headerMain, {
+  let placementFrame;
+  const schedulePlacement = () => {
+    cancelAnimationFrame(placementFrame);
+    placementFrame = requestAnimationFrame(placeTrigger);
+  };
+  window.addEventListener('resize', schedulePlacement);
+  window.addEventListener('load', schedulePlacement);
+  window.addEventListener('freebbs:session-change', schedulePlacement);
+  if (accountPanel) {
+    new ResizeObserver(schedulePlacement).observe(accountPanel);
+    new MutationObserver(schedulePlacement).observe(accountPanel, {
+      childList: true,
+      subtree: true,
       attributes: true,
-      attributeFilter: ['data-page-title'],
+      attributeFilter: ['class', 'hidden', 'style'],
     });
-  document.fonts?.ready.then(placeTrigger);
+  }
+  if (headerMain)
+    new MutationObserver(schedulePlacement).observe(headerMain, {
+      attributes: true,
+      attributeFilter: ['data-page-title', 'class'],
+    });
+  new MutationObserver(schedulePlacement).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['style', 'class', 'data-font-preset', 'data-type-scale'],
+  });
+  new MutationObserver(schedulePlacement).observe(document.body, {
+    attributes: true,
+    attributeFilter: ['class'],
+  });
+  document.fonts?.ready.then(schedulePlacement);
+  document.fonts?.addEventListener('loadingdone', schedulePlacement);
   placeTrigger();
   document.addEventListener('keydown', (event) => {
     const typing = event.target.closest?.('input, textarea, select, [contenteditable="true"]');

@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { parseCourseSchedule } = require('../course-schedule');
 
 function publicId(prefix) {
   return `${prefix}_${crypto.randomBytes(12).toString('hex')}`;
@@ -229,13 +230,57 @@ function createTsinghuaSyncStore(pool) {
     );
   }
 
-  async function upsertSemesterSnapshot(connection, userId, snapshot, syncedAt) {
+  async function upsertSemesterSnapshot(connection, userId, generation, snapshot, syncedAt) {
     const semesterId = String(snapshot.semesterId || '')
       .trim()
       .slice(0, 32);
     if (!semesterId) return;
 
-    const courses = Array.isArray(snapshot.courses) ? snapshot.courses : [];
+    let courses = Array.isArray(snapshot.courses) ? snapshot.courses : [];
+    if (snapshot.status === 'partial') {
+      const [previousRows] = await connection.execute(
+        `SELECT s.courses_json FROM campus_learn_semester_snapshots s
+         INNER JOIN user_campus_connectors c ON c.user_id = s.user_id
+           AND c.provider = 'tsinghua-learn' AND c.generation = s.connector_generation
+         WHERE s.user_id = ? AND s.semester_id = ? AND s.connector_generation = ?
+           AND c.connected_at IS NOT NULL AND s.fetched_at >= c.connected_at
+         LIMIT 1`,
+        [userId, semesterId, generation],
+      );
+      const previousValue = Array.isArray(previousRows) ? previousRows[0]?.courses_json : null;
+      let previous = [];
+      try {
+        previous = typeof previousValue === 'string' ? JSON.parse(previousValue) : previousValue;
+      } catch {
+        previous = [];
+      }
+      const retainedWarning = '本次同步不完整，暂保留此前可靠的上课安排。';
+      const merged = new Map(
+        (Array.isArray(previous) ? previous : [])
+          .filter((course) => course?.sourceReference)
+          .map((course) => [
+            course.sourceReference,
+            { ...course, calendarSyncWarning: retainedWarning },
+          ]),
+      );
+      for (const course of courses) {
+        const old = merged.get(course.sourceReference);
+        const keepOldSchedule =
+          old && !parseCourseSchedule(old).issue && parseCourseSchedule(course).issue;
+        merged.set(
+          course.sourceReference,
+          keepOldSchedule
+            ? {
+                ...course,
+                scheduleText: old.scheduleText,
+                locationText: course.locationText || old.locationText,
+                calendarSyncWarning: retainedWarning,
+              }
+            : course,
+        );
+      }
+      courses = [...merged.values()];
+    }
     const courseReferences = new Set(courses.map((course) => course.sourceReference));
     const notifications = (Array.isArray(snapshot.notifications) ? snapshot.notifications : [])
       .filter((notification) => courseReferences.has(notification.courseReference))
@@ -252,13 +297,14 @@ function createTsinghuaSyncStore(pool) {
 
     await connection.execute(
       `INSERT INTO campus_learn_semester_snapshots (
-        user_id, semester_id, courses_json, notifications_json, sync_status, fetched_at
-      ) VALUES (?, ?, ?, ?, ?, ?)
+        user_id, semester_id, courses_json, notifications_json, sync_status, fetched_at, connector_generation
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
         courses_json = VALUES(courses_json),
         notifications_json = VALUES(notifications_json),
         sync_status = VALUES(sync_status),
-        fetched_at = VALUES(fetched_at)`,
+        fetched_at = VALUES(fetched_at),
+        connector_generation = VALUES(connector_generation)`,
       [
         userId,
         semesterId,
@@ -266,22 +312,25 @@ function createTsinghuaSyncStore(pool) {
         JSON.stringify(notifications),
         snapshot.status === 'partial' ? 'partial' : 'complete',
         normalizeDate(snapshot.fetchedAt) || syncedAt,
+        generation,
       ],
     );
   }
 
-  async function upsertSemesterCatalog(connection, userId, snapshot, syncedAt) {
+  async function upsertSemesterCatalog(connection, userId, generation, snapshot, syncedAt) {
     if (!Array.isArray(snapshot.availableSemesters)) return;
     await connection.execute(
       `INSERT INTO campus_learn_semester_catalogs (
-        user_id, current_semester_id, semesters_json, fetched_at
-      ) VALUES (?, ?, ?, ?)
+        user_id, connector_generation, current_semester_id, semesters_json, fetched_at
+      ) VALUES (?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
+        connector_generation = VALUES(connector_generation),
         current_semester_id = VALUES(current_semester_id),
         semesters_json = VALUES(semesters_json),
         fetched_at = VALUES(fetched_at)`,
       [
         userId,
+        generation,
         String(snapshot.currentSemesterId || '').slice(0, 32) || null,
         JSON.stringify(snapshot.availableSemesters),
         normalizeDate(snapshot.fetchedAt) || syncedAt,
@@ -353,7 +402,13 @@ function createTsinghuaSyncStore(pool) {
       for (const notification of snapshot.notifications || []) {
         await upsertNotification(connection, current.user_id, notification, finishedAt);
       }
-      await upsertSemesterSnapshot(connection, current.user_id, snapshot, finishedAt);
+      await upsertSemesterSnapshot(
+        connection,
+        current.user_id,
+        claimed.connector_generation,
+        snapshot,
+        finishedAt,
+      );
       if (snapshot.semesterId) {
         await connection.execute(
           `INSERT INTO campus_homework_snapshots
@@ -371,7 +426,13 @@ function createTsinghuaSyncStore(pool) {
           ],
         );
       }
-      await upsertSemesterCatalog(connection, current.user_id, snapshot, finishedAt);
+      await upsertSemesterCatalog(
+        connection,
+        current.user_id,
+        claimed.connector_generation,
+        snapshot,
+        finishedAt,
+      );
       for (const item of snapshot.importantItems || []) {
         await upsertImportantItem(connection, current.user_id, item);
       }

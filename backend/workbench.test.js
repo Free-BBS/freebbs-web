@@ -59,6 +59,111 @@ test('computes a Monday-to-Monday week in Asia/Shanghai', () => {
   assert.equal(range.end.toISOString(), '2026-08-02T16:00:00.000Z');
 });
 
+test('course calendar routes authenticate before reading and validate semester and Monday before writing', async (t) => {
+  let queries = 0;
+  const base = await startTestServer(t, {
+    user: { id: 7 },
+    pool: {
+      async execute() {
+        queries += 1;
+        return [[]];
+      },
+    },
+  });
+  for (const method of ['GET', 'PUT']) {
+    const result = await requestJson(base, '/campus/course-calendar?semester=2026-2027-1', {
+      method,
+      auth: false,
+    });
+    assert.equal(result.response.status, 401);
+  }
+  assert.equal(queries, 0);
+  assert.equal(
+    (await requestJson(base, '/campus/course-calendar?semester=invalid%2Fsemester')).response
+      .status,
+    400,
+  );
+  for (const body of [
+    { semesterId: '2026-2027-1', firstWeekMonday: '2026-09-22' },
+    { semesterId: '../other', firstWeekMonday: '2026-09-21' },
+    {},
+  ]) {
+    const result = await requestJson(base, '/campus/course-calendar', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+    assert.equal(result.response.status, 400);
+  }
+  assert.equal(queries, 0);
+});
+
+test('saving a semester Monday immediately exposes fixed courses in calendar, summary and conflicts', async (t) => {
+  let monday = null;
+  let settingsWrites = 0;
+  const pool = {
+    async execute(sql, parameters) {
+      if (sql.includes('INSERT INTO campus_course_calendar_settings')) {
+        assert.deepEqual(parameters, ['2026-09-21', '2026-2027-1', 7]);
+        [monday] = parameters;
+        settingsWrites += 1;
+        return [{ affectedRows: 1 }];
+      }
+      assert.equal(parameters[0], 7);
+      if (sql.includes('FROM campus_learn_semester_snapshots s'))
+        return [
+          [
+            {
+              semester_id: '2026-2027-1',
+              first_week_monday: monday,
+              snapshot_generation: 3,
+              connector_generation: 3,
+              settings_generation: monday ? 3 : null,
+              connected_at: '2026-09-20T02:00:00Z',
+              fetched_at: '2026-09-21T02:00:00Z',
+              sync_status: 'complete',
+              courses_json: [
+                {
+                  sourceReference: 'course:a',
+                  title: '信号与系统',
+                  scheduleText: '1-16周 周一第2大节',
+                },
+              ],
+            },
+          ],
+        ];
+      assert.doesNotMatch(sql, /INSERT INTO schedule_items|UPDATE schedule_items/);
+      return [[]];
+    },
+  };
+  const base = await startTestServer(t, { pool, user: { id: 7 } });
+  const before = await requestJson(base, '/campus/course-calendar?semester=2026-2027-1');
+  assert.equal(before.payload.scheduledLessons, 0);
+  assert.match(before.payload.issues[0].message, /第一教学周/);
+  const saved = await requestJson(base, '/campus/course-calendar', {
+    method: 'PUT',
+    body: JSON.stringify({
+      semesterId: '2026-2027-1',
+      firstWeekMonday: '2026-09-21',
+    }),
+  });
+  assert.equal(saved.response.status, 200);
+  assert.equal(saved.payload.scheduledLessons, 16);
+  for (const route of [
+    '/schedule-items?from=2026-09-20T16:00:00Z&to=2026-09-27T16:00:00Z',
+    '/summary?from=2026-09-20T16:00:00Z&to=2026-09-27T16:00:00Z',
+    '/schedule-items/conflicts?startAt=2026-09-21T02:00:00Z&endAt=2026-09-21T03:00:00Z',
+  ]) {
+    const result = await requestJson(base, route);
+    assert.equal(result.response.status, 200, route);
+    const items = result.payload.scheduleItems || result.payload.conflicts;
+    assert.equal(items.length, 1, route);
+    assert.equal(items[0].kind, 'course');
+    assert.equal(items[0].status, 'confirmed');
+    assert.ok(items[0].courseScheduleReference);
+  }
+  assert.equal(settingsWrites, 1);
+});
+
 test('rejects inverted and excessively large custom ranges', () => {
   assert.equal(
     parseRange({
@@ -209,6 +314,7 @@ test('summary scopes all three data sets to the authenticated user', async (t) =
           ],
         ];
       }
+      if (sql.includes('FROM campus_learn_semester_snapshots')) return [[]];
       throw new Error(`Unexpected SQL: ${sql}`);
     },
   };
@@ -225,7 +331,7 @@ test('summary scopes all three data sets to the authenticated user', async (t) =
   assert.equal(payload.importantItems[0].publicId, 'wi_1');
   assert.equal(payload.notifications[0].publicId, 'wn_1');
   assert.equal(payload.scheduleItems[0].publicId, 'ws_1');
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
   assert.equal(calls[0].parameters[0], 7);
   assert.deepEqual(calls[1].parameters.slice(0, 2), [7, 7]);
   assert.equal(calls[2].parameters[0], 7);
@@ -241,7 +347,26 @@ test('campus semesters expose only the authenticated user normalized snapshot', 
       async execute(statement, parameters = []) {
         const sql = statement.replace(/\s+/g, ' ').trim();
         calls.push({ sql, parameters });
-        if (sql.includes('FROM campus_learn_semester_catalogs')) return [[]];
+        if (sql.includes('LEFT JOIN campus_learn_semester_catalogs')) {
+          return [
+            [
+              {
+                current_semester_id: '2026-2027-1',
+                semesters_json: JSON.stringify([{ id: '2026-2027-1', label: '2026—2027 秋' }]),
+                catalog_fetched_at: new Date('2026-08-02T08:00:00.000Z'),
+                semester_id: '2026-2027-1',
+                courses_json: JSON.stringify([
+                  { sourceReference: 'course:a', title: '信号与系统' },
+                ]),
+                notifications_json: JSON.stringify([
+                  { sourceReference: 'notice:a', courseReference: 'course:a', title: '第一讲' },
+                ]),
+                sync_status: 'complete',
+                snapshot_fetched_at: new Date('2026-08-02T08:00:00.000Z'),
+              },
+            ],
+          ];
+        }
         return [
           [
             {
@@ -261,6 +386,8 @@ test('campus semesters expose only the authenticated user normalized snapshot', 
 
   const list = await requestJson(baseUrl, '/campus/semesters');
   assert.equal(list.response.status, 200);
+  assert.equal(list.payload.currentSemesterId, '2026-2027-1');
+  assert.equal(list.payload.semesters[0].label, '2026—2027 秋');
   assert.equal(list.payload.semesters[0].courseCount, 1);
   assert.equal(list.payload.semesters[0].notificationCount, 1);
 
@@ -268,7 +395,40 @@ test('campus semesters expose only the authenticated user normalized snapshot', 
   assert.equal(detail.response.status, 200);
   assert.equal(detail.payload.semester.courses[0].title, '信号与系统');
   assert.deepEqual(calls[0].parameters, [21]);
-  assert.deepEqual(calls[2].parameters, [21, '2026-2027-1']);
+  assert.deepEqual(calls[1].parameters, [21, '2026-2027-1']);
+  for (const { sql } of calls) {
+    assert.match(sql, /connector\.generation = (?:catalog|snapshot)\.connector_generation/u);
+    assert.match(sql, /fetched_at >= connector\.connected_at/u);
+    assert.match(
+      sql,
+      /connector\.status IN \('active_verified', 'active_unverified', 'reauthorization_required'\)/u,
+    );
+    assert.match(sql, /connector\.connected_at IS NOT NULL/u);
+  }
+});
+
+test('campus semester routes hide every snapshot outside the current connection boundary', async (t) => {
+  const calls = [];
+  const baseUrl = await startTestServer(t, {
+    user: { id: 22, is_admin: false },
+    pool: {
+      async execute(statement, parameters = []) {
+        calls.push({ sql: statement.replace(/\s+/g, ' ').trim(), parameters });
+        return [[]];
+      },
+    },
+  });
+
+  const list = await requestJson(baseUrl, '/campus/semesters');
+  assert.equal(list.response.status, 200);
+  assert.deepEqual(list.payload, { currentSemesterId: null, semesters: [] });
+  const detail = await requestJson(baseUrl, '/campus/semesters/2026-2027-1');
+  assert.equal(detail.response.status, 404);
+  assert.equal(detail.payload.message, '尚未同步该学期');
+  assert.deepEqual(
+    calls.map(({ parameters }) => parameters),
+    [[22], [22, '2026-2027-1']],
+  );
 });
 
 test('notification limits are clamped before being embedded in the query', async (t) => {
@@ -455,6 +615,7 @@ test('calendar exposes owned homework and persists completion without modifying 
     async execute(sql, parameters) {
       assert.equal(parameters[0], 7);
       if (sql.includes('FROM schedule_items')) return [[]];
+      if (sql.includes('FROM campus_learn_semester_snapshots')) return [[]];
       if (sql.includes('FROM campus_homework_snapshots'))
         return [
           [

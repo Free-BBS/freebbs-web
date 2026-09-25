@@ -84,7 +84,7 @@ test('workbench provides authenticated CRUD controls and conflict confirmation',
   assert.match(html, /id="workbench-important-dialog"/);
   assert.match(html, /id="workbench-add-schedule"/);
   assert.match(html, /id="workbench-schedule-dialog"/);
-  assert.match(html, /src="\/workbench\.js\?v=20260924-schedule-notes-1"/);
+  assert.match(html, /src="\/workbench\.js\?v=20260924-readable-cards-1"/);
   assert.match(controller, /\/workbench\/important-items/);
   assert.match(controller, /\/workbench\/schedule-items\/conflicts/);
   assert.match(controller, /\/confirm/);
@@ -134,6 +134,31 @@ test('manual and AI plans share one optional location/notes field without changi
     controller,
     /if \(item\.homeworkReference\)[\s\S]*?'toggle-homework-completion'[\s\S]*?else \{[\s\S]*?'edit-schedule'/,
   );
+});
+
+test('planner explains its three-task limit and reports separate tasks before a batch confirmation', () => {
+  assert.match(html, /一段话最多安排 3 件事/);
+  assert.match(html, /逐条检查标题、时间和地点\/备注/);
+  assert.match(html, /确认后全部加入，有冲突则整批不写入/);
+  assert.match(controller, /Number\.isInteger\(result\.taskCount\)/);
+  assert.match(controller, /当前尚未写入/);
+});
+
+test('week cards prioritize complete names and notes over duration-sized text clipping', () => {
+  assert.match(html, /卡片优先显示名称和地点\/备注，点击查看具体时间/);
+  assert.match(controller, /block\.setAttribute\('aria-label', block\.title\)/);
+  assert.match(controller, /if \(entry\.item\.homeworkReference\) block\.append\(time\)/);
+  assert.doesNotMatch(controller, /block\.append\(title, time\)/);
+  assert.match(controller, /function layoutWeekCards\(/);
+  assert.match(controller, /lanes\[lane\] = top \+ height \+ 4/);
+  assert.doesNotMatch(controller, /block\.style\.height\s*=/);
+  const titleStyles = css.match(/\.workbench-week-event strong\s*\{([^}]+)\}/)[1];
+  const noteStyles = css.match(/\.workbench-week-notes\s*\{([^}]+)\}/)[1];
+  for (const styles of [titleStyles, noteStyles]) {
+    assert.match(styles, /white-space:\s*pre-wrap/);
+    assert.match(styles, /overflow-wrap:\s*anywhere/);
+    assert.doesNotMatch(styles, /ellipsis|overflow:\s*hidden/);
+  }
 });
 
 test('workbench separates plan and notifications while reusing the live publication inbox', () => {

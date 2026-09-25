@@ -15,7 +15,7 @@
     />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
-    <link rel="stylesheet" href="/workbench.css?v=20260924-schedule-notes-1" />
+    <link rel="stylesheet" href="/workbench.css?v=20260924-readable-cards-1" />
     <link rel="stylesheet" href="/workbench-connectors.css" />
     <link rel="stylesheet" href="/username-guard.css" />
     <link rel="stylesheet" href="/notifications.css" />
@@ -244,6 +244,9 @@
                         按账号保存在本浏览器；仅裁切时间图，不删除日程。全天与 DDL 始终显示。
                       </small>
                     </form>
+                    <p class="workbench-hours-hint">
+                      卡片优先显示名称和地点/备注，点击查看具体时间。卡片高度随文字展开，不代表精确时长。
+                    </p>
                     <p
                       class="workbench-hours-hint"
                       id="workbench-hours-outside"
@@ -279,9 +282,9 @@
                     <div>
                       <h2>和 Max 说说你的安排</h2>
                       <p>
-                        例如：“19 号下午 5 点开会，持续 2 小时”“每周三第三大节上课，持续 8 周”，
-                        或“9 月 19 日 23:59 之前完成报告”。也可以请 Max 在接下来几天安排空档。
-                        先预览并修改，确认后才加入计划表。
+                        一段话最多安排 3 件事，可以用分号分开，并写明时间、时长和地点/备注。
+                        也支持“每周三第三大节上课，持续 8 周”“9 月 19 日 23:59 之前完成报告”， 或请
+                        Max 在接下来几天安排空档。逐条预览并修改，确认后一起加入计划表。
                       </p>
                     </div>
                     <form class="workbench-agent-form" id="workbench-agent-form">
@@ -290,7 +293,7 @@
                         id="workbench-agent-message"
                         maxlength="600"
                         rows="3"
-                        placeholder="接下来 3 天，我想花 6 小时整理实验数据；请避开已有安排。"
+                        placeholder="今天晚上9点开书记会，罗姆楼5103；10点开支书例会，罗姆楼10-206，两个会都是1小时。"
                         required
                       ></textarea>
                       <div class="workbench-agent-form-footer">
@@ -310,7 +313,9 @@
                       <h3>请检查这些时间</h3>
                       <div id="workbench-agent-proposals"></div>
                       <div class="workbench-agent-form-footer">
-                        <span>可以在加入前修改标题与时间；有冲突时需重新生成。</span>
+                        <span
+                          >逐条检查标题、时间和地点/备注；确认后全部加入，有冲突则整批不写入。</span
+                        >
                         <button
                           class="workbench-compact-action"
                           id="workbench-agent-confirm"
@@ -392,6 +397,33 @@
                     <p id="workbench-campus-courses-status" role="status" aria-live="polite">
                       连接清华账号并完成同步后，这里会显示课程。
                     </p>
+                    <section
+                      id="workbench-course-calendar"
+                      class="workbench-course-calendar"
+                      hidden
+                    >
+                      <h3>固定课程自动入表</h3>
+                      <p>
+                        设置本学期第一教学周的周一，已同步且时间完整的课程会直接显示在个人计划表，不需要逐条添加。重复同步不重复生成，AI
+                        规划会避开上课时间。
+                      </p>
+                      <form id="workbench-course-calendar-form">
+                        <label for="workbench-course-calendar-monday">第一教学周 · 周一日期</label>
+                        <input id="workbench-course-calendar-monday" type="date" required />
+                        <button
+                          id="workbench-course-calendar-save"
+                          type="submit"
+                          class="workbench-compact-action"
+                        >
+                          保存校历并生成课程
+                        </button>
+                      </form>
+                      <p id="workbench-course-calendar-status" role="status" aria-live="polite"></p>
+                      <ul id="workbench-course-calendar-issues"></ul>
+                      <p class="workbench-course-calendar-note">
+                        仅使用明确的教学周、星期和时间；识别不完整时会列出原因，不猜测课表。停课、补课等以教务通知为准，未提供的例外日期无法自动判断。校历或课表更新后，请复核是否与已保存的个人安排重叠。
+                      </p>
+                    </section>
                     <div class="workbench-campus-courses-layout">
                       <section aria-labelledby="workbench-campus-courses-title">
                         <h3 id="workbench-campus-courses-title">课程列表</h3>
@@ -928,9 +960,27 @@
       <p id="homework-detail-message" role="status" aria-live="polite"></p>
       <div id="homework-detail"></div>
     </dialog>
+    <dialog
+      id="workbench-course-calendar-detail"
+      class="workbench-dialog"
+      aria-labelledby="workbench-course-calendar-title"
+    >
+      <div class="workbench-dialog-panel">
+        <h2 id="workbench-course-calendar-title">固定课程</h2>
+        <p id="workbench-course-calendar-time"></p>
+        <p id="workbench-course-calendar-description"></p>
+        <p>
+          来自网络学堂最近一次同步。请在校历和上课时间变更后重新同步；这里不会修改网络学堂或你的手工安排。
+        </p>
+        <button id="workbench-course-calendar-close" type="button" class="workbench-compact-action">
+          关闭
+        </button>
+      </div>
+    </dialog>
     <script src="/workbench-homework.js?v=20260922-readonly-1"></script>
     <script src="/workbench-hours.js?v=20260924-schedule-notes-1"></script>
-    <script src="/workbench.js?v=20260924-schedule-notes-1"></script>
+    <script src="/workbench.js?v=20260924-readable-cards-1"></script>
+    <script src="/workbench-course-calendar.js?v=20260924-course-calendar-1"></script>
     <script src="/assets/vendor/fingerprint2-1.5.1.min.js"></script>
     <script src="/tsinghua-cas-fingerprint.js"></script>
     <script src="/workbench-connectors.js?v=20260922-homework-1"></script>

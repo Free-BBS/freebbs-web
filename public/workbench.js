@@ -448,6 +448,44 @@
     }).format(value);
   }
 
+  let weekLayouts = [];
+  function layoutWeekCards() {
+    if (!elements.weekScroll?.clientWidth || !elements.weekGrid.getClientRects().length) return;
+    const columnWidth = Math.max(196, Math.floor(elements.weekScroll.clientWidth / 7));
+    const timelineHeight = (state.hours.end - state.hours.start) * 40;
+    let contentHeight = timelineHeight;
+    const widths = weekLayouts.map(({ timeline, blocks }) => {
+      const lanes = [];
+      for (const { block, top } of blocks) {
+        // Keep the real start on the time axis, but never shrink the title/notes into a time slot.
+        block.style.width = `${columnWidth - 9}px`;
+        const { height } = block.getBoundingClientRect();
+        let lane = lanes.findIndex((end) => end <= top);
+        if (lane < 0) lane = lanes.length;
+        lanes[lane] = top + height + 4;
+        block.style.left = `${lane * columnWidth + 4}px`;
+        contentHeight = Math.max(contentHeight, top + height + 4);
+      }
+      timeline.style.setProperty('--workbench-timeline-hours-height', `${timelineHeight}px`);
+      return Math.max(1, lanes.length) * columnWidth;
+    });
+    elements.weekGrid.style.gridTemplateColumns = widths.map((width) => `${width}px`).join(' ');
+    elements.weekGrid.style.minWidth = `${widths.reduce((sum, width) => sum + width, 0)}px`;
+    // A short event at 23:59 must remain readable without shifting it to an earlier start.
+    weekLayouts.forEach(({ timeline }) => {
+      Object.assign(timeline.style, { height: `${Math.ceil(contentHeight)}px` });
+    });
+  }
+
+  let weekLayoutFrame = 0;
+  function requestWeekCardLayout() {
+    if (weekLayoutFrame) return;
+    weekLayoutFrame = window.requestAnimationFrame(() => {
+      weekLayoutFrame = 0;
+      layoutWeekCards();
+    });
+  }
+
   function renderWeekGrid() {
     if (!elements.weekGrid) return;
     if (state.weekStart === null) state.weekStart = getWeekStart();
@@ -456,6 +494,7 @@
     const todayStart = getWeekStart(new Date());
     elements.weekToday.disabled = state.weekStart === todayStart;
     const days = [];
+    weekLayouts = [];
     const outsideIds = new Set();
     const clippedIds = new Set();
     const visibleIds = new Set();
@@ -505,21 +544,15 @@
         visibleIds.add(item.publicId);
         if (clipped) clippedIds.add(item.publicId);
       });
-      const lanes = [];
-      const placed = entries
-        .filter(({ item }) => !item.allDay && item.kind !== 'deadline')
-        .map((entry) => {
-          let lane = lanes.findIndex((end) => end <= entry.start);
-          if (lane < 0) lane = lanes.length;
-          lanes[lane] = entry.end;
-          return { ...entry, lane };
-        });
+      const blocks = [];
       for (const entry of entries) {
         const block = document.createElement('button');
         block.type = 'button';
         block.dataset.workbenchAction = entry.item.homeworkReference
           ? 'toggle-homework-completion'
           : 'edit-schedule';
+        if (entry.item.courseScheduleReference)
+          block.dataset.workbenchAction = 'view-course-schedule';
         block.dataset.publicId = entry.item.publicId;
         block.className = `workbench-week-event${entry.item.status === 'draft' ? ' is-draft' : ''}${entry.item.sourceType === 'agent' ? ' is-agent' : ''}${entry.item.kind === 'deadline' ? ' is-deadline' : ''}${entry.item.kind === 'weekly' ? ' is-weekly' : ''}`;
         if (entry.item.completed) block.classList.add('is-completed');
@@ -527,6 +560,7 @@
         let prefix = '';
         if (entry.item.kind === 'deadline') prefix = '⏱ DDL · ';
         if (entry.item.kind === 'weekly') prefix = '↻ 周常 · ';
+        if (entry.item.courseScheduleReference) prefix = '课程 · ';
         title.textContent = `${entry.item.completed ? '✓ 已完成 · ' : prefix}${entry.item.title || '未命名日程'}`;
         const time = document.createElement('small');
         time.textContent = `${entry.item.sourceType === 'agent' ? 'Max · ' : ''}${toShanghaiInputValue(entry.item.startAt).slice(11)}–${toShanghaiInputValue(entry.item.endAt).slice(11)}`;
@@ -538,7 +572,10 @@
           time.textContent += entry.item.completed ? ' · 点击恢复未完成' : ' · 点击标记已完成';
           block.setAttribute('aria-pressed', String(entry.item.completed));
         }
-        block.append(title, time);
+        block.append(title);
+        // Homework keeps its existing completion control and explicit deadline.
+        // Other cards prioritize the event name and notes; clicking reveals the exact times.
+        if (entry.item.homeworkReference) block.append(time);
         if (entry.item.description) {
           const notes = document.createElement('small');
           notes.className = 'workbench-week-notes';
@@ -547,26 +584,25 @@
         }
         const calendarAction = entry.item.completed ? '恢复未完成' : '标记已完成';
         block.title = `${entry.item.title} · ${entry.item.kind === 'deadline' ? `截止 ${formatMoment(entry.item.endAt)}` : `${formatMoment(entry.item.startAt)} — ${formatMoment(entry.item.endAt)}`}${entry.item.description ? `\n地点/备注：${entry.item.description}` : ''}${entry.item.updatedAt ? `\n更新于 ${formatMoment(entry.item.updatedAt)}` : ''} · ${entry.item.homeworkReference ? calendarAction : '点击编辑'}`;
+        if (entry.item.courseScheduleReference)
+          block.title = block.title.replace(/点击编辑$/, '查看固定课程');
+        block.setAttribute('aria-label', block.title);
         if (entry.item.allDay || entry.item.kind === 'deadline') {
           allDay.append(block);
         } else {
-          const lane =
-            placed.find(
-              (candidate) => candidate.item === entry.item && candidate.start === entry.start,
-            )?.lane || 0;
-          const laneCount = Math.max(1, lanes.length);
           const top = Math.floor(((entry.start - windowStart) / (60 * 60 * 1000)) * 40);
           block.style.top = `${top}px`;
-          block.style.height = `${Math.min(timelineHeight - top, Math.max(28, Math.ceil(((entry.end - entry.start) / (60 * 60 * 1000)) * 40)))}px`;
-          block.style.left = `calc(${(lane / laneCount) * 100}% + 4px)`;
-          block.style.width = `calc(${100 / laneCount}% - 8px)`;
+          block.style.minHeight = `${Math.max(0, Math.ceil(((entry.end - entry.start) / (60 * 60 * 1000)) * 40) - 4)}px`;
+          blocks.push({ block, top });
           timeline.append(block);
         }
       }
+      weekLayouts.push({ timeline, blocks });
       day.append(header, allDay, timeline);
       days.push(day);
     }
     elements.weekGrid.replaceChildren(...days);
+    layoutWeekCards();
     for (const id of outsideIds) {
       if (visibleIds.has(id)) clippedIds.add(id);
     }
@@ -806,7 +842,9 @@
         if (isDraft) {
           actions.push(makeAction('确认加入', 'confirm-schedule', item.publicId, 'is-primary'));
         }
-        if (item.homeworkReference) {
+        if (item.courseScheduleReference) {
+          actions.push(makeAction('查看固定课程', 'view-course-schedule', item.publicId));
+        } else if (item.homeworkReference) {
           actions.push(
             makeAction(
               item.completed ? '恢复未完成' : '标记已完成',
@@ -827,6 +865,7 @@
         else if (item.allDay) eyebrow = '全天';
         if (item.homeworkReference)
           eyebrow = item.completed ? '✓ 课程作业 · 已完成' : '⏱ 课程作业 · 未完成';
+        if (item.courseScheduleReference) eyebrow = '课程 · 网络学堂自动同步';
         return makeDataItem({
           eyebrow,
           title: item.title || '未命名日程',
@@ -1232,7 +1271,11 @@
       });
       state.proposals = result.suggestions || [];
       renderAgentProposals();
-      elements.agentStatus.textContent = `已生成 ${state.proposals.length} 段安排。请检查并确认，当前尚未写入。`;
+      const summary =
+        Number.isInteger(result.taskCount) && result.taskCount > 1
+          ? `已识别 ${result.taskCount} 件事，生成 ${state.proposals.length} 段安排。`
+          : `已生成 ${state.proposals.length} 段安排。`;
+      elements.agentStatus.textContent = `${summary}请逐条检查并确认，当前尚未写入。`;
     } catch (error) {
       elements.agentStatus.textContent = error.message || '生成失败，请补充日期与时长后重试。';
     } finally {
@@ -1305,12 +1348,22 @@
     elements.scheduleList.classList.toggle('hidden', !state.listView);
     elements.viewToggle.setAttribute('aria-pressed', String(state.listView));
     elements.viewToggle.textContent = state.listView ? '七天视图' : '列表视图';
+    requestWeekCardLayout();
   }
 
   async function mutate(action, publicId) {
     const importantItem = state.importantItems.find((item) => item.publicId === publicId);
     const notification = state.notifications.find((item) => item.publicId === publicId);
     const scheduleItem = state.scheduleItems.find((item) => item.publicId === publicId);
+
+    if (scheduleItem?.courseScheduleReference) {
+      if (action === 'view-course-schedule') {
+        window.dispatchEvent(
+          new CustomEvent('freebbs:course-calendar-show', { detail: scheduleItem }),
+        );
+      }
+      return;
+    }
 
     if (action === 'toggle-homework-completion' && scheduleItem?.homeworkReference) {
       await app.callApi(
@@ -1739,6 +1792,10 @@
     });
   }
 
+  window.addEventListener('freebbs:course-calendar-updated', () => {
+    if (isLoggedIn()) loadWorkbenchData();
+  });
+
   window.addEventListener('freebbs:workbench-refresh', () => {
     if (isLoggedIn()) {
       loadWorkbenchData();
@@ -1768,4 +1825,20 @@
   }
   renderHoursControls();
   renderWeekGrid();
+  if (window.ResizeObserver) {
+    let previousWidth = 0;
+    new ResizeObserver(() => {
+      const width = elements.weekScroll.clientWidth;
+      if (width !== previousWidth) {
+        previousWidth = width;
+        requestWeekCardLayout();
+      }
+    }).observe(elements.weekScroll);
+  }
+  new MutationObserver(requestWeekCardLayout).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['class', 'style', 'data-font-preset', 'data-type-scale'],
+  });
+  document.fonts?.ready.then(requestWeekCardLayout);
+  document.fonts?.addEventListener('loadingdone', requestWeekCardLayout);
 })();

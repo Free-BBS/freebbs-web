@@ -155,7 +155,7 @@ test('the isolated runner removes inherited database targets and Node hooks with
   }
 });
 
-test('the isolated runner enables its twelve named test files with matching database opt-ins', () => {
+test('the isolated runner enables its thirteen named test files with matching database opt-ins', () => {
   const expected = [
     'backend/wallet-ledger.test.js',
     'backend/economy-rewards.mysql.test.js',
@@ -169,9 +169,10 @@ test('the isolated runner enables its twelve named test files with matching data
     'backend/surveys.test.js',
     'backend/community.integration.test.js',
     'backend/workbench-schedule-planner.mysql.test.js',
+    'backend/course-schedule.mysql.test.js',
   ];
   assert.deepEqual([...TEST_FILES].sort(), expected.sort());
-  assert.equal(new Set(TEST_FILES).size, 12);
+  assert.equal(new Set(TEST_FILES).size, 13);
   for (const file of TEST_FILES)
     assert.equal(fs.existsSync(path.join(__dirname, '..', file)), true);
   const env = testEnvironment(windowsPipe, {});
@@ -192,8 +193,8 @@ test('the isolated runner enables its twelve named test files with matching data
   assert.equal(env.MYSQL_SOCKET, windowsPipe);
 });
 
-test('the isolated runner requires successful top-level evidence for all twelve live MySQL tests', () => {
-  assert.equal(REQUIRED_MYSQL_TESTS.length, 12);
+test('the isolated runner requires successful top-level evidence for all thirteen live MySQL tests', () => {
+  assert.equal(REQUIRED_MYSQL_TESTS.length, 13);
   const successes = REQUIRED_MYSQL_TESTS.map((name, index) => `ok ${index + 1} - ${name}`);
   const summary = '# fail 0\n# skipped 0\n';
   const complete = `${successes.join('\n')}\n${summary}`;

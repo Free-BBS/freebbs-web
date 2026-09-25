@@ -194,10 +194,13 @@ test('history is a purple reading shell, never part of the editable Markdown bod
   assert.match(html, /src="\/knowledge-history.js"/);
   assert.ok(html.indexOf('id="knowledge-reading"') < html.indexOf('id="knowledge-history"'));
   assert.ok(html.indexOf('id="knowledge-history"') < html.indexOf('id="knowledge-body"'));
+  assert.ok(html.indexOf('id="knowledge-title"') < html.indexOf('id="knowledge-history"'));
+  assert.equal((html.match(/id="knowledge-history"/g) || []).length, 1);
   assert.match(
     css,
-    /\.knowledge-history\s*\{[^}]*--history-surface: #f2edfc;[^}]*position: sticky;/,
+    /\.knowledge-history\s*\{[^}]*--history-surface: #f2edfc;[^}]*position: sticky;[^}]*top: 0;/,
   );
+  assert.doesNotMatch(css, /\.knowledge-history\s*\{[^}]*top: 128px/);
   assert.match(css, /\.knowledge-history\s*\{[^}]*width: 100%;/);
   assert.match(css, /body.theme-dark \.knowledge-history\s*\{[^}]*--history-surface:/);
   assert.match(editorCss, /\.course-material-reader\.is-editing #knowledge-reading/);

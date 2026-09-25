@@ -171,7 +171,31 @@ function createOnboardingPreview({ now = Date.now } = {}) {
     { now },
   );
   const discussion = discussionFixture();
-  const workbench = createWorkbenchPreviewApi({ now });
+  const workbench = createWorkbenchPreviewApi({
+    now,
+    campusCourses: [
+      {
+        sourceReference: 'learn:course:demo-math',
+        title: '模拟课程 · 数学分析',
+        teacher: '演示教师',
+        scheduleText: '第1-16周 星期一第1大节；第1-16周 星期四第3大节',
+        locationText: '六教 6A201（模拟）',
+      },
+      {
+        sourceReference: 'learn:course:demo-circuit',
+        title: '模拟课程 · 电路实验',
+        teacher: '演示教师',
+        scheduleText: '第1-16周(单周) 星期三15:20-16:55',
+        locationText: '实验室 301（模拟）',
+      },
+      {
+        sourceReference: 'learn:course:demo-pending',
+        title: '模拟课程 · 待定研讨课',
+        scheduleText: '时间待定',
+        locationText: '',
+      },
+    ],
+  });
   const result = (body, status = 200) => ({ body, status });
   const preview = createEconomyPreview({
     now,

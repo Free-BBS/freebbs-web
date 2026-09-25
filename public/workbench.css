@@ -12,6 +12,7 @@ body.workbench-page {
   --workbench-line-strong: rgba(150, 206, 207, 0.28);
   --workbench-text: #f3f8f6;
   --workbench-muted: #9fb7b8;
+  --workbench-hour-text: #aeb0b2;
   --workbench-accent: #45bdc6;
   --workbench-accent-strong: #6ad3d8;
   --workbench-accent-soft: rgba(69, 189, 198, 0.13);
@@ -34,6 +35,7 @@ body.theme-light.workbench-page {
   --workbench-line-strong: rgba(14, 72, 77, 0.23);
   --workbench-text: #102d31;
   --workbench-muted: #5b7679;
+  --workbench-hour-text: #656769;
   --workbench-accent: #087985;
   --workbench-accent-strong: #086a74;
   --workbench-accent-soft: rgba(8, 121, 133, 0.09);
@@ -382,8 +384,8 @@ body.workbench-page .workbench-week-scroll {
 
 body.workbench-page .workbench-week-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(148px, 1fr));
-  min-width: 1036px;
+  grid-template-columns: repeat(7, minmax(196px, 1fr));
+  min-width: 1372px;
   background: var(--workbench-panel-soft);
 }
 
@@ -456,29 +458,34 @@ body.workbench-page .workbench-week-timeline {
     var(--workbench-line) 39px,
     var(--workbench-line) 40px
   );
+  background-size: 100% var(--workbench-timeline-hours-height, 720px);
+  background-repeat: no-repeat;
 }
 
-body.workbench-page .workbench-week-hour {
+body.workbench-page .workbench-week-grid .workbench-week-hour {
   position: absolute;
   z-index: 1;
   left: 4px;
   padding: 1px 3px;
-  color: var(--workbench-muted);
+  color: var(--workbench-hour-text) !important;
   font-size: 0.54rem;
-  background: var(--workbench-panel);
-  border-radius: 4px;
+  font-weight: 400 !important;
+  background: transparent;
   pointer-events: none;
 }
 
 body.workbench-page .workbench-week-event {
   position: absolute;
   z-index: 2;
-  display: grid;
-  align-content: start;
-  gap: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 4px;
   min-width: 0;
-  overflow: hidden;
-  padding: 3px 6px;
+  height: auto;
+  overflow: visible;
+  padding: 6px 8px;
   color: var(--workbench-text);
   text-align: left;
   background: var(--workbench-panel-strong);
@@ -523,16 +530,18 @@ body.workbench-page .workbench-week-event.is-draft {
 }
 
 body.workbench-page .workbench-week-event strong {
-  overflow: hidden;
-  font-size: 0.7rem;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  flex: none;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 body.workbench-page .workbench-week-event small {
+  flex: none;
   color: var(--workbench-muted);
-  font-size: 0.6rem;
+  font-size: 0.68rem;
+  line-height: 1.45;
 }
 
 body.workbench-page .workbench-hours-form {
@@ -585,9 +594,8 @@ body.workbench-page .workbench-hours-hint[hidden] {
 }
 
 body.workbench-page .workbench-week-notes {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 body.workbench-page .workbench-week-all-day .workbench-week-event {
@@ -1890,4 +1898,57 @@ body.workbench-page .workbench-week-event.is-completed {
 body.workbench-page .workbench-week-event.is-completed strong {
   text-decoration: line-through;
   opacity: 0.75;
+}
+
+body.workbench-page .workbench-course-calendar {
+  margin: 18px 0;
+  padding: 18px;
+  background: var(--workbench-panel-soft);
+  border: 1px solid var(--workbench-line);
+  border-radius: 16px;
+}
+
+body.workbench-page .workbench-course-calendar[hidden] {
+  display: none;
+}
+
+body.workbench-page #workbench-course-calendar-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+body.workbench-page #workbench-course-calendar-monday {
+  min-width: 0;
+  max-width: 100%;
+  padding: 10px;
+  border: 1px solid var(--workbench-line-strong);
+  border-radius: 10px;
+  font: inherit;
+  color: var(--workbench-text);
+  background: var(--workbench-panel);
+}
+
+body.workbench-page .workbench-course-calendar-note,
+body.workbench-page #workbench-course-calendar-issues {
+  font-size: 0.85em;
+  color: var(--workbench-muted);
+  overflow-wrap: anywhere;
+}
+
+body.workbench-page #workbench-course-calendar-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 768px) {
+  body.workbench-page .personal-fold > summary::after {
+    width: 1em;
+    height: 1em;
+    line-height: 1;
+    flex: none;
+    text-align: center;
+  }
 }

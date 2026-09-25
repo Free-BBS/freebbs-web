@@ -1,0 +1,674 @@
+/* The storefront owns this layer; inventory and shared purchase dialogs keep economy.css. */
+body.electromagnetic-page {
+  --shop-paper: #faf4e6;
+  --shop-paper-line: #e6ddc8;
+  --shop-ink: #38504b;
+  --shop-art-paper: #fffdf7;
+  --shop-section-dot: #5e978d;
+  --shop-sign-line: #bfae93;
+  --shop-sign-ink: #514739;
+  --shop-sign-shadow: #e8dfce;
+  --shop-sign-fill: #fbf7ec;
+  --shop-sign-medallion: #e3eee7;
+}
+
+body.electromagnetic-page.theme-dark {
+  --shop-paper: #25342f;
+  --shop-paper-line: #405148;
+  --shop-ink: #dcebdc;
+  --shop-art-paper: #304239;
+  --shop-section-dot: #87bca3;
+  --shop-sign-line: #756b57;
+  --shop-sign-ink: #efe4cb;
+  --shop-sign-shadow: #111e1c;
+  --shop-sign-fill: #293a33;
+  --shop-sign-medallion: #374b40;
+}
+
+body.electromagnetic-page .shop-hero {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  padding: clamp(24px, 3vw, 36px);
+  border: 1px solid var(--shop-paper-line);
+  border-radius: 24px;
+  background: var(--shop-paper);
+}
+
+body.electromagnetic-page .shop-hero-copy {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+}
+
+body.electromagnetic-page .shop-hero h1,
+body.electromagnetic-page .economy-auth-required h1 {
+  display: block;
+  margin: 0;
+  color: var(--ui-text) !important;
+  font-family: inherit;
+  font-size: clamp(1.8rem, 3.2vw, 2.55rem);
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+body.electromagnetic-page .shop-hero p {
+  margin: 0;
+  color: var(--shop-ink) !important;
+  font-size: 0.94rem;
+  line-height: 1.8;
+}
+
+body.electromagnetic-page .shop-hero .shop-eyebrow,
+body.electromagnetic-page .economy-auth-required .shop-eyebrow {
+  color: var(--shop-ink) !important;
+  font-size: 0.73rem;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0.08em;
+}
+
+body.electromagnetic-page .shop-hero .economy-inventory-link {
+  min-height: 44px;
+  margin-top: 5px;
+  padding: 9px 14px;
+  border: 1px solid var(--shop-paper-line);
+  border-radius: 12px;
+  background: var(--shop-art-paper);
+  color: var(--ui-text);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+body.electromagnetic-page .shop-hero .economy-inventory-link:hover {
+  border-color: var(--ui-accent);
+}
+
+body.electromagnetic-page .shop-hero .economy-inventory-link img {
+  filter: none;
+}
+
+body.electromagnetic-page.theme-dark .shop-hero .economy-inventory-link img {
+  filter: brightness(0) invert(0.93);
+}
+
+body.electromagnetic-page .shop-hero-art {
+  position: relative;
+  flex: 0 0 224px;
+  width: 224px;
+  height: 180px;
+}
+
+body.electromagnetic-page .shop-hero-art > span {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--shop-paper-line);
+  background: var(--shop-art-paper);
+}
+
+body.electromagnetic-page .shop-hero-art img {
+  width: 74%;
+  height: 74%;
+  object-fit: contain;
+}
+
+body.electromagnetic-page .shop-hero-max {
+  right: 34px;
+  bottom: 4px;
+  width: 134px;
+  height: 134px;
+  border-radius: 42% 42% 36% 36%;
+  transform: rotate(-5deg);
+}
+
+body.electromagnetic-page .shop-hero-orbit {
+  top: 0;
+  left: 0;
+  width: 80px;
+  height: 80px;
+  border-radius: 24px;
+  transform: rotate(-10deg);
+}
+
+body.electromagnetic-page .shop-hero-fish {
+  top: 22px;
+  right: 0;
+  width: 65px;
+  height: 65px;
+  border-radius: 20px;
+  transform: rotate(10deg);
+}
+
+body.electromagnetic-page .economy-balance-row {
+  margin: 20px 0 28px;
+}
+
+body.electromagnetic-page .economy-section-head {
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 14px;
+}
+
+body.electromagnetic-page .economy-section-head h2 {
+  color: var(--ui-text) !important;
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+body.electromagnetic-page .economy-section-head .discussion-message:empty {
+  display: none;
+}
+
+body.electromagnetic-page .shop-category-nav {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 34px;
+}
+
+body.electromagnetic-page .shop-category-nav a {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 3px 12px;
+  min-height: 80px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--shop-sign-line);
+  border-radius: 18px 18px 15px 15px;
+  background: var(--shop-sign-fill);
+  color: var(--shop-sign-ink);
+  box-shadow: 0 3px 0 var(--shop-sign-shadow);
+  font-size: 0.94rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+body.electromagnetic-page .shop-category-nav a[href='#shop-section-appearance'],
+body.electromagnetic-page .shop-section[data-shop-section='appearance'] {
+  --shop-sign-fill: #eff0f8;
+  --shop-sign-medallion: #e0e4f2;
+  --shop-section-dot: #7d85ad;
+}
+
+body.electromagnetic-page .shop-category-nav a[href='#shop-section-collection'],
+body.electromagnetic-page .shop-section[data-shop-section='collection'] {
+  --shop-sign-fill: #fbf2db;
+  --shop-sign-medallion: #f4e7c3;
+  --shop-section-dot: #b99751;
+}
+
+body.electromagnetic-page .shop-category-nav a[href='#shop-section-consumables'],
+body.electromagnetic-page .shop-section[data-shop-section='consumables'] {
+  --shop-sign-fill: #fbe9df;
+  --shop-sign-medallion: #f4d8c9;
+  --shop-section-dot: #bd866e;
+}
+
+body.electromagnetic-page .shop-category-nav a[href='#shop-section-companions'],
+body.electromagnetic-page .shop-section[data-shop-section='companions'] {
+  --shop-sign-fill: #eef3df;
+  --shop-sign-medallion: #e7edcf;
+  --shop-section-dot: #8c9b62;
+}
+
+body.electromagnetic-page.theme-dark .shop-category-nav a[href='#shop-section-appearance'],
+body.electromagnetic-page.theme-dark .shop-section[data-shop-section='appearance'] {
+  --shop-sign-fill: #303441;
+  --shop-sign-medallion: #404557;
+  --shop-section-dot: #b2b8dc;
+}
+
+body.electromagnetic-page.theme-dark .shop-category-nav a[href='#shop-section-collection'],
+body.electromagnetic-page.theme-dark .shop-section[data-shop-section='collection'] {
+  --shop-sign-fill: #3d382a;
+  --shop-sign-medallion: #4b432d;
+  --shop-section-dot: #d8bb78;
+}
+
+body.electromagnetic-page.theme-dark .shop-category-nav a[href='#shop-section-consumables'],
+body.electromagnetic-page.theme-dark .shop-section[data-shop-section='consumables'] {
+  --shop-sign-fill: #43332e;
+  --shop-sign-medallion: #584338;
+  --shop-section-dot: #d3a48d;
+}
+
+body.electromagnetic-page.theme-dark .shop-category-nav a[href='#shop-section-companions'],
+body.electromagnetic-page.theme-dark .shop-section[data-shop-section='companions'] {
+  --shop-sign-fill: #303b2b;
+  --shop-sign-medallion: #3e4933;
+  --shop-section-dot: #b8c68b;
+}
+
+body.electromagnetic-page .shop-category-nav img {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  width: 46px;
+  height: 46px;
+  padding: 5px;
+  border-radius: 15px;
+  background: var(--shop-sign-medallion);
+  object-fit: contain;
+}
+
+body.electromagnetic-page .shop-catalog .shop-category-nav span {
+  align-self: end;
+  color: var(--shop-sign-ink) !important;
+  line-height: 1.4;
+}
+
+body.electromagnetic-page .shop-catalog .shop-category-nav small {
+  align-self: start;
+  color: var(--shop-ink) !important;
+  font-size: 0.69rem;
+  font-weight: 400;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+body.electromagnetic-page .shop-category-nav a:hover {
+  border-color: var(--ui-accent);
+  background: var(--shop-sign-fill);
+}
+
+body.electromagnetic-page .shop-category-nav a:focus-visible,
+body.electromagnetic-page .economy-inventory-link:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 3px;
+}
+
+body.electromagnetic-page .shop-sections {
+  gap: 38px;
+}
+
+body.electromagnetic-page .shop-section-heading {
+  align-items: center;
+  gap: 10px 18px;
+  margin-bottom: 20px;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+body.electromagnetic-page .shop-catalog .shop-section-heading h2 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 13px;
+  min-width: 136px;
+  padding: 10px 17px;
+  border: 1.5px solid var(--shop-sign-line);
+  border-radius: 15px 15px 12px 12px;
+  background: var(--shop-sign-fill);
+  box-shadow: 0 3px 0 var(--shop-sign-shadow);
+  color: var(--shop-sign-ink) !important;
+  font-size: 1.08rem;
+  line-height: 1.5;
+  scroll-margin-top: 112px;
+}
+
+body.electromagnetic-page .shop-catalog .shop-section-heading h2::before,
+body.electromagnetic-page .shop-catalog .shop-section-heading h2::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: var(--shop-section-dot);
+}
+
+body.electromagnetic-page .shop-catalog .shop-section-heading h2:target {
+  color: var(--ui-accent) !important;
+}
+
+body.electromagnetic-page .shop-section-heading p {
+  font-size: 0.84rem;
+}
+
+body.electromagnetic-page .shop-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 214px), 1fr));
+  gap: 18px;
+}
+
+body.electromagnetic-page .shop-item-card {
+  grid-template-rows: auto 1fr auto;
+  gap: 15px;
+  padding: 14px;
+  border-radius: 20px !important;
+  border-color: var(--ui-line) !important;
+  box-shadow: none !important;
+}
+
+body.electromagnetic-page .shop-item-card:hover {
+  border-color: var(--ui-accent) !important;
+  transform: none;
+}
+
+body.electromagnetic-page .shop-item-card[data-product-class='avatar_frame'],
+body.electromagnetic-page .shop-item-card[data-product-class='device'] {
+  --product-tint: #e2efee;
+}
+
+body.electromagnetic-page .shop-section[data-shop-section='appearance'] .shop-item-card {
+  border-color: #c9c5da !important;
+  background:
+    radial-gradient(circle at 88% 9%, rgba(139, 129, 178, 0.12), transparent 31%),
+    radial-gradient(circle at 9% 92%, rgba(102, 157, 151, 0.1), transparent 34%),
+    var(--ui-surface-raised);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.55),
+    0 7px 20px rgba(56, 65, 82, 0.07) !important;
+}
+
+body.electromagnetic-page
+  .shop-section[data-shop-section='appearance']
+  .shop-item-card
+  .shop-item-image {
+  position: relative;
+  border: 0;
+  box-shadow:
+    inset 0 0 0 1px rgba(118, 111, 151, 0.3),
+    inset 0 0 0 6px rgba(255, 255, 255, 0.4),
+    0 5px 14px rgba(58, 66, 87, 0.08);
+}
+
+body.electromagnetic-page
+  .shop-section[data-shop-section='appearance']
+  .shop-item-card
+  .shop-item-image::before {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  inset: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-radius: 10px;
+  pointer-events: none;
+}
+
+body.electromagnetic-page.theme-dark .shop-section[data-shop-section='appearance'] .shop-item-card {
+  border-color: #55586f !important;
+  background:
+    radial-gradient(circle at 88% 9%, rgba(171, 161, 215, 0.13), transparent 31%),
+    radial-gradient(circle at 9% 92%, rgba(106, 171, 158, 0.09), transparent 34%),
+    var(--ui-surface-raised);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 8px 22px rgba(0, 0, 0, 0.2) !important;
+}
+
+body.electromagnetic-page.theme-dark
+  .shop-section[data-shop-section='appearance']
+  .shop-item-card
+  .shop-item-image {
+  box-shadow:
+    inset 0 0 0 1px rgba(179, 172, 213, 0.34),
+    inset 0 0 0 6px rgba(255, 255, 255, 0.035),
+    0 5px 16px rgba(0, 0, 0, 0.18);
+}
+
+body.electromagnetic-page .shop-item-card[data-product-class='collectible'],
+body.electromagnetic-page .shop-item-card[data-product-class='scholar_relic'],
+body.electromagnetic-page .shop-item-card[data-product-class='converter'],
+body.electromagnetic-page .shop-item-card[data-product-class='consumable'] {
+  --product-tint: #f1eee6;
+}
+
+body.electromagnetic-page .shop-item-card[data-product-class='pet_tool'],
+body.electromagnetic-page .shop-item-card[data-product-class='decoration'] {
+  --product-tint: #edf0e3;
+}
+
+body.electromagnetic-page.theme-dark .shop-item-card[data-product-class='avatar_frame'],
+body.electromagnetic-page.theme-dark .shop-item-card[data-product-class='device'] {
+  --product-tint: #23403f;
+}
+
+body.electromagnetic-page.theme-dark .shop-item-card[data-product-class='collectible'],
+body.electromagnetic-page.theme-dark .shop-item-card[data-product-class='scholar_relic'],
+body.electromagnetic-page.theme-dark .shop-item-card[data-product-class='converter'],
+body.electromagnetic-page.theme-dark .shop-item-card[data-product-class='consumable'] {
+  --product-tint: #353431;
+}
+
+body.electromagnetic-page .shop-item-card[data-product-class='device'] .shop-item-image,
+body.electromagnetic-page .shop-item-card[data-product-class='collectible'] .shop-item-image,
+body.electromagnetic-page .shop-item-card[data-product-class='scholar_relic'] .shop-item-image,
+body.electromagnetic-page .shop-item-card[data-product-class='converter'] .shop-item-image,
+body.electromagnetic-page .shop-item-card[data-product-class='consumable'] .shop-item-image {
+  border: 0;
+  background: var(--product-tint);
+  box-shadow:
+    inset 0 0 0 1px rgba(104, 111, 106, 0.16),
+    inset 0 0 18px rgba(77, 69, 52, 0.035);
+}
+
+body.electromagnetic-page .shop-item-card[data-product-class='device'] .shop-item-image img,
+body.electromagnetic-page .shop-item-card[data-product-class='collectible'] .shop-item-image img,
+body.electromagnetic-page .shop-item-card[data-product-class='scholar_relic'] .shop-item-image img,
+body.electromagnetic-page .shop-item-card[data-product-class='converter'] .shop-item-image img,
+body.electromagnetic-page .shop-item-card[data-product-class='consumable'] .shop-item-image img {
+  filter: saturate(0.82) contrast(0.97);
+}
+
+body.electromagnetic-page.theme-dark .shop-item-card[data-product-class='pet_tool'],
+body.electromagnetic-page.theme-dark .shop-item-card[data-product-class='decoration'] {
+  --product-tint: #2c392c;
+}
+
+body.electromagnetic-page .shop-item-card .shop-item-image {
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 0;
+  border-radius: 13px;
+}
+
+body.electromagnetic-page .shop-item-card .shop-item-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+body.electromagnetic-page .shop-item-card .asset-quantity-badge {
+  top: 22px;
+  right: 22px;
+  min-height: 24px;
+  padding: 3px 7px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--ui-text) !important;
+  font-size: 0.69rem;
+}
+
+body.electromagnetic-page .shop-item-copy {
+  grid-template-rows: auto auto minmax(2.8em, 1fr) auto minmax(3.2em, auto);
+  gap: 7px;
+  align-content: stretch;
+}
+
+body.electromagnetic-page .shop-item-copy h2 {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+body.electromagnetic-page .shop-item-copy p {
+  font-size: 0.81rem;
+  line-height: 1.65;
+}
+
+body.electromagnetic-page .shop-item-copy .shop-category {
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+body.electromagnetic-page .shop-item-copy .shop-item-price {
+  padding-top: 5px;
+  color: var(--ui-accent) !important;
+  font-size: 0.95rem;
+  font-weight: 750;
+  line-height: 1.6;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+body.electromagnetic-page .shop-item-copy .shop-purchase-progress {
+  align-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-muted);
+  font-size: 0.7rem;
+  line-height: 1.6;
+  display: block;
+  overflow: visible;
+}
+
+body.electromagnetic-page .shop-item-actions .electromagnetic-button {
+  min-height: 44px;
+  padding: 9px 12px;
+  border-color: var(--ui-line) !important;
+  border-radius: 11px;
+  background: var(--ui-surface-soft) !important;
+  color: var(--ui-text) !important;
+  font-size: 0.83rem;
+  font-weight: 600;
+}
+
+body.electromagnetic-page .shop-item-actions .electromagnetic-button:hover {
+  border-color: var(--ui-accent) !important;
+  background: var(--ui-accent-soft) !important;
+}
+
+body.electromagnetic-page .economy-auth-required {
+  padding: clamp(24px, 4vw, 44px);
+  border-radius: 24px;
+}
+
+@media (max-width: 900px) {
+  body.electromagnetic-page .shop-category-nav a {
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 3px 9px;
+    padding: 11px;
+  }
+
+  body.electromagnetic-page .shop-category-nav img {
+    width: 38px;
+    height: 38px;
+    padding: 4px;
+    border-radius: 12px;
+  }
+
+  body.electromagnetic-page .shop-catalog .shop-section-heading h2 {
+    scroll-margin-top: 96px;
+  }
+}
+
+@media (max-width: 600px) {
+  body.electromagnetic-page .shop-hero {
+    align-items: flex-start;
+    gap: 12px;
+    padding: 23px 20px;
+    border-radius: 19px;
+  }
+
+  body.electromagnetic-page .shop-hero-copy {
+    position: relative;
+    z-index: 1;
+    gap: 10px;
+  }
+
+  body.electromagnetic-page .shop-hero p:not(.shop-eyebrow) {
+    max-width: 25em;
+    font-size: 0.84rem;
+  }
+
+  body.electromagnetic-page .shop-hero-art {
+    display: none;
+  }
+
+  body.electromagnetic-page .economy-balance-row {
+    margin: 18px 0 24px;
+  }
+
+  body.electromagnetic-page .shop-category-nav {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 7px;
+    margin-bottom: 28px;
+  }
+
+  body.electromagnetic-page .shop-category-nav a {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 36px auto;
+    justify-items: center;
+    gap: 6px;
+    padding: 10px 4px;
+    border-radius: 12px;
+    font-size: 0.76rem;
+  }
+
+  body.electromagnetic-page .shop-category-nav img {
+    grid-column: 1;
+    grid-row: 1;
+    width: 36px;
+    height: 36px;
+  }
+
+  body.electromagnetic-page .shop-catalog .shop-category-nav span {
+    align-self: center;
+  }
+
+  body.electromagnetic-page .shop-catalog .shop-category-nav small {
+    display: none;
+  }
+
+  body.electromagnetic-page .shop-catalog .shop-section-heading h2 {
+    min-width: 122px;
+    padding: 8px 12px;
+    font-size: 1rem;
+  }
+
+  body.electromagnetic-page .shop-section-heading p {
+    flex-basis: 100%;
+    padding-left: 3px;
+  }
+
+  body.electromagnetic-page .shop-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  body.electromagnetic-page .shop-item-card {
+    grid-template-rows: auto 1fr auto;
+    gap: 12px;
+    padding: 10px;
+    border-radius: 16px !important;
+  }
+
+  body.electromagnetic-page .shop-item-card .asset-quantity-badge {
+    top: 16px;
+    right: 16px;
+    min-height: 21px;
+    padding: 2px 5px;
+    font-size: 0.64rem;
+  }
+
+  body.electromagnetic-page .shop-item-copy h2 {
+    font-size: 0.92rem;
+  }
+
+  body.electromagnetic-page .shop-item-copy .shop-item-price {
+    font-size: 0.84rem;
+  }
+}
+
+@media (max-width: 359px) {
+  body.electromagnetic-page .shop-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -18,6 +18,15 @@
   top: 16px;
   z-index: 90;
 }
+.site-search-title-measure {
+  position: fixed;
+  top: 0;
+  left: -10000px;
+  width: max-content;
+  visibility: hidden;
+  white-space: pre;
+  pointer-events: none;
+}
 .site-search {
   box-sizing: border-box;
   width: min(680px, calc(100vw - 24px));
@@ -210,6 +219,7 @@ body:not(.auth-page-body) .topbar > .site-search-trigger {
   justify-content: center;
   padding: 0;
   font: 14px var(--font-ui);
+  box-sizing: border-box;
 }
 .site-search-trigger span {
   display: none;
@@ -227,10 +237,42 @@ body:not(.auth-page-body) .topbar > .site-search-trigger.is-expanded {
 .site-search .site-search-form input:focus-visible {
   outline: none !important;
 }
+/* The page title has priority. Search shrinks before any title text is hidden. */
+body:not(.auth-page-body) .main-content[data-page-title]::before {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  max-width: none;
+  margin-inline: 0;
+  padding-block: 0;
+  padding-right: var(--site-search-title-reserve, min(55vw, 590px));
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
+@media (min-width: 901px) {
+  body[data-search-compact-account] .user-panel .user-copy {
+    display: none !important;
+  }
+  body[data-search-compact-account] .user-panel .user-summary {
+    gap: 0;
+  }
+}
+/* Very long titles wrap; reserve the extra row instead of covering page content. */
+body:not(.auth-page-body) .main-content[data-search-wrapped-title]::before {
+  height: calc(var(--site-search-base-header-height) + var(--site-search-header-extra)) !important;
+}
+body:not(.auth-page-body) .main-content[data-search-wrapped-title] {
+  padding-top: calc(
+    var(--site-search-base-main-padding) + var(--site-search-header-extra)
+  ) !important;
+}
 @media (max-width: 900px) {
   body:not(.auth-page-body) .topbar > .site-search-trigger {
     top: calc(10px + env(safe-area-inset-top, 0px));
-    right: calc(168px + env(safe-area-inset-right, 0px));
+    right: calc(72px + env(safe-area-inset-right, 0px));
     height: 44px;
   }
   body.aichat-page.max-input-active .topbar > .site-search-trigger {
@@ -240,12 +282,9 @@ body:not(.auth-page-body) .topbar > .site-search-trigger.is-expanded {
 
 @media (max-width: 900px) {
   body:not(.auth-page-body) .main-content[data-page-title]::before {
-    display: block;
-    padding-right: 148px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    line-height: 64px;
-    box-sizing: border-box;
+    padding-right: var(--site-search-title-reserve, 110px);
+  }
+  body[data-search-wrapped-title] .user-economy-stack {
+    top: calc(64px + env(safe-area-inset-top, 0px) + var(--site-search-header-extra)) !important;
   }
 }

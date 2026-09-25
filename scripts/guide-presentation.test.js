@@ -4,9 +4,21 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const read = (file) => fs.readFileSync(path.join(__dirname, '../public', file), 'utf8');
-test('header electric, magnetic and heat values share one bold role', () => {
+test('header button and span balances share font family, size, weight and number metrics', () => {
   const css = read('ui-polish.css');
   assert.match(css, /\.user-economy-stack \.currency-value\s*\{[^}]*font-weight:\s*700;/);
+  assert.match(css, /\.user-economy-stack \.currency-value\s*\{[^}]*font-family:\s*var\(--font-ui/);
+  assert.match(
+    css,
+    /\.user-economy-stack \.currency-value\s*\{[^}]*font-size:\s*var\(--header-currency-font-size\)/,
+  );
+  assert.match(
+    css,
+    /\.user-economy-stack \.currency-value\s*\{[^}]*font-variant-numeric:\s*tabular-nums/,
+  );
+  assert.match(css, /\.user-economy-stack \.currency-value\s*\{[^}]*line-height:\s*1;/);
+  assert.match(css, /--header-currency-font-size:\s*0\.9rem/);
+  assert.match(css, /--header-currency-font-size:\s*0\.84rem/);
   const source = read('app.js');
   const renderer = source.slice(
     source.indexOf('function renderCurrency('),

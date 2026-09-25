@@ -7,7 +7,7 @@
       "class": "avatar_frame",
       "description": "给头像留一圈自己的风景。",
       "desc": "绕了很远的路，才发现圆心一直是你。",
-      "image": "/assets/icons/frame_orbit.svg",
+      "image": "/assets/shop/max-cartoon-v1/frame_orbit.webp",
       "cost": {
         "magnetic": 20
       },
@@ -23,7 +23,7 @@
       "class": "avatar_frame",
       "description": "把凌晨的天空留在身边。",
       "desc": "有人把凌晨三点的天空折成一个圆，藏起了最后一盏实验室的灯。",
-      "image": "/assets/icons/frame_aurora.svg",
+      "image": "/assets/shop/max-cartoon-v1/frame_aurora.webp",
       "cost": {
         "magnetic": 40
       },
@@ -56,7 +56,7 @@
       "class": "nameplate",
       "description": "今天也发现了一点新鲜事。",
       "desc": "望远镜还没调好，工作证先到了。第一项任务：在 BBS 里，认真听完一个不同的想法。",
-      "image": "/assets/icons/plate_observer.svg",
+      "image": "/assets/shop/max-cartoon-v1/plate_observer.webp",
       "cost": {
         "magnetic": 20
       },
@@ -72,7 +72,7 @@
       "class": "profile_card",
       "description": "给明天的好主意留个位置。",
       "desc": "纸角留着一杯咖啡的印子。那些还没连上的线，正等着一个好主意。",
-      "image": "/assets/icons/card_blueprint.svg",
+      "image": "/assets/shop/max-cartoon-v1/card_blueprint.webp",
       "cost": {
         "magnetic": 50
       },
@@ -88,7 +88,7 @@
       "class": "profile_card",
       "description": "密涅瓦的猫头鹰在黄昏起飞",
       "desc": "密涅瓦的猫头鹰在黄昏起飞。\n\n夕光漫过实验台，纸页上的公式还留着白天的疑问。答案未必在实验结束时抵达，那些看似零散的现象、误差与灵光，或许会在一次安静的回望中，显出彼此的联系。\n\n为自己的主页留一盏暮色里的灯。今天尚未想明白的事，也值得被温柔地带到明天。",
-      "image": "/assets/icons/card_twilight.svg",
+      "image": "/assets/shop/max-cartoon-v1/card_twilight.webp",
       "cost": {
         "magnetic": 50
       },
@@ -104,7 +104,7 @@
       "class": "pet_food",
       "description": "Max 好像闻到了什么。",
       "desc": "它看起来十分镇定，直到远处传来电子羊的脚步声——羊会吃鱼吗？这是它的最后一个想法。",
-      "image": "/assets/icons/fish.svg",
+      "image": "/assets/shop/max-cartoon-v1/fish.webp",
       "cost": {
         "magnetic": 2
       },
@@ -119,7 +119,7 @@
       "class": "pet_tool",
       "description": "和羊毛轻轻一擦，接住一点小小的电。",
       "desc": "一根安静的橡胶棒，等着牧场送来蓬松的羊毛。\n\n轻轻摩擦后，橡胶棒带上负电，电子也有了新的去处。它不会在一次实验后消失，可以一直陪你做这件小事。",
-      "image": "/assets/icons/rubber-rod.svg",
+      "image": "/assets/shop/max-cartoon-v1/rubber_rod.webp",
       "cost": {
         "magnetic": 7
       },
@@ -135,7 +135,7 @@
       "class": "converter",
       "description": "有些变化，需要一点代价。",
       "desc": "上帝说：\n【此处省略四行】。\n于是便有了光。",
-      "image": "/assets/icons/battery.svg",
+      "image": "/assets/shop/max-cartoon-v1/differential_converter.webp",
       "cost": {
         "electric": 4,
         "magnetic": 4
@@ -155,7 +155,7 @@
       "class": "decoration",
       "description": "一段刻骨铭心的记忆",
       "desc": "一个鱼骨头，没有人知道是哪里来的。也许是某个不小心吃鱼时掉落的，也可能是某个不小心吃鱼时捡到的。总之它就是一个鱼骨头，除了硬似乎没有什么用处。",
-      "image": "/assets/icons/fishbone.svg",
+      "image": "/assets/shop/max-cartoon-v1/fishbone.webp",
       "cost": {
         "electric": 5
       },
@@ -170,7 +170,7 @@
       "class": "collectible",
       "description": "一枚尚未读懂的碎片。",
       "desc": "掌心里多了一枚来历不明的碎片。\n边缘并不锋利，却总像刚刚从某个梦里剥落。你试着翻到背面——背面也很神秘。",
-      "image": "/assets/icons/mysterious-fragment.svg",
+      "image": "/assets/shop/max-cartoon-v1/mysterious_fragment.webp",
       "cost": {
         "electric": 5
       },
@@ -185,7 +185,7 @@
       "class": "device",
       "description": "一束光，正在等你点头。",
       "desc": "一只总想闪亮登场的小家伙。\n外壳上贴着一张微微卷边的便笺：「请给我一点电，我有一个光明的想法。」",
-      "image": "/assets/icons/laser.svg",
+      "image": "/assets/shop/max-cartoon-v1/laser.webp",
       "cost": {
         "electric": 25
       },
@@ -201,7 +201,7 @@
       "class": "scholar_relic",
       "description": "透过另一副眼镜，重新观察熟悉的世界。",
       "desc": "镜架有些旧，镜片却像刚擦过一样。\n你戴上它，房间没有变化。摘下来再看，似乎又少了什么。\n盒子里压着一张纸条：「别急着眨眼，世界正在整理它的思路。」",
-      "image": "/assets/icons/maxwell_spectacles.svg",
+      "image": "/assets/shop/max-cartoon-v1/maxwell_spectacles.webp",
       "cost": {
         "electric": 200,
         "magnetic": 200
@@ -219,7 +219,7 @@
       "class": "scholar_relic",
       "description": "收藏一份关于连接与发现的想象。",
       "desc": "一只安静得有些过分的圆环。\n你绕着它走了一圈，什么也没发生。又走一圈，桌上的笔不知为何滚到了另一边。\n当然，也可能只是桌子没放平。",
-      "image": "/assets/icons/faraday_ring.svg",
+      "image": "/assets/shop/max-cartoon-v1/faraday_ring.webp",
       "cost": {
         "electric": 200,
         "magnetic": 200
@@ -237,7 +237,7 @@
       "class": "scholar_relic",
       "description": "把未知留在掌心，把好奇留给明天。",
       "desc": "硬币的正面写着「也许」，反面写着「再想想」。\n你想用它做个决定，它却偏偏站在了桌面上。\n这显然不是一枚愿意替你省事的硬币。",
-      "image": "/assets/icons/shannon_coin.svg",
+      "image": "/assets/shop/max-cartoon-v1/shannon_coin.webp",
       "cost": {
         "electric": 200,
         "magnetic": 200
@@ -255,7 +255,7 @@
       "class": "scholar_relic",
       "description": "为每一次灵光乍现留下回响。",
       "desc": "它已经很久没有说话了。\n深夜把耳朵凑近，偶尔会听见一声极轻的「收到」。\n至于在回复谁，包装盒上没有写。",
-      "image": "/assets/icons/hertz_resonator.svg",
+      "image": "/assets/shop/max-cartoon-v1/hertz_resonator.webp",
       "cost": {
         "electric": 200,
         "magnetic": 200
@@ -270,7 +270,7 @@
       "key": "max_pet",
       "assetKey": "max_pet",
       "class": "pet",
-      "image": "/assets/icons/max-sheep.svg",
+      "image": "/assets/shop/max-cartoon-v1/max_pet.webp",
       "priceMode": "combined",
       "requiresPersonalPrice": true,
       "isgift": false,
@@ -288,7 +288,7 @@
       "key": "fortune_bag",
       "assetKey": "fortune_bag",
       "class": "consumable",
-      "image": "/assets/icons/fortune_bag.svg",
+      "image": "/assets/shop/max-cartoon-v1/fortune_bag.webp",
       "priceMode": "combined",
       "requiresPersonalPrice": true,
       "isgift": false,

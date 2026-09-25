@@ -11,6 +11,7 @@
   const PROGRESS_STORAGE_KEY = 'free_bbs_course_progress_v1';
   const CURRENT_LEARNING_STORAGE_KEY = 'free_bbs_current_learning_node_v1';
   const INTERACTION_WIDTH_STORAGE_KEY = 'free_bbs_knowledge_interaction_width_v1';
+  const INTERACTION_PREFERENCES_STORAGE_KEY = 'free_bbs_knowledge_interaction_preferences_v1';
   const TOOLS_COLLAPSED_STORAGE_KEY = 'free_bbs_knowledge_tools_collapsed_v1';
   const KNOWLEDGE_TAGS = [
     { key: 'important', label: '重要' },
@@ -437,7 +438,7 @@
     window.addEventListener('resize', () => setInteractionWidth(state.interactionWidth));
   }
 
-  function setChatOpen(isOpen, { focus = true } = {}) {
+  function setChatOpen(isOpen, { focus = true, persist = true } = {}) {
     const workbench = document.getElementById('knowledge-workbench');
     const panel = document.getElementById('knowledge-chat-panel');
     const resizer = document.getElementById('knowledge-panel-resizer');
@@ -450,6 +451,7 @@
     }
 
     state.chatOpen = Boolean(isOpen);
+    if (persist) persistInteractionPreferences();
     workbench.classList.toggle('is-interaction-open', state.chatOpen);
     setHidden(panel, !state.chatOpen);
     setHidden(resizer, !state.chatOpen);
@@ -615,6 +617,36 @@
 
     element.toggleAttribute('hidden', Boolean(isHidden));
     element.classList.toggle('hidden', Boolean(isHidden));
+  }
+
+  function readInteractionPreferences() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(INTERACTION_PREFERENCES_STORAGE_KEY));
+      return {
+        open: typeof stored?.open === 'boolean' ? stored.open : true,
+        tab: stored?.tab === 'discussion' ? 'discussion' : 'max',
+      };
+    } catch {
+      return { open: true, tab: 'max' };
+    }
+  }
+
+  function persistInteractionPreferences() {
+    try {
+      // This is a browser layout preference shared across knowledge points, not chat history.
+      localStorage.setItem(
+        INTERACTION_PREFERENCES_STORAGE_KEY,
+        JSON.stringify({ open: state.chatOpen, tab: state.chatTab }),
+      );
+    } catch {
+      // A blocked or full browser store must not prevent opening, closing or changing tabs.
+    }
+  }
+
+  function restoreInteractionPreferences() {
+    const preferences = readInteractionPreferences();
+    setChatTab(preferences.tab, { persist: false });
+    setChatOpen(preferences.open, { focus: false, persist: false });
   }
 
   function getDiscussionBoardSlug() {
@@ -1398,9 +1430,10 @@
     });
   }
 
-  function setChatTab(rawTab) {
+  function setChatTab(rawTab, { persist = true } = {}) {
     const nextTab = rawTab === 'discussion' ? 'discussion' : 'max';
     state.chatTab = nextTab;
+    if (persist) persistInteractionPreferences();
     document.querySelectorAll('[data-knowledge-chat-tab]').forEach((button) => {
       const isActive = button.dataset.knowledgeChatTab === nextTab;
       button.classList.toggle('is-active', isActive);
@@ -1549,7 +1582,7 @@
     bindWorkspaceControls();
     bindChatControls();
     bindDiscussionComposer();
-    setChatOpen(true, { focus: false });
+    restoreInteractionPreferences();
 
     if (!app) {
       showPageError('课程渲染模块未加载，请刷新页面后重试。');
