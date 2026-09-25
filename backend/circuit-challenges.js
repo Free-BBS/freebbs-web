@@ -1,7 +1,10 @@
 const express = require('express');
 const { validateDocument, simulate, catalog, buildNets } = require('../public/circuit-engine');
 const { walletLedgerCheckpoint, annotateWalletLedger } = require('./wallet-ledger');
-const { circuitChallengeCatalog } = require('./circuit-challenge-catalog');
+const {
+  circuitChallengeCatalog,
+  legacyCircuitChallengeUpdates,
+} = require('./circuit-challenge-catalog');
 
 const FIXED_IDS = Object.freeze({
   source: 'V_IN',
@@ -70,12 +73,18 @@ async function ensureCircuitChallengeTables(pool) {
   await pool.execute(`CREATE TABLE IF NOT EXISTS circuit_challenge_catalog_seeds (
     seed_key VARCHAR(80) PRIMARY KEY,
     challenge_id INT UNSIGNED NOT NULL UNIQUE,
+    seed_revision INT UNSIGNED NOT NULL DEFAULT 1,
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     CONSTRAINT fk_circuit_challenge_seed_challenge
       FOREIGN KEY (challenge_id) REFERENCES circuit_challenges (id) ON DELETE CASCADE
   )`);
   for (const [table, column, definition] of [
     ['circuit_challenges', 'reward_electric', 'INT UNSIGNED NOT NULL DEFAULT 0 AFTER tolerance'],
+    [
+      'circuit_challenge_catalog_seeds',
+      'seed_revision',
+      'INT UNSIGNED NOT NULL DEFAULT 1 AFTER challenge_id',
+    ],
     [
       'circuit_challenge_submissions',
       'completion_reward',
@@ -285,12 +294,57 @@ async function ensureCircuitChallengeCatalog(pool) {
   let inserted = 0;
   try {
     await connection.beginTransaction();
+    for (const legacy of legacyCircuitChallengeUpdates()) {
+      const [[seeded]] = await connection.execute(
+        'SELECT challenge_id FROM circuit_challenge_catalog_seeds WHERE seed_key = ? LIMIT 1',
+        [legacy.key],
+      );
+      if (seeded) continue;
+      const [[challenge]] = await connection.execute(
+        `SELECT id FROM circuit_challenges
+         WHERE title = ?
+           AND NOT EXISTS (
+             SELECT 1 FROM circuit_challenge_catalog_seeds seeds
+             WHERE seeds.challenge_id = circuit_challenges.id
+           )
+         ORDER BY id ASC LIMIT 1`,
+        [legacy.matchTitle],
+      );
+      if (!challenge) continue;
+      await connection.execute(
+        `UPDATE circuit_challenges
+         SET title = ?, reward_electric = ?, updated_at = CURRENT_TIMESTAMP(3)
+         WHERE id = ?`,
+        [legacy.title, legacy.rewardElectric, challenge.id],
+      );
+      await connection.execute(
+        `INSERT INTO circuit_challenge_catalog_seeds (seed_key, challenge_id, seed_revision)
+         VALUES (?, ?, 2)`,
+        [legacy.key, challenge.id],
+      );
+    }
     for (const seed of circuitChallengeCatalog()) {
       const [[existing]] = await connection.execute(
-        'SELECT challenge_id FROM circuit_challenge_catalog_seeds WHERE seed_key = ? LIMIT 1',
+        `SELECT challenge_id, seed_revision
+         FROM circuit_challenge_catalog_seeds WHERE seed_key = ? LIMIT 1`,
         [seed.key],
       );
-      if (existing) continue;
+      const seedRevision = Number(seed.revision) || 1;
+      if (existing) {
+        if (seedRevision > Number(existing.seed_revision || 1)) {
+          await connection.execute(
+            `UPDATE circuit_challenges
+             SET title = ?, description = ?, reward_electric = ?, updated_at = CURRENT_TIMESTAMP(3)
+             WHERE id = ?`,
+            [seed.title, seed.description, seed.rewardElectric, existing.challenge_id],
+          );
+          await connection.execute(
+            'UPDATE circuit_challenge_catalog_seeds SET seed_revision = ? WHERE seed_key = ?',
+            [seedRevision, seed.key],
+          );
+        }
+        continue;
+      }
       const data = readChallengeInput({
         title: seed.title,
         description: seed.description,
@@ -314,8 +368,9 @@ async function ensureCircuitChallengeCatalog(pool) {
         ],
       );
       await connection.execute(
-        'INSERT INTO circuit_challenge_catalog_seeds (seed_key, challenge_id) VALUES (?, ?)',
-        [seed.key, challenge.insertId],
+        `INSERT INTO circuit_challenge_catalog_seeds (seed_key, challenge_id, seed_revision)
+         VALUES (?, ?, ?)`,
+        [seed.key, challenge.insertId, seedRevision],
       );
       inserted += 1;
     }

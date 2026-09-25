@@ -26,11 +26,12 @@ test('challenge schema upgrades existing tables with reward columns', async () =
     },
   };
   await ensureCircuitChallengeTables(pool);
-  assert.equal(alters.length, 3);
+  assert.equal(alters.length, 4);
   assert.ok(statements.some((sql) => sql.includes('circuit_challenge_catalog_seeds')));
   assert.ok(alters.some((sql) => sql.includes('reward_electric')));
   assert.ok(alters.some((sql) => sql.includes('completion_reward')));
   assert.ok(alters.some((sql) => sql.includes('record_reward')));
+  assert.ok(alters.some((sql) => sql.includes('seed_revision')));
 });
 
 function solution() {
