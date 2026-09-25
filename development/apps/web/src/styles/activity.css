@@ -1,0 +1,322 @@
+.module-page dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.module-page dl > div {
+  min-width: 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--color-line);
+  overflow-wrap: anywhere;
+}
+
+.module-page dt {
+  margin-bottom: 6px;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+
+.module-page dd {
+  margin: 0;
+}
+
+.event-card {
+  gap: 18px;
+}
+
+.event-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.event-date-stamp {
+  display: grid;
+  flex: 0 0 62px;
+  justify-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border: 1px solid color-mix(in srgb, var(--action-primary) 22%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--action-primary) 7%, transparent);
+  color: var(--action-primary);
+  line-height: 1.2;
+}
+
+.event-date-stamp > span {
+  font-size: 11px;
+}
+
+.event-date-stamp > strong {
+  font-family: var(--font-serif);
+  font-size: 27px;
+  font-weight: 600;
+}
+
+.event-card-heading {
+  min-width: 0;
+}
+
+.event-card h3 {
+  margin: 10px 0 0;
+  font-size: 21px;
+  line-height: 1.5;
+}
+
+.event-card h3 a {
+  text-decoration: none;
+}
+
+.event-card h3 a:hover {
+  color: var(--action-primary);
+}
+
+.event-card-labels {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.event-standing-label {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.workbench-card.event-card .activity-summary {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  min-height: 3.4em;
+}
+
+.event-card-facts {
+  display: grid;
+  gap: 6px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border-subtle);
+}
+
+.event-card .event-card-facts p {
+  font-size: 13px;
+}
+
+.event-card-disclosure {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.event-card-disclosure > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.event-card-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.event-card-disclosure > summary::after {
+  content: '+';
+  font-size: 18px;
+}
+
+.event-card-disclosure[open] > summary::after {
+  content: '−';
+}
+
+.event-card-disclosure > summary:hover {
+  color: var(--action-primary);
+}
+
+.event-card-extra,
+.event-management-body,
+.event-management-body > section {
+  display: grid;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.event-card-extra a {
+  color: var(--action-primary);
+  text-underline-offset: 4px;
+}
+
+.event-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.event-detail-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  color: var(--action-primary);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.event-detail-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.event-registration-state {
+  color: var(--color-success);
+  font-size: 12px;
+}
+
+.event-card-footer button {
+  border-color: var(--action-primary);
+  background: var(--action-primary);
+  color: var(--action-primary-text);
+  font-size: 13px;
+}
+
+.event-card-management {
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.workbench-card .activity-summary {
+  display: grid;
+  gap: 4px;
+  color: var(--color-muted);
+}
+
+.workbench-card .activity-summary strong {
+  color: var(--color-text);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+.editor-drawer-body form {
+  display: grid;
+  gap: 14px;
+}
+
+.editor-drawer-body form label {
+  display: grid;
+  gap: 6px;
+}
+
+[role='progressbar'][aria-label='活动筹备进度'] {
+  position: relative;
+  height: 14px;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: var(--color-paper-muted);
+}
+
+[role='progressbar'][aria-label='活动筹备进度'] > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-active), var(--color-accent));
+  transition: width 240ms ease;
+}
+
+ol[aria-label='活动时间线'] {
+  position: relative;
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0 0 0 28px;
+  list-style: none;
+}
+
+ol[aria-label='活动时间线']::before {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 8px;
+  width: 2px;
+  background: var(--color-line);
+  content: '';
+}
+
+ol[aria-label='活动时间线'] li {
+  position: relative;
+  padding: 16px 18px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-paper-muted);
+}
+
+ol[aria-label='活动时间线'] li::before {
+  position: absolute;
+  top: 22px;
+  left: -27px;
+  width: 12px;
+  height: 12px;
+  border: 3px solid var(--color-page);
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-line);
+  content: '';
+}
+
+ol[aria-label='活动时间线'] time,
+ol[aria-label='活动时间线'] span {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+ol[aria-label='活动时间线'] strong {
+  display: block;
+  margin: 6px 0;
+  font-family: var(--font-serif);
+  font-size: 18px;
+}
+
+table[aria-label='比赛预览'] {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-paper-muted);
+}
+
+table[aria-label='比赛预览'] th,
+table[aria-label='比赛预览'] td {
+  padding: 13px 15px;
+  border-bottom: 1px solid var(--color-line);
+  text-align: left;
+}
+
+table[aria-label='比赛预览'] th {
+  color: var(--color-muted);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+@media (max-width: 680px) {
+  table[aria-label='比赛预览'] {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [role='progressbar'][aria-label='活动筹备进度'] > span {
+    transition: none;
+  }
+}

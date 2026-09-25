@@ -1,0 +1,17 @@
+.git
+.gitignore
+.worktrees
+.superpowers
+node_modules
+**/node_modules
+**/dist
+**/.data
+.env*
+**/.env*
+!**/.env.example
+!**/.env*.example
+coverage
+playwright-report
+test-results
+*.log
+*.tmp

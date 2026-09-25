@@ -122,19 +122,20 @@ http://127.0.0.1:3001/api/health
 
 后端相关环境变量模板在 `backend/.env.example`。常用字段：
 
-| 变量             | 默认值                  | 用途                                   |
-| ---------------- | ----------------------- | -------------------------------------- |
-| `API_HOST`       | `127.0.0.1`             | 后端监听地址。                         |
-| `API_PORT`       | `3001`                  | 后端监听端口。                         |
-| `BACKEND_IP`     | `127.0.0.1`             | MySQL 主机地址。                       |
-| `MYSQL_PORT`     | `3306`                  | MySQL 端口。                           |
-| `MYSQL_USER`     | `root`                  | MySQL 用户名。                         |
-| `MYSQL_PASSWORD` | 空                      | MySQL 密码。                           |
-| `MYSQL_DATABASE` | `free_bbs`              | 数据库名。                             |
-| `AUTH_SECRET`    | `free-bbs-dev-secret`   | JWT 签名密钥，生产环境必须替换。       |
-| `UPLOAD_DIR`     | `database/uploads`      | 上传文件目录，生产环境应放在持久目录。 |
-| `AGENT_URL`      | `http://127.0.0.1:5001` | 预留 AI agent 服务地址。               |
-| `SANDBOX_URL`    | `http://127.0.0.1:8000` | 预留代码运行/沙箱服务地址。            |
+| 变量                         | 默认值                  | 用途                                               |
+| ---------------------------- | ----------------------- | -------------------------------------------------- |
+| `API_HOST`                   | `127.0.0.1`             | 后端监听地址。                                     |
+| `API_PORT`                   | `3001`                  | 后端监听端口。                                     |
+| `BACKEND_IP`                 | `127.0.0.1`             | MySQL 主机地址。                                   |
+| `MYSQL_PORT`                 | `3306`                  | MySQL 端口。                                       |
+| `MYSQL_USER`                 | `root`                  | MySQL 用户名。                                     |
+| `MYSQL_PASSWORD`             | 空                      | MySQL 密码。                                       |
+| `MYSQL_DATABASE`             | `free_bbs`              | 数据库名。                                         |
+| `DEVELOPMENT_MYSQL_DATABASE` | `free_bbs_development`  | 发展端独立数据库；连接字段默认继承主站 `MYSQL_*`。 |
+| `AUTH_SECRET`                | `free-bbs-dev-secret`   | JWT 签名密钥，生产环境必须替换。                   |
+| `UPLOAD_DIR`                 | `database/uploads`      | 上传文件目录，生产环境应放在持久目录。             |
+| `AGENT_URL`                  | `http://127.0.0.1:5001` | 预留 AI agent 服务地址。                           |
+| `SANDBOX_URL`                | `http://127.0.0.1:8000` | 预留代码运行/沙箱服务地址。                        |
 
 本地可以复制模板后自行填写：
 
@@ -229,6 +230,21 @@ curl --fail http://127.0.0.1:3001/api/health
 mysql -u root -p < database/schema.sql
 mysql -u root -p < database/seed.sql
 ```
+
+发展端与学习端平级，使用同一 MySQL 服务上的独立 schema。首次上线前创建发展端数据库，
+并让应用账号拥有该库的读写和建表权限：
+
+```sql
+CREATE DATABASE free_bbs_development
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_0900_ai_ci;
+GRANT ALL PRIVILEGES ON free_bbs_development.* TO 'freebbs'@'localhost';
+```
+
+库名可用 `DEVELOPMENT_MYSQL_DATABASE` 覆盖；如需使用独立连接账号，可再设置
+`DEVELOPMENT_MYSQL_HOST`、`DEVELOPMENT_MYSQL_PORT`、`DEVELOPMENT_MYSQL_USER`、
+`DEVELOPMENT_MYSQL_PASSWORD` 和 `DEVELOPMENT_MYSQL_SOCKET`。主站用户目录仍从主库只读获取，
+发展端角色、白名单和业务数据只写入发展端库。
 
 更推荐使用增量迁移脚本：
 

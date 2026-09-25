@@ -1,0 +1,43 @@
+{
+  "name": "freebbs-development",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web npm:dev:api npm:dev:web",
+    "dev:api": "npm run dev -w @freebbs-development/api",
+    "dev:web": "npm run dev -w @freebbs-development/web",
+    "build:contracts": "npm run build -w @freebbs-development/contracts",
+    "build": "npm run build:contracts && npm run build -w @freebbs-development/api && npm run build -w @freebbs-development/web",
+    "test": "vitest run",
+    "test:operations": "node --test tests/scripts/operational-scripts.test.mjs",
+    "test:workflows": "node --test tests/workflows/release-workflows.test.mjs",
+    "test:e2e:production": "playwright test --config playwright.production.config.ts",
+    "db:migrate": "node scripts/migrate.mjs",
+    "test:mysql": "npm run build:contracts && npm run db:migrate && npm run db:migrate && vitest run apps/api/src/core/database/mysql.integration.test.ts",
+    "db:seed": "node scripts/seed.mjs",
+    "admin:bootstrap": "node scripts/admin-bootstrap.mjs",
+    "typecheck": "npm run build:contracts && npm run typecheck -ws --if-present",
+    "lint": "eslint .",
+    "format:check": "prettier . --check",
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm test && npm run test:operations && npm run test:workflows && npm run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@playwright/test": "^1.61.1",
+    "@types/node": "^20.0.0",
+    "concurrently": "^9.0.0",
+    "eslint": "^9.0.0",
+    "jsdom": "26.1.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^4.1.10"
+  }
+}

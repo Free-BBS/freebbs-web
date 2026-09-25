@@ -1,0 +1,191 @@
+name: freebbs-development
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: deploy/docker/api.Dockerfile
+    init: true
+    environment:
+      PORT: '3100'
+      NODE_ENV: ${NODE_ENV:-development}
+      AUTH_MODE: ${AUTH_MODE:-demo}
+      DATA_MODE: ${DATA_MODE:-memory}
+      MAIN_SITE_API_BASE_URL: ${MAIN_SITE_API_BASE_URL:-http://host.docker.internal:3000}
+      AUTH_TIMEOUT_MS: ${AUTH_TIMEOUT_MS:-3000}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      DEMO_USER_IDS: ${DEMO_USER_IDS:-demo-student,demo-admin,demo-sports-lead,demo-captain}
+      MYSQL_HOST: ${MYSQL_HOST:-database}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_USER: ${MYSQL_USER:-freebbs_development}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-free_bbs_development}
+      FESTIVAL_UPLOAD_DIR: /var/lib/freebbs-development/festival
+    volumes:
+      - festival-videos:/var/lib/freebbs-development/festival
+    expose:
+      - '3100'
+    ports:
+      - '127.0.0.1:${WEB_PORT:-8080}:8080'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    depends_on:
+      database:
+        condition: service_healthy
+        required: false
+      migrate:
+        condition: service_completed_successfully
+        required: false
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3100/api/development/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/docker/web.Dockerfile
+    network_mode: service:api
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:8080/development/']
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  database:
+    image: mysql:8.4
+    profiles: [mysql, adminer, seed]
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-free_bbs_development}
+      MYSQL_USER: ${MYSQL_USER:-freebbs_development}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-}
+    expose:
+      - '3306'
+    ports:
+      - '127.0.0.1:${MYSQL_PORT:-3306}:3306'
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'mysqladmin ping --host=127.0.0.1 --user=root --password="$${MYSQL_ROOT_PASSWORD}" --silent',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  migrate:
+    build:
+      context: .
+      dockerfile: deploy/docker/api.Dockerfile
+    profiles: [mysql, adminer, seed]
+    command: ['node', 'scripts/migrate.mjs']
+    environment:
+      DATA_MODE: mysql
+      MYSQL_HOST: database
+      MYSQL_PORT: '3306'
+      MYSQL_USER: ${MYSQL_USER:-freebbs_development}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-free_bbs_development}
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: 'no'
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  seed:
+    build:
+      context: .
+      dockerfile: deploy/docker/api.Dockerfile
+    profiles: [seed]
+    command: ['node', 'scripts/seed.mjs']
+    environment:
+      NODE_ENV: 'development'
+      DATA_MODE: mysql
+      ALLOW_DEMO_SEED: 'true'
+      MYSQL_HOST: database
+      MYSQL_PORT: '3306'
+      MYSQL_USER: ${MYSQL_USER:-freebbs_development}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-free_bbs_development}
+    depends_on:
+      database:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: 'no'
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  adminer:
+    image: adminer:5-standalone
+    profiles: [adminer]
+    environment:
+      ADMINER_DEFAULT_SERVER: database
+    ports:
+      - '127.0.0.1:${ADMINER_PORT:-8081}:8080'
+    depends_on:
+      database:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'php', '-r', "exit(@fsockopen('127.0.0.1', 8080) ? 0 : 1);"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  mysql-data:
+  festival-videos:

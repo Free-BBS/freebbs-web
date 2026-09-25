@@ -1,0 +1,62 @@
+name: Production database migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type RUN exactly to execute pending production migrations
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-database-migration
+  cancel-in-progress: false
+
+jobs:
+  validate-confirmation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require exact confirmation
+        if: ${{ inputs.confirmation != 'RUN' }}
+        run: |
+          echo 'Confirmation must be exactly RUN.' >&2
+          exit 1
+
+  migrate:
+    needs: validate-confirmation
+    if: ${{ github.ref == 'refs/heads/main' && github.ref_protected == true && inputs.confirmation == 'RUN' }}
+    runs-on: [self-hosted, linux, production-database]
+    timeout-minutes: 15
+    environment:
+      name: production-database
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Run checksum-verified migrations
+        env:
+          NODE_ENV: production
+          DATA_MODE: mysql
+          MYSQL_HOST: ${{ secrets.MYSQL_HOST }}
+          MYSQL_PORT: ${{ secrets.MYSQL_PORT }}
+          MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
+          MYSQL_USER: ${{ secrets.MYSQL_MIGRATION_USER }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_MIGRATION_PASSWORD }}
+        shell: bash
+        run: |
+          for required in MYSQL_HOST MYSQL_PORT MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD; do
+            if [[ -z "${!required}" ]]; then
+              echo "Required database secret is not configured: ${required}" >&2
+              exit 1
+            fi
+          done
+          npm run db:migrate

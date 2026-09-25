@@ -1,0 +1,38 @@
+[Unit]
+Description=Validate FreeBBS Development Web integration
+After=network-online.target freebbs-development-api.service nginx.service
+Wants=network-online.target
+Requires=freebbs-development-api.service
+Requires=nginx.service
+ConditionPathIsSymbolicLink=/usr/share/nginx/html/development
+ConditionPathExists=/etc/freebbs-development/development.env
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+EnvironmentFile=/etc/freebbs-development/development.env
+ExecStart=/usr/bin/test -r /usr/share/nginx/html/development/index.html
+ExecStart=/usr/bin/test -r /etc/nginx/snippets/freebbs-development.locations.conf
+RemainAfterExit=yes
+UMask=0027
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectKernelLogs=true
+ProtectClock=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

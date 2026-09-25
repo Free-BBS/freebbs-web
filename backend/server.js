@@ -39,6 +39,12 @@ const pool = require('./db');
 const { createSiteSearch, createSiteSearchRouter } = require('./site-search');
 const config = require('./config');
 const {
+  createDevelopmentAuthClient,
+  createDevelopmentDatabaseConfig,
+  createDevelopmentUserDirectory,
+  loadDevelopmentRuntime,
+} = require('./development-integration');
+const {
   createProfileExtras,
   ProfileExtrasError,
   ensureProfileExtrasTables,
@@ -159,6 +165,7 @@ const {
 } = require('./verification');
 
 const app = express();
+let developmentRuntime = null;
 app.set('trust proxy', 'loopback');
 const loginRateLimiter = createLoginRateLimiter({ pool });
 const internalApp = express();
@@ -348,6 +355,16 @@ app.use(
   }),
 );
 app.use('/api/ai/files/parse', express.raw({ type: 'application/octet-stream', limit: '8mb' }));
+app.use((request, response, next) => {
+  if (!request.path.startsWith('/api/development/v1')) return next();
+  if (!developmentRuntime) {
+    response.status(503).json({
+      data: { error: { code: 'not_ready', message: 'Development service is not ready' } },
+    });
+    return undefined;
+  }
+  return developmentRuntime.app(request, response, next);
+});
 app.use(express.json({ limit: '28mb' }));
 app.use((error, _request, response, next) => {
   if (error.type === 'entity.too.large') {
@@ -6231,6 +6248,17 @@ async function start() {
   await ensureCircuitTables(pool);
   await ensureCircuitExampleTables(pool);
   await ensureCircuitChallengeTables(pool);
+  developmentRuntime = await loadDevelopmentRuntime({
+    repositoryRoot: path.join(__dirname, '..'),
+    authClient: createDevelopmentAuthClient({
+      verifyToken: verify,
+      getUserById,
+      toUserProfile,
+    }),
+    userDirectory: createDevelopmentUserDirectory(pool),
+    database: createDevelopmentDatabaseConfig(config.db),
+    uploadDirectory: path.join(config.uploadDir, 'development', 'festival'),
+  });
   await decayHeatIfNeeded(new Date());
   scheduleNextHeatDecay();
 

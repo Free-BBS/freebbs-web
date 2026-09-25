@@ -6,12 +6,16 @@ cd "$ROOT_DIR"
 
 echo "[ci] installing dependencies"
 npm ci
+npm ci --prefix development
+
+echo "[ci] validating development center"
+npm run check --prefix development
 
 echo "[ci] syntax check"
 for script in scripts/*.sh; do
   bash -n "$script"
 done
-node --test scripts/pr-validation-workflow.test.js scripts/mysql-isolation.test.js
+node --test scripts/pr-validation-workflow.test.js scripts/mysql-isolation.test.js scripts/development-migration-boundary.test.js
 node --check server.js
 node --check public/page-transitions.js
 node --check public/publish.js

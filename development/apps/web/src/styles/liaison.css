@@ -1,0 +1,1449 @@
+.liaison-board {
+  min-width: 0;
+  overflow-x: clip;
+}
+
+.tavern-hero {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  min-height: 330px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(250px, 0.85fr);
+  overflow: hidden;
+  border: 1px solid rgba(225, 181, 93, 0.58);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 75% 24%, rgba(239, 178, 76, 0.2), transparent 30%),
+    linear-gradient(112deg, #082f35 0%, #0a3d42 54%, #142e31 100%);
+  box-shadow:
+    0 18px 44px rgba(5, 30, 33, 0.18),
+    inset 0 1px rgba(255, 244, 213, 0.18);
+  color: #fff9e9;
+}
+
+.tavern-hero::before,
+.tavern-hero::after {
+  position: absolute;
+  z-index: -1;
+  content: '';
+  pointer-events: none;
+}
+
+.tavern-hero::before {
+  inset: 18px;
+  border: 1px solid rgba(244, 217, 159, 0.16);
+  border-radius: 22px;
+}
+
+.tavern-hero::after {
+  right: -76px;
+  bottom: -150px;
+  width: 430px;
+  height: 430px;
+  border: 1px solid rgba(225, 181, 93, 0.16);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 38px rgba(225, 181, 93, 0.04),
+    0 0 0 78px rgba(225, 181, 93, 0.025);
+}
+
+.tavern-hero-copy {
+  z-index: 2;
+  display: grid;
+  align-content: center;
+  gap: 18px;
+  padding: clamp(34px, 5vw, 64px);
+}
+
+.tavern-kicker {
+  margin: 0;
+  color: #e7bd68;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.tavern-hero h2 {
+  margin: 0;
+  color: #fff9e9;
+  font-family: var(--font-serif);
+  font-size: clamp(42px, 6vw, 70px);
+  font-weight: 900;
+  letter-spacing: 0.035em;
+  line-height: 1;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
+}
+
+.tavern-hero-copy > p:not(.tavern-kicker) {
+  max-width: 34rem;
+  margin: 0;
+  color: rgba(255, 249, 233, 0.82);
+  font-size: 16px;
+  line-height: 1.85;
+}
+
+.tavern-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+}
+
+.tavern-hero-actions > span {
+  color: #f2d79d;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.liaison-board .tavern-hero-actions .secondary-action {
+  min-height: 42px;
+  border-color: rgba(239, 194, 102, 0.74);
+  background: linear-gradient(180deg, #f2c86d, #d9a83f);
+  color: #19383a;
+  box-shadow: 0 8px 20px rgba(6, 24, 25, 0.22);
+}
+
+.tavern-bartender {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.tavern-bartender img {
+  position: absolute;
+  right: clamp(-30px, 0vw, 10px);
+  bottom: -108px;
+  width: min(100%, 390px);
+  max-width: none;
+  filter: drop-shadow(0 20px 25px rgba(0, 0, 0, 0.3));
+}
+
+.tavern-filter {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(160px, 0.7fr) auto;
+  align-items: end;
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.tavern-filter label {
+  min-width: 0;
+}
+
+.opportunity-deck {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-4);
+  padding: clamp(18px, 3vw, 30px) 0 0;
+}
+
+.opportunity-deck-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-inline: clamp(4px, 1vw, 12px);
+}
+
+.opportunity-deck-heading > div:first-child {
+  display: grid;
+  gap: 7px;
+}
+
+.opportunity-deck-heading h3 {
+  margin: 0;
+  color: var(--color-text);
+  font-family: var(--font-serif);
+  font-size: clamp(27px, 4vw, 38px);
+}
+
+.opportunity-deck-controls {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.opportunity-deck-controls button {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+  background: var(--surface-raised);
+  color: var(--color-text);
+  font-size: 19px;
+  box-shadow: var(--shadow-card);
+}
+
+.opportunity-deck-controls button:disabled {
+  opacity: 0.36;
+}
+
+.opportunity-deck-controls span {
+  min-width: 54px;
+  color: var(--color-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  text-align: center;
+}
+
+.opportunity-carousel-shell {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 30px;
+}
+
+.opportunity-carousel-shell::before,
+.opportunity-carousel-shell::after {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  bottom: 8px;
+  width: clamp(18px, 8vw, 96px);
+  content: '';
+  pointer-events: none;
+}
+
+.opportunity-carousel-shell::before {
+  left: 0;
+  background: linear-gradient(90deg, var(--surface-page), transparent);
+}
+
+.opportunity-carousel-shell::after {
+  right: 0;
+  background: linear-gradient(-90deg, var(--surface-page), transparent);
+}
+
+.opportunity-carousel {
+  --opportunity-card-width: min(72vw, 370px);
+  display: flex;
+  min-width: 0;
+  gap: clamp(12px, 2.4vw, 28px);
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  padding: 26px max(12px, calc((100% - var(--opportunity-card-width)) / 2)) 34px;
+  scroll-behavior: smooth;
+  scroll-padding-inline: max(12px, calc((100% - var(--opportunity-card-width)) / 2));
+  scroll-snap-type: inline mandatory;
+  scrollbar-color: color-mix(in srgb, var(--action-primary) 38%, transparent) transparent;
+  scrollbar-width: thin;
+  touch-action: pan-x;
+}
+
+.opportunity-carousel::-webkit-scrollbar {
+  height: 6px;
+}
+
+.opportunity-carousel::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--action-primary) 38%, transparent);
+}
+
+.liaison-problem-card.opportunity-card {
+  position: relative;
+  display: block;
+  width: var(--opportunity-card-width);
+  min-width: var(--opportunity-card-width);
+  flex: 0 0 var(--opportunity-card-width);
+  opacity: 0.5;
+  filter: blur(1.2px) saturate(0.72);
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  transform: scale(0.86) translateY(12px);
+  transform-origin: center;
+  transition:
+    transform 220ms ease,
+    filter 220ms ease,
+    opacity 220ms ease;
+}
+
+.liaison-problem-card.opportunity-card:nth-child(even):not(.is-active) {
+  transform: scale(0.86) translateY(12px) rotate(1.5deg);
+}
+
+.liaison-problem-card.opportunity-card:nth-child(odd):not(.is-active) {
+  transform: scale(0.86) translateY(12px) rotate(-1.5deg);
+}
+
+.liaison-problem-card.opportunity-card.is-active {
+  z-index: 2;
+  opacity: 1;
+  filter: none;
+  transform: scale(1) translateY(0);
+}
+
+.liaison-board .opportunity-card-button {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-height: 430px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto 1fr auto auto;
+  gap: 13px;
+  overflow: hidden;
+  padding: 26px;
+  border: 1px solid #ba8c3f;
+  border-radius: 24px;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    radial-gradient(circle at 82% 10%, rgba(231, 186, 98, 0.18), transparent 25%),
+    linear-gradient(148deg, #123f42 0%, #082f35 67%, #0a272d 100%);
+  background-size:
+    100% 34px,
+    auto,
+    auto;
+  box-shadow:
+    0 18px 38px rgba(6, 31, 34, 0.2),
+    inset 0 0 0 6px rgba(255, 247, 218, 0.035),
+    inset 0 0 0 8px rgba(228, 187, 103, 0.13);
+  color: #fff9e9;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.liaison-board .opportunity-card-button::before,
+.liaison-board .opportunity-card-button::after {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  border-color: rgba(240, 201, 120, 0.72);
+  content: '';
+  pointer-events: none;
+}
+
+.liaison-board .opportunity-card-button::before {
+  top: 13px;
+  left: 13px;
+  border-top: 2px solid;
+  border-left: 2px solid;
+  border-radius: 9px 0 0;
+}
+
+.liaison-board .opportunity-card-button::after {
+  right: 13px;
+  bottom: 13px;
+  border-right: 2px solid;
+  border-bottom: 2px solid;
+  border-radius: 0 0 9px;
+}
+
+.liaison-board .opportunity-card-button:focus-visible {
+  outline: 3px solid color-mix(in srgb, #f2c86d 76%, white);
+  outline-offset: 4px;
+}
+
+.opportunity-card-number {
+  color: #e7bd68;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+}
+
+.opportunity-card-status {
+  justify-self: end;
+}
+
+.opportunity-card-status .status-badge {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff9e9;
+}
+
+.opportunity-card-source {
+  grid-column: 1 / -1;
+  color: rgba(255, 249, 233, 0.68);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.liaison-board .opportunity-card-button > strong {
+  grid-column: 1 / -1;
+  align-self: end;
+  margin-top: 8px;
+  color: #fff9e9;
+  font-family: var(--font-serif);
+  font-size: clamp(25px, 3vw, 32px);
+  letter-spacing: 0.015em;
+  line-height: 1.3;
+}
+
+.opportunity-card-summary {
+  grid-column: 1 / -1;
+  display: -webkit-box;
+  overflow: hidden;
+  color: rgba(255, 249, 233, 0.76);
+  font-size: 14px;
+  line-height: 1.7;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.opportunity-card-tags {
+  grid-column: 1 / -1;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.opportunity-card-tags i {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 5px 9px;
+  border: 1px solid rgba(231, 189, 104, 0.28);
+  border-radius: 999px;
+  color: #f0d69e;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.opportunity-card-facts {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(239, 211, 153, 0.18);
+}
+
+.opportunity-card-facts > span {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.opportunity-card-facts small {
+  color: rgba(255, 249, 233, 0.54);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.opportunity-card-facts b {
+  overflow: hidden;
+  color: #fff7e2;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.opportunity-card-hint {
+  grid-column: 1 / -1;
+  justify-self: center;
+  color: #e7bd68;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.opportunity-detail {
+  display: grid;
+  gap: var(--space-4);
+  padding: clamp(20px, 4vw, 36px);
+  border: 1px solid var(--border-subtle);
+  border-top: 4px solid #c89b49;
+  border-radius: 24px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.opportunity-detail > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.opportunity-detail > header > div {
+  display: grid;
+  gap: 7px;
+}
+
+.opportunity-detail h3 {
+  margin: 0;
+  color: var(--color-text);
+  font-family: var(--font-serif);
+  font-size: clamp(24px, 4vw, 34px);
+}
+
+.opportunity-detail-summary {
+  max-width: 58rem;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.opportunity-detail-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--border-subtle);
+}
+
+.opportunity-detail-facts > div {
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+  padding: var(--space-4);
+  background: var(--surface-subtle);
+}
+
+.opportunity-detail-facts > div:last-child {
+  grid-column: 1 / -1;
+}
+
+.opportunity-detail-facts dt {
+  color: #a57727;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.opportunity-detail-facts dd {
+  margin: 0;
+  color: var(--color-text);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.primary-opportunity-link {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 18px;
+  border-radius: var(--radius-sm);
+  background: var(--action-primary);
+  color: var(--action-primary-text, #fff) !important;
+  text-decoration: none;
+}
+
+.opportunity-empty {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  padding: 50px 24px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-lg);
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.opportunity-empty strong {
+  color: var(--color-text);
+}
+
+@media (max-width: 760px) {
+  .tavern-hero {
+    min-height: 390px;
+    grid-template-columns: minmax(0, 1fr) 148px;
+  }
+
+  .tavern-hero-copy {
+    align-content: start;
+    padding: 34px 20px 28px 26px;
+  }
+
+  .tavern-hero-copy > p:not(.tavern-kicker) {
+    font-size: 14px;
+  }
+
+  .tavern-bartender img {
+    right: -70px;
+    bottom: -42px;
+    width: 285px;
+  }
+
+  .tavern-filter {
+    grid-template-columns: 1fr;
+  }
+
+  .opportunity-carousel {
+    --opportunity-card-width: min(82vw, 340px);
+    padding-block: 20px 28px;
+  }
+
+  .opportunity-detail-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .opportunity-detail-facts > div:last-child {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .tavern-hero {
+    min-height: 430px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tavern-hero-copy {
+    max-width: 78%;
+  }
+
+  .tavern-bartender {
+    position: absolute;
+    inset: 0;
+  }
+
+  .tavern-bartender img {
+    right: -88px;
+    bottom: -86px;
+    width: 290px;
+  }
+
+  .opportunity-deck-heading {
+    align-items: flex-start;
+  }
+
+  .opportunity-deck-controls button {
+    width: 38px;
+    height: 38px;
+  }
+
+  .opportunity-deck-controls span {
+    display: none;
+  }
+
+  .liaison-board .opportunity-card-button {
+    min-height: 410px;
+    padding: 22px;
+  }
+
+  .opportunity-detail > header {
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .opportunity-carousel {
+    scroll-behavior: auto;
+  }
+
+  .liaison-problem-card.opportunity-card {
+    transition: none;
+  }
+}
+
+/* Opportunity tavern entrance and enlarged noticeboard. */
+.tavern-room {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  min-height: 650px;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+  border: 1px solid rgba(220, 172, 83, 0.56);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 20% 16%, rgba(244, 190, 91, 0.14), transparent 27%),
+    linear-gradient(90deg, rgba(3, 21, 24, 0.18) 1px, transparent 1px),
+    linear-gradient(158deg, #0b3338 0%, #102c2f 58%, #172426 100%);
+  background-size:
+    auto,
+    42px 100%,
+    auto;
+  box-shadow:
+    0 20px 48px rgba(5, 30, 33, 0.2),
+    inset 0 1px rgba(255, 245, 216, 0.15);
+  color: #fff9e9;
+  transition:
+    filter 180ms ease,
+    transform 180ms ease;
+}
+
+.tavern-room::before {
+  position: absolute;
+  z-index: -1;
+  inset: 18px;
+  border: 1px solid rgba(242, 207, 137, 0.13);
+  border-radius: 22px;
+  content: '';
+}
+
+.tavern-room.is-obscured {
+  filter: blur(4px) brightness(0.64);
+  transform: scale(0.99);
+}
+
+.tavern-room-heading {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  max-width: 38rem;
+  gap: 13px;
+  padding: clamp(32px, 5vw, 54px) clamp(28px, 5vw, 62px) 18px;
+}
+
+.tavern-room-heading h2 {
+  margin: 0;
+  color: #fff7e2;
+  font-family: var(--font-serif);
+  font-size: clamp(42px, 6vw, 68px);
+  line-height: 1;
+}
+
+.tavern-room-heading > p:last-child {
+  max-width: 32rem;
+  margin: 0;
+  color: rgba(255, 249, 233, 0.74);
+  line-height: 1.8;
+}
+
+.tavern-room-scene {
+  display: grid;
+  min-height: 470px;
+  grid-template-columns: minmax(260px, 0.82fr) minmax(430px, 1.18fr);
+  align-items: end;
+  gap: clamp(12px, 3vw, 42px);
+  padding: 0 clamp(28px, 5vw, 64px) 42px;
+}
+
+.tavern-keeper {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  align-self: stretch;
+  align-items: end;
+  justify-items: center;
+  margin: 0;
+}
+
+.tavern-keeper img {
+  width: min(100%, 390px);
+  max-height: 510px;
+  object-fit: contain;
+  object-position: center bottom;
+  filter: drop-shadow(0 20px 24px rgba(0, 0, 0, 0.32));
+}
+
+.tavern-keeper figcaption {
+  position: absolute;
+  right: 2%;
+  bottom: 18px;
+  padding: 10px 14px;
+  border: 1px solid rgba(233, 195, 117, 0.38);
+  border-radius: 16px 16px 16px 4px;
+  background: rgba(7, 35, 38, 0.92);
+  color: #f2d59b;
+  font-size: 12px;
+  font-weight: 750;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+.liaison-board .noticeboard-preview {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-height: 450px;
+  align-self: end;
+  grid-template-rows: 1fr auto;
+  gap: 18px;
+  overflow: hidden;
+  padding: 30px;
+  border: 11px solid #70472b;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(82, 52, 28, 0.13) 0 2px, transparent 3px),
+    radial-gradient(circle at 78% 68%, rgba(82, 52, 28, 0.12) 0 2px, transparent 3px),
+    linear-gradient(145deg, #c39761, #a97742);
+  background-size:
+    28px 28px,
+    34px 34px,
+    auto;
+  box-shadow:
+    0 24px 40px rgba(0, 0, 0, 0.3),
+    inset 0 0 0 3px rgba(255, 224, 162, 0.2),
+    inset 0 0 30px rgba(64, 35, 14, 0.2);
+  color: #28231e;
+  cursor: pointer;
+  text-align: left;
+  transform: perspective(1100px) rotateY(-2deg);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.liaison-board .noticeboard-preview:hover,
+.liaison-board .noticeboard-preview:focus-visible {
+  box-shadow:
+    0 30px 54px rgba(0, 0, 0, 0.38),
+    0 0 0 4px rgba(230, 186, 96, 0.22),
+    inset 0 0 0 3px rgba(255, 224, 162, 0.2);
+  transform: perspective(1100px) rotateY(0) translateY(-5px);
+}
+
+.noticeboard-paper-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 18px;
+}
+
+.noticeboard-paper {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  align-content: center;
+  gap: 7px;
+  padding: 19px 17px 15px;
+  border: 1px solid rgba(89, 62, 35, 0.2);
+  background: #f4e8c9;
+  box-shadow: 0 7px 13px rgba(55, 33, 15, 0.18);
+}
+
+.noticeboard-paper::before {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  background: #a84032;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.25);
+  content: '';
+  transform: translateX(-50%);
+}
+
+.noticeboard-paper-1,
+.noticeboard-paper-4 {
+  transform: rotate(-1.2deg);
+}
+
+.noticeboard-paper-2,
+.noticeboard-paper-3 {
+  transform: rotate(1deg);
+}
+
+.noticeboard-paper small {
+  color: #856746;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.noticeboard-paper strong {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #30291f;
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.noticeboard-paper i {
+  color: #9b542a;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.noticeboard-placeholder {
+  min-height: 112px;
+  opacity: 0.5;
+  background: color-mix(in srgb, #f4e8c9 68%, #8e6b43);
+}
+
+.noticeboard-placeholder::before,
+.noticeboard-placeholder::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(48%, 72px);
+  height: 2px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(73, 55, 36, 0.46);
+  box-shadow: none;
+  content: '';
+  transform: translate(-50%, -50%) rotate(34deg);
+}
+
+.noticeboard-placeholder::after {
+  transform: translate(-50%, -50%) rotate(-34deg);
+}
+
+.noticeboard-loading {
+  grid-column: 1 / -1;
+  align-self: center;
+  justify-self: center;
+  color: #493724;
+  font-weight: 800;
+}
+
+.noticeboard-preview-footer {
+  justify-self: center;
+  color: #493724;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.noticeboard-overlay {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  overflow-y: auto;
+  place-items: start center;
+  padding: 20px;
+  background: rgba(4, 16, 18, 0.7);
+  backdrop-filter: blur(13px) saturate(0.8);
+  -webkit-backdrop-filter: blur(13px) saturate(0.8);
+}
+
+.noticeboard-panel {
+  width: min(1180px, 100%);
+  min-width: 0;
+  min-height: calc(100vh - 40px);
+  padding: clamp(20px, 3vw, 38px);
+  border: 10px solid #674025;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 88% 4%, rgba(229, 174, 73, 0.12), transparent 25%),
+    linear-gradient(150deg, #132f32 0%, #0b2023 100%);
+  box-shadow:
+    0 36px 90px rgba(0, 0, 0, 0.56),
+    inset 0 0 0 2px rgba(247, 209, 135, 0.17);
+  color: #fff9e9;
+}
+
+.noticeboard-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid rgba(237, 201, 130, 0.18);
+}
+
+.noticeboard-panel-header > p {
+  max-width: 34rem;
+  margin: 0;
+  color: rgba(255, 249, 233, 0.66);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.noticeboard-admin-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.liaison-board .noticeboard-create {
+  min-height: 42px;
+  border-color: #d5a64c;
+  background: linear-gradient(180deg, #f1ca78, #d7a647);
+  color: #24383a;
+  font-weight: 900;
+}
+
+.liaison-board .noticeboard-close {
+  display: grid;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 249, 233, 0.2);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff9e9;
+  font-size: 28px;
+  font-weight: 400;
+}
+
+.noticeboard-panel .tavern-filter {
+  margin-top: 22px;
+  border-color: rgba(239, 211, 153, 0.16);
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow: none;
+}
+
+.noticeboard-panel .tavern-filter label {
+  color: rgba(255, 249, 233, 0.72);
+}
+
+.noticeboard-panel .tavern-filter input,
+.noticeboard-panel .tavern-filter select {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: #112b2f;
+  color: #fff9e9;
+}
+
+.noticeboard-panel .opportunity-deck-heading h3 {
+  color: #fff9e9;
+}
+
+.noticeboard-panel .opportunity-deck-controls button {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff9e9;
+}
+
+.noticeboard-panel .opportunity-deck-controls span {
+  color: rgba(255, 249, 233, 0.64);
+}
+
+.noticeboard-panel .opportunity-carousel-shell::before {
+  background: linear-gradient(90deg, #10292c, transparent);
+}
+
+.noticeboard-panel .opportunity-carousel-shell::after {
+  background: linear-gradient(-90deg, #10292c, transparent);
+}
+
+.noticeboard-panel .liaison-problem-card.opportunity-card,
+.noticeboard-panel .liaison-board .liaison-problem-card.opportunity-card {
+  height: 450px;
+  min-height: 450px;
+}
+
+.noticeboard-panel .liaison-problem-card.opportunity-card,
+.noticeboard-panel .liaison-problem-card.opportunity-card:nth-child(even):not(.is-active),
+.noticeboard-panel .liaison-problem-card.opportunity-card:nth-child(odd):not(.is-active),
+.noticeboard-panel .liaison-problem-card.opportunity-card.is-active {
+  transform: none;
+}
+
+.noticeboard-panel .liaison-problem-card.opportunity-card:not(.is-active) {
+  opacity: 0.56;
+  filter: blur(1.2px) saturate(0.72);
+}
+
+.liaison-board .noticeboard-panel .opportunity-card-button {
+  height: 450px;
+  min-height: 450px;
+  border-width: 2px;
+  border-color: #c79a47;
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 50% 11%, rgba(236, 191, 99, 0.22), transparent 19%),
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(155deg, #16484c 0%, #093338 62%, #081f24 100%);
+  background-size:
+    auto,
+    100% 32px,
+    auto;
+  box-shadow:
+    0 22px 40px rgba(0, 0, 0, 0.35),
+    inset 0 0 0 6px rgba(255, 248, 220, 0.035),
+    inset 0 0 0 9px rgba(218, 171, 80, 0.16);
+}
+
+.noticeboard-panel .opportunity-card-button::before,
+.noticeboard-panel .opportunity-card-button::after {
+  width: 42px;
+  height: 42px;
+  border-color: #f0d596;
+}
+
+.noticeboard-panel .opportunity-detail {
+  border-color: rgba(113, 74, 39, 0.34);
+  border-top-color: #cb9840;
+  background: #f3ead6;
+  box-shadow: 0 20px 42px rgba(0, 0, 0, 0.22);
+}
+
+.noticeboard-panel .opportunity-detail h3,
+.noticeboard-panel .opportunity-detail-facts dd {
+  color: #252d2d;
+}
+
+.noticeboard-panel .opportunity-detail-summary {
+  color: #59605e;
+}
+
+.noticeboard-panel .opportunity-detail-facts {
+  border-color: rgba(87, 67, 45, 0.2);
+  background: rgba(87, 67, 45, 0.2);
+}
+
+.noticeboard-panel .opportunity-detail-facts > div {
+  background: #e7dfce;
+}
+
+@media (max-width: 800px) {
+  .tavern-room {
+    min-height: 610px;
+  }
+
+  .tavern-room-scene {
+    min-height: 440px;
+    grid-template-columns: minmax(150px, 0.62fr) minmax(300px, 1.38fr);
+    gap: 12px;
+    padding: 0 22px 30px;
+  }
+
+  .tavern-keeper figcaption {
+    display: none;
+  }
+
+  .liaison-board .noticeboard-preview {
+    min-height: 390px;
+    padding: 22px;
+    border-width: 9px;
+  }
+
+  .noticeboard-overlay {
+    padding: 0;
+  }
+
+  .noticeboard-panel {
+    min-height: 100vh;
+    border-width: 0;
+    border-radius: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .tavern-room {
+    min-height: 620px;
+  }
+
+  .tavern-room-heading {
+    padding: 28px 24px 14px;
+  }
+
+  .tavern-room-heading > p:last-child {
+    font-size: 13px;
+  }
+
+  .tavern-room-scene {
+    min-height: 430px;
+    grid-template-columns: minmax(112px, 0.52fr) minmax(0, 1.48fr);
+    align-items: end;
+    padding: 0 14px 24px 6px;
+  }
+
+  .tavern-keeper img {
+    width: 205px;
+    max-width: none;
+    transform: translateX(-34px);
+  }
+
+  .liaison-board .noticeboard-preview {
+    min-height: 365px;
+    gap: 12px;
+    padding: 18px 14px;
+    border-width: 8px;
+    transform: none;
+  }
+
+  .noticeboard-paper-grid {
+    gap: 10px;
+  }
+
+  .noticeboard-paper {
+    padding: 17px 10px 10px;
+  }
+
+  .noticeboard-paper strong {
+    font-size: 13px;
+  }
+
+  .noticeboard-preview-footer {
+    font-size: 10px;
+    text-align: center;
+  }
+
+  .noticeboard-panel {
+    padding: 18px 12px 30px;
+  }
+
+  .noticeboard-panel-header {
+    gap: 12px;
+  }
+
+  .noticeboard-panel-header p:last-child {
+    display: none;
+  }
+
+  .noticeboard-admin-tools {
+    align-items: flex-end;
+    flex-direction: column-reverse;
+  }
+
+  .liaison-board .noticeboard-create {
+    min-height: 38px;
+    padding: 7px 11px;
+    font-size: 12px;
+  }
+
+  .noticeboard-panel .opportunity-carousel {
+    --opportunity-card-width: min(82vw, 330px);
+  }
+
+  .noticeboard-panel .liaison-problem-card.opportunity-card,
+  .liaison-board .noticeboard-panel .opportunity-card-button {
+    height: 420px;
+    min-height: 420px;
+  }
+}
+
+/* Refined card treatment: quiet board feedback and material hierarchy. */
+.liaison-board .noticeboard-preview:hover,
+.liaison-board .noticeboard-preview:focus-visible,
+.liaison-board .noticeboard-preview:active {
+  outline: 3px solid rgba(28, 42, 42, 0.78);
+  outline-offset: 3px;
+  border-color: #543622;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(61, 35, 18, 0.2) 0 2px, transparent 3px),
+    radial-gradient(circle at 78% 68%, rgba(61, 35, 18, 0.18) 0 2px, transparent 3px),
+    linear-gradient(145deg, #ad7d4c, #7f5130);
+  background-size:
+    28px 28px,
+    34px 34px,
+    auto;
+  filter: none;
+  box-shadow:
+    0 18px 34px rgba(0, 0, 0, 0.32),
+    inset 0 0 0 3px rgba(31, 24, 17, 0.28),
+    inset 0 0 42px rgba(28, 19, 12, 0.32);
+  transform: perspective(1100px) rotateY(0) translateY(1px);
+}
+
+.tavern-room.is-obscured .noticeboard-preview {
+  border-color: #49301f;
+  filter: brightness(0.58) saturate(0.68);
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.34),
+    inset 0 0 0 3px rgba(25, 20, 15, 0.34),
+    inset 0 0 54px rgba(22, 15, 10, 0.46);
+}
+
+.noticeboard-panel .liaison-problem-card.opportunity-card {
+  opacity: 0.62;
+  filter: blur(1px) saturate(0.66) brightness(0.78);
+  transition:
+    filter 180ms ease,
+    opacity 180ms ease;
+}
+
+.noticeboard-panel .liaison-problem-card.opportunity-card.is-active {
+  opacity: 1;
+  filter: none;
+}
+
+.liaison-board .noticeboard-panel .opportunity-card-button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto 84px auto auto auto auto;
+  gap: 9px 12px;
+  padding: 23px;
+  border: 1px solid #536b6b;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 50% 28%, rgba(151, 180, 173, 0.12), transparent 31%),
+    linear-gradient(152deg, #173b3e 0%, #102c30 54%, #0b2125 100%);
+  box-shadow:
+    0 18px 34px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 5px rgba(227, 235, 226, 0.025),
+    inset 0 0 0 7px rgba(137, 158, 153, 0.09);
+}
+
+.liaison-board .noticeboard-panel .opportunity-card.is-active .opportunity-card-button {
+  border-color: #536b6b;
+  box-shadow:
+    0 24px 48px rgba(0, 0, 0, 0.42),
+    0 0 0 1px rgba(220, 228, 216, 0.11),
+    inset 0 0 0 5px rgba(227, 235, 226, 0.035),
+    inset 0 0 0 7px rgba(137, 158, 153, 0.13);
+}
+
+.liaison-board .noticeboard-panel .opportunity-card-button::before,
+.liaison-board .noticeboard-panel .opportunity-card-button::after {
+  width: 34px;
+  height: 34px;
+  border-color: rgba(194, 205, 195, 0.62);
+}
+
+.noticeboard-panel .opportunity-card-number {
+  color: #b9aa82;
+  letter-spacing: 0.14em;
+}
+
+.noticeboard-panel .opportunity-card-status .status-badge {
+  border-color: rgba(207, 220, 211, 0.13);
+  background: rgba(207, 220, 211, 0.08);
+  color: #dce6dd;
+}
+
+.noticeboard-panel .opportunity-card-source {
+  overflow: hidden;
+  color: rgba(232, 238, 231, 0.58);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.opportunity-card-emblem {
+  grid-column: 1 / -1;
+  display: grid;
+  width: 76px;
+  height: 76px;
+  place-content: center;
+  justify-self: center;
+  border: 1px solid rgba(186, 201, 193, 0.32);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(195, 207, 198, 0.1), transparent 66%), rgba(5, 24, 27, 0.34);
+  box-shadow:
+    inset 0 0 0 5px rgba(220, 228, 219, 0.025),
+    0 10px 25px rgba(0, 0, 0, 0.16);
+  color: #e1e8df;
+  text-align: center;
+}
+
+.opportunity-card-emblem b {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.opportunity-card-emblem i {
+  margin-top: 4px;
+  color: rgba(225, 232, 223, 0.46);
+  font-size: 7px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.liaison-board .noticeboard-panel .opportunity-card-button > strong {
+  align-self: auto;
+  margin: 0;
+  overflow: hidden;
+  color: #f0f2ea;
+  font-size: clamp(23px, 2.5vw, 29px);
+  line-height: 1.25;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.noticeboard-panel .opportunity-card-summary {
+  min-height: 50px;
+  padding: 10px 12px;
+  border: 1px solid rgba(203, 214, 205, 0.1);
+  border-radius: 10px;
+  background: rgba(230, 235, 227, 0.045);
+  color: rgba(236, 240, 233, 0.7);
+  font-size: 12px;
+  line-height: 1.55;
+  -webkit-line-clamp: 2;
+}
+
+.noticeboard-panel .opportunity-card-tags {
+  flex-wrap: nowrap;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.noticeboard-panel .opportunity-card-tags i {
+  border-color: rgba(184, 197, 189, 0.18);
+  background: rgba(208, 219, 210, 0.045);
+  color: #c7d1c8;
+}
+
+.noticeboard-panel .opportunity-card-facts {
+  padding-top: 10px;
+  border-color: rgba(211, 219, 211, 0.12);
+}
+
+.noticeboard-panel .opportunity-card-facts small {
+  color: rgba(226, 233, 225, 0.42);
+}
+
+.noticeboard-panel .opportunity-card-facts b {
+  color: #e5e9e2;
+  font-size: 11px;
+}
+
+.noticeboard-panel .opportunity-card-hint {
+  color: rgba(220, 226, 218, 0.52);
+  font-weight: 650;
+}
+
+.noticeboard-panel .opportunity-detail {
+  gap: 20px;
+  border: 1px solid #d3cab8;
+  border-top: 1px solid #d3cab8;
+  border-radius: 18px;
+  background: linear-gradient(rgba(84, 77, 64, 0.035) 1px, transparent 1px), #f4f0e7;
+  background-size:
+    100% 32px,
+    auto;
+  box-shadow:
+    0 18px 36px rgba(0, 0, 0, 0.2),
+    inset 0 0 0 5px rgba(90, 78, 58, 0.025);
+}
+
+.noticeboard-panel .opportunity-detail::before {
+  width: 42px;
+  height: 3px;
+  border-radius: 999px;
+  background: #314d4e;
+  content: '';
+}
+
+.noticeboard-panel .opportunity-detail-facts {
+  gap: 12px;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+}
+
+.noticeboard-panel .opportunity-detail-facts > div {
+  gap: 14px;
+  padding: 22px 24px;
+  border: 1px solid #d8d0c2;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.noticeboard-panel .opportunity-detail-facts dt {
+  color: #496162;
+}
+
+.noticeboard-panel .liaison-tag-list li {
+  background: #e3e9e5;
+  color: #365859;
+}
+
+@media (max-width: 560px) {
+  .liaison-board .noticeboard-panel .opportunity-card-button {
+    grid-template-rows: auto auto 74px auto auto auto auto;
+    padding: 20px;
+  }
+
+  .opportunity-card-emblem {
+    width: 68px;
+    height: 68px;
+  }
+
+  .liaison-board .noticeboard-panel .opportunity-card-button > strong {
+    font-size: 22px;
+  }
+}

@@ -9,6 +9,19 @@ cd "$ROOT_DIR"
 : "${MYSQL_USER:?MYSQL_USER is required}"
 : "${MYSQL_DATABASE:?MYSQL_DATABASE is required}"
 
+NODE_BINARY="${NODE_BINARY:-node}"
+
+require_database_identifier() {
+  local name="$1"
+  local value="$2"
+  if [[ ! "$value" =~ ^[A-Za-z0-9_]+$ ]]; then
+    echo "[deploy] $name must contain only letters, numbers, and underscores" >&2
+    exit 1
+  fi
+}
+
+require_database_identifier MYSQL_DATABASE "$MYSQL_DATABASE"
+
 MYSQL_PWD="${MYSQL_PASSWORD:-}"
 export MYSQL_PWD
 
@@ -68,3 +81,5 @@ for file in "${migration_files[@]}"; do
 done
 
 echo "[deploy] database migration complete"
+
+NODE_BINARY="$NODE_BINARY" bash scripts/migrate-development.sh

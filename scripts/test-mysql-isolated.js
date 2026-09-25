@@ -38,6 +38,7 @@ function testEnvironment(socketPath, original = process.env) {
   }
   return {
     ...env,
+    NODE_ENV: 'test',
     FREEBBS_TEST_MYSQL_SOCKET: socketPath,
     RUN_ADMIN_REWARDS_MYSQL: '1',
     RUN_ECONOMY_MYSQL: '1',
