@@ -1,6 +1,7 @@
 const express = require('express');
 const { validateDocument, simulate, catalog, buildNets } = require('../public/circuit-engine');
 const { walletLedgerCheckpoint, annotateWalletLedger } = require('./wallet-ledger');
+const { circuitChallengeCatalog } = require('./circuit-challenge-catalog');
 
 const FIXED_IDS = Object.freeze({
   source: 'V_IN',
@@ -65,6 +66,13 @@ async function ensureCircuitChallengeTables(pool) {
     CONSTRAINT fk_circuit_challenge_submissions_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
     INDEX idx_circuit_challenge_rank (challenge_id, challenge_revision, component_count, error_score, created_at),
     INDEX idx_circuit_challenge_user (user_id, created_at)
+  )`);
+  await pool.execute(`CREATE TABLE IF NOT EXISTS circuit_challenge_catalog_seeds (
+    seed_key VARCHAR(80) PRIMARY KEY,
+    challenge_id INT UNSIGNED NOT NULL UNIQUE,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    CONSTRAINT fk_circuit_challenge_seed_challenge
+      FOREIGN KEY (challenge_id) REFERENCES circuit_challenges (id) ON DELETE CASCADE
   )`);
   for (const [table, column, definition] of [
     ['circuit_challenges', 'reward_electric', 'INT UNSIGNED NOT NULL DEFAULT 0 AFTER tolerance'],
@@ -270,6 +278,55 @@ function readChallengeInput(body, { updating = false } = {}) {
     isActive: body.isActive !== false,
     ...(updating ? { expectedRevision: body.expectedRevision } : {}),
   };
+}
+
+async function ensureCircuitChallengeCatalog(pool) {
+  const connection = await pool.getConnection();
+  let inserted = 0;
+  try {
+    await connection.beginTransaction();
+    for (const seed of circuitChallengeCatalog()) {
+      const [[existing]] = await connection.execute(
+        'SELECT challenge_id FROM circuit_challenge_catalog_seeds WHERE seed_key = ? LIMIT 1',
+        [seed.key],
+      );
+      if (existing) continue;
+      const data = readChallengeInput({
+        title: seed.title,
+        description: seed.description,
+        tolerance: seed.tolerance,
+        rewardElectric: seed.rewardElectric,
+        isActive: true,
+        document: seed.document,
+      });
+      const [challenge] = await connection.execute(
+        `INSERT INTO circuit_challenges
+         (title, description, document_json, target_json, tolerance, reward_electric, is_active,
+          created_by, updated_by)
+         VALUES (?, ?, ?, ?, ?, ?, 1, NULL, NULL)`,
+        [
+          data.title,
+          data.description,
+          JSON.stringify(data.document),
+          JSON.stringify(data.target),
+          data.tolerance,
+          data.rewardElectric,
+        ],
+      );
+      await connection.execute(
+        'INSERT INTO circuit_challenge_catalog_seeds (seed_key, challenge_id) VALUES (?, ?)',
+        [seed.key, challenge.insertId],
+      );
+      inserted += 1;
+    }
+    await connection.commit();
+    return inserted;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 function starterDocument(document) {
@@ -632,6 +689,7 @@ module.exports = {
   CircuitChallengeError,
   FIXED_IDS,
   createCircuitChallengesRouter,
+  ensureCircuitChallengeCatalog,
   ensureCircuitChallengeTables,
   outputFrom,
   readChallengeInput,

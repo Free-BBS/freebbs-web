@@ -112,6 +112,7 @@ const { createCircuitsRouter, ensureCircuitTables } = require('./circuits');
 const { createCircuitExamplesRouter, ensureCircuitExampleTables } = require('./circuit-examples');
 const {
   createCircuitChallengesRouter,
+  ensureCircuitChallengeCatalog,
   ensureCircuitChallengeTables,
 } = require('./circuit-challenges');
 const { readRagCourseSnapshot } = require('./rag-course-snapshot');
@@ -6248,6 +6249,7 @@ async function start() {
   await ensureCircuitTables(pool);
   await ensureCircuitExampleTables(pool);
   await ensureCircuitChallengeTables(pool);
+  await ensureCircuitChallengeCatalog(pool);
   developmentRuntime = await initializeDevelopmentRuntime({
     repositoryRoot: path.join(__dirname, '..'),
     authClient: createDevelopmentAuthClient({
