@@ -11,6 +11,7 @@ function profileToDevelopmentIdentity(profile) {
     baseRole: 'student',
     roles: [],
     tags: [],
+    mainSiteAdmin: profile.isAdmin === true,
   };
 }
 

@@ -60,6 +60,7 @@ test('development auth adapter accepts only a verified main-site account', async
       username: row.username,
       studentId: row.student_id,
       avatarPath: row.avatar_path,
+      isAdmin: true,
     }),
   });
 
@@ -73,7 +74,22 @@ test('development auth adapter accepts only a verified main-site account', async
     baseRole: 'student',
     roles: [],
     tags: [],
+    mainSiteAdmin: true,
   });
+});
+
+test('development auth adapter does not coerce an untrusted admin-like value', async () => {
+  const client = createDevelopmentAuthClient({
+    verifyToken: () => ({ sub: 8 }),
+    getUserById: async () => ({ id: 8, uid: 'u_member', username: 'Member' }),
+    toUserProfile: (row) => ({
+      uid: row.uid,
+      username: row.username,
+      isAdmin: 'true',
+    }),
+  });
+
+  assert.equal((await client.introspect('valid')).mainSiteAdmin, false);
 });
 
 test('development directory exposes a read-only user projection with escaped search', async () => {

@@ -12,6 +12,7 @@ export interface UserContext {
   baseRole: BaseRole;
   roles: RoleKey[];
   tags: PermissionTag[];
+  readonly mainSiteAdmin?: boolean;
   developmentAccess?: 'member' | 'lead';
   viewer?: {
     uid: string;

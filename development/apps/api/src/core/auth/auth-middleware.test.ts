@@ -231,6 +231,7 @@ describe('main-site identity adapter', () => {
           id: 999,
           studentId: '2023000042',
           username: 'main-user',
+          isAdmin: true,
           passwordHash: 'must-not-leak',
         }),
         { status: 200, headers: { 'content-type': 'application/json' } },
@@ -251,11 +252,26 @@ describe('main-site identity adapter', () => {
       baseRole: 'student',
       roles: [],
       tags: [],
+      mainSiteAdmin: true,
     });
     expect(fetchMock).toHaveBeenCalledWith(
       'https://www.free-bbs.cn/api/auth/me',
       expect.objectContaining({ headers: { authorization: 'Bearer opaque-token' } }),
     );
+  });
+
+  it('does not coerce an admin-like value returned by the identity endpoint', async () => {
+    const client = new MainSiteAuthClient({
+      apiBaseUrl: 'https://www.free-bbs.cn',
+      fetch: vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(JSON.stringify({ uid: 'main-uid-43', isAdmin: 'true' }), { status: 200 }),
+      ),
+    });
+
+    await expect(client.introspect('opaque-token')).resolves.toMatchObject({
+      uid: 'main-uid-43',
+      mainSiteAdmin: false,
+    });
   });
 
   it('returns null for invalid tokens and classifies upstream failures as unavailable', async () => {
