@@ -20,6 +20,8 @@
 .main-site-account {
   flex: 0 0 auto;
   gap: 18px;
+  /* Match the learning site's --font-ui fallback order for Chinese labels. */
+  font-family: 'Syne', 'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
 .main-site-economy {
@@ -51,6 +53,7 @@
   border-radius: 999px;
   background: var(--surface-raised);
   color: var(--color-text);
+  font-family: 'Syne', 'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 0.9rem;
   font-weight: 800;
   letter-spacing: 0.02em;
@@ -62,6 +65,10 @@
 
 .main-site-shortcut {
   cursor: pointer;
+}
+
+.main-site-currency {
+  font-weight: 700;
 }
 
 .main-site-shortcut:hover {
@@ -99,17 +106,28 @@
 }
 
 body.theme-light .main-site-checkin {
-  border-color: #bb861e;
-  background: linear-gradient(135deg, #ffe9a3, #fff1bc);
-  color: #704500;
+  border-color: #d5a43a;
+  background: #fffdf3;
+  color: #8a5b08;
   box-shadow: 0 5px 14px rgba(185, 132, 28, 0.16);
 }
 
-body.theme-dark .main-site-checkin {
+body.theme-light .main-site-checkin.is-complete {
+  border-color: #bb861e;
+  background: linear-gradient(135deg, #ffe9a3, #fff1bc);
+  color: #704500;
+  box-shadow: 0 5px 14px rgba(185, 132, 28, 0.24);
+}
+
+body.theme-dark .main-site-checkin.is-complete {
   border-color: #d5a43a;
   background: linear-gradient(135deg, #493915, #302711);
   color: #ffe4a0;
   box-shadow: 0 5px 14px rgba(185, 132, 28, 0.24);
+}
+
+.main-site-checkin:not(.is-complete) img {
+  filter: grayscale(1) saturate(0) opacity(0.64);
 }
 
 body.theme-dark .main-site-shortcut:not(.main-site-checkin) img {
@@ -151,8 +169,10 @@ body.theme-dark .main-site-shortcut:not(.main-site-checkin) img {
 
 .main-site-user-copy strong {
   overflow: hidden;
-  font-size: 0.9rem;
+  font-family: 'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', 'Noto Serif SC', sans-serif;
+  font-size: 1rem;
   font-weight: 800;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -486,7 +506,7 @@ body.theme-dark .main-site-shortcut:not(.main-site-checkin) img {
   }
 
   .main-site-user-copy {
-    max-width: min(35vw, 160px);
+    display: none;
   }
 
   .main-site-user {
