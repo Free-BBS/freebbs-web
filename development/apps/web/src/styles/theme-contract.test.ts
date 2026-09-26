@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import componentsCss from './components.css?raw';
 import shellCss from './shell.css?raw';
+import financeCss from './finance.css?raw';
+import sportsCss from './sports.css?raw';
 import themeCss from './theme.css?raw';
 import tokensCss from './tokens.css?raw';
 
@@ -23,6 +25,14 @@ function contrastRatio(foreground: string, background: string) {
 }
 
 describe('dark-theme contrast contract', () => {
+  it('uses a normal-width interface font for Latin text across development pages', () => {
+    expect(tokensCss).toMatch(/--font-ui:\s*'Segoe UI'/);
+    expect(tokensCss).toContain("--font-latin: 'Segoe UI', Arial, Helvetica, sans-serif;");
+    for (const stylesheet of [tokensCss, sportsCss, financeCss]) {
+      expect(stylesheet).not.toMatch(/Syne|Bahnschrift|DIN Alternate|Arial Narrow/);
+    }
+  });
+
   it('provides a light treatment for external sidebar SVG images', () => {
     expect(themeCss).toMatch(
       /body\.theme-dark \.module-icon img,[\s\S]*?filter:\s*brightness\(0\) invert\(1\)/,

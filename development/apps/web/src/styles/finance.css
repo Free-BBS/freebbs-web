@@ -97,7 +97,7 @@
 }
 
 .finance-budget-remaining strong {
-  font-family: var(--font-ui);
+  font-family: var(--font-latin);
   font-size: clamp(28px, 4vw, 38px);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.025em;
