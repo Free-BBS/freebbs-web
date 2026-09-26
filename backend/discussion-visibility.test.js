@@ -204,7 +204,11 @@ function harness(records = [post(1)], { replyRows, lasers = {} } = {}) {
     MAX_AGENT_USER: { username: 'max' },
     shouldAskMax: () => false,
     REACTION_MANETRON_REWARDS: { smile: 1 },
-    notifications: { notifyReply: async () => {}, notifyReaction: async () => {} },
+    notifications: {
+      notifyReply: async () => {},
+      notifyMentions: async () => {},
+      notifyReaction: async () => {},
+    },
     DISCUSSION_REACTION_TYPES: new Set(['smile', 'light', 'fireworks']),
     console: { error() {} },
   };

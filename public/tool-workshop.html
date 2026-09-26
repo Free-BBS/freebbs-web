@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>FREE-BBS - 小工具工坊</title>
+    <meta name="description" content="用 AI 制作、预览并发布单文件 HTML 小工具。" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-v2-32.png" />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/layout-fixes.css" />
+    <link rel="stylesheet" href="/username-guard.css" />
+    <link rel="stylesheet" href="/notifications.css" />
+    <link rel="stylesheet" href="/tool-workshop.css" />
+  </head>
+  <body class="tool-workshop-page">
+    <div class="page-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="FREE-BBS 首页"
+          ><span class="brand-mark">FREE<br />BBS</span></a
+        >
+        <nav class="nav-actions" aria-label="顶部导航">
+          <a class="nav-link" href="/"
+            ><img class="nav-icon" src="/assets/icons/home.svg" alt="" /><span>主页</span></a
+          >
+          <a class="nav-link" href="/world"
+            ><img class="nav-icon" src="/assets/icons/map.svg" alt="" /><span>学习世界</span></a
+          >
+          <a class="nav-link" href="/discussion"
+            ><img class="nav-icon" src="/assets/icons/people.svg" alt="" /><span>讨论</span></a
+          >
+          <a class="nav-link" href="/aichat"
+            ><img class="nav-icon" src="/assets/icons/ai.svg" alt="" /><span>问问 Max</span></a
+          >
+          <a class="nav-link fortune-link hidden" href="#"
+            ><img class="nav-icon" src="/assets/icons/yunshi.svg" alt="" /><span>签到</span></a
+          >
+          <a class="nav-link manage-link hidden" href="/adminusers"
+            ><img class="nav-icon" src="/assets/icons/gear.svg" alt="" /><span>管理</span></a
+          >
+          <div class="user-panel" id="user-panel">
+            <div class="user-summary">
+              <button class="avatar" type="button" aria-label="用户头像">
+                <img
+                  class="avatar-image"
+                  id="avatar-image"
+                  src="/assets/avatar_placeholder.webp"
+                  alt="用户头像"
+                />
+              </button>
+              <div class="user-actions" id="user-actions">
+                <button class="user-icon-button hidden" id="user-settings-button" type="button">
+                  <img class="user-action-icon" src="/assets/icons/gear.svg" alt="" /><span
+                    >设置</span
+                  >
+                </button>
+                <button class="user-icon-button hidden" id="user-logout-button" type="button">
+                  <img class="user-action-icon" src="/assets/icons/exit.svg" alt="" /><span
+                    >退出</span
+                  >
+                </button>
+              </div>
+              <div class="user-copy">
+                <button class="user-name" type="button" id="user-name">登录/注册</button>
+                <div class="user-role" id="user-role">学生</div>
+              </div>
+            </div>
+            <div class="user-status" id="user-status"></div>
+          </div>
+        </nav>
+      </header>
+
+      <nav class="mobile-nav" aria-label="手机底部导航"></nav>
+
+      <main class="main-content tool-workshop-main">
+        <section class="tool-workshop-shell" aria-labelledby="tool-workshop-title">
+          <header class="tool-workshop-hero">
+            <div>
+              <p>创意实验室 · 单文件 HTML</p>
+              <h1 id="tool-workshop-title">小工具工坊</h1>
+              <span>描述一个想法，让 AI 做出可以立即使用的小工具；也可以直接修改源码。</span>
+            </div>
+            <button id="tool-create-toggle" type="button">制作小工具</button>
+          </header>
+
+          <section class="tool-studio" id="tool-studio" hidden aria-label="小工具制作台">
+            <div class="tool-studio-inputs">
+              <label
+                ><span>告诉 AI 要做什么</span
+                ><textarea
+                  id="tool-prompt"
+                  maxlength="2000"
+                  rows="5"
+                  placeholder="例如：做一个支持番茄钟、今日计数和本地保存的极简专注工具"
+                ></textarea>
+              </label>
+              <div class="tool-studio-fields">
+                <label
+                  ><span>标题</span
+                  ><input id="tool-title" maxlength="120" placeholder="给小工具起个名字"
+                /></label>
+                <label
+                  ><span>简介</span
+                  ><input id="tool-description" maxlength="500" placeholder="一句话说明用途"
+                /></label>
+              </div>
+              <div class="tool-studio-actions">
+                <button id="tool-generate" type="button">AI 生成 / 修改</button>
+                <button id="tool-preview" type="button">刷新预览</button>
+                <button id="tool-publish" type="button">发布到广场</button>
+              </div>
+              <p id="tool-studio-status" role="status" aria-live="polite"></p>
+            </div>
+            <div class="tool-code-panel">
+              <label for="tool-html">HTML 源码</label>
+              <textarea
+                id="tool-html"
+                spellcheck="false"
+                aria-label="HTML 源码"
+                placeholder="AI 生成的完整 HTML 会出现在这里，也可以直接粘贴和修改。"
+              ></textarea>
+            </div>
+            <div class="tool-preview-panel">
+              <div>
+                <strong>安全预览</strong
+                ><span>脚本在隔离沙盒中运行，不能访问 FREE-BBS 登录状态。</span>
+              </div>
+              <iframe id="tool-preview-frame" title="小工具预览" sandbox="allow-scripts"></iframe>
+            </div>
+          </section>
+
+          <div class="tool-gallery-toolbar">
+            <div role="group" aria-label="小工具范围">
+              <button type="button" data-tool-scope="all" aria-pressed="true">所有人的</button>
+              <button type="button" data-tool-scope="mine" aria-pressed="false">我发布的</button>
+            </div>
+            <p id="tool-gallery-status" role="status" aria-live="polite">正在加载小工具广场…</p>
+          </div>
+          <section
+            class="tool-gallery"
+            id="tool-gallery"
+            aria-label="小工具广场"
+            aria-busy="true"
+          ></section>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="tool-viewer" id="tool-viewer" aria-labelledby="tool-viewer-title">
+      <header>
+        <div>
+          <h2 id="tool-viewer-title"></h2>
+          <p id="tool-viewer-meta"></p>
+        </div>
+        <button type="button" data-tool-close aria-label="关闭">×</button>
+      </header>
+      <iframe id="tool-viewer-frame" title="已发布小工具" sandbox="allow-scripts"></iframe>
+      <footer>
+        <button type="button" id="tool-share-discussion">发到讨论区</button
+        ><button type="button" data-tool-close>关闭</button>
+      </footer>
+    </dialog>
+
+    <script src="/typography.js"></script>
+    <script src="/username-guard.js"></script>
+    <script src="/app.js"></script>
+    <script src="/notifications.js"></script>
+    <script src="/tool-workshop.js"></script>
+  </body>
+</html>

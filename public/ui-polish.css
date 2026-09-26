@@ -1974,6 +1974,57 @@ body:not(.auth-page-body) .user-economy-stack .currency-value {
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
+
+/* A used 黄金名片 follows the name wherever it appears, without changing layout. */
+.has-golden-name {
+  color: #a96f00 !important;
+  font-weight: 750 !important;
+  background: linear-gradient(
+    105deg,
+    #825100 0%,
+    #d89f20 31%,
+    #fff0a8 49%,
+    #bd7d00 67%,
+    #704000 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 1px 10px rgb(204 145 20 / 18%);
+  animation: golden-name-shimmer 7s ease-in-out infinite;
+}
+body.theme-dark .has-golden-name {
+  background-image: linear-gradient(
+    105deg,
+    #b97700 0%,
+    #f1c34e 31%,
+    #fff6c5 49%,
+    #d69918 67%,
+    #996000 100%
+  );
+  text-shadow: 0 1px 12px rgb(244 189 67 / 24%);
+}
+.inventory-golden-name-actions {
+  display: grid;
+  gap: 10px;
+}
+@keyframes golden-name-shimmer {
+  0%,
+  68%,
+  100% {
+    background-position: 100% 50%;
+  }
+  82% {
+    background-position: 0 50%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .has-golden-name {
+    animation: none;
+    background-position: 50% 50%;
+  }
+}
 body.theme-dark:not(.auth-page-body) .economy-shortcut-shop .economy-shortcut-icon {
   filter: brightness(0) invert(1) !important;
 }

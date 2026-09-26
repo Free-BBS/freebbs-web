@@ -10,6 +10,7 @@ const {
   FRAGMENT_PRICES,
   DAY_MS,
   LASER_POLICY,
+  GOLDEN_NAME_DURATION_MS,
 } = require('./economy-shop');
 const { createEconomyMemoryStore } = require('../scripts/fixtures/economy-memory-store');
 const items = require('../public/data/shop-items.json').items.map((item) => ({
@@ -240,6 +241,28 @@ test('simultaneous unique laser purchases cannot create two devices', async () =
   assert.equal(store.account().assets.laser, 1);
   assert.equal(store.account().electric, 9975);
 });
+test('golden name cards cost 20 electric, activate for seven days and stack idempotently', async () => {
+  const { buy, shop, store, clock } = setup();
+  await buy('golden_name_card');
+  await buy('golden_name_card');
+  assert.equal(store.account().electric, 9960);
+  assert.equal(store.account().assets.golden_name_card, 2);
+  const firstKey = crypto.randomUUID();
+  const first = await shop.useGoldenName({ userId: 1, requestKey: firstKey });
+  assert.equal(first.expiresAtMs, clock.value + GOLDEN_NAME_DURATION_MS);
+  assert.equal(store.account().assets.golden_name_card, 1);
+  assert.equal((await shop.useGoldenName({ userId: 1, requestKey: firstKey })).replayed, true);
+  assert.equal(store.account().assets.golden_name_card, 1);
+  const second = await shop.useGoldenName({ userId: 1, requestKey: crypto.randomUUID() });
+  assert.equal(second.expiresAtMs, first.expiresAtMs + GOLDEN_NAME_DURATION_MS);
+  assert.equal(store.account().assets.golden_name_card, 0);
+  const row = (await shop.decoratePosts([{ user_id: 1 }]))[0];
+  assert.equal(row.goldenName.active, true);
+  assert.equal(row.goldenName.expiresAtMs, second.expiresAtMs);
+  await assert.rejects(shop.useGoldenName({ userId: 1, requestKey: crypto.randomUUID() }), {
+    code: 'ASSET_REQUIRED',
+  });
+});
 test('combined relic price debits BOTH currencies and delivers exactly once', async () => {
   const { buy, store } = setup();
   const requestKey = crypto.randomUUID();
@@ -400,12 +423,16 @@ test('migration creates only new tables, never seeds counters from legacy assets
       statements.push(statement);
     },
   });
-  assert.equal(statements.length, 3);
+  assert.equal(statements.length, 6);
   assert.ok(statements.every((s) => s.startsWith('CREATE TABLE IF NOT EXISTS')));
 });
 test('catalog has dual-cost collectible relics and dual-currency laser activation policy', () => {
   const laser = items.find((i) => i.key === 'laser');
+  const goldenName = items.find((i) => i.key === 'golden_name_card');
   assert.deepEqual(laser.cost, { electric: LASER_POLICY.purchasePrice });
+  assert.deepEqual(goldenName.cost, { electric: 20 });
+  assert.equal(goldenName.description, '是金子总会发光的...吗？');
+  assert.equal(goldenName.isGift, false);
   const relics = items.filter((i) => i.class === 'scholar_relic');
   assert.equal(relics.length, 4);
   for (const item of relics) {

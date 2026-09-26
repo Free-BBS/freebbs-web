@@ -93,7 +93,15 @@ test('shop groups all enabled products into four ordered sections without changi
   assert.deepEqual(
     groups.map((group) => group.items.map((entry) => entry.key)),
     [
-      ['frame_orbit', 'frame_aurora', 'card_blueprint', 'card_twilight', 'plate_observer', 'laser'],
+      [
+        'frame_orbit',
+        'frame_aurora',
+        'card_blueprint',
+        'card_twilight',
+        'plate_observer',
+        'golden_name_card',
+        'laser',
+      ],
       [
         'mysterious_fragment',
         'maxwell_spectacles',
@@ -109,7 +117,7 @@ test('shop groups all enabled products into four ordered sections without changi
   await context.loadElectromagneticPage();
   const html = node('shop-grid').innerHTML;
   assert.equal((html.match(/data-shop-section=/g) || []).length, 4);
-  assert.equal((html.match(/class="shop-item-card"/g) || []).length, 17);
+  assert.equal((html.match(/class="shop-item-card"/g) || []).length, 18);
   assert.doesNotMatch(html, /data-item-key="plate_maxwell"/);
 });
 

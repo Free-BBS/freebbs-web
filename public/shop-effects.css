@@ -48,6 +48,30 @@ body.theme-dark.discussion-page
   --laser-wash: rgb(255 215 119 / 4%);
   --laser-edge: rgb(255 210 99 / 10%);
 }
+/* The decorative star field must never let a feed thumbnail stretch the whole post. */
+body.discussion-page
+  .main-content
+  .discussion-post-card.has-laser-glow
+  .discussion-post-card-main.has-preview {
+  min-height: 0;
+  align-items: start;
+}
+body.discussion-page .main-content .discussion-post-card.has-laser-glow .discussion-post-preview {
+  align-self: start;
+  height: 84px !important;
+  min-height: 0 !important;
+  max-height: 84px !important;
+  contain: paint;
+}
+body.discussion-page
+  .main-content
+  .discussion-post-card.has-laser-glow
+  .discussion-post-preview
+  :is(img, svg, span) {
+  height: 84px !important;
+  min-height: 0 !important;
+  max-height: 84px !important;
+}
 @media (max-width: 600px) {
   body.discussion-page
     .main-content

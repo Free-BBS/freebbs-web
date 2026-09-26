@@ -1,22 +1,21 @@
 (() => {
   const nav = document.querySelector('.mobile-nav');
   if (!nav) return;
-  const path = location.pathname.replace(/\/$/, '') || '/';
+  const path = window.location.pathname.replace(/\/$/, '') || '/';
   const primary = [
     ['/', 'home', '首页'],
     ['/discussion', 'people', '讨论'],
     ['/publish', 'plus', ''],
-    ['/world', 'map', '学习世界'],
+    ['/world', 'map', '学习'],
   ];
   const tools = [
-    ['/circuits', 'circuit', '电路实验室'],
+    ['/development', 'star', '发展端'],
     ['/workbench', 'run', '我的工作台'],
     ['/settings', 'gear', '个人设置'],
-    ['/development', 'star', '发展端'],
   ];
   const activePath = ['/course', '/knowledge'].includes(path)
     ? '/world'
-    : path === '/circuit'
+    : path === '/circuit' || path === '/circuit-challenge'
       ? '/circuits'
       : path;
   function link([href, icon, label], className) {
@@ -94,10 +93,88 @@
   });
   createMenu.addEventListener('click', () => closeCreate());
   window.addEventListener('resize', () => {
-    if (innerWidth > 900) closeCreate();
+    if (window.innerWidth > 900) closeCreate();
   });
   createGroup.append(createButton, createMenu);
   nav.children[2].replaceWith(createGroup);
+
+  const learningGroup = document.createElement('div');
+  learningGroup.className = 'mobile-tools mobile-learning';
+  const learningButton = document.createElement('button');
+  learningButton.type = 'button';
+  learningButton.className = 'mobile-primary mobile-learning-toggle';
+  learningButton.innerHTML =
+    '<img src="/assets/icons/map.svg" alt="" aria-hidden="true"><span>学习</span>';
+  learningButton.setAttribute('aria-expanded', 'false');
+  learningButton.setAttribute('aria-haspopup', 'menu');
+  learningButton.setAttribute('aria-controls', 'mobile-learning-menu');
+  if (['/world', '/circuits', '/tool-workshop'].includes(activePath))
+    learningButton.classList.add('is-active');
+  const learningMenu = document.createElement('div');
+  learningMenu.id = 'mobile-learning-menu';
+  learningMenu.className = 'mobile-tools-menu mobile-learning-menu';
+  learningMenu.setAttribute('role', 'menu');
+  learningMenu.setAttribute('aria-label', '学习');
+  learningMenu.hidden = true;
+  const knowledge = link(['/world', 'map', '知识小宇宙'], 'mobile-tool-link');
+  knowledge.setAttribute('role', 'menuitem');
+  learningMenu.append(knowledge);
+  const creativeLabel = document.createElement('p');
+  creativeLabel.className = 'mobile-menu-label';
+  creativeLabel.textContent = '创意实验室';
+  learningMenu.append(creativeLabel);
+  for (const item of [
+    ['/circuits', 'circuit', '电路实验室'],
+    ['/tool-workshop', 'wrench', '小工具工坊'],
+  ]) {
+    const node = link(item, 'mobile-tool-link');
+    node.setAttribute('role', 'menuitem');
+    learningMenu.append(node);
+  }
+  const closeLearning = (restore = false) => {
+    learningMenu.hidden = true;
+    learningButton.setAttribute('aria-expanded', 'false');
+    if (restore) learningButton.focus();
+  };
+  learningButton.addEventListener('click', () => {
+    closeCreate();
+    close();
+    learningMenu.hidden = !learningMenu.hidden;
+    learningButton.setAttribute('aria-expanded', String(!learningMenu.hidden));
+  });
+  learningGroup.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeLearning(true);
+      event.preventDefault();
+      return;
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    learningMenu.hidden = false;
+    learningButton.setAttribute('aria-expanded', 'true');
+    const items = [...learningMenu.querySelectorAll('[role="menuitem"]')];
+    const index = items.indexOf(document.activeElement);
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? items.length - 1
+          : (index + (event.key === 'ArrowUp' ? -1 : 1) + items.length) % items.length;
+    items[next].focus();
+  });
+  document.addEventListener('pointerdown', (event) => {
+    if (!learningGroup.contains(event.target)) closeLearning();
+  });
+  learningGroup.addEventListener('focusout', (event) => {
+    if (!learningGroup.contains(event.relatedTarget)) closeLearning();
+  });
+  learningMenu.addEventListener('click', () => closeLearning());
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 900) closeLearning();
+  });
+  learningGroup.append(learningButton, learningMenu);
+  nav.children[3].replaceWith(learningGroup);
+
   const group = document.createElement('div');
   group.className = 'mobile-tools';
   const button = document.createElement('button');
@@ -140,8 +217,6 @@
     }
   };
   window.addEventListener('freebbs:session-change', syncAdmin);
-  window.freeBbsApp?.sessionReady?.then(syncAdmin);
-  syncAdmin();
   const close = (restore = false) => {
     menu.hidden = true;
     button.setAttribute('aria-expanded', 'false');
@@ -152,7 +227,7 @@
     node.type = 'button';
     node.className = 'mobile-tool-link mobile-tool-action';
     node.setAttribute('role', 'menuitem');
-    node.innerHTML = '<img src="/assets/icons/' + icon + '.svg" alt=""><span>' + label + '</span>';
+    node.innerHTML = `<img src="/assets/icons/${icon}.svg" alt=""><span>${label}</span>`;
     node.addEventListener('click', (event) => {
       event.stopPropagation();
       close();
@@ -161,23 +236,23 @@
     menu.append(node);
     return node;
   };
-  const theme = action('切换明亮 / 黑暗', 'moon', (event) =>
-    window.freeBbsApp?.toggleThemeMode(event),
-  );
   const inbox = action('通知中心', 'chats', () => {
     if (!window.freeBbsApp?.userState?.isLoggedIn) {
-      location.href = '/login';
+      window.location.href = '/login';
       return;
     }
     window.dispatchEvent(new CustomEvent('freebbs:open-notifications'));
   });
   window.addEventListener('freebbs:notification-count', (event) => {
     const count = Number(event.detail?.count) || 0;
-    inbox.querySelector('span').textContent = count ? '通知中心 · ' + count + ' 未读' : '通知中心';
+    inbox.querySelector('span').textContent = count ? `通知中心 · ${count} 未读` : '通知中心';
     button.classList.toggle('has-unread', count > 0);
   });
+  window.freeBbsApp?.sessionReady?.then(syncAdmin);
+  syncAdmin();
   button.addEventListener('click', () => {
     closeCreate();
+    closeLearning();
     menu.hidden = !menu.hidden;
     button.setAttribute('aria-expanded', String(!menu.hidden));
   });
@@ -211,7 +286,7 @@
     if (event.target.closest('a')) close();
   });
   window.addEventListener('resize', () => {
-    if (innerWidth > 900) close();
+    if (window.innerWidth > 900) close();
   });
   group.append(button, menu);
   nav.append(group);

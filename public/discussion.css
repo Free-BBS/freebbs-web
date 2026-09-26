@@ -783,6 +783,49 @@ body.discussion-page .discussion-post-preview-circuit {
   --circuit-muted: var(--discussion-muted);
 }
 
+.discussion-mention-picker {
+  position: fixed;
+  z-index: 1200;
+  box-sizing: border-box;
+  max-height: min(288px, 42vh);
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--ui-line, #cbd9dc);
+  border-radius: 12px;
+  background: var(--ui-surface, #fff);
+  box-shadow: 0 18px 48px rgb(20 45 52 / 18%);
+}
+.discussion-mention-picker[hidden] {
+  display: none !important;
+}
+.discussion-mention-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-text, #17333a);
+  font: 600 14px/1.35 var(--font-ui, sans-serif);
+  text-align: left;
+  cursor: pointer;
+}
+.discussion-mention-option:is(:hover, :focus-visible, .is-active) {
+  outline: 0;
+  background: var(--ui-surface-soft, #edf5f4);
+  color: var(--ui-accent, #137c7a);
+}
+.discussion-mention-option img {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 @media (max-width: 900px) {
   body.discussion-page .main-content.settings-main {
     width: 100%;

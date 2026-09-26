@@ -32,6 +32,7 @@ const userState = {
   avatarPath: '',
   bio: '',
   websiteUrl: '',
+  goldenName: null,
   electrons: 0,
   manetrons: 0,
   heat: 0,
@@ -373,6 +374,7 @@ function initializeDashboardShell() {
     '/knowledge': '知识点',
     '/discussion': '讨论区',
     '/circuits': '电路实验室',
+    '/tool-workshop': '小工具工坊',
     '/circuit': '电路仿真',
     '/circuit-challenge': '电路闯关',
     '/workbench': '我的工作台',
@@ -402,6 +404,7 @@ function initializeDashboardShell() {
     { href: '/world', icon: 'map', label: '学习世界' },
     { href: '/discussion', icon: 'people', label: '讨论区' },
     { href: '/circuits', icon: 'circuit', label: '电路实验室' },
+    { href: '/tool-workshop', icon: 'wrench', label: '小工具工坊' },
     { href: '/workbench', icon: 'run', label: '我的工作台' },
     { href: '/aichat', icon: 'ai', label: '问问 Max' },
     { href: '/surveys', icon: 'calendar', label: '活动报名' },
@@ -419,7 +422,7 @@ function initializeDashboardShell() {
     activePath = '/system-settings';
   } else if (['/course', '/knowledge'].includes(path)) {
     activePath = '/world';
-  } else if (path === '/circuit') {
+  } else if (path === '/circuit' || path === '/circuit-challenge') {
     activePath = '/circuits';
   }
 
@@ -1547,6 +1550,75 @@ async function handleLaserCharge(button) {
   }
 }
 
+let goldenNameClockOffsetMs = 0;
+let goldenNameLatestServerNowMs = 0;
+let goldenNameRefreshTimer = 0;
+let goldenNameRefreshQueued = false;
+
+function refreshGoldenNameEffects() {
+  goldenNameRefreshQueued = false;
+  window.clearTimeout(goldenNameRefreshTimer);
+  goldenNameRefreshTimer = 0;
+  const nowMs = Date.now() + goldenNameClockOffsetMs;
+  let remainingMs = Infinity;
+  document.querySelectorAll('[data-golden-name-expires]').forEach((node) => {
+    const expiresAtMs = Number(node.dataset.goldenNameExpires || 0);
+    const active = Number.isFinite(expiresAtMs) && expiresAtMs > nowMs;
+    node.classList.toggle('has-golden-name', active);
+    if (active) remainingMs = Math.min(remainingMs, expiresAtMs - nowMs);
+    else delete node.dataset.goldenNameExpires;
+  });
+  if (Number.isFinite(remainingMs)) {
+    goldenNameRefreshTimer = window.setTimeout(
+      refreshGoldenNameEffects,
+      Math.min(remainingMs + 1, 60000),
+    );
+  }
+}
+
+function queueGoldenNameRefresh() {
+  if (goldenNameRefreshQueued) return;
+  goldenNameRefreshQueued = true;
+  queueMicrotask(refreshGoldenNameEffects);
+}
+
+function getActiveGoldenNameExpiry(goldenName) {
+  if (!goldenName?.active) return 0;
+  const expiresAtMs = Number(goldenName.expiresAtMs || 0);
+  const serverNowMs = Number(goldenName.serverNowMs || 0);
+  if (Number.isFinite(serverNowMs) && serverNowMs > goldenNameLatestServerNowMs) {
+    goldenNameLatestServerNowMs = serverNowMs;
+    goldenNameClockOffsetMs = serverNowMs - Date.now();
+  }
+  const active = Number.isFinite(expiresAtMs) && expiresAtMs > Date.now() + goldenNameClockOffsetMs;
+  if (active) queueGoldenNameRefresh();
+  return active ? expiresAtMs : 0;
+}
+
+function isGoldenNameActive(goldenName) {
+  return getActiveGoldenNameExpiry(goldenName) > 0;
+}
+
+function syncGoldenNameElement(node, goldenName) {
+  if (!node) return;
+  const expiresAtMs = getActiveGoldenNameExpiry(goldenName);
+  node.classList.toggle('has-golden-name', expiresAtMs > 0);
+  if (expiresAtMs > 0) node.dataset.goldenNameExpires = String(expiresAtMs);
+  else delete node.dataset.goldenNameExpires;
+}
+
+function formatGoldenNameExpiry(value) {
+  const expiresAtMs = Number(value || 0);
+  if (!Number.isFinite(expiresAtMs) || expiresAtMs <= 0) return '未知时间';
+  return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(expiresAtMs));
+}
+
 function openInventoryInspectModal(asset) {
   if (!asset) {
     return;
@@ -1578,6 +1650,19 @@ function openInventoryInspectModal(asset) {
       <button class="electromagnetic-button" data-action="convert" data-direction="magnetic_to_electric" type="button" title="10 磁元转 10 电元">磁 → 电</button>
     `
       : '';
+  const goldenNameActions =
+    asset.key === 'golden_name_card'
+      ? `
+      <div class="inventory-golden-name-actions">
+        <p class="fortune-record-empty">${
+          isGoldenNameActive(catalogItem?.goldenName)
+            ? `当前黄金名片有效至 ${escapeHtml(formatGoldenNameExpiry(catalogItem.goldenName.expiresAtMs))}；再次使用会顺延 7 天。`
+            : '使用后，名字将在接下来的 7 天显示为黄金色泽。'
+        }</p>
+        <button class="electromagnetic-button" data-action="use-golden-name" type="button">使用黄金名片</button>
+      </div>
+    `
+      : '';
   const giftActions = canGift
     ? `
       <div class="inventory-gift-form" data-gift-asset-key="${escapeHtml(asset.key)}">
@@ -1591,6 +1676,7 @@ function openInventoryInspectModal(asset) {
     renderPurchaseProgress(item),
     renderLaserControls(item),
     window.FreeBbsProfileExtras?.inventoryActions(asset.key),
+    goldenNameActions,
     converterActions,
     giftActions,
   ]
@@ -1652,6 +1738,7 @@ function groupShopItems(items) {
     avatar_frame: 0,
     profile_card: 0,
     nameplate: 0,
+    name_effect: 0,
     device: 0,
     collectible: 1,
     scholar_relic: 1,
@@ -1669,6 +1756,7 @@ function groupShopItems(items) {
     'card_twilight',
     'plate_observer',
     'plate_maxwell',
+    'golden_name_card',
     'laser',
     'mysterious_fragment',
     'maxwell_spectacles',
@@ -1741,7 +1829,7 @@ async function loadElectromagneticPage() {
             ${renderShopItemMedia(item)}
           </div>
           <div class="shop-item-copy">
-            <span class="shop-category">${escapeHtml({ avatar_frame: '头像框', nameplate: '铭牌', profile_card: '主页主题', pet: '牧场伙伴', pet_food: '牧场食物', pet_tool: '牧场工具', scholar_relic: '学者收藏', collectible: '神秘收藏', decoration: '牧场纪念', device: '发光设备', converter: '货币转换', consumable: '消耗品' }[item.class] || '小物件')}</span>
+            <span class="shop-category">${escapeHtml({ avatar_frame: '头像框', nameplate: '铭牌', name_effect: '名字特效', profile_card: '主页主题', pet: '牧场伙伴', pet_food: '牧场食物', pet_tool: '牧场工具', scholar_relic: '学者收藏', collectible: '神秘收藏', decoration: '牧场纪念', device: '发光设备', converter: '货币转换', consumable: '消耗品' }[item.class] || '小物件')}</span>
             <h2>${escapeHtml(item.name)}</h2>
             <p>${escapeHtml(item.description || '查看详情，了解这个物品。')}</p>
             <strong class="shop-item-price">${escapeHtml(renderShopItemPrice(item))}</strong>
@@ -1955,9 +2043,10 @@ async function handleElectromagneticPageClick(event) {
   }
 }
 
-// Keep unresolved gift intents across modal closes/reopens, scoped to the login session.
+// Keep unresolved inventory intents across modal closes/reopens, scoped to the login session.
 const inventoryGiftIntents = new Map();
 let inventoryGiftSession = null;
+let goldenNameUseIntent = null;
 async function handleInventoryPageClick(event) {
   const closeInspect = event.target.closest("[data-action='close-shop-inspect']");
   if (closeInspect) {
@@ -1984,6 +2073,65 @@ async function handleInventoryPageClick(event) {
 
   if (button.dataset.action === 'charge-laser') {
     await handleLaserCharge(button);
+    return;
+  }
+
+  if (button.dataset.action === 'use-golden-name') {
+    const sessionToken = userState.token;
+    if (!userState.isLoggedIn) return;
+    if (!goldenNameUseIntent || goldenNameUseIntent.sessionToken !== sessionToken) {
+      goldenNameUseIntent = {
+        requestKey: window.crypto.randomUUID(),
+        sessionToken,
+        pending: false,
+      };
+    }
+    if (goldenNameUseIntent.pending) return;
+    goldenNameUseIntent.pending = true;
+    button.disabled = true;
+    const modal = document.getElementById('shop-inspect-modal');
+    const modalMessage = modal?.querySelector('#shop-inspect-message');
+    if (message) message.textContent = '正在使用黄金名片…';
+    if (modalMessage) modalMessage.textContent = '正在使用黄金名片…';
+    try {
+      const payload = await callApi('/electromagnetic/golden-name/use', {
+        method: 'POST',
+        body: JSON.stringify({ requestKey: goldenNameUseIntent.requestKey }),
+      });
+      if (sessionToken !== userState.token || !userState.isLoggedIn) return;
+      if (payload.user) saveSession(sessionToken, payload.user);
+      if (Array.isArray(payload.shopItems)) {
+        economyShopItems = payload.shopItems.map(normalizeShopCatalogItem);
+      }
+      goldenNameUseIntent = null;
+      await loadInventoryPage();
+      if (sessionToken !== userState.token || !userState.isLoggedIn) return;
+      const asset = (window.freeBbsInventoryAssets || []).find(
+        (entry) => entry.key === 'golden_name_card',
+      );
+      if (asset && modal && !modal.classList.contains('hidden')) {
+        openInventoryInspectModal(asset);
+      } else if (modal && !asset) {
+        modal.classList.add('hidden');
+      }
+      const success = payload.use?.replayed
+        ? '已确认原操作，没有重复消耗名片。'
+        : `黄金名片已生效，有效至 ${formatGoldenNameExpiry(payload.use?.expiresAtMs)}。`;
+      if (message) message.textContent = success;
+      const refreshedMessage = document.getElementById('shop-inspect-message');
+      if (refreshedMessage) refreshedMessage.textContent = success;
+    } catch (error) {
+      if (sessionToken !== userState.token || !userState.isLoggedIn) return;
+      if (error.status === 409) {
+        await loadInventoryPage();
+        goldenNameUseIntent = null;
+      }
+      if (message) message.textContent = error.message;
+      if (modalMessage) modalMessage.textContent = error.message;
+    } finally {
+      if (goldenNameUseIntent) goldenNameUseIntent.pending = false;
+      button.disabled = false;
+    }
     return;
   }
 
@@ -2841,6 +2989,8 @@ function renderUser() {
 
   if (!userState.isLoggedIn) {
     userName.textContent = '登录/注册';
+    userName.classList.remove('has-golden-name');
+    delete userName.dataset.goldenNameExpires;
     userName.title = '';
     userName.disabled = false;
     if (userRole) {
@@ -2872,6 +3022,7 @@ function renderUser() {
   userName.textContent = userState.username;
   userName.title = userState.username;
   userName.disabled = true;
+  syncGoldenNameElement(userName, userState.goldenName);
   if (userRole) {
     userRole.textContent = userState.isAdmin
       ? '管理员'
@@ -2960,6 +3111,7 @@ function saveSession(token, user) {
   userState.cosmetics = user.cosmetics || userState.cosmetics || {};
   userState.bio = user.bio || '';
   userState.websiteUrl = user.websiteUrl || '';
+  userState.goldenName = user.goldenName || null;
   userState.electrons = user.electrons ?? 0;
   userState.manetrons = user.manetrons ?? 0;
   userState.heat = user.heat ?? 0;
@@ -2995,6 +3147,7 @@ function clearSession() {
   userState.avatarPath = '';
   userState.bio = '';
   userState.websiteUrl = '';
+  userState.goldenName = null;
   userState.electrons = 0;
   userState.manetrons = 0;
   userState.heat = 0;
@@ -3195,16 +3348,21 @@ function renderAuthorProfileLink(author, className, includeAvatar = false) {
   const profileHref = getProfileHref(author?.uid);
   const frame = window.FreeBbsProfileExtras?.frame(author?.cosmetics) || '';
   const nameplate = window.FreeBbsProfileExtras?.badge(author?.cosmetics?.nameplate) || '';
+  const goldenNameExpiry = getActiveGoldenNameExpiry(author?.goldenName);
+  const nameClass = goldenNameExpiry ? 'user-display-name has-golden-name' : 'user-display-name';
+  const goldenNameAttribute = goldenNameExpiry
+    ? ` data-golden-name-expires="${goldenNameExpiry}"`
+    : '';
 
   if (!profileHref) {
     return includeAvatar
       ? `
         <span class="${className}">
           <img class="discussion-post-avatar" src="${escapeHtml(getAvatarUrl(author?.avatarPath))}" alt="${displayName} 的头像" />
-          <span>${displayName}</span>
+          <span class="${nameClass}"${goldenNameAttribute}>${displayName}</span>
         </span>
       `
-      : `<span class="${className}">${displayName}</span>`;
+      : `<span class="${className}"><span class="${nameClass}"${goldenNameAttribute}>${displayName}</span></span>`;
   }
 
   return includeAvatar
@@ -3213,10 +3371,10 @@ function renderAuthorProfileLink(author, className, includeAvatar = false) {
         <span class="discussion-avatar-frame" data-frame="${frame}">
           <img class="discussion-post-avatar" data-avatar-frame="${frame}" src="${escapeHtml(getAvatarUrl(author?.avatarPath))}" alt="${displayName} 的头像" />
         </span>
-        <span>${displayName}</span>
+        <span class="${nameClass}"${goldenNameAttribute}>${displayName}</span>
       </a>
     `
-    : `<a class="${className}" data-action="open-profile" href="${profileHref}">${displayName}${nameplate}</a>`;
+    : `<a class="${className}" data-action="open-profile" href="${profileHref}"><span class="${nameClass}"${goldenNameAttribute}>${displayName}</span>${nameplate}</a>`;
 }
 
 function normalizeWebsiteUrl(value) {
@@ -3343,6 +3501,7 @@ function renderHomeDiscussionPosts(posts, mode = homeDashboardState.feedMode) {
       const commentCount = Number(post.commentCount || 0);
       const authorName =
         post.author?.displayName || post.author?.fullName || post.author?.username || '匿名用户';
+      const goldenNameExpiry = getActiveGoldenNameExpiry(post.author?.goldenName);
       const boardSlug = post.board?.slug || 'all';
       const boardName = post.board?.name || '全部';
 
@@ -3360,7 +3519,7 @@ function renderHomeDiscussionPosts(posts, mode = homeDashboardState.feedMode) {
           </span>
           <h3 class="home-feed-title">${escapeHtml(post.title)}</h3>
           <span class="home-feed-meta">
-            <span class="home-feed-author">${escapeHtml(authorName)}</span>
+            <span class="home-feed-author ${goldenNameExpiry ? 'has-golden-name' : ''}"${goldenNameExpiry ? ` data-golden-name-expires="${goldenNameExpiry}"` : ''}>${escapeHtml(authorName)}</span>
             <span
               class="home-feed-signals"
               aria-label="${commentCount} 条评论，${reactionCount} 个反应"
@@ -5758,6 +5917,203 @@ function clearDiscussionCommentDraft(postId, parentCommentId = 0) {
   discussionCommentDrafts.delete(getDiscussionCommentDraftKey(postId, parentCommentId));
 }
 
+const discussionMentionSearch = {
+  input: null,
+  range: null,
+  users: [],
+  activeIndex: 0,
+  timer: 0,
+  controller: null,
+  sequence: 0,
+};
+
+function isDiscussionMentionInput(input) {
+  return Boolean(
+    input &&
+    (input === discussionComposeContent || input.classList?.contains('discussion-comment-input')),
+  );
+}
+
+function ensureDiscussionMentionPicker() {
+  let picker = document.getElementById('discussion-mention-picker');
+  if (picker) return picker;
+  picker = document.createElement('div');
+  picker.id = 'discussion-mention-picker';
+  picker.className = 'discussion-mention-picker';
+  picker.setAttribute('role', 'listbox');
+  picker.setAttribute('aria-label', '搜索并选择要提到的用户');
+  picker.hidden = true;
+  picker.addEventListener('pointerdown', (event) => event.preventDefault());
+  picker.addEventListener('click', (event) => {
+    const option = event.target.closest('[data-mention-username]');
+    if (option) selectDiscussionMention(option.dataset.mentionUsername);
+  });
+  document.body.append(picker);
+  return picker;
+}
+
+function getDiscussionMentionRange(input) {
+  const cursor = Number(input?.selectionStart);
+  if (!Number.isInteger(cursor)) return null;
+  const before = input.value.slice(0, cursor);
+  const match = before.match(/(^|[\s([{"'])@([A-Za-z0-9_]*)$/);
+  if (!match || !match[2]) return null;
+  return {
+    start: cursor - match[2].length - 1,
+    end: cursor,
+    query: match[2],
+  };
+}
+
+function positionDiscussionMentionPicker() {
+  const picker = document.getElementById('discussion-mention-picker');
+  const input = discussionMentionSearch.input;
+  if (!picker || picker.hidden || !input?.isConnected) return;
+  const rect = input.getBoundingClientRect();
+  const width = Math.min(340, Math.max(220, rect.width));
+  const left = Math.min(
+    Math.max(12, rect.left),
+    Math.max(12, document.documentElement.clientWidth - width - 12),
+  );
+  const roomBelow = window.innerHeight - rect.bottom;
+  picker.style.width = `${width}px`;
+  picker.style.left = `${left}px`;
+  picker.style.top =
+    roomBelow >= Math.min(260, picker.offsetHeight + 12)
+      ? `${Math.min(window.innerHeight - picker.offsetHeight - 12, rect.bottom + 6)}px`
+      : `${Math.max(12, rect.top - picker.offsetHeight - 6)}px`;
+}
+
+function hideDiscussionMentionPicker() {
+  window.clearTimeout(discussionMentionSearch.timer);
+  discussionMentionSearch.timer = 0;
+  discussionMentionSearch.controller?.abort();
+  discussionMentionSearch.controller = null;
+  const picker = document.getElementById('discussion-mention-picker');
+  if (picker) picker.hidden = true;
+  if (discussionMentionSearch.input) {
+    discussionMentionSearch.input.setAttribute('aria-expanded', 'false');
+    discussionMentionSearch.input.removeAttribute('aria-activedescendant');
+  }
+  discussionMentionSearch.input = null;
+  discussionMentionSearch.range = null;
+  discussionMentionSearch.users = [];
+}
+
+function renderDiscussionMentionPicker() {
+  const picker = ensureDiscussionMentionPicker();
+  const users = discussionMentionSearch.users;
+  if (!users.length || !discussionMentionSearch.input) {
+    hideDiscussionMentionPicker();
+    return;
+  }
+  picker.innerHTML = users
+    .map((user, index) => {
+      const optionId = `discussion-mention-option-${index}`;
+      const goldenNameExpiry = getActiveGoldenNameExpiry(user.goldenName);
+      return `
+        <button
+          id="${optionId}"
+          class="discussion-mention-option ${index === discussionMentionSearch.activeIndex ? 'is-active' : ''}"
+          type="button"
+          role="option"
+          aria-selected="${index === discussionMentionSearch.activeIndex}"
+          data-mention-username="${escapeHtml(user.username)}"
+        >
+          <img src="${escapeHtml(getAvatarUrl(user.avatarPath))}" alt="" />
+          <span class="${goldenNameExpiry ? 'has-golden-name' : ''}"${goldenNameExpiry ? ` data-golden-name-expires="${goldenNameExpiry}"` : ''}>@${escapeHtml(user.username)}</span>
+        </button>`;
+    })
+    .join('');
+  picker.hidden = false;
+  const input = discussionMentionSearch.input;
+  input.setAttribute('aria-controls', picker.id);
+  input.setAttribute('aria-haspopup', 'listbox');
+  input.setAttribute('aria-expanded', 'true');
+  input.setAttribute(
+    'aria-activedescendant',
+    `discussion-mention-option-${discussionMentionSearch.activeIndex}`,
+  );
+  positionDiscussionMentionPicker();
+}
+
+async function searchDiscussionMentions(input, range) {
+  discussionMentionSearch.sequence += 1;
+  const { sequence } = discussionMentionSearch;
+  discussionMentionSearch.controller?.abort();
+  const controller = new AbortController();
+  discussionMentionSearch.controller = controller;
+  try {
+    const payload = await callApi(
+      `/discussion/users/search?q=${encodeURIComponent(range.query)}&limit=8`,
+      { method: 'GET', signal: controller.signal },
+    );
+    if (
+      sequence !== discussionMentionSearch.sequence ||
+      input !== discussionMentionSearch.input ||
+      getDiscussionMentionRange(input)?.query !== range.query
+    )
+      return;
+    discussionMentionSearch.users = payload.users || [];
+    discussionMentionSearch.activeIndex = 0;
+    renderDiscussionMentionPicker();
+  } catch (error) {
+    if (error.name !== 'AbortError' && sequence === discussionMentionSearch.sequence) {
+      hideDiscussionMentionPicker();
+    }
+  }
+}
+
+function handleDiscussionMentionInput(event) {
+  const input = event.target;
+  if (!isDiscussionMentionInput(input) || event.isComposing || !userState.isLoggedIn) return;
+  const range = getDiscussionMentionRange(input);
+  if (!range) {
+    hideDiscussionMentionPicker();
+    return;
+  }
+  discussionMentionSearch.input = input;
+  discussionMentionSearch.range = range;
+  window.clearTimeout(discussionMentionSearch.timer);
+  discussionMentionSearch.timer = window.setTimeout(
+    () => searchDiscussionMentions(input, range),
+    180,
+  );
+}
+
+function selectDiscussionMention(username) {
+  const input = discussionMentionSearch.input;
+  const range = discussionMentionSearch.range;
+  if (!input || !range || !username) return;
+  const replacement = `@${username} `;
+  input.setRangeText(replacement, range.start, range.end, 'end');
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  hideDiscussionMentionPicker();
+  input.focus();
+}
+
+function handleDiscussionMentionKeydown(event) {
+  if (event.target !== discussionMentionSearch.input || !discussionMentionSearch.users.length)
+    return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    hideDiscussionMentionPicker();
+    return;
+  }
+  if (!['ArrowDown', 'ArrowUp', 'Enter', 'Tab'].includes(event.key)) return;
+  event.preventDefault();
+  if (event.key === 'Enter' || event.key === 'Tab') {
+    selectDiscussionMention(
+      discussionMentionSearch.users[discussionMentionSearch.activeIndex]?.username,
+    );
+    return;
+  }
+  const count = discussionMentionSearch.users.length;
+  discussionMentionSearch.activeIndex =
+    (discussionMentionSearch.activeIndex + (event.key === 'ArrowDown' ? 1 : -1) + count) % count;
+  renderDiscussionMentionPicker();
+}
+
 function renderDiscussionCommentComposerFields({
   postId,
   parentCommentId = 0,
@@ -6921,6 +7277,7 @@ async function loadPublicProfile() {
     }
     if (publicProfileName) {
       publicProfileName.textContent = profile.username || '未命名用户';
+      syncGoldenNameElement(publicProfileName, profile.goldenName);
     }
     if (publicProfileStudentId) {
       publicProfileStudentId.textContent = profile.uid ? `UID ${profile.uid}` : '未公开 UID';
@@ -10130,6 +10487,20 @@ discussionDetail?.addEventListener('submit', handleDiscussionCommentSubmit);
 discussionDetail?.addEventListener('input', handleDiscussionCommentInput);
 discussionDetail?.addEventListener('compositionstart', handleDiscussionCommentCompositionStart);
 discussionDetail?.addEventListener('compositionend', handleDiscussionCommentCompositionEnd);
+document.addEventListener('input', handleDiscussionMentionInput);
+document.addEventListener('keydown', handleDiscussionMentionKeydown, true);
+document.addEventListener('pointerdown', (event) => {
+  const picker = document.getElementById('discussion-mention-picker');
+  if (
+    discussionMentionSearch.input &&
+    event.target !== discussionMentionSearch.input &&
+    !picker?.contains(event.target)
+  ) {
+    hideDiscussionMentionPicker();
+  }
+});
+window.addEventListener('resize', positionDiscussionMentionPicker);
+window.addEventListener('scroll', positionDiscussionMentionPicker, true);
 discussionCreateToggle?.addEventListener('click', handleDiscussionCreateToggle);
 discussionComposeForm?.addEventListener('submit', handleDiscussionComposeSubmit);
 discussionComposeBoard?.addEventListener('change', syncDiscussionAnonymousOption);

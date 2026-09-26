@@ -37,6 +37,7 @@ const {
 const { ensureSurveyTables, createSurveyService, createSurveysRouter } = require('./surveys');
 const pool = require('./db');
 const { createSiteSearch, createSiteSearchRouter } = require('./site-search');
+const { createFrontendToolsRouter } = require('./frontend-tools');
 const config = require('./config');
 const {
   createDevelopmentAuthClient,
@@ -1484,6 +1485,8 @@ function currencyColumn(currency) {
 }
 
 function toUserProfile(row) {
+  const goldenNameExpiresAtMs = Number(row.golden_name_expires_at_ms || 0);
+  const serverNowMs = Date.now();
   return {
     id: row.id,
     uid: row.uid || '',
@@ -1503,6 +1506,11 @@ function toUserProfile(row) {
     electrons: Number(row.electrons || 0),
     manetrons: Number(row.manetrons || 0),
     heat: Number(row.heat || 0),
+    goldenName: {
+      expiresAtMs: goldenNameExpiresAtMs,
+      serverNowMs,
+      active: goldenNameExpiresAtMs > serverNowMs,
+    },
     createdAt: row.created_at,
   };
 }
@@ -1572,6 +1580,7 @@ function toDiscussionPostSummary(row, viewerId = 0) {
           displayName: row.username || '匿名用户',
           avatarPath: row.avatar_path || '',
           cosmetics: !isDeleted ? row.cosmetics || {} : {},
+          goldenName: !isDeleted ? row.goldenName || null : null,
         },
     likeCount: Number(row.like_count || 0),
     lightCount: Number(row.light_count || 0),
@@ -1606,6 +1615,7 @@ function toDiscussionComment(row) {
           fullName: '',
           displayName: row.username || '匿名用户',
           avatarPath: row.avatar_path || '',
+          goldenName: row.goldenName || null,
         },
   };
 }
@@ -1747,6 +1757,42 @@ async function postAgentChat(payload, user = null, { signal } = {}) {
   });
   upstream.siteSources = siteReferences(enrichedPayload.context?.siteBrowse, config.publicWebUrl);
   return upstream;
+}
+
+async function generateFrontendToolHtml({ user, prompt, currentHtml }) {
+  const instruction = [
+    '你是 FREE-BBS 小工具工坊的前端制作助手。',
+    '只返回一个完整、可独立运行的单文件 HTML，不要使用 Markdown 代码围栏或解释文字。',
+    '把 CSS 和 JavaScript 全部内联；不得引用外部网络资源，不得收集个人信息，不得提交表单或打开新窗口。',
+    '界面需适配手机与桌面，具备清楚的标签、键盘焦点与必要的空状态。',
+    currentHtml
+      ? `请在下面现有 HTML 基础上修改，保留仍然符合要求的功能：\n${currentHtml}`
+      : '请从零制作。',
+    `用户需求：${prompt}`,
+  ].join('\n\n');
+  const payload = buildAgentChatPayload(
+    user,
+    {
+      messages: [{ role: 'user', content: instruction }],
+      stream: false,
+      temperature: 0.35,
+    },
+    { agent: 'general_chat', source: 'tool_workshop', channel: 'tool_workshop' },
+  );
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120000);
+  timeout.unref?.();
+  try {
+    const upstream = await postAgentChat(payload, user, { signal: controller.signal });
+    const result = await upstream.json().catch(() => ({}));
+    if (!upstream.ok)
+      throw Object.assign(new Error(result.message || `AI 服务返回 ${upstream.status}`), {
+        status: 502,
+      });
+    return result.answer || result.result?.answer || result.content || '';
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function normalizeKnowledgeRagText(value, maximumLength) {
@@ -2616,8 +2662,13 @@ function issueToken(user) {
 
 async function getUserById(id) {
   const [rows] = await pool.execute(
-    `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, is_admin, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
-     FROM users WHERE id = ? LIMIT 1`,
+    `SELECT u.id, u.uid, u.username, u.full_name, u.student_id, u.email, u.email_verified_at,
+            u.role, u.is_admin, u.electrons, u.manetrons, u.heat, u.grade, u.major,
+            u.avatar_path, u.bio, u.website_url, u.created_at,
+            COALESCE(g.expires_at_ms, 0) AS golden_name_expires_at_ms
+     FROM users u
+     LEFT JOIN user_golden_names g ON g.user_id = u.id
+     WHERE u.id = ? LIMIT 1`,
     [id],
   );
 
@@ -2626,8 +2677,13 @@ async function getUserById(id) {
 
 async function getUserByIdFromUsername(username) {
   const [rows] = await pool.execute(
-    `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, is_admin, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
-     FROM users WHERE username = ? LIMIT 1`,
+    `SELECT u.id, u.uid, u.username, u.full_name, u.student_id, u.email, u.email_verified_at,
+            u.role, u.is_admin, u.electrons, u.manetrons, u.heat, u.grade, u.major,
+            u.avatar_path, u.bio, u.website_url, u.created_at,
+            COALESCE(g.expires_at_ms, 0) AS golden_name_expires_at_ms
+     FROM users u
+     LEFT JOIN user_golden_names g ON g.user_id = u.id
+     WHERE u.username = ? LIMIT 1`,
     [username],
   );
 
@@ -2903,6 +2959,15 @@ maxDocumentStore = require('./max-files').registerMaxFiles(app, requireAuth, {
 });
 
 app.use('/api/search', createSiteSearchRouter(siteSearch, getOptionalAuthUser));
+app.use(
+  '/api/tools',
+  createFrontendToolsRouter({
+    pool,
+    requireAuth,
+    getOptionalAuthUser,
+    generateHtml: generateFrontendToolHtml,
+  }),
+);
 
 app.post('/api/ai/chat', async (request, response) => {
   const user = await requireAuth(request, response);
@@ -3516,6 +3581,28 @@ app.post('/api/electromagnetic/laser/charge', async (request, response) => {
   }
 });
 
+app.post('/api/electromagnetic/golden-name/use', async (request, response) => {
+  response.set('Cache-Control', 'private, no-store');
+  try {
+    const user = await requireAuth(request, response);
+    if (!user) return;
+    const use = await economyShop.useGoldenName({
+      userId: user.id,
+      requestKey: request.body.requestKey,
+    });
+    response.json({
+      use,
+      user: toUserProfile(await getUserById(user.id)),
+      assets: await getUserAssets(user.id),
+      shopItems: await economyShop.decorate(getShopItems(), user.id),
+    });
+  } catch (error) {
+    if (error instanceof ShopPurchaseError)
+      response.status(error.status).json({ message: error.message, code: error.code });
+    else response.status(500).json({ message: '黄金名片使用失败，请重试确认原操作' });
+  }
+});
+
 app.get('/api/profile/extras', async (request, response) => {
   response.set('Cache-Control', 'private, no-store');
   try {
@@ -4126,6 +4213,52 @@ app.get('/api/discussion/stats', async (request, response) => {
   }
 });
 
+app.get('/api/discussion/users/search', async (request, response) => {
+  response.set('Cache-Control', 'private, no-store');
+  try {
+    const user = await requireAuth(request, response);
+    if (!user) return;
+    const query = String(request.query.q || '').trim();
+    const limit = normalizeLimit(request.query.limit, 8, 12);
+    if (!query || query.length > 64 || /[^A-Za-z0-9_]/.test(query)) {
+      response.status(400).json({ message: '请输入用户名中的字母、数字或下划线' });
+      return;
+    }
+    const [rows] = await pool.execute(
+      `SELECT u.id, u.uid, u.username, u.avatar_path,
+              COALESCE(g.expires_at_ms, 0) AS golden_name_expires_at_ms
+       FROM users u
+       LEFT JOIN user_golden_names g ON g.user_id = u.id
+       WHERE u.id <> ? AND LOWER(u.username) LIKE CONCAT('%', LOWER(?), '%')
+       ORDER BY CASE
+                  WHEN LOWER(u.username) = LOWER(?) THEN 0
+                  WHEN LOWER(u.username) LIKE CONCAT(LOWER(?), '%') THEN 1
+                  ELSE 2
+                END,
+                u.username ASC
+       LIMIT ${limit}`,
+      [user.id, query, query, query],
+    );
+    const serverNowMs = Date.now();
+    response.json({
+      users: rows.map((row) => ({
+        id: row.id,
+        uid: row.uid || '',
+        username: row.username,
+        displayName: row.username,
+        avatarPath: row.avatar_path || '',
+        goldenName: {
+          expiresAtMs: Number(row.golden_name_expires_at_ms || 0),
+          serverNowMs,
+          active: Number(row.golden_name_expires_at_ms || 0) > serverNowMs,
+        },
+      })),
+    });
+  } catch (error) {
+    response.status(500).json({ message: '搜索用户失败', detail: error.message });
+  }
+});
+
 app.get('/api/discussion/posts', async (request, response) => {
   const boardSlug = String(request.query.board || 'all')
     .trim()
@@ -4444,6 +4577,16 @@ app.post('/api/discussion/posts', async (request, response) => {
         undefined,
         'community',
       );
+      if (!isAnonymous) {
+        await notifications.notifyMentions(
+          {
+            actor: user,
+            post: { id: created.insertId, pid: postPid, title, user_id: user.id },
+            contentMarkdown,
+          },
+          connection,
+        );
+      }
       return created;
     });
 
@@ -4861,6 +5004,16 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
         { actor: user, post, commentId: inserted.insertId, parentAuthorId, contentMarkdown },
         connection,
       );
+      await notifications.notifyMentions(
+        {
+          actor: user,
+          post,
+          commentId: inserted.insertId,
+          contentMarkdown,
+          excludeUserIds: [post.user_id, parentAuthorId],
+        },
+        connection,
+      );
       return inserted;
     });
 
@@ -5272,7 +5425,7 @@ app.post('/api/auth/login', async (request, response) => {
     }
 
     await loginRateLimiter.resetAccount(row);
-    const user = toUserProfile(row);
+    const user = toUserProfile(await getUserById(row.id));
 
     response.json({
       token: issueToken(user),
@@ -5415,6 +5568,7 @@ app.get('/api/users/:uid/public-profile', async (request, response) => {
     }
 
     const user = rows[0];
+    const [decoratedIdentity] = await economyShop.decoratePosts([{ user_id: user.id }]);
     const studentId = user.student_id;
     const [statsRows] = await pool.execute(
       `SELECT
@@ -5441,6 +5595,7 @@ app.get('/api/users/:uid/public-profile', async (request, response) => {
         createdAt: user.created_at,
         postCount: Number(statsRows[0]?.post_count || 0),
         likeCount: Number(statsRows[0]?.like_count || 0),
+        goldenName: decoratedIdentity.goldenName,
         collectibles: await economyShop.publicCollectibles(getShopItems(), user.id),
         ...(await profileExtras.publicProfile(user.id)),
       },
