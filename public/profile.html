@@ -163,7 +163,7 @@
                   <span id="public-profile-student-id">-</span>
                   <span id="public-profile-major">-</span>
                 </div>
-                <div class="public-profile-website-row">
+                <div class="public-profile-website-row" hidden>
                   <span>个人网页</span>
                   <p id="public-profile-website">-</p>
                 </div>
@@ -189,8 +189,17 @@
             </div>
 
             <p class="auth-message settings-message" id="public-profile-message"></p>
+            <section
+              id="public-profile-activity"
+              class="profile-activity"
+              aria-label="站内活跃度"
+              hidden
+            ></section>
             <section class="profile-additions" aria-label="装扮管理与收藏">
-              <section class="profile-wardrobe" id="public-profile-wardrobe" hidden></section>
+              <details class="profile-wardrobe-disclosure">
+                <summary>管理我的装扮</summary>
+                <section class="profile-wardrobe" id="public-profile-wardrobe" hidden></section>
+              </details>
               <section
                 id="public-profile-collectibles"
                 class="profile-collectibles"
@@ -233,6 +242,7 @@
     <script src="/username-guard.js"></script>
     <script src="/max-ranch.js"></script>
     <script src="/profile-extras.js"></script>
+    <script src="/profile-activity.js"></script>
     <script src="/app.js"></script>
     <script src="/notifications.js"></script>
   </body>

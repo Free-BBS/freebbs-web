@@ -33,7 +33,44 @@
   }
   const models = menu('max-composer-tools', '模型与思考设置', brain);
   models.body.append(controls);
-  const attachments = menu('max-composer-add', '添加文件或图片', plus);
+  const attachments = menu('max-composer-add', '模式与附件', plus);
+  const mode = document.getElementById('max-create-mode');
+  if (mode) {
+    mode.hidden = true;
+    attachments.body.append(mode);
+    const group = document.createElement('div');
+    group.className = 'max-creation-choices';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', '回答方式');
+    const syncMode = () => {
+      group.querySelectorAll('button').forEach((button) => {
+        button.setAttribute('aria-pressed', String(button.dataset.mode === mode.value));
+        button.disabled = mode.disabled;
+      });
+      attachments.summary.title = `模式与附件 · ${mode.selectedOptions[0].textContent}`;
+      attachments.summary.setAttribute('aria-label', attachments.summary.title);
+    };
+    Array.from(mode.options).forEach((option) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.mode = option.value;
+      button.textContent = option.textContent;
+      button.addEventListener('click', () => {
+        mode.value = option.value;
+        mode.dispatchEvent(new Event('change', { bubbles: true }));
+        attachments.details.open = false;
+        document.getElementById('aichat-input')?.focus();
+      });
+      group.append(button);
+    });
+    attachments.body.append(group);
+    mode.addEventListener('change', syncMode);
+    new MutationObserver(syncMode).observe(mode, {
+      attributes: true,
+      attributeFilter: ['disabled'],
+    });
+    syncMode();
+  }
   const fileButton = document.querySelector('[data-file-add]');
   const imageButton = document.querySelector('[data-image-add]');
   const camera = document.createElement('input');
@@ -62,6 +99,9 @@
       () => imageButton.click(),
     ],
   ];
+  const attachmentActions = document.createElement('div');
+  attachmentActions.className = 'max-attachment-choices';
+  attachments.body.append(attachmentActions);
   choices.forEach(([label, paths, original, action]) => {
     const button = document.createElement('button');
     button.type = 'button';
@@ -80,7 +120,7 @@
       attachments.details.open = false;
       attachments.summary.focus();
     });
-    attachments.body.append(button);
+    attachmentActions.append(button);
   });
   document.addEventListener('pointerdown', (event) => {
     // The modal tour owns its controls while illustrating this open menu.
