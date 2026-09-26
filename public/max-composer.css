@@ -308,6 +308,50 @@ body.aichat-page .main-content .aichat-thread {
 }
 
 /* One compact row in every viewport; attachments occupy the rows above it. */
+#max-create-mode {
+  grid-row: 5;
+  grid-column: 2 / -1;
+  justify-self: start;
+  width: auto;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 0.8rem;
+}
+.max-artifact-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.max-artifact-action button,
+.max-artifact-stop {
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 8px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  cursor: pointer;
+}
+.max-artifact-source,
+.max-artifact-stop {
+  grid-column: 2;
+  min-width: 0;
+}
+.max-artifact-source pre {
+  max-height: 280px;
+  overflow: auto;
+  font-size: 0.8rem;
+}
+.max-artifact-source summary {
+  cursor: pointer;
+  padding-block: 8px;
+}
 body.aichat-page .main-content .aichat-composer {
   position: relative;
   overflow: visible;

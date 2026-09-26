@@ -63,6 +63,9 @@
           ? `<span class="discussion-post-preview-tool" data-tid="${preview.tid}" aria-hidden="true"></span>`
           : `<span class="discussion-post-preview-circuit" data-cid="${preview.cid}" data-revision="${preview.revision}" aria-hidden="true"></span>`;
     const label = { image: '图片', circuit: '中的电路图', tool: '中的小工具' }[preview.type];
+    // Keep a native post link usable even when preview enhancement is unavailable.
+    if (preview.type === 'tool')
+      return `<a class="discussion-post-preview" href="/discussion?post=${encodeURIComponent(postId)}" data-action="open-post" data-post-id="${escape(postId)}" aria-label="查看帖子${label}">${media}</a>`;
     return `<button class="discussion-post-preview" type="button" data-action="open-post" data-post-id="${escape(postId)}" aria-label="查看帖子${label}">${media}</button>`;
   }
 
@@ -181,6 +184,7 @@
     const version = {};
     versions.set(root, version);
     const tools = new Map();
+    const visibleTools = new WeakSet();
     const fitTool = (element) => {
       const iframe = element.querySelector('iframe');
       const scale = element.clientWidth / 640;
@@ -207,14 +211,15 @@
             if (!tools.has(preview.tid)) tools.set(preview.tid, loadTool(preview.tid, apiBase));
             const [, tool] = await Promise.all([loadToolSandbox(), tools.get(preview.tid)]);
             if (!root.contains(element) || versions.get(root) !== version) return;
+            if ('IntersectionObserver' in window && !visibleTools.has(element)) return;
+            if (element.querySelector('iframe')) return;
             const iframe = document.createElement('iframe');
-            iframe.title = '小工具静态预览';
-            iframe.setAttribute('sandbox', '');
+            iframe.title = '小工具预览';
+            iframe.setAttribute('sandbox', 'allow-scripts');
             iframe.setAttribute('tabindex', '-1');
             iframe.setAttribute('aria-hidden', 'true');
-            iframe.setAttribute('inert', '');
             iframe.referrerPolicy = 'no-referrer';
-            iframe.srcdoc = window.FreeBbsToolEmbeds.sandboxDocument(tool.html, false);
+            iframe.srcdoc = window.FreeBbsToolEmbeds.sandboxDocument(tool.html, true);
             element.append(iframe);
           }
           fitTool(element);
@@ -256,12 +261,21 @@
     }
     const observer = new IntersectionObserver(
       (entries) => {
-        entries
-          .filter(({ isIntersecting }) => isIntersecting)
-          .forEach(({ target }) => {
+        entries.forEach(({ target, isIntersecting }) => {
+          if (target.classList.contains('discussion-post-preview-tool')) {
+            if (isIntersecting) {
+              visibleTools.add(target);
+              render(target);
+            } else {
+              visibleTools.delete(target);
+              target.querySelector('iframe')?.remove();
+              sizeObserver?.unobserve(target);
+            }
+          } else if (isIntersecting) {
             observer.unobserve(target);
             render(target);
-          });
+          }
+        });
       },
       { rootMargin: '160px' },
     );

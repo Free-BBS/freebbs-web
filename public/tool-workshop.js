@@ -226,7 +226,7 @@
       new Date(tool.updatedAt || tool.createdAt),
     );
     return `<article class="tool-card" tabindex="0" role="button" data-tool-id="${escapeHtml(tool.id)}" aria-label="打开小工具 ${escapeHtml(tool.title)}">
-      <div class="tool-card-preview" aria-hidden="true"><iframe title="${escapeHtml(tool.title)} 静态预览" sandbox="" tabindex="-1" inert></iframe></div>
+      <div class="tool-card-preview" aria-hidden="true"><iframe title="${escapeHtml(tool.title)} 预览" sandbox="allow-scripts" tabindex="-1" referrerpolicy="no-referrer" loading="lazy"></iframe></div>
       <div class="tool-card-copy">
         <h2>${escapeHtml(tool.title)}</h2>
         <p>${escapeHtml(tool.description || '作者还没有写简介。')}</p>
@@ -241,7 +241,7 @@
       : `<div class="tool-gallery-empty">${state.scope === 'mine' ? '你还没有发布小工具。打开制作台，把第一个想法做出来。' : '广场里还没有小工具，来发布第一个作品。'}</div>`;
     gallery.querySelectorAll('.tool-card').forEach((card) => {
       const tool = state.tools.find((entry) => entry.id === card.dataset.toolId);
-      card.querySelector('iframe').srcdoc = sandboxDocument(tool?.html, false);
+      card.querySelector('iframe').srcdoc = sandboxDocument(tool?.html, true);
     });
   }
 
@@ -361,6 +361,21 @@
 
   app.sessionReady.then(async () => {
     await loadTools();
+    try {
+      const draft = window.FreeBbsMaxArtifacts?.read('tool', app.userState.uid);
+      if (draft) {
+        openStudio();
+        titleInput.value = draft.title;
+        htmlInput.value = draft.html;
+        promptInput.value = draft.title;
+        renderCode();
+        selectPanel('preview');
+        status.textContent = '已接收 Max 生成的草稿，尚未发布。';
+        return;
+      }
+    } catch (error) {
+      galleryStatus.textContent = error.message;
+    }
     const requested = new URLSearchParams(window.location.search).get('tool');
     if (!requested) return;
     let tool = state.tools.find((entry) => entry.id === requested);

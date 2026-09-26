@@ -536,6 +536,7 @@
   }
   body.discussion-page .main-content .discussion-post-card {
     padding: 18px 0 !important;
+    overflow: visible;
     gap: 12px !important;
     grid-template-columns: 34px minmax(0, 1fr) !important;
     border: 0 !important;
@@ -735,7 +736,40 @@ body.discussion-page .discussion-comment-author-link .discussion-avatar-frame {
 }
 
 /* Shared mobile chrome: search and account stay on row one; economy stays on row two. */
+.mobile-header-backdrop {
+  display: none;
+}
 @media (max-width: 900px) {
+  .mobile-header-backdrop {
+    display: block;
+    position: fixed;
+    z-index: 149;
+    inset: 0 0 auto;
+    height: calc(112px + env(safe-area-inset-top, 0px));
+    background: var(--ui-page);
+    border-bottom: 1px solid var(--ui-line);
+    pointer-events: none;
+  }
+  body.aichat-page.max-input-active .mobile-header-backdrop {
+    display: none;
+  }
+  body.discussion-page
+    .main-content
+    .discussion-layout:not(.is-detail-view)
+    .discussion-stats-sidebar {
+    position: fixed !important;
+    z-index: 150;
+    top: calc(112px + env(safe-area-inset-top, 0px));
+    left: 0;
+    right: 0;
+    width: auto;
+    padding: 0 calc(16px + env(safe-area-inset-right, 0px)) 0
+      calc(16px + env(safe-area-inset-left, 0px)) !important;
+    background: var(--ui-page) !important;
+  }
+  body.discussion-page:has(.discussion-layout:not(.is-detail-view)) .main-content.settings-main {
+    padding-top: calc(172px + env(safe-area-inset-top, 0px)) !important;
+  }
   .mobile-menu-label {
     margin: 5px 10px 3px;
     color: var(--ui-muted);
@@ -762,6 +796,7 @@ body.discussion-page .discussion-comment-author-link .discussion-avatar-frame {
     background: var(--ui-page) !important;
   }
   body:not(.auth-page-body) .topbar > .site-search-trigger {
+    z-index: 152 !important;
     top: calc(10px + env(safe-area-inset-top, 0px)) !important;
     left: calc(16px + env(safe-area-inset-left, 0px)) !important;
     right: calc(78px + env(safe-area-inset-right, 0px)) !important;

@@ -214,6 +214,11 @@
               </label>
             </div>
             <form class="aichat-composer" id="aichat-form">
+              <select id="max-create-mode" aria-label="对话或生成作品">
+                <option value="chat">对话</option>
+                <option value="circuit">生成电路</option>
+                <option value="tool">生成 HTML 小工具</option>
+              </select>
               <div id="aichat-attachments" class="aichat-attachments" aria-label="本条消息的附件">
                 <div id="aichat-images" class="max-images">
                   <button
@@ -308,6 +313,12 @@
     <script src="/max-file-preview.js"></script>
     <script src="/max-document-reader.js"></script>
     <script src="/max-files.js"></script>
+    <script src="/circuit-engine.js"></script>
+    <script src="/circuit-plot.js"></script>
+    <script src="/circuit-ai-actions.js"></script>
+    <script src="/circuit-chat.js"></script>
+    <script src="/max-artifact-data.js"></script>
+    <script src="/max-artifacts.js"></script>
     <script src="/app.js"></script>
     <script src="/notifications.js"></script>
     <script src="/max-composer.js"></script>

@@ -180,7 +180,7 @@
   }
 
   function draftKey(cid = state.cid) {
-    return `free_bbs_circuit_draft_v1:${cid || 'new'}`;
+    return `free_bbs_circuit_draft_v1:${cid || params.get('maxDraft') || 'new'}`;
   }
 
   function persistDraft() {
@@ -3176,7 +3176,20 @@
         params.delete('new');
         const query = params.toString();
         window.history.replaceState({}, '', `/circuit${query ? `?${query}` : ''}`);
-      } else restoreDraft();
+      } else if (!restoreDraft()) {
+        try {
+          const draft = window.FreeBbsMaxArtifacts?.read('circuit', app.userState.uid);
+          if (draft) {
+            state.document = engine.validateDocument(draft.document);
+            $('title').value = draft.title;
+            state.dirty = true;
+            persistDraft();
+            setStatus('已接收 Max 生成的电路草稿，尚未保存。');
+          }
+        } catch (error) {
+          setStatus(error.message, 'error');
+        }
+      }
       resetHistory();
       renderAnalysis();
       renderInspector();

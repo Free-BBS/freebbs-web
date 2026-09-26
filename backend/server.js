@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { StringDecoder } = require('node:string_decoder');
 const sharp = require('sharp');
+const { normalize: normalizeMaxArtifact } = require('../public/max-artifact-data');
 const {
   modelCatalog,
   resolveModelOptions,
@@ -1617,6 +1618,7 @@ function toDiscussionComment(row) {
           displayName: row.username || '匿名用户',
           avatarPath: row.avatar_path || '',
           goldenName: row.goldenName || null,
+          cosmetics: row.cosmetics || {},
         },
   };
 }
@@ -2506,6 +2508,8 @@ function normalizeAiMessages(value) {
       role,
       content: content.slice(0, 80000),
     };
+    if (role === 'assistant' && message.artifact !== undefined)
+      normalizedMessage.artifact = normalizeMaxArtifact(message.artifact);
     if (role === 'user' && message.images !== undefined) {
       normalizedMessage.images = validateVisionImages(message.images);
       if (normalizedMessage.images.length > 4) throw new Error('每条消息最多保存 4 张图片。');

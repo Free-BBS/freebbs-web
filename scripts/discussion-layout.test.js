@@ -10,6 +10,22 @@ const desktopCss = fs.readFileSync(path.join(root, 'public/desktop-elegant.css')
 const postReaderCss = fs.readFileSync(path.join(root, 'public/post-reader.css'), 'utf8');
 const appSource = fs.readFileSync(path.join(root, 'public/app.js'), 'utf8');
 
+test('mobile header backdrop is outside the scrolling content and discussion boards stay fixed below it', () => {
+  const shell = fs.readFileSync(path.join(root, 'public/mobile-shell.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'public/mobile-shell.css'), 'utf8');
+  assert.match(shell, /document.body.append\(backdrop\)/);
+  assert.match(
+    styles,
+    /\.mobile-header-backdrop\s*\{[^}]*position: fixed;[^}]*z-index: 149;[^}]*safe-area-inset-top/s,
+  );
+  assert.match(
+    styles,
+    /\.discussion-layout:not\(\.is-detail-view\)\s*\.discussion-stats-sidebar\s*\{[^}]*position: fixed !important;[^}]*top: calc\(112px/s,
+  );
+  assert.match(styles, /\.topbar > \.site-search-trigger\s*\{\s*z-index: 152 !important;/);
+  assert.match(styles, /padding-top: calc\(172px \+ env\(safe-area-inset-top/);
+});
+
 test('discussion boards precede the feed and obsolete personal statistics are absent', () => {
   const boards = html.indexOf('id="discussion-board-list"');
   const feed = html.indexOf('class="discussion-feed"');

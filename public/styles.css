@@ -11148,7 +11148,8 @@ body.theme-light:not(.home-page) .electromagnetic-shop-item p {
 
 .shop-inspect-image img {
   width: min(120px, 48%);
-  aspect-ratio: 1;
+  height: auto;
+  object-fit: contain;
   filter: invert(93%) sepia(13%) saturate(476%) hue-rotate(5deg) brightness(104%) contrast(91%);
 }
 

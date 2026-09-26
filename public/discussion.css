@@ -820,11 +820,12 @@ body.discussion-page .discussion-post-preview-circuit {
 body.discussion-page .discussion-post-preview-tool {
   position: relative;
   overflow: hidden;
-  contain: strict;
+  isolation: isolate;
   background: white;
 }
 body.discussion-page .discussion-post-preview-tool iframe {
-  position: absolute;
+  /* Safari can collapse an absolutely positioned srcdoc frame in this thumbnail. */
+  position: relative;
   inset: 0 auto auto 0;
   display: block;
   max-width: none !important;

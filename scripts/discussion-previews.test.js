@@ -15,6 +15,8 @@ test('tool thumbnails reference a saved tool and open the post rather than execu
   assert.match(html, /discussion-post-preview-tool/);
   assert.match(html, /data-action="open-post"/);
   assert.match(html, /aria-label="查看帖子中的小工具"/);
+  assert.match(html, /^<a /);
+  assert.match(html, /href="\/discussion\?post=post-1"/);
   assert.doesNotMatch(html, /<iframe|<script/);
 });
 
@@ -72,7 +74,7 @@ function toolPreviewEnvironment(fetch) {
   return { root, window, frames, removed: () => removed };
 }
 
-test('feed tool renderer uses a script-free, inert, credential-free sandbox and fixed thumbnail scaling', async () => {
+test('feed tool renderer runs canvas scripts in an opaque credential-free sandbox with fixed scaling', async () => {
   const env = toolPreviewEnvironment(async (url, options) => {
     assert.equal(url, `/api/tools/${tid}`);
     assert.equal(options.credentials, 'omit');
@@ -93,10 +95,11 @@ test('feed tool renderer uses a script-free, inert, credential-free sandbox and 
     setImmediate(resolve);
   });
   assert.equal(env.frames.length, 1);
-  assert.equal(env.frames[0].attributes.sandbox, '');
-  assert.equal(env.frames[0].attributes.inert, '');
+  assert.equal(env.frames[0].attributes.sandbox, 'allow-scripts');
+  assert.equal(env.frames[0].attributes.inert, undefined);
   assert.equal(env.frames[0].attributes.tabindex, '-1');
-  assert.match(env.frames[0].srcdoc, /script-src 'none'/);
+  assert.match(env.frames[0].srcdoc, /script-src 'unsafe-inline'/);
+  assert.match(env.frames[0].srcdoc, /connect-src 'none'/);
   assert.equal(env.frames[0].style.width, '640px');
   assert.equal(env.frames[0].style.transform, 'scale(0.175)');
   env.window.FreeBbsDiscussionPreviews.enhance(env.root);

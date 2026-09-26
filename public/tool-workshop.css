@@ -315,10 +315,10 @@ body.theme-light .tool-code-live code.hljs {
   overflow: hidden;
   border-radius: 4px;
   background: #fff;
-  contain: strict;
+  isolation: isolate;
 }
 .tool-card iframe {
-  position: absolute;
+  position: relative;
   top: 0;
   left: 0;
   width: 576px;
