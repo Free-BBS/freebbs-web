@@ -4574,6 +4574,34 @@ function addCodeRunButtons(root) {
 }
 
 let circuitReferenceLoader;
+let toolReferenceLoader;
+
+function enhanceToolReferences(root) {
+  if (!root.querySelector('a[href*="/tool-workshop"]')) return;
+  if (window.FreeBbsToolEmbeds) {
+    window.FreeBbsToolEmbeds.enhance(root, { apiBase: API_BASE_URL });
+    return;
+  }
+  if (!toolReferenceLoader) {
+    toolReferenceLoader = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = '/tool-embeds.js';
+      script.async = true;
+      script.onload = resolve;
+      script.onerror = () => {
+        script.remove();
+        toolReferenceLoader = null;
+        reject(new Error('小工具引用组件载入失败'));
+      };
+      document.head.append(script);
+    });
+  }
+  toolReferenceLoader
+    .then(() => window.FreeBbsToolEmbeds?.enhance(root, { apiBase: API_BASE_URL }))
+    .catch(() => {
+      // Leave the original workshop link usable if the optional embed cannot load.
+    });
+}
 
 function enhanceCircuitReferences(root) {
   if (!root.querySelector('a[href*="/circuit?"]')) return;
@@ -4627,6 +4655,7 @@ function enhanceMarkdownContent(root, { interactiveCodeControls = true } = {}) {
     image.referrerPolicy = 'no-referrer';
   });
   enhanceCircuitReferences(root);
+  enhanceToolReferences(root);
 }
 
 function setAiChatStatus(message) {

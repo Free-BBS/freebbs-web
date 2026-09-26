@@ -48,5 +48,9 @@ test('tool workshop ships the public square, AI studio, sandboxed previews and d
   assert.match(controller, /\/tools\/generate\/html/);
   assert.match(controller, /free_bbs_tool_share_draft/);
   assert.match(controller, /sandboxDocument/);
-  assert.match(controller, /connect-src 'none'/);
+  assert.match(page, /src="\/tool-embeds.js"/);
+  assert.match(
+    fs.readFileSync(path.join(publicDir, 'tool-embeds.js'), 'utf8'),
+    /connect-src 'none'/,
+  );
 });
