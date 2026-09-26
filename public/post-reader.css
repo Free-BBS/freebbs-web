@@ -194,14 +194,12 @@ body.discussion-page.post-reading .post-comment-sheet textarea {
   padding: 12px !important;
 }
 @media (max-width: 900px) {
-  body.discussion-page.post-reading .topbar,
-  body.discussion-page.post-reading .mobile-nav.mobile-nav-compact,
-  body.discussion-page.post-reading .user-panel,
-  body.discussion-page.post-reading .main-content::before {
+  body.discussion-page.post-reading .mobile-nav.mobile-nav-compact {
     display: none !important;
   }
   body.discussion-page.post-reading .page-shell .main-content {
-    padding: calc(12px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom)) !important;
+    padding: calc(128px + env(safe-area-inset-top, 0px)) 16px
+      calc(90px + env(safe-area-inset-bottom, 0px)) !important;
   }
   body.discussion-page.post-reading .discussion-detail {
     padding: 0 !important;

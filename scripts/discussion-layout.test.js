@@ -26,6 +26,43 @@ test('mobile header backdrop is outside the scrolling content and discussion boa
   assert.match(styles, /padding-top: calc\(172px \+ env\(safe-area-inset-top/);
 });
 
+test('mobile readers preserve functional chrome, not just an empty safe-area backdrop', () => {
+  const shell = fs.readFileSync(path.join(root, 'public/mobile-shell.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'public/mobile-shell.css'), 'utf8');
+  const publish = fs.readFileSync(path.join(root, 'public/publish.html'), 'utf8');
+  assert.match(shell, /document.querySelector\('\.topbar \.user-panel'\)/);
+  assert.match(shell, /!document.documentElement.classList.contains\('development-embedded'\)/);
+  assert.match(shell, /classList.add\('has-mobile-header'\)/);
+  assert.match(
+    styles,
+    /html body.has-mobile-header:not\(\.max-input-active\) \.topbar\s*\{\s*display: contents !important;/,
+  );
+  assert.doesNotMatch(
+    postReaderCss,
+    /body\.discussion-page\.post-reading \.(?:topbar|user-panel|main-content::before)/,
+  );
+  assert.match(postReaderCss, /padding: calc\(128px \+ env\(safe-area-inset-top, 0px\)\)/);
+  assert.match(publish, /<header class="topbar publish-mobile-header">/);
+  for (const id of ['user-panel', 'avatar-image', 'user-name', 'user-status']) {
+    assert.ok(publish.includes(`id="${id}"`));
+  }
+  assert.match(styles, /\.course-material-immersive\s*\{\s*z-index: 0;\s*padding-top: calc\(180px/);
+  assert.match(styles, /\.course-map-editor-immersive\)\s*\{\s*z-index: 0;\s*top: calc\(112px/);
+  assert.match(styles, /\.aichat-dialog-toggle\s*\{\s*z-index: 152;/);
+});
+
+test('development mobile header stays opaque and sticky including its safe area', () => {
+  const styles = fs.readFileSync(
+    path.join(root, 'development/apps/web/src/styles/main-site-header.css'),
+    'utf8',
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 900px\)\s*\{\s*\.main-site-header\s*\{\s*position: sticky;\s*top: 0;\s*z-index: 40;/,
+  );
+  assert.match(styles, /padding-top: calc\(10px \+ env\(safe-area-inset-top, 0px\)\);/);
+});
+
 test('discussion boards precede the feed and obsolete personal statistics are absent', () => {
   const boards = html.indexOf('id="discussion-board-list"');
   const feed = html.indexOf('class="discussion-feed"');

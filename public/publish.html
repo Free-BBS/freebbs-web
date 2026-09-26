@@ -28,6 +28,35 @@
   </head>
 
   <body class="publish-page">
+    <header class="topbar publish-mobile-header">
+      <nav class="nav-actions" aria-label="顶部导航">
+        <div class="user-panel" id="user-panel">
+          <div class="user-summary">
+            <button class="avatar" type="button" aria-label="用户头像">
+              <img
+                class="avatar-image"
+                id="avatar-image"
+                src="/assets/avatar_placeholder.webp"
+                alt="用户头像"
+              />
+            </button>
+            <div class="user-actions" id="user-actions">
+              <button class="user-icon-button hidden" id="user-settings-button" type="button">
+                设置
+              </button>
+              <button class="user-icon-button hidden" id="user-logout-button" type="button">
+                退出
+              </button>
+            </div>
+            <div class="user-copy">
+              <button class="user-name" type="button" id="user-name">登录/注册</button>
+              <div class="user-role" id="user-role">学生</div>
+            </div>
+          </div>
+          <div class="user-status" id="user-status"></div>
+        </div>
+      </nav>
+    </header>
     <div hidden>
       <button id="user-name" type="button"></button>
       <div id="user-status"></div>

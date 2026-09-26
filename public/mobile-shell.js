@@ -1,5 +1,10 @@
 (() => {
-  if (!document.body.classList.contains('auth-page-body')) {
+  if (
+    !document.body.classList.contains('auth-page-body') &&
+    !document.documentElement.classList.contains('development-embedded') &&
+    document.querySelector('.topbar .user-panel')
+  ) {
+    document.body.classList.add('has-mobile-header');
     const backdrop = document.createElement('div');
     backdrop.className = 'mobile-header-backdrop';
     backdrop.setAttribute('aria-hidden', 'true');
