@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/circuit.css" />
     <link rel="stylesheet" href="/circuit-challenge.css" />
+    <link rel="stylesheet" href="/circuit-mobile.css" />
   </head>
   <body class="circuit-page circuit-challenge-page">
     <div class="page-shell page-shell-settings">
@@ -139,7 +140,7 @@
           <div>
             <p class="challenge-kicker">电路实验室</p>
             <h1>用更少的元件，复现目标波形</h1>
-            <p>连接左右端口，运行仿真。输出足够接近目标后，元件越少，榜单排名越高。</p>
+            <p>逐关复现目标波形，记录每一步进展，在总榜看看谁走得更远。</p>
           </div>
           <div class="challenge-header-actions">
             <button id="challenge-admin-new" type="button" hidden>新建题目</button>
@@ -156,6 +157,7 @@
         ></p>
 
         <section class="challenge-layout">
+          <p id="challenge-progress" class="challenge-status" role="status"></p>
           <aside class="challenge-levels" aria-labelledby="challenge-levels-title">
             <div class="challenge-side-heading">
               <h2 id="challenge-levels-title">关卡</h2>
@@ -272,7 +274,7 @@
                 <p>点击添加，再拖动引脚连线</p>
                 <div id="challenge-palette"></div>
               </aside>
-              <div class="challenge-canvas-wrap">
+              <div class="challenge-canvas-wrap circuit-canvas-panel">
                 <div class="challenge-canvas-toolbar">
                   <span id="challenge-canvas-help"
                     >IN− 默认接地；公共 VCC / VEE 可选，不接也可。</span
@@ -304,6 +306,16 @@
                   </div>
                 </div>
                 <div id="challenge-stage" class="challenge-stage" aria-label="闯关电路画布"></div>
+                <div class="challenge-viewport" aria-label="画布视图">
+                  <button id="challenge-zoom-out" type="button" aria-label="缩小画布">−</button>
+                  <output id="challenge-zoom-value">100%</output>
+                  <button id="challenge-zoom-in" type="button" aria-label="放大画布">＋</button>
+                  <button id="challenge-zoom-reset" type="button">复位</button>
+                  <button id="challenge-pan" type="button" aria-pressed="false">平移</button>
+                  <button id="challenge-expand-canvas" type="button" aria-pressed="false">
+                    展开
+                  </button>
+                </div>
               </div>
               <aside class="challenge-inspector" aria-labelledby="challenge-inspector-title">
                 <h3 id="challenge-inspector-title">元件参数</h3>
@@ -332,6 +344,7 @@
                 <button id="challenge-submit" class="is-primary" type="button" disabled>
                   提交成绩
                 </button>
+                <button id="challenge-next" type="button" hidden>下一关</button>
                 <button id="challenge-admin-save" class="is-primary" type="button" hidden>
                   生成目标并保存
                 </button>
@@ -342,11 +355,15 @@
 
           <aside class="challenge-ranking" aria-labelledby="challenge-ranking-title">
             <div class="challenge-side-heading">
-              <h2 id="challenge-ranking-title">最简榜</h2>
-              <span>元件优先</span>
+              <h2 id="challenge-ranking-title">闯关榜单</h2>
+              <select id="challenge-ranking-scope" aria-label="榜单范围">
+                <option value="overall">总榜 · 闯关进度</option>
+                <option value="level">本关 · 最简电路</option>
+              </select>
             </div>
+            <p id="challenge-my-rank" class="challenge-ranking-note"></p>
             <div id="challenge-leaderboard" class="challenge-leaderboard"></div>
-            <p class="challenge-ranking-note">
+            <p id="challenge-ranking-note" class="challenge-ranking-note">
               同元件数时误差更小者靠前；每次严格刷新全关最低元件数，再奖励一份。
             </p>
           </aside>
@@ -430,7 +447,9 @@
     <script src="/circuit-layout.js"></script>
     <script src="/circuit-history.js"></script>
     <script src="/circuit-shortcuts.js"></script>
+    <script src="/circuit-viewport.js"></script>
     <script src="/circuit-challenge.js"></script>
+    <script src="/circuit-mobile.js"></script>
     <script src="/notifications.js"></script>
   </body>
 </html>

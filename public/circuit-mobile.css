@@ -1,0 +1,475 @@
+/* One working surface, with secondary controls opened only when needed. */
+.circuit-mobile-heading,
+.circuit-mobile-dock,
+.circuit-mobile-feedback {
+  display: none;
+}
+.circuit-mobile-zoom {
+  display: none !important;
+}
+.circuit-mobile-sheet-content > details {
+  border-bottom: 1px solid var(--ui-line);
+}
+.circuit-mobile-sheet-content > details > summary {
+  min-height: 44px;
+  padding: 10px 0;
+  cursor: pointer;
+  font-size: 15px;
+}
+.circuit-mobile-sheet-content > details > :not(summary) {
+  margin-bottom: 16px;
+}
+.challenge-viewport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+}
+.challenge-viewport output {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+.challenge-stage svg {
+  min-width: 0;
+}
+.challenge-canvas-wrap.is-expanded {
+  position: fixed;
+  inset: 16px;
+  z-index: 180;
+}
+.challenge-levels,
+.challenge-ranking,
+.challenge-workbench {
+  border-radius: 0;
+  box-shadow: none;
+}
+.challenge-levels,
+.challenge-ranking {
+  border-width: 0 0 1px;
+}
+.challenge-level-list {
+  max-height: 240px;
+}
+.challenge-main .challenge-level {
+  border: 0;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+}
+.challenge-main .challenge-level.is-active {
+  border-bottom-color: var(--challenge-accent);
+}
+.challenge-level.is-completed small {
+  color: var(--challenge-accent);
+}
+.challenge-level:disabled {
+  opacity: 0.65;
+}
+.challenge-leaderboard {
+  display: block;
+}
+.challenge-rank {
+  border-right: 0;
+  border-bottom: 1px solid var(--ui-line);
+  min-height: 44px;
+  font-size: 14px;
+}
+.challenge-rank small {
+  font-size: 12px;
+}
+.challenge-rank.is-me {
+  background: var(--ui-surface-soft);
+}
+#challenge-ranking-scope {
+  width: auto;
+}
+.circuit-mobile-sheet {
+  --challenge-accent: #74d6a4;
+  width: min(640px, calc(100vw - 16px));
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px));
+  margin: auto auto 8px;
+  padding: 0;
+  border: 1px solid var(--ui-line);
+  border-radius: 12px 12px 4px 4px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  overscroll-behavior: contain;
+}
+.circuit-mobile-sheet::backdrop {
+  background: #0007;
+}
+.circuit-mobile-sheet > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--ui-surface);
+  border-bottom: 1px solid var(--ui-line);
+}
+.circuit-mobile-sheet h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.circuit-mobile-sheet button {
+  min-height: 44px;
+  cursor: pointer;
+}
+.circuit-mobile-sheet > header button {
+  border: 0;
+  background: none;
+  color: var(--ui-accent);
+  font: inherit;
+  padding: 8px;
+}
+body.circuit-page .circuit-mobile-sheet .circuit-mobile-sheet-content {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 16px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-sizing: border-box;
+}
+.circuit-mobile-sheet-content > * {
+  flex-shrink: 0;
+}
+.circuit-mobile-sheet
+  :is(
+    .challenge-levels,
+    .challenge-ranking,
+    .challenge-inspector,
+    .challenge-palette,
+    .challenge-brief,
+    .challenge-waveboard,
+    .circuit-analysis,
+    .circuit-palette,
+    .circuit-results,
+    .circuit-document-heading,
+    .circuit-sharing
+  ) {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  width: 100%;
+  box-shadow: none;
+}
+.circuit-mobile-sheet .challenge-level-list {
+  display: grid;
+  max-height: none;
+  gap: 0;
+}
+.circuit-mobile-sheet .challenge-level {
+  min-height: 54px !important;
+  padding: 10px 4px !important;
+  border-bottom: 1px solid var(--ui-line);
+  background: none;
+}
+.circuit-mobile-sheet .challenge-level > span {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.circuit-mobile-sheet .challenge-level strong {
+  font-size: 14px;
+}
+.circuit-mobile-sheet .challenge-level small {
+  font-size: 12px;
+  white-space: normal;
+}
+.circuit-mobile-sheet #challenge-palette {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0;
+}
+.circuit-mobile-sheet #challenge-palette button {
+  min-height: 52px;
+  border: 0;
+  border-bottom: 1px solid var(--ui-line);
+  border-radius: 0;
+  font-size: 15px;
+}
+.circuit-mobile-sheet :is(input, select, textarea) {
+  font-size: 16px !important;
+}
+.circuit-mobile-sheet .challenge-facts {
+  gap: 12px;
+}
+.circuit-mobile-sheet .challenge-brief {
+  display: grid;
+  gap: 14px;
+}
+.circuit-mobile-sheet .challenge-canvas-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.circuit-mobile-sheet .circuit-document-heading {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+.circuit-mobile-sheet .circuit-editor-actions {
+  justify-content: flex-start;
+}
+.circuit-mobile-sheet .circuit-action-label {
+  display: inline !important;
+}
+.circuit-mobile-sheet :is(.challenge-admin-form, #circuit-analysis-form) {
+  grid-template-columns: 1fr;
+  padding: 0;
+}
+.circuit-mobile-sheet [hidden] {
+  display: none !important;
+}
+
+@media (max-width: 900px) {
+  body.has-circuit-mobile-workspace .topbar .theme-toggle {
+    display: none !important;
+  }
+  body.has-circuit-mobile-workspace .circuit-mobile-zoom {
+    display: block !important;
+    position: absolute;
+    top: 52px;
+    right: 12px;
+    min-height: 44px;
+    border: 0;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 12px;
+    background: var(--ui-surface);
+    color: var(--ui-muted);
+  }
+  body.has-circuit-mobile-workspace #circuit-component-menu button[data-add-component] {
+    border-width: 0 0 1px;
+    border-radius: 0;
+    min-height: 44px;
+  }
+  body.has-circuit-mobile-workspace {
+    height: 100dvh;
+    overflow: hidden;
+  }
+  body.has-circuit-mobile-workspace > .page-shell {
+    min-height: 0 !important;
+  }
+  body.has-circuit-mobile-workspace .page-shell > :is(.circuit-main, .challenge-main) {
+    position: fixed !important;
+    inset: calc(112px + env(safe-area-inset-top, 0px)) 0
+      calc(64px + env(safe-area-inset-bottom, 0px)) !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden;
+  }
+  body.has-circuit-mobile-workspace .page-shell > :is(.circuit-main, .challenge-main)::before {
+    content: '' !important;
+    position: fixed;
+    inset: 0 0 auto;
+    height: calc(112px + env(safe-area-inset-top, 0px));
+    background: var(--ui-page);
+    z-index: -1;
+  }
+  .has-circuit-mobile-workspace .circuit-mobile-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    height: 44px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--ui-line);
+  }
+  .circuit-mobile-heading > span {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+  }
+  .has-circuit-mobile-workspace :is(.circuit-mobile-heading, .circuit-mobile-dock) :is(button, a) {
+    min-height: 44px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: 13px;
+    color: var(--ui-text);
+    text-decoration: none;
+  }
+  .circuit-mobile-heading #circuit-save {
+    width: 44px;
+    color: var(--ui-text) !important;
+  }
+  .circuit-mobile-heading #circuit-save svg {
+    width: 22px;
+    height: 22px;
+  }
+  .circuit-mobile-heading #circuit-save span {
+    display: none;
+  }
+  .has-circuit-mobile-workspace .circuit-mobile-dock {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    height: 48px;
+    border-top: 1px solid var(--ui-line);
+    background: var(--ui-surface);
+  }
+  .circuit-mobile-dock kbd {
+    display: none;
+  }
+  .has-circuit-mobile-workspace .circuit-mobile-dock :is(#circuit-run, #challenge-run) {
+    background: var(--ui-accent-soft);
+    color: var(--ui-accent) !important;
+  }
+  .has-circuit-mobile-workspace .circuit-mobile-feedback {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    bottom: 48px;
+    left: 0;
+    right: 0;
+    height: 74px;
+    padding: 6px 12px;
+    box-sizing: border-box;
+    border-top: 1px solid var(--ui-line);
+    overflow-y: auto;
+    background: var(--ui-surface);
+  }
+  .circuit-mobile-feedback :is(p, strong) {
+    font-size: 12px !important;
+    line-height: 1.4;
+    margin: 0 !important;
+  }
+  .circuit-mobile-feedback p:empty {
+    display: none;
+  }
+  .circuit-mobile-feedback #circuit-stop:disabled {
+    display: none;
+  }
+  .circuit-mobile-feedback #circuit-stop {
+    position: absolute;
+    right: 8px;
+    top: 0;
+    min-height: 32px;
+  }
+  body.has-circuit-mobile-workspace
+    .page-shell
+    :is(
+      .circuit-workspace,
+      .circuit-editor-layout,
+      .circuit-editor-content,
+      .challenge-layout,
+      .challenge-workbench,
+      .challenge-build-area
+    ) {
+    display: contents !important;
+  }
+  body.has-circuit-mobile-workspace .page-shell :is(.circuit-canvas-panel, .challenge-canvas-wrap) {
+    position: absolute !important;
+    inset: 44px 0 122px !important;
+    display: flex !important;
+    flex-direction: column;
+    min-height: 0 !important;
+    height: auto !important;
+    border: 0;
+    border-radius: 0;
+  }
+  body.has-circuit-mobile-workspace .page-shell :is(.circuit-stage, .challenge-stage) {
+    flex: 1;
+    width: 100%;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: none;
+    overflow: hidden;
+  }
+  body.has-circuit-mobile-workspace .page-shell :is(.circuit-stage, .challenge-stage) > svg {
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+  }
+  body.has-circuit-mobile-workspace
+    .page-shell
+    :is(
+      .circuit-heading,
+      .circuit-document-heading,
+      .circuit-palette,
+      .circuit-canvas-toolbar,
+      .circuit-viewport-controls,
+      .circuit-canvas-note,
+      .circuit-analysis,
+      .circuit-workbench-actions,
+      .circuit-results,
+      .circuit-sharing,
+      .circuit-model-notes,
+      .challenge-header,
+      .challenge-levels,
+      .challenge-ranking,
+      .challenge-brief,
+      .challenge-waveboard,
+      .challenge-palette,
+      .challenge-inspector,
+      .challenge-canvas-toolbar,
+      .challenge-viewport,
+      #challenge-progress,
+      #challenge-admin-form
+    ) {
+    display: none !important;
+  }
+  body.has-circuit-mobile-workspace .circuit-mobile-feedback .challenge-runbar {
+    display: flex;
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    padding: 0;
+    gap: 10px;
+    border: 0;
+    box-shadow: none;
+    background: none;
+  }
+  .circuit-mobile-feedback .challenge-runbar > div:first-child {
+    flex: 1;
+    min-width: 0;
+  }
+  .circuit-mobile-feedback .challenge-run-actions {
+    width: auto;
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+  }
+  .circuit-mobile-feedback .challenge-run-actions button {
+    min-height: 44px;
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+  .circuit-mobile-feedback #challenge-reset {
+    display: none;
+  }
+  body.has-circuit-mobile-workspace .challenge-main.is-empty #challenge-empty {
+    display: block;
+    position: absolute;
+    inset: 50px 12px 130px;
+    overflow: auto;
+    padding: 12px;
+  }
+  body.has-circuit-mobile-workspace .challenge-main.is-empty .challenge-canvas-wrap {
+    display: none !important;
+  }
+  .circuit-mobile-sheet #challenge-expand-canvas,
+  .circuit-mobile-sheet #circuit-expand-canvas {
+    display: none !important;
+  }
+  .circuit-mobile-sheet :is(.circuit-analysis, .circuit-sharing) > .circuit-section-heading {
+    margin-bottom: 12px;
+  }
+}

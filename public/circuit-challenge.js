@@ -53,6 +53,8 @@
   };
   const state = {
     challenges: [],
+    progress: null,
+    rankingScope: 'overall',
     challenge: null,
     document: baseDocument(),
     original: null,
@@ -190,6 +192,7 @@
         state.selectedWire = '';
         renderInspector();
         renderSchematic();
+        window.FreeBbsCircuitMobile?.show('parameters');
       },
       onWireClick(id, position) {
         if (state.wireStart) return completeConnection(state.wireStart, { wireId: id, position });
@@ -198,6 +201,7 @@
         state.wireAnchor = position;
         renderInspector();
         renderSchematic();
+        window.FreeBbsCircuitMobile?.show('parameters');
       },
       onConnect(from, target) {
         completeConnection(from, target);
@@ -226,6 +230,7 @@
         renderSchematic();
       },
     });
+    state.viewport?.attach();
   }
 
   function addComponent(type) {
@@ -825,18 +830,25 @@
   }
 
   function renderLevels() {
-    $('level-count').textContent = String(state.challenges.length);
+    $('level-count').textContent =
+      `${state.progress?.cleared || 0} / ${state.progress?.total || state.challenges.length}`;
+    $('progress').textContent = app.userState.isLoggedIn
+      ? `已连续通过 ${state.progress?.cleared || 0} 关 · ${state.progress?.nextChallengeId ? '通过当前关卡后解锁下一关' : '全部通关'}`
+      : '登录后保存通关进度，逐关解锁';
+    const next = state.challenges.find((item) => item.id === state.progress?.nextChallengeId);
+    $('next').hidden = !next || !state.challenge?.completed || next.id === state.challenge.id;
+    $('next').dataset.challengeId = next?.id || '';
     $('level-list').innerHTML = state.challenges.length
       ? state.challenges
           .map(
             (challenge) =>
-              `<button class="challenge-level ${challenge.id === state.challenge?.id ? 'is-active' : ''}" data-challenge-id="${challenge.id}" type="button"><span><strong>${escapeHtml(challenge.title)}</strong><small>${waveformName(challenge.input.waveform)} / ${challenge.input.frequency} Hz · ${Number(challenge.rewardElectric) || 0} 电元</small></span></button>`,
+              `<button class="challenge-level ${challenge.id === state.challenge?.id ? 'is-active' : ''} ${challenge.completed ? 'is-completed' : ''}" data-challenge-id="${challenge.id}" type="button" ${challenge.locked && !app.userState.isAdmin ? 'disabled' : ''} ${challenge.id === state.challenge?.id ? 'aria-current="step"' : ''}><span><strong>${escapeHtml(challenge.title)}</strong><small>${challenge.completed ? '✓ 已通关' : challenge.locked ? '未解锁 · 先通过前面的关卡' : '待挑战'}${challenge.completed && challenge.locked ? ' · 待补齐前关' : ''}</small></span></button>`,
           )
           .join('')
       : '<p class="challenge-empty">还没有上线的关卡。</p>';
   }
 
-  async function loadChallenges(preferredId) {
+  async function loadChallenges(preferredId, refreshOnly = false) {
     setStatus('正在读取关卡…');
     $('retry').hidden = true;
     try {
@@ -845,11 +857,21 @@
         { method: 'GET' },
       );
       state.challenges = payload.challenges || [];
+      state.progress = payload.progress;
+      if (state.challenge)
+        Object.assign(
+          state.challenge,
+          state.challenges.find((item) => item.id === state.challenge.id),
+        );
       renderLevels();
       setStatus('');
+      if (refreshOnly) return;
       const target =
-        state.challenges.find((item) => item.id === Number(preferredId)) ||
-        state.challenges.find((item) => item.isActive) ||
+        state.challenges.find(
+          (item) => item.id === Number(preferredId) && (!item.locked || app.userState.isAdmin),
+        ) ||
+        state.challenges.find((item) => item.id === state.progress?.nextChallengeId) ||
+        state.challenges.find((item) => item.isActive && !item.locked) ||
         state.challenges[0];
       if (target) await loadChallenge(target.id);
     } catch (error) {
@@ -876,6 +898,7 @@
       state.wirePoints = [];
       state.history?.reset({ document: state.document });
       renderChallenge();
+      window.FreeBbsCircuitMobile?.close();
       await loadLeaderboard();
       setStatus('');
     } catch (error) {
@@ -935,14 +958,29 @@
     }
     $('leaderboard').innerHTML = '<p class="challenge-empty">正在读取排名…</p>';
     try {
-      const payload = await app.callApi(`/circuit-challenges/${state.challenge.id}/leaderboard`, {
-        method: 'GET',
-      });
+      const overall = state.rankingScope === 'overall';
+      const payload = await app.callApi(
+        overall
+          ? '/circuit-challenges/leaderboard'
+          : `/circuit-challenges/${state.challenge.id}/leaderboard`,
+        {
+          method: 'GET',
+        },
+      );
+      $('ranking-note').textContent = overall
+        ? '按连续通关数排序；进度相同，先达到者领先。仅统计当前有效版本。'
+        : '按元件数、误差、达成时间排序。';
+      $('my-rank').textContent =
+        overall && payload.me
+          ? `我的排名 #${payload.me.rank} · 连续通过 ${payload.me.cleared} 关`
+          : overall && app.userState.isLoggedIn
+            ? '通过第一关后进入总榜'
+            : '';
       $('leaderboard').innerHTML = payload.leaderboard.length
         ? payload.leaderboard
             .map(
               (entry) =>
-                `<div class="challenge-rank"><b>${entry.rank}</b><strong>${escapeHtml(entry.username)}</strong><small>${entry.componentCount} 件<br />误差 ${(entry.error * 100).toFixed(2)}%</small></div>`,
+                `<div class="challenge-rank ${entry.isMe ? 'is-me' : ''}"><b>${entry.rank}</b><strong>${escapeHtml(entry.username)}</strong><small>${overall ? `通过 ${entry.cleared} 关` : `${entry.componentCount} 件 · 误差 ${(entry.error * 100).toFixed(2)}%`}</small></div>`,
             )
             .join('')
         : '<p class="challenge-empty">还没有人通关，第一名等你来拿。</p>';
@@ -973,6 +1011,7 @@
       $('run-status').textContent =
         `成绩已进入榜单，误差 ${(payload.error * 100).toFixed(2)}%${rewardNotes.length ? `；${rewardNotes.join('，')}` : ''}。`;
       if (payload.balance) app.syncWallet(payload.balance, app.userState.token);
+      await loadChallenges(state.challenge.id, true);
       await loadLeaderboard();
     } catch (error) {
       setStatus(error.message || '提交失败', true, 'run-status');
@@ -1205,6 +1244,19 @@
     if (!app || !engine || !renderer || !wiring || !layout || !historyModel || !shortcuts)
       return setStatus('电路模块未加载，请刷新后重试。', true);
     await app.sessionReady;
+    state.viewport = window.FreeBbsCircuitViewport?.create($('stage'), {
+      in: $('zoom-in'),
+      out: $('zoom-out'),
+      reset: $('zoom-reset'),
+      pan: $('pan'),
+      value: $('zoom-value'),
+      expand: $('expand-canvas'),
+    });
+    $('next').addEventListener('click', () => loadChallenge(Number($('next').dataset.challengeId)));
+    $('ranking-scope').addEventListener('change', () => {
+      state.rankingScope = $('ranking-scope').value;
+      loadLeaderboard();
+    });
     $('admin-new').hidden = !app.userState.isAdmin;
     renderPalette();
     bindEvents();
