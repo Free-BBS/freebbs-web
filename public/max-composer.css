@@ -419,7 +419,27 @@ body.aichat-page .main-content .aichat-composer {
   font-size: 16px;
 }
 .max-composer-add .max-composer-popover {
-  width: 180px;
+  width: min(250px, calc(100vw - 40px));
+}
+.max-creation-choices {
+  border-bottom: 1px solid var(--ui-line);
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+}
+.max-creation-choices button::before {
+  content: '';
+  width: 16px;
+  flex: 0 0 16px;
+}
+.max-creation-choices button[aria-pressed='true']::before {
+  content: '✓';
+}
+.max-creation-choices button[aria-pressed='true'] {
+  color: var(--ui-accent) !important;
+  background: var(--ui-surface-soft) !important;
+}
+#max-create-mode[hidden] {
+  display: none !important;
 }
 .max-composer-add .max-composer-popover button {
   display: flex;
@@ -441,6 +461,19 @@ body.aichat-page .main-content .aichat-composer {
 .max-composer-add .max-composer-popover button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+.max-attachment-choices {
+  display: flex;
+  gap: 4px;
+}
+.max-composer-add .max-attachment-choices button {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 4px;
+  font-size: 13px;
 }
 @media (max-width: 900px) {
   body.aichat-page .main-content .aichat-composer {

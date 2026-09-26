@@ -40,6 +40,8 @@ const pool = require('./db');
 const { createSiteSearch, createSiteSearchRouter } = require('./site-search');
 const { createFrontendToolsRouter } = require('./frontend-tools');
 const { createFrontendToolGenerator } = require('./frontend-tool-generation');
+const { createMaxCreationIntentRouter } = require('./max-creation-intent');
+const { loadProfileActivity } = require('./profile-activity');
 const config = require('./config');
 const {
   createDevelopmentAuthClient,
@@ -216,7 +218,7 @@ let agentSettingsInternalState = config.agentServiceToken ? 'starting' : 'disabl
 const FORTUNE_BONUS_KEY = 'fortune_bonus_enabled';
 const HEAT_DECAY_DATE_KEY = 'heat_decay_last_date';
 const FORTUNE_LOOKBACK_DAYS = 30;
-const CHECKIN_LOOKBACK_DAYS = 14;
+const CHECKIN_LOOKBACK_DAYS = 366;
 const { checkinReward } = require('./economy-policy');
 
 const SHOP_CATALOG_PATH = path.join(__dirname, '..', 'public', 'data', 'shop-items.json');
@@ -2943,6 +2945,25 @@ app.use(
   }),
 );
 
+app.use(
+  '/api/ai',
+  createMaxCreationIntentRouter({
+    requireAuth,
+    postAgentChat,
+    buildAgentChatPayload,
+    getModelOptions: async () => {
+      const catalog = modelCatalog(await systemSettingsStore.readSettings());
+      const profile = catalog.models.find((model) => model.id === catalog.defaultModel);
+      return {
+        model: catalog.defaultModel,
+        reasoning_effort:
+          ['off', 'low', 'auto'].find((effort) => profile.efforts.includes(effort)) ||
+          profile.defaultEffort,
+      };
+    },
+  }),
+);
+
 app.post('/api/ai/chat', async (request, response) => {
   const user = await requireAuth(request, response);
 
@@ -4194,7 +4215,7 @@ app.get('/api/discussion/users/search', async (request, response) => {
     if (!user) return;
     const query = String(request.query.q || '').trim();
     const limit = normalizeLimit(request.query.limit, 8, 12);
-    if (!query || query.length > 64 || /[^A-Za-z0-9_]/.test(query)) {
+    if (query.length > 64 || /[^A-Za-z0-9_]/.test(query)) {
       response.status(400).json({ message: '请输入用户名中的字母、数字或下划线' });
       return;
     }
@@ -4203,7 +4224,7 @@ app.get('/api/discussion/users/search', async (request, response) => {
               COALESCE(g.expires_at_ms, 0) AS golden_name_expires_at_ms
        FROM users u
        LEFT JOIN user_golden_names g ON g.user_id = u.id
-       WHERE u.id <> ? AND LOWER(u.username) LIKE CONCAT('%', LOWER(?), '%')
+       WHERE u.id <> ? AND LOCATE(LOWER(?), LOWER(u.username)) > 0
        ORDER BY CASE
                   WHEN LOWER(u.username) = LOWER(?) THEN 0
                   WHEN LOWER(u.username) LIKE CONCAT(LOWER(?), '%') THEN 1
@@ -5570,6 +5591,7 @@ app.get('/api/users/:uid/public-profile', async (request, response) => {
         createdAt: user.created_at,
         postCount: Number(statsRows[0]?.post_count || 0),
         likeCount: Number(statsRows[0]?.like_count || 0),
+        activity: await loadProfileActivity(pool, user.id),
         goldenName: decoratedIdentity.goldenName,
         collectibles: await economyShop.publicCollectibles(getShopItems(), user.id),
         ...(await profileExtras.publicProfile(user.id)),

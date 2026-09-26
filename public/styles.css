@@ -10811,6 +10811,119 @@ body.theme-light:not(.home-page) .code-run-output-label {
   font-variant-numeric: tabular-nums;
 }
 
+/* Check-in history is a compact, seven-column month instead of a growing list. */
+#fortune-modal .fortune-panel {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  margin-top: 16px;
+}
+#fortune-modal .fortune-chart-caption {
+  display: none;
+}
+@media (max-width: 600px) {
+  #fortune-modal .fortune-panel {
+    padding: 20px 16px;
+  }
+  #fortune-modal .fortune-title {
+    font-size: 24px;
+  }
+  #fortune-modal .fortune-date {
+    margin: 4px 0 12px;
+    font-size: 13px;
+  }
+  #fortune-modal .fortune-badge {
+    min-width: 90px;
+    padding: 8px 16px;
+  }
+  #fortune-modal .fortune-score {
+    margin-top: 8px;
+    font-size: 13px;
+  }
+  #fortune-modal .fortune-tagline {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  #fortune-modal .fortune-checkin-button {
+    margin-top: 12px;
+  }
+  #fortune-modal #fortune-records {
+    padding: 10px 0 0;
+    margin-top: 16px;
+  }
+}
+#fortune-records {
+  display: block;
+  padding: 12px;
+}
+.checkin-month-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.checkin-month-heading button {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: 24px/1 var(--font-ui);
+  cursor: pointer;
+}
+.checkin-month-heading button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.checkin-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 12px;
+}
+.checkin-weekday {
+  padding: 6px 0;
+  text-align: center;
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+.checkin-calendar .checkin-day {
+  min-width: 0;
+  height: 38px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font: 500 14px/1 var(--font-ui);
+  cursor: pointer;
+}
+.checkin-calendar .is-unchecked {
+  background: #e9edef;
+  color: #647078;
+}
+body.theme-dark .checkin-calendar .is-unchecked {
+  background: #343a40;
+  color: #b7c0c5;
+}
+.checkin-calendar .is-today {
+  outline: 2px solid var(--ui-accent, #087782);
+  outline-offset: 1px;
+}
+.checkin-calendar button:focus-visible {
+  outline: 2px solid var(--ui-text);
+  outline-offset: 2px;
+}
+.checkin-month-summary,
+.checkin-day-detail {
+  color: var(--ui-muted);
+  font: 12px/1.6 var(--font-ui);
+  margin: 6px 0 0;
+}
+.checkin-day-detail {
+  min-height: 38px;
+  margin-top: 12px;
+}
+
 .fortune-record-row > * {
   min-width: 0;
   text-align: left;

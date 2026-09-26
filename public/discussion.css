@@ -855,6 +855,12 @@ body.discussion-page .discussion-post-preview-tool iframe {
 .discussion-mention-picker[hidden] {
   display: none !important;
 }
+.discussion-mention-status {
+  padding: 12px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--ui-muted, #687b80);
+}
 .discussion-mention-option {
   display: flex;
   align-items: center;

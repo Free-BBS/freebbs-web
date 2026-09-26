@@ -774,6 +774,53 @@ function getFortuneResult(score, date = getTodayKey()) {
   };
 }
 
+function renderCheckinCalendar(container, payload) {
+  const today = payload.todayFortune?.date || payload.today?.date || getTodayKey();
+  const byDate = new Map((payload.records || []).map((item) => [item.date, item]));
+  const first = new Date(`${today}T00:00:00Z`);
+  first.setUTCDate(first.getUTCDate() - 365);
+  // Only offer complete months within the available history window.
+  if (first.getUTCDate() !== 1) first.setUTCMonth(first.getUTCMonth() + 1, 1);
+  const oldestMonth = first.toISOString().slice(0, 7);
+  const currentMonth = today.slice(0, 7);
+  let month = currentMonth;
+  function paint() {
+    const [year, number] = month.split('-').map(Number);
+    const offset = (new Date(Date.UTC(year, number - 1, 1)).getUTCDay() + 6) % 7;
+    const count = new Date(Date.UTC(year, number, 0)).getUTCDate();
+    let checked = 0;
+    const cells = Array.from({ length: offset }, () => '<span aria-hidden="true"></span>');
+    for (let day = 1; day <= count; day += 1) {
+      const key = `${month}-${String(day).padStart(2, '0')}`;
+      const record = byDate.get(key);
+      if (record) checked += 1;
+      const fortune = record ? getFortuneResult(record.fortuneScore, key) : null;
+      const detail = record
+        ? `${key} · ${fortune.label} · 连续 ${Number(record.streak || 0)} 天 · ${formatCheckinReward(record)}`
+        : `${key} · ${key > today ? '尚未到来' : '未签到'}`;
+      cells.push(
+        `<button type="button" class="checkin-day ${fortune?.colorClass || 'is-unchecked'}${key === today ? ' is-today' : ''}" data-day="${key}" aria-label="${escapeHtml(detail)}" title="${escapeHtml(detail)}"${key === today ? ' aria-current="date"' : ''}>${day}</button>`,
+      );
+    }
+    container.innerHTML = `<div class="checkin-month-heading"><button type="button" data-month-step="-1" aria-label="上个月" ${month <= oldestMonth ? 'disabled' : ''}>‹</button><strong>${year} 年 ${number} 月</strong><button type="button" data-month-step="1" aria-label="下个月" ${month >= currentMonth ? 'disabled' : ''}>›</button></div><p class="checkin-month-summary">本月已签到 ${checked} 天 · 灰色为未签到</p><div class="checkin-calendar" aria-label="${year} 年 ${number} 月签到日历">${['一', '二', '三', '四', '五', '六', '日'].map((label) => `<span class="checkin-weekday">${label}</span>`).join('')}${cells.join('')}</div><p class="checkin-day-detail" aria-live="polite">点击日期查看签到详情 · 按北京时间记录</p>`;
+    container.querySelectorAll('[data-month-step]').forEach((button) => {
+      button.onclick = () => {
+        month = new Date(Date.UTC(year, number - 1 + Number(button.dataset.monthStep), 1))
+          .toISOString()
+          .slice(0, 7);
+        paint();
+      };
+    });
+    container.querySelectorAll('[data-day]').forEach((button) => {
+      button.onclick = () => {
+        container.querySelector('.checkin-day-detail').textContent =
+          button.getAttribute('aria-label');
+      };
+    });
+  }
+  paint();
+}
+
 function ensureFortuneModal() {
   let modal = document.getElementById('fortune-modal');
 
@@ -964,19 +1011,7 @@ async function openFortuneModal() {
       : result.date >= '2026-09-16'
         ? '签到领取磁元'
         : '签到领取电元';
-    records.innerHTML = (payload.records || []).length
-      ? payload.records
-          .map(
-            (item) => `
-          <div class="fortune-record-row">
-            <span>${escapeHtml(item.date)}</span>
-            <strong>连续 ${Number(item.streak || 0)} 天</strong>
-            <span>${formatCheckinReward(item)}</span>
-          </div>
-        `,
-          )
-          .join('')
-      : `<p class="fortune-record-empty">还没有签到记录。</p>`;
+    renderCheckinCalendar(records, payload);
   };
 
   try {
@@ -5717,7 +5752,10 @@ async function handleAiChatSubmit(event) {
   const documents = window.FreeBbsMaxFiles?.documents?.() || [];
   const composerMessage = aiChatInput.value.trim();
   const generationMode = window.FreeBbsMaxArtifacts?.mode() || 'chat';
-  if (generationMode !== 'chat' && (images.length || fileContext || documents.length)) {
+  if (
+    ['circuit', 'tool'].includes(generationMode) &&
+    (images.length || fileContext || documents.length)
+  ) {
     setAiChatStatus('生成作品目前使用文字需求，请移除附件后生成，或切回「对话」分析附件。');
     return;
   }
@@ -5730,6 +5768,7 @@ async function handleAiChatSubmit(event) {
     return;
   }
 
+  const sendSessionToken = userState.token;
   aiChatState.isSending = true;
   window.FreeBbsMaxImages?.setBusy(true);
   window.FreeBbsMaxFiles?.setBusy(true);
@@ -5798,7 +5837,26 @@ async function handleAiChatSubmit(event) {
     const { requestPayload } = aiChatState.pendingSend;
     await saveAiDialog({ throwOnError: true });
     requestPayload.did = aiChatState.currentDid || '';
-    const artifactMode = aiChatState.pendingSend.artifactMode || 'chat';
+    let artifactMode = aiChatState.pendingSend.artifactMode || 'chat';
+    if (artifactMode === 'auto') {
+      // Attachments stay in the normal multimodal conversation until generators
+      // support them; never silently discard a user's files.
+      artifactMode = 'chat';
+      if (!images.length && !fileContext && !documents.length) {
+        setAiChatStatus('Max 正在选择回答方式…');
+        const intent = await callApi('/ai/creation-intent', {
+          method: 'POST',
+          body: JSON.stringify({
+            prompt: userMessage,
+            previousKind: aiChatState.messages.findLast((message) => message.artifact)?.artifact
+              .kind,
+          }),
+          signal: AbortSignal.timeout(30000),
+        });
+        artifactMode = ['circuit', 'tool'].includes(intent.mode) ? intent.mode : 'chat';
+      }
+    }
+    if (userState.token !== sendSessionToken) throw new Error('登录状态已变化，请刷新后重试。');
     const rawResult =
       artifactMode !== 'chat'
         ? await window.FreeBbsMaxArtifacts.generate({
@@ -6024,8 +6082,8 @@ function getDiscussionMentionRange(input) {
   const cursor = Number(input?.selectionStart);
   if (!Number.isInteger(cursor)) return null;
   const before = input.value.slice(0, cursor);
-  const match = before.match(/(^|[\s([{"'])@([A-Za-z0-9_]*)$/);
-  if (!match || !match[2]) return null;
+  const match = before.match(/(^|[^A-Za-z0-9_@])@([A-Za-z0-9_]*)$/);
+  if (!match) return null;
   return {
     start: cursor - match[2].length - 1,
     end: cursor,
@@ -6038,18 +6096,20 @@ function positionDiscussionMentionPicker() {
   const input = discussionMentionSearch.input;
   if (!picker || picker.hidden || !input?.isConnected) return;
   const rect = input.getBoundingClientRect();
-  const width = Math.min(340, Math.max(220, rect.width));
-  const left = Math.min(
-    Math.max(12, rect.left),
-    Math.max(12, document.documentElement.clientWidth - width - 12),
-  );
-  const roomBelow = window.innerHeight - rect.bottom;
+  const viewport = window.visualViewport;
+  const top = viewport?.offsetTop || 0;
+  const bottom = top + (viewport?.height || window.innerHeight);
+  const viewportWidth = viewport?.width || document.documentElement.clientWidth;
+  const width = Math.min(340, Math.max(220, rect.width), viewportWidth - 24);
+  const left = Math.min(Math.max(12, rect.left), Math.max(12, viewportWidth - width - 12));
+  const roomBelow = bottom - rect.bottom;
+  picker.style.maxHeight = `${Math.max(80, Math.min(288, (viewport?.height || window.innerHeight) * 0.48))}px`;
   picker.style.width = `${width}px`;
   picker.style.left = `${left}px`;
   picker.style.top =
     roomBelow >= Math.min(260, picker.offsetHeight + 12)
-      ? `${Math.min(window.innerHeight - picker.offsetHeight - 12, rect.bottom + 6)}px`
-      : `${Math.max(12, rect.top - picker.offsetHeight - 6)}px`;
+      ? `${Math.max(top + 6, Math.min(bottom - picker.offsetHeight - 12, rect.bottom + 6))}px`
+      : `${Math.max(top + 6, Math.min(bottom - picker.offsetHeight - 12, rect.top - picker.offsetHeight - 6))}px`;
 }
 
 function hideDiscussionMentionPicker() {
@@ -6068,18 +6128,21 @@ function hideDiscussionMentionPicker() {
   discussionMentionSearch.users = [];
 }
 
-function renderDiscussionMentionPicker() {
+function renderDiscussionMentionPicker(status = '') {
   const picker = ensureDiscussionMentionPicker();
   const users = discussionMentionSearch.users;
-  if (!users.length || !discussionMentionSearch.input) {
+  if (!discussionMentionSearch.input) {
     hideDiscussionMentionPicker();
     return;
   }
-  picker.innerHTML = users
-    .map((user, index) => {
-      const optionId = `discussion-mention-option-${index}`;
-      const goldenNameExpiry = getActiveGoldenNameExpiry(user.goldenName);
-      return `
+  const host = discussionMentionSearch.input.closest('dialog[open]') || document.body;
+  if (picker.parentElement !== host) host.append(picker);
+  picker.innerHTML =
+    users
+      .map((user, index) => {
+        const optionId = `discussion-mention-option-${index}`;
+        const goldenNameExpiry = getActiveGoldenNameExpiry(user.goldenName);
+        return `
         <button
           id="${optionId}"
           class="discussion-mention-option ${index === discussionMentionSearch.activeIndex ? 'is-active' : ''}"
@@ -6091,17 +6154,20 @@ function renderDiscussionMentionPicker() {
           <img src="${escapeHtml(getAvatarUrl(user.avatarPath))}" alt="" />
           <span class="${goldenNameExpiry ? 'has-golden-name' : ''}"${goldenNameExpiry ? ` data-golden-name-expires="${goldenNameExpiry}"` : ''}>@${escapeHtml(user.username)}</span>
         </button>`;
-    })
-    .join('');
+      })
+      .join('') ||
+    `<p class="discussion-mention-status" role="status">${escapeHtml(status || '没有找到用户，继续输入用户名试试')}</p>`;
   picker.hidden = false;
   const input = discussionMentionSearch.input;
   input.setAttribute('aria-controls', picker.id);
   input.setAttribute('aria-haspopup', 'listbox');
   input.setAttribute('aria-expanded', 'true');
-  input.setAttribute(
-    'aria-activedescendant',
-    `discussion-mention-option-${discussionMentionSearch.activeIndex}`,
-  );
+  if (users.length)
+    input.setAttribute(
+      'aria-activedescendant',
+      `discussion-mention-option-${discussionMentionSearch.activeIndex}`,
+    );
+  else input.removeAttribute('aria-activedescendant');
   positionDiscussionMentionPicker();
 }
 
@@ -6127,7 +6193,8 @@ async function searchDiscussionMentions(input, range) {
     renderDiscussionMentionPicker();
   } catch (error) {
     if (error.name !== 'AbortError' && sequence === discussionMentionSearch.sequence) {
-      hideDiscussionMentionPicker();
+      discussionMentionSearch.users = [];
+      renderDiscussionMentionPicker('搜索暂时不可用，请继续输入重试');
     }
   }
 }
@@ -6142,6 +6209,10 @@ function handleDiscussionMentionInput(event) {
   }
   discussionMentionSearch.input = input;
   discussionMentionSearch.range = range;
+  discussionMentionSearch.sequence += 1;
+  discussionMentionSearch.controller?.abort();
+  discussionMentionSearch.users = [];
+  renderDiscussionMentionPicker(range.query ? '正在搜索…' : '选择用户，或继续输入用户名搜索…');
   window.clearTimeout(discussionMentionSearch.timer);
   discussionMentionSearch.timer = window.setTimeout(
     () => searchDiscussionMentions(input, range),
@@ -6161,13 +6232,13 @@ function selectDiscussionMention(username) {
 }
 
 function handleDiscussionMentionKeydown(event) {
-  if (event.target !== discussionMentionSearch.input || !discussionMentionSearch.users.length)
-    return;
+  if (event.isComposing || event.target !== discussionMentionSearch.input) return;
   if (event.key === 'Escape') {
     event.preventDefault();
     hideDiscussionMentionPicker();
     return;
   }
+  if (!discussionMentionSearch.users.length) return;
   if (!['ArrowDown', 'ArrowUp', 'Enter', 'Tab'].includes(event.key)) return;
   event.preventDefault();
   if (event.key === 'Enter' || event.key === 'Tab') {
@@ -7352,7 +7423,8 @@ async function loadPublicProfile() {
     }
     if (publicProfileMajor) {
       const majorParts = [profile.grade, profile.major].filter(Boolean);
-      publicProfileMajor.textContent = majorParts.join(' · ') || '未填写院系信息';
+      publicProfileMajor.textContent = majorParts.join(' · ');
+      publicProfileMajor.hidden = !majorParts.length;
     }
     if (publicProfilePostCount) {
       publicProfilePostCount.textContent = String(profile.postCount ?? 0);
@@ -7365,6 +7437,7 @@ async function loadPublicProfile() {
     }
     if (publicProfileWebsite) {
       const websiteUrl = normalizeWebsiteUrl(profile.websiteUrl);
+      publicProfileWebsite.closest('.public-profile-website-row').hidden = !websiteUrl;
       if (websiteUrl) {
         publicProfileWebsite.innerHTML = `<a href="${escapeHtml(websiteUrl)}" target="_blank" rel="noreferrer">${escapeHtml(profile.websiteUrl)}</a>`;
       } else {
@@ -7373,6 +7446,7 @@ async function loadPublicProfile() {
     }
 
     setPublicProfileMessage('');
+    window.FreeBbsProfileActivity?.render(profile.activity);
     await window.FreeBbsProfileExtras?.renderProfile(profile);
   } catch (error) {
     if (publicProfileName) {
@@ -10557,6 +10631,10 @@ discussionDetail?.addEventListener('input', handleDiscussionCommentInput);
 discussionDetail?.addEventListener('compositionstart', handleDiscussionCommentCompositionStart);
 discussionDetail?.addEventListener('compositionend', handleDiscussionCommentCompositionEnd);
 document.addEventListener('input', handleDiscussionMentionInput);
+document.addEventListener('compositionend', handleDiscussionMentionInput);
+document.addEventListener('click', (event) => {
+  if (isDiscussionMentionInput(event.target)) handleDiscussionMentionInput(event);
+});
 document.addEventListener('keydown', handleDiscussionMentionKeydown, true);
 document.addEventListener('pointerdown', (event) => {
   const picker = document.getElementById('discussion-mention-picker');
@@ -10570,6 +10648,8 @@ document.addEventListener('pointerdown', (event) => {
 });
 window.addEventListener('resize', positionDiscussionMentionPicker);
 window.addEventListener('scroll', positionDiscussionMentionPicker, true);
+window.visualViewport?.addEventListener('resize', positionDiscussionMentionPicker);
+window.visualViewport?.addEventListener('scroll', positionDiscussionMentionPicker);
 discussionCreateToggle?.addEventListener('click', handleDiscussionCreateToggle);
 discussionComposeForm?.addEventListener('submit', handleDiscussionComposeSubmit);
 discussionComposeBoard?.addEventListener('change', syncDiscussionAnonymousOption);

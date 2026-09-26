@@ -705,7 +705,9 @@
       );
     }
     function revealTargetFold(node) {
-      const fold = node?.closest('details.personal-fold');
+      const fold =
+        node?.closest('details.personal-fold') ||
+        node?.closest('details.profile-wardrobe-disclosure');
       if (!fold || fold.open) return false;
       openedTargetFolds.add(fold);
       fold.open = true;

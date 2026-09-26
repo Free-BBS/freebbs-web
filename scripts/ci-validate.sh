@@ -148,6 +148,7 @@ npm run test:aichat-navigation
 echo "[ci] registration, notifications, username and course API tests"
 node --test scripts/post-merge-fixes.test.js
 npm run test:community
+node --test backend/max-creation-intent.test.js backend/profile-activity.test.js scripts/community-usability.test.js scripts/max-artifacts.test.js
 python3 -B backend/course-upload-client.test.py
 
 echo "[ci] validating required files"
