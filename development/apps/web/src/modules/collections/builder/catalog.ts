@@ -35,7 +35,12 @@ export const ruleCatalog: ReadonlyArray<{
   { kind: 'upload_count', label: '文件数量', description: '限制一次上传数量', symbol: '×' },
   { kind: 'file_types', label: '文件格式', description: '允许特定文件类型', symbol: '◇' },
   { kind: 'file_size', label: '文件大小', description: '设置单个文件上限', symbol: 'MB' },
-  { kind: 'title_pattern', label: '标题审核', description: '按规则检查标题', symbol: '✓' },
+  {
+    kind: 'title_pattern',
+    label: '标题审核',
+    description: '检查文字标题与上传文件名',
+    symbol: '✓',
+  },
   { kind: 'schedule', label: '开放时间', description: '定时开放和截止', symbol: '◴' },
   { kind: 'capacity', label: '名额上限', description: '达到人数后自动截止', symbol: '∑' },
 ];

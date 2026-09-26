@@ -80,8 +80,8 @@ export function FieldLibrary({
         </div>
       </section>
       <section>
-        <h2>规则宝石</h2>
-        <p className="builder-library-help">先选中一枚宝石，再点击画布中亮起的卡槽完成镶嵌。</p>
+        <h2>附加规则</h2>
+        <p className="builder-library-help">先选择规则，再点击画布中亮起的卡槽。</p>
         <div className="builder-rule-parts">
           {ruleCatalog.map((item) => (
             <button
