@@ -113,4 +113,30 @@ describe('DevelopmentUsersSection', () => {
     expect(within(row).getByText(/创意设计部部员/)).toBeInTheDocument();
     expect(within(row).getByText('可访问')).toBeInTheDocument();
   });
+
+  it('keeps an unsaved identity draft when a search is submitted', async () => {
+    const request = vi.fn((path: string) => {
+      if (path === '/admin/development-users') return Promise.resolve([person]);
+      if (path === '/sports/teams') return Promise.resolve(teams);
+      if (path.startsWith('/admin/development-users?')) return Promise.resolve([]);
+      throw new Error(`Unexpected request ${path}`);
+    });
+    const user = userEvent.setup();
+    render(<DevelopmentUsersSection client={{ request: request as ApiClient['request'] }} />);
+
+    await screen.findByRole('button', { name: /Target/ });
+    await user.click(screen.getByRole('button', { name: /电子系学生会/ }));
+    await user.click(screen.getByRole('button', { name: '文艺中心：部员' }));
+    await user.type(screen.getByRole('textbox', { name: '搜索用户名、学号或 UID' }), 'missing');
+    await user.click(screen.getByRole('button', { name: '搜索' }));
+
+    expect(request).not.toHaveBeenCalledWith('/admin/development-users?query=missing');
+    expect(screen.getByRole('button', { name: '文艺中心：部员' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '当前身份卡片有未保存修改，请先保存或放弃。',
+    );
+  });
 });

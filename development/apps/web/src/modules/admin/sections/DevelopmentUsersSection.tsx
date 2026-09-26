@@ -78,7 +78,11 @@ export function DevelopmentUsersSection({ client }: { client: Pick<ApiClient, 'r
   }, []);
 
   const load = useCallback(
-    async (search = '') => {
+    async (search = '', options: { replaceDraft?: boolean } = {}) => {
+      if (dirty && !options.replaceDraft) {
+        setMessage('当前身份卡片有未保存修改，请先保存或放弃。');
+        return false;
+      }
       setLoading(true);
       setError('');
       try {
@@ -96,13 +100,15 @@ export function DevelopmentUsersSection({ client }: { client: Pick<ApiClient, 'r
           setSelectedUid('');
           setDraft(null);
         }
+        return true;
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : '用户名单加载失败');
+        return false;
       } finally {
         setLoading(false);
       }
     },
-    [client, selectUser, selectedUid],
+    [client, dirty, selectUser, selectedUid],
   );
 
   useEffect(() => {
@@ -165,8 +171,8 @@ export function DevelopmentUsersSection({ client }: { client: Pick<ApiClient, 'r
           captainTeamIds: captainEnabled ? draft.captainTeamIds : [],
         }),
       });
-      await load(query);
-      setMessage(`已保存 ${draft.username} 的身份设置`);
+      const refreshed = await load(query, { replaceDraft: true });
+      if (refreshed) setMessage(`已保存 ${draft.username} 的身份设置`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '身份设置保存失败');
     } finally {
