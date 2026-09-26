@@ -17,6 +17,13 @@ export default defineConfig({
           environment: 'node',
         },
       },
+      {
+        test: {
+          name: 'contracts',
+          include: ['packages/contracts/src/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
       './apps/web/vite.config.ts',
     ],
   },

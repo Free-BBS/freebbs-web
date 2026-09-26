@@ -2,6 +2,7 @@ import {
   MODULE_IDS,
   ROLE_KEYS,
   SOCIAL_ORGANIZATIONS,
+  identityLabels,
   type ModuleId,
   type PermissionAction,
   type RoleKey,
@@ -16,29 +17,14 @@ import {
 const publicScope: ScopeRef = { type: 'public', id: '*' };
 const sportsTeamScope: ScopeRef = { type: 'sports_team', id: '*' };
 
-const roleNames: Readonly<Record<RoleKey, string>> = {
-  'platform.super_admin': 'Platform super administrator',
-  'domain.arts_lead': '文艺中心负责人',
-  'domain.sports_lead': '体育中心负责人',
-  'domain.liaison_lead': '联络中心负责人',
-  'domain.rights_development_lead': '权发中心负责人',
-  'department.arts_director': '文艺中心部长',
-  'department.sports_director': '体育中心部长',
-  'department.liaison_director': '联络中心部长',
-  'department.rights_development_director': '权发中心部长',
-  'department.arts_member': '文艺中心部员',
-  'department.sports_member': '体育中心部员',
-  'department.liaison_member': '联络中心部员',
-  'department.rights_development_member': '权发中心部员',
-  'affiliation.tuanwei_member': 'Youth League affiliation member',
-  'affiliation.sast_member': 'SAST affiliation member',
-  'affiliation.tuanwei_director': 'Youth League affiliation director',
-  'affiliation.tuanwei_lead': 'Youth League affiliation lead',
-  'affiliation.sast_director': 'SAST affiliation director',
-  'affiliation.sast_lead': 'SAST affiliation lead',
-  'affiliation.tms_member': 'TMS member',
-  'affiliation.tms_director': 'TMS director',
-  'affiliation.tms_lead': 'TMS lead',
+const hiddenRoleNames: Partial<Readonly<Record<RoleKey, string>>> = {
+  'platform.super_admin': '发展端负责人',
+  'affiliation.tuanwei_member': '团委历史身份（部员）',
+  'affiliation.tuanwei_director': '团委历史身份（部长）',
+  'affiliation.tuanwei_lead': '团委历史身份（负责人）',
+  'affiliation.sast_member': '科协历史身份（部员）',
+  'affiliation.sast_director': '科协历史身份（部长）',
+  'affiliation.sast_lead': '科协历史身份（负责人）',
 };
 
 const moduleNames: Readonly<Record<ModuleId, string>> = {
@@ -54,7 +40,10 @@ const moduleNames: Readonly<Record<ModuleId, string>> = {
   admin: 'Permissions and modules',
 };
 
-export const BUILT_IN_ROLES = ROLE_KEYS.map((key) => ({ key, name: roleNames[key] }));
+export const BUILT_IN_ROLES = ROLE_KEYS.map((key) => ({
+  key,
+  name: hiddenRoleNames[key] ?? identityLabels([key])[0] ?? key,
+}));
 
 const seenPermissions = new Set<string>();
 export const BUILT_IN_PERMISSIONS = ALL_PERMISSION_RULES.flatMap(({ action, resource }) => {
