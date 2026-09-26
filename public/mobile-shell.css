@@ -740,6 +740,13 @@ body.discussion-page .discussion-comment-author-link .discussion-avatar-frame {
   display: none;
 }
 @media (max-width: 900px) {
+  /* Reading and editing surfaces use the same functional header as the feed. */
+  html:has(body.has-mobile-header:not(.max-input-active)) {
+    scroll-padding-top: calc(128px + env(safe-area-inset-top, 0px));
+  }
+  html body.has-mobile-header:not(.max-input-active) .topbar {
+    display: contents !important;
+  }
   .mobile-header-backdrop {
     display: block;
     position: fixed;
@@ -816,7 +823,7 @@ body.discussion-page .discussion-comment-author-link .discussion-avatar-frame {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  body:not(.auth-page-body) .page-shell .topbar .user-panel {
+  body:not(.auth-page-body) .topbar .user-panel {
     top: calc(10px + env(safe-area-inset-top, 0px)) !important;
     right: calc(16px + env(safe-area-inset-right, 0px)) !important;
   }
@@ -856,5 +863,61 @@ body.discussion-page .discussion-comment-author-link .discussion-avatar-frame {
     :is(img, svg, span) {
     height: 168px !important;
     max-height: 168px !important;
+  }
+}
+
+@media (min-width: 901px) {
+  body.publish-page .publish-mobile-header,
+  body.publish-page > .mobile-header-backdrop {
+    display: none !important;
+  }
+}
+
+@media (max-width: 900px) {
+  body.publish-page .publish-editor {
+    padding-top: calc(128px + env(safe-area-inset-top, 0px)) !important;
+  }
+
+  /* Max keeps its history control beside search, above the opaque header. */
+  body.aichat-page .topbar > .aichat-dialog-toggle {
+    z-index: 152;
+  }
+  body.aichat-page .topbar > .site-search-trigger {
+    left: calc(62px + env(safe-area-inset-left, 0px)) !important;
+  }
+
+  /* Immersive readers must not paint over the shared header. Their own controls
+     start below it, while full-screen dialogs retain their native top layer. */
+  body.has-mobile-header .course-material-immersive {
+    z-index: 0;
+    padding-top: calc(180px + env(safe-area-inset-top, 0px));
+  }
+  body.has-mobile-header .course-material-back {
+    top: calc(124px + env(safe-area-inset-top, 0px));
+  }
+  body.has-mobile-header .knowledge-tools {
+    top: calc(180px + env(safe-area-inset-top, 0px));
+    overflow-y: auto;
+  }
+  body.has-mobile-header .knowledge-workbench .knowledge-chat {
+    top: calc(112px + env(safe-area-inset-top, 0px));
+    height: calc(100dvh - 112px - env(safe-area-inset-top, 0px));
+  }
+  body.has-mobile-header .knowledge-chat-panel {
+    height: 100%;
+  }
+  body.has-mobile-header :is(.course-map-immersive, .course-map-editor-immersive) {
+    z-index: 0;
+    top: calc(112px + env(safe-area-inset-top, 0px));
+    height: calc(100dvh - 112px - env(safe-area-inset-top, 0px));
+  }
+  body.has-mobile-header
+    :is(.course-map-immersive, .course-map-editor-immersive)
+    .course-map-scroller {
+    height: 100%;
+  }
+  body.has-mobile-header
+    :is(.course-map-reader-controls, .course-map-reader-hud, .course-map-studio-bar) {
+    top: calc(124px + env(safe-area-inset-top, 0px));
   }
 }
