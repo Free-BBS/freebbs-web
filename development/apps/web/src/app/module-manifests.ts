@@ -110,8 +110,8 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
   },
   {
     id: 'admin',
-    name: '系统设置',
-    description: '管理平台权限、身份标签与模块状态。',
+    name: '管理员模块',
+    description: '维护发展端用户的组织身份卡片。',
     route: '/admin',
     icon: adminIcon,
     ownerTeam: '平台核心组',

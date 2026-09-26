@@ -20,12 +20,12 @@ describe('development identity catalog', () => {
   });
 
   it('rejects two positions from one unit and accepts positions from separate units', () => {
-    expect(
-      validateIdentitySelection(['domain.arts_lead', 'department.arts_member']),
-    ).toMatchObject({ ok: false, groupId: 'student_union.arts_center' });
-    expect(
-      validateIdentitySelection(['domain.arts_lead', 'department.sports_member']),
-    ).toEqual({ ok: true });
+    expect(validateIdentitySelection(['domain.arts_lead', 'department.arts_member'])).toMatchObject(
+      { ok: false, groupId: 'student_union.arts_center' },
+    );
+    expect(validateIdentitySelection(['domain.arts_lead', 'department.sports_member'])).toEqual({
+      ok: true,
+    });
   });
 
   it('keeps platform administrator separate from the development lead role', () => {

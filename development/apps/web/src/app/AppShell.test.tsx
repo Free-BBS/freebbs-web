@@ -298,5 +298,5 @@ it('exposes governance to a platform super administrator', () => {
 
   renderShell('/admin');
 
-  expect(screen.getByRole('link', { name: '系统设置' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: '管理员模块' })).toBeInTheDocument();
 });

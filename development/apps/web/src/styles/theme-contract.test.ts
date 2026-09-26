@@ -29,11 +29,13 @@ describe('dark-theme contrast contract', () => {
     );
   });
 
-  it('uses theme variables instead of a hard-coded white governance heading end color', () => {
-    expect(componentsCss).toContain(
-      'linear-gradient(135deg, var(--admin-paper), var(--admin-surface-end) 68%)',
-    );
-    expect(themeCss).toContain('--admin-surface-end:');
+  it('keeps the administrator module on shared semantic surfaces', () => {
+    expect(shellCss).toContain('.development-directory-layout');
+    expect(shellCss).toContain('grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);');
+    expect(shellCss).toContain('background: var(--surface-raised);');
+    expect(shellCss).toContain('border: 1px solid var(--border-subtle);');
+    expect(componentsCss).not.toContain('--admin-paper');
+    expect(themeCss).not.toContain('--admin-paper');
   });
 
   it('keeps shared learning-area surfaces and actions in the semantic token contract', () => {

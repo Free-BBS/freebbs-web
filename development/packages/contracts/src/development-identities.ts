@@ -36,7 +36,9 @@ const threeLevelGroup = (
   id,
   label,
   selection: 'single',
-  options: suffixes.map((suffix, index) => option(`${prefix}.${suffix}` as RoleKey, labels[index]!)),
+  options: suffixes.map((suffix, index) =>
+    option(`${prefix}.${suffix}` as RoleKey, labels[index]!),
+  ),
 });
 
 export const DEVELOPMENT_IDENTITY_SECTIONS: readonly DevelopmentIdentitySection[] = [
@@ -275,8 +277,7 @@ const groupByRole = new Map(
 );
 
 export type IdentitySelectionValidation =
-  | { ok: true }
-  | { ok: false; groupId: string; message: string };
+  { ok: true } | { ok: false; groupId: string; message: string };
 
 export function validateIdentitySelection(roles: readonly RoleKey[]): IdentitySelectionValidation {
   const selected = new Set(roles);

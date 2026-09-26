@@ -148,7 +148,24 @@
 
 .development-user-settings {
   display: grid;
-  gap: 22px;
+  min-width: 0;
+  gap: 20px;
+}
+
+.admin-module-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.admin-module-heading .module-page-header {
+  margin-bottom: 0;
+}
+
+.admin-module-heading .operation-log-trigger {
+  flex: 0 0 auto;
 }
 
 .development-settings-intro {
@@ -167,133 +184,530 @@
   gap: 8px;
 }
 
-.development-settings-intro input,
-.development-access-field input,
-.development-access-field select {
+.development-settings-intro input {
   min-height: 44px;
-  border: 1px solid var(--line-soft);
-  border-radius: 10px;
-  background: var(--surface-card);
-  color: var(--text-primary);
+  min-width: min(320px, 62vw);
+  padding: 0 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--color-text);
   font: inherit;
 }
 
-.development-settings-intro input {
-  min-width: min(320px, 62vw);
-  padding: 0 14px;
+.development-settings-intro button,
+.identity-save-bar button,
+.preview-user-button,
+.operation-log-drawer header button {
+  min-height: 42px;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--action-primary);
+  color: var(--action-primary-text);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
 }
 
-.development-user-list {
-  display: grid;
-  gap: 16px;
+.development-settings-message {
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--color-success) 28%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-success) 9%, transparent);
+  color: var(--color-success);
 }
 
-.development-user-card {
+.development-settings-message.is-error {
+  border-color: color-mix(in srgb, var(--color-danger) 28%, transparent);
+  background: color-mix(in srgb, var(--color-danger) 9%, transparent);
+  color: var(--color-danger);
+}
+
+.development-directory-layout {
   display: grid;
-  gap: 18px;
-  padding: clamp(18px, 2vw, 26px);
-  border: 1px solid var(--line-soft);
-  border-radius: 18px;
-  background: var(--surface-card);
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  min-width: 0;
+  gap: 20px;
+  align-items: start;
+}
+
+.development-user-directory,
+.development-identity-editor {
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
   box-shadow: var(--shadow-card);
 }
 
-.development-user-card > header,
-.development-user-card > footer {
+.development-user-directory {
+  display: grid;
+  max-height: min(72vh, 760px);
+  gap: 4px;
+  padding: 8px;
+  overflow-y: auto;
+}
+
+.development-user-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 84px;
+  align-items: center;
+  gap: 11px;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.development-user-row:hover {
+  background: var(--surface-muted);
+}
+
+.development-user-row[data-active='true'] {
+  border-color: color-mix(in srgb, var(--action-primary) 44%, var(--border-subtle));
+  background: color-mix(in srgb, var(--action-primary) 10%, var(--surface-raised));
+}
+
+.development-user-avatar {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+  background: var(--surface-muted);
+  color: var(--color-text);
+  font-weight: 850;
+}
+
+.development-user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.development-user-row-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.development-user-row-copy strong,
+.development-user-row-copy small,
+.development-user-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.development-user-row-copy small,
+.development-user-summary {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.development-access-badge {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.development-access-badge[data-level='lead'] {
+  background: color-mix(in srgb, var(--color-accent) 15%, var(--surface-raised));
+  color: var(--color-accent);
+}
+
+.development-access-badge[data-level='member'] {
+  background: color-mix(in srgb, var(--color-success) 12%, var(--surface-raised));
+  color: var(--color-success);
+}
+
+.development-identity-editor {
+  display: grid;
+  gap: 18px;
+  padding: clamp(18px, 2.6vw, 30px);
+}
+
+.identity-editor-header {
   display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.identity-editor-header > div {
+  min-width: 0;
+}
+
+.identity-editor-header h3 {
+  margin: 3px 0 5px;
+  font-size: clamp(22px, 3vw, 32px);
+}
+
+.identity-editor-header p:last-child {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-muted);
+}
+
+.preview-user-button,
+.admin-governance-page button.secondary-button {
+  border-color: var(--border-subtle);
+  background: transparent;
+  color: var(--color-text);
+}
+
+.identity-access-card,
+.identity-toggle-card,
+.identity-section {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.identity-access-card {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(260px, 1.2fr);
+  align-items: center;
+  gap: 18px;
+  padding: 16px;
+}
+
+.identity-access-card h4,
+.identity-access-card p {
+  margin: 0;
+}
+
+.identity-access-card p,
+.identity-toggle-card small,
+.identity-section-summary small {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.identity-toggle-card {
+  display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 18px;
+  padding: 14px 16px;
 }
 
-.development-user-card header div {
+.identity-toggle-card > span {
   display: grid;
-  gap: 4px;
+  min-width: 0;
+  gap: 3px;
 }
 
-.development-user-card header strong {
-  font-size: 1.15rem;
+.identity-toggle-card input,
+.captain-team-grid input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  accent-color: var(--action-primary);
 }
 
-.development-user-card header span {
-  color: var(--text-muted);
-}
-
-.development-access-field {
+.identity-sections {
   display: grid;
-  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
-  align-items: center;
-  gap: 14px;
-  font-weight: 700;
+  gap: 10px;
 }
 
-.development-access-field input,
-.development-access-field select {
+.identity-section {
+  overflow: hidden;
+}
+
+.identity-section-summary {
+  display: flex;
   width: 100%;
-  padding: 0 12px;
-}
-
-.development-user-card fieldset {
-  margin: 0;
-  padding: 0;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 15px 16px;
   border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.development-user-card legend {
-  margin-bottom: 10px;
-  font-weight: 800;
+.identity-section-summary:hover {
+  background: color-mix(in srgb, var(--action-primary) 7%, transparent);
 }
 
-.development-role-grid {
+.identity-section-summary[aria-expanded='true'] {
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--action-primary) 10%, transparent);
+}
+
+.identity-section-summary > span {
+  flex: 0 0 auto;
+  font-weight: 850;
+}
+
+.identity-section-summary small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identity-section-groups {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+
+.identity-group {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-raised);
+}
+
+.identity-group h4 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.identity-option-row {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.identity-option-row button {
+  min-height: 34px;
+  padding: 6px 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.identity-option-row button:hover {
+  border-color: color-mix(in srgb, var(--action-primary) 56%, var(--border-subtle));
+}
+
+.identity-option-row button[aria-pressed='true'] {
+  border-color: var(--action-primary);
+  background: var(--action-primary);
+  color: var(--action-primary-text);
+}
+
+.access-level-options {
+  justify-content: flex-end;
+}
+
+.captain-team-editor {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.identity-toggle-card.compact {
+  background: var(--surface-raised);
+}
+
+.captain-team-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 8px;
 }
 
-.development-role-grid label {
+.captain-team-grid label {
   display: flex;
-  min-height: 42px;
+  min-width: 0;
   align-items: center;
   gap: 9px;
-  padding: 8px 11px;
-  border: 1px solid var(--line-soft);
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
-  background: var(--surface-subtle);
+  background: var(--surface-raised);
+  font-size: 13px;
 }
 
-.development-user-card button,
-.development-settings-intro button {
-  min-height: 40px;
-  padding: 8px 16px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: var(--color-accent);
-  color: #fff;
-  font: inherit;
-  font-weight: 800;
+.identity-save-bar {
+  position: sticky;
+  z-index: 2;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
+  box-shadow: var(--shadow-raised);
+  backdrop-filter: blur(12px);
 }
 
-.development-user-card .preview-user-button {
-  border-color: var(--line-soft);
+.identity-save-bar button:disabled,
+.preview-user-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.operation-log-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(4, 17, 22, 0.48);
+  backdrop-filter: blur(3px);
+}
+
+.operation-log-drawer {
+  width: min(480px, 100%);
+  height: 100%;
+  padding: 24px;
+  overflow-y: auto;
+  border-left: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+  color: var(--color-text);
+  box-shadow: var(--shadow-raised);
+}
+
+.operation-log-drawer > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.operation-log-drawer h2 {
+  margin: 4px 0 0;
+}
+
+.operation-log-drawer header button {
+  width: 42px;
+  padding: 0;
+  border-color: var(--border-subtle);
   background: transparent;
-  color: var(--text-primary);
+  color: var(--color-text);
+  font-size: 24px;
 }
 
-@media (max-width: 720px) {
+.operation-log-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.operation-log-list li {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.operation-log-list span,
+.operation-log-list time {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.operation-log-list pre {
+  max-width: 100%;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 1040px) {
+  .development-directory-layout {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+
+  .identity-access-card {
+    grid-template-columns: 1fr;
+  }
+
+  .access-level-options {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .admin-module-heading,
   .development-settings-intro,
-  .development-user-card > header {
+  .identity-editor-header {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .development-settings-intro form,
-  .development-access-field {
+  .development-settings-intro form {
+    display: grid;
     grid-template-columns: 1fr;
   }
 
   .development-settings-intro input {
     min-width: 0;
     width: 100%;
+  }
+
+  .development-directory-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .development-user-directory {
+    max-height: 360px;
+  }
+
+  .identity-section-summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .identity-section-summary small {
+    width: 100%;
+    white-space: normal;
+  }
+
+  .identity-section-groups {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .identity-save-bar {
+    bottom: calc(var(--mobile-nav-height) + 8px);
   }
 }
 

@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AdminPage } from './AdminPage.js';
@@ -9,67 +10,51 @@ vi.mock('../../core/api/client.js', () => ({
   createApiClient: () => ({ request: mockRequest }),
 }));
 
-const page = <T,>(items: T[]) => ({ items, page: 1, pageSize: 20, total: items.length });
-const recordBase = {
-  status: 'active',
-  ownerUid: 'admin-1',
-  scope: { type: 'public', id: '*' },
-  createdAt: '2026-07-27T00:00:00.000Z',
-  updatedAt: '2026-07-27T00:00:00.000Z',
+const directoryUser = {
+  uid: 'uid-1001',
+  username: 'Yuchong',
+  displayName: 'Yuchong',
+  studentId: '2023010567',
+  avatarUrl: null,
+  accessLevel: 'lead',
+  roles: [],
+  captainTeamIds: [],
 };
 
 describe('AdminPage shell', () => {
   beforeEach(() => {
     mockRequest.mockReset();
-  });
-
-  it('uses the default API client and opens on the paged user governance section', async () => {
     mockRequest.mockImplementation((path: string) => {
-      if (path === '/admin/subjects?page=1&pageSize=20')
-        return Promise.resolve(
-          page([
-            {
-              ...recordBase,
-              id: 'subject-1',
-              uid: 'uid-1001',
-              displayName: '测试用户',
-              avatarUrl: null,
-            },
-          ]),
-        );
-      if (path === '/admin/role-assignments?page=1&pageSize=20') return Promise.resolve(page([]));
-      if (path === '/admin/tag-assignments?page=1&pageSize=20') return Promise.resolve(page([]));
-      if (path === '/admin/roles' || path === '/admin/tag-definitions') return Promise.resolve([]);
+      if (path === '/admin/development-users') return Promise.resolve([directoryUser]);
+      if (path === '/sports/teams') return Promise.resolve([]);
+      if (path.startsWith('/admin/audit-logs'))
+        return Promise.resolve({ items: [], page: 1, pageSize: 20, total: 0 });
       throw new Error(`Unexpected request ${path}`);
     });
-
-    render(<AdminPage />);
-    expect(screen.getByRole('heading', { name: '系统设置' }).closest('header')).toHaveClass(
-      'module-page-header',
-    );
-    expect(await screen.findByText('uid-1001')).toBeInTheDocument();
-    expect(screen.getByRole('tabpanel', { name: '用户与授权' })).toBeInTheDocument();
-    expect(screen.getByRole('search')).toHaveClass('filter-bar');
-    expect(screen.getByRole('list')).toHaveClass('responsive-record-list');
   });
 
-  it('uses the shared loading state while governance data is pending', () => {
-    mockRequest.mockImplementation(() => new Promise(() => undefined));
-
+  it('opens directly on the administrator identity directory', async () => {
     render(<AdminPage />);
 
-    expect(screen.getByRole('status')).toHaveClass('async-state');
+    expect(screen.getByRole('heading', { name: '管理员模块' })).toBeInTheDocument();
+    expect(await screen.findAllByText(/2023010567/)).not.toHaveLength(0);
+    expect(screen.queryByRole('tab', { name: 'Tag 定义' })).not.toBeInTheDocument();
+    expect(screen.queryByText('运行状态')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '操作记录' })).toBeInTheDocument();
   });
 
-  it('keeps a restricted or failed section recoverable', async () => {
-    mockRequest.mockRejectedValue({ status: 403, message: '仅平台最高管理员可访问' });
+  it('loads operation records only after opening the secondary panel', async () => {
     render(<AdminPage />);
+    await screen.findAllByText(/2023010567/);
+    expect(
+      mockRequest.mock.calls.some(([path]) => String(path).startsWith('/admin/audit-logs')),
+    ).toBe(false);
 
-    expect((await screen.findByRole('alert')).closest('[data-state]')).toHaveAttribute(
-      'data-state',
-      'error',
+    await userEvent.click(screen.getByRole('button', { name: '操作记录' }));
+
+    expect(await screen.findByRole('dialog', { name: '操作记录' })).toBeInTheDocument();
+    expect(mockRequest).toHaveBeenCalledWith(
+      '/admin/audit-logs?action=admin.development_user.update&page=1&pageSize=20',
     );
-    expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: '系统状态' })).toBeInTheDocument();
   });
 });
