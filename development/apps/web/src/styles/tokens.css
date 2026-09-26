@@ -33,7 +33,10 @@
   --gradient-page: var(--surface-page);
 
   --font-display: 'Segoe UI', 'Noto Serif SC', 'Songti SC', serif;
-  --font-ui: 'HarmonyOS Sans SC', 'Noto Sans SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
+  --font-ui:
+    'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, BlinkMacSystemFont,
+    sans-serif;
+  --font-latin: 'Segoe UI', Arial, Helvetica, sans-serif;
   --font-serif: 'Noto Serif SC', 'Songti SC', SimSun, serif;
 
   --sidebar-width: 216px;
