@@ -5402,7 +5402,8 @@ app.post('/api/auth/login', async (request, response) => {
       return;
     }
     const [rows] = await pool.execute(
-      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, password_hash, role, is_admin, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
+      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, password_hash, role, is_admin, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at,
+              COALESCE((SELECT expires_at_ms FROM user_golden_names WHERE user_id = users.id LIMIT 1), 0) AS golden_name_expires_at_ms
        FROM users
        WHERE username = ? OR email = ?
        LIMIT 1`,
@@ -5425,7 +5426,7 @@ app.post('/api/auth/login', async (request, response) => {
     }
 
     await loginRateLimiter.resetAccount(row);
-    const user = toUserProfile(await getUserById(row.id));
+    const user = toUserProfile(row);
 
     response.json({
       token: issueToken(user),
