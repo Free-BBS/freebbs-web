@@ -439,6 +439,93 @@ async function readRow(pool, id, { includeInactive = false } = {}) {
   return rows[0];
 }
 
+function progressionFor(levels, completions) {
+  const completed = new Set(completions.map((entry) => Number(entry.challenge_id)));
+  let unlocked = true;
+  let cleared = 0;
+  const challenges = levels
+    .filter((row) => Number(row.is_active))
+    .map((row, index) => {
+      const passed = completed.has(Number(row.id));
+      const locked = !unlocked;
+      if (unlocked && passed) cleared += 1;
+      if (!passed) unlocked = false;
+      return { id: Number(row.id), level: index + 1, completed: passed, locked };
+    });
+  return {
+    challenges,
+    progress: {
+      cleared,
+      completedCount: challenges.filter((row) => row.completed).length,
+      total: challenges.length,
+      nextChallengeId: challenges.find((row) => !row.completed)?.id || null,
+    },
+  };
+}
+
+async function readProgress(database, userId, { lock = false } = {}) {
+  const [levels] = await database.execute(
+    `SELECT id, revision, is_active FROM circuit_challenges
+     WHERE is_active = 1 ORDER BY id ASC${lock ? ' FOR UPDATE' : ''}`,
+  );
+  const [completed] = userId
+    ? await database.execute(
+        `SELECT DISTINCT s.challenge_id FROM circuit_challenge_submissions s
+         JOIN circuit_challenges c ON c.id = s.challenge_id AND c.revision = s.challenge_revision
+         WHERE s.user_id = ? AND c.is_active = 1`,
+        [userId],
+      )
+    : [[]];
+  return progressionFor(levels, completed);
+}
+
+function assertUnlocked(progression, id) {
+  if (progression.challenges.find((row) => row.id === id)?.locked) {
+    throw new CircuitChallengeError('请先通过前面的关卡，再挑战这一关', 403, 'challenge_locked');
+  }
+}
+
+async function readOverallLeaderboard(pool, userId) {
+  const [rows] = await pool.execute(
+    `WITH levels AS (
+       SELECT id, revision, ROW_NUMBER() OVER (ORDER BY id) AS level_number
+       FROM circuit_challenges WHERE is_active = 1
+     ), completions AS (
+       SELECT s.user_id, l.level_number, MIN(s.created_at) AS passed_at
+       FROM circuit_challenge_submissions s
+       JOIN levels l ON l.id = s.challenge_id AND l.revision = s.challenge_revision
+       GROUP BY s.user_id, l.level_number
+     ), ordered AS (
+       SELECT *, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY level_number) AS position
+       FROM completions
+     ), progress AS (
+       SELECT user_id, COUNT(*) AS completed_count,
+         MAX(CASE WHEN position = level_number THEN level_number ELSE 0 END) AS cleared,
+         MAX(CASE WHEN position = level_number THEN passed_at ELSE NULL END) AS reached_at
+       FROM ordered GROUP BY user_id
+     ), ranked AS (
+       SELECT *, ROW_NUMBER() OVER (ORDER BY cleared DESC, reached_at ASC, user_id ASC) AS ranking
+       FROM progress WHERE cleared > 0
+     )
+     SELECT r.*, u.uid, u.username FROM ranked r JOIN users u ON u.id = r.user_id
+     WHERE r.ranking <= 100 OR r.user_id = ? ORDER BY r.ranking`,
+    [userId || 0],
+  );
+  const entries = rows.map((row) => ({
+    rank: Number(row.ranking),
+    uid: row.uid,
+    username: row.username,
+    cleared: Number(row.cleared),
+    completedCount: Number(row.completed_count),
+    reachedAt: new Date(row.reached_at).toISOString(),
+    isMe: Number(row.user_id) === Number(userId),
+  }));
+  return {
+    leaderboard: entries.filter((row) => row.rank <= 100),
+    me: entries.find((row) => row.isMe) || null,
+  };
+}
+
 function createCircuitChallengesRouter({ pool, requireAuth }) {
   const router = express.Router();
   const handle = (callback) => async (request, response) => {
@@ -479,7 +566,24 @@ function createCircuitChallengesRouter({ pool, requireAuth }) {
         revision, is_active
        FROM circuit_challenges ${showAll ? '' : 'WHERE is_active = 1'} ORDER BY id ASC`,
       );
-      response.json({ challenges: rows.map(challengeSummary), canManage: isAdmin(user) });
+      const progression = await readProgress(pool, user?.id);
+      response.json({
+        challenges: rows.map((row) => ({
+          ...challengeSummary(row),
+          ...progression.challenges.find((entry) => entry.id === Number(row.id)),
+        })),
+        progress: progression.progress,
+        canManage: isAdmin(user),
+      });
+    }),
+  );
+
+  router.get(
+    '/leaderboard',
+    handle(async (request, response) => {
+      const user = await optionalUser(request, response);
+      if (request.headers.authorization && !user) return;
+      response.json(await readOverallLeaderboard(pool, user?.id));
     }),
   );
 
@@ -490,7 +594,17 @@ function createCircuitChallengesRouter({ pool, requireAuth }) {
       if (request.headers.authorization && !user) return;
       const canManage = isAdmin(user);
       const row = await readRow(pool, parseId(request.params.id), { includeInactive: canManage });
-      response.json({ challenge: challengeDetail(row, canManage), canManage });
+      const progression = await readProgress(pool, user?.id);
+      // Admins may inspect solutions for authoring; scored submissions never bypass the gate.
+      if (!canManage) assertUnlocked(progression, Number(row.id));
+      response.json({
+        challenge: {
+          ...challengeDetail(row, canManage),
+          ...progression.challenges.find((entry) => entry.id === Number(row.id)),
+        },
+        progress: progression.progress,
+        canManage,
+      });
     }),
   );
 
@@ -540,6 +654,7 @@ function createCircuitChallengesRouter({ pool, requireAuth }) {
       if (!user) return;
       const id = parseId(request.params.id);
       const row = await readRow(pool, id);
+      assertUnlocked(await readProgress(pool, user.id), id);
       if (
         !request.body ||
         Object.keys(request.body).some((key) => !['document', 'revision'].includes(key))
@@ -572,6 +687,9 @@ function createCircuitChallengesRouter({ pool, requireAuth }) {
       let balance;
       try {
         await connection.beginTransaction();
+        // Lock the ordered active catalog before checking progress, so a concurrent
+        // revision change or submission cannot grant access based on stale prerequisites.
+        assertUnlocked(await readProgress(connection, user.id, { lock: true }), id);
         const [[lockedChallenge]] = await connection.execute(
           `SELECT id, title, revision, is_active, reward_electric
            FROM circuit_challenges WHERE id = ? FOR UPDATE`,
@@ -752,4 +870,7 @@ module.exports = {
   starterDocument,
   validateChallengeDocument,
   waveformError,
+  progressionFor,
+  readProgress,
+  readOverallLeaderboard,
 };

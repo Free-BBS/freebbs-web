@@ -12,6 +12,7 @@ const {
 } = require('../backend/test-helpers/isolated-mysql');
 
 const TEST_FILES = [
+  'backend/circuit-progress.test.js',
   'backend/wallet-ledger.test.js',
   'backend/economy-rewards.mysql.test.js',
   'backend/admin-rewards.mysql.test.js',
@@ -66,6 +67,7 @@ function testEnvironment(socketPath, original = process.env) {
 }
 
 const REQUIRED_MYSQL_TESTS = [
+  'isolated MySQL: challenge progression gates direct requests and ranks contiguous current passes',
   'MySQL: additive rewards,',
   'community features work together against the full existing MySQL schema',
   'REPEATABLE READ reward cap',
