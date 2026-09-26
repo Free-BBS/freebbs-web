@@ -10,6 +10,9 @@
   const htmlInput = document.getElementById('tool-html');
   const previewFrame = document.getElementById('tool-preview-frame');
   const status = document.getElementById('tool-studio-status');
+  const cancelButton = document.getElementById('tool-cancel');
+  let generationController = null;
+  let reasoningHost = document.getElementById('tool-reasoning');
   const gallery = document.getElementById('tool-gallery');
   const galleryStatus = document.getElementById('tool-gallery-status');
   const viewer = document.getElementById('tool-viewer');
@@ -44,8 +47,10 @@
   function setBusy(busy, message = '') {
     state.busy = busy;
     studio?.querySelectorAll('button').forEach((button) => {
-      button.disabled = busy;
+      button.disabled = button === cancelButton ? false : busy;
     });
+    htmlInput.readOnly = busy;
+    promptInput.readOnly = busy;
     if (status) status.textContent = message;
   }
 
@@ -72,6 +77,7 @@
   }
 
   async function generate() {
+    if (state.busy) return;
     const prompt = promptInput.value.trim();
     if (!prompt) {
       status.textContent = '先描述要制作或修改的小工具';
@@ -79,18 +85,51 @@
       return;
     }
     setBusy(true, htmlInput.value.trim() ? 'AI 正在修改小工具…' : 'AI 正在制作小工具…');
+    generationController = new AbortController();
+    cancelButton.hidden = false;
+    const freshHost = reasoningHost.cloneNode(false);
+    reasoningHost.replaceWith(freshHost);
+    reasoningHost = freshHost;
+    const note = document.getElementById('tool-reasoning-note');
+    note.hidden = false;
+    note.textContent = '等待模型提供思考内容；未提供时仅显示生成进度。';
+    let hasReasoning = false;
+    let complete = false;
     try {
-      const payload = await app.callApi('/tools/generate/html', {
-        method: 'POST',
-        body: JSON.stringify({ prompt, currentHtml: htmlInput.value }),
+      const payload = await window.FreeBbsReasoning.request({
+        url: `${app.apiBaseUrl}/tools/generate/html`,
+        token: app.userState.token,
+        payload: { prompt, currentHtml: htmlInput.value },
+        signal: generationController.signal,
+        timeoutMs: 315000,
+        onStatus: ({ message }) => {
+          status.textContent = message;
+        },
+        onReasoning: (part) => {
+          window.FreeBbsReasoning.update(reasoningHost, part);
+          if (!hasReasoning) {
+            hasReasoning = true;
+            status.textContent = 'AI 正在思考…';
+            reasoningHost.querySelector('details').open = true;
+            note.textContent = '模型提供的思考内容，仅供查看，不作为 HTML 执行。';
+          }
+        },
       });
       htmlInput.value = payload.html;
       if (!titleInput.value.trim()) titleInput.value = prompt.replace(/\s+/g, ' ').slice(0, 28);
       refreshPreview();
       status.textContent = '已生成。可以继续描述修改，也可以直接编辑 HTML。';
+      if (!hasReasoning) note.textContent = '本次模型未提供可展示的思考内容，HTML 已生成。';
+      complete = true;
     } catch (error) {
-      status.textContent = error.message;
+      status.textContent = generationController.signal.aborted
+        ? '已停止生成，原有代码和预览已保留。'
+        : error.message;
+      if (!hasReasoning) note.textContent = '本次未收到可展示的思考内容。';
     } finally {
+      window.FreeBbsReasoning.finish(reasoningHost, { stopped: !complete });
+      cancelButton.hidden = true;
+      generationController = null;
       setBusy(false, status.textContent);
     }
   }
@@ -219,6 +258,8 @@
 
   createToggle.addEventListener('click', () => (studio.hidden ? openStudio() : closeStudio()));
   document.getElementById('tool-generate').addEventListener('click', generate);
+  cancelButton.addEventListener('click', () => generationController?.abort());
+  window.addEventListener('pagehide', () => generationController?.abort());
   document.getElementById('tool-preview').addEventListener('click', refreshPreview);
   document.getElementById('tool-publish').addEventListener('click', publish);
   scopeButtons.forEach((button) => {

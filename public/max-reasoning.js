@@ -78,7 +78,7 @@
     for (const source of sources.slice(0, 5)) {
       if (
         typeof source?.url !== 'string' ||
-        !/^\/(?![\/\\])/.test(source.url) ||
+        !/^\/(?![/\\])/.test(source.url) ||
         /[\s<>"()\\]/.test(source.url)
       )
         continue;
@@ -98,6 +98,7 @@
     token,
     payload,
     onReasoning = () => {},
+    onStatus = () => {},
     fetchImpl = root.fetch.bind(root),
     signal,
     timeoutMs = 300000,
@@ -144,6 +145,8 @@
         if (event.error) throw new Error(event.error.message || 'Max 回答失败，请重试。');
         if (typeof event.reasoning_delta === 'string')
           onReasoning({ id: String(event.reasoning_id || '1'), delta: event.reasoning_delta });
+        if (typeof event.status === 'string' && typeof event.message === 'string')
+          onStatus({ status: event.status, message: event.message });
         if (Array.isArray(event.site_sources)) siteSources = event.site_sources;
         if (event.done === true) {
           if (!event.result || typeof event.result.answer !== 'string')

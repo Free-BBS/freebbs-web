@@ -38,6 +38,7 @@ const { ensureSurveyTables, createSurveyService, createSurveysRouter } = require
 const pool = require('./db');
 const { createSiteSearch, createSiteSearchRouter } = require('./site-search');
 const { createFrontendToolsRouter } = require('./frontend-tools');
+const { createFrontendToolGenerator } = require('./frontend-tool-generation');
 const config = require('./config');
 const {
   createDevelopmentAuthClient,
@@ -1759,41 +1760,10 @@ async function postAgentChat(payload, user = null, { signal } = {}) {
   return upstream;
 }
 
-async function generateFrontendToolHtml({ user, prompt, currentHtml }) {
-  const instruction = [
-    '你是 FREE-BBS 小工具工坊的前端制作助手。',
-    '只返回一个完整、可独立运行的单文件 HTML，不要使用 Markdown 代码围栏或解释文字。',
-    '把 CSS 和 JavaScript 全部内联；不得引用外部网络资源，不得收集个人信息，不得提交表单或打开新窗口。',
-    '界面需适配手机与桌面，具备清楚的标签、键盘焦点与必要的空状态。',
-    currentHtml
-      ? `请在下面现有 HTML 基础上修改，保留仍然符合要求的功能：\n${currentHtml}`
-      : '请从零制作。',
-    `用户需求：${prompt}`,
-  ].join('\n\n');
-  const payload = buildAgentChatPayload(
-    user,
-    {
-      messages: [{ role: 'user', content: instruction }],
-      stream: false,
-      temperature: 0.35,
-    },
-    { agent: 'general_chat', source: 'tool_workshop', channel: 'tool_workshop' },
-  );
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 120000);
-  timeout.unref?.();
-  try {
-    const upstream = await postAgentChat(payload, user, { signal: controller.signal });
-    const result = await upstream.json().catch(() => ({}));
-    if (!upstream.ok)
-      throw Object.assign(new Error(result.message || `AI 服务返回 ${upstream.status}`), {
-        status: 502,
-      });
-    return result.answer || result.result?.answer || result.content || '';
-  } finally {
-    clearTimeout(timeout);
-  }
-}
+const generateFrontendToolHtml = createFrontendToolGenerator({
+  postAgentChat,
+  buildAgentChatPayload,
+});
 
 function normalizeKnowledgeRagText(value, maximumLength) {
   return typeof value === 'string' ? value.trim().slice(0, maximumLength) : '';
@@ -2055,13 +2025,13 @@ async function runMaxBackgroundTask({ user, payload, progress, signal }) {
       payload.messages?.findLast((message) => message?.role === 'user')?.content || '分析文件';
     let notes = '';
     for (const document of documents) {
-      for (let start = 1; start <= document.pageCount; start += 4) {
-        const end = Math.min(start + 3, document.pageCount);
+      for (let pageStart = 1; pageStart <= document.pageCount; pageStart += 4) {
+        const end = Math.min(pageStart + 3, document.pageCount);
         await progress({
           phase: 'reading',
-          message: `正在后台阅读 ${document.name} · 第 ${start}–${end}/${document.pageCount} 页`,
+          message: `正在后台阅读 ${document.name} · 第 ${pageStart}–${end}/${document.pageCount} 页`,
         });
-        const batch = await maxDocumentStore.pages(user.id, document.id, start, 4);
+        const batch = await maxDocumentStore.pages(user.id, document.id, pageStart, 4);
         const result = await requestMaxBackgroundAnswer(
           user,
           {

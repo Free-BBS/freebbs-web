@@ -515,6 +515,12 @@ async function readAgentResponse(
       onProgress(answer);
     }
     if (event.done === true) {
+      // Some upstreams provide only a final answer, without text deltas.
+      if (!answer && typeof event.result?.answer === 'string') {
+        if (Buffer.byteLength(event.result.answer, 'utf8') > MAX_RESPONSE_BYTES)
+          throw new Error('AI 回答过长，请缩小问题范围。');
+        answer = event.result.answer;
+      }
       onActivity();
       finished = true;
     }
