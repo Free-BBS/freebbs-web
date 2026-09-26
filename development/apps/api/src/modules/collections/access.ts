@@ -22,3 +22,15 @@ export function canCreateCollection(actor: AuthorizationContext): boolean {
 export function canManageCollection(actor: AuthorizationContext, ownerUid: string): boolean {
   return actor.roles.includes('platform.super_admin') || actor.uid === ownerUid;
 }
+
+export function canManageCollectionModuleLibrary(actor: AuthorizationContext): boolean {
+  return actor.roles.some(
+    (role) =>
+      role === 'platform.admin' ||
+      role === 'platform.super_admin' ||
+      role.startsWith('counselor.') ||
+      role === 'student_union.executive_president' ||
+      role === 'student_union.presidium' ||
+      /(?:lead|director|leader|deputy_secretary|chair|vice_chair|minister|consultant)$/.test(role),
+  );
+}

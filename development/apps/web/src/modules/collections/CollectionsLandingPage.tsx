@@ -211,7 +211,7 @@ export function CollectionsLandingPage({ client }: CollectionsLandingPageProps) 
                 <Link to="/collections/workbench/new">
                   <span>03</span>
                   <strong>创建表单</strong>
-                  <small>用积木搭出新的收集</small>
+                  <small>定义你的表单</small>
                 </Link>
               ) : null}
             </div>

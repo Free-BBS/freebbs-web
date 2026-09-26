@@ -23,6 +23,7 @@ import type {
   ClubMembershipRecord,
   ClubRecord,
   CollectionFormRecord,
+  CollectionModuleDefinitionRecord,
   CollectionResponseRecord,
   CollectionVersionRecord,
   ConsultationRecord,
@@ -94,6 +95,7 @@ interface MemoryState {
   collectionForms: CollectionFormRecord[];
   collectionVersions: CollectionVersionRecord[];
   collectionResponses: CollectionResponseRecord[];
+  collectionModuleDefinitions: CollectionModuleDefinitionRecord[];
   showcaseArticles: ShowcaseArticleRecord[];
   showcaseLikes: ShowcaseLikeRecord[];
   festivalSubmissions: FestivalSubmissionRecord[];
@@ -180,6 +182,7 @@ const searchFields: Record<CollectionName, string[]> = {
   collectionForms: ['title', 'description', 'organizationId'],
   collectionVersions: ['formId'],
   collectionResponses: ['formId', 'versionId', 'respondentUid'],
+  collectionModuleDefinitions: ['name', 'description', 'fieldKind', 'defaultLabel'],
   showcaseArticles: ['title', 'excerpt', 'body', 'organizationId'],
   showcaseLikes: ['articleId', 'userUid'],
   festivalSubmissions: ['title', 'description', 'authorName'],
@@ -350,6 +353,7 @@ function createEmptyState(): MemoryState {
     collectionForms: [],
     collectionVersions: [],
     collectionResponses: [],
+    collectionModuleDefinitions: [],
     showcaseArticles: [],
     showcaseLikes: [],
     festivalSubmissions: [],
@@ -1010,6 +1014,7 @@ function createDemoState(): MemoryState {
           },
         ],
         formRules: [{ id: 'attempt-workshop', kind: 'attempt_limit', value: 1 }],
+        outputs: [],
       },
       publishedAt: '2026-09-20T00:00:00.000Z',
       status: 'published',
@@ -1045,6 +1050,7 @@ function createDemoState(): MemoryState {
           },
         ],
         formRules: [{ id: 'attempt-media', kind: 'attempt_limit', value: 2 }],
+        outputs: [],
       },
       publishedAt: '2026-09-24T00:00:00.000Z',
       status: 'published',
@@ -1925,6 +1931,7 @@ function buildStore(holder: StateHolder, inTransaction = false): DevelopmentStor
     collectionForms: repository('collectionForms'),
     collectionVersions: repository('collectionVersions'),
     collectionResponses: repository('collectionResponses'),
+    collectionModuleDefinitions: repository('collectionModuleDefinitions'),
     showcaseArticles: repository('showcaseArticles'),
     showcaseLikes: repository('showcaseLikes'),
     festivalSubmissions: repository('festivalSubmissions'),

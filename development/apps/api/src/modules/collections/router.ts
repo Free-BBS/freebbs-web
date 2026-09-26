@@ -1,6 +1,8 @@
 import type {
   ApiEnvelope,
   CollectionFormSummary,
+  CollectionOutput,
+  CollectionRule,
   CollectionResponseSummary,
   CollectionSchema,
   CollectionsDashboardPayload,
@@ -21,13 +23,18 @@ import type {
   ShowcaseArticleRecord,
 } from '../../core/database/types.js';
 import { HttpError } from '../../core/errors/http-error.js';
-import { canCreateCollection, canManageCollection } from './access.js';
+import {
+  canCreateCollection,
+  canManageCollection,
+  canManageCollectionModuleLibrary,
+} from './access.js';
 import { readCollectionUpload, storeCollectionUpload } from './uploads.js';
 import {
   articleRouteSchema,
   formCreateSchema,
   formDraftSchema,
   formRouteSchema,
+  moduleDefinitionCreateSchema,
   responseSchema,
 } from './schemas.js';
 
@@ -168,6 +175,62 @@ function readLimit(schema: CollectionSchema, kind: 'attempt_limit' | 'capacity')
   return typeof rule?.value === 'number' ? rule.value : null;
 }
 
+function validateTitleText(
+  fieldLabel: string,
+  value: string,
+  ruleValue: CollectionRule['value'],
+): void {
+  if (
+    typeof ruleValue === 'object' &&
+    !Array.isArray(ruleValue) &&
+    'mode' in ruleValue &&
+    ruleValue.mode === 'title_validation'
+  ) {
+    const checked = ruleValue.trimWhitespace ? value.trim() : value;
+    const length = [...checked].length;
+    if (length < ruleValue.minLength)
+      throw new HttpError(
+        400,
+        'title_too_short',
+        `“${fieldLabel}”至少需要 ${ruleValue.minLength} 个字符`,
+      );
+    if (length > ruleValue.maxLength)
+      throw new HttpError(
+        400,
+        'title_too_long',
+        `“${fieldLabel}”不能超过 ${ruleValue.maxLength} 个字符`,
+      );
+    if (!ruleValue.allowLineBreaks && /[\r\n]/u.test(checked))
+      throw new HttpError(400, 'title_line_break', `“${fieldLabel}”不能包含换行`);
+    const forbiddenCharacter = [...ruleValue.forbiddenCharacters].find(
+      (character) => character !== ' ' && checked.includes(character),
+    );
+    if (forbiddenCharacter)
+      throw new HttpError(
+        400,
+        'title_forbidden_character',
+        `“${fieldLabel}”不能包含字符“${forbiddenCharacter}”`,
+      );
+    const forbiddenWord = ruleValue.forbiddenWords.find((word) => checked.includes(word));
+    if (forbiddenWord)
+      throw new HttpError(
+        400,
+        'title_forbidden_word',
+        `“${fieldLabel}”包含禁用词“${forbiddenWord}”`,
+      );
+    return;
+  }
+  if (typeof ruleValue !== 'string') return;
+  let pattern: RegExp;
+  try {
+    pattern = new RegExp(ruleValue);
+  } catch {
+    throw new HttpError(400, 'invalid_title_rule', '标题校验规则无效');
+  }
+  if (!pattern.test(value))
+    throw new HttpError(400, 'title_validation_failed', `“${fieldLabel}”未通过标题校验`);
+}
+
 function validateAnswers(schema: CollectionSchema, answers: Record<string, unknown>): void {
   for (const field of schema.fields) {
     if (field.kind === 'instructions') continue;
@@ -232,17 +295,89 @@ function validateAnswers(schema: CollectionSchema, answers: Record<string, unkno
       }
     }
     const titleRule = field.rules.find((rule) => rule.kind === 'title_pattern');
-    if (titleRule && typeof titleRule.value === 'string' && typeof value === 'string') {
-      let pattern: RegExp;
-      try {
-        pattern = new RegExp(titleRule.value);
-      } catch {
-        throw new HttpError(400, 'invalid_title_rule', '标题校验规则无效');
-      }
-      if (!pattern.test(value))
-        throw new HttpError(400, 'title_validation_failed', `“${field.label}”未通过标题校验`);
+    if (titleRule) {
+      const titles =
+        typeof value === 'string'
+          ? [value]
+          : ['file', 'image', 'video', 'audio'].includes(field.kind)
+            ? (Array.isArray(value) ? value : [value])
+                .map((asset) =>
+                  asset && typeof asset === 'object' && 'name' in asset
+                    ? (asset as { name?: unknown }).name
+                    : null,
+                )
+                .filter((name): name is string => typeof name === 'string')
+            : [];
+      for (const title of titles) validateTitleText(field.label, title, titleRule.value);
     }
   }
+}
+
+function csvCell(value: unknown): string {
+  const text =
+    value === null || value === undefined
+      ? ''
+      : typeof value === 'object'
+        ? JSON.stringify(value)
+        : String(value);
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function exportPayload(
+  output: CollectionOutput,
+  schema: CollectionSchema,
+  responses: Array<{
+    respondentUid: string;
+    submittedAt: string;
+    answers: Record<string, unknown>;
+  }>,
+): { body: string; contentType: string } {
+  if (output.kind === 'json') {
+    return {
+      body: JSON.stringify(
+        { title: schema.title, exportedAt: new Date().toISOString(), responses },
+        null,
+        2,
+      ),
+      contentType: 'application/json; charset=utf-8',
+    };
+  }
+  if (output.kind === 'summary') {
+    const rows = [
+      ['指标', '结果'],
+      ['表单', schema.title],
+      ['有效提交', responses.length],
+    ];
+    for (const field of schema.fields.filter((item) =>
+      ['single_choice', 'multiple_choice'].includes(item.kind),
+    )) {
+      const counts = new Map<string, number>();
+      for (const response of responses) {
+        const raw = response.answers[field.id];
+        for (const choice of Array.isArray(raw) ? raw : raw ? [raw] : []) {
+          if (typeof choice === 'string') counts.set(choice, (counts.get(choice) ?? 0) + 1);
+        }
+      }
+      for (const [choice, count] of counts) rows.push([`${field.label} · ${choice}`, count]);
+    }
+    return {
+      body: `\uFEFF${rows.map((row) => row.map(csvCell).join(',')).join('\r\n')}`,
+      contentType: 'text/csv; charset=utf-8',
+    };
+  }
+  const headers = ['学号 / 用户标识', '提交时间', ...schema.fields.map((field) => field.label)];
+  const rows = responses.map((item) => [
+    item.respondentUid,
+    item.submittedAt,
+    ...schema.fields.map((field) => item.answers[field.id]),
+  ]);
+  return {
+    body: `\uFEFF${[headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n')}`,
+    contentType:
+      output.kind === 'excel'
+        ? 'application/vnd.ms-excel; charset=utf-8'
+        : 'text/csv; charset=utf-8',
+  };
 }
 
 export function createCollectionsRouter(options: CollectionsRouterOptions): Router {
@@ -268,6 +403,44 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
         directory: uploadDirectory,
       }),
     );
+  });
+
+  router.get('/module-definitions', async (request, response) => {
+    const actor = await requireActor(options, request, response);
+    if (!actor) return;
+    const modules = await options.store.collectionModuleDefinitions.list({ status: 'active' });
+    send(
+      response,
+      200,
+      modules.map(({ id, name, description, fieldKind, defaultLabel }) => ({
+        id,
+        name,
+        description,
+        fieldKind,
+        defaultLabel,
+      })),
+    );
+  });
+
+  router.post('/module-definitions', async (request, response) => {
+    const actor = await requireActor(options, request, response);
+    if (!actor) return;
+    if (!canManageCollectionModuleLibrary(actor))
+      throw new HttpError(403, 'forbidden', '当前身份不能维护模块库');
+    const input = parse(moduleDefinitionCreateSchema, request.body);
+    const created = await options.store.collectionModuleDefinitions.create({
+      ...input,
+      status: 'active',
+      ownerUid: actor.uid,
+      scope: { type: 'public', id: '*' },
+    });
+    send(response, 201, {
+      id: created.id,
+      name: created.name,
+      description: created.description,
+      fieldKind: created.fieldKind,
+      defaultLabel: created.defaultLabel,
+    });
   });
 
   router.get('/assets/:assetId', async (request, response) => {
@@ -421,7 +594,7 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
   router.get('/forms/:formId', async (request, response) => {
     const actor = await requireActor(options, request, response);
     if (!actor) return;
-    const { formId } = parse(formRouteSchema, request.params);
+    const { formId } = parse(formRouteSchema, { formId: request.params.formId });
     const form = await options.store.collectionForms.get(formId);
     if (!form || (form.status !== 'published' && !canManageCollection(actor, form.ownerUid))) {
       throw new HttpError(404, 'collection_not_found', '未找到表单');
@@ -501,6 +674,30 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
       return formSummary(store, actor, updated);
     });
     send(response, 200, result);
+  });
+
+  router.get('/forms/:formId/exports/:outputId', async (request, response) => {
+    const actor = await requireActor(options, request, response);
+    if (!actor) return;
+    const { formId } = parse(formRouteSchema, { formId: request.params.formId });
+    const outputId = String(request.params.outputId ?? '');
+    const form = await options.store.collectionForms.get(formId);
+    if (!form || !canManageCollection(actor, form.ownerUid))
+      throw new HttpError(404, 'collection_not_found', '未找到表单');
+    const versionId = form.currentDraftVersionId ?? form.publishedVersionId;
+    const version = versionId ? await options.store.collectionVersions.get(versionId) : null;
+    const output = version?.schema.outputs?.find((item) => item.id === outputId);
+    if (!version || !output) throw new HttpError(404, 'output_not_found', '未找到输出模块');
+    const responses = (await options.store.collectionResponses.list({ query: form.id })).filter(
+      (item) => item.formId === form.id && item.status === 'submitted',
+    );
+    const exported = exportPayload(output, version.schema, responses);
+    const safeName = output.fileName.replace(/["\r\n]/gu, '_');
+    response
+      .status(200)
+      .set('Content-Type', exported.contentType)
+      .set('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(safeName)}`)
+      .send(exported.body);
   });
 
   router.post('/forms/:formId/responses', async (request, response) => {

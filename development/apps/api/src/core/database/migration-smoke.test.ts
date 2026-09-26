@@ -85,6 +85,7 @@ describe('database migrations', () => {
       'collection_forms',
       'collection_versions',
       'collection_responses',
+      'collection_module_definitions',
       'showcase_articles',
       'showcase_likes',
     ];
