@@ -1,7 +1,7 @@
 const { readAgentResponse } = require('./circuit-assistant');
 
 function createFrontendToolGenerator({ postAgentChat, buildAgentChatPayload }) {
-  return async ({ user, prompt, currentHtml, signal, onReasoning, onProgress }) => {
+  return async ({ user, prompt, currentHtml, signal, onReasoning, onProgress, onHtml }) => {
     const instruction = [
       '你是 FREE-BBS 小工具工坊的前端制作助手。',
       '最终回答只返回一个完整、可独立运行的单文件 HTML，不要使用 Markdown 代码围栏或解释文字。',
@@ -24,10 +24,15 @@ function createFrontendToolGenerator({ postAgentChat, buildAgentChatPayload }) {
       { agent: 'general_chat', source: 'tool_workshop', channel: 'tool_workshop' },
     );
     const upstream = await postAgentChat(payload, user, { signal });
+    let emittedCharacters = 0;
     const result = await readAgentResponse(upstream, {
       signal,
       onReasoning,
-      onProgress: (answer) => onProgress?.(answer.length),
+      onProgress: (answer) => {
+        onHtml?.(answer.slice(emittedCharacters));
+        emittedCharacters = answer.length;
+        onProgress?.(answer.length);
+      },
       onActivity: () => {},
     });
     return result.answer || result.result?.answer || result.content || '';

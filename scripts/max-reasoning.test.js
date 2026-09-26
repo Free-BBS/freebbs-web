@@ -57,6 +57,29 @@ test('partial or failed streams never appear as a completed answer', async () =>
   await assert.rejects(request(event({ error: { message: '模型不可用' } })), /模型不可用/);
 });
 
+test('HTML SSE survives split UTF-8 frames and remains separate from reasoning', async () => {
+  const code = [];
+  const thoughts = [];
+  const html = '<html><body>计数器</body></html>';
+  const result = await reasoning.request({
+    url: 'https://example.test/tools/generate/html',
+    token: 'test',
+    payload: { prompt: '计数器' },
+    onHtml: (delta) => code.push(delta),
+    onReasoning: (part) => thoughts.push(part.delta),
+    fetchImpl: async () =>
+      response(
+        event({ reasoning_delta: '先安排按钮' }) +
+          event({ html_delta: '<html><body>计数器' }) +
+          event({ html_delta: '</body></html>' }) +
+          event({ done: true, result: { answer: html, html } }),
+      ),
+  });
+  assert.equal(code.join(''), html);
+  assert.deepEqual(thoughts, ['先安排按钮']);
+  assert.equal(result.html, html);
+});
+
 test('reasoning starts collapsed, remembers the preference, and preserves manual toggles on completion', () => {
   const fs = require('node:fs');
   const vm = require('node:vm');
@@ -137,6 +160,7 @@ test('site references reject external or unsafe URLs and do not duplicate inline
         { url: '/discussion?post=one' },
         { url: '//evil.test' },
         { url: '/\\evil.test' },
+        // eslint-disable-next-line no-script-url -- malicious fixture must be rejected, never executed
         { url: 'javascript:alert(1)' },
         { url: '/x) injected' },
       ],

@@ -1,5 +1,6 @@
 const { marked, Parser, TextRenderer } = require('marked');
 const { parseReference } = require('../public/circuit-embeds');
+const { parseReference: parseToolReference } = require('../public/tool-embeds');
 
 const MAX_MARKDOWN_LENGTH = 20000;
 const MAX_IMAGE_URL_LENGTH = 4096;
@@ -71,6 +72,8 @@ function firstPreview(tokens, origin) {
     if (token.type === 'link') {
       const reference = parseReference(decodeEntities(token.href), origin);
       if (reference) return { type: 'circuit', ...reference };
+      const tool = parseToolReference(decodeEntities(token.href), origin);
+      if (tool) return { type: 'tool', ...tool };
     }
 
     let children = token.tokens || [];

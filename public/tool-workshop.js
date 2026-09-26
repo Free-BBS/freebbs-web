@@ -9,6 +9,16 @@
   const descriptionInput = document.getElementById('tool-description');
   const htmlInput = document.getElementById('tool-html');
   const previewFrame = document.getElementById('tool-preview-frame');
+  const previewEmpty = document.getElementById('tool-preview-empty');
+  const galleryView = document.getElementById('tool-gallery-view');
+  const panelButtons = [...document.querySelectorAll('[data-tool-panel]')];
+  const codeLive = document.getElementById('tool-code-live');
+  const codeHighlight = document.getElementById('tool-code-highlight');
+  const codeStatus = document.getElementById('tool-code-status');
+  const editCodeButton = document.getElementById('tool-edit-code');
+  let streamedHtml = '';
+  let highlightTimer = null;
+  let editingCode = false;
   const status = document.getElementById('tool-studio-status');
   const cancelButton = document.getElementById('tool-cancel');
   let generationController = null;
@@ -37,16 +47,54 @@
   function setBusy(busy, message = '') {
     state.busy = busy;
     studio?.querySelectorAll('button').forEach((button) => {
-      button.disabled = button === cancelButton ? false : busy;
+      button.disabled = button === cancelButton || button.dataset.toolPanel ? false : busy;
     });
     htmlInput.readOnly = busy;
     promptInput.readOnly = busy;
+    editCodeButton.hidden = busy;
     if (status) status.textContent = message;
   }
 
+  function renderCode(source = htmlInput.value) {
+    const following = codeLive.scrollHeight - codeLive.scrollTop - codeLive.clientHeight < 48;
+    if (window.hljs?.highlight) {
+      codeHighlight.innerHTML = window.hljs.highlight(source, {
+        language: 'xml',
+        ignoreIllegals: true,
+      }).value;
+    } else codeHighlight.textContent = source;
+    if (following) codeLive.scrollTop = codeLive.scrollHeight;
+    codeStatus.textContent = `${generationController ? '正在接收' : 'HTML'} · ${source.length} 字符`;
+  }
+
+  function setCodeEditing(editing) {
+    editingCode = editing;
+    htmlInput.hidden = !editing;
+    codeLive.hidden = editing;
+    editCodeButton.textContent = editing ? '完成编辑' : '编辑源码';
+    editCodeButton.setAttribute('aria-pressed', String(editing));
+    if (editing) htmlInput.focus({ preventScroll: true });
+    else renderCode();
+  }
+
   function refreshPreview() {
+    const hasHtml = Boolean(htmlInput.value.trim());
     previewFrame.srcdoc = sandboxDocument(htmlInput.value, true);
-    if (status) status.textContent = htmlInput.value.trim() ? '预览已刷新' : '请先生成或输入 HTML';
+    previewFrame.hidden = !hasHtml;
+    previewEmpty.hidden = hasHtml;
+    if (status && !state.busy)
+      status.textContent = htmlInput.value.trim() ? '预览已刷新' : '请先生成或输入 HTML';
+  }
+
+  function selectPanel(name) {
+    panelButtons.forEach((button) => {
+      const selected = button.dataset.toolPanel === name;
+      button.setAttribute('aria-pressed', String(selected));
+      document.getElementById(button.getAttribute('aria-controls')).hidden = !selected;
+    });
+    document.getElementById('tool-preview').hidden = name !== 'preview';
+    if (name === 'preview' && htmlInput.value.trim()) refreshPreview();
+    if (name === 'code' && !generationController && !editingCode) renderCode();
   }
 
   function openStudio() {
@@ -55,14 +103,17 @@
       return;
     }
     studio.hidden = false;
-    createToggle.textContent = '收起制作台';
-    promptInput.focus();
-    studio.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    galleryView.hidden = true;
+    createToggle.textContent = '返回广场';
+    createToggle.setAttribute('aria-expanded', 'true');
+    promptInput.focus({ preventScroll: true });
   }
 
   function closeStudio() {
     studio.hidden = true;
+    galleryView.hidden = false;
     createToggle.textContent = '制作小工具';
+    createToggle.setAttribute('aria-expanded', 'false');
     createToggle.focus();
   }
 
@@ -76,6 +127,10 @@
     }
     setBusy(true, htmlInput.value.trim() ? 'AI 正在修改小工具…' : 'AI 正在制作小工具…');
     generationController = new AbortController();
+    streamedHtml = '';
+    setCodeEditing(false);
+    renderCode('');
+    selectPanel('code');
     cancelButton.hidden = false;
     const freshHost = reasoningHost.cloneNode(false);
     reasoningHost.replaceWith(freshHost);
@@ -92,6 +147,16 @@
         payload: { prompt, currentHtml: htmlInput.value },
         signal: generationController.signal,
         timeoutMs: 315000,
+        onHtml: (delta) => {
+          streamedHtml += delta;
+          if (streamedHtml.length > 184000) throw new Error('生成的 HTML 过长，请精简需求后重试。');
+          if (highlightTimer === null) {
+            highlightTimer = setTimeout(() => {
+              highlightTimer = null;
+              renderCode(streamedHtml);
+            }, 100);
+          }
+        },
         onStatus: ({ message }) => {
           status.textContent = message;
         },
@@ -120,11 +185,15 @@
       window.FreeBbsReasoning.finish(reasoningHost, { stopped: !complete });
       cancelButton.hidden = true;
       generationController = null;
+      clearTimeout(highlightTimer);
+      highlightTimer = null;
+      renderCode();
       setBusy(false, status.textContent);
     }
   }
 
   async function publish() {
+    if (state.busy) return;
     if (!titleInput.value.trim() || !htmlInput.value.trim()) {
       status.textContent = '发布前请填写标题并生成或输入完整 HTML';
       return;
@@ -157,7 +226,7 @@
       new Date(tool.updatedAt || tool.createdAt),
     );
     return `<article class="tool-card" tabindex="0" role="button" data-tool-id="${escapeHtml(tool.id)}" aria-label="打开小工具 ${escapeHtml(tool.title)}">
-      <iframe title="${escapeHtml(tool.title)} 静态预览" sandbox="" tabindex="-1"></iframe>
+      <div class="tool-card-preview" aria-hidden="true"><iframe title="${escapeHtml(tool.title)} 静态预览" sandbox="" tabindex="-1" inert></iframe></div>
       <div class="tool-card-copy">
         <h2>${escapeHtml(tool.title)}</h2>
         <p>${escapeHtml(tool.description || '作者还没有写简介。')}</p>
@@ -249,8 +318,15 @@
   createToggle.addEventListener('click', () => (studio.hidden ? openStudio() : closeStudio()));
   document.getElementById('tool-generate').addEventListener('click', generate);
   cancelButton.addEventListener('click', () => generationController?.abort());
-  window.addEventListener('pagehide', () => generationController?.abort());
+  window.addEventListener('pagehide', () => {
+    generationController?.abort();
+    clearTimeout(highlightTimer);
+  });
+  editCodeButton.addEventListener('click', () => setCodeEditing(!editingCode));
   document.getElementById('tool-preview').addEventListener('click', refreshPreview);
+  panelButtons.forEach((button) => {
+    button.addEventListener('click', () => selectPanel(button.dataset.toolPanel));
+  });
   document.getElementById('tool-publish').addEventListener('click', publish);
   scopeButtons.forEach((button) => {
     button.addEventListener('click', async () => {

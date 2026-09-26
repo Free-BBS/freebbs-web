@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/tool-workshop.css" />
     <link rel="stylesheet" href="/max-reasoning.css" />
+    <link rel="stylesheet" href="/vendor/@highlightjs/cdn-assets/styles/github-dark.min.css" />
   </head>
   <body class="tool-workshop-page">
     <div class="page-shell">
@@ -77,11 +78,17 @@
         <section class="tool-workshop-shell" aria-labelledby="tool-workshop-title">
           <header class="tool-workshop-hero">
             <div>
-              <p>创意实验室 · 单文件 HTML</p>
               <h1 id="tool-workshop-title">小工具工坊</h1>
-              <span>描述一个想法，让 AI 做出可以立即使用的小工具；也可以直接修改源码。</span>
+              <span>发现好用的小工具，也把你的想法做出来。</span>
             </div>
-            <button id="tool-create-toggle" type="button">制作小工具</button>
+            <button
+              id="tool-create-toggle"
+              type="button"
+              aria-controls="tool-studio"
+              aria-expanded="false"
+            >
+              制作小工具
+            </button>
           </header>
 
           <section class="tool-studio" id="tool-studio" hidden aria-label="小工具制作台">
@@ -91,61 +98,112 @@
                 ><textarea
                   id="tool-prompt"
                   maxlength="2000"
-                  rows="5"
+                  rows="2"
                   placeholder="例如：做一个支持番茄钟、今日计数和本地保存的极简专注工具"
                 ></textarea>
               </label>
-              <div class="tool-studio-fields">
+              <div class="tool-studio-actions">
+                <button id="tool-generate" type="button">AI 生成 / 修改</button>
+                <button id="tool-cancel" type="button" hidden>停止生成</button>
+              </div>
+              <p id="tool-studio-status" role="status" aria-live="polite"></p>
+              <div id="tool-reasoning" aria-label="AI 思考过程"></div>
+              <p id="tool-reasoning-note" hidden>思考内容由模型提供；未提供时仅显示生成进度。</p>
+            </div>
+            <div class="tool-output">
+              <div class="tool-output-tabs" role="group" aria-label="制作视图">
+                <button
+                  type="button"
+                  data-tool-panel="preview"
+                  aria-controls="tool-panel-preview"
+                  aria-pressed="true"
+                >
+                  预览
+                </button>
+                <button
+                  type="button"
+                  data-tool-panel="code"
+                  aria-controls="tool-panel-code"
+                  aria-pressed="false"
+                >
+                  源码
+                </button>
+                <button
+                  type="button"
+                  data-tool-panel="publish"
+                  aria-controls="tool-panel-publish"
+                  aria-pressed="false"
+                >
+                  发布
+                </button>
+                <button id="tool-preview" type="button">刷新预览</button>
+              </div>
+              <div class="tool-code-panel" id="tool-panel-code" hidden>
+                <div class="tool-code-toolbar">
+                  <span id="tool-code-status">HTML · 支持直接编辑</span
+                  ><button id="tool-edit-code" type="button" aria-pressed="false">编辑源码</button>
+                </div>
+                <pre
+                  class="tool-code-live"
+                  id="tool-code-live"
+                  tabindex="0"
+                  aria-label="HTML 源码（实时更新）"
+                ><code id="tool-code-highlight" class="hljs language-xml"></code></pre>
+                <textarea
+                  id="tool-html"
+                  hidden
+                  spellcheck="false"
+                  aria-label="HTML 源码"
+                  placeholder="AI 生成的完整 HTML 会出现在这里，也可以直接粘贴和修改。"
+                ></textarea>
+              </div>
+              <div class="tool-preview-panel" id="tool-panel-preview">
+                <p id="tool-preview-empty">
+                  描述你的想法，或在「源码」中粘贴 HTML。<br />生成的小工具会出现在这里。
+                </p>
+                <iframe
+                  id="tool-preview-frame"
+                  title="小工具预览"
+                  sandbox="allow-scripts"
+                  hidden
+                ></iframe>
+              </div>
+              <div class="tool-studio-fields" id="tool-panel-publish" hidden>
+                <p>发布后，所有人都能使用，也可以分享到讨论区。</p>
                 <label
                   ><span>标题</span
                   ><input id="tool-title" maxlength="120" placeholder="给小工具起个名字"
                 /></label>
                 <label
                   ><span>简介</span
-                  ><input id="tool-description" maxlength="500" placeholder="一句话说明用途"
+                  ><input
+                    id="tool-description"
+                    maxlength="500"
+                    placeholder="一句话说明用途（选填）"
                 /></label>
+                <div class="tool-studio-actions">
+                  <button id="tool-publish" type="button">发布到广场</button>
+                </div>
               </div>
-              <div class="tool-studio-actions">
-                <button id="tool-generate" type="button">AI 生成 / 修改</button>
-                <button id="tool-cancel" type="button" hidden>停止生成</button>
-                <button id="tool-preview" type="button">刷新预览</button>
-                <button id="tool-publish" type="button">发布到广场</button>
-              </div>
-              <p id="tool-studio-status" role="status" aria-live="polite"></p>
-              <div id="tool-reasoning" aria-label="AI 思考过程"></div>
-              <p id="tool-reasoning-note" hidden>思考内容由模型提供；未提供时仅显示生成进度。</p>
-            </div>
-            <div class="tool-code-panel">
-              <label for="tool-html">HTML 源码</label>
-              <textarea
-                id="tool-html"
-                spellcheck="false"
-                aria-label="HTML 源码"
-                placeholder="AI 生成的完整 HTML 会出现在这里，也可以直接粘贴和修改。"
-              ></textarea>
-            </div>
-            <div class="tool-preview-panel">
-              <div>
-                <strong>安全预览</strong
-                ><span>脚本在隔离沙盒中运行，不能访问 FREE-BBS 登录状态。</span>
-              </div>
-              <iframe id="tool-preview-frame" title="小工具预览" sandbox="allow-scripts"></iframe>
+              <p class="tool-sandbox-note">隔离沙盒运行，不会读取你的登录信息。</p>
             </div>
           </section>
 
-          <div class="tool-gallery-toolbar">
-            <div role="group" aria-label="小工具范围">
-              <button type="button" data-tool-scope="all" aria-pressed="true">所有人的</button>
-              <button type="button" data-tool-scope="mine" aria-pressed="false">我发布的</button>
+          <div id="tool-gallery-view">
+            <div class="tool-gallery-toolbar">
+              <div role="group" aria-label="小工具范围">
+                <button type="button" data-tool-scope="all" aria-pressed="true">所有人的</button>
+                <button type="button" data-tool-scope="mine" aria-pressed="false">我发布的</button>
+              </div>
+              <p id="tool-gallery-status" role="status" aria-live="polite">正在加载小工具广场…</p>
             </div>
-            <p id="tool-gallery-status" role="status" aria-live="polite">正在加载小工具广场…</p>
+            <section
+              class="tool-gallery"
+              id="tool-gallery"
+              aria-label="小工具广场"
+              aria-busy="true"
+            ></section>
           </div>
-          <section
-            class="tool-gallery"
-            id="tool-gallery"
-            aria-label="小工具广场"
-            aria-busy="true"
-          ></section>
         </section>
       </main>
     </div>
@@ -171,6 +229,7 @@
     <script src="/notifications.js"></script>
     <script src="/max-reasoning.js"></script>
     <script src="/tool-embeds.js"></script>
+    <script src="/vendor/@highlightjs/cdn-assets/highlight.min.js"></script>
     <script src="/tool-workshop.js"></script>
   </body>
 </html>

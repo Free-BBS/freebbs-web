@@ -1,6 +1,8 @@
 (() => {
   function normalizePreview(value) {
     if (!value || typeof value !== 'object') return null;
+    if (value.type === 'tool' && /^t_[a-f0-9]{16}$/.test(value.tid || ''))
+      return { type: 'tool', tid: value.tid };
     if (value.type === 'image' && typeof value.url === 'string') {
       const url = value.url.trim();
       // eslint-disable-next-line no-control-regex -- disallow control characters in image URLs
@@ -57,8 +59,11 @@
     const media =
       preview.type === 'image'
         ? `<img src="${escape(resolveAssetUrl(preview.url))}" alt="${escape(preview.alt)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" />`
-        : `<span class="discussion-post-preview-circuit" data-cid="${preview.cid}" data-revision="${preview.revision}" aria-hidden="true"></span>`;
-    return `<button class="discussion-post-preview" type="button" data-action="open-post" data-post-id="${escape(postId)}" aria-label="查看帖子${preview.type === 'circuit' ? '中的电路图' : '图片'}">${media}</button>`;
+        : preview.type === 'tool'
+          ? `<span class="discussion-post-preview-tool" data-tid="${preview.tid}" aria-hidden="true"></span>`
+          : `<span class="discussion-post-preview-circuit" data-cid="${preview.cid}" data-revision="${preview.revision}" aria-hidden="true"></span>`;
+    const label = { image: '图片', circuit: '中的电路图', tool: '中的小工具' }[preview.type];
+    return `<button class="discussion-post-preview" type="button" data-action="open-post" data-post-id="${escape(postId)}" aria-label="查看帖子${label}">${media}</button>`;
   }
 
   if (typeof module !== 'undefined' && module.exports) {
@@ -67,8 +72,48 @@
   }
 
   let rendererLoader;
+  let toolLoader;
   const circuits = new Map();
   const observers = new WeakMap();
+  const sizeObservers = new WeakMap();
+  const versions = new WeakMap();
+
+  function loadToolSandbox() {
+    if (window.FreeBbsToolEmbeds) return Promise.resolve();
+    if (!toolLoader) {
+      toolLoader = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = '/tool-embeds.js';
+        script.onload = resolve;
+        script.onerror = () => {
+          script.remove();
+          toolLoader = null;
+          reject(new Error('小工具预览组件加载失败'));
+        };
+        document.head.append(script);
+      });
+    }
+    return toolLoader;
+  }
+
+  async function loadTool(tid, apiBase) {
+    const response = await fetch(`${apiBase}/tools/${tid}`, {
+      credentials: 'omit',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) throw new Error('小工具预览不可用');
+    const { tool } = await response.json();
+    if (
+      tool?.id !== tid ||
+      !tool.isPublished ||
+      typeof tool.html !== 'string' ||
+      !tool.html.trim() ||
+      tool.html.length > 180000
+    )
+      throw new Error('小工具未公开或内容无效');
+    return tool;
+  }
 
   function loadRenderer() {
     if (window.FreeBbsCircuitRenderer && window.FreeBbsCircuitEngine) return Promise.resolve();
@@ -132,11 +177,53 @@
   function enhance(root, { apiBase = '/api' } = {}) {
     if (!root) return;
     observers.get(root)?.disconnect();
+    sizeObservers.get(root)?.disconnect();
+    const version = {};
+    versions.set(root, version);
+    const tools = new Map();
+    const fitTool = (element) => {
+      const iframe = element.querySelector('iframe');
+      const scale = element.clientWidth / 640;
+      if (!iframe || !scale) return;
+      iframe.style.width = '640px';
+      iframe.style.height = `${Math.ceil(element.clientHeight / scale)}px`;
+      iframe.style.transform = `scale(${scale})`;
+    };
+    const sizeObserver =
+      'ResizeObserver' in window
+        ? new ResizeObserver((entries) => entries.forEach(({ target }) => fitTool(target)))
+        : null;
+    if (sizeObserver) sizeObservers.set(root, sizeObserver);
     root.querySelectorAll('.discussion-post-preview img').forEach((img) => {
       img.addEventListener('error', () => removePreview(img), { once: true });
       if (img.complete && !img.naturalWidth) removePreview(img);
     });
     const render = async (element) => {
+      if (element.classList.contains('discussion-post-preview-tool')) {
+        const preview = normalizePreview({ type: 'tool', tid: element.dataset.tid });
+        if (!preview) return removePreview(element);
+        try {
+          if (!element.querySelector('iframe')) {
+            if (!tools.has(preview.tid)) tools.set(preview.tid, loadTool(preview.tid, apiBase));
+            const [, tool] = await Promise.all([loadToolSandbox(), tools.get(preview.tid)]);
+            if (!root.contains(element) || versions.get(root) !== version) return;
+            const iframe = document.createElement('iframe');
+            iframe.title = '小工具静态预览';
+            iframe.setAttribute('sandbox', '');
+            iframe.setAttribute('tabindex', '-1');
+            iframe.setAttribute('aria-hidden', 'true');
+            iframe.setAttribute('inert', '');
+            iframe.referrerPolicy = 'no-referrer';
+            iframe.srcdoc = window.FreeBbsToolEmbeds.sandboxDocument(tool.html, false);
+            element.append(iframe);
+          }
+          fitTool(element);
+          sizeObserver?.observe(element);
+        } catch {
+          if (versions.get(root) === version) removePreview(element);
+        }
+        return;
+      }
       const preview = normalizePreview({
         type: 'circuit',
         cid: element.dataset.cid,
@@ -148,7 +235,7 @@
       }
       try {
         const [, circuit] = await Promise.all([loadRenderer(), loadCircuit(preview, apiBase)]);
-        if (!root.contains(element)) return;
+        if (!root.contains(element) || versions.get(root) !== version) return;
         const documentValue = window.FreeBbsCircuitEngine.validateDocument(circuit.document);
         window.FreeBbsCircuitRenderer.renderSchematic(element, documentValue, {
           viewBox: diagramBounds(documentValue),
@@ -160,7 +247,9 @@
         removePreview(element);
       }
     };
-    const elements = root.querySelectorAll('.discussion-post-preview-circuit');
+    const elements = root.querySelectorAll(
+      '.discussion-post-preview-circuit, .discussion-post-preview-tool',
+    );
     if (!('IntersectionObserver' in window)) {
       elements.forEach(render);
       return;

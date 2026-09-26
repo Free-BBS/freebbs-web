@@ -53,6 +53,7 @@ async function fixture(t, generateHtml, options = {}) {
 test('tool generator requests genuine reasoning and separates it from executable HTML', async () => {
   const reasoning = [];
   const counts = [];
+  const code = [];
   let sent;
   const generate = createFrontendToolGenerator({
     buildAgentChatPayload: (user, payload, defaults) => ({ ...defaults, ...payload }),
@@ -84,6 +85,7 @@ test('tool generator requests genuine reasoning and separates it from executable
       signal: new AbortController().signal,
       onReasoning: (part) => reasoning.push(part),
       onProgress: (count) => counts.push(count),
+      onHtml: (delta) => code.push(delta),
     }),
     html,
   );
@@ -93,6 +95,7 @@ test('tool generator requests genuine reasoning and separates it from executable
   assert.match(sent.messages[0].content, /localStorage/);
   assert.deepEqual(reasoning, [{ id: 'r1', delta: '<script>not executable</script>' }]);
   assert.equal(counts.at(-1), html.length);
+  assert.deepEqual(code, [html.slice(0, 30), html.slice(30)]);
 });
 
 test('tool generator accepts JSON fallback and final-only SSE, but rejects interrupted and error streams', async () => {
@@ -123,7 +126,7 @@ test('tool generator accepts JSON fallback and final-only SSE, but rejects inter
   }
 });
 
-test('tool route streams status and reasoning before completion and interoperates with the browser client', async (t) => {
+test('tool route streams HTML and reasoning before completion and interoperates with the browser client', async (t) => {
   let release;
   const ready = new Promise((resolve) => {
     release = resolve;
@@ -131,16 +134,19 @@ test('tool route streams status and reasoning before completion and interoperate
   let providerCompleted = false;
   const { url } = await fixture(
     t,
-    async ({ onReasoning, onProgress }) => {
+    async ({ onReasoning, onProgress, onHtml }) => {
       onReasoning({ id: '1', delta: '先安排按钮和计数。' });
       onProgress(32);
+      for (const character of html.slice(0, 30)) onHtml(character);
       await ready;
+      onHtml(html.slice(30));
       providerCompleted = true;
       return html;
     },
     { heartbeatMs: 5 },
   );
   const statuses = [];
+  const code = [];
   const result = await requestGeneration({
     url,
     token: 'test',
@@ -149,11 +155,27 @@ test('tool route streams status and reasoning before completion and interoperate
     onReasoning: (part) => {
       assert.equal(providerCompleted, false);
       assert.equal(part.delta, '先安排按钮和计数。');
+    },
+    onHtml: (delta) => {
+      code.push(delta);
+      if (code.length === 1) assert.equal(providerCompleted, false);
       release();
     },
   });
   assert.equal(result.html, html);
+  assert.deepEqual(code, [html.slice(0, 30), html.slice(30)]);
   assert.deepEqual(statuses, ['preparing', 'generating', 'validating']);
+});
+
+test('tool route bounds partial HTML streams before completion', async (t) => {
+  const { url } = await fixture(t, async ({ onHtml }) => {
+    onHtml('a'.repeat(184001));
+    return html;
+  });
+  await assert.rejects(
+    requestGeneration({ url, token: 'test', payload: { prompt: 'x' } }),
+    /HTML 过长/,
+  );
 });
 
 test('tool route keeps legacy JSON and rejects unauthenticated or invalid input before calling AI', async (t) => {

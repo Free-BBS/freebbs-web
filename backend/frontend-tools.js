@@ -146,6 +146,16 @@ function createFrontendToolsRouter({
         }, heartbeatMs)
       : null;
     heartbeat?.unref?.();
+    let pendingHtml = '';
+    let htmlCharacters = 0;
+    const flushHtml = () => {
+      if (!pendingHtml) return;
+      send({ html_delta: pendingHtml });
+      pendingHtml = '';
+    };
+    // Coalesce character-sized upstream chunks without buffering the whole answer.
+    const htmlFlushTimer = streaming ? setInterval(flushHtml, 80) : null;
+    htmlFlushTimer?.unref?.();
     let rejectAbort;
     const aborted = new Promise((_, reject) => {
       rejectAbort = () => reject(new Error('Generation aborted'));
@@ -160,6 +170,13 @@ function createFrontendToolsRouter({
           currentHtml,
           signal: controller.signal,
           onReasoning: ({ id, delta }) => send({ reasoning_id: id, reasoning_delta: delta }),
+          onHtml: (delta) => {
+            if (typeof delta !== 'string' || controller.signal.aborted) return;
+            htmlCharacters += delta.length;
+            if (htmlCharacters > MAX_HTML_LENGTH + 4000)
+              throw toolError('生成的 HTML 过长，请精简需求后重试', 502);
+            if (streaming) pendingHtml += delta;
+          },
           onProgress: (characters) => {
             if (Date.now() - lastProgress < 250) return;
             lastProgress = Date.now();
@@ -169,6 +186,7 @@ function createFrontendToolsRouter({
         aborted,
       ]);
       controller.signal.throwIfAborted();
+      flushHtml();
       send({ status: 'validating', message: '正在检查 HTML 完整性…' });
       const html = extractStandaloneHtml(answer);
       if (streaming) {
@@ -193,6 +211,7 @@ function createFrontendToolsRouter({
     } finally {
       clearTimeout(timer);
       clearInterval(heartbeat);
+      clearInterval(htmlFlushTimer);
       response.removeListener('close', disconnect);
       controller.signal.removeEventListener('abort', rejectAbort);
       controller.abort();

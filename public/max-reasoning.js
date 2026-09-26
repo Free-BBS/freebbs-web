@@ -98,6 +98,7 @@
     token,
     payload,
     onReasoning = () => {},
+    onHtml = () => {},
     onStatus = () => {},
     fetchImpl = root.fetch.bind(root),
     signal,
@@ -145,6 +146,7 @@
         if (event.error) throw new Error(event.error.message || 'Max 回答失败，请重试。');
         if (typeof event.reasoning_delta === 'string')
           onReasoning({ id: String(event.reasoning_id || '1'), delta: event.reasoning_delta });
+        if (typeof event.html_delta === 'string') onHtml(event.html_delta);
         if (typeof event.status === 'string' && typeof event.message === 'string')
           onStatus({ status: event.status, message: event.message });
         if (Array.isArray(event.site_sources)) siteSources = event.site_sources;
