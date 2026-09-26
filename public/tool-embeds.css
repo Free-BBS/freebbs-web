@@ -1,0 +1,72 @@
+.tool-reference {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 1.2em 0;
+  overflow: hidden;
+  border: 1px solid var(--ui-line, #31515a);
+  border-radius: 8px;
+  background: var(--ui-surface, #102228);
+  color: var(--ui-text, #dfedf0);
+  text-align: left;
+}
+.tool-reference-toolbar,
+.tool-reference-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  font: 400 13px / 1.6 var(--font-ui, sans-serif);
+}
+.tool-reference-toolbar {
+  border-bottom: 1px solid var(--ui-line, #31515a);
+}
+.tool-reference-toolbar strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tool-reference-footer {
+  border-top: 1px solid var(--ui-line, #31515a);
+}
+.tool-reference button,
+.tool-reference a {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ui-accent, #38a5b0);
+  font: inherit;
+  cursor: pointer;
+}
+.tool-reference iframe {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: clamp(320px, 55dvh, 520px);
+  border: 0;
+  background: white;
+  color-scheme: normal;
+}
+.tool-reference.is-expanded iframe {
+  height: 78dvh;
+}
+.tool-reference-status {
+  display: block;
+  padding: 18px 12px;
+  color: var(--ui-muted, #9db4bb);
+  font-size: 13px;
+}
+.tool-reference [hidden] {
+  display: none !important;
+}
+.tool-reference :is(button, a):focus-visible {
+  outline: 2px solid var(--ui-accent, #38a5b0);
+  outline-offset: -2px;
+}

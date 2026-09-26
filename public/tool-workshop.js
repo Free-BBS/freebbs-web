@@ -23,17 +23,7 @@
   const scopeButtons = [...document.querySelectorAll('[data-tool-scope]')];
   const state = { scope: 'all', tools: [], active: null, busy: false };
 
-  const csp =
-    "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; media-src data: blob:; form-action 'none'; base-uri 'none'; object-src 'none'\">";
-  const staticCsp =
-    "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; script-src 'none'; img-src data: blob:; font-src data:; connect-src 'none'; media-src data: blob:; form-action 'none'; base-uri 'none'; object-src 'none'\">";
-
-  function sandboxDocument(html, interactive = true) {
-    const source = String(html || '');
-    const policy = interactive ? csp : staticCsp;
-    if (/<head(?:\s|>)/i.test(source)) return source.replace(/<head([^>]*)>/i, `<head$1>${policy}`);
-    return source.replace(/<html([^>]*)>/i, `<html$1><head>${policy}</head>`);
-  }
+  const { sandboxDocument } = window.FreeBbsToolEmbeds;
 
   function escapeHtml(value) {
     return String(value ?? '')
