@@ -7,6 +7,40 @@ const cid = 'c_0123456789abcdef01234567';
 const circuitUrl = `/circuit?cid=${cid}&revision=3&view=schematic`;
 const image = { type: 'image', url: '/first.png', alt: '第一张图' };
 const circuit = { type: 'circuit', cid, revision: 3, view: 'schematic' };
+const tid = 't_0123456789abcdef';
+const toolUrl = `/tool-workshop?tool=${tid}`;
+
+test('shared tools participate in document-order feed previews, including old/reference-style links', () => {
+  const tool = { type: 'tool', tid };
+  for (const markdown of [
+    `[工具](${toolUrl})`,
+    `[工具](${origin}${toolUrl})`,
+    `[工具][saved]\n\n[saved]: ${toolUrl}`,
+    `> [工具](${toolUrl})\n\n![第一张图](/first.png)`,
+    `| 工具 |\n| --- |\n| [工具](${toolUrl}) |`,
+  ])
+    assert.deepEqual(getDiscussionPreview(markdown, origin), tool);
+  assert.deepEqual(
+    getDiscussionPreview(`![第一张图](/first.png)\n\n[工具](${toolUrl})`, origin),
+    image,
+  );
+  assert.deepEqual(
+    getDiscussionPreview(`[工具](${toolUrl})\n\n[电路](${circuitUrl})`, origin),
+    tool,
+  );
+});
+
+test('tool references in code or from external/untrusted URLs do not create previews', () => {
+  for (const markdown of [
+    `\`[工具](${toolUrl})\``,
+    `\`\`\`\n[工具](${toolUrl})\n\`\`\``,
+    `<!-- [工具](${toolUrl}) -->`,
+    `[工具](https://evil.test${toolUrl})`,
+    `[工具](${toolUrl}&tool=${tid})`,
+    '[工具](/tool-workshop?tool=../private)',
+  ])
+    assert.equal(getDiscussionPreview(markdown, origin), null);
+});
 
 test('post preview follows document order for images and embedded circuit links', () => {
   assert.deepEqual(
