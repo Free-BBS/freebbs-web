@@ -21,6 +21,17 @@
     margin-inline: auto;
   }
 
+  /* Cover the whole header, including the gutters outside its title surface. */
+  body:not(.auth-page-body) > .mobile-header-backdrop {
+    display: block;
+    position: fixed;
+    z-index: 109;
+    inset: 0 0 auto var(--bbs-shell-width);
+    height: 92px;
+    background: var(--ui-page);
+    pointer-events: none;
+  }
+
   body:not(.auth-page-body) .main-content > :where(section, article, header) {
     animation: desktop-section-enter 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
@@ -276,6 +287,11 @@
     margin-inline: 0;
   }
 
+  /* A translated entrance animation also moves the sticky navigation beneath it. */
+  body.discussion-page .main-content > .settings-shell {
+    animation: none !important;
+  }
+
   body.discussion-page .discussion-layout,
   body.discussion-page .discussion-layout:not(.is-detail-view) {
     grid-template-columns: minmax(0, 1fr) !important;
@@ -293,14 +309,28 @@
     .main-content
     .discussion-layout:not(.is-detail-view)
     .discussion-stats-sidebar {
-    position: static;
+    position: sticky;
+    top: 92px;
+    z-index: 100;
+    isolation: isolate;
+    overflow: visible;
     display: block;
     width: 100%;
     padding: 0 !important;
     border: 0 !important;
     border-radius: 0 !important;
-    background: transparent !important;
+    background: var(--ui-page) !important;
     box-shadow: none !important;
+  }
+
+  /* The board row masks scrolling avatars and previews in the side gutters too. */
+  body.discussion-page .discussion-layout:not(.is-detail-view) .discussion-stats-sidebar::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: 0 calc(-1 * var(--bbs-content-gutter));
+    background: var(--ui-page);
+    pointer-events: none;
   }
 
   body.discussion-page .discussion-stats-sidebar .discussion-stats-section {

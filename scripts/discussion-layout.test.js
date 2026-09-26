@@ -34,6 +34,25 @@ test('discussion boards precede the feed and obsolete personal statistics are ab
   assert.doesNotMatch(html, /发帖统计|获赞统计/);
 });
 
+test('desktop header covers both gutters and boards stick below it with an opaque surface', () => {
+  assert.match(
+    desktopCss,
+    /body\.discussion-page \.main-content > \.settings-shell\s*\{[^}]*animation: none !important;/s,
+  );
+  assert.match(
+    desktopCss,
+    /body:not\(\.auth-page-body\) > \.mobile-header-backdrop\s*\{[^}]*display: block;[^}]*position: fixed;[^}]*z-index: 109;[^}]*inset: 0 0 auto var\(--bbs-shell-width\);[^}]*height: 92px;[^}]*background: var\(--ui-page\);/s,
+  );
+  assert.match(
+    desktopCss,
+    /\.discussion-layout:not\(\.is-detail-view\)\s*\.discussion-stats-sidebar\s*\{[^}]*position: sticky;[^}]*top: 92px;[^}]*z-index: 100;[^}]*background: var\(--ui-page\) !important;/s,
+  );
+  assert.match(
+    desktopCss,
+    /\.discussion-stats-sidebar::before\s*\{[^}]*inset: 0 calc\(-1 \* var\(--bbs-content-gutter\)\);[^}]*background: var\(--ui-page\);/s,
+  );
+});
+
 test('desktop discussion layout uses a single column with horizontal board navigation', () => {
   assert.match(css, /grid-template-areas:\s*'stats'\s*'feed'/);
   assert.match(css, /\.discussion-board-list\s*{[^}]*display:\s*flex/s);

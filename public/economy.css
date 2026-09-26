@@ -229,7 +229,17 @@ body.economy-page .shop-inspect-copy p {
 }
 
 .economy-page .shop-inspect-actions {
+  grid-column: 1 / -1;
   grid-template-columns: 1fr;
+}
+
+.economy-page #shop-inspect-message {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.economy-page #shop-inspect-message:empty {
+  display: none;
 }
 
 .economy-page .economy-activation-button > span {

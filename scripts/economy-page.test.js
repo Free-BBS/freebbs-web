@@ -17,6 +17,20 @@ const item = {
   cost: { electric: 1, magnetic: 1 },
 };
 
+test('inspection rules and purchase actions span both columns below the image and description', () => {
+  assert.match(
+    source,
+    /<strong id="shop-inspect-price"><\/strong>\s*<\/div>\s*<div class="shop-inspect-actions"/,
+  );
+  const css = fs.readFileSync(path.join(publicDir, 'economy.css'), 'utf8');
+  assert.match(
+    css,
+    /\.shop-inspect-actions\s*\{[^}]*grid-column: 1 \/ -1;[^}]*grid-template-columns: 1fr;/s,
+  );
+  assert.match(css, /#shop-inspect-message\s*\{[^}]*grid-column: 1 \/ -1;/s);
+  assert.match(css, /#shop-inspect-message:empty\s*\{[^}]*display: none;/s);
+});
+
 function makeElement() {
   const classes = new Set(['hidden']);
   return {
