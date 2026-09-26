@@ -9,6 +9,17 @@ const ruleValue = z.union([
   z.boolean(),
   z.array(z.string().max(200)).max(50),
   z.object({ start: z.string().optional(), end: z.string().optional() }).strict(),
+  z
+    .object({
+      mode: z.literal('title_validation'),
+      minLength: z.number().int().min(0).max(500),
+      maxLength: z.number().int().min(1).max(500),
+      forbiddenCharacters: z.string().max(200),
+      forbiddenWords: z.array(z.string().trim().min(1).max(100)).max(100),
+      allowLineBreaks: z.boolean(),
+      trimWhitespace: z.boolean(),
+    })
+    .strict(),
 ]);
 
 export const collectionRuleSchema = z
@@ -58,6 +69,19 @@ export const collectionSchema = z
     description: z.string().trim().max(5_000),
     fields: z.array(collectionFieldSchema).min(1).max(100),
     formRules: z.array(collectionRuleSchema).max(20),
+    outputs: z
+      .array(
+        z
+          .object({
+            id,
+            kind: z.enum(['excel', 'csv', 'json', 'summary']),
+            label: z.string().trim().min(1).max(100),
+            fileName: z.string().trim().min(1).max(100),
+          })
+          .strict(),
+      )
+      .max(12)
+      .default([]),
   })
   .strict();
 
@@ -80,3 +104,11 @@ export const responseSchema = z
   .strict();
 export const formRouteSchema = z.object({ formId: id }).strict();
 export const articleRouteSchema = z.object({ articleId: id }).strict();
+export const moduleDefinitionCreateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(128),
+    description: z.string().trim().max(500).default(''),
+    defaultLabel: z.string().trim().min(1).max(200),
+    fieldKind: collectionFieldSchema.shape.kind,
+  })
+  .strict();

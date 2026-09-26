@@ -1,6 +1,7 @@
 import type {
   CollectionField,
   CollectionFieldKind,
+  CollectionOutput,
   CollectionRuleKind,
   CollectionSchema,
 } from '@freebbs-development/contracts';
@@ -43,18 +44,32 @@ export interface FormCanvasProps {
   onAddField: (kind: CollectionFieldKind, index?: number) => void;
   onMoveField: (id: string, index: number) => void;
   onAttachRule: (kind: CollectionRuleKind, fieldId?: string) => void;
+  armedRule: CollectionRuleKind | null;
 }
 
 function RuleSlot({
   field,
   onAttach,
+  armedRule,
+  existingKinds,
 }: {
   field?: CollectionField;
   onAttach: (kind: CollectionRuleKind) => void;
+  armedRule: CollectionRuleKind | null;
+  existingKinds: CollectionRuleKind[];
 }) {
+  const compatible =
+    armedRule !== null &&
+    acceptsRule(field?.kind ?? 'form', armedRule) &&
+    !existingKinds.includes(armedRule);
   return (
-    <div
-      className="builder-rule-slot"
+    <button
+      type="button"
+      className={`builder-rule-slot${compatible ? ' is-compatible' : ''}`}
+      disabled={armedRule !== null && !compatible}
+      onClick={() => {
+        if (compatible && armedRule) onAttach(armedRule);
+      }}
       onDragOver={(event) => {
         const [type, kind] = payload(event).split(':');
         if (
@@ -76,9 +91,28 @@ function RuleSlot({
         if (type === 'rule' && kind) onAttach(kind as CollectionRuleKind);
       }}
     >
-      <span>⌁</span>
-      <small>拖入规则零件</small>
-    </div>
+      <span>◇</span>
+      <small>{compatible ? `镶嵌到${field ? '此模块' : '整张表单'}` : '规则卡槽'}</small>
+    </button>
+  );
+}
+
+function OutputCard({ output }: { output: CollectionOutput }) {
+  const symbols: Record<CollectionOutput['kind'], string> = {
+    excel: 'XLS',
+    csv: 'CSV',
+    json: '{ }',
+    summary: 'Σ',
+  };
+  return (
+    <>
+      <span>{symbols[output.kind]}</span>
+      <div>
+        <strong>{output.label}</strong>
+        <small>{output.fileName}</small>
+      </div>
+      <b>↓</b>
+    </>
   );
 }
 
@@ -137,6 +171,7 @@ export function FormCanvas({
   onAddField,
   onMoveField,
   onAttachRule,
+  armedRule,
 }: FormCanvasProps) {
   return (
     <section className="builder-canvas" aria-label="表单仿真画布">
@@ -163,7 +198,11 @@ export function FormCanvas({
             ))}
           </div>
         </button>
-        <RuleSlot onAttach={(kind) => onAttachRule(kind)} />
+        <RuleSlot
+          armedRule={armedRule}
+          existingKinds={schema.formRules.map((rule) => rule.kind)}
+          onAttach={(kind) => onAttachRule(kind)}
+        />
         {schema.fields.map((field, index) => (
           <article
             key={field.id}
@@ -202,7 +241,12 @@ export function FormCanvas({
                   {ruleLabels[rule.kind]}
                 </button>
               ))}
-              <RuleSlot field={field} onAttach={(kind) => onAttachRule(kind, field.id)} />
+              <RuleSlot
+                field={field}
+                armedRule={armedRule}
+                existingKinds={field.rules.map((rule) => rule.kind)}
+                onAttach={(kind) => onAttachRule(kind, field.id)}
+              />
             </div>
           </article>
         ))}
@@ -218,6 +262,33 @@ export function FormCanvas({
         >
           <span>＋</span>把下一个展示模块放在这里
         </div>
+        <section className="builder-output-dock" aria-label="结果输出模块">
+          <header>
+            <div>
+              <span>OUTPUT</span>
+              <strong>结果输出坞</strong>
+            </div>
+            <small>提交数据会按这里的配置整理</small>
+          </header>
+          {(schema.outputs ?? []).length > 0 ? (
+            <div>
+              {(schema.outputs ?? []).map((output) => (
+                <button
+                  type="button"
+                  key={output.id}
+                  className={
+                    selection.type === 'output' && selection.id === output.id ? 'is-selected' : ''
+                  }
+                  onClick={() => onSelect({ type: 'output', id: output.id })}
+                >
+                  <OutputCard output={output} />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p>从左侧加入 Excel、CSV 或汇总报告。</p>
+          )}
+        </section>
       </div>
     </section>
   );
