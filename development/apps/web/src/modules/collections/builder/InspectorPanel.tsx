@@ -142,7 +142,7 @@ export function InspectorPanel({
       ) : null}
       {rule ? (
         <div className="builder-inspector-form">
-          <p className="builder-selection-label">规则零件</p>
+          <p className="builder-selection-label">附加规则</p>
           <h2>{kindNames[rule.kind]}</h2>
           {titleConfig ? (
             <div className="builder-title-validation">
