@@ -13,7 +13,7 @@ import { useMainSiteTheme } from '../core/theme/useMainSiteTheme.js';
 import { MainSiteHeader } from './MainSiteHeader.js';
 import { visibleModuleManifests, type ModuleStateOverrides } from './module-manifests.js';
 
-const SIDEBAR_MODULE_IDS = new Set(['events', 'sports', 'collections']);
+const HIDDEN_SIDEBAR_MODULE_IDS = new Set(['dashboard', 'admin', 'liaison']);
 
 export interface AppShellProps {
   children?: ReactNode;
@@ -63,7 +63,7 @@ function ModuleNavigation({
   return (
     <nav ref={navigationRef} className={className} aria-label={label}>
       {visibleModuleManifests(user, moduleStates)
-        .filter((module) => SIDEBAR_MODULE_IDS.has(module.id))
+        .filter((module) => !HIDDEN_SIDEBAR_MODULE_IDS.has(module.id))
         .map((module) => {
           const content = (
             <>

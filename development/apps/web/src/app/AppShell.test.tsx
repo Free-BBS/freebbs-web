@@ -89,7 +89,7 @@ describe('AppShell', () => {
       '/development',
     );
   });
-  it('keeps only the current-stage modules in navigation while preserving direct routes', () => {
+  it('removes only the opportunity module while keeping the other development modules', () => {
     mockUseAuth.mockReturnValue(authenticatedAuth());
 
     renderShell('/knowledge');
@@ -101,15 +101,23 @@ describe('AppShell', () => {
       '無活动',
       '無体育',
       '萬事集',
+      '信息与咨询',
+      '经验库',
+      '个人成长档案',
     ]);
     expect(within(navigation).queryByRole('link', { name: '工作台' })).not.toBeInTheDocument();
     expect(within(navigation).queryByText('财务治理')).not.toBeInTheDocument();
     expect(within(navigation).queryByText('权限与模块管理')).not.toBeInTheDocument();
     expect(within(navigation).queryByText('趣缘群体')).not.toBeInTheDocument();
     expect(within(navigation).queryByText('無限机会')).not.toBeInTheDocument();
-    expect(within(navigation).queryByText('信息与咨询')).not.toBeInTheDocument();
-    expect(within(navigation).queryByText('经验库')).not.toBeInTheDocument();
-    expect(within(navigation).queryByText('个人成长档案')).not.toBeInTheDocument();
+    expect(within(navigation).getByRole('link', { name: '个人成长档案' })).toHaveAttribute(
+      'href',
+      '/growth',
+    );
+    expect(within(navigation).getByRole('link', { name: '经验库' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
     expect(screen.getByRole('link', { name: 'FREE BBS' })).toHaveAttribute('href', '/dashboard');
     expect(screen.getByRole('img', { name: 'FREE BBS' })).toHaveAttribute(
       'src',
@@ -140,28 +148,29 @@ describe('AppShell', () => {
     }
   });
 
-  it('keeps retired modules hidden even while their direct routes remain reachable', () => {
+  it('marks the information module active for nested routes', () => {
     mockUseAuth.mockReturnValue(authenticatedAuth());
 
     renderShell('/information/triage');
 
     const navigation = screen.getByRole('navigation', { name: '主要导航' });
-    expect(within(navigation).queryByRole('link', { name: '信息与咨询' })).not.toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: '移动导航' })).not.toHaveTextContent(
-      '信息与咨询',
+    expect(within(navigation).getByRole('link', { name: '信息与咨询' })).toHaveAttribute(
+      'aria-current',
+      'page',
     );
+    expect(screen.getByRole('navigation', { name: '移动导航' })).toHaveTextContent('信息与咨询');
   });
 
-  it('does not restore retired modules for an unrelated route prefix', () => {
+  it('does not mark information active for an unrelated route prefix', () => {
     mockUseAuth.mockReturnValue(authenticatedAuth());
 
     renderShell('/information-archive');
 
     expect(
-      within(screen.getByRole('navigation', { name: '主要导航' })).queryByRole('link', {
+      within(screen.getByRole('navigation', { name: '主要导航' })).getByRole('link', {
         name: '信息与咨询',
       }),
-    ).not.toBeInTheDocument();
+    ).not.toHaveAttribute('aria-current', 'page');
   });
 
   it('omits a disabled module from navigation', () => {
@@ -277,7 +286,7 @@ it('does not expose governance to a policy-only administrator', () => {
   renderShell('/finance');
 
   const navigation = screen.getByRole('navigation', { name: '主要导航' });
-  expect(navigation).not.toHaveTextContent('财务治理');
+  expect(navigation).toHaveTextContent('财务治理');
   expect(within(navigation).queryByText('权限与模块管理')).not.toBeInTheDocument();
 });
 
