@@ -51,6 +51,31 @@ test('mobile mentions account for keyboard viewport and dialog top layer', () =>
   assert.match(source, /input.classList\?\.contains\('discussion-comment-input'\)/);
 });
 
+test('calendar numbers are unboxed, activity cells stay square, and ranch avoids nested cards', () => {
+  const styles = fs.readFileSync(require.resolve('../public/styles.css'), 'utf8');
+  const profile = fs.readFileSync(require.resolve('../public/profile-extras.css'), 'utf8');
+  assert.match(
+    styles,
+    /\.checkin-calendar \.checkin-day\s*\{[^}]*border: 0;[^}]*background: none;[^}]*box-shadow: none;/s,
+  );
+  assert.match(styles, /\.checkin-calendar \.fortune-great\s*\{\s*color:/);
+  assert.match(styles, /\.checkin-calendar \.is-today\s*\{[^}]*text-decoration: underline;/s);
+  assert.match(styles, /#fortune-records\s*\{[^}]*max-width: 320px;/s);
+  assert.match(styles, /\.checkin-calendar\s*\{[^}]*gap: 0 2px;[^}]*margin-top: 4px;/s);
+  assert.match(styles, /\.checkin-calendar \.checkin-day\s*\{[^}]*height: 32px;/s);
+  assert.match(
+    profile,
+    /grid-template-columns: repeat\(var\(--heat-columns\), var\(--heat-cell\)\)/,
+  );
+  assert.match(profile, /grid-template-rows: repeat\(7, var\(--heat-cell\)\)/);
+  assert.match(profile, /\.profile-heatmap button\s*\{[^}]*aspect-ratio: 1;/s);
+  assert.match(profile, /\.profile-ranch\s*\{[^}]*border-radius: 0;[^}]*background: transparent;/s);
+  assert.match(
+    profile,
+    /\.ranch-wool-stages > div\s*\{[^}]*border: 0;[^}]*background: transparent;/s,
+  );
+});
+
 test('bare @ search returns bounded public identities and rejects invalid queries', async () => {
   const server = fs.readFileSync(require.resolve('../backend/server'), 'utf8');
   const start = server.indexOf("app.get('/api/discussion/users/search'");
@@ -91,4 +116,102 @@ test('bare @ search returns bounded public identities and rejects invalid querie
   await handler({ query: { q: '%' } }, response);
   assert.equal(response.code, 400);
   assert.equal(queries.length, 1);
+});
+
+test('public profile activity uses verified viewer identity and cannot be shared-cache reused', async () => {
+  const server = fs.readFileSync(require.resolve('../backend/server'), 'utf8');
+  const start = server.indexOf("app.get('/api/users/:uid/public-profile'");
+  const end = server.indexOf("app.patch('/api/profile'", start);
+  let handler;
+  let activityViewer;
+  const request = { params: { uid: 'u_alice01' } };
+  const viewer = { id: 8 };
+  const context = {
+    app: {
+      get: (_path, fn) => {
+        handler = fn;
+      },
+    },
+    pool: { execute: async () => [[{ id: 7, uid: 'u_alice01' }]] },
+    economyShop: {
+      decoratePosts: async () => [{}],
+      publicCollectibles: async () => [],
+    },
+    getShopItems: () => [],
+    profileExtras: { publicProfile: async () => ({}) },
+    getOptionalAuthUser: async (received) => {
+      assert.equal(received, request);
+      return viewer;
+    },
+    loadProfileActivity: async (_pool, id, _now, options) => {
+      assert.equal(id, 7);
+      activityViewer = options.viewer;
+      return { visibility: 'members' };
+    },
+  };
+  vm.runInNewContext(server.slice(start, end), context);
+  const headers = {};
+  const response = {
+    set: (name, value) => {
+      headers[name] = value;
+    },
+    vary: (value) => {
+      headers.Vary = value;
+    },
+    json(value) {
+      this.payload = value;
+    },
+  };
+  await handler(request, response);
+  assert.equal(activityViewer, viewer);
+  assert.equal(headers['Cache-Control'], 'private, no-store');
+  assert.equal(headers.Vary, 'Authorization');
+  assert.equal(response.payload.profile.activity.visibility, 'members');
+});
+
+test('profile loading ignores stale member responses after logout or a newer request', async () => {
+  const start = source.indexOf('let publicProfileRequestVersion = 0;');
+  const end = source.indexOf('function normalizeAdminRole(', start);
+  const pending = [];
+  const rendered = [];
+  const context = {
+    isPublicProfilePage: () => true,
+    getProfileUidFromQuery: () => 'u_alice01',
+    isValidPublicUid: () => true,
+    setPublicProfileMessage: () => {},
+    userState: { token: 'member-session' },
+    callApi: () =>
+      new Promise((resolve) => {
+        pending.push(resolve);
+      }),
+    window: { FreeBbsProfileActivity: { render: (value) => rendered.push(value) } },
+  };
+  for (const field of [
+    'Avatar',
+    'Name',
+    'StudentId',
+    'Major',
+    'PostCount',
+    'LikeCount',
+    'Bio',
+    'Website',
+  ]) {
+    context[`publicProfile${field}`] = null;
+  }
+  vm.runInNewContext(source.slice(start, end), context);
+  const oldRequest = context.loadPublicProfile();
+  context.userState.token = '';
+  pending.shift()({ profile: { activity: 'private' } });
+  await oldRequest;
+  assert.equal(rendered.length, 0);
+  const first = context.loadPublicProfile();
+  const second = context.loadPublicProfile();
+  pending.shift()({ profile: { activity: 'obsolete' } });
+  pending.shift()({ profile: { activity: 'public' } });
+  await Promise.all([first, second]);
+  assert.deepEqual(rendered, ['public']);
+  assert.match(
+    source,
+    /isPublicProfilePage\(\)\) \{\s*window.FreeBbsProfileActivity\?\.render\(null\);\s*loadPublicProfile\(\)/,
+  );
 });

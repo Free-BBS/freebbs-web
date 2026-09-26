@@ -439,13 +439,21 @@ body.theme-dark .profile-decoration-preview[data-profile-card='card_twilight'] {
     linear-gradient(120deg, #352d48, #213640);
   border-color: #655279;
 }
-.profile-ranch,
 .profile-wardrobe {
   margin-top: 26px;
   padding: 24px;
   border: 1px solid var(--ui-line);
   border-radius: 20px;
   background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.profile-ranch {
+  margin-top: 24px;
+  padding: 24px 0 0;
+  border: 0;
+  border-top: 1px solid var(--ui-line);
+  border-radius: 0;
+  background: transparent;
   color: var(--ui-text);
 }
 body .profile-ranch :is(h2, h3, p, span),
@@ -484,10 +492,10 @@ body .profile-wardrobe :is(h2, h3, p) {
   position: relative;
   height: 340px;
   overflow: hidden;
-  border: 1px solid #b2bc9a55;
-  border-radius: 22px;
+  border: 0;
+  border-radius: 28px;
   background: var(--ranch-sky, linear-gradient(170deg, #edf1dc 0%, #e7ecda 38%, #f8edce 75%));
-  box-shadow: inset 0 1px 0 #fff9;
+  box-shadow: none;
   isolation: isolate;
 }
 .ranch-scene::before {
@@ -735,9 +743,9 @@ body.theme-dark .ranch-empty {
   --wool-fill: #b88636;
   margin-top: 22px;
   padding: clamp(18px, 3vw, 28px);
-  border: 1px solid var(--wool-line);
-  border-radius: 20px;
-  background: radial-gradient(ellipse at top right, #ecca8130, transparent 70%), var(--wool-bg);
+  border: 0;
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--wool-bg) 65%, transparent);
   color: var(--wool-ink);
 }
 body.theme-dark .ranch-wool {
@@ -799,10 +807,14 @@ body.theme-dark .ranch-wool {
 .ranch-wool-stages > div {
   display: grid;
   gap: 8px;
-  padding: 18px;
-  border: 1px solid var(--wool-line);
-  border-radius: 14px;
-  background: var(--ui-surface);
+  padding: 12px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.ranch-wool-stages > div + div {
+  padding-left: 18px;
+  border-left: 1px solid color-mix(in srgb, var(--wool-line) 55%, transparent);
 }
 .ranch-wool-stages strong {
   font: 650 1.8rem/1.4 var(--font-zh-ui, sans-serif);
@@ -841,6 +853,12 @@ body .profile-ranch .ranch-wool-stages button {
 @media (max-width: 520px) {
   .ranch-wool-stages {
     grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .ranch-wool-stages > div + div {
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid color-mix(in srgb, var(--wool-line) 55%, transparent);
   }
   .ranch-wool-art {
     width: 76px;
@@ -866,6 +884,24 @@ body :is(.profile-ranch, .profile-wardrobe) button:focus-visible {
 body :is(.profile-ranch, .profile-wardrobe) button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+body .profile-ranch button {
+  border-color: transparent;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ui-surface-soft) 65%, transparent);
+}
+body .profile-ranch .ranch-wool-stages button {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--wool-line) 22%, transparent);
+}
+body .profile-ranch [data-ranch-pause] {
+  background: transparent;
+  color: var(--ui-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+body .profile-ranch button:not(:disabled):hover {
+  background: color-mix(in srgb, var(--ui-accent) 12%, var(--ui-surface));
 }
 body .profile-wardrobe button[aria-pressed='true'] {
   border-color: var(--ui-accent);
@@ -955,7 +991,9 @@ body .profile-wardrobe button[aria-pressed='true'] {
   }
 }
 @media (max-width: 600px) {
-  .profile-ranch,
+  .profile-ranch {
+    padding: 20px 0 0;
+  }
   .profile-wardrobe {
     padding: 16px;
   }
@@ -1228,6 +1266,7 @@ body.public-profile-page:not(.auth-page-body) .public-profile-field p {
   font-size: 12px;
 }
 .profile-heat-scroll {
+  --heat-cell: 14px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   padding: 2px 2px 8px;
@@ -1236,12 +1275,12 @@ body.public-profile-page:not(.auth-page-body) .public-profile-field p {
 .profile-heatmap,
 .profile-heat-months {
   display: grid;
-  grid-template-columns: repeat(var(--heat-columns), minmax(12px, 1fr));
+  grid-template-columns: repeat(var(--heat-columns), var(--heat-cell));
   gap: 4px;
-  min-width: calc(var(--heat-columns) * 16px - 4px);
+  width: max-content;
 }
 .profile-heatmap {
-  grid-template-rows: repeat(7, 12px);
+  grid-template-rows: repeat(7, var(--heat-cell));
   grid-auto-flow: column;
 }
 .profile-heatmap button,
@@ -1254,7 +1293,9 @@ body.public-profile-page:not(.auth-page-body) .public-profile-field p {
 }
 .profile-heatmap button {
   width: 100%;
-  height: 12px;
+  height: var(--heat-cell);
+  aspect-ratio: 1;
+  box-sizing: border-box;
   cursor: pointer;
 }
 .profile-heatmap button:focus-visible {
@@ -1373,12 +1414,15 @@ body:not(.auth-page-body) .public-profile-grid {
   justify-items: center;
   gap: 4px;
   padding: 12px 4px;
-  border: 1px solid var(--ui-line);
-  border-radius: 14px;
-  background: var(--ui-surface-soft);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--ui-text);
   min-width: 0;
   overflow-wrap: anywhere;
+}
+.ranch-bone-count + .ranch-bone-count {
+  border-left: 1px solid var(--ui-line);
 }
 .ranch-bone-count svg {
   width: 42px;
