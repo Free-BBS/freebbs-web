@@ -2,7 +2,9 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { sendStatic } = require('./static-response');
+const { preparePageShell } = require('./page-shell');
 const { clientIpForBackend } = require('./proxy-client-ip');
+const { servePausedCodeLab } = require('./code-lab-availability');
 
 const host = process.env.HOST || '127.0.0.1';
 const port = process.env.PORT || 3000;
@@ -10,6 +12,12 @@ const publicDir = path.join(__dirname, 'public');
 const vendorDir = path.join(__dirname, 'node_modules');
 const developmentDir = path.join(__dirname, 'development', 'apps', 'web', 'dist');
 const pageRoutes = new Map([
+  ['/about', '/about.html'],
+  ['/staff', '/staff.html'],
+  ['/laboratory', '/laboratory.html'],
+  ['/code-lab', '/code-lab.html'],
+  ['/pbl', '/pbl.html'],
+  ['/creative-workshop', '/creative-workshop.html'],
   ['/search', '/search.html'],
   ['/surveys', '/surveys.html'],
   ['/system-settings/surveys', '/system-settings-surveys.html'],
@@ -44,6 +52,12 @@ const pageRoutes = new Map([
   ['/world', '/world.html'],
 ]);
 const htmlRedirects = new Map([
+  ['/about.html', '/about'],
+  ['/staff.html', '/staff'],
+  ['/laboratory.html', '/laboratory'],
+  ['/code-lab.html', '/code-lab'],
+  ['/pbl.html', '/pbl'],
+  ['/creative-workshop.html', '/creative-workshop'],
   ['/adminusers.html', '/adminusers'],
   ['/aichat.html', '/aichat'],
   ['/course.html', '/course'],
@@ -152,15 +166,14 @@ function sendFile(filePath, response, options = {}) {
     sendStatic(
       response,
       searchablePage
-        ? data
-            .toString()
+        ? preparePageShell(data.toString())
             .replace(
               '</head>',
-              '<link rel="stylesheet" href="/site-search.css"><link rel="stylesheet" href="/mobile-shell.css"><link rel="stylesheet" href="/desktop-elegant.css"><link rel="stylesheet" href="/page-transitions.css"></head>',
+              '<link rel="stylesheet" href="/site-search.css"><link rel="stylesheet" href="/mobile-shell.css"><link rel="stylesheet" href="/desktop-elegant.css"><link rel="stylesheet" href="/page-transitions.css"><link rel="stylesheet" href="/desktop-shell.css"><link rel="stylesheet" href="/personal-polish.css"></head>',
             )
             .replace(
               '</body>',
-              '<script src="/site-search.js" defer></script><script src="/mobile-shell.js" defer></script><script src="/page-transitions.js" defer></script></body>',
+              '<script src="/site-search.js" defer></script><script src="/mobile-shell.js" defer></script><script src="/page-transitions.js" defer></script><script src="/desktop-shell.js" defer></script></body>',
             )
         : data,
       headers,
@@ -173,6 +186,7 @@ const server = http.createServer((request, response) => {
     request.url || '/',
     `http://${request.headers.host || `${host}:${port}`}`,
   );
+  if (servePausedCodeLab(request, response, requestUrl.pathname)) return;
   if (requestUrl.pathname.startsWith('/api/') || requestUrl.pathname.startsWith('/uploads/')) {
     const upstream = http.request(
       {

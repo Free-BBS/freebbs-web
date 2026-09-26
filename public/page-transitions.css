@@ -1,5 +1,6 @@
 @view-transition {
-  navigation: auto;
+  /* Keep navigation immediate: do not hold the old page for a crossfade. */
+  navigation: none;
 }
 ::view-transition-old(root),
 ::view-transition-new(root) {

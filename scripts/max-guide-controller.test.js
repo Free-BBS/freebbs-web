@@ -1690,6 +1690,54 @@ test('a late list scroll restoration is reframed once below the fixed header unl
   }
 });
 
+test('guide framing measures the new desktop header instead of the removed pseudo heading', async () => {
+  const index = indexOf('settings-security');
+  const step = STEPS[index];
+  for (const headerBottom of [94, 138, 180]) {
+    let scrollY = 0;
+    let target;
+    const view = fixture({
+      href: '/settings?guideTour=1',
+      states: { [VERSION]: { status: 'in_progress', step: index } },
+      setup(value) {
+        const { win } = value;
+        value.node('.main-content');
+        value.node('.desktop-header', {
+          rect: {
+            left: 220,
+            right: 1440,
+            top: 0,
+            bottom: headerBottom,
+            width: 1220,
+            height: headerBottom,
+          },
+        });
+        win.getComputedStyle = (node, pseudo) =>
+          pseudo === '::before'
+            ? { display: 'none', position: 'static' }
+            : { display: 'block', visibility: 'visible' };
+        win.scrollBy = ({ top }) => {
+          scrollY += top;
+        };
+        target = value.node(step.target);
+        target.getBoundingClientRect = () => ({
+          left: 250,
+          right: 1400,
+          top: 500 - scrollY,
+          bottom: 900 - scrollY,
+          width: 1150,
+          height: 400,
+        });
+      },
+    });
+    await settle();
+    view.flushFrames();
+    assert.equal(target.getBoundingClientRect().top, headerBottom + 18);
+    assert.equal(view.doc.querySelector('.max-tour-spotlight').style.top, `${headerBottom + 10}px`);
+    await view.controller.pause();
+  }
+});
+
 test('mobile personal folds open only for the current target and preserve their original state when leaving', async () => {
   const index = indexOf('settings-reading');
   for (const originallyOpen of [false, true]) {

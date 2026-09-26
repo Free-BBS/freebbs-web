@@ -1,0 +1,431 @@
+/* Personal surfaces share the shop's quiet paper, fine borders and clear hierarchy.
+ * Existing mobile arrangements and equipped profile-theme colours are preserved. */
+.aichat-welcome {
+  display: none;
+}
+/* Keep the real checkbox accessible; draw the switch above neither its thumb
+ * nor the generic input background. Shared by desktop and existing mobile folds. */
+body.settings-page .main-content .settings-notification-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px max-content;
+  align-items: center;
+  column-gap: 8px;
+  padding: 10px 12px;
+}
+body.settings-page .settings-notification-row > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+body.settings-page .main-content .settings-notification-control {
+  display: block;
+  width: 44px;
+  height: 44px;
+}
+body.settings-page .settings-notification-control::before {
+  content: none !important;
+}
+body.settings-page .main-content .settings-notification-control input {
+  position: absolute;
+  inset: 0;
+  width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  padding: 0 !important;
+  margin: 0;
+  opacity: 0 !important;
+  z-index: 2;
+  cursor: pointer;
+}
+body.settings-page .main-content .settings-notification-control > span {
+  position: absolute;
+  top: 10px;
+  left: 0;
+  width: 44px;
+  height: 24px;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: #849198 !important;
+  transform: none;
+  pointer-events: none;
+  transition: background-color 140ms ease;
+}
+body.settings-page .settings-notification-control > span::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px #0003;
+  transition: transform 140ms ease;
+}
+body.settings-page .main-content .settings-notification-control input:checked + span {
+  background: #198754 !important;
+  transform: none;
+}
+body.settings-page .settings-notification-control input:checked + span::before {
+  transform: translateX(20px);
+}
+body.settings-page .settings-notification-control input:focus-visible + span {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 3px;
+}
+body.settings-page .settings-notification-control input:disabled {
+  cursor: wait;
+}
+body.settings-page .settings-notification-control input:disabled + span {
+  opacity: 0.55;
+}
+body.settings-page .main-content .settings-notification-state {
+  min-width: 0;
+  font: 600 0.82rem/1.5 var(--font-ui);
+  color: var(--ui-text) !important;
+}
+body.settings-page .main-content .settings-notification-state.is-off {
+  color: var(--ui-muted) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  body.settings-page .settings-notification-control > span,
+  body.settings-page .settings-notification-control > span::before {
+    transition: none;
+  }
+}
+@media (min-width: 901px) {
+  body:is(.aichat-page, .settings-page, .public-profile-page) {
+    --personal-paper: #fcfaf5;
+    --personal-tint: #eef3ef;
+    --personal-line: #d8e2dd;
+  }
+  body.theme-dark:is(.aichat-page, .settings-page, .public-profile-page) {
+    --personal-paper: #172a30;
+    --personal-tint: #1e343a;
+    --personal-line: #354b50;
+  }
+  body:is(.aichat-page, .settings-page, .public-profile-page)
+    .main-content
+    :is(input, textarea, select, button) {
+    font-family: var(--font-ui);
+  }
+  /* Max: a quiet reading pane beside a compact, independently scrolling history. */
+  body.aichat-page.desktop-shell-active .main-content {
+    padding-top: calc(var(--desktop-header-height, 94px) + 22px) !important;
+    padding-bottom: 22px !important;
+  }
+  body.aichat-page .main-content .aichat-shell {
+    grid-template-columns: minmax(210px, 0.28fr) minmax(0, 1fr);
+    gap: 22px;
+  }
+  body.aichat-page .main-content .aichat-dialogs {
+    padding: 18px 12px;
+    border: 1px solid var(--personal-line) !important;
+    border-radius: 18px !important;
+    background: var(--personal-paper) !important;
+  }
+  body.aichat-page .main-content .aichat-dialogs-head {
+    padding: 4px 8px 18px;
+    background: transparent !important;
+  }
+  body.aichat-page .aichat-dialogs-head h2 {
+    font-size: 1.12rem;
+  }
+  body.aichat-page .main-content .aichat-new-dialog {
+    min-height: 44px;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+    font-size: 0.94rem;
+  }
+  body.aichat-page .main-content .aichat-dialog-item {
+    margin-block: 5px;
+    padding: 14px 12px;
+    border: 1px solid transparent !important;
+    border-radius: 12px !important;
+    background: transparent !important;
+  }
+  body.aichat-page .main-content .aichat-dialog-item.is-active,
+  body.aichat-page .main-content .aichat-dialog-item:hover {
+    border-color: var(--personal-line) !important;
+    background: var(--personal-tint) !important;
+  }
+  body.aichat-page .main-content .aichat-dialog-item::before {
+    display: none;
+  }
+  body.aichat-page .main-content .aichat-dialog-item :is(strong, h3) {
+    font-size: 0.94rem;
+  }
+  body.aichat-page .main-content .aichat-dialog-item :is(time, small) {
+    font-size: 0.78rem;
+    color: var(--ui-muted);
+  }
+  body.aichat-page .main-content .aichat-main {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    border: 1px solid var(--personal-line) !important;
+    border-radius: 20px !important;
+    background: var(--ui-surface) !important;
+  }
+  body.aichat-page .aichat-welcome {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    padding: 20px 26px;
+    border-bottom: 1px solid var(--personal-line);
+    background: var(--personal-paper);
+  }
+  body.aichat-page .aichat-welcome h2 {
+    margin: 0;
+    font: 600 1.12rem/1.5 var(--font-display);
+  }
+  body.aichat-page .aichat-welcome p {
+    margin: 5px 0 0;
+    color: var(--ui-muted);
+    font: 400 0.84rem/1.6 var(--font-ui);
+  }
+  body.aichat-page .aichat-welcome > span {
+    font: 600 0.72rem/1.5 var(--font-ui);
+    letter-spacing: 0.15em;
+    color: var(--ui-accent);
+  }
+  body.aichat-page .main-content .aichat-thread {
+    padding: 24px;
+  }
+  body.aichat-page .main-content .aichat-message {
+    gap: 12px;
+  }
+  body.aichat-page .main-content .aichat-bubble {
+    padding: 16px 20px;
+    border-radius: 16px !important;
+    box-shadow: none !important;
+  }
+  body.aichat-page .main-content .aichat-message-assistant .aichat-bubble {
+    background: var(--personal-paper) !important;
+    border-color: var(--personal-line) !important;
+  }
+  body.aichat-page .main-content .aichat-composer {
+    margin: 12px 20px 6px;
+    padding: 7px !important;
+    border-radius: 18px !important;
+    background: var(--ui-surface) !important;
+  }
+  body.aichat-page .main-content .aichat-meta-row {
+    background: transparent !important;
+    padding: 4px 26px 16px;
+    color: var(--ui-muted) !important;
+  }
+  /* Settings: account tools followed by readable, clearly grouped sections. */
+  body.settings-page.personal-settings-page .settings-shell {
+    gap: 22px !important;
+  }
+  body.settings-page.personal-settings-page .settings-profile {
+    padding: 0 !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px !important;
+  }
+  body.settings-page.personal-settings-page .settings-account-actions {
+    padding: 18px 24px !important;
+    border: 1px solid var(--personal-line) !important;
+    border-radius: 16px;
+    background: var(--personal-paper);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  body.settings-page.personal-settings-page
+    .settings-profile
+    > :is(.settings-form, .course-token-settings) {
+    margin: 0 !important;
+    padding: 26px !important;
+    border: 1px solid var(--personal-line) !important;
+    border-radius: 18px !important;
+    background: var(--ui-surface) !important;
+    align-content: start;
+  }
+  body.settings-page .settings-profile > :is(#settings-form, .course-token-settings) {
+    grid-column: 1 / -1;
+  }
+  body.settings-page .settings-avatar-editor {
+    padding: 24px;
+    border-radius: 14px;
+    background: var(--personal-paper);
+    margin-bottom: 8px;
+    gap: 24px;
+  }
+  body.settings-page .settings-avatar-copy h2,
+  body.settings-page .settings-section-heading h2 {
+    font: 600 1.25rem/1.5 var(--font-display);
+    margin-top: 0;
+  }
+  body.settings-page .main-content .settings-section-heading p,
+  body.settings-page .main-content #settings-avatar-help {
+    font: 400 0.92rem/1.8 var(--font-ui);
+    color: var(--ui-muted) !important;
+  }
+  body.settings-page .main-content .auth-field > span {
+    font: 600 0.94rem/1.5 var(--font-ui);
+  }
+  body.settings-page #settings-form .settings-grid > .auth-field {
+    align-self: start;
+    align-content: start;
+  }
+  body.settings-page .main-content .auth-field :is(input, textarea, select) {
+    border: 1px solid var(--ui-line) !important;
+    border-radius: 10px !important;
+    padding: 12px 14px;
+    font: 400 1rem/1.6 var(--font-ui);
+    box-shadow: none !important;
+  }
+  body.settings-page .main-content .auth-field small {
+    font: 400 0.82rem/1.7 var(--font-ui);
+  }
+  body.settings-page .settings-typography-form .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  body.settings-page .settings-typography-preview {
+    padding: 18px;
+    border-radius: 12px;
+    background: var(--personal-paper);
+  }
+  body.settings-page .settings-notification-list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  body.settings-page .settings-profile > :is(.settings-notification-form, .settings-password-form) {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    min-width: 0;
+  }
+  body.settings-page .settings-password-form .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  body.settings-page :is(.settings-notification-form, .settings-password-form) > .auth-submit {
+    margin-top: auto;
+    align-self: center;
+  }
+  body.settings-page
+    :is(.settings-notification-form, .settings-password-form)
+    > .settings-message:empty {
+    display: none;
+  }
+  body.settings-page .settings-notification-row small {
+    font-weight: 400;
+  }
+  body.settings-page
+    .main-content
+    :is(.auth-submit, .settings-upload-button, .settings-profile-link) {
+    border-radius: 11px !important;
+    box-shadow: none !important;
+  }
+  /* Profile: do not repaint purchased themes; refine only their spacing/chrome. */
+  body.public-profile-page .main-content .settings-header {
+    display: none;
+  }
+  body.public-profile-page .main-content .public-profile-shell {
+    padding: clamp(24px, 3vw, 42px);
+    border: 1px solid var(--personal-line);
+    border-radius: 24px !important;
+    gap: 24px;
+  }
+  body.public-profile-page .public-profile-header {
+    align-items: center;
+    gap: 28px;
+    padding-bottom: 18px;
+  }
+  body.public-profile-page .public-profile-copy h2 {
+    font-size: clamp(1.6rem, 2.4vw, 2.2rem);
+    margin-bottom: 12px;
+  }
+  body.public-profile-page .public-profile-meta {
+    font-size: 0.88rem;
+  }
+  body.public-profile-page .public-profile-stats {
+    display: flex;
+    gap: 12px;
+  }
+  body.public-profile-page .public-profile-stat {
+    flex: 1;
+    padding: 16px 22px;
+    border-radius: 14px;
+    border: 1px solid var(--ui-line);
+  }
+  body.public-profile-page .public-profile-stat strong {
+    font: 600 1.65rem/1.3 var(--font-ui);
+    font-variant-numeric: tabular-nums;
+  }
+  body.public-profile-page .public-profile-field p {
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.9;
+  }
+  body.public-profile-page :is(.profile-ranch, .profile-wardrobe) {
+    padding: 28px;
+    border-radius: 18px;
+    box-shadow: none;
+  }
+  body.public-profile-page .wardrobe-slots {
+    gap: 16px;
+  }
+  body.public-profile-page .wardrobe-slots section {
+    padding: 18px;
+    border-radius: 14px;
+  }
+  body.public-profile-page .wardrobe-slots button {
+    border-radius: 8px;
+  }
+  body.public-profile-page .ranch-scene {
+    height: 360px;
+    border-radius: 18px;
+    --ranch-sky: linear-gradient(175deg, #e6efeb, #f8f0d9);
+    --ranch-distant: #c8d7c5;
+    --ranch-hill-back: #b6cbb0;
+    --ranch-hill: #a4be9b;
+    --ranch-meadow: #c7d5af;
+    --ranch-path: #e6d6b6;
+  }
+  body.theme-dark.public-profile-page .ranch-scene {
+    --ranch-sky: linear-gradient(175deg, #172c39, #304245);
+    --ranch-distant: #374f52;
+    --ranch-hill-back: #395850;
+    --ranch-hill: #345148;
+    --ranch-meadow: #48664c;
+    --ranch-path: #746e52;
+  }
+  body.public-profile-page .ranch-wool {
+    border-radius: 16px;
+    padding: 24px;
+  }
+  body.public-profile-page .ranch-wool-stages > div {
+    border-radius: 12px;
+    box-shadow: none;
+  }
+  body.public-profile-page .ranch-kicker {
+    font-family: var(--font-ui);
+  }
+  body.public-profile-page .ranch-rules {
+    padding: 16px;
+    border-radius: 12px;
+    border: 1px solid var(--ui-line);
+  }
+  body.public-profile-page .ranch-rules summary {
+    cursor: pointer;
+  }
+  @media (max-width: 1180px) {
+    body.settings-page.personal-settings-page .settings-profile,
+    body.settings-page .settings-notification-list {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    body.aichat-page .main-content .aichat-shell {
+      grid-template-columns: 210px minmax(0, 1fr);
+      gap: 14px;
+    }
+    body.aichat-page .aichat-welcome > span {
+      display: none;
+    }
+  }
+}

@@ -47,6 +47,56 @@
   let adminSection = null;
   let searchTimer;
   let requestId;
+  const seenAchievements = new Set();
+  let achievementToast;
+
+  function showAchievement({ key, uid, token }) {
+    const user = window.freeBbsApp?.userState;
+    if (
+      key !== 'plate_fishbone_master' ||
+      !user?.isLoggedIn ||
+      String(uid) !== String(user.uid) ||
+      token !== user.token ||
+      token !== localStorage.getItem(storageKey)
+    )
+      return;
+    const seenKey = `free_bbs_achievement_seen:${uid}:${key}`;
+    if (seenAchievements.has(seenKey)) return;
+    try {
+      if (localStorage.getItem(seenKey) === '1') return;
+    } catch {
+      /* Memory fallback. */
+    }
+    achievementToast?.remove();
+    achievementToast = document.createElement('aside');
+    achievementToast.className = 'achievement-toast';
+    achievementToast.setAttribute('role', 'status');
+    achievementToast.setAttribute('aria-live', 'polite');
+    achievementToast.innerHTML = `
+      <img src="/assets/icons/plate_fishbone_master.svg" alt="" />
+      <div><p class="achievement-toast-kicker">收获一枚成就铭牌</p>
+        <h2>鱼骨达人</h2>
+        <p>已收入「我的装扮」，可以和 BBS 见习观察员换着戴</p>
+        <a class="achievement-toast-equip">去佩戴 ↗</a>
+      </div>
+      <button type="button" class="achievement-toast-close" aria-label="关闭成就通知">×</button>`;
+    achievementToast.querySelector('a').href =
+      `/profile?uid=${encodeURIComponent(uid)}#public-profile-wardrobe`;
+    achievementToast
+      .querySelector('button')
+      .addEventListener('click', () => achievementToast?.remove());
+    document.body.append(achievementToast);
+    seenAchievements.add(seenKey);
+    try {
+      localStorage.setItem(seenKey, '1');
+    } catch {
+      /* Memory fallback. */
+    }
+  }
+  window.addEventListener('freebbs:achievement-unlocked', (event) => {
+    showAchievement(event.detail || {});
+    refreshCount();
+  });
 
   async function api(path, options = {}) {
     const token = localStorage.getItem(storageKey) || '';
@@ -195,6 +245,22 @@
       const changed = payload.unreadCount !== state.unreadCount;
       updateCount(payload.unreadCount);
       if (changed && !panel.hidden) await loadInbox();
+      // Recover an award whose success response was lost, or awarded in another tab.
+      if (changed && payload.unreadCount > 0) {
+        const inbox = await api('/notifications');
+        if (version !== state.sessionVersion || !canLoad()) return;
+        if (
+          inbox.notifications?.some(
+            (item) =>
+              item.kind === 'achievement' && !item.readAt && item.title === '获得成就 · 鱼骨达人',
+          )
+        )
+          showAchievement({
+            key: 'plate_fishbone_master',
+            uid: state.user.uid,
+            token: state.token,
+          });
+      }
     } catch (error) {
       if (!panel.hidden) message.textContent = error.message;
       if (error.status === 401) widget.hidden = true;
@@ -406,6 +472,7 @@
     state.sessionVersion += 1;
     const version = state.sessionVersion;
     const token = localStorage.getItem(storageKey) || '';
+    if (token !== state.token) achievementToast?.remove();
     state.token = token;
     state.user = null;
     widget.hidden = true;

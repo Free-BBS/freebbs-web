@@ -1,0 +1,281 @@
+/* Desktop only: the mobile shell keeps its original structure and positions. */
+@media (min-width: 901px) {
+  body.desktop-shell-active > .mobile-header-backdrop {
+    height: var(--desktop-header-height, 94px);
+  }
+  body.desktop-shell-active.discussion-page
+    .discussion-layout:not(.is-detail-view)
+    .discussion-stats-sidebar {
+    top: var(--desktop-header-height, 94px);
+  }
+  body.desktop-shell-active .main-content[data-page-title]::before {
+    display: none !important;
+    content: none !important;
+  }
+  body.desktop-shell-active .main-content[data-page-title] {
+    padding-top: calc(var(--desktop-header-height, 94px) + 28px) !important;
+    padding-bottom: 16px !important;
+  }
+  body.desktop-shell-active .desktop-header {
+    position: fixed;
+    z-index: 125;
+    inset: 0 var(--bbs-content-gutter) auto calc(var(--bbs-shell-width) + var(--bbs-content-gutter));
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    min-height: 94px;
+    padding-block: 18px;
+    box-sizing: border-box;
+    border-bottom: 1px solid var(--ui-line);
+    background: var(--ui-page);
+    color: var(--ui-text);
+    container: desktop-top / inline-size;
+  }
+  body.desktop-shell-active .desktop-header-title {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font: 700 clamp(1.8rem, 3vw, 2.28rem)/1.25 var(--font-display);
+    letter-spacing: -0.035em;
+    overflow-wrap: anywhere;
+  }
+  body.desktop-shell-active .desktop-header-controls,
+  body.desktop-shell-active .desktop-header-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+  body.desktop-shell-active .desktop-header .user-panel {
+    position: static !important;
+    display: flex !important;
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 8px;
+    width: auto;
+    max-width: none;
+    height: auto;
+    padding: 0;
+    transform: none;
+  }
+  body.desktop-shell-active .desktop-header .user-economy-stack {
+    display: block !important;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    order: 0;
+  }
+  body.desktop-shell-active .desktop-header .economy-shortcuts {
+    display: flex !important;
+    width: auto;
+    gap: 6px;
+  }
+  body.desktop-shell-active .desktop-header .economy-shortcut {
+    width: auto;
+    min-width: 42px;
+    height: 42px;
+    min-height: 42px;
+    padding: 8px 12px;
+    gap: 6px;
+    border-radius: 12px !important;
+    font: 600 0.88rem/1.3 var(--font-ui);
+    box-shadow: none;
+  }
+  body.desktop-shell-active .desktop-header .user-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    order: 1;
+  }
+  body.desktop-shell-active .desktop-header .avatar {
+    width: 42px !important;
+    height: 42px !important;
+    min-width: 42px;
+    margin: 0;
+  }
+  body.desktop-shell-active .desktop-header .user-copy {
+    display: none !important;
+  }
+  body.desktop-shell-active .desktop-header :is(.user-role, .user-actions) {
+    display: none !important;
+  }
+  body.desktop-shell-active
+    .desktop-header
+    :is(.site-search-trigger, .desktop-header-tools > .nav-link, .notification-bell) {
+    position: static !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 42px;
+    width: 42px !important;
+    min-width: 42px;
+    height: 42px;
+    min-height: 42px;
+    padding: 9px;
+    box-sizing: border-box;
+    border: 1px solid var(--ui-line);
+    border-radius: 12px !important;
+    background: var(--ui-surface) !important;
+    color: var(--ui-text) !important;
+    cursor: pointer;
+  }
+  body.desktop-shell-active .desktop-header-tools > .nav-link span,
+  body.desktop-shell-active .desktop-header .site-search-trigger span {
+    display: none;
+  }
+  body.desktop-shell-active .desktop-header .nav-icon {
+    width: 21px;
+    height: 21px;
+    filter: none !important;
+  }
+  body.theme-dark.desktop-shell-active .desktop-header .nav-icon {
+    filter: brightness(0) invert(1) !important;
+  }
+  body.desktop-shell-active .desktop-header .notification-widget {
+    position: relative;
+    top: auto;
+    right: auto;
+  }
+  body.desktop-shell-active .desktop-header .notification-bell {
+    position: relative !important;
+  }
+  body.desktop-shell-active .desktop-header :is(a, button):focus-visible,
+  body.desktop-shell-active .desktop-assets [role='button']:focus-visible {
+    outline: 2px solid var(--ui-accent);
+    outline-offset: 3px;
+  }
+  body.desktop-shell-active .topbar {
+    display: flex !important;
+    flex-direction: column;
+    height: 100dvh;
+    padding-bottom: 0 !important;
+    overflow-y: auto;
+    box-sizing: border-box;
+  }
+  body.desktop-shell-active .topbar > .brand {
+    min-height: 128px;
+    flex-shrink: 0;
+  }
+  body.desktop-shell-active .topbar .nav-actions {
+    display: flex;
+    flex-direction: column;
+    flex: 1 0 auto;
+  }
+  body.desktop-shell-active .topbar .nav-actions > .nav-link {
+    flex-shrink: 0;
+    min-height: 44px;
+  }
+  body.desktop-shell-active .nav-actions > [href='/'] {
+    order: 1;
+  }
+  body.desktop-shell-active .nav-actions > [href='/world'] {
+    order: 2;
+  }
+  body.desktop-shell-active .nav-actions > [href='/discussion'] {
+    order: 3;
+  }
+  body.desktop-shell-active .nav-actions > [href='/workbench'] {
+    order: 4;
+  }
+  body.desktop-shell-active .nav-actions > [href='/laboratory'] {
+    order: 5;
+  }
+  body.desktop-shell-active .nav-actions > [href='/creative-workshop'] {
+    order: 6;
+  }
+  body.desktop-shell-active .nav-actions > [href='/pbl'] {
+    order: 7;
+  }
+  body.desktop-shell-active .nav-actions > [href='/aichat'] {
+    order: 8;
+  }
+  body.desktop-shell-active .nav-actions > [href='/surveys'] {
+    order: 9;
+    margin-top: 8px;
+  }
+  body.desktop-shell-active .nav-actions > [href='/system-settings'] {
+    order: 10;
+  }
+  body.desktop-shell-active .desktop-sidebar-bottom {
+    order: 50;
+    display: grid;
+    gap: 0;
+    margin-top: auto;
+    padding-top: 28px;
+    padding-bottom: 0;
+  }
+  body.desktop-shell-active .desktop-sidebar-bottom > .nav-link {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 46px;
+    gap: 8px;
+    border: 1px solid #ffffff30 !important;
+    border-radius: 12px !important;
+    background: #ffffff0a !important;
+    text-align: center;
+  }
+  body.desktop-shell-active .desktop-sidebar-bottom > .nav-link:hover {
+    background: #ffffff16 !important;
+    border-color: #ffffff55 !important;
+  }
+  body.desktop-shell-active .desktop-assets {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  body.desktop-shell-active .desktop-assets .user-status {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    gap: 0;
+    padding: 12px 2px;
+    border-radius: 8px;
+    cursor: pointer;
+    box-sizing: border-box;
+  }
+  body.desktop-shell-active .desktop-assets .user-status:hover {
+    background: #ffffff08;
+  }
+  body.desktop-shell-active .desktop-assets .currency {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+    min-height: 28px;
+    width: auto;
+    padding: 2px;
+    border: 0 !important;
+    border-radius: 4px !important;
+    background: transparent !important;
+    color: #f5fbfd !important;
+    font: 700 0.86rem/1.4 var(--font-ui) !important;
+  }
+  body.desktop-shell-active .desktop-assets .currency + .currency {
+    border-left: 1px solid #ffffff26 !important;
+  }
+  body.desktop-shell-active .desktop-assets .currency-value {
+    color: inherit !important;
+    font: inherit !important;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+  }
+  body.desktop-shell-active .desktop-assets .currency-icon {
+    width: 16px;
+    height: 16px;
+    filter: brightness(0) invert(1) !important;
+    opacity: 0.85;
+  }
+  @container desktop-top (max-width: 890px) {
+    body.desktop-shell-active .desktop-header .economy-shortcut span {
+      display: none;
+    }
+    body.desktop-shell-active .desktop-header .economy-shortcut {
+      padding: 9px;
+    }
+  }
+}

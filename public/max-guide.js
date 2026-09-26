@@ -744,10 +744,17 @@
       }
       const main = doc.querySelector('.main-content');
       const heading = main && win.getComputedStyle(main, '::before');
-      const safeTop =
+      const legacySafeTop =
         heading?.position === 'fixed' && heading.display !== 'none'
           ? (parseFloat(heading.height) || 0) + (parseFloat(heading.borderBottomWidth) || 0)
           : 0;
+      // The desktop shell replaced the old pseudo-element heading. Measure its
+      // actual bottom so larger fonts and wrapped titles cannot hide the target.
+      const desktopHeader = visible('.desktop-header');
+      const safeTop = Math.max(
+        legacySafeTop,
+        desktopHeader ? desktopHeader.getBoundingClientRect().bottom : 0,
+      );
       const mobileNav = visible('.mobile-nav');
       const footerHeight = mobileNav ? mobileNav.getBoundingClientRect().height : 0;
       if (step.focus?.fit === 'overview') {

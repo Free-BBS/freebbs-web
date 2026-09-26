@@ -477,6 +477,21 @@ body .profile-wardrobe :is(h2, h3, p) {
   margin: 0 0 18px;
   opacity: 0.85;
 }
+.ranch-growth-model {
+  margin: 14px 0 20px;
+  padding: 12px 16px;
+  border: 1px solid var(--ui-line);
+  border-radius: 12px;
+  font: 400 0.9rem/1.8 var(--font-ui);
+}
+.ranch-growth-model summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.ranch-growth-model summary:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 4px;
+}
 #public-profile-ranch {
   scroll-margin-top: 110px;
 }
@@ -1673,4 +1688,7 @@ body.electromagnetic-page .shop-category-sample .shop-ranch-preview {
     width: 36px;
     height: 36px;
   }
+}
+#public-profile-wardrobe {
+  scroll-margin-top: calc(var(--desktop-header-height, 100px) + 16px);
 }

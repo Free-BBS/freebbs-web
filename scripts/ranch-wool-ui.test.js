@@ -78,7 +78,9 @@ test('wool lives in the ranch, safe counts render and visitors get no mutation c
     rubberRod: true,
   };
   const owner = api.woolPanel(state, true);
-  assert.match(owner, /3 \/ 5 条小鱼/);
+  assert.match(owner, /Poisson\(λ = 0.2\)/);
+  assert.match(owner, /并非喂满 5 次必得/);
+  assert.doesNotMatch(owner, /<progress/);
   assert.match(owner, /data-extra-action="shear" >剪下一份羊毛/);
   assert.match(owner, /data-extra-action="rub_wool" >摩擦起电/);
   assert.match(owner, /橡胶棒已就位，可以反复使用/);

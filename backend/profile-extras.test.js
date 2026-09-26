@@ -237,11 +237,13 @@ test('visitor presentation excludes wallet, fish, daily fortune and private acti
     'fedUntilMs',
     'feedProgress',
     'goldenBones',
+    'growthModel',
     'hardBones',
     'hungry',
     'nextShearAtMs',
     'serverNowMs',
     'shearedToday',
+    'woolRate',
     'woolReady',
     'woolStored',
   ]);
@@ -299,6 +301,13 @@ test('fishbone achievement unlocks when gold arrives after ten purchases, only o
   assert.equal(store.account().assets.plate_fishbone_master, 1);
   await act('equip', { slot: 'nameplate', itemKey: 'plate_fishbone_master' });
   assert.equal((await service.publicProfile(1)).cosmetics.nameplate, 'plate_fishbone_master');
+  assert.equal(store.account().notifications.length, 1);
+  assert.equal(store.account().notifications[0].kind, 'achievement');
+  store.account().assets.plate_observer = 1;
+  await act('equip', { slot: 'nameplate', itemKey: 'plate_observer' });
+  assert.equal((await service.publicProfile(1)).cosmetics.nameplate, 'plate_observer');
+  assert.equal(store.account().assets.plate_fishbone_master, 1);
+  assert.equal(store.account().notifications.length, 1);
 });
 
 test('held or fed bones do not replace the ten purchase requirement', async () => {
@@ -319,7 +328,12 @@ test('eligible existing accounts reconcile once and earned title persists withou
   store.account().counts.fishbone = 10;
   store.account().assets.golden_fishbone = 3;
   store.account().assets.ordinary_fishbone = 10;
-  await Promise.all([service.ownState(1), service.ownState(1)]);
+  const responses = await Promise.all([service.ownState(1), service.ownState(1)]);
+  assert.deepEqual(
+    responses.flatMap((response) => response.unlocked),
+    ['plate_fishbone_master'],
+  );
+  assert.equal(store.account().notifications.length, 1);
   assert.equal(store.account().assets.plate_fishbone_master, 1);
   assert.equal(store.account().equipped.nameplate, undefined);
   store.account().assets.golden_fishbone = 0;
@@ -329,9 +343,46 @@ test('eligible existing accounts reconcile once and earned title persists withou
 test('feed receipt failure rolls back newly unlocked achievement together with gold and fish', async () => {
   const { act, store } = setup();
   store.account().counts.fishbone = 10;
+  store.account().assets.golden_fishbone = 2;
+  store.account().assets.ordinary_fishbone = 10;
   store.failAt = 'profile_record';
   await assert.rejects(act('feed'));
   assert.equal(store.account().assets.plate_fishbone_master, undefined);
-  assert.equal(store.account().assets.golden_fishbone, undefined);
+  assert.equal(store.account().assets.golden_fishbone, 2);
+  assert.equal(store.account().notifications.length, 0);
   assert.equal(store.account().assets.fish, 3);
+});
+
+test('achievement notification failure rolls back legacy reconciliation and feeding', async () => {
+  for (const legacy of [true, false]) {
+    const { act, store, service } = setup();
+    store.account().counts.fishbone = 10;
+    store.account().assets.golden_fishbone = legacy ? 3 : 2;
+    store.account().assets.ordinary_fishbone = 10;
+    const before = structuredClone(store.account());
+    store.failAt = 'notification';
+    await assert.rejects(legacy ? service.ownState(1) : act('feed'), /simulated notification/);
+    assert.deepEqual(store.account(), before);
+  }
+});
+
+test('SQL achievement notice uses the same transaction, account UID link and unique event key, without email', async () => {
+  const calls = [];
+  const tx = mysqlProfileMethods({
+    execute: async (sql, params) => {
+      calls.push({ sql, params });
+      return [{ affectedRows: 1 }];
+    },
+  });
+  const { FISHBONE_MASTER } = require('./economy-achievements');
+  await tx.notifyAchievement(7, FISHBONE_MASTER);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].sql, /INSERT INTO community_notifications/);
+  assert.match(calls[0].sql, /FROM users WHERE id = \?/);
+  assert.match(calls[0].sql, /ON DUPLICATE KEY UPDATE/);
+  assert.match(calls[0].sql, /#public-profile-wardrobe/);
+  assert.equal(calls[0].params.at(-1), 7);
+  assert.equal(calls[0].params.at(-2), 'achievement:plate_fishbone_master');
+  assert.match(calls[0].params[0], /鱼骨达人/);
+  assert.doesNotMatch(calls[0].sql, /email_outbox/);
 });

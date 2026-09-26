@@ -1,0 +1,88 @@
+/* One quiet, compact footer shared by every full-page surface. */
+body .site-footer.site-footer-compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 2px;
+  margin: 12px var(--bbs-content-gutter, 24px) 0;
+  padding: 10px 0 8px;
+  width: auto;
+  border: 0;
+  border-top: 1px solid var(--ui-line);
+  border-radius: 0;
+  background: transparent !important;
+  color: var(--ui-muted) !important;
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
+  font: 400 0.86rem/1.6 var(--font-ui);
+}
+body .site-footer-compact .footer-links,
+body .site-footer-compact .footer-meta {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 26px;
+  padding: 0;
+  border: 0;
+  text-align: center;
+}
+body .site-footer-compact .footer-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  font: 500 0.9rem/1.6 var(--font-ui);
+  color: var(--ui-muted) !important;
+  text-decoration: none;
+}
+body .site-footer-compact .footer-links a + a::before {
+  content: none;
+}
+body .site-footer-compact .footer-meta p {
+  margin: 0;
+  font: 400 0.84rem/1.6 var(--font-ui);
+  color: var(--ui-muted) !important;
+}
+body .site-footer-compact a:hover {
+  color: var(--ui-accent) !important;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+body .site-footer-compact a:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 3px;
+}
+@media (min-width: 901px) {
+  body:not(.auth-page-body) .page-shell {
+    padding-bottom: 8px !important;
+  }
+  body:not(.auth-page-body) .page-shell:has(> .site-footer-compact) {
+    grid-template-rows: minmax(0, 1fr) auto;
+    row-gap: 0;
+  }
+}
+@media (max-width: 600px) {
+  body .site-footer.site-footer-compact {
+    margin-inline: 16px;
+  }
+  body .site-footer-compact .footer-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px 10px;
+  }
+  body .site-footer-compact .footer-links a {
+    justify-content: center;
+    min-height: 44px;
+    font-size: 0.8rem;
+  }
+  body .site-footer-compact .footer-meta {
+    gap: 4px 16px;
+  }
+}
+/* Chat deliberately retains its existing full-height mobile composer. */
+@media (max-width: 900px) {
+  body.aichat-page .site-footer.site-footer-compact {
+    display: none;
+  }
+}

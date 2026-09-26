@@ -32,7 +32,7 @@ test('activity requests use same-origin API on local, HTTPS and custom-port site
 });
 test('activities are visible in shared navigation and both pages reuse the site shell', () => {
   const app = fs.readFileSync('public/app.js', 'utf8');
-  assert.match(app, /\{ href: '\/surveys', icon: 'calendar', label: '活动报名' \}/);
+  assert.match(app, /\{ href: '\/surveys', icon: 'calendar', label: '活动报名（试用）' \}/);
   for (const file of ['public/surveys.html', 'public/system-settings-surveys.html']) {
     const html = fs.readFileSync(file, 'utf8');
     assert.match(html, /class="nav-actions"/);

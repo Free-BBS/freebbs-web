@@ -13,6 +13,15 @@ const { GUIDE_VERSION } = require('../public/max-guide-releases');
 const scenarios = [
   { name: 'desktop-light-slow', width: 1440, height: 900, theme: 'light', mapDelay: 3500 },
   { name: 'mobile-dark-late', width: 390, height: 844, theme: 'dark', mapDelay: 6500 },
+  {
+    name: 'desktop-dark-large',
+    width: 1280,
+    height: 900,
+    theme: 'dark',
+    mapDelay: 3500,
+    typeScale: 'large',
+    fontPreset: 'zhongsong-study',
+  },
 ];
 const sleep = (duration) =>
   new Promise((resolve) => {
@@ -99,7 +108,7 @@ async function waitStep(page, index, step, { revealed = false } = {}) {
       }
     }
   }
-  const snapshot = await page.evaluate(() => {
+  const snapshot = await page.evaluate((targetSelector) => {
     const card = document.querySelector('.max-tour-card');
     const rect = card.getBoundingClientRect();
     const next = document.querySelector('.max-tour .guide-primary').getBoundingClientRect();
@@ -122,13 +131,21 @@ async function waitStep(page, index, step, { revealed = false } = {}) {
       };
     });
     probe.remove();
-    const currencies = [...document.querySelectorAll('.user-economy-stack .currency-value')].map(
+    const currencies = [...document.querySelectorAll('#user-status .currency-value')].map(
       (node) => ({
         value: node.textContent,
         weight: getComputedStyle(node).fontWeight,
       }),
     );
     return {
+      target: [...document.querySelectorAll(targetSelector)]
+        .find((node) => {
+          const bounds = node.getBoundingClientRect();
+          return bounds.width > 0 && bounds.height > 0 && !node.closest('[hidden], .hidden');
+        })
+        ?.getBoundingClientRect()
+        .toJSON(),
+      header: document.querySelector('.desktop-header')?.getBoundingClientRect().toJSON(),
       path: window.location.pathname,
       search: window.location.search,
       title: document.querySelector('#max-tour-title').textContent,
@@ -147,7 +164,25 @@ async function waitStep(page, index, step, { revealed = false } = {}) {
       fonts,
       currencies,
     };
-  });
+  }, view.target);
+  if (
+    snapshot.header &&
+    [
+      'home-launchpad',
+      'settings-reading',
+      'settings-security',
+      'settings-profile-entry',
+      'profile-ranch',
+      'profile-wool',
+      'inventory-ledger-entry',
+      'development-status',
+    ].includes(step.id)
+  ) {
+    assert.ok(
+      snapshot.target.top >= snapshot.header.bottom,
+      `${step.id}: target hidden by desktop header`,
+    );
+  }
   assert.equal(snapshot.path, step.route, `${step.id}: wrong page`);
   if (['course', 'knowledge'].includes(step.station)) {
     assert.equal(new URLSearchParams(snapshot.search).get('course'), 'math');
@@ -206,9 +241,14 @@ async function runScenario(browser, scenario, directory) {
     // Test both the site's supported reduced-motion mode and ordinary animations.
     // Preserve exact native transition diagnostics separately in ordinary mode.
     await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: motion }]);
-    await page.evaluateOnNewDocument((theme) => {
-      localStorage.setItem('free_bbs_theme_mode', theme);
-    }, scenario.theme);
+    await page.evaluateOnNewDocument((preferences) => {
+      localStorage.setItem('free_bbs_theme_mode', preferences.theme);
+      if (preferences.typeScale)
+        localStorage.setItem(
+          'free_bbs_typography_preferences',
+          JSON.stringify({ typeScale: preferences.typeScale, fontPreset: preferences.fontPreset }),
+        );
+    }, scenario);
     page.on('pageerror', (error) => {
       const diagnostic = { url: page.url(), message: error.message };
       if (
@@ -262,6 +302,13 @@ async function runScenario(browser, scenario, directory) {
         .finally(() => pendingRequests.delete(operation));
     });
     await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
+    if (scenario.typeScale) {
+      assert.equal(await page.$eval('html', (node) => node.dataset.typeScale), scenario.typeScale);
+      assert.equal(
+        await page.$eval('html', (node) => node.dataset.fontPreset),
+        scenario.fontPreset,
+      );
+    }
     await page.waitForFunction(
       () =>
         document.querySelector('.max-tour[open] #max-tour-title')?.textContent ===
@@ -368,6 +415,9 @@ async function runScenario(browser, scenario, directory) {
           'course-directory',
           'course-enter-knowledge',
           'activities-receipt',
+          'settings-reading',
+          'settings-security',
+          'development-status',
         ].includes(step.id)
       ) {
         await page.screenshot({ path: path.join(directory, `${scenario.name}-${step.id}.png`) });
