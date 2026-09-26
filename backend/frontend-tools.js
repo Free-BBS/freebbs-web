@@ -47,7 +47,14 @@ function serializeTool(row, viewer) {
   };
 }
 
-function createFrontendToolsRouter({ pool, requireAuth, getOptionalAuthUser, generateHtml }) {
+function createFrontendToolsRouter({
+  pool,
+  requireAuth,
+  getOptionalAuthUser,
+  generateHtml,
+  generationTimeoutMs = 300000,
+  heartbeatMs = 15000,
+}) {
   const router = express.Router();
 
   router.get('/', async (request, response) => {
@@ -110,14 +117,85 @@ function createFrontendToolsRouter({ pool, requireAuth, getOptionalAuthUser, gen
       response.status(400).json({ message: '当前 HTML 过长，请精简后再让 AI 修改' });
       return;
     }
-    try {
-      const answer = await generateHtml({ user, prompt, currentHtml });
-      response.json({ html: extractStandaloneHtml(answer) });
-    } catch (error) {
-      response.status(error.status || 502).json({
-        message: error.status ? error.message : 'AI 暂时没有生成可用的 HTML，请换一种描述重试',
-        code: error.code || 'tool_generation_failed',
+    const streaming = /\btext\/event-stream\b/i.test(request.get('accept') || '');
+    const controller = new AbortController();
+    const disconnect = () => controller.abort();
+    response.once('close', disconnect);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, generationTimeoutMs);
+    timer.unref?.();
+    const send = (event) => {
+      if (streaming && !response.destroyed && !response.writableEnded)
+        response.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+    if (streaming) {
+      response.set({
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-store',
+        'X-Accel-Buffering': 'no',
       });
+      response.flushHeaders();
+      send({ status: 'preparing', message: '已连接，正在等待 AI 开始生成…' });
+    }
+    const heartbeat = streaming
+      ? setInterval(() => {
+          if (!response.destroyed) response.write(': keepalive\n\n');
+        }, heartbeatMs)
+      : null;
+    heartbeat?.unref?.();
+    let rejectAbort;
+    const aborted = new Promise((_, reject) => {
+      rejectAbort = () => reject(new Error('Generation aborted'));
+      controller.signal.addEventListener('abort', rejectAbort, { once: true });
+    });
+    let lastProgress = 0;
+    try {
+      const answer = await Promise.race([
+        generateHtml({
+          user,
+          prompt,
+          currentHtml,
+          signal: controller.signal,
+          onReasoning: ({ id, delta }) => send({ reasoning_id: id, reasoning_delta: delta }),
+          onProgress: (characters) => {
+            if (Date.now() - lastProgress < 250) return;
+            lastProgress = Date.now();
+            send({ status: 'generating', message: `正在编写 HTML · 已生成 ${characters} 字符` });
+          },
+        }),
+        aborted,
+      ]);
+      controller.signal.throwIfAborted();
+      send({ status: 'validating', message: '正在检查 HTML 完整性…' });
+      const html = extractStandaloneHtml(answer);
+      if (streaming) {
+        send({ done: true, result: { answer: html, html } });
+        response.end();
+      } else response.json({ html });
+    } catch (error) {
+      if (!response.destroyed) {
+        const failure = {
+          message: timedOut
+            ? 'AI 生成超时，原有代码未修改，请缩小需求后重试。'
+            : error.status
+              ? error.message
+              : 'AI 暂时没有生成可用的 HTML，请换一种描述重试',
+          code: timedOut ? 'tool_generation_timeout' : error.code || 'tool_generation_failed',
+        };
+        if (streaming) {
+          send({ error: failure });
+          response.end();
+        } else response.status(timedOut ? 504 : error.status || 502).json(failure);
+      }
+    } finally {
+      clearTimeout(timer);
+      clearInterval(heartbeat);
+      response.removeListener('close', disconnect);
+      controller.signal.removeEventListener('abort', rejectAbort);
+      controller.abort();
     }
   });
 

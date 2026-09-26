@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="/username-guard.css" />
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/tool-workshop.css" />
+    <link rel="stylesheet" href="/max-reasoning.css" />
   </head>
   <body class="tool-workshop-page">
     <div class="page-shell">
@@ -106,10 +107,13 @@
               </div>
               <div class="tool-studio-actions">
                 <button id="tool-generate" type="button">AI 生成 / 修改</button>
+                <button id="tool-cancel" type="button" hidden>停止生成</button>
                 <button id="tool-preview" type="button">刷新预览</button>
                 <button id="tool-publish" type="button">发布到广场</button>
               </div>
               <p id="tool-studio-status" role="status" aria-live="polite"></p>
+              <div id="tool-reasoning" aria-label="AI 思考过程"></div>
+              <p id="tool-reasoning-note" hidden>思考内容由模型提供；未提供时仅显示生成进度。</p>
             </div>
             <div class="tool-code-panel">
               <label for="tool-html">HTML 源码</label>
@@ -165,6 +169,7 @@
     <script src="/username-guard.js"></script>
     <script src="/app.js"></script>
     <script src="/notifications.js"></script>
+    <script src="/max-reasoning.js"></script>
     <script src="/tool-workshop.js"></script>
   </body>
 </html>
