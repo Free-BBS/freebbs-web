@@ -34,7 +34,21 @@
     if (new URLSearchParams(location.search).get('compose') === 'circuit') return;
     key = 'free_bbs_post_draft:' + app.userState.uid;
     try {
-      const draft = JSON.parse(sessionStorage.getItem(key) || 'null');
+      const sharedTool = new URLSearchParams(location.search).get('tool_share') === '1';
+      const toolDraft = sharedTool
+        ? JSON.parse(sessionStorage.getItem('free_bbs_tool_share_draft') || 'null')
+        : null;
+      if (toolDraft) {
+        document.getElementById('discussion-compose-title').value = String(
+          toolDraft.title || '',
+        ).slice(0, 120);
+        document.getElementById('discussion-compose-content').value = String(
+          toolDraft.content || '',
+        ).slice(0, 20000);
+        sessionStorage.removeItem('free_bbs_tool_share_draft');
+        status.textContent = '已带入小工具分享内容';
+      }
+      const draft = toolDraft ? null : JSON.parse(sessionStorage.getItem(key) || 'null');
       if (draft) {
         fields.forEach((id) => {
           const field = document.getElementById(id);

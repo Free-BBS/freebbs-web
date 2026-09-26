@@ -13,6 +13,7 @@ const {
   createNotificationEmailSender,
   normalizeNotificationLink,
   validatePublication,
+  extractMentionUsernames,
 } = require('./notifications');
 
 function createDatabase() {
@@ -52,6 +53,10 @@ function createDatabase() {
       const sql = rawSql.replace(/\s+/g, ' ').trim();
       calls.push({ sql, args });
       if (sql.startsWith('CREATE TABLE')) return [{ affectedRows: 0 }];
+      if (sql.startsWith('SELECT id, username FROM users')) {
+        const queries = new Set(args.map((value) => String(value).toLowerCase()));
+        return [users.filter((user) => queries.has(user.username.toLowerCase()))];
+      }
       if (sql.startsWith('SELECT id FROM users')) {
         let rows = users;
         if (sql.includes('course_material_managers'))
@@ -266,6 +271,28 @@ test('replies deduplicate authors, skip self and persist inbox plus outbox in on
   assert.equal(pool.data.notifications.length, 1);
   await service.notifyReply({ actor, post, commentId: 12, parentAuthorId: 1 });
   assert.equal(pool.data.notifications.length, 3);
+});
+
+test('discussion mentions parse usernames, deduplicate recipients and stay in-app only', async () => {
+  assert.deepEqual(extractMentionUsernames('@admin, @Admin and x@reply.example @reply'), [
+    'admin',
+    'reply',
+  ]);
+  const pool = createDatabase();
+  const service = createNotificationService({ pool });
+  const recipientCount = await service.notifyMentions({
+    actor,
+    post,
+    commentId: 18,
+    contentMarkdown: '请 @admin 和 @Admin 看看，也抄送 @author 与 @reply。',
+    excludeUserIds: [post.user_id],
+  });
+  assert.equal(recipientCount, 1);
+  assert.equal(pool.data.notifications.length, 1);
+  assert.equal(pool.data.notifications[0].recipient_id, 1);
+  assert.equal(pool.data.notifications[0].kind, 'mention');
+  assert.equal(pool.data.notifications[0].link, '/discussion?post=p_123456#comment-18');
+  assert.equal(pool.data.outbox.length, 0);
 });
 
 test('disabled email preferences keep the in-app notification but skip the email outbox', async () => {

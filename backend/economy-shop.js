@@ -12,6 +12,8 @@ const LASER_POLICY = Object.freeze({
   dailyMagnetic: 1,
   currency: 'combined',
 });
+const GOLDEN_NAME_DURATION_MS = 7 * DAY_MS;
+const GOLDEN_NAME_ASSET_KEY = 'golden_name_card';
 
 class ShopPurchaseError extends Error {
   constructor(message, code, status = 400) {
@@ -39,11 +41,15 @@ function fragmentOffer(count = 0) {
 function publicLaser(expiresAtMs, nowMs) {
   return { expiresAtMs, serverNowMs: nowMs, active: expiresAtMs > nowMs };
 }
+function publicGoldenName(expiresAtMs, nowMs) {
+  return { expiresAtMs, serverNowMs: nowMs, active: expiresAtMs > nowMs };
+}
 function createEconomyShop(store, { now = Date.now } = {}) {
   return {
     async decorate(items, userId) {
       const counts = await store.readCounts(userId);
       const laser = await store.readLaser(userId);
+      const goldenName = (await store.readGoldenName?.(userId)) || { expiresAtMs: 0 };
       return items
         .filter((item) => item.enabled !== false)
         .map((item) => {
@@ -67,6 +73,9 @@ function createEconomyShop(store, { now = Date.now } = {}) {
                     currency: 'combined',
                   },
                 }
+              : {}),
+            ...(item.key === GOLDEN_NAME_ASSET_KEY
+              ? { goldenName: publicGoldenName(goldenName.expiresAtMs || 0, now()) }
               : {}),
           };
         });
@@ -222,6 +231,40 @@ function createEconomyShop(store, { now = Date.now } = {}) {
         return receipt;
       });
     },
+    async useGoldenName({ userId, requestKey }) {
+      if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(requestKey || ''))
+        throw new ShopPurchaseError('请刷新仓库后重试', 'INVALID_USE');
+      const fingerprint = JSON.stringify({ item: GOLDEN_NAME_ASSET_KEY, action: 'use' });
+      return store.transaction(async (tx) => {
+        await tx.lockUser(userId);
+        const previous = await tx.findGoldenNameUse(userId, requestKey);
+        if (previous) {
+          if (previous.fingerprint !== fingerprint)
+            throw new ShopPurchaseError(
+              '请求编号已用于另一项操作，请重新确认',
+              'REQUEST_CONFLICT',
+              409,
+            );
+          return { ...previous.result, replayed: true };
+        }
+        if (!(await tx.consumeAsset(userId, GOLDEN_NAME_ASSET_KEY)))
+          throw new ShopPurchaseError('仓库里没有可使用的黄金名片', 'ASSET_REQUIRED', 409);
+        const current = await tx.readGoldenName(userId);
+        const expiresAtMs = Math.max(now(), current.expiresAtMs || 0) + GOLDEN_NAME_DURATION_MS;
+        if (!Number.isSafeInteger(expiresAtMs) || expiresAtMs > 8640000000000000)
+          throw new ShopPurchaseError('累计使用时长超出范围', 'INVALID_USE');
+        await tx.setGoldenName(userId, expiresAtMs);
+        const receipt = {
+          itemKey: GOLDEN_NAME_ASSET_KEY,
+          action: 'use',
+          expiresAtMs,
+          days: 7,
+          replayed: false,
+        };
+        await tx.recordGoldenNameUse(userId, requestKey, fingerprint, receipt);
+        return receipt;
+      });
+    },
     async decoratePosts(rows) {
       const ids = [
         ...new Set(
@@ -229,6 +272,7 @@ function createEconomyShop(store, { now = Date.now } = {}) {
         ),
       ];
       const expiry = await store.readPublicLasers(ids);
+      const goldenExpiry = (await store.readPublicGoldenNames?.(ids)) || {};
       const cosmetics = (await store.readPublicCosmetics?.(ids)) || {};
       const current = now();
       return rows.map((row) => ({
@@ -237,6 +281,10 @@ function createEconomyShop(store, { now = Date.now } = {}) {
         laser:
           !row.is_anonymous && !row.is_deleted
             ? publicLaser(expiry[row.user_id] || 0, current)
+            : null,
+        goldenName:
+          !row.is_anonymous && !row.is_deleted
+            ? publicGoldenName(goldenExpiry[row.user_id] || 0, current)
             : null,
       }));
     },
@@ -274,16 +322,18 @@ async function withTransaction(pool, work) {
   }
 }
 async function ensureShopPurchaseTables(pool) {
-  const sql = fs.readFileSync(
-    path.join(__dirname, '../database/migrations/037_shop_purchase_progress.sql'),
-    'utf8',
-  );
-  for (const statement of sql
-    .replace(/^\s*--.*$/gm, '')
-    .split(';')
-    .map((s) => s.trim())
-    .filter(Boolean))
-    await pool.query(statement);
+  for (const migration of [
+    '037_shop_purchase_progress.sql',
+    '053_golden_names_and_frontend_tools.sql',
+  ]) {
+    const sql = fs.readFileSync(path.join(__dirname, '../database/migrations', migration), 'utf8');
+    for (const statement of sql
+      .replace(/^\s*--.*$/gm, '')
+      .split(';')
+      .map((s) => s.trim())
+      .filter(Boolean))
+      await pool.query(statement);
+  }
 }
 async function readLaser(connection, id) {
   const [rows] = await connection.execute(
@@ -309,6 +359,13 @@ function createMysqlEconomyStore(pool) {
       return Object.fromEntries(rows.map((row) => [row.item_key, Number(row.purchase_count)]));
     },
     readLaser: (id) => readLaser(pool, id),
+    async readGoldenName(id) {
+      const [rows] = await pool.execute(
+        'SELECT expires_at_ms FROM user_golden_names WHERE user_id = ? LIMIT 1',
+        [id],
+      );
+      return { expiresAtMs: Number(rows[0]?.expires_at_ms || 0) };
+    },
     async readCollectibles(id, keys) {
       if (!keys.length) return [];
       const [rows] = await pool.execute(
@@ -324,6 +381,15 @@ function createMysqlEconomyStore(pool) {
         `SELECT l.user_id, l.expires_at_ms FROM user_lasers l
         INNER JOIN user_assets a ON a.user_id = l.user_id AND a.asset_key = 'laser' AND a.quantity > 0
         WHERE l.user_id IN (${ids.map(() => '?').join(',')})`,
+        ids,
+      );
+      return Object.fromEntries(rows.map((row) => [row.user_id, Number(row.expires_at_ms)]));
+    },
+    async readPublicGoldenNames(ids) {
+      if (!ids.length) return {};
+      const [rows] = await pool.execute(
+        `SELECT user_id, expires_at_ms FROM user_golden_names
+        WHERE user_id IN (${ids.map(() => '?').join(',')})`,
         ids,
       );
       return Object.fromEntries(rows.map((row) => [row.user_id, Number(row.expires_at_ms)]));
@@ -354,6 +420,21 @@ function createMysqlEconomyStore(pool) {
                 }
               : null;
           },
+          async findGoldenNameUse(id, key) {
+            const [rows] = await connection.execute(
+              'SELECT fingerprint, result_json FROM golden_name_uses WHERE user_id = ? AND request_key = ?',
+              [id, key],
+            );
+            return rows[0]
+              ? {
+                  fingerprint: rows[0].fingerprint,
+                  result:
+                    typeof rows[0].result_json === 'string'
+                      ? JSON.parse(rows[0].result_json)
+                      : rows[0].result_json,
+                }
+              : null;
+          },
           async purchaseCount(id, key) {
             await connection.execute(
               'INSERT IGNORE INTO shop_purchase_progress (user_id, item_key) VALUES (?, ?)',
@@ -366,12 +447,34 @@ function createMysqlEconomyStore(pool) {
             return Number(rows[0].purchase_count);
           },
           readLaser: (id) => readLaser(connection, id),
+          async readGoldenName(id) {
+            const [rows] = await connection.execute(
+              'SELECT expires_at_ms FROM user_golden_names WHERE user_id = ? LIMIT 1',
+              [id],
+            );
+            return { expiresAtMs: Number(rows[0]?.expires_at_ms || 0) };
+          },
           async setLaser(id, expiresAtMs) {
             await connection.execute(
               `INSERT INTO user_lasers (user_id, expires_at_ms) VALUES (?, ?)
             ON DUPLICATE KEY UPDATE expires_at_ms = VALUES(expires_at_ms)`,
               [id, expiresAtMs],
             );
+          },
+          async setGoldenName(id, expiresAtMs) {
+            await connection.execute(
+              `INSERT INTO user_golden_names (user_id, expires_at_ms) VALUES (?, ?)
+              ON DUPLICATE KEY UPDATE expires_at_ms = VALUES(expires_at_ms)`,
+              [id, expiresAtMs],
+            );
+          },
+          async consumeAsset(id, key) {
+            const [result] = await connection.execute(
+              `UPDATE user_assets SET quantity = quantity - ?
+               WHERE user_id = ? AND asset_key = ? AND quantity >= ?`,
+              [1, id, key, 1],
+            );
+            return result.affectedRows === 1;
           },
           async debit(id, amount, currency, spending = true, details = {}) {
             const checkpoint = await walletLedgerCheckpoint(connection, id);
@@ -457,6 +560,13 @@ function createMysqlEconomyStore(pool) {
               ],
             );
           },
+          async recordGoldenNameUse(id, requestKey, fingerprint, receipt) {
+            await connection.execute(
+              `INSERT INTO golden_name_uses (user_id, request_key, fingerprint, result_json)
+               VALUES (?, ?, ?, ?)`,
+              [id, requestKey, fingerprint, JSON.stringify(receipt)],
+            );
+          },
           async advance(id, key, count) {
             await connection.execute(
               'UPDATE shop_purchase_progress SET purchase_count = ? WHERE user_id = ? AND item_key = ?',
@@ -472,10 +582,13 @@ module.exports = {
   FRAGMENT_PRICES,
   DAY_MS,
   LASER_POLICY,
+  GOLDEN_NAME_DURATION_MS,
+  GOLDEN_NAME_ASSET_KEY,
   ShopPurchaseError,
   fragmentOffer,
   purchaseOffer,
   publicLaser,
+  publicGoldenName,
   createEconomyShop,
   createMysqlEconomyStore,
   ensureShopPurchaseTables,

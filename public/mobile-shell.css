@@ -641,6 +641,7 @@ body.discussion-page .discussion-comment-author-link .discussion-avatar-frame {
 }
 @media (max-width: 900px) {
   body .mobile-theme-toggle,
+  body .sidebar-theme-toggle,
   body .notification-bell {
     display: none !important;
   }
@@ -730,5 +731,95 @@ body.discussion-page .discussion-comment-author-link .discussion-avatar-frame {
 @media (max-width: 900px) {
   body.theme-light .mobile-create-menu .mobile-tool-link img {
     filter: brightness(0) !important;
+  }
+}
+
+/* Shared mobile chrome: search and account stay on row one; economy stays on row two. */
+@media (max-width: 900px) {
+  .mobile-menu-label {
+    margin: 5px 10px 3px;
+    color: var(--ui-muted);
+    font: 700 11px/1.4 var(--font-ui);
+    letter-spacing: 0.08em;
+  }
+  .mobile-learning-menu {
+    right: 50%;
+    transform: translateX(50%);
+    width: 202px;
+  }
+  .mobile-learning-menu::after {
+    right: calc(50% - 4px);
+  }
+  body:not(.auth-page-body) .main-content::before {
+    content: '' !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    height: calc(112px + env(safe-area-inset-top, 0px)) !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--ui-line) !important;
+    background: var(--ui-page) !important;
+  }
+  body:not(.auth-page-body) .topbar > .site-search-trigger {
+    top: calc(10px + env(safe-area-inset-top, 0px)) !important;
+    left: calc(16px + env(safe-area-inset-left, 0px)) !important;
+    right: calc(78px + env(safe-area-inset-right, 0px)) !important;
+    width: auto !important;
+    height: 44px !important;
+    justify-content: flex-start !important;
+    gap: 8px;
+    padding: 0 14px !important;
+    border-radius: 24px !important;
+    background: var(--ui-input) !important;
+    color: var(--ui-muted) !important;
+  }
+  body:not(.auth-page-body) .site-search-trigger span {
+    display: inline !important;
+    overflow: hidden;
+    font-size: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  body:not(.auth-page-body) .page-shell .topbar .user-panel {
+    top: calc(10px + env(safe-area-inset-top, 0px)) !important;
+    right: calc(16px + env(safe-area-inset-right, 0px)) !important;
+  }
+  body:not(.auth-page-body) .user-economy-stack,
+  body:not(.auth-page-body).discussion-page .user-economy-stack {
+    position: fixed !important;
+    top: calc(64px + env(safe-area-inset-top, 0px)) !important;
+    left: calc(14px + env(safe-area-inset-left, 0px)) !important;
+    right: calc(14px + env(safe-area-inset-right, 0px)) !important;
+    z-index: 151 !important;
+    display: flex !important;
+    width: auto !important;
+    height: 44px;
+    padding: 4px 0 8px !important;
+    overflow-x: auto;
+    background: var(--ui-page) !important;
+    scrollbar-width: none;
+  }
+  body:not(.auth-page-body) .user-economy-stack::-webkit-scrollbar {
+    display: none;
+  }
+  body:not(.auth-page-body) .main-content,
+  body:not(.auth-page-body).discussion-page .main-content,
+  body.home-page .landing-main {
+    padding-top: calc(128px + env(safe-area-inset-top, 0px)) !important;
+  }
+  body.discussion-page .main-content .discussion-post-card.has-laser-glow .discussion-post-preview {
+    height: 168px !important;
+    min-height: 0 !important;
+    max-height: 168px !important;
+    align-self: flex-start;
+  }
+  body.discussion-page
+    .main-content
+    .discussion-post-card.has-laser-glow
+    .discussion-post-preview
+    :is(img, svg, span) {
+    height: 168px !important;
+    max-height: 168px !important;
   }
 }

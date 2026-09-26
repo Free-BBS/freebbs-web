@@ -66,6 +66,21 @@
       "rules": "20 磁元，限购1件，可在个人主页装扮。"
     },
     {
+      "key": "golden_name_card",
+      "assetKey": "golden_name_card",
+      "name": "黄金名片",
+      "class": "name_effect",
+      "description": "是金子总会发光的...吗？",
+      "desc": "是金子总会发光的...吗？",
+      "image": "/assets/shop/max-cartoon-v1/golden_name_card.webp",
+      "cost": {
+        "electric": 20
+      },
+      "requiresPersonalPrice": true,
+      "isgift": false,
+      "rules": "20 电元一张。在仓库使用后，名字显示为黄金色泽 7 天；多次使用会在当前到期时间后继续累加。"
+    },
+    {
       "key": "card_blueprint",
       "assetKey": "card_blueprint",
       "name": "未完成的蓝图",

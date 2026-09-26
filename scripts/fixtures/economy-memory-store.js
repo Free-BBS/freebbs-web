@@ -15,6 +15,8 @@ function createEconomyMemoryStore(
         assets: {},
         counts: {},
         expiresAtMs: 0,
+        goldenNameExpiresAtMs: 0,
+        goldenNameUses: [],
         purchases: [],
         equipped: {},
         adopted: false,
@@ -36,6 +38,9 @@ function createEconomyMemoryStore(
   const laser = (id) => ({
     owned: (state.get(id)?.assets.laser || 0) > 0,
     expiresAtMs: state.get(id)?.expiresAtMs || 0,
+  });
+  const goldenName = (id) => ({
+    expiresAtMs: state.get(id)?.goldenNameExpiresAtMs || 0,
   });
   const store = {
     failAt: '',
@@ -76,10 +81,16 @@ function createEconomyMemoryStore(
     async readLaser(id) {
       return laser(id);
     },
+    async readGoldenName(id) {
+      return goldenName(id);
+    },
     async readPublicLasers(ids) {
       return Object.fromEntries(
         ids.filter((id) => laser(id).owned).map((id) => [id, laser(id).expiresAtMs]),
       );
+    },
+    async readPublicGoldenNames(ids) {
+      return Object.fromEntries(ids.map((id) => [id, goldenName(id).expiresAtMs]));
     },
     async readCollectibles(id, keys) {
       return keys.filter((key) => (state.get(id)?.assets[key] || 0) > 0);
@@ -201,15 +212,25 @@ function createEconomyMemoryStore(
           async findPurchase(id, key) {
             return state.get(id).purchases.find((r) => r.key === key);
           },
+          async findGoldenNameUse(id, key) {
+            return state.get(id).goldenNameUses.find((row) => row.key === key);
+          },
           async purchaseCount(id, key) {
             return state.get(id).counts[key] || 0;
           },
           async readLaser(id) {
             return laser(id);
           },
+          async readGoldenName(id) {
+            return goldenName(id);
+          },
           async setLaser(id, expiry) {
             fail('lease');
             state.get(id).expiresAtMs = expiry;
+          },
+          async setGoldenName(id, expiry) {
+            fail('golden_name');
+            state.get(id).goldenNameExpiresAtMs = expiry;
           },
           async debit(id, amount, currency, spending = true, details = {}) {
             fail(`debit_${currency}`);
@@ -230,6 +251,10 @@ function createEconomyMemoryStore(
           async record(id, key, counterKey, fingerprint, receipt) {
             fail('record');
             state.get(id).purchases.push({ key, counterKey, fingerprint, result: receipt });
+          },
+          async recordGoldenNameUse(id, key, fingerprint, receipt) {
+            fail('golden_name_record');
+            state.get(id).goldenNameUses.push({ key, fingerprint, result: receipt });
           },
           async advance(id, key, count) {
             fail('advance');

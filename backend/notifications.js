@@ -140,6 +140,19 @@ function positiveId(value) {
   return Number.isSafeInteger(number) && number > 0 ? number : null;
 }
 
+function extractMentionUsernames(value) {
+  const names = new Map();
+  const source = String(value || '');
+  for (const match of source.matchAll(
+    /(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{3,64})(?=$|[^A-Za-z0-9_])/g,
+  )) {
+    const username = match[2];
+    const key = username.toLowerCase();
+    if (!names.has(key)) names.set(key, username);
+  }
+  return [...names.values()].slice(0, 30);
+}
+
 function normalizeNotificationLink(value) {
   const link = String(value || '').trim();
   if (!link) return '';
@@ -401,6 +414,39 @@ function createNotificationService({
         eventKey: `reply:${commentId}`,
       }),
     );
+  }
+
+  async function notifyMentions(
+    { actor, post, commentId = null, contentMarkdown, excludeUserIds = [] },
+    connection,
+  ) {
+    const usernames = extractMentionUsernames(contentMarkdown);
+    if (!usernames.length) return 0;
+    return inTransaction(pool, connection, async (database) => {
+      const excluded = new Set(
+        [actor.id, ...excludeUserIds]
+          .map(Number)
+          .filter((id) => Number.isSafeInteger(id) && id > 0),
+      );
+      const [rows] = await database.execute(
+        `SELECT id, username FROM users
+         WHERE LOWER(username) IN (${usernames.map(() => 'LOWER(?)').join(', ')})`,
+        usernames,
+      );
+      const recipients = rows.map((row) => Number(row.id)).filter((id) => !excluded.has(id));
+      if (!recipients.length) return 0;
+      const anchor = commentId ? `#comment-${commentId}` : '';
+      const result = await insertNotifications(database, recipients, {
+        actorId: actor.id,
+        kind: 'mention',
+        title: `${actor.username || '用户'} 在讨论中提到了你`.slice(0, 160),
+        body: `《${post.title || '讨论'}》\n${String(contentMarkdown || '').slice(0, 1500)}`,
+        link: `/discussion?post=${encodeURIComponent(post.pid || post.id)}${anchor}`,
+        eventKey: `mention:${commentId ? `comment:${commentId}` : `post:${post.id}`}`,
+        email: false,
+      });
+      return result.recipientCount;
+    });
   }
 
   async function notifyReaction({ actor, post, reactionType, active }, connection) {
@@ -673,6 +719,7 @@ function createNotificationService({
   return {
     publish,
     notifyReply,
+    notifyMentions,
     notifyReaction,
     notifyCommentReaction,
     notifyReward,
@@ -851,4 +898,5 @@ module.exports = {
   weeklyDigestBody,
   parseWeeklyDigestBody,
   renderNotificationEmail,
+  extractMentionUsernames,
 };
