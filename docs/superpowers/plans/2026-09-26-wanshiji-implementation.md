@@ -302,4 +302,3 @@ Check at 1440px, 1024px, 768px and 390px widths in light/dark themes; verify no 
 Commit: `feat: complete wanshiji collection workflows`
 
 Start: `npm run dev` in `development` and open `http://localhost:5173/development/collections`.
-
