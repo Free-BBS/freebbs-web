@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 
 import { MainSiteHeader } from './MainSiteHeader.js';
 
@@ -35,14 +36,16 @@ describe('MainSiteHeader', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     render(
-      <MainSiteHeader user={user} authMode="main" themeMode="light" onToggleTheme={vi.fn()} />,
+      <MemoryRouter>
+        <MainSiteHeader user={user} authMode="main" themeMode="light" onToggleTheme={vi.fn()} />
+      </MemoryRouter>,
     );
 
     expect(screen.queryByRole('navigation', { name: '主站导航' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '设置' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '退出' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '仓库' })).toHaveAttribute('href', '/inventory');
-    expect(screen.getByRole('link', { name: '商店' })).toHaveAttribute('href', '/electromagnetic');
+    expect(screen.getByRole('link', { name: '商店' })).toHaveAttribute('href', '/shop');
     await waitFor(() => expect(screen.getByLabelText('电元：8')).toBeInTheDocument());
     expect(screen.getByLabelText('磁元：3')).toBeInTheDocument();
     expect(screen.getByLabelText('热力：2')).toBeInTheDocument();
@@ -92,11 +95,15 @@ describe('MainSiteHeader', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     render(
-      <MainSiteHeader user={user} authMode="main" themeMode="light" onToggleTheme={vi.fn()} />,
+      <MemoryRouter>
+        <MainSiteHeader user={user} authMode="main" themeMode="light" onToggleTheme={vi.fn()} />
+      </MemoryRouter>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: '签到' }));
     await screen.findByRole('button', { name: '签到领取磁元' });
+    expect(screen.getByRole('dialog')).toHaveClass('fortune-panel');
+    expect(screen.getByRole('dialog').querySelector('.fortune-awful')).toHaveTextContent('大吉');
     fireEvent.click(screen.getByRole('button', { name: '签到领取磁元' }));
     await waitFor(() => expect(screen.getByLabelText('磁元：5')).toBeInTheDocument());
     expect(
@@ -108,11 +115,31 @@ describe('MainSiteHeader', () => {
     );
   });
 
+  it('uses the main-site typography preference for account numbers', () => {
+    window.localStorage.setItem(
+      'free_bbs_typography_preferences',
+      JSON.stringify({ fontPreset: 'night-oscilloscope', typeScale: 'large' }),
+    );
+    const { container } = render(
+      <MemoryRouter>
+        <MainSiteHeader user={user} authMode="demo" themeMode="light" onToggleTheme={vi.fn()} />
+      </MemoryRouter>,
+    );
+    expect(container.querySelector('.main-site-header')).toHaveStyle({
+      '--main-site-ui-size': '18.88px',
+    });
+    expect(container.querySelector('.main-site-header')).toHaveStyle({
+      '--main-site-ui-font': '"Segoe UI", "Microsoft YaHei", sans-serif',
+    });
+  });
+
   it('does not invent main-site account data for a demo identity', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     render(
-      <MainSiteHeader user={user} authMode="demo" themeMode="light" onToggleTheme={vi.fn()} />,
+      <MemoryRouter>
+        <MainSiteHeader user={user} authMode="demo" themeMode="light" onToggleTheme={vi.fn()} />
+      </MemoryRouter>,
     );
     expect(screen.getByLabelText('电元：—')).toBeInTheDocument();
     expect(screen.getByLabelText('磁元：—')).toBeInTheDocument();
@@ -124,7 +151,14 @@ describe('MainSiteHeader', () => {
   it('orders the account controls like the main site and exposes the mobile theme switch', () => {
     const onToggleTheme = vi.fn();
     const { container } = render(
-      <MainSiteHeader user={user} authMode="demo" themeMode="dark" onToggleTheme={onToggleTheme} />,
+      <MemoryRouter>
+        <MainSiteHeader
+          user={user}
+          authMode="demo"
+          themeMode="dark"
+          onToggleTheme={onToggleTheme}
+        />
+      </MemoryRouter>,
     );
     const account = container.querySelector('.main-site-account');
     expect(Array.from(account?.children ?? []).map((child) => child.className)).toEqual([
@@ -175,7 +209,9 @@ describe('MainSiteHeader', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     render(
-      <MainSiteHeader user={user} authMode="main" themeMode="light" onToggleTheme={vi.fn()} />,
+      <MemoryRouter>
+        <MainSiteHeader user={user} authMode="main" themeMode="light" onToggleTheme={vi.fn()} />
+      </MemoryRouter>,
     );
 
     fireEvent.click(await screen.findByRole('button', { name: '通知，1 条未读' }));

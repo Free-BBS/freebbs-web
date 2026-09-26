@@ -1,0 +1,29 @@
+html.development-embedded .topbar,
+html.development-embedded .mobile-nav,
+html.development-embedded .site-footer {
+  display: none !important;
+}
+
+html.development-embedded .page-shell {
+  display: block !important;
+  min-height: 100dvh !important;
+  padding: 0 !important;
+}
+
+html.development-embedded .main-content {
+  width: 100% !important;
+  min-width: 0;
+  min-height: 100dvh !important;
+  margin: 0 !important;
+  padding: 24px !important;
+}
+
+html.development-embedded .main-content::before {
+  display: none !important;
+}
+
+@media (max-width: 760px) {
+  html.development-embedded .main-content {
+    padding: 16px !important;
+  }
+}

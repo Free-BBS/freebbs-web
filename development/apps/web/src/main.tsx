@@ -7,6 +7,8 @@ import './styles/tokens.css';
 import './styles/theme.css';
 import './styles/shell.css';
 import './styles/main-site-header.css';
+import './styles/main-site-fortune.css';
+import './styles/commerce.css';
 import './styles/components.css';
 import './styles/activity.css';
 import './styles/knowledge.css';

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 
 import type { UserContext } from '@freebbs-development/contracts';
 
@@ -28,10 +29,37 @@ interface MainSiteHeaderProps {
   onToggleTheme: () => void;
 }
 
+const typographyFonts: Record<string, string> = {
+  'transistor-lab': '"HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif',
+  'zhongsong-study': '"Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif',
+  'quantum-board': '"HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif',
+  'night-oscilloscope': '"Segoe UI", "Microsoft YaHei", sans-serif',
+};
+
+function headerTypography(): CSSProperties {
+  let preferences: { fontPreset?: string; typeScale?: string } = {};
+  try {
+    preferences = JSON.parse(
+      window.localStorage.getItem('free_bbs_typography_preferences') || '{}',
+    );
+  } catch {
+    // Use the main site's default preset when saved preferences are malformed.
+  }
+  const scale =
+    { standard: 16, comfortable: 17.28, large: 18.88 }[preferences.typeScale || 'comfortable'] ||
+    17.28;
+  return {
+    '--main-site-ui-font':
+      typographyFonts[preferences.fontPreset || 'transistor-lab'] ||
+      typographyFonts['transistor-lab'],
+    '--main-site-ui-size': `${scale}px`,
+  } as CSSProperties;
+}
+
 function fortune(score: number) {
   if (score >= 90) return { label: '祥瑞', tone: 'great', tagline: 'Absoulute legend' };
-  if (score >= 70) return { label: '大吉', tone: 'great', tagline: 'Absoulute legend' };
-  if (score >= 50) return { label: '吉', tone: 'good', tagline: '闭眼写，随手推' };
+  if (score >= 70) return { label: '大吉', tone: 'awful', tagline: 'Absoulute legend' };
+  if (score >= 50) return { label: '吉', tone: 'bad', tagline: '闭眼写，随手推' };
   if (score >= 20)
     return { label: '顺', tone: 'good', tagline: '人生是个泊松过程，一时的等待是为了下一次跳跃' };
   return { label: '平', tone: 'neutral', tagline: '人生是个泊松过程，一时的等待是为了下一次跳跃' };
@@ -67,6 +95,11 @@ function Currency({
 }
 
 export function MainSiteHeader({ user, authMode, themeMode, onToggleTheme }: MainSiteHeaderProps) {
+  const location = useLocation();
+  const savedLocation =
+    location.pathname === '/shop' || location.pathname === '/inventory'
+      ? (location.state as { from?: string } | null)?.from || '/dashboard'
+      : `${location.pathname}${location.search}`;
   const [profile, setProfile] = useState<MainSiteProfile | null>(null);
   const [checkin, setCheckin] = useState<CheckinSummary | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -95,7 +128,7 @@ export function MainSiteHeader({ user, authMode, themeMode, onToggleTheme }: Mai
     return () => {
       alive = false;
     };
-  }, [authMode, user.uid]);
+  }, [authMode, user.uid, location.pathname]);
 
   useEffect(() => {
     if (!dialogOpen) return;
@@ -150,7 +183,7 @@ export function MainSiteHeader({ user, authMode, themeMode, onToggleTheme }: Mai
 
   return (
     <>
-      <header className="main-site-header">
+      <header className="main-site-header" style={headerTypography()}>
         <div className="main-site-account">
           <div className="main-site-economy">
             <div className="main-site-shortcuts">
@@ -163,14 +196,14 @@ export function MainSiteHeader({ user, authMode, themeMode, onToggleTheme }: Mai
                 <img src={calendarIcon} alt="" />
                 <span>签到</span>
               </button>
-              <a className="main-site-shortcut" href={mainSiteHref('/inventory')}>
+              <Link className="main-site-shortcut" to="/inventory" state={{ from: savedLocation }}>
                 <img src={inventoryIcon} alt="" />
                 <span>仓库</span>
-              </a>
-              <a className="main-site-shortcut" href={mainSiteHref('/electromagnetic')}>
+              </Link>
+              <Link className="main-site-shortcut" to="/shop" state={{ from: savedLocation }}>
                 <img src={shopIcon} alt="" />
                 <span>商店</span>
-              </a>
+              </Link>
             </div>
             <div className="main-site-currencies">
               <Currency
@@ -213,78 +246,78 @@ export function MainSiteHeader({ user, authMode, themeMode, onToggleTheme }: Mai
       </header>
       {dialogOpen ? (
         <div
-          className="main-site-dialog"
+          className="fortune-modal development-fortune-modal"
           role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setDialogOpen(false);
-          }}
+          style={headerTypography()}
         >
+          <div className="fortune-backdrop" onMouseDown={() => setDialogOpen(false)} />
           <section
-            className="main-site-dialog-panel"
+            className="fortune-panel"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="main-site-dialog-title"
+            aria-labelledby="fortune-title"
           >
             <button
-              className="main-site-dialog-close"
+              className="fortune-close"
               type="button"
               onClick={() => setDialogOpen(false)}
               aria-label="关闭"
             >
               ×
             </button>
-            <h2 id="main-site-dialog-title">签到</h2>
+            <h2 className="fortune-title" id="fortune-title">
+              签到
+            </h2>
             {authMode === 'demo' ? (
-              <p>请登录主站账号后签到。</p>
+              <p className="fortune-record-empty">请登录主站账号后签到。</p>
             ) : (
               <>
-                {loading ? (
-                  <p role="status">正在加载签到信息…</p>
-                ) : checkin ? (
-                  <>
-                    <p className="main-site-dialog-date">{today}</p>
-                    <div className={`main-site-fortune main-site-fortune-${fortuneResult.tone}`}>
-                      {fortuneResult.label}
-                    </div>
-                    <p className="main-site-dialog-score">今日运势 {score}</p>
-                    <p className="main-site-dialog-tagline">{fortuneResult.tagline}</p>
-                    <button
-                      className="main-site-dialog-submit"
-                      type="button"
-                      disabled={posting || checkin.checkedInToday}
-                      onClick={() => void submitCheckin()}
-                    >
-                      {checkin.checkedInToday
-                        ? '今日已签到'
-                        : posting
-                          ? '签到中…'
-                          : today >= '2026-09-16'
-                            ? '签到领取磁元'
-                            : '签到领取电元'}
-                    </button>
-                    <div className="main-site-records" aria-label="签到记录">
-                      {checkin.records?.length ? (
-                        checkin.records.map((record) => (
-                          <div key={record.date} className="main-site-record">
-                            <span>{record.date}</span>
-                            <strong>连续 {record.streak} 天</strong>
-                            <span>{reward(record)}</span>
-                          </div>
-                        ))
-                      ) : (
-                        <p>还没有签到记录。</p>
-                      )}
-                    </div>
-                    <p className="main-site-record-caption">签到记录</p>
-                  </>
-                ) : null}
+                <p className="fortune-date">{loading ? '' : today}</p>
+                <div
+                  className={`fortune-badge ${checkin && !loading ? `fortune-${fortuneResult.tone}` : ''}`}
+                >
+                  {loading ? '加载中' : checkin ? fortuneResult.label : '签到'}
+                </div>
+                <p className="fortune-score">{checkin && !loading ? `今日运势 ${score}` : ''}</p>
+                <p className="fortune-tagline">
+                  {checkin && !loading ? fortuneResult.tagline : error}
+                </p>
+                <button
+                  className="fortune-checkin-button"
+                  type="button"
+                  disabled={loading || posting || !checkin || checkin.checkedInToday}
+                  onClick={() => void submitCheckin()}
+                >
+                  {loading
+                    ? '加载中'
+                    : checkin?.checkedInToday
+                      ? '今日已签到'
+                      : posting
+                        ? '签到中'
+                        : today >= '2026-09-16'
+                          ? '签到领取磁元'
+                          : '签到领取电元'}
+                </button>
+                <div className="fortune-records" aria-label="签到记录">
+                  {loading ? (
+                    <p className="fortune-record-empty">正在加载签到记录...</p>
+                  ) : checkin?.records?.length ? (
+                    checkin.records.map((record) => (
+                      <div key={record.date} className="fortune-record-row">
+                        <span>{record.date}</span>
+                        <strong>连续 {record.streak} 天</strong>
+                        <span>{reward(record)}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="fortune-record-empty">还没有签到记录。</p>
+                  )}
+                </div>
+                <p className="fortune-chart-caption">签到记录</p>
                 {error ? (
-                  <p className="main-site-dialog-error" role="alert">
-                    {error}{' '}
-                    <button type="button" onClick={() => void openCheckin()}>
-                      重试
-                    </button>
-                  </p>
+                  <button type="button" onClick={() => void openCheckin()}>
+                    重试
+                  </button>
                 ) : null}
               </>
             )}

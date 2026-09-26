@@ -20,8 +20,7 @@
 .main-site-account {
   flex: 0 0 auto;
   gap: 18px;
-  /* Match the learning site's --font-ui fallback order for Chinese labels. */
-  font-family: 'Syne', 'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family: var(--main-site-ui-font, 'Microsoft YaHei', sans-serif);
 }
 
 .main-site-economy {
@@ -53,8 +52,8 @@
   border-radius: 999px;
   background: var(--surface-raised);
   color: var(--color-text);
-  font-family: 'Syne', 'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  font-size: 0.9rem;
+  font-family: var(--main-site-ui-font, 'Microsoft YaHei', sans-serif);
+  font-size: calc(var(--main-site-ui-size, 17.28px) * 0.9);
   font-weight: 800;
   letter-spacing: 0.02em;
   line-height: 1;
@@ -169,8 +168,8 @@ body.theme-dark .main-site-shortcut:not(.main-site-checkin) img {
 
 .main-site-user-copy strong {
   overflow: hidden;
-  font-family: 'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', 'Noto Serif SC', sans-serif;
-  font-size: 1rem;
+  font-family: var(--main-site-ui-font, 'Microsoft YaHei', sans-serif);
+  font-size: var(--main-site-ui-size, 17.28px);
   font-weight: 800;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -344,129 +343,6 @@ body.theme-dark .main-site-shortcut:not(.main-site-checkin) img {
   padding: 14px;
 }
 
-.main-site-dialog {
-  position: fixed;
-  z-index: 100;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 16px;
-  background: rgba(5, 25, 33, 0.68);
-}
-
-.main-site-dialog-panel {
-  position: relative;
-  width: min(100%, 440px);
-  max-height: min(90vh, 700px);
-  overflow-y: auto;
-  padding: 28px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 18px;
-  background: var(--surface-raised);
-  color: var(--color-text);
-  text-align: center;
-  box-shadow: var(--shadow-raised);
-}
-
-.main-site-dialog-panel h2 {
-  margin: 0 0 8px;
-  font-size: 24px;
-}
-
-.main-site-dialog-close {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 32px;
-  height: 32px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--surface-muted);
-  color: var(--color-text);
-  cursor: pointer;
-  font-size: 24px;
-}
-
-.main-site-dialog-date,
-.main-site-record-caption {
-  color: var(--color-muted);
-  font-size: 12px;
-}
-
-.main-site-fortune {
-  display: grid;
-  width: 100px;
-  height: 100px;
-  place-items: center;
-  margin: 16px auto;
-  border-radius: 50%;
-  background: var(--surface-muted);
-  color: var(--color-text);
-  font-family: var(--font-display);
-  font-size: 27px;
-  font-weight: 750;
-}
-
-.main-site-fortune-great {
-  background: #ffdd7a;
-  color: #674006;
-}
-
-.main-site-fortune-good {
-  background: #b6e3d3;
-  color: #144c3c;
-}
-
-.main-site-dialog-score {
-  margin: 6px 0;
-  font-weight: 700;
-}
-
-.main-site-dialog-tagline {
-  min-height: 2em;
-  color: var(--color-muted);
-  font-size: 13px;
-}
-
-.main-site-dialog-submit {
-  width: 100%;
-  min-height: 44px;
-  border: 0;
-  border-radius: 10px;
-  background: var(--action-primary);
-  color: var(--action-primary-text);
-  cursor: pointer;
-  font-weight: 700;
-}
-
-.main-site-dialog-submit:disabled {
-  cursor: default;
-  opacity: 0.64;
-}
-
-.main-site-records {
-  display: grid;
-  gap: 6px;
-  max-height: 190px;
-  margin-top: 22px;
-  overflow-y: auto;
-  text-align: left;
-}
-
-.main-site-record {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 4px;
-  border-bottom: 1px solid var(--border-subtle);
-  font-size: 12px;
-}
-
-.main-site-dialog-error {
-  color: var(--color-danger);
-  font-size: 13px;
-}
-
 @media (max-width: 900px) {
   .main-site-header {
     min-height: 148px;
@@ -502,7 +378,7 @@ body.theme-dark .main-site-shortcut:not(.main-site-checkin) img {
   .main-site-currency {
     min-height: 40px;
     border-radius: 12px;
-    font-size: 0.84rem;
+    font-size: calc(var(--main-site-ui-size, 17.28px) * 0.84);
   }
 
   .main-site-user-copy {
