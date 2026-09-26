@@ -19,6 +19,7 @@ import './styles/sports.css';
 import './styles/liaison.css';
 import './styles/information.css';
 import './styles/finance.css';
+import './styles/collections.css';
 
 const rootElement = document.getElementById('root');
 

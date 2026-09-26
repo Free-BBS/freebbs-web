@@ -17,6 +17,7 @@ import { HttpError } from './core/errors/http-error.js';
 import { listModuleManifests } from './core/modules/registry.js';
 import { createAdminRouter } from './modules/admin/router.js';
 import { createClubsRouter } from './modules/clubs/router.js';
+import { createCollectionsRouter } from './modules/collections/router.js';
 import { createEventsRouter } from './modules/events/router.js';
 import { createFinanceRouter } from './modules/finance/router.js';
 import { createFestivalRouter } from './modules/festival/router.js';
@@ -66,6 +67,7 @@ export interface CreateAppOptions {
   festivalUploadDirectory?: string;
   festivalMaxUploadBytes?: number;
   sportsUploadDirectory?: string;
+  collectionsUploadDirectory?: string;
 }
 
 function requestId(response: Response): string {
@@ -238,6 +240,16 @@ export function createApp(options: CreateAppOptions = {}) {
     }),
   );
   app.use(`${API_BASE_PATH}/events`, createEventsRouter({ store, authenticate }));
+  app.use(
+    `${API_BASE_PATH}/collections`,
+    createCollectionsRouter({
+      store,
+      authenticate,
+      ...(options.collectionsUploadDirectory
+        ? { uploadDirectory: options.collectionsUploadDirectory }
+        : {}),
+    }),
+  );
   app.use(`${API_BASE_PATH}/growth`, createGrowthRouter({ store, authenticate }));
   app.use(`${API_BASE_PATH}/finance`, createFinanceRouter({ store, authenticate }));
   app.use(`${API_BASE_PATH}/knowledge`, createKnowledgeRouter({ store, authenticate }));
