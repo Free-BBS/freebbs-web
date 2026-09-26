@@ -227,7 +227,7 @@
 
 .development-directory-layout {
   display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
   min-width: 0;
   gap: 20px;
   align-items: start;
@@ -303,6 +303,15 @@
   display: grid;
   min-width: 0;
   gap: 2px;
+  font-family: var(--font-ui);
+  font-variant: normal;
+  letter-spacing: normal;
+}
+
+.development-user-row-copy strong {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 .development-user-row-copy strong,
