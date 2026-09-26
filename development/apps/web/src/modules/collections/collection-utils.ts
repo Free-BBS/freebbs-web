@@ -18,6 +18,7 @@ export const emptyCollectionSchema: CollectionSchema = {
     },
   ],
   formRules: [{ id: 'attempt-default', kind: 'attempt_limit', value: 1 }],
+  outputs: [],
 };
 
 export function isRequired(field: CollectionField): boolean {

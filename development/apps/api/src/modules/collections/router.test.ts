@@ -7,9 +7,10 @@ import { createMemoryStore } from '../../core/database/memory-store.js';
 
 const student = { 'X-Demo-User': 'demo-student' };
 const member = { 'X-Demo-User': 'demo-rights-member' };
+const admin = { 'X-Demo-User': 'demo-admin' };
 
 function fixture() {
-  const users = ['demo-student', 'demo-rights-member'];
+  const users = ['demo-student', 'demo-rights-member', 'demo-admin'];
   const store = createMemoryStore();
   return {
     store,
@@ -31,6 +32,7 @@ const schema = {
     },
   ],
   formRules: [{ id: 'attempt-once', kind: 'attempt_limit', value: 1 }],
+  outputs: [{ id: 'excel-output', kind: 'excel', label: '报名表格', fileName: '报名结果.csv' }],
 };
 
 describe('collections API', () => {
@@ -96,6 +98,57 @@ describe('collections API', () => {
         expect.objectContaining({ formId: created.body.data.id, source: 'native_collection' }),
       ]),
     );
+
+    const exported = await request(app)
+      .get(`/api/development/v1/collections/forms/${created.body.data.id}/exports/excel-output`)
+      .set(member)
+      .expect(200);
+    expect(exported.headers['content-disposition']).toContain('attachment');
+    expect(exported.text).toContain('想说的话');
+    expect(exported.text).toContain('期待参加');
+  });
+
+  it('applies readable title validation rules with specific feedback', async () => {
+    const { app } = fixture();
+    const guarded = {
+      ...schema,
+      fields: [
+        {
+          ...schema.fields[0],
+          rules: [
+            {
+              id: 'title-check',
+              kind: 'title_pattern',
+              value: {
+                mode: 'title_validation',
+                minLength: 2,
+                maxLength: 8,
+                forbiddenCharacters: '<>',
+                forbiddenWords: ['测试禁用词'],
+                allowLineBreaks: false,
+                trimWhitespace: true,
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const created = await request(app)
+      .post('/api/development/v1/collections/forms')
+      .set(member)
+      .send({ title: guarded.title, description: guarded.description, schema: guarded })
+      .expect(201);
+    await request(app)
+      .post(`/api/development/v1/collections/forms/${created.body.data.id}/publish`)
+      .set(member)
+      .send({})
+      .expect(200);
+    const rejected = await request(app)
+      .post(`/api/development/v1/collections/forms/${created.body.data.id}/responses`)
+      .set(student)
+      .send({ answers: { 'name-note': '含<符号' } })
+      .expect(400);
+    expect(rejected.body.data.error.message).toContain('不能包含字符');
   });
 
   it('keeps showcase likes idempotent', async () => {
@@ -117,5 +170,32 @@ describe('collections API', () => {
       .set(student)
       .expect(200);
     expect(removed.body.data).toMatchObject({ liked: false, likeCount: 0 });
+  });
+
+  it('lets module-library managers create shared reusable modules', async () => {
+    const { app } = fixture();
+    const payload = {
+      name: '视频作品信息',
+      description: '收集作品简介和视频',
+      defaultLabel: '请上传你的作品',
+      fieldKind: 'video',
+    };
+    await request(app)
+      .post('/api/development/v1/collections/module-definitions')
+      .set(member)
+      .send(payload)
+      .expect(403);
+    const created = await request(app)
+      .post('/api/development/v1/collections/module-definitions')
+      .set(admin)
+      .send(payload)
+      .expect(201);
+    const listed = await request(app)
+      .get('/api/development/v1/collections/module-definitions')
+      .set(student)
+      .expect(200);
+    expect(listed.body.data).toEqual([
+      expect.objectContaining({ id: created.body.data.id, name: '视频作品信息' }),
+    ]);
   });
 });

@@ -1,5 +1,6 @@
 import type {
   CollectionSchema,
+  CollectionFieldKind,
   FestivalSubmissionStatus,
   ModuleId,
   PermissionAction,
@@ -339,6 +340,13 @@ export interface CollectionResponseRecord extends StoredRecord {
   submittedAt: string;
 }
 
+export interface CollectionModuleDefinitionRecord extends StoredRecord {
+  name: string;
+  description: string;
+  fieldKind: CollectionFieldKind;
+  defaultLabel: string;
+}
+
 export interface ShowcaseArticleRecord extends StoredRecord {
   title: string;
   excerpt: string;
@@ -512,6 +520,7 @@ export interface DevelopmentStore {
   collectionForms: RecordRepository<CollectionFormRecord>;
   collectionVersions: RecordRepository<CollectionVersionRecord>;
   collectionResponses: RecordRepository<CollectionResponseRecord>;
+  collectionModuleDefinitions: RecordRepository<CollectionModuleDefinitionRecord>;
   showcaseArticles: RecordRepository<ShowcaseArticleRecord>;
   showcaseLikes: RecordRepository<ShowcaseLikeRecord>;
   festivalSubmissions: RecordRepository<FestivalSubmissionRecord>;

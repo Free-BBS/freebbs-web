@@ -3,7 +3,9 @@ import { emptyCollectionSchema } from '../collection-utils.js';
 import {
   acceptsRule,
   addField,
+  addOutput,
   attachRule,
+  defaultRule,
   moveField,
   removeField,
   validateSchema,
@@ -36,5 +38,18 @@ describe('collection builder model', () => {
       '请填写表单名称',
       '至少添加一个展示模块',
     ]);
+  });
+
+  it('creates editable result outputs and a readable title validation preset', () => {
+    const withOutput = addOutput(emptyCollectionSchema, 'excel');
+    expect(withOutput.outputs).toEqual([
+      expect.objectContaining({ kind: 'excel', label: 'Excel 兼容表格' }),
+    ]);
+    expect(defaultRule('title_pattern').value).toMatchObject({
+      mode: 'title_validation',
+      minLength: 1,
+      maxLength: 50,
+      allowLineBreaks: false,
+    });
   });
 });

@@ -28,6 +28,7 @@ import type {
   ClubMembershipRecord,
   ClubRecord,
   CollectionFormRecord,
+  CollectionModuleDefinitionRecord,
   CollectionResponseRecord,
   CollectionVersionRecord,
   ConsultationRecord,
@@ -496,6 +497,16 @@ const definitions = {
       utcDateTimeField('submittedAt', 'submitted_at'),
     ],
     searchColumns: ['form_id', 'version_id', 'respondent_uid'],
+  },
+  collectionModuleDefinitions: {
+    table: 'collection_module_definitions',
+    fields: [
+      field('name', 'name'),
+      field('description', 'description'),
+      field('fieldKind', 'field_kind'),
+      field('defaultLabel', 'default_label'),
+    ],
+    searchColumns: ['name', 'description', 'field_kind', 'default_label'],
   },
   showcaseArticles: {
     table: 'showcase_articles',
@@ -1064,6 +1075,9 @@ function buildMySqlStore(executor: Executor, pool: Pool, inTransaction: boolean)
     collectionForms: repository<CollectionFormRecord>(definitions.collectionForms),
     collectionVersions: repository<CollectionVersionRecord>(definitions.collectionVersions),
     collectionResponses: repository<CollectionResponseRecord>(definitions.collectionResponses),
+    collectionModuleDefinitions: repository<CollectionModuleDefinitionRecord>(
+      definitions.collectionModuleDefinitions,
+    ),
     showcaseArticles: repository<ShowcaseArticleRecord>(definitions.showcaseArticles),
     showcaseLikes: repository<ShowcaseLikeRecord>(definitions.showcaseLikes),
     sportsTeams: repository<SportsTeamRecord>(definitions.sportsTeams),

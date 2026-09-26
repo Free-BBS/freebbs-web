@@ -1,13 +1,18 @@
 import type {
   CollectionField,
   CollectionFieldKind,
+  CollectionOutput,
+  CollectionOutputKind,
   CollectionRule,
   CollectionRuleKind,
   CollectionSchema,
 } from '@freebbs-development/contracts';
 
 export type BuilderSelection =
-  { type: 'form' } | { type: 'field'; id: string } | { type: 'rule'; fieldId?: string; id: string };
+  | { type: 'form' }
+  | { type: 'field'; id: string }
+  | { type: 'rule'; fieldId?: string; id: string }
+  | { type: 'output'; id: string };
 
 const formRuleKinds = new Set<CollectionRuleKind>([
   'audience',
@@ -62,11 +67,49 @@ export function defaultRule(kind: CollectionRuleKind): CollectionRule {
     upload_count: 1,
     file_types: [],
     file_size: 10485760,
-    title_pattern: '^[^<>]{1,50}$',
+    title_pattern: {
+      mode: 'title_validation',
+      minLength: 1,
+      maxLength: 50,
+      forbiddenCharacters: '<>{}\\',
+      forbiddenWords: [],
+      allowLineBreaks: false,
+      trimWhitespace: true,
+    },
     schedule: { start: '', end: '' },
     capacity: 100,
   };
   return { id: uniqueId('rule'), kind, value: defaults[kind] };
+}
+
+const outputLabels: Record<CollectionOutputKind, { label: string; fileName: string }> = {
+  excel: { label: 'Excel 兼容表格', fileName: '报名结果.csv' },
+  csv: { label: 'CSV 数据表', fileName: '报名结果.csv' },
+  json: { label: 'JSON 原始数据', fileName: '报名结果.json' },
+  summary: { label: '自动汇总报告', fileName: '报名汇总.csv' },
+};
+
+export function addOutput(schema: CollectionSchema, kind: CollectionOutputKind): CollectionSchema {
+  const preset = outputLabels[kind];
+  const output: CollectionOutput = { id: uniqueId('output'), kind, ...preset };
+  return { ...schema, outputs: [...(schema.outputs ?? []), output] };
+}
+
+export function updateOutput(
+  schema: CollectionSchema,
+  id: string,
+  patch: Partial<CollectionOutput>,
+): CollectionSchema {
+  return {
+    ...schema,
+    outputs: (schema.outputs ?? []).map((output) =>
+      output.id === id ? { ...output, ...patch, id: output.id, kind: output.kind } : output,
+    ),
+  };
+}
+
+export function removeOutput(schema: CollectionSchema, id: string): CollectionSchema {
+  return { ...schema, outputs: (schema.outputs ?? []).filter((output) => output.id !== id) };
 }
 
 export function acceptsRule(

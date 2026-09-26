@@ -80,6 +80,21 @@ CREATE TABLE IF NOT EXISTS showcase_articles (
   INDEX idx_showcase_articles_organization (organization_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE IF NOT EXISTS collection_module_definitions (
+  id VARCHAR(64) PRIMARY KEY,
+  name VARCHAR(128) NOT NULL,
+  description VARCHAR(500) NOT NULL,
+  field_kind VARCHAR(32) NOT NULL,
+  default_label VARCHAR(255) NOT NULL,
+  status VARCHAR(32) NOT NULL,
+  owner_uid VARCHAR(128) NOT NULL,
+  scope_type VARCHAR(64) NOT NULL,
+  scope_id VARCHAR(128) NOT NULL,
+  created_at DATETIME(3) NOT NULL,
+  updated_at DATETIME(3) NOT NULL,
+  INDEX idx_collection_module_definitions_status (status, updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE IF NOT EXISTS showcase_likes (
   id VARCHAR(64) PRIMARY KEY,
   article_id VARCHAR(64) NOT NULL,

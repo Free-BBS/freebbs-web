@@ -1,4 +1,8 @@
-import type { CollectionFieldKind, CollectionRuleKind } from '@freebbs-development/contracts';
+import type {
+  CollectionFieldKind,
+  CollectionOutputKind,
+  CollectionRuleKind,
+} from '@freebbs-development/contracts';
 
 export const fieldCatalog: ReadonlyArray<{
   kind: CollectionFieldKind;
@@ -34,4 +38,21 @@ export const ruleCatalog: ReadonlyArray<{
   { kind: 'title_pattern', label: '标题审核', description: '按规则检查标题', symbol: '✓' },
   { kind: 'schedule', label: '开放时间', description: '定时开放和截止', symbol: '◴' },
   { kind: 'capacity', label: '名额上限', description: '达到人数后自动截止', symbol: '∑' },
+];
+
+export const outputCatalog: ReadonlyArray<{
+  kind: CollectionOutputKind;
+  label: string;
+  description: string;
+  symbol: string;
+}> = [
+  {
+    kind: 'excel',
+    label: 'Excel 表格',
+    description: '整理为 Excel 可直接打开的表格',
+    symbol: 'XLS',
+  },
+  { kind: 'csv', label: 'CSV 数据', description: '用于统计软件和批量处理', symbol: 'CSV' },
+  { kind: 'json', label: '原始数据', description: '保留完整字段结构和附件信息', symbol: '{ }' },
+  { kind: 'summary', label: '汇总报告', description: '统计提交量与选择题分布', symbol: 'Σ' },
 ];

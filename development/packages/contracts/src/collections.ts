@@ -26,10 +26,38 @@ export type CollectionRuleKind =
   | 'schedule'
   | 'capacity';
 
+export interface TitleValidationConfig {
+  mode: 'title_validation';
+  minLength: number;
+  maxLength: number;
+  forbiddenCharacters: string;
+  forbiddenWords: string[];
+  allowLineBreaks: boolean;
+  trimWhitespace: boolean;
+}
+
 export interface CollectionRule {
   id: string;
   kind: CollectionRuleKind;
-  value: string | number | boolean | string[] | { start?: string; end?: string };
+  value:
+    string | number | boolean | string[] | { start?: string; end?: string } | TitleValidationConfig;
+}
+
+export type CollectionOutputKind = 'excel' | 'csv' | 'json' | 'summary';
+
+export interface CollectionOutput {
+  id: string;
+  kind: CollectionOutputKind;
+  label: string;
+  fileName: string;
+}
+
+export interface CollectionModuleDefinition {
+  id: string;
+  name: string;
+  description: string;
+  fieldKind: CollectionFieldKind;
+  defaultLabel: string;
 }
 
 export interface CollectionField {
@@ -46,6 +74,7 @@ export interface CollectionSchema {
   description: string;
   fields: CollectionField[];
   formRules: CollectionRule[];
+  outputs: CollectionOutput[];
 }
 
 export type CollectionStatus = 'draft' | 'published' | 'closed' | 'archived';
