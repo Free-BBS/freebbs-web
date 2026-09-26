@@ -31,7 +31,7 @@ describe('dark-theme contrast contract', () => {
 
   it('keeps the administrator module on shared semantic surfaces', () => {
     expect(shellCss).toContain('.development-directory-layout');
-    expect(shellCss).toContain('grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);');
+    expect(shellCss).toContain('grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);');
     expect(shellCss).toContain('background: var(--surface-raised);');
     expect(shellCss).toContain('border: 1px solid var(--border-subtle);');
     expect(componentsCss).not.toContain('--admin-paper');

@@ -54,7 +54,7 @@
 .festival-eyebrow {
   color: var(--color-warning);
   font-size: 11px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
 .festival-entrance-arrow {
   position: absolute;
@@ -164,7 +164,7 @@
   color: var(--color-warning);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
 .festival-stage-heading h4 {
   margin: 1px 0 4px;

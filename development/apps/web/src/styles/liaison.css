@@ -60,7 +60,7 @@
   color: #e7bd68;
   font-size: 12px;
   font-weight: 900;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -344,7 +344,7 @@
   color: #e7bd68;
   font-size: 11px;
   font-weight: 900;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.04em;
 }
 
 .opportunity-card-status {
@@ -426,7 +426,7 @@
 .opportunity-card-facts small {
   color: rgba(255, 249, 233, 0.54);
   font-size: 10px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
 
 .opportunity-card-facts b {
@@ -510,7 +510,7 @@
   color: #a57727;
   font-size: 12px;
   font-weight: 900;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
 
 .opportunity-detail-facts dd {
@@ -1281,7 +1281,7 @@
 
 .noticeboard-panel .opportunity-card-number {
   color: #b9aa82;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.04em;
 }
 
 .noticeboard-panel .opportunity-card-status .status-badge {
@@ -1328,7 +1328,7 @@
   font-size: 7px;
   font-style: normal;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.04em;
 }
 
 .liaison-board .noticeboard-panel .opportunity-card-button > strong {
