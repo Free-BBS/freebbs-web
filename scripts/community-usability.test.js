@@ -60,6 +60,9 @@ test('calendar numbers are unboxed, activity cells stay square, and ranch avoids
   );
   assert.match(styles, /\.checkin-calendar \.fortune-great\s*\{\s*color:/);
   assert.match(styles, /\.checkin-calendar \.is-today\s*\{[^}]*text-decoration: underline;/s);
+  assert.match(styles, /#fortune-records\s*\{[^}]*max-width: 320px;/s);
+  assert.match(styles, /\.checkin-calendar\s*\{[^}]*gap: 0 2px;[^}]*margin-top: 4px;/s);
+  assert.match(styles, /\.checkin-calendar \.checkin-day\s*\{[^}]*height: 32px;/s);
   assert.match(
     profile,
     /grid-template-columns: repeat\(var\(--heat-columns\), var\(--heat-cell\)\)/,

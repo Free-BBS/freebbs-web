@@ -10854,17 +10854,20 @@ body.theme-light:not(.home-page) .code-run-output-label {
 }
 #fortune-records {
   display: block;
-  padding: 12px;
+  width: 100%;
+  max-width: 320px;
+  margin-inline: auto;
+  padding: 6px 0 0;
 }
 .checkin-month-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
 }
 .checkin-month-heading button {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -10879,18 +10882,18 @@ body.theme-light:not(.home-page) .code-run-output-label {
 .checkin-calendar {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 5px;
-  margin-top: 12px;
+  gap: 0 2px;
+  margin-top: 4px;
 }
 .checkin-weekday {
-  padding: 6px 0;
+  padding: 3px 0;
   text-align: center;
   color: var(--ui-muted);
   font-size: 12px;
 }
 .checkin-calendar .checkin-day {
   min-width: 0;
-  height: 38px;
+  height: 32px;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -10950,11 +10953,11 @@ body.theme-dark .checkin-calendar .is-unchecked {
 .checkin-day-detail {
   color: var(--ui-muted);
   font: 12px/1.6 var(--font-ui);
-  margin: 6px 0 0;
+  margin: 4px 0 0;
 }
 .checkin-day-detail {
-  min-height: 38px;
-  margin-top: 12px;
+  min-height: 20px;
+  margin-top: 4px;
 }
 
 .fortune-record-row > * {
