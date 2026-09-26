@@ -10892,22 +10892,55 @@ body.theme-light:not(.home-page) .code-run-output-label {
   min-width: 0;
   height: 38px;
   padding: 0;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  font: 500 14px/1 var(--font-ui);
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  font: 600 14px/1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
+.checkin-calendar .fortune-great {
+  color: #936705;
+}
+.checkin-calendar .fortune-awful {
+  color: #b43f3c;
+}
+.checkin-calendar .fortune-bad {
+  color: #217743;
+}
+.checkin-calendar .fortune-good {
+  color: #aa4176;
+}
+.checkin-calendar .fortune-neutral {
+  color: #475563;
+}
 .checkin-calendar .is-unchecked {
-  background: #e9edef;
-  color: #647078;
+  color: #879198;
+}
+body.theme-dark .checkin-calendar .fortune-great {
+  color: #edc56d;
+}
+body.theme-dark .checkin-calendar .fortune-awful {
+  color: #ffaaa3;
+}
+body.theme-dark .checkin-calendar .fortune-bad {
+  color: #8aceac;
+}
+body.theme-dark .checkin-calendar .fortune-good {
+  color: #ec9fbc;
+}
+body.theme-dark .checkin-calendar .fortune-neutral {
+  color: #e5ecef;
 }
 body.theme-dark .checkin-calendar .is-unchecked {
-  background: #343a40;
-  color: #b7c0c5;
+  color: #8b969e;
 }
 .checkin-calendar .is-today {
-  outline: 2px solid var(--ui-accent, #087782);
-  outline-offset: 1px;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 5px;
+  text-decoration-thickness: 1px;
 }
 .checkin-calendar button:focus-visible {
   outline: 2px solid var(--ui-text);

@@ -51,6 +51,28 @@ test('mobile mentions account for keyboard viewport and dialog top layer', () =>
   assert.match(source, /input.classList\?\.contains\('discussion-comment-input'\)/);
 });
 
+test('calendar numbers are unboxed, activity cells stay square, and ranch avoids nested cards', () => {
+  const styles = fs.readFileSync(require.resolve('../public/styles.css'), 'utf8');
+  const profile = fs.readFileSync(require.resolve('../public/profile-extras.css'), 'utf8');
+  assert.match(
+    styles,
+    /\.checkin-calendar \.checkin-day\s*\{[^}]*border: 0;[^}]*background: none;[^}]*box-shadow: none;/s,
+  );
+  assert.match(styles, /\.checkin-calendar \.fortune-great\s*\{\s*color:/);
+  assert.match(styles, /\.checkin-calendar \.is-today\s*\{[^}]*text-decoration: underline;/s);
+  assert.match(
+    profile,
+    /grid-template-columns: repeat\(var\(--heat-columns\), var\(--heat-cell\)\)/,
+  );
+  assert.match(profile, /grid-template-rows: repeat\(7, var\(--heat-cell\)\)/);
+  assert.match(profile, /\.profile-heatmap button\s*\{[^}]*aspect-ratio: 1;/s);
+  assert.match(profile, /\.profile-ranch\s*\{[^}]*border-radius: 0;[^}]*background: transparent;/s);
+  assert.match(
+    profile,
+    /\.ranch-wool-stages > div\s*\{[^}]*border: 0;[^}]*background: transparent;/s,
+  );
+});
+
 test('bare @ search returns bounded public identities and rejects invalid queries', async () => {
   const server = fs.readFileSync(require.resolve('../backend/server'), 'utf8');
   const start = server.indexOf("app.get('/api/discussion/users/search'");
