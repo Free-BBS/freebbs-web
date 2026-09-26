@@ -25,6 +25,7 @@ import { SportsPage } from '../modules/sports/SportsPage.js';
 import { SportsMatchesPage } from '../modules/sports/SportsMatchesPage.js';
 import { SportsTeamDetailPage } from '../modules/sports/SportsTeamDetailPage.js';
 import { AppShell } from './AppShell.js';
+import { CommercePage } from './CommercePage.js';
 import { MODULE_MANIFESTS, type ModuleStateOverrides } from './module-manifests.js';
 
 export async function loadModuleStates(): Promise<ModuleStateOverrides> {
@@ -203,6 +204,8 @@ export const appRouter = createBrowserRouter(
       children: [
         { index: true, element: <Navigate to="/dashboard" replace /> },
         { path: 'dashboard', element: <DashboardRoute /> },
+        { path: 'shop', element: <CommercePage section="shop" /> },
+        { path: 'inventory', element: <CommercePage section="inventory" /> },
         { path: 'knowledge', element: <KnowledgeRoute /> },
         { path: 'knowledge/:entryId', element: <KnowledgeDetailRoute /> },
         { path: 'information', element: <InformationHubRoute /> },

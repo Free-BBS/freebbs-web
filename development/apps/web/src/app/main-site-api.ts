@@ -3,7 +3,7 @@ import { AUTH_TOKEN_STORAGE_KEY } from '../core/api/client.js';
 export function mainSiteHref(path: string): string {
   const origin =
     import.meta.env.MODE === 'development'
-      ? (import.meta.env.VITE_MAIN_SITE_ORIGIN || 'http://localhost:3000').replace(/\/+$/, '')
+      ? (import.meta.env.VITE_MAIN_SITE_ORIGIN || 'http://127.0.0.1:3000').replace(/\/+$/, '')
       : '';
   return `${origin}${path}`;
 }
