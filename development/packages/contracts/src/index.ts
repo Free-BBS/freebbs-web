@@ -9,3 +9,4 @@ export * from './growth.js';
 export * from './information.js';
 export * from './demo.js';
 export * from './development-identities.js';
+export * from './collections.js';

@@ -37,6 +37,7 @@ describe('database migrations', () => {
       '012_sports_match_results.sql',
       '013_information_feed.sql',
       '014_development_access.sql',
+      '015_collections.sql',
     ]);
 
     const sql = (await Promise.all(migrations.map(({ path }) => readFile(path, 'utf8')))).join(
@@ -81,6 +82,11 @@ describe('database migrations', () => {
       'festival_submissions',
       'information_replies',
       'information_likes',
+      'collection_forms',
+      'collection_versions',
+      'collection_responses',
+      'showcase_articles',
+      'showcase_likes',
     ];
 
     for (const table of requiredTables) {
