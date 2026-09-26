@@ -99,19 +99,3 @@ body.theme-dark .module-icon img,
 body:not(.theme-light) .module-icon img {
   filter: brightness(0) invert(1);
 }
-
-body.theme-dark .admin-governance-page,
-body:not(.theme-light) .admin-governance-page {
-  --admin-paper: rgba(244, 240, 223, 0.07);
-  --admin-paper-deep: rgba(244, 240, 223, 0.045);
-  --admin-ink: #f4f0df;
-  --admin-gold: #ffd36d;
-  --admin-gold-soft: rgba(255, 211, 109, 0.12);
-  --admin-red: #ff9b8f;
-  --admin-surface-end: rgba(244, 240, 223, 0.12);
-  --admin-tab-surface: rgba(16, 27, 35, 0.94);
-  --admin-tab-ink: rgba(244, 240, 223, 0.72);
-  --admin-hover-surface: rgba(244, 240, 223, 0.1);
-  --admin-action-ink: #ffd36d;
-  --admin-card-end: rgba(244, 240, 223, 0.1);
-}

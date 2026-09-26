@@ -1,3 +1,4 @@
+import { ROLE_KEYS, type RoleKey } from '@freebbs-development/contracts';
 import type { PermissionRule, RolePermissionCatalog } from './policy.js';
 
 const rules = (
@@ -37,7 +38,7 @@ export const BASE_STUDENT_PERMISSIONS: readonly PermissionRule[] = [
     scope: { type: 'public', id: '*' },
   },
 ];
-export const ROLE_PERMISSION_CATALOG: RolePermissionCatalog = {
+const BASE_ROLE_PERMISSION_CATALOG: Partial<RolePermissionCatalog> = {
   'platform.super_admin': rules(['*', '*'], ['liaison.problem.review', 'liaison_problem']),
   'domain.arts_lead': rules(
     ['events.*', '*'],
@@ -249,6 +250,36 @@ export const ROLE_PERMISSION_CATALOG: RolePermissionCatalog = {
     ['finance.record.update', 'finance_record', { type: 'social_organization', id: 'tms' }],
   ),
 };
+
+function inheritedPermissionProfile(roleKey: RoleKey): RoleKey | null {
+  if (roleKey.startsWith('youth_league.')) {
+    if (roleKey.endsWith('.deputy_secretary') || roleKey.endsWith('.consultant'))
+      return 'affiliation.tuanwei_lead';
+    if (roleKey.endsWith('.leader') || roleKey.endsWith('.mentor'))
+      return 'affiliation.tuanwei_director';
+    if (roleKey.endsWith('.member') || roleKey.endsWith('.student'))
+      return 'affiliation.tuanwei_member';
+  }
+  if (roleKey === 'science_association.chair' || roleKey.endsWith('.vice_chair'))
+    return 'affiliation.sast_lead';
+  if (roleKey.startsWith('science_association.') && roleKey.endsWith('.minister'))
+    return 'affiliation.sast_director';
+  if (roleKey.startsWith('science_association.') && roleKey.endsWith('.member'))
+    return 'affiliation.sast_member';
+  return null;
+}
+
+export const ROLE_PERMISSION_CATALOG: RolePermissionCatalog = Object.fromEntries(
+  ROLE_KEYS.map((roleKey) => {
+    const inherited = inheritedPermissionProfile(roleKey);
+    return [
+      roleKey,
+      BASE_ROLE_PERMISSION_CATALOG[roleKey] ??
+        (inherited ? BASE_ROLE_PERMISSION_CATALOG[inherited] : undefined) ??
+        [],
+    ];
+  }),
+) as unknown as RolePermissionCatalog;
 
 export const SPORTS_CAPTAIN_RULES: readonly PermissionRule[] = rules(
   ['sports.checkin.read', 'sports_checkin'],

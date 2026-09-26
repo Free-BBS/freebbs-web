@@ -1,4 +1,9 @@
-import { ROLE_KEYS, type ApiEnvelope, type RoleKey } from '@freebbs-development/contracts';
+import {
+  ROLE_KEYS,
+  validateIdentitySelection,
+  type ApiEnvelope,
+  type RoleKey,
+} from '@freebbs-development/contracts';
 import { Router, type Response } from 'express';
 import { z } from 'zod';
 
@@ -78,10 +83,56 @@ export function createDevelopmentUsersRouter(
     if (!target) throw new HttpError(404, 'user_not_found', 'Main-site user was not found');
     const parsed = updateSchema.safeParse(request.body);
     if (!parsed.success) throw new HttpError(400, 'invalid_request', 'Invalid access settings');
+    const identityValidation = validateIdentitySelection(parsed.data.roles);
+    if (!identityValidation.ok) {
+      throw new HttpError(400, 'identity_group_conflict', identityValidation.message);
+    }
     const actor = adminActor(response);
 
     await store.transaction(async (transactionStore) => {
+      const activeTeamIds = new Set(
+        (await transactionStore.sportsTeams.list())
+          .filter((team) => team.status === 'active')
+          .map((team) => team.id),
+      );
+      if (parsed.data.captainTeamIds.some((teamId) => !activeTeamIds.has(teamId))) {
+        throw new HttpError(400, 'invalid_sports_team', '代表队不存在或不可用');
+      }
+
       await synchronizeSubject(transactionStore, directoryUserContext(target), new Date());
+      const accessBefore = (await transactionStore.developmentAccess.listForUpdate()).find(
+        (record) =>
+          record.status === 'active' &&
+          (record.subjectUid === target.uid ||
+            (target.studentId !== null && record.studentId === target.studentId)),
+      );
+      const roleAssignmentsBefore = await transactionStore.roleAssignments.listForUpdate({
+        query: target.uid,
+      });
+      const tagAssignmentsBefore = await transactionStore.tagAssignments.listForUpdate({
+        query: target.uid,
+      });
+      const previous = {
+        accessLevel: accessBefore?.accessLevel ?? null,
+        roles: roleAssignmentsBefore
+          .filter(
+            (assignment) =>
+              assignment.subjectUid === target.uid &&
+              assignment.status === 'active' &&
+              assignment.roleKey !== 'platform.super_admin',
+          )
+          .map(({ roleKey }) => roleKey)
+          .sort(),
+        captainTeamIds: tagAssignmentsBefore
+          .filter(
+            (assignment) =>
+              assignment.subjectUid === target.uid &&
+              assignment.status === 'active' &&
+              assignment.tagKey === 'sports.team_captain',
+          )
+          .map(({ scope }) => scope.id)
+          .sort(),
+      };
       await upsertDevelopmentAccessInTransaction(transactionStore, {
         user: directoryUserContext(target),
         accessLevel: parsed.data.accessLevel,
@@ -89,9 +140,7 @@ export function createDevelopmentUsersRouter(
       });
 
       const desiredRoles = new Set(parsed.data.roles);
-      const currentRoles = await transactionStore.roleAssignments.listForUpdate({
-        query: target.uid,
-      });
+      const currentRoles = roleAssignmentsBefore;
       for (const assignment of currentRoles) {
         if (assignment.subjectUid !== target.uid || assignment.roleKey === 'platform.super_admin')
           continue;
@@ -118,9 +167,7 @@ export function createDevelopmentUsersRouter(
       }
 
       const desiredTeams = new Set(parsed.data.captainTeamIds);
-      const currentTags = await transactionStore.tagAssignments.listForUpdate({
-        query: target.uid,
-      });
+      const currentTags = tagAssignmentsBefore;
       for (const assignment of currentTags) {
         if (assignment.subjectUid !== target.uid || assignment.tagKey !== 'sports.team_captain')
           continue;
@@ -148,7 +195,14 @@ export function createDevelopmentUsersRouter(
         action: 'admin.development_user.update',
         resourceType: 'development_user',
         resourceId: target.uid,
-        details: parsed.data,
+        details: {
+          previous,
+          next: {
+            accessLevel: parsed.data.accessLevel,
+            roles: [...parsed.data.roles].sort(),
+            captainTeamIds: [...parsed.data.captainTeamIds].sort(),
+          },
+        },
         status: 'active',
         ownerUid: actor.uid,
         scope: publicScope,

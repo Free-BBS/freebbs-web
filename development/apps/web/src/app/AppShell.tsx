@@ -188,7 +188,7 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
             !auth.user.previewing ? (
               <NavLink className="sidebar-system-link" to="/admin">
                 <img src={adminIcon} alt="" />
-                <span>系统设置</span>
+                <span>管理员模块</span>
               </NavLink>
             ) : null}
             <button
