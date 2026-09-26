@@ -5,14 +5,13 @@ function activityWindow(now = new Date()) {
   return { start: start.toISOString().slice(0, 10), end };
 }
 
-async function loadProfileActivity(pool, userId, now) {
+async function loadProfileActivity(pool, userId, now, { viewer = null } = {}) {
   const { start, end } = activityWindow(now);
   // UNIX_TIMESTAMP interprets DATETIME in the writing session's timezone.
   // Epoch arithmetic avoids dependence on optional MySQL named-timezone tables.
   const day = (column) =>
     `DATE_FORMAT(DATE_ADD('1970-01-01', INTERVAL (UNIX_TIMESTAMP(${column}) + 28800) SECOND), '%Y-%m-%d')`;
-  const visible =
-    'p.is_deleted = 0 AND p.is_hidden = 0 AND p.login_required = 0 AND p.is_anonymous = 0';
+  const visible = `p.is_deleted = 0 AND p.is_hidden = 0${viewer?.id ? '' : ' AND p.login_required = 0'}`;
   const bounds = (column) => `${column} >= FROM_UNIXTIME(?) AND ${column} < FROM_UNIXTIME(?)`;
   const queries = [
     [
@@ -20,7 +19,7 @@ async function loadProfileActivity(pool, userId, now) {
       'checkins',
     ],
     [
-      `SELECT ${day('p.created_at')} AS day, COUNT(*) AS count FROM discussion_posts p WHERE p.user_id = ? AND ${visible} AND ${bounds('p.created_at')} GROUP BY day`,
+      `SELECT ${day('p.created_at')} AS day, COUNT(*) AS count FROM discussion_posts p WHERE p.user_id = ? AND ${visible} AND p.is_anonymous = 0 AND ${bounds('p.created_at')} GROUP BY day`,
       'posts',
     ],
     [
@@ -59,6 +58,7 @@ async function loadProfileActivity(pool, userId, now) {
     start,
     end,
     timezone: 'Asia/Shanghai',
+    visibility: viewer?.id ? 'members' : 'public',
     days: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)),
   };
 }

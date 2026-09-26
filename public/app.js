@@ -7385,6 +7385,8 @@ async function toggleDiscussionVisibility(button) {
   }
 }
 
+let publicProfileRequestVersion = 0;
+
 async function loadPublicProfile() {
   if (!isPublicProfilePage()) {
     return;
@@ -7404,11 +7406,14 @@ async function loadPublicProfile() {
   }
 
   setPublicProfileMessage('正在加载个人主页...');
+  const version = ++publicProfileRequestVersion;
+  const profileSessionToken = userState.token;
 
   try {
     const payload = await callApi(`/users/${encodeURIComponent(profileUid)}/public-profile`, {
       method: 'GET',
     });
+    if (version !== publicProfileRequestVersion || profileSessionToken !== userState.token) return;
     const profile = payload.profile || {};
 
     if (publicProfileAvatar) {
@@ -7449,6 +7454,7 @@ async function loadPublicProfile() {
     window.FreeBbsProfileActivity?.render(profile.activity);
     await window.FreeBbsProfileExtras?.renderProfile(profile);
   } catch (error) {
+    if (version !== publicProfileRequestVersion || profileSessionToken !== userState.token) return;
     if (publicProfileName) {
       publicProfileName.textContent = '加载失败';
     }
@@ -10594,6 +10600,10 @@ document.getElementById('discussion-my-more')?.addEventListener('click', async (
   }
 });
 window.addEventListener('freebbs:session-change', async () => {
+  if (isPublicProfilePage()) {
+    window.FreeBbsProfileActivity?.render(null);
+    loadPublicProfile();
+  }
   if (!isDiscussionPage()) return;
   const pendingPost = getDiscussionQueryState().postId;
   discussionState.showDeleted = false;
@@ -10610,6 +10620,11 @@ window.addEventListener('freebbs:session-change', async () => {
     await loadDiscussionDetail(pendingPost);
 });
 window.addEventListener('storage', (event) => {
+  if (isPublicProfilePage() && (event.key === STORAGE_KEY || event.key === null)) {
+    publicProfileRequestVersion += 1;
+    window.FreeBbsProfileActivity?.render(null);
+    setPublicProfileMessage('登录状态已变化，请刷新页面查看当前可见的足迹。');
+  }
   if (!isDiscussionPage() || (event.key !== STORAGE_KEY && event.key !== null)) return;
   // Do not retain a hidden post after another tab logs out/switches accounts.
   resetDiscussionData();

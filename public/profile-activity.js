@@ -16,6 +16,13 @@
     host.innerHTML =
       '<div class="profile-activity-heading"><h3>站内足迹</h3><span></span></div><div class="profile-heat-scroll" tabindex="0" aria-label="近一年活跃度日历，可横向滚动"><div class="profile-heat-months"></div><div class="profile-heatmap" role="group" aria-label="每日活跃度"></div></div><p class="profile-activity-detail" aria-live="polite">点击日期查看详情</p><div class="profile-activity-legend"><small>签到、公开发帖与评论 · 北京时间</small><span>少 <i data-level="0"></i><i data-level="1"></i><i data-level="2"></i><i data-level="3"></i><i data-level="4"></i> 多</span></div>';
     host.querySelector('.profile-activity-heading span').textContent = `近一年 ${total} 次活动`;
+    const caption = host.querySelector('.profile-activity-legend small');
+    caption.textContent =
+      activity.visibility === 'members'
+        ? '签到、可见发帖与实名评论 · 北京时间'
+        : '签到、游客可见发帖与实名评论 · 北京时间';
+    caption.title =
+      '不含匿名发帖、隐藏或已删除内容；登录后计入登录可见讨论。评论按评论者身份统计，不受原帖匿名与否影响。';
     const grid = host.querySelector('.profile-heatmap');
     const labels = host.querySelector('.profile-heat-months');
     const columns = Math.ceil((365 + offset) / 7);
