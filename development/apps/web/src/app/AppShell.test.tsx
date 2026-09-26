@@ -59,8 +59,8 @@ describe('module state loader', () => {
   it('fails closed when the module registry cannot be loaded', async () => {
     mockRequest.mockRejectedValueOnce(new Error('registry unavailable'));
     const states = await loadModuleStates();
-    expect(Object.keys(states)).toHaveLength(9);
-    expect(Object.values(states)).toEqual(Array(9).fill('disabled'));
+    expect(Object.keys(states)).toHaveLength(10);
+    expect(Object.values(states)).toEqual(Array(10).fill('disabled'));
   });
 });
 
@@ -96,6 +96,7 @@ describe('AppShell', () => {
     expect(items.map((item) => item.querySelector('.module-name')?.textContent)).toEqual([
       '無活动',
       '無体育',
+      '萬事集',
       '無限机会',
       '信息与咨询',
       '经验库',

@@ -26,6 +26,10 @@ export default defineConfig(({ mode }) => {
           target: mainSiteOrigin,
           changeOrigin: false,
         },
+        '/api/surveys': {
+          target: mainSiteOrigin,
+          changeOrigin: false,
+        },
       },
     },
     test: {
