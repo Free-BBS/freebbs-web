@@ -128,7 +128,7 @@ describe('development access administration', () => {
       .set('Authorization', 'Bearer lead')
       .send({
         accessLevel: 'member',
-        roles: ['department.sports_member'],
+        roles: ['domain.arts_lead', 'department.sports_member', 'platform.admin'],
         captainTeamIds: ['team-basketball'],
       })
       .expect(200);
@@ -138,7 +138,9 @@ describe('development access administration', () => {
     ]);
     expect(await store.roleAssignments.list({ query: 'u_target' })).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({ roleKey: 'domain.arts_lead', status: 'active' }),
         expect.objectContaining({ roleKey: 'department.sports_member', status: 'active' }),
+        expect.objectContaining({ roleKey: 'platform.admin', status: 'active' }),
       ]),
     );
     expect(await store.tagAssignments.list({ query: 'u_target' })).toEqual(
@@ -149,6 +151,75 @@ describe('development access administration', () => {
         }),
       ]),
     );
+
+    await request(app)
+      .put('/api/development/v1/admin/development-users/u_target')
+      .set('Authorization', 'Bearer lead')
+      .send({
+        accessLevel: 'member',
+        roles: ['domain.arts_lead', 'department.arts_member'],
+        captainTeamIds: [],
+      })
+      .expect(400);
+
+    await request(app)
+      .put('/api/development/v1/admin/development-users/u_target')
+      .set('Authorization', 'Bearer lead')
+      .send({
+        accessLevel: 'member',
+        roles: ['department.sports_member'],
+        captainTeamIds: ['team-does-not-exist'],
+      })
+      .expect(400);
+  });
+
+  it('does not let a platform administrator open the administrator module', async () => {
+    const store = createMemoryStore();
+    const user = {
+      uid: 'u_platform_admin',
+      username: 'PlatformAdmin',
+      displayName: 'Platform administrator',
+      studentId: '2023000003',
+      avatarUrl: null,
+    };
+    await store.developmentAccess.create({
+      subjectUid: user.uid,
+      studentId: user.studentId,
+      username: user.username,
+      accessLevel: 'member',
+      status: 'active',
+      ownerUid: 'u_lead',
+      scope: { type: 'public', id: '*' },
+    });
+    await store.subjects.create({
+      uid: user.uid,
+      displayName: user.displayName,
+      avatarUrl: null,
+      status: 'active',
+      ownerUid: 'u_lead',
+      scope: { type: 'public', id: '*' },
+    });
+    await store.roleAssignments.create({
+      subjectUid: user.uid,
+      roleKey: 'platform.admin',
+      expiresAt: null,
+      status: 'active',
+      ownerUid: 'u_lead',
+      scope: { type: 'public', id: '*' },
+    });
+    const app = createApp({
+      store,
+      authMode: 'main',
+      authClient: {
+        introspect: async () => ({ ...user, baseRole: 'student', roles: [], tags: [] }),
+      },
+      userDirectory: { list: async () => [user], get: async () => user },
+    });
+
+    await request(app)
+      .get('/api/development/v1/admin/development-users')
+      .set('Authorization', 'Bearer platform-admin')
+      .expect(403);
   });
 
   it('will not remove the last active development lead', async () => {
