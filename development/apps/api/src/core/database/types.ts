@@ -1,4 +1,6 @@
 import type {
+  CollectionSchema,
+  CollectionFieldKind,
   FestivalSubmissionStatus,
   ModuleId,
   PermissionAction,
@@ -310,6 +312,56 @@ export interface ActivityRegistrationRecord extends StoredRecord {
   participantUid: string;
 }
 
+export interface CollectionFormRecord extends StoredRecord {
+  title: string;
+  description: string;
+  coverUrl: string | null;
+  organizationId: SocialOrganizationId | null;
+  currentDraftVersionId: string | null;
+  publishedVersionId: string | null;
+  opensAt: string | null;
+  closesAt: string | null;
+  capacity: number | null;
+}
+
+export interface CollectionVersionRecord extends StoredRecord {
+  formId: string;
+  version: number;
+  schema: CollectionSchema;
+  publishedAt: string | null;
+}
+
+export interface CollectionResponseRecord extends StoredRecord {
+  formId: string;
+  versionId: string;
+  respondentUid: string;
+  attempt: number;
+  answers: Record<string, unknown>;
+  submittedAt: string;
+}
+
+export interface CollectionModuleDefinitionRecord extends StoredRecord {
+  name: string;
+  description: string;
+  fieldKind: CollectionFieldKind;
+  defaultLabel: string;
+}
+
+export interface ShowcaseArticleRecord extends StoredRecord {
+  title: string;
+  excerpt: string;
+  body: string;
+  coverUrl: string | null;
+  externalUrl: string | null;
+  organizationId: SocialOrganizationId | null;
+  publishedAt: string;
+}
+
+export interface ShowcaseLikeRecord extends StoredRecord {
+  articleId: string;
+  userUid: string;
+}
+
 export interface FestivalSubmissionRecord extends StoredRecord {
   title: string;
   description: string;
@@ -465,6 +517,12 @@ export interface DevelopmentStore {
   activityMilestones: RecordRepository<ActivityMilestoneRecord>;
   competitionFixtures: RecordRepository<CompetitionFixtureRecord>;
   activityRegistrations: RecordRepository<ActivityRegistrationRecord>;
+  collectionForms: RecordRepository<CollectionFormRecord>;
+  collectionVersions: RecordRepository<CollectionVersionRecord>;
+  collectionResponses: RecordRepository<CollectionResponseRecord>;
+  collectionModuleDefinitions: RecordRepository<CollectionModuleDefinitionRecord>;
+  showcaseArticles: RecordRepository<ShowcaseArticleRecord>;
+  showcaseLikes: RecordRepository<ShowcaseLikeRecord>;
   festivalSubmissions: RecordRepository<FestivalSubmissionRecord>;
   sportsTeams: RecordRepository<SportsTeamRecord>;
   sportsTeamMembers: RecordRepository<SportsTeamMemberRecord>;

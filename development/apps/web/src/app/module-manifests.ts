@@ -8,6 +8,7 @@ import growthIcon from '../assets/icons/growth.svg';
 import informationIcon from '../assets/icons/information.svg';
 import knowledgeIcon from '../assets/icons/knowledge.svg';
 import liaisonIcon from '../assets/icons/liaison.svg';
+import collectionsIcon from '../assets/icons/collections.svg';
 import sportsIcon from '../assets/icons/sports.svg';
 import {
   hasPresentationPermission,
@@ -40,7 +41,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     ownerTeam: '平台核心组',
     status: 'enabled',
     requiredPermissions: [],
-    order: 5,
+    order: 6,
   },
   {
     id: 'information',
@@ -51,7 +52,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     ownerTeam: '权益发展团队',
     status: 'enabled',
     requiredPermissions: [],
-    order: 4,
+    order: 5,
   },
   {
     id: 'growth',
@@ -62,7 +63,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     ownerTeam: '平台核心组',
     status: 'enabled',
     requiredPermissions: [],
-    order: 6,
+    order: 7,
   },
   {
     id: 'events',
@@ -76,6 +77,17 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     order: 1,
   },
   {
+    id: 'collections',
+    name: '萬事集',
+    description: '汇集活动报名、内容橱窗与灵活的信息收集工具。',
+    route: '/collections',
+    icon: collectionsIcon,
+    ownerTeam: '平台核心组',
+    status: 'enabled',
+    requiredPermissions: [],
+    order: 3,
+  },
+  {
     id: 'liaison',
     name: '無限机会',
     description: '在机会委托酒馆发现真实课题，与伙伴组队协作。',
@@ -84,7 +96,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     ownerTeam: '联络团队',
     status: 'enabled',
     requiredPermissions: [],
-    order: 3,
+    order: 4,
   },
   {
     id: 'sports',
@@ -106,7 +118,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     ownerTeam: '财务治理团队',
     status: 'enabled',
     requiredPermissions: ['finance.record.read'],
-    order: 7,
+    order: 8,
   },
   {
     id: 'admin',
@@ -117,7 +129,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     ownerTeam: '平台核心组',
     status: 'enabled',
     requiredPermissions: ['admin.manage'],
-    order: 8,
+    order: 9,
   },
 ] as const;
 

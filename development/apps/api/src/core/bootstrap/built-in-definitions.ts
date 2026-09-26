@@ -34,6 +34,7 @@ const moduleNames: Readonly<Record<ModuleId, string>> = {
   clubs: 'Clubs',
   growth: 'Personal growth archive',
   events: 'Events',
+  collections: 'Wanshiji collections',
   liaison: 'Liaison resources',
   sports: '無体育',
   finance: 'Finance governance',

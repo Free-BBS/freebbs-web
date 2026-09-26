@@ -11,6 +11,7 @@ describe('module and role contracts', () => {
       'clubs',
       'growth',
       'events',
+      'collections',
       'liaison',
       'sports',
       'finance',

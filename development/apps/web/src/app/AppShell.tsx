@@ -13,6 +13,8 @@ import { useMainSiteTheme } from '../core/theme/useMainSiteTheme.js';
 import { MainSiteHeader } from './MainSiteHeader.js';
 import { visibleModuleManifests, type ModuleStateOverrides } from './module-manifests.js';
 
+const HIDDEN_SIDEBAR_MODULE_IDS = new Set(['dashboard', 'admin', 'liaison']);
+
 export interface AppShellProps {
   children?: ReactNode;
   moduleStates?: ModuleStateOverrides;
@@ -47,10 +49,21 @@ function ModuleNavigation({
       ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   }, [activePath, ensureCurrentVisible]);
 
+  useEffect(() => {
+    if (document.head.querySelector('link[data-learning-prefetch]')) return;
+    const prefetch = document.createElement('link');
+    prefetch.rel = 'prefetch';
+    prefetch.as = 'document';
+    prefetch.href = '/world';
+    prefetch.dataset.learningPrefetch = 'true';
+    document.head.append(prefetch);
+    return () => prefetch.remove();
+  }, []);
+
   return (
     <nav ref={navigationRef} className={className} aria-label={label}>
       {visibleModuleManifests(user, moduleStates)
-        .filter((module) => module.id !== 'dashboard' && module.id !== 'admin')
+        .filter((module) => !HIDDEN_SIDEBAR_MODULE_IDS.has(module.id))
         .map((module) => {
           const content = (
             <>
@@ -79,7 +92,7 @@ function ModuleNavigation({
           <img src={learningIcon} alt="" />
         </span>
         <span className="module-copy">
-          <span className="module-name">返回学习端</span>
+          <span className="module-name">学习端</span>
         </span>
       </a>
     </nav>
@@ -117,7 +130,7 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
   if (auth.status === 'loading') {
     return (
       <AuthState>
-        <h1>FREE / BBS</h1>
+        <h1 className="auth-brand-label">FREE / BBS</h1>
         <p>正在加载身份信息…</p>
       </AuthState>
     );

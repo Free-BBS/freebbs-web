@@ -59,13 +59,13 @@ describe('module state loader', () => {
   it('fails closed when the module registry cannot be loaded', async () => {
     mockRequest.mockRejectedValueOnce(new Error('registry unavailable'));
     const states = await loadModuleStates();
-    expect(Object.keys(states)).toHaveLength(9);
-    expect(Object.values(states)).toEqual(Array(9).fill('disabled'));
+    expect(Object.keys(states)).toHaveLength(10);
+    expect(Object.values(states)).toEqual(Array(10).fill('disabled'));
   });
 });
 
 describe('AppShell', () => {
-  it('places the learning return link at the end of desktop and mobile navigation', () => {
+  it('places a prefetched learning-site link at the end of desktop and mobile navigation', () => {
     mockUseAuth.mockReturnValue(authenticatedAuth());
     renderShell('/events');
 
@@ -73,8 +73,12 @@ describe('AppShell', () => {
       const navigation = screen.getByRole('navigation', { name });
       const links = within(navigation).getAllByRole('link');
       expect(links.at(-1)).toHaveAttribute('href', '/world');
-      expect(links.at(-1)).toHaveAccessibleName('返回学习端');
+      expect(links.at(-1)).toHaveAccessibleName('学习端');
     }
+    expect(document.head.querySelector('link[data-learning-prefetch]')).toHaveAttribute(
+      'href',
+      '/world',
+    );
   });
 
   it('sends a preview-denied identity back to the main-site construction page', () => {
@@ -85,7 +89,7 @@ describe('AppShell', () => {
       '/development',
     );
   });
-  it('hides the dashboard and protected modules while keeping the dashboard brand target', () => {
+  it('removes only the opportunity module while keeping the other development modules', () => {
     mockUseAuth.mockReturnValue(authenticatedAuth());
 
     renderShell('/knowledge');
@@ -96,7 +100,7 @@ describe('AppShell', () => {
     expect(items.map((item) => item.querySelector('.module-name')?.textContent)).toEqual([
       '無活动',
       '無体育',
-      '無限机会',
+      '萬事集',
       '信息与咨询',
       '经验库',
       '个人成长档案',
@@ -105,6 +109,7 @@ describe('AppShell', () => {
     expect(within(navigation).queryByText('财务治理')).not.toBeInTheDocument();
     expect(within(navigation).queryByText('权限与模块管理')).not.toBeInTheDocument();
     expect(within(navigation).queryByText('趣缘群体')).not.toBeInTheDocument();
+    expect(within(navigation).queryByText('無限机会')).not.toBeInTheDocument();
     expect(within(navigation).getByRole('link', { name: '个人成长档案' })).toHaveAttribute(
       'href',
       '/growth',

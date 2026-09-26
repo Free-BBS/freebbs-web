@@ -22,6 +22,10 @@ import type {
   AuditLogRecord,
   ClubMembershipRecord,
   ClubRecord,
+  CollectionFormRecord,
+  CollectionModuleDefinitionRecord,
+  CollectionResponseRecord,
+  CollectionVersionRecord,
   ConsultationRecord,
   InformationLikeRecord,
   InformationReplyRecord,
@@ -54,6 +58,8 @@ import type {
   SportsTeamShowcaseRecord,
   SportsTeamMemberRecord,
   SportsTeamRecord,
+  ShowcaseArticleRecord,
+  ShowcaseLikeRecord,
   StoredRecord,
   SubjectRecord,
   TagAssignmentRecord,
@@ -86,6 +92,12 @@ interface MemoryState {
   activityMilestones: ActivityMilestoneRecord[];
   competitionFixtures: CompetitionFixtureRecord[];
   activityRegistrations: ActivityRegistrationRecord[];
+  collectionForms: CollectionFormRecord[];
+  collectionVersions: CollectionVersionRecord[];
+  collectionResponses: CollectionResponseRecord[];
+  collectionModuleDefinitions: CollectionModuleDefinitionRecord[];
+  showcaseArticles: ShowcaseArticleRecord[];
+  showcaseLikes: ShowcaseLikeRecord[];
   festivalSubmissions: FestivalSubmissionRecord[];
   sportsTeams: SportsTeamRecord[];
   sportsTeamMembers: SportsTeamMemberRecord[];
@@ -167,6 +179,12 @@ const searchFields: Record<CollectionName, string[]> = {
   activityMilestones: ['activityId', 'title', 'type', 'description'],
   competitionFixtures: ['activityId', 'round', 'participantA', 'participantB', 'location'],
   activityRegistrations: ['activityId', 'participantUid'],
+  collectionForms: ['title', 'description', 'organizationId'],
+  collectionVersions: ['formId'],
+  collectionResponses: ['formId', 'versionId', 'respondentUid'],
+  collectionModuleDefinitions: ['name', 'description', 'fieldKind', 'defaultLabel'],
+  showcaseArticles: ['title', 'excerpt', 'body', 'organizationId'],
+  showcaseLikes: ['articleId', 'userUid'],
   festivalSubmissions: ['title', 'description', 'authorName'],
   sportsTeams: ['name', 'description', 'season', 'trainingSchedule'],
   sportsTeamMembers: ['teamId', 'memberUid'],
@@ -332,6 +350,12 @@ function createEmptyState(): MemoryState {
     activityMilestones: [],
     competitionFixtures: [],
     activityRegistrations: [],
+    collectionForms: [],
+    collectionVersions: [],
+    collectionResponses: [],
+    collectionModuleDefinitions: [],
+    showcaseArticles: [],
+    showcaseLikes: [],
     festivalSubmissions: [],
     sportsTeams: [],
     sportsMatches: [],
@@ -932,6 +956,154 @@ function createDemoState(): MemoryState {
       status: 'registered',
       ownerUid: 'demo-captain',
       scope: { type: 'activity', id: 'activity-night-run' },
+    }),
+  ];
+  state.collectionForms = [
+    stored('collection-autumn-workshop', {
+      title: '秋季工作坊许愿池',
+      description: '告诉我们你最想参加的工作坊，让下一场活动从大家的想法开始。',
+      coverUrl: null,
+      organizationId: 'tuanwei',
+      currentDraftVersionId: 'collection-version-workshop-1',
+      publishedVersionId: 'collection-version-workshop-1',
+      opensAt: '2026-09-20T00:00:00.000Z',
+      closesAt: '2026-10-20T15:59:59.000Z',
+      capacity: 300,
+      status: 'published',
+      ownerUid: 'demo-admin',
+      scope: publicScope,
+    }),
+    stored('collection-media-showcase', {
+      title: '镜头里的校园生活',
+      description: '投稿一张照片或一段短片，记录你眼中的校园日常。',
+      coverUrl: null,
+      organizationId: null,
+      currentDraftVersionId: 'collection-version-media-1',
+      publishedVersionId: 'collection-version-media-1',
+      opensAt: '2026-09-24T00:00:00.000Z',
+      closesAt: '2026-11-01T15:59:59.000Z',
+      capacity: null,
+      status: 'published',
+      ownerUid: 'demo-admin',
+      scope: publicScope,
+    }),
+  ];
+  state.collectionVersions = [
+    stored('collection-version-workshop-1', {
+      formId: 'collection-autumn-workshop',
+      version: 1,
+      schema: {
+        title: '秋季工作坊许愿池',
+        description: '选出你最想参加的主题，也欢迎留下新的想法。',
+        fields: [
+          {
+            id: 'workshop-choice',
+            kind: 'multiple_choice',
+            label: '想参加哪些工作坊？',
+            helpText: '可以多选',
+            options: ['LaTeX 排版', 'Unity 入门', '滑冰体验', '冰球体验'],
+            rules: [{ id: 'required-workshop', kind: 'required', value: true }],
+          },
+          {
+            id: 'new-idea',
+            kind: 'long_text',
+            label: '还有什么新想法？',
+            helpText: '选填',
+            options: [],
+            rules: [],
+          },
+        ],
+        formRules: [{ id: 'attempt-workshop', kind: 'attempt_limit', value: 1 }],
+        outputs: [],
+      },
+      publishedAt: '2026-09-20T00:00:00.000Z',
+      status: 'published',
+      ownerUid: 'demo-admin',
+      scope: publicScope,
+    }),
+    stored('collection-version-media-1', {
+      formId: 'collection-media-showcase',
+      version: 1,
+      schema: {
+        title: '镜头里的校园生活',
+        description: '上传作品和作品说明。',
+        fields: [
+          {
+            id: 'work-title',
+            kind: 'short_text',
+            label: '作品标题',
+            helpText: '20 字以内',
+            options: [],
+            rules: [{ id: 'required-title', kind: 'required', value: true }],
+          },
+          {
+            id: 'work-file',
+            kind: 'video',
+            label: '视频作品',
+            helpText: 'MP4 / WebM，最大 100 MiB',
+            options: [],
+            rules: [
+              { id: 'required-file', kind: 'required', value: true },
+              { id: 'video-types', kind: 'file_types', value: ['video/mp4', 'video/webm'] },
+              { id: 'video-size', kind: 'file_size', value: 104857600 },
+            ],
+          },
+        ],
+        formRules: [{ id: 'attempt-media', kind: 'attempt_limit', value: 2 }],
+        outputs: [],
+      },
+      publishedAt: '2026-09-24T00:00:00.000Z',
+      status: 'published',
+      ownerUid: 'demo-admin',
+      scope: publicScope,
+    }),
+  ];
+  state.collectionResponses = [
+    stored('collection-response-workshop', {
+      formId: 'collection-autumn-workshop',
+      versionId: 'collection-version-workshop-1',
+      respondentUid: 'demo-student',
+      attempt: 1,
+      answers: { 'workshop-choice': ['LaTeX 排版'], 'new-idea': '希望增加摄影工作坊' },
+      submittedAt: '2026-09-25T08:00:00.000Z',
+      status: 'submitted',
+      ownerUid: 'demo-student',
+      scope: publicScope,
+    }),
+  ];
+  state.showcaseArticles = [
+    stored('showcase-autumn', {
+      title: '把秋天装进一张活动清单',
+      excerpt: '本周的讲座、工作坊与运动体验，一次为你整理好。',
+      body: '九月的最后一周，校园里仍有许多值得停下脚步的事情。我们把分散在各处的活动整理成一份轻盈的清单，希望你能找到愿意出发的一项。\n\n从一场不设门槛的工作坊开始，也可以在傍晚加入操场上的训练。报名完成后，相关记录会收进“我的报名”。',
+      coverUrl: null,
+      externalUrl: null,
+      organizationId: null,
+      publishedAt: '2026-09-25T10:00:00.000Z',
+      status: 'published',
+      ownerUid: 'demo-admin',
+      scope: publicScope,
+    }),
+    stored('showcase-volunteer', {
+      title: '一次志愿活动如何被共同完成',
+      excerpt: '从发起、招募到现场协作，看看一张表单背后的故事。',
+      body: '一项顺利的志愿活动，往往始于清楚的问题和克制的信息收集。组织者只询问真正需要的内容，也让参与者随时知道下一步会发生什么。',
+      coverUrl: null,
+      externalUrl: null,
+      organizationId: 'tuanwei',
+      publishedAt: '2026-09-22T08:00:00.000Z',
+      status: 'published',
+      ownerUid: 'demo-admin',
+      scope: publicScope,
+    }),
+  ];
+  state.showcaseLikes = [
+    stored('showcase-like-autumn', {
+      articleId: 'showcase-autumn',
+      userUid: 'demo-student',
+      status: 'active',
+      ownerUid: 'demo-student',
+      scope: publicScope,
     }),
   ];
   state.sportsTeams = [
@@ -1602,6 +1774,52 @@ class MemoryRepository<T extends StoredRecord> implements RecordRepository<T> {
         return 'Registration already exists';
       }
     }
+    if (this.collection === 'collectionVersions') {
+      const candidate = input as unknown as { formId: string; version: number };
+      if (
+        this.records().some((record) => {
+          if (record.id === excludeId) return false;
+          const current = record as unknown as typeof candidate;
+          return current.formId === candidate.formId && current.version === candidate.version;
+        })
+      ) {
+        return 'Collection version already exists';
+      }
+    }
+    if (this.collection === 'collectionResponses') {
+      const candidate = input as unknown as {
+        formId: string;
+        versionId: string;
+        respondentUid: string;
+        attempt: number;
+      };
+      if (
+        this.records().some((record) => {
+          if (record.id === excludeId) return false;
+          const current = record as unknown as typeof candidate;
+          return (
+            current.formId === candidate.formId &&
+            current.versionId === candidate.versionId &&
+            current.respondentUid === candidate.respondentUid &&
+            current.attempt === candidate.attempt
+          );
+        })
+      ) {
+        return 'Collection response already exists';
+      }
+    }
+    if (this.collection === 'showcaseLikes') {
+      const candidate = input as unknown as { articleId: string; userUid: string };
+      if (
+        this.records().some((record) => {
+          if (record.id === excludeId) return false;
+          const current = record as unknown as typeof candidate;
+          return current.articleId === candidate.articleId && current.userUid === candidate.userUid;
+        })
+      ) {
+        return 'Showcase like already exists';
+      }
+    }
     if (this.collection === 'liaisonTeamMembers') {
       const candidate = input as unknown as {
         problemId: string;
@@ -1710,6 +1928,12 @@ function buildStore(holder: StateHolder, inTransaction = false): DevelopmentStor
     activityMilestones: repository('activityMilestones'),
     competitionFixtures: repository('competitionFixtures'),
     activityRegistrations: repository('activityRegistrations'),
+    collectionForms: repository('collectionForms'),
+    collectionVersions: repository('collectionVersions'),
+    collectionResponses: repository('collectionResponses'),
+    collectionModuleDefinitions: repository('collectionModuleDefinitions'),
+    showcaseArticles: repository('showcaseArticles'),
+    showcaseLikes: repository('showcaseLikes'),
     festivalSubmissions: repository('festivalSubmissions'),
     sportsTeams: repository('sportsTeams'),
     sportsMatches: repository('sportsMatches'),
