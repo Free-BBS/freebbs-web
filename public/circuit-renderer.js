@@ -1493,6 +1493,15 @@
             'aria-label': `${component.id} ${pin.label} 引脚`,
           });
           const endpoint = { componentId: component.id, pin: pin.pin };
+          const activatePin = () => {
+            if (
+              component.type === 'junction' &&
+              !options.wireStart &&
+              options.selectedId !== component.id
+            )
+              options.onComponentClick?.(component.id);
+            else options.onPinClick?.(endpoint);
+          };
           let suppressClick = false;
           hit.style.touchAction = 'none';
           hit.addEventListener(
@@ -1574,7 +1583,7 @@
             clearConnectionPreview();
             if (!moved && event.pointerType === 'touch') {
               suppressClick = true;
-              options.onPinClick?.(endpoint);
+              activatePin();
             }
             if (moved && component.type === 'junction')
               options.onMove(component.id, component.x, component.y);
@@ -1607,12 +1616,10 @@
               suppressClick = false;
               return;
             }
-            options.onPinClick?.(endpoint);
+            activatePin();
           });
           hit.addEventListener('keydown', (event) => {
-            activateWithKeyboard(event, ['Enter', ' '], () =>
-              options.onPinClick?.({ componentId: component.id, pin: pin.pin }),
-            );
+            activateWithKeyboard(event, ['Enter', ' '], activatePin);
           });
           group.append(hit);
         }

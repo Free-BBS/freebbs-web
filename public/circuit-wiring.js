@@ -155,7 +155,81 @@
     return { document, endpoint: { ...endpoint } };
   }
 
-  const exported = { connectToWire };
+  function simplifyPoints(points) {
+    const result = [];
+    points.forEach((point) => {
+      const next = { x: point.x, y: point.y };
+      if (result.length && samePoint(result.at(-1), next)) return;
+      while (result.length > 1) {
+        const a = result.at(-2);
+        const b = result.at(-1);
+        if ((a.x === b.x && b.x === next.x) || (a.y === b.y && b.y === next.y)) result.pop();
+        else break;
+      }
+      result.push(next);
+    });
+    return result;
+  }
+
+  function wireTowardJunction(wire, junctionId) {
+    if (wire.to.componentId === junctionId)
+      return { endpoint: clone(wire.from), points: clone(wire.points || []) };
+    if (wire.from.componentId === junctionId)
+      return { endpoint: clone(wire.to), points: clone(wire.points || []).reverse() };
+    return null;
+  }
+
+  function cleanupJunctions(input) {
+    if (!input || !Array.isArray(input.components) || !Array.isArray(input.wires))
+      throw new Error('电路数据无效，无法清理连接点。');
+    const document = clone(input);
+    let changed = false;
+    let repeat = true;
+    while (repeat) {
+      repeat = false;
+      for (const junction of document.components.filter((item) => item.type === 'junction')) {
+        const incident = document.wires.filter(
+          (wire) =>
+            wire.from.componentId === junction.id || wire.to.componentId === junction.id,
+        );
+        if (incident.length >= 3) continue;
+        if (incident.length === 2) {
+          const left = wireTowardJunction(incident[0], junction.id);
+          const right = wireTowardJunction(incident[1], junction.id);
+          if (left && right && !sameEndpoint(left.endpoint, right.endpoint)) {
+            const points = simplifyPoints([
+              ...left.points,
+              { x: junction.x, y: junction.y },
+              ...right.points.reverse(),
+            ]);
+            const merged = {
+              id: incident[0].id,
+              from: left.endpoint,
+              to: right.endpoint,
+              ...(points.length ? { points } : {}),
+            };
+            document.wires = document.wires.filter(
+              (wire) => !incident.some((item) => item.id === wire.id),
+            );
+            document.wires.push(merged);
+          } else {
+            document.wires = document.wires.filter(
+              (wire) => !incident.some((item) => item.id === wire.id),
+            );
+          }
+        } else if (incident.length === 1) {
+          document.wires = document.wires.filter((wire) => wire.id !== incident[0].id);
+        }
+        document.components = document.components.filter((item) => item.id !== junction.id);
+        changed = true;
+        repeat = true;
+        break;
+      }
+    }
+    return changed ? document : clone(input);
+  }
+
+  const exported = { cleanupJunctions, connectToWire };
   if (typeof module !== 'undefined' && module.exports) module.exports = exported;
   Object.assign(root, { FreeBbsCircuitWiring: exported });
 })(typeof globalThis !== 'undefined' ? globalThis : this);

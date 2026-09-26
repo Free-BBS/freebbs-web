@@ -1065,6 +1065,7 @@
     } else if (state.selectedWire)
       state.document.wires = state.document.wires.filter((wire) => wire.id !== state.selectedWire);
     else return;
+    state.document = wiring.cleanupJunctions(state.document);
     state.selectedId = '';
     state.selectedWire = '';
     state.wireStart = null;
@@ -2883,6 +2884,7 @@
       state.document.wires = state.document.wires.filter(
         (wire) => wire.id !== button.dataset.deleteWire,
       );
+      state.document = wiring.cleanupJunctions(state.document);
       state.selectedWire = '';
       changed();
       renderInspector();

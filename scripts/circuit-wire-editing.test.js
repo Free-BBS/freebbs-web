@@ -381,7 +381,11 @@ test('junctions render one centered accessible solid pin without labels, boxes o
   const document = sample();
   document.components.push({ id: 'J1', type: 'junction', x: 260, y: 200, params: {} });
   const clicked = [];
-  const state = harness(document, { onPinClick: (endpoint) => clicked.push(endpoint) });
+  const selected = [];
+  const state = harness(document, {
+    onComponentClick: (id) => selected.push(id),
+    onPinClick: (endpoint) => clicked.push(endpoint),
+  });
   const node = state.find('data-component-id', 'J1');
   assert.equal(node.all((element) => element.tagName === 'text').length, 0);
   assert.equal(node.all((element) => element.tagName === 'rect').length, 0);
@@ -389,6 +393,13 @@ test('junctions render one centered accessible solid pin without labels, boxes o
   assert.equal(pin.getAttribute('cx'), '0');
   assert.equal(pin.getAttribute('cy'), '0');
   pin.dispatch('click');
+  assert.deepEqual(selected, ['J1']);
+  assert.equal(clicked.length, 0);
+  const selectedState = harness(document, {
+    selectedId: 'J1',
+    onPinClick: (endpoint) => clicked.push(endpoint),
+  });
+  pinHit(selectedState, 'J1', 0).dispatch('click');
   assert.equal(JSON.stringify(clicked), '[{"componentId":"J1","pin":0}]');
   state.rendered.updateFrame({ voltages: {}, currents: { J1: 1 } });
   assert.equal(

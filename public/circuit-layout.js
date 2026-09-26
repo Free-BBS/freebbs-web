@@ -75,6 +75,90 @@
     return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
   }
 
+  function arrangeSignalFlow(components, wires, lockedComponentIds, flow) {
+    if (!flow?.sourceId || !flow?.sinkId) return components;
+    const source = components.find((item) => item.id === flow.sourceId);
+    const sink = components.find((item) => item.id === flow.sinkId);
+    if (!source || !sink || source.x === sink.x) return components;
+    const byId = new Map(components.map((item) => [item.id, item]));
+    const neighbors = new Map(components.map((item) => [item.id, new Set()]));
+    wires.forEach((wire) => {
+      neighbors.get(wire.from.componentId)?.add(wire.to.componentId);
+      neighbors.get(wire.to.componentId)?.add(wire.from.componentId);
+    });
+    const distances = (startId) => {
+      const result = new Map([[startId, 0]]);
+      const pending = [startId];
+      while (pending.length) {
+        const current = pending.shift();
+        for (const next of neighbors.get(current) || []) {
+          if (
+            result.has(next) ||
+            (lockedComponentIds.has(next) && ![flow.sourceId, flow.sinkId].includes(next))
+          )
+            continue;
+          result.set(next, result.get(current) + 1);
+          pending.push(next);
+        }
+      }
+      return result;
+    };
+    const fromSource = distances(flow.sourceId);
+    const fromSink = distances(flow.sinkId);
+    const leftToRight = source.x < sink.x;
+    const startX = source.x + (leftToRight ? 1 : -1) * (flow.padding || 150);
+    const endX = sink.x - (leftToRight ? 1 : -1) * (flow.padding || 150);
+    const top = flow.top ?? Math.min(source.y, sink.y) - 180;
+    const bottom = flow.bottom ?? Math.max(source.y, sink.y) + 180;
+    const free = components.filter((item) => !lockedComponentIds.has(item.id));
+    const positioned = free.map((component) => {
+      const a = fromSource.get(component.id);
+      const b = fromSink.get(component.id);
+      let ratio;
+      if (Number.isFinite(a) && Number.isFinite(b) && a + b) ratio = a / (a + b);
+      else if (Number.isFinite(a)) ratio = Math.min(0.85, a / Math.max(2, a + 1));
+      else if (Number.isFinite(b)) ratio = Math.max(0.15, 1 - b / Math.max(2, b + 1));
+      else ratio = (component.x - source.x) / (sink.x - source.x);
+      ratio = Math.max(0, Math.min(1, ratio));
+      const supportY = [...(neighbors.get(component.id) || [])]
+        .filter(
+          (id) => lockedComponentIds.has(id) && ![flow.sourceId, flow.sinkId].includes(id),
+        )
+        .map((id) => byId.get(id)?.y)
+        .filter(Number.isFinite);
+      return {
+        ...component,
+        x: snap(startX + ratio * (endX - startX)),
+        preferredY: supportY.length
+          ? supportY.reduce((sum, value) => sum + value, 0) / supportY.length
+          : (top + bottom) / 2,
+      };
+    });
+    const columns = new Map();
+    positioned.forEach((component) => {
+      if (!columns.has(component.x)) columns.set(component.x, []);
+      columns.get(component.x).push(component);
+    });
+    const positions = new Map();
+    for (const column of columns.values()) {
+      column.sort((a, b) => a.preferredY - b.preferredY || a.y - b.y || a.id.localeCompare(b.id));
+      const spacing = Math.min(140, (bottom - top) / Math.max(1, column.length - 1));
+      const first = column.length === 1 ? (top + bottom) / 2 : (top + bottom - spacing * (column.length - 1)) / 2;
+      column.forEach((component, index) => {
+        let y = first + index * spacing;
+        if (column.length === 1 && component.preferredY !== (top + bottom) / 2)
+          y = component.preferredY < (top + bottom) / 2 ? top + 60 : bottom - 60;
+        positions.set(component.id, { ...component, y: snap(y) });
+      });
+    }
+    return components.map((component) => {
+      const next = positions.get(component.id);
+      if (!next) return component;
+      const { preferredY, ...clean } = next;
+      return clean;
+    });
+  }
+
   function arrangeComponents(components, lockedComponentIds = new Set()) {
     const placed = [];
     const boxes = [];
@@ -467,10 +551,10 @@
     });
   }
 
-  function normalizeCircuitLayout(document, { lockedComponentIds = [] } = {}) {
+  function normalizeCircuitLayout(document, { lockedComponentIds = [], flow = null } = {}) {
     const locked = new Set(lockedComponentIds);
     const components = orientComponents(
-      arrangeComponents(document.components, locked),
+      arrangeComponents(arrangeSignalFlow(document.components, document.wires, locked, flow), locked),
       document.wires,
       locked,
     );

@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const engine = require('../public/circuit-engine');
 const renderer = require('../public/circuit-renderer');
-const { connectToWire } = require('../public/circuit-wiring');
+const { cleanupJunctions, connectToWire } = require('../public/circuit-wiring');
 
 const endpoint = (componentId, pin = 0) => ({ componentId, pin });
 function fixture() {
@@ -84,6 +84,41 @@ test('starting from a wire creates a junction without changing any existing circ
   const further = connectToWire(roundTrip, 'w5', { x: 400, y: 100 });
   assert.equal(further.document.components.at(-1).id, 'J2');
   assert.deepEqual(engine.simulate(further.document).traces, engine.simulate(input).traces);
+});
+
+test('deleting a branch automatically removes redundant junctions and rejoins the remaining wire', () => {
+  const input = fixture();
+  const branched = connectToWire(input, 'w1', { x: 300, y: 100 }, {
+    fromEndpoint: endpoint('R2'),
+  }).document;
+  const withoutBranch = structuredClone(branched);
+  withoutBranch.wires = withoutBranch.wires.filter(
+    (wire) =>
+      !(
+        [wire.from.componentId, wire.to.componentId].includes('R2') &&
+        [wire.from.componentId, wire.to.componentId].includes('J1')
+      ),
+  );
+  const cleaned = cleanupJunctions(withoutBranch);
+  assert.equal(cleaned.components.some((part) => part.type === 'junction'), false);
+  const merged = cleaned.wires.find(
+    (wire) =>
+      new Set([wire.from.componentId, wire.to.componentId]).has('V1') &&
+      new Set([wire.from.componentId, wire.to.componentId]).has('R1'),
+  );
+  assert.ok(merged);
+  assert.deepEqual(engine.buildNets(cleaned).pinNets['V1:0'], engine.buildNets(cleaned).pinNets['R1:0']);
+  assert.deepEqual(engine.simulate(cleaned).traces, engine.simulate(input).traces);
+  assert.equal(withoutBranch.components.some((part) => part.type === 'junction'), true);
+});
+
+test('orphaned and one-ended junctions disappear with their dangling wire', () => {
+  const input = fixture();
+  input.components.push({ id: 'J1', type: 'junction', x: 300, y: 200, params: {} });
+  input.wires.push({ id: 'dangling', from: endpoint('R2'), to: endpoint('J1') });
+  const cleaned = cleanupJunctions(input);
+  assert.equal(cleaned.components.some((part) => part.id === 'J1'), false);
+  assert.equal(cleaned.wires.some((wire) => wire.id === 'dangling'), false);
 });
 
 test('custom bends, exact corner splits and automatic routes preserve their visible geometry', () => {

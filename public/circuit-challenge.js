@@ -379,6 +379,13 @@
       const next = engine.validateDocument(
         layout.normalizeCircuitLayout(engine.validateDocument(state.document), {
           lockedComponentIds: [...fixedIds],
+          flow: {
+            sourceId: 'V_IN',
+            sinkId: 'OUT',
+            top: 120,
+            bottom: 500,
+            padding: 170,
+          },
         }),
       );
       if (JSON.stringify(next) === JSON.stringify(state.document)) {
@@ -450,6 +457,7 @@
     } else if (state.selectedWire && !fixedWire(state.selectedWire)) {
       state.document.wires = state.document.wires.filter((wire) => wire.id !== state.selectedWire);
     } else return;
+    state.document = wiring.cleanupJunctions(state.document);
     state.selectedId = '';
     state.selectedWire = '';
     changed();

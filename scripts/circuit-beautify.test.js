@@ -176,3 +176,46 @@ test('locked challenge terminals keep their position and orientation during beau
   }
   assert.deepEqual(engine.buildNets(after), engine.buildNets(input));
 });
+
+test('challenge flow layout forms readable left-to-right columns and keeps supply branches off the signal path', () => {
+  const input = engine.validateDocument({
+    version: 1,
+    components: [
+      { id: 'V_IN', type: 'voltage', x: 140, y: 300, rotation: 90, params: { dc: 2 } },
+      { id: 'OUT', type: 'oscilloscope', x: 860, y: 300, rotation: 90, params: {} },
+      { id: 'GND', type: 'ground', x: 500, y: 560, params: {} },
+      { id: 'R1', type: 'resistor', x: 700, y: 460, params: { resistance: 1000 } },
+      { id: 'R2', type: 'resistor', x: 260, y: 140, params: { resistance: 2000 } },
+      { id: 'C1', type: 'capacitor', x: 330, y: 180, params: { capacitance: 1e-6 } },
+    ],
+    wires: [
+      ['V_IN', 0, 'R1', 0],
+      ['R1', 1, 'R2', 0],
+      ['R2', 1, 'OUT', 0],
+      ['OUT', 0, 'C1', 0],
+      ['C1', 1, 'GND', 0],
+      ['V_IN', 1, 'GND', 0],
+      ['OUT', 1, 'GND', 0],
+    ].map(([from, fromPin, to, toPin], index) => ({
+      id: `w${index}`,
+      from: { componentId: from, pin: fromPin },
+      to: { componentId: to, pin: toPin },
+    })),
+  });
+  const options = {
+    lockedComponentIds: ['V_IN', 'OUT', 'GND'],
+    flow: { sourceId: 'V_IN', sinkId: 'OUT', top: 120, bottom: 500, padding: 170 },
+  };
+  const after = layout.normalizeCircuitLayout(input, options);
+  const byId = new Map(after.components.map((component) => [component.id, component]));
+  assert.ok(byId.get('R1').x < byId.get('R2').x);
+  assert.ok(byId.get('R1').x > byId.get('V_IN').x);
+  assert.ok(byId.get('R2').x < byId.get('OUT').x);
+  assert.ok(byId.get('C1').y > 300);
+  assert.deepEqual(
+    after.components.filter(({ id }) => ['V_IN', 'OUT', 'GND'].includes(id)),
+    input.components.filter(({ id }) => ['V_IN', 'OUT', 'GND'].includes(id)),
+  );
+  assert.deepEqual(engine.buildNets(after), engine.buildNets(input));
+  assert.deepEqual(layout.normalizeCircuitLayout(after, options), after);
+});
