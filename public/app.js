@@ -1251,9 +1251,9 @@ function ensureShopInspectModal() {
           <h2 id="shop-inspect-title"></h2>
           <p id="shop-inspect-desc"></p>
           <strong id="shop-inspect-price"></strong>
-          <div class="shop-inspect-actions" id="shop-inspect-actions"></div>
-          <p class="discussion-message" id="shop-inspect-message" role="status" aria-live="polite"></p>
         </div>
+        <div class="shop-inspect-actions" id="shop-inspect-actions"></div>
+        <p class="discussion-message" id="shop-inspect-message" role="status" aria-live="polite"></p>
       </div>
     </section>
   `;
