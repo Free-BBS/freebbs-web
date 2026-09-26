@@ -78,6 +78,7 @@ export class MainSiteAuthClient implements AuthClient {
         baseRole: 'student',
         roles: [],
         tags: [],
+        mainSiteAdmin: identity.isAdmin === true,
       };
     } catch (error) {
       if (error instanceof IdentityProviderUnavailableError) throw error;

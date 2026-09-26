@@ -123,6 +123,17 @@ body.development-page .development-lead {
   animation: development-status-pulse 2.8s ease-in-out infinite;
 }
 
+.development-access-status {
+  margin: -6px 0 0;
+  color: var(--ui-muted) !important;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.development-access-status[data-state='unavailable'] {
+  color: var(--ui-reward-muted) !important;
+}
+
 .development-facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

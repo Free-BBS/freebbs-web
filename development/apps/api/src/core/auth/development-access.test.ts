@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createMemoryStore } from '../database/memory-store.js';
-import { resolveDevelopmentAccess } from './development-access.js';
+import { hasConfiguredDevelopmentLead, resolveDevelopmentAccess } from './development-access.js';
 
 const publicScope = { type: 'public', id: '*' } as const;
 
@@ -75,5 +75,37 @@ describe('development access identity matching', () => {
         identity({ uid: 'uid-yuchong', studentId: null, username: 'yuchong' }),
       ),
     ).resolves.toMatchObject({ subjectUid: 'uid-yuchong', accessLevel: 'member' });
+  });
+});
+
+describe('development access bootstrap state', () => {
+  it('does not treat the system seed as completed development configuration', async () => {
+    const store = createMemoryStore({ seed: false });
+    await store.developmentAccess.create({
+      subjectUid: 'uid-seed',
+      studentId: '2023010567',
+      username: 'Yuchong',
+      accessLevel: 'lead',
+      status: 'active',
+      ownerUid: 'system',
+      scope: publicScope,
+    });
+
+    await expect(hasConfiguredDevelopmentLead(store)).resolves.toBe(false);
+  });
+
+  it('recognizes an active lead saved by a development actor', async () => {
+    const store = createMemoryStore({ seed: false });
+    await store.developmentAccess.create({
+      subjectUid: 'uid-lead',
+      studentId: '2023000001',
+      username: 'Lead',
+      accessLevel: 'lead',
+      status: 'active',
+      ownerUid: 'uid-actor',
+      scope: publicScope,
+    });
+
+    await expect(hasConfiguredDevelopmentLead(store)).resolves.toBe(true);
   });
 });
