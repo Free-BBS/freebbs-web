@@ -37,10 +37,11 @@
     '/settings',
     '/development',
     '/circuits',
+    '/laboratory',
   ]);
   let timer;
   function warm(target) {
-    const link = target.closest?.('.topbar a[href], .mobile-nav a[href]');
+    const link = target.closest?.('.topbar a[href], .desktop-header a[href], .mobile-nav a[href]');
     if (!link || link.download || (link.target && link.target !== '_self')) return;
     const url = new URL(link.href, location.href);
     if (

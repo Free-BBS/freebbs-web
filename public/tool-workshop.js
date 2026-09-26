@@ -306,7 +306,7 @@
     const draft = {
       title: `分享小工具：${state.active.title}`.slice(0, 120),
       content: [
-        state.active.description || '我在小工具工坊发布了一个新作品。',
+        state.active.description || '我在实验室制作了一个新工具。',
         '',
         `[打开「${state.active.title}」](${link})`,
       ].join('\n'),

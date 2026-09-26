@@ -21,6 +21,7 @@ async function unlockFishboneMaster(tx, userId) {
     return [];
   if ((await tx.purchaseCount(userId, 'fishbone')) < 10) return [];
   await tx.deliver(userId, FISHBONE_MASTER);
+  await tx.notifyAchievement(userId, FISHBONE_MASTER);
   return [FISHBONE_MASTER.key];
 }
 

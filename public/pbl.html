@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>PBL计划 | FREE BBS</title>
+    <link rel="icon" type="image/png" href="/assets/favicon-v2-64.png" />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/username-guard.css" />
+    <link rel="stylesheet" href="/notifications.css" />
+    <link rel="stylesheet" href="/layout-fixes.css" />
+    <link rel="stylesheet" href="/development.css" />
+    <link rel="stylesheet" href="/pbl.css" />
+  </head>
+  <body class="development-page pbl-page">
+    <div class="page-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="FREE-BBS 首页">
+          <span class="brand-mark">FREE<br />BBS</span>
+        </a>
+        <nav class="nav-actions" aria-label="主导航">
+          <div class="user-panel" id="user-panel">
+            <div class="user-summary">
+              <button class="avatar" type="button" aria-label="用户头像">
+                <img
+                  class="avatar-image"
+                  id="avatar-image"
+                  src="/assets/avatar_placeholder.webp"
+                  alt="用户头像"
+                />
+              </button>
+              <div class="user-actions" id="user-actions">
+                <button
+                  class="user-icon-button hidden"
+                  id="user-settings-button"
+                  type="button"
+                  aria-label="设置"
+                >
+                  <img class="user-action-icon" src="/assets/icons/gear.svg" alt="" /><span
+                    >设置</span
+                  >
+                </button>
+                <button
+                  class="user-icon-button hidden"
+                  id="user-logout-button"
+                  type="button"
+                  aria-label="退出"
+                >
+                  <span>退出</span>
+                </button>
+              </div>
+              <div class="user-copy">
+                <button class="user-name" type="button" id="user-name">登录/注册</button>
+                <div class="user-role" id="user-role">学生</div>
+              </div>
+            </div>
+            <div class="user-status" id="user-status"></div>
+          </div>
+        </nav>
+      </header>
+      <nav class="mobile-nav" aria-label="手机底部导航"></nav>
+      <main class="main-content development-main">
+        <section class="development-hero" aria-labelledby="pbl-title">
+          <div class="development-hero-copy">
+            <p class="development-kicker" lang="en">FROM LEARNING TO EXPLORATION</p>
+            <h1 id="pbl-title">PBL计划<span>正在建设</span></h1>
+            <p class="development-lead">从课程里的一个疑问出发，走向真实问题、项目实践与新的知识</p>
+            <div class="development-release" role="status">
+              <span class="development-release-dot" aria-hidden="true"></span>
+              <span
+                >计划随 FREE-BBS <strong>V2.0</strong> 于
+                <time datetime="2027-03">2027 年 3 月</time>上线</span
+              >
+            </div>
+            <dl class="development-facts">
+              <div>
+                <dt>当前阶段</dt>
+                <dd>规划中 · 暂未开放</dd>
+              </div>
+              <div>
+                <dt>目标版本</dt>
+                <dd>V2.0</dd>
+              </div>
+            </dl>
+            <p class="pbl-release-note">以上为计划时间，具体能力与开放安排以正式公告为准</p>
+            <div class="development-actions" aria-label="现在可以探索">
+              <a class="development-action development-action-primary" href="/world"
+                >先去学习世界</a
+              >
+              <a class="development-action development-action-secondary" href="/discussion"
+                >与同学讨论想法</a
+              >
+            </div>
+          </div>
+          <figure class="development-scene">
+            <div class="development-scene-frame">
+              <img
+                src="/assets/development-construction-bbs-v2.webp"
+                width="1536"
+                height="1024"
+                alt="挖掘机正在建设 BBS，PBL计划暂未开放"
+              />
+              <span class="development-scene-label">BUILDING THE NEXT SPACE</span>
+            </div>
+          </figure>
+        </section>
+        <section class="development-capabilities" aria-labelledby="pbl-directions-title">
+          <header class="development-section-heading">
+            <div><h2 id="pbl-directions-title">从学习，走向共同探索</h2></div>
+            <p>延续 V1.0 的自主探索方向，以下均为后续规划，不代表当前已开放功能</p>
+          </header>
+          <div class="pbl-directions">
+            <article class="development-card">
+              <span class="pbl-direction-number" aria-hidden="true">01</span>
+              <h3>让知识面对真实问题</h3>
+              <p>把课程中学到的原理带入项目实践，在尝试、验证与交流中提出新问题</p>
+            </article>
+            <article class="development-card">
+              <span class="pbl-direction-number" aria-hidden="true">02</span>
+              <h3>寻找一起探索的伙伴</h3>
+              <p>规划项目匹配与协作入口，围绕共同关心的问题连接同学，让想法逐步成为项目</p>
+            </article>
+            <article class="development-card">
+              <span class="pbl-direction-number" aria-hidden="true">03</span>
+              <h3>让投入得到清晰回应</h3>
+              <p>规划在知识讨论的基础上扩展 PBL 悬赏与协作规则，具体流程和激励方式仍待确认</p>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="/typography.js"></script>
+    <script src="/username-guard.js"></script>
+    <script src="/app.js"></script>
+    <script src="/notifications.js"></script>
+  </body>
+</html>

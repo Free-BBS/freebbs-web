@@ -22,12 +22,14 @@
   const tools = [
     ['/development', 'star', '发展端'],
     ['/workbench', 'run', '我的工作台'],
+    ['/pbl', 'star', 'PBL计划'],
+    ['/surveys', 'calendar', '活动报名（试用）'],
     ['/settings', 'gear', '个人设置'],
   ];
   const activePath = ['/course', '/knowledge'].includes(path)
     ? '/world'
-    : path === '/circuit' || path === '/circuit-challenge'
-      ? '/circuits'
+    : ['/circuit', '/circuits', '/circuit-challenge', '/tool-workshop', '/code-lab'].includes(path)
+      ? '/laboratory'
       : path;
   function link([href, icon, label], className) {
     const node = document.createElement('a');
@@ -72,6 +74,7 @@
   };
   createButton.addEventListener('click', () => {
     close();
+    closeLearning();
     createMenu.hidden = !createMenu.hidden;
     createButton.setAttribute('aria-expanded', String(!createMenu.hidden));
   });
@@ -83,6 +86,7 @@
     if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
       event.preventDefault();
       close();
+      closeLearning();
       createMenu.hidden = false;
       createButton.setAttribute('aria-expanded', 'true');
       const items = [...createMenu.querySelectorAll('a')];
@@ -119,7 +123,7 @@
   learningButton.setAttribute('aria-expanded', 'false');
   learningButton.setAttribute('aria-haspopup', 'menu');
   learningButton.setAttribute('aria-controls', 'mobile-learning-menu');
-  if (['/world', '/circuits', '/tool-workshop'].includes(activePath))
+  if (['/world', '/laboratory', '/creative-workshop'].includes(activePath))
     learningButton.classList.add('is-active');
   const learningMenu = document.createElement('div');
   learningMenu.id = 'mobile-learning-menu';
@@ -127,16 +131,16 @@
   learningMenu.setAttribute('role', 'menu');
   learningMenu.setAttribute('aria-label', '学习');
   learningMenu.hidden = true;
-  const knowledge = link(['/world', 'map', '知识小宇宙'], 'mobile-tool-link');
+  const knowledge = link(['/world', 'map', '学习世界'], 'mobile-tool-link');
   knowledge.setAttribute('role', 'menuitem');
   learningMenu.append(knowledge);
   const creativeLabel = document.createElement('p');
   creativeLabel.className = 'mobile-menu-label';
-  creativeLabel.textContent = '创意实验室';
+  creativeLabel.textContent = '探索与实践';
   learningMenu.append(creativeLabel);
   for (const item of [
-    ['/circuits', 'circuit', '电路实验室'],
-    ['/tool-workshop', 'wrench', '小工具工坊'],
+    ['/laboratory', 'circuit', '实验室'],
+    ['/creative-workshop', 'wrench', '创意工坊'],
   ]) {
     const node = link(item, 'mobile-tool-link');
     node.setAttribute('role', 'menuitem');
@@ -161,6 +165,8 @@
     }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
+    closeCreate();
+    close();
     learningMenu.hidden = false;
     learningButton.setAttribute('aria-expanded', 'true');
     const items = [...learningMenu.querySelectorAll('[role="menuitem"]')];
@@ -221,7 +227,7 @@
 
     menu.querySelector('[data-admin-tool]')?.remove();
     if (window.freeBbsApp?.userState?.isAdmin) {
-      const node = link(['/system-settings', 'gear', '系统设置'], 'mobile-tool-link');
+      const node = link(['/system-settings', 'gear', '管理员端'], 'mobile-tool-link');
       node.dataset.adminTool = 'true';
       node.setAttribute('role', 'menuitem');
       menu.append(node);
@@ -275,6 +281,8 @@
     }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
+    closeCreate();
+    closeLearning();
     menu.hidden = false;
     button.setAttribute('aria-expanded', 'true');
     const items = [...menu.querySelectorAll('[role="menuitem"]')];

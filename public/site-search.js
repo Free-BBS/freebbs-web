@@ -233,6 +233,7 @@
     return titleMeasure.getBoundingClientRect().width;
   };
   const placeTrigger = () => {
+    if (document.body.classList.contains('desktop-shell-active')) return;
     trigger.classList.remove('is-expanded');
     trigger.style.removeProperty('left');
     trigger.style.removeProperty('right');
@@ -356,7 +357,9 @@
   });
   document.fonts?.ready.then(schedulePlacement);
   document.fonts?.addEventListener('loadingdone', schedulePlacement);
-  placeTrigger();
+  // Let the shared desktop shell mount before measuring; otherwise a page pays
+  // for the old header's forced layouts immediately before moving it again.
+  schedulePlacement();
   document.addEventListener('keydown', (event) => {
     const typing = event.target.closest?.('input, textarea, select, [contenteditable="true"]');
     if (

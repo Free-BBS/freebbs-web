@@ -214,6 +214,7 @@ function applyThemeMode(mode) {
       <span>${isLight ? '暗色模式' : '明亮模式'}</span>
     `;
     button.setAttribute('aria-label', isLight ? '切换到暗色模式' : '切换到明亮模式');
+    button.title = isLight ? '切换到暗色模式' : '切换到明亮模式';
   });
 }
 
@@ -369,25 +370,31 @@ function initializeDashboardShell() {
   const path = window.location.pathname.replace(/\/$/, '') || '/';
   const pageTitles = {
     '/': '首页',
+    '/about': '关于 FREE BBS',
+    '/staff': '工作人员名单',
     '/world': '学习世界',
     '/course': '课程',
     '/knowledge': '知识点',
     '/discussion': '讨论区',
     '/circuits': '电路实验室',
-    '/tool-workshop': '小工具工坊',
+    '/tool-workshop': '制作我的工具',
+    '/creative-workshop': '创意工坊',
+    '/laboratory': '实验室',
+    '/code-lab': 'C / C++ 实验室',
+    '/pbl': 'PBL计划',
     '/circuit': '电路仿真',
     '/circuit-challenge': '电路闯关',
     '/workbench': '我的工作台',
     '/aichat': '问问 Max',
     '/search': '全站搜索',
-    '/surveys': '活动报名',
-    '/surveys.html': '活动报名',
+    '/surveys': '活动报名（试用）',
+    '/surveys.html': '活动报名（试用）',
     '/system-settings/surveys': '活动报名管理',
     '/development': '发展端',
     '/settings': '设置',
     '/profile': '个人主页',
     '/adminusers': '用户管理',
-    '/system-settings': '系统设置',
+    '/system-settings': '管理员端',
     '/system-settings/announcements': '公告管理',
     '/system-settings/rewards': '奖励方案',
     '/system-settings/model': '模型与密钥',
@@ -403,25 +410,28 @@ function initializeDashboardShell() {
     { href: '/', icon: 'home', label: '首页' },
     { href: '/world', icon: 'map', label: '学习世界' },
     { href: '/discussion', icon: 'people', label: '讨论区' },
-    { href: '/circuits', icon: 'circuit', label: '电路实验室' },
-    { href: '/tool-workshop', icon: 'wrench', label: '小工具工坊' },
     { href: '/workbench', icon: 'run', label: '我的工作台' },
+    { href: '/laboratory', icon: 'circuit', label: '实验室' },
+    { href: '/creative-workshop', icon: 'wrench', label: '创意工坊' },
+    { href: '/pbl', icon: 'star', label: 'PBL计划' },
     { href: '/aichat', icon: 'ai', label: '问问 Max' },
-    { href: '/surveys', icon: 'calendar', label: '活动报名' },
-    { href: '/development', icon: 'star', label: '发展端' },
-    { href: '/settings', icon: 'gear', label: '设置' },
+    { href: '/surveys', icon: 'calendar', label: '活动报名（试用）' },
     {
       href: '/system-settings',
       icon: 'gear',
-      label: '系统设置',
+      label: '管理员端',
       className: 'system-settings-link hidden',
     },
+    { href: '/development', icon: 'star', label: '发展端' },
+    { href: '/settings', icon: 'gear', label: '设置' },
   ];
   let activePath = path === '/surveys.html' ? '/surveys' : path;
   if (path.startsWith('/system-settings') || path === '/adminusers') {
     activePath = '/system-settings';
   } else if (['/course', '/knowledge'].includes(path)) {
     activePath = '/world';
+  } else if (['/tool-workshop', '/code-lab'].includes(path)) {
+    activePath = '/laboratory';
   } else if (path === '/circuit' || path === '/circuit-challenge') {
     activePath = '/circuits';
   }
@@ -433,7 +443,12 @@ function initializeDashboardShell() {
 
   document.querySelectorAll('.nav-actions, .mobile-nav').forEach((nav) => {
     navItems.forEach(({ href, icon, label, className = '' }) => {
+      const laboratoryEntry = href === '/laboratory';
       let link = nav.querySelector(`.nav-link[href="${href}"]`);
+      if (!link && laboratoryEntry) {
+        link = nav.querySelector('.nav-link[href="/circuits"]');
+        if (link) link.href = href;
+      }
       if (!link) {
         link = createNavLink({
           href,
@@ -451,8 +466,11 @@ function initializeDashboardShell() {
         text.textContent = label;
       }
 
-      link.classList.toggle('is-active', href === activePath);
-      if (href === activePath) {
+      const active =
+        href === activePath ||
+        (laboratoryEntry && ['/circuits', '/circuit-challenge'].includes(activePath));
+      link.classList.toggle('is-active', active);
+      if (active) {
         link.setAttribute('aria-current', 'page');
       } else if (link.getAttribute('aria-current') === 'page') {
         link.removeAttribute('aria-current');
@@ -727,7 +745,7 @@ function getFortuneResult(score, date = getTodayKey()) {
       label: '祥瑞',
       colorClass: 'fortune-great',
       colorName: '金色',
-      tagline: 'Absoulute legend',
+      tagline: 'Absolute legend',
     };
   }
 
@@ -738,7 +756,7 @@ function getFortuneResult(score, date = getTodayKey()) {
       label: '大吉',
       colorClass: 'fortune-awful',
       colorName: '红色',
-      tagline: 'Absoulute legend',
+      tagline: 'Absolute legend',
     };
   }
 
@@ -1071,7 +1089,7 @@ function ensureElectromagneticModal() {
         <h3>电元 · 探索与贡献</h3>
         <ul class="currency-guide-list">
           <li>公测期间，发现并提交有价值的问题，经审核可获得5–50电元奖励。</li>
-          <li>照顾 Max：每喂食5条小鱼长出1份羊毛，按北京时间每天最多剪一份。剪下后用橡胶棒摩擦，每份获得2电元。橡胶棒7磁元购买，可反复使用。</li>
+          <li>照顾 Max：每次有效喂养按泊松过程随机长毛，长期平均每5条鱼约1份，并非第五次必得；按北京时间每天最多剪一份。剪下后用橡胶棒摩擦，每份获得2电元。橡胶棒7磁元购买，可反复使用。</li>
           <li>后续课程配套入驻后，将开放学习内容相关的电元奖励，具体获取方式随课程公布。</li>
         </ul>
       </section>
@@ -2050,6 +2068,12 @@ async function handleElectromagneticPageClick(event) {
       }
       if (Array.isArray(payload.shopItems))
         economyShopItems = payload.shopItems.map(normalizeShopCatalogItem);
+      if (payload.purchase?.unlocked?.includes('plate_fishbone_master'))
+        window.dispatchEvent(
+          new CustomEvent('freebbs:achievement-unlocked', {
+            detail: { key: 'plate_fishbone_master', uid: userState.uid, token: sessionToken },
+          }),
+        );
       await loadElectromagneticPage();
       if (sessionToken !== userState.token || !userState.isLoggedIn) return;
       const modal = document.getElementById('shop-inspect-modal');
@@ -3022,6 +3046,36 @@ function renderWorkbenchDashboard() {
     );
   }
 }
+function renderHeaderBalances() {
+  if (!userStatus) return;
+  const desktop = window.matchMedia('(min-width: 901px)').matches;
+  const values = userState.isLoggedIn
+    ? [userState.electrons, userState.manetrons, userState.heat]
+    : ['-', '-', '-'];
+  userStatus.innerHTML = ['electric', 'magnetic', 'heat']
+    .map((type, index) => renderCurrency(type, values[index], !desktop && userState.isLoggedIn))
+    .join('');
+  if (desktop) {
+    userStatus.setAttribute('data-currency-guide', '');
+    userStatus.setAttribute('role', 'button');
+    userStatus.tabIndex = 0;
+    userStatus.setAttribute('aria-haspopup', 'dialog');
+    userStatus.setAttribute(
+      'aria-label',
+      `电元 ${values[0]}，磁元 ${values[1]}，热力 ${values[2]}，点击查看三种资产的说明`,
+    );
+  } else {
+    for (const attribute of [
+      'data-currency-guide',
+      'role',
+      'tabindex',
+      'aria-haspopup',
+      'aria-label',
+    ])
+      userStatus.removeAttribute(attribute);
+  }
+}
+
 function renderUser() {
   if (isAiChatPage()) {
     document.body.classList.add('is-ai-session-ready');
@@ -3043,11 +3097,7 @@ function renderUser() {
     }
     userSettingsButton?.classList.add('hidden');
     userLogoutButton?.classList.add('hidden');
-    userStatus.innerHTML = [
-      renderCurrency('electric', '-'),
-      renderCurrency('magnetic', '-'),
-      renderCurrency('heat', '-'),
-    ].join('');
+    renderHeaderBalances();
     avatarImages.forEach((image) => {
       image.src = DEFAULT_AVATAR;
     });
@@ -3075,11 +3125,7 @@ function renderUser() {
   }
   userSettingsButton?.classList.remove('hidden');
   userLogoutButton?.classList.remove('hidden');
-  userStatus.innerHTML = [
-    renderCurrency('electric', userState.electrons, true),
-    renderCurrency('magnetic', userState.manetrons, true),
-    renderCurrency('heat', userState.heat),
-  ].join('');
+  renderHeaderBalances();
   avatarImages.forEach((image) => {
     image.src = getAvatarUrl(userState.avatarPath);
   });
@@ -7283,13 +7329,14 @@ async function loadDiscussionPosts({ autoOpen = false, more = false } = {}) {
 async function initializeDiscussionPage() {
   if (isCurrentPath('/publish')) {
     await sessionReady;
-    discussionState.activeBoard = new URLSearchParams(location.search).get('board') || 'daily';
+    discussionState.activeBoard =
+      new URLSearchParams(window.location.search).get('board') || 'daily';
     await loadDiscussionBoards();
     return { boards: discussionState.boards, isFallback: discussionState.isFallback };
   }
   if (!isDiscussionPage()) return;
-  if (new URLSearchParams(location.search).get('compose') === 'circuit') {
-    location.replace('/publish' + location.search);
+  if (new URLSearchParams(window.location.search).get('compose') === 'circuit') {
+    window.location.replace(`/publish${window.location.search}`);
     return;
   }
   await sessionReady;
@@ -9402,7 +9449,7 @@ async function handleDiscussionCommentSubmit(event) {
 
 async function handleDiscussionCreateToggle() {
   if (!isCurrentPath('/publish')) {
-    location.href = '/publish?board=' + encodeURIComponent(discussionState.activeBoard);
+    window.location.href = `/publish?board=${encodeURIComponent(discussionState.activeBoard)}`;
     return;
   }
   if (!discussionComposeForm) {
@@ -9480,11 +9527,7 @@ async function handleDiscussionComposeSubmit(event) {
     );
     discussionComposeForm.reset();
     if (isCurrentPath('/publish')) {
-      location.href =
-        '/discussion?post=' +
-        encodeURIComponent(payload.post.id) +
-        '&board=' +
-        encodeURIComponent(payload.post.board.slug);
+      window.location.href = `/discussion?post=${encodeURIComponent(payload.post.id)}&board=${encodeURIComponent(payload.post.board.slug)}`;
       return;
     }
     syncDiscussionAnonymousOption();
@@ -10515,6 +10558,7 @@ window.freeBbsApp = {
     };
   })(),
   toggleThemeMode,
+  renderHeaderBalances,
   openFortuneModal,
   clearSession,
   enhanceMarkdownContent,
@@ -10550,6 +10594,16 @@ userName.addEventListener('click', handleAuthEntry);
 avatarButtons.forEach((button) => button.addEventListener('click', handleAvatarEntry));
 userStatus?.addEventListener('click', (event) => {
   if (event.target.closest('[data-currency-guide]')) openElectromagneticModal();
+});
+userStatus?.addEventListener('keydown', (event) => {
+  if (
+    event.target === userStatus &&
+    userStatus.getAttribute('role') === 'button' &&
+    ['Enter', ' '].includes(event.key)
+  ) {
+    event.preventDefault();
+    openElectromagneticModal();
+  }
 });
 userSettingsButton?.addEventListener('click', handleUserSettingsClick);
 userLogoutButton?.addEventListener('click', handleUserLogoutClick);

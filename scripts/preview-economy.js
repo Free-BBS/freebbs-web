@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
+const { servePausedCodeLab } = require('../code-lab-availability');
 const { createEconomyShop } = require('../backend/economy-shop');
 const { createEconomyMemoryStore } = require('./fixtures/economy-memory-store');
 const { createProfileExtras, beijingDay } = require('../backend/profile-extras');
@@ -43,6 +44,7 @@ function createEconomyPreview({
   previewNotice = '',
   transformHtml = null,
   allowVendor = false,
+  profileOptions = {},
 } = {}) {
   const previewPages = { ...pages, ...extraPages };
   const isWorkbenchPreview = previewPages['/workbench'] === 'workbench.html';
@@ -81,7 +83,7 @@ function createEconomyPreview({
     }
   }
   const shop = createEconomyShop(store, { now });
-  const extras = createProfileExtras(store, { now });
+  const extras = createProfileExtras(store, { now, ...profileOptions });
   function todayFortune() {
     const date = beijingDay(now());
     // A deterministic QA score, stored once per Beijing day, never a production override.
@@ -176,6 +178,7 @@ function createEconomyPreview({
       if (req.headers.host !== host) return send(403, { message: 'Loopback preview only' });
       const url = new URL(req.url, `http://${host}`);
       const route = decodeURIComponent(url.pathname);
+      if (servePausedCodeLab(req, res, route)) return;
       let requestBody;
       if (extraApi && route.startsWith('/api/')) {
         if (
@@ -206,6 +209,35 @@ function createEconomyPreview({
           now,
         });
         if (result) return send(result.status || 200, result.body);
+      }
+      const notificationRead = route.match(/^\/api\/notifications\/(\d+)\/read$/);
+      if (
+        (route === '/api/notifications' ||
+          route === '/api/notifications/unread-count' ||
+          route === '/api/notifications/read-all' ||
+          notificationRead) &&
+        (store.account().notifications.length || !previewApiHandler)
+      ) {
+        if (
+          req.headers.authorization !== `Bearer ${TOKEN}` ||
+          (req.headers.origin && req.headers.origin !== `http://${host}`)
+        )
+          return send(403, { message: '仅限本地模拟操作' });
+        const rows = store.account().notifications;
+        if (req.method === 'POST' && (notificationRead || route.endsWith('/read-all'))) {
+          for (const row of rows)
+            if (!notificationRead || String(row.id) === notificationRead[1])
+              row.readAt = new Date(now()).toISOString();
+          return send(200, { ok: true });
+        }
+        if (req.method !== 'GET') return send(405, { message: '预览不支持此操作' });
+        const unreadCount = rows.filter((row) => !row.readAt).length;
+        return send(
+          200,
+          route.endsWith('/unread-count')
+            ? { unreadCount }
+            : { notifications: [...rows].reverse(), unreadCount, nextCursor: null },
+        );
       }
       if (
         previewApiHandler &&
@@ -330,6 +362,10 @@ function createEconomyPreview({
             uid,
             username: id === 1 ? 'NotingSr_preview' : 'another_student',
             bio: '本地展示用账号',
+            activity: {
+              end: beijingDay(now()),
+              days: [{ date: beijingDay(now()), count: 4, checkins: 1, posts: 1, comments: 2 }],
+            },
             collectibles: await shop.publicCollectibles(items, id),
             ...(await extras.publicProfile(id)),
           },

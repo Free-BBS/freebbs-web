@@ -276,6 +276,11 @@ body.development-page .development-main .development-action-secondary:hover {
   letter-spacing: 0.15em;
 }
 
+/* Shared prose colors must not override the caption on the dark image scrim. */
+body.development-page .development-main .development-scene-label {
+  color: #ffffff !important;
+}
+
 .development-capabilities {
   display: grid;
   gap: 22px;

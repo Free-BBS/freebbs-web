@@ -29,6 +29,20 @@
   font-size: 0.85rem;
   line-height: 1.5;
 }
+body.tool-workshop-page .tool-laboratory-back {
+  display: inline-block;
+  margin-top: 10px;
+  color: var(--ui-accent);
+  font: 600 0.82rem/1.6 var(--font-ui);
+  text-decoration: none;
+}
+.tool-laboratory-back:hover {
+  text-decoration: underline;
+}
+.tool-laboratory-back:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 4px;
+}
 .tool-workshop-shell button,
 .tool-viewer button {
   min-height: 44px;

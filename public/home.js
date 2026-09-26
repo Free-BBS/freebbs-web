@@ -38,14 +38,12 @@
   function installHomeResume({ document: doc, window: win, app }) {
     const link = doc.getElementById('home-learning-link');
     const note = doc.getElementById('home-resume-note');
-    const worldLink = doc.getElementById('home-world-link');
-    if (!link || !note || !worldLink) return;
+    if (!link || !note) return;
     let revision = 0;
     function reset() {
       link.href = '/world';
       link.textContent = '进入学习世界 ↗';
-      note.textContent = '选择一门课程，从知识地图开始。';
-      worldLink.hidden = true;
+      note.textContent = '选择一门课程，从知识地图开始';
     }
     async function refresh() {
       revision += 1;
@@ -77,8 +75,7 @@
       if (request !== revision) return;
       link.href = recent.href;
       link.textContent = '继续上次浏览 ↗';
-      note.textContent = `本浏览器最近访问：${title}。非账号同步记录。`;
-      worldLink.hidden = false;
+      note.textContent = `本浏览器最近访问：${title}（非账号同步记录）`;
     }
     win.addEventListener('storage', (event) => {
       if (event.key === STORAGE_KEY || event.key === null) refresh();

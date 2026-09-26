@@ -77,7 +77,7 @@
         ].reduce((sum, key) => sum + (Number.parseFloat(heading[key]) || 0), 0);
       bounds.top = Math.max(bounds.top, (Number.parseFloat(heading.top) || 0) + headingHeight + 10);
     }
-    document.querySelectorAll('.topbar, .mobile-nav').forEach((navigation) => {
+    document.querySelectorAll('.topbar, .desktop-header, .mobile-nav').forEach((navigation) => {
       const style = window.getComputedStyle(navigation);
       const rect = navigation.getBoundingClientRect();
       if (!['fixed', 'sticky'].includes(style.position) || !rect.width || !rect.height) return;

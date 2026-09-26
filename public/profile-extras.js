@@ -10,6 +10,7 @@
   };
   const pending = new Map();
   let profileData = null;
+  let wardrobeAnchorShown = false;
   let own = null;
   let busy = false;
   let renderRevision = 0;
@@ -331,14 +332,13 @@
     if (!ranch.adopted) return '';
     const count = (value) =>
       Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(Number(value) || 0)));
-    const progress = Math.min(4, count(ranch.feedProgress));
     const ready = count(ranch.woolReady);
     const stored = count(ranch.woolStored);
     return `<section class="ranch-wool" aria-labelledby="ranch-wool-title">
       <div class="ranch-wool-heading"><div><span class="ranch-kicker">A LITTLE STATIC MAGIC</span><h3 id="ranch-wool-title">Max 的羊毛静电工坊</h3></div>
         <svg class="ranch-wool-art" viewBox="0 0 150 82" aria-hidden="true"><path d="M18 53Q6 37 22 30Q18 14 35 18Q47 4 58 18Q78 10 81 27Q99 30 90 48Q96 65 76 65H32Q14 69 18 53Z" fill="#fff2d7" stroke="#b38956" stroke-width="2"/><path d="M29 41q0-13 11-9t0 13m15-21q14-4 12 9m-10 21q12 5 18-5" fill="none" stroke="#d1af7d" stroke-width="2" stroke-linecap="round"/><g transform="rotate(28 113 43)"><rect x="105" y="7" width="18" height="69" rx="9" fill="#42404b" stroke="#262530" stroke-width="2"/><path d="M110 18h8m-8 16h8m-8 16h8" stroke="#c4e8f2" stroke-width="2"/></g><path d="m91 19 6 5-6 5m4 15 7 2-5 6" fill="none" stroke="#dba33d" stroke-width="2"/></svg></div>
-      <p>每喂食 5 条小鱼，长出一份蓬松羊毛。每天剪一份，和橡胶棒摩擦，让好奇心变成 2 电元。</p>
-      <div class="ranch-wool-progress"><span>下一份羊毛</span><progress max="5" value="${progress}" aria-label="下一份羊毛喂养进度">${progress}/5</progress><strong>${progress} / 5 条小鱼</strong></div>
+      <p>一条小鱼，一次随机生长的机会。长期平均每 5 条鱼约长出 1 份羊毛，并非喂满 5 次必得。每天剪一份，摩擦起电收获 2 电元。</p>
+      <details class="ranch-growth-model"><summary>生长的小秘密 · 泊松过程</summary><p>把每次成功喂养看作一个单位，新增羊毛数服从 Poisson(λ = 0.2)。每次约有 18.1% 的机会长出羊毛，偶尔也会长出多份；各次独立，不会越喂越接近“必中”。连续 n 次的平均新增量为 0.2n 份。</p><p>刷新、等待和重复请求不会重新抽取。旧的待剪与已剪羊毛继续保留，每日剪毛上限不变。</p></details>
       <div class="ranch-wool-stages"><div><span>长好待剪</span><strong>${ready} <small>份</small></strong>${isOwn ? `<button type="button" data-extra-action="shear" ${ready < 1 || ranch.shearedToday ? 'disabled' : ''}>${ranch.shearedToday ? '今天已剪毛' : '剪下一份羊毛'}</button>` : ''}</div>
         <div><span>已剪待摩擦</span><strong>${stored} <small>份</small></strong>${isOwn ? `<button type="button" data-extra-action="rub_wool" ${stored < 1 || !state.rubberRod ? 'disabled' : ''}>摩擦起电 · ＋2 电元</button>` : ''}</div></div>
       ${isOwn ? `<p class="ranch-wool-tool">${state.rubberRod ? '橡胶棒已就位，可以反复使用。' : '<a href="/electromagnetic">去商城带回橡胶棒 · 7 磁元 ↗</a>'}</p>` : ''}
@@ -376,6 +376,14 @@
       <p>主页主题会统一个人资料、收藏与牧场的配色，自己查看和他人访问都能看到。</p>
       <a href="/electromagnetic">在商城发现更多装扮 ↗</a>
       `;
+    if (!wardrobeAnchorShown && window.location.hash === '#public-profile-wardrobe') {
+      wardrobeAnchorShown = true;
+      const disclosure = container.closest('details');
+      if (disclosure) disclosure.open = true;
+      requestAnimationFrame(() => {
+        if (!container.hidden) container.scrollIntoView({ block: 'start' });
+      });
+    }
   }
   async function renderProfile(profile) {
     renderRevision += 1;
@@ -421,6 +429,16 @@
       )
         return;
       own = state;
+      if (state.unlocked?.includes('plate_fishbone_master'))
+        window.dispatchEvent(
+          new CustomEvent('freebbs:achievement-unlocked', {
+            detail: {
+              key: 'plate_fishbone_master',
+              uid: app.userState.uid,
+              token: app.userState.token,
+            },
+          }),
+        );
       applyPresentation(own.cosmetics);
       renderRanch(own);
     }
@@ -498,9 +516,15 @@
       if (body.action === 'rub_wool')
         text = '噼啪！羊毛与橡胶棒摩擦，获得 2 电元，已记入账本。橡胶棒可以继续使用。';
       if (body.action === 'feed' && result.result.woolGrown)
-        text += ' 五条小鱼的心意攒满了，Max 长出一份可以剪取的羊毛！';
-      if (result.result.unlocked?.includes('plate_fishbone_master'))
+        text += ` Max 长出 ${result.result.woolGrown} 份可以剪取的羊毛！`;
+      if (result.result.unlocked?.includes('plate_fishbone_master')) {
         text += ' 已解锁成就铭牌「鱼骨达人」，可以在我的装扮中佩戴。';
+        window.dispatchEvent(
+          new CustomEvent('freebbs:achievement-unlocked', {
+            detail: { key: 'plate_fishbone_master', uid, token },
+          }),
+        );
+      }
       if (profileData?.uid === uid) {
         profileData = { ...profileData, cosmetics: result.cosmetics, ranch: result.ranch };
         own = result;

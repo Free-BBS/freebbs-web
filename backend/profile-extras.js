@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { WOOL_RATE, sampleWoolGrowth } = require('./ranch-growth');
 const { FISHBONE_MASTER, unlockFishboneMaster } = require('./economy-achievements');
 const { walletLedgerCheckpoint, annotateWalletLedger } = require('./wallet-ledger');
 const {
@@ -63,18 +64,21 @@ function publicPresentation(state = {}, now = Date.now()) {
       fedUntilMs: Number(state.fedUntilMs || 0),
       serverNowMs: now,
       hungry: Number(state.fedUntilMs || 0) <= now,
+      growthModel: 'poisson-v1',
+      woolRate: WOOL_RATE,
       ...ranchWool(state),
       ...shearWindow(state, now),
     },
   };
 }
-function createProfileExtras(store, { now = Date.now } = {}) {
+function createProfileExtras(store, { now = Date.now, random } = {}) {
   return {
     async publicProfile(id) {
       return publicPresentation(await store.readExtras(id), now());
     },
     async ownState(id) {
       let state = await store.readExtras(id);
+      let unlocked = [];
       // Reconcile accounts that met the condition before this achievement was introduced.
       // Recheck under the same account lock; concurrent reads cannot award twice.
       if (
@@ -83,9 +87,9 @@ function createProfileExtras(store, { now = Date.now } = {}) {
         state.assets?.ordinary_fishbone >= 10 &&
         (await store.readCounts(id)).fishbone >= 10
       ) {
-        await store.transaction(async (tx) => {
+        unlocked = await store.transaction(async (tx) => {
           await tx.lockUser(id);
-          await unlockFishboneMaster(tx, id);
+          return unlockFishboneMaster(tx, id);
         });
         state = await store.readExtras(id);
       }
@@ -95,6 +99,7 @@ function createProfileExtras(store, { now = Date.now } = {}) {
         owned: Object.keys(COSMETICS).filter((key) => Number(state.assets?.[key] || 0) > 0),
         fish: Math.max(0, Number(state.assets?.fish || 0)),
         rubberRod: Number(state.assets?.rubber_rod || 0) > 0,
+        unlocked,
       };
     },
     async act({ userId, action, slot, itemKey = '', requestKey }) {
@@ -181,7 +186,9 @@ function createProfileExtras(store, { now = Date.now } = {}) {
             if (state.lastShearDay === shearDay)
               throw new ProfileExtrasError('Max 被薅秃了，明天再来吧。');
             if (state.woolReady < 1)
-              throw new ProfileExtrasError('还没有待剪的羊毛，每成功喂食 5 条小鱼长出 1 份');
+              throw new ProfileExtrasError(
+                '还没有待剪的羊毛，成功喂养后会随机生长，长期平均每 5 条鱼约 1 份',
+              );
             if (state.woolStored >= MAX_WOOL)
               throw new ProfileExtrasError('已剪羊毛数量达到上限，请先摩擦发电', 409);
             state.woolReady -= 1;
@@ -219,7 +226,8 @@ function createProfileExtras(store, { now = Date.now } = {}) {
           } catch (error) {
             throw new ProfileExtrasError(error.message);
           }
-          if (state.feedProgress === WOOL_FEEDS - 1 && state.woolReady >= MAX_WOOL)
+          const woolGrown = sampleWoolGrowth(random);
+          if (state.woolReady >= MAX_WOOL || woolGrown > MAX_WOOL - state.woolReady)
             throw new ProfileExtrasError('待剪羊毛数量达到上限，请先剪取', 409);
           // A daily receipt is independent of ordinary feeds and current bone holdings.
           // The account lock, delivery and receipt share one transaction.
@@ -244,12 +252,10 @@ function createProfileExtras(store, { now = Date.now } = {}) {
           state.lastFeedDay = day;
           state.adopted = true;
           state.fedUntilMs = nextFeed;
-          state.feedProgress += 1;
-          const woolGrown = state.feedProgress === WOOL_FEEDS ? 1 : 0;
-          if (woolGrown) {
-            state.feedProgress = 0;
-            state.woolReady += 1;
-          }
+          // Retain the legacy 0..4 column for compatibility with deployed schemas.
+          // It is no longer a countdown or an input to the random outcome.
+          state.feedProgress = (state.feedProgress + 1) % WOOL_FEEDS;
+          state.woolReady += woolGrown;
           result = { ...result, bone: key, woolGrown, ...ranchWool(state) };
         }
         await tx.saveExtras(userId, state);
@@ -304,6 +310,21 @@ async function readPublicCosmetics(connection, ids) {
 }
 function mysqlProfileMethods(connection) {
   return {
+    async notifyAchievement(id, item) {
+      // Award and inbox row commit together. The unique event key also guards retries.
+      await connection.execute(
+        `INSERT INTO community_notifications (recipient_id, actor_id, kind, title, body, link, event_key)
+         SELECT id, NULL, 'achievement', ?, ?, CONCAT('/profile?uid=', uid, '#public-profile-wardrobe'), ?
+           FROM users WHERE id = ?
+          ON DUPLICATE KEY UPDATE id = community_notifications.id`,
+        [
+          `获得成就 · ${item.name}`,
+          `成就铭牌「${item.name}」已收入我的装扮，可以与 BBS 见习观察员等铭牌切换佩戴，不会自动替换当前装扮`,
+          `achievement:${item.key}`,
+          id,
+        ],
+      );
+    },
     readExtras: (id) => readExtras(connection, id),
     async findProfileAction(id, key) {
       const [rows] = await connection.execute(

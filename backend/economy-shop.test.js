@@ -165,6 +165,7 @@ test('tenth bone purchase unlocks fishbone master if gold already exists; replay
   await buy('fishbone', { requestKey, expectedPurchaseCount: 9, quotedCost: { electric: 5 } });
   assert.equal(store.account().assets.plate_fishbone_master, 1);
   assert.equal(store.account().electric, 9995);
+  assert.equal(store.account().notifications.length, 1);
 });
 
 test('ten purchased bones without gold do not unlock the achievement', async () => {
@@ -182,6 +183,17 @@ test('purchase receipt failure rolls back the achievement, purchase count and de
   assert.equal(store.account().assets.plate_fishbone_master, undefined);
   assert.equal(store.account().counts.fishbone, 9);
   assert.equal(store.account().electric, 10000);
+  assert.equal(store.account().notifications.length, 0);
+});
+
+test('achievement notification failure rolls back the qualifying shop purchase', async () => {
+  const { buy, store } = setup([
+    { id: 1, counts: { fishbone: 9 }, assets: { golden_fishbone: 3, ordinary_fishbone: 10 } },
+  ]);
+  const before = structuredClone(store.account());
+  store.failAt = 'notification';
+  await assert.rejects(buy('fishbone'), /simulated notification/);
+  assert.deepEqual(store.account(), before);
 });
 test('laser purchase gives a durable asset, no light time and no magnetic debit', async () => {
   const { buy, store, shop } = setup();

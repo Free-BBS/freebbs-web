@@ -49,6 +49,9 @@ test('onboarding preview uses real local pages, account progress and transaction
     async () => {
       for (const route of [
         '/',
+        '/about',
+        '/staff',
+        '/laboratory',
         '/guide',
         '/world',
         '/course',
@@ -82,6 +85,10 @@ test('onboarding preview uses real local pages, account progress and transaction
       }
       assert.equal((await fetch(`${origin}/api/onboarding`)).status, 403);
       assert.equal(
+        (await api('/api/notifications/email-preferences')).preferences.weeklyDigest,
+        false,
+      );
+      assert.equal(
         (
           await fetch(`${origin}/api/onboarding`, {
             headers: { Authorization: `Bearer ${TOKEN}`, Origin: 'https://www.free-bbs.cn' },
@@ -98,8 +105,15 @@ test('onboarding preview uses real local pages, account progress and transaction
     'preview loads the production shell in the same order for responsive guide QA',
     async () => {
       const production = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
-      const styles = ['site-search', 'mobile-shell', 'desktop-elegant', 'page-transitions'];
-      const scripts = ['site-search', 'mobile-shell', 'page-transitions'];
+      const styles = [
+        'site-search',
+        'mobile-shell',
+        'desktop-elegant',
+        'page-transitions',
+        'desktop-shell',
+        'personal-polish',
+      ];
+      const scripts = ['site-search', 'mobile-shell', 'page-transitions', 'desktop-shell'];
       const head = styles.map((name) => `<link rel="stylesheet" href="/${name}.css">`).join('');
       const body = scripts.map((name) => `<script src="/${name}.js" defer></script>`).join('');
       assert.ok(
@@ -118,6 +132,8 @@ test('onboarding preview uses real local pages, account progress and transaction
           `${route}: shell scripts must follow page scripts`,
         );
         assert.equal(html.split('href="/desktop-elegant.css"').length - 1, 1, route);
+        assert.equal(html.split('data-shared-footer').length - 1, 1, route);
+        assert.match(html, /<body[^>]*>\s*<script src="\/typography.js"><\/script>/, route);
       }
       for (const asset of [
         ...styles.map((name) => `/${name}.css`),
@@ -156,9 +172,18 @@ test('onboarding preview uses real local pages, account progress and transaction
       // Follow the URL used by the real discussion create button, whose editor
       // now lives on a separate page rather than inside the discussion list.
       const client = fs.readFileSync(path.join(__dirname, '../public/app.js'), 'utf8');
-      const editorRoute = client.match(/location\.href = '(\/publish\?board=)'/);
-      assert.ok(editorRoute, 'The discussion button must expose its editor URL');
-      const response = await fetch(origin + editorRoute[1] + encodeURIComponent(post.board.slug));
+      const createButton = client.slice(
+        client.indexOf('async function handleDiscussionCreateToggle()'),
+        client.indexOf('async function handleDiscussionComposeSubmit('),
+      );
+      const location = { href: '' };
+      await vm.runInNewContext(`${createButton}\nhandleDiscussionCreateToggle();`, {
+        window: { location },
+        isCurrentPath: () => false,
+        discussionState: { activeBoard: post.board.slug },
+      });
+      assert.equal(location.href, `/publish?board=${encodeURIComponent(post.board.slug)}`);
+      const response = await fetch(origin + location.href);
       assert.equal(response.status, 200);
       const html = await response.text();
       assert.match(html, /id="discussion-compose-form"/);
@@ -475,7 +500,8 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
   assert.equal(step('profile-wool').emptyTarget, '#public-profile-ranch');
   assert.equal(step('profile-wool').action, undefined);
   assert.equal(step('profile-wool').prepare, undefined);
-  assert.match(step('profile-wool').body, /5次.*5条.*1份.*7磁元.*2电元/);
+  assert.match(step('profile-wool').body, /泊松.*平均每5条.*1份.*7磁元.*2电元/);
+  assert.match(step('profile-wool').body, /并非第5次必得/);
   assert.match(step('profile-wool').body, /羊毛只在牧场保存/);
   assert.match(step('profile-wool').body, /北京时间每天最多剪1份.*待剪量.*保留/);
   assert.equal(step('max-history').prepare[0].whenMissing, '#aichat-dialogs');
@@ -644,8 +670,13 @@ test('preview rubber rod purchase uses the real price, one-item limit and idempo
 
 test('preview preserves same-day wool and permits a second shear after Beijing midnight without consuming the rod', async (t) => {
   let previewNow = Date.parse('2026-09-21T10:00:00Z');
+  let growthDraws = 0;
   const { server, store } = createOnboardingPreview({
     now: () => previewNow,
+    growthRandom: () => {
+      growthDraws += 1;
+      return growthDraws % 5 === 0 ? 0.9 : 0.1;
+    },
   });
   await new Promise((resolve) => {
     server.listen(0, '127.0.0.1', resolve);

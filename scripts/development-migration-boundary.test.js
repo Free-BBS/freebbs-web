@@ -30,16 +30,24 @@ test('the controlled migration command applies development migrations', () => {
   assert.match(developmentMigrate, /DEVELOPMENT_MYSQL_DATABASE/);
 });
 
-test('deployment invokes all migrations only behind RUN_DB_MIGRATIONS=1', () => {
-  const guarded = deploy.match(/if \[\[ "\$RUN_DB_MIGRATIONS" == "1" \]\]; then([\s\S]*?)\nelse\n/);
-  assert.ok(guarded, 'deployment migration guard must remain explicit');
-  assert.match(guarded[1], /bash scripts\/migrate\.sh/);
-  assert.doesNotMatch(deploy.slice(0, guarded.index), /bash scripts\/migrate\.sh/);
-  assert.doesNotMatch(
-    deploy.slice((guarded.index ?? 0) + guarded[0].length),
-    /bash scripts\/migrate\.sh/,
-  );
-});
+for (const [format, ending] of [
+  ['LF', '\n'],
+  ['CRLF', '\r\n'],
+]) {
+  test(`deployment invokes migrations only behind RUN_DB_MIGRATIONS=1 with ${format}`, () => {
+    const source = deploy.replace(/\r?\n/g, ending);
+    const guarded = source.match(
+      /if \[\[ "\$RUN_DB_MIGRATIONS" == "1" \]\]; then([\s\S]*?)\r?\nelse\r?\n/,
+    );
+    assert.ok(guarded, 'deployment migration guard must remain explicit');
+    assert.match(guarded[1], /bash scripts\/migrate\.sh/);
+    assert.doesNotMatch(source.slice(0, guarded.index), /bash scripts\/migrate\.sh/);
+    assert.doesNotMatch(
+      source.slice((guarded.index ?? 0) + guarded[0].length),
+      /bash scripts\/migrate\.sh/,
+    );
+  });
+}
 
 test('isolated MySQL prepares the development schema before starting the integrated backend', () => {
   const migration = mysqlIntegration.indexOf("'scripts/migrate-development.sh'");
