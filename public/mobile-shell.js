@@ -1,4 +1,10 @@
 (() => {
+  if (!document.body.classList.contains('auth-page-body')) {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'mobile-header-backdrop';
+    backdrop.setAttribute('aria-hidden', 'true');
+    document.body.append(backdrop);
+  }
   const nav = document.querySelector('.mobile-nav');
   if (!nav) return;
   const path = window.location.pathname.replace(/\/$/, '') || '/';

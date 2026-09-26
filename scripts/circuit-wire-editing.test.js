@@ -811,6 +811,13 @@ test('only keyboard movement carries a history source and rejected keyboard edit
   assert.equal(component.getAttribute('transform'), transform);
 });
 
+test('pin hit targets remain transparent even before SVG styles are applied', () => {
+  const state = harness(sample());
+  const hit = pinHit(state, 'R1', 0);
+  assert.equal(hit.getAttribute('fill'), 'transparent');
+  assert.equal(hit.getAttribute('stroke'), 'none');
+});
+
 test('SVG controls leave modified Enter, Space and Delete shortcuts and IME events for the global handler', () => {
   const activated = [];
   const state = harness(sample(), {

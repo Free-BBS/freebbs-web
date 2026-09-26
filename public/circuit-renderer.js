@@ -1487,6 +1487,8 @@
             cy: y,
             r: 17,
             class: 'circuit-pin-hit',
+            fill: 'transparent',
+            stroke: 'none',
             'data-pin': pin.pin,
             tabindex: 0,
             role: 'button',

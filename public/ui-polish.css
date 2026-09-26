@@ -1976,7 +1976,8 @@ body:not(.auth-page-body) .user-economy-stack .currency-value {
 }
 
 /* A used 黄金名片 follows the name wherever it appears, without changing layout. */
-.has-golden-name {
+body .has-golden-name,
+body:not(.auth-page-body) .user-name.has-golden-name {
   color: #a96f00 !important;
   font-weight: 750 !important;
   background: linear-gradient(

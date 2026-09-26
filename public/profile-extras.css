@@ -99,6 +99,21 @@ body.public-profile-page:not(.auth-page-body) .public-profile-shell {
   flex-shrink: 0;
   --frame-glint: #568e8e;
 }
+.discussion-avatar-frame {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  overflow: visible;
+  border-radius: 50%;
+}
+.discussion-avatar-frame .discussion-post-avatar {
+  display: block;
+}
+.discussion-author-link-avatar,
+.discussion-comment-author-link {
+  overflow: visible;
+}
 :is(.public-profile-avatar-wrap, .discussion-avatar-frame)[data-frame='frame_aurora'] {
   --frame-glint: #a179c7;
 }

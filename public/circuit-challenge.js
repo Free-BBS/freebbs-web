@@ -139,8 +139,9 @@
   }
 
   function componentCount(document = state.document) {
-    return document.components.filter((item) => !fixedIds.has(item.id) && item.type !== 'junction')
-      .length;
+    return document.components.filter(
+      (item) => !fixedIds.has(item.id) && !['junction', 'ground'].includes(item.type),
+    ).length;
   }
 
   function waveformName(value) {

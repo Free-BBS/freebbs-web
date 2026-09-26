@@ -71,6 +71,8 @@ node --check public/circuit-assistant.js
 node --check public/circuit-agent.js
 node --check public/circuit-chat.js
 node --check public/max-reasoning.js
+node --check public/max-artifacts.js
+node --test scripts/max-artifacts.test.js
 node --check public/max-models.js
 node --check public/max-images.js
 node --check public/max-files.js

@@ -1401,9 +1401,16 @@ function renderShopPurchaseActions(item) {
 }
 
 function renderShopRules(item) {
-  return item.rules
-    ? `<details class="shop-trade-rules" open><summary>购买与使用说明</summary><p>${escapeHtml(item.rules)}</p></details>`
-    : '';
+  const hint =
+    item.key === 'golden_name_card'
+      ? `<p class="shop-purchase-progress">购买后请到<a href="/inventory">仓库</a>点击「使用黄金名片」，使用时才开始计算 7 天有效期。</p>`
+      : '';
+  return (
+    hint +
+    (item.rules
+      ? `<details class="shop-trade-rules" open><summary>购买与使用说明</summary><p>${escapeHtml(item.rules)}</p></details>`
+      : '')
+  );
 }
 
 async function resolveShopCatalog(payload) {
@@ -2018,6 +2025,9 @@ async function handleElectromagneticPageClick(event) {
           : '已激发';
         if (payload.purchase?.unlocked?.includes('plate_fishbone_master'))
           modalMessage.textContent += ' 已解锁成就铭牌「鱼骨达人」，可前往个人主页佩戴。';
+        if (itemKey === 'golden_name_card')
+          modalMessage.textContent +=
+            ' 尚未启用：请前往仓库，点击「使用黄金名片」后名字才会变为金色。';
       }
     }
 
@@ -3369,7 +3379,7 @@ function renderAuthorProfileLink(author, className, includeAvatar = false) {
     ? `
       <a class="${className}" data-action="open-profile" href="${profileHref}">
         <span class="discussion-avatar-frame" data-frame="${frame}">
-          <img class="discussion-post-avatar" data-avatar-frame="${frame}" src="${escapeHtml(getAvatarUrl(author?.avatarPath))}" alt="${displayName} 的头像" />
+          <img class="discussion-post-avatar" src="${escapeHtml(getAvatarUrl(author?.avatarPath))}" alt="${displayName} 的头像" />
         </span>
         <span class="${nameClass}"${goldenNameAttribute}>${displayName}</span>
       </a>
@@ -4842,6 +4852,7 @@ function renderAiChatThread() {
   renderAiWelcomeMessage();
   aiChatState.messages.forEach((message) => {
     const article = appendAiChatMessage(message.role, message.content);
+    if (message.role === 'assistant') window.FreeBbsMaxArtifacts?.mount(article, message.artifact);
     if (message.role === 'user') {
       window.FreeBbsMaxImages?.show(article?.querySelector('.aichat-bubble'), message.images || []);
       window.FreeBbsFilePreview?.mount(
@@ -4889,7 +4900,7 @@ function updateAiChatMessage(article, content) {
 function buildAiChatPayload(userMessage) {
   const recentMessages = aiChatState.messages
     .slice(-13)
-    .map(({ images, filePages, documents, ...message }) => message);
+    .map(({ images, filePages, documents, artifact, ...message }) => message);
 
   return {
     agent: 'navigation',
@@ -5705,6 +5716,11 @@ async function handleAiChatSubmit(event) {
   const filePages = window.FreeBbsMaxFiles?.pages() || [];
   const documents = window.FreeBbsMaxFiles?.documents?.() || [];
   const composerMessage = aiChatInput.value.trim();
+  const generationMode = window.FreeBbsMaxArtifacts?.mode() || 'chat';
+  if (generationMode !== 'chat' && (images.length || fileContext || documents.length)) {
+    setAiChatStatus('生成作品目前使用文字需求，请移除附件后生成，或切回「对话」分析附件。');
+    return;
+  }
   const userMessage =
     (composerMessage ||
       (images.length ? '请帮我分析这些图片。' : fileContext ? '请分析附件内容。' : '')) +
@@ -5726,6 +5742,7 @@ async function handleAiChatSubmit(event) {
   const previousAttempt = aiChatState.pendingSend;
   const retrying =
     previousAttempt &&
+    (previousAttempt.artifactMode || 'chat') === generationMode &&
     aiChatState.messages.at(-1) === previousAttempt.message &&
     previousAttempt.message.content === userMessage &&
     JSON.stringify(previousAttempt.message.images || []) === JSON.stringify(images) &&
@@ -5752,7 +5769,11 @@ async function handleAiChatSubmit(event) {
       ...(documents.length ? { documents } : {}),
     };
     aiChatState.messages.push(message);
-    aiChatState.pendingSend = { message, requestPayload };
+    aiChatState.pendingSend = {
+      message,
+      requestPayload,
+      artifactMode: generationMode,
+    };
     const userArticle = appendAiChatMessage('user', userMessage);
     window.FreeBbsMaxImages?.show(userArticle?.querySelector('.aichat-bubble'), images);
     window.FreeBbsFilePreview?.mount(
@@ -5777,18 +5798,34 @@ async function handleAiChatSubmit(event) {
     const { requestPayload } = aiChatState.pendingSend;
     await saveAiDialog({ throwOnError: true });
     requestPayload.did = aiChatState.currentDid || '';
-    const rawResult = await requestMaxNavigation(
-      requestPayload,
-      (progress) => {
-        window.FreeBbsReasoning.update(assistantArticle, progress);
-      },
-      (message, phase) => {
-        window.clearTimeout(bubbleTimer);
-        imageGeneration ||= Boolean(window.FreeBbsMaxImageResults?.isGenerationPhase(phase));
-        setAiChatThinkingBubble(assistantArticle, message, { imageGeneration });
-        setAiChatStatus(imageGeneration ? '正在生成图片…' : message);
-      },
-    );
+    const artifactMode = aiChatState.pendingSend.artifactMode || 'chat';
+    const rawResult =
+      artifactMode !== 'chat'
+        ? await window.FreeBbsMaxArtifacts.generate({
+            kind: artifactMode,
+            prompt: userMessage,
+            article: assistantArticle,
+            previous: aiChatState.messages.findLast(
+              (message) => message.artifact?.kind === artifactMode,
+            )?.artifact,
+            onReasoning: (progress) => window.FreeBbsReasoning.update(assistantArticle, progress),
+            onStatus: (message) => {
+              window.clearTimeout(bubbleTimer);
+              setAiChatStatus(message);
+            },
+          })
+        : await requestMaxNavigation(
+            requestPayload,
+            (progress) => {
+              window.FreeBbsReasoning.update(assistantArticle, progress);
+            },
+            (message, phase) => {
+              window.clearTimeout(bubbleTimer);
+              imageGeneration ||= Boolean(window.FreeBbsMaxImageResults?.isGenerationPhase(phase));
+              setAiChatThinkingBubble(assistantArticle, message, { imageGeneration });
+              setAiChatStatus(imageGeneration ? '正在生成图片…' : message);
+            },
+          );
     window.FreeBbsReasoning.finish(assistantArticle);
     const result = await addMentionedCourseMapRoute(rawResult, userMessage);
     window.clearTimeout(bubbleTimer);
@@ -5799,6 +5836,7 @@ async function handleAiChatSubmit(event) {
         : '未返回模型信息';
     assistantContent += `\n\n---\n\n回复模型：${replyModel}`;
     updateAiChatMessage(assistantArticle, assistantContent);
+    window.FreeBbsMaxArtifacts?.mount(assistantArticle, result.artifact);
     window.FreeBbsMaxImageResults?.finish(assistantArticle, result);
     const navigation = createAiNavigationSnapshot(result);
     const rag = createAiRagSnapshot(result);
@@ -5810,6 +5848,7 @@ async function handleAiChatSubmit(event) {
       content: assistantContent,
       navigation,
       rag,
+      ...(result.artifact ? { artifact: result.artifact } : {}),
     });
     aiChatState.pendingSend = null;
     window.FreeBbsMaxImages?.clear();
@@ -8557,6 +8596,7 @@ async function handleDiscussionPostClick(event) {
     return;
   }
 
+  event.preventDefault();
   await loadDiscussionDetail(postId);
   window.requestAnimationFrame(() => {
     document.getElementById('discussion-detail-title')?.focus({

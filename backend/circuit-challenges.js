@@ -680,7 +680,8 @@ function createCircuitChallengesRouter({ pool, requireAuth }) {
       }
       const componentCount = document.components.filter(
         (component) =>
-          !Object.values(FIXED_IDS).includes(component.id) && component.type !== 'junction',
+          !Object.values(FIXED_IDS).includes(component.id) &&
+          !['junction', 'ground'].includes(component.type),
       ).length;
       const connection = await pool.getConnection();
       let rewards;
