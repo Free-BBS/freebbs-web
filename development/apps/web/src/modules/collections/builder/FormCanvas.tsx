@@ -92,7 +92,7 @@ function RuleSlot({
       }}
     >
       <span>◇</span>
-      <small>{compatible ? `镶嵌到${field ? '此模块' : '整张表单'}` : '规则卡槽'}</small>
+      <small>{compatible ? `添加到${field ? '此模块' : '整张表单'}` : '附加规则卡槽'}</small>
     </button>
   );
 }
