@@ -1908,7 +1908,8 @@ body.workbench-page .workbench-course-calendar {
   border-radius: 16px;
 }
 
-body.workbench-page .workbench-course-calendar[hidden] {
+body.workbench-page .workbench-course-calendar[hidden],
+body.workbench-page #workbench-course-repeat[hidden] {
   display: none;
 }
 

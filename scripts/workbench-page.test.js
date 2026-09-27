@@ -84,7 +84,7 @@ test('workbench provides authenticated CRUD controls and conflict confirmation',
   assert.match(html, /id="workbench-important-dialog"/);
   assert.match(html, /id="workbench-add-schedule"/);
   assert.match(html, /id="workbench-schedule-dialog"/);
-  assert.match(html, /src="\/workbench\.js\?v=20260924-readable-cards-1"/);
+  assert.match(html, /src="\/workbench\.js\?v=20260928-arrangements-1"/);
   assert.match(controller, /\/workbench\/important-items/);
   assert.match(controller, /\/workbench\/schedule-items\/conflicts/);
   assert.match(controller, /\/confirm/);
@@ -136,10 +136,10 @@ test('manual and AI plans share one optional location/notes field without changi
   );
 });
 
-test('planner explains its three-task limit and reports separate tasks before a batch confirmation', () => {
-  assert.match(html, /一段话最多安排 3 件事/);
-  assert.match(html, /逐条检查标题、时间和地点\/备注/);
-  assert.match(html, /确认后全部加入，有冲突则整批不写入/);
+test('planner explains its five-event limit and reports separate tasks before confirmation', () => {
+  assert.match(html, /一次最多识别 5 个事件/);
+  assert.match(html, /可单独修改、确认任一项/);
+  assert.match(html, /已确认项不会重复加入/);
   assert.match(controller, /Number\.isInteger\(result\.taskCount\)/);
   assert.match(controller, /当前尚未写入/);
 });

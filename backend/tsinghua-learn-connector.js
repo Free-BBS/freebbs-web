@@ -5,11 +5,11 @@ const crypto = require('crypto');
 const LEARN_ORIGIN = 'https://learn.tsinghua.edu.cn';
 const LEARN_HOST = 'learn.tsinghua.edu.cn';
 const IDENTITY_HOST = 'id.tsinghua.edu.cn';
-const PARSER_VERSION = 'tsinghua-learn-json-v1';
+const PARSER_VERSION = 'tsinghua-learn-json-v2';
 const SCHEMA_VERSION = 'freebbs.tsinghua.learn.snapshot.v1';
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_RESPONSE_BYTES = 512 * 1024;
-const DEFAULT_MAX_REQUESTS = 140;
+const DEFAULT_MAX_REQUESTS = 164; // Three catalog requests plus five read-only requests per course.
 const DEFAULT_MAX_COURSES = 32;
 const DEFAULT_MAX_CONCURRENCY = 3;
 const DEFAULT_MINIMUM_REQUEST_INTERVAL_MS = 150;
@@ -34,6 +34,10 @@ const ALLOWED_API_REQUESTS = Object.freeze([
   Object.freeze({
     method: 'POST',
     pattern: /^\/b\/wlxt\/kcgg\/wlkc_ggb\/student\/pageListXs$/,
+  }),
+  Object.freeze({
+    method: 'GET',
+    pattern: /^\/b\/kc\/v_wlkc_xk_sjddb\/detail$/,
   }),
   Object.freeze({
     method: 'POST',
@@ -88,17 +92,28 @@ function decodeHtmlEntities(value) {
     lt: '<',
     nbsp: ' ',
     quot: '"',
+    mdash: '—',
+    ndash: '–',
+    hellip: '…',
+    middot: '·',
+    lsquo: '‘',
+    rsquo: '’',
+    ldquo: '“',
+    rdquo: '”',
+    times: '×',
   };
 
   return String(value || '').replace(
-    /&(#x[0-9a-f]+|#\d+|amp|apos|gt|lt|nbsp|quot);/gi,
+    /&(#x[0-9a-f]+|#\d+|amp|apos|gt|lt|nbsp|quot|mdash|ndash|hellip|middot|lsquo|rsquo|ldquo|rdquo|times);/gi,
     (entity, token) => {
       const normalized = token.toLowerCase();
-      if (normalized.startsWith('#x')) {
-        return String.fromCodePoint(Number.parseInt(normalized.slice(2), 16));
-      }
       if (normalized.startsWith('#')) {
-        return String.fromCodePoint(Number.parseInt(normalized.slice(1), 10));
+        const point = normalized.startsWith('#x')
+          ? Number.parseInt(normalized.slice(2), 16)
+          : Number.parseInt(normalized.slice(1), 10);
+        return Number.isInteger(point) && point > 0 && point <= 0x10ffff
+          ? String.fromCodePoint(point)
+          : '';
       }
       return named[normalized] || entity;
     },
@@ -226,7 +241,12 @@ function validateLearnApiPath(path, method = 'GET') {
   const allowed = ALLOWED_API_REQUESTS.some(
     (rule) => rule.method === normalizedMethod && rule.pattern.test(url.pathname),
   );
-  if (!allowed || url.search) {
+  const courseTime = url.pathname === '/b/kc/v_wlkc_xk_sjddb/detail';
+  const validQuery = courseTime
+    ? url.searchParams.size === 1 &&
+      /^[A-Za-z0-9._:-]{1,128}$/.test(url.searchParams.get('id') || '')
+    : !url.search;
+  if (!allowed || !validQuery) {
     throw new TsinghuaConnectorError('target_not_allowed', '网络学堂请求路径不在白名单内');
   }
   return url;
@@ -585,7 +605,7 @@ function parseCourses(payload, semesterId) {
   for (const row of rows) {
     try {
       const remoteId = normalizeIdentifier(row?.wlkcid, '课程 ID');
-      const title = normalizeText(row?.kcm, 200);
+      const title = normalizeHtmlText(row?.kcm, 200);
       if (!title) {
         throw new TsinghuaConnectorError('parser_record_rejected', '网络学堂课程缺少名称');
       }
@@ -598,10 +618,11 @@ function parseCourses(payload, semesterId) {
         providerCourseId: remoteId,
         sourceReference,
         title,
-        teacher: normalizeText(row?.jsm, 120),
+        teacher: normalizeHtmlText(row?.jsm, 120),
         semesterId: normalizeText(row?.xnxq || semesterId, 32),
         scheduleText: normalizeHtmlText(row?.skddxx || row?.skddxxStr || row?.sksj, 500),
         locationText: normalizeHtmlText(row?.skdd, 200),
+        sectionSystem: 'tsinghua-large',
       });
     } catch (error) {
       warnings.push({
@@ -789,6 +810,47 @@ async function fetchCourseResources(transport, course) {
     fatalError: null,
   };
 
+  // The course-list API no longer reliably carries time/location. Keep this
+  // separate read bounded by the same transport, session and failure policy.
+  try {
+    const times = await transport.requestJson(
+      `course-time:${course.sourceReference}`,
+      'GET',
+      `/b/kc/v_wlkc_xk_sjddb/detail?id=${encodeURIComponent(course.providerCourseId)}`,
+    );
+    if (
+      !Array.isArray(times) ||
+      times.length > 64 ||
+      times.some((value) => typeof value !== 'string')
+    ) {
+      throw new TsinghuaConnectorError('parser_schema_mismatch', '课程时间地点格式无法识别');
+    }
+    const scheduleText = times
+      .map((value) => normalizeHtmlText(value, 2000))
+      .filter(Boolean)
+      .join('; ');
+    if (scheduleText.length > 2000) {
+      throw new TsinghuaConnectorError('parser_schema_mismatch', '课程时间地点内容过长');
+    }
+    // A successful empty response is authoritative, not a reason to reuse old hours.
+    course.scheduleText = scheduleText;
+    course.locationText = '';
+    course.calendarSyncStatus = 'complete';
+  } catch (error) {
+    if (FATAL_SYNC_ERRORS.has(error.code)) {
+      result.fatalError = error;
+      return result;
+    }
+    course.calendarSyncStatus = 'failed';
+    course.calendarSyncWarning = '此次未能完整读取课程时间地点，请重新同步或手动核对';
+    result.errors.push({
+      code: error.code || 'resource_sync_failed',
+      courseReference: course.sourceReference,
+      resource: 'course-time',
+      retryable: Boolean(error.retryable),
+    });
+  }
+
   try {
     const noticePayload = await transport.requestJson(
       `notices:${course.sourceReference}`,
@@ -893,6 +955,9 @@ function toPublicCourse(course) {
     semesterId: course.semesterId,
     scheduleText: course.scheduleText,
     locationText: course.locationText,
+    sectionSystem: course.sectionSystem,
+    calendarSyncStatus: course.calendarSyncStatus,
+    ...(course.calendarSyncWarning ? { calendarSyncWarning: course.calendarSyncWarning } : {}),
   };
 }
 

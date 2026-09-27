@@ -1,0 +1,365 @@
+/* Workbench-only desktop composition. Mobile keeps its existing list and folds. */
+.workbench-section-links {
+  display: none;
+}
+
+@media (min-width: 901px) {
+  body.workbench-page,
+  body.theme-light.workbench-page {
+    --workbench-panel: var(--ui-surface);
+    --workbench-panel-strong: var(--ui-page);
+    --workbench-panel-soft: color-mix(in srgb, var(--ui-accent) 4%, var(--ui-surface));
+    --workbench-line: var(--ui-line);
+    --workbench-line-strong: var(--ui-line-strong);
+    --workbench-text: var(--ui-text);
+    --workbench-muted: var(--ui-muted);
+    --workbench-accent: var(--ui-accent);
+    --workbench-accent-strong: var(--ui-accent);
+    --workbench-accent-soft: color-mix(in srgb, var(--ui-accent) 8%, transparent);
+  }
+
+  body.workbench-page .main-content.workbench-main .workbench-shell {
+    width: 100%;
+    max-width: 1560px;
+    margin-inline: auto;
+  }
+
+  body.workbench-page .workbench-shell .workbench-hero {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 22px;
+    /* Override the former global desktop hero spacing, not mobile styles. */
+    padding: 4px 0 22px !important;
+  }
+
+  body.workbench-page .workbench-hero::after {
+    content: none;
+  }
+
+  body.workbench-page .workbench-eyebrow,
+  body.workbench-page .workbench-card-eyebrow {
+    font-family: var(--font-ui);
+    font-size: 0.65rem;
+    letter-spacing: 0.14em;
+    line-height: 1.5;
+  }
+
+  body.workbench-page .workbench-hero h1 {
+    font-size: clamp(1.35rem, 2vw, 2.15rem);
+    line-height: 1.5;
+    font-weight: 700;
+    letter-spacing: 0;
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
+  }
+
+  body.workbench-page .workbench-date {
+    margin-top: 10px;
+    color: var(--workbench-muted);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  body.workbench-page .workbench-intro-copy {
+    margin-top: 6px;
+    font-size: 0.8rem;
+  }
+
+  body.workbench-page .workbench-session-state {
+    max-width: 22em;
+    align-self: center;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: var(--workbench-panel);
+    white-space: normal;
+    line-height: 1.65;
+  }
+
+  body.workbench-page .workbench-view-switch {
+    gap: 4px;
+    margin-bottom: 22px;
+    padding: 4px;
+    border-radius: 12px;
+    background: var(--workbench-panel-soft);
+  }
+
+  body.workbench-page .workbench-view-switch button {
+    min-height: 40px;
+    padding: 8px 22px;
+    font-size: 0.85rem;
+    border-radius: 9px;
+  }
+
+  body.workbench-page .workbench-view-switch button[aria-current='page'] {
+    color: var(--workbench-accent);
+    box-shadow: 0 1px 4px rgb(0 0 0 / 5%);
+  }
+
+  body.workbench-page .workbench-view-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(230px, 22%);
+    gap: 22px;
+  }
+
+  body.workbench-page .workbench-section-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 24px;
+    margin: 0 0 16px;
+    padding: 0 2px;
+    font-size: 0.76rem;
+  }
+
+  body.workbench-page .workbench-section-links a {
+    padding-block: 6px;
+    color: var(--workbench-muted);
+    text-decoration: none;
+    text-underline-offset: 6px;
+  }
+
+  body.workbench-page .workbench-section-links a:hover {
+    color: var(--workbench-accent);
+    text-decoration: underline;
+  }
+
+  body.workbench-page :is(.workbench-dashboard-card, #workbench-agent-form) {
+    scroll-margin-top: calc(var(--desktop-header-height, 92px) + 24px);
+  }
+
+  body.workbench-page #workbench-plan-panel .workbench-dashboard-grid {
+    margin-top: 0;
+    gap: 24px;
+  }
+
+  body.workbench-page .workbench-dashboard-card {
+    padding: clamp(18px, 1.6vw, 28px);
+    border-radius: 16px;
+    box-shadow: none;
+  }
+
+  body.workbench-page .workbench-card-header {
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+
+  body.workbench-page
+    :is(
+      .workbench-card-header,
+      .workbench-agent-card,
+      .workbench-campus-copy,
+      .workbench-source-copy,
+      .workbench-campus-courses-header,
+      .workbench-homework-card
+    )
+    h2 {
+    margin: 0;
+    font-size: 1.08rem;
+    line-height: 1.5;
+    letter-spacing: 0;
+  }
+
+  body.workbench-page .workbench-card-tools {
+    gap: 6px;
+    justify-content: flex-start;
+  }
+
+  body.workbench-page
+    :is(
+      .workbench-week-control,
+      .workbench-compact-action,
+      .workbench-filter-action,
+      .workbench-agent-action
+    ) {
+    min-height: 38px;
+    border-radius: 9px;
+    font-size: 0.76rem;
+    line-height: 1.4;
+    box-shadow: none;
+  }
+
+  body.workbench-page .workbench-hours-form {
+    gap: 8px 12px;
+    margin: 0 0 12px;
+    padding: 12px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--workbench-panel-soft);
+  }
+
+  body.workbench-page .workbench-hours-form small {
+    flex-basis: 100%;
+    font-size: 0.7rem;
+  }
+
+  body.workbench-page .workbench-hours-hint {
+    margin: 8px 0 12px;
+    font-size: 0.7rem;
+    line-height: 1.65;
+  }
+
+  body.workbench-page .workbench-week-scroll {
+    max-height: 620px;
+    overflow: auto;
+    border-color: var(--workbench-line);
+    border-radius: 10px;
+    scrollbar-gutter: stable;
+  }
+
+  body.workbench-page .workbench-week-grid {
+    background: var(--workbench-panel);
+  }
+
+  body.workbench-page .workbench-week-day.is-today {
+    background: var(--workbench-accent-soft);
+  }
+
+  body.workbench-page .workbench-week-day-header {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--workbench-panel-strong);
+    padding: 12px 10px;
+  }
+
+  body.workbench-page .workbench-week-day.is-today .workbench-week-day-header {
+    box-shadow: inset 0 2px var(--workbench-accent);
+  }
+
+  body.workbench-page .workbench-week-event {
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgb(0 0 0 / 4%);
+  }
+
+  body.workbench-page .workbench-persistent-column {
+    top: calc(var(--desktop-header-height, 92px) + 18px);
+    padding-top: 44px;
+  }
+
+  body.workbench-page .workbench-priority-card {
+    border-top: 2px solid var(--workbench-accent) !important;
+  }
+
+  body.workbench-page .workbench-state-item {
+    min-height: 0;
+    padding: 14px;
+    border-radius: 10px;
+    line-height: 1.65;
+  }
+
+  body.workbench-page .workbench-state-item strong {
+    font-size: 0.9rem;
+  }
+
+  body.workbench-page .workbench-agent-card {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: 24px;
+  }
+
+  body.workbench-page
+    :is(
+      .workbench-agent-card p:last-child,
+      .workbench-campus-copy > p:not(.workbench-card-eyebrow),
+      .workbench-source-copy > p:not(.workbench-card-eyebrow)
+    ) {
+    max-width: none;
+    font-size: 0.78rem;
+    line-height: 1.85;
+  }
+
+  body.workbench-page :is(.workbench-campus-card, .workbench-source-card) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  body.workbench-page :is(.workbench-campus-copy, .workbench-campus-panel) {
+    font-family: var(--font-ui);
+  }
+
+  body.workbench-page :is(.workbench-campus-panel, .workbench-source-console) {
+    padding: 20px;
+    background: var(--workbench-panel-soft);
+    border: 1px solid var(--workbench-line);
+    border-radius: 12px;
+  }
+
+  body.workbench-page #workbench-campus-title {
+    font-size: 1rem;
+  }
+
+  body.workbench-page
+    :is(.workbench-campus-course, .workbench-campus-notice, .workbench-homework-item) {
+    border-radius: 10px;
+    background: var(--workbench-panel-soft);
+    border-color: var(--workbench-line);
+  }
+
+  body.workbench-page .workbench-source-card {
+    border-style: dashed;
+  }
+
+  body.workbench-page :is(.workbench-economy-section, .workbench-quick-section) {
+    margin-top: 24px;
+    padding: 22px;
+    border: 1px solid var(--workbench-line);
+    border-radius: 16px;
+  }
+
+  body.workbench-page :is(.workbench-economy-section, .workbench-quick-section) h2 {
+    font-size: 1.05rem;
+  }
+
+  body.workbench-page .workbench-card {
+    min-height: 120px;
+    gap: 8px;
+    padding: 18px;
+    background: var(--workbench-panel-soft);
+  }
+
+  body.workbench-page .workbench-card strong {
+    font-size: 0.9rem;
+  }
+
+  body.workbench-page .workbench-dialog {
+    border-radius: 16px;
+  }
+}
+
+/* Left courses determine the height; overflow stays inside the notices column. */
+@media (min-width: 1201px) {
+  body.workbench-page .workbench-campus-courses-layout > section:last-child {
+    contain: size;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  body.workbench-page .workbench-campus-notice-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    overscroll-behavior-y: contain;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1200px) {
+  body.workbench-page .workbench-view-layout {
+    grid-template-columns: minmax(0, 1fr) 220px;
+    gap: 14px;
+  }
+
+  body.workbench-page
+    :is(.workbench-agent-card, .workbench-hero, .workbench-campus-courses-layout) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.workbench-page .workbench-agent-form-footer {
+    flex-wrap: wrap;
+  }
+
+  body.workbench-page .workbench-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

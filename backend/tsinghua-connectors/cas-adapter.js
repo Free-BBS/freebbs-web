@@ -40,6 +40,10 @@ const ALLOWED_SYNC_REQUESTS = Object.freeze([
     pattern: /^\/b\/wlxt\/kcgg\/wlkc_ggb\/student\/pageListXs$/,
   }),
   Object.freeze({
+    method: 'GET',
+    pattern: /^\/b\/kc\/v_wlkc_xk_sjddb\/detail$/,
+  }),
+  Object.freeze({
     method: 'POST',
     pattern: /^\/b\/wlxt\/kczy\/zy\/student\/(?:zyListWj|zyListYjwg|zyListYpg)$/,
   }),
@@ -161,6 +165,11 @@ function validateSyncTarget(rawUrl, method) {
     throw targetBlocked();
   }
 
+  const courseTime = url.pathname === '/b/kc/v_wlkc_xk_sjddb/detail';
+  const validQuery = courseTime
+    ? url.searchParams.size === 1 &&
+      /^[A-Za-z0-9._:-]{1,128}$/.test(url.searchParams.get('id') || '')
+    : !url.search;
   if (
     url.origin !== LEARN_ORIGIN ||
     url.protocol !== 'https:' ||
@@ -169,7 +178,7 @@ function validateSyncTarget(rawUrl, method) {
     url.username ||
     url.password ||
     url.hash ||
-    url.search ||
+    !validQuery ||
     url.toString().length > 4_096 ||
     !ALLOWED_SYNC_REQUESTS.some((rule) => rule.method === method && rule.pattern.test(url.pathname))
   ) {

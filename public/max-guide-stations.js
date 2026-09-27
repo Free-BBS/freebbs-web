@@ -491,7 +491,7 @@
     'workbench-ai-plan',
     '#workbench-agent-form',
     '想法先变成预览，再进入日程。',
-    '一段话最多描述 3 件安排，写清时间、事项和地点/备注。先检查生成的预览，修改后再确认加入；导览不会调用 AI、生成或保存计划。',
+    'Max 可从一段话中自动识别最多 5 个事件，可混合普通安排与 DDL，写清时间、事项和地点/备注。预览可逐项修改、分别确认，也可全部确认；导览不会调用 AI、生成或保存计划。',
     { prepare: plan },
   );
   step(
@@ -804,7 +804,7 @@
     'laboratory-planned',
     '.laboratory-card:has(.laboratory-symbol)',
     '从代码到结果，再带回讨论',
-    '代码实验室支持 C/C++ 多架构汇编、Python 逐行变量观察、MATLAB（Octave）绘图与 Verilog 波形仿真，运行结果可保存为实验快照并分享到讨论区',
+    '代码实验室使用 GCC 运行 C/C++ 并生成多架构汇编、CPython 逐行观察变量、GNU Octave 运行 MATLAB 兼容代码、Icarus Verilog 仿真波形；各引擎有兼容范围与资源限制，请先阅读运行环境说明，结果可保存为实验快照并分享到讨论区',
     { caption: '原 Max 对话中的沙盒入口不在此次独立运行环境开放范围内' },
   );
   step(

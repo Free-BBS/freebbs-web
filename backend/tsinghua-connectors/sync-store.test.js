@@ -344,6 +344,35 @@ test('partial course snapshots preserve omitted and unparseable prior courses wi
   assert.equal(courses[2].calendarSyncWarning, undefined);
 });
 
+test('successful empty course times are not replaced with stale hours when another resource fails', async () => {
+  const old = {
+    sourceReference: 'course:a',
+    title: 'A',
+    scheduleText: '1-16周 周一第1节',
+    sectionSystem: 'tsinghua-large',
+  };
+  const pool = createTransactionalPool(async (sql) => {
+    if (sql.startsWith('SELECT r.id AS run_id')) return [[runningRow()], []];
+    if (sql.startsWith('SELECT s.courses_json')) return [[{ courses_json: [old] }]];
+    return [{ affectedRows: 1 }, []];
+  });
+  await createTsinghuaSyncStore(pool).completeRun(
+    claimedRun(),
+    {
+      status: 'partial',
+      semesterId: '2026-2027-1',
+      courses: [{ ...old, scheduleText: '', calendarSyncStatus: 'complete' }],
+    },
+    new Date('2026-09-22T02:00:00Z'),
+  );
+  const stored = pool.calls.find(({ sql }) =>
+    sql.startsWith('INSERT INTO campus_learn_semester_snapshots'),
+  );
+  const [course] = JSON.parse(stored.parameters[2]);
+  assert.equal(course.scheduleText, '');
+  assert.equal(course.calendarSyncWarning, undefined);
+});
+
 test('complete course snapshots replace removed courses without retaining stale arrangements', async () => {
   const pool = createTransactionalPool(async (sql) => {
     if (sql.startsWith('SELECT r.id AS run_id')) return [[runningRow()], []];
