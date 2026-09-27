@@ -55,6 +55,10 @@ body.ranch-creative-page.theme-dark .economy-shortcut {
 .dye-save-row #dye-undo {
   flex-shrink: 0;
 }
+.dye-save-row #dye-reset {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .dye-heading {
   display: flex;
   align-items: center;
@@ -600,6 +604,19 @@ body.theme-dark .community-sky-glow {
 .community-corner-links a {
   color: rgb(255 255 255 / 0.82);
   text-decoration: none;
+}
+body.ranch-gallery-page .main-content .community-corner-links button {
+  color: #fffdf5 !important;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  min-height: 30px;
+  font: inherit;
+  cursor: pointer;
+}
+.community-corner-links button[hidden],
+.community-actions button[hidden] {
+  display: none !important;
 }
 .community-interaction:not([hidden]) + .community-corner-links {
   opacity: 0;

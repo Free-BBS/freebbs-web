@@ -81,6 +81,34 @@
     svg.querySelectorAll('[data-ranch-dye-layer]').forEach((node) => node.remove());
     const defs = svgNode('defs', { 'data-ranch-dye-layer': '' });
     svg.prepend(defs);
+    for (const side of ['left', 'right']) {
+      const horn = svg.querySelector(`[data-horn-${side}]`);
+      if (!horn) continue;
+      if (!horn.dataset.originalFill) horn.dataset.originalFill = horn.getAttribute('fill');
+      if (!horn.dataset.originalStroke) horn.dataset.originalStroke = horn.getAttribute('stroke');
+      const metal = design.horns[side];
+      if (!metal) {
+        horn.setAttribute('fill', horn.dataset.originalFill);
+        horn.setAttribute('stroke', horn.dataset.originalStroke);
+        continue;
+      }
+      const id = `ranch-horn-${(sequence += 1)}`;
+      const gradient = svgNode('linearGradient', {
+        id,
+        x1: '0%',
+        y1: '0%',
+        x2: '100%',
+        y2: '100%',
+      });
+      const colors =
+        metal === 'gold' ? ['#fff2c9', '#cb9434', '#ffe5a0'] : ['#f7fbff', '#8a9ba8', '#e3edf4'];
+      colors.forEach((color, i) =>
+        gradient.append(svgNode('stop', { offset: `${i * 50}%`, 'stop-color': color })),
+      );
+      defs.append(gradient);
+      horn.setAttribute('fill', `url(#${id})`);
+      horn.setAttribute('stroke', metal === 'gold' ? '#a97832' : '#71818f');
+    }
     const targets = [
       [svg.querySelector('[data-wool-base]'), 'wool'],
       [svg.querySelector('[data-wool-ready] > path'), 'wool'],

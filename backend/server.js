@@ -2,6 +2,7 @@ const { createLanguageLabRouter } = require('./language-lab');
 const express = require('express');
 const crypto = require('crypto');
 const { createRanchDesignRouter, ensureRanchDesignTables } = require('./ranch-designs');
+const { createRanchWorldRouter, ensureRanchWorldTables } = require('./ranch-world');
 const fs = require('fs');
 const path = require('path');
 const { StringDecoder } = require('node:string_decoder');
@@ -2938,6 +2939,7 @@ maxDocumentStore = require('./max-files').registerMaxFiles(app, requireAuth, {
 
 app.use('/api/search', createSiteSearchRouter(siteSearch, getOptionalAuthUser));
 app.use('/api/ranch-designs', createRanchDesignRouter({ pool, requireAuth }));
+app.use('/api/ranch-world', createRanchWorldRouter({ pool, requireAuth }));
 app.use(
   '/api/tools',
   createFrontendToolsRouter({
@@ -6400,6 +6402,7 @@ async function start() {
   await ensureShopPurchaseTables(pool);
   await ensureProfileExtrasTables(pool);
   await ensureRanchDesignTables(pool);
+  await ensureRanchWorldTables(pool);
   await ensureEconomyPolicy(pool);
   await ensureRegistrationWhitelistTables(pool);
   await ensureRegistrationGuardTables(pool);

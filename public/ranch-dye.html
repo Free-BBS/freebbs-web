@@ -160,6 +160,23 @@
             <form id="dye-controls" class="dye-controls">
               <fieldset id="dye-fieldset" disabled>
                 <legend class="sr-only">染色工具</legend>
+                <div class="dye-options">
+                  <label
+                    >左角<select id="dye-horn-left">
+                      <option value="">原来的角</option>
+                      <option value="gold">金角</option>
+                      <option value="silver">银角</option>
+                    </select></label
+                  >
+                  <label
+                    >右角<select id="dye-horn-right">
+                      <option value="">原来的角</option>
+                      <option value="gold">金角</option>
+                      <option value="silver">银角</option>
+                    </select></label
+                  >
+                </div>
+                <small id="dye-horn-stock">角饰可在商店购买，摘下不会消耗。</small>
                 <div class="dye-segments" role="group" aria-label="染色部位">
                   <button type="button" data-part="wool" aria-pressed="true">羊毛</button
                   ><button type="button" data-part="face" aria-pressed="false">脸部</button>
@@ -261,6 +278,7 @@
                   </details>
                 </details>
                 <div class="dye-save-row">
+                  <button type="button" id="dye-reset">恢复空白</button>
                   <button type="button" id="dye-undo" disabled>撤销</button
                   ><button type="button" id="dye-save" class="dye-primary" disabled>
                     保存到我的羊

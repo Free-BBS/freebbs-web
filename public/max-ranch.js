@@ -127,6 +127,11 @@
     () => `<svg viewBox="0 0 180 180" role="img" aria-label="Max：戴眼镜的暖米色电子仿生羊">
     <g data-facing>
       <ellipse data-shadow cx="88" cy="166" rx="54" ry="4" fill="#715944" opacity=".16"/>
+      <g data-bicycle visibility="hidden" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <g stroke="#4c675d"><circle cx="46" cy="149" r="17"/><circle cx="129" cy="149" r="17"/></g>
+        <path d="m46 149 29-35 22 35H46l58-35 25 35-17-46h17M67 111h20" stroke="#c47f4b"/>
+        <path data-bike-spokes d="M29 149h34m-17-17v34m66-17h34m-17-17v34" stroke="#93a49a" stroke-width="1"/>
+      </g>
       ${limbMarkup(0)}${limbMarkup(1)}${limbMarkup(2)}${limbMarkup(3)}
       <g data-body>
         <g data-tail>
@@ -148,8 +153,8 @@
         <g data-head>
           <path d="M122 98C111 86 100 89 106 98Q111 107 126 107M151 95C161 86 174 89 169 97Q165 104 155 106" fill="#e2c19b" stroke="#9b7955" stroke-width="1.4"/>
           <path d="M109 94q6 0 12 7m45-7q-5 0-11 6" fill="none" stroke="#cba480" stroke-width="2" stroke-linecap="round"/>
-          <path d="M119 98C104 98 101 82 109 75C119 65 132 74 132 84C133 93 122 97 117 90C113 85 117 80 122 83" fill="#ce965c" stroke="#97633d" stroke-width="1.7" stroke-linecap="round"/>
-          <path d="M151 94C164 92 168 78 160 71C150 63 139 70 141 80C142 89 153 91 157 83C159 78 153 75 150 79" fill="#d7a369" stroke="#97633d" stroke-width="1.7" stroke-linecap="round"/>
+          <path data-horn-left d="M119 98C104 98 101 82 109 75C119 65 132 74 132 84C133 93 122 97 117 90C113 85 117 80 122 83" fill="#ce965c" stroke="#97633d" stroke-width="1.7" stroke-linecap="round"/>
+          <path data-horn-right d="M151 94C164 92 168 78 160 71C150 63 139 70 141 80C142 89 153 91 157 83C159 78 153 75 150 79" fill="#d7a369" stroke="#97633d" stroke-width="1.7" stroke-linecap="round"/>
           <path d="M109 80q4-7 11-5m-13 12 6 2m1-16 3 6m37-8-3 6m10 1-6 1" fill="none" stroke="#efc897" stroke-width="1.8" stroke-linecap="round"/>
           <path data-max-face d="M121 96C120 87 130 82 141 85C153 86 161 95 162 106C163 116 155 123 144 124C132 125 121 118 120 108C119 104 120 100 121 96Z" fill="#efdabd" stroke="#a0805d" stroke-width="1.5"/>
           <path data-max-muzzle d="M133 111C137 107 141 109 146 110C150 108 156 110 158 114C159 120 150 123 144 122C137 122 132 117 133 111Z" fill="#faedd8"/>
@@ -233,6 +238,7 @@
         .setAttribute('d', 'm146 115v1.5m-3.5 3q3.5-3.5 7 0');
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
     let paused = Boolean(previous?.paused);
+    let shared = Boolean(previous?.shared);
     let x = Number.isFinite(previous.x) ? previous.x : 12;
     let direction = previous.direction === -1 ? -1 : 1;
     let walkTime = 0;
@@ -261,7 +267,8 @@
     const scale = () => actorWidth() / 180;
     const width = () =>
       Math.max(0, (element.parentElement?.clientWidth || actorWidth()) - actorWidth());
-    const canAnimate = () => !destroyed && !hungry && !paused && !media.matches && !document.hidden;
+    const canAnimate = () =>
+      !shared && !destroyed && !hungry && !paused && !media.matches && !document.hidden;
     const draw = () => {
       if (destroyed) return;
       x = Math.max(0, Math.min(width(), x));
@@ -410,6 +417,35 @@
     draw();
     scheduleFrame();
     return {
+      syncFrame(state) {
+        if (destroyed || paused) return;
+        shared = true;
+        stopFrame();
+        x = (width() * Math.max(0, Math.min(100, state.x))) / 100;
+        direction = state.direction === -1 ? -1 : 1;
+        motionTime = state.time;
+        walkTime = state.time;
+        mode = state.kind || 'walk';
+        elapsed = (state.progress || 0) * 3.2;
+        pose = hungry
+          ? resting()
+          : media.matches
+            ? greetPose(walkPose(0), 1)
+            : ['greet', 'pet'].includes(mode)
+              ? greetPose(walkPose(walkTime), Math.sin((state.progress || 0) * Math.PI))
+              : walkPose(walkTime);
+        draw();
+        const progress = state.progress || 0;
+        const flip = mode === 'backflip' && !media.matches && !hungry;
+        const facing = direction < 0 ? 'translate(180 0) scale(-1 1)' : '';
+        nodes.facing.setAttribute(
+          'transform',
+          `${facing} ${flip ? `translate(0 ${-Math.sin(progress * Math.PI) * 30}) rotate(${-progress * 360} 90 136)` : ''}`,
+        );
+        element
+          .querySelector('[data-bicycle]')
+          .setAttribute('visibility', mode === 'bicycle' && !hungry ? 'visible' : 'hidden');
+      },
       greet,
       celebrate,
       walkTo(target) {

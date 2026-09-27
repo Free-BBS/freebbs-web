@@ -19,6 +19,7 @@
   let busy = false;
   let storageBlocked = false;
   let pointer = null;
+  let assets = {};
   const identity = () =>
     app?.userState?.isLoggedIn ? JSON.stringify([app.userState.uid, app.userState.token]) : '';
   const dirty = () => JSON.stringify(design) !== saved;
@@ -33,6 +34,7 @@
     save.disabled = !writable || busy || !dirty();
     save.textContent = busy ? '正在保存…' : '保存到我的羊';
     center.disabled = !writable || busy;
+    for (const side of ['left', 'right']) byId(`dye-horn-${side}`).value = design.horns[side] || '';
   }
   function checkpoint() {
     history.push(JSON.stringify(design));
@@ -147,6 +149,32 @@
     render();
     status.textContent = '已清空当前部位，可以撤销。';
   });
+  byId('dye-reset').addEventListener('click', () => {
+    if (!editable()) return;
+    checkpoint();
+    const horns = design.horns;
+    design = data.blank();
+    design.horns = horns;
+    render();
+    status.textContent = '羊毛和脸部已恢复空白，角饰保留；保存后生效，也可以撤销。';
+  });
+  ['left', 'right'].forEach((side) =>
+    byId(`dye-horn-${side}`).addEventListener('change', (event) => {
+      if (!editable()) return;
+      const metal = event.target.value || null;
+      const other = side === 'left' ? 'right' : 'left';
+      const needed = 1 + Number(design.horns[other] === metal);
+      if (metal && needed > (assets[`ranch_${metal}_horn`] || 0)) {
+        render();
+        status.textContent = '角饰数量不足，请先在商店购买；一只角饰只能戴在一侧。';
+        return;
+      }
+      checkpoint();
+      design.horns[side] = metal;
+      render();
+      status.textContent = '角饰已调整，保存后生效。';
+    }),
+  );
   byId('dye-undo').addEventListener('click', () => {
     if (!editable() || !history.length) return;
     design = JSON.parse(history.pop());
@@ -225,6 +253,9 @@
         return;
       }
       design = data.read(result.design);
+      assets = result.assets || {};
+      byId('dye-horn-stock').textContent =
+        `已拥有：金角 ${assets.ranch_gold_horn || 0} 只 · 银角 ${assets.ranch_silver_horn || 0} 只；每只只戴一侧。`;
       saved = JSON.stringify(design);
       revision = result.revision;
       history = [];

@@ -1,6 +1,58 @@
 {
   "items": [
     {
+      "key": "ranch_gold_horn",
+      "assetKey": "ranch_gold_horn",
+      "name": "金角",
+      "class": "pet_tool",
+      "description": "一只会映着阳光的金色角饰。",
+      "desc": "阳光落在角尖，Max 悄悄变成了草地上的小太阳。",
+      "cost": { "magnetic": 20 },
+      "image": "/assets/shop/max-cartoon-v1/ranch_gold_horn.webp",
+      "purchaseLimit": 2,
+      "isgift": false,
+      "rules": "20 磁元一只，永久拥有，最多购买两只。在染坊选择左角或右角佩戴，每只角饰只能戴在一侧，可随时摘下。"
+    },
+    {
+      "key": "ranch_silver_horn",
+      "assetKey": "ranch_silver_horn",
+      "name": "银角",
+      "class": "pet_tool",
+      "description": "把清亮的月色留在羊角上。",
+      "desc": "月色停在这里，像一声轻轻的晚安。",
+      "cost": { "magnetic": 10 },
+      "image": "/assets/shop/max-cartoon-v1/ranch_silver_horn.webp",
+      "purchaseLimit": 2,
+      "isgift": false,
+      "rules": "10 磁元一只，永久拥有，最多购买两只。在染坊选择左角或右角佩戴，每只角饰只能戴在一侧，可随时摘下。"
+    },
+    {
+      "key": "ranch_backflip",
+      "assetKey": "ranch_backflip",
+      "name": "后空翻",
+      "class": "pet_tool",
+      "description": "Max 学会了一个开心时的小把戏。",
+      "desc": "开心得要翻过来，才够把笑意抖进风里。",
+      "cost": { "magnetic": 12 },
+      "image": "/assets/shop/max-cartoon-v1/ranch_backflip.webp",
+      "purchaseLimit": 1,
+      "isgift": false,
+      "rules": "12 磁元永久解锁，公共牧场中偶尔自动后空翻，也可以点选自己的羊表演。解锁后免费反复使用，所有观看者同步看到。减少动态效果模式仅显示文字提示。"
+    },
+    {
+      "key": "ranch_bicycle",
+      "assetKey": "ranch_bicycle",
+      "name": "牧场自行车",
+      "class": "pet_tool",
+      "description": "风经过草地的时候，骑一小段路。",
+      "desc": "让脚步歇一歇，和风一起经过这片草地。",
+      "cost": { "magnetic": 30 },
+      "image": "/assets/shop/max-cartoon-v1/ranch_bicycle.webp",
+      "purchaseLimit": 1,
+      "isgift": false,
+      "rules": "30 磁元永久解锁，公共牧场中偶尔骑行，也可以点选自己的羊出发。解锁后免费反复使用，所有观看者同步看到。"
+    },
+    {
       "key": "frame_orbit",
       "assetKey": "frame_orbit",
       "name": "环流轨道",

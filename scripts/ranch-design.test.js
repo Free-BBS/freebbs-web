@@ -79,8 +79,11 @@ test('ranch API authenticates saves, enforces adoption/revisions and paginates p
   let owner = null;
   let commits = 0;
   let rollbacks = 0;
+  let horns = 0;
   const pool = {
     async execute(sql, values) {
+      if (sql.startsWith('SELECT asset_key, quantity'))
+        return [[{ asset_key: 'ranch_gold_horn', quantity: horns }]];
       if (sql.includes('LIMIT 25'))
         return [
           Array.from({ length: 25 }, (_, i) => ({
@@ -184,4 +187,28 @@ test('ranch API authenticates saves, enforces adoption/revisions and paginates p
   assert.equal(gallery.next, '77');
   assert.equal((await fetch(`${base}?before=bad`)).status, 400);
   assert.equal((await fetch(`${base}/invalid`)).status, 400);
+  const gold = data.blank();
+  gold.horns.left = 'gold';
+  assert.equal((await put({ design: gold, revision: 2 })).status, 403);
+  horns = 1;
+  gold.horns.right = 'gold';
+  assert.equal((await put({ design: gold, revision: 2 })).status, 403);
+  gold.horns.right = null;
+  assert.equal((await put({ design: gold, revision: 2 })).status, 200);
+  assert.equal((await put({ design: data.blank(), revision: 3 })).status, 200);
+  assert.deepEqual(stored.design, data.blank());
+});
+test('old dye saves remain compatible, horns are validated, and reset is reversible', () => {
+  const old = data.blank();
+  delete old.horns;
+  assert.deepEqual(data.validate(old).horns, { left: null, right: null });
+  assert.throws(() => data.validate({ ...data.blank(), horns: { left: 'url(x)' } }));
+  const source = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '../public/ranch-dye.js'),
+    'utf8',
+  );
+  assert.match(source, /byId\('dye-reset'\)/);
+  assert.match(source, /design = data\.blank\(\)/);
+  assert.match(source, /design\.horns = horns/);
+  assert.match(source, /checkpoint\(\)/);
 });
