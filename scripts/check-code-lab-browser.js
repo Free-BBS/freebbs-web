@@ -74,7 +74,21 @@ async function main() {
       const id = content.match(/experiment=(e_[a-f0-9]{32})/)[1];
       assert.ok(rows.has(id));
       await page.click('.publish-submit');
-      await page.waitForFunction(() => location.pathname === '/discussion', { timeout: 15000 });
+      await page
+        .waitForFunction(() => location.pathname === '/discussion', { timeout: 15000 })
+        .catch(async (error) => {
+          console.error(
+            await page.evaluate(() => ({
+              url: location.href,
+              text: document.body.innerText.slice(-4000),
+              invalid: [...document.querySelectorAll(':invalid')].map((el) => ({
+                id: el.id,
+                message: el.validationMessage,
+              })),
+            })),
+          );
+          throw error;
+        });
       assert.equal(posts[0].preview.type, 'lab');
       await page.waitForSelector('.lab-embed .lab-preview', { timeout: 15000 });
       await page.screenshot({

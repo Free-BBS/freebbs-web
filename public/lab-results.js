@@ -46,7 +46,7 @@
     let body = '';
     for (let i = 0; i <= 5; i += 1) {
       const pos = x((end * i) / 5);
-      body += `<line x1="${pos}" x2="${pos}" y1="24" y2="${height}" stroke="currentColor" opacity=".12"/><text x="${pos}" y="17" fill="currentColor" font-size="11">${Number(((end * i) / 5).toPrecision(5))}</text>`;
+      body += `<line x1="${pos}" x2="${pos}" y1="24" y2="${height}" stroke="currentColor" opacity=".12"/><text x="${pos}" y="17" fill="currentColor" font-size="11" text-anchor="${i === 5 ? 'end' : i === 0 ? 'start' : 'middle'}">${Number(((end * i) / 5).toPrecision(5))}</text>`;
     }
     signals.forEach((signal, index) => {
       const y = 42 + index * 54;

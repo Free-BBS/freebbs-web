@@ -102,6 +102,9 @@ def main():
         # Preserve actual Octave plots, including subplots, labels and multiple figures.
         wrapper = """warning('off','Octave:gnuplot-graphics');
 set(0, 'defaultfigurevisible', 'off');
+set(0, 'defaultfigureposition', [100, 100, 900, 700]);
+set(0, 'defaultfigurepaperpositionmode', 'auto');
+set(0, 'defaultaxesfontsize', 10);
 graphics_toolkit('gnuplot');
 try
   run('/tmp/main.m');

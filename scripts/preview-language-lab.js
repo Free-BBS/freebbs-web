@@ -18,7 +18,16 @@ function createLabPreview({
       '/publish': 'publish.html',
     },
     previewNotice: '代码实验室联调：使用隔离容器执行，账号、帖子和实验快照仅保存在本地内存。',
-    transformHtml: (html) => preparePageShell(html),
+    transformHtml: (html) =>
+      preparePageShell(html)
+        .replace(
+          '</head>',
+          '<link rel="stylesheet" href="/site-search.css"><link rel="stylesheet" href="/mobile-shell.css"><link rel="stylesheet" href="/desktop-elegant.css"><link rel="stylesheet" href="/page-transitions.css"><link rel="stylesheet" href="/desktop-shell.css"><link rel="stylesheet" href="/personal-polish.css"></head>',
+        )
+        .replace(
+          '</body>',
+          '<script src="/site-search.js" defer></script><script src="/mobile-shell.js" defer></script><script src="/page-transitions.js" defer></script><script src="/desktop-shell.js" defer></script></body>',
+        ),
     extraApi: async ({ route, method, body }) => {
       if (route === '/api/discussion/posts' && method === 'POST') {
         const post = {
@@ -26,7 +35,7 @@ function createLabPreview({
           title: body.title,
           content: body.contentMarkdown,
           contentMarkdown: body.contentMarkdown,
-          board: 'daily',
+          board: { slug: 'daily', name: '日常' },
           boardSlug: 'daily',
           author: { uid: 'u_preview01', username: '本地测试用户' },
           preview: getDiscussionPreview(
