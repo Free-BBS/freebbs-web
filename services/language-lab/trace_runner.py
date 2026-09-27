@@ -79,7 +79,7 @@ def variables(frame):
             if name.startswith('__') or isinstance(value, (types.ModuleType, types.FunctionType, type)):
                 continue
             result.append({'name': name[:100], 'type': type.__getattribute__(type(value), '__name__')[:80],
-                           'value': value_repr(value), 'scope': scope})
+                           'value': value_repr(value), 'scope': 'global' if frame.f_globals is frame.f_locals else scope})
     return result[:100]
 
 

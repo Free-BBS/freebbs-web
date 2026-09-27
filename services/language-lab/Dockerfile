@@ -7,6 +7,8 @@ RUN sed -i "s|http://deb.debian.org/debian|${DEBIAN_MIRROR}|g" /etc/apt/sources.
        gcc-riscv64-linux-gnu g++-riscv64-linux-gnu \
        octave gnuplot-nox fonts-freefont-otf iverilog \
     && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ghostscript \
+    && rm -rf /var/lib/apt/lists/*
 COPY worker.py trace_runner.py /opt/lab/
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 HOME=/tmp OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 USER 65534:65534

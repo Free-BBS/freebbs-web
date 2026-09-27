@@ -331,3 +331,20 @@ body.language-lab-page #lab-console,
 body.language-lab-page #lab-result .lab-assembly {
   color: #e0efea !important;
 }
+
+.lab-share-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.lab-share-box small {
+  font-size: 11px;
+  opacity: 0.7;
+}
+@media (max-width: 480px) {
+  .lab-share-box {
+    align-items: flex-start;
+  }
+}

@@ -22,8 +22,11 @@ def command(name):
 
 
 def stop(name):
-    subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL,
-                   stderr=subprocess.DEVNULL, timeout=10)
+    try:
+        subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        pass  # The worker also has an independent in-container wall clock timeout.
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -124,7 +127,11 @@ class Handler(BaseHTTPRequestHandler):
                 JOBS.pop(name, None)
             stop(name)
             if process:
-                process.wait(timeout=10)
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
             SLOTS.release()
 
 
