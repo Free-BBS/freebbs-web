@@ -22,6 +22,7 @@ import type {
   AuditLogRecord,
   ClubMembershipRecord,
   ClubRecord,
+  CollectionAssetRecord,
   CollectionFormRecord,
   CollectionModuleDefinitionRecord,
   CollectionResponseRecord,
@@ -95,6 +96,7 @@ interface MemoryState {
   collectionForms: CollectionFormRecord[];
   collectionVersions: CollectionVersionRecord[];
   collectionResponses: CollectionResponseRecord[];
+  collectionAssets: CollectionAssetRecord[];
   collectionModuleDefinitions: CollectionModuleDefinitionRecord[];
   showcaseArticles: ShowcaseArticleRecord[];
   showcaseLikes: ShowcaseLikeRecord[];
@@ -182,6 +184,7 @@ const searchFields: Record<CollectionName, string[]> = {
   collectionForms: ['title', 'description', 'organizationId'],
   collectionVersions: ['formId'],
   collectionResponses: ['formId', 'versionId', 'respondentUid'],
+  collectionAssets: ['formId', 'fieldId', 'uploaderUid', 'responseId', 'name', 'mimeType'],
   collectionModuleDefinitions: ['name', 'description', 'fieldKind', 'defaultLabel'],
   showcaseArticles: ['title', 'excerpt', 'body', 'organizationId'],
   showcaseLikes: ['articleId', 'userUid'],
@@ -353,6 +356,7 @@ function createEmptyState(): MemoryState {
     collectionForms: [],
     collectionVersions: [],
     collectionResponses: [],
+    collectionAssets: [],
     collectionModuleDefinitions: [],
     showcaseArticles: [],
     showcaseLikes: [],
@@ -1931,6 +1935,7 @@ function buildStore(holder: StateHolder, inTransaction = false): DevelopmentStor
     collectionForms: repository('collectionForms'),
     collectionVersions: repository('collectionVersions'),
     collectionResponses: repository('collectionResponses'),
+    collectionAssets: repository('collectionAssets'),
     collectionModuleDefinitions: repository('collectionModuleDefinitions'),
     showcaseArticles: repository('showcaseArticles'),
     showcaseLikes: repository('showcaseLikes'),

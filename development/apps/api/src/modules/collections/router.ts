@@ -7,9 +7,10 @@ import type {
   CollectionSchema,
   CollectionsDashboardPayload,
   ShowcaseArticle,
+  SocialOrganizationId,
   UnifiedRegistration,
 } from '@freebbs-development/contracts';
-import { organizationById } from '@freebbs-development/contracts';
+import { organizationById, organizationForRole } from '@freebbs-development/contracts';
 import { Router } from 'express';
 import multer from 'multer';
 import { resolve } from 'node:path';
@@ -18,6 +19,7 @@ import { z } from 'zod';
 import type { AuthenticationResult, AuthHeaders } from '../../core/auth/auth-middleware.js';
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
 import type {
+  CollectionAssetRecord,
   CollectionFormRecord,
   DevelopmentStore,
   ShowcaseArticleRecord,
@@ -28,7 +30,7 @@ import {
   canManageCollection,
   canManageCollectionModuleLibrary,
 } from './access.js';
-import { readCollectionUpload, storeCollectionUpload } from './uploads.js';
+import { deleteCollectionUpload, readCollectionUpload, storeCollectionUpload } from './uploads.js';
 import {
   articleRouteSchema,
   formCreateSchema,
@@ -74,11 +76,98 @@ async function requireActor(
   return null;
 }
 
-function nativeStatus(form: CollectionFormRecord, now = new Date()): UnifiedRegistration['status'] {
+const UPLOAD_FIELD_KINDS = new Set(['file', 'image', 'video', 'audio']);
+const PENDING_ASSET_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_PENDING_ASSETS_PER_USER = 20;
+
+function actorOrganizations(actor: AuthorizationContext): SocialOrganizationId[] {
+  return [
+    ...new Set(
+      actor.roles
+        .map((role) => organizationForRole(role)?.organizationId)
+        .filter((value): value is SocialOrganizationId => value !== undefined),
+    ),
+  ];
+}
+
+function resolveOrganization(
+  actor: AuthorizationContext,
+  requested: SocialOrganizationId | null,
+): SocialOrganizationId | null {
+  if (actor.roles.includes('platform.super_admin')) return requested;
+  const organizations = actorOrganizations(actor);
+  if (requested !== null) {
+    if (!organizations.includes(requested))
+      throw new HttpError(403, 'forbidden', '不能以未加入的组织创建或维护表单');
+    return requested;
+  }
+  if (organizations.length === 1) return organizations[0] ?? null;
+  if (organizations.length > 1)
+    throw new HttpError(400, 'organization_required', '请选择本次表单所属的组织');
+  return null;
+}
+
+function audienceAllows(actor: AuthorizationContext, schema: CollectionSchema): boolean {
+  const rule = schema.formRules.find((item) => item.kind === 'audience');
+  if (!rule || rule.value === 'all' || rule.value === true) return true;
+  const organizations = actorOrganizations(actor);
+  if (rule.value === 'social_org') return organizations.length > 0;
+  if (typeof rule.value === 'string')
+    return organizations.includes(rule.value as SocialOrganizationId);
+  if (Array.isArray(rule.value))
+    return rule.value.some((organizationId) =>
+      organizations.includes(organizationId as SocialOrganizationId),
+    );
+  return false;
+}
+
+function scheduleBoundary(schema: CollectionSchema, key: 'start' | 'end'): string | null {
+  const rule = schema.formRules.find((item) => item.kind === 'schedule');
+  if (!rule || typeof rule.value !== 'object' || Array.isArray(rule.value)) return null;
+  if ('mode' in rule.value) return null;
+  const value = rule.value[key];
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function effectiveWindow(form: CollectionFormRecord, schema: CollectionSchema) {
+  const starts = [form.opensAt, scheduleBoundary(schema, 'start')]
+    .filter((value): value is string => value !== null)
+    .map((value) => new Date(value))
+    .filter((value) => !Number.isNaN(value.getTime()));
+  const ends = [form.closesAt, scheduleBoundary(schema, 'end')]
+    .filter((value): value is string => value !== null)
+    .map((value) => new Date(value))
+    .filter((value) => !Number.isNaN(value.getTime()));
+  return {
+    opensAt:
+      starts.length > 0
+        ? new Date(Math.max(...starts.map((value) => value.getTime()))).toISOString()
+        : null,
+    closesAt:
+      ends.length > 0
+        ? new Date(Math.min(...ends.map((value) => value.getTime()))).toISOString()
+        : null,
+  };
+}
+
+function nativeStatus(
+  form: CollectionFormRecord,
+  schema: CollectionSchema,
+  now = new Date(),
+): UnifiedRegistration['status'] {
   if (form.status !== 'published') return 'closed';
-  if (form.opensAt && new Date(form.opensAt) > now) return 'upcoming';
-  if (form.closesAt && new Date(form.closesAt) < now) return 'closed';
+  const window = effectiveWindow(form, schema);
+  if (window.opensAt && new Date(window.opensAt) > now) return 'upcoming';
+  if (window.closesAt && new Date(window.closesAt) < now) return 'closed';
   return 'open';
+}
+
+function canViewCollection(
+  actor: AuthorizationContext,
+  form: CollectionFormRecord,
+  schema: CollectionSchema,
+): boolean {
+  return canManageCollection(actor, form.ownerUid) || audienceAllows(actor, schema);
 }
 
 async function formSummary(
@@ -94,6 +183,9 @@ async function formSummary(
         ? store.collectionVersions.get(form.currentDraftVersionId)
         : Promise.resolve(null),
   ]);
+  const window = version
+    ? effectiveWindow(form, version.schema)
+    : { opensAt: form.opensAt, closesAt: form.closesAt };
   return {
     id: form.id,
     title: form.title,
@@ -101,8 +193,8 @@ async function formSummary(
     coverUrl: form.coverUrl,
     organizationId: form.organizationId,
     status: form.status as CollectionFormSummary['status'],
-    opensAt: form.opensAt,
-    closesAt: form.closesAt,
+    opensAt: window.opensAt,
+    closesAt: window.closesAt,
     capacity: form.capacity,
     responseCount: responses.filter(
       (item) => item.formId === form.id && item.status === 'submitted',
@@ -125,6 +217,8 @@ async function registrationFromForm(
     store.collectionResponses.list({ query: form.id }),
   ]);
   if (!version) return null;
+  if (!canViewCollection(actor, form, version.schema)) return null;
+  const window = effectiveWindow(form, version.schema);
   const activeResponses = responses.filter(
     (item) => item.formId === form.id && item.status === 'submitted',
   );
@@ -135,13 +229,13 @@ async function registrationFromForm(
     description: form.description,
     organizer: form.organizationId ? organizationById(form.organizationId).name : 'FREE-BBS',
     coverUrl: form.coverUrl,
-    opensAt: form.opensAt,
-    closesAt: form.closesAt,
+    opensAt: window.opensAt,
+    closesAt: window.closesAt,
     location: null,
     capacity: form.capacity,
     registrationCount: activeResponses.length,
     registered: activeResponses.some((item) => item.respondentUid === actor.uid),
-    status: nativeStatus(form),
+    status: nativeStatus(form, version.schema),
     schema: version.schema,
   };
 }
@@ -232,8 +326,17 @@ function validateTitleText(
 }
 
 function validateAnswers(schema: CollectionSchema, answers: Record<string, unknown>): void {
+  const answerableFields = new Map(
+    schema.fields
+      .filter((field) => field.kind !== 'instructions' && field.kind !== 'identity')
+      .map((field) => [field.id, field]),
+  );
+  for (const fieldId of Object.keys(answers)) {
+    if (!answerableFields.has(fieldId))
+      throw new HttpError(400, 'unknown_field', `回答中包含未知字段“${fieldId}”`);
+  }
   for (const field of schema.fields) {
-    if (field.kind === 'instructions') continue;
+    if (field.kind === 'instructions' || field.kind === 'identity') continue;
     const value = answers[field.id];
     const required = field.rules.some((rule) => rule.kind === 'required' && rule.value === true);
     if (
@@ -246,8 +349,28 @@ function validateAnswers(schema: CollectionSchema, answers: Record<string, unkno
       throw new HttpError(400, 'required_answer_missing', `“${field.label}”尚未填写`);
     }
     if (value === undefined || value === null || value === '') continue;
-    if (field.kind === 'multiple_choice' && !Array.isArray(value)) {
-      throw new HttpError(400, 'invalid_answer', `“${field.label}”需要选择一个或多个选项`);
+    if ((field.kind === 'short_text' || field.kind === 'long_text') && typeof value !== 'string') {
+      throw new HttpError(400, 'invalid_answer', `“${field.label}”需要填写文字`);
+    }
+    if (field.kind === 'datetime') {
+      if (
+        typeof value !== 'string' ||
+        !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})?$/u.test(
+          value,
+        ) ||
+        Number.isNaN(Date.parse(value))
+      ) {
+        throw new HttpError(400, 'invalid_answer', `“${field.label}”的日期时间格式无效`);
+      }
+    }
+    if (field.kind === 'multiple_choice') {
+      if (
+        !Array.isArray(value) ||
+        value.some((choice) => typeof choice !== 'string' || !field.options.includes(choice)) ||
+        new Set(value).size !== value.length
+      ) {
+        throw new HttpError(400, 'invalid_answer', `“${field.label}”需要选择有效选项`);
+      }
     }
     if (
       field.kind === 'single_choice' &&
@@ -255,7 +378,7 @@ function validateAnswers(schema: CollectionSchema, answers: Record<string, unkno
     ) {
       throw new HttpError(400, 'invalid_answer', `“${field.label}”的选项无效`);
     }
-    if (['file', 'image', 'video', 'audio'].includes(field.kind)) {
+    if (UPLOAD_FIELD_KINDS.has(field.kind)) {
       const assets = Array.isArray(value) ? value : [value];
       const uploadLimit = field.rules.find((rule) => rule.kind === 'upload_count')?.value;
       if (typeof uploadLimit === 'number' && assets.length > uploadLimit) {
@@ -299,7 +422,7 @@ function validateAnswers(schema: CollectionSchema, answers: Record<string, unkno
       const titles =
         typeof value === 'string'
           ? [value]
-          : ['file', 'image', 'video', 'audio'].includes(field.kind)
+          : UPLOAD_FIELD_KINDS.has(field.kind)
             ? (Array.isArray(value) ? value : [value])
                 .map((asset) =>
                   asset && typeof asset === 'object' && 'name' in asset
@@ -313,13 +436,113 @@ function validateAnswers(schema: CollectionSchema, answers: Record<string, unkno
   }
 }
 
+function assetPayload(asset: CollectionAssetRecord) {
+  return {
+    id: asset.id,
+    name: asset.name,
+    mimeType: asset.mimeType,
+    sizeBytes: asset.sizeBytes,
+    url: `/api/development/v1/collections/assets/${asset.id}`,
+  };
+}
+
+async function validateAssetAnswers(
+  store: DevelopmentStore,
+  actor: AuthorizationContext,
+  form: CollectionFormRecord,
+  schema: CollectionSchema,
+  answers: Record<string, unknown>,
+): Promise<CollectionAssetRecord[]> {
+  const claimedIds = new Set<string>();
+  const records: CollectionAssetRecord[] = [];
+  for (const field of schema.fields.filter((item) => UPLOAD_FIELD_KINDS.has(item.kind))) {
+    const value = answers[field.id];
+    if (value === undefined || value === null || value === '') continue;
+    const assets = Array.isArray(value) ? value : [value];
+    const allowedTypes = field.rules.find((rule) => rule.kind === 'file_types')?.value;
+    const sizeLimit = field.rules.find((rule) => rule.kind === 'file_size')?.value;
+    for (const claimed of assets) {
+      if (!claimed || typeof claimed !== 'object' || !('id' in claimed))
+        throw new HttpError(400, 'invalid_asset', `“${field.label}”的文件记录无效`);
+      const id = (claimed as { id?: unknown }).id;
+      if (typeof id !== 'string' || claimedIds.has(id))
+        throw new HttpError(400, 'invalid_asset', `“${field.label}”的文件记录无效`);
+      claimedIds.add(id);
+      const asset = await store.collectionAssets.getForUpdate(id);
+      if (
+        !asset ||
+        asset.status !== 'pending' ||
+        asset.responseId !== null ||
+        asset.uploaderUid !== actor.uid ||
+        asset.formId !== form.id ||
+        asset.fieldId !== field.id
+      ) {
+        throw new HttpError(400, 'invalid_asset', `“${field.label}”的文件不属于本次填写`);
+      }
+      const canonical = assetPayload(asset);
+      const candidate = claimed as Record<string, unknown>;
+      if (
+        candidate.name !== canonical.name ||
+        candidate.mimeType !== canonical.mimeType ||
+        candidate.sizeBytes !== canonical.sizeBytes ||
+        candidate.url !== canonical.url
+      ) {
+        throw new HttpError(400, 'asset_metadata_mismatch', `“${field.label}”的文件信息不一致`);
+      }
+      if (
+        Array.isArray(allowedTypes) &&
+        allowedTypes.length > 0 &&
+        !allowedTypes.includes(asset.mimeType)
+      ) {
+        throw new HttpError(400, 'unsupported_file_type', `“${field.label}”含有不支持的文件格式`);
+      }
+      if (typeof sizeLimit === 'number' && asset.sizeBytes > sizeLimit) {
+        throw new HttpError(400, 'upload_too_large', `“${field.label}”含有超过大小上限的文件`);
+      }
+      records.push(asset);
+    }
+  }
+  return records;
+}
+
+async function cleanupExpiredAssets(
+  store: DevelopmentStore,
+  directory: string,
+  now: Date,
+): Promise<void> {
+  const cutoff = now.getTime() - PENDING_ASSET_TTL_MS;
+  const candidates = (await store.collectionAssets.list()).filter(
+    (asset) =>
+      asset.status === 'expired' ||
+      (asset.status === 'pending' && new Date(asset.createdAt).getTime() <= cutoff),
+  );
+  for (const candidate of candidates) {
+    const storageKey = await store.transaction(async (transactionStore) => {
+      const current = await transactionStore.collectionAssets.getForUpdate(candidate.id);
+      if (!current) return null;
+      if (
+        current.status !== 'expired' &&
+        (current.status !== 'pending' || new Date(current.createdAt).getTime() > cutoff)
+      )
+        return null;
+      if (current.status !== 'expired')
+        await transactionStore.collectionAssets.update(current.id, { status: 'expired' });
+      return current.storageKey;
+    });
+    if (!storageKey) continue;
+    await deleteCollectionUpload(directory, storageKey);
+    await store.collectionAssets.delete(candidate.id);
+  }
+}
+
 function csvCell(value: unknown): string {
-  const text =
+  let text =
     value === null || value === undefined
       ? ''
       : typeof value === 'object'
         ? JSON.stringify(value)
         : String(value);
+  if (/^\s*[=+\-@]/u.test(text)) text = `'${text}`;
   return `"${text.replaceAll('"', '""')}"`;
 }
 
@@ -391,18 +614,70 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
   router.post('/assets', upload.single('file'), async (request, response) => {
     const actor = await requireActor(options, request, response);
     if (!actor) return;
-    void actor;
     if (!request.file) throw new HttpError(400, 'missing_upload', '请选择要上传的文件');
-    send(
-      response,
-      201,
-      await storeCollectionUpload({
-        buffer: request.file.buffer,
-        originalName: request.file.originalname,
-        mimeType: request.file.mimetype,
-        directory: uploadDirectory,
+    const uploadTarget = parse(
+      z.object({
+        formId: z.string().trim().min(1).max(128),
+        fieldId: z.string().trim().min(1).max(128),
       }),
+      request.body,
     );
+    const form = await options.store.collectionForms.get(uploadTarget.formId);
+    const version = form?.publishedVersionId
+      ? await options.store.collectionVersions.get(form.publishedVersionId)
+      : null;
+    if (!form || !version || !audienceAllows(actor, version.schema))
+      throw new HttpError(404, 'collection_not_found', '未找到表单');
+    if (nativeStatus(form, version.schema) !== 'open')
+      throw new HttpError(409, 'collection_closed', '当前表单尚未开放或已经截止');
+    const field = version.schema.fields.find(
+      (item) => item.id === uploadTarget.fieldId && UPLOAD_FIELD_KINDS.has(item.kind),
+    );
+    if (!field) throw new HttpError(400, 'invalid_upload_field', '上传字段不存在');
+    const allowedTypes = field.rules.find((rule) => rule.kind === 'file_types')?.value;
+    if (
+      Array.isArray(allowedTypes) &&
+      allowedTypes.length > 0 &&
+      !allowedTypes.includes(request.file.mimetype)
+    )
+      throw new HttpError(400, 'unsupported_file_type', '文件格式不在表单允许范围内');
+    const sizeLimit = field.rules.find((rule) => rule.kind === 'file_size')?.value;
+    if (typeof sizeLimit === 'number' && request.file.size > sizeLimit)
+      throw new HttpError(413, 'upload_too_large', '文件超过表单设置的大小上限');
+
+    await cleanupExpiredAssets(options.store, uploadDirectory, new Date());
+    const pendingCount = (await options.store.collectionAssets.list({ query: actor.uid })).filter(
+      (asset) => asset.uploaderUid === actor.uid && asset.status === 'pending',
+    ).length;
+    if (pendingCount >= MAX_PENDING_ASSETS_PER_USER)
+      throw new HttpError(429, 'pending_upload_limit', '请先完成当前提交，再继续上传文件');
+
+    const stored = await storeCollectionUpload({
+      buffer: request.file.buffer,
+      originalName: request.file.originalname,
+      mimeType: request.file.mimetype,
+      directory: uploadDirectory,
+      ...(typeof sizeLimit === 'number' ? { maxBytes: sizeLimit } : {}),
+    });
+    try {
+      const created = await options.store.collectionAssets.create({
+        formId: form.id,
+        fieldId: field.id,
+        uploaderUid: actor.uid,
+        responseId: null,
+        name: stored.name,
+        mimeType: stored.mimeType,
+        sizeBytes: stored.sizeBytes,
+        storageKey: stored.id,
+        status: 'pending',
+        ownerUid: actor.uid,
+        scope: { type: 'collection_form', id: form.id },
+      });
+      send(response, 201, assetPayload(created));
+    } catch (error) {
+      await deleteCollectionUpload(uploadDirectory, stored.id);
+      throw error;
+    }
   });
 
   router.get('/module-definitions', async (request, response) => {
@@ -446,13 +721,24 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
   router.get('/assets/:assetId', async (request, response) => {
     const actor = await requireActor(options, request, response);
     if (!actor) return;
-    void actor;
     const assetId = z.string().uuid().safeParse(request.params.assetId);
     if (!assetId.success) throw new HttpError(404, 'asset_not_found', '未找到文件');
-    const file = await readCollectionUpload(uploadDirectory, assetId.data);
+    const asset = await options.store.collectionAssets.get(assetId.data);
+    const form = asset ? await options.store.collectionForms.get(asset.formId) : null;
+    if (
+      !asset ||
+      !form ||
+      !['pending', 'attached'].includes(asset.status) ||
+      (asset.uploaderUid !== actor.uid && !canManageCollection(actor, form.ownerUid))
+    )
+      throw new HttpError(404, 'asset_not_found', '未找到文件');
+    const file = await readCollectionUpload(uploadDirectory, asset.storageKey);
     if (!file) throw new HttpError(404, 'asset_not_found', '未找到文件');
-    response.setHeader('Content-Type', 'application/octet-stream');
-    response.setHeader('Content-Disposition', 'attachment');
+    response.setHeader('Content-Type', asset.mimeType);
+    response.setHeader(
+      'Content-Disposition',
+      `attachment; filename*=UTF-8''${encodeURIComponent(asset.name.replace(/[\r\n]/gu, '_'))}`,
+    );
     response.status(200).send(file);
   });
 
@@ -558,12 +844,13 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
     if (!actor) return;
     if (!canCreateCollection(actor)) throw new HttpError(403, 'forbidden', '当前身份不能创建表单');
     const input = parse(formCreateSchema, request.body);
+    const organizationId = resolveOrganization(actor, input.organizationId);
     const result = await options.store.transaction(async (store) => {
       const form = await store.collectionForms.create({
         title: input.title,
         description: input.description,
         coverUrl: input.coverUrl,
-        organizationId: input.organizationId,
+        organizationId,
         currentDraftVersionId: null,
         publishedVersionId: null,
         opensAt: input.opensAt,
@@ -596,7 +883,15 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
     if (!actor) return;
     const { formId } = parse(formRouteSchema, { formId: request.params.formId });
     const form = await options.store.collectionForms.get(formId);
-    if (!form || (form.status !== 'published' && !canManageCollection(actor, form.ownerUid))) {
+    const publishedVersion = form?.publishedVersionId
+      ? await options.store.collectionVersions.get(form.publishedVersionId)
+      : null;
+    if (
+      !form ||
+      (form.status !== 'published' && !canManageCollection(actor, form.ownerUid)) ||
+      (form.status === 'published' &&
+        (!publishedVersion || !canViewCollection(actor, form, publishedVersion.schema)))
+    ) {
       throw new HttpError(404, 'collection_not_found', '未找到表单');
     }
     send(response, 200, await formSummary(options.store, actor, form));
@@ -611,6 +906,10 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
       const form = await store.collectionForms.getForUpdate(formId);
       if (!form || !canManageCollection(actor, form.ownerUid))
         throw new HttpError(404, 'collection_not_found', '未找到表单');
+      const organizationId =
+        input.organizationId === undefined
+          ? form.organizationId
+          : resolveOrganization(actor, input.organizationId);
       let draft = form.currentDraftVersionId
         ? await store.collectionVersions.getForUpdate(form.currentDraftVersionId)
         : null;
@@ -640,7 +939,7 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
         title: input.title ?? input.schema.title,
         description: input.description ?? input.schema.description,
         ...(input.coverUrl !== undefined ? { coverUrl: input.coverUrl } : {}),
-        ...(input.organizationId !== undefined ? { organizationId: input.organizationId } : {}),
+        organizationId,
         ...(input.opensAt !== undefined ? { opensAt: input.opensAt } : {}),
         ...(input.closesAt !== undefined ? { closesAt: input.closesAt } : {}),
         ...(input.capacity !== undefined ? { capacity: input.capacity } : {}),
@@ -684,12 +983,13 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
     const form = await options.store.collectionForms.get(formId);
     if (!form || !canManageCollection(actor, form.ownerUid))
       throw new HttpError(404, 'collection_not_found', '未找到表单');
-    const versionId = form.currentDraftVersionId ?? form.publishedVersionId;
+    const versionId = form.publishedVersionId;
     const version = versionId ? await options.store.collectionVersions.get(versionId) : null;
     const output = version?.schema.outputs?.find((item) => item.id === outputId);
     if (!version || !output) throw new HttpError(404, 'output_not_found', '未找到输出模块');
     const responses = (await options.store.collectionResponses.list({ query: form.id })).filter(
-      (item) => item.formId === form.id && item.status === 'submitted',
+      (item) =>
+        item.formId === form.id && item.versionId === version.id && item.status === 'submitted',
     );
     const exported = exportPayload(output, version.schema, responses);
     const safeName = output.fileName.replace(/["\r\n]/gu, '_');
@@ -707,11 +1007,16 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
     const { answers } = parse(responseSchema, request.body);
     const result = await options.store.transaction(async (store) => {
       const form = await store.collectionForms.getForUpdate(formId);
-      if (!form || nativeStatus(form) !== 'open' || !form.publishedVersionId)
+      if (!form || !form.publishedVersionId)
         throw new HttpError(409, 'collection_closed', '当前表单尚未开放或已经截止');
       const version = await store.collectionVersions.get(form.publishedVersionId);
       if (!version) throw new HttpError(409, 'missing_version', '发布版本不存在');
+      if (!audienceAllows(actor, version.schema))
+        throw new HttpError(404, 'collection_not_found', '未找到表单');
+      if (nativeStatus(form, version.schema) !== 'open')
+        throw new HttpError(409, 'collection_closed', '当前表单尚未开放或已经截止');
       validateAnswers(version.schema, answers);
+      const assets = await validateAssetAnswers(store, actor, form, version.schema, answers);
       const existing = (await store.collectionResponses.listForUpdate({ query: form.id })).filter(
         (item) =>
           item.formId === form.id &&
@@ -727,7 +1032,7 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
       const capacity = form.capacity ?? readLimit(version.schema, 'capacity');
       if (capacity !== null && all.length >= capacity)
         throw new HttpError(409, 'capacity_reached', '报名名额已满');
-      return store.collectionResponses.create({
+      const created = await store.collectionResponses.create({
         formId: form.id,
         versionId: version.id,
         respondentUid: actor.uid,
@@ -738,6 +1043,14 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
         ownerUid: actor.uid,
         scope: { type: 'collection_form', id: form.id },
       });
+      for (const asset of assets) {
+        const updated = await store.collectionAssets.update(asset.id, {
+          responseId: created.id,
+          status: 'attached',
+        });
+        if (!updated) throw new Error('Collection asset disappeared during submission');
+      }
+      return created;
     });
     send(response, 201, result);
   });
