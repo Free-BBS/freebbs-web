@@ -2,7 +2,12 @@ import { loadEnvironment } from './config/env.js';
 import { startServerRuntime } from './server-runtime.js';
 
 const environment = loadEnvironment();
-const runtime = await startServerRuntime({ host: environment.host, port: environment.port });
+const collectionsUploadDirectory = process.env.COLLECTIONS_UPLOAD_DIR?.trim();
+const runtime = await startServerRuntime({
+  host: environment.host,
+  port: environment.port,
+  ...(collectionsUploadDirectory ? { collectionsUploadDirectory } : {}),
+});
 
 async function shutdown(): Promise<void> {
   try {

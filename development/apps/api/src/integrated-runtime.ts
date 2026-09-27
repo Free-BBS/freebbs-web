@@ -17,6 +17,7 @@ export interface IntegratedRuntimeOptions {
   userDirectory: UserDirectory;
   database: IntegratedDatabaseConfig;
   uploadDirectory: string;
+  collectionsUploadDirectory: string;
   sportsUploadDirectory?: string;
 }
 
@@ -50,6 +51,7 @@ export async function createIntegratedDevelopmentRuntime(
     authClient: options.authClient,
     userDirectory: options.userDirectory,
     festivalUploadDirectory: options.uploadDirectory,
+    collectionsUploadDirectory: options.collectionsUploadDirectory,
     ...(options.sportsUploadDirectory
       ? { sportsUploadDirectory: options.sportsUploadDirectory }
       : {}),

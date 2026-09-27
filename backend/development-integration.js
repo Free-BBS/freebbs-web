@@ -87,6 +87,7 @@ async function loadDevelopmentRuntime({
   userDirectory,
   database,
   uploadDirectory,
+  collectionsUploadDirectory,
   sportsUploadDirectory,
 }) {
   const modulePath = path.join(
@@ -103,6 +104,7 @@ async function loadDevelopmentRuntime({
     userDirectory,
     database,
     uploadDirectory,
+    collectionsUploadDirectory,
     sportsUploadDirectory,
   });
 }

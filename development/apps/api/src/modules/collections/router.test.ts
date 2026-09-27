@@ -78,6 +78,49 @@ async function createPublishedForm(
 }
 
 describe('collections API', () => {
+  it('authenticates asset uploads before parsing multipart bodies', async () => {
+    const directory = await uploadDirectory();
+    const { app } = fixture(directory);
+
+    const response = await request(app)
+      .post('/api/development/v1/collections/assets')
+      .set('Content-Type', 'multipart/form-data')
+      .send('missing multipart boundary')
+      .expect(401);
+
+    expect(response.body.data.error.code).toBe('missing_identity');
+  });
+
+  it('rejects a relative collection upload directory in production before parsing files', async () => {
+    const store = createMemoryStore();
+    const app = createApp({
+      environment: { NODE_ENV: 'production', AUTH_MODE: 'main' },
+      store,
+      authMode: 'main',
+      authClient: {
+        introspect: async () => ({
+          uid: 'u_student',
+          displayName: 'Student',
+          avatarUrl: null,
+          baseRole: 'student' as const,
+          roles: [],
+          tags: [],
+        }),
+      },
+      previewAllowedUids: ['u_student'],
+      collectionsUploadDirectory: '.data/collection-uploads',
+    });
+
+    const response = await request(app)
+      .post('/api/development/v1/collections/assets')
+      .set('Authorization', 'Bearer valid')
+      .set('Content-Type', 'multipart/form-data')
+      .send('missing multipart boundary')
+      .expect(503);
+
+    expect(response.body.data.error.code).toBe('upload_not_configured');
+  });
+
   it('shows creation only to social organization identities', async () => {
     const { app } = fixture();
     const ordinary = await request(app)

@@ -13,7 +13,7 @@ import type {
 import { organizationById, organizationForRole } from '@freebbs-development/contracts';
 import { Router } from 'express';
 import multer from 'multer';
-import { resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 import { z } from 'zod';
 
 import type { AuthenticationResult, AuthHeaders } from '../../core/auth/auth-middleware.js';
@@ -47,6 +47,7 @@ export interface CollectionsRouterOptions {
   store: DevelopmentStore;
   authenticate: Authenticate;
   uploadDirectory?: string;
+  nodeEnvironment?: 'development' | 'test' | 'production';
 }
 interface ErrorData {
   error: { code: string; message: string };
@@ -606,79 +607,93 @@ function exportPayload(
 export function createCollectionsRouter(options: CollectionsRouterOptions): Router {
   const router = Router();
   const uploadDirectory = options.uploadDirectory ?? resolve('.data/collection-uploads');
+  const uploadDirectoryConfigured =
+    options.nodeEnvironment !== 'production' ||
+    (options.uploadDirectory !== undefined && isAbsolute(options.uploadDirectory));
   const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 100 * 1024 * 1024, files: 1 },
   });
 
-  router.post('/assets', upload.single('file'), async (request, response) => {
-    const actor = await requireActor(options, request, response);
-    if (!actor) return;
-    if (!request.file) throw new HttpError(400, 'missing_upload', '请选择要上传的文件');
-    const uploadTarget = parse(
-      z.object({
-        formId: z.string().trim().min(1).max(128),
-        fieldId: z.string().trim().min(1).max(128),
-      }),
-      request.body,
-    );
-    const form = await options.store.collectionForms.get(uploadTarget.formId);
-    const version = form?.publishedVersionId
-      ? await options.store.collectionVersions.get(form.publishedVersionId)
-      : null;
-    if (!form || !version || !audienceAllows(actor, version.schema))
-      throw new HttpError(404, 'collection_not_found', '未找到表单');
-    if (nativeStatus(form, version.schema) !== 'open')
-      throw new HttpError(409, 'collection_closed', '当前表单尚未开放或已经截止');
-    const field = version.schema.fields.find(
-      (item) => item.id === uploadTarget.fieldId && UPLOAD_FIELD_KINDS.has(item.kind),
-    );
-    if (!field) throw new HttpError(400, 'invalid_upload_field', '上传字段不存在');
-    const allowedTypes = field.rules.find((rule) => rule.kind === 'file_types')?.value;
-    if (
-      Array.isArray(allowedTypes) &&
-      allowedTypes.length > 0 &&
-      !allowedTypes.includes(request.file.mimetype)
-    )
-      throw new HttpError(400, 'unsupported_file_type', '文件格式不在表单允许范围内');
-    const sizeLimit = field.rules.find((rule) => rule.kind === 'file_size')?.value;
-    if (typeof sizeLimit === 'number' && request.file.size > sizeLimit)
-      throw new HttpError(413, 'upload_too_large', '文件超过表单设置的大小上限');
+  router.post(
+    '/assets',
+    async (request, response, next) => {
+      const actor = await requireActor(options, request, response);
+      if (!actor) return;
+      if (!uploadDirectoryConfigured)
+        throw new HttpError(503, 'upload_not_configured', '萬事集文件存储尚未配置，请联系管理员');
+      response.locals.collectionsActor = actor;
+      next();
+    },
+    upload.single('file'),
+    async (request, response) => {
+      const actor = response.locals.collectionsActor as AuthorizationContext;
+      if (!request.file) throw new HttpError(400, 'missing_upload', '请选择要上传的文件');
+      const uploadTarget = parse(
+        z.object({
+          formId: z.string().trim().min(1).max(128),
+          fieldId: z.string().trim().min(1).max(128),
+        }),
+        request.body,
+      );
+      const form = await options.store.collectionForms.get(uploadTarget.formId);
+      const version = form?.publishedVersionId
+        ? await options.store.collectionVersions.get(form.publishedVersionId)
+        : null;
+      if (!form || !version || !audienceAllows(actor, version.schema))
+        throw new HttpError(404, 'collection_not_found', '未找到表单');
+      if (nativeStatus(form, version.schema) !== 'open')
+        throw new HttpError(409, 'collection_closed', '当前表单尚未开放或已经截止');
+      const field = version.schema.fields.find(
+        (item) => item.id === uploadTarget.fieldId && UPLOAD_FIELD_KINDS.has(item.kind),
+      );
+      if (!field) throw new HttpError(400, 'invalid_upload_field', '上传字段不存在');
+      const allowedTypes = field.rules.find((rule) => rule.kind === 'file_types')?.value;
+      if (
+        Array.isArray(allowedTypes) &&
+        allowedTypes.length > 0 &&
+        !allowedTypes.includes(request.file.mimetype)
+      )
+        throw new HttpError(400, 'unsupported_file_type', '文件格式不在表单允许范围内');
+      const sizeLimit = field.rules.find((rule) => rule.kind === 'file_size')?.value;
+      if (typeof sizeLimit === 'number' && request.file.size > sizeLimit)
+        throw new HttpError(413, 'upload_too_large', '文件超过表单设置的大小上限');
 
-    await cleanupExpiredAssets(options.store, uploadDirectory, new Date());
-    const pendingCount = (await options.store.collectionAssets.list({ query: actor.uid })).filter(
-      (asset) => asset.uploaderUid === actor.uid && asset.status === 'pending',
-    ).length;
-    if (pendingCount >= MAX_PENDING_ASSETS_PER_USER)
-      throw new HttpError(429, 'pending_upload_limit', '请先完成当前提交，再继续上传文件');
+      await cleanupExpiredAssets(options.store, uploadDirectory, new Date());
+      const pendingCount = (await options.store.collectionAssets.list({ query: actor.uid })).filter(
+        (asset) => asset.uploaderUid === actor.uid && asset.status === 'pending',
+      ).length;
+      if (pendingCount >= MAX_PENDING_ASSETS_PER_USER)
+        throw new HttpError(429, 'pending_upload_limit', '请先完成当前提交，再继续上传文件');
 
-    const stored = await storeCollectionUpload({
-      buffer: request.file.buffer,
-      originalName: request.file.originalname,
-      mimeType: request.file.mimetype,
-      directory: uploadDirectory,
-      ...(typeof sizeLimit === 'number' ? { maxBytes: sizeLimit } : {}),
-    });
-    try {
-      const created = await options.store.collectionAssets.create({
-        formId: form.id,
-        fieldId: field.id,
-        uploaderUid: actor.uid,
-        responseId: null,
-        name: stored.name,
-        mimeType: stored.mimeType,
-        sizeBytes: stored.sizeBytes,
-        storageKey: stored.id,
-        status: 'pending',
-        ownerUid: actor.uid,
-        scope: { type: 'collection_form', id: form.id },
+      const stored = await storeCollectionUpload({
+        buffer: request.file.buffer,
+        originalName: request.file.originalname,
+        mimeType: request.file.mimetype,
+        directory: uploadDirectory,
+        ...(typeof sizeLimit === 'number' ? { maxBytes: sizeLimit } : {}),
       });
-      send(response, 201, assetPayload(created));
-    } catch (error) {
-      await deleteCollectionUpload(uploadDirectory, stored.id);
-      throw error;
-    }
-  });
+      try {
+        const created = await options.store.collectionAssets.create({
+          formId: form.id,
+          fieldId: field.id,
+          uploaderUid: actor.uid,
+          responseId: null,
+          name: stored.name,
+          mimeType: stored.mimeType,
+          sizeBytes: stored.sizeBytes,
+          storageKey: stored.id,
+          status: 'pending',
+          ownerUid: actor.uid,
+          scope: { type: 'collection_form', id: form.id },
+        });
+        send(response, 201, assetPayload(created));
+      } catch (error) {
+        await deleteCollectionUpload(uploadDirectory, stored.id);
+        throw error;
+      }
+    },
+  );
 
   router.get('/module-definitions', async (request, response) => {
     const actor = await requireActor(options, request, response);

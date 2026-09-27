@@ -19,6 +19,8 @@ UMask=0027
 StateDirectory=freebbs-development
 StateDirectoryMode=0700
 Environment=FESTIVAL_UPLOAD_DIR=/var/lib/freebbs-development/festival
+Environment=COLLECTIONS_UPLOAD_DIR=/var/lib/freebbs-development/collections
+ReadWritePaths=/var/lib/freebbs-development
 
 NoNewPrivileges=true
 PrivateTmp=true

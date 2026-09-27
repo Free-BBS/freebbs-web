@@ -245,8 +245,12 @@ export function createApp(options: CreateAppOptions = {}) {
     createCollectionsRouter({
       store,
       authenticate,
-      ...(options.collectionsUploadDirectory
-        ? { uploadDirectory: options.collectionsUploadDirectory }
+      nodeEnvironment: environment.nodeEnv,
+      ...((options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR)
+        ? {
+            uploadDirectory:
+              options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
+          }
         : {}),
     }),
   );

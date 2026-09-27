@@ -21,8 +21,10 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-free_bbs_development}
       FESTIVAL_UPLOAD_DIR: /var/lib/freebbs-development/festival
+      COLLECTIONS_UPLOAD_DIR: /var/lib/freebbs-development/collections
     volumes:
       - festival-videos:/var/lib/freebbs-development/festival
+      - collection-assets:/var/lib/freebbs-development/collections
     expose:
       - '3100'
     ports:
@@ -189,3 +191,4 @@ services:
 volumes:
   mysql-data:
   festival-videos:
+  collection-assets:
