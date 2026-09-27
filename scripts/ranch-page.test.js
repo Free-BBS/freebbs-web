@@ -52,10 +52,12 @@ test('season switching updates accessible selection without issuing any transact
     },
   }));
   const root = { dataset: {}, querySelector: () => caption, querySelectorAll: () => buttons };
-  const context = { seasons, currentSeason: undefined };
+  const body = { classList: { contains: () => true }, dataset: {} };
+  const context = { seasons, currentSeason: undefined, document: { body } };
   vm.runInNewContext(functionSource('applySeason', 'panel'), context);
   context.applySeason(root, 'summer');
   assert.equal(root.dataset.ranchSeason, 'summer');
+  assert.equal(body.dataset.ranchSeason, 'summer');
   assert.equal(caption.textContent, '北京 · 草木');
   assert.deepEqual(
     buttons.map((button) => button['aria-pressed']),
@@ -63,7 +65,34 @@ test('season switching updates accessible selection without issuing any transact
   );
   context.applySeason(root, 'invalid');
   assert.equal(root.dataset.ranchSeason, 'summer');
+  body.classList.contains = () => false;
+  context.applySeason(root, 'winter');
+  assert.equal(root.dataset.ranchSeason, 'winter');
+  assert.equal(body.dataset.ranchSeason, 'summer', 'profile preview must not theme shared chrome');
   assert.doesNotMatch(functionSource('applySeason', 'panel'), /fetch|callApi/);
+});
+
+test('mobile ranch locks only its viewport, keeps dialogs scrollable, and shortens visible labels without losing names', () => {
+  const css = read('public/ranch-page.css');
+  assert.match(
+    css,
+    /html:has\(body.ranch-page\)\s*\{[^}]*overflow: hidden;[^}]*overscroll-behavior: none;/,
+  );
+  assert.match(
+    css,
+    /body.ranch-page.public-profile-page:not\(\.auth-page-body\) \.main-content\s*\{[^}]*position: fixed;/,
+  );
+  assert.match(css, /\.ranch-drawer\s*\{[^}]*overflow-y: auto;/);
+  assert.match(css, /\.ranch-scene-actions\s*\{[^}]*grid-auto-flow: column;/);
+  assert.doesNotMatch(
+    css,
+    /\.ranch-scene-actions \[data-extra-action='feed'\]\s*\{\s*flex-basis: 100%/,
+  );
+  assert.match(css, /\.mobile-header-backdrop::before/);
+  assert.match(css, /\.mobile-nav-compact::before/);
+  assert.match(css, /filter: blur\(14px\)/);
+  assert.match(source, /button.setAttribute\('aria-label', button.textContent\)/);
+  assert.match(source, /button.dataset.compactLabel = label/);
 });
 
 test('standalone ranch preserves existing data and purchases while the profile is only a linked scene', () => {
@@ -95,7 +124,7 @@ test('four compressed local photos and supply imagery exist, with mobile and key
   for (const match of source.matchAll(/src="(\/assets\/[^"$]+)"/g))
     assert.ok(fs.existsSync(path.join(__dirname, '../public', match[1])), match[1]);
   const css = read('public/ranch-page.css');
-  assert.match(css, /100svh - 112px - var\(--mobile-nav-space, 64px\)/);
+  assert.match(css, /html:has\(body.ranch-page\)[^{]*\{\s*overflow: hidden;/);
   assert.match(css, /ranch-preview-link:focus-visible/);
   assert.match(css, /ranch-drawer::backdrop/);
 });

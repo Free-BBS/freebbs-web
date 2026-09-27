@@ -28,6 +28,9 @@
     if (!seasons[season]) return;
     currentSeason = season;
     root.dataset.ranchSeason = season;
+    if (document.body.classList.contains('ranch-page')) {
+      document.body.dataset.ranchSeason = season;
+    }
     const caption = root.querySelector('[data-season-caption]');
     if (caption) caption.textContent = `北京 · ${seasons[season][1]}`;
     root.querySelectorAll('[data-ranch-season-choice]').forEach((button) => {
@@ -131,6 +134,19 @@
           'beforeend',
           '<button type="button" data-ranch-open="ranch-shop-dialog">牧场补给</button>',
         );
+      }
+      const compactLabels = [
+        ['[data-extra-action="feed"]', `喂养 ${Math.max(0, Number(state.fish) || 0)}`],
+        ['[data-ranch-greet]', '招呼'],
+        ['[data-ranch-open="ranch-wool-dialog"]', '羊毛'],
+        ['[data-ranch-open="ranch-shop-dialog"]', '补给'],
+      ];
+      for (const [selector, label] of compactLabels) {
+        const button = controls.querySelector(selector);
+        if (!button) continue;
+        button.dataset.compactLabel = label;
+        button.setAttribute('aria-label', button.textContent);
+        button.title = button.textContent;
       }
       const pause = root.querySelector('[data-ranch-pause]');
       pause.classList.add('ranch-scene-pause');
