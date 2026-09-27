@@ -16,6 +16,71 @@ const {
 } = require('../public/max-guide-releases');
 const { STEPS, STATIONS, RELEASE_STEP_IDS } = require('../public/max-guide-stations');
 
+test('merged ranch preview saves appearance separately from Poisson wool, assets and receipts', async (t) => {
+  let draws = 0;
+  const { server, store } = createOnboardingPreview({
+    growthRandom: () => {
+      draws += 1;
+      return 0.99;
+    },
+  });
+  await new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  t.after(() => {
+    server.closeAllConnections();
+    server.close();
+  });
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  for (const page of ['/ranch', '/ranch-dye', '/ranch-gallery'])
+    assert.equal((await fetch(`${origin}${page}`)).status, 200);
+  const get = async (route) => {
+    const response = await fetch(`${origin}${route}`, {
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  const { design, revision } = await get('/api/ranch-designs/mine');
+  design.wool.base = '#225577';
+  const body = JSON.stringify({ design, revision, userId: 2 });
+  const before = structuredClone(store.account());
+  const put = (headers = {}) =>
+    fetch(`${origin}/api/ranch-designs/mine`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json', ...headers },
+      body,
+    });
+  assert.equal((await put({ Authorization: 'Bearer wrong' })).status, 403);
+  assert.equal((await put({ Origin: 'https://example.invalid' })).status, 403);
+  assert.equal((await put()).status, 200);
+  assert.equal((await put()).status, 409, 'stale tabs cannot overwrite designs');
+  assert.deepEqual(store.account(), before, 'dye save leaves economic state unchanged');
+  assert.equal(draws, 0);
+  const publicResult = await fetch(`${origin}/api/ranch-designs/u_preview01`);
+  assert.equal(publicResult.status, 200, 'public artwork loads without auth');
+  const publicSheep = await publicResult.json();
+  assert.deepEqual(Object.keys(publicSheep).sort(), ['design', 'revision', 'uid', 'username']);
+  assert.equal(publicSheep.design.wool.base, '#225577');
+  await get('/api/fortune');
+  const requestKey = randomUUID();
+  const feed = () =>
+    fetch(`${origin}/api/profile/extras`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'feed', requestKey }),
+    });
+  const first = await feed();
+  assert.equal(first.status, 200);
+  assert.equal((await first.json()).result.woolGrown, 2);
+  const replay = await feed();
+  assert.equal((await replay.json()).result.replayed, true);
+  assert.equal(draws, 1);
+  assert.equal(store.account().assets.fish, before.assets.fish - 1);
+  assert.equal(store.account().woolReady, before.woolReady + 2);
+  assert.equal((await get('/api/ranch-designs/mine')).design.wool.base, '#225577');
+});
+
 test('onboarding preview uses real local pages, account progress and transactional wallet data', async (t) => {
   const { server, store } = createOnboardingPreview({
     now: () => Date.parse('2026-09-20T10:00:00Z'),
@@ -49,6 +114,9 @@ test('onboarding preview uses real local pages, account progress and transaction
     async () => {
       for (const route of [
         '/',
+        '/about',
+        '/staff',
+        '/laboratory',
         '/guide',
         '/world',
         '/course',
@@ -82,6 +150,10 @@ test('onboarding preview uses real local pages, account progress and transaction
       }
       assert.equal((await fetch(`${origin}/api/onboarding`)).status, 403);
       assert.equal(
+        (await api('/api/notifications/email-preferences')).preferences.weeklyDigest,
+        false,
+      );
+      assert.equal(
         (
           await fetch(`${origin}/api/onboarding`, {
             headers: { Authorization: `Bearer ${TOKEN}`, Origin: 'https://www.free-bbs.cn' },
@@ -98,8 +170,15 @@ test('onboarding preview uses real local pages, account progress and transaction
     'preview loads the production shell in the same order for responsive guide QA',
     async () => {
       const production = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
-      const styles = ['site-search', 'mobile-shell', 'desktop-elegant', 'page-transitions'];
-      const scripts = ['site-search', 'mobile-shell', 'page-transitions'];
+      const styles = [
+        'site-search',
+        'mobile-shell',
+        'desktop-elegant',
+        'page-transitions',
+        'desktop-shell',
+        'personal-polish',
+      ];
+      const scripts = ['site-search', 'mobile-shell', 'page-transitions', 'desktop-shell'];
       const head = styles.map((name) => `<link rel="stylesheet" href="/${name}.css">`).join('');
       const body = scripts.map((name) => `<script src="/${name}.js" defer></script>`).join('');
       assert.ok(
@@ -118,6 +197,8 @@ test('onboarding preview uses real local pages, account progress and transaction
           `${route}: shell scripts must follow page scripts`,
         );
         assert.equal(html.split('href="/desktop-elegant.css"').length - 1, 1, route);
+        assert.equal(html.split('data-shared-footer').length - 1, 1, route);
+        assert.match(html, /<body[^>]*>\s*<script src="\/typography.js"><\/script>/, route);
       }
       for (const asset of [
         ...styles.map((name) => `/${name}.css`),
@@ -156,9 +237,18 @@ test('onboarding preview uses real local pages, account progress and transaction
       // Follow the URL used by the real discussion create button, whose editor
       // now lives on a separate page rather than inside the discussion list.
       const client = fs.readFileSync(path.join(__dirname, '../public/app.js'), 'utf8');
-      const editorRoute = client.match(/location\.href = '(\/publish\?board=)'/);
-      assert.ok(editorRoute, 'The discussion button must expose its editor URL');
-      const response = await fetch(origin + editorRoute[1] + encodeURIComponent(post.board.slug));
+      const createButton = client.slice(
+        client.indexOf('async function handleDiscussionCreateToggle()'),
+        client.indexOf('async function handleDiscussionComposeSubmit('),
+      );
+      const location = { href: '' };
+      await vm.runInNewContext(`${createButton}\nhandleDiscussionCreateToggle();`, {
+        window: { location },
+        isCurrentPath: () => false,
+        discussionState: { activeBoard: post.board.slug },
+      });
+      assert.equal(location.href, `/publish?board=${encodeURIComponent(post.board.slug)}`);
+      const response = await fetch(origin + location.href);
       assert.equal(response.status, 200);
       const html = await response.text();
       assert.match(html, /id="discussion-compose-form"/);
@@ -386,10 +476,12 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
   assert.equal(new Set(STATIONS.map((station) => station.id)).size, STATIONS.length);
   const routes = new Map(STATIONS.map((station) => [station.id, station.route]));
   for (const station of STATIONS) {
-    assert.match(station.route, /^\/[a-z]*$/);
-    assert.match(station.fallbackRoute, /^\/[a-z]*$/);
+    assert.match(station.route, /^\/[a-z-]*$/);
+    assert.match(station.fallbackRoute, /^\/[a-z-]*$/);
   }
   const auditedControls = new Set([
+    '.economy-shortcut-checkin',
+    '#fortune-modal .fortune-close',
     '.island-orbit-item[data-world-id="mathematics"]',
     '#world-enter-island',
     '#world-modal[open] [data-close-modal]',
@@ -414,10 +506,12 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
     '#shop-grid [data-action="inspect-item"]',
     '#wallet-ledger-open',
     '#settings-profile-link',
+    '.ranch-preview-link',
+    '[data-ranch-open="ranch-wool-dialog"]',
     '#discussion-post-list .discussion-post-card:has(.discussion-pin-badge) [data-action="open-post"], #discussion-post-list:not(:has(.discussion-pin-badge)) [data-action="open-post"]',
   ]);
   for (const step of STEPS) {
-    assert.equal(step.route, routes.get(step.station));
+    assert.equal(step.route, step.id === 'profile-wool' ? '/ranch' : routes.get(step.station));
     for (const field of ['id', 'target', 'label', 'title', 'body', 'caption'])
       assert.ok(step[field], `${step.id}: ${field}`);
     assert.ok(Object.isFrozen(step));
@@ -433,9 +527,9 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
       if (view.action) assert.ok(['click', 'link'].includes(view.action.kind));
     }
   }
-  assert.equal(STEPS.length, 48);
-  assert.equal(STATIONS.length, 14);
-  assert.equal(RELEASE_STEP_IDS.length, 5);
+  assert.equal(STEPS.length, 58);
+  assert.equal(STATIONS.length, 19);
+  assert.equal(RELEASE_STEP_IDS.length, 12);
   assert.deepEqual(LATEST_RELEASE.stepIds, RELEASE_STEP_IDS);
   for (const id of RELEASE_STEP_IDS) {
     const step = STEPS.find((entry) => entry.id === id);
@@ -471,11 +565,17 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
   assert.match(step('inventory-ledger').body, /这笔交易之后/);
   assert.equal(step('profile-ranch').target, '#public-profile-ranch .ranch-scene');
   assert.equal(step('profile-ranch').emptyTarget, '#public-profile-ranch');
-  assert.equal(step('profile-wool').target, '.ranch-wool-stages');
+  assert.equal(step('profile-wool').target, '#ranch-wool-dialog[open] .ranch-wool-stages');
   assert.equal(step('profile-wool').emptyTarget, '#public-profile-ranch');
   assert.equal(step('profile-wool').action, undefined);
-  assert.equal(step('profile-wool').prepare, undefined);
-  assert.match(step('profile-wool').body, /5次.*5条.*1份.*7磁元.*2电元/);
+  assert.deepEqual(step('profile-wool').prepare, [
+    {
+      selector: '[data-ranch-open="ranch-wool-dialog"]',
+      whenMissing: '#ranch-wool-dialog[open]',
+    },
+  ]);
+  assert.match(step('profile-wool').body, /泊松.*平均每5条.*1份.*7磁元.*2电元/);
+  assert.match(step('profile-wool').body, /并非第5次必得/);
   assert.match(step('profile-wool').body, /羊毛只在牧场保存/);
   assert.match(step('profile-wool').body, /北京时间每天最多剪1份.*待剪量.*保留/);
   assert.equal(step('max-history').prepare[0].whenMissing, '#aichat-dialogs');
@@ -644,8 +744,13 @@ test('preview rubber rod purchase uses the real price, one-item limit and idempo
 
 test('preview preserves same-day wool and permits a second shear after Beijing midnight without consuming the rod', async (t) => {
   let previewNow = Date.parse('2026-09-21T10:00:00Z');
+  let growthDraws = 0;
   const { server, store } = createOnboardingPreview({
     now: () => previewNow,
+    growthRandom: () => {
+      growthDraws += 1;
+      return growthDraws % 5 === 0 ? 0.9 : 0.1;
+    },
   });
   await new Promise((resolve) => {
     server.listen(0, '127.0.0.1', resolve);

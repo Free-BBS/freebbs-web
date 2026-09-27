@@ -14,7 +14,7 @@ const { createMysqlEconomyStore } = require('./economy-shop');
 const { createEconomyMemoryStore } = require('../scripts/fixtures/economy-memory-store');
 
 const fixed = Date.parse('2026-09-21T10:00:00Z');
-function setup(fields = {}, now = () => fixed) {
+function setup(fields = {}, now = () => fixed, random = () => 0.9) {
   const store = createEconomyMemoryStore(
     [
       {
@@ -31,7 +31,7 @@ function setup(fields = {}, now = () => fixed) {
     ],
     { recordLedger: true, now },
   );
-  const service = createProfileExtras(store, { now });
+  const service = createProfileExtras(store, { now, random });
   const act = (action, options = {}) =>
     service.act({ userId: 1, action, requestKey: randomUUID(), ...options });
   return { store, service, act };
@@ -60,20 +60,29 @@ test('wool starts at zero without inferring old feeds, bone holdings or inventor
   assert.equal(store.account().assets.wool, undefined);
 });
 
-test('each five successfully consumed fish grows one ranch wool while golden bones remain once per day', async () => {
-  const { store, service, act } = setup();
+test('independent Poisson increments grow zero, one or multiple wool; client counters and bone quotas cannot choose the result', async () => {
+  const draws = [0.1, 0.9, 0.99, 0.1, 0.1, 0.9, 0.1, 0.1, 0.1, 0.9];
+  const expected = [0, 1, 2, 0, 0, 1, 0, 0, 0, 1];
+  const { store, service, act } = setup(
+    {},
+    () => fixed,
+    () => draws.shift(),
+  );
   assert.equal(WOOL_FEEDS, 5);
   assert.equal(WOOL_ELECTRIC_REWARD, 2);
   for (let i = 1; i <= 10; i += 1) {
     const result = await act('feed', { feedProgress: 4, woolReady: 999, quantity: 999 });
-    assert.equal(result.woolGrown, i % 5 === 0 ? 1 : 0);
+    assert.equal(result.woolGrown, expected[i - 1]);
     assert.equal(result.feedProgress, i % 5);
-    assert.equal(result.woolReady, Math.floor(i / 5));
+    assert.equal(
+      result.woolReady,
+      expected.slice(0, i).reduce((a, b) => a + b, 0),
+    );
     assert.equal(result.woolStored, 0);
   }
   assert.deepEqual(wool((await service.ownState(1)).ranch), {
     feedProgress: 0,
-    woolReady: 2,
+    woolReady: 5,
     woolStored: 0,
   });
   assert.equal(store.account().assets.fish, 10);
@@ -86,8 +95,16 @@ test('each five successfully consumed fish grows one ranch wool while golden bon
   assert.equal(store.account().ledger, undefined);
 });
 
-test('simultaneous feeds and retries cross the fifth-feed boundary only once', async () => {
-  const { store, act } = setup({ feedProgress: 4 });
+test('simultaneous feeds draw once each and successful retries never resample', async () => {
+  let draws = 0;
+  const { store, act } = setup(
+    { feedProgress: 4 },
+    () => fixed,
+    () => {
+      draws += 1;
+      return 0.9;
+    },
+  );
   const requestKey = randomUUID();
   const receipts = await Promise.all([
     act('feed', { requestKey }),
@@ -95,14 +112,15 @@ test('simultaneous feeds and retries cross the fifth-feed boundary only once', a
     act('feed'),
   ]);
   assert.equal(receipts.filter((result) => result.replayed).length, 1);
-  assert.deepEqual(wool(store.account()), { feedProgress: 1, woolReady: 1, woolStored: 0 });
+  assert.deepEqual(wool(store.account()), { feedProgress: 1, woolReady: 2, woolStored: 0 });
+  assert.equal(draws, 2);
   assert.equal(store.account().assets.fish, 18);
   assert.equal(store.account().assets.golden_fishbone, 1);
   assert.equal(store.account().assets.ordinary_fishbone, 1);
   const restarted = createProfileExtras(store, { now: () => fixed + 86400000 });
   await restarted.act({ userId: 1, action: 'feed', requestKey });
   assert.equal(store.account().feedProgress, 1);
-  assert.equal(store.account().woolReady, 1);
+  assert.equal(store.account().woolReady, 2);
 });
 
 test('ordinary then auspicious feeds keep wool progress independent from the golden-bone quota and day changes', async () => {
@@ -112,13 +130,13 @@ test('ordinary then auspicious feeds keep wool progress independent from the gol
   assert.equal((await act('feed')).bone, 'golden_fishbone');
   const tomorrow = fixed + 86400000;
   store.account().fortunes[beijingDay(tomorrow)] = 95;
-  await createProfileExtras(store, { now: () => tomorrow }).act({
+  await createProfileExtras(store, { now: () => tomorrow, random: () => 0.9 }).act({
     userId: 1,
     action: 'feed',
     requestKey: randomUUID(),
   });
   assert.equal(store.account().assets.golden_fishbone, 2);
-  assert.deepEqual(wool(store.account()), { feedProgress: 1, woolReady: 1, woolStored: 0 });
+  assert.deepEqual(wool(store.account()), { feedProgress: 1, woolReady: 3, woolStored: 0 });
 });
 
 for (const fields of [
@@ -136,7 +154,7 @@ for (const fields of [
 }
 
 for (const stage of ['consume', 'deliver', 'extras', 'profile_record', 'commit']) {
-  test(`fifth-feed rollback at ${stage} restores wool, fish, bones and daily receipts together`, async () => {
+  test(`random-growth rollback at ${stage} restores wool, fish, bones and daily receipts together`, async () => {
     const { store, act } = setup({ feedProgress: 4 });
     const before = structuredClone(store.account());
     const requestKey = randomUUID();

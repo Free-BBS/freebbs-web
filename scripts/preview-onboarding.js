@@ -1,6 +1,7 @@
 // Loopback-only experience lab. All account data is memory-only; no production services.
 const fs = require('node:fs');
 const path = require('node:path');
+const { preparePageShell } = require('../page-shell');
 const { createEconomyPreview } = require('./preview-economy');
 const { createWorkbenchPreviewApi } = require('./workbench-preview-api');
 const { createBoneSales } = require('../backend/economy-sales');
@@ -16,6 +17,13 @@ const catalog = require('../public/data/shop-items.json');
 
 const PREVIEW_PAGES = {
   '/': 'index.html',
+  '/about': 'about.html',
+  '/staff': 'staff.html',
+  '/laboratory': 'laboratory.html',
+  '/pbl': 'pbl.html',
+  '/creative-workshop': 'creative-workshop.html',
+  '/tool-workshop': 'tool-workshop.html',
+  '/circuit-challenge': 'circuit-challenge.html',
   '/guide': 'guide.html',
   '/world': 'world.html',
   '/course': 'course.html',
@@ -150,7 +158,7 @@ function initialLedger(now) {
   });
 }
 
-function createOnboardingPreview({ now = Date.now } = {}) {
+function createOnboardingPreview({ now = Date.now, growthRandom } = {}) {
   const progressByVersion = new Map();
   const readProgress = (version = GUIDE_VERSION) =>
     structuredClone(progressByVersion.get(resolveGuideVersion(version)) || emptyProgress(version));
@@ -199,6 +207,7 @@ function createOnboardingPreview({ now = Date.now } = {}) {
   const result = (body, status = 200) => ({ body, status });
   const preview = createEconomyPreview({
     now,
+    profileOptions: { random: growthRandom },
     allowVendor: true,
     extraPages: PREVIEW_PAGES,
     accounts: [
@@ -236,14 +245,14 @@ function createOnboardingPreview({ now = Date.now } = {}) {
     transformHtml(html, route) {
       // Match the shared shell appended by the production static server. Missing
       // these layers makes guide geometry and responsive QA differ from the site.
-      const page = html
+      const page = preparePageShell(html)
         .replace(
           '</head>',
-          '<link rel="stylesheet" href="/site-search.css"><link rel="stylesheet" href="/mobile-shell.css"><link rel="stylesheet" href="/desktop-elegant.css"><link rel="stylesheet" href="/page-transitions.css"></head>',
+          '<link rel="stylesheet" href="/site-search.css"><link rel="stylesheet" href="/mobile-shell.css"><link rel="stylesheet" href="/desktop-elegant.css"><link rel="stylesheet" href="/page-transitions.css"><link rel="stylesheet" href="/desktop-shell.css"><link rel="stylesheet" href="/personal-polish.css"></head>',
         )
         .replace(
           '</body>',
-          '<script src="/site-search.js" defer></script><script src="/mobile-shell.js" defer></script><script src="/page-transitions.js" defer></script></body>',
+          '<script src="/site-search.js" defer></script><script src="/mobile-shell.js" defer></script><script src="/page-transitions.js" defer></script><script src="/desktop-shell.js" defer></script></body>',
         );
       if (route !== '/aichat') return page;
       return page
@@ -255,6 +264,9 @@ function createOnboardingPreview({ now = Date.now } = {}) {
     },
     async extraApi(context) {
       const { route, method, body, url, store } = context;
+      if (route === '/api/tools' && method === 'GET') return result({ tools: [] });
+      if (route.startsWith('/api/tools'))
+        return result({ message: '本地预览不调用真实 AI，也不生成或发布小工具' }, 503);
       if (route === '/api/onboarding/reward') {
         const rewardState = () => {
           const claimedAt = store.account().onboardingRewardClaimedAt || null;
@@ -356,6 +368,17 @@ function createOnboardingPreview({ now = Date.now } = {}) {
         });
       }
       if (route.startsWith('/api/workbench/') || route.startsWith('/api/notifications')) {
+        if (route === '/api/notifications/email-preferences' && method === 'GET')
+          return result({
+            preferences: {
+              reply: true,
+              reaction: true,
+              commentLike: true,
+              announcement: true,
+              weeklyDigest: false,
+              aiTask: true,
+            },
+          });
         if (route === '/api/notifications/unread-count')
           return result({
             unreadCount: workbench.communityNotices.filter((entry) => !entry.readAt).length,

@@ -44,6 +44,10 @@
     font: inherit !important;
     white-space: nowrap;
   }
+  body:not(.auth-page-body) .mobile-nav-compact .mobile-primary > span,
+  body:not(.auth-page-body) .mobile-nav-compact .mobile-tool-link > span {
+    color: inherit !important;
+  }
   .mobile-nav-compact .mobile-primary img {
     width: 23px;
     height: 23px;

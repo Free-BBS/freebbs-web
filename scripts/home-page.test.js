@@ -24,7 +24,7 @@ test('homepage places all four primary actions before community discovery', () =
   assert.match(html, /让学习<span>自由而不孤独/);
   assert.doesNotMatch(html, /class="searchbar"|href="#staff"/);
   assert.match(html, /独立于评价体系/);
-  assert.match(html, /不代表学习能力或综合表现/);
+  assert.match(html, /花费电元和磁元可以生成热力/);
 });
 
 test('homepage retains all original data hooks, with each id unique', () => {
@@ -46,20 +46,16 @@ test('homepage retains all original data hooks, with each id unique', () => {
   assert.ok(html.indexOf('href="/home.css"') > html.indexOf('href="/layout-fixes.css"'));
 });
 
-test('homepage introduces FREE BBS with a permanent guide and keeps the staff placeholder', () => {
+test('homepage links to independent about and staff pages without obsolete folding sections', () => {
   assert.doesNotMatch(html, /feedback|mailto:/i);
-  for (const id of ['about-freebbs', 'freebbs-staff']) {
-    assert.ok(html.includes(`href="#${id}"`));
+  assert.doesNotMatch(html, /id="(?:about-freebbs|freebbs-staff)"|home-course-shortcuts/);
+  for (const route of ['about', 'staff']) {
+    assert.ok(html.includes(`href="/${route}"`));
+    const page = fs.readFileSync(path.join(root, 'public', `${route}.html`), 'utf8');
+    assert.match(page, /建设中 · 暂未开放/);
+    assert.match(page, /development-construction-bbs-v2\.webp/);
+    assert.match(page, /href="\/guide"/);
   }
-  const about = html.split('id="about-freebbs">')[1].split('</details>')[0];
-  assert.match(about, /关于\s*FREE BBS/);
-  assert.match(about, /学生主导、长期公益/);
-  assert.match(about, /href="\/guide"/);
-  assert.doesNotMatch(about, /正在施工/);
-  const staff = html.split('id="freebbs-staff">')[1].split('</details>')[0];
-  assert.match(staff, /FREE BBS工作人员名单/);
-  assert.match(staff, /<span>正在施工<\/span>/);
-  assert.match(staff, /<p>正在施工<\/p>/);
 });
 
 test('all homepage local images, icons and styles exist; app links have real routes', () => {
@@ -142,7 +138,7 @@ test('broken and blocked storage do not prevent static homepage actions', () => 
 
 function harness(initial, callApi = async () => ({ node: { id: 'S1', title: '系统' } })) {
   const elements = new Map(
-    ['home-learning-link', 'home-resume-note', 'home-world-link'].map((id) => [
+    ['home-learning-link', 'home-resume-note'].map((id) => [
       id,
       { href: '', textContent: '', hidden: true },
     ]),
@@ -187,7 +183,6 @@ test('valid point is verified through read-only API and rendered as text', async
   assert.match(h.elements.get('home-resume-note').textContent, /本浏览器最近访问/);
   assert.match(h.elements.get('home-resume-note').textContent, /非账号同步记录/);
   assert.match(h.elements.get('home-resume-note').textContent, /<img/);
-  assert.equal(h.elements.get('home-world-link').hidden, false);
 });
 
 test('deleted, unreadable or malformed points fall back to learning world', async () => {
@@ -201,7 +196,6 @@ test('deleted, unreadable or malformed points fall back to learning world', asyn
     const h = harness(pointRoute, callApi);
     await flush();
     assert.equal(h.elements.get('home-learning-link').href, '/world');
-    assert.equal(h.elements.get('home-world-link').hidden, true);
   }
 });
 
@@ -269,6 +263,9 @@ test('isolated preview serves labelled mocks and forbids writes, remote hosts an
     '/app.js',
     '/home.js',
     '/home.css',
+    '/site-info.css',
+    '/about',
+    '/staff',
     '/notifications.js',
     '/username-guard.js',
     '/assets/signals_island.webp',

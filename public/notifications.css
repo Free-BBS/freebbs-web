@@ -280,3 +280,73 @@
     flex-direction: column;
   }
 }
+/* A non-modal award notice: no forced equipment change and no focus stealing. */
+body .achievement-toast {
+  position: fixed;
+  z-index: 22000;
+  right: 22px;
+  bottom: 22px;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) 28px;
+  gap: 14px;
+  width: min(420px, calc(100vw - 32px));
+  padding: 22px;
+  box-sizing: border-box;
+  border: 1px solid var(--ui-line);
+  border-top: 3px solid var(--ui-reward);
+  border-radius: 20px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  box-shadow: var(--ui-shadow);
+  font-family: var(--font-ui);
+}
+body .achievement-toast > img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+}
+body .achievement-toast h2 {
+  margin: 4px 0 10px;
+  font-size: 1.35rem;
+  line-height: 1.4;
+  color: var(--ui-text) !important;
+}
+body .achievement-toast p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: var(--ui-muted) !important;
+}
+body .achievement-toast .achievement-toast-kicker {
+  font-size: 0.78rem;
+}
+body .achievement-toast .achievement-toast-equip {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--ui-accent) !important;
+  font-weight: 700;
+}
+body .achievement-toast-close {
+  align-self: start;
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  width: 28px;
+  height: 32px;
+  background: transparent;
+  color: var(--ui-text);
+  font: 400 1.4rem/1 var(--font-ui);
+  cursor: pointer;
+}
+body .achievement-toast :is(a, button):focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 3px;
+}
+@media (max-width: 900px) {
+  body .achievement-toast {
+    right: 16px;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    padding: 16px;
+    gap: 10px;
+  }
+}

@@ -4,7 +4,8 @@ const http = require('node:http');
 const path = require('node:path');
 
 const publicRoot = path.resolve(__dirname, '../public');
-const PORT = 3107;
+const PORT = Number(process.env.HOME_PREVIEW_PORT || 3107);
+const pages = { '/': 'index.html', '/about': 'about.html', '/staff': 'staff.html' };
 const mime = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
@@ -118,6 +119,10 @@ function createHomePreviewServer() {
         return send(405, { message: 'Read-only preview: all writes disabled' });
       const url = new URL(req.url, 'http://127.0.0.1');
       const pathname = decodeURIComponent(url.pathname);
+      if (pathname === '/about.html' || pathname === '/staff.html') {
+        res.writeHead(301, { Location: pathname.replace('.html', '') });
+        return res.end();
+      }
       const scenario = new URL(req.headers.referer || '/', 'http://127.0.0.1').searchParams.get(
         'case',
       );
@@ -184,7 +189,7 @@ function createHomePreviewServer() {
         pathname.split('/').some((part) => part === '..' || part.startsWith('.'))
       )
         return send(400, { message: 'Invalid path' });
-      const file = path.resolve(publicRoot, pathname === '/' ? 'index.html' : pathname.slice(1));
+      const file = path.resolve(publicRoot, pages[pathname] || pathname.slice(1));
       const realFile = await fs.realpath(file);
       const relative = path.relative(await fs.realpath(publicRoot), realFile);
       const ext = path.extname(realFile);
@@ -192,18 +197,24 @@ function createHomePreviewServer() {
         relative.startsWith('..') ||
         path.isAbsolute(relative) ||
         !mime[ext] ||
-        (ext === '.html' && path.basename(file) !== 'index.html')
+        (ext === '.html' && !pages[pathname])
       )
         return send(403, { message: 'Not a homepage preview asset' });
       let content = await fs.readFile(realFile);
       if (ext === '.html') {
-        content = content
-          .toString()
+        content = preparePageShell(content.toString())
           .replace(/<link\b[^>]*https:\/\/fonts\.[\s\S]*?>/g, '')
-          .replace('</head>', '<script src="/__home-preview.js"></script></head>')
+          .replace(
+            '</head>',
+            '<link rel="stylesheet" href="/site-search.css"><link rel="stylesheet" href="/mobile-shell.css"><link rel="stylesheet" href="/desktop-elegant.css"><link rel="stylesheet" href="/page-transitions.css"><link rel="stylesheet" href="/desktop-shell.css"><link rel="stylesheet" href="/personal-polish.css"><script src="/__home-preview.js"></script></head>',
+          )
           .replace(
             '</body>',
-            '<aside style="position:fixed;bottom:0;left:0;right:0;z-index:9999;padding:7px 12px;background:#e8dcb9;color:#16383c;text-align:center;font:12px/1.6 system-ui">本地首页实验 · 动态与数字均为演示数据 · 不连接线上　<a href="/?resume=yes&session=member">有记录</a> / <a href="/?resume=no">新访客</a> / <a href="/?case=empty">空数据</a> / <a href="/?case=error">加载失败</a></aside></body>',
+            '<script src="/site-search.js" defer></script><script src="/mobile-shell.js" defer></script><script src="/page-transitions.js" defer></script><script src="/desktop-shell.js" defer></script></body>',
+          )
+          .replace(
+            '</body>',
+            '<details data-preview-notice style="position:relative;margin:16px;padding:12px;border:1px solid #ccd7ce;border-radius:12px;background:#edf2ec;color:#25473e;font:13px/1.8 system-ui"><summary>本地首页预览 · 动态与数字均为演示数据 · 不连接线上</summary><nav aria-label="预览场景"><a href="/?resume=yes&session=member">有浏览记录</a> · <a href="/?resume=no">新访客</a> · <a href="/?theme=light">浅色</a> · <a href="/?theme=dark">深色</a> · <a href="/?case=empty">空数据</a> · <a href="/?case=error">加载失败</a></nav></details></body>',
           );
       }
       if (['/app.js', '/notifications.js', '/username-guard.js'].includes(pathname))
@@ -227,3 +238,4 @@ if (require.main === module) {
 }
 
 module.exports = { createHomePreviewServer, patchScript };
+const { preparePageShell } = require('../page-shell');

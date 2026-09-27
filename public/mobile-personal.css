@@ -421,6 +421,14 @@
     margin-left: auto;
     font-size: 25px;
     opacity: 0.55;
+    /* Keep the rotating chevron square; inherited line-height otherwise
+     * turns into horizontal overflow when a mobile section is expanded. */
+    flex: 0 0 25px;
+    width: 25px;
+    height: 25px;
+    line-height: 1;
+    display: grid;
+    place-items: center;
   }
   .personal-fold[open] > summary::after {
     content: '›';

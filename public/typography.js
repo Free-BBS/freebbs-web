@@ -151,4 +151,16 @@
 
   // Reading a page never requires storage to be writable.
   applyPreferences(getStoredPreferences());
+  // The server places this module at the start of <body> to avoid showing the
+  // default theme/font size and then repainting the whole page during app startup.
+  if (document.body?.classList) {
+    let light = false;
+    try {
+      light = localStorage.getItem('free_bbs_theme_mode') === 'light';
+    } catch {
+      // Match the application's default when storage is unavailable.
+    }
+    document.body.classList.toggle('theme-light', light);
+    document.body.classList.toggle('theme-dark', !light);
+  }
 })();

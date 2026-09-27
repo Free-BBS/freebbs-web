@@ -1,8 +1,8 @@
 // Shared browser/CommonJS manifest. Append release records instead of reusing an
 // existing id: each account keeps a separate receipt for every published tour.
 (() => {
-  const GUIDE_VERSION = 'max-v2';
-  const LEGACY_GUIDE_VERSIONS = Object.freeze(['max-v1']);
+  const GUIDE_VERSION = 'max-v3';
+  const LEGACY_GUIDE_VERSIONS = Object.freeze(['max-v1', 'max-v2']);
   const RELEASES = Object.freeze([
     Object.freeze({
       id: 'guide-depth-2026-09',
@@ -45,6 +45,31 @@
         '认识仍在建设的发展端与规划中的同学服务',
         '找到当前独立的活动报名入口，了解报名条件与回执查询',
         '明确发展端上线后，活动报名将整合进入发展端',
+      ]),
+    }),
+    Object.freeze({
+      id: 'guide-layout-2026-09',
+      title: '跟 Max 认识新版布局',
+      description: '从顶栏到侧栏，认识签到月历、实验室、规划入口与独立牧场',
+      publishedAt: '2026-09-27',
+      stepIds: Object.freeze([
+        'shell-search',
+        'shell-checkin',
+        'shell-account',
+        'shell-navigation',
+        'laboratory-circuit',
+        'laboratory-tools',
+        'laboratory-planned',
+        'creative-workshop-plan',
+        'pbl-plan',
+        'shell-assets',
+        'profile-ranch',
+        'profile-wool',
+      ]),
+      highlights: Object.freeze([
+        '按当前页面顺序认识搜索、签到、设置与导航',
+        '分清实验室已开放工具与规划中的运行环境',
+        '从个人主页进入独立牧场，查看羊毛与收藏',
       ]),
     }),
   ]);

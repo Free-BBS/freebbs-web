@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>FREE-BBS | 电子系学生自主学习平台</title>
+    <title>FREE BBS | 电子系学习发展共同体</title>
     <meta
       name="description"
-      content="FREE-BBS 是由学生维护的电子系自主学习平台，连接课程知识地图、讨论区和 Max 学习助手。"
+      content="FREE BBS · 电子系学习发展共同体，学生主导，长期公益，独立于评价体系，让学习自由而不孤独"
     />
-    <meta property="og:title" content="FREE-BBS | 电子系学生自主学习平台" />
-    <meta property="og:description" content="把课程脉络、真实讨论和项目探索放进同一个学习现场。" />
+    <meta property="og:title" content="FREE BBS | 电子系学习发展共同体" />
+    <meta property="og:description" content="把课程脉络、真实讨论和项目探索放进同一个学习现场" />
     <meta property="og:image" content="/assets/homebg.webp" />
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-v2-32.png" />
@@ -26,6 +26,7 @@
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/home.css" />
+    <link rel="stylesheet" href="/site-info.css" />
   </head>
   <body class="home-page">
     <div class="page-shell">
@@ -145,8 +146,11 @@
       <main class="main-content home-dashboard-main">
         <header class="home-welcome">
           <div>
-            <p class="home-eyebrow">FREE BBS · 电子系学习发展共同体</p>
-            <h1>让学习<span>自由而不孤独。</span></h1>
+            <p class="home-eyebrow home-identity">
+              <a href="/about" aria-label="关于 FREE BBS">FREE BBS</a>
+              <span aria-hidden="true">·</span> 电子系学习发展共同体
+            </p>
+            <h1>让学习<span>自由而不孤独</span></h1>
           </div>
           <p class="home-welcome-note">学生主导 · 长期公益<br />独立于评价体系</p>
         </header>
@@ -157,17 +161,14 @@
               <p class="home-eyebrow">FREE LEARNING / 自主学习</p>
               <h2 id="home-learning-title">今天，<br />想弄懂什么？</h2>
               <p class="home-learning-description">
-                从一个知识点出发，<br />看见一门课的来龙去脉。
+                从一个知识点出发，<br />拆解电子信息的“关系网”
               </p>
               <a class="home-primary-link" id="home-learning-link" href="/world"
                 >进入学习世界 <span aria-hidden="true">↗</span></a
               >
               <p class="home-resume-note" id="home-resume-note" role="status" aria-live="polite">
-                选择一门课程，从知识地图开始。
+                选择一门课程，从知识地图开始
               </p>
-              <a class="home-world-link" id="home-world-link" href="/world" hidden
-                >也可以探索其他课程 →</a
-              >
             </div>
             <div class="home-islands" aria-hidden="true">
               <span class="home-orbit home-orbit-one"></span>
@@ -191,14 +192,6 @@
                 />
               </picture>
             </div>
-            <nav class="home-course-shortcuts" aria-label="已开放课程快捷入口">
-              <span>从这里出发</span>
-              <a href="/course?course=math">高等微积分 <span aria-hidden="true">↗</span></a>
-              <a href="/course?course=circuits"
-                >电子电路与系统基础 <span aria-hidden="true">↗</span></a
-              >
-              <a href="/course?course=signals">信号与系统 <span aria-hidden="true">↗</span></a>
-            </nav>
           </article>
 
           <nav class="home-quick-actions" aria-label="讨论、工作台与 Max">
@@ -207,8 +200,10 @@
                 ><img src="/assets/icons/people.svg" alt=""
               /></span>
               <span
-                ><small>一起想明白</small><strong>进入讨论区</strong
-                ><span class="home-action-description">分享疑问，也接住别人的思考。</span></span
+                ><small>找到同好，收获思考</small><strong>进入讨论区</strong
+                ><span class="home-action-description"
+                  >分享疑问，接续思考<br />在解释与交流中，形成自我判断</span
+                ></span
               >
               <span class="home-action-arrow" aria-hidden="true">↗</span>
             </a>
@@ -218,7 +213,9 @@
               /></span>
               <span
                 ><small>安排自己的节奏</small><strong>我的工作台</strong
-                ><span class="home-action-description">查看通知，让信息回到手边。</span></span
+                ><span class="home-action-description"
+                  >整理计划、通知与重要事项<br />从庞杂的信息流中，快速抓取所需</span
+                ></span
               >
               <span class="home-action-arrow" aria-hidden="true">↗</span>
             </a>
@@ -227,8 +224,10 @@
                 ><img src="/assets/icons/ai.svg" alt=""
               /></span>
               <span
-                ><small>带着问题来</small><strong>问问 Max</strong
-                ><span class="home-action-description">解释、追问，再回到知识中验证。</span></span
+                ><small>从问题中找到头绪</small><strong>问问 Max</strong
+                ><span class="home-action-description"
+                  >平台寻址，思路引导和解释<br />从直接的答案中跳出，辨明逻辑方向</span
+                ></span
               >
               <span class="home-action-arrow" aria-hidden="true">↗</span>
             </a>
@@ -240,7 +239,7 @@
             <span class="home-principle-number" aria-hidden="true">01</span>
             <div>
               <h2>自主学习</h2>
-              <p>不只记住结论，更理解知识的联系。</p>
+              <p>理解并掌握电子信息学科脉络，构建个性化、智能化的个人知识图谱基座</p>
             </div>
             <span class="home-principle-label">FREE LEARNING</span>
           </div>
@@ -248,7 +247,7 @@
             <span class="home-principle-number" aria-hidden="true">02</span>
             <div>
               <h2>自主讨论</h2>
-              <p>在解释与交流中，形成自己的判断。</p>
+              <p>人与人、人与AI深度交流，验证思考、独立判断，找到求知路上的同行者</p>
             </div>
             <span class="home-principle-label">FREE DISCUSSION</span>
           </div>
@@ -256,18 +255,23 @@
             <span class="home-principle-number" aria-hidden="true">03</span>
             <div>
               <h2>自主探索</h2>
-              <p>把所学变成尝试，让想法经得起验证。</p>
+              <p>融通电子系代际复利，在真实应用场景中发现边界、推动创新、领跑时代</p>
             </div>
-            <a class="home-principle-label" href="/circuit">试试电路实验室 ↗</a>
+            <span class="home-principle-label">FREE EXPLORATION</span>
           </div>
         </section>
 
         <header class="home-community-heading">
-          <div>
-            <p class="home-eyebrow">GROW TOGETHER / 一起生长</p>
-            <h2>接上彼此的思考</h2>
-          </div>
-          <p>一个人的经验，可以成为后来者的起点。</p>
+          <p class="home-community-motto" lang="en">
+            <span class="home-motto-initial">F</span>riends
+            <span class="home-motto-initial">R</span>ally to
+            <span class="home-motto-initial">E</span>mpower
+            <span class="home-motto-initial">E</span>ducation,
+            <span class="home-motto-initial">B</span>uilding
+            <span class="home-motto-initial">B</span>etter
+            <span class="home-motto-initial">S</span>tudy
+          </p>
+          <h2>电子人同行齐心，共创新时代的学习平台，在分享与协作中赋能教育、成就你我</h2>
         </header>
 
         <div class="home-dashboard">
@@ -386,7 +390,7 @@
             <p class="visually-hidden" id="home-heat-status" role="status" aria-live="polite">
               正在加载热力榜…
             </p>
-            <p class="home-heat-explainer">热力反映社区参与贡献，不代表学习能力或综合表现。</p>
+            <p class="home-heat-explainer">热力是反映社区参与贡献，花费电元和磁元可以生成热力！</p>
             <ol
               class="home-heat-list"
               id="landing-heat-list"
@@ -425,41 +429,29 @@
 
         <section class="home-notice-link" aria-label="活动与系内资讯">
           <div>
-            <p class="home-eyebrow">BEYOND THE CLASSROOM</p>
-            <h2>学习之外，也别错过新的可能。</h2>
-            <p>活动与系内资讯，在工作台集中查看。</p>
+            <p class="home-eyebrow" lang="en">BEYOND LEARNING</p>
+            <h2>学习之外，也别错过新的可能</h2>
+            <p>看看发展端和工作台，记录日常活动与系内资讯</p>
           </div>
-          <a href="/workbench">查看工作台通知 <span aria-hidden="true">↗</span></a>
+          <nav class="home-notice-actions" aria-label="活动资讯入口">
+            <a href="/development">看看发展端 <span aria-hidden="true">↗</span></a>
+            <a href="/workbench">前往工作台 <span aria-hidden="true">↗</span></a>
+          </nav>
         </section>
-        <details class="home-about" id="about-freebbs">
-          <summary>关于 FREE BBS <span>与 Max 一起认识这里</span></summary>
-          <p>
-            FREE BBS
-            是学生主导、长期公益的电子系学习发展平台。我们连接课程知识、真实讨论、个人计划与探索工具，帮助同学理解知识、掌控学习、走向创造。
-          </p>
-          <p><a href="/guide">阅读完整介绍与新手任务 →</a></p>
-        </details>
-        <details class="home-about" id="freebbs-staff">
-          <summary>FREE BBS工作人员名单 <span>正在施工</span></summary>
-          <p>正在施工</p>
-        </details>
       </main>
 
-      <footer class="site-footer">
-        <div class="footer-block footer-left">
-          <p>© Free-bbs 工作组 2026-2027</p>
-        </div>
-
-        <div class="footer-block footer-center">
-          <div class="footer-links">
-            <a href="#about-freebbs">关于FREE BBS</a>
-            <a href="#freebbs-staff">FREE BBS工作人员名单</a>
-            <a href="https://www.ee.tsinghua.edu.cn/" target="_blank" rel="noreferrer"
-              >清华大学电子系</a
-            >
-            <a href="https://www.eesast.com">电子系学生科协</a>
-          </div>
-          <p>&lt;京ICP备2025155858号-2&gt;</p>
+      <footer class="site-footer site-footer-compact">
+        <nav class="footer-links" aria-label="关于平台">
+          <a href="/about">关于 FREE BBS</a>
+          <a href="/staff">FREE BBS 工作人员名单</a>
+          <a href="https://www.ee.tsinghua.edu.cn/" target="_blank" rel="noreferrer"
+            >清华大学电子系</a
+          >
+          <a href="https://www.eesast.com">电子系学生科协</a>
+        </nav>
+        <div class="footer-meta">
+          <p>© 2026-2027 FREE BBS 工作组</p>
+          <p>京ICP备2025155858号-2</p>
         </div>
       </footer>
     </div>

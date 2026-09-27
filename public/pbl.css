@@ -1,0 +1,60 @@
+/* Reuse the development illustration and palette, without its access/redirect flow. */
+body.pbl-page .development-hero h1 {
+  font-size: clamp(2.1rem, 3.5vw, 3.6rem);
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+body.pbl-page .development-hero-copy {
+  padding: clamp(24px, 3vw, 48px);
+}
+body.pbl-page .development-kicker {
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+body.pbl-page .pbl-release-note {
+  color: var(--ui-muted) !important;
+  font: 400 0.86rem/1.7 var(--font-ui);
+}
+body.pbl-page .development-section-heading h2 {
+  font-size: clamp(1.5rem, 2.5vw, 2.4rem);
+  line-height: 1.4;
+}
+.pbl-directions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.pbl-directions .development-card {
+  align-content: start;
+  gap: 14px;
+  padding: clamp(22px, 2.4vw, 34px);
+}
+.pbl-directions h3,
+.pbl-directions p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.pbl-directions h3 {
+  color: var(--ui-text) !important;
+  font-size: 1.15rem;
+  line-height: 1.5;
+}
+.pbl-directions p {
+  color: var(--ui-muted) !important;
+  font-size: 0.95rem;
+  line-height: 1.85;
+}
+.pbl-direction-number {
+  color: var(--ui-accent);
+  font: 700 0.88rem/1.5 var(--font-ui);
+}
+@media (max-width: 1200px) {
+  body.pbl-page .development-hero,
+  body.pbl-page .development-section-heading,
+  .pbl-directions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  body.pbl-page .development-hero {
+    min-height: 0;
+  }
+}

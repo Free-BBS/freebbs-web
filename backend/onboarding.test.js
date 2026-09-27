@@ -292,13 +292,19 @@ test('SQL adapter uses one locked transaction and binds account/version on each 
   assert.deepEqual(result.completedTasks, ['explore_world', 'meet_max']);
   assert.equal(result.seenAt, new Date(fixed - 1000).toISOString());
   assert.deepEqual(events, ['begin', 'commit', 'release']);
-  assert.deepEqual(calls[0].values, [12, LEGACY_GUIDE_VERSIONS[0]]);
-  assert.match(calls[1].sql, /ON DUPLICATE KEY UPDATE/);
-  assert.deepEqual(calls[1].values.slice(0, 2), [12, GUIDE_VERSION]);
-  assert.match(calls[2].sql, /FOR UPDATE$/);
-  assert.deepEqual(calls[2].values, [12, GUIDE_VERSION]);
-  assert.deepEqual(calls[3].values.slice(-2), [12, GUIDE_VERSION]);
-  assert.equal(calls[3].values[3], fixed);
+  const reads = calls.slice(0, LEGACY_GUIDE_VERSIONS.length);
+  assert.deepEqual(
+    reads.map((call) => call.values),
+    LEGACY_GUIDE_VERSIONS.map((version) => [12, version]),
+  );
+  assert.ok(reads.every((call) => call.sql.startsWith('SELECT')));
+  const writes = calls.slice(LEGACY_GUIDE_VERSIONS.length);
+  assert.match(writes[0].sql, /ON DUPLICATE KEY UPDATE/);
+  assert.deepEqual(writes[0].values.slice(0, 2), [12, GUIDE_VERSION]);
+  assert.match(writes[1].sql, /FOR UPDATE$/);
+  assert.deepEqual(writes[1].values, [12, GUIDE_VERSION]);
+  assert.deepEqual(writes[2].values.slice(-2), [12, GUIDE_VERSION]);
+  assert.equal(writes[2].values[3], fixed);
 });
 
 test('SQL adapter rolls back and releases on failure without reporting success', async () => {
@@ -540,7 +546,7 @@ test('SQL empty current guide reads legacy visits without creating a welcome rec
     },
     async execute(sql, values) {
       calls.push({ sql, values });
-      if (values[1] === GUIDE_VERSION) return [[]];
+      if (values[1] !== LEGACY_GUIDE_VERSIONS[0]) return [[]];
       return [
         [
           {
@@ -561,13 +567,10 @@ test('SQL empty current guide reads legacy visits without creating a welcome rec
   };
   const service = createOnboardingService(createMysqlOnboardingStore(pool));
   assert.deepEqual(await service.read(12), { ...emptyProgress(), completedTasks: ['meet_max'] });
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 1 + LEGACY_GUIDE_VERSIONS.length);
   assert.ok(calls.every((call) => call.sql.startsWith('SELECT')));
   assert.deepEqual(
     calls.map((call) => call.values),
-    [
-      [12, GUIDE_VERSION],
-      [12, LEGACY_GUIDE_VERSIONS[0]],
-    ],
+    [[12, GUIDE_VERSION], ...LEGACY_GUIDE_VERSIONS.map((version) => [12, version])],
   );
 });

@@ -29,6 +29,7 @@ function createEconomyMemoryStore(
         luckUntilMs: 0,
         rewards: {},
         profileActions: [],
+        notifications: [],
         fortunes: {},
         ...a,
       },
@@ -108,6 +109,22 @@ function createEconomyMemoryStore(
       }
       try {
         const result = await work({
+          async notifyAchievement(id, item) {
+            fail('notification');
+            const rows = state.get(id).notifications;
+            const eventKey = `achievement:${item.key}`;
+            if (!rows.some((row) => row.eventKey === eventKey))
+              rows.push({
+                id: rows.length + 1,
+                kind: 'achievement',
+                title: `获得成就 · ${item.name}`,
+                body: `成就铭牌「${item.name}」已收入我的装扮，可以与 BBS 见习观察员等铭牌切换佩戴`,
+                link: `/profile?uid=u_preview0${id}#public-profile-wardrobe`,
+                eventKey,
+                readAt: null,
+                createdAt: new Date(now()).toISOString(),
+              });
+          },
           readExtras: store.readExtras,
           async findProfileAction(id, key) {
             return state.get(id).profileActions.find((row) => row.key === key);

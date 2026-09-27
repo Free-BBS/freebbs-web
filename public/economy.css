@@ -293,10 +293,6 @@ body.economy-page .inventory-gift-input::placeholder {
   body.economy-page .shop-inspect-image {
     min-height: 100px;
   }
-
-  .economy-page .shop-inspect-image img {
-    width: 64px;
-  }
 }
 
 @media (max-width: 359px) {

@@ -524,6 +524,22 @@ body .ranch-supplies button {
   body.ranch-page .profile-ranch .ranch-scene-pause {
     top: 210px;
   }
+  /* The shared desktop shell moves controls out of the legacy topbar. Keep the
+   * immersive scene below its measured header, including large-font wrapping. */
+  body.ranch-page.desktop-shell-active .desktop-header {
+    background: transparent;
+  }
+  body.ranch-page.public-profile-page.desktop-shell-active .main-content[data-page-title] {
+    top: var(--desktop-header-height, 94px);
+    height: auto;
+    padding: 0 !important;
+  }
+  body.ranch-page.desktop-shell-active .ranch-scene-heading {
+    top: 22px;
+  }
+  body.ranch-page.desktop-shell-active .profile-ranch .ranch-scene-pause {
+    top: 140px;
+  }
 }
 @media (max-width: 900px) {
   html:has(body.ranch-page) {

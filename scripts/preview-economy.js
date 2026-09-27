@@ -1,11 +1,13 @@
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
+const { servePausedCodeLab } = require('../code-lab-availability');
 const { createEconomyShop } = require('../backend/economy-shop');
 const { createEconomyMemoryStore } = require('./fixtures/economy-memory-store');
 const { createProfileExtras, beijingDay } = require('../backend/profile-extras');
 const { FISHBONE_MASTER } = require('../backend/economy-achievements');
 const { effectiveFortune, checkinReward } = require('../backend/economy-policy');
+const ranchDesignData = require('../public/ranch-design-data');
 
 const root = path.resolve(__dirname, '..', 'public');
 const TOKEN = 'economy-preview-only-not-a-real-session';
@@ -30,6 +32,9 @@ const pages = {
   '/inventory': 'inventory.html',
   '/discussion': 'discussion.html',
   '/profile': 'profile.html',
+  '/ranch': 'ranch.html',
+  '/ranch-dye': 'ranch-dye.html',
+  '/ranch-gallery': 'ranch-gallery.html',
   '/settings': 'settings.html',
 };
 function createEconomyPreview({
@@ -43,6 +48,7 @@ function createEconomyPreview({
   previewNotice = '',
   transformHtml = null,
   allowVendor = false,
+  profileOptions = {},
 } = {}) {
   const previewPages = { ...pages, ...extraPages };
   const isWorkbenchPreview = previewPages['/workbench'] === 'workbench.html';
@@ -81,7 +87,18 @@ function createEconomyPreview({
     }
   }
   const shop = createEconomyShop(store, { now });
-  const extras = createProfileExtras(store, { now });
+  const extras = createProfileExtras(store, { now, ...profileOptions });
+  // Preview-only designs stay separate from all account/economy state.
+  const ranchDesigns = new Map();
+  const previewSheep = (id) => {
+    const account = store.account(id);
+    return {
+      uid: `u_preview0${id}`,
+      username: id === 1 ? 'NotingSr_preview' : 'another_student',
+      adopted: Boolean(account.adopted || account.assets.max_pet > 0),
+      ...(ranchDesigns.get(id) || { design: ranchDesignData.blank(), revision: 0 }),
+    };
+  };
   function todayFortune() {
     const date = beijingDay(now());
     // A deterministic QA score, stored once per Beijing day, never a production override.
@@ -176,6 +193,48 @@ function createEconomyPreview({
       if (req.headers.host !== host) return send(403, { message: 'Loopback preview only' });
       const url = new URL(req.url, `http://${host}`);
       const route = decodeURIComponent(url.pathname);
+      if (servePausedCodeLab(req, res, route)) return;
+      if (route === '/api/ranch-designs' || route.startsWith('/api/ranch-designs/')) {
+        const mine = route === '/api/ranch-designs/mine';
+        if (
+          (req.headers.origin && req.headers.origin !== `http://${host}`) ||
+          ((mine || req.method !== 'GET') && req.headers.authorization !== `Bearer ${TOKEN}`)
+        )
+          return send(403, { message: '仅限本地模拟操作' });
+        if (mine && req.method === 'PUT') {
+          if (!previewSheep(1).adopted) return send(403, { message: '请先领养模拟 Max' });
+          let raw = '';
+          for await (const chunk of req) {
+            raw += chunk;
+            if (raw.length > 32768) return send(413, { message: '请求过大' });
+          }
+          let design;
+          let revision;
+          try {
+            const body = JSON.parse(raw);
+            design = ranchDesignData.validate(body.design);
+            revision = body.revision;
+            if (!Number.isSafeInteger(revision) || revision < 0 || revision >= 4294967295)
+              throw new Error('无效花纹版本');
+          } catch {
+            return send(400, { message: '无效的模拟花纹' });
+          }
+          if (revision !== previewSheep(1).revision)
+            return send(409, { message: '另一页已更新花纹，请重新载入后再编辑' });
+          const result = { design, revision: revision + 1 };
+          ranchDesigns.set(1, result);
+          return send(200, result);
+        }
+        if (req.method !== 'GET') return send(405, { message: '预览不支持此操作' });
+        if (mine) return send(200, previewSheep(1));
+        const publicSheep = [2, 1]
+          .map(previewSheep)
+          .filter((sheep) => sheep.adopted)
+          .map(({ adopted: _adopted, ...sheep }) => sheep);
+        if (route === '/api/ranch-designs') return send(200, { sheep: publicSheep, next: null });
+        const sheep = publicSheep.find((entry) => route === `/api/ranch-designs/${entry.uid}`);
+        return sheep ? send(200, sheep) : send(404, { message: '未找到已领养的模拟羊' });
+      }
       let requestBody;
       if (extraApi && route.startsWith('/api/')) {
         if (
@@ -206,6 +265,35 @@ function createEconomyPreview({
           now,
         });
         if (result) return send(result.status || 200, result.body);
+      }
+      const notificationRead = route.match(/^\/api\/notifications\/(\d+)\/read$/);
+      if (
+        (route === '/api/notifications' ||
+          route === '/api/notifications/unread-count' ||
+          route === '/api/notifications/read-all' ||
+          notificationRead) &&
+        (store.account().notifications.length || !previewApiHandler)
+      ) {
+        if (
+          req.headers.authorization !== `Bearer ${TOKEN}` ||
+          (req.headers.origin && req.headers.origin !== `http://${host}`)
+        )
+          return send(403, { message: '仅限本地模拟操作' });
+        const rows = store.account().notifications;
+        if (req.method === 'POST' && (notificationRead || route.endsWith('/read-all'))) {
+          for (const row of rows)
+            if (!notificationRead || String(row.id) === notificationRead[1])
+              row.readAt = new Date(now()).toISOString();
+          return send(200, { ok: true });
+        }
+        if (req.method !== 'GET') return send(405, { message: '预览不支持此操作' });
+        const unreadCount = rows.filter((row) => !row.readAt).length;
+        return send(
+          200,
+          route.endsWith('/unread-count')
+            ? { unreadCount }
+            : { notifications: [...rows].reverse(), unreadCount, nextCursor: null },
+        );
       }
       if (
         previewApiHandler &&
@@ -330,6 +418,10 @@ function createEconomyPreview({
             uid,
             username: id === 1 ? 'NotingSr_preview' : 'another_student',
             bio: '本地展示用账号',
+            activity: {
+              end: beijingDay(now()),
+              days: [{ date: beijingDay(now()), count: 4, checkins: 1, posts: 1, comments: 2 }],
+            },
             collectibles: await shop.publicCollectibles(items, id),
             ...(await extras.publicProfile(id)),
           },

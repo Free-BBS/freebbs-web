@@ -159,6 +159,18 @@ test('all four scenes have four compressed local seasonal photos', () => {
   assert.match(css, /ranch-drawer::backdrop/);
 });
 
+test('shared desktop chrome leaves new immersive and preview scene dimensions intact', () => {
+  const polish = read('public/personal-polish.css');
+  const css = read('public/ranch-page.css');
+  assert.match(polish, /body.public-profile-page:not\(\.ranch-page\) :is\(\.profile-ranch/);
+  assert.match(polish, /\.profile-ranch:not\(\.ranch-photographic\) \.ranch-scene/);
+  assert.match(
+    css,
+    /body.ranch-page.public-profile-page.desktop-shell-active \.main-content\[data-page-title\]\s*\{[^}]*top: var\(--desktop-header-height, 94px\);[^}]*height: auto;[^}]*padding: 0 !important;/,
+  );
+  assert.match(read('scripts/preview-economy.js'), /'\/ranch': 'ranch.html'/);
+});
+
 test('ranch supplies load the shared full-row purchase layout, including mobile styles', () => {
   const html = read('public/ranch.html');
   const economy = read('public/economy.css');

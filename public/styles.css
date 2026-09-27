@@ -11290,14 +11290,21 @@ body.theme-light:not(.home-page) .electromagnetic-shop-item p {
 .shop-inspect-image {
   display: grid;
   place-items: center;
+  align-self: start;
+  min-width: 0;
   min-height: 280px;
   border: 1px dashed var(--chalk-line-strong);
   background: rgba(244, 240, 223, 0.06);
 }
 
-.shop-inspect-image img {
-  width: min(120px, 48%);
+.shop-inspect-image > img {
+  display: block;
+  width: min(240px, 90%);
+  max-width: 100%;
+  /* Catalogue width/height attributes reserve space, but must not leave the
+   * image 512px tall after the detail column scales its width down. */
   height: auto;
+  aspect-ratio: auto;
   object-fit: contain;
   filter: invert(93%) sepia(13%) saturate(476%) hue-rotate(5deg) brightness(104%) contrast(91%);
 }

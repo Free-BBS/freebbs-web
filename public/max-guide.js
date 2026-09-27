@@ -52,7 +52,9 @@
   function initialGuideDecision(progress, { member, pathname, visible, blocked, requested }) {
     const firstWelcome = member && !progress.seenAt && AUTO_WELCOME_PATHS.has(pathname);
     const continuedTour =
-      requested && progress.status === 'in_progress' && STEPS[progress.step]?.route === pathname;
+      requested &&
+      progress.status === 'in_progress' &&
+      stepsFor(progress.version)[progress.step]?.route === pathname;
     if ((firstWelcome || requested) && (!visible || blocked))
       return { presentation: 'defer', saveVisit: false };
     let presentation = 'none';
@@ -77,7 +79,7 @@
       id: 'meet_max',
       route: '/aichat',
       title: '和 Max 打个照面',
-      description: '认识答疑入口，不必立即提问。',
+      description: '认识平台寻址与思路引导入口，不必立即提问。',
     },
     {
       id: 'open_workbench',
@@ -161,7 +163,8 @@
       const candidate = new URL(remembered, base);
       if (candidate.origin === base && candidate.pathname === step.route) url = candidate;
     }
-    if (step.route === '/profile' && context.uid) url.searchParams.set('uid', context.uid);
+    if (['/profile', '/ranch'].includes(step.route) && context.uid)
+      url.searchParams.set('uid', context.uid);
     url.searchParams.delete('guideVersion');
     url.searchParams.set('guideTour', '1');
     if (version !== VERSION) url.searchParams.set('guideVersion', version);
@@ -651,14 +654,26 @@
       const stationList = doc.getElementById('guide-station-list');
       if (stationList)
         stationList.replaceChildren(
-          ...STATIONS.map((station) => {
+          ...STATIONS.map((station, index) => {
             const button = element('button', 'guide-station-link');
             button.type = 'button';
             button.dataset.guideStation = station.id;
-            button.append(
-              element('strong', '', station.title || station.label),
-              element('small', '', station.description || '进入这一站，跟 Max 一步步看看。'),
+            const number = element(
+              'span',
+              'guide-station-number',
+              String(index + 1).padStart(2, '0'),
             );
+            number.setAttribute('aria-hidden', 'true');
+            const copy = element('span', 'guide-station-copy');
+            copy.append(
+              element('strong', '', station.label),
+              element(
+                'small',
+                '',
+                station.description || station.title || '进入这一站，跟 Max 一步步看看',
+              ),
+            );
+            button.append(number, copy, element('span', 'guide-station-arrow', '↗'));
             return button;
           }),
         );
@@ -701,6 +716,7 @@
       return (
         (!isMember() && visible(step.guestTarget)) ||
         visible(step.target) ||
+        visible(step.emptyReady) ||
         visible(step.emptyTarget)
       );
     }
@@ -744,10 +760,17 @@
       }
       const main = doc.querySelector('.main-content');
       const heading = main && win.getComputedStyle(main, '::before');
-      const safeTop =
+      const legacySafeTop =
         heading?.position === 'fixed' && heading.display !== 'none'
           ? (parseFloat(heading.height) || 0) + (parseFloat(heading.borderBottomWidth) || 0)
           : 0;
+      // The desktop shell replaced the old pseudo-element heading. Measure its
+      // actual bottom so larger fonts and wrapped titles cannot hide the target.
+      const desktopHeader = visible('.desktop-header');
+      const safeTop = Math.max(
+        legacySafeTop,
+        desktopHeader ? desktopHeader.getBoundingClientRect().bottom : 0,
+      );
       const mobileNav = visible('.mobile-nav');
       const footerHeight = mobileNav ? mobileNav.getBoundingClientRect().height : 0;
       if (step.focus?.fit === 'overview') {
@@ -1006,11 +1029,24 @@
       progress.setAttribute('role', 'progressbar');
       progress.setAttribute('aria-label', '导览进度');
       progress.setAttribute('aria-valuemin', '0');
+      const progressLabel = element('p', 'max-tour-progress-label');
       const status = element('p', 'max-tour-status');
       status.setAttribute('role', 'status');
       row.append(exit, back, restart, next);
       secondary.append(stationSelect, skip, expand);
-      card.append(mascot, kicker, title, body, caption, row, secondary, progress, status, retry);
+      card.append(
+        mascot,
+        kicker,
+        title,
+        body,
+        caption,
+        progressLabel,
+        progress,
+        row,
+        secondary,
+        status,
+        retry,
+      );
       dialog.append(...curtains, spotlight, targetAction, alternateAction, card);
       doc.body.append(dialog);
       controls = {
@@ -1028,6 +1064,7 @@
         stations: stationSelect,
         secondary,
         progress,
+        progressLabel,
         status,
         targetAction,
         alternateAction,
@@ -1075,7 +1112,7 @@
       const release = releases.RELEASES.find((item) => item.id === version);
       welcomeChoice = resumable ? p.step : 0;
       card.classList.add('is-welcome');
-      controls.kicker.textContent = release ? 'MAX · 本次更新专门指引' : 'MAX · 分站探索手册';
+      controls.kicker.textContent = release ? 'MAX · 更新导览' : 'MAX · 探索指南';
       controls.title.textContent = resumable
         ? '地图替你留着，接着逛吧。'
         : release
@@ -1085,7 +1122,7 @@
         ? `我们上次走到「${steps[p.step].label}」。可以继续这一站，也可以重新开始。`
         : release
           ? `${release.description}这次只介绍新增与调整的功能，完成后不会自动重复。`
-          : '从学习世界的一颗星球，到课程里的一个知识点，再看看讨论、计划与自己的小行囊。你可以逐站探索，也可以在手册里只选择感兴趣的一站。';
+          : '先认识顶栏，再沿着左侧导航从上到下，看看学习、讨论、工作台与实验室。每次只介绍一个区域，你可以随时暂停，也可以从目录选择感兴趣的章节。';
       controls.caption.textContent = notice();
       controls.back.hidden = true;
       controls.restart.hidden = !resumable;
@@ -1097,6 +1134,7 @@
       controls.exit.textContent = '稍后再看';
       controls.secondary.hidden = true;
       controls.progress.hidden = true;
+      controls.progressLabel.hidden = true;
       controls.retry.hidden = !syncError;
       controls.status.textContent = syncError;
       setBusy(false);
@@ -1160,12 +1198,35 @@
         await waitVisible(action.whenMissing, epoch, Math.max(0, deadline - Date.now()));
       }
     }
+    function adoptReplacedTargetDialog(node) {
+      const replacement = node?.closest('dialog[open]');
+      if (!replacement?.id) return;
+      let owned = false;
+      for (const opened of openedDialogs) {
+        if (!opened.isConnected && opened.id === replacement.id) {
+          openedDialogs.delete(opened);
+          owned = true;
+        }
+      }
+      if (!owned) return;
+      // A late profile response can rebuild a prepared ranch dialog. Transfer
+      // ownership so it is cleaned up on exit, and keep guide controls above
+      // the replacement in the native top layer. Never promote over unrelated UI.
+      openedDialogs.add(replacement);
+      if (dialog.open) {
+        dialog.close();
+        showDialog();
+      }
+    }
     function refreshStepTarget(step, index) {
       if (targetLoading || mode !== 'tour' || activeIndex !== index || displayedStep !== step)
         return;
       prepareTargetFold(step);
       const next = visibleTarget(step);
-      const missing = !next || Boolean(step.emptyTarget && next === visible(step.emptyTarget));
+      adoptReplacedTargetDialog(next);
+      const confirmedEmpty = Boolean(step.emptyReady && next === visible(step.emptyReady));
+      const missing =
+        !next || confirmedEmpty || Boolean(step.emptyTarget && next === visible(step.emptyTarget));
       if (next === target && missing === targetMissing) return;
       restoreTarget?.();
       restoreTarget = null;
@@ -1181,13 +1242,14 @@
       controls.body.textContent = missing
         ? step.emptyBody || '这里暂时还没有加载完成。你可以重试，也可以先跳过这一站。'
         : step.body;
-      controls.caption.textContent = missing
-        ? '不会用无关区域代替高亮，也不会替你创建内容。'
-        : step.caption || '跟着亮起的区域，一步步看看。';
-      if (missing && !syncError) {
+      controls.caption.textContent =
+        missing && !confirmedEmpty
+          ? '不会用无关区域代替高亮，也不会替你创建内容。'
+          : step.caption || '跟着亮起的区域，一步步看看。';
+      if (missing && !confirmedEmpty && !syncError) {
         showError(new Error('该区域暂不可用。'), () => showStep(index));
         targetError = true;
-      } else if (!missing && targetError) {
+      } else if ((!missing || confirmedEmpty) && targetError) {
         targetError = false;
         clearError();
       }
@@ -1243,7 +1305,10 @@
       targetMissing = false;
       targetLoading = true;
       targetError = false;
-      const baseStep = steps[index];
+      const baseStep =
+        !isMember() && steps[index].guest
+          ? { ...steps[index], ...steps[index].guest }
+          : steps[index];
       const step =
         reveal && baseStep.reveal
           ? { ...baseStep, ...baseStep.reveal, prepare: [], reveal: null }
@@ -1274,15 +1339,21 @@
       controls.exit.textContent = '稍后继续';
       controls.secondary.hidden = false;
       controls.progress.hidden = false;
+      controls.progressLabel.hidden = false;
+      controls.progressLabel.textContent = `探索进度 · ${index + 1} / ${steps.length}`;
       controls.progress.setAttribute('aria-valuemax', String(steps.length));
       controls.progress.setAttribute('aria-valuenow', String(index + 1));
-      controls.progress.replaceChildren(
-        ...steps.map((unused, i) => element('span', i <= index ? 'is-past' : '')),
-      );
+      const fill = element('span', 'is-past');
+      fill.style.width = `${((index + 1) / steps.length) * 100}%`;
+      controls.progress.replaceChildren(fill);
       const groups = steps.filter((entry, i) => i === 0 || entry.station !== steps[i - 1].station);
       controls.stations.replaceChildren(
-        ...groups.map((entry) => {
-          const option = element('option', '', entry.label);
+        ...groups.map((entry, chapter) => {
+          const option = element(
+            'option',
+            '',
+            `${String(chapter + 1).padStart(2, '0')} · ${entry.label}`,
+          );
           option.value = String(steps.indexOf(entry));
           option.selected = entry.station === step.station;
           return option;
@@ -1300,6 +1371,7 @@
         epoch,
         Math.max(0, deadline - Date.now()),
         () => prepareTargetFold(step),
+        step.emptyReady,
       );
       if (epoch !== viewEpoch || blockedSession) return;
       targetLoading = false;
@@ -1631,21 +1703,10 @@
         let chosen = VERSION;
         if (requested && knownVersion(requestedVersion)) chosen = requestedVersion;
         else if (!requested && isMember() && AUTO_WELCOME_PATHS.has(path())) {
-          let legacySeen = false;
-          if (!base.seenAt) {
-            for (const legacy of releases.LEGACY_GUIDE_VERSIONS) {
-              const previous = await app.callApi(
-                `/onboarding?version=${encodeURIComponent(legacy)}`,
-                {
-                  method: 'GET',
-                  headers: { Authorization: `Bearer ${identity().token}` },
-                },
-              );
-              if (epoch !== initEpoch) return;
-              legacySeen ||= Boolean(previous.seenAt);
-            }
-          }
-          if (!base.seenAt && !legacySeen) automatic = true;
+          // The rebuilt guide starts afresh for every account. Historical
+          // receipts remain on the server solely for visits/reward eligibility;
+          // their numeric positions must never be interpreted as v3 positions.
+          if (!base.seenAt) automatic = true;
           else if (releases.LATEST_RELEASE) {
             const latest = progressClient(releases.LATEST_RELEASE.id);
             const state = await latest.load();
