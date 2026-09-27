@@ -215,6 +215,18 @@ test('pause cancels RAF instead of spinning, and resuming never starts duplicate
   assert.notEqual(node('[data-fleece]').attributes.transform, frozen);
 });
 
+test('social walks approach a bounded target with the existing gait and settle on arrival', (t) => {
+  const { controller, advance, element } = ranchHarness(t, { x: 40 });
+  assert.equal(controller.walkTo(80), true);
+  assert.equal(controller.snapshot().x, 40, 'normal motion must not teleport');
+  advance(400);
+  assert.ok(controller.snapshot().x > 40 && controller.snapshot().x < 80);
+  advance(1400);
+  assert.equal(controller.snapshot().x, 80);
+  assert.equal(element.dataset.pose, 'greet');
+  assert.equal(controller.walkTo(NaN), false);
+});
+
 test('reduced motion uses a static greeting and bounded feedback without creating RAF', (t) => {
   const { controller, frames, timers, node, media, advance } = ranchHarness(t, {}, true);
   assert.equal(frames.size, 0);

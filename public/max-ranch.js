@@ -244,6 +244,7 @@
     let effect = null;
     let effectTimer = null;
     let destroyed = false;
+    let walkTarget = null;
     const resting = () => ({
       angle: 0,
       bob: 17,
@@ -364,7 +365,11 @@
       if (mode === 'walk') {
         // Match CSS scaling in world space so planted hooves do not drift.
         const next = x + direction * SPEED * scale() * delta;
-        if (next < 0 || next > width()) greet();
+        if (walkTarget !== null && Math.abs(walkTarget - x) <= SPEED * scale() * delta) {
+          x = walkTarget;
+          walkTarget = null;
+          greet();
+        } else if (next < 0 || next > width()) greet();
         else {
           x = next;
           walkTime += delta;
@@ -407,6 +412,22 @@
     return {
       greet,
       celebrate,
+      walkTo(target) {
+        if (destroyed || hungry || !Number.isFinite(target)) return false;
+        walkTarget = Math.max(0, Math.min(width(), target));
+        direction = walkTarget < x ? -1 : 1;
+        mode = 'walk';
+        paused = false;
+        last = 0;
+        if (media.matches) {
+          x = walkTarget;
+          walkTarget = null;
+          pose = greetPose(walkPose(walkTime), 1);
+        }
+        draw();
+        scheduleFrame();
+        return true;
+      },
       pause(value) {
         if (destroyed) return;
         paused = Boolean(value);
