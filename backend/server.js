@@ -6419,6 +6419,7 @@ async function start() {
     userDirectory: createDevelopmentUserDirectory(pool),
     database: createDevelopmentDatabaseConfig(config.db),
     uploadDirectory: path.join(config.uploadDir, 'development', 'festival'),
+    collectionsUploadDirectory: path.join(config.uploadDir, 'development', 'collections'),
     sportsUploadDirectory: path.join(config.uploadDir, 'development', 'sports'),
   });
   await decayHeatIfNeeded(new Date());

@@ -109,6 +109,22 @@ describe('production server composition', () => {
     expect(fakes.checkReadiness).not.toHaveBeenCalled();
   });
 
+  it('passes the configured collection upload directory into the application', async () => {
+    const { startServerRuntime } = await import('./server-runtime.js');
+    const runtime = await startServerRuntime({
+      host: '127.0.0.1',
+      port: 3100,
+      collectionsUploadDirectory: '/var/lib/freebbs-development/collections',
+    } as Parameters<typeof startServerRuntime>[0]);
+
+    expect(fakes.createApp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collectionsUploadDirectory: '/var/lib/freebbs-development/collections',
+      }),
+    );
+    await runtime.close();
+  });
+
   it('closes the store when app creation fails', async () => {
     fakes.createApp.mockImplementationOnce(() => {
       throw new Error('app creation failed');

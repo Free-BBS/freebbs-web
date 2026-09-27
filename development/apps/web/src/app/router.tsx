@@ -7,6 +7,12 @@ import { useAuth } from '../core/auth/AuthProvider.js';
 import type { PresentationUser } from '../core/permissions/Can.js';
 import { SuperAdminRouteGuard } from '../core/permissions/SuperAdminRouteGuard.js';
 import { AdminPage } from '../modules/admin/AdminPage.js';
+import { CollectionsLandingPage } from '../modules/collections/CollectionsLandingPage.js';
+import { MyRegistrations } from '../modules/collections/MyRegistrations.js';
+import { RegistrationGallery } from '../modules/collections/RegistrationGallery.js';
+import { ShowcaseDetailPage } from '../modules/collections/ShowcaseDetailPage.js';
+import { ShowcasePage } from '../modules/collections/ShowcasePage.js';
+import { CollectionWorkbench } from '../modules/collections/builder/CollectionWorkbench.js';
 import { DashboardPage } from '../modules/dashboard/DashboardPage.js';
 import { ActivityDetailPage } from '../modules/events/ActivityDetailPage.js';
 import { EventsPage } from '../modules/events/EventsPage.js';
@@ -147,6 +153,36 @@ function LiaisonRoute() {
   return <LiaisonPage key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
 }
 
+function CollectionsRoute() {
+  const auth = useAuth();
+  return <CollectionsLandingPage key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
+}
+
+function RegistrationGalleryRoute() {
+  const auth = useAuth();
+  return <RegistrationGallery key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
+}
+
+function MyRegistrationsRoute() {
+  const auth = useAuth();
+  return <MyRegistrations key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
+}
+
+function ShowcaseRoute() {
+  const auth = useAuth();
+  return <ShowcasePage key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
+}
+
+function ShowcaseDetailRoute() {
+  const auth = useAuth();
+  return <ShowcaseDetailPage key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
+}
+
+function CollectionWorkbenchRoute() {
+  const auth = useAuth();
+  return <CollectionWorkbench key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
+}
+
 function ProblemDetailRoute() {
   const auth = useAuth();
   const { problemId = '' } = useParams();
@@ -228,6 +264,12 @@ export const appRouter = createBrowserRouter(
         { path: 'clubs', element: <Navigate to="/growth" replace /> },
         { path: 'events', element: <EventsRoute /> },
         { path: 'events/student-festival', element: <FestivalRoute /> },
+        { path: 'collections', element: <CollectionsRoute /> },
+        { path: 'collections/registrations', element: <RegistrationGalleryRoute /> },
+        { path: 'collections/mine', element: <MyRegistrationsRoute /> },
+        { path: 'collections/showcase', element: <ShowcaseRoute /> },
+        { path: 'collections/showcase/:articleId', element: <ShowcaseDetailRoute /> },
+        { path: 'collections/workbench/:collectionId', element: <CollectionWorkbenchRoute /> },
         { path: 'liaison', element: <LiaisonRoute /> },
         { path: 'liaison/problems/:problemId', element: <ProblemDetailRoute /> },
         { path: 'events/:activityId', element: <ActivityDetailRoute /> },

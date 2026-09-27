@@ -109,6 +109,21 @@ describe('deployment configuration', () => {
     expect(compose.match(/healthcheck:/g)).toHaveLength(4);
   });
 
+  it('keeps collection uploads in persistent writable production storage', () => {
+    const compose = configuration('docker-compose.yml');
+    const apiDockerfile = configuration('deploy/docker/api.Dockerfile');
+    const apiUnit = configuration('deploy/systemd/freebbs-development-api.service');
+    const environment = configuration('deploy/env/development.env.example');
+
+    for (const source of [apiDockerfile, apiUnit, environment]) {
+      expect(source).toContain('COLLECTIONS_UPLOAD_DIR=/var/lib/freebbs-development/collections');
+    }
+    expect(apiUnit).toContain('ReadWritePaths=/var/lib/freebbs-development');
+    expect(compose).toContain('COLLECTIONS_UPLOAD_DIR: /var/lib/freebbs-development/collections');
+    expect(compose).toContain('collection-assets:/var/lib/freebbs-development/collections');
+    expect(compose).toMatch(/volumes:[\s\S]*collection-assets:/);
+  });
+
   it('makes deterministic demo seeding explicit and keeps its safety gate', () => {
     const compose = configuration('docker-compose.yml');
     const apiDockerfile = configuration('deploy/docker/api.Dockerfile');

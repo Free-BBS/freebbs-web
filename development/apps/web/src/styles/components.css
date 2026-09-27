@@ -134,6 +134,13 @@ button:disabled {
   font-size: 26px;
 }
 
+.auth-state .auth-brand-label {
+  font-family: var(--font-latin);
+  font-stretch: normal;
+  font-variant-ligatures: none;
+  letter-spacing: 0.04em;
+}
+
 .auth-state p {
   margin: 0;
   color: var(--color-muted);
