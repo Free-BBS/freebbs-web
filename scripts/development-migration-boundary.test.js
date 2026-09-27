@@ -18,6 +18,11 @@ const mysqlIntegration = fs.readFileSync(
   path.join(root, 'backend/community.integration.test.js'),
   'utf8',
 );
+const developmentWorkflowPath = path.join(root, '.github/workflows/development-db-migrate.yml');
+const productionDevelopmentMigratePath = path.join(
+  root,
+  'scripts/migrate-development-production.sh',
+);
 
 test('ordinary development runtime startup verifies schema without applying DDL', () => {
   assert.doesNotMatch(runtime, /runMigrations/);
@@ -45,4 +50,36 @@ test('isolated MySQL prepares the development schema before starting the integra
   const migration = mysqlIntegration.indexOf("'scripts/migrate-development.sh'");
   const startup = mysqlIntegration.indexOf("spawn(process.execPath, ['backend/server.js']");
   assert.ok(migration >= 0 && startup > migration);
+});
+
+test('the production development migration workflow cannot touch the main database or frontend', () => {
+  assert.equal(
+    fs.existsSync(developmentWorkflowPath),
+    true,
+    'a dedicated development-only migration workflow is required',
+  );
+  assert.equal(
+    fs.existsSync(productionDevelopmentMigratePath),
+    true,
+    'a guarded production wrapper for the development migration is required',
+  );
+  const workflow = fs.readFileSync(developmentWorkflowPath, 'utf8');
+  const productionMigrate = fs.readFileSync(productionDevelopmentMigratePath, 'utf8');
+
+  assert.match(workflow, /name:\s*Development Database Migration/);
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /RUN DEVELOPMENT/);
+  assert.match(workflow, /github\.ref == 'refs\/heads\/main'/);
+  assert.match(workflow, /bash scripts\/migrate-development-production\.sh/);
+  assert.doesNotMatch(workflow, /bash scripts\/migrate\.sh/);
+  assert.doesNotMatch(workflow, /FRONTEND_SERVICE_NAME/);
+
+  assert.match(productionMigrate, /bash scripts\/migrate-development\.sh/);
+  assert.doesNotMatch(productionMigrate, /bash scripts\/migrate\.sh/);
+  assert.match(productionMigrate, /DEVELOPMENT_DATABASE.*MYSQL_DATABASE/);
+  assert.match(productionMigrate, /DEVELOPMENT_DATABASE" == "\$MYSQL_DATABASE/);
+  assert.match(productionMigrate, /SYSTEMCTL_BINARY" restart "\$BACKEND_SERVICE_NAME/);
+  assert.doesNotMatch(productionMigrate, /FRONTEND_SERVICE_NAME/);
+  assert.match(productionMigrate, /\/api\/health/);
+  assert.match(productionMigrate, /\/api\/development\/v1\/ready/);
 });

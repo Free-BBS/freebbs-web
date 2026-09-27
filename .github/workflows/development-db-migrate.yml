@@ -1,0 +1,103 @@
+name: Development Database Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type RUN DEVELOPMENT to migrate only the development database'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: free-bbs-production
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  migrate-development:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      ENV_FILE: ${{ vars.FREE_BBS_ENV_FILE || '/etc/free-bbs/free-bbs.env' }}
+      BACKEND_SERVICE_NAME: ${{ vars.BACKEND_SERVICE_NAME || 'free-bbs-backend' }}
+      MAIN_HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL || 'http://127.0.0.1:3001/api/health' }}
+      DEVELOPMENT_READY_URL: ${{ vars.DEVELOPMENT_READY_URL || 'http://127.0.0.1:3001/api/development/v1/ready' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: development/package-lock.json
+
+      - name: Validate confirmation
+        env:
+          CONFIRM_DEVELOPMENT_DATABASE: ${{ inputs.confirmation }}
+        run: |
+          if [[ "$CONFIRM_DEVELOPMENT_DATABASE" != "RUN DEVELOPMENT" ]]; then
+            echo "Refusing to migrate without the exact RUN DEVELOPMENT confirmation." >&2
+            exit 1
+          fi
+
+      - name: Build development migration runtime
+        run: |
+          npm ci --prefix development
+          npm run build --prefix development
+          bash -n scripts/migrate-development.sh
+          bash -n scripts/migrate-development-production.sh
+          node --test scripts/development-migration-boundary.test.js
+
+      - name: Package migration release
+        run: |
+          set -euo pipefail
+          ARCHIVE_PATH="/tmp/free-bbs-development-db-${GITHUB_SHA}.tar.gz"
+          tar \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='database/uploads' \
+            -czf "$ARCHIVE_PATH" .
+
+      - name: Configure SSH
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "$DEPLOY_PORT" "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Upload migration release
+        run: |
+          set -euo pipefail
+          ARCHIVE_PATH="/tmp/free-bbs-development-db-${GITHUB_SHA}.tar.gz"
+          scp -P "$DEPLOY_PORT" "$ARCHIVE_PATH" \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/free-bbs-development-db-${GITHUB_SHA}.tar.gz"
+
+      - name: Migrate development database and restart backend
+        run: |
+          set -euo pipefail
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -euo pipefail; \
+             RELEASE_DIR=/tmp/free-bbs-development-db-${GITHUB_SHA}; \
+             ARCHIVE_PATH=/tmp/free-bbs-development-db-${GITHUB_SHA}.tar.gz; \
+             trap 'rm -rf \"\$RELEASE_DIR\" \"\$ARCHIVE_PATH\"' EXIT; \
+             rm -rf \"\$RELEASE_DIR\"; \
+             mkdir -p \"\$RELEASE_DIR\"; \
+             tar -xzf \"\$ARCHIVE_PATH\" -C \"\$RELEASE_DIR\"; \
+             cd \"\$RELEASE_DIR\"; \
+             npm ci --omit=dev --prefix development; \
+             ENV_FILE='$ENV_FILE' \
+             BACKEND_SERVICE_NAME='$BACKEND_SERVICE_NAME' \
+             MAIN_HEALTHCHECK_URL='$MAIN_HEALTHCHECK_URL' \
+             DEVELOPMENT_READY_URL='$DEVELOPMENT_READY_URL' \
+             bash scripts/migrate-development-production.sh"
