@@ -3,7 +3,7 @@
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LAB_IMAGE="${LAB_IMAGE:-freebbs-language-lab:latest}"
-docker build --network=host --build-arg HTTP_PROXY= --build-arg HTTPS_PROXY= --build-arg ALL_PROXY= --build-arg http_proxy= --build-arg https_proxy= --build-arg all_proxy= --build-arg NO_PROXY="*" -t "$LAB_IMAGE" "$ROOT_DIR/services/language-lab"
+docker build --build-arg "DEBIAN_MIRROR=${LAB_DEBIAN_MIRROR:-https://mirrors.aliyun.com/debian}" --network=host --build-arg HTTP_PROXY= --build-arg HTTPS_PROXY= --build-arg ALL_PROXY= --build-arg http_proxy= --build-arg https_proxy= --build-arg all_proxy= --build-arg NO_PROXY="*" -t "$LAB_IMAGE" "$ROOT_DIR/services/language-lab"
 docker run --rm --network=none --entrypoint python3 "$LAB_IMAGE" -c \
   'import shutil; assert all(shutil.which(c) for c in ["gcc", "g++", "mips-linux-gnu-g++", "riscv64-linux-gnu-g++", "octave", "iverilog"])'
 docker rm -f freebbs-language-lab-controller 2>/dev/null || true

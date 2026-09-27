@@ -75,3 +75,22 @@ jobs:
         env:
           MYSQLD_BIN: /usr/sbin/mysqld
         run: npm run test:mysql:isolated
+
+  language-runtime:
+    name: Isolated language runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and start loopback-only runtime
+        env:
+          LAB_DEBIAN_MIRROR: https://deb.debian.org/debian
+        run: bash scripts/deploy-language-lab.sh
+      - name: Verify compilers, live tracing, waveforms and sandbox isolation
+        run: python3 services/language-lab/integration_test.py
+      - name: Stop runtime
+        if: always()
+        run: docker rm -f freebbs-language-lab-controller || true

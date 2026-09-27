@@ -481,6 +481,7 @@
     }
   });
   async function initialize() {
+    let loadError = '';
     const query = new URLSearchParams(window.location.search);
     const id = query.get('experiment');
     await app.sessionReady;
@@ -509,7 +510,8 @@
         url.searchParams.set('experiment', id);
         window.history.replaceState(null, '', url);
       } catch (error) {
-        status(error.message, true);
+        loadError = `${error.message}；当前显示的是示例代码。`;
+        status(loadError, true);
       }
     }
     try {
@@ -524,6 +526,7 @@
     } catch {
       status('运行服务连接失败，请刷新重试。', true);
     }
+    if (loadError) status(loadError, true);
     controls();
   }
   initialize();
