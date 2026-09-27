@@ -383,7 +383,7 @@ function initializeDashboardShell() {
     '/tool-workshop': '制作我的工具',
     '/creative-workshop': '创意工坊',
     '/laboratory': '实验室',
-    '/code-lab': 'C / C++ 实验室',
+    '/code-lab': '代码实验室',
     '/pbl': 'PBL计划',
     '/circuit': '电路仿真',
     '/circuit-challenge': '电路闯关',
@@ -4678,7 +4678,33 @@ function addCodeRunButtons(root) {
 let circuitReferenceLoader;
 let toolReferenceLoader;
 
+let labReferenceLoader;
+function enhanceLabReferences(root) {
+  if (!root.querySelector('a[href*="/code-lab"]')) return;
+  if (window.FreeBbsLabResults) {
+    window.FreeBbsLabResults.enhance(root, { apiBase: API_BASE_URL });
+    return;
+  }
+  if (!labReferenceLoader) {
+    labReferenceLoader = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = '/lab-results.js';
+      script.onload = resolve;
+      script.onerror = () => {
+        script.remove();
+        labReferenceLoader = null;
+        reject(new Error('实验预览加载失败'));
+      };
+      document.head.append(script);
+    });
+  }
+  labReferenceLoader
+    .then(() => window.FreeBbsLabResults.enhance(root, { apiBase: API_BASE_URL }))
+    .catch(() => {});
+}
+
 function enhanceToolReferences(root) {
+  enhanceLabReferences(root);
   if (!root.querySelector('a[href*="/tool-workshop"]')) return;
   if (window.FreeBbsToolEmbeds) {
     window.FreeBbsToolEmbeds.enhance(root, { apiBase: API_BASE_URL });

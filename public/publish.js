@@ -34,6 +34,32 @@
     if (new URLSearchParams(location.search).get('compose') === 'circuit') return;
     key = 'free_bbs_post_draft:' + app.userState.uid;
     try {
+      const sharedLab = new URLSearchParams(location.search).get('lab_share') === '1';
+      const labDraft = sharedLab
+        ? JSON.parse(sessionStorage.getItem('free_bbs_lab_share_draft') || 'null')
+        : null;
+      if (labDraft && labDraft.uid === app.userState.uid) {
+        const old = JSON.parse(sessionStorage.getItem(key) || 'null');
+        const titleField = document.getElementById('discussion-compose-title');
+        const contentField = document.getElementById('discussion-compose-content');
+        titleField.value = String(old?.['discussion-compose-title'] || labDraft.title || '').slice(
+          0,
+          120,
+        );
+        const previous = String(old?.['discussion-compose-content'] || '');
+        const addition = String(labDraft.content || '');
+        if ((previous + addition).length + 2 > 20000) {
+          status.textContent = '已有草稿接近字数上限，请缩短后刷新以追加实验引用。';
+        } else {
+          contentField.value = [previous, addition].filter(Boolean).join('\n\n');
+          save();
+          sessionStorage.removeItem('free_bbs_lab_share_draft');
+          status.textContent = previous ? '已将实验引用追加到原有草稿' : '已带入实验代码与结果快照';
+          form.addEventListener('input', save);
+          form.addEventListener('change', save);
+          return;
+        }
+      }
       const sharedTool = new URLSearchParams(location.search).get('tool_share') === '1';
       const toolDraft = sharedTool
         ? JSON.parse(sessionStorage.getItem('free_bbs_tool_share_draft') || 'null')

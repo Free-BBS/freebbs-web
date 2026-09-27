@@ -220,6 +220,8 @@ const server = http.createServer((request, response) => {
       } else response.destroy();
     });
     request.on('aborted', () => upstream.destroy());
+    // Lab executions belong to the open page; abort its backend stream on navigation.
+    if (requestUrl.pathname === '/api/labs/run') response.once('close', () => upstream.destroy());
     request.pipe(upstream);
     return;
   }

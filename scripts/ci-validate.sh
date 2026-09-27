@@ -105,6 +105,8 @@ npm run test:circuits
 
 echo "[ci] public page tests"
 npm run test:public-pages
+npm run test:code-lab
+python3 services/language-lab/test_worker.py
 
 echo "[ci] authentication and typography preferences tests"
 npm run test:auth

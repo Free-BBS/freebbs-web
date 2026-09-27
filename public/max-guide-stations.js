@@ -803,8 +803,8 @@
     'laboratory',
     'laboratory-planned',
     '.laboratory-card:has(.laboratory-symbol)',
-    '规划中的环境，也清楚标出来',
-    '独立 C/C++、Python、MATLAB 与 Verilog 运行环境目前均为规划中。C/C++ 等稳定服务器与环境验证完成后再开放，不把代码高亮或数据导入当作已支持运行',
+    '从代码到结果，再带回讨论',
+    '代码实验室支持 C/C++ 多架构汇编、Python 逐行变量观察、MATLAB（Octave）绘图与 Verilog 波形仿真，运行结果可保存为实验快照并分享到讨论区',
     { caption: '原 Max 对话中的沙盒入口不在此次独立运行环境开放范围内' },
   );
   step(

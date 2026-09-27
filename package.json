@@ -30,7 +30,7 @@
     "test:settings-layout:browser": "node scripts/check-settings-layout-browser.js",
     "test:navigation": "node --test scripts/navigation-pbl.test.js scripts/development-navigation.test.js scripts/activities-page.test.js scripts/activities-server.test.js",
     "test:navigation:browser": "node scripts/check-navigation-pbl-browser.js",
-    "test:code-lab": "node --test scripts/code-lab.test.js",
+    "test:code-lab": "node --test scripts/code-lab.test.js scripts/lab-results.test.js backend/language-lab.test.js",
     "test:code-lab:browser": "node scripts/check-code-lab-browser.js",
     "test:achievements:browser": "node scripts/check-achievement-browser.js",
     "preview:economy": "node scripts/preview-economy.js",

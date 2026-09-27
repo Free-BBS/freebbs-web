@@ -10,8 +10,18 @@ test(
   { timeout: 15000 },
   async (t) => {
     const requests = [];
+    let resolveLabClosed;
+    const labClosed = new Promise((resolve) => {
+      resolveLabClosed = resolve;
+    });
     const backend = http.createServer((request, response) => {
       requests.push(request.url);
+      if (request.url === '/api/labs/run') {
+        response.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
+        response.write('{"type":"started"}\n');
+        response.once('close', resolveLabClosed);
+        return;
+      }
       if (request.url.startsWith('/uploads/')) {
         response.writeHead(200, { 'Content-Type': 'image/svg+xml' });
         response.end('<svg xmlns="http://www.w3.org/2000/svg"><title>avatar fixture</title></svg>');
@@ -62,6 +72,24 @@ test(
     assert.equal(avatar.status, 200);
     assert.match(avatar.headers.get('content-type'), /image\/svg\+xml/);
     assert.match(await avatar.text(), /avatar fixture/);
+    const abortLab = new AbortController();
+    const liveLab = await fetch(`${origin}/api/labs/run`, {
+      method: 'POST',
+      body: '{}',
+      signal: abortLab.signal,
+    });
+    await liveLab.body.getReader().read();
+    abortLab.abort();
+    await Promise.race([
+      labClosed,
+      new Promise((_, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error('lab proxy did not cancel upstream')),
+          2000,
+        );
+        timer.unref();
+      }),
+    ]);
     const activities = await fetch(`${origin}/api/surveys`);
     assert.deepEqual(await activities.json(), { surveys: [] });
     const page = await fetch(`${origin}/surveys`);
@@ -95,7 +123,7 @@ test(
     const codeCanonical = await fetch(`${origin}/code-lab.html?from=test`, { redirect: 'manual' });
     assert.equal(codeCanonical.headers.get('location'), '/code-lab?from=test');
     const planned = await (await fetch(`${origin}/code-lab`)).text();
-    assert.match(planned, /规划中 · 暂未开放/);
+    assert.match(planned, /id="lab-source"/);
     assert.doesNotMatch(planned, /code-lab(?:-worker)?\.js|id="code-run"/);
     for (const retired of [
       '/code-lab-worker.js',
@@ -120,6 +148,6 @@ test(
     assert.equal(pblCanonical.headers.get('location'), '/pbl?from=menu');
     const embed = await (await fetch(`${origin}/circuit-embed`)).text();
     assert.doesNotMatch(embed, /desktop-shell/);
-    assert.deepEqual(requests, ['/uploads/avatar-test.svg?v=1', '/api/surveys']);
+    assert.deepEqual(requests, ['/uploads/avatar-test.svg?v=1', '/api/labs/run', '/api/surveys']);
   },
 );

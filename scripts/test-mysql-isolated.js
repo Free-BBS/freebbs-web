@@ -12,6 +12,7 @@ const {
 } = require('../backend/test-helpers/isolated-mysql');
 
 const TEST_FILES = [
+  'backend/language-lab.mysql.test.js',
   'backend/profile-activity.mysql.test.js',
   'backend/circuit-progress.test.js',
   'backend/wallet-ledger.test.js',
@@ -69,6 +70,7 @@ function testEnvironment(socketPath, original = process.env) {
 }
 
 const REQUIRED_MYSQL_TESTS = [
+  'isolated MySQL: immutable code and result snapshots survive router restart',
   'isolated MySQL: profile activity counts visible posts and named comments across Beijing midnight',
   'isolated MySQL: challenge progression gates direct requests and ranks contiguous current passes',
   'MySQL: additive rewards,',

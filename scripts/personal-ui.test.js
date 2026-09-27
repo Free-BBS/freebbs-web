@@ -7,17 +7,17 @@ const { TOKEN } = require('./preview-economy');
 
 const read = (file) => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
 
-test('laboratory distinguishes circuits and tools from four planned runtimes', () => {
+test('laboratory offers circuits, tools and four working language runtimes', () => {
   const html = read('public/laboratory.html');
   assert.match(read('server.js'), /\['\/laboratory', '\/laboratory.html'\]/);
   assert.match(html, /href="\/circuits"/);
-  assert.equal((html.match(/class="laboratory-status is-planned"/g) || []).length, 4);
+  assert.equal((html.match(/href="\/code-lab\?language=/g) || []).length, 4);
   for (const title of ['C / C++', 'Python', 'MATLAB', 'Verilog 运行与仿真', '制作我的工具'])
     assert.ok(html.includes(title));
-  assert.equal((html.match(/class="laboratory-enter"/g) || []).length, 2);
+  assert.equal((html.match(/class="laboratory-enter"/g) || []).length, 6);
   assert.doesNotMatch(html, /Max 内可用/);
   assert.doesNotMatch(html, /href="\/code-lab"/);
-  assert.match(html, /独立代码运行环境尚未开放/);
+  assert.match(html, /GNU Octave/);
   assert.match(read('public/mobile-shell.js'), /\['\/laboratory', 'circuit', '实验室'\]/);
   assert.match(read('public/app.js'), /href: '\/laboratory', icon: 'circuit', label: '实验室'/);
 });

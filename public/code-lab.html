@@ -3,20 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>C / C++ 实验室 · 规划中 | FREE BBS</title>
-    <meta
-      name="description"
-      content="C / C++ 运行环境规划中，待稳定服务器与运行环境完成验证后再开放"
-    />
+    <title>代码实验室 | FREE BBS</title>
+    <meta name="description" content="运行代码、观察变量、多架构汇编与仿真波形，分享实验到讨论区" />
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
     <link rel="stylesheet" href="/username-guard.css" />
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
-    <link rel="stylesheet" href="/site-info.css" />
+    <link rel="stylesheet" href="/language-lab.css" />
+    <link rel="stylesheet" href="/lab-results.css" />
   </head>
-  <body class="site-info-page">
+  <body class="language-lab-page">
     <div class="page-shell">
       <header class="topbar">
         <a class="brand" href="/" aria-label="FREE-BBS 首页">
@@ -76,32 +74,98 @@
 
       <nav class="mobile-nav" aria-label="手机底部导航"></nav>
 
-      <main class="main-content site-info-main">
-        <section class="site-info-card" aria-labelledby="site-info-title">
-          <div class="site-info-copy">
-            <p class="site-info-eyebrow" lang="en">C / C++ LAB</p>
-            <h1 id="site-info-title">C / C++ 运行环境</h1>
-            <p class="site-info-status"><span aria-hidden="true"></span>规划中 · 暂未开放</p>
-            <p class="site-info-description">
-              待稳定服务器与运行环境完成验证后，再开放编写与运行功能，开放时间以公告为准
-            </p>
-            <nav class="site-info-actions" aria-label="继续探索">
-              <a class="site-info-primary" href="/laboratory"
-                >返回实验室 <span aria-hidden="true">↗</span></a
-              >
-              <a href="/guide">先看看 Max 的探索手册 <span aria-hidden="true">→</span></a>
-            </nav>
+      <main class="main-content language-lab-main">
+        <header class="lab-heading">
+          <div>
+            <a href="/laboratory" class="lab-back">← 实验室</a>
+            <p class="lab-eyebrow">CODE · OBSERVE · SHARE</p>
+            <h1>代码实验室</h1>
+            <p id="lab-description">从一行代码开始，看看计算如何发生。</p>
           </div>
-          <figure class="site-info-scene">
-            <img
-              src="/assets/development-construction-bbs-v2.webp"
-              width="1536"
-              height="1024"
-              alt="Max 开着挖掘机建设 FREE BBS，地面上挖出了 BBS 字样"
+          <div class="lab-share-box">
+            <button type="button" id="lab-share" class="lab-primary">分享到讨论区 ↗</button
+            ><small>保存代码与结果的公开快照</small>
+          </div>
+        </header>
+        <nav class="lab-languages" aria-label="实验语言">
+          <button type="button" data-language="c">C</button
+          ><button type="button" data-language="cpp">C++</button
+          ><button type="button" data-language="python">Python</button
+          ><button type="button" data-language="matlab">MATLAB</button
+          ><button type="button" data-language="verilog">Verilog</button>
+        </nav>
+        <div id="lab-status" role="status" aria-live="polite">正在检查运行环境…</div>
+        <div class="lab-workspace">
+          <section class="lab-source-panel" aria-label="源代码编辑器">
+            <div class="lab-panel-title">
+              <label for="lab-title">实验名称</label
+              ><button type="button" id="lab-example">载入示例</button
+              ><button type="button" id="lab-download">下载代码</button>
+            </div>
+            <input
+              id="lab-title"
+              maxlength="120"
+              aria-label="实验名称"
+              placeholder="给这次实验起个名字"
             />
-            <figcaption>先把运行环境准备好，再开始新的实验</figcaption>
-          </figure>
-        </section>
+            <div class="lab-editor">
+              <pre id="lab-lines" aria-hidden="true">1</pre>
+              <textarea
+                id="lab-source"
+                aria-label="源代码"
+                spellcheck="false"
+                autocapitalize="off"
+                autocomplete="off"
+                wrap="off"
+              ></textarea>
+            </div>
+            <div class="lab-run-options">
+              <label id="lab-optimization-label"
+                >优化级别
+                <select id="lab-optimization">
+                  <option value="0">-O0</option>
+                  <option value="1">-O1</option>
+                  <option value="2">-O2</option>
+                  <option value="3">-O3</option>
+                  <option value="s">-Os</option>
+                </select></label
+              >
+              <label id="lab-speed-label" hidden
+                >每行间隔（秒）
+                <input id="lab-speed" type="number" min="0" max="5" step="0.1" value="1"
+              /></label>
+              <button type="button" id="lab-run" class="lab-primary" disabled>运行实验</button
+              ><button type="button" id="lab-stop" disabled>停止</button>
+            </div>
+            <div id="lab-python-controls" hidden>
+              <button type="button" id="lab-pause" disabled>暂停</button
+              ><button type="button" id="lab-step">单步执行</button
+              ><span id="lab-position">等待运行</span>
+            </div>
+            <details class="lab-input">
+              <summary>标准输入 stdin</summary>
+              <textarea
+                id="lab-stdin"
+                aria-label="标准输入"
+                rows="3"
+                placeholder="每次 input / scanf 读取的数据按行填写"
+              ></textarea>
+            </details>
+            <p class="lab-hint" id="lab-runtime-note"></p>
+          </section>
+          <section class="lab-output-panel" aria-label="实验结果">
+            <div class="lab-panel-title">
+              <h2>观察窗口</h2>
+              <span id="lab-result-state">尚未运行</span>
+            </div>
+            <nav id="lab-result-tabs" class="lab-result-tabs" aria-label="结果类型"></nav>
+            <div id="lab-result"><p class="lab-empty">运行后，这里会显示汇编、变量或波形。</p></div>
+            <details open class="lab-output">
+              <summary>终端输出</summary>
+              <pre id="lab-console" class="lab-console">等待运行…</pre>
+            </details>
+          </section>
+        </div>
       </main>
       <footer class="site-footer site-footer-compact">
         <nav class="footer-links" aria-label="关于平台">
@@ -122,5 +186,7 @@
     <script src="/username-guard.js"></script>
     <script src="/app.js"></script>
     <script src="/notifications.js"></script>
+    <script src="/lab-results.js"></script>
+    <script src="/language-lab.js"></script>
   </body>
 </html>
