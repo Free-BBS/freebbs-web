@@ -16,6 +16,71 @@ const {
 } = require('../public/max-guide-releases');
 const { STEPS, STATIONS, RELEASE_STEP_IDS } = require('../public/max-guide-stations');
 
+test('merged ranch preview saves appearance separately from Poisson wool, assets and receipts', async (t) => {
+  let draws = 0;
+  const { server, store } = createOnboardingPreview({
+    growthRandom: () => {
+      draws += 1;
+      return 0.99;
+    },
+  });
+  await new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  t.after(() => {
+    server.closeAllConnections();
+    server.close();
+  });
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  for (const page of ['/ranch', '/ranch-dye', '/ranch-gallery'])
+    assert.equal((await fetch(`${origin}${page}`)).status, 200);
+  const get = async (route) => {
+    const response = await fetch(`${origin}${route}`, {
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  const { design, revision } = await get('/api/ranch-designs/mine');
+  design.wool.base = '#225577';
+  const body = JSON.stringify({ design, revision, userId: 2 });
+  const before = structuredClone(store.account());
+  const put = (headers = {}) =>
+    fetch(`${origin}/api/ranch-designs/mine`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json', ...headers },
+      body,
+    });
+  assert.equal((await put({ Authorization: 'Bearer wrong' })).status, 403);
+  assert.equal((await put({ Origin: 'https://example.invalid' })).status, 403);
+  assert.equal((await put()).status, 200);
+  assert.equal((await put()).status, 409, 'stale tabs cannot overwrite designs');
+  assert.deepEqual(store.account(), before, 'dye save leaves economic state unchanged');
+  assert.equal(draws, 0);
+  const publicResult = await fetch(`${origin}/api/ranch-designs/u_preview01`);
+  assert.equal(publicResult.status, 200, 'public artwork loads without auth');
+  const publicSheep = await publicResult.json();
+  assert.deepEqual(Object.keys(publicSheep).sort(), ['design', 'revision', 'uid', 'username']);
+  assert.equal(publicSheep.design.wool.base, '#225577');
+  await get('/api/fortune');
+  const requestKey = randomUUID();
+  const feed = () =>
+    fetch(`${origin}/api/profile/extras`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'feed', requestKey }),
+    });
+  const first = await feed();
+  assert.equal(first.status, 200);
+  assert.equal((await first.json()).result.woolGrown, 2);
+  const replay = await feed();
+  assert.equal((await replay.json()).result.replayed, true);
+  assert.equal(draws, 1);
+  assert.equal(store.account().assets.fish, before.assets.fish - 1);
+  assert.equal(store.account().woolReady, before.woolReady + 2);
+  assert.equal((await get('/api/ranch-designs/mine')).design.wool.base, '#225577');
+});
+
 test('onboarding preview uses real local pages, account progress and transactional wallet data', async (t) => {
   const { server, store } = createOnboardingPreview({
     now: () => Date.parse('2026-09-20T10:00:00Z'),

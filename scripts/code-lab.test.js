@@ -19,7 +19,7 @@ test('C/C++ is planned; the direct URL has no editor, worker or run action', () 
   assert.doesNotMatch(page, /code-lab(?:-worker)?\.js|code-lab\.css|id="code-run"|<textarea/);
   assert.match(
     read('public/max-guide-stations.js'),
-    /C\/C\+\+、Python、MATLAB 与 Verilog 独立运行环境仍在规划中/,
+    /独立 C\/C\+\+、Python、MATLAB 与 Verilog 运行环境目前均为规划中/,
   );
 });
 
