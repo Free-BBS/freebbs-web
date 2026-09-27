@@ -1,6 +1,8 @@
 (() => {
   function normalizePreview(value) {
     if (!value || typeof value !== 'object') return null;
+    if (value.type === 'lab' && /^e_[a-f0-9]{32}$/.test(value.id || ''))
+      return { type: 'lab', id: value.id };
     if (value.type === 'tool' && /^t_[a-f0-9]{16}$/.test(value.tid || ''))
       return { type: 'tool', tid: value.tid };
     if (value.type === 'image' && typeof value.url === 'string') {
@@ -57,12 +59,16 @@
     const preview = normalizePreview(value);
     if (!preview) return '';
     const media =
-      preview.type === 'image'
-        ? `<img src="${escape(resolveAssetUrl(preview.url))}" alt="${escape(preview.alt)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" />`
-        : preview.type === 'tool'
-          ? `<span class="discussion-post-preview-tool" data-tid="${preview.tid}" aria-hidden="true"></span>`
-          : `<span class="discussion-post-preview-circuit" data-cid="${preview.cid}" data-revision="${preview.revision}" aria-hidden="true"></span>`;
-    const label = { image: '图片', circuit: '中的电路图', tool: '中的小工具' }[preview.type];
+      preview.type === 'lab'
+        ? `<span class="discussion-post-preview-lab" data-lab-id="${preview.id}" aria-hidden="true"></span>`
+        : preview.type === 'image'
+          ? `<img src="${escape(resolveAssetUrl(preview.url))}" alt="${escape(preview.alt)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" />`
+          : preview.type === 'tool'
+            ? `<span class="discussion-post-preview-tool" data-tid="${preview.tid}" aria-hidden="true"></span>`
+            : `<span class="discussion-post-preview-circuit" data-cid="${preview.cid}" data-revision="${preview.revision}" aria-hidden="true"></span>`;
+    const label = { lab: '中的代码实验', image: '图片', circuit: '中的电路图', tool: '中的小工具' }[
+      preview.type
+    ];
     // Keep a native post link usable even when preview enhancement is unavailable.
     if (preview.type === 'tool')
       return `<a class="discussion-post-preview" href="/discussion?post=${encodeURIComponent(postId)}" data-action="open-post" data-post-id="${escape(postId)}" aria-label="查看帖子${label}">${media}</a>`;
@@ -74,6 +80,23 @@
     return;
   }
 
+  let labLoader;
+  function loadLabRenderer() {
+    if (window.FreeBbsLabResults) return Promise.resolve();
+    if (!labLoader)
+      labLoader = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = '/lab-results.js';
+        script.onload = resolve;
+        script.onerror = () => {
+          script.remove();
+          labLoader = null;
+          reject(new Error('实验预览加载失败'));
+        };
+        document.head.append(script);
+      });
+    return labLoader;
+  }
   let rendererLoader;
   let toolLoader;
   const circuits = new Map();
@@ -203,6 +226,20 @@
       if (img.complete && !img.naturalWidth) removePreview(img);
     });
     const render = async (element) => {
+      if (element.classList.contains('discussion-post-preview-lab')) {
+        try {
+          const preview = normalizePreview({ type: 'lab', id: element.dataset.labId });
+          if (!preview) return removePreview(element);
+          await loadLabRenderer();
+          window.FreeBbsLabResults.styles();
+          const experiment = await window.FreeBbsLabResults.load(preview.id, apiBase);
+          if (!root.contains(element) || versions.get(root) !== version) return;
+          element.innerHTML = window.FreeBbsLabResults.preview(experiment, true);
+        } catch {
+          if (versions.get(root) === version) removePreview(element);
+        }
+        return;
+      }
       if (element.classList.contains('discussion-post-preview-tool')) {
         const preview = normalizePreview({ type: 'tool', tid: element.dataset.tid });
         if (!preview) return removePreview(element);
@@ -253,7 +290,7 @@
       }
     };
     const elements = root.querySelectorAll(
-      '.discussion-post-preview-circuit, .discussion-post-preview-tool',
+      '.discussion-post-preview-circuit, .discussion-post-preview-tool, .discussion-post-preview-lab',
     );
     if (!('IntersectionObserver' in window)) {
       elements.forEach(render);

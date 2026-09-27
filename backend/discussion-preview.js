@@ -1,3 +1,4 @@
+const { parseReference: parseLabReference } = require('../public/lab-results');
 const { marked, Parser, TextRenderer } = require('marked');
 const { parseReference } = require('../public/circuit-embeds');
 const { parseReference: parseToolReference } = require('../public/tool-embeds');
@@ -70,6 +71,8 @@ function firstPreview(tokens, origin) {
       continue;
     }
     if (token.type === 'link') {
+      const lab = parseLabReference(decodeEntities(token.href), origin);
+      if (lab) return { type: 'lab', ...lab };
       const reference = parseReference(decodeEntities(token.href), origin);
       if (reference) return { type: 'circuit', ...reference };
       const tool = parseToolReference(decodeEntities(token.href), origin);

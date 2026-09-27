@@ -90,7 +90,7 @@ test('handbook feature cards follow navigation order and keep planned capabiliti
     assert.ok(page.includes(index === 4 ? 'V1.2' : 'V2.0'));
     assert.ok(cards[index].includes(index === 4 ? 'V1.2' : 'V2.0'));
   }
-  assert.match(text(cards[3]), /独立 C\/C\+\+、Python、MATLAB 与 Verilog 运行环境均为规划中/);
+  assert.match(text(cards[3]), /代码实验室支持 C\/C\+\+ 多架构汇编/);
   assert.match(text(cards[0]), /学习资源等工具按课程建设进度逐步开放/);
   for (const tag of guide.matchAll(/<(h1|h2)[^>]*>([\s\S]*?)<\/\1>/g))
     assert.doesNotMatch(text(tag[2]), /。$/);

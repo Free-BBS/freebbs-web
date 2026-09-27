@@ -1,4 +1,4 @@
-// The browser compiler is paused. Also block stale/vendor URLs on incremental deployments.
+// Retired WASM compiler assets stay closed; the current lab uses /language-lab.js and an isolated server runtime.
 const path = require('node:path');
 
 function servePausedCodeLab(request, response, pathname) {
@@ -19,7 +19,9 @@ function servePausedCodeLab(request, response, pathname) {
     'Cache-Control': 'no-store',
     'X-Content-Type-Options': 'nosniff',
   });
-  response.end(request.method === 'HEAD' ? undefined : 'C / C++ 运行环境规划中，暂未开放');
+  response.end(
+    request.method === 'HEAD' ? undefined : '旧版编译资源已停用，请打开 /code-lab 使用代码实验室',
+  );
   return true;
 }
 

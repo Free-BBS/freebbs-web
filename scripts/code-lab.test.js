@@ -7,20 +7,16 @@ const { createPersonalPreview } = require('./preview-personal');
 
 const read = (file) => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
 
-test('C/C++ is planned; the direct URL has no editor, worker or run action', () => {
+test('all language labs have editor, visualization and discussion sharing entry points', () => {
   const lab = read('public/laboratory.html');
-  const card = lab.match(/<p class="laboratory-eyebrow">C \/ C\+\+<\/p>[\s\S]*?<\/article>/)[0];
-  assert.match(card, /稳定服务器/);
-  assert.match(card, /暂未开放/);
-  assert.doesNotMatch(card, /<a\b|开放试用|开始编程/);
+  for (const language of ['cpp', 'python', 'matlab', 'verilog'])
+    assert.ok(lab.includes(`/code-lab?language=${language}`));
   const page = read('public/code-lab.html');
-  assert.match(page, /规划中 · 暂未开放/);
-  assert.match(page, /href="\/laboratory"/);
-  assert.doesNotMatch(page, /code-lab(?:-worker)?\.js|code-lab\.css|id="code-run"|<textarea/);
-  assert.match(
-    read('public/max-guide-stations.js'),
-    /独立 C\/C\+\+、Python、MATLAB 与 Verilog 运行环境目前均为规划中/,
-  );
+  assert.match(page, /id="lab-source"/);
+  assert.match(page, /id="lab-share"/);
+  assert.match(page, /language-lab\.js/);
+  assert.match(page, /lab-results\.js/);
+  assert.doesNotMatch(lab, /暂未开放/);
 });
 
 test('no compiler package, executable client or WASM CSP ships in the paused release', () => {
@@ -86,7 +82,7 @@ test('retired assets are closed for all methods, versions and vendor aliases', (
   }
 });
 
-test('personal preview shows the planned page and blocks old compiler resources', async (t) => {
+test('personal preview shows the language lab and blocks old compiler resources', async (t) => {
   const { server } = createPersonalPreview();
   await new Promise((resolve) => {
     server.listen(0, '127.0.0.1', resolve);
@@ -98,7 +94,7 @@ test('personal preview shows the planned page and blocks old compiler resources'
   const base = `http://127.0.0.1:${server.address().port}`;
   const page = await fetch(`${base}/code-lab`);
   assert.equal(page.status, 200);
-  assert.match(await page.text(), /规划中 · 暂未开放/);
+  assert.match(await page.text(), /id="lab-source"/);
   for (const route of [
     '/code-lab-worker.js',
     '/code-lab.js',

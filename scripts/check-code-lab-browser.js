@@ -1,129 +1,107 @@
-// Regression for the paused C/C++ lab: no compiler, model calls or production data.
+// End-to-end against the real isolated runtime; accounts, posts and snapshots remain in memory.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
-// eslint-disable-next-line import/no-dynamic-require
 const puppeteer = require(process.env.PUPPETEER_MODULE || 'puppeteer');
-const { createPersonalPreview } = require('./preview-personal');
+const { createLabPreview } = require('./preview-language-lab');
 
 async function main() {
-  const { server } = createPersonalPreview();
+  const { server, rows, posts } = createLabPreview();
   await new Promise((resolve) => {
     server.listen(0, '127.0.0.1', resolve);
   });
   const origin = `http://127.0.0.1:${server.address().port}`;
-  const artifacts = fs.mkdtempSync(path.join(os.tmpdir(), 'freebbs-code-lab-paused-'));
-  const requests = [];
-  server.on('request', (request) => requests.push(request.url));
-  let browser;
-  let cases = 0;
+  const output = path.join(__dirname, '..', 'output', 'playwright');
+  fs.mkdirSync(output, { recursive: true });
+  const browser = await puppeteer.launch({
+    headless: true,
+    ...(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {}),
+  });
   try {
-    browser = await puppeteer.launch({
-      headless: true,
-      executablePath:
-        process.env.CHROMIUM_EXECUTABLE || 'C:/Program Files/Google/Chrome/Application/chrome.exe',
-    });
     const page = await browser.newPage();
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
-    const workers = [];
-    page.on('workercreated', (worker) => workers.push(worker.url()));
-    for (const route of ['/laboratory', '/code-lab']) {
-      await page.goto(origin + route, { waitUntil: 'networkidle0' });
-      await page.waitForFunction(() => window.freeBbsApp && window.freeBbsTypography);
-      if (route === '/laboratory') {
-        const card = await page.evaluate(() => {
-          const node = [...document.querySelectorAll('.laboratory-card')].find((item) =>
-            item.textContent.includes('C / C++ 运行环境'),
-          );
-          return { text: node.textContent, links: node.querySelectorAll('a, button').length };
+    await page.setViewport({ width: 1440, height: 1050 });
+    for (const language of ['c', 'cpp', 'python', 'matlab', 'verilog']) {
+      await page.goto(`${origin}/code-lab?language=${language}`, { waitUntil: 'networkidle0' });
+      await page.waitForFunction(() => !document.getElementById('lab-run').disabled, {
+        timeout: 20000,
+      });
+      if (language === 'python')
+        await page.$eval('#lab-speed', (element) => {
+          element.value = '0.01';
+          element.dispatchEvent(new Event('change'));
         });
-        assert.match(card.text, /规划中/);
-        assert.match(card.text, /稳定服务器/);
-        assert.equal(card.links, 0);
-        assert.ok(await page.$('a[href="/circuits"]'));
-        assert.ok(await page.$('a[href="/tool-workshop"]'));
-      } else {
-        assert.match(await page.$eval('.site-info-status', (node) => node.textContent), /规划中/);
-        assert.equal(await page.$('#code-run, #code-source, [data-code-lab]'), null);
-      }
-      for (const width of [1440, 1024, 901, 390, 320]) {
-        await page.setViewport({ width, height: width > 900 ? 1050 : 850 });
-        for (const theme of ['light', 'dark']) {
-          await page.evaluate(async (value) => {
-            if (document.body.classList.contains('theme-light') !== (value === 'light'))
-              window.freeBbsApp.toggleThemeMode();
-            await new Promise((resolve) => {
-              setTimeout(resolve, 350);
-            });
-          }, theme);
-          for (const fontPreset of [
-            'transistor-lab',
-            'zhongsong-study',
-            'quantum-board',
-            'night-oscilloscope',
-          ]) {
-            for (const typeScale of ['standard', 'large']) {
-              await page.evaluate(
-                async (preferences) => {
-                  window.freeBbsTypography.applyPreferences(preferences);
-                  await document.fonts.ready;
-                  await new Promise((resolve) => {
-                    requestAnimationFrame(() => requestAnimationFrame(resolve));
-                  });
-                },
-                { fontPreset, typeScale },
-              );
-              const measure = await page.evaluate(() => ({
-                width: document.scrollingElement.clientWidth,
-                scroll: document.scrollingElement.scrollWidth,
-                images: [...document.querySelectorAll('main img')].every(
-                  (img) => img.complete && img.naturalWidth > 0,
-                ),
-                status: [
-                  ...document.querySelectorAll('.laboratory-status, .site-info-status'),
-                ].every((node) => node.scrollWidth <= node.clientWidth + 2),
-              }));
-              assert.ok(
-                measure.scroll <= measure.width + 2 && measure.images && measure.status,
-                JSON.stringify({ route, width, theme, fontPreset, typeScale, measure }),
-              );
-              cases += 1;
-            }
-          }
-          if ((width === 1440 && theme === 'light') || (width === 390 && theme === 'dark')) {
-            await page.screenshot({
-              path: path.join(artifacts, `${route.slice(1)}-${width}-${theme}.png`),
-              fullPage: true,
-            });
-          }
+      await page.click('#lab-run');
+      await page.waitForFunction(
+        () =>
+          !document.getElementById('lab-run').disabled &&
+          document.getElementById('lab-result-state').textContent.includes('退出码'),
+        { timeout: 60000 },
+      );
+      assert.equal(
+        await page.$eval('#lab-result-state', (element) => element.textContent),
+        '退出码 0',
+        await page.$eval('#lab-console', (element) => element.textContent),
+      );
+      if (['c', 'cpp'].includes(language)) {
+        for (const target of ['mips', 'riscv', 'x86']) {
+          await page.click(`[data-result-tab="${target}"]`);
+          assert.match(await page.$eval('.lab-assembly', (element) => element.textContent), /main/);
         }
-      }
+      } else if (language === 'python')
+        assert.match(
+          await page.$eval('.lab-variables', (element) => element.textContent),
+          /total.*int.*20/s,
+        );
+      else if (language === 'matlab')
+        await page.waitForFunction(() =>
+          [...document.querySelectorAll('.lab-figure img')].some(
+            (img) => img.complete && img.naturalWidth > 0,
+          ),
+        );
+      else assert.ok(await page.$('.lab-wave'));
+      await page.screenshot({ path: path.join(output, `lab-${language}.png`), fullPage: true });
+      await page.click('#lab-share');
+      await page.waitForFunction(
+        () =>
+          location.pathname === '/publish' &&
+          document
+            .getElementById('discussion-compose-content')
+            ?.value.includes('/code-lab?experiment='),
+      );
+      const content = await page.$eval('#discussion-compose-content', (element) => element.value);
+      const id = content.match(/experiment=(e_[a-f0-9]{32})/)[1];
+      assert.ok(rows.has(id));
+      await page.click('.publish-submit');
+      await page.waitForFunction(() => location.pathname === '/discussion', { timeout: 15000 });
+      assert.equal(posts[0].preview.type, 'lab');
+      await page.waitForSelector('.lab-embed .lab-preview', { timeout: 15000 });
+      await page.screenshot({
+        path: path.join(output, `lab-${language}-discussion.png`),
+        fullPage: true,
+      });
+      await page.goto(`${origin}/code-lab?experiment=${id}`, { waitUntil: 'networkidle0' });
+      await page.waitForFunction(() =>
+        document.getElementById('lab-result-state').textContent.includes('快照'),
+      );
+      assert.ok((await page.$eval('#lab-source', (element) => element.value)).length > 20);
+      await page.setViewport({ width: 390, height: 844 });
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2));
+      await page.screenshot({
+        path: path.join(output, `lab-${language}-mobile.png`),
+        fullPage: true,
+      });
+      await page.setViewport({ width: 1440, height: 1050 });
     }
-    await page.click('a.site-info-primary[href="/laboratory"]');
-    await page.waitForFunction(() => window.location.pathname === '/laboratory');
     assert.deepEqual(errors, []);
-    assert.deepEqual(workers, []);
-    assert.equal(
-      requests.some((url) =>
-        /code-lab-assets|clang-wasm|code-lab-worker|\/api\/code\/run/.test(url),
-      ),
-      false,
-    );
     console.log(
-      JSON.stringify({
-        checks: 'planned cards + direct URL + zero compiler requests/workers + return navigation',
-        cases,
-        artifacts,
-      }),
+      'PASS: five languages, assembly tabs, live variables, real plots/waveforms, share/publish/preview/reopen, mobile overflow.',
     );
   } finally {
-    if (browser) await browser.close();
+    await browser.close();
     server.closeAllConnections();
-    await new Promise((resolve) => {
-      server.close(resolve);
-    });
+    server.close();
   }
 }
 main().catch((error) => {

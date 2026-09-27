@@ -1,0 +1,131 @@
+.lab-preview,
+.lab-embed {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+.lab-embed {
+  margin: 16px 0;
+  padding: 18px;
+  border: 1px solid var(--border-color, #d4dfdf);
+  border-radius: 14px;
+  background: var(--panel-bg, #f5f9f9);
+  color: var(--text-main, #172d30);
+  overflow: hidden;
+}
+.lab-preview-heading {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+.lab-preview-heading span,
+.lab-hint {
+  font-size: 12px;
+  opacity: 0.72;
+}
+.lab-variables {
+  width: 100%;
+  border-collapse: collapse;
+  font:
+    13px/1.5 ui-monospace,
+    monospace;
+  table-layout: fixed;
+}
+.lab-variables th,
+.lab-variables td {
+  text-align: left;
+  padding: 9px;
+  border-bottom: 1px solid #81999b40;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+.lab-variables th:nth-child(3) {
+  width: 45%;
+}
+.lab-wave-scroll {
+  max-width: 100%;
+  overflow: auto;
+}
+.lab-wave {
+  display: block;
+  width: 100%;
+  min-width: 600px;
+}
+.lab-figure {
+  margin: 12px 0;
+}
+.lab-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: white;
+  border-radius: 8px;
+}
+.lab-figure figcaption {
+  font-size: 12px;
+  opacity: 0.7;
+  margin-top: 6px;
+}
+.lab-preview-code,
+.lab-console {
+  margin: 10px 0;
+  padding: 14px;
+  background: #102326;
+  color: #def4ec;
+  border-radius: 8px;
+  overflow: auto;
+  max-height: 380px;
+  font:
+    12px/1.6 ui-monospace,
+    monospace;
+  text-align: left;
+  white-space: pre;
+}
+.lab-empty {
+  padding: 20px;
+  opacity: 0.7;
+}
+.lab-preview.is-compact {
+  padding: 12px;
+  height: 100%;
+  overflow: hidden;
+  background: #f1f7f7;
+  color: #163c40;
+}
+.lab-preview.is-compact .lab-preview-heading {
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+.lab-preview.is-compact .lab-preview-heading span,
+.lab-preview.is-compact .lab-hint {
+  display: none;
+}
+.lab-preview.is-compact .lab-wave {
+  min-width: 0;
+}
+.lab-preview.is-compact .lab-variables {
+  font-size: 10px;
+}
+.lab-preview.is-compact .lab-variables td,
+.lab-preview.is-compact .lab-variables th {
+  padding: 3px;
+}
+.lab-preview.is-compact pre {
+  font-size: 10px;
+  padding: 8px;
+  margin: 0;
+}
+.discussion-post-preview-lab {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+body:not(.theme-light) .lab-embed {
+  background: #172e32;
+  color: #e0eeee;
+}

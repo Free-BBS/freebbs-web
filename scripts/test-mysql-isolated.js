@@ -12,6 +12,7 @@ const {
 } = require('../backend/test-helpers/isolated-mysql');
 
 const TEST_FILES = [
+  'backend/language-lab.mysql.test.js',
   'backend/profile-activity.mysql.test.js',
   'backend/circuit-progress.test.js',
   'backend/wallet-ledger.test.js',

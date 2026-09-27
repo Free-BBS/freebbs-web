@@ -1,3 +1,4 @@
+const { createLanguageLabRouter } = require('./language-lab');
 const express = require('express');
 const crypto = require('crypto');
 const { createRanchDesignRouter, ensureRanchDesignTables } = require('./ranch-designs');
@@ -3121,6 +3122,8 @@ app.post('/api/ai/info/jobs/get', async (request, response) => {
     });
   }
 });
+
+app.use('/api/labs', createLanguageLabRouter({ pool, requireAuth }));
 
 app.post('/api/code/run', async (request, response) => {
   const user = await requireAuth(request, response);

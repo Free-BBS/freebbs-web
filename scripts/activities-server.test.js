@@ -95,7 +95,7 @@ test(
     const codeCanonical = await fetch(`${origin}/code-lab.html?from=test`, { redirect: 'manual' });
     assert.equal(codeCanonical.headers.get('location'), '/code-lab?from=test');
     const planned = await (await fetch(`${origin}/code-lab`)).text();
-    assert.match(planned, /规划中 · 暂未开放/);
+    assert.match(planned, /id="lab-source"/);
     assert.doesNotMatch(planned, /code-lab(?:-worker)?\.js|id="code-run"/);
     for (const retired of [
       '/code-lab-worker.js',
