@@ -19,6 +19,35 @@ test('all language labs have editor, visualization and discussion sharing entry 
   assert.doesNotMatch(lab, /暂未开放/);
 });
 
+test('environment explanation remains above the editor and independent of runtime status', () => {
+  const page = read('public/code-lab.html');
+  assert.equal((page.match(/id="lab-runtime-note"/g) || []).length, 1);
+  assert.ok(page.indexOf('id="lab-runtime-note"') < page.indexOf('id="lab-source"'));
+  assert.match(page, /aria-labelledby="lab-environment-title"/);
+  assert.match(page, /512 MiB/);
+  assert.match(page, /180 秒/);
+  assert.match(page, /Ghostscript[\s\S]*许可适配仍待核实/);
+  assert.match(page, /不代表合规审核已完成/);
+  assert.match(page, /软件版本及可用库以实际部署为准/);
+  const client = read('public/language-lab.js');
+  for (const engine of ['GCC', 'CPython', 'GNU Octave', 'Icarus Verilog / vvp'])
+    assert.ok(client.includes(`实际引擎：${engine}`));
+  assert.match(client, /\$\('lab-octave-license-note'\)\.hidden = language !== 'matlab'/);
+  assert.match(client, /MIPS32 \/ RISC-V64 仅生成汇编，不运行对应架构的程序/);
+  assert.match(client, /非 MathWorks MATLAB，不包含其专有工具箱/);
+});
+
+test('entry, discussion labels and guide distinguish Octave from MathWorks MATLAB', () => {
+  const directory = read('public/laboratory.html');
+  assert.match(directory, /<h2>Octave · MATLAB 兼容<\/h2>/);
+  assert.doesNotMatch(directory, /<h2>MATLAB 运行环境<\/h2>/);
+  assert.match(directory, /MIPS32 与 RISC-V64 仅生成汇编/);
+  assert.match(directory, /CPython/);
+  assert.match(directory, /不包含 FPGA\s+综合与硬件运行/);
+  assert.match(read('public/lab-results.js'), /matlab: 'Octave（MATLAB 兼容）'/);
+  assert.match(read('public/max-guide-stations.js'), /GNU Octave 运行 MATLAB 兼容代码/);
+});
+
 test('no compiler package, executable client or WASM CSP ships in the paused release', () => {
   for (const file of ['package.json', 'package-lock.json']) {
     assert.doesNotMatch(

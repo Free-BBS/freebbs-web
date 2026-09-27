@@ -99,7 +99,7 @@
             </div>
             <p class="laboratory-eyebrow">C / C++</p>
             <h2>C / C++ 运行环境</h2>
-            <p>运行 C / C++，对照 x86、MIPS 与 RISC-V 汇编理解代码</p>
+            <p>使用 GCC 运行 C17 / C++17，实际执行于 x86-64；MIPS32 与 RISC-V64 仅生成汇编供对照</p>
             <a class="laboratory-enter" href="/code-lab?language=cpp"
               >开始实验 <span aria-hidden="true">↗</span></a
             >
@@ -111,7 +111,10 @@
             </div>
             <p class="laboratory-eyebrow">PYTHON</p>
             <h2>Python 运行环境</h2>
-            <p>调节逐行执行速度，实时观察变量类型和值，支持暂停与单步</p>
+            <p>
+              使用服务器端 CPython，调节逐行执行速度、观察变量，支持暂停与单步，不等同于本机 Python
+              环境
+            </p>
             <a class="laboratory-enter" href="/code-lab?language=python"
               >开始实验 <span aria-hidden="true">↗</span></a
             >
@@ -121,9 +124,12 @@
               <span class="laboratory-symbol" aria-hidden="true">∿</span
               ><span class="laboratory-status">已开放</span>
             </div>
-            <p class="laboratory-eyebrow">MATLAB</p>
-            <h2>MATLAB 运行环境</h2>
-            <p>使用 GNU Octave 运行 MATLAB 兼容代码，查看曲线、子图与实验结果</p>
+            <p class="laboratory-eyebrow">GNU OCTAVE</p>
+            <h2>Octave · MATLAB 兼容</h2>
+            <p>
+              实际引擎为 GNU Octave，非 MathWorks
+              MATLAB，不包含其专有工具箱，也不保证全部语法与结果一致
+            </p>
             <a class="laboratory-enter" href="/code-lab?language=matlab"
               >开始实验 <span aria-hidden="true">↗</span></a
             >
@@ -135,7 +141,10 @@
             </div>
             <p class="laboratory-eyebrow">VERILOG</p>
             <h2>Verilog 运行与仿真</h2>
-            <p>运行 Verilog 测试平台，观察数字波形、总线与时序变化</p>
+            <p>
+              使用 Icarus Verilog / vvp 进行数字仿真，支持部分 SystemVerilog 2012，不包含 FPGA
+              综合与硬件运行
+            </p>
             <a class="laboratory-enter" href="/code-lab?language=verilog"
               >开始实验 <span aria-hidden="true">↗</span></a
             >

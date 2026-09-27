@@ -50,6 +50,7 @@ body.ranch-creative-page.theme-dark .economy-shortcut {
 }
 .dye-save-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 .dye-save-row #dye-undo {

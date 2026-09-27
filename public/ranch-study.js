@@ -84,10 +84,10 @@
     text(
       '[data-study-enter]',
       state.running
-        ? `专注中 ${countdown(state.remaining)} ↗`
+        ? `专注中 ${countdown(state.remaining)}`
         : state.complete
-          ? '本轮专注完成 ↗'
-          : '学习背景 ↗',
+          ? '本轮专注完成'
+          : '学习背景',
     );
     text('[data-study-motion]', scene.classList.contains('is-paused') ? '继续动态' : '暂停动态');
     scene.classList.toggle('is-study-mode', active);
@@ -192,7 +192,7 @@
     scene = next;
     scene.insertAdjacentHTML(
       'beforeend',
-      `<button type="button" class="ranch-study-enter" data-study-enter>学习背景 ↗</button>
+      `<button type="button" class="ranch-study-enter" data-study-enter>学习背景</button>
       <div class="ranch-study-overlay">
         <div class="ranch-study-readout">
           <div class="ranch-study-clock" data-study-clock><time data-study-time aria-label="当地时间"></time><p data-study-date></p></div>

@@ -8,7 +8,8 @@ const {
 } = require('./course-schedule');
 const { probePrimaryTsinghuaPortals } = require('./portal-boundary-probe');
 const { probePublicNoticeSource } = require('./public-source-probe');
-const { getLearnConnectorCapabilities } = require('./tsinghua-learn-connector');
+const { getLearnConnectorCapabilities, normalizeHtmlText } = require('./tsinghua-learn-connector');
+const { saveManualCourse } = require('./manual-courses');
 
 const NOTIFICATION_CATEGORIES = new Set([
   'course',
@@ -163,7 +164,10 @@ async function readCampusSemester(pool, userId, semesterId) {
   if (!row) return null;
   return {
     id: row.semester_id,
-    courses: parseJsonArray(row.courses_json),
+    courses: parseJsonArray(row.courses_json).map((course) => ({
+      ...course,
+      title: normalizeHtmlText(course.title, 200),
+    })),
     notifications: parseJsonArray(row.notifications_json),
     syncStatus: row.sync_status,
     fetchedAt: toIsoString(row.fetched_at),
@@ -189,6 +193,9 @@ function toScheduleItem(row) {
   let kind = 'event';
   if (row.source_type === 'agent' && row.source_reference === 'planner:deadline') kind = 'deadline';
   if (row.source_type === 'agent' && row.source_reference === 'planner:weekly') kind = 'weekly';
+  if (row.source_type === 'manual' && row.source_reference === 'manual:deadline') kind = 'deadline';
+  if (row.source_type === 'manual' && row.source_reference?.startsWith('manual:course:'))
+    kind = 'course';
   return {
     publicId: row.public_id,
     title: row.title,
@@ -1122,7 +1129,7 @@ function createWorkbenchRouter({
          WHERE user_id = ?
            AND deleted_at IS NULL
            AND status = 'confirmed'
-           AND (source_reference IS NULL OR source_reference <> 'planner:deadline')
+           AND (source_reference IS NULL OR source_reference NOT IN ('planner:deadline', 'manual:deadline'))
            AND start_at < ?
            AND end_at > ?
            ${excludeCondition}
@@ -1141,6 +1148,18 @@ function createWorkbenchRouter({
     }
   });
 
+  router.post('/manual-courses', async (request, response) => {
+    const user = await requireAuth(request, response);
+    if (!user) return;
+    try {
+      response.status(201).json(await saveManualCourse(pool, user.id, request.body));
+    } catch (error) {
+      if (error.status)
+        response.status(error.status).json({ message: error.message, code: error.code });
+      else sendWorkbenchError(response, error, '添加课程失败');
+    }
+  });
+
   router.post('/schedule-items', async (request, response) => {
     try {
       const user = await requireAuth(request, response);
@@ -1153,11 +1172,14 @@ function createWorkbenchRouter({
       const description = normalizeText(body.description, 4000);
       const startAt = parseDateValue(body.startAt, { required: true });
       const endAt = parseDateValue(body.endAt, { required: true });
+      const kind = body.kind || 'event';
       const timezone = normalizeText(body.timezone || SHANGHAI_TIME_ZONE, 64, {
         required: true,
       });
 
       if (
+        !['event', 'deadline'].includes(kind) ||
+        (kind === 'deadline' && (endAt - startAt !== 60000 || body.allDay === true)) ||
         !title ||
         description === null ||
         (body.description != null && typeof body.description !== 'string') ||
@@ -1176,9 +1198,9 @@ function createWorkbenchRouter({
       await pool.execute(
         `INSERT INTO schedule_items (
           public_id, user_id, created_by_user_id, source_type, title, description,
-          start_at, end_at, all_day, timezone, status, user_confirmed_at
+          start_at, end_at, all_day, timezone, status, user_confirmed_at, source_reference
         ) VALUES (
-          ?, ?, ?, 'manual', ?, NULLIF(?, ''), ?, ?, ?, ?, 'confirmed', CURRENT_TIMESTAMP
+          ?, ?, ?, 'manual', ?, NULLIF(?, ''), ?, ?, ?, ?, 'confirmed', CURRENT_TIMESTAMP, ?
         )`,
         [
           publicId,
@@ -1190,6 +1212,7 @@ function createWorkbenchRouter({
           endAt,
           body.allDay ? 1 : 0,
           timezone,
+          kind === 'deadline' ? 'manual:deadline' : null,
         ],
       );
       const [rows] = await pool.execute(
@@ -1283,8 +1306,7 @@ function createWorkbenchRouter({
         return;
       }
       if (
-        existing.source_type === 'agent' &&
-        existing.source_reference === 'planner:deadline' &&
+        ['planner:deadline', 'manual:deadline'].includes(existing.source_reference) &&
         (nextEndAt.getTime() - nextStartAt.getTime() !== 60000 || body.allDay === true)
       ) {
         response.status(400).json({ message: 'DDL 请设置一个准确的截止时间。' });
@@ -1419,6 +1441,7 @@ function createWorkbenchRouter({
          SET status = 'cancelled',
              cancelled_at = COALESCE(cancelled_at, CURRENT_TIMESTAMP),
              deleted_at = CURRENT_TIMESTAMP,
+             dedupe_key = IF(source_reference LIKE 'manual:course:%', NULL, dedupe_key),
              user_overridden_at = CURRENT_TIMESTAMP,
              version = version + 1
          WHERE public_id = ? AND user_id = ? AND deleted_at IS NULL`,

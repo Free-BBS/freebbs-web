@@ -8,7 +8,7 @@ const MINUTE_MS = 60 * 1000;
 const MAX_PLAN_DAYS = 30;
 const MAX_HORIZON_DAYS = 371;
 const MAX_SUGGESTIONS = 52;
-const MAX_TASKS = 3;
+const MAX_TASKS = 5;
 // Inline this server-owned limit: mysql2 execute() binds JS numbers as DOUBLE.
 const MAX_EVENTS = 500;
 const MAX_PROMPT_LENGTH = 600;
@@ -317,7 +317,7 @@ function parseKnownScheduleMessage(message, now = new Date()) {
   const text = String(message || '').trim();
   const { parts, sharedDuration } = splitScheduleTasks(text);
   if (parts.length > MAX_TASKS) {
-    throw Object.assign(new Error('一句话最多安排 3 件独立任务，请拆成多次添加。'), {
+    throw Object.assign(new Error('一次最多识别 5 个事件，请分次添加。'), {
       status: 422,
     });
   }
@@ -519,10 +519,9 @@ function buildPreview(extraction, existing, now = new Date()) {
   if (kind === 'batch') {
     const { tasks } = extraction;
     if (!Array.isArray(tasks) || tasks.length < 1 || tasks.length > MAX_TASKS) {
-      throw Object.assign(
-        new Error('一句话最多安排 3 件独立任务，请提供 1–3 件任务或拆成多次添加。'),
-        { status: 422 },
-      );
+      throw Object.assign(new Error('一次最多识别 5 个事件，请提供 1–5 个事件或分次添加。'), {
+        status: 422,
+      });
     }
     if (tasks.some((task) => !['event', 'weekly', 'deadline', 'plan'].includes(task?.kind))) {
       throw Object.assign(new Error('每件任务都需完整说明日期、时间或时长，不能嵌套批量任务。'), {
@@ -615,7 +614,7 @@ function buildPrompt(message, now) {
     '若是每周重复、持续 X 周，输出 {"kind":"weekly","title":"...","startAt":"首次发生的ISO时间","endAt":"首次结束的ISO时间","weeks":X}。服务器展开每周一次，不能漏掉重复次数。',
     '若是“某日某时之前完成/截止”之类的 DDL，输出 {"kind":"deadline","title":"要完成的事","startAt":"截止时间提前1分钟的ISO时间","endAt":"截止时间的ISO时间"}。DDL 是时间点，不是要占满此前时段。',
     '若用户希望在接下来 N 天内完成 X 小时某事，输出 {"kind":"plan","title":"...","days":N,"totalMinutes":X乘60,"dayStart":"09:00","dayEnd":"21:00"}。若用户限定上午/下午/晚上，调整 dayStart/dayEnd。',
-    '若用户描述 2–3 件独立任务，必须全部提取并输出 {"kind":"batch","tasks":[上述 event/weekly/deadline/plan 对象]}。tasks 只允许 1–3 项，禁止嵌套 batch；重复周次、空档计划的分段不算独立任务。超过 3 件输出 clarify，说明“一句话最多安排 3 件独立任务，请拆成多次添加”。',
+    '自行理解整段话中的独立事件，不要求分号或固定格式。若用户描述 2–5 个独立事件，必须全部提取并输出 {"kind":"batch","tasks":[上述 event/weekly/deadline/plan 对象]}。tasks 只允许 1–5 项，禁止嵌套 batch；重复周次、空档计划的分段不算独立事件。超过 5 个输出 clarify，说明“一次最多识别 5 个事件，请分次添加”。普通事件和个人 DDL 可以混合，不依赖网络学堂作业。不得只取前五个，信息不清楚时追问，不猜测缺失的时间。',
     '同一句话省略的日期、上午/下午/晚上等时段继承前一件任务，明确给出的新日期或时段优先；跨日明确给出日期后，不擅自沿用上一日的晚上。仅在用户明确说“都/均/各”时共享时长；任何一件任务缺少必要信息，整句输出 clarify，绝不能只返回第一件或遗漏其他任务。',
     '示例：北京时间今天是 2026-09-24，用户说“我今天晚上9点要开书记会，罗姆楼5103；10点要开支书例会，罗姆楼10-206，两个会都是1小时”，应返回 batch，两项分别为书记会 2026-09-24T21:00:00+08:00 至 22:00:00+08:00、description 为罗姆楼5103，以及支书例会 2026-09-24T22:00:00+08:00 至 23:00:00+08:00、description 为罗姆楼10-206。示例日期仅用于解释，实际必须根据当前日期解析。',
     '不要自己排列空档，服务器会避开已有日程。缺少日期、时长等必要信息时输出 {"kind":"clarify","question":"需要补充什么"}。不要编造。',
@@ -652,7 +651,7 @@ function createSchedulePlannerRouter({
       const [rows] = await pool.execute(
         `SELECT start_at, end_at FROM schedule_items
          WHERE user_id = ? AND deleted_at IS NULL AND status IN ('draft', 'confirmed')
-           AND (source_reference IS NULL OR source_reference <> 'planner:deadline')
+           AND (source_reference IS NULL OR source_reference NOT IN ('planner:deadline', 'manual:deadline'))
            AND start_at < ? AND end_at > ? ORDER BY start_at LIMIT ${MAX_EVENTS + 1}`,
         [user.id, end, now],
       );
@@ -695,7 +694,7 @@ function createSchedulePlannerRouter({
       const identifiedTasks = splitScheduleTasks(message).parts.length;
       if (
         identifiedTasks > 1 &&
-        (extraction?.kind !== 'batch' || extraction.tasks?.length !== identifiedTasks)
+        (extraction?.kind !== 'batch' || extraction.tasks?.length < identifiedTasks)
       ) {
         response
           .status(422)
@@ -742,7 +741,7 @@ function createSchedulePlannerRouter({
       const [scheduleBusy] = await connection.execute(
         `SELECT start_at, end_at FROM schedule_items
          WHERE user_id = ? AND deleted_at IS NULL AND status IN ('draft', 'confirmed')
-           AND (source_reference IS NULL OR source_reference <> 'planner:deadline')
+           AND (source_reference IS NULL OR source_reference NOT IN ('planner:deadline', 'manual:deadline'))
            AND start_at < ? AND end_at > ? LIMIT ${MAX_EVENTS + 1}`,
         [user.id, end, start],
       );

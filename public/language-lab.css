@@ -78,6 +78,50 @@
 #lab-status.is-error {
   color: #c34e30;
 }
+body.language-lab-page .lab-environment {
+  margin: 0 0 20px;
+  padding: 16px 20px;
+  border: 1px solid var(--ui-line, #81999b60);
+  border-radius: 14px;
+  background: var(--ui-surface-soft, #172c30);
+  color: var(--ui-text, #e0efea);
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+body.language-lab-page .lab-environment h2 {
+  margin: 0 0 8px;
+  font: 600 0.95rem/1.6 var(--font-ui);
+  color: inherit;
+}
+body.language-lab-page .lab-environment p,
+body.language-lab-page .lab-environment li {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.8;
+  color: inherit;
+}
+.lab-environment-details {
+  margin-top: 10px;
+}
+.lab-environment-details summary {
+  width: fit-content;
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1.8;
+}
+.lab-environment-details summary:focus-visible {
+  outline: 2px solid var(--ui-accent, #229eaa);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.lab-environment-details ul {
+  margin: 10px 0;
+  padding-left: 1.3em;
+}
+body.language-lab-page #lab-octave-license-note {
+  padding-top: 10px;
+  border-top: 1px solid var(--ui-line, #81999b60);
+}
 .lab-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);

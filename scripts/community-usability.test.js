@@ -169,24 +169,37 @@ test('public profile activity uses verified viewer identity and cannot be shared
   assert.equal(response.payload.profile.activity.visibility, 'members');
 });
 
-function createProfileLoadingHarness({ ranch = false } = {}) {
+function createProfileLoadingHarness({
+  ranch = false,
+  search = '?uid=u_alice01',
+  ready = Promise.resolve(),
+} = {}) {
   const start = source.indexOf('let publicProfileRequestVersion = 0;');
   const end = source.indexOf('function normalizeAdminRole(', start);
   const pending = [];
   const rendered = [];
   const messages = [];
+  const replacements = [];
   const context = {
+    URLSearchParams,
+    sessionReady: ready,
     document: { body: { classList: { contains: (name) => ranch && name === 'ranch-page' } } },
     isPublicProfilePage: () => true,
-    getProfileUidFromQuery: () => 'u_alice01',
-    isValidPublicUid: () => true,
+    getProfileUidFromQuery: () =>
+      new URLSearchParams(search).get('uid') || new URLSearchParams(search).get('studentId') || '',
+    isValidPublicUid: (uid) =>
+      /^u_?[a-z0-9]{6,32}$/i.test(String(uid || '')) || /^20\d{8}$/.test(String(uid || '')),
     setPublicProfileMessage: (message) => messages.push(message),
     userState: { token: 'member-session' },
     callApi: () =>
       new Promise((resolve, reject) => {
         pending.push({ resolve, reject });
       }),
-    window: { FreeBbsProfileActivity: { render: (value) => rendered.push(value) } },
+    window: {
+      location: { search, pathname: ranch ? '/ranch' : '/profile', hash: '#pasture' },
+      history: { state: null, replaceState: (_state, _title, url) => replacements.push(url) },
+      FreeBbsProfileActivity: { render: (value) => rendered.push(value) },
+    },
   };
   for (const field of [
     'Avatar',
@@ -201,8 +214,82 @@ function createProfileLoadingHarness({ ranch = false } = {}) {
     context[`publicProfile${field}`] = null;
   }
   vm.runInNewContext(source.slice(start, end), context);
-  return { context, pending, rendered, messages };
+  return { context, pending, rendered, messages, replacements };
 }
+
+test('own ranch waits for restored identity, then canonicalizes the URL without another navigation', async () => {
+  let restore;
+  const ready = new Promise((resolve) => {
+    restore = resolve;
+  });
+  const { context, pending, rendered, messages, replacements } = createProfileLoadingHarness({
+    ranch: true,
+    search: '?scene=lake',
+    ready,
+  });
+  const request = context.loadPublicProfile();
+  assert.equal(pending.length, 0);
+  assert.equal(messages.at(-1), '正在确认登录状态…');
+  Object.assign(context.userState, { uid: 'u_owner01', isLoggedIn: true });
+  restore();
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+  assert.deepEqual(replacements, ['/ranch?scene=lake&uid=u_owner01#pasture']);
+  pending.shift().resolve({ profile: { activity: 'owner' } });
+  await request;
+  assert.deepEqual(rendered, ['owner']);
+  assert.equal(messages.at(-1), '');
+});
+
+test('own ranch shows login or temporary failure state without requesting an empty UID', async () => {
+  for (const token of ['', 'temporarily-unverified-token']) {
+    const { context, pending, messages, replacements } = createProfileLoadingHarness({
+      ranch: true,
+      search: '',
+    });
+    context.userState.token = token;
+    await context.loadPublicProfile();
+    assert.equal(pending.length, 0);
+    assert.equal(replacements.length, 0);
+    assert.match(messages.at(-1), token ? /暂时无法确认登录状态/ : /登录后即可照顾你的 Max/);
+    assert.doesNotMatch(messages.at(-1), /无效/);
+  }
+});
+
+test('explicit missing/malformed UIDs never silently open the signed-in owner ranch', async () => {
+  for (const search of ['?uid=', '?uid=bad', '?studentId=bad']) {
+    const { context, pending, messages, replacements } = createProfileLoadingHarness({
+      ranch: true,
+      search,
+    });
+    Object.assign(context.userState, { uid: 'u_owner01', isLoggedIn: true });
+    await context.loadPublicProfile();
+    assert.equal(pending.length, 0);
+    assert.equal(replacements.length, 0);
+    assert.equal(messages.at(-1), '无效用户 UID');
+  }
+  const profile = createProfileLoadingHarness({ search: '' });
+  await profile.context.loadPublicProfile();
+  assert.equal(profile.messages.at(-1), '无效用户 UID');
+});
+
+test('concurrent own-ranch loads after session restoration only render the latest request', async () => {
+  const { context, pending, replacements } = createProfileLoadingHarness({
+    ranch: true,
+    search: '',
+  });
+  Object.assign(context.userState, { uid: 'u_owner01', isLoggedIn: true });
+  const first = context.loadPublicProfile();
+  const second = context.loadPublicProfile();
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+  assert.equal(pending.length, 1);
+  assert.equal(replacements.length, 1);
+  pending.shift().resolve({ profile: {} });
+  await Promise.all([first, second]);
+});
 
 for (const ranch of [false, true]) {
   const page = ranch ? 'ranch' : 'profile';

@@ -266,13 +266,17 @@ function createTsinghuaSyncStore(pool) {
       for (const course of courses) {
         const old = merged.get(course.sourceReference);
         const keepOldSchedule =
-          old && !parseCourseSchedule(old).issue && parseCourseSchedule(course).issue;
+          old &&
+          course.calendarSyncStatus !== 'complete' &&
+          !parseCourseSchedule(old).issue &&
+          parseCourseSchedule(course).issue;
         merged.set(
           course.sourceReference,
           keepOldSchedule
             ? {
                 ...course,
                 scheduleText: old.scheduleText,
+                sectionSystem: old.sectionSystem,
                 locationText: course.locationText || old.locationText,
                 calendarSyncWarning: retainedWarning,
               }

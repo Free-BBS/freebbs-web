@@ -170,6 +170,31 @@ test('authorized fetch permits only the connector exact read API allowlist', asy
   assert.equal(calls, 0);
 });
 
+test('course time requests use the authorized session and strict single-id query', async () => {
+  let calls = 0;
+  const authorizedFetch = createAuthorizedFetch(grant([cookie()]), {
+    now: () => 1000,
+    async fetchImpl(url) {
+      calls += 1;
+      assert.equal(new URL(url).searchParams.get('id'), 'course_1');
+      return new Response('[]', { status: 200 });
+    },
+  });
+  const path = `${LEARN_ORIGIN}/b/kc/v_wlkc_xk_sjddb/detail`;
+  for (const query of ['', '?id=one&id=two', '?id=../x', '?id=one&next=https://evil.test']) {
+    await assert.rejects(
+      authorizedFetch(path + query, { method: 'GET' }),
+      rejectsWith('connector_target_blocked'),
+    );
+  }
+  await assert.rejects(
+    authorizedFetch(`${path}?id=course_1`, { method: 'POST' }),
+    rejectsWith('connector_target_blocked'),
+  );
+  await authorizedFetch(`${path}?id=course_1`, { method: 'GET' });
+  assert.equal(calls, 1);
+});
+
 test('expired cookies require reauthorization and never reach the network', async () => {
   const authorizedFetch = createAuthorizedFetch(grant([cookie({ expiresAt: 10 })]), {
     now: () => 20,

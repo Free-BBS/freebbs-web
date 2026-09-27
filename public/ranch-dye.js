@@ -155,6 +155,7 @@
     const horns = design.horns;
     design = data.blank();
     design.horns = horns;
+    pointer = null;
     render();
     status.textContent = '羊毛和脸部已恢复空白，角饰保留；保存后生效，也可以撤销。';
   });

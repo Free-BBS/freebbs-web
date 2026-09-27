@@ -7,12 +7,12 @@
     display: block;
     position: absolute;
     top: 210px;
-    right: 106px;
+    right: var(--ranch-action-inset, 24px);
     z-index: 4;
     min-height: 44px;
-    padding: 8px 14px;
+    padding: 8px 12px;
     border: 1px solid #ffffff40;
-    border-radius: 24px;
+    border-radius: 28px;
     background: #fffffff0;
     color: #213d2c !important;
     font: 600 12px/1.4 var(--font-ui);

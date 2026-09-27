@@ -60,6 +60,11 @@
     scheduleId: document.getElementById('workbench-schedule-id'),
     scheduleVersion: document.getElementById('workbench-schedule-version'),
     scheduleTitle: document.getElementById('workbench-schedule-title'),
+    scheduleKind: document.getElementById('workbench-schedule-kind'),
+    scheduleKindHint: document.getElementById('workbench-schedule-kind-hint'),
+    courseRepeat: document.getElementById('workbench-course-repeat'),
+    courseCount: document.getElementById('workbench-course-count'),
+    courseInterval: document.getElementById('workbench-course-interval'),
     scheduleDescription: document.getElementById('workbench-schedule-description'),
     scheduleStart: document.getElementById('workbench-schedule-start'),
     scheduleEnd: document.getElementById('workbench-schedule-end'),
@@ -107,6 +112,8 @@
     noticeView: 'all',
     scheduleItems: [],
     weekStart: null,
+    focusToday: true,
+    scheduleReady: false,
     hours: { ...hoursModel.DEFAULT_HOURS },
     listView: false,
     proposals: [],
@@ -210,7 +217,13 @@
     elements.campusCourseList.replaceChildren();
     elements.campusNoticeList.replaceChildren();
     const courses = Array.isArray(semester?.courses) ? semester.courses : [];
-    const notices = Array.isArray(semester?.notifications) ? semester.notifications : [];
+    const noticeTime = (notice) => {
+      const value = notice.publishedAt ? Date.parse(notice.publishedAt) : NaN;
+      return Number.isFinite(value) ? value : -Infinity;
+    };
+    const notices = (
+      Array.isArray(semester?.notifications) ? [...semester.notifications] : []
+    ).sort((a, b) => noticeTime(b) - noticeTime(a));
 
     if (!courses.length) {
       const empty = document.createElement('p');
@@ -256,6 +269,11 @@
       const detail = document.createElement('p');
       detail.textContent = truncate(notice.body || '暂无公告正文', 180);
       item.append(title, detail);
+      if (Number.isFinite(noticeTime(notice))) {
+        const published = document.createElement('small');
+        published.textContent = `发布于 ${formatMoment(notice.publishedAt)}`;
+        item.append(published);
+      }
       const actionUrl = safeActionUrl(notice.actionUrl);
       if (actionUrl) {
         const link = document.createElement('a');
@@ -267,6 +285,7 @@
       }
       elements.campusNoticeList.append(item);
     });
+    elements.campusNoticeList.scrollTop = 0;
 
     elements.campusCoursesStatus.textContent = `同步于 ${formatMoment(semester.fetchedAt)} · ${courses.length} 门课程 · ${notices.length} 条公告${semester.syncStatus === 'partial' ? ' · 部分同步' : ''}`;
   }
@@ -475,6 +494,14 @@
     weekLayouts.forEach(({ timeline }) => {
       Object.assign(timeline.style, { height: `${Math.ceil(contentHeight)}px` });
     });
+    if (state.focusToday && state.scheduleReady && elements.weekScroll.clientWidth > 0) {
+      const today = elements.weekGrid.querySelector('.workbench-week-day.is-today');
+      if (today) {
+        elements.weekScroll.scrollLeft +=
+          today.getBoundingClientRect().left - elements.weekScroll.getBoundingClientRect().left - 1;
+        state.focusToday = false;
+      }
+    }
   }
 
   let weekLayoutFrame = 0;
@@ -492,7 +519,7 @@
     const weekEnd = state.weekStart + 7 * DAY_MS;
     elements.weekLabel.textContent = `${formatDay(new Date(state.weekStart))} — ${formatDay(new Date(weekEnd - DAY_MS))} · 北京时间`;
     const todayStart = getWeekStart(new Date());
-    elements.weekToday.disabled = state.weekStart === todayStart;
+    elements.weekToday.disabled = false;
     const days = [];
     weekLayouts = [];
     const outsideIds = new Set();
@@ -560,6 +587,7 @@
         let prefix = '';
         if (entry.item.kind === 'deadline') prefix = '⏱ DDL · ';
         if (entry.item.kind === 'weekly') prefix = '↻ 周常 · ';
+        if (entry.item.kind === 'course' && !entry.item.courseScheduleReference) prefix = '课程 · ';
         if (entry.item.courseScheduleReference) prefix = '课程 · ';
         title.textContent = `${entry.item.completed ? '✓ 已完成 · ' : prefix}${entry.item.title || '未命名日程'}`;
         const time = document.createElement('small');
@@ -862,6 +890,7 @@
         if (isDraft) eyebrow = 'Agent 草稿 · 待确认';
         else if (item.kind === 'deadline') eyebrow = '⏱ DDL · 截止提醒';
         else if (item.kind === 'weekly') eyebrow = '↻ 周常 · 已确认';
+        else if (item.kind === 'course') eyebrow = '课程 · 手动添加';
         else if (item.allDay) eyebrow = '全天';
         if (item.homeworkReference)
           eyebrow = item.completed ? '✓ 课程作业 · 已完成' : '⏱ 课程作业 · 未完成';
@@ -977,6 +1006,7 @@
     }
 
     if (scheduleResult.status === 'fulfilled') {
+      state.scheduleReady = true;
       state.scheduleItems = scheduleResult.value.scheduleItems || [];
       renderScheduleItems();
     } else {
@@ -1078,19 +1108,49 @@
     elements.scheduleStart.value = toShanghaiInputValue(item?.startAt || fallback.startAt);
     elements.scheduleEnd.value = toShanghaiInputValue(item?.endAt || fallback.endAt);
     elements.scheduleAllDay.checked = Boolean(item?.allDay);
-    const isDeadline = item?.kind === 'deadline';
-    elements.scheduleDialog.dataset.kind = isDeadline ? 'deadline' : 'event';
-    elements.scheduleStart.closest('label').hidden = isDeadline;
-    elements.scheduleEnd.closest('label').querySelector('span').textContent = isDeadline
-      ? '截止时间'
-      : '结束时间';
-    elements.scheduleAllDay.closest('label').hidden = isDeadline;
-    elements.scheduleDialogTitle.textContent = item ? '编辑日程' : '新增日程';
-    if (isDeadline) elements.scheduleDialogTitle.textContent = '编辑 DDL';
+    elements.scheduleKind.value = ['deadline', 'course'].includes(item?.kind) ? item.kind : 'event';
+    elements.scheduleKind.disabled = Boolean(item);
+    updateScheduleKind();
     elements.scheduleFormStatus.textContent = '';
     resetConflictWarning();
     openDialog(elements.scheduleDialog);
     elements.scheduleTitle.focus();
+  }
+
+  function updateScheduleKind() {
+    const editing = Boolean(elements.scheduleId.value);
+    const kind = elements.scheduleKind.value;
+    const isDeadline = kind === 'deadline';
+    const repeating = kind === 'course' && !editing;
+    elements.scheduleDialog.dataset.kind = kind;
+    elements.scheduleStart.closest('label').hidden = isDeadline;
+    elements.scheduleStart.required = !isDeadline;
+    elements.scheduleStart.closest('label').querySelector('span').textContent = repeating
+      ? '首次上课时间'
+      : '开始时间';
+    elements.scheduleEnd.closest('label').querySelector('span').textContent = isDeadline
+      ? '截止时间'
+      : repeating
+        ? '首次下课时间'
+        : '结束时间';
+    elements.scheduleAllDay.closest('label').hidden = kind !== 'event';
+    if (kind !== 'event') elements.scheduleAllDay.checked = false;
+    elements.courseRepeat.hidden = !repeating;
+    elements.courseCount.disabled = !repeating;
+    elements.courseInterval.disabled = !repeating;
+    elements.scheduleDialogTitle.textContent = editing
+      ? isDeadline
+        ? '编辑 DDL'
+        : '编辑安排'
+      : '新增安排';
+    elements.scheduleKindHint.textContent = isDeadline
+      ? '个人 DDL 不依赖网络学堂；只标记截止时间，不占用此前整段时间'
+      : repeating
+        ? '选课、旁听都可以手动加入，不需要连接网络学堂。每周有不同时间或地点时，请分别添加；节假日和调停课需自行修改'
+        : kind === 'course'
+          ? '仅修改本次课程，其余重复课程保持不变'
+          : '';
+    resetConflictWarning();
   }
 
   async function submitImportant(event) {
@@ -1149,6 +1209,7 @@
     const publicId = elements.scheduleId.value;
     const endAt = shanghaiInputToIso(elements.scheduleEnd.value);
     const isDeadline = elements.scheduleDialog.dataset.kind === 'deadline';
+    const repeating = elements.scheduleDialog.dataset.kind === 'course' && !publicId;
     const startAt =
       isDeadline && endAt
         ? new Date(new Date(endAt).getTime() - 60000).toISOString()
@@ -1158,13 +1219,20 @@
       return;
     }
 
-    const conflictKey = `${publicId}:${startAt}:${endAt}`;
+    const conflictKey = JSON.stringify([
+      publicId,
+      startAt,
+      endAt,
+      elements.scheduleTitle.value,
+      elements.scheduleDescription.value,
+      elements.courseCount.value,
+      elements.courseInterval.value,
+    ]);
     elements.scheduleSubmit.disabled = true;
     elements.scheduleFormStatus.textContent = '正在检查时间冲突…';
     try {
-      const conflicts = isDeadline
-        ? []
-        : await checkScheduleConflicts({ publicId, startAt, endAt });
+      const conflicts =
+        isDeadline || repeating ? [] : await checkScheduleConflicts({ publicId, startAt, endAt });
       if (conflicts.length && state.conflictAcknowledgement !== conflictKey) {
         state.conflictAcknowledgement = conflictKey;
         showConflicts(conflicts);
@@ -1180,14 +1248,22 @@
         allDay: elements.scheduleAllDay.checked,
         timezone: 'Asia/Shanghai',
       };
+      if (!publicId) payload.kind = isDeadline ? 'deadline' : 'event';
+      if (repeating) {
+        payload.count = Number(elements.courseCount.value);
+        payload.intervalWeeks = Number(elements.courseInterval.value);
+        payload.allowConflicts = state.conflictAcknowledgement === conflictKey;
+      }
       if (publicId && elements.scheduleVersion.value) {
         payload.version = Number(elements.scheduleVersion.value);
       }
       elements.scheduleFormStatus.textContent = '正在保存…';
       await app.callApi(
-        publicId
-          ? `/workbench/schedule-items/${encodeURIComponent(publicId)}`
-          : '/workbench/schedule-items',
+        repeating
+          ? '/workbench/manual-courses'
+          : publicId
+            ? `/workbench/schedule-items/${encodeURIComponent(publicId)}`
+            : '/workbench/schedule-items',
         {
           method: publicId ? 'PATCH' : 'POST',
           body: JSON.stringify(payload),
@@ -1196,8 +1272,16 @@
       closeDialog(elements.scheduleDialog);
       await loadWorkbenchData();
     } catch (error) {
+      if (repeating && error.code === 'course_conflict') {
+        state.conflictAcknowledgement = conflictKey;
+        elements.conflictPanel.classList.remove('hidden');
+        elements.conflictPanel.textContent = error.message;
+        elements.scheduleSubmit.textContent = '仍然保存';
+        elements.scheduleFormStatus.textContent = '课程尚未加入，请确认冲突后再次保存';
+        return;
+      }
       elements.scheduleFormStatus.textContent =
-        error.status === 409 ? '日程已被更新，已刷新，请重新编辑。' : error.message;
+        error.status === 409 && publicId ? '日程已被更新，已刷新，请重新编辑。' : error.message;
       if (error.status === 409) await loadWorkbenchData();
     } finally {
       elements.scheduleSubmit.disabled = false;
@@ -1249,6 +1333,12 @@
       card.append(number, titleLabel);
       if (item.kind !== 'deadline') card.append(startLabel);
       card.append(endLabel, notesLabel);
+      const confirm = document.createElement('button');
+      confirm.type = 'button';
+      confirm.className = 'workbench-compact-action workbench-proposal-confirm';
+      confirm.textContent = '确认这一项';
+      confirm.addEventListener('click', () => confirmAgentProposals(card));
+      card.append(confirm);
       return card;
     });
     elements.agentProposals.replaceChildren(...cards);
@@ -1257,7 +1347,8 @@
 
   async function generateAgentPreview(event) {
     event.preventDefault();
-    if (!requireLogin()) return;
+    if (!requireLogin() || state.plannerSaving) return;
+    const owner = state.ownerKey;
     const message = elements.agentMessage.value.trim();
     if (!message) return;
     elements.agentGenerate.disabled = true;
@@ -1269,6 +1360,7 @@
         method: 'POST',
         body: JSON.stringify({ message }),
       });
+      if (state.ownerKey !== owner) return;
       state.proposals = result.suggestions || [];
       renderAgentProposals();
       const summary =
@@ -1277,15 +1369,18 @@
           : `已生成 ${state.proposals.length} 段安排。`;
       elements.agentStatus.textContent = `${summary}请逐条检查并确认，当前尚未写入。`;
     } catch (error) {
-      elements.agentStatus.textContent = error.message || '生成失败，请补充日期与时长后重试。';
+      if (state.ownerKey === owner)
+        elements.agentStatus.textContent = error.message || '生成失败，请补充日期与时长后重试。';
     } finally {
-      elements.agentGenerate.disabled = false;
+      elements.agentGenerate.disabled = !isLoggedIn() || state.plannerSaving;
     }
   }
 
-  async function confirmAgentProposals() {
-    if (!requireLogin() || !state.proposals.length) return;
-    const cards = [...elements.agentProposals.querySelectorAll('.workbench-agent-proposal')];
+  async function confirmAgentProposals(selectedCard = null) {
+    if (!requireLogin() || !state.proposals.length || state.plannerSaving) return;
+    const owner = state.ownerKey;
+    const allCards = [...elements.agentProposals.querySelectorAll('.workbench-agent-proposal')];
+    const cards = allCards.includes(selectedCard) ? [selectedCard] : allCards;
     const suggestions = cards.map((card) => {
       const { kind } = card.dataset;
       const endAt = shanghaiInputToIso(card.querySelector('.workbench-proposal-end').value);
@@ -1313,25 +1408,42 @@
       elements.agentStatus.textContent = '请检查标题、开始和结束时间；地点/备注最多 4000 字。';
       return;
     }
-    elements.agentConfirm.disabled = true;
+    state.plannerSaving = true;
+    const buttons = [
+      elements.agentConfirm,
+      elements.agentGenerate,
+      ...elements.agentProposals.querySelectorAll('button'),
+    ];
+    buttons.forEach((button) => {
+      button.disabled = true;
+    });
     elements.agentStatus.textContent = '正在再次检查冲突并保存…';
     try {
       const result = await app.callApi('/workbench/schedule-planner/confirm', {
         method: 'POST',
         body: JSON.stringify({ suggestions }),
       });
-      state.proposals = [];
-      renderAgentProposals();
+      if (state.ownerKey !== owner) return;
+      // Remove only successful cards. Do not re-render the other cards: that would
+      // erase their unsaved edits, including deliberately incomplete dates.
+      state.proposals = state.proposals.filter((_, index) => !cards.includes(allCards[index]));
+      cards.forEach((card) => card.remove());
+      elements.agentPreview.classList.toggle('hidden', !state.proposals.length);
       state.weekStart = getWeekStart(new Date(suggestions[0].startAt));
       await loadWorkbenchData();
-      elements.agentStatus.textContent = `已加入 ${result.created} 段安排；你可在上方时间图中继续编辑。`;
+      if (state.ownerKey === owner)
+        elements.agentStatus.textContent = `已加入 ${result.created} 段安排${state.proposals.length ? `，剩余 ${state.proposals.length} 项可继续修改和确认` : '；可在上方计划表中继续编辑'}。`;
     } catch (error) {
-      elements.agentStatus.textContent =
-        error.status === 409
-          ? '已有日程发生变化或出现冲突；计划未写入，请重新生成。'
-          : error.message || '保存失败，请重试。';
+      if (state.ownerKey === owner)
+        elements.agentStatus.textContent =
+          error.status === 409
+            ? '所选安排存在冲突，尚未写入；请修改对应卡片，或先单独确认其他项。'
+            : error.message || '保存失败，请重试。';
     } finally {
-      elements.agentConfirm.disabled = false;
+      state.plannerSaving = false;
+      buttons.forEach((button) => {
+        button.disabled = !isLoggedIn();
+      });
     }
   }
 
@@ -1715,9 +1827,11 @@
 
   elements.addImportant?.addEventListener('click', () => openImportantEditor());
   elements.addSchedule?.addEventListener('click', () => openScheduleEditor());
+  elements.scheduleKind?.addEventListener('change', updateScheduleKind);
   elements.weekPrevious?.addEventListener('click', () => shiftWeek(-7));
   elements.weekNext?.addEventListener('click', () => shiftWeek(7));
   elements.weekToday?.addEventListener('click', () => {
+    state.focusToday = true;
     state.weekStart = getWeekStart();
     if (isLoggedIn()) loadWorkbenchData();
     else renderWeekGrid();

@@ -26,6 +26,14 @@ const principles = [
   ],
 ];
 
+test('workbench guide matches five mixed events and individual or batch confirmation', () => {
+  const copy = STEPS.find((step) => step.id === 'workbench-ai-plan').body;
+  assert.match(copy, /自动识别最多 5 个事件/);
+  assert.match(copy, /普通安排与 DDL/);
+  assert.match(copy, /逐项修改、分别确认.*全部确认/);
+  assert.doesNotMatch(copy, /最多 3/);
+});
+
 test('the handbook three FREE statements exactly match the approved homepage wording', () => {
   const section = guide.match(/<div class="guide-values">([\s\S]*?)<\/section>/)[1];
   const cards = [...section.matchAll(/<article>([\s\S]*?)<\/article>/g)].map((match) => match[1]);

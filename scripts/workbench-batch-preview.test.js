@@ -55,13 +55,14 @@ test('preview uses the real batch parser and never inserts before confirmation',
   assert.equal(view.events[1].description, '罗姆楼10-206；带电脑');
 });
 
-test('four tasks return a readable limit error without accepting the first three', async () => {
+test('six tasks return a readable limit error without accepting the first five', async () => {
   const view = fixture();
   const result = await view.request('preview', {
-    message: '明天下午1点开组会1小时；2点整理数据1小时；3点写报告1小时；4点讨论实验1小时',
+    message:
+      '明天下午1点开组会1小时；2点整理数据1小时；3点写报告1小时；4点讨论实验1小时；5点读书1小时；6点跑步1小时',
   });
   assert.equal(result.status, 422);
-  assert.match(result.body.message, /3/);
+  assert.match(result.body.message, /5/);
   assert.deepEqual(view.events, []);
 });
 
