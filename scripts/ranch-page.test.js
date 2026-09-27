@@ -106,11 +106,19 @@ test('mobile ranch locks only its viewport, keeps dialogs scrollable, and shorte
   assert.match(css, /\.mobile-header-backdrop::before/);
   assert.match(css, /\.mobile-nav-compact::before/);
   assert.match(css, /filter: blur\(14px\)/);
-  assert.match(css, /body.ranch-page:not\(\.auth-page-body\) \.topbar::before/);
+  assert.match(css, /body.ranch-page \.ranch-sidebar-backdrop::before/);
   assert.match(css, /inset: 0 0 0 var\(--bbs-shell-width, 240px\)/);
   assert.match(css, /\[data-ranch-period='night'\] \.ranch-scenery/);
   assert.match(source, /button.setAttribute\('aria-label', button.textContent\)/);
   assert.match(source, /button.dataset.compactLabel = label/);
+});
+
+test('blurred sidebar scenery cannot expand or isolate the navigation scroll container', () => {
+  const css = read('public/ranch-page.css');
+  assert.match(source, /document.body.append\(sidebarBackdrop\)/);
+  assert.match(css, /\.ranch-sidebar-backdrop\s*\{[^}]*position: fixed;[^}]*overflow: hidden;/);
+  assert.doesNotMatch(css, /\.topbar::before/);
+  assert.match(css, /\.topbar\s*\{[^}]*isolation: auto;[^}]*scrollbar-width: none;/);
 });
 
 test('standalone ranch preserves existing data and purchases while the profile is only a linked scene', () => {

@@ -8,6 +8,14 @@
   }
   let midnightTimer;
   let openPanel = null;
+  // Keep filtered scenery outside the scrolling navigation: Safari may otherwise
+  // clip its fixed-position search and account controls to the sidebar bounds.
+  if (document.body.classList.contains('ranch-page')) {
+    const sidebarBackdrop = document.createElement('div');
+    sidebarBackdrop.className = 'ranch-sidebar-backdrop';
+    sidebarBackdrop.setAttribute('aria-hidden', 'true');
+    document.body.append(sidebarBackdrop);
+  }
   function syncEnvironment(root) {
     const season = environment.seasonAt();
     const period = document.body.classList.contains('theme-light') ? 'day' : 'night';
