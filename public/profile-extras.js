@@ -78,7 +78,7 @@
     if (key === 'rubber_rod') {
       const uid = window.freeBbsApp?.userState.uid;
       return uid
-        ? `<a class="electromagnetic-button" href="/profile?uid=${encodeURIComponent(uid)}#public-profile-ranch">去牧场摩擦起电 ↗</a>`
+        ? `<a class="electromagnetic-button" href="/ranch?uid=${encodeURIComponent(uid)}">去牧场摩擦起电 ↗</a>`
         : '';
     }
     if (key === 'fortune_bag')
@@ -285,9 +285,12 @@
       ${wool}
       ${own ? '<details class="ranch-rules"><summary>喂养与纪念规则</summary><p>每条鱼增加 24 小时饱腹时间，最多累计 30 天，容量不足一天不扣鱼。按北京时间，每个祥瑞日首次喂养产生 1 个黄金鱼骨，每日限 1 个；当天后续喂养及其他运势下的喂养均产生 1 个普通鱼骨。累计购买 10 个坚硬鱼骨，拥有至少 3 个黄金鱼骨和 10 个普通鱼骨，自动解锁「鱼骨达人」；不消耗鱼骨。Max 饿时趴下，不死亡、不丢失。</p></details>' : ''}
       <p id="profile-extras-message" role="status" aria-live="polite"></p>`;
+    window.FreeBbsRanchPage?.present(root, state, profileData, Boolean(own));
     const ownerSign = root.querySelector('.ranch-owner-sign');
-    ownerSign.textContent = profileData?.username || '牧场主人';
-    ownerSign.title = ownerSign.textContent;
+    if (ownerSign) {
+      ownerSign.textContent = profileData?.username || '牧场主人';
+      ownerSign.title = ownerSign.textContent;
+    }
     actor = ranch.adopted
       ? window.FreeBbsMaxRanch.mount(root.querySelector('[data-max-actor]'), {
           ...motion,
@@ -296,6 +299,7 @@
           shearedToday: Boolean(ranch.shearedToday),
         })
       : null;
+    window.FreeBbsRanchPage?.restorePanel(root);
     const untilNextShear = Math.max(
       0,
       (ranch.nextShearAtMs || 0) - (ranch.serverNowMs || Date.now()),

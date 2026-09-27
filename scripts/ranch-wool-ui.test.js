@@ -102,7 +102,7 @@ test('shearing requires wool, rubbing requires sheared wool AND a reusable rod',
 });
 test('rod inventory links safely to the current account ranch rather than consumes the tool', () => {
   const { api, app } = fixture();
-  assert.match(api.inventoryActions('rubber_rod'), /\/profile\?uid=u_test#public-profile-ranch/);
+  assert.match(api.inventoryActions('rubber_rod'), /\/ranch\?uid=u_test/);
   app.userState.uid = 'unsafe"<x>';
   assert.doesNotMatch(api.inventoryActions('rubber_rod'), /<x>/);
   app.userState.uid = '';
