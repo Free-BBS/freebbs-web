@@ -47,3 +47,13 @@ npm run test:shell-loading:browser
 ```
 
 浏览器检查需要 Puppeteer/puppeteer-core 与 Chrome；可通过 PUPPETEER_MODULE、CHROME_PATH 指定已有本地安装
+
+## PR #152 自动检查修复与扩大复查
+
+- CI 运行 36324178223 的 validate 在 `scripts/community-usability.test.js` 失败：加载提示新增对 `document.body.classList` 的读取，但 VM 测试未提供 document，导致 API 尚未调用就报错，随后 pending 队列为空；已在本地复现
+- 补齐个人主页和牧场的模拟页面环境，保留会话与请求版本隔离断言；同时覆盖正确加载提示、退出登录后的旧响应、新请求先完成后旧响应才到达、旧会话/旧请求报错、当前错误显示及重试恢复
+- 本轮全部 `scripts/*.test.js`：1127 项通过，零失败、零跳过
+- 再次通过全站页面壳与 1440 / 901 / 390 / 320 明暗模式浏览器检查，包括牧场完整顶栏、商城状态对比度和工具连续开关/重载；无未捕获页面异常
+- 执行 CI 清单中全部 112 条 Node 测试/语法检查命令：110 条成功；Shell 语法检查与 SQL 安全静态检查通过
+- 另外两条本地失败与本次改动无关：Windows 的 Max 文件解析测试原生进程以 3221225477 退出；Max 图片测试在清理临时 WebP 时 EBUSY。这两组在上述 GitHub Linux CI 日志中均通过，未通过删测试或修改业务逻辑规避，仍以新提交的 Linux CI 结果为准
+- 受控字体延迟/不可达回归通过；不将本机检查描述为完整 Linux CI，发展端构建、Python 与隔离 MySQL 仍由 GitHub Actions 验证

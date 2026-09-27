@@ -169,20 +169,22 @@ test('public profile activity uses verified viewer identity and cannot be shared
   assert.equal(response.payload.profile.activity.visibility, 'members');
 });
 
-test('profile loading ignores stale member responses after logout or a newer request', async () => {
+function createProfileLoadingHarness({ ranch = false } = {}) {
   const start = source.indexOf('let publicProfileRequestVersion = 0;');
   const end = source.indexOf('function normalizeAdminRole(', start);
   const pending = [];
   const rendered = [];
+  const messages = [];
   const context = {
+    document: { body: { classList: { contains: (name) => ranch && name === 'ranch-page' } } },
     isPublicProfilePage: () => true,
     getProfileUidFromQuery: () => 'u_alice01',
     isValidPublicUid: () => true,
-    setPublicProfileMessage: () => {},
+    setPublicProfileMessage: (message) => messages.push(message),
     userState: { token: 'member-session' },
     callApi: () =>
-      new Promise((resolve) => {
-        pending.push(resolve);
+      new Promise((resolve, reject) => {
+        pending.push({ resolve, reject });
       }),
     window: { FreeBbsProfileActivity: { render: (value) => rendered.push(value) } },
   };
@@ -199,19 +201,63 @@ test('profile loading ignores stale member responses after logout or a newer req
     context[`publicProfile${field}`] = null;
   }
   vm.runInNewContext(source.slice(start, end), context);
-  const oldRequest = context.loadPublicProfile();
-  context.userState.token = '';
-  pending.shift()({ profile: { activity: 'private' } });
-  await oldRequest;
-  assert.equal(rendered.length, 0);
-  const first = context.loadPublicProfile();
-  const second = context.loadPublicProfile();
-  pending.shift()({ profile: { activity: 'obsolete' } });
-  pending.shift()({ profile: { activity: 'public' } });
-  await Promise.all([first, second]);
-  assert.deepEqual(rendered, ['public']);
-  assert.match(
-    source,
-    /isPublicProfilePage\(\)\) \{\s*window.FreeBbsProfileActivity\?\.render\(null\);\s*loadPublicProfile\(\)/,
-  );
-});
+  return { context, pending, rendered, messages };
+}
+
+for (const ranch of [false, true]) {
+  const page = ranch ? 'ranch' : 'profile';
+  const loading = ranch ? '正在走进牧场…' : '正在加载个人主页...';
+  test(`${page} loading ignores stale member responses after logout or a newer request`, async () => {
+    const { context, pending, rendered, messages } = createProfileLoadingHarness({ ranch });
+    const oldRequest = context.loadPublicProfile();
+    assert.equal(messages.at(-1), loading);
+    assert.equal(pending.length, 1, 'loading must reach the API request');
+    context.userState.token = '';
+    pending.shift().resolve({ profile: { activity: 'private' } });
+    await oldRequest;
+    assert.equal(rendered.length, 0);
+    const first = context.loadPublicProfile();
+    const second = context.loadPublicProfile();
+    const obsolete = pending.shift();
+    pending.shift().resolve({ profile: { activity: 'public' } });
+    await second;
+    obsolete.resolve({ profile: { activity: 'obsolete' } });
+    await first;
+    assert.deepEqual(rendered, ['public']);
+    assert.equal(messages.at(-1), '');
+    assert.match(
+      source,
+      /isPublicProfilePage\(\)\) \{\s*window.FreeBbsProfileActivity\?\.render\(null\);\s*loadPublicProfile\(\)/,
+    );
+  });
+
+  test(`${page} ignores stale request errors but displays a current failure and can retry`, async () => {
+    const { context, pending, rendered, messages } = createProfileLoadingHarness({ ranch });
+    const oldSession = context.loadPublicProfile();
+    context.userState.token = 'another-session';
+    pending.shift().reject(new Error('old account error'));
+    await oldSession;
+    assert.deepEqual(messages, [loading]);
+
+    const oldRequest = context.loadPublicProfile();
+    const newRequest = context.loadPublicProfile();
+    const obsolete = pending.shift();
+    pending.shift().resolve({ profile: { activity: 'current' } });
+    await newRequest;
+    obsolete.reject(new Error('stale error'));
+    await oldRequest;
+    assert.equal(messages.at(-1), '');
+    assert.deepEqual(rendered, ['current']);
+
+    const failed = context.loadPublicProfile();
+    pending.shift().reject(new Error('网络暂时不可用'));
+    await failed;
+    assert.equal(messages.at(-1), '网络暂时不可用');
+    const retry = context.loadPublicProfile();
+    assert.equal(messages.at(-1), loading);
+    pending.shift().resolve({ profile: { activity: 'recovered' } });
+    await retry;
+    assert.equal(messages.at(-1), '');
+    assert.deepEqual(rendered, ['current', 'recovered']);
+  });
+}
