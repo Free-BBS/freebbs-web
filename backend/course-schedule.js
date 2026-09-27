@@ -1,5 +1,6 @@
 const crypto = require('node:crypto');
 const { COURSE_SECTIONS } = require('./course-sections');
+const { normalizeHtmlText } = require('./tsinghua-learn-connector');
 
 const DAY_MS = 86400000;
 const MAX_WEEKS = 53;
@@ -89,14 +90,31 @@ function parseTimes(text) {
 }
 
 function parseCourseSchedule(course) {
-  const text = String(course?.scheduleText || '')
+  let text = String(course?.scheduleText || '')
     .normalize('NFKC')
     .replace(/[—–－]/g, '-')
     .replace(/[～]/g, '~')
     .replace(/\r/g, '')
     .trim();
-  if (!text) return { sessions: [], issue: '网络学堂尚未提供该课程的上课时间。' };
+  if (!text)
+    return {
+      sessions: [],
+      issue: '此次同步未取得课程时间，可重新同步或在“新增安排”中手动添加课程。',
+    };
   if (text.length > 2000) return { sessions: [], issue: '上课时间内容过长，需要核对。' };
+  if (/…|\.{3}/.test(text))
+    return { sessions: [], issue: '课程时间被截断，请同步完整时间或手动添加。' };
+  // Only the known campus provider uses “节” to denote these six large blocks.
+  if (course.sectionSystem === 'tsinghua-large') {
+    text = text
+      .replace(/第([1-6](?:\s*[,、]\s*[1-6])*)节/g, (_, list) =>
+        list
+          .split(/[,、]/)
+          .map((part) => `第${part.trim()}大节`)
+          .join('、'),
+      )
+      .replace(/第([1-6])\s*[-~至到]\s*([1-6])节/g, '第$1-$2大节');
+  }
   if (/单双|双单/.test(text))
     return { sessions: [], issue: '单双周说明存在歧义，请分别注明教学周。' };
   if (/停课|调课|补课|不上课|取消|另行|待定|除外|除[^;\n]*周|节假日|\d{1,2}月\d{1,2}/.test(text)) {
@@ -148,7 +166,14 @@ function parseCourseSchedule(course) {
         } else if (!leadingWeeks) currentWeeks = null;
         if (!currentWeeks) throw new Error('缺少明确教学周范围，不能假设整学期每周上课。');
         const segmentEnd = leadingWeeks && trailing.length ? trailing[0].index : nextIndex;
-        const segment = clause.slice(day.index + day[0].length, segmentEnd);
+        let segment = clause.slice(day.index + day[0].length, segmentEnd);
+        // Preserve the room belonging to each time, not just one room per course.
+        const room = /[,，]\s*([^,，]+)$/.exec(segment);
+        let location = '';
+        if (room && !/周|节|星期|礼拜|\d\s*:|:\s*\d/.test(room[1])) {
+          location = room[1].trim();
+          segment = segment.slice(0, room.index);
+        }
         const parityTokens = [...segment.matchAll(/([单双])(?:周|(?=\)))/g)].map(
           (match) => match[1],
         );
@@ -162,7 +187,12 @@ function parseCourseSchedule(course) {
         if (!sessionWeeks.length) throw new Error('周次和单双周条件没有匹配的教学周。');
         const dayNumber = WEEKDAY[day[1]] || Number(day[1]);
         for (const time of parseTimes(segment)) {
-          sessions.push({ weekday: dayNumber, weeks: sessionWeeks, ...time });
+          sessions.push({
+            weekday: dayNumber,
+            weeks: sessionWeeks,
+            ...time,
+            ...(location ? { location } : {}),
+          });
         }
       }
     }
@@ -183,7 +213,10 @@ function projectCourseSchedules(
   const uniqueCourses = new Map();
   for (const course of Array.isArray(courses) ? courses : []) {
     if (typeof course?.sourceReference === 'string' && course.sourceReference) {
-      uniqueCourses.set(course.sourceReference, course);
+      uniqueCourses.set(course.sourceReference, {
+        ...course,
+        title: normalizeHtmlText(course.title, 200),
+      });
     }
   }
   let parsedCourses = 0;
@@ -228,7 +261,11 @@ function projectCourseSchedules(
           courseReference: course.sourceReference,
           semesterId,
           title: course.title || '未命名课程',
-          description: [course.locationText, course.teacher, `第 ${week} 教学周`]
+          description: [
+            session.location || course.locationText,
+            course.teacher,
+            `第 ${week} 教学周`,
+          ]
             .filter(Boolean)
             .join(' · '),
           startAt: startAt.toISOString(),

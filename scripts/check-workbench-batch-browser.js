@@ -309,11 +309,14 @@ async function main() {
     assert.equal(preview.events.length, beforeThree.length + 3);
     report.checks.push('Three-event batch previews and saves all three');
 
-    stage = 'four-event batch is rejected without partial writes';
+    stage = 'six-event batch is rejected without partial writes';
     const beforeFour = snapshot();
-    await generate('后天上午8点开一会；9点开二会；10点开三会；11点开四会，四个会都是1小时', 422);
+    await generate(
+      '后天上午8点开一会；9点开二会；10点开三会；11点开四会；下午2点开五会；3点开六会，各1小时',
+      422,
+    );
     checkUnchanged(beforeFour);
-    report.checks.push('Four-event batch: HTTP 422, no partial preview or persistence');
+    report.checks.push('Six-event batch: HTTP 422, no partial preview or persistence');
 
     stage = 'overlap within a preview batch is rejected';
     const beforeOverlap = snapshot();

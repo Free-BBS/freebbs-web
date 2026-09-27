@@ -153,6 +153,14 @@
     render();
     status.textContent = '已撤销上一步。';
   });
+  byId('dye-reset').addEventListener('click', () => {
+    if (!editable()) return;
+    checkpoint();
+    design = data.blank();
+    pointer = null;
+    render();
+    status.textContent = '羊毛和脸部已恢复原色，可以撤销；点击“保存到我的羊”后生效';
+  });
   const palettes = {
     dawn: ['#eeaf65', '#e78199', '#a28cbd'],
     lake: ['#7e9bc7', '#79ad96', '#6c82bc'],

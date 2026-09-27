@@ -8,7 +8,7 @@
     c: 'C',
     cpp: 'C++',
     python: 'Python',
-    matlab: 'MATLAB / Octave',
+    matlab: 'Octave（MATLAB 兼容）',
     verilog: 'Verilog',
   };
   function parseReference(value, origin) {

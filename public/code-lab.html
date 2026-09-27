@@ -88,13 +88,42 @@
           </div>
         </header>
         <nav class="lab-languages" aria-label="实验语言">
-          <button type="button" data-language="c">C</button
-          ><button type="button" data-language="cpp">C++</button
-          ><button type="button" data-language="python">Python</button
-          ><button type="button" data-language="matlab">MATLAB</button
-          ><button type="button" data-language="verilog">Verilog</button>
+          <button type="button" data-language="c">C</button>
+          <button type="button" data-language="cpp">C++</button>
+          <button type="button" data-language="python">Python</button>
+          <button type="button" data-language="matlab">Octave（MATLAB 兼容）</button>
+          <button type="button" data-language="verilog">Verilog</button>
         </nav>
         <div id="lab-status" role="status" aria-live="polite">正在检查运行环境…</div>
+        <section class="lab-environment" aria-labelledby="lab-environment-title">
+          <h2 id="lab-environment-title">运行环境说明</h2>
+          <p id="lab-runtime-note" aria-live="polite">
+            代码在服务器端隔离环境中运行，实际引擎与限制将在选择语言后显示
+          </p>
+          <details class="lab-environment-details">
+            <summary>通用限制与软件说明</summary>
+            <ul>
+              <li>
+                运行容器无网络，不连接你的电脑文件或本机开发环境；临时文件随运行结束清理，请另行保存代码与结果
+              </li>
+              <li>
+                当前单次运行内存上限 512 MiB、最长 180 秒，另有 CPU
+                时间、进程数及输出限制；超过限制可能提前终止
+              </li>
+              <li>
+                C17、C++17 与 SystemVerilog 2012
+                是语言标准，不是引擎版本号；软件版本及可用库以实际部署为准
+              </li>
+              <li>
+                不同引擎、版本和数值精度可能产生不同结果，请结合课程要求核验；分享到讨论区会生成公开的代码与结果快照
+              </li>
+            </ul>
+            <p id="lab-octave-license-note" hidden>
+              GNU Octave 绘图链路还使用 gnuplot 与 Ghostscript；Ghostscript
+              的许可适配仍待核实，本说明不代表合规审核已完成
+            </p>
+          </details>
+        </section>
         <div class="lab-workspace">
           <section class="lab-source-panel" aria-label="源代码编辑器">
             <div class="lab-panel-title">
@@ -151,7 +180,6 @@
                 placeholder="每次 input / scanf 读取的数据按行填写"
               ></textarea>
             </details>
-            <p class="lab-hint" id="lab-runtime-note"></p>
           </section>
           <section class="lab-output-panel" aria-label="实验结果">
             <div class="lab-panel-title">

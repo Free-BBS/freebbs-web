@@ -20,6 +20,7 @@ const PREVIEW_PAGES = {
   '/about': 'about.html',
   '/staff': 'staff.html',
   '/laboratory': 'laboratory.html',
+  '/code-lab': 'code-lab.html',
   '/pbl': 'pbl.html',
   '/creative-workshop': 'creative-workshop.html',
   '/tool-workshop': 'tool-workshop.html',
@@ -181,6 +182,11 @@ function createOnboardingPreview({ now = Date.now, growthRandom, extraPages = {}
   const discussion = discussionFixture();
   const workbench = createWorkbenchPreviewApi({
     now,
+    campusNotices: Array.from({ length: 8 }, (_, index) => ({
+      title: `模拟公告 · 第 ${index + 1} 次课程提醒`,
+      body: '这是用于检查公告排序和区域滚动的本地演示内容，不是真实课程通知',
+      publishedAt: new Date(now() - (7 - index) * 86400000).toISOString(),
+    })),
     campusCourses: [
       {
         sourceReference: 'learn:course:demo-math',

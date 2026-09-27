@@ -390,11 +390,11 @@ test('ambiguous multi-task requests delegate the entire sentence instead of retu
     assert.equal(parseKnownScheduleMessage(message, sept24Afternoon), null, message);
 });
 
-test('more than three independent tasks are rejected without truncating', () => {
+test('more than five independent tasks are rejected without truncating', () => {
   assert.throws(
     () =>
       parseKnownScheduleMessage(
-        '明天9点开会；10点读书；11点讨论；下午2点写作，各1小时',
+        '明天9点开会；10点读书；11点讨论；下午2点写作；3点实验；4点复习，各1小时',
         sept24Afternoon,
       ),
     { status: 422 },
@@ -407,7 +407,7 @@ test('batch extraction rejects missing, excessive, nested and incomplete tasks',
     undefined,
     {},
     [],
-    [task, task, task, task],
+    [task, task, task, task, task, task],
     [{ kind: 'batch', tasks: [task] }],
     [task, { kind: 'clarify' }],
   ]) {
@@ -523,6 +523,7 @@ test('batch preview API recognizes 2 or 3 tasks without invoking a real or canne
   for (const [count, message] of [
     [2, twoMeetings.replace('今天', '明天')],
     [3, '明天上午9点开会；10点读书；11点讨论，各1小时'],
+    [5, '明天上午9点开会，10点读书，然后11点讨论，下午2点写作，还有3点实验，各1小时'],
   ]) {
     const response = await fetch(`${base}/preview`, {
       method: 'POST',
@@ -541,10 +542,12 @@ test('batch preview API recognizes 2 or 3 tasks without invoking a real or canne
   const response = await fetch(`${base}/preview`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: '明天9点开会；10点读书；11点讨论；下午2点写作，各1小时' }),
+    body: JSON.stringify({
+      message: '明天9点开会；10点读书；11点讨论；下午2点写作；3点实验；4点复习，各1小时',
+    }),
   });
   assert.equal(response.status, 422);
-  assert.match((await response.json()).message, /最多.*3/);
+  assert.match((await response.json()).message, /最多.*5/);
 });
 
 test('Agent batch previews retain every task and prompt requires scoped inheritance and descriptions', async (t) => {
@@ -578,7 +581,7 @@ test('Agent batch previews retain every task and prompt requires scoped inherita
   assert.equal((await response.json()).taskCount, 2);
   const prompt = calls.find((call) => call.agentPayload).agentPayload.message;
   assert.match(prompt, /"kind":"batch"/);
-  assert.match(prompt, /1–3 项/);
+  assert.match(prompt, /1–5 项/);
   assert.match(prompt, /绝不能只返回第一件/);
   assert.match(prompt, /description/);
 });

@@ -53,6 +53,70 @@ async function requestJson(baseUrl, path, options = {}) {
   };
 }
 
+test('personal DDL is independently created, persisted and read back as a deadline', async (t) => {
+  let saved;
+  const base = await startTestServer(t, {
+    user: { id: 7 },
+    pool: {
+      async execute(sql, parameters) {
+        if (sql.includes('INSERT INTO schedule_items')) {
+          assert.equal(parameters[1], 7);
+          assert.equal(parameters.at(-1), 'manual:deadline');
+          saved = {
+            public_id: parameters[0],
+            title: parameters[3],
+            description: parameters[4],
+            start_at: parameters[5],
+            end_at: parameters[6],
+            source_type: 'manual',
+            source_reference: parameters.at(-1),
+          };
+          return [{ affectedRows: 1 }];
+        }
+        assert.deepEqual(parameters, [saved.public_id, 7]);
+        return [[saved]];
+      },
+    },
+  });
+  const body = {
+    title: '提交科研报告',
+    description: '与课程作业无关',
+    startAt: '2026-10-02T15:58:00Z',
+    endAt: '2026-10-02T15:59:00Z',
+    kind: 'deadline',
+  };
+  const result = await requestJson(base, '/schedule-items', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  assert.equal(result.response.status, 201);
+  assert.equal(result.payload.scheduleItem.kind, 'deadline');
+  assert.equal(result.payload.scheduleItem.description, body.description);
+  for (const bad of [
+    { ...body, allDay: true },
+    { ...body, startAt: '2026-10-01T00:00:00Z' },
+    { ...body, kind: 'course' },
+  ]) {
+    assert.equal(
+      (await requestJson(base, '/schedule-items', { method: 'POST', body: JSON.stringify(bad) }))
+        .response.status,
+      400,
+    );
+  }
+});
+
+test('manual courses authenticate and validate without requiring a campus connector', async (t) => {
+  const base = await startTestServer(t, { user: { id: 7 }, pool: {} });
+  assert.equal(
+    (await requestJson(base, '/manual-courses', { method: 'POST', auth: false })).response.status,
+    401,
+  );
+  assert.equal(
+    (await requestJson(base, '/manual-courses', { method: 'POST', body: '{}' })).response.status,
+    400,
+  );
+});
+
 test('computes a Monday-to-Monday week in Asia/Shanghai', () => {
   const range = getDefaultWeekRange(new Date('2026-08-01T08:00:00.000Z'));
   assert.equal(range.start.toISOString(), '2026-07-26T16:00:00.000Z');

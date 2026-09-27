@@ -7476,7 +7476,35 @@ async function loadPublicProfile() {
     return;
   }
 
-  const profileUid = getProfileUidFromQuery();
+  publicProfileRequestVersion += 1;
+  const version = publicProfileRequestVersion;
+  let profileUid = getProfileUidFromQuery();
+  const profileQuery = new URLSearchParams(window.location.search);
+  const ownRanch =
+    document.body.classList.contains('ranch-page') &&
+    !profileQuery.has('uid') &&
+    !profileQuery.has('studentId');
+
+  if (ownRanch) {
+    setPublicProfileMessage('正在确认登录状态…');
+    await sessionReady;
+    if (version !== publicProfileRequestVersion) return;
+    if (!userState.isLoggedIn || !isValidPublicUid(userState.uid)) {
+      setPublicProfileMessage(
+        userState.token
+          ? '暂时无法确认登录状态，请刷新重试'
+          : '登录后即可照顾你的 Max，请点击右上角头像登录',
+      );
+      return;
+    }
+    profileUid = userState.uid;
+    profileQuery.set('uid', profileUid);
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}?${profileQuery}${window.location.hash}`,
+    );
+  }
 
   if (!isValidPublicUid(profileUid)) {
     if (publicProfileName) {
@@ -7492,8 +7520,6 @@ async function loadPublicProfile() {
   setPublicProfileMessage(
     document.body.classList.contains('ranch-page') ? '正在走进牧场…' : '正在加载个人主页...',
   );
-  publicProfileRequestVersion += 1;
-  const version = publicProfileRequestVersion;
   const profileSessionToken = userState.token;
 
   try {

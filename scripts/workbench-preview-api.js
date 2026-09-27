@@ -5,10 +5,12 @@ const {
   validateSuggestion,
 } = require('../backend/workbench-schedule-planner');
 const { projectCourseSchedules, normalizeMonday } = require('../backend/course-schedule');
+const { expandManualCourse } = require('../backend/manual-courses');
 
 function createWorkbenchPreviewApi({
   now = Date.now,
   campusCourses = [],
+  campusNotices = [],
   semesterId = 'preview-semester',
 } = {}) {
   let firstWeekMonday = null;
@@ -116,7 +118,7 @@ function createWorkbenchPreviewApi({
         semester: {
           id: semesterId,
           courses: campusCourses,
-          notifications: [],
+          notifications: campusNotices,
           fetchedAt: new Date(now()).toISOString(),
           syncStatus: 'complete',
         },
@@ -172,6 +174,36 @@ function createWorkbenchPreviewApi({
         return result({ importantItem: importantItems[index] });
       }
     }
+    if (route === '/api/workbench/manual-courses' && method === 'POST') {
+      try {
+        const items = expandManualCourse(body);
+        if (events.some((item) => item.sourceReference === items[0].sourceReference)) {
+          return result({ message: '这组课程已经添加' }, 409);
+        }
+        if (
+          body.allowConflicts !== true &&
+          items.some((item) =>
+            [...events, ...courseProjection().events].some(
+              (other) => other.kind !== 'deadline' && overlaps(item, other),
+            ),
+          )
+        ) {
+          return result(
+            { message: '重复课程与已有安排重叠，请核对后再次保存', code: 'course_conflict' },
+            409,
+          );
+        }
+        events.push(
+          ...items.map((item) => {
+            nextId += 1;
+            return { ...item, publicId: `ws_preview_${nextId}`, status: 'confirmed', version: 1 };
+          }),
+        );
+        return result({ created: items.length }, 201);
+      } catch (error) {
+        return result({ message: error.message }, error.status || 500);
+      }
+    }
     if (route === '/api/workbench/schedule-items') {
       if (method === 'GET') {
         const from = new Date(url.searchParams.get('from') || 0).getTime();
@@ -190,7 +222,7 @@ function createWorkbenchPreviewApi({
           publicId: `ws_preview_${nextId}`,
           sourceType: 'manual',
           status: 'confirmed',
-          kind: 'event',
+          kind: body.kind === 'deadline' ? 'deadline' : 'event',
           version: 1,
         };
         events.push(item);
@@ -298,6 +330,7 @@ function createWorkbenchPreviewApi({
     importantItems,
     communityNotices,
     campusCourses,
+    campusNotices,
     courseProjection,
     setCommunityUnavailable(value) {
       communityUnavailable = Boolean(value);

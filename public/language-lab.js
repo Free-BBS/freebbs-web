@@ -93,15 +93,16 @@
     $('lab-speed-label').hidden = language !== 'python';
     $('lab-python-controls').hidden = language !== 'python';
     $('lab-runtime-note').textContent = {
-      c: 'C17 · GCC · x86-64 实际运行，MIPS32 / RISC-V64 交叉编译汇编；标准输入在下方填写。',
-      cpp: 'C++17 · GCC · x86-64 实际运行，MIPS32 / RISC-V64 交叉编译汇编；支持标准库。',
+      c: '实际引擎：GCC · C17 · 程序仅在 x86-64 上执行，MIPS32 / RISC-V64 仅生成汇编，不运行对应架构的程序',
+      cpp: '实际引擎：GCC · C++17 · 程序仅在 x86-64 上执行，MIPS32 / RISC-V64 仅生成汇编，不运行对应架构的程序',
       python:
-        '每行执行前显示变量；可在运行中调速、暂停和单步。最多 1500 次观察 / 180 秒。输入请预先填写。',
+        '实际引擎：CPython · 每行执行前观察变量，支持调速、暂停和单步，最多 1500 次观察 / 180 秒；标准输入请预先填写，不继承本机已安装的第三方库',
       matlab:
-        'GNU Octave 兼容模式，非 MathWorks MATLAB；支持 plot、subplot、频谱等绘图，最多 6 张图。部分专有工具箱不兼容。',
+        '实际引擎：GNU Octave（MATLAB 兼容）· 非 MathWorks MATLAB，不包含其专有工具箱，不保证全部语法与结果一致；支持 plot、subplot 等绘图，最多 6 张图',
       verilog:
-        'Icarus Verilog（支持部分 SystemVerilog 2012）。自动采集 VCD；请在测试平台中使用 $finish 结束仿真。最多 40 路、每路 2000 个跳变。',
+        '实际引擎：Icarus Verilog / vvp · 支持部分 SystemVerilog 2012，仅进行数字仿真，不包含 FPGA 综合与硬件运行；请使用 $finish 结束仿真，最多 40 路信号、每路 2000 个跳变',
     }[language];
+    $('lab-octave-license-note').hidden = language !== 'matlab';
   }
   function clearResult() {
     result = null;

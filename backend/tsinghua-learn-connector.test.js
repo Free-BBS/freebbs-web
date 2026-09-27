@@ -32,6 +32,8 @@ function createFixtureFetch({
   noticeStatus = 200,
   overlapHomeworkStatuses = false,
   coursePayload,
+  timePayload,
+  timeStatus = 200,
 } = {}) {
   const stats = {
     active: 0,
@@ -78,6 +80,10 @@ function createFixtureFetch({
       }
       if (url.pathname.includes('/loadCourseBySemesterId/')) {
         return jsonResponse(coursePayload || { resultList: courses });
+      }
+      if (url.pathname === '/b/kc/v_wlkc_xk_sjddb/detail') {
+        const course = courses.find((entry) => entry.wlkcid === url.searchParams.get('id'));
+        return jsonResponse(timePayload ?? (course ? [course.skddxx] : []), { status: timeStatus });
       }
       if (url.pathname.endsWith('/pageListXs')) {
         if (noticeStatus !== 200) {
@@ -149,6 +155,65 @@ function createFixtureFetch({
   return fetchImpl;
 }
 
+test('time/location uses its separate read endpoint and course entities are decoded', async () => {
+  const times = ['第1-16周星期一第3节，新水利馆404', '第1-16周星期三第3、4节，建华/经管新楼A204'];
+  const snapshot = await syncTsinghuaLearn({
+    authorizedFetch: createFixtureFetch({
+      coursePayload: {
+        resultList: [{ wlkcid: 'course_1', kcm: '行云流水&amp;mdash;&mdash;工科的中文写作' }],
+      },
+      timePayload: times,
+    }),
+    minimumRequestIntervalMs: 0,
+  });
+  assert.equal(snapshot.courses[0].title, '行云流水——工科的中文写作');
+  assert.equal(snapshot.courses[0].scheduleText, times.join('; '));
+  assert.equal(snapshot.courses[0].sectionSystem, 'tsinghua-large');
+  const { projectCourseSchedules } = require('./course-schedule');
+  const projected = projectCourseSchedules(snapshot.courses, {
+    semesterId: '2026-2027-1',
+    firstWeekMonday: '2026-09-21',
+  });
+  assert.equal(projected.events.length, 48);
+  assert.ok(projected.events[0].description.includes('新水利馆404'));
+  assert.ok(projected.events[1].description.includes('建华/经管新楼A204'));
+  assert.equal(projected.events[1].startAt, '2026-09-23T05:30:00.000Z');
+  assert.equal(projected.events[2].endAt, '2026-09-23T08:55:00.000Z');
+});
+
+test('time/location errors stay partial while homework remains available', async () => {
+  const result = await syncTsinghuaLearn({
+    authorizedFetch: createFixtureFetch({ timeStatus: 503 }),
+    minimumRequestIntervalMs: 0,
+  });
+  assert.equal(result.status, 'partial');
+  assert.equal(result.homework.length, 1);
+  assert.equal(result.errors[0].resource, 'course-time');
+  assert.ok(result.courses[0].calendarSyncWarning);
+  const empty = await syncTsinghuaLearn({
+    authorizedFetch: createFixtureFetch({ timePayload: [] }),
+    minimumRequestIntervalMs: 0,
+  });
+  assert.equal(empty.courses[0].scheduleText, '');
+});
+
+test('time endpoint allows exactly one bounded id and never accepts arbitrary queries or writes', () => {
+  const path = '/b/kc/v_wlkc_xk_sjddb/detail';
+  assert.ok(validateLearnApiPath(`${path}?id=course_1`, 'GET'));
+  for (const query of [
+    '',
+    '?id=',
+    '?id=one&id=two',
+    '?id=one&url=https://evil.test',
+    '?id=../evil',
+  ]) {
+    assert.throws(() => validateLearnApiPath(path + query, 'GET'));
+  }
+  assert.throws(() => validateLearnApiPath(`${path}?id=course_1`, 'POST'));
+  assert.equal(normalizeHtmlText('A&nbsp;&amp;&nbsp;B&mdash;C&middot;D&#8211;E'), 'A & B—C·D–E');
+  assert.equal(normalizeHtmlText('&#999999999;安全'), '安全');
+});
+
 test('normalizes HTML to inert text and parses Shanghai timestamps explicitly', () => {
   assert.equal(
     normalizeHtmlText('<script>steal()</script><p>作业 &amp; 安排</p><img src=x onerror=alert(1)>'),
@@ -159,7 +224,10 @@ test('normalizes HTML to inert text and parses Shanghai timestamps explicitly', 
   assert.equal(normalizeShanghaiDate('2026-02-30 12:00:00'), null);
   assert.equal(normalizeShanghaiDate('2026-08-03 23:59:00.0'), '2026-08-03T15:59:00.000Z');
   assert.equal(normalizeShanghaiDate('2026-08-03 23:59:00.123'), '2026-08-03T15:59:00.123Z');
-  assert.equal(normalizeShanghaiDate(Date.parse('2026-08-03T15:59:00Z')), '2026-08-03T15:59:00.000Z');
+  assert.equal(
+    normalizeShanghaiDate(Date.parse('2026-08-03T15:59:00Z')),
+    '2026-08-03T15:59:00.000Z',
+  );
   assert.equal(normalizeShanghaiDate('2026-02-30 12:00:00.0'), null);
 });
 
@@ -317,8 +385,8 @@ test('crawls semester, courses, notices and homework into a normalized snapshot'
   assert.equal(snapshot.importantItems.length, 1);
   assert.equal(snapshot.importantItems[0].status, 'draft');
   assert.equal(snapshot.importantItems[0].dueAt, '2026-08-03T15:59:00.000Z');
-  assert.equal(snapshot.evidence.requestCount, 7);
-  assert.equal(snapshot.evidence.responses.length, 7);
+  assert.equal(snapshot.evidence.requestCount, 8);
+  assert.equal(snapshot.evidence.responses.length, 8);
   assert.match(snapshot.evidence.responses[0].contentSha256, /^[a-f0-9]{64}$/);
   assert.equal(snapshot.evidence.safeguards.credentialsExposedToCaller, false);
   assert.equal(snapshot.evidence.safeguards.rawResponsesStored, false);
@@ -418,7 +486,7 @@ test('stops scheduling more courses when the upstream rate-limits a sync', async
     (error) => error.code === 'upstream_rate_limited',
   );
 
-  assert.ok(authorizedFetch.stats.calls.length <= 6);
+  assert.ok(authorizedFetch.stats.calls.length <= 9); // Three catalog + three in-flight time/notice pairs.
 });
 
 test('records cookie presence without retaining its value and rejects unbounded limits', async () => {
@@ -479,21 +547,26 @@ test('advertises implemented and blocked connector boundaries honestly', () => {
   assert.equal(verifiedCapability.liveSyncState, 'verified');
 });
 
-
 test('sync retains submitted homework with unknown dates and reports a partial snapshot', async () => {
   const fixture = createFixtureFetch();
   const snapshot = await syncTsinghuaLearn({
     minimumRequestIntervalMs: 0,
     authorizedFetch: async (url, options) => {
-      if (url.pathname.endsWith('/zyListYjwg')) return jsonResponse({
-        object: { aaData: [{ zyid: 'submitted1', xszyid: 'student1', bt: '作业', jzsj: '待定' }] },
-      });
+      if (url.pathname.endsWith('/zyListYjwg'))
+        return jsonResponse({
+          object: {
+            aaData: [{ zyid: 'submitted1', xszyid: 'student1', bt: '作业', jzsj: '待定' }],
+          },
+        });
       return fixture(url, options);
     },
   });
   assert.equal(snapshot.status, 'partial');
   assert.equal(snapshot.homework.length, 2);
-  assert.equal(snapshot.homework.find((item) => item.status === 'submitted').deadlineUnverified, true);
+  assert.equal(
+    snapshot.homework.find((item) => item.status === 'submitted').deadlineUnverified,
+    true,
+  );
   assert.equal(snapshot.errors.length, 0);
   assert.equal(snapshot.warnings[0].code, 'homework_deadline_unrecognized');
 });
