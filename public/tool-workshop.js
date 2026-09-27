@@ -26,7 +26,9 @@
   const gallery = document.getElementById('tool-gallery');
   const galleryStatus = document.getElementById('tool-gallery-status');
   const viewer = document.getElementById('tool-viewer');
-  const viewerFrame = document.getElementById('tool-viewer-frame');
+  let viewerFrame = document.getElementById('tool-viewer-frame');
+  const viewerStatus = document.getElementById('tool-viewer-status');
+  let viewerTimer;
   const viewerTitle = document.getElementById('tool-viewer-title');
   const viewerMeta = document.getElementById('tool-viewer-meta');
   const shareButton = document.getElementById('tool-share-discussion');
@@ -271,25 +273,67 @@
     }
   }
 
+  function loadViewer() {
+    if (!state.active || !viewer.open) return;
+    clearTimeout(viewerTimer);
+    // Each opening owns a fresh browsing context. Do not race an old srcdoc=''
+    // navigation or carry a closed tool's scripts into the next tool.
+    const frame = viewerFrame.cloneNode(false);
+    frame.removeAttribute('srcdoc');
+    frame.setAttribute('aria-busy', 'true');
+    frame.style.visibility = 'hidden'; // Keep a real viewport for canvas/layout scripts.
+    viewerStatus.hidden = false;
+    viewerStatus.textContent = '正在载入小工具…';
+    frame.addEventListener(
+      'load',
+      () => {
+        if (viewerFrame !== frame || !viewer.open) return;
+        clearTimeout(viewerTimer);
+        frame.setAttribute('aria-busy', 'false');
+        frame.style.visibility = '';
+        viewerStatus.hidden = true;
+      },
+      { once: true },
+    );
+    frame.srcdoc = sandboxDocument(state.active.html, true);
+    viewerFrame.replaceWith(frame);
+    viewerFrame = frame;
+    viewerTimer = setTimeout(() => {
+      if (viewerFrame !== frame || !viewer.open) return;
+      viewerStatus.textContent = '载入时间较长，可点击「重新载入」再试；也可以关闭返回广场';
+    }, 10000);
+  }
+
   function openTool(tool) {
     if (!tool) return;
     state.active = tool;
     viewerTitle.textContent = tool.title;
     viewerMeta.textContent = `@${tool.author?.username || '匿名用户'} · ${tool.description || '无简介'}`;
-    viewerFrame.srcdoc = sandboxDocument(tool.html, true);
     if (!viewer.open) viewer.showModal();
+    loadViewer();
     const url = new URL(window.location.href);
     url.searchParams.set('tool', tool.id);
     window.history.replaceState(null, '', url);
   }
 
-  function closeViewer() {
-    viewer.close();
-    viewerFrame.srcdoc = '';
+  function releaseViewer() {
+    clearTimeout(viewerTimer);
+    // Removing the old iframe also stops its timers and pending navigation.
+    const empty = viewerFrame.cloneNode(false);
+    empty.removeAttribute('srcdoc');
+    empty.removeAttribute('aria-busy');
+    viewerFrame.replaceWith(empty);
+    viewerFrame = empty;
+    viewerStatus.hidden = true;
     state.active = null;
     const url = new URL(window.location.href);
     url.searchParams.delete('tool');
     window.history.replaceState(null, '', url);
+  }
+
+  function closeViewer() {
+    releaseViewer();
+    viewer.close();
   }
 
   function shareToDiscussion() {
@@ -357,6 +401,11 @@
     event.preventDefault();
     closeViewer();
   });
+  viewer.addEventListener('close', () => {
+    // A queued close event from the previous tool must not clear a new opening.
+    if (!viewer.open && state.active) releaseViewer();
+  });
+  document.getElementById('tool-viewer-reload').addEventListener('click', loadViewer);
   shareButton.addEventListener('click', shareToDiscussion);
 
   app.sessionReady.then(async () => {

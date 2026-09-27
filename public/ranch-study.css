@@ -3,7 +3,7 @@
   display: none;
 }
 @media (min-width: 901px) {
-  body.ranch-page .ranch-study-enter {
+  body.ranch-page:not(.auth-page-body) .ranch-study-enter {
     display: block;
     position: absolute;
     top: 210px;
@@ -21,6 +21,7 @@
 body.ranch-study-open
   :is(
     .topbar,
+    .desktop-header,
     .mobile-header-backdrop,
     .mobile-nav,
     .ranch-sidebar-backdrop,

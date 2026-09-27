@@ -26,6 +26,7 @@
     "test:personal-ui": "node --test backend/ranch-growth.test.js backend/ranch-wool.test.js scripts/personal-ui.test.js scripts/ranch-wool-ui.test.js scripts/page-shell.test.js",
     "test:personal-ui:browser": "node scripts/check-personal-ui-browser.js",
     "test:shell-loading:browser": "node scripts/check-shell-loading-browser.js",
+    "test:ui-recovery:browser": "node scripts/check-ui-recovery-browser.js",
     "test:settings-layout:browser": "node scripts/check-settings-layout-browser.js",
     "test:navigation": "node --test scripts/navigation-pbl.test.js scripts/development-navigation.test.js scripts/activities-page.test.js scripts/activities-server.test.js",
     "test:navigation:browser": "node scripts/check-navigation-pbl-browser.js",

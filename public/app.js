@@ -376,6 +376,9 @@ function initializeDashboardShell() {
     '/course': '课程',
     '/knowledge': '知识点',
     '/discussion': '讨论区',
+    '/publish': '发布讨论',
+    '/course-map-editor': '课程图谱编辑',
+    '/markdown-editor': '知识点编辑',
     '/circuits': '电路实验室',
     '/tool-workshop': '制作我的工具',
     '/creative-workshop': '创意工坊',
@@ -394,6 +397,8 @@ function initializeDashboardShell() {
     '/settings': '设置',
     '/profile': '个人主页',
     '/ranch': '电子牧场',
+    '/ranch-gallery': '羊群广场',
+    '/ranch-dye': '牧场染坊',
     '/adminusers': '用户管理',
     '/system-settings': '管理员端',
     '/system-settings/announcements': '公告管理',
@@ -438,7 +443,7 @@ function initializeDashboardShell() {
   }
 
   document.body.dataset.pageTitle = pageTitles[path] || 'FREE-BBS';
-  document.querySelectorAll('.main-content').forEach((main) => {
+  document.querySelectorAll('main').forEach((main) => {
     main.dataset.pageTitle = document.body.dataset.pageTitle;
   });
 
@@ -7458,8 +7463,11 @@ async function loadPublicProfile() {
     return;
   }
 
-  setPublicProfileMessage('正在加载个人主页...');
-  const version = ++publicProfileRequestVersion;
+  setPublicProfileMessage(
+    document.body.classList.contains('ranch-page') ? '正在走进牧场…' : '正在加载个人主页...',
+  );
+  publicProfileRequestVersion += 1;
+  const version = publicProfileRequestVersion;
   const profileSessionToken = userState.token;
 
   try {

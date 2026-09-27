@@ -40,6 +40,7 @@
     });
   }
   function refreshEnvironment() {
+    if (document.body.classList.contains('ranch-page')) syncEnvironment(document.body);
     document.querySelectorAll('.ranch-photographic').forEach(syncEnvironment);
     clearTimeout(midnightTimer);
     if (!document.hidden)
@@ -233,4 +234,5 @@
     attributeFilter: ['class'],
   });
   window.FreeBbsRanchPage = { present, restorePanel };
+  refreshEnvironment();
 })();
