@@ -136,7 +136,7 @@
           hungry: '饿了，等一条鱼',
         }[point.kind] || '';
       actor.bubble.hidden = !actor.bubble.textContent;
-      actor.element.classList.toggle('is-interacting', point.kind !== 'walk');
+      actor.element.classList.toggle('is-interacting', point.kind !== 'walk' && !point.hungry);
     });
     frame = window.requestAnimationFrame(tick);
   }
