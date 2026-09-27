@@ -411,6 +411,11 @@ async function runScenario(browser, scenario, directory) {
       }
       if (
         [
+          'shell-checkin',
+          'shell-navigation',
+          'laboratory-circuit',
+          'creative-workshop-plan',
+          'shell-assets',
           'world-course-orbit',
           'course-directory',
           'course-enter-knowledge',

@@ -373,57 +373,48 @@ test('guide versions resolve only declared full/release catalogues and every rel
   }
 });
 
-test('community guide additions preserve published base indexes and the original release receipt', () => {
-  const publishedIds = [
-    'home-launchpad',
-    'home-handbook',
-    'world-atlas',
-    'world-coming-islands',
-    'world-mathematics',
-    'world-island-overview',
-    'world-course-orbit',
-    'course-directory',
-    'course-relations',
-    'course-enter-knowledge',
-    'knowledge-overview',
-    'knowledge-reading',
-    'knowledge-tools-status',
-    'knowledge-companions',
-    'discussion-filters',
-    'discussion-open-post',
-    'discussion-detail',
-    'discussion-reply-max',
-    'discussion-composer',
-    'max-conversation',
-    'max-composer',
-    'max-options',
-    'max-history',
-    'workbench-week',
-    'workbench-ai-plan',
-    'workbench-priorities',
-    'workbench-notifications',
-    'shop-catalog',
-    'shop-item-details',
-    'inventory-assets',
-    'inventory-recycling',
-    'inventory-ledger-entry',
-    'inventory-ledger-filters',
-    'inventory-ledger',
-    'settings-reading',
-    'settings-security',
-    'settings-profile-entry',
-    'profile-identity',
-    'profile-wardrobe',
-    'profile-ranch',
-    'profile-wool',
-    'handbook-missions',
-    'handbook-future',
+test('v3 follows the current navigation order and never reuses a legacy full-tour position', () => {
+  assert.equal(VERSION, 'max-v3');
+  assert.equal(STEPS.length, 58);
+  const expected = [
+    'shell',
+    'home',
+    'world',
+    'course',
+    'knowledge',
+    'discussion',
+    'workbench',
+    'laboratory',
+    'creative',
+    'pbl',
+    'max',
+    'activities',
+    'development',
+    'assets',
+    'shop',
+    'inventory',
+    'settings',
+    'profile',
+    'handbook',
   ];
-  assert.equal(VERSION, 'max-v2');
   assert.deepEqual(
-    STEPS.slice(0, publishedIds.length).map((step) => step.id),
-    publishedIds,
+    STATIONS.map((station) => station.id),
+    expected,
   );
+  assert.deepEqual(
+    STEPS.filter((step, i) => i === 0 || step.station !== STEPS[i - 1].station).map(
+      (step) => step.station,
+    ),
+    expected,
+  );
+  assert.equal(STEPS[0].id, 'shell-search');
+  assert.throws(() => tourUrl(23, 'max-v2'));
+  const oldLink = new URL(
+    tourUrl(0, VERSION, { '/': '/?guideVersion=max-v2&guideTour=1' }),
+    'https://www.free-bbs.cn',
+  );
+  assert.equal(oldLink.searchParams.has('guideVersion'), false);
+  assert.equal(emptyProgress().step, 0);
   const original = RELEASES.find((release) => release.id === 'guide-depth-2026-09');
   assert.deepEqual(original.stepIds, [
     'world-atlas',
@@ -437,10 +428,6 @@ test('community guide additions preserve published base indexes and the original
     'profile-wool',
   ]);
   assert.notEqual(LATEST_RELEASE.id, original.id);
-  assert.deepEqual(
-    STEPS.slice(publishedIds.length).map((step) => step.id),
-    LATEST_RELEASE.stepIds,
-  );
   const completed = normalizeProgress({ ...emptyProgress(), status: 'completed', step: 42 });
   assert.equal(completed.status, 'completed');
   assert.equal(completed.step, 42);
@@ -452,7 +439,7 @@ test('community guide additions preserve published base indexes and the original
 });
 
 test('development and activity steps use compact public targets and never act on signup forms', () => {
-  const additions = stepsFor(LATEST_RELEASE.id);
+  const additions = stepsFor('guide-community-2026-09');
   assert.deepEqual(
     additions.map((step) => step.station),
     ['development', 'development', 'activities', 'activities', 'activities'],
@@ -767,6 +754,8 @@ test('course overview readiness distinguishes the rendered directory from a focu
 
 test('station actions and preparation are restricted to an audited read-only view allowlist', () => {
   const readControls = new Set([
+    '.economy-shortcut-checkin',
+    '#fortune-modal .fortune-close',
     '.island-orbit-item[data-world-id="mathematics"]',
     '#world-enter-island',
     '#world-modal[open] [data-close-modal]',
@@ -1180,7 +1169,7 @@ test('controller defers both automatic welcome and visit writes while an existin
   assert.equal(watching, true);
   assert.deepEqual(
     events,
-    [VERSION, ...LEGACY_GUIDE_VERSIONS].map((version) => ({
+    [VERSION].map((version) => ({
       route: `/onboarding?version=${version}`,
       method: 'GET',
     })),

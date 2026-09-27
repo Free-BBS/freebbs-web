@@ -411,10 +411,12 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
   assert.equal(new Set(STATIONS.map((station) => station.id)).size, STATIONS.length);
   const routes = new Map(STATIONS.map((station) => [station.id, station.route]));
   for (const station of STATIONS) {
-    assert.match(station.route, /^\/[a-z]*$/);
-    assert.match(station.fallbackRoute, /^\/[a-z]*$/);
+    assert.match(station.route, /^\/[a-z-]*$/);
+    assert.match(station.fallbackRoute, /^\/[a-z-]*$/);
   }
   const auditedControls = new Set([
+    '.economy-shortcut-checkin',
+    '#fortune-modal .fortune-close',
     '.island-orbit-item[data-world-id="mathematics"]',
     '#world-enter-island',
     '#world-modal[open] [data-close-modal]',
@@ -460,9 +462,9 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
       if (view.action) assert.ok(['click', 'link'].includes(view.action.kind));
     }
   }
-  assert.equal(STEPS.length, 48);
-  assert.equal(STATIONS.length, 14);
-  assert.equal(RELEASE_STEP_IDS.length, 5);
+  assert.equal(STEPS.length, 58);
+  assert.equal(STATIONS.length, 19);
+  assert.equal(RELEASE_STEP_IDS.length, 12);
   assert.deepEqual(LATEST_RELEASE.stepIds, RELEASE_STEP_IDS);
   for (const id of RELEASE_STEP_IDS) {
     const step = STEPS.find((entry) => entry.id === id);

@@ -8,7 +8,7 @@ const {
   emptyProgress,
   stepsFor,
 } = require('../public/max-guide');
-const { LATEST_RELEASE } = require('../public/max-guide-releases');
+const { LATEST_RELEASE, LEGACY_GUIDE_VERSIONS } = require('../public/max-guide-releases');
 const { mergeProgress } = require('../backend/onboarding');
 
 const fixed = Date.parse('2026-09-21T10:00:00Z');
@@ -376,7 +376,9 @@ function fixture({
       await beforeRequest?.({ route, method, version, patch, options });
       const token = options.headers?.Authorization?.replace(/^Bearer /, '');
       if (route === '/onboarding/reward') {
-        const eligible = [VERSION, 'max-v1'].some((id) => Boolean(server.get(id)?.completedAt));
+        const eligible = [VERSION, ...LEGACY_GUIDE_VERSIONS].some((id) =>
+          Boolean(server.get(id)?.completedAt),
+        );
         const awarded = method === 'POST' && !rewardReceipts.has(token);
         if (method === 'POST') {
           assert.deepEqual(patch, {}, 'the server alone chooses the owner and reward amounts');
@@ -1180,7 +1182,10 @@ test('guests completing the full guide and members completing a short release ne
   const member = fixture({
     href: `${releaseSteps[last].route}?guideTour=1&guideVersion=${LATEST_RELEASE.id}`,
     states: { [LATEST_RELEASE.id]: { status: 'in_progress', step: last } },
-    setup: (value) => value.node(releaseSteps[last].target),
+    setup: (value) => {
+      value.node(releaseSteps[last].target);
+      for (const action of releaseSteps[last].prepare || []) value.node(action.whenMissing);
+    },
   });
   await settle();
   member.next.click();
@@ -1611,7 +1616,7 @@ test('desktop and mobile discussion composer entries are highlighted without pub
     await settle();
     const navigation = view.events.find((event) => event.type === 'navigate');
     const url = new URL(navigation.url, view.win.location.origin);
-    assert.equal(url.pathname, '/aichat');
+    assert.equal(url.pathname, '/workbench');
     assert.equal(url.searchParams.get('guideTour'), '1');
     assert.equal(view.events.filter((event) => event.type === 'navigate').length, 1);
     assert.deepEqual(
@@ -2002,7 +2007,7 @@ test('a manually selected release wins over a delayed first-account automatic we
   await settle();
   const navigation = view.events.find((event) => event.type === 'navigate');
   const destination = new URL(navigation.url, view.win.location.origin);
-  assert.equal(destination.pathname, '/development');
+  assert.equal(destination.pathname, '/');
   assert.equal(destination.searchParams.get('guideVersion'), LATEST_RELEASE.id);
   assert.equal(view.server.get(VERSION).status, 'not_started');
   assert.equal(view.server.get(VERSION).seenAt, null);
@@ -2196,7 +2201,7 @@ test('an unseen release invites an existing member once, then remains manually r
 });
 
 test('the community release crosses into activities and completes without changing prior receipts or signing up', async () => {
-  const release = LATEST_RELEASE.id;
+  const release = 'guide-community-2026-09';
   const previous = {
     [VERSION]: { status: 'completed', step: 42, completedAt: stamp },
     'guide-depth-2026-09': { status: 'completed', step: 8, completedAt: stamp },
@@ -2248,20 +2253,25 @@ test('the community release crosses into activities and completes without changi
   assert.ok(writes.every((event) => event.version === release));
 });
 
-test('a returning legacy member is invited to the new release rather than repeating the full welcome', async () => {
+test('a returning legacy member starts the rebuilt full guide without changing past rewards or receipts', async () => {
   const view = fixture({
     states: {
       [VERSION]: { seenAt: null },
       'max-v1': { status: 'completed', seenAt: stamp, completedAt: stamp },
+      'max-v2': { status: 'in_progress', step: 23, seenAt: stamp },
       [LATEST_RELEASE.id]: { seenAt: null },
     },
   });
   await settle();
   assert.equal(view.dialog.open, true);
-  assert.equal(view.controller.snapshot().version, LATEST_RELEASE.id);
-  assert.equal(view.server.get(VERSION).seenAt, null);
+  assert.equal(view.controller.snapshot().version, VERSION);
+  assert.equal(view.server.get(VERSION).step, 0);
+  assert.equal(view.server.get(VERSION).seenAt, stamp);
   assert.equal(view.server.get('max-v1').status, 'completed');
+  assert.equal(view.server.get('max-v2').step, 23);
+  assert.equal(view.server.get('max-v2').status, 'in_progress');
   assert.equal(view.server.get(LATEST_RELEASE.id).seenAt, stamp);
+  assert.equal(rewardWrites(view).length, 0);
   await view.controller.pause();
 });
 
@@ -2322,4 +2332,63 @@ test('guests get no automatic invitation and manual exploration stays inside tab
   assert.equal(saved.status, 'in_progress');
   assert.equal(view.memory.has(`freebbs_guide_guest_${VERSION}`), false);
   assert.equal(view.events.filter((event) => event.type === 'navigate').length, 1);
+});
+
+test('the rebuilt checkin chapter explains the entry to guests without opening login or signing in', async () => {
+  const index = indexOf('shell-checkin');
+  const view = fixture({
+    member: false,
+    href: '/?guideTour=1',
+    setup(value) {
+      value.memory.set(
+        `freebbs_guide_guest_${VERSION}`,
+        JSON.stringify({ ...emptyProgress(), status: 'in_progress', step: index, seenAt: stamp }),
+      );
+      value.node(STEPS[index].target, {
+        tag: 'button',
+        click: () => assert.fail('guest guide must not open login or checkin'),
+      });
+      value.node(STEPS[index + 1].target);
+    },
+  });
+  await settle();
+  assert.equal(view.controller.activeStep, index);
+  assert.match(view.doc.getElementById('max-tour-body').textContent, /登录后/);
+  assert.equal(view.next.textContent, '下一步 →');
+  view.next.click();
+  await settle();
+  assert.equal(view.controller.activeStep, index + 1);
+  assert.equal(
+    view.events.some((event) => event.type === 'request'),
+    false,
+  );
+  await view.controller.pause();
+});
+
+test('a confirmed empty activity list is immediately explained, while late real content can replace it', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
+  const index = indexOf('activities-receipt');
+  const step = STEPS[index];
+  let empty;
+  const view = fixture({
+    href: '/surveys?guideTour=1',
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+    setup(value) {
+      empty = value.node(step.emptyReady);
+    },
+  });
+  await settle();
+  assert.equal(view.controller.activeStep, index);
+  assert.equal(view.doc.getElementById('max-tour-body').textContent, step.emptyBody);
+  assert.equal(view.next.disabled, false);
+  assert.equal(view.doc.querySelector('.max-tour-status').textContent, '');
+  assert.equal(view.retry.hidden, true);
+  empty.hidden = true;
+  view.node(step.target);
+  view.observers
+    .filter((observer) => observer.mutation && observer.active)
+    .forEach((observer) => observer.callback([{ type: 'childList', target: view.doc.body }]));
+  view.flushFrames();
+  assert.equal(view.doc.getElementById('max-tour-body').textContent, step.body);
+  await view.controller.pause();
 });

@@ -3,7 +3,7 @@
 // equipment changes, feeding and local learning-tag changes stay user-initiated.
 (() => {
   const STATIONS = [
-    { id: 'home', label: '出发点', title: '认识 FREE BBS', route: '/', fallbackRoute: '/' },
+    { id: 'home', label: '首页', title: '认识 FREE BBS', route: '/', fallbackRoute: '/' },
     {
       id: 'world',
       label: '学习世界',
@@ -35,13 +35,13 @@
     {
       id: 'max',
       label: '问问 Max',
-      title: '认识你的答疑搭子',
+      title: '平台寻址，思路引导和解释',
       route: '/aichat',
       fallbackRoute: '/aichat',
     },
     {
       id: 'workbench',
-      label: '工作台',
+      label: '我的工作台',
       title: '安排自己的节奏',
       route: '/workbench',
       fallbackRoute: '/workbench',
@@ -93,13 +93,38 @@
     },
     {
       id: 'activities',
-      label: '活动报名',
+      label: '活动报名（试用）',
       title: '活动报名：从浏览到回执',
       description: '认识当前独立入口、报名条件与结果查询方式。',
       route: '/surveys',
       fallbackRoute: '/surveys',
     },
   ];
+  STATIONS.push(
+    { id: 'shell', label: '全站入口', title: '先认识顶栏与导航', route: '/', fallbackRoute: '/' },
+    {
+      id: 'laboratory',
+      label: '实验室',
+      title: '选择实验与制作工具',
+      route: '/laboratory',
+      fallbackRoute: '/laboratory',
+    },
+    {
+      id: 'creative',
+      label: '创意工坊',
+      title: '认识未来的插件空间',
+      route: '/creative-workshop',
+      fallbackRoute: '/creative-workshop',
+    },
+    {
+      id: 'pbl',
+      label: 'PBL 计划',
+      title: '了解项目式学习规划',
+      route: '/pbl',
+      fallbackRoute: '/pbl',
+    },
+    { id: 'assets', label: '资产入口', title: '找到资产与发展端', route: '/', fallbackRoute: '/' },
+  );
   const stationById = new Map(STATIONS.map((station) => [station.id, station]));
   const click = (selector, label) => ({ selector, label, kind: 'click' });
   const link = (selector, label) => ({ selector, label, kind: 'link' });
@@ -182,7 +207,7 @@
     'home-launchpad',
     '.home-actions',
     '好奇心，今天想去哪里？',
-    '我是 Max！FREE BBS 是电子系同学共同建设的学习发展平台。首页和导航可以进入学习世界、讨论区、工作台和问问 Max。「实验室」可以进入电路实验室与制作我的工具；C/C++、Python、MATLAB 与 Verilog 独立运行环境仍在规划中。',
+    '我是 Max，你在 FREE BBS 的学习与探索向导。这里是由学生主导、师生共同建设的电子系学习发展共同体，从首页和导航进入学习、讨论、个人计划与实验工具；规划中的能力会单独标明。',
     {
       focus: { fit: 'overview', radius: 24 },
       caption: '这趟旅行只认识功能，不会替你发布内容、花钱或发送 AI 问题；可以随时暂停、跳站。',
@@ -193,7 +218,7 @@
     'home-handbook',
     'a[href="/guide"]',
     '怕记不住？我把地图装进口袋啦。',
-    '「认识 FREE BBS」是长期保留的介绍与新手任务入口。以后想重走某一站、看看哪些功能还在建设，都可以回来找它。',
+    '「Max 探索手册」是长期保留的导引入口。以后想重走某一站、看看哪些功能还在建设，都可以从首页或浮动按钮回来；平台介绍和工作人员名单另有独立页面。',
   );
 
   step(
@@ -336,7 +361,7 @@
     'knowledge-companions',
     '#knowledge-chat-toggle',
     '需要搭把手？点亮这个小按钮。',
-    '点击右侧这个「AI」小按钮，就能打开课程学习面板。需要收起时，点面板右上角的「×」，小按钮就会重新出现；需要 Max 或课程讨论时，随时可以再点它打开。',
+    '点击右侧这个「AI」小按钮，就能打开课程学习面板，查看课程 RAG 问答与课程讨论。需要收起时，点面板右上角的「×」，小按钮就会重新出现；切换知识点时会保留上次的开合状态。',
     {
       prepare: [ready('#knowledge-chat-close', '#knowledge-chat-toggle[aria-expanded="false"]')],
       action: click('#knowledge-chat-toggle', '打开学习面板'),
@@ -345,8 +370,8 @@
       reveal: {
         target: '#knowledge-chat-panel',
         dismissToEntry: true,
-        title: 'Max 和课程讨论，都在这里。',
-        body: '面板里有「Max」与「课程讨论」两个标签页：可以围绕当前知识点提问，也能查看相关版块的帖子。点面板右上角的「×」可以收起面板，回到完整的正文视野；「AI」小按钮会重新出现，方便你随时再打开。',
+        title: '课程问答与课程讨论，都在这里',
+        body: '课程 RAG 面向当前知识点提供课程语境下的解释与自测入口；课程讨论用于查看相关版块的公开帖子，私人问答不会写入讨论区。点右上角的「×」可以收起面板，「AI」小按钮会重新出现。',
         action: {
           ...click('#knowledge-chat-close', '收起面板，继续导览'),
           alternateSelector: '#knowledge-chat-toggle',
@@ -419,7 +444,7 @@
     'max-conversation',
     '#aichat-thread',
     '轮到我正式上场啦。',
-    '课程答疑、推导思路、代码和本站电路链接，都可以带来一起讨论。我的回答可能出错，关键步骤和结论记得回到课程资料核对。',
+    '带着目标、已知条件和自己的尝试来提问。Max 帮你定位问题、理解原理和寻找下一步，不代替你思考或直接交付作业答案；关键结论仍要回到课程资料核对。',
     { guestTarget: '.aichat-auth-required' },
   );
   step(
@@ -466,7 +491,7 @@
     'workbench-ai-plan',
     '#workbench-agent-form',
     '想法先变成预览，再进入日程。',
-    '可以请 Max 帮忙拆解安排；生成后先查看提议，再由你确认添加。这里仅介绍这个两阶段入口，不调用 AI，也不生成或保存计划。',
+    '一段话最多描述 3 件安排，写清时间、事项和地点/备注。先检查生成的预览，修改后再确认加入；导览不会调用 AI、生成或保存计划。',
     { prepare: plan },
   );
   step(
@@ -634,7 +659,7 @@
     '把蓬松的羊毛，变成一点小小的电。',
     '有了 Max 后，每次成功喂养会按泊松过程随机长毛，长期平均每5条鱼约1份，并非第5次必得。按北京时间每天最多剪1份，其余待剪量继续保留。剪下后用商城7磁元购买的永久橡胶棒摩擦，棒带上负电，每份羊毛换2电元；棒可重复使用，羊毛只在牧场保存，不进入仓库。',
     {
-      // Keep the published step ID/index; only its destination moved in #141.
+      // The full ranch lives on its own page, reached from the profile preview.
       route: '/ranch',
       prepare: [ready('[data-ranch-open="ranch-wool-dialog"]', '#ranch-wool-dialog[open]')],
       emptyTarget: '#public-profile-ranch',
@@ -661,8 +686,6 @@
     { caption: '以后有新版导览，可以从固定入口主动打开；走过的任务仍然属于你。' },
   );
 
-  // max-v2 already shipped with 43 steps. Append only: numeric saved progress
-  // must keep identifying the same feature for returning users.
   step(
     'development',
     'development-status',
@@ -703,6 +726,7 @@
     '看清要求，把自己的回执收好。',
     '打开具体活动后，可以查看详情与报名要求。决定参与时，由你填写并提交；报名成功后请下载、妥善保存个人回执，用它在该活动的「查看我的抽签结果」入口查询结果。名额与抽签安排以主办方设置为准，回执不要分享给他人。',
     {
+      emptyReady: '.activity-grid .activity-empty',
       emptyTarget: '.activity-hero-links',
       emptyBody:
         '当前没有可展示的活动卡片。活动发布后，可以查看时间、名额与报名条件；自行提交成功后，记得下载并保管个人回执，再到该活动查询抽签结果。导览不会生成报名或回执。',
@@ -710,6 +734,128 @@
     },
   );
 
+  step(
+    'shell',
+    'shell-search',
+    '.site-search-trigger',
+    '从最上方，找到全站搜索',
+    '搜索入口固定在顶栏，可以查找课程、讨论和站内内容。输入关键词后再选择结果；导览只介绍入口，不读取或提交你的搜索',
+    { caption: '顶栏靠右排列；手机保留顶部搜索，不改变你当前页面的内容' },
+  );
+  step(
+    'shell',
+    'shell-checkin',
+    '.economy-shortcut-checkin',
+    '签到与月历，都从这里打开',
+    '点顶栏的签到可以查看今日状态与月历。真正签到需要你自己再点面板里的签到按钮，导览不会代签',
+    {
+      action: click('.economy-shortcut-checkin', '查看签到月历'),
+      guest: {
+        action: null,
+        reveal: null,
+        body: '登录后，这里可以查看签到状态与数字月历。真正签到仍需你自己确认；现在可以先继续了解其他入口',
+        caption: '游客导览不会打开登录窗口，也不会代为签到',
+      },
+      reveal: {
+        target: '#fortune-records .checkin-calendar',
+        prepare: [ready('.economy-shortcut-checkin', '#fortune-records .checkin-calendar')],
+        title: '数字月历，记录自己的节奏',
+        body: '日期按北京时间记录，已签到日期按当日运势着色，灰色表示未签到。可以切换月份、点击日期看详情；重新打开面板不会重复领取奖励',
+        action: click('#fortune-modal .fortune-close', '收起月历，继续'),
+        dismissToEntry: true,
+      },
+      caption: '只读取签到状态，不点击面板内的签到按钮，不修改任何余额',
+    },
+  );
+  step(
+    'shell',
+    'shell-account',
+    '.desktop-header-tools, .topbar .user-summary',
+    '账号工具，在顶栏右侧',
+    '电脑端把设置、明暗切换与通知集中在头像旁，昵称不再占用顶栏。手机保持原有头像与账号菜单；字体、字号在设置里调整',
+    { caption: '只认识入口，不切换主题、不打开账号菜单或修改资料' },
+  );
+  step(
+    'shell',
+    'shell-navigation',
+    '.topbar .nav-actions > .nav-link[href="/"], .mobile-nav .nav-link[href="/"]',
+    '接下来，沿导航从上往下走',
+    '电脑侧栏依次是首页、学习世界、讨论区、我的工作台、实验室、创意工坊、PBL 计划和问问 Max，活动报名保留试用入口。手机把实验室、工坊和 PBL 收在底部工具中',
+    { caption: '每一章都能暂停或跳过，目录支持直接选择；管理员入口仅对有权限的账号显示' },
+  );
+  step(
+    'laboratory',
+    'laboratory-circuit',
+    '.laboratory-circuit',
+    '实验室先选环境，再开始动手',
+    '电路实验室已经开放，可以搭建电路、运行仿真和观察波形。导览先停在入口，不替你创建电路或发起实验',
+    { caption: '教学仿真不代替真实测量，模型与分析结果需要验证' },
+  );
+  step(
+    'laboratory',
+    'laboratory-tools',
+    '.laboratory-card:has(a[href="/tool-workshop"])',
+    '制作自己的小工具',
+    '原小工具工坊已移到实验室，名称是「制作我的工具」。可以编写、编辑和预览 HTML 工具；生成与发布仍需自己确认',
+    { caption: '此处只介绍入口，不发送 AI 请求、不运行或发布工具' },
+  );
+  step(
+    'laboratory',
+    'laboratory-planned',
+    '.laboratory-card:has(.laboratory-symbol)',
+    '规划中的环境，也清楚标出来',
+    '独立 C/C++、Python、MATLAB 与 Verilog 运行环境目前均为规划中。C/C++ 等稳定服务器与环境验证完成后再开放，不把代码高亮或数据导入当作已支持运行',
+    { caption: '原 Max 对话中的沙盒入口不在此次独立运行环境开放范围内' },
+  );
+  step(
+    'creative',
+    'creative-workshop-plan',
+    '.development-release',
+    '创意工坊：未来的插件入口',
+    '计划与 IBBB 协同，提供可以选择安装的插件，让工具和 Skill 成为可直接使用的能力。当前目标是 2026 年 10 月、V1.2，具体开放时间以公告为准',
+    { caption: '目前是规划介绍页，尚不能安装或发布插件' },
+  );
+  step(
+    'pbl',
+    'pbl-plan',
+    '.development-release',
+    'PBL 计划：把学习带进项目',
+    '这里介绍项目式学习的建设方向，目标为 2027 年 3 月、V2.0。当前还未开放项目报名、组队或成果提交，不必为导览寻找尚不存在的功能',
+    { caption: '规划日期不是上线承诺，实际能力以正式发布为准' },
+  );
+  step(
+    'assets',
+    'shell-assets',
+    '#user-status, .economy-shortcut-inventory',
+    '最后看看导航底部的小小积累',
+    '电脑端资产位于左下角「前往发展端」下方，点击区域可查看电元、磁元和热力的说明。手机可从顶部仓库入口查看资产，接下来再逛商城与仓库',
+    { caption: '查看说明不等于兑换；收支以钱包账本中的实际记录为准' },
+  );
+  const stationOrder = [
+    'shell',
+    'home',
+    'world',
+    'course',
+    'knowledge',
+    'discussion',
+    'workbench',
+    'laboratory',
+    'creative',
+    'pbl',
+    'max',
+    'activities',
+    'development',
+    'assets',
+    'shop',
+    'inventory',
+    'settings',
+    'profile',
+    'handbook',
+  ];
+  STATIONS.sort((a, b) => stationOrder.indexOf(a.id) - stationOrder.indexOf(b.id));
+  const currentSteps = stationOrder.flatMap((station) =>
+    steps.filter((entry) => entry.station === station),
+  );
   function freeze(value) {
     if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
     Object.values(value).forEach(freeze);
@@ -717,13 +863,20 @@
   }
   // Independent short replay: no course/node ids or paid/write actions required.
   const RELEASE_STEP_IDS = [
-    'development-status',
-    'development-activities-plan',
-    'activities-entry',
-    'activities-browse',
-    'activities-receipt',
+    'shell-search',
+    'shell-checkin',
+    'shell-account',
+    'shell-navigation',
+    'laboratory-circuit',
+    'laboratory-tools',
+    'laboratory-planned',
+    'creative-workshop-plan',
+    'pbl-plan',
+    'shell-assets',
+    'profile-ranch',
+    'profile-wool',
   ];
-  const catalogue = freeze({ STATIONS, STEPS: steps, RELEASE_STEP_IDS });
+  const catalogue = freeze({ STATIONS, STEPS: currentSteps, RELEASE_STEP_IDS });
   if (typeof module !== 'undefined' && module.exports) module.exports = catalogue;
   if (typeof window !== 'undefined') window.FreeBbsGuideStations = catalogue;
 })();
