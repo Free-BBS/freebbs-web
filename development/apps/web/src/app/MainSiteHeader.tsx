@@ -7,6 +7,7 @@ import calendarIcon from '../assets/main-site/calendar.svg';
 import placeholderAvatar from '../assets/main-site/avatar_placeholder.webp';
 import electronIcon from '../assets/main-site/electron.svg';
 import flameIcon from '../assets/main-site/flame.svg';
+import gearIcon from '../assets/main-site/gear.svg';
 import inventoryIcon from '../assets/main-site/inventory.svg';
 import magnetronIcon from '../assets/main-site/magnetron.svg';
 import moonIcon from '../assets/main-site/moon.svg';
@@ -21,6 +22,7 @@ import {
   type MainSiteProfile,
 } from './main-site-api.js';
 import { MainSiteNotifications } from './MainSiteNotifications.js';
+import { MODULE_MANIFESTS } from './module-manifests.js';
 
 interface MainSiteHeaderProps {
   user: UserContext;
@@ -29,14 +31,26 @@ interface MainSiteHeaderProps {
   onToggleTheme: () => void;
 }
 
-const typographyFonts: Record<string, string> = {
-  'transistor-lab': '"HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif',
-  'zhongsong-study': '"Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif',
-  'quantum-board': '"HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif',
-  'night-oscilloscope': '"Segoe UI", "Microsoft YaHei", sans-serif',
+const typographyFonts: Record<string, { title: string; ui: string }> = {
+  'transistor-lab': {
+    title: '"Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif',
+    ui: '"HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif',
+  },
+  'zhongsong-study': {
+    title: '"Source Han Serif SC", "Noto Serif SC", "STZhongsong", "华文中宋", serif',
+    ui: '"Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif',
+  },
+  'quantum-board': {
+    title: '"Noto Serif SC", "Source Han Serif SC", "STZhongsong", serif',
+    ui: '"HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif',
+  },
+  'night-oscilloscope': {
+    title: '"Syne", "Noto Serif SC", "Source Han Serif SC", serif',
+    ui: '"Segoe UI", "Microsoft YaHei", sans-serif',
+  },
 };
 
-function headerTypography(): CSSProperties {
+export function mainSiteTypography(): CSSProperties {
   let preferences: { fontPreset?: string; typeScale?: string } = {};
   try {
     preferences = JSON.parse(
@@ -48,12 +62,35 @@ function headerTypography(): CSSProperties {
   const scale =
     { standard: 16, comfortable: 17.28, large: 18.88 }[preferences.typeScale || 'comfortable'] ||
     17.28;
+  const fonts =
+    typographyFonts[preferences.fontPreset || 'transistor-lab'] ||
+    typographyFonts['transistor-lab'];
   return {
-    '--main-site-ui-font':
-      typographyFonts[preferences.fontPreset || 'transistor-lab'] ||
-      typographyFonts['transistor-lab'],
+    '--main-site-ui-font': fonts.ui,
     '--main-site-ui-size': `${scale}px`,
+    '--font-ui': fonts.ui,
+    '--font-display': fonts.title,
   } as CSSProperties;
+}
+
+function developmentTitle(pathname: string): string {
+  if (pathname === '/dashboard' || pathname === '/') return '发展端 / 开始探索';
+  if (pathname.startsWith('/inventory')) return '仓库';
+  if (pathname.startsWith('/shop')) return '商店';
+  return (
+    MODULE_MANIFESTS.find(
+      (module) => pathname === module.route || pathname.startsWith(`${module.route}/`),
+    )?.name || '发展端'
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+      <circle cx="10" cy="10" r="6.5" />
+      <path d="m15 15 5 5" />
+    </svg>
+  );
 }
 
 function fortune(score: number) {
@@ -183,8 +220,17 @@ export function MainSiteHeader({ user, authMode, themeMode, onToggleTheme }: Mai
 
   return (
     <>
-      <header className="main-site-header" style={headerTypography()}>
+      <header className="main-site-header" style={mainSiteTypography()}>
+        <h1 className="main-site-header-title">{developmentTitle(location.pathname)}</h1>
         <div className="main-site-account">
+          <a
+            className="main-site-search main-site-tool-button"
+            href={mainSiteHref('/search')}
+            aria-label="全站搜索"
+            title="全站搜索"
+          >
+            <SearchIcon />
+          </a>
           <div className="main-site-economy">
             <div className="main-site-shortcuts">
               <button
@@ -233,22 +279,40 @@ export function MainSiteHeader({ user, authMode, themeMode, onToggleTheme }: Mai
               <img src={avatar} alt={`${user.displayName}头像`} />
             </a>
           </div>
-          <MainSiteNotifications authMode={authMode} userUid={user.uid} />
-          <button
-            className="main-site-mobile-theme"
-            type="button"
-            aria-label={themeMode === 'light' ? '切换到暗色模式' : '切换到明亮模式'}
-            onClick={onToggleTheme}
-          >
-            <img src={themeMode === 'light' ? moonIcon : sunIcon} alt="" />
-          </button>
+          <div className="main-site-tools">
+            <a
+              className="main-site-settings main-site-tool-button"
+              href={mainSiteHref('/settings')}
+              aria-label="设置"
+              title="设置"
+            >
+              <img src={gearIcon} alt="" />
+            </a>
+            <button
+              className="main-site-desktop-theme main-site-tool-button"
+              type="button"
+              aria-label={themeMode === 'light' ? '切换到暗色模式' : '切换到明亮模式'}
+              onClick={onToggleTheme}
+            >
+              <img src={themeMode === 'light' ? moonIcon : sunIcon} alt="" />
+            </button>
+            <MainSiteNotifications authMode={authMode} userUid={user.uid} />
+            <button
+              className="main-site-mobile-theme"
+              type="button"
+              aria-label={themeMode === 'light' ? '切换到暗色模式' : '切换到明亮模式'}
+              onClick={onToggleTheme}
+            >
+              <img src={themeMode === 'light' ? moonIcon : sunIcon} alt="" />
+            </button>
+          </div>
         </div>
       </header>
       {dialogOpen ? (
         <div
           className="fortune-modal development-fortune-modal"
           role="presentation"
-          style={headerTypography()}
+          style={mainSiteTypography()}
         >
           <div className="fortune-backdrop" onMouseDown={() => setDialogOpen(false)} />
           <section

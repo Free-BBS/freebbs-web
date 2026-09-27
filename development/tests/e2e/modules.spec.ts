@@ -40,7 +40,7 @@ test('navigates to every development module from the shell', async ({ page }) =>
     await expect(page.getByRole('heading', { name: heading, exact: true }).first()).toBeVisible();
   }
 
-  await expect(page.locator('.sidebar .module-nav a[href="/world"]')).toHaveText('返回学习端');
+  await expect(page.locator('.sidebar-footer a[href="/world"]')).toHaveText('学习端');
 });
 
 test('keeps the dashboard as the default landing page without a duplicate module card menu', async ({

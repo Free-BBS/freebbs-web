@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 describe('MainSiteHeader', () => {
-  it('shows only the requested account controls and real balances', async () => {
+  it('matches the learning shell controls and shows real balances', async () => {
     window.localStorage.setItem('free_bbs_auth_token', 'test-token');
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       if (String(input).endsWith('/auth/me')) {
@@ -41,8 +41,9 @@ describe('MainSiteHeader', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.queryByRole('navigation', { name: '主站导航' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '设置' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '发展端 / 开始探索' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '全站搜索' })).toHaveAttribute('href', '/search');
+    expect(screen.getByRole('link', { name: '设置' })).toHaveAttribute('href', '/settings');
     expect(screen.queryByRole('button', { name: '退出' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '仓库' })).toHaveAttribute('href', '/inventory');
     expect(screen.getByRole('link', { name: '商店' })).toHaveAttribute('href', '/shop');
@@ -148,7 +149,7 @@ describe('MainSiteHeader', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('orders the account controls like the main site and exposes the mobile theme switch', () => {
+  it('orders the account controls like the learning shell and exposes both theme switches', () => {
     const onToggleTheme = vi.fn();
     const { container } = render(
       <MemoryRouter>
@@ -162,17 +163,29 @@ describe('MainSiteHeader', () => {
     );
     const account = container.querySelector('.main-site-account');
     expect(Array.from(account?.children ?? []).map((child) => child.className)).toEqual([
+      'main-site-search main-site-tool-button',
       'main-site-economy',
       'main-site-user',
-      'main-site-notifications',
-      'main-site-mobile-theme',
+      'main-site-tools',
     ]);
     expect(screen.getByRole('img', { name: '林同学头像' })).toHaveAttribute(
       'src',
       expect.stringContaining('avatar_placeholder.webp'),
     );
-    fireEvent.click(screen.getByRole('button', { name: '切换到明亮模式' }));
+    const themeButtons = screen.getAllByRole('button', { name: '切换到明亮模式' });
+    expect(themeButtons).toHaveLength(2);
+    fireEvent.click(themeButtons[0]);
     expect(onToggleTheme).toHaveBeenCalledOnce();
+  });
+
+  it('uses the current development section as the desktop page title', () => {
+    render(
+      <MemoryRouter initialEntries={['/sports/teams/swimming']}>
+        <MainSiteHeader user={user} authMode="demo" themeMode="light" onToggleTheme={vi.fn()} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('heading', { name: '無体育' })).toBeInTheDocument();
   });
 
   it('opens the main-site inbox and marks an item read', async () => {
