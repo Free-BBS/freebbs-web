@@ -6,6 +6,7 @@ const designs = require('../public/ranch-design-data');
 const adopted = `(EXISTS (SELECT 1 FROM user_profile_extras p WHERE p.user_id = u.id AND p.adopted = 1)
  OR EXISTS (SELECT 1 FROM user_assets a WHERE a.user_id = u.id AND a.asset_key = 'max_pet' AND a.quantity > 0))`;
 const fields = `u.id, u.uid, u.username, d.design_json, d.revision,
+ (SELECT s.fed_until_ms FROM economy_account_state s WHERE s.user_id = u.id) AS fed_until_ms,
  (SELECT GROUP_CONCAT(CONCAT(a.asset_key, ':', a.quantity)) FROM user_assets a
  WHERE a.user_id = u.id AND a.quantity > 0 AND a.asset_key IN
  ('ranch_gold_horn','ranch_silver_horn','ranch_backflip','ranch_bicycle')) AS ranch_assets`;
@@ -15,6 +16,7 @@ const serialize = (row) => ({
   username: row.username,
   design: designs.read(row.design_json),
   revision: Number(row.revision) || 0,
+  fedUntilMs: Number(row.fed_until_ms) || 0,
   ...(row.ranch_assets !== undefined ? { assets: readRanchAssets(row.ranch_assets) } : {}),
 });
 function readRanchAssets(value) {

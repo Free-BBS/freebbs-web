@@ -44,8 +44,35 @@ async function harness(t) {
       revision: 1,
       design_json: JSON.stringify(blank()),
       ranch_assets: 'ranch_backflip:1,ranch_bicycle:1',
+      fed_until_ms: 200000,
     },
-    { id: 2, uid: 'u_owner02', username: 'Bob', revision: 0, design_json: null, ranch_assets: '' },
+    {
+      id: 2,
+      uid: 'u_owner02',
+      username: 'Bob',
+      revision: 0,
+      design_json: null,
+      ranch_assets: '',
+      fed_until_ms: 200000,
+    },
+    {
+      id: 3,
+      uid: 'u_owner03',
+      username: 'Carol',
+      revision: 0,
+      design_json: null,
+      ranch_assets: '',
+      fed_until_ms: 200000,
+    },
+    {
+      id: 4,
+      uid: 'u_owner04',
+      username: 'Hungry',
+      revision: 0,
+      design_json: null,
+      ranch_assets: '',
+      fed_until_ms: 0,
+    },
   ];
   let lock = Promise.resolve();
   const pool = {
@@ -119,21 +146,41 @@ async function harness(t) {
     },
   };
 }
-test('a persisted stroll is identical across workers and late viewers; client cannot choose its partner', async (t) => {
+test('a persisted stroll sends the signed-in sheep to the selected target across workers and late viewers', async (t) => {
   const h = await harness(t);
-  const res = await h.action({ kind: 'stroll', actor: 'u_owner01', partner: 'u_fake', x: -100 });
+  const res = await h.action({
+    kind: 'stroll',
+    actor: 'u_owner02',
+    target: 'u_owner03',
+    partner: 'u_fake',
+    x: -100,
+  });
   assert.equal(res.status, 200);
   const a = await h.snapshot('a');
   const b = await h.snapshot('b');
   assert.deepEqual(a, b);
-  assert.equal(a.events[0].partner, 'u_owner02');
+  assert.equal(a.events[0].actor, 'u_owner01');
+  assert.equal(a.events[0].partner, 'u_owner03');
+  assert.ok(a.events[0].origin.x >= 4);
+  assert.ok(a.events[0].meeting.x >= 4);
   assert.equal(a.events[0].by, undefined);
   assert.equal(a.sheep[0].id, undefined);
   h.advance(2000);
   assert.equal((await h.snapshot('b')).events[0].id, a.events[0].id);
   assert.equal((await h.action({ kind: 'pet', actor: 'u_owner01' })).status, 429);
-  h.advance(13000);
+  h.advance(17000);
   assert.equal((await h.snapshot()).events.length, 0);
+});
+test('stroll rejects self, missing, and hungry targets; hungry owners cannot walk or perform tricks', async (t) => {
+  const h = await harness(t);
+  for (const target of ['u_owner01', 'u_missing', undefined])
+    assert.equal((await h.action({ kind: 'stroll', target })).status, 400);
+  assert.equal((await h.action({ kind: 'stroll', target: 'u_owner04' })).status, 409);
+  assert.equal((await h.action({ kind: 'stroll', target: 'u_owner02' }, 4)).status, 409);
+  assert.equal((await h.action({ kind: 'backflip', actor: 'u_owner04' }, 4)).status, 409);
+  assert.equal((await h.action({ kind: 'bicycle', actor: 'u_owner04' }, 4)).status, 409);
+  assert.equal((await h.snapshot()).sheep[3].fedUntilMs, 0);
+  assert.equal((await h.snapshot()).revision, 0);
 });
 test('authenticated unlock/ownership checks and persisted shared scene changes', async (t) => {
   const h = await harness(t);

@@ -42,6 +42,14 @@
     for (const kind of ['backflip', 'bicycle'])
       dock.querySelector(`[data-community-action="${kind}"]`).hidden =
         !mine || !actor.sheep.assets?.[`ranch_${kind}`];
+    const stroll = dock.querySelector('[data-community-action="stroll"]');
+    const own = actors.get(viewerUid());
+    stroll.disabled =
+      mine ||
+      !own ||
+      actor.sheep.fedUntilMs <= state.serverNowMs ||
+      own.sheep.fedUntilMs <= state.serverNowMs;
+    stroll.title = mine ? '点选另一只羊，让你的 Max 过去找它' : '让你的 Max 过来和这只羊一起散步';
     dock.hidden = false;
   }
   function createActor(sheep) {
@@ -52,7 +60,10 @@
     element.className = 'community-sheep';
     lane.append(element);
     flock.append(lane);
-    const controller = window.FreeBbsMaxRanch.mount(element, { shared: true });
+    const controller = window.FreeBbsMaxRanch.mount(element, {
+      shared: true,
+      hungry: sheep.fedUntilMs <= state.serverNowMs,
+    });
     const name = document.createElement('span');
     name.className = 'community-sheep-name';
     const bubble = document.createElement('span');
@@ -122,9 +133,10 @@
           stroll: '一起走走',
           backflip: '后空翻！',
           bicycle: '骑车兜风',
+          hungry: '饿了，等一条鱼',
         }[point.kind] || '';
       actor.bubble.hidden = !actor.bubble.textContent;
-      actor.element.classList.toggle('is-interacting', point.kind !== 'walk');
+      actor.element.classList.toggle('is-interacting', point.kind !== 'walk' && !point.hungry);
     });
     frame = window.requestAnimationFrame(tick);
   }
@@ -141,7 +153,12 @@
       update(
         await window.freeBbsApp.callApi('/ranch-world/actions', {
           method: 'POST',
-          body: JSON.stringify({ kind, actor: selected?.sheep.uid, ...extra }),
+          body: JSON.stringify({
+            kind,
+            actor: kind === 'stroll' ? viewerUid() : selected?.sheep.uid,
+            ...(kind === 'stroll' ? { target: selected?.sheep.uid } : {}),
+            ...extra,
+          }),
         }),
       );
     } catch (error) {

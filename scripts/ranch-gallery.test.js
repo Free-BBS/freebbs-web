@@ -80,3 +80,46 @@ test('cycling travels four times faster and retains its path after dismounting',
   assert.ok(distance(before, after) < 0.01);
   assert.notDeepEqual(after, world.basePosition(uid, 110001));
 });
+test('hungry sheep stay still, never ride or flip, and resume after feeding', () => {
+  const actor = {
+    uid: 'u_owner01',
+    fedUntilMs: 90000,
+    assets: { ranch_bicycle: 1, ranch_backflip: 1 },
+  };
+  const a = world.positionFor(actor, 0, [actor], 100000);
+  const b = world.positionFor(actor, 0, [actor], 110000);
+  assert.equal(a.kind, 'hungry');
+  assert.equal(a.hungry, true);
+  assert.equal(a.x, b.x);
+  assert.equal(a.direction, b.direction);
+  assert.equal(
+    world.positionFor({ ...actor, fedUntilMs: 200000 }, 0, [actor], 100000).hungry,
+    false,
+  );
+  assert.deepEqual(world.ambientEvents([actor, { ...actor, uid: 'u_owner02' }], 100000), []);
+});
+test('selected-target stroll moves only the owner to the target before walking together', () => {
+  const event = {
+    id: 2,
+    actor: sheep[0].uid,
+    partner: sheep[10].uid,
+    kind: 'stroll',
+    start: 100000,
+    duration: 18000,
+    origin: { x: 10, top: 60, scale: 0.65, direction: 1 },
+    meeting: { x: 75, top: 75, scale: 0.95, direction: -1 },
+  };
+  const start = world.positionFor(sheep[0], 0, sheep, 100000, [event]);
+  const approaching = world.positionFor(sheep[0], 0, sheep, 103000, [event]);
+  const target = world.positionFor(sheep[10], 10, sheep, 103000, [event]);
+  assert.equal(start.x, 10);
+  assert.ok(approaching.x > 10 && approaching.x < 70);
+  assert.equal(target.x, 75);
+  assert.equal(target.top, 75);
+  const a = world.positionFor(sheep[0], 0, sheep, 109000, [event]);
+  const b = world.positionFor(sheep[10], 10, sheep, 109000, [event]);
+  assert.equal(a.top, b.top);
+  assert.equal(a.direction, b.direction);
+  assert.ok(Math.abs(Math.abs(a.x - b.x) - 5) < 0.001);
+  assert.deepEqual(a, world.positionFor(sheep[0], 0, sheep, 109000, [event]));
+});
