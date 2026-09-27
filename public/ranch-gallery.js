@@ -22,11 +22,11 @@
     const depth = lanes === 1 ? 0.5 : lane / (lanes - 1);
     const column = Math.floor(index / lanes);
     const columns = Math.max(1, Math.ceil((total - lane) / lanes));
-    const jitter = ((seed % 1000) / 1000 - 0.5) * 10;
+    const offset = 0.15 + ((lane * 0.381966 + (seed % 1000) / 1000) % 1) * 0.7;
     return {
       top: 59 + depth * 21,
       scale: 0.64 + depth * 0.4,
-      start: Math.max(3, Math.min(97, ((column + 0.5) / columns) * 100 + jitter)),
+      start: Math.max(3, Math.min(97, ((column + offset) / columns) * 100)),
       direction: seed % 2 ? 1 : -1,
       zIndex: 20 + lane,
     };
