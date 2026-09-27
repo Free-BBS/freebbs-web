@@ -27,6 +27,7 @@ import type {
   CompetitionFixtureRecord,
   ClubMembershipRecord,
   ClubRecord,
+  CollectionAssetRecord,
   CollectionFormRecord,
   CollectionModuleDefinitionRecord,
   CollectionResponseRecord,
@@ -497,6 +498,20 @@ const definitions = {
       utcDateTimeField('submittedAt', 'submitted_at'),
     ],
     searchColumns: ['form_id', 'version_id', 'respondent_uid'],
+  },
+  collectionAssets: {
+    table: 'collection_assets',
+    fields: [
+      field('formId', 'form_id'),
+      field('fieldId', 'field_id'),
+      field('uploaderUid', 'uploader_uid'),
+      field('responseId', 'response_id'),
+      field('name', 'original_name'),
+      field('mimeType', 'mime_type'),
+      safeIntegerField('sizeBytes', 'size_bytes'),
+      field('storageKey', 'storage_key'),
+    ],
+    searchColumns: ['form_id', 'field_id', 'uploader_uid', 'response_id', 'original_name'],
   },
   collectionModuleDefinitions: {
     table: 'collection_module_definitions',
@@ -1075,6 +1090,7 @@ function buildMySqlStore(executor: Executor, pool: Pool, inTransaction: boolean)
     collectionForms: repository<CollectionFormRecord>(definitions.collectionForms),
     collectionVersions: repository<CollectionVersionRecord>(definitions.collectionVersions),
     collectionResponses: repository<CollectionResponseRecord>(definitions.collectionResponses),
+    collectionAssets: repository<CollectionAssetRecord>(definitions.collectionAssets),
     collectionModuleDefinitions: repository<CollectionModuleDefinitionRecord>(
       definitions.collectionModuleDefinitions,
     ),

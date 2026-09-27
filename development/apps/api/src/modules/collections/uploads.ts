@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 
 import { HttpError } from '../../core/errors/http-error.js';
@@ -123,4 +123,13 @@ export async function readCollectionUpload(directory: string, id: string): Promi
     name.startsWith(`${id}.`),
   );
   return entry ? readFile(join(directory, entry)) : null;
+}
+
+export async function deleteCollectionUpload(directory: string, id: string): Promise<boolean> {
+  const entry = (await readdir(directory).catch(() => [])).find((name) =>
+    name.startsWith(`${id}.`),
+  );
+  if (!entry) return false;
+  await rm(join(directory, entry), { force: true });
+  return true;
 }

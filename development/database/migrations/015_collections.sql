@@ -61,6 +61,32 @@ CREATE TABLE IF NOT EXISTS collection_responses (
     ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE IF NOT EXISTS collection_assets (
+  id VARCHAR(64) PRIMARY KEY,
+  form_id VARCHAR(64) NOT NULL,
+  field_id VARCHAR(128) NOT NULL,
+  uploader_uid VARCHAR(128) NOT NULL,
+  response_id VARCHAR(64) NULL,
+  original_name VARCHAR(255) NOT NULL,
+  mime_type VARCHAR(255) NOT NULL,
+  size_bytes BIGINT UNSIGNED NOT NULL,
+  storage_key VARCHAR(128) NOT NULL,
+  status ENUM('pending', 'attached', 'expired') NOT NULL,
+  owner_uid VARCHAR(128) NOT NULL,
+  scope_type VARCHAR(64) NOT NULL,
+  scope_id VARCHAR(128) NOT NULL,
+  created_at DATETIME(3) NOT NULL,
+  updated_at DATETIME(3) NOT NULL,
+  UNIQUE KEY uq_collection_assets_storage_key (storage_key),
+  INDEX idx_collection_assets_uploader_status (uploader_uid, status, created_at),
+  INDEX idx_collection_assets_form_field (form_id, field_id, status),
+  INDEX idx_collection_assets_response (response_id),
+  CONSTRAINT fk_collection_assets_form FOREIGN KEY (form_id) REFERENCES collection_forms(id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_collection_assets_response FOREIGN KEY (response_id) REFERENCES collection_responses(id)
+    ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE IF NOT EXISTS showcase_articles (
   id VARCHAR(64) PRIMARY KEY,
   title VARCHAR(255) NOT NULL,

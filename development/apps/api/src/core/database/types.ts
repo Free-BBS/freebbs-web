@@ -340,6 +340,17 @@ export interface CollectionResponseRecord extends StoredRecord {
   submittedAt: string;
 }
 
+export interface CollectionAssetRecord extends StoredRecord {
+  formId: string;
+  fieldId: string;
+  uploaderUid: string;
+  responseId: string | null;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  storageKey: string;
+}
+
 export interface CollectionModuleDefinitionRecord extends StoredRecord {
   name: string;
   description: string;
@@ -520,6 +531,7 @@ export interface DevelopmentStore {
   collectionForms: RecordRepository<CollectionFormRecord>;
   collectionVersions: RecordRepository<CollectionVersionRecord>;
   collectionResponses: RecordRepository<CollectionResponseRecord>;
+  collectionAssets: RecordRepository<CollectionAssetRecord>;
   collectionModuleDefinitions: RecordRepository<CollectionModuleDefinitionRecord>;
   showcaseArticles: RecordRepository<ShowcaseArticleRecord>;
   showcaseLikes: RecordRepository<ShowcaseLikeRecord>;

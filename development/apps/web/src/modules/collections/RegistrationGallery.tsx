@@ -176,6 +176,8 @@ export function RegistrationGallery({ client }: RegistrationGalleryProps) {
           const uploaded = [];
           for (const file of files) {
             const body = new FormData();
+            body.append('formId', item.id);
+            body.append('fieldId', fieldId);
             body.append('file', file);
             uploaded.push(await api.request('/collections/assets', { method: 'POST', body }));
           }
