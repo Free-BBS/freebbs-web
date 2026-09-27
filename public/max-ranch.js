@@ -223,7 +223,7 @@
   function mount(element, previous = {}) {
     if (!element) return null;
     element.innerHTML = markup();
-    const hungry = Boolean(previous.hungry);
+    let hungry = Boolean(previous.hungry);
     const woolReady = previous.woolReady > 0;
     const longFleece = woolReady && !previous.shearedToday;
     const nodes = Object.fromEntries(
@@ -441,13 +441,25 @@
     return {
       syncFrame(state) {
         if (destroyed || paused) return;
+        if (typeof state.hungry === 'boolean' && hungry !== state.hungry) {
+          hungry = state.hungry;
+          element
+            .querySelector('[data-max-tears]')
+            .setAttribute('visibility', hungry ? 'visible' : 'hidden');
+          element
+            .querySelector('[data-max-mouth]')
+            .setAttribute(
+              'd',
+              hungry ? 'm146 115v1.5m-3.5 3q3.5-3.5 7 0' : 'm146 115v1.5m-3.5 0q3.5 3.5 7 0',
+            );
+        }
         shared = true;
         stopFrame();
         x = (width() * Math.max(0, Math.min(100, state.x))) / 100;
         direction = state.direction === -1 ? -1 : 1;
         motionTime = state.time;
         walkTime = state.time;
-        mode = state.kind || 'walk';
+        mode = hungry ? 'hungry' : state.kind || 'walk';
         elapsed = (state.progress || 0) * 3.2;
         pose = hungry
           ? resting()
@@ -476,13 +488,13 @@
         const facing = direction < 0 ? 'translate(180 0) scale(-1 1)' : '';
         nodes.facing.setAttribute(
           'transform',
-          `${facing} ${flip ? `translate(0 ${-Math.sin(flight * Math.PI) * 82}) rotate(${-flight * 360} 90 136)` : ''}`,
+          `${facing} ${flip ? `translate(0 ${-Math.sin(flight * Math.PI) * 150}) rotate(${-flight * 360} 90 136)` : ''}`,
         );
         // Keep the contact shadow on the grass while the sheep is airborne.
         if (flip) {
           nodes.shadow.setAttribute(
             'transform',
-            `rotate(${flight * 360} 90 136) translate(0 ${Math.sin(flight * Math.PI) * 82})`,
+            `rotate(${flight * 360} 90 136) translate(0 ${Math.sin(flight * Math.PI) * 150})`,
           );
           nodes.shadow.setAttribute('rx', String(54 - Math.sin(flight * Math.PI) * 24));
           nodes.shadow.setAttribute('opacity', String(0.16 - Math.sin(flight * Math.PI) * 0.09));

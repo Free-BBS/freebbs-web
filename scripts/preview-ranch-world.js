@@ -11,7 +11,7 @@ function createRanchPreview() {
     accounts: Array.from({ length: 14 }, (_, i) => ({
       id: i + 1,
       assets: { max_pet: 1, fish: 3 },
-      fedUntilMs: Date.now() + 86400000,
+      fedUntilMs: i === 2 ? Date.now() - 10000 : Date.now() + 86400000,
     })),
     transformHtml: (html) =>
       preparePageShell(html)
@@ -35,6 +35,7 @@ function createRanchPreview() {
         adopted: 1,
         design_json: design?.design || blank(),
         revision: design?.revision || 0,
+        fed_until_ms: preview.store.account(id).fedUntilMs,
         ranch_assets: Object.entries(preview.store.account(id).assets)
           .filter(([key, quantity]) => key.startsWith('ranch_') && quantity > 0)
           .map(([key, quantity]) => `${key}:${quantity}`)

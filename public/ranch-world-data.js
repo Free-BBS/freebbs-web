@@ -36,6 +36,7 @@
     };
   }
   function ambientEvents(sheep, time) {
+    sheep = sheep.filter((item) => item.fedUntilMs === undefined || item.fedUntilMs > time);
     if (sheep.length < 2) return [];
     const block = Math.floor(time / 30000);
     const index = seedFor(block) % sheep.length;
@@ -52,13 +53,16 @@
     ];
   }
   function positionFor(sheep, index, all, time, events = []) {
+    const hungry = sheep.fedUntilMs !== undefined && sheep.fedUntilMs <= time;
     const base = {
-      ...basePosition(sheep.uid, time, sheep.assets, sheep.motion),
+      ...basePosition(sheep.uid, hungry ? sheep.fedUntilMs : time, sheep.assets, sheep.motion),
       ...layout(sheep.uid, index, all.length),
-      kind: 'walk',
+      kind: hungry ? 'hungry' : 'walk',
+      hungry,
       progress: 0,
       time: time / 1000,
     };
+    if (hungry) return base;
     const seed = seedFor(sheep.uid);
     const phase = (time + (seed % 60000)) % 60000;
     if (sheep.assets?.ranch_backflip && phase < 1500) {
@@ -73,11 +77,52 @@
       .find(
         (item) =>
           (item.actor === sheep.uid || item.partner === sheep.uid) &&
+          (!item.partner ||
+            !all.some(
+              (actor) =>
+                actor.uid === item.partner &&
+                actor.fedUntilMs !== undefined &&
+                actor.fedUntilMs <= time,
+            )) &&
+          !all.some(
+            (actor) =>
+              actor.uid === item.actor &&
+              actor.fedUntilMs !== undefined &&
+              actor.fedUntilMs <= time,
+          ) &&
           time >= item.start &&
           time < item.start + item.duration,
       );
     if (!event) return base;
     const progress = (time - event.start) / event.duration;
+    if (event.kind === 'stroll' && event.origin && event.meeting) {
+      const own = event.actor === sheep.uid;
+      const approaching = Math.min(1, progress / 0.35);
+      const approach = approaching * approaching * (3 - 2 * approaching);
+      const side = own ? (event.origin.x < event.meeting.x ? -5 : 5) : 0;
+      const direction = event.meeting.direction;
+      const drift = direction * Math.max(0, progress - 0.35) * 18;
+      const pairedX = Math.max(4, Math.min(96, event.meeting.x + side + drift));
+      const from = own ? event.origin : event.meeting;
+      const returning = Math.max(0, Math.min(1, (progress - 0.8) / 0.2));
+      const returnMix = returning * returning * (3 - 2 * returning);
+      base.x =
+        (from.x + (pairedX - from.x) * (own ? approach : 1)) * (1 - returnMix) + base.x * returnMix;
+      base.top =
+        (from.top + (event.meeting.top - from.top) * (own ? approach : 1)) * (1 - returnMix) +
+        base.top * returnMix;
+      base.scale =
+        (from.scale + (event.meeting.scale - from.scale) * (own ? approach : 1)) * (1 - returnMix) +
+        base.scale * returnMix;
+      base.direction =
+        own && progress < 0.35 ? (event.meeting.x >= event.origin.x ? 1 : -1) : direction;
+      return {
+        ...base,
+        kind: own || progress >= 0.35 ? 'stroll' : 'greet',
+        progress,
+        eventId: event.id,
+      };
+    }
     if (event.kind === 'stroll') {
       const actorIndex = all.findIndex((item) => item.uid === event.actor);
       const leader = all[actorIndex];

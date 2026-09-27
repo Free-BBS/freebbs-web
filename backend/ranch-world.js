@@ -93,7 +93,8 @@ function createRanchWorldRouter({ pool, requireAuth, now = Date.now }) {
   router.post('/actions', async (req, res) => {
     const user = await requireAuth(req, res);
     if (!user) return;
-    const { kind, actor: uid, scene } = req.body || {};
+    const { kind, actor: requestedUid, target, scene } = req.body || {};
+    const uid = kind === 'stroll' ? user.uid : requestedUid;
     if (
       !['greet', 'pet', 'stroll', 'backflip', 'bicycle', 'scene'].includes(kind) ||
       (kind === 'scene' && !['meadow', 'lake', 'courtyard', 'wall'].includes(scene))
@@ -122,6 +123,18 @@ function createRanchWorldRouter({ pool, requireAuth, now = Date.now }) {
         await connection.rollback();
         return res.status(404).json({ message: '这只羊暂时不在牧场里' });
       }
+      const partner = kind === 'stroll' ? sheep.find((item) => item.uid === target) : null;
+      if (kind === 'stroll' && (!partner || partner === actor)) {
+        await connection.rollback();
+        return res.status(400).json({ message: '请点选另一位牧场主的羊，再邀请一起散步' });
+      }
+      if (
+        (['stroll', 'backflip', 'bicycle'].includes(kind) && actor.fedUntilMs <= time) ||
+        (kind === 'stroll' && partner.fedUntilMs <= time)
+      ) {
+        await connection.rollback();
+        return res.status(409).json({ message: '饿肚子的 Max 正在趴着休息，吃饱后再一起玩吧' });
+      }
       if (
         ['backflip', 'bicycle'].includes(kind) &&
         (actor.uid !== user.uid || !actor.assets?.[`ranch_${kind}`])
@@ -142,7 +155,7 @@ function createRanchWorldRouter({ pool, requireAuth, now = Date.now }) {
         start: time,
         duration:
           kind === 'stroll'
-            ? 12000
+            ? 18000
             : kind === 'bicycle'
               ? 10000
               : kind === 'backflip'
@@ -158,10 +171,23 @@ function createRanchWorldRouter({ pool, requireAuth, now = Date.now }) {
         actor.motion = state.motions[uid];
       }
       if (kind === 'scene') state.scene = scene;
-      else if (['greet', 'stroll'].includes(kind)) {
+      else if (kind === 'stroll') {
+        const origin = world.positionFor(actor, sheep.indexOf(actor), sheep, time, state.events);
+        const meeting = world.positionFor(
+          partner,
+          sheep.indexOf(partner),
+          sheep,
+          time,
+          state.events,
+        );
+        const point = ({ x, top, scale, direction }) => ({ x, top, scale, direction });
+        event.partner = partner.uid;
+        event.origin = point(origin);
+        event.meeting = point(meeting);
+      } else if (kind === 'greet') {
         const position = world.positionFor(actor, sheep.indexOf(actor), sheep, time, state.events);
         event.partner = sheep
-          .filter((item) => item !== actor)
+          .filter((item) => item !== actor && item.fedUntilMs > time)
           .sort((a, b) => {
             const distance = (item) => {
               const point = world.positionFor(item, sheep.indexOf(item), sheep, time, state.events);

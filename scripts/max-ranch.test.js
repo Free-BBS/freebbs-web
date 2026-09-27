@@ -427,7 +427,7 @@ test('shared frames replace local movement, show purchased actions and remain re
   controller.syncFrame({ x: 50, direction: 1, time: 124, kind: 'backflip', progress: 0.42 });
   const angle = Number(node('[data-facing]').attributes.transform.match(/rotate\(([-\d.]+)/)[1]);
   assert.ok(Math.abs(angle + 180) < 0.0001);
-  assert.match(node('[data-facing]').attributes.transform, /translate\(0 -82\)/);
+  assert.match(node('[data-facing]').attributes.transform, /translate\(0 -150\)/);
   assert.ok(Number(node('[data-leg="0"]').dataset.footY) < 150);
   assert.equal(node('[data-bicycle]').attributes.visibility, 'hidden');
   element.parentElement.clientWidth = 300;
@@ -442,6 +442,24 @@ test('reduced motion keeps wheels and pedalling static', (t) => {
   const foot = node('[data-leg="0"]').dataset.footY;
   controller.syncFrame({ x: 50, direction: 1, time: 124, kind: 'bicycle', progress: 0.6 });
   assert.equal(node('[data-leg="0"]').dataset.footY, foot);
+});
+test('shared hunger changes to the same resting and crying pose, then clears after feeding', (t) => {
+  const { controller, node } = ranchHarness(t, { shared: true });
+  controller.syncFrame({
+    x: 50,
+    direction: 1,
+    time: 123,
+    kind: 'backflip',
+    progress: 0.42,
+    hungry: true,
+  });
+  assert.equal(node('[data-max-tears]').attributes.visibility, 'visible');
+  assert.equal(node('[data-bicycle]').attributes.visibility, 'hidden');
+  assert.doesNotMatch(node('[data-facing]').attributes.transform, /rotate/);
+  assert.equal(node('[data-body]').attributes.transform, 'translate(0 17) rotate(0 64 112)');
+  controller.syncFrame({ x: 50, direction: 1, time: 124, kind: 'walk', hungry: false });
+  assert.equal(node('[data-max-tears]').attributes.visibility, 'hidden');
+  assert.equal(node('[data-max-mouth]').attributes.d, 'm146 115v1.5m-3.5 0q3.5 3.5 7 0');
 });
 test('reduced motion does not perform a shared backflip', (t) => {
   const { controller, node } = ranchHarness(t, { shared: true }, true);

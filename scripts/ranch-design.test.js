@@ -69,7 +69,7 @@ test('public sheep serialization never exposes internal ids or private account f
       design_json: '{bad',
       revision: 2,
     }),
-    { uid: 'u_owner01', username: 'A', design: data.blank(), revision: 2 },
+    { uid: 'u_owner01', username: 'A', design: data.blank(), revision: 2, fedUntilMs: 0 },
   );
 });
 
