@@ -425,6 +425,9 @@ body .ranch-supplies button {
 .ranch-supplies button > span:last-child {
   margin-left: auto;
 }
+.ranch-sidebar-backdrop {
+  display: none;
+}
 @media (min-width: 901px) {
   body.ranch-page {
     --ranch-chrome-wash: #edf3eabd;
@@ -432,12 +435,28 @@ body .ranch-supplies button {
   body.ranch-page.theme-dark {
     --ranch-chrome-wash: #102034c9;
   }
-  body.ranch-page:not(.auth-page-body) .topbar,
+  body.ranch-page:not(.auth-page-body) .topbar {
+    background: transparent !important;
+    isolation: auto;
+    scrollbar-width: none;
+  }
+  body.ranch-page:not(.auth-page-body) .topbar::-webkit-scrollbar {
+    display: none;
+  }
+  body.ranch-page .ranch-sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: var(--bbs-shell-width, 240px);
+    z-index: 129;
+    overflow: hidden;
+    pointer-events: none;
+  }
   body.ranch-page:not(.auth-page-body) > .mobile-header-backdrop {
     background: transparent !important;
     isolation: isolate;
   }
-  body.ranch-page:not(.auth-page-body) .topbar::before,
+  body.ranch-page .ranch-sidebar-backdrop::before,
   body.ranch-page:not(.auth-page-body) > .mobile-header-backdrop::before {
     content: '';
     position: absolute;
@@ -451,11 +470,12 @@ body .ranch-supplies button {
     filter: blur(14px);
     clip-path: inset(20px);
   }
-  body.ranch-page:not(.auth-page-body) .topbar::before {
+  body.ranch-page .ranch-sidebar-backdrop::before {
+    z-index: auto;
     background-position: left center;
     background-image: linear-gradient(#102b29a6, #102b29bf), var(--ranch-photo);
   }
-  body.ranch-page.theme-dark:not(.auth-page-body) .topbar::before {
+  body.ranch-page.theme-dark .ranch-sidebar-backdrop::before {
     background-image: linear-gradient(#0c172bd9, #0c172be0), var(--ranch-photo);
   }
   html:has(body.ranch-page),
