@@ -108,6 +108,37 @@ body.ranch-page #economy-message:empty {
   pointer-events: none;
   animation: ranch-scenery-drift 28s ease-in-out infinite alternate;
 }
+.ranch-preview .ranch-scenery {
+  animation: none;
+}
+[data-ranch-period='night'] .ranch-scenery {
+  filter: brightness(0.38) saturate(0.55);
+}
+.ranch-night-sky {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(#101f4b55, #142e521a 60%, #0b173433);
+}
+[data-ranch-period='night'] .ranch-night-sky {
+  opacity: 1;
+}
+.ranch-night-sky::before {
+  content: '';
+  position: absolute;
+  top: 10%;
+  right: 16%;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #e9efee;
+  box-shadow: 0 0 30px #d0e3ff55;
+}
+[data-ranch-period='night'] [data-max-actor] {
+  filter: brightness(0.78) saturate(0.8);
+}
 .ranch-atmosphere {
   position: absolute;
   inset: 0;
@@ -220,7 +251,7 @@ body.ranch-page .shop-inspect-panel {
   font-size: 13px;
   color: #fff;
 }
-.ranch-seasons {
+.ranch-scene-picker {
   display: flex;
   align-self: start;
   gap: 2px;
@@ -229,17 +260,17 @@ body.ranch-page .shop-inspect-panel {
   background: #12271d55;
   backdrop-filter: blur(10px);
 }
-body .ranch-seasons button {
+body .ranch-scene-picker button {
   border: 0;
-  border-radius: 50%;
-  width: 36px;
-  height: 36px;
+  border-radius: 24px;
+  width: 48px;
+  height: 44px;
   min-height: 0;
   padding: 0;
   color: #fff;
   background: transparent;
 }
-body .ranch-seasons button[aria-pressed='true'] {
+body .ranch-scene-picker button[aria-pressed='true'] {
   background: #fff;
   color: #24392b;
 }
@@ -301,10 +332,10 @@ body.ranch-page .ranch-scene-status {
 }
 body.ranch-page:not(.auth-page-body)
   .ranch-scene
-  :is(.ranch-back, h2, p, [data-ranch-season-choice]) {
+  :is(.ranch-back, h2, p, [data-ranch-scene-choice]) {
   color: #fff !important;
 }
-body.ranch-page:not(.auth-page-body) .ranch-seasons button[aria-pressed='true'] {
+body.ranch-page:not(.auth-page-body) .ranch-scene-picker button[aria-pressed='true'] {
   color: #24392b !important;
   background: #fff !important;
 }
@@ -393,6 +424,77 @@ body .ranch-supplies button {
 }
 .ranch-supplies button > span:last-child {
   margin-left: auto;
+}
+@media (min-width: 901px) {
+  body.ranch-page {
+    --ranch-chrome-wash: #edf3eabd;
+  }
+  body.ranch-page.theme-dark {
+    --ranch-chrome-wash: #102034c9;
+  }
+  body.ranch-page:not(.auth-page-body) .topbar,
+  body.ranch-page:not(.auth-page-body) > .mobile-header-backdrop {
+    background: transparent !important;
+    isolation: isolate;
+  }
+  body.ranch-page:not(.auth-page-body) .topbar::before,
+  body.ranch-page:not(.auth-page-body) > .mobile-header-backdrop::before {
+    content: '';
+    position: absolute;
+    inset: -20px;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      linear-gradient(var(--ranch-chrome-wash), var(--ranch-chrome-wash)), var(--ranch-photo);
+    background-size: auto 100dvh;
+    background-position: center top;
+    filter: blur(14px);
+    clip-path: inset(20px);
+  }
+  body.ranch-page:not(.auth-page-body) .topbar::before {
+    background-position: left center;
+    background-image: linear-gradient(#102b29a6, #102b29bf), var(--ranch-photo);
+  }
+  body.ranch-page.theme-dark:not(.auth-page-body) .topbar::before {
+    background-image: linear-gradient(#0c172bd9, #0c172be0), var(--ranch-photo);
+  }
+  html:has(body.ranch-page),
+  body.ranch-page {
+    overflow: hidden;
+  }
+  body.ranch-page.public-profile-page:not(.auth-page-body) .main-content {
+    position: fixed;
+    inset: 0 0 0 var(--bbs-shell-width, 240px);
+    width: auto;
+    height: 100dvh;
+    min-height: 0;
+    padding: 0 !important;
+    overflow: hidden;
+  }
+  body.ranch-page:not(.auth-page-body) .main-content::before {
+    display: none !important;
+  }
+  body.ranch-page :is(.settings-shell, .ranch-stage, .profile-ranch, .ranch-scene) {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    min-height: 0;
+    border-radius: 0;
+  }
+  body.ranch-page .settings-shell {
+    display: flex;
+    flex-direction: column;
+  }
+  body.ranch-page .ranch-stage {
+    flex: 1;
+    height: auto;
+  }
+  .ranch-page .ranch-scene-heading {
+    top: 112px;
+  }
+  body.ranch-page .profile-ranch .ranch-scene-pause {
+    top: 210px;
+  }
 }
 @media (max-width: 900px) {
   html:has(body.ranch-page) {
@@ -493,7 +595,7 @@ body .ranch-supplies button {
     gap: 16px;
     grid-template-columns: 1fr;
   }
-  .ranch-seasons {
+  .ranch-scene-picker {
     justify-self: start;
   }
   body .profile-ranch .ranch-scene-pause {
@@ -598,7 +700,7 @@ body .ranch-supplies button {
   .ranch-scene-heading .ranch-back {
     grid-column: auto;
   }
-  .ranch-scene-heading > div:not(.ranch-seasons) {
+  .ranch-scene-heading > div:not(.ranch-scene-picker) {
     display: none;
   }
   body .profile-ranch .ranch-scene-pause {
