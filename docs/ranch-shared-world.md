@@ -19,3 +19,5 @@
 `node scripts/preview-ranch-world.js` 提供 3214 端口内存预览，使用真实牧场路由与商城事务模型，仅操作模拟账号，无数据库连接或外部写入。可购买角饰、保存／清空染色、打开多个页面检查 SSE。
 
 `node --test backend/ranch-world.test.js scripts/ranch-gallery.test.js scripts/ranch-design.test.js scripts/max-ranch.test.js` 验证跨路由持久事件、权限、数量限制、SSE、共享轨迹与动画；完整门禁为 `bash scripts/ci-validate.sh`。
+
+骑车使用交替踩踏、车把握持、独立车轮与曲柄旋转，约每秒两圈；自动骑行和手动骑行均为步行速度的 4 倍（两者加速重叠时可叠加）。位移采用积分而非瞬时位置偏移，手动骑行的累计路程在世界行 `motions` 中持久保存，所以下车、刷新或切换后端进程不会跳回原步行位置。公开快照只提供各羊的路程偏移与骑行起止时间，不提供账号内部编号。后空翻缩短至 1.5 秒，腾空 82 SVG 单位，加入收腿与落地缓冲；减少动态效果模式保持车轮／腿部静止并禁用翻转。

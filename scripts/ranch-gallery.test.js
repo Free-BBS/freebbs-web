@@ -60,3 +60,23 @@ test('shared gallery uses SSE and server actions instead of local random interac
   assert.match(source, /stream\?\.close/);
   assert.match(source, /lastSnapshot \+ 5000/);
 });
+test('cycling travels four times faster and retains its path after dismounting', () => {
+  const uid = 'u_owner01';
+  const start = 60000 - (world.seedFor(uid) % 60000);
+  const assets = { ranch_bicycle: 1 };
+  const distance = (a, b) => Math.abs(a.x - b.x);
+  const walk = distance(
+    world.basePosition(uid, start + 20000, assets),
+    world.basePosition(uid, start + 20100, assets),
+  );
+  const ride = distance(
+    world.basePosition(uid, start + 32000, assets),
+    world.basePosition(uid, start + 32100, assets),
+  );
+  assert.ok(Math.abs(ride / walk - 4) < 0.0001);
+  const motion = { offset: 0, start: 100000, duration: 10000 };
+  const before = world.basePosition(uid, 109999, {}, motion);
+  const after = world.basePosition(uid, 110001, {}, motion);
+  assert.ok(distance(before, after) < 0.01);
+  assert.notDeepEqual(after, world.basePosition(uid, 110001));
+});
