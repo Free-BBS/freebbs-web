@@ -142,19 +142,62 @@
         </a>
       </nav>
 
-      <main class="main-content ranch-creative-main">
-        <section class="sheep-gallery-page" aria-label="羊群广场">
-          <header class="dye-heading">
-            <div>
-              <a href="/ranch">‹ 我的牧场</a>
-              <h1>羊群广场</h1>
-            </div>
-            <a class="dye-create-link" href="/ranch-dye">给我的羊染色 ↗</a>
-          </header>
-          <p class="dye-intro">每一只都不一样。这里住着大家领养的 Max，也收藏着各自的颜色。</p>
-          <p id="gallery-status" role="status" aria-live="polite">羊群正在赶来…</p>
-          <div id="sheep-gallery" class="sheep-gallery"></div>
-          <button id="gallery-more" type="button" hidden>再看看更多羊</button>
+      <main class="main-content ranch-creative-main ranch-community-main">
+        <section class="community-pasture-page" aria-labelledby="community-title">
+          <div class="community-pasture" id="community-pasture">
+            <div class="community-sky-glow" aria-hidden="true"></div>
+            <div class="community-clouds" aria-hidden="true"><i></i><i></i><i></i></div>
+            <header class="community-heading">
+              <div>
+                <a href="/ranch">‹ 我的牧场</a>
+                <p>MAX COMMONS</p>
+                <h1 id="community-title">大家的牧场</h1>
+                <span id="gallery-status" role="status" aria-live="polite">羊群正在赶来…</span>
+              </div>
+              <label class="community-scene-picker">
+                <span>散步场景</span>
+                <select id="community-scene" aria-label="选择公共牧场场景">
+                  <option value="meadow">草甸</option>
+                  <option value="lake">湖畔</option>
+                  <option value="courtyard">庭院</option>
+                  <option value="wall">长城</option>
+                </select>
+              </label>
+            </header>
+
+            <div
+              id="community-flock"
+              class="community-flock"
+              aria-label="正在公共牧场散步的羊群"
+            ></div>
+
+            <aside class="community-interaction" id="community-interaction" hidden>
+              <div class="community-selected-copy">
+                <strong id="community-selected-name"></strong>
+                <span id="community-selected-detail"></span>
+              </div>
+              <div class="community-actions" aria-label="与这只羊互动">
+                <button type="button" data-community-action="greet">打招呼</button>
+                <button type="button" data-community-action="stroll">一起散步</button>
+                <button type="button" data-community-action="pet">摸摸它</button>
+                <a id="community-visit" href="/ranch">逛逛 TA 的牧场</a>
+              </div>
+              <button
+                class="community-close"
+                type="button"
+                data-community-close
+                aria-label="关闭互动栏"
+              >
+                ×
+              </button>
+            </aside>
+
+            <nav class="community-corner-links" aria-label="牧场快捷操作">
+              <a href="/ranch-dye">给我的羊染色</a>
+              <span aria-hidden="true">·</span>
+              <a href="/ranch">照顾我的 Max</a>
+            </nav>
+          </div>
         </section>
       </main>
 
@@ -183,6 +226,7 @@
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
     <script src="/max-ranch.js"></script>
+    <script src="/ranch-environment.js"></script>
     <script src="/ranch-design-data.js"></script>
     <script src="/ranch-design.js"></script>
     <script src="/app.js"></script>
