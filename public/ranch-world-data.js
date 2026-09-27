@@ -16,10 +16,20 @@
     const depth = lane / (lanes - 1);
     return { top: 59 + depth * 21, scale: 0.64 + depth * 0.4, zIndex: 20 + lane };
   };
-  function basePosition(uid, time) {
+  function basePosition(uid, time, assets = {}, motion = null) {
     const seed = seedFor(uid);
     const period = 140000 + (seed % 40000);
-    const phase = ((time + (seed % period)) % period) / period;
+    let travel = time;
+    if (assets.ranch_bicycle) {
+      const shifted = time + (seed % 60000);
+      const phase = shifted % 60000;
+      // Integrate the speed boost, so dismounting never snaps back to the walking path.
+      travel +=
+        Math.floor(shifted / 60000) * 30000 + Math.max(0, Math.min(10000, phase - 28000)) * 3;
+    }
+    if (motion)
+      travel += motion.offset + Math.max(0, Math.min(motion.duration, time - motion.start)) * 3;
+    const phase = ((travel + (seed % period)) % period) / period;
     return {
       x: 4 + (phase < 0.5 ? phase * 2 : 2 - phase * 2) * 92,
       direction: phase < 0.5 ? 1 : -1,
@@ -43,7 +53,7 @@
   }
   function positionFor(sheep, index, all, time, events = []) {
     const base = {
-      ...basePosition(sheep.uid, time),
+      ...basePosition(sheep.uid, time, sheep.assets, sheep.motion),
       ...layout(sheep.uid, index, all.length),
       kind: 'walk',
       progress: 0,
@@ -51,9 +61,9 @@
     };
     const seed = seedFor(sheep.uid);
     const phase = (time + (seed % 60000)) % 60000;
-    if (sheep.assets?.ranch_backflip && phase < 2100) {
+    if (sheep.assets?.ranch_backflip && phase < 1500) {
       base.kind = 'backflip';
-      base.progress = phase / 2100;
+      base.progress = phase / 1500;
     } else if (sheep.assets?.ranch_bicycle && phase > 28000 && phase < 38000) {
       base.kind = 'bicycle';
       base.progress = (phase - 28000) / 10000;
@@ -70,8 +80,15 @@
     const progress = (time - event.start) / event.duration;
     if (event.kind === 'stroll') {
       const actorIndex = all.findIndex((item) => item.uid === event.actor);
-      const actor = basePosition(event.actor, event.start);
-      const partner = basePosition(event.partner, event.start);
+      const leader = all[actorIndex];
+      const companion = all.find((item) => item.uid === event.partner);
+      const actor = basePosition(event.actor, event.start, leader?.assets, leader?.motion);
+      const partner = basePosition(
+        event.partner,
+        event.start,
+        companion?.assets,
+        companion?.motion,
+      );
       const center = Math.max(15, Math.min(85, (actor.x + partner.x) / 2));
       const direction = actor.direction;
       const side = event.actor === sheep.uid ? -5 : 5;

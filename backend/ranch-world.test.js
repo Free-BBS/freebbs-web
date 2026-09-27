@@ -17,6 +17,21 @@ test('startup creates and seeds the world without enabling multi-statement SQL',
   assert.match(queries[0], /CREATE TABLE IF NOT EXISTS ranch_world_state/);
   assert.match(queries[1], /INSERT IGNORE/);
 });
+test('fast cycling persists its travel across workers, dismounting and repeated rides', async (t) => {
+  const h = await harness(t);
+  assert.equal((await h.action({ kind: 'bicycle', actor: 'u_owner01' })).status, 200);
+  const a = await h.snapshot('a');
+  assert.deepEqual(a, await h.snapshot('b'));
+  assert.deepEqual(a.sheep[0].motion, { offset: 0, start: 100000, duration: 10000 });
+  h.advance(11000);
+  assert.equal((await h.snapshot()).events.length, 0);
+  assert.deepEqual((await h.snapshot()).sheep[0].motion, a.sheep[0].motion);
+  assert.equal((await h.action({ kind: 'bicycle', actor: 'u_owner01' })).status, 200);
+  assert.equal((await h.snapshot('b')).sheep[0].motion.offset, 30000);
+  h.advance(11000);
+  const flip = await h.action({ kind: 'backflip', actor: 'u_owner01' });
+  assert.equal((await flip.json()).events[0].duration, 1500);
+});
 
 async function harness(t) {
   let time = 100000;

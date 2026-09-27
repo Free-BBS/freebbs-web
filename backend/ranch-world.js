@@ -22,6 +22,7 @@ function readState(row) {
     scene: data.scene || 'meadow',
     events: Array.isArray(data.events) ? data.events : [],
     cooldowns: data.cooldowns || {},
+    motions: data.motions || {},
   };
 }
 function createRanchWorldRouter({ pool, requireAuth, now = Date.now }) {
@@ -50,7 +51,7 @@ function createRanchWorldRouter({ pool, requireAuth, now = Date.now }) {
       events: state.events
         .filter((event) => event.start + event.duration > time)
         .map(({ by, ...event }) => event),
-      sheep: cached,
+      sheep: cached.map((item) => ({ ...item, motion: state.motions[item.uid] || null })),
       serverNowMs: now(),
     };
   }
@@ -112,7 +113,10 @@ function createRanchWorldRouter({ pool, requireAuth, now = Date.now }) {
         await connection.rollback();
         return res.status(429).json({ message: '让 Max 喘口气，3 秒后再试' });
       }
-      const sheep = await flock(connection);
+      const sheep = (await flock(connection)).map((item) => ({
+        ...item,
+        motion: state.motions[item.uid] || null,
+      }));
       const actor = sheep.find((item) => item.uid === uid);
       if (kind !== 'scene' && !actor) {
         await connection.rollback();
@@ -136,8 +140,23 @@ function createRanchWorldRouter({ pool, requireAuth, now = Date.now }) {
         actor: uid || '',
         kind,
         start: time,
-        duration: kind === 'stroll' ? 12000 : kind === 'bicycle' ? 10000 : 3000,
+        duration:
+          kind === 'stroll'
+            ? 12000
+            : kind === 'bicycle'
+              ? 10000
+              : kind === 'backflip'
+                ? 1500
+                : 3000,
       };
+      if (kind === 'bicycle') {
+        const previous = state.motions[uid];
+        const offset = previous
+          ? previous.offset + Math.max(0, Math.min(previous.duration, time - previous.start)) * 3
+          : 0;
+        state.motions[uid] = { offset, start: time, duration: event.duration };
+        actor.motion = state.motions[uid];
+      }
       if (kind === 'scene') state.scene = scene;
       else if (['greet', 'stroll'].includes(kind)) {
         const position = world.positionFor(actor, sheep.indexOf(actor), sheep, time, state.events);

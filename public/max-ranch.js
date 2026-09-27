@@ -75,6 +75,26 @@
       }),
     };
   }
+  function bicyclePose(time) {
+    const phase = time * Math.PI * 4;
+    const bob = -9 + Math.sin(phase * 2) * 0.65;
+    return {
+      angle: -5,
+      bob,
+      standing: 0,
+      legs: hips.map((hip, i) => {
+        const front = i === 1 || i === 3;
+        const angle = phase + (i === 0 ? Math.PI : 0);
+        return {
+          hip: { x: hip.x, y: hip.y + bob },
+          foot: front
+            ? { x: 120 + (i === 3 ? 4 : 0), y: 105 + (i === 3 ? 3 : 0) }
+            : { x: 87 + Math.cos(angle) * 11, y: 148 + Math.sin(angle) * 11 },
+          planted: false,
+        };
+      }),
+    };
+  }
   function blend(a, b, t) {
     return {
       angle: mix(a.angle, b.angle, t),
@@ -124,13 +144,15 @@
     return `<g data-leg="${i}"><path data-limb d="${legPath(leg, i)}" fill="none" stroke="${i < 2 ? '#bca181' : '#ebd5b5'}" stroke-width="${i < 2 ? 7 : 8}" stroke-linecap="round"/><path data-hoof d="${hoofPath(leg.foot.x, leg.foot.y)}" fill="${i < 2 ? '#725d49' : '#997556'}" stroke="#6f5039" stroke-width="1.1" stroke-linejoin="round"/><path data-hoof-split d="${hoofSplitPath(leg.foot.x, leg.foot.y)}" fill="none" stroke="#d3b795" stroke-width="1.1" stroke-linecap="round"/></g>`;
   };
   const markup =
-    () => `<svg viewBox="0 0 180 180" role="img" aria-label="Max：戴眼镜的暖米色电子仿生羊">
+    () => `<svg viewBox="0 0 180 180" overflow="visible" role="img" aria-label="Max：戴眼镜的暖米色电子仿生羊">
     <g data-facing>
       <ellipse data-shadow cx="88" cy="166" rx="54" ry="4" fill="#715944" opacity=".16"/>
       <g data-bicycle visibility="hidden" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <g stroke="#4c675d"><circle cx="46" cy="149" r="17"/><circle cx="129" cy="149" r="17"/></g>
         <path d="m46 149 29-35 22 35H46l58-35 25 35-17-46h17M67 111h20" stroke="#c47f4b"/>
-        <path data-bike-spokes d="M29 149h34m-17-17v34m66-17h34m-17-17v34" stroke="#93a49a" stroke-width="1"/>
+        <g data-bike-wheel-left stroke="#93a49a" stroke-width="1"><path d="M29 149h34M46 132v34M34 137l24 24M34 161l24-24"/><circle cx="46" cy="149" r="2" fill="#4c675d"/></g>
+        <g data-bike-wheel-right stroke="#93a49a" stroke-width="1"><path d="M112 149h34M129 132v34M117 137l24 24M117 161l24-24"/><circle cx="129" cy="149" r="2" fill="#4c675d"/></g>
+        <g data-bike-crank stroke="#596c61"><circle cx="87" cy="148" r="5"/><path d="M76 148h22"/><path d="M73 148h6m16 0h6" stroke-width="3"/></g>
       </g>
       ${limbMarkup(0)}${limbMarkup(1)}${limbMarkup(2)}${limbMarkup(3)}
       <g data-body>
@@ -433,15 +455,51 @@
             ? greetPose(walkPose(0), 1)
             : ['greet', 'pet'].includes(mode)
               ? greetPose(walkPose(walkTime), Math.sin((state.progress || 0) * Math.PI))
-              : walkPose(walkTime);
-        draw();
+              : mode === 'bicycle'
+                ? bicyclePose(walkTime)
+                : walkPose(walkTime);
         const progress = state.progress || 0;
         const flip = mode === 'backflip' && !media.matches && !hungry;
+        // A short, high arc with a tucked skeleton, rather than a slow spinning walk.
+        const flight = Math.max(0, Math.min(1, (progress - 0.08) / 0.68));
+        if (flip) {
+          const tuck = Math.sin(flight * Math.PI);
+          pose = walkPose(0);
+          pose.legs.forEach((leg) => {
+            leg.foot.y -= tuck * 23;
+            leg.foot.x += (90 - leg.foot.x) * tuck * 0.45;
+            leg.planted = flight === 0 || flight === 1;
+          });
+          pose.bob = progress > 0.76 ? Math.sin(((progress - 0.76) / 0.24) * Math.PI) * 7 : 0;
+        }
+        draw();
         const facing = direction < 0 ? 'translate(180 0) scale(-1 1)' : '';
         nodes.facing.setAttribute(
           'transform',
-          `${facing} ${flip ? `translate(0 ${-Math.sin(progress * Math.PI) * 30}) rotate(${-progress * 360} 90 136)` : ''}`,
+          `${facing} ${flip ? `translate(0 ${-Math.sin(flight * Math.PI) * 82}) rotate(${-flight * 360} 90 136)` : ''}`,
         );
+        // Keep the contact shadow on the grass while the sheep is airborne.
+        if (flip) {
+          nodes.shadow.setAttribute(
+            'transform',
+            `rotate(${flight * 360} 90 136) translate(0 ${Math.sin(flight * Math.PI) * 82})`,
+          );
+          nodes.shadow.setAttribute('rx', String(54 - Math.sin(flight * Math.PI) * 24));
+          nodes.shadow.setAttribute('opacity', String(0.16 - Math.sin(flight * Math.PI) * 0.09));
+        } else {
+          nodes.shadow.setAttribute('transform', '');
+          nodes.shadow.setAttribute('opacity', '.16');
+        }
+        const rotation = media.matches ? 0 : (state.time * 720) % 360;
+        element
+          .querySelector('[data-bike-wheel-left]')
+          .setAttribute('transform', `rotate(${rotation} 46 149)`);
+        element
+          .querySelector('[data-bike-wheel-right]')
+          .setAttribute('transform', `rotate(${rotation} 129 149)`);
+        element
+          .querySelector('[data-bike-crank]')
+          .setAttribute('transform', `rotate(${rotation} 87 148)`);
         element
           .querySelector('[data-bicycle]')
           .setAttribute('visibility', mode === 'bicycle' && !hungry ? 'visible' : 'hidden');

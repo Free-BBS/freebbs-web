@@ -418,13 +418,30 @@ test('shared frames replace local movement, show purchased actions and remain re
   controller.syncFrame({ x: 80, direction: -1, time: 123, kind: 'bicycle', progress: 0.5 });
   assert.ok(Math.abs(controller.snapshot().x - (700 - 216) * 0.8) < 0.00001);
   assert.equal(node('[data-bicycle]').attributes.visibility, 'visible');
-  controller.syncFrame({ x: 50, direction: 1, time: 124, kind: 'backflip', progress: 0.5 });
-  assert.match(node('[data-facing]').attributes.transform, /rotate\(-180/);
+  const firstPedal = node('[data-leg="0"]').dataset.footY;
+  const firstWheel = node('[data-bike-wheel-left]').attributes.transform;
+  controller.syncFrame({ x: 80, direction: -1, time: 123.125, kind: 'bicycle', progress: 0.51 });
+  assert.notEqual(node('[data-leg="0"]').dataset.footY, firstPedal);
+  assert.notEqual(node('[data-bike-wheel-left]').attributes.transform, firstWheel);
+  assert.equal(node('[data-leg="1"]').dataset.footY, '105');
+  controller.syncFrame({ x: 50, direction: 1, time: 124, kind: 'backflip', progress: 0.42 });
+  const angle = Number(node('[data-facing]').attributes.transform.match(/rotate\(([-\d.]+)/)[1]);
+  assert.ok(Math.abs(angle + 180) < 0.0001);
+  assert.match(node('[data-facing]').attributes.transform, /translate\(0 -82\)/);
+  assert.ok(Number(node('[data-leg="0"]').dataset.footY) < 150);
   assert.equal(node('[data-bicycle]').attributes.visibility, 'hidden');
   element.parentElement.clientWidth = 300;
   controller.syncFrame({ x: 50, direction: 1, time: 125, kind: 'walk', progress: 0 });
   assert.equal(controller.snapshot().x, 42);
   assert.equal(frames.size, 0);
+});
+test('reduced motion keeps wheels and pedalling static', (t) => {
+  const { controller, node } = ranchHarness(t, { shared: true }, true);
+  controller.syncFrame({ x: 50, direction: 1, time: 123, kind: 'bicycle', progress: 0.5 });
+  assert.equal(node('[data-bike-wheel-left]').attributes.transform, 'rotate(0 46 149)');
+  const foot = node('[data-leg="0"]').dataset.footY;
+  controller.syncFrame({ x: 50, direction: 1, time: 124, kind: 'bicycle', progress: 0.6 });
+  assert.equal(node('[data-leg="0"]').dataset.footY, foot);
 });
 test('reduced motion does not perform a shared backflip', (t) => {
   const { controller, node } = ranchHarness(t, { shared: true }, true);
