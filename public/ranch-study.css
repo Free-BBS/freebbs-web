@@ -73,6 +73,12 @@ body.ranch-page #public-profile-ranch:-webkit-full-screen {
 .is-study-mode .ranch-study-overlay {
   display: block;
 }
+.ranch-page .is-study-mode .ranch-pet-track {
+  bottom: 16%;
+}
+.ranch-page .is-study-mode [data-max-actor] {
+  width: min(280px, 100%);
+}
 .ranch-study-overlay {
   position: absolute;
   inset: 0;
@@ -191,6 +197,9 @@ body.ranch-page .ranch-study-notice {
   display: none;
 }
 @media (max-height: 650px) {
+  .ranch-page .is-study-mode [data-max-actor] {
+    width: min(220px, 100%);
+  }
   .ranch-study-readout {
     top: 24px;
   }
