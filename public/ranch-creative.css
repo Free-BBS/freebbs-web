@@ -843,3 +843,192 @@ body.theme-dark .community-sky-glow {
     transition: none;
   }
 }
+
+/* The commons is a landscape, with small controls floating over it. */
+.community-pasture,
+.community-flock,
+.community-clouds {
+  overflow: clip;
+}
+body.ranch-gallery-page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: #677858 var(--community-scene, url('/assets/ranch/autumn.webp')) center / cover;
+}
+body.ranch-gallery-page:not(.auth-page-body) .page-shell {
+  background: transparent !important;
+}
+body.ranch-gallery-page:not(.auth-page-body) .main-content.ranch-community-main {
+  position: fixed;
+  z-index: 110;
+  inset: 0 0 0 var(--bbs-shell-width);
+  width: auto !important;
+  height: auto !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+body.ranch-gallery-page:not(.auth-page-body) .topbar {
+  background: rgb(18 38 33 / 0.7) !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+}
+body.ranch-gallery-page:not(.auth-page-body) .topbar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(rgb(18 38 33 / 0.84), rgb(18 38 33 / 0.84)),
+    var(--community-scene, url('/assets/ranch/autumn.webp')) left center / auto 100vh;
+  filter: blur(16px);
+}
+body.ranch-gallery-page:not(.auth-page-body) .main-content::before {
+  left: var(--bbs-shell-width);
+  right: 0;
+  padding-left: var(--bbs-content-gutter);
+  max-width: none;
+  margin: 0;
+  background: rgb(246 246 234 / 0.78);
+  backdrop-filter: blur(28px) saturate(0.85);
+}
+body.ranch-gallery-page.theme-dark:not(.auth-page-body) .main-content::before {
+  background: rgb(15 30 30 / 0.76);
+}
+body.ranch-gallery-page:not(.auth-page-body) > .mobile-header-backdrop {
+  background: rgb(246 246 234 / 0.78);
+  backdrop-filter: blur(28px) saturate(0.85);
+}
+body.ranch-gallery-page.theme-dark:not(.auth-page-body) > .mobile-header-backdrop {
+  background: rgb(15 30 30 / 0.76);
+}
+.community-heading > div {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  text-shadow: 0 2px 14px rgb(10 25 25 / 0.65);
+}
+body.ranch-gallery-page .community-heading h1 {
+  color: #fffdf5 !important;
+  font-size: clamp(26px, 2.3vw, 38px);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+body.ranch-gallery-page .community-heading a,
+body.ranch-gallery-page .community-heading #gallery-status {
+  color: rgb(255 253 245 / 0.88) !important;
+}
+.community-heading #gallery-status {
+  font-weight: 400;
+  margin-top: 9px;
+}
+.community-scene-picker {
+  padding: 3px 6px;
+  gap: 0;
+  border-radius: 10px;
+  background: rgb(24 45 37 / 0.42);
+  box-shadow: none;
+}
+.community-scene-picker > span {
+  display: none;
+}
+body.ranch-gallery-page .community-scene-picker select {
+  min-height: 38px;
+  color: #fffdf5 !important;
+  background: transparent !important;
+  font-size: 13px;
+}
+.community-scene-picker select option {
+  color: #233d32;
+  background: #f7f6ee;
+}
+.community-sheep-lane {
+  --community-sheep-size: clamp(110px, 9vw, 170px);
+  height: var(--community-sheep-size);
+  transform: translateY(-50%);
+}
+body.ranch-gallery-page .community-sheep {
+  width: calc(var(--community-sheep-size) * var(--sheep-scale));
+}
+body.ranch-gallery-page .main-content .community-sheep-name {
+  color: #fffdf5 !important;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  padding: 2px 0;
+  font-size: 11px;
+  font-weight: 500;
+  text-shadow:
+    0 1px 3px #172e20,
+    0 1px 7px #172e20;
+}
+body.ranch-gallery-page .main-content .community-selected-copy strong,
+body.ranch-gallery-page .main-content .community-selected-copy span,
+body.ranch-gallery-page .main-content .community-actions button,
+body.ranch-gallery-page .main-content .community-corner-links a {
+  color: #fffdf5 !important;
+}
+body.ranch-gallery-page .main-content .community-actions a {
+  color: #23473e !important;
+}
+body.ranch-gallery-page .main-content .community-sheep-bubble {
+  color: #23473e !important;
+}
+.community-corner-links {
+  background: rgb(20 39 31 / 0.5);
+  padding: 11px 14px;
+  font-size: 12px;
+  bottom: 24px;
+  right: 30px;
+}
+@media (max-width: 700px) {
+  .community-interaction {
+    grid-template-columns: minmax(0, 1fr) 28px;
+    gap: 7px;
+  }
+  .community-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+  .community-close {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  body.ranch-gallery-page:not(.auth-page-body) .main-content.ranch-community-main {
+    inset: calc(112px + env(safe-area-inset-top, 0px)) 0 var(--mobile-nav-space, 64px);
+  }
+  body.ranch-gallery-page .community-heading h1 {
+    font-size: 23px;
+  }
+  .community-heading > div {
+    padding: 7px 2px;
+  }
+  .community-sheep-lane {
+    --community-sheep-size: 80px;
+  }
+  body.ranch-gallery-page .main-content .community-sheep-name {
+    font-size: 9px;
+    opacity: 0;
+    transition: opacity 180ms ease;
+  }
+  body.ranch-gallery-page
+    .main-content
+    .community-sheep:is(:focus-visible, .is-selected)
+    .community-sheep-name {
+    opacity: 1;
+  }
+  .community-corner-links {
+    padding: 8px 10px;
+    bottom: 12px;
+    right: 12px;
+    font-size: 10px;
+  }
+}

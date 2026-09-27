@@ -20,10 +20,13 @@
     const lanes = Math.max(4, Math.min(9, Math.ceil(Math.sqrt(Math.max(1, total)) * 1.45)));
     const lane = index % lanes;
     const depth = lanes === 1 ? 0.5 : lane / (lanes - 1);
+    const column = Math.floor(index / lanes);
+    const columns = Math.max(1, Math.ceil((total - lane) / lanes));
+    const jitter = ((seed % 1000) / 1000 - 0.5) * 10;
     return {
       top: 59 + depth * 21,
       scale: 0.64 + depth * 0.4,
-      start: 3 + ((index * 0.61803398875 + (seed % 1000) / 10000) % 1) * 70,
+      start: Math.max(3, Math.min(97, ((column + 0.5) / columns) * 100 + jitter)),
       direction: seed % 2 ? 1 : -1,
       zIndex: 20 + lane,
     };
@@ -77,6 +80,10 @@
       if (!environment) return;
       const valid = environment.validScene(scene);
       field.style.setProperty(
+        '--community-scene',
+        `url("${environment.photo(valid, environment.seasonAt())}")`,
+      );
+      document.body.style.setProperty(
         '--community-scene',
         `url("${environment.photo(valid, environment.seasonAt())}")`,
       );
