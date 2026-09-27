@@ -95,6 +95,12 @@ async function main() {
         path: path.join(output, `lab-${language}-discussion.png`),
         fullPage: true,
       });
+      await page.goto(`${origin}/discussion?board=daily`, { waitUntil: 'networkidle0' });
+      await page.waitForSelector('.discussion-post-preview-lab .lab-preview', { timeout: 15000 });
+      await page.screenshot({
+        path: path.join(output, `lab-${language}-feed.png`),
+        fullPage: true,
+      });
       await page.goto(`${origin}/code-lab?experiment=${id}`, { waitUntil: 'networkidle0' });
       await page.waitForFunction(() =>
         document.getElementById('lab-result-state').textContent.includes('快照'),
@@ -110,7 +116,7 @@ async function main() {
     }
     assert.deepEqual(errors, []);
     console.log(
-      'PASS: five languages, assembly tabs, live variables, real plots/waveforms, share/publish/preview/reopen, mobile overflow.',
+      'PASS: five languages, assembly tabs, live variables, real plots/waveforms, share/publish/feed and detail previews/reopen, mobile overflow.',
     );
   } finally {
     await browser.close();
