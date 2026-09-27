@@ -95,7 +95,41 @@ test('four compressed local photos and supply imagery exist, with mobile and key
   for (const match of source.matchAll(/src="(\/assets\/[^"$]+)"/g))
     assert.ok(fs.existsSync(path.join(__dirname, '../public', match[1])), match[1]);
   const css = read('public/ranch-page.css');
-  assert.match(css, /100svh - 216px/);
+  assert.match(css, /100svh - 112px - var\(--mobile-nav-space, 64px\)/);
   assert.match(css, /ranch-preview-link:focus-visible/);
   assert.match(css, /ranch-drawer::backdrop/);
+});
+
+test('ranch supplies load the shared full-row purchase layout, including mobile styles', () => {
+  const html = read('public/ranch.html');
+  const economy = read('public/economy.css');
+  assert.match(html, /<body class="[^"]*ranch-page[^"]*economy-page/);
+  assert.match(html, /href="\/economy.css"/);
+  assert.match(
+    economy,
+    /\.economy-page \.shop-inspect-actions\s*\{[^}]*grid-column: 1 \/ -1;[^}]*grid-template-columns: 1fr;/,
+  );
+  assert.match(
+    economy,
+    /@media \(max-width: 600px\)[\s\S]*?\.economy-page \.shop-inspect-layout\s*\{\s*grid-template-columns: 1fr;/,
+  );
+});
+
+test('photo motion pauses with the actor, tab visibility and reduced-motion preferences', () => {
+  const css = read('public/ranch-page.css');
+  assert.match(
+    source,
+    /scene.classList.toggle\('is-paused', pause.getAttribute\('aria-pressed'\) === 'true'\)/,
+  );
+  assert.match(source, /document.addEventListener\('visibilitychange'/);
+  assert.match(source, /scene.classList.toggle\('is-background-hidden', document.hidden\)/);
+  assert.match(
+    css,
+    /\.ranch-scene:is\(\.is-paused, \.is-background-hidden\)[^{]*\{\s*animation-play-state: paused;/,
+  );
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?animation: none;/);
+  assert.match(
+    css,
+    /@media \(max-width: 600px\)[\s\S]*?\.ranch-page \[data-max-actor\]\s*\{\s*width: min\(180px, 100%\)/,
+  );
 });

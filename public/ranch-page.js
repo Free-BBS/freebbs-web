@@ -71,6 +71,20 @@
       link.append(scene, caption);
       root.replaceChildren(link, message);
     } else {
+      // Separate photo/atmosphere layers keep animation off the controls and actor.
+      const scenery = document.createElement('div');
+      scenery.className = 'ranch-scenery';
+      scenery.setAttribute('aria-hidden', 'true');
+      const atmosphere = document.createElement('div');
+      atmosphere.className = 'ranch-atmosphere';
+      atmosphere.setAttribute('aria-hidden', 'true');
+      for (let index = 0; index < 7; index += 1) {
+        const mote = document.createElement('i');
+        mote.style.setProperty('--mote-index', index);
+        atmosphere.append(mote);
+      }
+      scene.prepend(scenery, atmosphere);
+      scene.classList.toggle('is-background-hidden', document.hidden);
       const heading = document.createElement('div');
       heading.className = 'ranch-scene-heading';
       heading.innerHTML = `<a class="ranch-back" href="/profile?uid=${uid}">‹ 个人主页</a><div><h2>Max 的电子牧场</h2><p data-season-caption></p></div><div class="ranch-seasons" role="group" aria-label="切换牧场季节">${Object.entries(
@@ -120,6 +134,8 @@
       }
       const pause = root.querySelector('[data-ranch-pause]');
       pause.classList.add('ranch-scene-pause');
+      pause.title = '暂停或继续羊的漫步与场景动态';
+      scene.classList.toggle('is-paused', pause.getAttribute('aria-pressed') === 'true');
       const description = document.createElement('p');
       description.className = 'ranch-scene-status';
       description.textContent = root.querySelector('.ranch-satiety')?.textContent || status;
@@ -154,6 +170,11 @@
   });
   window.addEventListener('storage', (event) => {
     if (event.key === 'free_bbs_auth_token' || event.key === null) openPanel = null;
+  });
+  document.addEventListener('visibilitychange', () => {
+    document.querySelectorAll('.ranch-page .ranch-scene').forEach((scene) => {
+      scene.classList.toggle('is-background-hidden', document.hidden);
+    });
   });
   window.FreeBbsRanchPage = { present, restorePanel };
 })();
