@@ -12,7 +12,7 @@ test('community pasture layout is deterministic, layered and viewport-safe', () 
   assert.deepEqual(first, gallery.layoutFor('u_owner01', 0, 24));
   assert.ok(first.top >= 59 && first.top <= 80);
   assert.ok(first.scale >= 0.64 && first.scale <= 1.04);
-  assert.ok(first.start >= 3 && first.start <= 72);
+  assert.ok(first.start >= 3 && first.start <= 97);
   assert.ok([-1, 1].includes(first.direction));
 
   const positions = Array.from({ length: 24 }, (_, index) =>
@@ -20,6 +20,8 @@ test('community pasture layout is deterministic, layered and viewport-safe', () 
   );
   assert.ok(new Set(positions.map((position) => position.top)).size >= 5);
   assert.ok(new Set(positions.map((position) => position.start)).size >= 12);
+  assert.ok(positions.some((position) => position.start > 75));
+  assert.ok(positions.some((position) => position.start < 25));
 });
 
 test('interaction chooses the nearest other sheep and builds an encoded ranch link', () => {
