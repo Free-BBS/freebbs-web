@@ -1,0 +1,761 @@
+.ranch-photographic[data-ranch-season='spring'],
+body.ranch-page[data-ranch-season='spring'] {
+  --ranch-photo: url('/assets/ranch/spring.webp');
+}
+.ranch-photographic[data-ranch-season='summer'],
+body.ranch-page[data-ranch-season='summer'] {
+  --ranch-photo: url('/assets/ranch/summer.webp');
+}
+.ranch-photographic[data-ranch-season='autumn'],
+body.ranch-page[data-ranch-season='autumn'] {
+  --ranch-photo: url('/assets/ranch/autumn.webp');
+}
+.ranch-photographic[data-ranch-season='winter'],
+body.ranch-page[data-ranch-season='winter'] {
+  --ranch-photo: url('/assets/ranch/winter.webp');
+}
+.ranch-photographic .ranch-scene {
+  background: #78896e var(--ranch-photo) center 60% / cover no-repeat !important;
+}
+.ranch-photographic .ranch-scene::before,
+.ranch-photographic
+  :is(.ranch-landscape, .ranch-sun, .ranch-home, .ranch-wildflowers, .ranch-ground) {
+  display: none;
+}
+.ranch-preview {
+  padding-top: 20px;
+}
+.ranch-preview-link {
+  display: block;
+  color: var(--ui-text);
+  text-decoration: none;
+}
+.ranch-preview .ranch-scene {
+  height: 230px;
+  border-radius: 16px;
+}
+.ranch-preview .ranch-pet-track {
+  left: 22%;
+  right: 22%;
+  bottom: 5px;
+  height: 180px;
+  pointer-events: none;
+}
+.ranch-preview [data-max-actor] {
+  width: min(180px, 100%);
+}
+.ranch-preview-caption {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0 0;
+}
+.ranch-preview-caption strong {
+  display: block;
+  font-size: 16px;
+}
+.ranch-preview-caption small {
+  display: block;
+  margin-top: 4px;
+  opacity: 0.65;
+}
+.ranch-preview-caption > span:last-child {
+  font-size: 13px;
+  white-space: nowrap;
+}
+.ranch-preview-link:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 5px;
+  border-radius: 16px;
+}
+body.ranch-page .ranch-stage {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+body.ranch-page .ranch-stage > .profile-ambience {
+  display: none !important;
+}
+body.ranch-page .profile-ranch {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+body.ranch-page .site-footer {
+  display: none;
+}
+body.ranch-page .settings-header {
+  display: none;
+}
+body.ranch-page .settings-shell {
+  gap: 0;
+}
+body.ranch-page #public-profile-message:empty,
+body.ranch-page #economy-message:empty {
+  display: none;
+}
+.ranch-page .ranch-scene {
+  height: clamp(500px, calc(100dvh - 175px), 900px);
+  border-radius: 20px;
+}
+.ranch-scenery {
+  position: absolute;
+  inset: -3%;
+  z-index: -1;
+  background: var(--ranch-photo) center 60% / cover no-repeat;
+  pointer-events: none;
+  animation: ranch-scenery-drift 28s ease-in-out infinite alternate;
+}
+.ranch-preview .ranch-scenery {
+  animation: none;
+}
+[data-ranch-period='night'] .ranch-scenery {
+  filter: brightness(0.38) saturate(0.55);
+}
+.ranch-night-sky {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(#101f4b55, #142e521a 60%, #0b173433);
+}
+[data-ranch-period='night'] .ranch-night-sky {
+  opacity: 1;
+}
+.ranch-night-sky::before {
+  content: '';
+  position: absolute;
+  top: 10%;
+  right: 16%;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #e9efee;
+  box-shadow: 0 0 30px #d0e3ff55;
+}
+[data-ranch-period='night'] [data-max-actor] {
+  filter: brightness(0.78) saturate(0.8);
+}
+.ranch-atmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ranch-atmosphere i {
+  position: absolute;
+  top: -12px;
+  left: calc(8% + var(--mote-index) * 13%);
+  width: 7px;
+  height: 5px;
+  border-radius: 70% 15% 70% 20%;
+  background: #f5c5c3;
+  opacity: 0;
+  animation: ranch-season-drift 18s linear infinite;
+  animation-delay: calc(var(--mote-index) * -3.7s);
+}
+[data-ranch-season='autumn'] .ranch-atmosphere i {
+  background: #e5b35c;
+}
+[data-ranch-season='winter'] .ranch-atmosphere i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #fff;
+}
+[data-ranch-season='summer'] .ranch-atmosphere i {
+  top: 35%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #fff5c7;
+  animation-name: ranch-summer-glimmer;
+}
+.ranch-scene:is(.is-paused, .is-background-hidden) :is(.ranch-scenery, .ranch-atmosphere i) {
+  animation-play-state: paused;
+}
+@keyframes ranch-scenery-drift {
+  from {
+    transform: translate3d(-0.7%, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(0.7%, -0.5%, 0) scale(1.035);
+  }
+}
+@keyframes ranch-season-drift {
+  0% {
+    transform: translate3d(-16px, 0, 0) rotate(0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.65;
+  }
+  80% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translate3d(55px, 80vh, 0) rotate(230deg);
+    opacity: 0;
+  }
+}
+@keyframes ranch-summer-glimmer {
+  0%,
+  100% {
+    transform: translate3d(0, 50px, 0);
+    opacity: 0;
+  }
+  50% {
+    transform: translate3d(25px, -30px, 0);
+    opacity: 0.65;
+  }
+}
+/* Supplies use the same purchase layout and theme as the main store. */
+body.ranch-page .shop-inspect-panel {
+  font-family: var(--font-ui);
+}
+.ranch-page .ranch-scene::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(#12271d66, transparent 35%, transparent 58%, #10201980);
+  pointer-events: none;
+}
+.ranch-scene-heading {
+  position: absolute;
+  inset: 22px 24px auto;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 18px;
+  color: #fff;
+  text-shadow: 0 1px 7px #152a1d66;
+}
+.ranch-scene-heading .ranch-back {
+  grid-column: 1 / -1;
+  justify-self: start;
+  color: #fff;
+  font-size: 14px;
+  text-decoration: none;
+}
+.ranch-page .ranch-scene-heading h2 {
+  margin: 0;
+  font: 600 clamp(20px, 2.8vw, 30px)/1.3 var(--font-ui);
+  color: #fff;
+}
+.ranch-page .ranch-scene-heading p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #fff;
+}
+.ranch-scene-picker {
+  display: flex;
+  align-self: start;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 30px;
+  background: #12271d55;
+  backdrop-filter: blur(10px);
+}
+body .ranch-scene-picker button {
+  border: 0;
+  border-radius: 24px;
+  width: 48px;
+  height: 44px;
+  min-height: 0;
+  padding: 0;
+  color: #fff;
+  background: transparent;
+}
+body .ranch-scene-picker button[aria-pressed='true'] {
+  background: #fff;
+  color: #24392b;
+}
+.ranch-page .ranch-pet-track {
+  left: 22%;
+  right: 22%;
+  bottom: 23%;
+  height: min(340px, 48vh);
+}
+.ranch-page [data-max-actor] {
+  width: min(320px, 100%);
+  filter: drop-shadow(0 14px 8px #17201635);
+}
+.ranch-scene-actions {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 24px;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+body .ranch-scene-actions button,
+body .profile-ranch .ranch-scene-pause {
+  color: #213d2c;
+  background: #fffffff0;
+  border: 1px solid #ffffff50;
+  border-radius: 28px;
+  padding: 12px 18px;
+  min-height: 44px;
+  font: 600 14px/1.4 var(--font-ui);
+  box-shadow: 0 3px 15px #16312215;
+}
+body .ranch-scene-actions button:disabled {
+  opacity: 0.65;
+}
+body .profile-ranch .ranch-scene-pause {
+  position: absolute;
+  right: 24px;
+  top: 140px;
+  z-index: 4;
+  padding: 8px 12px;
+  font-size: 12px;
+  background: #ffffffb8;
+}
+body.ranch-page .ranch-scene-status {
+  position: absolute;
+  bottom: 100px;
+  left: 20px;
+  right: 20px;
+  z-index: 4;
+  margin: 0;
+  color: #fff;
+  text-align: center;
+  font-size: 14px;
+  text-shadow: 0 1px 7px #102019;
+}
+body.ranch-page:not(.auth-page-body)
+  .ranch-scene
+  :is(.ranch-back, h2, p, [data-ranch-scene-choice]) {
+  color: #fff !important;
+}
+body.ranch-page:not(.auth-page-body) .ranch-scene-picker button[aria-pressed='true'] {
+  color: #24392b !important;
+  background: #fff !important;
+}
+body.ranch-page:not(.auth-page-body) .ranch-scene-actions button,
+body.ranch-page:not(.auth-page-body) .ranch-scene-pause {
+  color: #213d2c !important;
+  background: #fffffff0 !important;
+}
+.ranch-page #profile-extras-message {
+  position: absolute;
+  bottom: 145px;
+  left: 20px;
+  right: 20px;
+  z-index: 4;
+  margin: 0;
+  color: #fff;
+  text-align: center;
+  font-size: 14px;
+  text-shadow: 0 1px 7px #102019;
+}
+.ranch-drawer {
+  box-sizing: border-box;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  padding: 24px;
+  border: 1px solid var(--ui-line);
+  border-radius: 22px;
+  background: var(--ui-surface, #fff);
+  color: var(--ui-text);
+  overflow-y: auto;
+}
+.ranch-drawer::backdrop {
+  background: #13251e70;
+  backdrop-filter: blur(5px);
+}
+.ranch-drawer > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.ranch-drawer > header h2 {
+  margin: 0;
+}
+body .ranch-drawer [data-ranch-close] {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 28px;
+}
+.ranch-drawer .ranch-wool {
+  background: transparent;
+  padding: 18px 0;
+  margin-top: 0;
+}
+.ranch-drawer .ranch-wool-art,
+.ranch-drawer .ranch-kicker {
+  display: none;
+}
+.ranch-supplies {
+  display: grid;
+}
+body .ranch-supplies button {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--ui-line);
+  border-radius: 0;
+  padding: 16px 0;
+  background: transparent;
+  color: var(--ui-text);
+}
+.ranch-supplies img {
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+}
+.ranch-supplies small {
+  display: block;
+  opacity: 0.65;
+  margin-top: 4px;
+}
+.ranch-supplies button > span:last-child {
+  margin-left: auto;
+}
+.ranch-sidebar-backdrop {
+  display: none;
+}
+@media (min-width: 901px) {
+  body.ranch-page {
+    --ranch-chrome-wash: #edf3eabd;
+  }
+  body.ranch-page.theme-dark {
+    --ranch-chrome-wash: #102034c9;
+  }
+  body.ranch-page:not(.auth-page-body) .topbar {
+    background: transparent !important;
+    isolation: auto;
+    scrollbar-width: none;
+  }
+  body.ranch-page:not(.auth-page-body) .topbar::-webkit-scrollbar {
+    display: none;
+  }
+  body.ranch-page .ranch-sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: var(--bbs-shell-width, 240px);
+    z-index: 129;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  body.ranch-page:not(.auth-page-body) > .mobile-header-backdrop {
+    background: transparent !important;
+    isolation: isolate;
+  }
+  body.ranch-page .ranch-sidebar-backdrop::before,
+  body.ranch-page:not(.auth-page-body) > .mobile-header-backdrop::before {
+    content: '';
+    position: absolute;
+    inset: -20px;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      linear-gradient(var(--ranch-chrome-wash), var(--ranch-chrome-wash)), var(--ranch-photo);
+    background-size: auto 100dvh;
+    background-position: center top;
+    filter: blur(14px);
+    clip-path: inset(20px);
+  }
+  body.ranch-page .ranch-sidebar-backdrop::before {
+    z-index: auto;
+    background-position: left center;
+    background-image: linear-gradient(#102b29a6, #102b29bf), var(--ranch-photo);
+  }
+  body.ranch-page.theme-dark .ranch-sidebar-backdrop::before {
+    background-image: linear-gradient(#0c172bd9, #0c172be0), var(--ranch-photo);
+  }
+  html:has(body.ranch-page),
+  body.ranch-page {
+    overflow: hidden;
+  }
+  body.ranch-page.public-profile-page:not(.auth-page-body) .main-content {
+    position: fixed;
+    inset: 0 0 0 var(--bbs-shell-width, 240px);
+    width: auto;
+    height: 100dvh;
+    min-height: 0;
+    padding: 0 !important;
+    overflow: hidden;
+  }
+  body.ranch-page:not(.auth-page-body) .main-content::before {
+    display: none !important;
+  }
+  body.ranch-page :is(.settings-shell, .ranch-stage, .profile-ranch, .ranch-scene) {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    min-height: 0;
+    border-radius: 0;
+  }
+  body.ranch-page .settings-shell {
+    display: flex;
+    flex-direction: column;
+  }
+  body.ranch-page .ranch-stage {
+    flex: 1;
+    height: auto;
+  }
+  .ranch-page .ranch-scene-heading {
+    top: 112px;
+  }
+  body.ranch-page .profile-ranch .ranch-scene-pause {
+    top: 210px;
+  }
+  /* The shared desktop shell moves controls out of the legacy topbar. Keep the
+   * immersive scene below its measured header, including large-font wrapping. */
+  body.ranch-page.desktop-shell-active .desktop-header {
+    background: transparent;
+  }
+  body.ranch-page.public-profile-page.desktop-shell-active .main-content[data-page-title] {
+    top: var(--desktop-header-height, 94px);
+    height: auto;
+    padding: 0 !important;
+  }
+  body.ranch-page.desktop-shell-active .ranch-scene-heading {
+    top: 22px;
+  }
+  body.ranch-page.desktop-shell-active .profile-ranch .ranch-scene-pause {
+    top: 140px;
+  }
+}
+@media (max-width: 900px) {
+  html:has(body.ranch-page) {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  body.ranch-page {
+    --ranch-chrome-wash: #f1f5eab8;
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  body.ranch-page.public-profile-page:not(.auth-page-body) .main-content {
+    position: fixed;
+    inset: calc(112px + env(safe-area-inset-top, 0px) + var(--site-search-header-extra, 0px)) 0
+      var(--mobile-nav-space, 64px);
+    width: 100%;
+    height: auto;
+    min-height: 0 !important;
+    margin: 0;
+    padding: 0 !important;
+    overflow: hidden;
+  }
+  body.ranch-page :is(.settings-shell, .ranch-stage, .profile-ranch, .ranch-scene) {
+    height: 100%;
+    min-height: 0;
+    border-radius: 0;
+  }
+  body.ranch-page .settings-shell {
+    display: flex;
+    flex-direction: column;
+  }
+  body.ranch-page .ranch-stage {
+    flex: 1;
+    width: 100%;
+    height: auto;
+  }
+  body.ranch-page.theme-dark {
+    --ranch-chrome-wash: #10251cbf;
+  }
+  /* Blur the scenery, never the navigation content or its flyout menus. */
+  body.ranch-page:not(.auth-page-body) .main-content::before {
+    display: none !important;
+  }
+  body.ranch-page .mobile-header-backdrop,
+  body.ranch-page:not(.auth-page-body) .mobile-nav.mobile-nav-compact {
+    isolation: isolate;
+    background: transparent !important;
+    border-color: #ffffff30 !important;
+  }
+  body.ranch-page .mobile-header-backdrop::before,
+  body.ranch-page .mobile-nav-compact::before {
+    content: '';
+    position: absolute;
+    inset: -20px;
+    z-index: -1;
+    background-image:
+      linear-gradient(var(--ranch-chrome-wash), var(--ranch-chrome-wash)), var(--ranch-photo);
+    background-size: auto 100svh;
+    background-position: center top;
+    filter: blur(14px);
+    clip-path: inset(20px);
+    pointer-events: none;
+  }
+  body.ranch-page .mobile-nav-compact::before {
+    background-position: center bottom;
+  }
+  body.ranch-page:not(.auth-page-body) .user-economy-stack {
+    background: transparent !important;
+  }
+  body.ranch-page:not(.auth-page-body) .user-actions .mobile-theme-toggle {
+    display: none !important;
+  }
+  body.ranch-page:not(.auth-page-body) .topbar > .site-search-trigger {
+    background: color-mix(in srgb, var(--ui-surface) 76%, transparent) !important;
+  }
+}
+@media (max-width: 600px) {
+  .ranch-preview .ranch-scene {
+    height: 190px;
+  }
+  .ranch-preview .ranch-pet-track {
+    left: 14%;
+    right: 14%;
+    height: 150px;
+  }
+  .ranch-preview [data-max-actor] {
+    width: min(150px, 100%);
+  }
+  .ranch-preview-caption {
+    align-items: start;
+    gap: 8px;
+  }
+}
+@media (max-width: 900px) {
+  .ranch-scene-heading {
+    inset: 16px 16px auto;
+    gap: 16px;
+    grid-template-columns: 1fr;
+  }
+  .ranch-scene-picker {
+    justify-self: start;
+  }
+  body .profile-ranch .ranch-scene-pause {
+    right: 16px;
+    top: 122px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    font-size: 0;
+  }
+  .ranch-scene-pause::after {
+    content: 'Ⅱ';
+    font: 600 18px/1 var(--font-ui);
+  }
+  .ranch-scene-pause[aria-pressed='true']::after {
+    content: '▶';
+    font-size: 14px;
+  }
+  .ranch-page .ranch-pet-track {
+    left: 12%;
+    right: 12%;
+    bottom: max(112px, 23%);
+    height: 180px;
+  }
+  .ranch-page [data-max-actor] {
+    width: min(180px, 100%);
+  }
+  .ranch-scene-actions {
+    bottom: 12px;
+    left: 16px;
+    right: 16px;
+    max-width: 340px;
+    margin-inline: auto;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 3px;
+    border: 1px solid #ffffff35;
+    border-radius: 16px;
+    background: #132d20c9;
+    backdrop-filter: blur(12px);
+  }
+  body.ranch-page:not(.auth-page-body) .ranch-scene-actions button {
+    min-width: 0;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 10px;
+    box-shadow: none;
+    font-size: 0;
+    color: #fff !important;
+    background: transparent !important;
+  }
+  .ranch-scene-actions button::after {
+    content: attr(data-compact-label);
+    font: 600 13px/1.3 var(--font-ui);
+    white-space: nowrap;
+  }
+  body.ranch-page:not(.auth-page-body) .ranch-scene-actions button:is(:hover, :focus-visible) {
+    background: #ffffff20 !important;
+  }
+  .ranch-scene-actions button:focus-visible,
+  .ranch-scene-pause:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
+  body.ranch-page .ranch-scene-status {
+    bottom: 76px;
+    font-size: 13px;
+  }
+  .ranch-page #profile-extras-message {
+    bottom: 102px;
+    font-size: 12px;
+  }
+  .ranch-drawer {
+    padding: 18px;
+  }
+}
+@media (max-width: 900px) and (max-height: 650px) {
+  .ranch-scene-heading {
+    gap: 8px;
+  }
+  .ranch-page .ranch-scene-heading h2 {
+    font-size: 18px;
+  }
+  body .profile-ranch .ranch-scene-pause {
+    top: 102px;
+  }
+  .ranch-page .ranch-pet-track {
+    height: 150px;
+  }
+  .ranch-page [data-max-actor] {
+    width: min(150px, 100%);
+  }
+}
+@media (max-width: 900px) and (max-height: 450px) {
+  .ranch-scene-heading {
+    inset: 8px 68px auto 16px;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+  .ranch-scene-heading .ranch-back {
+    grid-column: auto;
+  }
+  .ranch-scene-heading > div:not(.ranch-scene-picker) {
+    display: none;
+  }
+  body .profile-ranch .ranch-scene-pause {
+    top: 8px;
+  }
+  .ranch-page .ranch-pet-track {
+    height: 110px;
+    bottom: 82px;
+  }
+  .ranch-page [data-max-actor] {
+    width: min(110px, 100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ranch-scenery,
+  .ranch-atmosphere i {
+    animation: none;
+  }
+  .ranch-photographic * {
+    scroll-behavior: auto;
+  }
+}

@@ -439,10 +439,12 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
     '#shop-grid [data-action="inspect-item"]',
     '#wallet-ledger-open',
     '#settings-profile-link',
+    '.ranch-preview-link',
+    '[data-ranch-open="ranch-wool-dialog"]',
     '#discussion-post-list .discussion-post-card:has(.discussion-pin-badge) [data-action="open-post"], #discussion-post-list:not(:has(.discussion-pin-badge)) [data-action="open-post"]',
   ]);
   for (const step of STEPS) {
-    assert.equal(step.route, routes.get(step.station));
+    assert.equal(step.route, step.id === 'profile-wool' ? '/ranch' : routes.get(step.station));
     for (const field of ['id', 'target', 'label', 'title', 'body', 'caption'])
       assert.ok(step[field], `${step.id}: ${field}`);
     assert.ok(Object.isFrozen(step));
@@ -496,10 +498,15 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
   assert.match(step('inventory-ledger').body, /这笔交易之后/);
   assert.equal(step('profile-ranch').target, '#public-profile-ranch .ranch-scene');
   assert.equal(step('profile-ranch').emptyTarget, '#public-profile-ranch');
-  assert.equal(step('profile-wool').target, '.ranch-wool-stages');
+  assert.equal(step('profile-wool').target, '#ranch-wool-dialog[open] .ranch-wool-stages');
   assert.equal(step('profile-wool').emptyTarget, '#public-profile-ranch');
   assert.equal(step('profile-wool').action, undefined);
-  assert.equal(step('profile-wool').prepare, undefined);
+  assert.deepEqual(step('profile-wool').prepare, [
+    {
+      selector: '[data-ranch-open="ranch-wool-dialog"]',
+      whenMissing: '#ranch-wool-dialog[open]',
+    },
+  ]);
   assert.match(step('profile-wool').body, /泊松.*平均每5条.*1份.*7磁元.*2电元/);
   assert.match(step('profile-wool').body, /并非第5次必得/);
   assert.match(step('profile-wool').body, /羊毛只在牧场保存/);

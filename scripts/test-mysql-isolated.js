@@ -12,6 +12,7 @@ const {
 } = require('../backend/test-helpers/isolated-mysql');
 
 const TEST_FILES = [
+  'backend/profile-activity.mysql.test.js',
   'backend/circuit-progress.test.js',
   'backend/wallet-ledger.test.js',
   'backend/economy-rewards.mysql.test.js',
@@ -50,6 +51,7 @@ function testEnvironment(socketPath, original = process.env) {
     RUN_LOGIN_RATE_MYSQL: '1',
     RUN_COMMUNITY_INTEGRATION: '1',
     RUN_WORKBENCH_MYSQL: '1',
+    RUN_PROFILE_ACTIVITY_MYSQL: '1',
     NOTIFICATIONS_MYSQL_TEST: '1',
     WHITELIST_TEST_MYSQL: '1',
     MYSQL_SOCKET: socketPath,
@@ -67,6 +69,7 @@ function testEnvironment(socketPath, original = process.env) {
 }
 
 const REQUIRED_MYSQL_TESTS = [
+  'isolated MySQL: profile activity counts visible posts and named comments across Beijing midnight',
   'isolated MySQL: challenge progression gates direct requests and ranks contiguous current passes',
   'MySQL: additive rewards,',
   'community features work together against the full existing MySQL schema',

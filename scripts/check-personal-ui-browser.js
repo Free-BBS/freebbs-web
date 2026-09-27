@@ -293,6 +293,10 @@ async function geometry(page) {
     ]);
     console.log('Interaction: ranch feed, shear, rub and wallet update');
     await page.goto(`${origin}/profile?uid=u_preview01`, { waitUntil: 'networkidle0' });
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'networkidle0' }),
+      page.click('.ranch-preview-link'),
+    ]);
     await page.waitForSelector('[data-extra-action="feed"]');
     const initialFish = store.account().assets.fish;
     await page.click('[data-extra-action="feed"]');
@@ -300,6 +304,7 @@ async function geometry(page) {
       /Max 吃饱了|金色的惊喜/.test(document.querySelector('#profile-extras-message')?.textContent),
     );
     assert.equal(store.account().assets.fish, initialFish - 1);
+    await page.click('[data-ranch-open="ranch-wool-dialog"]');
     await page.click('[data-extra-action="shear"]');
     await page.waitForFunction(() =>
       document.querySelector('#profile-extras-message')?.textContent.includes('羊毛剪好了'),
@@ -318,6 +323,7 @@ async function geometry(page) {
     );
     await page.screenshot({ path: path.join(output, 'ranch-after-shear.png') });
     console.log('Interaction: equipped profile theme and avatar frame');
+    await page.goto(`${origin}/profile?uid=u_preview01`, { waitUntil: 'networkidle0' });
     await page.click('.profile-wardrobe-disclosure > summary');
     for (const item of ['card_twilight', 'card_blueprint', 'frame_orbit', 'frame_aurora']) {
       const slot = item.startsWith('card') ? 'card' : 'frame';
@@ -340,7 +346,7 @@ async function geometry(page) {
     for (const width of [1440, 390]) {
       await page.setViewport({ width, height: 1000 });
       await page.goto(`${origin}/laboratory`, { waitUntil: 'networkidle0' });
-      assert.equal(await page.$$eval('.laboratory-status.is-planned', (nodes) => nodes.length), 2);
+      assert.equal(await page.$$eval('.laboratory-status.is-planned', (nodes) => nodes.length), 4);
       await Promise.all([
         page.waitForNavigation({ waitUntil: 'networkidle0' }),
         page.click('.laboratory-enter'),

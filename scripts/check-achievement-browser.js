@@ -160,7 +160,7 @@ async function main() {
     await page.evaluate(() =>
       localStorage.removeItem('free_bbs_achievement_seen:u_preview01:plate_fishbone_master'),
     );
-    await page.goto(`${origin}/profile?uid=u_preview01`, { waitUntil: 'networkidle0' });
+    await page.goto(`${origin}/ranch?uid=u_preview01`, { waitUntil: 'networkidle0' });
     await page.click('[data-extra-action="feed"]');
     await page.waitForSelector('.achievement-toast');
     assert.equal(account.assets.plate_fishbone_master, 1);

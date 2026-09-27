@@ -10,7 +10,7 @@ test('activity window covers 365 Beijing dates including today and leap days', (
   assert.equal(activityWindow(new Date('2024-02-29T10:00:00Z')).end, '2024-02-29');
 });
 
-test('activity aggregates checkins and visible non-anonymous posts/comments within a bounded year', async () => {
+test('guest activity counts non-anonymous posts and all visible named comments within a bounded year', async () => {
   const calls = [];
   const pool = {
     execute: async (sql, params) => {
@@ -40,9 +40,33 @@ test('activity aggregates checkins and visible non-anonymous posts/comments with
           ],
     );
     if (!sql.includes('user_checkins')) {
-      for (const field of ['is_hidden', 'is_deleted', 'login_required', 'is_anonymous'])
+      for (const field of ['is_hidden', 'is_deleted', 'login_required'])
         assert.ok(sql.includes(`p.${field} = 0`));
     }
   }
   assert.match(calls[2].sql, /c.is_deleted = 0/);
+  assert.match(calls[1].sql, /p.is_anonymous = 0/);
+  assert.doesNotMatch(calls[2].sql, /p.is_anonymous/);
+  assert.equal(result.visibility, 'public');
+});
+
+test('authenticated viewers include login-visible posts and comments but never anonymous authorship', async () => {
+  const calls = [];
+  const pool = {
+    execute: async (sql) => {
+      calls.push(sql);
+      return [[]];
+    },
+  };
+  const result = await loadProfileActivity(pool, 7, new Date('2026-09-27T02:00:00Z'), {
+    viewer: { id: 8 },
+  });
+  assert.equal(result.visibility, 'members');
+  for (const sql of calls.slice(1)) {
+    assert.doesNotMatch(sql, /p.login_required = 0/);
+    assert.match(sql, /p.is_hidden = 0/);
+    assert.match(sql, /p.is_deleted = 0/);
+  }
+  assert.match(calls[1], /p.is_anonymous = 0/);
+  assert.doesNotMatch(calls[2], /p.is_anonymous/);
 });

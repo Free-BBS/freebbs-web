@@ -161,7 +161,8 @@
       const candidate = new URL(remembered, base);
       if (candidate.origin === base && candidate.pathname === step.route) url = candidate;
     }
-    if (step.route === '/profile' && context.uid) url.searchParams.set('uid', context.uid);
+    if (['/profile', '/ranch'].includes(step.route) && context.uid)
+      url.searchParams.set('uid', context.uid);
     url.searchParams.delete('guideVersion');
     url.searchParams.set('guideTour', '1');
     if (version !== VERSION) url.searchParams.set('guideVersion', version);
@@ -1167,11 +1168,32 @@
         await waitVisible(action.whenMissing, epoch, Math.max(0, deadline - Date.now()));
       }
     }
+    function adoptReplacedTargetDialog(node) {
+      const replacement = node?.closest('dialog[open]');
+      if (!replacement?.id) return;
+      let owned = false;
+      for (const opened of openedDialogs) {
+        if (!opened.isConnected && opened.id === replacement.id) {
+          openedDialogs.delete(opened);
+          owned = true;
+        }
+      }
+      if (!owned) return;
+      // A late profile response can rebuild a prepared ranch dialog. Transfer
+      // ownership so it is cleaned up on exit, and keep guide controls above
+      // the replacement in the native top layer. Never promote over unrelated UI.
+      openedDialogs.add(replacement);
+      if (dialog.open) {
+        dialog.close();
+        showDialog();
+      }
+    }
     function refreshStepTarget(step, index) {
       if (targetLoading || mode !== 'tour' || activeIndex !== index || displayedStep !== step)
         return;
       prepareTargetFold(step);
       const next = visibleTarget(step);
+      adoptReplacedTargetDialog(next);
       const missing = !next || Boolean(step.emptyTarget && next === visible(step.emptyTarget));
       if (next === target && missing === targetMissing) return;
       restoreTarget?.();

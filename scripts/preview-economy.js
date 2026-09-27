@@ -31,6 +31,7 @@ const pages = {
   '/inventory': 'inventory.html',
   '/discussion': 'discussion.html',
   '/profile': 'profile.html',
+  '/ranch': 'ranch.html',
   '/settings': 'settings.html',
 };
 function createEconomyPreview({

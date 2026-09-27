@@ -363,7 +363,7 @@ body.settings-page .main-content .settings-notification-state.is-off {
     font-weight: 400;
     line-height: 1.9;
   }
-  body.public-profile-page :is(.profile-ranch, .profile-wardrobe) {
+  body.public-profile-page:not(.ranch-page) :is(.profile-ranch, .profile-wardrobe) {
     padding: 28px;
     border-radius: 18px;
     box-shadow: none;
@@ -378,7 +378,8 @@ body.settings-page .main-content .settings-notification-state.is-off {
   body.public-profile-page .wardrobe-slots button {
     border-radius: 8px;
   }
-  body.public-profile-page .ranch-scene {
+  /* Photographic previews and the standalone ranch own their scene dimensions. */
+  body.public-profile-page .profile-ranch:not(.ranch-photographic) .ranch-scene {
     height: 360px;
     border-radius: 18px;
     --ranch-sky: linear-gradient(175deg, #e6efeb, #f8f0d9);
@@ -388,7 +389,7 @@ body.settings-page .main-content .settings-notification-state.is-off {
     --ranch-meadow: #c7d5af;
     --ranch-path: #e6d6b6;
   }
-  body.theme-dark.public-profile-page .ranch-scene {
+  body.theme-dark.public-profile-page .profile-ranch:not(.ranch-photographic) .ranch-scene {
     --ranch-sky: linear-gradient(175deg, #172c39, #304245);
     --ranch-distant: #374f52;
     --ranch-hill-back: #395850;

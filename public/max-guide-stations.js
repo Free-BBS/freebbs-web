@@ -618,10 +618,11 @@
     'profile',
     'profile-ranch',
     '#public-profile-ranch .ranch-scene',
-    '我的小牧场，也在这里。',
-    '领养后的 Max 会出现在牧场；喂养与鱼骨产出以页面列出的实际规则和状态为准。先认识它住在哪里，是否领养、喂食或使用物品都由你决定。',
+    '从主页的小风景，走进电子牧场。',
+    '这里是牧场的实时预览，点击场景可进入独立电子牧场，在草甸、湖畔、庭院和长城之间切换。季节按北京月份变化，明暗模式对应昼夜；是否领养、喂食或使用物品都由你决定。',
     {
       emptyTarget: '#public-profile-ranch',
+      action: link('.ranch-preview-link', '走进电子牧场'),
       caption: '不会自动消耗小鱼、收取物品或改变任何牧场状态。',
     },
   );
@@ -629,10 +630,13 @@
   step(
     'profile',
     'profile-wool',
-    '.ranch-wool-stages',
+    '#ranch-wool-dialog[open] .ranch-wool-stages',
     '把蓬松的羊毛，变成一点小小的电。',
     '有了 Max 后，每次成功喂养会按泊松过程随机长毛，长期平均每5条鱼约1份，并非第5次必得。按北京时间每天最多剪1份，其余待剪量继续保留。剪下后用商城7磁元购买的永久橡胶棒摩擦，棒带上负电，每份羊毛换2电元；棒可重复使用，羊毛只在牧场保存，不进入仓库。',
     {
+      // Keep the published step ID/index; only its destination moved in #141.
+      route: '/ranch',
+      prepare: [ready('[data-ranch-open="ranch-wool-dialog"]', '#ranch-wool-dialog[open]')],
       emptyTarget: '#public-profile-ranch',
       emptyBody:
         '羊毛玩法需要先拥有 Max。成功喂养后随机长毛，长期平均每5条鱼约1份，不保证固定次数产出；按北京时间每天最多剪1份，剩余待剪量保留。剪下后用7磁元购买的永久橡胶棒摩擦，每份换2电元；导览不会替你购买或喂养。',

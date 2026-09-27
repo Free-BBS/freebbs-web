@@ -393,6 +393,7 @@ function initializeDashboardShell() {
     '/development': '发展端',
     '/settings': '设置',
     '/profile': '个人主页',
+    '/ranch': '电子牧场',
     '/adminusers': '用户管理',
     '/system-settings': '管理员端',
     '/system-settings/announcements': '公告管理',
@@ -1840,7 +1841,7 @@ function groupShopItems(items) {
 }
 
 async function loadElectromagneticPage() {
-  if (!isElectromagneticPage()) {
+  if (!isElectromagneticPage() && !isCurrentPath('/ranch')) {
     return;
   }
 
@@ -2010,7 +2011,7 @@ async function handleElectromagneticPageClick(event) {
   if (
     !button ||
     button.disabled ||
-    !isElectromagneticPage() ||
+    (!isElectromagneticPage() && !isCurrentPath('/ranch')) ||
     !['inspect-item', 'purchase-item'].includes(button.dataset.action)
   ) {
     return;
@@ -2018,6 +2019,11 @@ async function handleElectromagneticPageClick(event) {
 
   const message = document.getElementById('economy-message');
   if (button.dataset.action === 'inspect-item') {
+    if (isCurrentPath('/ranch')) {
+      const token = userState.token;
+      await loadElectromagneticPage();
+      if (token !== userState.token || !userState.isLoggedIn) return;
+    }
     openShopInspectModal(button.dataset.itemKey || '');
     return;
   }
@@ -3406,7 +3412,7 @@ function isEconomyPage() {
 }
 
 function isPublicProfilePage() {
-  return isCurrentPath('/profile');
+  return isCurrentPath('/profile') || isCurrentPath('/ranch');
 }
 
 function isCurrentPath(pagePath) {
@@ -7432,6 +7438,8 @@ async function toggleDiscussionVisibility(button) {
   }
 }
 
+let publicProfileRequestVersion = 0;
+
 async function loadPublicProfile() {
   if (!isPublicProfilePage()) {
     return;
@@ -7451,11 +7459,14 @@ async function loadPublicProfile() {
   }
 
   setPublicProfileMessage('正在加载个人主页...');
+  const version = ++publicProfileRequestVersion;
+  const profileSessionToken = userState.token;
 
   try {
     const payload = await callApi(`/users/${encodeURIComponent(profileUid)}/public-profile`, {
       method: 'GET',
     });
+    if (version !== publicProfileRequestVersion || profileSessionToken !== userState.token) return;
     const profile = payload.profile || {};
 
     if (publicProfileAvatar) {
@@ -7496,6 +7507,7 @@ async function loadPublicProfile() {
     window.FreeBbsProfileActivity?.render(profile.activity);
     await window.FreeBbsProfileExtras?.renderProfile(profile);
   } catch (error) {
+    if (version !== publicProfileRequestVersion || profileSessionToken !== userState.token) return;
     if (publicProfileName) {
       publicProfileName.textContent = '加载失败';
     }
@@ -10648,6 +10660,10 @@ document.getElementById('discussion-my-more')?.addEventListener('click', async (
   }
 });
 window.addEventListener('freebbs:session-change', async () => {
+  if (isPublicProfilePage()) {
+    window.FreeBbsProfileActivity?.render(null);
+    loadPublicProfile();
+  }
   if (!isDiscussionPage()) return;
   const pendingPost = getDiscussionQueryState().postId;
   discussionState.showDeleted = false;
@@ -10664,6 +10680,11 @@ window.addEventListener('freebbs:session-change', async () => {
     await loadDiscussionDetail(pendingPost);
 });
 window.addEventListener('storage', (event) => {
+  if (isPublicProfilePage() && (event.key === STORAGE_KEY || event.key === null)) {
+    publicProfileRequestVersion += 1;
+    window.FreeBbsProfileActivity?.render(null);
+    setPublicProfileMessage('登录状态已变化，请刷新页面查看当前可见的足迹。');
+  }
   if (!isDiscussionPage() || (event.key !== STORAGE_KEY && event.key !== null)) return;
   // Do not retain a hidden post after another tab logs out/switches accounts.
   resetDiscussionData();

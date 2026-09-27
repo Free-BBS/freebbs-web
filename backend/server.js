@@ -5540,6 +5540,8 @@ app.get('/api/auth/me', async (request, response) => {
 });
 
 app.get('/api/users/:uid/public-profile', async (request, response) => {
+  response.set('Cache-Control', 'private, no-store');
+  response.vary('Authorization');
   const userKey = String(request.params.uid || '').trim();
   const isUid = /^u_?[a-z0-9]{6,32}$/i.test(userKey);
   const isLegacyStudentId = /^20\d{8}$/.test(userKey);
@@ -5591,7 +5593,9 @@ app.get('/api/users/:uid/public-profile', async (request, response) => {
         createdAt: user.created_at,
         postCount: Number(statsRows[0]?.post_count || 0),
         likeCount: Number(statsRows[0]?.like_count || 0),
-        activity: await loadProfileActivity(pool, user.id),
+        activity: await loadProfileActivity(pool, user.id, undefined, {
+          viewer: await getOptionalAuthUser(request),
+        }),
         goldenName: decoratedIdentity.goldenName,
         collectibles: await economyShop.publicCollectibles(getShopItems(), user.id),
         ...(await profileExtras.publicProfile(user.id)),

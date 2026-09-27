@@ -112,6 +112,67 @@ test('guide paths are fixed same-origin routes and exploration tasks match the a
     assert.throws(() => tourUrl(index));
 });
 
+test('the existing wool step follows the standalone ranch without losing identity or saved progress', () => {
+  const index = STEPS.findIndex((step) => step.id === 'profile-wool');
+  assert.equal(STEPS[index - 1].id, 'profile-ranch');
+  assert.equal(STEPS[index].station, 'profile');
+  assert.equal(STEPS[index].route, '/ranch');
+  assert.deepEqual(STEPS[index].prepare, [
+    {
+      selector: '[data-ranch-open="ranch-wool-dialog"]',
+      whenMissing: '#ranch-wool-dialog[open]',
+    },
+  ]);
+  const url = new URL(
+    tourUrl(index, VERSION, {
+      uid: 'current-member',
+      '/ranch': '/ranch?uid=previous-member',
+    }),
+    'https://www.free-bbs.cn',
+  );
+  assert.equal(url.pathname, '/ranch');
+  assert.equal(url.searchParams.get('uid'), 'current-member');
+  assert.equal(url.searchParams.get('guideTour'), '1');
+  assert.doesNotMatch(JSON.stringify(STEPS[index].prepare), /feed|shear|rub_wool|purchase/);
+});
+
+test('a rebuilt prepared dialog transfers ownership without covering guide controls or adopting unrelated UI', () => {
+  const source = fs.readFileSync(nodePath.join(__dirname, '../public/max-guide.js'), 'utf8');
+  const start = source.indexOf('function adoptReplacedTargetDialog(');
+  const end = source.indexOf('function refreshStepTarget(', start);
+  const previous = { id: 'ranch-wool-dialog', isConnected: false };
+  const openedDialogs = new Set([previous]);
+  const dialog = {
+    open: true,
+    close() {
+      this.open = false;
+    },
+  };
+  let promotions = 0;
+  const context = {
+    openedDialogs,
+    dialog,
+    showDialog() {
+      promotions += 1;
+      dialog.open = true;
+    },
+  };
+  vm.runInNewContext(source.slice(start, end), context);
+  const replacement = { id: previous.id, isConnected: true };
+  const target = { closest: () => replacement };
+  context.adoptReplacedTargetDialog(target);
+  assert.deepEqual([...openedDialogs], [replacement]);
+  assert.equal(promotions, 1);
+  context.adoptReplacedTargetDialog(target);
+  context.adoptReplacedTargetDialog({ closest: () => ({ id: 'unrelated', isConnected: true }) });
+  assert.equal(promotions, 1, 'do not loop or steal focus from unrelated dialogs');
+  dialog.open = false;
+  replacement.isConnected = false;
+  const afterPause = { id: previous.id, isConnected: true };
+  context.adoptReplacedTargetDialog({ closest: () => afterPause });
+  assert.equal(promotions, 1, 'do not resume a paused guide');
+});
+
 test('unknown versions and statuses fail closed; task IDs are a strict array whitelist', () => {
   assert.throws(() => normalizeProgress({ ...emptyProgress(), version: 'v2' }));
   assert.throws(() => normalizeProgress({ ...emptyProgress(), status: '__proto__' }));
@@ -728,16 +789,23 @@ test('station actions and preparation are restricted to an audited read-only vie
     '#workbench-notifications-tab',
     '#shop-grid [data-action="inspect-item"]',
     '#wallet-ledger-open',
+    '[data-ranch-open="ranch-wool-dialog"]',
   ]);
   const readLinks = new Map([
     ['a.island-course-planet[data-course-slug="math"]', '/course'],
     ['.course-reader-study-link', '/knowledge'],
     ['#settings-profile-link', '/profile'],
+    ['.ranch-preview-link', '/ranch'],
   ]);
   const stationIds = new Set(STATIONS.map((station) => station.id));
   for (const [index, step] of STEPS.entries()) {
     assert.ok(stationIds.has(step.station));
-    assert.equal(step.route, STATIONS.find((station) => station.id === step.station).route);
+    assert.equal(
+      step.route,
+      step.id === 'profile-wool'
+        ? '/ranch'
+        : STATIONS.find((station) => station.id === step.station).route,
+    );
     assert.ok(step.target && step.title && step.body && step.caption);
     for (const view of [step, step.reveal].filter(Boolean)) {
       for (const action of view.prepare || []) {
