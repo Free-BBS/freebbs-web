@@ -123,6 +123,7 @@ node --check public/max-guide-releases.js
 node --check public/max-guide-stations.js
 node --test scripts/ranch-page.test.js
 node --test scripts/ranch-study.test.js
+node --test scripts/ranch-design.test.js
 node --check public/max-guide-geometry.js
 node --check public/max-guide.js
 node --check public/settings-profile-link.js
