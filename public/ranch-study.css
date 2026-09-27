@@ -1,0 +1,220 @@
+.ranch-study-enter,
+.ranch-study-overlay {
+  display: none;
+}
+@media (min-width: 901px) {
+  body.ranch-page .ranch-study-enter {
+    display: block;
+    position: absolute;
+    top: 210px;
+    right: 106px;
+    z-index: 4;
+    min-height: 44px;
+    padding: 8px 14px;
+    border: 1px solid #ffffff40;
+    border-radius: 24px;
+    background: #fffffff0;
+    color: #213d2c !important;
+    font: 600 12px/1.4 var(--font-ui);
+  }
+}
+body.ranch-study-open
+  :is(
+    .topbar,
+    .mobile-header-backdrop,
+    .mobile-nav,
+    .ranch-sidebar-backdrop,
+    .notification-widget,
+    .max-guide-launcher
+  ) {
+  visibility: hidden;
+}
+body.ranch-study-open:not(.auth-page-body) .main-content {
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  z-index: 180;
+}
+body.ranch-study-open .settings-shell {
+  animation: none !important;
+}
+body.ranch-page .ranch-scene.is-study-mode {
+  width: 100vw !important;
+  height: 100dvh !important;
+  max-height: none !important;
+  margin: 0;
+  border-radius: 0;
+}
+body.ranch-page #public-profile-ranch:fullscreen {
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  padding: 0;
+  background: #16271e;
+}
+body.ranch-page #public-profile-ranch:-webkit-full-screen {
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  padding: 0;
+  background: #16271e;
+}
+.is-study-mode
+  :is(
+    .ranch-scene-heading,
+    .ranch-scene-actions,
+    .ranch-scene-pause,
+    .ranch-scene-status,
+    .ranch-study-enter,
+    #profile-extras-message
+  ) {
+  display: none !important;
+}
+.is-study-mode .ranch-study-overlay {
+  display: block;
+}
+.ranch-page .is-study-mode .ranch-pet-track {
+  bottom: 16%;
+}
+.ranch-page .is-study-mode [data-max-actor] {
+  width: min(280px, 100%);
+}
+.ranch-study-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  color: #fff;
+}
+.ranch-study-readout {
+  position: absolute;
+  top: clamp(36px, 8vh, 100px);
+  left: 24px;
+  right: 24px;
+  text-align: center;
+  text-shadow: 0 2px 18px #10201990;
+}
+body.ranch-page .ranch-study-clock time {
+  font: 400 clamp(64px, 7vw, 112px)/1.05 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  color: #fff !important;
+}
+body.ranch-page .ranch-study-clock p {
+  font-size: 14px;
+  margin: 12px 0 0;
+  letter-spacing: 0.08em;
+}
+.ranch-study-focus {
+  margin-top: 28px;
+}
+.ranch-study-focus:first-child,
+.ranch-study-clock[hidden] + .ranch-study-focus {
+  margin-top: 0;
+}
+body.ranch-page .ranch-study-focus p {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+body.ranch-page .ranch-study-focus output {
+  display: block;
+  font: 500 clamp(38px, 4vw, 60px)/1.15 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: #fff !important;
+}
+.ranch-study-timer-controls,
+.ranch-study-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  pointer-events: auto;
+}
+.ranch-study-timer-controls {
+  margin-top: 12px;
+}
+.ranch-study-toolbar {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: 4px;
+  border: 1px solid #ffffff30;
+  border-radius: 28px;
+  background: #142a22a6;
+  backdrop-filter: blur(12px);
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.ranch-study-toolbar:hover,
+.ranch-study-toolbar:focus-within {
+  opacity: 1;
+}
+body.ranch-page .ranch-study-overlay :is(button, select) {
+  min-height: 44px;
+  width: auto;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 24px;
+  background: #16302780;
+  color: #fff !important;
+  font: 500 13px/1.4 var(--font-ui);
+}
+body.ranch-page .ranch-study-toolbar button {
+  background: transparent;
+}
+body.ranch-page .ranch-study-toolbar button[aria-pressed='true'] {
+  background: #ffffff24;
+}
+body.ranch-page .ranch-study-overlay select option {
+  background: #20382e;
+  color: #fff;
+}
+body.ranch-page:not(.auth-page-body) .ranch-study-overlay select {
+  background: #163027b3 !important;
+  color: #fff !important;
+  color-scheme: dark;
+}
+body.ranch-page .ranch-study-overlay select:disabled {
+  opacity: 0.65;
+}
+.ranch-study-overlay :is(button, select):focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+body.ranch-page .ranch-study-notice {
+  position: absolute;
+  bottom: 90px;
+  left: 24px;
+  right: 24px;
+  text-align: center;
+  font-size: 13px;
+  text-shadow: 0 1px 5px #000;
+}
+.ranch-study-notice:empty {
+  display: none;
+}
+@media (max-height: 650px) {
+  .ranch-page .is-study-mode [data-max-actor] {
+    width: min(220px, 100%);
+  }
+  .ranch-study-readout {
+    top: 24px;
+  }
+  body.ranch-page .ranch-study-clock time {
+    font-size: 56px;
+  }
+  .ranch-study-focus {
+    margin-top: 16px;
+  }
+  body.ranch-page .ranch-study-focus output {
+    font-size: 36px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ranch-study-toolbar {
+    transition: none;
+  }
+}
