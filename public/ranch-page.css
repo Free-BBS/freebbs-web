@@ -96,6 +96,92 @@ body.ranch-page #economy-message:empty {
   height: clamp(500px, calc(100dvh - 175px), 900px);
   border-radius: 20px;
 }
+.ranch-scenery {
+  position: absolute;
+  inset: -3%;
+  z-index: -1;
+  background: var(--ranch-photo) center 60% / cover no-repeat;
+  pointer-events: none;
+  animation: ranch-scenery-drift 28s ease-in-out infinite alternate;
+}
+.ranch-atmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ranch-atmosphere i {
+  position: absolute;
+  top: -12px;
+  left: calc(8% + var(--mote-index) * 13%);
+  width: 7px;
+  height: 5px;
+  border-radius: 70% 15% 70% 20%;
+  background: #f5c5c3;
+  opacity: 0;
+  animation: ranch-season-drift 18s linear infinite;
+  animation-delay: calc(var(--mote-index) * -3.7s);
+}
+[data-ranch-season='autumn'] .ranch-atmosphere i {
+  background: #e5b35c;
+}
+[data-ranch-season='winter'] .ranch-atmosphere i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #fff;
+}
+[data-ranch-season='summer'] .ranch-atmosphere i {
+  top: 35%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #fff5c7;
+  animation-name: ranch-summer-glimmer;
+}
+.ranch-scene:is(.is-paused, .is-background-hidden) :is(.ranch-scenery, .ranch-atmosphere i) {
+  animation-play-state: paused;
+}
+@keyframes ranch-scenery-drift {
+  from {
+    transform: translate3d(-0.7%, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(0.7%, -0.5%, 0) scale(1.035);
+  }
+}
+@keyframes ranch-season-drift {
+  0% {
+    transform: translate3d(-16px, 0, 0) rotate(0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.65;
+  }
+  80% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translate3d(55px, 80vh, 0) rotate(230deg);
+    opacity: 0;
+  }
+}
+@keyframes ranch-summer-glimmer {
+  0%,
+  100% {
+    transform: translate3d(0, 50px, 0);
+    opacity: 0;
+  }
+  50% {
+    transform: translate3d(25px, -30px, 0);
+    opacity: 0.65;
+  }
+}
+/* Supplies use the same purchase layout and theme as the main store. */
+body.ranch-page .shop-inspect-panel {
+  font-family: var(--font-ui);
+}
 .ranch-page .ranch-scene::after {
   content: '';
   position: absolute;
@@ -320,13 +406,22 @@ body .ranch-supplies button {
     align-items: start;
     gap: 8px;
   }
-  body.ranch-page .main-content {
-    padding-inline: 10px !important;
-    padding-bottom: 96px !important;
+  body.ranch-page.public-profile-page:not(.auth-page-body) .main-content {
+    padding-inline: 0 !important;
+    padding-top: calc(
+      112px + env(safe-area-inset-top, 0px) + var(--site-search-header-extra, 0px)
+    ) !important;
+    padding-bottom: var(--mobile-nav-space, 64px) !important;
   }
   .ranch-page .ranch-scene {
-    height: max(420px, calc(100svh - 216px));
-    border-radius: 18px;
+    height: max(
+      360px,
+      calc(
+        100svh - 112px - var(--mobile-nav-space, 64px) - env(safe-area-inset-top, 0px) -
+          var(--site-search-header-extra, 0px)
+      )
+    );
+    border-radius: 0;
   }
   .ranch-scene-heading {
     inset: 16px 16px auto;
@@ -343,11 +438,11 @@ body .ranch-supplies button {
   .ranch-page .ranch-pet-track {
     left: 12%;
     right: 12%;
-    bottom: 25%;
-    height: 240px;
+    bottom: max(150px, 25%);
+    height: 180px;
   }
   .ranch-page [data-max-actor] {
-    width: min(240px, 100%);
+    width: min(180px, 100%);
   }
   .ranch-scene-actions {
     bottom: 16px;
@@ -374,7 +469,34 @@ body .ranch-supplies button {
     padding: 18px;
   }
 }
+@media (max-width: 360px) {
+  body .ranch-scene-actions button {
+    padding-inline: 8px;
+    font-size: 12px;
+  }
+}
+@media (max-width: 600px) and (max-height: 650px) {
+  .ranch-scene-heading {
+    gap: 8px;
+  }
+  .ranch-page .ranch-scene-heading h2 {
+    font-size: 18px;
+  }
+  body .profile-ranch .ranch-scene-pause {
+    top: 102px;
+  }
+  .ranch-page .ranch-pet-track {
+    height: 150px;
+  }
+  .ranch-page [data-max-actor] {
+    width: min(150px, 100%);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
+  .ranch-scenery,
+  .ranch-atmosphere i {
+    animation: none;
+  }
   .ranch-photographic * {
     scroll-behavior: auto;
   }
