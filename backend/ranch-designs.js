@@ -129,11 +129,9 @@ function createRanchDesignRouter({ pool, requireAuth }) {
           Number(assets.find((asset) => asset.asset_key === `ranch_${metal}_horn`)?.quantity) || 0;
         if (needed > owned) {
           await connection.rollback();
-          return response
-            .status(403)
-            .json({
-              message: `佩戴 ${needed} 只${metal === 'gold' ? '金' : '银'}角，需要先购买对应数量`,
-            });
+          return response.status(403).json({
+            message: `佩戴 ${needed} 只${metal === 'gold' ? '金' : '银'}角，需要先购买对应数量`,
+          });
         }
       }
       const [current] = await connection.execute(
