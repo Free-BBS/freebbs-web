@@ -111,6 +111,11 @@
         )
         .join('')}</div>`;
       const controls = document.createElement('div');
+      const gallery = document.createElement('a');
+      gallery.className = 'ranch-back ranch-gallery-link';
+      gallery.href = '/ranch-gallery';
+      gallery.textContent = '羊群广场 ↗';
+      heading.querySelector('.ranch-back').after(gallery);
       controls.className = 'ranch-scene-actions';
       const feed = root.querySelector('[data-extra-action="feed"]');
       if (feed) controls.append(feed);
@@ -153,6 +158,16 @@
         ['[data-ranch-open="ranch-wool-dialog"]', '羊毛'],
         ['[data-ranch-open="ranch-shop-dialog"]', '补给'],
       ];
+      if (isOwner && ranch.adopted) {
+        const dye = document.createElement('button');
+        dye.type = 'button';
+        dye.textContent = '羊的染坊';
+        dye.dataset.compactLabel = '染坊';
+        dye.addEventListener('click', () => {
+          window.location.href = '/ranch-dye';
+        });
+        controls.append(dye);
+      }
       for (const [selector, label] of compactLabels) {
         const button = controls.querySelector(selector);
         if (!button) continue;

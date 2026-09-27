@@ -300,6 +300,7 @@
         })
       : null;
     window.FreeBbsRanchPage?.restorePanel(root);
+    window.FreeBbsRanchDesign?.load(profileData?.uid, root.querySelector('[data-max-actor]'));
     const untilNextShear = Math.max(
       0,
       (ranch.nextShearAtMs || 0) - (ranch.serverNowMs || Date.now()),

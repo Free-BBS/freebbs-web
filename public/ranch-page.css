@@ -241,6 +241,15 @@ body.ranch-page .shop-inspect-panel {
   font-size: 14px;
   text-decoration: none;
 }
+.ranch-scene-heading .ranch-back:not(.ranch-gallery-link) {
+  grid-column: 1;
+  grid-row: 1;
+}
+.ranch-scene-heading .ranch-gallery-link {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+}
 .ranch-page .ranch-scene-heading h2 {
   margin: 0;
   font: 600 clamp(20px, 2.8vw, 30px)/1.3 var(--font-ui);

@@ -260,6 +260,81 @@ test(
     const outsider = await createUser('outside_user', '2026000102');
 
     await t.test(
+      'ranch designs persist safely, serialize concurrent saves and expose only adopted sheep',
+      async () => {
+        const { blank } = require('../public/ranch-design-data');
+        // createUser inserts directly after startup; production registration assigns a UID.
+        await db.execute('UPDATE users SET uid = ? WHERE id = ?', ['u_ranchqa01', outsider.id]);
+        const first = await api('/ranch-designs/mine', { token: outsider.token });
+        assert.equal(first.adopted, false);
+        await api('/ranch-designs/mine', {
+          token: outsider.token,
+          method: 'PUT',
+          expected: 403,
+          body: { revision: 0, design: blank() },
+        });
+        await db.execute(
+          "INSERT INTO user_assets (user_id, asset_key, quantity) VALUES (?, 'max_pet', 1)",
+          [outsider.id],
+        );
+        const design = blank();
+        design.wool.layers.push({
+          mode: 'splat',
+          blend: 'multiply',
+          color: '#e78199',
+          x: 0.3,
+          y: 0.4,
+          radius: 0.5,
+          opacity: 0.8,
+          angle: 0,
+        });
+        design.face.base = '#aaccee';
+        const responses = await Promise.all(
+          [0, 1].map(() =>
+            fetch(`${base}/ranch-designs/mine`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${outsider.token}`,
+              },
+              body: JSON.stringify({ design, revision: 0, userId: admin.user.id }),
+            }),
+          ),
+        );
+        assert.deepEqual(responses.map((r) => r.status).sort(), [200, 409]);
+        const saved = await api('/ranch-designs/mine', { token: outsider.token });
+        assert.equal(saved.revision, 1);
+        assert.deepEqual(saved.design, design);
+        const publicSheep = await api(`/ranch-designs/${saved.uid}`);
+        assert.deepEqual(publicSheep.design, design);
+        assert.equal(publicSheep.studentId, undefined);
+        assert.equal(publicSheep.id, undefined);
+        const gallery = await api('/ranch-designs');
+        assert.equal(gallery.sheep.filter((sheep) => sheep.uid === saved.uid).length, 1);
+        const adminDesign = await api('/ranch-designs/mine', { token: admin.token });
+        assert.equal(adminDesign.revision, 0);
+        await api('/ranch-designs/mine', {
+          method: 'PUT',
+          expected: 401,
+          body: { design, revision: 1 },
+        });
+        await api('/ranch-designs/mine', {
+          token: outsider.token,
+          method: 'PUT',
+          expected: 400,
+          body: { design: { ...design, face: { base: 'url(x)', layers: [] } }, revision: 1 },
+        });
+        const reset = await api('/ranch-designs/mine', {
+          token: outsider.token,
+          method: 'PUT',
+          body: { design: blank(), revision: 1 },
+        });
+        assert.equal(reset.revision, 2);
+        assert.deepEqual(reset.design, blank());
+      },
+    );
+
+    await t.test(
       'existing invalid usernames must be renamed before using session or upload APIs',
       async () => {
         assert.equal(legacy.user.requiresUsernameChange, true);
