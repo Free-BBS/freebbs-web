@@ -1,41 +1,41 @@
 (() => {
-  const seasons = {
-    spring: ['春', '桃花初放，柳梢新绿'],
-    summer: ['夏', '雨后草木，蝉鸣长夏'],
-    autumn: ['秋', '西山红叶，银杏流金'],
-    winter: ['冬', '薄雪晴空，静候春归'],
-  };
-  let currentSeason;
-  let openPanel = null;
-  const storageKey = 'freebbs_ranch_season';
-  function initialSeason() {
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (seasons[saved]) return saved;
-    } catch {
-      /* The scene still works when storage is unavailable. */
-    }
-    const month = new Date(Date.now() + 8 * 3600000).getUTCMonth() + 1;
-    return month >= 3 && month <= 5
-      ? 'spring'
-      : month >= 6 && month <= 8
-        ? 'summer'
-        : month >= 9 && month <= 11
-          ? 'autumn'
-          : 'winter';
+  const environment = window.FreeBbsRanchEnvironment;
+  let currentScene = 'meadow';
+  try {
+    currentScene = environment.readScene(localStorage);
+  } catch {
+    /* Storage is optional. */
   }
-  function applySeason(root, season) {
-    if (!seasons[season]) return;
-    currentSeason = season;
-    root.dataset.ranchSeason = season;
+  let midnightTimer;
+  let openPanel = null;
+  function syncEnvironment(root) {
+    const season = environment.seasonAt();
+    const period = document.body.classList.contains('theme-light') ? 'day' : 'night';
+    const update = (element) => {
+      element.dataset.ranchSeason = season;
+      element.dataset.ranchScene = currentScene;
+      element.dataset.ranchPeriod = period;
+      element.style.setProperty(
+        '--ranch-photo',
+        `url("${environment.photo(currentScene, season)}")`,
+      );
+    };
+    update(root);
     if (document.body.classList.contains('ranch-page')) {
-      document.body.dataset.ranchSeason = season;
+      update(document.body);
     }
     const caption = root.querySelector('[data-season-caption]');
-    if (caption) caption.textContent = `北京 · ${seasons[season][1]}`;
-    root.querySelectorAll('[data-ranch-season-choice]').forEach((button) => {
-      button.setAttribute('aria-pressed', String(button.dataset.ranchSeasonChoice === season));
+    if (caption)
+      caption.textContent = `北京 · ${environment.seasons[season]} · ${period === 'day' ? '白天' : '夜晚'}`;
+    root.querySelectorAll('[data-ranch-scene-choice]').forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.ranchSceneChoice === currentScene));
     });
+  }
+  function refreshEnvironment() {
+    document.querySelectorAll('.ranch-photographic').forEach(syncEnvironment);
+    clearTimeout(midnightTimer);
+    if (!document.hidden)
+      midnightTimer = setTimeout(refreshEnvironment, environment.nextMidnight() + 50);
   }
   function panel(id, title) {
     const dialog = document.createElement('dialog');
@@ -56,6 +56,13 @@
     const uid = encodeURIComponent(profile?.uid || '');
     root.classList.add('ranch-photographic');
     root.classList.toggle('ranch-preview', !full);
+    const scenery = document.createElement('div');
+    scenery.className = 'ranch-scenery';
+    scenery.setAttribute('aria-hidden', 'true');
+    const nightSky = document.createElement('div');
+    nightSky.className = 'ranch-night-sky';
+    nightSky.setAttribute('aria-hidden', 'true');
+    scene.prepend(scenery, nightSky);
     const status = !ranch.adopted
       ? '一片草地，等待 Max 搬进来'
       : ranch.hungry
@@ -75,9 +82,6 @@
       root.replaceChildren(link, message);
     } else {
       // Separate photo/atmosphere layers keep animation off the controls and actor.
-      const scenery = document.createElement('div');
-      scenery.className = 'ranch-scenery';
-      scenery.setAttribute('aria-hidden', 'true');
       const atmosphere = document.createElement('div');
       atmosphere.className = 'ranch-atmosphere';
       atmosphere.setAttribute('aria-hidden', 'true');
@@ -86,16 +90,16 @@
         mote.style.setProperty('--mote-index', index);
         atmosphere.append(mote);
       }
-      scene.prepend(scenery, atmosphere);
+      scene.append(atmosphere);
       scene.classList.toggle('is-background-hidden', document.hidden);
       const heading = document.createElement('div');
       heading.className = 'ranch-scene-heading';
-      heading.innerHTML = `<a class="ranch-back" href="/profile?uid=${uid}">‹ 个人主页</a><div><h2>Max 的电子牧场</h2><p data-season-caption></p></div><div class="ranch-seasons" role="group" aria-label="切换牧场季节">${Object.entries(
-        seasons,
+      heading.innerHTML = `<a class="ranch-back" href="/profile?uid=${uid}">‹ 个人主页</a><div><h2>Max 的电子牧场</h2><p data-season-caption title="季节按北京月份自动变化；亮色为白天，暗色为夜晚"></p></div><div class="ranch-scene-picker" role="group" aria-label="切换牧场场景">${Object.entries(
+        environment.scenes,
       )
         .map(
           ([key, value]) =>
-            `<button type="button" data-ranch-season-choice="${key}" aria-label="${value[0]}季">${value[0]}</button>`,
+            `<button type="button" data-ranch-scene-choice="${key}" aria-label="${value[1]}">${value[0]}</button>`,
         )
         .join('')}</div>`;
       const controls = document.createElement('div');
@@ -159,18 +163,20 @@
       root.replaceChildren(scene, drawer, shop);
       if (!isOwner && openPanel === 'ranch-shop-dialog') openPanel = null;
     }
-    applySeason(root, currentSeason || initialSeason());
+    syncEnvironment(root);
+    refreshEnvironment();
   }
   function restorePanel(root) {
     const dialog = openPanel && root.querySelector(`#${openPanel}`);
     if (dialog && !dialog.open) dialog.showModal();
   }
   document.addEventListener('click', (event) => {
-    const season = event.target.closest('[data-ranch-season-choice]');
-    if (season) {
-      applySeason(season.closest('.profile-ranch'), season.dataset.ranchSeasonChoice);
+    const choice = event.target.closest('[data-ranch-scene-choice]');
+    if (choice) {
+      currentScene = environment.validScene(choice.dataset.ranchSceneChoice);
+      refreshEnvironment();
       try {
-        localStorage.setItem(storageKey, currentSeason);
+        localStorage.setItem(environment.storageKey, currentScene);
       } catch {
         /* Optional preference. */
       }
@@ -186,11 +192,22 @@
   });
   window.addEventListener('storage', (event) => {
     if (event.key === 'free_bbs_auth_token' || event.key === null) openPanel = null;
+    if (event.key === environment.storageKey || event.key === null) {
+      currentScene = environment.validScene(event.newValue);
+      refreshEnvironment();
+    }
   });
   document.addEventListener('visibilitychange', () => {
+    refreshEnvironment();
     document.querySelectorAll('.ranch-page .ranch-scene').forEach((scene) => {
       scene.classList.toggle('is-background-hidden', document.hidden);
     });
+  });
+  window.addEventListener('pageshow', refreshEnvironment);
+  window.addEventListener('focus', refreshEnvironment);
+  new MutationObserver(refreshEnvironment).observe(document.body, {
+    attributes: true,
+    attributeFilter: ['class'],
   });
   window.FreeBbsRanchPage = { present, restorePanel };
 })();
