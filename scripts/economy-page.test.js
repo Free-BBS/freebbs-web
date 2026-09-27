@@ -124,14 +124,23 @@ test('shop groups all enabled products into four ordered sections without changi
         'hertz_resonator',
       ],
       ['differential_converter', 'fortune_bag'],
-      ['max_pet', 'fish', 'fishbone', 'rubber_rod'],
+      [
+        'max_pet',
+        'fish',
+        'fishbone',
+        'ranch_gold_horn',
+        'ranch_silver_horn',
+        'ranch_backflip',
+        'ranch_bicycle',
+        'rubber_rod',
+      ],
     ],
   );
   assert.equal(JSON.stringify(catalog), before);
   await context.loadElectromagneticPage();
   const html = node('shop-grid').innerHTML;
   assert.equal((html.match(/data-shop-section=/g) || []).length, 4);
-  assert.equal((html.match(/class="shop-item-card"/g) || []).length, 18);
+  assert.equal((html.match(/class="shop-item-card"/g) || []).length, 22);
   assert.doesNotMatch(html, /data-item-key="plate_maxwell"/);
 });
 

@@ -5,14 +5,29 @@ const designs = require('../public/ranch-design-data');
 
 const adopted = `(EXISTS (SELECT 1 FROM user_profile_extras p WHERE p.user_id = u.id AND p.adopted = 1)
  OR EXISTS (SELECT 1 FROM user_assets a WHERE a.user_id = u.id AND a.asset_key = 'max_pet' AND a.quantity > 0))`;
-const fields = `u.id, u.uid, u.username, d.design_json, d.revision`;
+const fields = `u.id, u.uid, u.username, d.design_json, d.revision,
+ (SELECT GROUP_CONCAT(CONCAT(a.asset_key, ':', a.quantity)) FROM user_assets a
+ WHERE a.user_id = u.id AND a.quantity > 0 AND a.asset_key IN
+ ('ranch_gold_horn','ranch_silver_horn','ranch_backflip','ranch_bicycle')) AS ranch_assets`;
 const join = 'LEFT JOIN user_ranch_designs d ON d.user_id = u.id';
 const serialize = (row) => ({
   uid: row.uid,
   username: row.username,
   design: designs.read(row.design_json),
   revision: Number(row.revision) || 0,
+  ...(row.ranch_assets !== undefined ? { assets: readRanchAssets(row.ranch_assets) } : {}),
 });
+function readRanchAssets(value) {
+  return Object.fromEntries(
+    String(value || '')
+      .split(',')
+      .filter(Boolean)
+      .map((entry) => {
+        const [key, quantity] = entry.split(':');
+        return [key, Number(quantity) || 0];
+      }),
+  );
+}
 
 async function ensureRanchDesignTables(pool) {
   await pool.query(
@@ -104,6 +119,21 @@ function createRanchDesignRouter({ pool, requireAuth }) {
         await connection.rollback();
         return response.status(403).json({ message: '先在牧场领养一只羊，再来为它染色吧' });
       }
+      const [assets] = await connection.execute(
+        "SELECT asset_key, quantity FROM user_assets WHERE user_id = ? AND asset_key IN ('ranch_gold_horn', 'ranch_silver_horn')",
+        [user.id],
+      );
+      for (const metal of ['gold', 'silver']) {
+        const needed = Object.values(design.horns).filter((horn) => horn === metal).length;
+        const owned =
+          Number(assets.find((asset) => asset.asset_key === `ranch_${metal}_horn`)?.quantity) || 0;
+        if (needed > owned) {
+          await connection.rollback();
+          return response.status(403).json({
+            message: `佩戴 ${needed} 只${metal === 'gold' ? '金' : '银'}角，需要先购买对应数量`,
+          });
+        }
+      }
       const [current] = await connection.execute(
         'SELECT revision FROM user_ranch_designs WHERE user_id = ? FOR UPDATE',
         [user.id],
@@ -128,4 +158,11 @@ function createRanchDesignRouter({ pool, requireAuth }) {
   });
   return router;
 }
-module.exports = { createRanchDesignRouter, ensureRanchDesignTables, serialize };
+module.exports = {
+  createRanchDesignRouter,
+  ensureRanchDesignTables,
+  serialize,
+  fields,
+  join,
+  adopted,
+};

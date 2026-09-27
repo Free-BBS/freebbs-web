@@ -195,6 +195,7 @@
     clearTimeout(satietyTimer);
     const motion = actor?.snapshot();
     actor?.destroy();
+    window.FreeBbsRanchSharedView?.detach();
     const ranch = state.ranch || {};
     const bones = Math.max(0, Number(ranch.bones) || 0);
     const gold = Math.max(0, Number(ranch.goldenBones) || 0);
@@ -302,6 +303,11 @@
       : null;
     window.FreeBbsRanchPage?.restorePanel(root);
     window.FreeBbsRanchDesign?.load(profileData?.uid, root.querySelector('[data-max-actor]'));
+    window.FreeBbsRanchSharedView?.attach(
+      root.querySelector('[data-max-actor]'),
+      actor,
+      profileData?.uid,
+    );
     const untilNextShear = Math.max(
       0,
       (ranch.nextShearAtMs || 0) - (ranch.serverNowMs || Date.now()),
@@ -579,7 +585,11 @@
       document.querySelector('.ranch-scene')?.classList.toggle('is-paused', paused);
       actor?.pause(paused);
     }
-    if (event.target.closest('[data-ranch-greet]')) actor?.greet();
+    if (event.target.closest('[data-ranch-greet]')) {
+      if (document.body.classList.contains('ranch-page') && window.FreeBbsRanchSharedView)
+        window.FreeBbsRanchSharedView.interact('greet');
+      else actor?.greet();
+    }
   });
   window.addEventListener('freebbs:session-change', () => {
     const owner = identity();

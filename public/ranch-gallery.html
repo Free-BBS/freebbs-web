@@ -149,7 +149,7 @@
             <div class="community-clouds" aria-hidden="true"><i></i><i></i><i></i></div>
             <header class="community-heading">
               <div>
-                <a href="/ranch">‹ 我的牧场</a>
+                <a href="/ranch" data-own-ranch>‹ 我的牧场</a>
                 <h1 id="community-title">大家的牧场</h1>
                 <span id="gallery-status" role="status" aria-live="polite">羊群正在赶来…</span>
               </div>
@@ -179,6 +179,8 @@
                 <button type="button" data-community-action="greet">打招呼</button>
                 <button type="button" data-community-action="stroll">一起散步</button>
                 <button type="button" data-community-action="pet">摸摸它</button>
+                <button type="button" data-community-action="backflip" hidden>后空翻</button>
+                <button type="button" data-community-action="bicycle" hidden>骑自行车</button>
                 <a id="community-visit" href="/ranch">逛逛 TA 的牧场</a>
               </div>
               <button
@@ -192,9 +194,10 @@
             </aside>
 
             <nav class="community-corner-links" aria-label="牧场快捷操作">
+              <button type="button" id="community-find-mine" hidden>找到我的羊</button>
               <a href="/ranch-dye">给我的羊染色</a>
               <span aria-hidden="true">·</span>
-              <a href="/ranch">照顾我的 Max</a>
+              <a href="/ranch" data-own-ranch>照顾我的 Max</a>
             </nav>
           </div>
         </section>
@@ -230,6 +233,7 @@
     <script src="/ranch-design.js"></script>
     <script src="/app.js"></script>
     <script src="/notifications.js"></script>
+    <script src="/ranch-world-data.js"></script>
     <script src="/ranch-gallery.js"></script>
   </body>
 </html>

@@ -127,6 +127,7 @@ node --test scripts/ranch-page.test.js
 node --test scripts/ranch-study.test.js
 node --test scripts/ranch-design.test.js
 node --test scripts/ranch-gallery.test.js
+node --test backend/ranch-world.test.js
 node --test scripts/page-shell.test.js scripts/personal-ui.test.js
 node --check public/max-guide-geometry.js
 node --check public/max-guide.js

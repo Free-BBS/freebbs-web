@@ -412,6 +412,25 @@ test('scaled actors preserve world-space ground contact and respect their actual
   assert.equal(controller.snapshot().x, 4);
 });
 
+test('shared frames replace local movement, show purchased actions and remain resize-safe', (t) => {
+  const { controller, frames, element, node } = ranchHarness(t, { shared: true });
+  assert.equal(frames.size, 0);
+  controller.syncFrame({ x: 80, direction: -1, time: 123, kind: 'bicycle', progress: 0.5 });
+  assert.ok(Math.abs(controller.snapshot().x - (700 - 216) * 0.8) < 0.00001);
+  assert.equal(node('[data-bicycle]').attributes.visibility, 'visible');
+  controller.syncFrame({ x: 50, direction: 1, time: 124, kind: 'backflip', progress: 0.5 });
+  assert.match(node('[data-facing]').attributes.transform, /rotate\(-180/);
+  assert.equal(node('[data-bicycle]').attributes.visibility, 'hidden');
+  element.parentElement.clientWidth = 300;
+  controller.syncFrame({ x: 50, direction: 1, time: 125, kind: 'walk', progress: 0 });
+  assert.equal(controller.snapshot().x, 42);
+  assert.equal(frames.size, 0);
+});
+test('reduced motion does not perform a shared backflip', (t) => {
+  const { controller, node } = ranchHarness(t, { shared: true }, true);
+  controller.syncFrame({ x: 50, direction: 1, time: 123, kind: 'backflip', progress: 0.5 });
+  assert.doesNotMatch(node('[data-facing]').attributes.transform, /rotate/);
+});
 test('pastoral scenery is layered, unfenced, palette-aware and the greeting label is animal-friendly', () => {
   const js = readFileSync(path.join(__dirname, '../public/profile-extras.js'), 'utf8');
   const css = readFileSync(path.join(__dirname, '../public/profile-extras.css'), 'utf8');

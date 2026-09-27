@@ -10,6 +10,7 @@
     version: 1,
     wool: { base: null, layers: [] },
     face: { base: null, layers: [] },
+    horns: { left: null, right: null },
   });
   function invalid() {
     throw new Error('花纹格式不正确，请重新打开染坊');
@@ -26,6 +27,11 @@
   function validate(value) {
     if (!value || value.version !== 1) invalid();
     const result = blank();
+    for (const side of ['left', 'right']) {
+      const horn = value.horns?.[side] ?? null;
+      if (![null, 'gold', 'silver'].includes(horn)) invalid();
+      result.horns[side] = horn;
+    }
     for (const part of ['wool', 'face']) {
       const input = value[part];
       if (!input || !Array.isArray(input.layers) || input.layers.length > MAX_LAYERS) invalid();

@@ -152,6 +152,18 @@
           'beforeend',
           '<button type="button" data-ranch-open="ranch-shop-dialog">牧场补给</button>',
         );
+        for (const [key, name, hint] of [
+          ['ranch_gold_horn', '金角', '20 磁元／只'],
+          ['ranch_silver_horn', '银角', '10 磁元／只'],
+          ['ranch_backflip', '后空翻', '12 磁元 · 永久解锁'],
+          ['ranch_bicycle', '牧场自行车', '30 磁元 · 永久解锁'],
+        ])
+          shop
+            .querySelector('.ranch-supplies')
+            .insertAdjacentHTML(
+              'beforeend',
+              `<button type="button" data-action="inspect-item" data-item-key="${key}"><img src="/assets/shop/max-cartoon-v1/${key}.webp" alt=""/><span>${name}<small>${hint}</small></span><span aria-hidden="true">›</span></button>`,
+            );
       }
       const compactLabels = [
         ['[data-extra-action="feed"]', `喂养 ${Math.max(0, Number(state.fish) || 0)}`],
