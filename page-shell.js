@@ -19,6 +19,19 @@ function preparePageShell(source) {
   let html = footer.test(source)
     ? source.replace(footer, SITE_FOOTER)
     : source.replace('</main>', `</main>\n${SITE_FOOTER}`);
+  // External font CSS is decorative, never a dependency of first paint or the
+  // early theme script. Slow/unreachable font hosts keep the installed fallback.
+  html = html.replace(/<link\b[^>]*>/g, (link) => {
+    if (
+      !/href=["']https:\/\/fonts\.googleapis\.com\//.test(link) ||
+      !/rel=["']stylesheet["']/.test(link) ||
+      /\bmedia=/.test(link)
+    )
+      return link;
+    return link
+      .replace('display=swap', 'display=optional')
+      .replace(/\s*\/?>$/, ' media="print" onload="this.onload=null;this.media=\'all\'" />');
+  });
   if (!html.includes('href="/site-footer.css"'))
     html = html.replace('</head>', '<link rel="stylesheet" href="/site-footer.css"></head>');
   // Apply saved font size and theme before any page content can paint. The same
@@ -31,6 +44,22 @@ function preparePageShell(source) {
     html = html
       .replace(typography, '')
       .replace(/(<body\b[^>]*>)/, '$1\n<script src="/typography.js"></script>');
+  // Ranch scenery must be ready before its content paints, just like the theme.
+  const ranchEnvironment = /<script\b[^>]*src=["']\/ranch-environment\.js["'][^>]*>\s*<\/script>/;
+  if (
+    /<body\b[^>]*class="[^"]*\branch-page\b/.test(html) &&
+    ranchEnvironment.test(html) &&
+    !html.includes(
+      '<script src="/typography.js"></script>\n<script src="/ranch-environment.js"></script>',
+    )
+  ) {
+    html = html
+      .replace(ranchEnvironment, '')
+      .replace(
+        '<script src="/typography.js"></script>',
+        '<script src="/typography.js"></script>\n<script src="/ranch-environment.js"></script>',
+      );
+  }
   return html;
 }
 

@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const source = fs.readFileSync(require.resolve('../public/tool-workshop'), 'utf8');
 const page = fs.readFileSync(require.resolve('../public/tool-workshop.html'), 'utf8');
 
-function fixture() {
+function fixture(tools = []) {
   const nodes = new Map();
   function element(id) {
     if (nodes.has(id)) return nodes.get(id);
@@ -18,6 +18,7 @@ function fixture() {
       innerHTML: '',
       dataset: {},
       attributes: {},
+      style: {},
       handlers: {},
       scrollTop: 0,
       scrollHeight: 0,
@@ -28,6 +29,10 @@ function fixture() {
       getAttribute(key) {
         return this.attributes[key];
       },
+      removeAttribute(key) {
+        delete this.attributes[key];
+        if (key === 'srcdoc') delete this.srcdoc;
+      },
       addEventListener(name, handler) {
         this.handlers[name] = handler;
       },
@@ -36,9 +41,16 @@ function fixture() {
         return [];
       },
       cloneNode() {
-        return this;
+        return {
+          ...this,
+          attributes: { ...this.attributes },
+          style: { ...this.style },
+          handlers: {},
+        };
       },
-      replaceWith() {},
+      replaceWith(next) {
+        nodes.set(this.id, next);
+      },
       querySelector() {
         return {};
       },
@@ -82,7 +94,7 @@ function fixture() {
       apiBaseUrl: '/api',
       callApi: async (url, options) => {
         requests.push({ url, options });
-        return { tools: [] };
+        return { tools };
       },
     },
     FreeBbsToolEmbeds: { sandboxDocument: (html) => `sandbox:${html}` },
@@ -102,6 +114,7 @@ function fixture() {
       highlight: (html) => ({ value: html.replaceAll('&', '&amp;').replaceAll('<', '&lt;') }),
     },
     location: { href: 'https://example.test/tool-workshop', search: '' },
+    history: { replaceState() {} },
     addEventListener() {},
   };
   const document = {
@@ -125,6 +138,10 @@ function fixture() {
   return {
     element,
     requests,
+    open: (id) =>
+      element('tool-gallery').handlers.click({
+        target: { closest: () => ({ dataset: { toolId: id } }) },
+      }),
     click: (id) => element(id).handlers.click(),
     get generation() {
       return generation;
@@ -139,6 +156,43 @@ function fixture() {
     },
   };
 }
+
+test('viewer isolates consecutive openings, ignores stale load/close and supports retry', async () => {
+  const ui = fixture(
+    [1, 2].map((id) => ({
+      id: String(id),
+      title: String(id),
+      html: '<p>tool</p>',
+      createdAt: '2026-09-27',
+    })),
+  );
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+  ui.open('1');
+  const first = ui.element('tool-viewer-frame');
+  assert.equal(ui.element('tool-viewer').open, true);
+  assert.equal(first.style.visibility, 'hidden');
+  first.handlers.load();
+  assert.equal(first.style.visibility, '');
+  ui.element('tool-viewer').handlers.cancel({ preventDefault() {} });
+  ui.open('2');
+  const second = ui.element('tool-viewer-frame');
+  assert.notEqual(first, second);
+  first.handlers.load(); // Detached frame's response must not finish the new load.
+  ui.element('tool-viewer').handlers.close(); // Native close can be queued.
+  assert.equal(ui.element('tool-viewer-status').hidden, false);
+  assert.equal(ui.element('tool-viewer-title').textContent, '2');
+  ui.flush();
+  assert.match(ui.element('tool-viewer-status').textContent, /重新载入/);
+  ui.click('tool-viewer-reload');
+  const retried = ui.element('tool-viewer-frame');
+  assert.notEqual(retried, second);
+  second.handlers.load();
+  assert.equal(ui.element('tool-viewer-status').hidden, false);
+  retried.handlers.load();
+  assert.equal(ui.element('tool-viewer-status').hidden, true);
+});
 
 test('workshop switches between square and studio, then displays only the selected output panel', () => {
   const ui = fixture();

@@ -217,8 +217,17 @@
         </div>
         <button type="button" data-tool-close aria-label="关闭">×</button>
       </header>
-      <iframe id="tool-viewer-frame" title="已发布小工具" sandbox="allow-scripts"></iframe>
+      <div class="tool-viewer-surface">
+        <p id="tool-viewer-status" role="status" hidden></p>
+        <iframe
+          id="tool-viewer-frame"
+          title="已发布小工具"
+          sandbox="allow-scripts"
+          referrerpolicy="no-referrer"
+        ></iframe>
+      </div>
       <footer>
+        <button type="button" id="tool-viewer-reload">重新载入</button>
         <button type="button" id="tool-share-discussion">发到讨论区</button
         ><button type="button" data-tool-close>关闭</button>
       </footer>

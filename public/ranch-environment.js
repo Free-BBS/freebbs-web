@@ -38,5 +38,20 @@
   }
   const api = { scenes, seasons, storageKey, seasonAt, nextMidnight, validScene, readScene, photo };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  else root.FreeBbsRanchEnvironment = api;
+  else {
+    root.FreeBbsRanchEnvironment = api;
+    // Paint public scenery before waiting for account data; never cache a profile.
+    if (document.body.classList.contains('ranch-page')) {
+      let scene = 'meadow';
+      try {
+        scene = readScene(localStorage);
+      } catch {
+        /* Storage access may be disabled. */
+      }
+      const season = seasonAt();
+      document.body.dataset.ranchSeason = season;
+      document.body.dataset.ranchScene = scene;
+      document.body.style.setProperty('--ranch-photo', `url("${photo(scene, season)}")`);
+    }
+  }
 })(globalThis);

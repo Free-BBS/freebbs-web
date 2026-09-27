@@ -70,6 +70,7 @@ const htmlRedirects = new Map([
   ['/circuit-challenge.html', '/circuit-challenge'],
   ['/development.html', '/development'],
   ['/discussion.html', '/discussion'],
+  ['/publish.html', '/publish'],
   ['/electromagnetic.html', '/electromagnetic'],
   ['/inventory.html', '/inventory'],
   ['/guide.html', '/guide'],

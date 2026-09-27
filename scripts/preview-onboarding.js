@@ -158,7 +158,7 @@ function initialLedger(now) {
   });
 }
 
-function createOnboardingPreview({ now = Date.now, growthRandom } = {}) {
+function createOnboardingPreview({ now = Date.now, growthRandom, extraPages = {} } = {}) {
   const progressByVersion = new Map();
   const readProgress = (version = GUIDE_VERSION) =>
     structuredClone(progressByVersion.get(resolveGuideVersion(version)) || emptyProgress(version));
@@ -209,7 +209,7 @@ function createOnboardingPreview({ now = Date.now, growthRandom } = {}) {
     now,
     profileOptions: { random: growthRandom },
     allowVendor: true,
-    extraPages: PREVIEW_PAGES,
+    extraPages: { ...PREVIEW_PAGES, ...extraPages },
     accounts: [
       {
         id: 1,
@@ -265,6 +265,8 @@ function createOnboardingPreview({ now = Date.now, growthRandom } = {}) {
     async extraApi(context) {
       const { route, method, body, url, store } = context;
       if (route === '/api/tools' && method === 'GET') return result({ tools: [] });
+      if (route === '/api/development/v1/me')
+        return result({ message: '本地模拟账号未连接独立发展端' }, 403);
       if (route.startsWith('/api/tools'))
         return result({ message: '本地预览不调用真实 AI，也不生成或发布小工具' }, 503);
       if (route === '/api/onboarding/reward') {

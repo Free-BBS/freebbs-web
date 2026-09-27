@@ -399,6 +399,26 @@ body.theme-light .tool-code-live code.hljs {
 .tool-viewer::backdrop {
   background: rgba(3, 24, 30, 0.66);
 }
+.tool-viewer-surface {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--ui-surface-soft);
+}
+#tool-viewer-status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--ui-text);
+  background: var(--ui-surface-soft);
+  text-align: center;
+}
+#tool-viewer-status[hidden] {
+  display: none;
+}
 .tool-viewer header,
 .tool-viewer footer {
   display: flex;

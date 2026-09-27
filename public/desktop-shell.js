@@ -3,8 +3,16 @@
 (() => {
   const { body } = document;
   const nav = document.querySelector('.topbar .nav-actions');
-  const main = document.querySelector('.main-content[data-page-title]');
-  if (!nav || !main || body.classList.contains('auth-page-body')) return;
+  // Page-specific main classes must not silently opt out of the shared chrome.
+  // Full-screen readers/editors opt out explicitly instead.
+  const main = document.querySelector('main[data-page-title]');
+  if (
+    !nav ||
+    !main ||
+    main.dataset.shellMode === 'immersive' ||
+    body.classList.contains('auth-page-body')
+  )
+    return;
   const media = window.matchMedia('(min-width: 901px)');
   const moves = [];
   let header;

@@ -192,7 +192,9 @@
   }
   // Page CSS may replace the shell title (for example, the home breadcrumb).
   // Measure the rendered content with its real typography, not just the dataset.
-  const headerMain = document.querySelector('.main-content[data-page-title]');
+  const headerMain = document.querySelector(
+    'main[data-page-title]:not([data-shell-mode="immersive"])',
+  );
   const accountPanel = document.querySelector('.user-panel');
   const titleMeasure = document.createElement('span');
   titleMeasure.className = 'site-search-title-measure';

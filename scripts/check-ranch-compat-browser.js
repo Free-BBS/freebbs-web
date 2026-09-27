@@ -78,8 +78,8 @@ async function main() {
         );
         assert.deepEqual(store.account(), before, 'dye save must not affect wool or balances');
         await page.goto(`${origin}/ranch-gallery`, { waitUntil: 'networkidle0' });
-        await page.waitForSelector('.sheep-portrait');
-        assert.equal(await page.$$eval('.sheep-portrait', (nodes) => nodes.length), 2);
+        await page.waitForSelector('.community-sheep');
+        assert.equal(await page.$$eval('.community-sheep', (nodes) => nodes.length), 2);
         assert.equal(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
           true,

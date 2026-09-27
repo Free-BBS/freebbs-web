@@ -8,13 +8,17 @@
     .discussion-stats-sidebar {
     top: var(--desktop-header-height, 94px);
   }
-  body.desktop-shell-active .main-content[data-page-title]::before {
+  body.desktop-shell-active main[data-page-title]::before {
     display: none !important;
     content: none !important;
   }
-  body.desktop-shell-active .main-content[data-page-title] {
+  body.desktop-shell-active main[data-page-title] {
     padding-top: calc(var(--desktop-header-height, 94px) + 28px) !important;
     padding-bottom: 16px !important;
+  }
+  /* The composer is a standalone main, not wrapped in .page-shell. */
+  body.desktop-shell-active.publish-page {
+    padding-left: var(--bbs-shell-width);
   }
   body.desktop-shell-active .desktop-header {
     position: fixed;
@@ -38,6 +42,16 @@
     font: 700 clamp(1.8rem, 3vw, 2.28rem)/1.25 var(--font-display);
     letter-spacing: -0.035em;
     overflow-wrap: anywhere;
+  }
+  /* Scenic pages still have one continuous header, from sidebar to right edge. */
+  body.desktop-shell-active:is(.ranch-page, .ranch-gallery-page) .desktop-header {
+    left: var(--bbs-shell-width);
+    right: 0;
+    padding-inline: var(--bbs-content-gutter);
+    background: var(--ui-page);
+  }
+  body.desktop-shell-active.ranch-gallery-page .community-heading {
+    top: calc(var(--desktop-header-height, 94px) + clamp(14px, 2vw, 28px));
   }
   body.desktop-shell-active .desktop-header-controls,
   body.desktop-shell-active .desktop-header-tools {
