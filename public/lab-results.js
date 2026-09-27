@@ -40,9 +40,10 @@
       return '<p class="lab-empty">没有波形。请提供带时钟、激励及 $finish 的测试平台。</p>';
     const end = Math.max(1, Number(waveform.end) || 1);
     if (!Number.isFinite(end)) return '';
-    const width = 1000;
+    const width = compact ? 400 : 1000;
     const height = 38 + signals.length * 54;
-    const x = (time) => 180 + Math.max(0, Math.min(1, Number(time) / end)) * 800;
+    const x = (time) =>
+      (compact ? 0 : 180) + Math.max(0, Math.min(1, Number(time) / end)) * (compact ? 400 : 800);
     let body = '';
     for (let i = 0; i <= 5; i += 1) {
       const pos = x((end * i) / 5);
@@ -53,7 +54,8 @@
       const values = (Array.isArray(signal.values) ? signal.values : [])
         .filter((v) => Array.isArray(v) && Number.isFinite(v[0]) && v[0] >= 0 && v[0] <= end)
         .slice(0, 2000);
-      body += `<text x="8" y="${y + 20}" fill="currentColor" font-size="12"><title>${escape(signal.name)}</title>${escape(String(signal.name).slice(-22))}</text>`;
+      if (!compact)
+        body += `<text x="8" y="${y + 20}" fill="currentColor" font-size="12"><title>${escape(signal.name)}</title>${escape(String(signal.name).slice(-22))}</text>`;
       let previousY;
       values.forEach(([time, raw], j) => {
         const start = x(time);
@@ -64,7 +66,7 @@
         const color = unknown ? '#d58a39' : '#159a91';
         if (bus || unknown) {
           body += `<path d="M${start},${y + 14} L${Math.min(start + 4, finish)},${y + 2} H${Math.max(start, finish - 4)} L${finish},${y + 14} L${Math.max(start, finish - 4)},${y + 26} H${Math.min(start + 4, finish)} Z" fill="${color}" fill-opacity=".1" stroke="${color}"/>`;
-          if (finish - start > 22)
+          if (!compact && finish - start > 22)
             body += `<text x="${start + 6}" y="${y + 18}" fill="currentColor" font-size="11">${escape(value.length > 12 && !unknown ? `0x${BigInt(`0b${value.replace(/[^01]/g, '0')}`).toString(16)}` : value.slice(0, 12))}</text>`;
           previousY = undefined;
         } else {

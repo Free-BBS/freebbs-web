@@ -129,3 +129,50 @@ body:not(.theme-light) .lab-embed {
   background: #172e32;
   color: #e0eeee;
 }
+
+/* Feed cards already show the title: use the entire thumbnail for the result. */
+.lab-preview.is-compact {
+  padding: 6px;
+  box-sizing: border-box;
+}
+.lab-preview.is-compact .lab-preview-heading {
+  display: none;
+}
+.lab-preview.is-compact .lab-figure {
+  margin: 0;
+  height: 100%;
+}
+.lab-preview.is-compact .lab-figure img {
+  height: 100%;
+  object-fit: contain;
+  border-radius: 3px;
+}
+.lab-preview.is-compact .lab-figure figcaption {
+  display: none;
+}
+.lab-preview.is-compact .lab-wave-scroll {
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+.lab-preview.is-compact .lab-variables {
+  font-size: 8px;
+}
+.lab-preview.is-compact .lab-variables td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lab-preview.is-compact .lab-variables th:last-child,
+.lab-preview.is-compact .lab-variables td:last-child {
+  display: none;
+}
+.lab-preview.is-compact .lab-variables th:first-child {
+  width: 35%;
+}
+.lab-preview.is-compact pre {
+  font-size: 9px;
+  padding: 5px;
+  height: 100%;
+  border-radius: 3px;
+}
