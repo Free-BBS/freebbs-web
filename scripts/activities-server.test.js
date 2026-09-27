@@ -148,6 +148,6 @@ test(
     assert.equal(pblCanonical.headers.get('location'), '/pbl?from=menu');
     const embed = await (await fetch(`${origin}/circuit-embed`)).text();
     assert.doesNotMatch(embed, /desktop-shell/);
-    assert.deepEqual(requests, ['/uploads/avatar-test.svg?v=1', '/api/surveys']);
+    assert.deepEqual(requests, ['/uploads/avatar-test.svg?v=1', '/api/labs/run', '/api/surveys']);
   },
 );
