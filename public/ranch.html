@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>FREE-BBS - 个人主页</title>
+    <title>FREE-BBS - 电子牧场</title>
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-v2-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/freebbs-apple-touch-v2.png" />
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="/profile-extras.css" />
     <link rel="stylesheet" href="/ranch-page.css" />
   </head>
-  <body class="public-profile-page">
+  <body class="public-profile-page ranch-page">
     <div class="page-shell page-shell-settings">
       <header class="topbar">
         <a class="brand" href="/" aria-label="FREE-BBS 首页">
@@ -142,78 +142,17 @@
       </nav>
 
       <main class="main-content settings-main">
-        <section class="settings-shell" aria-label="个人主页">
-          <div class="settings-header">
-            <h1>个人主页</h1>
-          </div>
-
-          <section class="settings-profile public-profile-shell" aria-label="公开个人资料">
-            <div class="public-profile-header">
-              <div class="public-profile-avatar-wrap">
-                <img
-                  class="public-profile-avatar"
-                  id="public-profile-avatar"
-                  src="/assets/avatar_placeholder.webp"
-                  alt="用户头像"
-                />
-              </div>
-              <div class="public-profile-copy">
-                <h2 id="public-profile-name">加载中...</h2>
-                <div id="public-profile-nameplate"></div>
-                <div class="public-profile-meta">
-                  <span id="public-profile-student-id">-</span>
-                  <span id="public-profile-major">-</span>
-                </div>
-                <div class="public-profile-website-row" hidden>
-                  <span>个人网页</span>
-                  <p id="public-profile-website">-</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="public-profile-stats">
-              <article class="public-profile-stat">
-                <span>发帖</span>
-                <strong id="public-profile-post-count">-</strong>
-              </article>
-              <article class="public-profile-stat">
-                <span>获赞</span>
-                <strong id="public-profile-like-count">-</strong>
-              </article>
-            </div>
-
-            <div class="settings-grid public-profile-grid">
-              <div class="auth-field public-profile-field">
-                <span>简介</span>
-                <p id="public-profile-bio">正在加载...</p>
-              </div>
-            </div>
-
-            <p class="auth-message settings-message" id="public-profile-message"></p>
-            <section
-              id="public-profile-activity"
-              class="profile-activity"
-              aria-label="站内活跃度"
-              hidden
-            ></section>
-            <section class="profile-additions" aria-label="装扮管理与收藏">
-              <details class="profile-wardrobe-disclosure">
-                <summary>管理我的装扮</summary>
-                <section class="profile-wardrobe" id="public-profile-wardrobe" hidden></section>
-              </details>
-              <section
-                id="public-profile-collectibles"
-                class="profile-collectibles"
-                hidden
-                aria-label="个人收藏"
-              ></section>
-            </section>
+        <section class="settings-shell" aria-label="电子牧场">
+          <div class="settings-header"><h1>电子牧场</h1></div>
+          <p id="public-profile-message" class="auth-message" role="status">正在走进牧场…</p>
+          <section class="ranch-stage" aria-label="牧场场景">
             <section
               class="profile-ranch"
               id="public-profile-ranch"
               aria-label="个人牧场"
             ></section>
           </section>
+          <p id="economy-message" class="auth-message" role="status"></p>
         </section>
       </main>
 
@@ -244,7 +183,6 @@
     <script src="/max-ranch.js"></script>
     <script src="/ranch-page.js"></script>
     <script src="/profile-extras.js"></script>
-    <script src="/profile-activity.js"></script>
     <script src="/app.js"></script>
     <script src="/notifications.js"></script>
   </body>

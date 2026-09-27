@@ -1,0 +1,159 @@
+(() => {
+  const seasons = {
+    spring: ['春', '桃花初放，柳梢新绿'],
+    summer: ['夏', '雨后草木，蝉鸣长夏'],
+    autumn: ['秋', '西山红叶，银杏流金'],
+    winter: ['冬', '薄雪晴空，静候春归'],
+  };
+  let currentSeason;
+  let openPanel = null;
+  const storageKey = 'freebbs_ranch_season';
+  function initialSeason() {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (seasons[saved]) return saved;
+    } catch {
+      /* The scene still works when storage is unavailable. */
+    }
+    const month = new Date(Date.now() + 8 * 3600000).getUTCMonth() + 1;
+    return month >= 3 && month <= 5
+      ? 'spring'
+      : month >= 6 && month <= 8
+        ? 'summer'
+        : month >= 9 && month <= 11
+          ? 'autumn'
+          : 'winter';
+  }
+  function applySeason(root, season) {
+    if (!seasons[season]) return;
+    currentSeason = season;
+    root.dataset.ranchSeason = season;
+    const caption = root.querySelector('[data-season-caption]');
+    if (caption) caption.textContent = `北京 · ${seasons[season][1]}`;
+    root.querySelectorAll('[data-ranch-season-choice]').forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.ranchSeasonChoice === season));
+    });
+  }
+  function panel(id, title) {
+    const dialog = document.createElement('dialog');
+    dialog.id = id;
+    dialog.className = 'ranch-drawer';
+    dialog.setAttribute('aria-labelledby', `${id}-title`);
+    dialog.innerHTML = `<header><h2 id="${id}-title">${title}</h2><button type="button" data-ranch-close aria-label="关闭">×</button></header>`;
+    dialog.addEventListener('close', () => {
+      if (dialog.isConnected && openPanel === id) openPanel = null;
+    });
+    return dialog;
+  }
+  function present(root, state, profile, isOwner) {
+    const full = document.body.classList.contains('ranch-page');
+    const ranch = state.ranch || {};
+    const scene = root.querySelector('.ranch-scene');
+    const message = root.querySelector('#profile-extras-message');
+    const uid = encodeURIComponent(profile?.uid || '');
+    root.classList.add('ranch-photographic');
+    root.classList.toggle('ranch-preview', !full);
+    const status = !ranch.adopted
+      ? '一片草地，等待 Max 搬进来'
+      : ranch.hungry
+        ? 'Max 在等一条小鱼'
+        : 'Max 正在草地上散步';
+    if (!full) {
+      const link = document.createElement('a');
+      link.className = 'ranch-preview-link';
+      link.href = `/ranch?uid=${uid}`;
+      link.setAttribute('aria-label', '进入电子牧场');
+      const caption = document.createElement('div');
+      caption.className = 'ranch-preview-caption';
+      caption.innerHTML =
+        '<span><strong>Max 的电子牧场</strong><small></small></span><span aria-hidden="true">走进牧场 ↗</span>';
+      caption.querySelector('small').textContent = status;
+      link.append(scene, caption);
+      root.replaceChildren(link, message);
+    } else {
+      const heading = document.createElement('div');
+      heading.className = 'ranch-scene-heading';
+      heading.innerHTML = `<a class="ranch-back" href="/profile?uid=${uid}">‹ 个人主页</a><div><h2>Max 的电子牧场</h2><p data-season-caption></p></div><div class="ranch-seasons" role="group" aria-label="切换牧场季节">${Object.entries(
+        seasons,
+      )
+        .map(
+          ([key, value]) =>
+            `<button type="button" data-ranch-season-choice="${key}" aria-label="${value[0]}季">${value[0]}</button>`,
+        )
+        .join('')}</div>`;
+      const controls = document.createElement('div');
+      controls.className = 'ranch-scene-actions';
+      const feed = root.querySelector('[data-extra-action="feed"]');
+      if (feed) controls.append(feed);
+      const greet = root.querySelector('[data-ranch-greet]');
+      if (greet) controls.append(greet);
+      const wool = root.querySelector('.ranch-wool');
+      const rodLink = wool?.querySelector('.ranch-wool-tool a');
+      if (rodLink && isOwner) {
+        const buyRod = document.createElement('button');
+        buyRod.type = 'button';
+        buyRod.dataset.action = 'inspect-item';
+        buyRod.dataset.itemKey = 'rubber_rod';
+        buyRod.className = 'ranch-buy-rod';
+        buyRod.textContent = '购买橡胶棒 · 查看价格';
+        rodLink.replaceWith(buyRod);
+      }
+      const drawer = panel('ranch-wool-dialog', '羊毛与收藏');
+      if (wool) drawer.append(wool);
+      drawer.append(root.querySelector('.ranch-bone-summary'));
+      const rules = root.querySelector('.ranch-rules');
+      if (rules) drawer.append(rules);
+      controls.insertAdjacentHTML(
+        'beforeend',
+        '<button type="button" data-ranch-open="ranch-wool-dialog">羊毛与收藏</button>',
+      );
+      const shop = panel('ranch-shop-dialog', '牧场补给');
+      if (isOwner) {
+        shop.insertAdjacentHTML(
+          'beforeend',
+          '<p>在这里补充用品，无需离开牧场。点击物品查看当前价格并确认购买。</p><div class="ranch-supplies"><button type="button" data-action="inspect-item" data-item-key="fish"><img src="/assets/icons/fish.svg" alt=""/><span>小鱼<small>喂养 Max</small></span><span aria-hidden="true">›</span></button><button type="button" data-action="inspect-item" data-item-key="rubber_rod"><img src="/assets/shop/max-cartoon-v1/rubber_rod.webp" alt=""/><span>橡胶棒<small>羊毛摩擦起电</small></span><span aria-hidden="true">›</span></button><button type="button" data-action="inspect-item" data-item-key="max_pet"><img src="/assets/shop/max-cartoon-v1/max_pet.webp" alt=""/><span>电子羊 Max<small>请伙伴搬进牧场</small></span><span aria-hidden="true">›</span></button></div>',
+        );
+        controls.insertAdjacentHTML(
+          'beforeend',
+          '<button type="button" data-ranch-open="ranch-shop-dialog">牧场补给</button>',
+        );
+      }
+      const pause = root.querySelector('[data-ranch-pause]');
+      pause.classList.add('ranch-scene-pause');
+      const description = document.createElement('p');
+      description.className = 'ranch-scene-status';
+      description.textContent = root.querySelector('.ranch-satiety')?.textContent || status;
+      scene.append(heading, pause, description, controls, message);
+      root.replaceChildren(scene, drawer, shop);
+      if (!isOwner && openPanel === 'ranch-shop-dialog') openPanel = null;
+    }
+    applySeason(root, currentSeason || initialSeason());
+  }
+  function restorePanel(root) {
+    const dialog = openPanel && root.querySelector(`#${openPanel}`);
+    if (dialog && !dialog.open) dialog.showModal();
+  }
+  document.addEventListener('click', (event) => {
+    const season = event.target.closest('[data-ranch-season-choice]');
+    if (season) {
+      applySeason(season.closest('.profile-ranch'), season.dataset.ranchSeasonChoice);
+      try {
+        localStorage.setItem(storageKey, currentSeason);
+      } catch {
+        /* Optional preference. */
+      }
+    }
+    const trigger = event.target.closest('[data-ranch-open]');
+    if (trigger) {
+      openPanel = trigger.dataset.ranchOpen;
+      restorePanel(trigger.closest('.profile-ranch'));
+    }
+    if (event.target.closest('[data-ranch-close], .ranch-drawer [data-action="inspect-item"]')) {
+      event.target.closest('dialog')?.close();
+    }
+  });
+  window.addEventListener('storage', (event) => {
+    if (event.key === 'free_bbs_auth_token' || event.key === null) openPanel = null;
+  });
+  window.FreeBbsRanchPage = { present, restorePanel };
+})();

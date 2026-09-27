@@ -1,0 +1,381 @@
+.ranch-photographic[data-ranch-season='spring'] {
+  --ranch-photo: url('/assets/ranch/spring.webp');
+}
+.ranch-photographic[data-ranch-season='summer'] {
+  --ranch-photo: url('/assets/ranch/summer.webp');
+}
+.ranch-photographic[data-ranch-season='autumn'] {
+  --ranch-photo: url('/assets/ranch/autumn.webp');
+}
+.ranch-photographic[data-ranch-season='winter'] {
+  --ranch-photo: url('/assets/ranch/winter.webp');
+}
+.ranch-photographic .ranch-scene {
+  background: #78896e var(--ranch-photo) center 60% / cover no-repeat !important;
+}
+.ranch-photographic .ranch-scene::before,
+.ranch-photographic
+  :is(.ranch-landscape, .ranch-sun, .ranch-home, .ranch-wildflowers, .ranch-ground) {
+  display: none;
+}
+.ranch-preview {
+  padding-top: 20px;
+}
+.ranch-preview-link {
+  display: block;
+  color: var(--ui-text);
+  text-decoration: none;
+}
+.ranch-preview .ranch-scene {
+  height: 230px;
+  border-radius: 16px;
+}
+.ranch-preview .ranch-pet-track {
+  left: 22%;
+  right: 22%;
+  bottom: 5px;
+  height: 180px;
+  pointer-events: none;
+}
+.ranch-preview [data-max-actor] {
+  width: min(180px, 100%);
+}
+.ranch-preview-caption {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0 0;
+}
+.ranch-preview-caption strong {
+  display: block;
+  font-size: 16px;
+}
+.ranch-preview-caption small {
+  display: block;
+  margin-top: 4px;
+  opacity: 0.65;
+}
+.ranch-preview-caption > span:last-child {
+  font-size: 13px;
+  white-space: nowrap;
+}
+.ranch-preview-link:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 5px;
+  border-radius: 16px;
+}
+body.ranch-page .ranch-stage {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+body.ranch-page .ranch-stage > .profile-ambience {
+  display: none !important;
+}
+body.ranch-page .profile-ranch {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+body.ranch-page .site-footer {
+  display: none;
+}
+body.ranch-page .settings-header {
+  display: none;
+}
+body.ranch-page .settings-shell {
+  gap: 0;
+}
+body.ranch-page #public-profile-message:empty,
+body.ranch-page #economy-message:empty {
+  display: none;
+}
+.ranch-page .ranch-scene {
+  height: clamp(500px, calc(100dvh - 175px), 900px);
+  border-radius: 20px;
+}
+.ranch-page .ranch-scene::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(#12271d66, transparent 35%, transparent 58%, #10201980);
+  pointer-events: none;
+}
+.ranch-scene-heading {
+  position: absolute;
+  inset: 22px 24px auto;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 18px;
+  color: #fff;
+  text-shadow: 0 1px 7px #152a1d66;
+}
+.ranch-scene-heading .ranch-back {
+  grid-column: 1 / -1;
+  justify-self: start;
+  color: #fff;
+  font-size: 14px;
+  text-decoration: none;
+}
+.ranch-page .ranch-scene-heading h2 {
+  margin: 0;
+  font: 600 clamp(20px, 2.8vw, 30px)/1.3 var(--font-ui);
+  color: #fff;
+}
+.ranch-page .ranch-scene-heading p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #fff;
+}
+.ranch-seasons {
+  display: flex;
+  align-self: start;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 30px;
+  background: #12271d55;
+  backdrop-filter: blur(10px);
+}
+body .ranch-seasons button {
+  border: 0;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  min-height: 0;
+  padding: 0;
+  color: #fff;
+  background: transparent;
+}
+body .ranch-seasons button[aria-pressed='true'] {
+  background: #fff;
+  color: #24392b;
+}
+.ranch-page .ranch-pet-track {
+  left: 22%;
+  right: 22%;
+  bottom: 23%;
+  height: min(340px, 48vh);
+}
+.ranch-page [data-max-actor] {
+  width: min(320px, 100%);
+  filter: drop-shadow(0 14px 8px #17201635);
+}
+.ranch-scene-actions {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 24px;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+body .ranch-scene-actions button,
+body .profile-ranch .ranch-scene-pause {
+  color: #213d2c;
+  background: #fffffff0;
+  border: 1px solid #ffffff50;
+  border-radius: 28px;
+  padding: 12px 18px;
+  min-height: 44px;
+  font: 600 14px/1.4 var(--font-ui);
+  box-shadow: 0 3px 15px #16312215;
+}
+body .ranch-scene-actions button:disabled {
+  opacity: 0.65;
+}
+body .profile-ranch .ranch-scene-pause {
+  position: absolute;
+  right: 24px;
+  top: 140px;
+  z-index: 4;
+  padding: 8px 12px;
+  font-size: 12px;
+  background: #ffffffb8;
+}
+body.ranch-page .ranch-scene-status {
+  position: absolute;
+  bottom: 100px;
+  left: 20px;
+  right: 20px;
+  z-index: 4;
+  margin: 0;
+  color: #fff;
+  text-align: center;
+  font-size: 14px;
+  text-shadow: 0 1px 7px #102019;
+}
+body.ranch-page:not(.auth-page-body)
+  .ranch-scene
+  :is(.ranch-back, h2, p, [data-ranch-season-choice]) {
+  color: #fff !important;
+}
+body.ranch-page:not(.auth-page-body) .ranch-seasons button[aria-pressed='true'] {
+  color: #24392b !important;
+  background: #fff !important;
+}
+body.ranch-page:not(.auth-page-body) .ranch-scene-actions button,
+body.ranch-page:not(.auth-page-body) .ranch-scene-pause {
+  color: #213d2c !important;
+  background: #fffffff0 !important;
+}
+.ranch-page #profile-extras-message {
+  position: absolute;
+  bottom: 145px;
+  left: 20px;
+  right: 20px;
+  z-index: 4;
+  margin: 0;
+  color: #fff;
+  text-align: center;
+  font-size: 14px;
+  text-shadow: 0 1px 7px #102019;
+}
+.ranch-drawer {
+  box-sizing: border-box;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  padding: 24px;
+  border: 1px solid var(--ui-line);
+  border-radius: 22px;
+  background: var(--ui-surface, #fff);
+  color: var(--ui-text);
+  overflow-y: auto;
+}
+.ranch-drawer::backdrop {
+  background: #13251e70;
+  backdrop-filter: blur(5px);
+}
+.ranch-drawer > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.ranch-drawer > header h2 {
+  margin: 0;
+}
+body .ranch-drawer [data-ranch-close] {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 28px;
+}
+.ranch-drawer .ranch-wool {
+  background: transparent;
+  padding: 18px 0;
+  margin-top: 0;
+}
+.ranch-drawer .ranch-wool-art,
+.ranch-drawer .ranch-kicker {
+  display: none;
+}
+.ranch-supplies {
+  display: grid;
+}
+body .ranch-supplies button {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--ui-line);
+  border-radius: 0;
+  padding: 16px 0;
+  background: transparent;
+  color: var(--ui-text);
+}
+.ranch-supplies img {
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+}
+.ranch-supplies small {
+  display: block;
+  opacity: 0.65;
+  margin-top: 4px;
+}
+.ranch-supplies button > span:last-child {
+  margin-left: auto;
+}
+@media (max-width: 600px) {
+  .ranch-preview .ranch-scene {
+    height: 190px;
+  }
+  .ranch-preview .ranch-pet-track {
+    left: 14%;
+    right: 14%;
+    height: 150px;
+  }
+  .ranch-preview [data-max-actor] {
+    width: min(150px, 100%);
+  }
+  .ranch-preview-caption {
+    align-items: start;
+    gap: 8px;
+  }
+  body.ranch-page .main-content {
+    padding-inline: 10px !important;
+    padding-bottom: 96px !important;
+  }
+  .ranch-page .ranch-scene {
+    height: max(420px, calc(100svh - 216px));
+    border-radius: 18px;
+  }
+  .ranch-scene-heading {
+    inset: 16px 16px auto;
+    gap: 16px;
+    grid-template-columns: 1fr;
+  }
+  .ranch-seasons {
+    justify-self: start;
+  }
+  body .profile-ranch .ranch-scene-pause {
+    right: 16px;
+    top: 122px;
+  }
+  .ranch-page .ranch-pet-track {
+    left: 12%;
+    right: 12%;
+    bottom: 25%;
+    height: 240px;
+  }
+  .ranch-page [data-max-actor] {
+    width: min(240px, 100%);
+  }
+  .ranch-scene-actions {
+    bottom: 16px;
+    left: 12px;
+    right: 12px;
+    gap: 7px;
+  }
+  body .ranch-scene-actions button {
+    padding: 10px 13px;
+    font-size: 13px;
+  }
+  .ranch-scene-actions [data-extra-action='feed'] {
+    flex-basis: 100%;
+  }
+  body.ranch-page .ranch-scene-status {
+    bottom: 126px;
+    font-size: 13px;
+  }
+  .ranch-page #profile-extras-message {
+    bottom: 155px;
+    font-size: 12px;
+  }
+  .ranch-drawer {
+    padding: 18px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ranch-photographic * {
+    scroll-behavior: auto;
+  }
+}
