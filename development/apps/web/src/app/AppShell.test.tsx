@@ -65,16 +65,22 @@ describe('module state loader', () => {
 });
 
 describe('AppShell', () => {
-  it('places a prefetched learning-site link at the end of desktop and mobile navigation', () => {
+  it('places the learning-site link in the desktop footer and at the end of mobile navigation', () => {
     mockUseAuth.mockReturnValue(authenticatedAuth());
     renderShell('/events');
 
-    for (const name of ['主要导航', '移动导航']) {
-      const navigation = screen.getByRole('navigation', { name });
-      const links = within(navigation).getAllByRole('link');
-      expect(links.at(-1)).toHaveAttribute('href', '/world');
-      expect(links.at(-1)).toHaveAccessibleName('学习端');
-    }
+    const sidebar = screen.getByRole('complementary', { name: '发展平台侧栏' });
+    expect(within(sidebar).getByRole('link', { name: '学习端' })).toHaveAttribute('href', '/world');
+    expect(
+      within(screen.getByRole('navigation', { name: '主要导航' })).queryByRole('link', {
+        name: '学习端',
+      }),
+    ).not.toBeInTheDocument();
+    const mobileLinks = within(screen.getByRole('navigation', { name: '移动导航' })).getAllByRole(
+      'link',
+    );
+    expect(mobileLinks.at(-1)).toHaveAttribute('href', '/world');
+    expect(mobileLinks.at(-1)).toHaveAccessibleName('学习端');
     expect(document.head.querySelector('link[data-learning-prefetch]')).toHaveAttribute(
       'href',
       '/world',
@@ -199,11 +205,10 @@ describe('AppShell', () => {
     mockUseAuth.mockReturnValue(authenticatedAuth());
     renderShell();
 
-    const desktopToggle = within(
-      screen.getByRole('complementary', { name: '发展平台侧栏' }),
-    ).getByRole('button', { name: '切换到明亮模式' });
+    const desktopToggle = document.querySelector<HTMLButtonElement>('.main-site-desktop-theme');
+    expect(desktopToggle).toHaveAccessibleName('切换到明亮模式');
     expect(desktopToggle).toBeInTheDocument();
-    fireEvent.click(desktopToggle);
+    fireEvent.click(desktopToggle!);
     expect(document.body).toHaveClass('theme-light');
     expect(window.localStorage.getItem('free_bbs_theme_mode')).toBe('light');
   });
@@ -303,5 +308,7 @@ it('exposes governance to a platform super administrator', () => {
 
   renderShell('/admin');
 
-  expect(screen.getByRole('link', { name: '管理员模块' })).toBeInTheDocument();
+  const link = screen.getByRole('link', { name: '管理员模块' });
+  expect(link).toBeInTheDocument();
+  expect(link.querySelector('img')).toHaveClass('sidebar-system-icon');
 });

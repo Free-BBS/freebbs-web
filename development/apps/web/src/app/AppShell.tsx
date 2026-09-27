@@ -2,15 +2,13 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 
 import freeBbsEmblem from '../assets/freebbs-emblem-v2.png';
-import moonIcon from '../assets/main-site/moon.svg';
-import sunIcon from '../assets/main-site/sun.svg';
 import learningIcon from '../assets/icons/learning.svg';
 import adminIcon from '../assets/icons/admin.svg';
 import { DemoUserSwitcher } from '../core/auth/DemoUserSwitcher.js';
 import { useAuth } from '../core/auth/AuthProvider.js';
 import type { PresentationUser } from '../core/permissions/Can.js';
 import { useMainSiteTheme } from '../core/theme/useMainSiteTheme.js';
-import { MainSiteHeader } from './MainSiteHeader.js';
+import { MainSiteHeader, mainSiteTypography } from './MainSiteHeader.js';
 import { visibleModuleManifests, type ModuleStateOverrides } from './module-manifests.js';
 
 const HIDDEN_SIDEBAR_MODULE_IDS = new Set(['dashboard', 'admin', 'liaison']);
@@ -27,6 +25,20 @@ interface ModuleNavigationProps {
   label: string;
   moduleStates?: ModuleStateOverrides;
   user: PresentationUser;
+  withLearningLink?: boolean;
+}
+
+function LearningSiteLink({ className = '' }: { className?: string }) {
+  return (
+    <a className={`module-link learning-return-link ${className}`.trim()} href="/world">
+      <span className="module-icon" aria-hidden="true">
+        <img src={learningIcon} alt="" />
+      </span>
+      <span className="module-copy">
+        <span className="module-name">学习端</span>
+      </span>
+    </a>
+  );
 }
 
 function ModuleNavigation({
@@ -36,6 +48,7 @@ function ModuleNavigation({
   label,
   moduleStates,
   user,
+  withLearningLink = false,
 }: ModuleNavigationProps) {
   const navigationRef = useRef<HTMLElement>(null);
 
@@ -87,14 +100,7 @@ function ModuleNavigation({
             </div>
           );
         })}
-      <a className="module-link learning-return-link" href="/world">
-        <span className="module-icon" aria-hidden="true">
-          <img src={learningIcon} alt="" />
-        </span>
-        <span className="module-copy">
-          <span className="module-name">学习端</span>
-        </span>
-      </a>
+      {withLearningLink ? <LearningSiteLink /> : null}
     </nav>
   );
 }
@@ -178,7 +184,7 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
   }
 
   return (
-    <>
+    <div className="development-shell-root" style={mainSiteTypography()}>
       <a className="skip-link" href="#main-content">
         跳到主要内容
       </a>
@@ -200,20 +206,11 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
               (auth.authMode === 'demo' && auth.user.roles.includes('platform.super_admin'))) &&
             !auth.user.previewing ? (
               <NavLink className="sidebar-system-link" to="/admin">
-                <img src={adminIcon} alt="" />
+                <img className="sidebar-system-icon" src={adminIcon} alt="" />
                 <span>管理员模块</span>
               </NavLink>
             ) : null}
-            <button
-              className="sidebar-theme-button"
-              type="button"
-              aria-label={theme.mode === 'light' ? '切换到暗色模式' : '切换到明亮模式'}
-              aria-pressed={theme.mode === 'light'}
-              onClick={theme.toggle}
-            >
-              <img src={theme.mode === 'light' ? moonIcon : sunIcon} alt="" />
-              <span>{theme.mode === 'light' ? '暗色模式' : '明亮模式'}</span>
-            </button>
+            <LearningSiteLink className="sidebar-learning-link" />
           </div>
         </aside>
 
@@ -253,7 +250,8 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
         label="移动导航"
         moduleStates={moduleStates}
         user={auth.user as PresentationUser}
+        withLearningLink
       />
-    </>
+    </div>
   );
 }
