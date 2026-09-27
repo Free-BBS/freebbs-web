@@ -71,7 +71,8 @@ def vcd_waveforms(text):
 
 
 def main():
-    request = json.loads(sys.stdin.readline())
+    # Do not prefetch control messages: Python replaces this process after reading the request.
+    request = json.loads(sys.stdin.buffer.raw.readline())
     language, source = request['language'], request['source']
     stdin = request.get('stdin', '')
     if language == 'python':

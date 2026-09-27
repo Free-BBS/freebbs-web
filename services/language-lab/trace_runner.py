@@ -142,7 +142,7 @@ if __name__ == '__main__':
     threading.Thread(target=controls, daemon=True).start()
     sys.stdin = io.StringIO(settings.get('stdin', ''))
     sys.stdout, sys.stderr = Output('stdout'), Output('stderr')
-    namespace = {'__name__': '__main__', '__builtins__': builtins}
+    namespace = {'__name__': '__main__', '__file__': SOURCE_PATH, '__builtins__': builtins}
     exit_code = 0
     try:
         code = compile(open(SOURCE_PATH).read(), SOURCE_PATH, 'exec')

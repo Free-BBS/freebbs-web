@@ -102,7 +102,7 @@
       content = `<pre class="lab-preview-code">${escape(
         result.assembly.x86?.text
           ?.split('\n')
-          .filter((line) => line.trim() && !line.startsWith('#'))
+          .filter((line) => !/^\s*(?:[.#]|$)/.test(line))
           .slice(0, compact ? 10 : 20)
           .join('\n'),
       )}</pre><span class="lab-hint">x86-64 · MIPS32 · RISC-V64 汇编已保存</span>`;

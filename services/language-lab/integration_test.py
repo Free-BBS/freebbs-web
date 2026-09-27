@@ -88,6 +88,17 @@ class RuntimeTests(unittest.TestCase):
         output = ''.join(event.get('text', '') for event in events)
         for expected in ('65534', 'READONLY', 'NO_NETWORK'): self.assertIn(expected, output)
 
+    def test_step_sent_during_worker_startup_is_not_lost(self):
+        run_id = 'lab-' + uuid.uuid4().hex
+        response = request('/run', {'id': run_id, 'language': 'python', 'source': 'x=1\ny=2\n', 'interval': 0, 'paused': True})
+        try:
+            with request('/control/' + run_id, {'action': 'step'}): pass
+            self.assertEqual(json.loads(response.readline())['line'], 1)
+            self.assertEqual(json.loads(response.readline())['line'], 2)
+        finally:
+            with request('/control/' + run_id, {'action': 'stop'}): pass
+            response.close()
+
     def test_stop_sleeping_session(self):
         run_id = 'lab-' + uuid.uuid4().hex
         response = request('/run', {'id': run_id, 'language': 'python', 'source': 'x=1', 'interval': 1, 'paused': True})
