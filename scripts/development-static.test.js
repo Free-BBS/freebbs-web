@@ -27,3 +27,8 @@ test('shared profile and settings pages support the development embed shell', ()
     assert.match(html, /development-commerce-embed\.css/);
   }
 });
+
+test('shared desktop chrome stays disabled inside the development shell', () => {
+  const shell = fs.readFileSync(path.join(root, 'public', 'desktop-shell.js'), 'utf8');
+  assert.match(shell, /documentElement\.classList\.contains\('development-embedded'\)/);
+});
