@@ -184,20 +184,38 @@ export function FormCanvas({
         <b>实时预览</b>
       </header>
       <div className="builder-form-simulator">
-        <button
-          type="button"
-          className={`builder-form-heading${selection.type === 'form' ? ' is-selected' : ''}`}
-          onClick={() => onSelect({ type: 'form' })}
-        >
-          <span>萬事集 · 新收集</span>
-          <h1>{schema.title}</h1>
-          <p>{schema.description}</p>
+        <div className={`builder-form-heading${selection.type === 'form' ? ' is-selected' : ''}`}>
+          <button
+            type="button"
+            className="builder-form-heading-main"
+            aria-label="编辑表单基本信息"
+            onClick={() => onSelect({ type: 'form' })}
+          >
+            <span>萬事集 · 新收集</span>
+            <h1>{schema.title}</h1>
+            <p>{schema.description}</p>
+          </button>
           <div className="builder-rule-chips">
             {schema.formRules.map((rule) => (
-              <i key={rule.id}>{ruleLabels[rule.kind]}</i>
+              <button
+                type="button"
+                key={rule.id}
+                className={
+                  selection.type === 'rule' && !selection.fieldId && selection.id === rule.id
+                    ? 'is-selected'
+                    : undefined
+                }
+                aria-label={`编辑附加规则：${ruleLabels[rule.kind]}`}
+                aria-pressed={
+                  selection.type === 'rule' && !selection.fieldId && selection.id === rule.id
+                }
+                onClick={() => onSelect({ type: 'rule', id: rule.id })}
+              >
+                {ruleLabels[rule.kind]}
+              </button>
             ))}
           </div>
-        </button>
+        </div>
         <RuleSlot
           armedRule={armedRule}
           existingKinds={schema.formRules.map((rule) => rule.kind)}
