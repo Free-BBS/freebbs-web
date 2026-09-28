@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { saveManualCourse } = require('./manual-courses');
+const { editImportedSchedule } = require('./campus-schedule-overrides');
 const { ensureWorkbenchTables, listCampusSemesters, readCampusSemester } = require('./workbench');
 const { ensureCampusConnectorTables } = require('./tsinghua-connectors/schema');
 const {
@@ -90,8 +91,26 @@ test(
       }
     };
     await migrateWeeks();
+    const migrateEditableCalendar = async () => {
+      const connection = await pool.getConnection();
+      try {
+        const sql = fs.readFileSync(
+          path.join(__dirname, '../database/migrations/058_editable_campus_calendar.sql'),
+          'utf8',
+        );
+        for (const statement of sql
+          .split(';')
+          .map((value) => value.trim())
+          .filter(Boolean))
+          await connection.query(statement);
+      } finally {
+        connection.release();
+      }
+    };
+    await migrateEditableCalendar();
     await ensureCampusConnectorTables(pool);
     await ensureCampusConnectorTables(pool);
+    await migrateEditableCalendar();
     await migrateWeeks();
     const [[legacySettings]] = await pool.query(
       'SELECT teaching_weeks FROM campus_course_calendar_settings',
@@ -160,7 +179,7 @@ test(
       'UPDATE campus_learn_semester_snapshots SET courses_json = ? WHERE user_id = 1',
       [JSON.stringify([fullWeek])],
     );
-    assert.equal((await readCourseCalendar(pool, 1, calendar.semesterId)).scheduledLessons, 0);
+    assert.equal((await readCourseCalendar(pool, 1, calendar.semesterId)).scheduledLessons, 16);
     assert.equal(
       (await saveCourseCalendar(pool, 1, { ...calendar, teachingWeeks: 18 })).scheduledLessons,
       18,
@@ -177,11 +196,61 @@ test(
     assert.equal((await listCourseSchedules(pool, 1, range))[0].publicId, first.publicId);
     assert.equal(
       (await saveCourseCalendar(pool, 1, { ...calendar, teachingWeeks: null })).scheduledLessons,
-      0,
+      16,
     );
     await saveCourseCalendar(pool, 1, { ...calendar, teachingWeeks: 16 });
     const [[manual]] = await pool.query('SELECT COUNT(*) AS total FROM schedule_items');
     assert.equal(Number(manual.total), 0);
+    const [editable] = await listCourseSchedules(pool, 1, range);
+    const editBody = {
+      title: '我的旁听课',
+      version: editable.version,
+      sourceRevision: editable.sourceRevision,
+      startAt: '2026-09-29T01:50:00Z',
+      endAt: '2026-09-29T03:25:00Z',
+    };
+    await assert.rejects(editImportedSchedule(pool, 2, editable.publicId, editBody), {
+      status: 409,
+    });
+    const competing = await Promise.allSettled([
+      editImportedSchedule(pool, 1, editable.publicId, editBody),
+      editImportedSchedule(pool, 1, editable.publicId, { ...editBody, title: '另一个窗口的修改' }),
+    ]);
+    assert.equal(competing.filter((result) => result.status === 'fulfilled').length, 1);
+    assert.equal(competing.find((result) => result.status === 'rejected').reason.status, 409);
+    assert.equal((await listCourseSchedules(pool, 1, range)).length, 0);
+    const movedRange = {
+      start: new Date('2026-09-28T00:00:00Z'),
+      end: new Date('2026-10-05T00:00:00Z'),
+    };
+    const moved = (await listCourseSchedules(pool, 1, movedRange)).find(
+      (item) => item.publicId === editable.publicId,
+    );
+    assert.equal(moved.endAt, '2026-09-29T03:25:00.000Z');
+    assert.equal(moved.version, 2);
+    await pool.execute(
+      'UPDATE campus_learn_semester_snapshots SET courses_json = ? WHERE user_id = 1',
+      [JSON.stringify([{ ...fullWeek, locationText: '更新后的教室' }])],
+    );
+    const resynced = (await listCourseSchedules(pool, 1, movedRange)).find(
+      (item) => item.publicId === editable.publicId,
+    );
+    assert.equal(resynced.title, moved.title);
+    assert.equal(resynced.description, '更新后的教室');
+    const bindingTitle = resynced.title;
+    await editImportedSchedule(
+      pool,
+      1,
+      resynced.publicId,
+      { version: resynced.version, sourceRevision: resynced.sourceRevision },
+      { remove: true },
+    );
+    assert.equal(
+      (await listCourseSchedules(pool, 1, movedRange)).some(
+        (item) => item.publicId === resynced.publicId,
+      ),
+      false,
+    );
     await pool.execute(`UPDATE user_campus_connectors SET generation = 2,
       connected_at = '2026-09-22 02:00:00' WHERE user_id = 1`);
     assert.deepEqual(await listCourseSchedules(pool, 1, range), []);
@@ -202,16 +271,18 @@ test(
       SET fetched_at = '2026-09-22 03:00:00' WHERE user_id = 1`);
     await pool.execute(`UPDATE campus_learn_semester_catalogs
       SET fetched_at = '2026-09-22 03:00:00' WHERE user_id = 1`);
-    assert.deepEqual(await listCourseSchedules(pool, 1, range), []);
+    const [reboundDefault] = await listCourseSchedules(pool, 1, range);
+    assert.notEqual(reboundDefault.title, bindingTitle);
+    assert.equal(reboundDefault.version, 1);
     assert.equal((await listCampusSemesters(pool, 1)).semesters.length, 1);
     assert.equal((await readCampusSemester(pool, 1, '2026-2027-1')).courses.length, 1);
     await saveCourseCalendar(pool, 1, calendar);
     assert.equal(
       (await readCourseCalendar(pool, 1, calendar.semesterId)).teachingWeeks,
-      null,
-      "rebound connector cannot inherit the previous identity's confirmed week count",
+      16,
+      "rebound connector uses the public autumn default rather than inheriting another identity's settings",
     );
-    assert.equal((await listCourseSchedules(pool, 1, range)).length, 0);
+    assert.equal((await listCourseSchedules(pool, 1, range)).length, 1);
     await saveCourseCalendar(pool, 1, { ...calendar, teachingWeeks: 16 });
     assert.equal((await listCourseSchedules(pool, 1, range)).length, 1);
     await pool.execute("UPDATE user_campus_connectors SET status = 'revoked' WHERE user_id = 1");

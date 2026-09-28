@@ -61,11 +61,13 @@ const CREATE_SEQUENCE = [
   'create:campus_course_calendar_settings',
   'create:campus_homework_calendar_states',
   'create:campus_homework_snapshots',
+  'create:campus_schedule_overrides',
 ];
 
 test('does not ALTER core tables when every additive field and index already exists', async () => {
   const pool = createFakePool({
     columns: [
+      'campus_course_calendar_settings.options_json',
       'campus_learn_semester_catalogs.connector_generation',
       'campus_learn_semester_snapshots.connector_generation',
       'campus_course_calendar_settings.teaching_weeks',
@@ -80,6 +82,7 @@ test('does not ALTER core tables when every additive field and index already exi
 
   assert.deepEqual(pool.calls.map(describeCall), [
     ...CREATE_SEQUENCE,
+    'check-column:campus_course_calendar_settings.options_json',
     'check-column:campus_learn_semester_catalogs.connector_generation',
     'check-column:campus_learn_semester_snapshots.connector_generation',
     'check-column:campus_course_calendar_settings.teaching_weeks',
@@ -101,6 +104,8 @@ test('adds missing core fields and the unique index in dependency order', async 
 
   assert.deepEqual(pool.calls.map(describeCall), [
     ...CREATE_SEQUENCE,
+    'check-column:campus_course_calendar_settings.options_json',
+    'ALTER TABLE campus_course_calendar_settings ADD COLUMN options_json JSON NULL',
     'check-column:campus_learn_semester_catalogs.connector_generation',
     'ALTER TABLE campus_learn_semester_catalogs ADD COLUMN connector_generation INT UNSIGNED NULL AFTER user_id',
     'check-column:campus_learn_semester_snapshots.connector_generation',

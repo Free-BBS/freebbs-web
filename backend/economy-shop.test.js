@@ -82,11 +82,11 @@ test('rubber rod purchase records its real reason and same receipt never duplica
   );
 });
 
-test('three-leaf clovers cost two magnetic each and can be stocked repeatedly', async () => {
-  const { buy, store, shop } = setup([{ id: 1, magnetic: 6 }]);
+test('three-leaf clovers cost one magnetic each and can be stocked repeatedly', async () => {
+  const { buy, store, shop } = setup([{ id: 1, magnetic: 3 }]);
   for (let n = 1; n <= 3; n += 1) {
     const receipt = await buy('ranch_clover', { currency: 'magnetic' });
-    assert.deepEqual(receipt.cost, { magnetic: 2 });
+    assert.deepEqual(receipt.cost, { magnetic: 1 });
     assert.equal(store.account().assets.ranch_clover, n);
   }
   assert.equal(store.account().magnetic, 0);
@@ -95,6 +95,40 @@ test('three-leaf clovers cost two magnetic each and can be stocked repeatedly', 
   await assert.rejects(buy('ranch_clover', { currency: 'magnetic' }), {
     code: 'INSUFFICIENT_BALANCE',
   });
+});
+
+test('clover repricing rejects stale quotes but preserves old receipts and existing inventory', async () => {
+  const { buy, store, shop } = setup([{ id: 1, magnetic: 5, assets: { ranch_clover: 4 } }], {
+    recordLedger: true,
+  });
+  const item = items.find((entry) => entry.key === 'ranch_clover');
+  const requestKey = crypto.randomUUID();
+  await shop.purchase({
+    userId: 1,
+    item: { ...item, cost: { magnetic: 2 } },
+    currency: 'magnetic',
+    expectedPurchaseCount: 0,
+    quotedCost: { magnetic: 2 },
+    requestKey,
+  });
+  const replay = await buy('ranch_clover', {
+    currency: 'magnetic',
+    expectedPurchaseCount: 0,
+    quotedCost: { magnetic: 2 },
+    requestKey,
+  });
+  assert.equal(replay.replayed, true);
+  assert.deepEqual(replay.cost, { magnetic: 2 });
+  await assert.rejects(buy('ranch_clover', { currency: 'magnetic', quotedCost: { magnetic: 2 } }), {
+    code: 'PRICE_CHANGED',
+  });
+  assert.equal(store.account().assets.ranch_clover, 5);
+  assert.equal(store.account().magnetic, 3);
+  const fresh = await buy('ranch_clover', { currency: 'magnetic' });
+  assert.deepEqual(fresh.cost, { magnetic: 1 });
+  assert.equal(store.account().assets.ranch_clover, 6);
+  assert.equal(store.account().magnetic, 2);
+  assert.equal(store.account().ledger.length, 2);
 });
 
 test('combined purchases and laser charges explain every currency row with contiguous balances', async () => {

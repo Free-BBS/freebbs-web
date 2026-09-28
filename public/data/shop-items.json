@@ -72,10 +72,10 @@
       "class": "consumable",
       "description": "一阵只认空中羊的调皮风。",
       "desc": "三片叶子轻轻一转，草地上空就有了新的旅行。",
-      "cost": { "magnetic": 2 },
+      "cost": { "magnetic": 1 },
       "image": "/assets/shop/max-cartoon-v1/ranch_clover.webp",
       "isgift": false,
-      "rules": "2 磁元一个，可重复购买。到羊群广场使用，每次消耗一个；未来 3 秒内正在飞行或跳起的羊会被吹向天空，5 秒后飘回原来的活动路线。风还没停时可等它结束再用下一个。"
+      "rules": "1 磁元一个，可重复购买。到羊群广场使用，每次消耗一个；未来 3 秒内正在飞行或跳起的羊会被吹向天空，5 秒后飘回原来的活动路线。风还没停时可等它结束再用下一个。"
     },
     {
       "key": "frame_orbit",

@@ -1,4 +1,5 @@
 const { HOMEWORK_TABLES } = require('./homework-schema');
+const { OVERRIDE_TABLE } = require('../campus-schedule-overrides');
 
 const CREATE_TABLE_STATEMENTS = Object.freeze([
   `CREATE TABLE IF NOT EXISTS campus_learn_semester_catalogs (
@@ -198,6 +199,20 @@ async function ensureCampusConnectorTables(pool) {
   }
   for (const statement of HOMEWORK_TABLES) {
     await pool.execute(statement);
+  }
+  await pool.execute(OVERRIDE_TABLE);
+  if (
+    !(await informationSchemaEntryExists(
+      pool,
+      COLUMN_EXISTS_SQL,
+      'campus_course_calendar_settings',
+      'options_json',
+    ))
+  ) {
+    await executeAdditiveAlter(
+      pool,
+      'ALTER TABLE campus_course_calendar_settings ADD COLUMN options_json JSON NULL',
+    );
   }
 
   const catalogGenerationExists = await informationSchemaEntryExists(

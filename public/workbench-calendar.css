@@ -117,12 +117,13 @@ body.workbench-page .workbench-week-timeline {
 }
 body.workbench-page .workbench-week-timeline .workbench-week-event {
   z-index: var(--event-stack, 2);
+  justify-content: center;
   box-sizing: border-box;
   min-height: 0 !important;
   overflow: hidden;
   box-shadow: none;
   gap: 2px;
-  padding: 5px 8px;
+  padding: 3px 8px;
 }
 body.workbench-page .workbench-week-timeline .workbench-week-event > :is(strong, small) {
   display: block;
@@ -133,6 +134,26 @@ body.workbench-page .workbench-week-timeline .workbench-week-event > :is(strong,
 }
 body.workbench-page .workbench-week-timeline .workbench-week-event > [hidden] {
   display: none;
+}
+body.workbench-page
+  .workbench-week-timeline
+  .workbench-week-event
+  > .workbench-week-notes:not([hidden]) {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--workbench-note-lines, 1);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+body.workbench-page .workbench-week-timeline .workbench-week-event.is-compact-time-block {
+  gap: 1px;
+  padding-block: 1px;
+}
+body.workbench-page .workbench-week-timeline .workbench-week-event.is-compact-time-block > strong {
+  line-height: 1.35;
+}
+body.workbench-page .workbench-week-timeline .workbench-week-event.is-compact-time-block > small {
+  line-height: 1.4;
 }
 body.workbench-page .workbench-week-timeline .workbench-week-event.is-tiny-time-block {
   padding: 0 5px;

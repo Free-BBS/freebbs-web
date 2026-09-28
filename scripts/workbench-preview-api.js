@@ -8,7 +8,15 @@ const {
   projectCourseSchedules,
   normalizeMonday,
   normalizeTeachingWeeks,
+  parseCourseSchedule,
 } = require('../backend/course-schedule');
+const {
+  CALENDAR_PRESETS,
+  SECTION_CHOICES,
+  normalizeCalendarOptions,
+} = require('../backend/course-calendar-options');
+const { applyOverride, makePatch } = require('../backend/campus-schedule-overrides');
+const { DEFAULTS } = require('../public/academic-calendar');
 const { expandManualCourse } = require('../backend/manual-courses');
 
 function createWorkbenchPreviewApi({
@@ -17,21 +25,66 @@ function createWorkbenchPreviewApi({
   campusNotices = [],
   semesterId = 'preview-semester',
 } = {}) {
-  let firstWeekMonday = null;
-  let teachingWeeks = null;
-  const courseProjection = () =>
+  let firstWeekMonday = DEFAULTS[semesterId]?.firstWeekMonday || null;
+  let teachingWeeks = DEFAULTS[semesterId]?.teachingWeeks || null;
+  let options = normalizeCalendarOptions(
+    { holidayPreset: DEFAULTS[semesterId]?.holidayPreset || '' },
+    firstWeekMonday,
+  );
+  const personalEdits = new Map();
+  const sourceProjection = (includeExcluded = false) =>
     projectCourseSchedules(campusCourses, {
       semesterId,
       firstWeekMonday,
       teachingWeeks,
+      options,
+      includeExcluded,
       fetchedAt: new Date(now()).toISOString(),
     });
+  const courseProjection = () => {
+    const result = sourceProjection(true);
+    result.events = result.events
+      .map((item) => {
+        const edited = applyOverride(
+          { ...item, connectorGeneration: 1 },
+          personalEdits.get(item.publicId),
+        );
+        return edited && (!item.calendarHoliday || edited.startAt !== item.startAt) ? edited : null;
+      })
+      .filter(Boolean);
+    return result;
+  };
   const calendarStatus = () => {
     const projection = courseProjection();
     return {
       semesterId,
       firstWeekMonday,
       teachingWeeks,
+      options,
+      presets: CALENDAR_PRESETS,
+      sectionChoices: SECTION_CHOICES,
+      courses: campusCourses
+        .map((course) => ({
+          reference: course.sourceReference,
+          title: course.title,
+          sections: [
+            ...new Set(
+              parseCourseSchedule(course, {
+                teachingWeeks,
+                includeSections: true,
+              }).sessions.flatMap((session) =>
+                session.sectionStart
+                  ? Array.from(
+                      { length: session.sectionEnd - session.sectionStart + 1 },
+                      (_, i) => session.sectionStart + i,
+                    )
+                  : [],
+              ),
+            ),
+          ].filter((section) => Object.hasOwn(SECTION_CHOICES, section)),
+        }))
+        .filter((course) => course.sections.length),
+      skippedLessons: projection.skippedLessons,
       issues: projection.issues,
       parsedCourses: projection.parsedCourses,
       totalCourses: projection.totalCourses,
@@ -144,6 +197,11 @@ function createWorkbenchPreviewApi({
           teachingWeeks = body.teachingWeeks;
         }
         firstWeekMonday = body.firstWeekMonday;
+        try {
+          options = normalizeCalendarOptions(body.options || {}, firstWeekMonday);
+        } catch (error) {
+          return result({ message: error.message }, 400);
+        }
       }
       if (method === 'GET' || method === 'PUT') return result(calendarStatus());
     }
@@ -268,6 +326,34 @@ function createWorkbenchPreviewApi({
     }
     const scheduleMatch = /^\/api\/workbench\/schedule-items\/([^/]+)(?:\/(confirm))?$/.exec(route);
     if (scheduleMatch) {
+      if (scheduleMatch[1].startsWith('cs_')) {
+        const item = courseProjection().events.find((event) => event.publicId === scheduleMatch[1]);
+        if (!item) return result({ message: '模拟课程不存在' }, 404);
+        if (body.version !== item.version || body.sourceRevision !== item.sourceRevision)
+          return result({ message: '课程已更新，请刷新' }, 409);
+        try {
+          const patch =
+            method === 'DELETE'
+              ? { deleted: true }
+              : makePatch(item, body, personalEdits.get(item.publicId)?.patch_json || {});
+          personalEdits.set(item.publicId, {
+            patch_json: patch,
+            version: item.version + 1,
+            updated_at: new Date(now()).toISOString(),
+          });
+          return result(
+            method === 'DELETE'
+              ? { ok: true }
+              : {
+                  scheduleItem: courseProjection().events.find(
+                    (event) => event.publicId === item.publicId,
+                  ),
+                },
+          );
+        } catch (error) {
+          return result({ message: error.message }, error.status || 500);
+        }
+      }
       const index = events.findIndex((item) => item.publicId === scheduleMatch[1]);
       if (index < 0) return result({ message: '模拟日程不存在' }, 404);
       if (method === 'DELETE') {

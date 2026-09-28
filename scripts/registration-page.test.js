@@ -126,7 +126,7 @@ function wienChallenge(overrides = {}) {
   };
 }
 
-function harness(mode = 'register', next = '') {
+function harness(mode = 'register', next = '', options = {}) {
   const page = readPublic(mode === 'register' ? 'register.html' : `${mode}.html`);
   const elements = new Map();
   for (const [, id] of page.matchAll(/\bid="([^"]+)"/g)) elements.set(id, createElement());
@@ -159,6 +159,7 @@ function harness(mode = 'register', next = '') {
     },
   }));
   const document = {
+    ...createElement(),
     body: createElement(),
     getElementById: (id) => element(id) || null,
     querySelector: () => null,
@@ -177,12 +178,28 @@ function harness(mode = 'register', next = '') {
     }
   };
   const intervals = new Set();
-  let clock = now;
+  let clock = options.now ?? now;
+  const session = options.session || new Map();
   const requests = [];
   const responses = [];
   const window = {
+    ...createElement(),
     document,
     localStorage,
+    sessionStorage: {
+      getItem(key) {
+        if (options.blockStorage) throw new Error('Storage blocked');
+        return session.get(key) ?? null;
+      },
+      setItem(key, value) {
+        if (options.blockStorage) throw new Error('Storage blocked');
+        session.set(key, value);
+      },
+      removeItem(key) {
+        if (options.blockStorage) throw new Error('Storage blocked');
+        session.delete(key);
+      },
+    },
     location: {
       protocol: 'https:',
       hostname: 'free-bbs.test',
@@ -214,8 +231,8 @@ function harness(mode = 'register', next = '') {
         return this;
       }
     },
-    async fetch(url, options) {
-      requests.push({ url, method: options.method, body: JSON.parse(options.body) });
+    async fetch(url, requestOptions) {
+      requests.push({ url, method: requestOptions.method, body: JSON.parse(requestOptions.body) });
       assert.ok(responses.length, `unexpected request to ${url}`);
       const response = await responses.shift();
       if (response instanceof Error) throw response;
@@ -231,6 +248,8 @@ function harness(mode = 'register', next = '') {
   }
   return {
     element,
+    document,
+    session,
     authLinks,
     window,
     storage,
@@ -238,12 +257,84 @@ function harness(mode = 'register', next = '') {
     responses,
     intervals,
     submit: () => element('auth-page-form').dispatch('submit'),
+    advance(milliseconds) {
+      clock += milliseconds;
+    },
     tick(milliseconds) {
       clock += milliseconds;
       intervals.forEach((callback) => callback());
     },
   };
 }
+
+for (const mode of ['register', 'remake']) {
+  test(`${mode}: resend cooldown uses elapsed time after background throttling and sleep`, async () => {
+    const h = harness(mode);
+    const button = h.element('send-email-code');
+    h.responses.push({ body: { message: '验证码已发送' } });
+    await button.dispatch('click');
+    assert.equal(button.textContent, '60s后重发');
+    h.advance(25400); // No interval callback runs while the tab is backgrounded.
+    await h.document.dispatch('visibilitychange');
+    assert.equal(button.textContent, '35s后重发');
+    assert.equal(button.disabled, true);
+    h.advance(34599);
+    await h.window.dispatch('focus');
+    assert.equal(button.textContent, '1s后重发');
+    h.advance(1);
+    await h.window.dispatch('pageshow');
+    assert.equal(button.textContent, '发送验证码');
+    assert.equal(button.disabled, false);
+    assert.equal(h.intervals.size, 0);
+    assert.equal(h.requests.length, 1, 'resuming never sends email automatically');
+    h.responses.push({ body: {} });
+    await button.dispatch('click');
+    assert.equal(h.requests.length, 2);
+    h.tick(90000); // One delayed callback must expire the entire cooldown.
+    assert.equal(button.disabled, false);
+  });
+}
+
+test('resend cooldown survives reload without extending it or leaking across auth modes', async () => {
+  const h = harness();
+  h.responses.push({ body: {} });
+  await h.element('send-email-code').dispatch('click');
+  const reloaded = harness('register', '', { session: h.session, now: now + 21000 });
+  assert.equal(reloaded.element('send-email-code').textContent, '39s后重发');
+  const reset = harness('remake', '', { session: h.session, now: now + 21000 });
+  assert.equal(reset.element('send-email-code').disabled, false);
+  const expired = harness('register', '', { session: h.session, now: now + 61000 });
+  assert.equal(expired.element('send-email-code').disabled, false);
+  assert.equal(expired.intervals.size, 0);
+});
+
+test('resend blocks duplicate in-flight requests even when focus changes', async () => {
+  const h = harness();
+  const pending = deferred();
+  h.responses.push(pending.promise);
+  const first = h.element('send-email-code').dispatch('click');
+  await flush();
+  await h.window.dispatch('focus');
+  await h.element('send-email-code').dispatch('click');
+  assert.equal(h.requests.length, 1);
+  assert.equal(h.element('send-email-code').disabled, true);
+  pending.resolve({ body: {} });
+  await first;
+  assert.equal(h.element('send-email-code').textContent, '60s后重发');
+});
+
+test('429 still starts a full cooldown and storage failures do not break it', async () => {
+  const h = harness('register', '', { blockStorage: true });
+  h.responses.push({ status: 429, body: { message: '请稍后再试' } });
+  await h.element('send-email-code').dispatch('click');
+  assert.equal(h.element('send-email-code').textContent, '60s后重发');
+  h.tick(60000);
+  assert.equal(h.element('send-email-code').disabled, false);
+  h.responses.push({ status: 503, body: { message: '发送失败' } });
+  await h.element('send-email-code').dispatch('click');
+  assert.equal(h.element('send-email-code').disabled, false);
+  assert.equal(h.intervals.size, 0);
+});
 
 async function openChallenge(h, data = challenge()) {
   const agreement = h.element('auth-community-agreement');

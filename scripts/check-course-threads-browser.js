@@ -90,7 +90,7 @@ async function main() {
     const confirmed = await save('16');
     assert.equal(confirmed.parsedCourses, 7);
     assert.equal(confirmed.totalCourses, 8);
-    assert.equal(confirmed.scheduledLessons, 114);
+    assert.equal(confirmed.scheduledLessons, 98);
     assert.match(confirmed.issues[0].message, /星期/);
     const ids = preview.workbench
       .courseProjection()
@@ -104,18 +104,20 @@ async function main() {
         .sort(),
       ids,
     );
-    assert.equal(new Set(ids).size, 114);
+    assert.equal(new Set(ids).size, 98);
     await page.reload({ waitUntil: 'networkidle0' });
     await page.waitForFunction(
       () => document.querySelector('#workbench-course-calendar-weeks').value === '16',
     );
     const extended = await save('18');
-    assert.equal(extended.scheduledLessons, 126);
+    assert.equal(extended.scheduledLessons, 108);
     const latter = preview.workbench
       .courseProjection()
       .events.filter((event) => event.title.includes('后八周'));
     assert.equal(latter.length, 8);
-    assert.ok(latter.every((event) => /第 (?:9|1[0-6]) 教学周/.test(event.description)));
+    assert.ok(
+      latter.every((event) => event.startAt >= '2026-11-09' && event.startAt < '2027-01-04'),
+    );
     await save('16');
     report.checks.push(
       'Full/odd/even require confirmed calendar; half-semesters stay 1–8/9–16; repeat/reload stable; missing weekday rejected',
@@ -459,9 +461,9 @@ async function main() {
         }, theme);
         await settle();
         const layout = await page.evaluate(() => {
-          const panels = [...document.querySelectorAll('.home-feed-panel, .home-board-panel')].map(
-            (el) => el.getBoundingClientRect().height,
-          );
+          const panels = [
+            ...document.querySelectorAll('.home-feed-panel, .home-board-panel, .home-heat-panel'),
+          ].map((el) => el.getBoundingClientRect().height);
           const lists = ['#home-discussion-list', '#home-board-activity'].map((selector) => {
             const el = document.querySelector(selector);
             el.scrollTop = 100;
@@ -482,14 +484,14 @@ async function main() {
         assert.equal(layout.overflow, false);
         assert.ok(layout.lists[0].scrolled > 0);
         if (width > 900) {
-          assert.ok(Math.abs(layout.panels[0] - layout.panels[1]) < 1);
+          assert.ok(Math.abs(layout.panels[0] - layout.panels[1] - layout.panels[2] - 20) < 1);
           assert.ok(layout.lists.every((list) => list.scrolled > 0 && list.overflow === 'auto'));
         }
         await capture(`home-${width}-${theme}`, '.home-dashboard');
       }
     }
     report.checks.push(
-      'Homepage 24 posts/8 boards, all 3 sorts, desktop equal-height scrolling and mobile no overflow',
+      'Homepage 24 posts/8 boards, all 3 sorts, left feed aligns with stacked boards/heat, bounded scrolling and mobile no overflow',
     );
     assert.deepEqual(report.errors, []);
     report.passed = true;

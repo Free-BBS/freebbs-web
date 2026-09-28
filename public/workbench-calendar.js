@@ -1,5 +1,6 @@
 (function exposeCalendar(root) {
   const HOUR = 3600000;
+  const HOUR_HEIGHT = 48;
   function deadlineState(value, completed = false, now = Date.now()) {
     if (completed) return 'done';
     if (!value || !Number.isFinite(Date.parse(value))) return 'none';
@@ -78,12 +79,12 @@
     }
     return pairs;
   }
-  function timeBlock(start, end, windowStart, pixelsPerHour = 40) {
+  function timeBlock(start, end, windowStart, pixelsPerHour = HOUR_HEIGHT) {
     const top = ((start - windowStart) / HOUR) * pixelsPerHour;
     const bottom = ((end - windowStart) / HOUR) * pixelsPerHour;
     return { top, end: bottom, height: Math.max(0, bottom - top) };
   }
-  const api = { deadlineState, deadlineRemaining, colorIndex, conflicts, timeBlock };
+  const api = { HOUR_HEIGHT, deadlineState, deadlineRemaining, colorIndex, conflicts, timeBlock };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FreeBbsWorkbenchCalendar = api;
 })(typeof window !== 'undefined' ? window : globalThis);

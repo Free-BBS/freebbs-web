@@ -10,6 +10,7 @@ const { probePrimaryTsinghuaPortals } = require('./portal-boundary-probe');
 const { probePublicNoticeSource } = require('./public-source-probe');
 const { getLearnConnectorCapabilities, normalizeHtmlText } = require('./tsinghua-learn-connector');
 const { saveManualCourse } = require('./manual-courses');
+const { editImportedSchedule } = require('./campus-schedule-overrides');
 
 const NOTIFICATION_CATEGORIES = new Set([
   'course',
@@ -1114,7 +1115,7 @@ function createWorkbenchRouter({
 
       const startAt = parseDateValue(request.query.startAt, { required: true });
       const endAt = parseDateValue(request.query.endAt, { required: true });
-      const excludePublicId = normalizeText(request.query.excludePublicId, 36);
+      const excludePublicId = normalizeText(request.query.excludePublicId, 160);
 
       if (!startAt || !endAt || endAt <= startAt || excludePublicId === null) {
         response.status(400).json({ message: '请提供有效的日程时间范围' });
@@ -1147,7 +1148,12 @@ function createWorkbenchRouter({
         { start: startAt, end: endAt },
         'confirmed',
       );
-      response.json({ conflicts: [...rows.map(toScheduleItem), ...courses] });
+      response.json({
+        conflicts: [
+          ...rows.map(toScheduleItem),
+          ...courses.filter((item) => item.publicId !== excludePublicId),
+        ],
+      });
     } catch (error) {
       sendWorkbenchError(response, error, '检查日程冲突失败');
     }
@@ -1242,6 +1248,18 @@ function createWorkbenchRouter({
     try {
       const user = await requireAuth(request, response);
       if (!user) {
+        return;
+      }
+
+      if (/^(?:cs_|hw:)/.test(request.params.publicId)) {
+        response.json({
+          scheduleItem: await editImportedSchedule(
+            pool,
+            user.id,
+            request.params.publicId,
+            request.body || {},
+          ),
+        });
         return;
       }
 
@@ -1399,7 +1417,9 @@ function createWorkbenchRouter({
       );
       response.json({ scheduleItem: toScheduleItem(rows[0]) });
     } catch (error) {
-      sendWorkbenchError(response, error, '更新日程失败');
+      if ([400, 404, 409].includes(error.status))
+        response.status(error.status).json({ message: error.message });
+      else sendWorkbenchError(response, error, '更新日程失败');
     }
   });
 
@@ -1446,6 +1466,14 @@ function createWorkbenchRouter({
         return;
       }
 
+      if (/^(?:cs_|hw:)/.test(request.params.publicId)) {
+        await editImportedSchedule(pool, user.id, request.params.publicId, request.body || {}, {
+          remove: true,
+        });
+        response.json({ ok: true });
+        return;
+      }
+
       const [result] = await pool.execute(
         `UPDATE schedule_items
          SET status = 'cancelled',
@@ -1463,7 +1491,9 @@ function createWorkbenchRouter({
       }
       response.json({ ok: true });
     } catch (error) {
-      sendWorkbenchError(response, error, '删除日程失败');
+      if ([400, 404, 409].includes(error.status))
+        response.status(error.status).json({ message: error.message });
+      else sendWorkbenchError(response, error, '删除日程失败');
     }
   });
 

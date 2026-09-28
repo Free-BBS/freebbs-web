@@ -158,7 +158,7 @@
           ['ranch_backflip', '后空翻', '12 磁元 · 永久解锁'],
           ['ranch_bicycle', '牧场自行车', '30 磁元 · 永久解锁'],
           ['ranch_flying_wings', '中国羊能飞', '25 磁元 · 永久解锁'],
-          ['ranch_clover', '三叶草', '2 磁元／个 · 羊群广场使用'],
+          ['ranch_clover', '三叶草', '1 磁元／个 · 羊群广场使用'],
         ])
           shop
             .querySelector('.ranch-supplies')

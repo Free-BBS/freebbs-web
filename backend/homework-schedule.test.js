@@ -24,6 +24,7 @@ function fixture() {
     },
     async execute(sql, params) {
       assert.equal(params[0], 7);
+      if (sql.includes('FROM campus_schedule_overrides')) return [[]];
       if (sql.includes('FROM campus_homework_snapshots')) {
         assert.match(sql, /c.generation = s.connector_generation/);
         return [snapshots];

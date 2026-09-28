@@ -418,6 +418,10 @@ body.ranch-gallery-page .main-content #community-clover {
 body.ranch-gallery-page .main-content #community-clover[hidden] {
   display: none;
 }
+body.ranch-gallery-page .main-content #community-clover,
+body.ranch-gallery-page .main-content #community-clover > span {
+  color: #fffdf5 !important;
+}
 #community-clover img {
   width: 22px;
   height: 22px;

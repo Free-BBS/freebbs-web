@@ -441,16 +441,16 @@ body.workbench-page .workbench-week-all-day {
 
 body.workbench-page .workbench-week-timeline {
   position: relative;
-  height: 720px;
+  height: 864px;
   overflow: hidden;
   background-image: repeating-linear-gradient(
     to bottom,
     transparent 0,
-    transparent 39px,
-    var(--workbench-line) 39px,
-    var(--workbench-line) 40px
+    transparent calc(var(--workbench-hour-height, 48px) - 1px),
+    var(--workbench-line) calc(var(--workbench-hour-height, 48px) - 1px),
+    var(--workbench-line) var(--workbench-hour-height, 48px)
   );
-  background-size: 100% var(--workbench-timeline-hours-height, 720px);
+  background-size: 100% var(--workbench-timeline-hours-height, 864px);
   background-repeat: no-repeat;
 }
 
@@ -1918,6 +1918,38 @@ body.workbench-page #workbench-course-calendar-form label {
   gap: 8px;
   min-width: 0;
   max-width: 100%;
+}
+
+body.workbench-page .workbench-calendar-options {
+  flex: 1 0 100%;
+  min-width: 0;
+  border-block: 1px solid var(--workbench-line);
+  padding-block: 14px;
+}
+body.workbench-page .workbench-calendar-options summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+body.workbench-page .workbench-calendar-course-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px 20px;
+  padding-block: 14px;
+  border-top: 1px solid var(--workbench-line);
+}
+body.workbench-page .workbench-calendar-course-options > strong {
+  flex: 1 0 100%;
+}
+body.workbench-page #workbench-course-calendar-form :is(select, textarea) {
+  max-width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--workbench-line-strong);
+  border-radius: 10px;
+  font: inherit;
+  color: var(--workbench-text);
+  background: var(--workbench-panel);
 }
 
 body.workbench-page #workbench-course-calendar-monday,

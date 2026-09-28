@@ -124,6 +124,7 @@ function cleanTitle(message) {
     .replace(/[一二两三四五六七八九十\d.]+\s*(?:小时|分钟)/g, '')
     .replace(/^(?:在|于|安排)\s*/, '')
     .replace(/^从?起?/, '')
+    .replace(/^开始\s*/, '')
     .replace(/(?:之前|以前|截止)/g, '')
     .replace(/^[，,。\s]+|[，,。\s]+$/g, '')
     .replace(/^(?:(?:请)?(?:帮我|替我)|我(?:们)?|想要|需要|要)+/, '')
@@ -136,6 +137,10 @@ const PERIOD_MENTION = /(凌晨|早上|上午|中午|下午|傍晚|晚上)/;
 const DATE_MENTION =
   /(?:\d{4}年)?\d{1,2}月\d{1,2}[日号]?|\d{1,2}[日号]|今天|明天|后天|(?:每周|每星期|周常)[一二三四五六日天]/;
 const DURATION_MENTION = /(\d+(?:\.\d+)?|[一二两三四五六七八九十]+)\s*(小时|分钟)/;
+const NOTES_LABEL =
+  /^(?:地点\/备注|地点|备注|说明)\s*(?:[：:]|(?:里|中)?(?:包括|包含|是|为)\s*[：:]?)\s*/;
+const END_TIME_CLAUSE =
+  /^(?:(?:可以|可|预计|计划)\s*)?(?:持续到|持续至|一直到|直到|到)\s*((?:凌晨|早上|上午|中午|下午|傍晚|晚上)?\s*\d{1,2}(?::\d{2}|点(?:半|\d{1,2}分?)?))\s*(?:结束)?[。！!]?$/;
 
 function isLocationClause(value) {
   return /^(?:在|于)?[\p{L}\d -]*(?:楼|馆|教室|会议室|报告厅|实验室|操场|[一二三四五六]教)[\p{L}\d -]*$/u.test(
@@ -170,14 +175,15 @@ function splitScheduleTasks(message) {
     }
     const chunk = chunks[index].trim();
     if (!chunk) continue;
-    const isNote = /^(?:地点\/备注|地点|备注|说明)\s*[：:]/.test(chunk);
-    const isDurationContinuation = /^(?:持续(?:时间)?|连续|共计|共|约|之后每周|每周都有)/.test(
-      chunk,
-    );
+    const isNote = NOTES_LABEL.test(chunk);
+    const isDurationContinuation =
+      END_TIME_CLAUSE.test(chunk) ||
+      /^(?:持续(?:时间)?|连续|共计|共|约|之后每周|每周都有)/.test(chunk);
     const hasDurationTask =
       !isDurationContinuation && DURATION_MENTION.test(chunk) && Boolean(cleanTitle(chunk));
     const hasAnchor =
       !isNote &&
+      !isDurationContinuation &&
       ([...chunk.matchAll(TIME_MENTION)].length > 0 ||
         DATE_MENTION.test(chunk) ||
         /接下来\s*[一二两三四五六七八九十\d]+\s*天/.test(chunk) ||
@@ -214,10 +220,25 @@ function splitScheduleTasks(message) {
 
 function parseSingleKnownScheduleMessage(message, now, context = {}) {
   let text = String(message || '').trim();
-  const notes = /(?:^|[，,；;\n])\s*(?:地点\/备注|地点|备注|说明)\s*[：:]\s*([\s\S]+)$/.exec(text);
-  if (notes) {
-    const known = parseSingleKnownScheduleMessage(text.slice(0, notes.index), now, context);
-    return known ? { ...known, description: notes[1].trim() } : null;
+  const endClocks = [];
+  // A standalone end-time continuation may follow the notes, but is not a new task.
+  // Leave ranges, cross-date endings and ambiguous clauses for the Agent.
+  text = text.replace(/(^|[，,；;。\n])([^，,；;。\n]+)/g, (whole, separator, clause) => {
+    const match = END_TIME_CLAUSE.exec(clause.trim());
+    if (!match) return whole;
+    endClocks.push(match[1]);
+    return '';
+  });
+  if (endClocks.length > 1) return null;
+  const endClock = endClocks[0] || context.endClock;
+  const notes = /(?:^|[，,；;\n])\s*((?:地点\/备注|地点|备注|说明)[\s\S]+)$/.exec(text);
+  const noteLabel = notes && NOTES_LABEL.exec(notes[1]);
+  if (noteLabel) {
+    const known = parseSingleKnownScheduleMessage(text.slice(0, notes.index), now, {
+      ...context,
+      endClock,
+    });
+    return known ? { ...known, description: notes[1].slice(noteLabel[0].length).trim() } : null;
   }
   const descriptions = [];
   text = text.replace(/([，,；;\n])([^，,；;\n]+)/g, (whole, separator, clause) => {
@@ -275,6 +296,7 @@ function parseSingleKnownScheduleMessage(message, now, context = {}) {
   let start = shanghaiMidnight(dateKey) + clock.startMinutes * MINUTE_MS;
   const deadline = /(?:之前|以前|截止|ddl|DDL)/.test(text);
   if (deadline) {
+    if (endClock) return null;
     return {
       kind: 'deadline',
       title,
@@ -288,7 +310,19 @@ function parseSingleKnownScheduleMessage(message, now, context = {}) {
       text + (context.sharedDuration ? `，${context.sharedDuration}` : ''),
     );
   const minutes = duration ? smallNumber(duration[1]) * (duration[2] === '小时' ? 60 : 1) : null;
-  const endMinutes = clock.endMinutes ?? (minutes ? clock.startMinutes + minutes : null);
+  const explicitEnd = endClock
+    ? parseMentionedTime(endClock, PERIOD_MENTION.exec(text)?.[1] || context.period)?.startMinutes
+    : null;
+  if (
+    endClock &&
+    (!Number.isFinite(explicitEnd) ||
+      explicitEnd <= clock.startMinutes ||
+      (minutes && explicitEnd !== clock.startMinutes + minutes) ||
+      (clock.endMinutes && explicitEnd !== clock.endMinutes))
+  )
+    return null;
+  const endMinutes =
+    explicitEnd ?? clock.endMinutes ?? (minutes ? clock.startMinutes + minutes : null);
   if (!endMinutes) return null;
   const weekly = /(?:每周|每星期|周常)/.test(text);
   if (weekly) {
@@ -610,7 +644,7 @@ function buildPrompt(message, now) {
     '当前时区固定为 Asia/Shanghai。现有日程由服务器避让，你只需提取用户的时间意图。',
     `当前时间：${now.toISOString()}；北京时间日期：${localDateKey(now)}。`,
     '若用户描述一件时间确定的事，输出 {"kind":"event","title":"...","description":"...","startAt":"ISO 8601含+08:00","endAt":"ISO 8601含+08:00"}。',
-    '固定知识：课程第一大节 08:00–09:35；第二大节 09:50–12:15；第三大节 13:30–15:05；第四大节 15:20–16:55；第五大节 17:10–18:45；第六大节 19:20–21:45。用户说“第N大节”时严格使用对应时间。',
+    '固定知识：课程第一大节 08:00–09:35；第二大节默认 09:50–12:15；第三大节 13:30–15:05；第四大节 15:20–16:55；第五大节默认 17:05–18:40；第六大节默认 19:20–21:45。第二大节可按课程缩短为 09:50–11:25，第五大节可缩短为 17:05–17:50，第六大节可缩短为 19:20–20:55；有明确起止时间或课程个人设置时以其为准，不可扩展已提供的忙碌时间。',
     '若是每周重复、持续 X 周，输出 {"kind":"weekly","title":"...","startAt":"首次发生的ISO时间","endAt":"首次结束的ISO时间","weeks":X}。服务器展开每周一次，不能漏掉重复次数。',
     '若是“某日某时之前完成/截止”之类的 DDL，输出 {"kind":"deadline","title":"要完成的事","startAt":"截止时间提前1分钟的ISO时间","endAt":"截止时间的ISO时间"}。DDL 是时间点，不是要占满此前时段。',
     '若用户希望在接下来 N 天内完成 X 小时某事，输出 {"kind":"plan","title":"...","days":N,"totalMinutes":X乘60,"dayStart":"09:00","dayEnd":"21:00"}。若用户限定上午/下午/晚上，调整 dayStart/dayEnd。',
@@ -619,6 +653,7 @@ function buildPrompt(message, now) {
     '示例：北京时间今天是 2026-09-24，用户说“我今天晚上9点要开书记会，罗姆楼5103；10点要开支书例会，罗姆楼10-206，两个会都是1小时”，应返回 batch，两项分别为书记会 2026-09-24T21:00:00+08:00 至 22:00:00+08:00、description 为罗姆楼5103，以及支书例会 2026-09-24T22:00:00+08:00 至 23:00:00+08:00、description 为罗姆楼10-206。示例日期仅用于解释，实际必须根据当前日期解析。',
     '不要自己排列空档，服务器会避开已有日程。缺少日期、时长等必要信息时输出 {"kind":"clarify","question":"需要补充什么"}。不要编造。',
     '所有安排类型都可包含 description 字符串，作为一个可选的“地点/备注”字段：保留用户给出的地点及备注，没有则留空；不要另设 location 字段或编造地点。',
+    '“备注里包括/备注包含”等后的清单属于该事件的 description，不要拆成独立任务；“可以持续到17:30”等是前一事件的结束时间，不是新事件。已有明确起止时间就不必再问时长；备注之后明确提出的新安排仍须单独提取。',
     `用户的话：${message}`,
   ].join('\n');
 }

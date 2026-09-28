@@ -9,7 +9,7 @@ const { createEconomyPreview } = require('./preview-economy');
 const { createWorkbenchPreviewApi } = require('./workbench-preview-api');
 
 const NOW = Date.parse('2026-09-24T06:00:00Z');
-const COURSE_SELECTOR = '.workbench-week-event[data-workbench-action="view-course-schedule"]';
+const COURSE_SELECTOR = '.workbench-week-event[data-public-id^="cs_"]';
 
 async function main() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'freebbs-course-calendar-browser-'));
@@ -225,7 +225,7 @@ async function main() {
       .events.find((event) => event.title === '数字逻辑与处理器');
     assert.equal(digital.startAt, '2026-09-24T07:20:00.000Z');
     assert.equal(digital.endAt, '2026-09-24T08:55:00.000Z');
-    assert.equal(digital.description, '六教 6A201 · 教师甲 · 第 1 教学周');
+    assert.equal(digital.description, '六教 6A201');
     assert.equal(
       preview.events.length,
       0,
@@ -240,20 +240,20 @@ async function main() {
       'Monday anchor creates 8 stable lessons for 3/4 courses; only 2 occur this week; incomplete course is reported',
     );
 
-    stage = 'course timeline opens a read-only detail dialog';
+    stage = 'course timeline opens the unified editor';
     await page.click(`${COURSE_SELECTOR}[data-public-id="${digital.publicId}"]`);
-    await page.waitForSelector('#workbench-course-calendar-detail[open]');
+    await page.waitForSelector('#workbench-schedule-dialog[open]');
     assert.equal(
-      await page.$eval('#workbench-course-calendar-title', (element) => element.textContent),
+      await page.$eval('#workbench-schedule-title', (element) => element.value),
       '数字逻辑与处理器',
     );
     assert.match(
-      await page.$eval('#workbench-course-calendar-time', (element) => element.textContent),
-      /15:20.*16:55/,
+      await page.$eval('#workbench-schedule-start', (element) => element.value),
+      /15:20/,
     );
     assert.match(
-      await page.$eval('#workbench-course-calendar-description', (element) => element.textContent),
-      /六教 6A201.*教师甲.*第 1 教学周/,
+      await page.$eval('#workbench-schedule-description', (element) => element.value),
+      /六教 6A201/,
     );
     assert.equal(
       await page.$$eval(
@@ -262,17 +262,22 @@ async function main() {
       ),
       0,
     );
-    assert.equal(await page.$eval('#workbench-schedule-dialog', (element) => element.open), false);
-    await page.click('#workbench-course-calendar-close');
+    assert.equal(await page.$eval('#workbench-schedule-dialog', (element) => element.open), true);
+    await page.click('#workbench-schedule-dialog [data-workbench-dialog-close]');
     await page.click('#workbench-view-toggle');
     const actions = await page.$$eval(
       '#workbench-schedule-list [data-workbench-action]',
       (elements) => elements.map((element) => element.dataset.workbenchAction),
     );
-    assert.deepEqual(actions, ['view-course-schedule', 'view-course-schedule']);
+    assert.deepEqual(actions, [
+      'edit-schedule',
+      'delete-schedule',
+      'edit-schedule',
+      'delete-schedule',
+    ]);
     await page.click('#workbench-view-toggle');
     report.checks.push(
-      'Timeline and list expose read-only course details, with no manual edit/delete actions',
+      'Timeline and list share ordinary event editing/deletion without teaching-week prose',
     );
 
     stage = 'repeated saves and refreshed rooms retain stable lesson identities';
@@ -349,13 +354,13 @@ async function main() {
       '1440px/390px, light/dark: expanded calendar settings remain visible and fit the viewport',
     );
 
-    stage = 'read-only course details fit the mobile viewport';
+    stage = 'course editor fits the mobile viewport';
     await page.$eval(`${COURSE_SELECTOR}[data-public-id="${digital.publicId}"]`, (element) =>
       element.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' }),
     );
     await page.click(`${COURSE_SELECTOR}[data-public-id="${digital.publicId}"]`);
-    await page.waitForSelector('#workbench-course-calendar-detail[open]');
-    report.mobileDialog = await page.$eval('#workbench-course-calendar-detail', (element) => {
+    await page.waitForSelector('#workbench-schedule-dialog[open]');
+    report.mobileDialog = await page.$eval('#workbench-schedule-dialog', (element) => {
       const bounds = element.getBoundingClientRect();
       return {
         width: bounds.width,
@@ -367,22 +372,19 @@ async function main() {
     });
     assert.ok(report.mobileDialog.fits, JSON.stringify(report.mobileDialog));
     await screenshot('course-detail-dark-390');
-    await page.click('#workbench-course-calendar-close');
-    report.checks.push('Read-only course detail opens from the mobile timeline and fits 390px');
+    await page.click('#workbench-schedule-dialog [data-workbench-dialog-close]');
+    report.checks.push('Course editor opens from the mobile timeline and fits 390px');
 
     stage = 'calendar and dialog clear on logout';
     await page.setViewport({ width: 1440, height: 1000 });
     await page.click(`${COURSE_SELECTOR}[data-public-id="${digital.publicId}"]`);
-    await page.waitForSelector('#workbench-course-calendar-detail[open]');
+    await page.waitForSelector('#workbench-schedule-dialog[open]');
     await page.evaluate(() => {
       window.freeBbsApp.userState.isLoggedIn = false;
       window.dispatchEvent(new Event('freebbs:session-change'));
     });
     assert.equal(await page.$eval('#workbench-course-calendar', (element) => element.hidden), true);
-    assert.equal(
-      await page.$eval('#workbench-course-calendar-detail', (element) => element.open),
-      false,
-    );
+    assert.equal(await page.$eval('#workbench-schedule-dialog', (element) => element.open), false);
     assert.equal(
       await page.$eval('#workbench-course-calendar-monday', (element) => element.value),
       '',

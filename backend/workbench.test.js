@@ -224,7 +224,7 @@ test('saving a semester Monday immediately exposes fixed courses in calendar, su
   const pool = {
     async execute(sql, parameters) {
       if (sql.includes('INSERT INTO campus_course_calendar_settings')) {
-        assert.deepEqual(parameters, ['2026-09-21', null, '2026-2027-1', 7, 0]);
+        assert.deepEqual(parameters, ['2026-09-21', null, null, '2026-2027-1', 7, 0, 0]);
         [monday] = parameters;
         settingsWrites += 1;
         return [{ affectedRows: 1 }];
@@ -258,8 +258,9 @@ test('saving a semester Monday immediately exposes fixed courses in calendar, su
   };
   const base = await startTestServer(t, { pool, user: { id: 7 } });
   const before = await requestJson(base, '/campus/course-calendar?semester=2026-2027-1');
-  assert.equal(before.payload.scheduledLessons, 0);
-  assert.match(before.payload.issues[0].message, /第一教学周/);
+  assert.equal(before.payload.scheduledLessons, 15);
+  assert.equal(before.payload.firstWeekMonday, '2026-09-14');
+  assert.equal(before.payload.teachingWeeks, 16);
   const saved = await requestJson(base, '/campus/course-calendar', {
     method: 'PUT',
     body: JSON.stringify({
@@ -735,6 +736,7 @@ test('calendar exposes owned homework and persists completion without modifying 
   const pool = {
     async execute(sql, parameters) {
       assert.equal(parameters[0], 7);
+      if (sql.includes('FROM campus_schedule_overrides')) return [[]];
       if (sql.includes('FROM schedule_items')) return [[]];
       if (sql.includes('FROM campus_learn_semester_snapshots')) return [[]];
       if (sql.includes('FROM campus_homework_snapshots'))
