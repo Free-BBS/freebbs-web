@@ -64,6 +64,7 @@
   }
   function positionFor(sheep, index, all, time, events = []) {
     const hungry = sheep.fedUntilMs !== undefined && sheep.fedUntilMs <= time;
+    const seed = seedFor(sheep.uid);
     const base = {
       ...basePosition(
         sheep.uid,
@@ -78,9 +79,10 @@
       hungry,
       progress: 0,
       time: time / 1000,
+      // Stable per-sheep rhythm: viewers see the same gait without the flock marching in lockstep.
+      animationTime: (time / 1000) * (0.94 + (seed % 13) * 0.01) + ((seed % 997) / 997) * 1.2,
     };
     if (hungry) return base;
-    const seed = seedFor(sheep.uid);
     const phase = (time + (seed % 60000)) % 60000;
     if (sheep.gear === 'wing' && phase < 24000) {
       const lift = Math.min(1, phase / 4500, (24000 - phase) / 4500);

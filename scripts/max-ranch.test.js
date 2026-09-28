@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
+const world = require('../public/ranch-world-data');
 const {
   walkPose,
   standPose,
@@ -434,6 +435,24 @@ test('shared frames replace local movement, show purchased actions and remain re
   controller.syncFrame({ x: 50, direction: 1, time: 125, kind: 'walk', progress: 0 });
   assert.equal(controller.snapshot().x, 42);
   assert.equal(frames.size, 0);
+});
+test('shared sheep use their individual rhythm for hooves and idle movement', (t) => {
+  const { controller, node } = ranchHarness(t, { shared: true });
+  const flock = [
+    { uid: 'u_owner0', assets: {} },
+    { uid: 'u_owner1', assets: {} },
+  ];
+  const first = world.positionFor(flock[0], 0, flock, 100000);
+  const second = world.positionFor(flock[1], 1, flock, 100000);
+  controller.syncFrame(first);
+  const firstHoof = node('[data-leg="0"]').dataset.footX;
+  const firstTail = node('[data-tail]').attributes.transform;
+  controller.syncFrame(second);
+  assert.notEqual(node('[data-leg="0"]').dataset.footX, firstHoof);
+  assert.notEqual(node('[data-tail]').attributes.transform, firstTail);
+  controller.syncFrame(first);
+  assert.equal(node('[data-leg="0"]').dataset.footX, firstHoof);
+  assert.equal(node('[data-tail]').attributes.transform, firstTail);
 });
 test('reduced motion keeps wheels and pedalling static', (t) => {
   const { controller, node } = ranchHarness(t, { shared: true }, true);
