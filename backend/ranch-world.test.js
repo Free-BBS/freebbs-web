@@ -4,6 +4,7 @@ const express = require('express');
 const { once } = require('node:events');
 const { createRanchWorldRouter, ensureRanchWorldTables } = require('./ranch-world');
 const { blank } = require('../public/ranch-design-data');
+const world = require('../public/ranch-world-data');
 
 test('startup creates and seeds the world without enabling multi-statement SQL', async () => {
   const queries = [];
@@ -22,7 +23,7 @@ test('fast cycling persists its travel across workers, dismounting and repeated 
   assert.equal((await h.action({ kind: 'bicycle', actor: 'u_owner01' })).status, 200);
   const a = await h.snapshot('a');
   assert.deepEqual(a, await h.snapshot('b'));
-  assert.deepEqual(a.sheep[0].motion, { offset: 0, start: 100000, duration: 10000 });
+  assert.deepEqual(a.sheep[0].motion, { offset: 0, start: 100000, duration: 10000, bonus: 3 });
   h.advance(11000);
   assert.equal((await h.snapshot()).events.length, 0);
   assert.deepEqual((await h.snapshot()).sheep[0].motion, a.sheep[0].motion);
@@ -31,6 +32,37 @@ test('fast cycling persists its travel across workers, dismounting and repeated 
   h.advance(11000);
   const flip = await h.action({ kind: 'backflip', actor: 'u_owner01' });
   assert.equal((await flip.json()).events[0].duration, 1500);
+});
+
+test('bicycle and flying wings are exclusive persisted equipment with owner-only flight', async (t) => {
+  const h = await harness(t);
+  assert.equal((await h.snapshot()).sheep[0].gear, 'bicycle');
+  assert.equal(
+    (await h.action({ kind: 'equip', mode: 'wing', actor: 'u_owner02' }, 2)).status,
+    403,
+  );
+  assert.equal((await h.action({ kind: 'equip', mode: '<img>' })).status, 400);
+  assert.equal((await h.action({ kind: 'fly', actor: 'u_owner01' })).status, 403);
+  const before = await h.snapshot();
+  const beforeX = world.positionFor(before.sheep[0], 0, before.sheep, before.serverNowMs).x;
+  assert.equal((await h.action({ kind: 'equip', mode: 'wing', actor: 'u_owner02' })).status, 200);
+  const equipped = await h.snapshot('b');
+  const afterX = world.positionFor(equipped.sheep[0], 0, equipped.sheep, equipped.serverNowMs).x;
+  assert.ok(Math.abs(beforeX - afterX) < 0.00001, 'equipping must not teleport the sheep');
+  assert.equal(equipped.sheep[0].gear, 'wing');
+  assert.equal(equipped.sheep[1].gear, 'walk');
+  assert.equal((await h.action({ kind: 'bicycle', actor: 'u_owner01' })).status, 403);
+  assert.equal((await h.action({ kind: 'fly', actor: 'u_owner01' }, 2)).status, 403);
+  assert.equal((await h.action({ kind: 'fly', actor: 'u_owner01' })).status, 200);
+  assert.equal((await h.snapshot('b')).events[0].kind, 'fly');
+  assert.equal((await h.action({ kind: 'equip', mode: 'bicycle' })).status, 200);
+  const cycling = await h.snapshot('b');
+  assert.equal(cycling.sheep[0].gear, 'bicycle');
+  assert.ok(!cycling.events.some((event) => event.kind === 'fly'));
+  assert.equal((await h.action({ kind: 'equip', mode: 'walk' })).status, 200);
+  assert.equal((await h.snapshot('b')).sheep[0].gear, 'walk');
+  h.advance(4000);
+  assert.equal((await h.action({ kind: 'bicycle', actor: 'u_owner01' })).status, 403);
 });
 
 async function harness(t) {
@@ -43,7 +75,7 @@ async function harness(t) {
       username: 'Alice',
       revision: 1,
       design_json: JSON.stringify(blank()),
-      ranch_assets: 'ranch_backflip:1,ranch_bicycle:1',
+      ranch_assets: 'ranch_backflip:1,ranch_bicycle:1,ranch_flying_wings:1',
       fed_until_ms: 200000,
     },
     {

@@ -466,6 +466,90 @@ test('reduced motion does not perform a shared backflip', (t) => {
   controller.syncFrame({ x: 50, direction: 1, time: 123, kind: 'backflip', progress: 0.5 });
   assert.doesNotMatch(node('[data-facing]').attributes.transform, /rotate/);
 });
+test('wing equipment flaps in flight, lands still equipped and never shows the bicycle', (t) => {
+  const { controller, element, node } = ranchHarness(t, { shared: true });
+  controller.syncFrame({
+    x: 60,
+    direction: 1,
+    time: 123,
+    kind: 'fly',
+    gear: 'wing',
+    progress: 0.5,
+  });
+  assert.equal(node('[data-wings]').attributes.visibility, 'visible');
+  assert.equal(node('[data-bicycle]').attributes.visibility, 'hidden');
+  assert.equal(node('[data-flight-trails]').attributes.visibility, 'visible');
+  assert.equal(node('[data-shadow]').attributes.visibility, 'hidden');
+  assert.equal(element.dataset.gear, 'wing');
+  const flap = node('[data-wing-left]').attributes.transform;
+  assert.match(flap, /scale\(1 1\)/);
+  controller.syncFrame({
+    x: 65,
+    direction: 1,
+    time: 123.15,
+    kind: 'fly',
+    gear: 'wing',
+    progress: 0.6,
+  });
+  assert.notEqual(node('[data-wing-left]').attributes.transform, flap);
+  controller.syncFrame({
+    x: 65,
+    direction: 1,
+    time: 123.8,
+    kind: 'fly',
+    gear: 'wing',
+    progress: 0.965,
+  });
+  const foldingScale = Number(
+    node('[data-wing-left]').attributes.transform.match(/scale\((\S+) /)[1],
+  );
+  assert.ok(foldingScale > 0.2 && foldingScale < 1, 'wings fold gradually while descending');
+  controller.syncFrame({ x: 65, direction: 1, time: 124, kind: 'walk', gear: 'wing', progress: 0 });
+  assert.equal(node('[data-wings]').attributes.visibility, 'visible');
+  assert.match(node('[data-wing-left]').attributes.transform, /scale\(0\.2 0\.28\)/);
+  assert.equal(node('[data-shadow]').attributes.visibility, 'visible');
+  controller.syncFrame({
+    x: 65,
+    direction: 1,
+    time: 125,
+    kind: 'bicycle',
+    gear: 'bicycle',
+    progress: 0.5,
+  });
+  assert.equal(node('[data-wings]').attributes.visibility, 'hidden');
+  assert.equal(node('[data-bicycle]').attributes.visibility, 'visible');
+});
+test('reduced motion holds wings still and hunger hides them', (t) => {
+  const { controller, node } = ranchHarness(t, { shared: true }, true);
+  controller.syncFrame({
+    x: 50,
+    direction: 1,
+    time: 123,
+    kind: 'fly',
+    gear: 'wing',
+    progress: 0.5,
+  });
+  const flap = node('[data-wing-left]').attributes.transform;
+  assert.equal(node('[data-flight-trails]').attributes.visibility, 'hidden');
+  controller.syncFrame({
+    x: 50,
+    direction: 1,
+    time: 124,
+    kind: 'fly',
+    gear: 'wing',
+    progress: 0.6,
+  });
+  assert.equal(node('[data-wing-left]').attributes.transform, flap);
+  controller.syncFrame({
+    x: 50,
+    direction: 1,
+    time: 125,
+    kind: 'hungry',
+    gear: 'wing',
+    hungry: true,
+  });
+  assert.equal(node('[data-wings]').attributes.visibility, 'hidden');
+});
 test('pastoral scenery is layered, unfenced, palette-aware and the greeting label is animal-friendly', () => {
   const js = readFileSync(path.join(__dirname, '../public/profile-extras.js'), 'utf8');
   const css = readFileSync(path.join(__dirname, '../public/profile-extras.css'), 'utf8');

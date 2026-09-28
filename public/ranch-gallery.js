@@ -7,6 +7,8 @@
   const dock = byId('community-interaction');
   const sceneSelect = byId('community-scene');
   const findMine = byId('community-find-mine');
+  const gearSelect = byId('community-gear');
+  const gearControl = byId('community-gear-control');
   const actors = new Map();
   let state;
   let selected;
@@ -34,14 +36,23 @@
     byId('community-selected-name').textContent = actor.sheep.username;
     const mine = actor.sheep.uid === viewerUid();
     byId('community-selected-detail').textContent = mine
-      ? '这是你的 Max · 所有人同步观看'
+      ? `这是你的 Max · ${actor.sheep.gear === 'wing' ? '佩戴飞行翅膀' : actor.sheep.gear === 'bicycle' ? '装备自行车' : '步行'} · 所有人同步观看`
       : '公共牧场 · 所有人同步观看';
     const visit = byId('community-visit');
     visit.href = `/ranch?uid=${encodeURIComponent(actor.sheep.uid)}`;
     visit.textContent = mine ? '回我的牧场' : '逛逛 TA 的牧场';
-    for (const kind of ['backflip', 'bicycle'])
+    for (const kind of ['backflip', 'bicycle', 'fly'])
       dock.querySelector(`[data-community-action="${kind}"]`).hidden =
-        !mine || !actor.sheep.assets?.[`ranch_${kind}`];
+        !mine ||
+        (kind === 'backflip'
+          ? !actor.sheep.assets?.ranch_backflip
+          : actor.sheep.gear !== (kind === 'fly' ? 'wing' : 'bicycle'));
+    gearControl.hidden = !mine;
+    gearSelect.querySelector('[value="bicycle"]').hidden = !actor.sheep.assets?.ranch_bicycle;
+    gearSelect.querySelector('[value="bicycle"]').disabled = !actor.sheep.assets?.ranch_bicycle;
+    gearSelect.querySelector('[value="wing"]').hidden = !actor.sheep.assets?.ranch_flying_wings;
+    gearSelect.querySelector('[value="wing"]').disabled = !actor.sheep.assets?.ranch_flying_wings;
+    gearSelect.value = actor.sheep.gear || 'walk';
     const stroll = dock.querySelector('[data-community-action="stroll"]');
     const own = actors.get(viewerUid());
     stroll.disabled =
@@ -133,6 +144,7 @@
           stroll: '一起走走',
           backflip: '后空翻！',
           bicycle: '骑车兜风',
+          fly: '飞起来啦',
           hungry: '饿了，等一条鱼',
         }[point.kind] || '';
       actor.bubble.hidden = !actor.bubble.textContent;
@@ -163,6 +175,7 @@
       );
     } catch (error) {
       status.textContent = error.message || '同步失败，请重试';
+      gearSelect.value = selected?.sheep.gear || 'walk';
       configureScene(state?.scene || 'meadow');
     } finally {
       submitting = false;
@@ -192,6 +205,7 @@
     .forEach((button) =>
       button.addEventListener('click', () => submit(button.dataset.communityAction)),
     );
+  gearSelect.addEventListener('change', () => submit('equip', { mode: gearSelect.value }));
   dock.querySelector('[data-community-close]').addEventListener('click', () => {
     selected?.element.classList.remove('is-selected');
     selected = null;

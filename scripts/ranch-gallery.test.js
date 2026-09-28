@@ -53,12 +53,37 @@ test('shared gallery uses SSE and server actions instead of local random interac
   const source = read('public/ranch-gallery.js');
   assert.match(html, /data-community-action="stroll"/);
   assert.match(html, /ranch-world-data\.js/);
+  assert.match(html, /value="wing">中国羊能飞/);
+  assert.match(html, /data-community-action="fly"/);
   assert.match(source, /new EventSource/);
   assert.match(source, /ranch-world\/actions/);
   assert.match(source, /syncFrame/);
   assert.doesNotMatch(source, /Math\.random|pickPartner|walkTo/);
   assert.match(source, /stream\?\.close/);
   assert.match(source, /lastSnapshot \+ 5000/);
+});
+test('equipped wings fly high on a shared clock, while bicycle and wing never appear together', () => {
+  const actor = {
+    uid: 'u_owner01',
+    gear: 'wing',
+    assets: { ranch_bicycle: 1, ranch_flying_wings: 1 },
+  };
+  const start = 60000 - (world.seedFor(actor.uid) % 60000);
+  const risen = world.positionFor(actor, 0, [actor], start + 12000);
+  assert.equal(risen.kind, 'fly');
+  assert.equal(risen.gear, 'wing');
+  assert.ok(risen.top <= 34);
+  assert.notEqual(world.positionFor(actor, 0, [actor], start + 32000).kind, 'bicycle');
+  const bike = { ...actor, gear: 'bicycle' };
+  assert.equal(world.positionFor(bike, 0, [bike], start + 32000).kind, 'bicycle');
+  assert.notEqual(world.positionFor(bike, 0, [bike], start + 12000).kind, 'fly');
+  const landing = world.positionFor(actor, 0, [actor], start + 24000);
+  assert.equal(landing.kind, 'walk');
+  assert.equal(landing.gear, 'wing');
+  const manual = { id: 4, actor: actor.uid, kind: 'fly', start: start + 30000, duration: 12000 };
+  const mid = world.positionFor(actor, 0, [actor], manual.start + 6000, [manual]);
+  assert.equal(mid.kind, 'fly');
+  assert.ok(mid.top <= 50);
 });
 test('cycling travels four times faster and retains its path after dismounting', () => {
   const uid = 'u_owner01';

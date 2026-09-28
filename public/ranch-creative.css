@@ -553,6 +553,31 @@ body.theme-dark .community-sky-glow {
   align-items: center;
   gap: 4px;
 }
+.community-gear {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 5px 2px 8px;
+  border: 1px solid rgb(255 255 255 / 0.25);
+  border-radius: 9px;
+  color: rgb(255 255 255 / 0.85);
+  background: rgb(255 255 255 / 0.08);
+  font: 500 11px/1.2 var(--font-ui);
+  white-space: nowrap;
+}
+.community-gear[hidden] {
+  display: none;
+}
+.ranch-creative-main .community-gear select {
+  min-height: 30px;
+  max-width: 105px;
+  padding: 3px 5px;
+  border: 0;
+  border-radius: 6px;
+  color: #23473e;
+  background: #f8faf0;
+  font: 600 11px/1.2 var(--font-ui);
+}
 .ranch-creative-main .community-actions :is(button, a),
 .ranch-creative-main .community-close {
   min-height: 38px;
@@ -832,6 +857,14 @@ body.ranch-gallery-page .main-content .community-corner-links button {
   .ranch-creative-main .community-actions :is(button, a) {
     min-height: 34px;
     padding: 5px 8px;
+    font-size: 10px;
+  }
+  .community-gear {
+    font-size: 10px;
+  }
+  .ranch-creative-main .community-gear select {
+    max-width: 99px;
+    min-height: 26px;
     font-size: 10px;
   }
   .ranch-creative-main .community-close {
