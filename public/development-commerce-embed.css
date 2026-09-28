@@ -1,5 +1,7 @@
 html.development-embedded .topbar,
 html.development-embedded .mobile-nav,
+html.development-embedded .desktop-header,
+html.development-embedded .mobile-header-backdrop,
 html.development-embedded .site-footer {
   display: none !important;
 }
@@ -15,6 +17,10 @@ html.development-embedded .main-content {
   min-width: 0;
   min-height: 100dvh !important;
   margin: 0 !important;
+  padding: 24px !important;
+}
+
+html.development-embedded body.desktop-shell-active .main-content {
   padding: 24px !important;
 }
 

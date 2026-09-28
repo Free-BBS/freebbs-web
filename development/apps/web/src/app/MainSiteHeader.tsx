@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 import type { UserContext } from '@freebbs-development/contracts';
@@ -68,9 +68,14 @@ export function mainSiteTypography(): CSSProperties {
   return {
     '--main-site-ui-font': fonts.ui,
     '--main-site-ui-size': `${scale}px`,
+    '--main-site-type-scale': String(scale / 16),
     '--font-ui': fonts.ui,
     '--font-display': fonts.title,
   } as CSSProperties;
+}
+
+function beijingToday(): string {
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 function developmentTitle(pathname: string): string {
@@ -94,8 +99,8 @@ function SearchIcon() {
 }
 
 function fortune(score: number) {
-  if (score >= 90) return { label: '祥瑞', tone: 'great', tagline: 'Absoulute legend' };
-  if (score >= 70) return { label: '大吉', tone: 'awful', tagline: 'Absoulute legend' };
+  if (score >= 90) return { label: '祥瑞', tone: 'great', tagline: 'Absolute legend' };
+  if (score >= 70) return { label: '大吉', tone: 'awful', tagline: 'Absolute legend' };
   if (score >= 50) return { label: '吉', tone: 'bad', tagline: '闭眼写，随手推' };
   if (score >= 20)
     return { label: '顺', tone: 'good', tagline: '人生是个泊松过程，一时的等待是为了下一次跳跃' };
@@ -106,6 +111,102 @@ function reward(record: { date: string; rewardElectrons?: number; rewardMagnetic
   if (Number(record.rewardMagnetic) > 0) return `+${record.rewardMagnetic} 磁元`;
   if (Number(record.rewardElectrons) > 0) return `+${record.rewardElectrons} 电元（历史）`;
   return record.date >= '2026-09-16' ? '磁元奖励待核对' : '+0 电元（历史）';
+}
+
+function CheckinCalendar({ summary }: { summary: CheckinSummary }) {
+  const today = summary.todayFortune?.date || summary.today?.date || beijingToday();
+  const currentMonth = today.slice(0, 7);
+  const oldestMonth = useMemo(() => {
+    const first = new Date(`${today}T00:00:00Z`);
+    first.setUTCDate(first.getUTCDate() - 365);
+    if (first.getUTCDate() !== 1) first.setUTCMonth(first.getUTCMonth() + 1, 1);
+    return first.toISOString().slice(0, 7);
+  }, [today]);
+  const [month, setMonth] = useState(currentMonth);
+  const [detail, setDetail] = useState('点击日期查看签到详情 · 按北京时间记录');
+
+  useEffect(() => {
+    setMonth(currentMonth);
+    setDetail('点击日期查看签到详情 · 按北京时间记录');
+  }, [currentMonth]);
+
+  const records = useMemo(
+    () => new Map((summary.records || []).map((record) => [record.date, record])),
+    [summary.records],
+  );
+  const [year, monthNumber] = month.split('-').map(Number);
+  const offset = (new Date(Date.UTC(year, monthNumber - 1, 1)).getUTCDay() + 6) % 7;
+  const dayCount = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  const checked = Array.from(records.keys()).filter((date) => date.startsWith(`${month}-`)).length;
+
+  function moveMonth(step: number) {
+    setMonth(new Date(Date.UTC(year, monthNumber - 1 + step, 1)).toISOString().slice(0, 7));
+    setDetail('点击日期查看签到详情 · 按北京时间记录');
+  }
+
+  return (
+    <div className="fortune-records" id="fortune-records" aria-label="签到记录">
+      <div className="checkin-month-heading">
+        <button
+          type="button"
+          aria-label="上个月"
+          disabled={month <= oldestMonth}
+          onClick={() => moveMonth(-1)}
+        >
+          ‹
+        </button>
+        <strong>{`${year} 年 ${monthNumber} 月`}</strong>
+        <button
+          type="button"
+          aria-label="下个月"
+          disabled={month >= currentMonth}
+          onClick={() => moveMonth(1)}
+        >
+          ›
+        </button>
+      </div>
+      <p className="checkin-month-summary">本月已签到 {checked} 天 · 灰色为未签到</p>
+      <div
+        className="checkin-calendar"
+        role="grid"
+        aria-label={`${year} 年 ${monthNumber} 月签到日历`}
+      >
+        {['一', '二', '三', '四', '五', '六', '日'].map((label) => (
+          <span className="checkin-weekday" key={label}>
+            {label}
+          </span>
+        ))}
+        {Array.from({ length: offset }, (_, index) => (
+          <span aria-hidden="true" key={`blank-${index}`} />
+        ))}
+        {Array.from({ length: dayCount }, (_, index) => {
+          const day = index + 1;
+          const date = `${month}-${String(day).padStart(2, '0')}`;
+          const record = records.get(date);
+          const result = record ? fortune(Number(record.fortuneScore || 0)) : null;
+          const dayDetail = record
+            ? `${date} · ${result?.label} · 连续 ${Number(record.streak || 0)} 天 · ${reward(record)}`
+            : `${date} · ${date > today ? '尚未到来' : '未签到'}`;
+          return (
+            <button
+              className={`checkin-day ${result ? `fortune-${result.tone}` : 'is-unchecked'}${date === today ? ' is-today' : ''}`}
+              type="button"
+              key={date}
+              aria-label={dayDetail}
+              aria-current={date === today ? 'date' : undefined}
+              title={dayDetail}
+              onClick={() => setDetail(dayDetail)}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+      <p className="checkin-day-detail" aria-live="polite">
+        {detail}
+      </p>
+    </div>
+  );
 }
 
 function Currency({
@@ -271,23 +372,25 @@ export function MainSiteHeader({ user, authMode, themeMode, onToggleTheme }: Mai
             <div className="main-site-user-copy">
               <strong title={profileName}>{profileName}</strong>
             </div>
-            <a
+            <Link
               className="main-site-avatar"
-              href={mainSiteHref(`/profile?uid=${encodeURIComponent(user.uid)}`)}
+              to="/profile"
+              state={{ from: savedLocation }}
               aria-label="打开我的个人主页"
             >
               <img src={avatar} alt={`${user.displayName}头像`} />
-            </a>
+            </Link>
           </div>
           <div className="main-site-tools">
-            <a
+            <Link
               className="main-site-settings main-site-tool-button"
-              href={mainSiteHref('/settings')}
+              to="/settings"
+              state={{ from: savedLocation }}
               aria-label="设置"
               title="设置"
             >
               <img src={gearIcon} alt="" />
-            </a>
+            </Link>
             <button
               className="main-site-desktop-theme main-site-tool-button"
               type="button"
@@ -362,21 +465,17 @@ export function MainSiteHeader({ user, authMode, themeMode, onToggleTheme }: Mai
                           ? '签到领取磁元'
                           : '签到领取电元'}
                 </button>
-                <div className="fortune-records" aria-label="签到记录">
-                  {loading ? (
+                {loading ? (
+                  <div className="fortune-records" aria-label="签到记录">
                     <p className="fortune-record-empty">正在加载签到记录...</p>
-                  ) : checkin?.records?.length ? (
-                    checkin.records.map((record) => (
-                      <div key={record.date} className="fortune-record-row">
-                        <span>{record.date}</span>
-                        <strong>连续 {record.streak} 天</strong>
-                        <span>{reward(record)}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="fortune-record-empty">还没有签到记录。</p>
-                  )}
-                </div>
+                  </div>
+                ) : checkin ? (
+                  <CheckinCalendar summary={checkin} />
+                ) : (
+                  <div className="fortune-records" aria-label="签到记录">
+                    <p className="fortune-record-empty">签到记录暂时不可用。</p>
+                  </div>
+                )}
                 <p className="fortune-chart-caption">签到记录</p>
                 {error ? (
                   <button type="button" onClick={() => void openCheckin()}>

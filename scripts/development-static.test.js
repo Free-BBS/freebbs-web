@@ -19,3 +19,11 @@ test('authentication accepts only same-origin development return paths', () => {
   assert.match(auth, /next\.pathname\.startsWith\('\/development\/'\)/);
   assert.match(auth, /next\.origin === window\.location\.origin && allowed/);
 });
+
+test('shared profile and settings pages support the development embed shell', () => {
+  for (const page of ['profile.html', 'settings.html']) {
+    const html = fs.readFileSync(path.join(root, 'public', page), 'utf8');
+    assert.match(html, /development-commerce-embed\.js/);
+    assert.match(html, /development-commerce-embed\.css/);
+  }
+});

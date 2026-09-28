@@ -60,6 +60,11 @@ function DashboardRoute() {
   return <DashboardPage key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
 }
 
+function ProfileRoute() {
+  const auth = useAuth();
+  return <CommercePage section="profile" userUid={auth.user?.uid} />;
+}
+
 function KnowledgeRoute() {
   const auth = useAuth();
   const [search] = useSearchParams();
@@ -242,6 +247,8 @@ export const appRouter = createBrowserRouter(
         { path: 'dashboard', element: <DashboardRoute /> },
         { path: 'shop', element: <CommercePage section="shop" /> },
         { path: 'inventory', element: <CommercePage section="inventory" /> },
+        { path: 'profile', element: <ProfileRoute /> },
+        { path: 'settings', element: <CommercePage section="settings" /> },
         { path: 'knowledge', element: <KnowledgeRoute /> },
         { path: 'knowledge/:entryId', element: <KnowledgeDetailRoute /> },
         { path: 'information', element: <InformationHubRoute /> },

@@ -60,6 +60,8 @@ describe('application routes', () => {
     ['/sports/team-1', 'sports/:teamId'],
     ['/shop', 'shop'],
     ['/inventory', 'inventory'],
+    ['/profile', 'profile'],
+    ['/settings', 'settings'],
     ['/liaison/problems/problem-1', 'liaison/problems/:problemId'],
   ])('matches %s to its focused module route', (pathname, expectedPath) => {
     expect(leafRoute(pathname)?.path).toBe(expectedPath);

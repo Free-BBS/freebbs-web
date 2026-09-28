@@ -4,17 +4,32 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { mainSiteHref } from './main-site-api.js';
 
 interface CommercePageProps {
-  section: 'shop' | 'inventory';
+  section: 'shop' | 'inventory' | 'profile' | 'settings';
+  userUid?: string;
 }
 
-export function CommercePage({ section }: CommercePageProps) {
+const sectionLabels = {
+  shop: { kicker: 'FREE-BBS · 电磁场', label: '商店', title: 'FREE-BBS 商店' },
+  inventory: { kicker: 'FREE-BBS · 电磁场', label: '仓库', title: 'FREE-BBS 仓库' },
+  profile: { kicker: 'FREE-BBS · 个人中心', label: '个人主页', title: 'FREE-BBS 个人主页' },
+  settings: { kicker: 'FREE-BBS · 个人中心', label: '设置', title: 'FREE-BBS 设置' },
+} as const;
+
+export function CommercePage({ section, userUid = '' }: CommercePageProps) {
   const frame = useRef<HTMLIFrameElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from || '/dashboard';
-  const source = mainSiteHref(
-    section === 'shop' ? '/electromagnetic?embed=development' : '/inventory?embed=development',
-  );
+  const sourcePath =
+    section === 'shop'
+      ? '/electromagnetic?embed=development'
+      : section === 'inventory'
+        ? '/inventory?embed=development'
+        : section === 'profile'
+          ? `/profile?uid=${encodeURIComponent(userUid)}&embed=development`
+          : '/settings?embed=development';
+  const source = mainSiteHref(sourcePath);
+  const labels = sectionLabels[section];
 
   useEffect(() => {
     const expectedOrigin = new URL(source, window.location.href).origin;
@@ -29,22 +44,17 @@ export function CommercePage({ section }: CommercePageProps) {
   }, [from, navigate, source]);
 
   return (
-    <section className="development-commerce" aria-label={section === 'shop' ? '商店' : '仓库'}>
+    <section className="development-commerce" aria-label={labels.label}>
       <div className="development-commerce-heading">
         <div>
-          <p>FREE-BBS · 电磁场</p>
-          <h1>{section === 'shop' ? '商店' : '仓库'}</h1>
+          <p>{labels.kicker}</p>
+          <h1>{labels.label}</h1>
         </div>
         <button type="button" onClick={() => navigate(from)}>
           返回发展端
         </button>
       </div>
-      <iframe
-        ref={frame}
-        key={section}
-        title={section === 'shop' ? 'FREE-BBS 商店' : 'FREE-BBS 仓库'}
-        src={source}
-      />
+      <iframe ref={frame} key={section} title={labels.title} src={source} />
     </section>
   );
 }

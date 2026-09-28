@@ -733,6 +733,7 @@
   border-radius: 9px;
   color: var(--color-sidebar-text);
   opacity: 0.92;
+  letter-spacing: 0.04em;
   text-decoration: none;
   transition:
     color var(--transition-fast),
@@ -745,6 +746,7 @@
   background: var(--nav-link-hover-background);
   color: var(--nav-link-hover-text);
   opacity: 1;
+  letter-spacing: 0.08em;
 }
 
 .module-link.active,
@@ -794,9 +796,9 @@
 
 .module-name {
   overflow: hidden;
-  font-size: 0.92rem;
-  font-weight: 800;
-  letter-spacing: 0;
+  font-size: calc(0.92rem * var(--main-site-type-scale, 1));
+  font-weight: 700;
+  letter-spacing: inherit;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -834,8 +836,9 @@
   background: rgba(255, 255, 255, 0.04);
   color: var(--color-sidebar-text);
   font-family: var(--font-ui);
-  font-size: 0.92rem;
-  font-weight: 800;
+  font-size: calc(0.92rem * var(--main-site-type-scale, 1));
+  font-weight: 700;
+  letter-spacing: 0.04em;
   text-align: center;
 }
 
@@ -1080,7 +1083,7 @@
   .module-name,
   .sidebar-footer .sidebar-system-link,
   .sidebar-footer .sidebar-learning-link {
-    font-size: 0.86rem;
+    font-size: calc(0.86rem * var(--main-site-type-scale, 1));
   }
 }
 
