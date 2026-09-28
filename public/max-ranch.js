@@ -488,8 +488,11 @@
         stopFrame();
         x = (width() * Math.max(0, Math.min(100, state.x))) / 100;
         direction = state.direction === -1 ? -1 : 1;
-        motionTime = state.time;
-        walkTime = state.time;
+        const animationTime = Number.isFinite(state.animationTime)
+          ? state.animationTime
+          : state.time;
+        motionTime = animationTime;
+        walkTime = animationTime;
         mode = hungry ? 'hungry' : state.kind || 'walk';
         elapsed = (state.progress || 0) * 3.2;
         pose = hungry
@@ -535,7 +538,7 @@
           nodes.shadow.setAttribute('transform', '');
           nodes.shadow.setAttribute('opacity', '.16');
         }
-        const rotation = media.matches ? 0 : (state.time * 720) % 360;
+        const rotation = media.matches ? 0 : (animationTime * 720) % 360;
         element
           .querySelector('[data-bike-wheel-left]')
           .setAttribute('transform', `rotate(${rotation} 46 149)`);
@@ -550,7 +553,7 @@
           .setAttribute('visibility', mode === 'bicycle' && !hungry ? 'visible' : 'hidden');
         const winged = state.gear === 'wing' && !hungry;
         const flying = mode === 'fly' && winged;
-        const flap = media.matches ? -12 : Math.sin(state.time * 10) * 26 - 6;
+        const flap = media.matches ? -12 : Math.sin(animationTime * 10) * 26 - 6;
         const wingProgress = Math.max(0, Math.min(1, Number(state.progress) || 0));
         const deployment = flying ? Math.min(1, wingProgress / 0.07, (1 - wingProgress) / 0.07) : 0;
         const spread = deployment * deployment * (3 - 2 * deployment);

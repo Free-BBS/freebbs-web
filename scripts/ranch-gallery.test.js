@@ -22,6 +22,19 @@ test('shared positions are deterministic across clients and late arrivals, with 
     assert.ok(point.scale >= 0.64 && point.scale <= 1.04);
   }
 });
+test('each sheep keeps an independent but deterministic animation rhythm', () => {
+  const time = 100000;
+  const frames = sheep.map((actor, index) => world.positionFor(actor, index, sheep, time));
+  const phases = frames.map((frame) => (frame.animationTime % 1.2).toFixed(2));
+  assert.ok(new Set(phases).size > sheep.length / 2, 'the flock does not step in unison');
+  frames.forEach((frame, index) => {
+    const repeated = world.positionFor(sheep[index], index, sheep, time);
+    const next = world.positionFor(sheep[index], index, sheep, time + 1000);
+    assert.equal(repeated.animationTime, frame.animationTime);
+    assert.ok(next.animationTime - frame.animationTime >= 0.939);
+    assert.ok(next.animationTime - frame.animationTime <= 1.061);
+  });
+});
 test('paired stroll joins two sheep in a shared lane and walks in the same direction', () => {
   const event = {
     id: 1,
