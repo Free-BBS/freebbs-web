@@ -28,9 +28,14 @@ test('storefront category links follow the real catalog groups and existing guid
     assert.equal(links[index][1], `#shop-section-${group.key}`);
     assert.equal(links[index][2], group.title);
   });
-  ['shop-grid', 'economy-balance-row', 'economy-message'].forEach((id) => {
+  ['shop-grid', 'economy-message'].forEach((id) => {
     assert.equal([...html.matchAll(new RegExp(`id="${id}"`, 'g'))].length, 1);
   });
+  assert.doesNotMatch(html, /id="economy-balance-row"/, 'wallet lives in the shared navigation');
+  assert.doesNotMatch(
+    fs.readFileSync(path.join(publicDir, 'workbench.html'), 'utf8'),
+    /id="workbench-session-state"/,
+  );
   assert.match(hero, /class="economy-inventory-link" href="\/inventory"/);
   assert.match(hero, /<h1>电磁场商城<\/h1>/);
   const message = html.match(/<p\s[^>]*id="economy-message"[^>]*>/)[0];

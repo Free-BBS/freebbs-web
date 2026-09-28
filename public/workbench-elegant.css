@@ -40,13 +40,13 @@
   body.workbench-page .workbench-eyebrow,
   body.workbench-page .workbench-card-eyebrow {
     font-family: var(--font-ui);
-    font-size: 0.65rem;
+    font-size: 0.8rem;
     letter-spacing: 0.14em;
     line-height: 1.5;
   }
 
   body.workbench-page .workbench-hero h1 {
-    font-size: clamp(1.35rem, 2vw, 2.15rem);
+    font-size: clamp(1.55rem, 2.3vw, 2.25rem);
     line-height: 1.5;
     font-weight: 700;
     letter-spacing: 0;
@@ -63,7 +63,7 @@
 
   body.workbench-page .workbench-intro-copy {
     margin-top: 6px;
-    font-size: 0.8rem;
+    font-size: 1rem;
   }
 
   body.workbench-page .workbench-session-state {
@@ -87,7 +87,7 @@
   body.workbench-page .workbench-view-switch button {
     min-height: 40px;
     padding: 8px 22px;
-    font-size: 0.85rem;
+    font-size: 1rem;
     border-radius: 9px;
   }
 
@@ -108,7 +108,7 @@
     gap: 10px 24px;
     margin: 0 0 16px;
     padding: 0 2px;
-    font-size: 0.76rem;
+    font-size: 1rem;
   }
 
   body.workbench-page .workbench-section-links a {
@@ -156,7 +156,7 @@
     )
     h2 {
     margin: 0;
-    font-size: 1.08rem;
+    font-size: 1.3rem;
     line-height: 1.5;
     letter-spacing: 0;
   }
@@ -175,7 +175,7 @@
     ) {
     min-height: 38px;
     border-radius: 9px;
-    font-size: 0.76rem;
+    font-size: 0.95rem;
     line-height: 1.4;
     box-shadow: none;
   }
@@ -191,12 +191,12 @@
 
   body.workbench-page .workbench-hours-form small {
     flex-basis: 100%;
-    font-size: 0.7rem;
+    font-size: 0.9rem;
   }
 
   body.workbench-page .workbench-hours-hint {
     margin: 8px 0 12px;
-    font-size: 0.7rem;
+    font-size: 0.9rem;
     line-height: 1.65;
   }
 
@@ -250,7 +250,7 @@
   }
 
   body.workbench-page .workbench-state-item strong {
-    font-size: 0.9rem;
+    font-size: 1.1rem;
   }
 
   body.workbench-page .workbench-agent-card {
@@ -265,7 +265,7 @@
       .workbench-source-copy > p:not(.workbench-card-eyebrow)
     ) {
     max-width: none;
-    font-size: 0.78rem;
+    font-size: 1rem;
     line-height: 1.85;
   }
 
@@ -286,7 +286,7 @@
   }
 
   body.workbench-page #workbench-campus-title {
-    font-size: 1rem;
+    font-size: 1.25rem;
   }
 
   body.workbench-page
@@ -308,7 +308,7 @@
   }
 
   body.workbench-page :is(.workbench-economy-section, .workbench-quick-section) h2 {
-    font-size: 1.05rem;
+    font-size: 1.3rem;
   }
 
   body.workbench-page .workbench-card {
@@ -319,11 +319,55 @@
   }
 
   body.workbench-page .workbench-card strong {
-    font-size: 0.9rem;
+    font-size: 1.1rem;
   }
 
   body.workbench-page .workbench-dialog {
     border-radius: 16px;
+  }
+
+  body.workbench-page .workbench-dialog label > span {
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+
+  /* Use readable rem-based roles, preserving the user's font/size preferences.
+     The timeline's faint hour ticks intentionally remain secondary. */
+  body.workbench-page :is(.workbench-date, .workbench-week-label, .workbench-hours-form),
+  body.workbench-page :is(.workbench-agent-form, .workbench-agent-proposal) label,
+  body.workbench-page .workbench-agent-form textarea,
+  body.workbench-page .workbench-agent-proposal :is(input, textarea),
+  body.workbench-page :is(.workbench-campus-course, .workbench-campus-notice) p,
+  body.workbench-page .workbench-week-event strong {
+    font-size: 1rem;
+    line-height: 1.65;
+  }
+
+  body.workbench-page
+    :is(.workbench-state-item, .workbench-campus-course, .workbench-campus-notice) {
+    overflow-wrap: anywhere;
+  }
+
+  body.workbench-page .workbench-session-state,
+  body.workbench-page .workbench-card-status,
+  body.workbench-page .workbench-item-action,
+  body.workbench-page .workbench-agent-form-footer span,
+  body.workbench-page .workbench-week-event small,
+  body.workbench-page .workbench-state-item p,
+  body.workbench-page .workbench-state-item small,
+  body.workbench-page .workbench-card small,
+  body.workbench-page .workbench-campus-empty,
+  body.workbench-page .workbench-course-calendar-note,
+  body.workbench-page #workbench-course-calendar-issues {
+    font-size: 0.9rem;
+    line-height: 1.65;
+  }
+
+  body.workbench-page :is(.workbench-card-tools, .workbench-item-actions) button {
+    height: auto;
+    min-height: 42px;
+    padding-block: 8px;
+    white-space: normal;
   }
 }
 

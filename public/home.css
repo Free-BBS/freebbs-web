@@ -405,6 +405,17 @@ body.home-page .home-dashboard-panel {
   padding: 22px;
 }
 
+@media (min-width: 901px) {
+  body.home-page .home-dashboard {
+    grid-template-areas: 'feed boards' 'heat heat';
+  }
+  body.home-page .home-heat-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px 24px;
+  }
+}
+
 /* Shared legacy rules force text colors with !important. Keep overrides local,
    especially the always-dark learning illustration, in both site themes. */
 body.home-page .home-dashboard-main .home-eyebrow,
@@ -452,15 +463,47 @@ body.home-page .site-footer {
   transform: none !important;
 }
 
-body.home-page .home-feed-list,
-body.home-page .home-board-activity,
 body.home-page .home-heat-list {
   max-height: none;
   overflow: visible;
 }
 
-body.home-page .home-feed-list {
-  flex: 0 0 auto;
+body.home-page :is(.home-feed-panel, .home-board-panel) {
+  height: clamp(480px, 68vh, 680px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+body.home-page :is(.home-feed-list, .home-board-activity) {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  overscroll-behavior-y: contain;
+  align-content: start;
+}
+
+body.home-page .home-feed-item,
+body.home-page .home-board-item {
+  flex-shrink: 0;
+}
+
+body.home-page .home-panel-header {
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  min-height: 3.6rem;
+}
+
+body.home-page .home-feed-sort .home-feed-toggle {
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  font: inherit;
+  padding: 8px 12px;
+  max-width: 100%;
+  cursor: pointer;
 }
 
 body.home-page .home-feed-item {

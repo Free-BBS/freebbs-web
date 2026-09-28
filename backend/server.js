@@ -1,12 +1,12 @@
-const { createLanguageLabRouter } = require('./language-lab');
 const express = require('express');
 const crypto = require('crypto');
-const { createRanchDesignRouter, ensureRanchDesignTables } = require('./ranch-designs');
-const { createRanchWorldRouter, ensureRanchWorldTables } = require('./ranch-world');
 const fs = require('fs');
 const path = require('path');
 const { StringDecoder } = require('node:string_decoder');
 const sharp = require('sharp');
+const { createRanchWorldRouter, ensureRanchWorldTables } = require('./ranch-world');
+const { createRanchDesignRouter, ensureRanchDesignTables } = require('./ranch-designs');
+const { createLanguageLabRouter } = require('./language-lab');
 const { normalize: normalizeMaxArtifact } = require('../public/max-artifact-data');
 const {
   modelCatalog,
@@ -290,31 +290,53 @@ const DISCUSSION_BOARD_SEEDS = [
   },
   {
     slug: 'math',
-    name: '数理',
-    description: '数学、物理与推导讨论',
-    descriptionMarkdown: '数学、物理与推导讨论。支持 Markdown 与 KaTeX，例如 `$E=mc^2$`。',
+    name: '数学',
+    description: '数学知识、方法与推导讨论',
+    descriptionMarkdown:
+      '数学知识、方法与推导讨论，支持 Markdown 与 KaTeX。原数理分区的帖子保留在这里。',
     sortOrder: 20,
+  },
+  {
+    slug: 'physics',
+    name: '物理',
+    description: '物理概念、现象与模型讨论',
+    descriptionMarkdown: '从物理现象出发，交流概念理解、模型和推导过程。',
+    sortOrder: 30,
   },
   {
     slug: 'circuit',
     name: '电路',
     description: '模电、数电与硬件实现',
     descriptionMarkdown: '模电、数电与硬件实现相关内容。建议附上电路图、波形、公式或关键参数。',
-    sortOrder: 30,
+    sortOrder: 40,
   },
   {
     slug: 'signal',
     name: '信号',
     description: '信号、系统与通信方向讨论',
     descriptionMarkdown: '信号、系统与通信方向讨论。可以贴推导、代码、仿真结果和参考资料。',
-    sortOrder: 40,
+    sortOrder: 50,
+  },
+  {
+    slug: 'computer',
+    name: '计算机',
+    description: '编程、算法与计算机系统',
+    descriptionMarkdown: '交流编程思路、算法、计算机系统和工具使用，分享排错过程。',
+    sortOrder: 60,
+  },
+  {
+    slug: 'experiment',
+    name: '实验',
+    description: '实验设计、测量与实践记录',
+    descriptionMarkdown: '分享实验设计、测量方法、结果分析与实践经验。',
+    sortOrder: 70,
   },
   {
     slug: 'changelog',
     name: '更新日志',
     description: '站点更新、修复与版本记录',
     descriptionMarkdown: 'FREE-BBS 的站点更新、修复与版本记录。这里用于同步功能变化和维护信息。',
-    sortOrder: 50,
+    sortOrder: 80,
   },
 ];
 
@@ -3675,7 +3697,7 @@ app.post('/api/electromagnetic/assets/:assetKey/gift', async (request, response)
 
     const requestedAssetKey = String(request.params.assetKey || '').trim();
     const target = String(request.body.target || '').trim();
-    const requestKey = request.body.requestKey;
+    const { requestKey } = request.body;
 
     if (!requestedAssetKey || requestedAssetKey.length > 64) {
       response.status(400).json({ message: '无效资产' });
@@ -4270,7 +4292,7 @@ app.get('/api/discussion/posts', async (request, response) => {
   const requestedSort = String(request.query.sort || 'latest')
     .trim()
     .toLowerCase();
-  const sortMode = requestedSort === 'hot' ? 'hot' : 'latest';
+  const sortMode = ['hot', 'balanced'].includes(requestedSort) ? requestedSort : 'latest';
 
   try {
     await ensureDiscussionTables();
@@ -4320,6 +4342,13 @@ app.get('/api/discussion/posts', async (request, response) => {
                  ) DESC,
                  p.created_at DESC,
                  p.id DESC`;
+    } else if (sortMode === 'balanced') {
+      // Recency-decayed engagement: comments weigh 3, reactions weigh 1.
+      // A baseline keeps new posts eligible; old popularity gradually decays.
+      orderBy = `p.is_pinned DESC,
+                 ((1 + COALESCE(c.comment_count, 0) * 3 + COALESCE(l.reaction_count, 0)) /
+                  POW(1 + GREATEST(0, TIMESTAMPDIFF(SECOND, p.created_at, NOW())) / 86400.0, 1.3)) DESC,
+                 p.created_at DESC, p.id DESC`;
     } else if (boardSlug !== 'all') {
       orderBy =
         'p.is_pinned DESC, p.pinned_at DESC, p.is_featured DESC, p.featured_at DESC, p.created_at DESC, p.id DESC';

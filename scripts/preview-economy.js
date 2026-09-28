@@ -5,7 +5,7 @@ const { servePausedCodeLab } = require('../code-lab-availability');
 const { createEconomyShop } = require('../backend/economy-shop');
 const { createEconomyMemoryStore } = require('./fixtures/economy-memory-store');
 const { createProfileExtras, beijingDay } = require('../backend/profile-extras');
-const { FISHBONE_MASTER } = require('../backend/economy-achievements');
+const { FISHBONE_MASTER, CIRCUIT_MASTER } = require('../backend/economy-achievements');
 const { effectiveFortune, checkinReward } = require('../backend/economy-policy');
 const ranchDesignData = require('../public/ranch-design-data');
 
@@ -145,6 +145,7 @@ function createEconomyPreview({
           quantity,
           item: items.find((i) => i.assetKey === key),
           ...(key === FISHBONE_MASTER.key ? { metadata: FISHBONE_MASTER, isGift: false } : {}),
+          ...(key === CIRCUIT_MASTER.key ? { metadata: CIRCUIT_MASTER, isGift: false } : {}),
         })),
     };
   }
@@ -238,7 +239,8 @@ function createEconomyPreview({
       let requestBody;
       if (extraApi && route.startsWith('/api/')) {
         if (
-          !['GET', 'HEAD', 'POST', 'PATCH', 'DELETE'].includes(req.method) ||
+          (!['GET', 'HEAD', 'POST', 'PATCH', 'DELETE'].includes(req.method) &&
+            !(req.method === 'PUT' && route === '/api/workbench/campus/course-calendar')) ||
           req.headers.authorization !== `Bearer ${TOKEN}` ||
           (req.headers.origin && req.headers.origin !== `http://${host}`)
         )

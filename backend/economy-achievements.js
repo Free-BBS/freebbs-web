@@ -25,4 +25,16 @@ async function unlockFishboneMaster(tx, userId) {
   return [FISHBONE_MASTER.key];
 }
 
-module.exports = { FISHBONE_MASTER, unlockFishboneMaster };
+const CIRCUIT_MASTER = Object.freeze({
+  key: 'plate_circuit_master',
+  assetKey: 'plate_circuit_master',
+  name: '电路达人',
+  class: 'nameplate',
+  source: 'achievement',
+  description: '通过电路闯关模式全部当前开放关卡后获得，以服务端当前题目版本的有效通关记录为准',
+  desc: '从第一条连线到最后一束波形，让每一次探索在回路中相遇',
+  image: '/assets/icons/plate_circuit_master.svg',
+  isGift: false,
+});
+
+module.exports = { FISHBONE_MASTER, CIRCUIT_MASTER, unlockFishboneMaster };

@@ -207,6 +207,11 @@ function toScheduleItem(row) {
     status: row.status,
     sourceType: row.source_type,
     kind,
+    seriesKey:
+      row.source_type === 'manual' &&
+      /^manual:(?:course|recurring):/.test(row.source_reference || '')
+        ? row.source_reference
+        : null,
     version: Number(row.version || 1),
     updatedAt: toIsoString(row.updated_at),
     userConfirmedAt: toIsoString(row.user_confirmed_at),
@@ -1148,15 +1153,20 @@ function createWorkbenchRouter({
     }
   });
 
-  router.post('/manual-courses', async (request, response) => {
+  router.post(['/manual-courses', '/recurring-events'], async (request, response) => {
     const user = await requireAuth(request, response);
     if (!user) return;
     try {
-      response.status(201).json(await saveManualCourse(pool, user.id, request.body));
+      const kind = request.path === '/manual-courses' ? 'course' : request.body?.kind;
+      if (!['event', 'course'].includes(kind)) {
+        response.status(400).json({ message: '重复安排仅支持普通事件或课程' });
+        return;
+      }
+      response.status(201).json(await saveManualCourse(pool, user.id, request.body, { kind }));
     } catch (error) {
       if (error.status)
         response.status(error.status).json({ message: error.message, code: error.code });
-      else sendWorkbenchError(response, error, '添加课程失败');
+      else sendWorkbenchError(response, error, '添加重复安排失败');
     }
   });
 

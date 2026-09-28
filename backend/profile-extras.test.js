@@ -310,6 +310,25 @@ test('fishbone achievement unlocks when gold arrives after ten purchases, only o
   assert.equal(store.account().notifications.length, 1);
 });
 
+test('circuit achievement is owned-only, swappable and never auto-equipped', async () => {
+  const { act, store, service } = setup();
+  await assert.rejects(
+    act('equip', { slot: 'nameplate', itemKey: 'plate_circuit_master' }),
+    /尚未解锁/,
+  );
+  store.account().assets.plate_observer = 1;
+  await act('equip', { slot: 'nameplate', itemKey: 'plate_observer' });
+  store.account().assets.plate_circuit_master = 1;
+  const state = await service.ownState(1);
+  assert.ok(state.owned.includes('plate_circuit_master'));
+  assert.equal((await service.publicProfile(1)).cosmetics.nameplate, 'plate_observer');
+  for (const itemKey of ['plate_circuit_master', 'plate_observer']) {
+    await act('equip', { slot: 'nameplate', itemKey });
+    assert.equal((await service.publicProfile(1)).cosmetics.nameplate, itemKey);
+  }
+  assert.equal(store.account().assets.plate_circuit_master, 1);
+});
+
 test('held or fed bones do not replace the ten purchase requirement', async () => {
   const { act, store, service } = setup();
   store.account().assets.fishbone = 100;

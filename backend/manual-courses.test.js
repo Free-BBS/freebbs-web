@@ -25,6 +25,19 @@ test('manual courses expand exact weekly/alternate dates without a campus accoun
   );
 });
 
+test('unified repeat rules preserve legacy course identities and ordinary event kind', async () => {
+  const body = { ...sample, recurrence: { unit: 'week', interval: 1, count: 16 } };
+  assert.deepEqual(expandManualCourse(body), expandManualCourse(sample));
+  const events = expandManualCourse(body, { kind: 'event' });
+  assert.equal(events.length, 16);
+  assert.equal(events[0].kind, 'event');
+  assert.match(events[0].sourceReference, /^manual:recurring:/);
+  const db = database({ failAt: 2 });
+  await assert.rejects(saveManualCourse(db.pool, 17, body, { kind: 'event' }), /unavailable/);
+  assert.ok(db.calls.includes('rollback'));
+  assert.ok(!db.calls.includes('commit'));
+});
+
 test('malformed or cross-midnight courses fail before opening a transaction', async () => {
   for (const overrides of [
     { title: '' },

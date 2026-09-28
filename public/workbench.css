@@ -16,15 +16,7 @@ body.workbench-page {
   --workbench-accent: #45bdc6;
   --workbench-accent-strong: #6ad3d8;
   --workbench-accent-soft: rgba(69, 189, 198, 0.13);
-  font-family: var(--workbench-font-sans);
-}
-
-body.workbench-page h1,
-body.workbench-page h2,
-body.workbench-page h3,
-body.workbench-page .workbench-state-item strong,
-body.workbench-page .workbench-card strong {
-  font-family: var(--workbench-font-sans) !important;
+  font-family: var(--font-body);
 }
 
 body.theme-light.workbench-page {
@@ -1916,12 +1908,20 @@ body.workbench-page #workbench-course-repeat[hidden] {
 body.workbench-page #workbench-course-calendar-form {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: end;
   gap: 10px;
   margin: 14px 0;
 }
 
-body.workbench-page #workbench-course-calendar-monday {
+body.workbench-page #workbench-course-calendar-form label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+body.workbench-page #workbench-course-calendar-monday,
+body.workbench-page #workbench-course-calendar-weeks {
   min-width: 0;
   max-width: 100%;
   padding: 10px;
@@ -1930,6 +1930,10 @@ body.workbench-page #workbench-course-calendar-monday {
   font: inherit;
   color: var(--workbench-text);
   background: var(--workbench-panel);
+}
+
+body.workbench-page #workbench-course-calendar-weeks {
+  width: 12em;
 }
 
 body.workbench-page .workbench-course-calendar-note,
@@ -1944,6 +1948,36 @@ body.workbench-page #workbench-course-calendar-description {
   overflow-wrap: anywhere;
 }
 
+body.workbench-page #workbench-course-repeat[hidden],
+body.workbench-page .workbench-repeat-preview[hidden] {
+  display: none;
+}
+
+body.workbench-page .workbench-repeat-custom-inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+body.workbench-page .workbench-repeat-preview {
+  padding: 12px 16px;
+  border: 1px solid var(--workbench-line-strong);
+  border-radius: 12px;
+  background: var(--workbench-panel-soft);
+  overflow-wrap: anywhere;
+}
+
+body.workbench-page .workbench-repeat-preview summary {
+  cursor: pointer;
+}
+
+body.workbench-page .workbench-repeat-preview ol {
+  max-height: 220px;
+  overflow-y: auto;
+  padding-left: 1.5em;
+  font-size: 0.9em;
+}
+
 @media (max-width: 768px) {
   body.workbench-page .personal-fold > summary::after {
     width: 1em;
@@ -1952,4 +1986,8 @@ body.workbench-page #workbench-course-calendar-description {
     flex: none;
     text-align: center;
   }
+}
+/* Empty guidance must not reserve a blank row in the ordinary-event editor. */
+#workbench-schedule-kind-hint:empty {
+  display: none;
 }

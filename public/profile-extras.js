@@ -5,6 +5,7 @@
     plate_maxwell: ['nameplate', '麦克斯韦亲传'],
     plate_observer: ['nameplate', 'BBS见习观察员'],
     plate_fishbone_master: ['nameplate', '鱼骨达人'],
+    plate_circuit_master: ['nameplate', '电路达人'],
     card_blueprint: ['card', '未完成的蓝图'],
     card_twilight: ['card', '暮色实验室'],
   };
@@ -53,6 +54,8 @@
   }
   const valid = (key, slot) => (items[key]?.[0] === slot ? key : '');
   const crests = {
+    plate_circuit_master:
+      '<path d="M14 11h16v22H14zM9 15h5m-5 7h5m-5 7h5m16-14h5m-5 7h5m-5 7h5M19 7v4m6-4v4m-6 22v4m6-4v4"/><path d="M17 24h3v-8h4v12h3v-8" stroke-width="2"/><circle cx="9" cy="22" r="1.5"/><circle cx="35" cy="22" r="1.5"/>',
     plate_maxwell:
       '<path d="M8 19c5-10 9-10 14 0s9 10 14 0M8 25c5-10 9-10 14 0s9 10 14 0"/><path d="M22 7v30" opacity=".35"/><circle cx="22" cy="22" r="3"/>',
     plate_observer:
@@ -62,9 +65,13 @@
   };
   function badge(key) {
     if (!valid(key, 'nameplate')) return '';
-    const earned = key === 'plate_fishbone_master';
+    const achievementTitles = {
+      plate_fishbone_master: '累计购买 10 个坚硬鱼骨，拥有至少 3 个黄金鱼骨、10 个普通鱼骨',
+      plate_circuit_master: '通过电路闯关模式全部当前开放关卡，以当前题目版本的服务端通关记录为准',
+    };
+    const earned = Boolean(achievementTitles[key]);
     const title = earned
-      ? '累计购买 10 个坚硬鱼骨，拥有至少 3 个黄金鱼骨、10 个普通鱼骨；非卖品，不代表管理权限'
+      ? `${achievementTitles[key]}；非卖品，不代表管理权限`
       : '购买装扮，不代表身份认证或管理权限';
     return (
       `<span class="cosmetic-nameplate ${key}" title="${title}">` +

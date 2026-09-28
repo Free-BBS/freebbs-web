@@ -154,6 +154,7 @@ async function main() {
     await fill('#workbench-schedule-description', '六教6C300');
     await fill('#workbench-schedule-start', '2026-10-02T13:30');
     await fill('#workbench-schedule-end', '2026-10-02T15:05');
+    await page.select('#workbench-repeat-end-mode', 'count');
     await fill('#workbench-course-count', '3');
     await click('#workbench-schedule-submit');
     await page.waitForSelector('#workbench-schedule-dialog:not([open])');
@@ -231,7 +232,10 @@ async function main() {
       document.querySelector('#dye-status').textContent.includes('已保存'),
     );
     await click('#dye-reset');
-    assert.match(await page.$eval('#dye-status', (node) => node.textContent), /恢复原色.*保存/);
+    assert.match(
+      await page.$eval('#dye-status', (node) => node.textContent),
+      /羊毛和脸部已恢复空白，角饰保留.*保存后生效/,
+    );
     await click('#dye-undo');
     await click('#dye-reset');
     await click('#dye-save');

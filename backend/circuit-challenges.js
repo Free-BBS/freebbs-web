@@ -1,6 +1,7 @@
 const express = require('express');
 const { validateDocument, simulate, catalog, buildNets } = require('../public/circuit-engine');
 const { walletLedgerCheckpoint, annotateWalletLedger } = require('./wallet-ledger');
+const { isCircuitMasterProgress, unlockCircuitMaster } = require('./circuit-achievement');
 const {
   circuitChallengeCatalog,
   legacyCircuitChallengeUpdates,
@@ -485,6 +486,23 @@ function assertUnlocked(progression, id) {
   }
 }
 
+async function reconcileCircuitMaster(pool, userId, progress) {
+  if (!userId || !isCircuitMasterProgress(progress)) return [];
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const current = await readProgress(connection, userId, { lock: true });
+    const unlocked = await unlockCircuitMaster(connection, userId, current.progress);
+    await connection.commit();
+    return unlocked;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 async function readOverallLeaderboard(pool, userId) {
   const [rows] = await pool.execute(
     `WITH levels AS (
@@ -567,12 +585,14 @@ function createCircuitChallengesRouter({ pool, requireAuth }) {
        FROM circuit_challenges ${showAll ? '' : 'WHERE is_active = 1'} ORDER BY id ASC`,
       );
       const progression = await readProgress(pool, user?.id);
+      const unlocked = await reconcileCircuitMaster(pool, user?.id, progression.progress);
       response.json({
         challenges: rows.map((row) => ({
           ...challengeSummary(row),
           ...progression.challenges.find((entry) => entry.id === Number(row.id)),
         })),
         progress: progression.progress,
+        unlocked,
         canManage: isAdmin(user),
       });
     }),
@@ -686,6 +706,7 @@ function createCircuitChallengesRouter({ pool, requireAuth }) {
       const connection = await pool.getConnection();
       let rewards;
       let balance;
+      let unlocked = [];
       try {
         await connection.beginTransaction();
         // Lock the ordered active catalog before checking progress, so a concurrent
@@ -779,6 +800,9 @@ function createCircuitChallengesRouter({ pool, requireAuth }) {
             heat: Number(account.heat),
           };
         }
+        // The successful submission, collectible and inbox notification commit together.
+        const completed = await readProgress(connection, user.id);
+        unlocked = await unlockCircuitMaster(connection, user.id, completed.progress);
         await connection.commit();
       } catch (error) {
         await connection.rollback();
@@ -791,6 +815,7 @@ function createCircuitChallengesRouter({ pool, requireAuth }) {
         componentCount,
         error: errorScore,
         rewards,
+        unlocked,
         ...(balance ? { balance } : {}),
       });
     }),

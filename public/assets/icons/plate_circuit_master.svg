@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="edge" x1="26" y1="12" x2="102" y2="114" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f6e3ab"/><stop offset=".46" stop-color="#b3904e"/><stop offset="1" stop-color="#e1c786"/>
+    </linearGradient>
+    <linearGradient id="enamel" x1="34" y1="20" x2="92" y2="110" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#376878"/><stop offset="1" stop-color="#133a49"/>
+    </linearGradient>
+    <linearGradient id="chip" x1="48" y1="44" x2="83" y2="83" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#d7eeea"/><stop offset="1" stop-color="#87b4b3"/>
+    </linearGradient>
+  </defs>
+  <path d="M64 9 109 27v38c0 24-19 43-45 54C38 108 19 89 19 65V27L64 9Z" fill="url(#edge)" stroke="#8b703d" stroke-width="2"/>
+  <path d="m64 16 38 16v33c0 20-16 37-38 47-22-10-38-27-38-47V32l38-16Z" fill="url(#enamel)" stroke="#f4e2b1" stroke-width="1.5"/>
+  <path d="m64 23 31 13v29c0 17-13 31-31 40-18-9-31-23-31-40V36l31-13Z" stroke="#86b7bd" stroke-opacity=".42"/>
+  <g stroke="#c9b477" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M48 54H37V43m11 20H34m14 9H38v10m42-28h11V43M80 63h14m-14 9h10v10M56 47V35m16 12V35M57 80v12m14-12v12"/>
+    <circle cx="37" cy="41" r="2.5" fill="#203f4b"/><circle cx="91" cy="41" r="2.5" fill="#203f4b"/>
+    <circle cx="38" cy="84" r="2.5" fill="#203f4b"/><circle cx="90" cy="84" r="2.5" fill="#203f4b"/>
+  </g>
+  <rect x="46" y="45" width="36" height="36" rx="7" fill="url(#chip)" stroke="#e9d397" stroke-width="2"/>
+  <rect x="50" y="49" width="28" height="28" rx="4" stroke="#2e6069" stroke-opacity=".45"/>
+  <path d="M53 65h6V55h9v16h7V61" stroke="#1f515e" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m60 97 3 3 6-7" stroke="#e7ce90" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m64 27 1.2 3.3 3.3 1.2-3.3 1.2L64 36l-1.2-3.3-3.3-1.2 3.3-1.2L64 27Z" fill="#f2ddb0"/>
+</svg>

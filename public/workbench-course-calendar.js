@@ -4,6 +4,7 @@
   if (!app || !section) return;
   const form = document.getElementById('workbench-course-calendar-form');
   const monday = document.getElementById('workbench-course-calendar-monday');
+  const teachingWeeks = document.getElementById('workbench-course-calendar-weeks');
   const save = document.getElementById('workbench-course-calendar-save');
   const status = document.getElementById('workbench-course-calendar-status');
   const issues = document.getElementById('workbench-course-calendar-issues');
@@ -19,14 +20,17 @@
     selected = '';
     section.hidden = true;
     monday.value = '';
+    teachingWeeks.value = '';
     status.textContent = '';
     issues.replaceChildren();
     save.disabled = false;
     monday.disabled = false;
+    teachingWeeks.disabled = false;
     if (dialog.open) dialog.close();
   };
   const render = (data) => {
     monday.value = data.firstWeekMonday || '';
+    teachingWeeks.value = data.teachingWeeks || '';
     issues.replaceChildren(
       ...(Array.isArray(data.issues) ? data.issues : []).map((issue) => {
         const item = document.createElement('li');
@@ -70,16 +74,26 @@
       status.textContent = '第一教学周起点必须是周一，请按本学期校历填写。';
       return;
     }
+    const count = teachingWeeks.value === '' ? null : Number(teachingWeeks.value);
+    if (count !== null && (!Number.isInteger(count) || count < 1 || count > 53)) {
+      status.textContent = '教学周数必须是 1–53 的整数，请按本学期校历确认';
+      return;
+    }
     version += 1;
     const requestVersion = version;
     const requestOwner = owner();
     save.disabled = true;
     monday.disabled = true;
+    teachingWeeks.disabled = true;
     status.textContent = '正在保存校历并生成课程…';
     try {
       const data = await app.callApi('/workbench/campus/course-calendar', {
         method: 'PUT',
-        body: JSON.stringify({ semesterId: selected, firstWeekMonday: monday.value }),
+        body: JSON.stringify({
+          semesterId: selected,
+          firstWeekMonday: monday.value,
+          teachingWeeks: count,
+        }),
       });
       if (requestVersion !== version || requestOwner !== owner()) return;
       render(data);
@@ -91,6 +105,7 @@
       if (requestVersion === version && requestOwner === owner()) {
         save.disabled = false;
         monday.disabled = false;
+        teachingWeeks.disabled = false;
       }
     }
   });

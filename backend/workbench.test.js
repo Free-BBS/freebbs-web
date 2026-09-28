@@ -1,7 +1,34 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const express = require('express');
-const { createWorkbenchRouter, getDefaultWeekRange, parseRange } = require('./workbench');
+const {
+  createWorkbenchRouter,
+  getDefaultWeekRange,
+  parseRange,
+  toScheduleItem,
+} = require('./workbench');
+
+test('schedule API exposes only stable manual series keys for cross-week event colours', () => {
+  const row = { public_id: 'one', source_type: 'manual', title: '组会' };
+  for (const sourceReference of ['manual:recurring:abc', 'manual:course:xyz']) {
+    const first = toScheduleItem({ ...row, source_reference: sourceReference });
+    const next = toScheduleItem({
+      ...row,
+      public_id: 'two',
+      title: '更正名称',
+      source_reference: sourceReference,
+    });
+    assert.equal(first.seriesKey, sourceReference);
+    assert.equal(first.seriesKey, next.seriesKey);
+  }
+  for (const sourceReference of [null, 'manual:deadline', 'planner:weekly', 'unrelated-source'])
+    assert.equal(toScheduleItem({ ...row, source_reference: sourceReference }).seriesKey, null);
+  assert.equal(
+    toScheduleItem({ ...row, source_type: 'agent', source_reference: 'manual:course:abc' })
+      .seriesKey,
+    null,
+  );
+});
 
 async function startTestServer(
   t,
@@ -117,6 +144,36 @@ test('manual courses authenticate and validate without requiring a campus connec
   );
 });
 
+test('recurring events authenticate and reject unsupported types and invalid rules before database access', async (t) => {
+  const base = await startTestServer(t, { user: { id: 7 }, pool: {} });
+  assert.equal(
+    (await requestJson(base, '/recurring-events', { method: 'POST', auth: false })).response.status,
+    401,
+  );
+  for (const body of [
+    {},
+    { kind: 'deadline' },
+    { kind: 'event' },
+    {
+      kind: 'course',
+      title: '旁听课',
+      startAt: '2026-10-01T10:00:00+08:00',
+      endAt: '2026-10-01T11:00:00+08:00',
+      recurrence: { unit: 'week', interval: 0, count: 16 },
+    },
+  ]) {
+    assert.equal(
+      (
+        await requestJson(base, '/recurring-events', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        })
+      ).response.status,
+      400,
+    );
+  }
+});
+
 test('computes a Monday-to-Monday week in Asia/Shanghai', () => {
   const range = getDefaultWeekRange(new Date('2026-08-01T08:00:00.000Z'));
   assert.equal(range.start.toISOString(), '2026-07-26T16:00:00.000Z');
@@ -167,7 +224,7 @@ test('saving a semester Monday immediately exposes fixed courses in calendar, su
   const pool = {
     async execute(sql, parameters) {
       if (sql.includes('INSERT INTO campus_course_calendar_settings')) {
-        assert.deepEqual(parameters, ['2026-09-21', '2026-2027-1', 7]);
+        assert.deepEqual(parameters, ['2026-09-21', null, '2026-2027-1', 7, 0]);
         [monday] = parameters;
         settingsWrites += 1;
         return [{ affectedRows: 1 }];

@@ -60,6 +60,19 @@ body.discussion-page.post-reading #discussion-detail-title {
   margin: 0 0 20px !important;
   letter-spacing: -0.02em;
 }
+/* A heading is a reading landmark, not an input: keep accessible focus without a box. */
+body.discussion-page.post-reading #discussion-detail-title:focus {
+  outline: none;
+}
+body.discussion-page.post-reading #discussion-detail-title:focus-visible {
+  text-decoration: underline;
+  text-decoration-color: var(--ui-line-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+body.discussion-page .discussion-comment {
+  scroll-margin-top: 150px;
+}
 body.discussion-page.post-reading .discussion-detail-meta {
   display: flex;
   flex-wrap: wrap;
@@ -414,38 +427,125 @@ body.discussion-page .discussion-comment-reply {
   border-left: 0 !important;
 }
 
-body.discussion-page .discussion-comment-thread-toggle {
-  display: inline-flex;
+/* One measured tree per root, with continuous parent stems behind the avatars. */
+body.discussion-page .discussion-thread-group {
+  position: relative;
+  isolation: isolate;
+  border-bottom: 1px solid var(--ui-line);
+  padding-bottom: 12px;
+}
+body.discussion-page #discussion-detail .discussion-thread-group .discussion-comment {
+  border-bottom: 0 !important;
+  padding-inline: 0;
+}
+body.discussion-page #discussion-detail .discussion-comment-reply {
+  --thread-step: 32px;
+  margin-left: calc(var(--comment-depth, 1) * var(--thread-step)) !important;
+  padding-left: 0 !important;
+  border-left: 0 !important;
+}
+
+body.discussion-page #discussion-detail .discussion-comment-reply:not(.has-laser-glow)::before {
+  display: none !important;
+}
+
+body.discussion-page .discussion-thread-guides {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+  user-select: none;
+  fill: none;
+  stroke: color-mix(in srgb, var(--ui-accent) 28%, var(--ui-line-strong));
+  stroke-width: 1.5px;
+}
+body.discussion-page .discussion-thread-hit {
+  stroke: transparent;
+  stroke-width: 12px;
+  pointer-events: none;
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  body.discussion-page .discussion-thread-hit {
+    pointer-events: stroke;
+  }
+  body.discussion-page .discussion-thread-guides g:has(.discussion-thread-hit:hover) {
+    stroke: var(--ui-accent);
+    stroke-width: 2px;
+  }
+}
+body.discussion-page .discussion-comment-author-link,
+body.discussion-page .discussion-comment-body {
+  position: relative;
+  z-index: 2;
+}
+body.discussion-page .discussion-comment-tools {
+  display: flex;
   align-items: center;
-  gap: 5px;
-  width: fit-content;
-  margin: 2px 0 14px 54px;
-  padding: 5px 0;
+  min-height: 36px;
+  margin-top: 8px;
+}
+body.discussion-page #discussion-detail .discussion-comment-actions {
+  margin: 0;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+body.discussion-page #discussion-detail .discussion-comment-reply-button {
+  margin-left: 0;
+}
+body.discussion-page .discussion-comment-thread-toggle {
+  position: absolute;
+  z-index: 3;
+  left: 19px;
+  bottom: 18px;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
   border: 0;
   background: transparent;
   box-shadow: none;
-  color: var(--ui-accent);
+  color: var(--ui-muted);
   font: inherit;
-  font-size: 0.8rem;
-  font-weight: 650;
-  line-height: 1.4;
   cursor: pointer;
 }
-
 body.discussion-page .discussion-comment-thread-toggle svg {
-  width: 16px;
-  height: 16px;
-  transition: transform 160ms ease;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  fill: var(--ui-page);
+  border-radius: 50%;
 }
-
-body.discussion-page .discussion-comment-thread-toggle[aria-expanded='true'] svg {
-  transform: rotate(180deg);
+body.discussion-page
+  .discussion-comment-thread-toggle[aria-expanded='true']
+  .discussion-thread-plus {
+  display: none;
 }
-
-body.discussion-page .discussion-comment-thread-toggle:hover span,
-body.discussion-page .discussion-comment-thread-toggle:focus-visible span {
-  text-decoration: underline;
-  text-underline-offset: 0.18em;
+body.discussion-page .discussion-comment-thread-toggle:is(:hover, :focus-visible) {
+  color: var(--ui-accent);
+}
+body.discussion-page .discussion-comment-thread-toggle:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 1px;
+  border-radius: 50%;
+}
+body.discussion-page .discussion-thread-count {
+  position: absolute;
+  left: 46px;
+  width: max-content;
+  font-size: 0.75rem;
+}
+body.discussion-page .discussion-comment:has(> [aria-expanded='false']) .discussion-comment-tools {
+  padding-left: 96px;
 }
 
 body.discussion-page .discussion-comment-parent {
@@ -502,20 +602,12 @@ body.discussion-page
   }
 
   body.discussion-page .discussion-comment-thread-toggle {
-    margin-left: 40px;
-    margin-bottom: 10px;
-    min-height: 36px;
+    width: 36px;
+    height: 36px;
   }
 
   body.discussion-page.post-reading #discussion-detail .discussion-comment-reply {
-    margin-left: min(calc(var(--comment-depth, 1) * 12px), 36px) !important;
-    padding-left: 12px !important;
-    border-left: 2px solid var(--discussion-line-strong) !important;
-    border-left-color: color-mix(
-      in srgb,
-      var(--discussion-accent-strong) 46%,
-      transparent
-    ) !important;
+    --thread-step: 20px;
   }
 
   body.discussion-page.post-reading #discussion-detail .discussion-comment-parent {
