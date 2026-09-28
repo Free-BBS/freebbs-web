@@ -132,6 +132,7 @@ test('shop groups all enabled products into four ordered sections without changi
         'ranch_silver_horn',
         'ranch_backflip',
         'ranch_bicycle',
+        'ranch_flying_wings',
         'rubber_rod',
       ],
     ],
@@ -140,7 +141,7 @@ test('shop groups all enabled products into four ordered sections without changi
   await context.loadElectromagneticPage();
   const html = node('shop-grid').innerHTML;
   assert.equal((html.match(/data-shop-section=/g) || []).length, 4);
-  assert.equal((html.match(/class="shop-item-card"/g) || []).length, 22);
+  assert.equal((html.match(/class="shop-item-card"/g) || []).length, 23);
   assert.doesNotMatch(html, /data-item-key="plate_maxwell"/);
 });
 

@@ -157,6 +157,7 @@
           ['ranch_silver_horn', '银角', '10 磁元／只'],
           ['ranch_backflip', '后空翻', '12 磁元 · 永久解锁'],
           ['ranch_bicycle', '牧场自行车', '30 磁元 · 永久解锁'],
+          ['ranch_flying_wings', '中国羊能飞', '25 磁元 · 永久解锁'],
         ])
           shop
             .querySelector('.ranch-supplies')

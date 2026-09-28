@@ -95,6 +95,22 @@
       }),
     };
   }
+  function flyingPose(time) {
+    const sway = Math.sin(time * 9) * 1.4;
+    return {
+      angle: -4,
+      bob: sway,
+      standing: 0,
+      legs: hips.map((hip, i) => ({
+        hip: { x: hip.x, y: hip.y + sway },
+        foot: {
+          x: hip.x + (i === 1 || i === 3 ? 14 : -16),
+          y: 149 + Math.sin(time * 6 + i * 1.3) * 3,
+        },
+        planted: false,
+      })),
+    };
+  }
   function blend(a, b, t) {
     return {
       angle: mix(a.angle, b.angle, t),
@@ -155,6 +171,21 @@
         <g data-bike-crank stroke="#596c61"><circle cx="87" cy="148" r="5"/><path d="M76 148h22"/><path d="M73 148h6m16 0h6" stroke-width="3"/></g>
       </g>
       ${limbMarkup(0)}${limbMarkup(1)}${limbMarkup(2)}${limbMarkup(3)}
+      <g data-wings visibility="hidden" stroke-linejoin="round" stroke-linecap="round">
+        <g data-wing-left>
+          <path d="M56 92C31 81 12 58-12 23C-8 46-8 70 3 81C13 87 22 80 27 76C24 88 37 99 56 92Z" fill="#edf8f1" stroke="#57999a" stroke-width="2"/>
+          <path d="M-10 25C9 36 25 39 37 40C32 58 38 75 55 91M3 81C13 63 22 55 37 40M27 76C35 63 37 54 37 40" fill="none" stroke="#8dc6c3" stroke-width="1.6"/>
+          <path d="M-5 39C5 48 15 48 24 47M2 59C12 66 18 65 27 61" fill="none" stroke="#fffef1" stroke-width="2"/>
+        </g>
+        <g data-wing-right transform="translate(180 0) scale(-1 1)">
+          <path d="M56 92C31 81 12 58-12 23C-8 46-8 70 3 81C13 87 22 80 27 76C24 88 37 99 56 92Z" fill="#edf8f1" stroke="#57999a" stroke-width="2"/>
+          <path d="M-10 25C9 36 25 39 37 40C32 58 38 75 55 91M3 81C13 63 22 55 37 40M27 76C35 63 37 54 37 40" fill="none" stroke="#8dc6c3" stroke-width="1.6"/>
+          <path d="M-5 39C5 48 15 48 24 47M2 59C12 66 18 65 27 61" fill="none" stroke="#fffef1" stroke-width="2"/>
+        </g>
+      </g>
+      <g data-flight-trails visibility="hidden" fill="none" stroke="#e4f9f3" stroke-width="2" stroke-linecap="round" opacity=".7">
+        <path d="M3 117h18M-3 128h27M12 139h13"/>
+      </g>
       <g data-body>
         <g data-tail>
           <path d="M35 119C22 122 16 116 19 109C19 102 29 101 31 109" fill="#fff0d3" stroke="#a3825f" stroke-width="1.6" stroke-linecap="round"/>
@@ -469,7 +500,9 @@
               ? greetPose(walkPose(walkTime), Math.sin((state.progress || 0) * Math.PI))
               : mode === 'bicycle'
                 ? bicyclePose(walkTime)
-                : walkPose(walkTime);
+                : mode === 'fly'
+                  ? flyingPose(walkTime)
+                  : walkPose(walkTime);
         const progress = state.progress || 0;
         const flip = mode === 'backflip' && !media.matches && !hungry;
         // A short, high arc with a tucked skeleton, rather than a slow spinning walk.
@@ -515,6 +548,25 @@
         element
           .querySelector('[data-bicycle]')
           .setAttribute('visibility', mode === 'bicycle' && !hungry ? 'visible' : 'hidden');
+        const winged = state.gear === 'wing' && !hungry;
+        const flying = mode === 'fly' && winged;
+        const flap = media.matches ? -12 : Math.sin(state.time * 10) * 26 - 6;
+        const wingProgress = Math.max(0, Math.min(1, Number(state.progress) || 0));
+        const deployment = flying ? Math.min(1, wingProgress / 0.07, (1 - wingProgress) / 0.07) : 0;
+        const spread = deployment * deployment * (3 - 2 * deployment);
+        const fold = `translate(56 92) rotate(${(1 - spread) * -32 + spread * flap}) scale(${0.2 + spread * 0.8} ${0.28 + spread * 0.72}) translate(-56 -92)`;
+        element.dataset.gear = state.gear || 'walk';
+        element
+          .querySelector('[data-wings]')
+          .setAttribute('visibility', winged ? 'visible' : 'hidden');
+        element.querySelector('[data-wing-left]').setAttribute('transform', fold);
+        element
+          .querySelector('[data-wing-right]')
+          .setAttribute('transform', `translate(180 0) scale(-1 1) ${fold}`);
+        element
+          .querySelector('[data-flight-trails]')
+          .setAttribute('visibility', flying && !media.matches ? 'visible' : 'hidden');
+        nodes.shadow.setAttribute('visibility', flying ? 'hidden' : 'visible');
       },
       greet,
       celebrate,

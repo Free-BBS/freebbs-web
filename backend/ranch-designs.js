@@ -9,7 +9,7 @@ const fields = `u.id, u.uid, u.username, d.design_json, d.revision,
  (SELECT s.fed_until_ms FROM economy_account_state s WHERE s.user_id = u.id) AS fed_until_ms,
  (SELECT GROUP_CONCAT(CONCAT(a.asset_key, ':', a.quantity)) FROM user_assets a
  WHERE a.user_id = u.id AND a.quantity > 0 AND a.asset_key IN
- ('ranch_gold_horn','ranch_silver_horn','ranch_backflip','ranch_bicycle')) AS ranch_assets`;
+ ('ranch_gold_horn','ranch_silver_horn','ranch_backflip','ranch_bicycle','ranch_flying_wings')) AS ranch_assets`;
 const join = 'LEFT JOIN user_ranch_designs d ON d.user_id = u.id';
 const serialize = (row) => ({
   uid: row.uid,

@@ -53,6 +53,19 @@
       "rules": "30 磁元永久解锁，公共牧场中偶尔骑行，也可以点选自己的羊出发。解锁后免费反复使用，所有观看者同步看到。"
     },
     {
+      "key": "ranch_flying_wings",
+      "assetKey": "ranch_flying_wings",
+      "name": "中国羊能飞",
+      "class": "pet_tool",
+      "description": "给 Max 一双轻盈的翅膀。",
+      "desc": "风从草甸升起，今天的中国羊真的能飞。",
+      "cost": { "magnetic": 25 },
+      "image": "/assets/shop/max-cartoon-v1/ranch_flying_wings.webp",
+      "purchaseLimit": 1,
+      "isgift": false,
+      "rules": "25 磁元永久拥有。到羊群广场点选自己的羊，在“出行装备”中选择翅膀；与自行车二选一。佩戴后长出翅膀，在公共和个人牧场高空飞行，也可手动起飞。可随时改为步行或自行车，反复使用免费。"
+    },
+    {
       "key": "frame_orbit",
       "assetKey": "frame_orbit",
       "name": "环流轨道",
