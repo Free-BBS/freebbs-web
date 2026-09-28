@@ -21,6 +21,7 @@ function renderCommerce() {
 describe('development commerce', () => {
   it('loads the main-site shop inside development and returns to the previous module', () => {
     renderCommerce();
+    expect(screen.queryByRole('heading', { name: '商店' })).not.toBeInTheDocument();
     expect(screen.getByTitle('FREE-BBS 商店')).toHaveAttribute(
       'src',
       '/electromagnetic?embed=development',

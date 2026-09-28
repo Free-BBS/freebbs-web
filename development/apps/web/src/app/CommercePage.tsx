@@ -9,10 +9,10 @@ interface CommercePageProps {
 }
 
 const sectionLabels = {
-  shop: { kicker: 'FREE-BBS · 电磁场', label: '商店', title: 'FREE-BBS 商店' },
-  inventory: { kicker: 'FREE-BBS · 电磁场', label: '仓库', title: 'FREE-BBS 仓库' },
-  profile: { kicker: 'FREE-BBS · 个人中心', label: '个人主页', title: 'FREE-BBS 个人主页' },
-  settings: { kicker: 'FREE-BBS · 个人中心', label: '设置', title: 'FREE-BBS 设置' },
+  shop: { label: '商店', title: 'FREE-BBS 商店' },
+  inventory: { label: '仓库', title: 'FREE-BBS 仓库' },
+  profile: { label: '个人主页', title: 'FREE-BBS 个人主页' },
+  settings: { label: '设置', title: 'FREE-BBS 设置' },
 } as const;
 
 export function CommercePage({ section, userUid = '' }: CommercePageProps) {
@@ -46,10 +46,6 @@ export function CommercePage({ section, userUid = '' }: CommercePageProps) {
   return (
     <section className="development-commerce" aria-label={labels.label}>
       <div className="development-commerce-heading">
-        <div>
-          <p>{labels.kicker}</p>
-          <h1>{labels.label}</h1>
-        </div>
         <button type="button" onClick={() => navigate(from)}>
           返回发展端
         </button>
