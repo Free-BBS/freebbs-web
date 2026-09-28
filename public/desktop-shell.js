@@ -9,6 +9,7 @@
   if (
     !nav ||
     !main ||
+    document.documentElement.classList.contains('development-embedded') ||
     main.dataset.shellMode === 'immersive' ||
     body.classList.contains('auth-page-body')
   )
