@@ -84,7 +84,7 @@ test('workbench provides authenticated CRUD controls and conflict confirmation',
   assert.match(html, /id="workbench-important-dialog"/);
   assert.match(html, /id="workbench-add-schedule"/);
   assert.match(html, /id="workbench-schedule-dialog"/);
-  assert.match(html, /src="\/workbench\.js\?v=20260928-arrangements-1"/);
+  assert.match(html, /src="\/workbench\.js\?v=20260928-recurrence-1"/);
   assert.match(controller, /\/workbench\/important-items/);
   assert.match(controller, /\/workbench\/schedule-items\/conflicts/);
   assert.match(controller, /\/confirm/);
@@ -93,7 +93,8 @@ test('workbench provides authenticated CRUD controls and conflict confirmation',
   assert.match(controller, /确认事项/u);
   assert.match(controller, /confirm-important/);
   assert.match(controller, /status: 'confirmed'/);
-  assert.match(controller, /24 小时内截止/u);
+  assert.match(controller, /calendarModel\.deadlineRemaining/);
+  assert.doesNotMatch(controller, /(?:24|72) 小时内截止/u);
   assert.match(controller, /同步后的课程作业截止时间会自动显示在对应日期/u);
   assert.match(controller, /DDL · 截止提醒/u);
 });
@@ -144,14 +145,21 @@ test('planner explains its five-event limit and reports separate tasks before co
   assert.match(controller, /当前尚未写入/);
 });
 
-test('week cards prioritize complete names and notes over duration-sized text clipping', () => {
-  assert.match(html, /卡片优先显示名称和地点\/备注，点击查看具体时间/);
+test('timed cards follow real durations while complete text stays accessible in details', () => {
+  assert.doesNotMatch(
+    html,
+    /色带按实际时长叠放|斜纹标出冲突|文字卡片显示名称|workbench-deadline-legend/,
+  );
+  assert.match(html, /id="workbench-time-conflicts"/);
   assert.match(controller, /block\.setAttribute\('aria-label', block\.title\)/);
   assert.match(controller, /if \(entry\.item\.homeworkReference\) block\.append\(time\)/);
   assert.doesNotMatch(controller, /block\.append\(title, time\)/);
   assert.match(controller, /function layoutWeekCards\(/);
-  assert.match(controller, /lanes\[lane\] = top \+ height \+ 4/);
-  assert.doesNotMatch(controller, /block\.style\.height\s*=/);
+  assert.match(controller, /gridTemplateColumns = `repeat\(7, \$\{columnWidth\}px\)`/);
+  assert.doesNotMatch(controller, /lanes\.length\) \* columnWidth|workbench-time-band/);
+  assert.match(controller, /block\.style\.height\s*=/);
+  assert.match(controller, /calendarModel\.timeBlock\(entry.start, entry.end, windowStart\)/);
+  assert.match(controller, /lanes\[lane\] = end/);
   const titleStyles = css.match(/\.workbench-week-event strong\s*\{([^}]+)\}/)[1];
   const noteStyles = css.match(/\.workbench-week-notes\s*\{([^}]+)\}/)[1];
   for (const styles of [titleStyles, noteStyles]) {
@@ -181,7 +189,7 @@ test('display-hour preferences are uid-scoped, change only layout and keep compl
   assert.match(html, /workbench-hours\.js\?v=/);
   assert.match(html, /id="workbench-hours-start"/);
   assert.match(html, /id="workbench-hours-end"/);
-  assert.match(html, /按账号保存在本浏览器/);
+  assert.match(html, /id="workbench-hours-status"/);
   assert.match(controller, /hoursModel\.saveHours\(hoursStorage\(\), getUser\(\)\.uid, hours\)/);
   assert.match(
     controller,

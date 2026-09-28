@@ -2,8 +2,9 @@
   const shell = document.querySelector('.workbench-shell');
   const app = window.freeBbsApp;
   const hoursModel = window.FreeBbsWorkbenchHours;
+  const calendarModel = window.FreeBbsWorkbenchCalendar;
 
-  if (!shell || !app || !hoursModel) {
+  if (!shell || !app || !hoursModel || !calendarModel) {
     return;
   }
 
@@ -65,6 +66,15 @@
     courseRepeat: document.getElementById('workbench-course-repeat'),
     courseCount: document.getElementById('workbench-course-count'),
     courseInterval: document.getElementById('workbench-course-interval'),
+    repeatCustom: document.getElementById('workbench-repeat-custom'),
+    repeatInterval: document.getElementById('workbench-repeat-interval'),
+    repeatUnit: document.getElementById('workbench-repeat-unit'),
+    repeatEndLabel: document.getElementById('workbench-repeat-end-label'),
+    repeatEndMode: document.getElementById('workbench-repeat-end-mode'),
+    repeatUntil: document.getElementById('workbench-repeat-until'),
+    repeatPreview: document.getElementById('workbench-repeat-preview'),
+    repeatSummary: document.getElementById('workbench-repeat-summary'),
+    repeatDates: document.getElementById('workbench-repeat-dates'),
     scheduleDescription: document.getElementById('workbench-schedule-description'),
     scheduleStart: document.getElementById('workbench-schedule-start'),
     scheduleEnd: document.getElementById('workbench-schedule-end'),
@@ -166,8 +176,7 @@
   function renderHoursControls() {
     elements.hoursStart.value = String(state.hours.start);
     elements.hoursEnd.value = String(state.hours.end);
-    elements.hoursStatus.textContent =
-      '按账号保存在本浏览器；仅裁切时间图，不删除日程。全天与 DDL 始终显示。';
+    elements.hoursStatus.textContent = '';
     [...elements.hoursForm.elements].forEach((control) => {
       control.toggleAttribute('disabled', !isLoggedIn() || !getUser().uid);
     });
@@ -187,9 +196,7 @@
     state.hours = hours;
     const saved = hoursModel.saveHours(hoursStorage(), getUser().uid, hours);
     renderHoursControls();
-    if (!saved)
-      elements.hoursStatus.textContent =
-        '浏览器未允许保存；本次页面已应用，仅裁切时间图，不删除日程。';
+    elements.hoursStatus.textContent = saved ? '已保存' : '已应用，浏览器未允许保存';
     renderWeekGrid();
   }
 
@@ -411,12 +418,8 @@
     }
     const dueAt = new Date(item.dueAt);
     if (Number.isNaN(dueAt.getTime())) return '截止时间待确认';
-    const remainingMs = dueAt.getTime() - Date.now();
     const absolute = formatMoment(item.dueAt);
-    if (remainingMs < 0) return `已逾期 · ${absolute}`;
-    if (remainingMs <= 24 * 60 * 60 * 1_000) return `24 小时内截止 · ${absolute}`;
-    if (remainingMs <= 48 * 60 * 60 * 1_000) return `48 小时内截止 · ${absolute}`;
-    return `截止：${absolute}`;
+    return `截止：${absolute}\n${calendarModel.deadlineRemaining(item.dueAt, item.status === 'completed')}`;
   }
 
   function toShanghaiInputValue(value) {
@@ -472,27 +475,48 @@
     if (!elements.weekScroll?.clientWidth || !elements.weekGrid.getClientRects().length) return;
     const columnWidth = Math.max(196, Math.floor(elements.weekScroll.clientWidth / 7));
     const timelineHeight = (state.hours.end - state.hours.start) * 40;
-    let contentHeight = timelineHeight;
-    const widths = weekLayouts.map(({ timeline, blocks }) => {
+    weekLayouts.forEach(({ timeline, blocks }) => {
       const lanes = [];
-      for (const { block, top } of blocks) {
-        // Keep the real start on the time axis, but never shrink the title/notes into a time slot.
-        block.style.width = `${columnWidth - 9}px`;
-        const { height } = block.getBoundingClientRect();
-        let lane = lanes.findIndex((end) => end <= top);
+      for (const { block, top, end, height } of blocks) {
+        // Lanes and card edges follow time, never the amount of text in a card.
+        let lane = lanes.findIndex((laneEnd) => laneEnd <= top);
         if (lane < 0) lane = lanes.length;
-        lanes[lane] = top + height + 4;
-        block.style.left = `${lane * columnWidth + 4}px`;
-        contentHeight = Math.max(contentHeight, top + height + 4);
+        const offset = Math.min(lane, 4) * 8;
+        block.style.left = `${4 + offset}px`;
+        block.style.width = `${columnWidth - 9 - offset}px`;
+        block.style.setProperty('--event-stack', String(2 + lane));
+        lanes[lane] = end;
+        const style = getComputedStyle(block);
+        let remaining =
+          height -
+          parseFloat(style.paddingTop) -
+          parseFloat(style.paddingBottom) -
+          parseFloat(style.borderTopWidth) -
+          parseFloat(style.borderBottomWidth);
+        let shown = 0;
+        for (const child of block.children) {
+          child.hidden = false;
+          const childStyle = getComputedStyle(child);
+          const lineHeight =
+            parseFloat(childStyle.lineHeight) || parseFloat(childStyle.fontSize) * 1.5;
+          const needed =
+            lineHeight +
+            parseFloat(childStyle.paddingTop) +
+            parseFloat(childStyle.borderTopWidth) +
+            (shown ? parseFloat(style.rowGap) || 0 : 0);
+          child.hidden = needed > remaining;
+          if (!child.hidden) {
+            remaining -= needed;
+            shown += 1;
+          }
+        }
       }
       timeline.style.setProperty('--workbench-timeline-hours-height', `${timelineHeight}px`);
-      return Math.max(1, lanes.length) * columnWidth;
     });
-    elements.weekGrid.style.gridTemplateColumns = widths.map((width) => `${width}px`).join(' ');
-    elements.weekGrid.style.minWidth = `${widths.reduce((sum, width) => sum + width, 0)}px`;
-    // A short event at 23:59 must remain readable without shifting it to an earlier start.
+    elements.weekGrid.style.gridTemplateColumns = `repeat(7, ${columnWidth}px)`;
+    elements.weekGrid.style.minWidth = `${7 * columnWidth}px`;
     weekLayouts.forEach(({ timeline }) => {
-      Object.assign(timeline.style, { height: `${Math.ceil(contentHeight)}px` });
+      timeline.style.height = `${timelineHeight}px`;
     });
     if (state.focusToday && state.scheduleReady && elements.weekScroll.clientWidth > 0) {
       const today = elements.weekGrid.querySelector('.workbench-week-day.is-today');
@@ -505,6 +529,84 @@
   }
 
   let weekLayoutFrame = 0;
+  let currentConflicts = [];
+  function paintCalendarItem(
+    node,
+    item,
+    dueAt = item.kind === 'deadline' ? item.endAt : null,
+    showLabel = true,
+  ) {
+    node.dataset.eventColor = String(calendarModel.colorIndex(item));
+    if (dueAt) {
+      node.dataset.deadlineAt = dueAt;
+      node.dataset.deadlineCompleted = String(
+        Boolean(item.completed || item.status === 'completed'),
+      );
+      node.dataset.deadlineState = calendarModel.deadlineState(
+        dueAt,
+        node.dataset.deadlineCompleted === 'true',
+      );
+      if (showLabel) {
+        const label = document.createElement('small');
+        label.className = 'workbench-deadline-status';
+        node.append(label);
+      }
+      updateDeadlineLabel(node);
+    }
+  }
+  function updateDeadlineLabel(node) {
+    const label = node.querySelector('.workbench-deadline-status');
+    if (label)
+      label.textContent = calendarModel.deadlineRemaining(
+        node.dataset.deadlineAt,
+        node.dataset.deadlineCompleted === 'true',
+      );
+    const importantTime = node.querySelector('.workbench-important-time');
+    if (importantTime)
+      importantTime.textContent = formatImportantDue({
+        dueAt: node.dataset.deadlineAt,
+        status: node.dataset.deadlineCompleted === 'true' ? 'completed' : 'confirmed',
+      });
+  }
+  function refreshDeadlineColors() {
+    if (!isLoggedIn()) return;
+    shell.querySelectorAll('[data-deadline-at]').forEach((node) => {
+      node.dataset.deadlineState = calendarModel.deadlineState(
+        node.dataset.deadlineAt,
+        node.dataset.deadlineCompleted === 'true',
+      );
+      updateDeadlineLabel(node);
+    });
+    requestWeekCardLayout();
+  }
+  function renderTimeConflicts() {
+    const panel = document.getElementById('workbench-time-conflicts');
+    const summary = document.getElementById('workbench-time-conflicts-summary');
+    const list = document.getElementById('workbench-time-conflicts-list');
+    panel.hidden = !currentConflicts.length || !isLoggedIn();
+    summary.textContent = currentConflicts.length
+      ? `本周有 ${currentConflicts.length} 组时间冲突 · 点击查看重叠时段`
+      : '';
+    list.replaceChildren(
+      ...currentConflicts.map(({ a, b, start, end }) => {
+        const row = document.createElement('li');
+        const names = document.createElement('strong');
+        names.textContent = `${a.title} × ${b.title}`;
+        const time = document.createElement('span');
+        time.textContent = `重叠：${formatMoment(start)} — ${formatMoment(end)}`;
+        row.append(names, time);
+        for (const item of [a, b])
+          row.append(
+            makeAction(
+              `查看：${item.title}`,
+              item.courseScheduleReference ? 'view-course-schedule' : 'edit-schedule',
+              item.publicId,
+            ),
+          );
+        return row;
+      }),
+    );
+  }
   function requestWeekCardLayout() {
     if (weekLayoutFrame) return;
     weekLayoutFrame = window.requestAnimationFrame(() => {
@@ -517,6 +619,8 @@
     if (!elements.weekGrid) return;
     if (state.weekStart === null) state.weekStart = getWeekStart();
     const weekEnd = state.weekStart + 7 * DAY_MS;
+    currentConflicts = calendarModel.conflicts(state.scheduleItems, state.weekStart, weekEnd);
+    renderTimeConflicts();
     elements.weekLabel.textContent = `${formatDay(new Date(state.weekStart))} — ${formatDay(new Date(weekEnd - DAY_MS))} · 北京时间`;
     const todayStart = getWeekStart(new Date());
     elements.weekToday.disabled = false;
@@ -583,6 +687,7 @@
         block.dataset.publicId = entry.item.publicId;
         block.className = `workbench-week-event${entry.item.status === 'draft' ? ' is-draft' : ''}${entry.item.sourceType === 'agent' ? ' is-agent' : ''}${entry.item.kind === 'deadline' ? ' is-deadline' : ''}${entry.item.kind === 'weekly' ? ' is-weekly' : ''}`;
         if (entry.item.completed) block.classList.add('is-completed');
+        paintCalendarItem(block, entry.item);
         const title = document.createElement('strong');
         let prefix = '';
         if (entry.item.kind === 'deadline') prefix = '⏱ DDL · ';
@@ -610,18 +715,36 @@
           notes.textContent = entry.item.description;
           block.append(notes);
         }
+        const overlaps = currentConflicts.filter(
+          ({ a, b }) => a.publicId === entry.item.publicId || b.publicId === entry.item.publicId,
+        );
+        if (overlaps.length) {
+          block.classList.add('has-time-conflict');
+          const warning = document.createElement('small');
+          warning.className = 'workbench-event-conflict';
+          warning.textContent = `时间冲突 · ${overlaps.length} 项`;
+          block.append(warning);
+        }
         const calendarAction = entry.item.completed ? '恢复未完成' : '标记已完成';
         block.title = `${entry.item.title} · ${entry.item.kind === 'deadline' ? `截止 ${formatMoment(entry.item.endAt)}` : `${formatMoment(entry.item.startAt)} — ${formatMoment(entry.item.endAt)}`}${entry.item.description ? `\n地点/备注：${entry.item.description}` : ''}${entry.item.updatedAt ? `\n更新于 ${formatMoment(entry.item.updatedAt)}` : ''} · ${entry.item.homeworkReference ? calendarAction : '点击编辑'}`;
         if (entry.item.courseScheduleReference)
           block.title = block.title.replace(/点击编辑$/, '查看固定课程');
+        if (overlaps.length)
+          block.title += `\n${overlaps
+            .map(
+              ({ a, b, start, end }) =>
+                `与「${a.publicId === entry.item.publicId ? b.title : a.title}」重叠：${formatMoment(start)} — ${formatMoment(end)}`,
+            )
+            .join('\n')}`;
         block.setAttribute('aria-label', block.title);
         if (entry.item.allDay || entry.item.kind === 'deadline') {
           allDay.append(block);
         } else {
-          const top = Math.floor(((entry.start - windowStart) / (60 * 60 * 1000)) * 40);
+          const { top, end, height } = calendarModel.timeBlock(entry.start, entry.end, windowStart);
           block.style.top = `${top}px`;
-          block.style.minHeight = `${Math.max(0, Math.ceil(((entry.end - entry.start) / (60 * 60 * 1000)) * 40) - 4)}px`;
-          blocks.push({ block, top });
+          block.style.height = `${height}px`;
+          block.classList.toggle('is-tiny-time-block', height < 28);
+          blocks.push({ block, top, end, height });
           timeline.append(block);
         }
       }
@@ -712,15 +835,15 @@
       return;
     }
     elements.importantList.replaceChildren(
-      ...items.map((item) =>
-        makeDataItem({
+      ...items.map((item) => {
+        const node = makeDataItem({
           eyebrow:
             item.status === 'draft' ? '待确认草稿' : PRIORITY_LABELS[item.priority] || '事项',
           title: item.title || '未命名事项',
           href: item.actionUrl,
-          description: [formatImportantDue(item), truncate(item.description)]
-            .filter(Boolean)
-            .join(' · '),
+          description: item.dueAt
+            ? formatImportantDue(item)
+            : [formatImportantDue(item), truncate(item.description)].filter(Boolean).join(' · '),
           className: item.status === 'draft' ? 'is-draft' : '',
           actions: [
             ...(item.status === 'draft'
@@ -732,8 +855,13 @@
               : [makeAction('完成', 'complete-important', item.publicId, 'is-primary')]),
             makeAction('删除', 'delete-important', item.publicId, 'is-danger'),
           ],
-        }),
-      ),
+        });
+        if (item.dueAt) {
+          node.querySelector(':scope > small').classList.add('workbench-important-time');
+          paintCalendarItem(node, item, item.dueAt, false);
+        }
+        return node;
+      }),
     );
     elements.importantList.setAttribute('aria-busy', 'false');
   }
@@ -895,7 +1023,7 @@
         if (item.homeworkReference)
           eyebrow = item.completed ? '✓ 课程作业 · 已完成' : '⏱ 课程作业 · 未完成';
         if (item.courseScheduleReference) eyebrow = '课程 · 网络学堂自动同步';
-        return makeDataItem({
+        const node = makeDataItem({
           eyebrow,
           title: item.title || '未命名日程',
           description: [
@@ -910,6 +1038,17 @@
             .join(' '),
           actions,
         });
+        paintCalendarItem(node, item);
+        const conflictCount = currentConflicts.filter(
+          ({ a, b }) => a.publicId === item.publicId || b.publicId === item.publicId,
+        ).length;
+        if (conflictCount) {
+          const warning = document.createElement('small');
+          warning.className = 'workbench-event-conflict';
+          warning.textContent = `时间冲突 · 与 ${conflictCount} 项安排重叠，请查看上方冲突报告`;
+          node.append(warning);
+        }
+        return node;
       }),
     );
     elements.scheduleList.setAttribute('aria-busy', 'false');
@@ -1121,23 +1260,27 @@
     const editing = Boolean(elements.scheduleId.value);
     const kind = elements.scheduleKind.value;
     const isDeadline = kind === 'deadline';
-    const repeating = kind === 'course' && !editing;
+    const repeating = !editing && kind !== 'deadline' && elements.courseInterval.value !== 'none';
     elements.scheduleDialog.dataset.kind = kind;
     elements.scheduleStart.closest('label').hidden = isDeadline;
     elements.scheduleStart.required = !isDeadline;
     elements.scheduleStart.closest('label').querySelector('span').textContent = repeating
-      ? '首次上课时间'
+      ? kind === 'course'
+        ? '首次上课时间'
+        : '首次开始时间'
       : '开始时间';
     elements.scheduleEnd.closest('label').querySelector('span').textContent = isDeadline
       ? '截止时间'
       : repeating
-        ? '首次下课时间'
+        ? kind === 'course'
+          ? '首次下课时间'
+          : '首次结束时间'
         : '结束时间';
     elements.scheduleAllDay.closest('label').hidden = kind !== 'event';
     if (kind !== 'event') elements.scheduleAllDay.checked = false;
-    elements.courseRepeat.hidden = !repeating;
-    elements.courseCount.disabled = !repeating;
-    elements.courseInterval.disabled = !repeating;
+    elements.courseRepeat.hidden = editing || isDeadline;
+    elements.courseInterval.disabled = editing || isDeadline;
+    updateRepeatPreview();
     elements.scheduleDialogTitle.textContent = editing
       ? isDeadline
         ? '编辑 DDL'
@@ -1145,12 +1288,66 @@
       : '新增安排';
     elements.scheduleKindHint.textContent = isDeadline
       ? '个人 DDL 不依赖网络学堂；只标记截止时间，不占用此前整段时间'
-      : repeating
+      : kind === 'course' && !editing
         ? '选课、旁听都可以手动加入，不需要连接网络学堂。每周有不同时间或地点时，请分别添加；节假日和调停课需自行修改'
         : kind === 'course'
           ? '仅修改本次课程，其余重复课程保持不变'
-          : '';
+          : editing
+            ? '仅修改本次安排，其余重复安排保持不变'
+            : '';
     resetConflictWarning();
+  }
+
+  function repeatRule() {
+    const mode = elements.courseInterval.value;
+    const rule =
+      mode === 'custom'
+        ? { unit: elements.repeatUnit.value, interval: Number(elements.repeatInterval.value) }
+        : { unit: mode === 'daily' ? 'day' : 'week', interval: mode === '2' ? 2 : 1 };
+    if (mode === 'none') return { ...rule, count: 1 };
+    return elements.repeatEndMode.value === 'count'
+      ? { ...rule, count: Number(elements.courseCount.value) }
+      : { ...rule, until: elements.repeatUntil.value };
+  }
+
+  function updateRepeatPreview() {
+    const enabled = !elements.scheduleId.value && elements.scheduleKind.value !== 'deadline';
+    const repeating = enabled && elements.courseInterval.value !== 'none';
+    const custom = repeating && elements.courseInterval.value === 'custom';
+    const byCount = repeating && elements.repeatEndMode.value === 'count';
+    elements.repeatCustom.hidden = !custom;
+    elements.repeatInterval.disabled = !custom;
+    elements.repeatInterval.required = custom;
+    elements.repeatUnit.disabled = !custom;
+    elements.repeatEndLabel.hidden = !repeating;
+    elements.repeatEndMode.disabled = !repeating;
+    elements.courseCount.closest('label').hidden = !byCount;
+    elements.courseCount.disabled = !byCount;
+    elements.courseCount.required = byCount;
+    elements.repeatUntil.closest('label').hidden = !repeating || byCount;
+    elements.repeatUntil.disabled = !repeating || byCount;
+    elements.repeatUntil.required = repeating && !byCount;
+    elements.repeatUntil.min = elements.scheduleStart.value.slice(0, 10);
+    elements.repeatPreview.hidden = !repeating;
+    elements.repeatDates.replaceChildren();
+    if (!repeating) return;
+    try {
+      const items = window.FreeBbsScheduleRecurrence.expand({
+        startAt: shanghaiInputToIso(elements.scheduleStart.value),
+        endAt: shanghaiInputToIso(elements.scheduleEnd.value),
+        recurrence: repeatRule(),
+      });
+      elements.repeatSummary.textContent = `将生成 ${items.length} 次安排 · 点击核对全部日期`;
+      elements.repeatDates.replaceChildren(
+        ...items.map((item) => {
+          const li = document.createElement('li');
+          li.textContent = `${formatMoment(item.startAt)} — ${formatMoment(item.endAt)}`;
+          return li;
+        }),
+      );
+    } catch (error) {
+      elements.repeatSummary.textContent = error.message;
+    }
   }
 
   async function submitImportant(event) {
@@ -1209,7 +1406,10 @@
     const publicId = elements.scheduleId.value;
     const endAt = shanghaiInputToIso(elements.scheduleEnd.value);
     const isDeadline = elements.scheduleDialog.dataset.kind === 'deadline';
-    const repeating = elements.scheduleDialog.dataset.kind === 'course' && !publicId;
+    const repeating =
+      !publicId &&
+      !isDeadline &&
+      (elements.courseInterval.value !== 'none' || elements.scheduleKind.value === 'course');
     const startAt =
       isDeadline && endAt
         ? new Date(new Date(endAt).getTime() - 60000).toISOString()
@@ -1227,6 +1427,8 @@
       elements.scheduleDescription.value,
       elements.courseCount.value,
       elements.courseInterval.value,
+      elements.scheduleAllDay.checked,
+      repeatRule(),
     ]);
     elements.scheduleSubmit.disabled = true;
     elements.scheduleFormStatus.textContent = '正在检查时间冲突…';
@@ -1250,8 +1452,9 @@
       };
       if (!publicId) payload.kind = isDeadline ? 'deadline' : 'event';
       if (repeating) {
-        payload.count = Number(elements.courseCount.value);
-        payload.intervalWeeks = Number(elements.courseInterval.value);
+        payload.kind = elements.scheduleKind.value;
+        payload.recurrence = repeatRule();
+        window.FreeBbsScheduleRecurrence.expand(payload);
         payload.allowConflicts = state.conflictAcknowledgement === conflictKey;
       }
       if (publicId && elements.scheduleVersion.value) {
@@ -1260,7 +1463,7 @@
       elements.scheduleFormStatus.textContent = '正在保存…';
       await app.callApi(
         repeating
-          ? '/workbench/manual-courses'
+          ? '/workbench/recurring-events'
           : publicId
             ? `/workbench/schedule-items/${encodeURIComponent(publicId)}`
             : '/workbench/schedule-items',
@@ -1277,7 +1480,7 @@
         elements.conflictPanel.classList.remove('hidden');
         elements.conflictPanel.textContent = error.message;
         elements.scheduleSubmit.textContent = '仍然保存';
-        elements.scheduleFormStatus.textContent = '课程尚未加入，请确认冲突后再次保存';
+        elements.scheduleFormStatus.textContent = '重复安排尚未加入，请确认冲突后再次保存';
         return;
       }
       elements.scheduleFormStatus.textContent =
@@ -1827,7 +2030,12 @@
 
   elements.addImportant?.addEventListener('click', () => openImportantEditor());
   elements.addSchedule?.addEventListener('click', () => openScheduleEditor());
-  elements.scheduleKind?.addEventListener('change', updateScheduleKind);
+  elements.scheduleKind?.addEventListener('change', () => {
+    if (elements.scheduleKind.value === 'course' && elements.courseInterval.value === 'none')
+      elements.courseInterval.value = '1';
+    updateScheduleKind();
+  });
+  elements.courseInterval?.addEventListener('change', updateScheduleKind);
   elements.weekPrevious?.addEventListener('click', () => shiftWeek(-7));
   elements.weekNext?.addEventListener('click', () => shiftWeek(7));
   elements.weekToday?.addEventListener('click', () => {
@@ -1842,7 +2050,11 @@
   elements.agentConfirm?.addEventListener('click', confirmAgentProposals);
   elements.importantForm?.addEventListener('submit', submitImportant);
   elements.scheduleForm?.addEventListener('submit', submitSchedule);
-  elements.scheduleForm?.addEventListener('input', resetConflictWarning);
+  elements.scheduleForm?.addEventListener('input', () => {
+    resetConflictWarning();
+    updateRepeatPreview();
+  });
+  elements.repeatEndMode?.addEventListener('change', updateRepeatPreview);
   elements.notificationCategory?.addEventListener('change', () => {
     state.notificationFilters.category = elements.notificationCategory.value;
     renderNotifications();
@@ -1955,4 +2167,16 @@
   });
   document.fonts?.ready.then(requestWeekCardLayout);
   document.fonts?.addEventListener('loadingdone', requestWeekCardLayout);
+  let deadlineTimer = window.setInterval(refreshDeadlineColors, 30000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) refreshDeadlineColors();
+  });
+  window.addEventListener('pagehide', () => window.clearInterval(deadlineTimer));
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+      window.clearInterval(deadlineTimer);
+      deadlineTimer = window.setInterval(refreshDeadlineColors, 30000);
+      refreshDeadlineColors();
+    }
+  });
 })();

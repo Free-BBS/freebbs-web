@@ -282,27 +282,31 @@
               </div>
               <div class="home-panel-actions">
                 <a class="home-panel-link" href="/discussion">进入讨论区</a>
-                <button
-                  class="home-feed-toggle"
-                  id="home-feed-toggle"
-                  type="button"
-                  aria-pressed="true"
-                  aria-controls="home-discussion-list"
-                  aria-label="热帖优先"
-                >
-                  <span class="home-feed-toggle-label">排序</span>
-                  <strong id="home-feed-mode-label">热帖</strong>
-                </button>
+                <label class="home-feed-sort">
+                  <span id="home-feed-mode-label" class="visually-hidden">排序</span>
+                  <select
+                    class="home-feed-toggle"
+                    id="home-feed-toggle"
+                    aria-label="讨论区动态排序"
+                    aria-controls="home-discussion-list"
+                  >
+                    <option value="balanced">综合</option>
+                    <option value="latest">最新</option>
+                    <option value="hot">热帖</option>
+                  </select>
+                </label>
               </div>
             </header>
 
             <p class="visually-hidden" id="home-feed-status" role="status" aria-live="polite">
-              正在加载热帖…
+              正在加载综合动态…
             </p>
             <div
               class="home-feed-list"
               id="home-discussion-list"
               role="list"
+              tabindex="0"
+              aria-label="讨论区动态，可上下滚动"
               aria-busy="true"
               aria-describedby="home-feed-status"
             >
@@ -349,6 +353,8 @@
               class="home-board-activity"
               id="home-board-activity"
               role="list"
+              tabindex="0"
+              aria-label="分区互动，可上下滚动"
               aria-busy="true"
               aria-describedby="home-board-status"
             >

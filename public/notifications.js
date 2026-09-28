@@ -48,12 +48,24 @@
   let searchTimer;
   let requestId;
   const seenAchievements = new Set();
+  const achievementNames = {
+    plate_fishbone_master: '鱼骨达人',
+    plate_circuit_master: '电路达人',
+  };
+  const achievementQueue = [];
   let achievementToast;
+
+  function closeAchievement() {
+    achievementToast?.remove();
+    achievementToast = null;
+    const next = achievementQueue.shift();
+    if (next) showAchievement(next);
+  }
 
   function showAchievement({ key, uid, token }) {
     const user = window.freeBbsApp?.userState;
     if (
-      key !== 'plate_fishbone_master' ||
+      !Object.hasOwn(achievementNames, key) ||
       !user?.isLoggedIn ||
       String(uid) !== String(user.uid) ||
       token !== user.token ||
@@ -67,24 +79,26 @@
     } catch {
       /* Memory fallback. */
     }
-    achievementToast?.remove();
+    if (achievementToast?.isConnected) {
+      if (!achievementQueue.some((item) => item.key === key && item.uid === uid))
+        achievementQueue.push({ key, uid, token });
+      return;
+    }
     achievementToast = document.createElement('aside');
     achievementToast.className = 'achievement-toast';
     achievementToast.setAttribute('role', 'status');
     achievementToast.setAttribute('aria-live', 'polite');
     achievementToast.innerHTML = `
-      <img src="/assets/icons/plate_fishbone_master.svg" alt="" />
+      <img src="/assets/icons/${key}.svg" alt="" />
       <div><p class="achievement-toast-kicker">收获一枚成就铭牌</p>
-        <h2>鱼骨达人</h2>
-        <p>已收入「我的装扮」，可以和 BBS 见习观察员换着戴</p>
+        <h2>${achievementNames[key]}</h2>
+        <p>已收入「我的装扮」，可以和其他铭牌换着戴</p>
         <a class="achievement-toast-equip">去佩戴 ↗</a>
       </div>
       <button type="button" class="achievement-toast-close" aria-label="关闭成就通知">×</button>`;
     achievementToast.querySelector('a').href =
       `/profile?uid=${encodeURIComponent(uid)}#public-profile-wardrobe`;
-    achievementToast
-      .querySelector('button')
-      .addEventListener('click', () => achievementToast?.remove());
+    achievementToast.querySelector('button').addEventListener('click', closeAchievement);
     document.body.append(achievementToast);
     seenAchievements.add(seenKey);
     try {
@@ -249,17 +263,15 @@
       if (changed && payload.unreadCount > 0) {
         const inbox = await api('/notifications');
         if (version !== state.sessionVersion || !canLoad()) return;
-        if (
-          inbox.notifications?.some(
-            (item) =>
-              item.kind === 'achievement' && !item.readAt && item.title === '获得成就 · 鱼骨达人',
+        for (const [key, name] of Object.entries(achievementNames)) {
+          if (
+            inbox.notifications?.some(
+              (item) =>
+                item.kind === 'achievement' && !item.readAt && item.title === `获得成就 · ${name}`,
+            )
           )
-        )
-          showAchievement({
-            key: 'plate_fishbone_master',
-            uid: state.user.uid,
-            token: state.token,
-          });
+            showAchievement({ key, uid: state.user.uid, token: state.token });
+        }
       }
     } catch (error) {
       if (!panel.hidden) message.textContent = error.message;
@@ -472,7 +484,11 @@
     state.sessionVersion += 1;
     const version = state.sessionVersion;
     const token = localStorage.getItem(storageKey) || '';
-    if (token !== state.token) achievementToast?.remove();
+    if (token !== state.token) {
+      achievementQueue.length = 0;
+      achievementToast?.remove();
+      achievementToast = null;
+    }
     state.token = token;
     state.user = null;
     widget.hidden = true;

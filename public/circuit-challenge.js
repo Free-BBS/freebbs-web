@@ -849,7 +849,18 @@
       : '<p class="challenge-empty">还没有上线的关卡。</p>';
   }
 
+  function notifyAchievements(payload, session) {
+    if (session.token !== app.userState.token || session.uid !== app.userState.uid) return;
+    for (const key of payload.unlocked || [])
+      window.dispatchEvent(
+        new CustomEvent('freebbs:achievement-unlocked', {
+          detail: { key, uid: session.uid, token: session.token },
+        }),
+      );
+  }
+
   async function loadChallenges(preferredId, refreshOnly = false) {
+    const session = { uid: app.userState.uid, token: app.userState.token };
     setStatus('正在读取关卡…');
     $('retry').hidden = true;
     try {
@@ -857,6 +868,8 @@
         `/circuit-challenges${app.userState.isAdmin ? '?manage=1' : ''}`,
         { method: 'GET' },
       );
+      if (session.token !== app.userState.token || session.uid !== app.userState.uid) return;
+      notifyAchievements(payload, session);
       state.challenges = payload.challenges || [];
       state.progress = payload.progress;
       if (state.challenge)
@@ -997,6 +1010,7 @@
       setStatus('请先登录，再提交榜单成绩。', true, 'run-status');
       return;
     }
+    const session = { uid: app.userState.uid, token: app.userState.token };
     state.busy = true;
     updateControls();
     try {
@@ -1004,6 +1018,8 @@
         method: 'POST',
         body: JSON.stringify({ revision: state.challenge.revision, document: state.document }),
       });
+      if (session.token !== app.userState.token || session.uid !== app.userState.uid) return;
+      notifyAchievements(payload, session);
       $('result-title').textContent = `通关，使用 ${payload.componentCount} 个元件`;
       const rewardNotes = [];
       if (payload.rewards?.completion)
@@ -1011,7 +1027,7 @@
       if (payload.rewards?.record) rewardNotes.push(`刷新最低纪录 +${payload.rewards.record} 电元`);
       $('run-status').textContent =
         `成绩已进入榜单，误差 ${(payload.error * 100).toFixed(2)}%${rewardNotes.length ? `；${rewardNotes.join('，')}` : ''}。`;
-      if (payload.balance) app.syncWallet(payload.balance, app.userState.token);
+      if (payload.balance) app.syncWallet(payload.balance, session.token);
       await loadChallenges(state.challenge.id, true);
       await loadLeaderboard();
     } catch (error) {

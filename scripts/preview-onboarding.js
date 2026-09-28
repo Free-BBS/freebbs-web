@@ -159,7 +159,12 @@ function initialLedger(now) {
   });
 }
 
-function createOnboardingPreview({ now = Date.now, growthRandom, extraPages = {} } = {}) {
+function createOnboardingPreview({
+  now = Date.now,
+  growthRandom,
+  extraPages = {},
+  extraApi: additionalApi = null,
+} = {}) {
   const progressByVersion = new Map();
   const readProgress = (version = GUIDE_VERSION) =>
     structuredClone(progressByVersion.get(resolveGuideVersion(version)) || emptyProgress(version));
@@ -269,6 +274,10 @@ function createOnboardingPreview({ now = Date.now, growthRandom, extraPages = {}
         );
     },
     async extraApi(context) {
+      if (additionalApi) {
+        const additionalResult = await additionalApi(context);
+        if (additionalResult) return additionalResult;
+      }
       const { route, method, body, url, store } = context;
       if (route === '/api/tools' && method === 'GET') return result({ tools: [] });
       if (route === '/api/development/v1/me')
@@ -334,6 +343,25 @@ function createOnboardingPreview({ now = Date.now, growthRandom, extraPages = {}
               (!board || board === 'all' || post.board.slug === board) &&
               (sort !== 'unanswered' || post.commentCount === 0),
           );
+          const engagement = (post) =>
+            (post.commentCount || 0) * 3 +
+            (post.likeCount || 0) +
+            (post.lightCount || 0) +
+            (post.fireworksCount || 0);
+          const score = (post) =>
+            (1 + engagement(post)) /
+            (1 + Math.max(0, now() - Date.parse(post.createdAt)) / 86400000) ** 1.3;
+          posts.sort(
+            (a, b) =>
+              Number(b.isPinned) - Number(a.isPinned) ||
+              (sort === 'balanced'
+                ? score(b) - score(a)
+                : sort === 'hot'
+                  ? engagement(b) - engagement(a)
+                  : 0) ||
+              Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
+              Number(b.id) - Number(a.id),
+          );
           return result({ posts, nextCursor: null });
         }
         const postMatch = /^\/api\/discussion\/posts\/(\d+)(\/comments)?$/.exec(route);
@@ -376,6 +404,30 @@ function createOnboardingPreview({ now = Date.now, growthRandom, extraPages = {}
         });
       }
       if (route.startsWith('/api/workbench/') || route.startsWith('/api/notifications')) {
+        const awardNotices = store.account().notifications;
+        const combinedNotices = [
+          ...awardNotices.map((notice) => ({ ...notice, id: `achievement-${notice.id}` })),
+          ...workbench.communityNotices,
+        ];
+        if (route === '/api/notifications' && method === 'GET')
+          return result({
+            notifications: combinedNotices,
+            unreadCount: combinedNotices.filter((notice) => !notice.readAt).length,
+            nextCursor: null,
+          });
+        if (route === '/api/notifications/read-all' && method === 'POST') {
+          [...awardNotices, ...workbench.communityNotices].forEach((notice) => {
+            notice.readAt = new Date(now()).toISOString();
+          });
+          return result({ ok: true });
+        }
+        const awardRead = /^\/api\/notifications\/achievement-(\d+)\/read$/.exec(route);
+        if (awardRead && method === 'POST') {
+          const notice = awardNotices.find((entry) => String(entry.id) === awardRead[1]);
+          if (!notice) return result({ message: '通知不存在' }, 404);
+          notice.readAt = new Date(now()).toISOString();
+          return result({ ok: true });
+        }
         if (route === '/api/notifications/email-preferences' && method === 'GET')
           return result({
             preferences: {
@@ -389,7 +441,7 @@ function createOnboardingPreview({ now = Date.now, growthRandom, extraPages = {}
           });
         if (route === '/api/notifications/unread-count')
           return result({
-            unreadCount: workbench.communityNotices.filter((entry) => !entry.readAt).length,
+            unreadCount: combinedNotices.filter((entry) => !entry.readAt).length,
           });
         const answer = await workbench.handle(context);
         if (answer) return answer;
@@ -477,7 +529,7 @@ function createOnboardingPreview({ now = Date.now, growthRandom, extraPages = {}
       return res.end('Visual preview fixture unavailable');
     }
   });
-  return { ...preview, workbench, progress: readProgress };
+  return { ...preview, workbench, discussion, progress: readProgress };
 }
 
 if (require.main === module) {

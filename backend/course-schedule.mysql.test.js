@@ -3,9 +3,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
+const { saveManualCourse } = require('./manual-courses');
 const { ensureWorkbenchTables, listCampusSemesters, readCampusSemester } = require('./workbench');
 const { ensureCampusConnectorTables } = require('./tsinghua-connectors/schema');
-const { listCourseSchedules, saveCourseCalendar } = require('./course-schedule');
+const {
+  listCourseSchedules,
+  readCourseCalendar,
+  saveCourseCalendar,
+} = require('./course-schedule');
 
 test(
   'isolated MySQL: course migration, settings, resync and connector generation are executable',
@@ -59,8 +64,43 @@ test(
     await pool.execute(`INSERT INTO campus_learn_semester_catalogs
       (user_id, current_semester_id, semesters_json, fetched_at)
       VALUES (1, '2026-2027-1', '[{"id":"2026-2027-1"}]', '2026-09-21 02:00:00')`);
+    // Begin with the deployed pre-056 settings table, including an existing row.
+    const settingsDdl = fs
+      .readFileSync(path.join(__dirname, '../database/migrations/051_course_calendar.sql'), 'utf8')
+      .split('CREATE TABLE IF NOT EXISTS campus_course_calendar_settings')[1];
+    await pool.query(`CREATE TABLE IF NOT EXISTS campus_course_calendar_settings${settingsDdl}`);
+    await pool.query(`INSERT INTO campus_course_calendar_settings
+      (user_id, semester_id, connector_generation, first_week_monday)
+      VALUES (1, '2026-2027-1', 1, '2026-09-21')`);
+    const migrateWeeks = async () => {
+      const connection = await pool.getConnection();
+      try {
+        const sql = fs.readFileSync(
+          path.join(__dirname, '../database/migrations/056_course_calendar_teaching_weeks.sql'),
+          'utf8',
+        );
+        for (const statement of sql
+          .split(';')
+          .map((value) => value.trim())
+          .filter(Boolean)) {
+          await connection.query(statement);
+        }
+      } finally {
+        connection.release();
+      }
+    };
+    await migrateWeeks();
     await ensureCampusConnectorTables(pool);
     await ensureCampusConnectorTables(pool);
+    await migrateWeeks();
+    const [[legacySettings]] = await pool.query(
+      'SELECT teaching_weeks FROM campus_course_calendar_settings',
+    );
+    assert.equal(
+      legacySettings.teaching_weeks,
+      null,
+      'migration must not silently assume 16 weeks',
+    );
     const [[legacySnapshot]] = await pool.query(
       'SELECT connector_generation FROM campus_learn_semester_snapshots',
     );
@@ -111,6 +151,35 @@ test(
     const [changed] = await listCourseSchedules(pool, 1, range);
     assert.equal(changed.publicId, first.publicId);
     assert.match(changed.description, /201/);
+    const fullWeek = {
+      ...course,
+      sectionSystem: 'tsinghua-large',
+      scheduleText: '星期一第2节(全周)',
+    };
+    await pool.execute(
+      'UPDATE campus_learn_semester_snapshots SET courses_json = ? WHERE user_id = 1',
+      [JSON.stringify([fullWeek])],
+    );
+    assert.equal((await readCourseCalendar(pool, 1, calendar.semesterId)).scheduledLessons, 0);
+    assert.equal(
+      (await saveCourseCalendar(pool, 1, { ...calendar, teachingWeeks: 18 })).scheduledLessons,
+      18,
+    );
+    assert.equal(
+      (await saveCourseCalendar(pool, 1, calendar)).teachingWeeks,
+      18,
+      'older clients preserve confirmed weeks',
+    );
+    assert.equal(
+      (await saveCourseCalendar(pool, 1, { ...calendar, teachingWeeks: 16 })).scheduledLessons,
+      16,
+    );
+    assert.equal((await listCourseSchedules(pool, 1, range))[0].publicId, first.publicId);
+    assert.equal(
+      (await saveCourseCalendar(pool, 1, { ...calendar, teachingWeeks: null })).scheduledLessons,
+      0,
+    );
+    await saveCourseCalendar(pool, 1, { ...calendar, teachingWeeks: 16 });
     const [[manual]] = await pool.query('SELECT COUNT(*) AS total FROM schedule_items');
     assert.equal(Number(manual.total), 0);
     await pool.execute(`UPDATE user_campus_connectors SET generation = 2,
@@ -137,6 +206,13 @@ test(
     assert.equal((await listCampusSemesters(pool, 1)).semesters.length, 1);
     assert.equal((await readCampusSemester(pool, 1, '2026-2027-1')).courses.length, 1);
     await saveCourseCalendar(pool, 1, calendar);
+    assert.equal(
+      (await readCourseCalendar(pool, 1, calendar.semesterId)).teachingWeeks,
+      null,
+      "rebound connector cannot inherit the previous identity's confirmed week count",
+    );
+    assert.equal((await listCourseSchedules(pool, 1, range)).length, 0);
+    await saveCourseCalendar(pool, 1, { ...calendar, teachingWeeks: 16 });
     assert.equal((await listCourseSchedules(pool, 1, range)).length, 1);
     await pool.execute("UPDATE user_campus_connectors SET status = 'revoked' WHERE user_id = 1");
     assert.deepEqual(await listCourseSchedules(pool, 1, range), []);
@@ -145,5 +221,73 @@ test(
       semesters: [],
     });
     assert.equal(await readCampusSemester(pool, 1, '2026-2027-1'), null);
+
+    const recurring = {
+      title: '重复会议',
+      description: '会议室101',
+      kind: 'event',
+      startAt: '2026-10-04T10:00:00+08:00',
+      endAt: '2026-10-04T11:00:00+08:00',
+      recurrence: { unit: 'week', interval: 2, until: '2026-11-01' },
+    };
+    assert.equal((await saveManualCourse(pool, 1, recurring, { kind: 'event' })).created, 3);
+    await assert.rejects(saveManualCourse(pool, 1, recurring, { kind: 'event' }), { status: 409 });
+    const [[repeats]] = await pool.query(
+      "SELECT COUNT(*) AS total FROM schedule_items WHERE source_reference LIKE 'manual:recurring:%'",
+    );
+    assert.equal(Number(repeats.total), 3);
+    const conflict = { ...recurring, title: '重复旁听课' };
+    await assert.rejects(saveManualCourse(pool, 1, conflict), {
+      status: 409,
+      code: 'course_conflict',
+    });
+    assert.equal(
+      (await saveManualCourse(pool, 1, { ...conflict, allowConflicts: true })).created,
+      3,
+    );
+    const [[other]] = await pool.query(
+      'SELECT COUNT(*) AS total FROM schedule_items WHERE user_id = 2',
+    );
+    assert.equal(Number(other.total), 0);
+
+    // Exercise the production ranking expression against actual MySQL, not a JS approximation.
+    const serverSource = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+    const balancedOrder = /sortMode === 'balanced'[\s\S]*?orderBy = `([^`]+)`/.exec(
+      serverSource,
+    )[1];
+    const [ranked] = await pool.query(`SELECT p.id FROM (
+      SELECT 1 AS id, 0 AS is_pinned, NOW() AS created_at
+      UNION ALL SELECT 2, 0, NOW() - INTERVAL 2 HOUR
+      UNION ALL SELECT 3, 0, NOW() - INTERVAL 180 DAY
+      UNION ALL SELECT 4, 1, NOW() - INTERVAL 200 DAY
+    ) p LEFT JOIN (SELECT 2 AS post_id, 10 AS comment_count UNION ALL SELECT 3, 50) c ON c.post_id = p.id
+    LEFT JOIN (SELECT 2 AS post_id, 5 AS reaction_count UNION ALL SELECT 3, 30) l ON l.post_id = p.id
+    ORDER BY ${balancedOrder}`);
+    assert.deepEqual(
+      ranked.map((row) => row.id),
+      [4, 2, 1, 3],
+    );
+
+    await pool.query(`CREATE TABLE discussion_boards (
+      id BIGINT PRIMARY KEY AUTO_INCREMENT, slug VARCHAR(32) UNIQUE, name VARCHAR(64),
+      description TEXT, description_markdown TEXT, sort_order INT, is_active TINYINT)`);
+    await pool.query(
+      "INSERT INTO discussion_boards (id, slug, name, description_markdown) VALUES (77, 'math', '数理', '管理员编辑的介绍')",
+    );
+    const catalogMigration = fs.readFileSync(
+      path.join(__dirname, '../database/migrations/057_discussion_board_catalog.sql'),
+      'utf8',
+    );
+    await pool.query(catalogMigration);
+    await pool.query(catalogMigration);
+    const [boards] = await pool.query(
+      'SELECT id, slug, name, description_markdown FROM discussion_boards ORDER BY sort_order',
+    );
+    assert.deepEqual(
+      boards.map((row) => row.name),
+      ['日常', '数学', '物理', '电路', '信号', '计算机', '实验', '更新日志'],
+    );
+    assert.equal(boards[1].id, 77);
+    assert.equal(boards[1].description_markdown, '管理员编辑的介绍');
   },
 );

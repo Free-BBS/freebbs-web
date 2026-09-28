@@ -229,7 +229,7 @@ test('calendar settings validate a real Monday before writing, and save only aga
         writes += 1;
         assert.match(sql, /c.user_id = \?/);
         assert.match(sql, /s.connector_generation = c.generation/);
-        assert.deepEqual(parameters, [config.firstWeekMonday, config.semesterId, 7]);
+        assert.deepEqual(parameters, [config.firstWeekMonday, null, config.semesterId, 7, 0]);
         return [{ affectedRows: 1 }];
       }
       assert.deepEqual(parameters, [7, config.semesterId]);
@@ -247,4 +247,109 @@ test('calendar settings validate a real Monday before writing, and save only aga
   };
   await assert.rejects(saveCourseCalendar(unavailable, 7, config), { status: 409 });
   assert.equal((await readCourseCalendar(unavailable, 7, config.semesterId)).totalCourses, 0);
+});
+
+test('real campus full-week labels require confirmed weeks and retain every time and room', () => {
+  const courses = [
+    ['writing', '星期一第3节(全周)，新水利馆404'],
+    ['optimization', '星期二第1节(全周)，六教6C300; 星期四第2节(全周)，六教6C300'],
+    ['information', '星期三第3节(全周)，建华/经管新楼A204; 星期三第4节(全周)，建华/经管新楼A204'],
+  ].map(([sourceReference, scheduleText]) => ({
+    ...course,
+    sourceReference,
+    scheduleText,
+    sectionSystem: 'tsinghua-large',
+  }));
+  const missing = projectCourseSchedules(courses, config);
+  assert.equal(missing.events.length, 0);
+  assert.equal(missing.issues.length, 3);
+  assert.ok(missing.issues.every((issue) => /教学周数/.test(issue.message)));
+  const result = projectCourseSchedules(courses, { ...config, teachingWeeks: 16 });
+  assert.equal(result.parsedCourses, 3);
+  assert.equal(result.events.length, 80);
+  assert.deepEqual(result.issues, []);
+  assert.ok(result.events.every((item) => item.description.includes('周次按已确认校历补全')));
+  assert.match(result.events[0].description, /新水利馆404/);
+  assert.equal(projectCourseSchedules(courses, { ...config, teachingWeeks: 18 }).events.length, 90);
+});
+
+test('calendar fallback handles odd and even weeks without inventing missing weekdays or labels', () => {
+  const sample = (text, teachingWeeks = 17) =>
+    parseCourseSchedule(
+      {
+        ...course,
+        sectionSystem: 'tsinghua-large',
+        scheduleText: text,
+      },
+      { teachingWeeks },
+    );
+  assert.deepEqual(
+    sample('星期三第3节(单周)，六教101').sessions[0].weeks,
+    [1, 3, 5, 7, 9, 11, 13, 15, 17],
+  );
+  assert.deepEqual(
+    sample('星期三第3节(双周)，六教101').sessions[0].weeks,
+    [2, 4, 6, 8, 10, 12, 14, 16],
+  );
+  assert.ok(sample('实验时间另行安排(全周)').issue);
+  assert.ok(sample('第3节(全周)，实验室101').issue);
+  assert.ok(sample('星期三第3节，实验室101').issue);
+  assert.ok(sample('星期三第3节(全周)(单周)').issue);
+  assert.deepEqual(sample('第1-4周 星期三第3节(全周)', 2).sessions[0].weeks, [1, 2, 3, 4]);
+});
+
+test('campus half-semester labels always mean weeks 1–8 and 9–16 in Chinese or digits', () => {
+  for (const label of ['前八周', '前8周']) {
+    const parsed = parseCourseSchedule({ ...course, scheduleText: `星期三第2大节(${label})` });
+    assert.equal(parsed.issue, null);
+    assert.deepEqual(parsed.sessions[0].weeks, [1, 2, 3, 4, 5, 6, 7, 8]);
+  }
+  for (const label of ['后八周', '后8周']) {
+    const item = { ...course, scheduleText: `星期三第2大节(${label})` };
+    assert.deepEqual(parseCourseSchedule(item).sessions[0].weeks, [9, 10, 11, 12, 13, 14, 15, 16]);
+    assert.deepEqual(
+      parseCourseSchedule(item, { teachingWeeks: 16 }).sessions[0].weeks,
+      [9, 10, 11, 12, 13, 14, 15, 16],
+    );
+    assert.deepEqual(
+      parseCourseSchedule(item, { teachingWeeks: 18 }).sessions[0].weeks,
+      [9, 10, 11, 12, 13, 14, 15, 16],
+    );
+  }
+  assert.deepEqual(
+    parseCourseSchedule(
+      {
+        ...course,
+        scheduleText: '后八周(双周) 星期一第3大节',
+      },
+      { teachingWeeks: 16 },
+    ).sessions[0].weeks,
+    [10, 12, 14, 16],
+  );
+});
+
+test('teaching-week settings reject invalid input before any database access', async () => {
+  for (const teachingWeeks of [0, -1, 54, 16.5, '16', true, [], {}, '']) {
+    await assert.rejects(saveCourseCalendar(null, 7, { ...config, teachingWeeks }), {
+      status: 400,
+    });
+  }
+});
+
+test('confirmed fallback weeks remain scoped to the owning connector generation', async () => {
+  const item = { ...course, sectionSystem: 'tsinghua-large', scheduleText: '星期一第2节(全周)' };
+  const pool = {
+    async execute() {
+      return [[snapshot({ courses_json: [item], teaching_weeks: 16 })]];
+    },
+  };
+  assert.equal((await readCourseCalendar(pool, 7, config.semesterId)).scheduledLessons, 16);
+  const stale = {
+    async execute() {
+      return [[snapshot({ courses_json: [item], teaching_weeks: 16, settings_generation: 2 })]];
+    },
+  };
+  const calendar = await readCourseCalendar(stale, 7, config.semesterId);
+  assert.equal(calendar.teachingWeeks, null);
+  assert.equal(calendar.scheduledLessons, 0);
 });

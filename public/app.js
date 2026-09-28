@@ -124,7 +124,6 @@ const discussionFilterControls = Array.from(document.querySelectorAll('[data-dis
 const discussionFilterStatus = document.getElementById('discussion-filter-status');
 const workbenchGreeting = document.getElementById('workbench-greeting');
 const workbenchDate = document.getElementById('workbench-date');
-const workbenchSessionState = document.getElementById('workbench-session-state');
 const workbenchContinueTitle = document.getElementById('workbench-continue-title');
 const workbenchContinueDescription = document.getElementById('workbench-continue-description');
 const workbenchContinueLink = document.getElementById('workbench-continue-link');
@@ -170,6 +169,7 @@ const discussionState = {
   showDeleted: false,
   commentActionsPending: new Set(),
   expandedReplyThreads: new Set(),
+  collapsedReplyThreads: new Set(),
 };
 
 function createDiscussionRequestSignal() {
@@ -183,7 +183,7 @@ const discussionCommentDrafts = new Map();
 const discussionOpenReplyByPost = new Map();
 const discussionCommentPreviewTimers = new WeakMap();
 const homeDashboardState = {
-  feedMode: 'hot',
+  feedMode: 'balanced',
   feedCache: new Map(),
   feedRequestId: 0,
 };
@@ -1852,7 +1852,6 @@ async function loadElectromagneticPage() {
 
   const grid = document.getElementById('shop-grid');
   const message = document.getElementById('economy-message');
-  const balances = document.getElementById('economy-balance-row');
 
   if (!userState.isLoggedIn) {
     return;
@@ -1874,7 +1873,6 @@ async function loadElectromagneticPage() {
     const assetQuantityByKey = new Map(
       (payload.assets || []).map((asset) => [asset.key, Number(asset.quantity || 0)]),
     );
-    renderEconomyBalances(balances);
     if (grid) {
       grid.innerHTML =
         groupShopItems(economyShopItems)
@@ -2981,12 +2979,6 @@ function renderWorkbenchDashboard() {
     ? `${displayName}，今天从哪里继续？`
     : '把今天要做的事放在一个地方';
 
-  if (workbenchSessionState) {
-    workbenchSessionState.textContent = userState.isLoggedIn
-      ? `已登录 · ${userState.electrons} 电元 · ${userState.manetrons} 磁元 · ${userState.heat} 热力`
-      : '游客预览 · 登录后同步个人学习与时间事项';
-  }
-
   if (workbenchContinueTitle) {
     workbenchContinueTitle.textContent = learningRoute.title;
   }
@@ -3548,14 +3540,13 @@ function updateHomeFeedToggle() {
     return;
   }
 
-  const isHot = homeDashboardState.feedMode === 'hot';
-  const currentLabel = isHot ? '热帖' : '最新帖';
-  const nextLabel = isHot ? '最新帖' : '热帖';
-
-  homeFeedModeLabel.textContent = currentLabel;
-  homeFeedToggle.setAttribute('aria-pressed', String(isHot));
-  homeFeedToggle.setAttribute('aria-label', '热帖优先');
-  homeFeedToggle.title = `切换到${nextLabel}`;
+  const labels = { balanced: '综合', latest: '最新', hot: '热帖' };
+  homeFeedModeLabel.textContent = '排序';
+  homeFeedToggle.value = homeDashboardState.feedMode;
+  homeFeedToggle.setAttribute(
+    'aria-label',
+    `讨论区动态排序：${labels[homeDashboardState.feedMode]}`,
+  );
 }
 
 function renderHomeFeedLoading() {
@@ -3586,11 +3577,12 @@ function renderHomeDiscussionPosts(posts, mode = homeDashboardState.feedMode) {
   if (!homeDiscussionList) {
     return;
   }
+  homeDiscussionList.dataset.sort = mode;
 
   if (!posts.length) {
     homeDiscussionList.innerHTML = `
       <article class="home-dashboard-empty">
-        <p>暂时没有${mode === 'hot' ? '热帖' : '最新帖子'}。</p>
+        <p>暂时没有可显示的帖子</p>
         <a href="/discussion">进入讨论区发帖</a>
       </article>
     `;
@@ -6544,10 +6536,67 @@ function getDiscussionRootCommentId(commentId, commentsById = null) {
 }
 
 function expandDiscussionReplyThreadForComment(commentId) {
-  const rootCommentId = getDiscussionRootCommentId(commentId);
-  if (rootCommentId)
-    discussionState.expandedReplyThreads.add(getDiscussionReplyThreadKey(rootCommentId));
+  const lookup = new Map(discussionState.comments.map((comment) => [Number(comment.id), comment]));
+  let comment = lookup.get(Number(commentId));
+  const visited = new Set();
+  while (comment && !visited.has(Number(comment.id))) {
+    visited.add(Number(comment.id));
+    const key = getDiscussionReplyThreadKey(comment.id);
+    discussionState.expandedReplyThreads.add(key);
+    discussionState.collapsedReplyThreads.delete(key);
+    comment = lookup.get(Number(comment.parentCommentId));
+  }
 }
+
+function discussionBranchExpanded(comment) {
+  const key = getDiscussionReplyThreadKey(comment.id);
+  return comment.parentCommentId
+    ? !discussionState.collapsedReplyThreads.has(key)
+    : discussionState.expandedReplyThreads.has(key);
+}
+
+function updateDiscussionThreadVisibility() {
+  const lookup = new Map(discussionState.comments.map((comment) => [Number(comment.id), comment]));
+  const list = document.getElementById('discussion-comment-list');
+  if (!list) return;
+  list.querySelectorAll('.discussion-comment[data-comment-id]').forEach((article) => {
+    const ancestors = new Set();
+    let parent = lookup.get(Number(article.dataset.parentCommentId));
+    let hidden = false;
+    while (parent && !ancestors.has(Number(parent.id))) {
+      ancestors.add(Number(parent.id));
+      if (!discussionBranchExpanded(parent)) hidden = true;
+      parent = lookup.get(Number(parent.parentCommentId));
+    }
+    article.hidden = hidden;
+  });
+  list.querySelectorAll('button[data-action="toggle-comment-thread"]').forEach((button) => {
+    const comment = lookup.get(Number(button.dataset.threadRoot));
+    if (!comment) return;
+    const expanded = discussionBranchExpanded(comment);
+    button.setAttribute('aria-expanded', String(expanded));
+    button.setAttribute(
+      'aria-label',
+      `${expanded ? '收起' : '展开'}${getDiscussionCommentAuthorName(comment)}这条评论的 ${button.dataset.replyCount || ''} 条回复`,
+    );
+    const label = button.querySelector('.discussion-thread-count');
+    if (label) label.textContent = expanded ? '' : `${button.dataset.replyCount} 条回复`;
+    button.title = `${expanded ? '收起' : '展开'}这条评论的回复`;
+  });
+  list.querySelectorAll('[data-comment-thread-root]').forEach((thread) => {
+    const comment = lookup.get(Number(thread.dataset.commentThreadRoot));
+    thread.dataset.threadExpanded = String(Boolean(comment && discussionBranchExpanded(comment)));
+  });
+  window.FreeBbsDiscussionThreads?.schedule();
+}
+
+window.addEventListener('hashchange', () => {
+  const id = /^#comment-(\d+)$/.exec(window.location.hash)?.[1];
+  const list = document.getElementById('discussion-comment-list');
+  if (!id || !list || !getDiscussionCommentById(Number(id))) return;
+  delete list.dataset.scrolledAnchor;
+  renderDiscussionComments();
+});
 
 function renderDiscussionReplyForm(postId, commentId, authorName) {
   return `
@@ -6623,19 +6672,23 @@ function renderDiscussionComments() {
 
   const commentAnchor = window.location.hash;
   const anchoredCommentId = /^#comment-(\d+)$/.exec(commentAnchor)?.[1];
-  if (anchoredCommentId) {
-    const rootCommentId = getDiscussionRootCommentId(anchoredCommentId, commentsById);
-    if (rootCommentId !== Number(anchoredCommentId))
-      discussionState.expandedReplyThreads.add(getDiscussionReplyThreadKey(rootCommentId));
-  }
-  const openReplyCommentId = discussionOpenReplyByPost.get(
-    String(discussionState.activePostId || ''),
-  );
-  if (openReplyCommentId) {
-    const rootCommentId = getDiscussionRootCommentId(openReplyCommentId, commentsById);
-    if (rootCommentId !== Number(openReplyCommentId))
-      discussionState.expandedReplyThreads.add(getDiscussionReplyThreadKey(rootCommentId));
-  }
+  if (anchoredCommentId && list.dataset.scrolledAnchor !== commentAnchor)
+    expandDiscussionReplyThreadForComment(anchoredCommentId);
+
+  const descendantIds = (id, visited = new Set()) => {
+    if (visited.has(id)) return [];
+    visited.add(id);
+    return (commentsByParent.get(id) || []).flatMap((child) => [
+      child.id,
+      ...descendantIds(child.id, visited),
+    ]);
+  };
+  const branchToggle = (comment) => {
+    const ids = descendantIds(comment.id);
+    if (!ids.length) return '';
+    const expanded = discussionBranchExpanded(comment);
+    return `<button class="discussion-comment-thread-toggle" type="button" data-action="toggle-comment-thread" data-thread-root="${Number(comment.id)}" data-reply-count="${ids.length}" aria-expanded="${expanded}" aria-controls="${ids.map((id) => `comment-${Number(id)}`).join(' ')}"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M6 10h8"/><path class="discussion-thread-plus" d="M10 6v8"/></svg><span class="discussion-thread-count">${expanded ? '' : `${ids.length} 条回复`}</span></button>`;
+  };
 
   const renderComment = (comment, depth = 0, { hidden = false } = {}) => {
     const displayDepth = Math.min(depth, 4);
@@ -6649,12 +6702,17 @@ function renderDiscussionComments() {
 
     const current = `
     <article id="comment-${comment.id}" class="discussion-comment ${depth > 0 ? 'discussion-comment-reply' : ''}" data-comment-id="${comment.id}" data-parent-comment-id="${Number(comment.parentCommentId || 0)}" data-comment-depth="${displayDepth}" style="--comment-depth: ${displayDepth}" ${hidden ? 'hidden' : ''} ${!comment.isDeleted ? window.FreeBbsPostLaser?.attributes(comment.laser, comment.author?.id) || '' : ''}>
+      ${branchToggle(comment)}
       ${renderAuthorProfileLink(comment.author, 'discussion-comment-author-link', true)}
       <div class="discussion-comment-body">
         <div class="discussion-comment-meta">
           ${renderAuthorProfileLink(comment.author, 'discussion-author-link')}
           <span>${escapeHtml(formatDateTime(comment.createdAt))}</span>
           ${comment.isFeatured && !comment.isDeleted ? '<span class="discussion-feature-badge">精华回帖</span>' : ''}
+        </div>
+        ${replyContext}
+        <div class="discussion-comment-content discussion-markdown-body">${renderMarkdownContent(comment.contentMarkdown)}</div>
+        <div class="discussion-comment-tools">
           ${
             comment.isDeleted ||
             discussionState.activePost?.isDeleted ||
@@ -6670,8 +6728,6 @@ function renderDiscussionComments() {
           </div>`
           }
         </div>
-        ${replyContext}
-        <div class="discussion-comment-content discussion-markdown-body">${renderMarkdownContent(comment.contentMarkdown)}</div>
         <div class="discussion-comment-reply-slot" data-reply-slot="${comment.id}"></div>
       </div>
     </article>
@@ -6680,11 +6736,12 @@ function renderDiscussionComments() {
     return current;
   };
 
-  const flattenReplies = (parentId, depth = 1) =>
-    (commentsByParent.get(parentId) || []).flatMap((reply) => [
-      { comment: reply, depth },
-      ...flattenReplies(reply.id, depth + 1),
-    ]);
+  const flattenReplies = (parentId, depth = 1, visited = new Set()) =>
+    (commentsByParent.get(parentId) || []).flatMap((reply) => {
+      if (visited.has(reply.id)) return [];
+      visited.add(reply.id);
+      return [{ comment: reply, depth }, ...flattenReplies(reply.id, depth + 1, visited)];
+    });
 
   const renderThread = (rootComment) => {
     const replies = flattenReplies(rootComment.id);
@@ -6692,18 +6749,13 @@ function renderDiscussionComments() {
     const threadKey = getDiscussionReplyThreadKey(rootComment.id);
     const expanded = discussionState.expandedReplyThreads.has(threadKey);
     const replyMarkup = replies
-      .map(({ comment, depth }, index) =>
-        renderComment(comment, depth, { hidden: !expanded && index > 0 }),
-      )
+      .map(({ comment, depth }) => renderComment(comment, depth, { hidden: !expanded }))
       .join('');
-    const toggle =
-      replies.length > 1
-        ? `<button class="discussion-comment-thread-toggle" type="button" data-action="toggle-comment-thread" data-thread-root="${Number(rootComment.id)}" aria-expanded="${expanded}" aria-controls="comment-thread-${Number(rootComment.id)}"><span>${expanded ? '收起回复' : `展开全部 ${replies.length} 条回复`}</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>`
-        : '';
-    return `${renderComment(rootComment)}<div id="comment-thread-${Number(rootComment.id)}" class="discussion-comment-replies" data-comment-thread-root="${Number(rootComment.id)}">${replyMarkup}</div>${toggle}`;
+    return `<div class="discussion-thread-group">${renderComment(rootComment)}<div id="comment-thread-${Number(rootComment.id)}" class="discussion-comment-replies" data-comment-thread-root="${Number(rootComment.id)}" data-thread-expanded="${expanded}">${replyMarkup}</div></div>`;
   };
 
   list.innerHTML = (commentsByParent.get(0) || []).map((comment) => renderThread(comment)).join('');
+  updateDiscussionThreadVisibility();
 
   list
     .querySelectorAll('.discussion-comment-content')
@@ -6712,6 +6764,7 @@ function renderDiscussionComments() {
     .querySelectorAll('.discussion-comment')
     .forEach((article) => window.FreeBbsMaxImageResults?.decorate(article));
   restoreOpenDiscussionReplyComposer();
+  window.FreeBbsDiscussionThreads?.refresh(list);
   if (/^#comment-\d+$/.test(commentAnchor) && list.dataset.scrolledAnchor !== commentAnchor) {
     const target = document.getElementById(commentAnchor.slice(1));
     if (target) {
@@ -6848,7 +6901,8 @@ async function loadHomeDiscussionPosts(mode = homeDashboardState.feedMode, { for
     return;
   }
 
-  const normalizedMode = mode === 'latest' ? 'latest' : 'hot';
+  const normalizedMode = ['latest', 'hot'].includes(mode) ? mode : 'balanced';
+  const modeLabel = { balanced: '综合动态', hot: '热帖', latest: '最新帖' }[normalizedMode];
   homeDashboardState.feedMode = normalizedMode;
   updateHomeFeedToggle();
 
@@ -6856,7 +6910,7 @@ async function loadHomeDiscussionPosts(mode = homeDashboardState.feedMode, { for
   if (cachedPosts && !force) {
     renderHomeDiscussionPosts(cachedPosts, normalizedMode);
     homeDiscussionList.setAttribute('aria-busy', 'false');
-    setHomeFeedStatus(`已显示${normalizedMode === 'hot' ? '热帖' : '最新帖'}`);
+    setHomeFeedStatus(`已显示${modeLabel}，可上下滚动查看`);
     return;
   }
 
@@ -6864,12 +6918,12 @@ async function loadHomeDiscussionPosts(mode = homeDashboardState.feedMode, { for
   homeDashboardState.feedRequestId = requestId;
   homeFeedToggle.disabled = true;
   renderHomeFeedLoading();
-  setHomeFeedStatus(`正在加载${normalizedMode === 'hot' ? '热帖' : '最新帖'}…`);
+  setHomeFeedStatus(`正在加载${modeLabel}…`);
 
   try {
     const query = new URLSearchParams({
       board: 'all',
-      limit: '6',
+      limit: '24',
       sort: normalizedMode,
     });
     const payload = await callApi(`/discussion/posts?${query.toString()}`, {
@@ -6883,7 +6937,7 @@ async function loadHomeDiscussionPosts(mode = homeDashboardState.feedMode, { for
     const posts = payload.posts || [];
     homeDashboardState.feedCache.set(normalizedMode, posts);
     renderHomeDiscussionPosts(posts, normalizedMode);
-    setHomeFeedStatus(`已显示${normalizedMode === 'hot' ? '热帖' : '最新帖'}`);
+    setHomeFeedStatus(`已显示 ${posts.length} 条${modeLabel}，可上下滚动查看`);
   } catch {
     if (requestId === homeDashboardState.feedRequestId) {
       renderHomeDiscussionError();
@@ -6958,8 +7012,8 @@ function loadHomeBoardActivityForViewport(event = homeBoardDesktopMedia) {
 }
 
 function handleHomeFeedToggleClick() {
-  const nextMode = homeDashboardState.feedMode === 'hot' ? 'latest' : 'hot';
-  loadHomeDiscussionPosts(nextMode);
+  homeDiscussionList.scrollTop = 0;
+  loadHomeDiscussionPosts(homeFeedToggle.value);
 }
 
 function handleHomeDashboardRetry(event) {
@@ -7182,8 +7236,10 @@ async function loadDiscussionDetail(postId) {
       top: window.scrollY,
     };
   }
-  if (String(discussionState.activePostId || '') !== String(postId))
+  if (String(discussionState.activePostId || '') !== String(postId)) {
     discussionState.expandedReplyThreads?.clear();
+    discussionState.collapsedReplyThreads?.clear();
+  }
   discussionState.activePostId = String(postId);
   discussionState.activePost = null;
   discussionState.comments = [];
@@ -7414,6 +7470,7 @@ function resetDiscussionData() {
   discussionCommentDrafts.clear();
   discussionOpenReplyByPost.clear();
   discussionState.expandedReplyThreads?.clear();
+  discussionState.collapsedReplyThreads?.clear();
   renderDiscussionDetail(null);
   renderDiscussionPosts();
 }
@@ -9260,19 +9317,30 @@ async function handleDiscussionDetailClick(event) {
   const threadToggle = event.target.closest('[data-action="toggle-comment-thread"]');
   if (threadToggle) {
     const rootCommentId = Number(threadToggle.dataset.threadRoot || 0);
-    const thread = discussionDetail.querySelector(`[data-comment-thread-root="${rootCommentId}"]`);
-    if (!thread || !rootCommentId) return;
-    const expanded = threadToggle.getAttribute('aria-expanded') !== 'true';
+    const comment = getDiscussionCommentById(rootCommentId);
+    if (!comment || !rootCommentId) return;
+    event.preventDefault();
+    const expanded = !discussionBranchExpanded(comment);
     const threadKey = getDiscussionReplyThreadKey(rootCommentId);
-    if (expanded) discussionState.expandedReplyThreads.add(threadKey);
-    else discussionState.expandedReplyThreads.delete(threadKey);
-    thread.querySelectorAll('.discussion-comment-reply').forEach((reply, index) => {
-      reply.hidden = !expanded && index > 0;
-    });
-    threadToggle.setAttribute('aria-expanded', String(expanded));
-    const label = threadToggle.querySelector('span');
-    const count = thread.querySelectorAll('.discussion-comment-reply').length;
-    if (label) label.textContent = expanded ? '收起回复' : `展开全部 ${count} 条回复`;
+    if (expanded) {
+      discussionState.expandedReplyThreads.add(threadKey);
+      discussionState.collapsedReplyThreads.delete(threadKey);
+    } else {
+      discussionState.expandedReplyThreads.delete(threadKey);
+      discussionState.collapsedReplyThreads.add(threadKey);
+    }
+    const anchor = document.getElementById(`comment-${rootCommentId}`);
+    const beforeTop = anchor?.getBoundingClientRect().top;
+    updateDiscussionThreadVisibility();
+    if (!expanded && anchor) {
+      const headerToggle = anchor.querySelector('.discussion-comment-thread-toggle');
+      headerToggle?.focus({ preventScroll: true });
+      const desiredTop = Math.max(140, Math.min(beforeTop, window.innerHeight - 100));
+      window.scrollBy({
+        top: anchor.getBoundingClientRect().top - desiredTop,
+        behavior: 'instant',
+      });
+    }
     return;
   }
   const commentAction = event.target.closest(
@@ -10830,7 +10898,7 @@ discussionImageInput?.addEventListener('change', async (event) => {
   event.target.value = '';
 });
 discussionComposeContent?.addEventListener('paste', handleDiscussionPaste);
-homeFeedToggle?.addEventListener('click', handleHomeFeedToggleClick);
+homeFeedToggle?.addEventListener('change', handleHomeFeedToggleClick);
 homeBoardDesktopMedia.addEventListener('change', loadHomeBoardActivityForViewport);
 document.addEventListener('click', handleCodeCopyClick);
 document.addEventListener('click', handleCodeRunClick);

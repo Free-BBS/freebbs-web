@@ -1,0 +1,204 @@
+/* Stable, muted event colours; urgency is reserved for deadlines and conflicts. */
+body.workbench-page [data-event-color] {
+  --event-ink: #315d61;
+  --event-fill: #edf5f3;
+  --event-edge: #91b6b4;
+}
+body.workbench-page [data-event-color='1'] {
+  --event-ink: #51698b;
+  --event-fill: #eff3f9;
+  --event-edge: #a0b2cc;
+}
+body.workbench-page [data-event-color='2'] {
+  --event-ink: #796284;
+  --event-fill: #f5f0f7;
+  --event-edge: #b9a6c2;
+}
+body.workbench-page [data-event-color='3'] {
+  --event-ink: #776543;
+  --event-fill: #f7f3e9;
+  --event-edge: #c2b28d;
+}
+body.workbench-page [data-event-color='4'] {
+  --event-ink: #7e5c64;
+  --event-fill: #f8f0f2;
+  --event-edge: #c4a3ab;
+}
+body.workbench-page [data-event-color='5'] {
+  --event-ink: #536e56;
+  --event-fill: #f0f5ec;
+  --event-edge: #a6b99a;
+}
+body.theme-dark.workbench-page [data-event-color] {
+  --event-ink: #b6ded8;
+  --event-fill: #203d40;
+  --event-edge: #648e8c;
+}
+body.theme-dark.workbench-page [data-event-color='1'] {
+  --event-ink: #c1d4f0;
+  --event-fill: #29384b;
+  --event-edge: #7087a6;
+}
+body.theme-dark.workbench-page [data-event-color='2'] {
+  --event-ink: #decce9;
+  --event-fill: #3c3246;
+  --event-edge: #93829e;
+}
+body.theme-dark.workbench-page [data-event-color='3'] {
+  --event-ink: #e5d3a9;
+  --event-fill: #423c2d;
+  --event-edge: #9c8f6d;
+}
+body.theme-dark.workbench-page [data-event-color='4'] {
+  --event-ink: #e7c7d1;
+  --event-fill: #43323c;
+  --event-edge: #9e7f8e;
+}
+body.theme-dark.workbench-page [data-event-color='5'] {
+  --event-ink: #cbdcba;
+  --event-fill: #303f32;
+  --event-edge: #839779;
+}
+body.workbench-page [data-deadline-state='safe'] {
+  --event-ink: #296048;
+  --event-fill: #edf6f0;
+  --event-edge: #7aa38c;
+}
+body.workbench-page [data-deadline-state='soon'] {
+  --event-ink: #86531f;
+  --event-fill: #fcf3e6;
+  --event-edge: #c59b63;
+}
+body.workbench-page :is([data-deadline-state='critical'], [data-deadline-state='overdue']) {
+  --event-ink: #9c3f48;
+  --event-fill: #fbedef;
+  --event-edge: #c68a90;
+}
+body.workbench-page [data-deadline-state='done'] {
+  --event-ink: var(--ui-muted);
+  --event-fill: var(--ui-surface-soft);
+  --event-edge: var(--ui-line);
+}
+body.theme-dark.workbench-page [data-deadline-state='safe'] {
+  --event-ink: #bee0cb;
+  --event-fill: #243e32;
+  --event-edge: #749b84;
+}
+body.theme-dark.workbench-page [data-deadline-state='soon'] {
+  --event-ink: #f0cf99;
+  --event-fill: #453827;
+  --event-edge: #ab8b5c;
+}
+body.theme-dark.workbench-page
+  :is([data-deadline-state='critical'], [data-deadline-state='overdue']) {
+  --event-ink: #f1c2c7;
+  --event-fill: #4a2d35;
+  --event-edge: #b67b85;
+}
+body.workbench-page :is(.workbench-week-event, .workbench-state-item)[data-event-color] {
+  background: var(--event-fill);
+  border-color: var(--event-edge);
+  border-left: 3px solid var(--event-ink);
+}
+body.workbench-page .workbench-week-grid .workbench-week-event strong {
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--event-ink);
+}
+body.workbench-page .workbench-week-grid .workbench-week-event small {
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+body.workbench-page .workbench-week-grid .workbench-week-event {
+  padding: 7px 9px;
+}
+body.workbench-page .workbench-week-timeline {
+  isolation: isolate;
+}
+body.workbench-page .workbench-week-timeline .workbench-week-event {
+  z-index: var(--event-stack, 2);
+  box-sizing: border-box;
+  min-height: 0 !important;
+  overflow: hidden;
+  box-shadow: none;
+  gap: 2px;
+  padding: 5px 8px;
+}
+body.workbench-page .workbench-week-timeline .workbench-week-event > :is(strong, small) {
+  display: block;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+body.workbench-page .workbench-week-timeline .workbench-week-event > [hidden] {
+  display: none;
+}
+body.workbench-page .workbench-week-timeline .workbench-week-event.is-tiny-time-block {
+  padding: 0 5px;
+  border: 0;
+  border-radius: 2px;
+  box-shadow: inset 3px 0 var(--event-ink);
+}
+body.workbench-page .workbench-week-timeline .workbench-week-event:is(:hover, :focus-visible) {
+  z-index: 1000;
+}
+body.workbench-page .workbench-important-time {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+body.workbench-page #workbench-hours-status:empty {
+  display: none;
+}
+body.workbench-page .workbench-deadline-status {
+  order: 5;
+  color: var(--event-ink);
+  font-weight: 600;
+}
+body.workbench-page .workbench-week-grid .workbench-event-conflict {
+  color: var(--event-ink);
+  border-top: 1px dashed var(--event-edge);
+  padding-top: 4px;
+  font-weight: 600;
+}
+body.workbench-page .workbench-time-conflicts {
+  padding: 12px 15px;
+  margin: 12px 0;
+  background: var(--ui-surface-soft);
+  border: 1px solid var(--ui-line);
+  border-left: 3px solid #b07d4c;
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+body.workbench-page .workbench-time-conflicts[hidden] {
+  display: none;
+}
+body.workbench-page .workbench-time-conflicts summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+body.workbench-page .workbench-time-conflicts ul {
+  max-height: 260px;
+  overflow-y: auto;
+  padding-left: 20px;
+}
+body.workbench-page .workbench-time-conflicts li {
+  margin-block: 12px;
+  overflow-wrap: anywhere;
+}
+body.workbench-page .workbench-time-conflicts li > :is(strong, span) {
+  display: block;
+}
+body.workbench-page .workbench-time-conflicts li button {
+  margin: 6px 6px 0 0;
+  max-width: 100%;
+  white-space: normal;
+}
+@media (max-width: 900px) {
+  body.workbench-page .workbench-week-grid .workbench-week-event strong {
+    font-size: 0.8rem;
+  }
+  body.workbench-page .workbench-week-grid .workbench-week-event small {
+    font-size: 0.72rem;
+  }
+}

@@ -141,6 +141,8 @@ async function main() {
             timeline: timeline ? rect(timeline) : null,
             title: element.querySelector('strong')?.textContent,
             description: element.querySelector('.workbench-week-notes')?.textContent,
+            accessible: element.getAttribute('aria-label'),
+            overflowY: getComputedStyle(element).overflowY,
             scrollHeight: element.scrollHeight,
             clientHeight: element.clientHeight,
             scrollWidth: element.scrollWidth,
@@ -165,6 +167,13 @@ async function main() {
           timelineHeights: [...document.querySelectorAll('.workbench-week-timeline')].map(
             (element) => element.getBoundingClientRect().height,
           ),
+          dayWidths: [...document.querySelectorAll('.workbench-week-day')].map(
+            (element) => element.getBoundingClientRect().width,
+          ),
+          expectedDayWidth: Math.max(
+            196,
+            Math.floor(document.querySelector('.workbench-week-scroll').clientWidth / 7),
+          ),
         };
       });
     const checkLayout = (layout, label) => {
@@ -178,15 +187,18 @@ async function main() {
           item.description,
           `${label}: incomplete notes ${item.publicId}`,
         );
+        assert.ok(card.accessible.includes(item.title), `${label}: complete accessible title`);
         assert.ok(
-          card.scrollHeight <= card.clientHeight + 1,
-          `${label}: clipped height ${item.publicId}`,
+          card.accessible.includes(item.description),
+          `${label}: complete accessible notes`,
         );
+        if (card.timeline) assert.equal(card.overflowY, 'hidden');
+        else assert.ok(card.scrollHeight <= card.clientHeight + 1);
         assert.ok(
           card.scrollWidth <= card.clientWidth + 1,
           `${label}: clipped width ${item.publicId}`,
         );
-        for (const run of card.runs) {
+        for (const run of card.timeline ? [] : card.runs) {
           assert.ok(
             run.top >= card.box.top - 1 &&
               run.bottom <= card.box.bottom + 1 &&
@@ -208,25 +220,31 @@ async function main() {
           const start = new Date(item.startAt);
           const minute = ((start.getUTCHours() + 8) % 24) * 60 + start.getUTCMinutes();
           const expectedTop = ((minute - 6 * 60) / 60) * 40;
+          const expectedHeight =
+            ((Date.parse(item.endAt) - Date.parse(item.startAt)) / 3600000) * 40;
+          assert.ok(
+            Math.abs(card.box.height - expectedHeight) < 0.1,
+            `${label}: duration height ${item.publicId}`,
+          );
           assert.ok(
             Math.abs(card.box.top - card.timeline.top - expectedTop) <= 2,
             `${label}: shifted true start position ${item.publicId}`,
           );
         }
       }
-      const timed = layout.cards.filter((card) => card.timeline);
-      for (let first = 0; first < timed.length; first += 1) {
-        for (let second = first + 1; second < timed.length; second += 1) {
-          const a = timed[first];
-          const b = timed[second];
-          const overlapX = Math.min(a.box.right, b.box.right) - Math.max(a.box.left, b.box.left);
-          const overlapY = Math.min(a.box.bottom, b.box.bottom) - Math.max(a.box.top, b.box.top);
-          assert.ok(
-            overlapX <= 1 || overlapY <= 1,
-            `${label}: visible cards overlap ${a.id}/${b.id}`,
-          );
-        }
-      }
+      assert.ok(
+        layout.dayWidths.every((width) => Math.abs(width - layout.expectedDayWidth) < 1),
+        `${label}: conflicts must not widen a day`,
+      );
+      const a = layout.cards.find((card) => card.id === 'five-minute').box;
+      const b = layout.cards.find((card) => card.id === 'overlap').box;
+      const adjacent = layout.cards.find((card) => card.id === 'adjacent').box;
+      assert.ok(a.bottom <= adjacent.top + 0.1, `${label}: adjacent events never visually overlap`);
+      assert.ok(
+        Math.min(a.right, b.right) > Math.max(a.left, b.left) &&
+          Math.min(a.bottom, b.bottom) > Math.max(a.top, b.top),
+        `${label}: conflicting cards must genuinely overlap`,
+      );
       assert.ok(
         Math.max(...layout.timelineHeights) - Math.min(...layout.timelineHeights) <= 1,
         `${label}: day timelines must share height`,
@@ -256,6 +274,14 @@ async function main() {
             const layout = await inspect();
             report.layouts.push({ label: stage, ...layout });
             checkLayout(layout, stage);
+            await page.focus('.workbench-week-event[data-public-id="five-minute"]');
+            assert.ok(
+              await page.$eval(
+                '.workbench-week-event[data-public-id="five-minute"]',
+                (e) => Number(getComputedStyle(e).zIndex) >= 1000,
+              ),
+              `${stage}: keyboard can reveal a covered card`,
+            );
           }
         }
         await page.$eval('.workbench-week-event[data-public-id="one-hour"]', (element) =>
@@ -267,7 +293,7 @@ async function main() {
       }
     }
     report.checks.push(
-      '32 viewport/theme/font/scale combinations: complete titles and multiline notes, no card collisions, no document overflow',
+      '32 viewport/theme/font/scale combinations: fixed equal columns, duration-sized cards, only real conflicts overlap, full accessible labels and keyboard details, no document overflow',
     );
     report.checks.push(
       '5-minute, adjacent, overlapping, 21:02 one-hour and 23:59 cards retain real start coordinates and fit equal-height day timelines',

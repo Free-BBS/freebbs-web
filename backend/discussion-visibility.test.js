@@ -8,6 +8,21 @@ const { anonymousAuthor, visibleComments } = require('./discussion-interactions'
 const { createEconomyShop } = require('./economy-shop');
 
 const source = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+
+test('the eight default boards preserve existing slugs and have a stable subject order', () => {
+  const start = source.indexOf('const DISCUSSION_BOARD_SEEDS = [');
+  const end = source.indexOf('fs.mkdirSync', start);
+  const seeds = vm.runInNewContext(`${source.slice(start, end)}; DISCUSSION_BOARD_SEEDS`);
+  assert.deepEqual(
+    Array.from(seeds, (board) => board.name),
+    ['日常', '数学', '物理', '电路', '信号', '计算机', '实验', '更新日志'],
+  );
+  assert.deepEqual(
+    Array.from(seeds, (board) => board.slug),
+    ['daily', 'math', 'physics', 'circuit', 'signal', 'computer', 'experiment', 'changelog'],
+  );
+  assert.equal(new Set(seeds.map((board) => board.sortOrder)).size, 8);
+});
 const author = { id: 7, username: 'author', student_id: 'student7' };
 const peer = { id: 8, username: 'peer' };
 const admin = { id: 9, username: 'admin', is_admin: true };
@@ -267,6 +282,29 @@ test('comments use their own author lease, including historical and nested repli
   assert.equal(res.payload.comments[2].laser, null);
   assert.equal(res.payload.comments[3].laser.active, false);
 });
+
+for (const sort of ['balanced', 'latest', 'hot']) {
+  test(`${sort} feed still applies guest visibility, limits and deterministic ordering`, async () => {
+    const h = harness([
+      post(1),
+      post(2, { login_required: 1 }),
+      post(3, { is_deleted: 1 }),
+      post(4, { is_hidden: 1 }),
+    ]);
+    const response = await h.request('get', '/discussion/posts', { query: { sort, limit: '24' } });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.payload.posts.length, 1);
+    const sql = h.queries.find((query) => query.sql.includes('ORDER BY')).sql;
+    assert.match(sql, /p.login_required = 0/);
+    assert.match(sql, /LIMIT 24/);
+    assert.match(sql, /p.id DESC/);
+    if (sort === 'balanced')
+      assert.match(
+        sql,
+        /POW\(1 \+ GREATEST\(0, TIMESTAMPDIFF\(SECOND, p.created_at, NOW\(\)\)\) \/ 86400.0, 1.3\)/,
+      );
+  });
+}
 
 for (const user of [null, author, peer, admin]) {
   test(`public feed omits hidden and deleted posts for ${user?.username || 'guest'}`, async () => {

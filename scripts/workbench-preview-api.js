@@ -4,7 +4,11 @@ const {
   parseKnownScheduleMessage,
   validateSuggestion,
 } = require('../backend/workbench-schedule-planner');
-const { projectCourseSchedules, normalizeMonday } = require('../backend/course-schedule');
+const {
+  projectCourseSchedules,
+  normalizeMonday,
+  normalizeTeachingWeeks,
+} = require('../backend/course-schedule');
 const { expandManualCourse } = require('../backend/manual-courses');
 
 function createWorkbenchPreviewApi({
@@ -14,10 +18,12 @@ function createWorkbenchPreviewApi({
   semesterId = 'preview-semester',
 } = {}) {
   let firstWeekMonday = null;
+  let teachingWeeks = null;
   const courseProjection = () =>
     projectCourseSchedules(campusCourses, {
       semesterId,
       firstWeekMonday,
+      teachingWeeks,
       fetchedAt: new Date(now()).toISOString(),
     });
   const calendarStatus = () => {
@@ -25,6 +31,7 @@ function createWorkbenchPreviewApi({
     return {
       semesterId,
       firstWeekMonday,
+      teachingWeeks,
       issues: projection.issues,
       parsedCourses: projection.parsedCourses,
       totalCourses: projection.totalCourses,
@@ -131,6 +138,11 @@ function createWorkbenchPreviewApi({
       if (method === 'PUT') {
         if (!normalizeMonday(body.firstWeekMonday))
           return result({ message: '第一教学周必须是周一日期。' }, 400);
+        if (Object.hasOwn(body, 'teachingWeeks')) {
+          if (body.teachingWeeks !== null && !normalizeTeachingWeeks(body.teachingWeeks))
+            return result({ message: '教学周数必须是 1–53 的整数。' }, 400);
+          teachingWeeks = body.teachingWeeks;
+        }
         firstWeekMonday = body.firstWeekMonday;
       }
       if (method === 'GET' || method === 'PUT') return result(calendarStatus());
@@ -174,9 +186,15 @@ function createWorkbenchPreviewApi({
         return result({ importantItem: importantItems[index] });
       }
     }
-    if (route === '/api/workbench/manual-courses' && method === 'POST') {
+    if (
+      ['/api/workbench/manual-courses', '/api/workbench/recurring-events'].includes(route) &&
+      method === 'POST'
+    ) {
       try {
-        const items = expandManualCourse(body);
+        const kind = route.endsWith('/manual-courses') ? 'course' : body.kind;
+        if (!['event', 'course'].includes(kind))
+          return result({ message: '请选择事件或课程' }, 400);
+        const items = expandManualCourse(body, { kind });
         if (events.some((item) => item.sourceReference === items[0].sourceReference)) {
           return result({ message: '这组课程已经添加' }, 409);
         }
@@ -196,7 +214,13 @@ function createWorkbenchPreviewApi({
         events.push(
           ...items.map((item) => {
             nextId += 1;
-            return { ...item, publicId: `ws_preview_${nextId}`, status: 'confirmed', version: 1 };
+            return {
+              ...item,
+              seriesKey: item.sourceReference,
+              publicId: `ws_preview_${nextId}`,
+              status: 'confirmed',
+              version: 1,
+            };
           }),
         );
         return result({ created: items.length }, 201);

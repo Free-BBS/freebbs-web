@@ -371,6 +371,13 @@ body .cosmetic-nameplate[class] small {
   --plate-edge: #c7a258;
   --plate-accent: #98621b;
 }
+.cosmetic-nameplate.plate_circuit_master {
+  --plate-bg: #e4f1f2;
+  --plate-ink: #174e5d;
+  --plate-edge: #87abb0;
+  --plate-accent: #8a692f;
+  background-image: linear-gradient(115deg, #ffffff65, transparent 65%, #dbbb6f18);
+}
 body.theme-dark .cosmetic-nameplate {
   --plate-bg: #193d42;
   --plate-ink: #c6ece1;
@@ -388,6 +395,13 @@ body.theme-dark .cosmetic-nameplate.plate_fishbone_master {
   --plate-ink: #f5dfae;
   --plate-edge: #a1854a;
   --plate-accent: #ecc779;
+}
+body.theme-dark .cosmetic-nameplate.plate_circuit_master {
+  --plate-bg: #183943;
+  --plate-ink: #d0ecee;
+  --plate-edge: #638e96;
+  --plate-accent: #e2c581;
+  background-image: linear-gradient(115deg, #ffffff08, transparent 65%, #dbbb6f12);
 }
 .profile-decoration-preview {
   display: flex;

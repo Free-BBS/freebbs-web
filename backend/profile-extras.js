@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { WOOL_RATE, sampleWoolGrowth } = require('./ranch-growth');
-const { FISHBONE_MASTER, unlockFishboneMaster } = require('./economy-achievements');
+const { FISHBONE_MASTER, CIRCUIT_MASTER, unlockFishboneMaster } = require('./economy-achievements');
 const { walletLedgerCheckpoint, annotateWalletLedger } = require('./wallet-ledger');
 const {
   beijingDay,
@@ -17,6 +17,7 @@ const COSMETICS = Object.freeze({
   plate_maxwell: { slot: 'nameplate', name: '麦克斯韦亲传' },
   plate_observer: { slot: 'nameplate', name: 'BBS见习观察员' },
   [FISHBONE_MASTER.key]: { slot: 'nameplate', name: FISHBONE_MASTER.name, source: 'achievement' },
+  [CIRCUIT_MASTER.key]: { slot: 'nameplate', name: CIRCUIT_MASTER.name, source: 'achievement' },
   card_blueprint: { slot: 'card', name: '未完成的蓝图' },
   card_twilight: { slot: 'card', name: '暮色实验室' },
 });

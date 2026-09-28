@@ -23,6 +23,12 @@ function normalizeMonday(value) {
     : null;
 }
 
+function normalizeTeachingWeeks(value) {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MAX_WEEKS
+    ? value
+    : null;
+}
+
 function parseWeeks(expression, parity) {
   const weeks = new Set();
   for (const part of expression.replace(/\s/g, '').split(/[,、]/)) {
@@ -89,7 +95,7 @@ function parseTimes(text) {
   });
 }
 
-function parseCourseSchedule(course) {
+function parseCourseSchedule(course, { teachingWeeks = null } = {}) {
   let text = String(course?.scheduleText || '')
     .normalize('NFKC')
     .replace(/[—–－]/g, '-')
@@ -123,6 +129,9 @@ function parseCourseSchedule(course) {
   if (/或|(?:星期|周|礼拜)[一二三四五六日天1-7]\s*[,、]\s*[一二三四五六日天1-7]/.test(text)) {
     return { sessions: [], issue: '课程包含可选时段或省略的星期，请完整列出每次上课安排。' };
   }
+  // Campus half-semester labels are fixed teaching-week ranges, not the last
+  // eight weeks of a configurable calendar (e.g. an 18-week semester).
+  text = text.replace(/前(?:八|8)周/g, '第1-8周').replace(/后(?:八|8)周/g, '第9-16周');
   const sessions = [];
   try {
     for (const clause of text.split(/[;\n]+/).filter((part) => part.trim())) {
@@ -164,7 +173,6 @@ function parseCourseSchedule(course) {
             ),
           ].sort((a, b) => a - b);
         } else if (!leadingWeeks) currentWeeks = null;
-        if (!currentWeeks) throw new Error('缺少明确教学周范围，不能假设整学期每周上课。');
         const segmentEnd = leadingWeeks && trailing.length ? trailing[0].index : nextIndex;
         let segment = clause.slice(day.index + day[0].length, segmentEnd);
         // Preserve the room belonging to each time, not just one room per course.
@@ -173,6 +181,20 @@ function parseCourseSchedule(course) {
         if (room && !/周|节|星期|礼拜|\d\s*:|:\s*\d/.test(room[1])) {
           location = room[1].trim();
           segment = segment.slice(0, room.index);
+        }
+        const cycleLabels = [...segment.matchAll(/([全单双])周/g)].map((match) => match[1]);
+        if (new Set(cycleLabels).size > 1)
+          throw new Error('同一时段的全周或单双周说明存在冲突，请核对课程时间。');
+        let calendarWeeks = false;
+        if (!currentWeeks) {
+          if (!cycleLabels.length) throw new Error('缺少明确教学周范围，不能假设整学期每周上课。');
+          const count = normalizeTeachingWeeks(teachingWeeks);
+          if (!count)
+            throw new Error(
+              '已读取上课星期与节次，但“全周／单双周”未包含起止周；请填写并确认本学期教学周数。',
+            );
+          currentWeeks = Array.from({ length: count }, (_, week) => week + 1);
+          calendarWeeks = true;
         }
         const parityTokens = [...segment.matchAll(/([单双])(?:周|(?=\)))/g)].map(
           (match) => match[1],
@@ -192,6 +214,7 @@ function parseCourseSchedule(course) {
             weeks: sessionWeeks,
             ...time,
             ...(location ? { location } : {}),
+            ...(calendarWeeks ? { weekSource: 'calendar' } : {}),
           });
         }
       }
@@ -204,7 +227,7 @@ function parseCourseSchedule(course) {
 
 function projectCourseSchedules(
   courses,
-  { semesterId, firstWeekMonday, range, fetchedAt = null } = {},
+  { semesterId, firstWeekMonday, teachingWeeks = null, range, fetchedAt = null } = {},
 ) {
   const events = new Map();
   const issues = [];
@@ -221,7 +244,7 @@ function projectCourseSchedules(
   }
   let parsedCourses = 0;
   for (const course of uniqueCourses.values()) {
-    const parsed = parseCourseSchedule(course);
+    const parsed = parseCourseSchedule(course, { teachingWeeks });
     const issue = parsed.issue || (!monday ? '请先设置该学期第一教学周的周一日期。' : null);
     if (!parsed.issue) parsedCourses += 1;
     if (issue) {
@@ -265,6 +288,7 @@ function projectCourseSchedules(
             session.location || course.locationText,
             course.teacher,
             `第 ${week} 教学周`,
+            session.weekSource === 'calendar' ? '周次按已确认校历补全' : '',
           ]
             .filter(Boolean)
             .join(' · '),
@@ -303,7 +327,8 @@ async function loadSnapshots(pool, userId, semesterId) {
     `SELECT s.semester_id, s.courses_json, s.fetched_at, s.sync_status,
             s.connector_generation AS snapshot_generation, c.generation AS connector_generation,
             c.connected_at, settings.connector_generation AS settings_generation,
-            DATE_FORMAT(settings.first_week_monday, '%Y-%m-%d') AS first_week_monday
+            DATE_FORMAT(settings.first_week_monday, '%Y-%m-%d') AS first_week_monday,
+            settings.teaching_weeks
      FROM campus_learn_semester_snapshots s
      INNER JOIN user_campus_connectors c ON c.user_id = s.user_id
        AND c.provider = 'tsinghua-learn' AND c.generation = s.connector_generation
@@ -331,6 +356,12 @@ function rowMonday(row) {
     : null;
 }
 
+function rowTeachingWeeks(row) {
+  return Number(row.settings_generation) === Number(row.connector_generation)
+    ? normalizeTeachingWeeks(row.teaching_weeks)
+    : null;
+}
+
 async function listCourseSchedules(pool, userId, range, status = '') {
   if (status && status !== 'confirmed') return [];
   const start = new Date(range?.start);
@@ -344,6 +375,7 @@ async function listCourseSchedules(pool, userId, range, status = '') {
     const projected = projectCourseSchedules(parseCoursesColumn(row.courses_json), {
       semesterId: row.semester_id,
       firstWeekMonday: rowMonday(row),
+      teachingWeeks: rowTeachingWeeks(row),
       range: { start, end },
       fetchedAt: row.fetched_at,
     });
@@ -360,6 +392,7 @@ async function readCourseCalendar(pool, userId, semesterId) {
     return {
       semesterId,
       firstWeekMonday: null,
+      teachingWeeks: null,
       issues: [
         {
           courseReference: null,
@@ -374,14 +407,17 @@ async function readCourseCalendar(pool, userId, semesterId) {
       fetchedAt: null,
     };
   const firstWeekMonday = rowMonday(row);
+  const teachingWeeks = rowTeachingWeeks(row);
   const result = projectCourseSchedules(parseCoursesColumn(row.courses_json), {
     semesterId,
     firstWeekMonday,
+    teachingWeeks,
     fetchedAt: row.fetched_at,
   });
   return {
     semesterId,
     firstWeekMonday,
+    teachingWeeks,
     issues: result.issues,
     parsedCourses: result.parsedCourses,
     totalCourses: result.totalCourses,
@@ -391,28 +427,39 @@ async function readCourseCalendar(pool, userId, semesterId) {
   };
 }
 
-async function saveCourseCalendar(pool, userId, { semesterId, firstWeekMonday } = {}) {
+async function saveCourseCalendar(pool, userId, settings = {}) {
+  const { semesterId, firstWeekMonday, teachingWeeks } = settings;
+  const providedWeeks = Object.hasOwn(settings, 'teachingWeeks');
+  const count = normalizeTeachingWeeks(teachingWeeks);
+  if (providedWeeks && teachingWeeks !== null && count === null)
+    throw Object.assign(new Error('教学周数必须是 1–53 的整数；不确定时可留空'), { status: 400 });
   if (!validSemester(semesterId) || !normalizeMonday(firstWeekMonday)) {
     throw Object.assign(new Error('请提供有效学期和第一教学周的周一日期（YYYY-MM-DD）'), {
       status: 400,
     });
   }
   const [result] = await pool.execute(
-    `INSERT INTO campus_course_calendar_settings (user_id, semester_id, connector_generation, first_week_monday)
-     SELECT c.user_id, s.semester_id, c.generation, ?
+    `INSERT INTO campus_course_calendar_settings (user_id, semester_id, connector_generation, first_week_monday, teaching_weeks)
+     SELECT c.user_id, s.semester_id, c.generation, ?, ?
      FROM user_campus_connectors c
      INNER JOIN campus_learn_semester_snapshots s ON s.user_id = c.user_id
        AND s.connector_generation = c.generation AND s.semester_id = ?
      WHERE c.user_id = ? AND c.provider = 'tsinghua-learn'
        AND c.status IN ('active_verified', 'active_unverified', 'reauthorization_required')
        AND c.connected_at IS NOT NULL AND s.fetched_at >= c.connected_at
-     ON DUPLICATE KEY UPDATE connector_generation = VALUES(connector_generation),
+     ON DUPLICATE KEY UPDATE
+       teaching_weeks = IF(campus_course_calendar_settings.connector_generation <> VALUES(connector_generation) OR ?, VALUES(teaching_weeks), campus_course_calendar_settings.teaching_weeks),
+       connector_generation = VALUES(connector_generation),
        first_week_monday = VALUES(first_week_monday), updated_at = CURRENT_TIMESTAMP`,
-    [firstWeekMonday, semesterId, userId],
+    [firstWeekMonday, count, semesterId, userId, providedWeeks ? 1 : 0],
   );
   if (!result.affectedRows) {
     const existing = await readCourseCalendar(pool, userId, semesterId);
-    if (existing.firstWeekMonday === firstWeekMonday) return existing;
+    if (
+      existing.firstWeekMonday === firstWeekMonday &&
+      (!providedWeeks || existing.teachingWeeks === count)
+    )
+      return existing;
     throw Object.assign(new Error('请先连接网络学堂并重新同步该学期课程'), { status: 409 });
   }
   return readCourseCalendar(pool, userId, semesterId);
@@ -425,5 +472,6 @@ module.exports = {
   projectCourseSchedules,
   parseCourseSchedule,
   normalizeMonday,
+  normalizeTeachingWeeks,
   validSemester,
 };

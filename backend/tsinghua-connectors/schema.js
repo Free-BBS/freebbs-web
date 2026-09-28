@@ -151,6 +151,7 @@ const CREATE_TABLE_STATEMENTS = Object.freeze([
     semester_id VARCHAR(32) NOT NULL,
     connector_generation INT UNSIGNED NOT NULL,
     first_week_monday DATE NOT NULL,
+    teaching_weeks TINYINT UNSIGNED NULL,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, semester_id),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -224,6 +225,19 @@ async function ensureCampusConnectorTables(pool) {
       pool,
       `ALTER TABLE campus_learn_semester_snapshots
       ADD COLUMN connector_generation INT UNSIGNED NULL AFTER semester_id`,
+    );
+  }
+
+  const teachingWeeksColumnExists = await informationSchemaEntryExists(
+    pool,
+    COLUMN_EXISTS_SQL,
+    'campus_course_calendar_settings',
+    'teaching_weeks',
+  );
+  if (!teachingWeeksColumnExists) {
+    await executeAdditiveAlter(
+      pool,
+      'ALTER TABLE campus_course_calendar_settings ADD COLUMN teaching_weeks TINYINT UNSIGNED NULL AFTER first_week_monday',
     );
   }
 

@@ -133,21 +133,33 @@ test('mobile child comments name their parent and retain a bounded thread guide'
   );
   assert.match(
     postReaderCss,
-    /@media \(max-width:\s*900px\)[\s\S]*?#discussion-detail \.discussion-comment-reply\s*{[^}]*margin-left:\s*min\(calc\(var\(--comment-depth, 1\) \* 12px\), 36px\)\s*!important;[^}]*border-left:\s*2px solid/s,
+    /@media \(max-width:\s*900px\)[\s\S]*?#discussion-detail \.discussion-comment-reply\s*{[^}]*--thread-step:\s*20px/s,
   );
+  assert.match(
+    postReaderCss,
+    /margin-left:\s*calc\(var\(--comment-depth, 1\) \* var\(--thread-step\)\)/,
+  );
+  assert.match(postReaderCss, /\.discussion-thread-guides\s*{[^}]*pointer-events:\s*none/s);
+  assert.match(appSource, /Math\.min\(depth, 4\)/);
 });
 
-test('reply threads show one reply by default and expose a flat expand control', () => {
+test('reply branches fold independently, retain flat bounded layout and have multiple safe controls', () => {
   assert.match(
     appSource,
-    /const flattenReplies = \(parentId, depth = 1\) =>[\s\S]*?\.\.\.flattenReplies\(reply\.id, depth \+ 1\)/,
+    /const flattenReplies = [\s\S]*?\.\.\.flattenReplies\(reply\.id, depth \+ 1, visited\)/,
   );
-  assert.match(appSource, /renderComment\(comment, depth, \{ hidden: !expanded && index > 0 \}\)/);
+  assert.match(appSource, /hidden: !expanded/);
+  assert.match(appSource, /function updateDiscussionThreadVisibility/);
+  assert.match(appSource, /collapsedReplyThreads: new Set/);
+  assert.match(appSource, /class="discussion-thread-group"/);
+  assert.doesNotMatch(appSource, /is-thread-footer|is-thread-header|discussion-thread-rail/);
+  assert.match(appSource, /FreeBbsDiscussionThreads\?\.refresh\(list\)/);
+  assert.match(postReaderCss, /\(hover: hover\) and \(pointer: fine\)/);
   assert.match(
     appSource,
     /data-action="toggle-comment-thread"[\s\S]*?aria-expanded="\$\{expanded\}"/,
   );
-  assert.match(appSource, /`展开全部 \$\{replies\.length\} 条回复`/);
+  assert.match(appSource, /`\$\{ids\.length\} 条回复`/);
   assert.match(
     postReaderCss,
     /\.discussion-comment-thread-toggle\s*{[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s,

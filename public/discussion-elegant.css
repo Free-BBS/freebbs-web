@@ -1,0 +1,124 @@
+/* Desktop reading rhythm matches the homepage/shop, with user-selected fonts.
+   Mobile navigation and the laser's own visual surface are deliberately retained. */
+@media (min-width: 901px) {
+  body.discussion-page
+    :is(
+      .discussion-board-about h2,
+      .discussion-post-card h3,
+      .discussion-post-title,
+      .discussion-detail-head h2,
+      .discussion-comments-head h3
+    ) {
+    font-family: var(--font-display) !important;
+  }
+
+  body.discussion-page:not(.post-reading) .main-content .discussion-board-list {
+    gap: 10px !important;
+    padding: 10px 0 12px;
+  }
+
+  body.discussion-page:not(.post-reading) .main-content .discussion-board-chip {
+    padding: 10px 16px !important;
+    border: 1px solid transparent !important;
+    border-radius: 12px !important;
+    font-size: 1rem !important;
+    line-height: 1.5;
+  }
+
+  body.discussion-page:not(.post-reading) .main-content .discussion-board-chip.is-active,
+  body.discussion-page:not(.post-reading) .main-content .discussion-board-chip:hover {
+    background: color-mix(in srgb, var(--ui-accent) 8%, var(--ui-page)) !important;
+    border-color: var(--ui-line-strong) !important;
+  }
+
+  body.discussion-page:not(.post-reading) .main-content .discussion-post-card:not(.has-laser-glow) {
+    background: var(--ui-surface) !important;
+    border: 1px solid var(--ui-line) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 3px 12px rgb(0 0 0 / 3%) !important;
+  }
+
+  body.discussion-page:not(.post-reading) .main-content .discussion-post-card {
+    padding: 24px !important;
+    gap: 18px !important;
+  }
+
+  body.discussion-page #discussion-post-list {
+    gap: 16px !important;
+  }
+
+  body.discussion-page:not(.post-reading)
+    .main-content
+    :is(.discussion-filter-chip, .discussion-create-toggle, .discussion-board-name) {
+    font-size: 0.95rem !important;
+    line-height: 1.6;
+  }
+
+  body.discussion-page:not(.post-reading) .main-content .discussion-post-card h3,
+  body.discussion-page:not(.post-reading) .main-content .discussion-post-title {
+    font-family: var(--font-display);
+    font-size: 1.35rem !important;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  body.discussion-page:not(.post-reading)
+    .main-content
+    .discussion-post-card
+    .discussion-post-title {
+    color: var(--surface-ink) !important;
+  }
+
+  body.discussion-page:not(.post-reading)
+    .main-content
+    :is(.discussion-post-excerpt, .discussion-board-about-body) {
+    font-size: 1rem !important;
+    line-height: 1.8;
+  }
+
+  body.discussion-page:not(.post-reading)
+    .main-content
+    :is(
+      .discussion-post-source,
+      .discussion-post-actions,
+      .discussion-reaction-button,
+      .discussion-comment-count,
+      .discussion-post-open,
+      .discussion-sort-button
+    ) {
+    font-size: 0.9rem !important;
+    line-height: 1.6;
+  }
+
+  body.discussion-page #discussion-filter-status {
+    font-size: 0.85rem;
+  }
+
+  body.discussion-page.post-reading #discussion-detail-title {
+    font-size: clamp(1.7rem, 2.4vw, 2.25rem) !important;
+  }
+
+  body.discussion-page.post-reading #discussion-markdown-body,
+  body.discussion-page #discussion-detail .discussion-comment-content {
+    font-size: 1.05rem !important;
+    line-height: 1.9;
+  }
+
+  body.discussion-page
+    #discussion-detail
+    :is(.discussion-comment-meta, .discussion-detail-meta, .discussion-comment-parent) {
+    font-size: 0.85rem;
+    line-height: 1.65;
+  }
+
+  body.discussion-page
+    #discussion-detail
+    :is(
+      .discussion-comment-action,
+      .discussion-comment-reply-button,
+      .discussion-comment-thread-toggle
+    ) {
+    font-size: 0.85rem !important;
+    min-height: 36px;
+  }
+}
