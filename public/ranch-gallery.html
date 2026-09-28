@@ -152,17 +152,34 @@
                 <a href="/ranch" data-own-ranch>‹ 我的牧场</a>
                 <h1 id="community-title">大家的牧场</h1>
                 <span id="gallery-status" role="status" aria-live="polite">羊群正在赶来…</span>
+                <span id="community-wind-status" class="community-wind-status" hidden></span>
               </div>
-              <label class="community-scene-picker">
-                <span>散步场景</span>
-                <select id="community-scene" aria-label="选择公共牧场场景">
-                  <option value="meadow">草甸</option>
-                  <option value="lake">湖畔</option>
-                  <option value="courtyard">庭院</option>
-                  <option value="wall">长城</option>
-                </select>
-              </label>
+              <div class="community-heading-tools">
+                <button
+                  id="community-clover"
+                  type="button"
+                  hidden
+                  title="使用一片三叶草：3 秒内吹飞空中羊，5 秒后飘回"
+                >
+                  <img src="/assets/icons/ranch-clover.svg" alt="" aria-hidden="true" />
+                  <span>三叶草</span>
+                </button>
+                <label class="community-scene-picker">
+                  <span>散步场景</span>
+                  <select id="community-scene" aria-label="选择公共牧场场景">
+                    <option value="meadow">草甸</option>
+                    <option value="lake">湖畔</option>
+                    <option value="courtyard">庭院</option>
+                    <option value="wall">长城</option>
+                  </select>
+                </label>
+              </div>
             </header>
+            <div class="community-clover-wind" aria-hidden="true">
+              <img src="/assets/icons/ranch-clover.svg" alt="" />
+              <img src="/assets/icons/ranch-clover.svg" alt="" />
+              <img src="/assets/icons/ranch-clover.svg" alt="" />
+            </div>
 
             <div
               id="community-flock"

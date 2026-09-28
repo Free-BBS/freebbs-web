@@ -10,7 +10,13 @@ function createRanchPreview() {
   const preview = createEconomyPreview({
     accounts: Array.from({ length: 14 }, (_, i) => ({
       id: i + 1,
-      assets: { max_pet: 1, fish: 3 },
+      assets: {
+        max_pet: 1,
+        fish: 3,
+        ...(i === 0 ? { ranch_clover: 2, ranch_flying_wings: 1 } : {}),
+        ...(i === 1 ? { ranch_flying_wings: 1 } : {}),
+        ...(i === 4 ? { ranch_backflip: 1 } : {}),
+      },
       fedUntilMs: i === 2 ? Date.now() - 10000 : Date.now() + 86400000,
     })),
     transformHtml: (html) =>
@@ -22,7 +28,14 @@ function createRanchPreview() {
         .replace('</body>', '<script src="/mobile-shell.js"></script></body>'),
   });
   const designs = new Map();
-  let state = { revision: 0, state_json: JSON.stringify({ scene: 'meadow', events: [] }) };
+  let state = {
+    revision: 0,
+    state_json: JSON.stringify({
+      scene: 'meadow',
+      events: [],
+      gear: { u_preview01: 'wing', u_preview02: 'wing' },
+    }),
+  };
   let queue = Promise.resolve();
   const rows = () =>
     Array.from({ length: 14 }, (_, i) => {
@@ -44,6 +57,8 @@ function createRanchPreview() {
     });
   const pool = {
     async execute(sql, values = []) {
+      if (sql.startsWith('SELECT quantity FROM user_assets'))
+        return [[{ quantity: preview.store.account(values[0]).assets.ranch_clover || 0 }]];
       if (sql.includes('ranch_world_state')) return [[structuredClone(state)]];
       if (sql.startsWith('SELECT id FROM users')) return [[{ id: values[0] }]];
       if (sql.startsWith('SELECT revision FROM'))
@@ -66,6 +81,7 @@ function createRanchPreview() {
       let release;
       let pending;
       let pendingDesign;
+      let pendingClover;
       return {
         async beginTransaction() {
           const prior = queue;
@@ -75,6 +91,12 @@ function createRanchPreview() {
           await prior;
         },
         async execute(sql, values) {
+          if (sql.startsWith('UPDATE user_assets SET quantity = quantity - 1')) {
+            const owner = preview.store.account(values[0]);
+            if (!owner.assets.ranch_clover) return [{ affectedRows: 0 }];
+            pendingClover = values[0];
+            return [{ affectedRows: 1 }];
+          }
           if (sql.startsWith('UPDATE ranch_world_state')) {
             pending = { state_json: values[0], revision: values[1] };
             return [{}];
@@ -88,6 +110,7 @@ function createRanchPreview() {
         async commit() {
           if (pending) state = pending;
           if (pendingDesign) designs.set(...pendingDesign);
+          if (pendingClover) preview.store.account(pendingClover).assets.ranch_clover -= 1;
           release();
         },
         async rollback() {

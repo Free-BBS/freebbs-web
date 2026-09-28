@@ -68,12 +68,16 @@ test('shared gallery uses SSE and server actions instead of local random interac
   assert.match(html, /ranch-world-data\.js/);
   assert.match(html, /value="wing">中国羊能飞/);
   assert.match(html, /data-community-action="fly"/);
+  assert.match(html, /id="community-clover"/);
+  assert.match(html, /id="community-wind-status"/);
   assert.match(source, /new EventSource/);
   assert.match(source, /ranch-world\/actions/);
   assert.match(source, /syncFrame/);
   assert.doesNotMatch(source, /Math\.random|pickPartner|walkTo/);
   assert.match(source, /stream\?\.close/);
   assert.match(source, /lastSnapshot \+ 5000/);
+  assert.match(source, /submit\('clover'\)/);
+  assert.match(source, /ranch-world\/clovers/);
 });
 test('equipped wings fly high on a shared clock, while bicycle and wing never appear together', () => {
   const actor = {
@@ -97,6 +101,44 @@ test('equipped wings fly high on a shared clock, while bicycle and wing never ap
   const mid = world.positionFor(actor, 0, [actor], manual.start + 6000, [manual]);
   assert.equal(mid.kind, 'fly');
   assert.ok(mid.top <= 50);
+});
+test('clover catches airborne sheep for three seconds and returns each after five', () => {
+  const flyer = {
+    uid: 'u_flyer',
+    gear: 'wing',
+    assets: { ranch_flying_wings: 1 },
+    fedUntilMs: 200000,
+  };
+  const walker = { uid: 'u_walker', assets: {}, fedUntilMs: 200000 };
+  const hungry = { uid: 'u_hungry', gear: 'wing', assets: {}, fedUntilMs: 0 };
+  const actors = [flyer, walker, hungry];
+  const nextFlight = 60000 - (world.seedFor(flyer.uid) % 60000) + 60000;
+  const start = nextFlight - 500;
+  const clover = { id: 88, kind: 'clover', start, duration: 8000, targets: [] };
+  clover.targets = world.cloverTargets(clover, actors, [], start);
+  assert.equal(clover.targets.length, 1);
+  const caught = clover.targets[0];
+  assert.equal(caught.uid, flyer.uid);
+  assert.ok(caught.at >= start && caught.at < start + 3000);
+  const blown = world.positionFor(flyer, 0, actors, caught.at + 800, [clover]);
+  assert.equal(blown.kind, 'clover');
+  assert.ok(blown.top < 30);
+  const returning = world.positionFor(flyer, 0, actors, caught.at + 4999, [clover]);
+  const landed = world.positionFor(flyer, 0, actors, caught.at + 5000, [clover]);
+  assert.notEqual(landed.kind, 'clover');
+  assert.ok(Math.abs(returning.top - landed.top) < 0.1);
+  const manual = {
+    id: 89,
+    actor: walker.uid,
+    kind: 'backflip',
+    start: start + 1000,
+    duration: 1500,
+  };
+  clover.targets = world.cloverTargets(clover, actors, [manual], manual.start);
+  assert.ok(
+    clover.targets.some((target) => target.uid === walker.uid && target.at === manual.start),
+  );
+  assert.deepEqual(clover.targets, world.cloverTargets(clover, actors, [manual], manual.start));
 });
 test('cycling travels four times faster and retains its path after dismounting', () => {
   const uid = 'u_owner01';

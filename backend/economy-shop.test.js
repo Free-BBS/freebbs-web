@@ -82,6 +82,21 @@ test('rubber rod purchase records its real reason and same receipt never duplica
   );
 });
 
+test('three-leaf clovers cost two magnetic each and can be stocked repeatedly', async () => {
+  const { buy, store, shop } = setup([{ id: 1, magnetic: 6 }]);
+  for (let n = 1; n <= 3; n += 1) {
+    const receipt = await buy('ranch_clover', { currency: 'magnetic' });
+    assert.deepEqual(receipt.cost, { magnetic: 2 });
+    assert.equal(store.account().assets.ranch_clover, n);
+  }
+  assert.equal(store.account().magnetic, 0);
+  const item = (await shop.decorate(items, 1)).find((entry) => entry.key === 'ranch_clover');
+  assert.equal(item.purchasePolicy.soldOut, false);
+  await assert.rejects(buy('ranch_clover', { currency: 'magnetic' }), {
+    code: 'INSUFFICIENT_BALANCE',
+  });
+});
+
 test('combined purchases and laser charges explain every currency row with contiguous balances', async () => {
   const { buy, charge, store } = setup(undefined, { recordLedger: true });
   await buy('maxwell_spectacles');

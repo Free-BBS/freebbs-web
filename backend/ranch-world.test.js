@@ -65,9 +65,47 @@ test('bicycle and flying wings are exclusive persisted equipment with owner-only
   assert.equal((await h.action({ kind: 'bicycle', actor: 'u_owner01' })).status, 403);
 });
 
+test('clover consumption is atomic, shared, and catches later airborne sheep', async (t) => {
+  const h = await harness(t);
+  assert.equal((await h.clovers(1)).quantity, 2);
+  assert.equal((await h.action({ kind: 'clover' }, 2)).status, 409);
+  const seed = world.seedFor('u_owner01') % 60000;
+  const phase = (100000 + seed) % 60000;
+  h.advance(60000 - phase - 500);
+  const used = await h.action({ kind: 'clover' });
+  assert.equal(used.status, 200);
+  assert.equal((await h.clovers(1)).quantity, 1);
+  const first = await h.snapshot('b');
+  const wind = first.events.find((event) => event.kind === 'clover');
+  assert.equal(wind.duration, 8000);
+  assert.ok(wind.targets.some((target) => target.uid === 'u_owner01' && target.at > wind.start));
+  assert.equal((await h.action({ kind: 'clover' })).status, 409);
+  assert.equal((await h.clovers(1)).quantity, 1);
+  h.advance(1000);
+  assert.equal((await h.action({ kind: 'backflip', actor: 'u_owner02' }, 2)).status, 200);
+  const updated = await h.snapshot('a');
+  const gust = updated.events.find((event) => event.kind === 'clover');
+  assert.ok(gust.targets.some((target) => target.uid === 'u_owner02'));
+  assert.equal(
+    world.positionFor(updated.sheep[1], 1, updated.sheep, updated.serverNowMs + 900, updated.events)
+      .kind,
+    'clover',
+  );
+  h.advance(8001);
+  assert.equal(
+    (await h.snapshot()).events.some((event) => event.kind === 'clover'),
+    false,
+  );
+  assert.equal((await h.action({ kind: 'clover' })).status, 200);
+  assert.equal((await h.clovers(1)).quantity, 0);
+  h.advance(8001);
+  assert.equal((await h.action({ kind: 'clover' })).status, 409);
+});
+
 async function harness(t) {
   let time = 100000;
   let state = { revision: 0, state_json: JSON.stringify({ scene: 'meadow', events: [] }) };
+  const clovers = new Map([[1, 2]]);
   const rows = [
     {
       id: 1,
@@ -84,7 +122,7 @@ async function harness(t) {
       username: 'Bob',
       revision: 0,
       design_json: null,
-      ranch_assets: '',
+      ranch_assets: 'ranch_backflip:1',
       fed_until_ms: 200000,
     },
     {
@@ -108,13 +146,16 @@ async function harness(t) {
   ];
   let lock = Promise.resolve();
   const pool = {
-    async execute(sql) {
+    async execute(sql, values) {
+      if (sql.startsWith('SELECT quantity FROM user_assets'))
+        return [[{ quantity: clovers.get(values[0]) || 0 }]];
       if (sql.includes('FROM users u')) return [rows];
       if (sql.includes('ranch_world_state')) return [[structuredClone(state)]];
       throw new Error(sql);
     },
     async getConnection() {
       let pending;
+      let pendingClover;
       let release;
       return {
         async beginTransaction() {
@@ -125,6 +166,12 @@ async function harness(t) {
           await prior;
         },
         async execute(sql, values) {
+          if (sql.startsWith('UPDATE user_assets SET quantity = quantity - 1')) {
+            const available = clovers.get(values[0]) || 0;
+            if (available < 1) return [{ affectedRows: 0 }];
+            pendingClover = values[0];
+            return [{ affectedRows: 1 }];
+          }
           if (sql.startsWith('UPDATE ranch_world_state')) {
             pending = { revision: values[1], state_json: values[0] };
             return [{}];
@@ -133,6 +180,7 @@ async function harness(t) {
         },
         async commit() {
           if (pending) state = pending;
+          if (pendingClover) clovers.set(pendingClover, clovers.get(pendingClover) - 1);
           release();
         },
         async rollback() {
@@ -169,10 +217,13 @@ async function harness(t) {
       body: JSON.stringify(body),
     });
   const snapshot = (worker = 'a') => fetch(`${url}/${worker}`).then((res) => res.json());
+  const ownedClovers = (id) =>
+    fetch(`${url}/a/clovers`, { headers: { 'x-user': String(id) } }).then((res) => res.json());
   return {
     url,
     action,
     snapshot,
+    clovers: ownedClovers,
     advance: (ms) => {
       time += ms;
     },

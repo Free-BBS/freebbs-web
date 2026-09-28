@@ -395,6 +395,87 @@ body.theme-dark .community-sky-glow {
   color: rgb(255 255 255 / 0.82);
   font: 500 12px/1.35 var(--font-ui);
 }
+.community-heading-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+body.ranch-gallery-page .main-content #community-clover {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 40px;
+  padding: 5px 10px;
+  color: #fffdf5;
+  border: 1px solid rgb(255 255 255 / 0.28);
+  border-radius: 10px;
+  background: rgb(24 45 37 / 0.42);
+  backdrop-filter: blur(16px);
+  font: 600 12px/1.2 var(--font-ui);
+  white-space: nowrap;
+}
+body.ranch-gallery-page .main-content #community-clover[hidden] {
+  display: none;
+}
+#community-clover img {
+  width: 22px;
+  height: 22px;
+}
+.community-wind-status {
+  display: block;
+  margin-top: 5px;
+  color: #dcf6cf;
+  font: 600 11px/1.3 var(--font-ui);
+}
+.community-wind-status[hidden] {
+  display: none;
+}
+.community-clover-wind {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  overflow: hidden;
+  pointer-events: none;
+  visibility: hidden;
+}
+.community-pasture.is-clover-windy .community-clover-wind {
+  visibility: visible;
+}
+.community-clover-wind img {
+  position: absolute;
+  top: 28%;
+  left: -9%;
+  width: clamp(20px, 3vw, 42px);
+  opacity: 0;
+  animation: community-clover-drift 2.5s linear infinite;
+}
+.community-clover-wind img:nth-child(2) {
+  top: 47%;
+  animation-delay: -0.8s;
+  animation-duration: 2.9s;
+}
+.community-clover-wind img:nth-child(3) {
+  top: 65%;
+  animation-delay: -1.7s;
+  animation-duration: 3.2s;
+}
+@keyframes community-clover-drift {
+  0% {
+    transform: translateX(0) rotate(0);
+    opacity: 0;
+  }
+  13% {
+    opacity: 0.75;
+  }
+  85% {
+    opacity: 0.75;
+  }
+  100% {
+    transform: translateX(118vw) rotate(550deg);
+    opacity: 0;
+  }
+}
 .community-scene-picker {
   display: flex;
   align-items: center;
@@ -1059,6 +1140,18 @@ body.ranch-gallery-page .main-content .community-sheep-bubble {
   body.ranch-gallery-page .community-heading h1 {
     font-size: 23px;
   }
+  .community-heading-tools {
+    gap: 4px;
+  }
+  body.ranch-gallery-page .main-content #community-clover {
+    min-height: 34px;
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+  #community-clover img {
+    width: 18px;
+    height: 18px;
+  }
   .community-heading > div {
     padding: 7px 2px;
   }
@@ -1081,5 +1174,10 @@ body.ranch-gallery-page .main-content .community-sheep-bubble {
     bottom: 12px;
     right: 12px;
     font-size: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .community-clover-wind {
+    display: none;
   }
 }

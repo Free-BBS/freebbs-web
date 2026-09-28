@@ -505,9 +505,12 @@
                 ? bicyclePose(walkTime)
                 : mode === 'fly'
                   ? flyingPose(walkTime)
-                  : walkPose(walkTime);
+                  : mode === 'clover'
+                    ? flyingPose(walkTime)
+                    : walkPose(walkTime);
         const progress = state.progress || 0;
         const flip = mode === 'backflip' && !media.matches && !hungry;
+        const blown = mode === 'clover' && !media.matches && !hungry;
         // A short, high arc with a tucked skeleton, rather than a slow spinning walk.
         const flight = Math.max(0, Math.min(1, (progress - 0.08) / 0.68));
         if (flip) {
@@ -524,7 +527,7 @@
         const facing = direction < 0 ? 'translate(180 0) scale(-1 1)' : '';
         nodes.facing.setAttribute(
           'transform',
-          `${facing} ${flip ? `translate(0 ${-Math.sin(flight * Math.PI) * 150}) rotate(${-flight * 360} 90 136)` : ''}`,
+          `${facing} ${flip ? `translate(0 ${-Math.sin(flight * Math.PI) * 150}) rotate(${-flight * 360} 90 136)` : blown ? `rotate(${Math.sin(progress * Math.PI * 4) * (state.windLift || 0) * 21} 90 112)` : ''}`,
         );
         // Keep the contact shadow on the grass while the sheep is airborne.
         if (flip) {
@@ -552,7 +555,7 @@
           .querySelector('[data-bicycle]')
           .setAttribute('visibility', mode === 'bicycle' && !hungry ? 'visible' : 'hidden');
         const winged = state.gear === 'wing' && !hungry;
-        const flying = mode === 'fly' && winged;
+        const flying = (mode === 'fly' || (blown && state.windLift > 0.1)) && winged;
         const flap = media.matches ? -12 : Math.sin(animationTime * 10) * 26 - 6;
         const wingProgress = Math.max(0, Math.min(1, Number(state.progress) || 0));
         const deployment = flying ? Math.min(1, wingProgress / 0.07, (1 - wingProgress) / 0.07) : 0;
@@ -569,7 +572,10 @@
         element
           .querySelector('[data-flight-trails]')
           .setAttribute('visibility', flying && !media.matches ? 'visible' : 'hidden');
-        nodes.shadow.setAttribute('visibility', flying ? 'hidden' : 'visible');
+        nodes.shadow.setAttribute(
+          'visibility',
+          flying || (blown && state.windLift > 0.1) ? 'hidden' : 'visible',
+        );
       },
       greet,
       celebrate,

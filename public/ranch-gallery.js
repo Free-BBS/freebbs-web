@@ -9,6 +9,10 @@
   const findMine = byId('community-find-mine');
   const gearSelect = byId('community-gear');
   const gearControl = byId('community-gear-control');
+  const cloverButton = byId('community-clover');
+  const cloverLabel = cloverButton.querySelector('span');
+  const windStatus = byId('community-wind-status');
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const actors = new Map();
   let state;
   let selected;
@@ -17,9 +21,45 @@
   let frame;
   let stopped = false;
   let submitting = false;
+  let cloverCount = 0;
   let lastSnapshot = 0;
   const viewerUid = () => window.freeBbsApp?.userState?.uid || '';
   const baseUrl = () => window.freeBbsApp?.apiBaseUrl || window.FREEBBS_API_BASE || '/api';
+  function renderClover(time) {
+    const clover = state?.events?.find(
+      (event) => event.kind === 'clover' && time < event.start + event.duration,
+    );
+    const windy = clover && time < clover.start + 3000;
+    field.classList.toggle('is-clover-windy', Boolean(windy));
+    windStatus.hidden = !clover;
+    if (clover)
+      windStatus.textContent = windy ? '三叶草起风 · 空中的羊正被吹走' : '风停了 · 羊群正飘回来';
+    cloverButton.disabled = submitting || Boolean(clover);
+    const label = cloverCount ? `三叶草 ×${cloverCount}` : '三叶草 · 2 磁元';
+    if (cloverLabel.textContent !== label) cloverLabel.textContent = label;
+    cloverButton.title = clover
+      ? '等羊群飘回来后可以再用一片'
+      : cloverCount
+        ? '消耗一片：未来 3 秒内吹飞空中的羊，5 秒后飘回'
+        : '到商店购买三叶草，每片 2 磁元';
+  }
+  async function refreshClovers() {
+    await window.freeBbsApp?.sessionReady;
+    if (!window.freeBbsApp?.userState?.isLoggedIn) {
+      cloverCount = 0;
+      cloverButton.hidden = false;
+      renderClover(state?.serverNowMs || Date.now());
+      return;
+    }
+    try {
+      const result = await window.freeBbsApp.callApi('/ranch-world/clovers');
+      cloverCount = Math.max(0, Number(result.quantity) || 0);
+      cloverButton.hidden = false;
+      renderClover(state?.serverNowMs || Date.now());
+    } catch {
+      cloverButton.hidden = true;
+    }
+  }
   function configureScene(scene) {
     const environment = window.FreeBbsRanchEnvironment;
     const valid = environment.validScene(scene);
@@ -130,9 +170,12 @@
     frame = null;
     if (stopped || document.hidden || !state) return;
     const time = Math.min(Date.now(), lastSnapshot + 5000) + offset;
+    const visibleEvents = reducedMotion.matches
+      ? state.events.filter((event) => event.kind !== 'clover')
+      : state.events;
     state.sheep.forEach((sheep, index) => {
       const actor = actors.get(sheep.uid);
-      const point = world.positionFor(sheep, index, state.sheep, time, state.events);
+      const point = world.positionFor(sheep, index, state.sheep, time, visibleEvents);
       actor.lane.style.setProperty('--lane-top', `${point.top}%`);
       actor.lane.style.setProperty('--sheep-scale', String(point.scale));
       actor.lane.style.zIndex = String(point.zIndex);
@@ -145,11 +188,13 @@
           backflip: '后空翻！',
           bicycle: '骑车兜风',
           fly: '飞起来啦',
+          clover: '被三叶草吹起来啦',
           hungry: '饿了，等一条鱼',
         }[point.kind] || '';
       actor.bubble.hidden = !actor.bubble.textContent;
       actor.element.classList.toggle('is-interacting', point.kind !== 'walk' && !point.hungry);
     });
+    renderClover(time);
     frame = window.requestAnimationFrame(tick);
   }
   async function submit(kind, extra = {}) {
@@ -173,10 +218,15 @@
           }),
         }),
       );
+      if (kind === 'clover') {
+        cloverCount = Math.max(0, cloverCount - 1);
+        refreshClovers();
+      }
     } catch (error) {
       status.textContent = error.message || '同步失败，请重试';
       gearSelect.value = selected?.sheep.gear || 'walk';
       configureScene(state?.scene || 'meadow');
+      if (kind === 'clover') refreshClovers();
     } finally {
       submitting = false;
     }
@@ -206,6 +256,17 @@
       button.addEventListener('click', () => submit(button.dataset.communityAction)),
     );
   gearSelect.addEventListener('change', () => submit('equip', { mode: gearSelect.value }));
+  cloverButton.addEventListener('click', () => {
+    if (!window.freeBbsApp?.userState?.isLoggedIn) {
+      status.textContent = '登录后才能在牧场使用三叶草。';
+      return;
+    }
+    if (!cloverCount) {
+      window.location.href = '/electromagnetic';
+      return;
+    }
+    submit('clover');
+  });
   dock.querySelector('[data-community-close]').addEventListener('click', () => {
     selected?.element.classList.remove('is-selected');
     selected = null;
@@ -236,6 +297,7 @@
   });
   window.addEventListener('pageshow', () => {
     if (!stream) connect();
+    refreshClovers();
   });
   fetch(`${baseUrl()}/ranch-world`)
     .then((response) => {
@@ -247,4 +309,5 @@
       status.textContent = '正在连接公共牧场…';
     });
   connect();
+  refreshClovers();
 })();

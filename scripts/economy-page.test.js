@@ -123,7 +123,7 @@ test('shop groups all enabled products into four ordered sections without changi
         'shannon_coin',
         'hertz_resonator',
       ],
-      ['differential_converter', 'fortune_bag'],
+      ['differential_converter', 'fortune_bag', 'ranch_clover'],
       [
         'max_pet',
         'fish',
@@ -141,7 +141,7 @@ test('shop groups all enabled products into four ordered sections without changi
   await context.loadElectromagneticPage();
   const html = node('shop-grid').innerHTML;
   assert.equal((html.match(/data-shop-section=/g) || []).length, 4);
-  assert.equal((html.match(/class="shop-item-card"/g) || []).length, 23);
+  assert.equal((html.match(/class="shop-item-card"/g) || []).length, 24);
   assert.doesNotMatch(html, /data-item-key="plate_maxwell"/);
 });
 
