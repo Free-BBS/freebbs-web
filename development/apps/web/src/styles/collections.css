@@ -184,6 +184,9 @@
 .collections-belt-card strong {
   font-family: var(--font-serif);
   font-size: 22px;
+  font-synthesis: none;
+  font-weight: 500;
+  letter-spacing: 0.01em;
   line-height: 1.35;
 }
 .collections-belt-card > span:last-child {
@@ -194,8 +197,8 @@
   width: fit-content;
   color: var(--collection-gold);
   font-size: 11px;
-  font-weight: 850;
-  letter-spacing: 0.08em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
 }
 
 .collections-tavern {
