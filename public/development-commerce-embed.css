@@ -2,6 +2,7 @@ html.development-embedded .topbar,
 html.development-embedded .mobile-nav,
 html.development-embedded .desktop-header,
 html.development-embedded .mobile-header-backdrop,
+html.development-embedded .notification-widget,
 html.development-embedded .site-footer {
   display: none !important;
 }
