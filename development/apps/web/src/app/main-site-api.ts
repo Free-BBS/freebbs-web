@@ -23,6 +23,7 @@ export interface MainSiteProfile {
 export interface CheckinRecord {
   date: string;
   streak: number;
+  fortuneScore?: number;
   rewardElectrons?: number;
   rewardMagnetic?: number;
 }

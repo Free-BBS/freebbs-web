@@ -80,7 +80,14 @@ describe('MainSiteHeader', () => {
             summary: {
               checkedInToday: true,
               todayFortune: { date: '2026-09-18', score: 72 },
-              records: [],
+              records: [
+                {
+                  date: '2026-09-17',
+                  streak: 2,
+                  fortuneScore: 93,
+                  rewardMagnetic: 1,
+                },
+              ],
             },
           }),
         };
@@ -90,7 +97,14 @@ describe('MainSiteHeader', () => {
         json: async () => ({
           checkedInToday: false,
           todayFortune: { date: '2026-09-18', score: 72 },
-          records: [],
+          records: [
+            {
+              date: '2026-09-17',
+              streak: 2,
+              fortuneScore: 93,
+              rewardMagnetic: 1,
+            },
+          ],
         }),
       };
     });
@@ -105,6 +119,14 @@ describe('MainSiteHeader', () => {
     await screen.findByRole('button', { name: '签到领取磁元' });
     expect(screen.getByRole('dialog')).toHaveClass('fortune-panel');
     expect(screen.getByRole('dialog').querySelector('.fortune-awful')).toHaveTextContent('大吉');
+    expect(screen.getByText('2026 年 9 月')).toBeInTheDocument();
+    expect(screen.getByRole('grid', { name: '2026 年 9 月签到日历' })).toBeInTheDocument();
+    const checkedDay = screen.getByRole('button', {
+      name: '2026-09-17 · 祥瑞 · 连续 2 天 · +1 磁元',
+    });
+    expect(checkedDay).toHaveClass('fortune-great');
+    fireEvent.click(checkedDay);
+    expect(screen.getByText('2026-09-17 · 祥瑞 · 连续 2 天 · +1 磁元')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '签到领取磁元' }));
     await waitFor(() => expect(screen.getByLabelText('磁元：5')).toBeInTheDocument());
     expect(
@@ -128,6 +150,9 @@ describe('MainSiteHeader', () => {
     );
     expect(container.querySelector('.main-site-header')).toHaveStyle({
       '--main-site-ui-size': '18.88px',
+    });
+    expect(container.querySelector('.main-site-header')).toHaveStyle({
+      '--main-site-type-scale': '1.18',
     });
     expect(container.querySelector('.main-site-header')).toHaveStyle({
       '--main-site-ui-font': '"Segoe UI", "Microsoft YaHei", sans-serif',
@@ -171,6 +196,10 @@ describe('MainSiteHeader', () => {
     expect(screen.getByRole('img', { name: '林同学头像' })).toHaveAttribute(
       'src',
       expect.stringContaining('avatar_placeholder.webp'),
+    );
+    expect(screen.getByRole('link', { name: '打开我的个人主页' })).toHaveAttribute(
+      'href',
+      '/profile',
     );
     const themeButtons = screen.getAllByRole('button', { name: '切换到明亮模式' });
     expect(themeButtons).toHaveLength(2);

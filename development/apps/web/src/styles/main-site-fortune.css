@@ -17,9 +17,9 @@
   position: relative;
   z-index: 1;
   width: min(100% - 32px, 560px);
-  max-height: 90dvh;
+  max-height: calc(100dvh - 32px);
   overflow-y: auto;
-  margin: 7vh auto 0;
+  margin: 16px auto 0;
   padding: 30px 28px 28px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 28px;
@@ -119,10 +119,11 @@
 }
 
 .development-fortune-modal .fortune-records {
-  display: grid;
-  gap: 10px;
-  margin-top: 16px;
-  padding-top: 16px;
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 16px auto 0;
+  padding: 6px 0 0;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
@@ -146,9 +147,105 @@
   color: rgba(244, 245, 245, 0.58);
 }
 .development-fortune-modal .fortune-chart-caption {
-  margin: 8px 0 0;
-  color: rgba(232, 237, 243, 0.62);
-  font-size: 0.84em;
+  display: none;
+}
+
+.development-fortune-modal .checkin-month-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.development-fortune-modal .checkin-month-heading button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: 24px/1 var(--font-ui);
+  cursor: pointer;
+}
+
+.development-fortune-modal .checkin-month-heading button:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+
+.development-fortune-modal .checkin-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0 2px;
+  margin-top: 4px;
+}
+
+.development-fortune-modal .checkin-weekday {
+  padding: 3px 0;
+  color: rgba(244, 239, 231, 0.64);
+  font-size: 12px;
+  text-align: center;
+}
+
+.development-fortune-modal .checkin-calendar .checkin-day {
+  min-width: 0;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  font: 600 14px/1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.development-fortune-modal .checkin-calendar .fortune-great {
+  color: #edc56d;
+}
+
+.development-fortune-modal .checkin-calendar .fortune-awful {
+  color: #ffaaa3;
+}
+
+.development-fortune-modal .checkin-calendar .fortune-bad {
+  color: #8aceac;
+}
+
+.development-fortune-modal .checkin-calendar .fortune-good {
+  color: #ec9fbc;
+}
+
+.development-fortune-modal .checkin-calendar .fortune-neutral {
+  color: #e5ecef;
+}
+
+.development-fortune-modal .checkin-calendar .is-unchecked {
+  color: #8b969e;
+}
+
+.development-fortune-modal .checkin-calendar .is-today {
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 5px;
+}
+
+.development-fortune-modal .checkin-calendar button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.development-fortune-modal .checkin-month-summary,
+.development-fortune-modal .checkin-day-detail {
+  margin: 4px 0 0;
+  color: rgba(244, 239, 231, 0.64);
+  font: 12px/1.6 var(--font-ui);
+}
+
+.development-fortune-modal .checkin-day-detail {
+  min-height: 20px;
 }
 
 body.theme-light .development-fortune-modal .fortune-backdrop {
@@ -177,12 +274,80 @@ body.theme-light .development-fortune-modal .fortune-records,
 body.theme-light .development-fortune-modal .fortune-record-row {
   border-color: rgba(10, 12, 14, 0.12);
 }
+
+body.theme-light .development-fortune-modal .checkin-weekday,
+body.theme-light .development-fortune-modal .checkin-month-summary,
+body.theme-light .development-fortune-modal .checkin-day-detail {
+  color: rgba(17, 19, 21, 0.62);
+}
+
+body.theme-light .development-fortune-modal .checkin-calendar .fortune-great {
+  color: #936705;
+}
+
+body.theme-light .development-fortune-modal .checkin-calendar .fortune-awful {
+  color: #b43f3c;
+}
+
+body.theme-light .development-fortune-modal .checkin-calendar .fortune-bad {
+  color: #217743;
+}
+
+body.theme-light .development-fortune-modal .checkin-calendar .fortune-good {
+  color: #aa4176;
+}
+
+body.theme-light .development-fortune-modal .checkin-calendar .fortune-neutral {
+  color: #475563;
+}
+
+body.theme-light .development-fortune-modal .checkin-calendar .is-unchecked {
+  color: #879198;
+}
 body.theme-light .development-fortune-modal .fortune-checkin-button {
   border-color: rgba(10, 12, 14, 0.24);
   color: #111315;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 600px) {
+  .development-fortune-modal .fortune-panel {
+    padding: 20px 16px;
+  }
+
+  .development-fortune-modal .fortune-title {
+    font-size: 24px;
+  }
+
+  .development-fortune-modal .fortune-date {
+    margin: 4px 0 12px;
+    font-size: 13px;
+  }
+
+  .development-fortune-modal .fortune-badge {
+    min-width: 90px;
+    padding: 8px 16px;
+  }
+
+  .development-fortune-modal .fortune-score {
+    margin-top: 8px;
+    font-size: 13px;
+  }
+
+  .development-fortune-modal .fortune-tagline {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .development-fortune-modal .fortune-checkin-button {
+    margin-top: 12px;
+  }
+
+  .development-fortune-modal .fortune-records {
+    margin-top: 16px;
+    padding: 10px 0 0;
+  }
+
   .development-fortune-modal .fortune-record-row {
     grid-template-columns: 1fr;
   }
