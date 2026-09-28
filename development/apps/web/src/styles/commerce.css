@@ -6,19 +6,9 @@
 
 .development-commerce-heading {
   display: flex;
-  align-items: end;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: flex-end;
   gap: 16px;
-}
-
-.development-commerce-heading p {
-  margin: 0 0 4px;
-  color: var(--color-muted);
-  font-size: 12px;
-}
-
-.development-commerce-heading h1 {
-  margin: 0;
 }
 
 .development-commerce-heading button {

@@ -207,14 +207,20 @@ describe('MainSiteHeader', () => {
     expect(onToggleTheme).toHaveBeenCalledOnce();
   });
 
-  it('uses the current development section as the desktop page title', () => {
+  it.each([
+    ['/sports/teams/swimming', '無体育'],
+    ['/shop', '商店'],
+    ['/inventory', '仓库'],
+    ['/profile', '个人主页'],
+    ['/settings', '设置'],
+  ])('uses the current development section as the desktop page title at %s', (path, title) => {
     render(
-      <MemoryRouter initialEntries={['/sports/teams/swimming']}>
+      <MemoryRouter initialEntries={[path]}>
         <MainSiteHeader user={user} authMode="demo" themeMode="light" onToggleTheme={vi.fn()} />
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('heading', { name: '無体育' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: title })).toBeInTheDocument();
   });
 
   it('opens the main-site inbox and marks an item read', async () => {

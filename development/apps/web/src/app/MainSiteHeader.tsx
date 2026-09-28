@@ -82,6 +82,8 @@ function developmentTitle(pathname: string): string {
   if (pathname === '/dashboard' || pathname === '/') return '发展端 / 开始探索';
   if (pathname.startsWith('/inventory')) return '仓库';
   if (pathname.startsWith('/shop')) return '商店';
+  if (pathname.startsWith('/profile')) return '个人主页';
+  if (pathname.startsWith('/settings')) return '设置';
   return (
     MODULE_MANIFESTS.find(
       (module) => pathname === module.route || pathname.startsWith(`${module.route}/`),
