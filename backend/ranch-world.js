@@ -78,6 +78,19 @@ function createRanchWorldRouter({ pool, requireAuth, now = Date.now }) {
       res.status(503).json({ message: '牧场同步暂不可用，请稍后重试' });
     }
   });
+  router.get('/clovers', async (req, res) => {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    try {
+      const [rows] = await pool.execute(
+        "SELECT quantity FROM user_assets WHERE user_id = ? AND asset_key = 'ranch_clover'",
+        [user.id],
+      );
+      res.json({ quantity: Math.max(0, Number(rows[0]?.quantity) || 0) });
+    } catch {
+      res.status(503).json({ message: '三叶草数量暂不可用' });
+    }
+  });
   router.get('/stream', (_req, res) => {
     res.set({
       'Content-Type': 'text/event-stream',
@@ -106,9 +119,19 @@ function createRanchWorldRouter({ pool, requireAuth, now = Date.now }) {
     const user = await requireAuth(req, res);
     if (!user) return;
     const { kind, actor: requestedUid, target, scene, mode } = req.body || {};
-    const uid = ['stroll', 'equip'].includes(kind) ? user.uid : requestedUid;
+    const uid = ['stroll', 'equip', 'clover'].includes(kind) ? user.uid : requestedUid;
     if (
-      !['greet', 'pet', 'stroll', 'backflip', 'bicycle', 'fly', 'equip', 'scene'].includes(kind) ||
+      ![
+        'greet',
+        'pet',
+        'stroll',
+        'backflip',
+        'bicycle',
+        'fly',
+        'equip',
+        'clover',
+        'scene',
+      ].includes(kind) ||
       (kind === 'scene' && !['meadow', 'lake', 'courtyard', 'wall'].includes(scene)) ||
       (kind === 'equip' && !['walk', 'bicycle', 'wing'].includes(mode))
     )
@@ -123,13 +146,16 @@ function createRanchWorldRouter({ pool, requireAuth, now = Date.now }) {
       const state = readState(rows[0]);
       const time = now();
       state.events = state.events.filter((event) => event.start + event.duration > time);
-      if (kind !== 'equip' && time - (state.cooldowns[String(user.id)] || 0) < 3000) {
+      if (
+        !['equip', 'clover'].includes(kind) &&
+        time - (state.cooldowns[String(user.id)] || 0) < 3000
+      ) {
         await connection.rollback();
         return res.status(429).json({ message: '让 Max 喘口气，3 秒后再试' });
       }
       const sheep = (await flock(connection)).map((item) => present(item, state));
       const actor = sheep.find((item) => item.uid === uid);
-      if (kind !== 'scene' && !actor) {
+      if (!['scene', 'clover'].includes(kind) && !actor) {
         await connection.rollback();
         return res.status(404).json({ message: '这只羊暂时不在牧场里' });
       }
@@ -164,6 +190,43 @@ function createRanchWorldRouter({ pool, requireAuth, now = Date.now }) {
         return res.status(403).json({ message: '请先购买这件出行装备' });
       }
       const revision = Number(rows[0].revision) + 1;
+      if (kind === 'clover') {
+        if (state.events.some((event) => event.kind === 'clover')) {
+          await connection.rollback();
+          return res.status(409).json({ message: '三叶草的风还没停，等羊群飘回来吧' });
+        }
+        const [consumed] = await connection.execute(
+          "UPDATE user_assets SET quantity = quantity - 1 WHERE user_id = ? AND asset_key = 'ranch_clover' AND quantity >= 1",
+          [user.id],
+        );
+        if (consumed.affectedRows !== 1) {
+          await connection.rollback();
+          return res.status(409).json({ message: '三叶草已经用完，去商店补充吧' });
+        }
+        const event = {
+          id: revision,
+          kind: 'clover',
+          actor: '',
+          start: time,
+          duration: 8000,
+          targets: [],
+        };
+        event.targets = world.cloverTargets(event, sheep, state.events, time);
+        state.events.push(event);
+        await connection.execute(
+          'UPDATE ranch_world_state SET state_json = ?, revision = ? WHERE id = 1',
+          [JSON.stringify(state), revision],
+        );
+        await connection.commit();
+        cached = null;
+        return res.json({
+          revision,
+          scene: state.scene,
+          events: state.events.map(({ by, ...item }) => item),
+          sheep,
+          serverNowMs: now(),
+        });
+      }
       if (kind === 'equip') {
         const previous = state.motions[uid];
         state.motions[uid] = {
@@ -185,6 +248,10 @@ function createRanchWorldRouter({ pool, requireAuth, now = Date.now }) {
         state.events = state.events.filter(
           (event) => event.actor !== uid || !['bicycle', 'fly'].includes(event.kind),
         );
+        const clover = state.events.find(
+          (event) => event.kind === 'clover' && time < event.start + 3000,
+        );
+        if (clover) clover.targets = world.cloverTargets(clover, sheep, state.events, time);
         await connection.execute(
           'UPDATE ranch_world_state SET state_json = ?, revision = ? WHERE id = 1',
           [JSON.stringify(state), revision],
@@ -268,6 +335,10 @@ function createRanchWorldRouter({ pool, requireAuth, now = Date.now }) {
       );
       state.events.push(event);
       state.events = state.events.slice(-64);
+      const clover = state.events.find(
+        (item) => item.kind === 'clover' && time < item.start + 3000,
+      );
+      if (clover) clover.targets = world.cloverTargets(clover, sheep, state.events, time);
       await connection.execute(
         'UPDATE ranch_world_state SET state_json = ?, revision = ? WHERE id = 1',
         [JSON.stringify(state), revision],

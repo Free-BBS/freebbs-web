@@ -10,6 +10,10 @@
     // eslint-disable-next-line no-bitwise
     return hash >>> 0;
   };
+  const smooth = (value) => {
+    const t = Math.max(0, Math.min(1, value));
+    return t * t * (3 - 2 * t);
+  };
   const layout = (uid, index, total) => {
     const lanes = Math.max(4, Math.min(9, Math.ceil(Math.sqrt(Math.max(1, total)) * 1.45)));
     const lane = index % lanes;
@@ -62,7 +66,7 @@
       },
     ];
   }
-  function positionFor(sheep, index, all, time, events = []) {
+  function normalPositionFor(sheep, index, all, time, events = []) {
     const hungry = sheep.fedUntilMs !== undefined && sheep.fedUntilMs <= time;
     const seed = seedFor(sheep.uid);
     const base = {
@@ -198,5 +202,50 @@
     }
     return { ...base, kind: event.kind, progress, eventId: event.id };
   }
-  return { seedFor, layout, travelBoost, basePosition, ambientEvents, positionFor };
+  function cloverTargets(clover, sheep, events, fromTime = clover.start) {
+    const until = clover.start + 3000;
+    const targets = (clover.targets || []).filter((target) => target.at <= fromTime);
+    const caught = new Set(targets.map((target) => target.uid));
+    const ordinary = events.filter((event) => event.kind !== 'clover');
+    for (const [index, actor] of sheep.entries()) {
+      if (caught.has(actor.uid)) continue;
+      for (let at = Math.max(clover.start, fromTime); at < until; at += 100) {
+        const point = normalPositionFor(actor, index, sheep, at, ordinary);
+        if (!['fly', 'backflip'].includes(point.kind) || point.hungry) continue;
+        targets.push({ uid: actor.uid, at, fromX: point.x, fromTop: point.top });
+        break;
+      }
+    }
+    return targets.sort((a, b) => a.at - b.at || a.uid.localeCompare(b.uid));
+  }
+  function positionFor(sheep, index, all, time, events = []) {
+    const ordinary = events.filter((event) => event.kind !== 'clover');
+    const base = normalPositionFor(sheep, index, all, time, ordinary);
+    const clover = events.find(
+      (event) =>
+        event.kind === 'clover' && time >= event.start && time < event.start + event.duration,
+    );
+    const target = clover?.targets?.find((item) => item.uid === sheep.uid);
+    if (!target || time < target.at || time >= target.at + 5000 || base.hungry) return base;
+    const age = time - target.at;
+    const outward = smooth(age / 700);
+    const returning = smooth((age - 3300) / 1700);
+    const seed = seedFor(sheep.uid);
+    const skyX = 12 + (seed % 77);
+    const skyTop = 11 + (seed % 13);
+    const gustX = target.fromX + (skyX - target.fromX) * outward;
+    const gustTop = target.fromTop + (skyTop - target.fromTop) * outward;
+    return {
+      ...base,
+      x: gustX * (1 - returning) + base.x * returning,
+      top: gustTop * (1 - returning) + base.top * returning,
+      scale: base.scale * (1 - 0.12 * outward * (1 - returning)),
+      direction: seed % 2 ? 1 : -1,
+      kind: 'clover',
+      progress: age / 5000,
+      windLift: outward * (1 - returning),
+      eventId: clover.id,
+    };
+  }
+  return { seedFor, layout, travelBoost, basePosition, ambientEvents, cloverTargets, positionFor };
 });

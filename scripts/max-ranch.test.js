@@ -538,6 +538,25 @@ test('wing equipment flaps in flight, lands still equipped and never shows the b
   assert.equal(node('[data-wings]').attributes.visibility, 'hidden');
   assert.equal(node('[data-bicycle]').attributes.visibility, 'visible');
 });
+test('a clover gust carries an airborne pose and hides the ground shadow', (t) => {
+  const { controller, element, node } = ranchHarness(t, { shared: true });
+  controller.syncFrame({
+    x: 42,
+    direction: 1,
+    time: 123,
+    animationTime: 123.4,
+    kind: 'clover',
+    gear: 'wing',
+    progress: 0.3,
+    windLift: 1,
+  });
+  assert.equal(element.dataset.pose, 'clover');
+  assert.equal(node('[data-shadow]').attributes.visibility, 'hidden');
+  assert.equal(node('[data-wings]').attributes.visibility, 'visible');
+  assert.match(node('[data-facing]').attributes.transform, /rotate\(/);
+  controller.syncFrame({ x: 42, direction: 1, time: 128, kind: 'walk', gear: 'wing' });
+  assert.equal(node('[data-shadow]').attributes.visibility, 'visible');
+});
 test('reduced motion holds wings still and hunger hides them', (t) => {
   const { controller, node } = ranchHarness(t, { shared: true }, true);
   controller.syncFrame({

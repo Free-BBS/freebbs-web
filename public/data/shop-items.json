@@ -66,6 +66,18 @@
       "rules": "25 磁元永久拥有。到羊群广场点选自己的羊，在“出行装备”中选择翅膀；与自行车二选一。佩戴后长出翅膀，在公共和个人牧场高空飞行，也可手动起飞。可随时改为步行或自行车，反复使用免费。"
     },
     {
+      "key": "ranch_clover",
+      "assetKey": "ranch_clover",
+      "name": "三叶草",
+      "class": "consumable",
+      "description": "一阵只认空中羊的调皮风。",
+      "desc": "三片叶子轻轻一转，草地上空就有了新的旅行。",
+      "cost": { "magnetic": 2 },
+      "image": "/assets/shop/max-cartoon-v1/ranch_clover.webp",
+      "isgift": false,
+      "rules": "2 磁元一个，可重复购买。到羊群广场使用，每次消耗一个；未来 3 秒内正在飞行或跳起的羊会被吹向天空，5 秒后飘回原来的活动路线。风还没停时可等它结束再用下一个。"
+    },
+    {
       "key": "frame_orbit",
       "assetKey": "frame_orbit",
       "name": "环流轨道",
