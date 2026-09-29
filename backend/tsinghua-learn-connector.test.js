@@ -174,11 +174,21 @@ test('time/location uses its separate read endpoint and course entities are deco
     semesterId: '2026-2027-1',
     firstWeekMonday: '2026-09-21',
   });
-  assert.equal(projected.events.length, 48);
+  // Each week has Monday's lesson and one merged Wednesday 3–4 block.
+  assert.equal(projected.events.length, 32);
   assert.ok(projected.events[0].description.includes('新水利馆404'));
   assert.ok(projected.events[1].description.includes('建华/经管新楼A204'));
   assert.equal(projected.events[1].startAt, '2026-09-23T05:30:00.000Z');
-  assert.equal(projected.events[2].endAt, '2026-09-23T08:55:00.000Z');
+  assert.equal(projected.events[1].endAt, '2026-09-23T08:55:00.000Z');
+  const wednesdayLessons = projected.events.filter((event) =>
+    event.description.includes('建华/经管新楼A204'),
+  );
+  assert.equal(wednesdayLessons.length, 16);
+  assert.ok(
+    wednesdayLessons.every(
+      (event) => Date.parse(event.endAt) - Date.parse(event.startAt) === 205 * 60000,
+    ),
+  );
 });
 
 test('time/location errors stay partial while homework remains available', async () => {

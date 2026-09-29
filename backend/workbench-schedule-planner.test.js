@@ -39,7 +39,7 @@ test('six course sections use the exact Beijing-time knowledge mapping', () => {
     ['09:50', '12:15'],
     ['13:30', '15:05'],
     ['15:20', '16:55'],
-    ['17:10', '18:45'],
+    ['17:05', '18:40'],
     ['19:20', '21:45'],
   ]);
   const names = ['一', '二', '三', '四', '五', '六'];
@@ -309,6 +309,48 @@ test('planner preview requires login before reading private schedule', async (t)
 const sept24Afternoon = new Date('2026-09-24T06:00:00.000Z');
 const twoMeetings =
   '我今天晚上9点要开书记会，罗姆楼5103；10点要开支书例会，罗姆楼10-206，两个会都是1小时';
+
+const workWithNotes =
+  '今天13:00开始处理团委和BBS工作，备注里包括预算修正、BBS学习世界UI更新，BBS主旨推送，启明星激励计划，可以持续到17:30';
+
+test('oral notes and an end-time continuation remain one complete event', () => {
+  const parsed = parseKnownScheduleMessage(workWithNotes, now);
+  assert.deepEqual(parsed, {
+    kind: 'event',
+    title: '处理团委和BBS工作',
+    startAt: '2026-09-18T05:00:00.000Z',
+    endAt: '2026-09-18T09:30:00.000Z',
+    description: '预算修正、BBS学习世界UI更新，BBS主旨推送，启明星激励计划',
+  });
+  assert.equal(buildPreview(parsed, [], now).suggestions.length, 1);
+  for (const label of ['备注：', '备注包括', '备注中包含', '说明为']) {
+    const other = parseKnownScheduleMessage(
+      `今天下午1点开会，可以持续到5点半，${label}第一项；第二项\n第三项`,
+      now,
+    );
+    assert.equal(other.endAt, parsed.endAt);
+    assert.equal(other.description, '第一项；第二项\n第三项');
+  }
+});
+
+test('explicit end clauses do not hide later tasks or invent ambiguous end times', () => {
+  const batch = parseKnownScheduleMessage(
+    '今天13:00开会，备注里包括预算和推送，可以持续到17:30；18:00读书，直到19:00',
+    now,
+  );
+  assert.equal(batch.tasks.length, 2);
+  assert.equal(batch.tasks[0].description, '预算和推送');
+  assert.equal(batch.tasks[1].endAt, '2026-09-18T11:00:00.000Z');
+  for (const message of [
+    '今天13:00开会，持续1小时，可以持续到17:30',
+    '今天13:00开会，可以持续到17:30，直到18:30',
+    '今天23:00开会，可以持续到1:00',
+    '今天13:00开会，可以持续到25:30',
+    '今天13:00开会，可以持续到17:30；18:00读书',
+    '今天13:00开会，可以持续到明天17:30',
+  ])
+    assert.equal(parseKnownScheduleMessage(message, now), null, message);
+});
 
 test('two meetings inherit Beijing date, evening and shared duration without mixing titles or locations', () => {
   const parsed = parseKnownScheduleMessage(twoMeetings, sept24Afternoon);
@@ -612,6 +654,36 @@ test('Agent cannot silently drop an incomplete task from an explicitly multi-tas
   }
 });
 
+test('Agent single-event range extraction is not rejected as a missing second task', async (t) => {
+  const task = {
+    kind: 'event',
+    title: '处理团委和BBS工作',
+    description: '预算修正、推送',
+    startAt: new Date(Date.now() + 86400000).toISOString(),
+    endAt: new Date(Date.now() + 102600000).toISOString(),
+  };
+  const { base, calls } = await startServer(t, { answer: task });
+  const response = await fetch(`${base}/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: '明天13:00到17:30处理团委和BBS工作，备注里包括预算修正、推送，可以持续到17:30',
+    }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).suggestions.length, 1);
+  assert.ok(calls.some((call) => call.agentPayload));
+  const incomplete = await fetch(`${base}/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: '明天13:00开会，备注里包括预算修正、推送，可以持续到17:30；18:00讨论',
+    }),
+  });
+  assert.equal(incomplete.status, 422);
+  assert.ok(!calls.some((call) => call.sql?.includes('INSERT')));
+});
+
 function futureSuggestions(count) {
   const start = Date.now() + 86400000;
   return Array.from({ length: count }, (_, index) => ({
@@ -768,7 +840,9 @@ test('planner preview only reads authenticated user schedule and does not write'
   });
   assert.equal(response.status, 200);
   assert.equal((await response.json()).suggestions.length > 0, true);
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
+  assert.match(calls[1].sql, /^SELECT preferences_json/);
+  assert.deepEqual(calls[1].parameters, [17]);
   assert.equal(calls[0].parameters[0], 17);
   assert.match(calls[0].sql, /ORDER BY start_at LIMIT 501$/);
   assert.doesNotMatch(calls[0].sql, /LIMIT\s+\?/i);

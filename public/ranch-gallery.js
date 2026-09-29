@@ -35,13 +35,13 @@
     if (clover)
       windStatus.textContent = windy ? '三叶草起风 · 空中的羊正被吹走' : '风停了 · 羊群正飘回来';
     cloverButton.disabled = submitting || Boolean(clover);
-    const label = cloverCount ? `三叶草 ×${cloverCount}` : '三叶草 · 2 磁元';
+    const label = cloverCount ? `三叶草 ×${cloverCount}` : '三叶草 · 1 磁元';
     if (cloverLabel.textContent !== label) cloverLabel.textContent = label;
     cloverButton.title = clover
       ? '等羊群飘回来后可以再用一片'
       : cloverCount
         ? '消耗一片：未来 3 秒内吹飞空中的羊，5 秒后飘回'
-        : '到商店购买三叶草，每片 2 磁元';
+        : '到商店购买三叶草，每片 1 磁元';
   }
   async function refreshClovers() {
     await window.freeBbsApp?.sessionReady;

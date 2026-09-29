@@ -34,6 +34,23 @@ async function main() {
     event('overlap', 21, '08:02', '09:00', '同时进行的实验进度讨论', '六教 6A201\n请带上电路图'),
     event('later', 21, '14:00', '15:00', '下午安排', '线上会议'),
     event(
+      'full-notes',
+      22,
+      '08:00',
+      '12:30',
+      '团委和BBS工作',
+      '预算修正、BBS学习世界UI更新、BBS主旨推送、启明星激励计划。\n地点：罗姆楼 5103',
+    ),
+    event('notes-conflict', 22, '08:30', '10:00', '阶段讨论', '线上会议'),
+    event(
+      'long-word',
+      23,
+      '09:00',
+      '10:30',
+      '检查构建日志',
+      `https://example.invalid/${'continuous-build-output-'.repeat(20)}`,
+    ),
+    event(
       'long-text',
       22,
       '17:10',
@@ -134,6 +151,17 @@ async function main() {
         const cards = [...document.querySelectorAll('.workbench-week-event')].map((element) => {
           const box = rect(element);
           const timeline = element.closest('.workbench-week-timeline');
+          const notes = element.querySelector('.workbench-week-notes');
+          const notesStyle = notes ? getComputedStyle(notes) : null;
+          const warning = element.querySelector('.workbench-event-conflict');
+          const style = getComputedStyle(element);
+          const visibleChildren = [...element.children].filter(
+            (child) => !child.hidden && child.getClientRects().length,
+          );
+          const contentTop =
+            box.top + parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop);
+          const contentBottom =
+            box.bottom - parseFloat(style.borderBottomWidth) - parseFloat(style.paddingBottom);
           return {
             id: element.dataset.publicId,
             text: element.textContent,
@@ -141,6 +169,26 @@ async function main() {
             timeline: timeline ? rect(timeline) : null,
             title: element.querySelector('strong')?.textContent,
             description: element.querySelector('.workbench-week-notes')?.textContent,
+            notesVisible: !element.querySelector('.workbench-week-notes')?.hidden,
+            notesLayout:
+              notes && !notes.hidden
+                ? {
+                    box: rect(notes),
+                    lineHeight: parseFloat(notesStyle.lineHeight),
+                    lineLimit: Number(notesStyle.webkitLineClamp),
+                    scrollHeight: notes.scrollHeight,
+                    clientHeight: notes.clientHeight,
+                    scrollWidth: notes.scrollWidth,
+                    clientWidth: notes.clientWidth,
+                  }
+                : null,
+            conflictVisible: warning ? !warning.hidden : false,
+            conflictBox: warning && !warning.hidden ? rect(warning) : null,
+            verticalBalance: visibleChildren.length
+              ? Math.min(...visibleChildren.map((child) => rect(child).top)) -
+                contentTop -
+                (contentBottom - Math.max(...visibleChildren.map((child) => rect(child).bottom)))
+              : 0,
             accessible: element.getAttribute('aria-label'),
             overflowY: getComputedStyle(element).overflowY,
             scrollHeight: element.scrollHeight,
@@ -187,6 +235,12 @@ async function main() {
           item.description,
           `${label}: incomplete notes ${item.publicId}`,
         );
+        if (item.publicId === 'one-hour')
+          assert.equal(
+            card.notesVisible,
+            true,
+            `${label}: one-hour events must show their location`,
+          );
         assert.ok(card.accessible.includes(item.title), `${label}: complete accessible title`);
         assert.ok(
           card.accessible.includes(item.description),
@@ -208,6 +262,45 @@ async function main() {
           );
         }
         if (card.timeline) {
+          assert.ok(
+            Math.abs(card.verticalBalance) <= 0.5,
+            `${label}: title and notes are vertically centred as one group`,
+          );
+          if (card.notesLayout) {
+            const notes = card.notesLayout;
+            assert.ok(notes.box.bottom <= card.box.bottom + 0.1, `${label}: notes stay in card`);
+            assert.ok(
+              notes.box.height <= notes.lineLimit * notes.lineHeight + 0.1,
+              `${label}: notes use only whole lines that fit`,
+            );
+            assert.ok(
+              notes.scrollWidth <= notes.clientWidth + 1,
+              `${label}: long unbroken notes wrap inside the card`,
+            );
+          }
+          if (item.publicId === 'full-notes') {
+            const notes = card.notesLayout;
+            assert.ok(
+              notes && notes.box.height > notes.lineHeight * 2,
+              `${label}: multiline notes`,
+            );
+            assert.ok(
+              notes.scrollHeight <= notes.clientHeight + 1,
+              `${label}: long event has space for its complete notes`,
+            );
+            assert.ok(card.conflictVisible, `${label}: expanded notes retain conflict warning`);
+            assert.ok(
+              notes.box.bottom <= card.conflictBox.top + 0.1 &&
+                card.conflictBox.bottom <= card.box.bottom + 0.1,
+              `${label}: notes do not cover conflict warning`,
+            );
+          }
+          if (item.publicId === 'long-word') {
+            assert.ok(
+              card.notesLayout.scrollHeight > card.notesLayout.clientHeight,
+              `${label}: excess notes are clipped, not the time block expanded`,
+            );
+          }
           assert.doesNotMatch(
             card.text,
             /\d{2}:\d{2}/,
@@ -219,9 +312,9 @@ async function main() {
           );
           const start = new Date(item.startAt);
           const minute = ((start.getUTCHours() + 8) % 24) * 60 + start.getUTCMinutes();
-          const expectedTop = ((minute - 6 * 60) / 60) * 40;
+          const expectedTop = ((minute - 6 * 60) / 60) * 48;
           const expectedHeight =
-            ((Date.parse(item.endAt) - Date.parse(item.startAt)) / 3600000) * 40;
+            ((Date.parse(item.endAt) - Date.parse(item.startAt)) / 3600000) * 48;
           assert.ok(
             Math.abs(card.box.height - expectedHeight) < 0.1,
             `${label}: duration height ${item.publicId}`,
@@ -293,7 +386,7 @@ async function main() {
       }
     }
     report.checks.push(
-      '32 viewport/theme/font/scale combinations: fixed equal columns, duration-sized cards, only real conflicts overlap, full accessible labels and keyboard details, no document overflow',
+      '32 viewport/theme/font/scale combinations: compact 48px hours show one-hour locations; long notes wrap to available height, preserve conflict warnings, and never expand duration-sized cards; no document overflow',
     );
     report.checks.push(
       '5-minute, adjacent, overlapping, 21:02 one-hour and 23:59 cards retain real start coordinates and fit equal-height day timelines',
@@ -310,10 +403,11 @@ async function main() {
       });
     });
     await settle();
-    for (const id of ['five-minute', 'long-text', 'last-minute']) {
+    for (const id of ['five-minute', 'full-notes', 'long-text', 'last-minute']) {
       await page.$eval(`.workbench-week-event[data-public-id="${id}"]`, (element) => {
         element.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
       });
+      await page.focus(`.workbench-week-event[data-public-id="${id}"]`);
       const target = path.join(directory, `detail-${id}.png`);
       await page.screenshot({ path: target });
       report.screenshots.push(target);

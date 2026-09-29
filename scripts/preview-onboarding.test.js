@@ -327,7 +327,9 @@ test('onboarding preview uses real local pages, account progress and transaction
     assert.equal(course.nodes.length, 4);
     const detail = await api(`/api/courses/signals/map/nodes/${course.nodes[0].id}`);
     assert.match(detail.node.markdown, /本地预览/);
-    assert.equal((await api('/api/workbench/summary')).scheduleItems.length, 1);
+    const schedule = (await api('/api/workbench/summary')).scheduleItems;
+    assert.equal(schedule.filter((item) => item.publicId === 'ws_existing').length, 1);
+    assert.ok(schedule.some((item) => item.kind === 'course'));
     const event = await api(
       '/api/workbench/schedule-items/ws_existing',
       { title: '模拟修改' },

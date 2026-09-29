@@ -2974,7 +2974,7 @@ function renderWorkbenchDashboard() {
     document.body.dataset.workbenchController === 'standalone';
 
   document.body.classList.toggle('is-workbench-authenticated', userState.isLoggedIn);
-  workbenchDate.textContent = today;
+  workbenchDate.textContent = window.FreeBbsAcademicCalendar?.format() || today;
   workbenchGreeting.textContent = userState.isLoggedIn
     ? `${displayName}，今天从哪里继续？`
     : '把今天要做的事放在一个地方';

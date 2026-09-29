@@ -174,6 +174,10 @@ function run(command, args, options = {}, verifyTests = false) {
 }
 
 async function main() {
+  const workbenchOnly = process.argv.includes('--workbench-only');
+  const testFiles = workbenchOnly
+    ? TEST_FILES.filter((file) => /(?:workbench|course-schedule)/.test(file))
+    : TEST_FILES;
   const root = path.resolve(__dirname, '..');
   // Linux uses a deliberately short fixed parent so the Unix socket fits its length limit.
   const parent = process.platform === 'win32' ? os.tmpdir() : '/tmp';
@@ -241,17 +245,17 @@ async function main() {
     );
     verifiedInstance = true;
     console.log(
-      `[mysql-qa] MySQL ${version.version}; networking disabled; ${TEST_FILES.length} test files`,
+      `[mysql-qa] MySQL ${version.version}; networking disabled; ${testFiles.length} test files`,
     );
     await run(
       process.execPath,
-      ['--test', '--test-reporter=tap', '--test-concurrency=1', ...TEST_FILES],
+      ['--test', '--test-reporter=tap', '--test-concurrency=1', ...testFiles],
       {
         cwd: root,
         env,
         signal: controller.signal,
       },
-      true,
+      !workbenchOnly,
     );
     success = true;
   } finally {

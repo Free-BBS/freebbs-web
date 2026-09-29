@@ -474,7 +474,7 @@
   function layoutWeekCards() {
     if (!elements.weekScroll?.clientWidth || !elements.weekGrid.getClientRects().length) return;
     const columnWidth = Math.max(196, Math.floor(elements.weekScroll.clientWidth / 7));
-    const timelineHeight = (state.hours.end - state.hours.start) * 40;
+    const timelineHeight = (state.hours.end - state.hours.start) * calendarModel.HOUR_HEIGHT;
     weekLayouts.forEach(({ timeline, blocks }) => {
       const lanes = [];
       for (const { block, top, end, height } of blocks) {
@@ -509,6 +509,15 @@
             remaining -= needed;
             shown += 1;
           }
+        }
+        // Reserve title/status rows first; notes may use only the remaining real time height.
+        const notes = block.querySelector('.workbench-week-notes');
+        if (notes && !notes.hidden) {
+          const notesStyle = getComputedStyle(notes);
+          const lineHeight =
+            parseFloat(notesStyle.lineHeight) || parseFloat(notesStyle.fontSize) * 1.5;
+          const lines = 1 + Math.floor(Math.max(0, remaining) / lineHeight);
+          notes.style.setProperty('--workbench-note-lines', String(lines));
         }
       }
       timeline.style.setProperty('--workbench-timeline-hours-height', `${timelineHeight}px`);
@@ -652,8 +661,9 @@
       allDay.className = 'workbench-week-all-day';
       const timeline = document.createElement('div');
       timeline.className = 'workbench-week-timeline';
-      const timelineHeight = (state.hours.end - state.hours.start) * 40;
+      const timelineHeight = (state.hours.end - state.hours.start) * calendarModel.HOUR_HEIGHT;
       timeline.style.height = `${timelineHeight}px`;
+      timeline.style.setProperty('--workbench-hour-height', `${calendarModel.HOUR_HEIGHT}px`);
       timeline.setAttribute(
         'aria-label',
         `${String(state.hours.start).padStart(2, '0')}:00–${String(state.hours.end).padStart(2, '0')}:00`,
@@ -661,7 +671,7 @@
       for (let hour = state.hours.start; hour < state.hours.end; hour += 1) {
         const marker = document.createElement('span');
         marker.className = 'workbench-week-hour';
-        marker.style.top = `${(hour - state.hours.start) * 40}px`;
+        marker.style.top = `${(hour - state.hours.start) * calendarModel.HOUR_HEIGHT}px`;
         marker.textContent = `${String(hour).padStart(2, '0')}:00`;
         timeline.append(marker);
       }
@@ -679,10 +689,11 @@
       for (const entry of entries) {
         const block = document.createElement('button');
         block.type = 'button';
-        block.dataset.workbenchAction = entry.item.homeworkReference
-          ? 'toggle-homework-completion'
-          : 'edit-schedule';
-        if (entry.item.courseScheduleReference)
+        block.dataset.workbenchAction =
+          entry.item.homeworkReference && !entry.item.editable
+            ? 'toggle-homework-completion'
+            : 'edit-schedule';
+        if (entry.item.courseScheduleReference && !entry.item.editable)
           block.dataset.workbenchAction = 'view-course-schedule';
         block.dataset.publicId = entry.item.publicId;
         block.className = `workbench-week-event${entry.item.status === 'draft' ? ' is-draft' : ''}${entry.item.sourceType === 'agent' ? ' is-agent' : ''}${entry.item.kind === 'deadline' ? ' is-deadline' : ''}${entry.item.kind === 'weekly' ? ' is-weekly' : ''}`;
@@ -693,7 +704,6 @@
         if (entry.item.kind === 'deadline') prefix = '⏱ DDL · ';
         if (entry.item.kind === 'weekly') prefix = '↻ 周常 · ';
         if (entry.item.kind === 'course' && !entry.item.courseScheduleReference) prefix = '课程 · ';
-        if (entry.item.courseScheduleReference) prefix = '课程 · ';
         title.textContent = `${entry.item.completed ? '✓ 已完成 · ' : prefix}${entry.item.title || '未命名日程'}`;
         const time = document.createElement('small');
         time.textContent = `${entry.item.sourceType === 'agent' ? 'Max · ' : ''}${toShanghaiInputValue(entry.item.startAt).slice(11)}–${toShanghaiInputValue(entry.item.endAt).slice(11)}`;
@@ -726,8 +736,8 @@
           block.append(warning);
         }
         const calendarAction = entry.item.completed ? '恢复未完成' : '标记已完成';
-        block.title = `${entry.item.title} · ${entry.item.kind === 'deadline' ? `截止 ${formatMoment(entry.item.endAt)}` : `${formatMoment(entry.item.startAt)} — ${formatMoment(entry.item.endAt)}`}${entry.item.description ? `\n地点/备注：${entry.item.description}` : ''}${entry.item.updatedAt ? `\n更新于 ${formatMoment(entry.item.updatedAt)}` : ''} · ${entry.item.homeworkReference ? calendarAction : '点击编辑'}`;
-        if (entry.item.courseScheduleReference)
+        block.title = `${entry.item.title} · ${entry.item.kind === 'deadline' ? `截止 ${formatMoment(entry.item.endAt)}` : `${formatMoment(entry.item.startAt)} — ${formatMoment(entry.item.endAt)}`}${entry.item.description ? `\n地点/备注：${entry.item.description}` : ''}${entry.item.updatedAt ? `\n更新于 ${formatMoment(entry.item.updatedAt)}` : ''} · ${entry.item.homeworkReference && !entry.item.editable ? calendarAction : '点击编辑'}`;
+        if (entry.item.courseScheduleReference && !entry.item.editable)
           block.title = block.title.replace(/点击编辑$/, '查看固定课程');
         if (overlaps.length)
           block.title += `\n${overlaps
@@ -743,6 +753,10 @@
           const { top, end, height } = calendarModel.timeBlock(entry.start, entry.end, windowStart);
           block.style.top = `${top}px`;
           block.style.height = `${height}px`;
+          block.classList.toggle(
+            'is-compact-time-block',
+            entry.end - entry.start <= 60 * 60 * 1000,
+          );
           block.classList.toggle('is-tiny-time-block', height < 28);
           blocks.push({ block, top, end, height });
           timeline.append(block);
@@ -998,7 +1012,7 @@
         if (isDraft) {
           actions.push(makeAction('确认加入', 'confirm-schedule', item.publicId, 'is-primary'));
         }
-        if (item.courseScheduleReference) {
+        if (item.courseScheduleReference && !item.editable) {
           actions.push(makeAction('查看固定课程', 'view-course-schedule', item.publicId));
         } else if (item.homeworkReference) {
           actions.push(
@@ -1008,6 +1022,11 @@
               item.publicId,
             ),
           );
+          if (item.editable)
+            actions.push(
+              makeAction('编辑', 'edit-schedule', item.publicId),
+              makeAction('删除', 'delete-schedule', item.publicId, 'is-danger'),
+            );
         } else {
           actions.push(
             makeAction('编辑', 'edit-schedule', item.publicId),
@@ -1148,6 +1167,7 @@
       state.scheduleReady = true;
       state.scheduleItems = scheduleResult.value.scheduleItems || [];
       renderScheduleItems();
+      window.dispatchEvent(new CustomEvent('freebbs:workbench-loaded'));
     } else {
       renderDataFailure(elements.scheduleList, '本周时间表', scheduleResult.reason);
       elements.weekGrid.textContent =
@@ -1242,6 +1262,7 @@
     elements.scheduleForm?.reset();
     elements.scheduleId.value = item?.publicId || '';
     elements.scheduleVersion.value = item?.version || '';
+    elements.scheduleForm.dataset.sourceRevision = item?.sourceRevision || '';
     elements.scheduleTitle.value = item?.title || '';
     elements.scheduleDescription.value = item?.description || '';
     elements.scheduleStart.value = toShanghaiInputValue(item?.startAt || fallback.startAt);
@@ -1286,15 +1307,17 @@
         ? '编辑 DDL'
         : '编辑安排'
       : '新增安排';
-    elements.scheduleKindHint.textContent = isDeadline
-      ? '个人 DDL 不依赖网络学堂；只标记截止时间，不占用此前整段时间'
-      : kind === 'course' && !editing
-        ? '选课、旁听都可以手动加入，不需要连接网络学堂。每周有不同时间或地点时，请分别添加；节假日和调停课需自行修改'
-        : kind === 'course'
-          ? '仅修改本次课程，其余重复课程保持不变'
-          : editing
-            ? '仅修改本次安排，其余重复安排保持不变'
-            : '';
+    elements.scheduleKindHint.textContent = elements.scheduleForm.dataset.sourceRevision
+      ? '仅修改个人计划中的本次安排，不回写网络学堂；重新同步会保留你的修改'
+      : isDeadline
+        ? '个人 DDL 不依赖网络学堂；只标记截止时间，不占用此前整段时间'
+        : kind === 'course' && !editing
+          ? '选课、旁听都可以手动加入，不需要连接网络学堂。每周有不同时间或地点时，请分别添加；节假日和调停课需自行修改'
+          : kind === 'course'
+            ? '仅修改本次课程，其余重复课程保持不变'
+            : editing
+              ? '仅修改本次安排，其余重复安排保持不变'
+              : '';
     resetConflictWarning();
   }
 
@@ -1460,6 +1483,8 @@
       if (publicId && elements.scheduleVersion.value) {
         payload.version = Number(elements.scheduleVersion.value);
       }
+      if (publicId && elements.scheduleForm.dataset.sourceRevision)
+        payload.sourceRevision = elements.scheduleForm.dataset.sourceRevision;
       elements.scheduleFormStatus.textContent = '正在保存…';
       await app.callApi(
         repeating
@@ -1671,7 +1696,17 @@
     const notification = state.notifications.find((item) => item.publicId === publicId);
     const scheduleItem = state.scheduleItems.find((item) => item.publicId === publicId);
 
-    if (scheduleItem?.courseScheduleReference) {
+    if (
+      scheduleItem?.editable &&
+      ['view-course-schedule', 'toggle-homework-completion'].includes(action)
+    ) {
+      // Calendar cards open the same editor; completion remains an explicit list action.
+      if (action === 'view-course-schedule') {
+        openScheduleEditor(scheduleItem);
+        return;
+      }
+    }
+    if (scheduleItem?.courseScheduleReference && !scheduleItem.editable) {
       if (action === 'view-course-schedule') {
         window.dispatchEvent(
           new CustomEvent('freebbs:course-calendar-show', { detail: scheduleItem }),
@@ -1743,6 +1778,14 @@
       if (!window.confirm(`删除日程“${scheduleItem.title}”？`)) return;
       await app.callApi(`/workbench/schedule-items/${encodeURIComponent(publicId)}`, {
         method: 'DELETE',
+        ...(scheduleItem.sourceRevision
+          ? {
+              body: JSON.stringify({
+                version: scheduleItem.version,
+                sourceRevision: scheduleItem.sourceRevision,
+              }),
+            }
+          : {}),
       });
     } else if (action === 'confirm-schedule' && scheduleItem) {
       const conflicts = await checkScheduleConflicts({

@@ -2,8 +2,7 @@
 const { createOnboardingPreview } = require('./preview-onboarding');
 const { createCircuitAchievementPreviewApi } = require('./preview-circuit-achievement-api');
 
-function createCourseThreadsPreview() {
-  const now = () => Date.parse('2026-09-28T02:00:00Z');
+function createCourseThreadsPreview({ now = () => Date.parse('2026-09-28T02:00:00Z') } = {}) {
   const preview = createOnboardingPreview({ now, extraApi: createCircuitAchievementPreviewApi() });
   const boardNames = [
     ['daily', '日常'],

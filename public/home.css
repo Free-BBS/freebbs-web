@@ -407,12 +407,13 @@ body.home-page .home-dashboard-panel {
 
 @media (min-width: 901px) {
   body.home-page .home-dashboard {
-    grid-template-areas: 'feed boards' 'heat heat';
+    grid-template-areas: 'feed boards' 'feed heat';
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    height: clamp(760px, 95vh, 1020px);
   }
   body.home-page .home-heat-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 12px 24px;
+    display: flex;
+    flex-direction: column;
   }
 }
 
@@ -484,6 +485,26 @@ body.home-page :is(.home-feed-list, .home-board-activity) {
   scrollbar-gutter: stable;
   overscroll-behavior-y: contain;
   align-content: start;
+}
+
+@media (min-width: 901px) {
+  body.home-page :is(.home-feed-panel, .home-board-panel, .home-heat-panel) {
+    height: auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  body.home-page .home-heat-list {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    overscroll-behavior-y: contain;
+  }
+  body.home-page .home-heat-list > li {
+    flex-shrink: 0;
+  }
 }
 
 body.home-page .home-feed-item,

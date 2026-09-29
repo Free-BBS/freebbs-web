@@ -94,7 +94,7 @@ async function main() {
     assert.equal(await page.$eval('#workbench-hours-start', (element) => element.value), '6');
     assert.equal(
       await page.$eval('.workbench-week-timeline', (element) => element.style.height),
-      '720px',
+      '864px',
     );
     assert.equal(
       await page.$$eval(
@@ -115,7 +115,7 @@ async function main() {
         '.workbench-week-event[data-public-id="notes-main"]',
         (element) => element.style.top,
       ),
-      '160px',
+      '192px',
     );
     assert.match(
       await page.$eval('#workbench-hours-outside', (element) => element.textContent),
@@ -136,21 +136,21 @@ async function main() {
     await waitStatus('#workbench-hours-status', '严格晚于');
     assert.equal(
       await page.$eval('.workbench-week-timeline', (element) => element.style.height),
-      '720px',
+      '864px',
     );
     await apply(10, 10);
     await waitStatus('#workbench-hours-status', '严格晚于');
     await apply(8, 20);
     assert.equal(
       await page.$eval('.workbench-week-timeline', (element) => element.style.height),
-      '480px',
+      '576px',
     );
     assert.equal(
       await page.$eval(
         '.workbench-week-event[data-public-id="notes-main"]',
         (element) => element.style.top,
       ),
-      '80px',
+      '96px',
     );
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForSelector('.workbench-week-event[data-public-id="notes-main"]');

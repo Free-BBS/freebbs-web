@@ -72,7 +72,13 @@ test('accepts readable course directories only after resolving allowed-root boun
   await fs.promises.mkdir(courseRoot, { recursive: true });
   await fs.promises.mkdir(outsideRoot);
   await fs.promises.writeFile(filePath, 'not a directory');
-  await fs.promises.symlink(outsideRoot, escapingLink);
+  // Directory junctions exercise the same realpath boundary without requiring
+  // Windows developer mode or the symlink privilege.
+  await fs.promises.symlink(
+    outsideRoot,
+    escapingLink,
+    process.platform === 'win32' ? 'junction' : 'dir',
+  );
 
   t.after(async () => {
     await fs.promises.rm(temporaryRoot, { recursive: true, force: true });

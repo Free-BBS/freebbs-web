@@ -15,7 +15,9 @@ const sendEmailCodeButton = document.getElementById('send-email-code');
 const authMajorFixed = document.getElementById('auth-major-fixed');
 const EMAIL_CODE_RESEND_SECONDS = 60;
 let emailCodeCountdownTimer = null;
-let emailCodeCountdownRemaining = 0;
+let emailCodeCountdownUntil = 0;
+let emailCodeSending = false;
+const EMAIL_CODE_COOLDOWN_KEY = `free_bbs_email_code_cooldown:${authForm?.dataset.authMode || ''}`;
 
 function getStoredThemeMode() {
   return localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark';
@@ -74,39 +76,55 @@ function setMessage(message) {
   authMessage.textContent = message || '';
 }
 
-function setEmailCodeButtonCountdown(seconds) {
-  if (!sendEmailCodeButton) {
-    return;
-  }
-
-  window.clearInterval(emailCodeCountdownTimer);
-  emailCodeCountdownRemaining = Math.max(0, Number(seconds) || 0);
-
-  if (!emailCodeCountdownRemaining) {
-    sendEmailCodeButton.disabled = false;
-    sendEmailCodeButton.textContent = '发送验证码';
-    return;
-  }
-
-  const renderCountdown = () => {
-    sendEmailCodeButton.disabled = true;
-    sendEmailCodeButton.textContent = `${emailCodeCountdownRemaining}s后重发`;
-  };
-
-  renderCountdown();
-  emailCodeCountdownTimer = window.setInterval(() => {
-    emailCodeCountdownRemaining -= 1;
-
-    if (emailCodeCountdownRemaining <= 0) {
-      window.clearInterval(emailCodeCountdownTimer);
-      emailCodeCountdownTimer = null;
-      sendEmailCodeButton.disabled = false;
-      sendEmailCodeButton.textContent = '发送验证码';
-      return;
+function refreshEmailCodeCountdown() {
+  if (!sendEmailCodeButton) return;
+  const remaining = Math.max(0, Math.ceil((emailCodeCountdownUntil - Date.now()) / 1000));
+  if (!remaining) {
+    window.clearInterval(emailCodeCountdownTimer);
+    emailCodeCountdownTimer = null;
+    emailCodeCountdownUntil = 0;
+    try {
+      window.sessionStorage.removeItem(EMAIL_CODE_COOLDOWN_KEY);
+    } catch {
+      /* The in-memory deadline still works when storage is blocked. */
     }
+  }
+  sendEmailCodeButton.disabled = emailCodeSending || remaining > 0;
+  sendEmailCodeButton.textContent = remaining ? `${remaining}s后重发` : '发送验证码';
+}
 
-    renderCountdown();
-  }, 1000);
+function setEmailCodeButtonCountdown(seconds) {
+  if (!sendEmailCodeButton) return;
+  window.clearInterval(emailCodeCountdownTimer);
+  emailCodeCountdownUntil = Date.now() + Math.max(0, Number(seconds) || 0) * 1000;
+  try {
+    window.sessionStorage.setItem(EMAIL_CODE_COOLDOWN_KEY, String(emailCodeCountdownUntil));
+  } catch {
+    /* Storage is optional; server-side resend throttling remains authoritative. */
+  }
+  refreshEmailCodeCountdown();
+  if (emailCodeCountdownUntil > Date.now())
+    emailCodeCountdownTimer = window.setInterval(refreshEmailCodeCountdown, 1000);
+}
+
+function initializeEmailCodeCountdown() {
+  if (!sendEmailCodeButton) return;
+  try {
+    const until = Number(window.sessionStorage.getItem(EMAIL_CODE_COOLDOWN_KEY));
+    const remaining = until - Date.now();
+    if (
+      Number.isFinite(remaining) &&
+      remaining > 0 &&
+      remaining <= EMAIL_CODE_RESEND_SECONDS * 1000
+    )
+      setEmailCodeButtonCountdown(remaining / 1000);
+    else refreshEmailCodeCountdown();
+  } catch {
+    refreshEmailCodeCountdown();
+  }
+  document.addEventListener?.('visibilitychange', refreshEmailCodeCountdown);
+  window.addEventListener?.('focus', refreshEmailCodeCountdown);
+  window.addEventListener?.('pageshow', refreshEmailCodeCountdown);
 }
 
 async function callApi(path, options = {}) {
@@ -240,7 +258,7 @@ async function handleSendEmailCode() {
   const studentIdInput = document.getElementById('auth-student-id');
   const mode = authForm.dataset.authMode;
 
-  if (emailCodeCountdownRemaining > 0) {
+  if (emailCodeSending || emailCodeCountdownUntil > Date.now()) {
     return;
   }
 
@@ -254,6 +272,7 @@ async function handleSendEmailCode() {
     return;
   }
 
+  emailCodeSending = true;
   sendEmailCodeButton.disabled = true;
   setMessage('正在发送验证码...');
 
@@ -283,10 +302,8 @@ async function handleSendEmailCode() {
       sendEmailCodeButton.textContent = '发送验证码';
     }
   } finally {
-    if (emailCodeCountdownRemaining <= 0) {
-      sendEmailCodeButton.disabled = false;
-      sendEmailCodeButton.textContent = '发送验证码';
-    }
+    emailCodeSending = false;
+    refreshEmailCodeCountdown();
   }
 }
 
@@ -325,6 +342,7 @@ function initializeAuthReturnLinks() {
 initializeAuthReturnLinks();
 authForm?.addEventListener('submit', handleAuthSubmit);
 sendEmailCodeButton?.addEventListener('click', handleSendEmailCode);
+initializeEmailCodeCountdown();
 authMajorFixed?.addEventListener('click', () => {
   window.alert('目前只开放给电子系同学');
 });

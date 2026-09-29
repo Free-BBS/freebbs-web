@@ -1,6 +1,14 @@
 const crypto = require('node:crypto');
 const { COURSE_SECTIONS } = require('./course-sections');
 const { normalizeHtmlText } = require('./tsinghua-learn-connector');
+const {
+  CALENDAR_PRESETS,
+  SECTION_CHOICES,
+  normalizeCalendarOptions,
+  holidayForDate,
+} = require('./course-calendar-options');
+const { loadCourseOverrides, applyOverride } = require('./campus-schedule-overrides');
+const { DEFAULTS } = require('../public/academic-calendar');
 
 const DAY_MS = 86400000;
 const MAX_WEEKS = 53;
@@ -91,11 +99,16 @@ function parseTimes(text) {
     const start = NUMBER[match[1]] || Number(match[1]);
     const end = NUMBER[match[2]] || Number(match[2] || start);
     if (end < start) throw new Error('大节结束序号必须不早于开始序号。');
-    return { start: COURSE_SECTIONS[start][0], end: COURSE_SECTIONS[end][1] };
+    return {
+      start: COURSE_SECTIONS[start][0],
+      end: COURSE_SECTIONS[end][1],
+      sectionStart: start,
+      sectionEnd: end,
+    };
   });
 }
 
-function parseCourseSchedule(course, { teachingWeeks = null } = {}) {
+function parseCourseSchedule(course, { teachingWeeks = null, includeSections = false } = {}) {
   let text = String(course?.scheduleText || '')
     .normalize('NFKC')
     .replace(/[—–－]/g, '-')
@@ -209,6 +222,10 @@ function parseCourseSchedule(course, { teachingWeeks = null } = {}) {
         if (!sessionWeeks.length) throw new Error('周次和单双周条件没有匹配的教学周。');
         const dayNumber = WEEKDAY[day[1]] || Number(day[1]);
         for (const time of parseTimes(segment)) {
+          if (!includeSections) {
+            delete time.sectionStart;
+            delete time.sectionEnd;
+          }
           sessions.push({
             weekday: dayNumber,
             weeks: sessionWeeks,
@@ -227,10 +244,20 @@ function parseCourseSchedule(course, { teachingWeeks = null } = {}) {
 
 function projectCourseSchedules(
   courses,
-  { semesterId, firstWeekMonday, teachingWeeks = null, range, fetchedAt = null } = {},
+  {
+    semesterId,
+    firstWeekMonday,
+    teachingWeeks = null,
+    range,
+    fetchedAt = null,
+    options = {},
+    includeExcluded = false,
+  } = {},
 ) {
   const events = new Map();
   const issues = [];
+  const calendarOptions = normalizeCalendarOptions(options, firstWeekMonday);
+  let skippedLessons = 0;
   const monday = normalizeMonday(firstWeekMonday);
   const anchor = monday ? Date.parse(`${monday}T00:00:00+08:00`) : null;
   const uniqueCourses = new Map();
@@ -244,7 +271,7 @@ function projectCourseSchedules(
   }
   let parsedCourses = 0;
   for (const course of uniqueCourses.values()) {
-    const parsed = parseCourseSchedule(course, { teachingWeeks });
+    const parsed = parseCourseSchedule(course, { teachingWeeks, includeSections: true });
     const issue = parsed.issue || (!monday ? '请先设置该学期第一教学周的周一日期。' : null);
     if (!parsed.issue) parsedCourses += 1;
     if (issue) {
@@ -258,50 +285,109 @@ function projectCourseSchedules(
         message: course.calendarSyncWarning,
       });
     }
+    const occurrences = [];
     for (const session of parsed.sessions) {
-      for (const week of session.weeks) {
-        const day = anchor + ((week - 1) * 7 + session.weekday - 1) * DAY_MS;
-        const startAt = new Date(day + minutes(session.start) * 60000);
-        const endAt = new Date(day + minutes(session.end) * 60000);
-        if (range && (startAt >= range.end || endAt <= range.start)) continue;
-        const reference = crypto
-          .createHash('sha256')
-          .update(
-            JSON.stringify([
-              semesterId,
-              course.sourceReference,
-              week,
-              session.weekday,
-              session.start,
-              session.end,
-            ]),
-          )
-          .digest('hex')
-          .slice(0, 32);
-        events.set(reference, {
-          publicId: `cs_${reference}`,
-          courseScheduleReference: reference,
-          courseReference: course.sourceReference,
-          semesterId,
-          title: course.title || '未命名课程',
-          description: [
-            session.location || course.locationText,
-            course.teacher,
-            `第 ${week} 教学周`,
-            session.weekSource === 'calendar' ? '周次按已确认校历补全' : '',
-          ]
-            .filter(Boolean)
-            .join(' · '),
-          startAt: startAt.toISOString(),
-          endAt: endAt.toISOString(),
-          allDay: false,
-          timezone: 'Asia/Shanghai',
-          kind: 'course',
-          sourceType: 'network_classroom',
-          status: 'confirmed',
-          updatedAt: fetchedAt ? new Date(fetchedAt).toISOString() : null,
+      const counts = calendarOptions.courseSections[course.sourceReference] || {};
+      const startChoice = SECTION_CHOICES[session.sectionStart]?.find(
+        (item) => item.count === counts[session.sectionStart],
+      );
+      const endChoice = SECTION_CHOICES[session.sectionEnd]?.find(
+        (item) => item.count === counts[session.sectionEnd],
+      );
+      for (const week of session.weeks)
+        occurrences.push({
+          ...session,
+          week,
+          location: session.location || course.locationText || '',
+          start: startChoice?.start || session.start,
+          end: endChoice?.end || session.end,
         });
+    }
+    const uniqueOccurrences = [
+      ...new Map(
+        occurrences.map((session) => [
+          JSON.stringify([
+            session.week,
+            session.weekday,
+            session.start,
+            session.end,
+            session.location,
+          ]),
+          session,
+        ]),
+      ).values(),
+    ];
+    uniqueOccurrences.sort(
+      (a, b) =>
+        a.week - b.week ||
+        a.weekday - b.weekday ||
+        a.location.localeCompare(b.location) ||
+        a.start.localeCompare(b.start),
+    );
+    const merged = [];
+    for (const session of uniqueOccurrences) {
+      const previous = merged.at(-1);
+      if (
+        previous &&
+        previous.week === session.week &&
+        previous.weekday === session.weekday &&
+        previous.location === session.location &&
+        previous.sectionEnd &&
+        previous.sectionEnd + 1 === session.sectionStart &&
+        minutes(session.start) - minutes(previous.end) >= 0 &&
+        minutes(session.start) - minutes(previous.end) <= 30
+      ) {
+        previous.end = session.end;
+        previous.sectionEnd = session.sectionEnd;
+      } else merged.push({ ...session });
+    }
+    for (const session of merged) {
+      const { week } = session;
+      const day = anchor + ((week - 1) * 7 + session.weekday - 1) * DAY_MS;
+      const startAt = new Date(day + minutes(session.start) * 60000);
+      const endAt = new Date(day + minutes(session.end) * 60000);
+      const calendarHoliday = holidayForDate(
+        new Date(day + 8 * 3600000).toISOString().slice(0, 10),
+        calendarOptions,
+      );
+      if (calendarHoliday) {
+        skippedLessons += 1;
+        if (!includeExcluded) continue;
       }
+      if (range && (startAt >= range.end || endAt <= range.start)) continue;
+      const reference = crypto
+        .createHash('sha256')
+        .update(
+          JSON.stringify([
+            semesterId,
+            course.sourceReference,
+            week,
+            session.weekday,
+            session.sectionStart ? `section:${session.sectionStart}` : session.start,
+            session.sectionEnd ? `section:${session.sectionEnd}` : session.end,
+          ]),
+        )
+        .digest('hex')
+        .slice(0, 32);
+      events.set(reference, {
+        publicId: `cs_${reference}`,
+        courseScheduleReference: reference,
+        courseReference: course.sourceReference,
+        semesterId,
+        calendarHoliday,
+        sectionStart: session.sectionStart || null,
+        sectionEnd: session.sectionEnd || null,
+        title: course.title || '未命名课程',
+        description: session.location || course.locationText || '',
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString(),
+        allDay: false,
+        timezone: 'Asia/Shanghai',
+        kind: 'course',
+        sourceType: 'network_classroom',
+        status: 'confirmed',
+        updatedAt: fetchedAt ? new Date(fetchedAt).toISOString() : null,
+      });
     }
   }
   return {
@@ -309,6 +395,7 @@ function projectCourseSchedules(
     issues,
     parsedCourses,
     totalCourses: uniqueCourses.size,
+    skippedLessons,
   };
 }
 
@@ -324,42 +411,69 @@ function parseCoursesColumn(value) {
 
 async function loadSnapshots(pool, userId, semesterId) {
   const [rows] = await pool.execute(
-    `SELECT s.semester_id, s.courses_json, s.fetched_at, s.sync_status,
-            s.connector_generation AS snapshot_generation, c.generation AS connector_generation,
-            c.connected_at, settings.connector_generation AS settings_generation,
+    `SELECT s.semester_id, s.calendar_copy_json,
+            JSON_EXTRACT(s.calendar_copy_json, '$.courses') AS courses_json,
+            JSON_UNQUOTE(JSON_EXTRACT(s.calendar_copy_json, '$.fetchedAt')) AS fetched_at,
+            s.sync_status,
+            JSON_EXTRACT(s.calendar_copy_json, '$.generation') AS snapshot_generation,
+            JSON_EXTRACT(s.calendar_copy_json, '$.generation') AS connector_generation,
+            settings.connector_generation AS settings_generation,
             DATE_FORMAT(settings.first_week_monday, '%Y-%m-%d') AS first_week_monday,
-            settings.teaching_weeks
+            settings.teaching_weeks, settings.options_json
      FROM campus_learn_semester_snapshots s
-     INNER JOIN user_campus_connectors c ON c.user_id = s.user_id
-       AND c.provider = 'tsinghua-learn' AND c.generation = s.connector_generation
      LEFT JOIN campus_course_calendar_settings settings ON settings.user_id = s.user_id
-       AND settings.semester_id = s.semester_id AND settings.connector_generation = c.generation
-     WHERE s.user_id = ? AND c.status IN ('active_verified', 'active_unverified', 'reauthorization_required')
-       AND c.connected_at IS NOT NULL AND s.fetched_at >= c.connected_at
+       AND settings.semester_id = s.semester_id AND settings.connector_generation > 0
+     WHERE s.user_id = ? AND s.calendar_copy_json IS NOT NULL
        ${semesterId ? 'AND s.semester_id = ?' : ''}
      ORDER BY s.fetched_at DESC`,
     semesterId ? [userId, semesterId] : [userId],
   );
-  // Retain an application-level check as well as SQL scoping, including legacy snapshots.
-  return rows.filter(
-    (row) =>
-      Number(row.snapshot_generation) > 0 &&
-      Number(row.snapshot_generation) === Number(row.connector_generation) &&
-      row.connected_at &&
-      new Date(row.fetched_at) >= new Date(row.connected_at),
-  );
+  // Synced courses belong to the local user, independently of the live grant.
+  // Keep the snapshot generation for calendar settings and personal edits; never
+  // reinterpret it as the latest connection generation after expiry/revocation.
+  return rows
+    .map((row) => {
+      const copy =
+        typeof row.calendar_copy_json === 'string'
+          ? JSON.parse(row.calendar_copy_json)
+          : row.calendar_copy_json;
+      if (!copy) return row;
+      return {
+        ...row,
+        savedEvents: copy.events,
+        settings_generation: copy.generation,
+        first_week_monday: copy.firstWeekMonday,
+        teaching_weeks: copy.teachingWeeks,
+        options_json: copy.options || {},
+      };
+    })
+    .filter(
+      (row) =>
+        Number(row.snapshot_generation) > 0 &&
+        Number(row.snapshot_generation) === Number(row.connector_generation) &&
+        Number.isFinite(new Date(row.fetched_at).getTime()),
+    );
 }
 
 function rowMonday(row) {
-  return Number(row.settings_generation) === Number(row.connector_generation)
-    ? normalizeMonday(row.first_week_monday)
-    : null;
+  const saved = Number(row.settings_generation) > 0 ? normalizeMonday(row.first_week_monday) : null;
+  return saved || DEFAULTS[row.semester_id]?.firstWeekMonday || null;
 }
 
 function rowTeachingWeeks(row) {
-  return Number(row.settings_generation) === Number(row.connector_generation)
-    ? normalizeTeachingWeeks(row.teaching_weeks)
-    : null;
+  const saved =
+    Number(row.settings_generation) > 0 ? normalizeTeachingWeeks(row.teaching_weeks) : null;
+  return saved || DEFAULTS[row.semester_id]?.teachingWeeks || null;
+}
+
+function rowOptions(row) {
+  if (!(Number(row.settings_generation) > 0) || !row.options_json) {
+    const preset = DEFAULTS[row.semester_id];
+    return preset && rowMonday(row) === preset.firstWeekMonday
+      ? { holidayPreset: preset.holidayPreset }
+      : {};
+  }
+  return typeof row.options_json === 'string' ? JSON.parse(row.options_json) : row.options_json;
 }
 
 async function listCourseSchedules(pool, userId, range, status = '') {
@@ -370,17 +484,29 @@ async function listCourseSchedules(pool, userId, range, status = '') {
     throw new TypeError('A valid course calendar range is required');
   }
   const rows = await loadSnapshots(pool, userId);
+  const overrides = rows.length ? await loadCourseOverrides(pool, userId) : new Map();
   const events = new Map();
   for (const row of rows) {
-    const projected = projectCourseSchedules(parseCoursesColumn(row.courses_json), {
-      semesterId: row.semester_id,
-      firstWeekMonday: rowMonday(row),
-      teachingWeeks: rowTeachingWeeks(row),
-      range: { start, end },
-      fetchedAt: row.fetched_at,
-    });
-    for (const event of projected.events)
+    const projected = Array.isArray(row.savedEvents)
+      ? { events: row.savedEvents }
+      : projectCourseSchedules(parseCoursesColumn(row.courses_json), {
+          semesterId: row.semester_id,
+          firstWeekMonday: rowMonday(row),
+          teachingWeeks: rowTeachingWeeks(row),
+          options: rowOptions(row),
+          includeExcluded: true,
+          fetchedAt: row.fetched_at,
+        });
+    for (const original of projected.events) {
+      const override = overrides.get(original.publicId);
+      const event = applyOverride(
+        { ...original, connectorGeneration: Number(row.connector_generation) },
+        override,
+      );
+      if (!event || (original.calendarHoliday && event.startAt === original.startAt)) continue;
+      if (new Date(event.startAt) >= end || new Date(event.endAt) <= start) continue;
       if (!events.has(event.publicId)) events.set(event.publicId, event);
+    }
   }
   return [...events.values()].sort((a, b) => a.startAt.localeCompare(b.startAt));
 }
@@ -391,13 +517,18 @@ async function readCourseCalendar(pool, userId, semesterId) {
   if (!row)
     return {
       semesterId,
-      firstWeekMonday: null,
-      teachingWeeks: null,
+      imported: false,
+      firstWeekMonday: DEFAULTS[semesterId]?.firstWeekMonday || null,
+      teachingWeeks: DEFAULTS[semesterId]?.teachingWeeks || null,
+      options: normalizeCalendarOptions(),
+      presets: CALENDAR_PRESETS,
+      sectionChoices: SECTION_CHOICES,
+      courses: [],
       issues: [
         {
           courseReference: null,
           title: '课程课表',
-          message: '请先连接网络学堂并重新同步该学期课程。',
+          message: '确认接入后，课程会保存为个人安排。',
         },
       ],
       parsedCourses: 0,
@@ -408,16 +539,43 @@ async function readCourseCalendar(pool, userId, semesterId) {
     };
   const firstWeekMonday = rowMonday(row);
   const teachingWeeks = rowTeachingWeeks(row);
-  const result = projectCourseSchedules(parseCoursesColumn(row.courses_json), {
+  const options = rowOptions(row);
+  const courses = parseCoursesColumn(row.courses_json);
+  const result = projectCourseSchedules(courses, {
     semesterId,
     firstWeekMonday,
     teachingWeeks,
+    options,
     fetchedAt: row.fetched_at,
   });
   return {
     semesterId,
+    imported: true,
     firstWeekMonday,
     teachingWeeks,
+    options: normalizeCalendarOptions(options, firstWeekMonday),
+    presets: CALENDAR_PRESETS,
+    sectionChoices: SECTION_CHOICES,
+    courses: courses
+      .map((course) => ({
+        reference: course.sourceReference,
+        title: normalizeHtmlText(course.title, 200),
+        sections: [
+          ...new Set(
+            parseCourseSchedule(course, { teachingWeeks, includeSections: true }).sessions.flatMap(
+              (session) =>
+                session.sectionStart
+                  ? Array.from(
+                      { length: session.sectionEnd - session.sectionStart + 1 },
+                      (_, i) => session.sectionStart + i,
+                    )
+                  : [],
+            ),
+          ),
+        ].filter((section) => Object.hasOwn(SECTION_CHOICES, section)),
+      }))
+      .filter((course) => course.sections.length),
+    skippedLessons: result.skippedLessons,
     issues: result.issues,
     parsedCourses: result.parsedCourses,
     totalCourses: result.totalCourses,
@@ -431,6 +589,10 @@ async function saveCourseCalendar(pool, userId, settings = {}) {
   const { semesterId, firstWeekMonday, teachingWeeks } = settings;
   const providedWeeks = Object.hasOwn(settings, 'teachingWeeks');
   const count = normalizeTeachingWeeks(teachingWeeks);
+  const providedOptions = Object.hasOwn(settings, 'options');
+  const options = providedOptions
+    ? normalizeCalendarOptions(settings.options, firstWeekMonday)
+    : null;
   if (providedWeeks && teachingWeeks !== null && count === null)
     throw Object.assign(new Error('教学周数必须是 1–53 的整数；不确定时可留空'), { status: 400 });
   if (!validSemester(semesterId) || !normalizeMonday(firstWeekMonday)) {
@@ -439,25 +601,34 @@ async function saveCourseCalendar(pool, userId, settings = {}) {
     });
   }
   const [result] = await pool.execute(
-    `INSERT INTO campus_course_calendar_settings (user_id, semester_id, connector_generation, first_week_monday, teaching_weeks)
-     SELECT c.user_id, s.semester_id, c.generation, ?, ?
-     FROM user_campus_connectors c
-     INNER JOIN campus_learn_semester_snapshots s ON s.user_id = c.user_id
-       AND s.connector_generation = c.generation AND s.semester_id = ?
-     WHERE c.user_id = ? AND c.provider = 'tsinghua-learn'
-       AND c.status IN ('active_verified', 'active_unverified', 'reauthorization_required')
-       AND c.connected_at IS NOT NULL AND s.fetched_at >= c.connected_at
+    `INSERT INTO campus_course_calendar_settings (user_id, semester_id, connector_generation, first_week_monday, teaching_weeks, options_json)
+     SELECT s.user_id, s.semester_id, s.connector_generation, ?, ?, ?
+     FROM campus_learn_semester_snapshots s
+     WHERE s.semester_id = ? AND s.user_id = ? AND s.connector_generation > 0
      ON DUPLICATE KEY UPDATE
-       teaching_weeks = IF(campus_course_calendar_settings.connector_generation <> VALUES(connector_generation) OR ?, VALUES(teaching_weeks), campus_course_calendar_settings.teaching_weeks),
+       options_json = IF(?, VALUES(options_json),
+         IF(campus_course_calendar_settings.first_week_monday <> VALUES(first_week_monday),
+           JSON_SET(COALESCE(campus_course_calendar_settings.options_json, JSON_OBJECT()), '$.holidayPreset', ''),
+           campus_course_calendar_settings.options_json)),
+       teaching_weeks = IF(?, VALUES(teaching_weeks), campus_course_calendar_settings.teaching_weeks),
        connector_generation = VALUES(connector_generation),
        first_week_monday = VALUES(first_week_monday), updated_at = CURRENT_TIMESTAMP`,
-    [firstWeekMonday, count, semesterId, userId, providedWeeks ? 1 : 0],
+    [
+      firstWeekMonday,
+      count,
+      options ? JSON.stringify(options) : null,
+      semesterId,
+      userId,
+      providedOptions ? 1 : 0,
+      providedWeeks ? 1 : 0,
+    ],
   );
   if (!result.affectedRows) {
     const existing = await readCourseCalendar(pool, userId, semesterId);
     if (
       existing.firstWeekMonday === firstWeekMonday &&
-      (!providedWeeks || existing.teachingWeeks === count)
+      (!providedWeeks || existing.teachingWeeks === count) &&
+      (!providedOptions || JSON.stringify(existing.options) === JSON.stringify(options))
     )
       return existing;
     throw Object.assign(new Error('请先连接网络学堂并重新同步该学期课程'), { status: 409 });

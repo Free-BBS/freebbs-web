@@ -44,7 +44,7 @@ test('parses explicit teaching weeks, split weeks, parity and the six large cour
   assert.deepEqual(parse('第1-2周 星期天 第五-六大节').sessions[0], {
     weekday: 7,
     weeks: [1, 2],
-    start: '17:10',
+    start: '17:05',
     end: '21:45',
   });
   const distinct = parse('1-8周 周一08:00-09:35，9-16周 周一13:30-15:05');
@@ -188,12 +188,18 @@ test('missing calendar and unrecognized records produce actionable course-specif
   assert.match(retained.issues[0].message, /保留/);
 });
 
-test('course queries scope user, generation and connect time; legacy or rebound snapshots never enter the calendar', async () => {
+test('saved courses belong to their local user and survive expired/revoked grants; unowned legacy snapshots remain excluded', async () => {
   const pool = {
     async execute(sql, parameters) {
+      if (sql.includes('FROM campus_schedule_overrides')) {
+        assert.match(sql, /o.user_id = \?/);
+        assert.match(sql, /LEFT\(o.public_id, 3\) = 'cs_'/);
+        assert.deepEqual(parameters, [7]);
+        return [[]];
+      }
       assert.match(sql, /s.user_id = \?/);
-      assert.match(sql, /c.generation = s.connector_generation/);
-      assert.match(sql, /s.fetched_at >= c.connected_at/);
+      assert.match(sql, /s.connector_generation > 0/);
+      assert.doesNotMatch(sql, /\bc\.status|user_campus_connectors/);
       assert.deepEqual(parameters, [7]);
       return [
         [
@@ -202,7 +208,7 @@ test('course queries scope user, generation and connect time; legacy or rebound 
           snapshot({ snapshot_generation: 2 }),
           snapshot({ fetched_at: '2026-09-19T02:00:00Z' }),
           snapshot({ connected_at: null }),
-          snapshot({ semester_id: 'old', settings_generation: 2 }),
+          snapshot({ fetched_at: 'invalid' }),
           snapshot(),
         ],
       ];
@@ -227,9 +233,17 @@ test('calendar settings validate a real Monday before writing, and save only aga
     async execute(sql, parameters) {
       if (sql.includes('INSERT INTO campus_course_calendar_settings')) {
         writes += 1;
-        assert.match(sql, /c.user_id = \?/);
-        assert.match(sql, /s.connector_generation = c.generation/);
-        assert.deepEqual(parameters, [config.firstWeekMonday, null, config.semesterId, 7, 0]);
+        assert.match(sql, /s.user_id = \?/);
+        assert.match(sql, /s.connector_generation > 0/);
+        assert.deepEqual(parameters, [
+          config.firstWeekMonday,
+          null,
+          null,
+          config.semesterId,
+          7,
+          0,
+          0,
+        ]);
         return [{ affectedRows: 1 }];
       }
       assert.deepEqual(parameters, [7, config.semesterId]);
@@ -266,11 +280,11 @@ test('real campus full-week labels require confirmed weeks and retain every time
   assert.ok(missing.issues.every((issue) => /教学周数/.test(issue.message)));
   const result = projectCourseSchedules(courses, { ...config, teachingWeeks: 16 });
   assert.equal(result.parsedCourses, 3);
-  assert.equal(result.events.length, 80);
+  assert.equal(result.events.length, 64);
   assert.deepEqual(result.issues, []);
-  assert.ok(result.events.every((item) => item.description.includes('周次按已确认校历补全')));
+  assert.ok(result.events.every((item) => !item.description.includes('教学周')));
   assert.match(result.events[0].description, /新水利馆404/);
-  assert.equal(projectCourseSchedules(courses, { ...config, teachingWeeks: 18 }).events.length, 90);
+  assert.equal(projectCourseSchedules(courses, { ...config, teachingWeeks: 18 }).events.length, 72);
 });
 
 test('calendar fallback handles odd and even weeks without inventing missing weekdays or labels', () => {
@@ -336,7 +350,7 @@ test('teaching-week settings reject invalid input before any database access', a
   }
 });
 
-test('confirmed fallback weeks remain scoped to the owning connector generation', async () => {
+test('confirmed calendar settings stay with the local user when renewing their campus grant', async () => {
   const item = { ...course, sectionSystem: 'tsinghua-large', scheduleText: '星期一第2节(全周)' };
   const pool = {
     async execute() {
@@ -350,6 +364,7 @@ test('confirmed fallback weeks remain scoped to the owning connector generation'
     },
   };
   const calendar = await readCourseCalendar(stale, 7, config.semesterId);
-  assert.equal(calendar.teachingWeeks, null);
-  assert.equal(calendar.scheduledLessons, 0);
+  assert.equal(calendar.teachingWeeks, 16);
+  assert.equal(calendar.firstWeekMonday, config.firstWeekMonday);
+  assert.equal(calendar.scheduledLessons, 16);
 });

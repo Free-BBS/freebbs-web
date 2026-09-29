@@ -16,12 +16,12 @@ test('time block edges meet exactly for adjacent events, including fractional mi
   const b = timeBlock((15 + 5 / 60) * HOUR, 16 * HOUR, 6 * HOUR);
   assert.equal(a.end, b.top);
   assert.equal(a.top + a.height, b.top);
-  assert.ok(Math.abs(a.height - (95 / 60) * 40) < 0.001);
+  assert.ok(Math.abs(a.height - (95 / 60) * 48) < 0.001);
 });
 test('one-minute and clipped day-end blocks never extend beyond their actual endpoint', () => {
   const short = timeBlock((24 - 1 / 60) * HOUR, 24 * HOUR, 6 * HOUR);
-  assert.equal(short.end, 720);
-  assert.ok(Math.abs(short.height - 40 / 60) < 0.001);
+  assert.equal(short.end, 864);
+  assert.ok(Math.abs(short.height - 48 / 60) < 0.001);
 });
 const iso = (hour) => new Date(now + hour * HOUR).toISOString();
 const event = (id, start, end, extra = {}) => ({

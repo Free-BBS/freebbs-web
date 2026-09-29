@@ -2,6 +2,12 @@ const crypto = require('node:crypto');
 const express = require('express');
 const { COURSE_SECTIONS } = require('./course-sections');
 const { listCourseSchedules: defaultListCourseSchedules } = require('./course-schedule');
+const {
+  readPreferences,
+  savePreferences,
+  availableWindows,
+  planWithPreferences,
+} = require('./planning-preferences');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
@@ -124,6 +130,7 @@ function cleanTitle(message) {
     .replace(/[一二两三四五六七八九十\d.]+\s*(?:小时|分钟)/g, '')
     .replace(/^(?:在|于|安排)\s*/, '')
     .replace(/^从?起?/, '')
+    .replace(/^开始\s*/, '')
     .replace(/(?:之前|以前|截止)/g, '')
     .replace(/^[，,。\s]+|[，,。\s]+$/g, '')
     .replace(/^(?:(?:请)?(?:帮我|替我)|我(?:们)?|想要|需要|要)+/, '')
@@ -136,6 +143,10 @@ const PERIOD_MENTION = /(凌晨|早上|上午|中午|下午|傍晚|晚上)/;
 const DATE_MENTION =
   /(?:\d{4}年)?\d{1,2}月\d{1,2}[日号]?|\d{1,2}[日号]|今天|明天|后天|(?:每周|每星期|周常)[一二三四五六日天]/;
 const DURATION_MENTION = /(\d+(?:\.\d+)?|[一二两三四五六七八九十]+)\s*(小时|分钟)/;
+const NOTES_LABEL =
+  /^(?:地点\/备注|地点|备注|说明)\s*(?:[：:]|(?:里|中)?(?:包括|包含|是|为)\s*[：:]?)\s*/;
+const END_TIME_CLAUSE =
+  /^(?:(?:可以|可|预计|计划)\s*)?(?:持续到|持续至|一直到|直到|到)\s*((?:凌晨|早上|上午|中午|下午|傍晚|晚上)?\s*\d{1,2}(?::\d{2}|点(?:半|\d{1,2}分?)?))\s*(?:结束)?[。！!]?$/;
 
 function isLocationClause(value) {
   return /^(?:在|于)?[\p{L}\d -]*(?:楼|馆|教室|会议室|报告厅|实验室|操场|[一二三四五六]教)[\p{L}\d -]*$/u.test(
@@ -170,14 +181,15 @@ function splitScheduleTasks(message) {
     }
     const chunk = chunks[index].trim();
     if (!chunk) continue;
-    const isNote = /^(?:地点\/备注|地点|备注|说明)\s*[：:]/.test(chunk);
-    const isDurationContinuation = /^(?:持续(?:时间)?|连续|共计|共|约|之后每周|每周都有)/.test(
-      chunk,
-    );
+    const isNote = NOTES_LABEL.test(chunk);
+    const isDurationContinuation =
+      END_TIME_CLAUSE.test(chunk) ||
+      /^(?:持续(?:时间)?|连续|共计|共|约|之后每周|每周都有)/.test(chunk);
     const hasDurationTask =
       !isDurationContinuation && DURATION_MENTION.test(chunk) && Boolean(cleanTitle(chunk));
     const hasAnchor =
       !isNote &&
+      !isDurationContinuation &&
       ([...chunk.matchAll(TIME_MENTION)].length > 0 ||
         DATE_MENTION.test(chunk) ||
         /接下来\s*[一二两三四五六七八九十\d]+\s*天/.test(chunk) ||
@@ -214,10 +226,25 @@ function splitScheduleTasks(message) {
 
 function parseSingleKnownScheduleMessage(message, now, context = {}) {
   let text = String(message || '').trim();
-  const notes = /(?:^|[，,；;\n])\s*(?:地点\/备注|地点|备注|说明)\s*[：:]\s*([\s\S]+)$/.exec(text);
-  if (notes) {
-    const known = parseSingleKnownScheduleMessage(text.slice(0, notes.index), now, context);
-    return known ? { ...known, description: notes[1].trim() } : null;
+  const endClocks = [];
+  // A standalone end-time continuation may follow the notes, but is not a new task.
+  // Leave ranges, cross-date endings and ambiguous clauses for the Agent.
+  text = text.replace(/(^|[，,；;。\n])([^，,；;。\n]+)/g, (whole, separator, clause) => {
+    const match = END_TIME_CLAUSE.exec(clause.trim());
+    if (!match) return whole;
+    endClocks.push(match[1]);
+    return '';
+  });
+  if (endClocks.length > 1) return null;
+  const endClock = endClocks[0] || context.endClock;
+  const notes = /(?:^|[，,；;\n])\s*((?:地点\/备注|地点|备注|说明)[\s\S]+)$/.exec(text);
+  const noteLabel = notes && NOTES_LABEL.exec(notes[1]);
+  if (noteLabel) {
+    const known = parseSingleKnownScheduleMessage(text.slice(0, notes.index), now, {
+      ...context,
+      endClock,
+    });
+    return known ? { ...known, description: notes[1].slice(noteLabel[0].length).trim() } : null;
   }
   const descriptions = [];
   text = text.replace(/([，,；;\n])([^，,；;\n]+)/g, (whole, separator, clause) => {
@@ -275,6 +302,7 @@ function parseSingleKnownScheduleMessage(message, now, context = {}) {
   let start = shanghaiMidnight(dateKey) + clock.startMinutes * MINUTE_MS;
   const deadline = /(?:之前|以前|截止|ddl|DDL)/.test(text);
   if (deadline) {
+    if (endClock) return null;
     return {
       kind: 'deadline',
       title,
@@ -288,7 +316,19 @@ function parseSingleKnownScheduleMessage(message, now, context = {}) {
       text + (context.sharedDuration ? `，${context.sharedDuration}` : ''),
     );
   const minutes = duration ? smallNumber(duration[1]) * (duration[2] === '小时' ? 60 : 1) : null;
-  const endMinutes = clock.endMinutes ?? (minutes ? clock.startMinutes + minutes : null);
+  const explicitEnd = endClock
+    ? parseMentionedTime(endClock, PERIOD_MENTION.exec(text)?.[1] || context.period)?.startMinutes
+    : null;
+  if (
+    endClock &&
+    (!Number.isFinite(explicitEnd) ||
+      explicitEnd <= clock.startMinutes ||
+      (minutes && explicitEnd !== clock.startMinutes + minutes) ||
+      (clock.endMinutes && explicitEnd !== clock.endMinutes))
+  )
+    return null;
+  const endMinutes =
+    explicitEnd ?? clock.endMinutes ?? (minutes ? clock.startMinutes + minutes : null);
   if (!endMinutes) return null;
   const weekly = /(?:每周|每星期|周常)/.test(text);
   if (weekly) {
@@ -361,6 +401,8 @@ function shanghaiMidnight(dateKey) {
 function parseClock(value, fallback) {
   const match = /^(\d{2}):(\d{2})$/.exec(String(value || fallback));
   if (!match) return null;
+  if (Number(match[2]) > 59 || Number(match[1]) > 24 || (match[1] === '24' && match[2] !== '00'))
+    return null;
   const minutes = Number(match[1]) * 60 + Number(match[2]);
   return minutes >= 0 && minutes <= 24 * 60 ? minutes : null;
 }
@@ -420,7 +462,7 @@ function validateSuggestion(value, now = new Date()) {
   };
 }
 
-function buildPlan(extraction, existing, now = new Date()) {
+function buildPlan(extraction, existing, now = new Date(), preferences = null) {
   const title = typeof extraction?.title === 'string' ? extraction.title.trim() : '';
   const description =
     typeof extraction?.description === 'string'
@@ -428,8 +470,14 @@ function buildPlan(extraction, existing, now = new Date()) {
       : '由工作台 Max 根据现有日程空档建议。';
   const days = Number(extraction?.days);
   const totalMinutes = Number(extraction?.totalMinutes);
-  const dayStart = parseClock(extraction?.dayStart, '09:00');
-  const dayEnd = parseClock(extraction?.dayEnd, '21:00');
+  const dayStart = parseClock(
+    extraction?.dayStart,
+    preferences?.enabled ? preferences.dayStart : '09:00',
+  );
+  const dayEnd = parseClock(
+    extraction?.dayEnd,
+    preferences?.enabled ? preferences.dayEnd : '21:00',
+  );
   if (
     !title ||
     title.length > 200 ||
@@ -450,6 +498,8 @@ function buildPlan(extraction, existing, now = new Date()) {
     throw Object.assign(new Error('请说明要做的事、接下来几天及总共多少小时。'), { status: 422 });
   }
 
+  if (preferences?.enabled)
+    return planWithPreferences({ ...extraction, days, totalMinutes }, existing, now, preferences);
   const suggestions = [];
   const occupied = existing.map((item) => ({
     startAt: new Date(item.startAt || item.start_at).toISOString(),
@@ -513,7 +563,7 @@ function buildPlan(extraction, existing, now = new Date()) {
   return suggestions;
 }
 
-function buildPreview(extraction, existing, now = new Date()) {
+function buildPreview(extraction, existing, now = new Date(), preferences = null) {
   const kind = extraction?.kind;
   let suggestions;
   if (kind === 'batch') {
@@ -534,12 +584,12 @@ function buildPreview(extraction, existing, now = new Date()) {
     // the sentence. Then each plan also avoids all earlier plans in this batch.
     for (let index = 0; index < tasks.length; index += 1) {
       if (tasks[index].kind === 'plan') continue;
-      expanded[index] = buildPreview(tasks[index], occupied, now).suggestions;
+      expanded[index] = buildPreview(tasks[index], occupied, now, preferences).suggestions;
       occupied.push(...expanded[index].filter((item) => item.kind !== 'deadline'));
     }
     for (let index = 0; index < tasks.length; index += 1) {
       if (tasks[index].kind !== 'plan') continue;
-      expanded[index] = buildPreview(tasks[index], occupied, now).suggestions;
+      expanded[index] = buildPreview(tasks[index], occupied, now, preferences).suggestions;
       occupied.push(...expanded[index]);
     }
     suggestions = expanded.flat();
@@ -565,7 +615,7 @@ function buildPreview(extraction, existing, now = new Date()) {
       return { ...item, occurrence: index + 1, totalWeeks: weeks };
     });
   } else if (kind === 'plan') {
-    suggestions = buildPlan(extraction, existing, now);
+    suggestions = buildPlan(extraction, existing, now, preferences);
   } else {
     throw Object.assign(new Error('请说清楚是添加一件具体日程，还是在接下来几天安排任务。'), {
       status: 422,
@@ -610,15 +660,16 @@ function buildPrompt(message, now) {
     '当前时区固定为 Asia/Shanghai。现有日程由服务器避让，你只需提取用户的时间意图。',
     `当前时间：${now.toISOString()}；北京时间日期：${localDateKey(now)}。`,
     '若用户描述一件时间确定的事，输出 {"kind":"event","title":"...","description":"...","startAt":"ISO 8601含+08:00","endAt":"ISO 8601含+08:00"}。',
-    '固定知识：课程第一大节 08:00–09:35；第二大节 09:50–12:15；第三大节 13:30–15:05；第四大节 15:20–16:55；第五大节 17:10–18:45；第六大节 19:20–21:45。用户说“第N大节”时严格使用对应时间。',
+    '固定知识：课程第一大节 08:00–09:35；第二大节默认 09:50–12:15；第三大节 13:30–15:05；第四大节 15:20–16:55；第五大节默认 17:05–18:40；第六大节默认 19:20–21:45。第二大节可按课程缩短为 09:50–11:25，第五大节可缩短为 17:05–17:50，第六大节可缩短为 19:20–20:55；有明确起止时间或课程个人设置时以其为准，不可扩展已提供的忙碌时间。',
     '若是每周重复、持续 X 周，输出 {"kind":"weekly","title":"...","startAt":"首次发生的ISO时间","endAt":"首次结束的ISO时间","weeks":X}。服务器展开每周一次，不能漏掉重复次数。',
     '若是“某日某时之前完成/截止”之类的 DDL，输出 {"kind":"deadline","title":"要完成的事","startAt":"截止时间提前1分钟的ISO时间","endAt":"截止时间的ISO时间"}。DDL 是时间点，不是要占满此前时段。',
-    '若用户希望在接下来 N 天内完成 X 小时某事，输出 {"kind":"plan","title":"...","days":N,"totalMinutes":X乘60,"dayStart":"09:00","dayEnd":"21:00"}。若用户限定上午/下午/晚上，调整 dayStart/dayEnd。',
+    '若用户希望在接下来 N 天内完成 X 小时某事，输出 {"kind":"plan","title":"...","days":N,"totalMinutes":X乘60}。仅在用户限定上午/下午/晚上或钟点时输出 dayStart/dayEnd，未限定时省略这两个字段，由服务器使用个人偏好。不要猜测完成任务所需工时。',
     '自行理解整段话中的独立事件，不要求分号或固定格式。若用户描述 2–5 个独立事件，必须全部提取并输出 {"kind":"batch","tasks":[上述 event/weekly/deadline/plan 对象]}。tasks 只允许 1–5 项，禁止嵌套 batch；重复周次、空档计划的分段不算独立事件。超过 5 个输出 clarify，说明“一次最多识别 5 个事件，请分次添加”。普通事件和个人 DDL 可以混合，不依赖网络学堂作业。不得只取前五个，信息不清楚时追问，不猜测缺失的时间。',
     '同一句话省略的日期、上午/下午/晚上等时段继承前一件任务，明确给出的新日期或时段优先；跨日明确给出日期后，不擅自沿用上一日的晚上。仅在用户明确说“都/均/各”时共享时长；任何一件任务缺少必要信息，整句输出 clarify，绝不能只返回第一件或遗漏其他任务。',
     '示例：北京时间今天是 2026-09-24，用户说“我今天晚上9点要开书记会，罗姆楼5103；10点要开支书例会，罗姆楼10-206，两个会都是1小时”，应返回 batch，两项分别为书记会 2026-09-24T21:00:00+08:00 至 22:00:00+08:00、description 为罗姆楼5103，以及支书例会 2026-09-24T22:00:00+08:00 至 23:00:00+08:00、description 为罗姆楼10-206。示例日期仅用于解释，实际必须根据当前日期解析。',
     '不要自己排列空档，服务器会避开已有日程。缺少日期、时长等必要信息时输出 {"kind":"clarify","question":"需要补充什么"}。不要编造。',
     '所有安排类型都可包含 description 字符串，作为一个可选的“地点/备注”字段：保留用户给出的地点及备注，没有则留空；不要另设 location 字段或编造地点。',
+    '“备注里包括/备注包含”等后的清单属于该事件的 description，不要拆成独立任务；“可以持续到17:30”等是前一事件的结束时间，不是新事件。已有明确起止时间就不必再问时长；备注之后明确提出的新安排仍须单独提取。',
     `用户的话：${message}`,
   ].join('\n');
 }
@@ -637,6 +688,70 @@ function createSchedulePlannerRouter({
 }) {
   const router = express.Router();
 
+  router.get('/preferences', async (request, response) => {
+    const user = await requireAuth(request, response);
+    if (!user) return;
+    try {
+      response.json(await readPreferences(pool, user.id));
+    } catch (error) {
+      sendError(response, error, '读取规划偏好失败，请稍后重试。');
+    }
+  });
+  router.put('/preferences', async (request, response) => {
+    const user = await requireAuth(request, response);
+    if (!user) return;
+    try {
+      response.json(await savePreferences(pool, user.id, request.body));
+    } catch (error) {
+      sendError(response, error, '保存规划偏好失败，请稍后重试。');
+    }
+  });
+  router.get('/availability', async (request, response) => {
+    const user = await requireAuth(request, response);
+    if (!user) return;
+    const days = Number(request.query.days || 1);
+    if (![1, 7].includes(days)) {
+      response.status(400).json({ message: '请选择今天或未来七天。' });
+      return;
+    }
+    try {
+      const now = new Date();
+      const end = new Date(shanghaiMidnight(localDateKey(now)) + days * DAY_MS);
+      const [rows] = await pool.execute(
+        `SELECT start_at, end_at FROM schedule_items
+        WHERE user_id = ? AND deleted_at IS NULL AND status IN ('draft', 'confirmed')
+        AND (source_reference IS NULL OR source_reference NOT IN ('planner:deadline', 'manual:deadline'))
+        AND start_at < ? AND end_at > ? ORDER BY start_at LIMIT ${MAX_EVENTS + 1}`,
+        [user.id, end, now],
+      );
+      const courses = await listCourseSchedules(pool, user.id, { start: now, end });
+      if (rows.length + courses.length > MAX_EVENTS)
+        throw Object.assign(new Error('现有日程过多，暂时无法安全计算空档。'), { status: 422 });
+      const { preferences } = await readPreferences(pool, user.id);
+      const effective = preferences.enabled
+        ? preferences
+        : {
+            ...preferences,
+            dayStart: '09:00',
+            dayEnd: '21:00',
+            weekdays: [1, 2, 3, 4, 5, 6, 7],
+            restWindows: [],
+            breakMinutes: 0,
+          };
+      const windows = availableWindows([...rows, ...courses], now, days, effective);
+      response.json({
+        windows,
+        days,
+        minutes: windows.reduce(
+          (sum, gap) => sum + (Date.parse(gap.endAt) - Date.parse(gap.startAt)) / MINUTE_MS,
+          0,
+        ),
+      });
+    } catch (error) {
+      sendError(response, error, '查看空档失败，请稍后重试。');
+    }
+  });
+
   router.post('/preview', async (request, response) => {
     const user = await requireAuth(request, response);
     if (!user) return;
@@ -649,7 +764,7 @@ function createSchedulePlannerRouter({
       const now = new Date();
       const end = new Date(shanghaiMidnight(localDateKey(now)) + MAX_HORIZON_DAYS * DAY_MS);
       const [rows] = await pool.execute(
-        `SELECT start_at, end_at FROM schedule_items
+        `SELECT start_at, end_at, source_type, source_reference FROM schedule_items
          WHERE user_id = ? AND deleted_at IS NULL AND status IN ('draft', 'confirmed')
            AND (source_reference IS NULL OR source_reference NOT IN ('planner:deadline', 'manual:deadline'))
            AND start_at < ? AND end_at > ? ORDER BY start_at LIMIT ${MAX_EVENTS + 1}`,
@@ -662,8 +777,14 @@ function createSchedulePlannerRouter({
         return;
       }
       const known = parseKnownScheduleMessage(message, now);
+      const preview = async (extraction) => {
+        const hasPlan =
+          extraction?.kind === 'plan' || extraction?.tasks?.some((task) => task.kind === 'plan');
+        const preferences = hasPlan ? (await readPreferences(pool, user.id)).preferences : null;
+        return buildPreview(extraction, existing, now, preferences);
+      };
       if (known) {
-        response.json(buildPreview(known, existing, now));
+        response.json(await preview(known));
         return;
       }
       const payload = buildAgentChatPayload(user, {
@@ -701,7 +822,7 @@ function createSchedulePlannerRouter({
           .json({ message: '尚未完整识别所有任务，请逐项补充日期、时间和时长后重试。' });
         return;
       }
-      response.json(buildPreview(extraction, existing, now));
+      response.json(await preview(extraction));
     } catch (error) {
       sendError(response, error, '生成计划失败，请稍后重试。');
     }
