@@ -22,6 +22,22 @@
   max-width: 720px;
 }
 
+.collections-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.collections-activity-link {
+  padding: 12px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  background: var(--surface-raised);
+  color: var(--color-muted);
+  font-weight: 750;
+  text-decoration: none;
+}
+
 .collections-eyebrow,
 .collections-subpage-heading p {
   margin: 0 0 8px;

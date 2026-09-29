@@ -72,5 +72,5 @@ export async function loadRegistrationCatalog(
 export const sourceLabels = {
   learning_survey: '学习端报名',
   development_activity: '無活动',
-  native_collection: '萬事集',
+  native_collection: '萬事屋',
 } as const;

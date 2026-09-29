@@ -131,13 +131,18 @@ export function CollectionsLandingPage({ client }: CollectionsLandingPageProps) 
       <header className="collections-heading">
         <div>
           <p className="collections-eyebrow">COLLECT · SHARE · BEGIN</p>
-          <h1>萬事集</h1>
+          <h1>萬事屋</h1>
           <p>把分散的报名、作品和想法收在一处。挑一张卡片，看看今天有什么值得参与。</p>
         </div>
-        <Link className="collections-wallet" to="/collections/mine" aria-label="我的报名">
-          <span aria-hidden="true">⌑</span>
-          <span>我的报名</span>
-        </Link>
+        <div className="collections-heading-actions">
+          <Link className="collections-activity-link" to="/events">
+            现有活动
+          </Link>
+          <Link className="collections-wallet" to="/collections/mine" aria-label="我的报名">
+            <span aria-hidden="true">⌑</span>
+            <span>我的报名</span>
+          </Link>
+        </div>
       </header>
 
       <section className="collections-belt-section" aria-labelledby="collections-featured-title">
@@ -160,7 +165,7 @@ export function CollectionsLandingPage({ client }: CollectionsLandingPageProps) 
         ) : null}
       </section>
 
-      <section className="collections-tavern" aria-label="萬事集告示板">
+      <section className="collections-tavern" aria-label="萬事屋告示板">
         <img src={collectionKeeper} alt="小羊酒保站在贴满告示的木板旁" />
         <div className="collections-board-copy">
           <span>今日告示</span>

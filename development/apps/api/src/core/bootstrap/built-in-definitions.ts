@@ -33,6 +33,7 @@ const moduleNames: Readonly<Record<ModuleId, string>> = {
   information: 'Information and consultation',
   clubs: 'Clubs',
   growth: 'Personal growth archive',
+  community: 'Wujie Square',
   events: 'Events',
   collections: 'Wanshiji collections',
   liaison: 'Liaison resources',

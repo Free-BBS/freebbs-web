@@ -27,6 +27,14 @@ import type {
   CollectionModuleDefinitionRecord,
   CollectionResponseRecord,
   CollectionVersionRecord,
+  CommunityAliasRecord,
+  CommunityCommentRecord,
+  CommunityLikeRecord,
+  CommunityPostRecord,
+  CommunityReportRecord,
+  CommunitySupplementRecord,
+  CommunityViewRecord,
+  CommunityWishWorkflowRecord,
   ConsultationRecord,
   InformationLikeRecord,
   InformationReplyRecord,
@@ -93,6 +101,14 @@ interface MemoryState {
   activityMilestones: ActivityMilestoneRecord[];
   competitionFixtures: CompetitionFixtureRecord[];
   activityRegistrations: ActivityRegistrationRecord[];
+  communityPosts: CommunityPostRecord[];
+  communityComments: CommunityCommentRecord[];
+  communitySupplements: CommunitySupplementRecord[];
+  communityLikes: CommunityLikeRecord[];
+  communityAliases: CommunityAliasRecord[];
+  communityViews: CommunityViewRecord[];
+  communityReports: CommunityReportRecord[];
+  communityWishWorkflows: CommunityWishWorkflowRecord[];
   collectionForms: CollectionFormRecord[];
   collectionVersions: CollectionVersionRecord[];
   collectionResponses: CollectionResponseRecord[];
@@ -181,6 +197,14 @@ const searchFields: Record<CollectionName, string[]> = {
   activityMilestones: ['activityId', 'title', 'type', 'description'],
   competitionFixtures: ['activityId', 'round', 'participantA', 'participantB', 'location'],
   activityRegistrations: ['activityId', 'participantUid'],
+  communityPosts: ['title', 'body', 'sourceType', 'sourceId'],
+  communityComments: ['postId', 'authorUid', 'body'],
+  communitySupplements: ['postId', 'authorUid', 'body'],
+  communityLikes: ['targetType', 'targetId', 'userUid'],
+  communityAliases: ['threadId', 'userUid'],
+  communityViews: ['postId', 'userUid', 'bucketStart'],
+  communityReports: ['postId', 'reporterUid', 'reason'],
+  communityWishWorkflows: ['postId', 'wishStatus', 'conversionStatus', 'activityId'],
   collectionForms: ['title', 'description', 'organizationId'],
   collectionVersions: ['formId'],
   collectionResponses: ['formId', 'versionId', 'respondentUid'],
@@ -241,6 +265,7 @@ function collectionDefaults(collection: CollectionName): Record<string, unknown>
         location: '',
         organizationId: null,
         standingActivity: false,
+        sourceCommunityPostId: null,
       };
     case 'liaisonProblems':
       return {
@@ -353,6 +378,14 @@ function createEmptyState(): MemoryState {
     activityMilestones: [],
     competitionFixtures: [],
     activityRegistrations: [],
+    communityPosts: [],
+    communityComments: [],
+    communitySupplements: [],
+    communityLikes: [],
+    communityAliases: [],
+    communityViews: [],
+    communityReports: [],
+    communityWishWorkflows: [],
     collectionForms: [],
     collectionVersions: [],
     collectionResponses: [],
@@ -661,6 +694,7 @@ function createDemoState(): MemoryState {
     ['information', '信息与咨询'],
     ['clubs', '趣缘群体'],
     ['growth', '个人成长档案'],
+    ['community', '無界广场'],
     ['events', '活动'],
     ['liaison', '联络资源'],
     ['sports', '体育代表队'],
@@ -839,6 +873,7 @@ function createDemoState(): MemoryState {
       location: '中央主楼大厅',
       organizationId: 'liaison_center',
       standingActivity: false,
+      sourceCommunityPostId: null,
       technicalSupportStatus: 'requested',
       technicalSupportNote: '需要现场网络与投影支持。',
       status: 'published',
@@ -857,6 +892,7 @@ function createDemoState(): MemoryState {
       location: '东大操场',
       organizationId: 'sports_center',
       standingActivity: false,
+      sourceCommunityPostId: null,
       technicalSupportStatus: 'confirmed',
       technicalSupportNote: '路线签到设备已确认。',
       status: 'published',
@@ -875,6 +911,7 @@ function createDemoState(): MemoryState {
       location: '清华大学各体育场馆',
       organizationId: 'sports_center',
       standingActivity: true,
+      sourceCommunityPostId: null,
       technicalSupportStatus: 'not_requested',
       technicalSupportNote: null,
       status: 'published',
@@ -1778,6 +1815,92 @@ class MemoryRepository<T extends StoredRecord> implements RecordRepository<T> {
         return 'Registration already exists';
       }
     }
+    if (this.collection === 'activities') {
+      const candidate = input as unknown as { sourceCommunityPostId: string | null };
+      if (
+        candidate.sourceCommunityPostId !== null &&
+        this.records().some((record) => {
+          if (record.id === excludeId) return false;
+          return (
+            (record as unknown as typeof candidate).sourceCommunityPostId ===
+            candidate.sourceCommunityPostId
+          );
+        })
+      ) {
+        return 'Community post already has an activity';
+      }
+    }
+    if (this.collection === 'communityLikes') {
+      const candidate = input as unknown as {
+        targetType: string;
+        targetId: string;
+        userUid: string;
+      };
+      if (
+        this.records().some((record) => {
+          if (record.id === excludeId) return false;
+          const current = record as unknown as typeof candidate;
+          return (
+            current.targetType === candidate.targetType &&
+            current.targetId === candidate.targetId &&
+            current.userUid === candidate.userUid
+          );
+        })
+      ) {
+        return 'Community like already exists';
+      }
+    }
+    if (this.collection === 'communityAliases') {
+      const candidate = input as unknown as {
+        threadId: string;
+        userUid: string;
+        aliasIndex: number;
+      };
+      if (
+        this.records().some((record) => {
+          if (record.id === excludeId) return false;
+          const current = record as unknown as typeof candidate;
+          return (
+            current.threadId === candidate.threadId &&
+            (current.userUid === candidate.userUid || current.aliasIndex === candidate.aliasIndex)
+          );
+        })
+      ) {
+        return 'Community alias already exists';
+      }
+    }
+    if (this.collection === 'communityViews') {
+      const candidate = input as unknown as {
+        postId: string;
+        userUid: string;
+        bucketStart: string;
+      };
+      if (
+        this.records().some((record) => {
+          if (record.id === excludeId) return false;
+          const current = record as unknown as typeof candidate;
+          return (
+            current.postId === candidate.postId &&
+            current.userUid === candidate.userUid &&
+            current.bucketStart === candidate.bucketStart
+          );
+        })
+      ) {
+        return 'Community view already exists';
+      }
+    }
+    if (this.collection === 'communityWishWorkflows') {
+      const candidate = input as unknown as { postId: string };
+      if (
+        this.records().some(
+          (record) =>
+            record.id !== excludeId &&
+            (record as unknown as typeof candidate).postId === candidate.postId,
+        )
+      ) {
+        return 'Community wish workflow already exists';
+      }
+    }
     if (this.collection === 'collectionVersions') {
       const candidate = input as unknown as { formId: string; version: number };
       if (
@@ -1932,6 +2055,14 @@ function buildStore(holder: StateHolder, inTransaction = false): DevelopmentStor
     activityMilestones: repository('activityMilestones'),
     competitionFixtures: repository('competitionFixtures'),
     activityRegistrations: repository('activityRegistrations'),
+    communityPosts: repository('communityPosts'),
+    communityComments: repository('communityComments'),
+    communitySupplements: repository('communitySupplements'),
+    communityLikes: repository('communityLikes'),
+    communityAliases: repository('communityAliases'),
+    communityViews: repository('communityViews'),
+    communityReports: repository('communityReports'),
+    communityWishWorkflows: repository('communityWishWorkflows'),
     collectionForms: repository('collectionForms'),
     collectionVersions: repository('collectionVersions'),
     collectionResponses: repository('collectionResponses'),

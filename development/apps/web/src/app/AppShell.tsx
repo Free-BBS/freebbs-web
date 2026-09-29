@@ -11,7 +11,7 @@ import { useMainSiteTheme } from '../core/theme/useMainSiteTheme.js';
 import { MainSiteHeader, mainSiteTypography } from './MainSiteHeader.js';
 import { visibleModuleManifests, type ModuleStateOverrides } from './module-manifests.js';
 
-const HIDDEN_SIDEBAR_MODULE_IDS = new Set(['dashboard', 'admin', 'liaison']);
+const HIDDEN_SIDEBAR_MODULE_IDS = new Set(['dashboard', 'admin', 'liaison', 'events']);
 
 export interface AppShellProps {
   children?: ReactNode;

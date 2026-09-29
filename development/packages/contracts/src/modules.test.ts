@@ -10,6 +10,7 @@ describe('module and role contracts', () => {
       'information',
       'clubs',
       'growth',
+      'community',
       'events',
       'collections',
       'liaison',

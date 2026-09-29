@@ -20,6 +20,7 @@ import './styles/liaison.css';
 import './styles/information.css';
 import './styles/finance.css';
 import './styles/collections.css';
+import './styles/community.css';
 
 const rootElement = document.getElementById('root');
 
