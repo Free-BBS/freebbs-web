@@ -18,6 +18,7 @@ import { listModuleManifests } from './core/modules/registry.js';
 import { createAdminRouter } from './modules/admin/router.js';
 import { createClubsRouter } from './modules/clubs/router.js';
 import { createCollectionsRouter } from './modules/collections/router.js';
+import { createCommunityRouter } from './modules/community/router.js';
 import { createEventsRouter } from './modules/events/router.js';
 import { createFinanceRouter } from './modules/finance/router.js';
 import { createFestivalRouter } from './modules/festival/router.js';
@@ -254,6 +255,7 @@ export function createApp(options: CreateAppOptions = {}) {
         : {}),
     }),
   );
+  app.use(`${API_BASE_PATH}/community`, createCommunityRouter({ store, authenticate }));
   app.use(`${API_BASE_PATH}/growth`, createGrowthRouter({ store, authenticate }));
   app.use(`${API_BASE_PATH}/finance`, createFinanceRouter({ store, authenticate }));
   app.use(`${API_BASE_PATH}/knowledge`, createKnowledgeRouter({ store, authenticate }));

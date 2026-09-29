@@ -117,6 +117,59 @@ export class CommunityService {
     return Promise.all(posts.map((post) => this.toFeedItem(actor, post)));
   }
 
+  async updatePost(
+    actor: AuthorizationContext,
+    postId: string,
+    patch: { title?: string; body?: string; tags?: string[] },
+  ): Promise<CommunityPostRecord> {
+    return this.store.transaction(async (store) => {
+      const post = await store.communityPosts.getForUpdate(postId);
+      if (post === null || post.status !== 'active' || post.ownerUid !== actor.uid) {
+        throw missingPost();
+      }
+      if (post.kind === 'wish') {
+        const { workflow } = await this.findWish(store, postId, true);
+        if (workflow.wishStatus !== 'collecting' || workflow.officialResponse !== null) {
+          throw new HttpError(409, 'community_post_locked', 'Handled wishes use supplements');
+        }
+      }
+      const updated = await store.communityPosts.update(postId, {
+        ...patch,
+        ...(patch.tags === undefined ? {} : { tags: uniqueTags(post.kind, patch.tags) }),
+      });
+      if (updated === null) throw missingPost();
+      await recordAuditEvent(store, {
+        actorUid: actor.uid,
+        action: 'community.post.updated',
+        resourceType: 'community_post',
+        resourceId: postId,
+        details: { fields: Object.keys(patch).sort() },
+      });
+      return updated;
+    });
+  }
+
+  async deletePost(actor: AuthorizationContext, postId: string): Promise<void> {
+    await this.store.transaction(async (store) => {
+      const post = await store.communityPosts.getForUpdate(postId);
+      if (
+        post === null ||
+        post.status !== 'active' ||
+        (post.ownerUid !== actor.uid &&
+          !allowed(actor, 'community.content.moderate', 'community_post'))
+      ) {
+        throw missingPost();
+      }
+      await store.communityPosts.update(postId, { status: 'deleted' });
+      await recordAuditEvent(store, {
+        actorUid: actor.uid,
+        action: 'community.post.deleted',
+        resourceType: 'community_post',
+        resourceId: postId,
+      });
+    });
+  }
+
   async getThread(actor: AuthorizationContext, postId: string): Promise<CommunityThreadDetail> {
     const post = await this.store.communityPosts.get(postId);
     if (post === null || post.status !== 'active') throw missingPost();
@@ -251,6 +304,30 @@ export class CommunityService {
       status: 'open',
       ownerUid: actor.uid,
       scope: { type: 'user', id: actor.uid },
+    });
+  }
+
+  async recordView(actor: AuthorizationContext, postId: string): Promise<void> {
+    const post = await this.store.communityPosts.get(postId);
+    if (post === null || post.status !== 'active') throw missingPost();
+    const bucketTime = this.now().getTime();
+    const bucketStart = new Date(bucketTime - (bucketTime % (30 * 60 * 1000))).toISOString();
+    await this.store.transaction(async (store) => {
+      const existing = (await store.communityViews.listForUpdate({ query: postId })).find(
+        (view) =>
+          view.postId === postId &&
+          view.userUid === actor.uid &&
+          view.bucketStart === bucketStart,
+      );
+      if (existing !== undefined) return;
+      await store.communityViews.create({
+        postId,
+        userUid: actor.uid,
+        bucketStart,
+        status: 'active',
+        ownerUid: actor.uid,
+        scope: publicScope,
+      });
     });
   }
 
