@@ -32,6 +32,14 @@ import type {
   CollectionModuleDefinitionRecord,
   CollectionResponseRecord,
   CollectionVersionRecord,
+  CommunityAliasRecord,
+  CommunityCommentRecord,
+  CommunityLikeRecord,
+  CommunityPostRecord,
+  CommunityReportRecord,
+  CommunitySupplementRecord,
+  CommunityViewRecord,
+  CommunityWishWorkflowRecord,
   ConsultationRecord,
   InformationLikeRecord,
   InformationReplyRecord,
@@ -149,6 +157,15 @@ const jsonField = (key: string, column: string) =>
     decode: (value) => {
       if (typeof value !== 'string') return value ?? {};
       return JSON.parse(value) as Record<string, unknown>;
+    },
+  });
+const nullableJsonField = (key: string, column: string) =>
+  field(key, column, {
+    encode: (value) => (value === null || value === undefined ? null : JSON.stringify(value)),
+    decode: (value) => {
+      if (value === null || value === undefined) return null;
+      if (typeof value === 'string') return JSON.parse(value) as Record<string, unknown>;
+      return value;
     },
   });
 function safeInteger(value: unknown): number {
@@ -408,6 +425,7 @@ const definitions = {
   },
   activities: {
     table: 'activities',
+    conflictMessage: 'Community post already has an activity',
     fields: [
       utcDateTimeField('registrationDeadline', 'registration_deadline'),
       defaultedField('capacity', 'capacity', null),
@@ -423,10 +441,95 @@ const definitions = {
       }),
       field('organizationId', 'organization_id'),
       booleanField('standingActivity', 'standing_activity'),
+      defaultedField('sourceCommunityPostId', 'source_community_post_id', null),
       field('technicalSupportStatus', 'technical_support_status'),
       field('technicalSupportNote', 'technical_support_note'),
     ],
     searchColumns: ['title', 'description', 'technical_support_note', 'location', 'contact'],
+  },
+  communityPosts: {
+    table: 'community_posts',
+    fields: [
+      field('kind', 'post_kind'),
+      field('title', 'title'),
+      field('body', 'body'),
+      tagsField,
+      field('displayMode', 'display_mode'),
+      field('sourceType', 'source_type'),
+      field('sourceId', 'source_id'),
+    ],
+    searchColumns: ['title', 'body', 'source_type', 'source_id'],
+  },
+  communityComments: {
+    table: 'community_comments',
+    fields: [
+      field('postId', 'post_id'),
+      field('parentId', 'parent_id'),
+      field('authorUid', 'author_uid'),
+      field('body', 'body'),
+      field('displayMode', 'display_mode'),
+    ],
+    searchColumns: ['post_id', 'author_uid', 'body'],
+  },
+  communitySupplements: {
+    table: 'community_supplements',
+    fields: [field('postId', 'post_id'), field('authorUid', 'author_uid'), field('body', 'body')],
+    searchColumns: ['post_id', 'author_uid', 'body'],
+  },
+  communityLikes: {
+    table: 'community_likes',
+    conflictMessage: 'Community like already exists',
+    fields: [
+      field('targetType', 'target_type'),
+      field('targetId', 'target_id'),
+      field('userUid', 'user_uid'),
+    ],
+    searchColumns: ['target_type', 'target_id', 'user_uid'],
+  },
+  communityAliases: {
+    table: 'community_thread_aliases',
+    conflictMessage: 'Community alias already exists',
+    fields: [
+      field('threadId', 'thread_id'),
+      field('userUid', 'user_uid'),
+      positiveIntegerField('aliasIndex', 'alias_index'),
+    ],
+    searchColumns: ['thread_id', 'user_uid'],
+  },
+  communityViews: {
+    table: 'community_views',
+    conflictMessage: 'Community view already exists',
+    fields: [
+      field('postId', 'post_id'),
+      field('userUid', 'user_uid'),
+      utcDateTimeField('bucketStart', 'bucket_start'),
+    ],
+    searchColumns: ['post_id', 'user_uid'],
+  },
+  communityReports: {
+    table: 'community_reports',
+    fields: [
+      field('postId', 'post_id'),
+      field('reporterUid', 'reporter_uid'),
+      field('reason', 'reason'),
+      field('resolution', 'resolution'),
+      field('handledByUid', 'handled_by_uid'),
+    ],
+    searchColumns: ['post_id', 'reporter_uid', 'reason'],
+  },
+  communityWishWorkflows: {
+    table: 'community_wish_workflows',
+    conflictMessage: 'Community wish workflow already exists',
+    fields: [
+      field('postId', 'post_id'),
+      field('wishStatus', 'wish_status'),
+      field('officialResponse', 'official_response'),
+      field('responseByUid', 'response_by_uid'),
+      field('conversionStatus', 'conversion_status'),
+      nullableJsonField('conversionPayload', 'conversion_payload'),
+      field('activityId', 'activity_id'),
+    ],
+    searchColumns: ['post_id', 'wish_status', 'conversion_status', 'activity_id'],
   },
   activityMilestones: {
     table: 'activity_milestones',
@@ -1086,6 +1189,18 @@ function buildMySqlStore(executor: Executor, pool: Pool, inTransaction: boolean)
     competitionFixtures: repository<CompetitionFixtureRecord>(definitions.competitionFixtures),
     activityRegistrations: repository<ActivityRegistrationRecord>(
       definitions.activityRegistrations,
+    ),
+    communityPosts: repository<CommunityPostRecord>(definitions.communityPosts),
+    communityComments: repository<CommunityCommentRecord>(definitions.communityComments),
+    communitySupplements: repository<CommunitySupplementRecord>(
+      definitions.communitySupplements,
+    ),
+    communityLikes: repository<CommunityLikeRecord>(definitions.communityLikes),
+    communityAliases: repository<CommunityAliasRecord>(definitions.communityAliases),
+    communityViews: repository<CommunityViewRecord>(definitions.communityViews),
+    communityReports: repository<CommunityReportRecord>(definitions.communityReports),
+    communityWishWorkflows: repository<CommunityWishWorkflowRecord>(
+      definitions.communityWishWorkflows,
     ),
     collectionForms: repository<CollectionFormRecord>(definitions.collectionForms),
     collectionVersions: repository<CollectionVersionRecord>(definitions.collectionVersions),
