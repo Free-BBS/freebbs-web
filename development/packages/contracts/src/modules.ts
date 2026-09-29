@@ -6,6 +6,7 @@ export const MODULE_IDS = [
   'information',
   'clubs',
   'growth',
+  'community',
   'events',
   'collections',
   'liaison',
