@@ -580,11 +580,9 @@ function createWorkbenchRouter({
     try {
       const user = await requireAuth(request, response);
       if (!user) return;
-      response
-        .status(409)
-        .json({
-          message: '校历和节次由系统统一维护，请使用课程接入预览；个人课程可在计划表直接编辑。',
-        });
+      response.status(409).json({
+        message: '校历和节次由系统统一维护，请使用课程接入预览；个人课程可在计划表直接编辑。',
+      });
     } catch (error) {
       if ([400, 409].includes(error.status))
         response.status(error.status).json({ message: error.message });
