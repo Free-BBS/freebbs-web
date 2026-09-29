@@ -125,7 +125,13 @@ export function calculateTrending(
         left.postId.localeCompare(right.postId),
     )
     .slice(0, 10)
-    .map(({ latestInteraction: _latestInteraction, ...item }) => item);
+    .map((item) => ({
+      postId: item.postId,
+      title: item.title,
+      kind: item.kind,
+      score: item.score,
+      rankChange: item.rankChange,
+    }));
 }
 
 export class CommunityTrendingCache {

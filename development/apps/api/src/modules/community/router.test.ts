@@ -84,6 +84,7 @@ async function testApp() {
       response: express.Response,
       _next: express.NextFunction,
     ) => {
+      void _next;
       const value = error as { status?: number; code?: string; message?: string };
       response.status(value.status ?? 500).json({
         data: {
