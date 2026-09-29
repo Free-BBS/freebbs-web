@@ -9,6 +9,7 @@ import informationIcon from '../assets/icons/information.svg';
 import knowledgeIcon from '../assets/icons/knowledge.svg';
 import liaisonIcon from '../assets/icons/liaison.svg';
 import collectionsIcon from '../assets/icons/collections.svg';
+import communityIcon from '../assets/icons/community.svg';
 import sportsIcon from '../assets/icons/sports.svg';
 import {
   hasPresentationPermission,
@@ -33,6 +34,17 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     order: 0,
   },
   {
+    id: 'community',
+    name: '無界广场',
+    description: '分享校园日常、回应新生愿望，并让好想法成长为活动。',
+    route: '/community',
+    icon: communityIcon,
+    ownerTeam: '平台核心组',
+    status: 'enabled',
+    requiredPermissions: [],
+    order: 1,
+  },
+  {
     id: 'knowledge',
     name: '经验库',
     description: '沉淀组织经验、工作流程与培养资料。',
@@ -41,7 +53,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     ownerTeam: '平台核心组',
     status: 'enabled',
     requiredPermissions: [],
-    order: 6,
+    order: 5,
   },
   {
     id: 'information',
@@ -52,7 +64,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     ownerTeam: '权益发展团队',
     status: 'enabled',
     requiredPermissions: [],
-    order: 5,
+    order: 4,
   },
   {
     id: 'growth',
@@ -63,7 +75,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     ownerTeam: '平台核心组',
     status: 'enabled',
     requiredPermissions: [],
-    order: 7,
+    order: 6,
   },
   {
     id: 'events',
@@ -74,18 +86,18 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     ownerTeam: '活动团队',
     status: 'enabled',
     requiredPermissions: [],
-    order: 1,
+    order: 10,
   },
   {
     id: 'collections',
-    name: '萬事集',
+    name: '萬事屋',
     description: '汇集活动报名、内容橱窗与灵活的信息收集工具。',
     route: '/collections',
     icon: collectionsIcon,
     ownerTeam: '平台核心组',
     status: 'enabled',
     requiredPermissions: [],
-    order: 3,
+    order: 2,
   },
   {
     id: 'liaison',
@@ -107,7 +119,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     ownerTeam: '体育团队',
     status: 'enabled',
     requiredPermissions: [],
-    order: 2,
+    order: 3,
   },
   {
     id: 'finance',
@@ -118,7 +130,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     ownerTeam: '财务治理团队',
     status: 'enabled',
     requiredPermissions: ['finance.record.read'],
-    order: 8,
+    order: 7,
   },
   {
     id: 'admin',
@@ -129,7 +141,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     ownerTeam: '平台核心组',
     status: 'enabled',
     requiredPermissions: ['admin.manage'],
-    order: 9,
+    order: 8,
   },
 ] as const;
 

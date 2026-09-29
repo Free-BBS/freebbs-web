@@ -27,7 +27,7 @@ export function MyRegistrations({ client }: { client?: Pick<ApiClient, 'request'
     <main className="collections-page collections-subpage">
       <header className="collections-subpage-heading">
         <div>
-          <Link to="/collections">← 返回萬事集</Link>
+          <Link to="/collections">← 返回萬事屋</Link>
           <p>MY WALLET</p>
           <h1>我的报名</h1>
           <span>每一次提交都收进这里，方便你随时回看。</span>

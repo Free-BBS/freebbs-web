@@ -104,7 +104,10 @@ export class CommunityService {
     });
   }
 
-  async listFeed(actor: AuthorizationContext, channel: CommunityChannel): Promise<CommunityFeedItem[]> {
+  async listFeed(
+    actor: AuthorizationContext,
+    channel: CommunityChannel,
+  ): Promise<CommunityFeedItem[]> {
     const posts = (await this.store.communityPosts.list()).filter(
       (post) =>
         post.status === 'active' &&
@@ -182,15 +185,13 @@ export class CommunityService {
     return {
       item: await this.toFeedItem(actor, post),
       comments: await Promise.all(comments.map((comment) => this.toComment(actor, comment))),
-      supplements: supplements.map(
-        (supplement): CommunitySupplement => ({
-          id: supplement.id,
-          postId: supplement.postId,
-          body: supplement.body,
-          createdAt: supplement.createdAt,
-          updatedAt: supplement.updatedAt,
-        }),
-      ),
+      supplements: supplements.map((supplement): CommunitySupplement => ({
+        id: supplement.id,
+        postId: supplement.postId,
+        body: supplement.body,
+        createdAt: supplement.createdAt,
+        updatedAt: supplement.updatedAt,
+      })),
     };
   }
 
@@ -277,7 +278,9 @@ export class CommunityService {
           like.userUid === actor.uid,
       );
       if (existing !== undefined) {
-        return store.communityLikes.update(existing.id, { status: enabled ? 'active' : 'inactive' });
+        return store.communityLikes.update(existing.id, {
+          status: enabled ? 'active' : 'inactive',
+        });
       }
       if (!enabled) return null;
       return store.communityLikes.create({
@@ -315,9 +318,7 @@ export class CommunityService {
     await this.store.transaction(async (store) => {
       const existing = (await store.communityViews.listForUpdate({ query: postId })).find(
         (view) =>
-          view.postId === postId &&
-          view.userUid === actor.uid &&
-          view.bucketStart === bucketStart,
+          view.postId === postId && view.userUid === actor.uid && view.bucketStart === bucketStart,
       );
       if (existing !== undefined) return;
       await store.communityViews.create({
@@ -348,7 +349,10 @@ export class CommunityService {
       if (!wishTransitions[workflow.wishStatus].includes(to)) {
         throw new HttpError(409, 'invalid_wish_transition', 'Wish transition is invalid');
       }
-      if (to === 'realized' && !allowed(actor, 'community.wish.convert.approve', 'community_wish')) {
+      if (
+        to === 'realized' &&
+        !allowed(actor, 'community.wish.convert.approve', 'community_wish')
+      ) {
         throw forbidden('Leader approval is required');
       }
       return store.communityWishWorkflows.update(workflow.id, { wishStatus: to });
@@ -423,10 +427,7 @@ export class CommunityService {
   private async updateWish<T>(
     actor: AuthorizationContext,
     postId: string,
-    update: (
-      store: DevelopmentStore,
-      workflow: CommunityWishWorkflowRecord,
-    ) => Promise<T>,
+    update: (store: DevelopmentStore, workflow: CommunityWishWorkflowRecord) => Promise<T>,
   ): Promise<T> {
     return this.store.transaction(async (store) => {
       const { workflow } = await this.findWish(store, postId, true);
@@ -483,6 +484,7 @@ export class CommunityService {
       status: post.status,
       wishStatus: workflow?.wishStatus ?? null,
       officialResponse: workflow?.officialResponse ?? null,
+      conversionStatus: workflow?.conversionStatus ?? null,
       linkedActivityId: workflow?.activityId ?? null,
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
@@ -581,14 +583,14 @@ export class CommunityService {
 
   private async ensureAlias(store: DevelopmentStore, threadId: string, uid: string) {
     const aliases = await store.communityAliases.listForUpdate({ query: threadId });
-    const existing = aliases.find(
-      (alias) => alias.threadId === threadId && alias.userUid === uid,
-    );
+    const existing = aliases.find((alias) => alias.threadId === threadId && alias.userUid === uid);
     if (existing !== undefined) return existing;
     const next =
       Math.max(
         0,
-        ...aliases.filter((alias) => alias.threadId === threadId).map(({ aliasIndex }) => aliasIndex),
+        ...aliases
+          .filter((alias) => alias.threadId === threadId)
+          .map(({ aliasIndex }) => aliasIndex),
       ) + 1;
     return store.communityAliases.create({
       threadId,

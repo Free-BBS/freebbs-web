@@ -3,21 +3,10 @@ import type { ScopeRef } from './permissions.js';
 export const COMMUNITY_POST_KINDS = ['daily', 'wish', 'festival_showcase'] as const;
 export type CommunityPostKind = (typeof COMMUNITY_POST_KINDS)[number];
 
-export const COMMUNITY_CHANNELS = [
-  'all',
-  'daily',
-  'wishes',
-  'student_festival',
-  'rights',
-] as const;
+export const COMMUNITY_CHANNELS = ['all', 'daily', 'wishes', 'student_festival', 'rights'] as const;
 export type CommunityChannel = (typeof COMMUNITY_CHANNELS)[number];
 
-export const COMMUNITY_WISH_STATUSES = [
-  'collecting',
-  'responded',
-  'planning',
-  'realized',
-] as const;
+export const COMMUNITY_WISH_STATUSES = ['collecting', 'responded', 'planning', 'realized'] as const;
 export type CommunityWishStatus = (typeof COMMUNITY_WISH_STATUSES)[number];
 
 export type CommunityDisplayMode = 'named' | 'anonymous';
@@ -53,6 +42,7 @@ export interface CommunityFeedItem {
   status: CommunityContentStatus;
   wishStatus: CommunityWishStatus | null;
   officialResponse: string | null;
+  conversionStatus: 'none' | 'requested' | 'approved' | null;
   linkedActivityId: string | null;
   createdAt: string;
   updatedAt: string;

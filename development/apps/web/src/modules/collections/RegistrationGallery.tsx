@@ -208,7 +208,7 @@ export function RegistrationGallery({ client }: RegistrationGalleryProps) {
     <main className="collections-page collections-subpage">
       <header className="collections-subpage-heading">
         <div>
-          <Link to="/collections">← 返回萬事集</Link>
+          <Link to="/collections">← 返回萬事屋</Link>
           <p>REGISTRATION HALL</p>
           <h1>报名入口</h1>
           <span>展开卡片，在原地读完信息并完成报名。</span>

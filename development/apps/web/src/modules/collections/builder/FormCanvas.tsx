@@ -191,7 +191,7 @@ export function FormCanvas({
             aria-label="编辑表单基本信息"
             onClick={() => onSelect({ type: 'form' })}
           >
-            <span>萬事集 · 新收集</span>
+            <span>萬事屋 · 新收集</span>
             <h1>{schema.title}</h1>
             <p>{schema.description}</p>
           </button>

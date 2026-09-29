@@ -2,7 +2,10 @@ import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { BASE_STUDENT_PERMISSIONS, ROLE_PERMISSION_CATALOG } from '../../core/authorization/permission-catalog.js';
+import {
+  BASE_STUDENT_PERMISSIONS,
+  ROLE_PERMISSION_CATALOG,
+} from '../../core/authorization/permission-catalog.js';
 import type { AuthorizationContext, PermissionRule } from '../../core/authorization/policy.js';
 import { createMemoryStore } from '../../core/database/memory-store.js';
 import { createCommunityRouter } from './router.js';
@@ -74,13 +77,22 @@ async function testApp() {
       now: () => new Date('2026-09-29T12:00:00.000Z'),
     }),
   );
-  app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
-    const value = error as { status?: number; code?: string; message?: string };
-    response.status(value.status ?? 500).json({
-      data: { error: { code: value.code ?? 'internal_error', message: value.message ?? 'error' } },
-      requestId: response.locals.requestId,
-    });
-  });
+  app.use(
+    (
+      error: unknown,
+      _request: express.Request,
+      response: express.Response,
+      _next: express.NextFunction,
+    ) => {
+      const value = error as { status?: number; code?: string; message?: string };
+      response.status(value.status ?? 500).json({
+        data: {
+          error: { code: value.code ?? 'internal_error', message: value.message ?? 'error' },
+        },
+        requestId: response.locals.requestId,
+      });
+    },
+  );
   return { app, store };
 }
 
@@ -129,10 +141,7 @@ describe('community router', () => {
       .put(`/community/targets/post/${postId}/like`)
       .set('X-User', 'viewer')
       .expect(200);
-    await request(app)
-      .post(`/community/posts/${postId}/views`)
-      .set('X-User', 'viewer')
-      .expect(204);
+    await request(app).post(`/community/posts/${postId}/views`).set('X-User', 'viewer').expect(204);
     await request(app)
       .post(`/community/posts/${postId}/reports`)
       .set('X-User', 'viewer')
@@ -205,6 +214,10 @@ describe('community router', () => {
       .expect(200);
 
     expect(second.body.data.id).toBe(first.body.data.id);
-    expect((await store.activities.list()).filter(({ sourceCommunityPostId }) => sourceCommunityPostId === postId)).toHaveLength(1);
+    expect(
+      (await store.activities.list()).filter(
+        ({ sourceCommunityPostId }) => sourceCommunityPostId === postId,
+      ),
+    ).toHaveLength(1);
   });
 });

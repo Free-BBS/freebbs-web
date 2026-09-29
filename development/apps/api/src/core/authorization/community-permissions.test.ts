@@ -25,9 +25,7 @@ describe('community permission catalogue', () => {
         'community.wish.convert.request',
       ]),
     );
-    expect(actions('youth_league.freshman.member')).not.toContain(
-      'community.wish.convert.approve',
-    );
+    expect(actions('youth_league.freshman.member')).not.toContain('community.wish.convert.approve');
     for (const role of [
       'youth_league.freshman.leader',
       'youth_league.freshman.deputy_secretary',

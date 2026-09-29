@@ -30,10 +30,34 @@ describe('community trending', () => {
       post('old', 'owner-c', '2026-09-27T09:00:00.000Z'),
     ];
     const likes = [
-      { targetType: 'post' as const, targetId: 'popular', userUid: 'fan-a', status: 'active', createdAt: '2026-09-29T11:00:00.000Z' },
-      { targetType: 'post' as const, targetId: 'popular', userUid: 'owner-a', status: 'active', createdAt: '2026-09-29T11:30:00.000Z' },
-      { targetType: 'post' as const, targetId: 'hidden', userUid: 'fan-a', status: 'active', createdAt: '2026-09-29T11:30:00.000Z' },
-      { targetType: 'post' as const, targetId: 'old', userUid: 'fan-a', status: 'active', createdAt: '2026-09-27T11:30:00.000Z' },
+      {
+        targetType: 'post' as const,
+        targetId: 'popular',
+        userUid: 'fan-a',
+        status: 'active',
+        createdAt: '2026-09-29T11:00:00.000Z',
+      },
+      {
+        targetType: 'post' as const,
+        targetId: 'popular',
+        userUid: 'owner-a',
+        status: 'active',
+        createdAt: '2026-09-29T11:30:00.000Z',
+      },
+      {
+        targetType: 'post' as const,
+        targetId: 'hidden',
+        userUid: 'fan-a',
+        status: 'active',
+        createdAt: '2026-09-29T11:30:00.000Z',
+      },
+      {
+        targetType: 'post' as const,
+        targetId: 'old',
+        userUid: 'fan-a',
+        status: 'active',
+        createdAt: '2026-09-27T11:30:00.000Z',
+      },
     ];
     const comments = Array.from({ length: 5 }, (_, index) => ({
       postId: 'popular',
@@ -42,9 +66,24 @@ describe('community trending', () => {
       createdAt: `2026-09-29T11:0${index}:00.000Z`,
     }));
     const views = [
-      { postId: 'popular', userUid: 'fan-c', status: 'active', bucketStart: '2026-09-29T11:00:00.000Z' },
-      { postId: 'popular', userUid: 'fan-c', status: 'active', bucketStart: '2026-09-29T11:30:00.000Z' },
-      { postId: 'popular', userUid: 'owner-a', status: 'active', bucketStart: '2026-09-29T11:30:00.000Z' },
+      {
+        postId: 'popular',
+        userUid: 'fan-c',
+        status: 'active',
+        bucketStart: '2026-09-29T11:00:00.000Z',
+      },
+      {
+        postId: 'popular',
+        userUid: 'fan-c',
+        status: 'active',
+        bucketStart: '2026-09-29T11:30:00.000Z',
+      },
+      {
+        postId: 'popular',
+        userUid: 'owner-a',
+        status: 'active',
+        bucketStart: '2026-09-29T11:30:00.000Z',
+      },
     ];
 
     const result = calculateTrending(posts, likes, comments, views, now);

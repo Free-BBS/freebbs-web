@@ -59,8 +59,7 @@ export function calculateTrending(
 
   return posts
     .filter(
-      (post) =>
-        post.status === 'active' && post.scope.type === 'public' && post.scope.id === '*',
+      (post) => post.status === 'active' && post.scope.type === 'public' && post.scope.id === '*',
     )
     .flatMap((post) => {
       const postLikes = likes.filter(
@@ -82,7 +81,10 @@ export function calculateTrending(
           inWindow(comment.createdAt, lowerBound, upperBound),
       );
       for (const comment of postComments) {
-        commentCounts.set(comment.authorUid, Math.min(3, (commentCounts.get(comment.authorUid) ?? 0) + 1));
+        commentCounts.set(
+          comment.authorUid,
+          Math.min(3, (commentCounts.get(comment.authorUid) ?? 0) + 1),
+        );
       }
       const effectiveComments = [...commentCounts.values()].reduce((sum, count) => sum + count, 0);
 

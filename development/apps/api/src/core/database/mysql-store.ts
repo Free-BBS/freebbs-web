@@ -1192,9 +1192,7 @@ function buildMySqlStore(executor: Executor, pool: Pool, inTransaction: boolean)
     ),
     communityPosts: repository<CommunityPostRecord>(definitions.communityPosts),
     communityComments: repository<CommunityCommentRecord>(definitions.communityComments),
-    communitySupplements: repository<CommunitySupplementRecord>(
-      definitions.communitySupplements,
-    ),
+    communitySupplements: repository<CommunitySupplementRecord>(definitions.communitySupplements),
     communityLikes: repository<CommunityLikeRecord>(definitions.communityLikes),
     communityAliases: repository<CommunityAliasRecord>(definitions.communityAliases),
     communityViews: repository<CommunityViewRecord>(definitions.communityViews),

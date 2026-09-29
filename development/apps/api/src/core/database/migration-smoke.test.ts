@@ -38,6 +38,7 @@ describe('database migrations', () => {
       '013_information_feed.sql',
       '014_development_access.sql',
       '015_collections.sql',
+      '016_community.sql',
     ]);
 
     const sql = (await Promise.all(migrations.map(({ path }) => readFile(path, 'utf8')))).join(

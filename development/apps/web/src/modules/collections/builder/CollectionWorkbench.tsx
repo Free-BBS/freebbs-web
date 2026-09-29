@@ -219,7 +219,7 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
         <div className="collections-empty">
           <strong>当前身份没有创建入口</strong>
           <p>表单工作台仅向社工组织成员开放。</p>
-          <Link to="/collections">返回萬事集</Link>
+          <Link to="/collections">返回萬事屋</Link>
         </div>
       </main>
     );
@@ -228,7 +228,7 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
     <main className="collection-workbench-page">
       <header className="builder-topbar">
         <div>
-          <Link to="/collections">← 萬事集</Link>
+          <Link to="/collections">← 萬事屋</Link>
           <span>FORM LAB / 表单仿真工作台</span>
           <strong>{schema.title}</strong>
         </div>

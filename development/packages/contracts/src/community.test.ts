@@ -10,19 +10,8 @@ import {
 describe('community contracts', () => {
   it('defines independent feed kinds, channels, and the four wish states', () => {
     expect(COMMUNITY_POST_KINDS).toEqual(['daily', 'wish', 'festival_showcase']);
-    expect(COMMUNITY_CHANNELS).toEqual([
-      'all',
-      'daily',
-      'wishes',
-      'student_festival',
-      'rights',
-    ]);
-    expect(COMMUNITY_WISH_STATUSES).toEqual([
-      'collecting',
-      'responded',
-      'planning',
-      'realized',
-    ]);
+    expect(COMMUNITY_CHANNELS).toEqual(['all', 'daily', 'wishes', 'student_festival', 'rights']);
+    expect(COMMUNITY_WISH_STATUSES).toEqual(['collecting', 'responded', 'planning', 'realized']);
   });
 
   it('represents an anonymous wish without exposing a real author identifier', () => {
@@ -36,6 +25,7 @@ describe('community contracts', () => {
       status: 'active',
       wishStatus: 'collecting',
       officialResponse: null,
+      conversionStatus: 'none',
       linkedActivityId: null,
       createdAt: '2026-09-29T00:00:00.000Z',
       updatedAt: '2026-09-29T00:00:00.000Z',

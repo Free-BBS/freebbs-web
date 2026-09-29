@@ -50,7 +50,11 @@ const patchPostSchema = z
   .strict()
   .refine((value) => Object.values(value).some((part) => part !== undefined));
 const commentSchema = z
-  .object({ body: z.string().trim().min(1).max(5_000), parentId: identifier.nullable(), displayMode })
+  .object({
+    body: z.string().trim().min(1).max(5_000),
+    parentId: identifier.nullable(),
+    displayMode,
+  })
   .strict();
 const supplementSchema = z.object({ body: z.string().trim().min(1).max(10_000) }).strict();
 const reportSchema = z.object({ reason: z.string().trim().min(2).max(500) }).strict();
@@ -76,7 +80,9 @@ const feedQuerySchema = z
   .object({ channel: z.enum(COMMUNITY_CHANNELS).default('all'), cursor: identifier.optional() })
   .strict();
 const postRouteSchema = z.object({ postId: identifier }).strict();
-const targetRouteSchema = z.object({ targetType: z.enum(['post', 'comment']), targetId: identifier }).strict();
+const targetRouteSchema = z
+  .object({ targetType: z.enum(['post', 'comment']), targetId: identifier })
+  .strict();
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.output<T> {
   const result = schema.safeParse(value);
@@ -137,7 +143,10 @@ export function createCommunityRouter(options: CommunityRouterOptions): Router {
     if (actor === null) return;
     const query = parse(feedQuerySchema, request.query);
     const items = await service.listFeed(actor, query.channel);
-    const start = query.cursor === undefined ? 0 : Math.max(0, items.findIndex(({ id }) => id === query.cursor) + 1);
+    const start =
+      query.cursor === undefined
+        ? 0
+        : Math.max(0, items.findIndex(({ id }) => id === query.cursor) + 1);
     send(response, 200, items.slice(start, start + 20));
   });
 
@@ -165,7 +174,11 @@ export function createCommunityRouter(options: CommunityRouterOptions): Router {
     const actor = await requireActor(options, request, response);
     if (actor === null) return;
     const { postId } = parse(postRouteSchema, request.params);
-    send(response, 200, await service.updatePost(actor, postId, parse(patchPostSchema, request.body)));
+    send(
+      response,
+      200,
+      await service.updatePost(actor, postId, parse(patchPostSchema, request.body)),
+    );
   });
 
   router.delete('/posts/:postId', async (request, response) => {
@@ -180,7 +193,11 @@ export function createCommunityRouter(options: CommunityRouterOptions): Router {
     const actor = await requireActor(options, request, response);
     if (actor === null) return;
     const { postId } = parse(postRouteSchema, request.params);
-    send(response, 201, await service.createComment(actor, postId, parse(commentSchema, request.body)));
+    send(
+      response,
+      201,
+      await service.createComment(actor, postId, parse(commentSchema, request.body)),
+    );
   });
 
   router.post('/posts/:postId/supplements', async (request, response) => {

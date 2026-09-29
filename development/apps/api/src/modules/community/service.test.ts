@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { BASE_STUDENT_PERMISSIONS, ROLE_PERMISSION_CATALOG } from '../../core/authorization/permission-catalog.js';
+import {
+  BASE_STUDENT_PERMISSIONS,
+  ROLE_PERMISSION_CATALOG,
+} from '../../core/authorization/permission-catalog.js';
 import type { AuthorizationContext, PermissionRule } from '../../core/authorization/policy.js';
 import { createMemoryStore } from '../../core/database/memory-store.js';
 import { HttpError } from '../../core/errors/http-error.js';
@@ -127,6 +130,7 @@ describe('community service', () => {
       organizationId: 'tuanwei',
       startsAt: null,
     });
+    expect((await service.getThread(member, post.id)).item.conversionStatus).toBe('requested');
     await expect(service.approveWishConversion(member, post.id)).rejects.toMatchObject({
       status: 403,
     } satisfies Partial<HttpError>);
@@ -139,7 +143,11 @@ describe('community service', () => {
       sourceCommunityPostId: post.id,
       organizationId: 'tuanwei',
     });
-    expect((await store.activities.list()).filter(({ sourceCommunityPostId }) => sourceCommunityPostId === post.id)).toHaveLength(1);
+    expect(
+      (await store.activities.list()).filter(
+        ({ sourceCommunityPostId }) => sourceCommunityPostId === post.id,
+      ),
+    ).toHaveLength(1);
     expect((await service.getThread(student, post.id)).item).toMatchObject({
       wishStatus: 'planning',
       linkedActivityId: first.id,
