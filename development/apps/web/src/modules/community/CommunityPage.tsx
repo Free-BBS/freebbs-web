@@ -438,14 +438,23 @@ export function CommunityPage({ client, initialPostId }: CommunityPageProps) {
                     <button type="submit">发布官方回应</button>
                   </form>
                 ) : null}
-                {detail.item.capabilities.canTransitionWish ? (
+                {(detail.item.capabilities.canTransitionWish &&
+                  detail.item.wishStatus === 'responded') ||
+                (detail.item.capabilities.canTransitionWish &&
+                  detail.item.capabilities.canApproveConversion &&
+                  detail.item.wishStatus === 'planning') ? (
                   <div className="community-workflow__actions">
-                    <button type="button" onClick={() => void transition('planning')}>
-                      进入筹备
-                    </button>
-                    <button type="button" onClick={() => void transition('realized')}>
-                      标记已实现
-                    </button>
+                    {detail.item.wishStatus === 'responded' ? (
+                      <button type="button" onClick={() => void transition('planning')}>
+                        进入筹备
+                      </button>
+                    ) : null}
+                    {detail.item.wishStatus === 'planning' &&
+                    detail.item.capabilities.canApproveConversion ? (
+                      <button type="button" onClick={() => void transition('realized')}>
+                        标记已实现
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
                 {detail.item.capabilities.canRequestConversion &&

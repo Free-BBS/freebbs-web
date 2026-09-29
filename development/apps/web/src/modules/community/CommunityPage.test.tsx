@@ -103,6 +103,8 @@ describe('CommunityPage', () => {
     await user.click(await screen.findByRole('button', { name: '打开想要滑冰工作坊' }));
     expect(await screen.findByRole('dialog', { name: '想要滑冰工作坊' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '批准转为活动草稿' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '进入筹备' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '标记已实现' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: '匿名回复' }));
     await user.type(screen.getByLabelText('写下回复'), '我也想参加。');
     await user.click(screen.getByRole('button', { name: '发送回复' }));
@@ -157,4 +159,91 @@ describe('CommunityPage', () => {
     );
     expect(screen.queryByRole('button', { name: '举报帖子' })).not.toBeInTheDocument();
   });
+
+  it.each([
+    {
+      label: 'member collecting',
+      status: 'collecting' as const,
+      canApprove: false,
+      visibleAction: null,
+      transitionTarget: null,
+    },
+    {
+      label: 'member responded',
+      status: 'responded' as const,
+      canApprove: false,
+      visibleAction: '进入筹备',
+      transitionTarget: 'planning',
+    },
+    {
+      label: 'member planning',
+      status: 'planning' as const,
+      canApprove: false,
+      visibleAction: null,
+      transitionTarget: null,
+    },
+    {
+      label: 'approver planning',
+      status: 'planning' as const,
+      canApprove: true,
+      visibleAction: '标记已实现',
+      transitionTarget: 'realized',
+    },
+    {
+      label: 'approver realized',
+      status: 'realized' as const,
+      canApprove: true,
+      visibleAction: null,
+      transitionTarget: null,
+    },
+  ])(
+    'shows only executable wish transitions for $label',
+    async ({ status, canApprove, visibleAction, transitionTarget }) => {
+      const scenarioItem: CommunityFeedItem = {
+        ...wish,
+        wishStatus: status,
+        conversionStatus: 'none',
+        capabilities: {
+          ...capabilities,
+          canApproveConversion: canApprove,
+          canRespondToWish: false,
+          canRequestConversion: false,
+        },
+      };
+      const scenarioThread: CommunityThreadDetail = {
+        item: scenarioItem,
+        comments: [],
+        supplements: [],
+      };
+      const request = vi.fn(async (path: string, init?: RequestInit) => {
+        if (path === '/community/feed?channel=all') return [scenarioItem];
+        if (path === '/community/trending') return { ...trends, items: [] };
+        if (path === '/community/posts/wish-1' && !init) return scenarioThread;
+        if (path === '/community/wishes/wish-1/transitions' && init?.method === 'POST') return {};
+        throw new Error(`Unexpected request: ${path}`);
+      });
+      const user = userEvent.setup();
+      render(<CommunityPage client={{ request } as unknown as ApiClient} />);
+
+      await user.click(await screen.findByRole('button', { name: '打开想要滑冰工作坊' }));
+      expect(await screen.findByRole('dialog', { name: '想要滑冰工作坊' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '进入筹备' })).toBe(
+        visibleAction === '进入筹备' ? screen.getByRole('button', { name: '进入筹备' }) : null,
+      );
+      expect(screen.queryByRole('button', { name: '标记已实现' })).toBe(
+        visibleAction === '标记已实现' ? screen.getByRole('button', { name: '标记已实现' }) : null,
+      );
+
+      if (visibleAction && transitionTarget) {
+        await user.click(screen.getByRole('button', { name: visibleAction }));
+        expect(request).toHaveBeenCalledWith(
+          '/community/wishes/wish-1/transitions',
+          expect.objectContaining({
+            method: 'POST',
+            body: expect.stringContaining(`"to":"${transitionTarget}"`),
+          }),
+        );
+      }
+    },
+  );
 });
