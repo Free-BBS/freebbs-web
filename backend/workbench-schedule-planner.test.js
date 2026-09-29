@@ -840,7 +840,9 @@ test('planner preview only reads authenticated user schedule and does not write'
   });
   assert.equal(response.status, 200);
   assert.equal((await response.json()).suggestions.length > 0, true);
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
+  assert.match(calls[1].sql, /^SELECT preferences_json/);
+  assert.deepEqual(calls[1].parameters, [17]);
   assert.equal(calls[0].parameters[0], 17);
   assert.match(calls[0].sql, /ORDER BY start_at LIMIT 501$/);
   assert.doesNotMatch(calls[0].sql, /LIMIT\s+\?/i);

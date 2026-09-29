@@ -42,7 +42,10 @@ test('persists one generated image and replaces private payload data with Markdo
     (await fs.promises.readdir(uploadDir)).some((fileName) => fileName.endsWith('.uploading')),
     false,
   );
-  const metadata = await sharp(path.join(uploadDir, result.files[0])).metadata();
+  // Inspect bytes, not a pathname: libvips may cache a Windows file handle after metadata().
+  const metadata = await sharp(
+    await fs.promises.readFile(path.join(uploadDir, result.files[0])),
+  ).metadata();
   assert.equal(metadata.format, 'webp');
 });
 

@@ -3,6 +3,7 @@ const path = require('node:path');
 const { DOMParser } = require('@xmldom/xmldom');
 
 const { createUploads, MAX_BYTES } = require('./max-file-uploads');
+
 const MAX_TEXT = 60000;
 const extensions = new Set([
   '.doc',
@@ -126,6 +127,8 @@ async function extract(name, buffer) {
   return text;
 }
 function parseFile(name, buffer, visual = false) {
+  if (process.platform === 'win32' && (visual || path.extname(name).toLowerCase() === '.pdf'))
+    return require('./max-file-process').parseFileInProcess({ name, buffer, visual });
   return new Promise((resolve, reject) => {
     const worker = new Worker(__filename, {
       workerData: { name, buffer, visual },
@@ -230,23 +233,22 @@ function registerMaxFiles(app, requireAuth, { directory, documentStore } = {}) {
   });
   return documents;
 }
-if (!isMainThread) {
-  const task = workerData.visual
-    ? workerData.visual === 'prepare'
-      ? require('./max-document-vision').prepareDocument(
-          workerData.name,
-          Buffer.from(workerData.buffer),
-        )
+function runParserTask(data) {
+  return data.visual
+    ? data.visual === 'prepare'
+      ? require('./max-document-vision').prepareDocument(data.name, Buffer.from(data.buffer))
       : require('./max-document-vision').renderDocument(
-          workerData.name,
-          Buffer.from(workerData.buffer),
-          typeof workerData.visual === 'object' ? workerData.visual : {},
+          data.name,
+          Buffer.from(data.buffer),
+          typeof data.visual === 'object' ? data.visual : {},
         )
-    : extract(workerData.name, Buffer.from(workerData.buffer));
-  task
+    : extract(data.name, Buffer.from(data.buffer));
+}
+if (!isMainThread) {
+  runParserTask(workerData)
     .then((value) =>
       parentPort.postMessage(workerData.visual ? { document: value } : { text: value }),
     )
     .catch((error) => parentPort.postMessage({ error: error.message }));
 }
-module.exports = { registerMaxFiles, extract, parseFile };
+module.exports = { registerMaxFiles, extract, parseFile, runParserTask };

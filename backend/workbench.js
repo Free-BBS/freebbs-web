@@ -1,16 +1,14 @@
 const crypto = require('crypto');
 const express = require('express');
 const { listHomeworkDeadlines, setHomeworkCompletion } = require('./homework-schedule');
-const {
-  listCourseSchedules,
-  readCourseCalendar,
-  saveCourseCalendar,
-} = require('./course-schedule');
+const { listCourseSchedules, readCourseCalendar } = require('./course-schedule');
 const { probePrimaryTsinghuaPortals } = require('./portal-boundary-probe');
 const { probePublicNoticeSource } = require('./public-source-probe');
 const { getLearnConnectorCapabilities, normalizeHtmlText } = require('./tsinghua-learn-connector');
 const { saveManualCourse } = require('./manual-courses');
 const { editImportedSchedule } = require('./campus-schedule-overrides');
+const { PREFERENCES_TABLE } = require('./planning-preferences');
+const { previewCourseImport, confirmCourseImport } = require('./course-imports');
 
 const NOTIFICATION_CATEGORIES = new Set([
   'course',
@@ -105,7 +103,10 @@ async function listCampusSemesters(pool, userId) {
   const [rows] = await pool.execute(
     `SELECT catalog.current_semester_id, catalog.semesters_json,
             catalog.fetched_at AS catalog_fetched_at,
-            snapshot.semester_id, snapshot.courses_json, snapshot.notifications_json,
+            snapshot.semester_id, snapshot.courses_json,
+            IF(connector.generation = snapshot.connector_generation
+               AND connector.status IN ('active_verified', 'active_unverified', 'reauthorization_required'),
+               snapshot.notifications_json, JSON_ARRAY()) AS notifications_json,
             snapshot.sync_status, snapshot.fetched_at AS snapshot_fetched_at
      FROM user_campus_connectors connector
      LEFT JOIN campus_learn_semester_catalogs catalog
@@ -114,11 +115,8 @@ async function listCampusSemesters(pool, userId) {
        AND catalog.fetched_at >= connector.connected_at
      LEFT JOIN campus_learn_semester_snapshots snapshot
        ON snapshot.user_id = connector.user_id
-       AND connector.generation = snapshot.connector_generation
-       AND snapshot.fetched_at >= connector.connected_at
+       AND snapshot.connector_generation > 0
      WHERE connector.user_id = ? AND connector.provider = 'tsinghua-learn'
-       AND connector.status IN ('active_verified', 'active_unverified', 'reauthorization_required')
-       AND connector.connected_at IS NOT NULL
      ORDER BY snapshot.semester_id DESC`,
     [userId],
   );
@@ -126,9 +124,14 @@ async function listCampusSemesters(pool, userId) {
   const snapshotRows = rows.filter((row) => row.semester_id);
   const snapshots = new Map(snapshotRows.map((row) => [row.semester_id, row]));
   const available = parseJsonArray(catalog?.semesters_json);
-  const semesterEntries = available.length
-    ? available
-    : snapshotRows.map((row) => ({ id: row.semester_id, label: row.semester_id }));
+  const semesterEntries = [
+    ...new Map([
+      ...available.map((semester) => [semester.id, semester]),
+      ...snapshotRows
+        .filter((row) => !available.some((semester) => semester.id === row.semester_id))
+        .map((row) => [row.semester_id, { id: row.semester_id, label: row.semester_id }]),
+    ]).values(),
+  ];
   return {
     currentSemesterId: catalog?.current_semester_id || null,
     semesters: semesterEntries.map((semester) => {
@@ -148,16 +151,17 @@ async function listCampusSemesters(pool, userId) {
 
 async function readCampusSemester(pool, userId, semesterId) {
   const [rows] = await pool.execute(
-    `SELECT snapshot.semester_id, snapshot.courses_json, snapshot.notifications_json,
+    `SELECT snapshot.semester_id, snapshot.courses_json,
+            IF(connector.generation = snapshot.connector_generation
+               AND connector.status IN ('active_verified', 'active_unverified', 'reauthorization_required'),
+               snapshot.notifications_json, JSON_ARRAY()) AS notifications_json,
             snapshot.sync_status, snapshot.fetched_at
      FROM user_campus_connectors connector
      INNER JOIN campus_learn_semester_snapshots snapshot
        ON snapshot.user_id = connector.user_id
-       AND connector.generation = snapshot.connector_generation
-       AND snapshot.fetched_at >= connector.connected_at
+       AND snapshot.connector_generation > 0
      WHERE connector.user_id = ? AND connector.provider = 'tsinghua-learn'
-       AND connector.status IN ('active_verified', 'active_unverified', 'reauthorization_required')
-       AND connector.connected_at IS NOT NULL AND snapshot.semester_id = ?
+       AND snapshot.semester_id = ?
      LIMIT 1`,
     [userId, semesterId],
   );
@@ -261,6 +265,7 @@ function parseRange(query) {
 }
 
 async function ensureWorkbenchTables(pool) {
+  await pool.execute(PREFERENCES_TABLE);
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS notifications (
       id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -575,13 +580,35 @@ function createWorkbenchRouter({
     try {
       const user = await requireAuth(request, response);
       if (!user) return;
-      response.json(await saveCourseCalendar(pool, user.id, request.body || {}));
+      response
+        .status(409)
+        .json({
+          message: '校历和节次由系统统一维护，请使用课程接入预览；个人课程可在计划表直接编辑。',
+        });
     } catch (error) {
       if ([400, 409].includes(error.status))
         response.status(error.status).json({ message: error.message });
       else sendWorkbenchError(response, error, '保存课程校历失败');
     }
   });
+
+  for (const method of ['get', 'post']) {
+    router[method]('/campus/course-import', async (request, response) => {
+      try {
+        const user = await requireAuth(request, response);
+        if (!user) return;
+        response.json(
+          method === 'get'
+            ? await previewCourseImport(pool, user.id, request.query.semester)
+            : await confirmCourseImport(pool, user.id, request.body || {}),
+        );
+      } catch (error) {
+        if ([400, 409].includes(error.status))
+          response.status(error.status).json({ message: error.message });
+        else sendWorkbenchError(response, error, '接入课程失败');
+      }
+    });
+  }
 
   router.get('/campus/semesters', async (request, response) => {
     try {

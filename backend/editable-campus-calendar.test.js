@@ -209,9 +209,9 @@ function fixture() {
             {
               semester_id: config.semesterId,
               courses_json: [source],
-              settings_generation: generation,
+              settings_generation: snapshotGeneration,
               snapshot_generation: snapshotGeneration,
-              connector_generation: generation,
+              connector_generation: snapshotGeneration,
               first_week_monday: config.firstWeekMonday,
               teaching_weeks: 16,
               options_json: {},
@@ -221,7 +221,7 @@ function fixture() {
           ],
         ];
       if (sql.includes('FROM campus_schedule_overrides'))
-        return [[...(patchRow?.connector_generation === generation ? [patchRow] : [])]];
+        return [[...(patchRow ? [patchRow] : [])]];
       if (sql.includes('INSERT INTO campus_schedule_overrides')) {
         patchRow = {
           connector_generation: params[1],
@@ -279,8 +279,38 @@ test('editing, resync, moving across ranges, deletion and rebinding all use one 
   );
   pool.rebind();
   assert.deepEqual(await listCourseSchedules(pool, 7, range), []);
+  assert.equal(
+    (await listCourseSchedules(pool, 7, nextRange)).some(
+      (event) => event.publicId === item.publicId,
+    ),
+    false,
+  );
   pool.newSnapshot();
-  const [rebound] = await listCourseSchedules(pool, 7, range);
-  assert.equal(rebound.title, course.title);
-  assert.equal(rebound.version, 1);
+  assert.deepEqual(
+    await listCourseSchedules(pool, 7, range),
+    [],
+    'a deleted personal occurrence must not reappear after reauthorization and resync',
+  );
+});
+
+test('disconnect/expiry never hide courses or personal edits and they stay editable before reconnecting', async () => {
+  const pool = fixture();
+  const range = { start: new Date('2026-09-14'), end: new Date('2026-09-21') };
+  const before = await listCourseSchedules(pool, 7, range);
+  pool.rebind(); // The live grant generation changes; the owned saved snapshot does not.
+  assert.deepEqual(await listCourseSchedules(pool, 7, range), before);
+  const item = before[0];
+  await editImportedSchedule(pool, 7, item.publicId, {
+    version: item.version,
+    sourceRevision: item.sourceRevision,
+    title: '我的课程',
+    description: '我的备注',
+  });
+  pool.rebind();
+  const after = await listCourseSchedules(pool, 7, range);
+  assert.equal(after[0].title, '我的课程');
+  assert.equal(after[0].description, '我的备注');
+  assert.equal(after[0].publicId, item.publicId);
+  assert.equal(after[0].version, 2);
+  assert.equal(after.length, before.length);
 });

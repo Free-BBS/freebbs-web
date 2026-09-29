@@ -11,7 +11,15 @@ const OVERRIDE_TABLE = `CREATE TABLE IF NOT EXISTS campus_schedule_overrides (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 )`;
 
-async function loadOverrides(pool, userId) {
+async function loadOverrides(pool, userId, generation = null) {
+  if (generation !== null) {
+    const [rows] = await pool.execute(
+      `SELECT o.public_id, o.patch_json, o.version, o.updated_at, o.connector_generation
+       FROM campus_schedule_overrides o WHERE o.user_id = ? AND o.connector_generation = ?`,
+      [userId, generation],
+    );
+    return new Map(rows.map((row) => [row.public_id, row]));
+  }
   const [rows] = await pool.execute(
     `SELECT o.public_id, o.patch_json, o.version, o.updated_at, o.connector_generation
      FROM campus_schedule_overrides o
@@ -20,6 +28,18 @@ async function loadOverrides(pool, userId) {
      WHERE o.user_id = ? AND c.status IN ('active_verified', 'active_unverified', 'reauthorization_required')`,
     [userId],
   );
+  return new Map(rows.map((row) => [row.public_id, row]));
+}
+
+async function loadCourseOverrides(pool, userId) {
+  const [rows] = await pool.execute(
+    `SELECT o.public_id, o.patch_json, o.version, o.updated_at, o.connector_generation
+     FROM campus_schedule_overrides o WHERE o.user_id = ? AND LEFT(o.public_id, 3) = 'cs_'
+       AND o.connector_generation > 0 ORDER BY o.version, o.updated_at, o.connector_generation`,
+    [userId],
+  );
+  // Stable occurrence IDs include semester/course/week/section. Personal edits
+  // belong to the local user and survive renewing the upstream credential.
   return new Map(rows.map((row) => [row.public_id, row]));
 }
 
@@ -109,13 +129,10 @@ async function editImportedSchedule(pool, userId, publicId, body, { remove = fal
   try {
     await connection.beginTransaction();
     // Serialize edits with rebinding/revocation. Source data is re-read inside this transaction.
-    const [bindings] = await connection.execute(
-      `SELECT generation FROM user_campus_connectors WHERE user_id = ? AND provider = 'tsinghua-learn'
-       AND status IN ('active_verified', 'active_unverified', 'reauthorization_required') FOR UPDATE`,
+    await connection.execute(
+      `SELECT generation FROM user_campus_connectors WHERE user_id = ? AND provider = 'tsinghua-learn' FOR UPDATE`,
       [userId],
     );
-    if (!bindings.length)
-      throw Object.assign(new Error('网络学堂连接已失效，请重新同步'), { status: 409 });
     const range = {
       start: new Date('2000-01-01T00:00:00Z'),
       end: new Date('2201-01-01T00:00:00Z'),
@@ -128,7 +145,11 @@ async function editImportedSchedule(pool, userId, publicId, body, { remove = fal
     if (!existing) throw Object.assign(new Error('同步日程不存在，请刷新课表'), { status: 404 });
     if (body.version !== existing.version || body.sourceRevision !== existing.sourceRevision)
       throw Object.assign(new Error('日程或课程源信息已更新，请刷新后重试'), { status: 409 });
-    const previous = (await loadOverrides(connection, userId)).get(publicId);
+    const previous = (
+      publicId.startsWith('cs_')
+        ? await loadCourseOverrides(connection, userId)
+        : await loadOverrides(connection, userId, existing.connectorGeneration)
+    ).get(publicId);
     const previousPatch = previous
       ? typeof previous.patch_json === 'string'
         ? JSON.parse(previous.patch_json)
@@ -141,7 +162,7 @@ async function editImportedSchedule(pool, userId, publicId, body, { remove = fal
       `INSERT INTO campus_schedule_overrides (user_id, connector_generation, public_id, patch_json, version)
        VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE patch_json = VALUES(patch_json),
          version = VALUES(version), updated_at = CURRENT_TIMESTAMP`,
-      [userId, bindings[0].generation, publicId, JSON.stringify(patch), existing.version + 1],
+      [userId, existing.connectorGeneration, publicId, JSON.stringify(patch), existing.version + 1],
     );
     await connection.commit();
     return { ...existing, ...patch, personallyEdited: true, version: existing.version + 1 };
@@ -153,4 +174,11 @@ async function editImportedSchedule(pool, userId, publicId, body, { remove = fal
   }
 }
 
-module.exports = { OVERRIDE_TABLE, loadOverrides, applyOverride, makePatch, editImportedSchedule };
+module.exports = {
+  OVERRIDE_TABLE,
+  loadOverrides,
+  loadCourseOverrides,
+  applyOverride,
+  makePatch,
+  editImportedSchedule,
+};

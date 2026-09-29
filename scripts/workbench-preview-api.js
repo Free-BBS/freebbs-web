@@ -18,6 +18,7 @@ const {
 const { applyOverride, makePatch } = require('../backend/campus-schedule-overrides');
 const { DEFAULTS } = require('../public/academic-calendar');
 const { expandManualCourse } = require('../backend/manual-courses');
+const { normalizePreferences, availableWindows } = require('../backend/planning-preferences');
 
 function createWorkbenchPreviewApi({
   now = Date.now,
@@ -25,15 +26,21 @@ function createWorkbenchPreviewApi({
   campusNotices = [],
   semesterId = 'preview-semester',
 } = {}) {
-  let firstWeekMonday = DEFAULTS[semesterId]?.firstWeekMonday || null;
-  let teachingWeeks = DEFAULTS[semesterId]?.teachingWeeks || null;
+  const calendar = DEFAULTS[semesterId === 'preview-semester' ? '2026-2027-1' : semesterId];
+  let firstWeekMonday = calendar?.firstWeekMonday || null;
+  let teachingWeeks = calendar?.teachingWeeks || null;
   let options = normalizeCalendarOptions(
-    { holidayPreset: DEFAULTS[semesterId]?.holidayPreset || '' },
+    { holidayPreset: calendar?.holidayPreset || '' },
     firstWeekMonday,
   );
   const personalEdits = new Map();
+  let planningPreferences = normalizePreferences();
+  let preferencesSaved = false;
+  let savedCourses = null;
+  let copiedEvents = null;
+  let importPending = false;
   const sourceProjection = (includeExcluded = false) =>
-    projectCourseSchedules(campusCourses, {
+    projectCourseSchedules(savedCourses || campusCourses, {
       semesterId,
       firstWeekMonday,
       teachingWeeks,
@@ -42,7 +49,9 @@ function createWorkbenchPreviewApi({
       fetchedAt: new Date(now()).toISOString(),
     });
   const courseProjection = () => {
-    const result = sourceProjection(true);
+    if (importPending) return { events: [], issues: [], parsedCourses: 0, totalCourses: 0 };
+    if (!savedCourses && campusCourses.length) savedCourses = structuredClone(campusCourses);
+    const result = copiedEvents ? structuredClone(copiedEvents) : sourceProjection(true);
     result.events = result.events
       .map((item) => {
         const edited = applyOverride(
@@ -58,6 +67,7 @@ function createWorkbenchPreviewApi({
     const projection = courseProjection();
     return {
       semesterId,
+      imported: !importPending,
       firstWeekMonday,
       teachingWeeks,
       options,
@@ -142,6 +152,45 @@ function createWorkbenchPreviewApi({
   const result = (body, status = 200) => ({ body, status });
 
   async function handle({ route, url, method, body }) {
+    if (route === '/api/workbench/schedule-planner/preferences') {
+      try {
+        if (method === 'PUT') {
+          planningPreferences = normalizePreferences(body);
+          preferencesSaved = true;
+        }
+        return result({ preferences: planningPreferences, saved: preferencesSaved });
+      } catch (error) {
+        return result({ message: error.message }, error.status || 500);
+      }
+    }
+    if (route === '/api/workbench/schedule-planner/availability' && method === 'GET') {
+      const days = Number(url.searchParams.get('days') || 1);
+      if (![1, 7].includes(days)) return result({ message: '请选择今天或未来七天。' }, 400);
+      const effective = planningPreferences.enabled
+        ? planningPreferences
+        : {
+            ...planningPreferences,
+            dayStart: '09:00',
+            dayEnd: '21:00',
+            weekdays: [1, 2, 3, 4, 5, 6, 7],
+            restWindows: [],
+            breakMinutes: 0,
+          };
+      const windows = availableWindows(
+        [...events, ...courseProjection().events],
+        new Date(now()),
+        days,
+        effective,
+      );
+      return result({
+        windows,
+        days,
+        minutes: windows.reduce(
+          (sum, gap) => sum + (Date.parse(gap.endAt) - Date.parse(gap.startAt)) / 60000,
+          0,
+        ),
+      });
+    }
     if (route === '/api/notifications') {
       if (communityUnavailable) return result({ message: '通知服务暂时不可用' }, 503);
       return result({
@@ -197,6 +246,9 @@ function createWorkbenchPreviewApi({
           teachingWeeks = body.teachingWeeks;
         }
         firstWeekMonday = body.firstWeekMonday;
+        // Fixture setup only; production calendars cannot be changed per account.
+        savedCourses = structuredClone(campusCourses);
+        copiedEvents = null;
         try {
           options = normalizeCalendarOptions(body.options || {}, firstWeekMonday);
         } catch (error) {
@@ -204,6 +256,45 @@ function createWorkbenchPreviewApi({
         }
       }
       if (method === 'GET' || method === 'PUT') return result(calendarStatus());
+    }
+    if (route === '/api/workbench/connectors/tsinghua/sync-runs' && method === 'POST')
+      return result({ run: { publicId: 'preview-course-sync', status: 'succeeded' } });
+    if (route === '/api/workbench/connectors/tsinghua/sync-runs/preview-course-sync')
+      return result({ run: { publicId: 'preview-course-sync', status: 'succeeded' } });
+    if (route === '/api/workbench/campus/course-import') {
+      const projection = projectCourseSchedules(campusCourses, {
+        semesterId,
+        firstWeekMonday,
+        teachingWeeks,
+        options,
+        includeExcluded: true,
+      });
+      const revision = require('node:crypto')
+        .createHash('sha256')
+        .update(JSON.stringify([campusCourses, savedCourses, importPending]))
+        .digest('hex');
+      if (method === 'POST') {
+        if (body.revision !== revision) return result({ message: '请重新预览并确认。' }, 409);
+        savedCourses = structuredClone(campusCourses);
+        copiedEvents = structuredClone(projection);
+        importPending = false;
+        return result({ imported: true });
+      }
+      return result({
+        semesterId,
+        revision,
+        firstWeekMonday,
+        teachingWeeks,
+        imported: !importPending,
+        scheduledLessons: projection.events.filter((event) => !event.calendarHoliday).length,
+        skippedLessons: projection.skippedLessons,
+        issues: projection.issues,
+        courses: campusCourses.map((course) => ({
+          title: course.title,
+          schedule: course.scheduleText,
+          location: course.locationText,
+        })),
+      });
     }
     if (route === '/api/workbench/summary') {
       return result({
@@ -386,6 +477,7 @@ function createWorkbenchPreviewApi({
             extraction,
             [...events, ...courseProjection().events].filter((item) => item.kind !== 'deadline'),
             new Date(now()),
+            planningPreferences,
           ),
         );
       } catch (error) {
@@ -442,6 +534,11 @@ function createWorkbenchPreviewApi({
     campusCourses,
     campusNotices,
     courseProjection,
+    requireCourseConfirmation() {
+      importPending = true;
+      savedCourses = null;
+      copiedEvents = null;
+    },
     setCommunityUnavailable(value) {
       communityUnavailable = Boolean(value);
     },

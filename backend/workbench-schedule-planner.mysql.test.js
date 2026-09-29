@@ -6,6 +6,7 @@ const { randomUUID } = require('node:crypto');
 const express = require('express');
 const { createSchedulePlannerRouter, localDateKey } = require('./workbench-schedule-planner');
 const { ensureCampusConnectorTables } = require('./tsinghua-connectors/schema');
+const { PREFERENCES_TABLE } = require('./planning-preferences');
 
 test(
   'isolated MySQL: planner preview and confirmation use executable limits and preserve schedule isolation',
@@ -49,6 +50,7 @@ test(
       await pool.query(statement);
     }
     await ensureCampusConnectorTables(pool);
+    await pool.query(PREFERENCES_TABLE);
 
     const app = express();
     app.use(express.json());
@@ -165,6 +167,15 @@ test(
          (user_id, semester_id, connector_generation, first_week_monday)
          VALUES (?, 'planner-fixture', 1, ?)`,
         [userId, firstWeekMonday],
+      );
+      // Already-confirmed local fixture; ordinary sync alone cannot add courses.
+      await pool.execute(
+        `UPDATE campus_learn_semester_snapshots
+         SET calendar_copy_json = JSON_OBJECT('courses', courses_json, 'generation', 1,
+           'fetchedAt', DATE_FORMAT(fetched_at, '%Y-%m-%dT%H:%i:%s.000Z'),
+           'firstWeekMonday', ?, 'teachingWeeks', 16, 'options', JSON_OBJECT())
+         WHERE user_id = ?`,
+        [firstWeekMonday, userId],
       );
       const withCourses = await post('preview', { message: courseMessage });
       assert.equal(

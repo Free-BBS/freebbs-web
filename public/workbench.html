@@ -15,7 +15,7 @@
     />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
-    <link rel="stylesheet" href="/workbench.css?v=20260929-compact-notes-4" />
+    <link rel="stylesheet" href="/workbench.css?v=20260929-planning-preferences-1" />
     <link rel="stylesheet" href="/workbench-connectors.css" />
     <link rel="stylesheet" href="/username-guard.css" />
     <link rel="stylesheet" href="/notifications.css" />
@@ -154,6 +154,53 @@
               <p class="workbench-intro-copy">理清今天的安排，为学习与探索留一些从容</p>
             </div>
           </header>
+          <aside class="workbench-companion" aria-label="Max 的小提示" id="workbench-companion">
+            <div class="workbench-companion-copy" id="workbench-companion-bubble">
+              <div class="workbench-companion-heading">
+                <strong>Max</strong
+                ><button
+                  type="button"
+                  id="workbench-companion-collapse"
+                  aria-label="收起 Max 对话气泡"
+                >
+                  ×
+                </button>
+              </div>
+              <p id="workbench-companion-tip" role="status" aria-live="polite">
+                从一件小事开始，也是在向前走。
+              </p>
+              <div class="workbench-companion-actions">
+                <button type="button" id="workbench-companion-next">换一句</button>
+                <a href="#workbench-max-planner" id="workbench-companion-plan">看看空余时间</a>
+                <button type="button" id="workbench-companion-hide">关闭提示</button>
+              </div>
+            </div>
+            <button
+              type="button"
+              id="workbench-companion-avatar"
+              class="workbench-companion-avatar"
+              aria-expanded="true"
+              aria-controls="workbench-companion-bubble"
+              aria-label="和 Max 说说安排"
+              title="点击 Max，展开或收起小提示"
+            >
+              <img
+                src="/assets/max-guide-v1.webp"
+                alt=""
+                width="88"
+                height="132"
+                draggable="false"
+              />
+            </button>
+          </aside>
+          <button
+            type="button"
+            id="workbench-companion-show"
+            class="workbench-compact-action"
+            hidden
+          >
+            显示 Max 小提示
+          </button>
 
           <nav class="workbench-view-switch" aria-label="工作台窗口">
             <button
@@ -298,6 +345,111 @@
                         每个事件分别预览和修改，可逐项确认或全部确认；每周重复不占事件名额。
                       </p>
                     </div>
+                    <div class="workbench-planning-shortcuts">
+                      <button type="button" data-planning-gaps="1" class="workbench-compact-action">
+                        看看今天空档
+                      </button>
+                      <button type="button" data-planning-gaps="7" class="workbench-compact-action">
+                        看看未来七天
+                      </button>
+                    </div>
+                    <div id="workbench-planning-gaps" class="workbench-planning-gaps" hidden>
+                      <p id="workbench-planning-gaps-status" role="status"></p>
+                      <ul id="workbench-planning-gap-list" aria-label="可用空档"></ul>
+                      <p class="workbench-planning-note">
+                        只参考已记录的安排；空档也可以留给休息，不必全部填满。
+                      </p>
+                    </div>
+                    <details class="workbench-planning-preferences">
+                      <summary>
+                        我的规划偏好 <span id="workbench-preferences-summary">选填，随时可改</span>
+                      </summary>
+                      <p>
+                        给 Max 一点参考，让安排更合你的节奏。只用于自动规划空档，不改动已有事件。
+                      </p>
+                      <form id="workbench-preferences-form">
+                        <fieldset id="workbench-preferences-fields" disabled>
+                          <label class="workbench-pref-check"
+                            ><input type="checkbox" name="enabled" />按这些偏好规划空档</label
+                          >
+                          <div class="workbench-preference-grid">
+                            <label>最早开始<input type="time" name="dayStart" required /></label>
+                            <label
+                              >最晚结束<input
+                                type="text"
+                                name="dayEnd"
+                                placeholder="21:00（可填 24:00）"
+                                pattern="([01][0-9]|2[0-3]):[0-5][0-9]|24:00"
+                                required
+                            /></label>
+                            <label
+                              >单次专注时长<select name="focusMinutes">
+                                <option value="30">30 分钟</option>
+                                <option value="45">45 分钟</option>
+                                <option value="60">60 分钟</option>
+                                <option value="90">90 分钟</option>
+                                <option value="120">120 分钟</option>
+                              </select></label
+                            >
+                            <label
+                              >安排之间留出<select name="breakMinutes">
+                                <option value="0">不额外留间隔</option>
+                                <option value="5">5 分钟</option>
+                                <option value="10">10 分钟</option>
+                                <option value="15">15 分钟</option>
+                                <option value="30">30 分钟</option>
+                              </select></label
+                            >
+                            <label
+                              >每天最多新增<input
+                                type="number"
+                                name="dailyMaxMinutes"
+                                min="30"
+                                max="480"
+                                step="15"
+                                required
+                              /><span>分钟（已有安排不变）</span></label
+                            >
+                          </div>
+                          <fieldset class="workbench-preference-weekdays">
+                            <legend>哪些天可以安排</legend>
+                            <label><input type="checkbox" name="weekdays" value="1" />周一</label
+                            ><label><input type="checkbox" name="weekdays" value="2" />周二</label
+                            ><label><input type="checkbox" name="weekdays" value="3" />周三</label
+                            ><label><input type="checkbox" name="weekdays" value="4" />周四</label
+                            ><label><input type="checkbox" name="weekdays" value="5" />周五</label
+                            ><label><input type="checkbox" name="weekdays" value="6" />周六</label
+                            ><label><input type="checkbox" name="weekdays" value="7" />周日</label>
+                          </fieldset>
+                          <div class="workbench-rest-heading">
+                            <strong>想保留的时间</strong
+                            ><button
+                              type="button"
+                              id="workbench-rest-add"
+                              class="workbench-compact-action"
+                            >
+                              添加时段
+                            </button>
+                          </div>
+                          <div id="workbench-rest-windows"></div>
+                          <p class="workbench-planning-note">
+                            午饭、晚饭、散步或发呆，都可以留一点时间。最多 4
+                            段，不需要保留时可移除。
+                          </p>
+                          <div class="workbench-planning-shortcuts">
+                            <button type="submit" class="workbench-compact-action">保存偏好</button
+                            ><button
+                              type="button"
+                              id="workbench-preferences-reset"
+                              class="workbench-compact-action"
+                            >
+                              恢复建议值
+                            </button>
+                          </div>
+                        </fieldset>
+                        <p id="workbench-preferences-status" role="status" aria-live="polite"></p>
+                      </form>
+                    </details>
                     <form class="workbench-agent-form" id="workbench-agent-form">
                       <label for="workbench-agent-message">告诉 Max 你想做什么</label>
                       <textarea
@@ -416,82 +568,21 @@
                       class="workbench-course-calendar"
                       hidden
                     >
-                      <h3>固定课程自动入表</h3>
-                      <p>
-                        设置本学期第一教学周的周一，已同步且时间完整的课程会直接显示在个人计划表，不需要逐条添加。重复同步不重复生成，AI
-                        规划会避开上课时间。
-                      </p>
-                      <form id="workbench-course-calendar-form">
-                        <label>
-                          校历
-                          <select id="workbench-calendar-preset">
-                            <option value="">自定义校历</option>
-                          </select>
-                        </label>
-                        <label for="workbench-course-calendar-monday">
-                          第一教学周 · 周一日期
-                          <input id="workbench-course-calendar-monday" type="date" required />
-                        </label>
-                        <label for="workbench-course-calendar-weeks">
-                          本学期教学周数
-                          <input
-                            id="workbench-course-calendar-weeks"
-                            type="number"
-                            min="1"
-                            max="53"
-                            step="1"
-                            placeholder="按校历确认，如 16"
-                            aria-describedby="workbench-course-calendar-weeks-hint"
-                          />
-                        </label>
-                        <details class="workbench-calendar-options">
-                          <summary>假期与上课时长</summary>
-                          <p id="workbench-calendar-holidays"></p>
-                          <p class="workbench-course-calendar-note">
-                            放假日自动跳过，不顺延教学周。调课以教务通知为准；2027
-                            年假期可能调整，届时可修改例外日期。
-                          </p>
-                          <div class="workbench-form-grid">
-                            <label
-                              >额外停课日期（每行一天）<textarea
-                                id="workbench-calendar-skip"
-                                rows="3"
-                                placeholder="2026-10-08"
-                              ></textarea>
-                            </label>
-                            <label
-                              >假期照常上课日期（每行一天）<textarea
-                                id="workbench-calendar-include"
-                                rows="3"
-                                placeholder="2026-10-01"
-                              ></textarea>
-                            </label>
-                          </div>
-                          <p class="workbench-course-calendar-note">
-                            照常上课按该日原课表保留；补课请在计划表中添加或移动对应事件。
-                          </p>
-                          <div id="workbench-calendar-sections"></div>
-                        </details>
+                      <div class="workbench-course-import-toolbar">
+                        <p
+                          id="workbench-course-calendar-status"
+                          role="status"
+                          aria-live="polite"
+                        ></p>
                         <button
-                          id="workbench-course-calendar-save"
-                          type="submit"
+                          id="workbench-course-import-open"
+                          type="button"
                           class="workbench-compact-action"
                         >
-                          保存校历并生成课程
+                          接入课程
                         </button>
-                      </form>
-                      <p
-                        id="workbench-course-calendar-weeks-hint"
-                        class="workbench-course-calendar-note"
-                      >
-                        课程写明第几周时使用原周次；“前八周”为第 1–8 周，“后八周”为第 9–16
-                        周。本学期默认从 2026 年 9 月 14 日开始，共 16 周；其他学期可自行设置。
-                      </p>
-                      <p id="workbench-course-calendar-status" role="status" aria-live="polite"></p>
+                      </div>
                       <ul id="workbench-course-calendar-issues"></ul>
-                      <p class="workbench-course-calendar-note">
-                        课程可在计划表中直接编辑，个人修改不会回写网络学堂，也不会被重新同步覆盖。
-                      </p>
                     </section>
                     <div class="workbench-campus-courses-layout">
                       <section aria-labelledby="workbench-campus-courses-title">
@@ -1082,7 +1173,7 @@
     <script src="/vendor/marked/lib/marked.umd.js"></script>
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
-    <script src="/academic-calendar.js?v=20260929-1"></script>
+    <script src="/academic-calendar.js?v=20260929-shared-calendar-2"></script>
     <script src="/app.js?v=20260929-calendar-1"></script>
     <dialog
       id="homework-dialog"
@@ -1114,8 +1205,35 @@
     <script src="/workbench-hours.js?v=20260924-schedule-notes-1"></script>
     <script src="/workbench-calendar.js?v=20260929-compact-notes-4"></script>
     <script src="/schedule-recurrence.js?v=20260928-1"></script>
-    <script src="/workbench.js?v=20260929-compact-notes-4"></script>
-    <script src="/workbench-course-calendar.js?v=20260929-editable-courses-1"></script>
+    <script src="/workbench.js?v=20260929-planning-preferences-1"></script>
+    <script src="/workbench-companion.js?v=20260929-1"></script>
+    <script src="/workbench-planning.js?v=20260929-1"></script>
+    <dialog
+      id="workbench-course-import-dialog"
+      class="workbench-dialog"
+      aria-labelledby="workbench-course-import-title"
+    >
+      <form method="dialog" class="workbench-dialog-panel">
+        <h2 id="workbench-course-import-title">确认接入课程</h2>
+        <p id="workbench-course-import-summary"></p>
+        <p>
+          确认后按普通事件保存，可在计划表修改。日常同步不会更改这些安排；重新接入会更新课程，保留你的个人修改与删除。
+        </p>
+        <ul id="workbench-course-import-list"></ul>
+        <p id="workbench-course-import-status" role="status"></p>
+        <div class="workbench-course-import-toolbar">
+          <button type="submit" class="workbench-compact-action">暂不接入</button>
+          <button
+            id="workbench-course-import-confirm"
+            type="button"
+            class="workbench-compact-action"
+          >
+            确认接入
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <script src="/workbench-course-calendar.js?v=20260929-confirmed-import-1"></script>
     <script src="/assets/vendor/fingerprint2-1.5.1.min.js"></script>
     <script src="/tsinghua-cas-fingerprint.js"></script>
     <script src="/workbench-connectors.js?v=20260922-homework-1"></script>

@@ -48,7 +48,7 @@ async function main() {
     const later = await page.$('.max-tour-later');
     if (later) await later.click();
     await page.waitForFunction(
-      () => document.querySelector('#workbench-course-calendar-weeks')?.value === '16',
+      () => document.querySelector('#workbench-course-import-open')?.textContent === '重新接入课程',
     );
     const fill = (selector, value) =>
       page.$eval(
@@ -59,31 +59,13 @@ async function main() {
         },
         value,
       );
-    const save = async () => {
-      const pending = page.waitForResponse(
-        (response) =>
-          response.url().endsWith('/api/workbench/campus/course-calendar') &&
-          response.request().method() === 'PUT',
-      );
-      await page.click('#workbench-course-calendar-save');
-      const response = await pending;
-      const body = await response.json();
-      assert.equal(response.status(), 200, JSON.stringify(body));
-      await page.waitForFunction(
-        () => !document.querySelector('#workbench-course-calendar-save').disabled,
-      );
-      return body;
-    };
     const events = () => preview.workbench.courseProjection().events;
     stage = 'calendar default and combined lessons';
     assert.equal(
       await page.$eval('#workbench-date', (el) => el.textContent),
       '9月29日 校历第3周周二',
     );
-    assert.equal(
-      await page.$eval('#workbench-course-calendar-monday', (el) => el.value),
-      '2026-09-14',
-    );
+    assert.equal(await page.$('#workbench-course-calendar-form'), null);
     const merged = events().filter(
       (item) => item.courseReference === 'demo:weeks:2' && item.startAt.startsWith('2026-09-30'),
     );
@@ -96,42 +78,6 @@ async function main() {
     );
     report.checks.push(
       'Today-only academic-week label, plain course notes, merged Wednesday course and National Day skip',
-    );
-
-    stage = 'per-course section durations and holiday override';
-    await page.$eval('.workbench-calendar-options', (el) => {
-      el.open = true;
-    });
-    for (const [number, count] of [
-      [2, '2'],
-      [5, '1'],
-      [6, '2'],
-    ]) {
-      await page.select(`#workbench-calendar-sections select[data-section="${number}"]`, count);
-    }
-    await fill('#workbench-calendar-include', '2026-10-01');
-    await save();
-    const optimization = events().find(
-      (item) => item.courseReference === 'demo:weeks:1' && item.startAt.startsWith('2026-10-01'),
-    );
-    assert.equal(optimization.endAt, '2026-10-01T03:25:00.000Z');
-    const five = events().find(
-      (item) => item.courseReference === 'demo:variable-sections' && item.sectionStart === 5,
-    );
-    const six = events().find(
-      (item) => item.courseReference === 'demo:variable-sections' && item.sectionStart === 6,
-    );
-    assert.equal(five.startAt.slice(11, 16), '09:05');
-    assert.equal(five.endAt.slice(11, 16), '09:50');
-    assert.equal(six.endAt.slice(11, 16), '12:55');
-    await fill('#workbench-calendar-include', '');
-    await save();
-    assert.equal(
-      events().some((item) => item.startAt.startsWith('2026-10-01')),
-      false,
-    );
-    report.checks.push(
-      '2/5/6 duration controls save independently; holiday inclusion restores only explicitly chosen date',
     );
 
     stage = 'unified course editor, persist after refresh';
@@ -179,7 +125,6 @@ async function main() {
           document.querySelectorAll('details.personal-fold').forEach((el) => {
             el.open = true;
           });
-          document.querySelector('.workbench-calendar-options').open = true;
         }, theme);
         await page.evaluate(async () => {
           await document.fonts.ready;

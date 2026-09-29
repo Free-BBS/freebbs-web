@@ -3,6 +3,250 @@
  * Page-scoped to avoid adding another override layer to the shared stylesheet.
  */
 
+/* Small, quiet companion and optional planning settings. */
+.workbench-page #workbench-max-planner {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.workbench-page #workbench-max-planner > * {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  max-width: none;
+}
+.workbench-page #workbench-max-planner > .workbench-planning-preferences {
+  margin: 0;
+}
+.workbench-page .workbench-planning-preferences {
+  scroll-margin-top: 120px;
+}
+.workbench-page .workbench-companion {
+  position: fixed;
+  right: 24px;
+  bottom: 94px;
+  z-index: 75;
+  width: 88px;
+  height: 132px;
+  pointer-events: none;
+  color: var(--workbench-text);
+}
+.workbench-page .workbench-companion[hidden],
+.workbench-page .workbench-companion-copy[hidden],
+.workbench-page #workbench-companion-show[hidden],
+.workbench-page .workbench-planning-gaps[hidden] {
+  display: none;
+}
+.workbench-page .workbench-companion img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+.workbench-page .workbench-companion-copy {
+  position: absolute;
+  right: 74px;
+  bottom: 80px;
+  width: min(280px, calc(100vw - 138px));
+  box-sizing: border-box;
+  border: 1px solid var(--workbench-line-strong);
+  border-radius: 20px 20px 4px 20px;
+  padding: 16px 18px;
+  background: var(--workbench-panel-strong);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 10%);
+  pointer-events: auto;
+  max-height: calc(100dvh - 300px);
+  overflow-y: auto;
+  min-width: 0;
+}
+.workbench-page .workbench-companion-avatar {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  pointer-events: auto;
+  cursor: pointer;
+  filter: drop-shadow(0 5px 5px rgb(0 0 0 / 12%));
+}
+.workbench-page .workbench-companion-avatar:focus-visible {
+  outline: 2px solid var(--workbench-accent);
+  outline-offset: 5px;
+  border-radius: 16px;
+}
+.workbench-page .workbench-companion-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.workbench-page #workbench-companion-collapse {
+  border: 0;
+  background: transparent;
+  color: var(--workbench-muted);
+  font: inherit;
+  font-size: 1.4rem;
+  padding: 0 4px;
+  cursor: pointer;
+}
+.workbench-page .workbench-companion-copy strong {
+  font-size: 1.1rem;
+}
+.workbench-page .workbench-companion-copy p {
+  margin: 10px 0;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+.workbench-page .workbench-companion-actions,
+.workbench-page .workbench-planning-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.workbench-page .workbench-companion-actions button,
+.workbench-page .workbench-companion-actions a {
+  border: 0;
+  background: transparent;
+  color: var(--workbench-accent-strong);
+  padding: 6px 0;
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.workbench-page #workbench-companion-show {
+  margin-bottom: 20px;
+}
+.workbench-page .workbench-planning-preferences {
+  border: 1px solid var(--workbench-line);
+  border-radius: 16px;
+  padding: 18px;
+  margin: 20px 0;
+  background: var(--workbench-panel-soft);
+}
+.workbench-page .workbench-planning-preferences summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 1.08rem;
+}
+.workbench-page #workbench-preferences-summary {
+  font-weight: 400;
+  font-size: 0.95rem;
+  color: var(--workbench-muted);
+  margin-inline-start: 10px;
+  line-height: 1.7;
+}
+.workbench-page .workbench-planning-preferences p {
+  color: var(--workbench-muted);
+  line-height: 1.7;
+}
+.workbench-page #workbench-preferences-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.workbench-page .workbench-preference-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 16px;
+  margin: 18px 0;
+}
+.workbench-page .workbench-preference-grid label,
+.workbench-page .workbench-rest-row label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.workbench-page .workbench-planning-preferences input:not([type='checkbox']),
+.workbench-page .workbench-planning-preferences select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--workbench-line-strong);
+  border-radius: 10px;
+  background: var(--workbench-panel);
+  color: var(--workbench-text);
+  font: inherit;
+}
+.workbench-page .workbench-planning-preferences input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--workbench-accent);
+  flex: 0 0 auto;
+}
+.workbench-page .workbench-pref-check,
+.workbench-page .workbench-preference-weekdays label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+.workbench-page .workbench-preference-weekdays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  border: 0;
+  padding: 0;
+  margin: 20px 0;
+}
+.workbench-page .workbench-rest-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 0;
+}
+.workbench-page .workbench-rest-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  align-items: end;
+  gap: 12px;
+  margin: 12px 0;
+  max-width: 620px;
+}
+.workbench-page .workbench-planning-note {
+  font-size: 0.94rem;
+}
+.workbench-page .workbench-planning-gaps {
+  background: var(--workbench-panel-soft);
+  border-radius: 16px;
+  padding: 18px;
+  margin-top: 16px;
+}
+.workbench-page #workbench-planning-gap-list {
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-left: 24px;
+  line-height: 1.9;
+}
+@media (max-width: 600px) {
+  .workbench-page .workbench-companion {
+    right: 14px;
+    bottom: calc(148px + env(safe-area-inset-bottom));
+    width: 64px;
+    height: 96px;
+  }
+  .workbench-page .workbench-companion-copy {
+    right: 54px;
+    bottom: 58px;
+    width: min(250px, calc(100vw - 98px));
+    padding: 14px;
+  }
+  .workbench-page .workbench-rest-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .workbench-page .workbench-rest-row button {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+  .workbench-page #workbench-preferences-summary {
+    display: block;
+    margin: 6px 0 0;
+  }
+}
+
 body.workbench-page {
   --workbench-font-sans: var(--font-ui);
   --workbench-panel: rgba(13, 39, 44, 0.9);
@@ -2022,4 +2266,22 @@ body.workbench-page .workbench-repeat-preview ol {
 /* Empty guidance must not reserve a blank row in the ordinary-event editor. */
 #workbench-schedule-kind-hint:empty {
   display: none;
+}
+.workbench-course-import-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+#workbench-course-import-list {
+  max-height: 45dvh;
+  overflow-y: auto;
+  padding-inline-start: 1.5rem;
+}
+#workbench-course-import-list p {
+  margin-top: 0.3rem;
+}
+#workbench-course-import-status {
+  white-space: pre-line;
 }

@@ -240,7 +240,13 @@ function createEconomyPreview({
       if (extraApi && route.startsWith('/api/')) {
         if (
           (!['GET', 'HEAD', 'POST', 'PATCH', 'DELETE'].includes(req.method) &&
-            !(req.method === 'PUT' && route === '/api/workbench/campus/course-calendar')) ||
+            !(
+              req.method === 'PUT' &&
+              [
+                '/api/workbench/campus/course-calendar',
+                '/api/workbench/schedule-planner/preferences',
+              ].includes(route)
+            )) ||
           req.headers.authorization !== `Bearer ${TOKEN}` ||
           (req.headers.origin && req.headers.origin !== `http://${host}`)
         )

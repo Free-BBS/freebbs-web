@@ -3,6 +3,11 @@
   else root.FreeBbsAcademicCalendar = factory();
 })(typeof window === 'undefined' ? globalThis : window, () => {
   const DEFAULTS = Object.freeze({
+    '2026-2027-2': Object.freeze({
+      firstWeekMonday: '2027-02-22',
+      teachingWeeks: 16,
+      holidayPreset: 'tsinghua-2027-spring',
+    }),
     '2026-2027-1': Object.freeze({
       firstWeekMonday: '2026-09-14',
       teachingWeeks: 16,

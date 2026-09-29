@@ -1167,6 +1167,7 @@
       state.scheduleReady = true;
       state.scheduleItems = scheduleResult.value.scheduleItems || [];
       renderScheduleItems();
+      window.dispatchEvent(new CustomEvent('freebbs:workbench-loaded'));
     } else {
       renderDataFailure(elements.scheduleList, '本周时间表', scheduleResult.reason);
       elements.weekGrid.textContent =

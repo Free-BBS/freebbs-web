@@ -7,11 +7,14 @@ const { saveManualCourse } = require('./manual-courses');
 const { editImportedSchedule } = require('./campus-schedule-overrides');
 const { ensureWorkbenchTables, listCampusSemesters, readCampusSemester } = require('./workbench');
 const { ensureCampusConnectorTables } = require('./tsinghua-connectors/schema');
+const { createMysqlCampusConnectorStore } = require('./tsinghua-connectors/mysql-store');
+const { previewCourseImport, confirmCourseImport } = require('./course-imports');
 const {
-  listCourseSchedules,
-  readCourseCalendar,
-  saveCourseCalendar,
-} = require('./course-schedule');
+  readPreferences,
+  savePreferences,
+  normalizePreferences,
+} = require('./planning-preferences');
+const { listCourseSchedules, readCourseCalendar } = require('./course-schedule');
 
 test(
   'isolated MySQL: course migration, settings, resync and connector generation are executable',
@@ -40,6 +43,15 @@ test(
     await pool.query('CREATE TABLE users (id BIGINT PRIMARY KEY) ENGINE=InnoDB');
     await pool.query('INSERT INTO users VALUES (1), (2)');
     await ensureWorkbenchTables(pool);
+    const preferenceMigration = fs.readFileSync(
+      path.join(__dirname, '../database/migrations/059_workbench_planning_preferences.sql'),
+      'utf8',
+    );
+    await pool.query(preferenceMigration);
+    await pool.query(preferenceMigration);
+    await savePreferences(pool, 1, normalizePreferences({ focusMinutes: 30 }));
+    assert.equal((await readPreferences(pool, 1)).preferences.focusMinutes, 30);
+    assert.equal((await readPreferences(pool, 2)).preferences.focusMinutes, 60);
     await pool.query(`CREATE TABLE campus_learn_semester_catalogs (
       user_id BIGINT PRIMARY KEY,
       current_semester_id VARCHAR(32) NULL,
@@ -157,19 +169,81 @@ test(
     );
     assert.equal((await listCampusSemesters(pool, 1)).semesters.length, 1);
     assert.equal((await readCampusSemester(pool, 1, '2026-2027-1')).courses.length, 1);
-    const calendar = { semesterId: '2026-2027-1', firstWeekMonday: '2026-09-21' };
-    assert.equal((await saveCourseCalendar(pool, 1, calendar)).scheduledLessons, 16);
-    assert.equal((await saveCourseCalendar(pool, 1, calendar)).scheduledLessons, 16);
+    const calendar = { semesterId: '2026-2027-1' };
+    // Exercise the actual deployment migration against a pre-060 schema in this
+    // disposable database, including a legacy personal calendar that must survive.
+    await pool.execute(
+      'ALTER TABLE campus_learn_semester_snapshots DROP COLUMN calendar_copy_json',
+    );
+    const migrateCopies = async () => {
+      const connection = await pool.getConnection();
+      try {
+        const sql = fs.readFileSync(
+          path.join(__dirname, '../database/migrations/060_confirmed_course_import.sql'),
+          'utf8',
+        );
+        for (const statement of sql
+          .split(';')
+          .map((part) => part.trim())
+          .filter(Boolean))
+          await connection.query(statement);
+      } finally {
+        connection.release();
+      }
+    };
+    await migrateCopies();
+    assert.equal(
+      (await listCourseSchedules(pool, 1, range))[0].startAt,
+      '2026-09-21T01:50:00.000Z',
+    );
+    assert.equal(
+      (await readCourseCalendar(pool, 1, calendar.semesterId)).firstWeekMonday,
+      '2026-09-21',
+    );
+    // A new/unconfirmed snapshot is not auto-imported by rerunning the migration.
+    await pool.execute('UPDATE campus_learn_semester_snapshots SET calendar_copy_json = NULL');
+    await migrateCopies();
+    assert.deepEqual(
+      await listCourseSchedules(pool, 1, range),
+      [],
+      'new courses need confirmation',
+    );
+    await ensureCampusConnectorTables(pool);
+    assert.deepEqual(
+      await listCourseSchedules(pool, 1, range),
+      [],
+      'boot cannot auto-import new courses',
+    );
+    const acceptCourses = async () => {
+      const preview = await previewCourseImport(pool, 1, calendar.semesterId);
+      return confirmCourseImport(pool, 1, {
+        semesterId: calendar.semesterId,
+        revision: preview.revision,
+      });
+    };
+    assert.equal((await acceptCourses()).scheduledLessons, 15);
     const [first] = await listCourseSchedules(pool, 1, range);
     assert.equal(first.startAt, '2026-09-21T01:50:00.000Z');
     assert.deepEqual(await listCourseSchedules(pool, 2, range), []);
+    await assert.rejects(previewCourseImport(pool, 2, calendar.semesterId), { status: 409 });
+    const initialPreview = await previewCourseImport(pool, 1, calendar.semesterId);
     await pool.execute(
       'UPDATE campus_learn_semester_snapshots SET courses_json = ? WHERE user_id = 1',
       [JSON.stringify([{ ...course, locationText: '201' }])],
     );
+    const [unchanged] = await listCourseSchedules(pool, 1, range);
+    assert.deepEqual(unchanged, first, 'ordinary sync must not change confirmed events');
+    await assert.rejects(
+      confirmCourseImport(pool, 1, {
+        semesterId: calendar.semesterId,
+        revision: initialPreview.revision,
+      }),
+      { status: 409 },
+    );
+    await acceptCourses();
     const [changed] = await listCourseSchedules(pool, 1, range);
     assert.equal(changed.publicId, first.publicId);
-    assert.match(changed.description, /201/);
+    assert.equal(changed.description, '201');
     const fullWeek = {
       ...course,
       sectionSystem: 'tsinghua-large',
@@ -179,26 +253,8 @@ test(
       'UPDATE campus_learn_semester_snapshots SET courses_json = ? WHERE user_id = 1',
       [JSON.stringify([fullWeek])],
     );
-    assert.equal((await readCourseCalendar(pool, 1, calendar.semesterId)).scheduledLessons, 16);
-    assert.equal(
-      (await saveCourseCalendar(pool, 1, { ...calendar, teachingWeeks: 18 })).scheduledLessons,
-      18,
-    );
-    assert.equal(
-      (await saveCourseCalendar(pool, 1, calendar)).teachingWeeks,
-      18,
-      'older clients preserve confirmed weeks',
-    );
-    assert.equal(
-      (await saveCourseCalendar(pool, 1, { ...calendar, teachingWeeks: 16 })).scheduledLessons,
-      16,
-    );
-    assert.equal((await listCourseSchedules(pool, 1, range))[0].publicId, first.publicId);
-    assert.equal(
-      (await saveCourseCalendar(pool, 1, { ...calendar, teachingWeeks: null })).scheduledLessons,
-      16,
-    );
-    await saveCourseCalendar(pool, 1, { ...calendar, teachingWeeks: 16 });
+    await acceptCourses();
+    assert.equal((await readCourseCalendar(pool, 1, calendar.semesterId)).teachingWeeks, 16);
     const [[manual]] = await pool.query('SELECT COUNT(*) AS total FROM schedule_items');
     assert.equal(Number(manual.total), 0);
     const [editable] = await listCourseSchedules(pool, 1, range);
@@ -210,7 +266,7 @@ test(
       endAt: '2026-09-29T03:25:00Z',
     };
     await assert.rejects(editImportedSchedule(pool, 2, editable.publicId, editBody), {
-      status: 409,
+      status: 404,
     });
     const competing = await Promise.allSettled([
       editImportedSchedule(pool, 1, editable.publicId, editBody),
@@ -236,13 +292,23 @@ test(
       (item) => item.publicId === editable.publicId,
     );
     assert.equal(resynced.title, moved.title);
-    assert.equal(resynced.description, '更新后的教室');
-    const bindingTitle = resynced.title;
+    assert.equal(resynced.description, moved.description, 'sync leaves saved room unchanged');
+    const savedBeforeDisconnect = await listCourseSchedules(pool, 1, movedRange);
+    await createMysqlCampusConnectorStore(pool).revokeConnection(1, 'tsinghua-learn', new Date());
+    assert.deepEqual(await listCourseSchedules(pool, 1, movedRange), savedBeforeDisconnect);
+    assert.equal((await listCampusSemesters(pool, 1)).semesters.length, 1);
+    assert.equal((await readCampusSemester(pool, 1, '2026-2027-1')).courses.length, 1);
+    const offlineEdit = await editImportedSchedule(pool, 1, resynced.publicId, {
+      version: resynced.version,
+      sourceRevision: resynced.sourceRevision,
+      description: '离线修改的地点',
+    });
+    assert.equal(offlineEdit.description, '离线修改的地点');
     await editImportedSchedule(
       pool,
       1,
       resynced.publicId,
-      { version: resynced.version, sourceRevision: resynced.sourceRevision },
+      { version: offlineEdit.version, sourceRevision: offlineEdit.sourceRevision },
       { remove: true },
     );
     assert.equal(
@@ -254,44 +320,34 @@ test(
     await pool.execute(`UPDATE user_campus_connectors SET generation = 2,
       connected_at = '2026-09-22 02:00:00' WHERE user_id = 1`);
     assert.deepEqual(await listCourseSchedules(pool, 1, range), []);
-    assert.deepEqual(await listCampusSemesters(pool, 1), {
-      currentSemesterId: null,
-      semesters: [],
-    });
-    assert.equal(await readCampusSemester(pool, 1, '2026-2027-1'), null);
+    assert.equal((await listCampusSemesters(pool, 1)).semesters.length, 1);
+    assert.equal((await readCampusSemester(pool, 1, '2026-2027-1')).courses.length, 1);
     await pool.execute(
       'UPDATE campus_learn_semester_snapshots SET connector_generation = 2 WHERE user_id = 1',
     );
     await pool.execute(
       'UPDATE campus_learn_semester_catalogs SET connector_generation = 2 WHERE user_id = 1',
     );
-    assert.deepEqual((await listCampusSemesters(pool, 1)).semesters, []);
-    assert.equal(await readCampusSemester(pool, 1, '2026-2027-1'), null);
+    assert.equal((await listCampusSemesters(pool, 1)).semesters.length, 1);
+    assert.equal((await readCampusSemester(pool, 1, '2026-2027-1')).courses.length, 1);
     await pool.execute(`UPDATE campus_learn_semester_snapshots
       SET fetched_at = '2026-09-22 03:00:00' WHERE user_id = 1`);
     await pool.execute(`UPDATE campus_learn_semester_catalogs
       SET fetched_at = '2026-09-22 03:00:00' WHERE user_id = 1`);
-    const [reboundDefault] = await listCourseSchedules(pool, 1, range);
-    assert.notEqual(reboundDefault.title, bindingTitle);
-    assert.equal(reboundDefault.version, 1);
+    assert.deepEqual(
+      await listCourseSchedules(pool, 1, range),
+      [],
+      'deleted occurrences stay deleted after renewing a grant',
+    );
     assert.equal((await listCampusSemesters(pool, 1)).semesters.length, 1);
     assert.equal((await readCampusSemester(pool, 1, '2026-2027-1')).courses.length, 1);
-    await saveCourseCalendar(pool, 1, calendar);
-    assert.equal(
-      (await readCourseCalendar(pool, 1, calendar.semesterId)).teachingWeeks,
-      16,
-      "rebound connector uses the public autumn default rather than inheriting another identity's settings",
-    );
-    assert.equal((await listCourseSchedules(pool, 1, range)).length, 1);
-    await saveCourseCalendar(pool, 1, { ...calendar, teachingWeeks: 16 });
-    assert.equal((await listCourseSchedules(pool, 1, range)).length, 1);
+    assert.equal((await readCourseCalendar(pool, 1, calendar.semesterId)).teachingWeeks, 16);
+    await assert.rejects(previewCourseImport(pool, 1, calendar.semesterId), { status: 409 });
     await pool.execute("UPDATE user_campus_connectors SET status = 'revoked' WHERE user_id = 1");
     assert.deepEqual(await listCourseSchedules(pool, 1, range), []);
-    assert.deepEqual(await listCampusSemesters(pool, 1), {
-      currentSemesterId: null,
-      semesters: [],
-    });
-    assert.equal(await readCampusSemester(pool, 1, '2026-2027-1'), null);
+    assert.equal((await listCampusSemesters(pool, 1)).semesters.length, 1);
+    assert.equal((await readCampusSemester(pool, 1, '2026-2027-1')).courses.length, 1);
+    assert.deepEqual(await listCourseSchedules(pool, 2, movedRange), []);
 
     const recurring = {
       title: '重复会议',

@@ -180,7 +180,7 @@ test('computes a Monday-to-Monday week in Asia/Shanghai', () => {
   assert.equal(range.end.toISOString(), '2026-08-02T16:00:00.000Z');
 });
 
-test('course calendar routes authenticate before reading and validate semester and Monday before writing', async (t) => {
+test('course calendar routes authenticate and retired per-user settings never write', async (t) => {
   let queries = 0;
   const base = await startTestServer(t, {
     user: { id: 7 },
@@ -199,6 +199,27 @@ test('course calendar routes authenticate before reading and validate semester a
     assert.equal(result.response.status, 401);
   }
   assert.equal(queries, 0);
+  for (const method of ['GET', 'POST']) {
+    const unauthenticated = await requestJson(base, '/campus/course-import?semester=2026-2027-1', {
+      method,
+      auth: false,
+    });
+    assert.equal(unauthenticated.response.status, 401);
+  }
+  assert.equal(
+    (await requestJson(base, '/campus/course-import?semester=../other')).response.status,
+    400,
+  );
+  assert.equal(
+    (
+      await requestJson(base, '/campus/course-import', {
+        method: 'POST',
+        body: JSON.stringify({ semesterId: '2026-2027-1', revision: 'forged' }),
+      })
+    ).response.status,
+    400,
+  );
+  assert.equal(queries, 0);
   assert.equal(
     (await requestJson(base, '/campus/course-calendar?semester=invalid%2Fsemester')).response
       .status,
@@ -213,12 +234,12 @@ test('course calendar routes authenticate before reading and validate semester a
       method: 'PUT',
       body: JSON.stringify(body),
     });
-    assert.equal(result.response.status, 400);
+    assert.equal(result.response.status, 409);
   }
   assert.equal(queries, 0);
 });
 
-test('saving a semester Monday immediately exposes fixed courses in calendar, summary and conflicts', async (t) => {
+test('saved courses appear in calendar, summary and conflicts with no per-user calendar writes', async (t) => {
   let monday = null;
   let settingsWrites = 0;
   const pool = {
@@ -268,8 +289,7 @@ test('saving a semester Monday immediately exposes fixed courses in calendar, su
       firstWeekMonday: '2026-09-21',
     }),
   });
-  assert.equal(saved.response.status, 200);
-  assert.equal(saved.payload.scheduledLessons, 16);
+  assert.equal(saved.response.status, 409);
   for (const route of [
     '/schedule-items?from=2026-09-20T16:00:00Z&to=2026-09-27T16:00:00Z',
     '/summary?from=2026-09-20T16:00:00Z&to=2026-09-27T16:00:00Z',
@@ -283,7 +303,7 @@ test('saving a semester Monday immediately exposes fixed courses in calendar, su
     assert.equal(items[0].status, 'confirmed');
     assert.ok(items[0].courseScheduleReference);
   }
-  assert.equal(settingsWrites, 1);
+  assert.equal(settingsWrites, 0);
 });
 
 test('rejects inverted and excessively large custom ranges', () => {
@@ -520,16 +540,16 @@ test('campus semesters expose only the authenticated user normalized snapshot', 
   assert.deepEqual(calls[1].parameters, [21, '2026-2027-1']);
   for (const { sql } of calls) {
     assert.match(sql, /connector\.generation = (?:catalog|snapshot)\.connector_generation/u);
-    assert.match(sql, /fetched_at >= connector\.connected_at/u);
+    assert.match(sql, /snapshot.connector_generation > 0/u);
     assert.match(
       sql,
       /connector\.status IN \('active_verified', 'active_unverified', 'reauthorization_required'\)/u,
     );
-    assert.match(sql, /connector\.connected_at IS NOT NULL/u);
+    assert.match(sql, /snapshot.notifications_json, JSON_ARRAY\(\)/u);
   }
 });
 
-test('campus semester routes hide every snapshot outside the current connection boundary', async (t) => {
+test('campus semester routes never return snapshots belonging to another local user', async (t) => {
   const calls = [];
   const baseUrl = await startTestServer(t, {
     user: { id: 22, is_admin: false },
