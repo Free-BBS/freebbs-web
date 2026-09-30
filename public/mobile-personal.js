@@ -1,6 +1,6 @@
 (() => {
-  const settings = location.pathname === '/settings';
-  if (!settings && location.pathname !== '/workbench') return;
+  const settings = window.location.pathname === '/settings';
+  if (!settings && window.location.pathname !== '/workbench') return;
   document.body.classList.add(settings ? 'personal-settings-page' : 'personal-workbench-page');
   const media = matchMedia('(max-width: 900px)');
   const moved = [];
@@ -36,7 +36,7 @@
         details.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     });
-    function renderOverview() {
+    const renderOverview = () => {
       const state = window.freeBbsApp?.userState || {};
       overview.querySelector('h2').textContent = state.username || '未登录';
       overview.querySelector('.personal-bio').textContent = state.bio || '记录学习，分享发现。';
@@ -51,7 +51,7 @@
         a.href = state.uid ? `/profile?uid=${encodeURIComponent(state.uid)}` : '/login';
       for (const count of overview.querySelectorAll('[data-balance]'))
         count.textContent = state[count.dataset.balance] ?? 0;
-    }
+    };
     const panel = document.querySelector('.user-panel');
     if (panel)
       new MutationObserver(renderOverview).observe(panel, {
@@ -76,7 +76,8 @@
     }
     const priority = document.querySelector('.workbench-priority-card');
     const schedule = document.querySelector('.workbench-schedule-card');
-    if (priority && schedule) {
+    // A viewport overview temporarily owns the calendar; keep the sidebar in the page.
+    if (priority && schedule && !schedule.closest('dialog')) {
       const placeholder = document.createComment('priority-position');
       priority.before(placeholder);
       schedule.after(priority);

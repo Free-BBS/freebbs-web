@@ -525,6 +525,11 @@ body.discussion-page .discussion-comment-thread-toggle svg {
   fill: var(--ui-page);
   border-radius: 50%;
 }
+/* Keep the hit target stationary between pointer-down and pointer-up. The
+   shared desktop :active transform must not replace this centering transform. */
+body.discussion-page .discussion-comment-thread-toggle:active {
+  transform: translate(-50%, -50%);
+}
 body.discussion-page
   .discussion-comment-thread-toggle[aria-expanded='true']
   .discussion-thread-plus {

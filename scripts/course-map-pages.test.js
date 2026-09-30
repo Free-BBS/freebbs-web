@@ -79,7 +79,7 @@ test('course map pages load their dedicated controllers', () => {
   const markdownEditor = fs.readFileSync(path.join(root, 'public', 'markdown-editor.html'), 'utf8');
 
   assert.match(reader, /data-course-map-page/);
-  assert.match(reader, /<script src="\/course-map\.js"><\/script>/);
+  assert.match(reader, /<script src="\/course-map\.js\?v=20260930-directory-3"><\/script>/);
   assert.doesNotMatch(reader, /course-map-reader-hud/);
   assert.doesNotMatch(reader, /course-map-reader-title/);
   assert.doesNotMatch(reader, /course-map-reader-meta/);
@@ -151,8 +151,11 @@ test('course map reader groups nodes by chapter and reveals only focused relatio
     controller,
     /directoryLink\.href = returnToDirectory \? courseDirectoryHref\(\) : '\/world'/,
   );
-  assert.match(controller, /window\.location\.assign\(knowledgeHref\(nodeId\)\)/);
-  assert.match(controller, /再次点击可打开知识点正文/);
+  assert.match(
+    controller,
+    /overviewDrawer\.open\(nodeById\(id\), state.course, topicButton, focusNode\)/,
+  );
+  assert.match(controller, /点击知识点查看学习概览/);
   assert.match(controller, /6类设定的知识点关系/);
   for (const relation of ['前置', '推导', '应用', '推广', '对比', '等价']) {
     assert.match(controller, new RegExp(`${relation} · A`));
@@ -171,7 +174,9 @@ test('course map reader groups nodes by chapter and reveals only focused relatio
   assert.match(controller, /const KNOWLEDGE_TAGS =/);
   assert.match(controller, /function renderNodeTags\(nodeId\)/);
   assert.match(controller, /function renderDirectoryNodeTags\(nodeId\)/);
-  assert.match(controller, /course-map-directory-current-tags/);
+  assert.match(controller, /remainingNodes\.map\(\(node\) => renderReaderNode/);
+  assert.doesNotMatch(controller, /is-knowledge-map/);
+  assert.doesNotMatch(controller, /course-reader-study-link/);
   assert.match(controller, /course-map-topic-tags/);
   assert.doesNotMatch(controller, /course-map-topic-detail/);
   assert.match(styles, /\.course-map-chapter-card\.is-expanded/);
@@ -200,7 +205,7 @@ test('knowledge page uses database-backed knowledge controller', () => {
   const knowledge = fs.readFileSync(path.join(root, 'public', 'knowledge.html'), 'utf8');
   const controller = fs.readFileSync(path.join(root, 'public', 'knowledge.js'), 'utf8');
   const styles = fs.readFileSync(path.join(root, 'public', 'course.css'), 'utf8');
-  assert.match(knowledge, /<script src="\/knowledge\.js"><\/script>/);
+  assert.match(knowledge, /<script src="\/knowledge\.js\?v=20260929-overview-1"><\/script>/);
   assert.doesNotMatch(knowledge, /id="knowledge-learn-button"/);
   assert.doesNotMatch(knowledge, /id="knowledge-review-button"/);
   assert.match(knowledge, /id="knowledge-tag-title"/);
@@ -238,7 +243,7 @@ test('knowledge page uses database-backed knowledge controller', () => {
   assert.match(controller, /renderMarkdownContent/);
   assert.match(controller, /sections\.knowledgeMarkdown/);
   assert.match(controller, /function setKnowledgeView\(view/);
-  assert.match(controller, /view: 'overview'/);
+  assert.match(controller, /view: params.get\('view'\) === 'reading' \? 'reading' : 'overview'/);
   assert.match(controller, /setKnowledgeView\(state\.view\)/);
   assert.match(controller, /setKnowledgeView\('reading'/);
   assert.match(controller, /function buildKnowledgeChatRequest/);

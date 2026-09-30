@@ -84,7 +84,7 @@ test('workbench provides authenticated CRUD controls and conflict confirmation',
   assert.match(html, /id="workbench-important-dialog"/);
   assert.match(html, /id="workbench-add-schedule"/);
   assert.match(html, /id="workbench-schedule-dialog"/);
-  assert.match(html, /src="\/workbench\.js\?v=20260929-planning-preferences-1"/);
+  assert.match(html, /src="\/workbench\.js\?v=20260930-nav-3"/);
   assert.match(controller, /\/workbench\/important-items/);
   assert.match(controller, /\/workbench\/schedule-items\/conflicts/);
   assert.match(controller, /\/confirm/);
@@ -158,7 +158,7 @@ test('timed cards follow real durations while complete text stays accessible in 
   assert.match(controller, /gridTemplateColumns = `repeat\(7, \$\{columnWidth\}px\)`/);
   assert.doesNotMatch(controller, /lanes\.length\) \* columnWidth|workbench-time-band/);
   assert.match(controller, /block\.style\.height\s*=/);
-  assert.match(controller, /calendarModel\.timeBlock\(entry.start, entry.end, windowStart\)/);
+  assert.match(controller, /calendarModel\.displayTimeBlock\(/);
   assert.match(controller, /lanes\[lane\] = end/);
   const titleStyles = css.match(/\.workbench-week-event strong\s*\{([^}]+)\}/)[1];
   const noteStyles = css.match(/\.workbench-week-notes\s*\{([^}]+)\}/)[1];

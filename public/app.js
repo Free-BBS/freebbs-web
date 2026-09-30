@@ -2401,7 +2401,7 @@ async function loadHeatLeaderboard() {
   }
 
   try {
-    const payload = await callApi('/leaderboard/heat?limit=5', {
+    const payload = await callApi('/leaderboard/heat?limit=10', {
       method: 'GET',
     });
     const users = payload.users || [];
@@ -4705,7 +4705,7 @@ function enhanceToolReferences(root) {
   if (!toolReferenceLoader) {
     toolReferenceLoader = new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = '/tool-embeds.js';
+      script.src = '/tool-embeds.js?v=20260930-viewport-1';
       script.async = true;
       script.onload = resolve;
       script.onerror = () => {

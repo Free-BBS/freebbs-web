@@ -84,7 +84,55 @@
     const bottom = ((end - windowStart) / HOUR) * pixelsPerHour;
     return { top, end: bottom, height: Math.max(0, bottom - top) };
   }
-  const api = { HOUR_HEIGHT, deadlineState, deadlineRemaining, colorIndex, conflicts, timeBlock };
+  function displayTimeBlock(start, end, windowStart, pixelsPerHour = HOUR_HEIGHT) {
+    const actual = timeBlock(start, end, windowStart, pixelsPerHour);
+    const height = Math.max(pixelsPerHour / 2, actual.height);
+    return { top: actual.top, end: actual.top + height, height, expanded: height > actual.height };
+  }
+  function overviewHourHeight(availableHeight, headingHeight, durationHours = 16) {
+    // Reserve a half-hour display box below midnight without moving any hour tick.
+    return Math.max(
+      16,
+      Math.min(
+        HOUR_HEIGHT,
+        Math.floor(((availableHeight - headingHeight - 24 - 2) / durationHours) * 100) / 100,
+      ),
+    );
+  }
+  function shortEventGroups(entries) {
+    const short = entries.filter((entry) => entry.endMs - entry.startMs <= HOUR / 2);
+    const long = entries.filter((entry) => entry.endMs - entry.startMs > HOUR / 2);
+    const components = [];
+    for (const entry of [...short].sort((a, b) => a.top - b.top)) {
+      const previous = components.at(-1);
+      if (previous && entry.top < previous.end - 0.01) {
+        previous.short.push(entry);
+        previous.end = Math.max(previous.end, entry.end);
+      } else components.push({ short: [entry], top: entry.top, end: entry.end });
+    }
+    return components
+      .map((component) => ({
+        ...component,
+        members: [
+          ...component.short,
+          ...long.filter(
+            (entry) => entry.top < component.end - 0.01 && entry.end > component.top + 0.01,
+          ),
+        ].sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs),
+      }))
+      .filter((component) => component.members.length > 1);
+  }
+  const api = {
+    HOUR_HEIGHT,
+    deadlineState,
+    deadlineRemaining,
+    colorIndex,
+    conflicts,
+    timeBlock,
+    displayTimeBlock,
+    overviewHourHeight,
+    shortEventGroups,
+  };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FreeBbsWorkbenchCalendar = api;
 })(typeof window !== 'undefined' ? window : globalThis);

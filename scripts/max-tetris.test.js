@@ -1,7 +1,36 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
-const { Game } = require('../public/max-tetris');
+const { Game, COLORS, drawBoard } = require('../public/max-tetris');
+
+test('seven shapes retain distinct colours in active and settled cells across board themes', () => {
+  assert.equal(new Set(COLORS.slice(1)).size, 7);
+  for (const palette of [
+    { grid: '#d9e2e7', empty: '#f3f6f7', outline: '#58707b' },
+    { grid: '#314853', empty: '#101f28', outline: '#aec8d1' },
+  ]) {
+    for (let index = 0; index < 7; index += 1) {
+      const game = new Game(() => (index + 0.5) / 7);
+      assert.equal(game.color, index + 1);
+      const fills = [];
+      const context = {
+        fillRect(...rect) {
+          fills.push({ color: this.fillStyle, rect });
+        },
+        strokeRect() {},
+      };
+      drawBoard(context, game, palette);
+      assert.equal(fills[0].color, palette.grid);
+      assert.equal(fills.filter((fill) => fill.color === palette.empty).length, 160);
+      assert.equal(fills.filter((fill) => fill.color === COLORS[index + 1]).length, 4);
+      game.drop();
+      fills.length = 0;
+      drawBoard(context, game, palette);
+      assert.equal(fills.filter((fill) => fill.color === COLORS[index + 1]).length, 8);
+      assert.ok(game.board.flat().includes(index + 1));
+    }
+  }
+});
 
 test('tetrominoes move, rotate, and lock when dropped', () => {
   const game = new Game(() => 0);

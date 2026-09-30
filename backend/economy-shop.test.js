@@ -484,7 +484,7 @@ test('migration creates only new tables, never seeds counters from legacy assets
       statements.push(statement);
     },
   });
-  assert.equal(statements.length, 6);
+  assert.equal(statements.length, 7);
   assert.ok(statements.every((s) => s.startsWith('CREATE TABLE IF NOT EXISTS')));
 });
 test('catalog has dual-cost collectible relics and dual-currency laser activation policy', () => {

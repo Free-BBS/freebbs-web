@@ -126,6 +126,7 @@
     scheduleReady: false,
     hours: { ...hoursModel.DEFAULT_HOURS },
     listView: false,
+    weekOverview: false,
     proposals: [],
     notificationFilters: { category: '', unread: false, favorite: false, search: '' },
     conflictAcknowledgement: '',
@@ -136,6 +137,9 @@
     const next = view === 'notifications' ? 'notifications' : 'plan';
     elements.planPanel.hidden = next !== 'plan';
     elements.notificationsPanel.hidden = next !== 'notifications';
+    shell.querySelectorAll('[data-workbench-links]').forEach((links) => {
+      links.hidden = links.dataset.workbenchLinks !== next;
+    });
     elements.viewButtons.forEach((button) => {
       if (button.dataset.workbenchView === next) button.setAttribute('aria-current', 'page');
       else button.removeAttribute('aria-current');
@@ -471,14 +475,211 @@
   }
 
   let weekLayouts = [];
+  const calendarCard = document.getElementById('workbench-calendar');
+  const overviewButton = document.getElementById('workbench-week-overview');
+  const overviewDialog = document.createElement('dialog');
+  overviewDialog.className = 'workbench-week-overview-dialog';
+  overviewDialog.setAttribute('aria-labelledby', 'workbench-calendar-title');
+  shell.append(overviewDialog);
+  let overviewReturn = null;
+  function displayHours() {
+    return state.hours;
+  }
+  function fitOverviewBounds() {
+    if (!overviewReturn) return;
+    const rect = overviewReturn.placeholder.getBoundingClientRect();
+    const width = Math.min(rect.width, window.innerWidth - 24);
+    overviewDialog.style.width = `${width}px`;
+    overviewDialog.style.left = `${Math.max(12, Math.min(rect.left, window.innerWidth - width - 12))}px`;
+    overviewDialog.style.height = `${Math.min(window.innerHeight - 24, (state.hours.end - state.hours.start) * calendarModel.HOUR_HEIGHT + 200)}px`;
+    overviewDialog.style.setProperty('--overview-inline-padding', `${overviewReturn.padding}px`);
+  }
+  function openWeekOverview() {
+    if (state.weekOverview) return;
+    const placeholder = document.createElement('div');
+    placeholder.className = 'workbench-calendar-placeholder';
+    placeholder.setAttribute('aria-hidden', 'true');
+    placeholder.style.minWidth = '0';
+    calendarCard.before(placeholder);
+    overviewReturn = {
+      placeholder,
+      listView: state.listView,
+      scrollTop: elements.weekScroll.scrollTop,
+      scrollLeft: elements.weekScroll.scrollLeft,
+      padding: parseFloat(getComputedStyle(calendarCard).paddingLeft) || 16,
+    };
+    state.weekOverview = true;
+    state.listView = false;
+    elements.weekScroll.classList.remove('hidden');
+    elements.scheduleList.classList.add('hidden');
+    elements.viewToggle.setAttribute('aria-pressed', 'false');
+    elements.viewToggle.textContent = '列表视图';
+    overviewButton.textContent = '退出总览';
+    overviewButton.setAttribute('aria-expanded', 'true');
+    overviewDialog.append(calendarCard);
+    fitOverviewBounds();
+    overviewDialog.showModal();
+    elements.weekScroll.scrollTop = 0;
+    elements.weekScroll.scrollLeft = 0;
+    renderWeekGrid();
+    overviewButton.focus({ preventScroll: true });
+  }
+  overviewButton?.addEventListener('click', () => {
+    if (state.weekOverview) overviewDialog.close();
+    else openWeekOverview();
+  });
+  overviewDialog.addEventListener('close', () => {
+    if (!overviewReturn) return;
+    state.weekOverview = false;
+    overviewReturn.placeholder.replaceWith(calendarCard);
+    overviewButton.textContent = '一屏总览';
+    overviewButton.setAttribute('aria-expanded', 'false');
+    state.listView = overviewReturn.listView;
+    elements.weekScroll.classList.toggle('hidden', state.listView);
+    elements.scheduleList.classList.toggle('hidden', !state.listView);
+    elements.viewToggle.setAttribute('aria-pressed', String(state.listView));
+    elements.viewToggle.textContent = state.listView ? '七天视图' : '列表视图';
+    renderWeekGrid();
+    elements.weekScroll.scrollTop = overviewReturn.scrollTop;
+    elements.weekScroll.scrollLeft = overviewReturn.scrollLeft;
+    overviewReturn = null;
+    overviewButton.focus({ preventScroll: true });
+  });
+  window.addEventListener('resize', fitOverviewBounds);
+  const eventGroupDialog = document.createElement('dialog');
+  eventGroupDialog.className = 'workbench-dialog workbench-event-group-dialog';
+  eventGroupDialog.setAttribute('aria-labelledby', 'workbench-event-group-title');
+  eventGroupDialog.innerHTML =
+    '<div class="workbench-dialog-panel"><header><h2 id="workbench-event-group-title"></h2><button type="button" class="workbench-dialog-close" data-workbench-dialog-close autofocus aria-label="关闭事件列表">×</button></header><div class="workbench-event-group-list"></div></div>';
+  shell.append(eventGroupDialog);
+  const displayedGroups = new Map();
+  let activeGroupIds = [];
+  function renderEventGroup() {
+    const items = activeGroupIds
+      .map((id) => state.scheduleItems.find((item) => item.publicId === id))
+      .filter(Boolean);
+    if (!items.length) {
+      eventGroupDialog.close();
+      return;
+    }
+    eventGroupDialog.querySelector('h2').textContent = `此处有 ${items.length} 个事件`;
+    const rows = items.map((item) => {
+      const row = document.createElement('article');
+      paintCalendarItem(row, item, null, false);
+      const title = document.createElement('strong');
+      title.textContent = item.title;
+      const time = document.createElement('p');
+      time.textContent = `${formatMoment(item.startAt)} — ${formatMoment(item.endAt)}`;
+      const notes = document.createElement('p');
+      notes.textContent = item.description || '';
+      row.append(
+        title,
+        time,
+        notes,
+        makeAction(
+          item.editable === false ? '查看详情' : '查看 / 编辑',
+          item.courseScheduleReference && !item.editable ? 'view-course-schedule' : 'edit-schedule',
+          item.publicId,
+        ),
+      );
+      return row;
+    });
+    eventGroupDialog.querySelector('.workbench-event-group-list').replaceChildren(...rows);
+  }
+  function openEventGroup(key) {
+    activeGroupIds = displayedGroups.get(key) || [];
+    renderEventGroup();
+    if (activeGroupIds.length) eventGroupDialog.showModal();
+  }
   function layoutWeekCards() {
     if (!elements.weekScroll?.clientWidth || !elements.weekGrid.getClientRects().length) return;
-    const columnWidth = Math.max(196, Math.floor(elements.weekScroll.clientWidth / 7));
-    const timelineHeight = (state.hours.end - state.hours.start) * calendarModel.HOUR_HEIGHT;
-    weekLayouts.forEach(({ timeline, blocks }) => {
+    const minimumWidth =
+      parseFloat(
+        getComputedStyle(elements.weekGrid).getPropertyValue('--workbench-day-min-width'),
+      ) || 196;
+    displayedGroups.clear();
+    const columnWidth = Math.max(
+      state.weekOverview ? 0 : minimumWidth,
+      Math.floor(elements.weekScroll.clientWidth / 7),
+    );
+    elements.weekGrid.style.gridTemplateColumns = `repeat(7, ${columnWidth}px)`;
+    elements.weekGrid.style.minWidth = `${7 * columnWidth}px`;
+    const hours = displayHours();
+    const gridTop = elements.weekGrid.getBoundingClientRect().top;
+    const headingHeight = Math.max(
+      0,
+      ...weekLayouts.map(({ timeline }) => timeline.getBoundingClientRect().top - gridTop),
+    );
+    const hourHeight = state.weekOverview
+      ? calendarModel.overviewHourHeight(
+          elements.weekScroll.clientHeight,
+          headingHeight,
+          hours.end - hours.start,
+        )
+      : calendarModel.HOUR_HEIGHT;
+    const timelineHeight = (hours.end - hours.start) * hourHeight;
+    weekLayouts.forEach(({ timeline, blocks, windowStart }, dayIndex) => {
+      timeline.querySelectorAll('.workbench-event-group').forEach((node) => node.remove());
+      timeline.style.setProperty('--workbench-hour-height', `${hourHeight}px`);
+      timeline.querySelectorAll('.workbench-week-hour').forEach((tick, index) => {
+        tick.style.top = `${index * hourHeight}px`;
+      });
+      blocks.forEach((entry) => {
+        const geometry = calendarModel.displayTimeBlock(
+          entry.startMs,
+          entry.endMs,
+          windowStart,
+          hourHeight,
+        );
+        const actualHeight = calendarModel.timeBlock(
+          entry.startMs,
+          entry.endMs,
+          windowStart,
+          hourHeight,
+        ).height;
+        const height = state.weekOverview ? Math.max(24, geometry.height) : geometry.height;
+        const expanded = height > actualHeight;
+        Object.assign(entry, { top: geometry.top, height, end: geometry.top + height });
+        entry.block.style.top = `${entry.top}px`;
+        entry.block.style.height = `${height}px`;
+        entry.block.classList.toggle('is-tiny-time-block', height < 28);
+        entry.block.dataset.displayExpanded = String(expanded);
+        entry.block.title =
+          entry.baseTitle + (expanded ? '\n为方便显示已加长（实际时间不变）' : '');
+        entry.block.setAttribute('aria-label', entry.block.title);
+        entry.block.hidden = false;
+      });
+      const groups = calendarModel.shortEventGroups(blocks);
+      for (const group of groups) {
+        group.short.forEach(({ block }) => {
+          block.hidden = true;
+        });
+        const key = `${dayIndex}:${group.members.map(({ block }) => block.dataset.publicId).join(',')}`;
+        displayedGroups.set(
+          key,
+          group.members.map(({ block }) => block.dataset.publicId),
+        );
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'workbench-week-event workbench-event-group is-tiny-time-block';
+        button.dataset.workbenchAction = 'view-event-group';
+        button.dataset.groupKey = key;
+        button.style.top = `${group.top}px`;
+        button.style.height = `${Math.max(24, hourHeight / 2)}px`;
+        button.style.left = '4px';
+        button.style.width = `${columnWidth - 9}px`;
+        const label = document.createElement('strong');
+        label.textContent = `此处有 ${group.members.length} 个事件`;
+        button.append(label);
+        button.title = group.members.map(({ baseTitle }) => baseTitle).join('\n\n');
+        button.setAttribute('aria-label', label.textContent);
+        button.setAttribute('aria-haspopup', 'dialog');
+        timeline.append(button);
+      }
       const lanes = [];
       for (const { block, top, end, height } of blocks) {
-        // Lanes and card edges follow time, never the amount of text in a card.
+        if (block.hidden) continue;
+        // Stack the minimum half-hour display boxes, never infer a real conflict from them.
         let lane = lanes.findIndex((laneEnd) => laneEnd <= top);
         if (lane < 0) lane = lanes.length;
         const offset = Math.min(lane, 4) * 8;
@@ -522,12 +723,21 @@
       }
       timeline.style.setProperty('--workbench-timeline-hours-height', `${timelineHeight}px`);
     });
-    elements.weekGrid.style.gridTemplateColumns = `repeat(7, ${columnWidth}px)`;
-    elements.weekGrid.style.minWidth = `${7 * columnWidth}px`;
+    const displayTimelineHeight = Math.max(
+      timelineHeight,
+      ...weekLayouts.flatMap(({ blocks }) => blocks.map(({ end }) => end)),
+    );
     weekLayouts.forEach(({ timeline }) => {
-      timeline.style.height = `${timelineHeight}px`;
+      // Leave room below the final tick for a short event near midnight.
+      timeline.style.height = `${displayTimelineHeight}px`;
     });
-    if (state.focusToday && state.scheduleReady && elements.weekScroll.clientWidth > 0) {
+    if (eventGroupDialog.open) renderEventGroup();
+    if (
+      !state.weekOverview &&
+      state.focusToday &&
+      state.scheduleReady &&
+      elements.weekScroll.clientWidth > 0
+    ) {
       const today = elements.weekGrid.querySelector('.workbench-week-day.is-today');
       if (today) {
         elements.weekScroll.scrollLeft +=
@@ -638,6 +848,7 @@
     const outsideIds = new Set();
     const clippedIds = new Set();
     const visibleIds = new Set();
+    const hours = displayHours();
     for (let index = 0; index < 7; index += 1) {
       const dayStart = state.weekStart + index * DAY_MS;
       const day = document.createElement('section');
@@ -661,24 +872,24 @@
       allDay.className = 'workbench-week-all-day';
       const timeline = document.createElement('div');
       timeline.className = 'workbench-week-timeline';
-      const timelineHeight = (state.hours.end - state.hours.start) * calendarModel.HOUR_HEIGHT;
+      const timelineHeight = (hours.end - hours.start) * calendarModel.HOUR_HEIGHT;
       timeline.style.height = `${timelineHeight}px`;
       timeline.style.setProperty('--workbench-hour-height', `${calendarModel.HOUR_HEIGHT}px`);
       timeline.setAttribute(
         'aria-label',
-        `${String(state.hours.start).padStart(2, '0')}:00–${String(state.hours.end).padStart(2, '0')}:00`,
+        `${String(hours.start).padStart(2, '0')}:00–${String(hours.end).padStart(2, '0')}:00`,
       );
-      for (let hour = state.hours.start; hour < state.hours.end; hour += 1) {
+      for (let hour = hours.start; hour < hours.end; hour += 1) {
         const marker = document.createElement('span');
         marker.className = 'workbench-week-hour';
-        marker.style.top = `${(hour - state.hours.start) * calendarModel.HOUR_HEIGHT}px`;
+        marker.style.top = `${(hour - hours.start) * calendarModel.HOUR_HEIGHT}px`;
         marker.textContent = `${String(hour).padStart(2, '0')}:00`;
         timeline.append(marker);
       }
       const { entries, outside, windowStart } = hoursModel.layoutDay(
         state.scheduleItems,
         dayStart,
-        state.hours,
+        hours,
       );
       outside.forEach((item) => outsideIds.add(item.publicId));
       entries.forEach(({ item, clipped }) => {
@@ -750,7 +961,16 @@
         if (entry.item.allDay || entry.item.kind === 'deadline') {
           allDay.append(block);
         } else {
-          const { top, end, height } = calendarModel.timeBlock(entry.start, entry.end, windowStart);
+          const { top, end, height, expanded } = calendarModel.displayTimeBlock(
+            entry.start,
+            entry.end,
+            windowStart,
+          );
+          block.dataset.displayExpanded = String(expanded);
+          if (expanded) {
+            block.title += '\n为方便显示已加长（实际时间不变）';
+            block.setAttribute('aria-label', block.title);
+          }
           block.style.top = `${top}px`;
           block.style.height = `${height}px`;
           block.classList.toggle(
@@ -758,11 +978,19 @@
             entry.end - entry.start <= 60 * 60 * 1000,
           );
           block.classList.toggle('is-tiny-time-block', height < 28);
-          blocks.push({ block, top, end, height });
+          blocks.push({
+            block,
+            top,
+            end,
+            height,
+            startMs: entry.start,
+            endMs: entry.end,
+            baseTitle: block.title.replace('\n为方便显示已加长（实际时间不变）', ''),
+          });
           timeline.append(block);
         }
       }
-      weekLayouts.push({ timeline, blocks });
+      weekLayouts.push({ timeline, blocks, windowStart });
       day.append(header, allDay, timeline);
       days.push(day);
     }
@@ -867,7 +1095,6 @@
             ...(item.status === 'draft'
               ? []
               : [makeAction('完成', 'complete-important', item.publicId, 'is-primary')]),
-            makeAction('删除', 'delete-important', item.publicId, 'is-danger'),
           ],
         });
         if (item.dueAt) {
@@ -1235,6 +1462,9 @@
     elements.importantPriority.value = item?.priority || 'normal';
     elements.importantDialogTitle.textContent = item ? '编辑重要事项' : '新增重要事项';
     elements.importantFormStatus.textContent = '';
+    const deleteButton = document.getElementById('workbench-important-delete');
+    deleteButton.hidden = !item;
+    deleteButton.dataset.publicId = item?.publicId || '';
     openDialog(elements.importantDialog);
     elements.importantTitle.focus();
   }
@@ -1272,6 +1502,12 @@
     elements.scheduleKind.disabled = Boolean(item);
     updateScheduleKind();
     elements.scheduleFormStatus.textContent = '';
+    const displayNote = document.getElementById('workbench-schedule-display-note');
+    displayNote.hidden =
+      !item ||
+      ![...elements.weekGrid.querySelectorAll('[data-display-expanded="true"]')].some(
+        (card) => card.dataset.publicId === item.publicId,
+      );
     resetConflictWarning();
     openDialog(elements.scheduleDialog);
     elements.scheduleTitle.focus();
@@ -1756,6 +1992,7 @@
       await app.callApi(`/workbench/important-items/${encodeURIComponent(publicId)}`, {
         method: 'DELETE',
       });
+      closeDialog(elements.importantDialog);
     } else if (action === 'toggle-notification-read' && notification) {
       await app.callApi(`/workbench/notifications/${encodeURIComponent(publicId)}/state`, {
         method: 'PATCH',
@@ -1813,6 +2050,10 @@
   async function handleShellClick(event) {
     const actionButton = event.target.closest('[data-workbench-action]');
     if (!actionButton) return;
+    if (actionButton.dataset.workbenchAction === 'view-event-group') {
+      openEventGroup(actionButton.dataset.groupKey);
+      return;
+    }
     actionButton.disabled = true;
     try {
       await mutate(actionButton.dataset.workbenchAction, actionButton.dataset.publicId || '');
@@ -2092,6 +2333,9 @@
   elements.agentForm?.addEventListener('submit', generateAgentPreview);
   elements.agentConfirm?.addEventListener('click', confirmAgentProposals);
   elements.importantForm?.addEventListener('submit', submitImportant);
+  document
+    .getElementById('workbench-important-delete')
+    ?.addEventListener('click', handleShellClick);
   elements.scheduleForm?.addEventListener('submit', submitSchedule);
   elements.scheduleForm?.addEventListener('input', () => {
     resetConflictWarning();
@@ -2195,11 +2439,11 @@
   renderHoursControls();
   renderWeekGrid();
   if (window.ResizeObserver) {
-    let previousWidth = 0;
+    let previousSize = '';
     new ResizeObserver(() => {
-      const width = elements.weekScroll.clientWidth;
-      if (width !== previousWidth) {
-        previousWidth = width;
+      const size = `${elements.weekScroll.clientWidth}:${elements.weekScroll.clientHeight}`;
+      if (size !== previousSize) {
+        previousSize = size;
         requestWeekCardLayout();
       }
     }).observe(elements.weekScroll);
@@ -2210,6 +2454,8 @@
   });
   document.fonts?.ready.then(requestWeekCardLayout);
   document.fonts?.addEventListener('loadingdone', requestWeekCardLayout);
+  if (new URLSearchParams(window.location.search).get('calendar') === 'overview')
+    window.requestAnimationFrame(openWeekOverview);
   let deadlineTimer = window.setInterval(refreshDeadlineColors, 30000);
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) refreshDeadlineColors();

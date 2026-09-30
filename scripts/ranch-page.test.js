@@ -125,7 +125,7 @@ test('standalone ranch preserves existing data and purchases while the profile i
   assert.match(read('server.js'), /\['\/ranch', '\/ranch.html'\]/);
   for (const html of ['public/profile.html', 'public/ranch.html']) {
     assert.ok(read(html).indexOf('/ranch-environment.js') < read(html).indexOf('/ranch-page.js'));
-    assert.match(read(html), /src="\/ranch-page.js"/);
+    assert.match(read(html), /src="\/ranch-page\.js(?:\?v=[^"]+)?"/);
     assert.match(read(html), /href="\/ranch-page.css"/);
   }
   assert.match(source, /link.href = `\/ranch\?uid=\$\{uid\}`/);

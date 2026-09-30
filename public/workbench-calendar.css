@@ -161,6 +161,13 @@ body.workbench-page .workbench-week-timeline .workbench-week-event.is-tiny-time-
   border-radius: 2px;
   box-shadow: inset 3px 0 var(--event-ink);
 }
+body.workbench-page .workbench-week-timeline .workbench-week-event.is-tiny-time-block > strong {
+  font-size: min(0.85rem, 18px);
+  line-height: 1.1;
+}
+#workbench-schedule-display-note[hidden] {
+  display: none;
+}
 body.workbench-page .workbench-week-timeline .workbench-week-event:is(:hover, :focus-visible) {
   z-index: 1000;
 }
@@ -222,4 +229,185 @@ body.workbench-page .workbench-time-conflicts li button {
   body.workbench-page .workbench-week-grid .workbench-week-event small {
     font-size: 0.72rem;
   }
+}
+
+/* Keep the dashboard's width and applied hour range; only add vertical room. */
+body.workbench-page .workbench-calendar-placeholder {
+  grid-column: 1 / -1;
+}
+body.workbench-page dialog.workbench-week-overview-dialog[open] {
+  position: fixed;
+  inset: 12px auto auto 0;
+  max-width: none;
+  max-height: calc(100dvh - 24px);
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--ui-line);
+  border-radius: 16px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  overflow: hidden;
+  display: flex;
+}
+body.workbench-page .workbench-week-overview-dialog #workbench-calendar {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 12px var(--overview-inline-padding, 16px);
+  gap: 8px;
+  border: 0;
+  border-radius: 0;
+}
+body.workbench-page .workbench-week-overview-dialog .workbench-card-header {
+  flex: none;
+  gap: 8px;
+  margin: 0;
+}
+body.workbench-page .workbench-week-overview-dialog .workbench-card-header h2 {
+  font-size: 1.15rem;
+  margin: 0;
+}
+body.workbench-page .workbench-week-overview-dialog .workbench-week-label {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+}
+body.workbench-page .workbench-week-overview-dialog .workbench-card-tools {
+  gap: 6px;
+}
+body.workbench-page .workbench-week-overview-dialog .workbench-card-tools button {
+  min-height: 36px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}
+body.workbench-page
+  .workbench-week-overview-dialog
+  :is(#workbench-hours-form, #workbench-view-toggle, #workbench-hours-outside) {
+  display: none;
+}
+body.workbench-page .workbench-week-overview-dialog .workbench-time-conflicts {
+  flex: none;
+  margin: 0;
+  padding: 5px 10px;
+  font-size: 0.75rem;
+}
+body.workbench-page .workbench-week-overview-dialog .workbench-time-conflicts ul {
+  max-height: 15vh;
+}
+body.workbench-page .workbench-week-overview-dialog .workbench-week-scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  scrollbar-gutter: auto;
+  border-radius: 10px;
+}
+body.workbench-page .workbench-week-overview-dialog .workbench-week-day {
+  min-width: 0;
+}
+body.workbench-page .workbench-week-overview-dialog .workbench-week-day-header {
+  min-height: 34px;
+  padding: 5px 8px;
+  gap: 2px;
+  font-size: 0.8rem;
+  flex-wrap: wrap;
+}
+body.workbench-page .workbench-week-overview-dialog .workbench-week-day-header strong {
+  font-size: inherit;
+}
+body.workbench-page .workbench-week-overview-dialog .workbench-week-all-day {
+  min-height: 6px;
+  padding: 2px;
+  max-height: 110px;
+  overflow: auto;
+}
+body.workbench-page .workbench-week-overview-dialog .workbench-week-all-day .workbench-week-event {
+  min-height: 28px;
+  gap: 0;
+  padding: 3px 5px;
+  font-size: 0.72rem;
+  line-height: 1.25;
+}
+body.workbench-page
+  .workbench-week-overview-dialog
+  .workbench-week-all-day
+  .workbench-week-event
+  strong {
+  font-size: min(0.8rem, 16px);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.workbench-page
+  .workbench-week-overview-dialog
+  .workbench-week-all-day
+  .workbench-week-event
+  small {
+  display: none;
+}
+body.workbench-page .workbench-week-overview-dialog .workbench-week-hour {
+  font-size: 10px;
+  line-height: 12px;
+}
+body.workbench-page
+  .workbench-week-overview-dialog
+  .workbench-week-timeline
+  .workbench-week-event
+  > strong {
+  font-size: min(0.8rem, 16px);
+  line-height: 1.15;
+}
+body.workbench-page
+  .workbench-week-overview-dialog
+  .workbench-week-timeline
+  .workbench-week-event
+  > small {
+  font-size: min(0.7rem, 14px);
+  line-height: 1.2;
+}
+
+body.workbench-page .workbench-week-event[hidden] {
+  display: none !important;
+}
+body.workbench-page .workbench-week-timeline .workbench-event-group {
+  z-index: 1100;
+  justify-content: center;
+  padding: 0 3px;
+  border: 1px solid var(--ui-accent);
+  border-radius: 7px;
+  background: var(--ui-accent-soft, #e8f1f2);
+  color: var(--ui-text);
+}
+body.workbench-page .workbench-week-timeline .workbench-event-group:is(:hover, :focus-visible) {
+  z-index: 1100;
+}
+body.workbench-page .workbench-week-timeline .workbench-event-group > strong {
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.workbench-event-group-list {
+  display: grid;
+  gap: 12px;
+  max-height: 65dvh;
+  overflow-y: auto;
+}
+.workbench-event-group-list article {
+  padding: 16px;
+  border: 1px solid var(--event-edge, var(--ui-line));
+  border-left: 4px solid var(--event-ink, var(--ui-accent));
+  border-radius: 10px;
+  background: var(--event-fill, var(--ui-surface-soft));
+}
+.workbench-event-group-list p {
+  margin: 8px 0;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

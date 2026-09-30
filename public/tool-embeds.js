@@ -18,15 +18,143 @@
     }
   }
 
-  function sandboxDocument(html, interactive = true) {
+  function viewportFitScale(width, height, contentWidth, contentHeight) {
+    if (
+      ![width, height, contentWidth, contentHeight].every(
+        (value) => Number.isFinite(value) && value > 0,
+      )
+    )
+      return 1;
+    if (contentWidth <= width + 1 && contentHeight <= height + 1) return 1;
+    return Math.min(1, width / contentWidth, height / contentHeight);
+  }
+
+  // Runs inside the opaque iframe. No host DOM access or credential-bearing bridge.
+  function installViewportFit(scaleFor) {
+    function start() {
+      const body = document.body;
+      const root = document.documentElement;
+      if (!body) return;
+      const overflow = [root, body].map((node) => ({
+        value: node.style.getPropertyValue('overflow'),
+        priority: node.style.getPropertyPriority('overflow'),
+      }));
+      const originalZoom = body.style.getPropertyValue('zoom');
+      const zoomPriority = body.style.getPropertyPriority('zoom');
+      const baseZoom = Number.parseFloat(getComputedStyle(body).zoom) || 1;
+      let fitEnabled = true;
+      let pending = 0;
+      let lastFit = 0;
+      function fit() {
+        lastFit = performance.now();
+        if (originalZoom) body.style.setProperty('zoom', originalZoom, zoomPriority);
+        else body.style.removeProperty('zoom');
+        [root, body].forEach((node, index) => {
+          if (!fitEnabled) node.style.setProperty('overflow', 'auto', 'important');
+          else if (overflow[index].value)
+            node.style.setProperty('overflow', overflow[index].value, overflow[index].priority);
+          else node.style.removeProperty('overflow');
+        });
+        let scale = 1;
+        if (fitEnabled) {
+          const width = window.innerWidth;
+          const height = window.innerHeight;
+          let left = 0;
+          let top = 0;
+          let right = Math.max(body.scrollWidth * baseZoom, width);
+          let bottom = Math.max(body.scrollHeight * baseZoom, height);
+          // Include centred/fixed canvases that extend past a clipped body.
+          const children = body.querySelectorAll('*');
+          for (let i = 0; i < Math.min(children.length, 300); i += 1) {
+            const rect = children[i].getBoundingClientRect();
+            if (!rect.width || !rect.height) continue;
+            left = Math.min(left, rect.left);
+            top = Math.min(top, rect.top);
+            right = Math.max(right, rect.right);
+            bottom = Math.max(bottom, rect.bottom);
+          }
+          // Ordinary long documents retain native vertical scrolling and readable text.
+          const clipsHeight = [root, body].some((node) =>
+            ['hidden', 'clip'].includes(getComputedStyle(node).overflowY),
+          );
+          scale = scaleFor(width, height, right - left, clipsHeight ? bottom - top : height);
+          if (scale < 1) body.style.setProperty('zoom', String(baseZoom * scale), 'important');
+        }
+        body.dataset.freebbsToolScale = String(scale);
+        body.dataset.freebbsToolFit = fitEnabled ? 'fit' : 'original';
+      }
+      function schedule() {
+        if (pending) return;
+        pending = window.setTimeout(
+          () => {
+            pending = 0;
+            fit();
+          },
+          Math.max(0, 100 - (performance.now() - lastFit)),
+        );
+      }
+      window.addEventListener('resize', schedule);
+      window.addEventListener('message', (event) => {
+        if (
+          event.source !== window.parent ||
+          event.data?.type !== 'freebbs-tool-viewport' ||
+          !['fit', 'original'].includes(event.data.mode)
+        )
+          return;
+        fitEnabled = event.data.mode === 'fit';
+        if (fitEnabled) {
+          body.scrollTo(0, 0);
+          root.scrollTo(0, 0);
+        }
+        schedule();
+      });
+      document.addEventListener('load', schedule, true);
+      const mutations = new MutationObserver((records) => {
+        if (
+          records.some(
+            (record) =>
+              !(
+                record.type === 'attributes' &&
+                record.attributeName === 'style' &&
+                (record.target === body || record.target === root)
+              ),
+          )
+        )
+          schedule();
+      });
+      mutations.observe(body, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ['style', 'class', 'width', 'height', 'hidden', 'open'],
+      });
+      if (typeof ResizeObserver === 'function') {
+        const sizes = new ResizeObserver(schedule);
+        sizes.observe(body);
+        [...body.children].slice(0, 24).forEach((node) => sizes.observe(node));
+      }
+      document.fonts?.ready.then(schedule);
+      fit();
+    }
+    if (document.readyState === 'loading')
+      document.addEventListener('DOMContentLoaded', start, { once: true });
+    else start();
+  }
+
+  function sandboxDocument(html, interactive = true, { fitViewport = false } = {}) {
     // Put the trusted policy before ALL authored content, even scripts before <head>.
     // The iframe must also omit allow-same-origin, forms, popups and top-navigation.
     const policy = `default-src 'none'; style-src 'unsafe-inline'; script-src ${interactive ? "'unsafe-inline'" : "'none'"}; img-src data: blob:; font-src data:; connect-src 'none'; media-src data: blob:; form-action 'none'; base-uri 'none'; object-src 'none'`;
-    return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body>${String(html || '')}</body></html>`;
+    const fit =
+      interactive && fitViewport
+        ? `<script>(${installViewportFit.toString()})(${viewportFitScale.toString()});</script>`
+        : '';
+    return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body>${String(html || '')}${fit}</body></html>`;
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { parseReference, sandboxDocument };
+    module.exports = { parseReference, sandboxDocument, viewportFitScale };
     return;
   }
 
@@ -119,7 +247,7 @@
           iframe.loading = 'lazy';
           iframe.referrerPolicy = 'no-referrer';
           iframe.setAttribute('sandbox', 'allow-scripts');
-          iframe.srcdoc = sandboxDocument(tool.html);
+          iframe.srcdoc = sandboxDocument(tool.html, true, { fitViewport: true });
           footer.before(iframe);
           status.hidden = true;
           expand.hidden = false;

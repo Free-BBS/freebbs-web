@@ -2,8 +2,15 @@
 const { createOnboardingPreview } = require('./preview-onboarding');
 const { createCircuitAchievementPreviewApi } = require('./preview-circuit-achievement-api');
 
-function createCourseThreadsPreview({ now = () => Date.parse('2026-09-28T02:00:00Z') } = {}) {
-  const preview = createOnboardingPreview({ now, extraApi: createCircuitAchievementPreviewApi() });
+function createCourseThreadsPreview({
+  now = () => Date.parse('2026-09-28T02:00:00Z'),
+  extraApi,
+} = {}) {
+  const circuitApi = createCircuitAchievementPreviewApi();
+  const preview = createOnboardingPreview({
+    now,
+    extraApi: async (context) => (await extraApi?.(context)) || circuitApi(context),
+  });
   const boardNames = [
     ['daily', '日常'],
     ['math', '数学'],

@@ -109,7 +109,7 @@
     if (!toolLoader) {
       toolLoader = new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = '/tool-embeds.js';
+        script.src = '/tool-embeds.js?v=20260930-viewport-1';
         script.onload = resolve;
         script.onerror = () => {
           script.remove();

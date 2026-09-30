@@ -1,0 +1,194 @@
+/* A quiet reading preview shared by the map drawer and knowledge page. */
+body .knowledge-overview-drawer {
+  position: fixed;
+  inset: 16px 24px 16px auto;
+  width: min(46vw, 760px);
+  min-width: 400px;
+  max-width: calc(100vw - 48px);
+  height: calc(100dvh - 32px);
+  max-height: calc(100dvh - 32px);
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--ui-line);
+  border-radius: 20px;
+  background: var(--ui-surface, #fff);
+  color: var(--ui-text, #132b32);
+  box-shadow: 0 12px 45px #001a2522;
+}
+body .knowledge-overview-drawer[open] {
+  display: flex;
+  flex-direction: column;
+}
+.knowledge-overview-drawer::backdrop {
+  background: #071e291a;
+}
+.knowledge-overview-drawer-header,
+.knowledge-overview-drawer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 28px;
+  flex-shrink: 0;
+}
+.knowledge-overview-drawer-header {
+  border-bottom: 1px solid var(--ui-line);
+}
+.knowledge-overview-drawer-header h2 {
+  margin: 0;
+  font: 600 1.05rem/1.5 var(--font-display);
+  color: var(--ui-muted);
+}
+.knowledge-overview-drawer-header button {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ui-surface-soft);
+  color: inherit;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+.knowledge-overview-drawer-body {
+  padding: 24px 32px;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+  overscroll-behavior: contain;
+}
+.knowledge-overview-content {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+.knowledge-overview-content h2 {
+  margin: 8px 0;
+  font: 700 clamp(1.45rem, 2.3vw, 2rem)/1.5 var(--font-display);
+}
+.knowledge-overview-content h3 {
+  margin: 0 0 10px;
+  font: 600 1rem/1.5 var(--font-display);
+}
+.knowledge-overview-content p {
+  margin: 0;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.knowledge-overview-course,
+.knowledge-overview-chapter,
+.knowledge-overview-muted {
+  color: var(--ui-muted);
+  font-size: 0.9rem;
+}
+.knowledge-overview-muted:empty {
+  display: none;
+}
+.knowledge-overview-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px 12px;
+  margin: 0;
+  padding: 20px 0;
+  border-block: 1px solid var(--ui-line);
+}
+.knowledge-overview-facts dt {
+  color: var(--ui-muted);
+  font-size: 0.85rem;
+  margin-bottom: 5px;
+}
+.knowledge-overview-facts dd {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.knowledge-overview-people ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.knowledge-overview-people li {
+  padding: 5px 12px;
+  border: 1px solid var(--ui-line);
+  border-radius: 999px;
+  background: var(--ui-surface-soft);
+  font-size: 0.92rem;
+}
+.knowledge-overview-originals {
+  margin-top: 26px;
+  border-top: 1px solid var(--ui-line);
+  padding-top: 16px;
+}
+.knowledge-overview-originals[hidden] {
+  display: none;
+}
+.knowledge-overview-originals summary {
+  cursor: pointer;
+  color: var(--ui-muted);
+  font-size: 0.9rem;
+  padding-block: 8px;
+}
+.knowledge-overview-drawer-footer {
+  border-top: 1px solid var(--ui-line);
+}
+.knowledge-overview-drawer-footer :is(button, a) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: 9px;
+  border: 1px solid var(--ui-line);
+  text-decoration: none;
+  font: inherit;
+  cursor: pointer;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+}
+.knowledge-overview-drawer-footer button[hidden] {
+  display: none;
+}
+.knowledge-overview-drawer-footer .knowledge-overview-study {
+  color: var(--ui-surface);
+  background: var(--ui-accent, #006979);
+  border-color: transparent;
+}
+body .knowledge-overview-drawer :is(button, a):focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 3px;
+}
+body.knowledge-page #knowledge-overview .knowledge-supplementary {
+  grid-template-columns: minmax(0, 1fr);
+}
+body.knowledge-page #knowledge-overview .knowledge-supplementary-card summary {
+  padding: 12px 16px;
+}
+body.knowledge-page #knowledge-overview .knowledge-supplementary-card summary small {
+  display: none;
+}
+@media (max-width: 900px) {
+  body .knowledge-overview-drawer {
+    inset: 12px 12px 12px auto;
+    width: min(calc(100vw - 24px), 620px);
+    min-width: 0;
+    max-width: calc(100vw - 24px);
+    height: calc(100dvh - 24px);
+    max-height: calc(100dvh - 24px);
+    border-radius: 16px;
+  }
+  .knowledge-overview-drawer-body {
+    padding: 20px;
+  }
+  .knowledge-overview-drawer-header,
+  .knowledge-overview-drawer-footer {
+    padding: 16px 20px;
+  }
+}
+@media (max-width: 480px) {
+  .knowledge-overview-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

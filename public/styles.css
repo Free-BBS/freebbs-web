@@ -14785,14 +14785,35 @@ body.aichat-page .aichat-message.is-image-generation .aichat-copy-control {
 }
 
 .max-image-placeholder {
+  --tetris-panel: #eaf0f2;
+  --tetris-text: #243b44;
+  --tetris-muted: #526770;
+  --tetris-grid: #d9e2e7;
+  --tetris-empty: #f3f6f7;
+  --tetris-outline: #58707b;
+  --tetris-button: #f8fafb;
+  --tetris-button-hover: #ffffff;
+  --tetris-edge: #b4c5cc;
   width: min(100%, 720px);
   min-height: 338px;
   margin: 0 18px 18px;
   overflow: hidden;
-  border: 1px solid #cbd2d5;
+  border: 1px solid var(--tetris-edge);
   border-radius: 12px;
-  background: #e5e9eb;
-  color: #34434a;
+  background: var(--tetris-panel);
+  color: var(--tetris-text);
+}
+
+body.theme-dark .max-image-placeholder {
+  --tetris-panel: #182b34;
+  --tetris-text: #edf6f7;
+  --tetris-muted: #b6cbd1;
+  --tetris-grid: #314853;
+  --tetris-empty: #101f28;
+  --tetris-outline: #aec8d1;
+  --tetris-button: #233b46;
+  --tetris-button-hover: #2b4955;
+  --tetris-edge: #53717d;
 }
 
 .max-image-discussion-pending {
@@ -14837,19 +14858,19 @@ body.aichat-page .aichat-message.is-image-generation .aichat-copy-control {
 
 .max-image-placeholder-activate strong {
   margin-top: 12px;
-  color: #283d45 !important;
+  color: var(--tetris-text) !important;
   font-size: 1rem;
   font-weight: 650;
 }
 
 .max-image-placeholder-activate span:not(.max-image-placeholder-squares) {
-  color: #075f72 !important;
+  color: var(--tetris-text) !important;
   font-size: 0.9rem;
   font-weight: 600;
 }
 
 .max-image-placeholder-activate small {
-  color: #68767c !important;
+  color: var(--tetris-muted) !important;
   font-size: 0.76rem;
 }
 
@@ -14882,14 +14903,14 @@ body.aichat-page .aichat-message.is-image-generation .aichat-copy-control {
   justify-content: space-between;
   gap: 6px 16px;
   margin-bottom: 12px;
-  color: #415158;
+  color: var(--tetris-muted);
   font-size: 0.78rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
 .max-tetris-heading b {
-  color: #243b44;
+  color: var(--tetris-text);
 }
 
 .max-tetris-layout {
@@ -14904,16 +14925,16 @@ body.aichat-page .aichat-message.is-image-generation .aichat-copy-control {
   width: 100%;
   max-width: 240px;
   height: auto;
-  border: 1px solid #aebcc0;
+  border: 1px solid var(--tetris-edge);
   border-radius: 5px;
-  background: #eef0f0;
+  background: var(--tetris-empty);
 }
 
 .max-tetris-side {
   display: grid;
   align-content: start;
   gap: 15px;
-  color: #586a71;
+  color: var(--tetris-text);
   font-size: 0.78rem;
   line-height: 1.5;
 }
@@ -14925,10 +14946,10 @@ body.aichat-page .aichat-message.is-image-generation .aichat-copy-control {
 .max-tetris-side > button,
 .max-tetris-controls button {
   min-height: 42px;
-  border: 1px solid #b2c1c4;
+  border: 1px solid var(--tetris-edge);
   border-radius: 7px;
-  background: #f5f7f7;
-  color: #25434b;
+  background: var(--tetris-button);
+  color: var(--tetris-text);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -14936,7 +14957,7 @@ body.aichat-page .aichat-message.is-image-generation .aichat-copy-control {
 
 .max-tetris-side > button:hover,
 .max-tetris-controls button:hover {
-  background: #fff;
+  background: var(--tetris-button-hover);
 }
 
 .max-tetris-controls {
@@ -14950,7 +14971,7 @@ body.aichat-page .aichat-message.is-image-generation .aichat-copy-control {
 }
 
 .max-tetris-side small {
-  color: #69787e;
+  color: var(--tetris-muted);
 }
 
 .max-generated-image {

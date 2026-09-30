@@ -392,6 +392,8 @@ body.home-page .home-community-heading h2 {
 }
 
 body.home-page .home-dashboard {
+  --home-heat-row-height: max(72px, 4rem);
+  --home-board-row-height: max(112px, 6.5rem);
   height: auto;
   min-height: 0;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
@@ -408,8 +410,9 @@ body.home-page .home-dashboard-panel {
 @media (min-width: 901px) {
   body.home-page .home-dashboard {
     grid-template-areas: 'feed boards' 'feed heat';
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-    height: clamp(760px, 95vh, 1020px);
+    grid-template-rows: auto auto;
+    height: auto;
+    min-height: 0;
   }
   body.home-page .home-heat-list {
     display: flex;
@@ -465,8 +468,36 @@ body.home-page .site-footer {
 }
 
 body.home-page .home-heat-list {
-  max-height: none;
-  overflow: visible;
+  flex: none;
+  height: calc(5 * var(--home-heat-row-height));
+  max-height: calc(5 * var(--home-heat-row-height));
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  overscroll-behavior-y: contain;
+  scroll-snap-type: y proximity;
+}
+
+body.home-page .home-heat-list > li {
+  flex: 0 0 var(--home-heat-row-height);
+  height: var(--home-heat-row-height);
+  min-height: var(--home-heat-row-height);
+  box-sizing: border-box;
+  scroll-snap-align: start;
+}
+
+body.home-page .home-heat-item > a {
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  padding-block: 6px;
+}
+
+body.home-page .home-heat-user-copy :is(strong, small) {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 1.4;
 }
 
 body.home-page :is(.home-feed-panel, .home-board-panel) {
@@ -496,7 +527,7 @@ body.home-page :is(.home-feed-list, .home-board-activity) {
     overflow: hidden;
   }
   body.home-page .home-heat-list {
-    flex: 1 1 0;
+    flex: none;
     min-height: 0;
     overflow-y: auto;
     scrollbar-gutter: stable;
@@ -510,6 +541,30 @@ body.home-page :is(.home-feed-list, .home-board-activity) {
 body.home-page .home-feed-item,
 body.home-page .home-board-item {
   flex-shrink: 0;
+}
+
+body.home-page .home-board-panel {
+  height: auto;
+}
+
+body.home-page .home-board-activity {
+  flex: none;
+  height: calc(4 * var(--home-board-row-height));
+  scroll-snap-type: y proximity;
+}
+
+body.home-page .home-board-item {
+  height: var(--home-board-row-height);
+  box-sizing: border-box;
+  align-content: center;
+  scroll-snap-align: start;
+}
+
+@media (min-width: 901px) {
+  body.home-page .home-feed-panel {
+    contain: size;
+    align-self: stretch;
+  }
 }
 
 body.home-page .home-panel-header {
@@ -678,7 +733,10 @@ body.home-page .home-learning a:focus-visible {
   body.home-page .home-dashboard {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto;
-    grid-template-areas: 'feed' 'heat';
+    grid-template-areas: 'feed' 'boards' 'heat';
+  }
+  body.home-page .home-board-panel {
+    display: flex !important;
   }
 }
 

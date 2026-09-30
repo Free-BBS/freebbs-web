@@ -34,6 +34,7 @@ node --check backend/workbench-schedule-planner.js
 node --test backend/background-tasks.test.js
 node --check public/app.js
 node --test scripts/workbench-calendar.test.js
+node --test backend/ranch-bicycle-refund.test.js
 node --check public/auth.js
 node --check public/auth-challenge.js
 node --check public/wien-oscillator-model.js
@@ -114,7 +115,7 @@ npm run test:auth
 
 echo "[ci] workbench and schedule planner tests"
 npm run test:workbench
-node --test scripts/schedule-recurrence.test.js
+node --test scripts/schedule-recurrence.test.js scripts/workbench-homework-order.test.js scripts/knowledge-overview.test.js
 
 echo "[ci] shop and settings tests"
 npm run test:shop-settings

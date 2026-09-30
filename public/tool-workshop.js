@@ -31,6 +31,16 @@
   let viewerTimer;
   const viewerTitle = document.getElementById('tool-viewer-title');
   const viewerMeta = document.getElementById('tool-viewer-meta');
+  const viewerFitButton = document.getElementById('tool-viewer-fit');
+  let viewerFits = true;
+  function applyViewerFit() {
+    viewerFitButton.textContent = viewerFits ? '原始大小' : '适应窗口';
+    viewerFitButton.setAttribute('aria-pressed', String(viewerFits));
+    viewerFrame.contentWindow?.postMessage(
+      { type: 'freebbs-tool-viewport', mode: viewerFits ? 'fit' : 'original' },
+      '*',
+    );
+  }
   const shareButton = document.getElementById('tool-share-discussion');
   const scopeButtons = [...document.querySelectorAll('[data-tool-scope]')];
   const state = { scope: 'all', tools: [], active: null, busy: false };
@@ -81,7 +91,7 @@
 
   function refreshPreview() {
     const hasHtml = Boolean(htmlInput.value.trim());
-    previewFrame.srcdoc = sandboxDocument(htmlInput.value, true);
+    previewFrame.srcdoc = sandboxDocument(htmlInput.value, true, { fitViewport: true });
     previewFrame.hidden = !hasHtml;
     previewEmpty.hidden = hasHtml;
     if (status && !state.busy)
@@ -292,10 +302,11 @@
         frame.setAttribute('aria-busy', 'false');
         frame.style.visibility = '';
         viewerStatus.hidden = true;
+        applyViewerFit();
       },
       { once: true },
     );
-    frame.srcdoc = sandboxDocument(state.active.html, true);
+    frame.srcdoc = sandboxDocument(state.active.html, true, { fitViewport: true });
     viewerFrame.replaceWith(frame);
     viewerFrame = frame;
     viewerTimer = setTimeout(() => {
@@ -307,6 +318,8 @@
   function openTool(tool) {
     if (!tool) return;
     state.active = tool;
+    viewerFits = true;
+    applyViewerFit();
     viewerTitle.textContent = tool.title;
     viewerMeta.textContent = `@${tool.author?.username || '匿名用户'} · ${tool.description || '无简介'}`;
     if (!viewer.open) viewer.showModal();
@@ -406,6 +419,10 @@
     if (!viewer.open && state.active) releaseViewer();
   });
   document.getElementById('tool-viewer-reload').addEventListener('click', loadViewer);
+  viewerFitButton.addEventListener('click', () => {
+    viewerFits = !viewerFits;
+    applyViewerFit();
+  });
   shareButton.addEventListener('click', shareToDiscussion);
 
   app.sessionReady.then(async () => {
