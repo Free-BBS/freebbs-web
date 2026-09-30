@@ -154,7 +154,7 @@ test('the profile entry replaces the legacy overview without removing mobile edi
     };
     vm.runInNewContext(source, {
       document,
-      location: { pathname: '/settings' },
+      window: { location: { pathname: '/settings' } },
       matchMedia: () => media,
     });
     assert.deepEqual(classes, ['personal-settings-page']);

@@ -46,11 +46,11 @@
       "class": "pet_tool",
       "description": "风经过草地的时候，骑一小段路。",
       "desc": "让脚步歇一歇，和风一起经过这片草地。",
-      "cost": { "magnetic": 30 },
+      "cost": { "magnetic": 20 },
       "image": "/assets/shop/max-cartoon-v1/ranch_bicycle.webp",
       "purchaseLimit": 1,
       "isgift": false,
-      "rules": "30 磁元永久解锁，公共牧场中偶尔骑行，也可以点选自己的羊出发。解锁后免费反复使用，所有观看者同步看到。"
+      "rules": "20 磁元永久解锁，公共牧场中偶尔骑行，也可以点选自己的羊出发。解锁后免费反复使用，所有观看者同步看到。"
     },
     {
       "key": "ranch_flying_wings",

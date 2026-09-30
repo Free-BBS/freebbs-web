@@ -1,11 +1,39 @@
 /* Workbench-only desktop composition. Mobile keeps its existing list and folds. */
 .workbench-section-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  font-size: 0.9rem;
+}
+body.workbench-page .workbench-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 28px;
+  margin-bottom: 20px;
+}
+body.workbench-page .workbench-navigation .workbench-view-switch {
+  flex-shrink: 0;
+  margin: 0;
+}
+body.workbench-page .workbench-view-links {
+  flex: 1 1 400px;
+  min-width: 0;
+}
+body.workbench-page .workbench-section-links[hidden] {
   display: none;
+}
+body.workbench-page .workbench-section-links a {
+  padding-block: 6px;
+  color: var(--workbench-muted);
+  text-decoration: none;
 }
 
 @media (min-width: 901px) {
   body.workbench-page,
   body.theme-light.workbench-page {
+    --desktop-content-width: 1560px;
     --workbench-panel: var(--ui-surface);
     --workbench-panel-strong: var(--ui-page);
     --workbench-panel-soft: color-mix(in srgb, var(--ui-accent) 4%, var(--ui-surface));
@@ -97,8 +125,8 @@
   }
 
   body.workbench-page .workbench-view-layout {
-    grid-template-columns: minmax(0, 1fr) minmax(230px, 22%);
-    gap: 22px;
+    grid-template-columns: minmax(0, 1fr) clamp(180px, 17%, 220px);
+    gap: 12px;
   }
 
   body.workbench-page .workbench-section-links {
@@ -106,7 +134,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 10px 24px;
-    margin: 0 0 16px;
+    margin: 0;
     padding: 0 2px;
     font-size: 1rem;
   }
@@ -201,7 +229,7 @@
   }
 
   body.workbench-page .workbench-week-scroll {
-    max-height: 620px;
+    max-height: max(620px, calc(100dvh - 180px));
     overflow: auto;
     border-color: var(--workbench-line);
     border-radius: 10px;
@@ -221,7 +249,8 @@
     top: 0;
     z-index: 3;
     background: var(--workbench-panel-strong);
-    padding: 12px 10px;
+    padding: 12px 6px;
+    gap: 4px;
   }
 
   body.workbench-page .workbench-week-day.is-today .workbench-week-day-header {
@@ -240,6 +269,11 @@
 
   body.workbench-page .workbench-priority-card {
     border-top: 2px solid var(--workbench-accent) !important;
+    padding: 14px;
+  }
+
+  body.workbench-page .workbench-persistent-column .workbench-state-item {
+    padding: 12px;
   }
 
   body.workbench-page .workbench-state-item {
@@ -390,8 +424,8 @@
 
 @media (min-width: 901px) and (max-width: 1200px) {
   body.workbench-page .workbench-view-layout {
-    grid-template-columns: minmax(0, 1fr) 220px;
-    gap: 14px;
+    grid-template-columns: minmax(0, 1fr) 180px;
+    gap: 12px;
   }
 
   body.workbench-page

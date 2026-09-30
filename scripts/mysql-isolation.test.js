@@ -155,7 +155,7 @@ test('the isolated runner removes inherited database targets and Node hooks with
   }
 });
 
-test('the isolated runner enables its sixteen named test files with matching database opt-ins', () => {
+test('the isolated runner enables its seventeen named test files with matching database opt-ins', () => {
   const expected = [
     'backend/language-lab.mysql.test.js',
     'backend/profile-activity.mysql.test.js',
@@ -164,6 +164,7 @@ test('the isolated runner enables its sixteen named test files with matching dat
     'backend/economy-rewards.mysql.test.js',
     'backend/admin-rewards.mysql.test.js',
     'backend/economy-sales.mysql.test.js',
+    'backend/ranch-bicycle-refund.mysql.test.js',
     'backend/onboarding-reward.mysql.test.js',
     'backend/username-changes.test.js',
     'backend/login-rate-limit.test.js',
@@ -175,7 +176,7 @@ test('the isolated runner enables its sixteen named test files with matching dat
     'backend/course-schedule.mysql.test.js',
   ];
   assert.deepEqual([...TEST_FILES].sort(), expected.sort());
-  assert.equal(new Set(TEST_FILES).size, 16);
+  assert.equal(new Set(TEST_FILES).size, 17);
   for (const file of TEST_FILES)
     assert.equal(fs.existsSync(path.join(__dirname, '..', file)), true);
   const env = testEnvironment(windowsPipe, {});
@@ -183,6 +184,7 @@ test('the isolated runner enables its sixteen named test files with matching dat
     'RUN_ADMIN_REWARDS_MYSQL',
     'RUN_ECONOMY_MYSQL',
     'RUN_BONE_SALES_MYSQL',
+    'RUN_BICYCLE_REFUND_MYSQL',
     'RUN_ONBOARDING_REWARD_MYSQL',
     'RUN_USERNAME_INTEGRATION',
     'RUN_LOGIN_RATE_MYSQL',
@@ -197,8 +199,8 @@ test('the isolated runner enables its sixteen named test files with matching dat
   assert.equal(env.MYSQL_SOCKET, windowsPipe);
 });
 
-test('the isolated runner requires successful top-level evidence for all sixteen live MySQL tests', () => {
-  assert.equal(REQUIRED_MYSQL_TESTS.length, 16);
+test('the isolated runner requires successful top-level evidence for all seventeen live MySQL tests', () => {
+  assert.equal(REQUIRED_MYSQL_TESTS.length, 17);
   const successes = REQUIRED_MYSQL_TESTS.map((name, index) => `ok ${index + 1} - ${name}`);
   const summary = '# fail 0\n# skipped 0\n';
   const complete = `${successes.join('\n')}\n${summary}`;

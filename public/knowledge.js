@@ -48,7 +48,7 @@
     discussionComposeMode: 'edit',
     discussionSessionUid: '',
     discussionSessionVersion: 0,
-    view: 'overview',
+    view: params.get('view') === 'reading' ? 'reading' : 'overview',
   };
   const discussionDateFormatter = new Intl.DateTimeFormat('zh-CN', {
     month: 'numeric',
@@ -1521,6 +1521,8 @@
     const markdown = String(sections.knowledgeMarkdown ?? node.markdown ?? '').trim();
     const basicInfoMarkdown = String(sections.basicInfoMarkdown || '').trim();
     const applicationsMarkdown = String(sections.applicationsMarkdown || '').trim();
+    const brief = document.getElementById('knowledge-overview-brief');
+    if (brief) window.FreeBbsKnowledgeOverview?.render(brief, node, state.course);
 
     document.title = `FREE-BBS - ${node.title}`;
     document.getElementById('knowledge-node-id').textContent = node.id;

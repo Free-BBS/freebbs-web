@@ -1,5 +1,5 @@
 (function exposeWorkbenchHours(root) {
-  const DEFAULT_HOURS = Object.freeze({ start: 6, end: 24 });
+  const DEFAULT_HOURS = Object.freeze({ start: 8, end: 24 });
   const HOUR_MS = 60 * 60 * 1000;
 
   function normalizeHours(value) {

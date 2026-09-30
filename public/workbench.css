@@ -619,10 +619,17 @@ body.workbench-page .workbench-week-scroll {
 }
 
 body.workbench-page .workbench-week-grid {
+  --workbench-day-min-width: 196px;
   display: grid;
-  grid-template-columns: repeat(7, minmax(196px, 1fr));
-  min-width: 1372px;
+  grid-template-columns: repeat(7, minmax(var(--workbench-day-min-width), 1fr));
+  min-width: calc(7 * var(--workbench-day-min-width));
   background: var(--workbench-panel-soft);
+}
+
+@media (min-width: 901px) {
+  body.workbench-page .workbench-week-grid {
+    --workbench-day-min-width: 104px;
+  }
 }
 
 body.workbench-page .workbench-week-day {
@@ -1888,9 +1895,21 @@ body.workbench-page .workbench-homework-card {
   grid-column: 1 / -1;
 }
 
-body.workbench-page .workbench-homework-card > h2 {
+body.workbench-page .workbench-homework-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+body.workbench-page .workbench-homework-header h2 {
   margin: 0;
   font-size: 1.2rem;
+}
+
+body.workbench-page #homework-scroll-controls[hidden] {
+  display: none;
 }
 
 body.workbench-page .workbench-homework-card > p,
@@ -1947,11 +1966,22 @@ body.workbench-page .workbench-homework-dialog > header {
 
 body.workbench-page .workbench-homework-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: min(100%, 280px);
   gap: 1rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  padding-block: 2px 12px;
+  scrollbar-color: var(--workbench-line-strong) transparent;
+}
+
+body.workbench-page .workbench-homework-list > p {
+  grid-column: 1 / -1;
 }
 
 body.workbench-page .workbench-homework-item {
+  scroll-snap-align: start;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -2284,4 +2314,13 @@ body.workbench-page .workbench-repeat-preview ol {
 }
 #workbench-course-import-status {
   white-space: pre-line;
+}
+/* Keep the diagnostic card out of the user-facing workbench for now. */
+.workbench-source-card[hidden],
+#workbench-important-delete[hidden] {
+  display: none !important;
+}
+
+#workbench-important-delete {
+  margin-right: auto;
 }

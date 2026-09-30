@@ -23,6 +23,7 @@ const {
   annotateWalletLedger,
 } = require('./wallet-ledger');
 const { createBoneSalesRouter } = require('./economy-sales');
+const { refundRanchBicyclePurchases } = require('./ranch-bicycle-refund');
 const { registerOnboarding } = require('./onboarding');
 const { registerOnboardingReward } = require('./onboarding-reward');
 const {
@@ -6439,6 +6440,12 @@ async function start() {
   await ensureSurveyTables(pool);
   await ensureAdminRewardTables(pool);
   await ensureWalletLedger(pool);
+  const bicycleRefunds = await refundRanchBicyclePurchases(pool);
+  if (bicycleRefunds.refunded) {
+    console.log(
+      `牧场自行车降价补差：${bicycleRefunds.refunded} 笔，共 ${bicycleRefunds.magnetic} 磁元`,
+    );
+  }
   await ensureCourseUploadTables(pool);
   await ensureCircuitTables(pool);
   await ensureCircuitExampleTables(pool);

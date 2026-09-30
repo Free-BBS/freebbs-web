@@ -50,6 +50,11 @@
     "preview:course-threads": "node scripts/preview-course-threads.js",
     "preview:calendar-threads": "node scripts/preview-calendar-threads.js",
     "preview:editable-calendar": "node scripts/preview-editable-calendar.js",
+    "preview:dashboard-usability": "node scripts/preview-dashboard-usability.js",
+    "test:dashboard-usability:browser": "node scripts/check-dashboard-usability-browser.js",
+    "test:overview-refinements:browser": "node scripts/check-overview-refinements-browser.js",
+    "test:workbench-overview:browser": "node scripts/check-workbench-overview-browser.js",
+    "test:tool-viewport:browser": "node scripts/check-tool-viewport-browser.js",
     "test:editable-calendar": "node --test backend/editable-campus-calendar.test.js backend/course-schedule.test.js backend/homework-schedule.test.js",
     "test:editable-calendar:browser": "node scripts/check-editable-calendar-browser.js",
     "test:calendar-threads:browser": "node scripts/check-calendar-threads-browser.js",
@@ -83,6 +88,7 @@
     "test:surveys": "node --test backend/surveys.test.js scripts/activities-page.test.js scripts/activities-admin.test.js scripts/activities-server.test.js scripts/survey-receipts.test.js",
     "test:economy:browser": "node scripts/check-economy-v2-browser.js && node scripts/check-profile-themes-browser.js",
     "test:economy-retry": "node --test backend/economy-retry.test.js",
+    "test:bicycle-refund": "node --test backend/ranch-bicycle-refund.test.js backend/ranch-bicycle-refund.mysql.test.js",
     "test:economy-mysql": "node --test backend/economy-rewards.mysql.test.js"
   },
   "dependencies": {

@@ -434,6 +434,7 @@ body.theme-light .tool-code-live code.hljs {
 }
 .tool-viewer footer {
   justify-content: flex-end;
+  flex-wrap: wrap;
   border-top: 1px solid var(--ui-line);
   border-bottom: 0;
   padding-bottom: max(12px, env(safe-area-inset-bottom));

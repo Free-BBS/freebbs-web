@@ -1,10 +1,29 @@
 (() => {
+  const isPending = (item) => !['submitted', 'graded'].includes(item.status);
+  function deadline(item) {
+    const time = item.dueAt && !item.deadlineUnverified ? Date.parse(item.dueAt) : NaN;
+    return Number.isFinite(time) ? time : Infinity;
+  }
+  function compareHomework(a, b) {
+    const group = Number(isPending(b)) - Number(isPending(a));
+    if (group) return group;
+    const first = deadline(a);
+    const second = deadline(b);
+    if (first !== second) return first < second ? -1 : 1;
+    return String(a.title || '').localeCompare(String(b.title || ''), 'zh-CN');
+  }
+  if (typeof module !== 'undefined' && module.exports)
+    module.exports = { compareHomework, isPending };
+  if (typeof window === 'undefined') return;
   const app = window.freeBbsApp;
   const root = document.getElementById('workbench-homework');
   if (!app || !root) return;
   const course = document.getElementById('homework-course');
   const filter = document.getElementById('homework-status-filter');
   const list = document.getElementById('homework-list');
+  const controls = document.getElementById('homework-scroll-controls');
+  const previous = document.getElementById('homework-previous');
+  const next = document.getElementById('homework-next');
   const message = document.getElementById('homework-message');
   const dialog = document.getElementById('homework-dialog');
   const detail = document.getElementById('homework-detail');
@@ -31,6 +50,24 @@
     value
       ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })
       : '未提供';
+  function updateScrollControls() {
+    const end = Math.max(0, list.scrollWidth - list.clientWidth);
+    controls.hidden = end < 2;
+    previous.disabled = list.scrollLeft <= 1;
+    next.disabled = list.scrollLeft >= end - 1;
+  }
+  function moveList(direction) {
+    list.scrollBy({
+      left: direction * (list.clientWidth + 16),
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'instant'
+        : 'smooth',
+    });
+  }
+  previous.addEventListener('click', () => moveList(-1));
+  next.addEventListener('click', () => moveList(1));
+  list.addEventListener('scroll', updateScrollControls, { passive: true });
+  new ResizeObserver(updateScrollControls).observe(list);
   function node(tag, text, className) {
     const element = document.createElement(tag);
     if (text !== undefined) element.textContent = text;
@@ -65,9 +102,10 @@
     const visible = items.filter(
       (item) =>
         (!course.value || item.courseReference === course.value) &&
-        (!filter.value || item.status === filter.value),
+        (!filter.value ||
+          (filter.value === 'pending' ? isPending(item) : item.status === filter.value)),
     );
-    visible.sort((a, b) => new Date(a.dueAt || '9999-01-01') - new Date(b.dueAt || '9999-01-01'));
+    visible.sort(compareHomework);
     visible.forEach((item) => {
       const card = node('article', undefined, 'workbench-homework-item');
       card.append(
@@ -92,6 +130,8 @@
           ),
         );
     }
+    list.scrollLeft = 0;
+    requestAnimationFrame(updateScrollControls);
   }
   async function load() {
     version += 1;
@@ -99,6 +139,7 @@
     items = [];
     syncStatus = '';
     list.replaceChildren();
+    controls.hidden = true;
     if (!semester) {
       message.textContent = '请先选择并同步一个学期。';
       return;
@@ -187,6 +228,7 @@
     syncStatus = '';
     semester = '';
     list.replaceChildren();
+    controls.hidden = true;
     detail.replaceChildren();
     dialog.close();
     message.textContent = '连接学堂并同步学期后显示作业。';

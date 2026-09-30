@@ -3,11 +3,32 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
-const { parseReference, sandboxDocument } = require('../public/tool-embeds');
+const { parseReference, sandboxDocument, viewportFitScale } = require('../public/tool-embeds');
 
 const origin = 'https://www.free-bbs.cn';
 const tid = 't_0123456789abcdef';
 const source = fs.readFileSync(path.join(__dirname, '../public/tool-embeds.js'), 'utf8');
+
+test('viewport fitting preserves responsive sizes and never enlarges content', () => {
+  assert.equal(viewportFitScale(1098, 666, 1098, 666), 1);
+  assert.equal(viewportFitScale(1098, 666, 1200, 850), 666 / 850);
+  assert.equal(viewportFitScale(360, 600, 1200, 850), 0.3);
+  assert.equal(viewportFitScale(1200, 900, 600, 300), 1);
+  for (const invalid of [0, -1, NaN, Infinity, '100'])
+    assert.equal(viewportFitScale(invalid, 300, 1000, 1000), 1);
+});
+
+test('fit script is opt-in and cannot weaken opaque iframe restrictions or static previews', () => {
+  assert.doesNotMatch(sandboxDocument('<main>tool</main>'), /freebbs-tool-viewport/);
+  const fitted = sandboxDocument('<main>tool</main>', true, { fitViewport: true });
+  assert.match(fitted, /event.source !== window.parent/);
+  assert.match(fitted, /connect-src 'none'/);
+  assert.match(fitted, /ResizeObserver/);
+  assert.doesNotMatch(
+    sandboxDocument('<main>tool</main>', false, { fitViewport: true }),
+    /freebbs-tool-viewport/,
+  );
+});
 
 test('only same-origin saved tool references are embedded', () => {
   for (const url of [
@@ -188,7 +209,7 @@ test('private, mismatched, oversized and failed tool responses never create an i
 test('discussion Markdown and workshop previews use the shared embed integration', () => {
   const app = fs.readFileSync(path.join(__dirname, '../public/app.js'), 'utf8');
   assert.match(app, /enhanceToolReferences\(root\);/);
-  assert.match(app, /script.src = '\/tool-embeds.js'/);
+  assert.match(app, /script.src = '\/tool-embeds\.js\?v=20260930-viewport-1'/);
   assert.match(app, /FreeBbsToolEmbeds.enhance\(root, \{ apiBase: API_BASE_URL \}\)/);
   const workshop = fs.readFileSync(path.join(__dirname, '../public/tool-workshop.js'), 'utf8');
   assert.match(workshop, /const \{ sandboxDocument \} = window.FreeBbsToolEmbeds/);

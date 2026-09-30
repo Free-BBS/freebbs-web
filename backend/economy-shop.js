@@ -325,6 +325,7 @@ async function ensureShopPurchaseTables(pool) {
   for (const migration of [
     '037_shop_purchase_progress.sql',
     '053_golden_names_and_frontend_tools.sql',
+    '061_shop_price_refunds.sql',
   ]) {
     const sql = fs.readFileSync(path.join(__dirname, '../database/migrations', migration), 'utf8');
     for (const statement of sql

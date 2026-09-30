@@ -6,10 +6,66 @@ const {
   deadlineState,
   deadlineRemaining,
   timeBlock,
+  displayTimeBlock,
+  overviewHourHeight,
+  shortEventGroups,
 } = require('../public/workbench-calendar');
 
 const now = Date.parse('2026-09-28T00:00:00+08:00');
 const HOUR = 3600000;
+
+test('overview fits applied hours with a midnight display allowance and respects readability bounds', () => {
+  for (const height of [550, 650, 800, 1000]) {
+    const hourHeight = overviewHourHeight(height, 70);
+    assert.ok(hourHeight >= 16 && hourHeight <= 48);
+    assert.ok(16 * hourHeight + 70 + 24 + 2 <= height);
+  }
+  assert.equal(overviewHourHeight(2000, 70), 48);
+  assert.equal(overviewHourHeight(300, 70), 16);
+  assert.ok(overviewHourHeight(800, 90) < overviewHourHeight(800, 40));
+});
+
+test('short display collisions aggregate without inventing real time conflicts or changing intervals', () => {
+  const entry = (id, start, end) => ({
+    id,
+    startMs: start * HOUR,
+    endMs: end * HOUR,
+    ...displayTimeBlock(start * HOUR, end * HOUR, 0),
+  });
+  const short = entry('a', 17 + 20 / 60, 17 + 25 / 60);
+  const touching = entry('b', 17 + 25 / 60, 17 + 35 / 60);
+  const before = structuredClone([short, touching]);
+  const groups = shortEventGroups([short, touching]);
+  assert.deepEqual(
+    groups[0].members.map((item) => item.id),
+    ['a', 'b'],
+  );
+  assert.deepEqual([short, touching], before);
+  assert.equal(shortEventGroups([entry('a', 17, 17.1), entry('b', 17.5, 17.6)]).length, 0);
+  assert.equal(shortEventGroups([entry('a', 17, 19), entry('b', 18, 20)]).length, 0);
+  const long = entry('c', 17.6, 18.8);
+  assert.deepEqual(
+    shortEventGroups([long, touching, short])[0].members.map((item) => item.id),
+    ['a', 'b', 'c'],
+  );
+  assert.equal(shortEventGroups([short])[0], undefined);
+  assert.equal(shortEventGroups([short, touching, entry('d', 17.8, 17.9)]).length, 1);
+  assert.ok(overviewHourHeight(700, 70, 18) < overviewHourHeight(700, 70, 16));
+});
+
+test('short event display has a half-hour floor without extending its real interval', () => {
+  const block = displayTimeBlock(17 * HOUR, 17 * HOUR + 5 * 60000, 6 * HOUR);
+  assert.equal(block.top, 11 * 48);
+  assert.equal(block.height, 24);
+  assert.equal(block.expanded, true);
+  assert.equal(displayTimeBlock(0, HOUR / 2, 0).expanded, false);
+  assert.equal(displayTimeBlock(0, HOUR, 0).height, 48);
+  assert.equal(displayTimeBlock(0, HOUR / 12, 0, 60).height, 30);
+  assert.equal(
+    conflicts([event('short', 17, 17 + 5 / 60), event('next', 17 + 5 / 60, 18)]).length,
+    0,
+  );
+});
 
 test('time block edges meet exactly for adjacent events, including fractional minutes', () => {
   const a = timeBlock(13.5 * HOUR, (15 + 5 / 60) * HOUR, 6 * HOUR);

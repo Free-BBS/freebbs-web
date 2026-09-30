@@ -1,8 +1,11 @@
 // Local-only demonstration. No account credentials, production API or database.
 const { createCourseThreadsPreview } = require('./preview-course-threads');
 
-async function createEditableCalendarPreview() {
-  const preview = createCourseThreadsPreview({ now: () => Date.parse('2026-09-29T02:00:00Z') });
+async function createEditableCalendarPreview({ extraApi } = {}) {
+  const preview = createCourseThreadsPreview({
+    now: () => Date.parse('2026-09-29T02:00:00Z'),
+    extraApi,
+  });
   preview.workbench.campusCourses.push({
     sourceReference: 'demo:variable-sections',
     title: '模拟课程 · 研讨与实验',

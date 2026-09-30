@@ -7,6 +7,7 @@ function createFrontendToolGenerator({ postAgentChat, buildAgentChatPayload }) {
       '最终回答只返回一个完整、可独立运行的单文件 HTML，不要使用 Markdown 代码围栏或解释文字。',
       '把 CSS 和 JavaScript 全部内联；不得引用外部网络资源，不得收集个人信息，不得提交表单或打开新窗口。',
       '界面需适配手机与桌面，具备清楚的标签、键盘焦点与必要的空状态。',
+      '工具运行在实际 iframe 视口中，不是整个桌面。以 100% 可用宽高布局，html/body 使用 border-box 并合理处理 margin；不要把界面固定为大于视口的像素宽高。Canvas/SVG 应随容器缩放，内容较长时允许滚动，不得用 overflow:hidden 隐藏必要按钮。',
       '预览在不含 allow-same-origin 的 iframe 沙盒中运行；localStorage 等持久化 API 可能不可用，必须捕获异常并回退到内存状态，不能因此导致工具无法使用。',
       currentHtml
         ? `请在下面现有 HTML 基础上修改，保留仍然符合要求的功能：\n${currentHtml}`

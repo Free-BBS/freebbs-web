@@ -156,7 +156,7 @@
           ['ranch_gold_horn', '金角', '20 磁元／只'],
           ['ranch_silver_horn', '银角', '10 磁元／只'],
           ['ranch_backflip', '后空翻', '12 磁元 · 永久解锁'],
-          ['ranch_bicycle', '牧场自行车', '30 磁元 · 永久解锁'],
+          ['ranch_bicycle', '牧场自行车', '20 磁元 · 永久解锁'],
           ['ranch_flying_wings', '中国羊能飞', '25 磁元 · 永久解锁'],
           ['ranch_clover', '三叶草', '1 磁元／个 · 羊群广场使用'],
         ])

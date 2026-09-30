@@ -15,14 +15,14 @@
     />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
-    <link rel="stylesheet" href="/workbench.css?v=20260929-planning-preferences-1" />
+    <link rel="stylesheet" href="/workbench.css?v=20260929-refinements-3" />
     <link rel="stylesheet" href="/workbench-connectors.css" />
     <link rel="stylesheet" href="/username-guard.css" />
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/mobile-personal.css?v=20260922-workbench-width-2" />
-    <link rel="stylesheet" href="/workbench-elegant.css?v=20260928-readable-calendar-1" />
-    <link rel="stylesheet" href="/workbench-calendar.css?v=20260929-compact-notes-4" />
+    <link rel="stylesheet" href="/workbench-elegant.css?v=20260930-nav-3" />
+    <link rel="stylesheet" href="/workbench-calendar.css?v=20260930-hours-2" />
   </head>
   <body class="workbench-page" data-workbench-controller="standalone">
     <div class="page-shell page-shell-settings">
@@ -202,34 +202,42 @@
             显示 Max 小提示
           </button>
 
-          <nav class="workbench-view-switch" aria-label="工作台窗口">
-            <button
-              type="button"
-              id="workbench-plan-tab"
-              data-workbench-view="plan"
-              aria-controls="workbench-plan-panel"
-              aria-current="page"
-            >
-              个人计划
-            </button>
-            <button
-              type="button"
-              id="workbench-notifications-tab"
-              data-workbench-view="notifications"
-              aria-controls="workbench-notifications-panel"
-            >
-              通知 <span id="workbench-notification-count" hidden></span>
-            </button>
-          </nav>
+          <div class="workbench-navigation">
+            <nav class="workbench-view-switch" aria-label="工作台窗口">
+              <button
+                type="button"
+                id="workbench-plan-tab"
+                data-workbench-view="plan"
+                aria-controls="workbench-plan-panel"
+                aria-current="page"
+              >
+                个人计划
+              </button>
+              <button
+                type="button"
+                id="workbench-notifications-tab"
+                data-workbench-view="notifications"
+                aria-controls="workbench-notifications-panel"
+              >
+                通知 <span id="workbench-notification-count" hidden></span>
+              </button>
+            </nav>
+            <div class="workbench-view-links">
+              <nav
+                class="workbench-section-links"
+                data-workbench-links="plan"
+                aria-label="个人计划分区"
+              >
+                <a href="#workbench-calendar">个人计划表</a>
+                <a href="#workbench-max-planner">Max 帮我安排</a>
+                <a href="#workbench-campus-learning">校内课程</a>
+                <a href="#workbench-homework">课程作业</a>
+              </nav>
+            </div>
+          </div>
           <div class="workbench-view-layout">
             <div class="workbench-view-content">
               <section id="workbench-plan-panel" class="workbench-view-panel" aria-label="个人计划">
-                <nav class="workbench-section-links" aria-label="个人计划分区">
-                  <a href="#workbench-calendar">个人计划表</a>
-                  <a href="#workbench-max-planner">Max 帮我安排</a>
-                  <a href="#workbench-campus-learning">校内课程</a>
-                  <a href="#workbench-homework">课程作业</a>
-                </nav>
                 <div class="workbench-dashboard-grid">
                   <article
                     class="workbench-dashboard-card workbench-schedule-card"
@@ -237,7 +245,7 @@
                   >
                     <header class="workbench-card-header">
                       <div>
-                        <h2>个人计划表</h2>
+                        <h2 id="workbench-calendar-title">个人计划表</h2>
                         <p class="workbench-week-label" id="workbench-week-label">
                           本周 · 北京时间
                         </p>
@@ -273,6 +281,15 @@
                           aria-pressed="false"
                         >
                           列表视图
+                        </button>
+                        <button
+                          class="workbench-week-control"
+                          id="workbench-week-overview"
+                          type="button"
+                          aria-haspopup="dialog"
+                          aria-expanded="false"
+                        >
+                          一屏总览
                         </button>
                         <button
                           class="workbench-compact-action"
@@ -608,7 +625,27 @@
                     class="workbench-dashboard-card workbench-homework-card"
                     id="workbench-homework"
                   >
-                    <h2>课程作业</h2>
+                    <header class="workbench-homework-header">
+                      <h2>课程作业</h2>
+                      <div id="homework-scroll-controls" class="workbench-card-tools" hidden>
+                        <button
+                          type="button"
+                          id="homework-previous"
+                          aria-label="查看前面的作业"
+                          aria-controls="homework-list"
+                        >
+                          ←
+                        </button>
+                        <button
+                          type="button"
+                          id="homework-next"
+                          aria-label="查看后面的作业"
+                          aria-controls="homework-list"
+                        >
+                          →
+                        </button>
+                      </div>
+                    </header>
                     <p>查看当前学期的作业、检测完成状态并下载附件。本站不提供作业提交功能。</p>
                     <div class="workbench-homework-filters">
                       <label
@@ -620,8 +657,8 @@
                       <label
                         >状态
                         <select id="homework-status-filter">
+                          <option value="pending" selected>未完成</option>
                           <option value="">全部状态</option>
-                          <option value="unsubmitted">未交</option>
                           <option value="submitted">已交</option>
                           <option value="graded">已批</option>
                         </select></label
@@ -631,10 +668,16 @@
                     <p id="homework-message" role="status" aria-live="polite">
                       连接学堂并同步学期后显示作业。
                     </p>
-                    <div id="homework-list" class="workbench-homework-list"></div>
+                    <div
+                      id="homework-list"
+                      class="workbench-homework-list"
+                      tabindex="0"
+                      role="region"
+                      aria-label="课程作业，按截止时间从近到远，可左右滚动"
+                    ></div>
                   </article>
 
-                  <article class="workbench-dashboard-card workbench-source-card">
+                  <article class="workbench-dashboard-card workbench-source-card" hidden>
                     <div class="workbench-source-copy">
                       <h2>校内连接器证据自检</h2>
                       <p>
@@ -934,6 +977,15 @@
             </div>
             <p class="workbench-form-status" id="workbench-important-form-status" role="status"></p>
             <footer>
+              <button
+                id="workbench-important-delete"
+                class="workbench-item-action is-danger"
+                type="button"
+                data-workbench-action="delete-important"
+                hidden
+              >
+                删除事项
+              </button>
               <button class="workbench-secondary-action" type="button" data-workbench-dialog-close>
                 取消
               </button>
@@ -974,6 +1026,9 @@
               </select>
             </label>
             <p id="workbench-schedule-kind-hint" class="workbench-form-status"></p>
+            <p id="workbench-schedule-display-note" class="workbench-form-status" hidden>
+              为方便显示已加长，实际开始、结束时间不变。
+            </p>
             <label>
               <span>标题</span>
               <input id="workbench-schedule-title" name="title" maxlength="200" required />
@@ -1201,11 +1256,11 @@
         </button>
       </div>
     </dialog>
-    <script src="/workbench-homework.js?v=20260922-readonly-1"></script>
-    <script src="/workbench-hours.js?v=20260924-schedule-notes-1"></script>
-    <script src="/workbench-calendar.js?v=20260929-compact-notes-4"></script>
+    <script src="/workbench-homework.js?v=20260929-sorted-scroll-2"></script>
+    <script src="/workbench-hours.js?v=20260930-hours-2"></script>
+    <script src="/workbench-calendar.js?v=20260930-hours-2"></script>
     <script src="/schedule-recurrence.js?v=20260928-1"></script>
-    <script src="/workbench.js?v=20260929-planning-preferences-1"></script>
+    <script src="/workbench.js?v=20260930-nav-3"></script>
     <script src="/workbench-companion.js?v=20260929-1"></script>
     <script src="/workbench-planning.js?v=20260929-1"></script>
     <dialog
@@ -1238,6 +1293,6 @@
     <script src="/tsinghua-cas-fingerprint.js"></script>
     <script src="/workbench-connectors.js?v=20260922-homework-1"></script>
     <script src="/notifications.js"></script>
-    <script src="/mobile-personal.js"></script>
+    <script src="/mobile-personal.js?v=20260930-overview-1"></script>
   </body>
 </html>

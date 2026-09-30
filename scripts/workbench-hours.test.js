@@ -10,7 +10,7 @@ const {
 } = require('../public/workbench-hours');
 
 test('display hours accept integer hours only and strictly increasing same-day ranges', () => {
-  assert.deepEqual(DEFAULT_HOURS, { start: 6, end: 24 });
+  assert.deepEqual(DEFAULT_HOURS, { start: 8, end: 24 });
   assert.deepEqual(normalizeHours({ start: '0', end: '24' }), { start: 0, end: 24 });
   assert.deepEqual(normalizeHours({ start: 23, end: 24 }), { start: 23, end: 24 });
   for (const value of [
@@ -79,7 +79,7 @@ test('display clipping keeps boundaries, midnight splits, all-day and DDL withou
     event('deadline', 2, 3, { kind: 'deadline' }),
   ];
   const before = JSON.stringify(items);
-  const day = layoutDay(items, dayStart, DEFAULT_HOURS);
+  const day = layoutDay(items, dayStart, { start: 6, end: 24 });
   assert.deepEqual(
     day.outside.map((item) => item.publicId),
     ['early'],
@@ -95,7 +95,7 @@ test('display clipping keeps boundaries, midnight splits, all-day and DDL withou
   );
   assert.ok(day.entries.some(({ item }) => item.publicId === 'all-day'));
   assert.ok(day.entries.some(({ item }) => item.publicId === 'deadline'));
-  const next = layoutDay(items, dayStart + 24 * hourMs, DEFAULT_HOURS);
+  const next = layoutDay(items, dayStart + 24 * hourMs, { start: 6, end: 24 });
   assert.equal(next.entries.length, 1);
   assert.equal(next.entries[0].start, dayStart + 30 * hourMs);
   assert.equal(next.entries[0].end, dayStart + 31 * hourMs);

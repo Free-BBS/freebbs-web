@@ -44,6 +44,7 @@ async function main() {
   let emptyPartial = false;
   let calendarCompleted = false;
   const errors = [];
+  let failurePage;
   async function assertCardLayout(page) {
     const geometry = await page.$eval('#workbench-homework', (element) => {
       const rect = element.getBoundingClientRect();
@@ -75,6 +76,7 @@ async function main() {
   }
   try {
     const page = await browser.newPage();
+    failurePage = page;
     await page.setViewport({ width: 1440, height: 1000 });
     page.on('pageerror', (error) => errors.push(error.message));
     await page.setRequestInterception(true);
@@ -179,6 +181,10 @@ async function main() {
     await page.waitForSelector(`${calendarToggle}.is-completed`);
     await page.click(calendarToggle);
     await page.waitForSelector(`${calendarToggle}[aria-pressed="false"]`);
+    // Dismiss the floating helper before resizing: its open bubble intentionally
+    // overlays the narrow-screen homework controls.
+    if (await page.$('#workbench-companion-collapse'))
+      await page.click('#workbench-companion-collapse');
     await assertCardLayout(page);
     await page.$eval('#workbench-homework', (element) => element.scrollIntoView());
     await (
@@ -245,6 +251,28 @@ async function main() {
     assert.equal(await page.$$eval('.workbench-homework-item', (elements) => elements.length), 0);
     assert.deepEqual(errors, []);
     console.log(`Homework browser checks passed. Screenshots: ${directory}`);
+  } catch (error) {
+    console.error('Original homework failure', error);
+    await failurePage?.screenshot({ path: path.join(directory, 'failure.png') });
+    console.error(
+      'Homework diagnostic',
+      directory,
+      await failurePage?.evaluate(() => {
+        const button = document.getElementById('homework-refresh');
+        if (!button)
+          return { url: window.location.href, text: document.body.textContent.slice(0, 400) };
+        const rect = button.getBoundingClientRect();
+        return {
+          message: document.getElementById('homework-message').textContent,
+          list: document.getElementById('homework-list').textContent,
+          filter: document.getElementById('homework-status-filter').value,
+          refreshTarget: document
+            .elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
+            ?.outerHTML?.slice(0, 400),
+        };
+      }),
+    );
+    throw error;
   } finally {
     await browser.close();
     await new Promise((resolve) => {

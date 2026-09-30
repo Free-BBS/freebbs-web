@@ -9,6 +9,8 @@
   const app = window.freeBbsApp;
   const params = new URLSearchParams(window.location.search);
   const courseSlug = params.get('course') || 'signals';
+  const overviewDrawer =
+    mapPage && window.FreeBbsKnowledgeOverview?.createDrawer({ app, courseSlug });
   const NODE_LABEL_WIDTH = 230;
   const NODE_LABEL_HEIGHT = 112;
   const NODE_DOT_RADIUS = 11;
@@ -157,7 +159,7 @@
   }
 
   function knowledgeHref(nodeId) {
-    const query = new URLSearchParams({ course: courseSlug, point: nodeId });
+    const query = new URLSearchParams({ course: courseSlug, point: nodeId, view: 'reading' });
     return `/knowledge?${query.toString()}`;
   }
 
@@ -600,7 +602,6 @@
       ? activeChapter.nodes.filter((node) => node.id !== primaryNode.id)
       : activeChapter.nodes;
     const primaryRelationCount = primaryNode ? viewModel.nodeDegrees.get(primaryNode.id) || 0 : 0;
-
     return `
       <div class="course-map-directory-layout">
         ${renderChapterIndex(viewModel, activeChapter.id)}
@@ -612,44 +613,37 @@
               <strong id="course-map-directory-title">${escapeHtml(activeChapter.title)}</strong>
               <i>${activeChapter.nodes.length} 个知识点</i>
             </span>
-            <p>选择知识点后查看它的直接关联</p>
+            <p>点击知识点，先了解再学习</p>
           </header>
 
           ${
             primaryNode
               ? `<div class="course-map-directory-current${learningNode ? ' is-learning' : ''}">
-                  ${renderDirectoryNodeTags(primaryNode.id)}
-                  <div class="course-map-directory-current-copy">
-                    <small>${learningNode ? '继续学习' : '从这里开始'}</small>
-                    <span>${escapeHtml(primaryNode.id)}</span>
-                    <h2>${escapeHtml(primaryNode.title)}</h2>
-                    <p>${escapeHtml(primaryNode.summary || '从这个知识点进入学习，或查看它与课程中其他知识点的关系。')}</p>
-                    <div>
-                      <b>${primaryRelationCount}</b> 条直接关联
-                      ${learningNode ? '<i>已为你定位到上次学习位置</i>' : ''}
-                    </div>
-                  </div>
-                  <div class="course-map-directory-current-actions">
-                    <button type="button" data-reader-node-id="${escapeHtml(primaryNode.id)}">查看知识关联</button>
-                    <a href="${knowledgeHref(primaryNode.id)}">进入学习</a>
-                  </div>
-                </div>`
+            ${renderDirectoryNodeTags(primaryNode.id)}
+            <div class="course-map-directory-current-copy">
+              <small>${learningNode ? '继续学习' : '从这里开始'}</small>
+              <span>${escapeHtml(primaryNode.id)}</span>
+              <h2>${escapeHtml(primaryNode.title)}</h2>
+              <p>${escapeHtml(primaryNode.summary || '先了解这个知识点，再进入学习。')}</p>
+              <div><b>${primaryRelationCount}</b> 条直接关联
+                ${learningNode ? '<i>已为你定位到上次学习位置</i>' : ''}
+              </div>
+            </div>
+            <div class="course-map-directory-current-actions">
+              <button type="button" data-reader-node-id="${escapeHtml(primaryNode.id)}">查看学习概览</button>
+            </div>
+          </div>`
               : ''
           }
-
           ${
             remainingNodes.length
               ? `
-          <div class="course-map-directory-section-heading">
-            <span>
-              <strong>${primaryNode ? '本章其他知识点' : '本章知识点'}</strong>
-            </span>
-            <i>${remainingNodes.length} 项</i>
-          </div>
-          <div class="course-map-directory-nodes">
-            ${remainingNodes.map((node) => renderReaderNode(node, viewModel)).join('')}
-          </div>
-          `
+            <div class="course-map-directory-section-heading">
+              <span><strong>本章其他知识点</strong></span><i>${remainingNodes.length} 项</i>
+            </div>
+            <div class="course-map-directory-nodes">
+              ${remainingNodes.map((node) => renderReaderNode(node, viewModel)).join('')}
+            </div>`
               : ''
           }
         </section>
@@ -683,7 +677,6 @@
         <div class="course-map-focus-stage${leftNodes.length && rightNodes.length ? '' : ' has-single-side'}">
           <div class="course-map-focus-center">
             ${renderReaderNode(focusedNode, viewModel)}
-            <a class="course-reader-study-link" href="${knowledgeHref(focusedNode.id)}">进入学习 →</a>
           </div>
           ${
             leftNodes.length
@@ -760,7 +753,7 @@
                 <p class="course-map-focus-arrow-help-hint">关联知识点下方会注明两者的实际关系；点击知识点可继续查看其关联。</p>
               </div>
             </div>
-            <span class="course-map-focus-helper">再次点击可打开知识点正文</span>
+            <span class="course-map-focus-helper">点击知识点查看学习概览</span>
           </div>
           <span class="course-map-focus-summary-copy">仅显示与 ${escapeHtml(focusedNode.id)} 直接相连的本章知识点</span>
         </footer>
@@ -1359,7 +1352,8 @@
           return;
         }
         if (!editorPage) {
-          window.location.href = knowledgeHref(nodeId);
+          if (overviewDrawer) overviewDrawer.open(nodeById(nodeId), state.course, nodeElement);
+          else window.location.href = knowledgeHref(nodeId);
           return;
         }
         if (state.edgeTool) {
@@ -1879,7 +1873,6 @@
 
     const focusNode = (nodeId) => {
       if (state.focusedNodeId === nodeId) {
-        window.location.assign(knowledgeHref(nodeId));
         return;
       }
 
@@ -2013,7 +2006,9 @@
 
       const topicButton = target?.closest('[data-reader-node-id]');
       if (topicButton) {
-        focusNode(topicButton.dataset.readerNodeId);
+        const id = topicButton.dataset.readerNodeId;
+        if (overviewDrawer) overviewDrawer.open(nodeById(id), state.course, topicButton, focusNode);
+        else focusNode(id);
         return;
       }
 
@@ -2033,6 +2028,7 @@
     });
     document.getElementById('course-map-reset-view')?.addEventListener('click', resetReaderView);
     document.addEventListener('keydown', (event) => {
+      if (overviewDrawer?.isOpen()) return;
       if (event.key === 'Escape') {
         hideReaderEdgeTooltip();
       }

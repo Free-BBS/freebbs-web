@@ -46,6 +46,14 @@ test('homepage retains all original data hooks, with each id unique', () => {
   assert.ok(html.indexOf('href="/home.css"') > html.indexOf('href="/layout-fixes.css"'));
 });
 
+test('homepage loads the top ten heat users in a five-row scrollable viewport', () => {
+  const app = fs.readFileSync(path.join(root, 'public/app.js'), 'utf8');
+  assert.match(app, /leaderboard\/heat\?limit=10/);
+  assert.match(html, /热力榜前十/);
+  assert.match(html, /aria-label="热力榜前十，每次显示五人，可上下滚动"/);
+  assert.match(css, /height: calc\(5 \* var\(--home-heat-row-height\)\)/);
+});
+
 test('homepage links to independent about and staff pages without obsolete folding sections', () => {
   assert.doesNotMatch(html, /feedback|mailto:/i);
   assert.doesNotMatch(html, /id="(?:about-freebbs|freebbs-staff)"|home-course-shortcuts/);
