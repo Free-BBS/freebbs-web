@@ -13,6 +13,7 @@ import { RegistrationGallery } from '../modules/collections/RegistrationGallery.
 import { ShowcaseDetailPage } from '../modules/collections/ShowcaseDetailPage.js';
 import { ShowcasePage } from '../modules/collections/ShowcasePage.js';
 import { CollectionWorkbench } from '../modules/collections/builder/CollectionWorkbench.js';
+import { CommunityPage } from '../modules/community/CommunityPage.js';
 import { DashboardPage } from '../modules/dashboard/DashboardPage.js';
 import { ActivityDetailPage } from '../modules/events/ActivityDetailPage.js';
 import { EventsPage } from '../modules/events/EventsPage.js';
@@ -163,6 +164,18 @@ function CollectionsRoute() {
   return <CollectionsLandingPage key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
 }
 
+function CommunityRoute() {
+  const auth = useAuth();
+  const { postId } = useParams();
+  return (
+    <CommunityPage
+      key={`${auth.demoUser ?? auth.user?.uid}:${postId ?? 'feed'}`}
+      client={auth.client}
+      initialPostId={postId}
+    />
+  );
+}
+
 function RegistrationGalleryRoute() {
   const auth = useAuth();
   return <RegistrationGallery key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
@@ -277,6 +290,8 @@ export const appRouter = createBrowserRouter(
         { path: 'collections/showcase', element: <ShowcaseRoute /> },
         { path: 'collections/showcase/:articleId', element: <ShowcaseDetailRoute /> },
         { path: 'collections/workbench/:collectionId', element: <CollectionWorkbenchRoute /> },
+        { path: 'community', element: <CommunityRoute /> },
+        { path: 'community/posts/:postId', element: <CommunityRoute /> },
         { path: 'liaison', element: <LiaisonRoute /> },
         { path: 'liaison/problems/:problemId', element: <ProblemDetailRoute /> },
         { path: 'events/:activityId', element: <ActivityDetailRoute /> },

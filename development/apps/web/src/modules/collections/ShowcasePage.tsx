@@ -27,7 +27,7 @@ export function ShowcasePage({ client }: { client?: Pick<ApiClient, 'request'> }
     <main className="collections-page collections-subpage showcase-page">
       <header className="collections-subpage-heading">
         <div>
-          <Link to="/collections">← 返回萬事集</Link>
+          <Link to="/collections">← 返回萬事屋</Link>
           <p>STORIES & MOMENTS</p>
           <h1>内容橱窗</h1>
           <span>活动结束之后，故事仍然可以继续被看见。</span>

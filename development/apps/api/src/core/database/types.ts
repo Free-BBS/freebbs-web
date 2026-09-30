@@ -1,6 +1,11 @@
 import type {
   CollectionSchema,
   CollectionFieldKind,
+  CommunityContentStatus,
+  CommunityDisplayMode,
+  CommunityPostKind,
+  CommunityWishConversionInput,
+  CommunityWishStatus,
   FestivalSubmissionStatus,
   ModuleId,
   PermissionAction,
@@ -30,6 +35,7 @@ type DefaultedContentKeys<T> = Extract<
   | 'registrationDeadline'
   | 'capacity'
   | 'contact'
+  | 'sourceCommunityPostId'
   | 'season'
   | 'trainingSchedule'
   | (T extends KnowledgeEntryRecord | ClubRecord ? 'category' : never)
@@ -283,8 +289,71 @@ export interface ActivityRecord extends StoredRecord {
   location?: string;
   organizationId?: SocialOrganizationId | null;
   standingActivity?: boolean;
+  sourceCommunityPostId: string | null;
   technicalSupportStatus: TechnicalSupportStatus;
   technicalSupportNote: string | null;
+}
+
+export interface CommunityPostRecord extends StoredRecord {
+  kind: CommunityPostKind;
+  title: string;
+  body: string;
+  tags: string[];
+  displayMode: CommunityDisplayMode;
+  sourceType: 'festival_submission' | null;
+  sourceId: string | null;
+  status: CommunityContentStatus;
+}
+
+export interface CommunityCommentRecord extends StoredRecord {
+  postId: string;
+  parentId: string | null;
+  authorUid: string;
+  body: string;
+  displayMode: CommunityDisplayMode;
+  status: CommunityContentStatus;
+}
+
+export interface CommunitySupplementRecord extends StoredRecord {
+  postId: string;
+  authorUid: string;
+  body: string;
+}
+
+export interface CommunityLikeRecord extends StoredRecord {
+  targetType: 'post' | 'comment';
+  targetId: string;
+  userUid: string;
+}
+
+export interface CommunityAliasRecord extends StoredRecord {
+  threadId: string;
+  userUid: string;
+  aliasIndex: number;
+}
+
+export interface CommunityViewRecord extends StoredRecord {
+  postId: string;
+  userUid: string;
+  bucketStart: string;
+}
+
+export interface CommunityReportRecord extends StoredRecord {
+  postId: string;
+  reporterUid: string;
+  reason: string;
+  resolution: string | null;
+  handledByUid: string | null;
+}
+
+export interface CommunityWishWorkflowRecord extends StoredRecord {
+  postId: string;
+  wishStatus: CommunityWishStatus;
+  officialResponse: string | null;
+  responseByUid: string | null;
+  conversionStatus: 'none' | 'requested' | 'approved';
+  conversionPayload: CommunityWishConversionInput | null;
+  activityId: string | null;
 }
 
 export interface ActivityMilestoneRecord extends StoredRecord {
@@ -528,6 +597,14 @@ export interface DevelopmentStore {
   activityMilestones: RecordRepository<ActivityMilestoneRecord>;
   competitionFixtures: RecordRepository<CompetitionFixtureRecord>;
   activityRegistrations: RecordRepository<ActivityRegistrationRecord>;
+  communityPosts: RecordRepository<CommunityPostRecord>;
+  communityComments: RecordRepository<CommunityCommentRecord>;
+  communitySupplements: RecordRepository<CommunitySupplementRecord>;
+  communityLikes: RecordRepository<CommunityLikeRecord>;
+  communityAliases: RecordRepository<CommunityAliasRecord>;
+  communityViews: RecordRepository<CommunityViewRecord>;
+  communityReports: RecordRepository<CommunityReportRecord>;
+  communityWishWorkflows: RecordRepository<CommunityWishWorkflowRecord>;
   collectionForms: RecordRepository<CollectionFormRecord>;
   collectionVersions: RecordRepository<CollectionVersionRecord>;
   collectionResponses: RecordRepository<CollectionResponseRecord>;

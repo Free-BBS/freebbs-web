@@ -7,7 +7,7 @@ describe('store configuration', () => {
   it('defaults DATA_MODE to an immediately usable memory store', async () => {
     const handle = createStore({});
     expect(handle.mode).toBe('memory');
-    expect(await handle.store.modules.list()).toHaveLength(10);
+    expect(await handle.store.modules.list()).toHaveLength(11);
     await handle.close();
   });
 

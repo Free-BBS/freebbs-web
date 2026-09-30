@@ -59,8 +59,8 @@ describe('module state loader', () => {
   it('fails closed when the module registry cannot be loaded', async () => {
     mockRequest.mockRejectedValueOnce(new Error('registry unavailable'));
     const states = await loadModuleStates();
-    expect(Object.keys(states)).toHaveLength(10);
-    expect(Object.values(states)).toEqual(Array(10).fill('disabled'));
+    expect(Object.keys(states)).toHaveLength(11);
+    expect(Object.values(states)).toEqual(Array(11).fill('disabled'));
   });
 });
 
@@ -95,7 +95,7 @@ describe('AppShell', () => {
       '/development',
     );
   });
-  it('removes only the opportunity module while keeping the other development modules', () => {
+  it('uses the new square-first navigation while keeping established development modules', () => {
     mockUseAuth.mockReturnValue(authenticatedAuth());
 
     renderShell('/knowledge');
@@ -104,9 +104,9 @@ describe('AppShell', () => {
     const items = within(navigation).getAllByTestId('module-navigation-item');
 
     expect(items.map((item) => item.querySelector('.module-name')?.textContent)).toEqual([
-      '無活动',
+      '無界广场',
+      '萬事屋',
       '無体育',
-      '萬事集',
       '信息与咨询',
       '经验库',
       '个人成长档案',
@@ -116,6 +116,7 @@ describe('AppShell', () => {
     expect(within(navigation).queryByText('权限与模块管理')).not.toBeInTheDocument();
     expect(within(navigation).queryByText('趣缘群体')).not.toBeInTheDocument();
     expect(within(navigation).queryByText('無限机会')).not.toBeInTheDocument();
+    expect(within(navigation).queryByText('無活动')).not.toBeInTheDocument();
     expect(within(navigation).getByRole('link', { name: '个人成长档案' })).toHaveAttribute(
       'href',
       '/growth',
@@ -182,11 +183,11 @@ describe('AppShell', () => {
   it('omits a disabled module from navigation', () => {
     mockUseAuth.mockReturnValue(authenticatedAuth());
 
-    renderShell('/dashboard', { moduleStates: { events: 'disabled' } });
+    renderShell('/dashboard', { moduleStates: { community: 'disabled' } });
 
     const navigation = screen.getByRole('navigation', { name: '主要导航' });
-    expect(within(navigation).queryByRole('link', { name: '無活动' })).not.toBeInTheDocument();
-    expect(within(navigation).queryByText('無活动')).not.toBeInTheDocument();
+    expect(within(navigation).queryByRole('link', { name: '無界广场' })).not.toBeInTheDocument();
+    expect(within(navigation).queryByText('無界广场')).not.toBeInTheDocument();
   });
 
   it('renders the authenticated user name and avatar', () => {
