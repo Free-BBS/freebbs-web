@@ -47,17 +47,45 @@
       ],
     },
   ];
-  const COLORS = [
+  // I/O/T/S/Z/J/L stay cyan/yellow/purple/green/red/blue/orange in either theme.
+  const COLORS = Object.freeze([
     null,
-    '#648c91',
-    '#b4936c',
-    '#71869f',
-    '#809779',
-    '#a27e82',
-    '#8b819b',
-    '#8b989e',
-  ];
+    '#28b8c7',
+    '#e4b841',
+    '#a879d4',
+    '#67b57d',
+    '#e0757b',
+    '#638edd',
+    '#e6a052',
+  ]);
+  const DEFAULT_PALETTE = { grid: '#d9e2e7', empty: '#f3f6f7', outline: '#58707b' };
   const mounted = new WeakMap();
+
+  function drawBoard(context, game, palette = DEFAULT_PALETTE) {
+    context.fillStyle = palette.grid;
+    context.fillRect(0, 0, COLS * CELL, ROWS * CELL);
+    function cell(x, y, color) {
+      const left = x * CELL + 1;
+      const top = y * CELL + 1;
+      context.fillStyle = color ? COLORS[color] : palette.empty;
+      context.fillRect(left, top, CELL - 2, CELL - 2);
+      if (color) {
+        context.strokeStyle = palette.outline;
+        context.lineWidth = 1;
+        context.strokeRect(left + 0.5, top + 0.5, CELL - 3, CELL - 3);
+      }
+    }
+    for (let y = 0; y < ROWS; y += 1) {
+      for (let x = 0; x < COLS; x += 1) cell(x, y, game?.board[y][x] || 0);
+    }
+    if (game && !game.over) {
+      game.piece.forEach((row, y) =>
+        row.forEach((occupied, x) => {
+          if (occupied) cell(game.x + x, game.y + y, game.color);
+        }),
+      );
+    }
+  }
 
   class Game {
     constructor(random = Math.random) {
@@ -160,23 +188,14 @@
     }
 
     function draw() {
-      context.fillStyle = '#dce1e3';
-      context.fillRect(0, 0, COLS * CELL, ROWS * CELL);
-      for (let y = 0; y < ROWS; y += 1) {
-        for (let x = 0; x < COLS; x += 1) {
-          context.fillStyle = game?.board[y][x] ? COLORS[game.board[y][x]] : '#eef0f0';
-          context.fillRect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2);
-        }
-      }
-      if (game && !game.over) {
-        game.piece.forEach((row, y) =>
-          row.forEach((cell, x) => {
-            if (!cell) return;
-            context.fillStyle = COLORS[game.color];
-            context.fillRect((game.x + x) * CELL + 1, (game.y + y) * CELL + 1, CELL - 2, CELL - 2);
-          }),
-        );
-      }
+      const style = root.getComputedStyle(canvas);
+      const palette = Object.fromEntries(
+        Object.entries(DEFAULT_PALETTE).map(([key, fallback]) => [
+          key,
+          style.getPropertyValue(`--tetris-${key}`).trim() || fallback,
+        ]),
+      );
+      drawBoard(context, game, palette);
       score.textContent = String(game?.score || 0);
       lines.textContent = String(game?.lines || 0);
       if (game?.over) {
@@ -266,8 +285,16 @@
     panel.addEventListener('click', onClick);
     host.addEventListener('keydown', onKeyDown);
     root.document.addEventListener('visibilitychange', onVisibility);
+    const themeObserver = new root.MutationObserver(() => {
+      if (game) draw();
+    });
+    themeObserver.observe(root.document.body, {
+      attributes: true,
+      attributeFilter: ['class', 'style'],
+    });
     mounted.set(host, () => {
       stopTimer();
+      themeObserver.disconnect();
       opener.removeEventListener('click', onOpen);
       panel.removeEventListener('click', onClick);
       host.removeEventListener('keydown', onKeyDown);
@@ -282,7 +309,7 @@
     if (host) mounted.delete(host);
   }
 
-  const api = { Game, mount, dispose };
+  const api = { Game, COLORS, drawBoard, mount, dispose };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FreeBbsMaxTetris = api;
 })(typeof window === 'object' ? window : globalThis);
