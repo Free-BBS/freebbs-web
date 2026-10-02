@@ -213,8 +213,15 @@
             item.readAt = new Date().toISOString();
             updateCount(Math.max(0, state.unreadCount - 1));
           }
-          if (link) window.location.assign(link);
-          else renderItems();
+          if (link) {
+            closePanel();
+            window.dispatchEvent(
+              new CustomEvent('freebbs:notification-open', {
+                detail: { link, kind: item.kind },
+              }),
+            );
+            window.location.assign(link);
+          } else renderItems();
         } catch (error) {
           message.textContent = error.message;
         } finally {

@@ -1,0 +1,118 @@
+/* Account controls and reading preferences share the available desktop width. */
+body.settings-page .settings-shell {
+  width: 100%;
+  max-width: none;
+}
+
+body.settings-page .settings-jump-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+}
+
+body.settings-page .settings-jump-links a {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--ui-accent);
+  font: 500 0.92rem/1.6 var(--font-ui);
+  text-underline-offset: 4px;
+}
+
+body.settings-page .settings-profile {
+  grid-template-columns: minmax(0, 1fr) !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.settings-page .settings-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 28px;
+  min-width: 0;
+}
+
+body.settings-page .settings-column {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+
+body.settings-page.personal-settings-page .settings-column > .settings-form {
+  min-width: 0;
+  margin: 0;
+  padding: 24px !important;
+  border: 1px solid var(--ui-line) !important;
+  border-radius: 14px !important;
+  background: var(--ui-surface) !important;
+  box-shadow: none;
+}
+
+body.settings-page .settings-column :is(p, h2, h3, small, label) {
+  overflow-wrap: anywhere;
+}
+
+body.settings-page .settings-column :is(input, textarea, select) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+body.settings-page .settings-column .settings-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body.settings-page #settings-form .profile-extras-top {
+  margin-bottom: 8px;
+}
+
+body.settings-page .settings-avatar-row {
+  align-items: start;
+}
+
+body.settings-page .settings-column .auth-submit {
+  justify-self: start;
+  min-height: 44px;
+  width: auto;
+  max-width: 100%;
+}
+
+body.settings-page :is(#settings-form, #settings-identity, #certifications, #settings-reading) {
+  scroll-margin-top: 110px;
+}
+
+@media (max-width: 1180px) {
+  body.settings-page .settings-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  body.settings-page.personal-settings-page .page-shell .main-content {
+    padding-top: calc(
+      128px + env(safe-area-inset-top, 0px) + var(--site-search-header-extra, 0px)
+    ) !important;
+  }
+
+  body.settings-page .settings-column {
+    gap: 16px;
+  }
+
+  body.settings-page .settings-jump-links {
+    gap: 4px 18px;
+  }
+
+  body.settings-page .settings-column .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.settings-page.personal-settings-page .settings-column > .settings-form {
+    padding: 16px 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--ui-line) !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+  }
+}

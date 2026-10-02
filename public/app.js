@@ -19,6 +19,7 @@ const USER_ROLE_LABELS = {
   student: '学生',
   ta: '助教',
   teacher: '教师',
+  enterprise: '企业',
   admin: '管理员',
 };
 const ADMIN_ROLE_OPTIONS = Object.entries(USER_ROLE_LABELS).filter(([role]) => role !== 'admin');
@@ -3440,6 +3441,7 @@ function renderAuthorProfileLink(author, className, includeAvatar = false) {
     author?.displayName || author?.fullName || author?.username || '匿名用户',
   );
   const profileHref = getProfileHref(author?.uid);
+  const identities = window.FreeBbsIdentityBadges?.markup(author) || '';
   const frame = window.FreeBbsProfileExtras?.frame(author?.cosmetics) || '';
   const nameplate = window.FreeBbsProfileExtras?.badge(author?.cosmetics?.nameplate) || '';
   const goldenNameExpiry = getActiveGoldenNameExpiry(author?.goldenName);
@@ -3456,7 +3458,7 @@ function renderAuthorProfileLink(author, className, includeAvatar = false) {
           <span class="${nameClass}"${goldenNameAttribute}>${displayName}</span>
         </span>
       `
-      : `<span class="${className}"><span class="${nameClass}"${goldenNameAttribute}>${displayName}</span></span>`;
+      : `<span class="${className}"><span class="${nameClass}"${goldenNameAttribute}>${displayName}</span>${identities}</span>`;
   }
 
   return includeAvatar
@@ -3468,7 +3470,7 @@ function renderAuthorProfileLink(author, className, includeAvatar = false) {
         <span class="${nameClass}"${goldenNameAttribute}>${displayName}</span>
       </a>
     `
-    : `<a class="${className}" data-action="open-profile" href="${profileHref}"><span class="${nameClass}"${goldenNameAttribute}>${displayName}</span>${nameplate}</a>`;
+    : `<a class="${className}" data-action="open-profile" href="${profileHref}"><span class="${nameClass}"${goldenNameAttribute}>${displayName}</span>${nameplate}${identities}</a>`;
 }
 
 function normalizeWebsiteUrl(value) {
@@ -3614,6 +3616,7 @@ function renderHomeDiscussionPosts(posts, mode = homeDashboardState.feedMode) {
           <h3 class="home-feed-title">${escapeHtml(post.title)}</h3>
           <span class="home-feed-meta">
             <span class="home-feed-author ${goldenNameExpiry ? 'has-golden-name' : ''}"${goldenNameExpiry ? ` data-golden-name-expires="${goldenNameExpiry}"` : ''}>${escapeHtml(authorName)}</span>
+            ${window.FreeBbsIdentityBadges?.markup(post.author) || ''}
             <span
               class="home-feed-signals"
               aria-label="${commentCount} 条评论，${reactionCount} 个反应"
@@ -6157,7 +6160,7 @@ function getDiscussionMentionRange(input) {
   const cursor = Number(input?.selectionStart);
   if (!Number.isInteger(cursor)) return null;
   const before = input.value.slice(0, cursor);
-  const match = before.match(/(^|[^A-Za-z0-9_@])@([A-Za-z0-9_]*)$/);
+  const match = before.match(/(^|[^A-Za-z0-9_@])@([\p{Script=Han}A-Za-z0-9_]*)$/u);
   if (!match) return null;
   return {
     start: cursor - match[2].length - 1,
@@ -7593,6 +7596,7 @@ async function loadPublicProfile() {
       publicProfileName.textContent = profile.username || '未命名用户';
       syncGoldenNameElement(publicProfileName, profile.goldenName);
     }
+    window.FreeBbsIdentityBadges?.mount(publicProfileName, profile);
     if (publicProfileStudentId) {
       publicProfileStudentId.textContent = profile.uid ? `UID ${profile.uid}` : '未公开 UID';
     }
@@ -7627,6 +7631,7 @@ async function loadPublicProfile() {
     if (version !== publicProfileRequestVersion || profileSessionToken !== userState.token) return;
     if (publicProfileName) {
       publicProfileName.textContent = '加载失败';
+      window.FreeBbsIdentityBadges?.mount(publicProfileName, null);
     }
     if (publicProfileBio) {
       publicProfileBio.textContent = '暂时无法获取该用户的公开资料。';
@@ -7856,7 +7861,7 @@ function renderAdminUserEditor(user, permissionCatalog) {
           <button class="admin-button admin-button-danger" data-action="delete" type="button">
             删除账号
           </button>
-          ${user.role === 'teacher' && !user.isAdmin ? '<button class="admin-button admin-button-secondary" data-action="reset-teacher-password" type="button">重置教师密码</button>' : ''}
+          ${['teacher', 'enterprise'].includes(user.role) && !user.isAdmin ? '<button class="admin-button admin-button-secondary" data-action="reset-teacher-password" type="button">重置账号密码</button>' : ''}
           <button class="admin-button admin-button-primary" data-action="save" type="button">
             保存修改
           </button>
@@ -8018,14 +8023,14 @@ function renderAdminDraftEditor() {
           <header>
             <div>
               <h3>登录资料</h3>
-              <p>选择教师身份时，学号和邮箱可暂不填写。创建后请复制初始登录信息交给本人。</p>
+              <p>选择教师或企业身份时，学号和邮箱可暂不填写；企业姓名填写公司名称。创建后请复制初始登录信息交给本人。</p>
             </div>
           </header>
           <div class="admin-user-fields-grid">
             ${renderAdminTextField({
               label: '用户名',
               field: 'username',
-              placeholder: '至少 3 个字符',
+              placeholder: '2–64 位汉字、英文字母、数字或下划线',
               autocomplete: 'off',
               ownerLabel: '新用户',
             })}
@@ -8038,14 +8043,14 @@ function renderAdminDraftEditor() {
             ${renderAdminTextField({
               label: '学号',
               field: 'studentId',
-              placeholder: '20 开头的 10 位学号；教师选填',
+              placeholder: '20 开头的 10 位学号；教师、企业选填',
               ownerLabel: '新用户',
             })}
             ${renderAdminTextField({
               label: '邮箱',
               field: 'email',
               type: 'email',
-              placeholder: 'name@example.com；教师选填',
+              placeholder: 'name@example.com；教师、企业选填',
               ownerLabel: '新用户',
             })}
             ${renderAdminTextField({
@@ -8664,6 +8669,7 @@ async function handleAdminUsersClick(event) {
           email: card.querySelector('[data-field="email"]').value.trim(),
           password: initialPassword,
           role: values.role,
+          companyName: values.role === 'enterprise' ? values.fullName : undefined,
           isAdmin: values.isAdmin,
           electrons: values.electrons,
           manetrons: values.manetrons,

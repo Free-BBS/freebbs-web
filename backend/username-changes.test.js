@@ -229,7 +229,7 @@ test('two different concurrent names cannot both spend the same free turn', asyn
 });
 
 test('legacy mandatory repair is free and does not consume the voluntary allowance', async () => {
-  const f = store({ username: '旧昵称', balance: 0 });
+  const f = store({ username: '旧 昵称', balance: 0 });
   await f.change({ expectedUsername: undefined });
   assert.equal(f.state.logs[0][3], 'required');
   assert.equal(f.state.free, true);
@@ -237,7 +237,7 @@ test('legacy mandatory repair is free and does not consume the voluntary allowan
 
 test('invalid names fail before opening a transaction', async () => {
   const f = store();
-  for (const username of ['ab', '中文名字', 'bad name', 'abc\n', 'x'.repeat(65), null]) {
+  for (const username of ['a', '中文🙂', 'bad name', 'abc\n', 'x'.repeat(65), null]) {
     await assert.rejects(f.change({ username }), { code: 'invalid_username' });
   }
   assert.equal(f.state.events.length, 0);

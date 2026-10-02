@@ -63,7 +63,9 @@ const {
 } = require('./profile-extras');
 
 const siteSearch = createSiteSearch(pool);
-const economyShop = createEconomyShop(createMysqlEconomyStore(pool));
+const economyShop = createEconomyShop(createMysqlEconomyStore(pool), {
+  decorateIdentities: (rows) => certificationService.decorate(rows),
+});
 const profileExtras = createProfileExtras(createMysqlEconomyStore(pool));
 const {
   AvatarUploadError,
@@ -114,6 +116,13 @@ const {
   createAccountIdentityService,
   createTeacherAccountsRouter,
 } = require('./teacher-accounts');
+const {
+  normalizeCertification,
+  approveEnterpriseCertification,
+  ensureUserCertificationTables,
+  createUserCertificationService,
+  createUserCertificationRouter,
+} = require('./user-certifications');
 const { sign, verify } = require('./token');
 const {
   USERNAME_MESSAGE,
@@ -244,7 +253,7 @@ const MAX_AGENT_USER = {
   email: 'max@free-bbs.local',
   avatarPath: '/assets/max_the_agent_avatar.webp',
 };
-const USER_ROLES = new Set(['student', 'ta', 'teacher', 'admin']);
+const USER_ROLES = new Set(['student', 'ta', 'teacher', 'admin', 'enterprise']);
 const maxImageGenerationGate = createImageGenerationGate();
 const maxDiscussionProgress = new Map();
 const systemSettingsStore = createSystemSettingsStore({
@@ -257,6 +266,7 @@ const systemSettingsStore = createSystemSettingsStore({
 });
 const surveyService = createSurveyService(pool);
 const notifications = createNotificationService({ pool, publicWebUrl: config.publicWebUrl });
+const certificationService = createUserCertificationService({ pool, notifications });
 const backgroundTasks = createBackgroundTaskService({
   pool,
   getUser: getUserById,
@@ -1617,6 +1627,9 @@ function toDiscussionPostSummary(row, viewerId = 0) {
           avatarPath: row.avatar_path || '',
           cosmetics: !isDeleted ? row.cosmetics || {} : {},
           goldenName: !isDeleted ? row.goldenName || null : null,
+          role: !isDeleted ? row.author_role || '' : '',
+          certifications: !isDeleted ? row.certifications || [] : [],
+          identityBadges: !isDeleted ? row.identityBadges || [] : [],
         },
     likeCount: Number(row.like_count || 0),
     lightCount: Number(row.light_count || 0),
@@ -1644,16 +1657,21 @@ function toDiscussionComment(row) {
     updatedAt: row.updated_at,
     author: row.is_deleted
       ? { ...anonymousAuthor(), username: '已删除', displayName: '已删除' }
-      : {
-          id: row.user_id,
-          uid: row.uid || '',
-          username: row.username,
-          fullName: '',
-          displayName: row.username || '匿名用户',
-          avatarPath: row.avatar_path || '',
-          goldenName: row.goldenName || null,
-          cosmetics: row.cosmetics || {},
-        },
+      : row.is_anonymous
+        ? anonymousAuthor()
+        : {
+            id: row.user_id,
+            uid: row.uid || '',
+            username: row.username,
+            fullName: '',
+            displayName: row.username || '匿名用户',
+            avatarPath: row.avatar_path || '',
+            goldenName: row.goldenName || null,
+            cosmetics: row.cosmetics || {},
+            role: row.author_role || '',
+            certifications: row.certifications || [],
+            identityBadges: row.identityBadges || [],
+          },
   };
 }
 
@@ -2770,6 +2788,10 @@ app.use(
 app.use(
   '/api/admin/registration-whitelist',
   createRegistrationWhitelistRouter({ pool, requireAdmin }),
+);
+app.use(
+  '/api',
+  createUserCertificationRouter({ service: certificationService, requireAuth, requireAdmin }),
 );
 app.use(
   '/api',
@@ -4267,8 +4289,8 @@ app.get('/api/discussion/users/search', async (request, response) => {
     if (!user) return;
     const query = String(request.query.q || '').trim();
     const limit = normalizeLimit(request.query.limit, 8, 12);
-    if (query.length > 64 || /[^A-Za-z0-9_]/.test(query)) {
-      response.status(400).json({ message: '请输入用户名中的字母、数字或下划线' });
+    if (Array.from(query).length > 64 || /[^\p{Script=Han}A-Za-z0-9_]/u.test(query)) {
+      response.status(400).json({ message: '请输入用户名中的汉字、字母、数字或下划线' });
       return;
     }
     const [rows] = await pool.execute(
@@ -5662,6 +5684,8 @@ app.get('/api/users/:uid/public-profile', async (request, response) => {
           viewer: await getOptionalAuthUser(request),
         }),
         goldenName: decoratedIdentity.goldenName,
+        certifications: decoratedIdentity.certifications || [],
+        identityBadges: decoratedIdentity.identityBadges || [],
         collectibles: await economyShop.publicCollectibles(getShopItems(), user.id),
         ...(await profileExtras.publicProfile(user.id)),
       },
@@ -6099,6 +6123,13 @@ app.post('/api/admin/users', async (request, response) => {
 
     const { username, fullName, studentId, email, password, role, grade, major } =
       normalizeAdminAccount(request.body);
+    const companyName =
+      role === 'enterprise'
+        ? normalizeCertification({
+            type: 'company',
+            companyName: request.body.companyName || fullName,
+          }).companyName
+        : null;
     const isAdmin = Boolean(request.body.isAdmin || role === 'admin');
     const electrons = Number(request.body.electrons ?? 0);
     const manetrons = Number(request.body.manetrons ?? 0);
@@ -6121,7 +6152,7 @@ app.post('/api/admin/users', async (request, response) => {
           studentId,
           email,
           passwordHash,
-          email && role !== 'teacher' ? new Date() : null,
+          email && !['teacher', 'enterprise'].includes(role) ? new Date() : null,
           role,
           isAdmin ? 1 : 0,
           initialElectric,
@@ -6131,6 +6162,13 @@ app.post('/api/admin/users', async (request, response) => {
           major,
         ],
       );
+      if (role === 'enterprise') {
+        await approveEnterpriseCertification(connection, {
+          userId: created.insertId,
+          adminId: adminUser.id,
+          companyName,
+        });
+      }
       if (initialElectric || initialMagnetic) {
         await annotateWalletLedger(connection, created.insertId, '0', {
           sourceKey: `admin-create:${crypto.randomUUID()}`,
@@ -6419,6 +6457,7 @@ async function startAgentSettingsInternalApi() {
 async function start() {
   await ensureUsersUidColumn();
   await ensureTeacherAccountTables(pool);
+  await ensureUserCertificationTables(pool);
   await ensureUsernameChangeTables(pool);
   await ensureAppSettingsTable();
   await ensureSystemSecretSettingsTable(pool);

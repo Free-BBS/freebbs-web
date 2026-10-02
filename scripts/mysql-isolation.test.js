@@ -175,10 +175,11 @@ test('the isolated runner enables its nineteen named test files with matching da
     'backend/workbench-schedule-planner.mysql.test.js',
     'backend/course-schedule.mysql.test.js',
     'backend/teacher-accounts.mysql.test.js',
+    'backend/user-certifications.mysql.test.js',
     'backend/schedule-series.mysql.test.js',
   ];
   assert.deepEqual([...TEST_FILES].sort(), expected.sort());
-  assert.equal(new Set(TEST_FILES).size, 19);
+  assert.equal(new Set(TEST_FILES).size, 20);
   for (const file of TEST_FILES)
     assert.equal(fs.existsSync(path.join(__dirname, '..', file)), true);
   const env = testEnvironment(windowsPipe, {});

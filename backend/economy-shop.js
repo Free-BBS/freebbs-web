@@ -44,7 +44,10 @@ function publicLaser(expiresAtMs, nowMs) {
 function publicGoldenName(expiresAtMs, nowMs) {
   return { expiresAtMs, serverNowMs: nowMs, active: expiresAtMs > nowMs };
 }
-function createEconomyShop(store, { now = Date.now } = {}) {
+function createEconomyShop(
+  store,
+  { now = Date.now, decorateIdentities = async (rows) => rows } = {},
+) {
   return {
     async decorate(items, userId) {
       const counts = await store.readCounts(userId);
@@ -275,7 +278,8 @@ function createEconomyShop(store, { now = Date.now } = {}) {
       const goldenExpiry = (await store.readPublicGoldenNames?.(ids)) || {};
       const cosmetics = (await store.readPublicCosmetics?.(ids)) || {};
       const current = now();
-      return rows.map((row) => ({
+      const identified = await decorateIdentities(rows);
+      return identified.map((row) => ({
         ...row,
         cosmetics: !row.is_anonymous && !row.is_deleted ? cosmetics[row.user_id] || {} : {},
         laser:
