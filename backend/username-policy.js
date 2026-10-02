@@ -2,7 +2,7 @@ const express = require('express');
 const crypto = require('node:crypto');
 const { walletLedgerCheckpoint, annotateWalletLedger } = require('./wallet-ledger');
 
-const USERNAME_MESSAGE = '用户名须为 3 至 64 位英文字母、数字或下划线';
+const USERNAME_MESSAGE = '用户名须为 2 至 64 个汉字、英文字母、数字或下划线';
 const RENAME_COST = 10;
 
 async function ensureUsernameChangeTables(pool) {
@@ -116,9 +116,9 @@ async function changeUsername({ pool, userId, username, expectedUsername, allowP
 function isValidUsername(value) {
   return (
     typeof value === 'string' &&
-    value.length >= 3 &&
-    value.length <= 64 &&
-    !/[^A-Za-z0-9_]/.test(value)
+    Array.from(value).length >= 2 &&
+    Array.from(value).length <= 64 &&
+    /^[\p{Script=Han}A-Za-z0-9_]+$/u.test(value)
   );
 }
 
@@ -126,7 +126,7 @@ function enforceUsername(user, response) {
   if (isValidUsername(user.username)) return true;
   response.status(403).json({
     code: 'username_change_required',
-    message: '请先修改用户名，仅可使用英文字母、数字和下划线',
+    message: '请先修改用户名，可使用汉字、英文字母、数字和下划线',
     requiresUsernameChange: true,
   });
   return false;

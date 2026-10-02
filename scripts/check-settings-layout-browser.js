@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 // eslint-disable-next-line import/no-dynamic-require
-const puppeteer = require(process.env.PUPPETEER_MODULE || 'puppeteer');
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const { createPersonalPreview } = require('./preview-personal');
 
 (async () => {
@@ -18,12 +18,16 @@ const { createPersonalPreview } = require('./preview-personal');
   fs.mkdirSync(output, { recursive: true });
   let browser;
   try {
-    browser = await puppeteer.launch({
+    browser = await chromium.launch({
       executablePath:
         process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe',
       headless: true,
     });
-    const page = await browser.newPage();
+    const context = await browser.newContext();
+    await context.route('**/*', (route) =>
+      new URL(route.request().url()).origin === origin ? route.continue() : route.abort(),
+    );
+    const page = await context.newPage();
     const errors = [];
     let saves = 0;
     page.on('pageerror', (error) => errors.push(error.message));
@@ -34,8 +38,8 @@ const { createPersonalPreview } = require('./preview-personal');
       )
         saves += 1;
     });
-    await page.setViewport({ width: 1440, height: 1100 });
-    await page.goto(`${origin}/settings`, { waitUntil: 'networkidle0' });
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.goto(`${origin}/settings`, { waitUntil: 'networkidle' });
     await page.waitForFunction(
       () => !document.querySelector('[data-notification-preference="weeklyDigest"]').checked,
     );
@@ -57,13 +61,13 @@ const { createPersonalPreview } = require('./preview-personal');
         .textContent.includes('已保存'),
     );
     assert.equal(saves, 1);
-    await page.reload({ waitUntil: 'networkidle0' });
+    await page.reload({ waitUntil: 'networkidle' });
     await page.waitForFunction(
       () => !document.querySelector('[data-notification-preference="reply"]').checked,
     );
     let checked = 0;
     for (const width of [1440, 1280, 1024, 390, 360]) {
-      await page.setViewport({ width, height: 1100 });
+      await page.setViewportSize({ width, height: 1100 });
       if (width <= 900)
         await page.evaluate(() =>
           document.querySelectorAll('.personal-fold').forEach((e) => {
@@ -150,8 +154,7 @@ const { createPersonalPreview } = require('./preview-personal');
               false,
               `${label}: ${JSON.stringify([data.dimensions, data.overflowing])}`,
             );
-            // The existing <=1024px form layout stacks these fields.
-            if (width > 1024) {
+            if (width > 900) {
               assert.ok(
                 Math.abs(data.name.y - data.website.y) < 1,
                 `${label}: input top alignment`,
@@ -175,7 +178,7 @@ const { createPersonalPreview } = require('./preview-personal');
                 Math.abs(data.mail.width - data.password.width) < 1,
                 `${label}: equal half width`,
               );
-            } else assert.ok(data.password.y > data.mail.y, `${label}: narrow-screen stacking`);
+            } else assert.ok(data.mail.y > data.password.y, `${label}: narrow-screen stacking`);
             for (const row of data.rows) {
               assert.equal(
                 row.color,

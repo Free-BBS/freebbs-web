@@ -96,7 +96,10 @@
     "test:staff-teacher-calendar": "node --test scripts/staff-page.test.js backend/teacher-accounts.test.js backend/schedule-series.test.js scripts/teacher-accounts-page.test.js",
     "preview:staff-teacher-calendar": "node scripts/preview-staff-teacher-calendar.js",
     "test:schedule-series:browser": "node scripts/check-schedule-series-browser.js",
-    "test:staff-teacher-calendar:browser": "node scripts/check-staff-teacher-calendar-browser.js"
+    "test:staff-teacher-calendar:browser": "node scripts/check-staff-teacher-calendar-browser.js",
+    "preview:identity-usability": "node scripts/preview-identity-usability.js",
+    "test:identity-usability": "node --test backend/user-certifications.test.js backend/user-certifications.mysql.test.js scripts/identity-badges.test.js scripts/user-certifications-page.test.js scripts/staff-photo-assets.test.js scripts/workbench-companion.test.js scripts/settings-username.test.js",
+    "test:identity-usability:browser": "node scripts/check-user-certifications-browser.js"
   },
   "dependencies": {
     "@highlightjs/cdn-assets": "^11.11.1",

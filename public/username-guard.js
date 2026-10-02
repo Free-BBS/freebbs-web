@@ -9,7 +9,10 @@
   let pending;
 
   function requireValidUsername(user = {}) {
-    if (!user.requiresUsernameChange && /^[A-Za-z0-9_]{3,64}$/.test(user.username || '')) {
+    if (
+      !user.requiresUsernameChange &&
+      /^[\p{Script=Han}A-Za-z0-9_]{2,64}$/u.test(user.username || '')
+    ) {
       return Promise.resolve(null);
     }
     if (pending) return pending;
@@ -20,12 +23,12 @@
       dialog.innerHTML = `
         <form class="username-dialog-form">
           <h2 id="username-dialog-title">请修改用户名</h2>
-          <p>用户名仅可使用英文字母、数字和下划线。修改后即可继续使用。</p>
+          <p>用户名可使用汉字、英文字母、数字和下划线。修改后即可继续使用。</p>
           <label for="replacement-username">新用户名</label>
           <input id="replacement-username" name="username" type="text" autocomplete="username"
-            minlength="3" maxlength="64" pattern="[A-Za-z0-9_]+" required
+            minlength="2" maxlength="128" pattern="[\\p{Script=Han}A-Za-z0-9_]{2,64}" required
             aria-describedby="username-rule username-error" />
-          <small id="username-rule">3–64 个字符，例如 zhang_san2026</small>
+          <small id="username-rule">2–64 个字符，可用中文全名，例如张亦驰</small>
           <p id="username-error" class="username-dialog-error" role="alert"></p>
           <button type="submit">保存并继续</button>
           <button class="username-signout" type="button">退出登录</button>
@@ -36,7 +39,9 @@
         window.location.assign('/login');
       });
       const input = dialog.querySelector('input');
-      input.value = /^[A-Za-z0-9_]{3,64}$/.test(user.username || '') ? user.username : '';
+      input.value = /^[\p{Script=Han}A-Za-z0-9_]{2,64}$/u.test(user.username || '')
+        ? user.username
+        : '';
       dialog.querySelector('form').addEventListener('submit', async (event) => {
         event.preventDefault();
         const button = dialog.querySelector('[type="submit"]');

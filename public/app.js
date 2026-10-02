@@ -19,6 +19,7 @@ const USER_ROLE_LABELS = {
   student: '学生',
   ta: '助教',
   teacher: '教师',
+  enterprise: '企业',
   admin: '管理员',
 };
 const ADMIN_ROLE_OPTIONS = Object.entries(USER_ROLE_LABELS).filter(([role]) => role !== 'admin');
@@ -3440,6 +3441,7 @@ function renderAuthorProfileLink(author, className, includeAvatar = false) {
     author?.displayName || author?.fullName || author?.username || '匿名用户',
   );
   const profileHref = getProfileHref(author?.uid);
+  const identities = window.FreeBbsIdentityBadges?.markup(author) || '';
   const frame = window.FreeBbsProfileExtras?.frame(author?.cosmetics) || '';
   const nameplate = window.FreeBbsProfileExtras?.badge(author?.cosmetics?.nameplate) || '';
   const goldenNameExpiry = getActiveGoldenNameExpiry(author?.goldenName);
@@ -3456,7 +3458,7 @@ function renderAuthorProfileLink(author, className, includeAvatar = false) {
           <span class="${nameClass}"${goldenNameAttribute}>${displayName}</span>
         </span>
       `
-      : `<span class="${className}"><span class="${nameClass}"${goldenNameAttribute}>${displayName}</span></span>`;
+      : `<span class="${className}"><span class="${nameClass}"${goldenNameAttribute}>${displayName}</span>${identities}</span>`;
   }
 
   return includeAvatar
@@ -3468,7 +3470,7 @@ function renderAuthorProfileLink(author, className, includeAvatar = false) {
         <span class="${nameClass}"${goldenNameAttribute}>${displayName}</span>
       </a>
     `
-    : `<a class="${className}" data-action="open-profile" href="${profileHref}"><span class="${nameClass}"${goldenNameAttribute}>${displayName}</span>${nameplate}</a>`;
+    : `<a class="${className}" data-action="open-profile" href="${profileHref}"><span class="${nameClass}"${goldenNameAttribute}>${displayName}</span>${nameplate}${identities}</a>`;
 }
 
 function normalizeWebsiteUrl(value) {
@@ -3614,6 +3616,7 @@ function renderHomeDiscussionPosts(posts, mode = homeDashboardState.feedMode) {
           <h3 class="home-feed-title">${escapeHtml(post.title)}</h3>
           <span class="home-feed-meta">
             <span class="home-feed-author ${goldenNameExpiry ? 'has-golden-name' : ''}"${goldenNameExpiry ? ` data-golden-name-expires="${goldenNameExpiry}"` : ''}>${escapeHtml(authorName)}</span>
+            ${window.FreeBbsIdentityBadges?.markup(post.author) || ''}
             <span
               class="home-feed-signals"
               aria-label="${commentCount} 条评论，${reactionCount} 个反应"
@@ -6157,7 +6160,7 @@ function getDiscussionMentionRange(input) {
   const cursor = Number(input?.selectionStart);
   if (!Number.isInteger(cursor)) return null;
   const before = input.value.slice(0, cursor);
-  const match = before.match(/(^|[^A-Za-z0-9_@])@([A-Za-z0-9_]*)$/);
+  const match = before.match(/(^|[^A-Za-z0-9_@])@([\p{Script=Han}A-Za-z0-9_]*)$/u);
   if (!match) return null;
   return {
     start: cursor - match[2].length - 1,
@@ -7593,6 +7596,7 @@ async function loadPublicProfile() {
       publicProfileName.textContent = profile.username || '未命名用户';
       syncGoldenNameElement(publicProfileName, profile.goldenName);
     }
+    window.FreeBbsIdentityBadges?.mount(publicProfileName, profile);
     if (publicProfileStudentId) {
       publicProfileStudentId.textContent = profile.uid ? `UID ${profile.uid}` : '未公开 UID';
     }
@@ -7627,6 +7631,7 @@ async function loadPublicProfile() {
     if (version !== publicProfileRequestVersion || profileSessionToken !== userState.token) return;
     if (publicProfileName) {
       publicProfileName.textContent = '加载失败';
+      window.FreeBbsIdentityBadges?.mount(publicProfileName, null);
     }
     if (publicProfileBio) {
       publicProfileBio.textContent = '暂时无法获取该用户的公开资料。';
@@ -7641,6 +7646,13 @@ function normalizeAdminRole(role) {
 
 function getAdminRoleLabel(role) {
   return USER_ROLE_LABELS[normalizeAdminRole(role)] || USER_ROLE_LABELS.student;
+}
+
+function getAdminCertifiedCompanyName(user) {
+  return (
+    user.certifications?.find((certification) => certification.type === 'company')?.companyName ||
+    ''
+  );
 }
 
 function getAdminUserInitial(user) {
@@ -7737,6 +7749,8 @@ function renderAdminTextField({
 
 function renderAdminUserEditor(user, permissionCatalog) {
   const ownerLabel = user.username || '用户';
+  const companyName =
+    getAdminCertifiedCompanyName(user) || (user.role === 'enterprise' ? user.fullName : '') || '';
   return `
     <div class="admin-user-editor" id="admin-user-editor-${user.id}" hidden>
       <section class="admin-user-editor-section">
@@ -7801,6 +7815,25 @@ function renderAdminUserEditor(user, permissionCatalog) {
               <small>允许管理全站用户与设置</small>
             </span>
           </label>
+          <div data-admin-company-field style="grid-column: 1 / -1" ${user.role === 'enterprise' ? '' : 'hidden'}>
+            <label class="admin-user-field">
+              <span>企业名称</span>
+              <input
+                data-field="companyName"
+                type="text"
+                value="${escapeHtml(companyName)}"
+                placeholder="请核实企业全称，2–128 个字符"
+                autocomplete="organization"
+                maxlength="256"
+                aria-label="${escapeHtml(ownerLabel)}的企业名称"
+                aria-describedby="admin-company-note-${user.id}"
+                ${user.role === 'enterprise' ? '' : 'disabled'}
+              />
+            </label>
+          </div>
+          <p data-admin-company-note id="admin-company-note-${user.id}" style="grid-column: 1 / -1" ${user.role === 'enterprise' ? '' : 'hidden'}>
+            ${getAdminCertifiedCompanyName(user) ? '保存时将同步企业认证，请核实企业名称。' : '该企业账号尚无已认证企业名称，请核实后保存。'}
+          </p>
           <div class="admin-user-balance-fields">
             ${renderAdminTextField({
               label: '电元',
@@ -7856,7 +7889,7 @@ function renderAdminUserEditor(user, permissionCatalog) {
           <button class="admin-button admin-button-danger" data-action="delete" type="button">
             删除账号
           </button>
-          ${user.role === 'teacher' && !user.isAdmin ? '<button class="admin-button admin-button-secondary" data-action="reset-teacher-password" type="button">重置教师密码</button>' : ''}
+          ${['teacher', 'enterprise'].includes(user.role) && !user.isAdmin ? '<button class="admin-button admin-button-secondary" data-action="reset-teacher-password" type="button">重置账号密码</button>' : ''}
           <button class="admin-button admin-button-primary" data-action="save" type="button">
             保存修改
           </button>
@@ -7879,6 +7912,7 @@ function renderAdminUserCard(user, permissionCatalog) {
       class="admin-user-row"
       data-user-id="${user.id}"
       data-role="${escapeHtml(normalizedRole)}"
+      data-saved-role="${escapeHtml(normalizedRole)}"
       data-is-admin="${user.isAdmin ? 'true' : 'false'}"
       data-board-count="${boardCount}"
       data-course-count="${courseCount}"
@@ -8018,14 +8052,14 @@ function renderAdminDraftEditor() {
           <header>
             <div>
               <h3>登录资料</h3>
-              <p>选择教师身份时，学号和邮箱可暂不填写。创建后请复制初始登录信息交给本人。</p>
+              <p>选择教师或企业身份时，学号和邮箱可暂不填写；企业姓名填写公司名称。创建后请复制初始登录信息交给本人。</p>
             </div>
           </header>
           <div class="admin-user-fields-grid">
             ${renderAdminTextField({
               label: '用户名',
               field: 'username',
-              placeholder: '至少 3 个字符',
+              placeholder: '2–64 位汉字、英文字母、数字或下划线',
               autocomplete: 'off',
               ownerLabel: '新用户',
             })}
@@ -8038,14 +8072,14 @@ function renderAdminDraftEditor() {
             ${renderAdminTextField({
               label: '学号',
               field: 'studentId',
-              placeholder: '20 开头的 10 位学号；教师选填',
+              placeholder: '20 开头的 10 位学号；教师、企业选填',
               ownerLabel: '新用户',
             })}
             ${renderAdminTextField({
               label: '邮箱',
               field: 'email',
               type: 'email',
-              placeholder: 'name@example.com；教师选填',
+              placeholder: 'name@example.com；教师、企业选填',
               ownerLabel: '新用户',
             })}
             ${renderAdminTextField({
@@ -8175,6 +8209,7 @@ function setAdminUserCardStatus(card, message, tone = '') {
 function getAdminUserCardValues(card) {
   return {
     fullName: card.querySelector('[data-field="fullName"]')?.value.trim() || '',
+    companyName: card.querySelector('[data-field="companyName"]')?.value.trim() || '',
     role: card.querySelector('[data-field="role"]')?.value || 'student',
     isAdmin: Boolean(card.querySelector('[data-field="isAdmin"]')?.checked),
     electrons: Number(card.querySelector('[data-field="electrons"]')?.value || 0),
@@ -8189,6 +8224,26 @@ function getAdminUserCardValues(card) {
       (input) => input.value,
     ),
   };
+}
+
+function refreshAdminCompanyField(card) {
+  const role = card.querySelector('[data-field="role"]')?.value;
+  const companyGroup = card.querySelector('[data-admin-company-field]');
+  const companyField = card.querySelector('[data-field="companyName"]');
+  const note = card.querySelector('[data-admin-company-note]');
+  if (!companyGroup || !companyField || !note) return;
+  const enterprise = role === 'enterprise';
+  const wasEnterprise = card.dataset.savedRole === 'enterprise';
+  companyGroup.hidden = !enterprise;
+  companyField.disabled = !enterprise;
+  note.hidden = !enterprise && !wasEnterprise;
+  if (enterprise) {
+    note.textContent = wasEnterprise
+      ? '保存时将同步企业认证，请核实企业名称。'
+      : '改为企业账号将同步企业认证并关闭旧待审申请，请核实企业全称。';
+  } else if (wasEnterprise) {
+    note.textContent = '改为其他身份将移除企业认证并关闭待审核企业申请；其他学历认证保留。';
+  }
 }
 
 function refreshAdminPermissionCounts(card) {
@@ -8276,6 +8331,8 @@ function handleAdminUserFieldInput(event) {
   if (field === adminToggle && !adminToggle.checked && roleField?.value === 'admin') {
     roleField.value = 'student';
   }
+  if (field.dataset.field === 'companyName') field.setCustomValidity('');
+  refreshAdminCompanyField(card);
 
   if (card.classList.contains('admin-user-row-draft')) {
     setAdminUserCardStatus(card, '正在填写新账号', 'dirty');
@@ -8633,6 +8690,23 @@ async function handleAdminUsersClick(event) {
   }
 
   const values = getAdminUserCardValues(card);
+  if (action === 'save' && values.role === 'enterprise') {
+    const companySize = Array.from(values.companyName).length;
+    if (
+      companySize < 2 ||
+      companySize > 128 ||
+      Array.from(values.companyName).some(
+        (character) => character.codePointAt(0) < 32 || character.codePointAt(0) === 127,
+      )
+    ) {
+      const message = '请填写核实后的企业名称，长度为 2–128 个字符';
+      const companyField = card.querySelector('[data-field="companyName"]');
+      companyField?.setCustomValidity(message);
+      companyField?.reportValidity();
+      setAdminUserCardStatus(card, message, 'danger');
+      return;
+    }
+  }
   const actionButtons = Array.from(card.querySelectorAll('button[data-action]'));
   const mutableFields = Array.from(card.querySelectorAll('input:not([readonly]), select')).map(
     (field) => ({
@@ -8664,6 +8738,7 @@ async function handleAdminUsersClick(event) {
           email: card.querySelector('[data-field="email"]').value.trim(),
           password: initialPassword,
           role: values.role,
+          companyName: values.role === 'enterprise' ? values.fullName : undefined,
           isAdmin: values.isAdmin,
           electrons: values.electrons,
           manetrons: values.manetrons,
@@ -8692,11 +8767,13 @@ async function handleAdminUsersClick(event) {
     if (action === 'save') {
       setAdminUserCardStatus(card, '正在保存…');
       setAdminMessage('正在保存用户...');
-      await callApi(`/admin/users/${userId}`, {
+      const updateOwner = `${userState.uid}:${userState.token}`;
+      const payload = await callApi(`/admin/users/${userId}`, {
         method: 'PATCH',
         body: JSON.stringify({
           fullName: values.fullName,
           role: values.role,
+          companyName: values.role === 'enterprise' ? values.companyName : undefined,
           isAdmin: values.isAdmin,
           electrons: values.electrons,
           manetrons: values.manetrons,
@@ -8705,7 +8782,26 @@ async function handleAdminUsersClick(event) {
           courseManagerSlugs: values.courseManagerSlugs,
         }),
       });
+      if (`${userState.uid}:${userState.token}` !== updateOwner || !userState.isAdmin) return;
+      let savedUser = payload.user;
+      let refreshFailed = false;
+      if (!Array.isArray(savedUser?.certifications)) {
+        try {
+          const directory = await callApi('/admin/users', { method: 'GET' });
+          savedUser = directory.users?.find((user) => String(user.id) === userId) || savedUser;
+        } catch {
+          refreshFailed = true;
+        }
+      }
+      if (`${userState.uid}:${userState.token}` !== updateOwner || !userState.isAdmin) return;
+      card.dataset.savedRole = savedUser?.role || values.role;
+      if (Array.isArray(savedUser?.certifications)) {
+        const savedCompanyName = getAdminCertifiedCompanyName(savedUser);
+        const companyField = card.querySelector('[data-field="companyName"]');
+        if (companyField) companyField.value = savedCompanyName;
+      }
       card.classList.remove('is-dirty');
+      refreshAdminCompanyField(card);
       refreshAdminUserCardSummary(card);
       setAdminUserCardStatus(
         card,
@@ -8715,7 +8811,10 @@ async function handleAdminUsersClick(event) {
         }).format(new Date())}`,
         'success',
       );
-      setAdminMessage('用户已更新', 3200);
+      setAdminMessage(
+        refreshFailed ? '用户已保存，企业认证信息未能刷新，请刷新页面核对' : '用户已更新',
+        refreshFailed ? 0 : 3200,
+      );
       return;
     }
 

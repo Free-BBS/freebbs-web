@@ -100,8 +100,8 @@
     async function submit() {
       if (busy || !policy || !getSession()) return;
       const username = input.value;
-      if (!/^[A-Za-z0-9_]{3,64}$/.test(username) || /[^A-Za-z0-9_]/.test(username)) {
-        message.textContent = '昵称须为 3–64 位英文字母、数字或下划线。';
+      if (!/^[\p{Script=Han}A-Za-z0-9_]{2,64}$/u.test(username)) {
+        message.textContent = '昵称须为 2–64 位汉字、英文字母、数字或下划线。';
         return;
       }
       if (username === policy.username) {

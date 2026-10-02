@@ -67,7 +67,9 @@ function createDatabase() {
         return [rows];
       }
       if (sql.startsWith('SELECT user_id, email_reply')) {
-        return [[...data.preferences.entries()].map(([user_id, row]) => ({ user_id, ...row }))];
+        return [
+          [...data.preferences.entries()].map(([userId, row]) => ({ user_id: userId, ...row })),
+        ];
       }
       if (sql.startsWith('INSERT INTO user_notification_email_preferences')) {
         const [userId, ...flags] = args;
@@ -274,6 +276,10 @@ test('replies deduplicate authors, skip self and persist inbox plus outbox in on
 });
 
 test('discussion mentions parse usernames, deduplicate recipients and stay in-app only', async () => {
+  assert.deepEqual(
+    extractMentionUsernames('请 @中文同学 @老师 @ab @a @中文同学 @名字🙂 联系 x@老师.test'),
+    ['中文同学', '老师', 'ab', '名字'],
+  );
   assert.deepEqual(extractMentionUsernames('@admin, @Admin and x@reply.example @reply'), [
     'admin',
     'reply',

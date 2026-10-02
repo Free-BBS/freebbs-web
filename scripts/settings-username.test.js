@@ -114,7 +114,7 @@ test('paid change requires confirmation and changing the input revokes consent',
 });
 
 test('invalid or unchanged names and insufficient balance do not send mutation requests', async () => {
-  for (const name of ['old_name', 'ab', '中文昵称', 'abc\n']) {
+  for (const name of ['old_name', '张', 'abc\n', '张 老师', '张老师😀']) {
     const f = fixture();
     await f.controller.load();
     f.get().value = name;
@@ -127,6 +127,17 @@ test('invalid or unchanged names and insufficient balance do not send mutation r
   f.get('-paid').checked = true;
   await f.controller.submit();
   assert.equal(f.calls.length, 1);
+});
+
+test('Chinese full names and mixed Chinese usernames can be saved', async () => {
+  for (const name of ['张弛', '张亦驰', '李老师_2026']) {
+    const f = fixture();
+    await f.controller.load();
+    f.get().value = name;
+    await f.controller.submit();
+    assert.equal(f.calls.length, 2);
+    assert.equal(f.saved[0].user.username, name);
+  }
 });
 
 test('double clicks send only one paid request', async () => {

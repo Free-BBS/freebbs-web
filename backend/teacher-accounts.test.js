@@ -4,7 +4,7 @@ const { once } = require('node:events');
 const express = require('express');
 const { normalizeAdminAccount, createTeacherAccountsRouter } = require('./teacher-accounts');
 
-test('only admin-provisioned teacher identities allow missing student ID and email', () => {
+test('only admin-provisioned teacher and enterprise identities allow missing student ID and email', () => {
   const body = {
     username: 'professor_one',
     fullName: '测试教师',
@@ -16,6 +16,10 @@ test('only admin-provisioned teacher identities allow missing student ID and ema
   assert.equal(teacher.email, null);
   assert.equal(teacher.grade, null);
   assert.equal(teacher.major, null);
+  const enterprise = normalizeAdminAccount({ ...body, username: '中文企业', role: 'enterprise' });
+  assert.equal(enterprise.studentId, null);
+  assert.equal(enterprise.email, null);
+  assert.equal(enterprise.grade, null);
   for (const role of ['student', 'ta', 'admin']) {
     assert.throws(() => normalizeAdminAccount({ ...body, role }), { code: 'invalid_student_id' });
   }
