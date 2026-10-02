@@ -1,8 +1,9 @@
 // Local-only demonstration. No account credentials, production API or database.
 const { createCourseThreadsPreview } = require('./preview-course-threads');
 
-async function createEditableCalendarPreview({ extraApi } = {}) {
+async function createEditableCalendarPreview({ extraApi, ...previewOptions } = {}) {
   const preview = createCourseThreadsPreview({
+    ...previewOptions,
     now: () => Date.parse('2026-09-29T02:00:00Z'),
     extraApi,
   });

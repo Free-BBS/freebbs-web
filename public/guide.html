@@ -66,7 +66,7 @@
               </button>
               <a class="guide-secondary" href="#guide-atlas">我先自己逛逛 ↓</a>
             </div>
-            <p class="guide-small">分站深入探索 · 随时暂停 · 首页随时再出发</p>
+            <p class="guide-small">学习 · 讨论 · 计划 · 随时跳过或重看</p>
           </div>
           <div class="guide-mascot-scene" aria-hidden="true">
             <span class="guide-orbit guide-orbit-one"></span
@@ -91,84 +91,22 @@
           </div>
         </section>
 
-        <section class="guide-reward" aria-labelledby="guide-reward-title">
-          <div>
-            <p class="guide-eyebrow">MAX · 给探索的第一份礼物</p>
-            <h2 id="guide-reward-title">完整走一遍，收下 10 电元 + 10 磁元</h2>
-            <p>
-              登录后完成完整新手导览，每个账号可领取一次。已完成的老用户同样可领取；重看导览或完成新功能短导览不会重复发放。
-            </p>
-            <p class="guide-small">
-              五站访问足迹只记录你认识了哪些入口，不作为奖励资格或学习成果的证明。
-            </p>
-            <p
-              id="guide-reward-status"
-              class="guide-reward-status"
-              role="status"
-              aria-live="polite"
-            >
-              登录后可查看奖励资格与领取状态。
-            </p>
-          </div>
-          <button
-            class="guide-primary"
-            id="guide-reward-claim"
-            type="button"
-            data-guide-reward-claim
-            disabled
-            hidden
-          >
-            领取 10 电元 + 10 磁元
-          </button>
-        </section>
-
-        <section class="guide-manifesto" aria-labelledby="guide-why">
-          <p class="guide-eyebrow">01 / 我们为什么在这里</p>
-          <h2 id="guide-why">让学习自由而不孤独</h2>
-          <p>
-            FREE BBS
-            是由学生主导、师生共同建设的电子系学习发展共同体。我们把课程的来龙去脉、真实的讨论和可验证的探索连接起来，帮助每个人理解知识、形成自己的学习方法，在交流与实践中走向新的问题和创造
-          </p>
-          <div class="guide-values">
-            <article>
-              <span>01</span>
-              <h3>FREE LEARNING</h3>
-              <strong>自主学习</strong>
-              <p>理解并掌握电子信息学科脉络，构建个性化、智能化的个人知识图谱基座</p>
-            </article>
-            <article>
-              <span>02</span>
-              <h3>FREE DISCUSSION</h3>
-              <strong>自主讨论</strong>
-              <p>人与人、人与AI深度交流，验证思考、独立判断，找到求知路上的同行者</p>
-            </article>
-            <article>
-              <span>03</span>
-              <h3>FREE EXPLORATION</h3>
-              <strong>自主探索</strong>
-              <p>融通电子系代际复利，在真实应用场景中发现边界、推动创新、领跑时代</p>
-            </article>
-          </div>
-        </section>
-
         <section id="guide-stations" class="guide-section" aria-labelledby="guide-stations-title">
           <div class="guide-section-heading">
             <div>
               <p class="guide-eyebrow">EXPLORE WITH MAX</p>
-              <h2 id="guide-stations-title">从上到下，认识你的学习空间</h2>
+              <h2 id="guide-stations-title">先认识三个主要功能</h2>
             </div>
           </div>
           <p>
-            先看顶栏，再沿导航顺序逐区探索，最后认识自己的资产、设置和牧场。章节按当前页面结构排列，可以从头开始，也可以直接选择一章
+            学习从课程与知识点开始，讨论用来交流问题，工作台帮助安排时间。选择需要的一章即可，不必逐一体验所有功能
           </p>
           <div id="guide-station-list" class="guide-station-list"></div>
           <article id="guide-latest-release" class="guide-release-card">
             <div>
               <p class="guide-eyebrow">WHAT'S NEW · 本次更新</p>
-              <h3>跟 Max 认识新版布局</h3>
-              <p>
-                看看签到月历、实验室与规划入口，再到独立牧场逛逛。只介绍这次调整，不自动签到、报名、消费或发送消息；与完整导览分别保存进度
-              </p>
+              <h3>学习、讨论、计划，按需要开始</h3>
+              <p>快速看看三个主要入口。导引只介绍功能，不发布内容、保存计划或发送 AI 问题</p>
               <p id="guide-release-status" role="status">新功能专门导览 · 与完整导览分别保存</p>
             </div>
             <button class="guide-primary" type="button" data-guide-release>看看本次更新 ↗</button>
@@ -178,9 +116,9 @@
           <div class="guide-section-heading">
             <div>
               <p class="guide-eyebrow">02 / 已经可以出发的地方</p>
-              <h2 id="guide-atlas-title">一张地图，很多种好奇</h2>
+              <h2 id="guide-atlas-title">学习、讨论和计划</h2>
             </div>
-            <p>已开放的入口可以直接使用；建设中的功能会单独标明。</p>
+            <p>从需要的功能开始，随时回来继续。</p>
           </div>
           <div class="guide-atlas-grid">
             <article class="guide-place guide-place-world">
@@ -217,199 +155,63 @@
               </p>
               <a href="/workbench">整理自己的节奏 ↗</a>
             </article>
-            <article class="guide-place">
-              <div class="guide-place-top">
-                <span class="guide-place-icon">⌁</span><span class="guide-tag">已开放</span>
-              </div>
-              <h3>实验室</h3>
-              <p class="guide-quote">“先让想法通上电，再看波形怎么说。”</p>
-              <p>
-                在电路实验室搭建与仿真电路、观察波形；通过「制作我的工具」制作和预览 HTML
-                小工具。代码实验室支持 C/C++ 多架构汇编、Python 逐行观察、MATLAB（Octave）绘图与
-                Verilog 波形，实验可分享到讨论区。
-              </p>
-              <a href="/laboratory">选择实验与工具 ↗</a>
-            </article>
-            <article class="guide-place">
-              <div class="guide-place-top">
-                <span class="guide-place-icon">◇</span
-                ><span class="guide-tag guide-tag-future">规划中</span>
-              </div>
-              <h3>创意工坊</h3>
-              <p class="guide-quote">“让可用的创意，成为彼此手边的工具。”</p>
-              <p>
-                计划与 IBBB 协同，提供可选择安装的工具、Skill 等插件。目标为 2026 年 10
-                月、V1.2，目前尚未开放插件安装与发布，具体以公告为准。
-              </p>
-              <a href="/creative-workshop">了解创意工坊规划 ↗</a>
-            </article>
-            <article class="guide-place">
-              <div class="guide-place-top">
-                <span class="guide-place-icon">△</span
-                ><span class="guide-tag guide-tag-future">规划中</span>
-              </div>
-              <h3>PBL 计划</h3>
-              <p class="guide-quote">“从真实问题出发，在项目里发现新的可能。”</p>
-              <p>
-                面向项目式学习，连接知识应用、协作与实践。目标为 2027 年 3
-                月、V2.0，目前尚未开放项目报名、组队与成果提交，具体以公告为准。
-              </p>
-              <a href="/pbl">了解 PBL 计划 ↗</a>
-            </article>
-            <article class="guide-place">
-              <div class="guide-place-top">
-                <span class="guide-place-icon">✧</span><span class="guide-tag">已开放</span>
-              </div>
-              <h3>问问 Max</h3>
-              <p class="guide-quote">“我负责陪你追问，你负责保留自己的判断。”</p>
-              <p>
-                平台寻址，思路引导和解释。带着目标、已知条件和自己的尝试来交流，Max
-                帮你梳理下一步，不代替你思考或直接交付作业答案；重要结论仍需核对资料、检验假设。
-              </p>
-              <a href="/aichat">从问题中找到头绪 ↗</a>
-            </article>
-            <article class="guide-place">
-              <div class="guide-place-top">
-                <span class="guide-place-icon">⌘</span><span class="guide-tag">已开放</span>
-              </div>
-              <h3>活动报名（试用）</h3>
-              <p class="guide-quote">“世界很大，课表之外也有新的坐标。”</p>
-              <p>
-                当前通过独立入口浏览活动，查看时间、名额与报名条件。自行报名成功后保存回执，查询抽签结果。发展端上线后，活动报名将整合进入发展端。
-              </p>
-              <a href="/surveys">查看活动报名 ↗</a>
-            </article>
-            <article class="guide-place">
-              <div class="guide-place-top">
-                <span class="guide-place-icon">✦</span>
-                <span class="guide-tag guide-tag-future">建设中</span>
-              </div>
-              <h3>发展端</h3>
-              <p class="guide-quote">“新的空间，也在一点点长出来。”</p>
-              <p>
-                面向同学与团学组织，规划通知与活动、资源开放、意见反馈、个人活动记录和组织协作。当前展示建设进度与规划，实际功能以发布为准。
-              </p>
-              <a href="/development">了解发展端建设进展 ↗</a>
-            </article>
           </div>
         </section>
 
         <section
-          id="guide-missions"
-          class="guide-missions guide-section"
-          aria-labelledby="guide-missions-title"
+          id="guide-other-features"
+          class="guide-section"
+          aria-labelledby="guide-other-title"
         >
           <div class="guide-section-heading">
             <div>
-              <p class="guide-eyebrow">03 / 你的第一张探索地图</p>
-              <h2 id="guide-missions-title">五站小旅行，慢慢来就好</h2>
+              <p class="guide-eyebrow">还可以做什么</p>
+              <h2 id="guide-other-title">其他功能，按需要探索</h2>
             </div>
-            <span class="guide-progress-label" id="guide-task-progress">0 / 5 已探索</span>
           </div>
           <p>
-            打开这些页面，就能留下你的探索足迹。足迹勾选不作为奖励资格；完成完整新手导览可领取一次奖励，学习成果由实际学习功能另行记录。
+            站内还有 <a href="/aichat">Max 问答</a>、<a href="/laboratory">实验与工具</a>、<a
+              href="/surveys"
+              >活动报名</a
+            >、<a href="/settings">个人设置</a
+            >和社区互动等功能，从导航即可找到。建设中的入口会标明状态，具体功能以页面说明为准。
           </p>
-          <div class="guide-progress-track"><span id="guide-task-bar"></span></div>
-          <div id="guide-task-list" class="guide-task-list"></div>
-          <div class="guide-mission-foot">
-            <p id="guide-sync-status" role="status">登录后，探索进度会随账号保存。</p>
-            <button class="guide-secondary" type="button" data-guide-start>
-              让 Max 带我走一遍 ↗
-            </button>
-          </div>
+          <p>
+            提问时带上背景和自己的尝试，讨论时尊重他人、保护个人信息。AI
+            的重要结论需要核对，学习选择与最终判断始终属于你。
+          </p>
         </section>
-
-        <section
-          id="guide-community"
-          class="guide-community guide-section"
-          aria-labelledby="guide-community-title"
-        >
+        <section class="guide-reward" aria-labelledby="guide-reward-title">
           <div>
-            <p class="guide-eyebrow">04 / 一起把这里变得更好</p>
-            <h2 id="guide-community-title">认真探索，也温柔相待</h2>
-            <p class="guide-quote">“我的角有点硬，但说话可以很柔软。”</p>
+            <p class="guide-eyebrow">MAX · 给探索的第一份礼物</p>
+            <h2 id="guide-reward-title">完整走一遍，收下 10 电元 + 10 磁元</h2>
             <p>
-              尊重不同观点，解释你的思路；引用内容说明来源，分享资料确认授权。保护自己与他人的个人信息，遇到问题使用站内管理与反馈渠道。
-            </p>
-            <p>
-              讨论区前台显示昵称，后台保留实名身份。请尊重他人并遵守社区公约；管理员依据规则处理违规内容，并提供反馈与申诉渠道。
-            </p>
-            <p>
-              AI
-              是讨论搭子。遇到关键推导与重要结论，请核对课程资料、检验假设，也欢迎把疑问带回讨论区。
-            </p>
-            <a class="guide-text-link" href="mailto:feedback@free-bbs.cn"
-              >问题反馈：feedback@free-bbs.cn ↗</a
-            >
-          </div>
-          <div class="guide-economy-card">
-            <p class="guide-eyebrow">一点点参与，一点点积累</p>
-            <h3>认识电元、磁元与热力</h3>
-            <p>
-              <strong>电元</strong> ·
-              主要围绕学习完成度与知识贡献设计，当前获取与使用规则以资产说明为准；学习内容奖励随课程配套逐步开放。
-            </p>
-            <p>
-              <strong>磁元</strong> ·
-              主要记录社区活跃与有效参与，可用于装扮与指定兑换，具体获取和使用规则以资产说明为准。
-            </p>
-            <p>
-              <strong>热力</strong> ·
-              使用电元或磁元会产生热力，是社区参与的趣味记录，不用于评价学习能力或综合表现。
+              登录后完成完整新手导览，每个账号可领取一次。已完成的老用户同样可领取；重看导览或完成新功能短导览不会重复发放。
             </p>
             <p class="guide-small">
-              电脑端点击左下角资产区域查看完整规则；手机可从顶部仓库入口查看资产。
+              访问足迹只记录你认识了哪些入口，不作为奖励资格或学习成果的证明。
             </p>
-            <p>完整新手导览奖励：每个账号一次 10 电元 + 10 磁元，老用户完成后同样可领取。</p>
-            <p>
-              商店里有装扮、收藏、消耗品与伙伴。头像框、铭牌和主页主题在个人主页佩戴；仓库可查看收支账本，普通鱼骨与黄金鱼骨也可换成磁元。
+            <p
+              id="guide-reward-status"
+              class="guide-reward-status"
+              role="status"
+              aria-live="polite"
+            >
+              登录后可查看奖励资格与领取状态。
             </p>
-            <p class="guide-small">核心学习资源与功能保持开放，社区热力不代表学习能力。</p>
-            <a href="/inventory">看看我的仓库 ↗</a>
           </div>
+          <button
+            class="guide-primary"
+            id="guide-reward-claim"
+            type="button"
+            data-guide-reward-claim
+            disabled
+            hidden
+          >
+            领取 10 电元 + 10 磁元
+          </button>
         </section>
 
-        <section
-          id="guide-horizon"
-          class="guide-horizon guide-section"
-          aria-labelledby="guide-horizon-title"
-        >
-          <div class="guide-section-heading">
-            <div>
-              <p class="guide-eyebrow">05 / 地图还在生长</p>
-              <h2 id="guide-horizon-title">下一站，还有很多可能</h2>
-            </div>
-            <span class="guide-tag guide-tag-future">未来规划 · 尚未完整开放</span>
-          </div>
-          <p>
-            以下为后续版本的建设方向，具体开放时间与范围以功能发布为准。规划不等于已上线，学习选择与最终判断始终属于你。
-          </p>
-          <div class="guide-future-grid">
-            <article>
-              <h3>学科导航与课程共建</h3>
-              <p>
-                逐步建设总知识图谱、跨课程连接和课程组匿名聚合反馈，让知识关系更清楚、课程内容持续改进，不用于学生排名。
-              </p>
-            </article>
-            <article>
-              <h3>学习记录与个人计划</h3>
-              <p>
-                完善课程学习记录、课程语境和可携带的个人时间表；学习路径与计划由用户确认、调整，不替代自己的判断。
-              </p>
-            </article>
-            <article>
-              <h3>从工具走向项目实践</h3>
-              <p>
-                创意工坊计划在 V1.2 提供插件入口，PBL 计划面向 V2.0
-                的项目式学习；发展端独立建设，通过统一身份与页面入口协同。
-              </p>
-            </article>
-          </div>
-          <p class="guide-small">
-            更多知识岛与完整总知识图谱将逐步建设。深入评测不在 V1.0、V1.1 中开发，最早在 V2.0
-            重新论证。
-          </p>
-        </section>
         <footer class="guide-farewell">
           <span aria-hidden="true">✦</span>
           <h2>准备好了？你的问题，就是下一站</h2>

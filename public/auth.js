@@ -150,6 +150,25 @@ async function callApi(path, options = {}) {
   return payload;
 }
 
+function resetIdentity() {
+  const method = document.getElementById('auth-reset-method')?.value || 'studentId';
+  return method === 'username'
+    ? { identifier: document.getElementById('auth-reset-identifier').value.trim() }
+    : { studentId: document.getElementById('auth-student-id').value.trim() };
+}
+
+document.getElementById('auth-reset-method')?.addEventListener('change', (event) => {
+  const username = event.target.value === 'username';
+  document.getElementById('auth-reset-username-field').hidden = !username;
+  document.getElementById('auth-reset-student-field').hidden = username;
+  const identifier = document.getElementById('auth-reset-identifier');
+  const studentId = document.getElementById('auth-student-id');
+  identifier.disabled = !username;
+  identifier.required = username;
+  studentId.disabled = username;
+  studentId.required = !username;
+});
+
 async function handleAuthSubmit(event) {
   event.preventDefault();
 
@@ -166,7 +185,17 @@ async function handleAuthSubmit(event) {
       const password = document.getElementById('auth-password').value;
       const passwordConfirm = document.getElementById('auth-password-confirm').value;
 
-      if (!/^20\d{8}$/.test(studentId)) {
+      if (
+        mode === 'remake' &&
+        Object.hasOwn(resetIdentity(), 'identifier') &&
+        !resetIdentity().identifier
+      ) {
+        throw new Error('请输入登录用户名');
+      }
+      if (
+        (mode === 'register' || !Object.hasOwn(resetIdentity(), 'identifier')) &&
+        !/^20\d{8}$/.test(studentId)
+      ) {
         throw new Error('学号必须是 20 开头的 10 位数字');
       }
 
@@ -190,7 +219,7 @@ async function handleAuthSubmit(event) {
       payload = await callApi('/auth/reset-password', {
         method: 'POST',
         body: JSON.stringify({
-          studentId: document.getElementById('auth-student-id').value.trim(),
+          ...resetIdentity(),
           email: document.getElementById('auth-email').value.trim(),
           emailCode: document.getElementById('auth-email-code').value.trim(),
           password: document.getElementById('auth-password').value,
@@ -267,8 +296,20 @@ async function handleSendEmailCode() {
     return;
   }
 
-  if (mode === 'remake' && (!studentIdInput || !/^20\d{8}$/.test(studentIdInput.value.trim()))) {
+  if (
+    mode === 'remake' &&
+    !Object.hasOwn(resetIdentity(), 'identifier') &&
+    (!studentIdInput || !/^20\d{8}$/.test(studentIdInput.value.trim()))
+  ) {
     setMessage('请先输入 20 开头的 10 位学号');
+    return;
+  }
+  if (
+    mode === 'remake' &&
+    Object.hasOwn(resetIdentity(), 'identifier') &&
+    !resetIdentity().identifier
+  ) {
+    setMessage('请先输入登录用户名');
     return;
   }
 
@@ -284,6 +325,7 @@ async function handleSendEmailCode() {
         body: JSON.stringify({
           email: emailInput.value.trim(),
           studentId: studentIdInput?.value.trim() || '',
+          ...(mode === 'remake' ? resetIdentity() : {}),
           ...(mode === 'register'
             ? { fullName: document.getElementById('auth-full-name').value.trim() }
             : {}),

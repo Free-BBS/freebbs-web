@@ -1,3 +1,4 @@
+const { createHash } = require('node:crypto');
 const {
   buildPreview,
   overlaps,
@@ -19,6 +20,12 @@ const { applyOverride, makePatch } = require('../backend/campus-schedule-overrid
 const { DEFAULTS } = require('../public/academic-calendar');
 const { expandManualCourse } = require('../backend/manual-courses');
 const { normalizePreferences, availableWindows } = require('../backend/planning-preferences');
+const {
+  importedSeriesKey,
+  definitionFor,
+  summarizeSeries,
+  planMutation,
+} = require('../backend/schedule-series');
 
 function createWorkbenchPreviewApi({
   now = Date.now,
@@ -34,6 +41,7 @@ function createWorkbenchPreviewApi({
     firstWeekMonday,
   );
   const personalEdits = new Map();
+  const seriesDefinitions = new Map();
   let planningPreferences = normalizePreferences();
   let preferencesSaved = false;
   let savedCourses = null;
@@ -48,17 +56,38 @@ function createWorkbenchPreviewApi({
       includeExcluded,
       fetchedAt: new Date(now()).toISOString(),
     });
-  const courseProjection = () => {
+  const courseProjection = (includeDeleted = false) => {
     if (importPending) return { events: [], issues: [], parsedCourses: 0, totalCourses: 0 };
     if (!savedCourses && campusCourses.length) savedCourses = structuredClone(campusCourses);
     const result = copiedEvents ? structuredClone(copiedEvents) : sourceProjection(true);
     result.events = result.events
       .map((item) => {
-        const edited = applyOverride(
-          { ...item, connectorGeneration: 1 },
-          personalEdits.get(item.publicId),
+        const seriesKey = importedSeriesKey(item);
+        const row = personalEdits.get(item.publicId);
+        const patch = row?.patch_json || {};
+        const policy = personalEdits.get(`cs_series_${seriesKey.slice(7)}`)?.patch_json || {};
+        const exception = Boolean(row && !patch.seriesManaged);
+        const deleted = Boolean(
+          patch.deleted ||
+          (policy.suppressedFrom && item.startAt >= policy.suppressedFrom && !exception),
         );
-        return edited && (!item.calendarHoliday || edited.startAt !== item.startAt) ? edited : null;
+        const edited = applyOverride(
+          {
+            ...item,
+            connectorGeneration: 1,
+            seriesKey,
+            originalStartAt: item.startAt,
+            originalEndAt: item.endAt,
+          },
+          includeDeleted && patch.deleted
+            ? { ...row, patch_json: { ...patch, deleted: false } }
+            : row,
+        );
+        return edited &&
+          (includeDeleted || !deleted) &&
+          (!item.calendarHoliday || edited.startAt !== item.startAt)
+          ? { ...edited, deleted, exception }
+          : null;
       })
       .filter(Boolean);
     return result;
@@ -148,10 +177,132 @@ function createWorkbenchPreviewApi({
     },
   ];
   let nextId = 2;
+  const activeEvents = () => events.filter((item) => !item.deleted);
+  function seriesState(publicId) {
+    const selected = [...events, ...courseProjection(true).events].find(
+      (item) => item.publicId === publicId && !item.deleted,
+    );
+    if (!selected) throw Object.assign(new Error('模拟日程不存在'), { status: 404 });
+    if (!selected.seriesKey) return null;
+    const imported = publicId.startsWith('cs_');
+    const items = [...events, ...courseProjection(true).events].filter(
+      (item) => item.seriesKey === selected.seriesKey,
+    );
+    const saved = seriesDefinitions.get(selected.seriesKey);
+    const definition = saved?.definition || definitionFor(items, null, imported);
+    const version = saved?.version || 0;
+    const anchors = new Map(definition.occurrences.map((item) => [item.publicId, item]));
+    const members = saved && !imported ? items.filter((item) => anchors.has(item.publicId)) : items;
+    const normalized = members.map((item) => ({
+      ...item,
+      originalStartAt: anchors.get(item.publicId)?.startAt || item.originalStartAt || item.startAt,
+      originalEndAt: anchors.get(item.publicId)?.endAt || item.originalEndAt || item.endAt,
+    }));
+    const fingerprint = createHash('sha256')
+      .update(JSON.stringify([version, definition, normalized]))
+      .digest('hex');
+    return {
+      key: selected.seriesKey,
+      imported,
+      definition,
+      version,
+      fingerprint,
+      items: normalized,
+      selected: normalized.find((item) => item.publicId === publicId),
+    };
+  }
   let communityUnavailable = false;
   const result = (body, status = 200) => ({ body, status });
 
   async function handle({ route, url, method, body }) {
+    const seriesMatch = /^\/api\/workbench\/schedule-items\/([^/]+)\/series$/.exec(route);
+    if (seriesMatch) {
+      try {
+        const state = seriesState(decodeURIComponent(seriesMatch[1]));
+        if (method === 'GET') return result({ series: summarizeSeries(state) });
+        if (method !== 'POST' || !state) return result({ message: '模拟系列操作无效' }, 400);
+        const plan = planMutation(state, body);
+        const proposals = plan.generated || plan.patches || [];
+        const ids = new Set(plan.affected.map((item) => item.publicId));
+        if (
+          body.operation === 'update' &&
+          body.allowConflicts !== true &&
+          proposals.some((item) =>
+            [...activeEvents(), ...courseProjection().events].some(
+              (other) =>
+                !other.deleted &&
+                !ids.has(other.publicId) &&
+                other.kind !== 'deadline' &&
+                overlaps(item, other),
+            ),
+          )
+        )
+          return result(
+            { message: '修改后的安排与已有日程重叠，请核对后再次保存', code: 'course_conflict' },
+            409,
+          );
+        plan.affected.forEach((item, index) => {
+          if (item.deleted) return;
+          const patch = plan.remove ? { deleted: true } : plan.patches[index];
+          if (state.imported)
+            personalEdits.set(item.publicId, {
+              patch_json: {
+                ...personalEdits.get(item.publicId)?.patch_json,
+                ...patch,
+                seriesManaged: body.scope !== 'single',
+              },
+              version: item.version + 1,
+              updated_at: new Date(now()).toISOString(),
+            });
+          else
+            Object.assign(
+              events.find((entry) => entry.publicId === item.publicId),
+              patch,
+              { version: item.version + 1, exception: body.scope === 'single' || item.exception },
+            );
+        });
+        const definition = { ...state.definition };
+        if (plan.remove && body.scope === 'following') {
+          definition.suppressedFrom =
+            definition.suppressedFrom && definition.suppressedFrom < plan.anchor
+              ? definition.suppressedFrom
+              : plan.anchor;
+          if (state.imported)
+            personalEdits.set(`cs_series_${state.key.slice(7)}`, {
+              patch_json: { suppressedFrom: definition.suppressedFrom },
+            });
+        }
+        seriesDefinitions.set(state.key, { definition, version: state.version + 1 });
+        if (plan.generated?.length) {
+          nextId += 1;
+          const key = `manual:${state.selected.kind === 'course' ? 'course' : 'recurring'}:preview${nextId}`;
+          const generated = plan.generated.map((item) => {
+            nextId += 1;
+            return {
+              ...item,
+              publicId: `ws_preview_${nextId}`,
+              sourceReference: key,
+              seriesKey: key,
+              sourceType: 'manual',
+              kind: state.selected.kind,
+              status: 'confirmed',
+              version: 1,
+            };
+          });
+          events.push(...generated);
+          seriesDefinitions.set(key, {
+            definition: {
+              ...definitionFor(generated, plan.recurrence),
+              externalExceptions: plan.exceptions || [],
+            },
+            version: 1,
+          });
+        }
+        return result({ ok: true, created: plan.generated?.length || 0 });
+      } catch (error) {
+        return result({ message: error.message }, error.status || 500);
+      }
+    }
     if (route === '/api/workbench/schedule-planner/preferences') {
       try {
         if (method === 'PUT') {
@@ -177,7 +328,7 @@ function createWorkbenchPreviewApi({
             breakMinutes: 0,
           };
       const windows = availableWindows(
-        [...events, ...courseProjection().events],
+        [...activeEvents(), ...courseProjection().events],
         new Date(now()),
         days,
         effective,
@@ -300,7 +451,7 @@ function createWorkbenchPreviewApi({
       return result({
         importantItems,
         notifications: [],
-        scheduleItems: [...events, ...courseProjection().events],
+        scheduleItems: [...activeEvents(), ...courseProjection().events],
       });
     }
     if (route === '/api/workbench/important-items') {
@@ -344,13 +495,13 @@ function createWorkbenchPreviewApi({
         if (!['event', 'course'].includes(kind))
           return result({ message: '请选择事件或课程' }, 400);
         const items = expandManualCourse(body, { kind });
-        if (events.some((item) => item.sourceReference === items[0].sourceReference)) {
+        if (activeEvents().some((item) => item.sourceReference === items[0].sourceReference)) {
           return result({ message: '这组课程已经添加' }, 409);
         }
         if (
           body.allowConflicts !== true &&
           items.some((item) =>
-            [...events, ...courseProjection().events].some(
+            [...activeEvents(), ...courseProjection().events].some(
               (other) => other.kind !== 'deadline' && overlaps(item, other),
             ),
           )
@@ -360,18 +511,24 @@ function createWorkbenchPreviewApi({
             409,
           );
         }
-        events.push(
-          ...items.map((item) => {
-            nextId += 1;
-            return {
-              ...item,
-              seriesKey: item.sourceReference,
-              publicId: `ws_preview_${nextId}`,
-              status: 'confirmed',
-              version: 1,
-            };
-          }),
-        );
+        const generated = items.map((item) => {
+          nextId += 1;
+          return {
+            ...item,
+            seriesKey: item.sourceReference,
+            publicId: `ws_preview_${nextId}`,
+            status: 'confirmed',
+            version: 1,
+          };
+        });
+        events.push(...generated);
+        seriesDefinitions.set(items[0].sourceReference, {
+          definition: definitionFor(
+            generated,
+            body.recurrence || { unit: 'week', interval: body.intervalWeeks, count: body.count },
+          ),
+          version: 1,
+        });
         return result({ created: items.length }, 201);
       } catch (error) {
         return result({ message: error.message }, error.status || 500);
@@ -382,9 +539,11 @@ function createWorkbenchPreviewApi({
         const from = new Date(url.searchParams.get('from') || 0).getTime();
         const to = new Date(url.searchParams.get('to') || 0).getTime();
         return result({
-          scheduleItems: [...events, ...courseProjection().events].filter(
+          scheduleItems: [...activeEvents(), ...courseProjection().events].filter(
             (item) =>
-              new Date(item.startAt).getTime() < to && new Date(item.endAt).getTime() > from,
+              !item.deleted &&
+              new Date(item.startAt).getTime() < to &&
+              new Date(item.endAt).getTime() > from,
           ),
         });
       }
@@ -407,8 +566,9 @@ function createWorkbenchPreviewApi({
       const endAt = url.searchParams.get('endAt');
       const exclude = url.searchParams.get('excludePublicId');
       return result({
-        conflicts: [...events, ...courseProjection().events].filter(
+        conflicts: [...activeEvents(), ...courseProjection().events].filter(
           (item) =>
+            !item.deleted &&
             item.publicId !== exclude &&
             item.kind !== 'deadline' &&
             overlaps({ startAt, endAt }, item),
@@ -423,10 +583,11 @@ function createWorkbenchPreviewApi({
         if (body.version !== item.version || body.sourceRevision !== item.sourceRevision)
           return result({ message: '课程已更新，请刷新' }, 409);
         try {
+          const previousPatch = personalEdits.get(item.publicId)?.patch_json || {};
           const patch =
             method === 'DELETE'
-              ? { deleted: true }
-              : makePatch(item, body, personalEdits.get(item.publicId)?.patch_json || {});
+              ? { ...previousPatch, deleted: true, seriesManaged: false }
+              : { ...makePatch(item, body, previousPatch), seriesManaged: false };
           personalEdits.set(item.publicId, {
             patch_json: patch,
             version: item.version + 1,
@@ -445,16 +606,21 @@ function createWorkbenchPreviewApi({
           return result({ message: error.message }, error.status || 500);
         }
       }
-      const index = events.findIndex((item) => item.publicId === scheduleMatch[1]);
+      const index = events.findIndex((item) => item.publicId === scheduleMatch[1] && !item.deleted);
       if (index < 0) return result({ message: '模拟日程不存在' }, 404);
       if (method === 'DELETE') {
-        events.splice(index, 1);
+        Object.assign(events[index], {
+          deleted: true,
+          exception: true,
+          version: events[index].version + 1,
+        });
         return result({ deleted: true });
       }
       if (method === 'PATCH' || (method === 'POST' && scheduleMatch[2] === 'confirm')) {
         events[index] = {
           ...events[index],
           ...(method === 'PATCH' ? body : { status: 'confirmed' }),
+          ...(method === 'PATCH' ? { exception: true } : {}),
           version: events[index].version + 1,
         };
         return result({ scheduleItem: events[index] });
@@ -475,7 +641,9 @@ function createWorkbenchPreviewApi({
         return result(
           buildPreview(
             extraction,
-            [...events, ...courseProjection().events].filter((item) => item.kind !== 'deadline'),
+            [...activeEvents(), ...courseProjection().events].filter(
+              (item) => item.kind !== 'deadline',
+            ),
             new Date(now()),
             planningPreferences,
           ),
@@ -499,7 +667,7 @@ function createWorkbenchPreviewApi({
         const conflict = suggestions.some(
           (item, index) =>
             item.kind !== 'deadline' &&
-            ([...events, ...courseProjection().events].some(
+            ([...activeEvents(), ...courseProjection().events].some(
               (busy) => busy.kind !== 'deadline' && overlaps(item, busy),
             ) ||
               suggestions

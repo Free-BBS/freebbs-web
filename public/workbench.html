@@ -15,7 +15,7 @@
     />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
-    <link rel="stylesheet" href="/workbench.css?v=20260929-refinements-3" />
+    <link rel="stylesheet" href="/workbench.css?v=20261001-series-1" />
     <link rel="stylesheet" href="/workbench-connectors.css" />
     <link rel="stylesheet" href="/username-guard.css" />
     <link rel="stylesheet" href="/notifications.css" />
@@ -1026,6 +1026,30 @@
               </select>
             </label>
             <p id="workbench-schedule-kind-hint" class="workbench-form-status"></p>
+            <section id="workbench-schedule-series" class="workbench-series-settings" hidden>
+              <p id="workbench-series-summary" class="workbench-form-status"></p>
+              <label>
+                <span>修改或删除范围</span>
+                <select id="workbench-series-scope">
+                  <option value="single">仅本次</option>
+                  <option value="following">本次及以后</option>
+                </select>
+              </label>
+              <p class="workbench-form-status">
+                本次及以后的操作保留此前安排和其他单次修改、删除。
+              </p>
+              <label id="workbench-series-mode-label" hidden>
+                <span>之后的日期安排</span>
+                <select id="workbench-series-mode">
+                  <option value="keep">保留实际日期，调整时间和内容</option>
+                  <option value="replace">设置新的重复规则</option>
+                </select>
+              </label>
+              <details class="workbench-repeat-preview">
+                <summary>查看实际安排日期（含单次修改和删除）</summary>
+                <ol id="workbench-series-dates"></ol>
+              </details>
+            </section>
             <p id="workbench-schedule-display-note" class="workbench-form-status" hidden>
               为方便显示已加长，实际开始、结束时间不变。
             </p>
@@ -1124,6 +1148,14 @@
             ></aside>
             <p class="workbench-form-status" id="workbench-schedule-form-status" role="status"></p>
             <footer>
+              <button
+                id="workbench-schedule-delete"
+                class="workbench-item-action is-danger"
+                type="button"
+                hidden
+              >
+                删除日程
+              </button>
               <button class="workbench-secondary-action" type="button" data-workbench-dialog-close>
                 取消
               </button>
@@ -1260,7 +1292,7 @@
     <script src="/workbench-hours.js?v=20260930-hours-2"></script>
     <script src="/workbench-calendar.js?v=20260930-hours-2"></script>
     <script src="/schedule-recurrence.js?v=20260928-1"></script>
-    <script src="/workbench.js?v=20260930-nav-3"></script>
+    <script src="/workbench.js?v=20261001-series-1"></script>
     <script src="/workbench-companion.js?v=20260929-1"></script>
     <script src="/workbench-planning.js?v=20260929-1"></script>
     <dialog

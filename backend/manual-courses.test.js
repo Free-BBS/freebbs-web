@@ -84,13 +84,13 @@ function database({ duplicate = false, failAt = 0, busy = [] } = {}) {
     async execute(sql, params) {
       calls.push({ sql, params });
       assert.equal(
-        sql.includes('INSERT') ? params[1] : params[0],
+        sql.includes('INSERT INTO schedule_items') ? params[1] : params[0],
         17,
         'all reads/writes are owner scoped',
       );
       if (sql.startsWith('SELECT public_id')) return [duplicate ? [{ public_id: 'existing' }] : []];
       if (sql.startsWith('SELECT title')) return [busy];
-      if (sql.includes('INSERT')) {
+      if (sql.includes('INSERT INTO schedule_items')) {
         inserts += 1;
         if (inserts === failAt) throw new Error('storage unavailable');
       }
@@ -110,7 +110,17 @@ function database({ duplicate = false, failAt = 0, busy = [] } = {}) {
 test('manual course creation commits all rows and rejects duplicate submissions', async () => {
   const db = database();
   assert.deepEqual(await saveManualCourse(db.pool, 17, sample), { created: 16 });
-  assert.equal(db.calls.filter((call) => call.sql?.includes('INSERT')).length, 16);
+  assert.equal(
+    db.calls.filter((call) => call.sql?.includes('INSERT INTO schedule_items')).length,
+    16,
+  );
+  const definition = db.calls.find((call) => call.sql?.includes('INSERT INTO schedule_series'));
+  assert.deepEqual(JSON.parse(definition.params[2]).recurrence, {
+    unit: 'week',
+    interval: 1,
+    count: 16,
+  });
+  assert.equal(JSON.parse(definition.params[2]).occurrences.length, 16);
   assert.equal(db.calls.at(-2), 'commit');
   assert.equal(db.calls.at(-1), 'release');
   const duplicate = database({ duplicate: true });

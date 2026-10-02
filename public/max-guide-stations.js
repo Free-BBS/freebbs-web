@@ -162,7 +162,16 @@
     ready(mathPlanet, `#world-modal[open], ${mathCourseOrbit}`),
     ready('#world-enter-island', mathCourseOrbit),
   ];
-  const focusedNode = [ready('[data-reader-node-id]', '.course-reader-study-link')];
+  const focusedCourse =
+    'body:not(:has(#course-knowledge-overview[open])) .course-map-focused-chapter';
+  const overviewStudy = '#course-knowledge-overview[open] .knowledge-overview-study';
+  const focusedNode = [
+    ready('[data-reader-node-id]', `${focusedCourse}, #course-knowledge-overview[open]`),
+    ready(
+      '#course-knowledge-overview[open] .knowledge-overview-drawer-footer > button',
+      focusedCourse,
+    ),
+  ];
   const reading = [ready('#knowledge-start-reading', '#knowledge-reading:not(.hidden)')];
   const plan = [ready('#workbench-plan-tab', '#workbench-plan-tab[aria-current="page"]')];
   // The branches are mutually exclusive: querySelector's DOM order cannot
@@ -312,12 +321,15 @@
   step(
     'course',
     'course-enter-knowledge',
-    '.course-reader-study-link',
+    overviewStudy,
     '现在，走进知识点本身。',
     '「进入学习」会打开刚才选中的真实知识点，而不是另一份示意页面。课程和知识点地址会跟着实际链接走，回来也能继续这条路线。',
     {
-      prepare: focusedNode,
-      action: link('.course-reader-study-link', '进入知识点'),
+      prepare: [
+        ...focusedNode,
+        ready('.course-map-focus-center [data-reader-node-id]', overviewStudy),
+      ],
+      action: link(overviewStudy, '进入知识点'),
       emptyTarget: '#course-map-canvas',
       emptyBody: '暂时没有可进入的知识点。回到学习世界选择已有内容的课程，或跳到讨论区继续。',
     },
@@ -434,6 +446,9 @@
     '想发一个问题？从这个按钮进入。',
     '结束或暂停导览后，电脑上点右上角的「发帖」；手机上先点底部「＋」，再选「发帖」，就能进入独立的编辑页面。选好版块、写标题和正文，再检查表达是否清楚；有背景、有过程的讨论更容易得到帮助。这一步先认识入口，点击「下一步」会继续参观。',
     {
+      prepare: [
+        ready('#discussion-detail [data-action="close-detail"]', 'body:not(.post-reading)'),
+      ],
       emptyTarget: '.discussion-feed-toolbar',
       emptyBody: '发帖编辑器需要登录，或当前账号暂无可发帖版块。你仍然可以阅读已开放的讨论。',
     },
@@ -876,7 +891,67 @@
     'profile-ranch',
     'profile-wool',
   ];
-  const catalogue = freeze({ STATIONS, STEPS: currentSteps, RELEASE_STEP_IDS });
+  // Published tours retain their original order for saved progress. Only the
+  // essentials below are offered to new users; archived tours are never promoted.
+  const CORE_STEP_IDS = [
+    'home-launchpad',
+    'world-atlas',
+    'world-course-orbit',
+    'course-directory',
+    'course-relations',
+    'course-enter-knowledge',
+    'knowledge-overview',
+    'knowledge-reading',
+    'discussion-filters',
+    'discussion-open-post',
+    'discussion-detail',
+    'discussion-composer',
+    'workbench-week',
+    'workbench-ai-plan',
+    'workbench-priorities',
+  ];
+  const essentialSteps = CORE_STEP_IDS.map((id) => {
+    const entry = currentSteps.find((item) => item.id === id);
+    return ['course', 'knowledge'].includes(entry.station)
+      ? { ...entry, station: 'world', label: '学习' }
+      : { ...entry };
+  });
+  essentialSteps.push({
+    id: 'handbook-other-features',
+    station: 'handbook',
+    label: '其他功能',
+    route: '/guide',
+    fallbackRoute: '/guide',
+    target: '#guide-other-features',
+    title: '还有其他功能，按需要探索',
+    body: '站内还有 Max 问答、实验与工具、活动报名和个人设置等入口。需要时从导航进入，建设中的功能会标明状态；不必逐一体验才能开始学习。',
+    caption: '以后可以随时从首页打开导引，重看学习、讨论或计划这一章。',
+  });
+  const essentialStations = ['home', 'world', 'discussion', 'workbench', 'handbook'].map((id) => {
+    const entry = STATIONS.find((item) => item.id === id);
+    const labels = {
+      home: '开始',
+      world: '学习',
+      discussion: '讨论',
+      workbench: '计划',
+      handbook: '其他功能',
+    };
+    const descriptions = {
+      home: '三个主要入口，随时可以跳过',
+      world: '找课程、看知识地图、阅读知识点',
+      discussion: '浏览问题、交流思路、发布讨论',
+      workbench: '管理日程、重复安排和重要事项',
+      handbook: '按需要发现更多工具',
+    };
+    return { ...entry, label: labels[id], title: descriptions[id] };
+  });
+  const catalogue = freeze({
+    STATIONS: essentialStations,
+    STEPS: essentialSteps,
+    ARCHIVED_STATIONS: STATIONS,
+    ARCHIVED_STEPS: currentSteps,
+    RELEASE_STEP_IDS,
+  });
   if (typeof module !== 'undefined' && module.exports) module.exports = catalogue;
   if (typeof window !== 'undefined') window.FreeBbsGuideStations = catalogue;
 })();

@@ -43,6 +43,7 @@ function createEconomyPreview({
   extraPages = {},
   previewApiHandler = null,
   extraApi = null,
+  allowDemoAuthentication = false,
   accounts = null,
   storeOptions = {},
   previewNotice = '',
@@ -247,7 +248,16 @@ function createEconomyPreview({
                 '/api/workbench/schedule-planner/preferences',
               ].includes(route)
             )) ||
-          req.headers.authorization !== `Bearer ${TOKEN}` ||
+          (req.headers.authorization !== `Bearer ${TOKEN}` &&
+            !(
+              allowDemoAuthentication &&
+              [
+                '/api/auth/login',
+                '/api/auth/login-challenge',
+                '/api/auth/send-reset-code',
+                '/api/auth/reset-password',
+              ].includes(route)
+            )) ||
           (req.headers.origin && req.headers.origin !== `http://${host}`)
         )
           return send(403, { message: '仅限本地模拟操作' });
@@ -263,6 +273,7 @@ function createEconomyPreview({
           route,
           url,
           method: req.method,
+          headers: req.headers,
           body: requestBody,
           store,
           shop,
@@ -272,7 +283,11 @@ function createEconomyPreview({
           economy,
           now,
         });
-        if (result) return send(result.status || 200, result.body);
+        if (result) {
+          for (const [name, value] of Object.entries(result.headers || {}))
+            res.setHeader(name, value);
+          return send(result.status || 200, result.body);
+        }
       }
       const notificationRead = route.match(/^\/api\/notifications\/(\d+)\/read$/);
       if (
@@ -325,7 +340,11 @@ function createEconomyPreview({
           method: req.method,
           body: requestBody || (raw ? JSON.parse(raw) : {}),
         });
-        if (result) return send(result.status || 200, result.body);
+        if (result) {
+          for (const [name, value] of Object.entries(result.headers || {}))
+            res.setHeader(name, value);
+          return send(result.status || 200, result.body);
+        }
         return send(404, { message: '该操作不在工作台预览范围内' });
       }
       if (!['GET', 'HEAD'].includes(req.method)) {

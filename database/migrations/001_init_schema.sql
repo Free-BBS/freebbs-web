@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS users (
     uid VARCHAR(32) UNIQUE,
     username VARCHAR(64) NOT NULL UNIQUE,
     full_name VARCHAR(64) NOT NULL,
-    student_id VARCHAR(10) NOT NULL UNIQUE,
+    student_id VARCHAR(10) NULL UNIQUE,
     email VARCHAR(128) UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     email_verified_at DATETIME NULL,

@@ -11,6 +11,8 @@ const {
 const { LATEST_RELEASE, LEGACY_GUIDE_VERSIONS } = require('../public/max-guide-releases');
 const { mergeProgress } = require('../backend/onboarding');
 
+const ARCHIVED_VERSION = 'max-v3';
+const ARCHIVED_STEPS = stepsFor(ARCHIVED_VERSION);
 const fixed = Date.parse('2026-09-21T10:00:00Z');
 const stamp = new Date(fixed).toISOString();
 const indexOf = (id, version = VERSION) => stepsFor(version).findIndex((step) => step.id === id);
@@ -455,6 +457,13 @@ function fixture({
   return value;
 }
 
+// Retained UI behaviours use the published full-tour version explicitly.
+function archivedFixture(options = {}) {
+  const url = new URL(options.href || '/guide', 'https://www.free-bbs.cn');
+  url.searchParams.set('guideVersion', ARCHIVED_VERSION);
+  return fixture({ ...options, href: `${url.pathname}${url.search}${url.hash}` });
+}
+
 function rewardCard(view) {
   view.node('#guide-reward-status');
   const button = view.node('#guide-reward-claim', { tag: 'button' });
@@ -484,9 +493,48 @@ const rewardWrites = (view) =>
       event.type === 'request' && event.route === '/onboarding/reward' && event.method === 'POST',
   );
 
+test('v4 renders only the five concise chapters and follows core knowledge into discussion', async () => {
+  const chapterView = fixture({ setup: (value) => value.node('#guide-station-list') });
+  await settle();
+  assert.deepEqual(
+    chapterView.doc
+      .querySelectorAll('[data-guide-station]')
+      .map((node) => node.dataset.guideStation),
+    ['home', 'world', 'discussion', 'workbench', 'handbook'],
+  );
+  const index = indexOf('knowledge-reading');
+  const step = STEPS[index];
+  const view = fixture({
+    href: '/knowledge?course=math&point=MA-01-1&guideTour=1',
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+    setup(value) {
+      value.node('#knowledge-reading:not(.hidden)');
+      value.node(step.target);
+    },
+  });
+  await settle();
+  assert.equal(view.controller.snapshot().version, 'max-v4');
+  assert.equal(view.controller.activeStep, index);
+  assert.equal(view.doc.getElementById('max-tour-body').textContent, step.body);
+  const chapters = view.nodes.find((node) => node.classList.contains('max-tour-stations'));
+  assert.equal(chapters.children.length, 5);
+  view.next.click();
+  await settle();
+  assert.equal(view.server.get(VERSION).step, indexOf('discussion-filters'));
+  const navigation = view.events.find((event) => event.type === 'navigate');
+  assert.equal(new URL(navigation.url, view.win.location.origin).pathname, '/discussion');
+  assert.equal(rewardWrites(view).length, 0);
+  assert.ok(
+    view.events
+      .filter((event) => event.type === 'request')
+      .every((event) => event.route.startsWith('/onboarding')),
+  );
+  await view.controller.pause();
+});
+
 test('a target arriving after three seconds is highlighted without the old premature unavailable state', async (t) => {
   t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
-  const index = indexOf('home-handbook');
+  const index = indexOf('home-launchpad');
   let ready = false;
   const view = fixture({
     href: '/?guideTour=1',
@@ -521,7 +569,7 @@ test('a target arriving after three seconds is highlighted without the old prema
 
 test('a waiting guide immediately presents progress and keeps its pause button available', async (t) => {
   t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
-  const index = indexOf('home-handbook');
+  const index = indexOf('home-launchpad');
   const view = fixture({
     href: '/?guideTour=1',
     states: { [VERSION]: { status: 'in_progress', step: index } },
@@ -551,7 +599,7 @@ test('a waiting guide immediately presents progress and keeps its pause button a
 
 test('a waiting guide can save and navigate to another station without reviving its old wait', async (t) => {
   t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
-  const index = indexOf('home-handbook');
+  const index = indexOf('home-launchpad');
   const view = fixture({
     href: '/?guideTour=1',
     states: { [VERSION]: { status: 'in_progress', step: index } },
@@ -580,7 +628,7 @@ test('a waiting guide can save and navigate to another station without reviving 
 
 test('a cancelled target wait cannot clear the retry for a failed station change', async (t) => {
   t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
-  const index = indexOf('home-handbook');
+  const index = indexOf('home-launchpad');
   const view = fixture({
     href: '/?guideTour=1',
     states: { [VERSION]: { status: 'in_progress', step: index } },
@@ -607,7 +655,7 @@ test('a cancelled target wait cannot clear the retry for a failed station change
 
 test('a missing page region reaches one deadline and keeps retry and skip visible until recovery', async (t) => {
   t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
-  const index = indexOf('home-handbook');
+  const index = indexOf('home-launchpad');
   const view = fixture({
     href: '/?guideTour=1',
     states: { [VERSION]: { status: 'in_progress', step: index } },
@@ -636,13 +684,13 @@ test('a missing page region reaches one deadline and keeps retry and skip visibl
   assert.equal(view.doc.querySelector('.max-tour-spotlight').hidden, false);
 });
 
-test('opening a late native feature and loading its contents share one ten-second deadline', async (t) => {
+test('archived v3: opening a late native feature and loading its contents share one ten-second deadline', async (t) => {
   t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
-  const index = indexOf('inventory-ledger');
+  const index = indexOf('inventory-ledger', ARCHIVED_VERSION);
   let ledger;
-  const view = fixture({
+  const view = archivedFixture({
     href: '/inventory?guideTour=1',
-    states: { [VERSION]: { status: 'in_progress', step: index } },
+    states: { [ARCHIVED_VERSION]: { status: 'in_progress', step: index } },
     setup(value) {
       ledger = value.node('#wallet-ledger', { tag: 'dialog' });
       value.selectors.set('#wallet-ledger[open]', () => (ledger.open ? [ledger] : []));
@@ -666,13 +714,13 @@ test('opening a late native feature and loading its contents share one ten-secon
   assert.equal(view.events.filter((event) => event.type === 'click').length, 1);
 });
 
-test('the loading guide stays above a prepared native modal while its rows are still pending', async (t) => {
+test('archived v3: the loading guide stays above a prepared native modal while its rows are still pending', async (t) => {
   t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
-  const index = indexOf('inventory-ledger');
+  const index = indexOf('inventory-ledger', ARCHIVED_VERSION);
   let ledger;
-  const view = fixture({
+  const view = archivedFixture({
     href: '/inventory?guideTour=1',
-    states: { [VERSION]: { status: 'in_progress', step: index } },
+    states: { [ARCHIVED_VERSION]: { status: 'in_progress', step: index } },
     setup(value) {
       ledger = value.node('#wallet-ledger', { tag: 'dialog' });
       value.selectors.set('#wallet-ledger[open]', () => (ledger.open ? [ledger] : []));
@@ -691,7 +739,7 @@ test('the loading guide stays above a prepared native modal while its rows are s
   );
   view.nodes.find((node) => node.textContent === '稍后继续').click();
   await settle();
-  view.node(STEPS[index].target);
+  view.node(ARCHIVED_STEPS[index].target);
   t.mock.timers.tick(11000);
   await settle();
   assert.equal(view.dialog.open, false);
@@ -699,7 +747,7 @@ test('the loading guide stays above a prepared native modal while its rows are s
 
 test('a missing target that arrives after the deadline recovers without another navigation or save', async (t) => {
   t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
-  const index = indexOf('home-handbook');
+  const index = indexOf('home-launchpad');
   const view = fixture({
     href: '/?guideTour=1',
     observeMutations: true,
@@ -726,7 +774,7 @@ test('a missing target that arrives after the deadline recovers without another 
 
 test('a late page class change can reveal an existing target after the loading deadline', async (t) => {
   t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
-  const index = indexOf('home-handbook');
+  const index = indexOf('home-launchpad');
   let target;
   const view = fixture({
     href: '/?guideTour=1',
@@ -751,7 +799,7 @@ test('a late page class change can reveal an existing target after the loading d
 });
 
 test('replacing a highlighted DOM target rebinds its spotlight and resize observation', async (t) => {
-  const index = indexOf('home-handbook');
+  const index = indexOf('home-launchpad');
   let original;
   const view = fixture({
     href: '/?guideTour=1',
@@ -786,7 +834,7 @@ test('replacing a highlighted DOM target rebinds its spotlight and resize observ
 });
 
 test('mutations produced by the guide dialog do not schedule an endless animation frame loop', async (t) => {
-  const index = indexOf('home-handbook');
+  const index = indexOf('home-launchpad');
   const view = fixture({
     href: '/?guideTour=1',
     observeMutations: true,
@@ -808,7 +856,7 @@ test('mutations produced by the guide dialog do not schedule an endless animatio
 });
 
 test('expanding the explanation positions from its final visible height in the same frame', async (t) => {
-  const index = indexOf('home-handbook');
+  const index = indexOf('home-launchpad');
   const view = fixture({
     href: '/?guideTour=1',
     states: { [VERSION]: { status: 'in_progress', step: index } },
@@ -854,7 +902,7 @@ test('expanding the explanation positions from its final visible height in the s
 });
 
 test('compact layout remains stable across repeated frames until explicit expansion or viewport change', async (t) => {
-  const index = indexOf('home-handbook');
+  const index = indexOf('home-launchpad');
   const view = fixture({
     href: '/?guideTour=1',
     observeMutations: true,
@@ -918,7 +966,7 @@ test('compact layout remains stable across repeated frames until explicit expans
 
 test('changing account while a target is loading clears the old tour request and delayed UI', async (t) => {
   t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
-  const index = indexOf('home-handbook');
+  const index = indexOf('home-launchpad');
   const view = fixture({
     href: '/?guideTour=1',
     states: { [VERSION]: { status: 'in_progress', step: index } },
@@ -1428,16 +1476,16 @@ test('a rotated world restores mathematics with only the approved Home shortcut 
   assert.equal(rewardWrites(view).length, 0);
 });
 
-test('math spotlight preserves the entire island and restores its overlapping hub after leaving', async () => {
-  const index = indexOf('world-mathematics');
-  const step = STEPS[index];
+test('archived v3: math spotlight preserves the entire island and restores its overlapping hub after leaving', async () => {
+  const index = indexOf('world-mathematics', ARCHIVED_VERSION);
+  const step = ARCHIVED_STEPS[index];
   const rect = { left: 400, top: 200, right: 700, bottom: 600, width: 300, height: 400 };
   for (const leave of ['pause', 'next']) {
     let mathClicks = 0;
-    const view = fixture({
+    const view = archivedFixture({
       href: '/world?guideTour=1',
       observeMutations: true,
-      states: { [VERSION]: { status: 'in_progress', step: index } },
+      states: { [ARCHIVED_VERSION]: { status: 'in_progress', step: index } },
       setup(value) {
         value.node(step.target, {
           tag: 'button',
@@ -1449,7 +1497,7 @@ test('math spotlight preserves the entire island and restores its overlapping hu
         const core = value.node('#world-core');
         core.className = 'world-core';
         for (const prepare of step.prepare) value.node(prepare.whenMissing);
-        const next = STEPS[index + 1];
+        const next = ARCHIVED_STEPS[index + 1];
         value.node(next.target);
         for (const prepare of next.prepare) value.node(prepare.whenMissing);
       },
@@ -1478,15 +1526,15 @@ test('math spotlight preserves the entire island and restores its overlapping hu
   }
 });
 
-test('knowledge companions explains its small toggle before opening and closing the real panel', async () => {
-  const index = indexOf('knowledge-companions');
-  const step = STEPS[index];
+test('archived v3: knowledge companions explains its small toggle before opening and closing the real panel', async () => {
+  const index = indexOf('knowledge-companions', ARCHIVED_VERSION);
+  const step = ARCHIVED_STEPS[index];
   let panel;
   let toggle;
   const clicks = [];
-  const view = fixture({
+  const view = archivedFixture({
     href: '/knowledge?course=math&node=MA-01-1&guideTour=1',
-    states: { [VERSION]: { status: 'in_progress', step: index } },
+    states: { [ARCHIVED_VERSION]: { status: 'in_progress', step: index } },
     setup(value) {
       panel = value.node('#knowledge-chat-panel', {
         rect: { left: 700, top: 100, right: 1200, bottom: 800, width: 500, height: 700 },
@@ -1525,7 +1573,7 @@ test('knowledge companions explains its small toggle before opening and closing 
   view.flushFrames();
   assert.equal(panel.hidden, false);
   assert.equal(view.controller.activeStep, index, 'opening stays within the published step');
-  assert.equal(view.server.get(VERSION).step, index);
+  assert.equal(view.server.get(ARCHIVED_VERSION).step, index);
   assert.equal(view.events.filter((event) => event.method === 'PATCH').length, writes);
   assert.equal(
     view.events.some((event) => event.type === 'navigate'),
@@ -1562,7 +1610,7 @@ test('knowledge companions explains its small toggle before opening and closing 
   await settle();
   assert.equal(panel.hidden, true);
   assert.deepEqual(clicks, ['close', 'toggle', 'toggle', 'toggle', 'close', 'toggle', 'close']);
-  assert.equal(view.server.get(VERSION).step, index + 1);
+  assert.equal(view.server.get(ARCHIVED_VERSION).step, index + 1);
   const navigation = view.events.find((event) => event.type === 'navigate');
   assert.equal(new URL(navigation.url, view.win.location.origin).pathname, '/discussion');
   assert.equal(step.reveal.target, '#knowledge-chat-panel');
@@ -1572,7 +1620,12 @@ test('desktop and mobile discussion composer entries are highlighted without pub
   const index = indexOf('discussion-composer');
   const step = STEPS[index];
   assert.equal(step.target, '#discussion-create-toggle, .mobile-publish');
-  assert.equal(step.prepare, undefined);
+  assert.deepEqual(step.prepare, [
+    {
+      selector: '#discussion-detail [data-action="close-detail"]',
+      whenMissing: 'body:not(.post-reading)',
+    },
+  ]);
   assert.equal(step.action, undefined);
   for (const mobile of [false, true]) {
     let entry;
@@ -1580,6 +1633,7 @@ test('desktop and mobile discussion composer entries are highlighted without pub
       href: '/discussion?guideTour=1',
       states: { [VERSION]: { status: 'in_progress', step: index } },
       setup(value) {
+        value.node(step.prepare[0].whenMissing);
         const options = {
           tag: 'button',
           click: () => assert.fail('the introduction must not navigate or create a publish draft'),
@@ -1626,16 +1680,16 @@ test('desktop and mobile discussion composer entries are highlighted without pub
   }
 });
 
-test('a late list scroll restoration is reframed once below the fixed header unless the tour was paused', async () => {
-  const index = indexOf('discussion-reply-max');
-  const step = STEPS[index];
+test('archived v3: a late list scroll restoration is reframed once below the fixed header unless the tour was paused', async () => {
+  const index = indexOf('discussion-reply-max', ARCHIVED_VERSION);
+  const step = ARCHIVED_STEPS[index];
   for (const paused of [false, true]) {
     let scrollY = 0;
     let framingCalls = 0;
     let composer;
-    const view = fixture({
+    const view = archivedFixture({
       href: '/discussion?guideTour=1',
-      states: { [VERSION]: { status: 'in_progress', step: index } },
+      states: { [ARCHIVED_VERSION]: { status: 'in_progress', step: index } },
       setup(value) {
         value.node('.main-content');
         const { win } = value;
@@ -1657,7 +1711,8 @@ test('a late list scroll restoration is reframed once below the fixed header unl
           },
         });
         composer = value.node('#discussion-create-toggle', { tag: 'button' });
-        value.selectors.set(STEPS[index + 1].target, composer);
+        value.selectors.set(ARCHIVED_STEPS[index + 1].target, composer);
+        value.node(ARCHIVED_STEPS[index + 1].prepare[0].whenMissing);
         composer.getBoundingClientRect = () => ({
           left: 1134,
           right: 1228,
@@ -1695,15 +1750,15 @@ test('a late list scroll restoration is reframed once below the fixed header unl
   }
 });
 
-test('guide framing measures the new desktop header instead of the removed pseudo heading', async () => {
-  const index = indexOf('settings-security');
-  const step = STEPS[index];
+test('archived v3: guide framing measures the new desktop header instead of the removed pseudo heading', async () => {
+  const index = indexOf('settings-security', ARCHIVED_VERSION);
+  const step = ARCHIVED_STEPS[index];
   for (const headerBottom of [94, 138, 180]) {
     let scrollY = 0;
     let target;
-    const view = fixture({
+    const view = archivedFixture({
       href: '/settings?guideTour=1',
-      states: { [VERSION]: { status: 'in_progress', step: index } },
+      states: { [ARCHIVED_VERSION]: { status: 'in_progress', step: index } },
       setup(value) {
         const { win } = value;
         value.node('.main-content');
@@ -1743,22 +1798,22 @@ test('guide framing measures the new desktop header instead of the removed pseud
   }
 });
 
-test('mobile personal folds open only for the current target and preserve their original state when leaving', async () => {
-  const index = indexOf('settings-reading');
+test('archived v3: mobile personal folds open only for the current target and preserve their original state when leaving', async () => {
+  const index = indexOf('settings-reading', ARCHIVED_VERSION);
   for (const originallyOpen of [false, true]) {
     for (const leave of ['next', 'pause']) {
       let readingFold;
       let passwordFold;
       let unrelatedFold;
       let fontChoice;
-      const view = fixture({
+      const view = archivedFixture({
         href: '/settings?guideTour=1',
-        states: { [VERSION]: { status: 'in_progress', step: index } },
+        states: { [ARCHIVED_VERSION]: { status: 'in_progress', step: index } },
         setup(value) {
           readingFold = value.node('#reading-fold', { tag: 'details' });
           readingFold.className = 'personal-fold';
           readingFold.open = originallyOpen;
-          const reading = value.node(STEPS[index].target, {
+          const reading = value.node(ARCHIVED_STEPS[index].target, {
             tag: 'form',
             click: () => assert.fail('a tour must not click or submit the reading form'),
           });
@@ -1769,7 +1824,7 @@ test('mobile personal folds open only for the current target and preserve their 
           passwordFold = value.node('#password-fold', { tag: 'details' });
           passwordFold.className = 'personal-fold';
           passwordFold.append(
-            value.node(STEPS[index + 1].target, {
+            value.node(ARCHIVED_STEPS[index + 1].target, {
               tag: 'form',
               click: () => assert.fail('a tour must not click or submit the password form'),
             }),
@@ -1849,15 +1904,19 @@ test('unsafe target hrefs neither advance saved progress nor navigate', async ()
   assert.equal(view.dialog.open, false, 'an invalid link must never trap the user in the overlay');
 });
 
-test('resuming the ledger shows loading first then its real dialog with Max on top without toggling twice', async () => {
-  const index = indexOf('inventory-ledger');
-  const step = STEPS[index];
+test('archived v3: resuming the ledger shows loading first then its real dialog with Max on top without toggling twice', async () => {
+  const index = indexOf('inventory-ledger', ARCHIVED_VERSION);
+  const step = ARCHIVED_STEPS[index];
   let ledger;
   let openCount = 0;
-  const view = fixture({
+  const view = archivedFixture({
     href: '/inventory?guideTour=1',
     states: {
-      [VERSION]: { status: 'in_progress', step: index, completedTasks: ['visit_inventory'] },
+      [ARCHIVED_VERSION]: {
+        status: 'in_progress',
+        step: index,
+        completedTasks: ['visit_inventory'],
+      },
     },
     setup(value) {
       ledger = value.node('#wallet-ledger', { tag: 'dialog' });
@@ -1895,7 +1954,7 @@ test('resuming the ledger shows loading first then its real dialog with Max on t
 });
 
 test('Escape remains available during a held save, restores focus and prevents delayed navigation', async () => {
-  const index = indexOf('home-handbook');
+  const index = indexOf('home-launchpad');
   const gate = deferred();
   const view = fixture({
     href: '/?guideTour=1',
@@ -1927,7 +1986,7 @@ test('Escape remains available during a held save, restores focus and prevents d
 });
 
 test('a failed progress save leaves the highlighted step and lets Retry finish the same transition', async () => {
-  const index = indexOf('home-handbook');
+  const index = indexOf('home-launchpad');
   let fail = true;
   const view = fixture({
     href: '/?guideTour=1',
@@ -2007,7 +2066,7 @@ test('a manually selected release wins over a delayed first-account automatic we
   await settle();
   const navigation = view.events.find((event) => event.type === 'navigate');
   const destination = new URL(navigation.url, view.win.location.origin);
-  assert.equal(destination.pathname, '/');
+  assert.equal(destination.pathname, stepsFor(LATEST_RELEASE.id)[0].route);
   assert.equal(destination.searchParams.get('guideVersion'), LATEST_RELEASE.id);
   assert.equal(view.server.get(VERSION).status, 'not_started');
   assert.equal(view.server.get(VERSION).seenAt, null);
@@ -2112,25 +2171,29 @@ test('the short release keeps its prepared ledger open while the first row loads
   await view.controller.pause();
 });
 
-test('leaving the ledger closes its tour-opened dialog but preserves unrelated user dialogs', async () => {
-  const index = indexOf('inventory-ledger');
-  const firstInventoryIndex = indexOf('inventory-assets');
+test('archived v3: leaving the ledger closes its tour-opened dialog but preserves unrelated user dialogs', async () => {
+  const index = indexOf('inventory-ledger', ARCHIVED_VERSION);
+  const firstInventoryIndex = indexOf('inventory-assets', ARCHIVED_VERSION);
   let ledger;
   let userDialog;
-  const view = fixture({
+  const view = archivedFixture({
     href: '/inventory?guideTour=1',
     states: {
-      [VERSION]: { status: 'in_progress', step: index, completedTasks: ['visit_inventory'] },
+      [ARCHIVED_VERSION]: {
+        status: 'in_progress',
+        step: index,
+        completedTasks: ['visit_inventory'],
+      },
     },
     setup(value) {
       userDialog = value.node('#user-owned-dialog', { tag: 'dialog' });
       ledger = value.node('#wallet-ledger', { tag: 'dialog' });
-      const row = value.node(STEPS[index].target);
+      const row = value.node(ARCHIVED_STEPS[index].target);
       ledger.append(row);
-      value.selectors.set(STEPS[index].target, () => (ledger.open ? [row] : []));
+      value.selectors.set(ARCHIVED_STEPS[index].target, () => (ledger.open ? [row] : []));
       value.selectors.set('#wallet-ledger[open]', () => (ledger.open ? [ledger] : []));
       value.node('#wallet-ledger-open', { tag: 'button', click: () => ledger.showModal() });
-      value.node(STEPS[firstInventoryIndex].target);
+      value.node(ARCHIVED_STEPS[firstInventoryIndex].target);
     },
   });
   await settle();
@@ -2152,11 +2215,11 @@ test('leaving the ledger closes its tour-opened dialog but preserves unrelated u
       .length,
     1,
   );
-  const settingsIndex = indexOf('settings-reading');
+  const settingsIndex = indexOf('settings-reading', ARCHIVED_VERSION);
   stations.value = String(settingsIndex);
   stations.fire('change');
   await settle();
-  assert.equal(view.server.get(VERSION).step, settingsIndex);
+  assert.equal(view.server.get(ARCHIVED_VERSION).step, settingsIndex);
   const navigation = view.events.find((event) => event.type === 'navigate');
   assert.equal(new URL(navigation.url, view.win.location.origin).pathname, '/settings');
   await view.controller.pause();
@@ -2334,21 +2397,26 @@ test('guests get no automatic invitation and manual exploration stays inside tab
   assert.equal(view.events.filter((event) => event.type === 'navigate').length, 1);
 });
 
-test('the rebuilt checkin chapter explains the entry to guests without opening login or signing in', async () => {
-  const index = indexOf('shell-checkin');
-  const view = fixture({
+test('archived v3: the rebuilt checkin chapter explains the entry to guests without opening login or signing in', async () => {
+  const index = indexOf('shell-checkin', ARCHIVED_VERSION);
+  const view = archivedFixture({
     member: false,
     href: '/?guideTour=1',
     setup(value) {
       value.memory.set(
-        `freebbs_guide_guest_${VERSION}`,
-        JSON.stringify({ ...emptyProgress(), status: 'in_progress', step: index, seenAt: stamp }),
+        `freebbs_guide_guest_${ARCHIVED_VERSION}`,
+        JSON.stringify({
+          ...emptyProgress(ARCHIVED_VERSION),
+          status: 'in_progress',
+          step: index,
+          seenAt: stamp,
+        }),
       );
-      value.node(STEPS[index].target, {
+      value.node(ARCHIVED_STEPS[index].target, {
         tag: 'button',
         click: () => assert.fail('guest guide must not open login or checkin'),
       });
-      value.node(STEPS[index + 1].target);
+      value.node(ARCHIVED_STEPS[index + 1].target);
     },
   });
   await settle();
@@ -2365,14 +2433,14 @@ test('the rebuilt checkin chapter explains the entry to guests without opening l
   await view.controller.pause();
 });
 
-test('a confirmed empty activity list is immediately explained, while late real content can replace it', async (t) => {
+test('archived v3: a confirmed empty activity list is immediately explained, while late real content can replace it', async (t) => {
   t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: fixed });
-  const index = indexOf('activities-receipt');
-  const step = STEPS[index];
+  const index = indexOf('activities-receipt', ARCHIVED_VERSION);
+  const step = ARCHIVED_STEPS[index];
   let empty;
-  const view = fixture({
+  const view = archivedFixture({
     href: '/surveys?guideTour=1',
-    states: { [VERSION]: { status: 'in_progress', step: index } },
+    states: { [ARCHIVED_VERSION]: { status: 'in_progress', step: index } },
     setup(value) {
       empty = value.node(step.emptyReady);
     },
@@ -2390,5 +2458,115 @@ test('a confirmed empty activity list is immediately explained, while late real 
     .forEach((observer) => observer.callback([{ type: 'childList', target: view.doc.body }]));
   view.flushFrames();
   assert.equal(view.doc.getElementById('max-tour-body').textContent, step.body);
+  await view.controller.pause();
+});
+
+test('current and archived course tours prepare the real overview drawer before highlighting knowledge relations', async () => {
+  for (const version of [VERSION, ARCHIVED_VERSION]) {
+    const index = indexOf('course-relations', version);
+    const step = stepsFor(version)[index];
+    const next = stepsFor(version)[index + 1];
+    let overview;
+    const clicks = [];
+    const view = fixture({
+      href: `/course?course=math&guideTour=1&guideVersion=${version}`,
+      states: { [version]: { status: 'in_progress', step: index } },
+      setup(value) {
+        const focused = value.node(step.target);
+        focused.hidden = true;
+        const study = value.node(next.target, { tag: 'a' });
+        study.setAttribute('href', '/knowledge?course=math&point=MA-01-01');
+        overview = value.node('#course-knowledge-overview', { tag: 'dialog' });
+        value.selectors.set(step.prepare[0].whenMissing, () =>
+          overview.open ? [overview] : focused.hidden ? [] : [focused],
+        );
+        value.selectors.set(step.prepare[1].whenMissing, () =>
+          !overview.open && !focused.hidden ? [focused] : [],
+        );
+        value.node(step.prepare[0].selector, {
+          tag: 'button',
+          click: () => {
+            clicks.push('open-overview');
+            overview.showModal();
+          },
+        });
+        const relations = value.node(step.prepare[1].selector, {
+          tag: 'button',
+          click: () => {
+            clicks.push('show-relations');
+            overview.close();
+            focused.hidden = false;
+          },
+        });
+        overview.append(relations);
+        value.selectors.set(step.prepare[1].selector, () => (overview.open ? [relations] : []));
+        value.selectors.set(next.target, () => (overview.open ? [study] : []));
+        value.node(next.prepare[2].selector, {
+          tag: 'button',
+          click: () => {
+            clicks.push('open-focused-overview');
+            overview.showModal();
+          },
+        });
+        value.node(step.action.selector, { tag: 'button' });
+      },
+    });
+    await settle();
+    assert.deepEqual(clicks, ['open-overview', 'show-relations']);
+    assert.equal(overview.open, false);
+    assert.equal(view.retry.hidden, true);
+    assert.equal(view.doc.getElementById('max-tour-body').textContent, step.body);
+    view.next.click();
+    await settle();
+    assert.equal(view.controller.activeStep, index + 1);
+    assert.equal(view.next.textContent, '进入知识点');
+    assert.equal(view.retry.hidden, true);
+    assert.deepEqual(clicks, ['open-overview', 'show-relations', 'open-focused-overview']);
+    assert.equal(overview.open, true, 'the study link belongs to the selected node overview');
+    assert.equal(rewardWrites(view).length, 0);
+    await view.controller.pause();
+  }
+});
+
+test('the current detail-to-composer transition closes the post reader without opening an editor or publishing', async () => {
+  const index = indexOf('discussion-detail');
+  const next = STEPS[index + 1];
+  assert.equal(next.id, 'discussion-composer');
+  let closes = 0;
+  const view = fixture({
+    href: '/discussion?guideTour=1',
+    states: { [VERSION]: { status: 'in_progress', step: index } },
+    setup(value) {
+      value.doc.body.classList.add('post-reading');
+      const title = value.node(STEPS[index].target);
+      const entry = value.node(next.target, {
+        tag: 'button',
+        click: () => assert.fail('the tour must not open or publish a draft'),
+      });
+      entry.hidden = true;
+      value.selectors.set(next.prepare[0].whenMissing, () =>
+        value.doc.body.classList.contains('post-reading') ? [] : [value.doc.body],
+      );
+      value.node(next.prepare[0].selector, {
+        tag: 'button',
+        click: () => {
+          closes += 1;
+          value.doc.body.classList.remove('post-reading');
+          title.hidden = true;
+          entry.hidden = false;
+        },
+      });
+    },
+  });
+  await settle();
+  view.next.click();
+  await settle();
+  view.flushFrames();
+  assert.equal(view.controller.activeStep, index + 1);
+  assert.equal(closes, 1);
+  assert.equal(view.doc.body.classList.contains('post-reading'), false);
+  assert.equal(view.doc.getElementById('max-tour-body').textContent, next.body);
+  assert.equal(view.retry.hidden, true);
+  assert.equal(rewardWrites(view).length, 0);
   await view.controller.pause();
 });

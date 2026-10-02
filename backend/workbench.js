@@ -9,6 +9,7 @@ const { saveManualCourse } = require('./manual-courses');
 const { editImportedSchedule } = require('./campus-schedule-overrides');
 const { PREFERENCES_TABLE } = require('./planning-preferences');
 const { previewCourseImport, confirmCourseImport } = require('./course-imports');
+const { SERIES_TABLE, readSeries, summarizeSeries, mutateSeries } = require('./schedule-series');
 
 const NOTIFICATION_CATEGORIES = new Set([
   'course',
@@ -265,6 +266,7 @@ function parseRange(query) {
 }
 
 async function ensureWorkbenchTables(pool) {
+  await pool.query(SERIES_TABLE);
   await pool.execute(PREFERENCES_TABLE);
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS notifications (
@@ -1201,6 +1203,34 @@ function createWorkbenchRouter({
     }
   });
 
+  router.get('/schedule-items/:publicId/series', async (request, response) => {
+    const user = await requireAuth(request, response);
+    if (!user) return;
+    try {
+      // Homework deadlines are independent occurrences, even when attached to one course.
+      const series = request.params.publicId.startsWith('hw:')
+        ? null
+        : summarizeSeries(await readSeries(pool, user.id, request.params.publicId));
+      response.json({ series });
+    } catch (error) {
+      if ([400, 404, 409].includes(error.status))
+        response.status(error.status).json({ message: error.message });
+      else sendWorkbenchError(response, error, '读取重复安排失败');
+    }
+  });
+
+  router.post('/schedule-items/:publicId/series', async (request, response) => {
+    const user = await requireAuth(request, response);
+    if (!user) return;
+    try {
+      response.json(await mutateSeries(pool, user.id, request.params.publicId, request.body || {}));
+    } catch (error) {
+      if ([400, 404, 409].includes(error.status))
+        response.status(error.status).json({ message: error.message, code: error.code });
+      else sendWorkbenchError(response, error, '修改重复安排失败');
+    }
+  });
+
   router.post('/schedule-items', async (request, response) => {
     try {
       const user = await requireAuth(request, response);
@@ -1499,19 +1529,34 @@ function createWorkbenchRouter({
         return;
       }
 
+      const body = request.body || {};
+      if (
+        Object.hasOwn(body, 'version') &&
+        (!Number.isSafeInteger(body.version) || body.version < 1)
+      ) {
+        response.status(400).json({ message: '日程版本号无效' });
+        return;
+      }
       const [result] = await pool.execute(
         `UPDATE schedule_items
          SET status = 'cancelled',
              cancelled_at = COALESCE(cancelled_at, CURRENT_TIMESTAMP),
              deleted_at = CURRENT_TIMESTAMP,
-             dedupe_key = IF(source_reference LIKE 'manual:course:%', NULL, dedupe_key),
+             dedupe_key = IF(source_reference LIKE 'manual:course:%' OR source_reference LIKE 'manual:recurring:%', NULL, dedupe_key),
              user_overridden_at = CURRENT_TIMESTAMP,
              version = version + 1
-         WHERE public_id = ? AND user_id = ? AND deleted_at IS NULL`,
-        [request.params.publicId, user.id],
+         WHERE public_id = ? AND user_id = ? AND deleted_at IS NULL
+         ${Object.hasOwn(body, 'version') ? 'AND version = ?' : ''}`,
+        [
+          request.params.publicId,
+          user.id,
+          ...(Object.hasOwn(body, 'version') ? [body.version] : []),
+        ],
       );
       if (!result.affectedRows) {
-        response.status(404).json({ message: '日程不存在' });
+        response
+          .status(Object.hasOwn(body, 'version') ? 409 : 404)
+          .json({ message: '日程已更新或不存在，请刷新后重试' });
         return;
       }
       response.json({ ok: true });

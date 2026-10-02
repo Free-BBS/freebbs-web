@@ -24,7 +24,12 @@ const {
 } = require('../public/max-guide');
 const { GUIDE_VERSION, TASK_IDS, mergeProgress } = require('../backend/onboarding');
 const { RELEASES, LATEST_RELEASE, LEGACY_GUIDE_VERSIONS } = require('../public/max-guide-releases');
-const { STATIONS, RELEASE_STEP_IDS } = require('../public/max-guide-stations');
+const {
+  STATIONS,
+  ARCHIVED_STEPS,
+  ARCHIVED_STATIONS,
+  RELEASE_STEP_IDS,
+} = require('../public/max-guide-stations');
 
 const fixed = Date.parse('2026-09-20T10:00:00Z');
 const serverReply = (patch = {}) => ({ ...emptyProgress(), ...patch });
@@ -112,19 +117,19 @@ test('guide paths are fixed same-origin routes and exploration tasks match the a
     assert.throws(() => tourUrl(index));
 });
 
-test('the existing wool step follows the standalone ranch without losing identity or saved progress', () => {
-  const index = STEPS.findIndex((step) => step.id === 'profile-wool');
-  assert.equal(STEPS[index - 1].id, 'profile-ranch');
-  assert.equal(STEPS[index].station, 'profile');
-  assert.equal(STEPS[index].route, '/ranch');
-  assert.deepEqual(STEPS[index].prepare, [
+test('archived v3 wool step follows the standalone ranch without losing identity or saved progress', () => {
+  const index = ARCHIVED_STEPS.findIndex((step) => step.id === 'profile-wool');
+  assert.equal(ARCHIVED_STEPS[index - 1].id, 'profile-ranch');
+  assert.equal(ARCHIVED_STEPS[index].station, 'profile');
+  assert.equal(ARCHIVED_STEPS[index].route, '/ranch');
+  assert.deepEqual(ARCHIVED_STEPS[index].prepare, [
     {
       selector: '[data-ranch-open="ranch-wool-dialog"]',
       whenMissing: '#ranch-wool-dialog[open]',
     },
   ]);
   const url = new URL(
-    tourUrl(index, VERSION, {
+    tourUrl(index, 'max-v3', {
       uid: 'current-member',
       '/ranch': '/ranch?uid=previous-member',
     }),
@@ -133,7 +138,10 @@ test('the existing wool step follows the standalone ranch without losing identit
   assert.equal(url.pathname, '/ranch');
   assert.equal(url.searchParams.get('uid'), 'current-member');
   assert.equal(url.searchParams.get('guideTour'), '1');
-  assert.doesNotMatch(JSON.stringify(STEPS[index].prepare), /feed|shear|rub_wool|purchase/);
+  assert.doesNotMatch(
+    JSON.stringify(ARCHIVED_STEPS[index].prepare),
+    /feed|shear|rub_wool|purchase/,
+  );
 });
 
 test('a rebuilt prepared dialog transfers ownership without covering guide controls or adopting unrelated UI', () => {
@@ -341,18 +349,20 @@ test('oversized targets retain their entire visible hole and explicitly request 
   assert.deepEqual(all.hole, { x: 0, y: 0, width: 390, height: 844, radius: 16 });
 });
 
-test('guide versions resolve only declared full/release catalogues and every release step exists', () => {
+test('guide versions resolve current, archived v3 and immutable release catalogues', () => {
   assert.equal(stepsFor(), STEPS);
   assert.equal(stepsFor(VERSION), STEPS);
-  assert.ok(STEPS.length > 30 && STEPS.length <= 201);
+  assert.equal(STEPS.length, 16);
   assert.equal(new Set(STEPS.map((step) => step.id)).size, STEPS.length);
+  assert.equal(stepsFor('max-v3'), ARCHIVED_STEPS);
+  assert.equal(ARCHIVED_STEPS.length, 58);
   for (const release of RELEASES) {
     const ids = release.stepIds || RELEASE_STEP_IDS;
-    assert.ok(ids.length > 0 && ids.length < STEPS.length);
+    assert.ok(ids.length > 0 && ids.length < ARCHIVED_STEPS.length);
     assert.equal(new Set(ids).size, ids.length);
     for (const id of ids)
       assert.ok(
-        STEPS.some((step) => step.id === id),
+        [...STEPS, ...ARCHIVED_STEPS].some((step) => step.id === id),
         `missing release step: ${id}`,
       );
     assert.deepEqual(
@@ -364,7 +374,13 @@ test('guide versions resolve only declared full/release catalogues and every rel
       ids.length - 1,
     );
   }
-  for (const version of ['unknown', '__proto__', '', null, ...LEGACY_GUIDE_VERSIONS]) {
+  for (const version of [
+    'unknown',
+    '__proto__',
+    '',
+    null,
+    ...LEGACY_GUIDE_VERSIONS.filter((id) => id !== 'max-v3'),
+  ]) {
     assert.throws(() => stepsFor(version), `unknown client catalogue: ${version}`);
     assert.throws(() => tourUrl(0, version));
     assert.throws(() =>
@@ -373,9 +389,20 @@ test('guide versions resolve only declared full/release catalogues and every rel
   }
 });
 
-test('v3 follows the current navigation order and never reuses a legacy full-tour position', () => {
-  assert.equal(VERSION, 'max-v3');
-  assert.equal(STEPS.length, 58);
+test('v4 has five concise chapters and preserves every published v3 numeric position', () => {
+  assert.equal(VERSION, 'max-v4');
+  assert.deepEqual(
+    STATIONS.map((station) => station.id),
+    ['home', 'world', 'discussion', 'workbench', 'handbook'],
+  );
+  assert.equal(STEPS.length, 16);
+  assert.deepEqual(
+    STEPS.filter((step, index) => index === 0 || step.station !== STEPS[index - 1].station).map(
+      (step) => step.station,
+    ),
+    ['home', 'world', 'discussion', 'workbench', 'handbook'],
+  );
+  assert.equal(ARCHIVED_STEPS.length, 58);
   const expected = [
     'shell',
     'home',
@@ -398,16 +425,17 @@ test('v3 follows the current navigation order and never reuses a legacy full-tou
     'handbook',
   ];
   assert.deepEqual(
-    STATIONS.map((station) => station.id),
+    ARCHIVED_STATIONS.map((station) => station.id),
     expected,
   );
   assert.deepEqual(
-    STEPS.filter((step, i) => i === 0 || step.station !== STEPS[i - 1].station).map(
-      (step) => step.station,
-    ),
+    ARCHIVED_STEPS.filter(
+      (step, i) => i === 0 || step.station !== ARCHIVED_STEPS[i - 1].station,
+    ).map((step) => step.station),
     expected,
   );
-  assert.equal(STEPS[0].id, 'shell-search');
+  assert.equal(ARCHIVED_STEPS[0].id, 'shell-search');
+  assert.equal(STEPS[0].id, 'home-launchpad');
   assert.throws(() => tourUrl(23, 'max-v2'));
   const oldLink = new URL(
     tourUrl(0, VERSION, { '/': '/?guideVersion=max-v2&guideTour=1' }),
@@ -428,9 +456,17 @@ test('v3 follows the current navigation order and never reuses a legacy full-tou
     'profile-wool',
   ]);
   assert.notEqual(LATEST_RELEASE.id, original.id);
-  const completed = normalizeProgress({ ...emptyProgress(), status: 'completed', step: 42 });
+  const completed = normalizeProgress(
+    { ...emptyProgress('max-v3'), status: 'completed', step: 42 },
+    'max-v3',
+  );
   assert.equal(completed.status, 'completed');
   assert.equal(completed.step, 42);
+  assert.equal(stepsFor('max-v3')[completed.step].id, ARCHIVED_STEPS[42].id);
+  assert.equal(
+    new URL(tourUrl(42, 'max-v3'), 'https://www.free-bbs.cn').searchParams.get('guideVersion'),
+    'max-v3',
+  );
   const originalProgress = normalizeProgress(
     { ...emptyProgress(original.id), status: 'in_progress', step: 6 },
     original.id,
@@ -517,8 +553,8 @@ test('safe guide links reject off-origin and wrong-route destinations without lo
   assert.equal(release.searchParams.get('view'), 'orbit');
   const profile = new URL(
     tourUrl(
-      STEPS.findIndex((step) => step.route === '/profile'),
-      VERSION,
+      ARCHIVED_STEPS.findIndex((step) => step.route === '/profile'),
+      'max-v3',
       {
         uid: 'my-user',
         '/profile': '/profile?uid=someone-else',
@@ -529,12 +565,12 @@ test('safe guide links reject off-origin and wrong-route destinations without lo
   assert.equal(profile.searchParams.get('uid'), 'my-user');
 });
 
-test('world overview stations reset concealed planets and never reuse a different island modal', () => {
+test('archived v3: world overview stations reset concealed planets and never reuse a different island modal', () => {
   const math = '.island-orbit-item[data-world-id="mathematics"]';
   const physics = '.island-orbit-item[data-world-id="physics"]';
   const visiblePlanets = `#world-orbit:has(${math}:not([aria-hidden="true"])):has(${physics}:not([aria-hidden="true"]))`;
   for (const id of ['world-coming-islands', 'world-mathematics', 'world-island-overview']) {
-    const step = STEPS.find((entry) => entry.id === id);
+    const step = ARCHIVED_STEPS.find((entry) => entry.id === id);
     for (const initial of [
       { stage: true, modal: false, hidden: true, world: 'signals' },
       { stage: false, modal: true, hidden: true, world: 'signals' },
@@ -660,8 +696,8 @@ test('resumed mathematics course step returns from another island instead of acc
   }
 });
 
-test('comment guidance highlights the shared entry instead of a desktop-only inline editor', () => {
-  const step = STEPS.find((entry) => entry.id === 'discussion-reply-max');
+test('archived v3: comment guidance highlights the shared entry instead of a desktop-only inline editor', () => {
+  const step = ARCHIVED_STEPS.find((entry) => entry.id === 'discussion-reply-max');
   const style = fs.readFileSync(nodePath.join(__dirname, '../public/post-reader.css'), 'utf8');
   const reader = fs.readFileSync(nodePath.join(__dirname, '../public/post-reader.js'), 'utf8');
   assert.match(style, /\.discussion-comments > #discussion-comment-form\s*\{\s*display: none;/);
@@ -677,7 +713,12 @@ test('publishing guidance includes the mobile create menu without navigating or 
   assert.equal(step.target, '#discussion-create-toggle, .mobile-publish');
   assert.match(step.body, /手机上先点底部「＋」，再选「发帖」/);
   assert.equal(step.action, undefined);
-  assert.equal(step.prepare, undefined);
+  assert.deepEqual(step.prepare, [
+    {
+      selector: '#discussion-detail [data-action="close-detail"]',
+      whenMissing: 'body:not(.post-reading)',
+    },
+  ]);
 });
 
 test('course guide preparation cannot navigate away while the real map API is pending', async () => {
@@ -763,6 +804,8 @@ test('station actions and preparation are restricted to an audited read-only vie
     '#world-orbit',
     '#course-map-reset-view',
     '[data-reader-node-id]',
+    '.course-map-focus-center [data-reader-node-id]',
+    '#course-knowledge-overview[open] .knowledge-overview-drawer-footer > button',
     '[data-course-map-arrow-help-toggle]',
     '#knowledge-return-overview',
     '#knowledge-start-reading',
@@ -771,6 +814,7 @@ test('station actions and preparation are restricted to an audited read-only vie
     '#knowledge-chat-close',
     '#discussion-post-list .discussion-post-card:has(.discussion-pin-badge) [data-action="open-post"], #discussion-post-list:not(:has(.discussion-pin-badge)) [data-action="open-post"]',
     '[data-action="close-detail"]',
+    '#discussion-detail [data-action="close-detail"]',
     '#discussion-create-toggle',
     '.max-composer-tools > summary',
     '#aichat-dialog-toggle',
@@ -782,46 +826,52 @@ test('station actions and preparation are restricted to an audited read-only vie
   ]);
   const readLinks = new Map([
     ['a.island-course-planet[data-course-slug="math"]', '/course'],
-    ['.course-reader-study-link', '/knowledge'],
+    ['#course-knowledge-overview[open] .knowledge-overview-study', '/knowledge'],
     ['#settings-profile-link', '/profile'],
     ['.ranch-preview-link', '/ranch'],
   ]);
-  const stationIds = new Set(STATIONS.map((station) => station.id));
-  for (const [index, step] of STEPS.entries()) {
-    assert.ok(stationIds.has(step.station));
-    assert.equal(
-      step.route,
-      step.id === 'profile-wool'
-        ? '/ranch'
-        : STATIONS.find((station) => station.id === step.station).route,
-    );
-    assert.ok(step.target && step.title && step.body && step.caption);
-    for (const view of [step, step.reveal].filter(Boolean)) {
-      for (const action of view.prepare || []) {
-        assert.ok(
-          readControls.has(action.selector),
-          `unaudited prepare control: ${action.selector}`,
-        );
-        assert.ok(
-          action.whenMissing,
-          'prepare clicks must be guarded to avoid toggling a ready view shut',
-        );
-        if (action.key) {
-          assert.equal(action.selector, '#world-orbit');
-          assert.equal(action.key, 'Home', 'only the read-only orbit reset key is audited');
+  for (const [steps, stationCatalogue] of [
+    [STEPS, STATIONS],
+    [ARCHIVED_STEPS, ARCHIVED_STATIONS],
+  ]) {
+    const stationIds = new Set(stationCatalogue.map((station) => station.id));
+    for (const [index, step] of steps.entries()) {
+      assert.ok(stationIds.has(step.station));
+      assert.equal(
+        step.route,
+        step.id === 'profile-wool' ||
+          (step.station === 'world' && ['/course', '/knowledge'].includes(step.route))
+          ? step.route
+          : stationCatalogue.find((station) => station.id === step.station).route,
+      );
+      assert.ok(step.target && step.title && step.body && step.caption);
+      for (const view of [step, step.reveal].filter(Boolean)) {
+        for (const action of view.prepare || []) {
+          assert.ok(
+            readControls.has(action.selector),
+            `unaudited prepare control: ${action.selector}`,
+          );
+          assert.ok(
+            action.whenMissing,
+            'prepare clicks must be guarded to avoid toggling a ready view shut',
+          );
+          if (action.key) {
+            assert.equal(action.selector, '#world-orbit');
+            assert.equal(action.key, 'Home', 'only the read-only orbit reset key is audited');
+          }
         }
-      }
-      if (!view.action) continue;
-      assert.ok(['click', 'link'].includes(view.action.kind));
-      if (view.action.kind === 'click')
-        assert.ok(
-          readControls.has(view.action.selector),
-          `unaudited click: ${view.action.selector}`,
-        );
-      else assert.equal(readLinks.get(view.action.selector), STEPS[index + 1].route);
-      if (view.action.alternateSelector) {
-        assert.equal(view.action.kind, 'click');
-        assert.ok(readControls.has(view.action.alternateSelector));
+        if (!view.action) continue;
+        assert.ok(['click', 'link'].includes(view.action.kind));
+        if (view.action.kind === 'click')
+          assert.ok(
+            readControls.has(view.action.selector),
+            `unaudited click: ${view.action.selector}`,
+          );
+        else assert.equal(readLinks.get(view.action.selector), steps[index + 1].route);
+        if (view.action.alternateSelector) {
+          assert.equal(view.action.kind, 'click');
+          assert.ok(readControls.has(view.action.alternateSelector));
+        }
       }
     }
   }

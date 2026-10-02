@@ -29,6 +29,8 @@ const TEST_FILES = [
   'backend/community.integration.test.js',
   'backend/workbench-schedule-planner.mysql.test.js',
   'backend/course-schedule.mysql.test.js',
+  'backend/teacher-accounts.mysql.test.js',
+  'backend/schedule-series.mysql.test.js',
 ];
 
 function testEnvironment(socketPath, original = process.env) {
@@ -89,6 +91,8 @@ const REQUIRED_MYSQL_TESTS = [
   'MySQL ledger captures',
   'isolated MySQL: planner preview',
   'isolated MySQL: course migration, settings, resync and connector generation',
+  'isolated MySQL verifies teacher accounts, identity ownership, retries and concurrent binding over HTTP',
+  'isolated MySQL: series ownership, rules, exceptions, concurrency, rollback and imported resync',
 ];
 
 function validateMysqlTestOutput(output) {
@@ -179,7 +183,7 @@ function run(command, args, options = {}, verifyTests = false) {
 async function main() {
   const workbenchOnly = process.argv.includes('--workbench-only');
   const testFiles = workbenchOnly
-    ? TEST_FILES.filter((file) => /(?:workbench|course-schedule)/.test(file))
+    ? TEST_FILES.filter((file) => /(?:workbench|course-schedule|schedule-series)/.test(file))
     : TEST_FILES;
   const root = path.resolve(__dirname, '..');
   // Linux uses a deliberately short fixed parent so the Unix socket fits its length limit.

@@ -81,6 +81,13 @@
     scheduleAllDay: document.getElementById('workbench-schedule-all-day'),
     scheduleFormStatus: document.getElementById('workbench-schedule-form-status'),
     scheduleSubmit: document.getElementById('workbench-schedule-submit'),
+    scheduleDelete: document.getElementById('workbench-schedule-delete'),
+    scheduleSeries: document.getElementById('workbench-schedule-series'),
+    seriesSummary: document.getElementById('workbench-series-summary'),
+    seriesScope: document.getElementById('workbench-series-scope'),
+    seriesMode: document.getElementById('workbench-series-mode'),
+    seriesModeLabel: document.getElementById('workbench-series-mode-label'),
+    seriesDates: document.getElementById('workbench-series-dates'),
     conflictPanel: document.getElementById('workbench-conflict-panel'),
     sourceProbe: document.getElementById('workbench-source-probe'),
     sourceStatus: document.getElementById('workbench-source-status'),
@@ -130,6 +137,9 @@
     proposals: [],
     notificationFilters: { category: '', unread: false, favorite: false, search: '' },
     conflictAcknowledgement: '',
+    editedSeries: null,
+    seriesLoading: false,
+    editorRequest: 0,
     campusSemesters: [],
   };
 
@@ -1490,6 +1500,14 @@
     if (!requireLogin()) return;
     const fallback = getDefaultScheduleWindow();
     elements.scheduleForm?.reset();
+    state.editorRequest += 1;
+    const editorRequest = state.editorRequest;
+    state.editedSeries = null;
+    state.seriesLoading = false;
+    elements.scheduleSeries.hidden = true;
+    elements.scheduleDelete.hidden = !item || item.editable === false;
+    elements.scheduleDelete.disabled = false;
+    elements.scheduleSubmit.disabled = false;
     elements.scheduleId.value = item?.publicId || '';
     elements.scheduleVersion.value = item?.version || '';
     elements.scheduleForm.dataset.sourceRevision = item?.sourceRevision || '';
@@ -1511,13 +1529,84 @@
     resetConflictWarning();
     openDialog(elements.scheduleDialog);
     elements.scheduleTitle.focus();
+    if (item && (item.seriesKey || item.courseScheduleReference)) {
+      state.seriesLoading = true;
+      elements.scheduleDelete.disabled = true;
+      elements.scheduleSubmit.disabled = true;
+      elements.scheduleFormStatus.textContent = '正在读取重复安排…';
+      app
+        .callApi(`/workbench/schedule-items/${encodeURIComponent(item.publicId)}/series`, {
+          auth: true,
+        })
+        .then(({ series }) => {
+          if (editorRequest !== state.editorRequest) return;
+          state.editedSeries = series;
+          elements.scheduleSeries.hidden = !series;
+          if (series) {
+            const rule = series.recurrence;
+            const repeat = rule
+              ? `每 ${rule.interval} ${rule.unit === 'week' ? '周' : '天'} · ${rule.until ? `截止 ${rule.until}` : `从本次起 ${rule.count} 次`}`
+              : '按实际日期安排';
+            elements.seriesSummary.textContent = `${repeat}。${series.description}`;
+            elements.seriesDates.replaceChildren(
+              ...series.occurrences.map((entry) => {
+                const li = document.createElement('li');
+                li.textContent = `${formatMoment(entry.startAt)} — ${formatMoment(entry.endAt)}${entry.deleted ? ' · 已删除' : entry.exception ? ' · 单次修改' : ''}`;
+                return li;
+              }),
+            );
+            elements.seriesScope.value = 'single';
+            elements.seriesMode.value = 'keep';
+            if (rule) {
+              elements.courseInterval.value =
+                rule.unit === 'day' && rule.interval === 1
+                  ? 'daily'
+                  : rule.unit === 'week' && [1, 2].includes(rule.interval)
+                    ? String(rule.interval)
+                    : 'custom';
+              elements.repeatInterval.value = String(rule.interval);
+              elements.repeatUnit.value = rule.unit;
+              elements.repeatEndMode.value = rule.until ? 'until' : 'count';
+              elements.repeatUntil.value = rule.until || '';
+              elements.courseCount.value = String(rule.count || series.remaining);
+            } else {
+              elements.courseInterval.value = '1';
+              elements.repeatEndMode.value = 'count';
+              elements.courseCount.value = String(Math.max(1, series.remaining));
+            }
+          }
+          elements.scheduleFormStatus.textContent = '';
+          updateScheduleKind();
+        })
+        .catch((error) => {
+          if (editorRequest !== state.editorRequest) return;
+          elements.scheduleFormStatus.textContent = `${error.message}，请关闭后重新打开。`;
+          // A missing/stale series must not silently become an unrelated single event.
+          elements.scheduleDelete.disabled = true;
+          elements.scheduleSubmit.disabled = true;
+        })
+        .finally(() => {
+          if (editorRequest !== state.editorRequest) return;
+          state.seriesLoading = false;
+          if (state.editedSeries) {
+            elements.scheduleDelete.disabled = false;
+            elements.scheduleSubmit.disabled = false;
+          }
+        });
+    }
   }
 
   function updateScheduleKind() {
     const editing = Boolean(elements.scheduleId.value);
     const kind = elements.scheduleKind.value;
     const isDeadline = kind === 'deadline';
-    const repeating = !editing && kind !== 'deadline' && elements.courseInterval.value !== 'none';
+    const editingRule =
+      editing &&
+      state.editedSeries &&
+      elements.seriesScope.value === 'following' &&
+      elements.seriesMode.value === 'replace';
+    const repeating =
+      (!editing || editingRule) && kind !== 'deadline' && elements.courseInterval.value !== 'none';
     elements.scheduleDialog.dataset.kind = kind;
     elements.scheduleStart.closest('label').hidden = isDeadline;
     elements.scheduleStart.required = !isDeadline;
@@ -1535,25 +1624,39 @@
         : '结束时间';
     elements.scheduleAllDay.closest('label').hidden = kind !== 'event';
     if (kind !== 'event') elements.scheduleAllDay.checked = false;
-    elements.courseRepeat.hidden = editing || isDeadline;
-    elements.courseInterval.disabled = editing || isDeadline;
+    elements.courseRepeat.hidden = (editing && !editingRule) || isDeadline;
+    elements.courseInterval.disabled = (editing && !editingRule) || isDeadline;
+    elements.seriesModeLabel.hidden =
+      !state.editedSeries || elements.seriesScope.value !== 'following';
+    elements.scheduleDelete.textContent =
+      state.editedSeries && elements.seriesScope.value === 'following'
+        ? '删除本次及以后'
+        : '删除本次日程';
     updateRepeatPreview();
-    elements.scheduleDialogTitle.textContent = editing
-      ? isDeadline
-        ? '编辑 DDL'
-        : '编辑安排'
-      : '新增安排';
-    elements.scheduleKindHint.textContent = elements.scheduleForm.dataset.sourceRevision
-      ? '仅修改个人计划中的本次安排，不回写网络学堂；重新同步会保留你的修改'
-      : isDeadline
-        ? '个人 DDL 不依赖网络学堂；只标记截止时间，不占用此前整段时间'
-        : kind === 'course' && !editing
-          ? '选课、旁听都可以手动加入，不需要连接网络学堂。每周有不同时间或地点时，请分别添加；节假日和调停课需自行修改'
-          : kind === 'course'
-            ? '仅修改本次课程，其余重复课程保持不变'
-            : editing
-              ? '仅修改本次安排，其余重复安排保持不变'
-              : '';
+    elements.scheduleDialogTitle.textContent =
+      state.editedSeries && elements.seriesScope.value === 'following'
+        ? '编辑后续安排'
+        : editing
+          ? isDeadline
+            ? '编辑 DDL'
+            : '编辑安排'
+          : '新增安排';
+    elements.scheduleKindHint.textContent =
+      state.editedSeries && elements.seriesScope.value === 'following'
+        ? state.editedSeries.imported
+          ? '调整个人计划中的本次及以后课程，不回写网络学堂；重新同步保留个人安排'
+          : '调整本次及以后的安排；此前安排和其他单次修改、删除保留'
+        : elements.scheduleForm.dataset.sourceRevision
+          ? '仅修改个人计划中的本次安排，不回写网络学堂；重新同步会保留你的修改'
+          : isDeadline
+            ? '个人 DDL 不依赖网络学堂；只标记截止时间，不占用此前整段时间'
+            : kind === 'course' && !editing
+              ? '选课、旁听都可以手动加入，不需要连接网络学堂。每周有不同时间或地点时，请分别添加；节假日和调停课需自行修改'
+              : kind === 'course'
+                ? '仅修改本次课程，其余重复课程保持不变'
+                : editing
+                  ? '仅修改本次安排，其余重复安排保持不变'
+                  : '';
     resetConflictWarning();
   }
 
@@ -1570,7 +1673,12 @@
   }
 
   function updateRepeatPreview() {
-    const enabled = !elements.scheduleId.value && elements.scheduleKind.value !== 'deadline';
+    const enabled =
+      (!elements.scheduleId.value ||
+        (state.editedSeries &&
+          elements.seriesScope.value === 'following' &&
+          elements.seriesMode.value === 'replace')) &&
+      elements.scheduleKind.value !== 'deadline';
     const repeating = enabled && elements.courseInterval.value !== 'none';
     const custom = repeating && elements.courseInterval.value === 'custom';
     const byCount = repeating && elements.repeatEndMode.value === 'count';
@@ -1606,6 +1714,111 @@
       );
     } catch (error) {
       elements.repeatSummary.textContent = error.message;
+    }
+  }
+
+  function seriesRequest(operation) {
+    const series = state.editedSeries;
+    const body = {
+      scope: elements.seriesScope.value,
+      operation,
+      version: series.version,
+      fingerprint: series.fingerprint,
+    };
+    if (operation === 'update') {
+      body.patch = {
+        title: elements.scheduleTitle.value,
+        description: elements.scheduleDescription.value,
+        startAt: shanghaiInputToIso(elements.scheduleStart.value),
+        endAt: shanghaiInputToIso(elements.scheduleEnd.value),
+        allDay: elements.scheduleAllDay.checked,
+        timezone: 'Asia/Shanghai',
+      };
+      body.recurrenceMode = elements.seriesMode.value;
+      if (body.scope === 'following' && body.recurrenceMode === 'replace') {
+        body.recurrence = repeatRule();
+        window.FreeBbsScheduleRecurrence.expand({ ...body.patch, recurrence: body.recurrence });
+      }
+    }
+    return body;
+  }
+
+  async function submitSeriesSchedule() {
+    elements.scheduleSubmit.disabled = true;
+    elements.scheduleDelete.disabled = true;
+    try {
+      const body = seriesRequest('update');
+      const conflictKey = JSON.stringify(body);
+      body.allowConflicts = state.conflictAcknowledgement === conflictKey;
+      elements.scheduleFormStatus.textContent = '正在保存日程安排…';
+      await app.callApi(
+        `/workbench/schedule-items/${encodeURIComponent(elements.scheduleId.value)}/series`,
+        {
+          method: 'POST',
+          auth: true,
+          body: JSON.stringify(body),
+        },
+      );
+      closeDialog(elements.scheduleDialog);
+      await loadWorkbenchData();
+    } catch (error) {
+      if (error.code === 'course_conflict') {
+        state.conflictAcknowledgement = JSON.stringify(seriesRequest('update'));
+        elements.conflictPanel.classList.remove('hidden');
+        elements.conflictPanel.textContent = error.message;
+        elements.scheduleSubmit.textContent = '仍然保存';
+      }
+      elements.scheduleFormStatus.textContent = error.message || '保存失败，请重试。';
+      if (error.status === 409 && error.code !== 'course_conflict') {
+        closeDialog(elements.scheduleDialog);
+        await loadWorkbenchData();
+        // eslint-disable-next-line no-alert
+        window.alert(error.message);
+      }
+    } finally {
+      elements.scheduleSubmit.disabled = false;
+      elements.scheduleDelete.disabled = false;
+    }
+  }
+
+  async function deleteEditedSchedule() {
+    if (state.seriesLoading) return;
+    const publicId = elements.scheduleId.value;
+    const item = state.scheduleItems.find((entry) => entry.publicId === publicId);
+    if (!item || item.editable === false) return;
+    const following = state.editedSeries && elements.seriesScope.value === 'following';
+    // eslint-disable-next-line no-alert
+    if (
+      !window.confirm(
+        following
+          ? `删除“${item.title}”本次及以后的安排？此前安排和其他单次修改、删除将保留。`
+          : `删除本次日程“${item.title}”？`,
+      )
+    )
+      return;
+    elements.scheduleDelete.disabled = true;
+    elements.scheduleSubmit.disabled = true;
+    try {
+      if (state.editedSeries) {
+        await app.callApi(`/workbench/schedule-items/${encodeURIComponent(publicId)}/series`, {
+          method: 'POST',
+          auth: true,
+          body: JSON.stringify(seriesRequest('delete')),
+        });
+        closeDialog(elements.scheduleDialog);
+        await loadWorkbenchData();
+      } else await mutate('delete-schedule', publicId, { confirmed: true });
+    } catch (error) {
+      elements.scheduleFormStatus.textContent = error.message || '删除失败，请重试。';
+      if (error.status === 409) {
+        closeDialog(elements.scheduleDialog);
+        await loadWorkbenchData();
+        // eslint-disable-next-line no-alert
+        window.alert(error.message);
+      }
+    } finally {
+      elements.scheduleDelete.disabled = false;
+      elements.scheduleSubmit.disabled = false;
     }
   }
 
@@ -1662,6 +1875,11 @@
 
   async function submitSchedule(event) {
     event.preventDefault();
+    if (state.seriesLoading) return;
+    if (state.editedSeries) {
+      await submitSeriesSchedule();
+      return;
+    }
     const publicId = elements.scheduleId.value;
     const endAt = shanghaiInputToIso(elements.scheduleEnd.value);
     const isDeadline = elements.scheduleDialog.dataset.kind === 'deadline';
@@ -1927,7 +2145,7 @@
     requestWeekCardLayout();
   }
 
-  async function mutate(action, publicId) {
+  async function mutate(action, publicId, { confirmed = false } = {}) {
     const importantItem = state.importantItems.find((item) => item.publicId === publicId);
     const notification = state.notifications.find((item) => item.publicId === publicId);
     const scheduleItem = state.scheduleItems.find((item) => item.publicId === publicId);
@@ -2012,18 +2230,21 @@
       });
     } else if (action === 'delete-schedule' && scheduleItem) {
       // eslint-disable-next-line no-alert
-      if (!window.confirm(`删除日程“${scheduleItem.title}”？`)) return;
+      if (!confirmed && !window.confirm(`删除日程“${scheduleItem.title}”？`)) return;
       await app.callApi(`/workbench/schedule-items/${encodeURIComponent(publicId)}`, {
         method: 'DELETE',
-        ...(scheduleItem.sourceRevision
+        ...(scheduleItem.version
           ? {
               body: JSON.stringify({
                 version: scheduleItem.version,
-                sourceRevision: scheduleItem.sourceRevision,
+                ...(scheduleItem.sourceRevision
+                  ? { sourceRevision: scheduleItem.sourceRevision }
+                  : {}),
               }),
             }
           : {}),
       });
+      closeDialog(elements.scheduleDialog);
     } else if (action === 'confirm-schedule' && scheduleItem) {
       const conflicts = await checkScheduleConflicts({
         publicId,
@@ -2337,6 +2558,9 @@
     .getElementById('workbench-important-delete')
     ?.addEventListener('click', handleShellClick);
   elements.scheduleForm?.addEventListener('submit', submitSchedule);
+  elements.scheduleDelete?.addEventListener('click', deleteEditedSchedule);
+  elements.seriesScope?.addEventListener('change', updateScheduleKind);
+  elements.seriesMode?.addEventListener('change', updateScheduleKind);
   elements.scheduleForm?.addEventListener('input', () => {
     resetConflictWarning();
     updateRepeatPreview();

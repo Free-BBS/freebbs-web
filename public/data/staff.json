@@ -1,0 +1,240 @@
+{
+  "sourceDate": "2026-10-02",
+  "members": [
+    {
+      "name": "张亦驰",
+      "groups": ["产品设计·总负责人", "课程部"],
+      "introduction": "苟利于民，不必法古；苟周于事，不必循俗。勠力同心，和衷共济；草木蔓发，春山在望。击鼓催征稳驭舟，奋楫扬帆启新程。",
+      "photo": "/assets/staff/zhang-yichi.png",
+      "generalResponsibilities": ["产品设计总负责人", "课程总负责人"]
+    },
+    {
+      "name": "周步星",
+      "groups": ["产品设计·总负责人", "技术部"],
+      "introduction": "喜欢运动、听歌",
+      "photo": "/assets/staff/member-16.jpg",
+      "generalResponsibilities": ["技术总负责人"]
+    },
+    {
+      "name": "刘国豪",
+      "groups": ["产品设计·总负责人", "战略部"],
+      "introduction": "我是零字班刘国豪，期待和大家共同学习进步，共创属于THUEEer的学习发展社区！",
+      "photo": "/assets/staff/member-30.jpg",
+      "generalResponsibilities": ["战略总负责人"]
+    },
+    {
+      "name": "王从一",
+      "groups": ["产品设计·总负责人", "课程部"],
+      "introduction": "希望与大家一起进步，成为更好的自己！",
+      "photo": "/assets/staff/member-32.jpg",
+      "generalResponsibilities": ["产品设计总负责人", "课程总负责人"]
+    },
+    {
+      "name": "刘家赫",
+      "groups": ["产品设计·总负责人", "技术部"],
+      "introduction": "大家好，我是刘家赫，主要负责FREEBBS网站的技术开发工作，欢迎大家与我讨论交流网站的设计与发展，闲暇时间一起玩棋牌或解谜游戏也欢迎👏",
+      "photo": "/assets/staff/member-28.jpg",
+      "generalResponsibilities": ["技术总负责人"]
+    },
+    {
+      "name": "张弛",
+      "groups": ["产品设计·总负责人", "战略部", "课程部"],
+      "introduction": "猫注六经时，六经皆注猫",
+      "photo": "/assets/staff/member-33.jpg",
+      "courseGroups": ["信号组"],
+      "generalResponsibilities": ["战略总负责人"]
+    },
+    {
+      "name": "项思锐",
+      "groups": ["产品设计·总负责人", "战略部"],
+      "introduction": "希望和大家多多探索~",
+      "photo": "/assets/staff/member-29.jpg",
+      "generalResponsibilities": ["产品设计总负责人"]
+    },
+    {
+      "name": "江玮陶",
+      "groups": ["产品设计·总负责人", "技术部", "课程部"],
+      "introduction": "codex爱好者/欢迎来www.weitao-jiang.cn找我玩捏",
+      "photo": "/assets/staff/member-02.jpg",
+      "courseGroups": ["电路组"],
+      "courseResponsibilities": ["电子电路与系统基础课程负责人"],
+      "generalResponsibilities": ["开发总负责人"]
+    },
+    {
+      "name": "王宇翀",
+      "groups": ["产品设计·总负责人", "战略部", "技术部"],
+      "introduction": "FreeBBS发展端负责人",
+      "photo": "/assets/staff/member-19.png",
+      "generalResponsibilities": ["发展端总负责人"]
+    },
+    {
+      "name": "毛开逸",
+      "groups": ["技术部"],
+      "introduction": "喜欢和ai协作拥抱新质生产力的电子系玩家～",
+      "photo": "/assets/staff/member-01.jpg"
+    },
+    {
+      "name": "刘若桐",
+      "groups": ["技术部"],
+      "introduction": "刘·万有引力·VibeCoding忠实拥护者·AAA硬件批发·学堂路车神·若桐",
+      "photo": "/assets/staff/member-03.png"
+    },
+    {
+      "name": "张宸瑞",
+      "groups": ["课程部"],
+      "introduction": "precise metrics",
+      "photo": "/assets/staff/member-04.jpg",
+      "courseGroups": ["信号组"]
+    },
+    {
+      "name": "李泊衡",
+      "groups": ["技术部"],
+      "introduction": "一个脱离了高级趣味的人",
+      "photo": "/assets/staff/member-05.png"
+    },
+    {
+      "name": "时豪",
+      "groups": ["战略部"],
+      "introduction": "EE PhD ing，照片看起来毕业了，实际并没有毕业",
+      "photo": "/assets/staff/member-06.jpg"
+    },
+    {
+      "name": "王禹博",
+      "groups": ["课程部"],
+      "introduction": "喜食章鱼小丸子",
+      "photo": "/assets/staff/member-07.jpg",
+      "courseGroups": ["信号组"]
+    },
+    {
+      "name": "刘正韬",
+      "groups": ["课程部"],
+      "introduction": "电路苦手，干饭高手",
+      "photo": "/assets/staff/member-08.png",
+      "courseGroups": ["数学组"],
+      "courseResponsibilities": ["高等微积分课程负责人"]
+    },
+    {
+      "name": "罗昊东",
+      "groups": ["课程部"],
+      "introduction": "入乎其内，出乎其外",
+      "photo": "/assets/staff/member-09.jpg",
+      "courseGroups": ["数学组"]
+    },
+    {
+      "name": "刘君锋",
+      "groups": ["课程部"],
+      "introduction": "保持神秘",
+      "photo": "/assets/staff/member-10.jpg",
+      "courseGroups": ["数学组"]
+    },
+    {
+      "name": "杨咏",
+      "groups": ["战略部"],
+      "introduction": "从体育，向未来",
+      "photo": "/assets/staff/member-11.png"
+    },
+    {
+      "name": "孔为",
+      "groups": ["技术部"],
+      "introduction": "关注塔菲喵~\n关注塔菲谢谢喵~",
+      "photo": "/assets/staff/member-12.jpg"
+    },
+    {
+      "name": "陈思齐",
+      "groups": ["技术部"],
+      "introduction": "热爱生活的五道口体校大学生",
+      "photo": "/assets/staff/member-13.jpg"
+    },
+    {
+      "name": "杨佳宜",
+      "groups": ["课程部"],
+      "introduction": "他们无法理解：世界上有足球，舞蹈和花样滑冰，人为什么还会悲伤",
+      "photo": "/assets/staff/member-14.jpg",
+      "courseGroups": ["电路组"]
+    },
+    {
+      "name": "林子昂",
+      "groups": ["课程部"],
+      "introduction": "你好",
+      "photo": "/assets/staff/member-15.jpg",
+      "courseGroups": ["电路组"]
+    },
+    {
+      "name": "李方时",
+      "groups": ["课程部"],
+      "introduction": "我是无54班李方时，科协学培部部员，五字班最爱奶龙之人",
+      "photo": "/assets/staff/member-17.jpg",
+      "courseGroups": ["数学组"]
+    },
+    {
+      "name": "胡云淏",
+      "groups": ["技术部"],
+      "introduction": "这个人很神秘",
+      "photo": "/assets/staff/member-18.jpg"
+    },
+    {
+      "name": "孟广轩",
+      "groups": ["课程部"],
+      "introduction": "持续调试人生程序，bug很多，暂不支持回滚",
+      "photo": "/assets/staff/member-20.png",
+      "courseGroups": ["数学组"]
+    },
+    {
+      "name": "陈曦恺",
+      "groups": ["课程部"],
+      "introduction": "喜欢哈气",
+      "photo": "/assets/staff/member-21.jpg",
+      "courseGroups": ["电路组"]
+    },
+    {
+      "name": "王渚僖",
+      "groups": ["课程部"],
+      "introduction": "大家好，我是来自无47的王渚僖，很高兴认识大家～",
+      "photo": "/assets/staff/member-22.jpg",
+      "courseGroups": ["数学组"]
+    },
+    {
+      "name": "秦琢言",
+      "groups": ["战略部"],
+      "introduction": "喜欢旅游、看书、摆烂的intj",
+      "photo": "/assets/staff/member-23.jpg"
+    },
+    {
+      "name": "周柏田",
+      "groups": ["课程部"],
+      "introduction": "",
+      "photo": "/assets/staff/member-24.jpg",
+      "courseGroups": ["数学组"]
+    },
+    {
+      "name": "郭东琦",
+      "groups": ["课程部"],
+      "introduction": "Hello，我是郭东琦",
+      "photo": "/assets/staff/member-25.jpg",
+      "courseGroups": ["数学组"]
+    },
+    {
+      "name": "宋宣增",
+      "groups": ["技术部", "课程部"],
+      "introduction": "Arch&Sys爱好者，欢迎大家关注我的Linkedin:www.linkedin.com/in/lucas-song-1910653b1",
+      "photo": "/assets/staff/member-26.jpg",
+      "courseGroups": ["电路组"],
+      "courseResponsibilities": ["数字逻辑与处理器课程负责人"]
+    },
+    {
+      "name": "刘牧杨",
+      "groups": ["课程部"],
+      "introduction": "非典型理工女，舞蹈爱好者～",
+      "photo": "/assets/staff/member-27.jpg",
+      "courseGroups": ["电路组"]
+    },
+    {
+      "name": "陈禛兴",
+      "groups": ["课程部"],
+      "introduction": "已拜倒在AI伟力下，大步迈入有Token能使Agent推Harness时代",
+      "photo": "/assets/staff/member-31.png",
+      "courseGroups": ["信号组"],
+      "courseResponsibilities": ["信号与系统课程负责人"]
+    }
+  ]
+}

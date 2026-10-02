@@ -7856,6 +7856,7 @@ function renderAdminUserEditor(user, permissionCatalog) {
           <button class="admin-button admin-button-danger" data-action="delete" type="button">
             删除账号
           </button>
+          ${user.role === 'teacher' && !user.isAdmin ? '<button class="admin-button admin-button-secondary" data-action="reset-teacher-password" type="button">重置教师密码</button>' : ''}
           <button class="admin-button admin-button-primary" data-action="save" type="button">
             保存修改
           </button>
@@ -8017,7 +8018,7 @@ function renderAdminDraftEditor() {
           <header>
             <div>
               <h3>登录资料</h3>
-              <p>创建后可以继续分配讨论区和课程负责范围。</p>
+              <p>选择教师身份时，学号和邮箱可暂不填写。创建后请复制初始登录信息交给本人。</p>
             </div>
           </header>
           <div class="admin-user-fields-grid">
@@ -8037,14 +8038,14 @@ function renderAdminDraftEditor() {
             ${renderAdminTextField({
               label: '学号',
               field: 'studentId',
-              placeholder: '20 开头的 10 位学号',
+              placeholder: '20 开头的 10 位学号；教师选填',
               ownerLabel: '新用户',
             })}
             ${renderAdminTextField({
               label: '邮箱',
               field: 'email',
               type: 'email',
-              placeholder: 'name@example.com',
+              placeholder: 'name@example.com；教师选填',
               ownerLabel: '新用户',
             })}
             ${renderAdminTextField({
@@ -8594,6 +8595,14 @@ async function handleAdminUsersClick(event) {
 
   const { action } = button.dataset;
 
+  if (action === 'reset-teacher-password') {
+    window.FreeBbsAdminAccounts?.openReset({
+      id: userId,
+      username: card.querySelector('[data-field="username"]').value,
+    });
+    return;
+  }
+
   if (action === 'cancel') {
     card.remove();
     adminExpandedUserId = '';
@@ -8644,6 +8653,8 @@ async function handleAdminUsersClick(event) {
     if (action === 'create') {
       setAdminUserCardStatus(card, '正在创建账号…');
       setAdminMessage('正在创建用户...');
+      const initialPassword = card.querySelector('[data-field="password"]').value;
+      const creationOwner = `${userState.uid}:${userState.token}`;
       const payload = await callApi('/admin/users', {
         method: 'POST',
         body: JSON.stringify({
@@ -8651,7 +8662,7 @@ async function handleAdminUsersClick(event) {
           fullName: values.fullName,
           studentId: card.querySelector('[data-field="studentId"]').value.trim(),
           email: card.querySelector('[data-field="email"]').value.trim(),
-          password: card.querySelector('[data-field="password"]').value,
+          password: initialPassword,
           role: values.role,
           isAdmin: values.isAdmin,
           electrons: values.electrons,
@@ -8659,7 +8670,13 @@ async function handleAdminUsersClick(event) {
           heat: values.heat,
         }),
       });
+      if (`${userState.uid}:${userState.token}` !== creationOwner || !userState.isAdmin) return;
       adminExpandedUserId = String(payload.user?.id || '');
+      card.querySelector('[data-field="password"]').value = '';
+      window.FreeBbsAdminAccounts?.showCreated({
+        username: payload.user.username,
+        password: initialPassword,
+      });
       setAdminMessage('用户创建成功', 3200);
       await loadAdminUsers();
       const createdCard = Array.from(adminUsers?.querySelectorAll('.admin-user-row') || []).find(
@@ -10978,18 +10995,20 @@ sessionReady.then(() => {
   }
 });
 
-window.addEventListener('freebbs:username-updated', (event) => {
+function handleAccountIdentityUpdated(event) {
   // A nickname change must not overwrite an unsaved profile draft.
   const draft = settingsForm ? { bio: settingsBio.value, website: settingsWebsiteUrl.value } : null;
   try {
-    saveSession(event.detail.token, event.detail.user);
+    saveSession(event.detail.token || userState.token, event.detail.user);
   } finally {
     if (draft) {
       settingsBio.value = draft.bio;
       settingsWebsiteUrl.value = draft.website;
     }
   }
-});
+}
+window.addEventListener('freebbs:username-updated', handleAccountIdentityUpdated);
+window.addEventListener('freebbs:identity-updated', handleAccountIdentityUpdated);
 
 window.addEventListener('storage', (event) => {
   if (event.key === STORAGE_KEY || event.key === null) {

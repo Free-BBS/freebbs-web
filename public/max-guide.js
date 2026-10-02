@@ -9,12 +9,22 @@
   function stepsFor(version = VERSION) {
     if (!knownVersion(version)) throw new Error('导览版本无效');
     const release = releases.RELEASES.find((item) => item.id === version);
-    if (!release) return STEPS;
+    if (!release) return version === 'max-v3' ? stations.ARCHIVED_STEPS : STEPS;
     const ids = release.stepIds || stations.RELEASE_STEP_IDS || [];
-    return ids.map((id) => STEPS.find((step) => step.id === id)).filter(Boolean);
+    return ids
+      .map(
+        (id) =>
+          STEPS.find((step) => step.id === id) ||
+          stations.ARCHIVED_STEPS.find((step) => step.id === id),
+      )
+      .filter(Boolean);
   }
   function knownVersion(value) {
-    return value === VERSION || releases.RELEASES.some((release) => release.id === value);
+    return (
+      value === VERSION ||
+      value === 'max-v3' ||
+      releases.RELEASES.some((release) => release.id === value)
+    );
   }
   const FLOATING_PATHS = new Set([
     '/',
@@ -645,8 +655,8 @@
         max.alt = '';
         const copy = element('span');
         copy.append(
-          element('strong', '', '跟着 Max，认识 FREE BBS 的每一个角落'),
-          element('small', '', '分站讲解 · 新功能指引 · 随时继续探索'),
+          element('strong', '', '跟着 Max，认识学习、讨论和计划'),
+          element('small', '', '三个主要功能 · 随时跳过或重看'),
         );
         entry.append(max, copy, element('b', '', '↗'));
         actions.before(entry);
@@ -1122,7 +1132,7 @@
         ? `我们上次走到「${steps[p.step].label}」。可以继续这一站，也可以重新开始。`
         : release
           ? `${release.description}这次只介绍新增与调整的功能，完成后不会自动重复。`
-          : '先认识顶栏，再沿着左侧导航从上到下，看看学习、讨论、工作台与实验室。每次只介绍一个区域，你可以随时暂停，也可以从目录选择感兴趣的章节。';
+          : '先认识学习、讨论和计划三个主要功能。可以从头开始，也可以只看需要的一章；其他工具留到需要时再探索。';
       controls.caption.textContent = notice();
       controls.back.hidden = true;
       controls.restart.hidden = !resumable;
@@ -1705,7 +1715,7 @@
         else if (!requested && isMember() && AUTO_WELCOME_PATHS.has(path())) {
           // The rebuilt guide starts afresh for every account. Historical
           // receipts remain on the server solely for visits/reward eligibility;
-          // their numeric positions must never be interpreted as v3 positions.
+          // their numeric positions must never be interpreted as v4 positions.
           if (!base.seenAt) automatic = true;
           else if (releases.LATEST_RELEASE) {
             const latest = progressClient(releases.LATEST_RELEASE.id);

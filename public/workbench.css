@@ -2324,3 +2324,24 @@ body.workbench-page .workbench-repeat-preview ol {
 #workbench-important-delete {
   margin-right: auto;
 }
+
+#workbench-schedule-delete[hidden],
+#workbench-schedule-series[hidden],
+#workbench-series-mode-label[hidden] {
+  display: none !important;
+}
+
+#workbench-schedule-delete {
+  margin-right: auto;
+}
+
+.workbench-series-settings {
+  padding: 0.8rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+}
+
+.workbench-series-settings .workbench-repeat-preview {
+  max-height: 12rem;
+  overflow-y: auto;
+}
