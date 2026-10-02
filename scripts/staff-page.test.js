@@ -186,6 +186,7 @@ test('public roster contains only approved fields and 34 unique members', () => 
           'courseGroups',
           'courseResponsibilities',
           'generalResponsibilities',
+          'responsibilities',
           'introduction',
           'name',
           'photo',
@@ -403,6 +404,86 @@ test('general responsibilities accept only confirmed role titles and render each
   const textLabel = textCard.children[1].children[2].children[0];
   assert.equal(textLabel.textContent, unsafeText);
   assert.equal(textLabel.children.length, 0);
+});
+
+test('ordinary responsibilities validate string arrays, deduplicate and display as safe text before the introduction', () => {
+  const responsibility = '<img src=x onerror=alert(1)>宣传推广负责人';
+  const input = {
+    name: '职责成员',
+    groups: ['战略部'],
+    introduction: '原有介绍',
+    responsibilities: [` ${responsibility} `, responsibility, '其他职责'],
+  };
+  const member = normalizeStaffRoster({ members: [input] }).members[0];
+  assert.deepEqual(member.responsibilities, [responsibility, '其他职责']);
+  const card = createStaffCard({ createElement: element }, member);
+  const [name, groups, roles, introduction] = card.children[1].children;
+  assert.equal(name.textContent, input.name);
+  assert.equal(groups.children[0].textContent, '战略部');
+  assert.equal(roles.tagName, 'ul');
+  assert.equal(roles.className, 'staff-person-responsibilities');
+  assert.deepEqual(
+    roles.children.map((node) => node.textContent),
+    [responsibility, '其他职责'],
+  );
+  assert.equal(roles.children[0].children.length, 0);
+  assert.equal(introduction.textContent, input.introduction);
+  for (const invalid of ['宣传推广负责人', null, [null], [23], [''], ['   ']]) {
+    assert.throws(
+      () => normalizeStaffRoster({ members: [{ ...input, responsibilities: invalid }] }),
+      /成员职责/,
+    );
+  }
+  assert.deepEqual(
+    normalizeStaffRoster({ members: [{ ...input, responsibilities: undefined }] }).members[0]
+      .responsibilities,
+    [],
+  );
+  assert.equal(selectStaffMembers([member], PRODUCT_GROUP).length, 0);
+});
+
+test('Shi Hao keeps strategic placement and displays promotion responsibility without joining product leaders', async () => {
+  const { members } = normalizeStaffRoster(roster);
+  const staffWithResponsibilities = members.filter((member) => member.responsibilities.length);
+  assert.deepEqual(
+    staffWithResponsibilities.map((member) => member.name),
+    ['时豪'],
+  );
+  assert.deepEqual(staffWithResponsibilities[0].responsibilities, ['宣传推广负责人']);
+  assert.deepEqual(staffWithResponsibilities[0].generalResponsibilities, []);
+  assert.deepEqual(
+    selectStaffMembers(members, PRODUCT_GROUP).map((member) => member.name),
+    PRODUCT_NAMES,
+  );
+  const doc = directoryDocument();
+  await installStaffDirectory({
+    document: doc,
+    fetch: async () => ({ ok: true, json: async () => roster }),
+  });
+  doc.filters[3].trigger('click');
+  assert.deepEqual(cardNames(doc), [
+    '刘国豪',
+    '张弛',
+    '项思锐',
+    '王宇翀',
+    '时豪',
+    '杨咏',
+    '秦琢言',
+  ]);
+  const card = directoryCards(doc).find(
+    (node) => node.children[1].children[0].textContent === '时豪',
+  );
+  const roles = card.children[1].children.find(
+    (node) => node.className === 'staff-person-responsibilities',
+  );
+  assert.deepEqual(
+    roles.children.map((node) => node.textContent),
+    ['宣传推广负责人'],
+  );
+  assert.equal(
+    card.children[1].children.at(-1).textContent,
+    staffWithResponsibilities[0].introduction,
+  );
 });
 
 test('department sections prioritize matching general leaders then course leaders without duplicate people', () => {

@@ -96,7 +96,8 @@
       "name": "时豪",
       "groups": ["战略部"],
       "introduction": "EE PhD ing，照片看起来毕业了，实际并没有毕业",
-      "photo": "/assets/staff/member-06.jpg"
+      "photo": "/assets/staff/member-06.jpg",
+      "responsibilities": ["宣传推广负责人"]
     },
     {
       "name": "王禹博",

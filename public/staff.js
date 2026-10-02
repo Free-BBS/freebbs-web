@@ -55,6 +55,14 @@
         )
       )
         throw new Error('总负责人信息无效');
+      const responsibilities = member.responsibilities === undefined ? [] : member.responsibilities;
+      if (
+        !Array.isArray(responsibilities) ||
+        responsibilities.some(
+          (responsibility) => typeof responsibility !== 'string' || !responsibility.trim(),
+        )
+      )
+        throw new Error('成员职责信息无效');
       const introduction = typeof member.introduction === 'string' ? member.introduction : '';
       const photo =
         typeof member.photo === 'string' &&
@@ -69,6 +77,9 @@
           ...new Set(courseResponsibilities.map((responsibility) => responsibility.trim())),
         ],
         generalResponsibilities: [...new Set(generalResponsibilities)],
+        responsibilities: [
+          ...new Set(responsibilities.map((responsibility) => responsibility.trim())),
+        ],
         introduction: introduction.trim() === '【请输入文本】' ? '' : introduction,
         photo,
       };
@@ -205,6 +216,16 @@
       const responsibilities = doc.createElement('ul');
       responsibilities.className = 'staff-person-responsibilities';
       member.courseResponsibilities.forEach((responsibility) => {
+        const label = doc.createElement('li');
+        label.textContent = responsibility;
+        responsibilities.append(label);
+      });
+      copy.append(responsibilities);
+    }
+    if (member.responsibilities?.length) {
+      const responsibilities = doc.createElement('ul');
+      responsibilities.className = 'staff-person-responsibilities';
+      member.responsibilities.forEach((responsibility) => {
         const label = doc.createElement('li');
         label.textContent = responsibility;
         responsibilities.append(label);
