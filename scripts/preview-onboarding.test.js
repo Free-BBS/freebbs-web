@@ -13,8 +13,15 @@ const {
   GUIDE_VERSION,
   LEGACY_GUIDE_VERSIONS,
   LATEST_RELEASE,
+  RELEASES,
 } = require('../public/max-guide-releases');
-const { STEPS, STATIONS, RELEASE_STEP_IDS } = require('../public/max-guide-stations');
+const {
+  STEPS,
+  STATIONS,
+  ARCHIVED_STEPS,
+  ARCHIVED_STATIONS,
+  RELEASE_STEP_IDS,
+} = require('../public/max-guide-stations');
 
 test('merged ranch preview saves appearance separately from Poisson wool, assets and receipts', async (t) => {
   let draws = 0;
@@ -212,7 +219,7 @@ test('onboarding preview uses real local pages, account progress and transaction
   await t.test('Max guide anchors match the actual local conversation page', async () => {
     const html = await (await fetch(`${origin}/aichat`)).text();
     for (const id of ['max-conversation', 'max-composer', 'max-history']) {
-      const step = STEPS.find((entry) => entry.id === id);
+      const step = ARCHIVED_STEPS.find((entry) => entry.id === id);
       assert.match(step.target, /^#[a-z][a-z0-9-]*$/);
       assert.ok(html.includes(`id="${step.target.slice(1)}"`), `${id}: ${step.target}`);
     }
@@ -473,11 +480,21 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
   const sandbox = { window: {} };
   vm.runInNewContext(source, sandbox);
   assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.FreeBbsGuideStations.STEPS)), STEPS);
-  assert.ok(STEPS.length >= 30 && STEPS.length <= 201);
+  assert.equal(STEPS.length, 16);
+  assert.equal(STATIONS.length, 5);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(sandbox.window.FreeBbsGuideStations.ARCHIVED_STEPS)),
+    ARCHIVED_STEPS,
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(sandbox.window.FreeBbsGuideStations.ARCHIVED_STATIONS)),
+    ARCHIVED_STATIONS,
+  );
+  assert.ok(ARCHIVED_STEPS.length >= 30 && ARCHIVED_STEPS.length <= 201);
   assert.equal(new Set(STEPS.map((step) => step.id)).size, STEPS.length);
   assert.equal(new Set(STATIONS.map((station) => station.id)).size, STATIONS.length);
-  const routes = new Map(STATIONS.map((station) => [station.id, station.route]));
-  for (const station of STATIONS) {
+  const routes = new Map(ARCHIVED_STATIONS.map((station) => [station.id, station.route]));
+  for (const station of ARCHIVED_STATIONS) {
     assert.match(station.route, /^\/[a-z-]*$/);
     assert.match(station.fallbackRoute, /^\/[a-z-]*$/);
   }
@@ -492,14 +509,17 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
     'a.island-course-planet[data-course-slug="math"]',
     '#course-map-reset-view',
     '[data-reader-node-id]',
+    '.course-map-focus-center [data-reader-node-id]',
+    '#course-knowledge-overview[open] .knowledge-overview-drawer-footer > button',
     '[data-course-map-arrow-help-toggle]',
-    '.course-reader-study-link',
+    '#course-knowledge-overview[open] .knowledge-overview-study',
     '#knowledge-return-overview',
     '#knowledge-start-reading',
     '#knowledge-chat-tab-discussion',
     '#knowledge-chat-close',
     '#knowledge-chat-toggle',
     '[data-action="close-detail"]',
+    '#discussion-detail [data-action="close-detail"]',
     '#discussion-create-toggle',
     '.max-composer-tools > summary',
     '#aichat-dialog-toggle',
@@ -512,7 +532,7 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
     '[data-ranch-open="ranch-wool-dialog"]',
     '#discussion-post-list .discussion-post-card:has(.discussion-pin-badge) [data-action="open-post"], #discussion-post-list:not(:has(.discussion-pin-badge)) [data-action="open-post"]',
   ]);
-  for (const step of STEPS) {
+  for (const step of ARCHIVED_STEPS) {
     assert.equal(step.route, step.id === 'profile-wool' ? '/ranch' : routes.get(step.station));
     for (const field of ['id', 'target', 'label', 'title', 'body', 'caption'])
       assert.ok(step[field], `${step.id}: ${field}`);
@@ -529,26 +549,40 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
       if (view.action) assert.ok(['click', 'link'].includes(view.action.kind));
     }
   }
-  assert.equal(STEPS.length, 58);
-  assert.equal(STATIONS.length, 19);
+  assert.equal(ARCHIVED_STEPS.length, 58);
+  assert.equal(ARCHIVED_STATIONS.length, 19);
   assert.equal(RELEASE_STEP_IDS.length, 12);
-  assert.deepEqual(LATEST_RELEASE.stepIds, RELEASE_STEP_IDS);
+  assert.deepEqual(
+    RELEASES.find((release) => release.id === 'guide-layout-2026-09').stepIds,
+    RELEASE_STEP_IDS,
+  );
+  assert.deepEqual(LATEST_RELEASE.stepIds, [
+    'world-atlas',
+    'discussion-filters',
+    'workbench-week',
+    'handbook-other-features',
+  ]);
   for (const id of RELEASE_STEP_IDS) {
-    const step = STEPS.find((entry) => entry.id === id);
+    const step = ARCHIVED_STEPS.find((entry) => entry.id === id);
     assert.ok(step, id);
     assert.ok(
       !['course', 'knowledge'].includes(step.station),
       'Short replay must not require a previously selected course or knowledge node',
     );
   }
-  const step = (id) => STEPS.find((entry) => entry.id === id);
+  const step = (id) => ARCHIVED_STEPS.find((entry) => entry.id === id);
   assert.equal(step('world-atlas').target, '.world-orbit-shell');
   assert.equal(step('world-atlas').focus.fit, 'overview');
   assert.equal(step('course-directory').focus.fit, 'overview');
   assert.equal(step('knowledge-companions').target, '#knowledge-chat-toggle');
   assert.equal(step('knowledge-companions').reveal.target, '#knowledge-chat-panel');
   assert.equal(step('discussion-composer').target, '#discussion-create-toggle, .mobile-publish');
-  assert.equal(step('discussion-composer').prepare, undefined);
+  assert.deepEqual(step('discussion-composer').prepare, [
+    {
+      selector: '#discussion-detail [data-action="close-detail"]',
+      whenMissing: 'body:not(.post-reading)',
+    },
+  ]);
   assert.equal(step('discussion-composer').action, undefined);
   assert.equal(step('inventory-ledger-filters').target, '#wallet-ledger[open] .wallet-toolbar');
   assert.equal(

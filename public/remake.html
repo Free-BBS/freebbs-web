@@ -15,6 +15,7 @@
     />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
+    <link rel="stylesheet" href="/account-identity.css" />
     <link rel="stylesheet" href="/username-guard.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
   </head>
@@ -23,8 +24,24 @@
       <section class="auth-page-panel" aria-labelledby="auth-page-title">
         <h1 class="auth-page-title" id="auth-page-title">找回密码</h1>
         <form class="auth-form auth-form-register" id="auth-page-form" data-auth-mode="remake">
+          <label class="auth-field"
+            ><span>找回方式</span
+            ><select id="auth-reset-method">
+              <option value="username">用户名与已验证邮箱</option>
+              <option value="studentId">学号与邮箱（原方式）</option>
+            </select></label
+          >
+          <label class="auth-field" id="auth-reset-username-field"
+            ><span>登录用户名</span
+            ><input
+              id="auth-reset-identifier"
+              name="identifier"
+              autocomplete="username"
+              maxlength="64"
+              required
+          /></label>
           <div class="auth-grid-row auth-grid-row-two">
-            <label class="auth-field">
+            <label class="auth-field" id="auth-reset-student-field" hidden>
               <span class="auth-label">
                 <img class="auth-label-icon" src="/assets/icons/id.svg" alt="" aria-hidden="true" />
                 <span>学号</span>
@@ -36,7 +53,7 @@
                 inputmode="numeric"
                 maxlength="10"
                 placeholder="20开头10位"
-                required
+                disabled
               />
             </label>
 
@@ -118,6 +135,7 @@
           <p class="auth-message" id="auth-message"></p>
           <button class="auth-submit" id="auth-submit" type="submit">重设密码</button>
         </form>
+        <p>尚未绑定邮箱的教师账号，请联系管理员重置初始密码。</p>
         <p class="auth-page-switch">想起密码？<a href="/login">去登录</a></p>
       </section>
     </main>

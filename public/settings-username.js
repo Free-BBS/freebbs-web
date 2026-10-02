@@ -52,9 +52,11 @@
       refresh.disabled = busy;
       if (policy) {
         const next = policy.nextFreeAt ? new Date(policy.nextFreeAt).toLocaleString('zh-CN') : '';
-        policyText.textContent = policy.freeAvailable
-          ? '本次可免费修改昵称。免费次数不累计。'
-          : `本次需要 10 磁元，当前余额 ${policy.balance} 磁元。下次免费时间：${next}。`;
+        policyText.textContent = policy.teacherFree
+          ? '教师账号可免费修改登录用户名，请保持符合格式并使用新用户名登录。'
+          : policy.freeAvailable
+            ? '本次可免费修改昵称。免费次数不累计。'
+            : `本次需要 10 磁元，当前余额 ${policy.balance} 磁元。下次免费时间：${next}。`;
       }
     }
 

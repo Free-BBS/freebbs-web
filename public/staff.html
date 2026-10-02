@@ -4,7 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>FREE BBS 工作人员名单 | FREE BBS</title>
-    <meta name="description" content="FREE BBS 工作人员名单，页面建设中，暂未开放" />
+    <meta
+      name="description"
+      content="认识共同建设 FREE BBS 的伙伴，查看产品设计与总负责人、课程部、技术部和战略部工作人员介绍。"
+    />
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
@@ -12,8 +15,9 @@
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/site-info.css" />
+    <link rel="stylesheet" href="/staff.css" />
   </head>
-  <body class="site-info-page">
+  <body class="site-info-page staff-page">
     <div class="page-shell">
       <header class="topbar">
         <a class="brand" href="/" aria-label="FREE-BBS 首页">
@@ -73,29 +77,103 @@
 
       <nav class="mobile-nav" aria-label="手机底部导航"></nav>
 
-      <main class="main-content site-info-main">
-        <section class="site-info-card" aria-labelledby="site-info-title">
-          <div class="site-info-copy">
-            <p class="site-info-eyebrow" lang="en">THE PEOPLE BEHIND FREE BBS</p>
-            <h1 id="site-info-title"><span>FREE BBS</span> <span>工作人员名单</span></h1>
-            <p class="site-info-status"><span aria-hidden="true"></span>建设中 · 暂未开放</p>
-            <p class="site-info-description">
-              这里将记录共同建设 FREE BBS 的伙伴，工作人员名单暂未开放，Max 正在施工
+      <main class="main-content site-info-main staff-main">
+        <header class="staff-intro" aria-labelledby="staff-title">
+          <p class="staff-eyebrow" lang="en">THE PEOPLE BEHIND FREE BBS</p>
+          <h1 id="staff-title">FREE BBS 工作人员名单</h1>
+          <p class="staff-description">认识共同建设这片学习天地的伙伴。</p>
+          <p class="staff-date" id="staff-date"></p>
+        </header>
+
+        <section class="staff-directory" aria-label="工作人员名录">
+          <div class="staff-toolbar">
+            <div class="staff-filters" role="group" aria-label="按栏目查看">
+              <button
+                type="button"
+                class="staff-filter"
+                data-staff-group="产品设计·总负责人"
+                aria-pressed="true"
+                disabled
+              >
+                产品设计·总负责人 <span data-staff-count="产品设计·总负责人"></span>
+              </button>
+              <button
+                type="button"
+                class="staff-filter"
+                data-staff-group="课程部"
+                aria-pressed="false"
+                disabled
+              >
+                课程部 <span data-staff-count="课程部"></span>
+              </button>
+              <button
+                type="button"
+                class="staff-filter"
+                data-staff-group="技术部"
+                aria-pressed="false"
+                disabled
+              >
+                技术部 <span data-staff-count="技术部"></span>
+              </button>
+              <button
+                type="button"
+                class="staff-filter"
+                data-staff-group="战略部"
+                aria-pressed="false"
+                disabled
+              >
+                战略部 <span data-staff-count="战略部"></span>
+              </button>
+            </div>
+            <div class="staff-course-section" id="staff-course-section" hidden>
+              <div class="staff-filters" role="group" aria-label="按课程部组别查看">
+                <button
+                  type="button"
+                  class="staff-filter"
+                  data-staff-course-group="数学组"
+                  aria-pressed="true"
+                  disabled
+                >
+                  数学组 <span data-staff-course-count="数学组"></span>
+                </button>
+                <button
+                  type="button"
+                  class="staff-filter"
+                  data-staff-course-group="电路组"
+                  aria-pressed="false"
+                  disabled
+                >
+                  电路组 <span data-staff-course-count="电路组"></span>
+                </button>
+                <button
+                  type="button"
+                  class="staff-filter"
+                  data-staff-course-group="信号组"
+                  aria-pressed="false"
+                  disabled
+                >
+                  信号组 <span data-staff-course-count="信号组"></span>
+                </button>
+                <button
+                  type="button"
+                  class="staff-filter"
+                  data-staff-course-group="待确认"
+                  aria-pressed="false"
+                  disabled
+                  hidden
+                >
+                  待确认 <span data-staff-course-count="待确认"></span>
+                </button>
+              </div>
+            </div>
+            <p class="staff-status" id="staff-status" role="status" aria-live="polite">
+              正在加载名录…
             </p>
-            <nav class="site-info-actions" aria-label="继续探索">
-              <a class="site-info-primary" href="/">返回首页 <span aria-hidden="true">↗</span></a>
-              <a href="/guide">先看看 Max 的探索手册 <span aria-hidden="true">→</span></a>
-            </nav>
           </div>
-          <figure class="site-info-scene">
-            <img
-              src="/assets/development-construction-bbs-v2.webp"
-              width="1536"
-              height="1024"
-              alt="Max 开着挖掘机建设 FREE BBS，地面上挖出了 BBS 字样"
-            />
-            <figcaption>这片小天地，正在一点点建起来</figcaption>
-          </figure>
+          <button type="button" class="staff-retry" id="staff-retry" hidden>重新加载名录</button>
+          <p class="staff-empty" id="staff-empty" hidden></p>
+          <div class="staff-grid" id="staff-grid" aria-busy="true"></div>
+          <noscript><p>请启用 JavaScript 查看工作人员名录。</p></noscript>
         </section>
       </main>
       <footer class="site-footer site-footer-compact">
@@ -113,9 +191,20 @@
         </div>
       </footer>
     </div>
+    <dialog class="staff-photo-dialog" id="staff-photo-dialog" aria-labelledby="staff-photo-name">
+      <div class="staff-photo-header">
+        <h2 class="staff-photo-heading" id="staff-photo-name"></h2>
+        <button type="button" class="staff-photo-close" id="staff-photo-close" autofocus>
+          关闭照片
+        </button>
+      </div>
+      <p class="staff-photo-status" id="staff-photo-status" role="status" hidden></p>
+      <img class="staff-photo-image" id="staff-photo-image" alt="" />
+    </dialog>
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
     <script src="/app.js"></script>
     <script src="/notifications.js"></script>
+    <script src="/staff.js"></script>
   </body>
 </html>

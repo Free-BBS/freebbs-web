@@ -5,10 +5,16 @@ const { createCircuitAchievementPreviewApi } = require('./preview-circuit-achiev
 function createCourseThreadsPreview({
   now = () => Date.parse('2026-09-28T02:00:00Z'),
   extraApi,
+  extraPages,
+  transformHtml,
+  allowDemoAuthentication,
 } = {}) {
   const circuitApi = createCircuitAchievementPreviewApi();
   const preview = createOnboardingPreview({
     now,
+    extraPages,
+    transformHtml,
+    allowDemoAuthentication,
     extraApi: async (context) => (await extraApi?.(context)) || circuitApi(context),
   });
   const boardNames = [

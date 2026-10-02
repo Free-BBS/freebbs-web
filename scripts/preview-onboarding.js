@@ -163,7 +163,9 @@ function createOnboardingPreview({
   now = Date.now,
   growthRandom,
   extraPages = {},
+  allowDemoAuthentication = false,
   extraApi: additionalApi = null,
+  transformHtml: additionalTransform = null,
 } = {}) {
   const progressByVersion = new Map();
   const readProgress = (version = GUIDE_VERSION) =>
@@ -220,6 +222,7 @@ function createOnboardingPreview({
     now,
     profileOptions: { random: growthRandom },
     allowVendor: true,
+    allowDemoAuthentication,
     extraPages: { ...PREVIEW_PAGES, ...extraPages },
     accounts: [
       {
@@ -256,7 +259,7 @@ function createOnboardingPreview({
     transformHtml(html, route) {
       // Match the shared shell appended by the production static server. Missing
       // these layers makes guide geometry and responsive QA differ from the site.
-      const page = preparePageShell(html)
+      let page = preparePageShell(html)
         .replace(
           '</head>',
           '<link rel="stylesheet" href="/site-search.css"><link rel="stylesheet" href="/mobile-shell.css"><link rel="stylesheet" href="/desktop-elegant.css"><link rel="stylesheet" href="/page-transitions.css"><link rel="stylesheet" href="/desktop-shell.css"><link rel="stylesheet" href="/personal-polish.css"></head>',
@@ -265,6 +268,7 @@ function createOnboardingPreview({
           '</body>',
           '<script src="/site-search.js" defer></script><script src="/mobile-shell.js" defer></script><script src="/page-transitions.js" defer></script><script src="/desktop-shell.js" defer></script></body>',
         );
+      if (additionalTransform) page = additionalTransform(page, route);
       if (route !== '/aichat') return page;
       return page
         .replace('<p>课程答疑、推导与电路分析</p>', '<p>本地仅演示界面 · 未连接真实 AI</p>')

@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const { listCourseSchedules } = require('./course-schedule');
 const { expand } = require('../public/schedule-recurrence');
+const { definitionFor, writeDefinition } = require('./schedule-series');
 
 // Manual/audited courses are ordinary owned schedule rows, independent of campus grants.
 // One rule represents one weekly time/location; a second rule can cover another weekday.
@@ -80,7 +81,10 @@ function expandManualCourse(body = {}, { kind = 'course' } = {}) {
 }
 
 async function saveManualCourse(pool, userId, body, options) {
-  const items = expandManualCourse(body, options);
+  const items = expandManualCourse(body, options).map((item) => ({
+    ...item,
+    publicId: `ws_${crypto.randomBytes(12).toString('hex')}`,
+  }));
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -129,7 +133,7 @@ async function saveManualCourse(pool, userId, body, options) {
           title, description, start_at, end_at, all_day, timezone, status, user_confirmed_at
         ) VALUES (?, ?, ?, 'manual', ?, ?, ?, NULLIF(?, ''), ?, ?, ?, 'Asia/Shanghai', 'confirmed', CURRENT_TIMESTAMP)`,
         [
-          `ws_${crypto.randomBytes(12).toString('hex')}`,
+          item.publicId,
           userId,
           userId,
           item.sourceReference,
@@ -142,6 +146,17 @@ async function saveManualCourse(pool, userId, body, options) {
         ],
       );
     }
+    const recurrence = body.recurrence || {
+      unit: 'week',
+      interval: body.intervalWeeks,
+      count: body.count,
+    };
+    await writeDefinition(
+      connection,
+      userId,
+      items[0].sourceReference,
+      definitionFor(items, recurrence),
+    );
     await connection.commit();
     return { created: items.length };
   } catch (error) {

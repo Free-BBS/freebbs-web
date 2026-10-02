@@ -2,7 +2,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { STEPS, STATIONS } = require('../public/max-guide-stations');
+const {
+  STEPS,
+  STATIONS,
+  ARCHIVED_STEPS,
+  ARCHIVED_STATIONS,
+} = require('../public/max-guide-stations');
 
 const read = (file) => fs.readFileSync(path.join(__dirname, '../public', file), 'utf8');
 const guide = read('guide.html');
@@ -34,72 +39,76 @@ test('workbench guide matches five mixed events and individual or batch confirma
   assert.doesNotMatch(copy, /最多 3/);
 });
 
-test('the handbook three FREE statements exactly match the approved homepage wording', () => {
-  const section = guide.match(/<div class="guide-values">([\s\S]*?)<\/section>/)[1];
-  const cards = [...section.matchAll(/<article>([\s\S]*?)<\/article>/g)].map((match) => match[1]);
-  assert.equal(cards.length, 3);
-  principles.forEach(([english, chinese, copy], index) => {
-    assert.equal(text(cards[index].match(/<h3>(.*?)<\/h3>/s)[1]), english);
-    assert.equal(text(cards[index].match(/<strong>(.*?)<\/strong>/s)[1]), chinese);
-    assert.equal(text(cards[index].match(/<p>(.*?)<\/p>/s)[1]), copy);
+test('the homepage keeps the approved three FREE statements without repeating them in the handbook', () => {
+  principles.forEach(([english, chinese, copy]) => {
     assert.ok(homepage.includes(`<h2>${chinese}</h2>`));
     assert.ok(homepage.includes(`<p>${copy}</p>`));
     assert.ok(homepage.includes(`>${english}</span>`));
   });
+  assert.doesNotMatch(guide, /guide-manifesto|guide-values/);
 });
 
 test('handbook positioning, identity and agency match the approved copy without stale promises', () => {
   const body = text(guide);
-  assert.match(body, /由学生主导、师生共同建设的电子系学习发展共同体/);
+  assert.match(body, /学生主导/);
   assert.match(body, /学习与探索向导/);
-  assert.match(body, /讨论区前台显示昵称，后台保留实名身份/);
+  assert.match(body, /尊重他人、保护个人信息/);
   assert.match(body, /学习选择与最终判断始终属于你/);
-  assert.match(body, /不代替你思考或直接交付作业答案/);
+  assert.match(body, /AI 的重要结论需要核对/);
   assert.doesNotMatch(
     body,
     /小小向导|把疑问交给彼此的思考|支持匿名发帖|昵称与匿名保护|以下是 V1\.0|点击顶部资产数字/,
   );
-  assert.match(body, /电脑端点击左下角资产区域/);
-  assert.match(body, /热力.*不用于评价学习能力或综合表现/);
+  assert.match(body, /独立于评价体系/);
   assert.match(body, /每个账号可领取一次/);
   assert.match(body, /不会重复发放/);
   assert.match(STEPS.find((step) => step.id === 'home-launchpad').body, /师生共同建设/);
-  assert.match(STEPS.find((step) => step.id === 'knowledge-companions').reveal.body, /课程 RAG/);
-  assert.equal(STATIONS.find((station) => station.id === 'max').title, '平台寻址，思路引导和解释');
+  assert.match(
+    ARCHIVED_STEPS.find((step) => step.id === 'knowledge-companions').reveal.body,
+    /课程 RAG/,
+  );
+  assert.equal(
+    ARCHIVED_STATIONS.find((station) => station.id === 'max').title,
+    '平台寻址，思路引导和解释',
+  );
 });
 
-test('handbook feature cards follow navigation order and keep planned capabilities explicitly planned', () => {
+test('handbook opens with its feature directory and keeps the one-time reward at the end', () => {
+  const sections = [...guide.matchAll(/<section\b[^>]*>/g)].map((match) => match[0]);
+  assert.equal(sections.length, 5);
+  assert.match(sections[0], /class="guide-hero"/);
+  assert.match(sections[1], /id="guide-stations"/);
+  assert.match(sections[2], /id="guide-atlas"/);
+  assert.match(sections[3], /id="guide-other-features"/);
+  assert.match(sections[4], /class="guide-reward"/);
+});
+
+test('handbook focuses on three core cards and describes other features briefly', () => {
   const section = guide.match(/<div class="guide-atlas-grid">([\s\S]*?)<\/section>/)[1];
   const cards = [...section.matchAll(/<article[^>]*>([\s\S]*?)<\/article>/g)].map(
     (match) => match[1],
   );
   assert.deepEqual(
     cards.map((card) => text(card.match(/<h3>(.*?)<\/h3>/s)[1])),
-    [
-      '学习世界',
-      '讨论区',
-      '我的工作台',
-      '实验室',
-      '创意工坊',
-      'PBL 计划',
-      '问问 Max',
-      '活动报名（试用）',
-      '发展端',
-    ],
+    ['学习世界', '讨论区', '我的工作台'],
   );
-  for (const [index, route, source] of [
-    [4, '/creative-workshop', 'creative-workshop.html'],
-    [5, '/pbl', 'pbl.html'],
-  ]) {
-    assert.match(cards[index], /guide-tag-future">规划中/);
+  for (const [index, route] of [
+    [0, '/world'],
+    [1, '/discussion'],
+    [2, '/workbench'],
+  ])
     assert.ok(cards[index].includes(`href="${route}"`));
-    assert.match(cards[index], /目前尚未开放/);
-    const page = read(source);
-    assert.ok(page.includes(index === 4 ? 'V1.2' : 'V2.0'));
-    assert.ok(cards[index].includes(index === 4 ? 'V1.2' : 'V2.0'));
-  }
-  assert.match(text(cards[3]), /代码实验室支持 C\/C\+\+ 多架构汇编/);
   assert.match(text(cards[0]), /学习资源等工具按课程建设进度逐步开放/);
+  const other = guide.match(/<section[^>]+id="guide-other-features"[\s\S]*?<\/section>/)[0];
+  assert.match(text(other), /Max 问答、实验与工具、活动报名、个人设置/);
+  assert.match(text(other), /建设中的入口会标明状态/);
+  assert.ok(text(other).length < 240, 'secondary features remain a brief introduction');
+  assert.doesNotMatch(guide, /id="guide-(?:missions|community|economy|horizon)"/);
+  assert.deepEqual(
+    STATIONS.map((station) => station.label),
+    ['开始', '学习', '讨论', '计划', '其他功能'],
+  );
+  assert.equal(STEPS.length, 16);
   for (const tag of guide.matchAll(/<(h1|h2)[^>]*>([\s\S]*?)<\/\1>/g))
     assert.doesNotMatch(text(tag[2]), /。$/);
 });

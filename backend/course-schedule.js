@@ -476,7 +476,13 @@ function rowOptions(row) {
   return typeof row.options_json === 'string' ? JSON.parse(row.options_json) : row.options_json;
 }
 
-async function listCourseSchedules(pool, userId, range, status = '') {
+async function listCourseSchedules(
+  pool,
+  userId,
+  range,
+  status = '',
+  { includeDeleted = false } = {},
+) {
   if (status && status !== 'confirmed') return [];
   const start = new Date(range?.start);
   const end = new Date(range?.end);
@@ -499,13 +505,45 @@ async function listCourseSchedules(pool, userId, range, status = '') {
         });
     for (const original of projected.events) {
       const override = overrides.get(original.publicId);
-      const event = applyOverride(
-        { ...original, connectorGeneration: Number(row.connector_generation) },
-        override,
+      const { importedSeriesKey } = require('./schedule-series');
+      const seriesKey = importedSeriesKey(original);
+      const patch = override
+        ? typeof override.patch_json === 'string'
+          ? JSON.parse(override.patch_json)
+          : override.patch_json
+        : {};
+      const policyRow = overrides.get(`cs_series_${seriesKey.slice(7)}`);
+      const policy = policyRow
+        ? typeof policyRow.patch_json === 'string'
+          ? JSON.parse(policyRow.patch_json)
+          : policyRow.patch_json
+        : {};
+      const exception = Boolean(override && !patch.seriesManaged);
+      const deleted = Boolean(
+        patch.deleted ||
+        (policy.suppressedFrom && original.startAt >= policy.suppressedFrom && !exception),
       );
-      if (!event || (original.calendarHoliday && event.startAt === original.startAt)) continue;
+      const event = applyOverride(
+        {
+          ...original,
+          connectorGeneration: Number(row.connector_generation),
+          seriesKey,
+          originalStartAt: original.startAt,
+          originalEndAt: original.endAt,
+        },
+        includeDeleted && patch.deleted
+          ? { ...override, patch_json: { ...patch, deleted: false } }
+          : override,
+      );
+      if (
+        !event ||
+        (deleted && !includeDeleted) ||
+        (original.calendarHoliday && event.startAt === original.startAt)
+      )
+        continue;
       if (new Date(event.startAt) >= end || new Date(event.endAt) <= start) continue;
-      if (!events.has(event.publicId)) events.set(event.publicId, event);
+      if (!events.has(event.publicId))
+        events.set(event.publicId, { ...event, deleted, exception, personalPatch: patch });
     }
   }
   return [...events.values()].sort((a, b) => a.startAt.localeCompare(b.startAt));

@@ -108,6 +108,12 @@ const {
 const { buildBackendHealth } = require('./health');
 const { hashPassword, verifyPassword, verifyPasswordAsync } = require('./password');
 const { createLoginRateLimiter } = require('./login-rate-limit');
+const {
+  normalizeAdminAccount,
+  ensureTeacherAccountTables,
+  createAccountIdentityService,
+  createTeacherAccountsRouter,
+} = require('./teacher-accounts');
 const { sign, verify } = require('./token');
 const {
   USERNAME_MESSAGE,
@@ -2745,6 +2751,22 @@ app.use(
   '/api/profile/username',
   createUsernameRouter({ pool, requireAuth, getUserById, toUserProfile, issueToken }),
 );
+const accountIdentityService = createAccountIdentityService({
+  pool,
+  sendCode: (email, code, purpose) =>
+    require('./mailer').sendVerificationCode(email, code, purpose),
+});
+app.use(
+  '/api',
+  createTeacherAccountsRouter({
+    service: accountIdentityService,
+    requireAuth,
+    requireAdmin,
+    getUserById,
+    toUserProfile,
+    issueToken,
+  }),
+);
 app.use(
   '/api/admin/registration-whitelist',
   createRegistrationWhitelistRouter({ pool, requireAdmin }),
@@ -5354,7 +5376,7 @@ app.post('/api/auth/send-reset-code', async (request, response) => {
     const [users] = await pool.execute(
       `SELECT id
        FROM users
-       WHERE student_id = ? AND LOWER(email) = ?
+       WHERE student_id = ? AND LOWER(email) = ? AND email_verified_at IS NOT NULL
        LIMIT 1`,
       [studentId, email],
     );
@@ -5518,36 +5540,43 @@ app.post('/api/auth/reset-password', async (request, response) => {
       return;
     }
 
-    const [users] = await pool.execute(
-      `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, is_admin, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
-       FROM users
-       WHERE student_id = ? AND LOWER(email) = ?
-       LIMIT 1`,
-      [studentId, email],
-    );
-
-    const row = users[0];
-
-    if (!row) {
-      response.status(404).json({ message: '学号和邮箱不匹配' });
+    const reset = await withDatabaseTransaction(async (connection) => {
+      // Match the identity routes' user -> code lock order. A concurrent email change
+      // must finish before this check or wait until the password reset commits.
+      const [users] = await connection.execute(
+        `SELECT id, uid, username, full_name, student_id, email, email_verified_at, role, is_admin, electrons, manetrons, heat, grade, major, avatar_path, bio, website_url, created_at
+         FROM users
+         WHERE student_id = ? AND LOWER(email) = ? AND email_verified_at IS NOT NULL
+         LIMIT 1 FOR UPDATE`,
+        [studentId, email],
+      );
+      const row = users[0];
+      if (!row) return { status: 404, message: '学号和邮箱不匹配' };
+      const [lockedCodes] = await connection.execute(
+        `SELECT id FROM email_verification_codes
+         WHERE email = ? AND code_hash = ? AND used_at IS NULL AND expires_at > NOW()
+         ORDER BY id DESC LIMIT 1 FOR UPDATE`,
+        [email, hashCode(email, emailCode)],
+      );
+      if (!lockedCodes[0]) return { status: 400, message: '邮箱验证码错误或已过期' };
+      await connection.execute('UPDATE users SET password_hash = ? WHERE id = ?', [
+        hashPassword(password),
+        row.id,
+      ]);
+      await connection.execute('UPDATE email_verification_codes SET used_at = NOW() WHERE id = ?', [
+        lockedCodes[0].id,
+      ]);
+      await connection.execute(
+        'UPDATE account_identity_codes SET used_at = NOW(3) WHERE user_id = ? AND used_at IS NULL',
+        [row.id],
+      );
+      return { userId: row.id };
+    });
+    if (reset.status) {
+      response.status(reset.status).json({ message: reset.message });
       return;
     }
-
-    await pool.execute(
-      `UPDATE users
-       SET password_hash = ?
-       WHERE id = ?`,
-      [hashPassword(password), row.id],
-    );
-
-    await pool.execute(
-      `UPDATE email_verification_codes
-       SET used_at = NOW()
-       WHERE id = ?`,
-      [codeRows[0].id],
-    );
-
-    const user = toUserProfile(await getUserById(row.id));
+    const user = toUserProfile(await getUserById(reset.userId));
 
     response.json({
       message: '密码已重设',
@@ -5604,14 +5633,13 @@ app.get('/api/users/:uid/public-profile', async (request, response) => {
 
     const user = rows[0];
     const [decoratedIdentity] = await economyShop.decoratePosts([{ user_id: user.id }]);
-    const studentId = user.student_id;
     const [statsRows] = await pool.execute(
       `SELECT
-         (SELECT COUNT(*) FROM discussion_posts WHERE author_student_id = ? AND is_deleted = 0 AND is_hidden = 0) AS post_count,
+         (SELECT COUNT(*) FROM discussion_posts WHERE user_id = ? AND is_deleted = 0 AND is_hidden = 0) AS post_count,
 	         (SELECT COUNT(*) FROM discussion_post_likes l
 	            INNER JOIN discussion_posts p ON p.id = l.post_id
-	            WHERE p.author_student_id = ? AND p.is_deleted = 0 AND p.is_hidden = 0 AND l.reaction_type = 'smile') AS like_count`,
-      [studentId, studentId],
+            WHERE p.user_id = ? AND p.is_deleted = 0 AND p.is_hidden = 0 AND l.reaction_type = 'smile') AS like_count`,
+      [user.id, user.id],
     );
 
     response.json({
@@ -5733,6 +5761,11 @@ app.patch('/api/profile/password', async (request, response) => {
        SET password_hash = ?
        WHERE id = ?`,
       [hashPassword(newPassword), user.id],
+    );
+
+    await pool.execute(
+      'UPDATE account_identity_codes SET used_at = NOW(3) WHERE user_id = ? AND used_at IS NULL',
+      [user.id],
     );
 
     response.json({ message: '密码已更新' });
@@ -6064,49 +6097,12 @@ app.post('/api/admin/users', async (request, response) => {
       return;
     }
 
-    const username = String(request.body.username || '').trim();
-    const fullName = String(request.body.fullName || '').trim();
-    const studentId = String(request.body.studentId || '').trim();
-    const email = String(request.body.email || '').trim();
-    const password = String(request.body.password || '');
-    const role = String(request.body.role || 'student').trim();
+    const { username, fullName, studentId, email, password, role, grade, major } =
+      normalizeAdminAccount(request.body);
     const isAdmin = Boolean(request.body.isAdmin || role === 'admin');
     const electrons = Number(request.body.electrons ?? 0);
     const manetrons = Number(request.body.manetrons ?? 0);
     const heat = Number(request.body.heat ?? 0);
-
-    if (!isValidUsername(username)) {
-      response.status(400).json({ message: USERNAME_MESSAGE });
-      return;
-    }
-
-    if (!fullName || fullName.length > 64) {
-      response.status(400).json({ message: '请输入姓名，且长度不超过 64 个字符' });
-      return;
-    }
-
-    if (!/^20\d{8}$/.test(studentId)) {
-      response.status(400).json({ message: '学号必须是 20 开头的 10 位数字' });
-      return;
-    }
-
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      response.status(400).json({ message: '请输入有效邮箱地址' });
-      return;
-    }
-
-    if (!password || password.length < 6) {
-      response.status(400).json({ message: '密码长度至少为 6 位' });
-      return;
-    }
-
-    if (!USER_ROLES.has(role)) {
-      response.status(400).json({ message: '角色不合法' });
-      return;
-    }
-
-    const grade = studentId.slice(0, 4);
-    const major = '电子信息科学与技术';
 
     const initialElectric = Number.isFinite(electrons) ? electrons : 0;
     const initialMagnetic = Number.isFinite(manetrons) ? manetrons : 0;
@@ -6117,7 +6113,7 @@ app.post('/api/admin/users', async (request, response) => {
         `INSERT INTO users (
           uid, username, full_name, student_id, email, password_hash, email_verified_at,
           role, is_admin, electrons, manetrons, heat, grade, major
-        ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           userUid,
           username,
@@ -6125,6 +6121,7 @@ app.post('/api/admin/users', async (request, response) => {
           studentId,
           email,
           passwordHash,
+          email && role !== 'teacher' ? new Date() : null,
           role,
           isAdmin ? 1 : 0,
           initialElectric,
@@ -6155,7 +6152,10 @@ app.post('/api/admin/users', async (request, response) => {
       return;
     }
 
-    response.status(500).json({ message: '创建用户失败', detail: error.message });
+    response.status(error.status || 500).json({
+      message: error.status ? error.message : '创建用户失败',
+      code: error.status ? error.code : undefined,
+    });
   }
 });
 
@@ -6418,6 +6418,7 @@ async function startAgentSettingsInternalApi() {
 
 async function start() {
   await ensureUsersUidColumn();
+  await ensureTeacherAccountTables(pool);
   await ensureUsernameChangeTables(pool);
   await ensureAppSettingsTable();
   await ensureSystemSecretSettingsTable(pool);

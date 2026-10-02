@@ -29,12 +29,14 @@ async function getUsernameChangePolicy(connection, user) {
     [user.id],
   );
   const required = !isValidUsername(user.username);
-  const freeAvailable = required || Boolean(Number(row.free_available));
+  const teacherFree = user.role === 'teacher';
+  const freeAvailable = teacherFree || required || Boolean(Number(row.free_available));
   return {
     username: user.username,
     freeAvailable,
     required,
-    nextFreeAt: row.next_free_at || null,
+    teacherFree,
+    nextFreeAt: teacherFree ? null : row.next_free_at || null,
     cost: freeAvailable ? 0 : RENAME_COST,
     balance: Number(user.manetrons || 0),
   };

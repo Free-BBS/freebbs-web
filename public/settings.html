@@ -23,6 +23,7 @@
     <link rel="stylesheet" href="/settings-avatar.css" />
     <link rel="stylesheet" href="/profile-extras.css" />
     <link rel="stylesheet" href="/settings-username.css" />
+    <link rel="stylesheet" href="/account-identity.css" />
     <link rel="stylesheet" href="/settings-guide.css" />
     <link rel="stylesheet" href="/mobile-personal.css" />
     <link rel="stylesheet" href="/development-commerce-embed.css" />
@@ -273,7 +274,8 @@
               <div class="settings-section-heading">
                 <h2>修改昵称</h2>
                 <p>
-                  昵称同时用作登录用户名。每 3 个自然月可免费修改一次，其余修改每次需要 10 磁元。
+                  昵称同时用作登录用户名。教师账号可免费修改；其他账号每 3
+                  个自然月可免费修改一次，其余修改每次需要 10 磁元。
                 </p>
               </div>
               <label class="auth-field" for="settings-username">
@@ -439,6 +441,74 @@
               <button class="auth-submit" type="submit" disabled>保存更改</button>
             </form>
 
+            <section class="settings-form" id="settings-identity" aria-label="邮箱与学号绑定">
+              <div class="settings-section-heading">
+                <h2>邮箱与学号</h2>
+                <p>教师可先使用用户名和初始密码登录，之后按需绑定。邮箱验证后可用于找回密码。</p>
+              </div>
+              <p id="settings-identity-status" role="status">请登录后查看绑定状态。</p>
+              <form id="settings-email-form">
+                <div class="settings-grid">
+                  <label class="auth-field"
+                    ><span>要绑定的邮箱</span
+                    ><input name="email" type="email" maxlength="128" autocomplete="email" required
+                  /></label>
+                  <label class="auth-field"
+                    ><span>当前密码</span
+                    ><input
+                      name="currentPassword"
+                      type="password"
+                      maxlength="128"
+                      autocomplete="current-password"
+                      required
+                  /></label>
+                </div>
+                <label class="auth-field"
+                  ><span>邮箱验证码</span>
+                  <div class="auth-inline">
+                    <input
+                      name="emailCode"
+                      inputmode="numeric"
+                      pattern="[0-9]{6}"
+                      maxlength="6"
+                      autocomplete="one-time-code"
+                      required
+                    /><button type="button" id="settings-email-code">发送验证码</button>
+                  </div></label
+                >
+                <p id="settings-email-message" role="status" aria-live="polite"></p>
+                <button class="auth-submit" type="submit">验证并绑定邮箱</button>
+              </form>
+              <form id="settings-student-form">
+                <h3>学号绑定申请</h3>
+                <p>
+                  学号选填。请提交本人的学号，并联系管理员核实姓名与学号归属后完成绑定。绑定不会更改教学身份或管理权限。
+                </p>
+                <div class="settings-grid">
+                  <label class="auth-field"
+                    ><span>学号</span
+                    ><input
+                      name="studentId"
+                      inputmode="numeric"
+                      pattern="20[0-9]{8}"
+                      maxlength="10"
+                      required
+                  /></label>
+                  <label class="auth-field"
+                    ><span>当前密码</span
+                    ><input
+                      name="currentPassword"
+                      type="password"
+                      maxlength="128"
+                      autocomplete="current-password"
+                      required
+                  /></label>
+                </div>
+                <p id="settings-student-message" role="status" aria-live="polite"></p>
+                <button class="auth-submit" type="submit">提交学号绑定申请</button>
+              </form>
+            </section>
+
             <form class="settings-form settings-password-form" id="settings-password-form">
               <div class="settings-section-heading">
                 <h2>修改密码</h2>
@@ -515,6 +585,7 @@
     <script src="/profile-extras.js"></script>
     <script src="/app.js"></script>
     <script src="/settings-username.js"></script>
+    <script src="/account-identity.js"></script>
     <script src="/settings-profile-link.js"></script>
     <script src="/notifications.js"></script>
     <script src="/settings-notification-preferences.js"></script>

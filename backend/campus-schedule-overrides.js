@@ -156,8 +156,8 @@ async function editImportedSchedule(pool, userId, publicId, body, { remove = fal
         : previous.patch_json
       : {};
     const patch = remove
-      ? { ...previousPatch, deleted: true }
-      : makePatch(existing, body, previousPatch);
+      ? { ...previousPatch, deleted: true, seriesManaged: false }
+      : { ...makePatch(existing, body, previousPatch), seriesManaged: false };
     await connection.execute(
       `INSERT INTO campus_schedule_overrides (user_id, connector_generation, public_id, patch_json, version)
        VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE patch_json = VALUES(patch_json),

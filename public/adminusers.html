@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/ui-polish.css" />
     <link rel="stylesheet" href="/adminusers.css" />
+    <link rel="stylesheet" href="/account-identity.css" />
     <link rel="stylesheet" href="/username-guard.css" />
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/registration-whitelist.css" />
@@ -246,6 +247,17 @@
               </div>
             </details>
 
+            <section
+              id="admin-student-requests"
+              class="admin-users-table"
+              aria-label="学号绑定审核"
+              hidden
+            >
+              <h2>学号绑定申请</h2>
+              <p>核实申请人的真实姓名与学号归属后再批准。账号身份与权限不会随绑定变化。</p>
+              <div id="admin-student-request-list"></div>
+              <p id="admin-student-request-message" role="status" aria-live="polite"></p>
+            </section>
             <section class="admin-users-table" aria-label="用户目录">
               <header class="admin-user-list-heading">
                 <div>
@@ -293,6 +305,7 @@
     <script src="/username-guard.js"></script>
     <script src="/registration-whitelist.js"></script>
     <script src="/app.js"></script>
+    <script src="/admin-account-credentials.js"></script>
     <script src="/notifications.js"></script>
   </body>
 </html>

@@ -208,29 +208,31 @@ test('settings makes the real name readonly and removes it from ordinary save re
   assert.doesNotMatch(source.slice(start, end), /fullName:/);
 });
 
-test('nickname session refresh preserves unsaved bio and website', () => {
+test('nickname and email session refresh preserve unsaved bio and website', () => {
   const source = fs.readFileSync(path.join(__dirname, '../public/app.js'), 'utf8');
-  const start = source.indexOf("window.addEventListener('freebbs:username-updated'");
+  const start = source.indexOf('function handleAccountIdentityUpdated(');
   const end = source.indexOf("window.addEventListener('storage'", start);
   assert.ok(start > 0 && end > start);
   const settingsBio = { value: '未保存的简介' };
   const settingsWebsiteUrl = { value: 'https://draft.example/' };
-  let callback;
+  const callbacks = {};
   vm.runInNewContext(source.slice(start, end), {
     window: {
       addEventListener: (name, handler) => {
-        callback = handler;
+        callbacks[name] = handler;
       },
     },
     settingsForm: {},
     settingsBio,
     settingsWebsiteUrl,
+    userState: { token: 'unchanged-token' },
     saveSession: () => {
       settingsBio.value = 'saved';
       settingsWebsiteUrl.value = '';
     },
   });
-  callback({ detail: { token: 'new-token', user: {} } });
+  callbacks['freebbs:username-updated']({ detail: { token: 'new-token', user: {} } });
+  callbacks['freebbs:identity-updated']({ detail: { user: {} } });
   assert.equal(settingsBio.value, '未保存的简介');
   assert.equal(settingsWebsiteUrl.value, 'https://draft.example/');
 });

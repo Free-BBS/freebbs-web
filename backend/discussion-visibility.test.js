@@ -498,7 +498,14 @@ test('normal deletion redacts notifications and removes access; author can delet
 
 test('public counts and asynchronous Max reply use public-only visibility', () => {
   assert.match(source, /p\.board_id = b\.id AND p\.is_deleted = 0 AND p\.is_hidden = 0/);
-  assert.match(source, /author_student_id = \? AND is_deleted = 0 AND is_hidden = 0/);
+  const profile = source.slice(
+    source.indexOf("app.get('/api/users/:uid/public-profile'"),
+    source.indexOf("app.patch('/api/profile'"),
+  );
+  assert.match(profile, /WHERE user_id = \? AND is_deleted = 0 AND is_hidden = 0/);
+  assert.match(profile, /p\.user_id = \? AND p\.is_deleted = 0 AND p\.is_hidden = 0/);
+  assert.match(profile, /\[user\.id, user\.id\]/);
+  assert.doesNotMatch(profile, /author_student_id = \?/);
   const max = source.slice(
     source.indexOf('async function createMaxDiscussionReply('),
     source.indexOf('function toAiDialogSummary('),
