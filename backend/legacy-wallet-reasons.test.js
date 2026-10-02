@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const test = require('node:test');
 const vm = require('node:vm');
 const { walletLedgerCheckpoint, annotateWalletLedger } = require('./wallet-ledger');
+const { normalizeAdminAccount } = require('./teacher-accounts');
 
 const source = fs.readFileSync(require.resolve('./server'), 'utf8');
 function fragment(start, end) {
@@ -78,10 +79,20 @@ function harness({ authorized = true, failAnnotation = false } = {}) {
       if (normalized.startsWith('INSERT INTO users')) {
         state.users[9] = {
           id: 9,
+          uid: args[0],
           username: args[1],
-          electrons: args[8],
-          manetrons: args[9],
-          heat: args[10],
+          full_name: args[2],
+          student_id: args[3],
+          email: args[4],
+          password_hash: args[5],
+          email_verified_at: args[6],
+          role: args[7],
+          is_admin: args[8],
+          electrons: args[9],
+          manetrons: args[10],
+          heat: args[11],
+          grade: args[12],
+          major: args[13],
         };
         recordBalance(9, 0, 0);
         return [{ insertId: 9, affectedRows: 1 }];
@@ -125,6 +136,7 @@ function harness({ authorized = true, failAnnotation = false } = {}) {
     crypto,
     walletLedgerCheckpoint,
     annotateWalletLedger,
+    normalizeAdminAccount,
     requireAuth: auth({ id: 8 }),
     requireAdmin: auth({ id: 7, username: 'NotingSr' }),
     normalizeCurrencyType: (value) => value,
@@ -229,6 +241,8 @@ test('admin creation describes a single initial balance entry; zero balances cre
       manetrons: magnetic,
     });
     assert.equal(response.code, 201);
+    assert.equal(f.state().users[9].electrons, electric);
+    assert.equal(f.state().users[9].manetrons, magnetic);
     const entries = f.state().ledger.filter((row) => row.user_id === 9);
     assert.equal(entries.length, electric || magnetic ? 1 : 0);
     if (entries.length) {
@@ -237,6 +251,47 @@ test('admin creation describes a single initial balance entry; zero balances cre
       assert.match(entries[0].source_key, /^admin-create:/);
     }
   }
+});
+
+test('teacher creation keeps optional identities NULL and records its initial balance atomically', async () => {
+  const teacher = {
+    ...createUser,
+    username: 'new_teacher',
+    fullName: '新教师',
+    studentId: '',
+    email: '',
+    role: 'teacher',
+    electrons: 5,
+    manetrons: 9,
+    heat: 3,
+  };
+  const f = harness();
+  const response = await f.call('/api/admin/users', teacher);
+  assert.equal(response.code, 201);
+  const user = f.state().users[9];
+  assert.equal(user.student_id, null);
+  assert.equal(user.email, null);
+  assert.equal(user.email_verified_at, null);
+  assert.equal(user.grade, null);
+  assert.equal(user.major, null);
+  assert.equal(user.role, 'teacher');
+  assert.equal(user.is_admin, 0);
+  assert.equal(user.electrons, 5);
+  assert.equal(user.manetrons, 9);
+  assert.equal(user.heat, 3);
+  assert.equal(user.password_hash, 'hashed-test-password');
+  const entries = f.state().ledger.filter((row) => row.user_id === user.id);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].title, '账户初始余额');
+  assert.match(entries[0].reason, /NotingSr.*5 电元、9 磁元/);
+  assert.match(entries[0].source_key, /^admin-create:/);
+  assert.ok(f.events.indexOf('annotate') < f.events.indexOf('commit'));
+  const failed = harness({ failAnnotation: true });
+  const initial = structuredClone(failed.state());
+  assert.equal((await failed.call('/api/admin/users', teacher)).code, 500);
+  assert.deepEqual(failed.state(), initial);
+  assert.ok(failed.events.includes('rollback'));
+  assert.ok(!failed.events.includes('commit'));
 });
 
 test('admin edits explain both balances once and repeat saves do not create empty entries', async () => {
