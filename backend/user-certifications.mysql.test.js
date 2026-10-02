@@ -21,8 +21,15 @@ const {
 } = require('./username-policy');
 const { hashPassword, verifyPassword, verifyPasswordAsync } = require('./password');
 const {
+  ensureWalletLedger,
+  walletLedgerCheckpoint,
+  annotateWalletLedger,
+} = require('./wallet-ledger');
+const {
   normalizeCertification,
   approveEnterpriseCertification,
+  syncEnterpriseCertification,
+  readApprovedCertifications,
   ensureUserCertificationTables,
   createUserCertificationService,
   createUserCertificationRouter,
@@ -72,6 +79,21 @@ test(
     (5,'u_other','其他用户','其他用户','2024210001',?,'student',0)`,
       [hash, hash, hash, hash, hash],
     );
+    await ensureWalletLedger(pool);
+    await pool.query(
+      'CREATE TABLE test_admin_responsibilities (user_id BIGINT PRIMARY KEY, value VARCHAR(64)) ENGINE=InnoDB',
+    );
+    for (const sql of [
+      'CREATE TABLE discussion_boards (id BIGINT PRIMARY KEY, slug VARCHAR(64)) ENGINE=InnoDB',
+      'CREATE TABLE discussion_board_moderators (user_id BIGINT, board_id BIGINT) ENGINE=InnoDB',
+      'CREATE TABLE courses (id BIGINT PRIMARY KEY, slug VARCHAR(64)) ENGINE=InnoDB',
+      'CREATE TABLE course_material_managers (user_id BIGINT, course_id BIGINT) ENGINE=InnoDB',
+      "INSERT INTO discussion_boards VALUES (1, 'test-board')",
+      'INSERT INTO discussion_board_moderators VALUES (5, 1)',
+      "INSERT INTO courses VALUES (1, 'test-course')",
+      'INSERT INTO course_material_managers VALUES (5, 1)',
+    ])
+      await pool.query(sql);
     const notifications = createNotificationService({
       pool,
       sendEmail: async () => {
@@ -114,8 +136,8 @@ test(
     const start = source.indexOf("app.post('/api/admin/users',");
     const end = source.indexOf("app.patch('/api/admin/users/:id',", start);
     assert.ok(start >= 0 && end > start);
-    let failLedger = false;
-    vm.runInNewContext(source.slice(start, end), {
+    const failures = { ledger: false, responsibilities: false };
+    const routeContext = vm.createContext({
       app,
       pool,
       crypto,
@@ -123,6 +145,8 @@ test(
       normalizeAdminAccount,
       normalizeCertification,
       approveEnterpriseCertification,
+      syncEnterpriseCertification,
+      readApprovedCertifications,
       hashPassword,
       getUserById,
       toUserProfile: (user) => ({
@@ -134,8 +158,22 @@ test(
         isAdmin: Boolean(user.is_admin),
       }),
       createUniqueUserUid: async () => `u_${crypto.randomBytes(8).toString('hex')}`,
-      annotateWalletLedger: async () => {
-        if (failLedger) throw new Error('injected ledger failure');
+      annotateWalletLedger: async (...args) => {
+        if (failures.ledger) throw new Error('injected ledger failure');
+        return annotateWalletLedger(...args);
+      },
+      walletLedgerCheckpoint,
+      USER_ROLES: new Set(['student', 'ta', 'teacher', 'admin', 'enterprise']),
+      getPermissionCatalog: async () => ({ boards: [], courses: [] }),
+      normalizeResponsibilitySlugs: (values = []) => values,
+      ensureDiscussionTables: async () => {},
+      ensureCourseMapTables: async () => {},
+      replaceUserResponsibilities: async (connection, id, boards) => {
+        await connection.execute(
+          'INSERT INTO test_admin_responsibilities (user_id, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)',
+          [id, boards.join(',')],
+        );
+        if (failures.responsibilities) throw new Error('injected responsibilities failure');
       },
       withDatabaseTransaction: async (work) => {
         const conn = await pool.getConnection();
@@ -152,6 +190,19 @@ test(
         }
       },
     });
+    const lockStart = source.indexOf('class AdminUserUpdateError extends Error');
+    const lockEnd = source.indexOf('function sanitizeWebsiteUrl(', lockStart);
+    const patchEnd = source.indexOf("app.delete('/api/admin/users/:id',", end);
+    assert.ok(lockStart >= 0 && lockEnd > lockStart && patchEnd > end);
+    vm.runInContext(source.slice(lockStart, lockEnd), routeContext);
+    vm.runInContext(source.slice(start, patchEnd), routeContext);
+    const mapStart = source.indexOf('async function addUserResponsibilities(');
+    const mapEnd = source.indexOf('function normalizeResponsibilitySlugs(', mapStart);
+    const listStart = source.indexOf("app.get('/api/admin/users',");
+    const listEnd = source.indexOf("app.get('/api/admin/ai-dialogs/export',", listStart);
+    assert.ok(mapStart >= 0 && mapEnd > mapStart && listStart >= 0 && listEnd > listStart);
+    vm.runInContext(source.slice(mapStart, mapEnd), routeContext);
+    vm.runInContext(source.slice(listStart, listEnd), routeContext);
     const loginStart = source.indexOf("app.post('/api/auth/login',");
     const loginEnd = source.indexOf("app.post('/api/auth/reset-password',", loginStart);
     assert.ok(loginStart >= 0 && loginEnd > loginStart);
@@ -485,14 +536,14 @@ test(
           verifyPassword('new-enterprise-qa-only', (await getUserById(user.id)).password_hash),
           true,
         );
-        failLedger = true;
+        failures.ledger = true;
         const failed = await request('/admin/users', 1, 'POST', {
           ...body,
           username: '回滚企业',
           electrons: 1,
         });
         assert.equal(failed.status, 500);
-        failLedger = false;
+        failures.ledger = false;
         const [[count]] = await pool.execute(
           "SELECT COUNT(*) AS count FROM users WHERE username = '回滚企业'",
         );
@@ -513,6 +564,278 @@ test(
         });
         assert.equal((await approve(selfCompany.data.request.id)).status, 200);
         assert.equal((await getUserById(5)).role, 'student');
+      },
+    );
+
+    await t.test(
+      'admin directory returns approved company names with responsibilities in one batch',
+      async () => {
+        assert.equal((await request('/admin/users', 3)).status, 403);
+        const directory = await request('/admin/users', 1);
+        assert.equal(directory.status, 200);
+        const user = directory.data.users.find((item) => item.id === 5);
+        assert.deepEqual(user.boardModeratorSlugs, ['test-board']);
+        assert.deepEqual(user.courseManagerSlugs, ['test-course']);
+        assert.equal(
+          user.certifications.find((c) => c.type === 'company').companyName,
+          '自行申请企业',
+        );
+        assert.equal(JSON.stringify(directory.data).includes(hash), false);
+        let queries = 0;
+        const [rows] = await pool.execute('SELECT * FROM users');
+        await routeContext.addUserResponsibilities(rows, {
+          execute: (...args) => {
+            queries += 1;
+            return pool.execute(...args);
+          },
+        });
+        assert.equal(queries, 3);
+        await routeContext.addUserResponsibilities([], {
+          execute: () => {
+            throw new Error('empty directory must not query');
+          },
+        });
+      },
+    );
+
+    for (const roleOnly of [false, true]) {
+      const routeName = roleOnly ? 'role PATCH' : 'full-user PATCH';
+      await t.test(
+        `${routeName} keeps enterprise upgrades, renames and downgrades atomic`,
+        async () => {
+          const created = await request('/admin/users', 1, 'POST', {
+            username: roleOnly ? '角色接口用户' : '完整接口用户',
+            fullName: '个人姓名不可作为公司名',
+            role: 'teacher',
+            password: 'isolated-enterprise-only',
+          });
+          assert.equal(created.status, 201);
+          const id = created.data.user.id;
+          const url = `/admin/users/${id}${roleOnly ? '/role' : ''}`;
+          const update = (body, actor = 1) =>
+            request(url, actor, 'PATCH', {
+              fullName: '个人姓名不可作为公司名',
+              role: 'student',
+              ...body,
+            });
+          const state = async () => {
+            const [[user]] = await pool.execute(
+              'SELECT full_name, role, is_admin, electrons, manetrons, heat FROM users WHERE id = ?',
+              [id],
+            );
+            const [certificates] = await pool.execute(
+              'SELECT * FROM user_certifications WHERE user_id = ? ORDER BY slot',
+              [id],
+            );
+            const [requests] = await pool.execute(
+              'SELECT * FROM user_certification_requests WHERE user_id = ? ORDER BY id',
+              [id],
+            );
+            const [ledger] = await pool.execute('SELECT * FROM wallet_ledger WHERE user_id = ?', [
+              id,
+            ]);
+            const [responsibilities] = await pool.execute(
+              'SELECT * FROM test_admin_responsibilities WHERE user_id = ?',
+              [id],
+            );
+            return { user, certificates, requests, ledger, responsibilities };
+          };
+          const [education, teacher] = await Promise.all([
+            apply(id, 'undergraduate', 2021, { institution: '测试大学电子院', className: '电11' }),
+            request('/me/certifications', id, 'POST', {
+              type: 'teacher',
+              institution: '其他大学',
+            }),
+          ]);
+          assert.equal((await approve(education.data.request.id)).status, 200);
+          assert.equal((await approve(teacher.data.request.id)).status, 200);
+          const before = await state();
+          assert.equal((await update({ role: 'enterprise' })).status, 400);
+          for (const companyName of ['', null, 'a', '名'.repeat(129)]) {
+            assert.equal((await update({ role: 'enterprise', companyName })).status, 400);
+          }
+          assert.equal(
+            (await update({ role: 'enterprise', companyName: '未授权企业' }, id)).status,
+            403,
+          );
+          assert.deepEqual(await state(), before);
+          const pending = await request('/me/certifications', id, 'POST', {
+            type: 'company',
+            companyName: '旧待审企业',
+          });
+          const upgraded = await update({ role: 'enterprise', companyName: '管理员确认企业' });
+          assert.equal(upgraded.status, 200);
+          assert.equal(upgraded.data.user.role, 'enterprise');
+          assert.equal(
+            upgraded.data.user.certifications.find((c) => c.type === 'company').companyName,
+            '管理员确认企业',
+          );
+          assert.equal((await approve(pending.data.request.id)).status, 409);
+          const saved = await state();
+          const company = saved.certificates.find((c) => c.slot === 'company');
+          assert.equal(company.company_name, '管理员确认企业');
+          assert.equal(Number(company.approved_by), 1);
+          assert.equal(company.source_request_id, null);
+          assert.equal(saved.requests.at(-1).status, 'rejected');
+          assert.match(saved.requests.at(-1).review_note, /管理员/);
+          assert.deepEqual(
+            saved.certificates.filter((c) => c.slot !== 'company'),
+            before.certificates,
+          );
+          assert.equal((await update({ role: 'enterprise' })).status, 200);
+          assert.deepEqual((await state()).certificates, saved.certificates);
+          const renamed = await update({ role: 'enterprise', companyName: '更新后的企业' }, 2);
+          assert.equal(renamed.status, 200);
+          assert.equal(
+            renamed.data.user.certifications.find((c) => c.type === 'company').label,
+            '更新后的企业',
+          );
+          assert.equal(
+            Number((await state()).certificates.find((c) => c.slot === 'company').approved_by),
+            2,
+          );
+          const stale = await request('/me/certifications', id, 'POST', {
+            type: 'company',
+            companyName: '降级前待审企业',
+          });
+          assert.equal(stale.status, 201);
+
+          // Fail after certification changes: both the company and user mutations must roll back.
+          const trigger = `test_enterprise_sync_fail_${id}`;
+          assert.ok(Number.isSafeInteger(Number(id)));
+          await pool.query(`CREATE TRIGGER ${trigger} BEFORE UPDATE ON users FOR EACH ROW
+          BEGIN IF OLD.id = ${Number(id)} THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'injected role failure'; END IF; END`);
+          const beforeFailure = await state();
+          try {
+            assert.equal(
+              (await update({ role: 'enterprise', companyName: '回滚更名' })).status,
+              500,
+            );
+            assert.deepEqual(await state(), beforeFailure);
+            assert.equal((await update({ role: 'teacher' })).status, 500);
+            assert.deepEqual(await state(), beforeFailure);
+          } finally {
+            await pool.query(`DROP TRIGGER ${trigger}`);
+          }
+          if (!roleOnly) {
+            failures.ledger = true;
+            try {
+              assert.equal(
+                (await update({ role: 'enterprise', companyName: '回滚余额更名', electrons: 10 }))
+                  .status,
+                500,
+              );
+              assert.deepEqual(await state(), beforeFailure);
+            } finally {
+              failures.ledger = false;
+            }
+            failures.responsibilities = true;
+            try {
+              assert.equal(
+                (await update({ role: 'student', electrons: 10, boardModeratorSlugs: ['test'] }))
+                  .status,
+                500,
+              );
+              assert.deepEqual(await state(), beforeFailure);
+            } finally {
+              failures.responsibilities = false;
+            }
+          }
+          // Approval and demotion share the production user locks. Either winner must end without a company badge.
+          const [demotion, review] = await Promise.all([
+            update({ role: 'teacher' }),
+            approve(stale.data.request.id),
+          ]);
+          assert.equal(demotion.status, 200);
+          assert.ok([200, 409].includes(review.status), JSON.stringify(review));
+          const downgraded = await state();
+          assert.equal(downgraded.user.role, 'teacher');
+          assert.equal(
+            downgraded.certificates.some((c) => c.slot === 'company'),
+            false,
+          );
+          assert.deepEqual(downgraded.certificates, before.certificates);
+          assert.notEqual(downgraded.requests.at(-1).status, 'pending');
+          const [publicRow] = await service.decorate([{ user_id: id }]);
+          assert.equal(
+            publicRow.identityBadges.some((badge) => badge.type === 'company'),
+            false,
+          );
+          assert.equal(publicRow.certifications.length, 2);
+          assert.equal((await approve(stale.data.request.id)).status, 409);
+
+          // A separately approved company belongs to the certification system even if the role is not enterprise.
+          const independent = await request('/me/certifications', id, 'POST', {
+            type: 'company',
+            companyName: '独立申请企业',
+          });
+          assert.equal((await approve(independent.data.request.id)).status, 200);
+          assert.equal((await update({ role: 'student' })).status, 200);
+          assert.equal(
+            (await state()).certificates.find((c) => c.slot === 'company').source_request_id,
+            independent.data.request.id,
+          );
+          const reused = await update({ role: 'enterprise' });
+          assert.equal(reused.status, 200);
+          assert.equal(
+            reused.data.user.certifications.find((c) => c.type === 'company').label,
+            '独立申请企业',
+          );
+          assert.equal(
+            (await state()).certificates.find((c) => c.slot === 'company').source_request_id,
+            null,
+          );
+          assert.equal((await update({ role: 'student' })).status, 200);
+          assert.deepEqual((await state()).certificates, before.certificates);
+        },
+      );
+    }
+
+    await t.test(
+      'enterprise role editing cannot bypass self-review or last-admin protections',
+      async () => {
+        for (const suffix of ['', '/role']) {
+          const result = await request(`/admin/users/1${suffix}`, 1, 'PATCH', {
+            fullName: '管理员一',
+            role: 'enterprise',
+            isAdmin: true,
+            companyName: '自审企业',
+          });
+          assert.equal(result.status, 403);
+          assert.equal((await getUserById(1)).role, 'admin');
+          assert.equal(
+            (await service.read(1)).approved.some((c) => c.type === 'company'),
+            false,
+          );
+        }
+        await pool.execute('UPDATE users SET is_admin = 0 WHERE id = 2');
+        try {
+          for (const suffix of ['', '/role']) {
+            assert.equal(
+              (
+                await request(`/admin/users/1${suffix}`, 1, 'PATCH', {
+                  fullName: '管理员一',
+                  role: 'enterprise',
+                  companyName: '不能降级最后管理员',
+                })
+              ).status,
+              409,
+            );
+            assert.equal((await getUserById(1)).role, 'admin');
+            assert.equal(
+              (
+                await request(`/admin/users/4${suffix}`, 2, 'PATCH', {
+                  fullName: '老师',
+                  role: 'enterprise',
+                  companyName: '已失去权限',
+                })
+              ).status,
+              403,
+            );
+          }
+        } finally {
+          await pool.execute('UPDATE users SET is_admin = 1 WHERE id = 2');
+        }
       },
     );
 

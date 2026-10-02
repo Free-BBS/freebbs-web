@@ -119,6 +119,8 @@ const {
 const {
   normalizeCertification,
   approveEnterpriseCertification,
+  syncEnterpriseCertification,
+  readApprovedCertifications,
   ensureUserCertificationTables,
   createUserCertificationService,
   createUserCertificationRouter,
@@ -2925,6 +2927,11 @@ async function lockAndValidateUserDeletion(connection, actorId, targetId) {
 function sendAdminUserUpdateError(response, error, fallbackMessage) {
   if (error instanceof AdminUserUpdateError) {
     response.status(error.status).json({ message: error.message });
+    return;
+  }
+
+  if (Number.isInteger(error.status) && error.status >= 400 && error.status < 500) {
+    response.status(error.status).json({ message: error.message, code: error.code });
     return;
   }
 
@@ -5857,6 +5864,7 @@ async function addUserResponsibilities(users, executor = pool) {
      WHERE m.user_id IN (${placeholders})`,
     userIds,
   );
+  const certificationsByUser = await readApprovedCertifications(executor, userIds);
   const [courseRows] = await executor.execute(
     `SELECT m.user_id, c.slug
      FROM course_material_managers m
@@ -5878,6 +5886,7 @@ async function addUserResponsibilities(users, executor = pool) {
   });
   return users.map((row) => ({
     ...toUserProfile(row),
+    certifications: certificationsByUser.get(Number(row.id)) || [],
     boardModeratorSlugs: boardSlugsByUser.get(Number(row.id)) || [],
     courseManagerSlugs: courseSlugsByUser.get(Number(row.id)) || [],
   }));
@@ -6180,9 +6189,13 @@ app.post('/api/admin/users', async (request, response) => {
     });
 
     const user = await getUserById(result.insertId);
+    const certificationsByUser = await readApprovedCertifications(pool, [result.insertId]);
 
     response.status(201).json({
-      user: toUserProfile(user),
+      user: {
+        ...toUserProfile(user),
+        certifications: certificationsByUser.get(Number(result.insertId)) || [],
+      },
     });
   } catch (error) {
     if (error && error.code === 'ER_DUP_ENTRY') {
@@ -6244,6 +6257,13 @@ app.patch('/api/admin/users/:id', async (request, response) => {
       role,
       isAdmin,
     );
+    await syncEnterpriseCertification(connection, {
+      userId: targetId,
+      adminId: adminUser.id,
+      previousRole: previousUser.role,
+      nextRole: role,
+      companyName: request.body.companyName,
+    });
     const nextElectric = Number.isFinite(electrons) ? electrons : 0;
     const nextMagnetic = Number.isFinite(manetrons) ? manetrons : 0;
     const previousElectric = Number(previousUser.electrons || 0);
@@ -6287,9 +6307,13 @@ app.patch('/api/admin/users/:id', async (request, response) => {
     await connection.commit();
 
     const user = await getUserById(targetId);
+    const certificationsByUser = await readApprovedCertifications(pool, [targetId]);
 
     response.json({
-      user: toUserProfile(user),
+      user: {
+        ...toUserProfile(user),
+        certifications: certificationsByUser.get(targetId) || [],
+      },
     });
   } catch (error) {
     if (connection) {
@@ -6327,7 +6351,20 @@ app.patch('/api/admin/users/:id/role', async (request, response) => {
 
     connection = await pool.getConnection();
     await connection.beginTransaction();
-    await lockAndValidateRoleChange(connection, adminUser.id, targetId, role, isAdmin);
+    const previousUser = await lockAndValidateRoleChange(
+      connection,
+      adminUser.id,
+      targetId,
+      role,
+      isAdmin,
+    );
+    await syncEnterpriseCertification(connection, {
+      userId: targetId,
+      adminId: adminUser.id,
+      previousRole: previousUser.role,
+      nextRole: role,
+      companyName: request.body.companyName,
+    });
     await connection.execute(
       `UPDATE users
        SET role = ?, is_admin = ?
@@ -6336,8 +6373,13 @@ app.patch('/api/admin/users/:id/role', async (request, response) => {
     );
     await connection.commit();
 
+    const user = await getUserById(targetId);
+    const certificationsByUser = await readApprovedCertifications(pool, [targetId]);
     response.json({
-      user: toUserProfile(await getUserById(targetId)),
+      user: {
+        ...toUserProfile(user),
+        certifications: certificationsByUser.get(targetId) || [],
+      },
     });
   } catch (error) {
     if (connection) {

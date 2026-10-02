@@ -22,6 +22,10 @@ const {
   createTeacherAccountsRouter,
 } = require('./teacher-accounts');
 const { ensureUsernameChangeTables, createUsernameRouter } = require('./username-policy');
+const {
+  ensureUserCertificationTables,
+  readApprovedCertifications,
+} = require('./user-certifications');
 
 test(
   'isolated MySQL verifies teacher accounts, identity ownership, retries and concurrent binding over HTTP',
@@ -81,6 +85,7 @@ test(
     await ensureTeacherAccountTables(pool);
     await ensureTeacherAccountTables(pool);
     await ensureUsernameChangeTables(pool);
+    await ensureUserCertificationTables(pool);
     const adminPassword = 'admin-proof-password';
     await pool.execute(
       `INSERT INTO users (uid, username, full_name, student_id, password_hash, role, is_admin)
@@ -163,6 +168,7 @@ test(
         requireAdmin,
         requireAuth,
         normalizeAdminAccount,
+        readApprovedCertifications,
         hashPassword,
         verifyPasswordAsync,
         verifyPassword,

@@ -165,6 +165,64 @@ async function approveEnterpriseCertification(connection, { userId, adminId, com
   );
 }
 
+// The caller must hold the user's row lock in the role-change transaction. Application
+// review takes the same lock before the request lock, so a superseded request cannot
+// restore a company identity after this transaction removes or replaces it.
+async function syncEnterpriseCertification(
+  connection,
+  { userId, adminId, previousRole, nextRole, companyName, now = Date.now },
+) {
+  const leavingEnterprise = previousRole === 'enterprise' && nextRole !== 'enterprise';
+  if (!leavingEnterprise && nextRole !== 'enterprise') return;
+
+  const [[approved]] = await connection.execute(
+    "SELECT company_name FROM user_certifications WHERE user_id = ? AND slot = 'company' FOR UPDATE",
+    [userId],
+  );
+  const providedName = companyName !== undefined;
+  let name;
+  if (nextRole === 'enterprise') {
+    if (!providedName && !approved?.company_name)
+      throw certificationError(400, 'company_name_required', '请填写企业名称后再设置为企业账户');
+    name = normalizeCertification({
+      type: 'company',
+      companyName: providedName ? companyName : approved?.company_name,
+    }).companyName;
+    if (
+      Number(userId) === Number(adminId) &&
+      (previousRole !== 'enterprise' || name !== approved?.company_name)
+    )
+      throw certificationError(403, 'self_review_forbidden', '不能为自己的账户授予或修改企业认证');
+    if (previousRole === 'enterprise' && name === approved?.company_name) return;
+  }
+
+  const [pending] = await connection.execute(
+    "SELECT id FROM user_certification_requests WHERE user_id = ? AND slot = 'company' AND status = 'pending' ORDER BY id FOR UPDATE",
+    [userId],
+  );
+  const reviewedAt = new Date(now());
+  const reviewNote = leavingEnterprise
+    ? '管理员已将账户调整为非企业角色，原企业认证与待审企业申请已撤销；如需认证，请重新提交。'
+    : '管理员已在账户角色设置中确认企业身份，原待审企业申请已终止；如需更改，请重新提交。';
+  for (const request of pending)
+    await connection.execute(
+      "UPDATE user_certification_requests SET status = 'rejected', reviewed_at = ?, reviewed_by = ?, review_note = ? WHERE id = ? AND status = 'pending'",
+      [reviewedAt, adminId, reviewNote, request.id],
+    );
+
+  if (leavingEnterprise) {
+    await connection.execute(
+      "DELETE FROM user_certifications WHERE user_id = ? AND slot = 'company'",
+      [userId],
+    );
+    return;
+  }
+  await connection.execute(
+    `INSERT INTO user_certifications (user_id, slot, company_name, approved_at, approved_by, source_request_id) VALUES (?, 'company', ?, ?, ?, NULL) ON DUPLICATE KEY UPDATE year = NULL, institution = NULL, class_name = NULL, company_name = VALUES(company_name), approved_at = VALUES(approved_at), approved_by = VALUES(approved_by), source_request_id = NULL`,
+    [userId, name, reviewedAt, adminId],
+  );
+}
+
 function createUserCertificationService({ pool, notifications, now = Date.now }) {
   async function transaction(work) {
     const connection = await pool.getConnection();
@@ -440,6 +498,7 @@ module.exports = {
   ensureUserCertificationTables,
   readApprovedCertifications,
   approveEnterpriseCertification,
+  syncEnterpriseCertification,
   createUserCertificationService,
   createUserCertificationRouter,
 };

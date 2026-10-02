@@ -39,6 +39,74 @@ async function createIdentityUsabilityPreview() {
     const adminRoute = route.startsWith('/api/admin/');
     if (adminRoute && !user.isAdmin) return result({ message: '需要管理员权限' }, 403);
     try {
+      if (route === '/api/admin/users' && method === 'GET')
+        return result({
+          users: [...teacher.accounts.values()].map((account) => ({
+            ...account,
+            certifications: certifications(account.id),
+          })),
+          permissionCatalog: { boards: [], courses: [] },
+        });
+      const accountUpdate = /^\/api\/admin\/users\/(\d+)(\/role)?$/.exec(route);
+      if (accountUpdate && method === 'PATCH') {
+        const target = teacher.accounts.get(Number(accountUpdate[1]));
+        if (!target) return result({ message: '演示账号不存在' }, 404);
+        if (!['student', 'ta', 'teacher', 'enterprise', 'admin'].includes(body.role))
+          return result({ message: '身份不合法' }, 400);
+        const wasEnterprise = target.role === 'enterprise';
+        const enterprise = body.role === 'enterprise';
+        const existingCompany = approved.get(target.id)?.get('company');
+        const company = enterprise
+          ? normalizeCertification({
+              type: 'company',
+              companyName:
+                body.companyName === undefined ? existingCompany?.companyName : body.companyName,
+            })
+          : null;
+        if (
+          enterprise &&
+          target.id === user.id &&
+          (!wasEnterprise || company.companyName !== existingCompany?.companyName)
+        )
+          return result({ message: '不能为自己的账户授予或修改企业认证' }, 403);
+        if (!accountUpdate[2] && !String(body.fullName || '').trim())
+          return result({ message: '请输入姓名' }, 400);
+        const replacesCompany =
+          enterprise && (!wasEnterprise || company.companyName !== existingCompany?.companyName);
+        if (replacesCompany) {
+          if (!approved.has(target.id)) approved.set(target.id, new Map());
+          approved.get(target.id).set('company', serializeCertification(toRow(company)));
+        } else if (wasEnterprise && !enterprise) {
+          approved.get(target.id)?.delete('company');
+        }
+        if (replacesCompany || (wasEnterprise && !enterprise))
+          requests
+            .filter(
+              (request) =>
+                request.userId === target.id &&
+                request.slot === 'company' &&
+                request.status === 'pending',
+            )
+            .forEach((request) => {
+              request.status = 'rejected';
+              request.reviewedAt = new Date().toISOString();
+              request.reviewNote = '管理员已调整企业角色与认证，请核实后重新申请。';
+            });
+        if (!accountUpdate[2])
+          Object.assign(target, {
+            fullName: body.fullName.trim(),
+            electrons: Number(body.electrons || 0),
+            manetrons: Number(body.manetrons || 0),
+            heat: Number(body.heat || 0),
+            boardModeratorSlugs: body.boardModeratorSlugs || [],
+            courseManagerSlugs: body.courseManagerSlugs || [],
+          });
+        Object.assign(target, {
+          role: body.role,
+          isAdmin: Boolean(body.isAdmin || body.role === 'admin'),
+        });
+        return result({ user: { ...target, certifications: certifications(target.id) } });
+      }
       if (route === '/api/me/certifications' && method === 'GET') {
         const code = user.studentId?.slice(4, 6);
         const education = { '01': 'undergraduate', 21: 'master', 31: 'doctor' }[code];

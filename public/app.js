@@ -7648,6 +7648,13 @@ function getAdminRoleLabel(role) {
   return USER_ROLE_LABELS[normalizeAdminRole(role)] || USER_ROLE_LABELS.student;
 }
 
+function getAdminCertifiedCompanyName(user) {
+  return (
+    user.certifications?.find((certification) => certification.type === 'company')?.companyName ||
+    ''
+  );
+}
+
 function getAdminUserInitial(user) {
   return String(user.fullName || user.username || '?')
     .trim()
@@ -7742,6 +7749,8 @@ function renderAdminTextField({
 
 function renderAdminUserEditor(user, permissionCatalog) {
   const ownerLabel = user.username || '用户';
+  const companyName =
+    getAdminCertifiedCompanyName(user) || (user.role === 'enterprise' ? user.fullName : '') || '';
   return `
     <div class="admin-user-editor" id="admin-user-editor-${user.id}" hidden>
       <section class="admin-user-editor-section">
@@ -7806,6 +7815,25 @@ function renderAdminUserEditor(user, permissionCatalog) {
               <small>允许管理全站用户与设置</small>
             </span>
           </label>
+          <div data-admin-company-field style="grid-column: 1 / -1" ${user.role === 'enterprise' ? '' : 'hidden'}>
+            <label class="admin-user-field">
+              <span>企业名称</span>
+              <input
+                data-field="companyName"
+                type="text"
+                value="${escapeHtml(companyName)}"
+                placeholder="请核实企业全称，2–128 个字符"
+                autocomplete="organization"
+                maxlength="256"
+                aria-label="${escapeHtml(ownerLabel)}的企业名称"
+                aria-describedby="admin-company-note-${user.id}"
+                ${user.role === 'enterprise' ? '' : 'disabled'}
+              />
+            </label>
+          </div>
+          <p data-admin-company-note id="admin-company-note-${user.id}" style="grid-column: 1 / -1" ${user.role === 'enterprise' ? '' : 'hidden'}>
+            ${getAdminCertifiedCompanyName(user) ? '保存时将同步企业认证，请核实企业名称。' : '该企业账号尚无已认证企业名称，请核实后保存。'}
+          </p>
           <div class="admin-user-balance-fields">
             ${renderAdminTextField({
               label: '电元',
@@ -7884,6 +7912,7 @@ function renderAdminUserCard(user, permissionCatalog) {
       class="admin-user-row"
       data-user-id="${user.id}"
       data-role="${escapeHtml(normalizedRole)}"
+      data-saved-role="${escapeHtml(normalizedRole)}"
       data-is-admin="${user.isAdmin ? 'true' : 'false'}"
       data-board-count="${boardCount}"
       data-course-count="${courseCount}"
@@ -8180,6 +8209,7 @@ function setAdminUserCardStatus(card, message, tone = '') {
 function getAdminUserCardValues(card) {
   return {
     fullName: card.querySelector('[data-field="fullName"]')?.value.trim() || '',
+    companyName: card.querySelector('[data-field="companyName"]')?.value.trim() || '',
     role: card.querySelector('[data-field="role"]')?.value || 'student',
     isAdmin: Boolean(card.querySelector('[data-field="isAdmin"]')?.checked),
     electrons: Number(card.querySelector('[data-field="electrons"]')?.value || 0),
@@ -8194,6 +8224,26 @@ function getAdminUserCardValues(card) {
       (input) => input.value,
     ),
   };
+}
+
+function refreshAdminCompanyField(card) {
+  const role = card.querySelector('[data-field="role"]')?.value;
+  const companyGroup = card.querySelector('[data-admin-company-field]');
+  const companyField = card.querySelector('[data-field="companyName"]');
+  const note = card.querySelector('[data-admin-company-note]');
+  if (!companyGroup || !companyField || !note) return;
+  const enterprise = role === 'enterprise';
+  const wasEnterprise = card.dataset.savedRole === 'enterprise';
+  companyGroup.hidden = !enterprise;
+  companyField.disabled = !enterprise;
+  note.hidden = !enterprise && !wasEnterprise;
+  if (enterprise) {
+    note.textContent = wasEnterprise
+      ? '保存时将同步企业认证，请核实企业名称。'
+      : '改为企业账号将同步企业认证并关闭旧待审申请，请核实企业全称。';
+  } else if (wasEnterprise) {
+    note.textContent = '改为其他身份将移除企业认证并关闭待审核企业申请；其他学历认证保留。';
+  }
 }
 
 function refreshAdminPermissionCounts(card) {
@@ -8281,6 +8331,8 @@ function handleAdminUserFieldInput(event) {
   if (field === adminToggle && !adminToggle.checked && roleField?.value === 'admin') {
     roleField.value = 'student';
   }
+  if (field.dataset.field === 'companyName') field.setCustomValidity('');
+  refreshAdminCompanyField(card);
 
   if (card.classList.contains('admin-user-row-draft')) {
     setAdminUserCardStatus(card, '正在填写新账号', 'dirty');
@@ -8638,6 +8690,23 @@ async function handleAdminUsersClick(event) {
   }
 
   const values = getAdminUserCardValues(card);
+  if (action === 'save' && values.role === 'enterprise') {
+    const companySize = Array.from(values.companyName).length;
+    if (
+      companySize < 2 ||
+      companySize > 128 ||
+      Array.from(values.companyName).some(
+        (character) => character.codePointAt(0) < 32 || character.codePointAt(0) === 127,
+      )
+    ) {
+      const message = '请填写核实后的企业名称，长度为 2–128 个字符';
+      const companyField = card.querySelector('[data-field="companyName"]');
+      companyField?.setCustomValidity(message);
+      companyField?.reportValidity();
+      setAdminUserCardStatus(card, message, 'danger');
+      return;
+    }
+  }
   const actionButtons = Array.from(card.querySelectorAll('button[data-action]'));
   const mutableFields = Array.from(card.querySelectorAll('input:not([readonly]), select')).map(
     (field) => ({
@@ -8698,11 +8767,13 @@ async function handleAdminUsersClick(event) {
     if (action === 'save') {
       setAdminUserCardStatus(card, '正在保存…');
       setAdminMessage('正在保存用户...');
-      await callApi(`/admin/users/${userId}`, {
+      const updateOwner = `${userState.uid}:${userState.token}`;
+      const payload = await callApi(`/admin/users/${userId}`, {
         method: 'PATCH',
         body: JSON.stringify({
           fullName: values.fullName,
           role: values.role,
+          companyName: values.role === 'enterprise' ? values.companyName : undefined,
           isAdmin: values.isAdmin,
           electrons: values.electrons,
           manetrons: values.manetrons,
@@ -8711,7 +8782,26 @@ async function handleAdminUsersClick(event) {
           courseManagerSlugs: values.courseManagerSlugs,
         }),
       });
+      if (`${userState.uid}:${userState.token}` !== updateOwner || !userState.isAdmin) return;
+      let savedUser = payload.user;
+      let refreshFailed = false;
+      if (!Array.isArray(savedUser?.certifications)) {
+        try {
+          const directory = await callApi('/admin/users', { method: 'GET' });
+          savedUser = directory.users?.find((user) => String(user.id) === userId) || savedUser;
+        } catch {
+          refreshFailed = true;
+        }
+      }
+      if (`${userState.uid}:${userState.token}` !== updateOwner || !userState.isAdmin) return;
+      card.dataset.savedRole = savedUser?.role || values.role;
+      if (Array.isArray(savedUser?.certifications)) {
+        const savedCompanyName = getAdminCertifiedCompanyName(savedUser);
+        const companyField = card.querySelector('[data-field="companyName"]');
+        if (companyField) companyField.value = savedCompanyName;
+      }
       card.classList.remove('is-dirty');
+      refreshAdminCompanyField(card);
       refreshAdminUserCardSummary(card);
       setAdminUserCardStatus(
         card,
@@ -8721,7 +8811,10 @@ async function handleAdminUsersClick(event) {
         }).format(new Date())}`,
         'success',
       );
-      setAdminMessage('用户已更新', 3200);
+      setAdminMessage(
+        refreshFailed ? '用户已保存，企业认证信息未能刷新，请刷新页面核对' : '用户已更新',
+        refreshFailed ? 0 : 3200,
+      );
       return;
     }
 
