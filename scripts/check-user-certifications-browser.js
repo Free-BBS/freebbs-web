@@ -49,6 +49,152 @@ const { createIdentityUsabilityPreview } = require('./preview-identity-usability
           !document.getElementById('admin-certification-refresh').disabled,
       );
     };
+    let checked = 0;
+    const inspectLayout = async (page, width, theme, scenario) => {
+      await page.setViewportSize({ width, height: 1100 });
+      await page.evaluate(async (mode) => {
+        if (document.body.classList.contains('theme-light') !== (mode === 'light'))
+          window.freeBbsApp.toggleThemeMode();
+        window.freeBbsTypography.applyPreferences({
+          fontPreset: 'zhongsong-study',
+          typeScale: 'large',
+        });
+        document.querySelectorAll('.personal-fold').forEach((fold) => {
+          fold.open = true;
+        });
+        window.scrollTo(0, 0);
+        await document.fonts.ready;
+        await new Promise((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        });
+      }, theme);
+      const bounds = await page.evaluate(() => {
+        const measure = (node) => ({
+          id: node.id || node.className,
+          ...node.getBoundingClientRect().toJSON(),
+        });
+        const measureBox = (selector) => {
+          const node = document.querySelector(selector);
+          if (!node) return null;
+          const rect = measure(node);
+          const style = getComputedStyle(node);
+          const insetLeft = parseFloat(style.paddingLeft) + parseFloat(style.borderLeftWidth);
+          const insetRight = parseFloat(style.paddingRight) + parseFloat(style.borderRightWidth);
+          return {
+            ...rect,
+            contentWidth: rect.width - insetLeft - insetRight,
+            contentLeft: rect.left + insetLeft,
+            contentRight: rect.right - insetRight,
+          };
+        };
+        const rows = [...document.querySelectorAll('.settings-rows > .settings-row')].map(
+          (row) => ({
+            ...measure(row),
+            cards: [...row.children]
+              .filter((node) => node.matches('.settings-form, .personal-fold'))
+              .map(measure),
+          }),
+        );
+        const panels = [...document.querySelectorAll('.settings-row > *, #certifications')].map(
+          measure,
+        );
+        const identityForms = [...document.querySelectorAll('.settings-identity-forms > form')].map(
+          measure,
+        );
+        return {
+          scrollWidth: document.documentElement.scrollWidth,
+          viewport: window.innerWidth,
+          panels,
+          rows,
+          identityForms,
+          pageShell: measureBox('.page-shell'),
+          main: measureBox('.page-shell .main-content'),
+          shell: measureBox('.settings-shell'),
+        };
+      });
+      const label = `${scenario} ${width} ${theme}`;
+      assert.ok(
+        bounds.scrollWidth <= width + 1,
+        `${label}: horizontal overflow ${JSON.stringify(bounds)}`,
+      );
+      assert.ok(
+        bounds.panels.every((panel) => panel.right <= width + 1 && panel.left >= -1),
+        `${label}: panels fit viewport`,
+      );
+      if (page === student) {
+        assert.ok(bounds.pageShell && bounds.main && bounds.shell, `${label}: layout containers`);
+        for (const [parent, child, name] of [
+          [bounds.pageShell, bounds.main, 'main fills page shell'],
+          [bounds.main, bounds.shell, 'settings shell fills main'],
+        ]) {
+          assert.ok(
+            Math.abs(child.width - parent.contentWidth) < 1,
+            `${label}: ${name} available inner width: ${JSON.stringify({ parent, child })}`,
+          );
+          assert.ok(
+            Math.abs(child.left - parent.contentLeft) < 1 &&
+              Math.abs(child.right - parent.contentRight) < 1,
+            `${label}: ${name} matches both inner edges after padding`,
+          );
+        }
+        assert.equal(bounds.rows.length, 5, `${label}: settings have five shared rows`);
+        assert.equal(bounds.identityForms.length, 2, `${label}: two identity binding forms`);
+        for (const row of bounds.rows) {
+          assert.ok(
+            Math.abs(row.width - bounds.shell.contentWidth) < 1,
+            `${label}: each shared row uses all available settings inner width`,
+          );
+          assert.ok(
+            row.cards.length === 1 || row.cards.length === 2,
+            `${label}: each row contains one full-width card or two paired cards`,
+          );
+          assert.ok(
+            Math.abs(row.cards[0].left - row.left) < 1,
+            `${label}: row starts at the shared left edge`,
+          );
+          assert.ok(
+            Math.abs(row.cards.at(-1).right - row.right) < 1,
+            `${label}: row ends at the shared right edge`,
+          );
+          if (row.cards.length === 1) {
+            assert.ok(
+              Math.abs(row.cards[0].width - row.width) < 1,
+              `${label}: unpaired card uses the full row width`,
+            );
+          } else if (width > 1180) {
+            const [left, right] = row.cards;
+            assert.ok(right.left > left.right, `${label}: cards occupy both columns`);
+            for (const edge of ['top', 'bottom', 'width'])
+              assert.ok(
+                Math.abs(left[edge] - right[edge]) < 1,
+                `${label}: paired cards have matching ${edge}: ${JSON.stringify(row)}`,
+              );
+          } else {
+            const [first, second] = row.cards;
+            assert.ok(second.top >= first.bottom, `${label}: narrow rows stack cards`);
+            assert.ok(
+              row.cards.every((card) => Math.abs(card.width - row.width) < 1),
+              `${label}: stacked cards use the full row width`,
+            );
+          }
+        }
+        if (width > 1180) {
+          const [email, studentId] = bounds.identityForms;
+          assert.ok(studentId.left > email.right, `${label}: binding forms occupy both columns`);
+          for (const edge of ['top', 'bottom', 'width'])
+            assert.ok(
+              Math.abs(email[edge] - studentId[edge]) < 1,
+              `${label}: email/student-ID forms have matching ${edge}`,
+            );
+        }
+      }
+      if ([390, 1440, 1920].includes(width))
+        await page.screenshot({
+          path: path.join(output, `${scenario}-${width}-${theme}.png`),
+          fullPage: true,
+        });
+      checked += 1;
+    };
     await student.goto(`${origin}/settings?demo=student`);
     await studentReady();
     assert.equal(await student.locator('#certification-kind').inputValue(), 'undergraduate');
@@ -58,6 +204,13 @@ const { createIdentityUsabilityPreview } = require('./preview-identity-usability
       '清华大学电子系',
     );
     assert.match(await student.locator('#certification-suggestion').innerText(), /已绑定学号/);
+    assert.equal(await student.locator('#certification-approved .certification-entry').count(), 0);
+    assert.equal(await student.locator('#certification-requests .certification-entry').count(), 0);
+    // Empty certifications are the common first visit and previously left a blank right column.
+    for (const width of [1440, 1920, 1024, 768, 390, 320])
+      for (const theme of ['light', 'dark'])
+        await inspectLayout(student, width, theme, 'settings-empty');
+    await inspectLayout(student, 1440, 'light', 'settings-empty-return-desktop');
     await admin.goto(`${origin}/adminusers?demo=admin`);
     await adminReady();
     assert.deepEqual(
@@ -191,71 +344,39 @@ const { createIdentityUsabilityPreview } = require('./preview-identity-usability
         .evaluate((node) => node.closest('.personal-fold').open),
       true,
     );
-    let checked = 0;
+    // Populate a long rejected-history list without changing the five active identities.
+    const rejected = preview.requests.find((request) => request.status === 'rejected');
+    for (let index = 0; index < 6; index += 1)
+      preview.requests.push({
+        ...rejected,
+        id: preview.requests.length + 1,
+        year: 2020 + index,
+        institution: `${'ElectronicEngineering'.repeat(5)}学院`,
+        reviewNote: `历史申请 ${index + 1}：${'请核对学校院系与入学信息。'.repeat(12)}`,
+      });
+    await student.locator('#certification-refresh').click();
+    await studentReady();
+    assert.equal(await student.locator('#certification-approved .certification-entry').count(), 5);
+    assert.ok(
+      (await student.locator('#certification-requests .certification-entry').count()) >= 10,
+    );
+    await student.locator('#certification-kind').selectOption('company');
+    assert.equal(await student.locator('#certification-education-fields').isVisible(), false);
+    assert.equal(await student.locator('#certification-company-fields').isVisible(), true);
     for (const page of [student, admin]) {
       for (const width of [320, 390, 768, 1024, 1440, 1920]) {
-        await page.setViewportSize({ width, height: 1100 });
-        for (const theme of ['light', 'dark']) {
-          await page.evaluate(async (mode) => {
-            if (document.body.classList.contains('theme-light') !== (mode === 'light'))
-              window.freeBbsApp.toggleThemeMode();
-            window.freeBbsTypography.applyPreferences({
-              fontPreset: 'zhongsong-study',
-              typeScale: 'large',
-            });
-            document.querySelectorAll('.personal-fold').forEach((fold) => {
-              fold.open = true;
-            });
-            window.scrollTo(0, 0);
-            await document.fonts.ready;
-            await new Promise((resolve) => {
-              requestAnimationFrame(() => requestAnimationFrame(resolve));
-            });
-          }, theme);
-          const bounds = await page.evaluate(() => {
-            const root = document.documentElement;
-            const panels = [
-              ...document.querySelectorAll('.settings-column > *, #certifications'),
-            ].map((node) => ({ id: node.id, ...node.getBoundingClientRect().toJSON() }));
-            const columns = [...document.querySelectorAll('.settings-column')].map((node) =>
-              node.getBoundingClientRect().toJSON(),
-            );
-            return { scrollWidth: root.scrollWidth, viewport: window.innerWidth, panels, columns };
-          });
-          const label = `${page === student ? 'settings' : 'admin'} ${width} ${theme}`;
-          assert.ok(
-            bounds.scrollWidth <= width + 1,
-            `${label}: horizontal overflow ${JSON.stringify(bounds)}`,
+        for (const theme of ['light', 'dark'])
+          await inspectLayout(
+            page,
+            width,
+            theme,
+            page === student ? 'settings-five-identities-long-history' : 'admin',
           );
-          assert.ok(
-            bounds.panels.every((panel) => panel.right <= width + 1 && panel.left >= -1),
-            `${label}: panels fit viewport`,
-          );
-          if (page === student && width >= 1440) {
-            assert.ok(
-              bounds.columns[1].left > bounds.columns[0].right,
-              `${label}: two independent desktop columns`,
-            );
-            assert.ok(
-              bounds.columns[0].width >= 480,
-              `${label}: profile uses available desktop width`,
-            );
-          }
-          if ([390, 1440, 1920].includes(width))
-            await page.screenshot({
-              path: path.join(
-                output,
-                `${page === student ? 'settings' : 'admin'}-${width}-${theme}.png`,
-              ),
-              fullPage: true,
-            });
-          checked += 1;
-        }
       }
     }
     assert.deepEqual(errors, [], `browser errors: ${errors.join('; ')}`);
     console.log(
-      `Certification UI passed: suggestion, reject/approve, retained identity, five slots, notification, Unicode usernames, ${checked} responsive/theme views. Screenshots: ${output}`,
+      `Certification UI passed: suggestion, reject/approve, retained identity, five slots, notification, Unicode usernames, empty/populated aligned settings rows, ${checked} responsive/theme views. Screenshots: ${output}`,
     );
   } finally {
     await browser?.close();
