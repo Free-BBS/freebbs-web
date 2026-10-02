@@ -122,23 +122,6 @@ body.settings-page :is(#settings-form, #settings-identity, #certifications, #set
 }
 
 @media (min-width: 1181px) {
-  body.settings-page #settings-form {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  body.settings-page #settings-form .profile-extras-top {
-    grid-column: 1;
-    grid-row: 1 / 3;
-  }
-
-  body.settings-page #settings-form > :is(.settings-grid, .auth-field) {
-    grid-column: 2;
-  }
-
-  body.settings-page #settings-form > :is(.settings-message, .auth-submit) {
-    grid-column: 1 / -1;
-  }
-
   body.settings-page #certification-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
