@@ -369,9 +369,46 @@ final class NavigationTests: XCTestCase {
         capture("52-native-ranch-study")
     }
     private func tapIdentifiedElement(_ id: String) {
-        let item = app.descendants(matching: .any).matching(identifier: id).firstMatch
-        let visible = revealVisibleListControl(item)
-        visible.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let deadline = Date().addingTimeInterval(60)
+        var previousFrame: CGRect?
+        var stationarySince: Date?
+        var scrolls = 0
+        while Date() < deadline {
+            // Re-query after each snapshot. A resolved firstMatch can retain a
+            // recycled SwiftUI List accessibility ID while its row is rebuilt.
+            let item = app.buttons[id]
+            if item.exists {
+                let frame = item.frame
+                let top = app.navigationBars.firstMatch.frame.maxY
+                let bottom = app.buttons["bottom-home"].frame.minY
+                if frame.width > 0 && frame.height > 0 && frame.minY >= top && frame.maxY <= bottom {
+                    if app.buttons[id].isHittable {
+                        let unchanged = previousFrame.map {
+                            abs($0.minY - frame.minY) <= 0.5 && abs($0.maxY - frame.maxY) <= 0.5
+                        } ?? false
+                        if unchanged {
+                            if let stationarySince, Date().timeIntervalSince(stationarySince) >= 0.3 {
+                                app.coordinate(withNormalizedOffset: .zero)
+                                    .withOffset(CGVector(dx: frame.midX, dy: frame.midY)).tap()
+                                return
+                            }
+                        } else {
+                            previousFrame = frame; stationarySince = Date()
+                        }
+                    } else { previousFrame = nil; stationarySince = nil }
+                    RunLoop.current.run(until: Date().addingTimeInterval(0.35))
+                    continue
+                }
+                guard scrolls < 8 else { break }
+                if frame.minY < top { app.swipeDown(velocity: .slow) }
+                else { app.swipeUp(velocity: .slow) }
+            } else {
+                guard scrolls < 8 else { break }
+                app.swipeUp(velocity: .slow)
+            }
+            scrolls += 1; previousFrame = nil; stationarySince = nil
+        }
+        XCTFail("Identified button must settle inside the visible content: " + id)
     }
     private func back() {
         let navigation = app.navigationBars.firstMatch
@@ -401,11 +438,16 @@ final class NavigationTests: XCTestCase {
         revealVisibleListControl(app.buttons["profileLogin"])
     }
     private func revealVisibleListControl(_ item: XCUIElement) -> XCUIElement {
+        var previousFrame: CGRect?
+        var stationarySince: Date?
+        var withinContent = false
         for _ in 0..<8 {
-            var previousFrame: CGRect?
-            var stationarySince: Date?
             let visible = NSPredicate { _, _ in
-                guard item.exists, item.isHittable else { return false }
+                withinContent = false
+                guard item.exists, item.isHittable else {
+                    previousFrame = nil; stationarySince = nil
+                    return false
+                }
                 let frame = item.frame
                 // iOS 27 can report a scrolling List row as hittable while its
                 // synthesized tap falls under the navigation/status bars.
@@ -415,6 +457,7 @@ final class NavigationTests: XCTestCase {
                     previousFrame = nil; stationarySince = nil
                     return false
                 }
+                withinContent = true
                 if previousFrame.map({ abs($0.minY - frame.minY) > 0.5 ||
                     abs($0.maxY - frame.maxY) > 0.5 }) ?? true {
                     previousFrame = frame; stationarySince = Date()
@@ -423,7 +466,11 @@ final class NavigationTests: XCTestCase {
                 return stationarySince.map { Date().timeIntervalSince($0) >= 0.3 } ?? false
             }
             let ready = XCTNSPredicateExpectation(predicate: visible, object: nil)
-            if XCTWaiter.wait(for: [ready], timeout: 3) == .completed { return item }
+            if XCTWaiter.wait(for: [ready], timeout: 6) == .completed { return item }
+            // Remote AX snapshots can exceed one polling window. Preserve the
+            // stability sample, and do not scroll an already visible row away.
+            if withinContent { continue }
+            previousFrame = nil; stationarySince = nil
             if item.exists && item.frame.minY < app.navigationBars.firstMatch.frame.maxY { app.swipeDown(velocity: .slow) }
             else { app.swipeUp(velocity: .slow) }
         }
