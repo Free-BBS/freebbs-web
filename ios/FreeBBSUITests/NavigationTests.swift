@@ -370,13 +370,24 @@ final class NavigationTests: XCTestCase {
     }
     private func tapIdentifiedElement(_ id: String) {
         let item = app.descendants(matching: .any).matching(identifier: id).firstMatch
-        for _ in 0..<10 {
-            if item.exists && item.isHittable { item.tap(); return }
-            app.swipeUp(velocity: .slow)
-        }
-        XCTFail("Unable to reach element: " + id + "\n" + app.debugDescription)
+        let visible = revealVisibleListControl(item)
+        visible.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
-    private func back() { app.navigationBars.buttons.element(boundBy: 0).tap() }
+    private func back() {
+        let navigation = app.navigationBars.firstMatch
+        let previousTitle = navigation.identifier
+        let button = navigation.buttons.firstMatch
+        XCTAssertTrue(button.waitForExistence(timeout: 5))
+        XCTAssertTrue(button.isHittable)
+        // The synthesized AX activation point can lag a navigation transition
+        // on iOS 26. Tap the visible button and verify that navigation occurred.
+        button.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let departed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == false"),
+            object: app.navigationBars[previousTitle])
+        XCTAssertEqual(XCTWaiter.wait(for: [departed], timeout: 10), .completed,
+                       "Back must leave " + previousTitle)
+    }
     private func revealProfileLogin() -> XCUIElement {
         revealVisibleListControl(app.buttons["profileLogin"])
     }
@@ -412,11 +423,15 @@ final class NavigationTests: XCTestCase {
     }
     private func tapListText(_ text: String) {
         let item = app.staticTexts[text]
-        for _ in 0..<5 {
-            if item.exists && item.isHittable { item.tap(); return }
-            app.swipeUp()
+        // A List can discard rows above its restored scroll position. Begin
+        // searching from the top when the requested row is not in the AX tree.
+        if !item.exists {
+            for _ in 0..<3 { app.swipeDown(velocity: .fast) }
         }
-        XCTFail("Unable to reach list item: " + text)
+        let visible = revealVisibleListControl(item)
+        visible.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.navigationBars[text].waitForExistence(timeout: 10),
+                      "List link must open " + text)
     }
     private func capture(_ name: String) {
         // Capture the device, avoiding XCTest's application crop during rotation.

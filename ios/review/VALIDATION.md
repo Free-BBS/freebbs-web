@@ -106,3 +106,11 @@ The bundled parameter module retains website validation and local draft saving, 
 主站目录/导航、介绍/导引/工作人员和离线渲染资源一致性检查通过。后端文档范围提示中的错误变量修正，相关 28 项测试通过；生产发布通过既有范围限定的备份、哈希校验和健康检查流程，不覆盖整份线上后端。
 
 正式 FREE-BBS 账号的校园连接、交易、报名、发布和管理员写入、真实文件提供者、真机与 VoiceOver 仍须验收。高级功能差异见 `FEATURE_PARITY.md`；正式 App Store 发布门槛保持未完成状态。
+
+### Build 11 完整矩阵与测试定位修正
+
+发布提交 `715a071` 的 Xcode 27 / iOS 27 完整检查在 [37138497061](https://github.com/Free-BBS/freebbs-web/actions/runs/37138497061) 中 58 项全部通过（46 单元、12 界面，0 失败、0 跳过），Release 编译通过。TestFlight 1.0.0 (11) 已上传，Apple 显示“正在测试”，现有内部群组已关联。
+
+同次 macos-26 / iOS 26.5 检查有两项界面失败，不能称为完整矩阵通过。证据显示工具工坊行位于 y=778–862，而底部栏起点 y=782，旧检查只看 `isHittable`，点击被底栏拦截；账号页返回的 AX 合成点击也未离开删除页，随后查找隐私入口失败。测试改为等待控件框完整进入导航与底栏之间并稳定，再点框中心；返回之后断言原导航页消失，列表链接断言实际目的页。保留全部功能检查，不跳过失败项。此次仅修改测试和验证文档，已上传 build 11 的 App 源码与签名包不变；最终矩阵与定向回归继续独立核验。
+
+两项最终定位回归在 SDK 27 / iPhone SE / iOS 26.0.1 的 `native-build11-ci-locator-regression.xcresult` 中全部通过（2 通过、0 失败）；检查真实返回、隐私入口、账号登录和工具实际渲染。完整矩阵的最新结果单独记录于 `native-build11-validation.json`。
