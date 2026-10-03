@@ -9,7 +9,7 @@ struct ProfileView: View {
             Section {
                 if let user = store.user {
                     HStack(spacing: 16) {
-                        Image(systemName: "person.crop.circle.fill").font(.system(size: 56)).foregroundStyle(Palette.teal).accessibilityHidden(true)
+                        Avatar(author: .init(id: user.id, username: user.username, displayName: user.username, avatarPath: user.avatarPath), size: 56)
                         VStack(alignment: .leading, spacing: 6) {
                             Text(user.username).font(.title3.bold()).lineLimit(2)
                             Text(user.bio.isEmpty ? "保持好奇，慢慢积累。" : user.bio).font(.subheadline).foregroundStyle(.secondary)
@@ -30,6 +30,25 @@ struct ProfileView: View {
                 NavigationLink { InboxView() } label: { Label("通知", systemImage: "bell.badge") }
                 NavigationLink { WorkbenchView() } label: { Label("学习日程", systemImage: "calendar") }
                 NavigationLink { ChatView() } label: { Label("问问 Max", systemImage: "sparkles") }
+                FeatureLink(path: "/workbench")
+                FeatureLink(path: "/surveys")
+                NavigationLink { FeaturesView() } label: { Label("所有功能", systemImage: "square.grid.2x2") }
+            }
+            Section("个人空间") {
+                FeatureLink(path: "/profile")
+                FeatureLink(path: "/settings")
+                FeatureLink(path: "/ranch")
+                FeatureLink(path: "/ranch-dye")
+                FeatureLink(path: "/ranch-gallery")
+                FeatureLink(path: "/electromagnetic")
+                FeatureLink(path: "/inventory")
+            }
+            if store.user?.isAdmin == true {
+                Section("管理") {
+                    FeatureLink(path: "/system-settings")
+                    FeatureLink(path: "/adminusers")
+                    FeatureLink(path: "/development/admin")
+                }
             }
             if store.user != nil {
                 Section {

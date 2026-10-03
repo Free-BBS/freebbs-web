@@ -21,6 +21,7 @@ struct RichMarkdownContent: View {
     var body: some View {
         RichWebView(source: source, origin: store.configuration.origin, token: store.isDemo ? nil : store.api.token,
                     dark: colorScheme == .dark, fontSize: fontSize, allowReferences: !store.isDemo, height: $height,
+                    readingStyle: ReadingStyle(raw: store.webPreferenceValues["free_bbs_typography_preferences"]),
                     link: open, copy: { value in UIPasteboard.general.string = value; copied = true })
             .id(store.sessionRevision).frame(height: height)
             .accessibilityIdentifier("richContent")
@@ -40,6 +41,7 @@ struct RichMarkdownContent: View {
         if WebContentPolicy.labURL(url, origin: store.configuration.origin) {
             destination = .init(title: "实验与工具", path: url.absoluteString)
         } else if let id = AppConfiguration.postID(from: raw, origin: store.configuration.origin) { linkedPost = id }
+        else if let feature = FeatureDestination(url: url, origin: store.configuration.origin) { store.featureDestination = feature }
         else { UIApplication.shared.open(url) }
     }
 }
@@ -52,6 +54,7 @@ private struct RichWebView: UIViewRepresentable {
     let fontSize: Double
     let allowReferences: Bool
     @Binding var height: Double
+    let readingStyle: ReadingStyle
     let link: (String) -> Void
     let copy: (String) -> Void
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -81,12 +84,17 @@ private struct RichWebView: UIViewRepresentable {
         init(_ parent: RichWebView) { self.parent = parent }
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { ready = true; render(webView) }
         func render(_ web: WKWebView) {
-            let key = parent.source + "|\(parent.dark)|\(parent.fontSize)|\(parent.allowReferences)"
+            let key = parent.source + "|\(parent.dark)|\(parent.fontSize)|\(parent.allowReferences)|\(parent.readingStyle)"
             guard ready, key != renderedKey else { return }
             renderedKey = key
-            web.callAsyncJavaScript("window.renderNativeContent(source, origin, token, dark, fontSize, allowReferences)",
+            web.callAsyncJavaScript("""
+                window.renderNativeContent(source, origin, token, dark, fontSize, allowReferences);
+                document.body.style.fontFamily = bodyFamily;
+                for (const heading of document.querySelectorAll('#content h1,#content h2,#content h3')) heading.style.fontFamily = headingFamily;
+                """,
                 arguments: ["source":parent.source, "origin":parent.origin.absoluteString, "token":parent.token ?? "", "dark":parent.dark,
-                            "fontSize":parent.fontSize, "allowReferences":parent.allowReferences], in: nil, in: .page) { [weak self] result in
+                            "fontSize":parent.fontSize * parent.readingStyle.scale, "allowReferences":parent.allowReferences,
+                            "bodyFamily":parent.readingStyle.bodyFamily, "headingFamily":parent.readingStyle.headingFamily], in: nil, in: .page) { [weak self] result in
                 if case .failure = result { self?.renderedKey = "" }
             }
         }

@@ -16,6 +16,9 @@ struct HomeView: View {
                 HStack(spacing: 12) { maxLink; workbenchLink }
                 VStack(alignment: .leading, spacing: 12) { maxLink; workbenchLink }
             }
+            NavigationLink { FeaturesView() } label: {
+                Label("所有功能", systemImage: "square.grid.2x2").frame(minHeight: 44)
+            }.buttonStyle(.bordered).accessibilityIdentifier("allFeatures")
             if let user = store.user {
                 Paper {
                     HStack(alignment: .top) {

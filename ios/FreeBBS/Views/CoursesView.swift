@@ -41,6 +41,9 @@ struct CoursesView: View {
             }
             if filtered.isEmpty { EmptyState(title: search.isEmpty ? "暂无课程" : "没有找到课程", symbol: "books.vertical", message: "试试其他关键词，或下拉刷新。") }
         }.listStyle(.insetGrouped).navigationTitle("课程").searchable(text: $search, prompt: "搜索课程")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink { FeatureWorkspaceView(destination: .init(path: "/search", title: "全站搜索")) } label: { Image(systemName: "magnifyingglass") }.accessibilityLabel("全站搜索")
+            } }
             .refreshable { await store.bootstrap() }
     }
 }
@@ -65,6 +68,9 @@ struct CourseDetailView: View {
             }
             Picker("浏览方式", selection: $showMap) { Text("知识点").tag(false); Text("关系图").tag(true) }.pickerStyle(.segmented)
             NavigationLink { CourseFilesView(course: course) } label: { Label("课程资料", systemImage: "doc.on.doc").frame(minHeight: 44) }
+            NavigationLink {
+                FeatureWorkspaceView(destination: .init(path: courseWorkspaceURL.absoluteString, title: "课程工作区"))
+            } label: { Label("完整地图、学习记录与课程管理", systemImage: "map").frame(minHeight: 44) }
             if loading { ProgressView("正在加载知识点…") }
             else if showMap, let map { KnowledgeMapView(map: map, course: course) }
             else {
@@ -97,6 +103,11 @@ struct CourseDetailView: View {
                 map = CourseMap(course: course, nodes: nodes, edges: [.init(source: "convolution", target: "fourier", type: "ordered")])
             } else { map = try await store.api.request("/api/courses/\(course.slug)/map") }
         } catch { store.error = error.localizedDescription }
+    }
+    private var courseWorkspaceURL: URL {
+        var url = URLComponents(url: store.configuration.origin, resolvingAgainstBaseURL: false)!
+        url.path = "/course"; url.queryItems = [.init(name: "course", value: course.slug)]
+        return url.url!
     }
 }
 
@@ -150,7 +161,12 @@ struct KnowledgeView: View {
                 Label("请 Max 帮我理解", systemImage: "sparkles").frame(minHeight: 48).frame(maxWidth: .infinity)
             }.buttonStyle(.bordered)
         }.navigationTitle("知识点").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { ShareLink(item: shareURL) } }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { ShareLink(item: shareURL) }
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink { FeatureWorkspaceView(destination: .init(path: shareURL.absoluteString, title: node.title)) } label: { Image(systemName: "ellipsis") }.accessibilityLabel("知识点完整操作与历史")
+                }
+            }
             .task { await load() }
     }
     private var shareURL: URL {

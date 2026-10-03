@@ -176,6 +176,44 @@ final class NavigationTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["置顶"].exists)
         capture("30-latest-discussions")
     }
+    func testCompleteFeatureCatalogSearchAndNavigation() {
+        launchPreview()
+        app.buttons["allFeatures"].tap()
+        XCTAssertTrue(app.navigationBars["所有功能"].waitForExistence(timeout: 5))
+        capture("40-all-features")
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText("牧场\n")
+        let ranch = app.descendants(matching: .any).matching(identifier: "feature-/ranch").firstMatch
+        XCTAssertTrue(ranch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any).matching(identifier: "feature-/system-settings").firstMatch.exists)
+        capture("41-feature-search")
+        tapIdentifiedElement("feature-/ranch")
+        XCTAssertTrue(app.navigationBars["电子牧场"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["工作区预览"].waitForExistence(timeout: 5))
+        capture("42-feature-workspace-preview")
+        back(); back()
+        app.tabBars.buttons["我的"].tap()
+        tapListText("全部个人设置")
+        XCTAssertTrue(app.navigationBars["全部个人设置"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["工作区预览"].exists)
+    }
+    func testMarkdownEditorSelectsCourseBeforeOpeningContextDocument() {
+        launchPreview()
+        app.buttons["allFeatures"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText("Markdown\n")
+        tapIdentifiedElement("feature-/markdown-editor")
+        XCTAssertTrue(app.navigationBars["Markdown 编辑器"].waitForExistence(timeout: 5))
+        let course = app.buttons["document-course-signals"].firstMatch
+        XCTAssertTrue(course.waitForExistence(timeout: 5))
+        XCTAssertTrue(course.isHittable)
+        capture("43-document-course-selection")
+        course.tap()
+        XCTAssertTrue(app.navigationBars["信号与系统"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["文档选择预览"].exists)
+    }
     func testMaxConsentSurvivesClearAndPageNavigationAndCanBeWithdrawn() {
         launchPreview()
         app.buttons["openMax"].tap()

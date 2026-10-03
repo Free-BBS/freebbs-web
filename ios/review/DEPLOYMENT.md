@@ -55,3 +55,11 @@ build 6 包含 build 5 的匿名作者修复，并修复 Swift SDK 27 在 iOS 26
 The bundled parameter module retains website validation and local draft saving, replacing desktop anchor placement with an independent bottom sheet. A keyboard or offscreen symbol no longer dismisses editing. Visible viewport bounds constrain the panel; compact layout prioritizes 44 pt inputs and scrollable hints. Closing the panel blurs input. No production website modification is needed.
 
 27 unit tests passed in Build8ClientVerification.xcresult. That run had an early landscape UI assertion failure and is not an overall success. Final circuit and code/tool UI reviews (2 tests) passed in Build8FinalUIReview.xcresult after waiting for the parameter control to become hittable. Actual software keyboard and landscape parameter screenshots are circuit-native-review/38-component-keyboard.png and 39-landscape-parameters.png. Archive, upload and TestFlight readiness remain separately verified in local artifacts.
+
+## Build 9 与当前上传状态
+
+build 7 是最近已确认「内部／正在测试」的版本：[TestFlight 构建 7](https://appstoreconnect.apple.com/teams/b6657e16-3de4-4dd1-acf0-711b662c81c3/apps/6818750003/testflight/ios/36e6091e-4bda-4648-8667-26ab3ddf07cc)。build 8 已由 SDK 27 完成签名 Archive；2026-10-03 20:29 的导出上传失败，日志为 `Failed to Use Accounts`。Mac 锁屏使 Xcode 无法读取上传账号，不能将签名 Archive 视为已上传或 Apple 已处理。
+
+build 9 在原生目录和各核心页面加入完整网站工作区，恢复学习、个人、牧场、商城、活动与发展端等功能，支持原生文件/照片选择、偏好持久化、账号隔离和授权返回。客户端完整本机回归 48 项全部通过，公开工作区只读复查另行记录；详见 [验证记录](VALIDATION.md) 与 [功能对照](FEATURE_PARITY.md)。本轮不修改或重发生产后端。
+
+用户已授权内部 TestFlight 上传，并明确要求先继续代码工作、稍后解锁。锁屏期间不重试账号导出或界面操作；解锁后上传本轮最终签名构建，并独立核实 Apple 的处理与可测试状态。正式上架门槛仍以 `ReleaseStatus.json` 为准。

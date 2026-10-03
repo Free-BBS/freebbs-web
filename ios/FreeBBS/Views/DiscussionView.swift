@@ -31,6 +31,9 @@ struct DiscussionView: View {
             Section { rows(posts.filter { !$0.isPinned }) }
                 }.listStyle(.plain).navigationTitle("讨论").searchable(text: $search, prompt: "搜索当前讨论")
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink { FeatureWorkspaceView(destination: .init(path: "/discussion", title: "完整讨论工作区")) } label: { Image(systemName: "ellipsis") }.accessibilityLabel("讨论高级操作与管理")
+                }
                 ToolbarItem(placement: .topBarLeading) {
                     Menu {
                         Picker("版块", selection: $store.selectedBoard) {
@@ -173,9 +176,12 @@ struct PostDetailView: View {
                 }.padding(.horizontal, 16).padding(.vertical, 8)
             }
         }
-        .toolbar { if current?.canDelete == true { ToolbarItem(placement: .topBarTrailing) {
-            Button("删除", role: .destructive) { confirmDelete = true }
-        } } }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink { FeatureWorkspaceView(destination: .init(path: shareURL.absoluteString, title: "讨论完整操作")) } label: { Image(systemName: "ellipsis") }.accessibilityLabel("编辑、投票与更多互动")
+            }
+            if current?.canDelete == true { ToolbarItem(placement: .topBarTrailing) { Button("删除", role: .destructive) { confirmDelete = true } } }
+        }
         .confirmationDialog("删除这条讨论？此操作无法撤销。", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("删除讨论", role: .destructive) { Task { await deletePost() } }
         }

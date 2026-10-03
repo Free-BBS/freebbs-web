@@ -71,7 +71,12 @@ struct ChatView: View {
                 }.accessibilityLabel(busy ? "停止回答" : "发送问题").disabled(!busy && (question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !store.aiConsent))
             }.padding(.horizontal, 16).padding(.vertical, 8)
         }
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("清空") { sendingTask?.cancel(); messages = [] }.disabled(busy) } }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) { Button("清空") { sendingTask?.cancel(); messages = [] }.disabled(busy) }
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink { FeatureWorkspaceView(destination: .init(path: "/aichat", title: "Max 完整工作区")) } label: { Image(systemName: "ellipsis") }.accessibilityLabel("历史对话、模型与 Max 工具")
+            }
+        }
         .onDisappear { sendingTask?.cancel() }
         .onChange(of: store.aiConsent) { _, allowed in if !allowed { sendingTask?.cancel() } }
         .onChange(of: store.sessionRevision) { _, _ in sendingTask?.cancel(); messages = [] }

@@ -206,6 +206,11 @@ struct LaboratoryView: View {
             Section("电路") { entries(0..<2) }
             Section("代码与计算") { entries(2..<6) }
             Section("工具工坊") { entries(6..<7) }
+            Section("创作") {
+                FeatureLink(path: "/markdown-editor")
+                FeatureLink(path: "/creative-workshop")
+            }
+            Section { NavigationLink { FeaturesView() } label: { Label("所有功能", systemImage: "square.grid.2x2") } }
         }.listStyle(.insetGrouped).navigationTitle("实验室")
     }
     private func entries(_ range: Range<Int>) -> some View {
@@ -248,6 +253,47 @@ struct LabExport: Identifiable { let id = UUID(); let url: URL }
     var export: LabExport?
     var discussionDraft: DiscussionDraft?
     var downloadError: String?
+    var pageTitle: String?
+    var hasAccountUtilities = false
+    var nextFeature: FeatureDestination?
+    var expectedAuthorizationURL: URL?
+    var authorization: ConnectorAuthorization?
+    var presentingConsent = false
+    var presentingFiles = false
+    var presentingUploadChoices = false
+    var presentingPhotos = false
+    var directoryUpload = false
+    var fileRevision = UUID()
+    var multipleFiles = false
+    @ObservationIgnored var consentReplies: [(Bool) -> Void] = []
+    @ObservationIgnored var fileReply: (([URL]?) -> Void)?
+    func resolveConsent(_ allowed: Bool) {
+        let replies = consentReplies; consentReplies = []; presentingConsent = false
+        replies.forEach { $0(allowed) }
+    }
+    func resolveFiles(_ urls: [URL]?) {
+        let reply = fileReply; fileReply = nil; fileRevision = UUID()
+        presentingFiles = false; presentingPhotos = false; presentingUploadChoices = false; reply?(urls)
+    }
+    func importFiles(_ urls: [URL]) {
+        var directory: URL?
+        do {
+            let created = try SiteImports.directory(); directory = created
+            let copied = try urls.enumerated().map { index, url in
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                let folder = created.appendingPathComponent(String(index), isDirectory: true)
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                let target = folder.appendingPathComponent(url.lastPathComponent)
+                try FileManager.default.copyItem(at: url, to: target)
+                return target
+            }
+            resolveFiles(copied)
+        } catch {
+            if let directory { SiteImports.discard([directory]) }
+            downloadError = error.localizedDescription; resolveFiles(nil)
+        }
+    }
     func resolveDialog(_ result: String?) {
         let completion = dialog?.completion
         dialog = nil; presentingDialog = false
@@ -297,7 +343,7 @@ struct CircuitWorkspaceView: View {
             }
             if !store.isDemo {
                 LabWebView(destination: destination, origin: store.configuration.origin, token: store.api.token,
-                           dark: colorScheme == .dark, browser: browser, login: { store.showLogin = true })
+                           dark: colorScheme == .dark, browser: browser, login: { store.showLogin = true }, store: store)
                     .id(store.sessionRevision).opacity(browser.error == nil ? 1 : 0)
                     .frame(maxWidth: .infinity, maxHeight: browser.error == nil ? .infinity : 0)
             }
@@ -319,7 +365,12 @@ struct CircuitWorkspaceView: View {
             .sheet(item: $browser.export, onDismiss: { browser.export = nil }) { item in
                 LabShareSheet(url: item.url)
             }
-            .onDisappear { browser.resolveDialog(nil) }
+            .onDisappear { browser.resolveDialog(nil); browser.resolveConsent(false); browser.resolveFiles(nil) }
+            .siteFileImport(browser: browser)
+            .confirmationDialog("允许 Max 处理发送的内容？", isPresented: $browser.presentingConsent, titleVisibility: .visible) {
+                Button("同意并继续") { store.aiConsent = true; browser.resolveConsent(true) }
+                Button("取消", role: .cancel) { browser.resolveConsent(false) }
+            } message: { Text("问题、上下文、图片和电路内容会交由 FREE-BBS 配置的 AI 服务处理。此选择按账号在本机保存，可在「我的」撤回。") }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     if isCircuit {
@@ -330,6 +381,7 @@ struct CircuitWorkspaceView: View {
                             Button("保存电路", systemImage: "square.and.arrow.down") { click("circuit-save") }
                             Button("分享至讨论", systemImage: "bubble.left") { click("circuit-publish") }
                             Button("元件参数", systemImage: "slider.horizontal.3") { panel("parameters") }
+                            Button("Max 电路助手", systemImage: "sparkles") { panel("max") }
                             Button("波形与读数", systemImage: "waveform.path") { panel("waves") }
                             Button("示例、版本与导入导出", systemImage: "square.stack") { panel("more") }
                             Button("取消接线", systemImage: "xmark") { click("circuit-cancel-wire") }
@@ -378,7 +430,7 @@ struct CircuitWorkspaceView: View {
         browser.webView?.evaluateJavaScript("document.getElementById('circuit-stage')?.dispatchEvent(new Event('freebbs-native-fit'))", completionHandler: nil)
     }
     private func panel(_ name: String) {
-        let sidebar = name == "parameters" && isCircuit
+        let sidebar = ["parameters", "max"].contains(name) && isCircuit
         let function = sidebar ? "FreeBbsCircuitSidebar" : "FreeBbsCircuitMobile"
         browser.webView?.evaluateJavaScript("if(['/circuit','/circuit-challenge'].includes(location.pathname)) window.\(function)?.\(sidebar ? "open" : "show")(\(WebContentPolicy.json(name)))", completionHandler: nil)
     }
@@ -388,19 +440,31 @@ struct CircuitWorkspaceView: View {
     }
 }
 
-private struct LabWebView: UIViewRepresentable {
+struct LabWebView: UIViewRepresentable {
     let destination: LabDestination
     let origin: URL
     let token: String?
     let dark: Bool
     let browser: LabBrowserState
     let login: () -> Void
+    var includeFeatures = false
+    var store: AppStore? = nil
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
-        config.websiteDataStore = .nonPersistent()
-        config.userContentController.addUserScript(.init(source: WebContentPolicy.sessionScript(origin: origin, token: token, dark: dark), injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        config.userContentController.addUserScript(.init(source: WebContentPolicy.mobileScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        config.websiteDataStore = store?.featureDataStore ?? .nonPersistent()
+        let preferences = store?.webPreferenceValues ?? [:]
+        let keys = Array(WebPreferences.keys) + (store?.user.map { [WebPreferences.discoveryKey($0)] } ?? [])
+        let bridge = store == nil ? "" : FeatureWebPolicy.session(origin: origin, token: token, dark: dark, preferences: preferences, preferenceKeys: keys)
+        let session = includeFeatures ? bridge : WebContentPolicy.sessionScript(origin: origin, token: token, dark: dark) + bridge
+        let mobile = includeFeatures ? FeatureWebPolicy.mobile : WebContentPolicy.mobileScript
+        config.userContentController.addUserScript(.init(source: session, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        config.userContentController.addUserScript(.init(source: mobile, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        if includeFeatures {
+            config.userContentController.addUserScript(.init(source: FeatureWebPolicy.embedded(script: bridge, origin: origin), injectionTime: .atDocumentStart, forMainFrameOnly: false))
+            config.userContentController.addUserScript(.init(source: FeatureWebPolicy.embedded(script: FeatureWebPolicy.mobile, origin: origin), injectionTime: .atDocumentEnd, forMainFrameOnly: false))
+        }
+        if store != nil { config.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "site") }
         let web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = context.coordinator; web.uiDelegate = context.coordinator
         web.isOpaque = false; web.backgroundColor = .clear
@@ -414,28 +478,44 @@ private struct LabWebView: UIViewRepresentable {
         }
         browser.webView = web
         if let url = URL(string: destination.path, relativeTo: origin)?.absoluteURL,
-           WebContentPolicy.labURL(url, origin: origin) { web.load(URLRequest(url: url)) }
+           allowed(url) { web.load(URLRequest(url: url)) }
         return web
     }
     func updateUIView(_ web: WKWebView, context: Context) {
         context.coordinator.parent = self
+        if store != nil && store?.aiConsent != true {
+            web.evaluateJavaScript("window.freebbsNativeCancelAI?.()", completionHandler: nil)
+        }
         web.evaluateJavaScript("if (typeof applyThemeMode === 'function') applyThemeMode(\(WebContentPolicy.json(dark ? "dark" : "light")))", completionHandler: nil)
     }
     static func dismantleUIView(_ web: WKWebView, coordinator: Coordinator) {
         web.stopLoading(); web.navigationDelegate = nil; web.uiDelegate = nil
         coordinator.progress?.invalidate()
+        if coordinator.parent.store != nil { web.configuration.userContentController.removeScriptMessageHandler(forName: "site", contentWorld: .page) }
+        coordinator.parent.browser.resolveConsent(false); coordinator.parent.browser.resolveFiles(nil)
         coordinator.parent.browser.webView = nil
     }
-    @MainActor final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
+    func allowed(_ url: URL) -> Bool {
+        includeFeatures ? FeatureCatalog.pageURL(url, origin: origin) : WebContentPolicy.labURL(url, origin: origin)
+    }
+    @MainActor final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandlerWithReply {
         var parent: LabWebView
         var progress: NSKeyValueObservation?
         var downloads: [ObjectIdentifier: URL] = [:]
         init(_ parent: LabWebView) { self.parent = parent }
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             parent.browser.loading = true; parent.browser.error = nil
+            parent.browser.hasAccountUtilities = false
         }
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             parent.browser.loading = false; parent.browser.canGoBack = webView.canGoBack
+            if parent.includeFeatures, let url = webView.url {
+                parent.browser.pageTitle = FeatureCatalog.feature(for: url)?.title ?? parent.destination.title
+                webView.evaluateJavaScript("typeof window.freeBbsApp?.openFortuneModal === 'function' && typeof window.openElectromagneticModal === 'function'") { [weak self, weak webView] value, _ in
+                    guard let self, let webView, self.parent.browser.webView === webView else { return }
+                    self.parent.browser.hasAccountUtilities = value as? Bool == true
+                }
+            }
         }
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { failed(error) }
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { failed(error) }
@@ -449,13 +529,35 @@ private struct LabWebView: UIViewRepresentable {
                (WebContentPolicy.sameOrigin(url, origin: parent.origin) || url.scheme == "blob") {
                 decisionHandler(.download); return
             }
-            if action.targetFrame?.isMainFrame == false { decisionHandler(.allow); return }
-            if WebContentPolicy.labURL(url, origin: parent.origin) { decisionHandler(.allow); return }
+            if action.targetFrame?.isMainFrame == false {
+                if parent.includeFeatures, let top = webView.url, FeatureCatalog.pageURL(url, origin: parent.origin),
+                   url.path != "/circuit-embed", !FeatureWebPolicy.trustedEmbeddedPage(url, top: top, origin: parent.origin) {
+                    decisionHandler(.cancel)
+                    if action.navigationType == .linkActivated || action.sourceFrame.request.url.map({ FeatureWebPolicy.trustedEmbeddedPage($0, top: top, origin: parent.origin) }) == true {
+                        parent.browser.nextFeature = FeatureDestination(url: url, origin: parent.origin)
+                    }
+                    return
+                }
+                decisionHandler(.allow); return
+            }
+            if parent.includeFeatures, url == parent.browser.expectedAuthorizationURL {
+                decisionHandler(.cancel); parent.browser.expectedAuthorizationURL = nil
+                parent.browser.authorization = ConnectorAuthorization(url: url); return
+            }
+            if parent.includeFeatures, parent.allowed(url), let feature = FeatureCatalog.feature(for: url), feature.native,
+               url != webView.url, action.navigationType == .linkActivated {
+                decisionHandler(.cancel); parent.browser.nextFeature = .init(url: url, origin: parent.origin); return
+            }
+            if parent.allowed(url) { decisionHandler(.allow); return }
             decisionHandler(.cancel)
             if WebContentPolicy.sameOrigin(url, origin: parent.origin), ["/publish", "/discussion"].contains(url.path) {
-                handoffDiscussion(url, web: webView); return
+                let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+                if query.contains(where: { ["lab_share", "tool_share", "compose"].contains($0.name) }) {
+                    handoffDiscussion(url, web: webView); return
+                }
             }
             if WebContentPolicy.sameOrigin(url, origin: parent.origin), ["/login", "/register"].contains(url.path) { parent.login() }
+            else if parent.store != nil, let destination = FeatureDestination(url: url, origin: parent.origin) { parent.store?.featureDestination = destination }
             else if action.navigationType == .linkActivated, AppConfiguration.safeLink(url.absoluteString, origin: parent.origin) != nil { UIApplication.shared.open(url) }
         }
         private func handoffDiscussion(_ url: URL, web: WKWebView) {
@@ -526,7 +628,11 @@ private struct LabWebView: UIViewRepresentable {
             parent.browser.presentingDialog = true
         }
         private func trusted(_ frame: WKFrameInfo) -> Bool {
-            frame.isMainFrame && frame.request.url.map { WebContentPolicy.labURL($0, origin: parent.origin) } == true
+            guard let url = frame.request.url, frame.securityOrigin.protocol == "https", frame.securityOrigin.host == parent.origin.host,
+                  parent.origin.port.map({ frame.securityOrigin.port == $0 }) ?? [0, 443].contains(frame.securityOrigin.port) else { return false }
+            if frame.isMainFrame { return parent.allowed(url) }
+            guard parent.includeFeatures, let top = parent.browser.webView?.url else { return false }
+            return FeatureWebPolicy.trustedEmbeddedPage(url, top: top, origin: parent.origin)
         }
         func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor () -> Void) {
             guard trusted(frame) else { completionHandler(); return }
@@ -542,9 +648,63 @@ private struct LabWebView: UIViewRepresentable {
         }
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
             guard let url = action.request.url else { return nil }
-            if WebContentPolicy.labURL(url, origin: parent.origin) { webView.load(action.request) }
+            if parent.allowed(url) { webView.load(action.request) }
             else if AppConfiguration.safeLink(url.absoluteString, origin: parent.origin) != nil { UIApplication.shared.open(url) }
             return nil
+        }
+        func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor ([URL]?) -> Void) {
+            guard parent.store != nil && trusted(frame) else { completionHandler(nil); return }
+            parent.browser.resolveFiles(nil)
+            parent.browser.multipleFiles = parameters.allowsMultipleSelection
+            parent.browser.directoryUpload = parameters.allowsDirectories
+            parent.browser.fileReply = completionHandler
+            if parameters.allowsDirectories { parent.browser.presentingFiles = true }
+            else { parent.browser.presentingUploadChoices = true }
+        }
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage, replyHandler: @escaping @MainActor @Sendable (Any?, String?) -> Void) {
+            guard trusted(message.frameInfo), let store = parent.store,
+                  parent.token == store.api.token, let body = message.body as? [String: Any], let type = body["type"] as? String else {
+                replyHandler(nil, "Untrusted page"); return
+            }
+            switch type {
+            case "location":
+                guard let raw = body["url"] as? String, let url = URL(string: raw), FeatureCatalog.pageURL(url, origin: parent.origin) else { replyHandler(nil, "Invalid page"); return }
+                parent.browser.pageTitle = FeatureCatalog.feature(for: url)?.title ?? parent.destination.title
+                parent.browser.canGoBack = parent.browser.webView?.canGoBack == true
+                replyHandler(true, nil)
+            case "consent":
+                guard store.user != nil else { replyHandler(false, nil); parent.login(); return }
+                if store.aiConsent { replyHandler(true, nil) }
+                else {
+                    parent.browser.consentReplies.append { replyHandler($0, nil) }
+                    parent.browser.presentingConsent = true
+                }
+            case "logout": store.logout(); replyHandler(true, nil)
+            case "session":
+                guard let token = body["token"] as? String, !token.isEmpty, token.utf8.count <= 8192 else { replyHandler(nil, "Invalid session"); return }
+                Task { @MainActor [weak self] in
+                    guard let self else { replyHandler(nil, "Closed workspace"); return }
+                    let previous = store.api.token
+                    do {
+                        let client = APIClient(origin: store.configuration.origin); client.token = token
+                        let response: UserResponse = try await client.request("/api/auth/me")
+                        guard store.api.token == previous, self.parent.token == previous else { replyHandler(nil, "Session changed"); return }
+                        try await store.accept(AuthResponse(token: token, user: response.user))
+                        replyHandler(true, nil)
+                    } catch { replyHandler(nil, "Unable to validate session") }
+                }
+            case "profileChanged":
+                Task { await store.bootstrap() }; replyHandler(true, nil)
+            case "authorization":
+                guard message.frameInfo.request.url?.path == "/workbench", let raw = body["url"] as? String, raw.utf8.count <= 16384,
+                      let url = AppConfiguration.safeLink(raw, origin: parent.origin), url.fragment == nil else { replyHandler(nil, "Invalid authorization destination"); return }
+                parent.browser.expectedAuthorizationURL = url; replyHandler(true, nil)
+            case "preference":
+                guard let key = body["key"] as? String, WebPreferences.permits(key, user: store.user),
+                      body["value"] is NSNull || body["value"] is String else { replyHandler(nil, "Invalid preference"); return }
+                store.saveWebPreference(key, value: body["value"] as? String); replyHandler(true, nil)
+            default: replyHandler(nil, "Unknown action")
+            }
         }
     }
 }

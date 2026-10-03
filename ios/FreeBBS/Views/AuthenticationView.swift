@@ -6,6 +6,7 @@ struct AuthenticationView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var mode = Mode.login
+    init(initialMode: Mode = .login) { _mode = State(initialValue: initialMode) }
     @State private var identifier = ""
     @State private var password = ""
     @State private var username = ""

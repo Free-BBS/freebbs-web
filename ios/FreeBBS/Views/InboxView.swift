@@ -49,7 +49,10 @@ struct InboxView: View {
                 store.unreadCount = max(0, store.unreadCount - 1)
             }
             if let id = AppConfiguration.postID(from: item.link, origin: store.configuration.origin) { destination = id }
-            else if let url = AppConfiguration.safeLink(item.link, origin: store.configuration.origin) { await UIApplication.shared.open(url) }
+            else if let url = AppConfiguration.safeLink(item.link, origin: store.configuration.origin) {
+                if let feature = FeatureDestination(url: url, origin: store.configuration.origin) { store.featureDestination = feature }
+                else { await UIApplication.shared.open(url) }
+            }
         } catch { store.error = error.localizedDescription }
     }
     private func readAll() async {

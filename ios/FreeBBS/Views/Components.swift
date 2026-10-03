@@ -46,12 +46,13 @@ struct EmptyState: View {
 struct Avatar: View {
     @Environment(AppStore.self) private var store
     let author: Author
+    var size: CGFloat = 36
     var body: some View {
         Group {
             if !author.avatarPath.isEmpty, let url = AppConfiguration.safeLink(author.avatarPath, origin: store.configuration.origin) {
                 AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: { initials }
             } else { initials }
-        }.frame(width: 36, height: 36).background(Palette.teal.opacity(0.1), in: Circle())
+        }.frame(width: size, height: size).background(Palette.teal.opacity(0.1), in: Circle())
             .clipShape(Circle()).accessibilityHidden(true)
     }
     private var initials: some View {

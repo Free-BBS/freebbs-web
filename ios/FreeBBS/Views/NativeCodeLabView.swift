@@ -80,6 +80,9 @@ struct NativeCodeLabView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        NavigationLink {
+                            FeatureWorkspaceView(destination: .init(path: fullWorkspacePath, title: "完整代码实验室"))
+                        } label: { Label("完整实验工作区", systemImage: "square.grid.2x2") }
                         Button("导出代码", systemImage: "square.and.arrow.up") { exportCode() }
                         Button("分享至讨论", systemImage: "bubble.left") { if requireAccount() { confirmShare = true } }.disabled(lab.running || sharing)
                         Button("恢复示例", systemImage: "arrow.counterclockwise") { lab.reset(lab.language) }.disabled(lab.running)
@@ -107,6 +110,11 @@ struct NativeCodeLabView: View {
             } message: { Text("代码、输入参数和当前运行结果将保存为公开实验。你可以在下一步编辑讨论内容。") }
             .task { await load() }
             .onDisappear { runTask?.cancel() }
+    }
+    private var fullWorkspacePath: String {
+        var components = URLComponents(string: destination.path)!
+        components.queryItems = (components.queryItems ?? []).filter { $0.name != "language" } + [.init(name: "language", value: lab.language.rawValue)]
+        return components.string ?? "/code-lab"
     }
     @ViewBuilder private var resultContent: some View {
         switch resultTab {

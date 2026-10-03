@@ -52,7 +52,7 @@
 5. **审核运营**：当前删除功能为密码验证后的申请队列；没有实现真实清除或自动注销。举报只有记录与处理接口，还需核实内容过滤、响应和违规内容处理流程。
 6. **隐私与支持**：客服邮箱、URL 已确认；用户批准的政策与支持页面已发布。运营主体、AI 提供商、保留期限、处理期限尚未确认，正式上架前须完善。
 7. **辅助功能**：大字和横屏通过自动导航与截图检查；VoiceOver 朗读顺序、减少透明度、硬件键盘及真机键盘交互仍需人工验收。
-8. **页面范围**：课程资料没有通过真实文件下载的集成测试；公式、图片、表格、代码和电路/工具/实验结果嵌入已接入共享渲染引擎，代码编辑、参数、结果、工具管理和电路列表/操作栏已原生化；电路画布和富文本仍使用 WebKit。正式账号的实验保存/发布、服务端执行与文件分享仍须端到端验收；商城和后台未迁移。
+8. **页面范围**：课程资料没有通过真实文件下载的集成测试；公式、图片、表格、代码和电路/工具/实验结果嵌入已接入共享渲染引擎，代码编辑、参数、结果、工具管理和电路列表/操作栏已原生化；电路画布和富文本仍使用 WebKit。build 9 接入商城、牧场、完整学习/讨论/实验工作区和发展端管理页面，详见 [FEATURE_PARITY.md](FEATURE_PARITY.md)。正式账号的保存/发布、校园授权、交易、报名、服务端执行与文件分享仍须端到端验收。
 
 完整提交前条件见 [App Store 准备](APP_STORE.md) 与 [运营流程](OPERATIONS.md)。只在实际完成并取得证据后更新 `ReleaseStatus.json`。
 
@@ -77,3 +77,15 @@
 The bundled parameter module retains website validation and local draft saving, replacing desktop anchor placement with an independent bottom sheet. A keyboard or offscreen symbol no longer dismisses editing. Visible viewport bounds constrain the panel; compact layout prioritizes 44 pt inputs and scrollable hints. Closing the panel blurs input. No production website modification is needed.
 
 27 unit tests passed in Build8ClientVerification.xcresult. That run had an early landscape UI assertion failure and is not an overall success. Final circuit and code/tool UI reviews (2 tests) passed in Build8FinalUIReview.xcresult after waiting for the parameter control to become hittable. Actual software keyboard and landscape parameter screenshots are circuit-native-review/38-component-keyboard.png and 39-landscape-parameters.png. Archive, upload and TestFlight readiness remain separately verified in local artifacts.
+
+## Build 9：网页功能覆盖与手机工作区
+
+2026-10-03，Xcode 27 / iPhone SE 第三代 / iOS 26.0.1 的完整客户端测试在 `Build9FinalClientVerification.xcresult` 中 48 项全部通过：39 单元、9 界面，0 失败、0 跳过。新增测试实际执行会话脚本，验证 AI 发送前同意、撤回中止、偏好跨文档保留与账号隔离；同时检查深链、OAuth 回调、文件复制与取消、发展端受信内嵌页、窄屏表格/表单、晚加载导航和牧场几何。原有最新/热门解析、富文本、原生代码/工具、楼中楼回复和 Max 同意回归保留。测试附带的崩溃报告来自模拟器 SpringBoard 的切换器断言，进程不是 FreeBBS；48 项测试完成，仍不代替真机验收。
+
+截图复查后，文档课程选择改用与原生课程列表一致的行样式，去掉重复箭头与嵌套卡片；`Build9DocumentRowFinalReview.xcresult` 中该实际导航流程再次通过。此后的完整检查以最终提交的 CI 为准。
+
+在线只读复查与新增文档流程在 `Build9EmbeddedAndDocumentsFinalReview.xcresult` 中 41 项全部通过（39 单元、1 在线界面、1 文档界面）。学习世界、羊群广场、探索手册和关于页使用正式网络内容，并确认去掉重复导航和桌面留白；没有执行生产写入。公开复查截图与源码保存在本机 `features-native-review/`，不加入依赖网络的 CI。
+
+目录生成检查覆盖主站 42 个页面、发展端 34 条路由和 68 个目录项；离线渲染资源一致性检查、后端安全 12 项测试及相关 ESLint 均通过。最新 PR 必须在本轮最终提交上完成 macos-26 / xcode-27 两套检查；上一提交 `2f7cf65` 的 [37122849412](https://github.com/Free-BBS/freebbs-web/actions/runs/37122849412) 已全部成功，不能作为 build 9 的通过证据。
+
+复杂功能由完整网页工作区与原生承载层提供，并非全部子控件都改写成 SwiftUI。真实 FREE-BBS 登录账号的校园连接、头像/文件保存、AI 生成、报名、交易、发帖和管理写入尚未现场验收；发布门槛保持不变。功能对照清单见 [FEATURE_PARITY.md](FEATURE_PARITY.md)。

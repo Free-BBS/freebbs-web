@@ -1,5 +1,6 @@
 import SwiftUI
 import Observation
+import WebKit
 
 @MainActor @Observable
 final class AppStore {
@@ -8,7 +9,17 @@ final class AppStore {
     let configuration = AppConfiguration()
     let api: APIClient
     private let preferences: UserDefaults
-    var user: User? { didSet { aiConsent = user.map { preferences.bool(forKey: Self.aiConsentKey($0)) } ?? false } }
+    var user: User? {
+        didSet {
+            aiConsent = user.map { preferences.bool(forKey: Self.aiConsentKey($0)) } ?? false
+            webPreferencesRevision += 1
+            if !isDemo {
+                let theme = webPreferenceValues["free_bbs_theme_mode"]
+                if let theme, ["light", "dark"].contains(theme) { preferences.set(theme, forKey: "freebbs.native.theme") }
+                else { preferences.removeObject(forKey: "freebbs.native.theme") }
+            }
+        }
+    }
     var aiConsent = false { didSet { if let user, !isDemo { preferences.set(aiConsent, forKey: Self.aiConsentKey(user)) } } }
     static func aiConsentKey(_ user: User) -> String { "freebbs.ai-consent.v1." + (user.uid.isEmpty ? "id-\(user.id)" : user.uid) }
     var courses: [Course] = []
@@ -26,6 +37,20 @@ final class AppStore {
     var postsLoading = false
     var postsError: String?
     var sessionRevision = 0
+    var featureDataStore = WKWebsiteDataStore.nonPersistent()
+    var featureDestination: FeatureDestination?
+    var webPreferencesRevision = 0
+    var webPreferenceValues: [String: String] {
+        _ = webPreferencesRevision
+        return (preferences.dictionary(forKey: WebPreferences.accountKey(user)) as? [String: String] ?? [:])
+            .filter { WebPreferences.permits($0.key, user: user) }
+    }
+    func saveWebPreference(_ key: String, value: String?) {
+        guard WebPreferences.permits(key, user: user), value.map({ $0.utf8.count <= 65536 }) != false else { return }
+        var values = webPreferenceValues; values[key] = value
+        preferences.set(values, forKey: WebPreferences.accountKey(user)); webPreferencesRevision += 1
+        if key == "free_bbs_theme_mode", let value, ["light", "dark"].contains(value) { preferences.set(value, forKey: "freebbs.native.theme") }
+    }
     var isDemo = false
     private var postsRevision = 0
     var blockedIDs: Set<Int> { Set(blocks.map(\.id)) }
@@ -33,6 +58,7 @@ final class AppStore {
 
     init(api injected: APIClient? = nil, preferences: UserDefaults = .standard) {
         self.preferences = preferences
+        SiteImports.purgeExpired()
         api = injected ?? APIClient(origin: configuration.origin)
         if injected == nil { api.token = TokenVault.read() }
         api.onUnauthorized = { [weak self] in self?.logout() }
@@ -63,6 +89,7 @@ final class AppStore {
         try TokenVault.save(response.token)
         api.token = response.token
         user = response.user
+        featureDataStore = .nonPersistent()
         sessionRevision += 1
         showLogin = false
         await refreshBlocks()
@@ -73,6 +100,7 @@ final class AppStore {
         TokenVault.clear()
         api.token = nil
         user = nil
+        featureDataStore = .nonPersistent()
         inbox = []; blocks = []; unreadCount = 0; nextInboxCursor = nil
         // Remove response fields personalized for the former user before another login.
         posts = []; postsError = nil; postsLoading = false; postsRevision += 1
