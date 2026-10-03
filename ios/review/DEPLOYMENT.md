@@ -37,3 +37,7 @@ App Store Connect 应用记录：FREE-BBS，Apple ID `6818750003`，Team `Q83556
 ## build 5 匿名作者兼容修复
 
 服务端 `anonymousAuthor()` 会返回 `id: null`；旧版客户端要求作者 ID 必须为整数，匿名帖会使整个讨论列表解析失败，已删除回复亦受影响。build 5 将作者 ID 改为可空，保留匿名内容，并仅允许屏蔽有效的真实账号；不丢弃无法解析的帖子来掩盖错误。新增最新/热门混合列表、匿名/已删除回复与非法作者字段的回归测试。签名 Archive 已成功，测试及上传结果见本机证据和 PR 最新检查。
+
+## build 6 兼容性修复
+
+build 6 包含 build 5 的匿名作者修复，并修复 Swift SDK 27 在 iOS 26 runtime 中 `AppStore` 的隐式隔离析构崩溃；API 客户端同样使用无额外清理逻辑的非隔离析构。25 项单元测试通过，小屏 7 项界面流程通过。最终签名构建、上传和可测试状态以本机 `build6-archive.log`、`build6-upload.log`、`testflight-build6-ready.png` 及 `final-ci-summary.json` 为证。

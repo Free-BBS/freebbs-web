@@ -38,6 +38,8 @@ struct AppConfiguration {
 
 @MainActor
 final class APIClient {
+    // Avoid SDK 27 executor-based destruction on the supported iOS 26 runtime.
+    nonisolated deinit {}
     let origin: URL
     var token: String?
     private let session: URLSession

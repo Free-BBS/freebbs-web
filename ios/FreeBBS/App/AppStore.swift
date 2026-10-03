@@ -3,6 +3,8 @@ import Observation
 
 @MainActor @Observable
 final class AppStore {
+    // Avoid SDK 27 executor-based destruction on the supported iOS 26 runtime.
+    nonisolated deinit {}
     let configuration = AppConfiguration()
     let api: APIClient
     private let preferences: UserDefaults

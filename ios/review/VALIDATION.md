@@ -24,7 +24,9 @@
 | 原生分层图标 | Apple Icon Composer ictool，design-generation 27 | 浅色、深色、着色和 60 pt 原生渲染复查通过；已编译为 Archive 主图标 |
 | 生产部署 | 范围限定的 GitHub Actions 发布 | 健康检查、401 权限保护、政策和支持页面 200 及正文一致性通过 |
 
-本轮客户端回归：22 个单元测试通过，包括核心合同、富文本及 sandbox、安全流式实验协议、最新/热门请求参数、Max 同意的保存、账号隔离和撤回。小屏完整运行的其余 6 个页面测试通过；撤回同意的独立页面复验也通过（`MaxConsentToggleHitTest.xcresult`）。完整 CI 结果以本机汇总和 [PR 174 最新检查](https://github.com/Free-BBS/freebbs-web/pull/174/checks) 为准。测试保留实际 UI 断言，不跳过实验室、回复或隐私流程。另有 120 项网页 Markdown、预览及工具嵌入测试通过。
+本轮客户端回归：25 个单元测试在 `FinalBuild6ContractTests.xcresult` 全部通过，包括核心合同、富文本与 sandbox、流式实验协议、最新/热门的真实请求参数和匿名作者、Max 同意保存/账号隔离/撤回。7 个完整小屏页面测试在 `UnifiedFinalReviewTests.xcresult` 全部通过；该次完整运行的单元测试 host 曾在 UIKit 启动时意外退出，因此不能将整份结果写为成功。随后独立单元测试定位到 SDK 27 在 iOS 26 runtime 的隐式隔离析构问题，显式使用非隔离析构后，25 项单元测试全部通过。完整同次 CI 结果见 [PR 174 最新检查](https://github.com/Free-BBS/freebbs-web/pull/174/checks) 和本机 `final-ci-summary.json`，不以 SDK 编译代替系统运行验收。
+
+匿名身份保留为 `nil`，不丢弃匿名帖，不把匿名身份当作真实账号屏蔽。回归覆盖混合的匿名/普通最新和热门列表、匿名/已删除回复，以及非法作者 ID 仍应失败。此前另有 120 项网页 Markdown、预览及工具嵌入测试通过。
 
 统一界面使用系统 List、Form、导航与分段控件；Liquid Glass 用于导航和操作区域，阅读内容保留清晰表面。原生代码编辑、运行参数、控制台、波形、工具管理与电路参数已恢复。讨论区分别显示置顶与最新内容，切换排序与版块会发送相应请求，过时请求不会覆盖新选择。Max 同意按账号存于本机，清空对话及页面切换不重置，可从「我的」撤回。
 
