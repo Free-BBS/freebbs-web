@@ -127,6 +127,30 @@ final class RichContentTests: XCTestCase, WKNavigationDelegate {
             XCTAssertEqual(result["mobileControls"] as? Bool, true)
         }
     }
+    func testNativeParameterSheetKeepsInputVisibleInLandscapeAndKeyboardSizedViewports() async throws {
+        for size in [CGSize(width: 667, height: 220), CGSize(width: 375, height: 224)] {
+            let web = await reader(size: size)
+            let value = try await web.callAsyncJavaScript("""
+                document.body.innerHTML='<div class="page-shell"><main class="circuit-main"><section class="circuit-parameter-popover"><header class="circuit-parameter-popover-heading"><div><p>元件参数</p><h3>R1 · 电阻</h3></div><button class="circuit-parameter-popover-close">×</button></header><form class="circuit-parameter-popover-fields"><p class="circuit-parameter-hint">支持字头：m、u、n、p，例如 4.7k。</p><label style="display:grid;gap:5px">电阻 / Ω<input value="1000"></label></form><footer class="circuit-parameter-popover-footer"><span>修改即保存到草稿</span><button class="circuit-parameter-popover-sidebar">在侧栏查看</button></footer></section></main></div>';
+                const old=document.createElement('style');old.textContent='.circuit-parameter-popover{display:flex;flex-direction:column;position:fixed;height:auto}.circuit-parameter-popover-heading,.circuit-parameter-popover-footer{display:flex;flex:0 0 auto;align-items:center;justify-content:space-between}.circuit-parameter-popover-fields{display:grid;flex:1 1 auto;grid-template-columns:minmax(0,1fr);gap:12px;overflow:auto}.circuit-parameter-popover-heading p,.circuit-parameter-popover-heading h3{margin:0}.circuit-parameter-popover-fields p{margin:0}';document.head.append(old);
+                const stage=document.createElement('div');stage.id='circuit-stage';stage.className='circuit-stage';
+                stage.innerHTML='<svg><g data-component-id="r1" transform="translate(3000 3000)"><rect width="40" height="20"/></g></svg>';
+                document.querySelector('main').append(stage);
+                eval(script);
+                FreeBbsCircuitParameterPopover.show({componentId:'r1',title:'R1 · 电阻',editable:true,html:'<p class="circuit-parameter-hint">支持字头：m、u、n、p，例如 4.7k。</p><label style="display:grid;gap:5px">电阻 / Ω<input data-parameter="resistance" value="1000"></label>'});
+                document.querySelector('input').focus();FreeBbsCircuitParameterPopover.reposition();
+                await new Promise(resolve=>setTimeout(resolve,80));
+                const sheet=document.querySelector('.circuit-parameter-popover').getBoundingClientRect();
+                const form=document.querySelector('form').getBoundingClientRect(),input=document.querySelector('input').getBoundingClientRect();
+                return {visible:!document.querySelector('.circuit-parameter-popover').hidden,contained:input.top>=form.top && input.bottom<=form.bottom && sheet.top>=0 && sheet.bottom<=innerHeight,readable:input.height>=44,scrollable:getComputedStyle(document.querySelector('form')).overflowY==='auto'};
+                """, arguments: ["script":WebContentPolicy.nativeCircuitScript], in: nil, contentWorld: .page)
+            let result = try XCTUnwrap(value as? [String:Any])
+            XCTAssertEqual(result["visible"] as? Bool, true)
+            XCTAssertEqual(result["contained"] as? Bool, true)
+            XCTAssertEqual(result["readable"] as? Bool, true)
+            XCTAssertEqual(result["scrollable"] as? Bool, true)
+        }
+    }
     func testNativeToolPreviewUsesSharedSandboxAndHasNoBridge() async throws {
         let web = await reader()
         _ = try await web.evaluateJavaScript("window.privateMarker='host-secret';window.previewResult='waiting';window.addEventListener('message',event=>window.previewResult=event.data)")

@@ -42,10 +42,42 @@ html = '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name
 licenses = '\n\n'.join((ROOT / p).read_text() for p in ['node_modules/marked/LICENSE.md', 'node_modules/katex/LICENSE', 'node_modules/@highlightjs/cdn-assets/LICENSE'])
 tool_code = (ROOT / 'public/tool-embeds.js').read_text()
 tool_host = '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"></head><body><script>' + tool_code.replace('</script', '<\\/script') + '</script></body></html>\n'
+# Reuse the website's validation/save behavior, but phone parameters are an
+# independent bottom sheet: keyboard/camera changes must not dismiss editing.
+parameter_source = (ROOT / 'public/circuit-parameter-popover.js').read_text()
+parameter_start = "  const panel = document.createElement('section');"
+parameter_position_start = "    const canvas = stage.getBoundingClientRect();"
+parameter_position_end = "\n  }\n\n  function schedulePosition()"
+parameter_position = parameter_source[parameter_source.index(parameter_position_start):parameter_source.index(parameter_position_end)]
+parameter_hide = "    panel.hidden = true;"
+for anchor in [parameter_start, parameter_position, parameter_hide]:
+    if parameter_source.count(anchor) != 1:
+        raise SystemExit('Parameter sheet source changed; review the native adaptation.')
+parameter_code = parameter_source.replace(parameter_start, """  window.FreeBbsCircuitParameterPopover?.hide();
+  document.getElementById('circuit-parameter-popover')?.remove();
+""" + parameter_start).replace(parameter_hide, """    if (panel.contains(document.activeElement)) document.activeElement.blur();
+""" + parameter_hide).replace(parameter_position, """    // A phone sheet remains editable when the selected symbol leaves the
+    // visible canvas, including while the keyboard reduces the viewport.
+    const viewport = window.visualViewport;
+    const height = viewport?.height || window.innerHeight;
+    const bottom = Math.max(0, window.innerHeight - (height + (viewport?.offsetTop || 0)));
+    panel.style.setProperty('--native-sheet-bottom', `${bottom + 12}px`);
+    panel.style.setProperty('--native-sheet-height', `${height}px`);
+    document.documentElement.classList.toggle('native-lab-compact', height <= 420);
+    if (observedAnchor !== target) {
+      observedAnchor?.removeAttribute('aria-controls');
+      observedAnchor?.removeAttribute('aria-expanded');
+      observedAnchor = target;
+      target.setAttribute('aria-controls', panel.id);
+      target.setAttribute('aria-expanded', 'true');
+    }
+    panel.dataset.side = 'bottom';
+""")
 outputs = {DEST: html, ROOT / 'ios/FreeBBS/Resources/RendererLicenses.txt': licenses,
            ROOT / 'ios/FreeBBS/Resources/ToolPreview.html': tool_host,
+           ROOT / 'ios/FreeBBS/Resources/NativeCircuitParameters.js': parameter_code,
            ROOT / 'ios/FreeBBS/Resources/NativeCircuitViewport.js': (ROOT / 'ios/WebSource/native-circuit-viewport.js').read_text()}
-manifest = {'source': 'public/app.js selected Markdown functions; public embed modules; native circuit camera and tool preview', 'engineSHA256': hashlib.sha256(engine.encode()).hexdigest(), 'documentSHA256': hashlib.sha256(html.encode()).hexdigest(), 'packageLockSHA256': hashlib.sha256((ROOT / 'package-lock.json').read_bytes()).hexdigest(), 'nativeCircuitSHA256': hashlib.sha256(outputs[ROOT / 'ios/FreeBBS/Resources/NativeCircuitViewport.js'].encode()).hexdigest(), 'toolPreviewSHA256': hashlib.sha256(tool_host.encode()).hexdigest()}
+manifest = {'source': 'public/app.js selected Markdown functions; public embed modules; native circuit camera and tool preview', 'engineSHA256': hashlib.sha256(engine.encode()).hexdigest(), 'documentSHA256': hashlib.sha256(html.encode()).hexdigest(), 'packageLockSHA256': hashlib.sha256((ROOT / 'package-lock.json').read_bytes()).hexdigest(), 'nativeCircuitSHA256': hashlib.sha256(outputs[ROOT / 'ios/FreeBBS/Resources/NativeCircuitViewport.js'].encode()).hexdigest(), 'nativeParametersSHA256': hashlib.sha256(parameter_code.encode()).hexdigest(), 'toolPreviewSHA256': hashlib.sha256(tool_host.encode()).hexdigest()}
 outputs[ROOT / 'ios/WebSource/manifest.json'] = json.dumps(manifest, indent=2) + '\n'
 for path, content in outputs.items():
     if '--check' in sys.argv:

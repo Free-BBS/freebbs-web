@@ -87,8 +87,8 @@ enum WebContentPolicy {
     html.freebbs-native-lab body .native-circuit-empty p { margin-top:8px; font-size:14px; line-height:1.5; color:var(--ui-muted); }
     html.freebbs-native-lab body .native-circuit-empty[hidden] { display:none!important; }
     html.freebbs-native-lab body .circuit-parameter-popover {
-      top:auto!important; bottom:12px!important; left:12px!important; right:12px!important;
-      width:calc(100% - 24px)!important; max-height:min(65dvh,360px)!important;
+      top:auto!important; bottom:var(--native-sheet-bottom,12px)!important; left:12px!important; right:12px!important;
+      width:calc(100% - 24px)!important; max-height:min(65dvh,360px,calc(var(--native-sheet-height,100dvh) - 24px))!important;
       border-radius:20px; overflow:hidden; font-family:-apple-system,BlinkMacSystemFont,sans-serif;
     }
     html.freebbs-native-lab body .circuit-parameter-popover[hidden] { display:none!important; }
@@ -96,10 +96,25 @@ enum WebContentPolicy {
     html.freebbs-native-lab body .circuit-parameter-popover-heading { padding:16px; }
     html.freebbs-native-lab body .circuit-parameter-popover-heading p { font-size:13px; }
     html.freebbs-native-lab body .circuit-parameter-popover-heading h3 { font-size:17px; }
-    html.freebbs-native-lab body .circuit-parameter-popover-fields { min-height:100px; padding:12px 16px; }
+    html.freebbs-native-lab body .circuit-parameter-popover-fields { min-height:0; padding:12px 16px; }
     html.freebbs-native-lab body .circuit-parameter-popover-fields label { font-size:15px; }
     html.freebbs-native-lab body .circuit-parameter-popover-fields :is(input,select) { min-height:44px; font-size:16px; }
     html.freebbs-native-lab body .circuit-parameter-popover-footer { font-size:12px; padding:8px 16px; }
+    html.freebbs-native-lab body .circuit-parameter-popover-close { min-height:44px!important; width:44px!important; flex-basis:44px!important; }
+    @media (max-height:420px) {
+      html.freebbs-native-lab body .circuit-parameter-popover { max-height:calc(var(--native-sheet-height,100dvh) - 24px)!important; }
+      html.freebbs-native-lab body .circuit-parameter-popover-heading { padding:8px 12px; }
+      html.freebbs-native-lab body .circuit-parameter-popover-heading p { display:none; }
+      html.freebbs-native-lab body .circuit-parameter-popover-fields { padding:8px 12px; }
+      html.freebbs-native-lab body .circuit-parameter-popover-fields > .circuit-parameter-hint { order:1; }
+      html.freebbs-native-lab body .circuit-parameter-popover-sidebar { display:none; }
+    }
+    html.freebbs-native-lab.native-lab-compact body .circuit-parameter-popover { max-height:calc(var(--native-sheet-height,100dvh) - 24px)!important; }
+    html.freebbs-native-lab.native-lab-compact body .circuit-parameter-popover-heading { padding:8px 12px; }
+    html.freebbs-native-lab.native-lab-compact body .circuit-parameter-popover-heading p { display:none; }
+    html.freebbs-native-lab.native-lab-compact body .circuit-parameter-popover-fields { padding:8px 12px; }
+    html.freebbs-native-lab.native-lab-compact body .circuit-parameter-popover-fields > .circuit-parameter-hint { order:1; }
+    html.freebbs-native-lab.native-lab-compact body .circuit-parameter-popover-sidebar { display:none; }
     html.freebbs-native-lab body .challenge-main.is-empty #challenge-empty { inset:12px!important; }
     """
     static let nativeViewportScript = """
@@ -116,6 +131,7 @@ enum WebContentPolicy {
       document.head.append(style);
       const stage = document.querySelector('.circuit-stage,.challenge-stage');
       if (!stage) return;
+      \(try! String(contentsOf: Bundle.main.url(forResource: "NativeCircuitParameters", withExtension: "js")!, encoding: .utf8))
       let guide;
       if (location.pathname === '/circuit' && !new URLSearchParams(location.search).has('cid')) {
         guide = document.createElement('div'); guide.className='native-circuit-empty';
