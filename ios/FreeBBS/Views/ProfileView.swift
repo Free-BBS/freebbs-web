@@ -227,6 +227,7 @@ struct SupportView: View {
                 if !store.configuration.supportEmail.isEmpty,
                    let url = URL(string: "mailto:" + store.configuration.supportEmail) {
                     Link(destination: url) { Label("联系支持", systemImage: "envelope").frame(minHeight: 48) }
+                        .accessibilityIdentifier("contactSupport")
                 } else { Text("正式客服联系方式尚未配置，当前版本仅用于开发审查。").foregroundStyle(.secondary) }
             }
             Paper {

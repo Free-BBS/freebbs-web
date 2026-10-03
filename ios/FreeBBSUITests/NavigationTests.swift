@@ -47,7 +47,9 @@ final class NavigationTests: XCTestCase {
         app.tabBars.buttons["我的"].tap()
         capture("10-profile")
         tapListText("帮助与联系")
-        XCTAssertTrue(app.buttons["联系支持"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["帮助与联系"].waitForExistence(timeout: 5))
+        let support = app.descendants(matching: .any).matching(identifier: "contactSupport").firstMatch
+        XCTAssertTrue(support.waitForExistence(timeout: 5))
         capture("11-support")
     }
     func testLandscapeAndLargeDynamicTypeRemainNavigable() {
