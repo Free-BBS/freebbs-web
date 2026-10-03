@@ -376,7 +376,16 @@ final class NavigationTests: XCTestCase {
     private func back() {
         let navigation = app.navigationBars.firstMatch
         let previousTitle = navigation.identifier
-        let button = navigation.buttons.firstMatch
+        // Returning to a searchable list can restore search mode. Its first
+        // navigation button closes search instead of popping the page.
+        if !navigation.buttons["BackButton"].exists {
+            let closeSearch = navigation.buttons.matching(
+                NSPredicate(format: "label IN %@", ["关闭", "取消", "Close", "Cancel"])).firstMatch
+            if closeSearch.exists {
+                closeSearch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
+        }
+        let button = navigation.buttons["BackButton"]
         XCTAssertTrue(button.waitForExistence(timeout: 5))
         XCTAssertTrue(button.isHittable)
         // The synthesized AX activation point can lag a navigation transition
