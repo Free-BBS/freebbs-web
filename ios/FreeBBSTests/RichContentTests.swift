@@ -1,5 +1,6 @@
 import XCTest
 import WebKit
+import SwiftUI
 @testable import FreeBBS
 
 @MainActor
@@ -18,6 +19,43 @@ final class RichContentTests: XCTestCase, WKNavigationDelegate {
         return web
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loaded?.fulfill(); loaded = nil }
+    func testProductionReaderLoadsBundledDocumentAndRecoversItsBody() async throws {
+        var measuredHeight = 48.0
+        var state = RichContentLoadState.loading
+        var openedLinks: [String] = []
+        let source = "## 实际正文\n\n$E=mc^2$\n\n| 时间 | 电压 |\n| --- | --- |\n| 0 | 1 |"
+        let reader = RichWebView(source: source, origin: origin, token: nil, dark: false, fontSize: 17,
+            allowReferences: false, height: Binding(get: { measuredHeight }, set: { measuredHeight = $0 }),
+            readingStyle: ReadingStyle(raw: nil), loadState: Binding(get: { state }, set: { state = $0 }),
+            link: { openedLinks.append($0) }, copy: { _ in })
+        let coordinator = reader.makeCoordinator()
+        // Exercise the actual delegate and sizing bridge, including creation
+        // at zero size followed by SwiftUI's first real layout.
+        let web = reader.makeWebView(coordinator: coordinator)
+        web.frame = CGRect(x: 0, y: 0, width: 320, height: 48)
+        defer {
+            coordinator.invalidate(); web.stopLoading(); web.navigationDelegate = nil
+            web.configuration.userContentController.removeScriptMessageHandler(forName: "reader")
+        }
+        for recovery in 0..<2 {
+            let deadline = Date().addingTimeInterval(20)
+            while Date() < deadline && (state != .ready || measuredHeight <= 100) {
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            XCTAssertEqual(state, .ready)
+            XCTAssertGreaterThan(measuredHeight, 100)
+            XCTAssertEqual(web.url?.standardizedFileURL, RichContentEngine.documentURL?.standardizedFileURL)
+            let body = try await web.evaluateJavaScript("document.getElementById('content').textContent") as? String
+            XCTAssertTrue(body?.contains("实际正文") == true)
+            let math = try await web.evaluateJavaScript("document.querySelectorAll('.katex').length") as? Int
+            XCTAssertEqual(math, 1)
+            XCTAssertTrue(openedLinks.isEmpty, "The trusted document must load rather than become a navigation link")
+            if recovery == 0 {
+                measuredHeight = 48
+                coordinator.webViewWebContentProcessDidTerminate(web)
+            }
+        }
+    }
     func testOfflineFormulaTableCodeAndImages() async throws {
         let web = await reader()
         let source = "## 实验\n\n$E=mc^2$\n\n$$\\int_0^1 x^2 dx$$\n\n| 时间 | 电压 |\n| --- | --- |\n| 0 | 1 |\n\n```python\nprint(1 + 2)\n```\n\n![波形](/uploads/native-test-wave.png)"
