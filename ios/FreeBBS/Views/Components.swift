@@ -9,7 +9,7 @@ enum Palette {
 struct PageSurface<Content: View>: View {
     @ViewBuilder let content: Content
     var body: some View {
-        ScrollView { VStack(alignment: .leading, spacing: 24) { content }
+        ScrollView { LazyVStack(alignment: .leading, spacing: 24) { content }
             .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 28)
             .frame(maxWidth: 680, alignment: .leading).frame(maxWidth: .infinity) }
         .background(Palette.canvas)
@@ -44,14 +44,22 @@ struct EmptyState: View {
     }
 }
 struct Avatar: View {
+    @Environment(AppStore.self) private var store
     let author: Author
     var body: some View {
-        Text(String(author.displayName.prefix(1)).uppercased()).font(.subheadline.bold())
-            .frame(width: 40, height: 40).background(Palette.teal.opacity(0.1), in: Circle())
-            .foregroundStyle(Palette.teal).accessibilityHidden(true)
+        Group {
+            if !author.avatarPath.isEmpty, let url = AppConfiguration.safeLink(author.avatarPath, origin: store.configuration.origin) {
+                AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: { initials }
+            } else { initials }
+        }.frame(width: 36, height: 36).background(Palette.teal.opacity(0.1), in: Circle())
+            .clipShape(Circle()).accessibilityHidden(true)
+    }
+    private var initials: some View {
+        Text(String(author.displayName.prefix(1)).uppercased()).font(.subheadline.bold()).foregroundStyle(Palette.teal)
     }
 }
 struct PostRow: View {
+    @Environment(AppStore.self) private var store
     let post: Post
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -60,14 +68,34 @@ struct PostRow: View {
                 if post.isPinned { Label("置顶", systemImage: "pin.fill").foregroundStyle(.secondary) }
                 if post.isFeatured { Label("精选", systemImage: "sparkle").foregroundStyle(.secondary) }
             }.font(.caption.weight(.medium))
-            Text(post.title).font(.headline).foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true)
+            Text(post.title).font(.headline).foregroundStyle(.primary).lineLimit(3).fixedSize(horizontal: false, vertical: true)
+            if let excerpt = post.excerpt, !excerpt.isEmpty {
+                Text(excerpt).font(.subheadline).foregroundStyle(.secondary).lineLimit(3).lineSpacing(3)
+            }
+            if let preview = post.preview {
+                if preview.type == "image", let raw = preview.url, let url = AppConfiguration.safeLink(raw, origin: store.configuration.origin) {
+                    AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: {
+                        Rectangle().fill(Palette.canvas).overlay { Image(systemName: "photo").foregroundStyle(.secondary) }
+                    }.frame(maxWidth: .infinity).frame(height: 150).clipped().clipShape(RoundedRectangle(cornerRadius: 14))
+                        .accessibilityLabel(preview.alt ?? "讨论图片")
+                } else if ["lab", "circuit", "tool"].contains(preview.type) {
+                    Label(preview.type == "circuit" ? "电路与波形" : preview.type == "lab" ? "代码实验快照" : "交互小工具",
+                          systemImage: preview.type == "circuit" ? "waveform.path" : preview.type == "lab" ? "terminal" : "hammer")
+                        .font(.caption.weight(.medium)).foregroundStyle(Palette.teal).padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading).background(Palette.teal.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+                }
+            }
             HStack(spacing: 8) {
-                Text(post.author.displayName).lineLimit(1)
+                Avatar(author: post.author).frame(width: 28, height: 28).scaleEffect(0.78)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(post.author.displayName).lineLimit(1)
+                    Text(AppDates.short(post.createdAt)).font(.caption2)
+                }
                 Spacer(minLength: 8)
                 Label("\(post.likeCount)", systemImage: "face.smiling")
                 Label("\(post.commentCount)", systemImage: "bubble")
             }.font(.caption).foregroundStyle(.secondary)
-        }.padding(.vertical, 12).frame(maxWidth: .infinity, alignment: .leading)
+        }.padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle()).accessibilityElement(children: .combine)
     }
 }
@@ -82,32 +110,9 @@ extension View {
     func glassAction() -> some View { modifier(GlassAction()) }
 }
 
-// Markdown is rendered as native text. Raw HTML never executes inside the app.
-// Math/circuit embeds remain source text in this first native reader; see release checklist.
 struct MarkdownContent: View {
     let source: String
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            ForEach(Array(source.components(separatedBy: "\n\n").enumerated()), id: \.offset) { _, block in
-                if block.hasPrefix("```") {
-                    Text(block.replacingOccurrences(of: "```", with: ""))
-                        .font(.system(.callout, design: .monospaced)).textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(14)
-                        .background(Palette.canvas, in: RoundedRectangle(cornerRadius: 12))
-                } else if block.hasPrefix("#") {
-                    Text(block.drop(while: { $0 == "#" || $0 == " " })).font(.title3.bold())
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    Text((try? AttributedString(markdown: block,
-                        options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(block))
-                        .font(.body).lineSpacing(5).textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }.frame(maxWidth: .infinity, alignment: .leading)
-            .environment(\.openURL, OpenURLAction { url in
-                guard url.scheme == "https", url.user == nil, url.password == nil else { return .discarded }
-                return .systemAction
-            })
+        RichMarkdownContent(source: source).frame(maxWidth: .infinity, alignment: .leading)
     }
 }

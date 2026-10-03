@@ -10,7 +10,9 @@
 | `FreeBBS/Core/APIClient.swift` | HTTPS、Bearer、同域重定向、错误反馈、临时会话 |
 | `FreeBBS/Core/TokenVault.swift` | 钥匙串 `WhenUnlockedThisDeviceOnly`，不保存明文密码 |
 | `FreeBBS/Views/AuthenticationView.swift` | 原生注册、协议、一次性 challenge、验证码、Wien 条件 |
-| `FreeBBS/Views/DiscussionView.swift` | 发帖/回复验证、防重复提交、举报与屏蔽入口 |
+| `FreeBBS/Views/DiscussionView.swift` | 卡片摘要、楼中楼、三种反应、回复点赞/删除、举报与屏蔽 |
+| `FreeBBS/Views/LaboratoryView.swift` | 同域白名单、临时 Web 会话、手机实验布局、原生提示和文件分享 |
+| `FreeBBS/Views/RichContentView.swift`、`WebSource/` | 离线共享渲染、参数传递、HTTPS、主 frame 桥接、HTML 工具 opaque sandbox |
 | `FreeBBS/Views/CoursesView.swift` | 手机知识点与关系视图、真实地图接口、分区正文 |
 | `FreeBBS/Views/ProfileView.swift` | 账号设置、真实删除申请状态、客服 |
 | `FreeBBS/Views/ChatView.swift` | AI 数据发送确认、上下文限制、取消请求 |
@@ -27,8 +29,10 @@
 | 知识点/关系 | 列表与邻接图切换；不使用缩小的桌面坐标图 |
 | 知识阅读 | 分区切换、可选择文字、正文自然高度 |
 | 资料 | 系统 Quick Look、下载时禁用重复操作、临时文件清理 |
-| 讨论列表 | 系统搜索、菜单筛选/排序、完整标题 |
-| 讨论详情 | 底部回复框随键盘移动，滚动正文，举报与屏蔽菜单 |
+| 讨论列表 | 独立卡片、头像、摘要与图片/实验预览，系统搜索和菜单筛选/排序 |
+| 讨论详情 | 回复引用与目标提示、评论点赞/删除、底部输入框随键盘移动、宽公式/表格独立横滚 |
+| 实验室 | 原生单列入口与导航，现有完整 Web 实验引擎；44 pt 触控、横滚语言/波形、原生确认与文件导出 |
+| 富文本 | 离线公式字体与高亮、图片随宽、代码/表格横滚、随 Dynamic Type 与深浅色更新 |
 | 发帖/举报 | 系统 Form 和 sheet，未提交草稿避免意外关闭 |
 | 登录/注册/找回 | 系统表单、密码自动填充、验证码键盘；图表附候选数值 |
 | 通知 | 未读标志不只依赖颜色、历史分页、重复记录去重 |
@@ -44,7 +48,8 @@
 
 - `--demo` 只在 Debug 编译存在，明确展示示例内容，不作为审核后门。
 - 目前只支持最近 50 条讨论，搜索为当前列表筛选；避免产品描述写成全站搜索。
-- 复杂 Markdown、公式、图片与电路嵌入没有完成原生渲染，产品范围必须如实描述。
+- 实验引擎和富文本由 WKWebView 承载；不能描述为全功能纯 SwiftUI 引擎。工具 iframe 不带 `allow-same-origin`，不能访问登录会话或原生桥。
+- Bearer 仅用于同域 API；实验室会话仅注入明确白名单的主 frame，账号切换销毁旧 WebView。HTML 工具的 CSP 禁止网络、表单、顶层导航。
 - 举报当前仅记录和处理队列，无自动过滤与管理员网页；标记 resolved 不会自动删除内容。
 - 删除当前只发起申请。App Store 提交前必须核实实际清除流程，不能直接把状态改为完成。
 - 程序未集成推送、统计、广告、第三方登录或支付，不申请相应权限。
@@ -53,4 +58,4 @@
 
 ## 平台标准来源
 
-Apple [Adopting Liquid Glass](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass)、[SwiftUI 自定义 Liquid Glass](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views)、[iOS 27 Release Notes](https://developer.apple.com/documentation/ios-ipados-release-notes/ios-ipados-27-release-notes)。本机已完成 SDK 27 的编译、签名与分发导出；13 项客户端测试运行在 iOS 26 runtime，iOS 27 系统运行验证尚待完成。新增的 `FreeBBSIcon.icon` 由原生 Icon Composer 工具渲染检查并编译进 Archive。
+Apple [Adopting Liquid Glass](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass)、[SwiftUI 自定义 Liquid Glass](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views)、[iOS 27 Release Notes](https://developer.apple.com/documentation/ios-ipados-release-notes/ios-ipados-27-release-notes)。本机已完成 SDK 27 的编译、签名与分发导出；CI 37114209875 的 Xcode 27 / iOS 27 runtime 回归已通过；本机新增功能回归使用 SDK 27 / iOS 26 runtime。新增的 `FreeBBSIcon.icon` 由原生 Icon Composer 工具渲染检查并编译进 Archive。

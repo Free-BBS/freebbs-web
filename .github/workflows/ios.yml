@@ -28,6 +28,8 @@ jobs:
       - run: npm ci
       - run: node --test backend/mobile-safety.test.js
       - run: npx eslint backend/mobile-safety.js backend/mobile-safety.test.js
+      - name: Verify bundled Markdown and embed assets match website sources
+        run: python3 ios/scripts/bundle-rich-content.py --check
 
   native-client:
     strategy:
@@ -43,13 +45,17 @@ jobs:
           xcodebuild -version
           xcrun simctl list devices available --json > /tmp/freebbs-simulators.json
           IOS_SIMULATOR_ID=$(python3 - <<'PY'
-          import json
+          import json, pathlib, sys
           data = json.load(open('/tmp/freebbs-simulators.json'))
           candidates = [(runtime, item) for runtime, items in data['devices'].items()
                         for item in items if item['isAvailable'] and item['name'].startswith('iPhone')]
           if not candidates:
               raise SystemExit('No available iPhone runtime; install the SDK runtime before testing.')
-          print(sorted(candidates, key=lambda pair: pair[0], reverse=True)[0][1]['udid'])
+          runtime, device = sorted(candidates, key=lambda pair: pair[0], reverse=True)[0]
+          pathlib.Path('ios/artifacts').mkdir(exist_ok=True)
+          pathlib.Path('ios/artifacts/simulator-environment.json').write_text(json.dumps({'runtime': runtime, 'device': device}, indent=2) + '\n')
+          print(f"Selected {device['name']} / {runtime}", file=sys.stderr)
+          print(device['udid'])
           PY
           )
           echo "IOS_SIMULATOR_ID=$IOS_SIMULATOR_ID" >> "$GITHUB_ENV"

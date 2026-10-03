@@ -26,6 +26,7 @@ struct ProfileView: View {
                 Section { Text("请先修改用户名，仅使用英文字母、数字和下划线，才能继续使用社区功能。") }
             }
             Section("学习") {
+                NavigationLink { InboxView() } label: { Label("通知", systemImage: "bell.badge") }
                 NavigationLink { WorkbenchView() } label: { Label("学习日程", systemImage: "calendar") }
                 NavigationLink { ChatView() } label: { Label("问问 Max", systemImage: "sparkles") }
             }
@@ -39,7 +40,7 @@ struct ProfileView: View {
                 NavigationLink { SupportView() } label: { Label("帮助与联系", systemImage: "questionmark.circle") }
             }
             Section {
-                HStack { Text("版本"); Spacer(); Text("1.0.0 (1)").foregroundStyle(.secondary) }
+                HStack { Text("版本"); Spacer(); Text(version).foregroundStyle(.secondary) }
                 if store.isDemo { Text("当前为界面预览模式，内容为示例，不会执行远端写入。").font(.footnote).foregroundStyle(.secondary) }
                 if store.user != nil { Button("退出登录", role: .destructive) { confirmLogout = true }.frame(minHeight: 44) }
             }
@@ -47,6 +48,10 @@ struct ProfileView: View {
             .confirmationDialog("退出当前账号？", isPresented: $confirmLogout, titleVisibility: .visible) {
                 Button("退出登录", role: .destructive) { store.logout(); Task { await store.refreshPosts() } }
             }
+    }
+    private var version: String {
+        let info = Bundle.main.infoDictionary ?? [:]
+        return "\(info["CFBundleShortVersionString"] as? String ?? "1.0.0") (\(info["CFBundleVersion"] as? String ?? "2"))"
     }
 }
 

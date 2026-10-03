@@ -30,6 +30,15 @@ struct Board: Codable, Identifiable, Hashable {
     let description: String
 }
 struct Post: Codable, Identifiable, Hashable {
+    struct Preview: Codable, Hashable {
+        let type: String
+        let url: String?
+        let alt: String?
+        let cid: String?
+        let revision: Int?
+        let tid: String?
+        let id: String?
+    }
     struct Category: Codable, Hashable { let slug: String; let name: String }
     let id: String
     let title: String
@@ -43,6 +52,12 @@ struct Post: Codable, Identifiable, Hashable {
     let isFeatured: Bool
     let contentMarkdown: String?
     let canDelete: Bool?
+    var excerpt: String? = nil
+    var preview: Preview? = nil
+    var lightCount: Int? = nil
+    var lightedByMe: Bool? = nil
+    var fireworksCount: Int? = nil
+    var fireworksByMe: Bool? = nil
     static func == (lhs: Post, rhs: Post) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
@@ -52,6 +67,11 @@ struct Comment: Codable, Identifiable {
     let contentMarkdown: String
     let createdAt: String
     let author: Author
+    var likeCount: Int? = nil
+    var likedByMe: Bool? = nil
+    var isDeleted: Bool? = nil
+    var canDelete: Bool? = nil
+    var isFeatured: Bool? = nil
 }
 struct Course: Codable, Identifiable, Hashable {
     let id: Int

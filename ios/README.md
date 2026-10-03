@@ -11,7 +11,7 @@ SwiftUI 原生客户端，位于现有 `Free-BBS/freebbs-web` 仓库的 `ios/`�
 - Bundle ID：`cn.free-bbs.app`，开发者团队：`Q83556V27Y`。
 - API Origin：`https://www.free-bbs.cn`，客服：`feedback@free-bbs.cn`。
 - 最低系统 iOS 26；标准 SwiftUI 控件采用系统 Liquid Glass，iOS 27 专项验证需要 Xcode 27 / iOS 27 runtime。
-- 当前本机为 Xcode 27.0（27A266a），已安装 iOS 27 SDK，签名 Archive 和分发导出通过。13 项客户端测试在 iOS 26.0.1 runtime 上通过；iOS 27 runtime 的下载停留在准备阶段，尚未完成该系统的运行验证。
+- 当前本机为 Xcode 27.0（27A266a），已安装 iOS 27 SDK，签名 Archive 和分发导出通过。本机使用 iOS 26.0.1 runtime；CI 的 Xcode 27 / iOS 27 runtime 回归已通过，详细记录见 `review/VALIDATION.md`。
 - 已配置并发布用户批准的隐私政策草稿：`https://www.free-bbs.cn/mobile/privacy.html`。运营主体、AI 数据处理及期限仍须补齐确认。xcconfig 中 `$()` 防止 URL 的 `//` 被当作注释。
 - 主图标为原生 `FreeBBSIcon.icon`：绵羊与知识轨道，支持系统浅色、深色和着色。设计源、提示词和预览见 `Design/Icons/README.md`。
 
@@ -21,9 +21,13 @@ Debug scheme 可增加 launch argument `--demo` 预览明确标注的示例页�
 
 今日首页与签到、课程搜索、知识点列表与关系浏览、分区知识阅读、课程资料系统预览、讨论版块与排序、标题搜索、讨论详情与回复、Markdown 发帖与预览、点赞、内容举报、用户屏蔽、通知及历史分页、个人资料编辑、用户名和密码修改、原生登录注册与找回密码、能带和文氏振荡器互动验证、学习日程、Max 对话及发送确认、账号删除申请、隐私政策、社区协议和客服入口。
 
+实验室包含电路编辑/仿真、电路挑战、C/C++、Python、Octave、Verilog 与 HTML 工具工坊。SwiftUI 提供原生导航、进度、重试、确认提示和系统文件分享；完整实验引擎运行在隔离的 WKWebView 内，并针对 iPhone 调整触控、工具栏、安全区域和横向波形滚动。通知由今日右上角与个人页面进入。
+
+课程、讨论、回复、发帖预览与 Max 共用离线 Markdown 引擎：KaTeX 公式及字体、代码高亮/复制、图片、表格，以及线上电路、工具和代码实验结果嵌入。升级网页渲染逻辑后执行 `npm ci && python3 ios/scripts/bundle-rich-content.py`；CI 以 `--check` 校验资源与来源一致。许可证随包附带，无远端脚本依赖。
+
 原生导航、系统标签栏、sheet、键盘与底部安全区域；内容区域最大宽度 680 pt，支持横屏、Dynamic Type、VoiceOver 和系统深浅色。玻璃仅用于导航与操作层，自定义玻璃按钮响应“减少透明度”。课程关系使用适合手机的邻接视图。
 
-这是一版可运行的原生客户端。网站的电路编辑/仿真、背包商城、后台管理、清华账号授权与学期同步、地图管理尚未迁移。Markdown 当前支持原生文字、强调、代码块和 HTTPS 链接；复杂表格、数学排版、内嵌电路、图片排版仍需后续原生渲染，不声称与网页版完全相同。Max 当前使用一次性 JSON 回答，没有流式输出或服务端对话存档。工作台为只读七天摘要。
+网站的背包商城、后台管理、清华账号授权与学期同步、地图管理尚未迁移。Max 当前使用一次性 JSON 回答，没有流式输出或服务端对话存档。工作台为只读七天摘要。
 
 ## 后端配套
 

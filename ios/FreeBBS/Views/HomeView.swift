@@ -61,6 +61,10 @@ struct HomeView: View {
         }
         .navigationTitle("FREE-BBS").navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .topBarTrailing) {
+            NavigationLink { InboxView() } label: {
+                Image(systemName: store.unreadCount > 0 ? "bell.badge" : "bell")
+            }.accessibilityLabel("通知").accessibilityValue("\(store.unreadCount) 条未读通知").accessibilityIdentifier("openInbox")
+        }; ToolbarItem(placement: .topBarTrailing) {
             Button { Task { await store.bootstrap() } } label: { Image(systemName: "arrow.clockwise") }
                 .accessibilityLabel("刷新首页")
         } }

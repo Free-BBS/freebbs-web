@@ -10,7 +10,7 @@ struct RootView: View {
             Tab("今日", systemImage: "sun.max", value: 0) { NavigationStack { HomeView() } }
             Tab("课程", systemImage: "square.stack.3d.up", value: 1) { NavigationStack { CoursesView() } }
             Tab("讨论", systemImage: "bubble.left.and.bubble.right", value: 2) { NavigationStack { DiscussionView() } }
-            Tab("通知", systemImage: "bell", value: 3) { NavigationStack { InboxView() } }.badge(store.unreadCount)
+            Tab("实验室", systemImage: "flask", value: 3) { NavigationStack { LaboratoryView() } }
             Tab("我的", systemImage: "person.crop.circle", value: 4) { NavigationStack { ProfileView() } }
         }
         .sheet(isPresented: $store.showLogin) { NavigationStack { AuthenticationView() }.environment(store) }

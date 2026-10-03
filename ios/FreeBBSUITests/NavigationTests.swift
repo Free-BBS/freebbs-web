@@ -40,7 +40,8 @@ final class NavigationTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["发表讨论"].waitForExistence(timeout: 5))
         capture("08-compose")
         app.buttons["取消"].tap()
-        app.tabBars.buttons["通知"].tap()
+        app.tabBars.buttons["今日"].tap()
+        app.buttons["openInbox"].tap()
         capture("09-inbox")
         app.buttons["全部已读"].tap()
         XCTAssertFalse(app.buttons["全部已读"].isEnabled)
@@ -104,6 +105,27 @@ final class NavigationTests: XCTestCase {
         capture("20-registration")
         app.buttons["找回密码"].tap()
         capture("21-reset-password")
+    }
+    func testLaboratoriesAndThreadedReplies() {
+        launchPreview()
+        app.tabBars.buttons["实验室"].tap()
+        XCTAssertTrue(app.staticTexts["电路实验室"].waitForExistence(timeout: 5))
+        capture("22-laboratories")
+        app.buttons["lab-/circuits"].tap()
+        XCTAssertTrue(app.staticTexts["实验室预览"].waitForExistence(timeout: 5))
+        capture("23-circuit-workspace")
+        app.tabBars.buttons["讨论"].tap()
+        capture("24-discussion-feed")
+        app.buttons["post-preview-convolution"].tap()
+        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10))
+        let target = app.buttons["reply-to-1"]
+        for _ in 0..<8 { if target.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(target.isHittable)
+        target.tap()
+        XCTAssertTrue(app.staticTexts["回复 @campus_notes"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["取消回复"].exists)
+        app.buttons["取消回复"].tap()
+        capture("25-threaded-replies")
     }
     private func back() { app.navigationBars.buttons.element(boundBy: 0).tap() }
     private func tapListText(_ text: String) {
