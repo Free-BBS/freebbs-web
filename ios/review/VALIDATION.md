@@ -65,3 +65,7 @@
 上一提交 2700e7a 在 [37118848936](https://github.com/Free-BBS/freebbs-web/actions/runs/37118848936) 的 iOS 27 任务全部通过，macos-26 的工具预览标题等待失败。本轮修复预览载入与进程恢复，保留实际内容断言并允许忙碌 CI 等待 30 秒。最新完整 CI 以 PR 检查及本机 `final-ci-summary.json` 为准，不能把前一提交的 iOS 27 成功当作本轮全部成功。
 
 最终本机版本在 `Build7ClientVerification.xcresult` 和 `build7-client-verification.log` 中 28 项全部通过（26 单元、2 界面）。新元件、参数输入与横屏的最终截图为 `circuit-native-review/33–37`；没有使用失败或不完整的结果替代最终验收。
+
+### CI 测试环境兼容
+
+8298486 的 macos-26 任务中，工具预览已通过；新增画布测试在离屏 WKWebView 导航后改变 frame 时读取到上一尺寸的 CSS dvh，电路导航检查依赖分区标题的 AX 类型。仅修正测试：各方向在导航前给 WKWebView 设置初始尺寸，完整几何/元件/缩放断言保留；电路导航同时检查目的页导航栏与实际「新建电路」按钮，楼中楼回复的实际操作检查保留。两项定向回归在 `ViewportAndLibraryCIRegression.xcresult`、`ci-test-refinement.log` 通过。发布 App 源码未改变，TestFlight build 7 保持有效。最新完整矩阵结果以 PR 检查和本机汇总为准。

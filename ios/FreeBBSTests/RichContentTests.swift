@@ -6,9 +6,9 @@ import WebKit
 final class RichContentTests: XCTestCase, WKNavigationDelegate {
     private var loaded: XCTestExpectation?
     private let origin = URL(string: "https://www.free-bbs.cn")!
-    private func reader() async -> WKWebView {
+    private func reader(size: CGSize = CGSize(width: 320, height: 600)) async -> WKWebView {
         let config = WKWebViewConfiguration(); config.websiteDataStore = .nonPersistent()
-        let web = WKWebView(frame: CGRect(x: 0, y: 0, width: 320, height: 600), configuration: config)
+        let web = WKWebView(frame: CGRect(origin: .zero, size: size), configuration: config)
         web.navigationDelegate = self
         let ready = XCTestExpectation(description: "Offline renderer loaded")
         loaded = ready
@@ -79,9 +79,10 @@ final class RichContentTests: XCTestCase, WKNavigationDelegate {
         XCTAssertEqual(value as? [String], ["none","none","none"])
     }
     func testNativeCircuitUsesEntirePortraitAndLandscapeViewportWithoutStretchingSymbols() async throws {
-        let web = await reader()
         for size in [CGSize(width: 320, height: 600), CGSize(width: 1024, height: 400)] {
-            web.frame.size = size
+            // Give each WebKit document its real viewport at load time; an offscreen
+            // view resized after navigation can retain the previous CSS dvh on iOS 26.
+            let web = await reader(size: size)
             let value = try await web.callAsyncJavaScript("""
                 document.body.className='circuit-page has-circuit-mobile-workspace';
                 document.body.innerHTML='<div class="page-shell"><main class="circuit-main"><section class="circuit-workspace"><div class="circuit-canvas-panel"><div class="circuit-stage"><svg viewBox="0 0 1000 640"><rect width="1000" height="640"/><path data-grid-size="20"/><g data-component-id="test-part" transform="translate(180 140)"><rect x="-50" y="-20" width="100" height="40"/></g></svg></div></div></section></main></div><dialog><div class="circuit-palette">元件列表</div></dialog>';

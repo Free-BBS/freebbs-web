@@ -113,8 +113,11 @@ final class NavigationTests: XCTestCase {
         app.tabBars.buttons["实验室"].tap()
         XCTAssertTrue(app.staticTexts["电路实验室"].waitForExistence(timeout: 5))
         capture("22-laboratories")
-        app.descendants(matching: .any).matching(identifier: "lab-/circuits").firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["我的电路"].waitForExistence(timeout: 5))
+        tapIdentifiedElement("lab-/circuits")
+        // Section headers have different AX element types across iOS releases.
+        // Check the destination and its real action instead of the header's type.
+        XCTAssertTrue(app.navigationBars["电路实验室"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["新建电路"].waitForExistence(timeout: 15))
         capture("23-circuit-workspace")
         app.tabBars.buttons["讨论"].tap()
         capture("24-discussion-feed")
