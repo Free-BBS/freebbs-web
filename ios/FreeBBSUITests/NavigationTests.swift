@@ -278,25 +278,40 @@ final class NavigationTests: XCTestCase {
         XCTAssertTrue(app.switches["maxConsent"].waitForExistence(timeout: 5))
     }
     private func openLearning(_ path: String) {
-        app.tabBars.buttons["学习"].tap()
-        // Each tab keeps its navigation stack; return to its menu before choosing.
-        for _ in 0..<8 {
-            if app.buttons["menu-" + path].waitForExistence(timeout: 1) { break }
-            let previous = app.navigationBars.buttons.element(boundBy: 0)
-            guard previous.exists else { XCTFail("Learning menu missing"); return }
-            previous.tap()
-        }
-        app.buttons["menu-" + path].tap()
+        returnToMenu("学习")
+        tapMenuItem(path)
     }
     private func openProfile() {
-        app.tabBars.buttons["工具"].tap()
+        returnToMenu("工具")
+        tapMenuItem("/settings")
+    }
+    private func returnToMenu(_ title: String) {
+        app.tabBars.buttons[title].tap()
         for _ in 0..<8 {
-            if app.buttons["menu-/settings"].waitForExistence(timeout: 1) { break }
+            if app.navigationBars[title].waitForExistence(timeout: 1) { return }
             let previous = app.navigationBars.buttons.element(boundBy: 0)
-            guard previous.exists else { XCTFail("Tools menu missing"); return }
+            guard previous.exists else { break }
             previous.tap()
         }
-        app.buttons["menu-/settings"].tap()
+        XCTFail("Menu missing: " + title + "\n" + app.debugDescription)
+    }
+    private func tapMenuItem(_ path: String) {
+        let item = app.buttons["menu-" + path]
+        // List lazily creates offscreen rows, especially on SE with large text.
+        // An absent row doesn't mean the menu has another page on its stack.
+        for _ in 0..<10 {
+            if item.exists {
+                let frame = item.frame
+                if frame.width > 0, frame.height > 0,
+                   frame.minY >= app.navigationBars.firstMatch.frame.maxY,
+                   frame.maxY <= app.tabBars.firstMatch.frame.minY {
+                    item.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+                    return
+                }
+            }
+            app.swipeUp(velocity: .slow)
+        }
+        XCTFail("Menu row unreachable: " + path + "\n" + app.debugDescription)
     }
     private func tapIdentifiedElement(_ id: String) {
         let item = app.descendants(matching: .any).matching(identifier: id).firstMatch
