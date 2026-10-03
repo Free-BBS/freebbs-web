@@ -24,7 +24,7 @@ App Store Connect 应用记录：FREE-BBS，Apple ID `6818750003`，Team `Q83556
 
 构建为版本 `1.0.0`、build `1`，Xcode `27.0`（`27A266a`）、SDK `iphoneos27.0`。主图标为原生分层 `FreeBBSIcon.icon`（绵羊与知识轨道）。automatic signing 的 Archive、Cloud Managed Apple Distribution 导出与上传均成功；签名具备 `beta-reports-active`，`get-task-allow` 为 false。
 
-2026-10-03 17:13 CST，Xcode 返回 `Upload succeeded` 和 `EXPORT SUCCEEDED`，确认 Apple 已接收包并开始处理。仅用于内部 TestFlight：导出参数 `testFlightInternalTestingOnly=true`，没有提交正式审核或发送测试邀请。Apple 处理完成后的可用性须在 [TestFlight](https://appstoreconnect.apple.com/teams/b6657e16-3de4-4dd1-acf0-711b662c81c3/apps/6818750003/testflight) 核实。
+2026-10-03 17:13 CST，Xcode 返回 `Upload succeeded` 和 `EXPORT SUCCEEDED`。随后在 [TestFlight](https://appstoreconnect.apple.com/teams/b6657e16-3de4-4dd1-acf0-711b662c81c3/apps/6818750003/testflight) 核实 Apple 处理完成，版本 1.0.0、构建 1 显示「内部」「准备测试」，有效期 90 天。构建 ID 为 `cf68eff7-e3f6-467f-bfae-bc922ad281de`。仅用于内部 TestFlight：导出参数 `testFlightInternalTestingOnly=true`，没有提交正式审核或发送测试邀请。截图证据 `../artifacts/testflight-ready.png` 仅保存在本机，未提交 Git。
 
 本地生成证据在 `../artifacts/`（Git 忽略）：`FreeBBS-Sheep-Final.xcarchive`、`sheep-export/FreeBBS.ipa`、`ios27-archive.log`、`ios27-export.log`、`testflight-upload.log`、`SDK27ReviewTests.xcresult`、`sdk27-test-summary.json`。不提交签名材料、账号密码或私钥。
 
