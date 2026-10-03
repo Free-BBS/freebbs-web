@@ -37,7 +37,7 @@ for name in ['FreeBBS','FreeBBSTests','FreeBBSUITests']:
     source_files = [file_ref(str(p.relative_to(ROOT))) for p in sorted((ROOT/name).rglob('*.swift'))]
     resource_files = []
     if name == 'FreeBBS':
-        resource_files = [file_ref('FreeBBS/Resources/'+s) for s in ['Assets.xcassets','FreeBBSIcon.icon','PrivacyInfo.xcprivacy','PrivacyPolicy.md','CommunityAgreement.md','RichContent.html','RendererLicenses.txt']]
+        resource_files = [file_ref('FreeBBS/Resources/'+s) for s in ['Assets.xcassets','FreeBBSIcon.icon','PrivacyInfo.xcprivacy','PrivacyPolicy.md','CommunityAgreement.md','RichContent.html','RendererLicenses.txt','ToolPreview.html','NativeCircuitViewport.js']]
     children = source_files + resource_files
     groups.append(add('group:'+name,'PBXGroup', name=name, children=[ref(v) for v in children], sourceTree='<group>'))
     source_build = [add('build:'+name+':'+v,'PBXBuildFile',fileRef=ref(v)) for v in source_files]

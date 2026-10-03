@@ -176,7 +176,7 @@ struct ToolSandboxView: UIViewRepresentable {
         let configuration = WKWebViewConfiguration(); configuration.websiteDataStore = .nonPersistent()
         let web = WKWebView(frame: .zero, configuration: configuration)
         web.navigationDelegate = context.coordinator
-        web.loadHTMLString(RichContentEngine.document, baseURL: nil)
+        web.loadHTMLString(try! String(contentsOf: Bundle.main.url(forResource: "ToolPreview", withExtension: "html")!, encoding: .utf8), baseURL: nil)
         return web
     }
     func updateUIView(_ web: WKWebView, context: Context) {
@@ -191,7 +191,7 @@ struct ToolSandboxView: UIViewRepresentable {
             guard ready else { return }
             web.evaluateJavaScript("document.documentElement.style.colorScheme = \(WebContentPolicy.json(dark ? "dark" : "light"))", completionHandler: nil)
             guard key != html else { return }
-            key = html
+            let renderedHTML = html
             web.callAsyncJavaScript("""
             document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
             document.body.style.cssText = 'margin:0;padding:0;overflow:hidden';
@@ -201,7 +201,13 @@ struct ToolSandboxView: UIViewRepresentable {
             frame.style.cssText = 'border:0;width:100%;height:100dvh;display:block';
             frame.srcdoc = FreeBbsToolEmbeds.sandboxDocument(html,true);
             document.body.append(frame);
-            """, arguments: ["html":html, "dark":dark], in: nil, in: .page) { _ in }
+            """, arguments: ["html":html, "dark":dark], in: nil, in: .page) { [weak self] result in
+                if case .success = result, self?.html == renderedHTML { self?.key = renderedHTML }
+            }
+        }
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            ready = false; key = ""
+            webView.reload()
         }
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
             let url = action.request.url?.absoluteString ?? ""

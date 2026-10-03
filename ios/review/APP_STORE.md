@@ -9,7 +9,7 @@
 | 名称 | FREE-BBS |
 | Bundle ID | cn.free-bbs.app |
 | Team ID | Q83556V27Y |
-| 版本/构建 | 1.0.0 / 4 |
+| 版本/构建 | 1.0.0 / 7 |
 | 设备 | iPhone |
 | 最低版本 | iOS 26.0 |
 | 主语言 | 简体中文 |
@@ -19,7 +19,7 @@
 | 支持 URL | https://www.free-bbs.cn/mobile/support.html |
 | Apple ID | 6818750003 |
 
-Bundle ID 和应用记录已在 Apple 账号中确认。已完成 iOS 27 SDK 签名 Archive 和分发导出，build 4 已可内部 TestFlight 测试，build 6 包含匿名作者字段与 iOS 26 兼容修复，上传状态见本机证据；具体部署和上传证据见 `DEPLOYMENT.md`。隐私政策仍有待运营方确认的主体、AI 数据处理和期限，正式上架前须完善。
+Bundle ID 和应用记录已在 Apple 账号中确认。已完成 iOS 27 SDK 签名 Archive 和分发导出，build 6 已可内部 TestFlight 测试；build 7 增加完整电路画布、可见的新元件及参数面板，最终上传状态见本机证据；具体部署和上传证据见 `DEPLOYMENT.md`。隐私政策仍有待运营方确认的主体、AI 数据处理和期限，正式上架前须完善。
 
 ## 中文文案草稿
 

@@ -40,8 +40,12 @@ for name in ['circuit-embeds.js', 'tool-embeds.js', 'lab-results.js']:
 code += '\n' + (ROOT / 'ios/WebSource/reader.js').read_text()
 html = '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><style>' + css + '</style></head><body><article id="content" aria-label="正文"></article><script>' + code.replace('</script', '<\\/script') + '</script></body></html>\n'
 licenses = '\n\n'.join((ROOT / p).read_text() for p in ['node_modules/marked/LICENSE.md', 'node_modules/katex/LICENSE', 'node_modules/@highlightjs/cdn-assets/LICENSE'])
-outputs = {DEST: html, ROOT / 'ios/FreeBBS/Resources/RendererLicenses.txt': licenses}
-manifest = {'source': 'public/app.js selected Markdown functions; public embed modules', 'engineSHA256': hashlib.sha256(engine.encode()).hexdigest(), 'documentSHA256': hashlib.sha256(html.encode()).hexdigest(), 'packageLockSHA256': hashlib.sha256((ROOT / 'package-lock.json').read_bytes()).hexdigest()}
+tool_code = (ROOT / 'public/tool-embeds.js').read_text()
+tool_host = '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"></head><body><script>' + tool_code.replace('</script', '<\\/script') + '</script></body></html>\n'
+outputs = {DEST: html, ROOT / 'ios/FreeBBS/Resources/RendererLicenses.txt': licenses,
+           ROOT / 'ios/FreeBBS/Resources/ToolPreview.html': tool_host,
+           ROOT / 'ios/FreeBBS/Resources/NativeCircuitViewport.js': (ROOT / 'ios/WebSource/native-circuit-viewport.js').read_text()}
+manifest = {'source': 'public/app.js selected Markdown functions; public embed modules; native circuit camera and tool preview', 'engineSHA256': hashlib.sha256(engine.encode()).hexdigest(), 'documentSHA256': hashlib.sha256(html.encode()).hexdigest(), 'packageLockSHA256': hashlib.sha256((ROOT / 'package-lock.json').read_bytes()).hexdigest(), 'nativeCircuitSHA256': hashlib.sha256(outputs[ROOT / 'ios/FreeBBS/Resources/NativeCircuitViewport.js'].encode()).hexdigest(), 'toolPreviewSHA256': hashlib.sha256(tool_host.encode()).hexdigest()}
 outputs[ROOT / 'ios/WebSource/manifest.json'] = json.dumps(manifest, indent=2) + '\n'
 for path, content in outputs.items():
     if '--check' in sys.argv:

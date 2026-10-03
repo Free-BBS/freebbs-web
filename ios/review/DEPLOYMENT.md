@@ -22,7 +22,7 @@
 
 App Store Connect 应用记录：FREE-BBS，Apple ID `6818750003`，Team `Q83556V27Y`，Bundle ID `cn.free-bbs.app`。
 
-最新内部构建为版本 `1.0.0`、build `4`，Xcode `27.0`（`27A266a`）、SDK `iphoneos27.0`。原生分层绵羊图标保留；本轮加入统一 SwiftUI 页面、原生实验室工作区、讨论最新/热门排序与按账号在本机记住 Max 同意。automatic signing Archive、Cloud Managed Apple Distribution 导出及上传成功。
+此前已确认的内部构建为版本 `1.0.0`、build `4`，Xcode `27.0`（`27A266a`）、SDK `iphoneos27.0`。原生分层绵羊图标保留；本轮加入统一 SwiftUI 页面、原生实验室工作区、讨论最新/热门排序与按账号在本机记住 Max 同意。automatic signing Archive、Cloud Managed Apple Distribution 导出及上传成功。
 
 2026-10-03 18:49:59 CST，Xcode 返回 `Upload succeeded` 和 `EXPORT SUCCEEDED`。随后在 [TestFlight](https://appstoreconnect.apple.com/teams/b6657e16-3de4-4dd1-acf0-711b662c81c3/apps/6818750003/testflight/ios/433e4b75-9f1c-4a8b-80e3-78231542d64f) 核实构建 4 显示「内部」「正在测试」，有效期 90 天，并属于已有的内部测试群组。没有新增测试人员或提交正式审核。
 
@@ -41,3 +41,11 @@ App Store Connect 应用记录：FREE-BBS，Apple ID `6818750003`，Team `Q83556
 ## build 6 兼容性修复
 
 build 6 包含 build 5 的匿名作者修复，并修复 Swift SDK 27 在 iOS 26 runtime 中 `AppStore` 的隐式隔离析构崩溃；API 客户端同样使用无额外清理逻辑的非隔离析构。25 项单元测试通过，小屏 7 项界面流程通过。最终签名构建、上传和可测试状态以本机 `build6-archive.log`、`build6-upload.log`、`testflight-build6-ready.png` 及 `final-ci-summary.json` 为证。
+
+## build 7 电路编辑与预览
+
+移除网页画布的重复安全区域，画布铺满原生导航与工具栏之间的空间。SwiftUI 底部提供「元件」「运行」及停止，刷新移入操作菜单；缩放和状态提示使用紧凑浮层。原生相机随竖屏/横屏改变视口，使用均匀缩放和延展网格；载入已有电路时适配内容，添加屏幕外的新元件会移动视野，重置缩放保留当前中心，并保留双指移动/缩放、导线编辑与完整电路按钮。相机随 App 离线提供，仅在受信任的电路页面安装，无需修改生产网页。
+
+添加元件后不自动遮挡画布，点击元件再打开适配手机的参数面板，输入框保持可见。工具预览改为只载入共享 sandbox 引擎的轻量页面，保留 opaque iframe、阻断网络与无账号/消息桥的隔离；进程终止后重新加载，不把失败渲染记录为完成。
+
+本机截图与测试见 `circuit-native-review/`、`Build7ClientVerification.xcresult` 和 `build7-client-verification.log`（26 项单元与 2 项界面流程，28 项全部通过）。在线电路检查仅加载公开页面与本地临时草稿，没有创建生产账号、发帖或保存线上电路；该项复查源代码作为本机证据保存，不加入依赖网络的常规 CI。签名上传及 Apple 处理结果见 `build7-archive.log`、`build7-upload.log`、`testflight-build7-ready.png`、`final-ci-summary.json`。正式上架门槛保持不变。

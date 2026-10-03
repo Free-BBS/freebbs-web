@@ -39,10 +39,104 @@ enum WebContentPolicy {
           const token = \(json(token ?? ""));
           if (token) localStorage.setItem('free_bbs_auth_token', token);
           else localStorage.removeItem('free_bbs_auth_token');
+          if (['/circuit','/circuit-challenge'].includes(location.pathname)) {
+            \(nativeViewportScript)
+          }
           localStorage.setItem('free_bbs_theme_mode', \(json(dark ? "dark" : "light")));
         })();
         """
     }
+    // The native host already owns safe areas and toolbars; the web canvas owns none.
+    static let nativeCircuitCSS = """
+    html.freebbs-native-lab, html.freebbs-native-lab body { height:100%; overflow:hidden!important; }
+    html.freebbs-native-lab body > .page-shell { height:100dvh!important; min-height:0!important; }
+    html.freebbs-native-lab body .page-shell > :is(.circuit-main,.challenge-main) {
+      position:fixed!important; inset:0!important; height:100%!important; min-height:0!important;
+      padding:0!important; margin:0!important; max-width:none!important; overflow:hidden;
+    }
+    html.freebbs-native-lab body .page-shell > :is(.circuit-main,.challenge-main)::before { display:none!important; }
+    html.freebbs-native-lab body .page-shell :is(.circuit-workspace,.circuit-editor-layout,.circuit-editor-content,.challenge-layout,.challenge-workbench,.challenge-build-area) { display:contents!important; }
+    html.freebbs-native-lab body .page-shell :is(.circuit-canvas-panel,.challenge-canvas-wrap) {
+      position:absolute!important; inset:0!important; display:flex!important; flex-direction:column;
+      min-height:0!important; height:auto!important; border:0!important; border-radius:0!important;
+    }
+    html.freebbs-native-lab body .page-shell :is(.circuit-stage,.challenge-stage) {
+      flex:1; width:100%!important; height:100%!important; min-height:0!important; max-height:none!important;
+    }
+    html.freebbs-native-lab body .page-shell :is(.circuit-stage,.challenge-stage) > svg {
+      width:100%!important; height:100%!important; min-height:0!important; min-width:0!important;
+    }
+    html.freebbs-native-lab body .page-shell :is(.circuit-heading,.circuit-document-heading,.circuit-palette,.circuit-canvas-toolbar,.circuit-viewport-controls,.circuit-canvas-note,.circuit-analysis,.circuit-workbench-actions,.circuit-results,.circuit-sharing,.circuit-model-notes,.challenge-header,.challenge-levels,.challenge-ranking,.challenge-brief,.challenge-waveboard,.challenge-palette,.challenge-inspector,.challenge-canvas-toolbar,.challenge-viewport,#challenge-progress,#challenge-admin-form) { display:none!important; }
+    html.freebbs-native-lab body :is(#circuit-run,#circuit-stop,#challenge-run,.circuit-mobile-heading,.circuit-mobile-dock) { display:none!important; }
+    html.freebbs-native-lab body .circuit-mobile-zoom {
+      display:block!important; top:12px!important; right:12px!important; min-height:36px!important;
+      padding:7px 12px!important; border-radius:18px!important; font:13px -apple-system,BlinkMacSystemFont,sans-serif!important;
+      font-variant-numeric:tabular-nums; color:var(--ui-text); background:var(--ui-surface);
+    }
+    html.freebbs-native-lab body .circuit-mobile-feedback {
+      position:absolute!important; left:12px!important; right:12px!important; bottom:12px!important;
+      height:auto!important; min-height:0!important; max-height:56px!important; padding:8px 12px!important;
+      border:0!important; border-radius:14px!important; background:var(--ui-surface); overflow:auto;
+    }
+    html.freebbs-native-lab body .native-circuit-empty {
+      position:absolute; left:50%; top:44%; transform:translate(-50%,-50%); width:min(280px,80%);
+      text-align:center; pointer-events:none; font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+      color:var(--ui-text); background:var(--ui-page); padding:16px; border-radius:18px;
+    }
+    html.freebbs-native-lab body .native-circuit-empty strong { font-size:18px; font-weight:600; }
+    html.freebbs-native-lab body .native-circuit-empty p { margin-top:8px; font-size:14px; line-height:1.5; color:var(--ui-muted); }
+    html.freebbs-native-lab body .native-circuit-empty[hidden] { display:none!important; }
+    html.freebbs-native-lab body .circuit-parameter-popover {
+      top:auto!important; bottom:12px!important; left:12px!important; right:12px!important;
+      width:calc(100% - 24px)!important; max-height:min(65dvh,360px)!important;
+      border-radius:20px; overflow:hidden; font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+    }
+    html.freebbs-native-lab body .circuit-parameter-popover[hidden] { display:none!important; }
+    html.freebbs-native-lab body .circuit-parameter-popover-arrow { display:none; }
+    html.freebbs-native-lab body .circuit-parameter-popover-heading { padding:16px; }
+    html.freebbs-native-lab body .circuit-parameter-popover-heading p { font-size:13px; }
+    html.freebbs-native-lab body .circuit-parameter-popover-heading h3 { font-size:17px; }
+    html.freebbs-native-lab body .circuit-parameter-popover-fields { min-height:100px; padding:12px 16px; }
+    html.freebbs-native-lab body .circuit-parameter-popover-fields label { font-size:15px; }
+    html.freebbs-native-lab body .circuit-parameter-popover-fields :is(input,select) { min-height:44px; font-size:16px; }
+    html.freebbs-native-lab body .circuit-parameter-popover-footer { font-size:12px; padding:8px 16px; }
+    html.freebbs-native-lab body .challenge-main.is-empty #challenge-empty { inset:12px!important; }
+    """
+    static let nativeViewportScript = """
+    \(try! String(contentsOf: Bundle.main.url(forResource: "NativeCircuitViewport", withExtension: "js")!, encoding: .utf8))
+    document.documentElement.classList.add('freebbs-native-lab');
+    // Keep the phone's sheet controls available even when its landscape width exceeds 900pt.
+    const nativeMatchMedia = window.matchMedia.bind(window);
+    window.matchMedia = query => nativeMatchMedia(/^\\(max-width:\\s*900px\\)$/.test(query) ? '(min-width: 0px)' : query);
+    """
+    static let nativeCircuitScript = """
+    (() => {
+      document.documentElement.classList.add('freebbs-native-lab');
+      const style = document.createElement('style'); style.textContent = `\(nativeCircuitCSS)`;
+      document.head.append(style);
+      const stage = document.querySelector('.circuit-stage,.challenge-stage');
+      if (!stage) return;
+      let guide;
+      if (location.pathname === '/circuit' && !new URLSearchParams(location.search).has('cid')) {
+        guide = document.createElement('div'); guide.className='native-circuit-empty';
+        guide.innerHTML='<strong>从一个元件开始</strong><p>添加元件与连线，运行后查看波形。</p>';
+        stage.parentElement.append(guide);
+      }
+      let componentIDs = new Set();
+      const update = () => {
+        const parts = [...stage.querySelectorAll('[data-component-id]')];
+        const added = parts.some(part => !componentIDs.has(part.dataset.componentId));
+        componentIDs = new Set(parts.map(part=>part.dataset.componentId));
+        // Adding a part keeps the canvas clear; tapping it opens the parameter sheet.
+        if (added) window.FreeBbsCircuitParameterPopover?.hide();
+        const svg = stage.querySelector('svg');
+        // The bundled native camera fills both orientations and keeps symbol proportions exact.
+        if (svg && svg.getAttribute('preserveAspectRatio') !== 'xMidYMid meet') svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+        if (guide) guide.hidden = !!stage.querySelector('[data-component-id]');
+      };
+      update(); new MutationObserver(update).observe(stage,{childList:true,subtree:true});
+    })();
+    """
     static let mobileScript = """
     (() => {
       const style = document.createElement('style');
@@ -82,9 +176,7 @@ enum WebContentPolicy {
       };
       hideChrome();
       if (['/circuit','/circuit-challenge'].includes(location.pathname)) {
-        const nativeStyle = document.createElement('style');
-        nativeStyle.textContent = '#circuit-run,#circuit-stop,#challenge-run,.circuit-mobile-heading,.circuit-mobile-dock {display:none!important} .circuit-mobile-workspace {padding-bottom:0!important}';
-        document.head.append(nativeStyle);
+        \(nativeCircuitScript)
       }
       new MutationObserver(hideChrome).observe(document.body, {childList:true, subtree:true, attributes:true, attributeFilter:['class']});
     })();
@@ -128,6 +220,7 @@ struct LabDialog: Identifiable {
 struct LabExport: Identifiable { let id = UUID(); let url: URL }
 
 @MainActor @Observable final class LabBrowserState {
+    nonisolated deinit {}
     var webView: WKWebView?
     var loading = true
     var error: String?
@@ -171,6 +264,9 @@ struct CircuitWorkspaceView: View {
     @State private var parameters = false
     private var isChallenge: Bool { URL(string: destination.path, relativeTo: store.configuration.origin)?.path == "/circuit-challenge" }
     private var isCircuit: Bool { URL(string: destination.path, relativeTo: store.configuration.origin)?.path == "/circuit" }
+    private var actionColor: Color {
+        colorScheme == .dark ? Color(red: 0.34, green: 0.82, blue: 0.78) : Color(red: 0, green: 0.43, blue: 0.42)
+    }
     var body: some View {
         VStack(spacing: 0) {
             if browser.loading && !store.isDemo { ProgressView(value: browser.progress).tint(Palette.teal) }
@@ -189,7 +285,7 @@ struct CircuitWorkspaceView: View {
                     .id(store.sessionRevision).opacity(browser.error == nil ? 1 : 0)
                     .frame(maxWidth: .infinity, maxHeight: browser.error == nil ? .infinity : 0)
             }
-        }.background(Palette.canvas)
+        }.background(Palette.canvas).tint(Palette.teal)
             .navigationTitle(destination.title).navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .tabBar)
             .alert("实验室", isPresented: $browser.presentingDialog, presenting: browser.dialog) { dialog in
@@ -225,6 +321,8 @@ struct CircuitWorkspaceView: View {
                             Button("撤销", systemImage: "arrow.uturn.backward") { click("circuit-undo") }
                             Button("重做", systemImage: "arrow.uturn.forward") { click("circuit-redo") }
                             Button("重置缩放", systemImage: "arrow.up.left.and.arrow.down.right") { click("circuit-zoom-reset") }
+                            Button("显示完整电路", systemImage: "viewfinder") { fitCircuit() }
+                            Button("刷新工作区", systemImage: "arrow.clockwise") { browser.webView?.reload() }
                         } label: { Image(systemName: "ellipsis") }.disabled(browser.loading || store.isDemo).accessibilityLabel("电路操作")
                     } else if isChallenge {
                         Menu {
@@ -241,17 +339,27 @@ struct CircuitWorkspaceView: View {
                         Button { browser.webView?.goBack() } label: { Image(systemName: "chevron.backward") }
                             .disabled(!browser.canGoBack).accessibilityLabel("返回上一实验页面")
                     }
-                    Button { browser.error = nil; browser.webView?.reload() } label: { Image(systemName: "arrow.clockwise") }
-                        .accessibilityLabel("刷新实验室")
+                    if !isCircuit {
+                        Button { browser.error = nil; browser.webView?.reload() } label: { Image(systemName: "arrow.clockwise") }
+                            .accessibilityLabel("刷新实验室")
+                    }
                 }
                 if isCircuit || isChallenge {
                     ToolbarItemGroup(placement: .bottomBar) {
-                        Button("运行仿真", systemImage: "play.fill") { click(isCircuit ? "circuit-run" : "challenge-run") }.disabled(browser.loading || store.isDemo)
-                        if isCircuit { Button("停止", systemImage: "stop.fill") { click("circuit-stop") }.disabled(browser.loading || store.isDemo) }
+                        if isCircuit {
+                            Button { click("circuit-component-add") } label: { HStack(spacing: 6) { Image(systemName: "plus"); Text("元件") }.foregroundStyle(actionColor) }
+                                .disabled(browser.loading || store.isDemo).accessibilityIdentifier("addCircuitComponent")
+                        }
+                        Button { click(isCircuit ? "circuit-run" : "challenge-run") } label: { HStack(spacing: 6) { Image(systemName: "play.fill"); Text("运行") }.foregroundStyle(actionColor) }
+                            .disabled(browser.loading || store.isDemo).accessibilityIdentifier("runCircuit")
+                        if isCircuit { Button { click("circuit-stop") } label: { Image(systemName: "stop.fill").foregroundStyle(actionColor) }.accessibilityLabel("停止仿真").disabled(browser.loading || store.isDemo) }
                         else { Button("重置", systemImage: "arrow.counterclockwise") { click("challenge-reset") }.disabled(browser.loading || store.isDemo) }
                     }
                 }
             }
+    }
+    private func fitCircuit() {
+        browser.webView?.evaluateJavaScript("document.getElementById('circuit-stage')?.dispatchEvent(new Event('freebbs-native-fit'))", completionHandler: nil)
     }
     private func panel(_ name: String) {
         let sidebar = name == "parameters" && isCircuit
@@ -282,6 +390,7 @@ private struct LabWebView: UIViewRepresentable {
         web.isOpaque = false; web.backgroundColor = .clear
         web.allowsBackForwardNavigationGestures = true
         web.scrollView.keyboardDismissMode = .interactive
+        web.scrollView.contentInsetAdjustmentBehavior = .never
         context.coordinator.progress = web.observe(\.estimatedProgress, options: [.new]) { [weak browser] web, _ in
             Task { @MainActor [weak web] in
                 if let web { browser?.progress = web.estimatedProgress }

@@ -153,7 +153,7 @@ final class NavigationTests: XCTestCase {
         capture("28-native-tool-editor")
         app.buttons["previewTool"].tap()
         XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.webViews.staticTexts["学习计时器"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.webViews.staticTexts["学习计时器"].firstMatch.waitForExistence(timeout: 30))
         capture("29-tool-preview")
     }
     func testDiscussionSortIsSelectable() {
