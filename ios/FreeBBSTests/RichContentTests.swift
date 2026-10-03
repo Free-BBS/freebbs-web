@@ -21,7 +21,9 @@ final class RichContentTests: XCTestCase, WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loaded?.fulfill(); loaded = nil }
     func testProductionReaderLoadsBundledDocumentAndRecoversItsBody() async throws {
         var measuredHeight = 48.0
-        var state = RichContentLoadState.loading
+        // SwiftUI can retain the previous ready state when an account/session
+        // change replaces only the representable's identity.
+        var state = RichContentLoadState.ready
         var openedLinks: [String] = []
         let source = "## 实际正文\n\n$E=mc^2$\n\n| 时间 | 电压 |\n| --- | --- |\n| 0 | 1 |"
         let reader = RichWebView(source: source, origin: origin, token: nil, dark: false, fontSize: 17,

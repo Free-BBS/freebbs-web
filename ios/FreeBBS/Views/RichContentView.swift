@@ -108,6 +108,8 @@ struct RichWebView: UIViewRepresentable {
         private var recoveryTask: Task<Void, Never>?
         private var loadingDeadline: Task<Void, Never>?
         private var invalidated = false
+        private var documentRendered = false
+        private var loadGeneration = 0
         init(_ parent: RichWebView) { self.parent = parent }
         func invalidate() {
             invalidated = true
@@ -117,6 +119,11 @@ struct RichWebView: UIViewRepresentable {
         func loadDocument(_ web: WKWebView) {
             guard !invalidated else { return }
             ready = false; renderedKey = ""
+            documentRendered = false; loadGeneration += 1
+            Task { @MainActor [weak self] in
+                guard let self, !self.invalidated, !self.documentRendered else { return }
+                self.parent.loadState = .loading
+            }
             guard let url = RichContentEngine.documentURL else {
                 Task { @MainActor [weak self] in self?.parent.loadState = .failed }
                 return
@@ -128,7 +135,7 @@ struct RichWebView: UIViewRepresentable {
             loadingDeadline?.cancel()
             loadingDeadline = Task { @MainActor [weak self, weak web] in
                 do { try await Task.sleep(for: .seconds(20)) } catch { return }
-                guard let self, let web, !self.invalidated, self.parent.loadState == .loading else { return }
+                guard let self, let web, !self.invalidated, !self.documentRendered else { return }
                 self.recover(web)
             }
         }
@@ -157,6 +164,7 @@ struct RichWebView: UIViewRepresentable {
             let key = parent.source + "|\(parent.dark)|\(parent.fontSize)|\(parent.allowReferences)|\(parent.readingStyle)"
             guard ready, key != renderedKey else { return }
             renderedKey = key
+            let generation = loadGeneration
             web.callAsyncJavaScript("""
                 window.renderNativeContent(source, origin, token, dark, fontSize, allowReferences);
                 document.body.style.fontFamily = bodyFamily;
@@ -165,9 +173,10 @@ struct RichWebView: UIViewRepresentable {
                 arguments: ["source":parent.source, "origin":parent.origin.absoluteString, "token":parent.token ?? "", "dark":parent.dark,
                             "fontSize":parent.fontSize * parent.readingStyle.scale, "allowReferences":parent.allowReferences,
                             "bodyFamily":parent.readingStyle.bodyFamily, "headingFamily":parent.readingStyle.headingFamily], in: nil, in: .page) { [weak self] result in
-                guard let self, !self.invalidated, self.renderedKey == key else { return }
+                guard let self, !self.invalidated, self.loadGeneration == generation, self.renderedKey == key else { return }
                 switch result {
                 case .success:
+                    self.documentRendered = true
                     self.loadingDeadline?.cancel(); self.loadingDeadline = nil
                     self.parent.loadState = .ready
                 case .failure: self.recover(web)
@@ -176,7 +185,7 @@ struct RichWebView: UIViewRepresentable {
         }
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
             // Opaque tool frames have no access to native clipboard, navigation or sizing.
-            guard message.frameInfo.isMainFrame, let data = message.body as? [String: Any] else { return }
+            guard !invalidated, message.frameInfo.isMainFrame, let data = message.body as? [String: Any] else { return }
             if data["type"] as? String == "height", let value = data["value"] as? Double, value.isFinite {
                 let next = max(24, min(200000, value))
                 if abs(parent.height - next) > 1 { parent.height = next }
