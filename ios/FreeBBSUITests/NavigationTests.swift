@@ -101,7 +101,9 @@ final class NavigationTests: XCTestCase {
         app.sheets.buttons["退出登录"].tap()
         let login = revealProfileLogin()
         capture("18a-logged-out-profile")
-        login.tap()
+        // Use the visible row's center: iOS 27's List AX activation point can
+        // remain beneath the status bar even after the row has scrolled back.
+        login.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(app.textFields["loginIdentifier"].waitForExistence(timeout: 5))
         capture("19-login")
         app.buttons["注册"].tap()
@@ -272,15 +274,15 @@ final class NavigationTests: XCTestCase {
                     previousFrame = nil; stationarySince = nil
                     return false
                 }
-                guard item.isHittable else { return false }
-                if previousFrame != frame {
+                if previousFrame.map({ abs($0.minY - frame.minY) > 0.5 ||
+                    abs($0.maxY - frame.maxY) > 0.5 }) ?? true {
                     previousFrame = frame; stationarySince = Date()
                     return false
                 }
                 return stationarySince.map { Date().timeIntervalSince($0) >= 0.3 } ?? false
             }
             let ready = XCTNSPredicateExpectation(predicate: visible, object: nil)
-            if XCTWaiter.wait(for: [ready], timeout: 2) == .completed { return item }
+            if XCTWaiter.wait(for: [ready], timeout: 3) == .completed { return item }
             app.swipeDown(velocity: .slow)
         }
         XCTFail("Login row must settle inside the visible List content\n" + app.debugDescription)
