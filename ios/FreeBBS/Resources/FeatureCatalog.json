@@ -1,0 +1,591 @@
+{
+  "entries": [
+    {
+      "path": "/",
+      "title": "首页",
+      "group": "首页",
+      "symbol": "house",
+      "detail": "课程、签到与讨论动态",
+      "listed": false,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/world",
+      "title": "学习世界",
+      "group": "学习世界",
+      "symbol": "globe",
+      "detail": "知识岛、完整课程地图与学习记录",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/course",
+      "title": "课程工作区",
+      "group": "学习世界",
+      "symbol": "books.vertical",
+      "detail": "课程地图、学习进度、资料上传与管理",
+      "listed": false,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/knowledge",
+      "title": "知识点工作区",
+      "group": "学习世界",
+      "symbol": "point.3.connected.trianglepath.dotted",
+      "detail": "学习概览、正文、编辑、历史与讨论",
+      "listed": false,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/course-map-editor",
+      "title": "编辑课程地图",
+      "group": "学习世界",
+      "symbol": "pencil.and.outline",
+      "detail": "知识结点、连接和地图背景",
+      "listed": false,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/search",
+      "title": "全站搜索",
+      "group": "学习世界",
+      "symbol": "magnifyingglass",
+      "detail": "跨课程、知识点与讨论查找内容",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/workbench",
+      "title": "我的工作台",
+      "group": "我的工作台",
+      "symbol": "calendar",
+      "detail": "计划表、校园连接、课程公告与作业",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/surveys",
+      "title": "活动报名（试用）",
+      "group": "活动报名（试用）",
+      "symbol": "ticket",
+      "detail": "报名、回执及抽签结果",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/discussion",
+      "title": "讨论区",
+      "group": "讨论区",
+      "symbol": "bubble.left.and.bubble.right",
+      "detail": "发表、回复、匿名、互动与版主管理",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/publish",
+      "title": "发表讨论",
+      "group": "讨论区",
+      "symbol": "square.and.pencil",
+      "detail": "编辑、预览及实验和工具分享",
+      "listed": false,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/aichat",
+      "title": "问问 Max",
+      "group": "问问 Max",
+      "symbol": "sparkles",
+      "detail": "历史对话、模型、附件与创作工具",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/markdown-editor",
+      "title": "Markdown 编辑器",
+      "group": "学习世界",
+      "symbol": "text.document",
+      "detail": "知识点文档编辑、公式预览与图片上传",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/creative-workshop",
+      "title": "创意工坊",
+      "group": "创意工坊",
+      "symbol": "paintbrush",
+      "detail": "创意工坊的规划与介绍",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/pbl",
+      "title": "PBL 计划",
+      "group": "PBL计划",
+      "symbol": "person.3",
+      "detail": "项目学习的规划与说明",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/laboratory",
+      "title": "实验室",
+      "group": "实验室",
+      "symbol": "flask",
+      "detail": "代码、电路和工具工作区",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/circuits",
+      "title": "电路库",
+      "group": "实验室",
+      "symbol": "cpu",
+      "detail": "创建、打开、导入与管理电路",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/circuit",
+      "title": "电路实验室",
+      "group": "实验室",
+      "symbol": "cpu",
+      "detail": "电路编辑、Max 助手、版本与仿真",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/circuit-embed",
+      "title": "电路引用",
+      "group": "实验室",
+      "symbol": "link",
+      "detail": "查看被分享的电路及指定版本",
+      "listed": false,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/circuit-challenge",
+      "title": "电路挑战",
+      "group": "实验室",
+      "symbol": "bolt.badge.clock",
+      "detail": "关卡、目标波形与排行榜",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/code-lab",
+      "title": "代码实验室",
+      "group": "实验室",
+      "symbol": "curlybraces",
+      "detail": "各运行环境、汇编与实验结果",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/tool-workshop",
+      "title": "工具工坊",
+      "group": "实验室",
+      "symbol": "hammer",
+      "detail": "管理工具、AI 制作、版本和分享",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/profile",
+      "title": "个人主页",
+      "group": "个人与牧场",
+      "symbol": "person.crop.circle",
+      "detail": "公开资料、动态、徽章、签到记录与牧场",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/settings",
+      "title": "个人设置",
+      "group": "个人设置",
+      "symbol": "gearshape",
+      "detail": "头像、阅读样式、邮件通知、邮箱与学号",
+      "listed": true,
+      "admin": false,
+      "login": true,
+      "native": true
+    },
+    {
+      "path": "/electromagnetic",
+      "title": "电磁场商城",
+      "group": "个人与牧场",
+      "symbol": "bag",
+      "detail": "商城、兑换、赠送与道具",
+      "listed": true,
+      "admin": false,
+      "login": true,
+      "native": true
+    },
+    {
+      "path": "/inventory",
+      "title": "仓库与钱包",
+      "group": "个人与牧场",
+      "symbol": "shippingbox",
+      "detail": "物品、使用、出售与钱包账本",
+      "listed": true,
+      "admin": false,
+      "login": true,
+      "native": true
+    },
+    {
+      "path": "/ranch",
+      "title": "电子牧场",
+      "group": "个人与牧场",
+      "symbol": "leaf",
+      "detail": "牧场互动、养成与学习",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/ranch-dye",
+      "title": "羊的染坊",
+      "group": "个人与牧场",
+      "symbol": "paintpalette",
+      "detail": "羊群配色、造型与设计",
+      "listed": true,
+      "admin": false,
+      "login": true,
+      "native": true
+    },
+    {
+      "path": "/ranch-gallery",
+      "title": "羊群广场",
+      "group": "个人与牧场",
+      "symbol": "person.2",
+      "detail": "浏览大家的牧场并互动",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/guide",
+      "title": "Max 探索手册",
+      "group": "帮助",
+      "symbol": "book.closed",
+      "detail": "功能引导与完成奖励",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/about",
+      "title": "关于 FREE-BBS",
+      "group": "帮助",
+      "symbol": "info.circle",
+      "detail": "平台介绍与相关信息",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/staff",
+      "title": "工作人员",
+      "group": "帮助",
+      "symbol": "person.2.badge.gearshape",
+      "detail": "工作人员及公开联系方式",
+      "listed": true,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/login",
+      "title": "登录",
+      "group": "账号",
+      "symbol": "person.crop.circle",
+      "detail": "登录和互动验证",
+      "listed": false,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/register",
+      "title": "注册",
+      "group": "账号",
+      "symbol": "person.badge.plus",
+      "detail": "邮箱、白名单与互动验证",
+      "listed": false,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/remake",
+      "title": "找回密码",
+      "group": "账号",
+      "symbol": "key",
+      "detail": "邮箱验证与密码恢复",
+      "listed": false,
+      "admin": false,
+      "login": false,
+      "native": true
+    },
+    {
+      "path": "/adminusers",
+      "title": "用户管理",
+      "group": "管理",
+      "symbol": "person.2.badge.key",
+      "detail": "账号、学号绑定与白名单",
+      "listed": true,
+      "admin": true,
+      "login": true,
+      "native": true
+    },
+    {
+      "path": "/system-settings",
+      "title": "管理员端",
+      "group": "管理",
+      "symbol": "gearshape.2",
+      "detail": "管理功能总览",
+      "listed": true,
+      "admin": true,
+      "login": true,
+      "native": true
+    },
+    {
+      "path": "/system-settings/announcements",
+      "title": "公告管理",
+      "group": "管理",
+      "symbol": "megaphone",
+      "detail": "发布、修改和管理公告",
+      "listed": true,
+      "admin": true,
+      "login": true,
+      "native": true
+    },
+    {
+      "path": "/system-settings/rewards",
+      "title": "奖励方案",
+      "group": "管理",
+      "symbol": "gift",
+      "detail": "奖励发放与记录",
+      "listed": true,
+      "admin": true,
+      "login": true,
+      "native": true
+    },
+    {
+      "path": "/system-settings/model",
+      "title": "模型与密钥",
+      "group": "管理",
+      "symbol": "key.horizontal",
+      "detail": "模型配置及 API key",
+      "listed": true,
+      "admin": true,
+      "login": true,
+      "native": true
+    },
+    {
+      "path": "/system-settings/course-materials",
+      "title": "课程资料管理",
+      "group": "管理",
+      "symbol": "folder",
+      "detail": "资料根目录、文件与权限",
+      "listed": true,
+      "admin": true,
+      "login": true,
+      "native": true
+    },
+    {
+      "path": "/system-settings/surveys",
+      "title": "报名活动管理",
+      "group": "管理",
+      "symbol": "checklist",
+      "detail": "活动、报名详情与抽签",
+      "listed": true,
+      "admin": true,
+      "login": true,
+      "native": true
+    }
+  ],
+  "aliases": {
+    "/about.html": "/about",
+    "/staff.html": "/staff",
+    "/laboratory.html": "/laboratory",
+    "/code-lab.html": "/code-lab",
+    "/pbl.html": "/pbl",
+    "/creative-workshop.html": "/creative-workshop",
+    "/search.html": "/search",
+    "/surveys.html": "/surveys",
+    "/system-settings-surveys.html": "/system-settings/surveys",
+    "/adminusers.html": "/adminusers",
+    "/aichat.html": "/aichat",
+    "/course.html": "/course",
+    "/course-map-editor.html": "/course-map-editor",
+    "/circuit.html": "/circuit",
+    "/circuit-embed.html": "/circuit-embed",
+    "/circuit-challenge.html": "/circuit-challenge",
+    "/discussion.html": "/discussion",
+    "/publish.html": "/publish",
+    "/electromagnetic.html": "/electromagnetic",
+    "/inventory.html": "/inventory",
+    "/guide.html": "/guide",
+    "/tool-workshop.html": "/tool-workshop",
+    "/knowledge.html": "/knowledge",
+    "/markdown-editor.html": "/markdown-editor",
+    "/login.html": "/login",
+    "/profile.html": "/profile",
+    "/ranch.html": "/ranch",
+    "/ranch-dye.html": "/ranch-dye",
+    "/ranch-gallery.html": "/ranch-gallery",
+    "/register.html": "/register",
+    "/remake.html": "/remake",
+    "/settings.html": "/settings",
+    "/system-settings.html": "/system-settings",
+    "/system-settings-announcements.html": "/system-settings/announcements",
+    "/system-settings-rewards.html": "/system-settings/rewards",
+    "/system-settings-course-materials.html": "/system-settings/course-materials",
+    "/system-settings-model.html": "/system-settings/model",
+    "/workbench.html": "/workbench",
+    "/world.html": "/world",
+    "/index.html": "/"
+  },
+  "navigation": {
+    "primary": [
+      {
+        "path": "/",
+        "title": "首页",
+        "symbol": "house"
+      },
+      {
+        "path": "/discussion",
+        "title": "讨论",
+        "symbol": "bubble.left.and.bubble.right"
+      },
+      {
+        "path": "/publish",
+        "title": "",
+        "symbol": "square.and.pencil"
+      },
+      {
+        "path": "/world",
+        "title": "学习",
+        "symbol": "globe"
+      },
+      {
+        "path": "tools",
+        "title": "工具",
+        "symbol": "wrench.and.screwdriver"
+      }
+    ],
+    "create": [
+      {
+        "path": "/publish",
+        "title": "发帖",
+        "symbol": "square.and.pencil"
+      },
+      {
+        "path": "/aichat",
+        "title": "问问 Max",
+        "symbol": "sparkles"
+      }
+    ],
+    "learning": [
+      {
+        "path": "/world",
+        "title": "学习世界",
+        "symbol": "globe"
+      },
+      {
+        "path": "/laboratory",
+        "title": "实验室",
+        "symbol": "flask"
+      },
+      {
+        "path": "/creative-workshop",
+        "title": "创意工坊",
+        "symbol": "paintbrush"
+      }
+    ],
+    "tools": [
+      {
+        "path": "/workbench",
+        "title": "我的工作台",
+        "symbol": "calendar"
+      },
+      {
+        "path": "/pbl",
+        "title": "PBL计划",
+        "symbol": "person.3"
+      },
+      {
+        "path": "/surveys",
+        "title": "活动报名（试用）",
+        "symbol": "ticket"
+      },
+      {
+        "path": "/settings",
+        "title": "个人设置",
+        "symbol": "gearshape"
+      }
+    ]
+  },
+  "directory": [
+    "学习世界",
+    "讨论区",
+    "我的工作台",
+    "实验室",
+    "创意工坊",
+    "PBL计划",
+    "问问 Max",
+    "活动报名（试用）",
+    "个人设置",
+    "个人与牧场",
+    "管理",
+    "帮助"
+  ]
+}

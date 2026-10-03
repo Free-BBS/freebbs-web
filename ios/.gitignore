@@ -1,0 +1,6 @@
+DerivedData/
+artifacts/
+*.xcuserstate
+xcuserdata/
+Config/Local.xcconfig
+__pycache__/
