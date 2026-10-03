@@ -47,7 +47,7 @@ struct NativeMaxDocumentPages: View {
             ForEach(Array(state.data["pages"].list.enumerated()), id: \.offset) { _, page in
                 NativeMaxAttachmentsView(metadata: ["images": .array([page])])
             }
-            HStack { Button("上一组") { start = max(1, start - 4) }.disabled(start <= 1); Spacer(); Text("\(start) – \(min(start + 3, document["pageCount"].int)) 页").font(.caption); Spacer(); Button("下一组") { start += 4 }.disabled(start + 4 > document["pageCount"].int) }.disabled(state.loading)
+            HStack { Button("上一组") { start = max(1, start - 4) }.frame(minHeight: 44).disabled(start <= 1); Spacer(); Text("\(start) – \(min(start + 3, document["pageCount"].int)) 页").font(.caption); Spacer(); Button("下一组") { start += 4 }.frame(minHeight: 44).disabled(start + 4 > document["pageCount"].int) }.buttonStyle(.borderless).disabled(state.loading)
         }.navigationTitle("文档预览").navigationBarTitleDisplayMode(.inline)
         .task(id: "\(store.sessionRevision)-\(start)") { await state.load(store, path: "/api/ai/files/" + NativeRoutes.component(document["id"].text) + "/pages", query: [.init(name: "start", value: String(start)), .init(name: "count", value: "4")]) }
     }

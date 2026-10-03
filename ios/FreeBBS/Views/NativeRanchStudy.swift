@@ -10,30 +10,34 @@ struct NativeRanchStudy: View {
     @State private var deadline: Date?
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    VStack(spacing: 20) {
-                        if clock { Text(context.date, style: .time).font(.system(size: 38, weight: .light)).monospacedDigit() }
-                        NativeSheep().frame(width: 190, height: 200)
+            Form {
+                Section {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                    VStack(spacing: 16) {
+                        if clock { Text(context.date, style: .time).font(.system(size: 30, weight: .light)).monospacedDigit() }
+                        NativeSheep().frame(width: 140, height: 148)
                         if focus {
                             let value = max(0, Int(ceil(deadline.map { $0.timeIntervalSince(context.date) } ?? remaining)))
-                            Text(String(format: "%02d:%02d", value / 60, value % 60)).font(.system(size: 54, weight: .light)).monospacedDigit().accessibilityLabel("专注剩余 \(value / 60) 分 \(value % 60) 秒")
+                            Text(String(format: "%02d:%02d", value / 60, value % 60)).font(.system(size: 44, weight: .light)).monospacedDigit().accessibilityLabel("专注剩余 \(value / 60) 分 \(value % 60) 秒")
                             if value == 0 { Text("专注结束，休息一下。") }
                         }
+                    }.frame(maxWidth: .infinity).padding(.vertical, 12)
                     }
                 }
-                Form {
+                Section("显示") {
                     Toggle("显示时钟", isOn: $clock)
                     Toggle("专注计时", isOn: $focus)
-                    if focus {
+                }
+                if focus {
+                    Section("专注") {
                         Picker("专注时长", selection: $minutes) { ForEach([15, 25, 45, 60], id: \.self) { Text("\($0) 分钟").tag($0) } }
                         HStack {
-                            Button(deadline == nil ? "开始" : "暂停", systemImage: deadline == nil ? "play.fill" : "pause.fill") { if let deadline { remaining = max(0, deadline.timeIntervalSinceNow); self.deadline = nil } else { if remaining <= 0 { remaining = Double(minutes * 60) }; deadline = .now.addingTimeInterval(remaining) } }
-                            Spacer(); Button("重置") { deadline = nil; remaining = Double(minutes * 60) }
-                        }
+                            Button(deadline == nil ? "开始" : "暂停", systemImage: deadline == nil ? "play.fill" : "pause.fill") { if let deadline { remaining = max(0, deadline.timeIntervalSinceNow); self.deadline = nil } else { if remaining <= 0 { remaining = Double(minutes * 60) }; deadline = .now.addingTimeInterval(remaining) } }.frame(minHeight: 44)
+                            Spacer(); Button("重置") { deadline = nil; remaining = Double(minutes * 60) }.frame(minHeight: 44)
+                        }.buttonStyle(.borderless)
                     }
-                }.scrollContentBackground(.hidden).frame(maxHeight: 280)
-            }.padding(.top, 20).frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(.systemGroupedBackground))
+                }
+            }.background(Color(.systemGroupedBackground))
             .navigationTitle("牧场学习").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } } }
         }

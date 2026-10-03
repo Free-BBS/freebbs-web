@@ -74,7 +74,7 @@ struct NativePublicProfileView: View {
                         let days = profile["activity"]["days"].list
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 14), spacing: 3) {
                             ForEach(Array(days.enumerated()), id: \.offset) { _, day in
-                                RoundedRectangle(cornerRadius: 3).fill(day["count"].int == 0 ? Color(.systemGray5) : Palette.teal.opacity(min(1, 0.25 + Double(day["count"].int) * 0.15))).frame(height: 16)
+                                RoundedRectangle(cornerRadius: 3).fill(activityColor(count: day["count"].int)).frame(height: 16)
                                     .accessibilityLabel(day["date"].text + "，" + day["count"].text + " 次活动")
                             }
                         }
@@ -89,4 +89,9 @@ struct NativePublicProfileView: View {
         }.navigationTitle("个人主页").navigationBarTitleDisplayMode(.inline).task(id: store.sessionRevision) { await load() }
     }
     private func load() async { if let key = uid ?? store.user?.uid, !key.isEmpty { await state.load(store, path: "/api/users/" + NativeRoutes.component(key) + "/public-profile") } }
+    private func activityColor(count: Int) -> Color {
+        if count == 0 { return Color(uiColor: .systemGray5) }
+        let opacity: Double = min(1.0, 0.25 + Double(count) * 0.15)
+        return Palette.teal.opacity(opacity)
+    }
 }

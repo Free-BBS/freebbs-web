@@ -331,7 +331,10 @@ final class NavigationTests: XCTestCase {
         XCTAssertTrue(app.scrollViews["nativeWeekCalendar"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.webViews.firstMatch.exists)
         capture("50-native-week-calendar")
-        app.buttons["addSchedule"].tap()
+        let add = app.buttons["addSchedule"]
+        XCTAssertTrue(add.isHittable)
+        add.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        capture("50a-native-schedule-sheet-open")
         XCTAssertTrue(app.textFields["workbenchTitle"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["类型"].exists)
         XCTAssertTrue(app.staticTexts["重复"].exists)
@@ -346,11 +349,21 @@ final class NavigationTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["牧场学习"].waitForExistence(timeout: 5))
         let focus = app.switches["专注计时"]
         XCTAssertTrue(focus.exists)
+        for _ in 0..<6 {
+            if focus.isHittable { break }
+            app.swipeUp(velocity: .slow)
+        }
+        XCTAssertTrue(focus.isHittable)
         if focus.value as? String != "1" {
             focus.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
         }
-        XCTAssertTrue(app.buttons["开始"].waitForExistence(timeout: 5))
-        app.buttons["开始"].tap()
+        let start = app.buttons["开始"]
+        for _ in 0..<6 {
+            if start.exists && start.isHittable { break }
+            app.swipeUp(velocity: .slow)
+        }
+        XCTAssertTrue(start.isHittable)
+        start.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(app.buttons["暂停"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.webViews.firstMatch.exists)
         capture("52-native-ranch-study")
