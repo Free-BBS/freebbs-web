@@ -53,4 +53,4 @@
 
 ## 平台标准来源
 
-Apple [Adopting Liquid Glass](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass)、[SwiftUI 自定义 Liquid Glass](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views)、[iOS 27 Release Notes](https://developer.apple.com/documentation/ios-ipados-release-notes/ios-ipados-27-release-notes)。本机 SDK 26 没有完成 SDK 27 的编译/运行验证，需在对应环境继续执行测试。
+Apple [Adopting Liquid Glass](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass)、[SwiftUI 自定义 Liquid Glass](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views)、[iOS 27 Release Notes](https://developer.apple.com/documentation/ios-ipados-release-notes/ios-ipados-27-release-notes)。本机已完成 SDK 27 的编译、签名与分发导出；13 项客户端测试运行在 iOS 26 runtime，iOS 27 系统运行验证尚待完成。新增的 `FreeBBSIcon.icon` 由原生 Icon Composer 工具渲染检查并编译进 Archive。

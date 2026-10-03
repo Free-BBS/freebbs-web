@@ -1,11 +1,11 @@
 {
   "operatorConfirmed": false,
   "privacyPolicyApproved": true,
-  "privacyPolicyPublished": false,
+  "privacyPolicyPublished": true,
   "aiProviderDisclosureConfirmed": false,
   "deletionFulfillmentVerified": false,
   "moderationWorkflowVerified": false,
-  "productionSafetyAPIsDeployed": false,
+  "productionSafetyAPIsDeployed": true,
   "reviewAccountVerified": false,
   "appStoreRecordCreated": true,
   "bundleIDRegistered": true,

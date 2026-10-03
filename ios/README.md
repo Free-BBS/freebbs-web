@@ -11,8 +11,9 @@ SwiftUI 原生客户端，位于现有 `Free-BBS/freebbs-web` 仓库的 `ios/`�
 - Bundle ID：`cn.free-bbs.app`，开发者团队：`Q83556V27Y`。
 - API Origin：`https://www.free-bbs.cn`，客服：`feedback@free-bbs.cn`。
 - 最低系统 iOS 26；标准 SwiftUI 控件采用系统 Liquid Glass，iOS 27 专项验证需要 Xcode 27 / iOS 27 runtime。
-- 当前本机为 Xcode 26.0.1 / iOS 26.0。不能把 iOS 26 模拟器通过当作 iOS 27 验证完成。
-- 正式隐私政策 URL 尚未配置。可在未跟踪的 `Config/Local.xcconfig` 中覆盖 `FREEBBS_PRIVACY_URL = https:/$()/域名/路径`；xcconfig 中 `$()` 防止 URL 的 `//` 被当作注释。
+- 当前本机为 Xcode 27.0（27A266a），已安装 iOS 27 SDK，签名 Archive 和分发导出通过。13 项客户端测试在 iOS 26.0.1 runtime 上通过；iOS 27 runtime 的下载停留在准备阶段，尚未完成该系统的运行验证。
+- 已配置并发布用户批准的隐私政策草稿：`https://www.free-bbs.cn/mobile/privacy.html`。运营主体、AI 数据处理及期限仍须补齐确认。xcconfig 中 `$()` 防止 URL 的 `//` 被当作注释。
+- 主图标为原生 `FreeBBSIcon.icon`：绵羊与知识轨道，支持系统浅色、深色和着色。设计源、提示词和预览见 `Design/Icons/README.md`。
 
 Debug scheme 可增加 launch argument `--demo` 预览明确标注的示例页面。示例登录不会写入钥匙串，也不执行远端写操作。Release 编译不包含示例加载入口。App Store 审核使用正式测试账号，不能用示例模式替代账号或冒充线上数据。
 
@@ -32,7 +33,7 @@ Debug scheme 可增加 launch argument `--demo` 预览明确标注的示例页�
 - `/api/mobile/reports`：验证内容存在，举报事务去重、每小时限额；管理员处理接口位于 `/api/admin/mobile/reports`。
 - `/api/mobile/account-deletion`：密码重新验证，返回真实 `pending` 申请状态；管理员队列 `/api/admin/mobile/account-deletions`。
 
-**删除申请尚不是完整删除流程。** 当前没有自动清除数据库、上传文件、备份或第三方 AI 数据的 worker。上线前必须按 `review/OPERATIONS.md` 建立并验证实际删除与申诉流程。举报队列不能代替内容过滤及人工响应。配套接口尚未部署到线上；不应将此状态的客户端提交 App Store。
+**删除申请尚不是完整删除流程。** 当前没有自动清除数据库、上传文件、备份或第三方 AI 数据的 worker。正式上架前必须按 `review/OPERATIONS.md` 建立并验证实际删除与申诉流程。举报队列不能代替内容过滤及人工响应。配套接口已通过范围限定的部署上线，健康检查、未认证保护及政策/支持页面通过；仍须进行登录后的全链路验收，当前准备内部 TestFlight 测试。
 
 ## 验证
 
@@ -50,12 +51,12 @@ python3 ios/scripts/check-release.py
 - `review/APP_STORE.md`：上架文案、审核路线、隐私问卷和提交步骤。
 - `review/OPERATIONS.md`：举报与账号删除运营接口和上线条件。
 - `FreeBBS/Resources/PrivacyPolicy.md`：随 App 展示的隐私草案。
-- `review/privacy.html`、`review/support.html`：可预览的网页草案，发布前必须补齐并审批。
+- `review/privacy.html`、`review/support.html`：用户批准的网页草案，已发布；正式上架前补齐运营信息。
 - `review/VALIDATION.md`：实际验证证据与未验证范围。
 
 ## Archive 与导出
 
-先在 Apple Developer 注册 explicit App ID `cn.free-bbs.app`，在 Xcode Accounts 登录所属团队，选择 automatic signing。在 App Store Connect 新建应用，填写 App Privacy、年龄分级、支持 URL、正式隐私政策 URL 和审核账号。无需提供账号密码或证书私钥到本仓库。
+explicit App ID `cn.free-bbs.app` 已注册，App Store Connect 应用记录已创建（Apple ID `6818750003`）。automatic signing 已生成签名 Archive 和 App Store Connect 分发包。App Privacy、年龄分级、审核账号和最终运营资料仍待确认。无需提供账号密码或证书私钥到本仓库。
 
 ```sh
 python3 ios/scripts/check-release.py
@@ -66,4 +67,4 @@ xcodebuild -exportArchive -archivePath ios/artifacts/FreeBBS.xcarchive \
   -exportOptionsPlist ios/ExportOptions.plist -exportPath ios/artifacts/export
 ```
 
-提供了导出配置；没有替你注册 App ID、创建 App Store Connect 记录、上传 TestFlight 或提交审核。
+后端部署记录和 TestFlight 上传状态见 `review/DEPLOYMENT.md`。正式 App Store 提交需先通过 `check-release.py`；内部测试不能替代正式发布验收。

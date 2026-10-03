@@ -15,6 +15,10 @@
 | 后端测试 | Node.js，模拟数据库 | 12 项通过；认证、权限、用户隔离、目标验证、举报去重/限额/回滚、密码与申请幂等、管理员操作 |
 | 后端静态检查 | 仓库 ESLint、Prettier 配置 | 新增后端两个文件通过；不对工作区已有文件作格式化 |
 | 发布检查 | `python3 ios/scripts/check-release.py` | 正确返回未就绪，保留正式发布门槛 |
+| iOS 27 SDK 签名构建 | Xcode 27.0（27A266a），iphoneos27.0 | Archive、App Store Connect 分发导出与内部 TestFlight 上传通过；见 `DEPLOYMENT.md` |
+| 新 SDK 回归 | SDK 27，iPhone 17 Pro / iOS 26.0.1 runtime | 13 项通过；`../artifacts/SDK27ReviewTests.xcresult`、`sdk27-test-summary.json` |
+| 原生分层图标 | Apple Icon Composer ictool，design-generation 27 | 浅色、深色、着色和 60 pt 原生渲染复查通过；已编译为 Archive 主图标 |
+| 生产部署 | 范围限定的 GitHub Actions 发布 | 健康检查、401 权限保护、政策和支持页面 200 及正文一致性通过 |
 
 最终模拟器结果与日志保存为 `../artifacts/FinalReviewTests.xcresult` 和 `../artifacts/ios-final-tests.log`。大屏结果另见 `../artifacts/PassedReviewTests.xcresult`，大屏横屏复查为 `../artifacts/LargeRotationTests.xcresult`，后端测试日志为 `../artifacts/backend-tests.log`。共 25 个不同测试通过：10 个 Swift 核心测试、3 个页面测试、12 个后端测试。测试结果和截图属于生成物，已加入 Git 忽略，可通过 CI artifact 或本机工作区查看。
 
@@ -31,12 +35,12 @@
 
 ## 尚未验证或完成
 
-1. **iOS 27**：本机没有 Xcode 27 / iOS 27 runtime。已准备 CI 的 Xcode 27 runner，但尚未推送、触发或取得远端结果。不能把现有模拟器结果视为 iOS 27 适配认证。
-2. **真机与签名**：没有签名 Archive、Validate App、TestFlight 安装或物理设备验证。Bundle ID 已配置，尚未核实 Apple 团队中的注册状态。
+1. **iOS 27 系统运行**：本机已安装 Xcode 27 / iOS 27 SDK，签名构建与上传通过。runtime 下载停留在准备阶段，新 SDK 回归仍使用 iOS 26.0.1 runtime；不能当作 iOS 27 系统运行验收。CI 结果待取得。
+2. **真机与安装**：Bundle ID、应用记录及签名分发已完成；Apple 已接收内部 TestFlight 包。尚无 TestFlight 安装或物理设备验证证据。
 3. **线上认证与写入**：没有使用用户正式账号验证注册邮件、互动验证、发帖、回复、AI、个人资料及校园数据。自动页面测试验证导航和布局，不能替代这些集成测试。
-4. **MySQL 与部署**：后端测试使用模拟数据库。迁移 032、实际事务与外键、管理员队列及生产路由仍需在测试数据库和线上部署后验收。
+4. **MySQL 与业务验收**：配套模块及迁移已部署，启动初始化和健康检查通过；单元测试使用模拟数据库。实际事务、外键及登录后的管理员队列业务仍须验收。
 5. **审核运营**：当前删除功能为密码验证后的申请队列；没有实现真实清除或自动注销。举报只有记录与处理接口，还需核实内容过滤、响应和违规内容处理流程。
-6. **隐私与支持**：客服邮箱已确认。运营主体、AI 提供商、保留期限、处理期限及正式政策 URL 未确认；隐私与支持网页是未发布草案。
+6. **隐私与支持**：客服邮箱、URL 已确认；用户批准的政策与支持页面已发布。运营主体、AI 提供商、保留期限、处理期限尚未确认，正式上架前须完善。
 7. **辅助功能**：大字和横屏通过自动导航与截图检查；VoiceOver 朗读顺序、减少透明度、硬件键盘及真机键盘交互仍需人工验收。
 8. **页面范围**：课程资料没有通过真实文件下载的集成测试；复杂数学、图片与电路嵌入未完整迁移。电路仿真、商城、管理后台等网页功能不在本版原生功能范围。
 

@@ -15,10 +15,11 @@
 | 主语言 | 简体中文 |
 | 客服 | feedback@free-bbs.cn |
 | 分类候选 | 教育 / 社交 |
-| 隐私政策 URL | 待正式发布 |
-| 支持 URL | 待发布支持页面 |
+| 隐私政策 URL | https://www.free-bbs.cn/mobile/privacy.html （已批准并发布的草稿） |
+| 支持 URL | https://www.free-bbs.cn/mobile/support.html |
+| Apple ID | 6818750003 |
 
-Bundle ID 是否已在当前团队注册、应用名是否可用都需要在 Apple 账号中确认。不要为通过检查而填写不存在的 URL。
+Bundle ID 和应用记录已在 Apple 账号中确认。已完成 iOS 27 SDK 签名 Archive 和分发导出，准备内部 TestFlight；具体部署和上传证据见 `DEPLOYMENT.md`。隐私政策仍有待运营方确认的主体、AI 数据处理和期限，正式上架前须完善。
 
 ## 中文文案草稿
 

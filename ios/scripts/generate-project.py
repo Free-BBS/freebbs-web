@@ -26,7 +26,7 @@ def ref(value): return Raw(value)
 
 def file_ref(path):
     suffix = Path(path).suffix
-    filetype = {'.swift':'sourcecode.swift', '.xcassets':'folder.assetcatalog', '.md':'text', '.xcprivacy':'text.xml', '.xcconfig':'text.xcconfig'}.get(suffix,'text')
+    filetype = {'.swift':'sourcecode.swift', '.xcassets':'folder.assetcatalog', '.icon':'folder.iconcomposer.icon', '.md':'text', '.xcprivacy':'text.xml', '.xcconfig':'text.xcconfig'}.get(suffix,'text')
     return add('file:'+path, 'PBXFileReference', lastKnownFileType=filetype, path=path, sourceTree='<group>')
 
 config_file = file_ref('Config/App.xcconfig')
@@ -37,7 +37,7 @@ for name in ['FreeBBS','FreeBBSTests','FreeBBSUITests']:
     source_files = [file_ref(str(p.relative_to(ROOT))) for p in sorted((ROOT/name).rglob('*.swift'))]
     resource_files = []
     if name == 'FreeBBS':
-        resource_files = [file_ref('FreeBBS/Resources/'+s) for s in ['Assets.xcassets','PrivacyInfo.xcprivacy','PrivacyPolicy.md','CommunityAgreement.md']]
+        resource_files = [file_ref('FreeBBS/Resources/'+s) for s in ['Assets.xcassets','FreeBBSIcon.icon','PrivacyInfo.xcprivacy','PrivacyPolicy.md','CommunityAgreement.md']]
     children = source_files + resource_files
     groups.append(add('group:'+name,'PBXGroup', name=name, children=[ref(v) for v in children], sourceTree='<group>'))
     source_build = [add('build:'+name+':'+v,'PBXBuildFile',fileRef=ref(v)) for v in source_files]
@@ -52,7 +52,7 @@ for name in ['FreeBBS','FreeBBSTests','FreeBBSUITests']:
     for config in ['Debug','Release']:
         settings = {'PRODUCT_NAME':'$(TARGET_NAME)','SDKROOT':'iphoneos','SUPPORTED_PLATFORMS':'iphoneos iphonesimulator','SWIFT_VERSION':'6.0','IPHONEOS_DEPLOYMENT_TARGET':'26.0','TARGETED_DEVICE_FAMILY':'1','CODE_SIGN_STYLE':'Automatic','DEVELOPMENT_TEAM':'Q83556V27Y','SWIFT_STRICT_CONCURRENCY':'complete'}
         if app:
-            settings.update({'INFOPLIST_FILE':'FreeBBS/Resources/Info.plist','GENERATE_INFOPLIST_FILE':'NO','ASSETCATALOG_COMPILER_APPICON_NAME':'AppIcon','ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME':'AccentColor','ENABLE_PREVIEWS':'YES','SWIFT_EMIT_LOC_STRINGS':'YES'})
+            settings.update({'INFOPLIST_FILE':'FreeBBS/Resources/Info.plist','GENERATE_INFOPLIST_FILE':'NO','ASSETCATALOG_COMPILER_APPICON_NAME':'FreeBBSIcon','ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME':'AccentColor','ENABLE_PREVIEWS':'YES','SWIFT_EMIT_LOC_STRINGS':'YES'})
         else:
             settings.update({'PRODUCT_BUNDLE_IDENTIFIER':f'cn.free-bbs.app.{name}','GENERATE_INFOPLIST_FILE':'YES'})
             if name == 'FreeBBSTests': settings.update({'TEST_HOST':'$(BUILT_PRODUCTS_DIR)/FreeBBS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FreeBBS','BUNDLE_LOADER':'$(TEST_HOST)'})

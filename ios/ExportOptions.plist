@@ -5,5 +5,7 @@
 <key>teamID</key><string>Q83556V27Y</string>
 <key>signingStyle</key><string>automatic</string>
 <key>uploadSymbols</key><true/>
+<key>testFlightInternalTestingOnly</key><true/>
+<key>manageAppVersionAndBuildNumber</key><false/>
 <key>destination</key><string>export</string>
 </dict></plist>
