@@ -124,6 +124,7 @@ const {
 } = require('./username-policy');
 const { createCourseMapsRouter, ensureCourseMapTables } = require('./course-maps');
 const { createCircuitsRouter, ensureCircuitTables } = require('./circuits');
+const { createMobileSafetyRouter, ensureMobileSafetyTables } = require('./mobile-safety');
 const { createCircuitExamplesRouter, ensureCircuitExampleTables } = require('./circuit-examples');
 const {
   createCircuitChallengesRouter,
@@ -2794,6 +2795,7 @@ app.use(
   createSurveysRouter({ pool, requireAdmin, getOptionalAuthUser, service: surveyService }),
 );
 app.use('/api/circuits', createCircuitsRouter({ pool, requireAuth }));
+app.use('/api', createMobileSafetyRouter({ pool, requireAuth, requireAdmin }));
 app.use('/api/circuit-examples', createCircuitExamplesRouter({ pool, requireAuth }));
 app.use('/api/circuit-challenges', createCircuitChallengesRouter({ pool, requireAuth }));
 app.use(
@@ -6438,6 +6440,7 @@ async function start() {
   await ensureRegistrationWhitelistTables(pool);
   await ensureRegistrationGuardTables(pool);
   await ensureNotificationTables(pool);
+  await ensureMobileSafetyTables(pool);
   await ensureSurveyTables(pool);
   await ensureAdminRewardTables(pool);
   await ensureWalletLedger(pool);

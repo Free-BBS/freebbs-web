@@ -1,0 +1,16 @@
+{
+  "operatorConfirmed": false,
+  "privacyPolicyApproved": true,
+  "privacyPolicyPublished": false,
+  "aiProviderDisclosureConfirmed": false,
+  "deletionFulfillmentVerified": false,
+  "moderationWorkflowVerified": false,
+  "productionSafetyAPIsDeployed": false,
+  "reviewAccountVerified": false,
+  "appStoreRecordCreated": true,
+  "bundleIDRegistered": true,
+  "iOS27DeviceTestingPassed": false,
+  "physicalDeviceTestingPassed": false,
+  "storeScreenshotsApproved": false,
+  "appPrivacyAnswersVerified": false
+}

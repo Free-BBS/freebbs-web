@@ -1,0 +1,64 @@
+name: iPhone client review
+
+on:
+  pull_request:
+    paths:
+      - 'ios/**'
+      - 'backend/mobile-safety*'
+      - 'database/migrations/032_mobile_safety.sql'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-review-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: node --test backend/mobile-safety.test.js
+      - run: npx eslint backend/mobile-safety.js backend/mobile-safety.test.js
+
+  native-client:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-26, xcode-27]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+      - name: Inspect SDK and select iPhone runtime
+        run: |
+          xcodebuild -version
+          xcrun simctl list devices available --json > /tmp/freebbs-simulators.json
+          IOS_SIMULATOR_ID=$(python3 - <<'PY'
+          import json
+          data = json.load(open('/tmp/freebbs-simulators.json'))
+          candidates = [(runtime, item) for runtime, items in data['devices'].items()
+                        for item in items if item['isAvailable'] and item['name'].startswith('iPhone')]
+          if not candidates:
+              raise SystemExit('No available iPhone runtime; install the SDK runtime before testing.')
+          print(sorted(candidates, key=lambda pair: pair[0], reverse=True)[0][1]['udid'])
+          PY
+          )
+          echo "IOS_SIMULATOR_ID=$IOS_SIMULATOR_ID" >> "$GITHUB_ENV"
+      - name: Build and test SwiftUI client
+        run: bash ios/scripts/verify.sh
+      - name: Upload review test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-evidence-${{ matrix.runner }}
+          path: ios/artifacts/
+          if-no-files-found: warn

@@ -5,6 +5,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      mobile_only:
+        description: Deploy only the mobile safety APIs and approved policy/support pages
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -16,6 +21,7 @@ concurrency:
 
 jobs:
   validate:
+    if: ${{ !inputs.mobile_only }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,6 +37,7 @@ jobs:
         run: bash scripts/ci-validate.sh
 
   deploy:
+    if: ${{ !inputs.mobile_only }}
     runs-on: ubuntu-latest
     needs: validate
     env:
@@ -78,3 +85,67 @@ jobs:
              RUN_DB_MIGRATIONS='0' \
              HEALTHCHECK_URL='$HEALTHCHECK_URL' \
              bash scripts/deploy.sh"
+
+  mobile-validate:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mobile_only }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: node --test backend/mobile-safety.test.js
+      - run: npx eslint backend/mobile-safety.js backend/mobile-safety.test.js
+      - name: Validate production patch without changing the checkout
+        run: |
+          node scripts/mobile-deploy/patch-mobile-backend.js backend/server.js /tmp/mobile-server.js
+          node --check /tmp/mobile-server.js
+          bash -n scripts/mobile-deploy/deploy-mobile.sh
+
+  mobile-deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mobile_only }}
+    needs: mobile-validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/data/www/free-BBS' }}
+      BACKEND_SERVICE_NAME: ${{ vars.BACKEND_SERVICE_NAME || 'free-bbs-backend' }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Package only mobile additions
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/mobile-release/backend /tmp/mobile-release/database/migrations /tmp/mobile-release/public/mobile
+          cp backend/mobile-safety.js /tmp/mobile-release/backend/
+          cp database/migrations/032_mobile_safety.sql /tmp/mobile-release/database/migrations/
+          cp public/mobile/privacy.html public/mobile/support.html /tmp/mobile-release/public/mobile/
+          cp scripts/mobile-deploy/patch-mobile-backend.js scripts/mobile-deploy/deploy-mobile.sh /tmp/mobile-release/
+          tar -czf /tmp/free-bbs-mobile-${GITHUB_SHA}.tar.gz -C /tmp/mobile-release .
+      - name: Configure existing deployment credentials
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "$DEPLOY_PORT" "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+      - name: Upload scoped release
+        run: scp -P "$DEPLOY_PORT" /tmp/free-bbs-mobile-${GITHUB_SHA}.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:/tmp/free-bbs-mobile-${GITHUB_SHA}.tar.gz"
+      - name: Back up, patch, restart and verify
+        run: |
+          set -euo pipefail
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -euo pipefail; \
+             MOBILE_RELEASE=/tmp/free-bbs-mobile-${GITHUB_SHA}; \
+             MOBILE_ARCHIVE=/tmp/free-bbs-mobile-${GITHUB_SHA}.tar.gz; \
+             trap 'rm -rf \"\$MOBILE_RELEASE\" \"\$MOBILE_ARCHIVE\"' EXIT; \
+             mkdir -p \"\$MOBILE_RELEASE\"; \
+             tar -xzf \"\$MOBILE_ARCHIVE\" -C \"\$MOBILE_RELEASE\"; \
+             DEPLOY_DIR='$DEPLOY_PATH' BACKEND_SERVICE_NAME='$BACKEND_SERVICE_NAME' \
+               bash \"\$MOBILE_RELEASE/deploy-mobile.sh\""

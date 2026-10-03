@@ -1,0 +1,43 @@
+# 验证记录
+
+验证日期：2026-10-03。以下是本机开发审查证据，尚未提交 Apple 审核。
+
+## 环境与结果
+
+| 验证 | 环境 | 结果 / 证据 |
+|---|---|---|
+| Debug 编译 | Xcode 26.0.1，iOS 26 SDK | 通过；Swift 6 编译，无第三方 Swift Package |
+| Release 编译 | generic iPhoneOS，关闭签名 | 通过；`../artifacts/ios-release-build.log` |
+| Swift 核心测试 | iOS 26.0.1 模拟器 | 10 项通过；安全 URL、通知路由、Wien 边界、日期、实际响应字段、Bearer、401、错误响应 |
+| 页面导航 | iPhone 17 Pro 模拟器，浅色 | 首页、Max、日程、课程、知识点、关系、讨论、发帖、通知、个人与客服通过 |
+| 小屏适配 | iPhone SE 第三代模拟器，深色 | 原生页面、账号设置、删除申请、隐私、登录、注册与重置密码通过 |
+| 横屏与辅助字号 | iPhone SE 第三代、iPhone 17 Pro，Accessibility XXXL | 导航可用，截图复查通过；横屏截图验证宽大于高 |
+| 后端测试 | Node.js，模拟数据库 | 12 项通过；认证、权限、用户隔离、目标验证、举报去重/限额/回滚、密码与申请幂等、管理员操作 |
+| 后端静态检查 | 仓库 ESLint、Prettier 配置 | 新增后端两个文件通过；不对工作区已有文件作格式化 |
+| 发布检查 | `python3 ios/scripts/check-release.py` | 正确返回未就绪，保留正式发布门槛 |
+
+最终模拟器结果与日志保存为 `../artifacts/FinalReviewTests.xcresult` 和 `../artifacts/ios-final-tests.log`。大屏结果另见 `../artifacts/PassedReviewTests.xcresult`，大屏横屏复查为 `../artifacts/LargeRotationTests.xcresult`，后端测试日志为 `../artifacts/backend-tests.log`。共 25 个不同测试通过：10 个 Swift 核心测试、3 个页面测试、12 个后端测试。测试结果和截图属于生成物，已加入 Git 忽略，可通过 CI artifact 或本机工作区查看。
+
+本机项目目录受 iCloud 文件占位影响。构建使用 `/tmp/freebbs-ios-source` 中的相同源码副本与 `/tmp/freebbs-ios-derived` 缓存，逐文件 SHA-256 对比未发现源码差异；临时路径不写入工程配置。
+
+## 截图证据
+
+- [iPhone 17 Pro 首页](../artifacts/screenshots/01-home.png)，另有该设备的课程、讨论等页面截图。
+- [小屏深色首页](../artifacts/screenshots-small/01-home.png)、[横屏](../artifacts/screenshots-small/12-landscape.png)、[最大辅助字号](../artifacts/screenshots-small/13-accessibility-text.png)。
+- [删除账号申请](../artifacts/screenshots-small/17-account-deletion.png)、[隐私草案](../artifacts/screenshots-small/18-privacy.png)、[注册](../artifacts/screenshots-small/20-registration.png)。
+- 小屏完整 21 张截图位于 `../artifacts/screenshots-small/`。
+
+截图通过 Debug 的 `--demo` 生成，带有示例标识。测试未向线上发帖、举报、修改账号或删除数据。这些截图用于开发审查，正式商店截图需使用经过验收的 Release 版本及真实内容重新拍摄。
+
+## 尚未验证或完成
+
+1. **iOS 27**：本机没有 Xcode 27 / iOS 27 runtime。已准备 CI 的 Xcode 27 runner，但尚未推送、触发或取得远端结果。不能把现有模拟器结果视为 iOS 27 适配认证。
+2. **真机与签名**：没有签名 Archive、Validate App、TestFlight 安装或物理设备验证。Bundle ID 已配置，尚未核实 Apple 团队中的注册状态。
+3. **线上认证与写入**：没有使用用户正式账号验证注册邮件、互动验证、发帖、回复、AI、个人资料及校园数据。自动页面测试验证导航和布局，不能替代这些集成测试。
+4. **MySQL 与部署**：后端测试使用模拟数据库。迁移 032、实际事务与外键、管理员队列及生产路由仍需在测试数据库和线上部署后验收。
+5. **审核运营**：当前删除功能为密码验证后的申请队列；没有实现真实清除或自动注销。举报只有记录与处理接口，还需核实内容过滤、响应和违规内容处理流程。
+6. **隐私与支持**：客服邮箱已确认。运营主体、AI 提供商、保留期限、处理期限及正式政策 URL 未确认；隐私与支持网页是未发布草案。
+7. **辅助功能**：大字和横屏通过自动导航与截图检查；VoiceOver 朗读顺序、减少透明度、硬件键盘及真机键盘交互仍需人工验收。
+8. **页面范围**：课程资料没有通过真实文件下载的集成测试；复杂数学、图片与电路嵌入未完整迁移。电路仿真、商城、管理后台等网页功能不在本版原生功能范围。
+
+完整提交前条件见 [App Store 准备](APP_STORE.md) 与 [运营流程](OPERATIONS.md)。只在实际完成并取得证据后更新 `ReleaseStatus.json`。
