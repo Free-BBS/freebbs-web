@@ -71,3 +71,9 @@
 8298486 的 macos-26 任务中，工具预览已通过；新增画布测试在离屏 WKWebView 导航后改变 frame 时读取到上一尺寸的 CSS dvh，电路导航检查依赖分区标题的 AX 类型。仅修正测试：各方向在导航前给 WKWebView 设置初始尺寸，完整几何/元件/缩放断言保留；电路导航同时检查目的页导航栏与实际「新建电路」按钮，楼中楼回复的实际操作检查保留。两项定向回归在 `ViewportAndLibraryCIRegression.xcresult`、`ci-test-refinement.log` 通过。发布 App 源码未改变，TestFlight build 7 保持有效。最新完整矩阵结果以 PR 检查和本机汇总为准。
 
 旧 iOS 27 任务还在查询屏幕外回复按钮时触发全页面 AX 快照超时。回复测试现先滚动到回复区，在该 ScrollView 内使用 firstMatch 定位原生按钮，并断言按钮实际被点按、回复目标和取消操作；不跳过回复功能。`ScopedThreadedReplyRegression.xcresult`、`scoped-reply-regression.log` 的定向回归通过。该变更仅影响审查测试，不改变 build 7 发布代码。
+
+## Build 8 circuit parameters
+
+The bundled parameter module retains website validation and local draft saving, replacing desktop anchor placement with an independent bottom sheet. A keyboard or offscreen symbol no longer dismisses editing. Visible viewport bounds constrain the panel; compact layout prioritizes 44 pt inputs and scrollable hints. Closing the panel blurs input. No production website modification is needed.
+
+27 unit tests passed in Build8ClientVerification.xcresult. That run had an early landscape UI assertion failure and is not an overall success. Final circuit and code/tool UI reviews (2 tests) passed in Build8FinalUIReview.xcresult after waiting for the parameter control to become hittable. Actual software keyboard and landscape parameter screenshots are circuit-native-review/38-component-keyboard.png and 39-landscape-parameters.png. Archive, upload and TestFlight readiness remain separately verified in local artifacts.

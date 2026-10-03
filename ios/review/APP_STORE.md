@@ -9,7 +9,7 @@
 | 名称 | FREE-BBS |
 | Bundle ID | cn.free-bbs.app |
 | Team ID | Q83556V27Y |
-| 版本/构建 | 1.0.0 / 7 |
+| 版本/构建 | 1.0.0 / 8 |
 | 设备 | iPhone |
 | 最低版本 | iOS 26.0 |
 | 主语言 | 简体中文 |

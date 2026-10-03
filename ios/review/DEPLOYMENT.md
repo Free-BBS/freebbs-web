@@ -49,3 +49,9 @@ build 6 包含 build 5 的匿名作者修复，并修复 Swift SDK 27 在 iOS 26
 添加元件后不自动遮挡画布，点击元件再打开适配手机的参数面板，输入框保持可见。工具预览改为只载入共享 sandbox 引擎的轻量页面，保留 opaque iframe、阻断网络与无账号/消息桥的隔离；进程终止后重新加载，不把失败渲染记录为完成。
 
 本机截图与测试见 `circuit-native-review/`、`Build7ClientVerification.xcresult` 和 `build7-client-verification.log`（26 项单元与 2 项界面流程，28 项全部通过）。在线电路检查仅加载公开页面与本地临时草稿，没有创建生产账号、发帖或保存线上电路；该项复查源代码作为本机证据保存，不加入依赖网络的常规 CI。签名上传及 Apple 处理结果见 `build7-archive.log`、`build7-upload.log`、`testflight-build7-ready.png`、`final-ci-summary.json`。正式上架门槛保持不变。
+
+## Build 8 circuit parameters
+
+The bundled parameter module retains website validation and local draft saving, replacing desktop anchor placement with an independent bottom sheet. A keyboard or offscreen symbol no longer dismisses editing. Visible viewport bounds constrain the panel; compact layout prioritizes 44 pt inputs and scrollable hints. Closing the panel blurs input. No production website modification is needed.
+
+27 unit tests passed in Build8ClientVerification.xcresult. That run had an early landscape UI assertion failure and is not an overall success. Final circuit and code/tool UI reviews (2 tests) passed in Build8FinalUIReview.xcresult after waiting for the parameter control to become hittable. Actual software keyboard and landscape parameter screenshots are circuit-native-review/38-component-keyboard.png and 39-landscape-parameters.png. Archive, upload and TestFlight readiness remain separately verified in local artifacts.
