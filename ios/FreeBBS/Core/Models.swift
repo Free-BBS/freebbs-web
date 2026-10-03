@@ -18,7 +18,7 @@ struct User: Codable, Identifiable {
     let requiresUsernameChange: Bool?
 }
 struct Author: Codable {
-    let id: Int
+    let id: Int?
     let username: String
     let displayName: String
     let avatarPath: String

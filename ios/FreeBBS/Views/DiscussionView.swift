@@ -75,7 +75,7 @@ struct PostDetailView: View {
     @State private var loading = false
     @Environment(\.dismiss) private var dismiss
     private var current: Post? { post ?? initial }
-    private var hidden: Bool { current.map { store.blockedIDs.contains($0.author.id) } ?? false }
+    private var hidden: Bool { current.map { store.blockedIDs.contains($0.author.id ?? 0) } ?? false }
     var body: some View {
         PageSurface {
             if hidden { EmptyState(title: "已屏蔽此作者", symbol: "person.slash", message: "可在“我的 → 已屏蔽用户”中管理。") }
@@ -109,7 +109,7 @@ struct PostDetailView: View {
                 }
                 }
                 SectionTitle(title: "回复 · \(comments.count)")
-                ForEach(comments.filter { !store.blockedIDs.contains($0.author.id) }) { comment in
+                ForEach(comments.filter { !store.blockedIDs.contains($0.author.id ?? 0) }) { comment in
                     Paper {
                         HStack {
                             Avatar(author: comment.author)
@@ -120,7 +120,7 @@ struct PostDetailView: View {
                             Spacer()
                             authorMenu(comment.author, target: .init(type: "comment", id: String(comment.id)))
                         }
-                        if let parentID = comment.parentCommentId, let parent = comments.first(where: { $0.id == parentID && !store.blockedIDs.contains($0.author.id) }) {
+                        if let parentID = comment.parentCommentId, let parent = comments.first(where: { $0.id == parentID && !store.blockedIDs.contains($0.author.id ?? 0) }) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("回复 @\(parent.author.displayName)").font(.caption.weight(.semibold)).foregroundStyle(Palette.teal)
                                 Text(parent.contentMarkdown).font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -196,7 +196,7 @@ struct PostDetailView: View {
     private func authorMenu(_ author: Author, target: ReportTarget) -> some View {
         Menu {
             Button("举报内容", systemImage: "flag") { if store.requireLogin() { reportTarget = target } }
-            if author.id > 0 && author.id != store.user?.id { Button("屏蔽用户", systemImage: "person.slash", role: .destructive) { if store.requireLogin() { blockTarget = author } } }
+            if let authorID = author.id, authorID > 0 && authorID != store.user?.id { Button("屏蔽用户", systemImage: "person.slash", role: .destructive) { if store.requireLogin() { blockTarget = author } } }
         } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }.accessibilityLabel("内容操作")
     }
     private func load() async {

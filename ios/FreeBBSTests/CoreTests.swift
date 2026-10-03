@@ -71,6 +71,40 @@ final class CoreTests: XCTestCase {
         do { let _: PostsResponse = try await client.request("/api/discussion/posts"); XCTFail("Expected decoding error") }
         catch { XCTAssertEqual(error.localizedDescription, APIError.invalidResponse.localizedDescription) }
     }
+    func testLatestAndHotFeedsDecodeAnonymousAuthorsWithoutDroppingPosts() async throws {
+        // Mirrors toDiscussionPostSummary + anonymousAuthor: identity is intentionally null.
+        let source = #"{"hash":"fixture","notModified":false,"nextCursor":null,"posts":[{"id":"anonymous-post","title":"匿名讨论","createdAt":"2026-10-03T02:00:00Z","board":{"slug":"all","name":"综合"},"author":{"id":null,"uid":"","username":"匿名用户","fullName":"","displayName":"匿名用户","avatarPath":""},"likeCount":0,"commentCount":1,"likedByMe":false,"isPinned":false,"isFeatured":false,"preview":null},{"id":"named-post","title":"普通讨论","createdAt":"2026-10-03T01:00:00Z","board":{"slug":"all","name":"综合"},"author":{"id":42,"username":"student","displayName":"student","avatarPath":""},"likeCount":3,"commentCount":0,"likedByMe":false,"isPinned":true,"isFeatured":false}]}"#
+        let client = APIClient(origin: origin, session: makeSession { request in
+            XCTAssertEqual(request.url?.path, "/api/discussion/posts")
+            return (200, source)
+        })
+        let store = AppStore(api: client)
+        for sort in ["latest", "hot"] {
+            store.sort = sort
+            await store.refreshPosts()
+            XCTAssertNil(store.postsError)
+            XCTAssertEqual(store.posts.count, 2)
+            XCTAssertNil(store.posts[0].author.id)
+            XCTAssertEqual(store.posts[1].author.id, 42)
+            store.blocks = [.init(id: 42, username: "student")]
+            XCTAssertEqual(store.visiblePosts.map(\.id), ["anonymous-post"])
+        }
+        await store.block(store.posts[0].author)
+        XCTAssertEqual(store.blocks.map(\.id), [42])
+        XCTAssertFalse(store.showLogin, "匿名作者没有可屏蔽的账号，不应弹出登录或发送请求")
+    }
+    func testAnonymousAndDeletedRepliesDecodeNullableIdentity() throws {
+        let source = #"{"comments":[{"id":1,"parentCommentId":null,"contentMarkdown":"匿名回复","createdAt":"2026-10-03T01:00:00Z","author":{"id":null,"username":"匿名用户","displayName":"匿名用户","avatarPath":""},"isDeleted":false},{"id":2,"parentCommentId":1,"contentMarkdown":"该评论已删除","createdAt":"2026-10-03T02:00:00Z","author":{"id":null,"username":"已删除","displayName":"已删除","avatarPath":""},"isDeleted":true}]}"#
+        let response = try JSONDecoder().decode(CommentsResponse.self, from: Data(source.utf8))
+        XCTAssertEqual(response.comments.count, 2)
+        XCTAssertNil(response.comments[0].author.id)
+        XCTAssertEqual(response.comments[1].parentCommentId, 1)
+        XCTAssertEqual(response.comments[1].isDeleted, true)
+    }
+    func testMalformedAuthorIdentityStillFailsDecoding() {
+        let source = #"{"id":"invalid","username":"student","displayName":"student","avatarPath":""}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(Author.self, from: Data(source.utf8)))
+    }
     private func makeSession(_ handler: @escaping (URLRequest) -> (Int, String)) -> URLSession {
         StubURLProtocol.handler = handler
         let config = URLSessionConfiguration.ephemeral

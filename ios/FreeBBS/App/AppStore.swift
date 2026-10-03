@@ -27,7 +27,7 @@ final class AppStore {
     var isDemo = false
     private var postsRevision = 0
     var blockedIDs: Set<Int> { Set(blocks.map(\.id)) }
-    var visiblePosts: [Post] { posts.filter { !blockedIDs.contains($0.author.id) } }
+    var visiblePosts: [Post] { posts.filter { !blockedIDs.contains($0.author.id ?? 0) } }
 
     init(api injected: APIClient? = nil, preferences: UserDefaults = .standard) {
         self.preferences = preferences
@@ -121,12 +121,12 @@ final class AppStore {
         } catch { self.error = error.localizedDescription }
     }
     func block(_ author: Author) async {
-        guard requireLogin() else { return }
+        guard let authorID = author.id, authorID > 0, requireLogin() else { return }
         do {
             if !isDemo {
-                let _: MessageResponse = try await api.request("/api/mobile/blocks", method: "POST", body: ["userId": author.id])
+                let _: MessageResponse = try await api.request("/api/mobile/blocks", method: "POST", body: ["userId": authorID])
             }
-            if !blockedIDs.contains(author.id) { blocks.append(.init(id: author.id, username: author.username)) }
+            if !blockedIDs.contains(authorID) { blocks.append(.init(id: authorID, username: author.username)) }
         } catch { self.error = error.localizedDescription }
     }
     #if DEBUG

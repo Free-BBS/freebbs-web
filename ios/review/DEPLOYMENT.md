@@ -33,3 +33,7 @@ App Store Connect 应用记录：FREE-BBS，Apple ID `6818750003`，Team `Q83556
 本机 iOS 27 runtime 已完成安装；已有 CI 在 iOS 27 runtime 验证过原客户端，本轮新功能须以 PR 最新的完整检查结果为准。小屏回归使用 SDK 27 与 iOS 26.0.1 runtime，物理设备测试尚未完成。详细范围见 [验证记录](VALIDATION.md)。
 
 正式提交的剩余条件以 `ReleaseStatus.json` 为准。`check-release.py` 仍应退出 1；内部 TestFlight 上传不清除运营、真机、隐私问卷和正式截图的门槛。
+
+## build 5 匿名作者兼容修复
+
+服务端 `anonymousAuthor()` 会返回 `id: null`；旧版客户端要求作者 ID 必须为整数，匿名帖会使整个讨论列表解析失败，已删除回复亦受影响。build 5 将作者 ID 改为可空，保留匿名内容，并仅允许屏蔽有效的真实账号；不丢弃无法解析的帖子来掩盖错误。新增最新/热门混合列表、匿名/已删除回复与非法作者字段的回归测试。签名 Archive 已成功，测试及上传结果见本机证据和 PR 最新检查。
