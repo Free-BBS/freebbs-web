@@ -262,6 +262,7 @@ struct LabExport: Identifiable { let id = UUID(); let url: URL }
     var presentingFiles = false
     var presentingUploadChoices = false
     var presentingPhotos = false
+    var presentingCamera = false
     var directoryUpload = false
     var fileRevision = UUID()
     var multipleFiles = false
@@ -273,7 +274,7 @@ struct LabExport: Identifiable { let id = UUID(); let url: URL }
     }
     func resolveFiles(_ urls: [URL]?) {
         let reply = fileReply; fileReply = nil; fileRevision = UUID()
-        presentingFiles = false; presentingPhotos = false; presentingUploadChoices = false; reply?(urls)
+        presentingFiles = false; presentingPhotos = false; presentingCamera = false; presentingUploadChoices = false; reply?(urls)
     }
     func importFiles(_ urls: [URL]) {
         var directory: URL?

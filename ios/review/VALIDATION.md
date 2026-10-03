@@ -91,3 +91,5 @@ The bundled parameter module retains website validation and local draft saving, 
 目录生成检查覆盖主站 42 个页面、发展端 34 条路由和 68 个目录项；离线渲染资源一致性检查、后端安全 12 项测试及相关 ESLint 均通过。最新 PR 必须在本轮最终提交上完成 macos-26 / xcode-27 两套检查；上一提交 `2f7cf65` 的 [37122849412](https://github.com/Free-BBS/freebbs-web/actions/runs/37122849412) 已全部成功，不能作为 build 9 的通过证据。
 
 复杂功能由完整网页工作区与原生承载层提供，并非全部子控件都改写成 SwiftUI。真实 FREE-BBS 登录账号的校园连接、头像/文件保存、AI 生成、报名、交易、发帖和管理写入尚未现场验收；发布门槛保持不变。功能对照清单见 [FEATURE_PARITY.md](FEATURE_PARITY.md)。
+
+隐私清单已声明 App 内部 UserDefaults（`CA92.1`）与清理自身临时导入文件所需的时间元数据（`C617.1`），并增加用户主动上传的照片/视频类别；权限文案覆盖头像、讨论附件和实验素材。理由与类别依据 [Apple Required Reason API 文档](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacyaccessedapitypes/nsprivacyaccessedapitypereasons) 和 [Apple 数据类别文档](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacycollecteddatatypes/nsprivacycollecteddatatype)，plist 格式检查通过。硬件可用时的拍照入口使用系统相机，取消和过期回调不会复用其他上传请求；相机及真实文件提供者的功能验收仍需物理设备。
