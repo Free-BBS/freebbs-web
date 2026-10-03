@@ -69,3 +69,5 @@
 ### CI 测试环境兼容
 
 8298486 的 macos-26 任务中，工具预览已通过；新增画布测试在离屏 WKWebView 导航后改变 frame 时读取到上一尺寸的 CSS dvh，电路导航检查依赖分区标题的 AX 类型。仅修正测试：各方向在导航前给 WKWebView 设置初始尺寸，完整几何/元件/缩放断言保留；电路导航同时检查目的页导航栏与实际「新建电路」按钮，楼中楼回复的实际操作检查保留。两项定向回归在 `ViewportAndLibraryCIRegression.xcresult`、`ci-test-refinement.log` 通过。发布 App 源码未改变，TestFlight build 7 保持有效。最新完整矩阵结果以 PR 检查和本机汇总为准。
+
+旧 iOS 27 任务还在查询屏幕外回复按钮时触发全页面 AX 快照超时。回复测试现先滚动到回复区，在该 ScrollView 内使用 firstMatch 定位原生按钮，并断言按钮实际被点按、回复目标和取消操作；不跳过回复功能。`ScopedThreadedReplyRegression.xcresult`、`scoped-reply-regression.log` 的定向回归通过。该变更仅影响审查测试，不改变 build 7 发布代码。

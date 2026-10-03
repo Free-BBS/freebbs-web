@@ -125,13 +125,18 @@ final class NavigationTests: XCTestCase {
         XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10))
         // Wait for the asynchronous Markdown body before locating replies below it.
         XCTAssertTrue(app.webViews.staticTexts["从滑动的窗口开始"].firstMatch.waitForExistence(timeout: 10))
-        let target = app.buttons["reply-to-1"]
-        let detail = app.scrollViews["discussionDetailScroll"]
-        XCTAssertTrue(target.waitForExistence(timeout: 10))
+        // Enter the replies before looking up their native controls. Whole-app
+        // queries can stall while snapshotting offscreen WebKit accessibility trees.
+        let detail = app.scrollViews["discussionDetailScroll"].firstMatch
+        XCTAssertTrue(detail.waitForExistence(timeout: 10))
+        detail.swipeUp(velocity: .slow)
+        let target = detail.buttons.matching(identifier: "reply-to-1").firstMatch
+        var tappedReply = false
         for _ in 0..<12 {
-            if target.isHittable { target.tap(); break }
+            if target.exists && target.isHittable { target.tap(); tappedReply = true; break }
             detail.swipeUp(velocity: .slow)
         }
+        XCTAssertTrue(tappedReply, "The first reply must be reachable and tappable")
         // Verify the actual reply destination; a second hit-test can race a WebKit resize.
         XCTAssertTrue(app.staticTexts["回复 @campus_notes"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["取消回复"].exists)
