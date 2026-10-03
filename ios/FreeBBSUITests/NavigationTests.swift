@@ -182,8 +182,21 @@ final class NavigationTests: XCTestCase {
         XCTAssertFalse(app.switches["maxConsent"].exists)
         capture("31-max-consent-remembered")
         app.tabBars.buttons["我的"].tap()
-        tapIdentifiedElement("maxConsentSetting")
+        let setting = app.descendants(matching: .any).matching(identifier: "maxConsentSetting").firstMatch
+        for _ in 0..<10 {
+            if setting.exists && setting.isHittable { break }
+            app.swipeUp(velocity: .slow)
+        }
+        XCTAssertTrue(setting.isHittable)
+        // A native List switch exposes the entire row as its accessibility frame.
+        // Tap the trailing switch, keeping the label outside the hit target.
+        setting.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        let withdrawn = expectation(for: NSPredicate(format: "value == %@", "0"), evaluatedWith: setting)
+        wait(for: [withdrawn], timeout: 5)
+        capture("32-max-consent-withdrawn")
         app.tabBars.buttons["今日"].tap()
+        back()
+        app.buttons["openMax"].tap()
         XCTAssertTrue(app.switches["maxConsent"].waitForExistence(timeout: 5))
     }
     private func tapIdentifiedElement(_ id: String) {

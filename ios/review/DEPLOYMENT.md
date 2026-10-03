@@ -22,12 +22,14 @@
 
 App Store Connect 应用记录：FREE-BBS，Apple ID `6818750003`，Team `Q83556V27Y`，Bundle ID `cn.free-bbs.app`。
 
-构建为版本 `1.0.0`、build `1`，Xcode `27.0`（`27A266a`）、SDK `iphoneos27.0`。主图标为原生分层 `FreeBBSIcon.icon`（绵羊与知识轨道）。automatic signing 的 Archive、Cloud Managed Apple Distribution 导出与上传均成功；签名具备 `beta-reports-active`，`get-task-allow` 为 false。
+最新内部构建为版本 `1.0.0`、build `4`，Xcode `27.0`（`27A266a`）、SDK `iphoneos27.0`。原生分层绵羊图标保留；本轮加入统一 SwiftUI 页面、原生实验室工作区、讨论最新/热门排序与按账号在本机记住 Max 同意。automatic signing Archive、Cloud Managed Apple Distribution 导出及上传成功。
 
-2026-10-03 17:13 CST，Xcode 返回 `Upload succeeded` 和 `EXPORT SUCCEEDED`。随后在 [TestFlight](https://appstoreconnect.apple.com/teams/b6657e16-3de4-4dd1-acf0-711b662c81c3/apps/6818750003/testflight) 核实 Apple 处理完成，版本 1.0.0、构建 1 显示「内部」「准备测试」，有效期 90 天。构建 ID 为 `cf68eff7-e3f6-467f-bfae-bc922ad281de`。仅用于内部 TestFlight：导出参数 `testFlightInternalTestingOnly=true`，没有提交正式审核或发送测试邀请。截图证据 `../artifacts/testflight-ready.png` 仅保存在本机，未提交 Git。
+2026-10-03 18:49:59 CST，Xcode 返回 `Upload succeeded` 和 `EXPORT SUCCEEDED`。随后在 [TestFlight](https://appstoreconnect.apple.com/teams/b6657e16-3de4-4dd1-acf0-711b662c81c3/apps/6818750003/testflight/ios/433e4b75-9f1c-4a8b-80e3-78231542d64f) 核实构建 4 显示「内部」「正在测试」，有效期 90 天，并属于已有的内部测试群组。没有新增测试人员或提交正式审核。
 
-本地生成证据在 `../artifacts/`（Git 忽略）：`FreeBBS-Sheep-Final.xcarchive`、`sheep-export/FreeBBS.ipa`、`ios27-archive.log`、`ios27-export.log`、`testflight-upload.log`、`SDK27ReviewTests.xcresult`、`sdk27-test-summary.json`。不提交签名材料、账号密码或私钥。
+签名构建与上传证据：`FreeBBS-Unified-Final-Build4.xcarchive`、`unified-final-upload/`、`unified-final-build4-archive.log`、`unified-final-build4-upload.log`、`testflight-build4-ready.png`，最终同步至 `../artifacts/`，不提交 Git。构建 1–3 保留为历史内部版本；早期未上传的 build 4 草稿不得代替这次最终 Archive。
 
-13 项客户端测试在 Xcode 27 / SDK 27、iPhone 17 Pro 的 iOS 26.0.1 runtime 上通过。iOS 27 runtime 下载持续停在 Preparing to download，不能将 SDK 编译成功记作 iOS 27 系统运行验证；此门槛仍为 false。
+导出参数 `testFlightInternalTestingOnly=true`，只用于内部测试。原始签名构建验证含 `beta-reports-active`，`get-task-allow` 为 false；不提交账号密码、签名材料或私钥。
 
-正式提交的剩余条件以 `ReleaseStatus.json` 为准。`check-release.py` 仍应退出 1；内部 TestFlight 上传不应清除运营、真机、隐私问卷和正式截图的门槛。
+本机 iOS 27 runtime 已完成安装；已有 CI 在 iOS 27 runtime 验证过原客户端，本轮新功能须以 PR 最新的完整检查结果为准。小屏回归使用 SDK 27 与 iOS 26.0.1 runtime，物理设备测试尚未完成。详细范围见 [验证记录](VALIDATION.md)。
+
+正式提交的剩余条件以 `ReleaseStatus.json` 为准。`check-release.py` 仍应退出 1；内部 TestFlight 上传不清除运营、真机、隐私问卷和正式截图的门槛。
