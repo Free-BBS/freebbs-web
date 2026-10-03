@@ -99,8 +99,9 @@ final class NavigationTests: XCTestCase {
         app.swipeUp()
         app.buttons["退出登录"].tap()
         app.sheets.buttons["退出登录"].tap()
-        for _ in 0..<3 { if app.buttons["profileLogin"].isHittable { break }; app.swipeDown() }
-        app.buttons["profileLogin"].tap()
+        let login = revealProfileLogin()
+        capture("18a-logged-out-profile")
+        login.tap()
         XCTAssertTrue(app.textFields["loginIdentifier"].waitForExistence(timeout: 5))
         capture("19-login")
         app.buttons["注册"].tap()
@@ -255,6 +256,34 @@ final class NavigationTests: XCTestCase {
         XCTFail("Unable to reach element: " + id + "\n" + app.debugDescription)
     }
     private func back() { app.navigationBars.buttons.element(boundBy: 0).tap() }
+    private func revealProfileLogin() -> XCUIElement {
+        let item = app.buttons["profileLogin"]
+        for _ in 0..<8 {
+            var previousFrame: CGRect?
+            var stationarySince: Date?
+            let visible = NSPredicate { _, _ in
+                guard item.exists && item.isHittable else { return false }
+                let frame = item.frame
+                // iOS 27 can report a scrolling List row as hittable while its
+                // synthesized tap falls under the navigation/status bars.
+                guard frame.minY >= self.app.navigationBars.firstMatch.frame.maxY,
+                      frame.maxY <= self.app.tabBars.firstMatch.frame.minY else {
+                    previousFrame = nil; stationarySince = nil
+                    return false
+                }
+                if previousFrame != frame {
+                    previousFrame = frame; stationarySince = Date()
+                    return false
+                }
+                return stationarySince.map { Date().timeIntervalSince($0) >= 0.3 } ?? false
+            }
+            let ready = XCTNSPredicateExpectation(predicate: visible, object: nil)
+            if XCTWaiter.wait(for: [ready], timeout: 2) == .completed { return item }
+            app.swipeDown(velocity: .slow)
+        }
+        XCTFail("Login row must settle inside the visible List content\n" + app.debugDescription)
+        return item
+    }
     private func tapListText(_ text: String) {
         let item = app.staticTexts[text]
         for _ in 0..<5 {
