@@ -33,7 +33,10 @@ final class NavigationTests: XCTestCase {
         app.buttons["allFeatures"].tap()
         let search = app.searchFields.firstMatch
         search.tap(); search.typeText("发展端\n")
-        XCTAssertTrue(app.staticTexts["没有结果"].waitForExistence(timeout: 5))
+        // The system localizes this heading differently across iOS releases.
+        // The empty-state heading still includes the submitted search term.
+        let emptyHeading = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "发展端")).firstMatch
+        XCTAssertTrue(emptyHeading.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["feature-/development"].exists)
         capture("46-development-excluded")
     }
