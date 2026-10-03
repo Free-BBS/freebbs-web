@@ -2,9 +2,9 @@
   "entries": [
     {
       "path": "/",
-      "title": "今日",
-      "group": "学习",
-      "symbol": "sun.max",
+      "title": "首页",
+      "group": "首页",
+      "symbol": "house",
       "detail": "课程、签到与讨论动态",
       "listed": false,
       "admin": false,
@@ -14,7 +14,7 @@
     {
       "path": "/world",
       "title": "学习世界",
-      "group": "学习",
+      "group": "学习世界",
       "symbol": "globe",
       "detail": "知识岛、完整课程地图与学习记录",
       "listed": true,
@@ -25,7 +25,7 @@
     {
       "path": "/course",
       "title": "课程工作区",
-      "group": "学习",
+      "group": "学习世界",
       "symbol": "books.vertical",
       "detail": "课程地图、学习进度、资料上传与管理",
       "listed": false,
@@ -36,7 +36,7 @@
     {
       "path": "/knowledge",
       "title": "知识点工作区",
-      "group": "学习",
+      "group": "学习世界",
       "symbol": "point.3.connected.trianglepath.dotted",
       "detail": "学习概览、正文、编辑、历史与讨论",
       "listed": false,
@@ -47,7 +47,7 @@
     {
       "path": "/course-map-editor",
       "title": "编辑课程地图",
-      "group": "学习",
+      "group": "学习世界",
       "symbol": "pencil.and.outline",
       "detail": "知识结点、连接和地图背景",
       "listed": false,
@@ -58,7 +58,7 @@
     {
       "path": "/search",
       "title": "全站搜索",
-      "group": "学习",
+      "group": "学习世界",
       "symbol": "magnifyingglass",
       "detail": "跨课程、知识点与讨论查找内容",
       "listed": true,
@@ -68,8 +68,8 @@
     },
     {
       "path": "/workbench",
-      "title": "完整工作台",
-      "group": "计划与活动",
+      "title": "我的工作台",
+      "group": "我的工作台",
       "symbol": "calendar",
       "detail": "计划表、校园连接、课程公告与作业",
       "listed": true,
@@ -79,8 +79,8 @@
     },
     {
       "path": "/surveys",
-      "title": "活动报名",
-      "group": "计划与活动",
+      "title": "活动报名（试用）",
+      "group": "活动报名（试用）",
       "symbol": "ticket",
       "detail": "报名、回执及抽签结果",
       "listed": true,
@@ -91,7 +91,7 @@
     {
       "path": "/discussion",
       "title": "完整讨论工作区",
-      "group": "社区与创作",
+      "group": "讨论区",
       "symbol": "bubble.left.and.bubble.right",
       "detail": "投票、悬赏、编辑、互动与版主管理",
       "listed": true,
@@ -102,7 +102,7 @@
     {
       "path": "/publish",
       "title": "完整发表工作区",
-      "group": "社区与创作",
+      "group": "讨论区",
       "symbol": "square.and.pencil",
       "detail": "编辑、预览及实验和工具分享",
       "listed": false,
@@ -113,7 +113,7 @@
     {
       "path": "/aichat",
       "title": "Max 完整工作区",
-      "group": "社区与创作",
+      "group": "问问 Max",
       "symbol": "sparkles",
       "detail": "历史对话、模型、附件与创作工具",
       "listed": true,
@@ -124,7 +124,7 @@
     {
       "path": "/markdown-editor",
       "title": "Markdown 编辑器",
-      "group": "社区与创作",
+      "group": "学习世界",
       "symbol": "text.document",
       "detail": "知识点文档编辑、公式预览与图片上传",
       "listed": true,
@@ -135,7 +135,7 @@
     {
       "path": "/creative-workshop",
       "title": "创意工坊",
-      "group": "社区与创作",
+      "group": "创意工坊",
       "symbol": "paintbrush",
       "detail": "创意工坊的规划与介绍",
       "listed": true,
@@ -146,7 +146,7 @@
     {
       "path": "/pbl",
       "title": "PBL 计划",
-      "group": "计划与活动",
+      "group": "PBL计划",
       "symbol": "person.3",
       "detail": "项目学习的规划与说明",
       "listed": true,
@@ -156,8 +156,8 @@
     },
     {
       "path": "/laboratory",
-      "title": "全部实验室",
-      "group": "实验与工具",
+      "title": "实验室",
+      "group": "实验室",
       "symbol": "flask",
       "detail": "代码、电路和工具工作区",
       "listed": true,
@@ -168,7 +168,7 @@
     {
       "path": "/circuits",
       "title": "电路库",
-      "group": "实验与工具",
+      "group": "实验室",
       "symbol": "cpu",
       "detail": "创建、打开、导入与管理电路",
       "listed": true,
@@ -179,7 +179,7 @@
     {
       "path": "/circuit",
       "title": "电路实验室",
-      "group": "实验与工具",
+      "group": "实验室",
       "symbol": "cpu",
       "detail": "电路编辑、Max 助手、版本与仿真",
       "listed": true,
@@ -190,7 +190,7 @@
     {
       "path": "/circuit-embed",
       "title": "电路引用",
-      "group": "实验与工具",
+      "group": "实验室",
       "symbol": "link",
       "detail": "查看被分享的电路及指定版本",
       "listed": false,
@@ -201,7 +201,7 @@
     {
       "path": "/circuit-challenge",
       "title": "电路挑战",
-      "group": "实验与工具",
+      "group": "实验室",
       "symbol": "bolt.badge.clock",
       "detail": "关卡、目标波形与排行榜",
       "listed": true,
@@ -212,7 +212,7 @@
     {
       "path": "/code-lab",
       "title": "完整代码实验室",
-      "group": "实验与工具",
+      "group": "实验室",
       "symbol": "curlybraces",
       "detail": "各运行环境、汇编与实验结果",
       "listed": true,
@@ -223,7 +223,7 @@
     {
       "path": "/tool-workshop",
       "title": "完整工具工坊",
-      "group": "实验与工具",
+      "group": "实验室",
       "symbol": "hammer",
       "detail": "管理工具、AI 制作、版本和分享",
       "listed": true,
@@ -244,8 +244,8 @@
     },
     {
       "path": "/settings",
-      "title": "全部个人设置",
-      "group": "个人与牧场",
+      "title": "个人设置",
+      "group": "个人设置",
       "symbol": "gearshape",
       "detail": "头像、阅读样式、邮件通知、邮箱与学号",
       "listed": true,
@@ -450,303 +450,6 @@
       "admin": true,
       "login": true,
       "native": false
-    },
-    {
-      "path": "/development",
-      "title": "发展端入口",
-      "group": "发展端",
-      "symbol": "arrow.up.right.square",
-      "detail": "平台介绍与功能入口",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/dashboard",
-      "title": "发展端总览",
-      "group": "发展端",
-      "symbol": "square.grid.2x2",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/shop",
-      "title": "发展端商城",
-      "group": "发展端",
-      "symbol": "bag",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/inventory",
-      "title": "发展端仓库",
-      "group": "发展端",
-      "symbol": "shippingbox",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/profile",
-      "title": "发展端个人主页",
-      "group": "发展端",
-      "symbol": "person.crop.circle",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/settings",
-      "title": "发展端个人设置",
-      "group": "发展端",
-      "symbol": "gearshape",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/knowledge",
-      "title": "知识平台",
-      "group": "发展端",
-      "symbol": "books.vertical",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/information",
-      "title": "信息服务",
-      "group": "发展端",
-      "symbol": "info.bubble",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/information/announcements",
-      "title": "发展端公告",
-      "group": "发展端",
-      "symbol": "megaphone",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/information/consultations",
-      "title": "我的咨询",
-      "group": "发展端",
-      "symbol": "bubble.left",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/information/triage",
-      "title": "咨询处理",
-      "group": "发展端",
-      "symbol": "tray.full",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/information/proposals",
-      "title": "提案池",
-      "group": "发展端",
-      "symbol": "lightbulb",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/growth",
-      "title": "成长与兴趣社群",
-      "group": "发展端",
-      "symbol": "person.3",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/interest-groups",
-      "title": "兴趣小组",
-      "group": "发展端",
-      "symbol": "person.3",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/clubs",
-      "title": "社团",
-      "group": "发展端",
-      "symbol": "person.3",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/events",
-      "title": "活动与招募",
-      "group": "发展端",
-      "symbol": "calendar.badge.plus",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/events/student-festival",
-      "title": "学生节",
-      "group": "发展端",
-      "symbol": "party.popper",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/collections",
-      "title": "作品征集",
-      "group": "发展端",
-      "symbol": "square.stack",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/collections/registrations",
-      "title": "征集报名",
-      "group": "发展端",
-      "symbol": "list.clipboard",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/collections/mine",
-      "title": "我的征集报名",
-      "group": "发展端",
-      "symbol": "person.text.rectangle",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/collections/showcase",
-      "title": "作品展示",
-      "group": "发展端",
-      "symbol": "photo.on.rectangle",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/community",
-      "title": "发展端社区",
-      "group": "发展端",
-      "symbol": "bubble.left.and.bubble.right",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/liaison",
-      "title": "学生联络",
-      "group": "发展端",
-      "symbol": "person.wave.2",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/sports",
-      "title": "体育与队伍",
-      "group": "发展端",
-      "symbol": "sportscourt",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/sports/matches",
-      "title": "体育赛程",
-      "group": "发展端",
-      "symbol": "flag.checkered",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": false,
-      "native": false
-    },
-    {
-      "path": "/development/finance",
-      "title": "财务工作区",
-      "group": "发展端",
-      "symbol": "chart.bar.doc.horizontal",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": false,
-      "login": true,
-      "native": false
-    },
-    {
-      "path": "/development/admin",
-      "title": "发展端管理",
-      "group": "发展端",
-      "symbol": "gearshape.2",
-      "detail": "按当前账号权限浏览与操作",
-      "listed": true,
-      "admin": true,
-      "login": true,
-      "native": false
     }
   ],
   "aliases": {
@@ -766,7 +469,6 @@
     "/circuit.html": "/circuit",
     "/circuit-embed.html": "/circuit-embed",
     "/circuit-challenge.html": "/circuit-challenge",
-    "/development.html": "/development",
     "/discussion.html": "/discussion",
     "/publish.html": "/publish",
     "/electromagnetic.html": "/electromagnetic",
@@ -792,40 +494,98 @@
     "/world.html": "/world",
     "/index.html": "/"
   },
-  "developmentPatterns": [
-    "^/development/dashboard$",
-    "^/development/shop$",
-    "^/development/inventory$",
-    "^/development/profile$",
-    "^/development/settings$",
-    "^/development/knowledge$",
-    "^/development/knowledge/[^/]{1,256}$",
-    "^/development/information$",
-    "^/development/information/announcements$",
-    "^/development/information/consultations$",
-    "^/development/information/triage$",
-    "^/development/information/proposals$",
-    "^/development/information/proposals/[^/]{1,256}$",
-    "^/development/growth$",
-    "^/development/interest\\-groups$",
-    "^/development/clubs$",
-    "^/development/events$",
-    "^/development/events/student\\-festival$",
-    "^/development/collections$",
-    "^/development/collections/registrations$",
-    "^/development/collections/mine$",
-    "^/development/collections/showcase$",
-    "^/development/collections/showcase/[^/]{1,256}$",
-    "^/development/collections/workbench/[^/]{1,256}$",
-    "^/development/community$",
-    "^/development/community/posts/[^/]{1,256}$",
-    "^/development/liaison$",
-    "^/development/liaison/problems/[^/]{1,256}$",
-    "^/development/events/[^/]{1,256}$",
-    "^/development/sports$",
-    "^/development/sports/matches$",
-    "^/development/sports/[^/]{1,256}$",
-    "^/development/finance$",
-    "^/development/admin$"
+  "navigation": {
+    "primary": [
+      {
+        "path": "/",
+        "title": "首页",
+        "symbol": "house"
+      },
+      {
+        "path": "/discussion",
+        "title": "讨论",
+        "symbol": "bubble.left.and.bubble.right"
+      },
+      {
+        "path": "/publish",
+        "title": "",
+        "symbol": "square.and.pencil"
+      },
+      {
+        "path": "/world",
+        "title": "学习",
+        "symbol": "globe"
+      },
+      {
+        "path": "tools",
+        "title": "工具",
+        "symbol": "wrench.and.screwdriver"
+      }
+    ],
+    "create": [
+      {
+        "path": "/publish",
+        "title": "发帖",
+        "symbol": "square.and.pencil"
+      },
+      {
+        "path": "/aichat",
+        "title": "问问 Max",
+        "symbol": "sparkles"
+      }
+    ],
+    "learning": [
+      {
+        "path": "/world",
+        "title": "学习世界",
+        "symbol": "globe"
+      },
+      {
+        "path": "/laboratory",
+        "title": "实验室",
+        "symbol": "flask"
+      },
+      {
+        "path": "/creative-workshop",
+        "title": "创意工坊",
+        "symbol": "paintbrush"
+      }
+    ],
+    "tools": [
+      {
+        "path": "/workbench",
+        "title": "我的工作台",
+        "symbol": "calendar"
+      },
+      {
+        "path": "/pbl",
+        "title": "PBL计划",
+        "symbol": "person.3"
+      },
+      {
+        "path": "/surveys",
+        "title": "活动报名（试用）",
+        "symbol": "ticket"
+      },
+      {
+        "path": "/settings",
+        "title": "个人设置",
+        "symbol": "gearshape"
+      }
+    ]
+  },
+  "directory": [
+    "学习世界",
+    "讨论区",
+    "我的工作台",
+    "实验室",
+    "创意工坊",
+    "PBL计划",
+    "问问 Max",
+    "活动报名（试用）",
+    "个人设置",
+    "个人与牧场",
+    "管理",
+    "帮助"
   ]
 }

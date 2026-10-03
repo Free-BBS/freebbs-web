@@ -44,6 +44,9 @@ struct CoursesView: View {
             .toolbar { ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink { FeatureWorkspaceView(destination: .init(path: "/search", title: "全站搜索")) } label: { Image(systemName: "magnifyingglass") }.accessibilityLabel("全站搜索")
             } }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink { FeatureWorkspaceView(destination: .init(path: "/world", title: "学习世界")) } label: { Image(systemName: "globe") }.accessibilityLabel("打开完整学习世界")
+            } }
             .refreshable { await store.bootstrap() }
     }
 }

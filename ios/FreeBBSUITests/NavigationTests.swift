@@ -12,6 +12,31 @@ final class NavigationTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.staticTexts["demoBanner"].waitForExistence(timeout: 15))
     }
+    func testWebsiteBottomNavigationCurrencyAndDevelopmentExclusion() {
+        launchPreview()
+        for title in ["首页", "讨论", "发布", "学习", "工具"] { XCTAssertTrue(app.tabBars.buttons[title].exists) }
+        XCTAssertEqual(app.tabBars.buttons.count, 5)
+        XCTAssertTrue(app.staticTexts["电元"].exists)
+        XCTAssertTrue(app.staticTexts["磁元"].exists)
+        XCTAssertFalse(app.staticTexts["磁子"].exists)
+        app.tabBars.buttons["发布"].tap()
+        XCTAssertTrue(app.buttons["menu-/publish"].exists)
+        XCTAssertTrue(app.buttons["menu-/aichat"].exists)
+        app.tabBars.buttons["学习"].tap()
+        for path in ["/world", "/laboratory", "/creative-workshop"] { XCTAssertTrue(app.buttons["menu-" + path].exists) }
+        capture("44-website-learning-navigation")
+        app.tabBars.buttons["工具"].tap()
+        for path in ["/workbench", "/pbl", "/surveys", "/settings"] { XCTAssertTrue(app.buttons["menu-" + path].exists) }
+        XCTAssertFalse(app.buttons["menu-/development"].exists)
+        capture("45-website-tools-navigation")
+        app.tabBars.buttons["首页"].tap()
+        app.buttons["allFeatures"].tap()
+        let search = app.searchFields.firstMatch
+        search.tap(); search.typeText("发展端\n")
+        XCTAssertTrue(app.staticTexts["没有结果"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["feature-/development"].exists)
+        capture("46-development-excluded")
+    }
     func testNativePagesAndCaptureReviewScreenshots() {
         launchPreview()
         capture("01-home")
@@ -23,7 +48,7 @@ final class NavigationTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["信号与系统 · 卷积复习"].waitForExistence(timeout: 5))
         capture("03-workbench")
         back()
-        app.tabBars.buttons["课程"].tap()
+        openLearning("/world")
         app.staticTexts["信号与系统"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["卷积"].waitForExistence(timeout: 5))
         capture("04-course")
@@ -42,12 +67,12 @@ final class NavigationTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["发表讨论"].waitForExistence(timeout: 5))
         capture("08-compose")
         app.buttons["取消"].tap()
-        app.tabBars.buttons["今日"].tap()
+        app.tabBars.buttons["首页"].tap()
         app.buttons["openInbox"].tap()
         capture("09-inbox")
         app.buttons["全部已读"].tap()
         XCTAssertFalse(app.buttons["全部已读"].isEnabled)
-        app.tabBars.buttons["我的"].tap()
+        openProfile()
         capture("10-profile")
         tapListText("帮助与联系")
         XCTAssertTrue(app.navigationBars["帮助与联系"].waitForExistence(timeout: 5))
@@ -58,7 +83,7 @@ final class NavigationTests: XCTestCase {
     func testLandscapeAndLargeDynamicTypeRemainNavigable() {
         launchPreview()
         XCUIDevice.shared.orientation = .landscapeLeft
-        app.tabBars.buttons["课程"].tap()
+        openLearning("/world")
         let landscape = NSPredicate { _, _ in
             let size = XCUIScreen.main.screenshot().image.size
             return size.width > size.height
@@ -71,16 +96,16 @@ final class NavigationTests: XCTestCase {
         app.terminate()
         app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons["课程"].waitForExistence(timeout: 10))
-        app.tabBars.buttons["课程"].tap()
+        XCTAssertTrue(app.tabBars.buttons["学习"].waitForExistence(timeout: 10))
+        openLearning("/world")
         XCTAssertTrue(app.staticTexts["信号与系统"].waitForExistence(timeout: 5))
         capture("13-accessibility-text")
-        app.tabBars.buttons["我的"].tap()
+        openProfile()
         XCTAssertTrue(app.staticTexts["编辑个人资料"].exists)
     }
     func testAccountAndPolicyPages() {
         launchPreview()
-        app.tabBars.buttons["我的"].tap()
+        openProfile()
         tapListText("编辑个人资料")
         capture("14-edit-profile")
         back()
@@ -113,7 +138,7 @@ final class NavigationTests: XCTestCase {
     }
     func testLaboratoriesAndThreadedReplies() {
         launchPreview()
-        app.tabBars.buttons["实验室"].tap()
+        openLearning("/laboratory")
         XCTAssertTrue(app.staticTexts["电路实验室"].waitForExistence(timeout: 5))
         capture("22-laboratories")
         tapIdentifiedElement("lab-/circuits")
@@ -148,7 +173,7 @@ final class NavigationTests: XCTestCase {
     }
     func testNativeCodeEditorAndToolPreview() {
         launchPreview()
-        app.tabBars.buttons["实验室"].tap()
+        openLearning("/laboratory")
         app.descendants(matching: .any).matching(identifier: "lab-/code-lab?language=python").firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Python 实验"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["runLab"].isHittable)
@@ -196,7 +221,7 @@ final class NavigationTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["工作区预览"].waitForExistence(timeout: 5))
         capture("42-feature-workspace-preview")
         back(); back()
-        app.tabBars.buttons["我的"].tap()
+        openProfile()
         tapListText("全部个人设置")
         XCTAssertTrue(app.navigationBars["全部个人设置"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["工作区预览"].exists)
@@ -231,7 +256,7 @@ final class NavigationTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["问问 Max"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.switches["maxConsent"].exists)
         capture("31-max-consent-remembered")
-        app.tabBars.buttons["我的"].tap()
+        openProfile()
         let setting = app.descendants(matching: .any).matching(identifier: "maxConsentSetting").firstMatch
         for _ in 0..<10 {
             if setting.exists && setting.isHittable { break }
@@ -244,10 +269,31 @@ final class NavigationTests: XCTestCase {
         let withdrawn = expectation(for: NSPredicate(format: "value == %@", "0"), evaluatedWith: setting)
         wait(for: [withdrawn], timeout: 5)
         capture("32-max-consent-withdrawn")
-        app.tabBars.buttons["今日"].tap()
+        app.tabBars.buttons["首页"].tap()
         back()
         app.buttons["openMax"].tap()
         XCTAssertTrue(app.switches["maxConsent"].waitForExistence(timeout: 5))
+    }
+    private func openLearning(_ path: String) {
+        app.tabBars.buttons["学习"].tap()
+        // Each tab keeps its navigation stack; return to its menu before choosing.
+        for _ in 0..<8 {
+            if app.buttons["menu-" + path].waitForExistence(timeout: 1) { break }
+            let previous = app.navigationBars.buttons.element(boundBy: 0)
+            guard previous.exists else { XCTFail("Learning menu missing"); return }
+            previous.tap()
+        }
+        app.buttons["menu-" + path].tap()
+    }
+    private func openProfile() {
+        app.tabBars.buttons["工具"].tap()
+        for _ in 0..<8 {
+            if app.buttons["menu-/settings"].waitForExistence(timeout: 1) { break }
+            let previous = app.navigationBars.buttons.element(boundBy: 0)
+            guard previous.exists else { XCTFail("Tools menu missing"); return }
+            previous.tap()
+        }
+        app.buttons["menu-/settings"].tap()
     }
     private func tapIdentifiedElement(_ id: String) {
         let item = app.descendants(matching: .any).matching(identifier: id).firstMatch

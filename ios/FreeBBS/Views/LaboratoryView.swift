@@ -461,10 +461,6 @@ struct LabWebView: UIViewRepresentable {
         let mobile = includeFeatures ? FeatureWebPolicy.mobile : WebContentPolicy.mobileScript
         config.userContentController.addUserScript(.init(source: session, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         config.userContentController.addUserScript(.init(source: mobile, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
-        if includeFeatures {
-            config.userContentController.addUserScript(.init(source: FeatureWebPolicy.embedded(script: bridge, origin: origin), injectionTime: .atDocumentStart, forMainFrameOnly: false))
-            config.userContentController.addUserScript(.init(source: FeatureWebPolicy.embedded(script: FeatureWebPolicy.mobile, origin: origin), injectionTime: .atDocumentEnd, forMainFrameOnly: false))
-        }
         if store != nil { config.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "site") }
         let web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = context.coordinator; web.uiDelegate = context.coordinator
@@ -526,15 +522,18 @@ struct LabWebView: UIViewRepresentable {
         }
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
             guard let url = action.request.url else { decisionHandler(.cancel); return }
+            if WebContentPolicy.sameOrigin(url, origin: parent.origin), FeatureCatalog.unavailableOnPhone(url) {
+                decisionHandler(.cancel); return
+            }
             if action.shouldPerformDownload, action.sourceFrame.isMainFrame,
                (WebContentPolicy.sameOrigin(url, origin: parent.origin) || url.scheme == "blob") {
                 decisionHandler(.download); return
             }
             if action.targetFrame?.isMainFrame == false {
-                if parent.includeFeatures, let top = webView.url, FeatureCatalog.pageURL(url, origin: parent.origin),
-                   url.path != "/circuit-embed", !FeatureWebPolicy.trustedEmbeddedPage(url, top: top, origin: parent.origin) {
+                if parent.includeFeatures, FeatureCatalog.pageURL(url, origin: parent.origin),
+                   url.path != "/circuit-embed" {
                     decisionHandler(.cancel)
-                    if action.navigationType == .linkActivated || action.sourceFrame.request.url.map({ FeatureWebPolicy.trustedEmbeddedPage($0, top: top, origin: parent.origin) }) == true {
+                    if action.navigationType == .linkActivated {
                         parent.browser.nextFeature = FeatureDestination(url: url, origin: parent.origin)
                     }
                     return
@@ -632,8 +631,7 @@ struct LabWebView: UIViewRepresentable {
             guard let url = frame.request.url, frame.securityOrigin.protocol == "https", frame.securityOrigin.host == parent.origin.host,
                   parent.origin.port.map({ frame.securityOrigin.port == $0 }) ?? [0, 443].contains(frame.securityOrigin.port) else { return false }
             if frame.isMainFrame { return parent.allowed(url) }
-            guard parent.includeFeatures, let top = parent.browser.webView?.url else { return false }
-            return FeatureWebPolicy.trustedEmbeddedPage(url, top: top, origin: parent.origin)
+            return false
         }
         func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor () -> Void) {
             guard trusted(frame) else { completionHandler(); return }

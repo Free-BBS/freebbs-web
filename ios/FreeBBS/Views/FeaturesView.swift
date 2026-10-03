@@ -67,7 +67,9 @@ struct FeatureWorkspaceView: View {
     }
     var body: some View {
         Group {
-            if feature?.admin == true && store.user?.isAdmin != true {
+            if URL(string: destination.path, relativeTo: store.configuration.origin).map(FeatureCatalog.unavailableOnPhone) == true || feature == nil {
+                ContentUnavailableView("此功能暂未在 iPhone 开放", systemImage: "iphone")
+            } else if feature?.admin == true && store.user?.isAdmin != true {
                 ContentUnavailableView("需要管理权限", systemImage: "lock.shield", description: Text("请使用具备对应权限的账号。"))
             } else if feature?.login == true && store.user == nil {
                 ContentUnavailableView {
@@ -83,7 +85,6 @@ struct FeatureWorkspaceView: View {
                 workspace
             }
         }.navigationTitle(browser.pageTitle ?? destination.title).navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .tabBar)
             .navigationDestination(item: $browser.nextFeature) { FeatureWorkspaceView(destination: $0) }
             .onDisappear { browser.resolveDialog(nil); browser.resolveConsent(false); browser.resolveFiles(nil) }
     }
@@ -157,4 +158,67 @@ struct FeatureWorkspaceView: View {
                 Button("确定", role: .cancel) { browser.downloadError = nil }
             } message: { Text(browser.downloadError ?? "") }
     }
+}
+
+// The website's mobile menus provide the order and labels; SwiftUI provides
+// the navigation, scrolling, typography, safe areas and system glass chrome.
+struct WebsiteMenuView: View {
+    enum Kind { case create, learning, tools }
+    @Environment(AppStore.self) private var store
+    let kind: Kind
+    private var items: [SiteNavigationItem] {
+        switch kind {
+        case .create: FeatureCatalog.navigation.create
+        case .learning: FeatureCatalog.navigation.learning
+        case .tools: FeatureCatalog.navigation.tools
+        }
+    }
+    private var title: String {
+        switch kind { case .create: "发布"; case .learning: "学习"; case .tools: "工具" }
+    }
+    var body: some View {
+        List {
+            if kind == .learning {
+                Section { ForEach(items.prefix(1)) { menuRow($0) } }
+                Section("探索与实践") { ForEach(items.dropFirst()) { menuRow($0) } }
+            } else {
+                Section {
+                    if kind == .tools && store.user == nil {
+                        Button { store.showLogin = true } label: { Label("登录 / 注册", systemImage: "person.crop.circle").frame(minHeight: 44) }
+                    }
+                    ForEach(items) { menuRow($0) }
+                }
+            }
+            if kind == .tools {
+                Section {
+                    if store.user?.isAdmin == true { FeatureLink(path: "/system-settings") }
+                    NavigationLink { InboxView() } label: { Label("通知中心", systemImage: "bell.badge") }
+                        .accessibilityIdentifier("menu-inbox")
+                }
+                Section("个人空间") {
+                    FeatureLink(path: "/profile")
+                    FeatureLink(path: "/inventory", title: "仓库")
+                    FeatureLink(path: "/electromagnetic", title: "电磁场")
+                }
+                Section {
+                    NavigationLink { FeaturesView() } label: { Label("所有功能", systemImage: "square.grid.2x2") }
+                    FeatureLink(path: "/guide")
+                    NavigationLink { SupportView() } label: { Label("帮助与联系", systemImage: "questionmark.circle") }
+                }
+            }
+        }.listStyle(.insetGrouped).navigationTitle(title)
+    }
+    private func menuRow(_ item: SiteNavigationItem) -> some View {
+        NavigationLink {
+            switch item.path {
+            case "/world": CoursesView().navigationTitle("学习世界")
+            case "/laboratory": LaboratoryView()
+            case "/settings": ProfileView().navigationTitle("个人设置")
+            default: FeatureWorkspaceView(destination: .init(path: item.path, title: item.title))
+            }
+        } label: {
+            Label(item.title, systemImage: item.symbol).frame(minHeight: 44)
+        }.accessibilityIdentifier("menu-" + item.path)
+    }
+
 }

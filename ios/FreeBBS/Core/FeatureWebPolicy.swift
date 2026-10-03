@@ -1,25 +1,6 @@
 import Foundation
 
 enum FeatureWebPolicy {
-    static let embeddedPaths: Set<String> = ["/settings", "/profile", "/inventory", "/electromagnetic"]
-    static func trustedEmbeddedPage(_ url: URL, top: URL, origin: URL) -> Bool {
-        guard WebContentPolicy.sameOrigin(url, origin: origin), WebContentPolicy.sameOrigin(top, origin: origin),
-              top.path.hasPrefix("/development/"), FeatureCatalog.pageURL(top, origin: origin), embeddedPaths.contains(url.path) else { return false }
-        let embed = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.filter { $0.name == "embed" } ?? []
-        return embed.count == 1 && embed.first?.value == "development"
-    }
-    static func embedded(script: String, origin: URL) -> String {
-        """
-        (() => {
-          if (window.top === window || location.origin !== new URL(\(WebContentPolicy.json(origin.absoluteString))).origin) return;
-          try { if (window.top.location.origin !== location.origin || !window.top.location.pathname.startsWith('/development/')) return; } catch { return; }
-          if (!\(WebContentPolicy.json(Array(embeddedPaths))).includes(location.pathname)) return;
-          const embed = new URLSearchParams(location.search).getAll('embed');
-          if (embed.length !== 1 || embed[0] !== 'development') return;
-          \(script)
-        })();
-        """
-    }
     static func session(origin: URL, token: String?, dark: Bool, preferences: [String: String] = [:], preferenceKeys: [String] = Array(WebPreferences.keys)) -> String {
         """
         (() => {
@@ -113,13 +94,6 @@ enum FeatureWebPolicy {
         html.freebbs-native-feature :is(.knowledge-document,.knowledge-document-content,.markdown-preview) { overflow-wrap:anywhere; }
         html.freebbs-native-feature .discussion-layout { grid-template-columns:minmax(0,1fr)!important; }
         html.freebbs-native-feature .discussion-sidebar { position:static!important; width:100%!important; }
-        html.freebbs-native-feature .app-shell { grid-template-columns:minmax(0,1fr)!important; padding:0!important; margin:0!important; }
-        html.freebbs-native-feature .app-shell>.sidebar { display:none!important; }
-        html.freebbs-native-feature .app-shell>.sidebar+div { min-width:0; }
-        html.freebbs-native-feature .page-content { padding:16px!important; width:100%; box-sizing:border-box; }
-        html.freebbs-native-feature .main-site-header { position:static!important; flex-wrap:wrap; padding:12px 16px!important; height:auto!important; }
-        html.freebbs-native-feature .main-site-header-title { display:none; }
-        html.freebbs-native-feature .main-site-account { flex-wrap:wrap; gap:10px; width:100%; }
         html.freebbs-native-feature :is(.discussion-filters,.discussion-board-tabs) { display:flex; overflow-x:auto; flex-wrap:nowrap; }
         html.freebbs-native-feature :is(.discussion-filters,.discussion-board-tabs)>* { flex-shrink:0; }
         @media(max-width:600px) {
@@ -147,6 +121,11 @@ enum FeatureWebPolicy {
         for (const main of document.querySelectorAll('.main-content')) {
           const scene = document.body.matches('.ranch-gallery-page,.ranch-page');
           for (const [key,value] of Object.entries({margin:'0',padding:scene ? '0' : '16px',width:'100%',...(scene ? {inset:'0',height:'100dvh','min-height':'0'} : {})})) main.style.setProperty(key,value,'important');
+        }
+        // Remove excluded destinations even when website scripts add links later.
+        for (const link of document.querySelectorAll('a[href]')) {
+          let url;try { url = new URL(link.href,location.href); } catch { continue; }
+          if (url.origin === location.origin && (url.pathname === '/development' || url.pathname === '/development.html' || url.pathname.startsWith('/development/'))) link.remove();
         }
         for (const table of document.querySelectorAll('main table')) {
           if (table.parentElement.classList.contains('native-table-scroll')) continue;

@@ -36,7 +36,7 @@ struct ProfileView: View {
             }
             Section("个人空间") {
                 FeatureLink(path: "/profile")
-                FeatureLink(path: "/settings")
+                FeatureLink(path: "/settings", title: "全部个人设置")
                 FeatureLink(path: "/ranch")
                 FeatureLink(path: "/ranch-dye")
                 FeatureLink(path: "/ranch-gallery")
@@ -47,7 +47,6 @@ struct ProfileView: View {
                 Section("管理") {
                     FeatureLink(path: "/system-settings")
                     FeatureLink(path: "/adminusers")
-                    FeatureLink(path: "/development/admin")
                 }
             }
             if store.user != nil {
@@ -255,7 +254,7 @@ struct SupportView: View {
         PageSurface {
             Paper {
                 SectionTitle(title: "我们愿意听见你的声音", subtitle: "问题、建议与社区反馈")
-                Text("举报内容：打开讨论详情 → 右侧内容菜单 → 举报内容。\n屏蔽用户：同一菜单选择“屏蔽用户”。\n账号删除：我的 → 删除账号。")
+                Text("举报内容：打开讨论详情 → 右侧内容菜单 → 举报内容。\n屏蔽用户：同一菜单选择“屏蔽用户”。\n账号删除：工具 → 个人设置 → 删除账号。")
                 if !store.configuration.supportEmail.isEmpty,
                    let url = URL(string: "mailto:" + store.configuration.supportEmail) {
                     Link(destination: url) { Label("联系支持", systemImage: "envelope").frame(minHeight: 48) }

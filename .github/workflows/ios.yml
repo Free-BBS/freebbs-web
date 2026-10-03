@@ -5,7 +5,8 @@ on:
     paths:
       - 'ios/**'
       - 'server.js'
-      - 'development/apps/web/src/app/router.tsx'
+      - 'public/mobile-shell.js'
+      - 'public/app.js'
       - 'backend/mobile-safety*'
       - 'database/migrations/032_mobile_safety.sql'
       - '.github/workflows/ios.yml'
@@ -32,7 +33,7 @@ jobs:
       - run: npx eslint backend/mobile-safety.js backend/mobile-safety.test.js
       - name: Verify bundled Markdown and embed assets match website sources
         run: python3 ios/scripts/bundle-rich-content.py --check
-      - name: Verify every website and development route is covered
+      - name: Verify main-site routes and website navigation are synchronized
         run: python3 ios/scripts/generate-feature-catalog.py --check
 
   native-client:

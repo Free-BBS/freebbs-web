@@ -21,7 +21,7 @@ import WebKit
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loaded?.fulfill(); loaded = nil }
 
     func testFeatureDeepLinksRetainQueriesAndRejectUntrustedOrNonPageDestinations() throws {
-        for raw in ["/course?course=circuits", "/knowledge?course=signals&point=fourier#applications", "/development/collections/workbench/event-42", "/settings.html/", "/development/information/proposals/p-42"] {
+        for raw in ["/course?course=circuits", "/knowledge?course=signals&point=fourier#applications", "/settings.html/"] {
             let url = URL(string: raw, relativeTo: origin)!.absoluteURL
             let destination = try XCTUnwrap(FeatureDestination(url: url, origin: origin), raw)
             XCTAssertEqual(destination.path, url.absoluteString)
@@ -133,13 +133,18 @@ import WebKit
             XCTAssertFalse(ConnectorAuthorizationPolicy.isCallback(URL(string: raw, relativeTo: origin)!.absoluteURL, origin: origin))
         }
     }
-    func testDevelopmentEmbeddedSettingsCanUploadButUntrustedFramesCannotUseBridge() {
-        let top = URL(string: "/development/settings", relativeTo: origin)!.absoluteURL
-        XCTAssertTrue(FeatureWebPolicy.trustedEmbeddedPage(URL(string: "/settings?embed=development", relativeTo: origin)!.absoluteURL, top: top, origin: origin))
-        for raw in ["/settings", "/settings?embed=development&embed=other", "/aichat?embed=development", "/uploads/tool.html?embed=development", "https://attacker.test/settings?embed=development"] {
-            XCTAssertFalse(FeatureWebPolicy.trustedEmbeddedPage(URL(string: raw, relativeTo: origin)!.absoluteURL, top: top, origin: origin))
+    func testDevelopmentIsExcludedFromCatalogAliasesAndAllDeepLinks() {
+        XCTAssertFalse(FeatureCatalog.entries.contains { $0.path.hasPrefix("/development") })
+        for raw in ["/development", "/development/", "/development.html", "/development/settings", "/development/admin", "/development/collections/workbench/event-42"] {
+            let url = URL(string: raw, relativeTo: origin)!.absoluteURL
+            XCTAssertTrue(FeatureCatalog.unavailableOnPhone(url), raw)
+            XCTAssertNil(FeatureDestination(url: url, origin: origin), raw)
+            XCTAssertNil(FeatureCatalog.feature(for: url), raw)
         }
-        XCTAssertFalse(FeatureWebPolicy.trustedEmbeddedPage(URL(string: "/settings?embed=development", relativeTo: origin)!.absoluteURL, top: origin.appendingPathComponent("discussion"), origin: origin))
+        XCTAssertEqual(FeatureCatalog.navigation.primary.map(\.path), ["/", "/discussion", "/publish", "/world", "tools"])
+        XCTAssertEqual(FeatureCatalog.navigation.learning.map(\.path), ["/world", "/laboratory", "/creative-workshop"])
+        XCTAssertEqual(FeatureCatalog.navigation.tools.map(\.path), ["/workbench", "/pbl", "/surveys", "/settings"])
+        XCTAssertEqual(FeatureCatalog.navigation.create.map(\.path), ["/publish", "/aichat"])
     }
     func testSessionRestoresPreferencesOnceAndRetainsLaterChangesAcrossDocuments() async throws {
         let web = await reader()
@@ -207,7 +212,7 @@ import WebKit
         let result = try await web.callAsyncJavaScript("""
             let writes=0;
             const storage={setItem:()=>writes++,removeItem:()=>writes++}, mock={};
-            for(const location of [{origin:'https://attacker.test',pathname:'/settings'}, {origin:'https://www.free-bbs.cn',pathname:'/api/auth/me'}]) {
+            for(const location of [{origin:'https://attacker.test',pathname:'/settings'}, {origin:'https://www.free-bbs.cn',pathname:'/api/auth/me'}, {origin:'https://www.free-bbs.cn',pathname:'/development'}, {origin:'https://www.free-bbs.cn',pathname:'/development/settings'}]) {
               Function('location','window','localStorage',script)(location,mock,storage);
             }
             return {writes,injected:document.documentElement.classList.contains('freebbs-native-feature')};
@@ -223,7 +228,7 @@ import WebKit
             document.documentElement.classList.add('freebbs-native-feature');
             document.body.classList.add('has-mobile-header');
             document.head.insertAdjacentHTML('beforeend','<style>.settings-grid{display:grid;grid-template-columns:400px 400px}html body.has-mobile-header .topbar{display:flex!important}table{width:900px}input,button{height:20px;font-size:12px}</style>');
-            document.body.innerHTML='<header class="topbar">duplicate header</header><div class="page-shell"><main class="main-content"><div class="settings-grid"><section><input value="editable"><input type="hidden" value="keep-hidden"><button id="save">保存</button></section><section>Settings</section></div><dialog><button>确认</button></dialog></main></div>';
+            document.body.innerHTML='<a href="/development">excluded</a><a href="/development/settings">excluded child</a><a href="/workbench" id="mainSiteLink">keep main site</a><header class="topbar">duplicate header</header><div class="page-shell"><main class="main-content"><div class="settings-grid"><section><input value="editable"><input type="hidden" value="keep-hidden"><button id="save">保存</button></section><section>Settings</section></div><dialog><button>确认</button></dialog></main></div>';
             eval(script);
             document.body.classList.add('has-mobile-header');
             document.head.insertAdjacentHTML('beforeend','<style>body:not(.auth-page-body) .mobile-nav.mobile-nav-compact{display:flex!important}</style>');
@@ -234,13 +239,15 @@ import WebKit
             return {width:innerWidth,pageWidth:document.documentElement.scrollWidth,columns:getComputedStyle(document.querySelector('.settings-grid')).gridTemplateColumns.split(' ').length,
               duplicate:getComputedStyle(document.querySelector('.topbar')).display,button:document.getElementById('save').getBoundingClientRect().height,
               input:input.getBoundingClientRect().height,font:getComputedStyle(input).fontSize,hidden:getComputedStyle(document.querySelector('[type=hidden]')).display,
-              lateNavigation:getComputedStyle(document.querySelector('.mobile-nav')).display,scroll:getComputedStyle(document.querySelector('.native-table-scroll')).overflowX,dialog:dialog.open};
+              excludedLinks:document.querySelectorAll('a[href^=\"/development\"]').length,mainLink:!!document.getElementById('mainSiteLink'),lateNavigation:getComputedStyle(document.querySelector('.mobile-nav')).display,scroll:getComputedStyle(document.querySelector('.native-table-scroll')).overflowX,dialog:dialog.open};
             """, arguments: ["script":FeatureWebPolicy.mobile], in: nil, contentWorld: .page)
         let values = try XCTUnwrap(result as? [String: Any])
         XCTAssertEqual(values["width"] as? Int, 375)
         XCTAssertLessThanOrEqual(try XCTUnwrap(values["pageWidth"] as? Int), 375)
         XCTAssertEqual(values["columns"] as? Int, 1)
         XCTAssertEqual(values["duplicate"] as? String, "none")
+        XCTAssertEqual(values["excludedLinks"] as? Int, 0)
+        XCTAssertEqual(values["mainLink"] as? Bool, true)
         XCTAssertEqual(values["lateNavigation"] as? String, "none")
         XCTAssertGreaterThanOrEqual(try XCTUnwrap(values["button"] as? Double), 44)
         XCTAssertGreaterThanOrEqual(try XCTUnwrap(values["input"] as? Double), 44)

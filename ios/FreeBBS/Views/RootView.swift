@@ -3,16 +3,24 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.scenePhase) private var scenePhase
-    @State private var tab = 0
+    @State private var tab = "/"
     @AppStorage("freebbs.native.theme") private var theme = "system"
     var body: some View {
         @Bindable var store = store
         TabView(selection: $tab) {
-            Tab("今日", systemImage: "sun.max", value: 0) { NavigationStack { HomeView() } }
-            Tab("课程", systemImage: "square.stack.3d.up", value: 1) { NavigationStack { CoursesView() } }
-            Tab("讨论", systemImage: "bubble.left.and.bubble.right", value: 2) { NavigationStack { DiscussionView() } }
-            Tab("实验室", systemImage: "flask", value: 3) { NavigationStack { LaboratoryView() } }
-            Tab("我的", systemImage: "person.crop.circle", value: 4) { NavigationStack { ProfileView() } }
+            ForEach(FeatureCatalog.navigation.primary) { item in
+                Tab(item.title.isEmpty ? "发布" : item.title, systemImage: item.path == "/publish" ? "plus" : item.symbol, value: item.path) {
+                    NavigationStack {
+                        switch item.path {
+                        case "/": HomeView()
+                        case "/discussion": DiscussionView()
+                        case "/publish": WebsiteMenuView(kind: .create)
+                        case "/world": WebsiteMenuView(kind: .learning)
+                        default: WebsiteMenuView(kind: .tools)
+                        }
+                    }
+                }
+            }
         }
         .preferredColorScheme(theme == "dark" ? .dark : theme == "light" ? .light : nil)
         .sheet(isPresented: Binding(get: { store.showLogin && store.featureDestination == nil }, set: { store.showLogin = $0 })) { NavigationStack { AuthenticationView() }.environment(store) }

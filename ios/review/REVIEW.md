@@ -14,6 +14,7 @@
 | `FreeBBS/Views/LaboratoryView.swift` | 同域白名单、临时 Web 会话、手机实验布局、原生提示和文件分享 |
 | `FreeBBS/Views/RichContentView.swift`、`WebSource/` | 离线共享渲染、参数传递、HTTPS、主 frame 桥接、HTML 工具 opaque sandbox |
 | `FreeBBS/Views/CoursesView.swift` | 手机知识点与关系视图、真实地图接口、分区正文 |
+| `FreeBBS/Core/FeatureCatalog.swift`、`Views/RootView.swift`、`Views/FeaturesView.swift` | 网页同序底栏/目录、主站 41 路由覆盖、发展端全部排除 |
 | `FreeBBS/Views/ProfileView.swift` | 账号设置、真实删除申请状态、客服 |
 | `FreeBBS/Views/ChatView.swift` | AI 数据发送确认、上下文限制、取消请求 |
 | `../backend/mobile-safety.js` | 权限、举报限额/去重、删除申请验证、管理员队列 |

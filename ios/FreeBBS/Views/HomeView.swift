@@ -30,8 +30,8 @@ struct HomeView: View {
                         Image(systemName: "leaf").font(.title).foregroundStyle(Palette.teal).accessibilityHidden(true)
                     }
                     HStack(spacing: 20) {
-                        VStack(alignment: .leading) { Text("\(user.electrons)").font(.title2.bold()); Text("电子").font(.caption).foregroundStyle(.secondary) }
-                        VStack(alignment: .leading) { Text("\(user.manetrons)").font(.title2.bold()); Text("磁子").font(.caption).foregroundStyle(.secondary) }
+                        VStack(alignment: .leading) { Text("\(user.electrons)").font(.title2.bold()); Text("电元").font(.caption).foregroundStyle(.secondary) }
+                        VStack(alignment: .leading) { Text("\(user.manetrons)").font(.title2.bold()); Text("磁元").font(.caption).foregroundStyle(.secondary) }
                         Spacer()
                         Button(checkedIn ? "今日已签到" : "签到") { Task { await checkIn() } }
                             .buttonStyle(.bordered).controlSize(.large).disabled(checkedIn || checkingIn)
@@ -55,8 +55,15 @@ struct HomeView: View {
                 }
             }
         }
-        .navigationTitle("今日")
-        .toolbar { ToolbarItem(placement: .topBarTrailing) {
+        .navigationTitle("首页")
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                NavigationLink { ProfileView() } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("个人设置")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink { FeatureWorkspaceView(destination: .init(path: "/inventory", title: "仓库")) } label: { Image(systemName: "shippingbox") }.accessibilityLabel("仓库")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
             NavigationLink { InboxView() } label: {
                 Image(systemName: store.unreadCount > 0 ? "bell.badge" : "bell")
             }.accessibilityLabel("通知").accessibilityValue("\(store.unreadCount) 条未读通知").accessibilityIdentifier("openInbox")

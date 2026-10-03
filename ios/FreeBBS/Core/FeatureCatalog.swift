@@ -13,36 +13,54 @@ struct SiteFeature: Decodable, Identifiable, Hashable {
     var id: String { path }
 }
 
+struct SiteNavigationItem: Decodable, Identifiable {
+    let path: String
+    let title: String
+    let symbol: String
+    var id: String { path }
+}
+struct SiteNavigation: Decodable {
+    let primary: [SiteNavigationItem]
+    let create: [SiteNavigationItem]
+    let learning: [SiteNavigationItem]
+    let tools: [SiteNavigationItem]
+}
+
 enum FeatureCatalog {
     private struct Document: Decodable {
         let entries: [SiteFeature]
         let aliases: [String: String]
-        let developmentPatterns: [String]
+        let navigation: SiteNavigation
+        let directory: [String]
     }
     private static let document: Document = {
         let url = Bundle.main.url(forResource: "FeatureCatalog", withExtension: "json")!
         return try! JSONDecoder().decode(Document.self, from: Data(contentsOf: url))
     }()
     static var entries: [SiteFeature] { document.entries }
-    static let groups = ["学习", "计划与活动", "社区与创作", "实验与工具", "个人与牧场", "发展端", "管理", "帮助"]
+    static var navigation: SiteNavigation { document.navigation }
+    static var groups: [String] { document.directory }
     static var navigationScript: String {
         """
         const nativePaths = \(WebContentPolicy.json(entries.map(\.path) + Array(document.aliases.keys)));
-        const nativePatterns = \(WebContentPolicy.json(document.developmentPatterns));
         const nativePath = location.pathname.length > 1 ? location.pathname.replace(/\\/$/,'') : location.pathname;
-        const nativePageAllowed = nativePaths.includes(nativePath) || nativePatterns.some(pattern => new RegExp(pattern).test(nativePath));
+        const nativePageAllowed = nativePaths.includes(nativePath);
         """
     }
     static func canonicalPath(_ path: String) -> String {
         let normalized = path.count > 1 && path.hasSuffix("/") ? String(path.dropLast()) : path
         return document.aliases[normalized] ?? normalized
     }
+    static func unavailableOnPhone(_ url: URL) -> Bool {
+        let path = canonicalPath(url.path)
+        return path == "/development" || path == "/development.html" || path.hasPrefix("/development/")
+    }
     static func pageURL(_ url: URL, origin: URL) -> Bool {
-        guard WebContentPolicy.sameOrigin(url, origin: origin) else { return false }
+        guard WebContentPolicy.sameOrigin(url, origin: origin), !unavailableOnPhone(url) else { return false }
         let path = canonicalPath(url.path)
         guard !path.split(separator: "/").contains(where: { $0 == "." || $0 == ".." }) else { return false }
         if entries.contains(where: { $0.path == path }) { return true }
-        return document.developmentPatterns.contains { path.range(of: $0, options: .regularExpression) != nil }
+        return false
     }
     static func feature(for url: URL) -> SiteFeature? {
         entries.first { $0.path == canonicalPath(url.path) } ?? entries
