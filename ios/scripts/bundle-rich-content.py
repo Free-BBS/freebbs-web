@@ -36,7 +36,13 @@ for name in ['circuit-embeds.css', 'tool-embeds.css', 'lab-results.css']:
 css += '\n' + (ROOT / 'ios/WebSource/reader.css').read_text()
 code = '\n'.join(path.read_text() for path in scripts) + '\n' + engine
 for name in ['circuit-embeds.js', 'tool-embeds.js', 'lab-results.js']:
-    code += '\n' + (ROOT / 'public' / name).read_text().replace('window.location.origin', '(window.FreeBBSOrigin || window.location.origin)')
+    embedded = (ROOT / 'public' / name).read_text().replace('window.location.origin', '(window.FreeBBSOrigin || window.location.origin)')
+    if name == 'lab-results.js':
+        anchor = "link.href = '/lab-results.css';"
+        if embedded.count(anchor) != 1:
+            raise SystemExit('Lab result stylesheet source changed; review the native origin adaptation.')
+        embedded = embedded.replace(anchor, "link.href = new URL('/lab-results.css', window.FreeBBSOrigin || window.location.origin).href;")
+    code += '\n' + embedded
 code += '\n' + (ROOT / 'ios/WebSource/reader.js').read_text()
 html = '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><style>' + css + '</style></head><body><article id="content" aria-label="正文"></article><script>' + code.replace('</script', '<\\/script') + '</script></body></html>\n'
 licenses = '\n\n'.join((ROOT / p).read_text() for p in ['node_modules/marked/LICENSE.md', 'node_modules/katex/LICENSE', 'node_modules/@highlightjs/cdn-assets/LICENSE'])

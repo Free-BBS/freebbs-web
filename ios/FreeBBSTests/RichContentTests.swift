@@ -58,6 +58,65 @@ final class RichContentTests: XCTestCase, WKNavigationDelegate {
             }
         }
     }
+    func testLocalReaderLoadsReferencesThroughBoundedNativeHTTP() async throws {
+        StubURLProtocol.handler = { request in
+            XCTAssertEqual(request.httpMethod, "GET")
+            XCTAssertEqual(request.url?.host, "www.free-bbs.cn")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-secret")
+            switch request.url?.path {
+            case "/api/tools/tool-fixture": return (200, "{\"tool\":{\"id\":\"tool-fixture\"}}")
+            case "/api/labs/experiments/lab-fixture": return (200, "{\"experiment\":{\"id\":\"lab-fixture\"}}")
+            default: XCTFail("Unexpected renderer request"); return (403, "{}")
+            }
+        }
+        defer { StubURLProtocol.handler = nil }
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [StubURLProtocol.self]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        var height = 48.0; var state = RichContentLoadState.loading; var links: [String] = []
+        let reader = RichWebView(source: "## 引用正文\n\n实际正文", origin: origin, token: "test-secret", dark: false,
+            fontSize: 17, allowReferences: false, height: Binding(get: { height }, set: { height = $0 }),
+            readingStyle: ReadingStyle(raw: nil), loadState: Binding(get: { state }, set: { state = $0 }),
+            referenceSession: session, link: { links.append($0) }, copy: { _ in })
+        let coordinator = reader.makeCoordinator(); let web = reader.makeWebView(coordinator: coordinator)
+        web.frame = CGRect(x: 0, y: 0, width: 320, height: 48)
+        defer {
+            coordinator.invalidate(); web.stopLoading(); web.navigationDelegate = nil
+            web.configuration.userContentController.removeScriptMessageHandler(forName: "reader")
+        }
+        let deadline = Date().addingTimeInterval(20)
+        while Date() < deadline && state != .ready { try await Task.sleep(for: .milliseconds(100)) }
+        XCTAssertEqual(state, .ready)
+        let result = try await web.callAsyncJavaScript("""
+            const tool = await (await fetch(origin + '/api/tools/tool-fixture')).json();
+            const lab = await (await fetch(origin + '/api/labs/experiments/lab-fixture')).json();
+            let blocked = 0;
+            try { await fetch(origin + '/api/auth/me'); } catch { blocked++; }
+            try { await fetch(origin + '/api/tools/tool-fixture', {method:'POST'}); } catch { blocked++; }
+            const link = document.createElement('a'); link.href = '/tool-workshop?tool=tool-fixture';
+            document.getElementById('content').append(link); link.click();
+            return {tool:tool.tool.id, lab:lab.experiment.id, blocked, base:document.baseURI};
+            """, arguments: ["origin":origin.absoluteString], in: nil, contentWorld: .page)
+        let value = try XCTUnwrap(result as? [String: Any])
+        XCTAssertEqual(value["tool"] as? String, "tool-fixture")
+        XCTAssertEqual(value["lab"] as? String, "lab-fixture")
+        XCTAssertEqual(value["blocked"] as? Int, 2)
+        XCTAssertTrue((value["base"] as? String)?.hasPrefix("file:") == true)
+        let linkDeadline = Date().addingTimeInterval(5)
+        while Date() < linkDeadline && links.isEmpty { try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertEqual(links, [origin.absoluteString + "/tool-workshop?tool=tool-fixture"])
+    }
+    func testReaderReferenceBoundaryRejectsOtherOriginsAndRoutes() {
+        for path in ["/api/tools/tool-fixture", "/api/labs/experiments/lab-fixture"] {
+            XCTAssertEqual(RichReferencePolicy.path(URL(string: origin.absoluteString + path)!, origin: origin), path)
+        }
+        for raw in ["https://attacker.test/api/tools/tool-fixture", "http://www.free-bbs.cn/api/tools/tool-fixture",
+                    "https://test-secret@www.free-bbs.cn/api/tools/tool-fixture", "https://www.free-bbs.cn/api/auth/me",
+                    "https://www.free-bbs.cn/api/tools/a%2Fb", "https://www.free-bbs.cn/api/tools/%2e%2e/secret",
+                    "https://www.free-bbs.cn/api/tools/tool-fixture?token=x", "https://www.free-bbs.cn/api/tools/tool-fixture#x"] {
+            XCTAssertNil(RichReferencePolicy.path(URL(string: raw)!, origin: origin), raw)
+        }
+    }
     func testOfflineFormulaTableCodeAndImages() async throws {
         let web = await reader()
         let source = "## 实验\n\n$E=mc^2$\n\n$$\\int_0^1 x^2 dx$$\n\n| 时间 | 电压 |\n| --- | --- |\n| 0 | 1 |\n\n```python\nprint(1 + 2)\n```\n\n![波形](/uploads/native-test-wave.png)"

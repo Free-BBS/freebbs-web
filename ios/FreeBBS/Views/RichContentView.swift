@@ -12,6 +12,17 @@ enum RichContentEngine {
 
 enum RichContentLoadState { case loading, ready, failed }
 
+enum RichReferencePolicy {
+    static func path(_ url: URL, origin: URL) -> String? {
+        guard url.scheme == "https", url.user == nil, url.password == nil,
+              url.query == nil, url.fragment == nil, WebContentPolicy.sameOrigin(url, origin: origin),
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              components.percentEncodedPath == url.path,
+              url.path.range(of: "^/api/(tools/|labs/experiments/)[A-Za-z0-9_-]{1,80}$", options: .regularExpression) != nil else { return nil }
+        return url.path
+    }
+}
+
 struct RichMarkdownContent: View {
     @Environment(AppStore.self) private var store
     @Environment(\.colorScheme) private var colorScheme
@@ -74,6 +85,7 @@ struct RichWebView: UIViewRepresentable {
     @Binding var height: Double
     let readingStyle: ReadingStyle
     @Binding var loadState: RichContentLoadState
+    var referenceSession: URLSession? = nil
     let link: (String) -> Void
     let copy: (String) -> Void
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -110,14 +122,19 @@ struct RichWebView: UIViewRepresentable {
         private var invalidated = false
         private var documentRendered = false
         private var loadGeneration = 0
+        private weak var webView: WKWebView?
+        private var referenceTasks: [String: Task<Void, Never>] = [:]
         init(_ parent: RichWebView) { self.parent = parent }
         func invalidate() {
             invalidated = true
             recoveryTask?.cancel(); recoveryTask = nil
             loadingDeadline?.cancel(); loadingDeadline = nil
+            referenceTasks.values.forEach { $0.cancel() }; referenceTasks.removeAll()
         }
         func loadDocument(_ web: WKWebView) {
             guard !invalidated else { return }
+            webView = web
+            referenceTasks.values.forEach { $0.cancel() }; referenceTasks.removeAll()
             ready = false; renderedKey = ""
             documentRendered = false; loadGeneration += 1
             Task { @MainActor [weak self] in
@@ -166,12 +183,14 @@ struct RichWebView: UIViewRepresentable {
             renderedKey = key
             let generation = loadGeneration
             web.callAsyncJavaScript("""
+                window.nativeReaderGeneration = generation;
                 window.renderNativeContent(source, origin, token, dark, fontSize, allowReferences);
                 document.body.style.fontFamily = bodyFamily;
                 for (const heading of document.querySelectorAll('#content h1,#content h2,#content h3')) heading.style.fontFamily = headingFamily;
                 """,
                 arguments: ["source":parent.source, "origin":parent.origin.absoluteString, "token":parent.token ?? "", "dark":parent.dark,
                             "fontSize":parent.fontSize * parent.readingStyle.scale, "allowReferences":parent.allowReferences,
+                            "generation":generation,
                             "bodyFamily":parent.readingStyle.bodyFamily, "headingFamily":parent.readingStyle.headingFamily], in: nil, in: .page) { [weak self] result in
                 guard let self, !self.invalidated, self.loadGeneration == generation, self.renderedKey == key else { return }
                 switch result {
@@ -186,11 +205,47 @@ struct RichWebView: UIViewRepresentable {
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
             // Opaque tool frames have no access to native clipboard, navigation or sizing.
             guard !invalidated, message.frameInfo.isMainFrame, let data = message.body as? [String: Any] else { return }
+            if data["type"] as? String == "fetch" || data["type"] as? String == "cancelFetch" {
+                guard data["generation"] as? Int == loadGeneration,
+                      let id = data["id"] as? String, id.count <= 80 else { return }
+                if data["type"] as? String == "cancelFetch" { referenceTasks.removeValue(forKey: id)?.cancel(); return }
+                fetchReference(data, id: id); return
+            }
             if data["type"] as? String == "height", let value = data["value"] as? Double, value.isFinite {
                 let next = max(24, min(200000, value))
                 if abs(parent.height - next) > 1 { parent.height = next }
             } else if data["type"] as? String == "link", let value = data["value"] as? String { parent.link(value) }
             else if data["type"] as? String == "copy", let value = data["value"] as? String, value.count <= 50000 { parent.copy(value) }
+        }
+        private func fetchReference(_ data: [String: Any], id: String) {
+            guard let web = webView else { return }
+            let generation = loadGeneration
+            guard referenceTasks[id] == nil, referenceTasks.count < 8,
+                  data["method"] as? String == "GET", let raw = data["url"] as? String,
+                  let url = URL(string: raw), let path = RichReferencePolicy.path(url, origin: parent.origin) else {
+                finishReference(web, id: id, generation: generation, status: 403, body: "{}"); return
+            }
+            let api = APIClient(origin: parent.origin, session: parent.referenceSession)
+            api.token = parent.token
+            referenceTasks[id] = Task { @MainActor [weak self, weak web] in
+                var status = 200; var body = "{}"
+                do {
+                    let record: SiteRecord = try await api.request(path, timeout: 15)
+                    let encoded = try JSONEncoder().encode(record)
+                    guard encoded.count <= 5 * 1024 * 1024, let value = String(data: encoded, encoding: .utf8) else { throw APIError.invalidResponse }
+                    body = value
+                } catch APIError.unauthorized { status = 401 }
+                catch APIError.server(let code, _) { status = (400...599).contains(code) ? code : 502 }
+                catch { status = 503 }
+                guard let self, !self.invalidated, self.loadGeneration == generation else { return }
+                self.referenceTasks[id] = nil
+                guard let web, !Task.isCancelled else { return }
+                self.finishReference(web, id: id, generation: generation, status: status, body: body)
+            }
+        }
+        private func finishReference(_ web: WKWebView, id: String, generation: Int, status: Int, body: String) {
+            web.callAsyncJavaScript("window.finishNativeReference(id, generation, status, body)",
+                arguments: ["id":id, "generation":generation, "status":status, "body":body], in: nil, in: .page) { _ in }
         }
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
             if action.targetFrame?.isMainFrame == false { decisionHandler(.allow); return }
