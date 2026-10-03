@@ -454,7 +454,7 @@ struct LabWebView: UIViewRepresentable {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = store?.featureDataStore ?? .nonPersistent()
         let preferences = store?.webPreferenceValues ?? [:]
-        let keys = Array(WebPreferences.keys) + (store?.user.map { [WebPreferences.discoveryKey($0)] } ?? [])
+        let keys = Array(WebPreferences.keys(for: store?.user))
         let bridge = store == nil ? "" : FeatureWebPolicy.session(origin: origin, token: token, dark: dark, preferences: preferences, preferenceKeys: keys)
         let session = includeFeatures ? bridge : WebContentPolicy.sessionScript(origin: origin, token: token, dark: dark) + bridge
         let mobile = includeFeatures ? FeatureWebPolicy.mobile : WebContentPolicy.mobileScript

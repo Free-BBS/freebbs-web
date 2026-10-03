@@ -84,6 +84,8 @@ The bundled parameter module retains website validation and local draft saving, 
 
 截图复查后，文档课程选择改用与原生课程列表一致的行样式，去掉重复箭头与嵌套卡片；`Build9DocumentRowFinalReview.xcresult` 中该实际导航流程再次通过。此后的完整检查以最终提交的 CI 为准。
 
+本地状态核对补充了 Max 模型与后台任务引用、牧场学习选项、工作台提示、成就已看记录及五种语言的代码草稿。恢复和保存仅接受当前账号的明确键，重启后保留、切换账号隔离，拒绝其他账号草稿及凭据键；`Build9PreferencesFinalVerification.xcresult` 中最终源码 39 项单元回归全部通过，随后重建签名 Archive。最终提交与结果由本机 `final-ci-summary.json`、`build9-archive-verification.json` 对应记录。
+
 在线只读复查与新增文档流程在 `Build9EmbeddedAndDocumentsFinalReview.xcresult` 中 41 项全部通过（39 单元、1 在线界面、1 文档界面）。学习世界、羊群广场、探索手册和关于页使用正式网络内容，并确认去掉重复导航和桌面留白；没有执行生产写入。公开复查截图与源码保存在本机 `features-native-review/`，不加入依赖网络的 CI。
 
 目录生成检查覆盖主站 42 个页面、发展端 34 条路由和 68 个目录项；离线渲染资源一致性检查、后端安全 12 项测试及相关 ESLint 均通过。最新 PR 必须在本轮最终提交上完成 macos-26 / xcode-27 两套检查；上一提交 `2f7cf65` 的 [37122849412](https://github.com/Free-BBS/freebbs-web/actions/runs/37122849412) 已全部成功，不能作为 build 9 的通过证据。
