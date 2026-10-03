@@ -158,6 +158,23 @@ final class NavigationTests: XCTestCase {
         capture("24-discussion-feed")
         app.descendants(matching: .any).matching(identifier: "post-preview-convolution").firstMatch.tap()
         XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10))
+        // WebKit first appears as a 48-point host. Wait for Markdown's native
+        // measured height to settle before requesting its deep AX subtree;
+        // snapshotting while it is being replaced can stall on slow runners.
+        let bodyDeadline = Date().addingTimeInterval(30)
+        var previousBodyFrame: CGRect?
+        var bodySettled = false
+        while Date() < bodyDeadline {
+            let frame = app.webViews.firstMatch.frame
+            if frame.height > 100, let previousBodyFrame,
+               abs(frame.height - previousBodyFrame.height) <= 0.5,
+               abs(frame.minY - previousBodyFrame.minY) <= 0.5 {
+                bodySettled = true; break
+            }
+            previousBodyFrame = frame
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        }
+        XCTAssertTrue(bodySettled, "Markdown must finish its initial native layout before reading replies")
         // Wait for the asynchronous Markdown body before locating replies below it.
         XCTAssertTrue(app.webViews.staticTexts["从滑动的窗口开始"].firstMatch.waitForExistence(timeout: 10))
         // Enter the replies before looking up their native controls. Whole-app
