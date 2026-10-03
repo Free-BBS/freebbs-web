@@ -5,42 +5,57 @@ struct DiscussionView: View {
     @State private var search = ""
     @State private var composing = false
     private var posts: [Post] {
-        store.visiblePosts.filter { (store.selectedBoard == "all" || $0.board.slug == store.selectedBoard) &&
+        let filtered = store.visiblePosts.filter { (store.selectedBoard == "all" || $0.board.slug == store.selectedBoard) &&
             (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search) || $0.author.username.localizedCaseInsensitiveContains(search)) }
+        return store.sort == "latest" ? filtered.sorted { $0.createdAt > $1.createdAt } : filtered
     }
     var body: some View {
         @Bindable var store = store
-        PageSurface {
-            HStack {
-                Menu {
-                    Picker("版块", selection: $store.selectedBoard) {
-                        Text("全部版块").tag("all")
-                        ForEach(store.boards) { Text($0.name).tag($0.slug) }
-                    }
-                } label: {
-                    Label(store.boards.first(where: { $0.slug == store.selectedBoard })?.name ?? "全部版块", systemImage: "line.3.horizontal.decrease")
-                        .font(.subheadline.weight(.medium)).padding(.horizontal, 16).frame(minHeight: 44).glassAction()
+        List {
+            Section {
+                Picker("讨论排序", selection: $store.sort) { Text("最新").tag("latest"); Text("热门").tag("hot") }
+                    .pickerStyle(.segmented).accessibilityIdentifier("discussionSort")
+                    .listRowSeparator(.hidden)
+                if store.postsLoading { ProgressView("正在加载讨论…") }
+                if let error = store.postsError {
+                    Text(error).foregroundStyle(.red)
+                    Button("重试加载讨论") { Task { await store.refreshPosts() } }
                 }
-                Spacer()
-                Picker("排序", selection: $store.sort) { Text("最新").tag("latest"); Text("热门").tag("hot") }
-                    .pickerStyle(.menu).accessibilityLabel("讨论排序")
             }
-            if posts.isEmpty { EmptyState(title: "还没有找到讨论", symbol: "bubble.left.and.text.bubble.right", message: "试试其他版块或关键词。") }
-            ForEach(posts) { post in
-                NavigationLink { PostDetailView(postID: post.id, initial: post) } label: { Paper { PostRow(post: post) } }
-                    .buttonStyle(.plain).accessibilityIdentifier("post-\(post.id)")
+            if posts.isEmpty && !store.postsLoading && store.postsError == nil {
+                EmptyState(title: "还没有找到讨论", symbol: "bubble.left.and.text.bubble.right", message: "试试其他版块或关键词。")
             }
-            Text("显示最近 50 条讨论。搜索当前列表中的标题与作者。")
-                .font(.caption).foregroundStyle(.secondary)
-        }.navigationTitle("讨论").searchable(text: $search, prompt: "搜索当前讨论")
-            .toolbar { ToolbarItem(placement: .topBarTrailing) {
-                Button { if store.requireLogin() { composing = true } } label: { Image(systemName: "square.and.pencil") }
-                    .accessibilityLabel("发表讨论").accessibilityIdentifier("composePost")
-            } }
+            if posts.contains(where: \.isPinned) {
+                Section("置顶") { rows(posts.filter(\.isPinned)) }
+            }
+            Section { rows(posts.filter { !$0.isPinned }) }
+                }.listStyle(.plain).navigationTitle("讨论").searchable(text: $search, prompt: "搜索当前讨论")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Picker("版块", selection: $store.selectedBoard) {
+                            Text("全部版块").tag("all")
+                            ForEach(store.boards) { Text($0.name).tag($0.slug) }
+                        }
+                    } label: { Image(systemName: "line.3.horizontal.decrease") }
+                        .accessibilityLabel("选择版块")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { if store.requireLogin() { composing = true } } label: { Image(systemName: "square.and.pencil") }
+                        .accessibilityLabel("发表讨论").accessibilityIdentifier("composePost")
+                }
+            }
             .task(id: "\(store.selectedBoard)-\(store.sort)-\(store.sessionRevision)") { await store.refreshPosts() }
             .refreshable { await store.refreshPosts() }
             .sheet(isPresented: $composing) { NavigationStack { ComposeView() }.environment(store) }
     }
+    private func rows(_ items: [Post]) -> some View {
+        ForEach(items) { post in
+            NavigationLink { PostDetailView(postID: post.id, initial: post) } label: { PostRow(post: post) }
+                .accessibilityIdentifier("post-\(post.id)")
+        }
+    }
+
 }
 
 struct PostDetailView: View {
@@ -77,12 +92,12 @@ struct PostDetailView: View {
                     authorMenu(post.author, target: .init(type: "post", id: post.id))
                 }
                 if loading && post.contentMarkdown == nil { ProgressView("正在加载正文…") }
-                Paper { MarkdownContent(source: post.contentMarkdown ?? "") }
+                MarkdownContent(source: post.contentMarkdown ?? "")
                 ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 20) {
                     Button { Task { await react("smile") } } label: {
                         Label("\(post.likeCount)", systemImage: post.likedByMe ? "face.smiling.fill" : "face.smiling")
-                            .padding(.horizontal, 18).frame(minHeight: 48).glassAction()
-                    }.buttonStyle(.plain).foregroundStyle(Palette.teal).disabled(sending).accessibilityLabel("点赞，\(post.likeCount) 次")
+                            .frame(minHeight: 44)
+                    }.buttonStyle(.bordered).foregroundStyle(Palette.teal).disabled(sending).accessibilityLabel("点赞，\(post.likeCount) 次")
                     Button { Task { await react("light") } } label: {
                         Label("\(post.lightCount ?? 0)", systemImage: post.lightedByMe == true ? "lightbulb.fill" : "lightbulb")
                     }.frame(minHeight: 44).disabled(sending).accessibilityLabel("启发，\(post.lightCount ?? 0) 次")
@@ -93,7 +108,7 @@ struct PostDetailView: View {
                     ShareLink(item: shareURL) { Label("分享", systemImage: "square.and.arrow.up") }.frame(minHeight: 44)
                 }
                 }
-                SectionTitle(title: "回复 · \(comments.count)", subtitle: "认真提问，也认真回应")
+                SectionTitle(title: "回复 · \(comments.count)")
                 ForEach(comments.filter { !store.blockedIDs.contains($0.author.id) }) { comment in
                     Paper {
                         HStack {
@@ -133,8 +148,9 @@ struct PostDetailView: View {
             } else if loading { ProgressView("正在加载讨论…") }
             else { EmptyState(title: "无法显示讨论", symbol: "bubble", message: "帖子可能已删除，请返回刷新。") }
         }
+        .accessibilityIdentifier("discussionDetailScroll")
         .navigationTitle("讨论详情").navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .safeAreaBar(edge: .bottom, spacing: 0) {
             if !hidden && current != nil {
                 VStack(spacing: 8) {
                     if let target = replyTarget {
@@ -147,13 +163,14 @@ struct PostDetailView: View {
                     HStack(alignment: .bottom, spacing: 12) {
                     TextField("写下你的回复…", text: $reply, axis: .vertical).lineLimit(1...5)
                         .focused($replyFocused)
-                        .padding(14).background(Palette.paper, in: RoundedRectangle(cornerRadius: 22))
+                        .padding(.horizontal, 16).padding(.vertical, 12)
+                        .glassEffect(.regular, in: Capsule())
                         .accessibilityIdentifier("replyField")
                     Button { Task { await sendReply() } } label: {
                         Image(systemName: "arrow.up").font(.headline).frame(width: 48, height: 48).glassAction()
                     }.accessibilityLabel("发送回复").disabled(reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sending)
                     }
-                }.padding(.horizontal, 16).padding(.vertical, 10).background(.bar)
+                }.padding(.horizontal, 16).padding(.vertical, 8)
             }
         }
         .toolbar { if current?.canDelete == true { ToolbarItem(placement: .topBarTrailing) {
@@ -246,6 +263,13 @@ struct PostDetailView: View {
     }
 }
 
+struct DiscussionDraft: Identifiable {
+    let id = UUID()
+    let title: String
+    let content: String
+    let board: String
+}
+
 struct ComposeView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -255,6 +279,9 @@ struct ComposeView: View {
     @State private var submitting = false
     @State private var preview = false
     @State private var confirmDiscard = false
+    init(title: String = "", content: String = "", board: String = "") {
+        _title = State(initialValue: title); _content = State(initialValue: content); _board = State(initialValue: board)
+    }
     var body: some View {
         Form {
             Section {

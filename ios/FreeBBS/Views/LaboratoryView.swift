@@ -43,33 +43,78 @@ enum WebContentPolicy {
         })();
         """
     }
+    static let mobileScript = """
+    (() => {
+      const style = document.createElement('style');
+      style.textContent = `
+        .topbar,.sidebar,.mobile-nav,.mobile-tools,.desktop-shell-rail,.max-guide-launcher { display:none!important; }
+        :root { --mobile-nav-space:0px; --font-ui:-apple-system,BlinkMacSystemFont,sans-serif; }
+        body,.page-shell,.dashboard-shell { padding:0!important; margin:0!important; min-height:100dvh!important; }
+        .main-content { margin-left:0!important; width:100%!important; padding:16px!important; box-sizing:border-box; }
+        input,textarea,select { font-size:16px!important; }
+        button,a.lab-back,.tool-studio button { min-height:44px; touch-action:manipulation; }
+        .lab-back { display:none; }
+        html body .page-shell .main-content::before { display:none!important; }
+        .lab-heading { align-items:flex-start; gap:12px; margin-bottom:16px; }
+        .lab-heading h1 { font-size:26px; }
+        .lab-heading p { font-size:16px; line-height:1.5; }
+        .lab-eyebrow,body.language-lab-page .lab-heading h1 { display:none; }
+        .lab-languages,.lab-result-tabs { flex-wrap:nowrap; overflow-x:auto; padding-bottom:10px; }
+        .lab-languages button,.lab-result-tabs button { flex-shrink:0; }
+        .lab-workspace,.tool-studio { grid-template-columns:minmax(0,1fr)!important; }
+        pre,.lab-wave-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+        .circuit-mobile-heading { top:0!important; }
+        .has-circuit-mobile-workspace .main-content { padding:0!important; }
+        .circuit-mobile-dock { padding-bottom:8px!important; }
+      `;
+      document.head.append(style);
+      // Site styles use highly specific !important rules and insert shell elements late.
+      const hideChrome = () => {
+        if (document.body.classList.contains('has-mobile-header')) document.body.classList.remove('has-mobile-header');
+        const main = document.querySelector('.main-content');
+        if (main) {
+          main.style.setProperty('margin', '0', 'important');
+          main.style.setProperty('padding', document.body.classList.contains('has-circuit-mobile-workspace') ? '0' : '16px', 'important');
+        }
+        document.querySelectorAll('.topbar,.sidebar,.mobile-nav,.mobile-tools,.desktop-shell-rail,.max-guide-launcher,.mobile-header-backdrop,.site-footer').forEach(node => {
+          if (node.style.getPropertyValue('display') !== 'none') node.style.setProperty('display', 'none', 'important');
+        });
+      };
+      hideChrome();
+      if (['/circuit','/circuit-challenge'].includes(location.pathname)) {
+        const nativeStyle = document.createElement('style');
+        nativeStyle.textContent = '#circuit-run,#circuit-stop,#challenge-run,.circuit-mobile-heading,.circuit-mobile-dock {display:none!important} .circuit-mobile-workspace {padding-bottom:0!important}';
+        document.head.append(nativeStyle);
+      }
+      new MutationObserver(hideChrome).observe(document.body, {childList:true, subtree:true, attributes:true, attributeFilter:['class']});
+    })();
+    """
+
 }
 
 struct LaboratoryView: View {
     var body: some View {
-        PageSurface {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("把想法，变成实验。").font(.largeTitle.bold())
-                Text("搭建、运行、观察，再把结果带回讨论。").foregroundStyle(.secondary)
-            }.padding(.vertical, 8)
-            ForEach(Array(LabDestination.entries.enumerated()), id: \.offset) { _, entry in
-                NavigationLink {
-                    LabWorkspaceView(destination: .init(title: entry.0, path: entry.3))
-                } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: entry.2).font(.title2).foregroundStyle(Palette.teal)
-                            .frame(width: 50, height: 50).background(Palette.teal.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(entry.0).font(.headline).foregroundStyle(.primary)
-                            Text(entry.1).font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.tertiary)
-                    }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Palette.paper, in: RoundedRectangle(cornerRadius: 22))
-                }.buttonStyle(.plain).accessibilityIdentifier("lab-" + entry.3)
-            }
-        }.navigationTitle("实验室")
+        List {
+            Section("电路") { entries(0..<2) }
+            Section("代码与计算") { entries(2..<6) }
+            Section("工具工坊") { entries(6..<7) }
+        }.listStyle(.insetGrouped).navigationTitle("实验室")
+    }
+    private func entries(_ range: Range<Int>) -> some View {
+        ForEach(Array(range), id: \.self) { index in
+            let entry = LabDestination.entries[index]
+            NavigationLink {
+                LabWorkspaceView(destination: .init(title: entry.0, path: entry.3))
+            } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: entry.2).font(.title2).foregroundStyle(Palette.teal).frame(width: 34)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(entry.0).font(.headline)
+                        Text(entry.1).font(.subheadline).foregroundStyle(.secondary)
+                    }
+                }.padding(.vertical, 6)
+            }.accessibilityIdentifier("lab-" + entry.3)
+        }
     }
 }
 
@@ -92,6 +137,7 @@ struct LabExport: Identifiable { let id = UUID(); let url: URL }
     var presentingDialog = false
     var promptText = ""
     var export: LabExport?
+    var discussionDraft: DiscussionDraft?
     var downloadError: String?
     func resolveDialog(_ result: String?) {
         let completion = dialog?.completion
@@ -102,9 +148,29 @@ struct LabExport: Identifiable { let id = UUID(); let url: URL }
 
 struct LabWorkspaceView: View {
     @Environment(AppStore.self) private var store
+    let destination: LabDestination
+    var body: some View {
+        let url = URL(string: destination.path, relativeTo: URL(string: "https://www.free-bbs.cn"))!
+        Group { if url.path == "/code-lab" {
+            NativeCodeLabView(destination: destination)
+        } else if url.path == "/tool-workshop" {
+            NativeToolsView(destination: destination)
+        } else if url.path == "/circuits" {
+            NativeCircuitLibraryView()
+        } else {
+            CircuitWorkspaceView(destination: destination)
+        } }.id(store.sessionRevision)
+    }
+}
+
+struct CircuitWorkspaceView: View {
+    @Environment(AppStore.self) private var store
     @Environment(\.colorScheme) private var colorScheme
     let destination: LabDestination
     @State private var browser = LabBrowserState()
+    @State private var parameters = false
+    private var isChallenge: Bool { URL(string: destination.path, relativeTo: store.configuration.origin)?.path == "/circuit-challenge" }
+    private var isCircuit: Bool { URL(string: destination.path, relativeTo: store.configuration.origin)?.path == "/circuit" }
     var body: some View {
         VStack(spacing: 0) {
             if browser.loading && !store.isDemo { ProgressView(value: browser.progress).tint(Palette.teal) }
@@ -125,6 +191,7 @@ struct LabWorkspaceView: View {
             }
         }.background(Palette.canvas)
             .navigationTitle(destination.title).navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .tabBar)
             .alert("实验室", isPresented: $browser.presentingDialog, presenting: browser.dialog) { dialog in
                 if dialog.kind == .text { TextField("输入内容", text: $browser.promptText) }
                 if dialog.kind != .notice { Button("取消", role: .cancel) { browser.resolveDialog(nil) } }
@@ -133,18 +200,67 @@ struct LabWorkspaceView: View {
             .alert("无法导出", isPresented: Binding(get: { browser.downloadError != nil }, set: { if !$0 { browser.downloadError = nil } })) {
                 Button("确定", role: .cancel) { browser.downloadError = nil }
             } message: { Text(browser.downloadError ?? "") }
+            .sheet(item: $browser.discussionDraft) { draft in
+                NavigationStack { ComposeView(title: draft.title, content: draft.content, board: draft.board) }.environment(store)
+            }
+            .sheet(isPresented: $parameters) { NavigationStack { CircuitParametersView(browser: browser) } }
             .sheet(item: $browser.export, onDismiss: { browser.export = nil }) { item in
                 LabShareSheet(url: item.url)
             }
             .onDisappear { browser.resolveDialog(nil) }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { browser.webView?.goBack() } label: { Image(systemName: "chevron.backward") }
-                        .disabled(!browser.canGoBack).accessibilityLabel("返回上一实验页面")
+                    if isCircuit {
+                        Button { parameters = true } label: { Image(systemName: "slider.horizontal.3") }
+                            .disabled(browser.loading || store.isDemo).accessibilityLabel("电路参数")
+                        Menu {
+                            Button("添加元件", systemImage: "plus") { click("circuit-component-add") }
+                            Button("保存电路", systemImage: "square.and.arrow.down") { click("circuit-save") }
+                            Button("分享至讨论", systemImage: "bubble.left") { click("circuit-publish") }
+                            Button("元件参数", systemImage: "slider.horizontal.3") { panel("parameters") }
+                            Button("波形与读数", systemImage: "waveform.path") { panel("waves") }
+                            Button("示例、版本与导入导出", systemImage: "square.stack") { panel("more") }
+                            Button("取消接线", systemImage: "xmark") { click("circuit-cancel-wire") }
+                            Button("整理布局", systemImage: "wand.and.stars") { click("circuit-beautify") }
+                            Button("撤销", systemImage: "arrow.uturn.backward") { click("circuit-undo") }
+                            Button("重做", systemImage: "arrow.uturn.forward") { click("circuit-redo") }
+                            Button("重置缩放", systemImage: "arrow.up.left.and.arrow.down.right") { click("circuit-zoom-reset") }
+                        } label: { Image(systemName: "ellipsis") }.disabled(browser.loading || store.isDemo).accessibilityLabel("电路操作")
+                    } else if isChallenge {
+                        Menu {
+                            Button("选择关卡", systemImage: "list.number") { panel("levels") }
+                            Button("排行榜", systemImage: "trophy") { panel("ranking") }
+                            Button("添加元件", systemImage: "plus") { panel("parts") }
+                            Button("元件参数", systemImage: "slider.horizontal.3") { panel("parameters") }
+                            Button("波形", systemImage: "waveform.path") { panel("waves") }
+                            Button("工具与设置", systemImage: "ellipsis") { panel("more") }
+                            Button("撤销", systemImage: "arrow.uturn.backward") { click("challenge-undo") }
+                            Button("取消接线", systemImage: "xmark") { click("challenge-cancel-wire") }
+                        } label: { Image(systemName: "ellipsis") }.disabled(browser.loading || store.isDemo).accessibilityLabel("挑战操作")
+                    } else {
+                        Button { browser.webView?.goBack() } label: { Image(systemName: "chevron.backward") }
+                            .disabled(!browser.canGoBack).accessibilityLabel("返回上一实验页面")
+                    }
                     Button { browser.error = nil; browser.webView?.reload() } label: { Image(systemName: "arrow.clockwise") }
                         .accessibilityLabel("刷新实验室")
                 }
+                if isCircuit || isChallenge {
+                    ToolbarItemGroup(placement: .bottomBar) {
+                        Button("运行仿真", systemImage: "play.fill") { click(isCircuit ? "circuit-run" : "challenge-run") }.disabled(browser.loading || store.isDemo)
+                        if isCircuit { Button("停止", systemImage: "stop.fill") { click("circuit-stop") }.disabled(browser.loading || store.isDemo) }
+                        else { Button("重置", systemImage: "arrow.counterclockwise") { click("challenge-reset") }.disabled(browser.loading || store.isDemo) }
+                    }
+                }
             }
+    }
+    private func panel(_ name: String) {
+        let sidebar = name == "parameters" && isCircuit
+        let function = sidebar ? "FreeBbsCircuitSidebar" : "FreeBbsCircuitMobile"
+        browser.webView?.evaluateJavaScript("if(['/circuit','/circuit-challenge'].includes(location.pathname)) window.\(function)?.\(sidebar ? "open" : "show")(\(WebContentPolicy.json(name)))", completionHandler: nil)
+    }
+    private func click(_ id: String) {
+        guard let web = browser.webView else { return }
+        web.evaluateJavaScript("if(['/circuit','/circuit-challenge'].includes(location.pathname)) document.getElementById(\(WebContentPolicy.json(id)))?.click()", completionHandler: nil)
     }
 }
 
@@ -160,7 +276,7 @@ private struct LabWebView: UIViewRepresentable {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()
         config.userContentController.addUserScript(.init(source: WebContentPolicy.sessionScript(origin: origin, token: token, dark: dark), injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        config.userContentController.addUserScript(.init(source: Self.mobileScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        config.userContentController.addUserScript(.init(source: WebContentPolicy.mobileScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         let web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = context.coordinator; web.uiDelegate = context.coordinator
         web.isOpaque = false; web.backgroundColor = .clear
@@ -185,29 +301,6 @@ private struct LabWebView: UIViewRepresentable {
         coordinator.progress?.invalidate()
         coordinator.parent.browser.webView = nil
     }
-    private static let mobileScript = """
-    (() => {
-      const style = document.createElement('style');
-      style.textContent = `
-        .topbar,.sidebar,.mobile-nav,.mobile-tools,.desktop-shell-rail,.max-guide-launcher { display:none!important; }
-        :root { --mobile-nav-space:0px; --font-ui:-apple-system,BlinkMacSystemFont,sans-serif; }
-        body,.page-shell,.dashboard-shell { padding:0!important; margin:0!important; min-height:100dvh!important; }
-        .main-content { margin-left:0!important; width:100%!important; padding:16px!important; box-sizing:border-box; }
-        input,textarea,select { font-size:16px!important; }
-        button,a.lab-back,.tool-studio button { min-height:44px; touch-action:manipulation; }
-        .lab-back { display:none; }
-        .lab-heading { align-items:flex-start; gap:12px; }
-        .lab-languages,.lab-result-tabs { flex-wrap:nowrap; overflow-x:auto; padding-bottom:10px; }
-        .lab-languages button,.lab-result-tabs button { flex-shrink:0; }
-        .lab-workspace,.tool-studio { grid-template-columns:minmax(0,1fr)!important; }
-        pre,.lab-wave-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-        .circuit-mobile-heading { top:0!important; }
-        .has-circuit-mobile-workspace .main-content { padding:0!important; }
-        .circuit-mobile-dock { padding-bottom:8px!important; }
-      `;
-      document.head.append(style);
-    })();
-    """
     @MainActor final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
         var parent: LabWebView
         var progress: NSKeyValueObservation?
@@ -234,8 +327,43 @@ private struct LabWebView: UIViewRepresentable {
             if action.targetFrame?.isMainFrame == false { decisionHandler(.allow); return }
             if WebContentPolicy.labURL(url, origin: parent.origin) { decisionHandler(.allow); return }
             decisionHandler(.cancel)
+            if WebContentPolicy.sameOrigin(url, origin: parent.origin), ["/publish", "/discussion"].contains(url.path) {
+                handoffDiscussion(url, web: webView); return
+            }
             if WebContentPolicy.sameOrigin(url, origin: parent.origin), ["/login", "/register"].contains(url.path) { parent.login() }
             else if action.navigationType == .linkActivated, AppConfiguration.safeLink(url.absoluteString, origin: parent.origin) != nil { UIApplication.shared.open(url) }
+        }
+        private func handoffDiscussion(_ url: URL, web: WKWebView) {
+            guard parent.token != nil else { parent.login(); return }
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            func value(_ key: String) -> String? {
+                let matches = items.filter { $0.name == key }
+                return matches.count == 1 ? matches[0].value : nil
+            }
+            if url.path == "/discussion", value("compose") == "circuit",
+               let cid = value("cid"), cid.range(of: "^c_[a-f0-9]{24}$", options: .regularExpression) != nil,
+               let revision = value("revision"), revision.range(of: "^[1-9][0-9]{0,8}$", options: .regularExpression) != nil {
+                var link = URLComponents(url: parent.origin, resolvingAgainstBaseURL: false)!
+                link.path = "/circuit"; link.queryItems = [.init(name: "cid", value: cid), .init(name: "revision", value: revision), .init(name: "view", value: "live")]
+                if let target = link.url {
+                    parent.browser.discussionDraft = DiscussionDraft(title: "分享电路实验", content: "[查看电路与仿真](\(target.absoluteString))\n\n我的观察：\n", board: "circuit")
+                }
+                return
+            }
+            guard url.path == "/publish" else { return }
+            let key: String
+            if value("lab_share") == "1" { key = "free_bbs_lab_share_draft" }
+            else if value("tool_share") == "1" { key = "free_bbs_tool_share_draft" }
+            else { return }
+            web.callAsyncJavaScript("return sessionStorage.getItem(key)", arguments: ["key":key], in: nil, in: .page) { [weak self, weak web] result in
+                guard let self, let web, self.parent.browser.webView === web,
+                      case .success(let value) = result, let raw = value as? String, raw.utf8.count <= 100000,
+                      let data = raw.data(using: .utf8),
+                      let draft = try? JSONSerialization.jsonObject(with: data) as? [String:Any],
+                      let title = draft["title"] as? String, title.count <= 120,
+                      let content = draft["content"] as? String, !content.isEmpty, content.count <= 20000 else { return }
+                self.parent.browser.discussionDraft = DiscussionDraft(title: title, content: content, board: "daily")
+            }
         }
         func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse, decisionHandler: @escaping @MainActor (WKNavigationResponsePolicy) -> Void) {
             guard let url = response.response.url else { decisionHandler(.cancel); return }
@@ -296,7 +424,7 @@ private struct LabWebView: UIViewRepresentable {
     }
 }
 
-private struct LabShareSheet: UIViewControllerRepresentable {
+struct LabShareSheet: UIViewControllerRepresentable {
     let url: URL
     func makeUIViewController(context: Context) -> UIActivityViewController {
         let controller = UIActivityViewController(activityItems: [url], applicationActivities: nil)

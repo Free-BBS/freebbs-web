@@ -9,8 +9,8 @@ enum Palette {
 struct PageSurface<Content: View>: View {
     @ViewBuilder let content: Content
     var body: some View {
-        ScrollView { LazyVStack(alignment: .leading, spacing: 24) { content }
-            .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 28)
+        ScrollView { VStack(alignment: .leading, spacing: 20) { content }
+            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
             .frame(maxWidth: 680, alignment: .leading).frame(maxWidth: .infinity) }
         .background(Palette.canvas)
         .scrollDismissesKeyboard(.interactively)
@@ -19,9 +19,9 @@ struct PageSurface<Content: View>: View {
 struct Paper<Content: View>: View {
     @ViewBuilder let content: Content
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) { content }
-            .frame(maxWidth: .infinity, alignment: .leading).padding(20)
-            .background(Palette.paper, in: RoundedRectangle(cornerRadius: 24))
+        VStack(alignment: .leading, spacing: 12) { content }
+            .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+            .background(Palette.paper, in: RoundedRectangle(cornerRadius: 20))
     }
 }
 struct SectionTitle: View {

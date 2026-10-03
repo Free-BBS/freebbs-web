@@ -5,7 +5,10 @@ import Observation
 final class AppStore {
     let configuration = AppConfiguration()
     let api: APIClient
-    var user: User?
+    private let preferences: UserDefaults
+    var user: User? { didSet { aiConsent = user.map { preferences.bool(forKey: Self.aiConsentKey($0)) } ?? false } }
+    var aiConsent = false { didSet { if let user, !isDemo { preferences.set(aiConsent, forKey: Self.aiConsentKey(user)) } } }
+    static func aiConsentKey(_ user: User) -> String { "freebbs.ai-consent.v1." + (user.uid.isEmpty ? "id-\(user.id)" : user.uid) }
     var courses: [Course] = []
     var boards: [Board] = []
     var posts: [Post] = []
@@ -18,15 +21,18 @@ final class AppStore {
     var loading = false
     var selectedBoard = "all"
     var sort = "latest"
+    var postsLoading = false
+    var postsError: String?
     var sessionRevision = 0
     var isDemo = false
     private var postsRevision = 0
     var blockedIDs: Set<Int> { Set(blocks.map(\.id)) }
     var visiblePosts: [Post] { posts.filter { !blockedIDs.contains($0.author.id) } }
 
-    init() {
-        api = APIClient(origin: configuration.origin)
-        api.token = TokenVault.read()
+    init(api injected: APIClient? = nil, preferences: UserDefaults = .standard) {
+        self.preferences = preferences
+        api = injected ?? APIClient(origin: configuration.origin)
+        if injected == nil { api.token = TokenVault.read() }
         api.onUnauthorized = { [weak self] in self?.logout() }
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--demo") { loadDemo() }
@@ -67,7 +73,7 @@ final class AppStore {
         user = nil
         inbox = []; blocks = []; unreadCount = 0; nextInboxCursor = nil
         // Remove response fields personalized for the former user before another login.
-        posts = []
+        posts = []; postsError = nil; postsLoading = false; postsRevision += 1
         sessionRevision += 1
     }
     @discardableResult func requireLogin() -> Bool {
@@ -77,16 +83,19 @@ final class AppStore {
     }
     func refreshPosts() async {
         guard !isDemo else { return }
+        postsLoading = true; postsError = nil
+        let requestedBoard = selectedBoard; let requestedSort = sort
         postsRevision += 1
         let revision = postsRevision
         let session = sessionRevision
+        defer { if revision == postsRevision { postsLoading = false } }
         do {
             let response: PostsResponse = try await api.request("/api/discussion/posts", query: [
-                .init(name: "board", value: selectedBoard), .init(name: "sort", value: sort),
+                .init(name: "board", value: requestedBoard), .init(name: "sort", value: requestedSort),
                 .init(name: "limit", value: "50")])
-            guard revision == postsRevision, session == sessionRevision else { return }
+            guard !Task.isCancelled, revision == postsRevision, session == sessionRevision, requestedBoard == selectedBoard, requestedSort == sort else { return }
             posts = response.posts
-        } catch { if revision == postsRevision { self.error = error.localizedDescription } }
+        } catch { if !Task.isCancelled, revision == postsRevision, session == sessionRevision { postsError = error.localizedDescription } }
     }
     func refreshInbox(more: Bool = false) async {
         guard user != nil, !isDemo else { return }

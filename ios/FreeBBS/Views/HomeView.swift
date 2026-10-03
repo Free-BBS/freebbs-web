@@ -10,15 +10,8 @@ struct HomeView: View {
                 Label("界面预览 · 示例内容", systemImage: "eye")
                     .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("demoBanner")
             }
-            VStack(alignment: .leading, spacing: 12) {
-                Text(Date.now.formatted(.dateTime.month().day().weekday(.wide)))
-                    .font(.subheadline).foregroundStyle(.secondary)
-                Text("让好奇心，\n有迹可循。")
-                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("学一个知识点，分享一个想法。\n今天也向前一点。")
-                    .font(.body).foregroundStyle(.secondary).lineSpacing(4)
-            }.padding(.vertical, 8)
+            Text(Date.now.formatted(.dateTime.month().day().weekday(.wide)))
+                .font(.subheadline).foregroundStyle(.secondary)
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 12) { maxLink; workbenchLink }
                 VStack(alignment: .leading, spacing: 12) { maxLink; workbenchLink }
@@ -27,8 +20,8 @@ struct HomeView: View {
                 Paper {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("你好，\(user.username)").font(.headline)
-                            Text("积累一点，连接更多。").font(.subheadline).foregroundStyle(.secondary)
+                            Text(user.username).font(.headline)
+                            Text("学习账户").font(.subheadline).foregroundStyle(.secondary)
                         }
                         Spacer()
                         Image(systemName: "leaf").font(.title).foregroundStyle(Palette.teal).accessibilityHidden(true)
@@ -42,7 +35,7 @@ struct HomeView: View {
                     }
                 }
             }
-            SectionTitle(title: "继续探索", subtitle: "把零散的知识，连成自己的地图")
+            SectionTitle(title: "我的课程")
             ForEach(store.courses.prefix(2)) { course in
                 NavigationLink { CourseDetailView(course: course) } label: { CourseRow(course: course) }
                     .buttonStyle(.plain)
@@ -51,15 +44,15 @@ struct HomeView: View {
                 if store.loading { ProgressView("正在加载课程…").frame(maxWidth: .infinity) }
                 else { EmptyState(title: "课程暂未加载", symbol: "book", message: "下拉刷新，重新连接 FREE-BBS。") }
             }
-            SectionTitle(title: "正在发生", subtitle: "看看大家最近的思考")
+            SectionTitle(title: "最新讨论")
             Paper {
                 if store.visiblePosts.isEmpty { Text("还没有讨论，去分享第一个想法吧。").foregroundStyle(.secondary) }
-                ForEach(store.visiblePosts.prefix(3)) { post in
+                ForEach(store.visiblePosts.sorted { $0.createdAt > $1.createdAt }.prefix(3)) { post in
                     NavigationLink { PostDetailView(postID: post.id, initial: post) } label: { PostRow(post: post) }.buttonStyle(.plain)
                 }
             }
         }
-        .navigationTitle("FREE-BBS").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("今日")
         .toolbar { ToolbarItem(placement: .topBarTrailing) {
             NavigationLink { InboxView() } label: {
                 Image(systemName: store.unreadCount > 0 ? "bell.badge" : "bell")
@@ -73,14 +66,14 @@ struct HomeView: View {
     private var maxLink: some View {
         NavigationLink { ChatView() } label: {
             Label("问问 Max", systemImage: "sparkles").font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 18).frame(minHeight: 48).glassAction()
-        }.buttonStyle(.plain).foregroundStyle(Palette.teal).accessibilityIdentifier("openMax")
+                .frame(minHeight: 44)
+        }.buttonStyle(.bordered).controlSize(.large).foregroundStyle(Palette.teal).accessibilityIdentifier("openMax")
     }
     private var workbenchLink: some View {
         NavigationLink { WorkbenchView() } label: {
             Label("学习日程", systemImage: "calendar").font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 18).frame(minHeight: 48).glassAction()
-        }.buttonStyle(.plain).accessibilityIdentifier("openWorkbench")
+                .frame(minHeight: 44)
+        }.buttonStyle(.bordered).controlSize(.large).accessibilityIdentifier("openWorkbench")
     }
     private func checkIn() async {
         guard store.requireLogin() else { return }

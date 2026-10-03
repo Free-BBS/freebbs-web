@@ -20,9 +20,9 @@ struct ChatView: View {
     @State private var messages: [ChatMessage] = []
     @State private var question = ""
     @State private var busy = false
-    @State private var consent = false
     @State private var sendingTask: Task<Void, Never>?
     var body: some View {
+        @Bindable var store = store
         ScrollViewReader { proxy in
             PageSurface {
                 if messages.isEmpty {
@@ -33,47 +33,51 @@ struct ChatView: View {
                             .foregroundStyle(.secondary)
                         if !context.isEmpty { Label("已带入当前知识点", systemImage: "book").font(.caption).foregroundStyle(Palette.teal) }
                     }.padding(.vertical, 24)
-                    Paper {
-                        Text("发送前请确认").font(.headline)
-                        Text("你的问题及本次对话上下文将发送到 FREE-BBS 后端及其配置的 AI 服务提供商。请勿输入密码、学号等敏感信息。")
+                    if !store.aiConsent { Paper {
+                        Text("首次使用 Max").font(.headline)
+                        Text("使用 Max 时，你主动发送的问题、对话上下文，以及工具制作需求和代码会发送到 FREE-BBS 后端及其配置的 AI 服务提供商。请勿输入密码、学号等敏感信息。")
                             .font(.subheadline).foregroundStyle(.secondary)
-                        Toggle("我同意发送本次对话内容", isOn: $consent)
+                        if store.user == nil { Button("登录并继续") { store.showLogin = true }.buttonStyle(.bordered) }
+                        else { Toggle("同意使用 Max 并记住我的选择", isOn: $store.aiConsent).accessibilityIdentifier("maxConsent") }
+                        Text("你可随时在“我的 → Max 数据使用”撤回同意。").font(.caption).foregroundStyle(.secondary)
                         Text("具体服务提供商须由运营方在正式隐私政策中公开。").font(.caption).foregroundStyle(.secondary)
-                    }
+                    } }
                     ForEach(["用一个例子解释卷积", "怎样安排今天的复习？"], id: \.self) { suggestion in
                         Button { question = suggestion } label: { Label(suggestion, systemImage: "arrow.turn.down.right").frame(minHeight: 44) }
                             .buttonStyle(.plain)
                     }
                 }
                 ForEach(messages) { message in
-                    Paper {
-                        Text(message.role == "user" ? "你" : "Max").font(.caption.bold()).foregroundStyle(Palette.teal)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(message.role == "user" ? "你" : "Max").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                         MarkdownContent(source: message.content)
-                    }.id(message.id)
+                    }.padding(message.role == "user" ? 16 : 0)
+                        .background(message.role == "user" ? Palette.paper : Color.clear, in: RoundedRectangle(cornerRadius: 20)).id(message.id)
                 }
                 if busy { HStack { ProgressView(); Text("Max 正在思考…").foregroundStyle(.secondary) }.id("thinking") }
             }
             .onChange(of: messages.count) { _, _ in if let id = messages.last?.id { proxy.scrollTo(id, anchor: .bottom) } }
         }
         .navigationTitle("问问 Max").navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) {
+        .safeAreaBar(edge: .bottom) {
             HStack(alignment: .bottom, spacing: 12) {
                 TextField("想问点什么？", text: $question, axis: .vertical).lineLimit(1...5)
-                    .padding(14).background(Palette.paper, in: RoundedRectangle(cornerRadius: 22))
+                    .padding(.horizontal, 16).padding(.vertical, 12).glassEffect(.regular, in: Capsule())
                 Button {
                     if busy { sendingTask?.cancel() }
                     else { sendingTask = Task { await send() } }
                 } label: {
                     Image(systemName: busy ? "stop.fill" : "arrow.up").font(.headline).frame(width: 48, height: 48).glassAction()
-                }.accessibilityLabel(busy ? "停止回答" : "发送问题").disabled(!busy && (question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !consent))
-            }.padding(16).background(.bar)
+                }.accessibilityLabel(busy ? "停止回答" : "发送问题").disabled(!busy && (question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !store.aiConsent))
+            }.padding(.horizontal, 16).padding(.vertical, 8)
         }
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("清空") { sendingTask?.cancel(); messages = []; consent = false }.disabled(busy) } }
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("清空") { sendingTask?.cancel(); messages = [] }.disabled(busy) } }
         .onDisappear { sendingTask?.cancel() }
-        .onChange(of: store.sessionRevision) { _, _ in sendingTask?.cancel(); messages = []; consent = false }
+        .onChange(of: store.aiConsent) { _, allowed in if !allowed { sendingTask?.cancel() } }
+        .onChange(of: store.sessionRevision) { _, _ in sendingTask?.cancel(); messages = [] }
     }
     private func send() async {
-        guard store.requireLogin(), consent else { return }
+        guard store.requireLogin(), store.aiConsent else { return }
         guard !store.isDemo else { store.error = "预览模式不会向 AI 服务发送消息。"; return }
         guard question.count <= 4000 else { store.error = "问题不能超过 4000 个字符。"; return }
         let prompt = question.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -48,14 +48,45 @@ final class APIClient {
         else {
             let config = URLSessionConfiguration.ephemeral
             config.timeoutIntervalForRequest = 45
-            config.timeoutIntervalForResource = 120
+            config.timeoutIntervalForResource = 360
             config.httpCookieStorage = nil
             config.urlCache = nil
             self.session = URLSession(configuration: config, delegate: SameOriginRedirectDelegate(), delegateQueue: nil)
         }
     }
+    func stream(_ path: String, body: [String: Any], receive: (Data) throws -> Void) async throws {
+        guard path == "/api/labs/run", var components = URLComponents(url: origin, resolvingAgainstBaseURL: false) else { throw APIError.invalidURL }
+        components.path = path
+        guard let url = components.url, url.scheme == "https" else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"; request.timeoutInterval = 210
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.setValue("application/x-ndjson", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
+        if http.statusCode == 401 { bytes.task.cancel(); onUnauthorized?(); throw APIError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else {
+            var message = "实验环境暂时不可用，请稍后重试。"
+            for try await line in bytes.lines {
+                if line.utf8.count < 4096, let data = line.data(using: .utf8), let json = try? JSONSerialization.jsonObject(with: data) as? [String:Any] { message = json["message"] as? String ?? message }
+                break
+            }
+            bytes.task.cancel(); throw APIError.server(http.statusCode, message)
+        }
+        try await withTaskCancellationHandler {
+            var total = 0
+            for try await line in bytes.lines {
+                try Task.checkCancellation()
+                let data = Data(line.utf8); total += data.count
+                guard data.count <= 2 * 1024 * 1024, total <= 12 * 1024 * 1024 else { bytes.task.cancel(); throw APIError.invalidResponse }
+                if !line.trimmingCharacters(in: .whitespaces).isEmpty { try receive(data) }
+            }
+        } onCancel: { bytes.task.cancel() }
+    }
     func request<T: Decodable>(_ path: String, method: String = "GET",
-                               query: [URLQueryItem] = [], body: [String: Any]? = nil) async throws -> T {
+                               query: [URLQueryItem] = [], body: [String: Any]? = nil, timeout: TimeInterval = 45) async throws -> T {
         guard path.hasPrefix("/api/"), !path.contains(".."),
               var components = URLComponents(url: origin, resolvingAgainstBaseURL: false) else { throw APIError.invalidURL }
         components.path = path
@@ -63,6 +94,7 @@ final class APIClient {
         guard let url = components.url, url.scheme == "https" else { throw APIError.invalidURL }
         var request = URLRequest(url: url)
         request.httpMethod = method
+        request.timeoutInterval = timeout
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         if let body {

@@ -63,6 +63,39 @@ final class RichContentTests: XCTestCase, WKNavigationDelegate {
             """, arguments: [:], in: nil, contentWorld: .page)
         XCTAssertEqual(result as? String, "isolated")
     }
+    func testLabShellRemovesSpecificAndLateWebsiteNavigation() async throws {
+        let web = await reader()
+        let value = try await web.callAsyncJavaScript("""
+            document.body.classList.add('has-mobile-header');
+            const css=document.createElement('style');
+            css.textContent='html body.has-mobile-header .topbar, body:not(.auth-page-body) .mobile-nav.mobile-nav-compact { display:flex!important; }';
+            document.head.append(css);
+            document.body.insertAdjacentHTML('beforeend','<header class="topbar">site header</header><nav class="mobile-nav mobile-nav-compact">site tabs</nav>');
+            eval(script);
+            document.body.insertAdjacentHTML('beforeend','<div class="mobile-header-backdrop">late backdrop</div>');
+            await new Promise(resolve=>setTimeout(resolve,50));
+            return [...document.querySelectorAll('.topbar,.mobile-nav,.mobile-header-backdrop')].map(node=>getComputedStyle(node).display);
+            """, arguments: ["script":WebContentPolicy.mobileScript], in: nil, contentWorld: .page)
+        XCTAssertEqual(value as? [String], ["none","none","none"])
+    }
+    func testNativeToolPreviewUsesSharedSandboxAndHasNoBridge() async throws {
+        let web = await reader()
+        _ = try await web.evaluateJavaScript("window.privateMarker='host-secret';window.previewResult='waiting';window.addEventListener('message',event=>window.previewResult=event.data)")
+        let coordinator = ToolSandboxView.Coordinator()
+        coordinator.ready = true
+        coordinator.html = "<html><body><script>let value;try{value=parent.privateMarker}catch{value='isolated'}parent.postMessage(value,'*')</script></body></html>"
+        coordinator.render(web)
+        let value = try await web.callAsyncJavaScript("""
+            for(let i=0;i<60 && window.previewResult==='waiting';i++) await new Promise(resolve=>setTimeout(resolve,50));
+            const frame=document.querySelector('iframe');
+            return {result:window.previewResult,sandbox:frame?.getAttribute('sandbox'),networkBlocked:frame?.srcdoc.includes("connect-src 'none'"),bridge:!!window.webkit?.messageHandlers?.reader};
+            """, arguments: [:], in: nil, contentWorld: .page)
+        let result = try XCTUnwrap(value as? [String:Any])
+        XCTAssertEqual(result["result"] as? String, "isolated")
+        XCTAssertEqual(result["sandbox"] as? String, "allow-scripts")
+        XCTAssertEqual(result["networkBlocked"] as? Bool, true)
+        XCTAssertEqual(result["bridge"] as? Bool, false)
+    }
     func testOnlyExactHTTPSLabOriginsReceiveSessions() {
         for raw in ["https://attacker.test/circuit", "https://www.free-bbs.cn.attacker.test/circuit", "https://www.free-bbs.cn:444/circuit", "http://www.free-bbs.cn/circuit", "https://user:password@www.free-bbs.cn/circuit", "https://www.free-bbs.cn/profile", "https://www.free-bbs.cn/circuit/not-a-lab"] {
             XCTAssertFalse(WebContentPolicy.labURL(URL(string: raw)!, origin: origin), raw)

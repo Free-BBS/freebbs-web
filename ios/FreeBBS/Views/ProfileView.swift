@@ -4,6 +4,7 @@ struct ProfileView: View {
     @Environment(AppStore.self) private var store
     @State private var confirmLogout = false
     var body: some View {
+        @Bindable var store = store
         List {
             Section {
                 if let user = store.user {
@@ -29,6 +30,13 @@ struct ProfileView: View {
                 NavigationLink { InboxView() } label: { Label("通知", systemImage: "bell.badge") }
                 NavigationLink { WorkbenchView() } label: { Label("学习日程", systemImage: "calendar") }
                 NavigationLink { ChatView() } label: { Label("问问 Max", systemImage: "sparkles") }
+            }
+            if store.user != nil {
+                Section {
+                    Toggle("允许 Max 处理发送的内容", isOn: $store.aiConsent).accessibilityIdentifier("maxConsentSetting")
+                } header: { Text("Max 数据使用") } footer: {
+                    Text("开启后，你发送的问题、对话上下文和工具制作需求及代码会交由 FREE-BBS 配置的 AI 服务处理。此选择按账号在本机保存；关闭后，下一次使用需重新同意。撤回不会删除已发送的记录。")
+                }
             }
             Section("隐私与社区") {
                 if store.user != nil {

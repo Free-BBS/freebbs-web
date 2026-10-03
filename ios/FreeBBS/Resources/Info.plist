@@ -14,6 +14,8 @@
 <string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string>
 </array>
 <key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
+<key>NSCameraUsageDescription</key><string>用于拍摄你要导入电路实验室的图片。</string>
+<key>NSPhotoLibraryUsageDescription</key><string>用于选择你要导入电路实验室的图片。</string>
 <key>ITSAppUsesNonExemptEncryption</key><false/>
 <key>FreeBBSOrigin</key><string>$(FREEBBS_ORIGIN)</string>
 <key>FreeBBSPrivacyURL</key><string>$(FREEBBS_PRIVACY_URL)</string>

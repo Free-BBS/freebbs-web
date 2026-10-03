@@ -26,13 +26,21 @@ struct CoursesView: View {
         store.courses.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) || $0.summary.localizedCaseInsensitiveContains(search) }
     }
     var body: some View {
-        PageSurface {
-            SectionTitle(title: "知识，由此连接", subtitle: "从一个问题出发，走进一门课程")
+        List {
             ForEach(filtered) { course in
-                NavigationLink { CourseDetailView(course: course) } label: { CourseRow(course: course) }.buttonStyle(.plain)
+                NavigationLink { CourseDetailView(course: course) } label: {
+                    HStack(spacing: 14) {
+                        Image(systemName: course.symbol).font(.title2).foregroundStyle(Palette.teal).frame(width: 36)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(course.name).font(.headline)
+                            Text(course.summary.isEmpty ? course.description : course.summary)
+                                .font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                        }
+                    }.padding(.vertical, 8)
+                }
             }
             if filtered.isEmpty { EmptyState(title: search.isEmpty ? "暂无课程" : "没有找到课程", symbol: "books.vertical", message: "试试其他关键词，或下拉刷新。") }
-        }.navigationTitle("课程").searchable(text: $search, prompt: "搜索课程")
+        }.listStyle(.insetGrouped).navigationTitle("课程").searchable(text: $search, prompt: "搜索课程")
             .refreshable { await store.bootstrap() }
     }
 }
@@ -52,7 +60,6 @@ struct CourseDetailView: View {
         PageSurface {
             Paper {
                 Image(systemName: course.symbol).font(.largeTitle).foregroundStyle(Palette.teal).accessibilityHidden(true)
-                Text(course.name).font(.title.bold())
                 Text(course.description).foregroundStyle(.secondary)
                 if let map { Text("\(map.nodes.count) 个知识点 · \(map.edges.count) 条连接").font(.caption).foregroundStyle(.secondary) }
             }
@@ -129,17 +136,15 @@ struct KnowledgeView: View {
     @State private var loading = false
     var body: some View {
         PageSurface {
-            Text(node.title).font(.largeTitle.bold()).fixedSize(horizontal: false, vertical: true)
+            Text(node.title).font(.title.bold()).fixedSize(horizontal: false, vertical: true)
             Text(node.summary).foregroundStyle(.secondary)
             Picker("文档分区", selection: $section) {
                 Text("知识").tag(0); Text("基本信息").tag(1); Text("应用").tag(2)
             }.pickerStyle(.segmented)
             if loading { ProgressView("正在加载正文…") }
             else {
-                Paper {
-                    if content.isEmpty { Text("此分区暂无内容。").foregroundStyle(.secondary) }
-                    else { MarkdownContent(source: content) }
-                }
+                if content.isEmpty { Text("此分区暂无内容。").foregroundStyle(.secondary) }
+                else { MarkdownContent(source: content) }
             }
             NavigationLink { ChatView(context: "课程：\(course.name)；知识点：\(node.title)\n\(content.prefix(12000))") } label: {
                 Label("请 Max 帮我理解", systemImage: "sparkles").frame(minHeight: 48).frame(maxWidth: .infinity)

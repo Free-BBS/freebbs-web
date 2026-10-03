@@ -5,7 +5,7 @@ struct InboxView: View {
     @State private var destination: String?
     @State private var loadingMore = false
     var body: some View {
-        PageSurface {
+        List {
             if store.user == nil {
                 EmptyState(title: "把消息留给你", symbol: "bell.badge", message: "登录后查看回复、互动和课程公告。")
                 Button("登录") { store.showLogin = true }.buttonStyle(.borderedProminent).controlSize(.large)
@@ -13,7 +13,6 @@ struct InboxView: View {
             else {
                 ForEach(store.inbox) { item in
                     Button { Task { await open(item) } } label: {
-                        Paper {
                             HStack(alignment: .top, spacing: 14) {
                                 Image(systemName: item.kind == "reply" ? "bubble.left" : "bell")
                                     .font(.title3).foregroundStyle(Palette.teal).frame(width: 36)
@@ -24,8 +23,7 @@ struct InboxView: View {
                                 }
                                 Spacer(minLength: 0)
                                 if item.readAt == nil { Circle().fill(Palette.teal).frame(width: 8, height: 8).accessibilityLabel("未读") }
-                            }
-                        }
+                            }.padding(.vertical, 8)
                     }.buttonStyle(.plain).accessibilityIdentifier("notification-\(item.id)")
                 }
                 if store.nextInboxCursor != nil {
@@ -35,7 +33,7 @@ struct InboxView: View {
                     }.frame(maxWidth: .infinity, minHeight: 48).disabled(loadingMore)
                 }
             }
-        }.navigationTitle("通知")
+        }.listStyle(.insetGrouped).navigationTitle("通知")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("全部已读") { Task { await readAll() } }.disabled(store.unreadCount == 0) } }
             .navigationDestination(item: $destination) { PostDetailView(postID: $0) }
             .refreshable { await store.refreshInbox() }

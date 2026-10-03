@@ -5,6 +5,8 @@ final class NavigationTests: XCTestCase {
     private var app: XCUIApplication!
     private func launchPreview() {
         continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        addTeardownBlock { XCUIDevice.shared.orientation = .portrait }
         app = XCUIApplication()
         app.launchArguments = ["--demo", "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
         app.launch()
@@ -32,7 +34,7 @@ final class NavigationTests: XCTestCase {
         app.buttons["关系图"].tap()
         capture("06-map")
         app.tabBars.buttons["讨论"].tap()
-        app.buttons["post-preview-convolution"].tap()
+        app.descendants(matching: .any).matching(identifier: "post-preview-convolution").firstMatch.tap()
         XCTAssertTrue(app.navigationBars["讨论详情"].waitForExistence(timeout: 5))
         capture("07-discussion-detail")
         back()
@@ -58,11 +60,11 @@ final class NavigationTests: XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
         app.tabBars.buttons["课程"].tap()
         let landscape = NSPredicate { _, _ in
-            let frame = self.app.windows.firstMatch.frame
-            return frame.width > frame.height
+            let size = XCUIScreen.main.screenshot().image.size
+            return size.width > size.height
         }
         let ready = expectation(for: landscape, evaluatedWith: app)
-        wait(for: [ready], timeout: 10)
+        wait(for: [ready], timeout: 20)
         XCTAssertTrue(app.staticTexts["信号与系统"].waitForExistence(timeout: 5))
         capture("12-landscape")
         XCUIDevice.shared.orientation = .portrait
@@ -111,21 +113,81 @@ final class NavigationTests: XCTestCase {
         app.tabBars.buttons["实验室"].tap()
         XCTAssertTrue(app.staticTexts["电路实验室"].waitForExistence(timeout: 5))
         capture("22-laboratories")
-        app.buttons["lab-/circuits"].tap()
-        XCTAssertTrue(app.staticTexts["实验室预览"].waitForExistence(timeout: 5))
+        app.descendants(matching: .any).matching(identifier: "lab-/circuits").firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["我的电路"].waitForExistence(timeout: 5))
         capture("23-circuit-workspace")
         app.tabBars.buttons["讨论"].tap()
         capture("24-discussion-feed")
-        app.buttons["post-preview-convolution"].tap()
+        app.descendants(matching: .any).matching(identifier: "post-preview-convolution").firstMatch.tap()
         XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10))
         let target = app.buttons["reply-to-1"]
-        for _ in 0..<8 { if target.isHittable { break }; app.swipeUp() }
+        let detail = app.scrollViews["discussionDetailScroll"]
+        XCTAssertTrue(target.waitForExistence(timeout: 10))
+        for _ in 0..<12 {
+            if target.isHittable { break }
+            detail.swipeUp(velocity: .slow)
+        }
         XCTAssertTrue(target.isHittable)
         target.tap()
         XCTAssertTrue(app.staticTexts["回复 @campus_notes"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["取消回复"].exists)
         app.buttons["取消回复"].tap()
         capture("25-threaded-replies")
+    }
+    func testNativeCodeEditorAndToolPreview() {
+        launchPreview()
+        app.tabBars.buttons["实验室"].tap()
+        app.descendants(matching: .any).matching(identifier: "lab-/code-lab?language=python").firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Python 实验"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["runLab"].isHittable)
+        capture("26-native-python")
+        app.buttons["editLabSource"].tap()
+        XCTAssertTrue(app.textViews["labSourceEditor"].waitForExistence(timeout: 5))
+        capture("27-native-editor")
+        app.buttons["完成"].tap()
+        back()
+        app.descendants(matching: .any).matching(identifier: "lab-/tool-workshop").firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["工具工坊"].waitForExistence(timeout: 5))
+        app.buttons["createTool"].tap()
+        capture("28-native-tool-editor")
+        app.buttons["previewTool"].tap()
+        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.webViews.staticTexts["学习计时器"].firstMatch.waitForExistence(timeout: 10))
+        capture("29-tool-preview")
+    }
+    func testDiscussionSortIsSelectable() {
+        launchPreview()
+        app.tabBars.buttons["讨论"].tap()
+        let selector = app.segmentedControls["discussionSort"]
+        XCTAssertTrue(selector.waitForExistence(timeout: 5))
+        selector.buttons["热门"].tap()
+        XCTAssertTrue(selector.buttons["热门"].isSelected)
+        selector.buttons["最新"].tap()
+        XCTAssertTrue(selector.buttons["最新"].isSelected)
+        XCTAssertTrue(app.staticTexts["置顶"].exists)
+        capture("30-latest-discussions")
+    }
+    func testMaxConsentSurvivesClearAndPageNavigationAndCanBeWithdrawn() {
+        launchPreview()
+        app.buttons["openMax"].tap()
+        let consent = app.switches["maxConsent"]
+        XCTAssertTrue(consent.waitForExistence(timeout: 5))
+        consent.tap()
+        XCTAssertFalse(consent.exists)
+        app.buttons["清空"].tap()
+        XCTAssertFalse(consent.exists)
+        back()
+        app.buttons["openMax"].tap()
+        XCTAssertTrue(app.navigationBars["问问 Max"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.switches["maxConsent"].exists)
+        capture("31-max-consent-remembered")
+        app.tabBars.buttons["我的"].tap()
+        let setting = app.switches["maxConsentSetting"]
+        for _ in 0..<6 { if setting.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(setting.isHittable)
+        setting.tap()
+        app.tabBars.buttons["今日"].tap()
+        XCTAssertTrue(app.switches["maxConsent"].waitForExistence(timeout: 5))
     }
     private func back() { app.navigationBars.buttons.element(boundBy: 0).tap() }
     private func tapListText(_ text: String) {
