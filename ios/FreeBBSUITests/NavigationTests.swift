@@ -146,7 +146,7 @@ final class NavigationTests: XCTestCase {
         capture("27-native-editor")
         app.buttons["完成"].tap()
         back()
-        app.descendants(matching: .any).matching(identifier: "lab-/tool-workshop").firstMatch.tap()
+        tapIdentifiedElement("lab-/tool-workshop")
         XCTAssertTrue(app.navigationBars["工具工坊"].waitForExistence(timeout: 5))
         app.buttons["createTool"].tap()
         capture("28-native-tool-editor")
@@ -182,12 +182,17 @@ final class NavigationTests: XCTestCase {
         XCTAssertFalse(app.switches["maxConsent"].exists)
         capture("31-max-consent-remembered")
         app.tabBars.buttons["我的"].tap()
-        let setting = app.switches["maxConsentSetting"]
-        for _ in 0..<6 { if setting.isHittable { break }; app.swipeUp() }
-        XCTAssertTrue(setting.isHittable)
-        setting.tap()
+        tapIdentifiedElement("maxConsentSetting")
         app.tabBars.buttons["今日"].tap()
         XCTAssertTrue(app.switches["maxConsent"].waitForExistence(timeout: 5))
+    }
+    private func tapIdentifiedElement(_ id: String) {
+        let item = app.descendants(matching: .any).matching(identifier: id).firstMatch
+        for _ in 0..<10 {
+            if item.exists && item.isHittable { item.tap(); return }
+            app.swipeUp(velocity: .slow)
+        }
+        XCTFail("Unable to reach element: " + id + "\n" + app.debugDescription)
     }
     private func back() { app.navigationBars.buttons.element(boundBy: 0).tap() }
     private func tapListText(_ text: String) {
