@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       mobile_only:
-        description: Deploy only the mobile safety APIs and approved policy/support pages
+        description: Deploy scoped mobile APIs, document range fix and approved policy/support pages
         type: boolean
         default: false
 
@@ -97,6 +97,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node --test backend/mobile-safety.test.js
+      - run: node --test scripts/mobile-deploy/patch-mobile-backend.test.js backend/max-background-stream.test.js backend/max-file-uploads.test.js backend/max-documents.test.js
       - run: npx eslint backend/mobile-safety.js backend/mobile-safety.test.js
       - name: Validate production patch without changing the checkout
         run: |

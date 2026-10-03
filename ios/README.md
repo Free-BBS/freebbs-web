@@ -11,7 +11,7 @@ SwiftUI 原生客户端，位于现有 `Free-BBS/freebbs-web` 仓库的 `ios/`�
 - Bundle ID：`cn.free-bbs.app`，开发者团队：`Q83556V27Y`。
 - API Origin：`https://www.free-bbs.cn`，客服：`feedback@free-bbs.cn`。
 - 最低系统 iOS 26；标准 SwiftUI 控件采用系统 Liquid Glass，iOS 27 专项验证需要 Xcode 27 / iOS 27 runtime。
-- 当前本机为 Xcode 27.0（27A266a），已安装 iOS 27 SDK，签名 Archive 和分发导出通过。本机使用 iOS 26.0.1 runtime；CI 的 Xcode 27 / iOS 27 runtime 回归已通过，详细记录见 `review/VALIDATION.md`。
+- 当前本机为 Xcode 27.0（27A266a），已安装 iOS 27 SDK、iOS 27.0 与 iOS 26.0.1 runtime；实际构建与回归结果见 `review/VALIDATION.md`。
 - 已配置并发布用户批准的隐私政策草稿：`https://www.free-bbs.cn/mobile/privacy.html`。运营主体、AI 数据处理及期限仍须补齐确认。xcconfig 中 `$()` 防止 URL 的 `//` 被当作注释。
 - 主图标为原生 `FreeBBSIcon.icon`：绵羊与知识轨道，支持系统浅色、深色和着色。设计源、提示词和预览见 `Design/Icons/README.md`。
 
@@ -25,9 +25,9 @@ Debug scheme 可增加 launch argument `--demo` 预览明确标注的示例页�
 
 课程、讨论、回复、发帖预览与 Max 共用离线 Markdown 引擎：KaTeX 公式及字体、代码高亮/复制、图片、表格，以及线上电路、工具和代码实验结果嵌入。升级网页渲染逻辑后执行 `npm ci && python3 ios/scripts/bundle-rich-content.py`；CI 以 `--check` 校验资源与来源一致。许可证随包附带，无远端脚本依赖。
 
-原生导航、系统标签栏、List/Form、sheet、键盘与底部安全区域；讨论“最新/热门”为直接可见的分段控件，置顶独立分组，旧请求不会覆盖新选择；内容区域最大宽度 680 pt，支持横屏、Dynamic Type、VoiceOver 和系统深浅色。玻璃仅用于导航与操作层，自定义玻璃按钮响应“减少透明度”。课程关系使用适合手机的邻接视图。
+原生导航、自定义 SwiftUI Liquid Glass 底部栏、List/Form、sheet、键盘与底部安全区域；讨论“最新/热门”为直接可见的分段控件，置顶独立分组，旧请求不会覆盖新选择；内容区域最大宽度 680 pt，支持横屏、Dynamic Type、VoiceOver 和系统深浅色。玻璃仅用于导航与操作层，自定义玻璃按钮响应“减少透明度”。课程关系使用适合手机的邻接视图。
 
-底部导航与网页版同序：**首页、讨论、发布、学习、工具**。学习菜单包含学习世界、实验室、创意工坊；工具菜单包含我的工作台、PBL计划、活动报名（试用）、个人设置和通知中心。主站全部 41 个页面通过原生页面或手机适配工作区使用，详见 `review/FEATURE_PARITY.md`。背包商城、后台、校园授权/同步、地图编辑、完整工作台与 Max 历史均保留在对应完整工作区；原生 Max 快捷页和日程概览仍为简化入口。发展端暂不在手机开放：目录、路由、嵌入会话桥均已移除，旧链接也会被拦截。资产沿用网站名称「电元、磁元」。
+底部导航与网页版同序：**首页、讨论、＋、学习、工具**；全站搜索独立位于右下角。发布、学习和工具使用系统 SwiftUI Menu 浮动菜单，发布加号以实色底强调。41 条主站路由都对应原生业务页面；工作台、校园、商城、牧场、编辑和管理页面不再套用完整网站 HTML。内容渲染和电路仿真引擎仍保留受限 WebKit，详见 `review/FEATURE_PARITY.md` 中的功能与未完成边界。发展端继续排除；资产名称沿用「电元、磁元」。
 
 ## 后端配套
 

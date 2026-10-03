@@ -4,7 +4,7 @@ const fs = require('node:fs');
 function insertOnce(source, anchor, addition) {
   if (source.includes(addition.trim())) return source;
   if (source.split(anchor).length !== 2) throw new Error('Expected a unique deployment anchor');
-  return source.replace(anchor, anchor + '\n' + addition);
+  return source.replace(anchor, `${anchor}\n${addition}`);
 }
 
 function patchMobileBackend(source) {
@@ -21,11 +21,19 @@ function patchMobileBackend(source) {
   const start = 'async function start() {';
   if (result.split(start).length !== 2) throw new Error('Expected a unique startup function');
   const offset = result.indexOf(start);
-  result = result.slice(0, offset) + insertOnce(
-    result.slice(offset),
-    '  await ensureNotificationTables(pool);',
-    '  await ensureMobileSafetyTables(pool);',
-  );
+  result =
+    result.slice(0, offset) +
+    insertOnce(
+      result.slice(offset),
+      '  await ensureNotificationTables(pool);',
+      '  await ensureMobileSafetyTables(pool);',
+    );
+  // Apply only the known document range typo; preserve all other production code.
+  const oldRange = `第 \${start}–\${end}/\${document.pageCount} 页`;
+  const newRange = `第 \${pageStart}–\${end}/\${document.pageCount} 页`;
+  const occurrences = result.split(oldRange).length - 1;
+  if (occurrences > 1) throw new Error('Expected a unique document range patch');
+  if (occurrences === 1) result = result.replace(oldRange, newRange);
   return result;
 }
 

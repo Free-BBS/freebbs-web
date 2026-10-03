@@ -72,8 +72,8 @@ struct CourseDetailView: View {
             Picker("浏览方式", selection: $showMap) { Text("知识点").tag(false); Text("关系图").tag(true) }.pickerStyle(.segmented)
             NavigationLink { CourseFilesView(course: course) } label: { Label("课程资料", systemImage: "doc.on.doc").frame(minHeight: 44) }
             NavigationLink {
-                FeatureWorkspaceView(destination: .init(path: courseWorkspaceURL.absoluteString, title: "课程工作区"))
-            } label: { Label("完整地图、学习记录与课程管理", systemImage: "map").frame(minHeight: 44) }
+                NativeCourseMapEditor(destination: .init(path: courseWorkspaceURL.absoluteString, title: "课程地图管理"))
+            } label: { Label("编辑课程地图", systemImage: "map").frame(minHeight: 44) }
             if loading { ProgressView("正在加载知识点…") }
             else if showMap, let map { KnowledgeMapView(map: map, course: course) }
             else {
@@ -167,7 +167,7 @@ struct KnowledgeView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { ShareLink(item: shareURL) }
                 ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink { FeatureWorkspaceView(destination: .init(path: shareURL.absoluteString, title: node.title)) } label: { Image(systemName: "ellipsis") }.accessibilityLabel("知识点完整操作与历史")
+                    NavigationLink { NativeDocumentEditor(destination: .init(path: shareURL.absoluteString, title: node.title)) } label: { Image(systemName: "ellipsis") }.accessibilityLabel("编辑知识点文档")
                 }
             }
             .task { await load() }

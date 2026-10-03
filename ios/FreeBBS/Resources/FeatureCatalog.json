@@ -20,7 +20,7 @@
       "listed": true,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/course",
@@ -31,7 +31,7 @@
       "listed": false,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/knowledge",
@@ -42,7 +42,7 @@
       "listed": false,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/course-map-editor",
@@ -53,7 +53,7 @@
       "listed": false,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/search",
@@ -64,7 +64,7 @@
       "listed": true,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/workbench",
@@ -75,7 +75,7 @@
       "listed": true,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/surveys",
@@ -86,40 +86,40 @@
       "listed": true,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/discussion",
-      "title": "完整讨论工作区",
+      "title": "讨论区",
       "group": "讨论区",
       "symbol": "bubble.left.and.bubble.right",
-      "detail": "投票、悬赏、编辑、互动与版主管理",
+      "detail": "发表、回复、匿名、互动与版主管理",
       "listed": true,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/publish",
-      "title": "完整发表工作区",
+      "title": "发表讨论",
       "group": "讨论区",
       "symbol": "square.and.pencil",
       "detail": "编辑、预览及实验和工具分享",
       "listed": false,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/aichat",
-      "title": "Max 完整工作区",
+      "title": "问问 Max",
       "group": "问问 Max",
       "symbol": "sparkles",
       "detail": "历史对话、模型、附件与创作工具",
       "listed": true,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/markdown-editor",
@@ -130,7 +130,7 @@
       "listed": true,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/creative-workshop",
@@ -141,7 +141,7 @@
       "listed": true,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/pbl",
@@ -152,7 +152,7 @@
       "listed": true,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/laboratory",
@@ -196,7 +196,7 @@
       "listed": false,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/circuit-challenge",
@@ -211,25 +211,25 @@
     },
     {
       "path": "/code-lab",
-      "title": "完整代码实验室",
+      "title": "代码实验室",
       "group": "实验室",
       "symbol": "curlybraces",
       "detail": "各运行环境、汇编与实验结果",
       "listed": true,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/tool-workshop",
-      "title": "完整工具工坊",
+      "title": "工具工坊",
       "group": "实验室",
       "symbol": "hammer",
       "detail": "管理工具、AI 制作、版本和分享",
       "listed": true,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/profile",
@@ -240,7 +240,7 @@
       "listed": true,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/settings",
@@ -251,7 +251,7 @@
       "listed": true,
       "admin": false,
       "login": true,
-      "native": false
+      "native": true
     },
     {
       "path": "/electromagnetic",
@@ -262,7 +262,7 @@
       "listed": true,
       "admin": false,
       "login": true,
-      "native": false
+      "native": true
     },
     {
       "path": "/inventory",
@@ -273,7 +273,7 @@
       "listed": true,
       "admin": false,
       "login": true,
-      "native": false
+      "native": true
     },
     {
       "path": "/ranch",
@@ -284,7 +284,7 @@
       "listed": true,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/ranch-dye",
@@ -295,7 +295,7 @@
       "listed": true,
       "admin": false,
       "login": true,
-      "native": false
+      "native": true
     },
     {
       "path": "/ranch-gallery",
@@ -306,7 +306,7 @@
       "listed": true,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/guide",
@@ -317,7 +317,7 @@
       "listed": true,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/about",
@@ -328,7 +328,7 @@
       "listed": true,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/staff",
@@ -339,7 +339,7 @@
       "listed": true,
       "admin": false,
       "login": false,
-      "native": false
+      "native": true
     },
     {
       "path": "/login",
@@ -383,7 +383,7 @@
       "listed": true,
       "admin": true,
       "login": true,
-      "native": false
+      "native": true
     },
     {
       "path": "/system-settings",
@@ -394,7 +394,7 @@
       "listed": true,
       "admin": true,
       "login": true,
-      "native": false
+      "native": true
     },
     {
       "path": "/system-settings/announcements",
@@ -405,7 +405,7 @@
       "listed": true,
       "admin": true,
       "login": true,
-      "native": false
+      "native": true
     },
     {
       "path": "/system-settings/rewards",
@@ -416,7 +416,7 @@
       "listed": true,
       "admin": true,
       "login": true,
-      "native": false
+      "native": true
     },
     {
       "path": "/system-settings/model",
@@ -427,7 +427,7 @@
       "listed": true,
       "admin": true,
       "login": true,
-      "native": false
+      "native": true
     },
     {
       "path": "/system-settings/course-materials",
@@ -438,7 +438,7 @@
       "listed": true,
       "admin": true,
       "login": true,
-      "native": false
+      "native": true
     },
     {
       "path": "/system-settings/surveys",
@@ -449,7 +449,7 @@
       "listed": true,
       "admin": true,
       "login": true,
-      "native": false
+      "native": true
     }
   ],
   "aliases": {

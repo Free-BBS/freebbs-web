@@ -17,9 +17,9 @@ PAGES = {
     '/search': ('全站搜索', '学习', 'magnifyingglass', '跨课程、知识点与讨论查找内容'),
     '/workbench': ('我的工作台', '计划与活动', 'calendar', '计划表、校园连接、课程公告与作业'),
     '/surveys': ('活动报名（试用）', '计划与活动', 'ticket', '报名、回执及抽签结果'),
-    '/discussion': ('完整讨论工作区', '社区与创作', 'bubble.left.and.bubble.right', '投票、悬赏、编辑、互动与版主管理'),
-    '/publish': ('完整发表工作区', '社区与创作', 'square.and.pencil', '编辑、预览及实验和工具分享'),
-    '/aichat': ('Max 完整工作区', '社区与创作', 'sparkles', '历史对话、模型、附件与创作工具'),
+    '/discussion': ('讨论区', '社区与创作', 'bubble.left.and.bubble.right', '发表、回复、匿名、互动与版主管理'),
+    '/publish': ('发表讨论', '社区与创作', 'square.and.pencil', '编辑、预览及实验和工具分享'),
+    '/aichat': ('问问 Max', '社区与创作', 'sparkles', '历史对话、模型、附件与创作工具'),
     '/markdown-editor': ('Markdown 编辑器', '社区与创作', 'text.document', '知识点文档编辑、公式预览与图片上传'),
     '/creative-workshop': ('创意工坊', '社区与创作', 'paintbrush', '创意工坊的规划与介绍'),
     '/pbl': ('PBL 计划', '计划与活动', 'person.3', '项目学习的规划与说明'),
@@ -28,8 +28,8 @@ PAGES = {
     '/circuit': ('电路实验室', '实验与工具', 'cpu', '电路编辑、Max 助手、版本与仿真'),
     '/circuit-embed': ('电路引用', '实验与工具', 'link', '查看被分享的电路及指定版本'),
     '/circuit-challenge': ('电路挑战', '实验与工具', 'bolt.badge.clock', '关卡、目标波形与排行榜'),
-    '/code-lab': ('完整代码实验室', '实验与工具', 'curlybraces', '各运行环境、汇编与实验结果'),
-    '/tool-workshop': ('完整工具工坊', '实验与工具', 'hammer', '管理工具、AI 制作、版本和分享'),
+    '/code-lab': ('代码实验室', '实验与工具', 'curlybraces', '各运行环境、汇编与实验结果'),
+    '/tool-workshop': ('工具工坊', '实验与工具', 'hammer', '管理工具、AI 制作、版本和分享'),
     '/profile': ('个人主页', '个人与牧场', 'person.crop.circle', '公开资料、动态、徽章、签到记录与牧场'),
     '/settings': ('个人设置', '个人与牧场', 'gearshape', '头像、阅读样式、邮件通知、邮箱与学号'),
     '/electromagnetic': ('电磁场商城', '个人与牧场', 'bag', '商城、兑换、赠送与道具'),
@@ -79,7 +79,7 @@ for path, (title, group, symbol, detail) in PAGES.items():
     entries.append(dict(path=path, title=title, group=parent_for_path.get(path, group), symbol=symbol, detail=detail,
                         listed=path not in CONTEXT and path not in {'/', '/login', '/register', '/remake'},
                         admin=group == '管理', login=group == '管理' or path in {'/settings', '/electromagnetic', '/inventory', '/ranch-dye'},
-                        native=path in {'/', '/login', '/register', '/remake', '/laboratory', '/circuits', '/circuit', '/circuit-challenge'}))
+                        native=True))
 aliases = {value: key for key, value in routes.items()}
 redirect_source = source.split('const htmlRedirects = new Map([', 1)[1].split(']);', 1)[0]
 # /circuits shares circuit.html with /circuit; the declared redirect, rather

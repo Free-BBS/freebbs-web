@@ -80,9 +80,7 @@ struct NativeCodeLabView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        NavigationLink {
-                            FeatureWorkspaceView(destination: .init(path: fullWorkspacePath, title: "完整代码实验室"))
-                        } label: { Label("完整实验工作区", systemImage: "square.grid.2x2") }
+
                         Button("导出代码", systemImage: "square.and.arrow.up") { exportCode() }
                         Button("分享至讨论", systemImage: "bubble.left") { if requireAccount() { confirmShare = true } }.disabled(lab.running || sharing)
                         Button("恢复示例", systemImage: "arrow.counterclockwise") { lab.reset(lab.language) }.disabled(lab.running)

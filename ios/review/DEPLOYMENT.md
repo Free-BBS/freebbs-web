@@ -1,5 +1,13 @@
 # 后端部署与内部 TestFlight
 
+## 2026-10-04 原生页面版本
+
+build 10 已于 2026-10-03 23:06 上传并确认内部可测：[TestFlight 构建 10](https://appstoreconnect.apple.com/teams/b6657e16-3de4-4dd1-acf0-711b662c81c3/apps/6818750003/testflight/ios/06a2e39c-5483-4bb8-b241-e144dcf5abc7)。下方 build 4–9 的状态属于对应日期的历史记录。
+
+build 11 使用 Xcode 27 / SDK 27，加入原生业务页面、右下角全站搜索、原生浮动菜单与醒目加号。最终源文件按 SHA-256 冻结后签名；上传与 Apple 可测状态需分别确认，汇总见本机 `native-build11-validation.json` 与 PR。分发保持 `testFlightInternalTestingOnly=true`，不自动提交 App Store 正式审核。
+
+文档视觉阅读的提示变量由不存在的 `start` 改为 `pageStart`。既有移动部署补丁仅替换这一个已知字符串，拒绝重复锚点，重复执行不再改变代码；保留备份、安装前哈希校验、失败回滚与后端健康检查。发布仍从具备既有部署凭据的 Actions 执行，本机 SSH 账号只有读取权限。
+
 日期：2026-10-03。此记录不代表 App Store 正式提交完成。
 
 ## 后端

@@ -59,34 +59,21 @@ struct FeatureLink: View {
 
 struct FeatureWorkspaceView: View {
     @Environment(AppStore.self) private var store
-    @Environment(\.colorScheme) private var colorScheme
     let destination: FeatureDestination
-    @State private var browser = LabBrowserState()
     private var feature: SiteFeature? {
-        URL(string: destination.path, relativeTo: store.configuration.origin).flatMap { FeatureCatalog.feature(for: $0) }
+        NativeRoutes.url(destination, origin: store.configuration.origin).flatMap { FeatureCatalog.feature(for: $0) }
     }
     var body: some View {
         Group {
-            if URL(string: destination.path, relativeTo: store.configuration.origin).map(FeatureCatalog.unavailableOnPhone) == true || feature == nil {
+            if NativeRoutes.url(destination, origin: store.configuration.origin).map(FeatureCatalog.unavailableOnPhone) == true || feature == nil {
                 ContentUnavailableView("此功能暂未在 iPhone 开放", systemImage: "iphone")
             } else if feature?.admin == true && store.user?.isAdmin != true {
                 ContentUnavailableView("需要管理权限", systemImage: "lock.shield", description: Text("请使用具备对应权限的账号。"))
             } else if feature?.login == true && store.user == nil {
-                ContentUnavailableView {
-                    Label("登录后继续", systemImage: "person.crop.circle")
-                } description: { Text(destination.title) } actions: {
-                    Button("登录或注册") { store.showLogin = true }.buttonStyle(.borderedProminent)
-                }
-            } else if feature?.path == "/markdown-editor", URLComponents(string: destination.path)?.queryItems?.contains(where: { $0.name == "point" && $0.value?.isEmpty == false }) != true {
-                MarkdownDocumentPicker()
-            } else if feature?.native == true {
-                nativeDestination
-            } else {
-                workspace
-            }
-        }.navigationTitle(browser.pageTitle ?? destination.title).navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(item: $browser.nextFeature) { FeatureWorkspaceView(destination: $0) }
-            .onDisappear { browser.resolveDialog(nil); browser.resolveConsent(false); browser.resolveFiles(nil) }
+                NativeAccountRequired()
+            } else { nativeDestination }
+        }.navigationTitle(destination.title).navigationBarTitleDisplayMode(.inline)
+            .id(destination.path + String(store.sessionRevision))
     }
     @ViewBuilder private var nativeDestination: some View {
         switch feature?.path {
@@ -94,69 +81,42 @@ struct FeatureWorkspaceView: View {
         case "/login": AuthenticationView()
         case "/register": AuthenticationView(initialMode: .register)
         case "/remake": AuthenticationView(initialMode: .reset)
+        case "/world", "/course", "/knowledge": NativeCourseDestination(destination: destination)
+        case "/course-map-editor": NativeCourseMapEditor(destination: destination)
+        case "/markdown-editor":
+            if NativeRoutes.query(destination, "point")?.isEmpty == false { NativeDocumentEditor(destination: destination) }
+            else { MarkdownDocumentPicker() }
+        case "/search": NativeSearchPage()
+        case "/workbench": NativeWorkbenchView()
+        case "/surveys": NativeSurveysView(surveyID: NativeRoutes.query(destination, "id"))
+        case "/discussion":
+            if let id = NativeRoutes.query(destination, "post") { PostDetailView(postID: id) }
+            else { DiscussionView() }
+        case "/publish": ComposeView()
+        case "/aichat": ChatView()
         case "/laboratory": LaboratoryView()
-        default: LabWorkspaceView(destination: destination.lab)
+        case "/circuits", "/circuit", "/circuit-embed", "/circuit-challenge": LabWorkspaceView(destination: destination.lab)
+        case "/code-lab": NativeCodeLabView(destination: destination.lab)
+        case "/tool-workshop": NativeToolsView(destination: destination.lab)
+        case "/profile": NativePublicProfileView(uid: NativeRoutes.query(destination, "uid"))
+        case "/settings": NativeSettingsView()
+        case "/electromagnetic": NativeEconomyView()
+        case "/inventory": NativeEconomyView(inventory: true)
+        case "/ranch": NativeRanchView(uid: NativeRoutes.query(destination, "uid"))
+        case "/ranch-gallery": NativeRanchView(gallery: true)
+        case "/ranch-dye": NativeDyeView()
+        case "/guide": NativeGuideView()
+        case "/about", "/pbl", "/creative-workshop": NativeInformationView(path: feature!.path, title: destination.title)
+        case "/staff": NativeStaffView()
+        case "/adminusers": NativeAdminUsersView()
+        case "/system-settings": NativeAdministrationView()
+        case "/system-settings/model": NativeAdminSettingsView()
+        case "/system-settings/course-materials": NativeAdminSettingsView(materials: true)
+        case "/system-settings/announcements": NativeAdminPublication()
+        case "/system-settings/rewards": NativeAdminPublication(rewards: true)
+        case "/system-settings/surveys": NativeAdminSurveys()
+        default: ContentUnavailableView("页面不存在", systemImage: "questionmark.folder")
         }
-    }
-    private var workspace: some View {
-        VStack(spacing: 0) {
-            if store.isDemo {
-                ContentUnavailableView("工作区预览", systemImage: feature?.symbol ?? "globe", description: Text("正式版本连接完整工作区。预览模式不读取或更改线上账号数据。"))
-            } else {
-                if browser.loading { ProgressView(value: browser.progress).tint(Palette.teal) }
-                if let error = browser.error {
-                    ContentUnavailableView { Label("暂时无法加载", systemImage: "wifi.exclamationmark") }
-                    description: { Text(error) } actions: {
-                        Button("重试") { browser.error = nil; browser.webView?.reload() }.buttonStyle(.borderedProminent)
-                    }
-                }
-                LabWebView(destination: destination.lab, origin: store.configuration.origin,
-                           token: store.api.token, dark: colorScheme == .dark, browser: browser,
-                           login: { store.showLogin = true }, includeFeatures: true, store: store)
-                    .id(store.sessionRevision).opacity(browser.error == nil ? 1 : 0)
-                    .frame(maxWidth: .infinity, maxHeight: browser.error == nil ? .infinity : 0)
-            }
-        }.background(Palette.canvas)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button("返回上一页", systemImage: "chevron.backward") { browser.webView?.goBack() }.disabled(!browser.canGoBack)
-                        Button("前进", systemImage: "chevron.forward") { browser.webView?.goForward() }.disabled(browser.webView?.canGoForward != true)
-                        Button("刷新", systemImage: "arrow.clockwise") { browser.error = nil; browser.webView?.reload() }
-                        if browser.hasAccountUtilities {
-                            Button("签到日历与运势", systemImage: "calendar.badge.checkmark") { browser.webView?.evaluateJavaScript("window.freeBbsApp.openFortuneModal()") }
-                            Button("资产说明", systemImage: "bolt.circle") { browser.webView?.evaluateJavaScript("window.openElectromagneticModal()") }
-                        }
-                        FeatureLink(path: "/inventory", title: "仓库与钱包账本")
-                        NavigationLink { FeaturesView() } label: { Label("所有功能", systemImage: "square.grid.2x2") }
-                        if let url = browser.webView?.url, FeatureCatalog.pageURL(url, origin: store.configuration.origin) {
-                            ShareLink(item: url) { Label("分享页面", systemImage: "square.and.arrow.up") }
-                        }
-                    } label: { Image(systemName: "ellipsis") }.accessibilityLabel("工作区操作")
-                }
-            }
-            .alert("FREE-BBS", isPresented: $browser.presentingDialog, presenting: browser.dialog) { dialog in
-                if dialog.kind == .text { TextField("输入内容", text: $browser.promptText) }
-                if dialog.kind != .notice { Button("取消", role: .cancel) { browser.resolveDialog(nil) } }
-                Button("确定") { browser.resolveDialog(dialog.kind == .text ? browser.promptText : "confirmed") }
-            } message: { Text($0.message) }
-            .confirmationDialog("允许 Max 处理发送的内容？", isPresented: $browser.presentingConsent, titleVisibility: .visible) {
-                Button("同意并继续") { store.aiConsent = true; browser.resolveConsent(true) }
-                Button("取消", role: .cancel) { browser.resolveConsent(false) }
-            } message: {
-                Text("你发送的问题、上下文、附件和制作需求会交由 FREE-BBS 配置的 AI 服务处理。此选择按账号在本机保存，可在「我的」撤回。")
-            }
-            .siteFileImport(browser: browser)
-            .sheet(item: $browser.export) { item in LabShareSheet(url: item.url) }
-            .sheet(item: $browser.authorization) { request in
-                ConnectedAccountAuthorization(request: request) { url in
-                    browser.authorization = nil
-                    if let url { browser.webView?.load(URLRequest(url: url)) }
-                }.environment(store)
-            }
-            .alert("无法打开文件", isPresented: Binding(get: { browser.downloadError != nil }, set: { if !$0 { browser.downloadError = nil } })) {
-                Button("确定", role: .cancel) { browser.downloadError = nil }
-            } message: { Text(browser.downloadError ?? "") }
     }
 }
 
@@ -213,7 +173,7 @@ struct WebsiteMenuView: View {
             switch item.path {
             case "/world": CoursesView().navigationTitle("学习世界")
             case "/laboratory": LaboratoryView()
-            case "/settings": ProfileView().navigationTitle("个人设置")
+            case "/settings": NativeSettingsView()
             default: FeatureWorkspaceView(destination: .init(path: item.path, title: item.title))
             }
         } label: {

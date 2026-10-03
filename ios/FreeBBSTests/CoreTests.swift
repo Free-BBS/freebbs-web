@@ -105,6 +105,74 @@ final class CoreTests: XCTestCase {
         let source = #"{"id":"invalid","username":"student","displayName":"student","avatarPath":""}"#
         XCTAssertThrowsError(try JSONDecoder().decode(Author.self, from: Data(source.utf8)))
     }
+    func testNativeRecordPreservesSurveyAndAttachmentJSONTypes() throws {
+        let data = Data(#"{"answers":{"q1":["A","B"],"q2":"text"},"revision":3,"adopted":true,"optional":null,"documents":[{"id":"doc","pageCount":12}]}"#.utf8)
+        let record = try JSONDecoder().decode(SiteRecord.self, from: data)
+        XCTAssertEqual(record["answers"]["q1"].list.map(\.text), ["A", "B"])
+        XCTAssertEqual(record["revision"].int, 3)
+        XCTAssertTrue(record["adopted"].flag)
+        XCTAssertEqual(record["optional"], .null)
+        XCTAssertEqual(try JSONDecoder().decode(SiteRecord.self, from: JSONEncoder().encode(record)), record)
+    }
+    func testEncodedHomeworkReferenceAndUIDAreNotDoubleEscaped() async throws {
+        let reference = "learn:homework:中文"
+        let path = "/api/workbench/connectors/tsinghua/homework/semesters/2026-2027-1/items/" + NativeRoutes.component(reference)
+        let client = APIClient(origin: origin, session: makeSession { request in
+            XCTAssertEqual(request.url?.lastPathComponent, reference)
+            XCTAssertFalse(request.url!.absoluteString.contains("%253A"))
+            return (200, "{}")
+        })
+        let _: SiteRecord = try await client.request(path)
+    }
+    func testNativeDeletionAcceptsEmpty204AndSendsNoJSONBody() async throws {
+        let client = APIClient(origin: origin, session: makeSession { request in
+            XCTAssertEqual(request.httpMethod, "DELETE")
+            XCTAssertNil(request.httpBody); XCTAssertNil(request.httpBodyStream)
+            XCTAssertNil(request.value(forHTTPHeaderField: "Content-Type"))
+            return (204, "")
+        })
+        let value: SiteRecord = try await client.request("/api/workbench/connectors/tsinghua/connection", method: "DELETE")
+        XCTAssertEqual(value, .empty)
+    }
+    func testNativeAPIRejectsQueryInjectionAndEncodedTraversal() async {
+        let client = APIClient(origin: origin, session: makeSession { _ in XCTFail("Unsafe URL must never be requested"); return (200, "{}") })
+        for path in ["/api/users/%2e%2e/auth/me", "/api/users/1?admin=true", "/api/auth/me#fragment"] {
+            do { let _: SiteRecord = try await client.request(path); XCTFail("Expected URL rejection") }
+            catch { XCTAssertEqual(error.localizedDescription, APIError.invalidURL.localizedDescription) }
+        }
+    }
+    func testIdentityVerificationFailureDoesNotLogOutCurrentAccount() async {
+        let client = APIClient(origin: origin, session: makeSession { _ in (401, #"{"message":"当前密码错误"}"#) })
+        var invalidated = false; client.onUnauthorized = { invalidated = true }
+        for path in ["/api/profile/email-code", "/api/profile/email", "/api/profile/student-id"] {
+            do { let _: SiteRecord = try await client.request(path, method: "POST", body: [:]); XCTFail("Expected verification failure") }
+            catch { XCTAssertFalse(invalidated); XCTAssertEqual(error.localizedDescription, "当前密码错误") }
+        }
+    }
+    func testAdminEditingAnotherUserKeepsOwnIdentity() async throws {
+        let source = #"{"id":77,"uid":"other","username":"other","fullName":"Other","role":"student","email":"other@example.com","studentId":"","isAdmin":false,"permissions":[],"electrons":0,"manetrons":0,"heat":0,"avatarPath":"","bio":"","websiteUrl":""}"#
+        let client = APIClient(origin: origin, session: makeSession { _ in (200, "{\"user\":" + source + "}") })
+        let store = AppStore(api: client)
+        var ownFields = try JSONDecoder().decode(SiteRecord.self, from: Data(source.utf8)).fields
+        ownFields["id"] = .number(1); ownFields["uid"] = .string("admin"); ownFields["username"] = .string("admin"); ownFields["isAdmin"] = .bool(true)
+        store.user = try SiteRecord.object(ownFields).decoded(User.self)
+        let workspace = NativeWorkspace()
+        let result = await workspace.mutate(store, path: "/api/admin/users/77", method: "PATCH", body: ["username": "other"])
+        XCTAssertNotNil(result); XCTAssertEqual(store.user?.id, 1); XCTAssertTrue(store.user?.isAdmin == true)
+    }
+    func testAllMainSiteFeaturesHaveNativeDestinationsAndBundledInformation() throws {
+        XCTAssertEqual(FeatureCatalog.entries.count, 41)
+        XCTAssertTrue(FeatureCatalog.entries.allSatisfy(\.native))
+        for name in ["NativeInformation", "StaffRoster", "NativeGuide"] {
+            let url = try XCTUnwrap(Bundle.main.url(forResource: name, withExtension: "json"))
+            let record = try JSONDecoder().decode(SiteRecord.self, from: Data(contentsOf: url))
+            XCTAssertFalse(record.fields.isEmpty, name)
+        }
+        let guideURL = try XCTUnwrap(Bundle.main.url(forResource: "NativeGuide", withExtension: "json"))
+        let guide = try JSONDecoder().decode(SiteRecord.self, from: Data(contentsOf: guideURL))
+        XCTAssertFalse(guide["steps"].list.isEmpty)
+        XCTAssertFalse(guide["steps"].list.contains { $0["route"].text.hasPrefix("/development") })
+    }
     private func makeSession(_ handler: @escaping (URLRequest) -> (Int, String)) -> URLSession {
         StubURLProtocol.handler = handler
         let config = URLSessionConfiguration.ephemeral

@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct DiscussionView: View {
     @Environment(AppStore.self) private var store
@@ -32,7 +33,7 @@ struct DiscussionView: View {
                 }.listStyle(.plain).navigationTitle("讨论").searchable(text: $search, prompt: "搜索当前讨论")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink { FeatureWorkspaceView(destination: .init(path: "/discussion", title: "完整讨论工作区")) } label: { Image(systemName: "ellipsis") }.accessibilityLabel("讨论高级操作与管理")
+                    NavigationLink { NativeDiscussionBoardsView() } label: { Image(systemName: "ellipsis") }.accessibilityLabel("讨论高级操作与管理")
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     Menu {
@@ -75,6 +76,7 @@ struct PostDetailView: View {
     @State private var reportTarget: ReportTarget?
     @State private var blockTarget: Author?
     @State private var confirmDelete = false
+    @State private var maxConsent = false
     @State private var loading = false
     @Environment(\.dismiss) private var dismiss
     private var current: Post? { post ?? initial }
@@ -142,6 +144,7 @@ struct PostDetailView: View {
                                     Label("\(comment.likeCount ?? 0)", systemImage: comment.likedByMe == true ? "hand.thumbsup.fill" : "hand.thumbsup")
                                 }.disabled(sending).accessibilityLabel("赞同回复，\(comment.likeCount ?? 0) 次")
                                 Spacer(minLength: 0)
+                                if comment.canFeature == true { Button(comment.isFeatured == true ? "取消精选" : "精选") { Task { await featureComment(comment) } }.disabled(sending) }
                                 if comment.canDelete == true { Button("删除", role: .destructive) { deleteCommentTarget = comment } }
                             }.font(.caption).frame(minHeight: 44)
                         }
@@ -178,10 +181,14 @@ struct PostDetailView: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink { FeatureWorkspaceView(destination: .init(path: shareURL.absoluteString, title: "讨论完整操作")) } label: { Image(systemName: "ellipsis") }.accessibilityLabel("编辑、投票与更多互动")
+                NavigationLink { NativeDiscussionControls(postID: postID) } label: { Image(systemName: "ellipsis") }.accessibilityLabel("讨论操作")
             }
             if current?.canDelete == true { ToolbarItem(placement: .topBarTrailing) { Button("删除", role: .destructive) { confirmDelete = true } } }
         }
+        .confirmationDialog("允许 Max 处理发送的内容？", isPresented: $maxConsent, titleVisibility: .visible) {
+            Button("同意并继续") { store.aiConsent = true; Task { await sendReply() } }
+            Button("取消", role: .cancel) { }
+        } message: { Text("@Max 会将回复与讨论上下文发送给本站配置的 AI 服务。按账号记住选择，可在设置中撤回。") }
         .confirmationDialog("删除这条讨论？此操作无法撤销。", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("删除讨论", role: .destructive) { Task { await deletePost() } }
         }
@@ -237,6 +244,7 @@ struct PostDetailView: View {
     }
     private func sendReply() async {
         guard store.requireLogin() else { return }
+        if reply.range(of: "@max", options: .caseInsensitive) != nil && !store.aiConsent { maxConsent = true; return }
         if store.isDemo { store.error = "预览模式不会发表回复。"; return }
         guard reply.count <= 5000 else { store.error = "回复不能超过 5000 个字符。"; return }
         sending = true
@@ -262,6 +270,13 @@ struct PostDetailView: View {
         do { let _: MessageResponse = try await store.api.request("/api/discussion/comments/\(comment.id)/like", method: "POST"); await load() }
         catch { store.error = error.localizedDescription }
     }
+    private func featureComment(_ comment: Comment) async {
+        guard store.requireLogin(), !store.isDemo else { return }
+        sending = true; defer { sending = false }
+        let owner = store.sessionRevision
+        do { let _: SiteRecord = try await store.api.request("/api/discussion/comments/\(comment.id)/feature", method: "PATCH", body: ["featured": comment.isFeatured != true]); guard owner == store.sessionRevision else { return }; await load() }
+        catch { if owner == store.sessionRevision { store.error = error.localizedDescription } }
+    }
     private func deleteComment(_ comment: Comment) async {
         guard !store.isDemo else { return }
         do { let _: MessageResponse = try await store.api.request("/api/discussion/comments/\(comment.id)", method: "DELETE"); await load(); await store.refreshPosts() }
@@ -285,6 +300,10 @@ struct ComposeView: View {
     @State private var submitting = false
     @State private var preview = false
     @State private var confirmDiscard = false
+    @State private var anonymous = false
+    @State private var loginRequired = false
+    @State private var image: PhotosPickerItem?
+    @State private var upload = NativeWorkspace()
     init(title: String = "", content: String = "", board: String = "") {
         _title = State(initialValue: title); _content = State(initialValue: content); _board = State(initialValue: board)
     }
@@ -301,6 +320,12 @@ struct ComposeView: View {
                 if preview { MarkdownContent(source: content).padding(.vertical, 10) }
                 else { TextEditor(text: $content).frame(minHeight: 240).accessibilityLabel("讨论正文").accessibilityIdentifier("composeBody") }
             } header: { Text("正文 · 支持 Markdown") } footer: { Text("\(title.count)/120 标题字符 · \(content.count)/20000 正文字符") }
+            Section("发表选项") {
+                Toggle("匿名发表", isOn: $anonymous)
+                Toggle("仅登录用户可见", isOn: $loginRequired)
+                PhotosPicker("插入图片", selection: $image, matching: .images).disabled(upload.busy)
+                WorkspaceStatus(state: upload)
+            }
             Section {
                 Text("请尊重他人，避免公开学号、邮箱或其他个人信息。违规内容可以在讨论详情中举报。")
                     .font(.footnote).foregroundStyle(.secondary)
@@ -311,6 +336,14 @@ struct ComposeView: View {
                 ToolbarItem(placement: .primaryAction) { Button(preview ? "编辑" : "预览") { preview.toggle() } }
                 ToolbarItem(placement: .confirmationAction) { Button("发布") { Task { await publish() } }.disabled(!valid || submitting) }
             }
+            .onChange(of: image) { _, value in Task {
+                let session = store.sessionRevision
+                do {
+                    guard let data = try await value?.loadTransferable(type: Data.self), data.count <= 5 * 1024 * 1024, let photo = UIImage(data: data), let jpeg = photo.jpegData(compressionQuality: 0.8) else { upload.error = "请选择不超过 5 MiB 的图片。"; return }
+                    guard session == store.sessionRevision else { return }
+                    if let result = await upload.mutate(store, path: "/api/discussion/uploads/images", body: ["imageDataUrl": "data:image/jpeg;base64," + jpeg.base64EncodedString()]), !result["url"].text.isEmpty { content += "\n![图片](" + result["url"].text + ")\n" }
+                } catch { upload.error = error.localizedDescription }
+            } }
             .interactiveDismissDisabled(!title.isEmpty || !content.isEmpty)
             .confirmationDialog("放弃这次编辑？", isPresented: $confirmDiscard, titleVisibility: .visible) { Button("放弃", role: .destructive) { dismiss() } }
     }
@@ -323,7 +356,7 @@ struct ComposeView: View {
         submitting = true
         defer { submitting = false }
         do {
-            let _: PostResponse = try await store.api.request("/api/discussion/posts", method: "POST", body: ["boardSlug": board, "title": title, "contentMarkdown": content])
+            let _: PostResponse = try await store.api.request("/api/discussion/posts", method: "POST", body: ["boardSlug": board, "title": title, "contentMarkdown": content, "isAnonymous": anonymous, "loginRequired": loginRequired])
             await store.refreshPosts(); dismiss()
         } catch { store.error = error.localizedDescription }
     }

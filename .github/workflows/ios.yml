@@ -8,6 +8,8 @@ on:
       - 'public/mobile-shell.js'
       - 'public/app.js'
       - 'backend/mobile-safety*'
+      - 'backend/server.js'
+      - 'scripts/mobile-deploy/**'
       - 'database/migrations/032_mobile_safety.sql'
       - '.github/workflows/ios.yml'
   workflow_dispatch:
@@ -30,9 +32,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node --test backend/mobile-safety.test.js
+      - run: node --test scripts/mobile-deploy/patch-mobile-backend.test.js backend/max-background-stream.test.js backend/max-file-uploads.test.js backend/max-documents.test.js backend/site-search.test.js
       - run: npx eslint backend/mobile-safety.js backend/mobile-safety.test.js
       - name: Verify bundled Markdown and embed assets match website sources
         run: python3 ios/scripts/bundle-rich-content.py --check
+      - name: Verify native handbook and staff match website content
+        run: python3 ios/scripts/generate-native-information.py --check
       - name: Verify main-site routes and website navigation are synchronized
         run: python3 ios/scripts/generate-feature-catalog.py --check
 

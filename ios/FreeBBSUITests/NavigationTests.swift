@@ -14,22 +14,25 @@ final class NavigationTests: XCTestCase {
     }
     func testWebsiteBottomNavigationCurrencyAndDevelopmentExclusion() {
         launchPreview()
-        for title in ["首页", "讨论", "发布", "学习", "工具"] { XCTAssertTrue(app.tabBars.buttons[title].exists) }
-        XCTAssertEqual(app.tabBars.buttons.count, 5)
+        for id in ["home", "discussion", "publish", "learning", "tools", "search"] { XCTAssertTrue(app.buttons["bottom-" + id].exists) }
+        XCTAssertGreaterThan(app.buttons["bottom-search"].frame.minX, app.buttons["bottom-tools"].frame.maxX)
         XCTAssertTrue(app.staticTexts["电元"].exists)
         XCTAssertTrue(app.staticTexts["磁元"].exists)
         XCTAssertFalse(app.staticTexts["磁子"].exists)
-        app.tabBars.buttons["发布"].tap()
+        app.buttons["bottom-publish"].tap()
         XCTAssertTrue(app.buttons["menu-/publish"].exists)
         XCTAssertTrue(app.buttons["menu-/aichat"].exists)
-        app.tabBars.buttons["学习"].tap()
+        dismissPopup()
+        app.buttons["bottom-learning"].tap()
         for path in ["/world", "/laboratory", "/creative-workshop"] { XCTAssertTrue(app.buttons["menu-" + path].exists) }
         capture("44-website-learning-navigation")
-        app.tabBars.buttons["工具"].tap()
+        dismissPopup()
+        app.buttons["bottom-tools"].tap()
         for path in ["/workbench", "/pbl", "/surveys", "/settings"] { XCTAssertTrue(app.buttons["menu-" + path].exists) }
         XCTAssertFalse(app.buttons["menu-/development"].exists)
         capture("45-website-tools-navigation")
-        app.tabBars.buttons["首页"].tap()
+        dismissPopup()
+        app.buttons["bottom-home"].tap()
         app.buttons["allFeatures"].tap()
         let search = app.searchFields.firstMatch
         search.tap(); search.typeText("发展端\n")
@@ -48,7 +51,8 @@ final class NavigationTests: XCTestCase {
         capture("02-max")
         back()
         app.buttons["openWorkbench"].tap()
-        XCTAssertTrue(app.staticTexts["信号与系统 · 卷积复习"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["addSchedule"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.webViews.firstMatch.exists)
         capture("03-workbench")
         back()
         openLearning("/world")
@@ -61,7 +65,7 @@ final class NavigationTests: XCTestCase {
         back()
         app.buttons["关系图"].tap()
         capture("06-map")
-        app.tabBars.buttons["讨论"].tap()
+        app.buttons["bottom-discussion"].tap()
         app.descendants(matching: .any).matching(identifier: "post-preview-convolution").firstMatch.tap()
         XCTAssertTrue(app.navigationBars["讨论详情"].waitForExistence(timeout: 5))
         capture("07-discussion-detail")
@@ -70,7 +74,7 @@ final class NavigationTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["发表讨论"].waitForExistence(timeout: 5))
         capture("08-compose")
         app.buttons["取消"].tap()
-        app.tabBars.buttons["首页"].tap()
+        app.buttons["bottom-home"].tap()
         app.buttons["openInbox"].tap()
         capture("09-inbox")
         app.buttons["全部已读"].tap()
@@ -99,7 +103,7 @@ final class NavigationTests: XCTestCase {
         app.terminate()
         app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons["学习"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["bottom-learning"].waitForExistence(timeout: 10))
         openLearning("/world")
         XCTAssertTrue(app.staticTexts["信号与系统"].waitForExistence(timeout: 5))
         capture("13-accessibility-text")
@@ -150,7 +154,7 @@ final class NavigationTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["电路实验室"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.buttons["新建电路"].waitForExistence(timeout: 15))
         capture("23-circuit-workspace")
-        app.tabBars.buttons["讨论"].tap()
+        app.buttons["bottom-discussion"].tap()
         capture("24-discussion-feed")
         app.descendants(matching: .any).matching(identifier: "post-preview-convolution").firstMatch.tap()
         XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10))
@@ -197,7 +201,7 @@ final class NavigationTests: XCTestCase {
     }
     func testDiscussionSortIsSelectable() {
         launchPreview()
-        app.tabBars.buttons["讨论"].tap()
+        app.buttons["bottom-discussion"].tap()
         let selector = app.segmentedControls["discussionSort"]
         XCTAssertTrue(selector.waitForExistence(timeout: 5))
         selector.buttons["热门"].tap()
@@ -221,13 +225,14 @@ final class NavigationTests: XCTestCase {
         capture("41-feature-search")
         tapIdentifiedElement("feature-/ranch")
         XCTAssertTrue(app.navigationBars["电子牧场"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["工作区预览"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["牧场场景"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.webViews.firstMatch.exists)
         capture("42-feature-workspace-preview")
         back(); back()
         openProfile()
-        tapListText("全部个人设置")
-        XCTAssertTrue(app.navigationBars["全部个人设置"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["工作区预览"].exists)
+        XCTAssertTrue(app.navigationBars["个人设置"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["chooseAvatar"].exists)
+        XCTAssertFalse(app.webViews.firstMatch.exists)
     }
     func testMarkdownEditorSelectsCourseBeforeOpeningContextDocument() {
         launchPreview()
@@ -252,7 +257,7 @@ final class NavigationTests: XCTestCase {
         XCTAssertTrue(consent.waitForExistence(timeout: 5))
         consent.tap()
         XCTAssertFalse(consent.exists)
-        app.buttons["清空"].tap()
+        app.buttons["新对话"].tap()
         XCTAssertFalse(consent.exists)
         back()
         app.buttons["openMax"].tap()
@@ -260,20 +265,15 @@ final class NavigationTests: XCTestCase {
         XCTAssertFalse(app.switches["maxConsent"].exists)
         capture("31-max-consent-remembered")
         openProfile()
-        let setting = app.descendants(matching: .any).matching(identifier: "maxConsentSetting").firstMatch
-        for _ in 0..<10 {
-            if setting.exists && setting.isHittable { break }
-            app.swipeUp(velocity: .slow)
-        }
-        XCTAssertTrue(setting.isHittable)
+        let setting = revealVisibleListControl(app.switches["maxConsentSetting"])
+        capture("31a-max-consent-setting-visible")
         // A native List switch exposes the entire row as its accessibility frame.
         // Tap the trailing switch, keeping the label outside the hit target.
         setting.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
         let withdrawn = expectation(for: NSPredicate(format: "value == %@", "0"), evaluatedWith: setting)
         wait(for: [withdrawn], timeout: 5)
         capture("32-max-consent-withdrawn")
-        app.tabBars.buttons["首页"].tap()
-        back()
+        app.buttons["bottom-home"].tap()
         app.buttons["openMax"].tap()
         XCTAssertTrue(app.switches["maxConsent"].waitForExistence(timeout: 5))
     }
@@ -286,32 +286,74 @@ final class NavigationTests: XCTestCase {
         tapMenuItem("/settings")
     }
     private func returnToMenu(_ title: String) {
-        app.tabBars.buttons[title].tap()
-        for _ in 0..<8 {
-            if app.navigationBars[title].waitForExistence(timeout: 1) { return }
-            let previous = app.navigationBars.buttons.element(boundBy: 0)
-            guard previous.exists else { break }
-            previous.tap()
-        }
-        XCTFail("Menu missing: " + title + "\n" + app.debugDescription)
+        let id = title == "学习" ? "learning" : "tools"
+        let button = app.buttons["bottom-" + id]
+        XCTAssertTrue(button.waitForExistence(timeout: 5))
+        button.tap()
+    }
+    private func dismissPopup() {
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
     }
     private func tapMenuItem(_ path: String) {
         let item = app.buttons["menu-" + path]
-        // List lazily creates offscreen rows, especially on SE with large text.
-        // An absent row doesn't mean the menu has another page on its stack.
-        for _ in 0..<10 {
-            if item.exists {
-                let frame = item.frame
-                if frame.width > 0, frame.height > 0,
-                   frame.minY >= app.navigationBars.firstMatch.frame.maxY,
-                   frame.maxY <= app.tabBars.firstMatch.frame.minY {
-                    item.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-                    return
-                }
-            }
-            app.swipeUp(velocity: .slow)
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "Menu item missing: " + path)
+        item.tap()
+    }
+    func testBottomRightSearchAndNativePublishPopup() {
+        launchPreview()
+        let search = app.buttons["bottom-search"]
+        XCTAssertGreaterThan(search.frame.minX, app.buttons["bottom-tools"].frame.maxX)
+        XCTAssertGreaterThanOrEqual(search.frame.width, 44)
+        capture("47-bottom-right-search")
+        search.tap()
+        let field = app.textFields["globalSearchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText("卷积")
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+        capture("48-bottom-search-keyboard")
+        app.buttons["返回导航"].tap()
+        let publish = app.buttons["bottom-publish"]
+        XCTAssertTrue(publish.waitForExistence(timeout: 5))
+        publish.tap()
+        XCTAssertTrue(app.buttons["menu-/publish"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["menu-/aichat"].exists)
+        XCTAssertFalse(app.navigationBars["发布"].exists)
+        capture("49-native-publish-popup")
+        app.buttons["menu-/publish"].tap()
+        XCTAssertTrue(app.navigationBars["发表讨论"].waitForExistence(timeout: 5))
+    }
+    func testNativeWorkbenchCalendarAndRanchStudy() {
+        launchPreview()
+        app.buttons["openWorkbench"].tap()
+        let week = app.switches["七天视图"]
+        XCTAssertTrue(week.waitForExistence(timeout: 5))
+        week.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        XCTAssertTrue(app.scrollViews["nativeWeekCalendar"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.webViews.firstMatch.exists)
+        capture("50-native-week-calendar")
+        app.buttons["addSchedule"].tap()
+        XCTAssertTrue(app.textFields["workbenchTitle"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["类型"].exists)
+        XCTAssertTrue(app.staticTexts["重复"].exists)
+        capture("51-native-schedule-editor")
+        app.buttons["取消"].tap()
+        app.buttons["bottom-home"].tap()
+        app.buttons["allFeatures"].tap()
+        let search = app.searchFields.firstMatch
+        search.tap(); search.typeText("牧场\n")
+        tapIdentifiedElement("feature-/ranch")
+        app.buttons["牧场学习"].tap()
+        XCTAssertTrue(app.navigationBars["牧场学习"].waitForExistence(timeout: 5))
+        let focus = app.switches["专注计时"]
+        XCTAssertTrue(focus.exists)
+        if focus.value as? String != "1" {
+            focus.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
         }
-        XCTFail("Menu row unreachable: " + path + "\n" + app.debugDescription)
+        XCTAssertTrue(app.buttons["开始"].waitForExistence(timeout: 5))
+        app.buttons["开始"].tap()
+        XCTAssertTrue(app.buttons["暂停"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.webViews.firstMatch.exists)
+        capture("52-native-ranch-study")
     }
     private func tapIdentifiedElement(_ id: String) {
         let item = app.descendants(matching: .any).matching(identifier: id).firstMatch
@@ -323,18 +365,20 @@ final class NavigationTests: XCTestCase {
     }
     private func back() { app.navigationBars.buttons.element(boundBy: 0).tap() }
     private func revealProfileLogin() -> XCUIElement {
-        let item = app.buttons["profileLogin"]
+        revealVisibleListControl(app.buttons["profileLogin"])
+    }
+    private func revealVisibleListControl(_ item: XCUIElement) -> XCUIElement {
         for _ in 0..<8 {
             var previousFrame: CGRect?
             var stationarySince: Date?
             let visible = NSPredicate { _, _ in
-                guard item.exists else { return false }
+                guard item.exists, item.isHittable else { return false }
                 let frame = item.frame
                 // iOS 27 can report a scrolling List row as hittable while its
                 // synthesized tap falls under the navigation/status bars.
                 guard frame.width > 0, frame.height > 0,
                       frame.minY >= self.app.navigationBars.firstMatch.frame.maxY,
-                      frame.maxY <= self.app.tabBars.firstMatch.frame.minY else {
+                      frame.maxY <= self.app.buttons["bottom-home"].frame.minY else {
                     previousFrame = nil; stationarySince = nil
                     return false
                 }
@@ -347,9 +391,10 @@ final class NavigationTests: XCTestCase {
             }
             let ready = XCTNSPredicateExpectation(predicate: visible, object: nil)
             if XCTWaiter.wait(for: [ready], timeout: 3) == .completed { return item }
-            app.swipeDown(velocity: .slow)
+            if item.exists && item.frame.minY < app.navigationBars.firstMatch.frame.maxY { app.swipeDown(velocity: .slow) }
+            else { app.swipeUp(velocity: .slow) }
         }
-        XCTFail("Login row must settle inside the visible List content\n" + app.debugDescription)
+        XCTFail("List control must settle inside the visible content\n" + item.debugDescription)
         return item
     }
     private func tapListText(_ text: String) {

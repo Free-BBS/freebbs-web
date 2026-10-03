@@ -93,3 +93,14 @@ The bundled parameter module retains website validation and local draft saving, 
 复杂功能由完整网页工作区与原生承载层提供，并非全部子控件都改写成 SwiftUI。真实 FREE-BBS 登录账号的校园连接、头像/文件保存、AI 生成、报名、交易、发帖和管理写入尚未现场验收；发布门槛保持不变。功能对照清单见 [FEATURE_PARITY.md](FEATURE_PARITY.md)。
 
 隐私清单已声明 App 内部 UserDefaults（`CA92.1`）与清理自身临时导入文件所需的时间元数据（`C617.1`），并增加用户主动上传的照片/视频类别；权限文案覆盖头像、讨论附件和实验素材。理由与类别依据 [Apple Required Reason API 文档](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacyaccessedapitypes/nsprivacyaccessedapitypereasons) 和 [Apple 数据类别文档](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacycollecteddatatypes/nsprivacycollecteddatatype)，plist 格式检查通过。硬件可用时的拍照入口使用系统相机，取消和过期回调不会复用其他上传请求；相机及真实文件提供者的功能验收仍需物理设备。
+## Build 11：原生业务页面与底部搜索
+
+2026-10-04。本轮将主站 41 条路由的业务界面改为 SwiftUI，排除发展端；富文本、工具执行、电路画布及外部授权保留受限渲染器。底部菜单改为系统浮动 Menu，独立搜索位于右下角，发布加号使用实色强调底。搜索校验请求版本、查询词、类别与账号，点击结果时收起键盘。底部首页/讨论切换同时清空值导航与视图导航。
+
+测试源码共 46 项单元、12 项界面测试。首轮完整回归中单元 46 项通过、界面 10 项通过；Max 撤回开关因滚动位置未通过，后续检查等待控件完整进入可见区域并保持稳定，保留实际值为 0 和重新显示同意入口的断言。新增工作台/牧场回归发现从首页进入工作台后点击首页无法清空视图导航，已修复并保留回归。失败记录不能作为整体成功证据。
+
+最终源码的 iOS 27 完整测试、小屏定向回归、签名 Archive、分发和 Apple 处理结果分别记录在本机 `native-build11/` 证据与 PR 最新检查；不能以之前版本的通过结果替代。实际结果汇总为 `native-build11-validation.json`。截图包括 47–49（独立搜索、键盘、发布浮层）、50–52（周视图、原生日程表单、牧场计时）。已检查旧首轮截图并补充中文本地化声明，系统空状态随应用使用简体中文。
+
+主站目录/导航、介绍/导引/工作人员和离线渲染资源一致性检查通过。后端文档范围提示中的错误变量修正，相关 28 项测试通过；生产发布通过既有范围限定的备份、哈希校验和健康检查流程，不覆盖整份线上后端。
+
+正式 FREE-BBS 账号的校园连接、交易、报名、发布和管理员写入、真实文件提供者、真机与 VoiceOver 仍须验收。高级功能差异见 `FEATURE_PARITY.md`；正式 App Store 发布门槛保持未完成状态。

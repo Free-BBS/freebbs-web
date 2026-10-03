@@ -90,7 +90,7 @@ struct EditProfileView: View {
     @State private var busy = false
     var body: some View {
         Form {
-            Section { TextField("姓名", text: $fullName).textContentType(.name)
+            Section { LabeledContent("姓名", value: fullName)
                 TextField("个人简介", text: $bio, axis: .vertical).lineLimit(3...8)
                 TextField("个人网页（选填）", text: $website).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled() }
             Section { Text("公开讨论中显示用户名。请避免在个人简介中填写敏感信息。").font(.footnote).foregroundStyle(.secondary) }
@@ -105,7 +105,7 @@ struct EditProfileView: View {
         busy = true
         defer { busy = false }
         do {
-            let response: UserResponse = try await store.api.request("/api/profile", method: "PATCH", body: ["fullName": fullName, "bio": bio, "websiteUrl": website])
+            let response: UserResponse = try await store.api.request("/api/profile", method: "PATCH", body: ["bio": bio, "websiteUrl": website])
             store.user = response.user; dismiss()
         } catch { store.error = error.localizedDescription }
     }

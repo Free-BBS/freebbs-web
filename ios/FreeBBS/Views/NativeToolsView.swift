@@ -39,10 +39,7 @@ struct NativeToolsView: View {
                     Menu { Picker("范围", selection: $mine) { Text("工具广场").tag(false); Text("我的工具").tag(true) } } label: { Image(systemName: mine ? "person.crop.circle" : "square.grid.2x2") }.accessibilityLabel("筛选工具")
                 }
                 ToolbarItem(placement: .topBarTrailing) { Button { creating = true } label: { Image(systemName: "plus") }.accessibilityLabel("制作工具").accessibilityIdentifier("createTool") }
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink { FeatureWorkspaceView(destination: .init(path: "/tool-workshop", title: "完整工具工坊")) }
-                    label: { Image(systemName: "square.grid.2x2") }.accessibilityLabel("完整工具工坊")
-                }
+
             }
             .sheet(isPresented: $creating) { NavigationStack { NativeToolEditorView() }.environment(store) }
             .sheet(item: $selected) { tool in NavigationStack { NativeToolDetailView(tool: tool).toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { selected = nil } } } }.environment(store) }

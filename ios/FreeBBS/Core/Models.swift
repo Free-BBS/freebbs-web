@@ -72,6 +72,7 @@ struct Comment: Codable, Identifiable {
     var isDeleted: Bool? = nil
     var canDelete: Bool? = nil
     var isFeatured: Bool? = nil
+    var canFeature: Bool? = nil
 }
 struct Course: Codable, Identifiable, Hashable {
     let id: Int

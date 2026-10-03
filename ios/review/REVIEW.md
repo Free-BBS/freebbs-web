@@ -15,6 +15,7 @@
 | `FreeBBS/Views/RichContentView.swift`、`WebSource/` | 离线共享渲染、参数传递、HTTPS、主 frame 桥接、HTML 工具 opaque sandbox |
 | `FreeBBS/Views/CoursesView.swift` | 手机知识点与关系视图、真实地图接口、分区正文 |
 | `FreeBBS/Core/FeatureCatalog.swift`、`Views/RootView.swift`、`Views/FeaturesView.swift` | 网页同序底栏/目录、主站 41 路由覆盖、发展端全部排除 |
+| `FreeBBS/Views/Native*.swift`、`Core/NativeWorkspace.swift` | 原生主站业务界面、校园/交易/管理表单、账号响应隔离 |
 | `FreeBBS/Views/ProfileView.swift` | 账号设置、真实删除申请状态、客服 |
 | `FreeBBS/Views/ChatView.swift` | AI 数据发送确认、上下文限制、取消请求 |
 | `../backend/mobile-safety.js` | 权限、举报限额/去重、删除申请验证、管理员队列 |
@@ -42,15 +43,15 @@
 | 个人设置 | 原生 List/Form、确认退出、资料与密码分开 |
 | 账号删除 | 清楚显示申请/待处理，二次确认及密码验证 |
 | Max | 对话滚动、浮动玻璃输入、键盘安全区域、按账号保存一次同意、清空不重置、可在个人页撤回 |
-| 日程 | 七天只读摘要、空态/错误态、时间本地化 |
+| 日程 | 七天视图与编辑、重复安排、校园同步、Max 规划预览与确认 |
 | 隐私/支持 | 原生可滚动文本，邮件联系 |
 
-共用 SF Symbols、语义字体和系统配色；自定义触控目标至少 44 pt，横竖屏和 Dynamic Type 采用自然布局。没有自建导航层覆盖系统玻璃标签栏；没有把长正文放在玻璃材质上。
+共用 SF Symbols、语义字体和系统配色；自定义触控目标至少 44 pt，横竖屏和 Dynamic Type 采用自然布局。底部导航由 SwiftUI GlassEffectContainer 与系统 Menu 构成；没有把长正文放在玻璃材质上。
 
 ## 审查时需留意
 
 - `--demo` 只在 Debug 编译存在，明确展示示例内容，不作为审核后门。
-- “最新”将置顶独立显示，其余已加载记录按发布时间排序，热门保留服务器热度顺序。加载/错误/重试可见，按请求版本、筛选和会话丢弃过期响应。当前只加载 50 条讨论，搜索为当前列表筛选；避免产品描述写成全站搜索。
+- “最新”将置顶独立显示，其余已加载记录按发布时间排序，热门保留服务器热度顺序。加载/错误/重试可见，按请求版本、筛选和会话丢弃过期响应。讨论页搜索为当前列表筛选；右下角独立入口使用全站搜索 API 与分页。
 - 代码实验和工具管理 UI 使用 SwiftUI，执行由既有服务端运行环境提供。电路画布/仿真、富文本和 HTML 预览仍含 WebKit；不能描述为全功能纯 SwiftUI 引擎。工具 iframe 不带 `allow-same-origin`，不能访问登录会话或原生桥。
 - 实验快照保存后可公开读取；工具 POST 每次创建一个公开新版本。客户端在写入前明确确认公开范围，AI 生成前要求同意；Max 对话与工具助手共用已说明的数据范围。选择按账号保存在本机，退出账号不会把同意转给其他账号，个人页可撤回。
 - Bearer 仅用于同域 API；实验室会话仅注入明确白名单的主 frame，账号切换销毁旧 WebView。HTML 工具的 CSP 禁止网络、表单、顶层导航。
