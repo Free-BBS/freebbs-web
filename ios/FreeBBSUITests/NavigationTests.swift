@@ -262,15 +262,17 @@ final class NavigationTests: XCTestCase {
             var previousFrame: CGRect?
             var stationarySince: Date?
             let visible = NSPredicate { _, _ in
-                guard item.exists && item.isHittable else { return false }
+                guard item.exists else { return false }
                 let frame = item.frame
                 // iOS 27 can report a scrolling List row as hittable while its
                 // synthesized tap falls under the navigation/status bars.
-                guard frame.minY >= self.app.navigationBars.firstMatch.frame.maxY,
+                guard frame.width > 0, frame.height > 0,
+                      frame.minY >= self.app.navigationBars.firstMatch.frame.maxY,
                       frame.maxY <= self.app.tabBars.firstMatch.frame.minY else {
                     previousFrame = nil; stationarySince = nil
                     return false
                 }
+                guard item.isHittable else { return false }
                 if previousFrame != frame {
                     previousFrame = frame; stationarySince = Date()
                     return false
