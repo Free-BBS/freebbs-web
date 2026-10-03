@@ -428,11 +428,21 @@ final class NavigationTests: XCTestCase {
         // The synthesized AX activation point can lag a navigation transition
         // on iOS 26. Tap the visible button and verify that navigation occurred.
         button.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        let departed = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "exists == false"),
-            object: app.navigationBars[previousTitle])
-        XCTAssertEqual(XCTWaiter.wait(for: [departed], timeout: 10), .completed,
-                       "Back must leave " + previousTitle)
+        // A predicate bound to the old navigation bar can keep reporting its
+        // cached existence after UIKit has removed it. CI screen recordings
+        // confirm the parent page is already visible in that case. Re-query
+        // the currently displayed bar instead of waiting on the old object.
+        let deadline = Date().addingTimeInterval(30)
+        while Date() < deadline {
+            let current = app.navigationBars.firstMatch
+            if current.exists && current.identifier != previousTitle {
+                let frame = current.frame
+                if frame.width > 0 && frame.height > 0 && app.frame.intersects(frame) { return }
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.35))
+        }
+        capture("back-did-not-leave-" + previousTitle)
+        XCTFail("Back must leave " + previousTitle)
     }
     private func revealProfileLogin() -> XCUIElement {
         revealVisibleListControl(app.buttons["profileLogin"])
