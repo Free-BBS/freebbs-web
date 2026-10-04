@@ -14,7 +14,7 @@ struct ContributionHeatmap: View {
             Text("近一年 \(activity.total) 次活动").font(.headline)
             HStack(alignment: .top, spacing: 6) {
                 VStack(spacing: 0) {
-                    Color.clear.frame(height: 22)
+                    Color.clear.frame(width: 12, height: 22)
                     ForEach(Array(["一", "", "三", "", "五", "", ""].enumerated()), id: \.offset) { _, day in
                         Text(day).font(.caption2).foregroundStyle(.secondary).frame(width: 12, height: step)
                     }
@@ -36,7 +36,7 @@ struct ContributionHeatmap: View {
                         context.fill(Path(roundedRect: rect, cornerRadius: 3), with: .color(color(value.level)))
                         if selected?.key == value.key { context.stroke(Path(roundedRect: rect.insetBy(dx: -1, dy: -1), cornerRadius: 3), with: .color(.primary), lineWidth: 1.5) }
                     }
-                }.frame(width: CGFloat(activity.weeks) * step, height: step * 7 + 22)
+                }.frame(width: CGFloat(activity.weeks) * step + 24, height: step * 7 + 22)
                     .contentShape(Rectangle())
                     .gesture(SpatialTapGesture().onEnded { event in
                         let row = Int((event.location.y - 22) / step), column = Int(event.location.x / step)
