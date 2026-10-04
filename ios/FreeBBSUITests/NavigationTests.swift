@@ -530,11 +530,14 @@ final class NavigationTests: XCTestCase {
         for _ in 0..<8 {
             let visible = NSPredicate { _, _ in
                 withinContent = false
-                guard item.exists, item.isHittable else {
+                guard item.exists, item.isEnabled else {
                     previousFrame = nil; stationarySince = nil
                     return false
                 }
                 let frame = item.frame
+                // iOS 26 may raise an AX activation-point error when querying
+                // isHittable for a restored offscreen row. Verify visible geometry
+                // before tapping coordinates; callers verify the resulting page.
                 // iOS 27 can report a scrolling List row as hittable while its
                 // synthesized tap falls under the navigation/status bars.
                 guard frame.width > 0, frame.height > 0,
