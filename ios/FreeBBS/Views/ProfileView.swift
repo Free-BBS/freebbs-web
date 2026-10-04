@@ -9,9 +9,9 @@ struct ProfileView: View {
             Section {
                 if let user = store.user {
                     HStack(spacing: 16) {
-                        Avatar(author: .init(id: user.id, username: user.username, displayName: user.username, avatarPath: user.avatarPath), size: 56)
+                        Avatar(author: user.author, size: 56)
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(user.username).font(.title3.bold()).lineLimit(2)
+                            AuthorName(author: user.author).font(.title3.bold()).lineLimit(2)
                             Text(user.bio.isEmpty ? "保持好奇，慢慢积累。" : user.bio).font(.subheadline).foregroundStyle(.secondary)
                         }
                     }.padding(.vertical, 12)
@@ -36,6 +36,7 @@ struct ProfileView: View {
             }
             Section("个人空间") {
                 FeatureLink(path: "/profile")
+                NavigationLink("个人装扮") { NativeProfileExtrasView() }.accessibilityIdentifier("ownDecorations")
                 FeatureLink(path: "/settings", title: "全部个人设置")
                 FeatureLink(path: "/ranch")
                 FeatureLink(path: "/ranch-dye")

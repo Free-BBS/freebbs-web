@@ -426,6 +426,24 @@ final class NavigationTests: XCTestCase {
         XCTAssertFalse(app.webViews.firstMatch.exists)
         capture("55-native-contribution-heatmap")
     }
+    func testNativeDecorationsAndGoldenNamePreview() {
+        launchPreview()
+        XCTAssertEqual(app.staticTexts["freebbs_preview"].value as? String, "金色名字")
+        XCTAssertTrue(app.staticTexts["BBS见习观察员"].exists)
+        app.buttons["个人设置"].tap()
+        tapIdentifiedElement("ownDecorations")
+        XCTAssertTrue(app.navigationBars["个人装扮"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["cosmetic-frame"].exists)
+        XCTAssertTrue(app.buttons["cosmetic-nameplate"].exists)
+        XCTAssertTrue(app.buttons["cosmetic-card"].exists)
+        XCTAssertFalse(app.buttons["cosmetic-frame"].isEnabled)
+        XCTAssertTrue(app.staticTexts["环流轨道"].exists || app.staticTexts["极光回路"].exists)
+        XCTAssertFalse(app.webViews.firstMatch.exists)
+        capture("57-native-decoration-wardrobe")
+        app.swipeUp(velocity: .slow)
+        XCTAssertTrue(app.staticTexts["黄金名片生效中"].exists)
+        capture("58-native-golden-name-and-collection")
+    }
     private func tapIdentifiedElement(_ id: String) {
         let deadline = Date().addingTimeInterval(60)
         var previousFrame: CGRect?

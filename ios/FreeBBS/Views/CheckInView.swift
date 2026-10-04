@@ -81,7 +81,7 @@ struct CheckInView: View {
                     Button { monthOffset -= 1; selectedDay = nil } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }.disabled(month <= oldestMonth).accessibilityLabel("上个月")
                     Spacer(); Text("\(String(calendar.component(.year, from: month))) 年 \(calendar.component(.month, from: month)) 月").font(.headline); Spacer()
                     Button { monthOffset += 1; selectedDay = nil } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44) }.disabled(monthOffset >= 0).accessibilityLabel("下个月")
-                }
+                }.buttonStyle(.borderless)
                 Text("本月已签到 \(checked.keys.filter { $0.hasPrefix(String(CheckInSummary.beijingDay(month).prefix(7))) }.count) 天 · 灰色为未签到").font(.caption).foregroundStyle(.secondary)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 7), spacing: 4) {
                     ForEach(Array(["一", "二", "三", "四", "五", "六", "日"].enumerated()), id: \.offset) { _, name in Text(name).font(.caption).foregroundStyle(.secondary) }
@@ -101,7 +101,7 @@ struct CheckInView: View {
                         }
                     }
                 }
-            }.accessibilityIdentifier("checkInCalendar")
+            }.accessibilityElement(children: .contain).accessibilityIdentifier("checkInCalendar")
         }
     }
     private func fortuneColor(_ score: Int?) -> Color {

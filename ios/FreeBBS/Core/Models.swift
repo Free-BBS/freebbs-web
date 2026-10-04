@@ -16,12 +16,17 @@ struct User: Codable, Identifiable {
     let manetrons: Int
     let heat: Int
     let requiresUsernameChange: Bool?
+    var cosmetics: Cosmetics? = nil
+    var goldenName: GoldenName? = nil
 }
 struct Author: Codable {
     let id: Int?
     let username: String
     let displayName: String
     let avatarPath: String
+    var uid: String? = nil
+    var cosmetics: Cosmetics? = nil
+    var goldenName: GoldenName? = nil
 }
 struct Board: Codable, Identifiable, Hashable {
     let id: Int

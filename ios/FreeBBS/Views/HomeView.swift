@@ -22,14 +22,14 @@ struct HomeView: View {
                 Label("所有功能", systemImage: "square.grid.2x2").frame(minHeight: 44)
             }.buttonStyle(.bordered).accessibilityIdentifier("allFeatures")
             if let user = store.user {
-                Paper {
+                Paper(card: user.cosmetics?.cardKey ?? "") {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(user.username).font(.headline)
+                            AuthorName(author: user.author).font(.headline)
                             Text("学习账户").font(.subheadline).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Image(systemName: "leaf").font(.title).foregroundStyle(Palette.teal).accessibilityHidden(true)
+                        Avatar(author: user.author, size: 44)
                     }
                     HStack(spacing: 20) {
                         VStack(alignment: .leading) { Text("\(user.electrons)").font(.title2.bold()); Text("电元").font(.caption).foregroundStyle(.secondary) }
@@ -114,7 +114,12 @@ struct HomeView: View {
 
     private func loadActivity() async {
         guard let uid = store.user?.uid, !uid.isEmpty else { activity.data = .empty; return }
+        let equipment = store.equipmentRevision
         await activity.load(store, path: "/api/users/" + NativeRoutes.component(uid) + "/public-profile", demo: .object(["profile": .object(["activity": ContributionActivity.preview])]))
+        guard !store.isDemo, equipment == store.equipmentRevision, uid == store.user?.uid, activity.error == nil, activity.data["profile"]["uid"].text == uid else { return }
+        let identity = Author(profile: activity.data["profile"])
+        if let cosmetics = identity.cosmetics { store.user?.cosmetics = cosmetics }
+        if let goldenName = identity.goldenName, goldenName.serverNowMs >= (store.user?.goldenName?.serverNowMs ?? 0) { store.user?.goldenName = goldenName }
     }
 }
 

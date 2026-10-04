@@ -17,11 +17,12 @@ struct PageSurface<Content: View>: View {
     }
 }
 struct Paper<Content: View>: View {
+    var card: String = ""
     @ViewBuilder let content: Content
     var body: some View {
         VStack(alignment: .leading, spacing: 12) { content }
             .frame(maxWidth: .infinity, alignment: .leading).padding(16)
-            .background(Palette.paper, in: RoundedRectangle(cornerRadius: 20))
+            .background { ProfileCardSurface(key: card).clipShape(RoundedRectangle(cornerRadius: 20)) }
     }
 }
 struct SectionTitle: View {
@@ -53,7 +54,9 @@ struct Avatar: View {
                 AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: { initials }
             } else { initials }
         }.frame(width: size, height: size).background(Palette.teal.opacity(0.1), in: Circle())
-            .clipShape(Circle()).accessibilityHidden(true)
+            .clipShape(Circle())
+            .overlay { AvatarFrame(key: author.equipment(store.user)?.frameKey ?? "").padding(-3) }
+            .accessibilityHidden(true)
     }
     private var initials: some View {
         Text(String(author.displayName.prefix(1)).uppercased()).font(.subheadline.bold()).foregroundStyle(Palette.teal)
@@ -87,9 +90,9 @@ struct PostRow: View {
                 }
             }
             HStack(spacing: 8) {
-                Avatar(author: post.author).frame(width: 28, height: 28).scaleEffect(0.78)
+                Avatar(author: post.author, size: 28)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(post.author.displayName).lineLimit(1)
+                    AuthorName(author: post.author).lineLimit(1)
                     Text(AppDates.short(post.createdAt)).font(.caption2)
                 }
                 Spacer(minLength: 8)

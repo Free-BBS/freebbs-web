@@ -12,6 +12,7 @@
 | `FreeBBS/Views/AuthenticationView.swift` | 原生注册、协议、一次性 challenge、验证码、Wien 条件 |
 | `FreeBBS/Views/DiscussionView.swift` | 卡片摘要、楼中楼、三种反应、回复点赞/删除、举报与屏蔽 |
 | `FreeBBS/Core/CheckIn.swift`、`Core/ContributionActivity.swift`、`Views/CheckInView.swift`、`Views/ContributionHeatmap.swift` | 签到响应形状、账号/日期/重复提交、月历和全年稀疏活动补齐 |
+| `FreeBBS/Core/Cosmetics.swift`、`Views/IdentityDecoration.swift`、`Views/NativeEconomyView.swift` | 八种装扮的原生显示/穿戴/卸下、服务端金色名字期限、匿名与账号隔离、钱包回执保留装扮、旧刷新不能覆盖新装备 |
 | `FreeBBS/Views/NativeRanchScene.swift`、`Resources/NativeRanchScene.js`、`Views/ChallengeControls.swift` | 受限场景与原生控制、计时保持、隐藏/锁定操作与参数验证 |
 | `FreeBBS/Views/LaboratoryView.swift` | 同域白名单、临时 Web 会话、手机实验布局、原生提示和文件分享 |
 | `FreeBBS/Views/RichContentView.swift`、`WebSource/` | 离线共享渲染、参数传递、HTTPS、主 frame 桥接、HTML 工具 opaque sandbox |

@@ -16,7 +16,7 @@ struct NativeSettingsView: View {
             Section("个人资料") {
                 HStack(spacing: 16) {
                     if let preview { Image(uiImage: preview).resizable().scaledToFill().frame(width: 64, height: 64).clipShape(Circle()) }
-                    else if let user = store.user { Avatar(author: .init(id: user.id, username: user.username, displayName: user.username, avatarPath: user.avatarPath), size: 64) }
+                    else if let user = store.user { Avatar(author: user.author, size: 64) }
                     PhotosPicker("选择头像", selection: $photo, matching: .images).accessibilityIdentifier("chooseAvatar")
                 }
                 if avatarData != nil { Button("确认上传头像") { Task { await upload() } }.disabled(state.busy) }
@@ -25,6 +25,7 @@ struct NativeSettingsView: View {
                 NavigationLink("修改用户名") { ChangeUsernameView() }
                 NavigationLink("邮箱与学号") { NativeIdentityView() }
                 NavigationLink("修改密码") { ChangePasswordView() }
+                NavigationLink("头像框、名牌与主页卡片") { NativeProfileExtrasView() }
                 WorkspaceStatus(state: state)
             }
             Section("界面") {

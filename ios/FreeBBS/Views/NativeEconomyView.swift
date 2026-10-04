@@ -168,22 +168,63 @@ struct NativeLedgerView: View {
 
 struct NativeProfileExtrasView: View {
     @Environment(AppStore.self) private var store
-    @State private var state = NativeWorkspace()
-    private let slots = [("frame", "头像框", [("frame_orbit", "轨道"), ("frame_aurora", "极光")]), ("nameplate", "名牌", [("plate_maxwell", "麦克斯韦"), ("plate_observer", "观察者"), ("plate_fishbone_master", "鱼骨大师"), ("plate_circuit_master", "电路大师")]), ("card", "主页卡片", [("card_blueprint", "蓝图"), ("card_twilight", "暮光")])]
+    @State private var wardrobe = WardrobeState()
+    private var state: NativeWorkspace { wardrobe.workspace }
     var body: some View {
-        Form {
-            WorkspaceStatus(state: state)
-            Section("装扮与牧场") { FeatureLink(path: "/ranch"); FeatureLink(path: "/ranch-dye"); FeatureLink(path: "/ranch-gallery") }
-            Section("穿戴装扮") {
-                ForEach(slots, id: \.0) { slot, title, options in
-                    Picker(title, selection: Binding(get: { state.data["equipped"][slot].text }, set: { key in Task {
-                        if await state.mutate(store, path: "/api/profile/extras", body: ["action": "equip", "slot": slot, "itemKey": key, "requestKey": UUID().uuidString]) != nil { await state.load(store, path: "/api/profile/extras") }
-                    } })) {
-                        Text("不使用").tag("")
-                        ForEach(options.filter { state.data["owned"].list.map(\.text).contains($0.0) || state.data["equipped"][slot].text == $0.0 }, id: \.0) { key, label in Text(label).tag(key) }
-                    }.disabled(state.busy || state.loading)
+        Group {
+            if store.user == nil { NativeAccountRequired(title: "登录后管理个人装扮") }
+            else { Form {
+                WorkspaceStatus(state: state)
+                if state.error != nil { Button("重新加载装扮") { Task { await wardrobe.load(store) } }.disabled(state.busy || state.loading) }
+                if let user = store.user {
+                    Section("当前装扮") {
+                        HStack(spacing: 16) {
+                            Avatar(author: user.author, size: 64)
+                            AuthorName(author: user.author).font(.title3.weight(.semibold))
+                        }.padding(.vertical, 16).listRowBackground(ProfileCardSurface(key: user.cosmetics?.cardKey ?? ""))
+                    }
                 }
-            }
-        }.navigationTitle("装扮与牧场").task(id: store.sessionRevision) { await state.load(store, path: "/api/profile/extras") }
+                Section("穿戴装扮") {
+                    ForEach([("frame", "头像框"), ("nameplate", "名牌"), ("card", "主页卡片")], id: \.0) { slot, title in
+                        Picker(title, selection: Binding(get: { wardrobe.cosmetics.key(slot) }, set: { key in Task { await wardrobe.equip(store, slot: slot, key: key) } })) {
+                            Text("不使用").tag("")
+                            ForEach(CosmeticItem.items.filter { $0.slot == slot && (wardrobe.owned.contains($0.id) || wardrobe.cosmetics.key(slot) == $0.id) }) { item in
+                                Label(item.title, systemImage: item.symbol).tag(item.id)
+                            }
+                        }.disabled(state.busy || state.loading || state.data.fields.isEmpty || store.isDemo)
+                            .accessibilityIdentifier("cosmetic-" + slot)
+                    }
+                    if store.isDemo { Text("示例装扮 · 不会修改线上装备").font(.footnote).foregroundStyle(.secondary) }
+                }
+                Section("金色名字") {
+                    if let gold = store.user?.goldenName, gold.isActive() {
+                        TimelineView(.explicit([Date.now, gold.deadline])) { context in
+                            if gold.isActive(at: context.date) {
+                                Label("黄金名片生效中", systemImage: "sparkles").foregroundStyle(.orange)
+                                Text("有效至 " + Date(timeIntervalSince1970: gold.expiresAtMs / 1000).formatted(.dateTime.year().month().day().hour().minute())).font(.footnote).foregroundStyle(.secondary)
+                            } else { Text("黄金名片已到期") }
+                        }
+                    } else { Text("当前未启用金色名字").foregroundStyle(.secondary) }
+                    Text("使用一张黄金名片可启用 7 天；有效期内再次使用会顺延。奖励与期限以服务器为准。").font(.footnote).foregroundStyle(.secondary)
+                    NavigationLink { NativeEconomyView(inventory: true) } label: { Label("前往仓库使用黄金名片", systemImage: "shippingbox") }
+                }
+                Section("装扮收藏") {
+                    ForEach(CosmeticItem.items) { item in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(alignment: .top) {
+                                Label(item.title, systemImage: item.symbol)
+                                Spacer()
+                                Text(wardrobe.owned.contains(item.id) ? "已拥有" : "未拥有").foregroundStyle(.secondary)
+                            }
+                            if let achievement = item.achievement { Text(achievement).font(.footnote).foregroundStyle(.secondary) }
+                        }
+                    }
+                    Text("装扮名牌不代表身份认证或管理权限。").font(.footnote).foregroundStyle(.secondary)
+                    NavigationLink { NativeEconomyView() } label: { Label("前往电磁场商城", systemImage: "bag") }
+                }
+                Section("装扮与牧场") { FeatureLink(path: "/ranch"); FeatureLink(path: "/ranch-dye"); FeatureLink(path: "/ranch-gallery") }
+            }.refreshable { await wardrobe.load(store) } }
+        }.navigationTitle("个人装扮").navigationBarTitleDisplayMode(.inline)
+            .task(id: "\(store.sessionRevision):\(store.user?.id ?? 0)") { await wardrobe.load(store) }
     }
 }

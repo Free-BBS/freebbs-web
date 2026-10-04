@@ -55,22 +55,25 @@ struct NativePublicProfileView: View {
     var uid: String? = nil
     @State private var state = NativeWorkspace()
     private var profile: SiteRecord { state.data["profile"] }
+    private var identity: Author { Author(profile: profile) }
     var body: some View {
         Group {
             if uid == nil && store.user == nil { NativeAccountRequired(title: "登录后查看个人主页") }
             else { List {
                 WorkspaceStatus(state: state)
                 Section {
+                  VStack(alignment: .leading, spacing: 16) {
                     HStack(spacing: 14) {
-                        Avatar(author: .init(id: profile["id"].int, username: profile["username"].text, displayName: profile["username"].text, avatarPath: profile["avatarPath"].text), size: 56)
+                        Avatar(author: identity, size: 56)
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(profile["username"].text).font(.title2.bold())
+                            AuthorName(author: identity).font(.title2.bold())
                             if !profile["bio"].text.isEmpty { Text(profile["bio"].text).font(.subheadline).foregroundStyle(.secondary) }
                         }
                     }.padding(.vertical, 6)
                     LabeledContent("公开帖子", value: "\(profile["postCount"].int)")
                     LabeledContent("收到的点赞", value: "\(profile["likeCount"].int)")
                     if !profile["websiteUrl"].text.isEmpty, let url = AppConfiguration.safeLink(profile["websiteUrl"].text, origin: store.configuration.origin) { Link("个人网页", destination: url) }
+                  }.padding(.vertical, 4).listRowBackground(ProfileCardSurface(key: identity.equipment(store.user)?.cardKey ?? ""))
                 }
                 Section("公开动态") {
                     if profile["activity"]["visibility"].text == "private" { Text("此用户的动态未公开。").foregroundStyle(.secondary) }
@@ -87,6 +90,6 @@ struct NativePublicProfileView: View {
             }.refreshable { await load() } }
         }.navigationTitle("个人主页").navigationBarTitleDisplayMode(.inline).task(id: store.sessionRevision) { await load() }
     }
-    private func load() async { if let key = uid ?? store.user?.uid, !key.isEmpty { await state.load(store, path: "/api/users/" + NativeRoutes.component(key) + "/public-profile", demo: .object(["profile": .object(["uid": .string(key), "username": .string(store.user?.username ?? "示例同学"), "activity": ContributionActivity.preview])])) } }
+    private func load() async { if let key = uid ?? store.user?.uid, !key.isEmpty { await state.load(store, path: "/api/users/" + NativeRoutes.component(key) + "/public-profile", demo: .object(["profile": .object(["id": .number(Double(store.user?.id ?? 1)), "uid": .string(key), "username": .string(store.user?.username ?? "示例同学"), "activity": ContributionActivity.preview])])) } }
 
 }

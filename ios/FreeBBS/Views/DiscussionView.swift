@@ -90,7 +90,7 @@ struct PostDetailView: View {
                 HStack {
                     Avatar(author: post.author)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(post.author.displayName).font(.subheadline.weight(.medium))
+                        AuthorName(author: post.author).font(.subheadline.weight(.medium))
                         Text(AppDates.short(post.createdAt)).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -119,7 +119,7 @@ struct PostDetailView: View {
                         HStack {
                             Avatar(author: comment.author)
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(comment.author.displayName).font(.subheadline.weight(.medium))
+                                AuthorName(author: comment.author).font(.subheadline.weight(.medium))
                                 Text(AppDates.short(comment.createdAt)).font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()

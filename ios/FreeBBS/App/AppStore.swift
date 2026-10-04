@@ -11,6 +11,12 @@ final class AppStore {
     private let preferences: UserDefaults
     var user: User? {
         didSet {
+            // Wallet/profile mutation receipts omit cosmetics; only an explicit
+            // cosmetics object (including an empty one) replaces equipment.
+            if user?.id == oldValue?.id, let previous = oldValue {
+                if user?.cosmetics == nil, let cosmetics = previous.cosmetics { user?.cosmetics = cosmetics }
+                if user?.goldenName == nil, let goldenName = previous.goldenName { user?.goldenName = goldenName }
+            }
             aiConsent = user.map { preferences.bool(forKey: Self.aiConsentKey($0)) } ?? false
             webPreferencesRevision += 1
             if !isDemo {
@@ -37,6 +43,7 @@ final class AppStore {
     var postsLoading = false
     var postsError: String?
     var sessionRevision = 0
+    var equipmentRevision = 0
     var featureDataStore = WKWebsiteDataStore.nonPersistent()
     var featureDestination: FeatureDestination?
     var webPreferencesRevision = 0
@@ -92,6 +99,7 @@ final class AppStore {
         featureDataStore = .nonPersistent()
         sessionRevision += 1
         showLogin = false
+        await refreshIdentity()
         await refreshBlocks()
         await refreshInbox()
         await refreshPosts()
@@ -110,6 +118,15 @@ final class AppStore {
         if user != nil { return true }
         showLogin = true
         return false
+    }
+    func refreshIdentity() async {
+        guard !isDemo, let owner = user?.id, api.token != nil else { return }
+        let session = sessionRevision, equipment = equipmentRevision
+        do {
+            let response: UserResponse = try await api.request("/api/auth/me")
+            guard session == sessionRevision, equipment == equipmentRevision, owner == user?.id, response.user.id == owner, !Task.isCancelled else { return }
+            user = response.user
+        } catch { if session == sessionRevision, owner == user?.id, !Task.isCancelled { self.error = error.localizedDescription } }
     }
     func refreshPosts() async {
         guard !isDemo else { return }
@@ -165,7 +182,9 @@ final class AppStore {
         api.token = nil
         user = User(id: 1, uid: "preview", username: "freebbs_preview", fullName: "预览同学", studentId: "2026000001",
                     email: nil, role: "student", isAdmin: false, bio: "让知识彼此连接。", websiteUrl: "", avatarPath: "",
-                    electrons: 128, manetrons: 32, heat: 18, requiresUsernameChange: false)
+                    electrons: 128, manetrons: 32, heat: 18, requiresUsernameChange: false,
+                    cosmetics: .init(frame: "frame_aurora", nameplate: "plate_observer", card: "card_blueprint"),
+                    goldenName: .init(expiresAtMs: Date.now.timeIntervalSince1970 * 1000 + 86400000, serverNowMs: Date.now.timeIntervalSince1970 * 1000, active: true))
         courses = [
             Course(id: 1, slug: "signals", name: "信号与系统", code: "SIGNALS", boardSlug: "signal", description: "从时域到频域，理解信号的语言。", summary: "连续与离散 · 变换与系统"),
             Course(id: 2, slug: "circuits", name: "电路原理", code: "CIRCUITS", boardSlug: "circuit", description: "探索电路中的每一条路径。", summary: "网络分析 · 动态响应"),

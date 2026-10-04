@@ -41,7 +41,9 @@ enum SiteRecord: Codable, Equatable, Sendable {
     } }
     static let empty = SiteRecord.object([:])
     func decoded<T: Decodable>(_ type: T.Type) throws -> T {
-        try JSONDecoder().decode(type, from: JSONSerialization.data(withJSONObject: value))
+        // JSONEncoder also accepts null/scalar records. JSONSerialization's
+        // default top-level restriction raises an Objective-C exception here.
+        try JSONDecoder().decode(type, from: JSONEncoder().encode(self))
     }
 }
 
