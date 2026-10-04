@@ -10,7 +10,9 @@ mkdir -p artifacts
 xcodebuild -project FreeBBS.xcodeproj -scheme FreeBBS \
   -destination "platform=iOS Simulator,id=$IOS_SIMULATOR_ID" \
   -derivedDataPath "$IOS_DERIVED_DATA" -resultBundlePath "artifacts/$IOS_RESULT_NAME.xcresult" \
-  -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO test
+  -parallel-testing-enabled NO -collect-test-diagnostics never \
+  -test-timeouts-enabled YES -default-test-execution-time-allowance 180 \
+  -maximum-test-execution-time-allowance 240 CODE_SIGNING_ALLOWED=NO test
 xcodebuild -project FreeBBS.xcodeproj -scheme FreeBBS -configuration Release \
   -sdk iphoneos -destination 'generic/platform=iOS' \
   -derivedDataPath "$IOS_DERIVED_DATA" CODE_SIGNING_ALLOWED=NO build

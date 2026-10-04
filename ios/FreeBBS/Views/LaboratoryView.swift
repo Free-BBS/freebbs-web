@@ -78,6 +78,7 @@ enum WebContentPolicy {
       height:auto!important; min-height:0!important; max-height:56px!important; padding:8px 12px!important;
       border:0!important; border-radius:14px!important; background:var(--ui-surface); overflow:auto;
     }
+    html.freebbs-native-lab body.circuit-challenge-page .circuit-mobile-feedback { display:none!important; }
     html.freebbs-native-lab body .native-circuit-empty {
       position:absolute; left:50%; top:44%; transform:translate(-50%,-50%); width:min(280px,80%);
       text-align:center; pointer-events:none; font-family:-apple-system,BlinkMacSystemFont,sans-serif;
@@ -115,6 +116,11 @@ enum WebContentPolicy {
     html.freebbs-native-lab.native-lab-compact body .circuit-parameter-popover-fields { padding:8px 12px; }
     html.freebbs-native-lab.native-lab-compact body .circuit-parameter-popover-fields > .circuit-parameter-hint { order:1; }
     html.freebbs-native-lab.native-lab-compact body .circuit-parameter-popover-sidebar { display:none; }
+    html.freebbs-native-lab.native-lab-very-compact body .circuit-parameter-popover-heading { padding:4px 12px; }
+    html.freebbs-native-lab.native-lab-very-compact body .circuit-parameter-popover-footer,
+    html.freebbs-native-lab.native-lab-very-compact body .circuit-parameter-popover-fields > .circuit-parameter-hint { display:none; }
+    html.freebbs-native-lab.native-lab-very-compact body .circuit-parameter-popover-fields label { font-size:13px; line-height:17px; gap:4px!important; }
+    html.freebbs-native-lab.native-lab-very-compact body .circuit-parameter-popover-fields :is(input,select) { box-sizing:border-box; height:44px; }
     html.freebbs-native-lab body .challenge-main.is-empty #challenge-empty { inset:12px!important; }
     """
     static let nativeViewportScript = """
@@ -151,6 +157,7 @@ enum WebContentPolicy {
         if (guide) guide.hidden = !!stage.querySelector('[data-component-id]');
       };
       update(); new MutationObserver(update).observe(stage,{childList:true,subtree:true});
+      \(try! String(contentsOf: Bundle.main.url(forResource: "NativeChallenge", withExtension: "js")!, encoding: .utf8))
     })();
     """
     static let mobileScript = """
@@ -254,6 +261,9 @@ struct LabExport: Identifiable { let id = UUID(); let url: URL }
     var discussionDraft: DiscussionDraft?
     var downloadError: String?
     var pageTitle: String?
+    var ranchState: SiteRecord = .empty
+    var challengeState: SiteRecord = .empty
+    var showingChallengeParameters = false
     var hasAccountUtilities = false
     var nextFeature: FeatureDestination?
     var expectedAuthorizationURL: URL?
@@ -342,6 +352,7 @@ struct CircuitWorkspaceView: View {
                     Button("重试") { browser.error = nil; browser.webView?.reload() }.buttonStyle(.borderedProminent)
                 }
             }
+            if isChallenge && !store.isDemo { ChallengeOverview(browser: browser, panel: panel) }
             if !store.isDemo {
                 LabWebView(destination: destination, origin: store.configuration.origin, token: store.api.token,
                            dark: colorScheme == .dark, browser: browser, login: { store.showLogin = true }, store: store)
@@ -363,6 +374,7 @@ struct CircuitWorkspaceView: View {
                 NavigationStack { ComposeView(title: draft.title, content: draft.content, board: draft.board) }.environment(store)
             }
             .sheet(isPresented: $parameters) { NavigationStack { CircuitParametersView(browser: browser) } }
+            .sheet(isPresented: $browser.showingChallengeParameters) { NavigationStack { ChallengeParametersView(browser: browser) } }
             .sheet(item: $browser.export, onDismiss: { browser.export = nil }) { item in
                 LabShareSheet(url: item.url)
             }
@@ -398,9 +410,11 @@ struct CircuitWorkspaceView: View {
                             Button("选择关卡", systemImage: "list.number") { panel("levels") }
                             Button("排行榜", systemImage: "trophy") { panel("ranking") }
                             Button("添加元件", systemImage: "plus") { panel("parts") }
-                            Button("元件参数", systemImage: "slider.horizontal.3") { panel("parameters") }
+                            Button("元件参数", systemImage: "slider.horizontal.3") { browser.showingChallengeParameters = true }
                             Button("波形", systemImage: "waveform.path") { panel("waves") }
                             Button("工具与设置", systemImage: "ellipsis") { panel("more") }
+                            Button("重置本关", systemImage: "arrow.counterclockwise") { click("challenge-reset") }
+                            Button("显示完整电路", systemImage: "viewfinder") { browser.webView?.evaluateJavaScript("document.getElementById('circuit-stage')?.dispatchEvent(new Event('freebbs-native-fit'))") }
                             Button("撤销", systemImage: "arrow.uturn.backward") { click("challenge-undo") }
                             Button("取消接线", systemImage: "xmark") { click("challenge-cancel-wire") }
                         } label: { Image(systemName: "ellipsis") }.disabled(browser.loading || store.isDemo).accessibilityLabel("挑战操作")
@@ -418,14 +432,24 @@ struct CircuitWorkspaceView: View {
                         if isCircuit {
                             Button { click("circuit-component-add") } label: { HStack(spacing: 6) { Image(systemName: "plus"); Text("元件") }.foregroundStyle(actionColor) }
                                 .disabled(browser.loading || store.isDemo).accessibilityIdentifier("addCircuitComponent")
+                        } else {
+                            Menu { ForEach(browser.challengeState["parts"].list.indices, id: \.self) { index in
+                                let part = browser.challengeState["parts"].list[index]
+                                Button(part["title"].text) { challengeCommand("part", part["id"].text) }
+                            } } label: { Label("元件", systemImage: "plus") }
+                            .disabled(browser.loading || store.isDemo).accessibilityIdentifier("addChallengeComponent")
                         }
-                        Button { click(isCircuit ? "circuit-run" : "challenge-run") } label: { HStack(spacing: 6) { Image(systemName: "play.fill"); Text("运行") }.foregroundStyle(actionColor) }
-                            .disabled(browser.loading || store.isDemo).accessibilityIdentifier("runCircuit")
+                        Button { click(isCircuit ? "circuit-run" : "challenge-run") } label: { HStack(spacing: 6) { Image(systemName: "play.fill"); Text(isChallenge ? "测试" : "运行") }.foregroundStyle(actionColor) }
+                            .disabled(browser.loading || store.isDemo || (isChallenge && !browser.challengeState["canRun"].flag)).accessibilityIdentifier("runCircuit")
                         if isCircuit { Button { click("circuit-stop") } label: { Image(systemName: "stop.fill").foregroundStyle(actionColor) }.accessibilityLabel("停止仿真").disabled(browser.loading || store.isDemo) }
-                        else { Button("重置", systemImage: "arrow.counterclockwise") { click("challenge-reset") }.disabled(browser.loading || store.isDemo) }
+                        else { Button("提交", systemImage: "checkmark.circle.fill") { click("challenge-submit") }
+                            .disabled(browser.loading || store.isDemo || !browser.challengeState["canSubmit"].flag).accessibilityIdentifier("submitChallenge") }
                     }
                 }
             }
+    }
+    private func challengeCommand(_ name: String, _ value: String) {
+        browser.webView?.callAsyncJavaScript("window.freebbsChallengeCommand?.(name,value)", arguments: ["name":name,"value":value], in: nil, in: .page) { _ in }
     }
     private func fitCircuit() {
         browser.webView?.evaluateJavaScript("document.getElementById('circuit-stage')?.dispatchEvent(new Event('freebbs-native-fit'))", completionHandler: nil)
@@ -450,31 +474,35 @@ struct LabWebView: UIViewRepresentable {
     let login: () -> Void
     var includeFeatures = false
     var store: AppStore? = nil
+    var ranchScene = false
     func makeCoordinator() -> Coordinator { Coordinator(self) }
-    func makeUIView(context: Context) -> WKWebView {
+    func makeUIView(context: Context) -> WKWebView { makeWebView(coordinator: context.coordinator) }
+    func makeWebView(coordinator: Coordinator) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = store?.featureDataStore ?? .nonPersistent()
         let preferences = store?.webPreferenceValues ?? [:]
         let keys = Array(WebPreferences.keys(for: store?.user))
         let bridge = store == nil ? "" : FeatureWebPolicy.session(origin: origin, token: token, dark: dark, preferences: preferences, preferenceKeys: keys)
-        let session = includeFeatures ? bridge : WebContentPolicy.sessionScript(origin: origin, token: token, dark: dark) + bridge
-        let mobile = includeFeatures ? FeatureWebPolicy.mobile : WebContentPolicy.mobileScript
+        let session = (includeFeatures ? bridge : WebContentPolicy.sessionScript(origin: origin, token: token, dark: dark) + bridge) + (ranchScene ? RanchScenePolicy.start : "")
+        let mobile = (includeFeatures ? FeatureWebPolicy.mobile : WebContentPolicy.mobileScript) + (ranchScene ? RanchScenePolicy.mobile : "")
         config.userContentController.addUserScript(.init(source: session, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         config.userContentController.addUserScript(.init(source: mobile, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
-        if store != nil { config.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "site") }
+        if store != nil { config.userContentController.addScriptMessageHandler(coordinator, contentWorld: .page, name: "site") }
         let web = WKWebView(frame: .zero, configuration: config)
-        web.navigationDelegate = context.coordinator; web.uiDelegate = context.coordinator
+        web.navigationDelegate = coordinator; web.uiDelegate = coordinator
         web.isOpaque = false; web.backgroundColor = .clear
         web.allowsBackForwardNavigationGestures = true
         web.scrollView.keyboardDismissMode = .interactive
         web.scrollView.contentInsetAdjustmentBehavior = .never
-        context.coordinator.progress = web.observe(\.estimatedProgress, options: [.new]) { [weak browser] web, _ in
+        coordinator.progress = web.observe(\.estimatedProgress, options: [.new]) { [weak browser] web, _ in
             Task { @MainActor [weak web] in
                 if let web { browser?.progress = web.estimatedProgress }
             }
         }
         browser.webView = web
-        if let url = URL(string: destination.path, relativeTo: origin)?.absoluteURL,
+        if ranchScene && store?.isDemo == true {
+            web.loadFileURL(RanchScenePolicy.previewURL, allowingReadAccessTo: RanchScenePolicy.previewURL)
+        } else if let url = URL(string: destination.path, relativeTo: origin)?.absoluteURL,
            allowed(url) { web.load(URLRequest(url: url)) }
         return web
     }
@@ -493,7 +521,8 @@ struct LabWebView: UIViewRepresentable {
         coordinator.parent.browser.webView = nil
     }
     func allowed(_ url: URL) -> Bool {
-        includeFeatures ? FeatureCatalog.pageURL(url, origin: origin) : WebContentPolicy.labURL(url, origin: origin)
+        if ranchScene { return WebContentPolicy.sameOrigin(url, origin: origin) && RanchScenePolicy.paths.contains(url.path) }
+        return includeFeatures ? FeatureCatalog.pageURL(url, origin: origin) : WebContentPolicy.labURL(url, origin: origin)
     }
     @MainActor final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandlerWithReply {
         var parent: LabWebView
@@ -522,6 +551,8 @@ struct LabWebView: UIViewRepresentable {
         }
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
             guard let url = action.request.url else { decisionHandler(.cancel); return }
+            if parent.ranchScene, parent.store?.isDemo == true, url == RanchScenePolicy.previewURL,
+               action.navigationType == .other { decisionHandler(.allow); return }
             if WebContentPolicy.sameOrigin(url, origin: parent.origin), FeatureCatalog.unavailableOnPhone(url) {
                 decisionHandler(.cancel); return
             }
@@ -595,6 +626,7 @@ struct LabWebView: UIViewRepresentable {
         func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse, decisionHandler: @escaping @MainActor (WKNavigationResponsePolicy) -> Void) {
             guard let url = response.response.url else { decisionHandler(.cancel); return }
             if !response.isForMainFrame { decisionHandler(.allow); return }
+            if parent.ranchScene, parent.store?.isDemo == true, url == RanchScenePolicy.previewURL { decisionHandler(.allow); return }
             guard WebContentPolicy.sameOrigin(url, origin: parent.origin) || url.scheme == "blob" else { decisionHandler(.cancel); return }
             let attachment = (response.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Disposition")?.lowercased().hasPrefix("attachment") == true
             decisionHandler(attachment || !response.canShowMIMEType ? .download : .allow)
@@ -626,6 +658,14 @@ struct LabWebView: UIViewRepresentable {
             parent.browser.promptText = initial
             parent.browser.dialog = LabDialog(kind: kind, message: message, completion: completion)
             parent.browser.presentingDialog = true
+        }
+        private func updateScene(_ body: [String: Any], ranch: Bool, replyHandler: @escaping @MainActor @Sendable (Any?, String?) -> Void) {
+            guard let raw = body["value"] as? String, raw.utf8.count <= 65536,
+                  let data = raw.data(using: .utf8), let value = try? JSONDecoder().decode(SiteRecord.self, from: data),
+                  case .object = value else { replyHandler(nil,"Invalid scene state"); return }
+            if ranch { parent.browser.ranchState = value }
+            else { parent.browser.challengeState = value }
+            replyHandler(true,nil)
         }
         private func trusted(_ frame: WKFrameInfo) -> Bool {
             guard let url = frame.request.url, frame.securityOrigin.protocol == "https", frame.securityOrigin.host == parent.origin.host,
@@ -661,11 +701,25 @@ struct LabWebView: UIViewRepresentable {
             else { parent.browser.presentingUploadChoices = true }
         }
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage, replyHandler: @escaping @MainActor @Sendable (Any?, String?) -> Void) {
+            if parent.ranchScene, parent.store?.isDemo == true, message.frameInfo.isMainFrame,
+               message.frameInfo.request.url == RanchScenePolicy.previewURL,
+               let body = message.body as? [String: Any], body["type"] as? String == "ranchScene" {
+                updateScene(body, ranch: true, replyHandler: replyHandler); return
+            }
             guard trusted(message.frameInfo), let store = parent.store,
                   parent.token == store.api.token, let body = message.body as? [String: Any], let type = body["type"] as? String else {
                 replyHandler(nil, "Untrusted page"); return
             }
             switch type {
+            case "ranchScene":
+                guard parent.ranchScene else { replyHandler(nil,"Invalid scene"); return }
+                updateScene(body, ranch: true, replyHandler: replyHandler)
+            case "challengeState":
+                guard parent.browser.webView?.url?.path == "/circuit-challenge" else { replyHandler(nil,"Invalid challenge"); return }
+                updateScene(body, ranch: false, replyHandler: replyHandler)
+            case "challengeParameters":
+                guard parent.browser.webView?.url?.path == "/circuit-challenge" else { replyHandler(nil,"Invalid challenge"); return }
+                parent.browser.showingChallengeParameters = true; replyHandler(true,nil)
             case "location":
                 guard let raw = body["url"] as? String, let url = URL(string: raw), FeatureCatalog.pageURL(url, origin: parent.origin) else { replyHandler(nil, "Invalid page"); return }
                 parent.browser.pageTitle = FeatureCatalog.feature(for: url)?.title ?? parent.destination.title

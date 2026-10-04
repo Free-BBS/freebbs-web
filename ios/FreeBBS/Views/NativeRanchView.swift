@@ -63,82 +63,10 @@ struct NativeSheep: View {
 }
 
 struct NativeRanchView: View {
-    @Environment(AppStore.self) private var store
     var uid: String? = nil
     var gallery = false
-    @State private var state = NativeWorkspace()
-    @State private var extras = NativeWorkspace()
-    @State private var study = false
-    @State private var selected: RanchSheepSelection?
-    @State private var action: EconomyAction?
-    @State private var retry: EconomyAction?
-    var body: some View {
-        List {
-            WorkspaceStatus(state: state)
-            if uid == nil {
-                Section("共享牧场") {
-                    Menu("牧场场景", systemImage: "leaf") {
-                        ForEach([("meadow", "草地"), ("lake", "湖边"), ("courtyard", "庭院"), ("wall", "墙边")], id: \.0) { key, name in Button(name) { confirm("将共享牧场切换到\(name)？", path: "/api/ranch-world/actions", body: ["kind": "scene", "scene": key]) } }
-                    }
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 16) {
-                        ForEach(Array(state.data["sheep"].list.enumerated()), id: \.offset) { _, sheep in
-                            Button { selected = .init(record: sheep) } label: {
-                                VStack {
-                                    NativeSheep(design: (try? sheep["design"].decoded(SheepDesign.self)) ?? .init()).frame(height: 100)
-                                    Text(sheep["username"].text).font(.caption).foregroundStyle(.primary).lineLimit(2)
-                                }.frame(maxWidth: .infinity)
-                            }.buttonStyle(.plain)
-                        }
-                    }.padding(.vertical, 12)
-                    if state.data["sheep"].list.isEmpty && !state.loading { Text("羊群暂时走远了。").foregroundStyle(.secondary) }
-                }
-            } else {
-                Section {
-                    NativeSheep(design: (try? state.data["design"].decoded(SheepDesign.self)) ?? .init()).frame(height: 220)
-                    Text(state.data["username"].text).font(.headline)
-                }
-            }
-            if store.user != nil {
-                Section("我的羊") {
-                    WorkspaceStatus(state: extras)
-                    ForEach([("adopt", "领养"), ("feed", "喂食"), ("shear", "剪羊毛"), ("rub_wool", "摩擦羊毛"), ("use_bag", "使用福袋")], id: \.0) { kind, title in
-                        Button(title) { confirm("确认\(title)？", path: "/api/profile/extras", body: ["action": kind]) }.disabled(state.busy)
-                    }
-                    Menu("行走装备") {
-                        ForEach([("walk", "步行"), ("bicycle", "自行车"), ("wing", "飞行翅膀")], id: \.0) { mode, label in Button(label) { confirm("装备\(label)？", path: "/api/ranch-world/actions", body: ["kind": "equip", "actor": store.user?.uid ?? "", "mode": mode]) } }
-                    }
-                    FeatureLink(path: "/ranch-dye")
-                    LabeledContent("鱼", value: extras.data["fish"].text)
-                }
-            }
-            if let retry, state.error != nil { Button("重试原操作") { Task { await perform(retry) } }.disabled(state.busy) }
-        }.navigationTitle(gallery ? "羊群广场" : "电子牧场").navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("牧场学习", systemImage: "timer") { study = true } } }
-        .sheet(isPresented: $study) { NativeRanchStudy().environment(store) }
-        .task(id: store.sessionRevision) { await load() }.refreshable { await load() }
-        .sheet(item: $selected) { selection in
-            NavigationStack {
-                List {
-                    NativeSheep(design: (try? selection.record["design"].decoded(SheepDesign.self)) ?? .init()).frame(height: 220)
-                    ForEach([("greet", "打招呼"), ("pet", "摸摸羊"), ("stroll", "散步"), ("backflip", "后空翻"), ("bicycle", "骑自行车"), ("fly", "飞行"), ("clover", "赠送三叶草")], id: \.0) { kind, title in
-                        Button(title) { selected = nil; confirm("确认\(title)？", path: "/api/ranch-world/actions", body: ["kind": kind, "actor": ["stroll", "backflip", "bicycle", "fly"].contains(kind) ? store.user?.uid ?? "" : selection.record["uid"].text, "target": selection.record["uid"].text]) }
-                    }
-                }.navigationTitle(selection.record["username"].text)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { selected = nil } } }
-            }
-        }
-        .confirmationDialog(action?.title ?? "确认操作", isPresented: Binding(get: { action != nil }, set: { if !$0 { action = nil } }), titleVisibility: .visible) {
-            if let action { Button("确认") { self.action = nil; Task { await perform(action) } } }
-        }
-    }
-    private func load() async {
-        await state.load(store, path: uid.map { "/api/ranch-designs/" + NativeRoutes.component($0) } ?? "/api/ranch-world")
-        if store.user != nil { await extras.load(store, path: "/api/profile/extras") }
-    }
-    private func confirm(_ title: String, path: String, body: [String: Any]) { var body = body; body["requestKey"] = UUID().uuidString; action = .init(title: title, path: path, body: body) }
-    private func perform(_ action: EconomyAction) async { retry = action; if await state.mutate(store, path: action.path, body: action.body) != nil { retry = nil; await load() } }
+    var body: some View { NativeRanchScene(uid: uid, gallery: gallery) }
 }
-struct RanchSheepSelection: Identifiable { let id = UUID(); let record: SiteRecord }
 
 struct NativeDyeView: View {
     @Environment(AppStore.self) private var store

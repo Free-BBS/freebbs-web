@@ -12,23 +12,25 @@ struct RootView: View {
     @FocusState private var searchFocused: Bool
     var body: some View {
         @Bindable var store = store
-        NavigationStack(path: $path) {
-            Group {
-                if searching { NativeSearchView(query: $query, onOpen: { searchFocused = false }) }
-                else if tab == "/discussion" { DiscussionView() }
-                else { HomeView() }
+        VStack(spacing: 0) {
+            NavigationStack(path: $path) {
+                Group {
+                    if searching { NativeSearchView(query: $query, onOpen: { searchFocused = false }) }
+                    else if tab == "/discussion" { DiscussionView() }
+                    else { HomeView() }
+                }
+                .navigationDestination(for: FeatureDestination.self) { destination in Group {
+                        switch destination.path {
+                        case "/native-features": FeaturesView()
+                        case "/native-inbox": InboxView()
+                        case "/native-support": SupportView()
+                        default: FeatureWorkspaceView(destination: destination)
+                        }
+                    } }
             }
-            .navigationDestination(for: FeatureDestination.self) { destination in Group {
-                    switch destination.path {
-                    case "/native-features": FeaturesView()
-                    case "/native-inbox": InboxView()
-                    case "/native-support": SupportView()
-                    default: FeatureWorkspaceView(destination: destination)
-                    }
-                } }
+            .id(navigationRevision)
+            bottomBar.fixedSize(horizontal: false, vertical: true)
         }
-        .id(navigationRevision)
-        .safeAreaBar(edge: .bottom) { bottomBar }
         .preferredColorScheme(theme == "dark" ? .dark : theme == "light" ? .light : nil)
         .sheet(isPresented: Binding(get: { store.showLogin && store.featureDestination == nil }, set: { store.showLogin = $0 })) { NavigationStack { AuthenticationView() }.environment(store) }
         .sheet(item: $store.featureDestination) { destination in

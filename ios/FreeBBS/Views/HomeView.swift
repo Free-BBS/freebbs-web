@@ -2,8 +2,10 @@ import SwiftUI
 
 struct HomeView: View {
     @Environment(AppStore.self) private var store
-    @State private var checkedIn = false
-    @State private var checkingIn = false
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var checkIn = CheckInState()
+    @State private var showingCheckIn = false
+    @State private var activity = NativeWorkspace()
     var body: some View {
         PageSurface {
             if store.isDemo {
@@ -33,9 +35,20 @@ struct HomeView: View {
                         VStack(alignment: .leading) { Text("\(user.electrons)").font(.title2.bold()); Text("电元").font(.caption).foregroundStyle(.secondary) }
                         VStack(alignment: .leading) { Text("\(user.manetrons)").font(.title2.bold()); Text("磁元").font(.caption).foregroundStyle(.secondary) }
                         Spacer()
-                        Button(checkedIn ? "今日已签到" : "签到") { Task { await checkIn() } }
-                            .buttonStyle(.bordered).controlSize(.large).disabled(checkedIn || checkingIn)
+                        Button(checkIn.summary?.checkedInToday == true ? "今日已签到" : "签到") { showingCheckIn = true }
+                            .buttonStyle(.bordered).controlSize(.large).accessibilityIdentifier("openCheckIn")
                     }
+                }
+            }
+            if store.user != nil {
+                SectionTitle(title: "站内足迹")
+                Paper {
+                    if let contribution = ContributionActivity(activity.data["profile"]["activity"]) { ContributionHeatmap(activity: contribution) }
+                    else if activity.loading { ProgressView("正在加载活跃度…") }
+                    else if let error = activity.error { Text(error).foregroundStyle(.secondary); Button("重试") { Task { await loadActivity() } } }
+                    NavigationLink { NativePublicProfileView() } label: {
+                        Label("个人主页", systemImage: "person.crop.circle")
+                    }.accessibilityIdentifier("ownPublicProfile")
                 }
             }
             SectionTitle(title: "我的课程")
@@ -71,7 +84,20 @@ struct HomeView: View {
             Button { Task { await store.bootstrap() } } label: { Image(systemName: "arrow.clockwise") }
                 .accessibilityLabel("刷新首页")
         } }
-        .refreshable { await store.bootstrap() }
+        .refreshable { await store.bootstrap(); await checkIn.load(store); await loadActivity() }
+        .sheet(isPresented: $showingCheckIn) { NavigationStack { CheckInView(state: checkIn).environment(store) } }
+        .task(id: "\(store.sessionRevision):\(store.user?.id ?? 0)") {
+            await checkIn.load(store)
+            await loadActivity()
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                if store.user != nil && checkIn.needsDayRefresh(.now) { await checkIn.load(store) }
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await checkIn.load(store); await loadActivity() } }
+        }
+        .onChange(of: checkIn.summary?.today?.date) { _, _ in Task { await loadActivity() } }
     }
     private var maxLink: some View {
         NavigationLink { ChatView() } label: {
@@ -85,17 +111,10 @@ struct HomeView: View {
                 .frame(minHeight: 44)
         }.buttonStyle(.bordered).controlSize(.large).accessibilityIdentifier("openWorkbench")
     }
-    private func checkIn() async {
-        guard store.requireLogin() else { return }
-        checkingIn = true
-        defer { checkingIn = false }
-        do {
-            if !store.isDemo {
-                let response: UserResponse = try await store.api.request("/api/checkin", method: "POST", body: [:])
-                store.user = response.user
-            }
-            checkedIn = true
-        } catch { store.error = error.localizedDescription }
+
+    private func loadActivity() async {
+        guard let uid = store.user?.uid, !uid.isEmpty else { activity.data = .empty; return }
+        await activity.load(store, path: "/api/users/" + NativeRoutes.component(uid) + "/public-profile", demo: .object(["profile": .object(["activity": ContributionActivity.preview])]))
     }
 }
 

@@ -61,24 +61,23 @@ struct NativePublicProfileView: View {
             else { List {
                 WorkspaceStatus(state: state)
                 Section {
-                    Avatar(author: .init(id: profile["id"].int, username: profile["username"].text, displayName: profile["username"].text, avatarPath: profile["avatarPath"].text), size: 72)
-                    Text(profile["username"].text).font(.title2.bold())
-                    Text(profile["bio"].text).foregroundStyle(.secondary)
-                    LabeledContent("公开帖子", value: profile["postCount"].text)
-                    LabeledContent("收到的点赞", value: profile["likeCount"].text)
+                    HStack(spacing: 14) {
+                        Avatar(author: .init(id: profile["id"].int, username: profile["username"].text, displayName: profile["username"].text, avatarPath: profile["avatarPath"].text), size: 56)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(profile["username"].text).font(.title2.bold())
+                            if !profile["bio"].text.isEmpty { Text(profile["bio"].text).font(.subheadline).foregroundStyle(.secondary) }
+                        }
+                    }.padding(.vertical, 6)
+                    LabeledContent("公开帖子", value: "\(profile["postCount"].int)")
+                    LabeledContent("收到的点赞", value: "\(profile["likeCount"].int)")
                     if !profile["websiteUrl"].text.isEmpty, let url = AppConfiguration.safeLink(profile["websiteUrl"].text, origin: store.configuration.origin) { Link("个人网页", destination: url) }
                 }
                 Section("公开动态") {
                     if profile["activity"]["visibility"].text == "private" { Text("此用户的动态未公开。").foregroundStyle(.secondary) }
                     else {
-                        let days = profile["activity"]["days"].list
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 14), spacing: 3) {
-                            ForEach(Array(days.enumerated()), id: \.offset) { _, day in
-                                RoundedRectangle(cornerRadius: 3).fill(activityColor(count: day["count"].int)).frame(height: 16)
-                                    .accessibilityLabel(day["date"].text + "，" + day["count"].text + " 次活动")
-                            }
-                        }
-                        LabeledContent("记录天数", value: String(days.filter { $0["count"].int > 0 }.count))
+                        if let activity = ContributionActivity(profile["activity"]) { ContributionHeatmap(activity: activity) }
+                        else { Text("活跃度暂未加载").foregroundStyle(.secondary) }
+
                     }
                 }
                 Section("个人空间") {
@@ -88,10 +87,6 @@ struct NativePublicProfileView: View {
             }.refreshable { await load() } }
         }.navigationTitle("个人主页").navigationBarTitleDisplayMode(.inline).task(id: store.sessionRevision) { await load() }
     }
-    private func load() async { if let key = uid ?? store.user?.uid, !key.isEmpty { await state.load(store, path: "/api/users/" + NativeRoutes.component(key) + "/public-profile") } }
-    private func activityColor(count: Int) -> Color {
-        if count == 0 { return Color(uiColor: .systemGray5) }
-        let opacity: Double = min(1.0, 0.25 + Double(count) * 0.15)
-        return Palette.teal.opacity(opacity)
-    }
+    private func load() async { if let key = uid ?? store.user?.uid, !key.isEmpty { await state.load(store, path: "/api/users/" + NativeRoutes.component(key) + "/public-profile", demo: .object(["profile": .object(["uid": .string(key), "username": .string(store.user?.username ?? "示例同学"), "activity": ContributionActivity.preview])])) } }
+
 }

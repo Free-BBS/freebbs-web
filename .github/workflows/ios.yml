@@ -36,6 +36,8 @@ jobs:
       - run: npx eslint backend/mobile-safety.js backend/mobile-safety.test.js
       - name: Verify bundled Markdown and embed assets match website sources
         run: python3 ios/scripts/bundle-rich-content.py --check
+      - name: Verify ranch preview matches website sheep, timer, and background assets
+        run: python3 ios/scripts/bundle-ranch-preview.py --check
       - name: Verify native handbook and staff match website content
         run: python3 ios/scripts/generate-native-information.py --check
       - name: Verify main-site routes and website navigation are synchronized

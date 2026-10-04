@@ -242,8 +242,9 @@ final class NavigationTests: XCTestCase {
         capture("41-feature-search")
         tapIdentifiedElement("feature-/ranch")
         XCTAssertTrue(app.navigationBars["电子牧场"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["牧场场景"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.webViews.firstMatch.exists)
+        XCTAssertTrue(app.buttons["牧场操作"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["牧场学习"].exists)
         capture("42-feature-workspace-preview")
         back(); back()
         openProfile()
@@ -362,28 +363,68 @@ final class NavigationTests: XCTestCase {
         let search = app.searchFields.firstMatch
         search.tap(); search.typeText("牧场\n")
         tapIdentifiedElement("feature-/ranch")
-        app.buttons["牧场学习"].tap()
+        let studyButton = app.buttons["牧场学习"]
+        expectation(for: NSPredicate(format: "exists == true AND enabled == true"), evaluatedWith: studyButton)
+        waitForExpectations(timeout: 20)
+        studyButton.tap()
         XCTAssertTrue(app.navigationBars["牧场学习"].waitForExistence(timeout: 5))
-        let focus = app.switches["专注计时"]
-        XCTAssertTrue(focus.exists)
-        for _ in 0..<6 {
-            if focus.isHittable { break }
-            app.swipeUp(velocity: .slow)
-        }
+        let focus = app.buttons["ranch-focus"]
+        XCTAssertTrue(focus.waitForExistence(timeout: 10))
+        capture("52a-ranch-study-controls")
         XCTAssertTrue(focus.isHittable)
-        if focus.value as? String != "1" {
-            focus.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
-        }
-        let start = app.buttons["开始"]
-        for _ in 0..<6 {
-            if start.exists && start.isHittable { break }
-            app.swipeUp(velocity: .slow)
-        }
-        XCTAssertTrue(start.isHittable)
-        start.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        XCTAssertTrue(app.buttons["暂停"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.webViews.firstMatch.exists)
+        let start = app.buttons["ranch-start"]
+        if !start.exists { focus.tap() }
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.webViews.firstMatch.exists)
+        XCTAssertTrue(app.webViews.staticTexts["25:00"].firstMatch.waitForExistence(timeout: 10))
+        start.tap()
+        let running = NSPredicate(format: "label CONTAINS %@", "暂停")
+        expectation(for: running, evaluatedWith: app.buttons["ranch-start"])
+        waitForExpectations(timeout: 10)
+        XCTAssertTrue(app.webViews.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "24:[0-5][0-9]")).firstMatch.waitForExistence(timeout: 10))
+        app.buttons["完成"].tap()
+        XCTAssertTrue(app.navigationBars["电子牧场"].waitForExistence(timeout: 10))
+        app.buttons["牧场学习"].tap()
+        XCTAssertTrue(app.navigationBars["牧场学习"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["ranch-start"].label.contains("暂停"))
+        app.buttons["ranch-start"].tap()
+        let paused = NSPredicate(format: "label CONTAINS %@", "开始")
+        expectation(for: paused, evaluatedWith: app.buttons["ranch-start"])
+        waitForExpectations(timeout: 10)
         capture("52-native-ranch-study")
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let reset = app.buttons["ranch-reset"]
+        XCTAssertTrue(reset.waitForExistence(timeout: 10))
+        XCTAssertTrue(reset.isHittable)
+        XCTAssertTrue(app.buttons["ranch-focus"].isHittable)
+        capture("53-ranch-study-landscape")
+    }
+    func testNativeCheckInCalendarAndContributionHeatmap() {
+        launchPreview()
+        XCTAssertTrue(app.scrollViews["contributionHeatmap"].waitForExistence(timeout: 10))
+        capture("56-home-contribution-heatmap")
+        app.buttons["openCheckIn"].tap()
+        XCTAssertTrue(app.navigationBars["签到"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["签到日历"].exists)
+        XCTAssertTrue(app.buttons["submitCheckIn"].exists)
+        XCTAssertFalse(app.buttons["submitCheckIn"].isEnabled)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "已领取 4 磁元")).firstMatch.exists)
+        let calendar = app.descendants(matching: .any).matching(identifier: "checkInCalendar").firstMatch
+        XCTAssertTrue(calendar.exists)
+        XCTAssertTrue(app.staticTexts["本月已签到 1 天 · 灰色为未签到"].exists)
+        app.buttons["上个月"].tap()
+        XCTAssertTrue(app.buttons["下个月"].isEnabled)
+        app.buttons["下个月"].tap()
+        XCTAssertFalse(app.buttons["下个月"].isEnabled)
+        capture("54-native-checkin-calendar")
+        app.buttons["完成"].tap()
+        tapIdentifiedElement("ownPublicProfile")
+        XCTAssertTrue(app.navigationBars["个人主页"].waitForExistence(timeout: 10))
+        let heatmap = app.scrollViews["contributionHeatmap"]
+        XCTAssertTrue(heatmap.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.datePickers["contributionDatePicker"].exists)
+        XCTAssertFalse(app.webViews.firstMatch.exists)
+        capture("55-native-contribution-heatmap")
     }
     private func tapIdentifiedElement(_ id: String) {
         let deadline = Date().addingTimeInterval(60)

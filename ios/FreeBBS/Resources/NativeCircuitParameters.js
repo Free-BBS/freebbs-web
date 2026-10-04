@@ -114,6 +114,7 @@
     panel.style.setProperty('--native-sheet-bottom', `${bottom + 12}px`);
     panel.style.setProperty('--native-sheet-height', `${height}px`);
     document.documentElement.classList.toggle('native-lab-compact', height <= 420);
+    document.documentElement.classList.toggle('native-lab-very-compact', height <= 220);
     if (observedAnchor !== target) {
       observedAnchor?.removeAttribute('aria-controls');
       observedAnchor?.removeAttribute('aria-expanded');

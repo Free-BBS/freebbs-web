@@ -7,15 +7,26 @@ import SwiftUI
 final class RichContentTests: XCTestCase, WKNavigationDelegate {
     private var loaded: XCTestExpectation?
     private let origin = URL(string: "https://www.free-bbs.cn")!
-    private func reader(size: CGSize = CGSize(width: 320, height: 600)) async -> WKWebView {
+    private func reader(size: CGSize = CGSize(width: 320, height: 600)) async throws -> WKWebView {
         let config = WKWebViewConfiguration(); config.websiteDataStore = .nonPersistent()
         let web = WKWebView(frame: CGRect(origin: .zero, size: size), configuration: config)
         web.navigationDelegate = self
+        // Visible WebKit hosts avoid offscreen suspension on the iOS 26 runner.
+        let previousWindow = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first(where: \.isKeyWindow)
+        let window = previousWindow?.windowScene.map { UIWindow(windowScene: $0) } ?? UIWindow(frame: web.frame)
+        window.rootViewController = UIViewController(); window.rootViewController?.view.addSubview(web)
+        window.makeKeyAndVisible()
+        addTeardownBlock { @MainActor in
+            web.stopLoading(); web.navigationDelegate = nil; window.isHidden = true; previousWindow?.makeKeyAndVisible()
+        }
         let ready = XCTestExpectation(description: "Offline renderer loaded")
         loaded = ready
         web.loadHTMLString(RichContentEngine.document, baseURL: origin)
-        let result = await XCTWaiter.fulfillment(of: [ready], timeout: 20)
-        XCTAssertEqual(result, .completed)
+        let result = await XCTWaiter.fulfillment(of: [ready], timeout: 45)
+        guard result == .completed else {
+            loaded = nil; web.stopLoading(); web.navigationDelegate = nil
+            throw NSError(domain: "FreeBBS.RendererTests", code: 1, userInfo: [NSLocalizedDescriptionKey: "Renderer navigation timed out; do not execute JavaScript on an unready document"])
+        }
         return web
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loaded?.fulfill(); loaded = nil }
@@ -118,7 +129,7 @@ final class RichContentTests: XCTestCase, WKNavigationDelegate {
         }
     }
     func testOfflineFormulaTableCodeAndImages() async throws {
-        let web = await reader()
+        let web = try await reader()
         let source = "## 实验\n\n$E=mc^2$\n\n$$\\int_0^1 x^2 dx$$\n\n| 时间 | 电压 |\n| --- | --- |\n| 0 | 1 |\n\n```python\nprint(1 + 2)\n```\n\n![波形](/uploads/native-test-wave.png)"
         let value = try await web.callAsyncJavaScript("""
             renderNativeContent(source, origin, '', false, 17, false);
@@ -134,7 +145,7 @@ final class RichContentTests: XCTestCase, WKNavigationDelegate {
         XCTAssertEqual(result["image"] as? String, "https://www.free-bbs.cn/uploads/native-test-wave.png")
     }
     func testUntrustedMarkdownCannotExecuteScriptsOrLoadFrames() async throws {
-        let web = await reader()
+        let web = try await reader()
         let source = "<script>window.compromised=true</script>\n\n<img src='javascript:alert(1)' onerror='window.compromised=true'>\n\n<iframe src='https://attacker.test'></iframe>\n\n[x](javascript:alert(1))\n\n![x](http://attacker.test/x)\n\n$\\href{javascript:alert(1)}{click}$"
         let value = try await web.callAsyncJavaScript("""
             renderNativeContent(source, origin, 'test-secret', true, 24, false);
@@ -147,7 +158,7 @@ final class RichContentTests: XCTestCase, WKNavigationDelegate {
         for key in ["scripts","frames","events","unsafe"] { XCTAssertEqual(result[key] as? Int, 0, key) }
     }
     func testPublishedToolUsesOpaqueSandbox() async throws {
-        let web = await reader()
+        let web = try await reader()
         let result = try await web.callAsyncJavaScript("""
             window.privateMarker='host-secret';
             return await new Promise(resolve => {
@@ -163,7 +174,7 @@ final class RichContentTests: XCTestCase, WKNavigationDelegate {
         XCTAssertEqual(result as? String, "isolated")
     }
     func testLabShellRemovesSpecificAndLateWebsiteNavigation() async throws {
-        let web = await reader()
+        let web = try await reader()
         let value = try await web.callAsyncJavaScript("""
             document.body.classList.add('has-mobile-header');
             const css=document.createElement('style');
@@ -181,7 +192,7 @@ final class RichContentTests: XCTestCase, WKNavigationDelegate {
         for size in [CGSize(width: 320, height: 600), CGSize(width: 1024, height: 400)] {
             // Give each WebKit document its real viewport at load time; an offscreen
             // view resized after navigation can retain the previous CSS dvh on iOS 26.
-            let web = await reader(size: size)
+            let web = try await reader(size: size)
             let value = try await web.callAsyncJavaScript("""
                 document.body.className='circuit-page has-circuit-mobile-workspace';
                 document.body.innerHTML='<div class="page-shell"><main class="circuit-main"><section class="circuit-workspace"><div class="circuit-canvas-panel"><div class="circuit-stage"><svg viewBox="0 0 1000 640"><rect width="1000" height="640"/><path data-grid-size="20"/><g data-component-id="test-part" transform="translate(180 140)"><rect x="-50" y="-20" width="100" height="40"/></g></svg></div></div></section></main></div><dialog><div class="circuit-palette">元件列表</div></dialog>';
@@ -228,7 +239,7 @@ final class RichContentTests: XCTestCase, WKNavigationDelegate {
     }
     func testNativeParameterSheetKeepsInputVisibleInLandscapeAndKeyboardSizedViewports() async throws {
         for size in [CGSize(width: 667, height: 220), CGSize(width: 375, height: 224)] {
-            let web = await reader(size: size)
+            let web = try await reader(size: size)
             let value = try await web.callAsyncJavaScript("""
                 document.body.innerHTML='<div class="page-shell"><main class="circuit-main"><section class="circuit-parameter-popover"><header class="circuit-parameter-popover-heading"><div><p>元件参数</p><h3>R1 · 电阻</h3></div><button class="circuit-parameter-popover-close">×</button></header><form class="circuit-parameter-popover-fields"><p class="circuit-parameter-hint">支持字头：m、u、n、p，例如 4.7k。</p><label style="display:grid;gap:5px">电阻 / Ω<input value="1000"></label></form><footer class="circuit-parameter-popover-footer"><span>修改即保存到草稿</span><button class="circuit-parameter-popover-sidebar">在侧栏查看</button></footer></section></main></div>';
                 const old=document.createElement('style');old.textContent='.circuit-parameter-popover{display:flex;flex-direction:column;position:fixed;height:auto}.circuit-parameter-popover-heading,.circuit-parameter-popover-footer{display:flex;flex:0 0 auto;align-items:center;justify-content:space-between}.circuit-parameter-popover-fields{display:grid;flex:1 1 auto;grid-template-columns:minmax(0,1fr);gap:12px;overflow:auto}.circuit-parameter-popover-heading p,.circuit-parameter-popover-heading h3{margin:0}.circuit-parameter-popover-fields p{margin:0}';document.head.append(old);
@@ -241,17 +252,17 @@ final class RichContentTests: XCTestCase, WKNavigationDelegate {
                 await new Promise(resolve=>setTimeout(resolve,80));
                 const sheet=document.querySelector('.circuit-parameter-popover').getBoundingClientRect();
                 const form=document.querySelector('form').getBoundingClientRect(),input=document.querySelector('input').getBoundingClientRect();
-                return {visible:!document.querySelector('.circuit-parameter-popover').hidden,contained:input.top>=form.top && input.bottom<=form.bottom && sheet.top>=0 && sheet.bottom<=innerHeight,readable:input.height>=44,scrollable:getComputedStyle(document.querySelector('form')).overflowY==='auto'};
+                return {sheet:sheet.toJSON(),form:form.toJSON(),input:input.toJSON(),viewport:innerHeight,visualHeight:visualViewport?.height,visible:!document.querySelector('.circuit-parameter-popover').hidden,contained:input.top>=form.top && input.bottom<=form.bottom && sheet.top>=0 && sheet.bottom<=innerHeight,readable:input.height>=44,scrollable:getComputedStyle(document.querySelector('form')).overflowY==='auto'};
                 """, arguments: ["script":WebContentPolicy.nativeCircuitScript], in: nil, contentWorld: .page)
             let result = try XCTUnwrap(value as? [String:Any])
             XCTAssertEqual(result["visible"] as? Bool, true)
-            XCTAssertEqual(result["contained"] as? Bool, true)
+            XCTAssertEqual(result["contained"] as? Bool, true, "\(result)")
             XCTAssertEqual(result["readable"] as? Bool, true)
             XCTAssertEqual(result["scrollable"] as? Bool, true)
         }
     }
     func testNativeToolPreviewUsesSharedSandboxAndHasNoBridge() async throws {
-        let web = await reader()
+        let web = try await reader()
         _ = try await web.evaluateJavaScript("window.privateMarker='host-secret';window.previewResult='waiting';window.addEventListener('message',event=>window.previewResult=event.data)")
         let coordinator = ToolSandboxView.Coordinator()
         coordinator.ready = true
