@@ -1,0 +1,14 @@
+PRODUCT_BUNDLE_IDENTIFIER = cn.free-bbs.app
+DEVELOPMENT_TEAM = Q83556V27Y
+CODE_SIGN_STYLE = Automatic
+MARKETING_VERSION = 1.0.0
+CURRENT_PROJECT_VERSION = 13
+IPHONEOS_DEPLOYMENT_TARGET = 26.0
+SWIFT_VERSION = 6.0
+SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor
+TARGETED_DEVICE_FAMILY = 1
+FREEBBS_ORIGIN = https:/$()/www.free-bbs.cn
+// Configure these after the operator approves and publishes the policy and contact.
+FREEBBS_PRIVACY_URL = https:/$()/www.free-bbs.cn/mobile/privacy.html
+FREEBBS_SUPPORT_EMAIL = feedback@free-bbs.cn
+#include? "Local.xcconfig"
