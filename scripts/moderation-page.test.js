@@ -258,6 +258,18 @@ test('administrator sees a warning when no reviewer is configured', async () => 
   assert.ok(h.get('reviewer-list').textContent.includes('当前没有审核负责人'));
 });
 
+test('an administrator outside the reviewer registry can manage reviewers from mine without review controls', async () => {
+  const h = harness({ mine: true, reviewer: false, isAdmin: true });
+  await h.app.ready;
+  await flush();
+  await h.app.openSubmission('s1');
+  assert.equal(h.get('review-link').hidden, true);
+  assert.equal(h.get('reviewers').hidden, false);
+  assert.equal(h.get('detail').querySelectorAll('button').length, 0);
+  assert.ok(h.requests.some(({ url }) => url.endsWith('/moderation/reviewers')));
+  assert.ok(!h.requests.some(({ url }) => url.includes('/moderation/submissions?')));
+});
+
 test('same decision retries reuse requestId and include the inspected version', async () => {
   let attempts = 0;
   const h = harness({
@@ -353,6 +365,90 @@ function extract(start, end) {
   assert.ok(from > 0 && to > from, start);
   return appSource.slice(from, to);
 }
+
+function entryHarness(session, customApi) {
+  const host = new Element('nav');
+  host.hidden = true;
+  const user = { isLoggedIn: true, token: 'current-account' };
+  let calls = 0;
+  const context = {
+    userState: user,
+    moderationEntryToken: null,
+    document: {
+      getElementById: (id) => (id === 'discussion-moderation-links' ? host : null),
+      querySelectorAll: () => [...host.children],
+      createElement: (tag) => {
+        const item = new Element(tag);
+        item.remove = () => {
+          host.children = host.children.filter((child) => child !== item);
+        };
+        return item;
+      },
+    },
+    callApi: async (url) => {
+      assert.equal(url, '/moderation/session');
+      calls += 1;
+      return customApi ? customApi(calls) : session;
+    },
+  };
+  vm.runInNewContext(
+    extract('async function syncModerationEntry(', 'function moderationAttachmentId('),
+    context,
+  );
+  return { host, user, sync: context.syncModerationEntry };
+}
+
+test('discussion navigation exposes author and reviewer destinations according to the current session', async () => {
+  for (const role of ['author', 'reviewer', 'admin', 'disabled', 'guest']) {
+    const h = entryHarness({
+      enabled: role !== 'disabled',
+      reviewer: role === 'reviewer',
+      isAdmin: role === 'admin',
+    });
+    if (role === 'guest') Object.assign(h.user, { isLoggedIn: false, token: '' });
+    await h.sync();
+    if (role === 'disabled' || role === 'guest') {
+      assert.equal(h.host.hidden, true, role);
+      assert.equal(h.host.children.length, 0, role);
+    } else {
+      assert.equal(h.host.hidden, false, role);
+      assert.equal(h.host.children[0].textContent, '我的提交');
+      assert.equal(h.host.children[0].href, '/moderation?mine=1');
+      assert.equal(h.host.children.length, role === 'reviewer' ? 2 : 1);
+      if (role === 'reviewer') {
+        assert.equal(h.host.children[1].textContent, '审核工作台');
+        assert.equal(h.host.children[1].href, '/moderation');
+      }
+      await h.sync();
+      assert.equal(h.host.children.length, role === 'reviewer' ? 2 : 1, 'no duplicate links');
+    }
+  }
+});
+
+test('a late reviewer lookup cannot restore navigation after logout', async () => {
+  const wait = deferred();
+  const h = entryHarness(null, () => wait.promise);
+  const pending = h.sync();
+  Object.assign(h.user, { isLoggedIn: false, token: '' });
+  await h.sync();
+  wait.resolve({ enabled: true, reviewer: true });
+  await pending;
+  assert.equal(h.host.hidden, true);
+  assert.equal(h.host.children.length, 0);
+});
+
+test('a temporary session lookup failure can recover on the next navigation sync', async () => {
+  const h = entryHarness(null, (calls) => {
+    if (calls === 1) throw new Error('temporary connection failure');
+    return { enabled: true, reviewer: true };
+  });
+  await h.sync();
+  assert.equal(h.host.hidden, true);
+  await h.sync();
+  assert.equal(h.host.hidden, false);
+  assert.equal(h.host.children.length, 2);
+});
+
 function submissionHarness() {
   const message = new Element('p');
   const input = new Element('textarea');

@@ -3219,28 +3219,40 @@ function showModerationSubmitted(payload, target = discussionComposeMessage) {
 }
 
 async function syncModerationEntry() {
+  const host = document.getElementById('discussion-moderation-links');
+  if (!host) return;
   const token = userState.isLoggedIn ? userState.token : '';
   if (moderationEntryToken === token) return;
   moderationEntryToken = token;
-  document.querySelectorAll('[data-moderation-entry]').forEach((link) => link.remove());
+  host.hidden = true;
+  host.replaceChildren();
   if (!token) return;
   try {
     const session = await callApi('/moderation/session');
-    if (moderationEntryToken !== token || userState.token !== token || !session.enabled) return;
-    const host = document.getElementById('user-actions');
-    if (!host) return;
+    if (
+      moderationEntryToken !== token ||
+      userState.token !== token ||
+      !userState.isLoggedIn ||
+      !session.enabled
+    )
+      return;
     for (const [href, label] of [
       ['/moderation?mine=1', '我的提交'],
-      ...(session.reviewer || session.isAdmin ? [['/moderation', '内容审核']] : []),
+      ...(session.reviewer ? [['/moderation', '审核工作台']] : []),
     ]) {
       const link = document.createElement('a');
       link.href = href;
       link.textContent = label;
-      link.className = 'user-icon-button';
+      link.className = 'discussion-filter-chip';
       link.dataset.moderationEntry = '';
       host.append(link);
     }
+    host.hidden = false;
   } catch {
+    if (moderationEntryToken !== token || userState.token !== token) return;
+    moderationEntryToken = null;
+    host.hidden = true;
+    host.replaceChildren();
     // An unavailable optional moderation endpoint must not block the existing page.
   }
 }
@@ -11030,6 +11042,7 @@ window.addEventListener('storage', (event) => {
     moderationSubmissionIntents.clear();
     clearModerationImagePreviews();
     moderationEntryToken = null;
+    document.getElementById('discussion-moderation-links')?.setAttribute('hidden', '');
     document.querySelectorAll('[data-moderation-entry]').forEach((link) => link.remove());
   }
   if (isPublicProfilePage() && (event.key === STORAGE_KEY || event.key === null)) {

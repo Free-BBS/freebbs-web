@@ -43,6 +43,27 @@ body.discussion-page .discussion-scope p {
   font-size: 0.9rem;
 }
 
+body.discussion-page .discussion-moderation-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+body.discussion-page .discussion-moderation-links[hidden],
+body.discussion-page .discussion-moderation-links:empty {
+  display: none !important;
+}
+
+body.discussion-page .discussion-moderation-links a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  text-decoration: none;
+}
+
 body.discussion-page .discussion-scope button,
 body.discussion-page .discussion-visibility-button {
   min-height: 44px;
