@@ -219,6 +219,66 @@ test('MiniMax M2.7 requests separated reasoning without pretending that thinking
   assert.doesNotMatch(JSON.stringify(result), /provider-secret/);
 });
 
+test('Kimi K2.6 uses JSON-object mode on the first request in both input modes', async () => {
+  for (const inputMode of ['redacted', 'synthetic_original']) {
+    const h = harness({
+      result: (_url, options) => {
+        const body = JSON.parse(options.body);
+        if (body.model !== 'kimi-k2.6') return jsonResponse();
+        if (body.response_format.type === 'json_schema')
+          return jsonResponse(
+            { error: 'invalid response_format json_schema schema' },
+            { status: 400 },
+          );
+        assert.deepEqual(body.response_format, { type: 'json_object' });
+        assert.deepEqual(body.thinking, { type: 'disabled' });
+        assert.equal(body.temperature, 0);
+        assert.equal(body.max_tokens, 700);
+        assert.equal(JSON.parse(body.messages[1].content).inputMode, inputMode);
+        return jsonResponse();
+      },
+    });
+    const result = await h.client.assess({ ...INPUT, inputMode, model: 'kimi-k2.6' });
+    assert.equal(result.model, 'kimi-k2.6');
+    assert.deepEqual(result.assessment, ASSESSMENT);
+    assert.equal(h.requests.length, 1);
+    // Choosing Kimi must not change the next request's GLM default or format.
+    const defaultResult = await h.client.assess(INPUT);
+    assert.equal(defaultResult.model, 'glm-5.1');
+    assert.equal(JSON.parse(h.requests[1].options.body).model, 'glm-5.1');
+    assert.equal(JSON.parse(h.requests[1].options.body).response_format.type, 'json_schema');
+    assert.equal(h.requests.length, 2);
+  }
+});
+
+test('Kimi JSON-object mode still rejects invalid assessments, truncated output and Markdown', async () => {
+  const truncated = envelope();
+  truncated.choices[0].finish_reason = 'length';
+  const markdown = envelope();
+  markdown.choices[0].message.content = `\u0060\u0060\u0060json\n${JSON.stringify(ASSESSMENT)}\n\u0060\u0060\u0060`;
+  for (const body of [
+    envelope({ ...ASSESSMENT, confidence: 0.9 }),
+    envelope({ ...ASSESSMENT, categories: ['privacy'] }),
+    envelope({ ...ASSESSMENT, decision: 'high_risk', categories: ['unknown'] }),
+    envelope({ ...ASSESSMENT, decision: 'needs_review', categories: ['privacy', 'privacy'] }),
+    envelope({ ...ASSESSMENT, reason: '' }),
+    truncated,
+    markdown,
+  ]) {
+    const h = harness({ result: () => jsonResponse(body) });
+    await assert.rejects(h.client.assess({ ...INPUT, model: 'kimi-k2.6' }), fixedError(502));
+    assert.equal(h.requests.length, 1);
+  }
+});
+
+test('Kimi provider errors do not retry with another format or model', async () => {
+  const h = harness({
+    result: () => jsonResponse({ error: 'provider-secret private-original' }, { status: 400 }),
+  });
+  await assert.rejects(h.client.assess({ ...INPUT, model: 'kimi-k2.6' }), fixedError(502));
+  assert.equal(h.requests.length, 1);
+});
+
 test('one settings snapshot and one provider request send only approved text and nonidentifying flags', async () => {
   const h = harness();
   const result = await h.client.assess({
@@ -325,11 +385,11 @@ test('image presence and redaction counts do not silently override valid text-on
   assert.match(body.messages[0].content, /计数非零本身不构成违规/);
 });
 
-test('only exact documented models receive native reasoning flags and schema mode', async () => {
+test('only exact configured models receive native reasoning flags and schema mode', async () => {
   for (const [model, thinking, effort, enableThinking, format] of [
     ['glm-5.2', 'disabled', undefined, undefined, 'json_schema'],
     ['glm-5.3', undefined, 'low', undefined, 'json_schema'],
-    ['kimi-k2.6', 'disabled', undefined, undefined, 'json_schema'],
+    ['kimi-k2.6', 'disabled', undefined, undefined, 'json_object'],
     ['kimi-k3', undefined, 'low', undefined, 'json_schema'],
     ['deepseek-v4-flash', 'disabled', undefined, undefined, 'json_schema'],
     ['deepseek-v4.1-flash', 'disabled', undefined, undefined, 'json_object'],

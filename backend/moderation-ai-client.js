@@ -56,15 +56,16 @@ inputMode 表示输入为 redacted 脱敏文本或 synthetic_original 虚构原�
 no_risk_detected 表示在文字中未发现需要拦截的风险，categories 必须为空数组；needs_review 表示不确定、缺少背景或需要支持性人工处理；high_risk 表示文字有明确严重风险。后两者必须有至少一个类别。自伤求助需要支持性复核，不羞辱、惩罚求助者。
 仅返回一个符合指定结构的 JSON 对象，准确包含 decision、categories、reason 三个字段。reason 用不超过 180 字的简短中文说明依据与不确定性，不复述个人身份、联系方式、地址或原文段落。不输出 Markdown、工具调用、置信度、评分或其他字段。`;
 
-// Exact documented capability snapshots; unknown model IDs do not inherit a
-// guessed family setting. No paid fallback request is made on incompatibility.
+// Exact model choices; unknown IDs do not inherit a guessed family setting.
+// Kimi K2.6 rejected this moderation schema with HTTP 400 in the test channel.
+// Use its documented JSON-object mode, retaining the full local validation.
+// No paid fallback request is made on incompatibility.
 // https://docs.infini-ai.com/gen-studio/api/text-generation/tutorial-structured-output.html
 const SCHEMA_MODELS = new Set([
   'glm-5.1',
   'glm-5.2',
   'glm-5.3',
   'glm-5.3-flash',
-  'kimi-k2.6',
   'kimi-k3',
   'deepseek-v4-pro',
   'deepseek-v4-flash',
