@@ -293,7 +293,7 @@ const moderationAiTest = createModerationAiTest({
   service: discussionModeration,
   enabled: aiTestEnvironmentEnabled(config),
   client: createModerationAiClient({
-    readSettings: () => systemSettingsStore.readSettings({ includeSecret: true }),
+    readSettings: (options) => systemSettingsStore.readSettings(options),
     modelOverride: config.discussionModerationAiModel,
   }),
 });

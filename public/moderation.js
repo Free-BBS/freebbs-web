@@ -244,6 +244,16 @@
     function aiTestPanel(submission, generation, version, terms) {
       const panel = node('section', undefined, 'moderation-ai-test');
       panel.setAttribute('aria-label', '无问芯穹试审（文字）');
+      const modelLabel = node('label', '试审模型');
+      modelLabel.htmlFor = 'moderation-ai-model';
+      const model = node('select');
+      model.id = 'moderation-ai-model';
+      model.disabled = true;
+      const modelStatus = node('p', '正在加载可用模型…', 'moderation-note');
+      modelStatus.setAttribute('role', 'status');
+      const retryModels = node('button', '重新加载模型列表');
+      retryModels.type = 'button';
+      retryModels.hidden = true;
       const label = node('label', '发送给无问芯穹的文字');
       label.htmlFor = 'moderation-ai-input-mode';
       const mode = node('select');
@@ -259,11 +269,15 @@
       mode.value = 'redacted';
       const button = node('button', '调用无问芯穹试审');
       button.type = 'button';
+      button.disabled = true;
       const status = node('p');
       status.setAttribute('role', 'status');
       const result = node('div', undefined, 'moderation-ai-result');
       let inputVersion = 0;
       let busy = false;
+      let modelIds = new Set();
+      let loadingModels = false;
+      let catalogVersion = 0;
       const inspectedVersion = submission.version;
       const current = () =>
         valid(generation) &&
@@ -279,9 +293,77 @@
         result.replaceChildren();
         status.textContent = '输入已变化，试审结果已清除。请手动重新调用。';
       };
+      async function loadModels() {
+        if (loadingModels || busy || !current()) return;
+        if (catalogVersion > 0) invalidate();
+        loadingModels = true;
+        catalogVersion += 1;
+        const requestVersion = catalogVersion;
+        modelIds = new Set();
+        model.disabled = true;
+        model.value = '';
+        const placeholder = node('option', '加载模型…');
+        placeholder.value = '';
+        model.replaceChildren(placeholder);
+        button.disabled = true;
+        retryModels.hidden = true;
+        modelStatus.textContent = '正在加载可用模型…';
+        try {
+          const catalog = await client.request('/moderation/ai-models', { method: 'GET' });
+          if (!current() || requestVersion !== catalogVersion) return;
+          if (
+            !Array.isArray(catalog.models) ||
+            !catalog.models.length ||
+            catalog.models.length > 100 ||
+            catalog.models.some(
+              (item) =>
+                !item ||
+                typeof item.id !== 'string' ||
+                !item.id.trim() ||
+                item.id.length > 128 ||
+                typeof item.label !== 'string' ||
+                !item.label.trim() ||
+                item.label.length > 128,
+            ) ||
+            new Set(catalog.models.map((item) => item.id)).size !== catalog.models.length ||
+            !catalog.models.some((item) => item.id === catalog.defaultModel)
+          )
+            throw new Error('模型列表无效，请重新加载。');
+          modelIds = new Set(catalog.models.map((item) => item.id));
+          model.replaceChildren(
+            ...catalog.models.map((item) => {
+              const option = node('option', item.label);
+              option.value = item.id;
+              return option;
+            }),
+          );
+          model.value = catalog.defaultModel;
+          model.disabled = false;
+          button.disabled = false;
+          modelStatus.textContent = '选择仅影响当前详情中的试审；图片仍需人工检查。';
+          retryModels.hidden = false;
+        } catch (error) {
+          if (current() && requestVersion === catalogVersion) {
+            const failedPlaceholder = node('option', '模型列表未就绪');
+            failedPlaceholder.value = '';
+            model.replaceChildren(failedPlaceholder);
+            modelStatus.textContent = `无法加载模型列表：${error.message} 加载列表不会调用模型。`;
+            retryModels.hidden = false;
+          }
+        } finally {
+          loadingModels = false;
+        }
+      }
+      retryModels.addEventListener('click', loadModels);
+      model.addEventListener('change', invalidate);
       mode.addEventListener('change', invalidate);
       button.addEventListener('click', async () => {
-        if (busy || !current()) return;
+        if (busy || !current() || loadingModels || !modelIds.size) return;
+        const requestedModel = model.value;
+        if (!modelIds.has(requestedModel)) {
+          status.textContent = '请从已加载的列表选择试审模型。';
+          return;
+        }
         const inputMode = mode.value;
         const inputTerms = terms.value;
         const extraTerms = inputTerms
@@ -301,10 +383,12 @@
         const responseCurrent = () =>
           current() &&
           requestVersion === inputVersion &&
+          model.value === requestedModel &&
           mode.value === inputMode &&
           terms.value === inputTerms;
         busy = true;
         button.disabled = true;
+        retryModels.disabled = true;
         result.replaceChildren();
         status.textContent = `正在调用无问芯穹，发送${inputMode === 'redacted' ? '本地脱敏后的文字' : '虚构原文（仅测试）'}…`;
         try {
@@ -312,7 +396,12 @@
             `/moderation/submissions/${encodeURIComponent(submission.id)}/ai-test`,
             {
               method: 'POST',
-              body: JSON.stringify({ expectedVersion: inspectedVersion, inputMode, extraTerms }),
+              body: JSON.stringify({
+                expectedVersion: inspectedVersion,
+                inputMode,
+                extraTerms,
+                model: requestedModel,
+              }),
             },
           );
           if (!responseCurrent()) return;
@@ -331,8 +420,7 @@
             typeof assessmentResult.contentHash !== 'string' ||
             !/^[a-f0-9]{64}$/.test(assessmentResult.contentHash) ||
             (submission.contentHash && assessmentResult.contentHash !== submission.contentHash) ||
-            typeof assessmentResult.model !== 'string' ||
-            !assessmentResult.model ||
+            assessmentResult.model !== requestedModel ||
             !Number.isFinite(assessmentResult.elapsedMs) ||
             assessmentResult.elapsedMs < 0 ||
             !Number.isSafeInteger(assessmentResult.imageCount) ||
@@ -383,18 +471,24 @@
           }
         } finally {
           busy = false;
-          button.disabled = false;
+          button.disabled = loadingModels || !modelIds.size;
+          retryModels.disabled = false;
         }
       });
       panel.append(
         node('h3', '无问芯穹试审（文字）'),
         node('p', '本轮仅用于虚构测试内容。点击后调用外部模型；图片不发送，风险建议仍需人工复核。'),
+        modelLabel,
+        model,
+        modelStatus,
+        retryModels,
         label,
         mode,
         button,
         status,
         result,
       );
+      loadModels();
       return { panel, invalidate };
     }
 

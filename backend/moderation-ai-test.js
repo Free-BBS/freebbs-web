@@ -22,7 +22,19 @@ function createModerationAiTest({ service, client, enabled = false }) {
   const reviewers = new Set();
   let running = 0;
 
-  async function run({ id, reviewerId, expectedVersion, inputMode, extraTerms = [] }) {
+  async function listModels({ reviewerId }) {
+    if (!enabled) throw fail('本机 AI 试审尚未启用。', 503);
+    if (!(await service.isReviewer(reviewerId))) throw fail('需要审核负责人权限。', 403);
+    const catalog = await client.listModels();
+    if (!(await service.isReviewer(reviewerId))) throw fail('需要审核负责人权限。', 403);
+    return {
+      defaultModel: catalog.defaultModel,
+      models: catalog.models.map(({ id, label }) => ({ id, label })),
+      settingsRevision: catalog.settingsRevision,
+    };
+  }
+
+  async function run({ id, reviewerId, expectedVersion, inputMode, extraTerms = [], model }) {
     if (!enabled) throw fail('本机 AI 试审尚未启用。', 503);
     if (
       !['redacted', 'synthetic_original'].includes(inputMode) ||
@@ -31,6 +43,12 @@ function createModerationAiTest({ service, client, enabled = false }) {
       extraTerms.some((term) => typeof term !== 'string' || !term.trim() || term.length > 128)
     )
       throw fail('试审模式或补充信息无效。');
+    if (
+      model !== undefined &&
+      (typeof model !== 'string' ||
+        (model !== '' && !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(model)))
+    )
+      throw fail('所选试审模型无效，请重新选择。');
     const actor = String(reviewerId);
     if (running >= 2 || reviewers.has(actor))
       throw fail('已有试审正在进行，请等待结果后再试。', 429);
@@ -49,6 +67,7 @@ function createModerationAiTest({ service, client, enabled = false }) {
         inputMode,
         redactionCounts: inputMode === 'redacted' ? snapshot.counts : {},
         hasImages: snapshot.imageCount > 0,
+        ...(model === undefined ? {} : { model }),
       });
       // A late provider response cannot restore evidence or supersede a human decision.
       const current = await service.aiTestSnapshot({ id, reviewerId, expectedVersion });
@@ -75,7 +94,7 @@ function createModerationAiTest({ service, client, enabled = false }) {
     }
   }
 
-  return { enabled: Boolean(enabled), run };
+  return { enabled: Boolean(enabled), run, listModels };
 }
 
 module.exports = { aiTestEnvironmentEnabled, createModerationAiTest };

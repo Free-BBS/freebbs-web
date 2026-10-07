@@ -1,4 +1,5 @@
 const { performance } = require('node:perf_hooks');
+const { modelCatalog } = require('./ai-models');
 
 const BASE_URL = 'https://cloud.infini-ai.com/maas/v1';
 const TIMEOUT_MS = 15000;
@@ -107,6 +108,10 @@ function hasControlCharacters(value, allowTextWhitespace = false) {
   });
 }
 
+function validModelId(value) {
+  return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(value);
+}
+
 function inputData({ title, content, inputMode, redactionCounts = {}, hasImages = false } = {}) {
   if (
     typeof title !== 'string' ||
@@ -154,6 +159,9 @@ function requestBody(model, data) {
           json_schema: { name: 'moderation_assessment', strict: true, schema: SCHEMA },
         }
       : { type: 'json_object' },
+    // M2.x thinking cannot be disabled. Keep it outside the final JSON content.
+    // https://docs.infini-ai.com/gen-studio/api/text-generation/tutorial-reasoning/minimax.html
+    ...(model === 'minimax-m2.7' ? { reasoning_split: true } : {}),
     ...thinking,
   };
 }
@@ -208,40 +216,62 @@ function createModerationAiClient({
   fetchImpl = globalThis.fetch,
   modelOverride = '',
 }) {
-  async function assess(input) {
-    const started = performance.now();
-    let data;
+  async function readCatalog(includeSecret) {
     try {
-      data = inputData(input);
-    } catch {
-      throw new ModerationAiError(400);
-    }
-    let settings;
-    try {
-      settings = await readSettings({ includeSecret: true });
+      const settings = await readSettings({ includeSecret });
+      const defaultModel = modelOverride || settings?.model;
+      if (
+        !settings ||
+        ![BASE_URL, `${BASE_URL}/`].includes(settings.baseUrl) ||
+        !validModelId(defaultModel) ||
+        !Number.isSafeInteger(settings.revision) ||
+        settings.revision < 0
+      )
+        throw new ModerationAiError(503);
+      const catalog = modelCatalog({ baseUrl: settings.baseUrl, model: defaultModel });
+      return {
+        defaultModel,
+        models: catalog.models.map(({ id, label }) => ({ id, label })),
+        settingsRevision: settings.revision,
+        ...(includeSecret ? { apiKey: settings.apiKey } : {}),
+      };
     } catch {
       throw new ModerationAiError(503);
     }
+  }
+
+  async function listModels() {
+    // Listing the shared Max catalog does not decrypt a key or call the provider.
+    return readCatalog(false);
+  }
+
+  async function assess(input) {
+    const started = performance.now();
+    let data;
+    let requestedModel;
+    try {
+      data = inputData(input);
+      requestedModel = input.model;
+      if (requestedModel !== undefined && requestedModel !== '' && !validModelId(requestedModel))
+        throw new ModerationAiError(400);
+    } catch {
+      throw new ModerationAiError(400);
+    }
+    const { defaultModel, models, apiKey, settingsRevision } = await readCatalog(true);
     const model =
-      typeof modelOverride === 'string' && modelOverride ? modelOverride : settings?.model;
+      requestedModel === undefined || requestedModel === '' ? defaultModel : requestedModel;
+    if (!models.some((item) => item.id === model)) throw new ModerationAiError(400);
     if (
-      !settings ||
-      ![BASE_URL, `${BASE_URL}/`].includes(settings.baseUrl) ||
-      typeof settings.apiKey !== 'string' ||
-      !settings.apiKey ||
-      settings.apiKey.length > 8192 ||
-      /\s/.test(settings.apiKey) ||
-      hasControlCharacters(settings.apiKey) ||
-      typeof model !== 'string' ||
-      !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(model) ||
-      !Number.isSafeInteger(settings.revision) ||
-      settings.revision < 0 ||
+      typeof apiKey !== 'string' ||
+      !apiKey ||
+      apiKey.length > 8192 ||
+      /\s/.test(apiKey) ||
+      hasControlCharacters(apiKey) ||
       typeof fetchImpl !== 'function'
     )
       throw new ModerationAiError(503);
     // Snapshot primitive values once. A concurrent settings update must not mix
     // endpoint/model/revision/credential values during this request.
-    const { apiKey, revision: settingsRevision } = settings;
     const controller = new AbortController();
     let timedOut = false;
     let activeReader;
@@ -336,7 +366,7 @@ function createModerationAiClient({
       clearTimeout(timer);
     }
   }
-  return { assess };
+  return { assess, listModels };
 }
 
 module.exports = { createModerationAiClient, CATEGORIES, POLICY_VERSION };

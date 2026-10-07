@@ -52,6 +52,16 @@ function createModerationRouter({
     }),
   );
   router.get(
+    '/ai-models',
+    authenticated(async (_request, response, user) => {
+      if (!enabled || !aiTest?.enabled) {
+        response.status(503).json({ message: '本机 AI 试审尚未启用。' });
+        return;
+      }
+      response.json(await aiTest.listModels({ reviewerId: user.id }));
+    }),
+  );
+  router.get(
     '/mine',
     authenticated(async (request, response, user) => {
       response.json(await service.mine({ authorId: user.id, before: request.query.before }));
@@ -113,10 +123,10 @@ function createModerationRouter({
         typeof body !== 'object' ||
         Array.isArray(body) ||
         Object.keys(body).some(
-          (key) => !['expectedVersion', 'inputMode', 'extraTerms'].includes(key),
+          (key) => !['expectedVersion', 'inputMode', 'extraTerms', 'model'].includes(key),
         )
       ) {
-        response.status(400).json({ message: '试审仅接受稿件版本、输入模式和补充信息。' });
+        response.status(400).json({ message: '试审仅接受稿件版本、输入模式、补充信息和模型。' });
         return;
       }
       response.json({
@@ -126,6 +136,7 @@ function createModerationRouter({
           expectedVersion: body.expectedVersion,
           inputMode: body.inputMode,
           extraTerms: body.extraTerms,
+          model: body.model,
         }),
       });
     }),

@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createModerationAiClient, CATEGORIES, POLICY_VERSION } = require('./moderation-ai-client');
+const { modelCatalog } = require('./ai-models');
 
 const BASE = 'https://cloud.infini-ai.com/maas/v1';
 const KEY = 'synthetic-test-key-never-a-real-credential';
@@ -62,6 +63,161 @@ function fixedError(status) {
     return true;
   };
 }
+
+test('model listing shares the Max catalog without reading a secret or contacting a provider', async () => {
+  for (const modelOverride of ['', 'deployment/custom-model:v2']) {
+    const config = settings({ apiKey: undefined, configured: false });
+    Object.defineProperty(config, 'apiKey', {
+      get() {
+        throw new Error('Listing must not access a secret');
+      },
+    });
+    const h = harness({ config, modelOverride });
+    const defaultModel = modelOverride || config.model;
+    const expectedModels = modelCatalog({ baseUrl: BASE, model: defaultModel }).models.map(
+      ({ id, label }) => ({ id, label }),
+    );
+    const listed = await h.client.listModels();
+    assert.deepEqual(listed, { defaultModel, models: expectedModels, settingsRevision: 7 });
+    assert.deepEqual(h.reads, [{ includeSecret: false }]);
+    assert.equal(h.requests.length, 0);
+    assert.ok(listed.models.some((item) => item.id === defaultModel));
+    assert.doesNotMatch(JSON.stringify(listed), /"apiKey"|"vision"|"efforts"|synthetic-test-key/);
+    listed.models[0].label = 'MUTATED_LOCAL_COPY';
+    assert.deepEqual((await h.client.listModels()).models, expectedModels);
+  }
+});
+
+test('listing validates the fixed endpoint and default configuration without requiring fetch', async () => {
+  const withoutFetch = createModerationAiClient({
+    readSettings: async () => settings({ apiKey: '', baseUrl: `${BASE}/` }),
+    fetchImpl: null,
+  });
+  assert.equal((await withoutFetch.listModels()).defaultModel, 'glm-5.1');
+  for (const extra of [
+    { baseUrl: 'http://127.0.0.1:9' },
+    { baseUrl: `${BASE}/other` },
+    { model: 'private-original bad model' },
+    { model: undefined },
+    { revision: '7' },
+    { revision: -1 },
+  ]) {
+    const h = harness({ config: settings(extra) });
+    await assert.rejects(h.client.listModels(), fixedError(503));
+    assert.deepEqual(h.reads, [{ includeSecret: false }]);
+    assert.equal(h.requests.length, 0);
+  }
+  const failedRead = createModerationAiClient({
+    readSettings: async (options) => {
+      assert.deepEqual(options, { includeSecret: false });
+      throw new Error(`${KEY} provider-secret private-original`);
+    },
+    fetchImpl: () => assert.fail('Listing must not fetch'),
+  });
+  await assert.rejects(failedRead.listModels(), fixedError(503));
+});
+
+test('each shared-catalog model can be chosen for one request without changing later defaults', async () => {
+  const h = harness({ modelOverride: 'deployment/custom-model:v2' });
+  const listed = await h.client.listModels();
+  for (const { id } of listed.models) {
+    const readsBefore = h.reads.length;
+    const result = await h.client.assess({ ...INPUT, model: id });
+    assert.equal(h.reads.length, readsBefore + 1);
+    assert.deepEqual(h.reads.at(-1), { includeSecret: true });
+    assert.equal(result.model, id);
+    const body = JSON.parse(h.requests.at(-1).options.body);
+    assert.equal(body.model, id);
+    assert.ok(!('model' in JSON.parse(body.messages[1].content)));
+  }
+  for (const model of [undefined, '']) {
+    const result = await h.client.assess({ ...INPUT, model });
+    assert.equal(result.model, 'deployment/custom-model:v2');
+  }
+  assert.equal(h.config.model, 'glm-5.1');
+  assert.equal((await h.client.listModels()).defaultModel, 'deployment/custom-model:v2');
+  const noOverride = harness();
+  for (const model of [undefined, ''])
+    assert.equal((await noOverride.client.assess({ ...INPUT, model })).model, 'glm-5.1');
+});
+
+test('invalid model types and syntax fail before settings; unlisted IDs cannot join the catalog', async () => {
+  for (const model of [null, 0, false, [], {}, ' ', 'glm-5.1\n', 'x'.repeat(129)]) {
+    const h = harness();
+    await assert.rejects(h.client.assess({ ...INPUT, model }), fixedError(400));
+    assert.equal(h.reads.length, 0);
+    assert.equal(h.requests.length, 0);
+  }
+  for (const model of ['not-in-the-catalog', 'https://evil.example/model', 'GLM-5.1']) {
+    const h = harness();
+    await assert.rejects(h.client.assess({ ...INPUT, model }), fixedError(400));
+    assert.deepEqual(h.reads, [{ includeSecret: true }]);
+    assert.equal(h.requests.length, 0);
+    assert.equal(h.config.model, 'glm-5.1');
+  }
+});
+
+test('concurrent choices retain their own model and settings snapshot in out-of-order responses', async () => {
+  const config = settings();
+  const pending = [];
+  const h = harness({
+    config,
+    result: (_url, options) =>
+      new Promise((resolve) => {
+        pending.push({ options, resolve });
+      }),
+  });
+  const first = h.client.assess({ ...INPUT, model: 'glm-5.2' });
+  const second = h.client.assess({ ...INPUT, model: 'deepseek-v4-flash' });
+  while (pending.length < 2) await new Promise(setImmediate);
+  config.model = 'deployment/changed';
+  config.revision = 8;
+  config.apiKey = 'changed-after-both-started';
+  pending[1].resolve(jsonResponse());
+  const secondResult = await second;
+  pending[0].resolve(jsonResponse());
+  const firstResult = await first;
+  assert.equal(firstResult.model, 'glm-5.2');
+  assert.equal(secondResult.model, 'deepseek-v4-flash');
+  for (const result of [firstResult, secondResult]) assert.equal(result.settingsRevision, 7);
+  for (const request of pending)
+    assert.equal(request.options.headers.Authorization, `Bearer ${KEY}`);
+  assert.deepEqual(h.reads, [{ includeSecret: true }, { includeSecret: true }]);
+  assert.equal((await h.client.listModels()).defaultModel, 'deployment/changed');
+});
+
+test('a later settings change rebuilds the allowed catalog instead of trusting a previous listing', async () => {
+  const config = settings({ model: 'deployment/previous', revision: 7 });
+  const h = harness({ config });
+  assert.equal((await h.client.listModels()).defaultModel, 'deployment/previous');
+  config.model = 'deployment/current';
+  config.revision = 8;
+  await assert.rejects(
+    h.client.assess({ ...INPUT, model: 'deployment/previous' }),
+    fixedError(400),
+  );
+  assert.equal(h.requests.length, 0);
+  const result = await h.client.assess({ ...INPUT, model: 'deployment/current' });
+  assert.equal(result.model, 'deployment/current');
+  assert.equal(result.settingsRevision, 8);
+  assert.equal((await h.client.listModels()).defaultModel, 'deployment/current');
+  config.baseUrl = 'https://evil.example/maas/v1';
+  await assert.rejects(h.client.assess({ ...INPUT, model: 'glm-5.1' }), fixedError(503));
+  assert.equal(h.requests.length, 1);
+});
+
+test('MiniMax M2.7 requests separated reasoning without pretending that thinking is disabled', async () => {
+  const response = envelope();
+  response.choices[0].message.reasoning_content = 'provider-secret reasoning';
+  const h = harness({ result: () => jsonResponse(response) });
+  const result = await h.client.assess({ ...INPUT, model: 'minimax-m2.7' });
+  const body = JSON.parse(h.requests[0].options.body);
+  assert.equal(body.reasoning_split, true);
+  assert.equal(body.thinking, undefined);
+  assert.equal(body.response_format.type, 'json_object');
+  assert.deepEqual(result.assessment, ASSESSMENT);
+  assert.doesNotMatch(JSON.stringify(result), /provider-secret/);
+});
 
 test('one settings snapshot and one provider request send only approved text and nonidentifying flags', async () => {
   const h = harness();
@@ -457,6 +613,8 @@ test('the same deadline covers body streaming after headers and cancels a stalle
   const pending = h.client.assess(INPUT);
   const rejected = assert.rejects(pending, fixedError(504));
   await started;
+  // ReadableStream may request data before the settings snapshot has resolved.
+  while (!h.requests.length) await new Promise(setImmediate);
   t.mock.timers.tick(15000);
   await rejected;
   assert.equal(h.requests[0].options.signal.aborted, true);

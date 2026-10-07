@@ -254,6 +254,10 @@ h2 {
   max-width: 32rem;
   min-width: 0;
 }
+.moderation-ai-test select:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
 .moderation-ai-test button {
   max-width: 100%;
 }

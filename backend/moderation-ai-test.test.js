@@ -49,16 +49,28 @@ function harness() {
       };
     },
     async isReviewer(id) {
-      return id !== 3;
+      return authorized && id !== 3;
     },
   };
   const client = {
+    async listModels() {
+      calls.push(['catalog']);
+      return {
+        defaultModel: 'fixture-model',
+        models: [
+          { id: 'fixture-model', label: '默认模型', extra: 'MUST_NOT_RETURN' },
+          { id: 'another-model', label: '另一模型' },
+        ],
+        settingsRevision: 2,
+        apiKey: 'MUST_NOT_RETURN',
+      };
+    },
     async assess(input) {
       calls.push(['provider', input]);
       if (provider) await provider(input);
       return {
         assessment: { decision: 'no_risk_detected', categories: [], reason: '文字未见明显风险' },
-        model: 'fixture-model',
+        model: input.model || 'fixture-model',
         settingsRevision: 2,
         policyVersion: 'fixture-policy',
         elapsedMs: 1,
@@ -155,6 +167,47 @@ test('synthetic original mode is explicit and does not append extra terms or ide
   assert.equal(result.redactorVersion, null);
 });
 
+test('model catalogs require an enabled current reviewer and contain only public model metadata', async () => {
+  const h = harness();
+  await assert.rejects(
+    createModerationAiTest({ service: h.service, client: h.client }).listModels({ reviewerId: 1 }),
+    { status: 503 },
+  );
+  await assert.rejects(h.aiTest.listModels({ reviewerId: 3 }), { status: 403 });
+  assert.equal(h.calls.length, 0);
+  const catalog = await h.aiTest.listModels({ reviewerId: 1 });
+  assert.deepEqual(catalog, {
+    defaultModel: 'fixture-model',
+    models: [
+      { id: 'fixture-model', label: '默认模型' },
+      { id: 'another-model', label: '另一模型' },
+    ],
+    settingsRevision: 2,
+  });
+  assert.deepEqual(h.calls, [['catalog']]);
+  const originalList = h.client.listModels;
+  h.client.listModels = async () => {
+    const result = await originalList();
+    h.setAuthorized(false);
+    return result;
+  };
+  await assert.rejects(h.aiTest.listModels({ reviewerId: 1 }), { status: 403 });
+});
+
+test('an explicit model belongs only to that trial and malformed model input cannot reach the provider', async () => {
+  const h = harness();
+  for (const model of [null, 3, {}, ['fixture-model'], 'bad model', 'x'.repeat(129)])
+    await assert.rejects(h.aiTest.run({ ...h.request, model }), { status: 400 });
+  assert.equal(h.calls.length, 0);
+  const chosen = await h.aiTest.run({ ...h.request, model: 'another-model' });
+  const fallback = await h.aiTest.run({ ...h.request, reviewerId: 2 });
+  assert.equal(chosen.model, 'another-model');
+  assert.equal(fallback.model, 'fixture-model');
+  const inputs = h.calls.filter(([kind]) => kind === 'provider').map(([, input]) => input);
+  assert.equal(inputs[0].model, 'another-model');
+  assert.equal(Object.hasOwn(inputs[1], 'model'), false);
+});
+
 test('disabled, unauthorized and invalid requests never start a paid model call', async () => {
   const h = harness();
   await assert.rejects(
@@ -245,7 +298,15 @@ test('real HTTP test route derives identity from auth and rejects body overrides
     });
   assert.equal((await call('anonymous')).status, 401);
   assert.equal((await call('admin')).status, 403);
-  for (const key of ['title', 'content', 'reviewerId', 'model', 'baseUrl', 'apiKey', 'images'])
+  for (const key of [
+    'title',
+    'content',
+    'reviewerId',
+    'reasoning_effort',
+    'baseUrl',
+    'apiKey',
+    'images',
+  ])
     assert.equal((await call('reviewer', { [key]: 'client override' })).status, 400);
   const response = await call('reviewer');
   assert.equal(response.status, 200);
@@ -256,4 +317,16 @@ test('real HTTP test route derives identity from auth and rejects body overrides
   });
   assert.equal((await session.json()).aiTestEnabled, true);
   assert.equal(h.calls.filter(([kind]) => kind === 'provider').length, 1);
+  const modelResponse = await call('reviewer', { model: 'another-model' });
+  assert.equal(modelResponse.status, 200);
+  assert.equal((await modelResponse.json()).result.model, 'another-model');
+  const catalogCall = (role) =>
+    fetch(`${origin}/api/moderation/ai-models`, { headers: { Authorization: role } });
+  assert.equal((await catalogCall('anonymous')).status, 401);
+  assert.equal((await catalogCall('admin')).status, 403);
+  const catalogResponse = await catalogCall('reviewer');
+  assert.equal(catalogResponse.status, 200);
+  assert.equal(catalogResponse.headers.get('cache-control'), 'private, no-store');
+  assert.equal((await catalogResponse.json()).defaultModel, 'fixture-model');
+  assert.equal(h.calls.filter(([kind]) => kind === 'provider').length, 2);
 });
