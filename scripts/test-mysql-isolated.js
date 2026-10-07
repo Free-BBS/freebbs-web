@@ -14,9 +14,13 @@ const {
 const MODERATION_TEST_FILE = 'backend/discussion-moderation.mysql.test.js';
 const MODERATION_TEST_TITLE =
   'isolated MySQL: moderation publication, retries, permissions, attachments and retention are atomic';
+const PRIVACY_TEST_FILE = 'backend/moderation-privacy.mysql.test.js';
+const PRIVACY_TEST_TITLE =
+  'isolated MySQL: local privacy previews enforce directory matching, authority and immutable evidence';
 
 const TEST_FILES = [
   MODERATION_TEST_FILE,
+  PRIVACY_TEST_FILE,
   'backend/language-lab.mysql.test.js',
   'backend/profile-activity.mysql.test.js',
   'backend/circuit-progress.test.js',
@@ -81,6 +85,7 @@ function testEnvironment(socketPath, original = process.env) {
 
 const REQUIRED_MYSQL_TESTS = [
   MODERATION_TEST_TITLE,
+  PRIVACY_TEST_TITLE,
   'isolated MySQL: immutable code and result snapshots survive router restart',
   'isolated MySQL: profile activity counts visible posts and named comments across Beijing midnight',
   'isolated MySQL: challenge progression gates direct requests and ranks contiguous current passes',
@@ -107,7 +112,10 @@ function selectMysqlTests(args = []) {
   const moderationOnly = args.includes('--moderation-only');
   assert.ok(!(workbenchOnly && moderationOnly), 'choose only one isolated MySQL test subset');
   if (moderationOnly)
-    return { testFiles: [MODERATION_TEST_FILE], requiredTests: [MODERATION_TEST_TITLE] };
+    return {
+      testFiles: [MODERATION_TEST_FILE, PRIVACY_TEST_FILE],
+      requiredTests: [MODERATION_TEST_TITLE, PRIVACY_TEST_TITLE],
+    };
   if (workbenchOnly)
     return {
       testFiles: TEST_FILES.filter((file) =>

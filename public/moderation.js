@@ -227,6 +227,135 @@
       }
     }
 
+    function privacyPreviewPanel(submission, generation, version) {
+      const panel = node('section', undefined, 'moderation-privacy');
+      panel.setAttribute('aria-label', '本地脱敏预览');
+      const label = node('label', '补充需要隐藏的信息（可选，每行一项）');
+      label.htmlFor = 'moderation-privacy-terms';
+      const terms = node('textarea');
+      terms.id = 'moderation-privacy-terms';
+      terms.maxLength = 6500;
+      terms.rows = 3;
+      terms.placeholder = '例如遗漏的姓名、宿舍号；最多 50 项，每项最多 128 字';
+      terms.autocomplete = 'off';
+      terms.spellcheck = false;
+      const button = node('button', '生成本地脱敏预览');
+      button.type = 'button';
+      const status = node('p');
+      status.setAttribute('role', 'status');
+      const result = node('div', undefined, 'moderation-privacy-result');
+      let previewVersion = 0;
+      let busy = false;
+      const current = () =>
+        valid(generation) && version === state.detailVersion && state.selected === submission;
+      terms.addEventListener('input', () => {
+        previewVersion += 1;
+        result.replaceChildren();
+        status.textContent = '补充信息已变化，请重新生成预览。';
+      });
+      button.addEventListener('click', async () => {
+        if (busy || !current()) return;
+        const extraTerms = terms.value
+          .split(/\r?\n/)
+          .map((term) => term.trim())
+          .filter(Boolean);
+        if (extraTerms.length > 50 || extraTerms.some((term) => term.length > 128)) {
+          status.textContent = '最多填写 50 项，每项最多 128 字。';
+          return;
+        }
+        previewVersion += 1;
+        const requestVersion = previewVersion;
+        busy = true;
+        button.disabled = true;
+        result.replaceChildren();
+        status.textContent = '正在本地处理，未发送给 AI…';
+        try {
+          const { preview } = await client.request(
+            `/moderation/submissions/${encodeURIComponent(submission.id)}/privacy-preview`,
+            {
+              method: 'POST',
+              body: JSON.stringify({ expectedVersion: submission.version, extraTerms }),
+            },
+          );
+          if (!current() || requestVersion !== previewVersion) return;
+          if (
+            preview?.mode !== 'local_preview' ||
+            preview.externalReady !== false ||
+            preview.submissionId !== submission.id ||
+            preview.version !== submission.version ||
+            typeof preview.title !== 'string' ||
+            typeof preview.content !== 'string'
+          )
+            throw new Error('预览结果无效，请刷新后重试。');
+          const captions = {
+            name: '姓名',
+            studentId: '学号',
+            phone: '电话',
+            email: '邮箱',
+            identifier: '证件或编号',
+            nationalId: '身份证号',
+            url: '链接',
+            link: '链接',
+            attachment: '图片地址',
+            custom: '补充信息',
+          };
+          const counts = Object.entries(captions).flatMap(([key, caption]) => {
+            const count = preview.counts?.[key];
+            return Number.isSafeInteger(count) && count > 0 ? [`${caption} ${count} 处`] : [];
+          });
+          result.append(
+            node('h4', '处理后的标题'),
+            node('pre', preview.title || '（评论无标题）', 'moderation-raw'),
+          );
+          result.append(node('h4', '处理后的正文'), node('pre', preview.content, 'moderation-raw'));
+          result.append(
+            node(
+              'p',
+              counts.length
+                ? `已替换：${counts.join('；')}。`
+                : '未命中当前规则；这不代表内容没有隐私信息。',
+            ),
+          );
+          if (Number.isSafeInteger(preview.imageCount) && preview.imageCount > 0)
+            result.append(
+              node('p', `包含 ${preview.imageCount} 张图片，图片内信息尚未处理，请继续人工检查。`),
+            );
+          result.append(
+            node(
+              'p',
+              '未知姓名、变形的身份信息和图片内隐私仍可能遗漏。预览不能作为允许外发或审核通过的依据。',
+              'moderation-privacy-warning',
+            ),
+          );
+          status.textContent = '预览已生成，仅在本地处理。原稿未修改，也未发送给 AI。';
+        } catch (error) {
+          if (current() && requestVersion === previewVersion) {
+            result.replaceChildren();
+            status.textContent =
+              error.status === 409
+                ? '提交状态或版本已变化，或当前稿件无法生成预览，请刷新后核对。'
+                : error.message;
+          }
+        } finally {
+          busy = false;
+          button.disabled = false;
+        }
+      });
+      panel.append(
+        node('h3', '本地脱敏预览'),
+        node(
+          'p',
+          '检查姓名、学号、联系方式等信息的替换效果。此步骤不调用 AI，不修改原稿；补充信息和预览不另行保存。',
+        ),
+        label,
+        terms,
+        button,
+        status,
+        result,
+      );
+      return panel;
+    }
+
     async function openSubmission(id) {
       clearDetail();
       const version = state.detailVersion;
@@ -305,6 +434,7 @@
           form.addEventListener('submit', (event) => event.preventDefault());
           form.append(label, reason, actions, status);
           el('detail').append(form);
+          el('detail').append(privacyPreviewPanel(submission, generation, version));
         }
         if (attachments.length && imageStatus)
           imageStatus.textContent = '图片加载完成后可通过审核；加载失败时请刷新重试。';

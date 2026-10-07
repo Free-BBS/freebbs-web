@@ -156,9 +156,10 @@ test('the isolated runner removes inherited database targets and Node hooks with
   }
 });
 
-test('the isolated runner enables its twenty named test files with matching database opt-ins', () => {
+test('the isolated runner enables its named test files with matching database opt-ins', () => {
   const expected = [
     'backend/discussion-moderation.mysql.test.js',
+    'backend/moderation-privacy.mysql.test.js',
     'backend/language-lab.mysql.test.js',
     'backend/profile-activity.mysql.test.js',
     'backend/circuit-progress.test.js',
@@ -180,7 +181,7 @@ test('the isolated runner enables its twenty named test files with matching data
     'backend/schedule-series.mysql.test.js',
   ];
   assert.deepEqual([...TEST_FILES].sort(), expected.sort());
-  assert.equal(new Set(TEST_FILES).size, 20);
+  assert.equal(new Set(TEST_FILES).size, 21);
   for (const file of TEST_FILES)
     assert.equal(fs.existsSync(path.join(__dirname, '..', file)), true);
   const env = testEnvironment(windowsPipe, {});
@@ -204,8 +205,8 @@ test('the isolated runner enables its twenty named test files with matching data
   assert.equal(env.MYSQL_SOCKET, windowsPipe);
 });
 
-test('the isolated runner requires successful top-level evidence for all twenty live MySQL tests', () => {
-  assert.equal(REQUIRED_MYSQL_TESTS.length, 20);
+test('the isolated runner requires successful top-level evidence for all live MySQL tests', () => {
+  assert.equal(REQUIRED_MYSQL_TESTS.length, 21);
   const successes = REQUIRED_MYSQL_TESTS.map((name, index) => `ok ${index + 1} - ${name}`);
   const summary = '# fail 0\n# skipped 0\n';
   const complete = `${successes.join('\n')}\n${summary}`;
@@ -235,17 +236,27 @@ test('the isolated runner requires successful top-level evidence for all twenty 
   );
 });
 
-test('moderation-only selects exactly its live suite and requires its successful top-level result', () => {
+test('moderation-only requires both publication and privacy suite results', () => {
   const selected = selectMysqlTests(['--moderation-only']);
-  assert.deepEqual(selected.testFiles, ['backend/discussion-moderation.mysql.test.js']);
+  assert.deepEqual(selected.testFiles, [
+    'backend/discussion-moderation.mysql.test.js',
+    'backend/moderation-privacy.mysql.test.js',
+  ]);
   assert.deepEqual(selected.requiredTests, [
     'isolated MySQL: moderation publication, retries, permissions, attachments and retention are atomic',
+    'isolated MySQL: local privacy previews enforce directory matching, authority and immutable evidence',
   ]);
-  const success = `ok 1 - ${selected.requiredTests[0]}`;
+  const success = selected.requiredTests
+    .map((name, index) => `ok ${index + 1} - ${name}`)
+    .join('\n');
   const summary = '# fail 0\n# skipped 0\n';
   const complete = `${success}\n${summary}`;
   const validate = (output) => validateMysqlTestOutput(output, selected.requiredTests);
   assert.doesNotThrow(() => validate(complete));
+  assert.throws(
+    () => validate(`ok 1 - ${selected.requiredTests[0]}\n${summary}`),
+    /required MySQL test did not run/,
+  );
   assert.throws(() => validate(summary), /required MySQL test did not run/);
   assert.throws(() => validate(`    ${success}\n${summary}`), /required MySQL test did not run/);
   assert.throws(

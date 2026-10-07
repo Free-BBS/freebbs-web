@@ -76,6 +76,29 @@ function createModerationRouter({
     }),
   );
   router.post(
+    '/submissions/:id/privacy-preview',
+    authenticated(async (request, response, user) => {
+      const body = request.body;
+      if (
+        !body ||
+        Array.isArray(body) ||
+        typeof body !== 'object' ||
+        Object.keys(body).some((key) => !['expectedVersion', 'extraTerms'].includes(key))
+      ) {
+        response.status(400).json({ message: '本地脱敏预览仅接受版本和补充脱敏词。' });
+        return;
+      }
+      response.json({
+        preview: await service.previewPrivacy({
+          id: request.params.id,
+          reviewerId: user.id,
+          expectedVersion: body.expectedVersion,
+          extraTerms: body.extraTerms,
+        }),
+      });
+    }),
+  );
+  router.post(
     '/submissions/:id/decision',
     authenticated(async (request, response, user) => {
       response.json({

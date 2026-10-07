@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { canReadPost } = require('./discussion-visibility');
+const { buildPrivacyPreview, normalizePrivacyText } = require('./moderation-privacy');
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const REQUEST_ID = /^[A-Za-z0-9_-]{8,64}$/;
@@ -431,6 +432,107 @@ function createDiscussionModeration({
     return outcome;
   }
 
+  async function previewPrivacy({ id, reviewerId, expectedVersion, extraTerms = [] }) {
+    let directoryLimitExceeded = false;
+    try {
+      uuid(id);
+      positiveId(reviewerId);
+      if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 1)
+        throw fail('审核版本无效。');
+      if (
+        !Array.isArray(extraTerms) ||
+        extraTerms.length > 50 ||
+        extraTerms.some(
+          (term) =>
+            typeof term !== 'string' ||
+            term.length > 1024 ||
+            !normalizePrivacyText(term).trim() ||
+            normalizePrivacyText(term).length > 128,
+        )
+      )
+        throw fail('补充脱敏词格式无效。');
+
+      // Keep the authority and immutable snapshot locked while the bounded local
+      // preview is built. No provider, filesystem or settings access belongs here.
+      return await transact(async (connection) => {
+        await requireReviewer(connection, reviewerId, true);
+        const row = await readRow(connection, id, true);
+        const assertCurrent = (current) => {
+          if (
+            current.status !== 'pending' ||
+            Number(current.version) !== expectedVersion ||
+            Number(current.evidence_expired) ||
+            current.evidence_purged_at ||
+            !current.payload_json
+          )
+            throw fail('审核记录已处理、到期或版本已变化，请刷新后重试。', 409);
+        };
+        assertCurrent(row);
+        const payload = parseJson(row.payload_json);
+        if (
+          !payload ||
+          typeof payload.content !== 'string' ||
+          (payload.title !== undefined && typeof payload.title !== 'string')
+        )
+          throw fail('审核记录暂不可用。', 503);
+        const title = payload.title || '';
+        const content = payload.content;
+        const normalized = normalizePrivacyText(`${title}\n${content}`);
+        // Fetch only directory entries mentioned in this server-owned snapshot.
+        // This is a bounded candidate lookup, not a complete name recognizer.
+        const [rows] = await connection.execute(
+          `SELECT full_name, student_id, email FROM users
+           WHERE (CHAR_LENGTH(TRIM(full_name)) > 0 AND LOCATE(full_name, ?) > 0)
+              OR (CHAR_LENGTH(TRIM(student_id)) > 0 AND LOCATE(student_id, ?) > 0)
+              OR (CHAR_LENGTH(TRIM(email)) > 0 AND LOCATE(email, ?) > 0)
+           LIMIT 501`,
+          [normalized, normalized, normalized],
+        );
+        if (rows.length > 500) {
+          directoryLimitExceeded = true;
+          throw fail('目录命中数量过多，本次无法完成本地检查。', 409);
+        }
+        const attachmentIds = parseJson(row.attachment_ids_json, []);
+        if (!Array.isArray(attachmentIds)) throw fail('审核记录暂不可用。', 503);
+        const result = buildPrivacyPreview({
+          title,
+          content,
+          identities: rows.map((identity) => ({
+            full_name: identity.full_name,
+            student_id: identity.student_id,
+            email: identity.email,
+          })),
+          extraTerms,
+          attachmentCount: attachmentIds.length,
+        });
+        // NOW(3) is evaluated again: crossing the evidence deadline while doing
+        // local work must not return a usable preview after expiry.
+        assertCurrent(await readRow(connection, id, true));
+        return {
+          submissionId: row.id,
+          version: Number(row.version),
+          contentHash: row.content_hash,
+          ...result,
+        };
+      });
+    } catch (error) {
+      const messages = {
+        400: '本地脱敏预览参数无效，请检查版本和补充脱敏词。',
+        403: '需要审核负责人权限。',
+        404: '审核记录不存在。',
+        409: directoryLimitExceeded
+          ? '目录命中数量过多，本次无法完成本地检查。'
+          : '审核记录已处理、到期或版本已变化，请刷新后重试。',
+        413: '审核内容过长，无法生成本地脱敏预览。',
+      };
+      // Never reflect a database error, raw directory value or submitted text.
+      const status = Object.prototype.hasOwnProperty.call(messages, error.status)
+        ? error.status
+        : 503;
+      throw fail(messages[status] || '本地脱敏预览暂不可用，请稍后重试。', status);
+    }
+  }
+
   async function listRows({ authorId, status, before, limit: requestedLimit }) {
     const limit = Math.min(
       100,
@@ -762,6 +864,7 @@ function createDiscussionModeration({
   return {
     submit,
     decide,
+    previewPrivacy,
     list,
     detail,
     mine,

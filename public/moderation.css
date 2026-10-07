@@ -209,6 +209,38 @@ h2 {
 .moderation-approve:hover {
   background: #204685;
 }
+.moderation-privacy {
+  display: grid;
+  gap: 12px;
+  margin-top: 28px;
+  border-top: 2px solid #cfd8e6;
+  padding-top: 20px;
+  min-width: 0;
+}
+.moderation-privacy h3,
+.moderation-privacy p {
+  margin: 0;
+}
+.moderation-privacy textarea {
+  width: 100%;
+  resize: vertical;
+}
+.moderation-privacy button {
+  min-height: 48px;
+  justify-self: start;
+  font-weight: 600;
+}
+.moderation-privacy-result {
+  min-width: 0;
+}
+.moderation-privacy-result p {
+  margin-top: 12px;
+}
+.moderation-privacy-warning {
+  border-left: 3px solid #b87800;
+  padding-left: 12px;
+  font-weight: 600;
+}
 #moderation-reviewers {
   margin-top: 24px;
 }

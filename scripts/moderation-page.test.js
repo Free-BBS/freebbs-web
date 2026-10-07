@@ -248,7 +248,13 @@ test('notification detail URL opens the review workspace for an active reviewer'
   await h.app.ready;
   assert.equal(h.app.state.selected.id, 's1');
   assert.equal(h.get('title').textContent, '审核工作台');
-  assert.equal(h.get('detail').querySelectorAll('button').length, 2);
+  assert.equal(
+    h
+      .get('detail')
+      .querySelectorAll('button')
+      .filter((button) => button.dataset.decision).length,
+    2,
+  );
 });
 
 test('administrator sees a warning when no reviewer is configured', async () => {
@@ -256,6 +262,122 @@ test('administrator sees a warning when no reviewer is configured', async () => 
   await h.app.ready;
   await flush();
   assert.ok(h.get('reviewer-list').textContent.includes('当前没有审核负责人'));
+});
+
+const privacyResponse = (extra = {}) => ({
+  preview: {
+    submissionId: 's1',
+    version: 1,
+    mode: 'local_preview',
+    externalReady: false,
+    title: '[姓名1]的建议',
+    content: '<script>literal()</script> [电话1]',
+    counts: { name: 1, phone: 1 },
+    imageCount: 1,
+    ...extra,
+  },
+});
+const privacyButton = (h) =>
+  h
+    .get('detail')
+    .querySelectorAll('button')
+    .find((button) => button.textContent === '生成本地脱敏预览');
+const privacyTerms = (h) =>
+  h
+    .get('detail')
+    .querySelectorAll('textarea')
+    .find((input) => input.id === 'moderation-privacy-terms');
+
+test('privacy preview sends only the version and added terms locally and renders output literally', async () => {
+  const h = harness({
+    customFetch: (url, options, defaults) =>
+      url.endsWith('/privacy-preview') ? response(privacyResponse()) : defaults(url, options),
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  privacyTerms(h).value = '  王小明\n\n 一号楼  ';
+  await privacyButton(h).click();
+  const request = h.requests.find(({ url }) => url.endsWith('/privacy-preview'));
+  assert.deepEqual(JSON.parse(request.options.body), {
+    expectedVersion: 1,
+    extraTerms: ['王小明', '一号楼'],
+  });
+  assert.equal(request.options.method, 'POST');
+  assert.equal(request.options.cache, 'no-store');
+  assert.ok(h.requests.every(({ url }) => url.startsWith('http://localhost:3000/api/')));
+  assert.ok(h.get('detail').textContent.includes('<script>literal()</script> [电话1]'));
+  assert.ok(h.get('detail').textContent.includes('图片内信息尚未处理'));
+  assert.ok(h.get('detail').textContent.includes('未发送给 AI'));
+  assert.equal(h.decisionAttempts(), 0);
+  assert.equal(h.submission.status, 'pending');
+});
+
+test('privacy preview rejects excessive terms and stale or mislabeled responses', async () => {
+  const h = harness({
+    customFetch: (url, options, defaults) =>
+      url.endsWith('/privacy-preview')
+        ? response(privacyResponse({ version: 2 }))
+        : defaults(url, options),
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  privacyTerms(h).value = Array(51).fill('敏感词').join('\n');
+  await privacyButton(h).click();
+  assert.equal(
+    h.requests.some(({ url }) => url.endsWith('/privacy-preview')),
+    false,
+  );
+  privacyTerms(h).value = '';
+  await privacyButton(h).click();
+  assert.ok(h.get('detail').textContent.includes('预览结果无效'));
+  assert.equal(h.get('detail').textContent.includes('[电话1]'), false);
+});
+
+test('editing privacy terms invalidates an in-flight preview and clears the displayed copy', async () => {
+  const pending = deferred();
+  let calls = 0;
+  const h = harness({
+    customFetch: (url, options, defaults) => {
+      if (!url.endsWith('/privacy-preview')) return defaults(url, options);
+      calls += 1;
+      return calls === 1 ? pending.promise : response(privacyResponse());
+    },
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  const loading = privacyButton(h).click();
+  privacyTerms(h).value = '新姓名';
+  privacyTerms(h).events.input();
+  pending.resolve(response(privacyResponse()));
+  await loading;
+  assert.equal(h.get('detail').textContent.includes('[电话1]'), false);
+  assert.ok(h.get('detail').textContent.includes('请重新生成预览'));
+  await privacyButton(h).click();
+  assert.ok(h.get('detail').textContent.includes('[电话1]'));
+  privacyTerms(h).events.input();
+  assert.equal(h.get('detail').textContent.includes('[电话1]'), false);
+});
+
+test('logout discards a late privacy preview and approved submissions do not expose its action', async () => {
+  const pending = deferred();
+  const h = harness({
+    customFetch: (url, options, defaults) =>
+      url.endsWith('/privacy-preview') ? pending.promise : defaults(url, options),
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  const loading = privacyButton(h).click();
+  h.setToken('');
+  await h.app.initialize();
+  pending.resolve(response(privacyResponse()));
+  await loading;
+  assert.equal(h.get('detail').textContent.includes('[电话1]'), false);
+  assert.equal(privacyButton(h), undefined);
+  h.setToken('reviewer-token');
+  h.submission.status = 'approved';
+  await h.app.initialize();
+  await h.app.openSubmission('s1');
+  assert.equal(privacyButton(h), undefined);
 });
 
 test('an administrator outside the reviewer registry can manage reviewers from mine without review controls', async () => {
