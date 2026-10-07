@@ -7,7 +7,7 @@
 - 原有 `DISCUSSION_MODERATION_ENABLED=true` 继续有效；新增 `DISCUSSION_MODERATION_AI_TEST_ENABLED=true` 才显示试审入口，默认关闭。
 - 还要求 `API_HOST` 与 `PUBLIC_WEB_URL` 都指向回环地址。例如测试电脑使用 `127.0.0.1` 与 `http://127.0.0.1:3000`。公开部署不能通过这两个测试开关直接启用当前实验入口。
 - 读取当前测试网站自己的系统模型设置（`app_settings`、`system_secret_settings`）和服务器加密密钥。正式网站可以调用不代表测试库已配置；不会连接生产库或复制生产密钥。
-- 管理员在测试网站“系统设置 → 模型与密钥”（`/system-settings-model`）查看配置状态并在页面内保存 API Key。API Key 不写进浏览器响应、聊天记录或更新包；服务器需要已有的有效 `SETTINGS_ENCRYPTION_KEY` 才能保存和解密。若提示加密配置缺失，应单独检查测试配置，不覆盖已有加密密钥。
+- 管理员在测试网站“系统设置 → 模型与密钥”（`/system-settings/model`）查看配置状态并在页面内保存 API Key。API Key 不写进浏览器响应、聊天记录或更新包；服务器需要已有的有效 `SETTINGS_ENCRYPTION_KEY` 才能保存和解密。若提示加密配置缺失，应单独检查测试配置，不覆盖已有加密密钥。
 - API Base URL、模型由部署环境管理。当前适配器只接受 `https://cloud.infini-ai.com/maas/v1`（允许尾部斜杠）。默认使用网站当前模型；可用 `DISCUSSION_MODERATION_AI_MODEL` 为试审指定单独模型，不改变聊天模型。未配置时明确提示渠道配置问题。
 - 无新增依赖、数据库表或迁移。更新代码和环境配置后重启测试后端即可。
 
