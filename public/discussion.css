@@ -1676,3 +1676,39 @@ body.discussion-page #discussion-detail .discussion-deleted-notice strong {
   background: var(--ui-accent);
   color: #fff;
 }
+
+body.discussion-page
+  .main-content
+  :is(#discussion-compose-message, .discussion-comment-message):not(:empty) {
+  flex: 1 1 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 16px 18px;
+  border: 1px solid var(--ui-line);
+  border-left: 3px solid var(--ui-accent, #087f8c);
+  border-radius: 12px;
+  background: var(--ui-surface-soft);
+  color: var(--ui-text) !important;
+  font-size: 17px !important;
+  font-weight: 500;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+body.discussion-page
+  .main-content
+  :is(#discussion-compose-message, .discussion-comment-message)
+  a[href^='/moderation'] {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  max-width: 100%;
+  margin-inline-start: 8px;
+  padding-inline: 2px;
+  color: var(--ui-accent, #087f8c) !important;
+  font-size: 17px !important;
+  font-weight: 700;
+  line-height: 1.75;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}

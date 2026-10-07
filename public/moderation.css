@@ -54,6 +54,7 @@ button:disabled {
 }
 .moderation-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 20px;
@@ -65,6 +66,27 @@ button:disabled {
   font-weight: 800;
   letter-spacing: 0.06em;
   text-decoration: none;
+}
+.moderation-back-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 10px 18px;
+  border: 1px solid #2855a5;
+  border-radius: 10px;
+  background: #2855a5;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.5;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.moderation-back-link:hover {
+  background: #204685;
+  border-color: #204685;
 }
 .moderation-header nav,
 .moderation-tabs,
@@ -231,6 +253,15 @@ h2 {
   }
   a {
     color: #9bc0ff;
+  }
+  .moderation-back-link {
+    color: #142c4b;
+    background: #a8c9ff;
+    border-color: #a8c9ff;
+  }
+  .moderation-back-link:hover {
+    background: #c5dcff;
+    border-color: #c5dcff;
   }
   .moderation-header,
   #moderation-detail,
