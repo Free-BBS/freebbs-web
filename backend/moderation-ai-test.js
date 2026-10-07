@@ -1,0 +1,81 @@
+const fail = (message, status = 400) => Object.assign(new Error(message), { status });
+
+function aiTestEnvironmentEnabled(config) {
+  const local = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
+  try {
+    const url = new URL(config.publicWebUrl);
+    return Boolean(
+      config.discussionModerationEnabled &&
+      config.discussionModerationAiTestEnabled &&
+      local.has(config.apiHost) &&
+      local.has(url.hostname) &&
+      ['http:', 'https:'].includes(url.protocol) &&
+      !url.username &&
+      !url.password,
+    );
+  } catch {
+    return false;
+  }
+}
+
+function createModerationAiTest({ service, client, enabled = false }) {
+  const reviewers = new Set();
+  let running = 0;
+
+  async function run({ id, reviewerId, expectedVersion, inputMode, extraTerms = [] }) {
+    if (!enabled) throw fail('本机 AI 试审尚未启用。', 503);
+    if (
+      !['redacted', 'synthetic_original'].includes(inputMode) ||
+      !Array.isArray(extraTerms) ||
+      extraTerms.length > 50 ||
+      extraTerms.some((term) => typeof term !== 'string' || !term.trim() || term.length > 128)
+    )
+      throw fail('试审模式或补充信息无效。');
+    const actor = String(reviewerId);
+    if (running >= 2 || reviewers.has(actor))
+      throw fail('已有试审正在进行，请等待结果后再试。', 429);
+    running += 1;
+    reviewers.add(actor);
+    const start = performance.now();
+    try {
+      // Each local transaction completes before any provider request starts.
+      const snapshot =
+        inputMode === 'redacted'
+          ? await service.previewPrivacy({ id, reviewerId, expectedVersion, extraTerms })
+          : await service.aiTestSnapshot({ id, reviewerId, expectedVersion });
+      const response = await client.assess({
+        title: snapshot.title,
+        content: snapshot.content,
+        inputMode,
+        redactionCounts: inputMode === 'redacted' ? snapshot.counts : {},
+        hasImages: snapshot.imageCount > 0,
+      });
+      // A late provider response cannot restore evidence or supersede a human decision.
+      const current = await service.aiTestSnapshot({ id, reviewerId, expectedVersion });
+      if (current.contentHash !== snapshot.contentHash)
+        throw fail('稿件已变化，本次试审结果已失效，请刷新后重试。', 409);
+      return {
+        submissionId: id,
+        version: snapshot.version,
+        contentHash: snapshot.contentHash,
+        inputMode,
+        assessment: response.assessment,
+        model: response.model,
+        settingsRevision: response.settingsRevision,
+        policyVersion: response.policyVersion,
+        redactorVersion: inputMode === 'redacted' ? snapshot.redactorVersion : null,
+        elapsedMs: Math.round(performance.now() - start),
+        imageCount: snapshot.imageCount,
+        imagesReviewed: false,
+        automaticPublication: false,
+      };
+    } finally {
+      running -= 1;
+      reviewers.delete(actor);
+    }
+  }
+
+  return { enabled: Boolean(enabled), run };
+}
+
+module.exports = { aiTestEnvironmentEnabled, createModerationAiTest };

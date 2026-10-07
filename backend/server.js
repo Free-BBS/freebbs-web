@@ -100,6 +100,8 @@ const {
 } = require('./moderation-attachments');
 const { createModerationPublisher } = require('./moderation-publisher');
 const { createModerationRouter } = require('./moderation-router');
+const { createModerationAiClient } = require('./moderation-ai-client');
+const { createModerationAiTest, aiTestEnvironmentEnabled } = require('./moderation-ai-test');
 const {
   MAX_RESPONSE_BYTES: MAX_AGENT_IMAGE_RESPONSE_BYTES,
   createImageGenerationGate,
@@ -286,6 +288,14 @@ const moderationAttachments = createModerationAttachmentStore({
     path.join(__dirname, '..', 'node_modules'),
   ],
   service: discussionModeration,
+});
+const moderationAiTest = createModerationAiTest({
+  service: discussionModeration,
+  enabled: aiTestEnvironmentEnabled(config),
+  client: createModerationAiClient({
+    readSettings: () => systemSettingsStore.readSettings({ includeSecret: true }),
+    modelOverride: config.discussionModerationAiModel,
+  }),
 });
 const backgroundTasks = createBackgroundTaskService({
   pool,
@@ -4252,6 +4262,7 @@ app.use(
     requireAuth,
     getOptionalAuthUser,
     enabled: config.discussionModerationEnabled,
+    aiTest: moderationAiTest,
   }),
 );
 

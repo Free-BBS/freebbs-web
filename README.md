@@ -273,6 +273,7 @@ password: free-bbs
 讨论区人工审核的隔离测试开关、私有图片、负责人管理和后续模型接入范围见
 [监管 Agent 首版实施与验收清单](docs/moderation-agent-v1.md)。当前默认关闭新稿件审核；
 设置 `DISCUSSION_MODERATION_ENABLED=true` 后，新帖子和评论先进入审核工作台，人工批准后发布。
+本机测试环境可另行启用[无问芯穹文字试审](docs/moderation-ai-test.md)，用虚构内容验证脱敏与模型建议，最终仍由负责人决定。
 
 ## 当前功能分布
 

@@ -366,3 +366,136 @@ test('long URL-like failures and nested punctuation remain bounded without a Mar
     assert.equal(result.externalReady, false);
   }
 });
+
+test('natural introduction masks a fictional name, student ID and entire dorm address separately', () => {
+  const result = buildPrivacyPreview({
+    content: '我是李星云，2025010000，紫荆一号楼629A，大家来找我玩！',
+  });
+  assert.equal(result.content, '我是【姓名_1】,【学号_1】,【地址_1】,大家来找我玩!');
+  assert.equal(result.counts.name, 1);
+  assert.equal(result.counts.studentId, 1);
+  assert.equal(result.counts.address, 1);
+  assert.equal(result.externalReady, false);
+});
+
+test('bounded surname rules support natural introductions and repeat names consistently across fields', () => {
+  for (const [name, introduction] of [
+    ['李星云', '我是李星云。'],
+    ['张三', '我叫张三,请多指教。'],
+    ['陈可', '本人叫陈可。'],
+    ['欧阳小明', '我是欧阳小明。'],
+    ['司马青', '本人是司马青。'],
+  ]) {
+    const result = buildPrivacyPreview({ title: `${name}的建议`, content: introduction });
+    assert.equal(result.title, '【姓名_1】的建议');
+    assert.ok(result.content.includes('【姓名_1】'));
+    assert.ok(!result.content.includes(name));
+    assert.equal(result.counts.name, 2);
+  }
+});
+
+test('roles, ordinary requests and calling other people are not treated as self introduced names', () => {
+  for (const content of [
+    '我是学生，想提建议。',
+    '我是来问问题的，希望得到答复。',
+    '我叫大家明天来开会。',
+    '本人叫外卖一般不超过二十元。',
+    '我是王者荣耀玩家，想找队友。',
+    '我是李老师的学生。',
+    '我是高年级。',
+    '我是高一。',
+    '我是高中生。',
+    '我是文科生。',
+    '我是单身。',
+    '我叫许多人,没有人回答。',
+    '我是张同学。',
+    '我是李星云的室友。',
+  ]) {
+    const result = buildPrivacyPreview({ content });
+    assert.equal(result.content, normalizePrivacyText(content), content);
+    assert.equal(result.counts.name, 0, content);
+  }
+});
+
+test('dormitory recognition masks full building and room combinations, including local variants', () => {
+  for (const address of [
+    '紫荆一号楼629A',
+    '紫荆1号楼629A',
+    '紫荆１号楼６２９Ａ',
+    '紫荆一号楼，房间629A',
+    '1号宿舍楼629A',
+    '1号宿舍楼的629A室',
+    '十二号寝室楼408',
+    '宿舍在1号楼629A',
+    '寝室：三号楼305室',
+    '我住在1栋629A',
+  ]) {
+    const result = buildPrivacyPreview({ content: `${address}，欢迎交流学习经验。` });
+    assert.equal(result.counts.address, 1, address);
+    assert.ok(result.content.includes('【地址_1】'), address);
+    assert.ok(!/(?:629A|408|305|６２９Ａ)/.test(result.content), address);
+    assert.ok(!/(?:号楼|号宿舍楼|号寝室楼|1栋)/.test(result.content), address);
+    assert.match(result.content, /欢迎交流学习经验/);
+  }
+});
+
+test('address placeholders are stable across full width, whitespace and room letter case', () => {
+  const result = buildPrivacyPreview({
+    title: '我的宿舍在1号楼629A',
+    content: '我住在１号楼 ６２９ａ，欢迎来访。',
+  });
+  assert.equal(result.title, '我的宿舍在【地址_1】');
+  assert.match(result.content, /我住在【地址_1】,欢迎来访/);
+  assert.equal(result.counts.address, 2);
+});
+
+test('building directions, public teaching rooms and unrelated numbers remain readable', () => {
+  for (const content of [
+    '请问紫荆1号楼怎么走？',
+    '紫荆2号楼开展消防演练。',
+    '1号宿舍楼的电梯坏了，请尽快维修。',
+    '在第一教学楼629A教室上课。',
+    '紫荆1号楼629A教室正在上课。',
+    '住在1号楼629A办公室？这明显不合理。',
+    '图书馆629A会议室有讲座。',
+    '我们住在城市里，租金偏高。',
+    '设备编号629A暂时不可用。',
+    '今天有629人参加活动。',
+  ]) {
+    const result = buildPrivacyPreview({ content });
+    assert.equal(result.content, normalizePrivacyText(content), content);
+    assert.equal(result.counts.address, 0, content);
+  }
+});
+
+test('local surname and campus address additions still disclose their incomplete coverage', () => {
+  const result = buildPrivacyPreview({ content: '我叫阿孜古丽，我住在一个没有收录的园区。' });
+  assert.equal(result.externalReady, false);
+  assert.match(result.limitations.join(''), /有限姓氏/);
+  assert.match(result.limitations.join(''), /并非完整姓名或地址识别/);
+});
+
+test('new introduction and dormitory patterns remain bounded on long incomplete input', async () => {
+  for (const content of [
+    '我是'.repeat(20000),
+    '紫荆一号楼'.repeat(7000),
+    `本人叫${' '.repeat(120000)}张三`,
+    `宿舍在1号楼${' '.repeat(120000)}629A`,
+  ]) {
+    const { result, error } = await boundedPreview({ content });
+    assert.equal(error, undefined);
+    assert.equal(result.externalReady, false);
+  }
+});
+
+test('excess distinct self introduced names fail with a fixed limit error', async () => {
+  const content = Array.from(
+    { length: 501 },
+    (_unused, index) =>
+      `我叫李${String.fromCharCode(0x4e00 + Math.floor(index / 32))}${String.fromCharCode(0x4e00 + (index % 32))}。`,
+  ).join('');
+  const { error, result } = await boundedPreview({ content });
+  assert.equal(result, undefined);
+  assert.equal(error.status, 413);
+  assert.equal(error.message, '脱敏预览内容或补充词过长。');
+});

@@ -6,6 +6,20 @@
     rejected: '未通过',
     expired: '已到期',
   };
+  const AI_CATEGORY_LABELS = {
+    privacy: '隐私信息',
+    harassment: '骚扰侮辱',
+    threat: '威胁',
+    self_harm: '自伤风险',
+    sexual_minors: '未成年人性风险',
+    sexual_content: '色情内容',
+    violence: '暴力',
+    fraud: '诈骗',
+    illegal_activity: '违法活动',
+    hate: '仇恨歧视',
+    misinformation: '不实信息',
+    other: '其他',
+  };
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   function attachmentId(attachment, apiBase, origin) {
@@ -227,6 +241,163 @@
       }
     }
 
+    function aiTestPanel(submission, generation, version, terms) {
+      const panel = node('section', undefined, 'moderation-ai-test');
+      panel.setAttribute('aria-label', '无问芯穹试审（文字）');
+      const label = node('label', '发送给无问芯穹的文字');
+      label.htmlFor = 'moderation-ai-input-mode';
+      const mode = node('select');
+      mode.id = 'moderation-ai-input-mode';
+      for (const [value, caption] of [
+        ['redacted', '本地脱敏后的文字'],
+        ['synthetic_original', '虚构原文（仅测试）'],
+      ]) {
+        const option = node('option', caption);
+        option.value = value;
+        mode.append(option);
+      }
+      mode.value = 'redacted';
+      const button = node('button', '调用无问芯穹试审');
+      button.type = 'button';
+      const status = node('p');
+      status.setAttribute('role', 'status');
+      const result = node('div', undefined, 'moderation-ai-result');
+      let inputVersion = 0;
+      let busy = false;
+      const inspectedVersion = submission.version;
+      const current = () =>
+        valid(generation) &&
+        version === state.detailVersion &&
+        state.selected === submission &&
+        submission.version === inspectedVersion &&
+        submission.status === 'pending' &&
+        !mine &&
+        state.session?.reviewer === true &&
+        state.session?.aiTestEnabled === true;
+      const invalidate = () => {
+        inputVersion += 1;
+        result.replaceChildren();
+        status.textContent = '输入已变化，试审结果已清除。请手动重新调用。';
+      };
+      mode.addEventListener('change', invalidate);
+      button.addEventListener('click', async () => {
+        if (busy || !current()) return;
+        const inputMode = mode.value;
+        const inputTerms = terms.value;
+        const extraTerms = inputTerms
+          .split(/\r?\n/)
+          .map((term) => term.trim())
+          .filter(Boolean);
+        if (!['redacted', 'synthetic_original'].includes(inputMode)) {
+          status.textContent = '请选择有效的文字发送方式。';
+          return;
+        }
+        if (extraTerms.length > 50 || extraTerms.some((term) => term.length > 128)) {
+          status.textContent = '最多填写 50 项补充信息，每项最多 128 字。';
+          return;
+        }
+        inputVersion += 1;
+        const requestVersion = inputVersion;
+        const responseCurrent = () =>
+          current() &&
+          requestVersion === inputVersion &&
+          mode.value === inputMode &&
+          terms.value === inputTerms;
+        busy = true;
+        button.disabled = true;
+        result.replaceChildren();
+        status.textContent = `正在调用无问芯穹，发送${inputMode === 'redacted' ? '本地脱敏后的文字' : '虚构原文（仅测试）'}…`;
+        try {
+          const { result: assessmentResult } = await client.request(
+            `/moderation/submissions/${encodeURIComponent(submission.id)}/ai-test`,
+            {
+              method: 'POST',
+              body: JSON.stringify({ expectedVersion: inspectedVersion, inputMode, extraTerms }),
+            },
+          );
+          if (!responseCurrent()) return;
+          const decisions = {
+            no_risk_detected: '未发现明显风险，仍需人工决定',
+            needs_review: '需要人工重点核查',
+            high_risk: '发现高风险迹象，请人工核查',
+          };
+          const assessment = assessmentResult?.assessment;
+          if (
+            assessmentResult?.submissionId !== submission.id ||
+            assessmentResult.version !== inspectedVersion ||
+            assessmentResult.inputMode !== inputMode ||
+            assessmentResult.imagesReviewed !== false ||
+            assessmentResult.automaticPublication !== false ||
+            typeof assessmentResult.contentHash !== 'string' ||
+            !/^[a-f0-9]{64}$/.test(assessmentResult.contentHash) ||
+            (submission.contentHash && assessmentResult.contentHash !== submission.contentHash) ||
+            typeof assessmentResult.model !== 'string' ||
+            !assessmentResult.model ||
+            !Number.isFinite(assessmentResult.elapsedMs) ||
+            assessmentResult.elapsedMs < 0 ||
+            !Number.isSafeInteger(assessmentResult.imageCount) ||
+            assessmentResult.imageCount < 0 ||
+            !Object.prototype.hasOwnProperty.call(decisions, assessment?.decision) ||
+            !Array.isArray(assessment.categories) ||
+            assessment.categories.some(
+              (category) =>
+                typeof category !== 'string' ||
+                !Object.prototype.hasOwnProperty.call(AI_CATEGORY_LABELS, category),
+            ) ||
+            typeof assessment.reason !== 'string' ||
+            assessment.reason.length > 1000
+          )
+            throw new Error('试审结果无效，请刷新后重试。');
+          result.append(
+            node('h4', decisions[assessment.decision]),
+            node(
+              'p',
+              `模型：${assessmentResult.model} · 耗时：${(assessmentResult.elapsedMs / 1000).toFixed(1)} 秒`,
+              'moderation-meta',
+            ),
+            node(
+              'p',
+              `本次发送：${inputMode === 'redacted' ? '本地脱敏后的文字副本' : '虚构原文（仅测试）'}`,
+            ),
+            node(
+              'p',
+              `风险分类：${assessment.categories.length ? assessment.categories.map((category) => AI_CATEGORY_LABELS[category]).join('、') : '未列出风险类别'}`,
+            ),
+            node('pre', assessment.reason, 'moderation-raw'),
+          );
+          if (assessmentResult.imageCount > 0 || submission.attachments?.length)
+            result.append(
+              node('p', '图片尚未机器审核，请继续人工检查全部图片。', 'moderation-privacy-warning'),
+            );
+          result.append(
+            node('p', '试审仅提供文字建议，原稿未修改，也不会自动发布。最终由审核负责人决定。'),
+          );
+          status.textContent = '文字试审已完成。';
+        } catch (error) {
+          if (responseCurrent()) {
+            result.replaceChildren();
+            status.textContent =
+              error.status === 409
+                ? '提交状态或版本已变化，请刷新后核对。'
+                : `${error.message} 如需再次调用，请手动重试。`;
+          }
+        } finally {
+          busy = false;
+          button.disabled = false;
+        }
+      });
+      panel.append(
+        node('h3', '无问芯穹试审（文字）'),
+        node('p', '本轮仅用于虚构测试内容。点击后调用外部模型；图片不发送，风险建议仍需人工复核。'),
+        label,
+        mode,
+        button,
+        status,
+        result,
+      );
+      return { panel, invalidate };
+    }
+
     function privacyPreviewPanel(submission, generation, version) {
       const panel = node('section', undefined, 'moderation-privacy');
       panel.setAttribute('aria-label', '本地脱敏预览');
@@ -246,12 +417,17 @@
       const result = node('div', undefined, 'moderation-privacy-result');
       let previewVersion = 0;
       let busy = false;
+      const ai =
+        state.session.aiTestEnabled === true
+          ? aiTestPanel(submission, generation, version, terms)
+          : null;
       const current = () =>
         valid(generation) && version === state.detailVersion && state.selected === submission;
       terms.addEventListener('input', () => {
         previewVersion += 1;
         result.replaceChildren();
         status.textContent = '补充信息已变化，请重新生成预览。';
+        ai?.invalidate();
       });
       button.addEventListener('click', async () => {
         if (busy || !current()) return;
@@ -292,6 +468,7 @@
             studentId: '学号',
             phone: '电话',
             email: '邮箱',
+            address: '地址',
             identifier: '证件或编号',
             nationalId: '身份证号',
             url: '链接',
@@ -353,6 +530,7 @@
         status,
         result,
       );
+      if (ai) panel.append(ai.panel);
       return panel;
     }
 

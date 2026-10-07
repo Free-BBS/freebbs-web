@@ -327,6 +327,72 @@ test(
     );
 
     await t.test(
+      'AI test snapshots remain reviewer-only and provider waits do not hold a publication lock',
+      async () => {
+        const { createModerationAiTest } = require('./moderation-ai-test');
+        const submission = await submit('合成原文 测试甲君', '合成试审标题');
+        const request = {
+          id: submission.id,
+          reviewerId,
+          expectedVersion: 1,
+          inputMode: 'synthetic_original',
+        };
+        const view = await service.aiTestSnapshot(request);
+        assert.deepEqual(
+          Object.keys(view).sort(),
+          ['submissionId', 'version', 'contentHash', 'title', 'content', 'imageCount'].sort(),
+        );
+        assert.equal(view.content, '合成原文 测试甲君');
+        await assert.rejects(service.aiTestSnapshot({ ...request, reviewerId: authorId }), {
+          status: 403,
+        });
+        const before = await snapshot();
+        const client = {
+          async assess(input) {
+            assert.equal(input.content, view.content);
+            assert.equal(Object.hasOwn(input, 'authorId'), false);
+            return {
+              assessment: {
+                decision: 'needs_review',
+                categories: ['privacy'],
+                reason: '合成审核建议',
+              },
+              model: 'test',
+              settingsRevision: 1,
+              policyVersion: 'test',
+            };
+          },
+        };
+        const runner = createModerationAiTest({ service, client, enabled: true });
+        assert.equal((await runner.run(request)).automaticPublication, false);
+        assert.equal(await snapshot(), before);
+        client.assess = async () => {
+          // This uses a second connection. It must not be waiting on a lock held across the model request.
+          await service.decide({
+            id: submission.id,
+            reviewerId,
+            expectedVersion: 1,
+            decision: 'rejected',
+            reason: '合成的人工决定',
+            requestId: crypto.randomUUID(),
+          });
+          return {
+            assessment: { decision: 'no_risk_detected', categories: [], reason: '迟到的合成结果' },
+            model: 'test',
+            settingsRevision: 1,
+            policyVersion: 'test',
+          };
+        };
+        await assert.rejects(runner.run(request), { status: 409 });
+        assert.equal(
+          (await service.detail({ id: submission.id, userId: reviewerId })).status,
+          'rejected',
+        );
+        assert.equal(publications, 0);
+      },
+    );
+
+    await t.test(
       'more than 500 actual directory hits fail closed without handing a partial directory to the builder',
       async () => {
         const parameters = [];

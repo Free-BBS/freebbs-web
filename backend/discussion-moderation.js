@@ -533,6 +533,53 @@ function createDiscussionModeration({
     }
   }
 
+  async function aiTestSnapshot({ id, reviewerId, expectedVersion }) {
+    try {
+      uuid(id);
+      positiveId(reviewerId);
+      if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 1)
+        throw fail('审核版本无效。');
+      return await transact(async (connection) => {
+        await requireReviewer(connection, reviewerId, true);
+        const row = await readRow(connection, id, true);
+        if (
+          row.status !== 'pending' ||
+          Number(row.version) !== expectedVersion ||
+          Number(row.evidence_expired) ||
+          row.evidence_purged_at ||
+          !row.payload_json
+        )
+          throw fail('提交已处理、到期或版本已变化，请刷新后重试。', 409);
+        const payload = parseJson(row.payload_json);
+        const attachments = parseJson(row.attachment_ids_json, []);
+        if (
+          !payload ||
+          typeof payload.content !== 'string' ||
+          (payload.title !== undefined && typeof payload.title !== 'string') ||
+          !Array.isArray(attachments)
+        )
+          throw fail('稿件数据暂不可用。', 503);
+        return {
+          submissionId: row.id,
+          version: Number(row.version),
+          contentHash: row.content_hash,
+          title: payload.title || '',
+          content: payload.content,
+          imageCount: attachments.length,
+        };
+      });
+    } catch (error) {
+      const messages = {
+        400: '试审参数无效。',
+        403: '需要审核负责人权限。',
+        404: '审核记录不存在。',
+        409: '提交已处理、到期或版本已变化，请刷新后重试。',
+      };
+      const status = Object.hasOwn(messages, error.status) ? error.status : 503;
+      throw fail(messages[status] || '稿件暂不可用，请稍后重试。', status);
+    }
+  }
+
   async function listRows({ authorId, status, before, limit: requestedLimit }) {
     const limit = Math.min(
       100,
@@ -865,6 +912,7 @@ function createDiscussionModeration({
     submit,
     decide,
     previewPrivacy,
+    aiTestSnapshot,
     list,
     detail,
     mine,

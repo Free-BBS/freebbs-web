@@ -21,6 +21,7 @@ function createModerationRouter({
   requireAuth,
   getOptionalAuthUser,
   enabled,
+  aiTest,
 }) {
   const router = express.Router();
   router.use((_request, response, next) => {
@@ -46,6 +47,7 @@ function createModerationRouter({
         reviewer: await service.isReviewer(user.id),
         isAdmin: Boolean(user.is_admin),
         mode: enabled ? 'manual' : 'disabled',
+        aiTestEnabled: Boolean(enabled && aiTest?.enabled),
       });
     }),
   );
@@ -93,6 +95,36 @@ function createModerationRouter({
           id: request.params.id,
           reviewerId: user.id,
           expectedVersion: body.expectedVersion,
+          extraTerms: body.extraTerms,
+        }),
+      });
+    }),
+  );
+  router.post(
+    '/submissions/:id/ai-test',
+    authenticated(async (request, response, user) => {
+      if (!enabled || !aiTest?.enabled) {
+        response.status(503).json({ message: '本机 AI 试审尚未启用。' });
+        return;
+      }
+      const body = request.body;
+      if (
+        !body ||
+        typeof body !== 'object' ||
+        Array.isArray(body) ||
+        Object.keys(body).some(
+          (key) => !['expectedVersion', 'inputMode', 'extraTerms'].includes(key),
+        )
+      ) {
+        response.status(400).json({ message: '试审仅接受稿件版本、输入模式和补充信息。' });
+        return;
+      }
+      response.json({
+        result: await aiTest.run({
+          id: request.params.id,
+          reviewerId: user.id,
+          expectedVersion: body.expectedVersion,
+          inputMode: body.inputMode,
           extraTerms: body.extraTerms,
         }),
       });
