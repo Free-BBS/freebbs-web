@@ -41,6 +41,13 @@ module.exports = {
   sandboxOutputDir:
     process.env.SANDBOX_OUTPUT_DIR || path.join(__dirname, '..', '..', 'sandbox', 'outputs'),
   uploadDir: process.env.UPLOAD_DIR || path.join(__dirname, '..', 'database', 'uploads'),
+  discussionModerationEnabled: readBooleanEnvironmentVariable('DISCUSSION_MODERATION_ENABLED'),
+  discussionModerationDir:
+    process.env.DISCUSSION_MODERATION_DIR ||
+    path.join(
+      path.dirname(process.env.UPLOAD_DIR || path.join(__dirname, '..', 'database', 'uploads')),
+      'moderation-private',
+    ),
   mail: {
     host: process.env.BOTMAIL_SMTP || '',
     port: Number(process.env.BOTMAIL_SMTP_PORT || 465),

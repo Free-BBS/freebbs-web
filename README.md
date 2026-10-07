@@ -270,6 +270,10 @@ username: admin
 password: free-bbs
 ```
 
+讨论区人工审核的隔离测试开关、私有图片、负责人管理和后续模型接入范围见
+[监管 Agent 首版实施与验收清单](docs/moderation-agent-v1.md)。当前默认关闭新稿件审核；
+设置 `DISCUSSION_MODERATION_ENABLED=true` 后，新帖子和评论先进入审核工作台，人工批准后发布。
+
 ## 当前功能分布
 
 | 功能                   | 前端位置                                                                                               | 后端/数据依赖                             |

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>内容审核 | FREE BBS</title>
+    <link rel="stylesheet" href="/moderation.css" />
+    <script src="/moderation.js" defer></script>
+  </head>
+  <body>
+    <header class="moderation-header">
+      <a class="moderation-brand" href="/">FREE BBS</a>
+      <nav aria-label="页面导航">
+        <a href="/discussion">返回讨论区</a>
+        <a id="moderation-login" href="/login">登录</a>
+      </nav>
+    </header>
+    <main id="moderation-app">
+      <header class="moderation-intro">
+        <p class="moderation-eyebrow">讨论区 · 人工审核</p>
+        <h1 id="moderation-title">内容审核</h1>
+        <p>提交内容经负责人审核通过后发布。当前由人工审核，尚未启用模型判断。</p>
+        <p class="moderation-note">
+          审核相关数据保存一个月；正常发布的帖子和评论不在此清理范围内。
+        </p>
+      </header>
+      <p id="moderation-message" role="status" aria-live="polite"></p>
+      <nav class="moderation-tabs" aria-label="审核范围" hidden id="moderation-tabs">
+        <a href="/moderation?mine=1" id="moderation-mine-link">我的提交</a>
+        <a href="/moderation" id="moderation-review-link" hidden>审核工作台</a>
+      </nav>
+      <section id="moderation-workspace" hidden>
+        <div class="moderation-toolbar">
+          <label for="moderation-status" id="moderation-status-label">状态</label>
+          <select id="moderation-status">
+            <option value="pending">待审核</option>
+            <option value="approved">已通过</option>
+            <option value="rejected">未通过</option>
+            <option value="expired">已到期</option>
+          </select>
+          <button type="button" id="moderation-refresh">刷新列表</button>
+        </div>
+        <div class="moderation-layout">
+          <section aria-label="提交列表">
+            <p id="moderation-list-status" role="status"></p>
+            <div id="moderation-list"></div>
+            <button type="button" id="moderation-more" hidden>加载更多</button>
+          </section>
+          <section id="moderation-detail" aria-label="提交详情" tabindex="-1">
+            <p class="moderation-empty">选择一条提交，查看正文和图片。</p>
+          </section>
+        </div>
+      </section>
+      <section id="moderation-reviewers" hidden aria-labelledby="moderation-reviewers-title">
+        <h2 id="moderation-reviewers-title">审核负责人</h2>
+        <p>管理员可管理负责人；审核权限以服务器校验为准。</p>
+        <div id="moderation-reviewer-list"></div>
+        <form id="moderation-reviewer-search">
+          <label for="moderation-reviewer-query">查找用户</label>
+          <input id="moderation-reviewer-query" type="search" maxlength="80" required />
+          <button type="submit">查找</button>
+        </form>
+        <p id="moderation-reviewer-message" role="status"></p>
+        <div id="moderation-candidates"></div>
+      </section>
+    </main>
+  </body>
+</html>

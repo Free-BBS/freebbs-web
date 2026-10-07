@@ -91,6 +91,16 @@ const {
 const { createCircuitRecognitionRouter } = require('./circuit-recognition');
 const { getDiscussionPreview } = require('./discussion-preview');
 const {
+  ensureSchema: ensureDiscussionModerationSchema,
+  createDiscussionModeration,
+} = require('./discussion-moderation');
+const {
+  createModerationAttachmentStore,
+  validateModerationMarkdown,
+} = require('./moderation-attachments');
+const { createModerationPublisher } = require('./moderation-publisher');
+const { createModerationRouter } = require('./moderation-router');
+const {
   MAX_RESPONSE_BYTES: MAX_AGENT_IMAGE_RESPONSE_BYTES,
   createImageGenerationGate,
   persistGeneratedImages,
@@ -257,6 +267,26 @@ const systemSettingsStore = createSystemSettingsStore({
 });
 const surveyService = createSurveyService(pool);
 const notifications = createNotificationService({ pool, publicWebUrl: config.publicWebUrl });
+const discussionModeration = createDiscussionModeration({
+  pool,
+  withDatabaseTransaction,
+  privateDir: config.discussionModerationDir,
+  publishSubmission: createModerationPublisher({
+    createPostPid: createUniqueDiscussionPostPid,
+    awardMagnetic,
+    notifications,
+  }),
+});
+const moderationAttachments = createModerationAttachmentStore({
+  uploadDir: config.uploadDir,
+  privateDir: config.discussionModerationDir,
+  publicDirs: [
+    path.join(__dirname, '..', 'public'),
+    path.join(__dirname, '..', 'development', 'apps', 'web', 'dist'),
+    path.join(__dirname, '..', 'node_modules'),
+  ],
+  service: discussionModeration,
+});
 const backgroundTasks = createBackgroundTaskService({
   pool,
   getUser: getUserById,
@@ -593,10 +623,10 @@ async function createUniqueUserUid(database = pool) {
   throw new Error('无法生成唯一 UID');
 }
 
-async function createUniqueDiscussionPostPid() {
+async function createUniqueDiscussionPostPid(database = pool) {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const pid = generateDiscussionPostPid();
-    const [rows] = await pool.execute(`SELECT id FROM discussion_posts WHERE pid = ? LIMIT 1`, [
+    const [rows] = await database.execute(`SELECT id FROM discussion_posts WHERE pid = ? LIMIT 1`, [
       pid,
     ]);
 
@@ -2265,6 +2295,9 @@ async function postSandboxRun(payload, timeoutSeconds) {
 }
 
 async function createMaxDiscussionReply(postId, triggerComment) {
+  // Manual rollout has no approved privacy/model pipeline yet. Never send a
+  // pending discussion to the ordinary chat client or publish an unreviewed bot reply.
+  if (config.discussionModerationEnabled) return null;
   await ensureMaxAgentUser();
 
   const [postRows] = await pool.execute(
@@ -4134,9 +4167,10 @@ app.patch('/api/discussion/boards/:slug/moderators/:userId', async (request, res
   }
 });
 
-app.post(
-  ['/api/discussion/uploads/images', '/api/circuit-report/uploads/images'],
-  async (request, response) => {
+function createImageUploadHandler(contentType) {
+  // Route registration fixes the content type. Express accepts case and trailing
+  // slash variants, so request.path must never decide whether an image is private.
+  return async (request, response) => {
     try {
       const user = await requireAuth(request, response);
 
@@ -4161,7 +4195,11 @@ app.post(
         return;
       }
 
-      const outputBuffer = await sharp(fileBuffer, { animated: false })
+      const outputBuffer = await sharp(fileBuffer, {
+        animated: false,
+        limitInputPixels: 36 * 1000 * 1000,
+        failOn: 'warning',
+      })
         .rotate()
         .resize({
           width: 1600,
@@ -4177,6 +4215,18 @@ app.post(
         return;
       }
 
+      if (config.discussionModerationEnabled && contentType === 'discussion') {
+        const attachment = await moderationAttachments.store({
+          ownerId: user.id,
+          buffer: outputBuffer,
+        });
+        response.status(201).json({
+          ...attachment,
+          previewDataUrl: `data:image/webp;base64,${outputBuffer.toString('base64')}`,
+        });
+        return;
+      }
+
       const fileName = buildDiscussionImageFileName(user.id);
       await fs.promises.writeFile(path.join(config.uploadDir, fileName), outputBuffer);
 
@@ -4184,9 +4234,25 @@ app.post(
         url: `/uploads/${fileName}`,
       });
     } catch (error) {
-      response.status(500).json({ message: '上传图片失败', detail: error.message });
+      response
+        .status(error.status || 500)
+        .json({ message: error.status ? error.message : '上传图片失败' });
     }
-  },
+  };
+}
+
+app.post('/api/discussion/uploads/images', createImageUploadHandler('discussion'));
+app.post('/api/circuit-report/uploads/images', createImageUploadHandler('circuit-report'));
+
+app.use(
+  '/api/moderation',
+  createModerationRouter({
+    service: discussionModeration,
+    attachmentStore: moderationAttachments,
+    requireAuth,
+    getOptionalAuthUser,
+    enabled: config.discussionModerationEnabled,
+  }),
 );
 
 registerDiscussionInteractions(app, {
@@ -4605,6 +4671,28 @@ app.post('/api/discussion/posts', async (request, response) => {
       return;
     }
 
+    if (config.discussionModerationEnabled) {
+      const attachmentIds = validateModerationMarkdown(contentMarkdown);
+      const submission = await withDatabaseTransaction((connection) =>
+        discussionModeration.submit(connection, {
+          kind: 'post',
+          authorId: user.id,
+          payload: {
+            boardId: board.id,
+            boardSlug: board.slug,
+            title,
+            content: contentMarkdown,
+            anonymous: isAnonymous,
+            loginRequired,
+          },
+          attachmentIds,
+          requestId: request.body.requestId,
+        }),
+      );
+      response.status(202).json({ ok: true, message: '已提交人工审核', moderation: submission });
+      return;
+    }
+
     const canFeatureCreatedPost = await canModerateBoard(user, board.id);
 
     const postPid = await createUniqueDiscussionPostPid();
@@ -4675,7 +4763,9 @@ app.post('/api/discussion/posts', async (request, response) => {
       post: toDiscussionPostDetail((await economyShop.decoratePosts([rows[0]]))[0], user.id),
     });
   } catch (error) {
-    response.status(500).json({ message: '发布帖子失败', detail: error.message });
+    response
+      .status(error.status || 500)
+      .json({ message: error.status ? error.message : '发布帖子失败' });
   }
 });
 
@@ -5031,6 +5121,35 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
 
     if (!canReadPost(post, user) || Number(post.is_hidden)) {
       response.status(404).json({ message: '帖子不存在' });
+      return;
+    }
+
+    if (config.discussionModerationEnabled) {
+      const attachmentIds = validateModerationMarkdown(contentMarkdown);
+      const submission = await withDatabaseTransaction(async (connection) => {
+        await lockPublicPost(connection, post.id);
+        if (parentCommentId) {
+          const [[parent]] = await connection.execute(
+            'SELECT id FROM discussion_comments WHERE id = ? AND post_id = ? AND is_deleted = 0 FOR UPDATE',
+            [parentCommentId, post.id],
+          );
+          if (!parent) throw Object.assign(new Error('被回复的评论不存在'), { status: 404 });
+        }
+        return discussionModeration.submit(connection, {
+          kind: 'comment',
+          authorId: user.id,
+          payload: {
+            postId: post.id,
+            parentCommentId: parentCommentId || null,
+            content: contentMarkdown,
+          },
+          attachmentIds,
+          requestId: request.body.requestId,
+        });
+      });
+      response
+        .status(202)
+        .json({ ok: true, message: '已提交人工审核', moderation: submission, maxPending: false });
       return;
     }
 
@@ -6441,6 +6560,7 @@ async function start() {
   await ensureSurveyTables(pool);
   await ensureAdminRewardTables(pool);
   await ensureWalletLedger(pool);
+  await ensureDiscussionModerationSchema(pool);
   const bicycleRefunds = await refundRanchBicyclePurchases(pool);
   if (bicycleRefunds.refunded) {
     console.log(
@@ -6486,6 +6606,20 @@ async function start() {
   notifications.startWeeklyDigestWorker();
   await backgroundTasks.start();
   surveyService.startWorker();
+  let moderationCleanupRunning = false;
+  const cleanupModeration = async () => {
+    if (moderationCleanupRunning) return;
+    moderationCleanupRunning = true;
+    try {
+      await discussionModeration.expireAndPurge();
+    } catch {
+      console.error('审核证据清理暂时失败，将在下次定时检查重试');
+    } finally {
+      moderationCleanupRunning = false;
+    }
+  };
+  cleanupModeration();
+  setInterval(cleanupModeration, 60 * 1000).unref();
   console.log(`MySQL target: ${config.db.host}:${config.db.port}/${config.db.database}`);
 }
 

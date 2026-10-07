@@ -5,6 +5,11 @@ const API_BASE_URL = (() => {
   return `${window.location.origin}/api`;
 })();
 const API_ROOT = API_BASE_URL.replace(/\/api$/, '');
+const moderationImagePreviews = new Map();
+const moderationImageRequests = new Map();
+let moderationPreviewGeneration = 0;
+const moderationSubmissionIntents = new Map();
+let moderationEntryToken = null;
 const DEFAULT_AVATAR = '/assets/avatar_placeholder.webp';
 const MAX_AGENT_AVATAR = '/assets/max_the_agent_avatar.webp';
 
@@ -3080,6 +3085,7 @@ function renderHeaderBalances() {
 }
 
 function renderUser() {
+  syncModerationEntry();
   if (isAiChatPage()) {
     document.body.classList.add('is-ai-session-ready');
     document.body.classList.toggle('is-ai-authenticated', userState.isLoggedIn);
@@ -3184,6 +3190,163 @@ function setSettingsPasswordMessage(message) {
 function setDiscussionMessage(message) {
   if (discussionComposeMessage) {
     discussionComposeMessage.textContent = message || '';
+  }
+}
+
+function moderationSubmissionRequestId(kind, body) {
+  const key = `${kind}:${body.postId || ''}:${body.parentCommentId || ''}`;
+  const fingerprint = JSON.stringify([userState.token, body]);
+  if (moderationSubmissionIntents.get(key)?.fingerprint !== fingerprint)
+    moderationSubmissionIntents.set(key, { fingerprint, requestId: crypto.randomUUID() });
+  return moderationSubmissionIntents.get(key).requestId;
+}
+
+function completeModerationSubmission(requestId) {
+  for (const [key, intent] of moderationSubmissionIntents)
+    if (intent.requestId === requestId) moderationSubmissionIntents.delete(key);
+}
+
+function showModerationSubmitted(payload, target = discussionComposeMessage) {
+  if (payload.moderation?.status !== 'pending') return false;
+  if (target) {
+    target.textContent = payload.message || '已提交审核，通过后会出现在讨论区。';
+    const link = document.createElement('a');
+    link.href = `/moderation?mine=1&id=${encodeURIComponent(payload.moderation.id)}`;
+    link.textContent = '查看我的提交';
+    target.append(document.createTextNode(' '), link);
+  }
+  return true;
+}
+
+async function syncModerationEntry() {
+  const token = userState.isLoggedIn ? userState.token : '';
+  if (moderationEntryToken === token) return;
+  moderationEntryToken = token;
+  document.querySelectorAll('[data-moderation-entry]').forEach((link) => link.remove());
+  if (!token) return;
+  try {
+    const session = await callApi('/moderation/session');
+    if (moderationEntryToken !== token || userState.token !== token || !session.enabled) return;
+    const host = document.getElementById('user-actions');
+    if (!host) return;
+    for (const [href, label] of [
+      ['/moderation?mine=1', '我的提交'],
+      ...(session.reviewer || session.isAdmin ? [['/moderation', '内容审核']] : []),
+    ]) {
+      const link = document.createElement('a');
+      link.href = href;
+      link.textContent = label;
+      link.className = 'user-icon-button';
+      link.dataset.moderationEntry = '';
+      host.append(link);
+    }
+  } catch {
+    // An unavailable optional moderation endpoint must not block the existing page.
+  }
+}
+
+function moderationAttachmentId(value) {
+  try {
+    const url = new URL(value, window.location.origin);
+    const api = new URL(API_BASE_URL, window.location.origin);
+    const prefix = `${api.pathname.replace(/\/$/, '')}/moderation/attachments/`;
+    const id = url.pathname.slice(prefix.length);
+    return url.origin === api.origin &&
+      url.pathname.startsWith(prefix) &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+      ? id
+      : '';
+  } catch {
+    return '';
+  }
+}
+
+async function loadModerationImagePreview(image, id) {
+  const token = userState.token;
+  const generation = moderationPreviewGeneration;
+  const cached = moderationImagePreviews.get(id);
+  image.removeAttribute('src');
+  image.dataset.moderationImage = id;
+  try {
+    let url = cached?.token === token ? cached.url : '';
+    if (!url) {
+      const key = JSON.stringify([generation, token, id]);
+      if (!moderationImageRequests.has(key)) {
+        const pending = (async () => {
+          const response = await fetch(`${API_BASE_URL}/moderation/attachments/${id}`, {
+            cache: 'no-store',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          if (!response.ok) throw new Error('图片暂不可用');
+          const blob = await response.blob();
+          if (generation !== moderationPreviewGeneration || token !== userState.token) return '';
+          if (!/^image\/(?:webp|png|jpeg|gif)$/.test(blob.type) || blob.size > 5 * 1024 * 1024)
+            throw new Error('图片格式无效');
+          const objectUrl = URL.createObjectURL(blob);
+          moderationImagePreviews.set(id, { token, url: objectUrl });
+          return objectUrl;
+        })().finally(() => moderationImageRequests.delete(key));
+        moderationImageRequests.set(key, pending);
+      }
+      url = await moderationImageRequests.get(key);
+    }
+    if (
+      url &&
+      generation === moderationPreviewGeneration &&
+      token === userState.token &&
+      image.isConnected
+    )
+      image.src = url;
+  } catch {
+    if (token === userState.token && image.isConnected) image.alt = '图片暂不可用，请刷新后重试';
+  }
+}
+
+function clearModerationImagePreviews() {
+  moderationPreviewGeneration += 1;
+  moderationImageRequests.clear();
+  for (const { url } of moderationImagePreviews.values())
+    if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+  moderationImagePreviews.clear();
+  document
+    .querySelectorAll('[data-moderation-image]')
+    .forEach((image) => image.removeAttribute('src'));
+  document.getElementById('discussion-upload-previews')?.replaceChildren();
+}
+
+function hydrateModerationImages(root) {
+  const images = [...(root.querySelectorAll?.('img[src]') || [])];
+  if (root.matches?.('img[src]')) images.push(root);
+  for (const image of images) {
+    const id = moderationAttachmentId(image.getAttribute('src'));
+    if (id) loadModerationImagePreview(image, id);
+  }
+}
+
+function renderDiscussionUploadPreviews() {
+  if (!discussionComposeContent) return;
+  let tray = document.getElementById('discussion-upload-previews');
+  if (!tray) {
+    tray = document.createElement('div');
+    tray.id = 'discussion-upload-previews';
+    tray.setAttribute('aria-label', '已上传的待审图片预览');
+    discussionComposeContent.insertAdjacentElement('afterend', tray);
+  }
+  tray.replaceChildren();
+  const paths =
+    discussionComposeContent.value.match(
+      /(?:https?:\/\/[^\s)]+)?\/api\/moderation\/attachments\/[0-9a-f-]{36}/gi,
+    ) || [];
+  const ids = new Set(paths.map(moderationAttachmentId).filter(Boolean));
+  for (const id of ids) {
+    const image = document.createElement('img');
+    image.alt = '已上传图片（待审核）';
+    image.style.maxWidth = '180px';
+    image.style.maxHeight = '140px';
+    image.style.objectFit = 'contain';
+    image.style.margin = '8px';
+    tray.append(image);
+    loadModerationImagePreview(image, id);
   }
 }
 
@@ -4767,6 +4930,8 @@ function enhanceMarkdownContent(root, { interactiveCodeControls = true } = {}) {
   });
   root.querySelectorAll('img').forEach((image) => {
     const source = image.getAttribute('src') || '';
+    const moderationId = moderationAttachmentId(source);
+    if (moderationId) loadModerationImagePreview(image, moderationId);
     if (source.startsWith('/uploads/')) {
       image.src = `${API_ROOT}${source}`;
     }
@@ -9524,6 +9689,9 @@ async function handleDiscussionCommentSubmit(event) {
   const contentMarkdown = input?.value.trim() || '';
   const postId = String(form.dataset.postId || discussionState.activePostId);
   const submitButton = form.querySelector('[type="submit"]');
+  const submittedToken = userState.token;
+  const submissionBody = { contentMarkdown, parentCommentId: parentCommentId || undefined };
+  const requestId = moderationSubmissionRequestId('comment', { postId, ...submissionBody });
 
   if (!contentMarkdown) {
     if (message) {
@@ -9549,12 +9717,19 @@ async function handleDiscussionCommentSubmit(event) {
       {
         method: 'POST',
         body: JSON.stringify({
-          contentMarkdown,
-          parentCommentId: parentCommentId || undefined,
+          ...submissionBody,
+          requestId,
         }),
       },
     );
 
+    completeModerationSubmission(requestId);
+    if (submittedToken !== userState.token || !userState.isLoggedIn) return;
+    if (payload.moderation?.status === 'pending') {
+      clearDiscussionCommentComposer(form);
+      showModerationSubmitted(payload, message);
+      return;
+    }
     const newComments = [payload.comment].filter(Boolean);
     discussionState.comments = [...discussionState.comments, ...newComments];
     const addedCommentCount = newComments.length;
@@ -9650,6 +9825,17 @@ async function handleDiscussionComposeSubmit(event) {
 
   setDiscussionMessage('正在发布帖子...');
   const submittedUid = userState.uid;
+  const submittedToken = userState.token;
+  const submissionBody = {
+    boardSlug: discussionComposeBoard.value,
+    loginRequired: document.getElementById('discussion-login-required')?.checked !== false,
+    isAnonymous:
+      discussionComposeBoard.value === 'daily' &&
+      Boolean(document.getElementById('discussion-anonymous')?.checked),
+    title: discussionComposeTitle.value.trim(),
+    contentMarkdown: discussionComposeContent.value,
+  };
+  const requestId = moderationSubmissionRequestId('post', submissionBody);
   const submitButton =
     discussionComposeForm.querySelector('button[type="submit"]') ||
     document.querySelector('button[form="discussion-compose-form"]');
@@ -9661,17 +9847,24 @@ async function handleDiscussionComposeSubmit(event) {
     const payload = await callApi('/discussion/posts', {
       method: 'POST',
       body: JSON.stringify({
-        boardSlug: discussionComposeBoard.value,
-        loginRequired: document.getElementById('discussion-login-required')?.checked !== false,
-        isAnonymous:
-          discussionComposeBoard.value === 'daily' &&
-          Boolean(document.getElementById('discussion-anonymous')?.checked),
-        title: discussionComposeTitle.value.trim(),
-        contentMarkdown: discussionComposeContent.value,
+        ...submissionBody,
+        requestId,
       }),
     });
 
-    if (!userState.isLoggedIn || userState.uid !== submittedUid) return;
+    completeModerationSubmission(requestId);
+    if (
+      !userState.isLoggedIn ||
+      userState.uid !== submittedUid ||
+      userState.token !== submittedToken
+    )
+      return;
+    if (showModerationSubmitted(payload)) {
+      discussionComposeForm.dispatchEvent(new CustomEvent('discussion:submitted'));
+      discussionComposeForm.reset();
+      renderDiscussionUploadPreviews();
+      return;
+    }
     setDiscussionMessage(payload.message || '帖子发布成功');
     discussionComposeForm.dispatchEvent(
       new CustomEvent('discussion:published', { detail: { post: payload.post } }),
@@ -9803,12 +9996,17 @@ async function uploadDiscussionImage(file) {
 
   setDiscussionMessage(`正在处理图片：${file.name || 'image'}`);
   const imageDataUrl = await resizeImageFileToWebp(file);
+  const uploadToken = userState.token;
   setDiscussionMessage(`正在上传图片：${file.name || 'image'}`);
   const payload = await callApi('/discussion/uploads/images', {
     method: 'POST',
     body: JSON.stringify({ imageDataUrl }),
   });
 
+  if (uploadToken !== userState.token || !userState.isLoggedIn)
+    throw new Error('登录状态已变化，请重新上传。');
+  const id = moderationAttachmentId(payload.url);
+  if (id) moderationImagePreviews.set(id, { token: uploadToken, url: imageDataUrl });
   return payload.url || '';
 }
 
@@ -9832,6 +10030,7 @@ async function insertDiscussionImages(files) {
     }
 
     setDiscussionMessage('图片已插入正文');
+    renderDiscussionUploadPreviews();
   } catch (error) {
     setDiscussionMessage(error.message);
   }
@@ -10805,6 +11004,8 @@ document.getElementById('discussion-my-more')?.addEventListener('click', async (
   }
 });
 window.addEventListener('freebbs:session-change', async () => {
+  moderationSubmissionIntents.clear();
+  clearModerationImagePreviews();
   if (isPublicProfilePage()) {
     window.FreeBbsProfileActivity?.render(null);
     loadPublicProfile();
@@ -10825,6 +11026,12 @@ window.addEventListener('freebbs:session-change', async () => {
     await loadDiscussionDetail(pendingPost);
 });
 window.addEventListener('storage', (event) => {
+  if (event.key === STORAGE_KEY || event.key === null) {
+    moderationSubmissionIntents.clear();
+    clearModerationImagePreviews();
+    moderationEntryToken = null;
+    document.querySelectorAll('[data-moderation-entry]').forEach((link) => link.remove());
+  }
   if (isPublicProfilePage() && (event.key === STORAGE_KEY || event.key === null)) {
     publicProfileRequestVersion += 1;
     window.FreeBbsProfileActivity?.render(null);
@@ -10842,6 +11049,20 @@ window.addEventListener('pageshow', (event) => {
     window.location.reload();
   }
 });
+window.addEventListener('pagehide', clearModerationImagePreviews);
+if (typeof MutationObserver !== 'undefined') {
+  const moderationImageObserver = new MutationObserver((records) => {
+    for (const record of records)
+      for (const added of record.addedNodes) hydrateModerationImages(added);
+  });
+  moderationImageObserver.observe(document.body, { childList: true, subtree: true });
+  hydrateModerationImages(document.body);
+}
+discussionComposeContent?.addEventListener('change', renderDiscussionUploadPreviews);
+discussionComposeForm?.addEventListener(
+  'discussion:draft-restored',
+  renderDiscussionUploadPreviews,
+);
 discussionPostList?.addEventListener('click', (event) => {
   handleDiscussionPostClick(event);
 });

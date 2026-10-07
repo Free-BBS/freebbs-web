@@ -356,6 +356,7 @@ function activityReturnPath() {
     const next = new URL(value, window.location.origin);
     const allowed =
       next.pathname === '/publish' ||
+      next.pathname === '/moderation' ||
       next.pathname === '/surveys' ||
       next.pathname.startsWith('/development/') ||
       (next.pathname === '/discussion' &&

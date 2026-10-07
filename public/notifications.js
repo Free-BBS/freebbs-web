@@ -15,6 +15,7 @@
     sessionVersion: 0,
     selectedUsers: new Map(),
     audienceVersion: 0,
+    pollMilliseconds: 30000,
   };
   const widget = document.createElement('div');
   widget.className = 'notification-widget';
@@ -508,6 +509,13 @@
       widget.hidden = Boolean(user.requiresUsernameChange);
       setupAdmin(user);
       if (canLoad()) await refreshCount();
+      // Review notices are committed with the draft. Active reviewers see the
+      // unread badge promptly while this page is open, without copying evidence.
+      const moderation = await api('/moderation/session').catch(() => null);
+      if (version !== state.sessionVersion || token !== localStorage.getItem(storageKey)) return;
+      state.pollMilliseconds = moderation?.enabled && moderation.reviewer ? 3000 : 30000;
+      clearInterval(timer);
+      timer = setInterval(refreshCount, state.pollMilliseconds);
     } catch (_error) {
       setupAdmin(null);
     }
@@ -567,7 +575,7 @@
   window.addEventListener('pageshow', (event) => {
     if (!event.persisted) return;
     clearInterval(timer);
-    timer = setInterval(refreshCount, 30000);
+    timer = setInterval(refreshCount, state.pollMilliseconds);
     syncSession();
   });
   syncSession();

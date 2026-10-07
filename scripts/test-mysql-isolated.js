@@ -11,7 +11,12 @@ const {
   assertIsolatedMysql,
 } = require('../backend/test-helpers/isolated-mysql');
 
+const MODERATION_TEST_FILE = 'backend/discussion-moderation.mysql.test.js';
+const MODERATION_TEST_TITLE =
+  'isolated MySQL: moderation publication, retries, permissions, attachments and retention are atomic';
+
 const TEST_FILES = [
+  MODERATION_TEST_FILE,
   'backend/language-lab.mysql.test.js',
   'backend/profile-activity.mysql.test.js',
   'backend/circuit-progress.test.js',
@@ -46,6 +51,7 @@ function testEnvironment(socketPath, original = process.env) {
   return {
     ...env,
     NODE_ENV: 'test',
+    RUN_MODERATION_MYSQL: '1',
     FREEBBS_TEST_MYSQL_SOCKET: socketPath,
     RUN_ADMIN_REWARDS_MYSQL: '1',
     RUN_ECONOMY_MYSQL: '1',
@@ -74,6 +80,7 @@ function testEnvironment(socketPath, original = process.env) {
 }
 
 const REQUIRED_MYSQL_TESTS = [
+  MODERATION_TEST_TITLE,
   'isolated MySQL: immutable code and result snapshots survive router restart',
   'isolated MySQL: profile activity counts visible posts and named comments across Beijing midnight',
   'isolated MySQL: challenge progression gates direct requests and ranks contiguous current passes',
@@ -95,11 +102,27 @@ const REQUIRED_MYSQL_TESTS = [
   'isolated MySQL: series ownership, rules, exceptions, concurrency, rollback and imported resync',
 ];
 
-function validateMysqlTestOutput(output) {
+function selectMysqlTests(args = []) {
+  const workbenchOnly = args.includes('--workbench-only');
+  const moderationOnly = args.includes('--moderation-only');
+  assert.ok(!(workbenchOnly && moderationOnly), 'choose only one isolated MySQL test subset');
+  if (moderationOnly)
+    return { testFiles: [MODERATION_TEST_FILE], requiredTests: [MODERATION_TEST_TITLE] };
+  if (workbenchOnly)
+    return {
+      testFiles: TEST_FILES.filter((file) =>
+        /(?:workbench|course-schedule|schedule-series)/.test(file),
+      ),
+      requiredTests: null,
+    };
+  return { testFiles: [...TEST_FILES], requiredTests: [...REQUIRED_MYSQL_TESTS] };
+}
+
+function validateMysqlTestOutput(output, requiredTests = REQUIRED_MYSQL_TESTS) {
   assert.match(output, /^# skipped 0\s*$/m, 'the isolated suite must not skip any test');
   assert.match(output, /^# fail 0\s*$/m, 'the isolated suite must not fail any test');
   const successes = output.split('\n').filter((line) => /^ok \d+ - /.test(line));
-  for (const name of REQUIRED_MYSQL_TESTS) {
+  for (const name of requiredTests) {
     assert.ok(
       successes.some((line) => line.includes(` - ${name}`)),
       `required MySQL test did not run: ${name}`,
@@ -131,7 +154,7 @@ function stopChildTree(child) {
   return Promise.resolve();
 }
 
-function run(command, args, options = {}, verifyTests = false) {
+function run(command, args, options = {}, requiredTests = null) {
   const { signal, ...spawnOptions } = options;
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -141,7 +164,7 @@ function run(command, args, options = {}, verifyTests = false) {
     const child = spawn(command, args, {
       windowsHide: true,
       detached: process.platform !== 'win32',
-      stdio: verifyTests ? ['ignore', 'pipe', 'inherit'] : 'inherit',
+      stdio: requiredTests ? ['ignore', 'pipe', 'inherit'] : 'inherit',
       ...spawnOptions,
     });
     const cancel = () => {
@@ -149,7 +172,7 @@ function run(command, args, options = {}, verifyTests = false) {
     };
     signal?.addEventListener('abort', cancel, { once: true });
     let output = '';
-    if (verifyTests)
+    if (requiredTests)
       child.stdout.on('data', (chunk) => {
         output += chunk.toString();
         process.stdout.write(chunk);
@@ -168,7 +191,7 @@ function run(command, args, options = {}, verifyTests = false) {
         return;
       }
       try {
-        if (verifyTests) validateMysqlTestOutput(output);
+        if (requiredTests) validateMysqlTestOutput(output, requiredTests);
         resolve();
       } catch (error) {
         reject(error);
@@ -181,10 +204,7 @@ function run(command, args, options = {}, verifyTests = false) {
 }
 
 async function main() {
-  const workbenchOnly = process.argv.includes('--workbench-only');
-  const testFiles = workbenchOnly
-    ? TEST_FILES.filter((file) => /(?:workbench|course-schedule|schedule-series)/.test(file))
-    : TEST_FILES;
+  const { testFiles, requiredTests } = selectMysqlTests(process.argv.slice(2));
   const root = path.resolve(__dirname, '..');
   // Linux uses a deliberately short fixed parent so the Unix socket fits its length limit.
   const parent = process.platform === 'win32' ? os.tmpdir() : '/tmp';
@@ -262,7 +282,7 @@ async function main() {
         env,
         signal: controller.signal,
       },
-      !workbenchOnly,
+      requiredTests,
     );
     success = true;
   } finally {
@@ -302,4 +322,10 @@ if (require.main === module)
     console.error(error.message);
     process.exitCode = 1;
   });
-module.exports = { TEST_FILES, testEnvironment, REQUIRED_MYSQL_TESTS, validateMysqlTestOutput };
+module.exports = {
+  TEST_FILES,
+  testEnvironment,
+  REQUIRED_MYSQL_TESTS,
+  selectMysqlTests,
+  validateMysqlTestOutput,
+};

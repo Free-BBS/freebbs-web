@@ -28,13 +28,15 @@
   };
   Promise.all([app.sessionReady, app.discussionReady]).then(() => {
     if (!app.userState.isLoggedIn) {
-      location.replace('/login?next=' + encodeURIComponent(location.pathname + location.search));
+      window.location.replace(
+        `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`,
+      );
       return;
     }
-    if (new URLSearchParams(location.search).get('compose') === 'circuit') return;
-    key = 'free_bbs_post_draft:' + app.userState.uid;
+    if (new URLSearchParams(window.location.search).get('compose') === 'circuit') return;
+    key = `free_bbs_post_draft:${app.userState.uid}`;
     try {
-      const sharedLab = new URLSearchParams(location.search).get('lab_share') === '1';
+      const sharedLab = new URLSearchParams(window.location.search).get('lab_share') === '1';
       const labDraft = sharedLab
         ? JSON.parse(sessionStorage.getItem('free_bbs_lab_share_draft') || 'null')
         : null;
@@ -60,7 +62,7 @@
           return;
         }
       }
-      const sharedTool = new URLSearchParams(location.search).get('tool_share') === '1';
+      const sharedTool = new URLSearchParams(window.location.search).get('tool_share') === '1';
       const toolDraft = sharedTool
         ? JSON.parse(sessionStorage.getItem('free_bbs_tool_share_draft') || 'null')
         : null;
@@ -89,19 +91,30 @@
     }
     form.addEventListener('input', save);
     form.addEventListener('change', save);
+    form.dispatchEvent(new CustomEvent('discussion:draft-restored'));
   });
   form.addEventListener('discussion:published', () => {
     published = true;
     try {
       sessionStorage.removeItem(key);
-    } catch {}
+    } catch {
+      /* The in-memory form was already submitted. */
+    }
+  });
+  form.addEventListener('discussion:submitted', () => {
+    try {
+      sessionStorage.removeItem(key);
+      status.textContent = '已提交审核，可在“我的提交”查看进度';
+    } catch {
+      /* A disabled draft store must not hide the successful submission. */
+    }
   });
   window.addEventListener('pagehide', save);
   window.addEventListener('freebbs:session-change', () => {
-    if (key && key !== 'free_bbs_post_draft:' + app.userState.uid) {
+    if (key && key !== `free_bbs_post_draft:${app.userState.uid}`) {
       key = null;
       form.reset();
-      location.replace('/login?next=%2Fpublish');
+      window.location.replace('/login?next=%2Fpublish');
     }
   });
 })();
