@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const sharp = require('sharp');
+const { readFields } = require('../public/knowledge-overview');
+const { stripAssessmentBlocks } = require('./learning-assessment');
 const { COURSE_SEEDS, SIGNAL_EDGE_SEEDS, SIGNAL_NODE_SEEDS } = require('./course-map-data');
 
 const NODE_ID_PATTERN = /^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$/;
@@ -222,7 +224,7 @@ function splitLegacyKnowledgeDocument(markdown, title = '') {
       const explicitSection = Object.entries(LEGACY_SECTION_HEADINGS).find(([, pattern]) =>
         pattern.test(normalizedLabel),
       )?.[0];
-      if (explicitSection) {
+      if (explicitSection && (!activeSectionLevel || level <= activeSectionLevel)) {
         activeSection = explicitSection;
         activeSectionLevel = level;
         continue;
@@ -279,8 +281,17 @@ function resolveKnowledgeSections(row) {
     : persistedSections;
 }
 
-function toMapNode(row, includeMarkdown = false) {
-  const sections = resolveKnowledgeSections(row);
+function toMapNode(row, includeMarkdown = false, includeAssessmentSource = false) {
+  const rawSections = resolveKnowledgeSections(row);
+  // Only course editors receive the authoring source. Student-facing content never
+  // contains scoring keys; its version still identifies the complete source.
+  const sections = Object.fromEntries(
+    Object.entries(rawSections).map(([key, value]) => [
+      key,
+      includeAssessmentSource ? value : stripAssessmentBlocks(value),
+    ]),
+  );
+  const chapterTitle = readFields(row.basic_info_markdown || sections.basicInfoMarkdown).chapter;
   return {
     id: row.node_id,
     title: row.title,
@@ -290,12 +301,17 @@ function toMapNode(row, includeMarkdown = false) {
       y: Number(row.position_y || 0),
     },
     hasDocument: Boolean(row.has_document ?? sections.knowledgeMarkdown),
+    ...(chapterTitle ? { chapterTitle } : {}),
     updatedAt: row.updated_at || null,
     ...(includeMarkdown
       ? {
           markdown: sections.knowledgeMarkdown,
           sections,
           revision: getKnowledgeNodeRevision(row),
+          documentVersion: crypto
+            .createHash('sha256')
+            .update(String(row.document_markdown || ''))
+            .digest('hex'),
         }
       : {}),
   };
@@ -597,12 +613,15 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
       }
       const currentUser = await getOptionalAuthUser(request);
       const [nodeRows] = await pool.execute(
-        `SELECT node_id, title, summary, position_x, position_y,
-                CASE WHEN document_markdown IS NULL OR document_markdown = '' THEN 0 ELSE 1 END AS has_document,
-                updated_at
-         FROM course_map_nodes
-         WHERE course_id = ?
-         ORDER BY position_y ASC, position_x ASC, node_id ASC`,
+        `SELECT n.node_id, n.title, n.summary, n.position_x, n.position_y,
+                CASE WHEN n.document_markdown IS NULL OR n.document_markdown = '' THEN 0 ELSE 1 END AS has_document,
+                n.updated_at, s.basic_info_markdown,
+                CASE WHEN s.basic_info_markdown IS NULL OR s.basic_info_markdown = ''
+                     THEN LEFT(n.document_markdown, 16384) ELSE NULL END AS document_markdown
+         FROM course_map_nodes n
+         LEFT JOIN course_map_node_sections s ON s.course_id = n.course_id AND s.node_id = n.node_id
+         WHERE n.course_id = ?
+         ORDER BY position_y ASC, position_x ASC, n.node_id ASC`,
         [course.id],
       );
       const [edgeRows] = await pool.execute(
@@ -648,12 +667,13 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
         return;
       }
       const currentUser = await getOptionalAuthUser(request);
+      const canEditMap = await canManageCourse(pool, currentUser, course.id);
       response.json({
         course: {
           ...toCourse(course),
-          canEditMap: await canManageCourse(pool, currentUser, course.id),
+          canEditMap,
         },
-        node: toMapNode(node, true),
+        node: toMapNode(node, true, canEditMap),
       });
     } catch (error) {
       sendCourseError(response, error, '获取知识结点失败');
@@ -692,7 +712,7 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
          FROM course_map_nodes WHERE course_id = ? AND node_id = ? LIMIT 1`,
         [access.course.id, nodeId],
       );
-      response.status(201).json({ node: toMapNode(rows[0], true) });
+      response.status(201).json({ node: toMapNode(rows[0], true, true) });
     } catch (error) {
       sendCourseError(response, error, '创建知识结点失败');
     }
@@ -814,7 +834,11 @@ function createCourseMapsRouter({ pool, requireAuth, getOptionalAuthUser, upload
         [sections.knowledgeMarkdown, access.user.id, access.course.id, nodeId],
       );
       await markRagIndexDirty(connection);
-      const node = toMapNode(await getKnowledgeNode(connection, access.course.id, nodeId), true);
+      const node = toMapNode(
+        await getKnowledgeNode(connection, access.course.id, nodeId),
+        true,
+        true,
+      );
       await connection.commit();
       response.json({
         ok: true,
@@ -1014,4 +1038,5 @@ module.exports = {
   normalizeLegacySectionHeading,
   resolveKnowledgeSections,
   splitLegacyKnowledgeDocument,
+  toMapNode,
 };

@@ -259,7 +259,7 @@ test('recovers numbered legacy content previously saved into the knowledge secti
   assert.equal(sections.applicationsMarkdown, '用于引出实数域。');
 });
 
-function createMockCourseMapPool() {
+function createMockCourseMapPool(nodes = []) {
   let backgroundUrl = '/assets/course-maps/initial.webp';
   const writes = [];
   const course = {
@@ -287,7 +287,7 @@ function createMockCourseMapPool() {
         return [[course]];
       }
       if (sql.includes('FROM course_map_nodes') && sql.includes('ORDER BY position_y')) {
-        return [[]];
+        return [nodes];
       }
       if (sql.includes('FROM course_map_edges') && sql.includes('ORDER BY created_at')) {
         return [[]];
@@ -307,6 +307,54 @@ function createMockCourseMapPool() {
     },
   };
 }
+
+test('public map derives actual chapter names from structured and legacy metadata without exposing documents', async (t) => {
+  const rows = [
+    {
+      node_id: 'SS-01-01',
+      title: '卷积',
+      basic_info_markdown: '章节/单元：时域分析',
+      has_document: 1,
+    },
+    {
+      node_id: 'SS-02-01',
+      title: '频域',
+      document_markdown:
+        '# 频域\n\n## 基本信息\n\n章节/单元：频域分析\n\n## 知识点正文\n\n不应通过地图返回的完整正文',
+      has_document: 1,
+    },
+  ];
+  const pool = createMockCourseMapPool(rows);
+  const app = express();
+  app.use(
+    '/api/courses',
+    createCourseMapsRouter({
+      pool,
+      getOptionalAuthUser: async () => null,
+      requireAuth: async () => null,
+    }),
+  );
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => {
+    server.once('listening', resolve);
+  });
+  t.after(
+    () =>
+      new Promise((resolve) => {
+        server.close(resolve);
+      }),
+  );
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/courses/signals/map`);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.deepEqual(
+    payload.nodes.map((node) => node.chapterTitle),
+    ['时域分析', '频域分析'],
+  );
+  assert.equal(payload.nodes[0].sections, undefined);
+  assert.equal(payload.nodes[1].markdown, undefined);
+  assert.ok(!JSON.stringify(payload).includes('不应通过地图返回'));
+});
 
 async function readJson(response) {
   return response.json().catch(() => ({}));

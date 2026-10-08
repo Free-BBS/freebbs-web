@@ -143,6 +143,13 @@ npm run test:onboarding
 
 echo "[ci] nickname policy and knowledge learning usability tests"
 npm run test:profile-learning
+npm run test:learning-workspace
+npm run test:learning-assessment
+npm run test:learning-analytics
+npm run test:learning-companion
+npm run test:learning-stars
+npm run test:learning-structure
+npm run test:course-authoring
 
 echo "[ci] activity registration and administration tests"
 npm run test:surveys

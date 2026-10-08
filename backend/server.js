@@ -123,6 +123,36 @@ const {
   ensureUsernameChangeTables,
 } = require('./username-policy');
 const { createCourseMapsRouter, ensureCourseMapTables } = require('./course-maps');
+const {
+  createLearningWorkspaceRouter,
+  ensureLearningWorkspaceTables,
+} = require('./learning-workspace');
+const {
+  createLearningAssessmentRouter,
+  createMysqlAssessmentStore,
+  ensureLearningAssessmentTables,
+} = require('./learning-assessment');
+const {
+  loadCompanionContext,
+  companionHint,
+  createMysqlCompanionNodeLoader,
+} = require('./learning-companion');
+const {
+  createLearningAnalyticsRouter,
+  createMysqlAnalyticsStore,
+  ensureLearningAnalyticsTables,
+  recordAssessmentEvent,
+} = require('./learning-analytics');
+const {
+  createLearningStarsRouter,
+  createLearningStarService,
+  createMysqlLearningStarStore,
+  ensureLearningStarTables,
+} = require('./learning-stars');
+const {
+  normalizePreference: normalizeLearningStart,
+  promptHintFromPreference,
+} = require('../public/learning-start');
 const { createCircuitsRouter, ensureCircuitTables } = require('./circuits');
 const { createCircuitExamplesRouter, ensureCircuitExampleTables } = require('./circuit-examples');
 const {
@@ -1814,20 +1844,23 @@ function buildKnowledgeRagPrompt(question, context) {
     `知识点：${context.knowledgePointTitle || '当前知识点'}`,
     `摘要：${context.knowledgePointSummary || '暂无摘要'}`,
     `当前页面正文：\n${context.knowledgePointMarkdown || '暂无正文'}`,
+    promptHintFromPreference(context.learningStartPreference, context.resources),
+    companionHint(context),
     '',
     `学生问题：${question}`,
   ].join('\n');
 }
 
-function buildKnowledgeRagChatPayload(user, payload) {
+function buildKnowledgeRagChatPayload(user, payload, trustedContext = null) {
   const rawContext = payload.context && typeof payload.context === 'object' ? payload.context : {};
-  const context = {
+  const context = trustedContext || {
     courseSlug: normalizeKnowledgeRagText(rawContext.courseSlug, 120),
     courseName: normalizeKnowledgeRagText(rawContext.courseName, 200),
     knowledgePointId: normalizeKnowledgeRagText(rawContext.knowledgePointId, 120),
     knowledgePointTitle: normalizeKnowledgeRagText(rawContext.knowledgePointTitle, 300),
     knowledgePointSummary: normalizeKnowledgeRagText(rawContext.knowledgePointSummary, 2000),
     knowledgePointMarkdown: normalizeKnowledgeRagText(rawContext.knowledgePointMarkdown, 30000),
+    learningStartPreference: normalizeLearningStart(rawContext.learningStartPreference),
   };
   const history = Array.isArray(payload.history)
     ? payload.history
@@ -2794,6 +2827,33 @@ app.use(
   createSurveysRouter({ pool, requireAdmin, getOptionalAuthUser, service: surveyService }),
 );
 app.use('/api/circuits', createCircuitsRouter({ pool, requireAuth }));
+app.use('/api/learning', createLearningWorkspaceRouter({ pool, requireAuth }));
+const learningAnalyticsStore = createMysqlAnalyticsStore(pool);
+const learningStarService = createLearningStarService({
+  store: createMysqlLearningStarStore(pool),
+});
+app.use(
+  '/api/learning-stars',
+  createLearningStarsRouter({ service: learningStarService, requireAuth }),
+);
+app.use(
+  '/api/learning-analytics',
+  createLearningAnalyticsRouter({ pool, requireAuth, requireAdmin, store: learningAnalyticsStore }),
+);
+app.use(
+  '/api/learning-assessments',
+  createLearningAssessmentRouter({
+    pool,
+    requireAuth,
+    onAssessmentEvent: async (event) => {
+      // Each durable business result can award a star even when process tracking is off.
+      await Promise.all([
+        learningStarService.recordAssessment(event),
+        recordAssessmentEvent(learningAnalyticsStore, event),
+      ]);
+    },
+  }),
+);
 app.use('/api/circuit-examples', createCircuitExamplesRouter({ pool, requireAuth }));
 app.use('/api/circuit-challenges', createCircuitChallengesRouter({ pool, requireAuth }));
 app.use(
@@ -3118,12 +3178,22 @@ app.post('/api/ai/knowledge/chat', async (request, response) => {
   }
 
   try {
-    const agentPayload = buildKnowledgeRagChatPayload(user, { ...payload, question });
+    const trustedContext = await loadCompanionContext({
+      store: createMysqlAssessmentStore(pool),
+      user,
+      rawContext: payload.context,
+      loadNode: createMysqlCompanionNodeLoader(pool),
+    });
+    const agentPayload = buildKnowledgeRagChatPayload(
+      user,
+      { ...payload, question },
+      trustedContext,
+    );
     const agentResponse = await postAgentChat(agentPayload, user);
     await relayAgentChatResponse(agentResponse, response, true);
   } catch (error) {
-    response.status(502).json({
-      message: 'RAG Agent 暂时不可用',
+    response.status([400, 404].includes(error.status) ? error.status : 502).json({
+      message: [400, 404].includes(error.status) ? error.message : 'RAG Agent 暂时不可用',
       detail: error.message,
     });
   }
@@ -6448,6 +6518,10 @@ async function start() {
     );
   }
   await ensureCourseUploadTables(pool);
+  await ensureLearningWorkspaceTables(pool);
+  await ensureLearningAssessmentTables(pool);
+  await ensureLearningAnalyticsTables(pool);
+  await ensureLearningStarTables(pool);
   await ensureCircuitTables(pool);
   await ensureCircuitExampleTables(pool);
   await ensureCircuitChallengeTables(pool);
