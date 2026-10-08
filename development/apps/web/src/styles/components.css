@@ -1,3 +1,5 @@
+@import '../../../../../public/actions.css';
+
 .workbench-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr));
@@ -41,7 +43,7 @@
 
 .workbench-card[aria-disabled='true'],
 .workbench-card:disabled,
-button:disabled {
+button:disabled:where(:not(.bbs-action)) {
   cursor: not-allowed;
   filter: grayscale(0.35);
   opacity: 0.52;
@@ -169,12 +171,11 @@ button:disabled {
     transform var(--transition-fast);
 }
 
-.auth-state a:hover,
-.auth-state button:hover,
-.demo-switcher button:hover {
+.auth-state a:hover:where(:not([aria-disabled='true'])),
+.auth-state button:hover:where(:not(:disabled, [aria-disabled='true'])),
+.demo-switcher button:hover:where(:not(:disabled, [aria-disabled='true'])) {
   background: var(--color-active);
   color: var(--action-primary-text);
-  transform: translateY(-1px);
 }
 
 .demo-switcher {
@@ -443,10 +444,11 @@ button:disabled {
   text-decoration: none;
 }
 
-:where(.module-page) button:hover,
-.dialog-form button:hover {
+:where(.module-page) button:hover:where(:not(:disabled, [aria-disabled='true'])),
+.dialog-form button:hover:where(:not(:disabled, [aria-disabled='true'])) {
   border-color: var(--color-active);
   background: var(--color-active);
+  color: var(--action-primary-text);
 }
 
 .module-page [role='alert'],

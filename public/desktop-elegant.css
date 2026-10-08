@@ -84,7 +84,8 @@
     border-radius: 10px !important;
   }
 
-  body:not(.auth-page-body) :where(a, button, input, textarea, select, summary) {
+  body:not(.auth-page-body)
+    :where(a, button, input, textarea, select, summary):not(:where(.bbs-action)) {
     transition:
       color 180ms ease,
       background-color 180ms ease,
@@ -92,10 +93,6 @@
       box-shadow 180ms ease,
       transform 180ms ease,
       opacity 180ms ease;
-  }
-
-  body:not(.auth-page-body) :where(a, button, summary):active {
-    transform: translateY(1px);
   }
 
   body:not(.auth-page-body) .topbar .nav-link:hover {

@@ -6,6 +6,7 @@
   --surface-muted: #eef3f4;
   --border-subtle: #d8e2e5;
   --action-primary: #075d68;
+  --action-primary-hover: #064a54;
   --action-primary-text: #ffffff;
   --nav-link-hover-background: #175267;
   --nav-link-hover-text: #ffffff;
@@ -61,6 +62,23 @@
   --shadow-card: 0 1px 2px rgba(23, 34, 32, 0.04);
   --shadow-raised: 0 16px 36px rgba(23, 34, 32, 0.16);
   --transition-fast: 140ms ease;
+}
+
+/* Both applications use public/actions.css; only role colors vary by theme. */
+:root,
+body {
+  --action-secondary: var(--surface-raised);
+  --action-secondary-hover: var(--surface-muted);
+  --action-secondary-text: var(--color-text);
+  --action-secondary-border: var(--border-subtle);
+  --action-quiet-hover: color-mix(in srgb, var(--action-primary) 10%, transparent);
+  --action-quiet-text: var(--action-primary);
+  --action-danger: var(--color-danger);
+  --action-focus: var(--color-focus);
+  --action-focus-width: 3px;
+  --action-focus-offset: 3px;
+  --action-disabled-opacity: 0.55;
+  --action-transition: var(--transition-fast);
 }
 
 *,

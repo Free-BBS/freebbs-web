@@ -67,6 +67,10 @@ function harness({ mode, failReads = false, failWrites = false, parent } = {}) {
   };
   window.parent ||= window;
   const context = vm.createContext({ document, window, localStorage });
+  vm.runInContext(
+    fs.readFileSync(path.join(publicDir, 'typography-preferences.js'), 'utf8'),
+    context,
+  );
   vm.runInContext(fs.readFileSync(path.join(publicDir, 'typography.js'), 'utf8'), context);
   return {
     context,

@@ -1,0 +1,86 @@
+/* Opt-in action roles. Page styles still own placement and special controls. */
+.bbs-action {
+  --action-fill: var(--action-secondary);
+  --action-hover-fill: var(--action-secondary-hover);
+  --action-foreground: var(--action-secondary-text);
+  --action-stroke: var(--action-secondary-border);
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--action-stroke);
+  border-radius: 12px;
+  background: var(--action-fill);
+  color: var(--action-foreground);
+  font: inherit;
+  font-weight: 650;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color var(--action-transition),
+    background-color var(--action-transition),
+    border-color var(--action-transition),
+    opacity var(--action-transition);
+}
+
+.bbs-action[data-action-tone='primary'] {
+  --action-fill: var(--action-primary);
+  --action-hover-fill: var(--action-primary-hover);
+  --action-foreground: var(--action-primary-text);
+  --action-stroke: var(--action-primary);
+}
+
+.bbs-action[data-action-tone='quiet'] {
+  --action-fill: transparent;
+  --action-hover-fill: var(--action-quiet-hover);
+  --action-foreground: var(--action-quiet-text);
+  --action-stroke: transparent;
+}
+
+.bbs-action[data-action-tone='danger'] {
+  --action-fill: var(--action-danger);
+  --action-hover-fill: var(--action-danger);
+  --action-foreground: var(--action-danger-text);
+  --action-stroke: var(--action-danger);
+}
+
+.bbs-action:hover:not(:disabled, [aria-disabled='true']),
+.bbs-action:active:not(:disabled, [aria-disabled='true']) {
+  background: var(--action-hover-fill);
+}
+
+/* Do not use pointer-events:none: disabled reasons can still be discovered.
+ * Native disabled prevents activation. aria-disabled also requires a JS guard. */
+.bbs-action:disabled,
+.bbs-action[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: var(--action-disabled-opacity);
+}
+
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: var(--action-focus-width, 3px) solid var(--action-focus, #087f90);
+  outline-offset: var(--action-focus-offset, 3px);
+}
+
+body:not(.auth-page-body) .topbar,
+body:not(.auth-page-body) .mobile-nav {
+  --action-focus: #bff8f7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bbs-action {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .bbs-action {
+    border-color: ButtonText;
+  }
+
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline-color: Highlight;
+  }
+}

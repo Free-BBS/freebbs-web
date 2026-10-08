@@ -42,6 +42,7 @@ export function InformationHubPage({ client, user }: InformationHubPageProps) {
   const [filter, setFilter] = useState<InformationFeedFilter>('all');
   const [items, setItems] = useState<InformationFeedItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [error, setError] = useState('');
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerMode, setComposerMode] = useState<'feedback' | 'announcement'>('feedback');
@@ -57,6 +58,7 @@ export function InformationHubPage({ client, user }: InformationHubPageProps) {
   useEffect(() => {
     let current = true;
     setLoading(true);
+    setLoadError('');
     setError('');
     void client
       .request<InformationFeedItem[]>(`/information/feed?filter=${filter}`)
@@ -64,7 +66,7 @@ export function InformationHubPage({ client, user }: InformationHubPageProps) {
         if (current) setItems(result);
       })
       .catch(() => {
-        if (current) setError('信息暂时无法加载，请稍后重试。');
+        if (current) setLoadError('信息暂时无法加载，请稍后重试。');
       })
       .finally(() => {
         if (current) setLoading(false);
@@ -218,16 +220,22 @@ export function InformationHubPage({ client, user }: InformationHubPageProps) {
         <a href="/development/information/proposals">提案池 ↗</a>
       </nav>
 
-      {error ? (
-        <p className="information-alert" role="alert">
-          {error}
+      {loadError || error ? (
+        <p className="information-alert" role="alert" data-state="error" aria-busy="false">
+          {loadError || error}
         </p>
       ) : null}
       <div className="information-layout">
-        <main className="information-feed" aria-live="polite">
-          {loading ? <p className="information-empty">正在整理信息…</p> : null}
-          {!loading && items.length === 0 ? (
-            <p className="information-empty">这个分类暂时还没有内容。</p>
+        <main className="information-feed" aria-live="polite" aria-busy={loading}>
+          {loading ? (
+            <p className="information-empty" role="status" data-state="loading">
+              正在整理信息…
+            </p>
+          ) : null}
+          {!loading && !loadError && items.length === 0 ? (
+            <p className="information-empty" role="status" data-state="empty">
+              这个分类暂时还没有内容。
+            </p>
           ) : null}
           {items.map((item) => (
             <InformationFeedCard

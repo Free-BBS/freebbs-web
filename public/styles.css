@@ -6729,10 +6729,6 @@ body.system-settings-page .system-settings-menu-item:hover {
   background: rgba(39, 136, 152, 0.08);
 }
 
-body.system-settings-page .system-settings-menu-item:active {
-  transform: translateY(1px);
-}
-
 body.system-settings-page .system-settings-menu-icon {
   width: 46px;
   height: 46px;
@@ -6936,11 +6932,6 @@ body.system-settings-page .system-settings-clear {
 body.system-settings-page .system-settings-clear:not(:disabled):hover {
   border-color: rgba(137, 40, 40, 0.34);
   background: rgba(137, 40, 40, 0.07);
-}
-
-body.system-settings-page .system-settings-submit:active,
-body.system-settings-page .system-settings-clear:active {
-  transform: translateY(1px);
 }
 
 body.system-settings-page .system-settings-submit:disabled,
@@ -11919,27 +11910,17 @@ body:not(.auth-page-body) .main-content {
 }
 
 body:not(.auth-page-body) .main-content,
-body:not(.auth-page-body) .main-content h1,
-body:not(.auth-page-body) .main-content h2,
-body:not(.auth-page-body) .main-content h3,
-body:not(.auth-page-body) .main-content h4,
-body:not(.auth-page-body) .main-content p,
-body:not(.auth-page-body) .main-content li,
-body:not(.auth-page-body) .main-content dt,
-body:not(.auth-page-body) .main-content dd,
-body:not(.auth-page-body) .main-content span,
-body:not(.auth-page-body) .main-content strong,
-body:not(.auth-page-body) .main-content small,
-body:not(.auth-page-body) .main-content label,
-body:not(.auth-page-body) .main-content button,
-body:not(.auth-page-body) .main-content a {
+body:not(.auth-page-body)
+  .main-content
+  :is(h1, h2, h3, h4, p, li, dt, dd, span, strong, small, label, button, a):not(
+    :where(.bbs-action, .bbs-action *)
+  ):not(:where(.ui-state, .ui-state *)) {
   color: var(--bbs-shell-text) !important;
 }
 
-body:not(.auth-page-body) .main-content p,
-body:not(.auth-page-body) .main-content li,
-body:not(.auth-page-body) .main-content dd,
-body:not(.auth-page-body) .main-content small,
+body:not(.auth-page-body)
+  .main-content
+  :is(p, li, dd, small):not(:where(.bbs-action, .bbs-action *)):not(:where(.ui-state, .ui-state *)),
 body:not(.auth-page-body) .discussion-post-card-meta,
 body:not(.auth-page-body) .discussion-detail-meta,
 body:not(.auth-page-body) .discussion-comment-meta {

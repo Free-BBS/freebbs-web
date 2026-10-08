@@ -12,8 +12,12 @@ const publicFiles = new Set([
   '/styles.css',
   '/course.css',
   '/ui-polish.css',
+  '/actions.css',
+  '/theme-tokens.css',
+  '/ui-state.css',
   '/knowledge-typography.css',
   '/typography.js',
+  '/typography-preferences.js',
 ]);
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',

@@ -85,7 +85,7 @@ describe('dark-theme contrast contract', () => {
       ).toBeGreaterThanOrEqual(4.5);
     }
     expect(componentsCss).toMatch(
-      /\.auth-state a:hover,[\s\S]*?\.demo-switcher button:hover\s*\{[^}]*background:\s*var\(--color-active\);[^}]*color:\s*var\(--action-primary-text\);/,
+      /\.auth-state a:hover[\s\S]*?\.demo-switcher button:hover[^{}]*\{[^}]*background:\s*var\(--color-active\);[^}]*color:\s*var\(--action-primary-text\);/,
     );
     expect(componentsCss).toMatch(
       /\.admin-governance-page button\.danger-button:hover\s*\{[^}]*background:\s*var\(--color-danger\);[^}]*color:\s*var\(--action-danger-text\);/,
@@ -93,6 +93,34 @@ describe('dark-theme contrast contract', () => {
     expect(componentsCss).toMatch(
       /\.module-page \.audience-switcher button\[aria-pressed='true'\]\s*\{[^}]*background:\s*var\(--color-active\);[^}]*color:\s*var\(--action-primary-text\);/,
     );
+  });
+
+  it('shares opt-in action states with the main site and guards generic hover fills', () => {
+    expect(componentsCss).toContain("@import '../../../../../public/actions.css';");
+    for (const token of [
+      '--action-primary-hover:',
+      '--action-secondary:',
+      '--action-secondary-hover:',
+      '--action-secondary-text:',
+      '--action-secondary-border:',
+      '--action-quiet-hover:',
+      '--action-quiet-text:',
+      '--action-danger:',
+      '--action-focus:',
+      '--action-disabled-opacity:',
+    ]) {
+      expect(tokensCss).toContain(token);
+    }
+    expect(componentsCss).toMatch(
+      /\.dialog-form button:hover:where\(:not\(:disabled, \[aria-disabled='true'\]\)\)\s*\{[^}]*color:\s*var\(--action-primary-text\);/,
+    );
+    expect(componentsCss).toMatch(
+      /\.demo-switcher button:hover[^{}]*\{[^}]*color:\s*var\(--action-primary-text\);[^}]*\}/,
+    );
+    const genericHover = componentsCss.match(
+      /\.auth-state a:hover[\s\S]*?\.demo-switcher button:hover[^{}]*\{([^}]*)\}/,
+    )?.[1];
+    expect(genericHover).not.toMatch(/transform\s*:/);
   });
 
   it('keeps sidebar hover and active navigation text above the normal-text contrast threshold', () => {

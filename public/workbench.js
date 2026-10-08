@@ -1032,7 +1032,12 @@
 
   function makeAction(label, action, publicId, className = '') {
     const button = document.createElement('button');
-    button.className = `workbench-item-action ${className}`.trim();
+    button.className = `workbench-item-action bbs-action ${className}`.trim();
+    button.dataset.actionTone = className.includes('is-danger')
+      ? 'danger'
+      : className.includes('is-primary')
+        ? 'primary'
+        : 'secondary';
     button.type = 'button';
     button.dataset.workbenchAction = action;
     button.dataset.publicId = publicId;
@@ -1087,8 +1092,10 @@
       actions.append(makeAction('重新加载', 'retry', ''));
       item.append(actions);
     }
-    list.setAttribute('aria-busy', String(busy));
-    list.replaceChildren(item);
+    window.freeBbsUiState.render(list, {
+      kind: busy ? 'loading' : retry ? 'error' : 'empty',
+      content: item,
+    });
   }
 
   function renderImportantItems() {
@@ -1130,7 +1137,7 @@
         return node;
       }),
     );
-    elements.importantList.setAttribute('aria-busy', 'false');
+    window.freeBbsUiState.set(elements.importantList, 'ready');
   }
 
   function renderNotifications() {
@@ -1260,7 +1267,7 @@
         });
       }),
     );
-    elements.notificationList.setAttribute('aria-busy', String(pending));
+    window.freeBbsUiState.set(elements.notificationList, pending ? 'loading' : 'ready');
   }
 
   function renderScheduleItems() {
@@ -1343,7 +1350,7 @@
         return node;
       }),
     );
-    elements.scheduleList.setAttribute('aria-busy', 'false');
+    window.freeBbsUiState.set(elements.scheduleList, 'ready');
   }
 
   function buildNotificationQuery() {

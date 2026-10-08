@@ -20,6 +20,6 @@
  * this local body weight for paragraphs and 700 for semantic strong/b.
  * Titles, UI, KaTeX and code retain their separate font-role variables. */
 html[data-font-preset='zhongsong-study'] body.knowledge-page #knowledge-body {
-  --font-zh-body: 'FREEBBS Knowledge Serif', 'Noto Serif SC', 'STSong', 'SimSun', serif;
-  --font-zh-body-weight: 400;
+  --font-zh-body: var(--font-knowledge-body);
+  --font-zh-body-weight: var(--font-knowledge-body-weight);
 }

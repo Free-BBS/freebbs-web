@@ -5,6 +5,43 @@ const API_BASE_URL = (() => {
   return `${window.location.origin}/api`;
 })();
 const API_ROOT = API_BASE_URL.replace(/\/api$/, '');
+function installUiStateFallback() {
+  if (window.freeBbsUiState) return;
+  // Emergency native-DOM fallback if the optional presentation asset fails.
+  // No second style or preference table, network request, or automatic retry.
+  const set = (container, kind) => {
+    if (!container) return;
+    container.dataset.uiState = kind;
+    container.setAttribute('aria-busy', String(kind === 'loading'));
+  };
+  const render = (container, { kind, content, title, message, action }) => {
+    if (!container) return null;
+    const doc = container.ownerDocument;
+    const node =
+      content || doc.createElement(['UL', 'OL'].includes(container.tagName) ? 'li' : 'div');
+    if (!content) {
+      node.textContent = message || title || '';
+      if (action?.label) {
+        const button = doc.createElement('button');
+        button.setAttribute('type', 'button');
+        button.textContent = action.label;
+        if (action.key) button.dataset.action = action.key;
+        if (action.href)
+          button.addEventListener('click', () => {
+            window.location.href = action.href;
+          });
+        node.append(button);
+      }
+    }
+    node.dataset.uiState = kind;
+    node.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+    set(container, kind);
+    container.replaceChildren(node);
+    return node;
+  };
+  window.freeBbsUiState = { set, render, degraded: true };
+}
+installUiStateFallback();
 const DEFAULT_AVATAR = '/assets/avatar_placeholder.webp';
 const MAX_AGENT_AVATAR = '/assets/max_the_agent_avatar.webp';
 
@@ -172,6 +209,8 @@ const discussionState = {
   isFallback: false,
   activePost: null,
   comments: [],
+  commentsStatus: 'idle',
+  commentsRequestId: 0,
   maxProgress: [],
   viewMode: 'latest',
   showDeleted: false,
@@ -2365,14 +2404,15 @@ function renderHeatLeaderboard(users) {
   }
 
   if (!users.length) {
-    homeHeatList.innerHTML = `
-      <li class="home-dashboard-empty">
-        <p>还没有用户进入热力榜。</p>
-      </li>
-    `;
+    window.freeBbsUiState.render(homeHeatList, {
+      kind: 'empty',
+      tag: 'li',
+      message: '还没有用户进入热力榜。',
+    });
     return;
   }
 
+  window.freeBbsUiState.set(homeHeatList, 'ready');
   homeHeatList.innerHTML = users
     .map((user, index) => {
       const displayName = user.nickname || user.username || '匿名用户';
@@ -2401,6 +2441,7 @@ function renderHeatLeaderboardLoading() {
     return;
   }
 
+  window.freeBbsUiState.set(homeHeatList, 'loading');
   homeHeatList.innerHTML = Array.from(
     { length: 5 },
     () => `
@@ -2434,12 +2475,12 @@ async function loadHeatLeaderboard() {
       homeHeatStatus.textContent = `已加载热力榜前 ${users.length} 名`;
     }
   } catch {
-    homeHeatList.innerHTML = `
-      <li class="home-dashboard-empty">
-        <p>热力榜暂时无法加载。</p>
-        <button type="button" data-action="retry-home-heat">重新加载</button>
-      </li>
-    `;
+    window.freeBbsUiState.render(homeHeatList, {
+      kind: 'error',
+      tag: 'li',
+      message: '热力榜暂时无法加载。',
+      action: { label: '重新加载', key: 'retry-home-heat' },
+    });
     if (homeHeatStatus) {
       homeHeatStatus.textContent = '热力榜加载失败';
     }
@@ -3582,7 +3623,7 @@ function renderHomeFeedLoading() {
     return;
   }
 
-  homeDiscussionList.setAttribute('aria-busy', 'true');
+  window.freeBbsUiState.set(homeDiscussionList, 'loading');
   homeDiscussionList.innerHTML = Array.from(
     { length: 5 },
     () => `
@@ -3608,15 +3649,15 @@ function renderHomeDiscussionPosts(posts, mode = homeDashboardState.feedMode) {
   homeDiscussionList.dataset.sort = mode;
 
   if (!posts.length) {
-    homeDiscussionList.innerHTML = `
-      <article class="home-dashboard-empty">
-        <p>暂时没有可显示的帖子</p>
-        <a href="/discussion">进入讨论区发帖</a>
-      </article>
-    `;
+    window.freeBbsUiState.render(homeDiscussionList, {
+      kind: 'empty',
+      message: '暂时没有可显示的帖子',
+      action: { label: '进入讨论区发帖', href: '/discussion' },
+    });
     return;
   }
 
+  window.freeBbsUiState.set(homeDiscussionList, 'ready');
   homeDiscussionList.innerHTML = posts
     .map((post) => {
       const reactionCount = getHomePostReactionCount(post);
@@ -3661,12 +3702,11 @@ function renderHomeDiscussionError() {
     return;
   }
 
-  homeDiscussionList.innerHTML = `
-    <article class="home-dashboard-empty">
-      <p>帖子暂时无法加载。</p>
-      <button type="button" data-action="retry-home-feed">重新加载</button>
-    </article>
-  `;
+  window.freeBbsUiState.render(homeDiscussionList, {
+    kind: 'error',
+    message: '帖子暂时无法加载。',
+    action: { label: '重新加载', key: 'retry-home-feed' },
+  });
 }
 
 function renderHomeBoardActivity(boards) {
@@ -3675,14 +3715,14 @@ function renderHomeBoardActivity(boards) {
   }
 
   if (!boards.length) {
-    homeBoardActivity.innerHTML = `
-      <div class="home-dashboard-empty">
-        <p>还没有分区互动记录。</p>
-      </div>
-    `;
+    window.freeBbsUiState.render(homeBoardActivity, {
+      kind: 'empty',
+      message: '还没有分区互动记录。',
+    });
     return;
   }
 
+  window.freeBbsUiState.set(homeBoardActivity, 'ready');
   const maxInteractions = Math.max(
     1,
     ...boards.map((board) => Number(board.interactionCount || 0)),
@@ -6687,11 +6727,25 @@ function renderDiscussionComments() {
     return;
   }
 
-  if (!discussionState.comments.length) {
-    list.innerHTML = `<p class="discussion-stats-muted">还没有评论。</p>`;
+  if (discussionState.commentsStatus === 'error') {
+    window.freeBbsUiState.render(list, {
+      kind: 'error',
+      message: '评论暂时无法加载。',
+      action: { label: '重新加载', key: 'retry-comments' },
+    });
     return;
   }
 
+  if (!discussionState.comments.length) {
+    const loading = discussionState.commentsStatus === 'loading';
+    window.freeBbsUiState.render(list, {
+      kind: loading ? 'loading' : 'empty',
+      message: loading ? '正在加载评论…' : '还没有评论。',
+    });
+    return;
+  }
+
+  window.freeBbsUiState.set(list, 'ready');
   const commentsByParent = new Map();
   const commentsById = new Map();
   discussionState.comments.forEach((comment) => {
@@ -7003,7 +7057,7 @@ async function loadHomeBoardActivity() {
   }
 
   homeBoardActivity.dataset.loading = 'true';
-  homeBoardActivity.setAttribute('aria-busy', 'true');
+  window.freeBbsUiState.set(homeBoardActivity, 'loading');
   renderHomeBoardLoading();
   if (homeBoardStatus) {
     homeBoardStatus.textContent = '正在加载分区互动数据…';
@@ -7020,12 +7074,11 @@ async function loadHomeBoardActivity() {
       homeBoardStatus.textContent = `已加载 ${boards.length} 个分区的互动数据`;
     }
   } catch {
-    homeBoardActivity.innerHTML = `
-      <div class="home-dashboard-empty">
-        <p>分区互动暂时无法加载。</p>
-        <button type="button" data-action="retry-home-boards">重新加载</button>
-      </div>
-    `;
+    window.freeBbsUiState.render(homeBoardActivity, {
+      kind: 'error',
+      message: '分区互动暂时无法加载。',
+      action: { label: '重新加载', key: 'retry-home-boards' },
+    });
     if (homeBoardStatus) {
       homeBoardStatus.textContent = '分区互动数据加载失败';
     }
@@ -7084,8 +7137,13 @@ async function loadDiscussionComments(postId) {
   if (discussionState.sessionStale) return;
   const version = discussionState.sessionVersion;
   const detailRequest = discussionState.postRequestId;
+  const requestId = (discussionState.commentsRequestId || 0) + 1;
+  discussionState.commentsRequestId = requestId;
+  discussionState.commentsStatus = 'loading';
+  if (!discussionState.comments.length) renderDiscussionComments();
   let comments = [];
   let maxProgress = [];
+  let status = 'ready';
   try {
     const payload = await callApi(`/discussion/posts/${encodeURIComponent(postId)}/comments`, {
       method: 'GET',
@@ -7094,14 +7152,17 @@ async function loadDiscussionComments(postId) {
     maxProgress = payload.maxProgress || [];
   } catch {
     // Fail closed: never retain comments from a previous post or user.
+    status = 'error';
   }
   if (
     version !== discussionState.sessionVersion ||
+    requestId !== discussionState.commentsRequestId ||
     detailRequest !== discussionState.postRequestId ||
     String(postId) !== String(discussionState.activePostId)
   )
     return;
   discussionState.comments = comments;
+  discussionState.commentsStatus = status;
   discussionState.maxProgress = maxProgress;
   renderDiscussionComments();
 }
@@ -7113,6 +7174,13 @@ function pollDiscussionCommentsForMax(
   { imageGeneration = false } = {},
 ) {
   let attempts = 0;
+  let polling = false;
+  let finished = false;
+  const sessionVersion = discussionState.sessionVersion;
+  const startedAt = Date.now();
+  const isCurrent = () =>
+    sessionVersion === discussionState.sessionVersion &&
+    String(postId) === String(discussionState.activePostId);
   const latestCommentId = Math.max(
     0,
     ...discussionState.comments.map((comment) => Number(comment.id) || 0),
@@ -7136,15 +7204,33 @@ function pollDiscussionCommentsForMax(
     placeholder?.remove();
   };
   const timer = window.setInterval(async () => {
-    attempts += 1;
-    if (String(postId) !== String(discussionState.activePostId)) {
+    if (finished) return;
+    if (!isCurrent()) {
+      finished = true;
       window.clearInterval(timer);
       clearPlaceholder();
       return;
     }
-
+    if (Date.now() - startedAt >= 120000) {
+      finished = true;
+      window.clearInterval(timer);
+      clearPlaceholder();
+      if (messageNode) messageNode.textContent = '评论已发布，Max 可能稍后回复';
+      return;
+    }
+    // A slow request must finish before another timer can supersede it.
+    // The shared loading state also serializes polling for multiple Max replies.
+    if (polling || discussionState.commentsStatus === 'loading') return;
+    polling = true;
+    attempts += 1;
     try {
       await loadDiscussionComments(postId);
+      if (finished || !isCurrent()) {
+        finished = true;
+        window.clearInterval(timer);
+        clearPlaceholder();
+        return;
+      }
       const phase = discussionState.maxProgress.find(
         (item) => Number(item.commentId) === Number(triggerCommentId),
       )?.phase;
@@ -7165,6 +7251,7 @@ function pollDiscussionCommentsForMax(
           Number(comment.id) > latestCommentId && comment.author?.username === 'max_the_agent',
       );
       if (maxReply) {
+        finished = true;
         window.clearInterval(timer);
         clearPlaceholder();
         if (messageNode) {
@@ -7178,9 +7265,12 @@ function pollDiscussionCommentsForMax(
       }
     } catch {
       // loadDiscussionComments already handles display fallback.
+    } finally {
+      polling = false;
     }
 
-    if (attempts >= 48) {
+    if (attempts >= 48 || Date.now() - startedAt >= 120000) {
+      finished = true;
       window.clearInterval(timer);
       clearPlaceholder();
       if (messageNode) {
@@ -7493,6 +7583,8 @@ function resetDiscussionData() {
   discussionState.postRequestId += 1;
   discussionState.posts = [];
   discussionState.comments = [];
+  discussionState.commentsStatus = 'idle';
+  discussionState.commentsRequestId = (discussionState.commentsRequestId || 0) + 1;
   discussionState.activePostId = '';
   discussionState.postsByBoard.clear();
   discussionState.postsHashByBoard = {};
@@ -9325,6 +9417,11 @@ async function handleDiscussionCommentAction(button) {
 }
 
 async function handleDiscussionDetailClick(event) {
+  const retryComments = event.target.closest('[data-action="retry-comments"]');
+  if (retryComments) {
+    await loadDiscussionComments(discussionState.activePostId);
+    return;
+  }
   const loginButton = event.target.closest('[data-action="login-to-read"]');
   if (loginButton) {
     showDiscussionLoginDialog(discussionState.activePostId);
@@ -9554,6 +9651,15 @@ async function handleDiscussionCommentSubmit(event) {
   const contentMarkdown = input?.value.trim() || '';
   const postId = String(form.dataset.postId || discussionState.activePostId);
   const submitButton = form.querySelector('[type="submit"]');
+  const submittedUid = userState.uid;
+  const submittedVersion = discussionState.sessionVersion;
+  const detailRequest = discussionState.postRequestId;
+  const isCurrent = () =>
+    userState.isLoggedIn &&
+    submittedUid === userState.uid &&
+    submittedVersion === discussionState.sessionVersion &&
+    detailRequest === discussionState.postRequestId &&
+    postId === String(discussionState.activePostId);
 
   if (!contentMarkdown) {
     if (message) {
@@ -9574,17 +9680,16 @@ async function handleDiscussionCommentSubmit(event) {
   }
 
   try {
-    const payload = await callApi(
-      `/discussion/posts/${encodeURIComponent(discussionState.activePostId)}/comments`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          contentMarkdown,
-          parentCommentId: parentCommentId || undefined,
-        }),
-      },
-    );
+    const payload = await callApi(`/discussion/posts/${encodeURIComponent(postId)}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({
+        contentMarkdown,
+        parentCommentId: parentCommentId || undefined,
+      }),
+    });
 
+    if (!isCurrent()) return;
+    const refreshComments = discussionState.commentsStatus !== 'ready';
     const newComments = [payload.comment].filter(Boolean);
     discussionState.comments = [...discussionState.comments, ...newComments];
     const addedCommentCount = newComments.length;
@@ -9609,15 +9714,17 @@ async function handleDiscussionCommentSubmit(event) {
     if (message) {
       message.textContent = payload.message || (parentCommentId ? '回复已发布' : '评论已发布');
     }
-    renderDiscussionComments();
     renderDiscussionPosts();
+    if (refreshComments) await loadDiscussionComments(postId);
+    else renderDiscussionComments();
+    if (!isCurrent()) return;
     if (payload.maxPending || shouldWaitForMaxReply(contentMarkdown)) {
       pollDiscussionCommentsForMax(discussionState.activePostId, payload.comment?.id, message, {
         imageGeneration: window.FreeBbsMaxImageResults?.isRequest(contentMarkdown),
       });
     }
   } catch (error) {
-    if (message) {
+    if (isCurrent() && message) {
       message.textContent = error.message;
     }
   } finally {

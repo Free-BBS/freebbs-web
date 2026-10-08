@@ -1617,10 +1617,21 @@ body.workbench-page .workbench-item-action.is-primary {
   background: var(--workbench-accent-soft);
 }
 
-body.workbench-page .workbench-item-action.is-danger:hover,
+body.workbench-page .workbench-item-action.is-danger {
+  color: var(--action-danger);
+}
+
+body.workbench-page
+  .workbench-item-action.is-danger:is(:hover, :active):where(
+    :not(:disabled, [aria-disabled='true'])
+  ) {
+  color: var(--action-danger-text);
+  background: var(--action-danger);
+  border-color: var(--action-danger);
+}
+
 body.workbench-page .workbench-item-action.is-danger:focus-visible {
-  color: #ffaaa5;
-  border-color: rgba(255, 111, 103, 0.58);
+  outline-color: var(--action-focus);
 }
 
 body.workbench-page .workbench-source-card {

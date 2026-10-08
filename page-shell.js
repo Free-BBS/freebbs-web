@@ -44,6 +44,23 @@ function preparePageShell(source) {
     html = html
       .replace(typography, '')
       .replace(/(<body\b[^>]*>)/, '$1\n<script src="/typography.js"></script>');
+  // The preference data is shared with the development frontend. Keep it in
+  // the head so the established early body/theme ordering remains unchanged.
+  const typographyPreferences =
+    /<script\b[^>]*src=["']\/typography-preferences\.js(?:\?[^"']*)?["'][^>]*>\s*<\/script>/;
+  if (typography.test(html)) {
+    const shared = html.match(typographyPreferences);
+    if (!shared || shared.index > html.search(typography)) {
+      if (shared) html = html.replace(typographyPreferences, '');
+      if (/<head\b[^>]*>/.test(html))
+        html = html.replace(
+          /(<head\b[^>]*>)/,
+          '$1\n<script src="/typography-preferences.js"></script>',
+        );
+      else
+        html = html.replace(typography, '<script src="/typography-preferences.js"></script>\n$&');
+    }
+  }
   // Ranch scenery must be ready before its content paints, just like the theme.
   const ranchEnvironment = /<script\b[^>]*src=["']\/ranch-environment\.js["'][^>]*>\s*<\/script>/;
   if (
@@ -65,6 +82,9 @@ function preparePageShell(source) {
     /<script\b[^>]*src=["']\/(?:app|notifications)\.js(?:\?[^"']*)?["'][^>]*>\s*<\/script>/;
   if (requestConsumer.test(html) && !html.includes('src="/request-runtime.js"'))
     html = html.replace(requestConsumer, '<script src="/request-runtime.js"></script>\n$&');
+  const stateConsumer = /<script\b[^>]*src=["']\/app\.js(?:\?[^"']*)?["'][^>]*>\s*<\/script>/;
+  if (stateConsumer.test(html) && !html.includes('src="/ui-state.js"'))
+    html = html.replace(stateConsumer, '<script src="/ui-state.js"></script>\n$&');
   return html;
 }
 

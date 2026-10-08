@@ -14,6 +14,8 @@ export default defineConfig(({ mode }) => {
         allow: [
           searchForWorkspaceRoot(process.cwd()),
           fileURLToPath(new URL('../../../public/request-runtime.js', import.meta.url)),
+          fileURLToPath(new URL('../../../public/typography-preferences.js', import.meta.url)),
+          fileURLToPath(new URL('../../../public/actions.css', import.meta.url)),
         ],
       },
       proxy: {
