@@ -31,6 +31,7 @@ node --test backend/initialize-once.test.js scripts/static-response.test.js
 node --check backend/server.js
 node --test backend/discussion-moderation.test.js backend/moderation-attachments.test.js backend/moderation-integration.test.js backend/moderation-privacy.test.js backend/moderation-privacy.integration.test.js scripts/moderation-page.test.js
 node --test backend/moderation-ai-client.test.js backend/moderation-ai-test.test.js
+node --test backend/moderation-policy.test.js backend/moderation-policy-decision.test.js backend/moderation-audit.test.js scripts/moderation-policy-regression.test.js
 node --check backend/background-tasks.js
 node --check backend/workbench-schedule-planner.js
 node --test backend/background-tasks.test.js

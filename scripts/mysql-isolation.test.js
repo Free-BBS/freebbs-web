@@ -160,6 +160,7 @@ test('the isolated runner enables its named test files with matching database op
   const expected = [
     'backend/discussion-moderation.mysql.test.js',
     'backend/moderation-privacy.mysql.test.js',
+    'backend/moderation-audit.mysql.test.js',
     'backend/language-lab.mysql.test.js',
     'backend/profile-activity.mysql.test.js',
     'backend/circuit-progress.test.js',
@@ -181,7 +182,7 @@ test('the isolated runner enables its named test files with matching database op
     'backend/schedule-series.mysql.test.js',
   ];
   assert.deepEqual([...TEST_FILES].sort(), expected.sort());
-  assert.equal(new Set(TEST_FILES).size, 21);
+  assert.equal(new Set(TEST_FILES).size, 22);
   for (const file of TEST_FILES)
     assert.equal(fs.existsSync(path.join(__dirname, '..', file)), true);
   const env = testEnvironment(windowsPipe, {});
@@ -206,7 +207,7 @@ test('the isolated runner enables its named test files with matching database op
 });
 
 test('the isolated runner requires successful top-level evidence for all live MySQL tests', () => {
-  assert.equal(REQUIRED_MYSQL_TESTS.length, 21);
+  assert.equal(REQUIRED_MYSQL_TESTS.length, 22);
   const successes = REQUIRED_MYSQL_TESTS.map((name, index) => `ok ${index + 1} - ${name}`);
   const summary = '# fail 0\n# skipped 0\n';
   const complete = `${successes.join('\n')}\n${summary}`;
@@ -236,15 +237,17 @@ test('the isolated runner requires successful top-level evidence for all live My
   );
 });
 
-test('moderation-only requires both publication and privacy suite results', () => {
+test('moderation-only requires publication, privacy and policy audit suite results', () => {
   const selected = selectMysqlTests(['--moderation-only']);
   assert.deepEqual(selected.testFiles, [
     'backend/discussion-moderation.mysql.test.js',
     'backend/moderation-privacy.mysql.test.js',
+    'backend/moderation-audit.mysql.test.js',
   ]);
   assert.deepEqual(selected.requiredTests, [
     'isolated MySQL: moderation publication, retries, permissions, attachments and retention are atomic',
     'isolated MySQL: local privacy previews enforce directory matching, authority and immutable evidence',
+    'isolated MySQL: policy audit preserves authority, feedback, synthetic exports and expiry across restarts',
   ]);
   const success = selected.requiredTests
     .map((name, index) => `ok ${index + 1} - ${name}`)

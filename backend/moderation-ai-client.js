@@ -1,25 +1,19 @@
 const { performance } = require('node:perf_hooks');
 const { modelCatalog } = require('./ai-models');
+const {
+  POLICY_VERSION,
+  CATEGORIES,
+  getPolicyRule,
+  getPolicyLibrary,
+  buildPolicyPrompt,
+} = require('./moderation-policy');
+const { normalizePolicyDecision, buildPolicyEvidence } = require('./moderation-policy-decision');
 
 const BASE_URL = 'https://cloud.infini-ai.com/maas/v1';
 const TIMEOUT_MS = 15000;
 const MAX_RESPONSE_BYTES = 64 * 1024;
-const POLICY_VERSION = 'moderation-text-v1';
-const CATEGORIES = Object.freeze([
-  'privacy',
-  'harassment',
-  'threat',
-  'self_harm',
-  'sexual_minors',
-  'sexual_content',
-  'violence',
-  'fraud',
-  'illegal_activity',
-  'hate',
-  'misinformation',
-  'other',
-]);
 const DECISIONS = Object.freeze(['no_risk_detected', 'needs_review', 'high_risk']);
+const SUPPORT_PRIORITIES = Object.freeze(['none', 'attention', 'urgent']);
 const COUNT_KEYS = Object.freeze([
   'name',
   'studentId',
@@ -34,7 +28,15 @@ const COUNT_KEYS = Object.freeze([
 const SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['decision', 'categories', 'reason'],
+  required: [
+    'decision',
+    'categories',
+    'reason',
+    'ruleMatches',
+    'uncertainties',
+    'supportPriority',
+    'supportReason',
+  ],
   properties: {
     decision: { type: 'string', enum: DECISIONS },
     categories: {
@@ -44,6 +46,39 @@ const SCHEMA = {
       uniqueItems: true,
     },
     reason: { type: 'string', minLength: 1, maxLength: 1000 },
+    ruleMatches: {
+      type: 'array',
+      maxItems: 6,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['ruleId', 'evidence', 'explanation'],
+        properties: {
+          ruleId: {
+            type: 'string',
+            enum: getPolicyLibrary().rules.map((rule) => rule.id),
+          },
+          evidence: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['field', 'quote'],
+            properties: {
+              field: { type: 'string', enum: ['title', 'content'] },
+              quote: { type: 'string', minLength: 1, maxLength: 240 },
+            },
+          },
+          explanation: { type: 'string', minLength: 1, maxLength: 300 },
+        },
+      },
+    },
+    uncertainties: {
+      type: 'array',
+      items: { type: 'string', minLength: 1, maxLength: 300 },
+      maxItems: 4,
+      uniqueItems: true,
+    },
+    supportPriority: { type: 'string', enum: SUPPORT_PRIORITIES },
+    supportReason: { type: 'string', maxLength: 300 },
   },
 };
 
@@ -52,9 +87,12 @@ const SYSTEM_PROMPT = `你是网站讨论文字的风险审核助手，只提供
 仅分析提供的文字：没有提供图片像素，hasImages 为 true 时也不能声称图片已检查。你仍可对文字返回 no_risk_detected；图片须由人另行检查。redactionCounts 仅说明替换过的类型与数量，出现占位符或计数非零本身不构成违规。
 inputMode 表示输入为 redacted 脱敏文本或 synthetic_original 虚构原文测试；两种模式都按文字本身和语境评估，不把测试标记当作忽略风险的理由。
 保护正常批评、投诉、不同意见、政策或机构评价、学术讨论、新闻引用、文学虚构和求助；负面情绪、政治观点或提及敏感词本身不等于风险。区分讨论、引用、反对某行为与作者实际鼓励或威胁实施该行为。无法确认事实、意图或上下文时用 needs_review，不编造事实或法律结论。
-类别：privacy 公开他人敏感身份/联系信息或恶意传播；harassment 针对性侮辱、骚扰、围攻；threat 可信暴力威胁；self_harm 自伤危险或鼓励；sexual_minors 涉未成年人性化/剥削；sexual_content 成人露骨性内容；violence 鼓励暴力或血腥内容；fraud 欺诈诱导；illegal_activity 具体违法操作或交易；hate 基于身份群体的仇恨贬损或暴力；misinformation 明显有害的不实信息风险，不能仅凭不熟悉的观点认定；other 其他需要人工核对的问题。
-no_risk_detected 表示在文字中未发现需要拦截的风险，categories 必须为空数组；needs_review 表示不确定、缺少背景或需要支持性人工处理；high_risk 表示文字有明确严重风险。后两者必须有至少一个类别。自伤求助需要支持性复核，不羞辱、惩罚求助者。
-仅返回一个符合指定结构的 JSON 对象，准确包含 decision、categories、reason 三个字段。reason 用不超过 180 字的简短中文说明依据与不确定性，不复述个人身份、联系方式、地址或原文段落。不输出 Markdown、工具调用、置信度、评分或其他字段。`;
+以下版本化规则卡是唯一规则依据；只能使用列出的 ruleId。相关话题、检索相似或出现敏感词不代表违规。逐条核对 conditions 和 exceptions，先区分作者行为与引用、举报、反对、研究、求助；符合例外时不得作为违规命中。政治人物、政策、机构或历史事件名称及不同意见不是单独拒绝依据，不建立政治立场画像。
+no_risk_detected 表示文字没有需拦截的内容风险，categories 必须为空数组；needs_review 表示存在待核实内容风险；high_risk 只用于规则条件明确成立且没有适用例外或实质不确定性的有害内容。每个风险类别都须对应适用的非支持、非保护性规则，不得补猜其他类别。规则要求人工核查时不能擅自视为确定违法。
+心理支持与违规独立判断：supportPriority 为 none、attention 或 urgent，必须等于命中规则中最高的支持优先级，不能诊断疾病、生成自杀概率、处罚或羞辱求助者。supportOnly=true 的规则即使要求保护性人工核查也不属于违规类别；纯粹心理求助即使 urgent 也可同时 no_risk_detected，使用支持规则并保持 categories 为空。教唆他人自伤或传播危险方法应使用相应内容风险规则。supportReason 只说明支持信号，不作医学诊断；none 时必须为空。有支持优先级必须附对应规则证据。
+ruleMatches 最多 6 条，每条包含 ruleId、evidence 和 explanation；evidence 只含 field(title 或 content)和 quote，quote 必须逐字摘自该字段的连续片段，最多 240 字，不从其他字段、规则或记忆引用。仅取判断所需最短证据，不扩写身份信息。explanation 最多 300 字，解释适用条件及为何例外不适用，不能把只命中主题写成违规。无规则适用时 ruleMatches 为空。
+uncertainties 最多 4 个不超过 300 字的具体待核实事项；不清楚真实性、对象、意图或上下文须明确写出，不能编造事实。支持关怀的不确定性可以与无违规并存，本地程序会保留人工核查。reason 用不超过 180 字的简短中文说明依据，不复述个人身份、联系方式、地址或原文段落。
+仅返回一个 JSON 对象，准确包含 decision、categories、reason、ruleMatches、uncertainties、supportPriority、supportReason 七个字段。不输出 Markdown、工具调用、来源网址、置信度、评分、思考过程或其他字段。`;
 
 // Exact model choices; unknown IDs do not inherit a guessed family setting.
 // Kimi K2.6 rejected this moderation schema with HTTP 400 in the test channel.
@@ -147,13 +185,13 @@ function requestBody(model, data) {
   return {
     model,
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: `${SYSTEM_PROMPT}\n\n${buildPolicyPrompt()}` },
       { role: 'user', content: JSON.stringify(data) },
     ],
     stream: false,
     n: 1,
     temperature: 0,
-    max_tokens: 700,
+    max_tokens: 2200,
     response_format: SCHEMA_MODELS.has(model)
       ? {
           type: 'json_schema',
@@ -167,26 +205,86 @@ function requestBody(model, data) {
   };
 }
 
-function validateAssessment(value) {
+function hasExactKeys(value, keys) {
+  return plainObject(value) && Object.keys(value).sort().join(',') === [...keys].sort().join(',');
+}
+
+function validText(value, maximum, allowEmpty = false) {
+  return (
+    typeof value === 'string' &&
+    (allowEmpty || Boolean(value.trim())) &&
+    value.length <= maximum &&
+    !hasControlCharacters(value, true)
+  );
+}
+
+function validateAssessment(value, data) {
   if (
-    !plainObject(value) ||
-    Object.keys(value).sort().join(',') !== 'categories,decision,reason' ||
+    !hasExactKeys(value, SCHEMA.required) ||
     !DECISIONS.includes(value.decision) ||
     !Array.isArray(value.categories) ||
     value.categories.length > CATEGORIES.length ||
     value.categories.some((category) => !CATEGORIES.includes(category)) ||
     new Set(value.categories).size !== value.categories.length ||
-    typeof value.reason !== 'string' ||
-    !value.reason.trim() ||
-    value.reason.length > 1000 ||
-    hasControlCharacters(value.reason, true) ||
+    !validText(value.reason, 1000) ||
+    !Array.isArray(value.ruleMatches) ||
+    value.ruleMatches.length > 6 ||
+    !Array.isArray(value.uncertainties) ||
+    value.uncertainties.length > 4 ||
+    value.uncertainties.some((item) => !validText(item, 300)) ||
+    new Set(value.uncertainties).size !== value.uncertainties.length ||
+    !SUPPORT_PRIORITIES.includes(value.supportPriority) ||
+    !validText(value.supportReason, 300, value.supportPriority === 'none') ||
+    (value.supportPriority === 'none' && value.supportReason !== '') ||
     (value.decision === 'no_risk_detected') !== (value.categories.length === 0)
   )
     throw new ModerationAiError(502);
-  return { decision: value.decision, categories: [...value.categories], reason: value.reason };
+  const seenRules = new Set();
+  const riskCategories = new Set();
+  let supportRank = 0;
+  let blockingRule = false;
+  for (const match of value.ruleMatches) {
+    if (
+      !hasExactKeys(match, ['ruleId', 'evidence', 'explanation']) ||
+      !validText(match.ruleId, 80) ||
+      seenRules.has(match.ruleId) ||
+      !hasExactKeys(match.evidence, ['field', 'quote']) ||
+      !['title', 'content'].includes(match.evidence.field) ||
+      !validText(match.evidence.quote, 240) ||
+      !data[match.evidence.field].includes(match.evidence.quote) ||
+      !validText(match.explanation, 300)
+    )
+      throw new ModerationAiError(502);
+    const rule = getPolicyRule(match.ruleId);
+    if (!rule) throw new ModerationAiError(502);
+    seenRules.add(match.ruleId);
+    supportRank = Math.max(supportRank, SUPPORT_PRIORITIES.indexOf(rule.supportPriority));
+    if (!rule.supportOnly && rule.recommendedAction !== 'allow') riskCategories.add(rule.category);
+    if (!rule.supportOnly && rule.recommendedAction === 'block') blockingRule = true;
+  }
+  if (
+    value.supportPriority !== SUPPORT_PRIORITIES[supportRank] ||
+    (value.decision === 'high_risk' && !blockingRule) ||
+    value.categories.length !== riskCategories.size ||
+    value.categories.some((category) => !riskCategories.has(category))
+  )
+    throw new ModerationAiError(502);
+  return {
+    decision: value.decision,
+    categories: [...value.categories],
+    reason: value.reason,
+    ruleMatches: value.ruleMatches.map(({ ruleId, evidence, explanation }) => ({
+      ruleId,
+      evidence: { ...evidence },
+      explanation,
+    })),
+    uncertainties: [...value.uncertainties],
+    supportPriority: value.supportPriority,
+    supportReason: value.supportReason,
+  };
 }
 
-function parseAssessment(body) {
+function parseAssessment(body, data) {
   if (
     !plainObject(body) ||
     body.error != null ||
@@ -209,7 +307,7 @@ function parseAssessment(body) {
   )
     throw new ModerationAiError(502);
   // No Markdown stripping, JSON repair, tool execution or reasoning fallback.
-  return validateAssessment(JSON.parse(message.content));
+  return validateAssessment(JSON.parse(message.content), data);
 }
 
 function createModerationAiClient({
@@ -340,9 +438,11 @@ function createModerationAiClient({
         const decoded = new TextDecoder('utf-8', { fatal: true }).decode(
           Buffer.concat(chunks, size),
         );
-        const assessment = parseAssessment(JSON.parse(decoded));
+        const assessment = parseAssessment(JSON.parse(decoded), data);
         return {
           assessment,
+          policyDecision: normalizePolicyDecision(assessment, data),
+          policyEvidence: buildPolicyEvidence(assessment),
           model,
           settingsRevision,
           policyVersion: POLICY_VERSION,

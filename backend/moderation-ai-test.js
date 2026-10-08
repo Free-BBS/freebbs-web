@@ -18,7 +18,7 @@ function aiTestEnvironmentEnabled(config) {
   }
 }
 
-function createModerationAiTest({ service, client, enabled = false }) {
+function createModerationAiTest({ service, client, audit, enabled = false }) {
   const reviewers = new Set();
   let running = 0;
 
@@ -61,24 +61,28 @@ function createModerationAiTest({ service, client, enabled = false }) {
         inputMode === 'redacted'
           ? await service.previewPrivacy({ id, reviewerId, expectedVersion, extraTerms })
           : await service.aiTestSnapshot({ id, reviewerId, expectedVersion });
-      const response = await client.assess({
+      if (audit) await audit.prepare({ id, reviewerId, snapshot });
+      const input = {
         title: snapshot.title,
         content: snapshot.content,
         inputMode,
         redactionCounts: inputMode === 'redacted' ? snapshot.counts : {},
         hasImages: snapshot.imageCount > 0,
         ...(model === undefined ? {} : { model }),
-      });
+      };
+      const response = await client.assess(input);
       // A late provider response cannot restore evidence or supersede a human decision.
       const current = await service.aiTestSnapshot({ id, reviewerId, expectedVersion });
       if (current.contentHash !== snapshot.contentHash)
         throw fail('稿件已变化，本次试审结果已失效，请刷新后重试。', 409);
-      return {
+      const result = {
         submissionId: id,
         version: snapshot.version,
         contentHash: snapshot.contentHash,
         inputMode,
         assessment: response.assessment,
+        policyDecision: response.policyDecision,
+        policyEvidence: response.policyEvidence,
         model: response.model,
         settingsRevision: response.settingsRevision,
         policyVersion: response.policyVersion,
@@ -88,6 +92,8 @@ function createModerationAiTest({ service, client, enabled = false }) {
         imagesReviewed: false,
         automaticPublication: false,
       };
+      if (audit) result.runId = await audit.record({ id, reviewerId, snapshot, input, result });
+      return result;
     } finally {
       running -= 1;
       reviewers.delete(actor);

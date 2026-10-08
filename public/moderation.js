@@ -18,6 +18,7 @@
     illegal_activity: '违法活动',
     hate: '仇恨歧视',
     misinformation: '不实信息',
+    political_compliance: '政治与公共议题合规',
     other: '其他',
   };
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -109,6 +110,9 @@
       imagesReady: false,
       nextCursor: '',
       count: 0,
+      library: null,
+      policyVersion: 0,
+      refreshHistory: null,
     };
 
     function node(tag, text, className) {
@@ -130,6 +134,7 @@
       state.selected = null;
       state.decisionIntent = null;
       state.deciding = false;
+      state.refreshHistory = null;
       el('detail').replaceChildren(node('p', '选择一条提交，查看正文和图片。', 'moderation-empty'));
     }
     function formatTime(value) {
@@ -148,6 +153,13 @@
       el('candidates').replaceChildren();
       el('reviewer-query').value = '';
       el('reviewer-message').textContent = '';
+      state.library = null;
+      state.policyVersion += 1;
+      el('policy-list').replaceChildren();
+      el('policy-status').textContent = '';
+      el('export-status').textContent = '';
+      el('regression-export').disabled = true;
+      el('policy-library').hidden = true;
       for (const id of ['workspace', 'reviewers', 'tabs', 'review-link']) el(id).hidden = true;
     }
 
@@ -239,6 +251,569 @@
           });
         }
       }
+    }
+
+    const DECISION_LABELS = {
+      no_risk_detected: '未发现明显风险',
+      needs_review: '需要人工核查',
+      high_risk: '高风险迹象',
+    };
+    const SUPPORT_LABELS = { none: '无特别提示', attention: '优先关怀', urgent: '紧急关注' };
+    const ACTION_LABELS = {
+      allow: '建议通过',
+      hold: '建议暂缓发布',
+      human_review: '建议人工核查',
+      block: '建议拦截',
+    };
+
+    function disclosure(title, className) {
+      const details = node('details', undefined, className || 'moderation-disclosure');
+      details.append(node('summary', title));
+      return details;
+    }
+
+    function field(labelText, control, id) {
+      control.id = id;
+      const label = node('label', labelText);
+      label.htmlFor = id;
+      const group = node('div', undefined, 'moderation-field');
+      group.append(label, control);
+      return group;
+    }
+
+    function selectControl(entries, value) {
+      const select = node('select');
+      for (const [key, caption] of Object.entries(entries)) {
+        const option = node('option', caption);
+        option.value = key;
+        select.append(option);
+      }
+      select.value = value || Object.keys(entries)[0];
+      return select;
+    }
+
+    function safeSourceLink(source) {
+      let parsed;
+      try {
+        parsed = new URL(source.url);
+      } catch {
+        return node('span', source.title || '来源待核对');
+      }
+      if (parsed.protocol !== 'https:' || parsed.username || parsed.password)
+        return node('span', source.title || '来源待核对');
+      const link = node('a', source.title || parsed.hostname);
+      link.href = parsed.href;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      return link;
+    }
+
+    function ruleCard(rule, sourceList = []) {
+      const card = node('article', undefined, 'moderation-rule-card');
+      card.append(
+        node('p', rule.id || rule.ruleId || '', 'moderation-rule-id'),
+        node('h4', rule.title || '规则依据'),
+      );
+      const info = [
+        AI_CATEGORY_LABELS[rule.category] || rule.category,
+        ACTION_LABELS[rule.recommendedAction],
+      ].filter(Boolean);
+      if (info.length) card.append(node('p', info.join(' · '), 'moderation-meta'));
+      if (rule.supportOnly)
+        card.append(node('p', '支持与关怀规则：命中本条不等于违规。', 'moderation-note'));
+      if (rule.basisType)
+        card.append(
+          node(
+            'p',
+            `本站规则性质：${{ legal_requirement: '法律合规要求', community_rule: '社区治理规则', support_guidance: '支持性指南' }[rule.basisType] || rule.basisType}。需结合条件和例外判断。`,
+            'moderation-note',
+          ),
+        );
+      for (const [key, caption] of [
+        ['conditions', '适用条件'],
+        ['exceptions', '例外与保护'],
+        ['positiveExample', '命中示例'],
+        ['negativeExample', '不应命中'],
+      ]) {
+        const value = rule[key];
+        if (value && (!Array.isArray(value) || value.length)) {
+          card.append(
+            node('strong', caption),
+            node('p', Array.isArray(value) ? value.join('；') : value),
+          );
+        }
+      }
+      const sources = sourceList.filter((source) => rule.sourceIds?.includes(source.id));
+      if (sources.length) {
+        const list = node('ul', undefined, 'moderation-source-list');
+        for (const source of sources) {
+          const item = node('li');
+          item.append(safeSourceLink(source));
+          const article = rule.sourceArticles?.[source.id] || source.article;
+          if (article) item.append(node('span', ` · ${article}`));
+          if (source.authorityType)
+            item.append(
+              node(
+                'span',
+                ` · ${{ law: '法律', regulation: '行政法规或规章', official_guidance: '官方指南', health_guidance: '健康支持指南', support_guidance: '支持性指南', community_rule: '本站规则', technical_reference: '技术参考' }[source.authorityType] || source.authorityType}`,
+              ),
+            );
+          list.append(item);
+        }
+        card.append(list);
+      }
+      return card;
+    }
+
+    function renderPolicies() {
+      if (!state.library) return;
+      const queryText = el('policy-query').value.trim().toLowerCase();
+      const category = el('policy-category').value;
+      const rules = state.library.rules.filter(
+        (rule) =>
+          (!category || rule.category === category) &&
+          (!queryText || JSON.stringify(rule).toLowerCase().includes(queryText)),
+      );
+      el('policy-list').replaceChildren(
+        ...rules.map((rule) => {
+          const details = disclosure(`${rule.id} · ${rule.title}`, 'moderation-rule-disclosure');
+          details.append(ruleCard(rule, state.library.sources));
+          return details;
+        }),
+      );
+      el('policy-status').textContent =
+        `规则版本 ${state.library.version} · 资料核对 ${state.library.checkedAt || '待确认'} · 显示 ${rules.length} / ${state.library.rules.length} 条`;
+      if (!rules.length)
+        el('policy-list').append(node('p', '没有匹配的规则，请调整搜索条件。', 'moderation-empty'));
+    }
+
+    async function loadPolicies() {
+      if (mine || !state.session?.reviewer) return;
+      const generation = state.generation;
+      state.policyVersion += 1;
+      const version = state.policyVersion;
+      el('policy-status').textContent = '正在加载规则依据…';
+      try {
+        const { library } = await client.request('/moderation/policies');
+        if (
+          !valid(generation) ||
+          version !== state.policyVersion ||
+          mine ||
+          !state.session?.reviewer
+        )
+          return;
+        if (!library || !Array.isArray(library.rules) || !Array.isArray(library.sources))
+          throw new Error('规则库格式无效。');
+        state.library = library;
+        const selected = el('policy-category').value;
+        el('policy-category').replaceChildren(
+          ...Object.entries({ '': '全部类别', ...AI_CATEGORY_LABELS }).map(([value, label]) => {
+            const option = node('option', label);
+            option.value = value;
+            return option;
+          }),
+        );
+        el('policy-category').value = selected;
+        renderPolicies();
+      } catch (error) {
+        if (valid(generation) && version === state.policyVersion)
+          el('policy-status').textContent = `规则依据未能加载：${error.message}`;
+      }
+    }
+
+    function policyResultPanels(run) {
+      const group = node('div', undefined, 'moderation-policy-result');
+      const assessment = run.assessment || {};
+      if (run.policyDecision) {
+        const action = run.policyDecision.recommendedAction;
+        const banner = node(
+          'div',
+          undefined,
+          `moderation-outcome moderation-outcome-${['allow', 'hold', 'block'].includes(action) ? action : 'hold'}`,
+        );
+        banner.append(
+          node('p', '本地规则建议', 'moderation-eyebrow'),
+          node('h4', ACTION_LABELS[action] || '交人工核查'),
+          node('p', '当前为人工审核阶段，本建议不会自动发布或拦截稿件。'),
+        );
+        const support = run.policyDecision.supportPriority || assessment.supportPriority;
+        if (support && support !== 'none')
+          banner.append(
+            node(
+              'p',
+              `支持优先级：${SUPPORT_LABELS[support] || support}。关怀需求与是否违规分别判断。`,
+            ),
+          );
+        for (const reason of run.policyDecision.reasonLabels || [])
+          banner.append(node('p', reason));
+        group.append(banner);
+      }
+      const evidence = disclosure('风险证据与规则依据');
+      if (assessment.supportReason)
+        evidence.append(node('p', `支持判断：${assessment.supportReason}`));
+      for (const match of assessment.ruleMatches || []) {
+        const item = node('article', undefined, 'moderation-evidence');
+        item.append(
+          node('strong', match.ruleId),
+          node('blockquote', match.evidence?.quote || ''),
+          node('p', match.explanation || ''),
+        );
+        evidence.append(item);
+      }
+      if (!assessment.ruleMatches?.length)
+        evidence.append(
+          node(
+            'p',
+            '本次未列出命中的具体规则。不得据此认定原稿或图片均无风险。',
+            'moderation-note',
+          ),
+        );
+      const policyEvidence = Array.isArray(run.policyEvidence) ? run.policyEvidence : [];
+      for (const entry of policyEvidence) {
+        const rule = entry.rule || entry;
+        evidence.append(ruleCard(rule, entry.sources || state.library?.sources || []));
+      }
+      for (const uncertainty of assessment.uncertainties || [])
+        evidence.append(node('p', `待核查：${uncertainty}`, 'moderation-privacy-warning'));
+      const raw = disclosure('结构化 JSON');
+      raw.append(
+        node('p', '仅展示本次审核的结构化结果；不含 API 密钥和供应商原始响应。', 'moderation-note'),
+        node(
+          'pre',
+          JSON.stringify(
+            {
+              model: run.model,
+              policyVersion: run.policyVersion,
+              assessment: run.assessment,
+              policyDecision: run.policyDecision,
+              policyEvidence: run.policyEvidence,
+            },
+            null,
+            2,
+          ),
+          'moderation-json',
+        ),
+      );
+      group.append(evidence, raw);
+      return group;
+    }
+
+    function feedbackPanel(submission, run, current, refresh) {
+      const wrapper = disclosure('人工复核与回归样例');
+      const form = node('form', undefined, 'moderation-feedback-form');
+      const previousFeedback = run.feedback || null;
+      const initial = previousFeedback || run.assessment || {};
+      const initialRuleIds =
+        previousFeedback?.ruleIds ||
+        (run.assessment?.ruleMatches || []).map((match) => match.ruleId);
+      const canWrite = () => current() && state.session?.aiTestEnabled === true;
+      const verdict = selectControl(
+        { agree: '同意机器判断', correct: '纠正机器判断', escalate: '升级人工核查' },
+        previousFeedback?.verdict || 'agree',
+      );
+      const decision = selectControl(DECISION_LABELS, initial.decision);
+      const support = selectControl(SUPPORT_LABELS, initial.supportPriority || 'none');
+      const categories = node('fieldset', undefined, 'moderation-category-options');
+      categories.append(node('legend', '人工确认的风险类别'));
+      const checks = Object.entries(AI_CATEGORY_LABELS).map(([value, label]) => {
+        const input = node('input');
+        input.type = 'checkbox';
+        input.value = value;
+        input.checked = initial.categories?.includes(value) || false;
+        const option = node('label');
+        option.append(input, node('span', label));
+        categories.append(option);
+        return input;
+      });
+      const rules = node('input');
+      rules.type = 'text';
+      rules.maxLength = 1000;
+      rules.value = initialRuleIds.join(', ');
+      rules.placeholder = '填写规则编号，用逗号分隔';
+      const note = node('textarea');
+      note.rows = 3;
+      note.maxLength = 1000;
+      note.value = previousFeedback?.note || '';
+      note.placeholder = '记录改判依据或需要进一步核实的事项，避免重复个人信息。';
+      const status = node('p');
+      status.setAttribute('role', 'status');
+      const save = node('button', '保存人工复核记录');
+      save.type = 'submit';
+      const prefix = `moderation-feedback-${run.id}`;
+      const ruleIds = () =>
+        rules.value
+          .split(/[,，\n]/)
+          .map((value) => value.trim())
+          .filter(Boolean);
+      const categoryIds = () => checks.filter((input) => input.checked).map((input) => input.value);
+      let feedbackIntent = null;
+      let regressionIntent = null;
+      const requestBody = (body, previous) => {
+        const key = JSON.stringify(body);
+        return previous?.key === key
+          ? previous
+          : { key, body: { ...body, requestId: cryptoApi.randomUUID() } };
+      };
+      const sameValues = (first, second) =>
+        JSON.stringify([...first].sort()) === JSON.stringify([...second].sort());
+      form.append(
+        node('p', '复核记录会保存到本条试审历史；不会改变帖子的发布状态。', 'moderation-note'),
+        node(
+          'p',
+          previousFeedback
+            ? '已载入最近保存的人工判断；选择“同意机器判断”表示与最初机器结果完全一致。'
+            : '尚未保存人工复核；当前字段来自机器判断。',
+          'moderation-note',
+        ),
+        field('复核结论', verdict, `${prefix}-verdict`),
+        field('人工风险判断', decision, `${prefix}-decision`),
+        field('支持优先级', support, `${prefix}-support`),
+        categories,
+        field('适用规则', rules, `${prefix}-rules`),
+        field('复核说明', note, `${prefix}-note`),
+        save,
+        status,
+      );
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (save.disabled || !canWrite()) return;
+        if (ruleIds().length > 6) {
+          status.textContent = '最多选择 6 条适用规则。';
+          return;
+        }
+        if (verdict.value !== 'agree' && !note.value.trim()) {
+          status.textContent = '纠正或升级核查时，请填写复核说明。';
+          return;
+        }
+        if (
+          verdict.value === 'agree' &&
+          (decision.value !== run.assessment?.decision ||
+            support.value !== (run.assessment?.supportPriority || 'none') ||
+            !sameValues(categoryIds(), run.assessment?.categories || []) ||
+            !sameValues(
+              ruleIds(),
+              (run.assessment?.ruleMatches || []).map((match) => match.ruleId),
+            ))
+        ) {
+          status.textContent = '你已修改判断，请将复核结论改为“纠正机器判断”或“升级人工核查”。';
+          return;
+        }
+        save.disabled = true;
+        status.textContent = '正在保存复核记录…';
+        try {
+          feedbackIntent = requestBody(
+            {
+              verdict: verdict.value,
+              decision: decision.value,
+              categories: categoryIds(),
+              ruleIds: ruleIds(),
+              supportPriority: support.value,
+              note: note.value.trim(),
+            },
+            feedbackIntent,
+          );
+          await client.request(
+            `/moderation/submissions/${encodeURIComponent(submission.id)}/ai-runs/${encodeURIComponent(run.id)}/feedback`,
+            {
+              method: 'POST',
+              body: JSON.stringify(feedbackIntent.body),
+            },
+          );
+          if (!current()) return;
+          status.textContent = '复核记录已保存。';
+          await refresh();
+        } catch (error) {
+          if (current()) status.textContent = error.message;
+        } finally {
+          if (current()) save.disabled = false;
+        }
+      });
+      const regression = disclosure('把此类问题改写为测试样例');
+      const regressionForm = node('form', undefined, 'moderation-feedback-form');
+      const title = node('input');
+      title.maxLength = 120;
+      const content = node('textarea');
+      content.rows = 4;
+      content.maxLength = 6000;
+      content.required = true;
+      const regressionReason = node('textarea');
+      regressionReason.rows = 2;
+      regressionReason.maxLength = 1000;
+      regressionReason.required = true;
+      const confirm = node('input');
+      confirm.type = 'checkbox';
+      confirm.required = true;
+      const confirmLabel = node('label', undefined, 'moderation-check');
+      confirmLabel.append(confirm, node('span', '我已手动改写为虚构样例，确认不含真实个人信息。'));
+      const regressionSave = node('button', '保存虚构回归样例');
+      regressionSave.type = 'submit';
+      regressionSave.disabled = !previousFeedback;
+      const regressionStatus = node('p');
+      regressionStatus.setAttribute('role', 'status');
+      regressionForm.append(
+        node(
+          'p',
+          previousFeedback
+            ? '标题和正文从空白开始。请重新编写同类问题的虚构样例；预期结果采用最近保存的人工判断。若修改上方判断，请先保存复核记录。'
+            : '请先保存上方人工复核记录，再改写同类问题的虚构样例。标题和正文不会自动复制原稿。',
+          'moderation-note',
+        ),
+        node(
+          'p',
+          '勾选确认不会自动匿名化。保存及导出的样例仍须人工检查，确保没有真实姓名、学号、地址、病史等信息。',
+          'moderation-note',
+        ),
+        field('虚构标题（可选）', title, `${prefix}-synthetic-title`),
+        field('虚构正文', content, `${prefix}-synthetic-content`),
+        field('为什么预期这样判断', regressionReason, `${prefix}-synthetic-reason`),
+        confirmLabel,
+        regressionSave,
+        regressionStatus,
+      );
+      regressionForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!canWrite() || regressionSave.disabled || !previousFeedback) return;
+        if (
+          decision.value !== previousFeedback.decision ||
+          support.value !== previousFeedback.supportPriority ||
+          !sameValues(categoryIds(), previousFeedback.categories || []) ||
+          !sameValues(ruleIds(), previousFeedback.ruleIds || [])
+        ) {
+          regressionStatus.textContent =
+            '上方判断尚有未保存的修改，请先保存人工复核记录，再创建回归样例。';
+          return;
+        }
+        if (!confirm.checked || !content.value.trim() || !regressionReason.value.trim()) {
+          regressionStatus.textContent = '请填写虚构正文和预期依据，并确认已去除真实个人信息。';
+          return;
+        }
+        regressionSave.disabled = true;
+        try {
+          regressionIntent = requestBody(
+            {
+              title: title.value.trim(),
+              content: content.value.trim(),
+              expectedDecision: decision.value,
+              categories: categoryIds(),
+              ruleIds: ruleIds(),
+              supportPriority: support.value,
+              reason: regressionReason.value.trim(),
+              syntheticConfirmed: true,
+            },
+            regressionIntent,
+          );
+          await client.request(
+            `/moderation/submissions/${encodeURIComponent(submission.id)}/ai-runs/${encodeURIComponent(run.id)}/regression`,
+            {
+              method: 'POST',
+              body: JSON.stringify(regressionIntent.body),
+            },
+          );
+          if (current()) {
+            regressionStatus.textContent = '虚构回归样例已保存，未调用外部模型。';
+            regressionSave.disabled = true;
+          }
+        } catch (error) {
+          if (current()) {
+            regressionStatus.textContent = error.message;
+            regressionSave.disabled = false;
+          }
+        }
+      });
+      regression.append(regressionForm);
+      wrapper.append(form, regression);
+      return wrapper;
+    }
+
+    function historyPanel(submission, generation, version) {
+      const panel = node('section', undefined, 'moderation-history');
+      panel.append(
+        node('p', 'AUDIT TRAIL', 'moderation-eyebrow'),
+        node('h3', '试审与人工复核记录'),
+        node(
+          'p',
+          '以下为保存的历史结果。更换模型或补充脱敏信息，不会改写此前记录。',
+          'moderation-note',
+        ),
+      );
+      const content = node('div');
+      panel.append(content);
+      const current = () =>
+        valid(generation) &&
+        version === state.detailVersion &&
+        state.selected === submission &&
+        !mine &&
+        state.session?.reviewer;
+      let requestVersion = 0;
+      async function refresh() {
+        if (!current()) return;
+        requestVersion += 1;
+        const requestId = requestVersion;
+        content.replaceChildren(node('p', '正在加载审核记录…', 'moderation-note'));
+        try {
+          const { runs } = await client.request(
+            `/moderation/submissions/${encodeURIComponent(submission.id)}/ai-history`,
+          );
+          if (!current() || requestId !== requestVersion) return;
+          if (!Array.isArray(runs)) throw new Error('审核记录格式无效。');
+          content.replaceChildren();
+          if (!runs.length) content.append(node('p', '暂无已保存的试审记录。', 'moderation-empty'));
+          for (const run of runs) {
+            const entry = disclosure(
+              `${formatTime(run.createdAt)} · ${run.model} · ${DECISION_LABELS[run.assessment?.decision] || '待核对'}`,
+              'moderation-history-entry',
+            );
+            entry.append(
+              node(
+                'p',
+                `规则版本：${run.policyVersion || '未记录'} · ${run.inputMode === 'synthetic_original' ? '虚构原文（仅测试）' : '本地脱敏文字'}`,
+                'moderation-meta',
+              ),
+              node('p', run.assessment?.reason || ''),
+              policyResultPanels(run),
+            );
+            if (run.feedback)
+              entry.append(
+                node(
+                  'p',
+                  `最近复核：${{ agree: '同意', correct: '纠正', escalate: '升级核查' }[run.feedback.verdict] || '已记录'} · ${DECISION_LABELS[run.feedback.decision] || ''} · ${formatTime(run.feedback.createdAt)}`,
+                ),
+                node('p', run.feedback.note || ''),
+              );
+            if (Array.isArray(run.feedbackHistory) && run.feedbackHistory.length > 1) {
+              const revisions = disclosure(`全部人工复核记录（${run.feedbackHistory.length}）`);
+              for (const feedback of run.feedbackHistory)
+                revisions.append(
+                  node(
+                    'p',
+                    `${formatTime(feedback.createdAt)} · ${{ agree: '同意', correct: '纠正', escalate: '升级核查' }[feedback.verdict] || '已记录'} · ${DECISION_LABELS[feedback.decision] || ''}`,
+                  ),
+                  node('p', feedback.note || '（无补充说明）'),
+                );
+              entry.append(revisions);
+            }
+            if (state.session?.aiTestEnabled === true)
+              entry.append(feedbackPanel(submission, run, current, refresh));
+            else
+              entry.append(
+                node(
+                  'p',
+                  '当前环境未启用文字试审，历史仅供查看；人工反馈与回归样例写入已停用。',
+                  'moderation-note',
+                ),
+              );
+            content.append(entry);
+          }
+        } catch (error) {
+          if (current() && requestId === requestVersion)
+            content.replaceChildren(
+              node('p', `审核历史未能加载：${error.message}`, 'moderation-note'),
+            );
+        }
+      }
+      state.refreshHistory = refresh;
+      refresh();
+      return panel;
     }
 
     function aiTestPanel(submission, generation, version, terms) {
@@ -452,6 +1027,7 @@
               `风险分类：${assessment.categories.length ? assessment.categories.map((category) => AI_CATEGORY_LABELS[category]).join('、') : '未列出风险类别'}`,
             ),
             node('pre', assessment.reason, 'moderation-raw'),
+            policyResultPanels(assessmentResult),
           );
           if (assessmentResult.imageCount > 0 || submission.attachments?.length)
             result.append(
@@ -461,6 +1037,7 @@
             node('p', '试审仅提供文字建议，原稿未修改，也不会自动发布。最终由审核负责人决定。'),
           );
           status.textContent = '文字试审已完成。';
+          if (assessmentResult.runId) state.refreshHistory?.();
         } catch (error) {
           if (responseCurrent()) {
             result.replaceChildren();
@@ -655,17 +1232,31 @@
         state.imagesReady = attachments.length === 0;
         let approveButton;
         let imageStatus;
-        el('detail').replaceChildren(title, meta, author, node('h3', '正文原文'), body, images);
-        if (submission.reason) el('detail').append(node('p', `审核说明：${submission.reason}`));
+        const original = node('section', undefined, 'moderation-original');
+        original.append(
+          node('p', 'ORIGINAL SUBMISSION', 'moderation-eyebrow'),
+          title,
+          meta,
+          author,
+          node('h3', '正文原文'),
+          body,
+          images,
+        );
+        const detailGrid = node('div', undefined, 'moderation-detail-grid');
+        const decisionColumn = node('aside', undefined, 'moderation-review-card');
+        decisionColumn.setAttribute('aria-label', '人工审核决定');
+        detailGrid.append(original, decisionColumn);
+        el('detail').replaceChildren(detailGrid);
+        if (submission.reason) original.append(node('p', `审核说明：${submission.reason}`));
         if (submission.expiresAt)
-          el('detail').append(
+          original.append(
             node('p', `审核数据到期时间：${formatTime(submission.expiresAt)}`, 'moderation-note'),
           );
         const published = publishedLink(submission.publishedUrl, window.location.origin);
         if (submission.status === 'approved' && published) {
           const link = node('a', '查看已发布内容');
           link.href = published;
-          el('detail').append(link);
+          original.append(link);
         }
         if (
           !mine &&
@@ -704,10 +1295,24 @@
             actions.append(button);
           }
           form.addEventListener('submit', (event) => event.preventDefault());
-          form.append(label, reason, actions, status);
-          el('detail').append(form);
+          form.append(
+            node('p', 'HUMAN REVIEW', 'moderation-eyebrow'),
+            node('h3', '负责人最终决定'),
+            node(
+              'p',
+              '核对内容、图片和依据后再发布。机器试审与复核记录均不会代替此操作。',
+              'moderation-note',
+            ),
+            label,
+            reason,
+            actions,
+            status,
+          );
+          decisionColumn.append(form);
           el('detail').append(privacyPreviewPanel(submission, generation, version));
-        }
+        } else decisionColumn.hidden = true;
+        if (!mine && state.session.reviewer && submission.status !== 'expired')
+          el('detail').append(historyPanel(submission, generation, version));
         if (attachments.length && imageStatus)
           imageStatus.textContent = '图片加载完成后可通过审核；加载失败时请刷新重试。';
         Promise.all(
@@ -766,7 +1371,15 @@
               'moderation-meta',
             ),
           );
-          button.addEventListener('click', () => openSubmission(item.id));
+          button.setAttribute('aria-pressed', 'false');
+          button.addEventListener('click', () => {
+            el('list')
+              .querySelectorAll('button')
+              .forEach((entry) =>
+                entry.setAttribute('aria-pressed', entry === button ? 'true' : 'false'),
+              );
+            openSubmission(item.id);
+          });
           el('list').append(button);
         }
       } catch (error) {
@@ -862,6 +1475,10 @@
           ? '仅显示你提交的审核记录。'
           : '请结合正文和全部图片作出人工审核决定。';
         el('workspace').hidden = false;
+        el('policy-library').hidden = mine || !session.reviewer;
+        el('regression-export').disabled =
+          mine || !session.reviewer || session.aiTestEnabled !== true;
+        if (!mine && session.reviewer) loadPolicies();
         await loadList();
         if (valid(generation) && query.get('id')) await openSubmission(query.get('id'));
       } catch (error) {
@@ -874,6 +1491,41 @@
     el('refresh').addEventListener('click', () => loadList());
     el('more').addEventListener('click', () => loadList(false, true));
     el('status').addEventListener('change', () => loadList());
+    el('policy-query').addEventListener('input', renderPolicies);
+    el('policy-category').addEventListener('change', renderPolicies);
+    el('policy-refresh').addEventListener('click', loadPolicies);
+    el('regression-export').addEventListener('click', async () => {
+      if (mine || !state.session?.reviewer || state.session?.aiTestEnabled !== true) return;
+      const generation = state.generation;
+      const button = el('regression-export');
+      if (button.disabled) return;
+      button.disabled = true;
+      try {
+        const payload = await client.request('/moderation/regressions/export');
+        if (
+          !valid(generation) ||
+          mine ||
+          !state.session?.reviewer ||
+          state.session?.aiTestEnabled !== true
+        )
+          return;
+        const blob = new Blob([JSON.stringify(payload, null, 2)], {
+          type: 'application/json;charset=utf-8',
+        });
+        const url = urlApi.createObjectURL(blob);
+        const link = node('a', '下载回归样例');
+        link.href = url;
+        link.download = `freebbs-moderation-regressions-${new Date().toISOString().slice(0, 10)}.json`;
+        link.click();
+        urlApi.revokeObjectURL(url);
+        el('export-status').textContent =
+          '回归样例已导出，未调用外部模型。导出文件不会自动匿名化，请在使用或分享前再次人工核查。';
+      } catch (error) {
+        if (valid(generation)) el('export-status').textContent = error.message;
+      } finally {
+        button.disabled = mine || !state.session?.reviewer || state.session?.aiTestEnabled !== true;
+      }
+    });
     el('reviewer-search').addEventListener('submit', async (event) => {
       event.preventDefault();
       const generation = state.generation;

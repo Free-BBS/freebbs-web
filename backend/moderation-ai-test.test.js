@@ -12,7 +12,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-function harness() {
+function harness({ audited = false } = {}) {
   const calls = [];
   const snapshot = {
     submissionId: 'case-1',
@@ -24,11 +24,15 @@ function harness() {
   };
   let authorized = true;
   let pending = true;
+  let expired = false;
   let provider;
+  let prepareAudit;
+  let recordAudit;
   function check(input) {
     if (!authorized || input.reviewerId === 3)
       throw Object.assign(new Error('需要审核负责人权限。'), { status: 403 });
-    if (!pending || input.expectedVersion !== 1)
+    if (expired) throw Object.assign(new Error('审核材料已到期。'), { status: 410 });
+    if (!pending || input.expectedVersion !== snapshot.version)
       throw Object.assign(new Error('稿件状态变化。'), { status: 409 });
   }
   const service = {
@@ -70,6 +74,8 @@ function harness() {
       if (provider) await provider(input);
       return {
         assessment: { decision: 'no_risk_detected', categories: [], reason: '文字未见明显风险' },
+        policyDecision: { recommendedAction: 'hold', canAutomaticallyPublish: false },
+        policyEvidence: [],
         model: input.model || 'fixture-model',
         settingsRevision: 2,
         policyVersion: 'fixture-policy',
@@ -79,7 +85,23 @@ function harness() {
       };
     },
   };
-  const aiTest = createModerationAiTest({ service, client, enabled: true });
+  const audit = {
+    async prepare(input) {
+      calls.push(['prepare', structuredClone(input)]);
+      if (prepareAudit) await prepareAudit(input);
+    },
+    async record(input) {
+      calls.push(['record', structuredClone(input)]);
+      if (recordAudit) await recordAudit(input);
+      return 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    },
+  };
+  const aiTest = createModerationAiTest({
+    service,
+    client,
+    ...(audited ? { audit } : {}),
+    enabled: true,
+  });
   const request = {
     id: 'case-1',
     reviewerId: 1,
@@ -94,14 +116,24 @@ function harness() {
     calls,
     snapshot,
     client,
+    audit,
     setAuthorized(value) {
       authorized = value;
     },
     setPending(value) {
       pending = value;
     },
+    setExpired(value) {
+      expired = value;
+    },
     setProvider(callback) {
       provider = callback;
+    },
+    setPrepare(callback) {
+      prepareAudit = callback;
+    },
+    setRecord(callback) {
+      recordAudit = callback;
     },
   };
 }
@@ -259,6 +291,149 @@ test('per-reviewer and global inflight limits release on success and provider fa
   h.setProvider(null);
   await h.aiTest.run(h.request);
   assert.equal(h.calls.filter(([kind]) => kind === 'provider').length, 4);
+});
+
+test('audited trials prepare before provider and persist after a fresh snapshot before returning runId', async () => {
+  for (const inputMode of ['redacted', 'synthetic_original']) {
+    const h = harness({ audited: true });
+    const result = await h.aiTest.run({ ...h.request, inputMode });
+    assert.deepEqual(
+      h.calls.map(([kind]) => kind),
+      [
+        inputMode === 'redacted' ? 'preview' : 'snapshot',
+        'prepare',
+        'provider',
+        'snapshot',
+        'record',
+      ],
+    );
+    const prepared = h.calls.find(([kind]) => kind === 'prepare')[1];
+    const providerInput = h.calls.find(([kind]) => kind === 'provider')[1];
+    const saved = h.calls.find(([kind]) => kind === 'record')[1];
+    assert.equal(prepared.id, h.request.id);
+    assert.equal(prepared.reviewerId, h.request.reviewerId);
+    assert.equal(prepared.snapshot.contentHash, h.snapshot.contentHash);
+    assert.equal(prepared.snapshot.version, h.snapshot.version);
+    assert.deepEqual(saved.input, providerInput);
+    assert.deepEqual(saved.snapshot, prepared.snapshot);
+    assert.equal(saved.result.assessment.decision, result.assessment.decision);
+    assert.deepEqual(saved.result.policyDecision, result.policyDecision);
+    assert.deepEqual(saved.result.policyEvidence, result.policyEvidence);
+    assert.equal(Object.hasOwn(saved.result, 'runId'), false);
+    assert.equal(result.runId, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+    assert.equal(result.automaticPublication, false);
+    assert.doesNotMatch(JSON.stringify(saved), /MUST_NOT_RETURN|合成姓名/);
+    if (inputMode === 'redacted') assert.doesNotMatch(JSON.stringify(saved), /合成原文/);
+  }
+});
+
+test('audit preparation failure prevents paid calls and releases the reviewer slot for an explicit retry', async () => {
+  for (const status of [403, 409, 410, 429, 503]) {
+    const h = harness({ audited: true });
+    h.setPrepare(() => {
+      throw Object.assign(new Error('固定审计准备失败'), { status });
+    });
+    await assert.rejects(h.aiTest.run(h.request), { status });
+    assert.deepEqual(
+      h.calls.map(([kind]) => kind),
+      ['preview', 'prepare'],
+    );
+    h.setPrepare(null);
+    const result = await h.aiTest.run(h.request);
+    assert.ok(result.runId);
+    assert.equal(h.calls.filter(([kind]) => kind === 'provider').length, 1);
+    assert.equal(h.calls.filter(([kind]) => kind === 'record').length, 1);
+  }
+});
+
+test('audit persistence failure never returns success or retries the provider and releases inflight slots', async () => {
+  const h = harness({ audited: true });
+  const bothRecordsStarted = deferred();
+  const releaseRecords = deferred();
+  let recordCount = 0;
+  h.setRecord(async () => {
+    recordCount += 1;
+    if (recordCount === 2) bothRecordsStarted.resolve();
+    await releaseRecords.promise;
+    throw Object.assign(new Error('固定审计写入失败'), { status: 503 });
+  });
+  const first = h.aiTest.run(h.request);
+  const second = h.aiTest.run({ ...h.request, reviewerId: 2 });
+  const outcomes = Promise.allSettled([first, second]);
+  await bothRecordsStarted.promise;
+  await assert.rejects(h.aiTest.run(h.request), { status: 429 });
+  await assert.rejects(h.aiTest.run({ ...h.request, reviewerId: 4 }), { status: 429 });
+  releaseRecords.resolve();
+  const failed = await outcomes;
+  assert.equal(
+    failed.filter((item) => item.status === 'rejected' && item.reason.status === 503).length,
+    2,
+  );
+  assert.equal(h.calls.filter(([kind]) => kind === 'provider').length, 2);
+  assert.equal(h.calls.filter(([kind]) => kind === 'record').length, 2);
+  h.setRecord(null);
+  const successes = await Promise.all([
+    h.aiTest.run(h.request),
+    h.aiTest.run({ ...h.request, reviewerId: 2 }),
+  ]);
+  successes.forEach((result) => assert.ok(result.runId));
+  assert.equal(h.calls.filter(([kind]) => kind === 'provider').length, 4);
+  assert.equal(h.calls.filter(([kind]) => kind === 'record').length, 4);
+});
+
+test('late provider responses never enter the audit record after final decision, expiry, version/hash change or revocation', async () => {
+  const scenarios = [
+    [(h) => h.setPending(false), 409],
+    [(h) => h.setExpired(true), 410],
+    [
+      (h) => {
+        h.snapshot.version = 2;
+      },
+      409,
+    ],
+    [
+      (h) => {
+        h.snapshot.contentHash = 'b'.repeat(64);
+      },
+      409,
+    ],
+    [(h) => h.setAuthorized(false), 403],
+  ];
+  for (const [mutate, status] of scenarios) {
+    const h = harness({ audited: true });
+    h.setProvider(() => mutate(h));
+    await assert.rejects(h.aiTest.run(h.request), { status });
+    assert.deepEqual(
+      h.calls.map(([kind]) => kind),
+      ['preview', 'prepare', 'provider', 'snapshot'],
+    );
+    assert.equal(h.calls.filter(([kind]) => kind === 'record').length, 0);
+    h.setPending(true);
+    h.setExpired(false);
+    h.setAuthorized(true);
+    h.snapshot.version = 1;
+    h.snapshot.contentHash = 'a'.repeat(64);
+    h.setProvider(null);
+    assert.ok((await h.aiTest.run(h.request)).runId);
+    assert.equal(h.calls.filter(([kind]) => kind === 'provider').length, 2);
+  }
+});
+
+test('the persistence transaction remains the final authority check after the fresh snapshot', async () => {
+  for (const status of [403, 409, 410]) {
+    const h = harness({ audited: true });
+    h.setRecord(() => {
+      throw Object.assign(new Error('事务内发现权限或证据变化'), { status });
+    });
+    await assert.rejects(h.aiTest.run(h.request), { status });
+    assert.deepEqual(
+      h.calls.map(([kind]) => kind),
+      ['preview', 'prepare', 'provider', 'snapshot', 'record'],
+    );
+    assert.equal(h.calls.filter(([kind]) => kind === 'provider').length, 1);
+    h.setRecord(null);
+    assert.ok((await h.aiTest.run(h.request)).runId);
+  }
 });
 
 test('real HTTP test route derives identity from auth and rejects body overrides', async (t) => {

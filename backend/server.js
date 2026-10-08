@@ -102,6 +102,7 @@ const { createModerationPublisher } = require('./moderation-publisher');
 const { createModerationRouter } = require('./moderation-router');
 const { createModerationAiClient } = require('./moderation-ai-client');
 const { createModerationAiTest, aiTestEnvironmentEnabled } = require('./moderation-ai-test');
+const { createModerationAudit, ensureModerationAuditSchema } = require('./moderation-audit');
 const {
   MAX_RESPONSE_BYTES: MAX_AGENT_IMAGE_RESPONSE_BYTES,
   createImageGenerationGate,
@@ -289,8 +290,10 @@ const moderationAttachments = createModerationAttachmentStore({
   ],
   service: discussionModeration,
 });
+const moderationAudit = createModerationAudit({ pool });
 const moderationAiTest = createModerationAiTest({
   service: discussionModeration,
+  audit: moderationAudit,
   enabled: aiTestEnvironmentEnabled(config),
   client: createModerationAiClient({
     readSettings: (options) => systemSettingsStore.readSettings(options),
@@ -4263,6 +4266,7 @@ app.use(
     getOptionalAuthUser,
     enabled: config.discussionModerationEnabled,
     aiTest: moderationAiTest,
+    audit: moderationAudit,
   }),
 );
 
@@ -6572,6 +6576,7 @@ async function start() {
   await ensureAdminRewardTables(pool);
   await ensureWalletLedger(pool);
   await ensureDiscussionModerationSchema(pool);
+  await ensureModerationAuditSchema(pool);
   const bicycleRefunds = await refundRanchBicyclePurchases(pool);
   if (bicycleRefunds.refunded) {
     console.log(
@@ -6623,6 +6628,7 @@ async function start() {
     moderationCleanupRunning = true;
     try {
       await discussionModeration.expireAndPurge();
+      await moderationAudit.purge();
     } catch {
       console.error('审核证据清理暂时失败，将在下次定时检查重试');
     } finally {

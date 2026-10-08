@@ -1,4 +1,5 @@
 const express = require('express');
+const { getPolicyLibrary } = require('./moderation-policy');
 
 function toDetail(submission) {
   return {
@@ -22,6 +23,7 @@ function createModerationRouter({
   getOptionalAuthUser,
   enabled,
   aiTest,
+  audit,
 }) {
   const router = express.Router();
   router.use((_request, response, next) => {
@@ -39,6 +41,96 @@ function createModerationRouter({
       });
     }
   };
+  const auditAccess = async (user, writing = false) => {
+    if (!enabled || !audit || (writing && !aiTest?.enabled))
+      throw Object.assign(new Error('本机审核记录功能尚未启用。'), { status: 503 });
+    if (!(await service.isReviewer(user.id)))
+      throw Object.assign(new Error('需要审核负责人权限。'), { status: 403 });
+  };
+  const exactBody = (body, fields) => {
+    if (
+      !body ||
+      Array.isArray(body) ||
+      typeof body !== 'object' ||
+      Object.keys(body).some((key) => !fields.includes(key))
+    )
+      throw Object.assign(new Error('复核或样例字段无效。'), { status: 400 });
+    return body;
+  };
+  router.get(
+    '/policies',
+    authenticated(async (_request, response, user) => {
+      if (!enabled || !(await service.isReviewer(user.id)))
+        throw Object.assign(new Error('需要审核负责人权限。'), { status: 403 });
+      response.json({ library: getPolicyLibrary() });
+    }),
+  );
+  router.get(
+    '/submissions/:id/ai-history',
+    authenticated(async (request, response, user) => {
+      await auditAccess(user);
+      response.json(await audit.history({ id: request.params.id, reviewerId: user.id }));
+    }),
+  );
+  router.post(
+    '/submissions/:id/ai-runs/:runId/feedback',
+    authenticated(async (request, response, user) => {
+      await auditAccess(user, true);
+      const body = exactBody(request.body, [
+        'verdict',
+        'decision',
+        'categories',
+        'ruleIds',
+        'supportPriority',
+        'note',
+        'requestId',
+      ]);
+      response.json(
+        await audit.feedback({
+          id: request.params.id,
+          runId: request.params.runId,
+          reviewerId: user.id,
+          body,
+        }),
+      );
+    }),
+  );
+  router.post(
+    '/submissions/:id/ai-runs/:runId/regression',
+    authenticated(async (request, response, user) => {
+      await auditAccess(user, true);
+      const body = exactBody(request.body, [
+        'title',
+        'content',
+        'expectedDecision',
+        'categories',
+        'ruleIds',
+        'supportPriority',
+        'reason',
+        'syntheticConfirmed',
+        'requestId',
+      ]);
+      response.json(
+        await audit.regression({
+          id: request.params.id,
+          runId: request.params.runId,
+          reviewerId: user.id,
+          body,
+        }),
+      );
+    }),
+  );
+  router.get(
+    '/regressions/export',
+    authenticated(async (_request, response, user) => {
+      await auditAccess(user, true);
+      response.setHeader(
+        'Content-Disposition',
+        'attachment; filename="freebbs-policy-regressions.json"',
+      );
+      response.json(await audit.exportRegressions({ reviewerId: user.id }));
+    }),
+  );
   router.get(
     '/session',
     authenticated(async (_request, response, user) => {

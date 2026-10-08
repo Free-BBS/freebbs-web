@@ -20,9 +20,12 @@
     </header>
     <main id="moderation-app">
       <header class="moderation-intro">
-        <p class="moderation-eyebrow">讨论区 · 人工审核</p>
+        <p class="moderation-eyebrow">FREE BBS / POLICY AUDIT WORKBENCH</p>
         <h1 id="moderation-title">内容审核</h1>
-        <p>提交内容经负责人审核通过后发布，最终决定由审核负责人作出。</p>
+        <p>读懂内容，核对依据，作出有记录的决定。</p>
+        <div class="moderation-context">
+          <span>讨论区</span><span>文字试审 · 图片人工核查</span><span>负责人最终决定</span>
+        </div>
         <p class="moderation-note">
           审核相关数据保存一个月；正常发布的帖子和评论不在此清理范围内。
         </p>
@@ -33,26 +36,63 @@
         <a href="/moderation" id="moderation-review-link" hidden>审核工作台</a>
       </nav>
       <section id="moderation-workspace" hidden>
-        <div class="moderation-toolbar">
-          <label for="moderation-status" id="moderation-status-label">状态</label>
-          <select id="moderation-status">
-            <option value="pending">待审核</option>
-            <option value="approved">已通过</option>
-            <option value="rejected">未通过</option>
-            <option value="expired">已到期</option>
-          </select>
-          <button type="button" id="moderation-refresh">刷新列表</button>
-        </div>
         <div class="moderation-layout">
-          <section aria-label="提交列表">
-            <p id="moderation-list-status" role="status"></p>
-            <div id="moderation-list"></div>
-            <button type="button" id="moderation-more" hidden>加载更多</button>
-          </section>
+          <aside class="moderation-queue" aria-label="审核队列">
+            <div class="moderation-section-heading">
+              <span class="moderation-eyebrow">REVIEW QUEUE</span>
+              <h2>提交队列</h2>
+            </div>
+            <div class="moderation-toolbar">
+              <label for="moderation-status" id="moderation-status-label">状态</label>
+              <select id="moderation-status">
+                <option value="pending">待审核</option>
+                <option value="approved">已通过</option>
+                <option value="rejected">未通过</option>
+                <option value="expired">已到期</option>
+              </select>
+              <button type="button" id="moderation-refresh">刷新列表</button>
+            </div>
+            <section aria-label="提交列表">
+              <p id="moderation-list-status" role="status"></p>
+              <div id="moderation-list"></div>
+              <button type="button" id="moderation-more" hidden>加载更多</button>
+            </section>
+            <p class="moderation-note moderation-queue-note">
+              机器建议不直接改变发布状态。请核对完整正文与图片，再作出人工决定。
+            </p>
+          </aside>
           <section id="moderation-detail" aria-label="提交详情" tabindex="-1">
             <p class="moderation-empty">选择一条提交，查看正文和图片。</p>
           </section>
         </div>
+      </section>
+      <section
+        id="moderation-policy-library"
+        class="moderation-policy-library"
+        hidden
+        aria-labelledby="moderation-policy-title"
+      >
+        <div class="moderation-section-heading">
+          <p class="moderation-eyebrow">POLICY LIBRARY</p>
+          <h2 id="moderation-policy-title">规则与依据</h2>
+          <p class="moderation-note">查看适用条件、例外和来源。检索命中不代表已经违规。</p>
+        </div>
+        <div class="moderation-toolbar">
+          <label for="moderation-policy-query">搜索规则</label
+          ><input
+            id="moderation-policy-query"
+            type="search"
+            placeholder="规则编号、主题或关键词"
+            maxlength="120"
+          /><label for="moderation-policy-category">风险类别</label
+          ><select id="moderation-policy-category">
+            <option value="">全部类别</option></select
+          ><button type="button" id="moderation-policy-refresh">刷新规则</button
+          ><button type="button" id="moderation-regression-export">导出回归样例</button>
+        </div>
+        <p id="moderation-policy-status" role="status"></p>
+        <p id="moderation-export-status" role="status"></p>
+        <div id="moderation-policy-list" class="moderation-policy-grid"></div>
       </section>
       <section id="moderation-reviewers" hidden aria-labelledby="moderation-reviewers-title">
         <h2 id="moderation-reviewers-title">审核负责人</h2>

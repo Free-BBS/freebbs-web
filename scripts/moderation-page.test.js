@@ -127,6 +127,11 @@ function harness({
       return response({ enabled: true, reviewer, isAdmin, aiTestEnabled, mode: 'manual' });
     if (url.endsWith('/reviewers')) return response({ reviewers: [] });
     if (url.endsWith('/ai-models')) return response(aiCatalog());
+    if (url.endsWith('/policies'))
+      return response({
+        library: { version: 'test-v1', checkedAt: '2026-10-08', rules: [], sources: [] },
+      });
+    if (url.endsWith('/ai-history')) return response({ runs: [] });
     if (/\/(mine|submissions)\?/.test(url)) return response({ submissions: [submission] });
     if (url.endsWith('/s1')) return response({ submission: { ...submission } });
     if (url.includes('/attachments/')) return response({ type: 'image/webp', size: 100 });
@@ -1295,4 +1300,370 @@ test('hydration ignores external image URLs and late bytes cannot restore a clea
   await flush();
   assert.equal(image.src, '');
   assert.equal(h.context.moderationImagePreviews.size, 0);
+});
+
+const policyRun = () => ({
+  id: 'run-1',
+  createdAt: '2026-10-08T00:00:00Z',
+  model: 'kimi-k2.6',
+  policyVersion: 'policy-v2',
+  inputMode: 'redacted',
+  assessment: {
+    decision: 'needs_review',
+    categories: ['harassment'],
+    reason: '需要结合上下文判断。',
+    ruleMatches: [
+      {
+        ruleId: 'HAR-001',
+        evidence: { field: 'content', quote: '<script>evidence()</script>' },
+        explanation: '文字是举报还是骚扰有待核查。',
+      },
+    ],
+    uncertainties: ['发言语境不足'],
+    supportPriority: 'none',
+    supportReason: '',
+  },
+  policyDecision: {
+    recommendedAction: 'hold',
+    supportPriority: 'none',
+    reasons: ['human_review'],
+    canAutomaticallyPublish: false,
+    imagesReviewed: false,
+  },
+  policyEvidence: [
+    {
+      rule: {
+        id: 'HAR-001',
+        title: '针对性骚扰',
+        category: 'harassment',
+        conditions: ['针对具体对象'],
+        exceptions: ['求助与正常投诉'],
+        sourceIds: ['law1'],
+      },
+      sources: [
+        {
+          id: 'law1',
+          title: '<b>官方规定</b>',
+          url: 'https://www.cac.gov.cn/example',
+          article: '第六条',
+        },
+      ],
+    },
+  ],
+});
+function control(h, tag, suffix) {
+  return h
+    .get('detail')
+    .querySelectorAll(tag)
+    .find((item) => item.id?.endsWith(suffix));
+}
+function policyHarness(options = {}) {
+  return harness({
+    aiTestEnabled: true,
+    ...options,
+    customFetch: async (url, request, fallback) => {
+      if (url.endsWith('/ai-history')) return response({ runs: [options.run || policyRun()] });
+      return options.customFetch
+        ? options.customFetch(url, request, fallback)
+        : fallback(url, request);
+    },
+  });
+}
+
+test('rule library and persisted AI history are reviewer-only, including admin outside reviewer registry', async () => {
+  for (const options of [
+    { mine: true },
+    { reviewer: false, isAdmin: true },
+    { mine: true, reviewer: false, isAdmin: true },
+  ]) {
+    const h = harness(options);
+    await h.app.ready;
+    if (options.mine) await h.app.openSubmission('s1');
+    assert.equal(h.get('policy-library').hidden, true);
+    assert.ok(
+      h.requests.every(({ url }) => !url.endsWith('/policies') && !url.endsWith('/ai-history')),
+    );
+  }
+  const h = harness();
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  assert.equal(h.get('policy-library').hidden, false);
+  assert.ok(h.requests.some(({ url }) => url.endsWith('/policies')));
+  assert.ok(h.requests.some(({ url }) => url.endsWith('/ai-history')));
+});
+
+test('policy library searches locally, protects literal content and rejects active source URLs', async () => {
+  const h = harness({
+    customFetch: async (url, options, fallback) =>
+      url.endsWith('/policies')
+        ? response({
+            library: {
+              version: 'p1',
+              checkedAt: '2026-10-08',
+              rules: [
+                {
+                  id: 'HAR-001',
+                  title: '<script>bad()</script>',
+                  category: 'harassment',
+                  conditions: ['骚扰'],
+                  sourceIds: ['a', 'b'],
+                },
+                { id: 'SUP-001', title: '心理支持', category: 'self_harm', sourceIds: [] },
+              ],
+              sources: [
+                { id: 'a', title: '官方', url: 'https://www.cac.gov.cn/example' },
+                { id: 'b', title: '恶意链接', url: ['javascript', ':bad()'].join('') },
+              ],
+            },
+          })
+        : fallback(url, options),
+  });
+  await h.app.ready;
+  await flush();
+  assert.match(h.get('policy-list').textContent, /<script>bad\(\)<\/script>/);
+  assert.equal(h.get('policy-list').querySelectorAll('script').length, 0);
+  assert.deepEqual(
+    h
+      .get('policy-list')
+      .querySelectorAll('a')
+      .map((item) => item.href),
+    ['https://www.cac.gov.cn/example'],
+  );
+  const before = h.requests.length;
+  h.get('policy-query').value = 'SUP-001';
+  h.get('policy-query').events.input();
+  assert.match(h.get('policy-list').textContent, /心理支持/);
+  assert.doesNotMatch(h.get('policy-list').textContent, /HAR-001/);
+  assert.equal(h.requests.length, before);
+});
+
+test('late rules and history cannot restore reviewer content after logout', async () => {
+  const library = deferred();
+  const history = deferred();
+  const h = harness({
+    customFetch: async (url, options, fallback) => {
+      if (url.endsWith('/policies')) return library.promise;
+      if (url.endsWith('/ai-history')) return history.promise;
+      return fallback(url, options);
+    },
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  h.setToken('');
+  await h.app.initialize();
+  library.resolve(
+    response({
+      library: { version: 'x', rules: [{ id: 'PRIVATE', title: 'private rule' }], sources: [] },
+    }),
+  );
+  history.resolve(response({ runs: [policyRun()] }));
+  await flush();
+  assert.equal(h.get('policy-list').textContent, '');
+  assert.doesNotMatch(h.get('detail').textContent, /run-1|人工复核与回归样例/);
+  assert.equal(h.get('policy-library').hidden, true);
+});
+
+test('historical assessments remain available after a human decision and render evidence literally', async () => {
+  const h = policyHarness();
+  h.submission.status = 'approved';
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  assert.match(h.get('detail').textContent, /建议暂缓发布/);
+  assert.match(h.get('detail').textContent, /<script>evidence\(\)<\/script>/);
+  assert.equal(h.get('detail').querySelectorAll('script').length, 0);
+  assert.ok(
+    !h
+      .get('detail')
+      .querySelectorAll('button')
+      .some((item) => item.dataset.decision),
+  );
+  assert.ok(
+    h
+      .get('detail')
+      .querySelectorAll('button')
+      .some((item) => item.textContent === '保存人工复核记录'),
+  );
+});
+
+test('feedback requires explicit correction and a note, retains request ID across retry, and never publishes', async () => {
+  let attempts = 0;
+  const h = policyHarness({
+    customFetch: async (url, options, fallback) => {
+      if (url.endsWith('/feedback')) {
+        attempts += 1;
+        return attempts === 1 ? response({ message: '稍后重试' }, 503) : response({ ok: true });
+      }
+      return fallback(url, options);
+    },
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  const form = h
+    .get('detail')
+    .querySelectorAll('form')
+    .find((item) =>
+      item.querySelectorAll('button').some((button) => button.textContent === '保存人工复核记录'),
+    );
+  control(h, 'select', '-decision').value = 'high_risk';
+  await form.events.submit({ preventDefault() {} });
+  assert.equal(attempts, 0);
+  assert.match(form.textContent, /已修改判断/);
+  control(h, 'select', '-verdict').value = 'correct';
+  await form.events.submit({ preventDefault() {} });
+  assert.equal(attempts, 0);
+  assert.match(form.textContent, /填写复核说明/);
+  control(h, 'textarea', '-note').value = '上下文显示存在针对性骚扰。';
+  await form.events.submit({ preventDefault() {} });
+  await form.events.submit({ preventDefault() {} });
+  const bodies = h.requests
+    .filter(({ url }) => url.endsWith('/feedback'))
+    .map(({ options }) => JSON.parse(options.body));
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[0].requestId, bodies[1].requestId);
+  assert.equal(bodies[0].decision, 'high_risk');
+  assert.equal(h.decisionAttempts(), 0);
+  assert.equal(h.requests.filter(({ url }) => url.endsWith('/ai-test')).length, 0);
+});
+
+test('regression sample begins blank and only sends manually rewritten content after explicit confirmation', async () => {
+  const run = policyRun();
+  run.feedback = {
+    verdict: 'agree',
+    decision: run.assessment.decision,
+    categories: run.assessment.categories,
+    ruleIds: ['HAR-001'],
+    supportPriority: 'none',
+    note: '',
+    createdAt: '2026-10-08T01:00:00Z',
+  };
+  const h = policyHarness({
+    run,
+    customFetch: async (url, options, fallback) =>
+      url.endsWith('/regression') ? response({ ok: true }) : fallback(url, options),
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  const content = control(h, 'textarea', '-synthetic-content');
+  const title = control(h, 'input', '-synthetic-title');
+  assert.equal(content.value, '');
+  assert.equal(title.value, '');
+  const form = h
+    .get('detail')
+    .querySelectorAll('form')
+    .find((item) =>
+      item.querySelectorAll('button').some((button) => button.textContent === '保存虚构回归样例'),
+    );
+  content.value = '虚构学生甲对设施提出正常建议。';
+  control(h, 'textarea', '-synthetic-reason').value = '用于保护正常建议。';
+  await form.events.submit({ preventDefault() {} });
+  assert.ok(!h.requests.some(({ url }) => url.endsWith('/regression')));
+  form.querySelectorAll('input').find((item) => item.type === 'checkbox').checked = true;
+  await form.events.submit({ preventDefault() {} });
+  const body = JSON.parse(h.requests.find(({ url }) => url.endsWith('/regression')).options.body);
+  assert.equal(body.content, content.value);
+  assert.equal(body.syntheticConfirmed, true);
+  assert.ok(body.requestId);
+  assert.ok(!JSON.stringify(body).includes(h.submission.contentMarkdown));
+  assert.equal(h.decisionAttempts(), 0);
+});
+
+test('saved corrected labels survive history refresh and regression uses those saved labels', async () => {
+  const run = policyRun();
+  const h = policyHarness({
+    run,
+    customFetch: async (url, options, fallback) => {
+      if (url.endsWith('/feedback')) {
+        run.feedback = { ...JSON.parse(options.body), createdAt: '2026-10-08T01:00:00Z' };
+        return response({ ok: true });
+      }
+      if (url.endsWith('/regression')) return response({ ok: true });
+      return fallback(url, options);
+    },
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  const findForm = (caption) =>
+    h
+      .get('detail')
+      .querySelectorAll('form')
+      .find((item) =>
+        item.querySelectorAll('button').some((button) => button.textContent === caption),
+      );
+  const feedbackForm = findForm('保存人工复核记录');
+  control(h, 'select', '-verdict').value = 'correct';
+  control(h, 'select', '-decision').value = 'no_risk_detected';
+  feedbackForm
+    .querySelectorAll('input')
+    .filter((item) => item.type === 'checkbox')
+    .forEach((item) => {
+      item.checked = false;
+    });
+  control(h, 'input', '-rules').value = '';
+  control(h, 'textarea', '-note').value = '本例是被骚扰者的举报，不应认定作者违规。';
+  await feedbackForm.events.submit({ preventDefault() {} });
+  assert.equal(control(h, 'select', '-decision').value, 'no_risk_detected');
+  assert.equal(control(h, 'select', '-verdict').value, 'correct');
+  assert.equal(control(h, 'input', '-rules').value, '');
+  assert.equal(
+    findForm('保存人工复核记录')
+      .querySelectorAll('input')
+      .filter((item) => item.type === 'checkbox' && item.checked).length,
+    0,
+  );
+  const regressionForm = findForm('保存虚构回归样例');
+  control(h, 'textarea', '-synthetic-content').value = '虚构同学甲在举报自己遭受的骚扰。';
+  control(h, 'textarea', '-synthetic-reason').value = '保护举报求助语境。';
+  regressionForm.querySelectorAll('input').find((item) => item.type === 'checkbox').checked = true;
+  control(h, 'select', '-decision').value = 'high_risk';
+  await regressionForm.events.submit({ preventDefault() {} });
+  assert.ok(!h.requests.some(({ url }) => url.endsWith('/regression')));
+  assert.match(regressionForm.textContent, /未保存的修改/);
+  control(h, 'select', '-decision').value = 'no_risk_detected';
+  await regressionForm.events.submit({ preventDefault() {} });
+  const saved = JSON.parse(h.requests.find(({ url }) => url.endsWith('/regression')).options.body);
+  assert.equal(saved.expectedDecision, 'no_risk_detected');
+  assert.deepEqual(saved.categories, []);
+  assert.deepEqual(saved.ruleIds, []);
+  assert.match(regressionForm.textContent, /不会自动匿名化/);
+});
+
+test('non-trial environment keeps read-only library and history but prevents feedback, regression and export writes', async () => {
+  const h = policyHarness({ aiTestEnabled: false });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  assert.equal(h.get('policy-library').hidden, false);
+  assert.match(h.get('detail').textContent, /需要结合上下文判断/);
+  assert.match(h.get('detail').textContent, /历史仅供查看/);
+  assert.ok(
+    !h
+      .get('detail')
+      .querySelectorAll('button')
+      .some(
+        (item) =>
+          item.textContent === '保存人工复核记录' || item.textContent === '保存虚构回归样例',
+      ),
+  );
+  assert.equal(h.get('regression-export').disabled, true);
+  await h.get('regression-export').events.click();
+  assert.ok(
+    !h.requests.some(({ url }) => /\/(feedback|regression|regressions\/export)$/.test(url)),
+  );
+});
+
+test('regression creation remains disabled until this run has a saved human review', async () => {
+  const h = policyHarness();
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  const save = h
+    .get('detail')
+    .querySelectorAll('button')
+    .find((item) => item.textContent === '保存虚构回归样例');
+  assert.equal(save.disabled, true);
+  assert.match(h.get('detail').textContent, /请先保存上方人工复核记录/);
 });
