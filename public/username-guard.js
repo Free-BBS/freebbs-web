@@ -20,12 +20,12 @@
       dialog.innerHTML = `
         <form class="username-dialog-form">
           <h2 id="username-dialog-title">请修改用户名</h2>
-          <p>用户名仅可使用英文字母、数字和下划线。修改后即可继续使用。</p>
+          <p>用户名须为 3–64 位英文字母、数字或下划线。此次修复免费，不占用普通免费改名次数；修改后即可继续使用。</p>
           <label for="replacement-username">新用户名</label>
           <input id="replacement-username" name="username" type="text" autocomplete="username"
-            minlength="3" maxlength="64" pattern="[A-Za-z0-9_]+" required
+            minlength="3" maxlength="64" pattern="[A-Za-z0-9_]{3,64}" required
             aria-describedby="username-rule username-error" />
-          <small id="username-rule">3–64 个字符，例如 zhang_san2026</small>
+          <small id="username-rule">3–64 位英文字母、数字或下划线，例如 NotingSr_2026</small>
           <p id="username-error" class="username-dialog-error" role="alert"></p>
           <button type="submit">保存并继续</button>
           <button class="username-signout" type="button">退出登录</button>

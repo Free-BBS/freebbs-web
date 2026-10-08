@@ -10,21 +10,18 @@
   const gapStatus = byId('planning-gaps-status');
   const gapList = byId('planning-gap-list');
   const companion = byId('companion');
-  const bubble = byId('companion-bubble');
-  function toggleBubble(open) {
-    bubble.hidden = !open;
-    byId('companion-avatar').setAttribute('aria-expanded', String(open));
-  }
-  byId('companion-avatar').addEventListener('click', () => toggleBubble(bubble.hidden));
-  byId('companion-collapse').addEventListener('click', () => toggleBubble(false));
-  byId('companion-plan').addEventListener('click', () => {
-    byId('plan-tab')?.click();
-    const fold = byId('max-planner').closest('details');
-    if (fold) fold.open = true;
-    toggleBubble(false);
-    window.requestAnimationFrame(() =>
-      byId('max-planner').scrollIntoView({ block: 'start', behavior: 'smooth' }),
-    );
+  const bubbleControls = window.FreeBbsWorkbenchCompanion.installBubbleControls({
+    document,
+    onHide: () => showTips(true),
+    onShow: () => showTips(false),
+    onPlan: () => {
+      byId('plan-tab')?.click();
+      const fold = byId('max-planner').closest('details');
+      if (fold) fold.open = true;
+      window.requestAnimationFrame(() =>
+        byId('max-planner').scrollIntoView({ block: 'start', behavior: 'smooth' }),
+      );
+    },
   });
   const defaults = {
     enabled: true,
@@ -54,8 +51,7 @@
   let tipsHidden = false;
   const hiddenKey = () => `freebbs:workbench:max-tips:${ownerKey() || 'guest'}`;
   function renderTip() {
-    companion.hidden = tipsHidden;
-    byId('companion-show').hidden = !tipsHidden;
+    bubbleControls.setHidden(tipsHidden);
     const tip = window.FreeBbsWorkbenchCompanion.selectTip(
       tipEvents,
       new Date(),
@@ -67,7 +63,7 @@
   }
   function showTips(hidden) {
     tipsHidden = hidden;
-    if (!hidden) toggleBubble(true);
+    bubbleControls.setOpen(false);
     try {
       localStorage.setItem(hiddenKey(), hidden ? 'hidden' : 'shown');
     } catch {
@@ -76,8 +72,6 @@
     renderTip();
     if (!hidden) refreshTip();
   }
-  byId('companion-hide').addEventListener('click', () => showTips(true));
-  byId('companion-show').addEventListener('click', () => showTips(false));
   byId('companion-next').addEventListener('click', () => {
     tipIndex += 1;
     renderTip();
@@ -290,7 +284,7 @@
     tipRequest += 1;
     tipEvents = [];
     tipReady = false;
-    toggleBubble(true);
+    bubbleControls.setOpen(false);
     savedPreferences = null;
     dirty = false;
     busy = false;

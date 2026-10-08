@@ -240,7 +240,7 @@ test(
     const admin = await login('admin');
     const owner = await createUser('circuit_owner', '2026000501');
     const other = await createUser('circuit_other', '2026000502');
-    const legacy = await createUser('旧用户名', '2026000503');
+    const legacy = await createUser('旧 用户名', '2026000503');
     let original;
     let otherCircuit;
 

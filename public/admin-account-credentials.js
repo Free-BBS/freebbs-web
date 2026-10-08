@@ -65,10 +65,10 @@
   function openReset({ id, username }) {
     const current = session();
     if (!current) return;
-    const node = createDialog(`重置教师 ${username} 的密码`);
+    const node = createDialog(`重置 ${username} 的密码`);
     const form = document.createElement('form');
     form.innerHTML =
-      '<label class="auth-field"><span>管理员当前密码</span><input name="currentPassword" type="password" autocomplete="current-password" maxlength="128" required /></label><label class="auth-field"><span>教师新初始密码</span><input name="password" type="password" autocomplete="new-password" minlength="6" maxlength="128" required /></label><button type="button" data-generate-password>生成初始密码</button><p role="status" aria-live="polite"></p><button type="submit">确认重置</button>';
+      '<label class="auth-field"><span>管理员当前密码</span><input name="currentPassword" type="password" autocomplete="current-password" maxlength="128" required /></label><label class="auth-field"><span>新初始密码</span><input name="password" type="password" autocomplete="new-password" minlength="6" maxlength="128" required /></label><button type="button" data-generate-password>生成初始密码</button><p role="status" aria-live="polite"></p><button type="submit">确认重置</button>';
     form.querySelector('[data-generate-password]').addEventListener('click', () => {
       const bytes = window.crypto.getRandomValues(new Uint8Array(16));
       form.elements.password.value = Array.from(bytes, (value) =>

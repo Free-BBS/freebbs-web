@@ -52,11 +52,17 @@
       refresh.disabled = busy;
       if (policy) {
         const next = policy.nextFreeAt ? new Date(policy.nextFreeAt).toLocaleString('zh-CN') : '';
-        policyText.textContent = policy.teacherFree
-          ? '教师账号可免费修改登录用户名，请保持符合格式并使用新用户名登录。'
-          : policy.freeAvailable
-            ? '本次可免费修改昵称。免费次数不累计。'
-            : `本次需要 10 磁元，当前余额 ${policy.balance} 磁元。下次免费时间：${next}。`;
+        if (policy.required) {
+          policyText.textContent =
+            '旧昵称需要修改为 3–64 位英文字母、数字或下划线。此次修复免费，不占用普通免费改名次数。';
+        } else if (policy.teacherFree) {
+          policyText.textContent =
+            '教师账号可免费修改登录用户名，请保持符合格式并使用新用户名登录。';
+        } else if (policy.freeAvailable) {
+          policyText.textContent = '本次可免费修改昵称。免费次数不累计。';
+        } else {
+          policyText.textContent = `本次需要 10 磁元，当前余额 ${policy.balance} 磁元。下次免费时间：${next}。`;
+        }
       }
     }
 
@@ -100,7 +106,7 @@
     async function submit() {
       if (busy || !policy || !getSession()) return;
       const username = input.value;
-      if (!/^[A-Za-z0-9_]{3,64}$/.test(username) || /[^A-Za-z0-9_]/.test(username)) {
+      if (!/^[A-Za-z0-9_]{3,64}$/.test(username)) {
         message.textContent = '昵称须为 3–64 位英文字母、数字或下划线。';
         return;
       }

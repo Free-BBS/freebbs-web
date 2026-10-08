@@ -113,6 +113,7 @@ python3 services/language-lab/test_worker.py
 echo "[ci] authentication and typography preferences tests"
 npm run test:auth
 npm run test:teacher-accounts
+npm run test:identity-usability
 
 echo "[ci] workbench and schedule planner tests"
 npm run test:workbench

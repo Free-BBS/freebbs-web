@@ -1,0 +1,194 @@
+.user-certifications [hidden],
+.admin-certifications[hidden],
+.admin-certifications [hidden] {
+  display: none !important;
+}
+
+.user-certifications form,
+.certification-fields {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.certification-toolbar,
+.certification-admin-heading,
+.certification-admin-toolbar,
+.certification-pagination,
+.certification-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.certification-toolbar p,
+.certification-help,
+.certification-suggestion p,
+.certification-admin-heading :is(h2, p) {
+  margin: 0;
+}
+
+.certification-secondary,
+.certification-review-actions button {
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 10px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: 500 0.88rem/1.6 var(--font-ui);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.certification-secondary:disabled,
+.certification-review-actions button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.certification-secondary:focus-visible,
+.certification-review-actions button:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 3px;
+}
+
+.certification-list,
+.certification-admin-list {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.certification-entry,
+.certification-suggestion,
+.certification-review {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--ui-line);
+  border-radius: 12px;
+  background: var(--ui-surface-soft);
+}
+
+.certification-entry :is(h3, p),
+.certification-review :is(h3, p) {
+  margin: 0;
+}
+
+.certification-entry h3,
+.certification-review h3 {
+  color: var(--ui-text);
+  font: 600 0.98rem/1.7 var(--font-ui);
+}
+
+.certification-entry p,
+.certification-help,
+.certification-suggestion p,
+.certification-review p,
+.certification-admin-heading p,
+#certification-status,
+#certification-message,
+#admin-certification-status {
+  color: var(--ui-muted);
+  font: 400 0.9rem/1.8 var(--font-ui);
+  overflow-wrap: anywhere;
+}
+
+.certification-entry[data-status='approved'] h3 {
+  color: var(--ui-accent);
+}
+
+.certification-suggestion button {
+  justify-self: start;
+}
+
+.admin-certifications {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  margin-bottom: 24px;
+  padding: 24px;
+  border: 1px solid var(--ui-line);
+  border-radius: 14px;
+  background: var(--ui-surface);
+  scroll-margin-top: 110px;
+}
+
+.certification-admin-heading h2 {
+  color: var(--ui-text);
+  font: 600 1.2rem/1.7 var(--font-ui);
+}
+
+#admin-certification-pending {
+  color: var(--ui-accent);
+  font: 600 0.95rem/1.7 var(--font-ui);
+  white-space: nowrap;
+}
+
+.certification-admin-toolbar .auth-field {
+  min-width: min(100%, 180px);
+}
+
+.certification-admin-toolbar select,
+.certification-review textarea {
+  min-width: 0;
+  max-width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 10px;
+  color: var(--ui-text);
+  background: var(--ui-input);
+  font: 400 0.92rem/1.7 var(--font-ui);
+}
+
+.certification-review textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.certification-confirmation {
+  display: flex;
+  align-items: start;
+  gap: 10px;
+  color: var(--ui-text);
+  font: 500 0.9rem/1.8 var(--font-ui);
+}
+
+.certification-confirmation input {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  margin: 3px 0 0;
+}
+
+.certification-review-actions {
+  justify-content: start;
+}
+
+.certification-pagination {
+  justify-content: center;
+  color: var(--ui-muted);
+  font: 400 0.9rem/1.7 var(--font-ui);
+}
+
+@media (max-width: 600px) {
+  .admin-certifications {
+    padding: 16px;
+  }
+
+  .certification-entry,
+  .certification-review,
+  .certification-suggestion {
+    padding: 12px;
+  }
+
+  .certification-admin-toolbar {
+    align-items: end;
+  }
+}

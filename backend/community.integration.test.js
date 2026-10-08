@@ -86,21 +86,39 @@ test(
       const source = await fs.readFile(path.join(root, 'database', file), 'utf8');
       await db.query(source.replaceAll('free_bbs', database));
     }
-    await runProgram('bash', ['scripts/migrate-development.sh'], {
-      cwd: root,
-      env: {
-        ...process.env,
-        NODE_BINARY: process.execPath,
-        NODE_ENV: 'test',
-        BACKEND_IP: backendMysqlOptions.host,
-        MYSQL_PORT: String(backendMysqlOptions.port),
-        MYSQL_USER: mysqlOptions.user,
-        MYSQL_PASSWORD: mysqlOptions.password,
-        MYSQL_DATABASE: database,
-        DEVELOPMENT_MYSQL_DATABASE: developmentDatabase,
-        ...(isolated ? { MYSQL_SOCKET: mysqlOptions.socketPath } : {}),
+    // The Windows mysql CLI does not infer PIPE from --socket and may fall back to
+    // a real TCP server. The verified mysql2 connection stays on this QA pipe.
+    const migrateWithNode = isolated && process.platform === 'win32';
+    if (migrateWithNode) {
+      assert.match(developmentDatabase, /^freebbs_community_test_[a-f0-9]{12}_development$/);
+      await db.query(
+        `CREATE DATABASE \`${developmentDatabase}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci`,
+      );
+    }
+    await runProgram(
+      migrateWithNode ? process.execPath : 'bash',
+      migrateWithNode
+        ? ['development/apps/api/dist/core/database/migrate.js']
+        : ['scripts/migrate-development.sh'],
+      {
+        cwd: root,
+        env: {
+          ...process.env,
+          NODE_BINARY: process.execPath,
+          NODE_ENV: 'test',
+          BACKEND_IP: backendMysqlOptions.host,
+          MYSQL_PORT: String(backendMysqlOptions.port),
+          MYSQL_USER: mysqlOptions.user,
+          MYSQL_PASSWORD: mysqlOptions.password,
+          MYSQL_DATABASE: database,
+          ...(migrateWithNode
+            ? { MYSQL_DATABASE: developmentDatabase, MYSQL_HOST: backendMysqlOptions.host }
+            : {}),
+          DEVELOPMENT_MYSQL_DATABASE: developmentDatabase,
+          ...(isolated ? { MYSQL_SOCKET: mysqlOptions.socketPath } : {}),
+        },
       },
-    });
+    );
     const port = await reservePort();
     backend = spawn(process.execPath, ['backend/server.js'], {
       cwd: root,
@@ -256,7 +274,7 @@ test(
       return book.xlsx.writeBuffer();
     }
     const admin = await login('admin');
-    const legacy = await createUser('旧用户名', '2026000101');
+    const legacy = await createUser('旧 用户名', '2026000101');
     const outsider = await createUser('outside_user', '2026000102');
 
     await t.test(
@@ -948,7 +966,7 @@ test(
           let exitCode = 0;
           try {
             output = await runProgram(
-              process.env.PYTHON || 'python3',
+              process.env.FREEBBS_TEST_PYTHON_BIN || process.env.PYTHON || 'python3',
               [
                 '-B',
                 path.join(root, 'skills/freebbs-course-upload/scripts/freebbs_course_upload.py'),

@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(128) UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     email_verified_at DATETIME NULL,
-    role ENUM('student', 'ta', 'teacher', 'admin') DEFAULT 'student',
+    role ENUM('student', 'ta', 'teacher', 'admin', 'enterprise') DEFAULT 'student',
     electrons BIGINT NOT NULL DEFAULT 0,
     manetrons BIGINT NOT NULL DEFAULT 0,
     grade VARCHAR(16),

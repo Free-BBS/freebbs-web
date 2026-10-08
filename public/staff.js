@@ -69,6 +69,11 @@
         /^\/assets\/staff\/[a-z0-9_-]+\.(?:png|jpe?g|webp)$/i.test(member.photo)
           ? member.photo
           : '';
+      const photoThumbnail =
+        typeof member.photoThumbnail === 'string' &&
+        /^\/assets\/staff\/[a-z0-9_-]+\.(?:png|jpe?g|webp)$/i.test(member.photoThumbnail)
+          ? member.photoThumbnail
+          : photo;
       return {
         name,
         groups,
@@ -82,6 +87,7 @@
         ],
         introduction: introduction.trim() === '【请输入文本】' ? '' : introduction,
         photo,
+        photoThumbnail,
       };
     });
     const sourceDate = /^\d{4}-\d{2}-\d{2}$/.test(data.sourceDate || '') ? data.sourceDate : '';
@@ -164,9 +170,10 @@
         if (!avatar.disabled) openPhoto?.(member, avatar);
       });
       const photo = doc.createElement('img');
-      photo.src = member.photo;
+      photo.src = member.photoThumbnail || member.photo;
       photo.alt = '';
       photo.loading = 'lazy';
+      photo.decoding = 'async';
       photo.width = 88;
       photo.height = 116;
       photo.addEventListener('load', () => {
@@ -280,6 +287,7 @@
       trigger = source;
       name.textContent = member.name;
       image.alt = `${member.name}的照片`;
+      image.decoding = 'async';
       image.hidden = false;
       status.hidden = true;
       status.textContent = '';

@@ -30,6 +30,12 @@ function validatePassword(value) {
   return value;
 }
 
+// Recovery must still find accounts created under the previous Chinese nickname policy.
+// This only validates a lookup identifier; new usernames use isValidUsername instead.
+function isRecoverableUsername(value) {
+  return typeof value === 'string' && /^[\p{Script=Han}A-Za-z0-9_]{2,64}$/u.test(value);
+}
+
 function normalizeAdminAccount(body = {}) {
   const username = String(body.username || '').trim();
   const fullName = String(body.fullName || '').trim();
@@ -40,13 +46,21 @@ function normalizeAdminAccount(body = {}) {
   if (!fullName || fullName.length > 64) {
     throw accountError(400, 'invalid_name', '请输入姓名，且长度不超过 64 个字符');
   }
-  if (!['student', 'ta', 'teacher', 'admin'].includes(role)) {
+  if (!['student', 'ta', 'teacher', 'admin', 'enterprise'].includes(role)) {
     throw accountError(400, 'invalid_role', '角色不合法');
   }
-  if ((!studentId && role !== 'teacher') || (studentId && !/^20\d{8}$/.test(studentId))) {
-    throw accountError(400, 'invalid_student_id', '学号必须是 20 开头的 10 位数字；教师可暂不填写');
+  if (
+    (!studentId && !['teacher', 'enterprise'].includes(role)) ||
+    (studentId && !/^20\d{8}$/.test(studentId))
+  ) {
+    throw accountError(
+      400,
+      'invalid_student_id',
+      '学号必须是 20 开头的 10 位数字；教师和企业可暂不填写',
+    );
   }
-  if (!email && role !== 'teacher') throw accountError(400, 'invalid_email', '请输入有效邮箱地址');
+  if (!email && !['teacher', 'enterprise'].includes(role))
+    throw accountError(400, 'invalid_email', '请输入有效邮箱地址');
   return {
     username,
     fullName,
@@ -54,8 +68,8 @@ function normalizeAdminAccount(body = {}) {
     studentId: studentId || null,
     email: email ? normalizeEmail(email) : null,
     password: validatePassword(body.password),
-    grade: role === 'teacher' ? null : studentId.slice(0, 4),
-    major: role === 'teacher' ? null : '电子信息科学与技术',
+    grade: ['teacher', 'enterprise'].includes(role) ? null : studentId.slice(0, 4),
+    major: ['teacher', 'enterprise'].includes(role) ? null : '电子信息科学与技术',
   };
 }
 
@@ -316,7 +330,7 @@ function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }
   async function sendResetCode(body = {}) {
     const email = normalizeEmail(body.email);
     const identifier = String(body.identifier || '').trim();
-    if (!isValidUsername(identifier))
+    if (!isRecoverableUsername(identifier))
       throw accountError(400, 'invalid_username', '请输入登录用户名');
     const [[match]] = await pool.execute(
       'SELECT id FROM users WHERE username = ? AND email = ? AND email_verified_at IS NOT NULL LIMIT 1',
@@ -340,6 +354,8 @@ function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }
     const password = validatePassword(body.password);
     const email = normalizeEmail(body.email);
     const identifier = String(body.identifier || '').trim();
+    if (!isRecoverableUsername(identifier))
+      throw accountError(400, 'invalid_username', '请输入登录用户名');
     const [[match]] = await pool.execute(
       'SELECT id FROM users WHERE username = ? AND email = ? AND email_verified_at IS NOT NULL LIMIT 1',
       [identifier, email],
@@ -383,8 +399,8 @@ function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }
       const user = rows.find((row) => Number(row.id) === userId);
       if (!admin?.is_admin) throw accountError(403, 'admin_required', '需要管理员权限');
       await checkPassword(admin, body.currentPassword);
-      if (!user || user.role !== 'teacher' || user.is_admin)
-        throw accountError(403, 'teacher_required', '仅可重置非管理员教师账号');
+      if (!user || !['teacher', 'enterprise'].includes(user.role) || user.is_admin)
+        throw accountError(403, 'teacher_required', '仅可重置非管理员教师或企业账号');
       await connection.execute('UPDATE users SET password_hash = ? WHERE id = ?', [
         hashPassword(password),
         userId,

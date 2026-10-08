@@ -88,5 +88,55 @@
     const choices = messages[kind];
     return { kind, text: choices[Math.abs(index) % choices.length] };
   }
-  return { selectTip, messages };
+  function installBubbleControls({ document: doc, onHide, onShow, onPlan }) {
+    const byId = (name) => doc.getElementById(`workbench-companion${name ? `-${name}` : ''}`);
+    const companion = byId('');
+    const bubble = byId('bubble');
+    const avatar = byId('avatar');
+    const collapse = byId('collapse');
+    const hide = byId('hide');
+    const show = byId('show');
+    const plan = byId('plan');
+    if (![companion, bubble, avatar, collapse, hide, show, plan].every(Boolean)) return undefined;
+
+    function setOpen(value, returnFocus = false) {
+      const open = Boolean(value && !companion.hidden);
+      bubble.hidden = !open;
+      avatar.setAttribute('aria-expanded', String(open));
+      avatar.setAttribute('aria-label', `${open ? '收起' : '展开'} Max 小提示`);
+      if (returnFocus) avatar.focus();
+    }
+    function setHidden(value) {
+      companion.hidden = Boolean(value);
+      show.hidden = !value;
+      if (value) setOpen(false);
+    }
+    setOpen(false);
+    avatar.addEventListener('click', () => setOpen(bubble.hidden));
+    collapse.addEventListener('click', () => setOpen(false, true));
+    bubble.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setOpen(false, true);
+      }
+    });
+    hide.addEventListener('click', () => {
+      setOpen(false);
+      onHide?.();
+      setHidden(true);
+      show.focus();
+    });
+    show.addEventListener('click', () => {
+      onShow?.();
+      setHidden(false);
+      setOpen(false);
+      avatar.focus();
+    });
+    plan.addEventListener('click', () => {
+      setOpen(false, true);
+      onPlan?.();
+    });
+    return { setOpen, setHidden };
+  }
+  return { selectTip, messages, installBubbleControls };
 });

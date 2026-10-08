@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="/ui-polish.css" />
     <link rel="stylesheet" href="/adminusers.css" />
     <link rel="stylesheet" href="/account-identity.css" />
+    <link rel="stylesheet" href="/user-certifications.css" />
     <link rel="stylesheet" href="/username-guard.css" />
     <link rel="stylesheet" href="/notifications.css" />
     <link rel="stylesheet" href="/registration-whitelist.css" />
@@ -187,6 +188,56 @@
               aria-live="polite"
             ></p>
 
+            <section
+              id="certifications"
+              class="admin-certifications"
+              aria-labelledby="admin-certifications-title"
+              hidden
+            >
+              <header class="certification-admin-heading">
+                <div>
+                  <h2 id="admin-certifications-title">身份认证审核</h2>
+                  <p>核实申请人身份后批准；通过前保留账号已有的认证身份。</p>
+                </div>
+                <strong id="admin-certification-pending">待审核 0 条</strong>
+              </header>
+              <div class="certification-admin-toolbar">
+                <label class="auth-field"
+                  ><span>申请状态</span
+                  ><select id="admin-certification-filter">
+                    <option value="pending">待审核</option>
+                    <option value="approved">已批准</option>
+                    <option value="rejected">未通过</option>
+                  </select></label
+                ><button
+                  type="button"
+                  id="admin-certification-refresh"
+                  class="certification-secondary"
+                >
+                  刷新申请
+                </button>
+              </div>
+              <p id="admin-certification-status" role="status" aria-live="polite"></p>
+              <div id="admin-certification-list" class="certification-admin-list"></div>
+              <div class="certification-pagination">
+                <button
+                  type="button"
+                  id="admin-certification-prev"
+                  class="certification-secondary"
+                  disabled
+                >
+                  上一页</button
+                ><span id="admin-certification-page"></span
+                ><button
+                  type="button"
+                  id="admin-certification-next"
+                  class="certification-secondary"
+                  disabled
+                >
+                  下一页
+                </button>
+              </div>
+            </section>
             <section class="admin-directory-toolbar" aria-label="筛选用户">
               <label class="admin-user-search" for="admin-user-search">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -209,6 +260,7 @@
                   <option value="teacher">教师</option>
                   <option value="ta">助教</option>
                   <option value="student">学生</option>
+                  <option value="enterprise">企业</option>
                 </select>
               </label>
               <label class="admin-user-filter">
@@ -306,6 +358,7 @@
     <script src="/registration-whitelist.js"></script>
     <script src="/app.js"></script>
     <script src="/admin-account-credentials.js"></script>
+    <script src="/admin-certifications.js"></script>
     <script src="/notifications.js"></script>
   </body>
 </html>
