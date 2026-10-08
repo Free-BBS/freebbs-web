@@ -121,11 +121,13 @@
   const state = {
     ownerKey: '',
     requestVersion: 0,
+    loadAbortController: null,
     importantItems: [],
     notifications: [],
     communityNotifications: [],
     communityCursor: null,
     communityUnreadCount: 0,
+    notificationLoad: null,
     noticeView: 'all',
     scheduleItems: [],
     weekStart: null,
@@ -1191,7 +1193,27 @@
       discussion: '回复与互动单独展示，不混入公共通知。',
     };
     elements.noticeHint.textContent = hints[state.noticeView];
+    const sources = state.noticeView === 'discussion' ? ['community'] : ['workbench', 'community'];
+    const pending = sources.some(
+      (source) => state.notificationLoad?.[source]?.status === 'pending',
+    );
+    const failures = sources
+      .map((source) => state.notificationLoad?.[source])
+      .filter((result) => result?.status === 'rejected');
+    if (failures.length === sources.length || (!items.length && !pending && failures.length)) {
+      renderDataFailure(elements.notificationList, '通知', failures[0].error);
+      return;
+    }
+    if (pending) elements.noticeHint.textContent = '部分通知正在加载。';
+    else if (failures.length)
+      elements.noticeHint.textContent = '部分通知暂时无法加载，可以刷新重试。';
     if (!items.length) {
+      if (pending) {
+        renderState(elements.notificationList, '通知', '正在加载', '正在读取其他通知。', {
+          busy: true,
+        });
+        return;
+      }
       const hasFilter = Boolean(filters.category || filters.unread || filters.favorite || search);
       renderState(
         elements.notificationList,
@@ -1238,7 +1260,7 @@
         });
       }),
     );
-    elements.notificationList.setAttribute('aria-busy', 'false');
+    elements.notificationList.setAttribute('aria-busy', String(pending));
   }
 
   function renderScheduleItems() {
@@ -1344,6 +1366,15 @@
     const requestVersion = state.requestVersion + 1;
     state.requestVersion = requestVersion;
     state.ownerKey = ownerKey;
+    state.loadAbortController?.abort();
+    const controller = new AbortController();
+    state.loadAbortController = controller;
+    state.notificationLoad = {
+      workbench: { status: 'pending' },
+      community: { status: 'pending' },
+    };
+    elements.notificationMore.hidden = true;
+    elements.notificationMore.disabled = false;
     renderState(elements.importantList, '重要事项', '正在加载', '正在读取你的个人事项。', {
       busy: true,
     });
@@ -1354,76 +1385,81 @@
       busy: true,
     });
 
-    const [importantResult, notificationResult, communityResult, scheduleResult] =
-      await Promise.allSettled([
-        app.callApi('/workbench/important-items', { method: 'GET' }),
-        app.callApi(`/workbench/notifications?${buildNotificationQuery()}`, { method: 'GET' }),
-        app.callApi('/notifications?limit=50', { method: 'GET' }),
-        app.callApi(
-          `/workbench/schedule-items?${new URLSearchParams({
-            from: new Date(state.weekStart ?? getWeekStart()).toISOString(),
-            to: new Date((state.weekStart ?? getWeekStart()) + 7 * DAY_MS).toISOString(),
-          })}`,
-          { method: 'GET' },
-        ),
-      ]);
-    if (requestVersion !== state.requestVersion || !isLoggedIn() || getOwnerKey() !== ownerKey) {
-      return;
-    }
-
-    const results = [importantResult, notificationResult, communityResult, scheduleResult];
-    if (
-      results.some((result) => result.status === 'rejected' && result.reason?.status === 401) &&
-      typeof app.clearSession === 'function'
-    ) {
-      app.clearSession();
-      return;
-    }
-
-    if (importantResult.status === 'fulfilled') {
-      state.importantItems = importantResult.value.importantItems || [];
-      renderImportantItems();
-    } else {
-      renderDataFailure(elements.importantList, '重要事项', importantResult.reason);
-    }
-
-    if (notificationResult.status === 'fulfilled') {
-      state.notifications = notificationResult.value.notifications || [];
-    } else {
-      state.notifications = [];
-    }
-
-    if (communityResult.status === 'fulfilled') {
-      state.communityNotifications = communityResult.value.notifications || [];
-      state.communityCursor = communityResult.value.nextCursor || null;
-      state.communityUnreadCount = Number(communityResult.value.unreadCount) || 0;
-    } else {
-      state.communityNotifications = [];
-      state.communityCursor = null;
-      state.communityUnreadCount = 0;
-    }
-    elements.notificationMore.hidden = !state.communityCursor;
-    if (notificationResult.status === 'rejected' && communityResult.status === 'rejected') {
-      renderDataFailure(elements.notificationList, '通知', communityResult.reason);
-    } else {
-      renderNotifications();
-      if (communityResult.status === 'rejected') {
-        elements.noticeHint.textContent = '平台发布与讨论动态暂时无法加载；已显示个人计划通知。';
-      } else if (notificationResult.status === 'rejected') {
-        elements.noticeHint.textContent = '个人计划通知暂时无法加载；已显示平台发布与讨论动态。';
+    const isCurrent = () =>
+      requestVersion === state.requestVersion && isLoggedIn() && getOwnerKey() === ownerKey;
+    const loadSection = async (path, onSuccess, onFailure) => {
+      try {
+        const payload = await app.callApi(path, { method: 'GET', signal: controller.signal });
+        if (isCurrent()) onSuccess(payload);
+      } catch (error) {
+        if (!isCurrent()) return;
+        if (error.status === 401 && typeof app.clearSession === 'function') {
+          app.clearSession();
+          return;
+        }
+        onFailure(error);
       }
-    }
-
-    if (scheduleResult.status === 'fulfilled') {
-      state.scheduleReady = true;
-      state.scheduleItems = scheduleResult.value.scheduleItems || [];
-      renderScheduleItems();
-      window.dispatchEvent(new CustomEvent('freebbs:workbench-loaded'));
-    } else {
-      renderDataFailure(elements.scheduleList, '本周时间表', scheduleResult.reason);
-      elements.weekGrid.textContent =
-        scheduleResult.reason?.message || '本周日程暂时无法加载，请重试。';
-    }
+    };
+    const updateNotifications = (source, result) => {
+      state.notificationLoad[source] = result;
+      elements.notificationMore.hidden =
+        state.notificationLoad.community.status !== 'fulfilled' || !state.communityCursor;
+      renderNotifications();
+    };
+    // Render each section as it settles; an unrelated slow endpoint cannot hold it back.
+    await Promise.all([
+      loadSection(
+        '/workbench/important-items',
+        (payload) => {
+          state.importantItems = payload.importantItems || [];
+          renderImportantItems();
+        },
+        (error) => renderDataFailure(elements.importantList, '重要事项', error),
+      ),
+      loadSection(
+        `/workbench/notifications?${buildNotificationQuery()}`,
+        (payload) => {
+          state.notifications = payload.notifications || [];
+          updateNotifications('workbench', { status: 'fulfilled' });
+        },
+        (error) => {
+          state.notifications = [];
+          updateNotifications('workbench', { status: 'rejected', error });
+        },
+      ),
+      loadSection(
+        '/notifications?limit=50',
+        (payload) => {
+          state.communityNotifications = payload.notifications || [];
+          state.communityCursor = payload.nextCursor || null;
+          state.communityUnreadCount = Number(payload.unreadCount) || 0;
+          updateNotifications('community', { status: 'fulfilled' });
+        },
+        (error) => {
+          state.communityNotifications = [];
+          state.communityCursor = null;
+          state.communityUnreadCount = 0;
+          updateNotifications('community', { status: 'rejected', error });
+        },
+      ),
+      loadSection(
+        `/workbench/schedule-items?${new URLSearchParams({
+          from: new Date(state.weekStart ?? getWeekStart()).toISOString(),
+          to: new Date((state.weekStart ?? getWeekStart()) + 7 * DAY_MS).toISOString(),
+        })}`,
+        (payload) => {
+          state.scheduleReady = true;
+          state.scheduleItems = payload.scheduleItems || [];
+          renderScheduleItems();
+          window.dispatchEvent(new CustomEvent('freebbs:workbench-loaded'));
+        },
+        (error) => {
+          renderDataFailure(elements.scheduleList, '本周时间表', error);
+          elements.weekGrid.textContent = error.message || '本周日程暂时无法加载，请重试。';
+        },
+      ),
+    ]);
+    if (state.loadAbortController === controller) state.loadAbortController = null;
   }
 
   async function loadMoreCommunityNotifications() {
@@ -1454,9 +1490,18 @@
       elements.notificationMore.hidden = !state.communityCursor;
       renderNotifications();
     } catch (error) {
-      elements.noticeHint.textContent = error.message || '加载更多失败，可以重试。';
+      if (
+        ownerKey !== getOwnerKey() ||
+        requestVersion !== state.requestVersion ||
+        cursor !== state.communityCursor ||
+        !isLoggedIn()
+      )
+        return;
+      if (error.status === 401 && typeof app.clearSession === 'function') app.clearSession();
+      else elements.noticeHint.textContent = error.message || '加载更多失败，可以重试。';
     } finally {
-      elements.notificationMore.disabled = false;
+      if (ownerKey === getOwnerKey() && requestVersion === state.requestVersion && isLoggedIn())
+        elements.notificationMore.disabled = false;
     }
   }
 
@@ -2520,6 +2565,8 @@
     updateAuthControls();
     if (ownerKey === state.ownerKey) return;
     state.requestVersion += 1;
+    state.loadAbortController?.abort();
+    state.loadAbortController = null;
     state.ownerKey = ownerKey;
     state.hours = hoursModel.readHours(hoursStorage(), ownerKey ? getUser().uid : null);
     renderHoursControls();
@@ -2528,9 +2575,12 @@
     state.communityNotifications = [];
     state.communityCursor = null;
     state.communityUnreadCount = 0;
+    state.notificationLoad = null;
     elements.notificationCount.hidden = true;
     elements.notificationMore.hidden = true;
+    elements.notificationMore.disabled = false;
     state.scheduleItems = [];
+    state.scheduleReady = false;
     state.proposals = [];
     renderAgentProposals();
     renderWeekGrid();

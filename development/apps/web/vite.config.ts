@@ -1,5 +1,6 @@
+import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
-import { loadEnv } from 'vite';
+import { loadEnv, searchForWorkspaceRoot } from 'vite';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig(({ mode }) => {
@@ -9,6 +10,12 @@ export default defineConfig(({ mode }) => {
     base: '/development/',
     plugins: [react()],
     server: {
+      fs: {
+        allow: [
+          searchForWorkspaceRoot(process.cwd()),
+          fileURLToPath(new URL('../../../public/request-runtime.js', import.meta.url)),
+        ],
+      },
       proxy: {
         '/api/development/v1': {
           target: 'http://127.0.0.1:3100',

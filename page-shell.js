@@ -60,6 +60,11 @@ function preparePageShell(source) {
         '<script src="/typography.js"></script>\n<script src="/ranch-environment.js"></script>',
       );
   }
+  // Request consumers share one runtime, after early appearance initialization.
+  const requestConsumer =
+    /<script\b[^>]*src=["']\/(?:app|notifications)\.js(?:\?[^"']*)?["'][^>]*>\s*<\/script>/;
+  if (requestConsumer.test(html) && !html.includes('src="/request-runtime.js"'))
+    html = html.replace(requestConsumer, '<script src="/request-runtime.js"></script>\n$&');
   return html;
 }
 

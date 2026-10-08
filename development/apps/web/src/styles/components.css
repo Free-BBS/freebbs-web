@@ -173,6 +173,7 @@ button:disabled {
 .auth-state button:hover,
 .demo-switcher button:hover {
   background: var(--color-active);
+  color: var(--action-primary-text);
   transform: translateY(-1px);
 }
 
@@ -1328,7 +1329,7 @@ nav[aria-label='信息与咨询分区'] a[aria-current='page'] {
 .module-page .audience-switcher button[aria-pressed='true'] {
   border-color: var(--color-line);
   background: var(--color-active);
-  color: var(--color-sidebar-text);
+  color: var(--action-primary-text);
 }
 
 .table-scroll {
@@ -1616,7 +1617,7 @@ nav[aria-label='信息与咨询分区'] a[aria-current='page'] {
 .admin-governance-page button.danger-button:hover {
   border-color: var(--color-danger);
   background: var(--color-danger);
-  color: #fffaf0;
+  color: var(--action-danger-text);
 }
 
 .admin-stat-grid,

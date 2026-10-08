@@ -37,6 +37,7 @@ body:not(.theme-light) {
   --color-paper-muted: var(--surface-muted);
   --color-focus: #78d9c6;
   --color-danger: #ff9b8f;
+  --action-danger-text: #0b2934;
   --color-warning: #ffd36d;
   --color-success: #7ee0c4;
   --glass-fill: var(--surface-raised);
@@ -74,6 +75,7 @@ body.theme-light {
   --color-paper-muted: var(--surface-muted);
   --color-focus: #146b71;
   --color-danger: #9d3932;
+  --action-danger-text: #fffaf0;
   --color-warning: #7c560a;
   --color-success: #176b56;
   --glass-fill: var(--surface-raised);

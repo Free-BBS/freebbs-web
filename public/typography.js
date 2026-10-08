@@ -151,16 +151,107 @@
 
   // Reading a page never requires storage to be writable.
   applyPreferences(getStoredPreferences());
-  // The server places this module at the start of <body> to avoid showing the
-  // default theme/font size and then repainting the whole page during app startup.
-  if (document.body?.classList) {
-    let light = false;
+  // This script runs at the start of <body>, before any page controller. Keep
+  // theme application here so every entry, including embedded pages, agrees.
+  const THEME_STORAGE_KEY = 'free_bbs_theme_mode';
+  let currentMode = 'dark';
+  const themeListeners = new Set();
+
+  function getStoredMode() {
     try {
-      light = localStorage.getItem('free_bbs_theme_mode') === 'light';
+      return window.localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark';
     } catch {
-      // Match the application's default when storage is unavailable.
+      return currentMode;
     }
-    document.body.classList.toggle('theme-light', light);
-    document.body.classList.toggle('theme-dark', !light);
+  }
+
+  function initialMode() {
+    try {
+      if (window.parent && window.parent !== window) {
+        const parentBody = window.parent.document.body;
+        if (parentBody?.classList.contains('theme-light')) return 'light';
+        if (parentBody?.classList.contains('theme-dark')) return 'dark';
+      }
+    } catch {
+      // An embedded page can only read its parent when they share an origin.
+    }
+    return getStoredMode();
+  }
+
+  function themePeers() {
+    const peers = Array.from(document.querySelectorAll('iframe'), (frame) => frame.contentWindow);
+    if (window.parent && window.parent !== window) peers.push(window.parent);
+    return peers.filter(Boolean);
+  }
+
+  function sendTheme(peer, mode) {
+    peer.postMessage({ type: 'freebbs:theme-sync', mode }, window.location.origin);
+  }
+
+  function applyMode(mode, { broadcast = true, source = null } = {}) {
+    const normalizedMode = mode === 'light' ? 'light' : 'dark';
+    const changed = currentMode !== normalizedMode;
+    currentMode = normalizedMode;
+    document.body?.classList.toggle('theme-light', normalizedMode === 'light');
+    document.body?.classList.toggle('theme-dark', normalizedMode === 'dark');
+    document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+      const light = normalizedMode === 'light';
+      const label = light ? '切换到暗色模式' : '切换到明亮模式';
+      button.setAttribute('aria-pressed', String(light));
+      button.setAttribute('aria-label', label);
+      button.title = label;
+      button.innerHTML = `
+        <img class="nav-icon theme-toggle-icon" src="/assets/icons/${light ? 'moon' : 'sun'}.svg" alt="" aria-hidden="true" />
+        <span>${light ? '暗色模式' : '明亮模式'}</span>
+      `;
+    });
+    if (changed) {
+      themeListeners.forEach((listener) => listener(normalizedMode));
+      if (broadcast) {
+        themePeers().forEach((peer) => {
+          if (peer !== source) sendTheme(peer, normalizedMode);
+        });
+      }
+    }
+    return normalizedMode;
+  }
+
+  function saveMode(mode) {
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, mode === 'light' ? 'light' : 'dark');
+      return true;
+    } catch {
+      // The visible selection still works when storage is blocked or full.
+      return false;
+    }
+  }
+
+  window.freeBbsTheme = Object.freeze({
+    getStoredMode,
+    getCurrentMode: () => currentMode,
+    applyMode,
+    saveMode,
+    subscribe(listener) {
+      themeListeners.add(listener);
+      return () => themeListeners.delete(listener);
+    },
+  });
+
+  applyMode(initialMode(), { broadcast: false });
+  window.addEventListener?.('storage', (event) => {
+    if (event.key === THEME_STORAGE_KEY) applyMode(event.newValue);
+    else if (event.key === null) applyMode(getStoredMode());
+  });
+  window.addEventListener?.('message', (event) => {
+    if (event.origin !== window.location.origin || !themePeers().includes(event.source)) return;
+    if (event.data?.type === 'freebbs:theme-request') sendTheme(event.source, currentMode);
+    else if (
+      event.data?.type === 'freebbs:theme-sync' &&
+      ['light', 'dark'].includes(event.data.mode)
+    )
+      applyMode(event.data.mode, { source: event.source });
+  });
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: 'freebbs:theme-request' }, window.location.origin);
   }
 })();

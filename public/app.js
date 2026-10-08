@@ -13,6 +13,14 @@ const THEME_STORAGE_KEY = 'free_bbs_theme_mode';
 const WORKBENCH_LAST_LEARNING_KEY = 'free_bbs_last_learning_route';
 const DISCUSSION_REQUEST_TIMEOUT_MS = 5000;
 
+function getStoredAuthToken() {
+  try {
+    return localStorage.getItem(STORAGE_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
 const TYPOGRAPHY_PRESETS = window.freeBbsTypography.presets;
 const TYPE_SCALE_PRESETS = window.freeBbsTypography.typeScalePresets;
 const USER_ROLE_LABELS = {
@@ -24,7 +32,7 @@ const USER_ROLE_LABELS = {
 const ADMIN_ROLE_OPTIONS = Object.entries(USER_ROLE_LABELS).filter(([role]) => role !== 'admin');
 const userState = {
   isLoggedIn: false,
-  token: localStorage.getItem(STORAGE_KEY) || '',
+  token: getStoredAuthToken(),
   uid: '',
   username: '',
   fullName: '',
@@ -198,10 +206,19 @@ const aiChatState = {
 };
 
 function getStoredThemeMode() {
-  return localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark';
+  if (window.freeBbsTheme) return window.freeBbsTheme.getCurrentMode();
+  try {
+    return localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark';
+  } catch {
+    return document.body.classList.contains('theme-light') ? 'light' : 'dark';
+  }
 }
 
 function applyThemeMode(mode) {
+  if (window.freeBbsTheme) {
+    window.freeBbsTheme.applyMode(mode);
+    return;
+  }
   const normalizedMode = mode === 'light' ? 'light' : 'dark';
   document.body.classList.toggle('theme-light', normalizedMode === 'light');
   document.body.classList.toggle('theme-dark', normalizedMode !== 'light');
@@ -233,7 +250,14 @@ function applyThemeModeWithTransition(mode, event) {
 
 function toggleThemeMode(event) {
   const nextMode = document.body.classList.contains('theme-light') ? 'dark' : 'light';
-  localStorage.setItem(THEME_STORAGE_KEY, nextMode);
+  if (window.freeBbsTheme) window.freeBbsTheme.saveMode(nextMode);
+  else {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, nextMode);
+    } catch {
+      // A blocked preference store must not prevent the current page changing theme.
+    }
+  }
   applyThemeModeWithTransition(nextMode, event);
 }
 
@@ -3266,17 +3290,20 @@ function clearSession() {
 async function callApi(path, options = {}) {
   const isCampusConnectorRequest =
     path === '/workbench/connectors/tsinghua' || path.startsWith('/workbench/connectors/tsinghua/');
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...(isCampusConnectorRequest ? { credentials: 'include' } : {}),
-    headers: {
-      'Content-Type': 'application/json',
-      ...(userState.token ? { Authorization: `Bearer ${userState.token}` } : {}),
-      ...(options.headers || {}),
+  const { response, payload } = await window.freeBbsRequests.request(
+    `${API_BASE_URL}${path}`,
+    {
+      ...(isCampusConnectorRequest ? { credentials: 'include' } : {}),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(userState.token ? { Authorization: `Bearer ${userState.token}` } : {}),
+        ...(options.headers || {}),
+      },
+      ...options,
     },
-    ...options,
-  });
+    async (result) => ({ response: result, payload: await result.json().catch(() => ({})) }),
+  );
 
-  const payload = await response.json().catch(() => ({}));
   if (typeof window !== 'undefined') window.FreeBbsPostLaser?.sync(payload);
 
   const circuitFailure =
@@ -3332,9 +3359,10 @@ async function restoreSession() {
   try {
     const payload = await callApi('/auth/me', {
       method: 'GET',
+      timeoutMs: 8000,
     });
 
-    if (localStorage.getItem(STORAGE_KEY) !== restoringToken) return;
+    if (getStoredAuthToken() !== restoringToken) return;
     saveSession(restoringToken, payload.user);
 
     if (isAdminManagementPage() && !userState.isAdmin) {
@@ -3343,9 +3371,9 @@ async function restoreSession() {
   } catch (error) {
     // A navigation abort or temporary outage does not invalidate a saved credential.
     // Ignore stale responses after another tab/account has changed the token.
-    if (localStorage.getItem(STORAGE_KEY) !== restoringToken) return;
+    if (getStoredAuthToken() !== restoringToken) return;
     if (error.status !== 401) {
-      userName.title = '登录状态暂未确认，请刷新重试';
+      if (userName) userName.title = '登录状态暂未确认，请刷新重试';
       return;
     }
     clearSession();

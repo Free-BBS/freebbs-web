@@ -24,6 +24,7 @@
   --color-paper-muted: var(--surface-muted);
   --color-focus: #168c9e;
   --color-danger: #a23d38;
+  --action-danger-text: #fffaf0;
   --color-warning: #825707;
   --color-success: #176b56;
   --glass-fill: var(--surface-raised);

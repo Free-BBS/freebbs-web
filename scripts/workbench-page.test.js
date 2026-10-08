@@ -178,7 +178,8 @@ test('workbench separates plan and notifications while reusing the live publicat
   assert.match(html, /data-notice-view="all"/);
   assert.match(html, /data-notice-view="recommended"/);
   assert.match(html, /data-notice-view="discussion"/);
-  assert.match(controller, /app\.callApi\('\/notifications\?limit=50'/);
+  assert.match(controller, /loadSection\(\s*'\/notifications\?limit=50'/);
+  assert.match(controller, /app\.callApi\(path, \{ method: 'GET', signal: controller\.signal \}\)/);
   assert.match(controller, /read-community-notification/);
   assert.match(controller, /state\.communityNotifications/);
   assert.match(controller, /window\.addEventListener\('popstate'/);
