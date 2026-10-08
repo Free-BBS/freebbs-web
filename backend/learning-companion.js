@@ -1,13 +1,9 @@
 // Max receives published course text and a bounded summary of the authenticated learner's evidence.
 // Neither chat, recommendations nor a self-report can change grading or stars.
-const {
-  parseAssessmentMarkdown,
-  stripAssessmentBlocks,
-  getAssessmentDocumentVersion,
-} = require('./learning-assessment');
+const { parseAssessmentMarkdown, getAssessmentDocumentVersion } = require('./learning-assessment');
 const { normalizePreference } = require('../public/learning-start');
 const { originMarkdown } = require('../public/learning-content');
-const { resolveKnowledgeSections } = require('./course-maps');
+const { resolveKnowledgeSections, isValidNodeId } = require('./course-maps');
 
 function normalizeTask(raw, questions = []) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
@@ -93,10 +89,7 @@ async function loadCompanionContext({ store, user, rawContext, loadNode }) {
     rawContext && typeof rawContext === 'object' && !Array.isArray(rawContext) ? rawContext : {};
   const slug = typeof raw.courseSlug === 'string' ? raw.courseSlug : '';
   const point = typeof raw.knowledgePointId === 'string' ? raw.knowledgePointId : '';
-  if (
-    !/^[a-z0-9][a-z0-9-]{0,119}$/.test(slug) ||
-    !/^[A-Z][A-Z0-9]*-[A-Z0-9]+-[A-Z0-9]+$/.test(point)
-  ) {
+  if (!/^[a-z0-9][a-z0-9-]{0,119}$/.test(slug) || !isValidNodeId(point)) {
     const error = new Error('课程或知识点标识无效');
     error.status = 400;
     throw error;
@@ -110,8 +103,8 @@ async function loadCompanionContext({ store, user, rawContext, loadNode }) {
   const assessment = parseAssessmentMarkdown(node.document_markdown);
   const assessmentContext = { ...node, node_id: node.node_id || point };
   const attempts = await store.list(user, assessmentContext, '', false);
-  const sections = resolveKnowledgeSections(node);
-  const markdown = stripAssessmentBlocks(sections.knowledgeMarkdown).slice(0, 30000);
+  const sections = resolveKnowledgeSections(node, false);
+  const markdown = sections.knowledgeMarkdown.slice(0, 30000);
   const allQuestions = [...assessment.questions, ...assessment.practiceQuestions];
   return {
     courseSlug: slug,

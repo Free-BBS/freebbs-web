@@ -14,6 +14,7 @@ const {
   resolveKnowledgeSections,
   splitLegacyKnowledgeDocument,
 } = require('./course-maps');
+const { buildModel, nodeLevel } = require('../public/course-structure');
 
 test('normalizes knowledge node ids to uppercase ASCII', () => {
   assert.equal(normalizeNodeId(' ss-01-01 '), 'SS-01-01');
@@ -354,6 +355,69 @@ test('public map derives actual chapter names from structured and legacy metadat
   assert.equal(payload.nodes[0].sections, undefined);
   assert.equal(payload.nodes[1].markdown, undefined);
   assert.ok(!JSON.stringify(payload).includes('不应通过地图返回'));
+});
+
+test('real public map responses carry normalized levels for the structure reader without returning source sections', async (t) => {
+  const rows = [
+    {
+      node_id: 'SS-01',
+      title: '历史核心知识点',
+      basic_info_markdown: '| 章节/单元 | 时域分析 |\n| 知识点层级 | **核心** |',
+      has_document: 1,
+    },
+    {
+      node_id: 'SS-01-01-01',
+      title: '深层一般知识点',
+      document_markdown:
+        '# 深层一般知识点\n\n## 基本信息\n\n章节/单元：时域分析\n\n知识点层级：一般\n\n## 知识点正文\n\nPRIVATE_MAP_BODY',
+      has_document: 1,
+    },
+    { node_id: 'SS-01-02', title: '拓展', basic_info_markdown: '知识点层级：拓展/选学' },
+    { node_id: 'SS-01-03', title: '核心英文', basic_info_markdown: '层级："core"' },
+    { node_id: 'SS-01-04', title: '一般英文', basic_info_markdown: '层级：general' },
+    { node_id: 'SS-01-05', title: '选学英文', basic_info_markdown: '层级：elective' },
+    { node_id: 'SS-01-06', title: '未标注' },
+    { node_id: 'SS-01-07', title: '未知层级', basic_info_markdown: '知识点层级：待确定' },
+  ];
+  const app = express();
+  app.use(
+    '/api/courses',
+    createCourseMapsRouter({
+      pool: createMockCourseMapPool(rows),
+      getOptionalAuthUser: async () => null,
+      requireAuth: async () => null,
+    }),
+  );
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => {
+    server.once('listening', resolve);
+  });
+  t.after(
+    () =>
+      new Promise((resolve) => {
+        server.close(resolve);
+      }),
+  );
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/courses/signals/map`);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  const expected = ['core', 'general', 'extension', 'core', 'general', 'extension', '', ''];
+  assert.deepEqual(
+    payload.nodes.map((point) => point.level),
+    expected,
+  );
+  assert.ok(
+    payload.nodes.every((point) => point.markdown === undefined && point.sections === undefined),
+  );
+  assert.ok(!JSON.stringify(payload).includes('PRIVATE_MAP_BODY'));
+  const structure = buildModel(payload.nodes, payload.edges);
+  assert.equal(structure.nodes.length, rows.length, 'all API-valid legacy and deep nodes survive');
+  assert.deepEqual(structure.nodes.map(nodeLevel), expected);
+  assert.equal(structure.chapters[0].title, '时域分析');
+  assert.deepEqual(
+    structure.chapters[0].nodes.map((point) => point.id),
+    rows.map((row) => row.node_id),
+  );
 });
 
 async function readJson(response) {

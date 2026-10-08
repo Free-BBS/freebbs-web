@@ -134,7 +134,20 @@ function normalizeNodeId(value) {
 }
 
 function isValidNodeId(value) {
-  return value.length >= 4 && value.length <= 64 && NODE_ID_PATTERN.test(value);
+  return (
+    typeof value === 'string' &&
+    value.length >= 4 &&
+    value.length <= 64 &&
+    NODE_ID_PATTERN.test(value)
+  );
+}
+
+function normalizeKnowledgeLevel(value) {
+  const normalized = String(value || '').replace(/[*`"'\s]/g, '');
+  if (/^(核心|core)$/.test(normalized)) return 'core';
+  if (/^(一般|general)$/.test(normalized)) return 'general';
+  if (/^(拓展|拓展\/选学|extension|elective)$/.test(normalized)) return 'extension';
+  return '';
 }
 
 function normalizeCoordinate(value) {
@@ -253,18 +266,36 @@ function splitLegacyKnowledgeDocument(markdown, title = '') {
   return sections;
 }
 
-function resolveKnowledgeSections(row) {
-  const legacySections = splitLegacyKnowledgeDocument(row.document_markdown, row.title);
+function resolveKnowledgeSections(row, includeAssessmentSource = true) {
+  // Remove private blocks before legacy headings can move their contents into a
+  // different section. Authors and grading still use the unchanged source.
+  const source = includeAssessmentSource
+    ? row
+    : {
+        ...row,
+        document_markdown: stripAssessmentBlocks(row.document_markdown),
+        knowledge_markdown:
+          row.knowledge_markdown == null
+            ? row.knowledge_markdown
+            : stripAssessmentBlocks(row.knowledge_markdown),
+        basic_info_markdown: stripAssessmentBlocks(row.basic_info_markdown),
+        applications_markdown: stripAssessmentBlocks(row.applications_markdown),
+      };
+  const legacySections = splitLegacyKnowledgeDocument(source.document_markdown, source.title);
   const hasStructuredSections =
-    row.knowledge_markdown !== undefined && row.knowledge_markdown !== null;
+    source.knowledge_markdown !== undefined && source.knowledge_markdown !== null;
   if (!hasStructuredSections) {
-    return legacySections;
+    return {
+      ...legacySections,
+      basicInfoMarkdown: source.basic_info_markdown || legacySections.basicInfoMarkdown,
+      applicationsMarkdown: source.applications_markdown || legacySections.applicationsMarkdown,
+    };
   }
 
   const persistedSections = {
-    knowledgeMarkdown: row.knowledge_markdown || '',
-    basicInfoMarkdown: row.basic_info_markdown || '',
-    applicationsMarkdown: row.applications_markdown || '',
+    knowledgeMarkdown: source.knowledge_markdown || '',
+    basicInfoMarkdown: source.basic_info_markdown || '',
+    applicationsMarkdown: source.applications_markdown || '',
   };
   const recoveredSections = splitLegacyKnowledgeDocument(
     persistedSections.knowledgeMarkdown,
@@ -282,20 +313,16 @@ function resolveKnowledgeSections(row) {
 }
 
 function toMapNode(row, includeMarkdown = false, includeAssessmentSource = false) {
-  const rawSections = resolveKnowledgeSections(row);
   // Only course editors receive the authoring source. Student-facing content never
   // contains scoring keys; its version still identifies the complete source.
-  const sections = Object.fromEntries(
-    Object.entries(rawSections).map(([key, value]) => [
-      key,
-      includeAssessmentSource ? value : stripAssessmentBlocks(value),
-    ]),
-  );
-  const chapterTitle = readFields(row.basic_info_markdown || sections.basicInfoMarkdown).chapter;
+  const sections = resolveKnowledgeSections(row, includeAssessmentSource);
+  const fields = readFields(sections.basicInfoMarkdown);
+  const chapterTitle = fields.chapter;
   return {
     id: row.node_id,
     title: row.title,
     summary: row.summary || '',
+    level: normalizeKnowledgeLevel(fields.level),
     position: {
       x: Number(row.position_x || 0),
       y: Number(row.position_y || 0),

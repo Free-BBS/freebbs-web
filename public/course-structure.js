@@ -5,6 +5,13 @@
   else root.FreeBbsCourseStructure = api;
 })(typeof window === 'undefined' ? null : window, (root) => {
   const compare = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true });
+  // Match the existing course-map API contract, including legacy two-part and
+  // deeper identifiers. Only the explicit zero-level convention marks a chapter.
+  const isValidNodeId = (id) =>
+    typeof id === 'string' &&
+    id.length >= 4 &&
+    id.length <= 64 &&
+    /^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$/.test(id);
   const chapterId = (id) =>
     String(id || '')
       .split('-')
@@ -29,8 +36,7 @@
   function buildModel(nodes = [], edges = []) {
     const byId = new Map();
     for (const node of nodes)
-      if (node && /^[A-Z][A-Z0-9]*-[A-Z0-9]+-[A-Z0-9]+$/.test(node.id || '') && !byId.has(node.id))
-        byId.set(node.id, node);
+      if (node && isValidNodeId(node.id) && !byId.has(node.id)) byId.set(node.id, node);
     const groups = new Map();
     for (const node of byId.values()) {
       const id = chapterId(node.id);
@@ -919,6 +925,7 @@
     return controller;
   }
   return {
+    isValidNodeId,
     chapterId,
     isChapterNode,
     nodeLevel,

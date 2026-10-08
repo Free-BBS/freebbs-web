@@ -8,8 +8,10 @@ const {
   layout,
   searchNodes,
   isChapterNode,
+  isValidNodeId,
   nodeLevel,
 } = require('../public/course-structure');
+const { isValidNodeId: isValidPublishedNodeId } = require('../backend/course-maps');
 
 const nodes = [
   { id: 'SS-01-00', title: '时域分析', summary: '课程组正式板块概览' },
@@ -31,6 +33,77 @@ const edges = [
   { source: 'SS-99-01', target: 'SS-01-01', type: 'ordered' },
 ];
 const model = buildModel(nodes, edges);
+
+test('reader identifiers match the published API for legacy, deep and bounded node IDs', () => {
+  const cases = [
+    'SS-01',
+    'SS-01-01',
+    'SS-01-01-01',
+    'CIRCUIT-A1-02-DEEP',
+    `SS-${'A'.repeat(61)}`,
+    `SS-${'A'.repeat(62)}`,
+    'S-A',
+    'SS',
+    'ss-01',
+    'SS--01',
+    'SS-01-',
+    '../SS-01',
+    'SS-01/<script>',
+    '信号-01',
+    null,
+    undefined,
+    42,
+    {},
+  ];
+  for (const id of cases) assert.equal(isValidNodeId(id), isValidPublishedNodeId(id), String(id));
+  assert.equal(isValidNodeId('SS-01'), true);
+  assert.equal(isValidNodeId('SS-01-01-01'), true);
+  assert.equal(isValidNodeId(`SS-${'A'.repeat(61)}`), true);
+  assert.equal(isValidNodeId(`SS-${'A'.repeat(62)}`), false);
+});
+
+test('legacy and deeper points stay in their original chapter with only direct cross-chapter relations', () => {
+  const compatible = buildModel(
+    [
+      { id: 'SS-01', title: '历史知识点' },
+      { id: 'SS-01-00', title: '时域分析' },
+      { id: 'SS-01-01-01', title: '深入卷积' },
+      { id: 'SS-01-01-00', title: '普通深层编号，并非章节概览' },
+      { id: 'SS-02-00', title: '频域分析' },
+      { id: 'SS-02-01-01', title: '变换域联系' },
+      { id: 'SS-02-02', title: '非直接关联' },
+    ],
+    [
+      { source: 'SS-01', target: 'SS-01-01-01', type: 'ordered' },
+      { source: 'SS-01-01-01', target: 'SS-02-01-01', type: 'related' },
+      { source: 'SS-02-01-01', target: 'SS-02-02', type: 'ordered' },
+    ],
+  );
+  assert.equal(compatible.nodes.length, 7);
+  assert.equal(isChapterNode(compatible.byId.get('SS-01')), false);
+  assert.equal(isChapterNode(compatible.byId.get('SS-01-01-00')), false);
+  assert.equal(compatible.chapters[0].overview.id, 'SS-01-00');
+  assert.deepEqual(
+    compatible.chapters.map((chapter) => chapter.title),
+    ['时域分析', '频域分析'],
+  );
+  const focused = reduceState(initialState(), { type: 'focus', id: 'SS-01-01-01' }, compatible);
+  assert.equal(focused.selectedChapterId, 'SS-01');
+  const view = viewModel(compatible, focused);
+  assert.deepEqual(
+    view.knowledgeNodes.map((point) => point.id),
+    ['SS-01', 'SS-01-01-01', 'SS-02-01-01'],
+  );
+  assert.equal(view.satellites[0].id, 'SS-02');
+  assert.equal(view.links.length, 2);
+  assert.deepEqual(
+    layout(compatible, view).boxes.map((box) => box.id),
+    ['SS-01', 'SS-01-01-01', 'SS-02-01-01'],
+  );
+  const legacy = reduceState(focused, { type: 'focus', id: 'SS-01' }, compatible);
+  assert.equal(viewModel(compatible, legacy).focus.id, 'SS-01');
+  assert.deepEqual(viewModel(compatible, initialState()).knowledgeNodes, []);
+});
 
 test('macro groups prefer real zero-level names and use only explicitly published zero-to-zero edges', () => {
   assert.deepEqual(

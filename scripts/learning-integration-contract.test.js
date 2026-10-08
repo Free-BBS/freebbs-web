@@ -87,6 +87,33 @@ test('all student-facing supplementary sections strip grading data and public gr
   assert.equal(summary.documentVersion, undefined);
 });
 
+test('legacy headings and derived metadata cannot move private quiz text into public fields', () => {
+  const source = `公开知识正文。\n\x60\x60\x60freebbs-quiz\n## 基本信息\n章节/单元：${SECRET}\n知识点层级：拓展\n\x60\x60\x60\n正文结束。`;
+  for (const structured of [false, true]) {
+    const row = {
+      node_id: 'SS-01-01',
+      title: '卷积',
+      document_markdown: source,
+      ...(structured ? { knowledge_markdown: source } : {}),
+      basic_info_markdown: `\x60\x60\x60freebbs-quiz\n章节/单元：${SECRET}\n知识点层级：拓展\n\x60\x60\x60`,
+    };
+    const publicNode = toMapNode(row, true);
+    assert.match(publicNode.markdown, /公开知识正文/);
+    assert.match(publicNode.markdown, /正文结束/);
+    assert.equal(publicNode.chapterTitle, undefined);
+    assert.equal(publicNode.level, '');
+    assert.doesNotMatch(
+      JSON.stringify(publicNode),
+      /private-course-scoring-contract-marker|freebbs-quiz/,
+    );
+    assert.match(
+      JSON.stringify(toMapNode(row, true, true)),
+      /private-course-scoring-contract-marker/,
+      'course editors keep the full source for correction',
+    );
+  }
+});
+
 test('frontend and backend strip quiz fences identically for CRLF, unclosed and long fences', () => {
   const cases = [
     ['ordinary Markdown', 'ordinary Markdown'],

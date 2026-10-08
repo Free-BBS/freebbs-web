@@ -246,6 +246,50 @@ test('invalid course identifiers and absent nodes fail before generating an AI r
   );
 });
 
+test('Max accepts the existing course map identifier contract without narrowing legacy or deep IDs', async () => {
+  for (const point of ['SS-01', 'SS-01-01-01', 'CIRCUIT-A1-02-DEEP', `SS-${'A'.repeat(61)}`]) {
+    const canonical = { ...node, node_id: point };
+    let receivedPoint;
+    const context = await loadCompanionContext({
+      user: { id: 7 },
+      rawContext: { ...rawContext, knowledgePointId: point },
+      loadNode: async (slug, id) => {
+        assert.equal(slug, 'signals');
+        receivedPoint = id;
+        return canonical;
+      },
+      store: {
+        list: async (user, value) => {
+          assert.equal(user.id, 7);
+          assert.equal(value.node_id, point);
+          return [];
+        },
+      },
+    });
+    assert.equal(receivedPoint, point);
+    assert.equal(context.knowledgePointId, point);
+    assert.equal(context.learningEvidence.observed, 0);
+  }
+});
+
+test('Max rejects unsafe, incomplete and overlong IDs before reading a course or learner record', async () => {
+  const mustNotRead = async () => {
+    assert.fail('invalid identifiers must fail before course or learner access');
+  };
+  for (const point of ['SS', 'S-A', 'ss-01', 'SS--01', '../SS-01', `SS-${'A'.repeat(62)}`]) {
+    await assert.rejects(
+      loadCompanionContext({
+        user: { id: 7 },
+        rawContext: { ...rawContext, knowledgePointId: point },
+        loadNode: mustNotRead,
+        store: { context: mustNotRead, list: mustNotRead },
+      }),
+      (error) => error.status === 400,
+      point,
+    );
+  }
+});
+
 test('Max resolves the same origin and canonical body as the page for a legacy unsplit course', async () => {
   const legacy = {
     ...node,

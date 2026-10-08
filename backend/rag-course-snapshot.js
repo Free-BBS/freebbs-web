@@ -1,4 +1,7 @@
+const { resolveKnowledgeSections } = require('./course-maps');
+
 const RAG_STATE_ROW_ID = 1;
+const STUDENT_CONTENT_POLICY = 'student-content-v1';
 
 function toIsoString(value) {
   if (!value) {
@@ -12,6 +15,7 @@ function normalizeSnapshotRow(row, relationsByNode) {
   const courseId = Number(row.course_id);
   const nodeId = String(row.node_id || '');
   const relationKey = `${courseId}:${nodeId}`;
+  const sections = resolveKnowledgeSections(row, false);
   return {
     courseId,
     courseSlug: String(row.course_slug || ''),
@@ -21,9 +25,7 @@ function normalizeSnapshotRow(row, relationsByNode) {
     nodeId,
     title: String(row.title || ''),
     summary: String(row.summary || ''),
-    knowledgeMarkdown: String(row.knowledge_markdown || ''),
-    basicInfoMarkdown: String(row.basic_info_markdown || ''),
-    applicationsMarkdown: String(row.applications_markdown || ''),
+    ...sections,
     updatedAt: toIsoString(row.content_updated_at),
     relations: relationsByNode.get(relationKey) || [],
   };
@@ -113,7 +115,9 @@ async function readRagCourseSnapshot(pool) {
     const state = stateRows[0] || {};
     const relationsByNode = buildRelations(edgeRows);
     return {
-      revision: String(state.requested_revision || 0),
+      // The indexer accepts opaque strings. Changing the content policy forces
+      // one rebuild even when no author has changed the database revision.
+      revision: `${STUDENT_CONTENT_POLICY}:${state.requested_revision || 0}`,
       requestedAt: toIsoString(state.requested_at),
       generatedAt: new Date().toISOString(),
       documents: nodeRows.map((row) => normalizeSnapshotRow(row, relationsByNode)),

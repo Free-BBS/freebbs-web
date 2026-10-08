@@ -113,9 +113,40 @@ test('reads revision, course content and relations in one transaction', async ()
   };
 
   const snapshot = await readRagCourseSnapshot(pool);
-  assert.equal(snapshot.revision, '12');
+  assert.equal(snapshot.revision, 'student-content-v1:12');
+  assert.notEqual(snapshot.revision, '12', 'invalidate a pre-filter index at the same DB revision');
+  assert.equal(
+    (await readRagCourseSnapshot(pool)).revision,
+    snapshot.revision,
+    'unchanged sanitized content must keep a stable revision',
+  );
   assert.equal(snapshot.documents.length, 1);
   assert.equal(snapshot.documents[0].knowledgeMarkdown, '正文');
   assert.deepEqual(calls.slice(-2), ['COMMIT', 'RELEASE']);
   assert.equal(calls.includes('ROLLBACK'), false);
+});
+
+test('RAG strips private scoring from every section before legacy extraction', () => {
+  const row = normalizeSnapshotRow(
+    {
+      course_id: 7,
+      course_slug: 'signals',
+      node_id: 'SS-01',
+      title: '信号',
+      knowledge_markdown:
+        '公开正文\n```freebbs-quiz\n## 基本信息\n章节/单元: private-answer\n```\n正文结束',
+      basic_info_markdown:
+        '公开概览\r\n~~~FREEBBS-QUIZ\r\n{"scoring":{"rubric":"private-rubric"}}\r\n~~~~',
+      applications_markdown: '公开应用\n```freebbs-quiz\nprivate-unclosed',
+    },
+    new Map(),
+  );
+  assert.match(row.knowledgeMarkdown, /公开正文/);
+  assert.match(row.knowledgeMarkdown, /正文结束/);
+  assert.match(row.basicInfoMarkdown, /公开概览/);
+  assert.match(row.applicationsMarkdown, /公开应用/);
+  assert.doesNotMatch(
+    JSON.stringify(row),
+    /freebbs-quiz|private-answer|private-rubric|private-unclosed/i,
+  );
 });

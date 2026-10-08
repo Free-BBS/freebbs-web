@@ -445,6 +445,96 @@ test('a partial snapshot never cancels items omitted from that snapshot', async 
   assert.match(connectorUpdate.sql, /status = 'active_verified'/u);
 });
 
+test('partial homework sync retains omitted DDLs and completes only a verified submitted source', async () => {
+  const previous = [
+    { sourceReference: 'learn:homework:one', status: 'unsubmitted', dueAt: '2026-10-08T08:00:00Z' },
+    {
+      sourceReference: 'learn:homework:omitted',
+      status: 'unsubmitted',
+      dueAt: '2026-10-09T08:00:00Z',
+    },
+  ];
+  const pool = createTransactionalPool(async (sql, params) => {
+    if (sql.startsWith('SELECT r.id AS run_id')) return [[runningRow()]];
+    if (sql.startsWith('SELECT homework_json')) {
+      assert.deepEqual(params, [7, 3, '2026-2027-1']);
+      assert.match(sql, /FOR UPDATE/);
+      return [[{ homework_json: previous }]];
+    }
+    return [{ affectedRows: 1 }];
+  });
+  const finishedAt = new Date('2026-10-08T05:00:00Z');
+  await createTsinghuaSyncStore(pool).completeRun(
+    claimedRun(),
+    {
+      semesterId: '2026-2027-1',
+      status: 'partial',
+      homework: [{ ...previous[0], status: 'submitted' }],
+    },
+    finishedAt,
+  );
+  const stored = pool.calls.find(({ sql }) =>
+    sql.startsWith('INSERT INTO campus_homework_snapshots'),
+  );
+  assert.deepEqual(JSON.parse(stored.parameters[3]), [
+    { ...previous[0], status: 'submitted' },
+    previous[1],
+  ]);
+  const completion = pool.calls.find(({ sql }) => sql.startsWith('UPDATE important_items'));
+  assert.match(completion.sql, /source_type = 'network_classroom'/);
+  assert.match(completion.sql, /status IN \('draft', 'confirmed'\) AND deleted_at IS NULL/);
+  assert.deepEqual(completion.parameters, [
+    finishedAt,
+    7,
+    previous[0].sourceReference,
+    previous[0].sourceReference,
+  ]);
+  const incompleteOverride = pool.calls.find(({ sql }) =>
+    sql.startsWith('DELETE FROM campus_homework_calendar_states'),
+  );
+  assert.deepEqual(incompleteOverride.parameters, [7, previous[0].sourceReference]);
+  assert.equal(
+    pool.calls.some(({ sql }) => sql.includes("SET status = 'cancelled', cancelled_at")),
+    false,
+  );
+});
+
+test('a slow full sync preserves a detail saved while waiting for its lock, then a later sync can observe withdrawal', async () => {
+  let stored = [
+    {
+      sourceReference: 'learn:homework:one',
+      status: 'submitted',
+      // completeRun's finishedAt was already captured before waiting for this
+      // connector lock; the committed detail can be newer than that timestamp.
+      homeworkStatusVerifiedAt: '2026-10-08T10:06:00.000Z',
+    },
+  ];
+  let startedAt = new Date('2026-10-08T10:00:00Z');
+  const pool = createTransactionalPool(async (sql) => {
+    if (sql.startsWith('SELECT r.id AS run_id')) return [[runningRow({ started_at: startedAt })]];
+    if (sql.startsWith('SELECT homework_json')) return [[{ homework_json: stored }]];
+    return [{ affectedRows: 1 }];
+  });
+  const staleSnapshot = {
+    status: 'complete',
+    semesterId: '2026-2027-1',
+    homework: [{ sourceReference: 'learn:homework:one', status: 'unsubmitted' }],
+  };
+  const store = createTsinghuaSyncStore(pool);
+  await store.completeRun(claimedRun(), staleSnapshot, new Date('2026-10-08T10:05:00Z'));
+  const saved = pool.calls.filter(({ sql }) =>
+    sql.startsWith('INSERT INTO campus_homework_snapshots'),
+  );
+  stored = JSON.parse(saved[0].parameters[3]);
+  assert.equal(stored[0].status, 'submitted');
+  startedAt = new Date('2026-10-08T10:07:00Z');
+  await store.completeRun(claimedRun(), staleSnapshot, new Date('2026-10-08T10:08:00Z'));
+  const next = pool.calls.filter(({ sql }) =>
+    sql.startsWith('INSERT INTO campus_homework_snapshots'),
+  );
+  assert.equal(JSON.parse(next[1].parameters[3])[0].status, 'unsubmitted');
+});
+
 test('completeRun fences a stale run generation before writing imported rows', async () => {
   const finishedAt = new Date('2026-08-02T08:05:00.000Z');
   const pool = createTransactionalPool(async (sql) => {
