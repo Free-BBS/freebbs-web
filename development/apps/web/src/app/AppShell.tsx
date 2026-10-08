@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 
 import freeBbsEmblem from '../assets/freebbs-emblem-v2.png';
 import learningIcon from '../assets/icons/learning.svg';
@@ -8,10 +8,15 @@ import { DemoUserSwitcher } from '../core/auth/DemoUserSwitcher.js';
 import { useAuth } from '../core/auth/AuthProvider.js';
 import type { PresentationUser } from '../core/permissions/Can.js';
 import { useMainSiteTheme } from '../core/theme/useMainSiteTheme.js';
-import { MainSiteHeader, mainSiteTypography } from './MainSiteHeader.js';
-import { visibleModuleManifests, type ModuleStateOverrides } from './module-manifests.js';
+import { MainSiteHeader } from './MainSiteHeader.js';
+import { useMainSiteTypography } from './main-site-typography.js';
+import {
+  visibleModuleManifests,
+  ORGANIZATIONS_NAVIGATION,
+  type ModuleStateOverrides,
+} from './module-manifests.js';
 
-const HIDDEN_SIDEBAR_MODULE_IDS = new Set(['dashboard', 'admin', 'liaison', 'events']);
+const HIDDEN_SIDEBAR_MODULE_IDS = new Set(['dashboard', 'admin', 'liaison', 'events', 'knowledge']);
 
 export interface AppShellProps {
   children?: ReactNode;
@@ -51,6 +56,8 @@ function ModuleNavigation({
   withLearningLink = false,
 }: ModuleNavigationProps) {
   const navigationRef = useRef<HTMLElement>(null);
+  const location = useLocation();
+  const deskAliasActive = /^\/(?:information|knowledge)(?:\/|$)/.test(location.pathname);
 
   useEffect(() => {
     if (!ensureCurrentVisible) {
@@ -77,7 +84,14 @@ function ModuleNavigation({
     <nav ref={navigationRef} className={className} aria-label={label}>
       {visibleModuleManifests(user, moduleStates)
         .filter((module) => !HIDDEN_SIDEBAR_MODULE_IDS.has(module.id))
+        .flatMap((module) =>
+          module.id === 'information' ? [module, ORGANIZATIONS_NAVIGATION] : [module],
+        )
         .map((module) => {
+          const isActive =
+            location.pathname === module.route ||
+            location.pathname.startsWith(`${module.route}/`) ||
+            (module.route === '/desk' && deskAliasActive);
           const content = (
             <>
               <span className="module-icon" aria-hidden="true">
@@ -90,13 +104,14 @@ function ModuleNavigation({
           );
 
           return (
-            <div data-testid="module-navigation-item" key={module.id}>
-              <NavLink
-                className={({ isActive }) => `module-link${isActive ? ' active' : ''}`}
+            <div data-testid="module-navigation-item" key={module.route}>
+              <Link
+                className={`module-link${isActive ? ' active' : ''}`}
+                aria-current={isActive ? 'page' : undefined}
                 to={module.route}
               >
                 {content}
-              </NavLink>
+              </Link>
             </div>
           );
         })}
@@ -133,6 +148,7 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
   const location = useLocation();
 
   const theme = useMainSiteTheme();
+  const typography = useMainSiteTypography();
   if (auth.status === 'loading') {
     return (
       <AuthState>
@@ -184,7 +200,7 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
   }
 
   return (
-    <div className="development-shell-root" style={mainSiteTypography()}>
+    <div className="development-shell-root" style={typography}>
       <a className="skip-link" href="#main-content">
         跳到主要内容
       </a>

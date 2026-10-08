@@ -21,6 +21,9 @@ import './styles/information.css';
 import './styles/finance.css';
 import './styles/collections.css';
 import './styles/community.css';
+import './styles/desk.css';
+import './styles/organizations.css';
+import './styles/typography.css';
 
 const rootElement = document.getElementById('root');
 

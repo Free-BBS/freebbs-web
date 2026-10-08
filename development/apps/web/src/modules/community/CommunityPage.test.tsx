@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -50,6 +50,141 @@ const trends: CommunityTrendingPayload = {
 };
 
 describe('CommunityPage', () => {
+  it('ignores a stale thread response without discarding the current reply draft', async () => {
+    let resolveOlder!: (value: CommunityThreadDetail) => void;
+    const newer = { ...wish, id: 'wish-2', title: '午后散步' };
+    const request = vi.fn(async (path: string) => {
+      if (path.startsWith('/community/feed')) return [wish, newer];
+      if (path === '/community/trending') return { ...trends, items: [] };
+      if (path === '/community/posts/wish-1')
+        return new Promise<CommunityThreadDetail>((resolve) => {
+          resolveOlder = resolve;
+        });
+      if (path === '/community/posts/wish-2') return { ...thread, item: newer };
+      if (path.endsWith('/views')) return {};
+      throw new Error(path);
+    });
+    const user = userEvent.setup();
+    render(<CommunityPage client={{ request } as unknown as ApiClient} />);
+    await user.click(await screen.findByRole('button', { name: `打开${wish.title}` }));
+    await user.click(screen.getByRole('button', { name: `打开${newer.title}` }));
+    await screen.findByRole('dialog', { name: newer.title });
+    await user.type(screen.getByLabelText('写下回复'), '这份回复还没发送');
+    await act(async () => resolveOlder(thread));
+    expect(screen.getByRole('dialog', { name: newer.title })).toBeInTheDocument();
+    expect(screen.getByLabelText('写下回复')).toHaveValue('这份回复还没发送');
+  });
+  it('refreshes the current channel when a publication finishes after the viewer changes tabs', async () => {
+    let finish!: () => void;
+    const request = vi.fn(async (path: string) => {
+      if (path === '/community/trending') return trends;
+      if (path === '/community/feed?channel=rights') return [];
+      if (path.startsWith('/community/feed')) return [wish];
+      if (path === '/community/posts')
+        return new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const user = userEvent.setup();
+    render(<CommunityPage client={{ request } as unknown as ApiClient} />);
+    await user.type(screen.getByLabelText('标题'), '午后操场');
+    await user.type(screen.getByLabelText('内容'), '今天的夕阳很美。');
+    await user.click(screen.getByRole('button', { name: '确认发布' }));
+    await user.click(screen.getByRole('tab', { name: '生权反馈' }));
+    await waitFor(() => expect(request).toHaveBeenLastCalledWith('/community/feed?channel=rights'));
+    finish();
+    await waitFor(() => expect(screen.getByText(/已发布，去广场看看/)).toBeInTheDocument());
+    expect(request).toHaveBeenLastCalledWith('/community/feed?channel=rights');
+    expect(screen.queryByRole('button', { name: `打开${wish.title}` })).not.toBeInTheDocument();
+  });
+  it('publishes from the inline composer and clears its fields only after success', async () => {
+    const request = vi.fn(async (path: string) => (path === '/community/trending' ? trends : []));
+    const user = userEvent.setup();
+    render(<CommunityPage client={{ request } as unknown as ApiClient} />);
+    const composer = screen.getByRole('region', { name: '分享校园新鲜事' });
+    await user.type(within(composer).getByLabelText('标题'), '午后操场');
+    await user.type(within(composer).getByLabelText('内容'), '今天的夕阳很美。');
+    await user.click(within(composer).getByRole('button', { name: '确认发布' }));
+    await waitFor(() => expect(within(composer).getByLabelText('内容')).toHaveValue(''));
+    expect(request).toHaveBeenCalledWith(
+      '/community/posts',
+      expect.objectContaining({ body: expect.stringContaining('午后操场') }),
+    );
+    expect(within(composer).getByRole('status')).toHaveTextContent('已发布');
+  });
+  it('keeps failed replies editable and retries without losing the selected identity', async () => {
+    let attempts = 0;
+    const request = vi.fn(async (path: string, init?: RequestInit) => {
+      if (path.startsWith('/community/feed')) return [wish];
+      if (path === '/community/trending') return trends;
+      if (path === '/community/posts/wish-1' && !init) return thread;
+      if (path.endsWith('/views')) return {};
+      if (path.endsWith('/comments')) {
+        if (++attempts === 1) throw new Error('offline');
+        return {};
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const user = userEvent.setup();
+    render(<CommunityPage client={{ request } as unknown as ApiClient} initialPostId="wish-1" />);
+    const dialog = await screen.findByRole('dialog', { name: wish.title });
+    await user.click(within(dialog).getByRole('radio', { name: '匿名回复' }));
+    await user.type(within(dialog).getByLabelText('写下回复'), '我也想参加。');
+    await user.click(within(dialog).getByRole('button', { name: '发送回复' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('操作失败');
+    expect(within(dialog).getByLabelText('写下回复')).toHaveValue('我也想参加。');
+    await user.click(within(dialog).getByRole('button', { name: '发送回复' }));
+    await waitFor(() => expect(within(dialog).getByLabelText('写下回复')).toHaveValue(''));
+    expect(attempts).toBe(2);
+    expect(request).toHaveBeenLastCalledWith('/community/posts/wish-1');
+  });
+
+  it('prevents concurrent likes and restores the count when saving fails', async () => {
+    let rejectLike!: (error: Error) => void;
+    const request = vi.fn(async (path: string) => {
+      if (path.startsWith('/community/feed')) return [wish];
+      if (path === '/community/trending') return trends;
+      if (path.endsWith('/like'))
+        return new Promise((_, reject) => {
+          rejectLike = reject;
+        });
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    render(<CommunityPage client={{ request } as unknown as ApiClient} />);
+    const like = await screen.findByRole('button', { name: '赞 12' });
+    fireEvent.click(like);
+    fireEvent.click(like);
+    expect(request.mock.calls.filter(([path]) => path.endsWith('/like'))).toHaveLength(1);
+    expect(like).toBeDisabled();
+    rejectLike(new Error('offline'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('点赞状态未能保存');
+    expect(screen.getByRole('button', { name: '赞 12' })).toBeEnabled();
+  });
+
+  it('uses the existing festival and confidential consultation entry points for special channels', async () => {
+    const request = vi.fn(async (path: string) => {
+      if (path === '/community/trending') return trends;
+      if (path.startsWith('/events/festival/submissions'))
+        return { items: [], page: 1, pageSize: 12, total: 0 };
+      return [];
+    });
+    const user = userEvent.setup();
+    render(<CommunityPage client={{ request } as unknown as ApiClient} />);
+    await user.click(screen.getByRole('tab', { name: '学生节舞台' }));
+    expect(screen.getByRole('link', { name: '我要上学生节' })).toHaveAttribute(
+      'href',
+      '/development/events/student-festival',
+    );
+    expect(screen.queryByRole('textbox', { name: '内容' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: '生权反馈' }));
+    expect(screen.getByRole('link', { name: '提交生权反馈' })).toHaveAttribute(
+      'href',
+      '/development/information/consultations',
+    );
+    expect(screen.getByText(/个人反馈默认保密/)).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: '内容' })).not.toBeInTheDocument();
+  });
   it('renders the five channels, feed, hot list, and anonymous composer', async () => {
     const request = vi.fn(async (path: string, init?: RequestInit) => {
       if (path === '/community/feed?channel=all') return [wish];

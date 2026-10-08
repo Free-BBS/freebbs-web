@@ -1,6 +1,7 @@
-import type { ModuleManifest } from '@freebbs-development/contracts';
+import type { InformationFeedFilter, ModuleManifest } from '@freebbs-development/contracts';
+import type { ReactNode } from 'react';
 import { Navigate, RouterProvider, createBrowserRouter, useLoaderData } from 'react-router-dom';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useMatches, useParams, useSearchParams } from 'react-router-dom';
 
 import { createApiClient } from '../core/api/client.js';
 import { useAuth } from '../core/auth/AuthProvider.js';
@@ -15,6 +16,7 @@ import { ShowcasePage } from '../modules/collections/ShowcasePage.js';
 import { CollectionWorkbench } from '../modules/collections/builder/CollectionWorkbench.js';
 import { CommunityPage } from '../modules/community/CommunityPage.js';
 import { DashboardPage } from '../modules/dashboard/DashboardPage.js';
+import { DeskPage } from '../modules/desk/DeskPage.js';
 import { ActivityDetailPage } from '../modules/events/ActivityDetailPage.js';
 import { EventsPage } from '../modules/events/EventsPage.js';
 import { FestivalPage } from '../modules/festival/FestivalPage.js';
@@ -33,7 +35,12 @@ import { SportsMatchesPage } from '../modules/sports/SportsMatchesPage.js';
 import { SportsTeamDetailPage } from '../modules/sports/SportsTeamDetailPage.js';
 import { AppShell } from './AppShell.js';
 import { CommercePage } from './CommercePage.js';
-import { MODULE_MANIFESTS, type ModuleStateOverrides } from './module-manifests.js';
+import {
+  MODULE_MANIFESTS,
+  resolveModuleStatus,
+  type ModuleStateOverrides,
+} from './module-manifests.js';
+import { OrganizationsPage } from '../modules/organizations/OrganizationsPage.js';
 
 export async function loadModuleStates(): Promise<ModuleStateOverrides> {
   try {
@@ -92,13 +99,32 @@ function KnowledgeDetailRoute() {
 
 function InformationHubRoute() {
   const auth = useAuth();
+  const [search] = useSearchParams();
+  const filter = search.get('filter');
+  const initialFilter: InformationFeedFilter = [
+    'all',
+    'official',
+    'public_feedback',
+    'mine',
+    'in_progress',
+    'resolved',
+  ].includes(filter ?? '')
+    ? (filter as InformationFeedFilter)
+    : 'all';
   return (
     <InformationHubPage
       key={auth.demoUser ?? auth.user?.uid}
       client={auth.client}
       user={auth.user}
+      initialFilter={initialFilter}
     />
   );
+}
+
+function DeskRoute({ children }: { children?: ReactNode }) {
+  const matches = useMatches();
+  const moduleStates = matches[0]?.data as ModuleStateOverrides | undefined;
+  return <DeskPage moduleStates={moduleStates}>{children}</DeskPage>;
 }
 
 function ProposalPoolRoute() {
@@ -128,6 +154,20 @@ function GrowthRoute() {
       client={auth.client}
       uid={auth.user?.uid ?? ''}
       displayName={auth.user?.displayName ?? '同学'}
+    />
+  );
+}
+
+function OrganizationsRoute() {
+  const { organizationKey, departmentKey } = useParams();
+  const matches = useMatches();
+  const states = matches[0]?.data as ModuleStateOverrides | undefined;
+  const information = MODULE_MANIFESTS.find((module) => module.id === 'information')!;
+  return (
+    <OrganizationsPage
+      organizationKey={organizationKey}
+      departmentKey={departmentKey}
+      enabled={resolveModuleStatus(information, states) === 'enabled'}
     />
   );
 }
@@ -260,11 +300,76 @@ export const appRouter = createBrowserRouter(
         { path: 'dashboard', element: <DashboardRoute /> },
         { path: 'shop', element: <CommercePage section="shop" /> },
         { path: 'inventory', element: <CommercePage section="inventory" /> },
+        { path: 'ranch', element: <CommercePage section="ranch" /> },
+        { path: 'ranch-gallery', element: <CommercePage section="ranch-gallery" /> },
+        { path: 'ranch-dye', element: <CommercePage section="ranch-dye" /> },
         { path: 'profile', element: <ProfileRoute /> },
         { path: 'settings', element: <CommercePage section="settings" /> },
-        { path: 'knowledge', element: <KnowledgeRoute /> },
-        { path: 'knowledge/:entryId', element: <KnowledgeDetailRoute /> },
-        { path: 'information', element: <InformationHubRoute /> },
+        { path: 'desk', element: <DeskRoute /> },
+        {
+          path: 'desk/information',
+          element: (
+            <DeskRoute>
+              <InformationHubRoute />
+            </DeskRoute>
+          ),
+        },
+        {
+          path: 'desk/knowledge',
+          element: (
+            <DeskRoute>
+              <KnowledgeRoute />
+            </DeskRoute>
+          ),
+        },
+        {
+          path: 'desk/knowledge/:entryId',
+          element: (
+            <DeskRoute>
+              <KnowledgeDetailRoute />
+            </DeskRoute>
+          ),
+        },
+        {
+          path: 'desk/information/proposals',
+          element: (
+            <DeskRoute>
+              <ProposalPoolRoute />
+            </DeskRoute>
+          ),
+        },
+        {
+          path: 'desk/information/proposals/:proposalId',
+          element: (
+            <DeskRoute>
+              <ProposalDetailRoute />
+            </DeskRoute>
+          ),
+        },
+        {
+          path: 'knowledge',
+          element: (
+            <DeskRoute>
+              <KnowledgeRoute />
+            </DeskRoute>
+          ),
+        },
+        {
+          path: 'knowledge/:entryId',
+          element: (
+            <DeskRoute>
+              <KnowledgeDetailRoute />
+            </DeskRoute>
+          ),
+        },
+        {
+          path: 'information',
+          element: (
+            <DeskRoute>
+              <InformationHubRoute />
+            </DeskRoute>
+          ),
+        },
         {
           path: 'information/announcements',
           element: <Navigate to="/information?filter=official" replace />,
@@ -277,9 +382,26 @@ export const appRouter = createBrowserRouter(
           path: 'information/triage',
           element: <Navigate to="/information?filter=in_progress" replace />,
         },
-        { path: 'information/proposals', element: <ProposalPoolRoute /> },
-        { path: 'information/proposals/:proposalId', element: <ProposalDetailRoute /> },
+        {
+          path: 'information/proposals',
+          element: (
+            <DeskRoute>
+              <ProposalPoolRoute />
+            </DeskRoute>
+          ),
+        },
+        {
+          path: 'information/proposals/:proposalId',
+          element: (
+            <DeskRoute>
+              <ProposalDetailRoute />
+            </DeskRoute>
+          ),
+        },
         { path: 'growth', element: <GrowthRoute /> },
+        { path: 'organizations', element: <OrganizationsRoute /> },
+        { path: 'organizations/:organizationKey', element: <OrganizationsRoute /> },
+        { path: 'organizations/:organizationKey/:departmentKey', element: <OrganizationsRoute /> },
         { path: 'interest-groups', element: <Navigate to="/growth" replace /> },
         { path: 'clubs', element: <Navigate to="/growth" replace /> },
         { path: 'events', element: <EventsRoute /> },

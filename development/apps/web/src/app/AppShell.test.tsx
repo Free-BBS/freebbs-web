@@ -107,8 +107,8 @@ describe('AppShell', () => {
       '無界广场',
       '萬事屋',
       '無体育',
-      '信息与咨询',
-      '经验库',
+      '無尽书桌',
+      '风采展示',
       '个人成长档案',
     ]);
     expect(within(navigation).queryByRole('link', { name: '工作台' })).not.toBeInTheDocument();
@@ -121,9 +121,12 @@ describe('AppShell', () => {
       'href',
       '/growth',
     );
-    expect(within(navigation).getByRole('link', { name: '经验库' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '無尽书桌' })).toHaveAttribute(
       'aria-current',
       'page',
+    );
+    expect(within(navigation).getByRole('link', { name: '风采展示' })).not.toHaveAttribute(
+      'aria-current',
     );
     expect(screen.getByRole('link', { name: 'FREE BBS' })).toHaveAttribute('href', '/dashboard');
     expect(screen.getByRole('img', { name: 'FREE BBS' })).toHaveAttribute(
@@ -132,6 +135,26 @@ describe('AppShell', () => {
     );
     expect(screen.getByRole('link', { name: 'FREE BBS' })).toHaveTextContent('FREE-BBS');
     expect(screen.queryByText('发展平台')).not.toBeInTheDocument();
+  });
+
+  it('keeps exhibition navigation independent from the desk and respects information availability', () => {
+    mockUseAuth.mockReturnValue(authenticatedAuth());
+    const view = renderShell('/organizations/student_union/arts_center');
+    const navigation = screen.getByRole('navigation', { name: '主要导航' });
+    expect(within(navigation).getByRole('link', { name: '风采展示' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(within(navigation).getByRole('link', { name: '無尽书桌' })).not.toHaveAttribute(
+      'aria-current',
+    );
+    view.unmount();
+    renderShell('/organizations', { moduleStates: { information: 'disabled' } });
+    expect(
+      within(screen.getByRole('navigation', { name: '主要导航' })).queryByRole('link', {
+        name: '风采展示',
+      }),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps the current mobile navigation item horizontally reachable', () => {
@@ -161,11 +184,11 @@ describe('AppShell', () => {
     renderShell('/information/triage');
 
     const navigation = screen.getByRole('navigation', { name: '主要导航' });
-    expect(within(navigation).getByRole('link', { name: '信息与咨询' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '無尽书桌' })).toHaveAttribute(
       'aria-current',
       'page',
     );
-    expect(screen.getByRole('navigation', { name: '移动导航' })).toHaveTextContent('信息与咨询');
+    expect(screen.getByRole('navigation', { name: '移动导航' })).toHaveTextContent('無尽书桌');
   });
 
   it('does not mark information active for an unrelated route prefix', () => {
@@ -175,7 +198,7 @@ describe('AppShell', () => {
 
     expect(
       within(screen.getByRole('navigation', { name: '主要导航' })).getByRole('link', {
-        name: '信息与咨询',
+        name: '無尽书桌',
       }),
     ).not.toHaveAttribute('aria-current', 'page');
   });
@@ -188,6 +211,34 @@ describe('AppShell', () => {
     const navigation = screen.getByRole('navigation', { name: '主要导航' });
     expect(within(navigation).queryByRole('link', { name: '無界广场' })).not.toBeInTheDocument();
     expect(within(navigation).queryByText('無界广场')).not.toBeInTheDocument();
+  });
+
+  it('offers one desk entry while keeping knowledge out of both sidebar menus', () => {
+    mockUseAuth.mockReturnValue(authenticatedAuth());
+    renderShell('/desk/knowledge');
+    for (const label of ['主要导航', '移动导航']) {
+      const navigation = screen.getByRole('navigation', { name: label });
+      expect(within(navigation).getAllByRole('link', { name: '無尽书桌' })).toHaveLength(1);
+      expect(within(navigation).getByRole('link', { name: '無尽书桌' })).toHaveAttribute(
+        'href',
+        '/desk',
+      );
+      expect(within(navigation).getByRole('link', { name: '無尽书桌' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+      expect(within(navigation).queryByRole('link', { name: '经验库' })).not.toBeInTheDocument();
+    }
+  });
+
+  it('does not expose the desk navigation when its information module is disabled', () => {
+    mockUseAuth.mockReturnValue(authenticatedAuth());
+    renderShell('/desk', { moduleStates: { information: 'disabled' } });
+    expect(
+      within(screen.getByRole('navigation', { name: '主要导航' })).queryByRole('link', {
+        name: '無尽书桌',
+      }),
+    ).not.toBeInTheDocument();
   });
 
   it('renders the authenticated user name and avatar', () => {

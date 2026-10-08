@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 import type { UserContext } from '@freebbs-development/contracts';
@@ -23,55 +23,14 @@ import {
 } from './main-site-api.js';
 import { MainSiteNotifications } from './MainSiteNotifications.js';
 import { MODULE_MANIFESTS } from './module-manifests.js';
+import { mainSiteTypography } from './main-site-typography.js';
+export { mainSiteTypography } from './main-site-typography.js';
 
 interface MainSiteHeaderProps {
   user: UserContext;
   authMode: AuthMode;
   themeMode: ThemeMode;
   onToggleTheme: () => void;
-}
-
-const typographyFonts: Record<string, { title: string; ui: string }> = {
-  'transistor-lab': {
-    title: '"Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif',
-    ui: '"HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif',
-  },
-  'zhongsong-study': {
-    title: '"Source Han Serif SC", "Noto Serif SC", "STZhongsong", "华文中宋", serif',
-    ui: '"Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif',
-  },
-  'quantum-board': {
-    title: '"Noto Serif SC", "Source Han Serif SC", "STZhongsong", serif',
-    ui: '"HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif',
-  },
-  'night-oscilloscope': {
-    title: '"Syne", "Noto Serif SC", "Source Han Serif SC", serif',
-    ui: '"Segoe UI", "Microsoft YaHei", sans-serif',
-  },
-};
-
-export function mainSiteTypography(): CSSProperties {
-  let preferences: { fontPreset?: string; typeScale?: string } = {};
-  try {
-    preferences = JSON.parse(
-      window.localStorage.getItem('free_bbs_typography_preferences') || '{}',
-    );
-  } catch {
-    // Use the main site's default preset when saved preferences are malformed.
-  }
-  const scale =
-    { standard: 16, comfortable: 17.28, large: 18.88 }[preferences.typeScale || 'comfortable'] ||
-    17.28;
-  const fonts =
-    typographyFonts[preferences.fontPreset || 'transistor-lab'] ||
-    typographyFonts['transistor-lab'];
-  return {
-    '--main-site-ui-font': fonts.ui,
-    '--main-site-ui-size': `${scale}px`,
-    '--main-site-type-scale': String(scale / 16),
-    '--font-ui': fonts.ui,
-    '--font-display': fonts.title,
-  } as CSSProperties;
 }
 
 function beijingToday(): string {
@@ -83,7 +42,11 @@ function developmentTitle(pathname: string): string {
   if (pathname.startsWith('/inventory')) return '仓库';
   if (pathname.startsWith('/shop')) return '商店';
   if (pathname.startsWith('/profile')) return '个人主页';
+  if (pathname.startsWith('/ranch-dye')) return '牧场染坊';
+  if (pathname.startsWith('/ranch-gallery')) return '羊群广场';
+  if (pathname.startsWith('/ranch')) return '电子牧场';
   if (pathname.startsWith('/settings')) return '设置';
+  if (pathname.startsWith('/organizations')) return '风采展示';
   return (
     MODULE_MANIFESTS.find(
       (module) => pathname === module.route || pathname.startsWith(`${module.route}/`),

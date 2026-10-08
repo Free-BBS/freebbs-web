@@ -22,6 +22,7 @@ const filters: Array<{ value: InformationFeedFilter; label: string }> = [
 export interface InformationHubPageProps {
   client: ApiClient;
   user: UserContext | null;
+  initialFilter?: InformationFeedFilter;
 }
 
 function canPublish(user: UserContext | null): boolean {
@@ -38,8 +39,12 @@ function canPublish(user: UserContext | null): boolean {
   );
 }
 
-export function InformationHubPage({ client, user }: InformationHubPageProps) {
-  const [filter, setFilter] = useState<InformationFeedFilter>('all');
+export function InformationHubPage({
+  client,
+  user,
+  initialFilter = 'all',
+}: InformationHubPageProps) {
+  const [filter, setFilter] = useState<InformationFeedFilter>(initialFilter);
   const [items, setItems] = useState<InformationFeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -53,6 +58,8 @@ export function InformationHubPage({ client, user }: InformationHubPageProps) {
     item: InformationFeedItem;
     replies: InformationReply[];
   } | null>(null);
+
+  useEffect(() => setFilter(initialFilter), [initialFilter]);
 
   useEffect(() => {
     let current = true;

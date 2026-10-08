@@ -2,9 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import type { CollectionField, UnifiedRegistration } from '@freebbs-development/contracts';
+import { organizationById } from '@freebbs-development/contracts';
 import { ApiError, createApiClient, type ApiClient } from '../../core/api/client.js';
 import { formatCollectionDate, isRequired, numericRule } from './collection-utils.js';
 import { loadRegistrationCatalog, sourceLabels } from './source-adapters.js';
+import {
+  filterRegistrationsByOrganization,
+  parseRegistrationOrganizations,
+} from './registration-organization.js';
 
 export interface RegistrationGalleryProps {
   client?: Pick<ApiClient, 'request'>;
@@ -133,6 +138,10 @@ export function RegistrationGallery({ client }: RegistrationGalleryProps) {
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const organizationIds = parseRegistrationOrganizations(search.get('organization'));
+  const visibleItems = filterRegistrationsByOrganization(items, organizationIds);
+  const allRegistrationsSearch = new URLSearchParams(search);
+  allRegistrationsSearch.delete('organization');
 
   useEffect(() => {
     let active = true;
@@ -222,6 +231,19 @@ export function RegistrationGallery({ client }: RegistrationGalleryProps) {
           学习端报名源暂时没有连接，其余报名仍可正常使用。
         </div>
       ) : null}
+      {organizationIds.length ? (
+        <div className="registration-organization-filter">
+          <span>
+            组织报名 · {organizationIds.map((id) => organizationById(id).name).join('、')}
+          </span>
+          <span>{visibleItems.length} 项</span>
+          <Link
+            to={`/collections/registrations${allRegistrationsSearch.size ? `?${allRegistrationsSearch}` : ''}`}
+          >
+            查看全部报名
+          </Link>
+        </div>
+      ) : null}
       {feedback ? (
         <div className="collections-feedback" role="status">
           {feedback}
@@ -232,7 +254,12 @@ export function RegistrationGallery({ client }: RegistrationGalleryProps) {
         <p className="collections-empty">报名入口暂时无法加载，请稍后重试。</p>
       ) : null}
       <section className="registration-grid" aria-label="全部报名">
-        {items.map((item) => {
+        {state === 'ready' && visibleItems.length === 0 ? (
+          <p className="collections-empty">
+            这里还没有可展示的报名。可以查看全部报名，或稍后再来。
+          </p>
+        ) : null}
+        {visibleItems.map((item) => {
           const key = `${item.source}:${item.id}`;
           const open = expanded === key;
           return (

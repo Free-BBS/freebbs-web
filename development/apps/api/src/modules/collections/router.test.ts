@@ -78,6 +78,22 @@ async function createPublishedForm(
 }
 
 describe('collections API', () => {
+  it('exposes explicit organization ownership for native and activity registration links', async () => {
+    const { app } = fixture();
+    const form = await createPublishedForm(app);
+    const response = await request(app)
+      .get('/api/development/v1/collections/registrations')
+      .set(student)
+      .expect(200);
+    expect(response.body.data.find((item: { id: string }) => item.id === form.id)).toMatchObject({
+      organizationId: 'rights_development_center',
+    });
+    const activities = response.body.data.filter(
+      (item: { source: string }) => item.source === 'development_activity',
+    );
+    expect(activities.length).toBeGreaterThan(0);
+    expect(activities.every((item: object) => Object.hasOwn(item, 'organizationId'))).toBe(true);
+  });
   it('authenticates asset uploads before parsing multipart bodies', async () => {
     const directory = await uploadDirectory();
     const { app } = fixture(directory);

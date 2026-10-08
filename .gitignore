@@ -166,5 +166,6 @@ test/
 !development/apps/web/src/test/
 !development/apps/web/src/test/setup.ts
 # Browser verification artifacts
+**/.preview/
 /.playwright-cli/
 /output/playwright/

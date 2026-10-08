@@ -111,6 +111,7 @@ export interface UnifiedRegistration {
   title: string;
   description: string;
   organizer: string;
+  organizationId?: SocialOrganizationId | null;
   coverUrl: string | null;
   opensAt: string | null;
   closesAt: string | null;

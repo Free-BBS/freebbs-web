@@ -229,6 +229,7 @@ async function registrationFromForm(
     title: form.title,
     description: form.description,
     organizer: form.organizationId ? organizationById(form.organizationId).name : 'FREE-BBS',
+    organizationId: form.organizationId,
     coverUrl: form.coverUrl,
     opensAt: window.opensAt,
     closesAt: window.closesAt,
@@ -796,6 +797,7 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
       source: 'development_activity',
       title: activity.title,
       description: activity.description,
+      organizationId: activity.organizationId ?? null,
       organizer: activity.organizationId
         ? organizationById(activity.organizationId).name
         : '無活动',

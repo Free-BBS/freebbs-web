@@ -12,6 +12,8 @@ export interface GrowthDomainCount {
   count: number;
 }
 
+export type GrowthAchievementSeries = 'milestone' | 'specialty' | 'diversity' | 'rhythm';
+
 export interface GrowthAchievement {
   id: string;
   title: string;
@@ -19,6 +21,10 @@ export interface GrowthAchievement {
   unlocked: boolean;
   progress: number;
   target: number;
+  /** Optional metadata keeps older summary fixtures and consumers compatible. */
+  series?: GrowthAchievementSeries;
+  icon?: string;
+  domain?: string;
 }
 
 export interface GrowthSummary {
