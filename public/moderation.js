@@ -337,11 +337,24 @@
             'moderation-note',
           ),
         );
+      let exampleCaptions = ['需要人工核查的情况', '不因本条要求核查的情况'];
+      if (rule.recommendedAction === 'block')
+        exampleCaptions = ['建议拦截并复核的情况', '不因本条拦截的情况'];
+      if (rule.recommendedAction === 'allow')
+        exampleCaptions = ['本条建议允许的情况', '需要按其他规则判断的情况'];
+      if (rule.id === 'EXP-001') exampleCaptions = ['应予保护的表达', '不属于本条保护范围的情况'];
+      if (rule.supportOnly)
+        exampleCaptions =
+          {
+            none: ['正常求助与康复分享', '需要进一步判断支持级别的情况'],
+            attention: ['需要关注与支持的情况', '不按本条列为关注的情况'],
+            urgent: ['需要紧急关怀的情况', '不按本条列为紧急的情况'],
+          }[rule.supportPriority] || exampleCaptions;
       for (const [key, caption] of [
         ['conditions', '适用条件'],
         ['exceptions', '例外与保护'],
-        ['positiveExample', '适用本规则的示例'],
-        ['negativeExample', '不适用本规则的示例'],
+        ['positiveExample', exampleCaptions[0]],
+        ['negativeExample', exampleCaptions[1]],
       ]) {
         const value = rule[key];
         if (value && (!Array.isArray(value) || value.length)) {
