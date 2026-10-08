@@ -18,12 +18,18 @@
 
   function badges(person) {
     if (!person || person.isAnonymous || person.isDeleted) return [];
+    const teacherBadge = (Array.isArray(person.identityBadges) ? person.identityBadges : []).find(
+      (badge) => badge.type === 'teacher' && (!badge.status || badge.status === 'approved'),
+    );
+    const teacherLabel = String(teacherBadge?.label || '').trim() || '教师';
     const result =
-      person.role === 'teacher' ? [{ type: 'teacher', label: '教师', title: '教师账号' }] : [];
+      person.role === 'teacher'
+        ? [{ type: 'teacher', label: teacherLabel, title: `教师账号 · ${teacherLabel}` }]
+        : [];
     const seen = new Set();
     for (const certificate of Array.isArray(person.certifications) ? person.certifications : []) {
       if (certificate.status && certificate.status !== 'approved') continue;
-      const type = certificate.type;
+      const { type } = certificate;
       if (!['education', 'company', 'teacher'].includes(type)) continue;
       const slot = type === 'education' ? certificate.education : type;
       if (type === 'education' && !['undergraduate', 'master', 'doctor'].includes(slot)) continue;
@@ -34,7 +40,14 @@
       result.push({
         type,
         label,
-        title: ['已认证', label, certificate.className].filter(Boolean).join(' · '),
+        title: [
+          '已认证',
+          label,
+          type === 'teacher' ? certificate.institution : '',
+          certificate.className,
+        ]
+          .filter(Boolean)
+          .join(' · '),
       });
     }
     return result;

@@ -21,7 +21,12 @@ const {
   createAccountIdentityService,
   createTeacherAccountsRouter,
 } = require('./teacher-accounts');
-const { ensureUsernameChangeTables, createUsernameRouter } = require('./username-policy');
+const {
+  ensureUsernameChangeTables,
+  createUsernameRouter,
+  getUsernameChangePolicy,
+  isValidUsername,
+} = require('./username-policy');
 const {
   ensureUserCertificationTables,
   readApprovedCertifications,
@@ -107,6 +112,7 @@ test(
       id: user.id,
       uid: user.uid,
       username: user.username,
+      requiresUsernameChange: !isValidUsername(user.username),
       fullName: user.full_name,
       email: user.email,
       emailVerifiedAt: user.email_verified_at,
@@ -407,6 +413,91 @@ test(
     const password = 'initial-teacher-password';
     const code = (email, purpose = 'bind_email') =>
       delivered.findLast((item) => item.email === email && item.purpose === purpose).code;
+    await t.test(
+      'new Chinese nicknames are rejected while legacy Chinese and short accounts can recover and repair for free',
+      async () => {
+        assert.equal((await call('/admin/users', 1, teacherBody('中文教师'))).status, 400);
+        for (const [index, username] of ['历史同学', 'ab'].entries()) {
+          const email = `legacy-nickname-${index}@example.test`;
+          const [inserted] = await pool.execute(
+            `INSERT INTO users (uid, username, full_name, student_id, email, email_verified_at, password_hash, role, manetrons)
+             VALUES (?, ?, '历史用户', ?, ?, ?, ?, 'student', 0)`,
+            [
+              `u_legacy_nickname_${index}`,
+              username,
+              `209988877${index}`,
+              email,
+              new Date(clock),
+              hashPassword('legacy-password'),
+            ],
+          );
+          const userId = inserted.insertId;
+          await pool.execute(
+            `INSERT INTO username_change_log (user_id, old_username, new_username, change_kind, magnetic_cost, changed_at)
+             VALUES (?, 'previous_name', ?, 'free', 0, UTC_TIMESTAMP(3))`,
+            [userId, username],
+          );
+          const login = await call('/auth/login', null, {
+            identifier: username,
+            password: 'legacy-password',
+          });
+          assert.equal(login.status, 200);
+          assert.equal(login.body.user.requiresUsernameChange, true);
+          assert.equal(
+            (await call('/auth/send-reset-code', null, { identifier: username, email })).status,
+            200,
+          );
+          const recovered = await call('/auth/reset-password', null, {
+            identifier: username,
+            email,
+            emailCode: code(email, 'reset_password'),
+            password: 'legacy-recovered-password',
+          });
+          assert.equal(recovered.status, 200);
+          assert.equal(recovered.body.user.requiresUsernameChange, true);
+          assert.equal(
+            (
+              await call('/auth/login', null, {
+                identifier: username,
+                password: 'legacy-recovered-password',
+              })
+            ).status,
+            200,
+          );
+          const before = await getUsernameChangePolicy(pool, await getUserById(userId));
+          const replacement = `legacy_repaired_${index}`;
+          const changed = await call(
+            '/profile/username',
+            userId,
+            { username: replacement },
+            'PATCH',
+          );
+          assert.equal(changed.status, 200);
+          assert.equal(changed.body.charged, 0);
+          assert.equal(changed.body.user.requiresUsernameChange, false);
+          assert.equal(changed.body.policy.freeAvailable, false);
+          assert.equal(changed.body.policy.nextFreeAt, before.nextFreeAt);
+          assert.equal(changed.body.user.manetrons, 0);
+          const [[logs]] = await pool.execute(
+            `SELECT SUM(change_kind = 'free') AS voluntary, SUM(change_kind = 'required') AS repairs,
+                    SUM(magnetic_cost) AS spent FROM username_change_log WHERE user_id = ?`,
+            [userId],
+          );
+          assert.equal(Number(logs.voluntary), 1);
+          assert.equal(Number(logs.repairs), 1);
+          assert.equal(Number(logs.spent), 0);
+          assert.equal(
+            (
+              await call('/auth/login', null, {
+                identifier: replacement,
+                password: 'legacy-recovered-password',
+              })
+            ).status,
+            200,
+          );
+        }
+      },
+    );
     await t.test(
       'actual login and repeated teacher renames work without charging currency',
       async () => {

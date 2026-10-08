@@ -280,6 +280,13 @@ const { createIdentityUsabilityPreview } = require('./preview-identity-usability
     await review('reject', '暂保留原年级');
     assert.match(await student.locator('#certification-approved').innerText(), /2021 年/);
     for (const kind of ['master', 'doctor', 'teacher', 'company']) {
+      if (kind === 'teacher') {
+        await student.locator('#certification-kind').selectOption(kind);
+        assert.match(
+          await student.locator('#certification-slot-status').innerText(),
+          /公开账号姓名“演示同学”/,
+        );
+      }
       await submit(
         kind,
         kind === 'company'
@@ -296,6 +303,35 @@ const { createIdentityUsabilityPreview } = require('./preview-identity-usability
     assert.equal(await student.evaluate(() => window.freeBbsApp.userState.role), 'student');
     const teacher = [...preview.approved.get(2).values()].find((item) => item.type === 'teacher');
     assert.equal(teacher.year, null);
+    const profile = await studentContext.newPage();
+    await profile.goto(`${origin}/profile?uid=u_preview02`);
+    await profile.locator('[data-profile-identities] .identity-badge-teacher').waitFor();
+    assert.equal(
+      await profile.locator('[data-profile-identities] .identity-badge-teacher').innerText(),
+      '演示同学 · 教师',
+    );
+    assert.match(
+      await profile
+        .locator('[data-profile-identities] .identity-badge-teacher')
+        .getAttribute('title'),
+      /例示大学电子工程学院/,
+    );
+    assert.equal(await profile.locator('#public-profile-name').innerText(), 'preview_student');
+    await profile.screenshot({
+      path: path.join(output, 'teacher-certified-profile.png'),
+      fullPage: true,
+    });
+    await profile.goto(`${origin}/profile?uid=u_preview01`);
+    await profile.locator('[data-profile-identities] .identity-badge-teacher').waitFor();
+    assert.equal(
+      await profile.locator('[data-profile-identities] .identity-badge-teacher').innerText(),
+      '演示管理员 · 教师',
+    );
+    await profile.screenshot({
+      path: path.join(output, 'teacher-role-profile.png'),
+      fullPage: true,
+    });
+    await profile.close();
     await student.locator('.notification-bell').click();
     await student.waitForFunction(() =>
       document.querySelector('.notification-list')?.textContent.includes('认证审核结果'),
@@ -315,22 +351,30 @@ const { createIdentityUsabilityPreview } = require('./preview-identity-usability
 
     const usernames = await student.evaluate(() => {
       const input = document.getElementById('settings-username');
-      return ['张老师', '𠀀𠀁', 'a', 'a-b', 'a b', '张'.repeat(65), '𠀀'.repeat(64)].map(
-        (value) => {
-          input.value = value;
-          return {
-            value,
-            valid: input.checkValidity(),
-            patternMismatch: input.validity.patternMismatch,
-          };
-        },
-      );
+      return [
+        'Teacher_Zhang',
+        '123',
+        'abc_123',
+        '张老师',
+        '𠀀𠀁',
+        'a',
+        'a-b',
+        'a b',
+        'a'.repeat(65),
+      ].map((value) => {
+        input.value = value;
+        return {
+          value,
+          valid: input.checkValidity(),
+          patternMismatch: input.validity.patternMismatch,
+        };
+      });
     });
     assert.deepEqual(
       usernames.map((item) => item.valid),
-      [true, true, false, false, false, false, true],
+      [true, true, true, false, false, false, false, false, false],
     );
-    await student.locator('#settings-username').fill('演示同学');
+    await student.locator('#settings-username').fill('preview_student');
     await student.setViewportSize({ width: 390, height: 1100 });
     await student.evaluate(() =>
       document.querySelectorAll('.personal-fold').forEach((fold) => {
@@ -376,7 +420,7 @@ const { createIdentityUsabilityPreview } = require('./preview-identity-usability
     }
     assert.deepEqual(errors, [], `browser errors: ${errors.join('; ')}`);
     console.log(
-      `Certification UI passed: suggestion, reject/approve, retained identity, five slots, notification, Unicode usernames, empty/populated aligned settings rows, ${checked} responsive/theme views. Screenshots: ${output}`,
+      `Certification UI passed: suggestion, reject/approve, retained identity, five slots, public teacher names and school details, notification, ASCII usernames, empty/populated aligned settings rows, ${checked} responsive/theme views. Screenshots: ${output}`,
     );
   } finally {
     await browser?.close();

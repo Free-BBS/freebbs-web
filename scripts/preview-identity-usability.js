@@ -4,6 +4,7 @@ const { createTeacherAccountsPreviewApi, DEMO_PASSWORD } = require('./preview-te
 const {
   normalizeCertification,
   serializeCertification,
+  identityBadges,
 } = require('../backend/user-certifications');
 
 async function createIdentityUsabilityPreview() {
@@ -12,7 +13,7 @@ async function createIdentityUsabilityPreview() {
   const student = teacher.accounts.get(2);
   Object.assign(student, {
     uid: 'u_preview02',
-    username: '演示同学',
+    username: 'preview_student',
     fullName: '演示同学',
     role: 'student',
     studentId: '2021010001',
@@ -23,7 +24,12 @@ async function createIdentityUsabilityPreview() {
   const result = (body, status = 200) => ({ body, status });
   const userFor = (headers) =>
     teacher.accounts.get(Number(/freebbs_demo_account=(\d+)/.exec(headers.cookie || '')?.[1] || 1));
-  const certifications = (id) => [...(approved.get(id)?.values() || [])];
+  const certifications = (id) =>
+    [...(approved.get(id)?.values() || [])].map((item) => {
+      if (item.type !== 'teacher') return item;
+      const verifiedName = teacher.accounts.get(id)?.fullName || '';
+      return { ...item, verifiedName, label: verifiedName ? `${verifiedName} · 教师` : item.label };
+    });
   const toRow = (value) => ({
     slot: value.slot,
     year: value.year,
@@ -39,6 +45,27 @@ async function createIdentityUsabilityPreview() {
     const adminRoute = route.startsWith('/api/admin/');
     if (adminRoute && !user.isAdmin) return result({ message: '需要管理员权限' }, 403);
     try {
+      const publicProfile = /^\/api\/users\/([^/]+)\/public-profile$/.exec(route);
+      if (publicProfile && method === 'GET') {
+        const account = [...teacher.accounts.values()].find(
+          (item) => item.uid === publicProfile[1],
+        );
+        if (!account) return result({ message: '演示账号不存在' }, 404);
+        const approvedCertifications = certifications(account.id);
+        return result({
+          profile: {
+            id: account.id,
+            uid: account.uid,
+            username: account.username,
+            fullName: '',
+            role: account.role,
+            certifications: approvedCertifications,
+            identityBadges: identityBadges(account.role, approvedCertifications, account.fullName),
+            activity: { days: [] },
+            collectibles: [],
+          },
+        });
+      }
       if (route === '/api/admin/users' && method === 'GET')
         return result({
           users: [...teacher.accounts.values()].map((account) => ({
@@ -125,6 +152,7 @@ async function createIdentityUsabilityPreview() {
           requests: requests.filter((request) => request.userId === user.id).toReversed(),
           suggestion,
           studentId: user.studentId,
+          fullName: user.fullName,
         });
       }
       if (route === '/api/me/certifications' && method === 'POST') {

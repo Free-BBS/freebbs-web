@@ -248,7 +248,7 @@ test(
       });
 
     await t.test(
-      'Chinese accounts log in and recover using the shared username policy and verified email',
+      'legacy Chinese accounts still log in and recover through verified email',
       async () => {
         assert.equal(
           (
@@ -449,8 +449,15 @@ test(
         const r = await request('/me/certifications', 5, 'POST', {
           type: 'teacher',
           institution: '其他大学电子院',
+          fullName: '冒充的教师姓名',
+          verifiedName: '冒充的教师姓名',
         });
         assert.equal(r.status, 201);
+        const [pendingAuthor] = await service.decorate([{ user_id: 5 }]);
+        assert.equal(
+          pendingAuthor.identityBadges.some((badge) => badge.type === 'teacher'),
+          false,
+        );
         assert.equal((await approve(r.data.request.id)).status, 200);
         const teacher = await service.decorate([
           { user_id: 5 },
@@ -459,8 +466,12 @@ test(
           { user_id: 4, is_deleted: 1 },
         ]);
         assert.equal(teacher[0].author_role, 'student');
-        assert.equal(teacher[0].identityBadges[0].label, '其他大学电子院 教师');
-        assert.equal(teacher[1].identityBadges[0].label, '教师');
+        assert.equal(teacher[0].identityBadges[0].label, '其他用户 · 教师');
+        const teacherCertificate = teacher[0].certifications.find((c) => c.type === 'teacher');
+        assert.equal(teacherCertificate.verifiedName, '其他用户');
+        assert.equal(teacherCertificate.institution, '其他大学电子院');
+        assert.equal(teacher[1].identityBadges[0].label, '测试老师 · 教师');
+        assert.equal(JSON.stringify(teacher).includes('冒充的教师姓名'), false);
         for (const row of teacher.slice(2)) {
           assert.deepEqual(row.certifications, []);
           assert.deepEqual(row.identityBadges, []);
@@ -468,6 +479,21 @@ test(
         }
         assert.equal((await getUserById(5)).role, 'student');
         assert.equal(Number((await getUserById(5)).is_admin), 0);
+        const corrected = await request('/admin/users/5', 1, 'PATCH', {
+          fullName: '核实后的中文姓名',
+          role: 'student',
+        });
+        assert.equal(corrected.status, 200);
+        const [updatedAuthor] = await service.decorate([{ user_id: 5 }]);
+        assert.equal(updatedAuthor.identityBadges[0].label, '核实后的中文姓名 · 教师');
+        assert.equal((await request('/me/certifications', 5)).data.fullName, '核实后的中文姓名');
+        await pool.execute("UPDATE users SET full_name = '其他用户' WHERE id = 5");
+        const [studentAuthor] = await service.decorate([{ user_id: 3 }]);
+        assert.equal(
+          studentAuthor.identityBadges.some((badge) => badge.label.includes('中文用户')),
+          false,
+        );
+        assert.ok(studentAuthor.certifications.every((c) => !c.verifiedName));
       },
     );
 
@@ -499,16 +525,20 @@ test(
     );
 
     await t.test(
-      'actual admin creation provisions Chinese enterprise credentials, NULL identities and verified company in one transaction',
+      'admin creation requires ASCII nicknames while retaining Chinese names and company certificates',
       async () => {
         const body = {
-          username: '中文企业',
+          username: 'enterprise_test',
           fullName: '企业联系名',
           companyName: '测试有限公司',
           role: 'enterprise',
           password: 'temporary-test-only',
         };
         assert.equal((await request('/admin/users', 3, 'POST', body)).status, 403);
+        assert.equal(
+          (await request('/admin/users', 1, 'POST', { ...body, username: '中文企业' })).status,
+          400,
+        );
         const made = await request('/admin/users', 1, 'POST', body);
         assert.equal(made.status, 201);
         const user = await getUserById(made.data.user.id);
@@ -539,20 +569,20 @@ test(
         failures.ledger = true;
         const failed = await request('/admin/users', 1, 'POST', {
           ...body,
-          username: '回滚企业',
+          username: 'enterprise_rollback',
           electrons: 1,
         });
         assert.equal(failed.status, 500);
         failures.ledger = false;
         const [[count]] = await pool.execute(
-          "SELECT COUNT(*) AS count FROM users WHERE username = '回滚企业'",
+          "SELECT COUNT(*) AS count FROM users WHERE username = 'enterprise_rollback'",
         );
         assert.equal(Number(count.count), 0);
         assert.equal(
           (
             await request('/admin/users', 1, 'POST', {
               ...body,
-              username: '坏企业',
+              username: 'enterprise_invalid',
               companyName: 'a',
             })
           ).status,
@@ -604,7 +634,7 @@ test(
         `${routeName} keeps enterprise upgrades, renames and downgrades atomic`,
         async () => {
           const created = await request('/admin/users', 1, 'POST', {
-            username: roleOnly ? '角色接口用户' : '完整接口用户',
+            username: roleOnly ? 'role_api_user' : 'full_api_user',
             fullName: '个人姓名不可作为公司名',
             role: 'teacher',
             password: 'isolated-enterprise-only',
@@ -840,27 +870,44 @@ test(
     );
 
     await t.test(
-      'UTF8MB4 usernames use codepoints and keep ordinary rename fees and ownership',
+      'legacy Unicode nicknames are repaired free without resetting the ordinary rename allowance',
       async () => {
         const name = '𠀀'.repeat(64);
-        assert.equal(isValidUsername(name), true);
+        assert.equal(isValidUsername(name), false);
         await pool.execute('UPDATE users SET username = ? WHERE id = 4', [name]);
         assert.equal((await getUserById(4)).username, name);
         const renamed = await changeUsername({
           pool,
           userId: 4,
-          username: '教师新名',
+          username: 'teacher_new_name',
           expectedUsername: name,
         });
         assert.equal(renamed.charged, 0);
         await pool.execute(
           "INSERT INTO username_change_log (user_id,old_username,new_username,change_kind,changed_at) VALUES (3,'旧中文','中文用户','free',UTC_TIMESTAMP(3))",
         );
+        const repaired = await changeUsername({
+          pool,
+          userId: 3,
+          username: 'student_repaired',
+          expectedUsername: '中文用户',
+        });
+        assert.equal(repaired.charged, 0);
+        const [[repairLog]] = await pool.execute(
+          'SELECT change_kind, magnetic_cost FROM username_change_log WHERE user_id = 3 ORDER BY id DESC LIMIT 1',
+        );
+        assert.equal(repairLog.change_kind, 'required');
+        assert.equal(Number(repairLog.magnetic_cost), 0);
         await assert.rejects(
-          changeUsername({ pool, userId: 3, username: '学生新名', expectedUsername: '中文用户' }),
+          changeUsername({
+            pool,
+            userId: 3,
+            username: 'student_next_name',
+            expectedUsername: 'student_repaired',
+          }),
           { code: 'payment_confirmation_required' },
         );
-        assert.equal((await getUserById(3)).username, '中文用户');
+        assert.equal((await getUserById(3)).username, 'student_repaired');
       },
     );
   },

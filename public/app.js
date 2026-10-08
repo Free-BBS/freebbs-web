@@ -8059,7 +8059,7 @@ function renderAdminDraftEditor() {
             ${renderAdminTextField({
               label: '用户名',
               field: 'username',
-              placeholder: '2–64 位汉字、英文字母、数字或下划线',
+              placeholder: '3–64 位英文字母、数字或下划线',
               autocomplete: 'off',
               ownerLabel: '新用户',
             })}

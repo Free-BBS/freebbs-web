@@ -41,12 +41,12 @@
               <input
                 id="auth-username"
                 name="username"
-                pattern="[\p{Script=Han}A-Za-z0-9_]{2,64}"
-                title="2–64 位汉字、英文字母、数字或下划线"
-                placeholder="可用中文全名，如张亦驰"
+                pattern="[A-Za-z0-9_]{3,64}"
+                title="3–64 位英文字母、数字或下划线"
+                placeholder="例如 NotingSr_2026"
                 type="text"
-                minlength="2"
-                maxlength="128"
+                minlength="3"
+                maxlength="64"
                 required
               />
             </label>

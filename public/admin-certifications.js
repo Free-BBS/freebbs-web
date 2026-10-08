@@ -11,7 +11,12 @@
   const summaryFor = (value) =>
     value?.type === 'company'
       ? value.companyName || ''
-      : [value?.institution, value?.year ? `${value.year} 年` : '', value?.className]
+      : [
+          value?.type === 'teacher' ? value?.verifiedName : '',
+          value?.institution,
+          value?.year ? `${value.year} 年` : '',
+          value?.className,
+        ]
           .filter(Boolean)
           .join(' · ');
 
@@ -156,7 +161,10 @@
       check.type = 'checkbox';
       check.setAttribute('data-identity-confirmed', '');
       const checkCopy = doc.createElement('span');
-      checkCopy.textContent = '我已核实申请人身份及申请信息';
+      checkCopy.textContent =
+        item.type === 'teacher'
+          ? `我已核实申请人姓名${item.fullName ? `“${item.fullName}”` : ''}、教师身份及学校院系；该姓名将公开显示在教师认证牌。`
+          : '我已核实申请人身份及申请信息';
       confirmation.append(check, checkCopy);
       const message = doc.createElement('p');
       message.setAttribute('data-review-message', '');

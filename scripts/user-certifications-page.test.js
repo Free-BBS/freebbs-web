@@ -279,12 +279,14 @@ test('teacher can omit year and company submits no hidden education fields', asy
   const posts = [];
   const f = await fixture('user', async (_route, options) => {
     if (options) posts.push(JSON.parse(options.body));
-    return options ? {} : { approved: [], requests: [] };
+    return options ? {} : { approved: [], requests: [], fullName: '张亦驰' };
   });
   f.el.kind.value = 'teacher';
   f.el.kind.listeners.change();
   f.el.year.value = '';
   assert.equal(f.el.year.required, false);
+  assert.match(f.el['slot-status'].textContent, /公开账号姓名“张亦驰”/);
+  assert.match(f.el['slot-status'].textContent, /更正姓名.*联系管理员/);
   await f.el.form.listeners.submit({ preventDefault() {} });
   assert.deepEqual(posts[0], { type: 'teacher', institution: '清华大学电子系', className: '' });
   f.el.kind.value = 'company';
@@ -292,6 +294,7 @@ test('teacher can omit year and company submits no hidden education fields', asy
   f.el.company.value = '例示电子有限公司';
   assert.equal(f.el.institution.disabled, true);
   assert.equal(f.el.company.disabled, false);
+  assert.doesNotMatch(f.el['slot-status'].textContent, /张亦驰|公开账号姓名/);
   await f.el.form.listeners.submit({ preventDefault() {} });
   assert.deepEqual(posts[1], { type: 'company', companyName: '例示电子有限公司' });
 });
@@ -306,15 +309,24 @@ test('switching accounts ignores an earlier certification read and clears identi
       : Promise.resolve({
           approved: [{ type: 'company', companyName: '新账号的企业' }],
           requests: [],
+          fullName: '新账号姓名',
         });
   });
   f.userState.uid = 'new_uid';
   f.userState.token = 'new_token';
   f.events['freebbs:session-change']();
   await settle();
-  first.resolve({ approved: [education({ institution: '上一账号的私密院系' })], requests: [] });
+  first.resolve({
+    approved: [education({ institution: '上一账号的私密院系' })],
+    requests: [],
+    fullName: '上一账号姓名',
+  });
   await settle();
   assert.match(f.el.approved.textContent, /新账号的企业/);
+  assert.doesNotMatch(f.root.textContent, /上一账号/);
+  f.el.kind.value = 'teacher';
+  f.el.kind.listeners.change();
+  assert.match(f.el['slot-status'].textContent, /新账号姓名/);
   assert.doesNotMatch(f.root.textContent, /上一账号/);
   assert.equal(f.dispatched.length, 1);
 });
@@ -359,6 +371,29 @@ test('a completed student-id binding refreshes the backend suggestion on the sam
 });
 
 const adminPayload = (requests) => ({ requests, total: requests.length, page: 1, pageSize: 30 });
+
+test('teacher approval names the account identity that will become public', async () => {
+  const f = await fixture(
+    'admin',
+    async () =>
+      adminPayload([
+        {
+          id: 4,
+          userUid: 'other_uid',
+          type: 'teacher',
+          status: 'pending',
+          fullName: '张亦驰',
+          username: 'Teacher_Zhang',
+          institution: '清华大学电子系',
+        },
+      ]),
+    { role: 'teacher', isAdmin: true },
+  );
+  const card = f.el.list.children[0];
+  assert.match(card.textContent, /核实申请人姓名“张亦驰”、教师身份及学校院系/);
+  assert.match(card.textContent, /该姓名将公开显示在教师认证牌/);
+  assert.equal(card.querySelector('[data-review-action]').disabled, true);
+});
 
 test('a teacher with isAdmin can review; self-review uses uid and approval requires explicit confirmation', async () => {
   const posts = [];

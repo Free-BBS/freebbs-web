@@ -82,6 +82,8 @@ function certificationSuggestion(studentId) {
 function serializeCertification(row) {
   const company = row.slot === 'company';
   const teacher = row.slot === 'teacher';
+  const verifiedName = teacher ? String(row.teacher_name || '').trim() : '';
+  const teacherLabel = verifiedName ? `${verifiedName} · 教师` : `${row.institution} 教师`;
   return {
     type: company ? 'company' : teacher ? 'teacher' : 'education',
     education: company || teacher ? null : row.slot,
@@ -89,10 +91,11 @@ function serializeCertification(row) {
     institution: company ? null : row.institution,
     className: row.class_name || '',
     companyName: row.company_name || '',
+    ...(teacher ? { verifiedName } : {}),
     label: company
       ? row.company_name
       : teacher
-        ? `${row.institution} 教师`
+        ? teacherLabel
         : `${row.year} ${row.institution} ${EDUCATIONS[row.slot]}`,
     approvedAt: row.approved_at || null,
   };
@@ -109,11 +112,12 @@ function serializeRequest(row) {
   };
 }
 
-function identityBadges(role, certifications = []) {
+function identityBadges(role, certifications = [], fullName = '') {
   const order = ['teacher', 'company', 'doctor', 'master', 'undergraduate'];
+  const verifiedName = String(fullName || '').trim();
   return [
     ...(role === 'teacher' && !certifications.some((item) => item.type === 'teacher')
-      ? [{ type: 'teacher', label: '教师' }]
+      ? [{ type: 'teacher', label: verifiedName ? `${verifiedName} · 教师` : '教师' }]
       : []),
     ...[...certifications]
       .sort((a, b) => order.indexOf(a.education || a.type) - order.indexOf(b.education || b.type))
@@ -122,6 +126,7 @@ function identityBadges(role, certifications = []) {
         education: item.education,
         label: item.label,
         className: item.className,
+        ...(item.type === 'teacher' ? { institution: item.institution } : {}),
       })),
   ].slice(0, 4);
 }
@@ -150,7 +155,7 @@ async function readApprovedCertifications(executor, userIds) {
   const approved = new Map(ids.map((id) => [id, []]));
   if (!ids.length) return approved;
   const [rows] = await executor.execute(
-    `SELECT * FROM user_certifications WHERE user_id IN (${ids.map(() => '?').join(',')}) ORDER BY FIELD(slot, 'undergraduate', 'master', 'doctor', 'company')`,
+    `SELECT c.*, CASE WHEN c.slot = 'teacher' THEN u.full_name ELSE NULL END AS teacher_name FROM user_certifications c JOIN users u ON u.id = c.user_id WHERE c.user_id IN (${ids.map(() => '?').join(',')}) ORDER BY FIELD(c.slot, 'undergraduate', 'master', 'doctor', 'company')`,
     ids,
   );
   for (const row of rows) approved.get(Number(row.user_id))?.push(serializeCertification(row));
@@ -242,7 +247,9 @@ function createUserCertificationService({ pool, notifications, now = Date.now })
   }
 
   async function read(userId) {
-    const [[user]] = await pool.execute('SELECT student_id FROM users WHERE id = ?', [userId]);
+    const [[user]] = await pool.execute('SELECT student_id, full_name FROM users WHERE id = ?', [
+      userId,
+    ]);
     const approved = await readApprovedCertifications(pool, [userId]);
     const [requests] = await pool.execute(
       'SELECT * FROM user_certification_requests WHERE user_id = ? ORDER BY id DESC LIMIT 20',
@@ -252,6 +259,7 @@ function createUserCertificationService({ pool, notifications, now = Date.now })
       approved: approved.get(Number(userId)) || [],
       requests: requests.map(serializeRequest),
       studentId: user?.student_id || null,
+      fullName: user?.full_name || '',
       suggestion: certificationSuggestion(user?.student_id),
     };
   }
@@ -432,18 +440,19 @@ function createUserCertificationService({ pool, notifications, now = Date.now })
       }));
     const approved = await readApprovedCertifications(pool, ids);
     const [users] = await pool.execute(
-      `SELECT id, role FROM users WHERE id IN (${ids.map(() => '?').join(',')})`,
+      `SELECT id, role, full_name FROM users WHERE id IN (${ids.map(() => '?').join(',')})`,
       ids,
     );
-    const roles = new Map(users.map((user) => [Number(user.id), user.role]));
+    const usersById = new Map(users.map((user) => [Number(user.id), user]));
     return rows.map((row) => {
       const hidden = row.is_anonymous || row.is_deleted;
       const certifications = hidden ? [] : approved.get(Number(row.user_id)) || [];
-      const role = hidden ? '' : roles.get(Number(row.user_id)) || '';
+      const user = hidden ? null : usersById.get(Number(row.user_id));
+      const role = user?.role || '';
       return {
         ...row,
         certifications,
-        identityBadges: identityBadges(role, certifications),
+        identityBadges: identityBadges(role, certifications, user?.full_name),
         author_role: role,
       };
     });

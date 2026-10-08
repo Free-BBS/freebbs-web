@@ -114,7 +114,16 @@ test('paid change requires confirmation and changing the input revokes consent',
 });
 
 test('invalid or unchanged names and insufficient balance do not send mutation requests', async () => {
-  for (const name of ['old_name', '张', 'abc\n', '张 老师', '张老师😀']) {
+  for (const name of [
+    'old_name',
+    'ab',
+    '张弛',
+    '张亦驰',
+    '李老师_2026',
+    'abc\n',
+    '张 老师',
+    '张老师😀',
+  ]) {
     const f = fixture();
     await f.controller.load();
     f.get().value = name;
@@ -129,8 +138,8 @@ test('invalid or unchanged names and insufficient balance do not send mutation r
   assert.equal(f.calls.length, 1);
 });
 
-test('Chinese full names and mixed Chinese usernames can be saved', async () => {
-  for (const name of ['张弛', '张亦驰', '李老师_2026']) {
+test('ASCII nicknames can be saved at both length boundaries', async () => {
+  for (const name of ['Ab3', 'NotingSr_2026', 'x'.repeat(64)]) {
     const f = fixture();
     await f.controller.load();
     f.get().value = name;
@@ -138,6 +147,21 @@ test('Chinese full names and mixed Chinese usernames can be saved', async () => 
     assert.equal(f.calls.length, 2);
     assert.equal(f.saved[0].user.username, name);
   }
+});
+
+test('legacy Chinese nickname repair shows the free exemption and submits an ASCII replacement', async () => {
+  const f = fixture({ balance: 0 });
+  Object.assign(f.state.policy, { username: '中文用户', required: true });
+  await f.controller.load();
+  assert.match(f.get('-policy').textContent, /此次修复免费，不占用普通免费改名次数/);
+  assert.equal(f.get('-payment').hidden, true);
+  f.get().value = 'repaired_name';
+  await f.controller.submit();
+  assert.deepEqual(JSON.parse(f.calls[1].body), {
+    username: 'repaired_name',
+    expectedUsername: '中文用户',
+    allowPaid: false,
+  });
 });
 
 test('double clicks send only one paid request', async () => {

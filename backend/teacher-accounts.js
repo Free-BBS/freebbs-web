@@ -30,6 +30,12 @@ function validatePassword(value) {
   return value;
 }
 
+// Recovery must still find accounts created under the previous Chinese nickname policy.
+// This only validates a lookup identifier; new usernames use isValidUsername instead.
+function isRecoverableUsername(value) {
+  return typeof value === 'string' && /^[\p{Script=Han}A-Za-z0-9_]{2,64}$/u.test(value);
+}
+
 function normalizeAdminAccount(body = {}) {
   const username = String(body.username || '').trim();
   const fullName = String(body.fullName || '').trim();
@@ -324,7 +330,7 @@ function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }
   async function sendResetCode(body = {}) {
     const email = normalizeEmail(body.email);
     const identifier = String(body.identifier || '').trim();
-    if (!isValidUsername(identifier))
+    if (!isRecoverableUsername(identifier))
       throw accountError(400, 'invalid_username', '请输入登录用户名');
     const [[match]] = await pool.execute(
       'SELECT id FROM users WHERE username = ? AND email = ? AND email_verified_at IS NOT NULL LIMIT 1',
@@ -348,7 +354,8 @@ function createAccountIdentityService({ pool, sendCode, now = () => Date.now() }
     const password = validatePassword(body.password);
     const email = normalizeEmail(body.email);
     const identifier = String(body.identifier || '').trim();
-    if (!isValidUsername(identifier)) throw accountError(400, 'invalid_username', USERNAME_MESSAGE);
+    if (!isRecoverableUsername(identifier))
+      throw accountError(400, 'invalid_username', '请输入登录用户名');
     const [[match]] = await pool.execute(
       'SELECT id FROM users WHERE username = ? AND email = ? AND email_verified_at IS NOT NULL LIMIT 1',
       [identifier, email],

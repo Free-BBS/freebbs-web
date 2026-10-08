@@ -235,9 +235,38 @@ test('legacy mandatory repair is free and does not consume the voluntary allowan
   assert.equal(f.state.free, true);
 });
 
+test('Chinese and short legacy nicknames can be repaired for free even during a free-rename cooldown', async () => {
+  for (const username of ['中文用户', '李老师_2026', 'ab']) {
+    for (const free of [true, false]) {
+      const f = store({ username, balance: 0, free });
+      const before = await getUsernameChangePolicy(f.pool, f.state.user);
+      assert.equal(before.required, true);
+      assert.equal(before.cost, 0);
+      const result = await f.change({ expectedUsername: undefined });
+      assert.equal(result.charged, 0);
+      assert.equal(result.policy.required, false);
+      assert.equal(result.policy.freeAvailable, free);
+      assert.equal(result.policy.nextFreeAt, before.nextFreeAt);
+      assert.equal(f.state.user.manetrons, 0);
+      assert.equal(f.state.logs[0][3], 'required');
+      assert.equal(f.state.free, free);
+      assert.equal(f.state.ledger.length, 0);
+    }
+  }
+});
+
 test('invalid names fail before opening a transaction', async () => {
   const f = store();
-  for (const username of ['a', '中文🙂', 'bad name', 'abc\n', 'x'.repeat(65), null]) {
+  for (const username of [
+    'a',
+    'ab',
+    '中文用户',
+    '中文🙂',
+    'bad name',
+    'abc\n',
+    'x'.repeat(65),
+    null,
+  ]) {
     await assert.rejects(f.change({ username }), { code: 'invalid_username' });
   }
   assert.equal(f.state.events.length, 0);

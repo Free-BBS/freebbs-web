@@ -9,7 +9,12 @@
   const summaryFor = (value) =>
     value.type === 'company'
       ? value.companyName || ''
-      : [value.institution, value.year ? `${value.year} 年` : '', value.className]
+      : [
+          value.type === 'teacher' ? value.verifiedName : '',
+          value.institution,
+          value.year ? `${value.year} 年` : '',
+          value.className,
+        ]
           .filter(Boolean)
           .join(' · ');
 
@@ -52,6 +57,7 @@
     let approved = [];
     let requests = [];
     let suggestion = null;
+    let fullName = '';
     const session = () =>
       !externalChange && app.userState.isLoggedIn && app.userState.uid && app.userState.token
         ? `${app.userState.uid}:${app.userState.token}`
@@ -87,6 +93,9 @@
         : approvedFor(el.kind.value)
           ? '提交修改申请后，原认证会保留到新申请通过。'
           : '提交后由管理员核实，审核通过后生效。';
+      if (el.kind.value === 'teacher' && ready)
+        el['slot-status'].textContent +=
+          ` 教师认证牌将公开账号姓名${fullName ? `“${fullName}”` : ''}；如需更正姓名，请先联系管理员。`;
       el.refresh.disabled = !session() || loading || saving;
       el['use-suggestion'].disabled = locked;
       el.signin.hidden = Boolean(session());
@@ -156,6 +165,7 @@
           (item) => slotFor(item) && (!item.status || item.status === 'approved'),
         );
         requests = payload.requests.filter((item) => slotFor(item));
+        fullName = typeof payload.fullName === 'string' ? payload.fullName.trim() : '';
         suggestion =
           slotFor(payload.suggestion) && payload.suggestion.type !== 'company'
             ? payload.suggestion
@@ -188,6 +198,7 @@
       approved = [];
       requests = [];
       suggestion = null;
+      fullName = '';
       el.form.reset();
       el.approved.replaceChildren();
       el.requests.replaceChildren();
