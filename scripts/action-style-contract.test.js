@@ -55,6 +55,10 @@ test('opt-in action tones do not collide with delegated business data-action att
   assert.match(actions, /outline-color:\s*Highlight/);
 });
 
+test('shared action display cannot reveal controls with the native hidden attribute', () => {
+  assert.match(actions, /\.bbs-action\[hidden\]\s*\{\s*display:\s*none;/);
+});
+
 test('shared action foreground/fill pairs meet normal-text contrast in both themes', () => {
   for (const pair of [
     ['#ffffff', '#0b5f6c'],

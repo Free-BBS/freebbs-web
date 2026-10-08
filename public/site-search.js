@@ -14,12 +14,12 @@
   host.classList.add('site-search');
   host.setAttribute('aria-label', '全站搜索');
   host.innerHTML =
-    '<form class="site-search-form" role="search"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 5 5"/></svg><input type="search" maxlength="120" placeholder="搜索帖子、知识点、课程…" aria-label="搜索全站" autocomplete="off"><button type="submit">搜索</button><button type="button" data-close aria-label="关闭搜索">×</button></form><nav class="site-search-types" aria-label="搜索分类"></nav><div class="site-search-status" role="status" aria-live="polite"></div><ol class="site-search-results"></ol><button type="button" class="site-search-more" hidden>加载更多</button><div class="site-search-footer"><span>搜索当前可见内容</span><a href="/search">打开搜索页面 ↗</a></div>';
+    '<form class="site-search-form" role="search"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 5 5"/></svg><input type="search" maxlength="120" placeholder="搜索帖子、知识点、课程…" aria-label="搜索全站" autocomplete="off"><button type="submit" class="bbs-action" data-action-tone="primary">搜索</button><button type="button" data-close aria-label="关闭搜索">×</button></form><nav class="site-search-types" aria-label="搜索分类"></nav><div class="site-search-status"></div><ol class="site-search-results"></ol><button type="button" class="site-search-more bbs-action" data-action-tone="secondary" hidden>加载更多</button><div class="site-search-footer"><span>搜索当前可见内容</span><a href="/search">打开搜索页面 ↗</a></div>';
   if (!fullPage) document.body.append(host);
   const input = host.querySelector('input');
   const form = host.querySelector('form');
   const list = host.querySelector('ol');
-  const status = host.querySelector('[role="status"]');
+  const status = host.querySelector('.site-search-status');
   const more = host.querySelector('.site-search-more');
   const close = host.querySelector('[data-close]');
   const footerLink = host.querySelector('.site-search-footer a');
@@ -33,6 +33,7 @@
   let opener;
   let composing = false;
   let resultCount = 0;
+  let sessionStale = false;
   input.value = fullPage ? (params.get('q') || '').slice(0, 120) : '';
   types.forEach(([key, label]) => {
     const button = document.createElement('button');
@@ -72,11 +73,61 @@
     li.append(link);
     list.append(li);
   }
+  const ownerKey = () => {
+    const user = window.freeBbsApp?.userState;
+    let storedToken = user?.token || '';
+    try {
+      storedToken = localStorage.getItem('free_bbs_auth_token') || '';
+    } catch {
+      // Memory identity remains usable when storage is blocked.
+    }
+    return JSON.stringify([user?.uid || '', user?.token || '', storedToken]);
+  };
+  function setStatus(kind, message, retryAppend) {
+    const ui = window.freeBbsUiState;
+    if (ui && !ui.degraded) {
+      ui.set(list, kind);
+      if (kind === 'ready') {
+        const summary = document.createElement('p');
+        summary.textContent = message;
+        summary.setAttribute('role', 'status');
+        status.replaceChildren(summary);
+      } else {
+        ui.render(status, {
+          kind,
+          message,
+          action:
+            kind === 'error' && retryAppend !== null
+              ? { label: '重试', key: 'retry-site-search', onClick: () => search(retryAppend) }
+              : undefined,
+        });
+      }
+      ui.set(status, kind);
+    } else {
+      // Keep native feedback usable when the optional presentation asset is unavailable.
+      list.dataset.uiState = kind;
+      list.setAttribute('aria-busy', String(kind === 'loading'));
+      status.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+      status.textContent = message;
+      if (kind === 'error' && retryAppend !== null) {
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.textContent = '重试';
+        retry.addEventListener('click', () => search(retryAppend));
+        status.append(retry);
+      }
+    }
+  }
   async function search(append = false) {
     clearTimeout(timer);
+    if (sessionStale) {
+      setStatus('error', '登录状态已变化，请刷新页面后继续搜索。', null);
+      return;
+    }
     controller?.abort();
     generation += 1;
     const version = generation;
+    const owner = ownerKey();
     controller = new AbortController();
     if (!append) {
       offset = 0;
@@ -89,32 +140,38 @@
     footerLink.href = `/search?${query}`;
     if (fullPage) window.history.replaceState(null, '', `/search?${query}`);
     query.set('offset', String(offset));
-    status.textContent = '正在搜索…';
-    list.setAttribute('aria-busy', 'true');
+    setStatus('loading', '正在搜索…');
     try {
       const base = window.FREEBBS_API_BASE || '/api';
-      const response = await fetch(`${base}/search?${query}`, {
+      const options = {
         signal: controller.signal,
         headers: window.freeBbsApp?.userState?.token
           ? { Authorization: `Bearer ${window.freeBbsApp.userState.token}` }
           : {},
-      });
-      const data = await response.json();
+      };
+      const consume = async (response) => ({ response, data: await response.json() });
+      const { response, data } = await window.freeBbsRequests.request(
+        `${base}/search?${query}`,
+        options,
+        consume,
+      );
       if (!response.ok) throw new Error(data.message || '搜索失败，请重试。');
-      if (version !== generation) return;
+      if (version !== generation || owner !== ownerKey()) return;
       data.results.forEach(appendResult);
       resultCount += data.results.length;
       offset = data.nextOffset;
       more.hidden = !data.hasMore;
-      status.textContent = resultCount
-        ? `${input.value.trim() ? '找到' : '浏览'} ${resultCount}${data.hasMore ? '+' : ''} 项内容${data.limited ? '，可缩小关键词范围继续查找' : ''}`
-        : '没有找到匹配内容，试试更短的关键词或其他分类。';
+      setStatus(
+        resultCount ? 'ready' : 'empty',
+        resultCount
+          ? `${input.value.trim() ? '找到' : '浏览'} ${resultCount}${data.hasMore ? '+' : ''} 项内容${data.limited ? '，可缩小关键词范围继续查找' : ''}`
+          : '没有找到匹配内容，试试更短的关键词或其他分类。',
+      );
     } catch (error) {
-      if (version !== generation || error.name === 'AbortError') return;
-      status.textContent = error.message || '搜索暂时不可用，请稍后重试。';
-      if (append) more.hidden = false;
+      if (version !== generation || owner !== ownerKey() || error.name === 'AbortError') return;
+      setStatus('error', error.message || '搜索暂时不可用，请稍后重试。', append);
     } finally {
-      if (version === generation) list.setAttribute('aria-busy', 'false');
+      if (version === generation && owner === ownerKey()) list.setAttribute('aria-busy', 'false');
     }
   }
   const open = () => {
@@ -162,6 +219,29 @@
     if (!composing) search();
   });
   more.addEventListener('click', () => search(true));
+  window.addEventListener('freebbs:session-change', () => {
+    generation += 1;
+    controller?.abort();
+    clearTimeout(timer);
+    list.replaceChildren();
+    resultCount = 0;
+    offset = 0;
+    more.hidden = true;
+    sessionStale = false;
+    if (fullPage || host.open) search();
+  });
+  window.addEventListener('storage', (event) => {
+    if (event.key !== 'free_bbs_auth_token' && event.key !== null) return;
+    generation += 1;
+    controller?.abort();
+    clearTimeout(timer);
+    sessionStale = true;
+    list.replaceChildren();
+    resultCount = 0;
+    offset = 0;
+    more.hidden = true;
+    setStatus('error', '登录状态已变化，请刷新页面后继续搜索。', null);
+  });
   input.addEventListener('compositionstart', () => {
     composing = true;
   });
@@ -378,12 +458,6 @@
       input.value = searchbar.querySelector('input')?.value || '';
       open();
     });
-  });
-  window.addEventListener('freebbs:session-change', () => {
-    generation += 1;
-    controller?.abort();
-    list.replaceChildren();
-    if (fullPage || host.open) search();
   });
   const resize = () =>
     host.style.setProperty(

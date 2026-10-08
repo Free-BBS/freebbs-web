@@ -40,6 +40,29 @@
   --font-display: var(--font-zh-title);
   --font-body: var(--font-zh-body);
   --font-ui: var(--font-zh-ui);
+  --font-copy: var(--font-zh-body);
+  /* Shared reading roles keep their existing density. Fixed-size compact
+   * controls remain fixed: changing their scale belongs to a layout review. */
+  --type-body-size: 1rem;
+  --type-body-small-size: 0.9rem;
+  --type-ui-small-size: 0.86rem;
+  --type-meta-size: 0.76rem;
+  --type-section-title-size: 1.35rem;
+  --type-fixed-badge-size: 10px;
+  --type-fixed-micro-size: 11px;
+  --type-fixed-meta-size: 12px;
+  --type-fixed-caption-size: 13px;
+  --type-fixed-control-size: 14px;
+  --type-fixed-ui-size: 16px;
+  --type-fixed-subheading-size: 17px;
+  --type-fixed-section-title-size: 18px;
+  --type-fixed-heading-size: 20px;
+  --type-weight-regular: 400;
+  --type-weight-medium: 500;
+  --type-weight-semibold: 600;
+  --type-weight-bold: 700;
+  --type-weight-heavy: 800;
+  --type-weight-black: 900;
 }
 
 * {
@@ -154,7 +177,7 @@ body::after {
 }
 
 a {
-  color: inherit;
+  color: var(--action-foreground, inherit);
   text-decoration: none;
 }
 
@@ -662,8 +685,8 @@ h3,
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 999px;
   padding: 10px 18px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--paper);
+  background: var(--action-fill, rgba(255, 255, 255, 0.08));
+  color: var(--action-foreground, var(--paper));
   font-family: var(--font-ui);
   font-size: 0.88rem;
   font-weight: 800;
@@ -676,9 +699,9 @@ h3,
 }
 
 .settings-logout-button:hover {
-  background: rgba(255, 138, 80, 0.18);
-  border-color: rgba(255, 138, 80, 0.34);
-  transform: translateY(-1px);
+  background: var(--action-hover-fill, rgba(255, 138, 80, 0.18));
+  border-color: var(--action-stroke, rgba(255, 138, 80, 0.34));
+  transform: var(--action-target-transform, translateY(-1px));
 }
 
 .settings-placeholder {
@@ -1038,14 +1061,17 @@ h3,
   min-width: 148px;
   padding: 12px 18px;
   border-radius: var(--radius-xs);
-  background: linear-gradient(
-    135deg,
-    rgba(126, 230, 199, 0.3),
-    rgba(89, 216, 255, 0.28),
-    rgba(138, 108, 255, 0.28)
+  background: var(
+    --action-fill,
+    linear-gradient(
+      135deg,
+      rgba(126, 230, 199, 0.3),
+      rgba(89, 216, 255, 0.28),
+      rgba(138, 108, 255, 0.28)
+    )
   );
   border: 1px solid rgba(255, 255, 255, 0.18);
-  color: var(--paper);
+  color: var(--action-foreground, var(--paper));
   font-weight: 800;
   cursor: pointer;
   backdrop-filter: var(--glass-blur);
@@ -1190,19 +1216,22 @@ h3,
 }
 
 .admin-button-secondary {
-  background: rgba(248, 243, 233, 0.08);
-  color: var(--ink);
+  background: var(--action-fill, rgba(248, 243, 233, 0.08));
+  color: var(--action-foreground, var(--ink));
   border: 1px solid rgba(255, 255, 255, 0.16);
 }
 
 .admin-button-primary {
-  background: linear-gradient(
-    135deg,
-    rgba(126, 230, 199, 0.36),
-    rgba(89, 216, 255, 0.34),
-    rgba(138, 108, 255, 0.34)
+  background: var(
+    --action-fill,
+    linear-gradient(
+      135deg,
+      rgba(126, 230, 199, 0.36),
+      rgba(89, 216, 255, 0.34),
+      rgba(138, 108, 255, 0.34)
+    )
   );
-  color: var(--paper);
+  color: var(--action-foreground, var(--paper));
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -2229,8 +2258,8 @@ h3,
   padding: 0 16px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(248, 243, 233, 0.08);
-  color: var(--ink);
+  background: var(--action-fill, rgba(248, 243, 233, 0.08));
+  color: var(--action-foreground, var(--ink));
   font-family: var(--font-ui);
   cursor: pointer;
   transition:
@@ -2241,9 +2270,9 @@ h3,
 
 .home-discussion-link:hover,
 .discussion-create-toggle:hover {
-  transform: translateY(-1px);
-  background: rgba(248, 243, 233, 0.12);
-  border-color: rgba(255, 255, 255, 0.22);
+  transform: var(--action-target-transform, translateY(-1px));
+  background: var(--action-hover-fill, rgba(248, 243, 233, 0.12));
+  border-color: var(--action-stroke, rgba(255, 255, 255, 0.22));
 }
 
 .home-discussion-list {
@@ -3354,8 +3383,8 @@ h3,
 .aichat-auth-link {
   border-radius: 999px;
   padding: 12px 20px;
-  background: var(--paper);
-  color: #101823;
+  background: var(--action-fill, var(--paper));
+  color: var(--action-foreground, #101823);
   font-family: var(--font-ui);
   font-weight: 800;
 }
@@ -3406,7 +3435,7 @@ h3,
 .aichat-dialog-item {
   width: 100%;
   border: none;
-  color: var(--paper);
+  color: var(--action-foreground, var(--paper));
   font-family: var(--font-ui);
   cursor: pointer;
 }
@@ -3414,7 +3443,7 @@ h3,
 .aichat-new-dialog {
   border-radius: 18px;
   padding: 12px 14px;
-  background: rgba(248, 243, 233, 0.12);
+  background: var(--action-fill, rgba(248, 243, 233, 0.12));
   font-weight: 800;
   text-align: left;
 }
@@ -3628,8 +3657,8 @@ h3,
   border: none;
   border-radius: 18px;
   padding: 12px 18px;
-  background: var(--paper);
-  color: #101823;
+  background: var(--action-fill, var(--paper));
+  color: var(--action-foreground, #101823);
   font-family: var(--font-ui);
   font-weight: 800;
   cursor: pointer;
@@ -3639,7 +3668,7 @@ h3,
 }
 
 .aichat-send:hover {
-  transform: translateY(-1px);
+  transform: var(--action-target-transform, translateY(-1px));
 }
 
 .aichat-send:disabled,
@@ -4139,7 +4168,7 @@ h3,
   max-width: 380px;
   color: rgba(232, 237, 243, 0.84);
   font-family: var(--font-copy);
-  font-size: 1rem;
+  font-size: var(--type-body-size);
   line-height: 1.7;
   text-align: center;
 }
@@ -4347,8 +4376,8 @@ h3,
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: var(--radius-xs);
   padding: 0 16px;
-  background: rgba(65, 64, 60, 0.3);
-  color: var(--paper);
+  background: var(--action-fill, rgba(65, 64, 60, 0.3));
+  color: var(--action-foreground, var(--paper));
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
@@ -4373,13 +4402,16 @@ h3,
   border-radius: var(--radius-xs);
   width: min(100%, 320px);
   padding: 14px 18px;
-  background: linear-gradient(
-    135deg,
-    rgba(126, 230, 199, 0.36),
-    rgba(89, 216, 255, 0.34),
-    rgba(138, 108, 255, 0.34)
+  background: var(
+    --action-fill,
+    linear-gradient(
+      135deg,
+      rgba(126, 230, 199, 0.36),
+      rgba(89, 216, 255, 0.34),
+      rgba(138, 108, 255, 0.34)
+    )
   );
-  color: var(--paper);
+  color: var(--action-foreground, var(--paper));
   font-weight: 800;
   letter-spacing: 0.08em;
   cursor: pointer;
@@ -6915,18 +6947,18 @@ body.system-settings-page .system-settings-clear {
 
 body.system-settings-page .main-content .system-settings-submit {
   border: 1px solid #075260;
-  background: #075260;
-  color: #ffffff !important;
+  background: var(--action-fill, #075260);
+  color: var(--action-foreground, #ffffff) !important;
 }
 
 body.system-settings-page .main-content .system-settings-submit:hover {
-  background: #063f49;
+  background: var(--action-hover-fill, #063f49);
 }
 
 body.system-settings-page .system-settings-clear {
   border: 1px solid rgba(7, 9, 11, 0.16);
-  background: transparent;
-  color: var(--bbs-shell-text) !important;
+  background: var(--action-fill, transparent);
+  color: var(--action-foreground, var(--bbs-shell-text)) !important;
 }
 
 body.system-settings-page .system-settings-clear:not(:disabled):hover {
@@ -8670,9 +8702,9 @@ body:not(.world-page) .discussion-compose textarea,
 body:not(.world-page) .discussion-compose select,
 body:not(.world-page) .discussion-compose input,
 body:not(.world-page) .discussion-moderator-row {
-  background: rgba(244, 240, 223, 0.055);
-  border-color: var(--chalk-line);
-  color: var(--chalk-text);
+  background: var(--action-fill, rgba(244, 240, 223, 0.055));
+  border-color: var(--action-stroke, var(--chalk-line));
+  color: var(--action-foreground, var(--chalk-text));
   box-shadow: inset 0 1px 0 rgba(244, 240, 223, 0.08);
 }
 
@@ -8731,9 +8763,9 @@ body:not(.world-page) .discussion-submit,
 body:not(.world-page) .discussion-create-toggle,
 body:not(.world-page) .aichat-send,
 body:not(.world-page) .aichat-auth-link {
-  background: rgba(244, 240, 223, 0.14);
+  background: var(--action-fill, rgba(244, 240, 223, 0.14));
   border: 1px solid rgba(244, 240, 223, 0.22);
-  color: var(--chalk-text);
+  color: var(--action-foreground, var(--chalk-text));
   box-shadow: none;
 }
 
@@ -8742,7 +8774,7 @@ body:not(.world-page) .discussion-submit:hover,
 body:not(.world-page) .discussion-create-toggle:hover,
 body:not(.world-page) .aichat-send:hover,
 body:not(.world-page) .aichat-auth-link:hover {
-  background: rgba(244, 240, 223, 0.2);
+  background: var(--action-hover-fill, rgba(244, 240, 223, 0.2));
 }
 
 body:not(.world-page) .discussion-markdown-body pre,
@@ -9068,8 +9100,8 @@ body:not(.world-page) .topbar {
   min-height: 46px;
   border-radius: 2px;
   border: 1px solid rgba(244, 240, 223, 0.24);
-  background: rgba(244, 240, 223, 0.09);
-  color: var(--chalk-text);
+  background: var(--action-fill, rgba(244, 240, 223, 0.09));
+  color: var(--action-foreground, var(--chalk-text));
   font-weight: 800;
   box-shadow:
     inset 0 -1px 0 rgba(244, 240, 223, 0.12),
@@ -9079,8 +9111,8 @@ body:not(.world-page) .topbar {
 .discussion-page .discussion-create-toggle:hover,
 .discussion-page .discussion-submit:hover,
 .discussion-page .discussion-board-save:hover {
-  background: rgba(244, 240, 223, 0.16);
-  transform: translateY(-1px);
+  background: var(--action-hover-fill, rgba(244, 240, 223, 0.16));
+  transform: var(--action-target-transform, translateY(-1px));
 }
 
 .discussion-page .discussion-post-list {
@@ -9548,7 +9580,7 @@ body:not(.home-page) .world-node-card {
   border: 0 !important;
   border-bottom: 1px solid var(--minimal-line) !important;
   border-radius: 0 !important;
-  background: transparent !important;
+  background: var(--action-fill, transparent) !important;
   box-shadow: none !important;
 }
 
@@ -9567,7 +9599,7 @@ body:not(.home-page) .settings-upload-button,
 body:not(.home-page) .settings-logout-button {
   border: 1px solid var(--minimal-line) !important;
   border-radius: 8px !important;
-  background: var(--minimal-surface) !important;
+  background: var(--action-fill, var(--minimal-surface)) !important;
   box-shadow: none !important;
 }
 
@@ -9589,8 +9621,8 @@ body:not(.home-page) .discussion-editor-button,
 body:not(.home-page) .discussion-comment-reply-button {
   border: 1px solid var(--minimal-line-strong) !important;
   border-radius: 8px !important;
-  background: transparent !important;
-  color: var(--minimal-text) !important;
+  background: var(--action-fill, transparent) !important;
+  color: var(--action-foreground, var(--minimal-text)) !important;
   box-shadow: none !important;
   transform: none !important;
 }
@@ -9611,7 +9643,7 @@ body:not(.home-page) .discussion-board-edit:hover,
 body:not(.home-page) .discussion-board-moderators:hover,
 body:not(.home-page) .discussion-editor-button:hover,
 body:not(.home-page) .discussion-comment-reply-button:hover {
-  background: var(--minimal-surface-soft) !important;
+  background: var(--action-hover-fill, var(--minimal-surface-soft)) !important;
 }
 
 body:not(.home-page) .discussion-board-about::after,
@@ -9972,8 +10004,8 @@ body:not(.home-page).auth-page-body .auth-input-wrapper {
 }
 
 body:not(.home-page).auth-page-body .auth-submit {
-  border-color: var(--minimal-line-strong) !important;
-  color: var(--minimal-text) !important;
+  border-color: var(--action-stroke, var(--minimal-line-strong)) !important;
+  color: var(--action-foreground, var(--minimal-text)) !important;
   opacity: 1 !important;
 }
 
@@ -10251,9 +10283,9 @@ body.theme-light:not(.home-page) .aichat-composer textarea,
 body.theme-light:not(.home-page) .settings-upload-button,
 body.theme-light:not(.home-page) .settings-logout-button,
 body.theme-light:not(.home-page).auth-page-body .auth-input-wrapper {
-  background: var(--minimal-surface) !important;
-  border-color: var(--minimal-line) !important;
-  color: var(--minimal-text) !important;
+  background: var(--action-fill, var(--minimal-surface)) !important;
+  border-color: var(--action-stroke, var(--minimal-line)) !important;
+  color: var(--action-foreground, var(--minimal-text)) !important;
 }
 
 body.theme-light:not(.home-page) input,
@@ -10289,8 +10321,8 @@ body.theme-light:not(.home-page) .discussion-board-moderators,
 body.theme-light:not(.home-page) .discussion-editor-button,
 body.theme-light:not(.home-page) .discussion-comment-reply-button,
 body.theme-light:not(.home-page) .theme-toggle {
-  border-color: var(--minimal-line-strong) !important;
-  color: var(--minimal-text) !important;
+  border-color: var(--action-stroke, var(--minimal-line-strong)) !important;
+  color: var(--action-foreground, var(--minimal-text)) !important;
 }
 
 body.theme-light:not(.home-page) .discussion-board-name,
@@ -10412,8 +10444,8 @@ body:not(.home-page) .aichat-new-dialog {
   border: 0 !important;
   border-bottom: 1px solid var(--minimal-line) !important;
   border-radius: 0 !important;
-  background: transparent !important;
-  color: var(--minimal-text) !important;
+  background: var(--action-fill, transparent) !important;
+  color: var(--action-foreground, var(--minimal-text)) !important;
 }
 
 body:not(.home-page) .aichat-dialog-list {
@@ -11594,7 +11626,7 @@ body:not(.auth-page-body) {
   overflow-x: hidden;
   background: var(--bbs-shell-page) !important;
   color: var(--bbs-shell-text) !important;
-  font-family: 'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', 'Noto Serif SC', sans-serif;
+  font-family: var(--font-body);
 }
 
 body:not(.auth-page-body)::before,
@@ -11702,9 +11734,9 @@ body:not(.auth-page-body) .nav-link {
   background: transparent !important;
   color: rgba(245, 251, 253, 0.92) !important;
   box-shadow: none !important;
-  font-family: 'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', 'Noto Serif SC', sans-serif;
+  font-family: var(--font-ui);
   font-size: 1.05rem;
-  font-weight: 800;
+  font-weight: var(--type-weight-heavy);
   letter-spacing: 0;
   line-height: 1.1;
   white-space: nowrap;
@@ -11813,9 +11845,9 @@ body:not(.auth-page-body) .user-name {
   border: 0;
   background: transparent;
   color: var(--bbs-shell-text) !important;
-  font-family: 'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', 'Noto Serif SC', sans-serif;
+  font-family: var(--font-ui);
   font-size: 1rem;
-  font-weight: 800;
+  font-weight: var(--type-weight-heavy);
   line-height: 1.2;
   text-align: right;
   overflow: hidden;
@@ -11948,9 +11980,9 @@ body:not(.auth-page-body) .main-content::before {
   border-bottom: 6px solid var(--bbs-shell-line);
   background: var(--bbs-shell-page);
   color: var(--bbs-shell-text);
-  font-family: 'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', 'Noto Serif SC', sans-serif;
+  font-family: var(--font-display);
   font-size: 2.45rem;
-  font-weight: 900;
+  font-weight: var(--type-weight-black);
   letter-spacing: 0;
   line-height: 1;
   pointer-events: none;
@@ -11994,9 +12026,9 @@ body:not(.auth-page-body) .workbench-intro {
 body:not(.auth-page-body) .workbench-intro h1 {
   margin: 4px 0 14px;
   color: var(--bbs-shell-text) !important;
-  font-family: 'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', 'Noto Serif SC', sans-serif;
+  font-family: var(--font-display);
   font-size: clamp(3rem, 7vw, 6.4rem);
-  font-weight: 900;
+  font-weight: var(--type-weight-black);
   line-height: 0.98;
 }
 
@@ -12294,9 +12326,9 @@ body:not(.auth-page-body) button {
 }
 
 .auth-page-body .auth-submit {
-  border-color: rgba(7, 9, 11, 0.16) !important;
-  background: var(--bbs-shell-sidebar) !important;
-  color: #ffffff !important;
+  border-color: var(--action-stroke, rgba(7, 9, 11, 0.16)) !important;
+  background: var(--action-fill, var(--bbs-shell-sidebar)) !important;
+  color: var(--action-foreground, #ffffff) !important;
 }
 
 @media (max-width: 900px) {
@@ -12509,16 +12541,16 @@ body.discussion-page .main-content .discussion-board-save {
   min-height: 44px;
   border: 1px solid #0b5f6c !important;
   border-radius: 11px !important;
-  background: #0b5f6c !important;
-  color: #ffffff !important;
+  background: var(--action-fill, #0b5f6c) !important;
+  color: var(--action-foreground, #ffffff) !important;
   box-shadow: 0 10px 24px rgba(6, 54, 65, 0.13) !important;
 }
 
 body.discussion-page .main-content .discussion-create-toggle:hover,
 body.discussion-page .main-content .discussion-submit:hover,
 body.discussion-page .main-content .discussion-board-save:hover {
-  background: #084c57 !important;
-  transform: translateY(-1px);
+  background: var(--action-hover-fill, #084c57) !important;
+  transform: var(--action-target-transform, translateY(-1px));
 }
 
 body.discussion-page .main-content .discussion-board-about:not(.hidden) {
@@ -13209,9 +13241,9 @@ body.home-page .home-panel-header h2,
 body.home-page .home-panel-header h3 {
   margin: 2px 0 0;
   color: var(--bbs-shell-text) !important;
-  font-family: 'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', 'Noto Serif SC', sans-serif;
+  font-family: var(--font-display);
   font-size: clamp(1.25rem, 1.6vw, 1.65rem);
-  font-weight: 900;
+  font-weight: var(--type-weight-black);
   line-height: 1.2;
   overflow-wrap: anywhere;
 }
@@ -13943,8 +13975,8 @@ body.aichat-page .main-content .aichat-new-dialog {
   padding: 10px 13px !important;
   border: 1px solid #0b5f6c !important;
   border-radius: 11px !important;
-  background: #0b5f6c !important;
-  color: #ffffff !important;
+  background: var(--action-fill, #0b5f6c) !important;
+  color: var(--action-foreground, #ffffff) !important;
   box-shadow: 0 10px 24px rgba(6, 54, 65, 0.13) !important;
   font-size: 0.84rem;
   transition:
@@ -13953,7 +13985,7 @@ body.aichat-page .main-content .aichat-new-dialog {
 }
 
 body.aichat-page .main-content .aichat-new-dialog span {
-  color: #ffffff !important;
+  color: var(--action-foreground, #ffffff) !important;
 }
 
 body.aichat-page .main-content .aichat-new-dialog span:first-child {
@@ -13963,8 +13995,8 @@ body.aichat-page .main-content .aichat-new-dialog span:first-child {
 }
 
 body.aichat-page .main-content .aichat-new-dialog:hover {
-  background: #084c57 !important;
-  transform: translateY(-1px);
+  background: var(--action-hover-fill, #084c57) !important;
+  transform: var(--action-target-transform, translateY(-1px));
 }
 
 body.aichat-page .main-content .aichat-dialog-list {
@@ -14539,13 +14571,13 @@ body.aichat-page .main-content .aichat-send {
   padding: 12px 16px;
   border: 1px solid #0b5f6c !important;
   border-radius: 12px !important;
-  background: #0b5f6c !important;
-  color: #ffffff !important;
+  background: var(--action-fill, #0b5f6c) !important;
+  color: var(--action-foreground, #ffffff) !important;
   box-shadow: 0 10px 24px rgba(6, 54, 65, 0.13) !important;
 }
 
 body.aichat-page .main-content .aichat-send span {
-  color: #ffffff !important;
+  color: var(--action-foreground, #ffffff) !important;
 }
 
 body.aichat-page .main-content .aichat-send-arrow {
@@ -14554,8 +14586,8 @@ body.aichat-page .main-content .aichat-send-arrow {
 }
 
 body.aichat-page .main-content .aichat-send:hover {
-  background: #084c57 !important;
-  transform: translateY(-1px);
+  background: var(--action-hover-fill, #084c57) !important;
+  transform: var(--action-target-transform, translateY(-1px));
 }
 
 body.aichat-page .main-content .aichat-send:disabled,
@@ -15205,15 +15237,15 @@ body.aichat-page .main-content .aichat-auth-link {
   padding: 11px 20px;
   border: 1px solid #0b5f6c !important;
   border-radius: 11px !important;
-  background: #0b5f6c !important;
-  color: #ffffff !important;
+  background: var(--action-fill, #0b5f6c) !important;
+  color: var(--action-foreground, #ffffff) !important;
   font-size: 0.88rem;
   box-shadow: 0 10px 24px rgba(6, 54, 65, 0.13) !important;
 }
 
 body.aichat-page .main-content .aichat-auth-link:hover {
-  background: #084c57 !important;
-  transform: translateY(-1px);
+  background: var(--action-hover-fill, #084c57) !important;
+  transform: var(--action-target-transform, translateY(-1px));
 }
 
 body.aichat-page .main-content button:focus-visible,

@@ -28,6 +28,8 @@ npm run test:ui-foundation
 node --check public/typography-preferences.js
 node --check public/ui-state.js
 npm run test:ui-components
+node --check public/surveys-common.js
+npm run test:ui-page-migration
 node --check public/mobile-shell.js
 node --check public/mobile-personal.js
 test -s public/desktop-elegant.css

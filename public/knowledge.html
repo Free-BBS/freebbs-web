@@ -421,8 +421,20 @@
               <footer class="knowledge-editor-footer">
                 <p class="knowledge-editor-status" id="knowledge-editor-status" role="status"></p>
                 <div class="knowledge-editor-actions">
-                  <button id="knowledge-editor-cancel" type="button">取消</button>
-                  <button class="knowledge-editor-save" id="knowledge-editor-save" type="button">
+                  <button
+                    class="bbs-action"
+                    data-action-tone="secondary"
+                    id="knowledge-editor-cancel"
+                    type="button"
+                  >
+                    取消
+                  </button>
+                  <button
+                    class="knowledge-editor-save bbs-action"
+                    data-action-tone="primary"
+                    id="knowledge-editor-save"
+                    type="button"
+                  >
                     保存
                   </button>
                 </div>
@@ -435,8 +447,22 @@
               >
                 <p>还有未保存的修改，是否放弃？</p>
                 <div class="knowledge-editor-actions">
-                  <button id="knowledge-editor-discard-confirm" type="button">放弃修改</button>
-                  <button id="knowledge-editor-discard-keep" type="button">继续编辑</button>
+                  <button
+                    class="bbs-action"
+                    data-action-tone="danger"
+                    id="knowledge-editor-discard-confirm"
+                    type="button"
+                  >
+                    放弃修改
+                  </button>
+                  <button
+                    class="bbs-action"
+                    data-action-tone="secondary"
+                    id="knowledge-editor-discard-keep"
+                    type="button"
+                  >
+                    继续编辑
+                  </button>
                 </div>
               </div>
             </section>
@@ -481,7 +507,12 @@
               <p class="knowledge-overview-empty hidden" id="knowledge-overview-empty">
                 可直接阅读正文。
               </p>
-              <button class="knowledge-overview-start" id="knowledge-start-reading" type="button">
+              <button
+                class="knowledge-overview-start bbs-action"
+                data-action-tone="primary"
+                id="knowledge-start-reading"
+                type="button"
+              >
                 开始阅读正文 <span aria-hidden="true">→</span>
               </button>
             </section>
@@ -991,7 +1022,14 @@
                   </div>
                   <div class="knowledge-discussion-toolbar-actions">
                     <button id="knowledge-discussion-compose-toggle" type="button">发帖子</button>
-                    <button id="knowledge-discussion-refresh" type="button">刷新</button>
+                    <button
+                      class="bbs-action"
+                      data-action-tone="quiet"
+                      id="knowledge-discussion-refresh"
+                      type="button"
+                    >
+                      刷新
+                    </button>
                     <a id="knowledge-discussion-board-link" href="/discussion">完整讨论区 ↗</a>
                   </div>
                 </header>
@@ -1068,11 +1106,17 @@
                       >登录后返回此页</a
                     >
                     <div class="knowledge-discussion-form-actions">
-                      <button id="knowledge-discussion-compose-cancel" type="button">
+                      <button
+                        class="bbs-action"
+                        data-action-tone="secondary"
+                        id="knowledge-discussion-compose-cancel"
+                        type="button"
+                      >
                         返回列表
                       </button>
                       <button
-                        class="knowledge-discussion-publish"
+                        class="knowledge-discussion-publish bbs-action"
+                        data-action-tone="primary"
                         id="knowledge-discussion-compose-submit"
                         type="submit"
                       >
@@ -1104,7 +1148,14 @@
                   hidden
                 >
                   <nav class="knowledge-discussion-detail-actions" aria-label="帖子详情操作">
-                    <button id="knowledge-discussion-back" type="button">← 返回帖子列表</button>
+                    <button
+                      class="bbs-action"
+                      data-action-tone="secondary"
+                      id="knowledge-discussion-back"
+                      type="button"
+                    >
+                      ← 返回帖子列表
+                    </button>
                     <a id="knowledge-discussion-post-link" href="/discussion">在讨论区打开 ↗</a>
                   </nav>
                   <div class="knowledge-discussion-detail-heading">
@@ -1146,7 +1197,12 @@
                         <span
                           >回复 <strong id="knowledge-discussion-comment-target-name"></strong
                         ></span>
-                        <button id="knowledge-discussion-comment-target-cancel" type="button">
+                        <button
+                          class="bbs-action"
+                          data-action-tone="secondary"
+                          id="knowledge-discussion-comment-target-cancel"
+                          type="button"
+                        >
                           取消回复
                         </button>
                       </div>
@@ -1172,7 +1228,8 @@
                       >
                       <div class="knowledge-discussion-form-actions">
                         <button
-                          class="knowledge-discussion-publish"
+                          class="knowledge-discussion-publish bbs-action"
+                          data-action-tone="primary"
                           id="knowledge-discussion-comment-submit"
                           type="submit"
                         >

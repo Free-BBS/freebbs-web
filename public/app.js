@@ -87,6 +87,7 @@ const userState = {
 let economyShopItems = [];
 const economyShortcutLinks = [];
 let adminPermissionCatalog = { boards: [], courses: [] };
+const adminUsersLoadState = { owner: '', requestId: 0, status: 'idle' };
 let adminExpandedUserId = '';
 let adminMessageTimer = 0;
 let sessionReady = Promise.resolve();
@@ -198,7 +199,10 @@ const discussionState = {
   sessionStale: false,
   nextMyCursor: '',
   boards: [],
+  boardsRequestId: 0,
   posts: [],
+  postsStatus: 'idle',
+  postsErrorMessage: '',
   postsByBoard: new Map(),
   postsHashByBoard: {},
   postsRequestId: 0,
@@ -242,6 +246,14 @@ const aiChatState = {
   isSending: false,
   statusTimer: 0,
   backgroundTaskId: '',
+  dialogOwner: '',
+  dialogSessionVersion: 0,
+  dialogSessionStale: false,
+  dialogsRequestId: 0,
+  dialogRequestId: 0,
+  requestedDid: '',
+  dialogsStatus: 'idle',
+  dialogsError: '',
 };
 
 function getStoredThemeMode() {
@@ -3282,6 +3294,8 @@ function saveSession(token, user) {
     }
   }
   localStorage.setItem(STORAGE_KEY, token);
+  aiChatState.dialogSessionStale = false;
+  syncAiDialogSession();
   renderUser();
   window.dispatchEvent(new CustomEvent('freebbs:session-change', { detail: { user } }));
   if (user.requiresUsernameChange) {
@@ -3316,6 +3330,7 @@ function clearSession() {
     /* Storage may be blocked. */
   }
   localStorage.removeItem(STORAGE_KEY);
+  resetAiDialogSession('');
   window.dispatchEvent(new CustomEvent('freebbs:session-change', { detail: { user: null } }));
   setCheckinShortcutState(false);
   aiChatState.currentDid = '';
@@ -3796,6 +3811,9 @@ function renderDiscussionBoards() {
   `,
     )
     .join('');
+  if (discussionState.isFallback)
+    discussionBoardList.innerHTML +=
+      '<button class="bbs-action" type="button" data-action="retry-discussion-boards" data-action-tone="secondary">重试加载版块</button>';
 
   renderDiscussionBoardAbout();
 }
@@ -3928,6 +3946,8 @@ function applyDiscussionPostsPayload(boardSlug, payload) {
 function restoreDiscussionBoardPosts(boardSlug) {
   const cachedPosts = discussionState.postsByBoard.get(boardSlug);
   discussionState.posts = cachedPosts || [];
+  discussionState.postsStatus = cachedPosts ? 'ready' : 'loading';
+  discussionState.postsErrorMessage = '';
 
   if (cachedPosts) {
     renderDiscussionPosts();
@@ -3940,6 +3960,8 @@ function restoreDiscussionBoardPosts(boardSlug) {
         <p>正在加载帖子...</p>
       </article>
     `;
+    const content = discussionPostList.firstElementChild;
+    if (content) window.freeBbsUiState?.render(discussionPostList, { kind: 'loading', content });
   }
 }
 
@@ -4033,10 +4055,12 @@ function updateDiscussionFilterControls(visibleCount) {
   });
 
   if (discussionFilterStatus) {
-    const sourceLabel = discussionState.isFallback ? '本地演示数据' : '讨论区';
-    discussionFilterStatus.textContent = `${sourceLabel} · 当前列表 ${getDiscussionViewLabel(
+    // Fallback only describes board navigation, never API-loaded post data.
+    discussionFilterStatus.textContent = `讨论区 · 当前列表 ${getDiscussionViewLabel(
       discussionState.viewMode,
     )} · ${visibleCount} 帖`;
+    if (discussionState.postsErrorMessage)
+      discussionFilterStatus.textContent = discussionState.postsErrorMessage;
   }
 }
 
@@ -4066,25 +4090,27 @@ function renderDiscussionPosts() {
   updateDiscussionFilterControls(visiblePosts.length);
 
   if (!discussionState.posts.length) {
-    discussionPostList.innerHTML = `
-      <article class="discussion-empty" role="listitem">
-        <strong>${discussionState.scope === 'mine' ? '此范围内还没有自己的帖子' : '这个版块还没有帖子'}</strong>
-        <p>可以发布第一个问题，或切换到其他版块继续浏览。</p>
-      </article>
-    `;
+    renderDiscussionPostsState(
+      ['loading', 'error'].includes(discussionState.postsStatus)
+        ? discussionState.postsStatus
+        : discussionState.postsStatus === 'idle'
+          ? 'loading'
+          : 'empty',
+    );
     return;
   }
 
   if (!visiblePosts.length) {
-    discussionPostList.innerHTML = `
-      <article class="discussion-empty" role="listitem">
-        <strong>当前筛选下没有帖子</strong>
-        <p>当前列表没有符合条件的帖子，可以返回最新内容继续浏览。</p>
-        <button type="button" data-action="reset-discussion-filter">返回最新</button>
-      </article>
-    `;
+    renderDiscussionPostsState('empty', { filtered: true });
     return;
   }
+
+  window.freeBbsUiState?.set(
+    discussionPostList,
+    ['loading', 'error'].includes(discussionState.postsStatus)
+      ? discussionState.postsStatus
+      : 'ready',
+  );
 
   discussionPostList.innerHTML = visiblePosts
     .map((post) => {
@@ -5528,15 +5554,24 @@ async function pollInfoJob(article, navigationResult) {
   }
 }
 
-async function requestMaxNavigation(payload, onReasoning, onProgress = () => {}) {
+async function requestMaxNavigation(
+  payload,
+  onReasoning,
+  onProgress = () => {},
+  { isCurrent = () => true } = {},
+) {
   if (!userState.token) throw new Error('请先登录后再使用问问 Max');
+  if (!isCurrent()) return null;
   const body = {
     ...payload,
     ...(window.FreeBbsMaxModels ? await window.FreeBbsMaxModels.chatOptions(payload) : {}),
   };
+  if (!isCurrent()) return null;
   let task = await startAiBackgroundTask('max', payload.did || '', body);
+  if (!isCurrent()) return null;
   rememberMaxBackgroundTask(task.id);
   while (['queued', 'running'].includes(task.status)) {
+    if (!isCurrent()) return null;
     onProgress(
       task.progress?.message || 'Max 正在后台思考，离开页面也会继续…',
       task.progress?.phase,
@@ -5544,7 +5579,9 @@ async function requestMaxNavigation(payload, onReasoning, onProgress = () => {})
     await new Promise((resolve) => {
       window.setTimeout(resolve, 1500);
     });
+    if (!isCurrent()) return null;
     task = await getAiBackgroundTask(task.id, { watching: !document.hidden });
+    if (!isCurrent()) return null;
   }
   if (task.status !== 'completed') throw new Error(task.error || 'Max 后台任务未能完成。');
   onReasoning({ done: true });
@@ -5565,11 +5602,17 @@ function rememberMaxBackgroundTask(id) {
   }
 }
 
-async function waitForMaxBackgroundTask(task, assistantArticle, { imageGeneration = false } = {}) {
+async function waitForMaxBackgroundTask(
+  task,
+  assistantArticle,
+  { imageGeneration = false, isCurrent = () => true } = {},
+) {
+  if (!isCurrent()) return null;
   rememberMaxBackgroundTask(task.id);
   let current = task;
   let showingImage = imageGeneration;
   while (['queued', 'running'].includes(current.status)) {
+    if (!isCurrent()) return null;
     const message = current.progress?.message || 'Max 正在后台思考，离开页面也会继续…';
     showingImage ||= Boolean(
       window.FreeBbsMaxImageResults?.isGenerationPhase(current.progress?.phase),
@@ -5579,7 +5622,9 @@ async function waitForMaxBackgroundTask(task, assistantArticle, { imageGeneratio
     await new Promise((resolve) => {
       window.setTimeout(resolve, 1500);
     });
+    if (!isCurrent()) return null;
     current = await getAiBackgroundTask(current.id, { watching: !document.hidden });
+    if (!isCurrent()) return null;
   }
   if (current.status !== 'completed') {
     throw new Error(current.error || 'Max 后台任务未能完成。');
@@ -5587,8 +5632,15 @@ async function waitForMaxBackgroundTask(task, assistantArticle, { imageGeneratio
   return current;
 }
 
-async function applyMaxBackgroundResult(task, assistantArticle, userMessage) {
+async function applyMaxBackgroundResult(
+  task,
+  assistantArticle,
+  userMessage,
+  { isCurrent = () => true } = {},
+) {
+  if (!isCurrent()) return;
   const result = await addMentionedCourseMapRoute(task.result || {}, userMessage);
+  if (!isCurrent()) return;
   const replyModel =
     typeof result.model === 'string' && /^[A-Za-z0-9_./:+-]{1,120}$/.test(result.model)
       ? result.model
@@ -5608,21 +5660,39 @@ async function applyMaxBackgroundResult(task, assistantArticle, userMessage) {
   window.FreeBbsMaxFiles?.clear();
   stopAiChatThinkingStatus();
   await saveAiDialog();
+  if (!isCurrent()) return;
   await acknowledgeAiBackgroundTask(task.id).catch(() => {});
+  if (!isCurrent()) return;
   rememberMaxBackgroundTask('');
 }
 
 async function resumeMaxBackgroundTask() {
   if (!isAiChatPage() || !userState.token || aiChatState.isSending) return;
   const did = getAiDialogIdFromUrl() || aiChatState.currentDid;
-  if (!did) return;
+  if (!did || did !== aiChatState.currentDid) return;
+  const owner = getAiDialogOwner();
+  if (!owner || aiChatState.dialogSessionStale) return;
+  const version = aiChatState.dialogSessionVersion;
+  let generation = aiChatState.dialogRequestId;
+  const selectedDid = aiChatState.currentDid;
+  const messages = aiChatState.messages;
+  const isCurrent = () =>
+    owner === getAiDialogOwner() &&
+    version === aiChatState.dialogSessionVersion &&
+    generation === aiChatState.dialogRequestId &&
+    selectedDid === aiChatState.currentDid &&
+    did === (getAiDialogIdFromUrl() || aiChatState.currentDid) &&
+    messages === aiChatState.messages &&
+    !aiChatState.dialogSessionStale;
   let task;
   try {
     task = await getLatestAiBackgroundTask('max', did);
   } catch {
     return;
   }
-  if (!task || task.acknowledged) return;
+  if (!isCurrent() || !task || task.acknowledged) return;
+  invalidateAiDialogDetail();
+  generation = aiChatState.dialogRequestId;
   aiChatState.isSending = true;
   const userMessage =
     aiChatState.messages.findLast((message) => message.role === 'user')?.content ||
@@ -5632,15 +5702,19 @@ async function resumeMaxBackgroundTask() {
   try {
     const finished = await waitForMaxBackgroundTask(task, assistantArticle, {
       imageGeneration: window.FreeBbsMaxImageResults?.isRequest(userMessage),
+      isCurrent,
     });
-    await applyMaxBackgroundResult(finished, assistantArticle, userMessage);
+    if (!isCurrent()) return;
+    await applyMaxBackgroundResult(finished, assistantArticle, userMessage, { isCurrent });
   } catch (error) {
+    if (!isCurrent()) return;
     updateAiChatMessage(assistantArticle, `后台任务未完成：${error.message}`);
     stopAiChatThinkingStatus(error.message);
     if (task?.id) await acknowledgeAiBackgroundTask(task.id).catch(() => {});
+    if (!isCurrent()) return;
     rememberMaxBackgroundTask('');
   } finally {
-    aiChatState.isSending = false;
+    if (isCurrent()) aiChatState.isSending = false;
   }
 }
 
@@ -5671,19 +5745,100 @@ function updateAiDialogUrl(did, { replace = false } = {}) {
   window.history[method]({}, '', url);
 }
 
+function getAiDialogOwner() {
+  return userState.isLoggedIn && userState.token ? `${userState.uid}:${userState.token}` : '';
+}
+
+function invalidateAiDialogDetail() {
+  aiChatState.dialogRequestId = (aiChatState.dialogRequestId || 0) + 1;
+  aiChatState.requestedDid = '';
+  clearAiChatStatusTimer();
+  if (aiChatState.isSending) {
+    aiChatState.isSending = false;
+    window.FreeBbsMaxImages?.setBusy(false);
+    window.FreeBbsMaxFiles?.setBusy(false);
+    if (aiChatInput) aiChatInput.disabled = false;
+    if (aiChatSend) aiChatSend.disabled = false;
+  }
+  window.freeBbsUiState?.set(aiChatThread, 'ready');
+}
+
+function resetAiDialogSession(owner = getAiDialogOwner()) {
+  aiChatState.dialogOwner = owner;
+  aiChatState.dialogSessionVersion = (aiChatState.dialogSessionVersion || 0) + 1;
+  aiChatState.dialogSessionStale = false;
+  aiChatState.dialogsRequestId = (aiChatState.dialogsRequestId || 0) + 1;
+  invalidateAiDialogDetail();
+  aiChatState.dialogsStatus = 'idle';
+  aiChatState.dialogsError = '';
+  aiChatState.currentDid = '';
+  aiChatState.dialogs = [];
+  aiChatState.messages = [];
+  aiChatState.pendingSend = null;
+  // Leave the previous owner's persisted task intact, but never track it with
+  // the next owner's visibility/pagehide handlers.
+  aiChatState.backgroundTaskId = '';
+}
+
+function syncAiDialogSession() {
+  const owner = getAiDialogOwner();
+  if (owner === aiChatState.dialogOwner) return;
+  resetAiDialogSession(owner);
+  window.FreeBbsMaxImages?.clear();
+  window.FreeBbsMaxFiles?.clear();
+  renderAiChatThread();
+  setAiChatStatus('');
+}
+
+function renderAiDialogListState(kind, message, { append = false, retry = false } = {}) {
+  if (!aiChatDialogList) return;
+  const doc = aiChatDialogList.ownerDocument;
+  const content = doc.createElement('p');
+  content.className = 'aichat-dialog-empty';
+  content.textContent = message;
+  if (retry) {
+    const button = doc.createElement('button');
+    button.type = 'button';
+    button.className = 'bbs-action';
+    button.dataset.actionTone = 'secondary';
+    button.dataset.action = 'retry-ai-dialogs';
+    button.textContent = '重试';
+    content.append(button);
+  }
+  if (append) {
+    const slot = doc.createElement('div');
+    window.freeBbsUiState.render(slot, { kind, content });
+    aiChatDialogList.append(content);
+    window.freeBbsUiState.set(aiChatDialogList, kind);
+  } else window.freeBbsUiState.render(aiChatDialogList, { kind, content });
+}
+
 function renderAiDialogList() {
   if (!aiChatDialogList) {
     return;
   }
 
+  syncAiDialogSession();
+  if (aiChatState.dialogSessionStale) {
+    renderAiDialogListState('error', '登录状态已变化，请刷新页面后继续。');
+    setAiDialogId('');
+    return;
+  }
+
   if (!userState.isLoggedIn) {
-    aiChatDialogList.innerHTML = `<p class="aichat-dialog-empty">登录后保存最近对话。</p>`;
+    renderAiDialogListState('empty', '登录后保存最近对话。');
     setAiDialogId('');
     return;
   }
 
   if (!aiChatState.dialogs.length) {
-    aiChatDialogList.innerHTML = `<p class="aichat-dialog-empty">还没有保存的对话。</p>`;
+    const status = aiChatState.dialogsStatus;
+    if (status === 'error')
+      renderAiDialogListState('error', aiChatState.dialogsError || '对话列表加载失败，请重试。', {
+        retry: true,
+      });
+    else if (status === 'ready') renderAiDialogListState('empty', '还没有保存的对话。');
+    else renderAiDialogListState('loading', '正在加载对话列表...');
     setAiDialogId(aiChatState.currentDid);
     return;
   }
@@ -5698,41 +5853,95 @@ function renderAiDialogList() {
   `,
     )
     .join('');
+  if (aiChatState.dialogsStatus === 'error')
+    renderAiDialogListState('error', aiChatState.dialogsError, { append: true, retry: true });
+  else
+    window.freeBbsUiState.set(
+      aiChatDialogList,
+      aiChatState.dialogsStatus === 'loading' ? 'loading' : 'ready',
+    );
   setAiDialogId(aiChatState.currentDid);
 }
 
 async function loadAiDialogs() {
-  if (!isAiChatPage() || !aiChatDialogList || !userState.token) {
+  if (!isAiChatPage() || !aiChatDialogList) return;
+  syncAiDialogSession();
+  if (!userState.isLoggedIn || !userState.token || aiChatState.dialogSessionStale) {
     renderAiDialogList();
     return;
   }
 
+  const owner = getAiDialogOwner();
+  const version = aiChatState.dialogSessionVersion;
+  const requestId = (aiChatState.dialogsRequestId || 0) + 1;
+  aiChatState.dialogsRequestId = requestId;
+  const detailRequest = aiChatState.dialogRequestId;
+  const selectedDid = aiChatState.currentDid;
+  const urlDid = getAiDialogIdFromUrl();
+  const isCurrent = () =>
+    owner === getAiDialogOwner() &&
+    version === aiChatState.dialogSessionVersion &&
+    requestId === aiChatState.dialogsRequestId &&
+    !aiChatState.dialogSessionStale;
+  aiChatState.dialogsStatus = 'loading';
+  aiChatState.dialogsError = '';
+  if (!aiChatState.dialogs.length) renderAiDialogList();
+  else window.freeBbsUiState.set(aiChatDialogList, 'loading');
   try {
     const payload = await callApi('/ai/dialogs?limit=20', {
       method: 'GET',
     });
+    if (!isCurrent()) return;
     aiChatState.dialogs = payload.dialogs || [];
-  } catch {
-    aiChatState.dialogs = [];
+    aiChatState.dialogsStatus = 'ready';
+  } catch (error) {
+    if (!isCurrent()) return;
+    if (error.status === 401 || error.status === 403) {
+      resetAiDialogSession(owner);
+      renderAiChatThread();
+    }
+    aiChatState.dialogsStatus = 'error';
+    aiChatState.dialogsError = '对话列表加载失败，请重试。';
+    renderAiDialogList();
+    return;
   }
 
   renderAiDialogList();
 
-  const urlDid = getAiDialogIdFromUrl();
-  if (urlDid && urlDid !== aiChatState.currentDid) {
+  if (
+    urlDid &&
+    urlDid !== aiChatState.currentDid &&
+    detailRequest === aiChatState.dialogRequestId &&
+    selectedDid === aiChatState.currentDid &&
+    urlDid === getAiDialogIdFromUrl() &&
+    !aiChatState.isSending
+  ) {
     await loadAiDialog(urlDid, { updateUrl: false });
   }
 }
 
 async function saveAiDialog({ throwOnError = false } = {}) {
-  if (!userState.token || !aiChatState.messages.length) {
+  if (!userState.token || !aiChatState.messages.length || aiChatState.dialogSessionStale) {
     renderAiDialogList();
     return;
   }
 
+  const owner = `${userState.uid}:${userState.token}`;
+  const version = aiChatState.dialogSessionVersion || 0;
+  const generation = aiChatState.dialogRequestId || 0;
+  let savedDid = aiChatState.currentDid;
+  const messages = aiChatState.messages;
+  const isCurrent = () =>
+    owner === `${userState.uid}:${userState.token}` &&
+    version === (aiChatState.dialogSessionVersion || 0) &&
+    generation === (aiChatState.dialogRequestId || 0) &&
+    savedDid === aiChatState.currentDid &&
+    messages === aiChatState.messages &&
+    !aiChatState.dialogSessionStale;
   try {
     // Keep the same identity if the server saved the dialog but its response was lost.
     aiChatState.currentDid ||= window.crypto.randomUUID();
+    savedDid = aiChatState.currentDid;
     const payload = await callApi('/ai/dialogs', {
       method: 'POST',
       body: JSON.stringify({
@@ -5741,13 +5950,19 @@ async function saveAiDialog({ throwOnError = false } = {}) {
         messages: aiChatState.messages,
       }),
     });
+    if (!isCurrent()) return;
 
+    // A confirmed save supersedes only an outstanding history GET.
+    aiChatState.dialogsRequestId = (aiChatState.dialogsRequestId || 0) + 1;
+    aiChatState.dialogsStatus = 'ready';
+    aiChatState.dialogsError = '';
     aiChatState.currentDid = payload.dialog.did;
     updateAiDialogUrl(aiChatState.currentDid, { replace: true });
     const rest = aiChatState.dialogs.filter((dialog) => dialog.did !== payload.dialog.did);
     aiChatState.dialogs = [payload.dialog, ...rest].slice(0, 20);
     renderAiDialogList();
   } catch (error) {
+    if (!isCurrent()) return;
     setAiChatStatus(`对话未保存：${error.message}`);
     if (throwOnError) throw new Error(`对话未保存：${error.message}`);
   }
@@ -5758,16 +5973,40 @@ async function loadAiDialog(did, { updateUrl = true } = {}) {
     return;
   }
 
+  syncAiDialogSession();
+  if (!getAiDialogOwner() || aiChatState.dialogSessionStale) return;
+  const owner = getAiDialogOwner();
+  const version = aiChatState.dialogSessionVersion;
+  const requestId = (aiChatState.dialogRequestId || 0) + 1;
+  aiChatState.dialogRequestId = requestId;
+  const requestedDid = String(did);
+  aiChatState.requestedDid = requestedDid;
+  const selectedDid = aiChatState.currentDid;
+  const messages = aiChatState.messages;
+  const isCurrent = () =>
+    owner === getAiDialogOwner() &&
+    version === aiChatState.dialogSessionVersion &&
+    requestId === aiChatState.dialogRequestId &&
+    requestedDid === aiChatState.requestedDid &&
+    selectedDid === aiChatState.currentDid &&
+    messages === aiChatState.messages &&
+    !aiChatState.isSending &&
+    !aiChatState.dialogSessionStale;
+  window.freeBbsUiState.set(aiChatThread, 'loading');
   try {
     setAiChatStatus('正在加载对话...');
     const payload = await callApi(`/ai/dialogs/${encodeURIComponent(did)}`, {
       method: 'GET',
     });
+    if (!isCurrent()) return;
+    if (String(payload.dialog?.did || '') !== requestedDid) throw new Error('对话标识不匹配');
     window.FreeBbsMaxImages?.clear();
     window.FreeBbsMaxFiles?.clear();
     aiChatState.currentDid = payload.dialog.did;
     aiChatState.messages = payload.dialog.messages || [];
     aiChatState.pendingSend = null;
+    aiChatState.requestedDid = '';
+    window.freeBbsUiState.set(aiChatThread, 'ready');
     if (updateUrl) {
       updateAiDialogUrl(aiChatState.currentDid);
     }
@@ -5775,8 +6014,46 @@ async function loadAiDialog(did, { updateUrl = true } = {}) {
     renderAiDialogList();
     setAiChatStatus('');
   } catch (error) {
-    setAiChatStatus(error.message);
+    if (!isCurrent()) return;
+    if (error.status === 401 || error.status === 403) {
+      resetAiDialogSession(owner);
+      aiChatState.dialogsStatus = 'error';
+      aiChatState.dialogsError = '对话暂时无法读取，请重新登录或重试。';
+      renderAiChatThread();
+      renderAiDialogList();
+    }
+    window.freeBbsUiState.set(aiChatThread, 'error');
+    if (aiChatStatus) {
+      const content = aiChatStatus.ownerDocument.createElement('span');
+      content.textContent = '对话加载失败，请重试。';
+      const button = aiChatStatus.ownerDocument.createElement('button');
+      button.type = 'button';
+      button.className = 'bbs-action';
+      button.dataset.action = 'retry-ai-dialog';
+      button.dataset.did = requestedDid;
+      button.dataset.actionTone = 'secondary';
+      button.textContent = '重试';
+      content.append(button);
+      window.freeBbsUiState.render(aiChatStatus, { kind: 'error', content });
+    }
   }
+}
+
+async function handleAiDialogListClick(event) {
+  if (event.target.closest('[data-action="retry-ai-dialogs"]')) {
+    await loadAiDialogs();
+    return;
+  }
+  const button = event.target.closest('.aichat-dialog-item');
+  if (button) {
+    setAiDialogsOpen(false, { restoreFocus: true });
+    await loadAiDialog(button.dataset.did || '');
+  }
+}
+
+async function handleAiDialogDetailRetry(event) {
+  const button = event.target.closest('[data-action="retry-ai-dialog"]');
+  if (button) await loadAiDialog(button.dataset.did || '');
 }
 
 function startNewAiDialog() {
@@ -5784,6 +6061,7 @@ function startNewAiDialog() {
     return;
   }
 
+  invalidateAiDialogDetail();
   clearAiChatStatusTimer();
   window.FreeBbsMaxImages?.clear();
   window.FreeBbsMaxFiles?.clear();
@@ -5879,6 +6157,11 @@ async function handleAiChatSubmit(event) {
     return;
   }
 
+  if (aiChatState.dialogSessionStale) {
+    setAiChatStatus('登录状态已变化，请刷新页面后继续。');
+    return;
+  }
+
   let images;
   try {
     images = window.FreeBbsMaxImages?.snapshot() || [];
@@ -5913,7 +6196,22 @@ async function handleAiChatSubmit(event) {
     return;
   }
 
-  const sendSessionToken = userState.token;
+  const sendOwner = `${userState.uid}:${userState.token}`;
+  const sendVersion = aiChatState.dialogSessionVersion || 0;
+  // A pending detail GET cannot replace the turn about to be sent.
+  aiChatState.dialogRequestId = (aiChatState.dialogRequestId || 0) + 1;
+  aiChatState.requestedDid = '';
+  window.freeBbsUiState?.set(aiChatThread, 'ready');
+  const sendGeneration = aiChatState.dialogRequestId;
+  const sendMessages = aiChatState.messages;
+  let sendDid = aiChatState.currentDid;
+  const isCurrent = () =>
+    sendOwner === `${userState.uid}:${userState.token}` &&
+    sendVersion === (aiChatState.dialogSessionVersion || 0) &&
+    sendGeneration === aiChatState.dialogRequestId &&
+    sendDid === aiChatState.currentDid &&
+    sendMessages === aiChatState.messages &&
+    !aiChatState.dialogSessionStale;
   aiChatState.isSending = true;
   window.FreeBbsMaxImages?.setBusy(true);
   window.FreeBbsMaxFiles?.setBusy(true);
@@ -5974,13 +6272,17 @@ async function handleAiChatSubmit(event) {
   if (imageGeneration) setAiChatStatus('正在生成图片…');
   const bubbleTimer = window.setTimeout(
     () => {
+      if (!isCurrent()) return;
       setAiChatThinkingBubble(assistantArticle, 'Max 正在输入......', { imageGeneration });
     },
     1000 + Math.floor(Math.random() * 4001),
   );
   try {
     const { requestPayload } = aiChatState.pendingSend;
-    await saveAiDialog({ throwOnError: true });
+    const saving = saveAiDialog({ throwOnError: true });
+    sendDid = aiChatState.currentDid;
+    await saving;
+    if (!isCurrent()) return;
     requestPayload.did = aiChatState.currentDid || '';
     let artifactMode = aiChatState.pendingSend.artifactMode || 'chat';
     if (artifactMode === 'auto') {
@@ -5998,10 +6300,11 @@ async function handleAiChatSubmit(event) {
           }),
           signal: AbortSignal.timeout(30000),
         });
+        if (!isCurrent()) return;
         artifactMode = ['circuit', 'tool'].includes(intent.mode) ? intent.mode : 'chat';
       }
     }
-    if (userState.token !== sendSessionToken) throw new Error('登录状态已变化，请刷新后重试。');
+    if (!isCurrent()) return;
     const rawResult =
       artifactMode !== 'chat'
         ? await window.FreeBbsMaxArtifacts.generate({
@@ -6011,8 +6314,11 @@ async function handleAiChatSubmit(event) {
             previous: aiChatState.messages.findLast(
               (message) => message.artifact?.kind === artifactMode,
             )?.artifact,
-            onReasoning: (progress) => window.FreeBbsReasoning.update(assistantArticle, progress),
+            onReasoning: (progress) => {
+              if (isCurrent()) window.FreeBbsReasoning.update(assistantArticle, progress);
+            },
             onStatus: (message) => {
+              if (!isCurrent()) return;
               window.clearTimeout(bubbleTimer);
               setAiChatStatus(message);
             },
@@ -6020,17 +6326,22 @@ async function handleAiChatSubmit(event) {
         : await requestMaxNavigation(
             requestPayload,
             (progress) => {
+              if (!isCurrent()) return;
               window.FreeBbsReasoning.update(assistantArticle, progress);
             },
             (message, phase) => {
+              if (!isCurrent()) return;
               window.clearTimeout(bubbleTimer);
               imageGeneration ||= Boolean(window.FreeBbsMaxImageResults?.isGenerationPhase(phase));
               setAiChatThinkingBubble(assistantArticle, message, { imageGeneration });
               setAiChatStatus(imageGeneration ? '正在生成图片…' : message);
             },
+            { isCurrent },
           );
+    if (!isCurrent()) return;
     window.FreeBbsReasoning.finish(assistantArticle);
     const result = await addMentionedCourseMapRoute(rawResult, userMessage);
+    if (!isCurrent()) return;
     window.clearTimeout(bubbleTimer);
     let assistantContent = String(result.answer || '').trim() || 'Max 暂时没有生成回答。';
     const replyModel =
@@ -6058,26 +6369,32 @@ async function handleAiChatSubmit(event) {
     window.FreeBbsMaxFiles?.clear();
     stopAiChatThinkingStatus();
     await saveAiDialog();
+    if (!isCurrent()) return;
     if (result.background_task_id) {
       await acknowledgeAiBackgroundTask(result.background_task_id).catch(() => {});
+      if (!isCurrent()) return;
       rememberMaxBackgroundTask('');
     }
   } catch (error) {
     window.clearTimeout(bubbleTimer);
+    if (!isCurrent()) return;
     window.FreeBbsReasoning?.finish(assistantArticle, { stopped: true });
     updateAiChatMessage(assistantArticle, `请求失败：${error.message}`);
     aiChatInput.value = composerMessage;
     resizeAiChatInput();
     stopAiChatThinkingStatus(error.message);
   } finally {
-    aiChatState.isSending = false;
-    window.FreeBbsMaxImages?.setBusy(false);
-    window.FreeBbsMaxFiles?.setBusy(false);
-    aiChatInput.disabled = false;
-    if (aiChatSend) {
-      aiChatSend.disabled = false;
+    window.clearTimeout(bubbleTimer);
+    if (isCurrent()) {
+      aiChatState.isSending = false;
+      window.FreeBbsMaxImages?.setBusy(false);
+      window.FreeBbsMaxFiles?.setBusy(false);
+      aiChatInput.disabled = false;
+      if (aiChatSend) {
+        aiChatSend.disabled = false;
+      }
+      aiChatInput.focus();
     }
-    aiChatInput.focus();
   }
 }
 
@@ -6109,14 +6426,8 @@ function initializeAiChatPage() {
   aiChatDialogBackdrop?.addEventListener('click', () =>
     setAiDialogsOpen(false, { restoreFocus: true }),
   );
-  aiChatDialogList?.addEventListener('click', (event) => {
-    const button = event.target.closest('.aichat-dialog-item');
-
-    if (button) {
-      loadAiDialog(button.dataset.did || '');
-      setAiDialogsOpen(false, { restoreFocus: true });
-    }
-  });
+  aiChatDialogList?.addEventListener('click', handleAiDialogListClick);
+  aiChatStatus?.addEventListener('click', handleAiDialogDetailRetry);
   aiChatDrawerMedia.addEventListener('change', (event) => {
     if (!event.matches) {
       setAiDialogsOpen(false);
@@ -6130,8 +6441,10 @@ function initializeAiChatPage() {
   window.addEventListener('popstate', () => {
     const did = getAiDialogIdFromUrl();
     if (did) {
+      invalidateAiDialogDetail();
       loadAiDialog(did, { updateUrl: false });
     } else {
+      invalidateAiDialogDetail();
       aiChatState.currentDid = '';
       aiChatState.messages = [];
       aiChatState.pendingSend = null;
@@ -7116,18 +7429,43 @@ function handleHomeDashboardRetry(event) {
 }
 
 async function loadDiscussionBoards() {
+  const requestId = (discussionState.boardsRequestId || 0) + 1;
+  discussionState.boardsRequestId = requestId;
+  const version = discussionState.sessionVersion;
+  window.freeBbsUiState?.set(discussionBoardList, 'loading');
   try {
     const payload = await callApi('/discussion/boards', {
       method: 'GET',
       signal: createDiscussionRequestSignal(),
     });
+    if (requestId !== discussionState.boardsRequestId || version !== discussionState.sessionVersion)
+      return;
     discussionState.boards = payload.boards || [];
     discussionState.isFallback = false;
-  } catch {
-    discussionState.boards = FALLBACK_DISCUSSION_BOARDS;
+  } catch (error) {
+    if (requestId !== discussionState.boardsRequestId || version !== discussionState.sessionVersion)
+      return;
+    // Keep known board metadata on a transient refresh failure. Fallback is only
+    // a navigation aid; the API still validates every read and publishing right.
+    if (!discussionState.boards.length || (error.status && error.status < 500)) {
+      discussionState.boards = FALLBACK_DISCUSSION_BOARDS;
+    }
+    // Preserve the existing publish preflight: unavailable board metadata never
+    // authorizes a write, even when its last successful labels remain visible.
     discussionState.isFallback = true;
+    window.freeBbsUiState?.set(discussionBoardList, 'error');
+    renderDiscussionBoards();
+    renderDiscussionComposeBoards();
+    renderDiscussionComposerState();
+    return;
+  } finally {
+    // A session switch invalidates metadata without leaving the old request's
+    // busy marker behind; a newer metadata request still owns its own marker.
+    if (requestId === discussionState.boardsRequestId && version !== discussionState.sessionVersion)
+      window.freeBbsUiState?.set(discussionBoardList, 'ready');
   }
 
+  window.freeBbsUiState?.set(discussionBoardList, 'ready');
   renderDiscussionBoards();
   renderDiscussionComposeBoards();
   renderDiscussionComposerState();
@@ -7412,6 +7750,44 @@ async function loadDiscussionDetail(postId) {
   }
 }
 
+function renderDiscussionPostsState(kind, { filtered = false } = {}) {
+  if (!discussionPostList) return;
+  const title =
+    kind === 'error'
+      ? '帖子加载失败'
+      : kind === 'loading'
+        ? ''
+        : filtered
+          ? '当前筛选下没有帖子'
+          : discussionState.scope === 'mine'
+            ? '此范围内还没有自己的帖子'
+            : '这个版块还没有帖子';
+  const message =
+    kind === 'loading'
+      ? '正在加载帖子...'
+      : kind === 'error'
+        ? '请重试；查看自己的帖子需要先登录。'
+        : filtered
+          ? '当前列表没有符合条件的帖子，可以返回最新内容继续浏览。'
+          : '可以发布第一个问题，或切换到其他版块继续浏览。';
+  discussionPostList.innerHTML = `
+    <article class="discussion-empty" role="${kind === 'error' ? 'alert' : 'status'}">
+      ${title ? `<strong>${title}</strong>` : ''}
+      <p>${message}</p>
+      ${kind === 'error' ? '<button class="bbs-action" type="button" data-action="retry-discussion-posts" data-action-tone="secondary">重试</button>' : ''}
+      ${filtered ? '<button class="bbs-action" type="button" data-action="reset-discussion-filter" data-action-tone="secondary">返回最新</button>' : ''}
+    </article>
+  `;
+  const content = discussionPostList.firstElementChild;
+  if (content) window.freeBbsUiState?.render(discussionPostList, { kind, content });
+  const containerKind =
+    kind === 'empty' && ['loading', 'error'].includes(discussionState.postsStatus)
+      ? discussionState.postsStatus
+      : kind;
+  window.freeBbsUiState?.set(discussionPostList, containerKind);
+  discussionPostList.setAttribute('aria-busy', String(containerKind === 'loading'));
+}
+
 async function loadDiscussionPosts({ autoOpen = false, more = false } = {}) {
   if (discussionState.sessionStale) return;
   if (!discussionPostList) {
@@ -7420,26 +7796,32 @@ async function loadDiscussionPosts({ autoOpen = false, more = false } = {}) {
 
   const requestId = discussionState.postsRequestId + 1;
   discussionState.postsRequestId = requestId;
+  const version = discussionState.sessionVersion;
+  const scope = discussionState.scope;
+  const activeBoard = discussionState.activeBoard || 'all';
+  const isCurrent = () =>
+    requestId === discussionState.postsRequestId &&
+    version === discussionState.sessionVersion &&
+    scope === discussionState.scope &&
+    activeBoard === (discussionState.activeBoard || 'all');
+  discussionState.postsStatus = 'loading';
+  discussionState.postsErrorMessage = '';
+  window.freeBbsUiState?.set(discussionPostList, 'loading');
   discussionPostList.setAttribute('aria-busy', 'true');
 
-  const activeBoard = discussionState.activeBoard || 'all';
   const hasCachedPosts = discussionState.postsByBoard.has(activeBoard);
   const currentHash = hasCachedPosts ? discussionState.postsHashByBoard[activeBoard] || '' : '';
   const append = Boolean(more && discussionState.scope === 'mine' && discussionState.nextMyCursor);
 
   if (!discussionState.posts.length) {
-    discussionPostList.innerHTML = `
-      <article class="discussion-empty">
-        <p>正在加载帖子...</p>
-      </article>
-    `;
+    renderDiscussionPostsState('loading');
   }
 
   try {
     const query = new URLSearchParams({
       board: activeBoard,
       limit: '50',
-      scope: discussionState.scope,
+      scope,
     });
     if (append) {
       query.set('cursor', discussionState.nextMyCursor);
@@ -7460,6 +7842,9 @@ async function loadDiscussionPosts({ autoOpen = false, more = false } = {}) {
     if (requestId !== discussionState.postsRequestId) {
       return;
     }
+    if (!isCurrent()) {
+      return;
+    }
 
     if (append) {
       payload.posts = [
@@ -7471,17 +7856,26 @@ async function loadDiscussionPosts({ autoOpen = false, more = false } = {}) {
     }
     discussionState.nextMyCursor = payload.nextCursor || '';
     applyDiscussionPostsPayload(activeBoard, payload);
+    discussionState.postsStatus = 'ready';
   } catch (error) {
-    if (requestId !== discussionState.postsRequestId) {
+    if (!isCurrent()) {
       return;
     }
 
-    // Retrying a later page must not discard the pages already on screen.
+    discussionState.postsStatus = 'error';
+    window.freeBbsUiState?.set(discussionPostList, 'error');
+    // A transient refresh must not discard the pages already on screen.
     // Access failures still clear private content rather than retaining stale access.
-    if (append && error.status !== 401 && error.status !== 403) {
+    const transientFailure = !error.status || error.status >= 500;
+    if (discussionState.posts.length && transientFailure) {
+      if (!append) discussionState.nextMyCursor = '';
+      const moreButton = window.document?.getElementById('discussion-my-more');
+      if (moreButton) moreButton.hidden = !discussionState.nextMyCursor;
+      discussionState.postsErrorMessage = append
+        ? '更多帖子加载失败，已保留当前列表。请点击“加载更多”重试。'
+        : '帖子刷新失败，已保留当前列表。可重新选择当前版块重试。';
       if (discussionFilterStatus)
-        discussionFilterStatus.textContent =
-          '更多帖子加载失败，已保留当前列表。请点击“加载更多”重试。';
+        discussionFilterStatus.textContent = discussionState.postsErrorMessage;
       discussionPostList.setAttribute('aria-busy', 'false');
       return;
     }
@@ -7495,10 +7889,7 @@ async function loadDiscussionPosts({ autoOpen = false, more = false } = {}) {
     discussionState.activePostId = '';
     discussionState.comments = [];
     renderDiscussionDetail(null);
-    renderDiscussionPosts();
-    discussionPostList.innerHTML =
-      '<article class="discussion-empty" role="status"><p>帖子加载失败；查看自己的帖子需要先登录。请重新选择帖子范围或刷新重试。</p></article>';
-    discussionPostList.setAttribute('aria-busy', 'false');
+    renderDiscussionPostsState('error');
     return;
   }
 
@@ -7511,6 +7902,7 @@ async function loadDiscussionPosts({ autoOpen = false, more = false } = {}) {
 
   renderDiscussionBoards();
   renderDiscussionComposeBoards();
+  window.freeBbsUiState?.set(discussionPostList, discussionState.posts.length ? 'ready' : 'empty');
   renderDiscussionPosts();
   discussionPostList.setAttribute('aria-busy', 'false');
 
@@ -7582,6 +7974,8 @@ function resetDiscussionData() {
   discussionState.postsRequestId += 1;
   discussionState.postRequestId += 1;
   discussionState.posts = [];
+  discussionState.postsStatus = 'idle';
+  discussionState.postsErrorMessage = '';
   discussionState.comments = [];
   discussionState.commentsStatus = 'idle';
   discussionState.commentsRequestId = (discussionState.commentsRequestId || 0) + 1;
@@ -8097,8 +8491,18 @@ function updateAdminUserListFilters() {
   }
   adminUserEmpty?.classList.toggle(
     'hidden',
-    visibleCount > 0 || Boolean(adminUsers.querySelector('.admin-user-row-draft')),
+    adminUsersLoadState.status !== 'ready' ||
+      visibleCount > 0 ||
+      Boolean(adminUsers.querySelector('.admin-user-row-draft')),
   );
+  if (adminUsersLoadState.status === 'ready') {
+    window.freeBbsUiState?.set(adminUserEmpty, 'empty');
+    adminUserEmpty?.setAttribute('role', 'status');
+    window.freeBbsUiState?.set(
+      adminUsers,
+      visibleCount > 0 || adminUsers.querySelector('.admin-user-row-draft') ? 'ready' : 'empty',
+    );
+  }
 }
 
 function renderAdminUsers(users, permissionCatalog = adminPermissionCatalog) {
@@ -8431,17 +8835,99 @@ function toggleAdminUserEditor(card) {
   updateAdminUserListFilters();
 }
 
+function resetAdminUsersLoadState(owner = '') {
+  adminUsersLoadState.owner = owner;
+  adminUsersLoadState.requestId += 1;
+  adminUsersLoadState.status = 'idle';
+  adminPermissionCatalog = { boards: [], courses: [] };
+  adminExpandedUserId = '';
+  if (adminUsers) {
+    adminUsers.replaceChildren();
+    window.freeBbsUiState?.set(adminUsers, 'ready');
+  }
+  adminUserEmpty?.classList.add('hidden');
+}
+
+function renderAdminUsersLoadError({ retain = false } = {}) {
+  if (!adminUsers) return;
+  adminUsers.querySelector('[data-admin-list-state]')?.remove();
+  const options = {
+    kind: 'error',
+    message: retain ? '用户列表刷新失败，已保留当前列表。' : '用户列表加载失败，请重试。',
+    action: { key: 'retry-admin-users', label: '重试' },
+  };
+  if (retain) {
+    const notice = adminUsers.ownerDocument.createElement('div');
+    notice.dataset.adminListState = 'true';
+    window.freeBbsUiState?.render(notice, options);
+    adminUsers.append(notice);
+    window.freeBbsUiState?.set(adminUsers, 'error');
+  } else {
+    const notice = window.freeBbsUiState?.render(adminUsers, options);
+    if (notice) notice.dataset.adminListState = 'true';
+  }
+}
+
 async function loadAdminUsers() {
-  if (!adminSection || !isAdminUsersPage() || !userState.isAdmin) {
+  if (
+    !adminSection ||
+    !adminUsers ||
+    !isAdminUsersPage() ||
+    !userState.isLoggedIn ||
+    !userState.isAdmin
+  ) {
     return;
+  }
+
+  const owner = `${userState.uid}:${userState.token}`;
+  if (adminUsersLoadState.owner !== owner) resetAdminUsersLoadState(owner);
+  const requestId = adminUsersLoadState.requestId + 1;
+  adminUsersLoadState.requestId = requestId;
+  adminUsersLoadState.status = 'loading';
+  const isCurrent = () =>
+    requestId === adminUsersLoadState.requestId &&
+    owner === `${userState.uid}:${userState.token}` &&
+    userState.isLoggedIn &&
+    userState.isAdmin;
+  const hasRows = Boolean(adminUsers.querySelector('.admin-user-row'));
+  adminUsers.querySelector('[data-admin-list-state]')?.remove();
+  adminUserEmpty?.classList.add('hidden');
+  window.freeBbsUiState?.set(adminUsers, 'loading');
+  if (!hasRows) {
+    const notice = window.freeBbsUiState?.render(adminUsers, {
+      kind: 'loading',
+      message: '正在加载用户...',
+    });
+    if (notice) notice.dataset.adminListState = 'true';
   }
 
   try {
     const payload = await callApi('/admin/users', { method: 'GET' });
+    if (!isCurrent()) return;
+    adminUsersLoadState.status = 'ready';
     adminPermissionCatalog = payload.permissionCatalog || { boards: [], courses: [] };
+    // A read refresh must not overwrite edits made while its response was pending.
+    if (
+      adminUsers.querySelector(
+        '.admin-user-row.is-dirty, .admin-user-row-draft:not(.is-saving), .admin-user-row:not(.admin-user-row-draft).is-saving',
+      )
+    ) {
+      adminUsers.querySelector('[data-admin-list-state]')?.remove();
+      updateAdminUserListFilters();
+      return;
+    }
     renderAdminUsers(payload.users || [], adminPermissionCatalog);
   } catch (error) {
-    setAdminMessage(error.message);
+    if (!isCurrent()) return;
+    adminUsersLoadState.status = 'error';
+    const transientFailure = !error.status || error.status >= 500;
+    if (!transientFailure) {
+      adminPermissionCatalog = { boards: [], courses: [] };
+      adminExpandedUserId = '';
+    }
+    renderAdminUsersLoadError({
+      retain: Boolean(adminUsers.querySelector('.admin-user-row')) && transientFailure,
+    });
   }
 }
 
@@ -8534,13 +9020,15 @@ function renderAdminSection() {
   }
 
   adminSection.classList.toggle('hidden', !isAdmin);
+  const adminOwner = isAdmin ? `${userState.uid}:${userState.token}` : '';
+  if (adminUsersLoadState.owner !== adminOwner) resetAdminUsersLoadState(adminOwner);
 
   if (fortuneBonusToggle) {
     fortuneBonusToggle.checked = userState.fortuneBonusEnabled;
     fortuneBonusToggle.disabled = !isAdmin;
   }
 
-  if (isAdmin && isAdminUsersPage()) {
+  if (isAdmin && isAdminUsersPage() && adminUsersLoadState.status === 'idle') {
     loadAdminUsers();
   }
 }
@@ -8705,6 +9193,11 @@ async function handleAdminUsersClick(event) {
   const button = event.target.closest('button[data-action]');
 
   if (!button) {
+    return;
+  }
+
+  if (button.dataset.action === 'retry-admin-users') {
+    await loadAdminUsers();
     return;
   }
 
@@ -8902,6 +9395,10 @@ async function handleFortuneBonusToggle(event) {
 }
 
 async function handleDiscussionBoardClick(event) {
+  if (event.target.closest('[data-action="retry-discussion-boards"]')) {
+    await loadDiscussionBoards();
+    return;
+  }
   const button = event.target.closest('[data-board-slug]');
 
   if (!button) {
@@ -8923,6 +9420,14 @@ async function handleDiscussionBoardClick(event) {
 
 async function handleDiscussionPostClick(event) {
   if (event.target.closest("[data-action='open-profile']")) {
+    return;
+  }
+
+  if (event.target.closest("[data-action='retry-discussion-posts']")) {
+    await Promise.all([
+      discussionState.isFallback ? loadDiscussionBoards() : Promise.resolve(),
+      loadDiscussionPosts(),
+    ]);
     return;
   }
 
@@ -10962,6 +11467,13 @@ window.addEventListener('freebbs:session-change', async () => {
     await loadDiscussionDetail(pendingPost);
 });
 window.addEventListener('storage', (event) => {
+  if (isAiChatPage() && (event.key === STORAGE_KEY || event.key === null)) {
+    resetAiDialogSession();
+    aiChatState.dialogSessionStale = true;
+    renderAiChatThread();
+    renderAiDialogList();
+    setAiChatStatus('登录状态已变化，请刷新页面后继续。');
+  }
   if (isPublicProfilePage() && (event.key === STORAGE_KEY || event.key === null)) {
     publicProfileRequestVersion += 1;
     window.FreeBbsProfileActivity?.render(null);

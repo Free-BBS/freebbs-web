@@ -589,11 +589,11 @@ body.workbench-page .workbench-week-label {
 body.workbench-page .workbench-week-control {
   min-height: 38px;
   padding: 5px 11px;
-  color: var(--workbench-text);
+  color: var(--action-foreground, var(--workbench-text));
   font: inherit;
   font-size: 0.76rem;
   font-weight: 700;
-  background: var(--workbench-panel-soft);
+  background: var(--action-fill, var(--workbench-panel-soft));
   border: 1px solid var(--workbench-line-strong);
   border-radius: 10px;
   cursor: pointer;
@@ -601,7 +601,7 @@ body.workbench-page .workbench-week-control {
 
 body.workbench-page .workbench-week-control:hover,
 body.workbench-page .workbench-week-control:focus-visible {
-  border-color: var(--workbench-accent-strong);
+  border-color: var(--action-stroke, var(--workbench-accent-strong));
   outline-color: var(--workbench-accent-strong);
 }
 
@@ -1140,10 +1140,10 @@ body.workbench-page .workbench-agent-action {
   align-items: center;
   justify-content: center;
   min-height: 44px;
-  color: #f8ffff;
+  color: var(--action-foreground, #f8ffff);
   font-weight: 800;
   text-decoration: none;
-  background: linear-gradient(135deg, #0a7983, #1599a5);
+  background: var(--action-fill, linear-gradient(135deg, #0a7983, #1599a5));
   border: 1px solid transparent;
   border-radius: 13px;
   box-shadow: 0 10px 28px rgba(6, 111, 121, 0.2);
@@ -1532,11 +1532,11 @@ body.workbench-page .workbench-item-action,
 body.workbench-page .workbench-source-actions button,
 body.workbench-page .workbench-dialog button {
   min-height: 44px;
-  color: var(--workbench-text);
+  color: var(--action-foreground, var(--workbench-text));
   font: inherit;
   font-size: 0.74rem;
   font-weight: 800;
-  background: transparent;
+  background: var(--action-fill, transparent);
   border: 1px solid var(--workbench-line-strong);
   border-radius: 11px;
   cursor: pointer;
@@ -1545,8 +1545,8 @@ body.workbench-page .workbench-dialog button {
 body.workbench-page .workbench-compact-action,
 body.workbench-page .workbench-source-actions button {
   padding: 0 14px;
-  color: var(--workbench-accent-strong);
-  background: var(--workbench-accent-soft);
+  color: var(--action-foreground, var(--workbench-accent-strong));
+  background: var(--action-fill, var(--workbench-accent-soft));
 }
 
 body.workbench-page :is(button, select, input, textarea):disabled {
@@ -1618,7 +1618,7 @@ body.workbench-page .workbench-item-action.is-primary {
 }
 
 body.workbench-page .workbench-item-action.is-danger {
-  color: var(--action-danger);
+  color: var(--action-foreground, var(--action-danger));
 }
 
 body.workbench-page
@@ -1855,9 +1855,9 @@ body.workbench-page .workbench-dialog footer button {
 }
 
 body.workbench-page .workbench-dialog-submit {
-  color: #f8ffff !important;
-  background: linear-gradient(135deg, #0a7983, #1599a5) !important;
-  border-color: transparent !important;
+  color: var(--action-foreground, #f8ffff) !important;
+  background: var(--action-fill, linear-gradient(135deg, #0a7983, #1599a5)) !important;
+  border-color: var(--action-stroke, transparent) !important;
 }
 
 @media (max-width: 900px) {
@@ -2110,8 +2110,8 @@ body.workbench-page .workbench-homework-form input::file-selector-button {
   border: 1px solid var(--workbench-line-strong);
   border-radius: 8px;
   padding: 0.5rem 0.8rem;
-  color: var(--workbench-text);
-  background: var(--workbench-accent-soft);
+  color: var(--action-foreground, var(--workbench-text));
+  background: var(--action-fill, var(--workbench-accent-soft));
   font: inherit;
   font-size: 0.82rem;
   font-weight: 700;

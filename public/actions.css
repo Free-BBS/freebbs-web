@@ -4,6 +4,7 @@
   --action-hover-fill: var(--action-secondary-hover);
   --action-foreground: var(--action-secondary-text);
   --action-stroke: var(--action-secondary-border);
+  --action-target-transform: none;
   display: inline-flex;
   min-height: 44px;
   align-items: center;
@@ -32,6 +33,11 @@
   --action-stroke: var(--action-primary);
 }
 
+/* Native hidden remains authoritative after opting into an inline-flex role. */
+.bbs-action[hidden] {
+  display: none;
+}
+
 .bbs-action[data-action-tone='quiet'] {
   --action-fill: transparent;
   --action-hover-fill: var(--action-quiet-hover);
@@ -48,6 +54,7 @@
 
 .bbs-action:hover:not(:disabled, [aria-disabled='true']),
 .bbs-action:active:not(:disabled, [aria-disabled='true']) {
+  --action-fill: var(--action-hover-fill);
   background: var(--action-hover-fill);
 }
 
@@ -55,6 +62,7 @@
  * Native disabled prevents activation. aria-disabled also requires a JS guard. */
 .bbs-action:disabled,
 .bbs-action[aria-disabled='true'] {
+  --action-hover-fill: var(--action-fill);
   cursor: not-allowed;
   opacity: var(--action-disabled-opacity);
 }

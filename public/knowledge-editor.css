@@ -29,8 +29,8 @@
   padding: 8px 12px;
   border: 1px solid var(--course-line-strong);
   border-radius: 6px;
-  background: var(--course-surface-solid);
-  color: var(--bbs-shell-text);
+  background: var(--action-fill, var(--course-surface-solid));
+  color: var(--action-foreground, var(--bbs-shell-text));
   font: 600 0.82rem / 1.3 var(--font-ui);
   cursor: pointer;
   transition:
@@ -62,8 +62,8 @@
 
 .knowledge-edit-toggle:hover,
 .knowledge-editor button:hover {
-  border-color: var(--course-accent);
-  background: var(--course-accent-soft);
+  border-color: var(--action-stroke, var(--course-accent));
+  background: var(--action-hover-fill, var(--course-accent-soft));
 }
 
 .knowledge-edit-toggle:focus-visible,
@@ -265,13 +265,16 @@
 
 .knowledge-editor-actions .knowledge-editor-save {
   min-width: 76px;
-  border-color: var(--course-accent);
-  background: var(--course-accent);
-  color: var(--course-surface-solid);
+  border-color: var(--action-stroke, var(--course-accent));
+  background: var(--action-fill, var(--course-accent));
+  color: var(--action-foreground, var(--course-surface-solid));
 }
 
 .knowledge-editor-actions .knowledge-editor-save:hover {
-  background: color-mix(in srgb, var(--course-accent) 88%, var(--bbs-shell-text));
+  background: var(
+    --action-hover-fill,
+    color-mix(in srgb, var(--course-accent) 88%, var(--bbs-shell-text))
+  );
 }
 
 .knowledge-editor-discard {
@@ -416,8 +419,8 @@
   padding: 7px 10px;
   border: 1px solid var(--course-line-strong);
   border-radius: 6px;
-  background: var(--course-surface-solid);
-  color: var(--bbs-shell-text);
+  background: var(--action-fill, var(--course-surface-solid));
+  color: var(--action-foreground, var(--bbs-shell-text));
   font: 600 0.76rem / 1.4 var(--font-ui);
   cursor: pointer;
   transition:
@@ -429,8 +432,8 @@
 .knowledge-discussion-comment-form button:hover,
 .knowledge-discussion-comment-meta button:hover,
 .knowledge-discussion-empty button:hover {
-  border-color: var(--course-accent);
-  background: var(--course-accent-soft);
+  border-color: var(--action-stroke, var(--course-accent));
+  background: var(--action-hover-fill, var(--course-accent-soft));
 }
 
 .knowledge-discussion-compose :is(button, input, textarea):focus-visible,
@@ -485,9 +488,9 @@
 
 .knowledge-discussion-form-actions .knowledge-discussion-publish,
 .knowledge-page #knowledge-discussion-compose-toggle {
-  border-color: var(--course-accent);
-  background: var(--course-accent-soft);
-  color: var(--course-accent);
+  border-color: var(--action-stroke, var(--course-accent));
+  background: var(--action-fill, var(--course-accent-soft));
+  color: var(--action-foreground, var(--course-accent));
 }
 
 .knowledge-discussion-comments-section {

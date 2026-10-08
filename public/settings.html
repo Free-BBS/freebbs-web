@@ -156,7 +156,12 @@
           </div>
           <div class="settings-account-actions">
             <span>账号与登录</span>
-            <button class="settings-logout-button" id="settings-logout-button" type="button">
+            <button
+              class="settings-logout-button bbs-action"
+              data-action-tone="danger"
+              id="settings-logout-button"
+              type="button"
+            >
               退出登录
             </button>
             <a class="settings-profile-link" id="settings-profile-link" hidden>
@@ -183,14 +188,16 @@
                     </p>
                     <div class="settings-avatar-actions">
                       <button
-                        class="settings-upload-button"
+                        class="settings-upload-button bbs-action"
+                        data-action-tone="secondary"
                         type="button"
                         data-avatar-action="choose"
                       >
                         选择新头像
                       </button>
                       <button
-                        class="settings-upload-button"
+                        class="settings-upload-button bbs-action"
+                        data-action-tone="primary"
                         type="button"
                         data-avatar-action="confirm"
                         hidden
@@ -198,7 +205,8 @@
                         确认上传
                       </button>
                       <button
-                        class="settings-upload-button"
+                        class="settings-upload-button bbs-action"
+                        data-action-tone="secondary"
                         type="button"
                         data-avatar-action="cancel"
                         hidden
@@ -264,7 +272,9 @@
               </label>
 
               <p class="auth-message settings-message" id="settings-message"></p>
-              <button class="auth-submit" type="submit">保存设置</button>
+              <button class="auth-submit bbs-action" data-action-tone="primary" type="submit">
+                保存设置
+              </button>
             </form>
 
             <form
@@ -307,10 +317,23 @@
                 aria-live="polite"
               ></p>
               <div class="settings-username-actions">
-                <button class="auth-submit" id="settings-username-submit" type="submit" disabled>
+                <button
+                  class="auth-submit bbs-action"
+                  data-action-tone="primary"
+                  id="settings-username-submit"
+                  type="submit"
+                  disabled
+                >
                   修改昵称
                 </button>
-                <button id="settings-username-refresh" type="button">刷新改名信息</button>
+                <button
+                  class="bbs-action"
+                  data-action-tone="quiet"
+                  id="settings-username-refresh"
+                  type="button"
+                >
+                  刷新改名信息
+                </button>
               </div>
             </form>
 
@@ -439,7 +462,14 @@
                 role="status"
                 aria-live="polite"
               ></p>
-              <button class="auth-submit" type="submit" disabled>保存更改</button>
+              <button
+                class="auth-submit bbs-action"
+                data-action-tone="primary"
+                type="submit"
+                disabled
+              >
+                保存更改
+              </button>
             </form>
 
             <section class="settings-form" id="settings-identity" aria-label="邮箱与学号绑定">
@@ -474,11 +504,20 @@
                       maxlength="6"
                       autocomplete="one-time-code"
                       required
-                    /><button type="button" id="settings-email-code">发送验证码</button>
+                    /><button
+                      class="bbs-action"
+                      data-action-tone="secondary"
+                      type="button"
+                      id="settings-email-code"
+                    >
+                      发送验证码
+                    </button>
                   </div></label
                 >
                 <p id="settings-email-message" role="status" aria-live="polite"></p>
-                <button class="auth-submit" type="submit">验证并绑定邮箱</button>
+                <button class="auth-submit bbs-action" data-action-tone="primary" type="submit">
+                  验证并绑定邮箱
+                </button>
               </form>
               <form id="settings-student-form">
                 <h3>学号绑定申请</h3>
@@ -506,7 +545,9 @@
                   /></label>
                 </div>
                 <p id="settings-student-message" role="status" aria-live="polite"></p>
-                <button class="auth-submit" type="submit">提交学号绑定申请</button>
+                <button class="auth-submit bbs-action" data-action-tone="primary" type="submit">
+                  提交学号绑定申请
+                </button>
               </form>
             </section>
 
@@ -551,7 +592,9 @@
               </label>
 
               <p class="auth-message settings-message" id="settings-password-message"></p>
-              <button class="auth-submit" type="submit">更新密码</button>
+              <button class="auth-submit bbs-action" data-action-tone="primary" type="submit">
+                更新密码
+              </button>
             </form>
           </section>
         </section>

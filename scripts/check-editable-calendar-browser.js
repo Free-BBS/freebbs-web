@@ -9,6 +9,7 @@ const { createEditableCalendarPreview } = require('./preview-editable-calendar')
 async function main() {
   const output = fs.mkdtempSync(path.join(os.tmpdir(), 'freebbs-editable-calendar-'));
   const preview = await createEditableCalendarPreview();
+  preview.workbench.requireCourseConfirmation();
   await new Promise((resolve) => {
     preview.server.listen(0, '127.0.0.1', resolve);
   });
@@ -45,10 +46,31 @@ async function main() {
     });
     await page.setViewport({ width: 1600, height: 1100 });
     await page.goto(`${base}/workbench`, { waitUntil: 'networkidle0' });
+    stage = 'first course preview and explicit confirmation';
+    await page.waitForSelector('#workbench-course-import-dialog[open]');
+    assert.equal(preview.workbench.courseProjection().events.length, 0);
+    assert.match(
+      await page.$eval('#workbench-course-import-list', (el) => el.textContent),
+      /最优化方法|应用信息论基础/,
+    );
+    const importing = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/workbench/campus/course-import') &&
+        response.request().method() === 'POST',
+    );
+    await page.click('#workbench-course-import-confirm');
+    assert.equal((await importing).status(), 200);
+    await page.waitForFunction(
+      () => !document.querySelector('#workbench-course-import-dialog').open,
+    );
     const later = await page.$('.max-tour-later');
     if (later) await later.click();
     await page.waitForFunction(
       () => document.querySelector('#workbench-course-import-open')?.textContent === '重新接入课程',
+    );
+    await page.waitForSelector('.workbench-week-event[data-public-id^="cs_"]');
+    report.checks.push(
+      'First course preview is read-only; only explicit confirmation saves events',
     );
     const fill = (selector, value) =>
       page.$eval(
@@ -84,27 +106,38 @@ async function main() {
     const original = events().find(
       (item) => item.courseReference === 'demo:weeks:1' && item.startAt.startsWith('2026-09-29'),
     );
+    const otherCourses = structuredClone(
+      events().filter((item) => item.publicId !== original.publicId),
+    );
     const card = `.workbench-week-event[data-public-id="${original.publicId}"]`;
     await page.$eval(card, (el) => el.scrollIntoView({ block: 'center', inline: 'center' }));
     await page.click(card);
     await page.waitForSelector('#workbench-schedule-dialog[open]');
+    await page.waitForSelector('#workbench-schedule-series:not([hidden])');
+    assert.equal(await page.$eval('#workbench-series-scope', (el) => el.value), 'single');
     await fill('#workbench-schedule-title', '最优化方法 · 个人调整');
     await fill('#workbench-schedule-description', '六教6C301');
     await fill('#workbench-schedule-start', '2026-09-29T10:00');
     await fill('#workbench-schedule-end', '2026-09-29T11:00');
     const pending = page.waitForResponse(
       (response) =>
-        response.url().endsWith(`/schedule-items/${original.publicId}`) &&
-        response.request().method() === 'PATCH',
+        response.url().endsWith(`/schedule-items/${original.publicId}/series`) &&
+        response.request().method() === 'POST',
     );
     await page.click('#workbench-schedule-submit');
-    assert.equal((await pending).status(), 200);
+    const savedResponse = await pending;
+    assert.equal(savedResponse.status(), 200);
+    assert.equal(JSON.parse(savedResponse.request().postData()).scope, 'single');
     await page.waitForFunction(() => !document.querySelector('#workbench-schedule-dialog').open);
     await page.reload({ waitUntil: 'networkidle0' });
     const edited = events().find((item) => item.publicId === original.publicId);
     assert.equal(edited.title, '最优化方法 · 个人调整');
     assert.equal(edited.startAt, '2026-09-29T02:00:00.000Z');
     assert.equal(edited.description, '六教6C301');
+    assert.deepEqual(
+      events().filter((item) => item.publicId !== original.publicId),
+      otherCourses,
+    );
     await page.waitForSelector(card);
     assert.match(await page.$eval(card, (el) => el.textContent), /六教6C301/);
     report.checks.push(
@@ -123,7 +156,7 @@ async function main() {
             typeScale: 'large',
           });
           document.querySelectorAll('details.personal-fold').forEach((el) => {
-            el.open = true;
+            Object.assign(el, { open: true });
           });
         }, theme);
         await page.evaluate(async () => {
@@ -132,29 +165,54 @@ async function main() {
             requestAnimationFrame(() => requestAnimationFrame(resolve));
           });
         });
-        const geometry = await page.evaluate(() => ({
-          overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
-          fieldsFit: [
-            ...document.querySelectorAll(
-              '#workbench-course-calendar-form select, #workbench-course-calendar-form textarea',
-            ),
-          ].every((el) => {
-            const rect = el.getBoundingClientRect();
-            return rect.left >= 0 && rect.right <= window.innerWidth + 1;
-          }),
-          notes: [
+        const geometry = await page.evaluate(() => {
+          const notes = [
             ...document.querySelectorAll(
               '.workbench-week-event[data-public-id="ws_hour_location"] .workbench-week-notes',
             ),
-          ].every((el) => !el.hidden),
-        }));
-        assert.deepEqual(geometry, { overflow: false, fieldsFit: true, notes: true });
-        report.layouts.push({ width, theme, ...geometry });
+          ];
+          return {
+            overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+            notes: notes.length > 0 && notes.every((el) => !el.hidden),
+          };
+        });
+        assert.deepEqual(geometry, { overflow: false, notes: true });
+        await page.$eval(card, (el) =>
+          el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' }),
+        );
+        await page.click(card);
+        await page.waitForSelector('#workbench-schedule-dialog[open]');
+        const fields = await page.evaluate(() =>
+          [
+            'workbench-schedule-kind',
+            'workbench-schedule-title',
+            'workbench-schedule-description',
+            'workbench-schedule-start',
+            'workbench-schedule-end',
+          ].map((id) => {
+            const rect = document.getElementById(id).getBoundingClientRect();
+            return {
+              id,
+              fits: rect.width > 0 && rect.left >= 0 && rect.right <= window.innerWidth + 1,
+            };
+          }),
+        );
+        assert.equal(fields.length, 5);
+        assert.equal(
+          fields.every((field) => field.fits),
+          true,
+          JSON.stringify(fields),
+        );
+        await page.click('#workbench-schedule-dialog button[data-workbench-dialog-close]');
+        await page.waitForFunction(
+          () => !document.querySelector('#workbench-schedule-dialog').open,
+        );
+        report.layouts.push({ width, theme, ...geometry, fields });
         if ([1600, 390].includes(width)) {
           await page.$eval('#workbench-course-calendar', (el) =>
             el.scrollIntoView({ block: 'start', behavior: 'instant' }),
           );
-          const screenshot = path.join(output, `settings-${width}-${theme}.png`);
+          const screenshot = path.join(output, `courses-${width}-${theme}.png`);
           await page.screenshot({ path: screenshot });
           report.screenshots.push(screenshot);
           await page.$eval('.workbench-week-event[data-public-id="ws_hour_location"]', (el) =>
@@ -180,6 +238,7 @@ async function main() {
     if (browser) await browser.close();
     await new Promise((resolve) => {
       preview.server.close(resolve);
+      preview.server.closeAllConnections();
     });
     if (!report.passed) console.error(`Failed at ${stage}: ${output}`);
   }

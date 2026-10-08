@@ -161,7 +161,7 @@
 
   body.personal-settings-page .personal-profile-link {
     color: var(--ui-muted);
-    font-size: 0.86rem;
+    font-size: var(--type-ui-small-size);
     text-decoration: none;
   }
 
@@ -185,12 +185,12 @@
     display: grid;
     gap: 5px;
     color: var(--ui-muted);
-    font-size: 0.76rem;
+    font-size: var(--type-meta-size);
   }
 
   body.personal-settings-page .personal-balances strong {
     color: var(--ui-text);
-    font-size: 1.35rem;
+    font-size: var(--type-section-title-size);
     font-variant-numeric: tabular-nums;
   }
 

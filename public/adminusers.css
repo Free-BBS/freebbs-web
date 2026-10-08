@@ -73,8 +73,8 @@ body.adminusers-page .admin-export-button {
   padding: 0 18px;
   border: 1px solid transparent !important;
   border-radius: 10px !important;
-  background: var(--admin-accent-solid) !important;
-  color: var(--admin-accent-text) !important;
+  background: var(--action-fill, var(--admin-accent-solid)) !important;
+  color: var(--action-foreground, var(--admin-accent-text)) !important;
   box-shadow: none !important;
   font-size: 0.88rem;
   font-weight: 850;
@@ -85,7 +85,7 @@ body.adminusers-page .admin-export-button {
 
 body.adminusers-page .admin-add-button span,
 body.adminusers-page .admin-export-button span {
-  color: inherit !important;
+  color: var(--action-foreground, inherit) !important;
 }
 
 body.adminusers-page .admin-add-button svg,
@@ -101,7 +101,7 @@ body.adminusers-page .admin-export-button svg {
 body.adminusers-page .admin-add-button:hover,
 body.adminusers-page .admin-export-button:hover {
   filter: brightness(1.08);
-  transform: translateY(-1px);
+  transform: var(--action-target-transform, translateY(-1px));
 }
 
 body.adminusers-page .admin-export-button {
@@ -932,18 +932,18 @@ body.adminusers-page .admin-button {
 
 body.adminusers-page .main-content .admin-button-primary {
   border: 1px solid transparent !important;
-  background: var(--admin-accent-solid) !important;
-  color: var(--admin-accent-text) !important;
+  background: var(--action-fill, var(--admin-accent-solid)) !important;
+  color: var(--action-foreground, var(--admin-accent-text)) !important;
 }
 
 body.adminusers-page .main-content .admin-button-primary span {
-  color: inherit !important;
+  color: var(--action-foreground, inherit) !important;
 }
 
 body.adminusers-page .main-content .admin-button-secondary {
   border: 1px solid var(--ui-line-strong) !important;
-  background: var(--ui-surface) !important;
-  color: var(--ui-text) !important;
+  background: var(--action-fill, var(--ui-surface)) !important;
+  color: var(--action-foreground, var(--ui-text)) !important;
 }
 
 body.adminusers-page .main-content .admin-button-danger {
@@ -958,7 +958,7 @@ body.adminusers-page .main-content .admin-button-danger.is-confirming {
   background: var(--admin-danger-soft) !important;
 }
 
-body.adminusers-page .admin-button:not(:disabled):active {
+body.adminusers-page .admin-button:not(:disabled):active:where(:not(.bbs-action)) {
   transform: translateY(1px);
 }
 

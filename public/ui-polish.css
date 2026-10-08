@@ -323,7 +323,7 @@ body:not(.auth-page-body)
     .course-discussion-link
   )
   * {
-  color: var(--action-primary-text) !important;
+  color: var(--action-foreground, var(--action-primary-text)) !important;
 }
 
 /* Home */
@@ -810,15 +810,15 @@ body.theme-dark:not(.auth-page-body) .settings-password-form input::placeholder 
 }
 
 body:not(.auth-page-body) .settings-form .auth-submit {
-  border-color: var(--action-primary) !important;
-  background: var(--action-primary) !important;
-  color: var(--action-primary-text) !important;
+  border-color: var(--action-stroke, var(--action-primary)) !important;
+  background: var(--action-fill, var(--action-primary)) !important;
+  color: var(--action-foreground, var(--action-primary-text)) !important;
   box-shadow: none !important;
 }
 
 body:not(.auth-page-body) .settings-form .auth-submit:hover {
-  background: var(--action-primary-hover) !important;
-  color: var(--action-primary-text) !important;
+  background: var(--action-hover-fill, var(--action-primary-hover)) !important;
+  color: var(--action-foreground, var(--action-primary-text)) !important;
 }
 
 body.system-settings-page .system-settings-menu-item,
@@ -980,15 +980,15 @@ body.theme-dark.economy-page .shop-inspect-image img {
 
 .auth-page-body .auth-submit {
   min-height: 48px;
-  border-color: var(--action-primary) !important;
-  background: var(--action-primary) !important;
-  color: var(--action-primary-text) !important;
+  border-color: var(--action-stroke, var(--action-primary)) !important;
+  background: var(--action-fill, var(--action-primary)) !important;
+  color: var(--action-foreground, var(--action-primary-text)) !important;
 }
 
 .auth-page-body .auth-submit:hover {
-  border-color: var(--action-primary-hover) !important;
-  background: var(--action-primary-hover) !important;
-  color: var(--action-primary-text) !important;
+  border-color: var(--action-stroke, var(--action-primary-hover)) !important;
+  background: var(--action-hover-fill, var(--action-primary-hover)) !important;
+  color: var(--action-foreground, var(--action-primary-text)) !important;
 }
 
 .auth-page-body .auth-submit:disabled,
@@ -1051,26 +1051,26 @@ html body.auth-page-body.theme-dark .auth-form input::placeholder {
 html body.auth-page-body .auth-major-fixed,
 html body.auth-page-body .auth-inline-button {
   min-height: 48px;
-  border-color: var(--ui-line-strong) !important;
-  background: var(--ui-surface-soft) !important;
-  color: var(--ui-text) !important;
+  border-color: var(--action-stroke, var(--ui-line-strong)) !important;
+  background: var(--action-fill, var(--ui-surface-soft)) !important;
+  color: var(--action-foreground, var(--ui-text)) !important;
   box-shadow: none !important;
 }
 
 html body.auth-page-body .auth-submit,
 html body.auth-page-body.theme-light .auth-submit,
 html body.auth-page-body.theme-dark .auth-submit {
-  border-color: var(--action-primary) !important;
-  background: var(--action-primary) !important;
-  color: var(--action-primary-text) !important;
+  border-color: var(--action-stroke, var(--action-primary)) !important;
+  background: var(--action-fill, var(--action-primary)) !important;
+  color: var(--action-foreground, var(--action-primary-text)) !important;
 }
 
 html body.auth-page-body .auth-submit:hover,
 html body.auth-page-body.theme-light .auth-submit:hover,
 html body.auth-page-body.theme-dark .auth-submit:hover {
-  border-color: var(--action-primary-hover) !important;
-  background: var(--action-primary-hover) !important;
-  color: var(--action-primary-text) !important;
+  border-color: var(--action-stroke, var(--action-primary-hover)) !important;
+  background: var(--action-hover-fill, var(--action-primary-hover)) !important;
+  color: var(--action-foreground, var(--action-primary-text)) !important;
 }
 
 /* Responsive hierarchy */
@@ -1782,11 +1782,11 @@ body:not(.world-page) .katex {
   font-family: var(--font-math);
 }
 
-/* Learning-world-linked course titles keep the original Chinese serif look. */
+/* Ordinary course titles follow the selected title role; the Learning World's
+ * editorial scene keeps its existing local typography rules. */
 body:not(.world-page) .course-hero h1,
 body:not(.world-page) .knowledge-header h1 {
-  font-family:
-    'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', 'Noto Serif SC', sans-serif !important;
+  font-family: var(--font-zh-title) !important;
 }
 
 body:not(.auth-page-body) .settings-typography-form {
