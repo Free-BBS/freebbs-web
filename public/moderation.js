@@ -319,8 +319,16 @@
         ACTION_LABELS[rule.recommendedAction],
       ].filter(Boolean);
       if (info.length) card.append(node('p', info.join(' · '), 'moderation-meta'));
+      if (rule.id === 'EXP-001')
+        card.append(
+          node(
+            'p',
+            '本条用于保护正常表达。适用时建议允许；不适用只表示不属于本条保护范围，仍需结合其他规则判断。',
+            'moderation-note',
+          ),
+        );
       if (rule.supportOnly)
-        card.append(node('p', '支持与关怀规则：命中本条不等于违规。', 'moderation-note'));
+        card.append(node('p', '支持与关怀规则：适用本条不表示违规。', 'moderation-note'));
       if (rule.basisType)
         card.append(
           node(
@@ -332,8 +340,8 @@
       for (const [key, caption] of [
         ['conditions', '适用条件'],
         ['exceptions', '例外与保护'],
-        ['positiveExample', '命中示例'],
-        ['negativeExample', '不应命中'],
+        ['positiveExample', '适用本规则的示例'],
+        ['negativeExample', '不适用本规则的示例'],
       ]) {
         const value = rule[key];
         if (value && (!Array.isArray(value) || value.length)) {
@@ -464,7 +472,7 @@
         evidence.append(
           node(
             'p',
-            '本次未列出命中的具体规则。不得据此认定原稿或图片均无风险。',
+            '本次未列出适用的具体规则。不得据此认定原稿或图片均无风险。',
             'moderation-note',
           ),
         );
@@ -1161,7 +1169,7 @@
               'p',
               counts.length
                 ? `已替换：${counts.join('；')}。`
-                : '未命中当前规则；这不代表内容没有隐私信息。',
+                : '本地识别未发现可替换的隐私信息；这不代表已完整脱敏。',
             ),
           );
           if (Number.isSafeInteger(preview.imageCount) && preview.imageCount > 0)
