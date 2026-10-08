@@ -19,7 +19,7 @@ const clearLabel = () => ({
 const riskLabel = () => ({
   decision: 'high_risk',
   categories: ['harassment'],
-  ruleIds: ['HAR-001'],
+  ruleIds: ['骚扰-001'],
   supportPriority: 'none',
 });
 const feedbackBody = () => ({
@@ -61,6 +61,7 @@ function harness(options = {}) {
       submission_id: ID,
       expired: 0,
       result_json: JSON.stringify({
+        policyVersion: POLICY_VERSION,
         assessment: { ...clearLabel(), ruleMatches: [], reason: '原机器结论' },
       }),
     },
@@ -71,6 +72,7 @@ function harness(options = {}) {
     existingCases: [],
     reviews: [],
     exports: [],
+    skippedLegacyCount: 0,
     ...options,
   };
   const db = {
@@ -108,6 +110,8 @@ function harness(options = {}) {
         return [state.reviews];
       if (sql.startsWith('SELECT c.id, c.case_json FROM moderation_regression_cases'))
         return [state.exports];
+      if (sql.startsWith('SELECT COUNT(*) AS skipped FROM moderation_regression_cases'))
+        return [[{ skipped: state.skippedLegacyCount }]];
       if (sql.startsWith('INSERT INTO')) {
         inserts.push({ sql, args });
         return [{ insertId: 9 }];
@@ -124,26 +128,29 @@ const expectStatus = (status) => (error) => error.status === status;
 test('human labels allow independent nonpunitive attention and urgent support', () => {
   assert.deepEqual(validateLabel(clearLabel()), clearLabel());
   for (const [ruleId, priority] of [
-    ['MEN-001', 'none'],
-    ['MEN-002', 'attention'],
-    ['MEN-003', 'urgent'],
+    ['关怀-001', 'attention'],
+    ['关怀-002', 'urgent'],
   ]) {
     const value = { ...clearLabel(), ruleIds: [ruleId], supportPriority: priority };
     assert.deepEqual(validateLabel(value), value);
   }
   assert.deepEqual(validateLabel(riskLabel()), riskLabel());
+  assert.deepEqual(validateLabel({ ...clearLabel(), decision: 'needs_review' }), {
+    ...clearLabel(),
+    decision: 'needs_review',
+  });
 });
 
 test('human labels cannot invent rules, unsupported categories or punitive support outcomes', () => {
   const invalid = [
     { ...riskLabel(), ruleIds: ['UNKNOWN-001'] },
-    { ...riskLabel(), ruleIds: ['HAR-001', 'HAR-001'] },
+    { ...riskLabel(), ruleIds: ['骚扰-001', '骚扰-001'] },
     { ...riskLabel(), categories: ['harassment', 'fraud'] },
     { ...riskLabel(), ruleIds: [] },
-    { ...riskLabel(), categories: ['political_compliance'], ruleIds: ['POL-001'] },
-    { ...riskLabel(), categories: ['self_harm'], ruleIds: ['MEN-003'], supportPriority: 'urgent' },
-    { ...clearLabel(), ruleIds: ['MEN-003'], supportPriority: 'none' },
-    { ...clearLabel(), ruleIds: ['MEN-002'], supportPriority: 'urgent' },
+    { ...riskLabel(), categories: ['political_compliance'], ruleIds: ['政治内容-001'] },
+    { ...riskLabel(), categories: ['self_harm'], ruleIds: ['关怀-002'], supportPriority: 'urgent' },
+    { ...clearLabel(), ruleIds: ['关怀-002'], supportPriority: 'none' },
+    { ...clearLabel(), ruleIds: ['关怀-001'], supportPriority: 'urgent' },
     { ...clearLabel(), supportPriority: 'attention' },
   ];
   for (const value of invalid)
@@ -285,6 +292,85 @@ test('agree feedback cannot silently change the machine label', async () => {
   assert.equal(h.inserts.length, 0);
 });
 
+test('old-policy runs can be corrected under current Chinese rules without rewriting historical evidence', async () => {
+  for (const [oldAssessment, currentLabel] of [
+    [
+      { ...riskLabel(), categories: ['harassment'], ruleMatches: [{ ruleId: 'HAR-001' }] },
+      riskLabel(),
+    ],
+    [{ ...clearLabel(), ruleMatches: [{ ruleId: 'EXP-001' }] }, clearLabel()],
+    [
+      {
+        ...clearLabel(),
+        decision: 'needs_review',
+        categories: ['other'],
+        ruleMatches: [{ ruleId: 'GEN-001' }],
+      },
+      { ...clearLabel(), decision: 'needs_review' },
+    ],
+  ]) {
+    const h = harness();
+    const originalJson = JSON.stringify({
+      policyVersion: 'freebbs-policy-2026-10-08-v1',
+      assessment: oldAssessment,
+    });
+    h.state.run.result_json = originalJson;
+    for (const label of [
+      currentLabel,
+      {
+        decision: oldAssessment.decision,
+        categories: oldAssessment.categories,
+        ruleIds: oldAssessment.ruleMatches.map((match) => match.ruleId),
+        supportPriority: oldAssessment.supportPriority,
+      },
+    ]) {
+      await assert.rejects(
+        h.audit.feedback({
+          id: ID,
+          runId: RUN_ID,
+          reviewerId: 7,
+          body: { ...feedbackBody(), ...label, verdict: 'agree' },
+        }),
+        (error) => error.status === 409 && /旧版规则.*纠正/.test(error.message),
+      );
+    }
+    await h.audit.feedback({
+      id: ID,
+      runId: RUN_ID,
+      reviewerId: 7,
+      body: { ...feedbackBody(), ...currentLabel, verdict: 'correct' },
+    });
+    const saved = JSON.parse(h.inserts[0].args[4]);
+    assert.equal(saved.policyVersion, POLICY_VERSION);
+    assert.deepEqual(saved.ruleIds, currentLabel.ruleIds);
+    assert.equal(h.state.run.result_json, originalJson);
+  }
+});
+
+test('uncategorized human review requires a concrete note even when agreeing with a machine concern', async () => {
+  const h = harness();
+  const label = { ...clearLabel(), decision: 'needs_review' };
+  h.state.run.result_json = JSON.stringify({
+    policyVersion: POLICY_VERSION,
+    assessment: { ...label, ruleMatches: [], uncertainties: ['潜在伤害对象和语境尚不清楚。'] },
+  });
+  const body = { ...feedbackBody(), ...label, verdict: 'agree', note: '' };
+  await assert.rejects(
+    h.audit.feedback({ id: ID, runId: RUN_ID, reviewerId: 7, body }),
+    expectStatus(400),
+  );
+  await h.audit.feedback({
+    id: ID,
+    runId: RUN_ID,
+    reviewerId: 7,
+    body: { ...body, note: '具体对象与近期行动意图需要进一步核实。' },
+  });
+  const saved = JSON.parse(h.inserts[0].args[4]);
+  assert.deepEqual(saved.ruleIds, []);
+  assert.deepEqual(saved.categories, []);
+  assert.equal(saved.decision, 'needs_review');
+});
+
 test('regression creation requires explicit synthetic attestation and a completed human review', async () => {
   const h = harness();
   const request = { id: ID, runId: RUN_ID, reviewerId: 7, body: regressionBody() };
@@ -325,15 +411,28 @@ test('regression creation requires explicit synthetic attestation and a complete
 });
 
 test('regression export is bounded and queries unexpired evidence rather than original posts', async () => {
-  const value = { title: '虚构样例', content: '合成讨论文字', syntheticConfirmed: true };
-  const h = harness({ exports: [{ id: REQUEST_ID, case_json: JSON.stringify(value) }] });
+  const value = {
+    title: '虚构样例',
+    content: '合成讨论文字',
+    syntheticConfirmed: true,
+    policyVersion: POLICY_VERSION,
+  };
+  const h = harness({
+    exports: [{ id: REQUEST_ID, case_json: JSON.stringify(value) }],
+    skippedLegacyCount: 3,
+  });
   const result = await h.audit.exportRegressions({ reviewerId: 7 });
   assert.deepEqual(result.cases, [{ id: REQUEST_ID, ...value }]);
+  assert.equal(result.skippedLegacyCount, 3);
   const sql = h.events.find((entry) => entry.sql?.startsWith('SELECT c.id')).sql;
   assert.match(sql, /c\.expires_at > NOW\(3\)/);
   assert.match(sql, /r\.expires_at > NOW\(3\)/);
   assert.match(sql, /s\.expires_at > NOW\(3\)/);
   assert.match(sql, /s\.evidence_purged_at IS NULL/);
+  assert.match(sql, /JSON_UNQUOTE\(JSON_EXTRACT\(c\.case_json, '\$\.policyVersion'\)\) = \?/);
+  assert.deepEqual(h.events.find((entry) => entry.sql?.startsWith('SELECT c.id')).args, [
+    POLICY_VERSION,
+  ]);
   assert.doesNotMatch(JSON.stringify(result), /不可自动导出|reviewerId|request_hash/);
   h.state.exports = Array.from({ length: 101 }, () => ({
     id: REQUEST_ID,

@@ -73,28 +73,28 @@
         aria-labelledby="moderation-policy-title"
       >
         <div class="moderation-section-heading">
-          <p class="moderation-eyebrow">POLICY LIBRARY</p>
-          <h2 id="moderation-policy-title">规则与依据</h2>
+          <p class="moderation-eyebrow">禁止内容 · 依据与边界</p>
+          <h2 id="moderation-policy-title">禁止内容清单</h2>
           <p class="moderation-note">
-            这里既有保护正常表达的规则，也有风险核查和心理支持规则。示例标题直接说明本条建议如何处理：保护、核查、拦截或关怀。判断一条规则后，仍需结合其他规则检查全文。
+            下列清单统一说明禁止发布的内容。疑似符合时须结合原文、语境和例外核实，由负责人作出最终决定；命中词语或检索到条款不会自动禁止发布。
           </p>
         </div>
         <details class="moderation-disclosure">
           <summary>规则编号是什么意思？</summary>
           <p>
-            编号由主题缩写和组内序号组成。例如 EXP-001 中，EXP 是 Expression（表达）的缩写，001
-            表示表达保护组的第 1 条规则。
+            编号由中文主题和组内序号组成。例如“隐私-001”表示隐私类第 1 条，“骚扰-001”表示骚扰类第 1
+            条。
           </p>
           <p>
-            这是本站内部编号，用于查找规则、记录依据和追踪修改，不是法律条号、风险等级或处罚编号。法律依据请看规则卡中的来源和条款。
+            编号用于查找条目、记录依据和追踪修改，不是法律条号、风险等级或处罚编号。法律依据请看条目中的来源和条款。
           </p>
         </details>
         <div class="moderation-toolbar">
-          <label for="moderation-policy-query">搜索规则</label
+          <label for="moderation-policy-query">搜索禁止条目</label
           ><input
             id="moderation-policy-query"
             type="search"
-            placeholder="规则编号、主题或关键词"
+            placeholder="例如：隐私-001、骚扰、政治内容"
             maxlength="120"
           /><label for="moderation-policy-category">风险类别</label
           ><select id="moderation-policy-category">
@@ -105,6 +105,17 @@
         <p id="moderation-policy-status" role="status"></p>
         <p id="moderation-export-status" role="status"></p>
         <div id="moderation-policy-list" class="moderation-policy-grid"></div>
+        <details id="moderation-policy-support" class="moderation-support-library">
+          <summary>关怀提示（不属于违规）</summary>
+          <p>
+            正常表达情绪、心理求助和康复分享不属于禁止内容。以下提示只用于判断是否需要关注或紧急关怀，不用于处罚求助者。
+          </p>
+          <div id="moderation-policy-support-list" class="moderation-policy-grid"></div>
+        </details>
+        <details class="moderation-disclosure">
+          <summary>审核时共同遵守的原则</summary>
+          <div id="moderation-policy-principles"></div>
+        </details>
       </section>
       <section id="moderation-reviewers" hidden aria-labelledby="moderation-reviewers-title">
         <h2 id="moderation-reviewers-title">审核负责人</h2>

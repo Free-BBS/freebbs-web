@@ -21,9 +21,7 @@ function normalizePolicyDecision(assessment, { hasImages = false, redactionCount
   const rules = matches.map((match) => getPolicyRule(match?.ruleId));
   const supportPriorities = ['none', 'attention', 'urgent'];
   const riskCategories = new Set(
-    rules
-      .filter((rule) => rule && !rule.supportOnly && rule.recommendedAction !== 'allow')
-      .map((rule) => rule.category),
+    rules.filter((rule) => rule?.kind === 'prohibition').map((rule) => rule.category),
   );
   const expectedSupport =
     supportPriorities[
@@ -39,12 +37,16 @@ function normalizePolicyDecision(assessment, { hasImages = false, redactionCount
     assessment.categories.length === riskCategories.size &&
     new Set(assessment.categories).size === assessment.categories.length &&
     assessment.categories.every((category) => riskCategories.has(category)) &&
-    (assessment.decision === 'no_risk_detected') === (assessment.categories.length === 0) &&
+    (assessment.decision !== 'no_risk_detected' || assessment.categories.length === 0) &&
+    (assessment.decision !== 'high_risk' || assessment.categories.length > 0) &&
     Array.isArray(assessment?.ruleMatches) &&
     matches.length <= 6 &&
     new Set(matches.map((match) => match?.ruleId)).size === matches.length &&
     Array.isArray(assessment?.uncertainties) &&
     assessment.uncertainties.length <= 4 &&
+    (assessment.decision !== 'needs_review' ||
+      assessment.categories.length > 0 ||
+      assessment.uncertainties.length > 0) &&
     assessment.uncertainties.every(
       (item) => typeof item === 'string' && item.trim() && item.length <= 300,
     ) &&
@@ -53,7 +55,7 @@ function normalizePolicyDecision(assessment, { hasImages = false, redactionCount
   const supportPriority = valid ? assessment.supportPriority : 'none';
   if (!valid) reasons.push('invalid_assessment');
   else {
-    const contentRules = rules.filter((rule) => !rule.supportOnly);
+    const contentRules = rules.filter((rule) => rule.kind === 'prohibition');
     const pending = assessment.uncertainties.length > 0;
     const reviewRequired = rules.some((rule) => rule.recommendedAction === 'human_review');
     if (pending) reasons.push('uncertain_context');

@@ -274,7 +274,7 @@ password: free-bbs
 [监管 Agent 首版实施与验收清单](docs/moderation-agent-v1.md)。当前默认关闭新稿件审核；
 设置 `DISCUSSION_MODERATION_ENABLED=true` 后，新帖子和评论先进入审核工作台，人工批准后发布。
 本机测试环境可另行启用[无问芯穹文字试审](docs/moderation-ai-test.md)，用虚构内容验证脱敏与模型建议，最终仍由负责人决定。
-融合版[规则审核工作台](docs/moderation-policy-workbench.md)提供版本化规则、逐条证据、人工纠错和回归样例导出；[规则库与官方来源](docs/moderation-policy-sources.md)说明法律、本站规则与心理支持指引的适用边界。
+融合版[规则审核工作台](docs/moderation-policy-workbench.md)提供使用中文编号的禁止内容清单、独立关怀提示、逐条证据、人工纠错和回归样例导出；[清单与官方来源](docs/moderation-policy-sources.md)说明法律、本站规则与心理支持指引的适用边界。
 
 ## 当前功能分布
 

@@ -129,7 +129,22 @@ function harness({
     if (url.endsWith('/ai-models')) return response(aiCatalog());
     if (url.endsWith('/policies'))
       return response({
-        library: { version: 'test-v1', checkedAt: '2026-10-08', rules: [], sources: [] },
+        library: {
+          version: 'policy-v2',
+          checkedAt: '2026-10-08',
+          rules: [
+            {
+              id: '骚扰-001',
+              title: '禁止针对性骚扰',
+              kind: 'prohibition',
+              category: 'harassment',
+              conditions: ['针对具体对象'],
+              sourceIds: [],
+            },
+          ],
+          sources: [],
+          principles: ['保护正常表达。'],
+        },
       });
     if (url.endsWith('/ai-history')) return response({ runs: [] });
     if (/\/(mine|submissions)\?/.test(url)) return response({ submissions: [submission] });
@@ -514,7 +529,7 @@ test('AI trial sends only the server-owned snapshot version, mode and terms and 
   assert.ok(h.requests.every(({ url }) => url.startsWith('http://localhost:3000/api/')));
   const text = h.get('detail').textContent;
   for (const expected of [
-    '未发现明显风险，仍需人工决定',
+    '未发现明确禁止内容，仍需人工决定',
     'synthetic-test-model',
     '1.3 秒',
     '隐私信息',
@@ -1314,7 +1329,7 @@ const policyRun = () => ({
     reason: '需要结合上下文判断。',
     ruleMatches: [
       {
-        ruleId: 'HAR-001',
+        ruleId: '骚扰-001',
         evidence: { field: 'content', quote: '<script>evidence()</script>' },
         explanation: '文字是举报还是骚扰有待核查。',
       },
@@ -1333,7 +1348,8 @@ const policyRun = () => ({
   policyEvidence: [
     {
       rule: {
-        id: 'HAR-001',
+        id: '骚扰-001',
+        kind: 'prohibition',
         title: '针对性骚扰',
         category: 'harassment',
         conditions: ['针对具体对象'],
@@ -1402,13 +1418,28 @@ test('policy library searches locally, protects literal content and rejects acti
               checkedAt: '2026-10-08',
               rules: [
                 {
-                  id: 'HAR-001',
+                  id: '骚扰-001',
+                  kind: 'prohibition',
                   title: '<script>bad()</script>',
                   category: 'harassment',
                   conditions: ['骚扰'],
                   sourceIds: ['a', 'b'],
                 },
-                { id: 'SUP-001', title: '心理支持', category: 'self_harm', sourceIds: [] },
+                {
+                  id: '隐私-001',
+                  title: '禁止公开他人隐私',
+                  kind: 'prohibition',
+                  category: 'privacy',
+                  sourceIds: [],
+                },
+                {
+                  id: '关怀-001',
+                  title: '需要心理支持',
+                  kind: 'support',
+                  supportOnly: true,
+                  category: 'self_harm',
+                  sourceIds: [],
+                },
               ],
               sources: [
                 { id: 'a', title: '官方', url: 'https://www.cac.gov.cn/example' },
@@ -1430,10 +1461,11 @@ test('policy library searches locally, protects literal content and rejects acti
     ['https://www.cac.gov.cn/example'],
   );
   const before = h.requests.length;
-  h.get('policy-query').value = 'SUP-001';
+  h.get('policy-query').value = '隐私-001';
   h.get('policy-query').events.input();
-  assert.match(h.get('policy-list').textContent, /心理支持/);
-  assert.doesNotMatch(h.get('policy-list').textContent, /HAR-001/);
+  assert.match(h.get('policy-list').textContent, /禁止公开他人隐私/);
+  assert.doesNotMatch(h.get('policy-list').textContent, /骚扰-001|心理支持/);
+  assert.match(h.get('policy-support-list').textContent, /需要心理支持/);
   assert.equal(h.requests.length, before);
 });
 
@@ -1533,7 +1565,8 @@ test('regression sample begins blank and only sends manually rewritten content a
     verdict: 'agree',
     decision: run.assessment.decision,
     categories: run.assessment.categories,
-    ruleIds: ['HAR-001'],
+    ruleIds: ['骚扰-001'],
+    policyVersion: 'policy-v2',
     supportPriority: 'none',
     note: '',
     createdAt: '2026-10-08T01:00:00Z',
@@ -1576,7 +1609,11 @@ test('saved corrected labels survive history refresh and regression uses those s
     run,
     customFetch: async (url, options, fallback) => {
       if (url.endsWith('/feedback')) {
-        run.feedback = { ...JSON.parse(options.body), createdAt: '2026-10-08T01:00:00Z' };
+        run.feedback = {
+          ...JSON.parse(options.body),
+          policyVersion: 'policy-v2',
+          createdAt: '2026-10-08T01:00:00Z',
+        };
         return response({ ok: true });
       }
       if (url.endsWith('/regression')) return response({ ok: true });
@@ -1666,4 +1703,158 @@ test('regression creation remains disabled until this run has a saved human revi
     .find((item) => item.textContent === '保存虚构回归样例');
   assert.equal(save.disabled, true);
   assert.match(h.get('detail').textContent, /请先保存上方人工复核记录/);
+});
+
+test('current library separates the prohibition checklist from support and global principles', async () => {
+  const library = JSON.parse(
+    fs.readFileSync(require.resolve('../backend/moderation-policy-library.json'), 'utf8'),
+  );
+  const h = harness({
+    customFetch: async (url, options, fallback) =>
+      url.endsWith('/policies') ? response({ library }) : fallback(url, options),
+  });
+  await h.app.ready;
+  await flush();
+  assert.equal(h.get('policy-list').querySelectorAll('details').length, 20);
+  assert.equal(h.get('policy-support-list').querySelectorAll('article').length, 2);
+  assert.doesNotMatch(
+    h.get('policy-list').textContent,
+    /关怀-00[12]|EXP-001|MEN-001|SYS-001|GEN-001/,
+  );
+  assert.match(h.get('policy-list').textContent, /禁止发布的内容/);
+  assert.match(h.get('policy-list').textContent, /不应据此禁止的情况/);
+  assert.match(h.get('policy-list').textContent, /禁止情形示例/);
+  assert.match(h.get('policy-support-list').textContent, /心理支持（不属于违规）/);
+  assert.doesNotMatch(h.get('policy-support-list').textContent, /禁止情形示例|自伤风险/);
+  assert.match(h.get('policy-principles').textContent, /正常|求助/);
+  assert.ok(
+    !h
+      .get('policy-category')
+      .querySelectorAll('option')
+      .some((item) => item.value === 'other'),
+  );
+});
+
+test('legacy evidence keeps original JSON but shows Chinese historical labels and requires current reassessment', async () => {
+  const run = policyRun();
+  run.policyVersion = 'policy-v1';
+  run.assessment.categories = ['other'];
+  run.assessment.ruleMatches = [
+    {
+      ruleId: 'EXP-001',
+      evidence: { field: 'content', quote: '正常建议' },
+      explanation: '历史表达保护',
+    },
+  ];
+  run.policyEvidence[0].rule = {
+    id: 'EXP-001',
+    title: '保护正常表达',
+    recommendedAction: 'allow',
+    conditions: ['正常建议'],
+    sourceIds: [],
+  };
+  run.feedback = {
+    policyVersion: 'policy-v1',
+    verdict: 'agree',
+    decision: 'no_risk_detected',
+    categories: ['other'],
+    ruleIds: ['EXP-001'],
+    supportPriority: 'none',
+    note: '历史说明',
+    createdAt: '2026-10-08T01:00:00Z',
+  };
+  const h = policyHarness({ run });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  const rules = control(h, 'input', '-rules');
+  const verdict = control(h, 'select', '-verdict');
+  assert.match(h.get('detail').textContent, /旧版表达保护-001（历史版本）/);
+  assert.match(h.get('detail').textContent, /不作为当前禁止清单中的条目/);
+  assert.match(h.get('detail').textContent, /复核规则版本：policy-v1/);
+  assert.ok(
+    h
+      .get('detail')
+      .querySelectorAll('pre')
+      .some((item) => item.textContent.includes('"ruleId": "EXP-001"')),
+  );
+  assert.equal(rules.value, '');
+  assert.equal(verdict.value, 'correct');
+  assert.ok(!verdict.querySelectorAll('option').some((item) => item.value === 'agree'));
+  const form = h
+    .get('detail')
+    .querySelectorAll('form')
+    .find((item) =>
+      item.querySelectorAll('button').some((button) => button.textContent === '保存人工复核记录'),
+    );
+  assert.equal(
+    form.querySelectorAll('input').filter((item) => item.type === 'checkbox' && item.checked)
+      .length,
+    0,
+  );
+  assert.ok(!form.querySelectorAll('input').some((item) => item.value === 'other'));
+  rules.value = 'HAR-001';
+  control(h, 'textarea', '-note').value = '重新核查';
+  await form.events.submit({ preventDefault() {} });
+  assert.match(form.textContent, /当前清单中的中文编号/);
+  assert.ok(!h.requests.some(({ url }) => url.endsWith('/feedback')));
+});
+
+test('a current-version correction on an old run remains editable without enabling old-result agreement', async () => {
+  const run = policyRun();
+  run.policyVersion = 'policy-v1';
+  run.assessment.ruleMatches[0].ruleId = 'HAR-001';
+  run.feedback = {
+    policyVersion: 'policy-v2',
+    verdict: 'correct',
+    decision: 'needs_review',
+    categories: ['harassment'],
+    ruleIds: ['骚扰-001'],
+    supportPriority: 'none',
+    note: '按新清单重评',
+    createdAt: '2026-10-08T01:00:00Z',
+  };
+  const h = policyHarness({ run });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  assert.equal(control(h, 'input', '-rules').value, '骚扰-001');
+  assert.equal(control(h, 'select', '-verdict').value, 'correct');
+  assert.match(h.get('detail').textContent, /复核规则版本：policy-v2/);
+  assert.ok(
+    !control(h, 'select', '-verdict')
+      .querySelectorAll('option')
+      .some((item) => item.value === 'agree'),
+  );
+});
+
+test('old backend rule shape cannot become an empty current checklist or enable feedback', async () => {
+  const h = policyHarness({
+    customFetch: async (url, options, fallback) =>
+      url.endsWith('/policies')
+        ? response({
+            library: {
+              version: 'policy-v1',
+              sources: [],
+              rules: [{ id: 'EXP-001', title: '保护正常表达' }],
+            },
+          })
+        : fallback(url, options),
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  assert.equal(h.app.state.library, null);
+  assert.match(
+    h.get('policy-status').textContent,
+    /后端尚未加载中文禁止清单，请重启测试后端并刷新/,
+  );
+  assert.equal(h.get('policy-list').textContent, '');
+  assert.equal(h.get('regression-export').disabled, true);
+  assert.ok(
+    !h
+      .get('detail')
+      .querySelectorAll('button')
+      .some((item) => item.textContent === '保存人工复核记录'),
+  );
 });

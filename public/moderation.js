@@ -10,7 +10,7 @@
     privacy: '隐私信息',
     harassment: '骚扰侮辱',
     threat: '威胁',
-    self_harm: '自伤风险',
+    self_harm: '自伤教唆与危险传播',
     sexual_minors: '未成年人性风险',
     sexual_content: '色情内容',
     violence: '暴力',
@@ -19,9 +19,43 @@
     hate: '仇恨歧视',
     misinformation: '不实信息',
     political_compliance: '政治与公共议题合规',
-    other: '其他',
+    other: '旧版其他',
   };
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  // Read-only labels for historical evidence. These do not add old IDs to the current rules.
+  const LEGACY_RULE_LABELS = {
+    'EXP-001': '旧版表达保护-001',
+    'PRI-001': '隐私-001',
+    'PRI-002': '隐私-002',
+    'PRI-003': '隐私-003',
+    'PRI-004': '隐私-004',
+    'HAR-001': '骚扰-001',
+    'HAR-002': '骚扰-002',
+    'THR-001': '威胁-001',
+    'HAT-001': '仇恨-001',
+    'SEX-001': '未成年保护-001',
+    'SEX-002': '色情-001',
+    'VIO-001': '暴力-001',
+    'FRA-001': '诈骗-001',
+    'ILL-001': '违法交易-001',
+    'MIS-001': '虚假信息-001',
+    'MIS-002': '虚假信息-002',
+    'POL-001': '政治内容-001',
+    'POL-002': '政治内容-002',
+    'POL-003': '政治内容-003',
+    'MEN-001': '旧版普通求助-001',
+    'MEN-002': '关怀-001',
+    'MEN-003': '关怀-002',
+    'MEN-004': '自伤教唆-001',
+    'MEN-005': '危险诊疗-001',
+    'SYS-001': '旧版指令隔离-001',
+    'GEN-001': '旧版人工核查-001',
+  };
+  function ruleDisplayId(id, historical = false) {
+    return LEGACY_RULE_LABELS[id] || historical
+      ? `${LEGACY_RULE_LABELS[id] || id}（历史版本）`
+      : id;
+  }
 
   function attachmentId(attachment, apiBase, origin) {
     if (UUID.test(attachment.id || '')) return attachment.id;
@@ -156,6 +190,8 @@
       state.library = null;
       state.policyVersion += 1;
       el('policy-list').replaceChildren();
+      el('policy-support-list').replaceChildren();
+      el('policy-principles').replaceChildren();
       el('policy-status').textContent = '';
       el('export-status').textContent = '';
       el('regression-export').disabled = true;
@@ -254,7 +290,7 @@
     }
 
     const DECISION_LABELS = {
-      no_risk_detected: '未发现明显风险',
+      no_risk_detected: '未发现明确禁止内容',
       needs_review: '需要人工核查',
       high_risk: '高风险迹象',
     };
@@ -308,27 +344,40 @@
       return link;
     }
 
-    function ruleCard(rule, sourceList = []) {
+    function ruleCard(rule, sourceList = [], historical = false) {
       const card = node('article', undefined, 'moderation-rule-card');
+      const isHistorical = historical || Boolean(LEGACY_RULE_LABELS[rule.id || rule.ruleId]);
       card.append(
-        node('p', rule.id || rule.ruleId || '', 'moderation-rule-id'),
+        node('p', ruleDisplayId(rule.id || rule.ruleId || '', isHistorical), 'moderation-rule-id'),
         node('h4', rule.title || '规则依据'),
       );
       const info = [
-        AI_CATEGORY_LABELS[rule.category] || rule.category,
-        ACTION_LABELS[rule.recommendedAction],
+        rule.kind === 'support' || rule.supportOnly
+          ? '心理支持（不属于违规）'
+          : AI_CATEGORY_LABELS[rule.category] || rule.category,
+        rule.kind === 'support' || rule.supportOnly
+          ? SUPPORT_LABELS[rule.supportPriority]
+          : ACTION_LABELS[rule.recommendedAction],
       ].filter(Boolean);
       if (info.length) card.append(node('p', info.join(' · '), 'moderation-meta'));
-      if (rule.id === 'EXP-001')
+      if (isHistorical)
         card.append(
           node(
             'p',
-            '本条用于保护正常表达。适用时建议允许；不适用只表示不属于本条保护范围，仍需结合其他规则判断。',
+            '这是当时使用的历史依据，保留用于追溯；不作为当前禁止清单中的条目。原始编号和数据保留在结构化 JSON 中。',
             'moderation-note',
           ),
         );
-      if (rule.supportOnly)
+      if (rule.kind === 'support' || rule.supportOnly)
         card.append(node('p', '支持与关怀规则：适用本条不表示违规。', 'moderation-note'));
+      if (rule.kind === 'prohibition' && rule.recommendedAction === 'human_review')
+        card.append(
+          node(
+            'p',
+            '疑似符合禁止情形时先交负责人核实；未经核实不自动判定违规。',
+            'moderation-note',
+          ),
+        );
       if (rule.basisType)
         card.append(
           node(
@@ -337,22 +386,24 @@
             'moderation-note',
           ),
         );
-      let exampleCaptions = ['需要人工核查的情况', '不因本条要求核查的情况'];
-      if (rule.recommendedAction === 'block')
-        exampleCaptions = ['建议拦截并复核的情况', '不因本条拦截的情况'];
-      if (rule.recommendedAction === 'allow')
-        exampleCaptions = ['本条建议允许的情况', '需要按其他规则判断的情况'];
-      if (rule.id === 'EXP-001') exampleCaptions = ['应予保护的表达', '不属于本条保护范围的情况'];
-      if (rule.supportOnly)
+      let conditionCaptions = isHistorical
+        ? ['当时的适用条件', '当时的例外与保护']
+        : ['禁止发布的内容', '不应据此禁止的情况'];
+      let exampleCaptions = isHistorical
+        ? ['历史规则示例', '历史规则对照示例']
+        : ['禁止情形示例', '不因本条禁止的示例'];
+      if (rule.kind === 'support' || rule.supportOnly) {
+        conditionCaptions = ['需要关怀的信号', '不据此触发关怀的情况'];
         exampleCaptions =
           {
             none: ['正常求助与康复分享', '需要进一步判断支持级别的情况'],
             attention: ['需要关注与支持的情况', '不按本条列为关注的情况'],
             urgent: ['需要紧急关怀的情况', '不按本条列为紧急的情况'],
           }[rule.supportPriority] || exampleCaptions;
+      }
       for (const [key, caption] of [
-        ['conditions', '适用条件'],
-        ['exceptions', '例外与保护'],
+        ['conditions', conditionCaptions[0]],
+        ['exceptions', conditionCaptions[1]],
         ['positiveExample', exampleCaptions[0]],
         ['negativeExample', exampleCaptions[1]],
       ]) {
@@ -390,7 +441,8 @@
       if (!state.library) return;
       const queryText = el('policy-query').value.trim().toLowerCase();
       const category = el('policy-category').value;
-      const rules = state.library.rules.filter(
+      const prohibitions = state.library.rules.filter((rule) => rule.kind === 'prohibition');
+      const rules = prohibitions.filter(
         (rule) =>
           (!category || rule.category === category) &&
           (!queryText || JSON.stringify(rule).toLowerCase().includes(queryText)),
@@ -403,9 +455,26 @@
         }),
       );
       el('policy-status').textContent =
-        `规则版本 ${state.library.version} · 资料核对 ${state.library.checkedAt || '待确认'} · 显示 ${rules.length} / ${state.library.rules.length} 条`;
+        `清单版本 ${state.library.version} · 资料核对 ${state.library.checkedAt || '待确认'} · 显示 ${rules.length} / ${prohibitions.length} 条禁止条目`;
       if (!rules.length)
-        el('policy-list').append(node('p', '没有匹配的规则，请调整搜索条件。', 'moderation-empty'));
+        el('policy-list').append(
+          node('p', '没有匹配的禁止条目。心理关怀提示请查看下方独立区域。', 'moderation-empty'),
+        );
+      el('policy-support-list').replaceChildren(
+        ...state.library.rules
+          .filter((rule) => rule.kind === 'support')
+          .map((rule) => ruleCard(rule, state.library.sources)),
+      );
+      el('policy-principles').replaceChildren(
+        ...(state.library.principles || []).map((principle) =>
+          node(
+            'p',
+            typeof principle === 'string'
+              ? principle
+              : `${principle.title || ''} ${principle.description || principle.text || ''}`,
+          ),
+        ),
+      );
     }
 
     async function loadPolicies() {
@@ -413,6 +482,12 @@
       const generation = state.generation;
       state.policyVersion += 1;
       const version = state.policyVersion;
+      state.library = null;
+      el('policy-list').replaceChildren();
+      el('policy-support-list').replaceChildren();
+      el('policy-principles').replaceChildren();
+      el('regression-export').disabled = true;
+      state.refreshHistory?.();
       el('policy-status').textContent = '正在加载规则依据…';
       try {
         const { library } = await client.request('/moderation/policies');
@@ -425,17 +500,23 @@
           return;
         if (!library || !Array.isArray(library.rules) || !Array.isArray(library.sources))
           throw new Error('规则库格式无效。');
+        if (library.rules.some((rule) => !rule || !['prohibition', 'support'].includes(rule.kind)))
+          throw new Error('后端尚未加载中文禁止清单，请重启测试后端并刷新。');
         state.library = library;
+        el('regression-export').disabled = state.session?.aiTestEnabled !== true;
         const selected = el('policy-category').value;
         el('policy-category').replaceChildren(
-          ...Object.entries({ '': '全部类别', ...AI_CATEGORY_LABELS }).map(([value, label]) => {
-            const option = node('option', label);
-            option.value = value;
-            return option;
-          }),
+          ...Object.entries({ '': '全部类别', ...AI_CATEGORY_LABELS })
+            .filter(([value]) => value !== 'other')
+            .map(([value, label]) => {
+              const option = node('option', label);
+              option.value = value;
+              return option;
+            }),
         );
         el('policy-category').value = selected;
         renderPolicies();
+        state.refreshHistory?.();
       } catch (error) {
         if (valid(generation) && version === state.policyVersion)
           el('policy-status').textContent = `规则依据未能加载：${error.message}`;
@@ -445,6 +526,17 @@
     function policyResultPanels(run) {
       const group = node('div', undefined, 'moderation-policy-result');
       const assessment = run.assessment || {};
+      const historical = Boolean(
+        state.library && run.policyVersion && run.policyVersion !== state.library.version,
+      );
+      if (historical)
+        group.append(
+          node(
+            'p',
+            '历史版本结果：仅用于追溯当时判断，不能替代按当前禁止清单复核。',
+            'moderation-privacy-warning',
+          ),
+        );
       if (run.policyDecision) {
         const action = run.policyDecision.recommendedAction;
         const banner = node(
@@ -475,7 +567,7 @@
       for (const match of assessment.ruleMatches || []) {
         const item = node('article', undefined, 'moderation-evidence');
         item.append(
-          node('strong', match.ruleId),
+          node('strong', ruleDisplayId(match.ruleId, historical)),
           node('blockquote', match.evidence?.quote || ''),
           node('p', match.explanation || ''),
         );
@@ -492,7 +584,7 @@
       const policyEvidence = Array.isArray(run.policyEvidence) ? run.policyEvidence : [];
       for (const entry of policyEvidence) {
         const rule = entry.rule || entry;
-        evidence.append(ruleCard(rule, entry.sources || state.library?.sources || []));
+        evidence.append(ruleCard(rule, entry.sources || state.library?.sources || [], historical));
       }
       for (const uncertainty of assessment.uncertainties || [])
         evidence.append(node('p', `待核查：${uncertainty}`, 'moderation-privacy-warning'));
@@ -522,35 +614,55 @@
     function feedbackPanel(submission, run, current, refresh) {
       const wrapper = disclosure('人工复核与回归样例');
       const form = node('form', undefined, 'moderation-feedback-form');
-      const previousFeedback = run.feedback || null;
-      const initial = previousFeedback || run.assessment || {};
+      const currentPolicyVersion = state.library.version;
+      const historical = run.policyVersion !== currentPolicyVersion;
+      const previousFeedback =
+        run.feedback?.policyVersion === currentPolicyVersion ? run.feedback : null;
+      const initial =
+        previousFeedback ||
+        (historical
+          ? { decision: 'needs_review', categories: [], supportPriority: 'none' }
+          : run.assessment) ||
+        {};
       const initialRuleIds =
         previousFeedback?.ruleIds ||
-        (run.assessment?.ruleMatches || []).map((match) => match.ruleId);
-      const canWrite = () => current() && state.session?.aiTestEnabled === true;
+        (historical ? [] : (run.assessment?.ruleMatches || []).map((match) => match.ruleId));
+      const canWrite = () =>
+        current() &&
+        state.session?.aiTestEnabled === true &&
+        state.library?.version === currentPolicyVersion;
+      const verdictOptions = historical
+        ? { correct: '按当前清单重新复核', escalate: '升级人工核查' }
+        : { agree: '同意机器判断', correct: '纠正机器判断', escalate: '升级人工核查' };
       const verdict = selectControl(
-        { agree: '同意机器判断', correct: '纠正机器判断', escalate: '升级人工核查' },
-        previousFeedback?.verdict || 'agree',
+        verdictOptions,
+        historical
+          ? previousFeedback?.verdict === 'escalate'
+            ? 'escalate'
+            : 'correct'
+          : previousFeedback?.verdict || 'agree',
       );
       const decision = selectControl(DECISION_LABELS, initial.decision);
       const support = selectControl(SUPPORT_LABELS, initial.supportPriority || 'none');
       const categories = node('fieldset', undefined, 'moderation-category-options');
       categories.append(node('legend', '人工确认的风险类别'));
-      const checks = Object.entries(AI_CATEGORY_LABELS).map(([value, label]) => {
-        const input = node('input');
-        input.type = 'checkbox';
-        input.value = value;
-        input.checked = initial.categories?.includes(value) || false;
-        const option = node('label');
-        option.append(input, node('span', label));
-        categories.append(option);
-        return input;
-      });
+      const checks = Object.entries(AI_CATEGORY_LABELS)
+        .filter(([value]) => value !== 'other')
+        .map(([value, label]) => {
+          const input = node('input');
+          input.type = 'checkbox';
+          input.value = value;
+          input.checked = initial.categories?.includes(value) || false;
+          const option = node('label');
+          option.append(input, node('span', label));
+          categories.append(option);
+          return input;
+        });
       const rules = node('input');
       rules.type = 'text';
       rules.maxLength = 1000;
       rules.value = initialRuleIds.join(', ');
-      rules.placeholder = '填写规则编号，用逗号分隔';
+      rules.placeholder = '例如：隐私-001，骚扰-001；最多 6 项';
       const note = node('textarea');
       note.rows = 3;
       note.maxLength = 1000;
@@ -582,15 +694,17 @@
         node(
           'p',
           previousFeedback
-            ? '已载入最近保存的人工判断；选择“同意机器判断”表示与最初机器结果完全一致。'
-            : '尚未保存人工复核；当前字段来自机器判断。',
+            ? `已载入按当前清单保存的人工判断。${historical ? '原机器结果为历史版本，不提供直接同意操作。' : '选择“同意机器判断”表示与最初机器结果完全一致。'}`
+            : historical
+              ? '这条机器结果使用历史版本。请按当前禁止清单完整重新复核；旧分类和旧编号未自动填入。'
+              : '尚未保存人工复核；当前字段来自机器判断。',
           'moderation-note',
         ),
         field('复核结论', verdict, `${prefix}-verdict`),
         field('人工风险判断', decision, `${prefix}-decision`),
         field('支持优先级', support, `${prefix}-support`),
         categories,
-        field('适用规则', rules, `${prefix}-rules`),
+        field('适用条目编号（中文）', rules, `${prefix}-rules`),
         field('复核说明', note, `${prefix}-note`),
         save,
         status,
@@ -600,6 +714,18 @@
         if (save.disabled || !canWrite()) return;
         if (ruleIds().length > 6) {
           status.textContent = '最多选择 6 条适用规则。';
+          return;
+        }
+        if (!Object.prototype.hasOwnProperty.call(verdictOptions, verdict.value)) {
+          status.textContent = '历史结果不能直接同意，请按当前禁止清单重新复核。';
+          return;
+        }
+        if (ruleIds().some((id) => !state.library.rules.some((rule) => rule.id === id))) {
+          status.textContent = '请填写当前清单中的中文编号；历史编号不能用于新的复核。';
+          return;
+        }
+        if (decision.value === 'needs_review' && !categoryIds().length && !note.value.trim()) {
+          status.textContent = '未对应具体禁止类别时，请在复核说明中写明需要核查的事项。';
           return;
         }
         if (verdict.value !== 'agree' && !note.value.trim()) {
@@ -797,7 +923,7 @@
               entry.append(
                 node(
                   'p',
-                  `最近复核：${{ agree: '同意', correct: '纠正', escalate: '升级核查' }[run.feedback.verdict] || '已记录'} · ${DECISION_LABELS[run.feedback.decision] || ''} · ${formatTime(run.feedback.createdAt)}`,
+                  `最近复核：${{ agree: '同意', correct: '纠正', escalate: '升级核查' }[run.feedback.verdict] || '已记录'} · ${DECISION_LABELS[run.feedback.decision] || ''} · ${formatTime(run.feedback.createdAt)} · 复核规则版本：${run.feedback.policyVersion || '未记录（历史）'}`,
                 ),
                 node('p', run.feedback.note || ''),
               );
@@ -807,14 +933,22 @@
                 revisions.append(
                   node(
                     'p',
-                    `${formatTime(feedback.createdAt)} · ${{ agree: '同意', correct: '纠正', escalate: '升级核查' }[feedback.verdict] || '已记录'} · ${DECISION_LABELS[feedback.decision] || ''}`,
+                    `${formatTime(feedback.createdAt)} · ${{ agree: '同意', correct: '纠正', escalate: '升级核查' }[feedback.verdict] || '已记录'} · ${DECISION_LABELS[feedback.decision] || ''} · 复核规则版本：${feedback.policyVersion || '未记录（历史）'}`,
                   ),
                   node('p', feedback.note || '（无补充说明）'),
                 );
               entry.append(revisions);
             }
-            if (state.session?.aiTestEnabled === true)
+            if (state.session?.aiTestEnabled === true && state.library)
               entry.append(feedbackPanel(submission, run, current, refresh));
+            else if (state.session?.aiTestEnabled === true)
+              entry.append(
+                node(
+                  'p',
+                  '当前禁止清单尚未加载，暂不能填写复核或回归样例。请刷新规则后重试。',
+                  'moderation-note',
+                ),
+              );
             else
               entry.append(
                 node(
@@ -1002,7 +1136,7 @@
           );
           if (!responseCurrent()) return;
           const decisions = {
-            no_risk_detected: '未发现明显风险，仍需人工决定',
+            no_risk_detected: '未发现明确禁止内容，仍需人工决定',
             needs_review: '需要人工重点核查',
             high_risk: '发现高风险迹象，请人工核查',
           };
@@ -1516,7 +1650,13 @@
     el('policy-category').addEventListener('change', renderPolicies);
     el('policy-refresh').addEventListener('click', loadPolicies);
     el('regression-export').addEventListener('click', async () => {
-      if (mine || !state.session?.reviewer || state.session?.aiTestEnabled !== true) return;
+      if (
+        mine ||
+        !state.session?.reviewer ||
+        state.session?.aiTestEnabled !== true ||
+        !state.library
+      )
+        return;
       const generation = state.generation;
       const button = el('regression-export');
       if (button.disabled) return;
@@ -1539,12 +1679,20 @@
         link.download = `freebbs-moderation-regressions-${new Date().toISOString().slice(0, 10)}.json`;
         link.click();
         urlApi.revokeObjectURL(url);
+        const count = Array.isArray(payload.cases) ? payload.cases.length : 0;
+        const skipped = Number.isSafeInteger(payload.skippedLegacyCount)
+          ? payload.skippedLegacyCount
+          : 0;
         el('export-status').textContent =
-          '回归样例已导出，未调用外部模型。导出文件不会自动匿名化，请在使用或分享前再次人工核查。';
+          `已导出 ${count} 条当前版本样例（${payload.policyVersion || state.library?.version || '版本待核对'}）；另有 ${skipped} 条旧版样例未导出，需要按当前清单重新复核并重建。${count ? '' : '本文件没有可执行的当前版本样例。'}未调用外部模型。文件不会自动匿名化，使用或分享前请再次人工核查。`;
       } catch (error) {
         if (valid(generation)) el('export-status').textContent = error.message;
       } finally {
-        button.disabled = mine || !state.session?.reviewer || state.session?.aiTestEnabled !== true;
+        button.disabled =
+          mine ||
+          !state.session?.reviewer ||
+          state.session?.aiTestEnabled !== true ||
+          !state.library;
       }
     });
     el('reviewer-search').addEventListener('submit', async (event) => {

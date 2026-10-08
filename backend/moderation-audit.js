@@ -35,7 +35,7 @@ function uniqueList(value, max, predicate) {
     new Set(value).size !== value.length ||
     value.some((item) => typeof item !== 'string' || !predicate(item))
   )
-    throw fail('风险类别或规则编号无效。');
+    throw fail('风险类别或规则编号无效或已停用，请按当前禁止清单重新复核。');
   return [...value].sort();
 }
 
@@ -48,11 +48,14 @@ function validateLabel({ decision, categories, ruleIds, supportPriority }) {
     ruleIds: uniqueList(ruleIds, 6, (item) => Boolean(getPolicyRule(item))),
     supportPriority,
   };
-  if ((decision === 'no_risk_detected') !== (result.categories.length === 0))
+  if (
+    (decision === 'no_risk_detected' && result.categories.length !== 0) ||
+    (decision === 'high_risk' && result.categories.length === 0)
+  )
     throw fail('审核结论与风险类别不一致。');
   const violations = result.ruleIds
     .map(getPolicyRule)
-    .filter((rule) => !rule.supportOnly && rule.recommendedAction !== 'allow');
+    .filter((rule) => rule.kind === 'prohibition');
   const expectedCategories = [...new Set(violations.map((rule) => rule.category))].sort();
   if (JSON.stringify(expectedCategories) !== JSON.stringify(result.categories))
     throw fail('所选规则与风险类别不一致。');
@@ -254,19 +257,27 @@ function createModerationAudit({ pool }) {
   }
 
   async function feedback({ id, runId, reviewerId, body }) {
-    const label = validateLabel(body);
     if (!['agree', 'correct', 'escalate'].includes(body.verdict)) throw fail('复核方式无效。');
-    const value = {
-      verdict: body.verdict,
-      ...label,
-      note: text(body.note, 1000, body.verdict !== 'agree'),
-    };
     const requestId = uuid(body.requestId);
-    const hash = digest({ id, runId, value });
     return transaction(async (db) => {
       const userId = await reviewer(db, reviewerId);
       await submission(db, id);
       const run = await runRow(db, id, runId);
+      const runResult = parse(run.result_json);
+      if (body.verdict === 'agree' && runResult.policyVersion !== POLICY_VERSION)
+        throw fail('该试审结果来自旧版规则，请选择纠正，并按当前禁止清单重新复核。', 409);
+      const label = validateLabel(body);
+      const value = {
+        verdict: body.verdict,
+        ...label,
+        note: text(
+          body.note,
+          1000,
+          body.verdict !== 'agree' ||
+            (label.decision === 'needs_review' && label.categories.length === 0),
+        ),
+      };
+      const hash = digest({ id, runId, value });
       const [existing] = await db.execute(
         'SELECT * FROM moderation_ai_feedback WHERE reviewer_id = ? AND request_id = ?',
         [userId, requestId],
@@ -275,7 +286,7 @@ function createModerationAudit({ pool }) {
         if (existing[0].request_hash !== hash) throw fail('同一请求编号对应不同复核内容。', 409);
         return { id: String(existing[0].id), replayed: true };
       }
-      const original = parse(run.result_json).assessment;
+      const original = runResult.assessment;
       if (
         value.verdict === 'agree' &&
         digest(label) !==
@@ -391,15 +402,27 @@ function createModerationAudit({ pool }) {
     return transaction(async (db) => {
       await reviewer(db, reviewerId);
       // Evidence expires independently of whether the cleanup worker has run.
-      const [rows] = await db.execute(`SELECT c.id, c.case_json FROM moderation_regression_cases c
+      const evidenceScope = `FROM moderation_regression_cases c
         JOIN moderation_ai_runs r ON r.id = c.run_id JOIN moderation_submissions s ON s.id = r.submission_id
         WHERE c.expires_at > NOW(3) AND r.expires_at > NOW(3) AND s.expires_at > NOW(3)
-        AND s.evidence_purged_at IS NULL ORDER BY c.created_at, c.id LIMIT 101`);
+        AND s.evidence_purged_at IS NULL`;
+      const [[legacy]] = await db.execute(
+        `SELECT COUNT(*) AS skipped ${evidenceScope}
+        AND NOT (JSON_UNQUOTE(JSON_EXTRACT(c.case_json, '$.policyVersion')) <=> ?)`,
+        [POLICY_VERSION],
+      );
+      const [rows] = await db.execute(
+        `SELECT c.id, c.case_json ${evidenceScope}
+        AND JSON_UNQUOTE(JSON_EXTRACT(c.case_json, '$.policyVersion')) = ?
+        ORDER BY c.created_at, c.id LIMIT 101`,
+        [POLICY_VERSION],
+      );
       if (rows.length > 100) throw fail('样例超过单次 100 条导出上限，请联系管理员分批处理。', 413);
       return {
         format: 'freebbs-moderation-regression-v1',
         policyVersion: POLICY_VERSION,
         exportedAt: new Date().toISOString(),
+        skippedLegacyCount: Number(legacy.skipped),
         cases: rows.map((row) => ({ id: row.id, ...parse(row.case_json) })),
       };
     });

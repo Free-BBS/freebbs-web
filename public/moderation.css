@@ -970,3 +970,39 @@ main {
     background: #6941c6;
   }
 }
+
+.moderation-support-library {
+  margin-top: 24px;
+  padding: 0 18px 18px;
+  border: 1px solid #d6e7e1;
+  border-radius: 12px;
+  background: #f6fbf8;
+}
+.moderation-support-library > summary {
+  cursor: pointer;
+  color: #306650;
+  padding: 17px 0;
+  font-weight: 700;
+}
+.moderation-support-library > p {
+  margin-top: 0;
+  font-size: 14px;
+}
+.moderation-support-library .moderation-rule-card {
+  background: #fff;
+  border: 1px solid #d6e7e1;
+  border-radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  .moderation-support-library {
+    background: #1b2f29;
+    border-color: #3b594b;
+  }
+  .moderation-support-library > summary {
+    color: #a6d6bf;
+  }
+  .moderation-support-library .moderation-rule-card {
+    background: #213a2f;
+    border-color: #3b594b;
+  }
+}

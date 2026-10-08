@@ -62,11 +62,19 @@ function parseArguments(args) {
 
 function validateDocument(document) {
   if (
-    !exactKeys(document, ['format', 'policyVersion', 'exportedAt', 'cases']) ||
+    !(
+      exactKeys(document, ['format', 'policyVersion', 'exportedAt', 'cases']) ||
+      exactKeys(document, ['format', 'policyVersion', 'exportedAt', 'cases', 'skippedLegacyCount'])
+    ) ||
     document.format !== FORMAT
   )
     throw fail('export_schema');
   if (document.policyVersion !== POLICY_VERSION) throw fail('policy_version');
+  if (
+    Object.hasOwn(document, 'skippedLegacyCount') &&
+    (!Number.isSafeInteger(document.skippedLegacyCount) || document.skippedLegacyCount < 0)
+  )
+    throw fail('export_schema');
   if (
     typeof document.exportedAt !== 'string' ||
     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(document.exportedAt) ||
@@ -235,6 +243,7 @@ async function runRegression({
     format: 'freebbs-moderation-regression-report-v1',
     policyVersion: POLICY_VERSION,
     exportedAt: fixtures.exportedAt,
+    skippedLegacyCount: fixtures.skippedLegacyCount || 0,
     startedAt: now().toISOString(),
     completedAt: null,
     status: 'running',
@@ -453,6 +462,7 @@ async function main(args, dependencies = {}) {
         run: false,
         policyVersion: POLICY_VERSION,
         plannedCalls: document.cases.length,
+        skippedLegacyCount: document.skippedLegacyCount || 0,
         model: options.model || '测试网站当前默认模型（执行时校验）',
         caseIds: document.cases.map((item) => item.id),
         scope: SCOPE,
@@ -504,6 +514,7 @@ async function main(args, dependencies = {}) {
       status: report.status,
       stopReason: report.stopReason,
       plannedCalls: report.plannedCalls,
+      skippedLegacyCount: report.skippedLegacyCount,
       ...report.summary,
       reportJson: writer.reportPath,
       message: '标签一致数量不是准确率；理由、证据适用性和例外仍需人工检查。',

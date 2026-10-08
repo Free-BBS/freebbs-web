@@ -222,12 +222,37 @@ test('preview reads only the exported fixture file, without config, database, AP
   assert.doesNotMatch(JSON.stringify(output), /synthetic-secret|apiKey|MYSQL_PASSWORD/);
 });
 
+test('preview reports skipped legacy cases but never upgrades a mixed or old-version export', async () => {
+  const input = 'F:\\test\\cases.json';
+  const io = memoryIO({ [input]: JSON.stringify({ ...exported(), skippedLegacyCount: 4 }) });
+  const outputs = [];
+  assert.equal(await main(['--input', input], { io, write: (value) => outputs.push(value) }), 0);
+  assert.equal(outputs[0].skippedLegacyCount, 4);
+  assert.deepEqual(io.events, [
+    ['stat', input],
+    ['read', input],
+  ]);
+  for (const data of [
+    { ...exported(), policyVersion: 'freebbs-policy-2026-10-08-v1' },
+    exported([
+      fixture(),
+      fixture({ id: 'old-case', policyVersion: 'freebbs-policy-2026-10-08-v1' }),
+    ]),
+    exported([
+      fixture({ expectedDecision: 'high_risk', categories: ['harassment'], ruleIds: ['HAR-001'] }),
+    ]),
+  ])
+    assert.throws(() => validateDocument(data));
+});
+
 test('exports reject extra identity metadata, real-data flags, duplicate IDs, wrong versions and impossible labels', () => {
   const invalid = [
     { ...exported(), author: 'should-not-read' },
     { ...exported(), format: 'raw-post-export' },
     { ...exported(), policyVersion: 'old-version' },
     { ...exported(), exportedAt: 'yesterday' },
+    { ...exported(), skippedLegacyCount: -1 },
+    { ...exported(), skippedLegacyCount: '2' },
     exported([]),
     exported(Array.from({ length: 101 }, (_, index) => fixture({ id: `case-${index}` }))),
     exported([fixture(), fixture()]),
@@ -246,14 +271,14 @@ test('exports reject extra identity metadata, real-data flags, duplicate IDs, wr
       { ruleIds: ['EXP-001', 'EXP-001'] },
       { supportPriority: 'urgent' },
       { expectedDecision: 'high_risk', categories: ['privacy'], ruleIds: [] },
-      { ruleIds: ['MEN-003'], supportPriority: 'attention' },
+      { ruleIds: ['关怀-002'], supportPriority: 'attention' },
     ].map((extra) => exported([fixture(extra)])),
   ];
   for (const value of invalid)
     assert.throws(() => validateDocument(value), JSON.stringify(value).slice(0, 150));
   const valid = exported([
     fixture({
-      ruleIds: ['MEN-003'],
+      ruleIds: ['关怀-002'],
       supportPriority: 'urgent',
       reason: '无违规，但存在需立即人工关怀的信号。',
     }),
@@ -334,12 +359,12 @@ test('comparison requires exact complete category and rule sets, but leaves expl
   const expected = fixture({
     expectedDecision: 'high_risk',
     categories: ['privacy', 'harassment'],
-    ruleIds: ['PRI-002', 'HAR-001'],
+    ruleIds: ['隐私-002', '骚扰-001'],
   });
   const valid = assessment({
     decision: 'high_risk',
     categories: ['harassment', 'privacy'],
-    ruleMatches: [{ ruleId: 'HAR-001' }, { ruleId: 'PRI-002' }],
+    ruleMatches: [{ ruleId: '骚扰-001' }, { ruleId: '隐私-002' }],
   });
   assert.equal(evaluate(valid, expected).result, 'matched');
   assert.equal(evaluate(valid, expected).reasonRequiresHumanReview, true);
@@ -348,7 +373,7 @@ test('comparison requires exact complete category and rule sets, but leaves expl
       ...valid,
       decision: 'needs_review',
       categories: [...valid.categories, 'fraud'],
-      ruleMatches: [{ ruleId: 'HAR-001' }],
+      ruleMatches: [{ ruleId: '骚扰-001' }],
       supportPriority: 'attention',
     },
     expected,
@@ -528,7 +553,7 @@ test('completed plans still return nonzero for API failures or changed expected 
   const configPath = 'F:\\test\\config.json';
   for (const [fixtureValue, fetchResult, expectedCode] of [
     [fixture(), () => new Response(PRIVATE, { status: 500 }), 1],
-    [fixture({ ruleIds: ['EXP-001'] }), () => response(), 2],
+    [fixture({ ruleIds: ['关怀-001'], supportPriority: 'attention' }), () => response(), 2],
   ]) {
     const io = memoryIO({
       [input]: JSON.stringify(exported([fixtureValue])),
@@ -566,17 +591,19 @@ test('the actual workbench export contract validates and runs without private au
       if (sql.startsWith('SELECT user_id FROM moderation_reviewers')) return [[{ user_id: 7 }]];
       if (sql.startsWith('SELECT c.id, c.case_json'))
         return [[{ id: caseId, case_json: JSON.stringify(value) }]];
+      if (sql.startsWith('SELECT COUNT(*) AS skipped')) return [[{ skipped: 2 }]];
       assert.fail('Export should not read original content or model secrets');
     },
   };
   const audit = createModerationAudit({ pool: { getConnection: async () => db } });
   const document = await audit.exportRegressions({ reviewerId: 7 });
-  assert.equal(reads.length, 2);
+  assert.equal(reads.length, 3);
   assert.deepEqual(validateDocument(document), document);
   assert.doesNotMatch(JSON.stringify(document), /reviewerId|submissionId|runId|authorId|apiKey/);
   const h = harness();
   const report = await h.run({ document });
   assert.equal(report.status, 'completed');
+  assert.equal(report.skippedLegacyCount, 2);
   assert.equal(report.results[0].fixture.id, caseId);
   assert.equal(h.calls.length, 1);
   assert.equal(report.summary.matchedLabels, 1);

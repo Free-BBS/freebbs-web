@@ -39,7 +39,7 @@ test(
     const label = () => ({
       decision: 'high_risk',
       categories: ['harassment'],
-      ruleIds: ['HAR-001'],
+      ruleIds: ['骚扰-001'],
       supportPriority: 'none',
     });
     const clearLabel = () => ({
@@ -60,7 +60,7 @@ test(
       content: '每天到虚构人物的帖子里羞辱他，直到他退出活动。',
       expectedDecision: 'high_risk',
       categories: ['harassment'],
-      ruleIds: ['HAR-001'],
+      ruleIds: ['骚扰-001'],
       supportPriority: 'none',
       reason: '虚构围攻行为应命中骚扰规则。',
       syntheticConfirmed: true,
@@ -118,7 +118,7 @@ test(
         uncertainties: [],
         ruleMatches: [
           {
-            ruleId: 'HAR-001',
+            ruleId: '骚扰-001',
             evidence: { field: 'content', quote: '每天去他的帖子下羞辱他' },
             explanation: '作者鼓动持续骚扰。',
           },
@@ -185,8 +185,8 @@ test(
         assert.equal(history.runs.length, 1);
         assert.equal(history.runs[0].id, item.runId);
         assert.equal(history.runs[0].policyVersion, POLICY_VERSION);
-        assert.equal(history.runs[0].assessment.ruleMatches[0].ruleId, 'HAR-001');
-        assert.equal(history.runs[0].policyEvidence[0].rule.id, 'HAR-001');
+        assert.equal(history.runs[0].assessment.ruleMatches[0].ruleId, '骚扰-001');
+        assert.equal(history.runs[0].policyEvidence[0].rule.id, '骚扰-001');
         assert.equal(history.runs[0].automaticPublication, false);
         assert.doesNotMatch(
           JSON.stringify(history),
@@ -403,6 +403,54 @@ test(
     );
 
     await t.test(
+      'old English evidence remains immutable while reviewers correct it under the current Chinese list',
+      async () => {
+        const item = await recorded();
+        const [[storedRow]] = await pool.execute(
+          'SELECT result_json FROM moderation_ai_runs WHERE id = ?',
+          [item.runId],
+        );
+        const oldResult =
+          typeof storedRow.result_json === 'string'
+            ? JSON.parse(storedRow.result_json)
+            : storedRow.result_json;
+        oldResult.policyVersion = 'freebbs-policy-2026-10-08-v1';
+        oldResult.assessment.ruleMatches[0].ruleId = 'HAR-001';
+        oldResult.policyEvidence[0].rule.id = 'HAR-001';
+        await pool.execute('UPDATE moderation_ai_runs SET result_json = ? WHERE id = ?', [
+          JSON.stringify(oldResult),
+          item.runId,
+        ]);
+        for (const ruleIds of [['HAR-001'], ['骚扰-001']]) {
+          await assert.rejects(
+            audit.feedback({ ...item, body: feedbackBody({ ruleIds }) }),
+            (error) => error.status === 409 && /旧版规则.*纠正/.test(error.message),
+          );
+        }
+        await audit.feedback({
+          ...item,
+          body: feedbackBody({
+            verdict: 'correct',
+            note: '按当前禁止清单重新核对，确认骚扰行为。',
+          }),
+        });
+        const history = await restarted.history({ id: item.id, reviewerId: 1 });
+        assert.equal(history.runs[0].policyVersion, oldResult.policyVersion);
+        assert.equal(history.runs[0].assessment.ruleMatches[0].ruleId, 'HAR-001');
+        assert.equal(history.runs[0].feedback.policyVersion, POLICY_VERSION);
+        assert.deepEqual(history.runs[0].feedback.ruleIds, ['骚扰-001']);
+        const created = await audit.regression({ ...item, body: caseBody() });
+        const [[row]] = await pool.execute(
+          'SELECT case_json FROM moderation_regression_cases WHERE id = ?',
+          [created.id],
+        );
+        const value = typeof row.case_json === 'string' ? JSON.parse(row.case_json) : row.case_json;
+        assert.equal(value.policyVersion, POLICY_VERSION);
+        assert.deepEqual(value.ruleIds, ['骚扰-001']);
+      },
+    );
+
+    await t.test(
       'exports contain only manually authored synthetic cases and omit actors, raw posts and audit internals',
       async () => {
         const output = await restarted.exportRegressions({ reviewerId: 4 });
@@ -417,6 +465,37 @@ test(
           assert.equal(item.title, '虚构讨论测试');
           assert.equal(item.policyVersion, POLICY_VERSION);
         });
+      },
+    );
+
+    await t.test(
+      'exports exclude old policy cases before limiting results and report how many need rebuilding',
+      async () => {
+        const item = await recorded();
+        await audit.feedback({ ...item, body: feedbackBody() });
+        const created = await audit.regression({ ...item, body: caseBody() });
+        await pool.execute(
+          "UPDATE moderation_regression_cases SET case_json = JSON_SET(case_json, '$.policyVersion', ?, '$.ruleIds', JSON_ARRAY('HAR-001')) WHERE id = ?",
+          ['freebbs-policy-2026-10-08-v1', created.id],
+        );
+        const output = await restarted.exportRegressions({ reviewerId: 1 });
+        assert.ok(output.cases.length > 0);
+        assert.equal(output.skippedLegacyCount, 1);
+        assert.ok(!output.cases.some((value) => value.id === created.id));
+        assert.ok(output.cases.every((value) => value.policyVersion === POLICY_VERSION));
+        const [[old]] = await pool.execute(
+          'SELECT case_json FROM moderation_regression_cases WHERE id = ?',
+          [created.id],
+        );
+        const oldValue =
+          typeof old.case_json === 'string' ? JSON.parse(old.case_json) : old.case_json;
+        assert.equal(oldValue.policyVersion, 'freebbs-policy-2026-10-08-v1');
+        assert.deepEqual(oldValue.ruleIds, ['HAR-001']);
+        await pool.execute(
+          'UPDATE moderation_regression_cases SET expires_at = DATE_SUB(NOW(3), INTERVAL 1 SECOND) WHERE id = ?',
+          [created.id],
+        );
+        assert.equal((await audit.exportRegressions({ reviewerId: 1 })).skippedLegacyCount, 0);
       },
     );
 
