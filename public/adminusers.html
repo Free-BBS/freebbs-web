@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <script src="/typography-preferences.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="FREE-BBS 用户与权限管理。" />
     <title>FREE-BBS - 用户管理</title>
@@ -158,7 +159,8 @@
             </div>
             <div class="admin-header-actions">
               <button
-                class="admin-button admin-button-secondary admin-export-button"
+                class="admin-button admin-button-secondary admin-export-button bbs-action"
+                data-action-tone="secondary"
                 id="admin-export-ai-dialogs"
                 type="button"
               >
@@ -168,7 +170,8 @@
                 <span>导出 AI 聊天</span>
               </button>
               <button
-                class="admin-button admin-button-primary admin-add-button"
+                class="admin-button admin-button-primary admin-add-button bbs-action"
+                data-action-tone="primary"
                 id="admin-add-user"
                 type="button"
               >
@@ -311,6 +314,8 @@
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
     <script src="/registration-whitelist.js"></script>
+    <script src="/request-runtime.js"></script>
+    <script src="/ui-state.js"></script>
     <script src="/app.js"></script>
     <script src="/admin-account-credentials.js"></script>
     <script src="/learning-analytics.js?v=20261002-evidence-1"></script>

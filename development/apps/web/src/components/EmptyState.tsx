@@ -14,6 +14,7 @@ export function EmptyState({ title, description, variant = 'empty', action }: Em
     <section
       className="empty-state"
       data-state={variant}
+      aria-busy="false"
       aria-labelledby={titleId}
       role={variant === 'error' ? 'alert' : undefined}
     >

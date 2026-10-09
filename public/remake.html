@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <script src="/typography-preferences.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>FREE-BBS - 找回密码</title>
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
@@ -86,7 +87,12 @@
                 placeholder="请输入6位验证码"
                 required
               />
-              <button class="auth-inline-button" id="send-email-code" type="button">
+              <button
+                class="auth-inline-button bbs-action"
+                data-action-tone="secondary"
+                id="send-email-code"
+                type="button"
+              >
                 发送验证码
               </button>
             </div>
@@ -133,7 +139,14 @@
           </div>
 
           <p class="auth-message" id="auth-message"></p>
-          <button class="auth-submit" id="auth-submit" type="submit">重设密码</button>
+          <button
+            class="auth-submit bbs-action"
+            data-action-tone="primary"
+            id="auth-submit"
+            type="submit"
+          >
+            重设密码
+          </button>
         </form>
         <p>尚未绑定邮箱的教师账号，请联系管理员重置初始密码。</p>
         <p class="auth-page-switch">想起密码？<a href="/login">去登录</a></p>

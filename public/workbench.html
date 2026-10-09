@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <script src="/typography-preferences.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>FREE-BBS - 我的工作台</title>
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
@@ -292,7 +293,8 @@
                           一屏总览
                         </button>
                         <button
-                          class="workbench-compact-action"
+                          class="workbench-compact-action bbs-action"
+                          data-action-tone="primary"
                           id="workbench-add-schedule"
                           type="button"
                         >
@@ -310,7 +312,13 @@
                         >结束
                         <select id="workbench-hours-end" aria-label="每天显示结束时间"></select
                       ></label>
-                      <button class="workbench-week-control" type="submit">应用</button>
+                      <button
+                        class="workbench-week-control bbs-action"
+                        data-action-tone="secondary"
+                        type="submit"
+                      >
+                        应用
+                      </button>
                       <small id="workbench-hours-status" role="status" aria-live="polite"></small>
                     </form>
                     <details id="workbench-time-conflicts" class="workbench-time-conflicts" hidden>
@@ -443,7 +451,8 @@
                             ><button
                               type="button"
                               id="workbench-rest-add"
-                              class="workbench-compact-action"
+                              class="workbench-compact-action bbs-action"
+                              data-action-tone="secondary"
                             >
                               添加时段
                             </button>
@@ -454,11 +463,17 @@
                             段，不需要保留时可移除。
                           </p>
                           <div class="workbench-planning-shortcuts">
-                            <button type="submit" class="workbench-compact-action">保存偏好</button
+                            <button
+                              type="submit"
+                              class="workbench-compact-action bbs-action"
+                              data-action-tone="primary"
+                            >
+                              保存偏好</button
                             ><button
                               type="button"
                               id="workbench-preferences-reset"
-                              class="workbench-compact-action"
+                              class="workbench-compact-action bbs-action"
+                              data-action-tone="quiet"
                             >
                               恢复建议值
                             </button>
@@ -481,7 +496,8 @@
                           >你的计划由你确认，不会自动写入。</span
                         >
                         <button
-                          class="workbench-agent-action"
+                          class="workbench-agent-action bbs-action"
+                          data-action-tone="primary"
                           id="workbench-agent-generate"
                           type="submit"
                         >
@@ -497,7 +513,8 @@
                           >可单独修改、确认任一项，也可确认全部剩余安排；已确认项不会重复加入。</span
                         >
                         <button
-                          class="workbench-compact-action"
+                          class="workbench-compact-action bbs-action"
+                          data-action-tone="primary"
                           id="workbench-agent-confirm"
                           type="button"
                         >
@@ -539,11 +556,31 @@
                         hidden
                       ></p>
                       <div class="workbench-campus-actions">
-                        <button id="workbench-campus-connect" type="button" disabled>
+                        <button
+                          class="bbs-action"
+                          data-action-tone="primary"
+                          id="workbench-campus-connect"
+                          type="button"
+                          disabled
+                        >
                           连接网络学堂
                         </button>
-                        <button id="workbench-campus-sync" type="button" disabled>立即同步</button>
-                        <button id="workbench-campus-disconnect" type="button" disabled>
+                        <button
+                          class="bbs-action"
+                          data-action-tone="secondary"
+                          id="workbench-campus-sync"
+                          type="button"
+                          disabled
+                        >
+                          立即同步
+                        </button>
+                        <button
+                          class="bbs-action"
+                          data-action-tone="danger"
+                          id="workbench-campus-disconnect"
+                          type="button"
+                          disabled
+                        >
                           解除连接
                         </button>
                       </div>
@@ -594,7 +631,8 @@
                         <button
                           id="workbench-course-import-open"
                           type="button"
-                          class="workbench-compact-action"
+                          class="workbench-compact-action bbs-action"
+                          data-action-tone="primary"
                         >
                           接入课程
                         </button>
@@ -663,7 +701,14 @@
                           <option value="graded">已批</option>
                         </select></label
                       >
-                      <button type="button" id="homework-refresh">刷新列表</button>
+                      <button
+                        class="bbs-action"
+                        data-action-tone="quiet"
+                        type="button"
+                        id="homework-refresh"
+                      >
+                        刷新列表
+                      </button>
                     </div>
                     <p id="homework-message" role="status" aria-live="polite">
                       连接学堂并同步学期后显示作业。
@@ -784,7 +829,8 @@
                       <p>平台发布、课程安排和个人讨论动态，在这里分别查看。</p>
                     </div>
                     <button
-                      class="workbench-compact-action"
+                      class="workbench-compact-action bbs-action"
+                      data-action-tone="quiet"
                       id="workbench-notification-refresh"
                       type="button"
                     >
@@ -853,7 +899,8 @@
                     </li>
                   </ul>
                   <button
-                    class="workbench-compact-action workbench-load-more"
+                    class="workbench-compact-action workbench-load-more bbs-action"
+                    data-action-tone="secondary"
                     id="workbench-notification-more"
                     type="button"
                     hidden
@@ -870,7 +917,8 @@
                   <div class="workbench-card-tools">
                     <span class="workbench-card-status">按截止时间</span>
                     <button
-                      class="workbench-compact-action"
+                      class="workbench-compact-action bbs-action"
+                      data-action-tone="primary"
                       id="workbench-add-important"
                       type="button"
                     >
@@ -979,17 +1027,29 @@
             <footer>
               <button
                 id="workbench-important-delete"
-                class="workbench-item-action is-danger"
+                class="workbench-item-action is-danger bbs-action"
+                data-action-tone="danger"
                 type="button"
                 data-workbench-action="delete-important"
                 hidden
               >
                 删除事项
               </button>
-              <button class="workbench-secondary-action" type="button" data-workbench-dialog-close>
+              <button
+                class="workbench-secondary-action bbs-action"
+                data-action-tone="secondary"
+                type="button"
+                data-workbench-dialog-close
+              >
                 取消
               </button>
-              <button class="workbench-dialog-submit" type="submit">保存事项</button>
+              <button
+                class="workbench-dialog-submit bbs-action"
+                data-action-tone="primary"
+                type="submit"
+              >
+                保存事项
+              </button>
             </footer>
           </form>
         </div>
@@ -1150,16 +1210,27 @@
             <footer>
               <button
                 id="workbench-schedule-delete"
-                class="workbench-item-action is-danger"
+                class="workbench-item-action is-danger bbs-action"
+                data-action-tone="danger"
                 type="button"
                 hidden
               >
                 删除日程
               </button>
-              <button class="workbench-secondary-action" type="button" data-workbench-dialog-close>
+              <button
+                class="workbench-secondary-action bbs-action"
+                data-action-tone="secondary"
+                type="button"
+                data-workbench-dialog-close
+              >
                 取消
               </button>
-              <button class="workbench-dialog-submit" id="workbench-schedule-submit" type="submit">
+              <button
+                class="workbench-dialog-submit bbs-action"
+                data-action-tone="primary"
+                id="workbench-schedule-submit"
+                type="submit"
+              >
                 保存日程
               </button>
             </footer>
@@ -1238,14 +1309,16 @@
             ></p>
             <footer>
               <button
-                class="workbench-secondary-action"
+                class="workbench-secondary-action bbs-action"
+                data-action-tone="secondary"
                 id="workbench-campus-login-cancel"
                 type="button"
               >
                 取消
               </button>
               <button
-                class="workbench-dialog-submit"
+                class="workbench-dialog-submit bbs-action"
+                data-action-tone="primary"
                 id="workbench-campus-login-submit"
                 type="submit"
               >
@@ -1261,6 +1334,8 @@
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
     <script src="/academic-calendar.js?v=20260929-shared-calendar-2"></script>
+    <script src="/request-runtime.js"></script>
+    <script src="/ui-state.js"></script>
     <script src="/app.js?v=20260929-calendar-1"></script>
     <dialog
       id="homework-dialog"
@@ -1269,7 +1344,15 @@
     >
       <header>
         <h2 id="homework-dialog-title">作业详情</h2>
-        <button type="button" id="homework-close" aria-label="关闭作业详情">关闭</button>
+        <button
+          class="bbs-action"
+          data-action-tone="secondary"
+          type="button"
+          id="homework-close"
+          aria-label="关闭作业详情"
+        >
+          关闭
+        </button>
       </header>
       <p id="homework-detail-message" role="status" aria-live="polite"></p>
       <div id="homework-detail"></div>
@@ -1283,7 +1366,12 @@
         <h2 id="workbench-course-calendar-title">固定课程</h2>
         <p id="workbench-course-calendar-time"></p>
         <p id="workbench-course-calendar-description"></p>
-        <button id="workbench-course-calendar-close" type="button" class="workbench-compact-action">
+        <button
+          id="workbench-course-calendar-close"
+          type="button"
+          class="workbench-compact-action bbs-action"
+          data-action-tone="secondary"
+        >
           关闭
         </button>
       </div>
@@ -1309,11 +1397,18 @@
         <ul id="workbench-course-import-list"></ul>
         <p id="workbench-course-import-status" role="status"></p>
         <div class="workbench-course-import-toolbar">
-          <button type="submit" class="workbench-compact-action">暂不接入</button>
+          <button
+            type="submit"
+            class="workbench-compact-action bbs-action"
+            data-action-tone="secondary"
+          >
+            暂不接入
+          </button>
           <button
             id="workbench-course-import-confirm"
             type="button"
-            class="workbench-compact-action"
+            class="workbench-compact-action bbs-action"
+            data-action-tone="primary"
           >
             确认接入
           </button>

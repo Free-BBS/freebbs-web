@@ -23,6 +23,13 @@ node --check public/post-reader.js
 node --check public/post-reward.js
 node --test backend/github-updates.test.js backend/github-code.test.js
 node --test scripts/session-restore.test.js
+node --check public/request-runtime.js
+npm run test:ui-foundation
+node --check public/typography-preferences.js
+node --check public/ui-state.js
+npm run test:ui-components
+node --check public/surveys-common.js
+npm run test:ui-page-migration
 node --check public/mobile-shell.js
 node --check public/mobile-personal.js
 test -s public/desktop-elegant.css

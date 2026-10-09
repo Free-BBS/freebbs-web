@@ -167,6 +167,28 @@ body:not(.auth-page-body) .user-summary {
     padding-top: calc(128px + env(safe-area-inset-top, 0px)) !important;
   }
 }
+/* Keep all three balances initially visible on narrow phones. The shortcut
+   labels stay available to assistive technology; exceptionally long balances
+   can still use the existing horizontal scroll instead of being truncated. */
+@media (max-width: 374px) {
+  body:not(.auth-page-body) .user-economy-stack {
+    gap: 4px;
+  }
+  body:not(.auth-page-body) .user-economy-stack .economy-shortcut {
+    flex: 0 0 44px;
+    min-width: 44px;
+  }
+  body:not(.auth-page-body) .user-economy-stack .economy-shortcut span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  body:not(.auth-page-body) .user-economy-stack .currency {
+    padding-inline: 3px;
+  }
+}
 .max-file-tools {
   display: flex;
   flex-wrap: wrap;

@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <script src="/typography-preferences.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>FREE-BBS - 发表</title>
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
@@ -65,7 +66,14 @@
       <header class="publish-header">
         <a href="/discussion" aria-label="返回讨论区" class="publish-back">×</a
         ><span id="publish-draft-status" role="status">发表帖子</span
-        ><button class="publish-submit" type="submit" form="discussion-compose-form">发布</button>
+        ><button
+          class="publish-submit bbs-action"
+          data-action-tone="primary"
+          type="submit"
+          form="discussion-compose-form"
+        >
+          发布
+        </button>
       </header>
       <section
         class="discussion-compose hidden"
@@ -166,6 +174,8 @@
     <nav class="mobile-nav" aria-label="主导航"></nav>
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
+    <script src="/request-runtime.js"></script>
+    <script src="/ui-state.js"></script>
     <script src="/app.js"></script>
     <script src="/publish.js"></script>
     <script src="/circuit-discussion.js"></script>

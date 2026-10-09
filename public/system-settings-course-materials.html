@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <script src="/typography-preferences.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="配置 FREE-BBS 课程资料在服务器上的根目录。" />
     <title>FREE-BBS - 课程资料</title>
@@ -141,7 +142,13 @@
             </p>
 
             <div class="system-settings-form-actions">
-              <button class="system-settings-submit" type="submit">验证并保存</button>
+              <button
+                class="system-settings-submit bbs-action"
+                data-action-tone="primary"
+                type="submit"
+              >
+                验证并保存
+              </button>
             </div>
 
             <p
@@ -157,6 +164,8 @@
 
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
+    <script src="/request-runtime.js"></script>
+    <script src="/ui-state.js"></script>
     <script src="/app.js"></script>
     <script src="/system-settings.js"></script>
     <script src="/notifications.js"></script>

@@ -20,10 +20,19 @@ let emailCodeSending = false;
 const EMAIL_CODE_COOLDOWN_KEY = `free_bbs_email_code_cooldown:${authForm?.dataset.authMode || ''}`;
 
 function getStoredThemeMode() {
-  return localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark';
+  if (window.freeBbsTheme) return window.freeBbsTheme.getCurrentMode();
+  try {
+    return localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark';
+  } catch {
+    return document.body.classList.contains('theme-light') ? 'light' : 'dark';
+  }
 }
 
 function applyThemeMode(mode) {
+  if (window.freeBbsTheme) {
+    window.freeBbsTheme.applyMode(mode);
+    return;
+  }
   const normalizedMode = mode === 'light' ? 'light' : 'dark';
   document.body.classList.toggle('theme-light', normalizedMode === 'light');
   document.body.classList.toggle('theme-dark', normalizedMode !== 'light');
@@ -53,7 +62,14 @@ function applyThemeModeWithTransition(mode, event) {
 
 function toggleThemeMode(event) {
   const nextMode = document.body.classList.contains('theme-light') ? 'dark' : 'light';
-  localStorage.setItem(THEME_STORAGE_KEY, nextMode);
+  if (window.freeBbsTheme) window.freeBbsTheme.saveMode(nextMode);
+  else {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, nextMode);
+    } catch {
+      // Changing the current page does not require storage permission.
+    }
+  }
   applyThemeModeWithTransition(nextMode, event);
 }
 

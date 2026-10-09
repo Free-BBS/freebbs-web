@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <script src="/typography-preferences.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>FREE-BBS - 登录</title>
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
@@ -58,7 +59,14 @@
           </label>
 
           <p class="auth-message" id="auth-message" role="status"></p>
-          <button class="auth-submit" id="auth-submit" type="submit">登录</button>
+          <button
+            class="auth-submit bbs-action"
+            data-action-tone="primary"
+            id="auth-submit"
+            type="submit"
+          >
+            登录
+          </button>
         </form>
         <p class="auth-page-switch">忘记密码？<a href="/remake">点我找回</a></p>
         <p class="auth-page-switch">还没账号？<a href="/register">去注册</a></p>

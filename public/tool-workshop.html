@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <script src="/typography-preferences.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>FREE-BBS - 制作我的工具</title>
     <meta name="description" content="用 AI 制作、预览并发布单文件 HTML 小工具。" />
@@ -83,6 +84,8 @@
               <a class="tool-laboratory-back" href="/laboratory">返回实验室 ↗</a>
             </div>
             <button
+              class="bbs-action"
+              data-action-tone="primary"
               id="tool-create-toggle"
               type="button"
               aria-controls="tool-studio"
@@ -104,8 +107,23 @@
                 ></textarea>
               </label>
               <div class="tool-studio-actions">
-                <button id="tool-generate" type="button">AI 生成 / 修改</button>
-                <button id="tool-cancel" type="button" hidden>停止生成</button>
+                <button
+                  class="bbs-action"
+                  data-action-tone="primary"
+                  id="tool-generate"
+                  type="button"
+                >
+                  AI 生成 / 修改
+                </button>
+                <button
+                  class="bbs-action"
+                  data-action-tone="secondary"
+                  id="tool-cancel"
+                  type="button"
+                  hidden
+                >
+                  停止生成
+                </button>
               </div>
               <p id="tool-studio-status" role="status" aria-live="polite"></p>
               <div id="tool-reasoning" aria-label="AI 思考过程"></div>
@@ -137,12 +155,27 @@
                 >
                   发布
                 </button>
-                <button id="tool-preview" type="button">刷新预览</button>
+                <button
+                  class="bbs-action"
+                  data-action-tone="secondary"
+                  id="tool-preview"
+                  type="button"
+                >
+                  刷新预览
+                </button>
               </div>
               <div class="tool-code-panel" id="tool-panel-code" hidden>
                 <div class="tool-code-toolbar">
                   <span id="tool-code-status">HTML · 支持直接编辑</span
-                  ><button id="tool-edit-code" type="button" aria-pressed="false">编辑源码</button>
+                  ><button
+                    class="bbs-action"
+                    data-action-tone="quiet"
+                    id="tool-edit-code"
+                    type="button"
+                    aria-pressed="false"
+                  >
+                    编辑源码
+                  </button>
                 </div>
                 <pre
                   class="tool-code-live"
@@ -183,7 +216,14 @@
                     placeholder="一句话说明用途（选填）"
                 /></label>
                 <div class="tool-studio-actions">
-                  <button id="tool-publish" type="button">发布到广场</button>
+                  <button
+                    class="bbs-action"
+                    data-action-tone="primary"
+                    id="tool-publish"
+                    type="button"
+                  >
+                    发布到广场
+                  </button>
                 </div>
               </div>
               <p class="tool-sandbox-note">隔离沙盒运行，不会读取你的登录信息。</p>
@@ -228,14 +268,29 @@
       </div>
       <footer>
         <button type="button" id="tool-viewer-fit" aria-pressed="true">原始大小</button>
-        <button type="button" id="tool-viewer-reload">重新载入</button>
-        <button type="button" id="tool-share-discussion">发到讨论区</button
+        <button
+          class="bbs-action"
+          data-action-tone="secondary"
+          type="button"
+          id="tool-viewer-reload"
+        >
+          重新载入
+        </button>
+        <button
+          class="bbs-action"
+          data-action-tone="primary"
+          type="button"
+          id="tool-share-discussion"
+        >
+          发到讨论区</button
         ><button type="button" data-tool-close>关闭</button>
       </footer>
     </dialog>
 
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
+    <script src="/request-runtime.js"></script>
+    <script src="/ui-state.js"></script>
     <script src="/app.js"></script>
     <script src="/notifications.js"></script>
     <script src="/max-reasoning.js"></script>

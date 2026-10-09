@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const requests = require('../public/request-runtime');
 
 const source = fs.readFileSync(path.join(__dirname, '../public/app.js'), 'utf8');
 const start = source.indexOf('async function callApi(');
@@ -13,6 +14,10 @@ function api(response, globals = {}) {
     userState: { token: 'test-token' },
     fetch: async () => response,
     ...globals,
+    window: { ...globals.window, freeBbsRequests: requests },
+  };
+  context.window.freeBbsRequests = {
+    request: (url, options, consume) => requests.request(url, options, consume, context.fetch),
   };
   vm.runInNewContext(source.slice(start, end), context);
   return context.callApi;

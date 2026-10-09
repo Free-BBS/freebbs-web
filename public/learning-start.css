@@ -19,7 +19,7 @@
 }
 .learning-start h3 {
   margin: 0 0 12px;
-  font-size: 17px;
+  font-size: var(--type-fixed-subheading-size);
 }
 .learning-start-choices,
 .learning-start-actions {
@@ -42,7 +42,7 @@
 .learning-start button {
   color: inherit;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--type-fixed-control-size);
   border: 1px solid var(--ui-line, #d8e1e4);
   border-radius: 9px;
   padding: 8px 12px;
@@ -73,12 +73,12 @@
 }
 .learning-start-exit {
   color: inherit;
-  font-size: 14px;
+  font-size: var(--type-fixed-control-size);
 }
 .learning-start-note,
 .learning-start-status {
   color: var(--ui-muted, #65747a);
-  font-size: 13px;
+  font-size: var(--type-fixed-caption-size);
 }
 .learning-start-status:empty {
   display: none;

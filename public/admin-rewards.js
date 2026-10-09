@@ -111,6 +111,8 @@
     const info = document.createElement('p');
     info.textContent = `${batch.recipient_count} 人 · 每人 ${amounts(Number(batch.electric), Number(batch.magnetic))}\n${batch.reason}\n${batch.actor} · ${new Date(batch.created_at).toLocaleString()}`;
     const details = document.createElement('button');
+    details.className = 'bbs-action';
+    details.dataset.actionTone = 'secondary';
     details.type = 'button';
     details.textContent = '查看发放名单';
     const list = document.createElement('ul');
