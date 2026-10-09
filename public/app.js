@@ -384,7 +384,7 @@ function initializeDashboardShell() {
     '/creative-workshop': '创意工坊',
     '/laboratory': '实验室',
     '/code-lab': '代码实验室',
-    '/pbl': 'PBL计划',
+    '/pbl': 'PBL 计划',
     '/circuit': '电路仿真',
     '/circuit-challenge': '电路闯关',
     '/workbench': '我的工作台',
@@ -419,7 +419,7 @@ function initializeDashboardShell() {
     { href: '/workbench', icon: 'run', label: '我的工作台' },
     { href: '/laboratory', icon: 'circuit', label: '实验室' },
     { href: '/creative-workshop', icon: 'wrench', label: '创意工坊' },
-    { href: '/pbl', icon: 'star', label: 'PBL计划' },
+    { href: '/pbl', icon: 'star', label: 'PBL 计划' },
     { href: '/aichat', icon: 'ai', label: '问问 Max' },
     { href: '/surveys', icon: 'calendar', label: '活动报名（试用）' },
     {
@@ -4297,6 +4297,7 @@ const SAFE_MARKDOWN_TAGS = new Set([
   'br',
   'code',
   'del',
+  'details',
   'em',
   'h1',
   'h2',
@@ -4313,6 +4314,7 @@ const SAFE_MARKDOWN_TAGS = new Set([
   'pre',
   's',
   'strong',
+  'summary',
   'sub',
   'sup',
   'table',
@@ -10950,34 +10952,80 @@ initializeEconomyNavigation();
 initializeUserEconomyShortcuts();
 // One shared guide controller follows the user across existing pages.
 async function loadMaxGuide() {
-  const loadScript = (source) =>
-    new Promise((resolve, reject) => {
+  if (loadMaxGuide.pending) return loadMaxGuide.pending;
+  loadMaxGuide.modules ||= new Map();
+  const modules = loadMaxGuide.modules;
+  const loadScript = (source) => {
+    const versionedSource = `${source}?v=20261008-1`;
+    if (modules.has(versionedSource)) return modules.get(versionedSource);
+    const pending = new Promise((resolve, reject) => {
       const script = document.createElement('script');
+      let settled = false;
+      const finish = (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        script.onload = null;
+        script.onerror = null;
+        if (error) {
+          script.remove();
+          modules.delete(versionedSource);
+          reject(error);
+        } else resolve();
+      };
       const timer = setTimeout(() => {
-        script.remove();
-        reject(new Error('Guide module loading timed out'));
+        finish(new Error('Guide module loading timed out'));
       }, 10000);
-      script.src = source;
-      script.onload = () => {
-        clearTimeout(timer);
-        resolve();
-      };
-      script.onerror = () => {
-        clearTimeout(timer);
-        script.remove();
-        reject(new Error('Guide module unavailable'));
-      };
+      script.src = versionedSource;
+      script.onload = () => finish();
+      script.onerror = () => finish(new Error('Guide module unavailable'));
       document.head.append(script);
     });
-  // Independent data/geometry modules download together; only the controller waits.
-  await Promise.all(
-    ['/max-guide-releases.js', '/max-guide-stations.js', '/max-guide-geometry.js'].map(loadScript),
-  );
-  await loadScript('/max-guide.js');
+    modules.set(versionedSource, pending);
+    return pending;
+  };
+  const pending = (async () => {
+    // A recovery keeps successful downloads and never runs two controllers.
+    await Promise.all(
+      ['/max-guide-releases.js', '/max-guide-stations.js', '/max-guide-geometry.js'].map(
+        loadScript,
+      ),
+    );
+    await loadScript('/max-guide.js');
+  })();
+  loadMaxGuide.pending = pending;
+  try {
+    await pending;
+  } finally {
+    if (loadMaxGuide.pending === pending) loadMaxGuide.pending = null;
+  }
 }
 loadMaxGuide().catch(() => {
-  const status = document.getElementById('guide-sync-status');
-  if (status) status.textContent = '导览暂未加载，请刷新后重试；其他功能可以照常使用。';
+  const status =
+    document.getElementById('guide-module-status') || document.getElementById('guide-sync-status');
+  if (!status) return;
+  status.hidden = false;
+  status.textContent = '导引暂未加载，其他功能可照常使用。';
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.id = 'guide-module-retry';
+  retry.className = 'max-tour-later';
+  retry.textContent = '重新加载导引';
+  retry.addEventListener('click', async () => {
+    if (retry.disabled) return;
+    retry.disabled = true;
+    status.textContent = '正在加载导引…';
+    try {
+      await loadMaxGuide();
+      status.textContent = '';
+      if (status.id === 'guide-module-status') status.hidden = true;
+      retry.remove();
+    } catch {
+      status.textContent = '网络暂不可用，稍后可重新加载导引。';
+      retry.disabled = false;
+    }
+  });
+  status.after(retry);
 });
 renderAdminSection();
 loadHomeDiscussionPosts();

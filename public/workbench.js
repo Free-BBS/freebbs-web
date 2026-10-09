@@ -314,16 +314,24 @@
   async function loadCampusSemester(semesterId) {
     if (!semesterId) return;
     const sessionToken = app.userState.token;
+    const ownerKey = getOwnerKey();
     elements.campusCoursesStatus.textContent = '正在读取该学期课程与公告…';
     try {
       const payload = await app.callApi(
         `/workbench/campus/semesters/${encodeURIComponent(semesterId)}`,
         { method: 'GET' },
       );
-      if (sessionToken !== app.userState.token || elements.campusSemester.value !== semesterId)
+      if (
+        !isLoggedIn() ||
+        ownerKey !== getOwnerKey() ||
+        sessionToken !== app.userState.token ||
+        elements.campusSemester.value !== semesterId
+      )
         return;
       renderCampusSemester(payload.semester);
     } catch (error) {
+      if (!isLoggedIn() || ownerKey !== getOwnerKey() || sessionToken !== app.userState.token)
+        return;
       elements.campusCoursesStatus.textContent = error.message || '读取学期数据失败';
     }
   }
@@ -364,9 +372,13 @@
 
   async function loadCampusSemesters(preferredSemesterId = '') {
     if (!elements.campusSemester || !isLoggedIn()) return;
+    const ownerKey = getOwnerKey();
+    const sessionToken = app.userState.token;
     elements.campusSemester.disabled = true;
     try {
       const payload = await app.callApi('/workbench/campus/semesters', { method: 'GET' });
+      if (!isLoggedIn() || ownerKey !== getOwnerKey() || sessionToken !== app.userState.token)
+        return;
       state.campusSemesters = payload.semesters || [];
       elements.campusSemester.replaceChildren();
       if (!state.campusSemesters.length) {
@@ -397,6 +409,8 @@
         elements.campusCoursesStatus.textContent = '选择该学期后将从网络学堂同步课程与公告。';
       }
     } catch (error) {
+      if (!isLoggedIn() || ownerKey !== getOwnerKey() || sessionToken !== app.userState.token)
+        return;
       elements.campusCoursesStatus.textContent = error.message || '读取同步学期失败';
     }
   }
@@ -2681,8 +2695,17 @@
   if (new URLSearchParams(window.location.search).get('calendar') === 'overview')
     window.requestAnimationFrame(openWeekOverview);
   let deadlineTimer = window.setInterval(refreshDeadlineColors, 30000);
+  let lastForegroundRefreshAt = 0;
+  function refreshForegroundData() {
+    if (!isLoggedIn() || document.hidden || Date.now() - lastForegroundRefreshAt < 1000) return;
+    lastForegroundRefreshAt = Date.now();
+    window.dispatchEvent(new CustomEvent('freebbs:workbench-refresh'));
+  }
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) refreshDeadlineColors();
+    if (!document.hidden) {
+      refreshDeadlineColors();
+      refreshForegroundData();
+    }
   });
   window.addEventListener('pagehide', () => window.clearInterval(deadlineTimer));
   window.addEventListener('pageshow', (event) => {
@@ -2690,6 +2713,7 @@
       window.clearInterval(deadlineTimer);
       deadlineTimer = window.setInterval(refreshDeadlineColors, 30000);
       refreshDeadlineColors();
+      refreshForegroundData();
     }
   });
 })();

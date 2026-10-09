@@ -2,7 +2,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { preparePageShell } = require('../page-shell');
-const { createEconomyPreview } = require('./preview-economy');
+const { createEconomyPreview, TOKEN } = require('./preview-economy');
+const { createLearningPreviewApi } = require('./preview-learning-workspace');
 const { createWorkbenchPreviewApi } = require('./workbench-preview-api');
 const { createBoneSales } = require('../backend/economy-sales');
 const {
@@ -69,7 +70,7 @@ function courseFixture(slug) {
   const definition = definitions[slug];
   if (!definition) return null;
   const nodes = definition.titles.map((title, index) => {
-    const markdown = `> 本地预览 · 演示资料，不是正式课程讲义。\n\n## ${title}\n\n这份简短内容用于体验真实的知识点阅读界面，示范公式、段落和已有导航入口。\n\n### 一个直观例子\n\n${definition.example}\n\n### 试着带着问题阅读\n\n- 这个知识点试图解释什么？\n- 结论依赖哪些条件？\n- 它与课程图谱里的前后知识点有什么联系？\n\n### 接着探索\n\n[返回课程地图](/course?course=${slug}) · [查看课程讨论](/discussion?board=${definition.boardSlug})\n\n这些链接通向现有页面；学习资源工具、个人笔记和知识起源正文仍在建设。本地预览未连接 AI，不包含额外的虚构资源库。`;
+    const markdown = `> 本地预览 · 演示资料，不是正式课程讲义。\n\n## ${title}\n\n这份简短内容用于体验真实的知识点阅读界面，示范公式、段落和已有导航入口。\n\n### 一个直观例子\n\n${definition.example}\n\n### 试着带着问题阅读\n\n- 这个知识点试图解释什么？\n- 结论依赖哪些条件？\n- 它与课程图谱里的前后知识点有什么联系？\n\n### 接着探索\n\n[返回课程地图](/course?course=${slug}) · [查看课程讨论](/discussion?board=${definition.boardSlug})\n\n本地预览支持自己的正文批注与学习记录，没有预置正式自测题，也未连接真实 AI。资源和知识起源按当前演示资料显示，不伪造完整课程。`;
     return {
       id: `${definition.prefix}-0${Math.floor(index / 2) + 1}-${index + 1}`,
       title,
@@ -505,9 +506,48 @@ function createOnboardingPreview({
     },
   });
   // A fixed, account-free visual fixture lives outside public and production routes.
+  const previewUser = { id: 1, uid: 'u_preview01', username: 'NotingSr_preview', role: 'student' };
+  const learningContexts = ['math', 'circuits', 'signals'].flatMap((slug, index) => {
+    const fixture = courseFixture(slug);
+    return fixture.nodes.map((node) => ({
+      slug,
+      course_id: index + 1,
+      course_name: fixture.course.name,
+      node_id: node.id,
+      title: node.title,
+      summary: node.summary,
+      basic_info_markdown: node.sections.basicInfoMarkdown,
+      applications_markdown: node.sections.applicationsMarkdown,
+      knowledge_markdown: node.sections.knowledgeMarkdown,
+      document_markdown: node.markdown,
+      has_relations: fixture.edges.some(
+        (edge) => edge.source === node.id || edge.target === node.id,
+      ),
+      is_active: 1,
+    }));
+  });
+  const learning = createLearningPreviewApi({
+    contextRows: learningContexts,
+    previewUsers: [previewUser],
+    managers: [],
+    identity: (request) =>
+      request.headers.authorization === `Bearer ${TOKEN}` ? previewUser : null,
+  });
   const [handlePreviewRequest] = preview.server.listeners('request');
   preview.server.removeListener('request', handlePreviewRequest);
   preview.server.on('request', async (req, res) => {
+    if (/^\/api\/learning(?:[/-]|$)/.test(req.url.split('?')[0])) {
+      const host = `127.0.0.1:${preview.server.address().port}`;
+      if (
+        req.headers.host !== host ||
+        (req.headers.origin && req.headers.origin !== `http://${host}`)
+      ) {
+        res.writeHead(403, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        return res.end(JSON.stringify({ message: 'Loopback preview only' }));
+      }
+      res.setHeader('Cache-Control', 'no-store');
+      return learning.app(req, res, () => handlePreviewRequest(req, res));
+    }
     if (req.url.split('?')[0] !== '/preview/ranch-states') return handlePreviewRequest(req, res);
     const host = `127.0.0.1:${preview.server.address().port}`;
     const headers = {
@@ -533,7 +573,7 @@ function createOnboardingPreview({
       return res.end('Visual preview fixture unavailable');
     }
   });
-  return { ...preview, workbench, discussion, progress: readProgress };
+  return { ...preview, workbench, discussion, progress: readProgress, learning };
 }
 
 if (require.main === module) {

@@ -144,7 +144,7 @@ async function main() {
         });
         const scrolled = await measure(page);
         assert.ok(
-          Math.abs(scrolled.history.top) < 1,
+          Math.abs(scrolled.history.top - (width <= 620 ? 60 : 0)) < 1,
           `${label}: introduction sticks flush to viewport top`,
         );
         await page.screenshot({ path: path.join(output, `knowledge-reading-${label}.png`) });

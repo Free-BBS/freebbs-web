@@ -76,6 +76,146 @@ function setMessage(message) {
   authMessage.textContent = message || '';
 }
 
+const registrationFields = [
+  'auth-username',
+  'auth-full-name',
+  'auth-student-id',
+  'auth-email',
+  'auth-email-code',
+  'auth-password',
+  'auth-password-confirm',
+  'auth-community-agreement',
+];
+const registrationErrorGroups = new Map();
+
+function clearRegistrationFieldError(id) {
+  const group = registrationErrorGroups.get(id) || [id];
+  for (const fieldId of group) {
+    const input = document.getElementById(fieldId);
+    const message = document.getElementById(`${fieldId}-error`);
+    if (input) input.setAttribute('aria-invalid', 'false');
+    if (message) {
+      message.textContent = '';
+      message.hidden = true;
+    }
+    registrationErrorGroups.delete(fieldId);
+  }
+}
+
+function setRegistrationFieldError(ids, message) {
+  const fields = Array.isArray(ids) ? ids : [ids];
+  for (const id of fields) {
+    const input = document.getElementById(id);
+    const hint = document.getElementById(`${id}-error`);
+    if (!input || !hint) continue;
+    input.setAttribute('aria-invalid', 'true');
+    hint.textContent = message;
+    hint.hidden = false;
+    registrationErrorGroups.set(id, fields);
+  }
+}
+
+function registrationSnapshot() {
+  return Object.fromEntries(
+    registrationFields.map((id) => {
+      const input = document.getElementById(id);
+      return [id, id === 'auth-community-agreement' ? input?.checked : input?.value];
+    }),
+  );
+}
+
+function validateRegistrationFields(ids = registrationFields) {
+  for (const id of ids) clearRegistrationFieldError(id);
+  const value = (id) => String(document.getElementById(id)?.value || '');
+  const errors = {
+    'auth-username': /^[A-Za-z0-9_]{3,64}$/.test(value('auth-username').trim())
+      ? ''
+      : '用户名须为 3 至 64 位英文字母、数字或下划线',
+    'auth-full-name':
+      value('auth-full-name').trim() && value('auth-full-name').trim().length <= 64
+        ? ''
+        : '请输入姓名，且长度不超过 64 个字符',
+    'auth-student-id': /^20\d{8}$/.test(value('auth-student-id').trim())
+      ? ''
+      : '学号必须是 20 开头的 10 位数字',
+    'auth-email':
+      value('auth-email').trim().length <= 128 &&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value('auth-email').trim())
+        ? ''
+        : '请输入有效邮箱地址，且长度不超过 128 个字符',
+    'auth-email-code': /^\d{6}$/.test(value('auth-email-code').trim())
+      ? ''
+      : '请输入 6 位邮箱验证码',
+    'auth-password': value('auth-password').length >= 6 ? '' : '密码长度至少为 6 位',
+    'auth-password-confirm':
+      value('auth-password-confirm') && value('auth-password') === value('auth-password-confirm')
+        ? ''
+        : '两次输入的密码不一致',
+    'auth-community-agreement': document.getElementById('auth-community-agreement')?.checked
+      ? ''
+      : '请先阅读并同意社区公约',
+  };
+  const invalid = ids.filter((id) => errors[id]);
+  for (const id of invalid) setRegistrationFieldError(id, errors[id]);
+  if (invalid.length) document.getElementById(invalid[0])?.focus();
+  return !invalid.length;
+}
+
+function showRegistrationError(error, snapshot) {
+  if (authForm?.dataset.authMode !== 'register') return false;
+  if (!Number.isInteger(error.status) || error.status >= 500) return false;
+  const message = String(error.message || '请求失败');
+  let fields;
+  if (/^community_agreement_/.test(error.code || '')) fields = ['auth-community-agreement'];
+  else if (['registration_not_whitelisted', 'registration_identity_claimed'].includes(error.code))
+    fields = ['auth-full-name', 'auth-student-id', 'auth-email'];
+  else if (/用户名、学号或邮箱已存在/.test(message))
+    fields = ['auth-username', 'auth-student-id', 'auth-email'];
+  else if (/邮箱验证码/.test(message)) fields = ['auth-email-code'];
+  else if (/用户名/.test(message)) fields = ['auth-username'];
+  else if (/学号/.test(message)) fields = ['auth-student-id'];
+  else if (/姓名/.test(message)) fields = ['auth-full-name'];
+  else if (/邮箱/.test(message)) fields = ['auth-email'];
+  else if (/密码/.test(message)) fields = ['auth-password'];
+  else if (/社区公约/.test(message)) fields = ['auth-community-agreement'];
+  else if (error.status === 429) fields = ['auth-email-code'];
+  if (!fields) return false;
+  // A late response belongs to the submitted identity, not to a newly edited one.
+  const current = registrationSnapshot();
+  if (snapshot && fields.some((id) => snapshot[id] !== current[id])) {
+    setMessage('');
+    return true;
+  }
+  setRegistrationFieldError(fields, message);
+  setMessage('');
+  document.getElementById(fields[0])?.focus();
+  return true;
+}
+
+function setEmailCodeStatus(message) {
+  const status = document.getElementById('auth-email-code-status');
+  if (authForm?.dataset.authMode !== 'register' || !status) {
+    setMessage(message);
+    return;
+  }
+  status.textContent = message || '';
+  status.hidden = !message;
+  setMessage('');
+}
+
+if (authForm?.dataset.authMode === 'register') {
+  for (const id of registrationFields) {
+    const input = document.getElementById(id);
+    const clear = () => {
+      clearRegistrationFieldError(id);
+      if (id === 'auth-password') clearRegistrationFieldError('auth-password-confirm');
+      if (['auth-full-name', 'auth-student-id', 'auth-email'].includes(id)) setEmailCodeStatus('');
+    };
+    input?.addEventListener('input', clear);
+    input?.addEventListener('change', clear);
+  }
+}
+
 function refreshEmailCodeCountdown() {
   if (!sendEmailCodeButton) return;
   const remaining = Math.max(0, Math.ceil((emailCodeCountdownUntil - Date.now()) / 1000));
@@ -90,7 +230,7 @@ function refreshEmailCodeCountdown() {
     }
   }
   sendEmailCodeButton.disabled = emailCodeSending || remaining > 0;
-  sendEmailCodeButton.textContent = remaining ? `${remaining}s后重发` : '发送验证码';
+  sendEmailCodeButton.textContent = remaining ? `${remaining} s 后重发` : '发送验证码';
 }
 
 function setEmailCodeButtonCountdown(seconds) {
@@ -174,6 +314,11 @@ async function handleAuthSubmit(event) {
 
   const mode = authForm.dataset.authMode;
   if (authSubmit.disabled) return;
+  if (mode === 'register' && !validateRegistrationFields()) {
+    setMessage('');
+    return;
+  }
+  const submittedFields = mode === 'register' ? registrationSnapshot() : null;
   authSubmit.disabled = true;
   setMessage(
     mode === 'login' ? '正在登录...' : mode === 'remake' ? '正在重设密码...' : '正在注册...',
@@ -276,7 +421,7 @@ async function handleAuthSubmit(event) {
       activityReturnPath() ||
       (window.matchMedia?.('(max-width: 900px)').matches ? '/discussion' : '/');
   } catch (error) {
-    setMessage(error.message);
+    if (!showRegistrationError(error, submittedFields)) setMessage(error.message);
   } finally {
     authSubmit.disabled = false;
   }
@@ -290,6 +435,15 @@ async function handleSendEmailCode() {
   if (emailCodeSending || emailCodeCountdownUntil > Date.now()) {
     return;
   }
+  if (
+    mode === 'register' &&
+    !validateRegistrationFields(['auth-full-name', 'auth-student-id', 'auth-email'])
+  ) {
+    setEmailCodeStatus('');
+    return;
+  }
+  const submittedFields = mode === 'register' ? registrationSnapshot() : null;
+  if (mode === 'register') clearRegistrationFieldError('auth-email-code');
 
   if (!emailInput || !emailInput.value.trim()) {
     setMessage('请先输入邮箱地址');
@@ -315,7 +469,7 @@ async function handleSendEmailCode() {
 
   emailCodeSending = true;
   sendEmailCodeButton.disabled = true;
-  setMessage('正在发送验证码...');
+  setEmailCodeStatus('正在发送验证码...');
 
   try {
     const payload = await callApi(
@@ -333,10 +487,19 @@ async function handleSendEmailCode() {
       },
     );
 
-    setMessage(payload.message || '验证码已发送');
+    const current = mode === 'register' ? registrationSnapshot() : null;
+    const identityChanged =
+      submittedFields &&
+      ['auth-full-name', 'auth-student-id', 'auth-email'].some(
+        (id) => submittedFields[id] !== current[id],
+      );
+    setEmailCodeStatus(
+      identityChanged ? '身份信息已更改，请重新获取验证码' : payload.message || '验证码已发送',
+    );
     setEmailCodeButtonCountdown(EMAIL_CODE_RESEND_SECONDS);
   } catch (error) {
-    setMessage(error.message);
+    setEmailCodeStatus('');
+    if (!showRegistrationError(error, submittedFields)) setMessage(error.message);
     if (error.status === 429) {
       setEmailCodeButtonCountdown(EMAIL_CODE_RESEND_SECONDS);
     } else {

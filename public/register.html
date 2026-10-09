@@ -26,7 +26,12 @@
         <p class="registration-note">
           仅限注册白名单内的成员。请填写与名单一致的学号、姓名和邮箱。
         </p>
-        <form class="auth-form auth-form-register" id="auth-page-form" data-auth-mode="register">
+        <form
+          class="auth-form auth-form-register"
+          id="auth-page-form"
+          data-auth-mode="register"
+          novalidate
+        >
           <div class="auth-grid-row auth-grid-row-four">
             <label class="auth-field">
               <span class="auth-label">
@@ -47,8 +52,10 @@
                 type="text"
                 minlength="3"
                 maxlength="64"
+                aria-describedby="auth-username-error"
                 required
               />
+              <span class="auth-field-error" id="auth-username-error" role="alert" hidden></span>
             </label>
 
             <label class="auth-field">
@@ -61,7 +68,15 @@
                 />
                 <span>姓名</span>
               </span>
-              <input id="auth-full-name" name="fullName" type="text" maxlength="64" required />
+              <input
+                id="auth-full-name"
+                name="fullName"
+                type="text"
+                maxlength="64"
+                aria-describedby="auth-full-name-error"
+                required
+              />
+              <span class="auth-field-error" id="auth-full-name-error" role="alert" hidden></span>
             </label>
 
             <label class="auth-field">
@@ -75,9 +90,11 @@
                 type="text"
                 inputmode="numeric"
                 maxlength="10"
-                placeholder="20开头10位"
+                placeholder="20 开头的 10 位数字"
+                aria-describedby="auth-student-id-error"
                 required
               />
+              <span class="auth-field-error" id="auth-student-id-error" role="alert" hidden></span>
             </label>
 
             <label class="auth-field">
@@ -113,8 +130,10 @@
                 type="email"
                 autocomplete="email"
                 maxlength="128"
+                aria-describedby="auth-email-error"
                 required
               />
+              <span class="auth-field-error" id="auth-email-error" role="alert" hidden></span>
             </label>
 
             <label class="auth-field">
@@ -134,13 +153,21 @@
                   type="text"
                   inputmode="numeric"
                   maxlength="6"
-                  placeholder="请输入6位验证码"
+                  placeholder="请输入 6 位验证码"
+                  aria-describedby="auth-email-code-error auth-email-code-status"
                   required
                 />
                 <button class="auth-inline-button" id="send-email-code" type="button">
                   发送验证码
                 </button>
               </div>
+              <span class="auth-field-error" id="auth-email-code-error" role="alert" hidden></span>
+              <span
+                class="auth-field-status"
+                id="auth-email-code-status"
+                role="status"
+                hidden
+              ></span>
             </label>
           </div>
 
@@ -160,8 +187,11 @@
                 name="password"
                 type="password"
                 autocomplete="new-password"
+                minlength="6"
+                aria-describedby="auth-password-error"
                 required
               />
+              <span class="auth-field-error" id="auth-password-error" role="alert" hidden></span>
             </label>
 
             <label class="auth-field">
@@ -179,8 +209,15 @@
                 name="passwordConfirm"
                 type="password"
                 autocomplete="new-password"
+                aria-describedby="auth-password-confirm-error"
                 required
               />
+              <span
+                class="auth-field-error"
+                id="auth-password-confirm-error"
+                role="alert"
+                hidden
+              ></span>
             </label>
           </div>
 
@@ -231,10 +268,17 @@
                 name="communityAgreementAccepted"
                 type="checkbox"
                 data-version="2026-09-09"
+                aria-describedby="auth-community-agreement-error"
                 required
               />
               <span>我已阅读并同意以上社区公约</span>
             </label>
+            <span
+              class="auth-field-error"
+              id="auth-community-agreement-error"
+              role="alert"
+              hidden
+            ></span>
           </section>
           <p class="auth-message" id="auth-message" role="status"></p>
           <button class="auth-submit" id="auth-submit" type="submit">同意公约并注册</button>
@@ -266,6 +310,6 @@
     <script src="/username-guard.js"></script>
     <script src="/wien-oscillator-model.js"></script>
     <script src="/auth-challenge.js"></script>
-    <script src="/auth.js?v=20260929-resend-clock-1"></script>
+    <script src="/auth.js?v=20261008-inline-fields-1"></script>
   </body>
 </html>

@@ -149,6 +149,16 @@
       section.append(element('h3', '', '学什么'), element('p', '', info.summary));
       container.append(section);
     }
+    if (!/^[A-Z][A-Z0-9]*-[A-Z0-9]+-0+$/.test(node.id || '')) {
+      const stars = element('div', 'learning-star-strip');
+      container.append(stars);
+      const courseSlug = course.slug || new URLSearchParams(window.location.search).get('course');
+      window.FreeBbsLearningStars?.mount(stars, {
+        courseSlug,
+        nodeId: node.id,
+        level: /拓展|extension|elective/.test(info.level) ? 'extension' : info.level,
+      });
+    }
     const people = element('section', 'knowledge-overview-people');
     people.append(element('h3', '', '参与同学'));
     const list = element('ul');
@@ -191,6 +201,7 @@
     let returnFocus = null;
     let showRelations = null;
     let currentId = '';
+    let chapterOverview = false;
     close.addEventListener('click', () => dialog.close());
     dialog.addEventListener('cancel', (event) => {
       event.preventDefault();
@@ -212,6 +223,10 @@
       if (!dialog.open && returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
     });
     relation.addEventListener('click', () => {
+      if (chapterOverview) {
+        window.location.assign(`${study.href}#knowledge-chapter-network`);
+        return;
+      }
       const callback = showRelations;
       const id = currentId;
       dialog.close();
@@ -221,6 +236,8 @@
       requestId += 1;
       const id = requestId;
       currentId = node.id;
+      chapterOverview = Boolean(window.FreeBbsLearningContent?.isChapterNode(node));
+      relation.textContent = chapterOverview ? '查看章节知识网络' : '查看知识关系';
       showRelations = onRelations;
       returnFocus = trigger || document.activeElement;
       study.href = `/knowledge?${new URLSearchParams({ course: courseSlug, point: node.id, view: 'reading' })}`;

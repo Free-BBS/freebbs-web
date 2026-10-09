@@ -84,7 +84,7 @@ test('workbench provides authenticated CRUD controls and conflict confirmation',
   assert.match(html, /id="workbench-important-dialog"/);
   assert.match(html, /id="workbench-add-schedule"/);
   assert.match(html, /id="workbench-schedule-dialog"/);
-  assert.match(html, /src="\/workbench\.js\?v=20261001-series-1"/);
+  assert.match(html, /src="\/workbench\.js\?v=20261008-homework-sync-1"/);
   assert.match(controller, /\/workbench\/important-items/);
   assert.match(controller, /\/workbench\/schedule-items\/conflicts/);
   assert.match(controller, /\/confirm/);
