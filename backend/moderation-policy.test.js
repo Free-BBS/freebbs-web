@@ -13,8 +13,8 @@ test('rules cover every supported category with traceable official or community 
   const library = getPolicyLibrary();
   const sourceIds = new Set(library.sources.map((source) => source.id));
   assert.equal(POLICY_VERSION, library.version);
-  assert.equal(POLICY_VERSION, 'freebbs-policy-2026-10-08-v2');
-  assert.equal(library.checkedAt, '2026-10-08');
+  assert.equal(POLICY_VERSION, 'freebbs-policy-2026-10-09-v3');
+  assert.equal(library.checkedAt, '2026-10-09');
   assert.equal(sourceIds.size, library.sources.length);
   assert.equal(new Set(library.rules.map((rule) => rule.id)).size, library.rules.length);
   assert.deepEqual(new Set(library.rules.map((rule) => rule.category)), new Set(CATEGORIES));
@@ -26,12 +26,22 @@ test('rules cover every supported category with traceable official or community 
     'www.miit.gov.cn',
     'www.nhc.gov.cn',
     'www.who.int',
+    'www.mofcom.gov.cn',
+    'www.stats.gov.cn',
+    'www.samr.gov.cn',
+    'www.beijing.gov.cn',
+    'www.ggj.gov.cn',
+    'xzfy.moj.gov.cn',
+    'www.sara.gov.cn',
+    'www.gov.cn',
   ]);
   for (const source of library.sources) {
     assert.ok(
       ['law', 'regulation', 'support_guidance', 'community_rule'].includes(source.authorityType),
     );
-    assert.equal(source.checkedAt, library.checkedAt);
+    assert.match(source.checkedAt, /^\d{4}-\d{2}-\d{2}$/);
+    assert.equal(new Date(source.checkedAt).toISOString().slice(0, 10), source.checkedAt);
+    assert.ok(source.checkedAt <= library.checkedAt);
     assert.ok(source.article && source.reference && source.title);
     if (source.authorityType === 'community_rule') {
       assert.equal(source.url, null);
@@ -62,15 +72,16 @@ test('rules cover every supported category with traceable official or community 
   }
 });
 
-test('active catalogue contains twenty prohibitions and two separate care notices', () => {
+test('active catalogue contains twenty-eight prohibitions and two separate care notices', () => {
   const library = getPolicyLibrary();
-  assert.equal(library.rules.length, 22);
+  assert.equal(library.rules.length, 30);
   const prohibitions = library.rules.filter((rule) => rule.kind === 'prohibition');
   const support = library.rules.filter((rule) => rule.kind === 'support');
-  assert.equal(prohibitions.length, 20);
+  assert.equal(prohibitions.length, 28);
   assert.equal(support.length, 2);
-  assert.equal(CATEGORIES.length, 12);
+  assert.equal(CATEGORIES.length, 11);
   assert.equal(CATEGORIES.includes('other'), false);
+  assert.equal(CATEGORIES.includes('sexual_minors'), false);
   for (const rule of prohibitions) {
     assert.match(rule.title, /^禁止/);
     assert.equal(rule.supportOnly, false);
@@ -130,9 +141,29 @@ test('no high-risk rule can bypass reviewer confirmation and no allow rule flags
 test('privacy rules distinguish residual content, placeholders, original publication and health data', () => {
   assert.match(getPolicyRule('隐私-001').exceptions.join(' '), /占位符/);
   assert.match(getPolicyRule('隐私-003').exceptions.join(' '), /原稿/);
-  assert.match(getPolicyRule('隐私-004').exceptions.join(' '), /未满十八周岁/);
+  assert.match(getPolicyRule('隐私-004').title, /医疗健康等敏感个人信息/);
+  assert.match(getPolicyRule('隐私-004').conditions.join(' '), /所有年龄/);
+  assert.doesNotMatch(JSON.stringify(getPolicyRule('隐私-004')), /未满十四周岁|未满14周岁/);
   assert.equal(getPolicyRule('隐私-003').basisType, 'community_rule');
   assert.match(getPolicyLibrary().limitations.join(' '), /不覆盖法定留存/);
+});
+
+test('sexual conduct rules are age-independent while protecting health information and help-seeking', () => {
+  assert.equal(getPolicyRule('未成年保护-001'), null);
+  for (const id of ['性剥削-001', '色情-001', '性招揽-001', '性暗示-001']) {
+    const rule = getPolicyRule(id);
+    assert.equal(rule.category, 'sexual_content');
+    assert.equal(rule.kind, 'prohibition');
+    assert.match(rule.conditions.join(' '), /所有年龄|不以[^；。]*年龄|全年龄/);
+    assert.match(rule.exceptions.join(' '), /健康|医学|教育/);
+    assert.match(rule.exceptions.join(' '), /求助|举报/);
+    assert.match(rule.exceptions.join(' '), /学术|新闻/);
+  }
+  assert.equal(getPolicyRule('性剥削-001').recommendedAction, 'block');
+  assert.equal(getPolicyRule('性招揽-001').recommendedAction, 'block');
+  assert.equal(getPolicyRule('性暗示-001').recommendedAction, 'human_review');
+  assert.equal(getPolicyRule('性暗示-001').basisType, 'community_rule');
+  assert.match(getPolicyLibrary().principles.join(' '), /一般恋爱交友不等于性招揽/);
 });
 
 test('callers cannot mutate canonical rules, nested sources, categories or the generated prompt', () => {
@@ -156,18 +187,24 @@ test('callers cannot mutate canonical rules, nested sources, categories or the g
   assert.equal(CATEGORIES.includes('invented_category'), false);
 });
 
-test('legacy IDs are display metadata and never accepted as active aliases', () => {
+test('legacy IDs preserve original display semantics and never become active aliases', () => {
   assert.equal(Object.keys(LEGACY_RULE_ID_MAP).length, 22);
   assert.equal(new Set(Object.values(LEGACY_RULE_ID_MAP)).size, 22);
   for (const [oldId, currentId] of Object.entries(LEGACY_RULE_ID_MAP)) {
     assert.equal(getPolicyRule(oldId), null);
-    assert.equal(getPolicyRule(currentId).id, currentId);
+    if (oldId === 'SEX-001') {
+      assert.equal(currentId, '未成年保护-001');
+      assert.equal(getPolicyRule(currentId), null);
+    } else {
+      assert.equal(getPolicyRule(currentId).id, currentId);
+    }
   }
   for (const removedId of ['EXP-001', 'MEN-001', 'SYS-001', 'GEN-001']) {
     assert.equal(getPolicyRule(removedId), null);
     assert.equal(Object.hasOwn(LEGACY_RULE_ID_MAP, removedId), false);
   }
   assert.doesNotMatch(buildPolicyPrompt(), /\b[A-Z]{3}-\d{3}\b/);
+  assert.doesNotMatch(buildPolicyPrompt(), /未成年保护-001|sexual_minors/);
 });
 
 test('global principles preserve protection and route insufficient context through uncertainties', () => {

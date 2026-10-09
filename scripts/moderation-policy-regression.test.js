@@ -234,6 +234,7 @@ test('preview reports skipped legacy cases but never upgrades a mixed or old-ver
   ]);
   for (const data of [
     { ...exported(), policyVersion: 'freebbs-policy-2026-10-08-v1' },
+    { ...exported(), policyVersion: 'freebbs-policy-2026-10-08-v2' },
     exported([
       fixture(),
       fixture({ id: 'old-case', policyVersion: 'freebbs-policy-2026-10-08-v1' }),
@@ -268,6 +269,12 @@ test('exports reject extra identity metadata, real-data flags, duplicate IDs, wr
       { expectedDecision: 'approved' },
       { categories: ['privacy'] },
       { ruleIds: ['INVENTED'] },
+      {
+        expectedDecision: 'high_risk',
+        categories: ['sexual_content'],
+        ruleIds: ['未成年保护-001'],
+      },
+      { expectedDecision: 'high_risk', categories: ['sexual_minors'], ruleIds: ['性剥削-001'] },
       { ruleIds: ['EXP-001', 'EXP-001'] },
       { supportPriority: 'urgent' },
       { expectedDecision: 'high_risk', categories: ['privacy'], ruleIds: [] },

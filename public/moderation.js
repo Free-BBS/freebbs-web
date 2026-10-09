@@ -11,8 +11,8 @@
     harassment: '骚扰侮辱',
     threat: '威胁',
     self_harm: '自伤教唆与危险传播',
-    sexual_minors: '未成年人性风险',
-    sexual_content: '色情内容',
+    sexual_minors: '旧版未成年人性风险',
+    sexual_content: '色情及不当性内容',
     violence: '暴力',
     fraud: '诈骗',
     illegal_activity: '违法活动',
@@ -34,6 +34,7 @@
     'THR-001': '威胁-001',
     'HAT-001': '仇恨-001',
     'SEX-001': '未成年保护-001',
+    '未成年保护-001': '未成年保护-001',
     'SEX-002': '色情-001',
     'VIO-001': '暴力-001',
     'FRA-001': '诈骗-001',
@@ -477,6 +478,15 @@
       );
     }
 
+    function currentCategoryEntries() {
+      const categories = Array.isArray(state.library?.categories)
+        ? state.library.categories
+        : (state.library?.rules || []).map((rule) => rule.category);
+      return [...new Set(categories)]
+        .filter((value) => typeof value === 'string' && value)
+        .map((value) => [value, AI_CATEGORY_LABELS[value] || value]);
+    }
+
     async function loadPolicies() {
       if (mine || !state.session?.reviewer) return;
       const generation = state.generation;
@@ -506,15 +516,15 @@
         el('regression-export').disabled = state.session?.aiTestEnabled !== true;
         const selected = el('policy-category').value;
         el('policy-category').replaceChildren(
-          ...Object.entries({ '': '全部类别', ...AI_CATEGORY_LABELS })
-            .filter(([value]) => value !== 'other')
-            .map(([value, label]) => {
-              const option = node('option', label);
-              option.value = value;
-              return option;
-            }),
+          ...[['', '全部类别'], ...currentCategoryEntries()].map(([value, label]) => {
+            const option = node('option', label);
+            option.value = value;
+            return option;
+          }),
         );
-        el('policy-category').value = selected;
+        el('policy-category').value = currentCategoryEntries().some(([value]) => value === selected)
+          ? selected
+          : '';
         renderPolicies();
         state.refreshHistory?.();
       } catch (error) {
@@ -646,18 +656,16 @@
       const support = selectControl(SUPPORT_LABELS, initial.supportPriority || 'none');
       const categories = node('fieldset', undefined, 'moderation-category-options');
       categories.append(node('legend', '人工确认的风险类别'));
-      const checks = Object.entries(AI_CATEGORY_LABELS)
-        .filter(([value]) => value !== 'other')
-        .map(([value, label]) => {
-          const input = node('input');
-          input.type = 'checkbox';
-          input.value = value;
-          input.checked = initial.categories?.includes(value) || false;
-          const option = node('label');
-          option.append(input, node('span', label));
-          categories.append(option);
-          return input;
-        });
+      const checks = currentCategoryEntries().map(([value, label]) => {
+        const input = node('input');
+        input.type = 'checkbox';
+        input.value = value;
+        input.checked = initial.categories?.includes(value) || false;
+        const option = node('label');
+        option.append(input, node('span', label));
+        categories.append(option);
+        return input;
+      });
       const rules = node('input');
       rules.type = 'text';
       rules.maxLength = 1000;

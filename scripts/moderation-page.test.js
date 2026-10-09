@@ -599,6 +599,9 @@ test('AI trial prevents duplicate calls and discards responses after terms or mo
         url.endsWith('/ai-test') ? pending.promise : defaults(url, options),
     });
     await h.app.ready;
+    h.get('policy-category').value = 'sexual_minors';
+    await h.get('policy-refresh').events.click();
+    assert.equal(h.get('policy-category').value, '');
     await h.app.openSubmission('s1');
     await flush();
     const button = aiButton(h);
@@ -1715,11 +1718,11 @@ test('current library separates the prohibition checklist from support and globa
   });
   await h.app.ready;
   await flush();
-  assert.equal(h.get('policy-list').querySelectorAll('details').length, 20);
+  assert.equal(h.get('policy-list').querySelectorAll('details').length, 28);
   assert.equal(h.get('policy-support-list').querySelectorAll('article').length, 2);
   assert.doesNotMatch(
     h.get('policy-list').textContent,
-    /关怀-00[12]|EXP-001|MEN-001|SYS-001|GEN-001/,
+    /关怀-00[12]|EXP-001|MEN-001|SYS-001|GEN-001|未成年保护-001/,
   );
   assert.match(h.get('policy-list').textContent, /禁止发布的内容/);
   assert.match(h.get('policy-list').textContent, /不应据此禁止的情况/);
@@ -1731,8 +1734,87 @@ test('current library separates the prohibition checklist from support and globa
     !h
       .get('policy-category')
       .querySelectorAll('option')
-      .some((item) => item.value === 'other'),
+      .some((item) => ['other', 'sexual_minors'].includes(item.value)),
   );
+  assert.match(h.get('policy-list').textContent, /性剥削-001/);
+  assert.match(h.get('policy-list').textContent, /性招揽-001/);
+  assert.match(h.get('policy-list').textContent, /性暗示-001/);
+});
+
+test('retired sexual rules retain their original historical meaning and cannot be selected for current feedback', async () => {
+  for (const oldId of ['SEX-001', '未成年保护-001']) {
+    const run = policyRun();
+    run.policyVersion = oldId === 'SEX-001' ? 'policy-v1' : 'policy-v2';
+    run.assessment.categories = ['sexual_minors'];
+    run.assessment.ruleMatches = [
+      {
+        ruleId: oldId,
+        evidence: { field: 'content', quote: '历史测试证据' },
+        explanation: '按旧规则保存的审核记录。',
+      },
+    ];
+    run.policyEvidence[0].rule = {
+      id: oldId,
+      title: '禁止未成年人性剥削',
+      category: 'sexual_minors',
+      recommendedAction: 'block',
+      conditions: ['原版本对未成年人的保护条件'],
+      sourceIds: [],
+    };
+    const h = policyHarness({
+      run,
+      customFetch: async (url, options, fallback) =>
+        url.endsWith('/policies')
+          ? response({
+              library: {
+                version: 'policy-v3',
+                categories: ['sexual_content', 'harassment'],
+                rules: [
+                  { id: '性剥削-001', kind: 'prohibition', category: 'sexual_content' },
+                  { id: '骚扰-001', kind: 'prohibition', category: 'harassment' },
+                ],
+                sources: [],
+              },
+            })
+          : fallback(url, options),
+    });
+    await h.app.ready;
+    await h.app.openSubmission('s1');
+    await flush();
+    const detail = h.get('detail');
+    assert.match(detail.textContent, /未成年保护-001（历史版本）/);
+    assert.match(detail.textContent, /旧版未成年人性风险/);
+    assert.match(detail.textContent, /原版本对未成年人的保护条件/);
+    assert.doesNotMatch(detail.textContent, /性剥削-001/);
+    assert.ok(
+      detail
+        .querySelectorAll('pre')
+        .some((item) => item.textContent.includes(`"ruleId": "${oldId}"`)),
+    );
+    const categoryOptions = h
+      .get('policy-category')
+      .querySelectorAll('option')
+      .map((item) => item.value);
+    assert.deepEqual(categoryOptions, ['', 'sexual_content', 'harassment']);
+    const form = detail
+      .querySelectorAll('form')
+      .find((item) =>
+        item.querySelectorAll('button').some((button) => button.textContent === '保存人工复核记录'),
+      );
+    assert.deepEqual(
+      form
+        .querySelectorAll('input')
+        .filter((item) => item.type === 'checkbox')
+        .map((item) => item.value),
+      ['sexual_content', 'harassment'],
+    );
+    assert.equal(control(h, 'input', '-rules').value, '');
+    control(h, 'input', '-rules').value = oldId;
+    control(h, 'textarea', '-note').value = '尝试把旧编号用作当前依据';
+    await form.events.submit({ preventDefault() {} });
+    assert.match(form.textContent, /历史编号不能用于新的复核/);
+    assert.ok(!h.requests.some(({ url }) => url.endsWith('/feedback')));
+  }
 });
 
 test('legacy evidence keeps original JSON but shows Chinese historical labels and requires current reassessment', async () => {

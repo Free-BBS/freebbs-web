@@ -547,8 +547,9 @@ test('strict local schema rejects unknown fields, categories, inconsistent decis
     const h = harness({ result: () => jsonResponse(envelope(assessment)) });
     await assert.rejects(h.client.assess(INPUT), fixedError(502));
   }
-  assert.equal(CATEGORIES.length, 12);
+  assert.equal(CATEGORIES.length, 11);
   assert.ok(!CATEGORIES.includes('other'));
+  assert.ok(!CATEGORIES.includes('sexual_minors'));
 });
 
 function ruleMatch(ruleId, quote, field = 'content') {
@@ -654,7 +655,12 @@ test('normal criticism, ordinary help and quoted prompt attacks need no protecti
 
 test('only current Chinese rule IDs are accepted and legacy or removed IDs never trigger an API retry', async () => {
   for (const [oldId, currentId] of Object.entries(LEGACY_RULE_ID_MAP)) {
-    const rule = getPolicyRule(currentId);
+    const rule = getPolicyRule(currentId) || {
+      kind: 'prohibition',
+      recommendedAction: 'block',
+      category: 'sexual_content',
+      supportPriority: 'none',
+    };
     const result = {
       ...ASSESSMENT,
       decision:
@@ -672,13 +678,36 @@ test('only current Chinese rule IDs are accepted and legacy or removed IDs never
     await assert.rejects(h.client.assess(INPUT), fixedError(502));
     assert.equal(h.requests.length, 1);
   }
-  for (const oldId of ['EXP-001', 'MEN-001', 'SYS-001', 'GEN-001']) {
+  for (const oldId of ['EXP-001', 'MEN-001', 'SYS-001', 'GEN-001', '未成年保护-001']) {
     const h = harness({
       result: () =>
         jsonResponse(envelope({ ...ASSESSMENT, ruleMatches: [ruleMatch(oldId, INPUT.content)] })),
     });
     await assert.rejects(h.client.assess(INPUT), fixedError(502));
     assert.equal(h.requests.length, 1);
+  }
+});
+
+test('current age-independent sexual rules use the current category and reject the retired category', async () => {
+  for (const ruleId of ['性剥削-001', '性招揽-001', '性暗示-001', '色情-001']) {
+    const rule = getPolicyRule(ruleId);
+    const content = '仅用于接口契约测试的虚构证据，不表示模型已实际识别本句。';
+    const assessment = {
+      ...ASSESSMENT,
+      decision: rule.recommendedAction === 'block' ? 'high_risk' : 'needs_review',
+      categories: ['sexual_content'],
+      ruleMatches: [ruleMatch(ruleId, content)],
+    };
+    const h = harness({ result: () => jsonResponse(envelope(assessment)) });
+    const result = await h.client.assess({ ...INPUT, content });
+    assert.deepEqual(result.assessment.categories, ['sexual_content']);
+    assert.equal(result.policyEvidence[0].rule.id, ruleId);
+    assert.equal(result.policyDecision.canAutomaticallyPublish, false);
+    const retired = harness({
+      result: () => jsonResponse(envelope({ ...assessment, categories: ['sexual_minors'] })),
+    });
+    await assert.rejects(retired.client.assess({ ...INPUT, content }), fixedError(502));
+    assert.equal(retired.requests.length, 1);
   }
 });
 

@@ -1,6 +1,6 @@
 {
-  "version": "freebbs-policy-2026-10-08-v2",
-  "checkedAt": "2026-10-08",
+  "version": "freebbs-policy-2026-10-09-v3",
+  "checkedAt": "2026-10-09",
   "status": "isolated_test",
   "scope": "高校为主、可能含未成年人的中国大陆公开社区讨论文字；图片需另行审核",
   "categories": [
@@ -8,7 +8,6 @@
     "harassment",
     "threat",
     "self_harm",
-    "sexual_minors",
     "sexual_content",
     "violence",
     "fraud",
@@ -27,21 +26,21 @@
   "sources": [
     {
       "id": "CN-CONSTITUTION",
-      "title": "中华人民共和国宪法",
-      "url": "https://www.npc.gov.cn/c2/c30834/201905/t20190521_281393.html",
-      "article": "第三十五条、第四十一条",
-      "reference": "言论及批评建议权利；不得捏造歪曲事实诬告陷害",
+      "title": "中华人民共和国宪法（2018年修正文本）",
+      "url": "https://www.mofcom.gov.cn/xxgcxjpxsdzgtsshzysx/zywj/art/2018/art_45c1e16fe351469090d53e63178268c8.html",
+      "article": "第一条至第五条、第三十五条、第三十六条、第四十一条",
+      "reference": "宪法基本原则、民族平等、表达与宗教信仰自由、批评建议与依法监督权利",
       "authorityType": "law",
-      "checkedAt": "2026-10-08"
+      "checkedAt": "2026-10-09"
     },
     {
       "id": "CN-ECOLOGY-6",
       "title": "网络信息内容生态治理规定",
       "url": "https://www.cac.gov.cn/2019-12/20/c_1578375159509309.htm",
-      "article": "第六条、第十八条",
-      "reference": "违法信息内容范围及用户义务；具体个案须核实构成条件",
+      "article": "第六条、第十八条、第二十五条",
+      "reference": "违法信息范围、用户责任及国家象征商业营销边界；个案需要核实行为与语境",
       "authorityType": "regulation",
-      "checkedAt": "2026-10-08"
+      "checkedAt": "2026-10-09"
     },
     {
       "id": "CN-ECOLOGY-7",
@@ -50,7 +49,7 @@
       "article": "第七条、第九条、第十条",
       "reference": "不良信息与违法信息不同；平台治理、处置和记录要求",
       "authorityType": "regulation",
-      "checkedAt": "2026-10-08"
+      "checkedAt": "2026-10-09"
     },
     {
       "id": "CN-CYBERBULLYING",
@@ -68,7 +67,7 @@
       "article": "第一千零一十条、第一千零二十四至一千零二十六条、第一千零三十二至一千零三十四条",
       "reference": "性骚扰、名誉、合理报道监督、隐私与个人信息保护",
       "authorityType": "law",
-      "checkedAt": "2026-10-08"
+      "checkedAt": "2026-10-09"
     },
     {
       "id": "CN-PIPL",
@@ -77,7 +76,7 @@
       "article": "第四至六条、第十三条、第十七至二十一条、第二十三至三十一条、第五十五至五十六条、第七十三条",
       "reference": "必要性、处理依据、委托与提供、敏感信息和未满十四周岁信息、影响评估；去标识化不等于匿名化",
       "authorityType": "law",
-      "checkedAt": "2026-10-08"
+      "checkedAt": "2026-10-09"
     },
     {
       "id": "CN-MINOR-NET",
@@ -86,7 +85,7 @@
       "article": "第二十二条、第二十三条",
       "reference": "危害未成年人的网络内容及可能影响身心健康内容的防护",
       "authorityType": "regulation",
-      "checkedAt": "2026-10-08"
+      "checkedAt": "2026-10-09"
     },
     {
       "id": "CN-ANTI-FRAUD",
@@ -131,7 +130,106 @@
       "article": "本规则库及 docs/moderation-policy-sources.md",
       "reference": "校园讨论的处置选择、正常表达保护、原文隐私复核、申诉与支持流程；不冒充法定义务",
       "authorityType": "community_rule",
-      "checkedAt": "2026-10-08"
+      "checkedAt": "2026-10-09"
+    },
+    {
+      "id": "CN-NATIONAL-SECURITY",
+      "title": "中华人民共和国国家安全法（2015年）",
+      "url": "https://www.stats.gov.cn/gk/tjfg/xgfxfg/202503/t20250310_1958929.html",
+      "article": "第七条、第十五条、第十七条、第十八条、第二十七条",
+      "reference": "国家安全、制度与主权统一保护，以及依法保障人权和正常宗教活动的要求",
+      "authorityType": "law",
+      "checkedAt": "2026-10-09"
+    },
+    {
+      "id": "CN-HEROES",
+      "title": "中华人民共和国英雄烈士保护法",
+      "url": "https://www.samr.gov.cn/zw/zfxxgk/fdzdgknr/bgt/art/2023/art_f01f57e84ad14981bb095cc865946bd5.html",
+      "article": "第二十二条、第二十三条",
+      "reference": "英烈事迹精神、姓名肖像与名誉荣誉保护及相关网络传播处置",
+      "authorityType": "law",
+      "checkedAt": "2026-10-09"
+    },
+    {
+      "id": "CN-ANTI-TERROR",
+      "title": "中华人民共和国反恐怖主义法（2018年修正）",
+      "url": "https://www.miit.gov.cn/jgsj/zfs/fl/art/2022/art_2c79fa5f17834377afffd4cc359392bf.html",
+      "article": "第二至六条、第十二条、第十六条、第十九条",
+      "reference": "恐怖与极端行为边界、认定与网络处置；不得按地域、民族或宗教歧视",
+      "authorityType": "law",
+      "checkedAt": "2026-10-09"
+    },
+    {
+      "id": "CN-STATE-SECRETS-2024",
+      "title": "中华人民共和国保守国家秘密法（2024年修订）",
+      "url": "https://www.beijing.gov.cn/zhengce/zhengcefagui/202402/t20240228_3571751.html",
+      "article": "第二条、第四条、第十三条、第二十八条、第二十九条",
+      "reference": "国家秘密须依法定密；依法公开事项应公开，禁止非法处理与无保密措施传播国家秘密",
+      "authorityType": "law",
+      "checkedAt": "2026-10-09"
+    },
+    {
+      "id": "CN-ETHNIC-UNITY-2026",
+      "title": "中华人民共和国民族团结进步促进法",
+      "url": "https://www.ggj.gov.cn/xwzx/szyw/202603/t20260313_49179.htm",
+      "article": "第三十一条、第五十三条、第五十九条、第六十一条、第六十五条",
+      "reference": "民族仇恨歧视信息及借身份激化冲突的边界、运营者责任；2026年7月1日起施行",
+      "authorityType": "law",
+      "checkedAt": "2026-10-09"
+    },
+    {
+      "id": "CN-RELIGIOUS-AFFAIRS",
+      "title": "宗教事务条例（2017年修订）",
+      "url": "https://xzfy.moj.gov.cn/c/2021-01-17/488814.shtml",
+      "article": "第四条、第四十四条、第四十五条、第四十七条、第四十八条",
+      "reference": "信仰自由与合法活动保护、学校场所限制、有关传播内容及信息服务管理边界",
+      "authorityType": "regulation",
+      "checkedAt": "2026-10-09"
+    },
+    {
+      "id": "CN-INTERNET-RELIGION",
+      "title": "互联网宗教信息服务管理办法",
+      "url": "https://www.sara.gov.cn/static/content/xxgk/bmgz/2021-12-20/1306305918975082496.html",
+      "article": "第六条、第十四条、第十五至十九条、第二十一条",
+      "reference": "互联网宗教信息服务许可及内容边界、传教和活动组织限制；不能仅据宗教身份判定",
+      "authorityType": "regulation",
+      "checkedAt": "2026-10-09"
+    },
+    {
+      "id": "CN-NATIONAL-FLAG",
+      "title": "中华人民共和国国旗法（2020年修正）",
+      "url": "https://www.samr.gov.cn/zw/zfxxgk/fdzdgknr/bgt/art/2023/art_5e1206b52a484dfdba6ea8b76d75a7f0.html",
+      "article": "第十九条、第二十条、第二十三条",
+      "reference": "国旗规范使用、禁止的商业用途及故意侮辱行为",
+      "authorityType": "law",
+      "checkedAt": "2026-10-09"
+    },
+    {
+      "id": "CN-NATIONAL-EMBLEM",
+      "title": "中华人民共和国国徽法（2020年修正）",
+      "url": "https://www.samr.gov.cn/zw/zfxxgk/fdzdgknr/bgt/art/2023/art_f79dc4897ec5425188bf7be71cd77d9a.html",
+      "article": "第十三条、第十八条",
+      "reference": "国徽及图案的禁止使用场合、故意侮辱行为",
+      "authorityType": "law",
+      "checkedAt": "2026-10-09"
+    },
+    {
+      "id": "CN-NATIONAL-ANTHEM",
+      "title": "中华人民共和国国歌法",
+      "url": "https://www.gov.cn/xinwen/2017-09/02/P020240830584422694611.pdf",
+      "article": "第六条、第八条、第十五条",
+      "reference": "国歌规范奏唱和使用、禁止的商业用途、故意侮辱行为",
+      "authorityType": "law",
+      "checkedAt": "2026-10-09"
+    },
+    {
+      "id": "CN-ADVERTISING",
+      "title": "中华人民共和国广告法（2021年修正）",
+      "url": "https://www.samr.gov.cn/zw/zfxxgk/fdzdgknr/fgs/art/2023/art_5474cf75173c45d6a0379730fb4e8d97.html",
+      "article": "第九条第一项、第二项",
+      "reference": "商业广告不得使用国家象征或国家机关及其工作人员的名义形象",
+      "authorityType": "law",
+      "checkedAt": "2026-10-09"
     }
   ],
   "principles": [
@@ -142,7 +240,8 @@
     "先核对每条适用条件与例外。禁止项标题说明禁止范围，不代表疑似内容已经违规或违法；需要人工核查的条目仅表示存在具体疑点、须人工核实，不得单凭该条升级为明确高风险或自动拒绝。",
     "不存在适用禁止项，但存在可说明的潜在伤害且关键语境不足时，在待核实事项中写明缺失事实并交人工核查，不返回兜底违规编号、不虚构类别或处罚。仅因模型不熟悉、不能证实一切或作者表达负面意见，不足以要求复核。",
     "关怀提示与违规判断独立：关怀提示不计入违规类别，可以与无违规结果同时成立；紧急情形的暂缓公开是保护性复核，不是处罚，不授权模型自动联系校方、家长或执法部门。",
-    "只判断实际给出的材料，不虚构年龄、授权、前因后果、身份、密级或违法罪名。脱敏占位符不等于残留隐私，脱敏副本也不证明原稿无隐私；没有图片像素就不能判断图片。"
+    "只判断实际给出的材料，不虚构年龄、授权、前因后果、身份、密级或违法罪名。脱敏占位符不等于残留隐私，脱敏副本也不证明原稿无隐私；没有图片像素就不能判断图片。",
+    "色情传播、性招揽、性暗示挑逗和性剥削均按具体行为限制，不以年龄、收费或自称自愿作为豁免；正常性健康知识、反性骚扰求助及必要新闻和学术引用应保留。一般恋爱交友不等于性招揽，不凭单词、身份或模型的性联想判违规。"
   ],
   "legacyRuleIdMap": {
     "PRI-001": "隐私-001",
@@ -256,7 +355,7 @@
     {
       "id": "隐私-004",
       "kind": "prohibition",
-      "title": "禁止缺乏适当保护公开可识别病历及未满十四周岁个人信息",
+      "title": "禁止缺乏适当保护公开医疗健康等敏感个人信息",
       "category": "privacy",
       "domain": "privacy",
       "basisType": "community_rule",
@@ -265,19 +364,20 @@
       "supportPriority": "none",
       "requiresHumanReview": true,
       "conditions": [
-        "公开与个人身份关联的诊断、病历、用药等医疗健康资料，或可识别的未满十四周岁儿童资料",
-        "需要另行核实公开与外发的目的、必要性、处理依据及保护措施"
+        "实际公开可关联到具体个人的病历、诊断、用药、生物识别、金融账户、行踪轨迹或宗教信仰等敏感个人信息，且公开必要性、处理依据或保护措施存在具体疑点",
+        "适用于所有年龄；指出信息类型及缺失的保护条件，不在审核说明中复述信息值，也不推断没有提供的健康、信仰或身份情况"
       ],
       "exceptions": [
-        "一般情绪表达不自动等于医疗健康资料；匿名求助和科学教育不自动违规",
-        "不能把所有未满十八周岁用户都套用未满十四周岁的专门同意规则"
+        "一般情绪表达、充分匿名的求助、科学教育和不含可识别资料的康复经历不自动违规",
+        "本人自愿讲述症状、治疗或康复以求助、分享经历，未额外公开病历标识、身份编号、联系方式、精确住址或他人资料时，不因关联站内账号或没有写同意声明就自动命中；有具体暴露风险再核查",
+        "不因提到疾病、银行或宗教就判定存在敏感个人信息；有实际个人信息时仍须核实必要性及适用处理依据"
       ],
       "positiveExample": "我把室友的实名诊断报告贴上来，证明他有病。",
       "negativeExample": "我曾经接受过治疗，现在愿意分享如何寻求帮助，不涉及身份和病历。",
       "sourceIds": ["CN-PIPL", "CN-MENTAL-HEALTH"],
       "supportOnly": false,
       "sourceArticles": {
-        "CN-PIPL": "第二十八至三十一条",
+        "CN-PIPL": "第二十八至三十条",
         "CN-MENTAL-HEALTH": "第四条"
       }
     },
@@ -391,28 +491,33 @@
       }
     },
     {
-      "id": "未成年保护-001",
+      "id": "性剥削-001",
       "kind": "prohibition",
-      "title": "禁止未成年人性剥削、色情化与性化招募",
-      "category": "sexual_minors",
-      "domain": "minor_protection",
+      "title": "禁止性剥削、胁迫及未经同意传播私密性内容",
+      "category": "sexual_content",
+      "domain": "content_safety",
       "basisType": "community_rule",
       "riskLevel": "high",
       "recommendedAction": "block",
       "supportPriority": "none",
       "requiresHumanReview": true,
       "conditions": [
-        "对未成年人实施或招募性剥削、索取性内容，或将未成年人色情化",
-        "年龄与目的存在实质疑点时交人工，不编造年龄"
+        "实际实施、招募或鼓动通过胁迫、欺骗、权力依附等方式索取性行为或私密性内容，或未经当事人同意传播、交易、以传播相威胁的私密性材料",
+        "不以受影响者年龄为适用前提；不需要先确认未成年才能提出拦截建议，不推断缺失的年龄、同意或双方关系"
       ],
-      "exceptions": ["适龄性教育、预防侵害、非露骨举报和寻求保护不属于性剥削"],
-      "positiveExample": "招募未成年学生提供色情内容并付费。",
-      "negativeExample": "未成年人遇到索要私密照片的要求，应如何求助？",
-      "sourceIds": ["CN-MINOR-NET", "CN-ECOLOGY-6"],
+      "exceptions": [
+        "反性骚扰、反性侵教育，以及不含不必要露骨细节的举报、求助、新闻或学术引用不属于实施剥削",
+        "当事人求助中转述被胁迫的经历，不得被当作其本人在实施威胁；涉及个人信息另按隐私规则核实"
+      ],
+      "positiveExample": "用公开私密照片相威胁，要求对方接受性要求，并招募他人一起施压。",
+      "negativeExample": "有人拿私密照片威胁我，请帮助我了解如何举报和保护自己。",
+      "sourceIds": ["CN-CIVIL-PERSONALITY", "CN-ECOLOGY-6", "CN-MINOR-NET", "FREEBBS-COMMUNITY"],
       "supportOnly": false,
       "sourceArticles": {
-        "CN-MINOR-NET": "第二十二条",
-        "CN-ECOLOGY-6": "第六条第九项"
+        "CN-CIVIL-PERSONALITY": "第一千零一十条、第一千零三十二至一千零三十三条",
+        "CN-ECOLOGY-6": "第六条第九至十项",
+        "CN-MINOR-NET": "第二十二条（材料涉及未成年人时的额外保护）",
+        "FREEBBS-COMMUNITY": "本站全年龄禁止色情、性招揽、性暗示挑逗及性剥削的讨论区规则"
       }
     },
     {
@@ -427,8 +532,8 @@
       "supportPriority": "none",
       "requiresHumanReview": true,
       "conditions": [
-        "直接传播露骨色情材料，或明确为色情内容交易和获取渠道引流",
-        "仅有性暗示或语境不明不足以断言露骨色情，转人工核查"
+        "实际传播以性刺激为目的的露骨色情文字或材料，或明确为色情内容交易和获取渠道引流；不以作者、受众或所涉人员年龄为前提",
+        "仅有医学术语、亲密关系话题或语境不明的暗示不足以断言露骨色情；性招揽和性暗示挑逗分别按对应条目核实"
       ],
       "exceptions": [
         "非色情目的的医学、性健康教育、举报与新闻讨论需根据必要性判断",
@@ -436,11 +541,68 @@
       ],
       "positiveExample": "出售色情视频合集，付款后发下载链接。",
       "negativeExample": "怎样获得可靠的性健康教育资料？",
-      "sourceIds": ["CN-ECOLOGY-6", "CN-ECOLOGY-7"],
+      "sourceIds": ["CN-ECOLOGY-6", "CN-ECOLOGY-7", "FREEBBS-COMMUNITY"],
       "supportOnly": false,
       "sourceArticles": {
         "CN-ECOLOGY-6": "第六条第九项",
-        "CN-ECOLOGY-7": "第七条第四项"
+        "CN-ECOLOGY-7": "第七条第四项",
+        "FREEBBS-COMMUNITY": "本站全年龄禁止色情、性招揽、性暗示挑逗及性剥削的讨论区规则"
+      }
+    },
+    {
+      "id": "性招揽-001",
+      "kind": "prohibition",
+      "title": "禁止性服务、性交易及以性目的招揽联系",
+      "category": "sexual_content",
+      "domain": "content_safety",
+      "basisType": "community_rule",
+      "riskLevel": "high",
+      "recommendedAction": "block",
+      "supportPriority": "none",
+      "requiresHumanReview": true,
+      "conditions": [
+        "明确提供、索取、招募或撮合性服务、性交易，或以实施性行为、获取私密性内容为目的公开招揽联系和引流",
+        "本站限制不以年龄、收费或自称自愿为前提；必须指出具体性目的，不把普通约会、恋爱、付费或私聊字样本身当作证据"
+      ],
+      "exceptions": [
+        "正常恋爱交友、亲密关系沟通和不以性行为或私密性内容为目的的社交邀请不因本条禁止",
+        "非色情目的的健康教育、反剥削报道、学术引用或举报求助不属于招揽；仍核实隐私与不必要细节"
+      ],
+      "positiveExample": "我提供有偿性服务，想预约的人来私信联系。",
+      "negativeExample": "想认识兴趣相投的同学，周末一起逛校园和参加社团活动。",
+      "sourceIds": ["CN-ECOLOGY-6", "FREEBBS-COMMUNITY"],
+      "supportOnly": false,
+      "sourceArticles": {
+        "CN-ECOLOGY-6": "第六条第九项（违法色情传播部分）",
+        "FREEBBS-COMMUNITY": "本站全年龄禁止色情、性招揽、性暗示挑逗及性剥削的讨论区规则"
+      }
+    },
+    {
+      "id": "性暗示-001",
+      "kind": "prohibition",
+      "title": "禁止以性刺激或性挑逗为目的的暗示内容",
+      "category": "sexual_content",
+      "domain": "content_safety",
+      "basisType": "community_rule",
+      "riskLevel": "medium",
+      "recommendedAction": "human_review",
+      "supportPriority": "none",
+      "requiresHumanReview": true,
+      "conditions": [
+        "结合上下文能指出以性刺激、性挑逗为目的的文字、暗语或引流，而非仅出现身体词汇或模型主观联想",
+        "本站将明确的性暗示挑逗列为禁止内容，适用于所有年龄；性质、目的或引用语境存在疑点时由人工核实，不笼统宣称属于违法色情"
+      ],
+      "exceptions": [
+        "正常性健康知识、反性骚扰求助、必要新闻和学术引用，以及不以性挑逗为目的的恋爱表达不因本条禁止",
+        "不能仅凭暧昧、宝贝、私聊、成人或某个表情认定性挑逗；不得编造缺失的暗语含义、语境或图片内容"
+      ],
+      "positiveExample": "用连续的性挑逗暗语招揽同学观看以性刺激为卖点的直播。",
+      "negativeExample": "课程讨论广告中的性暗示现象，分析如何避免物化和骚扰。",
+      "sourceIds": ["CN-ECOLOGY-7", "FREEBBS-COMMUNITY"],
+      "supportOnly": false,
+      "sourceArticles": {
+        "CN-ECOLOGY-7": "第七条第四项、第九至十条（不良信息及平台治理）",
+        "FREEBBS-COMMUNITY": "本站全年龄禁止色情、性招揽、性暗示挑逗及性剥削的讨论区规则"
       }
     },
     {
@@ -584,7 +746,7 @@
     {
       "id": "政治内容-001",
       "kind": "prohibition",
-      "title": "禁止危害国家安全、宪法原则与国家统一的违法传播",
+      "title": "禁止危害国家安全、颠覆政权或破坏国家统一的违法传播",
       "category": "political_compliance",
       "domain": "public_affairs",
       "basisType": "community_rule",
@@ -593,27 +755,29 @@
       "supportPriority": "none",
       "requiresHumanReview": true,
       "conditions": [
-        "有具体文本行为可能触及内容生态规定第六条第一至三项，需要核实语境、行为性质和法律适用",
-        "只有政治议题、人物名称、立场或批评情绪不足以命中；必须说明待核查的具体行为"
+        "材料中存在具体宣传、煽动、组织或协助危害国家安全、颠覆国家政权、分裂国家的行为；须指出原文及拟核实的行为性质，不能仅以政治话题或批评态度作为依据",
+        "本条不替代国家秘密、恐怖极端、民族仇恨和宪法原则等专门条目；同一事实优先使用最具体条目，确有独立行为才并列",
+        "负责人须核实全文语境、引用关系及具体法律适用；模型不能认定犯罪、推断政治倾向或根据模糊损害国家利益标签扩大禁止范围"
       ],
       "exceptions": [
-        "正常政策批评、历史学术讨论、新闻引用、宪法法律分析与改革建议不按敏感词拒绝",
-        "模型不能认定国家秘密、刑事责任或推断作者政治倾向；疑点不得直接升级自动拒绝"
+        "对公共政策、政府工作或具体公职行为的批评建议、依法投诉举报、公共利益监督，不因尖锐或负面而适用本条",
+        "历史、法律、国际关系的研究与新闻引用，应区分资料介绍和实际宣传煽动；不得仅因人物、地名、事件名称而禁止"
       ],
-      "positiveExample": "发帖声称出售未公开国家秘密资料，真实性与密级需要专业核实。",
-      "negativeExample": "这项公共政策增加了学生负担，我建议修改并说明理由。",
-      "sourceIds": ["CN-ECOLOGY-6", "CN-CONSTITUTION", "FREEBBS-COMMUNITY"],
+      "positiveExample": "虚构测试：帖子公开招募人员参与一个以非法分裂国家为目标的行动，负责人需核实作者真实表达和完整语境；不提供行动方法。",
+      "negativeExample": "这项公共政策对学生不够公平，我希望有关部门公布依据并修改不合理的部分。",
+      "sourceIds": ["CN-ECOLOGY-6", "CN-NATIONAL-SECURITY", "CN-CONSTITUTION", "FREEBBS-COMMUNITY"],
       "supportOnly": false,
       "sourceArticles": {
-        "CN-ECOLOGY-6": "第六条第一至三项",
+        "CN-ECOLOGY-6": "第六条第二项",
+        "CN-NATIONAL-SECURITY": "第七条、第十五条、第十七条、第十八条",
         "CN-CONSTITUTION": "第三十五条、第四十一条",
-        "FREEBBS-COMMUNITY": "本规则库及 docs/moderation-policy-sources.md"
+        "FREEBBS-COMMUNITY": "具体行为与语境核实；政治类仅建议人工复核"
       }
     },
     {
       "id": "政治内容-002",
       "kind": "prohibition",
-      "title": "禁止侵害英烈权益及违反宗教相关规定的违法传播",
+      "title": "禁止歪曲、侮辱英烈及侵害英烈名誉荣誉的传播",
       "category": "political_compliance",
       "domain": "public_affairs",
       "basisType": "community_rule",
@@ -622,21 +786,22 @@
       "supportPriority": "none",
       "requiresHumanReview": true,
       "conditions": [
-        "出现可能涉及内容生态规定第六条第四项或第七项的具体传播行为，且须核实对象、事实与法律边界",
-        "审核说明必须指出具体疑点，不能把历史研究、宗教身份或个人信仰本身列为风险"
+        "传播材料对可核实的英雄烈士事迹、精神或姓名肖像实施歪曲、丑化、亵渎、侮辱、诽谤等侵害；须指出具体行为，不能凭模型记忆确认对象身份或史实",
+        "负责人须核实对象是否属于相应保护范围、材料出处、必要上下文及作者是引用研究还是实施侵害；有争议的史料不能直接等同造谣"
       ],
       "exceptions": [
-        "有依据的历史研究、资料核对、正常宗教文化讨论及对具体机构行为的批评不自动违规",
-        "禁止模型凭空确认某人英烈身份、某组织法律性质或作者信仰；仅作人工核查建议"
+        "基于资料的历史研究、史料校勘、提问核实、合法新闻报道和纪念教育，不因涉及英烈或出现不同记载而自动禁止",
+        "为批评侵害行为而作的必要引用须结合立场和展示方式判断，不能把举报人当成侵害实施者"
       ],
-      "positiveExample": "以侮辱性伪造材料攻击被指为英烈的对象，需核实身份及材料来源。",
-      "negativeExample": "请比较不同史料对这一历史事件的记载差异。",
-      "sourceIds": ["CN-ECOLOGY-6", "CN-CONSTITUTION", "FREEBBS-COMMUNITY"],
+      "positiveExample": "虚构测试：发帖人自称编造了一份侮辱某英烈的所谓证据，并要求大家当作真实史料传播；对象和材料均须人工核实。",
+      "negativeExample": "两份公开史料对这位人物的经历记载不同，我想核对出版时间和原始出处。",
+      "sourceIds": ["CN-ECOLOGY-6", "CN-HEROES", "CN-CONSTITUTION", "FREEBBS-COMMUNITY"],
       "supportOnly": false,
       "sourceArticles": {
-        "CN-ECOLOGY-6": "第六条第四项、第七项",
-        "CN-CONSTITUTION": "第三十五条、第四十一条",
-        "FREEBBS-COMMUNITY": "本规则库及 docs/moderation-policy-sources.md"
+        "CN-ECOLOGY-6": "第六条第四项",
+        "CN-HEROES": "第二十二条、第二十三条",
+        "CN-CONSTITUTION": "第三十五条",
+        "FREEBBS-COMMUNITY": "英烈身份、史实、引用目的由负责人核实"
       }
     },
     {
@@ -651,21 +816,223 @@
       "supportPriority": "none",
       "requiresHumanReview": true,
       "conditions": [
-        "有具体宣扬、招募或鼓动材料可能涉及恐怖主义、极端主义传播，需要核实内容性质",
-        "如存在针对对象的可信暴力威胁，应同时按 威胁-001 处理，不能仅以政治标签作结论"
+        "存在赞扬、鼓动、招募或为恐怖活动及暴力极端活动提供帮助的具体宣传，须核实行为性质、作者态度与来源",
+        "组织和人员的法律认定须有可靠依据；模型不得仅凭服饰、民族、地域、宗教或激烈观点贴上恐怖或极端标签",
+        "如另有可信的人身暴力威胁，按 威胁-001 独立判断并及时交负责人处理；本政治条目本身不授权自动处罚或自动对外报告"
       ],
       "exceptions": [
-        "反恐教育、新闻引用、学术研究和对有关思想的批判不属于宣传招募",
-        "禁止仅因民族、宗教身份或争议政治观点推断为极端主义"
+        "反恐教育、新闻报道、学术研究和对极端宣传的批判，不因提及相关组织或展示必要引用就视为宣传招募",
+        "个人宗教信仰和民族风俗本身不构成本条风险"
       ],
-      "positiveExample": "为一个自称实施恐怖袭击的组织公开招募参与者，需核实并紧急人工处理。",
-      "negativeExample": "课程讨论恐怖主义宣传如何被识别和抵制。",
-      "sourceIds": ["CN-ECOLOGY-6", "CN-MINOR-NET", "FREEBBS-COMMUNITY"],
+      "positiveExample": "虚构测试：帖子赞扬一个自称以袭击平民为目标的组织，并替其招募成员；不包含组织名称、渠道或实施方法。",
+      "negativeExample": "课程作业分析恐怖主义宣传如何诱导受众，并讨论怎样识别和抵制这些信息。",
+      "sourceIds": ["CN-ECOLOGY-6", "CN-ANTI-TERROR", "CN-CONSTITUTION", "FREEBBS-COMMUNITY"],
       "supportOnly": false,
       "sourceArticles": {
         "CN-ECOLOGY-6": "第六条第五项",
-        "CN-MINOR-NET": "第二十二条",
-        "FREEBBS-COMMUNITY": "本规则库及 docs/moderation-policy-sources.md"
+        "CN-ANTI-TERROR": "第二至六条、第十二条、第十六条、第十九条",
+        "CN-CONSTITUTION": "第三十五条、第三十六条",
+        "FREEBBS-COMMUNITY": "宣传与引用区分；由负责人核实与依法处置"
+      }
+    },
+    {
+      "id": "政治内容-004",
+      "kind": "prohibition",
+      "title": "禁止泄露、售卖或索取依法保密的国家秘密",
+      "category": "political_compliance",
+      "domain": "public_affairs",
+      "basisType": "community_rule",
+      "riskLevel": "medium",
+      "recommendedAction": "human_review",
+      "supportPriority": "none",
+      "requiresHumanReview": true,
+      "conditions": [
+        "材料声称披露、售卖、交换、索取或传递国家秘密，或存在可说明的密级标志、来源限制等具体线索；须明确哪些事实待核实，不得由模型自行认定密级",
+        "负责人须核实是否依法定密、是否仍在保密期限、知悉和公开权限；普通内部通知、未发表论文或尚未公布消息不能只因未公开就被认定为国家秘密",
+        "疑似真实涉密材料应交负责人通过适当渠道核查，不应复制扩散；本规则文字不代表系统已经实现本地涉密检测或外发阻断"
+      ],
+      "exceptions": [
+        "对合法公开或已依法解密信息的正常研究讨论、保密法律科普、泛化虚构案例，不因军事、科技或政府主题自动适用本条",
+        "一般校园隐私、商业秘密和普通内部资料须按对应事实处理，不擅自升级为国家秘密"
+      ],
+      "positiveExample": "虚构测试：帖子声称出售仍标有有效密级的国家机关文件，并展示目录线索；不提供任何实际文件或获取方法。",
+      "negativeExample": "我整理了政府官网已经公开的统计资料，附原始公开链接供大家核对。",
+      "sourceIds": ["CN-ECOLOGY-6", "CN-STATE-SECRETS-2024", "FREEBBS-COMMUNITY"],
+      "supportOnly": false,
+      "sourceArticles": {
+        "CN-ECOLOGY-6": "第六条第二项",
+        "CN-STATE-SECRETS-2024": "第二条、第四条、第十三条、第二十八条、第二十九条",
+        "FREEBBS-COMMUNITY": "密级和公开权限需核实；不把未公开一概视为涉密"
+      }
+    },
+    {
+      "id": "政治内容-005",
+      "kind": "prohibition",
+      "title": "禁止煽动民族仇恨、民族歧视及借民族身份激化冲突",
+      "category": "political_compliance",
+      "domain": "public_affairs",
+      "basisType": "community_rule",
+      "riskLevel": "medium",
+      "recommendedAction": "human_review",
+      "supportPriority": "none",
+      "requiresHumanReview": true,
+      "conditions": [
+        "文字针对民族群体鼓动敌视、歧视、排斥或差别待遇，或借民族身份、习俗、信仰故意挑起冲突并存在扰乱秩序的具体内容；须识别对象和实际行为",
+        "核实作者是在主张歧视、记录受歧视经历、引用举报还是讨论政策；不得从姓名、地域或语言推断作者或被提及者的民族身份",
+        "本条提供民族团结法律边界的人工复核；仇恨-001 仍可处理独立明确的群体仇恨行为，同一句不得仅换标签重复加重"
+      ],
+      "exceptions": [
+        "民族文化、语言、风俗的正常介绍比较，民族政策的事实讨论与改进建议，不因提及差异而禁止",
+        "报告歧视、反驳偏见、批评个体的具体行为，不因当事人具有某民族身份就变成针对整个民族的仇恨"
+      ],
+      "positiveExample": "虚构测试：招募帖要求所有同学仅因某一民族身份排斥相应同学参加公开活动，并号召扩散这一排斥要求；不指定真实民族。",
+      "negativeExample": "我想比较几种民族节日的历史来源；同时，任何同学都应平等参加校园活动。",
+      "sourceIds": ["CN-ECOLOGY-6", "CN-ETHNIC-UNITY-2026", "CN-CONSTITUTION", "FREEBBS-COMMUNITY"],
+      "supportOnly": false,
+      "sourceArticles": {
+        "CN-ECOLOGY-6": "第六条第六项",
+        "CN-ETHNIC-UNITY-2026": "第三十一条、第五十三条、第五十九条、第六十一条、第六十五条",
+        "CN-CONSTITUTION": "第四条、第三十五条",
+        "FREEBBS-COMMUNITY": "民族身份不得推断；与一般仇恨条目按具体事实区分"
+      }
+    },
+    {
+      "id": "政治内容-006",
+      "kind": "prohibition",
+      "title": "禁止违法利用宗教、违法传教与组织宗教活动的内容",
+      "category": "political_compliance",
+      "domain": "public_affairs",
+      "basisType": "community_rule",
+      "riskLevel": "medium",
+      "recommendedAction": "human_review",
+      "supportPriority": "none",
+      "requiresHumanReview": true,
+      "conditions": [
+        "存在借宗教妨碍教育、婚姻或其他依法实施的制度，胁迫他人信教或参与活动、攻击信教或不信教者等具体行为，须说明原文和受影响权益",
+        "存在在线发展教徒、组织宗教活动、讲经讲道或宗教培训等具体招募传播内容时，应核实服务性质、许可和法定允许情形；不能把任何含宗教字词的内容直接认定为违法传教",
+        "校内组织传教或宗教活动的内容须核实场所性质及适用规定；缺少许可证明不等于已经查明没有许可，不从作者身份、社交关系或服饰推断信仰或违法"
+      ],
+      "exceptions": [
+        "个人信仰身份陈述、反歧视求助、对宗教机构具体行为的批评，本身不应被标记为违法",
+        "宗教史、文化和法律的中性学术讨论，应与传教、讲经、活动招募区分；如涉及向公众提供宗教信息服务，许可适用范围另由负责人核实，不能一概宣称自动豁免"
+      ],
+      "positiveExample": "虚构测试：帖子要求同学参加在普通教学楼举办的入教招募活动，并以不参加就排斥其参加班级事务相威胁；无真实宗教或活动地点。",
+      "negativeExample": "有人因为我的信仰或不信仰而排斥我参加课程小组，我希望学校公平处理。",
+      "sourceIds": [
+        "CN-ECOLOGY-6",
+        "CN-RELIGIOUS-AFFAIRS",
+        "CN-INTERNET-RELIGION",
+        "CN-CONSTITUTION",
+        "FREEBBS-COMMUNITY"
+      ],
+      "supportOnly": false,
+      "sourceArticles": {
+        "CN-ECOLOGY-6": "第六条第七项",
+        "CN-RELIGIOUS-AFFAIRS": "第四条、第四十四条、第四十五条、第四十七条、第四十八条",
+        "CN-INTERNET-RELIGION": "第六条、第十四条、第十五至十九条、第二十一条",
+        "CN-CONSTITUTION": "第三十六条",
+        "FREEBBS-COMMUNITY": "行为、服务性质及许可由负责人核实；不按宗教身份处罚"
+      }
+    },
+    {
+      "id": "政治内容-007",
+      "kind": "prohibition",
+      "title": "禁止宣扬邪教及危害性的封建迷信内容",
+      "category": "political_compliance",
+      "domain": "public_affairs",
+      "basisType": "community_rule",
+      "riskLevel": "medium",
+      "recommendedAction": "human_review",
+      "supportPriority": "none",
+      "requiresHumanReview": true,
+      "conditions": [
+        "为依法认定的邪教组织宣传、招募或提供传播支持；组织法律性质须由负责人依据可靠认定材料核实，不由模型根据陌生教义或名称判定",
+        "存在将超自然力量包装为应服从的现实权威、并鼓动损害身体健康、骗取财物、胁迫他人等具体迷信宣传行为；须核实语境与实际倡导，不能只因谈论民俗就定性",
+        "普通诈骗、危险诊疗或人身威胁有独立事实时按相应条目处理；不得仅凭神秘、迷信等泛化标签作高风险结论"
+      ],
+      "exceptions": [
+        "民俗史、神话文学、宗教文化与反邪教教育的讨论，应区分描述、虚构、批判和现实招募宣传",
+        "讲述本人遭遇并寻求帮助，不等同于宣扬；普通宗教身份和不熟悉的生活习俗不是认定邪教的依据"
+      ],
+      "positiveExample": "虚构测试：帖子宣传一个已依法认定组织并招募成员，声称必须服从其超自然命令才能消灾；组织认定和原文仍需负责人核实。",
+      "negativeExample": "这篇民俗学作业研究古代消灾观念的形成，同时提醒读者不要因所谓法术放弃就医或转账。",
+      "sourceIds": ["CN-ECOLOGY-6", "CN-INTERNET-RELIGION", "CN-CONSTITUTION", "FREEBBS-COMMUNITY"],
+      "supportOnly": false,
+      "sourceArticles": {
+        "CN-ECOLOGY-6": "第六条第七项",
+        "CN-INTERNET-RELIGION": "第十四条第三项",
+        "CN-CONSTITUTION": "第三十六条",
+        "FREEBBS-COMMUNITY": "法律性质核实；按可说明的现实危害区分宣传与民俗描述"
+      }
+    },
+    {
+      "id": "政治内容-008",
+      "kind": "prohibition",
+      "title": "禁止侮辱国家象征及将其用于法律禁止的商业宣传",
+      "category": "political_compliance",
+      "domain": "public_affairs",
+      "basisType": "community_rule",
+      "riskLevel": "medium",
+      "recommendedAction": "human_review",
+      "supportPriority": "none",
+      "requiresHumanReview": true,
+      "conditions": [
+        "内容本身实施或明确鼓动以贬损为目的侮辱我国国旗、国徽、国歌，或涉嫌以法律禁止方式将国家象征用于商业广告、商标等；须核实标识真实性、目的及广告属性，普通校园活动海报出现相关标识不自动违规",
+        "涉及图像、音频或视频的性质须实际查看相应材料；只有文字描述时不得臆测画面、音调或图案是否违法",
+        "负责人须区分实际侮辱、违规商业使用与新闻记录、依法展示、历史研究，不能把表达批评或负面新闻等同损害国家荣誉"
+      ],
+      "exceptions": [
+        "规范展示国家象征、尊重的历史与音乐研究、使用规范科普，不因出现旗徽或国歌名称而禁止",
+        "报道、举报相关侵害行为时必要且适度的引用，应结合作者立场和展示目的核实，不直接视为本人实施侮辱"
+      ],
+      "positiveExample": "虚构测试：商业推广帖明确把国徽图案当作自家商品的广告标识，并宣称获得国家机关背书；无实际商品或图像。",
+      "negativeExample": "我整理了国旗、国徽和国歌在校园活动中的规范使用要求，方便社团避免不当使用。",
+      "sourceIds": [
+        "CN-ECOLOGY-6",
+        "CN-NATIONAL-FLAG",
+        "CN-NATIONAL-EMBLEM",
+        "CN-NATIONAL-ANTHEM",
+        "CN-ADVERTISING",
+        "FREEBBS-COMMUNITY"
+      ],
+      "supportOnly": false,
+      "sourceArticles": {
+        "CN-ECOLOGY-6": "第六条第三项、第二十五条",
+        "CN-NATIONAL-FLAG": "第十九条、第二十条、第二十三条",
+        "CN-NATIONAL-EMBLEM": "第十三条、第十八条",
+        "CN-NATIONAL-ANTHEM": "第六条、第八条、第十五条",
+        "CN-ADVERTISING": "第九条第一项、第二项",
+        "FREEBBS-COMMUNITY": "意图、对象、材料和商业用途由负责人核实"
+      }
+    },
+    {
+      "id": "政治内容-009",
+      "kind": "prohibition",
+      "title": "禁止反对宪法所确定基本原则的违法传播",
+      "category": "political_compliance",
+      "domain": "public_affairs",
+      "basisType": "community_rule",
+      "riskLevel": "medium",
+      "recommendedAction": "human_review",
+      "supportPriority": "none",
+      "requiresHumanReview": true,
+      "conditions": [
+        "原文存在以非法行为排除宪法法律约束、建立法律之外特权等具体宣传，须对应宪法的具体原则及直接表达，交负责人核实是否属于内容生态规定第六条第一项禁止范围；不能只写反对基本原则的抽象标签",
+        "对单项政策、具体法律条文、机构办事方式或公职人员行为的批评，不等于反对宪法基本原则；不能以态度不积极、不认同某观点或模型认为敏感作为依据",
+        "如实质行为已属于国家安全、民族仇恨等专门条目，优先引用对应条目；本条不作缺乏具体行为时的兜底违规编号"
+      ],
+      "exceptions": [
+        "宪法法律教学、制度比较、依法提出改革或修法建议、讨论具体措施是否违宪，应保留正常表达空间",
+        "引用历史材料或批判相关宣传时，须看全文立场；不得脱离引号、否定句或上下文，把被批评的观点当作作者主张"
+      ],
+      "positiveExample": "虚构测试：某虚构组织公开宣称自己不受国家法律约束，号召以组织私定惩罚剥夺他人人身自由并拒绝依法处理；负责人须核实具体表达与法条，不含实施方法。",
+      "negativeExample": "我认为这项具体管理措施可能限制了法定权利，希望按照宪法和法律审查其依据并提出修改建议。",
+      "sourceIds": ["CN-ECOLOGY-6", "CN-CONSTITUTION", "FREEBBS-COMMUNITY"],
+      "supportOnly": false,
+      "sourceArticles": {
+        "CN-ECOLOGY-6": "第六条第一项",
+        "CN-CONSTITUTION": "第一条至第五条、第三十五条、第四十一条",
+        "FREEBBS-COMMUNITY": "列明具体原则；普通政策批评及依法改革建议不作禁止依据"
       }
     },
     {
