@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { createModerationAiClient, CATEGORIES, POLICY_VERSION } = require('./moderation-ai-client');
 const { modelCatalog } = require('./ai-models');
 const { getPolicyLibrary, getPolicyRule, LEGACY_RULE_ID_MAP } = require('./moderation-policy');
+const { CONTRACT_VERSION, sanitizeDiagnostics } = require('./moderation-ai-diagnostics');
 
 const BASE = 'https://cloud.infini-ai.com/maas/v1';
 const KEY = 'synthetic-test-key-never-a-real-credential';
@@ -65,6 +66,12 @@ function fixedError(status) {
       /synthetic-test-key|provider-secret|private-original|cloud\.infini/,
     );
     assert.equal(error.cause, undefined);
+    assert.ok(error.diagnostics);
+    assert.deepEqual(error.diagnostics, sanitizeDiagnostics(error.diagnostics));
+    assert.doesNotMatch(
+      JSON.stringify(error.diagnostics),
+      /synthetic-test-key|provider-secret|private-original/,
+    );
     return true;
   };
 }
@@ -336,6 +343,7 @@ test('one settings snapshot and one provider request send only approved text and
   assert.ok(Number.isSafeInteger(result.elapsedMs) && result.elapsedMs >= 0);
   assert.deepEqual(Object.keys(result).sort(), [
     'assessment',
+    'contractVersion',
     'elapsedMs',
     'model',
     'policyDecision',
@@ -941,4 +949,174 @@ test('the same deadline covers body streaming after headers and cancels a stalle
   await rejected;
   assert.equal(h.requests[0].options.signal.aborted, true);
   assert.equal(cancelled, true);
+});
+
+test('contract guidance requires exact category equality and separates pure care from content risk', async () => {
+  const content = '我现在需要立即有人陪伴，我担心自己会伤害自己。';
+  const assessment = {
+    ...ASSESSMENT,
+    ruleMatches: [ruleMatch('关怀-002', content)],
+    uncertainties: ['目前是否有人能够立即陪伴并帮助其保持安全。'],
+    supportPriority: 'urgent',
+    supportReason: '出现当前紧急求助信号，需要及时人工支持。',
+  };
+  const h = harness({ result: () => jsonResponse(envelope(assessment)) });
+  const result = await h.client.assess({ ...INPUT, content });
+  assert.equal(result.contractVersion, CONTRACT_VERSION);
+  assert.deepEqual(result.assessment, assessment);
+  assert.equal(result.policyDecision.recommendedAction, 'hold');
+  assert.equal(result.policyDecision.canAutomaticallyPublish, false);
+  const request = JSON.parse(h.requests[0].options.body);
+  const prompt = request.messages[0].content;
+  assert.match(prompt, /categories 必须恰好等于这些 category 的去重集合，一项不能漏、一项不能多/);
+  assert.match(prompt, /纯粹心理求助且无独立内容风险时 decision 必须为 no_risk_detected/);
+  assert.match(prompt, /不要求提供诊断、病史、治疗记录或额外身份资料/);
+  assert.match(prompt, /行动或意图含糊，应说明缺失语境并 needs_review/);
+  assert.match(prompt, /普通办事约定、行为批评、玩笑或引用须结合实际语境，不能一律复核/);
+  assert.ok(prompt.indexOf(`输出合同版本：${CONTRACT_VERSION}`) > prompt.indexOf('全局判断原则'));
+  assert.match(prompt, /字符串中的双引号、反斜杠和换行必须采用合法 JSON 转义/);
+  assert.equal(request.response_format.type, 'json_schema');
+  assert.equal(request.max_tokens, 2200);
+  assert.equal(h.requests.length, 1);
+});
+
+test('fences and double-encoded objects remain rejected while exposing shape-only diagnostics', async () => {
+  const sources = [
+    [
+      `\u0060\u0060\u0060json\n${JSON.stringify(ASSESSMENT)}\n\u0060\u0060\u0060`,
+      'content_json_invalid',
+      'fencedJsonParseable',
+    ],
+    [
+      JSON.stringify(JSON.stringify(ASSESSMENT)),
+      'assessment_fields_invalid',
+      'decodedJsonStringObject',
+    ],
+  ];
+  for (const model of ['glm-5.1', 'kimi-k2.6']) {
+    for (const [content, code, shapeKey] of sources) {
+      const response = envelope();
+      response.choices[0].message.content = content;
+      const h = harness({ result: () => jsonResponse(response) });
+      await assert.rejects(h.client.assess({ ...INPUT, model }), (error) => {
+        fixedError(502)(error);
+        assert.equal(error.diagnostics.failureCode, code);
+        assert.equal(error.diagnostics.httpStatus, 200);
+        assert.equal(error.diagnostics.contentShape[shapeKey], true);
+        assert.deepEqual(sanitizeDiagnostics(error.diagnostics), error.diagnostics);
+        assert.doesNotMatch(JSON.stringify(error), /属于正常批评|食堂|synthetic-test-key/);
+        return true;
+      });
+      assert.equal(h.requests.length, 1);
+      assert.equal(
+        JSON.parse(h.requests[0].options.body).response_format.type,
+        model === 'glm-5.1' ? 'json_schema' : 'json_object',
+      );
+    }
+  }
+});
+
+test('extra and missing categories are diagnosed without repairing model advice', async () => {
+  const content = '隔壁同学的手机号码和宿舍门牌，大家都来看。';
+  for (const categories of [[], ['privacy', 'harassment']]) {
+    const assessment = {
+      ...ASSESSMENT,
+      decision: 'needs_review',
+      categories,
+      ruleMatches: [ruleMatch('隐私-001', content)],
+      uncertainties: ['尚不清楚信息披露是否得到授权。'],
+    };
+    const h = harness({ result: () => jsonResponse(envelope(assessment)) });
+    await assert.rejects(h.client.assess({ ...INPUT, content }), (error) => {
+      fixedError(502)(error);
+      assert.equal(error.diagnostics.failureCode, 'category_rule_mismatch');
+      assert.equal(error.diagnostics.jsonSyntaxKind, 'none');
+      assert.equal(error.diagnostics.httpStatus, 200);
+      return true;
+    });
+    assert.equal(h.requests.length, 1);
+  }
+});
+
+test('safe failure codes distinguish transport, HTTP, envelope and content syntax without leaking text', async () => {
+  const invalidContent = envelope();
+  invalidContent.choices[0].message.content = '{"reason":"private-original",}';
+  const brokenFinish = envelope();
+  brokenFinish.choices[0].finish_reason = 'length';
+  for (const [result, expectedCode, expectedHttp] of [
+    [
+      () => {
+        throw new Error('provider-secret private-original');
+      },
+      'transport_error',
+      null,
+    ],
+    [
+      () => jsonResponse({ error: 'provider-secret private-original' }, { status: 429 }),
+      'http_error',
+      429,
+    ],
+    [
+      () =>
+        new Response('private-original provider-secret', {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      'response_json_invalid',
+      200,
+    ],
+    [
+      () => jsonResponse({ choices: [], secret: 'provider-secret' }),
+      'response_envelope_invalid',
+      200,
+    ],
+    [() => jsonResponse(brokenFinish), 'finish_reason_not_stop', 200],
+    [() => jsonResponse(invalidContent), 'content_json_invalid', 200],
+  ]) {
+    const h = harness({ result });
+    await assert.rejects(h.client.assess(INPUT), (error) => {
+      fixedError(502)(error);
+      assert.equal(error.diagnostics.failureCode, expectedCode);
+      assert.equal(error.diagnostics.httpStatus, expectedHttp);
+      assert.doesNotMatch(
+        JSON.stringify(error),
+        /private-original|provider-secret|synthetic-test-key/,
+      );
+      assert.deepEqual(sanitizeDiagnostics(error.diagnostics), error.diagnostics);
+      return true;
+    });
+    assert.equal(h.requests.length, 1);
+  }
+});
+
+test('rule, evidence, care and block contract errors retain distinct diagnostics', async () => {
+  const content = '这是一段用于核查规则绑定的普通测试文字。';
+  const privacy = {
+    ...ASSESSMENT,
+    decision: 'needs_review',
+    categories: ['privacy'],
+    ruleMatches: [ruleMatch('隐私-001', content)],
+  };
+  for (const [assessment, code] of [
+    [{ ...privacy, unexpected: 'private-original' }, 'assessment_fields_invalid'],
+    [
+      { ...privacy, ruleMatches: [ruleMatch('隐私-001', '原文没有这个片段')] },
+      'rule_evidence_invalid',
+    ],
+    [{ ...privacy, ruleMatches: [ruleMatch('未知-999', content)] }, 'rule_unknown'],
+    [
+      { ...privacy, supportPriority: 'urgent', supportReason: 'private-original' },
+      'support_rule_mismatch',
+    ],
+    [{ ...privacy, decision: 'high_risk' }, 'high_risk_without_block'],
+  ]) {
+    const h = harness({ result: () => jsonResponse(envelope(assessment)) });
+    await assert.rejects(h.client.assess({ ...INPUT, content }), (error) => {
+      fixedError(502)(error);
+      assert.equal(error.diagnostics.failureCode, code);
+      assert.equal(error.diagnostics.httpStatus, 200);
+      assert.doesNotMatch(JSON.stringify(error), /private-original|未知-999/);
+      return true;
+    });
+    assert.equal(h.requests.length, 1);
+  }
 });

@@ -10,6 +10,7 @@ const {
   runRegression,
 } = require('./moderation-policy-regression');
 const { buildComparison, renderHtml } = require('./moderation-evaluation-report');
+const { CONTRACT_VERSION } = require('../backend/moderation-ai-diagnostics');
 
 const DEFAULTS = Object.freeze({
   input: path.resolve(__dirname, '../test/fixtures/moderation-policy-v3.json'),
@@ -260,6 +261,7 @@ async function runEvaluation({
   const plan = preparePlan({ document, manifest, models, suite });
   const state = {
     policyVersion: POLICY_VERSION,
+    contractVersion: CONTRACT_VERSION,
     suite,
     selectedModels: plan.selectedModels,
     plannedCases: plan.document.cases,
@@ -485,6 +487,7 @@ async function main(args, dependencies = {}) {
       event: options.run ? 'plan' : 'preview',
       run: options.run,
       policyVersion: POLICY_VERSION,
+      contractVersion: CONTRACT_VERSION,
       suite: options.suite,
       models: plan.selectedModels,
       caseCount: plan.caseCount,

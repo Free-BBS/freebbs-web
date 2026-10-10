@@ -3,6 +3,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { POLICY_VERSION } = require('../backend/moderation-policy');
 const { validateLabel } = require('../backend/moderation-audit');
+const { CONTRACT_VERSION, sanitizeDiagnostics } = require('../backend/moderation-ai-diagnostics');
 
 const DEFAULTS = Object.freeze({
   config: 'F:\\FreeBBS-Test\\web-test\\config.json',
@@ -190,10 +191,12 @@ function safeError(error) {
   };
   const code = Object.hasOwn(messages, error?.code) ? error.code : 'execution_failed';
   const status = Object.hasOwn(statuses, error?.status) ? error.status : null;
+  const diagnostics = sanitizeDiagnostics(error?.diagnostics);
   return {
     code,
     status,
     message: messages[code] || statuses[status] || '本地准备、执行或报告写入失败；未输出原始错误。',
+    ...(diagnostics ? { diagnostics } : {}),
   };
 }
 
@@ -242,6 +245,7 @@ async function runRegression({
   const report = {
     format: 'freebbs-moderation-regression-report-v1',
     policyVersion: POLICY_VERSION,
+    contractVersion: CONTRACT_VERSION,
     exportedAt: fixtures.exportedAt,
     skippedLegacyCount: fixtures.skippedLegacyCount || 0,
     startedAt: now().toISOString(),
@@ -344,6 +348,7 @@ async function runRegression({
         row.policyDecision = result.policyDecision;
         row.settingsRevision = result.settingsRevision;
         row.policyVersion = result.policyVersion;
+        if (result.contractVersion === CONTRACT_VERSION) row.contractVersion = CONTRACT_VERSION;
         row.elapsedMs = result.elapsedMs;
         row.evaluation = evaluate(result.assessment, fixture);
         failures = 0;

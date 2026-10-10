@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { POLICY_VERSION } = require('../backend/moderation-policy');
+const { CONTRACT_VERSION, FAILURE_CODES } = require('../backend/moderation-ai-diagnostics');
 const {
   buildComparison,
   renderHtml,
@@ -128,6 +129,143 @@ test('predeclared alternative rule sets match separately and never overwrite ori
   assert.equal(report.models[0].byRule.length, 2);
   assert.equal(JSON.stringify(input), before);
   assert.equal(buildComparison(report).sampleSetSha256, report.sampleSetSha256);
+});
+
+test('care-only review is counted separately without accepting changed decision labels', () => {
+  const cases = [
+    fixture('attention', 'no_risk_detected', ['关怀-001'], 'attention'),
+    fixture('urgent', 'no_risk_detected', ['关怀-002'], 'urgent'),
+  ];
+  cases[1].content = '我现在已经伤害了自己，害怕继续下去，请有人马上帮助我。';
+  const results = cases.map((f) => row(f, 'needs_review'));
+  const report = buildComparison(plan(cases, results));
+  const m = report.models[0].metrics;
+  assert.equal(m.normalEscalations, 0);
+  assert.equal(m.careOnlyReviews, 2);
+  assert.equal(m.careUnderstated, 0);
+  assert.equal(m.matchedLabels, 0);
+  assert.equal(m.labelsToReview, 2);
+  assert.equal(m.decisionConfusion.no_risk_detected.needs_review, 2);
+  assert.equal(report.models[0].byRule[1].careOnlyReviews, 1);
+  assert.equal(report.summary.careOnlyReviews, 2);
+  for (const r of report.models[0].results) {
+    assert.equal(r.comparisonEvaluation.result, 'review');
+    assert.deepEqual(r.comparisonEvaluation.differences, ['decision']);
+    assert.equal(r.evaluation.result, 'review');
+  }
+  const html = renderHtml(report);
+  assert.match(html, /保护性关怀复核/);
+  assert.match(html, /判断标签仍有差异/);
+  assert.match(html, /单列该项不改变严格标签对比/);
+});
+
+test('ordinary ambiguity, prohibitions, unknown care rules and missing care remain review signals', () => {
+  const ordinary = row(fixture('ordinary'), 'needs_review');
+  ordinary.assessment.uncertainties = ['尚不清楚这句话是否针对某位同学。'];
+  const base = fixture('care-base', 'no_risk_detected', ['关怀-002'], 'urgent');
+  const lower = row({ ...base, id: 'care-lower' }, 'needs_review');
+  lower.assessment.supportPriority = 'attention';
+  const missing = row({ ...base, id: 'care-missing' }, 'needs_review');
+  missing.assessment.ruleMatches = [];
+  missing.assessment.supportPriority = 'none';
+  const withRisk = row({ ...base, id: 'with-risk' }, 'needs_review');
+  withRisk.assessment.categories = ['harassment'];
+  withRisk.assessment.ruleMatches.push({ ruleId: '骚扰-001' });
+  const unknown = row(
+    fixture('unknown', 'no_risk_detected', ['关怀-999'], 'urgent'),
+    'needs_review',
+  );
+  const inventedCare = row(
+    fixture('fake-care', 'no_risk_detected', ['关怀-001'], 'urgent'),
+    'needs_review',
+  );
+  const wrongRule = row({ ...base, id: 'wrong-rule' }, 'needs_review');
+  wrongRule.assessment.ruleMatches = [{ ruleId: '关怀-001' }];
+  const high = row({ ...base, id: 'high' }, 'high_risk');
+  const all = [ordinary, lower, missing, withRisk, unknown, inventedCare, wrongRule, high];
+  const report = buildComparison(
+    plan(
+      all.map((r) => r.fixture),
+      all,
+    ),
+  );
+  assert.equal(report.models[0].metrics.normalEscalations, all.length);
+  assert.equal(report.models[0].metrics.careOnlyReviews, 0);
+  assert.equal(report.models[0].metrics.careUnderstated, 2);
+  assert.equal(report.models[0].metrics.labelsToReview, all.length);
+});
+
+test('diagnostic rendering and saved comparison retain only safe fields and accept old reports', () => {
+  const marker = 'PRIVATE_DIAGNOSTIC_SHOULD_NOT_APPEAR';
+  const diagnostics = {
+    version: 1,
+    contractVersion: CONTRACT_VERSION,
+    failureCode: 'content_json_invalid',
+    httpStatus: 200,
+    jsonSyntaxKind: 'expected_separator',
+    providerText: marker,
+    contentShape: {
+      startsWithObject: true,
+      endsWithObject: true,
+      startsWithFence: false,
+      singleJsonFence: false,
+      fencedJsonParseable: false,
+      decodedJsonStringObject: false,
+      hasBom: false,
+      untrustedKey: marker,
+    },
+  };
+  const error = { status: 502, message: '模型调用或返回格式校验失败。', diagnostics };
+  const f = fixture('failed');
+  const input = plan([f], [row(f, 'no_risk_detected', { assessment: null, error })], { error });
+  input.models[0].error = error;
+  const report = buildComparison(input);
+  assert.doesNotMatch(JSON.stringify(report), /PRIVATE_DIAGNOSTIC|providerText|untrustedKey/);
+  assert.equal(report.models[0].results[0].error.diagnostics.httpStatus, 200);
+  const html = renderHtml(report);
+  assert.match(html, /模型审核正文不是有效的结构化数据/);
+  assert.match(html, /供应商响应状态：200/);
+  assert.match(html, /正文以对象起始符开头：是/);
+  assert.match(html, /正文以代码块标记开头：否/);
+  assert.match(html, /字段或数组的分隔符不正确/);
+  assert.doesNotMatch(html, /PRIVATE_DIAGNOSTIC|providerText|untrustedKey/);
+  const old = structuredClone(input);
+  delete old.models[0].results[0].error.diagnostics;
+  const oldHtml = renderHtml(old);
+  assert.match(oldHtml, /模型调用或返回格式校验失败/);
+  assert.doesNotMatch(oldHtml, /供应商响应状态：|返回格式检查/);
+});
+
+test('unknown diagnostic values are omitted and known failure codes have Chinese descriptions', () => {
+  const f = fixture('failed');
+  const marker = 'PRIVATE_DIAGNOSTIC_SHOULD_NOT_APPEAR';
+  for (const failureCode of [...FAILURE_CODES, marker]) {
+    const error = {
+      status: 502,
+      message: '模型调用或返回格式校验失败。',
+      diagnostics: {
+        version: 1,
+        contractVersion: CONTRACT_VERSION,
+        failureCode,
+        httpStatus: marker,
+        jsonSyntaxKind: marker,
+        contentShape: { startsWithObject: marker },
+      },
+    };
+    const report = buildComparison(
+      plan([f], [row(f, 'no_risk_detected', { assessment: null, error })]),
+    );
+    const html = renderHtml(report);
+    assert.doesNotMatch(JSON.stringify(report), /PRIVATE_DIAGNOSTIC/);
+    assert.doesNotMatch(html, /PRIVATE_DIAGNOSTIC|供应商响应状态：|语法检查|返回格式检查/);
+    if (failureCode === marker) {
+      assert.equal(report.models[0].results[0].error.diagnostics, undefined);
+      assert.doesNotMatch(html, /失败位置/);
+    } else {
+      assert.match(html, /失败位置/);
+      assert.doesNotMatch(html, /失败位置：<\/strong>接口校验失败/);
+    }
+  }
 });
 
 test('alternatives cannot excuse a risk downgrade or a missing care signal', () => {

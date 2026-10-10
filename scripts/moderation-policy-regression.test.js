@@ -4,6 +4,7 @@ const path = require('node:path');
 const { POLICY_VERSION } = require('../backend/moderation-policy');
 const { createModerationAiClient } = require('../backend/moderation-ai-client');
 const { createModerationAudit } = require('../backend/moderation-audit');
+const { CONTRACT_VERSION } = require('../backend/moderation-ai-diagnostics');
 const {
   FORMAT,
   parseArguments,
@@ -553,6 +554,89 @@ test('main run writes a sanitized report and safe summary without exposing confi
     safeError({ message: PRIVATE, cause: PRIVATE, stack: PRIVATE }).message,
     '本地准备、执行或报告写入失败；未输出原始错误。',
   );
+});
+
+test('safe errors preserve legacy fields and whitelist diagnostic metadata', () => {
+  const legacy = safeError({ status: 502, message: PRIVATE, code: PRIVATE });
+  assert.deepEqual(legacy, {
+    code: 'execution_failed',
+    status: 502,
+    message: '模型调用或返回格式校验失败。',
+  });
+  const diagnostics = {
+    version: 1,
+    contractVersion: CONTRACT_VERSION,
+    failureCode: 'content_json_invalid',
+    httpStatus: 200,
+    jsonSyntaxKind: 'trailing_content',
+    contentShape: {
+      startsWithObject: true,
+      endsWithObject: false,
+      startsWithFence: false,
+      singleJsonFence: false,
+      fencedJsonParseable: false,
+      decodedJsonStringObject: false,
+      hasBom: false,
+      privateField: PRIVATE,
+    },
+    responseText: PRIVATE,
+    requestHeaders: { Authorization: PRIVATE },
+  };
+  const result = safeError({ status: 502, diagnostics, message: PRIVATE, cause: PRIVATE });
+  assert.deepEqual({ code: result.code, status: result.status, message: result.message }, legacy);
+  assert.equal(result.diagnostics.failureCode, 'content_json_invalid');
+  assert.equal(result.diagnostics.httpStatus, 200);
+  assert.equal(result.diagnostics.jsonSyntaxKind, 'trailing_content');
+  assert.equal(Object.keys(result.diagnostics.contentShape).length, 7);
+  assert.doesNotMatch(
+    JSON.stringify(result),
+    /synthetic-secret|responseText|requestHeaders|privateField/,
+  );
+  for (const invalid of [
+    { ...diagnostics, version: 2 },
+    { ...diagnostics, contractVersion: PRIVATE },
+    { ...diagnostics, failureCode: PRIVATE },
+    PRIVATE,
+  ]) {
+    assert.deepEqual(safeError({ status: 502, diagnostics: invalid }), legacy);
+  }
+});
+
+test('regression records only the fixed contract version on successful client rows', async () => {
+  for (const clientContract of [CONTRACT_VERSION, undefined, PRIVATE]) {
+    const h = harness({
+      clientFactory: () => ({
+        listModels: async () => ({ defaultModel: 'glm-5.1', models: [{ id: 'glm-5.1' }] }),
+        assess: async () => ({
+          assessment: assessment(),
+          policyVersion: POLICY_VERSION,
+          contractVersion: clientContract,
+          policyDecision: null,
+          settingsRevision: 5,
+          elapsedMs: 1,
+        }),
+      }),
+    });
+    const report = await h.run();
+    assert.equal(report.contractVersion, CONTRACT_VERSION);
+    assert.equal(
+      report.results[0].contractVersion,
+      clientContract === CONTRACT_VERSION ? CONTRACT_VERSION : undefined,
+    );
+    assert.doesNotMatch(JSON.stringify(report), /synthetic-secret/);
+  }
+});
+
+test('regression retains safe response diagnostics in its saved failure row', async () => {
+  const h = harness({
+    fetchResult: () => new Response(PRIVATE, { status: 429 }),
+  });
+  const report = await h.run();
+  assert.equal(report.results[0].error.status, 502);
+  assert.equal(report.results[0].error.diagnostics.failureCode, 'http_error');
+  assert.equal(report.results[0].error.diagnostics.httpStatus, 429);
+  assert.equal(h.snapshots.at(-1).results[0].error.diagnostics.contractVersion, CONTRACT_VERSION);
+  assert.doesNotMatch(JSON.stringify(report), /synthetic-secret/);
 });
 
 test('completed plans still return nonzero for API failures or changed expected labels', async () => {
