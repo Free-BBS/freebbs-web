@@ -99,7 +99,7 @@ function KnowledgeDetailRoute() {
 
 function InformationHubRoute() {
   const auth = useAuth();
-  const [search] = useSearchParams();
+  const [search, setSearch] = useSearchParams();
   const filter = search.get('filter');
   const initialFilter: InformationFeedFilter = [
     'all',
@@ -116,7 +116,17 @@ function InformationHubRoute() {
       key={auth.demoUser ?? auth.user?.uid}
       client={auth.client}
       user={auth.user}
-      initialFilter={initialFilter}
+      filter={initialFilter}
+      onFilterChange={(nextFilter) => {
+        setSearch(
+          (current) => {
+            const next = new URLSearchParams(current);
+            next.set('filter', nextFilter);
+            return next;
+          },
+          { preventScrollReset: true },
+        );
+      }}
     />
   );
 }
