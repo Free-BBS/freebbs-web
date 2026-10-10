@@ -164,6 +164,12 @@ vite.config.ts.timestamp-*
 
 # Local testbench outputs
 test/
+!/test/
+/test/*
+!/test/fixtures/
+/test/fixtures/*
+!/test/fixtures/moderation-policy-v3.json
+!/test/fixtures/moderation-policy-v3-manifest.json
 !development/apps/web/src/test/
 !development/apps/web/src/test/setup.ts
 # Browser verification artifacts
