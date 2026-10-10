@@ -88,6 +88,7 @@ afterEach(() => {
 
 describe('growth achievement collection', () => {
   it('filters all four badge series while keeping a relevant next goal', async () => {
+    const user = userEvent.setup();
     setup();
     const album = await screen.findByRole('list', { name: '徽章收藏' });
     expect(within(album).getAllByRole('listitem')).toHaveLength(4);
@@ -97,12 +98,12 @@ describe('growth achievement collection', () => {
       ['成长节奏', '月间拾光'],
       ['成长里程', '初次登场'],
     ]) {
-      fireEvent.click(screen.getByRole('button', { name }));
+      await user.click(screen.getByRole('button', { name }));
       expect(screen.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true');
       expect(within(album).getAllByRole('listitem')).toHaveLength(1);
       expect(within(album).getByText(title)).toBeInTheDocument();
     }
-    fireEvent.click(screen.getByRole('button', { name: '全部成就' }));
+    await user.click(screen.getByRole('button', { name: '全部成就' }));
     expect(within(album).getAllByRole('listitem')).toHaveLength(4);
     expect(screen.getByRole('region', { name: '下一枚收藏' })).toHaveTextContent('月间拾光');
   });

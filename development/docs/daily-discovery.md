@@ -30,8 +30,8 @@ export const DISCOVERY_CONFIG: DiscoveryConfig = {
 
 ## frEE bbs MAP 上线
 
-小程序目前尚未发布、备案尚未完成，入口展示「即将上线」并打开说明。没有临时或虚构的跳转地址。
+小程序已发布。没有配置跳转链接时，入口展示「微信小程序」，点击后提示在微信中搜索「frEE bbs MAP」。不使用临时或虚构的跳转地址。
 
-发布后在 Web 构建环境中设置 `VITE_FREE_BBS_MAP_URL` 为真实 HTTPS 跳转链接，重新构建并发布 Web。入口会自动变为在新标签页打开的链接。变量示例位于 `apps/web/.env.example`。空值、非 HTTPS 地址以及包含用户名/密码的地址保持未上线状态。
+在 Web 构建环境中设置 `VITE_FREE_BBS_MAP_URL` 为真实 HTTPS 跳转链接，重新构建并发布 Web。入口会自动变为在新标签页打开的链接。变量示例位于 `apps/web/.env.example`。空值、非 HTTPS 地址以及包含用户名/密码的地址仍显示微信搜索说明。
 
 该变量是公开的前端配置，只能填写可公开访问的链接，不能填写私密凭据。

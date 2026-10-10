@@ -89,6 +89,18 @@ const departmentIntroductions: Record<string, { introduction: string; focus: str
     introduction: '把技术活动的想法变成清楚的安排，关注策划、组织和活动体验。',
     focus: ['活动策划', '赛事协作', '活动组织'],
   },
+  creative: {
+    introduction: '用视觉设计记录校园想法，从海报到版面，让每一次表达都有鲜明的样子。',
+    focus: ['视觉设计', '海报创作', '版面呈现'],
+  },
+  audiovisual: {
+    introduction: '用镜头与声音捕捉校园生活，从拍摄到剪辑，一起讲述身边的故事。',
+    focus: ['影像拍摄', '影音策划', '视频制作'],
+  },
+  new_media_reporters: {
+    introduction: '走近校园中的人和事，通过采访、写作与新媒体分享，把值得记录的故事传递给同学。',
+    focus: ['校园采访', '新闻写作', '新媒体传播'],
+  },
 };
 
 const exhibitionDefinitions: Array<
@@ -142,6 +154,16 @@ const exhibitionDefinitions: Array<
     focus: ['软件硬件', '学习培训', '项目实践', '活动策划'],
     organizationIds: ['sast'],
   },
+  {
+    key: 'media_center',
+    name: '电子系学生媒体中心',
+    shortName: '媒中',
+    motto: '把校园故事，装进镜头与文字。',
+    introduction:
+      '从创意设计到影音策划，从采访记录到新媒体分享，媒体中心用镜头、文字与设计留下校园生活的每一个鲜活瞬间。',
+    focus: ['创意设计', '影音策划', '校园记录', '新媒体传播'],
+    organizationIds: [],
+  },
 ];
 
 export const ORGANIZATION_GALLERY: readonly OrganizationExhibit[] = exhibitionDefinitions.map(
@@ -175,5 +197,6 @@ export function findOrganization(key: string): OrganizationExhibit | undefined {
 }
 
 export function organizationRegistrationPath(ids: readonly SocialOrganizationId[]): string {
+  if (!ids.length) return '/collections/registrations';
   return `/collections/registrations?${new URLSearchParams({ organization: ids.join(',') }).toString()}`;
 }

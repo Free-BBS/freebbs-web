@@ -1,4 +1,8 @@
-import type { InformationFeedFilter, ModuleManifest } from '@freebbs-development/contracts';
+import type {
+  InformationFeedFilter,
+  ModuleManifest,
+  RegistrationSource,
+} from '@freebbs-development/contracts';
 import type { ReactNode } from 'react';
 import { Navigate, RouterProvider, createBrowserRouter, useLoaderData } from 'react-router-dom';
 import { useMatches, useParams, useSearchParams } from 'react-router-dom';
@@ -11,13 +15,14 @@ import { AdminPage } from '../modules/admin/AdminPage.js';
 import { CollectionsLandingPage } from '../modules/collections/CollectionsLandingPage.js';
 import { MyRegistrations } from '../modules/collections/MyRegistrations.js';
 import { RegistrationGallery } from '../modules/collections/RegistrationGallery.js';
+import { AllActivitiesPage } from '../modules/collections/AllActivitiesPage.js';
+import { ActivityManagementPage } from '../modules/collections/ActivityManagementPage.js';
+import { ActivityPage } from '../modules/collections/ActivityPage.js';
 import { ShowcaseDetailPage } from '../modules/collections/ShowcaseDetailPage.js';
 import { ShowcasePage } from '../modules/collections/ShowcasePage.js';
 import { CollectionWorkbench } from '../modules/collections/builder/CollectionWorkbench.js';
 import { CommunityPage } from '../modules/community/CommunityPage.js';
-import { DashboardPage } from '../modules/dashboard/DashboardPage.js';
 import { DeskPage } from '../modules/desk/DeskPage.js';
-import { ActivityDetailPage } from '../modules/events/ActivityDetailPage.js';
 import { EventsPage } from '../modules/events/EventsPage.js';
 import { FestivalPage } from '../modules/festival/FestivalPage.js';
 import { FinancePage } from '../modules/finance/FinancePage.js';
@@ -63,11 +68,6 @@ function AppShellRoute() {
   return <AppShell moduleStates={moduleStates} />;
 }
 
-function DashboardRoute() {
-  const auth = useAuth();
-  return <DashboardPage key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
-}
-
 function ProfileRoute() {
   const auth = useAuth();
   return <CommercePage section="profile" userUid={auth.user?.uid} />;
@@ -99,7 +99,7 @@ function KnowledgeDetailRoute() {
 
 function InformationHubRoute() {
   const auth = useAuth();
-  const [search] = useSearchParams();
+  const [search, setSearch] = useSearchParams();
   const filter = search.get('filter');
   const initialFilter: InformationFeedFilter = [
     'all',
@@ -116,7 +116,17 @@ function InformationHubRoute() {
       key={auth.demoUser ?? auth.user?.uid}
       client={auth.client}
       user={auth.user}
-      initialFilter={initialFilter}
+      filter={initialFilter}
+      onFilterChange={(nextFilter) => {
+        setSearch(
+          (current) => {
+            const next = new URLSearchParams(current);
+            next.set('filter', nextFilter);
+            return next;
+          },
+          { preventScrollReset: true },
+        );
+      }}
     />
   );
 }
@@ -159,12 +169,15 @@ function GrowthRoute() {
 }
 
 function OrganizationsRoute() {
+  const auth = useAuth();
   const { organizationKey, departmentKey } = useParams();
   const matches = useMatches();
   const states = matches[0]?.data as ModuleStateOverrides | undefined;
   const information = MODULE_MANIFESTS.find((module) => module.id === 'information')!;
   return (
     <OrganizationsPage
+      key={`${auth.demoUser ?? auth.previewUser ?? auth.user?.uid}:${organizationKey}:${departmentKey}`}
+      client={auth.client}
       organizationKey={organizationKey}
       departmentKey={departmentKey}
       enabled={resolveModuleStatus(information, states) === 'enabled'}
@@ -178,11 +191,40 @@ function EventsRoute() {
 }
 
 function ActivityDetailRoute() {
-  const auth = useAuth();
   const { activityId = '' } = useParams();
   return (
-    <ActivityDetailPage
-      key={`${auth.demoUser ?? auth.user?.uid}:${activityId}`}
+    <Navigate
+      to={`/collections/activities/development_activity/${encodeURIComponent(activityId)}`}
+      replace
+    />
+  );
+}
+
+function AllActivitiesRoute() {
+  const auth = useAuth();
+  return <AllActivitiesPage key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
+}
+function ActivityManagementRoute() {
+  const auth = useAuth();
+  const [search] = useSearchParams();
+  return (
+    <ActivityManagementPage
+      key={auth.demoUser ?? auth.user?.uid}
+      client={auth.client}
+      user={auth.user}
+      initialCreate={search.get('create') === '1'}
+    />
+  );
+}
+function ActivityWorkspaceRoute() {
+  const auth = useAuth();
+  const { source = '', activityId = '' } = useParams();
+  if (!['learning_survey', 'development_activity', 'native_collection'].includes(source))
+    return <Navigate to="/collections/activities" replace />;
+  return (
+    <ActivityPage
+      key={`${auth.demoUser ?? auth.user?.uid}:${source}:${activityId}`}
+      source={source as RegistrationSource}
       activityId={activityId}
       client={auth.client}
     />
@@ -238,7 +280,13 @@ function ShowcaseDetailRoute() {
 
 function CollectionWorkbenchRoute() {
   const auth = useAuth();
-  return <CollectionWorkbench key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
+  const { collectionId } = useParams();
+  return (
+    <CollectionWorkbench
+      key={`${auth.demoUser ?? auth.previewUser ?? auth.user?.uid}:${collectionId}`}
+      client={auth.client}
+    />
+  );
 }
 
 function ProblemDetailRoute() {
@@ -296,8 +344,8 @@ export const appRouter = createBrowserRouter(
       element: <AppShellRoute />,
       loader: loadModuleStates,
       children: [
-        { index: true, element: <Navigate to="/dashboard" replace /> },
-        { path: 'dashboard', element: <DashboardRoute /> },
+        { index: true, element: <Navigate to="/community" replace /> },
+        { path: 'dashboard', element: <Navigate to="/community" replace /> },
         { path: 'shop', element: <CommercePage section="shop" /> },
         { path: 'inventory', element: <CommercePage section="inventory" /> },
         { path: 'ranch', element: <CommercePage section="ranch" /> },
@@ -407,6 +455,9 @@ export const appRouter = createBrowserRouter(
         { path: 'events', element: <EventsRoute /> },
         { path: 'events/student-festival', element: <FestivalRoute /> },
         { path: 'collections', element: <CollectionsRoute /> },
+        { path: 'collections/activities', element: <AllActivitiesRoute /> },
+        { path: 'collections/activities/manage', element: <ActivityManagementRoute /> },
+        { path: 'collections/activities/:source/:activityId', element: <ActivityWorkspaceRoute /> },
         { path: 'collections/registrations', element: <RegistrationGalleryRoute /> },
         { path: 'collections/mine', element: <MyRegistrationsRoute /> },
         { path: 'collections/showcase', element: <ShowcaseRoute /> },
@@ -422,7 +473,7 @@ export const appRouter = createBrowserRouter(
         { path: 'sports/:teamId', element: <SportsTeamDetailRoute /> },
         { path: 'finance', element: <FinanceRoute /> },
         { path: 'admin', element: <AdminRoute /> },
-        { path: '*', element: <Navigate to="/dashboard" replace /> },
+        { path: '*', element: <Navigate to="/community" replace /> },
       ],
     },
   ],

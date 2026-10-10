@@ -1,3 +1,4 @@
+import { canReadPublishedActivity } from '../collections/registrations.js';
 import type { ScopeRef } from '@freebbs-development/contracts';
 import type { SocialOrganizationId } from '@freebbs-development/contracts';
 
@@ -88,7 +89,7 @@ export class EventsService {
     const records = await this.store.activities.list(filters);
     return records.filter(
       (record) =>
-        (record.status === 'published' && can(actor, 'events.read', record.scope)) ||
+        canReadPublishedActivity(actor, record) ||
         canManage(actor, record) ||
         (record.status === 'pending' && can(actor, 'events.approve', record.scope)) ||
         (record.technicalSupportStatus === 'requested' &&
@@ -303,8 +304,9 @@ export class EventsService {
         );
       }
       if (
-        activity.registrationDeadline !== null &&
-        Date.parse(activity.registrationDeadline) <= this.now().getTime()
+        [activity.registrationDeadline, activity.endsAt].some(
+          (boundary) => boundary != null && Date.parse(boundary) <= this.now().getTime(),
+        )
       ) {
         throw new HttpError(
           409,

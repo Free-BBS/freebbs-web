@@ -97,6 +97,63 @@ describe('無尽书桌', () => {
     expect(request).toHaveBeenCalledWith('/information/feed?filter=mine');
   });
 
+  it('reopens the same notice book after switching the information tab internally', async () => {
+    const router = renderRoute('/desk/information?filter=official');
+    const user = userEvent.setup();
+    expect(await screen.findByRole('tab', { name: '官方发布' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await user.click(screen.getByRole('tab', { name: '我的咨询' }));
+    await waitFor(() => expect(request).toHaveBeenCalledWith('/information/feed?filter=mine'));
+    await user.click(screen.getByRole('button', { name: '打开通知册' }));
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: '官方发布' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      ),
+    );
+    expect(router.state.location.search).toBe('?filter=official');
+    expect(screen.getByRole('button', { name: '打开通知册' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: '打开咨询手记' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    await waitFor(() =>
+      expect(
+        request.mock.calls.filter(([path]) => path === '/information/feed?filter=official'),
+      ).toHaveLength(2),
+    );
+  });
+
+  it('synchronizes tabs, book selection and history while preserving other query parameters', async () => {
+    const router = renderRoute('/desk/information?filter=official&origin=desk');
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('tab', { name: '我的咨询' }));
+    await waitFor(() => expect(router.state.location.search).toBe('?filter=mine&origin=desk'));
+    expect(screen.getByRole('button', { name: '打开咨询手记' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await act(async () => {
+      await router.navigate(-1);
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: '官方发布' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      ),
+    );
+    expect(router.state.location.search).toBe('?filter=official&origin=desk');
+    expect(screen.getByRole('button', { name: '打开通知册' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
   it('opens the existing experience list and reader inside the desk', async () => {
     const router = renderRoute('/desk');
     await userEvent.click(await screen.findByRole('button', { name: '打开经验集' }));

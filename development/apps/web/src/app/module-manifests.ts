@@ -177,6 +177,13 @@ export function resolveModuleStatus(
   return override ?? manifest.status;
 }
 
+// Keep compatible activity URLs within their current visible navigation home.
+export function navigationPathname(pathname: string): string {
+  if (/^\/events\/student-festival(?:\/|$)/.test(pathname)) return '/community';
+  if (/^\/events(?:\/|$)/.test(pathname)) return '/collections';
+  return pathname;
+}
+
 export function visibleModuleManifests(
   user: PresentationUser,
   overrides?: ModuleStateOverrides,

@@ -33,7 +33,7 @@ export function CommercePage({ section, userUid = '' }: CommercePageProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [height, setHeight] = useState(700);
-  const from = (location.state as { from?: string } | null)?.from || '/dashboard';
+  const from = (location.state as { from?: string } | null)?.from || '/community';
   const query = new URLSearchParams(location.search);
   query.delete('embed');
   if ((section === 'profile' || section === 'ranch') && !query.has('uid') && userUid) {

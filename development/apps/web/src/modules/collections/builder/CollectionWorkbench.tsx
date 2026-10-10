@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import type {
@@ -13,6 +13,7 @@ import type {
   CollectionSchema,
   CollectionsDashboardPayload,
 } from '@freebbs-development/contracts';
+import { DEPARTMENT_DIRECTORY, departmentsForRoles } from '@freebbs-development/contracts';
 import { ApiError, createApiClient, type ApiClient } from '../../../core/api/client.js';
 import { useOptionalAuth } from '../../../core/auth/AuthProvider.js';
 import { emptyCollectionSchema } from '../collection-utils.js';
@@ -51,6 +52,10 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
   const fallback = useMemo(createApiClient, []);
   const api = client ?? fallback;
   const { collectionId } = useParams();
+  const roles = auth?.user?.roles ?? [];
+  const publisherDepartments = roles.includes('platform.super_admin')
+    ? [...DEPARTMENT_DIRECTORY]
+    : departmentsForRoles(roles);
   const [schema, setSchema] = useState<CollectionSchema>(structuredClone(emptyCollectionSchema));
   const [selection, setSelection] = useState<BuilderSelection>({ type: 'form' });
   const [formId, setFormId] = useState<string | null>(
@@ -63,6 +68,13 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
   const [customModules, setCustomModules] = useState<CollectionModuleDefinition[]>([]);
   const [busy, setBusy] = useState<'save' | 'publish' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -81,6 +93,11 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
         setAllowed(dashboard.canCreate || managesLibrary);
         setCustomModules(modules);
         if (form?.schema) setSchema({ ...form.schema, outputs: form.schema.outputs ?? [] });
+        else if (!formId && publisherDepartments.length === 1)
+          setSchema((current) => ({
+            ...current,
+            publisherDepartmentId: publisherDepartments[0]!.id,
+          }));
       },
       () => {
         if (active) setAllowed(false);
@@ -91,7 +108,6 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
     };
   }, [api, auth?.user?.roles, formId]);
 
-  const roles = auth?.user?.roles ?? [];
   const canManageLibrary = canMaintainModuleLibrary(roles);
 
   function add(kind: CollectionFieldKind, index?: number, template?: CollectionModuleDefinition) {
@@ -169,6 +185,10 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
   }
 
   async function save(publish: boolean) {
+    if (!formId && publisherDepartments.length > 1 && !schema.publisherDepartmentId) {
+      setMessage('请选择发布部门。');
+      return;
+    }
     const errors = validateSchema(schema);
     if (errors.length > 0) {
       setMessage(errors[0] ?? '请检查表单');
@@ -184,6 +204,7 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ title: schema.title, description: schema.description, schema }),
         });
+        if (!live.current) return;
         activeId = created.id;
         setFormId(created.id);
         window.history.replaceState(null, '', `/development/collections/workbench/${created.id}`);
@@ -193,17 +214,20 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ title: schema.title, description: schema.description, schema }),
         });
+        if (!live.current) return;
       }
       if (publish) {
         await api.request(`/collections/forms/${encodeURIComponent(activeId)}/publish`, {
           method: 'POST',
         });
+        if (!live.current) return;
         setMessage('表单已经发布，现在会出现在报名入口。');
       } else setMessage('草稿已经保存。');
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : '保存失败，请稍后重试。');
+      if (live.current)
+        setMessage(error instanceof ApiError ? error.message : '保存失败，请稍后重试。');
     } finally {
-      setBusy(null);
+      if (live.current) setBusy(null);
     }
   }
 
@@ -278,6 +302,7 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
         <InspectorPanel
           schema={schema}
           selection={selection}
+          publisherDepartments={publisherDepartments}
           onSchemaChange={setSchema}
           onFieldChange={changeField}
           onRuleChange={changeRule}

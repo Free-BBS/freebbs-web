@@ -2,6 +2,7 @@ import type { FestivalSubmission, FestivalSubmissionList } from '@freebbs-develo
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
+import stageCover from '../../assets/events/student-festival-stage.webp';
 import { ModulePageHeader } from '../../components/ModulePageHeader.js';
 import type { ApiClient } from '../../core/api/client.js';
 
@@ -342,13 +343,13 @@ export function FestivalPage({ client }: { client: FestivalClient }) {
   return (
     <section className="module-page festival-page">
       <ModulePageHeader
-        title="我要上学生节"
-        kicker="STUDENT FESTIVAL · 特别栏目"
+        title="我要上电子系春晚"
+        kicker="春节特别企划"
         description="把你的热爱，带上我们的舞台。"
         actions={
           <div className="festival-header-actions">
-            <Link className="festival-back" to="/events">
-              返回活动
+            <Link className="festival-back" to="/community">
+              返回無界广场
             </Link>
             {canReview && (
               <button
@@ -365,6 +366,18 @@ export function FestivalPage({ client }: { client: FestivalClient }) {
           </div>
         }
       />
+      <section className="festival-invitation" aria-labelledby="festival-invitation-title">
+        <div className="festival-invitation-copy">
+          <span className="festival-eyebrow">春节相约 · 线上春晚</span>
+          <h2 id="festival-invitation-title">春节相约，让我们的故事上场</h2>
+          <p>我们会在春节左右发布电子系春晚，欢迎大家投稿任何题材的素材。</p>
+          <p>歌声、舞蹈、校园故事，或一段想和大家分享的创意，都可以从这里开始。</p>
+          <a href="#festival-submit-heading">
+            开始投稿 <span aria-hidden="true">↗</span>
+          </a>
+        </div>
+        <img src={stageCover} alt="小羊在春晚舞台演唱，台下小羊观众正在观看" />
+      </section>
       <p className="festival-access-hint">
         {canReview
           ? '你已获得投稿审核及私密作品查看权限。'
@@ -373,7 +386,9 @@ export function FestivalPage({ client }: { client: FestivalClient }) {
       <section className="festival-submission" aria-labelledby="festival-submit-heading">
         <div className="festival-form-intro">
           <span className="festival-eyebrow">舞台，等你加入</span>
-          <h3 id="festival-submit-heading">分享你的作品</h3>
+          <h3 id="festival-submit-heading" tabIndex={-1}>
+            分享你的作品
+          </h3>
           <p>一段歌声、一支舞，或一个有趣的创意。上传视频，让我们看到你的精彩。</p>
         </div>
         <form onSubmit={(event) => void submit(event)}>

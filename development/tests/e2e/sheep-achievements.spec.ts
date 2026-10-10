@@ -17,18 +17,47 @@ const organizations = [
     name: '电子系科协',
     departments: ['办公室', '软件部', '硬件部', '学培部', '项目部', '策划部'],
   },
+  {
+    key: 'media_center',
+    name: '电子系学生媒体中心',
+    departments: ['创意设计部', '影音策划部', '新媒体与记者团部'],
+  },
 ] as const;
 
-test('four sheep entrances show complete departments and keep organizational navigation', async ({
+test('five sheep entrances show complete departments and keep organizational navigation', async ({
   page,
 }) => {
+  const expectDepartmentActivities = async (organizationRoot = false) => {
+    const related = page.getByRole('region', { name: '相关活动', exact: true });
+    await expect(related.getByRole('heading', { name: '相关活动', exact: true })).toBeVisible();
+    await expect(page.getByText('正在加载部门主页…', { exact: true })).toHaveCount(0);
+    await expect(related.getByText('正在整理相关活动…', { exact: true })).toHaveCount(0);
+    const active = related.getByRole('button', { name: '活跃活动', exact: true });
+    const past = related.getByRole('button', { name: '以往活动', exact: true });
+    await expect(active).toHaveAttribute('aria-pressed', 'true');
+    await expect(past).toHaveAttribute('aria-pressed', 'false');
+    await past.click();
+    await expect(past).toHaveAttribute('aria-pressed', 'true');
+    await expect(active).toHaveAttribute('aria-pressed', 'false');
+    await active.click();
+    await expect(active).toHaveAttribute('aria-pressed', 'true');
+    await expect(past).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByRole('link', { name: /^(查看相关报名|查看活动报名)$/ })).toHaveCount(0);
+    if (!organizationRoot)
+      await expect(page.locator('a[href*="/collections/registrations?organization="]')).toHaveCount(
+        0,
+      );
+    await expect(
+      page.getByText('目前展示全部活动报名，媒体中心相关活动请查看活动说明。', { exact: true }),
+    ).toHaveCount(0);
+  };
   await page.goto('./organizations');
   await expect(page.getByText('同在电子，亲如一家', { exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: /^走进电子系/ })).toHaveCount(4);
+  await expect(page.getByRole('link', { name: /^走进电子系/ })).toHaveCount(5);
   const sources = await page
     .locator('.organization-exhibit img')
     .evaluateAll((images) => images.map((image) => (image as HTMLImageElement).src));
-  expect(new Set(sources).size).toBe(4);
+  expect(new Set(sources).size).toBe(5);
   await expect
     .poll(() =>
       page
@@ -49,10 +78,22 @@ test('four sheep entrances show complete departments and keep organizational nav
   }
   for (const organization of organizations) {
     await page.goto(`./organizations/${organization.key}`);
-    await expect(page.getByRole('heading', { name: organization.name, exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('heading', {
+        name: organization.key === 'tms' ? 'TMS 电子系分会' : organization.name,
+        exact: true,
+      }),
+    ).toBeVisible();
     await expect(page.locator('.organization-page')).not.toContainText(
       /部员|部长|执行主席|主席团|岗位层级|财务负责人/,
     );
+    if (organization.key === 'tms') {
+      await expectDepartmentActivities(true);
+      await expect(page.getByRole('link', { name: '查看组织报名', exact: true })).toHaveAttribute(
+        'href',
+        /\/collections\/registrations\?organization=tms$/,
+      );
+    }
     for (const name of organization.departments) {
       const department = page.getByRole('link', { name: `了解${name}`, exact: true });
       const target = await department.getAttribute('href');
@@ -60,13 +101,18 @@ test('four sheep entrances show complete departments and keep organizational nav
       await department.click();
       await expect(page.getByRole('heading', { name, exact: true, level: 2 })).toBeVisible();
       await expect(page.locator('.organization-page')).not.toContainText(/部员|部长|岗位层级/);
-      await expect(page.getByRole('link', { name: '查看相关报名', exact: true })).toHaveAttribute(
-        'href',
-        /\/collections\/registrations\?organization=/,
-      );
+      await expectDepartmentActivities();
       await page.goto(`./organizations/${organization.key}`);
     }
   }
+});
+
+test('media exhibition opens the unfiltered activity catalog', async ({ page }) => {
+  await page.goto('./organizations/media_center');
+  await page.getByRole('link', { name: '查看活动报名', exact: true }).click();
+  await expect(page).toHaveURL(/\/collections\/registrations$/);
+  await expect(page.locator('.registration-organization-filter')).toHaveCount(0);
+  await expect(page.locator('.registration-grid')).toContainText('新生社群见面会');
 });
 
 test('badge details and display title persist only in the selected local account', async ({

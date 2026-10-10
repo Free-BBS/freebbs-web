@@ -78,6 +78,38 @@ async function createPublishedForm(
 }
 
 describe('collections API', () => {
+  it('lists only manageable forms including unpublished drafts without exposing another author drafts', async () => {
+    const { app } = fixture();
+    const own = await request(app)
+      .post('/api/development/v1/collections/forms')
+      .set(member)
+      .send({ title: schema.title, description: schema.description, schema })
+      .expect(201);
+    const other = await request(app)
+      .post('/api/development/v1/collections/forms')
+      .set(admin)
+      .send({ title: '另一位同学的草稿', description: '', schema })
+      .expect(201);
+    const mine = await request(app)
+      .get('/api/development/v1/collections/forms')
+      .set(member)
+      .expect(200);
+    expect(mine.body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: own.body.data.id, status: 'draft', canManage: true }),
+      ]),
+    );
+    expect(mine.body.data.some((form: { id: string }) => form.id === other.body.data.id)).toBe(
+      false,
+    );
+    const reader = await request(app)
+      .get('/api/development/v1/collections/forms')
+      .set(student)
+      .expect(200);
+    expect(reader.body.data).toEqual([]);
+    await request(app).get('/api/development/v1/collections/forms').expect(401);
+  });
+
   it('exposes explicit organization ownership for native and activity registration links', async () => {
     const { app } = fixture();
     const form = await createPublishedForm(app);

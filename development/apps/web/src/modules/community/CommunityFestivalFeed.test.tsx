@@ -45,7 +45,7 @@ describe('CommunityFestivalFeed', () => {
     expect(request).toHaveBeenCalledWith('/events/festival/submissions?view=showcase&page=1');
     expect(screen.queryByText('私密作品')).not.toBeInTheDocument();
     expect(screen.queryByText('待审作品')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '查看学生节作品' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '查看电子系春晚作品' })).toHaveAttribute(
       'href',
       '/development/events/student-festival',
     );

@@ -15,11 +15,11 @@ const policyOnlyUser: PresentationUser = {
   policies: [{ action: 'admin.manage', effect: 'allow' }],
 };
 
-function DashboardMarker() {
+function CommunityMarker() {
   const navigationType = useNavigationType();
   return (
     <>
-      <p>dashboard content</p>
+      <p>community content</p>
       <p data-testid="navigation-type">{navigationType}</p>
     </>
   );
@@ -37,17 +37,17 @@ function renderGuard(user: PresentationUser) {
             </SuperAdminRouteGuard>
           }
         />
-        <Route path="/dashboard" element={<DashboardMarker />} />
+        <Route path="/community" element={<CommunityMarker />} />
       </Routes>
     </MemoryRouter>,
   );
 }
 
 describe('SuperAdminRouteGuard', () => {
-  it('redirects a policy-only administrator to the dashboard with replacement', () => {
+  it('redirects a policy-only administrator to the community with replacement', () => {
     renderGuard(policyOnlyUser);
 
-    expect(screen.getByText('dashboard content')).toBeInTheDocument();
+    expect(screen.getByText('community content')).toBeInTheDocument();
     expect(screen.getByTestId('navigation-type')).toHaveTextContent('REPLACE');
     expect(screen.queryByText('governance content')).not.toBeInTheDocument();
   });
@@ -61,6 +61,6 @@ describe('SuperAdminRouteGuard', () => {
     });
 
     expect(screen.getByText('governance content')).toBeInTheDocument();
-    expect(screen.queryByText('dashboard content')).not.toBeInTheDocument();
+    expect(screen.queryByText('community content')).not.toBeInTheDocument();
   });
 });

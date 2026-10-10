@@ -20,7 +20,7 @@ export function CommunityFestivalFeed({ client }: { client: ApiClient }) {
         if (current) setData(result);
       })
       .catch(() => {
-        if (current) setError('学生节作品暂时无法加载，请重试。');
+        if (current) setError('电子系春晚作品暂时无法加载，请重试。');
       });
     return () => {
       current = false;
@@ -36,7 +36,7 @@ export function CommunityFestivalFeed({ client }: { client: ApiClient }) {
         </button>
       </div>
     );
-  if (!data) return <p className="community-empty">正在收集学生节的精彩作品…</p>;
+  if (!data) return <p className="community-empty">正在收集电子系春晚的精彩作品…</p>;
   const items = data.items.filter((item) => item.displayConsent && item.status === 'approved');
   return (
     <>
@@ -64,7 +64,7 @@ export function CommunityFestivalFeed({ client }: { client: ApiClient }) {
                       minute: '2-digit',
                     })}
                   </time>{' '}
-                  · 学生节舞台
+                  · 电子系春晚
                 </small>
               </span>
               <span className="community-status">展示中</span>
@@ -72,24 +72,24 @@ export function CommunityFestivalFeed({ client }: { client: ApiClient }) {
             <h3>{item.title}</h3>
             <p>{item.description}</p>
             <div className="community-tags">
-              <span>#学生节舞台</span>
+              <span>#电子系春晚</span>
               <span>#校园作品</span>
             </div>
           </a>
           <footer className="community-festival-footer">
             <span>
               <CommunityIcon name="stage" />
-              学生节作品
+              电子系春晚作品
             </span>
             <a href="/development/events/student-festival">
-              查看学生节作品
+              查看电子系春晚作品
               <CommunityIcon name="arrow" />
             </a>
           </footer>
         </article>
       ))}
       {data.total > data.pageSize ? (
-        <nav className="community-festival-pagination" aria-label="学生节作品分页">
+        <nav className="community-festival-pagination" aria-label="电子系春晚作品分页">
           <button type="button" disabled={page === 1} onClick={() => setPage((value) => value - 1)}>
             上一页
           </button>
