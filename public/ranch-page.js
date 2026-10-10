@@ -179,7 +179,8 @@
         dye.textContent = '羊的染坊';
         dye.dataset.compactLabel = '染坊';
         dye.addEventListener('click', () => {
-          window.location.href = '/ranch-dye';
+          if (!window.freeBbsDevelopmentNavigate?.('/ranch-dye'))
+            window.location.href = '/ranch-dye';
         });
         controls.append(dye);
       }

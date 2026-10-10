@@ -18,8 +18,14 @@ import { listModuleManifests } from './core/modules/registry.js';
 import { createAdminRouter } from './modules/admin/router.js';
 import { createClubsRouter } from './modules/clubs/router.js';
 import { createCollectionsRouter } from './modules/collections/router.js';
+import { createDepartmentRouter } from './modules/collections/department-router.js';
 import { createCommunityRouter } from './modules/community/router.js';
 import { createEventsRouter } from './modules/events/router.js';
+import { createActivityWorkspaceRouter } from './modules/events/workspace-router.js';
+import {
+  createLearningSurveyResolver,
+  type LearningSurveyResolver,
+} from './modules/events/workspace-activity.js';
 import { createFinanceRouter } from './modules/finance/router.js';
 import { createFestivalRouter } from './modules/festival/router.js';
 import { createGrowthRouter } from './modules/growth/router.js';
@@ -69,6 +75,7 @@ export interface CreateAppOptions {
   festivalMaxUploadBytes?: number;
   sportsUploadDirectory?: string;
   collectionsUploadDirectory?: string;
+  learningSurveyResolver?: LearningSurveyResolver;
 }
 
 function requestId(response: Response): string {
@@ -240,10 +247,41 @@ export function createApp(options: CreateAppOptions = {}) {
       ...(options.festivalMaxUploadBytes ? { maxUploadBytes: options.festivalMaxUploadBytes } : {}),
     }),
   );
+  app.use(
+    `${API_BASE_PATH}/events`,
+    createActivityWorkspaceRouter({
+      store,
+      authenticate,
+      learning:
+        options.learningSurveyResolver ??
+        createLearningSurveyResolver(environment.mainSiteApiBaseUrl, environment.authTimeoutMs),
+      nodeEnvironment: environment.nodeEnv,
+      ...((options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR)
+        ? {
+            uploadDirectory:
+              options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
+          }
+        : {}),
+    }),
+  );
   app.use(`${API_BASE_PATH}/events`, createEventsRouter({ store, authenticate }));
   app.use(
     `${API_BASE_PATH}/collections`,
     createCollectionsRouter({
+      store,
+      authenticate,
+      nodeEnvironment: environment.nodeEnv,
+      ...((options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR)
+        ? {
+            uploadDirectory:
+              options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
+          }
+        : {}),
+    }),
+  );
+  app.use(
+    `${API_BASE_PATH}/organizations`,
+    createDepartmentRouter({
       store,
       authenticate,
       nodeEnvironment: environment.nodeEnv,

@@ -7,10 +7,9 @@ import type {
   CollectionSchema,
   CollectionsDashboardPayload,
   ShowcaseArticle,
-  SocialOrganizationId,
   UnifiedRegistration,
 } from '@freebbs-development/contracts';
-import { organizationById, organizationForRole } from '@freebbs-development/contracts';
+import { departmentById, organizationById } from '@freebbs-development/contracts';
 import { Router } from 'express';
 import multer from 'multer';
 import { isAbsolute, resolve } from 'node:path';
@@ -41,6 +40,15 @@ import {
 } from './schemas.js';
 
 import type { Request, Response } from 'express';
+import {
+  audienceAllows,
+  effectiveWindow,
+  nativeStatus,
+  canViewCollection,
+  registrationFromForm,
+  listRegistrations,
+  resolvePublisher,
+} from './registrations.js';
 
 type Authenticate = (headers: AuthHeaders) => Promise<AuthenticationResult>;
 export interface CollectionsRouterOptions {
@@ -81,96 +89,6 @@ const UPLOAD_FIELD_KINDS = new Set(['file', 'image', 'video', 'audio']);
 const PENDING_ASSET_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_PENDING_ASSETS_PER_USER = 20;
 
-function actorOrganizations(actor: AuthorizationContext): SocialOrganizationId[] {
-  return [
-    ...new Set(
-      actor.roles
-        .map((role) => organizationForRole(role)?.organizationId)
-        .filter((value): value is SocialOrganizationId => value !== undefined),
-    ),
-  ];
-}
-
-function resolveOrganization(
-  actor: AuthorizationContext,
-  requested: SocialOrganizationId | null,
-): SocialOrganizationId | null {
-  if (actor.roles.includes('platform.super_admin')) return requested;
-  const organizations = actorOrganizations(actor);
-  if (requested !== null) {
-    if (!organizations.includes(requested))
-      throw new HttpError(403, 'forbidden', '不能以未加入的组织创建或维护表单');
-    return requested;
-  }
-  if (organizations.length === 1) return organizations[0] ?? null;
-  if (organizations.length > 1)
-    throw new HttpError(400, 'organization_required', '请选择本次表单所属的组织');
-  return null;
-}
-
-function audienceAllows(actor: AuthorizationContext, schema: CollectionSchema): boolean {
-  const rule = schema.formRules.find((item) => item.kind === 'audience');
-  if (!rule || rule.value === 'all' || rule.value === true) return true;
-  const organizations = actorOrganizations(actor);
-  if (rule.value === 'social_org') return organizations.length > 0;
-  if (typeof rule.value === 'string')
-    return organizations.includes(rule.value as SocialOrganizationId);
-  if (Array.isArray(rule.value))
-    return rule.value.some((organizationId) =>
-      organizations.includes(organizationId as SocialOrganizationId),
-    );
-  return false;
-}
-
-function scheduleBoundary(schema: CollectionSchema, key: 'start' | 'end'): string | null {
-  const rule = schema.formRules.find((item) => item.kind === 'schedule');
-  if (!rule || typeof rule.value !== 'object' || Array.isArray(rule.value)) return null;
-  if ('mode' in rule.value) return null;
-  const value = rule.value[key];
-  return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
-function effectiveWindow(form: CollectionFormRecord, schema: CollectionSchema) {
-  const starts = [form.opensAt, scheduleBoundary(schema, 'start')]
-    .filter((value): value is string => value !== null)
-    .map((value) => new Date(value))
-    .filter((value) => !Number.isNaN(value.getTime()));
-  const ends = [form.closesAt, scheduleBoundary(schema, 'end')]
-    .filter((value): value is string => value !== null)
-    .map((value) => new Date(value))
-    .filter((value) => !Number.isNaN(value.getTime()));
-  return {
-    opensAt:
-      starts.length > 0
-        ? new Date(Math.max(...starts.map((value) => value.getTime()))).toISOString()
-        : null,
-    closesAt:
-      ends.length > 0
-        ? new Date(Math.min(...ends.map((value) => value.getTime()))).toISOString()
-        : null,
-  };
-}
-
-function nativeStatus(
-  form: CollectionFormRecord,
-  schema: CollectionSchema,
-  now = new Date(),
-): UnifiedRegistration['status'] {
-  if (form.status !== 'published') return 'closed';
-  const window = effectiveWindow(form, schema);
-  if (window.opensAt && new Date(window.opensAt) > now) return 'upcoming';
-  if (window.closesAt && new Date(window.closesAt) < now) return 'closed';
-  return 'open';
-}
-
-function canViewCollection(
-  actor: AuthorizationContext,
-  form: CollectionFormRecord,
-  schema: CollectionSchema,
-): boolean {
-  return canManageCollection(actor, form.ownerUid) || audienceAllows(actor, schema);
-}
-
 async function formSummary(
   store: DevelopmentStore,
   actor: AuthorizationContext,
@@ -187,12 +105,16 @@ async function formSummary(
   const window = version
     ? effectiveWindow(form, version.schema)
     : { opensAt: form.opensAt, closesAt: form.closesAt };
+  const publisherDepartment = version?.schema.publisherDepartmentId
+    ? departmentById(version.schema.publisherDepartmentId)
+    : undefined;
   return {
     id: form.id,
-    title: form.title,
-    description: form.description,
+    title: version?.schema.title ?? form.title,
+    description: version?.schema.description ?? form.description,
+    publisherDepartmentId: version?.schema.publisherDepartmentId ?? null,
     coverUrl: form.coverUrl,
-    organizationId: form.organizationId,
+    organizationId: publisherDepartment ? publisherDepartment.organizationId : form.organizationId,
     status: form.status as CollectionFormSummary['status'],
     opensAt: window.opensAt,
     closesAt: window.closesAt,
@@ -204,40 +126,6 @@ async function formSummary(
     ...(version ? { schema: version.schema } : {}),
     createdAt: form.createdAt,
     updatedAt: form.updatedAt,
-  };
-}
-
-async function registrationFromForm(
-  store: DevelopmentStore,
-  actor: AuthorizationContext,
-  form: CollectionFormRecord,
-): Promise<UnifiedRegistration | null> {
-  if (!form.publishedVersionId) return null;
-  const [version, responses] = await Promise.all([
-    store.collectionVersions.get(form.publishedVersionId),
-    store.collectionResponses.list({ query: form.id }),
-  ]);
-  if (!version) return null;
-  if (!canViewCollection(actor, form, version.schema)) return null;
-  const window = effectiveWindow(form, version.schema);
-  const activeResponses = responses.filter(
-    (item) => item.formId === form.id && item.status === 'submitted',
-  );
-  return {
-    id: form.id,
-    source: 'native_collection',
-    title: form.title,
-    description: form.description,
-    organizer: form.organizationId ? organizationById(form.organizationId).name : 'FREE-BBS',
-    coverUrl: form.coverUrl,
-    opensAt: window.opensAt,
-    closesAt: window.closesAt,
-    location: null,
-    capacity: form.capacity,
-    registrationCount: activeResponses.length,
-    registered: activeResponses.some((item) => item.respondentUid === actor.uid),
-    status: nativeStatus(form, version.schema),
-    schema: version.schema,
   };
 }
 
@@ -783,38 +671,9 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
   router.get('/registrations', async (request, response) => {
     const actor = await requireActor(options, request, response);
     if (!actor) return;
-    const [forms, activities, activityRegistrations] = await Promise.all([
-      options.store.collectionForms.list({ status: 'published' }),
-      options.store.activities.list({ status: 'published' }),
-      options.store.activityRegistrations.list(),
-    ]);
-    const native = (
-      await Promise.all(forms.map((form) => registrationFromForm(options.store, actor, form)))
-    ).filter((item): item is UnifiedRegistration => item !== null);
-    const eventItems: UnifiedRegistration[] = activities.map((activity) => ({
-      id: activity.id,
-      source: 'development_activity',
-      title: activity.title,
-      description: activity.description,
-      organizer: activity.organizationId
-        ? organizationById(activity.organizationId).name
-        : '無活动',
-      coverUrl: null,
-      opensAt: null,
-      closesAt: activity.registrationDeadline,
-      location: activity.location ?? null,
-      capacity: activity.capacity,
-      registrationCount: activityRegistrations.filter((item) => item.activityId === activity.id)
-        .length,
-      registered: activityRegistrations.some(
-        (item) => item.activityId === activity.id && item.participantUid === actor.uid,
-      ),
-      status:
-        activity.registrationDeadline && new Date(activity.registrationDeadline) < new Date()
-          ? 'closed'
-          : 'open',
-    }));
-    send(response, 200, [...native, ...eventItems]);
+    const includePast =
+      parse(z.enum(['true', 'false']).optional(), request.query.includePast) === 'true';
+    send(response, 200, await listRegistrations(options.store, actor, includePast));
   });
 
   router.get('/mine', async (request, response) => {
@@ -854,12 +713,26 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
     );
   });
 
+  router.get('/forms', async (request, response) => {
+    const actor = await requireActor(options, request, response);
+    if (!actor) return;
+    const forms = await options.store.collectionForms.list();
+    const manageable = forms.filter((form) => canManageCollection(actor, form.ownerUid));
+    send(
+      response,
+      200,
+      await Promise.all(manageable.map((form) => formSummary(options.store, actor, form))),
+    );
+  });
+
   router.post('/forms', async (request, response) => {
     const actor = await requireActor(options, request, response);
     if (!actor) return;
     if (!canCreateCollection(actor)) throw new HttpError(403, 'forbidden', '当前身份不能创建表单');
     const input = parse(formCreateSchema, request.body);
-    const organizationId = resolveOrganization(actor, input.organizationId);
+    const publisher = resolvePublisher(actor, input.schema, input.organizationId);
+    input.schema = publisher.schema;
+    const organizationId = publisher.organizationId;
     const result = await options.store.transaction(async (store) => {
       const form = await store.collectionForms.create({
         title: input.title,
@@ -903,9 +776,10 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
       : null;
     if (
       !form ||
-      (form.status !== 'published' && !canManageCollection(actor, form.ownerUid)) ||
-      (form.status === 'published' &&
-        (!publishedVersion || !canViewCollection(actor, form, publishedVersion.schema)))
+      (!publishedVersion && !canManageCollection(actor, form.ownerUid)) ||
+      (publishedVersion !== null &&
+        (!['published', 'closed', 'archived'].includes(form.status) ||
+          !canViewCollection(actor, form, publishedVersion.schema)))
     ) {
       throw new HttpError(404, 'collection_not_found', '未找到表单');
     }
@@ -921,10 +795,12 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
       const form = await store.collectionForms.getForUpdate(formId);
       if (!form || !canManageCollection(actor, form.ownerUid))
         throw new HttpError(404, 'collection_not_found', '未找到表单');
-      const organizationId =
-        input.organizationId === undefined
-          ? form.organizationId
-          : resolveOrganization(actor, input.organizationId);
+      const publisher =
+        input.organizationId === undefined && input.schema.publisherDepartmentId === undefined
+          ? { schema: input.schema, organizationId: form.organizationId }
+          : resolvePublisher(actor, input.schema, input.organizationId);
+      input.schema = publisher.schema;
+      const organizationId = publisher.organizationId;
       let draft = form.currentDraftVersionId
         ? await store.collectionVersions.getForUpdate(form.currentDraftVersionId)
         : null;
@@ -978,6 +854,7 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
         throw new HttpError(409, 'missing_draft', '没有可发布的草稿');
       const version = await store.collectionVersions.getForUpdate(form.currentDraftVersionId);
       if (!version) throw new HttpError(409, 'missing_draft', '没有可发布的草稿');
+      if (version.schema.publisherDepartmentId) resolvePublisher(actor, version.schema, undefined);
       const publishedAt = new Date().toISOString();
       await store.collectionVersions.update(version.id, { status: 'published', publishedAt });
       const updated = await store.collectionForms.update(form.id, {

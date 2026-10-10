@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import {
@@ -19,6 +19,7 @@ import { isSuperAdmin } from '../../core/permissions/Can.js';
 import {
   knowledgeEntryPath,
   knowledgePreview,
+  knowledgeUpdatedTime,
   statusLabels,
   tone,
   typeLabels,
@@ -101,6 +102,11 @@ export function KnowledgePage({ client, user: suppliedUser }: KnowledgePageProps
       ? 'social_org'
       : 'general';
   function setAudience(next: KnowledgeAudience) {
+    if (next === audience) return;
+    requestGeneration.current += 1;
+    setDrawerEntry(null);
+    setOperationError(null);
+    setFeedback(null);
     setState('loading');
     const params = new URLSearchParams(searchParams);
     if (next === 'social_org') params.set('audience', next);
@@ -109,8 +115,13 @@ export function KnowledgePage({ client, user: suppliedUser }: KnowledgePageProps
   }
   const [organizationId, setOrganizationId] = useState<string>(() => organizations[0]?.id ?? '');
   const [entries, setEntries] = useState<KnowledgeEntry[]>([]);
+  const requestGeneration = useRef(0);
+  const activeContext = useRef({ api, audience });
+  activeContext.current = { api, audience };
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [query, setQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState<KnowledgeType | 'all'>('all');
+  const [sortOrder, setSortOrder] = useState('newest');
   const [feedback, setFeedback] = useState<string | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -142,11 +153,18 @@ export function KnowledgePage({ client, user: suppliedUser }: KnowledgePageProps
   const canCreate = selectedScope !== null && permitted(user, 'knowledge.create', selectedScope);
 
   const loadEntries = useCallback(async () => {
+    if (activeContext.current.api !== api || activeContext.current.audience !== audience) return;
+    const generation = ++requestGeneration.current;
     setState('loading');
     try {
-      setEntries(await api.request<KnowledgeEntry[]>(`/knowledge/entries?audience=${audience}`));
+      const result = await api.request<KnowledgeEntry[]>(`/knowledge/entries?audience=${audience}`);
+      if (generation !== requestGeneration.current || activeContext.current.audience !== audience)
+        return;
+      setEntries(result);
       setState('ready');
     } catch {
+      if (generation !== requestGeneration.current || activeContext.current.audience !== audience)
+        return;
       setState('error');
     }
   }, [api, audience]);
@@ -162,6 +180,9 @@ export function KnowledgePage({ client, user: suppliedUser }: KnowledgePageProps
   }, [audience, organizationId, organizations, writableOrganizations]);
   useEffect(() => {
     void loadEntries();
+    return () => {
+      requestGeneration.current += 1;
+    };
   }, [loadEntries]);
 
   function openDrawer(entry: KnowledgeEntry | 'create') {
@@ -266,13 +287,25 @@ export function KnowledgePage({ client, user: suppliedUser }: KnowledgePageProps
     }
   }
   const visibleEntries = useMemo(
-    () => entries.filter((entry) => matchesQuery(entry, query)),
-    [entries, query],
+    () =>
+      entries
+        .filter(
+          (entry) =>
+            (entry.audience ?? 'general') === audience &&
+            matchesQuery(entry, query) &&
+            (typeFilter === 'all' || entry.type === typeFilter),
+        )
+        .sort(
+          (left, right) =>
+            (knowledgeUpdatedTime(right) - knowledgeUpdatedTime(left)) *
+            (sortOrder === 'oldest' ? -1 : 1),
+        ),
+    [entries, query, audience, typeFilter, sortOrder],
   );
   return (
-    <section className="module-page" aria-label="经验库">
+    <section className="module-page knowledge-library" aria-label="经验库">
       <ModulePageHeader
-        title={audience === 'general' ? 'General' : '社工组织'}
+        title={audience === 'general' ? '同学经验库' : '社工组织经验库'}
         description={
           audience === 'general'
             ? '面向全体同学的流程、常见问题与经验沉淀。'
@@ -305,7 +338,7 @@ export function KnowledgePage({ client, user: suppliedUser }: KnowledgePageProps
             type="button"
             onClick={() => setAudience('general')}
           >
-            General
+            通用资料
           </button>
           {canViewSocialOrganizations ? (
             <button
@@ -317,9 +350,43 @@ export function KnowledgePage({ client, user: suppliedUser }: KnowledgePageProps
             </button>
           ) : null}
         </div>
+        <label className="knowledge-sort">
+          排序
+          <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}>
+            <option value="newest">最近更新</option>
+            <option value="oldest">最早更新</option>
+          </select>
+        </label>
       </FilterBar>
+      <div className="knowledge-type-filters" role="group" aria-label="经验类型筛选">
+        <button
+          type="button"
+          aria-pressed={typeFilter === 'all'}
+          onClick={() => setTypeFilter('all')}
+        >
+          全部类型
+        </button>
+        {Object.entries(typeLabels).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={typeFilter === value}
+            onClick={() => setTypeFilter(value as KnowledgeType)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {state === 'ready' ? (
+        <p className="knowledge-result-count">共 {visibleEntries.length} 份经验资料</p>
+      ) : null}
       {feedback ? <p role="status">{feedback}</p> : null}
-      {operationError ? <p role="alert">{operationError}</p> : null}
+      {operationError && drawerEntry === null ? <p role="alert">{operationError}</p> : null}
+      {state === 'error' ? (
+        <button type="button" onClick={() => void loadEntries()}>
+          重试
+        </button>
+      ) : null}
       <ResponsiveRecordList
         ariaLabel="经验条目列表"
         className="knowledge-card-grid"
@@ -328,7 +395,7 @@ export function KnowledgePage({ client, user: suppliedUser }: KnowledgePageProps
         errorMessage="暂时无法加载经验库"
         emptyTitle={entries.length === 0 ? '经验库中还没有内容' : '没有匹配的经验'}
         emptyDescription={
-          entries.length === 0 ? '有维护权限的同学可以新建一份草稿。' : '请调整搜索词后再试。'
+          entries.length === 0 ? '有维护权限的同学可以新建一份草稿。' : '请调整搜索词或类型后再试。'
         }
         getKey={(entry) => entry.id}
         renderRecord={(entry) => (
@@ -339,7 +406,12 @@ export function KnowledgePage({ client, user: suppliedUser }: KnowledgePageProps
             <header>
               <div>
                 <p className="record-eyebrow">
-                  {[entry.category, typeLabels[entry.type]].filter(Boolean).join(' · ')}
+                  {[
+                    entry.category === 'general' ? '通用资料' : entry.category,
+                    typeLabels[entry.type],
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </p>
                 <h3 id={`knowledge-${entry.id}`}>
                   <Link className="knowledge-card-link" to={knowledgeEntryPath(entry.id, audience)}>
@@ -367,6 +439,9 @@ export function KnowledgePage({ client, user: suppliedUser }: KnowledgePageProps
               {entry.maintainerUid ? (
                 <p className="record-meta">维护人：{entry.maintainerUid}</p>
               ) : null}
+              <p className="record-meta">
+                {entry.updatedAt ? `更新于 ${entry.updatedAt.slice(0, 10)}` : '持续整理中'}
+              </p>
             </div>
             <div className="record-actions">
               {permitted(user, 'knowledge.create', entry.scope) &&
@@ -422,88 +497,113 @@ export function KnowledgePage({ client, user: suppliedUser }: KnowledgePageProps
         description="完善正文、摘要和分类，方便同学查阅。"
         onClose={() => setDrawerEntry(null)}
       >
-        <form onSubmit={(event) => void save(event)} noValidate>
-          <label>
-            经验类型
-            <select value={type} onChange={(event) => setType(event.target.value as KnowledgeType)}>
-              {Object.entries(typeLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {drawerEntry === 'create' &&
-          audience === 'social_org' &&
-          writableOrganizations.length > 1 ? (
+        <form className="knowledge-editor" onSubmit={(event) => void save(event)} noValidate>
+          <fieldset>
+            <legend>01 · 内容</legend>
             <label>
-              所属社工组织
+              经验类型
               <select
-                value={organizationId}
-                onChange={(event) => setOrganizationId(event.target.value)}
+                value={type}
+                onChange={(event) => setType(event.target.value as KnowledgeType)}
               >
-                {writableOrganizations.map((organization) => (
-                  <option key={organization.id} value={organization.id}>
-                    {organization.name}
+                {Object.entries(typeLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
                   </option>
                 ))}
               </select>
             </label>
+            {drawerEntry === 'create' &&
+            audience === 'social_org' &&
+            writableOrganizations.length > 1 ? (
+              <label>
+                所属社工组织
+                <select
+                  value={organizationId}
+                  onChange={(event) => setOrganizationId(event.target.value)}
+                >
+                  {writableOrganizations.map((organization) => (
+                    <option key={organization.id} value={organization.id}>
+                      {organization.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <label>
+              {drawerEntry === 'create' ? '经验标题' : '编辑标题'}
+              <input
+                value={title}
+                maxLength={200}
+                onChange={(event) => setTitle(event.target.value)}
+              />
+            </label>
+            <label>
+              {drawerEntry === 'create' ? '经验正文' : '编辑正文'}
+              <textarea
+                value={body}
+                maxLength={20000}
+                onChange={(event) => setBody(event.target.value)}
+              />
+            </label>
+          </fieldset>
+          <fieldset>
+            <legend>02 · 分类与检索</legend>
+            <label>
+              分类
+              <input
+                value={category}
+                maxLength={80}
+                onChange={(event) => setCategory(event.target.value)}
+              />
+            </label>
+            <label>
+              标签
+              <input
+                value={tags}
+                onChange={(event) => setTags(event.target.value)}
+                placeholder="用逗号分隔"
+              />
+            </label>
+            <label>
+              摘要
+              <textarea
+                value={summary}
+                maxLength={500}
+                onChange={(event) => setSummary(event.target.value)}
+              />
+            </label>
+          </fieldset>
+          <fieldset>
+            <legend>03 · 维护信息</legend>
+            <label>
+              维护日期
+              <input
+                value={maintainedAt}
+                onChange={(event) => setMaintainedAt(event.target.value)}
+              />
+            </label>
+            <label>
+              维护人
+              <input
+                value={maintainerUid}
+                onChange={(event) => setMaintainerUid(event.target.value)}
+              />
+            </label>
+          </fieldset>
+          {operationError ? (
+            <p role="alert" className="knowledge-editor-error">
+              {operationError}
+            </p>
           ) : null}
-          <label>
-            {drawerEntry === 'create' ? '经验标题' : '编辑标题'}
-            <input
-              value={title}
-              maxLength={200}
-              onChange={(event) => setTitle(event.target.value)}
-            />
-          </label>
-          <label>
-            {drawerEntry === 'create' ? '经验正文' : '编辑正文'}
-            <textarea
-              value={body}
-              maxLength={20000}
-              onChange={(event) => setBody(event.target.value)}
-            />
-          </label>
-          <label>
-            分类
-            <input
-              value={category}
-              maxLength={80}
-              onChange={(event) => setCategory(event.target.value)}
-            />
-          </label>
-          <label>
-            标签
-            <input
-              value={tags}
-              onChange={(event) => setTags(event.target.value)}
-              placeholder="用逗号分隔"
-            />
-          </label>
-          <label>
-            摘要
-            <textarea
-              value={summary}
-              maxLength={500}
-              onChange={(event) => setSummary(event.target.value)}
-            />
-          </label>
-          <label>
-            维护日期
-            <input value={maintainedAt} onChange={(event) => setMaintainedAt(event.target.value)} />
-          </label>
-          <label>
-            维护人
-            <input
-              value={maintainerUid}
-              onChange={(event) => setMaintainerUid(event.target.value)}
-            />
-          </label>
-          <button type="submit" disabled={pending}>
-            {drawerEntry === 'create' ? '保存草稿' : '保存修改'}
-          </button>
+          <div className="knowledge-editor-footer">
+            <button type="button" onClick={() => setDrawerEntry(null)}>
+              取消
+            </button>
+            <button type="submit" disabled={pending}>
+              {drawerEntry === 'create' ? '保存草稿' : '保存修改'}
+            </button>
+          </div>
         </form>
       </EditorDrawer>
     </section>

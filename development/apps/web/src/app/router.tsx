@@ -1,6 +1,11 @@
-import type { ModuleManifest } from '@freebbs-development/contracts';
+import type {
+  InformationFeedFilter,
+  ModuleManifest,
+  RegistrationSource,
+} from '@freebbs-development/contracts';
+import type { ReactNode } from 'react';
 import { Navigate, RouterProvider, createBrowserRouter, useLoaderData } from 'react-router-dom';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useMatches, useParams, useSearchParams } from 'react-router-dom';
 
 import { createApiClient } from '../core/api/client.js';
 import { useAuth } from '../core/auth/AuthProvider.js';
@@ -10,12 +15,14 @@ import { AdminPage } from '../modules/admin/AdminPage.js';
 import { CollectionsLandingPage } from '../modules/collections/CollectionsLandingPage.js';
 import { MyRegistrations } from '../modules/collections/MyRegistrations.js';
 import { RegistrationGallery } from '../modules/collections/RegistrationGallery.js';
+import { AllActivitiesPage } from '../modules/collections/AllActivitiesPage.js';
+import { ActivityManagementPage } from '../modules/collections/ActivityManagementPage.js';
+import { ActivityPage } from '../modules/collections/ActivityPage.js';
 import { ShowcaseDetailPage } from '../modules/collections/ShowcaseDetailPage.js';
 import { ShowcasePage } from '../modules/collections/ShowcasePage.js';
 import { CollectionWorkbench } from '../modules/collections/builder/CollectionWorkbench.js';
 import { CommunityPage } from '../modules/community/CommunityPage.js';
-import { DashboardPage } from '../modules/dashboard/DashboardPage.js';
-import { ActivityDetailPage } from '../modules/events/ActivityDetailPage.js';
+import { DeskPage } from '../modules/desk/DeskPage.js';
 import { EventsPage } from '../modules/events/EventsPage.js';
 import { FestivalPage } from '../modules/festival/FestivalPage.js';
 import { FinancePage } from '../modules/finance/FinancePage.js';
@@ -33,7 +40,12 @@ import { SportsMatchesPage } from '../modules/sports/SportsMatchesPage.js';
 import { SportsTeamDetailPage } from '../modules/sports/SportsTeamDetailPage.js';
 import { AppShell } from './AppShell.js';
 import { CommercePage } from './CommercePage.js';
-import { MODULE_MANIFESTS, type ModuleStateOverrides } from './module-manifests.js';
+import {
+  MODULE_MANIFESTS,
+  resolveModuleStatus,
+  type ModuleStateOverrides,
+} from './module-manifests.js';
+import { OrganizationsPage } from '../modules/organizations/OrganizationsPage.js';
 
 export async function loadModuleStates(): Promise<ModuleStateOverrides> {
   try {
@@ -54,11 +66,6 @@ export async function loadModuleStates(): Promise<ModuleStateOverrides> {
 function AppShellRoute() {
   const moduleStates = useLoaderData() as ModuleStateOverrides;
   return <AppShell moduleStates={moduleStates} />;
-}
-
-function DashboardRoute() {
-  const auth = useAuth();
-  return <DashboardPage key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
 }
 
 function ProfileRoute() {
@@ -92,13 +99,42 @@ function KnowledgeDetailRoute() {
 
 function InformationHubRoute() {
   const auth = useAuth();
+  const [search, setSearch] = useSearchParams();
+  const filter = search.get('filter');
+  const initialFilter: InformationFeedFilter = [
+    'all',
+    'official',
+    'public_feedback',
+    'mine',
+    'in_progress',
+    'resolved',
+  ].includes(filter ?? '')
+    ? (filter as InformationFeedFilter)
+    : 'all';
   return (
     <InformationHubPage
       key={auth.demoUser ?? auth.user?.uid}
       client={auth.client}
       user={auth.user}
+      filter={initialFilter}
+      onFilterChange={(nextFilter) => {
+        setSearch(
+          (current) => {
+            const next = new URLSearchParams(current);
+            next.set('filter', nextFilter);
+            return next;
+          },
+          { preventScrollReset: true },
+        );
+      }}
     />
   );
+}
+
+function DeskRoute({ children }: { children?: ReactNode }) {
+  const matches = useMatches();
+  const moduleStates = matches[0]?.data as ModuleStateOverrides | undefined;
+  return <DeskPage moduleStates={moduleStates}>{children}</DeskPage>;
 }
 
 function ProposalPoolRoute() {
@@ -132,17 +168,63 @@ function GrowthRoute() {
   );
 }
 
+function OrganizationsRoute() {
+  const auth = useAuth();
+  const { organizationKey, departmentKey } = useParams();
+  const matches = useMatches();
+  const states = matches[0]?.data as ModuleStateOverrides | undefined;
+  const information = MODULE_MANIFESTS.find((module) => module.id === 'information')!;
+  return (
+    <OrganizationsPage
+      key={`${auth.demoUser ?? auth.previewUser ?? auth.user?.uid}:${organizationKey}:${departmentKey}`}
+      client={auth.client}
+      organizationKey={organizationKey}
+      departmentKey={departmentKey}
+      enabled={resolveModuleStatus(information, states) === 'enabled'}
+    />
+  );
+}
+
 function EventsRoute() {
   const auth = useAuth();
   return <EventsPage key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
 }
 
 function ActivityDetailRoute() {
-  const auth = useAuth();
   const { activityId = '' } = useParams();
   return (
-    <ActivityDetailPage
-      key={`${auth.demoUser ?? auth.user?.uid}:${activityId}`}
+    <Navigate
+      to={`/collections/activities/development_activity/${encodeURIComponent(activityId)}`}
+      replace
+    />
+  );
+}
+
+function AllActivitiesRoute() {
+  const auth = useAuth();
+  return <AllActivitiesPage key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
+}
+function ActivityManagementRoute() {
+  const auth = useAuth();
+  const [search] = useSearchParams();
+  return (
+    <ActivityManagementPage
+      key={auth.demoUser ?? auth.user?.uid}
+      client={auth.client}
+      user={auth.user}
+      initialCreate={search.get('create') === '1'}
+    />
+  );
+}
+function ActivityWorkspaceRoute() {
+  const auth = useAuth();
+  const { source = '', activityId = '' } = useParams();
+  if (!['learning_survey', 'development_activity', 'native_collection'].includes(source))
+    return <Navigate to="/collections/activities" replace />;
+  return (
+    <ActivityPage
+      key={`${auth.demoUser ?? auth.user?.uid}:${source}:${activityId}`}
+      source={source as RegistrationSource}
       activityId={activityId}
       client={auth.client}
     />
@@ -198,7 +280,13 @@ function ShowcaseDetailRoute() {
 
 function CollectionWorkbenchRoute() {
   const auth = useAuth();
-  return <CollectionWorkbench key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
+  const { collectionId } = useParams();
+  return (
+    <CollectionWorkbench
+      key={`${auth.demoUser ?? auth.previewUser ?? auth.user?.uid}:${collectionId}`}
+      client={auth.client}
+    />
+  );
 }
 
 function ProblemDetailRoute() {
@@ -256,15 +344,80 @@ export const appRouter = createBrowserRouter(
       element: <AppShellRoute />,
       loader: loadModuleStates,
       children: [
-        { index: true, element: <Navigate to="/dashboard" replace /> },
-        { path: 'dashboard', element: <DashboardRoute /> },
+        { index: true, element: <Navigate to="/community" replace /> },
+        { path: 'dashboard', element: <Navigate to="/community" replace /> },
         { path: 'shop', element: <CommercePage section="shop" /> },
         { path: 'inventory', element: <CommercePage section="inventory" /> },
+        { path: 'ranch', element: <CommercePage section="ranch" /> },
+        { path: 'ranch-gallery', element: <CommercePage section="ranch-gallery" /> },
+        { path: 'ranch-dye', element: <CommercePage section="ranch-dye" /> },
         { path: 'profile', element: <ProfileRoute /> },
         { path: 'settings', element: <CommercePage section="settings" /> },
-        { path: 'knowledge', element: <KnowledgeRoute /> },
-        { path: 'knowledge/:entryId', element: <KnowledgeDetailRoute /> },
-        { path: 'information', element: <InformationHubRoute /> },
+        { path: 'desk', element: <DeskRoute /> },
+        {
+          path: 'desk/information',
+          element: (
+            <DeskRoute>
+              <InformationHubRoute />
+            </DeskRoute>
+          ),
+        },
+        {
+          path: 'desk/knowledge',
+          element: (
+            <DeskRoute>
+              <KnowledgeRoute />
+            </DeskRoute>
+          ),
+        },
+        {
+          path: 'desk/knowledge/:entryId',
+          element: (
+            <DeskRoute>
+              <KnowledgeDetailRoute />
+            </DeskRoute>
+          ),
+        },
+        {
+          path: 'desk/information/proposals',
+          element: (
+            <DeskRoute>
+              <ProposalPoolRoute />
+            </DeskRoute>
+          ),
+        },
+        {
+          path: 'desk/information/proposals/:proposalId',
+          element: (
+            <DeskRoute>
+              <ProposalDetailRoute />
+            </DeskRoute>
+          ),
+        },
+        {
+          path: 'knowledge',
+          element: (
+            <DeskRoute>
+              <KnowledgeRoute />
+            </DeskRoute>
+          ),
+        },
+        {
+          path: 'knowledge/:entryId',
+          element: (
+            <DeskRoute>
+              <KnowledgeDetailRoute />
+            </DeskRoute>
+          ),
+        },
+        {
+          path: 'information',
+          element: (
+            <DeskRoute>
+              <InformationHubRoute />
+            </DeskRoute>
+          ),
+        },
         {
           path: 'information/announcements',
           element: <Navigate to="/information?filter=official" replace />,
@@ -277,14 +430,34 @@ export const appRouter = createBrowserRouter(
           path: 'information/triage',
           element: <Navigate to="/information?filter=in_progress" replace />,
         },
-        { path: 'information/proposals', element: <ProposalPoolRoute /> },
-        { path: 'information/proposals/:proposalId', element: <ProposalDetailRoute /> },
+        {
+          path: 'information/proposals',
+          element: (
+            <DeskRoute>
+              <ProposalPoolRoute />
+            </DeskRoute>
+          ),
+        },
+        {
+          path: 'information/proposals/:proposalId',
+          element: (
+            <DeskRoute>
+              <ProposalDetailRoute />
+            </DeskRoute>
+          ),
+        },
         { path: 'growth', element: <GrowthRoute /> },
+        { path: 'organizations', element: <OrganizationsRoute /> },
+        { path: 'organizations/:organizationKey', element: <OrganizationsRoute /> },
+        { path: 'organizations/:organizationKey/:departmentKey', element: <OrganizationsRoute /> },
         { path: 'interest-groups', element: <Navigate to="/growth" replace /> },
         { path: 'clubs', element: <Navigate to="/growth" replace /> },
         { path: 'events', element: <EventsRoute /> },
         { path: 'events/student-festival', element: <FestivalRoute /> },
         { path: 'collections', element: <CollectionsRoute /> },
+        { path: 'collections/activities', element: <AllActivitiesRoute /> },
+        { path: 'collections/activities/manage', element: <ActivityManagementRoute /> },
+        { path: 'collections/activities/:source/:activityId', element: <ActivityWorkspaceRoute /> },
         { path: 'collections/registrations', element: <RegistrationGalleryRoute /> },
         { path: 'collections/mine', element: <MyRegistrationsRoute /> },
         { path: 'collections/showcase', element: <ShowcaseRoute /> },
@@ -300,7 +473,7 @@ export const appRouter = createBrowserRouter(
         { path: 'sports/:teamId', element: <SportsTeamDetailRoute /> },
         { path: 'finance', element: <FinanceRoute /> },
         { path: 'admin', element: <AdminRoute /> },
-        { path: '*', element: <Navigate to="/dashboard" replace /> },
+        { path: '*', element: <Navigate to="/community" replace /> },
       ],
     },
   ],

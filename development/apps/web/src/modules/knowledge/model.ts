@@ -18,7 +18,14 @@ export interface KnowledgeEntry {
   organizationId?: string | null;
   status: KnowledgeStatus;
   ownerUid: string;
+  createdAt?: string;
+  updatedAt?: string;
   scope: ScopeRef;
+}
+
+export function knowledgeUpdatedTime(entry: KnowledgeEntry): number {
+  const timestamp = Date.parse(entry.updatedAt || entry.maintainedAt || entry.createdAt || '');
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 export const typeLabels: Record<KnowledgeType, string> = {

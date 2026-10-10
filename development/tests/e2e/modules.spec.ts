@@ -7,7 +7,7 @@ const adminHeaders = {
 };
 
 const modules = [
-  ['/knowledge', '/knowledge', 'General'],
+  ['/knowledge', '/knowledge', '同学经验库'],
   ['/information', '/information/announcements', '公开信息'],
   ['/growth', '/growth', '个人成长档案'],
   ['/events', '/events', '無活动'],

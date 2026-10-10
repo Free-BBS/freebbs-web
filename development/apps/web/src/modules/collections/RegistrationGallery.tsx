@@ -2,12 +2,20 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import type { CollectionField, UnifiedRegistration } from '@freebbs-development/contracts';
+import { organizationById } from '@freebbs-development/contracts';
 import { ApiError, createApiClient, type ApiClient } from '../../core/api/client.js';
 import { formatCollectionDate, isRequired, numericRule } from './collection-utils.js';
 import { loadRegistrationCatalog, sourceLabels } from './source-adapters.js';
+import { LearningSurveyRegistration } from './LearningSurveyRegistration.js';
+import {
+  filterRegistrationsByOrganization,
+  parseRegistrationOrganizations,
+} from './registration-organization.js';
 
 export interface RegistrationGalleryProps {
   client?: Pick<ApiClient, 'request'>;
+  focusedItem?: UnifiedRegistration;
+  embedded?: boolean;
 }
 
 function FieldControl({
@@ -122,10 +130,16 @@ function FieldControl({
   );
 }
 
-export function RegistrationGallery({ client }: RegistrationGalleryProps) {
+export function RegistrationGallery({
+  client,
+  focusedItem,
+  embedded = false,
+}: RegistrationGalleryProps) {
   const defaultClient = useMemo(createApiClient, []);
   const api = client ?? defaultClient;
   const [search] = useSearchParams();
+  const includePast = search.get('includePast') === 'true';
+  const focus = focusedItem ? `${focusedItem.source}:${focusedItem.id}` : search.get('focus');
   const [items, setItems] = useState<UnifiedRegistration[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [learningUnavailable, setLearningUnavailable] = useState(false);
@@ -133,10 +147,25 @@ export function RegistrationGallery({ client }: RegistrationGalleryProps) {
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const organizationIds = parseRegistrationOrganizations(search.get('organization'));
+  const visibleItems = focusedItem
+    ? items
+    : filterRegistrationsByOrganization(items, organizationIds);
+  const allRegistrationsSearch = new URLSearchParams(search);
+  allRegistrationsSearch.delete('organization');
 
   useEffect(() => {
+    if (focusedItem) {
+      setItems([focusedItem]);
+      setState('ready');
+      setLearningUnavailable(false);
+      return;
+    }
     let active = true;
-    loadRegistrationCatalog(api as ApiClient).then(
+    setState('loading');
+    loadRegistrationCatalog(api as ApiClient, globalThis.fetch.bind(globalThis), {
+      includePast,
+    }).then(
       (result) => {
         if (active) {
           setItems(result.items);
@@ -151,9 +180,16 @@ export function RegistrationGallery({ client }: RegistrationGalleryProps) {
     return () => {
       active = false;
     };
-  }, [api]);
+  }, [api, includePast, focusedItem]);
+
+  useEffect(() => {
+    setExpanded(focus);
+    setAnswers({});
+    setFeedback(null);
+  }, [focus]);
 
   async function submit(item: UnifiedRegistration) {
+    if (item.status !== 'open' || item.registered || busy) return;
     setBusy(true);
     setFeedback(null);
     try {
@@ -205,21 +241,36 @@ export function RegistrationGallery({ client }: RegistrationGalleryProps) {
   }
 
   return (
-    <main className="collections-page collections-subpage">
-      <header className="collections-subpage-heading">
-        <div>
-          <Link to="/collections">← 返回萬事屋</Link>
-          <p>REGISTRATION HALL</p>
-          <h1>报名入口</h1>
-          <span>展开卡片，在原地读完信息并完成报名。</span>
-        </div>
-        <Link className="collections-wallet compact" to="/collections/mine">
-          我的报名
-        </Link>
-      </header>
+    <div className={`collections-page collections-subpage${embedded ? ' is-embedded' : ''}`}>
+      {!embedded ? (
+        <header className="collections-subpage-heading">
+          <div>
+            <Link to="/collections">← 返回萬事屋</Link>
+            <p>REGISTRATION HALL</p>
+            <h1>报名入口</h1>
+            <span>展开卡片，在原地读完信息并完成报名。</span>
+          </div>
+          <Link className="collections-wallet compact" to="/collections/mine">
+            我的报名
+          </Link>
+        </header>
+      ) : null}
       {learningUnavailable ? (
         <div className="collections-inline-note">
           学习端报名源暂时没有连接，其余报名仍可正常使用。
+        </div>
+      ) : null}
+      {!embedded && organizationIds.length ? (
+        <div className="registration-organization-filter">
+          <span>
+            组织报名 · {organizationIds.map((id) => organizationById(id).name).join('、')}
+          </span>
+          <span>{visibleItems.length} 项</span>
+          <Link
+            to={`/collections/registrations${allRegistrationsSearch.size ? `?${allRegistrationsSearch}` : ''}`}
+          >
+            查看全部报名
+          </Link>
         </div>
       ) : null}
       {feedback ? (
@@ -232,60 +283,63 @@ export function RegistrationGallery({ client }: RegistrationGalleryProps) {
         <p className="collections-empty">报名入口暂时无法加载，请稍后重试。</p>
       ) : null}
       <section className="registration-grid" aria-label="全部报名">
-        {items.map((item) => {
+        {state === 'ready' && visibleItems.length === 0 ? (
+          <p className="collections-empty">
+            这里还没有可展示的报名。可以查看全部报名，或稍后再来。
+          </p>
+        ) : null}
+        {visibleItems.map((item) => {
           const key = `${item.source}:${item.id}`;
           const open = expanded === key;
           return (
             <article className={`registration-card${open ? ' is-open' : ''}`} key={key}>
-              <button
-                className="registration-card-summary"
-                type="button"
-                aria-expanded={open}
-                onClick={() => {
-                  setExpanded(open ? null : key);
-                  setAnswers({});
-                  setFeedback(null);
-                }}
-              >
-                <span className={`registration-status is-${item.status}`}>
-                  {item.status === 'open'
-                    ? '开放中'
-                    : item.status === 'upcoming'
-                      ? '即将开放'
-                      : '已截止'}
-                </span>
-                <span className="collections-source">{sourceLabels[item.source]}</span>
-                <strong>{item.title}</strong>
-                <p>{item.description}</p>
-                <dl>
-                  <div>
-                    <dt>发起</dt>
-                    <dd>{item.organizer}</dd>
-                  </div>
-                  <div>
-                    <dt>截止</dt>
-                    <dd>{formatCollectionDate(item.closesAt)}</dd>
-                  </div>
-                  {item.location ? (
+              {!embedded ? (
+                <button
+                  className="registration-card-summary"
+                  type="button"
+                  aria-expanded={open}
+                  onClick={() => {
+                    setExpanded(open ? null : key);
+                    setAnswers({});
+                    setFeedback(null);
+                  }}
+                >
+                  <span className={`registration-status is-${item.status}`}>
+                    {item.status === 'open'
+                      ? '开放中'
+                      : item.status === 'upcoming'
+                        ? '即将开放'
+                        : '已截止'}
+                  </span>
+                  <span className="collections-source">{sourceLabels[item.source]}</span>
+                  <strong>{item.title}</strong>
+                  <p>{item.description}</p>
+                  <dl>
                     <div>
-                      <dt>地点</dt>
-                      <dd>{item.location}</dd>
+                      <dt>发起</dt>
+                      <dd>{item.organizer}</dd>
                     </div>
-                  ) : null}
-                </dl>
-                <span className="registration-expand-label">
-                  {open ? '收起详情' : '展开并报名'} <b aria-hidden="true">⌄</b>
-                </span>
-              </button>
+                    <div>
+                      <dt>截止</dt>
+                      <dd>{formatCollectionDate(item.closesAt)}</dd>
+                    </div>
+                    {item.location ? (
+                      <div>
+                        <dt>地点</dt>
+                        <dd>{item.location}</dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                  <span className="registration-expand-label">
+                    {open ? '收起详情' : item.status === 'closed' ? '查看详情' : '展开并报名'}{' '}
+                    <b aria-hidden="true">⌄</b>
+                  </span>
+                </button>
+              ) : null}
               {open ? (
                 <div className="registration-card-detail">
                   {item.source === 'learning_survey' ? (
-                    <div className="registration-external">
-                      <p>这项报名沿用学习端的原有表单与填写记录。</p>
-                      <a href={`/surveys?id=${encodeURIComponent(item.id)}`}>
-                        前往学习端完成报名 ↗
-                      </a>
-                    </div>
+                    <LearningSurveyRegistration surveyId={item.id} />
                   ) : (
                     <form
                       onSubmit={(event) => {
@@ -293,35 +347,48 @@ export function RegistrationGallery({ client }: RegistrationGalleryProps) {
                         void submit(item);
                       }}
                     >
-                      {item.schema?.fields.map((field) => (
-                        <label
-                          className="collection-field"
-                          key={field.id}
-                          htmlFor={`collection-field-${field.id}`}
-                        >
-                          <span>
-                            {field.label}
-                            {isRequired(field) ? <em>必填</em> : null}
-                          </span>
-                          {field.helpText && field.kind !== 'identity' ? (
-                            <small>{field.helpText}</small>
-                          ) : null}
-                          <FieldControl
-                            field={field}
-                            value={answers[field.id]}
-                            onChange={(value) =>
-                              setAnswers((current) => ({ ...current, [field.id]: value }))
-                            }
-                          />
-                        </label>
-                      ))}
+                      <fieldset
+                        disabled={item.status !== 'open' || item.registered || busy}
+                        style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}
+                      >
+                        {item.schema?.fields.map((field) => (
+                          <label
+                            className="collection-field"
+                            key={field.id}
+                            htmlFor={`collection-field-${field.id}`}
+                          >
+                            <span>
+                              {field.label}
+                              {isRequired(field) ? <em>必填</em> : null}
+                            </span>
+                            {field.helpText && field.kind !== 'identity' ? (
+                              <small>{field.helpText}</small>
+                            ) : null}
+                            <FieldControl
+                              field={field}
+                              value={answers[field.id]}
+                              onChange={(value) =>
+                                setAnswers((current) => ({ ...current, [field.id]: value }))
+                              }
+                            />
+                          </label>
+                        ))}
+                      </fieldset>
                       {!item.schema ? <p>确认报名后，活动负责人会通过站内信息联系你。</p> : null}
                       <button
                         className="collections-primary-action"
                         type="submit"
                         disabled={busy || item.status !== 'open' || item.registered}
                       >
-                        {item.registered ? '已报名' : busy ? '正在提交…' : '确认报名'}
+                        {item.status === 'closed'
+                          ? '报名已截止'
+                          : item.status === 'upcoming'
+                            ? '报名尚未开放'
+                            : item.registered
+                              ? '已报名'
+                              : busy
+                                ? '正在提交…'
+                                : '确认报名'}
                       </button>
                     </form>
                   )}
@@ -331,6 +398,6 @@ export function RegistrationGallery({ client }: RegistrationGalleryProps) {
           );
         })}
       </section>
-    </main>
+    </div>
   );
 }

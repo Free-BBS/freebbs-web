@@ -1,10 +1,12 @@
 import type {
+  DepartmentDefinition,
   CollectionField,
   CollectionOutput,
   CollectionRule,
   CollectionSchema,
   TitleValidationConfig,
 } from '@freebbs-development/contracts';
+import { departmentById } from '@freebbs-development/contracts';
 import type { BuilderSelection } from './model.js';
 
 const kindNames: Record<CollectionRule['kind'], string> = {
@@ -21,6 +23,7 @@ const kindNames: Record<CollectionRule['kind'], string> = {
 
 export interface InspectorPanelProps {
   schema: CollectionSchema;
+  publisherDepartments?: readonly DepartmentDefinition[];
   selection: BuilderSelection;
   onSchemaChange: (schema: CollectionSchema) => void;
   onFieldChange: (field: CollectionField) => void;
@@ -43,6 +46,7 @@ export function InspectorPanel({
   onOutputChange,
   onDeleteOutput,
   onDownloadOutput,
+  publisherDepartments = [],
 }: InspectorPanelProps) {
   const field =
     selection.type === 'field' ? schema.fields.find((item) => item.id === selection.id) : undefined;
@@ -89,6 +93,35 @@ export function InspectorPanel({
               onChange={(event) => onSchemaChange({ ...schema, title: event.target.value })}
             />
           </label>
+          {publisherDepartments.length || schema.publisherDepartmentId ? (
+            <label>
+              发布部门
+              <select
+                value={schema.publisherDepartmentId ?? ''}
+                onChange={(event) => {
+                  const next = { ...schema };
+                  if (event.target.value)
+                    next.publisherDepartmentId = event.target.value as DepartmentDefinition['id'];
+                  else delete next.publisherDepartmentId;
+                  onSchemaChange(next);
+                }}
+              >
+                <option value="">选择发布部门</option>
+                {schema.publisherDepartmentId &&
+                !publisherDepartments.some((item) => item.id === schema.publisherDepartmentId) ? (
+                  <option value={schema.publisherDepartmentId} disabled>
+                    {departmentById(schema.publisherDepartmentId)?.name ?? '原发布部门'}
+                    （当前不可发布）
+                  </option>
+                ) : null}
+                {publisherDepartments.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.organizationName} · {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label>
             开场说明
             <textarea
