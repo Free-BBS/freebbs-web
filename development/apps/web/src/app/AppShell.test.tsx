@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { UserContext } from '@freebbs-development/contracts';
 
 import { AppShell } from './AppShell.js';
+import { mainSiteHref } from './main-site-api.js';
 import { loadModuleStates } from './router.js';
 
 const { mockRequest, mockUseAuth } = vi.hoisted(() => ({
@@ -65,6 +66,48 @@ describe('module state loader', () => {
 });
 
 describe('AppShell', () => {
+  it.each([
+    ['/events', '/collections'],
+    ['/events/activity-night-run', '/collections'],
+    ['/events/student-festival', '/community'],
+  ])('keeps %s inside the visible navigation module %s', (route, target) => {
+    mockUseAuth.mockReturnValue(authenticatedAuth());
+    renderShell(route);
+    const navigation = screen.getByRole('navigation', { name: '主要导航' });
+    expect(navigation.querySelector('a[aria-current="page"]')).toHaveAttribute('href', target);
+  });
+  it('places one learning-site footer after main content with the shared support links', () => {
+    mockUseAuth.mockReturnValue(authenticatedAuth());
+    renderShell('/organizations', { children: <p>展厅内容</p> });
+    const footer = screen.getByRole('contentinfo');
+    const main = screen.getByRole('main');
+    expect(screen.getAllByRole('contentinfo')).toHaveLength(1);
+    expect(main.nextElementSibling).toBe(footer);
+    expect(footer).toHaveClass('site-footer', 'site-footer-compact');
+    const links = within(footer).getByRole('navigation', { name: '关于平台' });
+    expect(within(links).getByRole('link', { name: '关于 FREE BBS' })).toHaveAttribute(
+      'href',
+      mainSiteHref('/about'),
+    );
+    expect(within(links).getByRole('link', { name: 'FREE BBS 工作人员名单' })).toHaveAttribute(
+      'href',
+      mainSiteHref('/staff'),
+    );
+    expect(within(links).getByRole('link', { name: '清华大学电子系' })).toHaveAttribute(
+      'href',
+      'https://www.ee.tsinghua.edu.cn/',
+    );
+    expect(within(links).getByRole('link', { name: '清华大学电子系' })).toHaveAttribute(
+      'target',
+      '_blank',
+    );
+    expect(within(links).getByRole('link', { name: '电子系学生科协' })).toHaveAttribute(
+      'href',
+      'https://www.eesast.com',
+    );
+    expect(footer).toHaveTextContent('© 2026-2027 FREE BBS 工作组');
+    expect(footer).toHaveTextContent('京ICP备2025155858号-2');
+  });
   it('places the learning-site link in the desktop footer and at the end of mobile navigation', () => {
     mockUseAuth.mockReturnValue(authenticatedAuth());
     renderShell('/events');
@@ -128,7 +171,7 @@ describe('AppShell', () => {
     expect(within(navigation).getByRole('link', { name: '风采展示' })).not.toHaveAttribute(
       'aria-current',
     );
-    expect(screen.getByRole('link', { name: 'FREE BBS' })).toHaveAttribute('href', '/dashboard');
+    expect(screen.getByRole('link', { name: 'FREE BBS' })).toHaveAttribute('href', '/community');
     expect(screen.getByRole('img', { name: 'FREE BBS' })).toHaveAttribute(
       'src',
       expect.stringContaining('freebbs-emblem-v2.png'),

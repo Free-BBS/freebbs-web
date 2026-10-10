@@ -122,13 +122,13 @@ describe('EventsPage', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     renderPage({ request: request as DevelopmentApi['request'] });
-    expect(screen.getByRole('heading', { name: '無活动' })).toBeInTheDocument();
-    const festivalEntry = screen.getByRole('link', { name: /我要上学生节/ });
-    expect(festivalEntry).toHaveTextContent('我要上学生节');
+    expect(screen.getByRole('heading', { name: '萬事屋' })).toBeInTheDocument();
+    const festivalEntry = screen.getByRole('link', { name: /我要上电子系春晚/ });
+    expect(festivalEntry).toHaveTextContent('我要上电子系春晚');
     expect(festivalEntry).not.toHaveTextContent('「');
     expect(
       within(festivalEntry).getByRole('img', {
-        name: '小羊在学生节舞台演唱，台下小羊观众正在观看',
+        name: '小羊在春晚舞台演唱，台下小羊观众正在观看',
       }),
     ).toHaveAttribute('src', expect.stringContaining('student-festival-stage'));
     let card = await screen.findByRole('article', { name: '校园夜跑' });

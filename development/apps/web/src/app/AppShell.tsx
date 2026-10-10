@@ -9,10 +9,12 @@ import { useAuth } from '../core/auth/AuthProvider.js';
 import type { PresentationUser } from '../core/permissions/Can.js';
 import { useMainSiteTheme } from '../core/theme/useMainSiteTheme.js';
 import { MainSiteHeader } from './MainSiteHeader.js';
+import { MainSiteFooter } from './MainSiteFooter.js';
 import { useMainSiteTypography } from './main-site-typography.js';
 import {
   visibleModuleManifests,
   ORGANIZATIONS_NAVIGATION,
+  navigationPathname,
   type ModuleStateOverrides,
 } from './module-manifests.js';
 
@@ -57,6 +59,7 @@ function ModuleNavigation({
 }: ModuleNavigationProps) {
   const navigationRef = useRef<HTMLElement>(null);
   const location = useLocation();
+  const navigationPath = navigationPathname(location.pathname);
   const deskAliasActive = /^\/(?:information|knowledge)(?:\/|$)/.test(location.pathname);
 
   useEffect(() => {
@@ -89,8 +92,8 @@ function ModuleNavigation({
         )
         .map((module) => {
           const isActive =
-            location.pathname === module.route ||
-            location.pathname.startsWith(`${module.route}/`) ||
+            navigationPath === module.route ||
+            navigationPath.startsWith(`${module.route}/`) ||
             (module.route === '/desk' && deskAliasActive);
           const content = (
             <>
@@ -206,7 +209,7 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
       </a>
       <div className="app-shell">
         <aside className="sidebar" aria-label="发展平台侧栏">
-          <NavLink className="brand" to="/dashboard" aria-label="FREE BBS">
+          <NavLink className="brand" to="/community" aria-label="FREE BBS">
             <img className="brand-mark" src={freeBbsEmblem} alt="FREE BBS" />
             <span className="brand-name">FREE-BBS</span>
           </NavLink>
@@ -230,8 +233,9 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
           </div>
         </aside>
 
-        <div>
+        <div className="app-shell-main">
           <MainSiteHeader
+            client={auth.client}
             user={auth.user}
             authMode={auth.authMode}
             themeMode={theme.mode}
@@ -256,6 +260,7 @@ export function AppShell({ children, moduleStates }: AppShellProps) {
           <main className="page-content" id="main-content">
             {children ?? <Outlet />}
           </main>
+          <MainSiteFooter />
         </div>
       </div>
 

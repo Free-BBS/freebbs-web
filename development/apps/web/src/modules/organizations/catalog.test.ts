@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { ORGANIZATION_GALLERY, organizationRegistrationPath, findOrganization } from './catalog.js';
 
 describe('organization exhibition catalog', () => {
-  it('shows exactly the requested four organizations and uses the existing department hierarchy', () => {
+  it('shows all five organizations and uses the existing department hierarchy', () => {
     expect(ORGANIZATION_GALLERY.map((item) => item.name)).toEqual([
       '电子系学生会',
       '电子系团委',
       '电子系TMS分会',
       '电子系科协',
+      '电子系学生媒体中心',
     ]);
     expect(findOrganization('student_union')?.departments.map((item) => item.name)).toEqual([
       '文艺中心',
@@ -25,6 +26,22 @@ describe('organization exhibition catalog', () => {
         expect(department).not.toHaveProperty('positions');
       }
     }
+  });
+  it('exhibits the three media departments with an honest unscoped activity destination', () => {
+    const media = findOrganization('media_center');
+    expect(media).toBeDefined();
+    expect(media?.departments.map(({ name }) => name)).toEqual([
+      '创意设计部',
+      '影音策划部',
+      '新媒体与记者团部',
+    ]);
+    expect(media?.organizationIds).toEqual([]);
+    for (const department of media?.departments ?? []) {
+      expect(department.organizationIds).toEqual([]);
+      expect(department.focus.length).toBeGreaterThan(0);
+    }
+    expect(ORGANIZATION_GALLERY.flatMap(({ departments }) => departments)).toHaveLength(19);
+    expect(organizationRegistrationPath([])).toBe('/collections/registrations');
   });
   it('links using explicit activity organization identifiers without inventing department scopes', () => {
     const union = findOrganization('student_union')!;

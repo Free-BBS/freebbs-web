@@ -125,9 +125,9 @@ test('square festival entry retains consent and review before appearing in the p
 }) => {
   test.setTimeout(60000);
   await page.goto('./community');
-  await page.getByRole('tab', { name: '学生节舞台' }).click();
-  await page.getByRole('link', { name: '我要上学生节', exact: true }).click();
-  const title = `广场学生节作品-${Date.now()}`;
+  await page.getByRole('tab', { name: '电子系春晚' }).click();
+  await page.getByRole('link', { name: '我要上电子系春晚', exact: true }).click();
+  const title = `广场电子系春晚作品-${Date.now()}`;
   await page.getByLabel('作品名称', { exact: true }).fill(title);
   await page.getByLabel('作品介绍', { exact: true }).fill('一起听听校园里的声音。');
   await page
@@ -155,7 +155,7 @@ test('square festival entry retains consent and review before appearing in the p
   await expect(work).toContainText('展示中');
   await page.getByLabel('Demo user').selectOption('demo-student');
   await page.goto('./community');
-  await page.getByRole('tab', { name: '学生节舞台' }).click();
+  await page.getByRole('tab', { name: '电子系春晚' }).click();
   await expect(page.locator('.community-card').filter({ hasText: title })).toBeVisible();
 });
 

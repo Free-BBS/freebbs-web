@@ -1,0 +1,172 @@
+.learning-registration {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+.learning-registration h3,
+.learning-registration h4,
+.learning-registration p {
+  margin: 0;
+}
+.learning-registration-heading {
+  display: grid;
+  gap: 10px;
+}
+.learning-registration-heading > span {
+  width: fit-content;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 4px 10px;
+  color: var(--color-active);
+  font-size: 12px;
+}
+.learning-registration-heading h3 {
+  font-size: 20px;
+  line-height: 1.5;
+}
+.learning-registration small,
+.learning-registration-privacy,
+.learning-registration-receipt p {
+  color: var(--color-muted);
+  line-height: 1.65;
+}
+.learning-registration form {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+}
+.learning-registration-fields,
+.learning-registration-question {
+  display: grid;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  gap: 10px;
+}
+.learning-registration-fields {
+  gap: 24px;
+}
+.learning-registration-field {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.learning-registration-question legend {
+  padding: 0;
+  margin-bottom: 10px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+.learning-registration input[type='text'],
+.learning-registration input[type='email'],
+.learning-registration textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1.6;
+}
+.learning-registration textarea {
+  resize: vertical;
+  min-height: 120px;
+  max-height: 320px;
+}
+.learning-registration input:focus-visible,
+.learning-registration textarea:focus-visible,
+.learning-registration button:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+}
+.learning-registration-choices {
+  display: grid;
+  gap: 8px;
+}
+.learning-registration-choices label {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  line-height: 1.6;
+}
+.learning-registration-choices input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 4px 0 0;
+  accent-color: var(--color-active);
+}
+.learning-registration button {
+  justify-self: start;
+  max-width: 100%;
+  padding: 10px 15px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+.learning-registration button.collections-primary-action {
+  background: var(--action-primary);
+  color: var(--action-primary-text);
+  border-color: transparent;
+}
+.learning-registration button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.learning-registration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.learning-registration-receipt,
+.learning-registration-lookup,
+.learning-registration-state,
+.learning-registration-result {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 18px;
+  background: var(--surface-muted);
+}
+.learning-registration-receipt code {
+  display: block;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--surface-raised);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.learning-registration-feedback {
+  border-left: 3px solid var(--color-warning);
+  padding: 10px 12px;
+  background: var(--surface-muted);
+  line-height: 1.65;
+}
+@media (max-width: 480px) {
+  .learning-registration-receipt,
+  .learning-registration-lookup,
+  .learning-registration-state,
+  .learning-registration-result {
+    padding: 14px;
+  }
+}

@@ -138,6 +138,6 @@ describe('DailyDiscovery', () => {
     );
     view.rerender(<FreeBbsMapAction url="" />);
     await userEvent.click(screen.getByRole('button', { name: /frEE bbs MAP/ }));
-    expect(screen.getByRole('dialog')).toHaveTextContent('小程序尚未发布');
+    expect(screen.getByRole('dialog')).toHaveTextContent('请在微信中搜索「frEE bbs MAP」');
   });
 });

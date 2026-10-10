@@ -1,3 +1,6 @@
+import { departmentForRoute } from '@freebbs-development/contracts';
+import type { ApiClient } from '../../core/api/client.js';
+import { DepartmentHomepage } from './DepartmentHomepage.js';
 import { Link } from 'react-router-dom';
 import { ORGANIZATION_GALLERY, findOrganization, organizationRegistrationPath } from './catalog.js';
 import { OrganizationMark } from './OrganizationMark.js';
@@ -6,10 +9,12 @@ export function OrganizationsPage({
   organizationKey,
   departmentKey,
   enabled = true,
+  client,
 }: {
   organizationKey?: string;
   departmentKey?: string;
   enabled?: boolean;
+  client?: Pick<ApiClient, 'request'>;
 }) {
   if (!enabled)
     return (
@@ -25,6 +30,33 @@ export function OrganizationsPage({
         <h2>没有找到这个展区</h2>
         <p>可以从组织首页重新开始浏览。</p>
         <Link to="/organizations">返回风采展示</Link>
+      </section>
+    );
+
+  const canonicalDepartment =
+    organization && (department || organization.key === 'tms')
+      ? departmentForRoute(organization.key, department?.key ?? 'position')
+      : undefined;
+  if (canonicalDepartment)
+    return (
+      <section className={`module-page organization-page organization-page--${organization!.key}`}>
+        <nav className="organization-breadcrumb" aria-label="展厅位置">
+          <Link to="/organizations">风采展示</Link>
+          <span aria-hidden="true">/</span>
+          <Link to={`/organizations/${organization!.key}`}>{organization!.name}</Link>
+          {department ? (
+            <>
+              <span aria-hidden="true">/</span>
+              <span aria-current="page">{department.name}</span>
+            </>
+          ) : null}
+        </nav>
+        <DepartmentHomepage
+          key={canonicalDepartment.id}
+          department={canonicalDepartment}
+          introduction={department?.introduction ?? organization!.introduction}
+          client={client}
+        />
       </section>
     );
 
@@ -121,106 +153,58 @@ export function OrganizationsPage({
                       <span key={focus}>{focus}</span>
                     ))}
                   </div>
+                  {!organization.organizationIds.length ? (
+                    <p className="organization-scope-note">
+                      目前展示全部活动报名，媒体中心相关活动请查看活动说明。
+                    </p>
+                  ) : null}
                   <Link
                     className="organization-primary-link"
                     to={organizationRegistrationPath(organization.organizationIds)}
                   >
-                    查看组织报名 <span aria-hidden="true">↗</span>
+                    {organization.organizationIds.length ? '查看组织报名' : '查看活动报名'}{' '}
+                    <span aria-hidden="true">↗</span>
                   </Link>
                 </>
               ) : null}
             </div>
           </header>
-          {department ? (
-            <div className="organization-detail-grid">
-              <section className="organization-panel">
-                <p className="organization-eyebrow">一起协作</p>
-                <h3>部门日常</h3>
-                <p>从这些方向出发，在共同参与中交流想法、积累经历。</p>
-                <div className="organization-focus">
-                  {department.focus.map((focus) => (
-                    <span key={focus}>{focus}</span>
+          <>
+            {organization.departments.length ? (
+              <section className="organization-department-section">
+                <header>
+                  <h3>走进各部门</h3>
+                  <span>选择一个部门，了解它的日常。</span>
+                </header>
+                <div className="organization-department-grid">
+                  {organization.departments.map((item, index) => (
+                    <Link
+                      className="organization-department-card"
+                      key={item.key}
+                      to={`/organizations/${organization.key}/${item.key}`}
+                      aria-label={`了解${item.name}`}
+                    >
+                      <span className="organization-department-index" aria-hidden="true">
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <div>
+                        <h4>{item.name}</h4>
+                        <p>{item.introduction}</p>
+                        <div className="organization-focus">
+                          {item.focus.map((focus) => (
+                            <span key={focus}>{focus}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <span className="organization-department-arrow" aria-hidden="true">
+                        ↗
+                      </span>
+                    </Link>
                   ))}
                 </div>
-                <p className="organization-small-note">
-                  具体工作与活动安排，请以组织发布的通知为准。
-                </p>
               </section>
-              <section className="organization-panel organization-activity-panel">
-                <p className="organization-eyebrow">从了解，到参与</p>
-                <h3>在萬事屋相遇</h3>
-                <p>查看相关活动与表单，展开报名卡片即可了解详情。</p>
-                {department.sharedActivityScope ? (
-                  <p className="organization-scope-note">
-                    目前展示{organization.name}的报名，具体承办组请查看活动说明。
-                  </p>
-                ) : null}
-                <Link
-                  className="organization-primary-link"
-                  to={organizationRegistrationPath(department.organizationIds)}
-                >
-                  查看相关报名 <span aria-hidden="true">↗</span>
-                </Link>
-                <Link
-                  className="organization-secondary-link"
-                  to={`/organizations/${organization.key}`}
-                >
-                  浏览其他部门
-                </Link>
-              </section>
-            </div>
-          ) : (
-            <>
-              {organization.departments.length ? (
-                <section className="organization-department-section">
-                  <header>
-                    <h3>走进各部门</h3>
-                    <span>选择一个部门，了解它的日常。</span>
-                  </header>
-                  <div className="organization-department-grid">
-                    {organization.departments.map((item, index) => (
-                      <Link
-                        className="organization-department-card"
-                        key={item.key}
-                        to={`/organizations/${organization.key}/${item.key}`}
-                        aria-label={`了解${item.name}`}
-                      >
-                        <span className="organization-department-index" aria-hidden="true">
-                          {String(index + 1).padStart(2, '0')}
-                        </span>
-                        <div>
-                          <h4>{item.name}</h4>
-                          <p>{item.introduction}</p>
-                          <div className="organization-focus">
-                            {item.focus.map((focus) => (
-                              <span key={focus}>{focus}</span>
-                            ))}
-                          </div>
-                        </div>
-                        <span className="organization-department-arrow" aria-hidden="true">
-                          ↗
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                </section>
-              ) : (
-                <section className="organization-panel organization-tms-panel">
-                  <div>
-                    <p className="organization-eyebrow">交流 · 学习 · 行动</p>
-                    <h3>在共同参与中，加深了解。</h3>
-                    <p>了解近期学习交流与活动安排，在萬事屋查看分会发布的报名。</p>
-                  </div>
-                  <Link
-                    className="organization-primary-link"
-                    to={organizationRegistrationPath(organization.organizationIds)}
-                  >
-                    查看相关报名 <span aria-hidden="true">↗</span>
-                  </Link>
-                </section>
-              )}
-            </>
-          )}
+            ) : null}
+          </>
         </>
       )}
     </section>

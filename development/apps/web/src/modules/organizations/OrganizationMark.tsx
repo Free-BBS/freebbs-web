@@ -2,6 +2,7 @@ import studentUnionScene from '../../assets/organizations/sheep-student-union.we
 import youthLeagueScene from '../../assets/organizations/sheep-youth-league.webp';
 import tmsScene from '../../assets/organizations/sheep-tms.webp';
 import scienceAssociationScene from '../../assets/organizations/sheep-science-association.webp';
+import mediaCenterScene from '../../assets/organizations/sheep-media-center.webp';
 
 const organizationScenes: Record<string, { source: string; description: string }> = {
   student_union: {
@@ -19,6 +20,10 @@ const organizationScenes: Record<string, { source: string; description: string }
   science_association: {
     source: scienceAssociationScene,
     description: '科协小羊正在动手调试机器人',
+  },
+  media_center: {
+    source: mediaCenterScene,
+    description: '媒中小羊正在用相机拍摄校园生活',
   },
 };
 

@@ -1,3 +1,4 @@
+import { canReadPublishedActivity } from '../collections/registrations.js';
 import type { ScopeRef } from '@freebbs-development/contracts';
 
 import { recordAuditEvent } from '../../core/audit/audit-service.js';
@@ -62,7 +63,7 @@ function canManage(actor: AuthorizationContext, record: ActivityRecord): boolean
 
 function canView(actor: AuthorizationContext, record: ActivityRecord): boolean {
   return (
-    (record.status === 'published' && allowed(actor, 'events.read', 'activity', record.scope)) ||
+    canReadPublishedActivity(actor, record) ||
     canManage(actor, record) ||
     (record.status === 'pending' && allowed(actor, 'events.approve', 'activity', record.scope)) ||
     (record.technicalSupportStatus === 'requested' &&

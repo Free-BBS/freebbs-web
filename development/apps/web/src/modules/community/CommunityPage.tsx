@@ -419,7 +419,7 @@ export function CommunityPage({ client, initialPostId }: CommunityPageProps) {
             href="/development/events/student-festival"
           >
             <CommunityIcon name="stage" />
-            我要上学生节
+            我要上电子系春晚
           </a>
         ) : channel === 'rights' ? (
           <a
@@ -485,7 +485,7 @@ export function CommunityPage({ client, initialPostId }: CommunityPageProps) {
               <CommunityIcon name="stage" />
               <div>
                 <h2>把舞台留给你的热爱</h2>
-                <p>在学生节投稿页提交作品，确认公开展示意愿；审核通过后，作品会出现在这里。</p>
+                <p>在电子系春晚投稿页提交作品，确认公开展示意愿；审核通过后，作品会出现在这里。</p>
               </div>
             </section>
           ) : null}
@@ -570,7 +570,7 @@ export function CommunityPage({ client, initialPostId }: CommunityPageProps) {
             <a href="/development/events/student-festival">
               <CommunityIcon name="stage" />
               <span>
-                <strong>学生节舞台</strong>
+                <strong>电子系春晚</strong>
                 <small>让大家看见你的热爱</small>
               </span>
               <CommunityIcon name="arrow" />

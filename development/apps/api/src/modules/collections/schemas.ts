@@ -1,4 +1,8 @@
-import { SOCIAL_ORGANIZATION_IDS } from '@freebbs-development/contracts';
+import {
+  SOCIAL_ORGANIZATION_IDS,
+  departmentById,
+  type DepartmentId,
+} from '@freebbs-development/contracts';
 import { z } from 'zod';
 
 const id = z.string().trim().min(1).max(128);
@@ -65,6 +69,11 @@ export const collectionFieldSchema = z
 
 export const collectionSchema = z
   .object({
+    publisherDepartmentId: z
+      .string()
+      .refine((id) => departmentById(id) !== undefined)
+      .transform((id) => id as DepartmentId)
+      .optional(),
     title: z.string().trim().min(1).max(200),
     description: z.string().trim().max(5_000),
     fields: z.array(collectionFieldSchema).min(1).max(100),

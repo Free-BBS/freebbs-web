@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-
-import type { AuthMode } from '../core/api/client.js';
+import type {
+  ActivityNotification,
+  ActivityNotificationInbox,
+} from '@freebbs-development/contracts';
+import type { AuthMode, ApiClient } from '../core/api/client.js';
 import { mainSiteHref, requestMainSite } from './main-site-api.js';
-
 interface NotificationItem {
   id: string;
   title: string;
@@ -10,149 +12,257 @@ interface NotificationItem {
   link: string;
   readAt: string | null;
   createdAt: string;
+  channel?: 'development';
+  source?: ActivityNotification['source'];
+  activityId?: string;
 }
-
 interface NotificationInbox {
   notifications: NotificationItem[];
   unreadCount: number;
   nextCursor: string | null;
 }
-
 function safeLink(link: string): string {
   if (!link.startsWith('/') || link.startsWith('//') || /[\\\s]/.test(link)) return '';
   return new URL(link, window.location.origin).origin === window.location.origin ? link : '';
 }
-
-function messageFrom(error: unknown): string {
+function messageFrom(error: unknown) {
   return error instanceof Error ? error.message : '通知加载失败，请稍后重试。';
 }
-
+function sorted(items: NotificationItem[]) {
+  return [...new Map(items.map((n) => [`${n.channel ?? 'main'}:${n.id}`, n])).values()].sort(
+    (a, b) => b.createdAt.localeCompare(a.createdAt),
+  );
+}
 export function MainSiteNotifications({
   authMode,
   userUid,
+  client,
 }: {
   authMode: AuthMode;
   userUid: string;
+  client?: Pick<ApiClient, 'request'>;
 }) {
   const [open, setOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
+  const [developmentCursor, setDevelopmentCursor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const busyRef = useRef(false);
-
+  const generation = useRef(0);
+  const counts = useRef({ main: 0, development: 0 });
   useEffect(() => {
+    const activeGeneration = ++generation.current;
+    let alive = true;
     setOpen(false);
     setUnreadCount(0);
     setItems([]);
-    if (authMode !== 'main') return;
-    let alive = true;
+    setCursor(null);
+    setDevelopmentCursor(null);
+    setMessage('');
+    setBusy(false);
+    busyRef.current = false;
+    counts.current = { main: 0, development: 0 };
     const refresh = async () => {
       if (document.hidden) return;
-      try {
-        const payload = await requestMainSite<{ unreadCount: number }>(
-          '/notifications/unread-count',
+      const results = await Promise.allSettled([
+        authMode === 'main'
+          ? requestMainSite<{ unreadCount: number }>('/notifications/unread-count')
+          : Promise.resolve(null),
+        client
+          ? client.request<ActivityNotificationInbox>('/events/notifications')
+          : Promise.resolve(null),
+      ]);
+      if (!alive || generation.current !== activeGeneration) return;
+      const [main, development] = results;
+      if (main.status === 'fulfilled' && main.value && Number.isFinite(main.value.unreadCount))
+        counts.current.main = main.value.unreadCount;
+      if (
+        development.status === 'fulfilled' &&
+        development.value &&
+        Array.isArray(development.value.notifications)
+      ) {
+        counts.current.development = development.value.unreadCount;
+        setItems((current) =>
+          sorted([
+            ...current.filter((n) => n.channel !== 'development'),
+            ...development.value!.notifications.map((n) => ({
+              ...n,
+              channel: 'development' as const,
+            })),
+          ]),
         );
-        if (alive) setUnreadCount(payload.unreadCount);
-      } catch {
-        // The bell remains usable; opening it shows the actionable error.
+        setDevelopmentCursor(development.value.nextCursor);
       }
+      setUnreadCount(counts.current.main + counts.current.development);
     };
     void refresh();
-    const interval = window.setInterval(() => void refresh(), 30_000);
+    const interval = window.setInterval(() => void refresh(), 30000);
     window.addEventListener('focus', refresh);
+    window.addEventListener('freebbs-development-notifications-changed', refresh);
     return () => {
       alive = false;
+      generation.current++;
       window.clearInterval(interval);
       window.removeEventListener('focus', refresh);
+      window.removeEventListener('freebbs-development-notifications-changed', refresh);
     };
-  }, [authMode, userUid]);
-
+  }, [authMode, userUid, client]);
   useEffect(() => {
     if (!open) return;
     closeRef.current?.focus();
-    const onOutside = (event: MouseEvent) => {
-      if (event.target instanceof Node && !rootRef.current?.contains(event.target)) setOpen(false);
+    const outside = (e: MouseEvent) => {
+      if (e.target instanceof Node && !rootRef.current?.contains(e.target)) setOpen(false);
     };
-    const onEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+    const escape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
         setOpen(false);
-        event.preventDefault();
+        e.preventDefault();
       }
     };
-    document.addEventListener('mousedown', onOutside);
-    document.addEventListener('keydown', onEscape);
+    document.addEventListener('mousedown', outside);
+    document.addEventListener('keydown', escape);
     return () => {
-      document.removeEventListener('mousedown', onOutside);
-      document.removeEventListener('keydown', onEscape);
+      document.removeEventListener('mousedown', outside);
+      document.removeEventListener('keydown', escape);
     };
   }, [open]);
-
   async function loadInbox(append = false) {
-    if (authMode !== 'main' || busyRef.current) return;
+    if (busyRef.current) return;
+    const activeGeneration = generation.current;
     busyRef.current = true;
     setBusy(true);
     setMessage('正在加载…');
-    try {
-      const query = append && cursor ? `?before=${encodeURIComponent(cursor)}` : '';
-      const payload = await requestMainSite<NotificationInbox>(`/notifications${query}`);
-      setItems((current) =>
-        append ? [...current, ...payload.notifications] : payload.notifications,
+    const results = await Promise.allSettled([
+      authMode === 'main' && (!append || cursor)
+        ? requestMainSite<NotificationInbox>(
+            `/notifications${append && cursor ? '?before=' + encodeURIComponent(cursor) : ''}`,
+          )
+        : Promise.resolve(null),
+      client && (!append || developmentCursor)
+        ? client.request<ActivityNotificationInbox>(
+            `/events/notifications${append && developmentCursor ? '?before=' + encodeURIComponent(developmentCursor) : ''}`,
+          )
+        : Promise.resolve(null),
+    ]);
+    if (generation.current !== activeGeneration) return;
+    const loaded: NotificationItem[] = [];
+    const errors: string[] = [];
+    const [main, development] = results;
+    if (main.status === 'fulfilled' && main.value && Array.isArray(main.value.notifications)) {
+      loaded.push(...main.value.notifications);
+      setCursor(main.value.nextCursor);
+      counts.current.main = main.value.unreadCount;
+    } else if (main.status === 'rejected') errors.push(messageFrom(main.reason));
+    if (
+      development.status === 'fulfilled' &&
+      development.value &&
+      Array.isArray(development.value.notifications)
+    ) {
+      loaded.push(
+        ...development.value.notifications.map((n) => ({ ...n, channel: 'development' as const })),
       );
-      setCursor(payload.nextCursor);
-      setUnreadCount(payload.unreadCount);
-      setMessage(payload.notifications.length || append ? '' : '暂时没有通知');
-    } catch (error) {
-      setMessage(messageFrom(error));
-    } finally {
-      busyRef.current = false;
-      setBusy(false);
-    }
+      setDevelopmentCursor(development.value.nextCursor);
+      counts.current.development = development.value.unreadCount;
+    } else if (development.status === 'rejected') errors.push(messageFrom(development.reason));
+    const failedMain = main.status === 'rejected';
+    const failedDevelopment = development.status === 'rejected';
+    setItems((current) =>
+      sorted(
+        append
+          ? [...current, ...loaded]
+          : [
+              ...current.filter((n) =>
+                n.channel === 'development' ? failedDevelopment : failedMain,
+              ),
+              ...loaded,
+            ],
+      ),
+    );
+    setUnreadCount(counts.current.main + counts.current.development);
+    setMessage(errors.join('；') || (loaded.length || append ? '' : '暂时没有通知'));
+    busyRef.current = false;
+    setBusy(false);
   }
-
   async function markRead(item: NotificationItem) {
+    const activeGeneration = generation.current;
     const link = safeLink(item.link);
+    const channel = item.channel === 'development' ? 'development' : 'main';
     try {
       if (!item.readAt) {
-        await requestMainSite(`/notifications/${encodeURIComponent(item.id)}/read`, {
-          method: 'POST',
-        });
+        if (channel === 'development')
+          await client?.request(
+            `/events/notifications/${item.source}/${encodeURIComponent(item.activityId ?? '')}/${encodeURIComponent(item.id)}/read`,
+            { method: 'POST' },
+          );
+        else
+          await requestMainSite(`/notifications/${encodeURIComponent(item.id)}/read`, {
+            method: 'POST',
+          });
+        if (generation.current !== activeGeneration) return;
         setItems((current) =>
-          current.map((entry) =>
-            entry.id === item.id ? { ...entry, readAt: new Date().toISOString() } : entry,
+          current.map((n) =>
+            n.id === item.id && n.channel === item.channel
+              ? { ...n, readAt: new Date().toISOString() }
+              : n,
           ),
         );
-        setUnreadCount((count) => Math.max(0, count - 1));
+        counts.current[channel] = Math.max(0, counts.current[channel] - 1);
+        setUnreadCount(counts.current.main + counts.current.development);
       }
-      if (link) window.location.assign(mainSiteHref(link));
+      if (generation.current !== activeGeneration) return;
+      if (link) window.location.assign(channel === 'development' ? link : mainSiteHref(link));
     } catch (error) {
-      setMessage(messageFrom(error));
+      if (generation.current === activeGeneration) setMessage(messageFrom(error));
     }
   }
-
   async function markAllRead() {
-    if (!unreadCount) return;
+    if (!unreadCount || busyRef.current) return;
+    const activeGeneration = generation.current;
     setBusy(true);
-    try {
-      await requestMainSite('/notifications/read-all', { method: 'POST' });
-      setItems((current) =>
-        current.map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() })),
-      );
-      setUnreadCount(0);
-      setMessage('');
-    } catch (error) {
-      setMessage(messageFrom(error));
-    } finally {
-      setBusy(false);
-    }
+    busyRef.current = true;
+    const results = await Promise.allSettled([
+      authMode === 'main'
+        ? requestMainSite('/notifications/read-all', { method: 'POST' })
+        : Promise.resolve(null),
+      client
+        ? client.request('/events/notifications/read-all', { method: 'POST' })
+        : Promise.resolve(null),
+    ]);
+    if (generation.current !== activeGeneration) return;
+    const succeeded = {
+      main: results[0].status === 'fulfilled',
+      development: results[1].status === 'fulfilled',
+    };
+    const now = new Date().toISOString();
+    setItems((current) =>
+      current.map((n) =>
+        succeeded[n.channel === 'development' ? 'development' : 'main']
+          ? { ...n, readAt: n.readAt ?? now }
+          : n,
+      ),
+    );
+    if (succeeded.main) counts.current.main = 0;
+    if (succeeded.development) counts.current.development = 0;
+    setUnreadCount(counts.current.main + counts.current.development);
+    setMessage(
+      results
+        .filter((r) => r.status === 'rejected')
+        .map((r) => messageFrom(r.reason))
+        .join('；'),
+    );
+    setBusy(false);
+    busyRef.current = false;
   }
-
   const label =
-    authMode === 'main' ? (unreadCount ? `通知，${unreadCount} 条未读` : '通知，无未读') : '通知';
-
+    authMode === 'main' || client
+      ? unreadCount
+        ? `通知，${unreadCount} 条未读`
+        : '通知，无未读'
+      : '通知';
   return (
     <div className="main-site-notifications" ref={rootRef}>
       <button
@@ -168,7 +278,7 @@ export function MainSiteNotifications({
             return;
           }
           setOpen(true);
-          if (authMode === 'main') void loadInbox();
+          void loadInbox();
         }}
       >
         <svg
@@ -196,7 +306,7 @@ export function MainSiteNotifications({
         >
           <header className="main-site-notification-panel-header">
             <h2>通知</h2>
-            {authMode === 'main' ? (
+            {authMode === 'main' || client ? (
               <button
                 type="button"
                 disabled={!unreadCount || busy}
@@ -214,57 +324,49 @@ export function MainSiteNotifications({
               ×
             </button>
           </header>
-          {authMode === 'demo' ? (
-            <p className="main-site-notification-message">请登录主站账号后查看通知。</p>
-          ) : (
-            <>
-              {message ? (
-                <p className="main-site-notification-message" role="status">
-                  {message}
-                </p>
-              ) : null}
-              <div className="main-site-notification-list">
-                {items.map((item) => {
-                  const date = new Date(item.createdAt);
-                  const link = safeLink(item.link);
-                  return (
-                    <article
-                      className={`main-site-notification-item${item.readAt ? '' : ' is-unread'}`}
-                      key={item.id}
-                    >
-                      <button type="button" onClick={() => void markRead(item)}>
-                        <strong>{item.title}</strong>
-                        <span>{item.body}</span>
-                        <time
-                          dateTime={Number.isNaN(date.getTime()) ? undefined : date.toISOString()}
-                        >
-                          {Number.isNaN(date.getTime())
-                            ? ''
-                            : date.toLocaleString('zh-CN', {
-                                month: 'numeric',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                        </time>
-                        <small>{link ? '查看详情 →' : item.readAt ? '已读' : '标为已读'}</small>
-                      </button>
-                    </article>
-                  );
-                })}
-              </div>
-              {cursor ? (
-                <button
-                  className="main-site-notification-more"
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void loadInbox(true)}
+          {message ? (
+            <p className="main-site-notification-message" role="status">
+              {message}
+            </p>
+          ) : null}
+          <div className="main-site-notification-list">
+            {items.map((item) => {
+              const date = new Date(item.createdAt);
+              const link = safeLink(item.link);
+              return (
+                <article
+                  className={`main-site-notification-item${item.readAt ? '' : ' is-unread'}`}
+                  key={`${item.channel ?? 'main'}:${item.id}`}
                 >
-                  加载更多
-                </button>
-              ) : null}
-            </>
-          )}
+                  <button type="button" onClick={() => void markRead(item)}>
+                    <strong>{item.title}</strong>
+                    <span>{item.body}</span>
+                    <time dateTime={Number.isNaN(date.getTime()) ? undefined : date.toISOString()}>
+                      {Number.isNaN(date.getTime())
+                        ? ''
+                        : date.toLocaleString('zh-CN', {
+                            month: 'numeric',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                    </time>
+                    <small>{link ? '查看详情 →' : item.readAt ? '已读' : '标为已读'}</small>
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+          {cursor || developmentCursor ? (
+            <button
+              className="main-site-notification-more"
+              type="button"
+              disabled={busy}
+              onClick={() => void loadInbox(true)}
+            >
+              加载更多
+            </button>
+          ) : null}
         </section>
       ) : null}
     </div>

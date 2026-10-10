@@ -34,20 +34,26 @@ test.beforeAll(async ({ request }) => {
   }
 });
 
-test('organization exhibition opens departments and filters the real registration catalog', async ({
-  page,
-}) => {
+test('organization exhibition opens exact department activity associations', async ({ page }) => {
   await page.goto('./organizations');
-  await expect(page.getByRole('link', { name: /^走进电子系/ })).toHaveCount(4);
+  await expect(page.getByRole('link', { name: /^走进电子系/ })).toHaveCount(5);
   await page.getByRole('link', { name: '走进电子系学生会', exact: true }).click();
+  await expect(page.getByRole('link', { name: '查看组织报名', exact: true })).toHaveAttribute(
+    'href',
+    '/development/collections/registrations?organization=arts_center%2Csports_center%2Cliaison_center%2Crights_development_center',
+  );
   await page.getByRole('link', { name: '了解文艺中心', exact: true }).click();
   await expect(page.getByRole('heading', { name: '文艺中心', exact: true })).toBeVisible();
-  await page.getByRole('link', { name: '查看相关报名', exact: true }).click();
-  await expect(page).toHaveURL(/\/collections\/registrations\?organization=arts_center$/);
-  await expect(page.locator('.registration-organization-filter')).toContainText('文艺中心');
-  await expect(page.locator('.registration-grid')).not.toContainText('新生社群见面会');
-  await page.getByRole('link', { name: '查看全部报名', exact: true }).click();
-  await expect(page.locator('.registration-grid')).toContainText('新生社群见面会');
+  await expect(page.getByRole('region', { name: '相关活动' })).toBeVisible();
+  await expect(page.getByRole('region', { name: '相关活动' })).not.toContainText('新生社群见面会');
+  await page.getByRole('button', { name: '以往活动', exact: true }).click();
+  await expect(page.getByRole('button', { name: '以往活动', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.goto('./organizations/media_center/creative');
+  await expect(page.getByText('暂无活跃活动', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '查看活动报名', exact: true })).toHaveCount(0);
 });
 
 test('growth filters work on account records and local sports examples are visible', async ({
@@ -105,6 +111,8 @@ for (const width of [390, 768, 1440]) {
       for (const route of [
         'organizations',
         'organizations/student_union',
+        'organizations/media_center',
+        'organizations/media_center/creative',
         'organizations/youth_league/freshman',
         'growth',
         'sports/matches',

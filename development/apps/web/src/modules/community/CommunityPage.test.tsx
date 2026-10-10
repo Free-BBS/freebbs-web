@@ -216,8 +216,8 @@ describe('CommunityPage', () => {
     });
     const user = userEvent.setup();
     render(<CommunityPage client={{ request } as unknown as ApiClient} />);
-    await user.click(screen.getByRole('tab', { name: '学生节舞台' }));
-    expect(screen.getByRole('link', { name: '我要上学生节' })).toHaveAttribute(
+    await user.click(screen.getByRole('tab', { name: '电子系春晚' }));
+    expect(screen.getByRole('link', { name: '我要上电子系春晚' })).toHaveAttribute(
       'href',
       '/development/events/student-festival',
     );
@@ -241,7 +241,7 @@ describe('CommunityPage', () => {
     render(<CommunityPage client={{ request } as unknown as ApiClient} />);
 
     expect(await screen.findByRole('heading', { name: '無界广场' })).toBeInTheDocument();
-    for (const label of ['综合', '校园日常', '新生许愿池', '学生节舞台', '生权反馈']) {
+    for (const label of ['综合', '校园日常', '新生许愿池', '电子系春晚', '生权反馈']) {
       expect(screen.getByRole('tab', { name: label })).toBeInTheDocument();
     }
     expect(await screen.findByRole('button', { name: '打开想要滑冰工作坊' })).toBeInTheDocument();
