@@ -391,9 +391,9 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
 .course-material-header h1 {
   margin: 0;
   color: var(--bbs-shell-text);
-  font-family: 'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', 'Noto Serif SC', sans-serif;
+  font-family: var(--font-zh-title);
   font-size: clamp(2.5rem, 8vw, 5.4rem);
-  font-weight: 900;
+  font-weight: var(--type-weight-black);
   line-height: 1.04;
 }
 
@@ -449,8 +449,8 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   padding: 0 16px;
   border: 1px solid var(--course-line-strong);
   border-radius: 8px;
-  background: var(--course-primary);
-  color: #ffffff !important;
+  background: var(--action-fill, var(--course-primary));
+  color: var(--action-foreground, #ffffff) !important;
   font-family: var(--font-ui);
   font-size: 0.88rem;
   font-weight: 900;
@@ -2198,9 +2198,9 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
   width: 100%;
   overflow: hidden;
   color: var(--map-text);
-  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family: var(--font-zh-title);
   font-size: calc(0.95rem + var(--course-map-title-size-step));
-  font-weight: 800;
+  font-weight: var(--type-weight-heavy);
   line-height: 1.25;
   text-align: left;
   text-overflow: ellipsis;
@@ -2321,8 +2321,9 @@ body.knowledge-page:has(.course-material-immersive) .site-footer {
  * Keep the map's visual hierarchy independent from the editor.  Names use
  * the configurable Chinese title face, supporting copy uses the body face,
  * controls use the UI face, English labels use the Latin face, and IDs /
- * technical markers retain the configurable code face.  The Learning World
- * and course hero's intentional display faces remain outside this scope.
+ * technical markers retain the configurable code face. The Learning World's
+ * editorial scene remains outside this scope; ordinary course headings use
+ * the shared title role.
  */
 .course-map-immersive
   :where(
@@ -2726,9 +2727,9 @@ body.course-map-editor-page .site-footer {
   margin: 0;
   overflow: hidden;
   color: #eafffb;
-  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family: var(--font-zh-title);
   font-size: 0.88rem;
-  font-weight: 600;
+  font-weight: var(--type-weight-semibold);
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4424,9 +4425,9 @@ body.knowledge-page .knowledge-main .knowledge-rag-form button {
 .knowledge-header h1 {
   margin: 0;
   color: var(--bbs-shell-text) !important;
-  font-family: 'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', 'Noto Serif SC', sans-serif;
+  font-family: var(--font-zh-title);
   font-size: clamp(2.5rem, 6vw, 5.4rem);
-  font-weight: 900;
+  font-weight: var(--type-weight-black);
   line-height: 1.02;
 }
 
@@ -5369,8 +5370,8 @@ body.knowledge-page:has(.course-material-immersive) .course-material-immersive {
   padding: 0 18px;
   border: 1px solid var(--course-accent);
   border-radius: 9px;
-  background: var(--course-accent);
-  color: #fff;
+  background: var(--action-fill, var(--course-accent));
+  color: var(--action-foreground, #fff);
   font-weight: 800;
   cursor: pointer;
 }
@@ -6303,9 +6304,9 @@ a.knowledge-route-node:focus-visible {
   border-radius: 6px 15px 15px;
   background: var(--course-surface-soft);
   color: var(--bbs-shell-text);
-  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
-  font-size: 0.9rem;
-  font-weight: 400;
+  font-family: var(--font-zh-body);
+  font-size: var(--type-body-small-size);
+  font-weight: var(--font-zh-body-weight, 400);
   line-height: 1.62;
   overflow-wrap: anywhere;
 }
@@ -6577,8 +6578,8 @@ a.knowledge-route-node:focus-visible {
   padding: 0 10px;
   border: 1px solid var(--course-line);
   border-radius: 9px;
-  background: var(--course-surface-soft);
-  color: var(--bbs-shell-text);
+  background: var(--action-fill, var(--course-surface-soft));
+  color: var(--action-foreground, var(--bbs-shell-text));
   font-size: 0.68rem;
   font-weight: 850;
   text-decoration: none;
@@ -6595,8 +6596,8 @@ a.knowledge-route-node:focus-visible {
 .knowledge-discussion-detail-actions a:focus-visible,
 .knowledge-discussion-empty a:hover,
 .knowledge-discussion-empty a:focus-visible {
-  border-color: var(--course-accent);
-  color: var(--course-accent);
+  border-color: var(--action-stroke, var(--course-accent));
+  color: var(--action-foreground, var(--course-accent));
   outline: none;
 }
 

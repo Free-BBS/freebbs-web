@@ -36,7 +36,7 @@
   border-radius: 16px;
   background: var(--ui-surface, #fff);
   color: var(--ui-text, #172d32);
-  font: 14px/1.5 var(--font-ui, sans-serif);
+  font: var(--type-fixed-control-size) / 1.5 var(--font-ui, sans-serif);
   overflow: hidden;
 }
 dialog.site-search {
@@ -69,12 +69,12 @@ dialog.site-search[open],
   padding: 8px 0;
   outline-offset: 2px;
 }
-.site-search button {
+.site-search button:not(.bbs-action) {
   cursor: pointer;
   color: inherit;
   font: inherit;
 }
-.site-search-form button {
+.site-search-form button:not(.bbs-action) {
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -101,12 +101,21 @@ dialog.site-search[open],
 .site-search-types button[aria-pressed='true'] {
   background: var(--ui-surface-soft, #eef3f4);
   color: var(--ui-accent, #0b5f6c);
-  font-weight: 600;
+  font-weight: var(--type-weight-semibold);
 }
 .site-search-status {
   padding: 10px 20px;
   color: var(--ui-muted, #607478);
-  font-size: 12px;
+  font-size: var(--type-fixed-meta-size);
+}
+
+.site-search-status .ui-state {
+  gap: 8px;
+  padding: 0;
+}
+
+.site-search-status p {
+  margin: 0;
 }
 .site-search-results {
   margin: 0;
@@ -132,19 +141,19 @@ dialog.site-search[open],
 .site-search-results small {
   display: block;
   color: var(--ui-muted, #607478);
-  font-size: 11px;
+  font-size: var(--type-fixed-micro-size);
 }
 .site-search-results strong {
   display: block;
   margin: 3px 0;
-  font-weight: 600;
-  font-size: 16px;
+  font-weight: var(--type-weight-semibold);
+  font-size: var(--type-fixed-ui-size);
   overflow-wrap: anywhere;
 }
 .site-search-results p {
   margin: 0;
   color: var(--ui-muted, #607478);
-  font-size: 13px;
+  font-size: var(--type-fixed-caption-size);
   overflow-wrap: anywhere;
 }
 .site-search-more {
@@ -160,7 +169,7 @@ dialog.site-search[open],
   justify-content: space-between;
   gap: 8px;
   padding: 10px 20px;
-  font-size: 11px;
+  font-size: var(--type-fixed-micro-size);
   color: var(--ui-muted, #607478);
 }
 .site-search-footer a {
@@ -218,7 +227,7 @@ body:not(.auth-page-body) .topbar > .site-search-trigger {
   height: 40px;
   justify-content: center;
   padding: 0;
-  font: 14px var(--font-ui);
+  font: var(--type-fixed-control-size) var(--font-ui);
   box-sizing: border-box;
 }
 .site-search-trigger span {

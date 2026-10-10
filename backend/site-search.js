@@ -1,4 +1,6 @@
 const express = require('express');
+const { resolveKnowledgeSections } = require('./course-maps');
+const { stripAssessmentBlocks } = require('./learning-assessment');
 
 // Human-maintained descriptions of real entry points, shared by search and Max.
 const PAGES = [
@@ -116,12 +118,6 @@ const SOURCES = {
   knowledge: {
     from: 'course_map_nodes n JOIN courses c ON c.id = n.course_id LEFT JOIN course_map_node_sections s ON s.course_id = n.course_id AND s.node_id = n.node_id',
     where: 'c.is_active = 1',
-    id: "CONCAT(c.slug, '/', n.node_id)",
-    title: 'n.title',
-    body: "CONCAT_WS(' ', n.summary, COALESCE(NULLIF(s.knowledge_markdown, ''), n.document_markdown), s.basic_info_markdown, s.applications_markdown)",
-    section: 'c.name',
-    updated: 'n.updated_at',
-    featured: '0',
     url: (row) => {
       const [course, point] = row.id.split('/');
       return `/knowledge?course=${encodeURIComponent(course)}&point=${encodeURIComponent(point)}`;
@@ -139,8 +135,87 @@ const SOURCES = {
     url: (row) => `/circuit?cid=${encodeURIComponent(row.id)}`,
   },
 };
+function knowledgeText(row) {
+  const sections = resolveKnowledgeSections(row, false);
+  return Object.values(sections).join('\n');
+}
+function compareResults(a, b, sort) {
+  return (
+    b.score - a.score ||
+    (sort === 'recommended' ? Number(b.featured || 0) - Number(a.featured || 0) : 0) ||
+    new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0) ||
+    `${a.type}:${a.id}`.localeCompare(`${b.type}:${b.id}`)
+  );
+}
+function searchableKnowledgeText(value) {
+  // Preserve the database's case/accent-insensitive search when matching public
+  // content outside SQL (including common Unicode collation expansions).
+  return String(value || '')
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/\p{M}/gu, '')
+    .replace(/ß/g, 'ss')
+    .replace(/æ/g, 'ae')
+    .replace(/œ/g, 'oe')
+    .replace(/ø/g, 'o')
+    .replace(/ł/g, 'l');
+}
 function createSiteSearch(pool) {
+  async function queryKnowledge(terms, count, sort) {
+    // Scoring source must affect neither matching nor rank/pagination. Read in
+    // small batches, sanitize each field before joining, and bound total DB time.
+    const results = [];
+    const deadline = Date.now() + 3500;
+    const batchSize = 25;
+    const matchingTerms = terms.map(searchableKnowledgeText);
+    let offset = 0;
+    for (;;) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw new Error('Knowledge search timed out');
+      const [rows] = await pool.execute(
+        {
+          sql: `SELECT /*+ MAX_EXECUTION_TIME(2500) */ CONCAT(c.slug, '/', n.node_id) AS id,
+          n.title, n.summary, n.document_markdown, s.knowledge_markdown,
+          s.basic_info_markdown, s.applications_markdown, c.name AS section,
+          n.updated_at AS updatedAt
+          FROM ${SOURCES.knowledge.from} WHERE ${SOURCES.knowledge.where}
+          ORDER BY c.id ASC, n.node_id ASC LIMIT ${batchSize} OFFSET ${offset}`,
+          timeout: remaining,
+        },
+        [],
+      );
+      for (const row of rows) {
+        const body = [stripAssessmentBlocks(row.summary), knowledgeText(row)].join('\n');
+        const lowerBody = searchableKnowledgeText(body);
+        const title = String(row.title || '');
+        const lowerTitle = searchableKnowledgeText(title);
+        const score = matchingTerms.reduce(
+          (sum, term) =>
+            sum + (lowerTitle.includes(term) ? 8 : 0) + (lowerBody.includes(term) ? 1 : 0),
+          0,
+        );
+        if (terms.length && !score) continue;
+        results.push({
+          type: 'knowledge',
+          id: String(row.id),
+          title,
+          url: SOURCES.knowledge.url(row),
+          excerpt: excerpt(body, terms),
+          section: row.section,
+          updatedAt: row.updatedAt,
+          featured: false,
+          score,
+        });
+      }
+      results.sort((a, b) => compareResults(a, b, sort));
+      results.splice(count);
+      if (rows.length < batchSize) break;
+      offset += rows.length;
+    }
+    return results;
+  }
   async function querySource(type, terms, count, sort, user) {
+    if (type === 'knowledge') return queryKnowledge(terms, count, sort);
     const source = SOURCES[type];
     const params = [];
     const score = terms.length
@@ -224,13 +299,7 @@ function createSiteSearch(pool) {
       types.map((kind) => querySource(kind, terms, offset + limit + 1, sort, user)),
     );
     results.push(...batches.flat());
-    results.sort(
-      (a, b) =>
-        b.score - a.score ||
-        (sort === 'recommended' ? Number(b.featured || 0) - Number(a.featured || 0) : 0) ||
-        new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0) ||
-        `${a.type}:${a.id}`.localeCompare(`${b.type}:${b.id}`),
-    );
+    results.sort((a, b) => compareResults(a, b, sort));
     return {
       query: q,
       type,
@@ -278,7 +347,8 @@ function createSiteSearch(pool) {
     if (url.pathname === '/knowledge' && url.searchParams.has('point')) {
       const [rows] = await pool.execute(
         {
-          sql: `SELECT n.title, LEFT(CONCAT_WS('\n', COALESCE(NULLIF(s.knowledge_markdown, ''), n.document_markdown), s.basic_info_markdown, s.applications_markdown), 14000) AS body
+          sql: `SELECT n.title, n.document_markdown, s.knowledge_markdown,
+          s.basic_info_markdown, s.applications_markdown
         FROM course_map_nodes n JOIN courses c ON c.id = n.course_id LEFT JOIN course_map_node_sections s ON s.course_id = n.course_id AND s.node_id = n.node_id
         WHERE c.slug = ? AND n.node_id = ? AND c.is_active = 1 LIMIT 1`,
           timeout: 3500,
@@ -286,12 +356,13 @@ function createSiteSearch(pool) {
         [url.searchParams.get('course') || 'signals', url.searchParams.get('point')],
       );
       if (!rows[0]) throw new Error('知识点不存在或不可见。');
+      const text = knowledgeText(rows[0]);
       return {
         type: 'knowledge',
         title: rows[0].title,
         url: `/knowledge?${new URLSearchParams({ course: url.searchParams.get('course') || 'signals', point: url.searchParams.get('point') })}`,
-        text: rows[0].body,
-        truncated: rows[0].body.length >= 14000,
+        text: text.slice(0, 14000),
+        truncated: text.length > 14000,
       };
     }
     const page = PAGES.find((item) => item.url === url.pathname);

@@ -1,3 +1,37 @@
+.auth-form-register {
+  --auth-error-color: #ff9daa;
+}
+
+body.theme-light .auth-form-register {
+  --auth-error-color: #b3263b;
+}
+
+html body.auth-page-body #auth-page-form.auth-form-register .auth-field-error {
+  display: block;
+  margin: 5px 0 0;
+  color: var(--auth-error-color) !important;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+html body.auth-page-body .auth-form-register input[aria-invalid='true'] {
+  border-color: var(--auth-error-color) !important;
+}
+
+.auth-form-register .auth-field-status {
+  display: block;
+  margin: 5px 0 0;
+  color: var(--ui-muted);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.auth-form-register .auth-field-error[hidden],
+.auth-form-register .auth-field-status[hidden] {
+  display: none !important;
+}
+
 .community-agreement {
   margin-top: 10px;
   padding-top: 26px;

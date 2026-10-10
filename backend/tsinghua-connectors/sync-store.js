@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { parseCourseSchedule } = require('../course-schedule');
+const { parseHomeworkArray, reconcileHomeworkCompletion } = require('./homework-state-sync');
 
 function publicId(prefix) {
   return `${prefix}_${crypto.randomBytes(12).toString('hex')}`;
@@ -372,7 +373,7 @@ function createTsinghuaSyncStore(pool) {
     try {
       await connection.beginTransaction();
       const [rows] = await connection.execute(
-        `SELECT r.id AS run_id, r.status AS run_status, r.connector_generation,
+        `SELECT r.id AS run_id, r.status AS run_status, r.connector_generation, r.started_at,
                 c.status AS connector_status,
                 c.generation, c.user_id
          FROM campus_connector_sync_runs r
@@ -414,6 +415,38 @@ function createTsinghuaSyncStore(pool) {
         finishedAt,
       );
       if (snapshot.semesterId) {
+        const [previousHomeworkRows] = await connection.execute(
+          `SELECT homework_json FROM campus_homework_snapshots
+           WHERE user_id = ? AND connector_generation = ? AND semester_id = ? FOR UPDATE`,
+          [current.user_id, claimed.connector_generation, snapshot.semesterId],
+        );
+        const previousHomework = parseHomeworkArray(previousHomeworkRows[0]?.homework_json);
+        let homework = snapshot.homework || [];
+        if (snapshot.status === 'partial') {
+          const retained = new Map(previousHomework.map((item) => [item.sourceReference, item]));
+          for (const item of homework) retained.set(item.sourceReference, item);
+          homework = [...retained.values()];
+        }
+        // The run may have read these records before a live detail recheck.
+        // Preserve only details verified after this run started; a later run can
+        // still observe a real withdrawal instead of forcing monotonic status.
+        const startedAt = normalizeDate(current.started_at || claimed.started_at);
+        const protectedHomework = previousHomework.filter((item) => {
+          const verifiedAt = normalizeDate(item.homeworkStatusVerifiedAt);
+          return startedAt && verifiedAt && verifiedAt >= startedAt;
+        });
+        if (protectedHomework.length) {
+          const merged = new Map(homework.map((item) => [item.sourceReference, item]));
+          for (const item of protectedHomework) merged.set(item.sourceReference, item);
+          homework = [...merged.values()];
+        }
+        await reconcileHomeworkCompletion(
+          connection,
+          current.user_id,
+          previousHomework,
+          homework,
+          finishedAt,
+        );
         await connection.execute(
           `INSERT INTO campus_homework_snapshots
            (user_id, connector_generation, semester_id, homework_json, fetched_at, sync_status)
@@ -424,7 +457,7 @@ function createTsinghuaSyncStore(pool) {
             current.user_id,
             claimed.connector_generation,
             snapshot.semesterId,
-            JSON.stringify(snapshot.homework || []),
+            JSON.stringify(homework),
             finishedAt,
             snapshot.status === 'partial' ? 'partial' : 'complete',
           ],

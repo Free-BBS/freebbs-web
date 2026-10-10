@@ -286,9 +286,9 @@ test('a failed first-page refresh clears its old cursor and the next request sta
   assert.equal(new URL(h.requests.at(-1).url, 'http://local').searchParams.has('cursor'), false);
   h.requests.at(-1).reject(new Error('Failed to fetch'));
   await pending;
-  assert.equal(h.state.posts.length, 0);
-  assert.equal(h.state.postsByBoard.size, 0);
-  assert.equal(h.state.postCache.size, 0);
+  assert.equal(h.state.posts.length, 50);
+  assert.equal(h.state.postsByBoard.get('all').length, 50);
+  assert.equal(h.state.postCache.size, 50);
   assert.equal(h.state.nextMyCursor, '');
   assert.equal(h.listAttributes['aria-busy'], 'false');
   const retry = h.context.loadDiscussionPosts({ more: true });

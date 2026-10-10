@@ -79,7 +79,7 @@ test('course map pages load their dedicated controllers', () => {
   const markdownEditor = fs.readFileSync(path.join(root, 'public', 'markdown-editor.html'), 'utf8');
 
   assert.match(reader, /data-course-map-page/);
-  assert.match(reader, /<script src="\/course-map\.js\?v=20260930-directory-3"><\/script>/);
+  assert.match(reader, /<script src="\/course-map\.js\?v=20261001-focus-2"><\/script>/);
   assert.doesNotMatch(reader, /course-map-reader-hud/);
   assert.doesNotMatch(reader, /course-map-reader-title/);
   assert.doesNotMatch(reader, /course-map-reader-meta/);
@@ -119,6 +119,7 @@ test('course map reader groups nodes by chapter and reveals only focused relatio
   const reader = fs.readFileSync(path.join(root, 'public', 'course.html'), 'utf8');
   const controller = fs.readFileSync(path.join(root, 'public', 'course-map.js'), 'utf8');
   const styles = fs.readFileSync(path.join(root, 'public', 'course.css'), 'utf8');
+  const backend = fs.readFileSync(path.join(root, 'backend', 'course-maps.js'), 'utf8');
 
   assert.match(reader, /id="course-map-directory-link"/);
   assert.match(reader, /href="\/world"/);
@@ -156,10 +157,12 @@ test('course map reader groups nodes by chapter and reveals only focused relatio
     /overviewDrawer\.open\(nodeById\(id\), state.course, topicButton, focusNode\)/,
   );
   assert.match(controller, /点击知识点查看学习概览/);
-  assert.match(controller, /6类设定的知识点关系/);
-  for (const relation of ['前置', '推导', '应用', '推广', '对比', '等价']) {
-    assert.match(controller, new RegExp(`${relation} · A`));
-  }
+  assert.match(backend, /const EDGE_TYPES = new Set\(\['ordered', 'related'\]\)/);
+  assert.match(controller, /两类知识点连接/);
+  assert.match(controller, /课程学习顺序 · A → B/);
+  assert.match(controller, /补充关联 · A — B/);
+  assert.doesNotMatch(controller, /6类设定的知识点关系/);
+  assert.doesNotMatch(controller, /<dt>(?:前置|推导|应用|推广|对比|等价) · A/);
   assert.doesNotMatch(controller, /当前节点的全部连线/);
   assert.match(controller, /function readerEdgeDescription\(edge\)/);
   assert.match(controller, /course-map-reader-edge-hits/);
@@ -205,7 +208,7 @@ test('knowledge page uses database-backed knowledge controller', () => {
   const knowledge = fs.readFileSync(path.join(root, 'public', 'knowledge.html'), 'utf8');
   const controller = fs.readFileSync(path.join(root, 'public', 'knowledge.js'), 'utf8');
   const styles = fs.readFileSync(path.join(root, 'public', 'course.css'), 'utf8');
-  assert.match(knowledge, /<script src="\/knowledge\.js\?v=20260929-overview-1"><\/script>/);
+  assert.match(knowledge, /<script src="\/knowledge\.js\?v=[A-Za-z0-9-]+"><\/script>/);
   assert.doesNotMatch(knowledge, /id="knowledge-learn-button"/);
   assert.doesNotMatch(knowledge, /id="knowledge-review-button"/);
   assert.match(knowledge, /id="knowledge-tag-title"/);
@@ -254,7 +257,9 @@ test('knowledge page uses database-backed knowledge controller', () => {
   assert.match(styles, /\.knowledge-chat-message-body/);
   assert.match(styles, /@keyframes knowledge-chat-loading-dot/);
   assert.doesNotMatch(controller, /createMockReply/);
-  assert.match(controller, /orderedKnowledgeNodes/);
+  assert.match(controller, /FreeBbsLearningNextSteps\?\.sequenceNode/);
+  assert.match(controller, /sequence\?\.\(map, \{ id: nodeId \}, 'previous'\)/);
+  assert.match(controller, /sequence\?\.\(map, \{ id: nodeId \}, 'next'\)/);
   assert.match(controller, /renderKnowledgeSequence/);
   assert.match(controller, /free_bbs_knowledge_interaction_width_v1/);
   assert.match(controller, /free_bbs_knowledge_tools_collapsed_v1/);

@@ -62,8 +62,8 @@ dialog.admin-account-dialog button,
   font: inherit;
   border: 1px solid #94b9c2;
   border-radius: 10px;
-  background: #e7f1f4;
-  color: #152d37;
+  background: var(--action-fill, #e7f1f4);
+  color: var(--action-foreground, #152d37);
   cursor: pointer;
 }
 
