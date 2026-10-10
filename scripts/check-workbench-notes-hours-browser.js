@@ -36,7 +36,7 @@ async function main() {
     preview.events.length,
     fixture('notes-main', 10, 12, { description: '六教 101' }),
     fixture('before-range', 4, 5),
-    fixture('overnight', 23, 31),
+    fixture('overnight', 23, 33),
     fixture('all-day', 48, 72, { allDay: true }),
     fixture('early-ddl', 26.99, 27, { kind: 'deadline' }),
   );
@@ -91,10 +91,10 @@ async function main() {
     await page.goto(`${base}/workbench`, { waitUntil: 'domcontentloaded' });
     stage = 'initial schedule';
     await page.waitForSelector('.workbench-week-event[data-public-id="notes-main"]');
-    assert.equal(await page.$eval('#workbench-hours-start', (element) => element.value), '6');
+    assert.equal(await page.$eval('#workbench-hours-start', (element) => element.value), '8');
     assert.equal(
       await page.$eval('.workbench-week-timeline', (element) => element.style.height),
-      '864px',
+      '768px',
     );
     assert.equal(
       await page.$$eval(
@@ -115,7 +115,7 @@ async function main() {
         '.workbench-week-event[data-public-id="notes-main"]',
         (element) => element.style.top,
       ),
-      '192px',
+      '96px',
     );
     assert.match(
       await page.$eval('#workbench-hours-outside', (element) => element.textContent),
@@ -136,7 +136,7 @@ async function main() {
     await waitStatus('#workbench-hours-status', '严格晚于');
     assert.equal(
       await page.$eval('.workbench-week-timeline', (element) => element.style.height),
-      '864px',
+      '768px',
     );
     await apply(10, 10);
     await waitStatus('#workbench-hours-status', '严格晚于');
@@ -161,13 +161,13 @@ async function main() {
       window.freeBbsApp.userState.uid = 'different-user';
       window.dispatchEvent(new Event('freebbs:session-change'));
     });
-    assert.equal(await page.$eval('#workbench-hours-start', (element) => element.value), '6');
+    assert.equal(await page.$eval('#workbench-hours-start', (element) => element.value), '8');
     await apply(9, 18);
     await page.evaluate(() => {
       window.freeBbsApp.userState.isLoggedIn = false;
       window.dispatchEvent(new Event('freebbs:session-change'));
     });
-    assert.equal(await page.$eval('#workbench-hours-start', (element) => element.value), '6');
+    assert.equal(await page.$eval('#workbench-hours-start', (element) => element.value), '8');
     assert.equal(await page.$eval('#workbench-hours-start', (element) => element.disabled), true);
     await page.evaluate((owner) => {
       window.freeBbsApp.userState.uid = owner;

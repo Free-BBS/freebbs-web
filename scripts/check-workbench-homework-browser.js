@@ -17,8 +17,13 @@ async function main() {
     server.listen(0, '127.0.0.1', resolve);
   });
   const base = `http://127.0.0.1:${server.address().port}`;
+  server.on('connect', (_request, socket) => {
+    socket.on('error', () => {});
+    socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
+  });
   const browser = await puppeteer.launch({
     headless: true,
+    args: [`--proxy-server=${base}`, '--disable-background-networking'],
     ...(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {}),
   });
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'freebbs-homework-browser-'));
@@ -28,6 +33,8 @@ async function main() {
     title: '[电路原理] 第一次作业（模拟）',
     providerCourseId: 'course1',
     providerStudentHomeworkId: 'student1',
+    actionUrl:
+      'https://learn.tsinghua.edu.cn/f/wlxt/kczy/zy/student/tijiao?wlkcid=course1&xszyid=student1',
     status: 'unsubmitted',
     submissionType: 2,
     completionType: 1,
@@ -43,8 +50,51 @@ async function main() {
   let writes = 0;
   let emptyPartial = false;
   let calendarCompleted = false;
+  let lastSuccessfulSyncAt = new Date().toISOString();
+  let upstreamPublished = false;
+  let importedNewHomework = false;
+  let syncRequests = 0;
+  let scheduleRequests = 0;
+  let detailRequests = 0;
+  let holdLiveForStaleList = false;
+  let releaseHeldDetail = null;
+  let releaseStaleList = null;
+  const extraHomework = {
+    ...homework,
+    sourceReference: 'learn:homework:new',
+    title: '无需重登的新作业 DDL',
+  };
   const errors = [];
   let failurePage;
+  async function clickControl(page, selector) {
+    await page.$eval(selector, (element) =>
+      element.scrollIntoView({ block: 'center', inline: 'center' }),
+    );
+    await page.waitForFunction(
+      (target) => {
+        const element = document.querySelector(target);
+        if (!element) return false;
+        const rect = element.getBoundingClientRect();
+        return element.contains(
+          document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2),
+        );
+      },
+      {},
+      selector,
+    );
+    await page.locator(selector).click();
+  }
+  async function localTab() {
+    const tab = await browser.newPage();
+    await tab.setRequestInterception(true);
+    tab.on('request', (request) => {
+      const url = new URL(request.url());
+      if (url.origin === base || url.protocol === 'about:' || url.protocol === 'data:')
+        request.continue();
+      else request.abort('blockedbyclient');
+    });
+    return tab;
+  }
   async function assertCardLayout(page) {
     const geometry = await page.$eval('#workbench-homework', (element) => {
       const rect = element.getBoundingClientRect();
@@ -92,7 +142,56 @@ async function main() {
         request.respond({ status: 204 });
         return;
       }
+      if (url.pathname === '/api/workbench/connectors/tsinghua/status') {
+        reply({
+          connector: {
+            configuration: { state: 'direct_cas' },
+            connection: { status: 'active_verified', lastSuccessfulSyncAt },
+            sync: { available: true, minimumIntervalSeconds: 300 },
+            safeguards: {
+              acceptsPasswordFromBrowser: true,
+              acceptsCookieFromBrowser: false,
+              storesPassword: false,
+              sessionCookiesEncryptedAtRest: true,
+            },
+          },
+        });
+        return;
+      }
+      if (
+        url.pathname === '/api/workbench/connectors/tsinghua/sync-runs' &&
+        request.method() === 'POST'
+      ) {
+        syncRequests += 1;
+        importedNewHomework = upstreamPublished;
+        lastSuccessfulSyncAt = new Date().toISOString();
+        reply({ run: { publicId: 'homework-sync-fixture', status: 'succeeded' } });
+        return;
+      }
+      if (url.pathname === '/api/workbench/connectors/tsinghua/sync-runs/homework-sync-fixture') {
+        reply({ run: { publicId: 'homework-sync-fixture', status: 'succeeded' } });
+        return;
+      }
+      if (url.pathname === '/api/workbench/important-items') {
+        reply({
+          importantItems: calendarCompleted
+            ? []
+            : [
+                {
+                  publicId: 'wi_homework',
+                  title: homework.title,
+                  status: 'confirmed',
+                  priority: 'normal',
+                  sourceType: 'network_classroom',
+                  dueAt: homework.dueAt,
+                  actionUrl: homework.actionUrl,
+                },
+              ],
+        });
+        return;
+      }
       if (url.pathname === '/api/workbench/schedule-items') {
+        scheduleRequests += 1;
         const due = new Date(new Date(url.searchParams.get('from')).getTime() + 86400000);
         reply({
           scheduleItems: [
@@ -107,6 +206,21 @@ async function main() {
               completed: calendarCompleted,
               status: calendarCompleted ? 'completed' : 'confirmed',
             },
+            ...(importedNewHomework
+              ? [
+                  {
+                    publicId: 'hw:new',
+                    homeworkReference: 'new',
+                    title: extraHomework.title,
+                    startAt: new Date(due.getTime() + 86400000 - 60000).toISOString(),
+                    endAt: new Date(due.getTime() + 86400000).toISOString(),
+                    kind: 'deadline',
+                    sourceType: 'network_classroom',
+                    completed: false,
+                    status: 'confirmed',
+                  },
+                ]
+              : []),
           ],
         });
         return;
@@ -151,11 +265,30 @@ async function main() {
           return;
         }
         if (url.pathname.includes('/items/')) {
-          reply({ homework });
+          detailRequests += 1;
+          const liveReply = () => {
+            if (homework.status === 'submitted' || homework.status === 'graded')
+              calendarCompleted = true;
+            reply({ homework });
+          };
+          if (holdLiveForStaleList) releaseHeldDetail = liveReply;
+          else liveReply();
+          return;
+        }
+        if (holdLiveForStaleList) {
+          holdLiveForStaleList = false;
+          const stale = { ...homework, status: 'unsubmitted' };
+          releaseStaleList = () =>
+            reply({
+              items: [stale, extraHomework],
+              fetchedAt: '2040-01-01T00:00:00Z',
+              syncStatus: 'complete',
+            });
+          releaseHeldDetail?.();
           return;
         }
         reply({
-          items: emptyPartial ? [] : [homework],
+          items: emptyPartial ? [] : [homework, ...(importedNewHomework ? [extraHomework] : [])],
           fetchedAt: new Date().toISOString(),
           syncStatus: emptyPartial ? 'partial' : 'complete',
         });
@@ -190,7 +323,7 @@ async function main() {
     await (
       await page.$('#workbench-homework')
     ).screenshot({ path: path.join(directory, 'homework-desktop.png') });
-    await page.click('.workbench-homework-item button');
+    await clickControl(page, '.workbench-homework-item button');
     await page.waitForFunction(() =>
       document.querySelector('#homework-detail').textContent.includes('计算电路'),
     );
@@ -205,6 +338,98 @@ async function main() {
       await page.$eval('#homework-dialog', (element) => element.scrollWidth <= element.clientWidth),
     );
     await page.click('#homework-close');
+    // A real tab switch, not a synthetic visibilitychange or session reset:
+    // upstream publishes while this authenticated workbench is backgrounded.
+    const tokenBefore = await page.evaluate(() => window.freeBbsApp.userState.token);
+    const tab = await localTab();
+    await tab.goto('about:blank');
+    await tab.bringToFront();
+    await page.waitForFunction(() => document.hidden);
+    upstreamPublished = true;
+    lastSuccessfulSyncAt = '2000-01-01T00:00:00Z';
+    const previousScheduleRequests = scheduleRequests;
+    await page.bringToFront();
+    await page.waitForSelector('#workbench-week-grid [data-public-id="hw:new"]');
+    await page.waitForFunction(() =>
+      document.querySelector('#homework-list').textContent.includes('无需重登的新作业'),
+    );
+    assert.ok(scheduleRequests > previousScheduleRequests);
+    assert.equal(syncRequests, 1, 'foreground sync must not loop or require a new login');
+    assert.equal(await page.evaluate(() => window.freeBbsApp.userState.token), tokenBefore);
+    await tab.close();
+
+    // A direct important-item link must also recheck the one clicked homework
+    // on return, even when the full sync was just done and no detail is open.
+    const directDetailCount = detailRequests;
+    const popupTarget = browser.waitForTarget((target) => target.opener() === page.target());
+    await page.click('#workbench-priority-list a');
+    const directTab = await (await popupTarget).page();
+    await directTab.goto(`${base}/electromagnetic`, { waitUntil: 'networkidle0' });
+    await directTab.bringToFront();
+    await page.waitForFunction(() => document.hidden);
+    homework.status = 'submitted';
+    holdLiveForStaleList = true;
+    await page.bringToFront();
+    await page.waitForSelector(`${calendarToggle}[data-public-id="hw:fixture"].is-completed`);
+    assert.ok(releaseStaleList, 'the cached list read must precede the verified detail reply');
+    releaseStaleList();
+    await page.waitForFunction(() =>
+      document.querySelector('#homework-message').textContent.includes('2040'),
+    );
+    await page.waitForFunction(
+      () => !document.querySelector('#workbench-priority-list').textContent.includes('第一次作业'),
+    );
+    assert.equal(await page.$eval('#homework-dialog', (element) => element.open), false);
+    assert.equal(detailRequests, directDetailCount + 1);
+    assert.equal(syncRequests, 1);
+    assert.equal(await page.evaluate(() => window.freeBbsApp.userState.token), tokenBefore);
+    await directTab.close();
+    homework.status = 'unsubmitted';
+    calendarCompleted = false;
+    await page.click('#homework-refresh');
+    await page.waitForFunction(() =>
+      document.querySelector('#homework-list').textContent.includes('第一次作业'),
+    );
+    await page.waitForFunction(() =>
+      document.querySelector('#workbench-priority-list').textContent.includes('第一次作业'),
+    );
+
+    // The live status check updates both the visible homework list and DDL /
+    // important-items projections in this same session, without a page reload.
+    await page.setViewport({ width: 1440, height: 1000 });
+    await clickControl(page, '.workbench-homework-item button');
+    await page.waitForFunction(() =>
+      document.querySelector('#homework-detail').textContent.includes('未交'),
+    );
+    const detailRequestsBefore = detailRequests;
+    const submissionTab = await localTab();
+    await submissionTab.goto(`${base}/electromagnetic`, { waitUntil: 'networkidle0' });
+    await submissionTab.bringToFront();
+    await page.waitForFunction(() => document.hidden);
+    homework.status = 'submitted';
+    await page.bringToFront();
+    await page.waitForFunction(() =>
+      document.querySelector('#homework-detail').textContent.includes('已交'),
+    );
+    await page.waitForSelector(`${calendarToggle}[data-public-id="hw:fixture"].is-completed`);
+    await page.waitForFunction(
+      () => !document.querySelector('#workbench-priority-list').textContent.includes('第一次作业'),
+    );
+    assert.doesNotMatch(
+      await page.$eval('#homework-list', (element) => element.textContent),
+      /第一次作业/,
+    );
+    assert.equal(await page.evaluate(() => window.freeBbsApp.userState.token), tokenBefore);
+    assert.equal(
+      detailRequests,
+      detailRequestsBefore + 1,
+      'open detail performs exactly one automatic readonly recheck',
+    );
+    assert.equal(syncRequests, 1, 'recent full synchronization remains throttled');
+    await submissionTab.close();
+    await page.click('#homework-close');
+    await page.select('#homework-status-filter', '');
+    assert.match(await page.$eval('#homework-list', (element) => element.textContent), /已交/);
     for (const theme of ['theme-light', 'theme-dark']) {
       await page.evaluate((value) => {
         document.body.classList.remove('theme-light', 'theme-dark');
@@ -229,7 +454,7 @@ async function main() {
     await page.waitForFunction(() =>
       document.querySelector('#homework-list').textContent.includes('待核对'),
     );
-    await page.click('.workbench-homework-item button');
+    await clickControl(page, '.workbench-homework-item button');
     await page.waitForFunction(() =>
       document.querySelector('#homework-detail').textContent.includes('待核对'),
     );
@@ -245,11 +470,64 @@ async function main() {
       await page.$eval('#homework-list', (element) => element.textContent),
       /不能确认该学期没有作业/,
     );
+    // Header arrival and delayed JSON are separate awaits. Logging out in
+    // between must discard the old private body, close the dialog and keep
+    // owned homework empty; use the app's real logout/session-change path.
+    emptyPartial = false;
+    await page.select('#homework-status-filter', '');
+    await clickControl(page, '#homework-refresh');
+    await page.waitForSelector('.workbench-homework-item button');
+    await page.evaluate(() => {
+      const originalFetch = window.fetch;
+      window.fetch = async (...args) => {
+        if (String(args[0]).includes('/homework/semesters/') && String(args[0]).includes('/items/'))
+          return {
+            ok: true,
+            json: () =>
+              new Promise((resolve) => {
+                window.homeworkQaLateBodyWaiting = true;
+                window.homeworkQaLateReply = () =>
+                  resolve({
+                    homework: {
+                      sourceReference: 'learn:homework:fixture',
+                      title: '旧用户私有迟到正文',
+                      submittedContent: '旧用户私有迟到正文',
+                      status: 'submitted',
+                    },
+                  });
+              }),
+          };
+        return originalFetch(...args);
+      };
+    });
+    await clickControl(page, '.workbench-homework-item button');
+    await page.waitForFunction(() => window.homeworkQaLateBodyWaiting === true);
+    await page.evaluate(() => {
+      window.freeBbsApp.clearSession();
+      window.homeworkQaLateReply();
+    });
+    await page.waitForFunction(
+      () =>
+        !document.querySelector('#homework-dialog').open &&
+        document.querySelectorAll('.workbench-homework-item').length === 0,
+    );
+    assert.doesNotMatch(
+      await page.$eval('#workbench-homework', (element) => element.textContent),
+      /旧用户私有迟到正文/,
+    );
     assert.equal(writes, 0);
     await page.evaluate(() => window.dispatchEvent(new Event('freebbs:campus-disconnected')));
     assert.equal(await page.$eval('#homework-dialog', (element) => element.open), false);
     assert.equal(await page.$$eval('.workbench-homework-item', (elements) => elements.length), 0);
     assert.deepEqual(errors, []);
+    console.log(
+      JSON.stringify({
+        foregroundSyncRequests: syncRequests,
+        detailRequests,
+        scheduleRequests,
+        pageErrors: errors.length,
+      }),
+    );
     console.log(`Homework browser checks passed. Screenshots: ${directory}`);
   } catch (error) {
     console.error('Original homework failure', error);

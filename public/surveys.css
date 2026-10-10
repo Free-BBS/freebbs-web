@@ -218,8 +218,8 @@
   justify-content: center;
   align-items: center;
   gap: 12px;
-  background: var(--sand);
-  color: var(--ui-accent-contrast);
+  background: var(--action-fill, var(--sand));
+  color: var(--action-foreground, var(--ui-accent-contrast));
   border: 1px solid transparent;
   border-radius: 12px;
   padding: 11px 18px;
@@ -228,9 +228,9 @@
   text-decoration: none;
 }
 .activities-main button.secondary {
-  background: var(--glass-fill);
-  color: var(--ink);
-  border-color: var(--line);
+  background: var(--action-fill, var(--glass-fill));
+  color: var(--action-foreground, var(--ink));
+  border-color: var(--action-stroke, var(--line));
 }
 .activities-main button:disabled {
   opacity: 0.5;
@@ -332,7 +332,7 @@
 }
 
 body.activities-page .activities-main a.button {
-  color: var(--ui-accent-contrast) !important;
+  color: var(--action-foreground, var(--ui-accent-contrast)) !important;
 }
 
 .activities-main {
@@ -364,7 +364,7 @@ body.activities-page .activities-main a.button {
 }
 body.activities-page .activities-main button:not(.secondary),
 body.activities-page .activities-main .activity-filters button[aria-pressed='true'] {
-  color: var(--ui-accent-contrast) !important;
+  color: var(--action-foreground, var(--ui-accent-contrast)) !important;
 }
 
 .activities-main .activity-datetime-field {

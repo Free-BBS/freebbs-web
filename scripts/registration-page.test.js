@@ -62,7 +62,9 @@ function createElement() {
       if (!childrenBySelector.has(selector)) childrenBySelector.set(selector, createElement());
       return childrenBySelector.get(selector);
     },
-    focus() {},
+    focus() {
+      this.focused = true;
+    },
     getScreenCTM: () => ({ inverse: () => ({}) }),
     setPointerCapture() {},
     showModal() {
@@ -267,20 +269,189 @@ function harness(mode = 'register', next = '', options = {}) {
   };
 }
 
+test('registration declares an adjacent accessible error for each editable field', () => {
+  const html = readPublic('register.html');
+  for (const id of [
+    'auth-username',
+    'auth-full-name',
+    'auth-student-id',
+    'auth-email',
+    'auth-email-code',
+    'auth-password',
+    'auth-password-confirm',
+    'auth-community-agreement',
+  ]) {
+    const input = html.match(new RegExp(`<input\\b[^>]*id="${id}"[^>]*>`))?.[0];
+    assert.ok(input, `${id} exists`);
+    assert.match(input, new RegExp(`aria-describedby="${id}-error(?: |")`));
+    assert.match(html, new RegExp(`<span\\b[^>]*id="${id}-error"[^>]*role="alert"[^>]*hidden`));
+  }
+  assert.match(html, /<form\b[^>]*\bnovalidate\b/);
+  const css = readPublic('registration.css');
+  assert.match(css, /--auth-error-color: #ff9daa/);
+  assert.match(css, /body\.theme-light[\s\S]*?--auth-error-color: #b3263b/);
+  assert.match(css, /input\[aria-invalid='true'\]/);
+  assert.match(css, /\.auth-field-error\[hidden\][\s\S]*?display: none !important/);
+});
+
+test('registration validates all fields inline before requesting a challenge', async () => {
+  const h = harness();
+  for (const id of [
+    'auth-username',
+    'auth-full-name',
+    'auth-student-id',
+    'auth-email',
+    'auth-email-code',
+    'auth-password',
+    'auth-password-confirm',
+  ]) {
+    h.element(id).value = '';
+  }
+  await h.submit();
+  for (const id of [
+    'auth-username',
+    'auth-full-name',
+    'auth-student-id',
+    'auth-email',
+    'auth-email-code',
+    'auth-password',
+    'auth-password-confirm',
+    'auth-community-agreement',
+  ]) {
+    assert.equal(h.element(id).attributes['aria-invalid'], 'true');
+    assert.equal(h.element(`${id}-error`).hidden, false);
+    assert.ok(h.element(`${id}-error`).textContent.length);
+  }
+  assert.equal(h.element('auth-username').focused, true);
+  assert.equal(h.element('auth-message').textContent, '');
+  assert.equal(h.element('auth-submit').disabled, false);
+  assert.equal(h.requests.length, 0);
+});
+
+test('editing a field clears its inline error and editing a password clears mismatch feedback', async () => {
+  const h = harness();
+  h.element('auth-community-agreement').checked = true;
+  h.element('auth-username').value = 'bad name';
+  h.element('auth-password-confirm').value = 'not the same';
+  await h.submit();
+  h.element('auth-username').value = 'reader';
+  await h.element('auth-username').dispatch('input');
+  assert.equal(h.element('auth-username-error').hidden, true);
+  assert.equal(h.element('auth-username').attributes['aria-invalid'], 'false');
+  await h.element('auth-password').dispatch('input');
+  assert.equal(h.element('auth-password-confirm-error').hidden, true);
+  assert.equal(h.element('auth-password-confirm').attributes['aria-invalid'], 'false');
+});
+
+test('sending a code validates the identity beside its fields without a network request', async () => {
+  const h = harness();
+  h.element('auth-full-name').value = '';
+  h.element('auth-student-id').value = '123';
+  h.element('auth-email').value = 'not-an-email';
+  await h.element('send-email-code').dispatch('click');
+  for (const id of ['auth-full-name', 'auth-student-id', 'auth-email']) {
+    assert.equal(h.element(`${id}-error`).hidden, false);
+    assert.equal(h.element(id).attributes['aria-invalid'], 'true');
+  }
+  assert.equal(h.requests.length, 0);
+  assert.equal(h.element('auth-message').textContent, '');
+  assert.equal(h.element('send-email-code').disabled, false);
+});
+
+test('whitelist mismatch is shown beside all identity fields and clears after editing one', async () => {
+  const h = harness();
+  h.responses.push({
+    status: 403,
+    body: {
+      code: 'registration_not_whitelisted',
+      message: '该身份不在可注册白名单中，请联系管理员核对学号、姓名和邮箱',
+    },
+  });
+  await h.element('send-email-code').dispatch('click');
+  for (const id of ['auth-full-name', 'auth-student-id', 'auth-email']) {
+    assert.equal(h.element(`${id}-error`).hidden, false);
+    assert.match(h.element(`${id}-error`).textContent, /白名单/);
+  }
+  assert.equal(h.element('auth-message').textContent, '');
+  h.element('auth-email').value = 'correct@example.test';
+  await h.element('auth-email').dispatch('input');
+  for (const id of ['auth-full-name', 'auth-student-id', 'auth-email']) {
+    assert.equal(h.element(`${id}-error`).hidden, true);
+    assert.equal(h.element(id).attributes['aria-invalid'], 'false');
+  }
+});
+
+test('email success is placed beside the code while network failures remain non-field messages', async () => {
+  const h = harness();
+  h.responses.push(new Error('网络连接中断，请稍后再试'));
+  await h.element('send-email-code').dispatch('click');
+  assert.equal(h.element('auth-message').textContent, '网络连接中断，请稍后再试');
+  assert.equal(h.element('auth-email-error').hidden, true);
+  h.responses.push({ body: { message: '验证码已发送，10 分钟内有效' } });
+  await h.element('send-email-code').dispatch('click');
+  assert.equal(h.element('auth-email-code-status').hidden, false);
+  assert.match(h.element('auth-email-code-status').textContent, /验证码已发送/);
+  assert.equal(h.element('auth-message').textContent, '');
+});
+
+test('a late rejected email response cannot mark a newly edited identity invalid', async () => {
+  const h = harness();
+  const pending = deferred();
+  h.responses.push(pending.promise);
+  const sending = h.element('send-email-code').dispatch('click');
+  h.element('auth-email').value = 'new@example.test';
+  await h.element('auth-email').dispatch('input');
+  pending.resolve({ status: 409, body: { message: '该邮箱已被注册' } });
+  await sending;
+  assert.equal(h.element('auth-email-error').hidden, true);
+  assert.equal(h.element('auth-email').attributes['aria-invalid'], 'false');
+  assert.equal(h.element('auth-message').textContent, '');
+});
+
+test('a late successful send explains identity changes without silently resending', async () => {
+  const h = harness();
+  const pending = deferred();
+  h.responses.push(pending.promise);
+  const sending = h.element('send-email-code').dispatch('click');
+  h.element('auth-email').value = 'new@example.test';
+  await h.element('auth-email').dispatch('input');
+  pending.resolve({ body: { message: '验证码已发送' } });
+  await sending;
+  assert.equal(h.element('auth-email-code-status').textContent, '身份信息已更改，请重新获取验证码');
+  assert.equal(h.requests.length, 1);
+  assert.equal(h.element('send-email-code').textContent, '60 s 后重发');
+  assert.equal(h.element('send-email-code').disabled, true);
+});
+
+test('server or transport failures do not mark an email invalid merely because wording mentions it', async () => {
+  for (const response of [
+    new Error('邮箱发送服务连接中断'),
+    { status: 500, body: { message: '邮箱发送服务暂时不可用' } },
+  ]) {
+    const h = harness();
+    h.responses.push(response);
+    await h.element('send-email-code').dispatch('click');
+    assert.equal(h.element('auth-email-error').hidden, true);
+    assert.equal(h.element('auth-email-code-error').hidden, true);
+    assert.match(h.element('auth-message').textContent, /邮箱发送服务/);
+    assert.equal(h.element('send-email-code').disabled, false);
+  }
+});
+
 for (const mode of ['register', 'remake']) {
   test(`${mode}: resend cooldown uses elapsed time after background throttling and sleep`, async () => {
     const h = harness(mode);
     const button = h.element('send-email-code');
     h.responses.push({ body: { message: '验证码已发送' } });
     await button.dispatch('click');
-    assert.equal(button.textContent, '60s后重发');
+    assert.equal(button.textContent, '60 s 后重发');
     h.advance(25400); // No interval callback runs while the tab is backgrounded.
     await h.document.dispatch('visibilitychange');
-    assert.equal(button.textContent, '35s后重发');
+    assert.equal(button.textContent, '35 s 后重发');
     assert.equal(button.disabled, true);
     h.advance(34599);
     await h.window.dispatch('focus');
-    assert.equal(button.textContent, '1s后重发');
+    assert.equal(button.textContent, '1 s 后重发');
     h.advance(1);
     await h.window.dispatch('pageshow');
     assert.equal(button.textContent, '发送验证码');
@@ -300,7 +471,7 @@ test('resend cooldown survives reload without extending it or leaking across aut
   h.responses.push({ body: {} });
   await h.element('send-email-code').dispatch('click');
   const reloaded = harness('register', '', { session: h.session, now: now + 21000 });
-  assert.equal(reloaded.element('send-email-code').textContent, '39s后重发');
+  assert.equal(reloaded.element('send-email-code').textContent, '39 s 后重发');
   const reset = harness('remake', '', { session: h.session, now: now + 21000 });
   assert.equal(reset.element('send-email-code').disabled, false);
   const expired = harness('register', '', { session: h.session, now: now + 61000 });
@@ -320,14 +491,14 @@ test('resend blocks duplicate in-flight requests even when focus changes', async
   assert.equal(h.element('send-email-code').disabled, true);
   pending.resolve({ body: {} });
   await first;
-  assert.equal(h.element('send-email-code').textContent, '60s后重发');
+  assert.equal(h.element('send-email-code').textContent, '60 s 后重发');
 });
 
 test('429 still starts a full cooldown and storage failures do not break it', async () => {
   const h = harness('register', '', { blockStorage: true });
   h.responses.push({ status: 429, body: { message: '请稍后再试' } });
   await h.element('send-email-code').dispatch('click');
-  assert.equal(h.element('send-email-code').textContent, '60s后重发');
+  assert.equal(h.element('send-email-code').textContent, '60 s 后重发');
   h.tick(60000);
   assert.equal(h.element('send-email-code').disabled, false);
   h.responses.push({ status: 503, body: { message: '发送失败' } });
@@ -353,7 +524,10 @@ test('registration without agreement stops before opening a challenge or making 
   await h.submit();
   assert.equal(h.requests.length, 0);
   assert.equal(h.element('band-challenge').open, false);
-  assert.match(h.element('auth-message').textContent, /阅读并同意社区公约/);
+  assert.match(h.element('auth-community-agreement-error').textContent, /阅读并同意社区公约/);
+  assert.equal(h.element('auth-community-agreement-error').hidden, false);
+  assert.equal(h.element('auth-community-agreement').attributes['aria-invalid'], 'true');
+  assert.equal(h.element('auth-message').textContent, '');
   assert.equal(h.element('auth-submit').disabled, false);
   assert.equal(h.storage.get(tokenKey), 'existing-token');
 });
@@ -520,7 +694,10 @@ test('an ordinary registration error closes the modal and restores the form for 
   assert.equal(h.requests.length, 2);
   assert.equal(h.element('band-challenge').open, false);
   assert.equal(h.element('auth-submit').disabled, false);
-  assert.equal(h.element('auth-message').textContent, '邮箱验证码错误');
+  assert.equal(h.element('auth-email-code-error').textContent, '邮箱验证码错误');
+  assert.equal(h.element('auth-email-code-error').hidden, false);
+  assert.equal(h.element('auth-email-code').attributes['aria-invalid'], 'true');
+  assert.equal(h.element('auth-message').textContent, '');
   assert.equal(h.storage.get(tokenKey), 'existing-token');
 });
 

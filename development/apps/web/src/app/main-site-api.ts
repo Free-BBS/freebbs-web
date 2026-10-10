@@ -1,4 +1,5 @@
 import { AUTH_TOKEN_STORAGE_KEY } from '../core/api/client.js';
+import { requestRuntime, type RequestOptions } from '../core/api/request.js';
 
 export function mainSiteHref(path: string): string {
   const origin =
@@ -37,18 +38,24 @@ export interface CheckinSummary {
   summary?: CheckinSummary;
 }
 
-export async function requestMainSite<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function requestMainSite<T>(path: string, init: RequestOptions = {}): Promise<T> {
   const token = window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)?.trim();
   if (!token) throw new Error('请登录主站账号后重试。');
-  const response = await fetch(`/api${path}`, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...init.headers,
+  const { response, payload } = await requestRuntime.request(
+    `/api${path}`,
+    {
+      ...init,
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...init.headers,
+      },
     },
-  });
-  const payload = (await response.json().catch(() => null)) as (T & { message?: string }) | null;
+    async (result) => ({
+      response: result,
+      payload: (await result.json().catch(() => null)) as (T & { message?: string }) | null,
+    }),
+  );
   if (!response.ok)
     throw new Error(payload?.message || `主站请求失败（HTTP ${response.status}）。`);
   if (payload === null) throw new Error('主站返回的数据暂时不可用。');

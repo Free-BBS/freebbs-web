@@ -163,10 +163,14 @@
     ready('#world-enter-island', mathCourseOrbit),
   ];
   const focusedCourse =
-    'body:not(:has(#course-knowledge-overview[open])) .course-map-focused-chapter';
+    'body:not(:has(#course-knowledge-overview[open])) .course-structure-details:has(.course-structure-relations), body:not(:has(#course-knowledge-overview[open])) .course-map-focused-chapter';
+  const selectCoursePoint =
+    '.course-structure-picker [data-course-point-id], [data-reader-node-id]';
+  const openCourseOverview =
+    '.course-structure-details .course-structure-primary, .course-map-focus-center [data-reader-node-id]';
   const overviewStudy = '#course-knowledge-overview[open] .knowledge-overview-study';
   const focusedNode = [
-    ready('[data-reader-node-id]', `${focusedCourse}, #course-knowledge-overview[open]`),
+    ready(selectCoursePoint, `${focusedCourse}, #course-knowledge-overview[open]`),
     ready(
       '#course-knowledge-overview[open] .knowledge-overview-drawer-footer > button',
       focusedCourse,
@@ -289,7 +293,7 @@
   step(
     'course',
     'course-directory',
-    '.course-map-directory-layout:has(.course-map-directory-panel)',
+    '.course-structure-picker, .course-map-directory-layout:has(.course-map-directory-panel)',
     '课程不是一长串文件。',
     '这里按章节组织知识点，显示课程简介、知识点数量和学习标记。先选一个知识点查看关联，就能知道它和前后的内容怎样接上。',
     {
@@ -297,9 +301,11 @@
       // its handler is installed only after the asynchronous map fetch. Never
       // auto-click that link while loading. This button cannot navigate away;
       // the directory-only panel also distinguishes it from the focused view.
-      prepare: [ready('#course-map-reset-view', '.course-map-directory-panel')],
+      prepare: [
+        ready('#course-map-reset-view', '.course-structure-picker, .course-map-directory-panel'),
+      ],
       focus: { fit: 'overview', radius: 24 },
-      action: click('[data-reader-node-id]', '查看一个知识点的关联'),
+      action: click(selectCoursePoint, '查看一个知识点的关联'),
       emptyTarget: '#course-map-status',
       emptyBody:
         '这门课程暂时没有可浏览的知识点，或地图尚未加载成功。可以返回学习世界换一门课程，或先跳到下一站。',
@@ -308,12 +314,15 @@
   step(
     'course',
     'course-relations',
-    '.course-map-focused-chapter',
+    focusedCourse,
     '把知识点的邻居，也认一认。',
-    '选中的知识点居中，相关内容围绕它展示。关系说明会解释箭头和联系类型；点击其他知识点可以继续探索，返回按钮可以回到总览。',
+    '选中知识点后，只显示它的直接联系，也可以连接到其他章节。右侧列出学习顺序与补充关联；先看看学习概览，再决定是否进入正文。',
     {
       prepare: focusedNode,
-      action: click('[data-course-map-arrow-help-toggle]', '看看关系说明'),
+      action: click(
+        '.course-structure-details .course-structure-primary, [data-course-map-arrow-help-toggle]',
+        '看看学习概览',
+      ),
       emptyTarget: '#course-map-canvas',
       emptyBody: '当前课程还没有可展开的知识关系，可以先跳过这一步。',
     },
@@ -325,10 +334,7 @@
     '现在，走进知识点本身。',
     '「进入学习」会打开刚才选中的真实知识点，而不是另一份示意页面。课程和知识点地址会跟着实际链接走，回来也能继续这条路线。',
     {
-      prepare: [
-        ...focusedNode,
-        ready('.course-map-focus-center [data-reader-node-id]', overviewStudy),
-      ],
+      prepare: [...focusedNode, ready(openCourseOverview, overviewStudy)],
       action: link(overviewStudy, '进入知识点'),
       emptyTarget: '#course-map-canvas',
       emptyBody: '暂时没有可进入的知识点。回到学习世界选择已有内容的课程，或跳到讨论区继续。',
@@ -910,13 +916,13 @@
     'workbench-ai-plan',
     'workbench-priorities',
   ];
-  const essentialSteps = CORE_STEP_IDS.map((id) => {
+  const legacyV4Steps = CORE_STEP_IDS.map((id) => {
     const entry = currentSteps.find((item) => item.id === id);
     return ['course', 'knowledge'].includes(entry.station)
       ? { ...entry, station: 'world', label: '学习' }
       : { ...entry };
   });
-  essentialSteps.push({
+  legacyV4Steps.push({
     id: 'handbook-other-features',
     station: 'handbook',
     label: '其他功能',
@@ -927,13 +933,110 @@
     body: '站内还有 Max 问答、实验与工具、活动报名和个人设置等入口。需要时从导航进入，建设中的功能会标明状态；不必逐一体验才能开始学习。',
     caption: '以后可以随时从首页打开导引，重看学习、讨论或计划这一章。',
   });
-  const essentialStations = ['home', 'world', 'discussion', 'workbench', 'handbook'].map((id) => {
+  // Each non-learning page gets one introduction, without opening a form,
+  // changing the user's view, or waiting for optional API data to exist.
+  const pageIntroductions = [
+    {
+      id: 'discussion-overview-202610',
+      station: 'discussion',
+      target: '.discussion-feed-toolbar',
+      title: '讨论区：让问题遇见同伴',
+      body: '按分区和排序查找讨论，点帖子阅读正文与回复。想提问时再点「发帖」，写清背景、尝试和卡点；也可以在评论中 @Max 邀请它一起思考。',
+      caption: '导引不会打开编辑器、发表内容、点赞或请求 AI；关键结论需要核对。',
+    },
+    {
+      id: 'workbench-overview-202610',
+      station: 'workbench',
+      target: '.workbench-navigation',
+      title: '工作台：安排自己的节奏',
+      body: '在个人计划中管理日程、重复安排和重要事项，在通知中查看消息。也可以请 Max 帮你整理安排或规划空余时间，先检查预览，再由自己确认添加。',
+      caption: '计划和课程都可按自己的需要编辑；导引不会同步账号、保存安排或标记通知已读。',
+    },
+    {
+      id: 'laboratory-overview-202610',
+      station: 'laboratory',
+      target: '.laboratory-intro',
+      title: '实验室：在尝试中理解原理',
+      body: '搭建与仿真电路，制作 HTML 小工具，或在 C / C++、Python、Octave、Verilog 环境中观察代码、变量和波形。选择一个环境，再带着自己的问题开始实验。',
+      caption: '各引擎的兼容范围与资源限制以页面说明为准；导引不运行代码、生成或发布作品。',
+    },
+    {
+      id: 'creative-overview-202610',
+      station: 'creative',
+      target: '.development-release',
+      title: '创意工坊：让想法成为实用工具',
+      body: '这里正在建设可安装的插件空间，计划让工具与 Skill 成为随手可用的能力。目前可以先去实验室的「制作我的工具」实践自己的想法。',
+      caption: '插件安装与发布尚未开放，具体开放时间以正式公告为准。',
+    },
+    {
+      id: 'pbl-overview-202610',
+      station: 'pbl',
+      target: '.development-release',
+      title: 'PBL 计划：从疑问走向真实项目',
+      body: '从课程中的问题出发，寻找同伴，把知识用于项目实践。这里目前介绍项目式学习的建设方向，之后再逐步开放组队、项目与成果协作。',
+      caption: '当前尚未开放项目报名、组队或成果提交，不必为完成导引寻找未开放的功能。',
+    },
+    {
+      id: 'max-overview-202610',
+      station: 'max',
+      target: '#aichat-form',
+      guestTarget: '.aichat-auth-required',
+      title: '问问 Max：多一个辅助思考的伙伴',
+      body: '说清目标、已知条件和自己的尝试，请 Max 解释原理、梳理思路或寻找下一步。学习页面右侧也有结合当前课程的 Max，不必离开正文来回切换。',
+      caption: '重要结论仍需核对；导引不会自动发送问题、选择文件或上传附件。',
+    },
+    {
+      id: 'development-overview-202610',
+      station: 'development',
+      target: '.development-release',
+      title: '发展端：连接学习之外的成长',
+      body: '这里正在建设面向同学与团学组织的发展空间，连接通知、活动、资源与组织协作。活动报名目前保留独立的试用入口，之后再整合到发展端。',
+      caption: '以页面显示的建设状态为准；导引不会报名、提交信息或授予任何权限。',
+    },
+    {
+      id: 'shop-overview-202610',
+      station: 'shop',
+      target: '.shop-category-nav',
+      title: '电磁场商城：先端详，再决定',
+      body: '按类别浏览装扮、收藏、消耗品和伙伴，端详物品的用途、当前价格与购买限制。已获得的物品在仓库中查看，电元和磁元的收支可以查钱包账本。',
+      caption: '价格与限制以当前账号显示为准；导引不会购买、兑换或消耗任何物品。',
+    },
+  ].map((entry) => ({
+    route: stationById.get(entry.station).route,
+    label: stationById.get(entry.station).label,
+    ...entry,
+  }));
+  const essentialSteps = [
+    ...legacyV4Steps
+      .filter((entry) => ['home', 'world'].includes(entry.station))
+      .map((entry) => ({ ...entry })),
+    ...pageIntroductions,
+    { ...legacyV4Steps.at(-1) },
+  ];
+  // Only current copy reflects the new learning tools. Published tours retain
+  // their original indices and text; their receipts are not interpreted as v5.
+  const currentReading = essentialSteps.find((entry) => entry.id === 'knowledge-reading');
+  currentReading.body =
+    '正文支持公式、图片与代码，也可以直接在原文上高亮、划线和写评注；批注仅自己可见。读完后按需要做练习、自测，或从「继续学习」选择下一步，不必逐一完成才能查阅内容。';
+  currentReading.caption =
+    'Max 是辅助老师，星标不替代掌握程度；导引不会写批注、作答或增加学习进度。';
+  const currentOverview = essentialSteps.find((entry) => entry.id === 'knowledge-overview');
+  currentOverview.caption =
+    '先了解知识背景，再按自己的需要阅读、自测或探索；不会自动替你选择学习起点。';
+  const essentialStationOrder = [
+    'home',
+    'world',
+    ...pageIntroductions.map((entry) => entry.station),
+    'handbook',
+  ];
+  const essentialStations = essentialStationOrder.map((id) => {
     const entry = STATIONS.find((item) => item.id === id);
     const labels = {
       home: '开始',
       world: '学习',
-      discussion: '讨论',
-      workbench: '计划',
+      discussion: '讨论区',
+      workbench: '工作台',
+      shop: '电磁场商城',
       handbook: '其他功能',
     };
     const descriptions = {
@@ -943,13 +1046,18 @@
       workbench: '管理日程、重复安排和重要事项',
       handbook: '按需要发现更多工具',
     };
-    return { ...entry, label: labels[id], title: descriptions[id] };
+    return {
+      ...entry,
+      label: labels[id] || entry.label,
+      title: descriptions[id] || entry.title,
+    };
   });
   const catalogue = freeze({
     STATIONS: essentialStations,
     STEPS: essentialSteps,
     ARCHIVED_STATIONS: STATIONS,
     ARCHIVED_STEPS: currentSteps,
+    LEGACY_V4_STEPS: legacyV4Steps,
     RELEASE_STEP_IDS,
   });
   if (typeof module !== 'undefined' && module.exports) module.exports = catalogue;

@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const express = require('express');
 const sharp = require('sharp');
 const { createBoneSales, createBoneSalesRouter } = require('../backend/economy-sales');
-const { createOnboardingPreview } = require('./preview-onboarding');
+const { createOnboardingPreview, courseFixture } = require('./preview-onboarding');
 const { TOKEN } = require('./preview-economy');
 const {
   GUIDE_VERSION,
@@ -22,6 +22,128 @@ const {
   ARCHIVED_STATIONS,
   RELEASE_STEP_IDS,
 } = require('../public/max-guide-stations');
+
+test('onboarding preview uses real empty learning stores across its three course fixtures', async (t) => {
+  const { server, learning } = createOnboardingPreview();
+  await new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  t.after(() => server.close());
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  async function get(route) {
+    const response = await fetch(`${origin}${route}`, {
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+    assert.equal(response.status, 200, route);
+    assert.match(response.headers.get('cache-control'), /no-store/);
+    return response.json();
+  }
+  for (const slug of ['math', 'circuits', 'signals']) {
+    const fixture = courseFixture(slug);
+    const stars = await get(`/api/learning-stars/${slug}`);
+    assert.equal(stars.course.slug, slug);
+    assert.equal(stars.nodes.length, fixture.nodes.length);
+    assert.ok(stars.course.stars.every((star) => !star.earned));
+    for (const node of fixture.nodes) {
+      const record = stars.nodes.find((item) => item.nodeId === node.id);
+      assert.ok(record, node.id);
+      assert.ok(record.stars.every((star) => !star.earned));
+      assert.equal(record.selftest.available, false, 'no published quiz is fabricated for a guide');
+      const questions = await get(`/api/learning-assessments/${slug}/${node.id}/questions`);
+      assert.equal(questions.questionVersion, null);
+      assert.equal(questions.reviewedBy, '');
+      assert.deepEqual(questions.questions, []);
+      assert.deepEqual(questions.practiceQuestions, []);
+      assert.deepEqual(
+        (await get(`/api/learning-assessments/${slug}/${node.id}/attempts`)).attempts,
+        [],
+      );
+      assert.deepEqual((await get(`/api/learning/${slug}/${node.id}/entries`)).entries, []);
+    }
+  }
+  assert.equal((await get('/api/learning-analytics/preferences')).preferences.enabled, false);
+  assert.deepEqual(learning.store.rows, []);
+  assert.deepEqual(learning.assessmentStore.rows, []);
+  assert.deepEqual(learning.starsStore.rows, []);
+  assert.deepEqual(learning.analyticsStore.rows, []);
+});
+
+test('guide completion and reward cannot turn into learning evidence or opt the learner into tracking', async (t) => {
+  const { server, learning } = createOnboardingPreview();
+  await new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  t.after(() => server.close());
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  async function call(route, method = 'GET', body = undefined) {
+    const response = await fetch(`${origin}${route}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${TOKEN}`,
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    assert.equal(response.status, 200, route);
+    return response.json();
+  }
+  const before = await call('/api/learning-stars/math');
+  await call('/api/onboarding', 'PATCH', {
+    version: GUIDE_VERSION,
+    status: 'completed',
+    step: STEPS.length - 1,
+  });
+  await call('/api/onboarding/reward', 'POST', {});
+  await call('/api/learning-stars/math/MA-01-1/reconcile', 'POST', {});
+  assert.deepEqual(await call('/api/learning-stars/math'), before);
+  assert.equal((await call('/api/learning-analytics/preferences')).preferences.enabled, false);
+  assert.deepEqual(learning.store.rows, []);
+  assert.deepEqual(learning.assessmentStore.rows, []);
+  assert.deepEqual(learning.starsStore.rows, []);
+  assert.deepEqual(learning.analyticsStore.rows, []);
+});
+
+test('shared learning preview APIs preserve authentication, same-origin and invalid-context errors', async (t) => {
+  const { server } = createOnboardingPreview();
+  await new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  t.after(() => server.close());
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  assert.equal((await fetch(`${origin}/api/learning-stars/math`)).status, 401);
+  assert.equal(
+    (
+      await fetch(`${origin}/api/learning-stars/math`, {
+        headers: { Authorization: 'Bearer wrong-preview-account' },
+      })
+    ).status,
+    401,
+  );
+  assert.equal(
+    (
+      await fetch(`${origin}/api/learning-stars/math`, {
+        headers: { Authorization: `Bearer ${TOKEN}`, Origin: 'https://www.free-bbs.cn' },
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await fetch(`${origin}/api/learning-stars/unknown`, {
+        headers: { Authorization: `Bearer ${TOKEN}` },
+      })
+    ).status,
+    404,
+  );
+  assert.equal(
+    (
+      await fetch(`${origin}/api/learning-stars/math/MA-99-1`, {
+        headers: { Authorization: `Bearer ${TOKEN}` },
+      })
+    ).status,
+    404,
+  );
+});
 
 test('merged ranch preview saves appearance separately from Poisson wool, assets and receipts', async (t) => {
   let draws = 0;
@@ -480,8 +602,8 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
   const sandbox = { window: {} };
   vm.runInNewContext(source, sandbox);
   assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.FreeBbsGuideStations.STEPS)), STEPS);
-  assert.equal(STEPS.length, 16);
-  assert.equal(STATIONS.length, 5);
+  assert.equal(STEPS.length, 17);
+  assert.equal(STATIONS.length, 11);
   assert.deepEqual(
     JSON.parse(JSON.stringify(sandbox.window.FreeBbsGuideStations.ARCHIVED_STEPS)),
     ARCHIVED_STEPS,
@@ -509,7 +631,10 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
     'a.island-course-planet[data-course-slug="math"]',
     '#course-map-reset-view',
     '[data-reader-node-id]',
+    '.course-structure-picker [data-course-point-id], [data-reader-node-id]',
     '.course-map-focus-center [data-reader-node-id]',
+    '.course-structure-details .course-structure-primary, .course-map-focus-center [data-reader-node-id]',
+    '.course-structure-details .course-structure-primary, [data-course-map-arrow-help-toggle]',
     '#course-knowledge-overview[open] .knowledge-overview-drawer-footer > button',
     '[data-course-map-arrow-help-toggle]',
     '#course-knowledge-overview[open] .knowledge-overview-study',
@@ -557,10 +682,14 @@ test('station catalogue is browser/CommonJS compatible, version-independent, and
     RELEASE_STEP_IDS,
   );
   assert.deepEqual(LATEST_RELEASE.stepIds, [
-    'world-atlas',
-    'discussion-filters',
-    'workbench-week',
-    'handbook-other-features',
+    'discussion-overview-202610',
+    'workbench-overview-202610',
+    'laboratory-overview-202610',
+    'creative-overview-202610',
+    'pbl-overview-202610',
+    'max-overview-202610',
+    'development-overview-202610',
+    'shop-overview-202610',
   ]);
   for (const id of RELEASE_STEP_IDS) {
     const step = ARCHIVED_STEPS.find((entry) => entry.id === id);

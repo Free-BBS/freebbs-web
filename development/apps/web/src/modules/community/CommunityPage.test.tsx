@@ -50,6 +50,51 @@ const trends: CommunityTrendingPayload = {
 };
 
 describe('CommunityPage', () => {
+  it('distinguishes failed, loading and successfully empty feeds', async () => {
+    let resolveFeed!: (value: CommunityFeedItem[]) => void;
+    const nextFeed = new Promise<CommunityFeedItem[]>((resolve) => {
+      resolveFeed = resolve;
+    });
+    const request = vi.fn(async (path: string) => {
+      if (path === '/community/trending') return { ...trends, items: [] };
+      if (path === '/community/feed?channel=all') throw new Error('Offline');
+      if (path === '/community/feed?channel=daily') return nextFeed;
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const user = userEvent.setup();
+    render(<CommunityPage client={{ request } as unknown as ApiClient} />);
+
+    expect(screen.getByRole('main')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByRole('status')).toHaveAttribute('data-state', 'loading');
+    expect(await screen.findByRole('alert')).toHaveTextContent('广场内容暂时无法加载');
+    expect(screen.getByRole('main')).toHaveAttribute('aria-busy', 'false');
+    expect(screen.queryByText('这个分区还没有内容，来写下第一条吧。')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: '校园日常' }));
+    expect(screen.getByRole('main')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText('这个分区还没有内容，来写下第一条吧。')).not.toBeInTheDocument();
+    await act(async () => resolveFeed([]));
+    expect(screen.getByRole('status')).toHaveAttribute('data-state', 'empty');
+    expect(screen.getByRole('main')).toHaveAttribute('aria-busy', 'false');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('does not confuse an operation failure with a successfully empty feed', async () => {
+    const request = vi.fn(async (path: string) => {
+      if (path === '/community/feed?channel=all') return [];
+      if (path === '/community/trending') return { ...trends, items: [] };
+      throw new Error('Detail unavailable');
+    });
+    render(<CommunityPage client={{ request } as unknown as ApiClient} initialPostId="missing" />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('帖子详情暂时无法打开');
+    expect(await screen.findByText('这个分区还没有内容，来写下第一条吧。')).toHaveAttribute(
+      'data-state',
+      'empty',
+    );
+  });
+
   it('ignores a stale thread response without discarding the current reply draft', async () => {
     let resolveOlder!: (value: CommunityThreadDetail) => void;
     const newer = { ...wish, id: 'wish-2', title: '午后散步' };

@@ -13,6 +13,20 @@ const source = fs.readFileSync(path.join(root, 'public/home.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public/home.css'), 'utf8');
 const storage = (data) => ({ getItem: () => JSON.stringify(data) });
 
+test('homepage motto preserves FREE BBS initials and names the shared study space', () => {
+  const motto = html.match(/<p class="home-community-motto"[^>]*>([\s\S]*?)<\/p>/)?.[1];
+  assert.ok(motto);
+  const words = motto
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  assert.equal(words, 'Friends Rally to Empower Education, Building Better StudySpaces');
+  const initials = [...motto.matchAll(/class="home-motto-initial">([A-Z])<\/span>/g)]
+    .map((match) => match[1])
+    .join('');
+  assert.equal(initials, 'FREEBBS');
+});
+
 test('homepage places all four primary actions before community discovery', () => {
   const start = html.indexOf('class="home-actions"');
   const end = html.indexOf('class="home-dashboard"');

@@ -54,7 +54,7 @@ test('regular navigation retains the agreed eight entries, followed by trial act
 test('mobile keeps five primary slots, PBL in tools, and experimental runtimes in learning', () => {
   const shell = read('public/mobile-shell.js');
   const tools = shell.split('const tools = [')[1].split('];')[0];
-  assert.match(tools, /\['\/pbl', 'star', 'PBL计划'\]/);
+  assert.match(tools, /\['\/pbl', 'star', 'PBL 计划'\]/);
   assert.match(tools, /活动报名（试用）/);
   const learning = shell.split('creativeLabel.textContent =')[1].split('const closeLearning')[0];
   assert.match(learning, /\/laboratory/);

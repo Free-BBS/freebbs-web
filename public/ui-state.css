@@ -1,0 +1,39 @@
+/* Shared state messages. No page layout or real-data cards are restyled here. */
+.ui-state {
+  display: grid;
+  justify-items: start;
+  align-content: start;
+  gap: 12px;
+  padding: 24px 0;
+  color: var(--ui-muted, var(--muted));
+  font-family: var(--font-ui);
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.ui-state-eyebrow {
+  font-size: 0.82em;
+}
+
+.ui-state-title {
+  color: var(--ui-text, var(--ink));
+  font-weight: 600;
+}
+
+.ui-state-message {
+  margin: 0;
+  color: inherit;
+}
+
+.ui-state[data-ui-state='error'] .ui-state-message {
+  color: var(--ui-danger, var(--ui-text, var(--ink)));
+}
+
+.ui-state .bbs-action {
+  margin: 0;
+}
+
+/* Keep the calendar sidebar's existing compact data-card geometry. */
+.workbench-state-item[data-ui-state] {
+  overflow-wrap: anywhere;
+}

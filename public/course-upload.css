@@ -73,10 +73,10 @@
   flex: 0 0 auto;
   min-height: 38px;
   padding: 7px 13px;
-  color: inherit;
+  color: var(--action-foreground, inherit);
   border: 1px solid var(--border-color, #7d8a9b66);
   border-radius: 8px;
-  background: transparent;
+  background: var(--action-fill, transparent);
   cursor: pointer;
 }
 .course-token-secret {

@@ -1,0 +1,193 @@
+.learning-data-panel {
+  margin: 24px 0;
+  padding: 24px;
+  border: 1px solid var(--border-color, #d8e1e4);
+  border-radius: 18px;
+  background: var(--card-bg, #fff);
+  color: var(--text-color, #132b32);
+}
+.learning-data-panel[hidden] {
+  display: none;
+}
+.learning-data-heading,
+.learning-data-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.learning-data-heading h3 {
+  margin: 0;
+  font-size: 24px;
+}
+.learning-data-heading select,
+.learning-data-controls button {
+  border: 1px solid var(--border-color, #d8e1e4);
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--card-bg, #fff);
+  color: inherit;
+  font: inherit;
+}
+.learning-data-controls button:active {
+  transform: none;
+}
+.learning-data-switch {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.learning-data-switch input {
+  width: 18px;
+  height: 18px;
+  accent-color: #087480;
+}
+.learning-data-caption,
+.learning-data-status {
+  color: var(--muted-color, #65747a);
+  font-size: 14px;
+  line-height: 1.65;
+}
+.learning-data-status:empty {
+  display: none;
+}
+.learning-data-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+.learning-data-metric {
+  background: var(--surface-soft, #f3f7f7);
+  padding: 15px;
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+}
+.learning-data-metric span {
+  font-size: 14px;
+  color: var(--muted-color, #65747a);
+}
+.learning-data-metric strong {
+  font-size: 24px;
+}
+.learning-data-metric small {
+  color: var(--muted-color, #65747a);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.learning-data-subheading,
+.learning-data-evidence h4 {
+  margin: 22px 0 8px;
+  font-size: 19px;
+}
+.learning-data-evidence {
+  margin-top: 24px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color, #d8e1e4);
+}
+.learning-data-evidence .learning-data-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+.learning-data-evidence-scope {
+  margin: 14px 0;
+}
+.learning-data-evidence-scope summary {
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--muted-color, #65747a);
+}
+.learning-data-table-scroll {
+  overflow: auto;
+}
+.learning-data-panel table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 14px;
+}
+.learning-data-panel th,
+.learning-data-panel td {
+  border-bottom: 1px solid var(--border-color, #d8e1e4);
+  padding: 12px 10px;
+  white-space: nowrap;
+}
+.learning-data-users {
+  margin-top: 20px;
+}
+.learning-data-users summary {
+  cursor: pointer;
+  padding: 10px 0;
+}
+.learning-data-unit-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+  gap: 12px;
+}
+.learning-data-unit {
+  padding: 16px;
+  border: 1px solid var(--border-color, #d8e1e4);
+  border-radius: 12px;
+}
+.learning-data-unit-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+}
+.learning-data-unit-heading a {
+  color: var(--accent-color, #087480);
+  font-size: 13px;
+}
+.learning-data-unit-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.learning-data-unit > small {
+  display: block;
+  margin-top: 10px;
+}
+body.theme-dark .learning-data-panel {
+  background: #122a32;
+  color: #e7eff1;
+  border-color: #38515a;
+}
+body.theme-dark .learning-data-metric {
+  background: #1b353e;
+}
+body.theme-dark .learning-data-controls button {
+  background: #1b353e;
+  color: #e7eff1;
+  border-color: #38515a;
+}
+body.theme-dark .learning-data-unit {
+  border-color: #38515a;
+}
+body.theme-dark .learning-data-unit-heading a {
+  color: #80d6dc;
+}
+body.theme-dark .learning-data-caption,
+body.theme-dark .learning-data-metric span,
+body.theme-dark .learning-data-metric small,
+body.theme-dark .learning-data-evidence-scope summary {
+  color: #b3c4ca;
+}
+@media (max-width: 620px) {
+  .learning-data-panel {
+    padding: 16px;
+  }
+  .learning-data-heading h3 {
+    font-size: 21px;
+  }
+  .learning-data-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .learning-data-evidence .learning-data-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

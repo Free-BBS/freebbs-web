@@ -115,6 +115,7 @@ export function CommunityPage({ client, initialPostId }: CommunityPageProps) {
   const [items, setItems] = useState<CommunityFeedItem[]>([]);
   const [trending, setTrending] = useState<CommunityTrendingPayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [error, setError] = useState('');
   const [composerKind, setComposerKind] = useState<'daily' | 'wish'>('daily');
   const composerRef = useRef<HTMLDivElement>(null);
@@ -139,6 +140,7 @@ export function CommunityPage({ client, initialPostId }: CommunityPageProps) {
   const loadFeed = useCallback(async () => {
     const requestId = ++feedRequest.current;
     setLoading(true);
+    setLoadError('');
     try {
       const nextItems = await client.request<CommunityFeedItem[]>(
         `/community/feed?channel=${channel}`,
@@ -147,7 +149,7 @@ export function CommunityPage({ client, initialPostId }: CommunityPageProps) {
       setItems(nextItems);
       setError('');
     } catch {
-      if (requestId === feedRequest.current) setError('广场内容暂时无法加载，请稍后重试。');
+      if (requestId === feedRequest.current) setLoadError('广场内容暂时无法加载，请稍后重试。');
     } finally {
       if (requestId === feedRequest.current) setLoading(false);
     }
@@ -460,16 +462,16 @@ export function CommunityPage({ client, initialPostId }: CommunityPageProps) {
           </button>
         ))}
       </nav>
-      {error ? (
-        <div className="community-alert" role="alert">
-          {error}
+      {loadError || error ? (
+        <div className="community-alert" role="alert" data-state="error" aria-busy="false">
+          {loadError || error}
           <button type="button" onClick={() => void loadFeed()}>
             重新加载
           </button>
         </div>
       ) : null}
       <div className="community-layout">
-        <main className="community-feed" aria-live="polite">
+        <main className="community-feed" aria-live="polite" aria-busy={loading}>
           <div ref={composerRef} hidden={channel === 'student_festival' || channel === 'rights'}>
             <CommunityPostDialog
               inline
@@ -506,13 +508,18 @@ export function CommunityPage({ client, initialPostId }: CommunityPageProps) {
           </div>
           {channel === 'student_festival' ? <CommunityFestivalFeed client={client} /> : null}
           {loading && channel !== 'student_festival' ? (
-            <p className="community-empty">正在收集广场上的新鲜事…</p>
+            <p className="community-empty" role="status" data-state="loading">
+              正在收集广场上的新鲜事…
+            </p>
           ) : null}
           {!loading &&
+          !loadError &&
           items.length === 0 &&
           channel !== 'rights' &&
           channel !== 'student_festival' ? (
-            <p className="community-empty">这个分区还没有内容，来写下第一条吧。</p>
+            <p className="community-empty" role="status" data-state="empty">
+              这个分区还没有内容，来写下第一条吧。
+            </p>
           ) : null}
           {channel !== 'student_festival' &&
             items.map((item) => (

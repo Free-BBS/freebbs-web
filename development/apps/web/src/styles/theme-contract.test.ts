@@ -56,12 +56,71 @@ describe('dark-theme contrast contract', () => {
       '--border-subtle:',
       '--action-primary:',
       '--action-primary-text:',
+      '--action-danger-text:',
     ]) {
       expect(tokensCss).toContain(token);
       expect(themeCss).toContain(token);
     }
     expect(tokensCss).toContain('--radius-sm: 12px;');
     expect(tokensCss).toContain('--radius-lg: 18px;');
+  });
+
+  it('pairs bright primary and destructive hover fills with readable foregrounds in both themes', () => {
+    const dark = themeCss.match(
+      /body\.theme-dark,[\s\S]*?body:not\(\.theme-light\)\s*\{([^}]+)\}/,
+    )?.[1];
+    const light = themeCss.match(/body\.theme-light\s*\{([^}]+)\}/)?.[1];
+    for (const declarations of [dark, light]) {
+      expect(declarations).toBeDefined();
+      const token = (name: string) => {
+        const value = declarations?.match(new RegExp(`${name}:\\s*(#[a-f0-9]{6});`, 'i'))?.[1];
+        if (!value) throw new Error(`Missing theme token ${name}`);
+        return value;
+      };
+      expect(
+        contrastRatio(token('--action-primary-text'), token('--action-primary')),
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(token('--action-danger-text'), token('--color-danger')),
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(componentsCss).toMatch(
+      /\.auth-state a:hover[\s\S]*?\.demo-switcher button:hover[^{}]*\{[^}]*background:\s*var\(--color-active\);[^}]*color:\s*var\(--action-primary-text\);/,
+    );
+    expect(componentsCss).toMatch(
+      /\.admin-governance-page button\.danger-button:hover\s*\{[^}]*background:\s*var\(--color-danger\);[^}]*color:\s*var\(--action-danger-text\);/,
+    );
+    expect(componentsCss).toMatch(
+      /\.module-page \.audience-switcher button\[aria-pressed='true'\]\s*\{[^}]*background:\s*var\(--color-active\);[^}]*color:\s*var\(--action-primary-text\);/,
+    );
+  });
+
+  it('shares opt-in action states with the main site and guards generic hover fills', () => {
+    expect(componentsCss).toContain("@import '../../../../../public/actions.css';");
+    for (const token of [
+      '--action-primary-hover:',
+      '--action-secondary:',
+      '--action-secondary-hover:',
+      '--action-secondary-text:',
+      '--action-secondary-border:',
+      '--action-quiet-hover:',
+      '--action-quiet-text:',
+      '--action-danger:',
+      '--action-focus:',
+      '--action-disabled-opacity:',
+    ]) {
+      expect(tokensCss).toContain(token);
+    }
+    expect(componentsCss).toMatch(
+      /\.dialog-form button:hover:where\(:not\(:disabled, \[aria-disabled='true'\]\)\)\s*\{[^}]*color:\s*var\(--action-primary-text\);/,
+    );
+    expect(componentsCss).toMatch(
+      /\.demo-switcher button:hover[^{}]*\{[^}]*color:\s*var\(--action-primary-text\);[^}]*\}/,
+    );
+    const genericHover = componentsCss.match(
+      /\.auth-state a:hover[\s\S]*?\.demo-switcher button:hover[^{}]*\{([^}]*)\}/,
+    )?.[1];
+    expect(genericHover).not.toMatch(/transform\s*:/);
   });
 
   it('keeps sidebar hover and active navigation text above the normal-text contrast threshold', () => {

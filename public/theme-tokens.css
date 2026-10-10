@@ -1,0 +1,103 @@
+/* Shared color contract. Legacy --ui-* names remain for gradual migration. */
+:root {
+  --ui-page: #f4f6f8;
+  --ui-surface: #ffffff;
+  --ui-surface-raised: #ffffff;
+  --ui-surface-soft: #edf2f3;
+  --ui-input: #ffffff;
+  --ui-text: #071317;
+  --ui-muted: rgba(7, 19, 23, 0.62);
+  --ui-faint: rgba(7, 19, 23, 0.42);
+  --ui-line: rgba(7, 19, 23, 0.12);
+  --ui-line-strong: rgba(7, 19, 23, 0.2);
+  --ui-accent: #075d68;
+  --ui-accent-hover: #064a54;
+  --ui-accent-contrast: #ffffff;
+  --ui-action: #0b5f6c;
+  --ui-action-hover: #084c57;
+  --ui-action-contrast: #ffffff;
+  --ui-reward: #d5a43a;
+  --ui-reward-complete: #bb861e;
+  --ui-reward-soft: #fffdf3;
+  --ui-reward-strong: #ffe9a3;
+  --ui-reward-highlight: #fff1bc;
+  --ui-reward-muted: #8a5b08;
+  --ui-reward-contrast: #704500;
+  --ui-accent-soft: rgba(39, 136, 152, 0.11);
+  --ui-danger: #9b3429;
+  --ui-danger-contrast: #ffffff;
+  --ui-focus: #087f90;
+  --ui-shadow: 0 16px 42px rgba(6, 54, 65, 0.08);
+}
+
+body.theme-light {
+  --bbs-shell-page: var(--ui-page);
+  --bbs-shell-text: var(--ui-text);
+  --bbs-shell-muted: var(--ui-muted);
+  --minimal-bg: var(--ui-page);
+  --minimal-text: var(--ui-text);
+  --minimal-muted: var(--ui-muted);
+  --minimal-line: var(--ui-line);
+}
+
+body.theme-dark {
+  --ui-page: #0d181d;
+  --ui-surface: #14242b;
+  --ui-surface-raised: #182b33;
+  --ui-surface-soft: #1c3139;
+  --ui-input: #101f25;
+  --ui-text: #edf6f7;
+  --ui-muted: rgba(237, 246, 247, 0.68);
+  --ui-faint: rgba(237, 246, 247, 0.46);
+  --ui-line: rgba(223, 242, 244, 0.13);
+  --ui-line-strong: rgba(223, 242, 244, 0.22);
+  --ui-accent: #72d6df;
+  --ui-accent-hover: #94e4eb;
+  --ui-accent-contrast: #071317;
+  --ui-reward: #d5a43a;
+  --ui-reward-complete: #d5a43a;
+  --ui-reward-soft: #302711;
+  --ui-reward-strong: #493915;
+  --ui-reward-highlight: #3c3015;
+  --ui-reward-muted: #ffe4a0;
+  --ui-reward-contrast: #ffe4a0;
+  --ui-accent-soft: rgba(85, 190, 202, 0.14);
+  --ui-danger: #ff9b8f;
+  --ui-danger-contrast: #071317;
+  --ui-focus: #8de8ee;
+  --ui-shadow: 0 20px 52px rgba(0, 0, 0, 0.24);
+  --bbs-shell-page: var(--ui-page);
+  --bbs-shell-text: var(--ui-text);
+  --bbs-shell-muted: var(--ui-muted);
+  --bbs-shell-line: var(--ui-line);
+  --minimal-bg: var(--ui-page);
+  --minimal-text: var(--ui-text);
+  --minimal-muted: var(--ui-muted);
+  --minimal-line: var(--ui-line);
+}
+
+/* Resolve aliases on the themed body, not only at :root. Custom properties
+ * inherited from :root otherwise retain the light value after a theme switch. */
+:root,
+body {
+  --surface-page: var(--ui-page);
+  --surface-raised: var(--ui-surface);
+  --surface-muted: var(--ui-surface-soft);
+  --border-subtle: var(--ui-line);
+  --action-primary: var(--ui-action);
+  --action-primary-hover: var(--ui-action-hover);
+  --action-primary-text: var(--ui-action-contrast);
+  --action-secondary: var(--ui-surface);
+  --action-secondary-hover: var(--ui-surface-soft);
+  --action-secondary-text: var(--ui-text);
+  --action-secondary-border: var(--ui-line-strong);
+  --action-quiet-hover: var(--ui-accent-soft);
+  --action-quiet-text: var(--ui-accent);
+  --action-danger: var(--ui-danger);
+  --action-danger-text: var(--ui-danger-contrast);
+  --action-focus: var(--ui-focus);
+  --action-focus-width: 3px;
+  --action-focus-offset: 3px;
+  --action-disabled-opacity: 0.55;
+  --action-transition: 140ms ease;
+}

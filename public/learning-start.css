@@ -1,0 +1,131 @@
+.learning-start {
+  margin: 14px 0 20px;
+  color: var(--ui-text, #132b32);
+}
+.learning-start[hidden] {
+  display: none;
+}
+.learning-start-dialog {
+  width: min(460px, calc(100vw - 36px));
+  box-sizing: border-box;
+  padding: 25px;
+  border: 1px solid var(--ui-line, #d8e1e4);
+  border-radius: 18px;
+  background: var(--ui-surface, #fff);
+  color: var(--ui-text, #132b32);
+}
+.learning-start-dialog::backdrop {
+  background: rgb(13 35 43 / 38%);
+}
+.learning-start h3 {
+  margin: 0 0 12px;
+  font-size: var(--type-fixed-subheading-size);
+}
+.learning-start-choices,
+.learning-start-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.learning-start-choices {
+  align-items: stretch;
+  flex-direction: column;
+}
+.learning-start-choices label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.learning-start select,
+.learning-start button {
+  color: inherit;
+  font: inherit;
+  font-size: var(--type-fixed-control-size);
+  border: 1px solid var(--ui-line, #d8e1e4);
+  border-radius: 9px;
+  padding: 8px 12px;
+  background: var(--ui-surface, #fff);
+}
+.learning-start button {
+  cursor: pointer;
+}
+.learning-start button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.learning-start button:active {
+  transform: none;
+}
+.learning-start button:focus-visible,
+.learning-start select:focus-visible {
+  outline: 2px solid #167d89;
+  outline-offset: 3px;
+}
+.learning-start .learning-start-apply {
+  background: #0c7783;
+  border-color: #0c7783;
+  color: #fff;
+}
+.learning-start-actions {
+  margin-top: 14px;
+}
+.learning-start-exit {
+  color: inherit;
+  font-size: var(--type-fixed-control-size);
+}
+.learning-start-note,
+.learning-start-status {
+  color: var(--ui-muted, #65747a);
+  font-size: var(--type-fixed-caption-size);
+}
+.learning-start-status:empty {
+  display: none;
+}
+.learning-start .learning-start-adjust {
+  background: transparent;
+  padding: 5px 10px;
+}
+body.theme-dark .learning-start-dialog,
+[data-theme='dark'] .learning-start-dialog {
+  background: var(--ui-surface, #1b353e);
+  color: var(--ui-text, #e7eff1);
+  border-color: var(--ui-line, #38515a);
+}
+body.theme-dark .learning-start select,
+body.theme-dark .learning-start button,
+[data-theme='dark'] .learning-start select,
+[data-theme='dark'] .learning-start button {
+  background: var(--ui-surface, #122a32);
+  color: var(--ui-text, #e7eff1);
+  border-color: var(--ui-line, #38515a);
+}
+body.theme-dark .learning-start .learning-start-apply,
+[data-theme='dark'] .learning-start .learning-start-apply {
+  background: #0c7783;
+  border-color: #0c7783;
+  color: #fff;
+}
+body.theme-dark .learning-start-note,
+body.theme-dark .learning-start-status,
+[data-theme='dark'] .learning-start-note,
+[data-theme='dark'] .learning-start-status {
+  color: var(--ui-muted, #b3c4ca);
+}
+@media (max-width: 600px) {
+  .learning-start-dialog {
+    padding: 20px;
+  }
+  .learning-start-choices {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .learning-start-choices label {
+    justify-content: space-between;
+  }
+  .learning-start select {
+    min-width: 170px;
+    max-width: 100%;
+  }
+}
