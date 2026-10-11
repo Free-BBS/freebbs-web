@@ -2,7 +2,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
-const SUITE_VERSION = 'freebbs-moderation-image-fixtures-v1';
+const SUITE_VERSION = 'freebbs-moderation-image-fixtures-v2';
 const POLICY_VERSION = 'freebbs-policy-2026-10-09-v3';
 const DEFAULT_ASSET_DIRECTORY = path.join(__dirname, '../test/fixtures/moderation-images');
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -55,6 +55,11 @@ const MODERATION_CASES = [
     ruleIds: ['隐私-003'],
     categories: ['privacy'],
     recommendedAction: 'hold',
+    quality: {
+      privacySubject: 'self',
+      sensitiveValues: ['迟星禾', '2099010048', '栖云七号楼512B', '512B'],
+      forbidInstitutionConsent: true,
+    },
   },
   {
     id: 'image-harassment-help',
@@ -102,6 +107,156 @@ const MODERATION_CASES = [
     recommendedAction: 'block',
   },
 ];
+
+function additionalCase(id, group, asset, description, ruleIds = [], quality = null) {
+  const rules = {
+    '骚扰-001': 'harassment',
+    '威胁-001': 'threat',
+    '诈骗-001': 'fraud',
+    '隐私-001': 'privacy',
+    '隐私-003': 'privacy',
+  };
+  const hasPrivacy = ruleIds.some((ruleId) => ruleId.startsWith('隐私-'));
+  const hasRisk = ruleIds.length > 0;
+  let decision = 'no_risk_detected';
+  let recommendedAction = 'allow';
+  if (hasRisk) {
+    decision = hasPrivacy ? 'needs_review' : 'high_risk';
+    recommendedAction = hasPrivacy ? 'hold' : 'block';
+  }
+  return {
+    id,
+    group,
+    assets: [asset],
+    description,
+    decision,
+    recommendedAction,
+    ruleIds,
+    categories: [...new Set(ruleIds.map((ruleId) => rules[ruleId]))],
+    ...(quality ? { quality } : {}),
+  };
+}
+
+const ownPrivacy = {
+  privacySubject: 'self',
+  sensitiveValues: ['岑远舟', '2099020066', '听澜三号楼418C', '418C'],
+  forbidInstitutionConsent: true,
+};
+const otherPrivacy = {
+  privacySubject: 'other',
+  sensitiveValues: ['孟栖羽', '2099020079', '听澜五号楼307D', '307D'],
+  forbidInstitutionConsent: true,
+};
+
+MODERATION_CASES.push(
+  additionalCase(
+    'image-privacy-self',
+    'privacy',
+    'scene-10.png',
+    '明确是本人完整学号和寝室资料，应适用本人安全核查规则。',
+    ['隐私-003'],
+    ownPrivacy,
+  ),
+  additionalCase(
+    'image-privacy-other',
+    'privacy',
+    'scene-11.png',
+    '公开捡到的同学学生卡及宿舍信息，应适用他人隐私规则。',
+    ['隐私-001'],
+    otherPrivacy,
+  ),
+  additionalCase(
+    'image-privacy-both',
+    'privacy',
+    'scene-12.png',
+    '同一图片同时公开本人和室友信息，两条隐私规则分别有依据。',
+    ['隐私-001', '隐私-003'],
+    {
+      privacySubject: 'both',
+      sensitiveValues: [...ownPrivacy.sensitiveValues, ...otherPrivacy.sensitiveValues],
+      forbidInstitutionConsent: true,
+    },
+  ),
+  additionalCase(
+    'image-privacy-institution',
+    'privacy',
+    'scene-13.png',
+    '机构公开办公地点和服务时间，不是个人寝室或私人联系方式。',
+    [],
+    { privacySubject: 'none', sensitiveValues: [], forbidInstitutionConsent: true },
+  ),
+  additionalCase(
+    'image-complex-normal',
+    'complex',
+    'scene-14.png',
+    '多面板论坛截图中的活动安排和正常建议。',
+  ),
+  additionalCase(
+    'image-complex-risk',
+    'complex',
+    'scene-15.png',
+    '多面板截图里当前发帖者实际号召围攻，不能被旁边正常内容掩盖。',
+    ['骚扰-001'],
+  ),
+  additionalCase(
+    'image-complex-quoted-help',
+    'complex',
+    'scene-16.png',
+    '截图中的威胁是举报取证，发帖者明确反对并求助。',
+  ),
+  additionalCase(
+    'image-complex-fiction',
+    'complex',
+    'scene-17.png',
+    '截图中的威胁对白属于明确标识的小说习作，不是现实威胁。',
+  ),
+  additionalCase('image-small-normal', 'small_text', 'scene-18.png', '小字号活动安排及正常建议。'),
+  additionalCase(
+    'image-small-risk',
+    'small_text',
+    'scene-19.png',
+    '小字号中的实际诈骗招募，需识别完整机制。',
+    ['诈骗-001'],
+  ),
+  additionalCase(
+    'image-small-privacy',
+    'small_text',
+    'scene-20.png',
+    '小字号中的本人完整学号及寝室门牌，需核查且理由不复述值。',
+    ['隐私-003'],
+    ownPrivacy,
+  ),
+  additionalCase(
+    'image-small-antifraud',
+    'small_text',
+    'scene-21.png',
+    '小字号引用骗局用来防骗，不应把反对意见当诈骗。',
+  ),
+  additionalCase(
+    'image-blur-mild-normal',
+    'blurred',
+    'scene-22.png',
+    '轻度模糊但可辨认的正常建议。',
+  ),
+  additionalCase(
+    'image-blur-mild-risk',
+    'blurred',
+    'scene-23.png',
+    '轻度模糊但可辨认的明确现实威胁。',
+    ['威胁-001'],
+  ),
+  ...['24', '25'].map((number, index) => ({
+    ...additionalCase(
+      `image-blur-unreadable-${index + 1}`,
+      'blurred',
+      `scene-${number}.png`,
+      '严重模糊无法可靠读出正文，应交人工并说明无法辨认。',
+    ),
+    decision: 'needs_review',
+    recommendedAction: 'hold',
+    readability: 'unreadable',
+  })),
+);
 
 function sha256(data) {
   return crypto.createHash('sha256').update(data).digest('hex');
@@ -242,11 +397,16 @@ async function buildImageFixtures(options = {}) {
         );
       }
       images.push(assets.get(filename));
-      imageText.push({ imageIndex: index + 1, text: declared.text });
+      imageText.push({
+        imageIndex: index + 1,
+        text: declared.text,
+        ...(declared.fragments ? { fragments: [...declared.fragments] } : {}),
+      });
     }
     cases.push({
       id: item.id,
       kind: 'moderation',
+      group: item.group || 'baseline',
       title: '附图说明',
       text: '请结合附图阅读这条帖子。',
       description: item.description,
@@ -256,6 +416,8 @@ async function buildImageFixtures(options = {}) {
         ruleIds: [...item.ruleIds],
         categories: [...item.categories],
         recommendedAction: item.recommendedAction,
+        readability: item.readability || 'readable',
+        quality: item.quality ? JSON.parse(JSON.stringify(item.quality)) : {},
         imageText,
       },
     });
@@ -265,7 +427,7 @@ async function buildImageFixtures(options = {}) {
     policyVersion: POLICY_VERSION,
     syntheticOnly: true,
     limitation:
-      '本套样例主要验证含文字图片、简单形状和多图阅读，不代表真实照片、色情画面、复杂截图或图片脱敏效果已通过。',
+      '本套样例验证合成文字图片、简单形状、多图、复杂截图、小字和模糊阅读，不代表真实照片、色情画面或图片脱敏效果已通过。',
     cases,
   };
   validateImageFixtures(suite);
@@ -278,7 +440,7 @@ function validateImageFixtures(suite) {
     suite.policyVersion !== POLICY_VERSION ||
     suite.syntheticOnly !== true ||
     !Array.isArray(suite.cases) ||
-    suite.cases.length !== 12
+    suite.cases.length !== 28
   ) {
     throw new Error('图片测试集结构不符合预期');
   }
@@ -326,6 +488,13 @@ function validateImageFixtures(suite) {
       ) {
         throw new Error('审核样例标签不符合预期');
       }
+      if (
+        item.group !== (original.group || 'baseline') ||
+        item.expected.readability !== (original.readability || 'readable') ||
+        JSON.stringify(item.expected.quality) !== JSON.stringify(original.quality || {})
+      ) {
+        throw new Error('审核样例分组或质量依据不符合预期');
+      }
       for (const key of ['categories', 'ruleIds']) {
         if (JSON.stringify(item.expected[key]) !== JSON.stringify(original[key])) {
           throw new Error('审核样例类别或规则标签不符合预期');
@@ -338,7 +507,19 @@ function validateImageFixtures(suite) {
           (entry, index) =>
             entry.imageIndex !== index + 1 ||
             typeof entry.text !== 'string' ||
-            entry.text.length < 5,
+            (entry.fragments !== undefined &&
+              (item.group !== 'complex' ||
+                !Array.isArray(entry.fragments) ||
+                entry.fragments.length === 0 ||
+                entry.fragments.some(
+                  (fragment) =>
+                    typeof fragment !== 'string' ||
+                    fragment.length < 10 ||
+                    !entry.text.includes(fragment),
+                ))) ||
+            (item.expected.readability === 'unreadable'
+              ? entry.text !== ''
+              : entry.text.length < 5),
         )
       ) {
         throw new Error('图片文字核对依据不完整');

@@ -41,16 +41,25 @@ async function removeTestDirectory(directory) {
   await fs.rm(directory, { recursive: true, force: true });
 }
 
-test('twelve synthetic fixtures cover two visual probes and ten moderation cases', async () => {
+test('twenty-eight synthetic fixtures cover two visual probes and twenty-six moderation cases', async () => {
   const value = await suite();
   assert.equal(value.suiteVersion, SUITE_VERSION);
   assert.equal(value.policyVersion, POLICY_VERSION);
   assert.equal(value.policyVersion, policy.version);
   assert.equal(value.syntheticOnly, true);
   assert.match(value.limitation, /不代表真实照片/);
-  assert.equal(value.cases.length, 12);
+  assert.equal(value.cases.length, 28);
   assert.equal(value.cases.filter((item) => item.kind === 'probe').length, 2);
-  assert.equal(value.cases.filter((item) => item.kind === 'moderation').length, 10);
+  assert.equal(value.cases.filter((item) => item.kind === 'moderation').length, 26);
+  assert.deepEqual(
+    Object.fromEntries(
+      ['baseline', 'privacy', 'complex', 'small_text', 'blurred'].map((group) => [
+        group,
+        value.cases.filter((item) => item.group === group).length,
+      ]),
+    ),
+    { baseline: 10, privacy: 4, complex: 4, small_text: 4, blurred: 4 },
+  );
   assert.equal(validateImageFixtures(value), value);
 });
 
@@ -77,7 +86,7 @@ test('each PNG decodes at its declared size without text or EXIF metadata', asyn
   const images = new Map(
     (await suite()).cases.flatMap((item) => item.images).map((image) => [image.sha256, image]),
   );
-  assert.equal(images.size, 11);
+  assert.equal(images.size, 27);
   for (const image of images.values()) {
     const metadata = await sharp(image.data).metadata();
     assert.equal(metadata.format, 'png');
@@ -120,9 +129,158 @@ test('moderation cases send neutral titles and text with no annotation or image 
     assert.equal(item.text, '请结合附图阅读这条帖子。');
     assert.equal(item.expected.imageText.length, item.images.length);
     for (const entry of item.expected.imageText) {
+      if (item.expected.readability === 'unreadable') {
+        assert.equal(entry.text, '');
+        assert.equal(entry.fragments, undefined);
+        continue;
+      }
       assert.ok(entry.text.length > 20);
       assert.ok(!item.text.includes(entry.text));
     }
+  }
+});
+
+test('privacy contrasts distinguish own, other, mixed and institutional information', async () => {
+  const cases = (await suite()).cases;
+  const expectations = [
+    ['image-personal-information', 'self', ['隐私-003']],
+    ['image-privacy-self', 'self', ['隐私-003']],
+    ['image-privacy-other', 'other', ['隐私-001']],
+    ['image-privacy-both', 'both', ['隐私-001', '隐私-003']],
+    ['image-privacy-institution', 'none', []],
+    ['image-small-privacy', 'self', ['隐私-003']],
+  ];
+  for (const [id, subject, ruleIds] of expectations) {
+    const item = cases.find((entry) => entry.id === id);
+    assert.equal(item.expected.quality.privacySubject, subject);
+    assert.deepEqual(item.expected.ruleIds, ruleIds);
+    assert.equal(item.expected.quality.forbidInstitutionConsent, true);
+    for (const value of item.expected.quality.sensitiveValues) {
+      assert.ok(
+        item.expected.imageText.some((entry) => entry.text.includes(value)),
+        `${id}: sensitive value must be visible synthetic content`,
+      );
+    }
+    if (subject !== 'none') {
+      assert.ok(item.expected.quality.sensitiveValues.some((value) => /^[0-9]{10}$/.test(value)));
+      assert.ok(
+        item.expected.quality.sensitiveValues.some((value) => /^[0-9]{3}[A-Z]$/.test(value)),
+      );
+      assert.equal(item.expected.recommendedAction, 'hold');
+    } else assert.equal(item.expected.recommendedAction, 'allow');
+  }
+});
+
+test('complex screenshots ground attribution and context using order-independent critical fragments', async () => {
+  const cases = (await suite()).cases.filter((item) => item.group === 'complex');
+  for (const item of cases) {
+    assert.equal(item.images[0].width, 1440);
+    assert.equal(item.images[0].height, 1000);
+    const [entry] = item.expected.imageText;
+    assert.ok(entry.fragments.length >= 2);
+    for (const fragment of entry.fragments) assert.ok(entry.text.includes(fragment));
+  }
+  assert.match(
+    cases.find((item) => item.id === 'image-complex-risk').expected.imageText[0].fragments.join(''),
+    /当前发帖者公开号召/,
+  );
+  assert.match(
+    cases
+      .find((item) => item.id === 'image-complex-quoted-help')
+      .expected.imageText[0].fragments.join(''),
+    /不是我对他人发出威胁/,
+  );
+  assert.match(
+    cases
+      .find((item) => item.id === 'image-complex-fiction')
+      .expected.imageText[0].fragments.join(''),
+    /不针对任何现实同学/,
+  );
+});
+
+test('small text is rendered at 18 pixels and severe blur has no readable origin labels', async () => {
+  const manifest = JSON.parse(
+    await fs.readFile(path.join(DEFAULT_ASSET_DIRECTORY, 'manifest.json'), 'utf8'),
+  );
+  for (const number of [18, 19, 20, 21]) {
+    const asset = manifest.assets[`scene-${number}.png`];
+    assert.equal(asset.width, 1600);
+    assert.equal(asset.rendering.fontPx, 18);
+  }
+  for (const number of [24, 25]) {
+    const asset = manifest.assets[`scene-${number}.png`];
+    assert.equal(asset.text, '');
+    assert.equal(asset.fragments, undefined);
+    assert.equal(asset.rendering.blur, 'severe');
+    assert.deepEqual(Object.keys(asset).sort(), ['height', 'rendering', 'sha256', 'text', 'width']);
+  }
+  const severe = (await suite()).cases.filter((item) => item.expected.readability === 'unreadable');
+  assert.equal(severe.length, 2);
+  for (const item of severe) {
+    assert.equal(item.expected.decision, 'needs_review');
+    assert.equal(item.expected.recommendedAction, 'hold');
+    assert.deepEqual(item.expected.ruleIds, []);
+    assert.deepEqual(item.expected.categories, []);
+    assert.deepEqual(item.expected.imageText, [{ imageIndex: 1, text: '' }]);
+  }
+});
+
+test('blur images are actual transformed pixels and severe blur removes fine detail', async () => {
+  async function edgeStrength(filename) {
+    const data = await fs.readFile(path.join(DEFAULT_ASSET_DIRECTORY, filename));
+    const { data: pixels, info } = await sharp(data)
+      .greyscale()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    let sum = 0;
+    for (let row = 0; row < info.height; row += 1) {
+      for (let col = 1; col < info.width; col += 1) {
+        const index = row * info.width + col;
+        sum += Math.abs(pixels[index] - pixels[index - 1]);
+      }
+    }
+    return sum / (info.width * info.height);
+  }
+  const mild = await edgeStrength('scene-22.png');
+  const severe = await edgeStrength('scene-24.png');
+  assert.ok(mild > 0.5, 'mild blur retains text edges');
+  assert.ok(severe < mild / 10, 'severe blur destroys fine text edges');
+  const cases = (await suite()).cases.filter((item) => item.group === 'blurred');
+  assert.equal(new Set(cases.flatMap((item) => item.images.map((image) => image.sha256))).size, 4);
+  assert.equal(
+    cases.find((item) => item.id === 'image-blur-mild-normal').expected.recommendedAction,
+    'allow',
+  );
+  assert.equal(
+    cases.find((item) => item.id === 'image-blur-mild-risk').expected.recommendedAction,
+    'block',
+  );
+});
+
+test('v2 validation rejects leaked unreadable transcripts, group changes and missing privacy grading', async () => {
+  for (const mutation of [
+    (value) => {
+      value.cases.find(
+        (item) => item.expected.readability === 'unreadable',
+      ).expected.imageText[0].text = 'unreadable hidden source';
+    },
+    (value) => {
+      value.cases.find((item) => item.group === 'complex').group = 'baseline';
+    },
+    (value) => {
+      value.cases.find(
+        (item) => item.id === 'image-privacy-self',
+      ).expected.quality.sensitiveValues = [];
+    },
+    (value) => {
+      value.cases.find((item) => item.group === 'complex').expected.imageText[0].fragments = [
+        'made up unrelated context',
+      ];
+    },
+  ]) {
+    const changed = cloneSuite(await suite());
+    mutation(changed);
+    assert.throws(() => validateImageFixtures(changed), /依据/);
   }
 });
 

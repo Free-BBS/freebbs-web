@@ -5,6 +5,7 @@ const {
   ModerationImageError,
   ENDPOINT,
   BASE_URL,
+  IMAGE_CONTRACT_VERSION,
   MAX_RESPONSE_BYTES,
   safeImageError,
 } = require('./moderation-image-client');
@@ -109,6 +110,150 @@ test('both models use image-first base64 JSON-object requests without provider-g
     assert.equal(value.policyDecision.recommendedAction, 'hold');
     assert.equal(value.policyDecision.imagesReviewed, false);
     assert.equal(value.policyVersion, POLICY_VERSION);
+    assert.equal(value.imageContractVersion, 'freebbs-moderation-image-test-v2');
+  }
+});
+
+test('both image models receive v2 privacy, attribution and unreadable-image constraints', async () => {
+  for (const model of ['kimi-k2.6', 'qwen3.6-27b']) {
+    const h = harness();
+    await h.client.assess({ ...INPUT, model });
+    const prompt = JSON.parse(h.requests[0].options.body).messages[0].content;
+    assert.ok(prompt.includes(IMAGE_CONTRACT_VERSION));
+    assert.match(prompt, /不能仅因无法验证其身份就额外套用“隐私-001”/);
+    assert.match(prompt, /只有输入同时提供本人和他人两类适用证据，才可同时引用两条/);
+    assert.match(prompt, /不据此认定违法、恶意或必须获得学校、管理方同意/);
+    assert.match(prompt, /理由、explanation、uncertainties、supportReason 只描述个人信息类型/);
+    assert.match(prompt, /evidence\.quote 只保留支持判断的最短充分连续原文/);
+    assert.match(prompt, /不得加入规则没有要求的学校\/管理方批准/);
+    assert.match(prompt, /不得编造保本、高额收益、返利、转账等输入未出现的事实/);
+    assert.match(prompt, /关键内容无法辨认时，decision 必须 needs_review/);
+    assert.match(prompt, /categories=\[\]、ruleMatches=\[\]/);
+    assert.match(prompt, /不能把截图里被举报者的言论当作发帖者自己的主张/);
+    assert.equal(h.requests.length, 1);
+  }
+});
+
+test('self-information review retains raw OCR and minimal evidence separately from reasons', async () => {
+  const value = result();
+  value.imageObservations[0].text = '这是我的完整学号2025010000，宿舍紫荆一号楼629A。';
+  value.assessment = {
+    ...safeAssessment(),
+    decision: 'needs_review',
+    categories: ['privacy'],
+    reason: '作者声称公开本人完整学号和精确寝室信息，需按本站测试规则进行安全复核。',
+    ruleMatches: [
+      {
+        ruleId: '隐私-003',
+        evidence: { field: 'image_1', quote: '完整学号2025010000' },
+        explanation: '本人完整学号和精确寝室信息需人工安全复核，不据此认定恶意。',
+      },
+    ],
+  };
+  const before = structuredClone(value);
+  const h = harness({ reply: () => response(value) });
+  const got = await h.client.assess({ ...INPUT, model: 'kimi-k2.6' });
+  assert.deepEqual(got.assessment, before.assessment);
+  assert.deepEqual(got.imageObservations, before.imageObservations);
+  assert.deepEqual(value, before);
+  assert.equal(got.contentPolicyDecision.recommendedAction, 'hold');
+  assert.equal(got.policyDecision.recommendedAction, 'hold');
+  assert.equal(h.requests.length, 1);
+});
+
+test('semantic model mistakes remain visible for report grading rather than being silently repaired', async () => {
+  const value = result();
+  value.imageObservations[0].text = '这是我的完整学号2025010000，宿舍紫荆一号楼629A。';
+  value.assessment = {
+    ...safeAssessment(),
+    decision: 'needs_review',
+    categories: ['privacy'],
+    reason: '完整学号2025010000，宿舍紫荆一号楼629A，需核实学校是否同意。',
+    ruleMatches: [
+      {
+        ruleId: '隐私-001',
+        evidence: { field: 'image_1', quote: '完整学号2025010000' },
+        explanation: '需要核实学校是否同意。',
+      },
+      {
+        ruleId: '隐私-003',
+        evidence: { field: 'image_1', quote: '宿舍紫荆一号楼629A' },
+        explanation: '本人完整学号和精确寝室信息需人工核查。',
+      },
+    ],
+  };
+  const h = harness({ reply: () => response(value) });
+  const got = await h.client.assess(INPUT);
+  assert.deepEqual(got.assessment, value.assessment);
+  assert.equal(got.contentPolicyDecision.recommendedAction, 'hold');
+  assert.equal(h.requests.length, 1);
+});
+
+test('unreadable image can require review with no invented risk category or evidence', async () => {
+  const value = {
+    imageObservations: [
+      { imageIndex: 1, text: '', description: '模糊的聊天截图，关键文字无法可靠辨认。' },
+    ],
+    assessment: {
+      ...safeAssessment(),
+      decision: 'needs_review',
+      reason: '图片关键内容无法可靠读取，需要负责人检查。',
+      uncertainties: ['第1张图片的正文因模糊无法可靠读取，无法确认是否存在风险。'],
+    },
+  };
+  const h = harness({ reply: () => response(value) });
+  const got = await h.client.assess(INPUT);
+  assert.deepEqual(got.assessment, value.assessment);
+  assert.deepEqual(got.policyEvidence, []);
+  assert.equal(got.contentPolicyDecision.recommendedAction, 'hold');
+  assert.equal(h.requests.length, 1);
+  const badValue = structuredClone(value);
+  badValue.assessment.uncertainties = [];
+  const bad = harness({ reply: () => response(badValue) });
+  await assert.rejects(bad.client.assess(INPUT), failure('assessment_fields_invalid'));
+  assert.equal(bad.requests.length, 1);
+});
+
+test('three-image evidence stays tied to its actual image including the final image', async () => {
+  const value = {
+    imageObservations: [
+      { imageIndex: 1, text: '建议增加插座', description: '第一张是普通建议截图。' },
+      { imageIndex: 2, text: '', description: '第二张文字模糊。' },
+      {
+        imageIndex: 3,
+        text: '这是我的完整学号2025010000。',
+        description: '第三张是个人信息卡片。',
+      },
+    ],
+    assessment: {
+      ...safeAssessment(),
+      decision: 'needs_review',
+      categories: ['privacy'],
+      reason: '第三张图片含作者声称属于本人的完整学号，需安全复核。',
+      ruleMatches: [
+        {
+          ruleId: '隐私-003',
+          evidence: { field: 'image_3', quote: '完整学号2025010000' },
+          explanation: '本人完整学号公开前需安全复核。',
+        },
+      ],
+      uncertainties: ['第二张图片的关键文字模糊，需要负责人查看原图。'],
+    },
+  };
+  const input = { ...INPUT, images: [IMAGE, IMAGE, IMAGE] };
+  const h = harness({ reply: () => response(value) });
+  const got = await h.client.assess(input);
+  assert.deepEqual(
+    got.imageObservations.map((observation) => observation.imageIndex),
+    [1, 2, 3],
+  );
+  assert.equal(got.assessment.ruleMatches[0].evidence.field, 'image_3');
+  for (const field of ['image_1', 'image_2', 'image_4']) {
+    const badValue = structuredClone(value);
+    badValue.assessment.ruleMatches[0].evidence.field = field;
+    const bad = harness({ reply: () => response(badValue) });
+    await assert.rejects(bad.client.assess(input), failure('rule_evidence_invalid'));
+    assert.equal(bad.requests.length, 1);
   }
 });
 
