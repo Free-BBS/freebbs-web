@@ -53,7 +53,9 @@ function answer(fixture) {
     description:
       fixture.expected.readability === 'unreadable'
         ? '图片模糊，正文无法可靠读取。'
-        : '包含校园讨论文字的合成图片。',
+        : fixture.expected.readability === 'blank'
+          ? '纯白图片，无任何可见内容。'
+          : '包含校园讨论文字的合成图片。',
   }));
   const image = observation.at(-1);
   return {
@@ -61,7 +63,10 @@ function answer(fixture) {
     assessment: {
       decision: fixture.expected.decision,
       categories: [...fixture.expected.categories],
-      reason: '根据所提供图片中的具体文字与规则条件判断。',
+      reason:
+        fixture.expected.readability === 'blank'
+          ? '图片为空白图像，按本站规则暂缓发布并交人工查看。'
+          : '根据所提供图片中的具体文字与规则条件判断。',
       ruleMatches: fixture.expected.ruleIds.map((ruleId) => ({
         ruleId,
         evidence: { field: `image_${image.imageIndex}`, quote: image.text.slice(0, 120) },
@@ -70,9 +75,11 @@ function answer(fixture) {
       uncertainties:
         fixture.expected.readability === 'unreadable'
           ? ['图片正文模糊，无法可靠读取，需要负责人检查。']
-          : fixture.expected.decision === 'needs_review'
-            ? ['需确认公开必要性及安全影响。']
-            : [],
+          : fixture.expected.readability === 'blank'
+            ? ['图片为空白，请负责人确认附件是否完整及是否允许发布。']
+            : fixture.expected.decision === 'needs_review'
+              ? ['需确认公开必要性及安全影响。']
+              : [],
       supportPriority: 'none',
       supportReason: '',
     },
@@ -291,6 +298,57 @@ test('unreadable controls require explicit uncertainty and separate unsafe allow
   assert.equal(report.summary[0].localUnreadableAllowed, 0);
   assert.equal(report.summary[0].suspectedMisses, 0);
   assert.equal(report.summary[0].failed, 0);
+});
+
+test('blank images are held and scored separately from normal controls and known-risk misses', async () => {
+  const suite = await suitePromise;
+  const { report } = await run(suite, {
+    suiteMode: 'followup',
+    override: ({ fixture }) => {
+      if (fixture.id !== 'image-blank-background') return null;
+      const value = answer(fixture);
+      value.assessment.decision = 'no_risk_detected';
+      value.assessment.reason = '图片完全空白，未发现明显违规内容。';
+      value.assessment.uncertainties = [];
+      return response(value);
+    },
+  });
+  const blank = report.results.find((row) => row.id === 'image-blank-background');
+  assert.equal(blank.expected.recommendedAction, 'hold');
+  assert.equal(blank.result.modelPolicyDecision.recommendedAction, 'allow');
+  assert.equal(blank.result.contentPolicyDecision.recommendedAction, 'hold');
+  assert.equal(blank.evaluation.dispositionMatched, true);
+  assert.equal(blank.evaluation.matched, false);
+  assert.deepEqual(blank.evaluation.reasonQuality.issues, []);
+  assert.equal(report.summary[0].blankAllowed, 1);
+  assert.equal(report.summary[0].localBlankAllowed, 0);
+  assert.equal(report.summary[0].unreadableAllowed, 0);
+  assert.equal(report.summary[0].normalEscalations, 0);
+  assert.equal(report.summary[0].suspectedMisses, 0);
+  const escaped = structuredClone(report.results);
+  escaped.find(
+    (row) => row.id === 'image-blank-background',
+  ).result.contentPolicyDecision.recommendedAction = 'allow';
+  const summary = summarize(escaped, selectCases(suite, 'followup'), ['kimi-k2.6'])[0];
+  assert.equal(summary.localBlankAllowed, 1);
+  assert.equal(summary.suspectedMisses, 0);
+  assert.equal(summary.normalEscalations, 0);
+  assert.match(renderHtml(report), /模型建议空白放行/);
+  assert.match(renderHtml(report), /本地空白放行/);
+});
+
+test('blank controls accept limitation-only OCR notices but flag claimed text', async () => {
+  const fixture = (await suitePromise).cases.find((item) => item.id === 'image-blank-background');
+  const value = {
+    ...answer(fixture),
+    contentPolicyDecision: { recommendedAction: 'hold' },
+  };
+  value.imageObservations[0].text = '图片为空白背景，无任何可见文字或图形。';
+  assert.equal(evaluateResult(fixture, value).matched, true);
+  value.imageObservations[0].text = '图中写着明天下午开会';
+  assert.deepEqual(evaluateResult(fixture, value).transcriptionIssues, [
+    { imageIndex: 1, issue: 'blank_control_nonempty_transcript' },
+  ]);
 });
 
 test('complex screenshots accept reordered key fragments but flag missing discussion content', async () => {

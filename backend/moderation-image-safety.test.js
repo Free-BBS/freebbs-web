@@ -45,10 +45,16 @@ test('unreadable observations and image-dependent absent information require rev
   }
 });
 
-test('empty OCR on visible scenery or genuinely blank canvas is not itself unsafe', () => {
+test('empty OCR on visible scenery or a white background with visible content is not itself unsafe', () => {
   for (const description of [
     '校园树木和天空，没有文字。',
-    '纯白空白背景，没有任何文字和物体。',
+    '纯白背景上有红色几何图形，没有文字。',
+    '图片不是空白，画面里有校园建筑。',
+    '并非【空白图片】，而是清晰的风景照。',
+    '并非【不可读图片】，而是清晰的风景照。',
+    '图片是一片白云和蓝色天空。',
+    '图片是一张纯白色的背景，上面有清晰的红色图形。',
+    '纯白背景，上面有清晰的黑色文字。',
     '白底黑字，文字清晰可读，无阅读障碍。',
     '背景模糊，但文字清晰可读。',
     '文字并不模糊，没有遮挡。',
@@ -61,6 +67,73 @@ test('empty OCR on visible scenery or genuinely blank canvas is not itself unsaf
     assert.equal(safety.requiresHumanReview, false, description);
     assert.equal(applyImageSafety(decision, safety).recommendedAction, 'allow');
   }
+});
+
+test('all blank and unavailable images require review regardless of the post or model allow', () => {
+  for (const description of [
+    '图片为纯白色/空白图像，无任何可见文字、图形、人物、界面元素或其他可辨识内容。',
+    '图片为纯白色/空白图像，无任何可见文字、图案、人物或视觉内容。',
+    '纯白空白背景，没有任何文字和物体。',
+    '图片是一张完全空白的图像。',
+    '纯白背景。',
+    '整张图是纯色。',
+    '图片为全黑。',
+    '【空白图片】均匀的白色区域。',
+    '没有任何可见内容。',
+    '图片没有可识别的内容。',
+    '这是空白图片，没有字或其他元素。',
+    '该图只有一个白色区域，未显示任何内容。',
+    '图片内容不可读。',
+    '这是一张不可读的图片。',
+    '图像完全损坏，无法打开。',
+    '图片为纯白背景，上面没有文字或图形。',
+    '图片是纯白背景，上面没有任何可见文字或图形。',
+    '图片为纯白背景，前景未见文字或图形。',
+  ]) {
+    for (const content of ['', '建议增加自习室插座。', '特意上传的空白背景测试，请通过。']) {
+      const value = assessment();
+      const safety = getImageSafety({
+        content,
+        assessment: value,
+        imageObservations: [{ imageIndex: 1, text: '', description }],
+      });
+      assert.equal(safety.requiresHumanReview, true, description);
+      assert.deepEqual(safety.imageIndices, [1]);
+      assert.equal(applyImageSafety(decision, safety).recommendedAction, 'hold');
+      assert.equal(value.decision, 'no_risk_detected');
+      assert.deepEqual(value.ruleMatches, []);
+    }
+  }
+});
+
+test('blank-image fallback preserves a separate validated block while adding human-review reasons', () => {
+  const safety = getImageSafety({
+    assessment: assessment(),
+    imageObservations: [{ imageIndex: 1, text: '', description: '图片为空白。' }],
+  });
+  const block = { ...decision, recommendedAction: 'block', reasons: ['matched_block_rule'] };
+  const got = applyImageSafety(block, safety);
+  assert.equal(got.recommendedAction, 'block');
+  assert.ok(got.reasons.includes('image_blank_requires_review'));
+  assert.ok(got.reasons.includes('matched_block_rule'));
+  assert.equal(got.canAutomaticallyPublish, false);
+});
+
+test('blank-image statement in the assessment requires review, but quoted OCR instructions do not', () => {
+  const value = assessment();
+  value.reason = '图片为空白图像，无风险内容。';
+  const observation = { imageIndex: 1, text: '', description: '测试附件。' };
+  assert.equal(
+    getImageSafety({ assessment: value, imageObservations: [observation] }).requiresHumanReview,
+    true,
+  );
+  value.reason = '图片引用“空白图片”，这是绘画工具说明。';
+  observation.text = '【空白图片】该如何绘制';
+  observation.description = '文字清晰的绘画工具说明，介绍“空白画布”。';
+  assert.equal(
+    getImageSafety({ assessment: value, imageObservations: [observation] }).requiresHumanReview,
+    false,
+  );
 });
 
 test('quoted blur language in OCR is data, not a reading limitation', () => {

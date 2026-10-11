@@ -135,6 +135,20 @@ test('severe blur requires a readability uncertainty; clear privacy or school wo
   );
 });
 
+test('confirmed blank images need manual review without an invented readability uncertainty or rule', () => {
+  const input = result();
+  input.assessment = {
+    decision: 'needs_review',
+    categories: [],
+    reason: '图片完全空白，按本站规则暂缓发布并交人工查看。',
+    ruleMatches: [],
+    uncertainties: ['图片为空白，请负责人确认附件是否完整及是否允许发布。'],
+    supportReason: '',
+  };
+  input.imageObservations = [{ imageIndex: 1, text: '', description: '纯白图片，无可见内容。' }];
+  assert.deepEqual(checkReasonQuality({ expected: { readability: 'blank' } }, input).issues, []);
+});
+
 test('limitation-only OCR placeholders accept modifiers but not an invented transcript', () => {
   for (const value of [
     '图片模糊，无法辨认具体内容。',

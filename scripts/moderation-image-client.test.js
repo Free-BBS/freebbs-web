@@ -130,6 +130,8 @@ test('both image models receive v3 privacy, attribution and unreadable-image con
     assert.match(prompt, /不得加入规则没有要求的学校\/管理方批准/);
     assert.match(prompt, /不得编造保本、高额收益、返利、转账等输入未出现的事实/);
     assert.match(prompt, /关键内容无法辨认时，decision 必须 needs_review/);
+    assert.match(prompt, /空白图片与不可读图片统一转人工/);
+    assert.match(prompt, /不论正文是否依赖附图、是否声称是背景测试/);
     assert.match(prompt, /categories=\[\]、ruleMatches=\[\]/);
     assert.match(prompt, /不能把截图里被举报者的言论当作发帖者自己的主张/);
     assert.match(prompt, /"imageIndex":1/);

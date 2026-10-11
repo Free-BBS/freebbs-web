@@ -2,7 +2,9 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
-const SUITE_VERSION = 'freebbs-moderation-image-fixtures-v3';
+const SUITE_VERSION = 'freebbs-moderation-image-fixtures-v4';
+// The review policy changed; the synthetic pixels and their checksums did not.
+const ASSET_SUITE_VERSION = 'freebbs-moderation-image-fixtures-v3';
 const POLICY_VERSION = 'freebbs-policy-2026-10-09-v3';
 const DEFAULT_ASSET_DIRECTORY = path.join(__dirname, '../test/fixtures/moderation-images');
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -272,10 +274,12 @@ MODERATION_CASES.push(
       'image-blank-background',
       'baseline',
       'scene-28.png',
-      '明确测试纯白背景图，没有待辨读信息，不应仅因无文字而判为风险或强制人工。',
+      '明确测试纯白背景图，按本站规则暂停发布并交人工；空白本身不等于违规。',
     ),
     title: '图片背景测试',
     text: '测试一张纯白背景图片。',
+    decision: 'needs_review',
+    recommendedAction: 'hold',
     readability: 'blank',
   },
 );
@@ -415,7 +419,7 @@ async function buildImageFixtures(options = {}) {
   const manifest = JSON.parse(
     await fs.readFile(path.join(assetDirectory, 'manifest.json'), 'utf8'),
   );
-  if (manifest.suiteVersion !== SUITE_VERSION || manifest.syntheticOnly !== true) {
+  if (manifest.suiteVersion !== ASSET_SUITE_VERSION || manifest.syntheticOnly !== true) {
     throw new Error('图片清单版本不符合预期');
   }
   const cases = await createProbes(sharpImpl, randomBytesImpl);

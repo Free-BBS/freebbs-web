@@ -44,6 +44,11 @@ async function removeTestDirectory(directory) {
 test('thirty-one synthetic fixtures cover two visual probes and twenty-nine moderation cases', async () => {
   const value = await suite();
   assert.equal(value.suiteVersion, SUITE_VERSION);
+  assert.equal(value.suiteVersion, 'freebbs-moderation-image-fixtures-v4');
+  const assetManifest = JSON.parse(
+    await fs.readFile(path.join(DEFAULT_ASSET_DIRECTORY, 'manifest.json'), 'utf8'),
+  );
+  assert.equal(assetManifest.suiteVersion, 'freebbs-moderation-image-fixtures-v3');
   assert.equal(value.policyVersion, POLICY_VERSION);
   assert.equal(value.policyVersion, policy.version);
   assert.equal(value.syntheticOnly, true);
@@ -290,7 +295,7 @@ test('v2 validation rejects leaked unreadable transcripts, group changes and mis
   }
 });
 
-test('v3 keeps fraud alternatives narrow and blank controls independent of unreadable text', async () => {
+test('v4 keeps fraud alternatives narrow and requires human review for blank controls', async () => {
   const value = await suite();
   const allowed = value.cases.filter((item) => item.expected.acceptedVariants?.length);
   assert.deepEqual(
@@ -309,7 +314,10 @@ test('v3 keeps fraud alternatives narrow and blank controls independent of unrea
   }
   const blank = value.cases.find((item) => item.id === 'image-blank-background');
   assert.equal(blank.expected.readability, 'blank');
-  assert.equal(blank.expected.recommendedAction, 'allow');
+  assert.equal(blank.expected.decision, 'needs_review');
+  assert.equal(blank.expected.recommendedAction, 'hold');
+  assert.deepEqual(blank.expected.categories, []);
+  assert.deepEqual(blank.expected.ruleIds, []);
   assert.equal(blank.text, '测试一张纯白背景图片。');
   assert.deepEqual(blank.expected.imageText, [{ imageIndex: 1, text: '' }]);
   for (const id of ['image-blur-text-region-1', 'image-blur-text-region-2']) {

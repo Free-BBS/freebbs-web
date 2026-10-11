@@ -1,4 +1,4 @@
-const QUALITY_VERSION = 'freebbs-moderation-image-quality-v3';
+const QUALITY_VERSION = 'freebbs-moderation-image-quality-v4';
 const normalize = (value) =>
   String(value || '')
     .normalize('NFKC')

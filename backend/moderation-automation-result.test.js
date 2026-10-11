@@ -142,6 +142,64 @@ test('unreadable-image local fallback holds without concealing the raw model all
   assert.equal(got.imageResults[0].response.imageSafety.requiresHumanReview, true);
 });
 
+test('a blank image in any batch holds even with safe Qwen text, Kimi allow and clear other images', () => {
+  for (const description of [
+    '图片为纯白色/空白图像，无任何可见文字、图形、人物、界面元素或其他可辨识内容。',
+    '图片为纯白色/空白图像，无任何可见文字、图案、人物或视觉内容。',
+    '纯白空白背景，没有任何文字和物体。',
+    '【空白图片】特意上传的纯色背景。',
+    '【不可读图片】附件未能正常呈现。',
+  ]) {
+    const input = fixture(4);
+    input.snapshot.content = '这是普通自习建议，附图仅为背景测试。';
+    input.imageResults[1].response.imageObservations[0] = { imageIndex: 1, text: '', description };
+    const got = buildAutomaticResult(input);
+    assert.equal(got.policyDecision.recommendedAction, 'hold', description);
+    assert.equal(got.imageResults[1].response.modelPolicyDecision.recommendedAction, 'allow');
+    assert.equal(got.imageResults[1].response.imageSafety.requiresHumanReview, true);
+    assert.deepEqual(got.imageResults[1].response.assessment.ruleMatches, []);
+    assert.equal(got.policyDecision.canAutomaticallyPublish, false);
+  }
+});
+
+test('clear photos without OCR can still pass image moderation', () => {
+  const input = fixture(1);
+  input.imageResults[0].response.imageObservations[0] = {
+    imageIndex: 1,
+    text: '',
+    description: '校园建筑前有树木和蓝天，没有文字，主体清楚。',
+  };
+  const got = buildAutomaticResult(input);
+  assert.equal(got.policyDecision.recommendedAction, 'allow');
+  assert.equal(got.requiresPostPublicationReview, true);
+});
+
+test('a blank second image does not weaken a grounded fraud block in the same batch', () => {
+  const input = fixture(2);
+  const { response } = input.imageResults[0];
+  response.imageObservations = [
+    { imageIndex: 1, text: '马上交押金领取兼职工作', description: '清晰的文字卡片。' },
+    { imageIndex: 2, text: '', description: '图片为空白。' },
+  ];
+  response.assessment = {
+    ...assessment(),
+    decision: 'high_risk',
+    categories: ['fraud'],
+    reason: '以兼职名义索取预付费用。',
+    ruleMatches: [
+      {
+        ruleId: '诈骗-001',
+        evidence: { field: 'image_1', quote: '交押金领取兼职工作' },
+        explanation: '兼职要求先交押金。',
+      },
+    ],
+  };
+  const got = buildAutomaticResult(input);
+  assert.equal(got.policyDecision.recommendedAction, 'block');
+  assert.ok(got.policyDecision.reasons.includes('image_blank_requires_review'));
+  assert.equal(got.imageResults[0].response.imageSafety.requiresHumanReview, true);
+});
+
 test('text privacy hold can skip image calls, while partial-image safe text cannot publish', () => {
   const input = fixture();
   input.snapshot.counts = { studentId: 1 };

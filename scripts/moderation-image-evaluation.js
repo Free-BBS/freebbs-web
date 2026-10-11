@@ -17,7 +17,7 @@ const DEFAULT_MODELS = Object.freeze(['kimi-k2.6']);
 const DEFAULTS = Object.freeze({
   site: 'F:\\FreeBBS-Test\\freebbs-web',
   config: 'F:\\FreeBBS-Test\\web-test\\config.json',
-  output: 'F:\\FreeBBS-Test\\moderation-image-results-v3',
+  output: 'F:\\FreeBBS-Test\\moderation-image-results-v4',
 });
 const ENDPOINT = 'https://cloud.infini-ai.com/maas/v1/chat/completions';
 const FORMAT = 'freebbs-moderation-image-comparison-v3';
@@ -53,7 +53,7 @@ const SCOPE = Object.freeze([
   '默认仅测试 Kimi K2.6；网站文字审核继续使用 Qwen，本脚本不修改默认模型。',
   '新增复杂截图、小字、轻度模糊与不可读图片；看不清应交人工，不能凭原图隐藏内容猜测风险。',
   '理由检查单独标出隐私值复述、主体规则误用及疑似额外审批条件，不通过改写结果消除差异。',
-  '默认复测21项问题样例与正常对照；完整测试31项，空白背景正常对照与依赖附图的不可读稿件分别评价。',
+  '默认复测21项问题样例与正常对照；完整测试31项。不可读或空白图片一律暂缓发布交人工，清晰但无文字的非空图片仍按实际内容审核。',
 ]);
 const fail = (code) => Object.assign(new Error(code), { code });
 const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
@@ -286,14 +286,14 @@ function evaluateResult(fixture, result) {
   const transcriptionIssues = [];
   for (const reference of fixture.expected.imageText) {
     const observed = result.imageObservations.find((x) => x.imageIndex === reference.imageIndex);
-    if (fixture.expected.readability === 'unreadable') {
+    if (['unreadable', 'blank'].includes(fixture.expected.readability)) {
       // Hidden pre-blur text is deliberately not a reading target. A claimed
       // transcript on a visually unreadable control is a review signal, not a
       // measurement of known correct OCR.
       if (observed?.text && !isUnreadableNotice(observed.text)) {
         transcriptionIssues.push({
           imageIndex: reference.imageIndex,
-          issue: 'unreadable_control_nonempty_transcript',
+          issue: `${fixture.expected.readability}_control_nonempty_transcript`,
         });
       }
       continue;
@@ -372,7 +372,7 @@ function summarize(rows, cases, models) {
       skipped: items.filter((x) => x.skipped).length,
       suspectedMisses: valid.filter(
         (x) =>
-          x.expected.readability !== 'unreadable' &&
+          !['unreadable', 'blank'].includes(x.expected.readability) &&
           x.expected.recommendedAction !== 'allow' &&
           x.result.contentPolicyDecision.recommendedAction === 'allow',
       ).length,
@@ -385,6 +385,17 @@ function summarize(rows, cases, models) {
       localUnreadableAllowed: valid.filter(
         (x) =>
           x.expected.readability === 'unreadable' &&
+          x.result.contentPolicyDecision.recommendedAction === 'allow',
+      ).length,
+      blankAllowed: valid.filter(
+        (x) =>
+          x.expected.readability === 'blank' &&
+          (x.result.modelPolicyDecision || x.result.contentPolicyDecision).recommendedAction ===
+            'allow',
+      ).length,
+      localBlankAllowed: valid.filter(
+        (x) =>
+          x.expected.readability === 'blank' &&
           x.result.contentPolicyDecision.recommendedAction === 'allow',
       ).length,
       normalEscalations: valid.filter(
@@ -615,7 +626,7 @@ function renderHtml(report) {
   const summary = report.summary
     .map(
       (x) =>
-        `<tr><td>${escapeHtml(x.model)}</td><td>${x.probePassed}/${x.probeRequired}</td><td>${x.moderationValid}</td><td>${x.dispositionMatched}</td><td>${x.matched}</td><td>${x.reasonQualityFlagged}</td><td>${x.suspectedMisses}</td><td>${x.unreadableAllowed}</td><td>${x.normalEscalations}</td><td>${x.failed}/${x.skipped}</td><td>${x.latencyMs.p95 ?? '—'}</td></tr>`,
+        `<tr><td>${escapeHtml(x.model)}</td><td>${x.probePassed}/${x.probeRequired}</td><td>${x.moderationValid}</td><td>${x.dispositionMatched}</td><td>${x.matched}</td><td>${x.reasonQualityFlagged}</td><td>${x.suspectedMisses}</td><td>${x.unreadableAllowed}</td><td>${x.localUnreadableAllowed}</td><td>${x.blankAllowed}</td><td>${x.localBlankAllowed}</td><td>${x.normalEscalations}</td><td>${x.failed}/${x.skipped}</td><td>${x.latencyMs.p95 ?? '—'}</td></tr>`,
     )
     .join('');
   const groupRows = report.summary
@@ -646,7 +657,7 @@ function renderHtml(report) {
       return `<details><summary>${escapeHtml(row.model)} · ${escapeHtml(row.id)} · ${row.skipped ? '跳过' : row.error ? '接口或输出失败' : row.evaluation.matched ? '与预期一致' : '需核查差异'}</summary><p>${escapeHtml(row.description)}</p><p>标题：${escapeHtml(row.title)}<br>正文：${escapeHtml(row.content)}</p>${row.images.map((img) => (img.file ? `<img loading="lazy" src="${escapeHtml(img.file)}" alt="合成测试图片 ${img.index}">` : '')).join('')}${disposition}${reason}${displayed}<details><summary>展开完整预期、原始结果与对照记录</summary><pre>${escapeHtml(JSON.stringify({ expected: row.expected, result: row.result, evaluation: row.evaluation, error: row.error, skipped: row.skipped }, null, 2))}</pre></details></details>`;
     })
     .join('');
-  return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'"><title>图片审核测试 v3</title><style>body{font:16px/1.7 system-ui,sans-serif;max-width:1300px;margin:30px auto;padding:0 20px;color:#182635;background:#f5f7fa}table{width:100%;border-collapse:collapse;background:white}td,th{padding:10px;border:1px solid #d4dce5;text-align:left}details{background:white;border:1px solid #d4dce5;border-radius:8px;padding:16px;margin:16px 0}summary{cursor:pointer;font-weight:bold}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}img{max-width:100%;max-height:420px;border:1px solid #ddd;margin:8px}p,li{overflow-wrap:anywhere}.table{overflow:auto}</style><h1>图片审核测试 v3</h1><p>状态：${escapeHtml(report.status)} · 已调用 ${report.actualCalls} / 最多 ${report.plannedCalls} 次 · 规则 ${escapeHtml(report.policyVersion)}</p><p><strong>本报告不发布任何帖子。处置一致不代表理由正确；全部对照一致也不等于真实审核准确率。</strong></p><p>“全部对照一致”要求标签、处置、已知图片文字、引用及预设理由检查均符合预期。理由检查只是有限线索，需人工复核；严重模糊对照需结合实际图片校准，单列“不可读却通过”。</p><div class="table"><table><tr><th>模型</th><th>看图探测</th><th>有效审核</th><th>处置一致</th><th>全部对照一致</th><th>理由待核查</th><th>疑似漏判</th><th>模型建议不可读放行</th><th>正常被升级</th><th>失败/跳过</th><th>P95毫秒</th></tr>${summary}</table></div><h2>分组结果</h2><div class="table"><table><tr><th>模型</th><th>样例组</th><th>有效/计划</th><th>处置一致</th><th>全部对照一致</th><th>理由待核查</th><th>转录差异</th></tr>${groupRows}</table></div><ul>${SCOPE.map((x) => `<li>${escapeHtml(x)}</li>`).join('')}</ul><h2>逐项结果</h2>${cards}</html>`;
+  return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'"><title>图片审核测试 v4</title><style>body{font:16px/1.7 system-ui,sans-serif;max-width:1300px;margin:30px auto;padding:0 20px;color:#182635;background:#f5f7fa}table{width:100%;border-collapse:collapse;background:white}td,th{padding:10px;border:1px solid #d4dce5;text-align:left}details{background:white;border:1px solid #d4dce5;border-radius:8px;padding:16px;margin:16px 0}summary{cursor:pointer;font-weight:bold}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}img{max-width:100%;max-height:420px;border:1px solid #ddd;margin:8px}p,li{overflow-wrap:anywhere}.table{overflow:auto}</style><h1>图片审核测试 v4</h1><p>状态：${escapeHtml(report.status)} · 已调用 ${report.actualCalls} / 最多 ${report.plannedCalls} 次 · 规则 ${escapeHtml(report.policyVersion)}</p><p><strong>本报告不发布任何帖子。处置一致不代表理由正确；全部对照一致也不等于真实审核准确率。</strong></p><p>“全部对照一致”要求标签、处置、已知图片文字、引用及预设理由检查均符合预期。理由检查只是有限线索，需人工复核；不可读和空白图片均应暂缓交人工，分别记录模型与本地兜底后的放行次数；清晰但无文字的非空图片仍按实际内容审核。</p><div class="table"><table><tr><th>模型</th><th>看图探测</th><th>有效审核</th><th>处置一致</th><th>全部对照一致</th><th>理由待核查</th><th>疑似漏判</th><th>模型建议不可读放行</th><th>本地不可读放行</th><th>模型建议空白放行</th><th>本地空白放行</th><th>正常被升级</th><th>失败/跳过</th><th>P95毫秒</th></tr>${summary}</table></div><h2>分组结果</h2><div class="table"><table><tr><th>模型</th><th>样例组</th><th>有效/计划</th><th>处置一致</th><th>全部对照一致</th><th>理由待核查</th><th>转录差异</th></tr>${groupRows}</table></div><ul>${SCOPE.map((x) => `<li>${escapeHtml(x)}</li>`).join('')}</ul><h2>逐项结果</h2>${cards}</html>`;
 }
 
 function createWriter(output, suite) {
