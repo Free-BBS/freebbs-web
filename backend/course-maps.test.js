@@ -1,23 +1,113 @@
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const express = require('express');
+const http = require('node:http');
 const sharp = require('sharp');
+const { listenAllowedLoopback } = require('../scripts/fixtures/allowed-loopback');
 const {
   createCourseMapsRouter,
+  getOriginDocumentVersion,
   isValidNodeId,
   normalizeMapBackgroundUrl,
   normalizeNodeId,
   normalizeLegacySectionHeading,
   resolveKnowledgeSections,
   splitLegacyKnowledgeDocument,
+  toMapNode,
 } = require('./course-maps');
+const { originMarkdown } = require('../public/learning-content');
 const { buildModel, nodeLevel } = require('../public/course-structure');
 
 test('normalizes knowledge node ids to uppercase ASCII', () => {
   assert.equal(normalizeNodeId(' ss-01-01 '), 'SS-01-01');
+});
+
+test('node details expose an independent origin fingerprint for the exact published origin', () => {
+  const row = {
+    node_id: 'SS-01-01',
+    title: '卷积',
+    document_markdown: '完整正文',
+    knowledge_markdown: '完整正文',
+    applications_markdown: '## 知识起源\n\n研究响应叠加。\n\n## 应用\n\n滤波器设计。',
+  };
+  const detail = toMapNode(row, true);
+  const expected = crypto
+    .createHash('sha256')
+    .update(originMarkdown(detail.sections))
+    .digest('hex');
+  assert.equal(detail.originDocumentVersion, expected);
+  assert.equal(
+    detail.documentVersion,
+    crypto.createHash('sha256').update(row.document_markdown).digest('hex'),
+  );
+  assert.equal(toMapNode(row).originDocumentVersion, undefined);
+  const unrelatedChange = {
+    ...row,
+    applications_markdown: row.applications_markdown.replace('滤波器设计', '通信系统'),
+  };
+  assert.equal(getOriginDocumentVersion(unrelatedChange), expected);
+  const originChange = {
+    ...row,
+    applications_markdown: row.applications_markdown.replace('响应叠加', '信号叠加'),
+  };
+  assert.notEqual(getOriginDocumentVersion(originChange), expected);
+  assert.equal(toMapNode(originChange, true).documentVersion, detail.documentVersion);
+});
+
+test('origin fingerprints never include private grading blocks and support recovered legacy origins', () => {
+  const row = {
+    node_id: 'SS-01-01',
+    title: '卷积',
+    document_markdown:
+      '# 卷积\n\n## 知识正文\n\n响应叠加。\n\n## 知识点应用\n\n### 知识起源\n\n为何研究响应叠加。\n\n```freebbs-quiz\nPRIVATE_GRADING_KEY\n```\n\n### 应用\n\n滤波器。',
+  };
+  const student = toMapNode(row, true);
+  const editor = toMapNode(row, true, true);
+  assert.doesNotMatch(JSON.stringify(student.sections), /PRIVATE_GRADING_KEY/);
+  assert.match(JSON.stringify(editor.sections), /PRIVATE_GRADING_KEY/);
+  assert.equal(editor.originDocumentVersion, student.originDocumentVersion);
+  const expected = crypto
+    .createHash('sha256')
+    .update(originMarkdown(student.sections))
+    .digest('hex');
+  assert.equal(student.originDocumentVersion, expected);
+  assert.equal(
+    getOriginDocumentVersion({
+      ...row,
+      document_markdown: row.document_markdown.replace(
+        'PRIVATE_GRADING_KEY',
+        'CHANGED_PRIVATE_KEY',
+      ),
+    }),
+    expected,
+  );
+});
+
+test('preview origin snapshots match production hashes and student-safe supplementary content', () => {
+  const { studentNode, createLearningFixture } = require('../scripts/preview-learning-workspace');
+  const fixture = createLearningFixture();
+  for (const node of fixture.nodes) {
+    const context = fixture.contextRows.find((item) => item.node_id === node.id);
+    const published = studentNode(node);
+    assert.equal(published.originDocumentVersion, getOriginDocumentVersion(context));
+    assert.equal(
+      published.originDocumentVersion,
+      crypto.createHash('sha256').update(originMarkdown(published.sections)).digest('hex'),
+    );
+  }
+  const node = structuredClone(fixture.nodes[0]);
+  node.sections.applicationsMarkdown =
+    '## 知识起源\n\n公开的起源。\n\n```freebbs-quiz\nPRIVATE_PREVIEW_KEY\n```';
+  const published = studentNode(node);
+  assert.doesNotMatch(JSON.stringify(published.sections), /PRIVATE_PREVIEW_KEY/);
+  assert.equal(
+    published.originDocumentVersion,
+    crypto.createHash('sha256').update(originMarkdown(published.sections)).digest('hex'),
+  );
 });
 
 test('accepts structured ASCII knowledge node ids', () => {
@@ -335,10 +425,8 @@ test('public map derives actual chapter names from structured and legacy metadat
       requireAuth: async () => null,
     }),
   );
-  const server = app.listen(0, '127.0.0.1');
-  await new Promise((resolve) => {
-    server.once('listening', resolve);
-  });
+  const server = http.createServer(app);
+  await listenAllowedLoopback(server, { diagnostic: (message) => t.diagnostic(message) });
   t.after(
     () =>
       new Promise((resolve) => {
@@ -388,10 +476,8 @@ test('real public map responses carry normalized levels for the structure reader
       requireAuth: async () => null,
     }),
   );
-  const server = app.listen(0, '127.0.0.1');
-  await new Promise((resolve) => {
-    server.once('listening', resolve);
-  });
+  const server = http.createServer(app);
+  await listenAllowedLoopback(server, { diagnostic: (message) => t.diagnostic(message) });
   t.after(
     () =>
       new Promise((resolve) => {
@@ -448,9 +534,8 @@ test('serves persisted backgrounds publicly and restricts background changes to 
       },
     }),
   );
-  const server = await new Promise((resolve) => {
-    const listeningServer = app.listen(0, '127.0.0.1', () => resolve(listeningServer));
-  });
+  const server = http.createServer(app);
+  await listenAllowedLoopback(server, { diagnostic: (message) => t.diagnostic(message) });
   const baseUrl = `http://127.0.0.1:${server.address().port}/api/courses/signals/map`;
 
   t.after(async () => {

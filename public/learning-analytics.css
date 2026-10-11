@@ -1,4 +1,6 @@
 .learning-data-panel {
+  min-width: 0;
+  scroll-margin-top: calc(var(--desktop-header-height, 100px) + 16px);
   margin: 24px 0;
   padding: 24px;
   border: 1px solid var(--border-color, #d8e1e4);
@@ -8,6 +10,113 @@
 }
 .learning-data-panel[hidden] {
   display: none;
+}
+.learning-data-panel [hidden] {
+  display: none !important;
+}
+.learning-data-panel {
+  font-size: 16px;
+  line-height: 1.65;
+}
+.learning-data-body,
+.learning-data-view {
+  min-width: 0;
+}
+.learning-data-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 22px 0 14px;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--surface-soft, #f3f7f7);
+}
+.learning-data-tabs button {
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.learning-data-tabs button[aria-pressed='true'] {
+  background: var(--card-bg, #fff);
+  border-color: var(--border-color, #d8e1e4);
+  font-weight: 650;
+  color: var(--accent-color, #087480);
+}
+.learning-data-panel :is(button, a, input, select, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--accent-color, #087480);
+  outline-offset: 3px;
+}
+.learning-data-panel button:active {
+  transform: none;
+}
+.learning-data-next-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+.learning-data-next-card {
+  padding: 16px;
+  border: 1px solid var(--border-color, #d8e1e4);
+  border-inline-start: 3px solid var(--accent-color, #087480);
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+.learning-data-next-card p {
+  margin: 8px 0 12px;
+}
+.learning-data-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  color: var(--accent-color, #087480);
+  text-underline-offset: 4px;
+}
+.learning-data-search {
+  width: min(100%, 420px);
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  margin: 8px 0 16px;
+  border: 1px solid var(--border-color, #d8e1e4);
+  border-radius: 10px;
+  background: var(--card-bg, #fff);
+  color: inherit;
+  font: inherit;
+}
+.learning-data-timeline {
+  display: flex;
+  gap: 8px;
+  padding: 10px 4px;
+  overflow-x: auto;
+}
+.learning-data-day {
+  flex: 1 0 34px;
+  height: 108px;
+  position: relative;
+  border-bottom: 1px solid var(--border-color, #d8e1e4);
+  border-radius: 4px;
+}
+.learning-data-day-bar {
+  position: absolute;
+  bottom: 22px;
+  left: 15%;
+  right: 15%;
+  background: var(--accent-color, #087480);
+  border-radius: 4px 4px 0 0;
+}
+.learning-data-day small {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  text-align: center;
+  font-size: 11px;
 }
 .learning-data-heading,
 .learning-data-controls {
@@ -22,6 +131,7 @@
   font-size: 24px;
 }
 .learning-data-heading select,
+.learning-data-heading button,
 .learning-data-controls button {
   border: 1px solid var(--border-color, #d8e1e4);
   padding: 8px 12px;
@@ -29,6 +139,10 @@
   background: var(--card-bg, #fff);
   color: inherit;
   font: inherit;
+}
+.learning-data-heading :is(select, button),
+.learning-data-controls button {
+  min-height: 44px;
 }
 .learning-data-controls button:active {
   transform: none;
@@ -100,12 +214,13 @@
 }
 .learning-data-table-scroll {
   overflow: auto;
+  scroll-margin-bottom: 12px;
 }
 .learning-data-panel table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  font-size: 14px;
+  font-size: 15px;
 }
 .learning-data-panel th,
 .learning-data-panel td {
@@ -160,7 +275,29 @@ body.theme-dark .learning-data-panel {
 body.theme-dark .learning-data-metric {
   background: #1b353e;
 }
-body.theme-dark .learning-data-controls button {
+body.theme-dark .learning-data-tabs {
+  background: #1b353e;
+}
+body.theme-dark .learning-data-tabs button[aria-pressed='true'],
+body.theme-dark .learning-data-search {
+  background: #122a32;
+  border-color: #38515a;
+  color: #e7eff1;
+}
+body.theme-dark .learning-data-link,
+body.theme-dark .learning-data-tabs button[aria-pressed='true'] {
+  color: #80d6dc;
+}
+body.theme-dark .learning-data-next-card {
+  border-color: #38515a;
+  border-inline-start-color: #80d6dc;
+}
+body.theme-dark .learning-data-day-bar {
+  background: #80d6dc;
+}
+body.theme-dark .learning-data-controls button,
+body.theme-dark .learning-data-heading button,
+body.theme-dark .learning-data-heading select {
   background: #1b353e;
   color: #e7eff1;
   border-color: #38515a;
@@ -172,6 +309,7 @@ body.theme-dark .learning-data-unit-heading a {
   color: #80d6dc;
 }
 body.theme-dark .learning-data-caption,
+body.theme-dark .learning-data-status,
 body.theme-dark .learning-data-metric span,
 body.theme-dark .learning-data-metric small,
 body.theme-dark .learning-data-evidence-scope summary {

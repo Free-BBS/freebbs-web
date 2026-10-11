@@ -115,6 +115,107 @@ test('notes use optimistic revisions and block cross-account edits/deletes', asy
   assert.equal((await call('DELETE', `/${id}`)).status, 200);
   assert.equal((await call('GET')).data.entries.length, 0);
 });
+
+test('conditional DELETE preserves a parallel edit and remains private to its owner', async (t) => {
+  const { call } = await fixture(t);
+  const initial = note();
+  const { id } = (await call('POST', '', initial)).data.entry;
+  assert.equal(
+    (await call('PUT', `/${id}`, { ...initial, content: '另一台设备保存的新理解', revision: 1 }))
+      .status,
+    200,
+  );
+  const stale = await call('DELETE', `/${id}`, { revision: 1 });
+  assert.equal(stale.status, 409);
+  assert.match(stale.cache, /private, no-store/);
+  assert.match(stale.data.message, /已变更/);
+  const current = (await call('GET')).data.entries[0];
+  assert.equal(current.revision, 2);
+  assert.equal(current.content, '另一台设备保存的新理解');
+  for (const as of ['other', 'manager']) {
+    assert.equal((await call('DELETE', `/${id}`, { revision: 1 }, as)).status, 404);
+    assert.equal((await call('DELETE', `/${id}`, { revision: 2 }, as)).status, 404);
+  }
+  assert.equal((await call('DELETE', `/${id}`, { revision: 2 })).status, 200);
+  assert.equal((await call('DELETE', `/${id}`, { revision: 2 })).status, 404);
+  assert.equal((await call('GET')).data.entries.length, 0);
+});
+
+test('conditional DELETE validates revision and retains the legacy delete contract', async (t) => {
+  const { call } = await fixture(t);
+  const { id } = (await call('POST', '', note())).data.entry;
+  for (const revision of [
+    null,
+    false,
+    true,
+    '1',
+    0,
+    -1,
+    1.5,
+    [],
+    {},
+    Number.MAX_SAFE_INTEGER + 1,
+  ]) {
+    assert.equal((await call('DELETE', `/${id}`, { revision })).status, 400);
+  }
+  assert.equal((await call('GET')).data.entries.length, 1);
+  assert.equal((await call('DELETE', `/${id}`)).status, 200);
+  const contributionId = (await call('POST', '', contribution())).data.entry.id;
+  assert.equal((await call('DELETE', `/${contributionId}`, { revision: 1 })).status, 404);
+  assert.equal((await call('DELETE', `/${contributionId}`, { revision: 999 })).status, 404);
+  assert.equal((await call('GET')).data.entries[0].kind, 'contribution');
+});
+
+test('conditional DELETE remains restricted to the current course and knowledge point', async (t) => {
+  const { server, call } = await fixture(t);
+  const { id } = (await call('POST', '', note())).data.entry;
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  for (const route of ['circuits/SS-01-01', 'signals/SS-01-02']) {
+    const response = await fetch(`${origin}/api/learning/${route}/entries/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer learning-preview-student',
+      },
+      body: JSON.stringify({ revision: 1 }),
+    });
+    assert.equal(response.status, 404);
+  }
+  assert.equal((await call('GET')).data.entries.length, 1);
+  assert.equal((await call('DELETE', `/${id}`, { revision: 1 })).status, 200);
+});
+
+test('two conditional DELETE requests can acknowledge the same record only once', async (t) => {
+  const { call } = await fixture(t);
+  const { id } = (await call('POST', '', note())).data.entry;
+  const results = await Promise.all([
+    call('DELETE', `/${id}`, { revision: 1 }),
+    call('DELETE', `/${id}`, { revision: 1 }),
+  ]);
+  assert.deepEqual(results.map((result) => result.status).sort(), [200, 404]);
+  assert.equal((await call('GET')).data.entries.length, 0);
+});
+
+test('conditional DELETE supports the same three private kinds without widening removal rights', async (t) => {
+  const { call } = await fixture(t);
+  for (const body of [
+    note(),
+    { ...note(), kind: 'reflection', feeling: 'getting' },
+    {
+      ...note(),
+      kind: 'path',
+      path: [{ id: 'read', tool: 'content', title: '回看正文', minutes: 12, completed: false }],
+    },
+  ]) {
+    const created = await call('POST', '', body);
+    assert.equal(created.status, 201);
+    const { id, revision } = created.data.entry;
+    assert.equal((await call('DELETE', `/${id}`, { revision: revision + 1 })).status, 409);
+    assert.equal((await call('GET')).data.entries.find((entry) => entry.id === id).kind, body.kind);
+    assert.equal((await call('DELETE', `/${id}`, { revision })).status, 200);
+  }
+  assert.equal((await call('GET')).data.entries.length, 0);
+});
 test('contributions enter course-only review, never the public discussion', async (t) => {
   const { call } = await fixture(t);
   await call('POST', '', note());
@@ -257,6 +358,54 @@ test('MySQL store binds all values and scopes every operation', async () => {
     /course_id = \?.*node_id = \?.*kind = 'contribution' AND status = 'pending'/,
   );
 });
+
+test('MySQL conditional DELETE binds revision atomically and discloses conflicts only within owner scope', async () => {
+  const calls = [];
+  let affectedRows = 0;
+  let ownedRows = [{ id: 10 }];
+  const pool = {
+    execute: async (sql, params) => {
+      assert.equal((sql.match(/\?/g) || []).length, params.length);
+      calls.push({ sql, params });
+      return sql.startsWith('DELETE') ? [{ affectedRows }, []] : [ownedRows, []];
+    },
+  };
+  const store = createMysqlLearningStore(pool);
+  const user = { id: 12 };
+  const context = { course_id: 4, node_id: 'SS-01-01' };
+  await assert.rejects(store.remove(user, context, '10', 3), { status: 409 });
+  assert.match(
+    calls[0].sql,
+    /user_id = \?.*course_id = \?.*node_id = \?.*kind IN \('note', 'reflection', 'path'\) AND revision = \?$/,
+  );
+  assert.deepEqual(calls[0].params, ['10', 12, 4, 'SS-01-01', 3]);
+  assert.match(
+    calls[1].sql,
+    /user_id = \?.*course_id = \?.*node_id = \?.*kind IN \('note', 'reflection', 'path'\) LIMIT 1$/,
+  );
+  assert.deepEqual(calls[1].params, ['10', 12, 4, 'SS-01-01']);
+  ownedRows = [];
+  assert.equal(await store.remove(user, context, '10', 3), false);
+  affectedRows = 1;
+  const before = calls.length;
+  assert.equal(await store.remove(user, context, '10', 4), true);
+  assert.equal(calls.length, before + 1, 'a successful CAS delete needs no later lookup');
+});
+
+test('MySQL legacy DELETE keeps its original one-query contract', async () => {
+  const calls = [];
+  const pool = {
+    execute: async (sql, params) => {
+      calls.push({ sql, params });
+      return [{ affectedRows: 0 }, []];
+    },
+  };
+  const store = createMysqlLearningStore(pool);
+  assert.equal(await store.remove({ id: 12 }, { course_id: 4, node_id: 'SS-01-01' }, '10'), false);
+  assert.equal(calls.length, 1);
+  assert.ok(!calls[0].sql.includes('revision = ?'));
+  assert.deepEqual(calls[0].params, ['10', 12, 4, 'SS-01-01']);
+});
 test('additive migration uses signed foreign keys matching existing users/courses', async () => {
   const statements = [];
   await ensureLearningWorkspaceTables({
@@ -358,6 +507,153 @@ const anchor = (context = { node_id: 'SS-01-01', document_markdown: '学习预�
 const annotatedNote = () => ({
   ...note(),
   annotation: { style: 'highlight', color: 'purple', anchor: anchor() },
+});
+const originNote = (context) => {
+  const value = annotatedNote();
+  value.annotation.anchor = {
+    ...anchor(context),
+    section: 'origin',
+    documentVersion: documentVersion(context, 'origin'),
+  };
+  return value;
+};
+
+test('annotation sections preserve legacy anchors and accept only body or origin', () => {
+  const legacy = validateEntry(annotatedNote()).annotation.anchor;
+  assert.equal(Object.hasOwn(legacy, 'section'), false);
+  for (const section of ['body', 'origin']) {
+    const input = annotatedNote();
+    input.annotation.anchor.section = section;
+    assert.equal(validateEntry(input).annotation.anchor.section, section);
+  }
+  for (const section of ['', null, false, 1, [], {}, 'applications', 'notes']) {
+    const input = annotatedNote();
+    input.annotation.anchor.section = section;
+    assert.throws(() => validateEntry(input), { status: 400 });
+    const correction = { ...contribution(), anchor: { ...anchor(), section } };
+    assert.throws(() => validateEntry(correction), { status: 400 });
+  }
+});
+
+test('body and origin anchors use separate versions while the legacy body SHA stays unchanged', () => {
+  const context = {
+    node_id: 'SS-01-01',
+    title: '同一句话',
+    document_markdown: '## 正文\n\n学会同一句话。',
+    knowledge_markdown: '## 正文\n\n学会同一句话。',
+    applications_markdown: '## 知识起源\n\n学会同一句话。',
+  };
+  assert.equal(
+    documentVersion(context),
+    crypto.createHash('sha256').update(context.document_markdown).digest('hex'),
+  );
+  const body = validateEntry({
+    ...annotatedNote(),
+    annotation: { style: 'highlight', color: 'blue', anchor: anchor(context) },
+  });
+  const origin = validateEntry(originNote(context));
+  assert.equal(body.annotation.anchor.quote, origin.annotation.anchor.quote);
+  assert.equal(body.annotation.anchor.blockAnchor, origin.annotation.anchor.blockAnchor);
+  assert.deepEqual(prepareEntryMetadata(body, context).annotation, body.annotation);
+  assert.deepEqual(prepareEntryMetadata(origin, context).annotation, origin.annotation);
+  const wrongSource = structuredClone(origin);
+  wrongSource.annotation.anchor.documentVersion = documentVersion(context);
+  assert.throws(() => prepareEntryMetadata(wrongSource, context), { status: 409 });
+});
+
+test('origin annotations round-trip privately and reject stale origin without invalidating body', async (t) => {
+  const { call, store } = await fixture(t);
+  const context = await store.context('signals', 'SS-01-01');
+  const initial = originNote(context);
+  const created = await call('POST', '', initial);
+  assert.equal(created.status, 201);
+  assert.equal(created.data.entry.annotation.anchor.section, 'origin');
+  assert.equal(
+    created.data.entry.annotation.anchor.documentVersion,
+    documentVersion(context, 'origin'),
+  );
+  // The old row-level field stays the body fingerprint, including for origin notes.
+  assert.equal(created.data.entry.documentVersion, documentVersion(context));
+  assert.equal((await call('GET', '', undefined, 'other')).data.entries.length, 0);
+  assert.equal((await call('GET', '', undefined, 'manager')).data.entries.length, 0);
+  const changed = { ...context, applications_markdown: '## 知识起源\n\n修改后的起源。' };
+  store.context = async () => changed;
+  const stale = await call('POST', '', { ...originNote(context), requestKey: crypto.randomUUID() });
+  assert.equal(stale.status, 409);
+  assert.match(stale.data.message, /知识起源已更新/);
+  assert.equal((await call('POST', '', annotatedNote())).status, 201);
+  assert.equal((await call('POST', '', originNote(changed))).status, 201);
+  const current = (await call('GET')).data.entries.find(
+    (item) => item.id === created.data.entry.id,
+  );
+  assert.equal(current.annotation.anchor.documentVersion, documentVersion(context, 'origin'));
+});
+
+test('unchanged historical origin anchors remain editable without accepting forged relocation', async (t) => {
+  const { call, store } = await fixture(t);
+  const context = await store.context('signals', 'SS-01-01');
+  const initial = originNote(context);
+  const entry = (await call('POST', '', initial)).data.entry;
+  store.context = async () => ({ ...context, applications_markdown: '## 知识起源\n\n新版起源。' });
+  assert.equal(
+    (await call('PUT', `/${entry.id}`, { ...initial, content: '补充自己的理解', revision: 1 }))
+      .status,
+    200,
+  );
+  const forged = structuredClone(initial);
+  forged.annotation.anchor.quote = '改';
+  assert.equal((await call('PUT', `/${entry.id}`, { ...forged, revision: 2 })).status, 409);
+  assert.equal(
+    (await call('PUT', `/${entry.id}`, { ...note(), content: '仍保留原来的起源锚点', revision: 2 }))
+      .status,
+    200,
+  );
+  const restored = (await call('GET')).data.entries[0];
+  assert.equal(restored.annotation.anchor.section, 'origin');
+  assert.equal(restored.revision, 3);
+});
+
+test('origin corrections require explicit contribution and enter the normal pending review boundary', async (t) => {
+  const { call, store } = await fixture(t);
+  const context = await store.context('signals', 'SS-01-01');
+  const input = {
+    ...contribution(),
+    anchor: originNote(context).annotation.anchor,
+  };
+  const created = await call('POST', '', input);
+  assert.equal(created.status, 201);
+  assert.equal(created.data.entry.status, 'pending');
+  assert.equal(created.data.entry.anchor.section, 'origin');
+  assert.equal((await call('GET', '', undefined, 'other')).data.entries.length, 0);
+  assert.equal(
+    (await call('GET', '?review=pending', undefined, 'manager')).data.entries[0].anchor.section,
+    'origin',
+  );
+});
+
+test('MySQL annotation context loads structured supplementary sections from the authenticated node', async () => {
+  const calls = [];
+  const row = {
+    course_id: 9,
+    node_id: 'SS-01-01',
+    title: '卷积',
+    document_markdown: '正文',
+    knowledge_markdown: '正文',
+    basic_info_markdown: '',
+    applications_markdown: '## 知识起源\n\n为何学习卷积。',
+  };
+  const store = createMysqlLearningStore({
+    execute: async (sql, params) => {
+      calls.push({ sql, params });
+      return [[row]];
+    },
+  });
+  assert.deepEqual(await store.context('signals', 'SS-01-01'), row);
+  assert.match(calls[0].sql, /n\.title/);
+  assert.match(calls[0].sql, /s\.applications_markdown/);
+  assert.match(calls[0].sql, /LEFT JOIN course_map_node_sections s/);
+  assert.match(calls[0].sql, /s\.course_id = n\.course_id AND s\.node_id = n\.node_id/);
+  assert.deepEqual(calls[0].params, ['signals', 'SS-01-01']);
 });
 const resource = () => ({
   ...contribution(),

@@ -1982,6 +1982,11 @@
 
     canvas.addEventListener('click', (event) => {
       const target = event.target instanceof Element ? event.target : null;
+      // The structure module owns its controls, text, and graph gestures.
+      // They are not blank clicks in the legacy directory view.
+      if (target?.closest('.course-structure')) {
+        return;
+      }
       if (target?.closest('.course-map-edge-hit')) {
         return;
       }
@@ -2056,6 +2061,14 @@
     document.getElementById('course-map-reset-view')?.addEventListener('click', resetReaderView);
     document.addEventListener('keydown', (event) => {
       if (overviewDrawer?.isOpen()) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (
+        event.defaultPrevented ||
+        state.readerLayout === 'structure' ||
+        target?.closest('input, textarea, select, [contenteditable], dialog[open]')
+      ) {
+        return;
+      }
       if (event.key === 'Escape') {
         hideReaderEdgeTooltip();
       }
@@ -2128,12 +2141,17 @@
       state.progress = readLocalJson(PROGRESS_STORAGE_KEY) || {};
       state.learningNodeId = getLearningNodeId();
       const initialChapters = courseChapters();
-      if (!state.learningNodeId) {
-        state.learningNodeId = initialChapters[0]?.nodes[0]?.id || '';
-      }
       state.activeChapterId =
         chapterIdForNodeId(state.learningNodeId) || initialChapters[0]?.id || '';
       const requestedFocus = params.get('focus');
+      const requestedChapterId =
+        mapPage && window.FreeBbsLearningContent?.isChapterNode(nodeById(requestedFocus))
+          ? chapterIdForNodeId(requestedFocus)
+          : '';
+      if (requestedChapterId) {
+        state.readerLayout = 'structure';
+        state.activeChapterId = requestedChapterId;
+      }
       if (
         mapPage &&
         requestedFocus &&
@@ -2162,6 +2180,8 @@
         bindEditorControls();
       }
       renderMap();
+      // A chapter overview returns to its directory, never a fabricated point focus.
+      if (requestedChapterId) state.structureController?.selectChapter(requestedChapterId);
       setSaveState(editorPage ? '所有修改会自动保存' : '');
       setStatus(state.nodes.length ? '' : `「${state.course.name}」的知识地图还没有录入知识点。`);
     } catch (error) {

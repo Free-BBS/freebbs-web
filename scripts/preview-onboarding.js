@@ -3,7 +3,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { preparePageShell } = require('../page-shell');
 const { createEconomyPreview, TOKEN } = require('./preview-economy');
-const { createLearningPreviewApi } = require('./preview-learning-workspace');
+const {
+  createLearningPreviewApi,
+  createSimulatedLearningChat,
+  studentNode,
+} = require('./preview-learning-workspace');
 const { createWorkbenchPreviewApi } = require('./workbench-preview-api');
 const { createBoneSales } = require('../backend/economy-sales');
 const {
@@ -167,7 +171,17 @@ function createOnboardingPreview({
   allowDemoAuthentication = false,
   extraApi: additionalApi = null,
   transformHtml: additionalTransform = null,
+  learningFixture = null,
 } = {}) {
+  const resolveCourse = (slug) =>
+    learningFixture?.course.slug === slug
+      ? {
+          course: learningFixture.course,
+          nodes: learningFixture.nodes.map((node) => studentNode(node)),
+          edges: learningFixture.edges,
+          backgroundUrl: '',
+        }
+      : courseFixture(slug);
   const progressByVersion = new Map();
   const readProgress = (version = GUIDE_VERSION) =>
     structuredClone(progressByVersion.get(resolveGuideVersion(version)) || emptyProgress(version));
@@ -460,7 +474,7 @@ function createOnboardingPreview({
       }
       const mapMatch = /^\/api\/courses\/([^/]+)\/map(?:\/nodes\/([^/]+))?$/.exec(route);
       if (mapMatch && method === 'GET') {
-        const map = courseFixture(mapMatch[1]);
+        const map = resolveCourse(mapMatch[1]);
         if (!map) return result({ message: '未找到本地示例课程' }, 404);
         if (!mapMatch[2]) return result(map);
         const node = map.nodes.find((entry) => entry.id === mapMatch[2]);
@@ -468,6 +482,10 @@ function createOnboardingPreview({
           ? result({ course: map.course, node })
           : result({ message: '未找到示例知识点' }, 404);
       }
+      if (learningFixture && route === '/api/courses' && method === 'GET')
+        return result({
+          courses: ['math', 'circuits', 'signals'].map((slug) => resolveCourse(slug).course),
+        });
       if (route === '/api/course-upload/tokens' && method === 'GET') return result({ tokens: [] });
       if (route === '/api/leaderboard/heat' && method === 'GET')
         return result({
@@ -508,7 +526,7 @@ function createOnboardingPreview({
   // A fixed, account-free visual fixture lives outside public and production routes.
   const previewUser = { id: 1, uid: 'u_preview01', username: 'NotingSr_preview', role: 'student' };
   const learningContexts = ['math', 'circuits', 'signals'].flatMap((slug, index) => {
-    const fixture = courseFixture(slug);
+    const fixture = learningFixture?.course.slug === slug ? learningFixture : courseFixture(slug);
     return fixture.nodes.map((node) => ({
       slug,
       course_id: index + 1,
@@ -526,17 +544,43 @@ function createOnboardingPreview({
       is_active: 1,
     }));
   });
+  const identity = (request) =>
+    request.headers.authorization === `Bearer ${TOKEN}` ? previewUser : null;
   const learning = createLearningPreviewApi({
     contextRows: learningContexts,
     previewUsers: [previewUser],
     managers: [],
-    identity: (request) =>
-      request.headers.authorization === `Bearer ${TOKEN}` ? previewUser : null,
+    identity,
   });
+  const requests = [];
+  if (learningFixture)
+    learning.app.post(
+      '/api/ai/knowledge/chat',
+      createSimulatedLearningChat({
+        identity,
+        assessmentStore: learning.assessmentStore,
+        learningStore: learning.store,
+        requests,
+      }),
+    );
   const [handlePreviewRequest] = preview.server.listeners('request');
   preview.server.removeListener('request', handlePreviewRequest);
   preview.server.on('request', async (req, res) => {
-    if (/^\/api\/learning(?:[/-]|$)/.test(req.url.split('?')[0])) {
+    if (learningFixture) {
+      const host = `127.0.0.1:${preview.server.address().port}`;
+      if (
+        req.headers.host !== host ||
+        (req.headers.origin && req.headers.origin !== `http://${host}`)
+      ) {
+        res.writeHead(403, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        return res.end(JSON.stringify({ message: 'Loopback preview only' }));
+      }
+    }
+    const route = req.url.split('?')[0];
+    if (
+      /^\/api\/learning(?:[/-]|$)/.test(route) ||
+      (learningFixture && route === '/api/ai/knowledge/chat')
+    ) {
       const host = `127.0.0.1:${preview.server.address().port}`;
       if (
         req.headers.host !== host ||
@@ -573,7 +617,14 @@ function createOnboardingPreview({
       return res.end('Visual preview fixture unavailable');
     }
   });
-  return { ...preview, workbench, discussion, progress: readProgress, learning };
+  return {
+    ...preview,
+    workbench,
+    discussion,
+    progress: readProgress,
+    learning,
+    ...(learningFixture ? { requests } : {}),
+  };
 }
 
 if (require.main === module) {

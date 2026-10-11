@@ -51,10 +51,11 @@ test('course review and mastery mechanisms stay grey and historical award stays 
   assert.equal(model[0].historicalVersion, true);
   assert.equal(model[1].earned, false);
 });
-function runtime() {
+function runtime({ knowledgePage = false, coursePage = false } = {}) {
   const elements = () => ({
     children: [],
     dataset: {},
+    listeners: new Map(),
     isConnected: true,
     textContent: '',
     append(...items) {
@@ -64,7 +65,9 @@ function runtime() {
       this.children = items;
     },
     setAttribute() {},
-    addEventListener() {},
+    addEventListener(name, callback) {
+      this.listeners.set(name, callback);
+    },
     get childElementCount() {
       return this.children.length;
     },
@@ -73,12 +76,14 @@ function runtime() {
   const listeners = new Map();
   const app = {
     userState: { uid: 'student', token: 'token1', isLoggedIn: true },
-    callApi(url) {
+    callApi(url, options) {
       let resolve;
-      const promise = new Promise((done) => {
+      let reject;
+      const promise = new Promise((done, fail) => {
         resolve = done;
+        reject = fail;
       });
-      calls.push({ url, resolve });
+      calls.push({ url, options, resolve, reject });
       return promise;
     },
   };
@@ -89,20 +94,35 @@ function runtime() {
       listeners.set(name, callback);
     },
   };
+  const page = knowledgePage ? elements() : null;
+  const selftestSlot = knowledgePage ? elements() : null;
+  const courseSlot = coursePage ? elements() : null;
   const document = {
     createElement: elements,
-    getElementById: () => null,
-    querySelector: () => null,
+    getElementById: (id) =>
+      ({ 'learning-selftest-stars': selftestSlot, 'course-learning-stars': courseSlot })[id] ||
+      null,
+    querySelector: (selector) => (selector === '[data-knowledge-page]' ? page : null),
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../public/learning-stars.js'), 'utf8'), {
     window,
     document,
     URLSearchParams,
   });
-  return { app, calls, listeners, api: window.FreeBbsLearningStars, slot: elements() };
+  return {
+    app,
+    calls,
+    listeners,
+    page,
+    selftestSlot,
+    courseSlot,
+    api: window.FreeBbsLearningStars,
+    slot: elements(),
+    newSlot: elements,
+  };
 }
 const snapshot = {
-  nodes: [{ nodeId: 'SS-01-01', stars: [{ key: 'self_learning', earned: true }] }],
+  node: { nodeId: 'SS-01-01', stars: [{ key: 'self_learning', earned: true }] },
 };
 const allText = (item) => [item.textContent, ...item.children.map(allText)].join(' ');
 const settled = () =>
@@ -114,24 +134,22 @@ test('historical node star and current-version selftest evidence render together
   const view = runtime();
   view.api.mount(view.slot, { courseSlug: 'signals', nodeId: 'SS-01-01' });
   view.calls[0].resolve({
-    nodes: [
-      {
-        nodeId: 'SS-01-01',
-        stars: [{ key: 'self_learning', earned: true, historicalVersion: true }],
-        selftest: {
-          available: true,
-          passedQuestionCount: 3,
-          questionCount: 4,
-          pendingReviewCount: 1,
-        },
+    node: {
+      nodeId: 'SS-01-01',
+      stars: [{ key: 'self_learning', earned: true, historicalVersion: true }],
+      selftest: {
+        available: true,
+        passedQuestionCount: 3,
+        questionCount: 4,
+        pendingReviewCount: 1,
       },
-    ],
+    },
   });
   await settled();
   assert.match(allText(view.slot), /保留历史版本的星记录/);
   assert.match(allText(view.slot), /本版自测 3\/4 题通过 · 1 题待复核/);
   assert.match(allText(view.slot), /已记录/);
-  assert.doesNotMatch(allText(view.slot), /同步学习记录|掌握程度|获取条件/);
+  assert.doesNotMatch(allText(view.slot), /更新学习星|掌握程度|获取条件/);
   const courseLearning = view.slot.children[0].children.find(
     (item) => item.dataset.learningStar === 'course_learning',
   );
@@ -159,18 +177,55 @@ test('history with no published selftest does not invent current-version progres
   const view = runtime();
   view.api.mount(view.slot, { courseSlug: 'signals', nodeId: 'SS-01-01' });
   view.calls[0].resolve({
-    nodes: [
-      {
-        nodeId: 'SS-01-01',
-        stars: [{ key: 'course_learning', earned: true, historicalVersion: true }],
-        selftest: { available: false, passedQuestionCount: 0, questionCount: 0 },
-      },
-    ],
+    node: {
+      nodeId: 'SS-01-01',
+      stars: [{ key: 'course_learning', earned: true, historicalVersion: true }],
+      selftest: { available: false, passedQuestionCount: 0, questionCount: 0 },
+    },
   });
   await settled();
   assert.match(allText(view.slot), /课程学习 已记录/);
   assert.match(allText(view.slot), /保留历史版本的星记录/);
   assert.doesNotMatch(allText(view.slot), /本版自测|0\/0/);
+});
+
+test('an eligible but unrecorded star offers an explicit update, not an automatic write or success claim', async () => {
+  const view = runtime();
+  view.api.mount(view.slot, { courseSlug: 'signals', nodeId: 'SS-01-01' });
+  view.calls[0].resolve({
+    node: {
+      nodeId: 'SS-01-01',
+      stars: [],
+      selftest: { available: true, eligible: true, passedQuestionCount: 2, questionCount: 2 },
+    },
+  });
+  await settled();
+  const findUpdate = (item) =>
+    item.textContent === '更新学习星' ? item : item.children.map(findUpdate).find(Boolean);
+  const button = findUpdate(view.slot);
+  assert.ok(button);
+  assert.match(allText(view.slot), /本版自测 2\/2 题通过/);
+  assert.doesNotMatch(allText(view.slot), /自主学习 已记录/);
+  assert.equal(view.calls.length, 1, 'Reading eligibility never performs a write');
+  const request = button.listeners.get('click')();
+  assert.equal(button.disabled, true);
+  assert.equal(view.calls[1].url, '/learning-stars/signals/SS-01-01/reconcile');
+  assert.equal(view.calls[1].options.method, 'POST');
+  assert.equal(view.calls[1].options.body, '{}');
+  view.calls[1].reject(new Error('fixture temporarily unavailable'));
+  await request;
+  assert.equal(button.disabled, false);
+  assert.equal(button.textContent, '更新失败，重试');
+  assert.doesNotMatch(allText(view.slot), /自主学习 已记录/);
+  const retry = button.listeners.get('click')();
+  view.calls[2].resolve({ awarded: true });
+  await retry;
+  assert.equal(view.calls[3].url, '/learning-stars/signals/SS-01-01');
+  assert.equal(view.calls[3].options.method, 'GET');
+  view.calls[3].resolve(snapshot);
+  await settled();
+  assert.match(allText(view.slot), /自主学习 已记录/);
+  assert.doesNotMatch(allText(view.slot), /更新学习星|更新失败/);
 });
 test('late star results cannot repaint another account and refresh uses its own identity', async () => {
   const view = runtime();
@@ -181,7 +236,7 @@ test('late star results cannot repaint another account and refresh uses its own 
   view.calls[0].resolve(snapshot);
   await settled();
   assert.doesNotMatch(allText(view.slot), /已记录/);
-  view.calls[1].resolve({ nodes: [{ nodeId: 'SS-01-01', stars: [] }] });
+  view.calls[1].resolve({ node: { nodeId: 'SS-01-01', stars: [] } });
   await settled();
   assert.doesNotMatch(allText(view.slot), /已记录/);
 });
@@ -200,4 +255,93 @@ test('cross-tab changes suspend even refresh and explicit identity confirmation 
   view.calls[1].resolve(snapshot);
   await settled();
   assert.match(allText(view.slot), /已记录/);
+});
+
+test('the actual knowledge-loaded path requests only its node and shares the overview request', async () => {
+  const view = runtime({ knowledgePage: true });
+  view.page.listeners.get('knowledge:loaded')({
+    detail: { course: { slug: 'signals' }, node: { id: 'SS-01-01' } },
+  });
+  view.api.mount(view.slot, { courseSlug: 'signals', nodeId: 'SS-01-01' });
+  assert.equal(view.calls.length, 1, 'overview and selftest slots share the same node request');
+  assert.equal(view.calls[0].url, '/learning-stars/signals/SS-01-01');
+  assert.equal(view.calls[0].options.method, 'GET');
+  view.calls[0].resolve(snapshot);
+  await settled();
+  assert.match(allText(view.selftestSlot), /自主学习 已记录/);
+  assert.match(allText(view.slot), /自主学习 已记录/);
+  const laterSlot = view.newSlot();
+  view.api.mount(laterSlot, { courseSlug: 'signals', nodeId: 'SS-01-01' });
+  await settled();
+  assert.equal(view.calls.length, 1, 'a later slot reuses the settled node request');
+  assert.match(allText(laterSlot), /自主学习 已记录/);
+});
+
+test('same-course different nodes and the course summary have isolated request caches', async () => {
+  const view = runtime({ coursePage: true });
+  view.api.mount(view.slot, { courseSlug: 'signals', nodeId: 'SS-01-01' });
+  const second = view.newSlot();
+  view.api.mount(second, { courseSlug: 'signals', nodeId: 'SS-02-01' });
+  assert.deepEqual(
+    view.calls.map((call) => call.url),
+    [
+      '/learning-stars/signals',
+      '/learning-stars/signals/SS-01-01',
+      '/learning-stars/signals/SS-02-01',
+    ],
+  );
+  view.calls[2].resolve({ node: { nodeId: 'SS-02-01', level: 'extension', stars: [] } });
+  view.calls[1].resolve(snapshot);
+  view.calls[0].resolve({ course: { stars: [{ key: 'course_lit', earned: true }] } });
+  await settled();
+  assert.match(allText(view.courseSlot), /课程点亮 已记录/);
+  assert.match(allText(view.slot), /自主学习 已记录/);
+  assert.doesNotMatch(allText(second), /已记录|课程学习/);
+  view.api.refresh();
+  assert.equal(view.calls.length, 6, 'refresh invalidates each distinct scope once');
+  assert.deepEqual(
+    view.calls.slice(3).map((call) => call.url),
+    [
+      '/learning-stars/signals',
+      '/learning-stars/signals/SS-01-01',
+      '/learning-stars/signals/SS-02-01',
+    ],
+  );
+});
+
+test('switching one slot to a new point ignores the late result from the old point', async () => {
+  const view = runtime();
+  view.api.mount(view.slot, { courseSlug: 'signals', nodeId: 'SS-01-01' });
+  view.api.mount(view.slot, { courseSlug: 'signals', nodeId: 'SS-02-01' });
+  assert.equal(view.calls.length, 2);
+  view.calls[1].resolve({ node: { nodeId: 'SS-02-01', level: 'extension', stars: [] } });
+  await settled();
+  view.calls[0].resolve(snapshot);
+  await settled();
+  assert.doesNotMatch(allText(view.slot), /已记录|课程学习/);
+});
+
+test('refresh deduplicates node slots and late errors do not evict the newer request', async () => {
+  const view = runtime();
+  const second = view.newSlot();
+  view.api.mount(view.slot, { courseSlug: 'signals', nodeId: 'SS-01-01' });
+  view.api.mount(second, { courseSlug: 'signals', nodeId: 'SS-01-01' });
+  view.api.refresh();
+  assert.equal(view.calls.length, 2, 'both slots share one new request after refresh');
+  view.calls[0].reject(new Error('old request failed after refresh'));
+  await settled();
+  const third = view.newSlot();
+  view.api.mount(third, { courseSlug: 'signals', nodeId: 'SS-01-01' });
+  assert.equal(view.calls.length, 2, 'an old error cannot delete the newer cached request');
+  view.calls[1].resolve(snapshot);
+  await settled();
+  for (const slot of [view.slot, second, third]) assert.match(allText(slot), /自主学习 已记录/);
+});
+
+test('a mismatched single-node response never displays another point evidence', async () => {
+  const view = runtime();
+  view.api.mount(view.slot, { courseSlug: 'signals', nodeId: 'SS-02-01' });
+  view.calls[0].resolve(snapshot);
+  await settled();
+  assert.doesNotMatch(allText(view.slot), /已记录/);
 });

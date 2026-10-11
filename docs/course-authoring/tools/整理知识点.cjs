@@ -37,6 +37,7 @@ function parse(source, { allowDemo = false } = {}) {
   let index = -1;
   let title = '';
   let fence = '';
+  const questionHeadings = new Map();
   for (const line of markdown.split('\n')) {
     const marker = line.match(/^\s{0,3}(`{3,}|~{3,})/);
     if (marker) {
@@ -48,6 +49,10 @@ function parse(source, { allowDemo = false } = {}) {
         throw new Error('三个二级标题必须按模板顺序各出现一次，其他标题使用三级及以下。');
       index = next;
       continue;
+    }
+    if (!marker && !fence && index === 2) {
+      const question = line.match(/^#{3,6}\s+题目\s+([A-Za-z0-9][A-Za-z0-9_.-]{0,119})\s*$/);
+      if (question) questionHeadings.set(question[1], (questionHeadings.get(question[1]) || 0) + 1);
     }
     if (index === -1) {
       if (/^#\s+/.test(line) && !title) title = line.replace(/^#\s+/, '').trim();
@@ -65,7 +70,22 @@ function parse(source, { allowDemo = false } = {}) {
     validateOptionalQuiz(sections.applicationsMarkdown)
   )
     throw new Error('自测评分扩展只能放在知识点正文的末尾。');
-  validateOptionalQuiz(sections.knowledgeMarkdown);
+  const quiz = validateOptionalQuiz(sections.knowledgeMarkdown);
+  if (quiz) {
+    // Extra unconfigured Markdown exercises remain valid. Check identifiers only,
+    // not whether separately written prompts/answers mean the same thing.
+    for (const question of quiz.questions) {
+      const count = questionHeadings.get(question.id) || 0;
+      if (!count)
+        throw new Error(
+          `评分扩展题号与Markdown正文不一致：${question.id} 缺少对应“题目 ${question.id}”标题。`,
+        );
+      if (count > 1)
+        throw new Error(
+          `评分扩展题号与Markdown正文不一致：${question.id} 在正文中重复出现${count}次。`,
+        );
+    }
+  }
   const metadata = {};
   for (const line of sections.basicInfoMarkdown.split('\n')) {
     if (!line.trim()) continue;

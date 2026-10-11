@@ -75,7 +75,7 @@ function createMysqlLearningStarStore(pool, transactional = false) {
         connection.release();
       }
     },
-    async course(slug, id) {
+    async course(slug, id, point) {
       const [courses] = await pool.execute(
         `SELECT id, slug, name FROM courses WHERE ${id ? 'id' : 'slug'} = ? AND is_active = 1 LIMIT 1${transactional ? ' FOR UPDATE' : ''}`,
         [id || slug],
@@ -83,11 +83,13 @@ function createMysqlLearningStarStore(pool, transactional = false) {
       const course = courses[0];
       if (!course) return null;
       const [nodes] = await pool.execute(
-        `SELECT n.course_id, n.node_id, n.title, n.document_markdown, s.basic_info_markdown
+        `SELECT n.course_id, n.node_id, n.title,
+         ${point ? 'CASE WHEN n.node_id = ? THEN n.document_markdown END' : 'n.document_markdown'} AS document_markdown,
+         s.basic_info_markdown
          FROM course_map_nodes n LEFT JOIN course_map_node_sections s
          ON s.course_id = n.course_id AND s.node_id = n.node_id
          WHERE n.course_id = ? ORDER BY n.node_id${transactional ? ' FOR UPDATE' : ''}`,
-        [course.id],
+        [...(point ? [point] : []), course.id],
       );
       return { ...course, nodes };
     },
@@ -323,9 +325,23 @@ function courseModel(course, nodes, awards) {
     }),
   };
 }
+function courseScopeModel(course, awards) {
+  const earned = new Set(
+    awards.filter((award) => Object.hasOwn(NODE_LABELS, award.key)).map((award) => award.nodeId),
+  );
+  return courseModel(
+    course,
+    leafNodes(course.nodes).map((node) => ({
+      nodeId: node.node_id,
+      level: levelOf(node),
+      stars: [{ earned: earned.has(node.node_id) }],
+    })),
+    awards,
+  );
+}
 function createLearningStarService({ store }) {
   async function context(slug, point, scopedStore = store) {
-    const course = await scopedStore.course(slug);
+    const course = await scopedStore.course(slug, null, point);
     if (!course) throw new LearningStarError(404, '课程不存在');
     if (point && !leafNodes(course.nodes).some((node) => node.node_id === point))
       throw new LearningStarError(404, '知识点不存在或为章节');
@@ -337,6 +353,18 @@ function createLearningStarService({ store }) {
     for (const node of leafNodes(course.nodes))
       nodes.push(nodeModel(node, awards, await selftestEvidence(scopedStore, user, course, node)));
     return { course: courseModel(course, nodes, awards), nodes };
+  }
+  async function nodeSnapshot(user, course, point, scopedStore, evidence) {
+    const node = leafNodes(course.nodes).find((item) => item.node_id === point);
+    const awards = await scopedStore.awards(user, course);
+    return {
+      course: courseScopeModel(course, awards),
+      node: nodeModel(
+        node,
+        awards,
+        evidence || (await selftestEvidence(scopedStore, user, course, node)),
+      ),
+    };
   }
   async function reconcileCourse(user, course, scopedStore, point) {
     const node = leafNodes(course.nodes).find((item) => item.node_id === point);
@@ -383,10 +411,10 @@ function createLearningStarService({ store }) {
         ),
       });
     }
-    const result = await snapshot(user, course, scopedStore);
+    const result = await nodeSnapshot(user, course, point, scopedStore, evidence);
     return {
       course: result.course,
-      node: result.nodes.find((item) => item.nodeId === point),
+      node: result.node,
       awarded: !already && evidence.summary.eligible,
     };
   }
@@ -395,8 +423,7 @@ function createLearningStarService({ store }) {
       return snapshot(user, await context(slug));
     },
     async node(user, slug, point) {
-      const result = await snapshot(user, await context(slug, point));
-      return { course: result.course, node: result.nodes.find((item) => item.nodeId === point) };
+      return nodeSnapshot(user, await context(slug, point), point, store);
     },
     async reconcile(user, slug, point) {
       return store.transaction(async (scopedStore) =>
@@ -408,7 +435,11 @@ function createLearningStarService({ store }) {
         return null;
       const owner = { id: attempt.userId || user.id };
       return store.transaction(async (scopedStore) => {
-        const course = await scopedStore.course(null, assessmentContext.course_id);
+        const course = await scopedStore.course(
+          null,
+          assessmentContext.course_id,
+          assessmentContext.node_id,
+        );
         if (!course) return null;
         // Ownership and grading are independently checked against persisted attempts.
         return reconcileCourse(owner, course, scopedStore, assessmentContext.node_id);

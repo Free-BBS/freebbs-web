@@ -101,6 +101,74 @@ test('converter validates optional quizzes before exporting existing three secti
     /只能放/,
   );
 });
+test('scored question IDs require one matching Markdown title and report the exact mismatch', () => {
+  for (const manuscript of [
+    source,
+    source
+      .replace('"status": "draft"', '"status": "published"')
+      .replace('"reviewedBy": ""', '"reviewedBy": "本地测试复核人"'),
+  ])
+    assert.throws(
+      () => parseDemo(manuscript.replace('#### 题目 SS-01-01-Q02', '#### 题目 OTHER-Q02')),
+      /题号与Markdown正文不一致：SS-01-01-Q02.*缺少对应/,
+    );
+  assert.throws(
+    () => parseDemo(source.replace('"id": "SS-01-01-Q02"', '"id": "OTHER-Q02"')),
+    /题号与Markdown正文不一致：OTHER-Q02.*缺少对应/,
+  );
+  assert.throws(
+    () =>
+      parseDemo(
+        source.replace(
+          '#### 题目 SS-01-01-Q02',
+          '#### 题目 SS-01-01-Q02\n\n#### 题目 SS-01-01-Q02',
+        ),
+      ),
+    /SS-01-01-Q02.*重复出现2次/,
+  );
+});
+test('mismatched scored IDs stop conversion before creating any publishable output', (t) => {
+  const output = fs.mkdtempSync(path.join(os.tmpdir(), 'freebbs-authoring-mismatch-'));
+  t.after(() => {
+    fs.rmSync(output, { recursive: true, force: true });
+  });
+  const invalidSource = source.replace('#### 题目 SS-01-01-Q02', '#### 题目 OTHER-Q02');
+  const file = path.join(output, 'manuscript.md');
+  fs.writeFileSync(file, invalidSource, 'utf8');
+  const exportDirectory = path.join(output, 'export');
+  assert.throws(
+    () => prepare(file, { allowDemo: true, out: exportDirectory, revision: 'new', x: 200, y: 180 }),
+    /SS-01-01-Q02.*缺少对应/,
+  );
+  assert.equal(fs.existsSync(exportDirectory), false);
+  assert.equal(fs.readFileSync(file, 'utf8'), invalidSource);
+});
+test('code examples cannot supply or duplicate scored Markdown question titles', () => {
+  for (const fence of ['```', '~~~~']) {
+    const example = `${fence}md\n#### 题目 SS-01-01-Q02\n${fence}`;
+    const inserted = source.replace('### 练习与思考', `### 练习与思考\n\n${example}`);
+    assert.equal(parseDemo(inserted).id, 'SS-01-01');
+    assert.throws(
+      () =>
+        parseDemo(inserted.replace(/#### 题目 SS-01-01-Q02(?=\n\n题型)/, '#### 题目 OTHER-Q02')),
+      /SS-01-01-Q02.*缺少对应/,
+    );
+  }
+});
+test('unconfigured Markdown exercises remain compatible and extra practice titles are allowed', () => {
+  const unchanged = parseDemo(unscoredSource);
+  const oldTitles = parseDemo(
+    unscoredSource.replace('#### 题目 SS-01-01-Q02', '#### 题目 OTHER-Q02'),
+  );
+  assert.equal(unchanged.id, 'SS-01-01');
+  assert.equal(oldTitles.id, 'SS-01-01');
+  assert.deepEqual(parseAssessmentMarkdown(oldTitles.sections.knowledgeMarkdown).questions, []);
+  const scored = parseAssessmentMarkdown(parseDemo().sections.knowledgeMarkdown);
+  assert.equal(
+    scored.practiceQuestions.find((question) => question.id === 'SS-01-01-Q01').questionVersion,
+    'legacy-practice',
+  );
+});
 test('local demonstration exercises use the real runtime contract for all four scoring types', () => {
   const assessment = parseAssessmentMarkdown(parseDemo().sections.knowledgeMarkdown);
   assert.deepEqual(assessment.warnings, []);

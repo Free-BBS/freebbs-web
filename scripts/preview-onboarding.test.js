@@ -61,14 +61,14 @@ test('onboarding preview uses real empty learning stores across its three course
       assert.deepEqual((await get(`/api/learning/${slug}/${node.id}/entries`)).entries, []);
     }
   }
-  assert.equal((await get('/api/learning-analytics/preferences')).preferences.enabled, false);
+  assert.equal((await get('/api/learning-analytics/preferences')).preferences.enabled, true);
   assert.deepEqual(learning.store.rows, []);
   assert.deepEqual(learning.assessmentStore.rows, []);
   assert.deepEqual(learning.starsStore.rows, []);
   assert.deepEqual(learning.analyticsStore.rows, []);
 });
 
-test('guide completion and reward cannot turn into learning evidence or opt the learner into tracking', async (t) => {
+test('guide completion and reward cannot manufacture learning evidence or change default recording', async (t) => {
   const { server, learning } = createOnboardingPreview();
   await new Promise((resolve) => {
     server.listen(0, '127.0.0.1', resolve);
@@ -96,7 +96,7 @@ test('guide completion and reward cannot turn into learning evidence or opt the 
   await call('/api/onboarding/reward', 'POST', {});
   await call('/api/learning-stars/math/MA-01-1/reconcile', 'POST', {});
   assert.deepEqual(await call('/api/learning-stars/math'), before);
-  assert.equal((await call('/api/learning-analytics/preferences')).preferences.enabled, false);
+  assert.equal((await call('/api/learning-analytics/preferences')).preferences.enabled, true);
   assert.deepEqual(learning.store.rows, []);
   assert.deepEqual(learning.assessmentStore.rows, []);
   assert.deepEqual(learning.starsStore.rows, []);

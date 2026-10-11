@@ -90,6 +90,10 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
+function allNodes(host) {
+  return [host, ...host.children.flatMap(allNodes)];
+}
+
 function analyticsBrowser(
   initialUser = { uid: '1', token: 'first-token', isLoggedIn: true },
   { consent = true } = {},
@@ -97,6 +101,7 @@ function analyticsBrowser(
   const createElement = () => ({
     children: [],
     dataset: {},
+    style: {},
     listeners: new Map(),
     textContent: '',
     hidden: false,
@@ -260,7 +265,7 @@ test('same-identity wallet/session notifications, manual refresh and BFCache do 
   assert.equal(tool.body.metadata.sessionId, originalSession);
 });
 
-test('starting-point and path choice APIs never turn consent on or post before verified opt-in', async () => {
+test('choices wait for server policy confirmation and never change recording policy or include text', async () => {
   const choice = {
     courseSlug: 'signals',
     nodeId: 'SS-01-01',
@@ -292,7 +297,7 @@ test('starting-point and path choice APIs never turn consent on or post before v
   );
 });
 
-test('a choice waiting for consent cannot be transferred to the next account by a late response', async () => {
+test('a choice waiting for recording policy cannot be transferred to the next account by a late response', async () => {
   const browser = analyticsBrowser(undefined, { consent: false });
   await browser.flush();
   const waiting = deferred();
@@ -363,25 +368,25 @@ test('same-identity session acknowledgement can resume after storage invalidatio
   assert.equal(browser.visits().length, 1);
 });
 
-test('turning collection off blocks choices immediately even if an older opt-in response arrives late', async () => {
+test('clearing history blocks writes while pending and resumes default recording without an opt-out control', async () => {
   const browser = analyticsBrowser();
   await browser.flush();
   const oldPreferences = deferred();
-  const turnOff = deferred();
-  let disabled = false;
+  const cleared = deferred();
   browser.setRoute((call) => {
     if (call.url === '/learning-analytics/preferences' && call.method === 'GET')
       return oldPreferences.promise;
-    if (call.method === 'PUT') return turnOff.promise;
-    if (disabled && call.url.startsWith('/learning-analytics/summary'))
-      return Promise.resolve({ preferences: { enabled: false }, process: {}, selftest: {} });
+    if (call.method === 'DELETE') return cleared.promise;
     return undefined;
   });
   browser.loadKnowledge();
   const nodes = (host) => [host, ...host.children.flatMap(nodes)];
-  const check = nodes(browser.personal).find((node) => node.type === 'checkbox');
-  check.checked = false;
-  const changed = check.listeners.get('change')[0]();
+  assert.equal(
+    nodes(browser.personal).some((node) => node.type === 'checkbox'),
+    false,
+  );
+  const clear = nodes(browser.personal).find((node) => node.textContent === '清空过程记录');
+  const changed = clear.listeners.get('click')[0]();
   oldPreferences.resolve({ preferences: { enabled: true } });
   await browser.flush();
   const choice = {
@@ -391,14 +396,18 @@ test('turning collection off blocks choices immediately even if an older opt-in 
     level: 'basic',
   };
   assert.equal(await browser.window.FreeBbsLearningAnalytics.recordLearningChoice(choice), false);
-  disabled = true;
-  turnOff.resolve({ preferences: { enabled: false } });
+  cleared.resolve({ preferences: { enabled: true } });
   await changed;
-  assert.equal(await browser.window.FreeBbsLearningAnalytics.recordLearningChoice(choice), false);
+  assert.equal(await browser.window.FreeBbsLearningAnalytics.recordLearningChoice(choice), true);
   assert.equal(
     browser.calls.filter((call) => call.body?.metadata?.action === 'learning_start_set').length,
-    0,
+    1,
   );
+  assert.equal(
+    browser.calls.some((call) => call.method === 'PUT'),
+    false,
+  );
+  assert.match(browser.text(browser.personal), /后续学习继续自动记录/);
 });
 
 test('personal learning evidence remains private and shows real attempts plus unknown preferences without mastery claims', async () => {
@@ -434,12 +443,59 @@ test('personal learning evidence remains private and shows real attempts plus un
   assert.match(text, /目的未选择/);
   assert.match(text, /正式自测 3/);
   assert.match(text, /同题复测 1/);
-  assert.match(text, /查看并调整起点/);
+  assert.match(text, /回到知识点/);
   assert.match(text, /尚未采集/);
   assert.doesNotMatch(text, /六维学习看板|已经掌握|已证明/);
   browser.emitWindow('storage', { key: 'free_bbs_auth_token' });
   assert.equal(browser.personal.hidden, true);
   assert.doesNotMatch(browser.text(browser.personal), /正式自测 3/);
+});
+
+test('failed clearing leaves recording active and does not erase original evidence', async () => {
+  const browser = analyticsBrowser();
+  browser.loadKnowledge();
+  await browser.flush();
+  browser.setRoute((call) =>
+    call.method === 'DELETE' ? Promise.reject(new Error('fixture unavailable')) : undefined,
+  );
+  const clear = allNodes(browser.personal).find((node) => node.textContent === '清空过程记录');
+  await clear.listeners.get('click')[0]();
+  assert.equal(
+    await browser.window.FreeBbsLearningAnalytics.recordLearningChoice({
+      courseSlug: 'signals',
+      nodeId: 'SS-01-01',
+      action: 'learning_start_set',
+      level: 'new',
+    }),
+    true,
+  );
+  assert.match(browser.text(browser.personal), /private-user-1/);
+  assert.match(browser.text(browser.personal), /fixture unavailable/);
+});
+
+test('confirmed clearing with a failed summary discards erased history and keeps automatic recording active', async () => {
+  const browser = analyticsBrowser();
+  browser.loadKnowledge();
+  await browser.flush();
+  browser.setRoute((call) => {
+    if (call.method === 'DELETE') return Promise.resolve({ preferences: { enabled: true } });
+    if (call.url.startsWith('/learning-analytics/summary'))
+      return Promise.reject(new Error('summary unavailable'));
+    return undefined;
+  });
+  const clear = allNodes(browser.personal).find((node) => node.textContent === '清空过程记录');
+  await clear.listeners.get('click')[0]();
+  assert.doesNotMatch(browser.text(browser.personal), /private-user-1/);
+  assert.match(browser.text(browser.personal), /已清空，统计刷新失败/);
+  assert.equal(
+    await browser.window.FreeBbsLearningAnalytics.recordLearningChoice({
+      courseSlug: 'signals',
+      nodeId: 'SS-01-01',
+      action: 'learning_start_set',
+      level: 'new',
+    }),
+    true,
+  );
 });
 
 test('real account changes clear old private data, invalidate late responses and record exactly one new authorized visit', async () => {
@@ -587,6 +643,16 @@ test('admin evidence separates usage from same-version change and shows denomina
   browser.emitWindow('freebbs:session-change');
   await browser.flush();
   const text = browser.text(browser.admin);
+  assert.match(text, /学习平台观察/);
+  assert.match(text, /战略部观察平台设计对学习与发展的支持/);
+  assert.match(text, /课程内容和题目问题由课程部跟进/);
+  assert.match(text, /本分析不读取私人批注、聊天或答案正文/);
+  assert.match(text, /当前仅覆盖学习页面/);
+  assert.match(text, /跨模块发展支持尚未纳入/);
+  assert.match(text, /平台使用/);
+  assert.match(text, /学习支持证据/);
+  assert.match(text, /学习路径/);
+  assert.match(text, /记录明细/);
   assert.match(text, /使用与参与/);
   assert.match(text, /学习变化证据/);
   assert.match(text, /1 \/ 2 组/);
@@ -612,7 +678,11 @@ test('empty and unavailable evidence states do not imply failure or benefit', as
   browser.setRoute((call) =>
     call.url.startsWith('/learning-analytics/admin/overview')
       ? Promise.resolve({
-          effectiveness: { officialLearners: 1, comparableSequences: 0 },
+          effectiveness: {
+            officialLearners: 1,
+            comparableSequences: 0,
+            failedComparableSequences: 0,
+          },
           users: [],
         })
       : undefined,
@@ -622,6 +692,16 @@ test('empty and unavailable evidence states do not imply failure or benefit', as
   assert.match(browser.text(browser.admin), /尚无可比较的复测样本/);
   assert.match(browser.text(browser.admin), /暂无样本/);
   assert.doesNotMatch(browser.text(browser.admin), /0 \/ 0 组/);
+  browser.setRoute((call) =>
+    call.url.startsWith('/learning-analytics/admin/overview')
+      ? Promise.resolve({ effectiveness: { officialLearners: 1 }, users: [] })
+      : undefined,
+  );
+  browser.window.FreeBbsLearningAnalytics.refresh();
+  await browser.flush();
+  assert.match(browser.text(browser.admin), /复测样本字段暂未提供/);
+  assert.match(browser.text(browser.admin), /可比较的同题复测 未提供 组/);
+  assert.doesNotMatch(browser.text(browser.admin), /尚无可比较的复测样本/);
 });
 
 test('admin cohort presentation labels true denominators, unknown goals, small samples and uncollected outcomes', async () => {
@@ -667,9 +747,367 @@ test('admin cohort presentation labels true denominators, unknown goals, small s
   assert.match(text, /起点缺失 3 个/);
   assert.match(text, /目的未选择/);
   assert.match(text, /2 \/ 5/);
-  assert.match(text, /接触过一些 \/ 未选择/);
+  assert.match(text, /不甚熟悉 \/ 未选择/);
   assert.match(text, /1人，少于5人/);
   assert.match(text, /探索作答/);
   assert.match(text, /尚未采集/);
   assert.doesNotMatch(text, /已经证明|提高了.*%|平台提升率|能力排名/);
+});
+
+function adminUserTable(browser) {
+  const find = (node, predicate) => {
+    if (predicate(node)) return node;
+    return node.children.map((child) => find(child, predicate)).find(Boolean);
+  };
+  const details = find(browser.admin, (node) => node.children[0]?.textContent === '各用户记录');
+  assert.ok(details);
+  const scroll = details.children.find((node) => node.className === 'learning-data-table-scroll');
+  assert.equal(scroll.tabIndex, 0);
+  const table = scroll.children[0];
+  return {
+    headings: table.children[0].children[0].children.map((node) => node.textContent),
+    rows: table.children[1].children.map((row) => row.children.map((node) => node.textContent)),
+    caption: browser.text(details),
+  };
+}
+
+test('admin user rows use actual formal and practice fields without treating the total as formal selftest', async () => {
+  const browser = analyticsBrowser(undefined, { consent: false });
+  await browser.flush();
+  browser.setRoute((call) =>
+    call.url.startsWith('/learning-analytics/admin/overview')
+      ? Promise.resolve({
+          users: [
+            {
+              id: 'practice-only',
+              nickname: '只做练习',
+              courseCount: 1,
+              process: { visits: 0 },
+              selftest: {
+                attempts: 200,
+                officialAttempts: 0,
+                practiceAttempts: 200,
+                passed: 0,
+                failed: 0,
+                pendingReview: 0,
+              },
+            },
+            {
+              id: 'mixed',
+              nickname: '<img src=x onerror=alert(1)>',
+              courseCount: 2,
+              process: { visits: 10 },
+              selftest: {
+                attempts: 203,
+                officialAttempts: 3,
+                practiceAttempts: 200,
+                passed: 1,
+                failed: 1,
+                pendingReview: 1,
+              },
+            },
+          ],
+        })
+      : undefined,
+  );
+  browser.app.userState.isAdmin = true;
+  browser.emitWindow('freebbs:session-change');
+  await browser.flush();
+  const actual = adminUserTable(browser);
+  assert.deepEqual(actual.headings, [
+    '用户',
+    '参与课程',
+    '访问',
+    '全部作答（次数）',
+    '正式自测（次数）',
+    '练习（次数）',
+    '正式通过 / 尚未通过（次数）',
+    '待复核（次数）',
+  ]);
+  assert.deepEqual(actual.rows, [
+    ['只做练习', '1', '0', '200', '0', '200', '0 / 0', '0'],
+    ['<img src=x onerror=alert(1)>', '2', '10', '203', '3', '200', '1 / 1', '1'],
+  ]);
+  assert.match(actual.caption, /含重复作答和历史版本/);
+  assert.match(actual.caption, /不代表当前题库通过或掌握程度/);
+  assert.equal(browser.calls.filter((call) => call.method !== 'GET').length, 0);
+});
+
+test('legacy admin payload keeps a known total and marks missing breakdowns instead of inventing zeros or formal counts', async () => {
+  const browser = analyticsBrowser(undefined, { consent: false });
+  await browser.flush();
+  browser.setRoute((call) =>
+    call.url.startsWith('/learning-analytics/admin/overview')
+      ? Promise.resolve({
+          users: [
+            { id: 'old', selftest: { attempts: 7, passed: 1, failed: 0, pendingReview: 0 } },
+            { id: 'partial', selftest: { attempts: 200, practiceAttempts: 200 } },
+            { id: 'missing' },
+          ],
+        })
+      : undefined,
+  );
+  browser.app.userState.isAdmin = true;
+  browser.emitWindow('freebbs:session-change');
+  await browser.flush();
+  const { rows, caption } = adminUserTable(browser);
+  assert.deepEqual(rows[0].slice(3), ['7', '未分列', '未分列', '1 / 0', '0']);
+  assert.deepEqual(rows[1].slice(3), ['200', '未分列', '200', '未提供 / 未提供', '未提供']);
+  assert.deepEqual(rows[2].slice(3), ['未提供', '未分列', '未分列', '未提供 / 未提供', '未提供']);
+  assert.match(caption, /接口未提供分项时显示“未分列”/);
+});
+
+test('personal view switches retain the chosen view across filter reload without private writes', async () => {
+  const browser = analyticsBrowser();
+  await browser.flush();
+  const buttons = allNodes(browser.personal).filter((node) => node.dataset.learningDataView);
+  assert.deepEqual(
+    buttons.map((node) => node.textContent),
+    ['学习近况', '知识点记录', '作答复盘'],
+  );
+  const selected = buttons.find((node) => node.dataset.learningDataView === 'units');
+  selected.listeners.get('click')[0]();
+  const views = () => allNodes(browser.personal).filter((node) => node.dataset.learningDataPanel);
+  assert.equal(views().find((node) => node.dataset.learningDataPanel === 'units').hidden, false);
+  assert.equal(views().find((node) => node.dataset.learningDataPanel === 'overview').hidden, true);
+  const filter = allNodes(browser.personal).find((node) => node.value === '30');
+  filter.value = '7';
+  await filter.listeners.get('change')[0]();
+  assert.equal(views().find((node) => node.dataset.learningDataPanel === 'units').hidden, false);
+  assert.equal(
+    browser.calls.some((call) => call.method !== 'GET'),
+    false,
+  );
+});
+
+test('next steps use valid existing practice routes, stay optional and never call Max or submit answers', async () => {
+  const browser = analyticsBrowser();
+  browser.setRoute((call) =>
+    call.url.startsWith('/learning-analytics/summary')
+      ? Promise.resolve({
+          preferences: { enabled: true },
+          insights: {
+            nextSteps: [
+              {
+                id: 'retry',
+                courseSlug: 'signals',
+                nodeId: 'SS-01-01',
+                tool: 'feedback',
+                quizView: 'mistakes',
+                reasonLabel: '最新记录尚未通过，按需回看条件。',
+              },
+              {
+                // eslint-disable-next-line no-script-url -- Deliberately invalid input must not become a link.
+                courseSlug: 'javascript:alert(1)',
+                nodeId: 'bad',
+                tool: 'feedback',
+                reasonLabel: '<img src=x>',
+              },
+              ...['content', 'notes', 'resources', 'continue'].map((tool) => ({
+                courseSlug: 'signals',
+                nodeId: 'SS-01-01',
+                tool,
+              })),
+            ],
+          },
+        })
+      : undefined,
+  );
+  browser.window.FreeBbsLearningAnalytics.refresh();
+  await browser.flush();
+  const links = allNodes(browser.personal).filter((node) => node.href);
+  assert.ok(
+    links.some(
+      (node) =>
+        node.href === '/knowledge?course=signals&point=SS-01-01&tool=feedback&quiz=mistakes',
+    ),
+  );
+  assert.equal(
+    links.some((node) => /javascript:|alert/.test(node.href)),
+    false,
+  );
+  for (const destination of ['view=reading', 'tool=notes', 'tool=resources', 'tool=continue'])
+    assert.ok(
+      links.some((node) => node.href.endsWith(destination)),
+      destination,
+    );
+  assert.match(browser.text(browser.personal), /不要求全部完成/);
+  assert.equal(
+    browser.calls.some((call) => call.method !== 'GET' || /\/ai\//.test(call.url)),
+    false,
+  );
+});
+
+test('recent activity has accessible factual counts and no streak or mastery labels', async () => {
+  const browser = analyticsBrowser();
+  browser.setRoute((call) =>
+    call.url.startsWith('/learning-analytics/summary')
+      ? Promise.resolve({
+          preferences: { enabled: true },
+          activity: { days: [{ date: '2026-10-11', visits: 2, attempts: 1, activeSeconds: 65 }] },
+        })
+      : undefined,
+  );
+  browser.window.FreeBbsLearningAnalytics.refresh();
+  await browser.flush();
+  const day = allNodes(browser.personal).find((node) => node.className === 'learning-data-day');
+  assert.equal(day.tabIndex, 0);
+  assert.match(day.title, /2026-10-11：访问 2 次，作答 1 次/);
+  assert.match(browser.text(browser.personal), /空白表示没有记录，不表示没有学习/);
+  assert.doesNotMatch(browser.text(browser.personal), /连续打卡|学习能力分|有效时长/);
+});
+
+test('admin diagnostics expose counts and missing fields, not fictional ability or causal metrics', async () => {
+  const browser = analyticsBrowser({
+    uid: '9',
+    token: 'admin-token',
+    isLoggedIn: true,
+    isAdmin: true,
+  });
+  browser.setRoute((call) =>
+    call.url.startsWith('/learning-analytics/admin/overview')
+      ? Promise.resolve({
+          diagnostics: {
+            coverage: {
+              observedLearners: 3,
+              processLearners: 2,
+              businessLearners: 2,
+              businessOnlyLearners: 1,
+            },
+            quality: { missingStartUnits: 1 },
+            attention: [],
+          },
+        })
+      : undefined,
+  );
+  browser.window.FreeBbsLearningAnalytics.refresh();
+  await browser.flush();
+  const text = browser.text(browser.admin);
+  assert.match(text, /本期有学习证据 3 人/);
+  assert.match(text, /课程支持待办（课程部）/);
+  const courseSupport = allNodes(browser.admin).find((node) =>
+    node.children.some((child) => child.textContent === '课程支持待办（课程部）'),
+  );
+  assert.ok(courseSupport);
+  assert.notEqual(courseSupport.open, true);
+  assert.match(text, /起点未记录的单元 1/);
+  assert.match(text, /选择时正文版本未知的单元 未提供/);
+  assert.match(text, /延迟保持、新题迁移与平台因果效果：尚未验证/);
+  assert.equal(allNodes(browser.admin).filter((node) => node.dataset.learningDataView).length, 4);
+  assert.doesNotMatch(text, /预测成绩|学生排名|学习成效指数/);
+});
+
+test('unavailable assessment data never looks like zero attempts or no support needs in either view', async () => {
+  const browser = analyticsBrowser({
+    uid: '9',
+    token: 'admin-token',
+    isLoggedIn: true,
+    isAdmin: true,
+  });
+  const unavailable = {
+    assessmentDataStatus: 'not_available',
+    officialAttempts: 0,
+    practiceAttempts: 0,
+    passed: 0,
+    failed: 0,
+    pendingReview: 0,
+  };
+  browser.setRoute((call) => {
+    if (/\/summary|\/admin\/overview/.test(call.url))
+      return Promise.resolve({
+        preferences: { enabled: true },
+        selftest: unavailable,
+        effectiveness: { ...unavailable, officialLearners: 0, comparableSequences: 0 },
+        insights: { assessmentDataStatus: 'not_available', nextSteps: [] },
+        journey: {
+          assessmentDataStatus: 'not_available',
+          units: [
+            {
+              courseSlug: 'signals',
+              nodeId: 'SS-01-01',
+              practiceAttempts: 0,
+              officialAttempts: 0,
+              pendingReview: 0,
+            },
+          ],
+        },
+        diagnostics: { coverage: {}, quality: unavailable, attention: [], transitions: [] },
+        users: [{ id: '9', selftest: unavailable }],
+      });
+    return undefined;
+  });
+  browser.window.FreeBbsLearningAnalytics.refresh();
+  await browser.flush();
+  const own = browser.text(browser.personal);
+  const admin = browser.text(browser.admin);
+  assert.match(own, /正式自测作答 未提供/);
+  assert.match(own, /练习 未提供/);
+  assert.match(own, /作答数据暂不可用/);
+  assert.doesNotMatch(own, /正式自测作答 0|目前没有需要特别回看/);
+  assert.match(admin, /不能判断复核或订正待办/);
+  assert.match(admin, /学习变化证据暂不可用/);
+  assert.doesNotMatch(admin, /正式自测参与 0|尚无可比较的复测样本|当前记录中没有待处理/);
+});
+
+for (const view of ['personal', 'admin'])
+  test(`${view} period changes clear old evidence while loading and after failure, then recover with the selected window`, async () => {
+    const browser = analyticsBrowser({
+      uid: '9',
+      token: 'admin-token',
+      isLoggedIn: true,
+      isAdmin: true,
+    });
+    await browser.flush();
+    const route =
+      view === 'personal' ? '/learning-analytics/summary' : '/learning-analytics/admin/overview';
+    const report = (name) => ({
+      preferences: { enabled: true },
+      process: { courses: [{ name, visits: 1 }] },
+      courses: [{ name, users: 5, visits: 1 }],
+      users: [],
+    });
+    browser.setRoute((call) =>
+      call.url.startsWith(route) ? Promise.resolve(report('OLD_WINDOW_30_CANARY')) : undefined,
+    );
+    browser.window.FreeBbsLearningAnalytics.refresh();
+    await browser.flush();
+    const host = browser[view];
+    assert.match(browser.text(host), /OLD_WINDOW_30_CANARY/);
+    const filter = allNodes(host).find((node) => node.value === '30');
+    const waiting = deferred();
+    browser.setRoute((call) => (call.url === `${route}?window=7` ? waiting.promise : undefined));
+    filter.value = '7';
+    const loading = filter.listeners.get('change')[0]();
+    assert.doesNotMatch(browser.text(host), /OLD_WINDOW_30_CANARY/);
+    assert.match(browser.text(host), /正在加载/);
+    waiting.reject(new Error('SELECTED_WINDOW_FAILED_CANARY'));
+    await loading;
+    assert.match(browser.text(host), /SELECTED_WINDOW_FAILED_CANARY/);
+    assert.doesNotMatch(browser.text(host), /OLD_WINDOW_30_CANARY/);
+    browser.setRoute((call) =>
+      call.url === `${route}?window=7` ? Promise.resolve(report('NEW_WINDOW_7_CANARY')) : undefined,
+    );
+    await allNodes(host)
+      .find((node) => node.className === 'learning-data-refresh')
+      .listeners.get('click')[0]();
+    assert.match(browser.text(host), /NEW_WINDOW_7_CANARY/);
+    assert.doesNotMatch(browser.text(host), /OLD_WINDOW_30_CANARY|SELECTED_WINDOW_FAILED_CANARY/);
+  });
+
+test('a personal report error from a replaced mount cannot overwrite the refreshed report status', async () => {
+  const browser = analyticsBrowser();
+  await browser.flush();
+  const waiting = deferred();
+  browser.setRoute((call) =>
+    call.url === '/learning-analytics/summary?window=7' ? waiting.promise : undefined,
+  );
+  const filter = allNodes(browser.personal).find((node) => node.value === '30');
+  filter.value = '7';
+  const oldRequest = filter.listeners.get('change')[0]();
+  browser.window.FreeBbsLearningAnalytics.refresh();
+  await browser.flush();
+  assert.match(browser.text(browser.personal), /private-user-1/);
+  waiting.reject(new Error('REPLACED_MOUNT_ERROR_CANARY'));
+  await oldRequest;
+  assert.doesNotMatch(browser.text(browser.personal), /REPLACED_MOUNT_ERROR_CANARY/);
 });

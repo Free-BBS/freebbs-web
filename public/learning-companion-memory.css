@@ -1,0 +1,37 @@
+.knowledge-chat-max-view {
+  /* Keep the flexible track on the conversation, not on the source disclosure. */
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
+}
+.knowledge-companion-sources {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--ui-line);
+  color: var(--ui-muted);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 0;
+  max-height: min(180px, 20dvh);
+  overflow-y: auto;
+}
+.knowledge-companion-sources summary {
+  min-height: 32px;
+  cursor: pointer;
+}
+.knowledge-companion-sources :is(p, ul) {
+  margin: 8px 0;
+}
+.knowledge-companion-sources ul {
+  max-height: 130px;
+  overflow: auto;
+  padding-left: 20px;
+}
+.knowledge-companion-sources button {
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.knowledge-companion-sources :is(summary, button):focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}

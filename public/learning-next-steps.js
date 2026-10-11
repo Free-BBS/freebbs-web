@@ -18,6 +18,64 @@
   const identifier = (value) =>
     typeof value === 'number' && Number.isFinite(value) ? String(value) : string(value, 100);
 
+  function hasReadableContent(node) {
+    const content =
+      root.FreeBbsLearningContent ||
+      (typeof module !== 'undefined' && module.exports ? require('./learning-content') : null);
+    const source = object(node.sections).knowledgeMarkdown ?? node.markdown ?? '';
+    return typeof source === 'string' && Boolean(content?.stripQuizSource(source).trim());
+  }
+
+  function availableResource(entry) {
+    const resource = object(entry);
+    if (resource.available === false) return false;
+    const url = typeof entry === 'string' ? entry : resource.url;
+    if (typeof url !== 'string' || !url.trim()) return false;
+    try {
+      const target = new URL(url, 'https://freebbs.invalid');
+      return ['http:', 'https:'].includes(target.protocol) && !target.username && !target.password;
+    } catch {
+      return false;
+    }
+  }
+
+  // These are optional shortcuts for the task at hand, not another learner questionnaire.
+  function taskEntries(value) {
+    const input = object(value);
+    const node = object(input.node);
+    const entries = [];
+    const add = (id, title, tool, detail = {}) =>
+      entries.push({ id, title, tool, minutes: 5, completed: false, skipped: false, ...detail });
+    if (hasReadableContent(node)) add('task-read', '查阅正文', 'content', { view: 'reading' });
+    if (input.hasOrigin === true) add('task-origin', '理解为什么', 'content', { view: 'origin' });
+    if (list(input.questions).some((question) => object(question).official === true))
+      add('task-selftest', '正式自测', 'feedback', { quizView: 'quick' });
+    const practice = list(input.practiceQuestions).filter((question) =>
+      identifier(object(question).id),
+    );
+    if (
+      practice.some((question) => object(question).assessmentRole !== 'exploration') ||
+      list(input.questions).some((question) => object(question).official === true)
+    )
+      add('task-practice', '练习解题', 'feedback', { quizView: 'practice' });
+    if (practice.some((question) => object(question).assessmentRole === 'exploration')) {
+      const question = practice.find((entry) => entry.assessmentRole === 'exploration');
+      add('task-explore', '探索与检验', 'feedback', {
+        quizView: 'practice',
+        questionId: identifier(question.id),
+      });
+    }
+    if (hasReadableContent(node)) add('task-note', '在原文上批注', 'notes');
+    else if (input.hasOrigin === true)
+      add('task-note', '在知识起源上批注', 'content', {
+        view: 'origin',
+        taskId: 'annotate-origin',
+      });
+    add('task-help', '向 Max 求助', 'discussion', { taskId: 'ask-max' });
+    add('task-discuss', '和同学讨论', 'discussion');
+    return entries;
+  }
+
   function normalizePath(value) {
     const saved = object(value);
     if (saved.version != null && saved.version !== VERSION) return [];
@@ -157,9 +215,9 @@
     if (!version) return [];
     // Practice submissions cannot replace the latest formal assessment evidence.
     // Version checks stay after deduplication so stale official results cannot resurface.
-    const formal = list(input.recentAttempts).filter(
-      (attempt) => object(attempt).official === true,
-    );
+    const formal = list(
+      Array.isArray(input.currentAttempts) ? input.currentAttempts : input.recentAttempts,
+    ).filter((attempt) => object(attempt).official === true);
     return latestAttempts(formal).filter((attempt) => {
       const snapshot = object(attempt.snapshot);
       const recordedVersion = identifier(attempt.documentVersion ?? snapshot.documentVersion);
@@ -246,7 +304,7 @@
           (attempt) => identifier(attempt.questionId) === identifier(question.id),
         ),
       );
-    const hasContent = Boolean(string(object(node.sections).knowledgeMarkdown || node.markdown));
+    const hasContent = hasReadableContent(node);
     const hasOrigin = input.hasOrigin === true;
     const graph = object(input.map);
     const hasRelations = list(graph.edges).some(
@@ -291,7 +349,7 @@
       }[validPreference?.level || 'new'];
       const question =
         candidates.find((entry) => entry.difficulty === suggestedDifficulty) || candidates[0];
-      return (
+      const strategy =
         strategies?.buildStrategy(
           {
             level: validPreference?.level || 'new',
@@ -304,13 +362,28 @@
             hasRelations,
             hasQuestions: Boolean(question),
             questionId: identifier(question?.id),
-            quizView: question?.official === true ? 'quick' : 'practice',
+            // A learning goal is practice intent, not consent to a formal submission.
+            // Published selftest items can also be attempted in nonofficial practice mode.
+            quizView: 'practice',
           },
-        ) || null
-      );
+        ) || null;
+      if (!strategy || validPreference) return strategy;
+      // The conservative default chooses scaffolding, not a student's self-report.
+      // Keep its plan/key/difficulty intact and only correct the explanatory copy.
+      return {
+        ...strategy,
+        reason: `${strategies.GOALS[strategy.goal]} · 起点未设置`,
+        hint: strategy.hint.replace(
+          `学习起点为学生自述“${strategies.LEVELS[strategy.level]}”，非测评结论，不代表本知识点能力。`,
+          '学习起点未设置；采用保守默认支架，不推断熟悉程度。',
+        ),
+      };
     };
-    const strategy = validPreference ? build(selectedGoal) : null;
-    const explicitStrategy = selectedGoal ? build(selectedGoal) : null;
+    // A saved, deliberately chosen goal is still the learner's choice after a
+    // reload. A recommended goal inferred only from familiarity is not one.
+    const explicitGoal = selectedGoal || validPreference?.goal || '';
+    const explicitStrategy = explicitGoal ? build(explicitGoal) : null;
+    const strategy = explicitStrategy || (validPreference ? build() : null);
     const failedAttempt = officialAttempts.find(
       (entry) => entry.status === 'graded' && entry.verdict === 'fail',
     );
@@ -322,13 +395,38 @@
         label,
         reason,
         steps: normalizePath(steps),
-        tip: '推荐可调整，学习入口始终开放。',
+        tip: '可换个任务，也可以先停一下。',
         evidence: { failed, pending },
-        intentGoal: selectedGoal,
+        intentGoal: explicitGoal,
       };
       const alternatives = [];
+      if (failed) alternatives.push({ ...repair });
+      if (pending && pendingAttempt)
+        alternatives.push({
+          id: 'review-pending',
+          title: '查看待复核作答',
+          description: '复核尚未完成，也可先查阅或探索。',
+          tool: 'feedback',
+          quizView: 'quick',
+          questionId: identifier(pendingAttempt.questionId),
+          minutes: 3,
+          completed: false,
+          skipped: false,
+        });
+      const next = passed && !pending && !path.length ? sequenceNode(input.map, node) : null;
+      if (next)
+        alternatives.push({
+          id: 'alternative-next',
+          title: '开始下一知识点',
+          description: string(next.title, 80),
+          tool: 'content',
+          point: identifier(next.id),
+          minutes: 10,
+          completed: false,
+          skipped: false,
+        });
       const exploratory = build('explore');
-      if (exploratory && selectedGoal !== 'explore')
+      if (exploratory && explicitGoal !== 'explore')
         alternatives.push({
           ...exploratory.steps[0],
           id: 'alternative-explore',
@@ -358,7 +456,9 @@
           completed: false,
           skipped: false,
         });
-      let primary = explicitStrategy?.steps[0] || null;
+      // An existing path is a more specific commitment than the course default.
+      // Only a task explicitly switched on this page may sit alongside it.
+      let primary = (!path.length || selectedGoal ? explicitStrategy?.steps[0] : null) || null;
       if (!primary && failed) primary = { ...repair };
       else if (!primary && pending)
         primary = {
@@ -405,7 +505,9 @@
         failed ? 'repair' : 'resume',
         failed ? '先订正，或继续你的路径' : allCompleted ? '已完成这条路径' : '接着上次的路径',
         failed
-          ? '当前版本有待订正的作答，已保存路径保持原顺序。'
+          ? pending
+            ? '当前版本有待订正和待复核的作答，已保存路径保持原顺序。'
+            : '当前版本有待订正的作答，已保存路径保持原顺序。'
           : pending
             ? '有作答待批阅，已保存路径保持不变。'
             : allCompleted
@@ -436,29 +538,56 @@
           previous.id,
         )
       : null;
-    const hasResources = list(input.resources ?? node.resources).some((entry) =>
-      typeof entry === 'string'
-        ? Boolean(string(entry))
-        : Boolean(
-            identifier(object(entry).id) ||
-            string(object(entry).title) ||
-            string(object(entry).url),
-          ),
-    );
+    const hasResources = list(input.resources ?? node.resources).some(availableResource);
     const resources = hasResources
       ? step('use-resource', '选一份学习资料', '对照已有资料，补充一个概念或例子。', 'resources', 8)
       : null;
-    const check = step(
-      'check-understanding',
-      list(input.questions).length ? '做个小自测' : '复述核心概念',
-      list(input.questions).length
-        ? '完成已有题目，回看作答反馈。'
-        : '用自己的话解释一个概念，再记录卡点。',
-      list(input.questions).length ? 'feedback' : 'notes',
-      5,
-    );
-    if (check.tool === 'feedback') check.quizView = 'quick';
-    const review = step('reflect', '写下复盘', '记录一个收获和下次想解决的问题。', 'notes', 3);
+    const help = (id, minutes) => ({
+      ...step(
+        id,
+        '带着一个问题求助',
+        '可向 Max 说明想查清什么，或先停一下；不会自动发送问题。',
+        'discussion',
+        minutes,
+      ),
+      taskId: 'ask-max',
+    });
+    const annotation = (id, title, description, minutes) => {
+      if (hasContent)
+        return step(id, title, `选中一处相关原文，点击“批注”。${description}`, 'notes', minutes);
+      if (hasOrigin)
+        return {
+          ...step(
+            id,
+            title,
+            `在知识起源中选中一处文字，点击“批注”。${description}`,
+            'content',
+            minutes,
+          ),
+          view: 'origin',
+          taskId: 'annotate-origin',
+        };
+      return help(id, minutes);
+    };
+    const check =
+      officialQuestions.length || practiceQuestions.length
+        ? {
+            ...step(
+              'check-understanding',
+              officialQuestions.length ? '做个小自测' : '尝试一道已有题',
+              '独立尝试一题，再回看作答反馈。',
+              'feedback',
+              5,
+            ),
+            quizView: officialQuestions.length ? 'quick' : 'practice',
+          }
+        : annotation(
+            'check-understanding',
+            '批注自己的理解',
+            '用自己的话解释这一处，或只记一个疑点。',
+            5,
+          );
+    const review = annotation('reflect', '留一条回看批注', '记一个收获或下次想核对的问题。', 3);
     const discuss = step(
       'ask-specific-question',
       '带着问题讨论',
@@ -470,6 +599,41 @@
 
     const withStrategy = (recommendation) =>
       strategy ? { ...recommendation, strategy, questions: strategy.questions } : recommendation;
+    if (
+      !hasContent &&
+      !hasOrigin &&
+      !hasRelations &&
+      !officialQuestions.length &&
+      !practiceQuestions.length
+    )
+      return withStrategy(
+        result(
+          strategy ? 'strategy' : 'start',
+          '先选一个能帮到你的入口',
+          '学习材料尚未补齐，可提问，也可以先暂停。',
+          [help('ask-about-missing-material', 3)],
+        ),
+      );
+    if (explicitStrategy) {
+      const recommendation = result(
+        'strategy',
+        explicitStrategy.label,
+        failed
+          ? pending
+            ? '当前版本有待订正和待复核的作答，也可按你的目标继续。'
+            : '当前版本有待订正的作答，可订正，也可按你的目标继续。'
+          : pending
+            ? '有作答待批阅，先按你的目标继续。'
+            : passed
+              ? sequenceNode(input.map, node)
+                ? '当前正式自测已通过，可继续下一知识点或按你的目标深入。'
+                : '当前正式自测已通过，可按你的目标回看与拓展。'
+              : explicitStrategy.reason,
+        explicitStrategy.steps,
+      );
+      recommendation.tip = '可换方向或暂停，不影响正式自测与星标。';
+      return withStrategy(recommendation);
+    }
     if (failed)
       return withStrategy(
         result(
@@ -486,7 +650,7 @@
         pending ? '有作答待批阅，先按你的目标继续。' : strategy.reason,
         strategy.steps,
       );
-      recommendation.tip = '可换方向，不影响正式自测与星标要求。';
+      recommendation.tip = '可换方向或暂停，不影响正式自测与星标。';
       return withStrategy(recommendation);
     }
     if (!pending && (passed || status === 'completed')) {
@@ -534,6 +698,9 @@
     reorderStep,
     toggleStep,
     sequenceNode,
+    availableResource,
+    hasReadableContent,
+    taskEntries,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else Object.assign(root, { FreeBbsLearningNextSteps: api });

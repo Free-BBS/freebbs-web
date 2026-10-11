@@ -154,6 +154,8 @@ npm run test:profile-learning
 npm run test:learning-workspace
 npm run test:learning-assessment
 npm run test:learning-analytics
+npm run test:learning-research
+npm run test:learning-human-contracts
 npm run test:learning-companion
 npm run test:learning-stars
 npm run test:learning-structure

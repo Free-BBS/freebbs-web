@@ -2329,6 +2329,57 @@ test('the community release crosses into activities and completes without changi
   assert.ok(writes.every((event) => event.version === release));
 });
 
+test('a first full invitation explicitly requested by URL does not invite a second update after pausing', async () => {
+  const first = fixture({
+    href: '/world?guideTour=1',
+    states: { [VERSION]: { seenAt: null }, [LATEST_RELEASE.id]: { seenAt: null } },
+  });
+  await settle();
+  assert.equal(first.dialog.open, true);
+  assert.equal(first.controller.snapshot().version, VERSION);
+  assert.equal(first.server.get(VERSION).seenAt, stamp);
+  assert.equal(first.server.get(LATEST_RELEASE.id).seenAt, stamp);
+  assert.equal(first.server.get(LATEST_RELEASE.id).status, 'not_started');
+  assert.equal(first.server.get(LATEST_RELEASE.id).completedAt, null);
+  assert.equal(rewardWrites(first).length, 0);
+  await first.controller.pause();
+  const second = fixture({
+    href: '/course?course=signals',
+    states: Object.fromEntries(first.server),
+  });
+  await settle();
+  assert.equal(
+    second.dialog,
+    undefined,
+    'a learner who paused one invitation can browse the next page',
+  );
+  await second.controller.start();
+  assert.equal(second.dialog.open, true, 'the complete guide remains explicitly replayable');
+  await second.controller.pause();
+});
+
+test('replaying an already seen full guide does not suppress an unseen update for an existing member', async () => {
+  const first = fixture({
+    href: '/guide?guideTour=1',
+    states: { [VERSION]: { seenAt: stamp }, [LATEST_RELEASE.id]: { seenAt: null } },
+  });
+  await settle();
+  assert.equal(first.dialog.open, true);
+  assert.equal(first.controller.snapshot().version, VERSION);
+  assert.equal(first.server.get(LATEST_RELEASE.id).seenAt, null);
+  await first.controller.pause();
+  const second = fixture({
+    href: '/course?course=signals',
+    states: Object.fromEntries(first.server),
+  });
+  await settle();
+  assert.equal(second.dialog.open, true);
+  assert.equal(second.controller.snapshot().version, LATEST_RELEASE.id);
+  assert.equal(second.doc.getElementById('max-tour-title').textContent, LATEST_RELEASE.title);
+  assert.equal(rewardWrites(second).length, 0);
+  await second.controller.pause();
+});
+
 test('a returning legacy member starts the rebuilt full guide without changing past rewards or receipts', async () => {
   const view = fixture({
     states: {

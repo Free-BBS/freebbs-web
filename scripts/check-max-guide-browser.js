@@ -7,6 +7,7 @@ const path = require('node:path');
 // eslint-disable-next-line import/no-dynamic-require
 const puppeteer = require(process.env.PUPPETEER_MODULE || 'puppeteer');
 const { createOnboardingPreview } = require('./preview-onboarding');
+const { listenAllowedLoopback } = require('./fixtures/allowed-loopback');
 const { STEPS } = require('../public/max-guide-stations');
 const { GUIDE_VERSION } = require('../public/max-guide-releases');
 
@@ -31,18 +32,15 @@ const click = (page, selector) => page.locator(selector).setTimeout(10000).click
 
 async function waitStep(page, index, step, { revealed = false } = {}) {
   const started = Date.now();
-  // The course-entry self-report is a real mandatory user choice. QA chooses
-  // explicitly as a learner; production guide code must never choose for them.
-  // After confirmation the deferred guide must resume without refresh/start.
+  // Browsing a course must not require a self-report. The guide must neither
+  // invent a starting point nor interrupt a fresh learner with a forced choice.
   if (step.id === 'course-directory') {
-    await page.waitForSelector('.learning-start-dialog[open] [data-learning-start-choice="level"]');
-    assert.equal(await page.$('.max-tour[open]'), null, 'do not cover the learning-start choice');
-    await page.select('.learning-start-dialog[open] [data-learning-start-choice="level"]', 'new');
-    await click(page, '.learning-start-dialog[open] .learning-start-apply');
+    await page.waitForSelector('.learning-start-adjust');
+    assert.equal(await page.$('.learning-start-dialog[open]'), null);
     assert.equal(
       await page.evaluate(() => window.FreeBbsLearningStart.currentPreference()?.level),
-      'new',
-      'the recorded preference must be the learner choice, not a guide default',
+      undefined,
+      'The guide cannot choose or require a learning starting point',
     );
   }
   const view = revealed ? { ...step, ...step.reveal } : step;
@@ -230,15 +228,19 @@ async function waitStep(page, index, step, { revealed = false } = {}) {
   return {
     ...snapshot,
     readyMs: Date.now() - started,
-    ...(step.id === 'course-directory' ? { learnerConfirmedStart: 'new' } : {}),
+    ...(step.id === 'course-directory' ? { learningStartOptional: true } : {}),
   };
 }
 
 async function runScenario(browser, scenario, directory) {
-  const { server, store, progress } = createOnboardingPreview();
-  await new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', resolve);
-  });
+  // The complete preview adds authored learning fixtures, not another origin.
+  // eslint-disable-next-line global-require
+  const createPreview =
+    process.env.GUIDE_PREVIEW_COMPLETE === '1'
+      ? require('./preview-learning-complete').createCompleteLearningPreview
+      : createOnboardingPreview;
+  const { server, store, progress } = createPreview();
+  await listenAllowedLoopback(server);
   const base = `http://127.0.0.1:${server.address().port}`;
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
@@ -339,9 +341,7 @@ async function runScenario(browser, scenario, directory) {
       readyTimings.push({
         id: step.id,
         readyMs: snapshot.readyMs,
-        ...(snapshot.learnerConfirmedStart
-          ? { learnerConfirmedStart: snapshot.learnerConfirmedStart }
-          : {}),
+        ...(snapshot.learningStartOptional ? { learningStartOptional: true } : {}),
       });
       if (
         ['world-coming-islands', 'world-mathematics', 'world-island-overview'].includes(step.id)

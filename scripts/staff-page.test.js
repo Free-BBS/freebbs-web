@@ -4,6 +4,7 @@ const path = require('node:path');
 const test = require('node:test');
 const {
   normalizeStaffRoster,
+  staffThumbnailPath,
   selectStaffMembers,
   countCourseGroup,
   partitionStaffMembers,
@@ -48,6 +49,10 @@ function element(tagName = 'div') {
     },
     getAttribute(name) {
       return attributes.get(name);
+    },
+    removeAttribute(name) {
+      attributes.delete(name);
+      delete this[name];
     },
     addEventListener(name, handler) {
       events.set(name, handler);
@@ -95,6 +100,14 @@ function directoryDocument() {
       'staff-photo-status',
     ].map((id) => [id, element()]),
   );
+  const connectImage = (node) => {
+    node.replaceWith = (replacement) => {
+      ids['staff-photo-image'] = replacement;
+      connectImage(replacement);
+    };
+    return node;
+  };
+  connectImage(ids['staff-photo-image']);
   ids['staff-course-section'].hidden = true;
   ids['staff-empty'].hidden = true;
   const dialog = ids['staff-photo-dialog'];
@@ -133,7 +146,7 @@ function directoryDocument() {
     counts,
     courseFilters,
     courseCounts,
-    createElement: element,
+    createElement: (tagName) => connectImage(element(tagName)),
     getElementById: (id) => ids[id],
     querySelectorAll: (selector) =>
       ({
@@ -190,6 +203,7 @@ test('public roster contains only approved fields and 34 unique members', () => 
           'introduction',
           'name',
           'photo',
+          'photoThumbnail',
         ].includes(key),
       ),
     );
@@ -704,7 +718,7 @@ test('a missing photo falls back to the member name', () => {
   assert.equal(fallback.hidden, false);
 });
 
-test('a loaded photo opens its original local image and close restores focus to the same member', () => {
+test('list uses only a thumbnail and explicit open loads the original even while its thumbnail is pending', () => {
   const doc = directoryDocument();
   const member = {
     name: '成员',
@@ -717,8 +731,15 @@ test('a loaded photo opens its original local image and close restores focus to 
   const [fallback, image] = avatar.children;
   assert.equal(avatar.tagName, 'button');
   assert.equal(avatar.getAttribute('aria-haspopup'), 'dialog');
+  assert.equal(image.src, '/assets/staff/member-thumb.webp');
+  assert.equal(image.decoding, 'async');
+  assert.equal(doc.ids['staff-photo-image'].src, undefined);
   avatar.trigger('click');
-  assert.equal(doc.ids['staff-photo-dialog'].open, false);
+  assert.equal(doc.ids['staff-photo-dialog'].open, true);
+  assert.equal(doc.ids['staff-photo-image'].src, member.photo);
+  assert.equal(doc.ids['staff-photo-image'].hidden, true);
+  assert.equal(doc.ids['staff-photo-status'].textContent, '正在加载完整照片…');
+  doc.ids['staff-photo-close'].trigger('click');
   image.trigger('load');
   assert.equal(avatar.disabled, false);
   assert.equal(fallback.hidden, true);
@@ -727,17 +748,23 @@ test('a loaded photo opens its original local image and close restores focus to 
   avatar.trigger('click');
   assert.equal(doc.ids['staff-photo-dialog'].open, true);
   assert.equal(doc.ids['staff-photo-name'].textContent, member.name);
-  assert.equal(doc.ids['staff-photo-image'].src, image.src);
+  assert.equal(doc.ids['staff-photo-image'].src, member.photo);
   assert.equal(doc.ids['staff-photo-image'].alt, '成员的照片');
   assert.equal(doc.ids['staff-photo-close'].focused, true);
+  doc.ids['staff-photo-image'].trigger('load');
+  assert.equal(doc.ids['staff-photo-image'].hidden, false);
+  assert.equal(doc.ids['staff-photo-status'].hidden, true);
   doc.ids['staff-photo-close'].trigger('click');
   assert.equal(doc.ids['staff-photo-dialog'].open, false);
   assert.equal(avatar.focused, true);
+  assert.equal(doc.ids['staff-photo-image'].src, undefined);
   image.trigger('error');
-  avatar.trigger('click');
-  assert.equal(avatar.disabled, true);
+  assert.equal(image.src, '/assets/staff/member-thumb.webp');
+  assert.equal(avatar.disabled, false);
   assert.equal(fallback.hidden, false);
-  assert.equal(doc.ids['staff-photo-dialog'].open, false);
+  avatar.trigger('click');
+  assert.equal(doc.ids['staff-photo-dialog'].open, true);
+  assert.equal(doc.ids['staff-photo-image'].src, member.photo);
 });
 
 test('photo viewer supports Escape and outside clicks while inside image clicks keep it open', () => {
@@ -772,10 +799,10 @@ test('photo viewer errors identify the current person and never replace their im
   const open = installStaffPhotoViewer(doc);
   const first = { name: '<img src=x>甲', photo: '/assets/staff/a.png' };
   const second = { name: '乙', photo: '/assets/staff/b.jpg' };
-  const image = doc.ids['staff-photo-image'];
   const status = doc.ids['staff-photo-status'];
   const dialog = doc.ids['staff-photo-dialog'];
   open(first, element('button'));
+  const image = doc.ids['staff-photo-image'];
   image.trigger('error');
   assert.equal(image.src, first.photo);
   assert.equal(image.hidden, true);
@@ -785,16 +812,99 @@ test('photo viewer errors identify the current person and never replace their im
   assert.equal(doc.ids['staff-photo-name'].children.length, 0);
   dialog.close();
   open(second, element('button'));
-  assert.equal(image.src, second.photo);
-  assert.equal(image.hidden, false);
+  const nextImage = doc.ids['staff-photo-image'];
+  assert.equal(nextImage.src, second.photo);
+  assert.equal(nextImage.hidden, true);
+  assert.equal(status.textContent, '正在加载完整照片…');
+  image.trigger('error');
+  image.trigger('load');
+  assert.equal(status.textContent, '正在加载完整照片…');
+  assert.equal(nextImage.hidden, true);
+  nextImage.trigger('load');
+  assert.equal(nextImage.hidden, false);
   assert.equal(status.hidden, true);
   assert.equal(status.textContent, '');
   dialog.close();
   for (const photo of ['https://invalid.example/a.png', '/assets/staff/../a.png', '/a.svg']) {
     open({ ...first, photo }, element('button'));
     assert.equal(dialog.open, false);
-    assert.equal(image.src, second.photo);
+    assert.equal(doc.ids['staff-photo-image'].src, undefined);
   }
+});
+
+test('old and invalid thumbnail fields never make a card download the original', () => {
+  for (const photoThumbnail of [
+    undefined,
+    'https://invalid.example/a.webp',
+    '/assets/staff/a.jpg',
+  ]) {
+    const { members } = normalizeStaffRoster({
+      members: [{ name: '成员', groups: [], photo: '/assets/staff/a.jpg', photoThumbnail }],
+    });
+    assert.equal(members[0].photoThumbnail, '/assets/staff/a-thumb.webp');
+    const card = createStaffCard({ createElement: element }, members[0]);
+    const thumbnail = card.children[0].children[1];
+    assert.equal(thumbnail.src, '/assets/staff/a-thumb.webp');
+    thumbnail.trigger('error');
+    assert.equal(thumbnail.src, '/assets/staff/a-thumb.webp');
+    assert.equal(card.children[0].children[0].hidden, false);
+  }
+  assert.equal(staffThumbnailPath('/assets/staff/../a.jpg'), '');
+  assert.equal(staffThumbnailPath('//invalid/a.jpg'), '');
+});
+
+test('closed and quickly replaced viewers ignore every stale load and error event', () => {
+  const doc = directoryDocument();
+  const open = installStaffPhotoViewer(doc);
+  const first = element('button');
+  const second = element('button');
+  open({ name: '甲', photo: '/assets/staff/a.jpg' }, first);
+  const oldImage = doc.ids['staff-photo-image'];
+  open({ name: '乙', photo: '/assets/staff/b.jpg' }, second);
+  const currentImage = doc.ids['staff-photo-image'];
+  oldImage.trigger('error');
+  oldImage.trigger('load');
+  assert.equal(currentImage.hidden, true);
+  assert.equal(doc.ids['staff-photo-name'].textContent, '乙');
+  assert.equal(doc.ids['staff-photo-status'].textContent, '正在加载完整照片…');
+  currentImage.trigger('load');
+  assert.equal(currentImage.hidden, false);
+  assert.equal(doc.ids['staff-photo-dialog'].getAttribute('aria-busy'), 'false');
+  doc.ids['staff-photo-dialog'].close();
+  currentImage.trigger('error');
+  currentImage.trigger('load');
+  assert.equal(currentImage.hidden, true);
+  assert.equal(doc.ids['staff-photo-status'].hidden, true);
+  assert.equal(second.focused, true);
+  assert.equal(first.focused, undefined);
+});
+
+test('a queued native close event cannot clear a photo opened before that event is dispatched', () => {
+  const doc = directoryDocument();
+  const dialog = doc.ids['staff-photo-dialog'];
+  dialog.close = () => {
+    dialog.open = false;
+  };
+  const open = installStaffPhotoViewer(doc);
+  open({ name: '甲', photo: '/assets/staff/a.jpg' }, element('button'));
+  const oldImage = doc.ids['staff-photo-image'];
+  dialog.close();
+  const newTrigger = element('button');
+  open({ name: '乙', photo: '/assets/staff/b.jpg' }, newTrigger);
+  const newImage = doc.ids['staff-photo-image'];
+  dialog.trigger('close');
+  oldImage.trigger('load');
+  oldImage.trigger('error');
+  assert.equal(newImage.src, '/assets/staff/b.jpg');
+  assert.equal(doc.ids['staff-photo-name'].textContent, '乙');
+  newImage.trigger('load');
+  assert.equal(newImage.hidden, false);
+  assert.equal(doc.ids['staff-photo-status'].hidden, true);
+  assert.equal(newTrigger.focused, undefined);
+  dialog.close();
+  dialog.trigger('close');
+  assert.equal(newImage.src, undefined);
+  assert.equal(newTrigger.focused, true);
 });
 
 test('directory opens the nine product leaders and provides four columns with three confirmed course groups', async () => {
@@ -978,7 +1088,7 @@ test('staff entry retains shared shell and every local asset exists', () => {
   assert.match(html, /id="user-panel"/);
   assert.match(html, /src="\/app\.js"/);
   assert.match(html, /href="\/staff\.css"/);
-  assert.match(html, /src="\/staff\.js"/);
+  assert.match(html, /src="\/staff\.js\?v=20261011-thumbnails"/);
   assert.match(html, /id="staff-course-section" hidden/);
   assert.match(html, /role="group" aria-label="按课程部组别查看"/);
   for (const group of ['数学组', '电路组', '信号组', '待确认']) {

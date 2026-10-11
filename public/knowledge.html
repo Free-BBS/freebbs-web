@@ -25,9 +25,12 @@
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/knowledge-editor.css" />
     <link rel="stylesheet" href="/knowledge-overview.css?v=20260930-map-overview-2" />
-    <link rel="stylesheet" href="/knowledge-workspace.css?v=20261003-1" />
+    <link rel="stylesheet" href="/knowledge-workspace.css?v=20261010-annotation-3" />
     <link rel="stylesheet" href="/learning-stars.css?v=20261002-1" />
     <link rel="stylesheet" href="/learning-start.css?v=20261003-1" />
+    <link rel="stylesheet" href="/human-learning-annotations.css?v=20261011-human-2" />
+    <link rel="stylesheet" href="/learning-research.css?v=20261011-research-1" />
+    <link rel="stylesheet" href="/learning-companion-memory.css?v=20261011-research-1" />
   </head>
   <body class="knowledge-page">
     <div class="page-shell page-shell-settings">
@@ -153,6 +156,7 @@
         class="knowledge-main course-material-immersive"
         data-shell-mode="immersive"
         data-knowledge-page
+        aria-busy="true"
       >
         <a
           class="course-map-reader-control course-material-back"
@@ -257,7 +261,7 @@
                 </button>
                 <button type="button" data-knowledge-tool="notes" aria-pressed="false">
                   <span aria-hidden="true">✎</span>
-                  <strong>我的批注</strong>
+                  <strong>批注</strong>
                 </button>
                 <button type="button" data-knowledge-tool="contribute" aria-pressed="false">
                   <span aria-hidden="true">＋</span>
@@ -281,7 +285,7 @@
             <header class="course-material-header">
               <div class="course-material-heading">
                 <p class="course-kicker" id="knowledge-node-id">Knowledge Point</p>
-                <h1 id="knowledge-title"></h1>
+                <h1 id="knowledge-title">正在载入知识点…</h1>
                 <p id="knowledge-summary"></p>
               </div>
               <button
@@ -466,13 +470,19 @@
                 </div>
               </div>
             </section>
-            <section class="course-material-section knowledge-overview" id="knowledge-overview">
+            <section
+              class="course-material-section knowledge-overview"
+              id="knowledge-overview"
+              tabindex="-1"
+            >
               <header class="course-material-section-heading">
                 <div>
                   <h2>学习概览</h2>
                 </div>
               </header>
-              <div id="knowledge-overview-brief"></div>
+              <div id="knowledge-overview-brief">
+                <p role="status">正在载入知识点资料…</p>
+              </div>
               <section class="knowledge-supplementary" id="knowledge-supplementary">
                 <details class="knowledge-supplementary-card hidden" id="knowledge-basic-info-card">
                   <summary>
@@ -512,22 +522,31 @@
                 data-action-tone="primary"
                 id="knowledge-start-reading"
                 type="button"
+                disabled
               >
-                开始阅读正文 <span aria-hidden="true">→</span>
+                <span id="knowledge-start-reading-label">正在载入正文…</span>
+                <span id="knowledge-start-reading-arrow" aria-hidden="true" hidden>→</span>
               </button>
             </section>
             <section
               class="course-material-section hidden"
               id="knowledge-reading"
               aria-label="课程资料正文"
+              tabindex="-1"
             >
               <header class="course-material-section-heading">
                 <div>
                   <h2>正文</h2>
                 </div>
                 <div class="knowledge-reading-actions">
-                  <button class="learning-reading-notes" type="button" data-learning-go="notes">
-                    我的批注
+                  <button
+                    class="learning-reading-notes"
+                    type="button"
+                    data-learning-go="notes"
+                    aria-controls="learning-annotation-toolbar"
+                    aria-pressed="false"
+                  >
+                    批注
                   </button>
                   <button
                     class="knowledge-reading-back"
@@ -563,10 +582,232 @@
                     id="knowledge-history-empty"
                     role="status"
                   >
-                    本知识点尚未提供起源说明。
+                    正在载入知识起源…
                   </div>
                 </div>
               </aside>
+              <div
+                id="learning-annotation-toolbar"
+                class="learning-annotation-toolbar"
+                data-annotation-ui="compact"
+                role="toolbar"
+                aria-label="正文与知识起源批注工具"
+                hidden
+              >
+                <div class="learning-annotation-split">
+                  <button
+                    type="button"
+                    class="learning-annotation-icon"
+                    data-annotation-action="highlight"
+                    aria-label="高亮选中文本"
+                    title="高亮"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m14 3 7 7-9 9H5v-7L14 3Z M12 5l7 7 M5 12l7 7 M3 22h18" />
+                    </svg>
+                    <span
+                      class="learning-annotation-color-line"
+                      data-annotation-color-preview="highlight"
+                      aria-hidden="true"
+                    ></span>
+                  </button>
+                  <button
+                    type="button"
+                    class="learning-annotation-menu-toggle"
+                    data-annotation-menu="highlight"
+                    aria-label="选择高亮颜色"
+                    title="高亮颜色"
+                    aria-expanded="false"
+                    aria-controls="learning-annotation-highlight-colors"
+                  >
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+                  </button>
+                  <div
+                    id="learning-annotation-highlight-colors"
+                    class="learning-annotation-colors"
+                    role="group"
+                    aria-label="高亮颜色"
+                    hidden
+                  >
+                    <button
+                      type="button"
+                      data-annotation-palette="highlight"
+                      data-annotation-color="yellow"
+                      data-annotation-color-label="黄"
+                      aria-label="黄色高亮"
+                      title="黄色"
+                      aria-pressed="true"
+                    ></button>
+                    <button
+                      type="button"
+                      data-annotation-palette="highlight"
+                      data-annotation-color="green"
+                      data-annotation-color-label="绿"
+                      aria-label="绿色高亮"
+                      title="绿色"
+                      aria-pressed="false"
+                    ></button>
+                    <button
+                      type="button"
+                      data-annotation-palette="highlight"
+                      data-annotation-color="blue"
+                      data-annotation-color-label="蓝"
+                      aria-label="蓝色高亮"
+                      title="蓝色"
+                      aria-pressed="false"
+                    ></button>
+                    <button
+                      type="button"
+                      data-annotation-palette="highlight"
+                      data-annotation-color="purple"
+                      data-annotation-color-label="紫"
+                      aria-label="紫色高亮"
+                      title="紫色"
+                      aria-pressed="false"
+                    ></button>
+                  </div>
+                </div>
+                <div class="learning-annotation-split">
+                  <button
+                    type="button"
+                    class="learning-annotation-icon"
+                    data-annotation-action="underline"
+                    aria-label="为选中文本添加下划线"
+                    title="下划线"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M6 3v8a6 6 0 0 0 12 0V3 M4 22h16" />
+                    </svg>
+                    <span
+                      class="learning-annotation-color-line"
+                      data-annotation-color-preview="underline"
+                      aria-hidden="true"
+                    ></span>
+                  </button>
+                  <button
+                    type="button"
+                    class="learning-annotation-menu-toggle"
+                    data-annotation-menu="underline"
+                    aria-label="选择下划线颜色"
+                    title="下划线颜色"
+                    aria-expanded="false"
+                    aria-controls="learning-annotation-underline-colors"
+                  >
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+                  </button>
+                  <div
+                    id="learning-annotation-underline-colors"
+                    class="learning-annotation-colors"
+                    role="group"
+                    aria-label="下划线颜色"
+                    hidden
+                  >
+                    <button
+                      type="button"
+                      data-annotation-palette="underline"
+                      data-annotation-color="yellow"
+                      data-annotation-color-label="黄"
+                      aria-label="黄色下划线"
+                      title="黄色"
+                      aria-pressed="false"
+                    ></button>
+                    <button
+                      type="button"
+                      data-annotation-palette="underline"
+                      data-annotation-color="green"
+                      data-annotation-color-label="绿"
+                      aria-label="绿色下划线"
+                      title="绿色"
+                      aria-pressed="false"
+                    ></button>
+                    <button
+                      type="button"
+                      data-annotation-palette="underline"
+                      data-annotation-color="blue"
+                      data-annotation-color-label="蓝"
+                      aria-label="蓝色下划线"
+                      title="蓝色"
+                      aria-pressed="false"
+                    ></button>
+                    <button
+                      type="button"
+                      data-annotation-palette="underline"
+                      data-annotation-color="purple"
+                      data-annotation-color-label="紫"
+                      aria-label="紫色下划线"
+                      title="紫色"
+                      aria-pressed="true"
+                    ></button>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="learning-annotation-icon"
+                  data-annotation-action="comment"
+                  aria-label="批注选中内容"
+                  title="批注"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M20 15a2 2 0 0 1-2 2H9l-5 4V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10Z M8 8h8 M8 12h6"
+                    />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="learning-annotation-icon"
+                  data-annotation-action="correction"
+                  aria-label="对选中内容提出纠错"
+                  title="纠错"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m4 16 12-12 4 4L8 20H4v-4Z M13 7l4 4 M3 4l4 4 M7 4 3 8" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="learning-annotation-icon"
+                  data-annotation-action="ask"
+                  aria-label="就选中内容问问 Max"
+                  title="问问 Max"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z M20 3v4 M18 5h4"
+                    />
+                  </svg>
+                </button>
+                <span class="learning-annotation-separator" aria-hidden="true"></span>
+                <button
+                  type="button"
+                  class="learning-annotation-icon"
+                  data-annotation-action="undo"
+                  aria-label="撤销最近一次批注操作"
+                  title="撤销"
+                  disabled
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M4 10h9a7 7 0 0 1 0 14 M4 10l6-6 M4 10l6 6"
+                      transform="translate(0 -3)"
+                    />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="learning-annotation-icon"
+                  id="learning-reader-overview"
+                  aria-label="返回知识概览"
+                  title="知识概览"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
+                  </svg>
+                </button>
+              </div>
               <div
                 id="learning-reading-notes-host"
                 class="learning-inline-notes learning-workspace"
@@ -594,7 +835,11 @@
               <section data-learning-panel="resources" hidden>
                 <div class="learning-empty">
                   <h3>学习资源</h3>
-                  <p>暂无相关资料。</p>
+                  <div id="learning-resources-content" aria-live="polite"></div>
+                  <div class="learning-actions">
+                    <button type="button" data-learning-go="content">回到正文</button>
+                    <button type="button" id="learning-resource-submit">推荐资料</button>
+                  </div>
                 </div>
               </section>
               <section data-learning-panel="feedback" hidden>
@@ -694,71 +939,23 @@
                   <p id="learning-plan-status" class="learning-form-status" role="status"></p>
                   <p id="learning-plan-tip" class="learning-plan-tip"></p>
                 </div>
+                <details class="learning-secondary-section">
+                  <summary>平台学习支持反馈与研究</summary>
+                  <section
+                    data-learning-research-personal
+                    aria-label="平台学习支持反馈与研究"
+                    hidden
+                  ></section>
+                </details>
               </section>
               <section data-learning-panel="notes" hidden>
                 <div class="learning-section-title">
                   <h3>我的批注</h3>
                   <button type="button" data-learning-go="content">收起</button>
-                  <button type="button" id="learning-annotation-toggle" aria-pressed="true">
-                    评注已开启
+                  <button type="button" id="learning-annotation-toggle" aria-pressed="false">
+                    打开批注工具
                   </button>
                 </div>
-                <div
-                  id="learning-annotation-toolbar"
-                  class="learning-annotation-toolbar"
-                  role="toolbar"
-                  aria-label="原文评注工具"
-                  hidden
-                >
-                  <div class="learning-annotation-colors" aria-label="高亮颜色">
-                    <button
-                      type="button"
-                      data-annotation-action="highlight"
-                      data-annotation-color="yellow"
-                      aria-label="黄色高亮"
-                      title="黄色高亮"
-                    ></button>
-                    <button
-                      type="button"
-                      data-annotation-action="highlight"
-                      data-annotation-color="green"
-                      aria-label="绿色高亮"
-                      title="绿色高亮"
-                    ></button>
-                    <button
-                      type="button"
-                      data-annotation-action="highlight"
-                      data-annotation-color="blue"
-                      aria-label="蓝色高亮"
-                      title="蓝色高亮"
-                    ></button>
-                    <button
-                      type="button"
-                      data-annotation-action="highlight"
-                      data-annotation-color="purple"
-                      aria-label="紫色高亮"
-                      title="紫色高亮"
-                    ></button>
-                  </div>
-                  <button type="button" data-annotation-action="underline">下划线</button>
-                  <button type="button" data-annotation-action="comment">评注</button>
-                  <button type="button" data-annotation-action="ask">问 Max</button>
-                  <button type="button" data-annotation-action="correction">纠错</button>
-                  <button type="button" data-annotation-action="remove">取消标注</button>
-                  <label class="learning-annotation-comment-field"
-                    >评注<textarea
-                      id="learning-annotation-comment"
-                      rows="2"
-                      maxlength="8000"
-                      placeholder="写下对这段原文的理解或疑问"
-                    ></textarea>
-                  </label>
-                </div>
-                <p id="learning-annotation-status" class="learning-form-status" role="status"></p>
-                <details class="learning-secondary-section" id="learning-annotation-directory">
-                  <summary>批注目录</summary>
-                  <div id="learning-annotation-list" class="learning-records"></div>
-                </details>
                 <details class="learning-secondary-section" id="learning-note-composer">
                   <summary>补充笔记</summary>
                   <form id="learning-note-form" class="learning-card learning-form">
@@ -881,17 +1078,25 @@
               </div>
             </section>
             <nav class="knowledge-sequence-navigation" aria-label="前后知识点导航">
-              <a class="knowledge-sequence-link is-previous" id="knowledge-previous-link">
+              <a
+                class="knowledge-sequence-link is-previous is-disabled"
+                id="knowledge-previous-link"
+                aria-disabled="true"
+              >
                 <span aria-hidden="true">←</span>
                 <span>
                   <small>上一个知识点</small>
-                  <strong id="knowledge-previous-title">已经是第一个知识点</strong>
+                  <strong id="knowledge-previous-title">正在载入前后知识点…</strong>
                 </span>
               </a>
-              <a class="knowledge-sequence-link is-next" id="knowledge-next-link">
+              <a
+                class="knowledge-sequence-link is-next is-disabled"
+                id="knowledge-next-link"
+                aria-disabled="true"
+              >
                 <span>
                   <small>下一个知识点</small>
-                  <strong id="knowledge-next-title">已经是最后一个知识点</strong>
+                  <strong id="knowledge-next-title">正在载入前后知识点…</strong>
                 </span>
                 <span aria-hidden="true">→</span>
               </a>
@@ -977,6 +1182,15 @@
                   <strong id="knowledge-chat-context">正在载入…</strong>
                 </div>
 
+                <div class="knowledge-companion-sources" data-learning-companion-sources>
+                  <p>Max 可参考本知识点已保存的笔记、批注、复盘和作答，仅用于帮助你。</p>
+                  <details>
+                    <summary>Max 的参考资料</summary>
+                    <p data-companion-source-status role="status">提问时会读取最新保存版本。</p>
+                    <ul data-companion-source-list></ul>
+                    <button type="button" data-companion-source-refresh>刷新资料</button>
+                  </details>
+                </div>
                 <div class="knowledge-chat-thread" id="knowledge-chat-thread" aria-live="polite">
                   <article class="knowledge-chat-message is-assistant">
                     <span>Max</span>
@@ -989,22 +1203,34 @@
                 <div class="knowledge-chat-prompts" aria-label="快捷提问">
                   <button type="button" data-chat-prompt="用直觉解释这个知识点">直觉解释</button>
                   <button type="button" data-chat-prompt="这个知识点有哪些易错点">易错点</button>
-                  <button type="button" data-chat-prompt="给我一道检查理解的小题">来道小题</button>
+                  <button
+                    type="button"
+                    data-chat-prompt="给我一道检查理解的小题"
+                    title="Max 生成练习，不计正式自测与星标"
+                  >
+                    练习小题
+                  </button>
                 </div>
 
                 <form class="knowledge-chat-form" id="knowledge-chat-form">
                   <textarea
                     id="knowledge-chat-input"
                     rows="2"
-                    maxlength="500"
+                    maxlength="4000"
                     aria-label="向 Max 提问"
                     placeholder="围绕当前知识点提问…"
                   ></textarea>
                   <button type="submit" aria-label="发送问题">发送</button>
                 </form>
                 <p class="knowledge-chat-privacy" id="knowledge-chat-status">
-                  RAG Agent · 对话不会写入课程讨论区
+                  Max 小题不计正式自测 · 对话不写入讨论区
                 </p>
+                <p
+                  class="knowledge-chat-privacy"
+                  id="knowledge-chat-draft-status"
+                  role="status"
+                  hidden
+                ></p>
               </section>
 
               <section
@@ -1244,6 +1470,72 @@
           </div>
         </div>
 
+        <section
+          id="learning-annotation-popover"
+          class="learning-annotation-popover"
+          role="dialog"
+          aria-labelledby="learning-annotation-popover-title"
+          tabindex="-1"
+          hidden
+        >
+          <header class="learning-annotation-popover-header">
+            <h3 id="learning-annotation-popover-title">批注</h3>
+            <button
+              type="button"
+              class="learning-annotation-icon"
+              data-annotation-ui="dismiss"
+              aria-label="关闭批注，保留草稿"
+              title="关闭"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12 M6 18 18 6" /></svg>
+            </button>
+          </header>
+          <p id="learning-annotation-popover-info" class="learning-annotation-popover-info"></p>
+          <blockquote id="learning-annotation-popover-quote"></blockquote>
+          <div
+            id="learning-annotation-popover-content"
+            class="learning-annotation-popover-content"
+          ></div>
+          <label
+            id="learning-annotation-comment-field"
+            class="learning-annotation-comment-field"
+            hidden
+          >
+            <span id="learning-annotation-comment-label">批注</span>
+            <textarea
+              id="learning-annotation-comment"
+              rows="4"
+              maxlength="8000"
+              placeholder="写下你的理解、疑问或修改建议"
+            ></textarea>
+          </label>
+          <p id="learning-annotation-popover-status" class="learning-form-status" role="status"></p>
+          <p id="learning-annotation-status" class="learning-form-status" role="status"></p>
+          <footer
+            id="learning-annotation-popover-actions"
+            class="learning-annotation-popover-actions"
+          >
+            <button type="button" data-annotation-ui="edit">编辑</button>
+            <button type="button" data-annotation-action="remove">删除批注</button>
+            <button type="button" data-annotation-ui="close">取消</button>
+            <button type="button" class="learning-primary" data-annotation-action="comment-save">
+              保存
+            </button>
+          </footer>
+        </section>
+        <dialog
+          id="learning-annotation-directory"
+          class="learning-annotation-directory"
+          aria-labelledby="learning-annotation-directory-title"
+        >
+          <header class="learning-annotation-popover-header">
+            <h3 id="learning-annotation-directory-title">我的批注</h3>
+            <button type="button" data-annotation-ui="close-directory" aria-label="关闭批注列表">
+              ×
+            </button>
+          </header>
+          <div id="learning-annotation-list" class="learning-records"></div>
+        </dialog>
         <button
           class="knowledge-chat-fab"
           id="knowledge-chat-toggle"
@@ -1273,20 +1565,26 @@
     <script src="/request-runtime.js"></script>
     <script src="/ui-state.js"></script>
     <script src="/app.js"></script>
-    <script src="/learning-stars.js?v=20261002-1"></script>
+    <script src="/learning-stars.js?v=20261010-human-1"></script>
     <script src="/knowledge-overview.js?v=20261002-stars-1"></script>
     <script src="/learning-content.js?v=20260930-1"></script>
     <script src="/learning-progress.js?v=20261001-1"></script>
-    <script src="/learning-analytics.js?v=20261003-1"></script>
-    <script src="/learning-strategies.js?v=20261003-1"></script>
-    <script src="/learning-start.js?v=20261003-1"></script>
-    <script src="/learning-next-steps.js?v=20261003-1"></script>
-    <script src="/knowledge.js?v=20261003-1"></script>
-    <script src="/knowledge-history.js"></script>
-    <script src="/learning-assessment.js?v=20261003-1"></script>
-    <script src="/knowledge-annotations.js?v=20261003-1"></script>
-    <script src="/knowledge-workspace.js?v=20261003-1"></script>
-    <script src="/learning-guide.js?v=20261003-1"></script>
+    <script src="/learning-analytics.js?v=20261011-records-4"></script>
+    <script src="/learning-companion-memory.js?v=20261011-research-1"></script>
+    <script src="/learning-research.js?v=20261011-research-2"></script>
+    <script src="/learning-strategies.js?v=20261011-human-2"></script>
+    <script src="/learning-start.js?v=20261010-human-1"></script>
+    <script src="/learning-next-steps.js?v=20261011-human-2"></script>
+    <script src="/learning-chat-drafts.js?v=20261011-human-2"></script>
+    <script src="/knowledge.js?v=20261011-research-2"></script>
+    <script src="/knowledge-history.js?v=20261010-annotation-3"></script>
+    <script src="/learning-answer-drafts.js?v=20261010-human-1"></script>
+    <script src="/learning-assessment.js?v=20261010-human-1"></script>
+    <script src="/learning-resources.js?v=20261010-human-1"></script>
+    <script src="/knowledge-annotations.js?v=20261011-human-2"></script>
+    <script src="/knowledge-workspace.js?v=20261011-research-1"></script>
+    <script src="/learning-reader.js?v=20261010-annotation-3"></script>
+    <script src="/learning-guide.js?v=20261011-records-2"></script>
     <script src="/knowledge-editor.js"></script>
     <script src="/notifications.js"></script>
   </body>
