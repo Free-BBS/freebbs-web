@@ -12,14 +12,18 @@
   },
   "dependencies": {
     "@freebbs-development/contracts": "0.1.0",
+    "exceljs": "^4.4.0",
     "express": "^5.1.0",
+    "jszip": "^3.10.1",
     "multer": "^2.4.0",
     "mysql2": "^3.14.0",
+    "nodemailer": "^10.0.16",
     "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/multer": "^2.2.0",
+    "@types/nodemailer": "^6.4.17",
     "@types/supertest": "^6.0.0",
     "supertest": "^7.1.0",
     "tsx": "^4.20.0"

@@ -18,6 +18,8 @@ import type {
 } from '../../core/database/types.js';
 import { HttpError } from '../../core/errors/http-error.js';
 import { canManageCollection } from './access.js';
+import { readCollectionFeature } from './feature-storage.js';
+import { resolve } from 'node:path';
 
 export function actorOrganizations(actor: AuthorizationContext): SocialOrganizationId[] {
   return [
@@ -105,6 +107,16 @@ export function effectiveWindow(form: CollectionFormRecord, schema: CollectionSc
   };
   return { opensAt: boundary('start', form.opensAt), closesAt: boundary('end', form.closesAt) };
 }
+export function effectiveCapacity(
+  form: CollectionFormRecord,
+  schema: CollectionSchema,
+): number | null {
+  const rule = schema.formRules.find((item) => item.kind === 'capacity')?.value;
+  const limits = [form.capacity, typeof rule === 'number' ? rule : null].filter(
+    (value): value is number => value !== null,
+  );
+  return limits.length ? Math.min(...limits) : null;
+}
 export function nativeStatus(
   form: CollectionFormRecord,
   schema: CollectionSchema,
@@ -155,6 +167,7 @@ export async function registrationFromForm(
   store: DevelopmentStore,
   actor: AuthorizationContext,
   form: CollectionFormRecord,
+  featureDirectory = resolve('.data/collection-uploads'),
 ): Promise<UnifiedRegistration | null> {
   if (!form.publishedVersionId || !['published', 'closed', 'archived'].includes(form.status))
     return null;
@@ -163,6 +176,22 @@ export async function registrationFromForm(
     store.collectionResponses.list({ query: form.id }),
   ]);
   if (!version?.publishedAt || !canViewCollection(actor, form, version.schema)) return null;
+  const featureState = await readCollectionFeature(featureDirectory, form.id);
+  if (
+    !canManageCollection(actor, form.ownerUid) &&
+    version.schema.recipientMode &&
+    version.schema.recipientMode !== 'open'
+  ) {
+    if (
+      !actor.studentId ||
+      !actor.displayName ||
+      (version.schema.recipientMode === 'restricted' &&
+        !featureState.recipients.some(
+          (item) => item.studentId === actor.studentId && item.name === actor.displayName,
+        ))
+    )
+      return null;
+  }
   const publisherDepartmentId = version.schema.publisherDepartmentId ?? null;
   const department = publisherDepartmentId ? departmentById(publisherDepartmentId) : undefined;
   const organizationId = department ? department.organizationId : form.organizationId;
@@ -180,8 +209,8 @@ export async function registrationFromForm(
     coverUrl: form.coverUrl,
     ...effectiveWindow(form, version.schema),
     location: null,
-    capacity: form.capacity,
-    registrationCount: active.length,
+    capacity: effectiveCapacity(form, version.schema),
+    registrationCount: active.length + featureState.responses.length,
     registered: active.some((item) => item.respondentUid === actor.uid),
     status: nativeStatus(form, version.schema),
     schema: version.schema,
@@ -191,6 +220,7 @@ export async function listRegistrations(
   store: DevelopmentStore,
   actor: AuthorizationContext,
   includePast = false,
+  featureDirectory = resolve('.data/collection-uploads'),
 ): Promise<DepartmentActivitySummary[]> {
   const [forms, activities, registrations] = await Promise.all([
     store.collectionForms.list(),
@@ -201,7 +231,7 @@ export async function listRegistrations(
     await Promise.all(
       forms
         .filter((form) => includePast || form.status === 'published')
-        .map((form) => registrationFromForm(store, actor, form)),
+        .map((form) => registrationFromForm(store, actor, form, featureDirectory)),
     )
   )
     .filter((item): item is UnifiedRegistration => item !== null)

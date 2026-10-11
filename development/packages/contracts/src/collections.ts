@@ -71,6 +71,8 @@ export interface CollectionField {
 }
 
 export interface CollectionSchema {
+  publicRegistration?: boolean;
+  recipientMode?: 'open' | 'named' | 'restricted';
   publisherDepartmentId?: DepartmentId;
   title: string;
   description: string;

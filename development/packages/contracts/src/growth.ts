@@ -4,6 +4,7 @@ export interface GrowthActivity {
   endsAt: string | null;
   domain: string;
   status: string;
+  source?: 'registration' | 'verified_attendance' | 'map';
 }
 
 export interface GrowthDomainCount {
@@ -29,7 +30,8 @@ export interface GrowthAchievement {
 
 export interface GrowthSummary {
   total: number;
-  basis: 'completed_registration';
+  basis: 'completed_registration' | 'mixed_participation';
+  verifiedTotal?: number;
   byDomain: GrowthDomainCount[];
   achievements: GrowthAchievement[];
   activities: GrowthActivity[];

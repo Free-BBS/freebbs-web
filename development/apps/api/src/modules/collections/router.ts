@@ -12,6 +12,14 @@ import type {
 import { departmentById, organizationById } from '@freebbs-development/contracts';
 import { Router } from 'express';
 import multer from 'multer';
+import { createPublicCollectionsRouter, isPublicSchema } from './public-router.js';
+import { createCollectionManagementRouter, assertRecipientIdentity } from './management-router.js';
+import {
+  readCollectionFeature,
+  withCollectionFeature,
+  type CollectionFeatureState,
+} from './feature-storage.js';
+import { downloadName, xlsxBuffer } from './spreadsheets.js';
 import { isAbsolute, resolve } from 'node:path';
 import { z } from 'zod';
 
@@ -43,6 +51,7 @@ import type { Request, Response } from 'express';
 import {
   audienceAllows,
   effectiveWindow,
+  effectiveCapacity,
   nativeStatus,
   canViewCollection,
   registrationFromForm,
@@ -93,14 +102,18 @@ async function formSummary(
   store: DevelopmentStore,
   actor: AuthorizationContext,
   form: CollectionFormRecord,
+  featureDirectory?: string,
+  preferDraft = false,
 ): Promise<CollectionFormSummary> {
   const [responses, version] = await Promise.all([
     store.collectionResponses.list({ query: form.id }),
-    form.publishedVersionId
-      ? store.collectionVersions.get(form.publishedVersionId)
-      : form.currentDraftVersionId
-        ? store.collectionVersions.get(form.currentDraftVersionId)
-        : Promise.resolve(null),
+    preferDraft && form.currentDraftVersionId
+      ? store.collectionVersions.get(form.currentDraftVersionId)
+      : form.publishedVersionId
+        ? store.collectionVersions.get(form.publishedVersionId)
+        : form.currentDraftVersionId
+          ? store.collectionVersions.get(form.currentDraftVersionId)
+          : Promise.resolve(null),
   ]);
   const window = version
     ? effectiveWindow(form, version.schema)
@@ -108,6 +121,9 @@ async function formSummary(
   const publisherDepartment = version?.schema.publisherDepartmentId
     ? departmentById(version.schema.publisherDepartmentId)
     : undefined;
+  const guestCount = featureDirectory
+    ? (await readCollectionFeature(featureDirectory, form.id)).responses.length
+    : 0;
   return {
     id: form.id,
     title: version?.schema.title ?? form.title,
@@ -118,10 +134,10 @@ async function formSummary(
     status: form.status as CollectionFormSummary['status'],
     opensAt: window.opensAt,
     closesAt: window.closesAt,
-    capacity: form.capacity,
-    responseCount: responses.filter(
-      (item) => item.formId === form.id && item.status === 'submitted',
-    ).length,
+    capacity: version ? effectiveCapacity(form, version.schema) : form.capacity,
+    responseCount:
+      responses.filter((item) => item.formId === form.id && item.status === 'submitted').length +
+      guestCount,
     canManage: canManageCollection(actor, form.ownerUid),
     ...(version ? { schema: version.schema } : {}),
     createdAt: form.createdAt,
@@ -214,7 +230,7 @@ function validateTitleText(
     throw new HttpError(400, 'title_validation_failed', `“${fieldLabel}”未通过标题校验`);
 }
 
-function validateAnswers(schema: CollectionSchema, answers: Record<string, unknown>): void {
+export function validateAnswers(schema: CollectionSchema, answers: Record<string, unknown>): void {
   const answerableFields = new Map(
     schema.fields
       .filter((field) => field.kind !== 'instructions' && field.kind !== 'identity')
@@ -435,7 +451,7 @@ function csvCell(value: unknown): string {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
-function exportPayload(
+async function exportPayload(
   output: CollectionOutput,
   schema: CollectionSchema,
   responses: Array<{
@@ -443,7 +459,7 @@ function exportPayload(
     submittedAt: string;
     answers: Record<string, unknown>;
   }>,
-): { body: string; contentType: string } {
+): Promise<{ body: string | Buffer; contentType: string }> {
   if (output.kind === 'json') {
     return {
       body: JSON.stringify(
@@ -483,12 +499,14 @@ function exportPayload(
     item.submittedAt,
     ...schema.fields.map((field) => item.answers[field.id]),
   ]);
+  if (output.kind === 'excel')
+    return {
+      body: await xlsxBuffer([headers, ...rows]),
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    };
   return {
     body: `\uFEFF${[headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n')}`,
-    contentType:
-      output.kind === 'excel'
-        ? 'application/vnd.ms-excel; charset=utf-8'
-        : 'text/csv; charset=utf-8',
+    contentType: 'text/csv; charset=utf-8',
   };
 }
 
@@ -502,6 +520,17 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
     storage: multer.memoryStorage(),
     limits: { fileSize: 100 * 1024 * 1024, files: 1 },
   });
+
+  router.use(
+    '/public',
+    createPublicCollectionsRouter(
+      options,
+      uploadDirectory,
+      uploadDirectoryConfigured,
+      validateAnswers,
+    ),
+  );
+  router.use(createCollectionManagementRouter(options, uploadDirectory, uploadDirectoryConfigured));
 
   router.post(
     '/assets',
@@ -532,6 +561,11 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
         throw new HttpError(404, 'collection_not_found', '未找到表单');
       if (nativeStatus(form, version.schema) !== 'open')
         throw new HttpError(409, 'collection_closed', '当前表单尚未开放或已经截止');
+      assertRecipientIdentity(
+        actor,
+        await readCollectionFeature(uploadDirectory, form.id),
+        version.schema.recipientMode,
+      );
       const field = version.schema.fields.find(
         (item) => item.id === uploadTarget.fieldId && UPLOAD_FIELD_KINDS.has(item.kind),
       );
@@ -653,7 +687,9 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
       options.store.showcaseArticles.list({ status: 'published' }),
     ]);
     const featured = (
-      await Promise.all(forms.map((form) => registrationFromForm(options.store, actor, form)))
+      await Promise.all(
+        forms.map((form) => registrationFromForm(options.store, actor, form, uploadDirectory)),
+      )
     )
       .filter((item): item is UnifiedRegistration => item !== null)
       .slice(0, 8);
@@ -673,7 +709,11 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
     if (!actor) return;
     const includePast =
       parse(z.enum(['true', 'false']).optional(), request.query.includePast) === 'true';
-    send(response, 200, await listRegistrations(options.store, actor, includePast));
+    send(
+      response,
+      200,
+      await listRegistrations(options.store, actor, includePast, uploadDirectory),
+    );
   });
 
   router.get('/mine', async (request, response) => {
@@ -721,7 +761,9 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
     send(
       response,
       200,
-      await Promise.all(manageable.map((form) => formSummary(options.store, actor, form))),
+      await Promise.all(
+        manageable.map((form) => formSummary(options.store, actor, form, uploadDirectory)),
+      ),
     );
   });
 
@@ -761,7 +803,7 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
         currentDraftVersionId: version.id,
       });
       if (!updated) throw new Error('Collection form disappeared during creation');
-      return formSummary(store, actor, updated);
+      return formSummary(store, actor, updated, uploadDirectory);
     });
     send(response, 201, result);
   });
@@ -771,6 +813,7 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
     if (!actor) return;
     const { formId } = parse(formRouteSchema, { formId: request.params.formId });
     const form = await options.store.collectionForms.get(formId);
+    const featureState = form ? await readCollectionFeature(uploadDirectory, form.id) : null;
     const publishedVersion = form?.publishedVersionId
       ? await options.store.collectionVersions.get(form.publishedVersionId)
       : null;
@@ -783,7 +826,19 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
     ) {
       throw new HttpError(404, 'collection_not_found', '未找到表单');
     }
-    send(response, 200, await formSummary(options.store, actor, form));
+    if (publishedVersion && featureState && !canManageCollection(actor, form.ownerUid))
+      assertRecipientIdentity(actor, featureState, publishedVersion.schema.recipientMode);
+    send(
+      response,
+      200,
+      await formSummary(
+        options.store,
+        actor,
+        form,
+        uploadDirectory,
+        canManageCollection(actor, form.ownerUid),
+      ),
+    );
   });
 
   router.put('/forms/:formId/draft', async (request, response) => {
@@ -837,7 +892,7 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
         currentDraftVersionId: draft.id,
       });
       if (!updated) throw new Error('Collection form disappeared');
-      return formSummary(store, actor, updated);
+      return formSummary(store, actor, updated, uploadDirectory);
     });
     send(response, 200, result);
   });
@@ -855,6 +910,27 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
       const version = await store.collectionVersions.getForUpdate(form.currentDraftVersionId);
       if (!version) throw new HttpError(409, 'missing_draft', '没有可发布的草稿');
       if (version.schema.publisherDepartmentId) resolvePublisher(actor, version.schema, undefined);
+      if (version.schema.publicRegistration && !isPublicSchema(version.schema))
+        throw new HttpError(
+          400,
+          'invalid_public_audience',
+          '公开填写必须使用不限范围、开放名单且不包含自动身份字段',
+        );
+      if (
+        (version.schema.publicRegistration ||
+          (version.schema.recipientMode && version.schema.recipientMode !== 'open')) &&
+        !uploadDirectoryConfigured
+      )
+        throw new HttpError(
+          503,
+          'collection_storage_unavailable',
+          '公开填写或定向名单存储尚未配置',
+        );
+      if (
+        version.schema.recipientMode === 'restricted' &&
+        !(await readCollectionFeature(uploadDirectory, form.id)).recipients.length
+      )
+        throw new HttpError(400, 'recipient_roster_required', '请先导入限制填写名单');
       const publishedAt = new Date().toISOString();
       await store.collectionVersions.update(version.id, { status: 'published', publishedAt });
       const updated = await store.collectionForms.update(form.id, {
@@ -862,7 +938,7 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
         publishedVersionId: version.id,
       });
       if (!updated) throw new Error('Collection form disappeared');
-      return formSummary(store, actor, updated);
+      return formSummary(store, actor, updated, uploadDirectory);
     });
     send(response, 200, result);
   });
@@ -875,16 +951,43 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
     const form = await options.store.collectionForms.get(formId);
     if (!form || !canManageCollection(actor, form.ownerUid))
       throw new HttpError(404, 'collection_not_found', '未找到表单');
-    const versionId = form.publishedVersionId;
+    const exportQuery = parse(
+      z
+        .object({
+          versionId: z.string().min(1).max(100).optional(),
+          allVersions: z.enum(['0', '1']).optional(),
+        })
+        .strict(),
+      request.query,
+    );
+    const versionId = exportQuery.versionId ?? form.publishedVersionId;
     const version = versionId ? await options.store.collectionVersions.get(versionId) : null;
     const output = version?.schema.outputs?.find((item) => item.id === outputId);
-    if (!version || !output) throw new HttpError(404, 'output_not_found', '未找到输出模块');
+    if (!version || version.formId !== form.id || version.publishedAt === null || !output)
+      throw new HttpError(404, 'output_not_found', '未找到输出模块');
     const responses = (await options.store.collectionResponses.list({ query: form.id })).filter(
       (item) =>
-        item.formId === form.id && item.versionId === version.id && item.status === 'submitted',
+        item.formId === form.id &&
+        (exportQuery.allVersions === '1' || item.versionId === version.id) &&
+        item.status === 'submitted',
     );
-    const exported = exportPayload(output, version.schema, responses);
-    const safeName = output.fileName.replace(/["\r\n]/gu, '_');
+    const guest = (await readCollectionFeature(uploadDirectory, form.id)).responses.filter(
+      (item) => exportQuery.allVersions === '1' || item.versionId === version.id,
+    );
+    let exportSchema = version.schema;
+    if (exportQuery.allVersions === '1') {
+      const historical = (await options.store.collectionVersions.list({ query: form.id }))
+        .filter((item) => item.formId === form.id && item.publishedAt !== null)
+        .sort((a, b) => b.version - a.version);
+      const fields = new Map<string, CollectionSchema['fields'][number]>();
+      for (const item of historical)
+        for (const field of item.schema.fields)
+          if (!fields.has(field.id))
+            fields.set(field.id, { ...field, label: `${field.label}（第${item.version}版）` });
+      exportSchema = { ...version.schema, fields: [...fields.values()] };
+    }
+    const exported = await exportPayload(output, exportSchema, [...responses, ...guest]);
+    const safeName = downloadName(output.fileName, output.kind === 'excel' ? 'xlsx' : undefined);
     response
       .status(200)
       .set('Content-Type', exported.contentType)
@@ -897,53 +1000,77 @@ export function createCollectionsRouter(options: CollectionsRouterOptions): Rout
     if (!actor) return;
     const { formId } = parse(formRouteSchema, request.params);
     const { answers } = parse(responseSchema, request.body);
-    const result = await options.store.transaction(async (store) => {
-      const form = await store.collectionForms.getForUpdate(formId);
-      if (!form || !form.publishedVersionId)
-        throw new HttpError(409, 'collection_closed', '当前表单尚未开放或已经截止');
-      const version = await store.collectionVersions.get(form.publishedVersionId);
-      if (!version) throw new HttpError(409, 'missing_version', '发布版本不存在');
-      if (!audienceAllows(actor, version.schema))
-        throw new HttpError(404, 'collection_not_found', '未找到表单');
-      if (nativeStatus(form, version.schema) !== 'open')
-        throw new HttpError(409, 'collection_closed', '当前表单尚未开放或已经截止');
-      validateAnswers(version.schema, answers);
-      const assets = await validateAssetAnswers(store, actor, form, version.schema, answers);
-      const existing = (await store.collectionResponses.listForUpdate({ query: form.id })).filter(
-        (item) =>
-          item.formId === form.id &&
-          item.respondentUid === actor.uid &&
-          item.status === 'submitted',
-      );
-      const attemptLimit = readLimit(version.schema, 'attempt_limit') ?? 1;
-      if (existing.length >= attemptLimit)
-        throw new HttpError(409, 'attempt_limit_reached', '已经达到提交次数上限');
-      const all = (await store.collectionResponses.listForUpdate({ query: form.id })).filter(
-        (item) => item.formId === form.id && item.status === 'submitted',
-      );
-      const capacity = form.capacity ?? readLimit(version.schema, 'capacity');
-      if (capacity !== null && all.length >= capacity)
-        throw new HttpError(409, 'capacity_reached', '报名名额已满');
-      const created = await store.collectionResponses.create({
-        formId: form.id,
-        versionId: version.id,
-        respondentUid: actor.uid,
-        attempt: existing.length + 1,
-        answers,
-        submittedAt: new Date().toISOString(),
-        status: 'submitted',
-        ownerUid: actor.uid,
-        scope: { type: 'collection_form', id: form.id },
-      });
-      for (const asset of assets) {
-        const updated = await store.collectionAssets.update(asset.id, {
-          responseId: created.id,
-          status: 'attached',
+    const run = async (state: CollectionFeatureState) =>
+      options.store.transaction(async (store) => {
+        const form = await store.collectionForms.getForUpdate(formId);
+        if (!form || !form.publishedVersionId)
+          throw new HttpError(409, 'collection_closed', '当前表单尚未开放或已经截止');
+        const version = await store.collectionVersions.get(form.publishedVersionId);
+        if (!version) throw new HttpError(409, 'missing_version', '发布版本不存在');
+        if (!audienceAllows(actor, version.schema))
+          throw new HttpError(404, 'collection_not_found', '未找到表单');
+        if (nativeStatus(form, version.schema) !== 'open')
+          throw new HttpError(409, 'collection_closed', '当前表单尚未开放或已经截止');
+        assertRecipientIdentity(actor, state, version.schema.recipientMode);
+        validateAnswers(version.schema, answers);
+        const assets = await validateAssetAnswers(store, actor, form, version.schema, answers);
+        for (const field of version.schema.fields.filter((field) => field.kind === 'identity'))
+          answers[field.id] = {
+            uid: actor.uid,
+            name: actor.displayName,
+            studentId: actor.studentId ?? null,
+          };
+        const existing = (await store.collectionResponses.listForUpdate({ query: form.id })).filter(
+          (item) =>
+            item.formId === form.id &&
+            item.respondentUid === actor.uid &&
+            item.status === 'submitted',
+        );
+        const attemptLimit = readLimit(version.schema, 'attempt_limit') ?? 1;
+        if (existing.length >= attemptLimit)
+          throw new HttpError(409, 'attempt_limit_reached', '已经达到提交次数上限');
+        const all = (await store.collectionResponses.listForUpdate({ query: form.id })).filter(
+          (item) => item.formId === form.id && item.status === 'submitted',
+        );
+        const capacity = effectiveCapacity(form, version.schema);
+        if (capacity !== null && all.length + state.responses.length >= capacity)
+          throw new HttpError(409, 'capacity_reached', '报名名额已满');
+        const created = await store.collectionResponses.create({
+          formId: form.id,
+          versionId: version.id,
+          respondentUid: actor.uid,
+          attempt: existing.length + 1,
+          answers,
+          submittedAt: new Date().toISOString(),
+          status: 'submitted',
+          ownerUid: actor.uid,
+          scope: { type: 'collection_form', id: form.id },
         });
-        if (!updated) throw new Error('Collection asset disappeared during submission');
-      }
-      return created;
-    });
+        for (const asset of assets) {
+          const updated = await store.collectionAssets.update(asset.id, {
+            responseId: created.id,
+            status: 'attached',
+          });
+          if (!updated) throw new Error('Collection asset disappeared during submission');
+        }
+        if (actor.studentId?.trim())
+          state.identities[created.id] = { name: actor.displayName, studentId: actor.studentId };
+        return created;
+      });
+    if (!uploadDirectoryConfigured) {
+      const form = await options.store.collectionForms.get(formId);
+      const version = form?.publishedVersionId
+        ? await options.store.collectionVersions.get(form.publishedVersionId)
+        : null;
+      if (
+        version?.schema.publicRegistration ||
+        (version?.schema.recipientMode && version.schema.recipientMode !== 'open')
+      )
+        throw new HttpError(503, 'collection_storage_unavailable', '表单附加存储尚未配置');
+    }
+    const result = uploadDirectoryConfigured
+      ? await withCollectionFeature(uploadDirectory, formId, run)
+      : await run({ sessions: [], responses: [], recipients: [], identities: {} });
     send(response, 201, result);
   });
 

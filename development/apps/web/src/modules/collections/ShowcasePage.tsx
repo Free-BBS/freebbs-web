@@ -1,3 +1,4 @@
+import { PublishingShelf } from '../publishing/PublishingPage.js';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -33,6 +34,7 @@ export function ShowcasePage({ client }: { client?: Pick<ApiClient, 'request'> }
           <span>活动结束之后，故事仍然可以继续被看见。</span>
         </div>
       </header>
+      <PublishingShelf />
       {articles === null ? (
         <p className="collections-empty">正在布置橱窗…</p>
       ) : articles.length === 0 ? (

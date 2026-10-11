@@ -86,6 +86,7 @@ export function ActivityManagementPage({
             >
               {canCreateLegacy ? '创建报名表单' : '创建活动'}
             </Link>
+            <Link to="/collections/tools">时间与资料协作</Link>
           </nav>
         ) : null}
       </header>
@@ -146,6 +147,9 @@ export function ActivityManagementPage({
                       <div className="activity-authoring-actions">
                         <Link to={`/collections/workbench/${encodeURIComponent(form.id)}`}>
                           编辑报名表
+                        </Link>
+                        <Link to={`/collections/results/${encodeURIComponent(form.id)}`}>
+                          结果与名单
                         </Link>
                         {form.status !== 'draft' ? (
                           <Link

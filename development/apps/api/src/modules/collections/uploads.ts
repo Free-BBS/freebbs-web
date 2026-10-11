@@ -64,7 +64,11 @@ function mimeMatches(
   if (kind === 'image') return mimeType.startsWith('image/');
   if (kind === 'audio') return mimeType.startsWith('audio/');
   if (kind === 'video')
-    return mimeType.startsWith('video/') || mimeType === 'application/octet-stream';
+    return (
+      mimeType.startsWith('video/') ||
+      ['audio/webm', 'audio/mp4', 'audio/x-m4a'].includes(mimeType) ||
+      mimeType === 'application/octet-stream'
+    );
   if (kind === 'pdf') return mimeType === 'application/pdf';
   if (kind === 'text') return mimeType.startsWith('text/') || mimeType === 'application/csv';
   return [

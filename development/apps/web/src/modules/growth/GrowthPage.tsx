@@ -106,7 +106,9 @@ export function GrowthPage({ client, uid, displayName }: GrowthPageProps) {
             <div className="growth-stats">
               <div className="growth-total" aria-label="已结束的活动报名">
                 <strong>{summary.total}</strong>
-                <span>已结束的活动报名</span>
+                <span>
+                  {summary.basis === 'mixed_participation' ? '成长参与记录' : '已结束的活动报名'}
+                </span>
               </div>
               <div className="growth-total" aria-label="探索领域">
                 <strong>{domains.length}</strong>
@@ -119,7 +121,9 @@ export function GrowthPage({ client, uid, displayName }: GrowthPageProps) {
             </div>
           </div>
           <p className="growth-basis">
-            目前以已结束且未取消的报名记录统计；实际到场记录和小程序经历将在接入后核验。
+            {summary.basis === 'mixed_participation'
+              ? `包含已结束报名和 ${summary.verifiedTotal ?? 0} 次经组织确认的参与／Map经历。报名记录不等同于实际到场。`
+              : '目前以已结束且未取消的报名记录统计；组织确认后的参与记录会单独标记，小程序经历需完成接入后核验。'}
           </p>
           <AchievementCollection key={uid} uid={uid} achievements={summary.achievements} />
           <div className="growth-grid">
@@ -221,7 +225,13 @@ export function GrowthPage({ client, uid, displayName }: GrowthPageProps) {
                               )}
                             </p>
                           </div>
-                          <span className="growth-record-label">报名记录</span>
+                          <span className="growth-record-label">
+                            {item.source === 'verified_attendance'
+                              ? '组织已确认'
+                              : item.source === 'map'
+                                ? 'Map已核验'
+                                : '报名记录'}
+                          </span>
                         </li>
                       ))}
                     </ul>

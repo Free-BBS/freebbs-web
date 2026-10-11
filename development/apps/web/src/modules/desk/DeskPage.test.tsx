@@ -44,6 +44,7 @@ beforeEach(() => {
   request.mockReset();
   request.mockImplementation(async (path: string) => {
     if (path.startsWith('/knowledge/entries')) return [entry];
+    if (path === '/publishing') return { canCreate: false, items: [] };
     return [];
   });
   useAuth.mockReturnValue({
@@ -70,19 +71,29 @@ describe('無尽书桌', () => {
     expect(screen.getAllByRole('complementary', { name: '发展平台侧栏' })).toHaveLength(1);
   });
 
-  it.each([
-    ['打开通知册', '/desk/information', 'official', '官方发布'],
-    ['打开咨询手记', '/desk/information', 'mine', '我的咨询'],
-  ])('opens %s with the existing information filter', async (name, pathname, filter, tab) => {
+  it.each([['打开咨询手记', '/desk/information', 'mine', '我的咨询']])(
+    'opens %s with the existing information filter',
+    async (name, pathname, filter, tab) => {
+      const router = renderRoute('/desk');
+      await userEvent.click(await screen.findByRole('button', { name }));
+      await waitFor(() => expect(router.state.location.pathname).toBe(pathname));
+      expect(router.state.location.search).toBe(`?filter=${filter}`);
+      expect(await screen.findByRole('heading', { name: '信息与咨询' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: tab })).toHaveAttribute('aria-selected', 'true');
+      expect(request).toHaveBeenCalledWith(`/information/feed?filter=${filter}`);
+      expect(screen.getByRole('button', { name: '提交反馈' })).toBeInTheDocument();
+      expect(screen.getAllByRole('complementary', { name: '发展平台侧栏' })).toHaveLength(1);
+    },
+  );
+  it('opens the categorized notices library and retains the historical notice link', async () => {
     const router = renderRoute('/desk');
-    await userEvent.click(await screen.findByRole('button', { name }));
-    await waitFor(() => expect(router.state.location.pathname).toBe(pathname));
-    expect(router.state.location.search).toBe(`?filter=${filter}`);
-    expect(await screen.findByRole('heading', { name: '信息与咨询' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: tab })).toHaveAttribute('aria-selected', 'true');
-    expect(request).toHaveBeenCalledWith(`/information/feed?filter=${filter}`);
-    expect(screen.getByRole('button', { name: '提交反馈' })).toBeInTheDocument();
-    expect(screen.getAllByRole('complementary', { name: '发展平台侧栏' })).toHaveLength(1);
+    await userEvent.click(await screen.findByRole('button', { name: '打开通知册' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/desk/library/notices'));
+    await userEvent.click(await screen.findByRole('link', { name: '官方通知与历史消息 ↗' }));
+    expect(await screen.findByRole('tab', { name: '官方发布' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   });
 
   it('switches books without leaving an old information filter behind', async () => {
@@ -107,6 +118,7 @@ describe('無尽书桌', () => {
     await user.click(screen.getByRole('tab', { name: '我的咨询' }));
     await waitFor(() => expect(request).toHaveBeenCalledWith('/information/feed?filter=mine'));
     await user.click(screen.getByRole('button', { name: '打开通知册' }));
+    await user.click(await screen.findByRole('link', { name: '官方通知与历史消息 ↗' }));
     await waitFor(() =>
       expect(screen.getByRole('tab', { name: '官方发布' })).toHaveAttribute(
         'aria-selected',
@@ -157,7 +169,8 @@ describe('無尽书桌', () => {
   it('opens the existing experience list and reader inside the desk', async () => {
     const router = renderRoute('/desk');
     await userEvent.click(await screen.findByRole('button', { name: '打开经验集' }));
-    expect(router.state.location.pathname).toBe('/desk/knowledge');
+    expect(router.state.location.pathname).toBe('/desk/library/experience');
+    await userEvent.click(await screen.findByRole('link', { name: '既有知识与经验 ↗' }));
     await userEvent.click(await screen.findByRole('link', { name: '第一次筹备活动' }));
     expect(await screen.findByRole('region', { name: '经验阅读' })).toHaveTextContent(
       '整理流程与场地安排。',
