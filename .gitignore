@@ -170,6 +170,7 @@ test/
 /test/fixtures/*
 !/test/fixtures/moderation-policy-v3.json
 !/test/fixtures/moderation-policy-v3-manifest.json
+!/test/fixtures/moderation-images/
 !development/apps/web/src/test/
 !development/apps/web/src/test/setup.ts
 # Browser verification artifacts
