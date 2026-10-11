@@ -8,6 +8,7 @@
   color: #1d2939;
   background: #f5f7fa;
   line-height: 1.6;
+  scroll-padding-top: 10rem;
 }
 * {
   box-sizing: border-box;
@@ -53,6 +54,9 @@ button:disabled {
   outline-offset: 3px;
 }
 .moderation-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
@@ -61,6 +65,7 @@ button:disabled {
   padding: 18px max(24px, calc((100vw - 1240px) / 2));
   background: #fff;
   border-bottom: 1px solid #d9e0e9;
+  box-shadow: 0 4px 14px rgb(40 34 54 / 8%);
 }
 .moderation-brand {
   font-weight: 800;
