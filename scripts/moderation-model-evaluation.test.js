@@ -84,6 +84,18 @@ const response = (value = assessment()) =>
     { headers: { 'Content-Type': 'application/json' } },
   );
 
+const quality = (value = fixture()) => ({
+  expectedAction: 'allow',
+  actionRationale: 'QUALITY_META_NOT_SENT：正常建议应允许，关怀安排另行处理。',
+  evidenceAnchors: [
+    { field: 'content', quote: value.content, rationale: 'ANCHOR_META_NOT_SENT：核对原文语境。' },
+  ],
+  absentFacts: [
+    { id: 'contact', label: 'ABSENT_META_NOT_SENT：原文未公开联系方式。', terms: ['公开联系方式'] },
+  ],
+  reviewQuestions: ['REVIEW_META_NOT_SENT：有无补写原文不存在的事实？'],
+});
+
 function harness({
   fetchResult = () => response(),
   clientFactory = createModerationAiClient,
@@ -332,6 +344,44 @@ test('manifest validates exact case mapping, version, synthetic data, known focu
     assert.throws(() => validateManifest(invalid, document));
 });
 
+test('quality annotations are validated before configuration reads or provider calls', async () => {
+  const document = exported();
+  const manifest = manifestFor(document);
+  manifest.cases['case-1'].quality = quality();
+  assert.deepEqual(validateManifest(manifest, document), manifest);
+  const old = manifestFor(document);
+  assert.deepEqual(validateManifest(old, document), old);
+  for (const bad of [
+    { ...quality(), expectedAction: 'publish' },
+    { ...quality(), extra: 'unexpected' },
+    {
+      ...quality(),
+      evidenceAnchors: [{ field: 'content', quote: '原文没有这句话', rationale: '错误锚点' }],
+    },
+  ]) {
+    const invalid = structuredClone(manifest);
+    invalid.cases['case-1'].quality = bad;
+    const io = memoryIO({
+      [DEFAULTS.input]: JSON.stringify(document),
+      [DEFAULTS.manifest]: JSON.stringify(invalid),
+    });
+    const outputs = [];
+    assert.equal(
+      await main(['--run'], {
+        io,
+        write: (value) => outputs.push(value),
+        runnerDependencies: {
+          loadModule: () => assert.fail('No database on invalid annotation'),
+          fetchImpl: () => assert.fail('No external request'),
+        },
+      }),
+      1,
+    );
+    assert.equal(outputs.at(-1).code, 'manifest_quality');
+    assert.ok(!io.events.some((event) => event[1] === DEFAULTS.config));
+  }
+});
+
 test('model listing reads only public settings catalog, never decrypts a key or calls provider', async () => {
   const h = harness();
   const catalog = await listAvailableModels({ config: config(), ...h.deps });
@@ -376,7 +426,9 @@ test('execution is serial and preserves strict per-model reports; manifest and e
     },
   });
   const document = exported([fixture(), fixture({ id: 'case-2' })]);
-  const comparison = await h.run({ document, manifest: manifestFor(document) });
+  const manifest = manifestFor(document);
+  for (const item of document.cases) manifest.cases[item.id].quality = quality(item);
+  const comparison = await h.run({ document, manifest });
   assert.equal(comparison.status, 'completed');
   assert.equal(comparison.summary.matchedLabels, 4);
   assert.equal(h.calls.length, 4);
@@ -397,10 +449,13 @@ test('execution is serial and preserves strict per-model reports; manifest and e
     ]);
     assert.doesNotMatch(
       JSON.stringify(sent),
-      /META_IS_NOT_SENT|expectedDecision|rationale|ruleFocus/,
+      /META_IS_NOT_SENT|META_NOT_SENT|expectedDecision|rationale|ruleFocus|quality|evidenceAnchors|absentFacts|reviewQuestions/,
     );
   }
   assert.equal(h.modelSnapshots.at(-1).report.results[0].evaluation.result, 'matched');
+  assert.equal(comparison.summary.reviewRequiredResults, 0);
+  assert.equal(comparison.models[0].results[0].qualityEvaluation.disposition.status, 'matched');
+  assert.equal(comparison.models[0].results[0].qualityEvaluation.grounding.reviewRequired, true);
   assert.doesNotMatch(JSON.stringify(comparison), /private-config|apiKey|MYSQL_PASSWORD/);
 });
 
@@ -547,6 +602,37 @@ test('main produces comparison JSON, self-contained HTML and per-model reports w
     assert.equal(JSON.parse(io.files.get(summary.comparisonJson)).models.length, 2);
     assert.match(io.files.get(summary.reportHtml), /<!doctype html>/i);
     assert.doesNotMatch(JSON.stringify(outputs), /private-config|MYSQL_PASSWORD/);
+  }
+});
+
+test('main returns review code for action or grounding differences even when all labels match', async () => {
+  for (const output of [
+    assessment({ uncertainties: ['后续情况需要负责人关注。'] }),
+    assessment({ reason: '作者公开联系方式，但这里仍作普通建议处理。' }),
+  ]) {
+    const document = exported();
+    const manifest = manifestFor(document);
+    manifest.cases['case-1'].quality = quality();
+    const io = memoryIO({
+      [DEFAULTS.input]: JSON.stringify(document),
+      [DEFAULTS.manifest]: JSON.stringify(manifest),
+      [DEFAULTS.config]: JSON.stringify(config()),
+    });
+    const outputs = [];
+    const h = harness({ fetchResult: () => response(output) });
+    const code = await main(['--run'], {
+      io,
+      write: (value) => outputs.push(value),
+      runnerDependencies: h.deps,
+      noProcessSignals: true,
+    });
+    assert.equal(code, 2);
+    assert.equal(outputs.at(-1).matchedLabels, 2);
+    assert.equal(outputs.at(-1).reviewRequiredResults, 2);
+    assert.equal(h.calls.length, 2, 'No extra judge-model request');
+    const saved = JSON.parse(io.files.get(outputs.at(-1).comparisonJson));
+    assert.equal(saved.models[0].results[0].overallEvaluation.result, 'review');
+    assert.equal(saved.qualityVersion, 'freebbs-evaluation-quality-2026-10-11-v1');
   }
 });
 

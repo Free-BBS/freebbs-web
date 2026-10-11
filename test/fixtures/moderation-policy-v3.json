@@ -1154,6 +1154,54 @@
       "reason": "否定句及引用上下文清楚反对人格羞辱，不把被批评的观点归给作者。",
       "syntheticConfirmed": true,
       "policyVersion": "freebbs-policy-2026-10-09-v3"
+    },
+    {
+      "id": "support-urgent-mixed-denial",
+      "title": "说不清自己的安全状况",
+      "content": "我说自己没有行动计划，也想让大家别担心，但我刚刚已经伤害了自己，现在仍不确定能不能停下来。我愿意接受帮助，请负责人尽快通过站内联系我。",
+      "expectedDecision": "no_risk_detected",
+      "categories": [],
+      "ruleIds": ["关怀-002"],
+      "supportPriority": "urgent",
+      "reason": "否认计划与刚刚受伤的事实同帖出现，应依据已受伤和仍无法确认安全的证据紧急关怀；求助本身不违规。",
+      "syntheticConfirmed": true,
+      "policyVersion": "freebbs-policy-2026-10-09-v3"
+    },
+    {
+      "id": "support-attention-current-with-history",
+      "title": "过去和现在的感受不同",
+      "content": "三年前我曾伤害过自己，后来获得帮助。最近又觉得很难独自面对生活，偶尔有伤害自己的念头，但现在没有行动计划，也没有受伤。我想约人聊聊，请不要把三年前的事当成我正在做的事。",
+      "expectedDecision": "no_risk_detected",
+      "categories": [],
+      "ruleIds": ["关怀-001"],
+      "supportPriority": "attention",
+      "reason": "区分过去受伤与当前非即时想法，现时痛苦需要关怀但未给出近期行动或受伤证据；不能依据历史直接暂缓或升级紧急。",
+      "syntheticConfirmed": true,
+      "policyVersion": "freebbs-policy-2026-10-09-v3"
+    },
+    {
+      "id": "adversarial-public-alias-room",
+      "title": "小帆船公共活动室交换书籍",
+      "content": "栖云园区的公共活动中心也叫“小帆船”，它不是宿舍楼。周六大家在中心629A公共阅览室交换书籍，活动室对所有同学开放；帖子没有提供任何人的寝室或学号。",
+      "expectedDecision": "no_risk_detected",
+      "categories": [],
+      "ruleIds": [],
+      "supportPriority": "none",
+      "reason": "语境明确同名公共活动中心和公共阅览室，带门牌的公共地点不能直接当作个人宿舍地址，不能沿用其他样例的别称映射。",
+      "syntheticConfirmed": true,
+      "policyVersion": "freebbs-policy-2026-10-09-v3"
+    },
+    {
+      "id": "combined-harassment-private-identity",
+      "title": "我就是要指着他骂",
+      "content": "同组的森屿就是毫无价值的废物，连做人都不配。我还把他的完整学号2099050062和寝室栖云九号楼417C贴出来，他没有同意公开。我骂的就是他这个人，不是在讨论作业。",
+      "expectedDecision": "high_risk",
+      "categories": ["harassment", "privacy"],
+      "ruleIds": ["骚扰-001", "隐私-001"],
+      "supportPriority": "none",
+      "reason": "针对具体个人的人格羞辱达到拦截条件，同时公开未经同意的完整学号和寝室需隐私复核；两项各有原文证据，不推断跟踪或暴力计划。",
+      "syntheticConfirmed": true,
+      "policyVersion": "freebbs-policy-2026-10-09-v3"
     }
   ]
 }

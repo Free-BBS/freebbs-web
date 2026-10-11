@@ -1,6 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const vm = require('node:vm');
 const { POLICY_VERSION } = require('../backend/moderation-policy');
+const { normalizePolicyDecision } = require('../backend/moderation-policy-decision');
+const { QUALITY_VERSION } = require('./moderation-evaluation-quality');
 const { CONTRACT_VERSION, FAILURE_CODES } = require('../backend/moderation-ai-diagnostics');
 const {
   buildComparison,
@@ -426,4 +429,230 @@ test('HTML escapes every report string, includes evidence, and loads no external
   assert.match(html, /模型理由/);
   assert.match(html, /无风险预期被升级/);
   assert.match(html, /设置|规则版本|freebbs-policy/);
+});
+
+function qualityMetadata(f, expectedAction = 'allow', extra = {}) {
+  return {
+    quality: {
+      expectedAction,
+      actionRationale: '依据样例明确的上下文标注最终处置。',
+      evidenceAnchors: [{ field: 'content', quote: f.content, rationale: '核对完整上下文。' }],
+      absentFacts: [{ id: 'contact', label: '个人联系方式', terms: ['联系方式', '电话号码'] }],
+      reviewQuestions: ['解释是否增添了原文没有的联系方式？'],
+      ...extra,
+    },
+  };
+}
+
+function withDisposition(r) {
+  return { ...r, policyDecision: normalizePolicyDecision(r.assessment) };
+}
+
+test('matched labels retain disposition differences and unsupported-fact leads in the overall review count', () => {
+  const attention = fixture('attention-disposition', 'no_risk_detected', ['关怀-001'], 'attention');
+  attention.content = '最近学习压力大，想找人聊聊，现在没有伤害自己的打算。';
+  const attentionRow = row(attention);
+  attentionRow.assessment.uncertainties = ['后续是否持续恶化需要负责人关注。'];
+  const privacy = fixture('privacy-reason', 'needs_review', ['隐私-001']);
+  privacy.content = '我是虚构同学，学号2025010000，住在紫荆一号楼629A，欢迎来找我。';
+  privacy.categories = ['privacy'];
+  const privacyRow = row(privacy);
+  privacyRow.assessment.reason = '作者公开了学号、宿舍地址和联系方式，需要人工复核。';
+  const report = buildComparison(
+    plan([attention, privacy], [withDisposition(attentionRow), withDisposition(privacyRow)], {
+      selectedModels: ['model-a'],
+      manifest: {
+        cases: {
+          [attention.id]: qualityMetadata(attention),
+          [privacy.id]: qualityMetadata(privacy, 'hold'),
+        },
+      },
+    }),
+  );
+  assert.equal(report.qualityVersion, QUALITY_VERSION);
+  assert.equal(report.summary.matchedLabels, 2);
+  assert.equal(report.summary.labelsToReview, 0);
+  assert.equal(report.summary.reviewRequiredResults, 2);
+  assert.deepEqual(report.summary.disposition, {
+    matched: 1,
+    review: 1,
+    unannotated: 0,
+    unavailable: 0,
+  });
+  assert.equal(report.summary.grounding.flagged, 1);
+  assert.equal(report.summary.grounding.not_flagged, 1);
+  assert.equal(report.summary.grounding.humanReviewRequired, 2);
+  assert.equal(report.models[0].results[0].qualityEvaluation.disposition.expectedAction, 'allow');
+  assert.equal(report.models[0].results[0].qualityEvaluation.disposition.actualAction, 'hold');
+  assert.ok(
+    report.models[0].results[1].qualityEvaluation.grounding.flags.some(
+      (flag) => flag.code === 'absent_fact_term_mentioned',
+    ),
+  );
+  assert.ok(report.models[0].results.every((r) => r.overallEvaluation.result === 'review'));
+  const html = renderHtml(report);
+  assert.match(html, /最终处置对照（仅为本地建议）/);
+  assert.match(html, /实际处置触发原因/);
+  assert.match(html, /存在待核实事实或语境/);
+  assert.match(html, /未发现自动核查线索，仍待人工检查/);
+  assert.match(html, /命中查找词只是核查线索/);
+  assert.match(html, /负责人核查问题/);
+  assert.match(html, /预先标注的原文锚点/);
+  assert.doesNotMatch(html, /理由正确率|理由合格|理由通过/);
+  assert.equal(buildComparison(report).sampleSetSha256, report.sampleSetSha256);
+});
+
+test('quality failures, missing annotations and unprocessed rows stay distinct from semantic differences', () => {
+  const annotated = fixture('annotated');
+  const missing = fixture('missing-action');
+  const old = fixture('old-no-annotation');
+  const failed = fixture('request-failed');
+  const unprocessed = fixture('not-run');
+  const report = buildComparison(
+    plan(
+      [annotated, missing, old, failed, unprocessed],
+      [
+        withDisposition(row(annotated)),
+        row(missing),
+        row(old),
+        row(failed, 'no_risk_detected', {
+          assessment: null,
+          error: { status: 502, message: '失败' },
+        }),
+      ],
+      {
+        selectedModels: ['model-a'],
+        manifest: {
+          cases: {
+            [annotated.id]: qualityMetadata(annotated),
+            [missing.id]: qualityMetadata(missing),
+          },
+        },
+      },
+    ),
+  );
+  assert.deepEqual(report.summary.disposition, {
+    matched: 1,
+    review: 0,
+    unannotated: 1,
+    unavailable: 2,
+  });
+  assert.equal(report.summary.reviewRequiredResults, 1);
+  assert.equal(report.summary.failed, 1);
+  assert.equal(report.summary.unprocessed, 1);
+  assert.equal(report.models[0].results[0].overallEvaluation.result, 'no_automated_difference');
+  assert.equal(report.models[0].results[1].overallEvaluation.result, 'review');
+  assert.equal(report.models[0].results[2].overallEvaluation.result, 'unannotated');
+  assert.equal(report.models[0].results[3].overallEvaluation.result, 'error');
+  const html = renderHtml(report);
+  assert.match(html, /处置未标注/);
+  assert.match(html, /理由依据未标注/);
+  assert.match(html, /没有理由依据标注，不能据此认定检查通过/);
+});
+
+test('the overall count deduplicates multiple review dimensions and case filters expose hidden label matches', () => {
+  const f = fixture('many-leads');
+  const r = row(f, 'needs_review');
+  r.assessment.uncertainties = ['联系方式仍待核实。'];
+  const report = buildComparison(
+    plan([f], [withDisposition(r)], {
+      selectedModels: ['model-a'],
+      manifest: { cases: { [f.id]: qualityMetadata(f) } },
+    }),
+  );
+  assert.equal(report.summary.labelsToReview, 1);
+  assert.equal(report.summary.disposition.review, 1);
+  assert.equal(report.summary.grounding.flagged, 1);
+  assert.equal(report.summary.reviewRequiredResults, 1);
+  const html = renderHtml(report);
+  const elements = {
+    'model-filter': { value: '', addEventListener() {} },
+    'result-filter': {
+      value: 'issues',
+      addEventListener(_name, handler) {
+        this.change = handler;
+      },
+    },
+    'visible-count': {},
+    'empty-state': {},
+  };
+  const rows = [
+    {
+      dataset: {
+        model: 'model-a',
+        outcome: 'matched',
+        overall: 'review',
+        disposition: 'review',
+        grounding: 'not_flagged',
+      },
+    },
+    {
+      dataset: {
+        model: 'model-a',
+        outcome: 'matched',
+        overall: 'review',
+        disposition: 'matched',
+        grounding: 'flagged',
+      },
+    },
+    {
+      dataset: {
+        model: 'model-a',
+        outcome: 'matched',
+        overall: 'unannotated',
+        disposition: 'unannotated',
+        grounding: 'unannotated',
+      },
+    },
+    {
+      dataset: {
+        model: 'model-a',
+        outcome: 'matched',
+        overall: 'no_automated_difference',
+        disposition: 'matched',
+        grounding: 'not_flagged',
+      },
+    },
+  ];
+  vm.runInNewContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], {
+    document: { getElementById: (id) => elements[id], querySelectorAll: () => rows },
+  });
+  assert.deepEqual(
+    rows.map((item) => item.hidden),
+    [false, false, false, true],
+  );
+  elements['result-filter'].value = 'disposition';
+  elements['result-filter'].change();
+  assert.deepEqual(
+    rows.map((item) => item.hidden),
+    [false, true, true, true],
+  );
+  elements['result-filter'].value = 'grounding';
+  elements['result-filter'].change();
+  assert.deepEqual(
+    rows.map((item) => item.hidden),
+    [true, false, true, true],
+  );
+});
+
+test('quality annotations, model explanations, triggering reasons and evidence remain escaped', () => {
+  const attack = '</script><img src=x onerror=alert(1)>';
+  const f = fixture('quality-escape');
+  f.content = attack;
+  const r = withDisposition(row(f));
+  r.assessment.reason = attack;
+  r.assessment.supportReason = attack;
+  r.assessment.uncertainties = [attack];
+  r.policyDecision.reasonLabels = [attack];
+  const metadata = qualityMetadata(f, 'allow', {
+    actionRationale: attack,
+    evidenceAnchors: [{ field: 'content', quote: attack, rationale: attack }],
+    absentFacts: [{ id: 'attack', label: attack, terms: ['onerror'] }],
+    reviewQuestions: [attack],
+  });
+  const html = renderHtml(plan([f], [r], { manifest: { cases: { [f.id]: metadata } } }));
+  assert.ok(!html.includes(attack));
+  assert.match(html, /&lt;\/script&gt;&lt;img/);
+  assert.equal((html.match(/<script>/g) || []).length, 1);
+  assert.doesNotMatch(html, /<(?:script|link|img|iframe)\b[^>]*(?:src|href)=/i);
 });

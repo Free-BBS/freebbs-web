@@ -11,6 +11,7 @@ const {
 } = require('./moderation-policy-regression');
 const { buildComparison, renderHtml } = require('./moderation-evaluation-report');
 const { CONTRACT_VERSION } = require('../backend/moderation-ai-diagnostics');
+const { QUALITY_VERSION, validateQualityExpectations } = require('./moderation-evaluation-quality');
 
 const DEFAULTS = Object.freeze({
   input: path.resolve(__dirname, '../test/fixtures/moderation-policy-v3.json'),
@@ -30,6 +31,8 @@ const SCOPE = Object.freeze([
   '不同模型使用相同样例与规则版本；全部串行，每条每模型一次，不自动重试。',
   '单模型连续三次 API 或格式失败后停止该模型；仍可测试其余模型。',
   '仅发送样例标题、正文和固定送审字段；预期答案、解释和元数据不会发送。',
+  '最终处置预期、原文锚点与理由核查要点仅供本地比较，不发送给模型；不增加额外裁判模型调用。',
+  '理由自动检查只提供可复核线索，未发现线索不代表理由正确；语境、角色、否定和例外仍需人工核对。',
   '报告仅供人工核查，不发布、不处罚、不修改审核记录。',
 ]);
 const fail = (code) => Object.assign(new Error(code), { code });
@@ -127,6 +130,7 @@ function validateManifest(manifest, document) {
     const meta = manifest.cases[id];
     const fields = ['ruleFocus', 'bucket', 'smoke', 'rationale'];
     if (Object.hasOwn(meta || {}, 'acceptedExpectations')) fields.push('acceptedExpectations');
+    if (Object.hasOwn(meta || {}, 'quality')) fields.push('quality');
     if (
       !exactKeys(meta, fields) ||
       !['prohibited', 'normal', 'boundary', 'support', 'adversarial'].includes(meta.bucket) ||
@@ -138,6 +142,7 @@ function validateManifest(manifest, document) {
       meta.ruleFocus.some((rule) => !getPolicyRule(rule))
     )
       throw fail('manifest_schema');
+    if (Object.hasOwn(meta, 'quality')) validateQualityExpectations(meta.quality, fixture);
     if (Object.hasOwn(meta, 'acceptedExpectations')) {
       if (
         !Array.isArray(meta.acceptedExpectations) ||
@@ -205,6 +210,7 @@ function safeError(error) {
     manifest_schema: '样例说明文件的格式、虚构确认或元数据不符合要求。',
     manifest_cases: '样例说明必须逐项对应全部样例编号，不能缺失或增加。',
     manifest_labels: '备选预期必须是合法、完整的判断、类别、规则编号及关怀级别组合。',
+    manifest_quality: '处置与理由标注不符合要求；请核对动作、逐字原文锚点和核查要点。',
     report_write_failed: '报告保存失败，已停止安排后续调用；请保留此前已保存的报告。',
     file_size: '输入不是普通文件或超过允许大小。',
   };
@@ -262,6 +268,7 @@ async function runEvaluation({
   const state = {
     policyVersion: POLICY_VERSION,
     contractVersion: CONTRACT_VERSION,
+    qualityVersion: QUALITY_VERSION,
     suite,
     selectedModels: plan.selectedModels,
     plannedCases: plan.document.cases,
@@ -488,11 +495,15 @@ async function main(args, dependencies = {}) {
       run: options.run,
       policyVersion: POLICY_VERSION,
       contractVersion: CONTRACT_VERSION,
+      qualityVersion: QUALITY_VERSION,
       suite: options.suite,
       models: plan.selectedModels,
       caseCount: plan.caseCount,
       plannedCalls: plan.plannedCalls,
       caseIds: plan.document.cases.map((item) => item.id),
+      qualityAnnotatedCases: plan.document.cases.filter(
+        (item) => plan.manifest?.cases[item.id]?.quality,
+      ).length,
       annotationStatus: plan.manifest?.annotationStatus || 'exported_labels_require_owner_review',
       scope: SCOPE,
       message: options.run
@@ -533,13 +544,16 @@ async function main(args, dependencies = {}) {
       ...comparison.summary,
       comparisonJson: writer.comparisonPath,
       reportHtml: writer.htmlPath,
-      message: '预期标签需负责人复核；一致比例不是准确率，耗时不能代表线上性能。',
+      message:
+        '标签、处置和理由线索分开核查；未发现自动差异不代表语义正确，一致比例不是准确率，耗时不能代表线上性能。',
     };
     writer.append(summary);
     write(summary);
     if (comparison.status === 'interrupted') return 130;
     if (comparison.status !== 'completed' || comparison.summary.failed > 0) return 1;
-    return comparison.summary.labelsToReview > 0 ? 2 : 0;
+    return comparison.summary.reviewRequiredResults > 0 || comparison.summary.labelsToReview > 0
+      ? 2
+      : 0;
   } catch (error) {
     write({
       event: 'failed',
