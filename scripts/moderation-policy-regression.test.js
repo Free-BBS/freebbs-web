@@ -639,6 +639,53 @@ test('regression retains safe response diagnostics in its saved failure row', as
   assert.doesNotMatch(JSON.stringify(report), /synthetic-secret/);
 });
 
+test('real client field diagnostics survive regression persistence without unknown provider keys or values', async () => {
+  // Reproduce the observed counts with invented keys, not guessed provider text.
+  const malformed = Object.fromEntries(
+    Array.from({ length: 5 }, (_, index) => [
+      `provider-private-key-${index}`,
+      'provider-private-value',
+    ]),
+  );
+  const h = harness({ fetchResult: () => response(malformed) });
+  const report = await h.run({ model: 'kimi-k2.6' });
+  assert.equal(report.status, 'completed');
+  assert.equal(report.summary.failed, 1);
+  assert.equal(report.results.length, 1);
+  assert.equal(report.results[0].assessment, null);
+  assert.equal(report.results[0].networkAttempted, true);
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.closed, 1);
+  const request = JSON.parse(h.calls[0].options.body);
+  assert.equal(request.model, 'kimi-k2.6');
+  assert.deepEqual(request.response_format, { type: 'json_object' });
+  const persisted = h.snapshots.filter((snapshot) => snapshot.results.length === 1);
+  assert.ok(persisted.length > 0);
+  for (const saved of [...persisted, report]) {
+    const { diagnostics } = saved.results[0].error;
+    assert.equal(diagnostics.contractVersion, 'freebbs-moderation-contract-2026-10-11-v2');
+    assert.equal(diagnostics.failureCode, 'assessment_fields_invalid');
+    assert.equal(diagnostics.httpStatus, 200);
+    assert.equal(diagnostics.jsonSyntaxKind, 'none');
+    assert.deepEqual(diagnostics.assessmentFields, {
+      missingFields: [
+        'decision',
+        'categories',
+        'reason',
+        'ruleMatches',
+        'uncertainties',
+        'supportPriority',
+        'supportReason',
+      ],
+      unknownFieldCount: 5,
+    });
+    assert.doesNotMatch(
+      JSON.stringify(saved),
+      /provider-private-key|provider-private-value|synthetic-secret/,
+    );
+  }
+});
+
 test('completed plans still return nonzero for API failures or changed expected labels', async () => {
   const input = 'F:\\test\\cases.json';
   const configPath = 'F:\\test\\config.json';

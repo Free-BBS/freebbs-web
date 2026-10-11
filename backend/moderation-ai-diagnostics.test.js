@@ -8,6 +8,7 @@ const {
   sanitizeDiagnostics,
   diagnoseContentShape,
   diagnoseJsonSyntax,
+  diagnoseAssessmentFields,
 } = require('./moderation-ai-diagnostics');
 
 function diagnostic(extra = {}) {
@@ -70,6 +71,105 @@ test('sanitization preserves every known code but never accepts arbitrary nested
     sanitizeDiagnostics(diagnostic({ jsonSyntaxKind: 'provider-secret' })).jsonSyntaxKind,
     undefined,
   );
+});
+
+test('known v1 and v2 contracts retain their actual version without inventing fields', () => {
+  for (const contractVersion of [
+    'freebbs-moderation-contract-2026-10-10-v1',
+    'freebbs-moderation-contract-2026-10-11-v2',
+  ]) {
+    const clean = sanitizeDiagnostics(diagnostic({ contractVersion }));
+    assert.equal(clean.contractVersion, contractVersion);
+    assert.equal(clean.assessmentFields, undefined);
+  }
+  assert.equal(
+    sanitizeDiagnostics(
+      diagnostic({ contractVersion: 'freebbs-moderation-contract-2026-10-12-v3' }),
+    ),
+    null,
+  );
+});
+
+test('assessment field diagnosis records seven missing and five unknown fields without names or values', () => {
+  const fields = diagnoseAssessmentFields({
+    PRIVATE_NAME_1: 'private-original',
+    PRIVATE_NAME_2: 123456789,
+    PRIVATE_NAME_3: ['provider-secret'],
+    PRIVATE_NAME_4: { private: true },
+    PRIVATE_NAME_5: null,
+  });
+  assert.deepEqual(fields, {
+    missingFields: [
+      'decision',
+      'categories',
+      'reason',
+      'ruleMatches',
+      'uncertainties',
+      'supportPriority',
+      'supportReason',
+    ],
+    unknownFieldCount: 5,
+  });
+  assert.doesNotMatch(JSON.stringify(fields), /PRIVATE_NAME|private|secret|123456789/);
+  assert.deepEqual(
+    sanitizeDiagnostics(diagnostic({ assessmentFields: fields })).assessmentFields,
+    fields,
+  );
+});
+
+test('assessment field diagnosis does not inspect values or coerce nonobject content', () => {
+  const value = {
+    decision: 123456789,
+    categories: 'private-original',
+    reason: ['provider-secret'],
+    ruleMatches: false,
+    uncertainties: null,
+    supportPriority: { private: true },
+  };
+  Object.defineProperty(value, 'supportReason', {
+    enumerable: true,
+    get() {
+      throw new Error('provider-secret');
+    },
+  });
+  assert.deepEqual(diagnoseAssessmentFields(value), { missingFields: [], unknownFieldCount: 0 });
+  for (const content of [null, undefined, 123456789, 'private-original', ['provider-secret']])
+    assert.equal(diagnoseAssessmentFields(content), undefined);
+  const many = Object.fromEntries(Array.from({ length: 1001 }, (_, i) => [`private-${i}`, i]));
+  assert.equal(diagnoseAssessmentFields(many).unknownFieldCount, 1000);
+});
+
+test('saved assessment fields whitelist names and bounded counts without coercion', () => {
+  const clean = sanitizeDiagnostics(
+    diagnostic({
+      assessmentFields: {
+        missingFields: ['decision', 'private-original', 'decision', '<script>secret</script>'],
+        unknownFieldCount: 5,
+        types: { decision: 'private-original' },
+        providerText: 'provider-secret',
+      },
+    }),
+  );
+  assert.deepEqual(clean.assessmentFields, { missingFields: ['decision'], unknownFieldCount: 5 });
+  assert.doesNotMatch(JSON.stringify(clean), /private-original|provider-secret|script|types/);
+  for (const count of [-1, 1001, 0.5, '5', null, Infinity])
+    assert.equal(
+      sanitizeDiagnostics(
+        diagnostic({
+          assessmentFields: { missingFields: [], unknownFieldCount: count },
+        }),
+      ).assessmentFields,
+      undefined,
+    );
+  for (const missingFields of ['decision', null, Array(65).fill('decision')])
+    assert.equal(
+      sanitizeDiagnostics(
+        diagnostic({
+          assessmentFields: { missingFields, unknownFieldCount: 0 },
+        }),
+      ).assessmentFields,
+      undefined,
+    );
 });
 
 test('shape diagnosis distinguishes whole JSON fences from prose and multiple blocks without accepting them', () => {

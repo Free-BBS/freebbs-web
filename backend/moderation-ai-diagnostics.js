@@ -1,5 +1,19 @@
 const DIAGNOSTICS_VERSION = 1;
-const CONTRACT_VERSION = 'freebbs-moderation-contract-2026-10-10-v1';
+const CONTRACT_VERSION = 'freebbs-moderation-contract-2026-10-11-v2';
+const KNOWN_CONTRACT_VERSIONS = Object.freeze([
+  'freebbs-moderation-contract-2026-10-10-v1',
+  CONTRACT_VERSION,
+]);
+const ASSESSMENT_FIELDS = Object.freeze([
+  'decision',
+  'categories',
+  'reason',
+  'ruleMatches',
+  'uncertainties',
+  'supportPriority',
+  'supportReason',
+]);
+const MAX_UNKNOWN_FIELDS = 1000;
 const FAILURE_CODES = Object.freeze([
   'configuration_invalid',
   'input_invalid',
@@ -50,6 +64,40 @@ function plainObject(value) {
   );
 }
 
+// Record only presence of our fixed field names and a bounded count. In
+// particular, a provider's alternative field names and all values stay local.
+function diagnoseAssessmentFields(value) {
+  try {
+    if (!plainObject(value)) return undefined;
+    const keys = Object.keys(value);
+    return {
+      missingFields: ASSESSMENT_FIELDS.filter((field) => !Object.hasOwn(value, field)),
+      unknownFieldCount: Math.min(
+        MAX_UNKNOWN_FIELDS,
+        keys.filter((field) => !ASSESSMENT_FIELDS.includes(field)).length,
+      ),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function sanitizeAssessmentFields(value) {
+  if (
+    !plainObject(value) ||
+    !Array.isArray(value.missingFields) ||
+    value.missingFields.length > 64 ||
+    !Number.isInteger(value.unknownFieldCount) ||
+    value.unknownFieldCount < 0 ||
+    value.unknownFieldCount > MAX_UNKNOWN_FIELDS
+  )
+    return undefined;
+  return {
+    missingFields: ASSESSMENT_FIELDS.filter((field) => value.missingFields.includes(field)),
+    unknownFieldCount: value.unknownFieldCount,
+  };
+}
+
 // Construct a new, bounded object. Never copy provider text, input, arbitrary
 // exception messages or extra diagnostic properties into a saved report.
 function sanitizeDiagnostics(value) {
@@ -57,13 +105,13 @@ function sanitizeDiagnostics(value) {
     if (
       !plainObject(value) ||
       value.version !== DIAGNOSTICS_VERSION ||
-      value.contractVersion !== CONTRACT_VERSION ||
+      !KNOWN_CONTRACT_VERSIONS.includes(value.contractVersion) ||
       !FAILURE_CODES.includes(value.failureCode)
     )
       return null;
     const result = {
       version: DIAGNOSTICS_VERSION,
-      contractVersion: CONTRACT_VERSION,
+      contractVersion: value.contractVersion,
       failureCode: value.failureCode,
       httpStatus:
         Number.isInteger(value.httpStatus) && value.httpStatus >= 100 && value.httpStatus <= 599
@@ -75,6 +123,8 @@ function sanitizeDiagnostics(value) {
       result.contentShape = Object.fromEntries(SHAPE_KEYS.map((key) => [key, shape[key]]));
     if (JSON_SYNTAX_KINDS.includes(value.jsonSyntaxKind))
       result.jsonSyntaxKind = value.jsonSyntaxKind;
+    const assessmentFields = sanitizeAssessmentFields(value.assessmentFields);
+    if (assessmentFields) result.assessmentFields = assessmentFields;
     return result;
   } catch {
     return null;
@@ -140,4 +190,5 @@ module.exports = {
   sanitizeDiagnostics,
   diagnoseContentShape,
   diagnoseJsonSyntax,
+  diagnoseAssessmentFields,
 };

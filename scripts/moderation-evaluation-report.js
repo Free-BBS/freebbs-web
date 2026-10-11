@@ -29,6 +29,15 @@ const FIELD_LABELS = {
   ruleIds: '适用规则',
   supportPriority: '关怀级别',
 };
+const ASSESSMENT_FIELD_LABELS = {
+  decision: '判断决定',
+  categories: '风险类别',
+  reason: '判断理由',
+  ruleMatches: '适用规则及证据',
+  uncertainties: '不确定事项',
+  supportPriority: '关怀级别',
+  supportReason: '关怀理由',
+};
 const STATUS_LABELS = {
   running: '运行中',
   completed: '已完成',
@@ -357,7 +366,11 @@ function renderDiagnostics(value) {
     .filter(([key, flag]) => SHAPE_LABELS[key] && typeof flag === 'boolean')
     .map(([key, flag]) => `<li>${e(SHAPE_LABELS[key])}：${flag ? '是' : '否'}</li>`)
     .join('');
-  return `<p><strong>失败位置：</strong>${e(FAILURE_LABELS[diagnostic.failureCode] || '接口校验失败')}。${diagnostic.httpStatus !== null ? ` 供应商响应状态：${diagnostic.httpStatus}。` : ''}</p>${diagnostic.jsonSyntaxKind ? `<p><strong>语法检查：</strong>${e(SYNTAX_LABELS[diagnostic.jsonSyntaxKind])}。</p>` : ''}${shape ? `<details><summary>返回格式检查（仅记录形态，不含原文）</summary><ul>${shape}</ul></details>` : ''}`;
+  const fields = diagnostic.assessmentFields;
+  const fieldDetails = fields
+    ? `<p><strong>缺少必需字段（${fields.missingFields.length} 项）：</strong>${e(join(fields.missingFields.map((field) => ASSESSMENT_FIELD_LABELS[field])))}。</p><p><strong>额外字段数量：</strong>${fields.unknownFieldCount === 1000 ? '至少 1000' : fields.unknownFieldCount}。仅记录数量，不保存额外字段名或内容。</p>`
+    : '';
+  return `<p><strong>失败位置：</strong>${e(FAILURE_LABELS[diagnostic.failureCode] || '接口校验失败')}。${diagnostic.httpStatus !== null ? ` 供应商响应状态：${diagnostic.httpStatus}。` : ''}</p>${diagnostic.jsonSyntaxKind ? `<p><strong>语法检查：</strong>${e(SYNTAX_LABELS[diagnostic.jsonSyntaxKind])}。</p>` : ''}${fieldDetails}${shape ? `<details><summary>返回格式检查（仅记录形态，不含原文）</summary><ul>${shape}</ul></details>` : ''}`;
 }
 
 function renderCase(row, model, metadata) {

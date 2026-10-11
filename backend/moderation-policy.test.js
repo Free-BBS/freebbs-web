@@ -148,6 +148,30 @@ test('privacy rules distinguish residual content, placeholders, original publica
   assert.match(getPolicyLibrary().limitations.join(' '), /不覆盖法定留存/);
 });
 
+test('prompt preserves review-only privacy conditions without demanding proof of a violation', () => {
+  const prompt = buildPolicyPrompt();
+  assert.match(prompt, /conditions 中明确把授权或公开必要性不明列为适用条件/);
+  assert.match(prompt, /列入 ruleMatches、同步列出对应 categories，并返回 needs_review/);
+  assert.match(prompt, /不必先证明违法或恶意/);
+  assert.match(prompt, /仅因无法验证所有事实不能一律命中/);
+  assert.match(prompt, /仍须满足该条 conditions 且没有适用 exceptions/);
+  assert.match(prompt, /仅匹配 human_review 规则时不得返回 high_risk/);
+  assert.match(getPolicyRule('隐私-001').conditions.join(' '), /公开必要性和授权不明/);
+  assert.equal(getPolicyRule('隐私-001').recommendedAction, 'human_review');
+});
+
+test('care prompt retains imminent-danger conditions and does not let one denial erase current action', () => {
+  const prompt = buildPolicyPrompt();
+  assert.match(prompt, /attention 适用于明显痛苦或非即时自伤想法、但没有近期行动或正在受伤的信息/);
+  assert.match(prompt, /urgent 需要本人明确表达近期实施意图、正在行动或已经受伤等即时危险证据/);
+  assert.match(prompt, /单个消极词语、一般痛苦或主动求助不足以自动升级 urgent/);
+  assert.match(
+    prompt,
+    /不能只凭一句否认计划就忽略同帖中明确的近期实施意图、正在行动或已经受伤信息/,
+  );
+  assert.match(prompt, /不明确的即时安全事实记入 uncertainties，不诊断疾病/);
+});
+
 test('sexual conduct rules are age-independent while protecting health information and help-seeking', () => {
   assert.equal(getPolicyRule('未成年保护-001'), null);
   for (const id of ['性剥削-001', '色情-001', '性招揽-001', '性暗示-001']) {

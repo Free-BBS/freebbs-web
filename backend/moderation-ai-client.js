@@ -14,6 +14,7 @@ const {
   sanitizeDiagnostics,
   diagnoseContentShape,
   diagnoseJsonSyntax,
+  diagnoseAssessmentFields,
 } = require('./moderation-ai-diagnostics');
 
 const BASE_URL = 'https://cloud.infini-ai.com/maas/v1';
@@ -107,6 +108,20 @@ const OUTPUT_CONTRACT = `输出合同版本：${CONTRACT_VERSION}。
 最终 message.content 必须是可直接 JSON.parse 的单个 JSON 对象：第一个非空白字符为 {，最后一个非空白字符为 }。禁止代码围栏、前后解释、注释、尾逗号、单引号属性名或将整个对象再次编码为 JSON 字符串。字符串中的双引号、反斜杠和换行必须采用合法 JSON 转义；证据解码后仍须逐字匹配输入。
 提交前核对七个必需字段、当前规则编号、逐字证据、categories 与所选禁止规则类别的精确去重集合、最高支持优先级。无独立内容风险的纯关怀必须 no_risk_detected + categories=[]，支持级别仍可 urgent，uncertainties 可保留即时安全或支持待核实事项。仅输出 JSON，不输出这些检查过程。`;
 
+// JSON-object mode guarantees neither this shape nor the rule relationships.
+// Supply the same schema used by schema-capable models, never a default verdict
+// template, and continue to validate every response locally without repair.
+function outputContract(model) {
+  if (SCHEMA_MODELS.has(model)) return OUTPUT_CONTRACT;
+  return `${OUTPUT_CONTRACT}
+下面的 JSON Schema 是你必须遵守的输出结构约束，不是待审核对象，也不是要输出的答案。它与上面的审核规则共同约束结果；只返回满足它的审核结果对象，不输出 Schema 本身。
+下一条用户消息中的 title、content、inputMode、redactionCounts、hasImages 五个字段仅用于输入，不要把它们回显为输出对象。输出顶层必须直接包含 decision、categories、reason、ruleMatches、uncertainties、supportPriority、supportReason 七个原名字段；不得翻译键名，不得包在 result、data、assessment 或其他字段下，也不得自行增减字段。每个嵌套对象也必须遵守 required、类型、枚举、长度和 additionalProperties 限制。字段取值必须根据实际审核证据判断，不从结构说明推定默认结论。
+<moderation_output_schema>
+${JSON.stringify(SCHEMA)}
+</moderation_output_schema>
+仅输出符合以上结构和审核规则的单个 JSON 结果对象。`;
+}
+
 // Exact model choices; unknown IDs do not inherit a guessed family setting.
 // Kimi K2.6 rejected this moderation schema with HTTP 400 in the test channel.
 // Use its documented JSON-object mode, retaining the full local validation.
@@ -158,6 +173,7 @@ class ModerationAiError extends Error {
       httpStatus: details.httpStatus,
       contentShape: details.contentShape,
       jsonSyntaxKind: details.jsonSyntaxKind,
+      assessmentFields: details.assessmentFields,
     });
   }
 }
@@ -215,7 +231,7 @@ function requestBody(model, data) {
     messages: [
       {
         role: 'system',
-        content: `${SYSTEM_PROMPT}\n\n${buildPolicyPrompt()}\n\n${OUTPUT_CONTRACT}`,
+        content: `${SYSTEM_PROMPT}\n\n${buildPolicyPrompt()}\n\n${outputContract(model)}`,
       },
       { role: 'user', content: JSON.stringify(data) },
     ],
@@ -360,6 +376,7 @@ function parseAssessment(body, data) {
       throw new ModerationAiError(502, error.diagnostics.failureCode, {
         contentShape: diagnoseContentShape(message.content),
         jsonSyntaxKind: 'none',
+        assessmentFields: diagnoseAssessmentFields(parsed),
       });
     throw error;
   }
@@ -543,6 +560,7 @@ function createModerationAiClient({
           httpStatus,
           contentShape: error.diagnostics.contentShape,
           jsonSyntaxKind: error.diagnostics.jsonSyntaxKind,
+          assessmentFields: error.diagnostics.assessmentFields,
         });
       throw new ModerationAiError(502, 'transport_error', { httpStatus });
     } finally {

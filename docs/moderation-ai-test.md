@@ -40,7 +40,7 @@
 
 MiniMax M2.7 按 [官方说明](https://docs.infini-ai.com/gen-studio/api/text-generation/tutorial-reasoning/minimax.html) 使用 `reasoning_split:true`，将推理放在独立字段；审核结果仍只接受最终 JSON，不解析或回传推理字段。
 
-Kimi K2.6 曾在测试账号返回 HTTP 400，诊断信息指向 `response_format/json_schema/schema` 无效。因此该精确型号改用 `response_format:{type:'json_object'}`，不随请求发送审核 schema；返回结果仍须通过完全相同的本地校验。GLM 等其他型号保持各自请求格式。用户已确认旧版 Kimi 修复可用；本次增加规则证据后的合同与输出预算仍需重新实测。不增加自动重试，也不能据旧诊断推断具体哪个 schema 关键字不兼容。
+Kimi K2.6 曾在测试账号返回 HTTP 400，诊断信息指向 `response_format/json_schema/schema` 无效。因此该精确型号改用 `response_format:{type:'json_object'}`，不在 `response_format` 中传递审核 schema；返回结果仍须通过完全相同的本地校验。输出约定 v2 为 JSON 对象模式在系统提示词尾部明确提供同源完整 schema，帮助模型遵守字段结构。GLM 等其他型号保持各自请求格式。不增加自动重试，也不能据旧诊断推断具体哪个 schema 关键字不兼容。实际输出效果仍需重新验证。
 
 ## 配置排查
 
@@ -52,7 +52,7 @@ Kimi K2.6 曾在测试账号返回 HTTP 400，诊断信息指向 `response_forma
 
 ## 验证与下一步
 
-首轮 v3 实测后的提示约定与安全错误诊断修订见[输出约定修订](moderation-contract-v1.md)。规则版本不变，输出约定单独记录版本；明确类别集合必须完全对应所选禁止规则、纯关怀独立于违规。GLM 的非法 JSON 具体语法原因尚待复测，不据此改请求格式或放宽本地校验。批测可直接记录白名单失败诊断，网页错误消息仍保持固定文本。
+当前提示约定与安全错误诊断见[输出约定 v2](moderation-contract-v2.md)，[v1 文档](moderation-contract-v1.md)保留历史依据。规则版本不变，输出约定单独记录版本；明确类别集合必须完全对应所选禁止规则、纯关怀独立于违规。v2 补充 JSON 对象模式的完整结构提示、人工复核规则和关怀分级边界，并记录固定字段缺失及额外字段数量。批测错误详情提供安全诊断，网页试审错误消息仍保持固定文本；离线测试不证明实际模型稳定性。
 
 旧版 Kimi 兼容修复和模型选择已由测试电脑操作者确认可用。融合版测试覆盖两种输入模式、GLM/Kimi 格式、无自动重试、非法规则或证据、矛盾标签、迟到结果、审计保存失败以及原有人工流程。测试使用合成响应，不以通过单元测试证明真实模型准确率。
 

@@ -291,6 +291,76 @@ test('Kimi provider errors do not retry with another format or model', async () 
   assert.equal(h.requests.length, 1);
 });
 
+test('JSON-object requests carry the complete canonical schema after the rules without altering GLM parameters', async () => {
+  const h = harness();
+  await h.client.assess(INPUT);
+  const glm = JSON.parse(h.requests[0].options.body);
+  const { schema } = glm.response_format.json_schema;
+  assert.deepEqual(glm.response_format, {
+    type: 'json_schema',
+    json_schema: { name: 'moderation_assessment', strict: true, schema },
+  });
+  assert.deepEqual(glm.thinking, { type: 'disabled' });
+  assert.equal(glm.max_tokens, 2200);
+  assert.equal(glm.temperature, 0);
+  assert.equal(glm.stream, false);
+  assert.equal(glm.n, 1);
+  assert.doesNotMatch(glm.messages[0].content, /<moderation_output_schema>/);
+  for (const model of ['kimi-k2.6', 'minimax-m2.7']) {
+    await h.client.assess({ ...INPUT, model });
+    const request = JSON.parse(h.requests.at(-1).options.body);
+    assert.deepEqual(request.response_format, { type: 'json_object' });
+    assert.deepEqual(request.messages[1], glm.messages[1]);
+    const prompt = request.messages[0].content;
+    const embedded = prompt.match(
+      /<moderation_output_schema>\n([^\n]+)\n<\/moderation_output_schema>/,
+    );
+    assert.ok(embedded);
+    assert.deepEqual(JSON.parse(embedded[1]), schema);
+    assert.ok(prompt.indexOf('<moderation_output_schema>') > prompt.indexOf('全局判断原则'));
+    assert.ok(prompt.indexOf('<moderation_output_schema>') > prompt.indexOf('输出合同版本'));
+    assert.match(prompt, /输出结构约束，不是待审核对象/);
+    assert.match(prompt, /不输出 Schema 本身/);
+    assert.match(prompt, /五个字段仅用于输入，不要把它们回显为输出对象/);
+    assert.match(prompt, /不得翻译键名，不得包在 result、data、assessment 或其他字段下/);
+    assert.match(prompt, /不从结构说明推定默认结论/);
+    assert.deepEqual(schema.required, Object.keys(ASSESSMENT));
+    assert.equal(schema.additionalProperties, false);
+    assert.equal(schema.properties.ruleMatches.items.additionalProperties, false);
+    assert.equal(
+      schema.properties.ruleMatches.items.properties.evidence.additionalProperties,
+      false,
+    );
+    assert.equal(Object.hasOwn(schema.properties.decision, 'default'), false);
+  }
+  assert.equal(h.requests.length, 3);
+});
+
+test('Kimi valid JSON missing all seven required fields is rejected once with names omitted from diagnostics', async () => {
+  // Synthetic unknown keys reproduce only the observed shape; the diagnostic
+  // report does not reveal the real model-authored key names or their values.
+  const unrelated = Object.fromEntries(
+    Array.from({ length: 5 }, (_, index) => [`private-original-${index}`, 'provider-secret']),
+  );
+  const h = harness({ result: () => jsonResponse(envelope(unrelated)) });
+  await assert.rejects(h.client.assess({ ...INPUT, model: 'kimi-k2.6' }), (error) => {
+    fixedError(502)(error);
+    assert.equal(error.diagnostics.failureCode, 'assessment_fields_invalid');
+    assert.equal(error.diagnostics.httpStatus, 200);
+    assert.equal(error.diagnostics.jsonSyntaxKind, 'none');
+    assert.deepEqual(error.diagnostics.assessmentFields, {
+      missingFields: Object.keys(ASSESSMENT),
+      unknownFieldCount: 5,
+    });
+    assert.doesNotMatch(JSON.stringify(error), /private-original|provider-secret/);
+    return true;
+  });
+  assert.equal(h.requests.length, 1);
+  assert.deepEqual(JSON.parse(h.requests[0].options.body).response_format, {
+    type: 'json_object',
+  });
+});
+
 test('one settings snapshot and one provider request send only approved text and nonidentifying flags', async () => {
   const h = harness();
   const result = await h.client.assess({

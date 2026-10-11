@@ -268,6 +268,79 @@ test('unknown diagnostic values are omitted and known failure codes have Chinese
   }
 });
 
+test('field diagnostics show fixed Chinese names and unknown count without report injection', () => {
+  const attack = '<img src=x onerror=alert(1)>PRIVATE_DIAGNOSTIC';
+  const error = {
+    status: 502,
+    message: '模型调用或返回格式校验失败。',
+    diagnostics: {
+      version: 1,
+      contractVersion: CONTRACT_VERSION,
+      failureCode: 'assessment_fields_invalid',
+      httpStatus: 200,
+      assessmentFields: {
+        missingFields: [
+          'decision',
+          'categories',
+          'reason',
+          'ruleMatches',
+          'uncertainties',
+          'supportPriority',
+          'supportReason',
+          attack,
+        ],
+        unknownFieldCount: 5,
+        [attack]: attack,
+      },
+    },
+  };
+  const f = fixture('fields-failed');
+  const report = buildComparison(
+    plan([f], [row(f, 'no_risk_detected', { assessment: null, error })]),
+  );
+  const html = renderHtml(report);
+  assert.equal(
+    report.models[0].results[0].error.diagnostics.assessmentFields.missingFields.length,
+    7,
+  );
+  assert.match(html, /缺少必需字段（7 项）/);
+  assert.match(
+    html,
+    /判断决定、风险类别、判断理由、适用规则及证据、不确定事项、关怀级别、关怀理由/,
+  );
+  assert.match(html, /额外字段数量：<\/strong>5/);
+  assert.doesNotMatch(JSON.stringify(report), /PRIVATE_DIAGNOSTIC|onerror|src=x/);
+  assert.doesNotMatch(html, /PRIVATE_DIAGNOSTIC|onerror|src=x/);
+  assert.equal(report.models[0].results[0].comparisonEvaluation.result, 'error');
+  assert.equal(report.models[0].metrics.failed, 1);
+  assert.equal(report.models[0].metrics.validResults, 0);
+});
+
+test('old contract diagnostics remain readable without changing their version', () => {
+  const oldVersion = 'freebbs-moderation-contract-2026-10-10-v1';
+  const f = fixture('old-contract');
+  const error = {
+    status: 502,
+    message: '模型调用或返回格式校验失败。',
+    diagnostics: {
+      version: 1,
+      contractVersion: oldVersion,
+      failureCode: 'assessment_fields_invalid',
+      httpStatus: 200,
+    },
+  };
+  const report = buildComparison(
+    plan([f], [row(f, 'no_risk_detected', { assessment: null, error })]),
+  );
+  assert.equal(report.models[0].results[0].error.diagnostics.contractVersion, oldVersion);
+  const html = renderHtml(report);
+  assert.match(html, /审核字段、类型或取值不符合约定/);
+  assert.match(html, /供应商响应状态：200/);
+  assert.doesNotMatch(html, /缺少必需字段|额外字段数量/);
+  report.models[0].results[0].error.diagnostics.contractVersion = 'unknown-private-version';
+  assert.doesNotMatch(renderHtml(report), /失败位置：|unknown-private-version/);
+});
+
 test('alternatives cannot excuse a risk downgrade or a missing care signal', () => {
   const f = fixture('risk', 'high_risk', ['骚扰-001']);
   const r = row(f, 'no_risk_detected');
