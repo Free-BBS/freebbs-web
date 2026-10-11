@@ -2650,3 +2650,289 @@ test('expired withdrawal HTTP410 refreshes and removes the action while explaini
       .some((item) => item.className === 'moderation-withdrawal'),
   );
 });
+
+const pendingImageReview = () => ({
+  required: true,
+  state: 'pending',
+  reviewedBy: null,
+  reviewedAt: null,
+  canConfirm: true,
+});
+const visibleText = (element) =>
+  element.tagName === 'DETAILS'
+    ? ''
+    : (element.text || '') + element.children.map(visibleText).join('');
+
+test('image review queue is a distinct reviewer queue and remains available when automation is paused', async () => {
+  const h = harness({
+    automation: { ...automaticSettings(), imagesEnabled: true, imageModel: 'kimi-k2.6' },
+    customFetch: (url, options, fallback) => {
+      if (url.includes('/automation/image-reviews'))
+        return response({
+          items: [{ id: 's1', title: '待看图片', kind: 'post', imageReview: pendingImageReview() }],
+        });
+      return fallback(url, options);
+    },
+  });
+  await h.app.ready;
+  await h.get('image-queue').events.click();
+  await flush();
+  assert.equal(h.get('status').value, 'image_review');
+  assert.match(h.get('list').textContent, /图片待复核.*已自动发布/);
+  assert.equal(h.get('more').hidden, true);
+  assert.match(h.get('automation-summary').textContent, /已暂停.*qwen3.6-27b.*kimi-k2.6/);
+  assert.ok(h.requests.some(({ url }) => url.endsWith('/automation/image-reviews?')));
+  for (const options of [{ mine: true }, { reviewer: false }]) {
+    const denied = harness({ ...options, automation: automaticSettings() });
+    await denied.app.ready;
+    await denied.get('image-queue').events.click();
+    assert.equal(denied.get('image-queue').hidden, true);
+    assert.ok(!denied.requests.some(({ url }) => url.includes('/image-reviews')));
+  }
+});
+
+test('published image confirmation waits for all original images and uses idempotent retries without changing version', async () => {
+  const imageWait = deferred();
+  const confirmWait = deferred();
+  let confirmations = 0;
+  let review = pendingImageReview();
+  const h = harness({
+    automation: automaticSettings(),
+    customFetch: (url, options, fallback) => {
+      if (url.includes('/attachments/')) return imageWait.promise;
+      if (url.endsWith('/automation'))
+        return response({ job: { ...automaticJob(), imageReview: review } });
+      if (url.endsWith('/image-review')) {
+        confirmations += 1;
+        if (confirmations === 1) return confirmWait.promise;
+        review = {
+          ...review,
+          state: 'confirmed',
+          canConfirm: false,
+          reviewedAt: '2026-10-11T12:00:00Z',
+        };
+        return response({ id: 's1', submissionId: 's1', version: 2, imageReview: review });
+      }
+      return fallback(url, options);
+    },
+  });
+  h.submission.status = 'approved';
+  h.submission.version = 2;
+  h.submission.attachments = [{ id: imageId }];
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  const button = h
+    .get('detail')
+    .querySelectorAll('button')
+    .find((node) => node.className === 'moderation-image-confirm');
+  assert.equal(button.disabled, true);
+  await button.events.click();
+  assert.equal(confirmations, 0);
+  imageWait.resolve(response({ type: 'image/webp', size: 100 }));
+  await flush();
+  assert.equal(button.disabled, false);
+  const pending = button.events.click();
+  await button.events.click();
+  assert.equal(confirmations, 1);
+  confirmWait.resolve(response({ message: '暂时失败' }, 503));
+  await pending;
+  assert.equal(button.disabled, false);
+  await button.events.click();
+  await flush();
+  const calls = h.requests
+    .filter(({ url }) => url.endsWith('/image-review'))
+    .map(({ options }) => JSON.parse(options.body));
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[0], calls[1]);
+  assert.equal(calls[0].expectedVersion, 2);
+  assert.equal(h.submission.version, 2);
+  assert.match(h.get('detail').textContent, /图片已复核/);
+  assert.ok(
+    h
+      .get('detail')
+      .querySelectorAll('form')
+      .some((form) => form.className === 'moderation-withdrawal'),
+  );
+  assert.ok(
+    !h
+      .get('detail')
+      .querySelectorAll('button')
+      .some((node) => node.className === 'moderation-image-confirm'),
+  );
+});
+
+test('failed image loading prevents post-publication confirmation while withdrawal stays available', async () => {
+  const h = harness({
+    automation: automaticSettings(),
+    customFetch: (url, options, fallback) => {
+      if (url.includes('/attachments/')) return response({ message: '图片无法加载' }, 503);
+      if (url.endsWith('/automation'))
+        return response({ job: { ...automaticJob(), imageReview: pendingImageReview() } });
+      return fallback(url, options);
+    },
+  });
+  h.submission.status = 'approved';
+  h.submission.version = 2;
+  h.submission.attachments = [{ id: imageId }];
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  const button = h
+    .get('detail')
+    .querySelectorAll('button')
+    .find((node) => node.className === 'moderation-image-confirm');
+  assert.equal(button.disabled, true);
+  await button.events.click();
+  assert.ok(!h.requests.some(({ url }) => url.endsWith('/image-review')));
+  assert.ok(
+    h
+      .get('detail')
+      .querySelectorAll('form')
+      .some((form) => form.className === 'moderation-withdrawal'),
+  );
+});
+
+test('image result prose uses display copies and raw OCR remains in a closed disclosure with distinct review focus', async () => {
+  const run = policyRun();
+  run.reviewFocus = { political: true, psychological: true };
+  run.imagesReviewed = true;
+  run.policyDecision = {
+    ...run.policyDecision,
+    imagesReviewed: true,
+    reasonLabels: ['图片已完成机器检查，需负责人复核。'],
+  };
+  run.imageResults = [
+    {
+      attachmentIds: [imageId],
+      response: {
+        model: 'kimi-k2.6',
+        assessment: {
+          reason: 'PRIVATE_RAW_REASON',
+          ruleMatches: [
+            {
+              ruleId: '隐私-003',
+              evidence: { field: 'image_1', quote: 'PRIVATE_QUOTE' },
+              explanation: 'PRIVATE_EXPLANATION',
+            },
+          ],
+        },
+        imageObservations: [
+          { imageIndex: 1, text: 'PRIVATE_OCR', description: 'PRIVATE_DESCRIPTION' },
+        ],
+        displayAssessment: {
+          reason: '安全展示的隐私信息类型',
+          ruleMatches: [{ ruleId: '隐私-003', explanation: '本人信息需安全复核。' }],
+          uncertainties: [],
+          supportReason: '',
+        },
+        displayObservations: [{ imageIndex: 1, text: 'PRIVATE_OCR', description: '安全图片说明' }],
+      },
+    },
+  ];
+  const h = harness({
+    automation: automaticSettings(),
+    customFetch: (url, options, fallback) => {
+      if (url.endsWith('/automation'))
+        return response({ job: { ...automaticJob('review'), result: run } });
+      return fallback(url, options);
+    },
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  const visible = visibleText(h.get('detail'));
+  assert.match(visible, /安全展示的隐私信息类型.*安全图片说明/);
+  assert.doesNotMatch(visible, /PRIVATE_/);
+  const originals = h
+    .get('detail')
+    .querySelectorAll('details')
+    .find((detail) => detail.textContent.includes('受限原始 OCR'));
+  assert.equal(Boolean(originals.open), false);
+  assert.match(originals.textContent, /PRIVATE_OCR/);
+  assert.match(originals.textContent, /PRIVATE_QUOTE/);
+  assert.doesNotMatch(
+    h.get('detail').textContent,
+    /PRIVATE_RAW_REASON|PRIVATE_EXPLANATION|PRIVATE_DESCRIPTION/,
+  );
+  assert.match(visible, /政治敏感相关内容 · 须负责人审核/);
+  assert.match(visible, /心理问题与求助 · 负责人关怀复核/);
+  assert.match(visible, /心理关怀不等于违规/);
+  assert.doesNotMatch(visible, /图片尚未机器审核/);
+});
+
+test('late image confirmation cannot restore content after logout', async () => {
+  const wait = deferred();
+  const h = harness({
+    automation: automaticSettings(),
+    customFetch: (url, options, fallback) => {
+      if (url.endsWith('/automation'))
+        return response({ job: { ...automaticJob(), imageReview: pendingImageReview() } });
+      if (url.endsWith('/image-review')) return wait.promise;
+      return fallback(url, options);
+    },
+  });
+  h.submission.status = 'approved';
+  h.submission.version = 2;
+  h.submission.attachments = [{ id: imageId }];
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  const button = h
+    .get('detail')
+    .querySelectorAll('button')
+    .find((node) => node.className === 'moderation-image-confirm');
+  const pending = button.events.click();
+  h.setToken('');
+  await h.app.initialize();
+  wait.resolve(
+    response({
+      id: 's1',
+      version: 2,
+      imageReview: { ...pendingImageReview(), state: 'confirmed', canConfirm: false },
+    }),
+  );
+  await pending;
+  assert.doesNotMatch(h.get('detail').textContent, /图片已复核|PRIVATE_/);
+  assert.equal(h.get('image-queue').hidden, true);
+});
+
+test('failed image parsing shows only allowlisted diagnostic descriptions and never claims a valid image result', async () => {
+  const h = harness({
+    automation: automaticSettings(),
+    customFetch: (url, options, fallback) => {
+      if (url.endsWith('/automation'))
+        return response({
+          job: {
+            ...automaticJob('review'),
+            result: {
+              assessment: null,
+              imagesReviewed: false,
+              policyEvidence: [],
+              manualReview: {
+                required: true,
+                validation: 'failed',
+                imageDiagnostics: {
+                  failureCode: 'image_observations_invalid',
+                  validation: {
+                    issue: 'index',
+                    path: 'PRIVATE_PROVIDER_PATH',
+                    actualType: 'PRIVATE_PROVIDER_VALUE',
+                  },
+                  raw: 'PRIVATE_PROVIDER_BODY',
+                },
+              },
+            },
+          },
+        });
+      return fallback(url, options);
+    },
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  assert.match(h.get('detail').textContent, /图片结果检查未通过/);
+  assert.match(h.get('detail').textContent, /图片序号不符合要求/);
+  assert.match(h.get('detail').textContent, /不将无效结果视为安全/);
+  assert.doesNotMatch(h.get('detail').textContent, /PRIVATE_PROVIDER|图片尚未机器审核/);
+});

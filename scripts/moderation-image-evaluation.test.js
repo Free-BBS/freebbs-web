@@ -60,7 +60,7 @@ function answer(fixture) {
     imageObservations: observation,
     assessment: {
       decision: fixture.expected.decision,
-      categories: fixture.expected.categories,
+      categories: [...fixture.expected.categories],
       reason: '根据所提供图片中的具体文字与规则条件判断。',
       ruleMatches: fixture.expected.ruleIds.map((ruleId) => ({
         ruleId,
@@ -108,6 +108,7 @@ async function run(suite, hooks = {}) {
 
 test('CLI is preview by default, accepts only requested models and rejects unknown or duplicate options', () => {
   assert.equal(parseArguments([]).run, false);
+  assert.equal(parseArguments([]).suite, 'followup');
   assert.deepEqual(parseArguments([]).models, ['kimi-k2.6']);
   assert.deepEqual(parseArguments(['--models', 'kimi-k2.6,qwen3.6-27b']).models, [
     'kimi-k2.6',
@@ -137,16 +138,16 @@ test('isolated configuration rejects remote web/DB and disabled test mode', () =
     assert.throws(() => validateTestConfig({ ...config, ...change }));
 });
 
-test('all 28 default Kimi requests use pixels without expected labels or local transcripts in text payload', async () => {
+test('all 31 full-suite Kimi requests use pixels without expected labels or local transcripts in text payload', async () => {
   const suite = await suitePromise;
   const { report, requests } = await run(suite);
   assert.equal(report.status, 'completed');
-  assert.equal(report.actualCalls, 28);
-  assert.equal(report.results.length, 28);
+  assert.equal(report.actualCalls, 31);
+  assert.equal(report.results.length, 31);
   assert.deepEqual(report.models, ['kimi-k2.6']);
   assert.ok(report.results.every((x) => x.evaluation?.matched));
   assert.ok(
-    report.summary.every((x) => x.visionVerified && x.moderationValid === 26 && x.matched === 26),
+    report.summary.every((x) => x.visionVerified && x.moderationValid === 29 && x.matched === 29),
   );
   for (const body of requests) {
     const content = body.messages[1].content;
@@ -175,11 +176,11 @@ test('failed image probe skips that model moderation and still tests other model
     override: ({ body, index }) =>
       body.model === 'kimi-k2.6' && index === 0 ? response({ code: 'ZZZZZZZZ' }) : null,
   });
-  assert.equal(report.actualCalls, 30);
+  assert.equal(report.actualCalls, 33);
   assert.equal(report.status, 'partial');
-  assert.equal(report.summary[0].skipped, 26);
+  assert.equal(report.summary[0].skipped, 29);
   assert.equal(report.summary[0].visionVerified, false);
-  assert.equal(report.summary[1].moderationValid, 26);
+  assert.equal(report.summary[1].moderationValid, 29);
 });
 
 test('probe suite defaults to two Kimi calls and never claims moderation validation', async () => {
@@ -193,7 +194,8 @@ test('filtered privacy and challenging suites preserve probes and use only their
   const suite = await suitePromise;
   for (const [suiteMode, planned, moderation] of [
     ['privacy', 7, 5],
-    ['challenging', 14, 12],
+    ['challenging', 16, 14],
+    ['followup', 21, 19],
   ]) {
     assert.equal(parseArguments(['--suite', suiteMode]).suite, suiteMode);
     const cases = selectCases(suite, suiteMode);
@@ -215,13 +217,13 @@ test('filtered privacy and challenging suites preserve probes and use only their
   assert.throws(() => selectCases(suite, 'unknown'), { code: 'arguments' });
 });
 
-test('explicit model comparison independently runs all 28 cases for each model', async () => {
+test('explicit model comparison independently runs all 31 full-suite cases for each model', async () => {
   const suite = await suitePromise;
   const { report } = await run(suite, { models: ['kimi-k2.6', 'qwen3.6-27b'] });
-  assert.equal(report.actualCalls, 56);
-  assert.equal(report.plannedCalls, 56);
+  assert.equal(report.actualCalls, 62);
+  assert.equal(report.plannedCalls, 62);
   assert.equal(report.summary.length, 2);
-  assert.ok(report.summary.every((summary) => summary.matched === 26 && summary.failed === 0));
+  assert.ok(report.summary.every((summary) => summary.matched === 29 && summary.failed === 0));
 });
 
 test('privacy reason quality flags preserve model output and remain separate from disposition', async () => {
@@ -277,7 +279,8 @@ test('unreadable controls require explicit uncertainty and separate unsafe allow
   assert.deepEqual(held.result.assessment.categories, []);
   assert.deepEqual(held.result.assessment.ruleMatches, []);
   assert.equal(held.evaluation.matched, true);
-  assert.equal(allowed.result.contentPolicyDecision.recommendedAction, 'allow');
+  assert.equal(allowed.result.modelPolicyDecision.recommendedAction, 'allow');
+  assert.equal(allowed.result.contentPolicyDecision.recommendedAction, 'hold');
   assert.equal(allowed.evaluation.matched, false);
   assert.ok(
     allowed.evaluation.reasonQuality.issues.some(
@@ -285,6 +288,7 @@ test('unreadable controls require explicit uncertainty and separate unsafe allow
     ),
   );
   assert.equal(report.summary[0].unreadableAllowed, 1);
+  assert.equal(report.summary[0].localUnreadableAllowed, 0);
   assert.equal(report.summary[0].suspectedMisses, 0);
   assert.equal(report.summary[0].failed, 0);
 });
@@ -307,6 +311,73 @@ test('complex screenshots accept reordered key fragments but flag missing discus
   assert.deepEqual(omitted.transcriptionIssues, [
     { imageIndex: 1, issue: 'key_image_text_missing' },
   ]);
+});
+
+test('fraud alternatives require the exact paired rule and category combination', async () => {
+  const suite = await suitePromise;
+  for (const id of ['image-fraud', 'image-small-risk']) {
+    const fixture = suite.cases.find((item) => item.id === id);
+    const value = { ...answer(fixture), contentPolicyDecision: { recommendedAction: 'block' } };
+    assert.equal(evaluateResult(fixture, value).matched, true);
+    value.assessment.categories.push('illegal_activity');
+    value.assessment.ruleMatches.push({
+      ...value.assessment.ruleMatches[0],
+      ruleId: '违法交易-001',
+    });
+    const accepted = evaluateResult(fixture, value);
+    assert.equal(accepted.matched, true);
+    assert.equal(accepted.acceptedVariantMatched, true);
+    value.assessment.ruleMatches.push({ ...value.assessment.ruleMatches[0], ruleId: '威胁-001' });
+    value.assessment.categories.push('threat');
+    assert.equal(evaluateResult(fixture, value).matched, false);
+    value.assessment.ruleMatches.pop();
+    value.assessment.categories.pop();
+    value.assessment.categories.pop();
+    assert.equal(evaluateResult(fixture, value).matched, false);
+  }
+});
+
+test('followup covers real failures, privacy reasons, fraud, blur and independent normal controls', async () => {
+  const selected = selectCases(await suitePromise, 'followup');
+  assert.equal(selected.length, 21);
+  const ids = new Set(selected.map((item) => item.id));
+  for (const id of [
+    'image-threat',
+    'image-health-education',
+    'image-privacy-other',
+    'image-privacy-both',
+    'image-complex-quoted-help',
+    'image-small-antifraud',
+    'image-privacy-self',
+    'image-small-privacy',
+    'image-fraud',
+    'image-small-risk',
+    'image-blur-unreadable-1',
+    'image-blur-unreadable-2',
+    'image-blur-text-region-1',
+    'image-blur-text-region-2',
+    'image-blank-background',
+    'image-normal-suggestion',
+    'image-privacy-institution',
+    'image-complex-fiction',
+    'image-blur-mild-normal',
+  ])
+    assert.ok(ids.has(id), id);
+});
+
+test('raw model reason issues remain visible when controlled display wording is present', async () => {
+  const fixture = (await suitePromise).cases.find((item) => item.id === 'image-privacy-self');
+  const value = { ...answer(fixture), contentPolicyDecision: { recommendedAction: 'hold' } };
+  value.assessment.reason = '宿舍听澜三号楼418C应复核。';
+  value.displayAssessment = { ...value.assessment, reason: '具体宿舍地址应复核。' };
+  const evaluation = evaluateResult(fixture, value);
+  assert.equal(evaluation.matched, false);
+  assert.ok(
+    evaluation.reasonQuality.issues.some(
+      (issue) => issue.code === 'privacy_value_repeated_in_reason',
+    ),
+  );
+  assert.equal(value.assessment.reason, '宿舍听澜三号楼418C应复核。');
 });
 
 test('latency median averages the middle pair for an even number of valid results', async () => {
@@ -361,7 +432,7 @@ test('unexpected scoring failures remain reportable without being counted as val
   });
   assert.equal(report.status, 'partial');
   assert.equal(report.summary[0].failed, 3);
-  assert.equal(report.summary[0].skipped, 23);
+  assert.equal(report.summary[0].skipped, 26);
   assert.equal(report.summary[0].moderationValid, 0);
   const html = renderHtml(report);
   assert.ok(html.includes('接口或输出失败'));
@@ -377,7 +448,7 @@ test('three consecutive errors stop further requests without retry', async () =>
   });
   assert.equal(report.actualCalls, 5);
   assert.equal(report.summary[0].failed, 3);
-  assert.equal(report.summary[0].skipped, 23);
+  assert.equal(report.summary[0].skipped, 26);
   assert.equal(JSON.stringify(report).includes('secret-provider-error'), false);
 });
 
@@ -471,11 +542,14 @@ test('site hash handles Windows CRLF while rejecting substantive source changes'
       'backend/moderation-policy-library.json',
       'backend/moderation-policy-decision.js',
       'backend/moderation-ai-diagnostics.js',
+      'backend/moderation-image-client.js',
+      'backend/moderation-image-safety.js',
+      'backend/moderation-privacy.js',
     ];
     fs.mkdirSync(path.join(directory, 'backend'));
     const source = 'first line\nsecond line\n';
     const manifest = {
-      format: 'freebbs-moderation-image-package-v2',
+      format: 'freebbs-moderation-image-package-v3',
       policyVersion: POLICY_VERSION,
       siteHashFormat: 'utf8-crlf-to-lf-sha256',
       siteFiles: Object.fromEntries(files.map((x) => [x, textFileHash(source)])),
@@ -546,9 +620,10 @@ test('writer uses fresh output and HTML escapes model strings, keeps images in l
 test('CLI preview succeeds without reading nonexistent config or writing output', async () => {
   const output = path.join(os.tmpdir(), `freebbs-preview-${Date.now()}`);
   for (const [suiteMode, plannedCalls] of [
-    ['full', 28],
+    ['full', 31],
     ['privacy', 7],
-    ['challenging', 14],
+    ['challenging', 16],
+    ['followup', 21],
     ['probe', 2],
   ]) {
     const events = [];

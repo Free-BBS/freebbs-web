@@ -168,6 +168,41 @@ function createModerationRouter({
       });
     }),
   );
+  router.get(
+    '/automation/image-reviews',
+    authenticated(async (request, response, user) => {
+      if (!automation?.store?.listImageReviews)
+        throw Object.assign(new Error('图片复核队列暂不可用。'), { status: 503 });
+      const rawLimit = request.query.limit;
+      if (
+        rawLimit !== undefined &&
+        (typeof rawLimit !== 'string' || !/^[1-9]\d{0,2}$/.test(rawLimit))
+      )
+        throw Object.assign(new Error('图片复核列表数量无效。'), { status: 400 });
+      response.json(
+        await automation.store.listImageReviews({
+          reviewerId: user.id,
+          limit: rawLimit === undefined ? undefined : Number(rawLimit),
+        }),
+      );
+    }),
+  );
+  router.post(
+    '/submissions/:id/image-review',
+    authenticated(async (request, response, user) => {
+      const body = exactBody(request.body, ['expectedVersion', 'requestId']);
+      if (!automation?.store?.confirmImageReview)
+        throw Object.assign(new Error('图片复核功能暂不可用。'), { status: 503 });
+      response.json(
+        await automation.store.confirmImageReview({
+          id: request.params.id,
+          reviewerId: user.id,
+          expectedVersion: body.expectedVersion,
+          requestId: body.requestId,
+        }),
+      );
+    }),
+  );
   router.post(
     '/submissions/:id/withdraw',
     authenticated(async (request, response, user) => {

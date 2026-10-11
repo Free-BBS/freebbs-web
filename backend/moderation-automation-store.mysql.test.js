@@ -62,6 +62,7 @@ test(
     let enabled = true;
     let throwAfterPublish = false;
     let publishedCount = 0;
+    const imagePixels = new Map();
     const realPublisher = createModerationPublisher({
       createPostPid: async () => `p_${crypto.randomBytes(12).toString('hex')}`,
       awardMagnetic: async () => 0,
@@ -76,6 +77,16 @@ test(
       pool,
       publishSubmission,
       isEnabled: () => enabled,
+      readImages: async (rows) =>
+        rows.map((item) => {
+          const bytes = imagePixels.get(item.id);
+          return {
+            id: item.id,
+            sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
+            mimeType: item.mime_type,
+            dataBase64: bytes.toString('base64'),
+          };
+        }),
       onPublished: async () => {
         publishedCount += 1;
       },
@@ -130,6 +141,66 @@ test(
       },
       ...extra,
     });
+    async function imageReady(count = 1, content = '图片记录了一次普通校园活动。') {
+      const bytes = await require('sharp')({
+        create: { width: 16, height: 16, channels: 3, background: '#eaf3ff' },
+      })
+        .webp()
+        .toBuffer();
+      const ids = [];
+      for (let index = 0; index < count; index += 1) {
+        const id = crypto.randomUUID();
+        await service.registerAttachment({
+          id,
+          authorId: 2,
+          fileName: `${id}.webp`,
+          mimeType: 'image/webp',
+          byteSize: bytes.length,
+          sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
+        });
+        imagePixels.set(id, bytes);
+        ids.push(id);
+      }
+      const body = input({ attachmentIds: ids });
+      body.payload.content = `${content}\n${ids.map((id) => `![图片](/api/moderation/attachments/${id})`).join('\n')}`;
+      const entry = await ready(body);
+      return { ...entry, imageIds: entry.snapshot.images.map((image) => image.id) };
+    }
+    function imageAllow(entry) {
+      const { buildAutomaticResult } = require('./moderation-automation-result');
+      const { IMAGE_CONTRACT_VERSION } = require('./moderation-image-client');
+      const base = allow(entry);
+      const imageResults = [];
+      for (let offset = 0; offset < entry.imageIds.length; offset += 3) {
+        const attachmentIds = entry.imageIds.slice(offset, offset + 3);
+        imageResults.push({
+          attachmentIds,
+          response: {
+            assessment: structuredClone(base.assessment),
+            imageObservations: attachmentIds.map((_id, index) => ({
+              imageIndex: index + 1,
+              text: '普通校园活动',
+              description: '一张普通活动图片。',
+            })),
+            model: 'kimi-k2.6',
+            settingsRevision: 1,
+            policyVersion: POLICY_VERSION,
+            imageContractVersion: IMAGE_CONTRACT_VERSION,
+          },
+        });
+      }
+      return buildAutomaticResult({
+        textResult: {
+          assessment: base.assessment,
+          model: base.model,
+          settingsRevision: base.settingsRevision,
+          policyVersion: base.policyVersion,
+        },
+        imageResults,
+        snapshot: entry.snapshot,
+        elapsedMs: 180,
+      });
+    }
     async function reviewOne(entry) {
       return store.finish(entry.claimed, {
         assessment: null,
@@ -387,7 +458,7 @@ test(
         };
         const outcome = await store.finish(care.claimed, allow(care, { assessment }));
         assert.equal(outcome.state, 'review');
-        assert.equal(outcome.reasonCode, 'support_requires_review');
+        assert.equal(outcome.reasonCode, 'focus_requires_review');
         assert.deepEqual(outcome.result.assessment.categories, []);
       },
     );
@@ -620,6 +691,409 @@ test(
         );
         const [notices] = await pool.query('SELECT body FROM community_notifications');
         assert.doesNotMatch(JSON.stringify(notices), /旧评论敏感正文/);
+      },
+    );
+    await t.test(
+      'safe complete image batches publish once, bind public attachments and create a separate reviewer queue',
+      async () => {
+        const entry = await imageReady(4);
+        assert.equal(entry.snapshot.images.length, 4);
+        assert.equal(entry.snapshot.counts.url, 0);
+        assert.doesNotMatch(entry.snapshot.content, /\/api\/moderation\/attachments\//);
+        assert.match(entry.snapshot.content, /本帖图片_1/);
+        const storedInput = (await job(entry.submission.id)).input_meta_json;
+        assert.equal(storedInput.images.length, 4);
+        assert.equal(JSON.stringify(storedInput).includes('dataBase64'), false);
+        const outcome = await store.finish(entry.claimed, imageAllow(entry));
+        assert.equal(outcome.state, 'published');
+        assert.equal(outcome.result.imagesReviewed, true);
+        assert.equal(outcome.reasonCode, 'no_image_risk');
+        assert.equal(JSON.stringify(outcome.result).includes('dataBase64'), false);
+        const [attached] = await pool.execute(
+          'SELECT published_id FROM moderation_attachments WHERE submission_id = ?',
+          [entry.submission.id],
+        );
+        assert.ok(
+          attached.every((item) => String(item.published_id) === outcome.submission.publishedId),
+        );
+        for (const id of entry.imageIds)
+          assert.equal((await service.getAttachment({ id, userId: 3 })).access, 'published');
+        const detail = await store.get({ id: entry.submission.id, reviewerId: 3 });
+        assert.deepEqual(detail.imageReview, {
+          required: true,
+          state: 'pending',
+          reviewedBy: null,
+          reviewedAt: null,
+          canConfirm: true,
+        });
+        assert.ok(
+          (await store.listImageReviews({ reviewerId: 3 })).items.some(
+            (item) => item.id === entry.submission.id,
+          ),
+        );
+        await assert.rejects(store.listImageReviews({ reviewerId: 2 }), { status: 403 });
+        const [notices] = await pool.execute(
+          'SELECT title FROM community_notifications WHERE event_key = ?',
+          [`moderation-auto:${entry.claimed.id}:published`],
+        );
+        assert.equal(notices.length, 4);
+        assert.ok(
+          notices.every((item) => item.title === '含图内容已自动发布，请负责人单独复核图片'),
+        );
+        assert.equal((await store.finish(entry.claimed, imageAllow(entry))).applied, false);
+        assert.equal(
+          Number(
+            (
+              await pool.execute(
+                'SELECT COUNT(*) AS n FROM moderation_image_reviews WHERE job_id = ?',
+                [entry.claimed.id],
+              )
+            )[0][0].n,
+          ),
+          1,
+        );
+        const request = {
+          id: entry.submission.id,
+          reviewerId: 3,
+          expectedVersion: 2,
+          requestId: crypto.randomUUID(),
+        };
+        await assert.rejects(store.confirmImageReview({ ...request, reviewerId: 2 }), {
+          status: 403,
+        });
+        await assert.rejects(store.confirmImageReview({ ...request, expectedVersion: 1 }), {
+          status: 409,
+        });
+        const confirmed = await store.confirmImageReview(request);
+        assert.equal(confirmed.replayed, false);
+        assert.equal(confirmed.imageReview.state, 'confirmed');
+        assert.equal(confirmed.imageReview.reviewedBy, '3');
+        assert.equal(confirmed.imageReview.canConfirm, false);
+        assert.equal((await store.confirmImageReview(request)).replayed, true);
+        await assert.rejects(
+          store.confirmImageReview({ ...request, requestId: crypto.randomUUID() }),
+          { status: 409 },
+        );
+        assert.equal(Number((await row(entry.submission.id)).version), 2);
+        assert.equal(
+          (await store.get({ id: entry.submission.id, reviewerId: 3 })).canWithdraw,
+          true,
+        );
+        assert.equal(
+          (await store.listImageReviews({ reviewerId: 3 })).items.some(
+            (item) => item.id === entry.submission.id,
+          ),
+          false,
+        );
+        assert.equal(
+          (
+            await pool.execute('SELECT id FROM community_notifications WHERE event_key = ?', [
+              `moderation-auto:${entry.claimed.id}:published`,
+            ])
+          )[0].length,
+          4,
+        );
+        await store.withdraw({
+          ...request,
+          requestId: crypto.randomUUID(),
+          reason: '图片复核后撤回',
+        });
+        assert.equal(
+          (await store.get({ id: entry.submission.id, reviewerId: 3 })).imageReview.state,
+          'withdrawn',
+        );
+        await assert.rejects(store.confirmImageReview(request), { status: 409 });
+        for (const id of entry.imageIds)
+          await assert.rejects(service.getAttachment({ id, userId: 3 }), { status: 404 });
+      },
+    );
+    await t.test(
+      'image approval rejects missing coverage, wrong order, forged flags and mismatched metadata',
+      async () => {
+        for (const mutate of [
+          (result) => {
+            result.imageResults = [];
+          },
+          (result) => {
+            result.imageResults[0].attachmentIds.reverse();
+          },
+          (result) => {
+            result.imageResults[0].response.model = 'qwen3.6-27b';
+          },
+          (result) => {
+            result.imageResults[0].response.settingsRevision = 2;
+          },
+          (result) => {
+            result.inputHash = '0'.repeat(64);
+          },
+          (result) => {
+            result.textResult = undefined;
+          },
+        ]) {
+          const entry = await imageReady(2);
+          const result = imageAllow(entry);
+          mutate(result);
+          result.imagesReviewed = true;
+          result.policyDecision = { recommendedAction: 'allow' };
+          assert.equal((await store.finish(entry.claimed, result)).state, 'review');
+          assert.equal(
+            (
+              await pool.execute('SELECT job_id FROM moderation_image_reviews WHERE job_id = ?', [
+                entry.claimed.id,
+              ])
+            )[0].length,
+            0,
+          );
+          const [attachments] = await pool.execute(
+            'SELECT published_id FROM moderation_attachments WHERE submission_id = ?',
+            [entry.submission.id],
+          );
+          assert.ok(attachments.every((item) => item.published_id === null));
+        }
+      },
+    );
+    await t.test(
+      'image bytes and all attachment metadata are rechecked immediately before publication',
+      async () => {
+        for (const mutate of [
+          async (entry) => {
+            imagePixels.set(entry.imageIds[0], Buffer.from('changed pixels'));
+          },
+          async (entry) =>
+            pool.execute('UPDATE moderation_attachments SET sha256 = ? WHERE id = ?', [
+              '0'.repeat(64),
+              entry.imageIds[0],
+            ]),
+          async (entry) =>
+            pool.execute('UPDATE moderation_attachments SET author_id = 3 WHERE id = ?', [
+              entry.imageIds[0],
+            ]),
+          async (entry) =>
+            pool.execute('UPDATE moderation_attachments SET bound_content_hash = ? WHERE id = ?', [
+              '0'.repeat(64),
+              entry.imageIds[0],
+            ]),
+          async (entry) =>
+            pool.execute(
+              'UPDATE moderation_attachments SET expires_at = DATE_SUB(NOW(3), INTERVAL 1 SECOND) WHERE id = ?',
+              [entry.imageIds[0]],
+            ),
+          async (entry) =>
+            pool.execute('UPDATE moderation_attachments SET purged_at = NOW(3) WHERE id = ?', [
+              entry.imageIds[0],
+            ]),
+          async (entry) =>
+            pool.execute(
+              'UPDATE moderation_submissions SET attachment_ids_json = JSON_ARRAY() WHERE id = ?',
+              [entry.submission.id],
+            ),
+        ]) {
+          const entry = await imageReady();
+          const result = imageAllow(entry);
+          await mutate(entry);
+          assert.equal((await store.finish(entry.claimed, result)).state, 'review');
+        }
+      },
+    );
+    await t.test(
+      'image approval and its queue roll back together if the worker stops during notification',
+      async () => {
+        const entry = await imageReady();
+        let applicable = true;
+        const stopping = createModerationAutomationStore({
+          ...options,
+          notifications: {
+            notifyModeration: async () => {
+              applicable = false;
+            },
+          },
+        });
+        await assert.rejects(
+          stopping.finish(entry.claimed, imageAllow(entry), { canApply: () => applicable }),
+          { status: 409 },
+        );
+        assert.equal((await row(entry.submission.id)).status, 'pending');
+        assert.equal(
+          (
+            await pool.execute('SELECT * FROM moderation_image_reviews WHERE job_id = ?', [
+              entry.claimed.id,
+            ])
+          )[0].length,
+          0,
+        );
+        assert.equal(
+          (
+            await pool.execute('SELECT published_id FROM moderation_attachments WHERE id = ?', [
+              entry.imageIds[0],
+            ])
+          )[0][0].published_id,
+          null,
+        );
+        await reviewOne(entry);
+      },
+    );
+    await t.test(
+      'confirmation request identity is unique and expiry removes pending image review work',
+      async () => {
+        const first = await imageReady();
+        await store.finish(first.claimed, imageAllow(first));
+        const second = await imageReady();
+        await store.finish(second.claimed, imageAllow(second));
+        const request = {
+          id: first.submission.id,
+          reviewerId: 3,
+          expectedVersion: 2,
+          requestId: crypto.randomUUID(),
+        };
+        await store.confirmImageReview(request);
+        await assert.rejects(store.confirmImageReview({ ...request, id: second.submission.id }), {
+          status: 409,
+        });
+        await pool.execute(
+          'UPDATE moderation_auto_jobs SET expires_at = DATE_SUB(NOW(3), INTERVAL 1 SECOND) WHERE id = ?',
+          [second.claimed.id],
+        );
+        assert.equal(
+          (await store.get({ id: second.submission.id, reviewerId: 3 })).imageReview.canConfirm,
+          false,
+        );
+        await assert.rejects(
+          store.confirmImageReview({
+            ...request,
+            id: second.submission.id,
+            requestId: crypto.randomUUID(),
+          }),
+          { status: 410 },
+        );
+        assert.equal(
+          (await store.listImageReviews({ reviewerId: 3 })).items.some(
+            (item) => item.id === second.submission.id,
+          ),
+          false,
+        );
+        await store.purge();
+        assert.equal(
+          (
+            await pool.execute('SELECT * FROM moderation_image_reviews WHERE job_id = ?', [
+              second.claimed.id,
+            ])
+          )[0].length,
+          0,
+        );
+      },
+    );
+    await t.test(
+      'verified attachment references do not hide external URLs or nearby personal names',
+      async () => {
+        const external = await imageReady(1, '活动详情见 https://example.org/activity 。');
+        assert.ok(external.snapshot.counts.url > 0);
+        assert.equal((await store.finish(external.claimed, imageAllow(external))).state, 'review');
+        await pool.execute("UPDATE users SET full_name = '陈宇' WHERE id = 2");
+        try {
+          const personal = await imageReady(1, '我是陈宇，这是活动记录。');
+          assert.ok(personal.snapshot.counts.name > 0);
+          assert.equal(personal.snapshot.counts.url, 0);
+          assert.doesNotMatch(personal.snapshot.content, /陈宇/);
+          assert.equal(
+            (await store.finish(personal.claimed, imageAllow(personal))).state,
+            'review',
+          );
+        } finally {
+          await pool.execute('UPDATE users SET full_name = NULL WHERE id = 2');
+        }
+      },
+    );
+    await t.test(
+      'invalid model results preserve local focus and only sanitized reported review signals',
+      async () => {
+        for (const [content, focus, diagnostics] of [
+          ['课程讨论涉及国家安全法。', 'political', undefined],
+          ['我希望获得心理咨询方面的帮助。', 'psychological', undefined],
+          [
+            '普通测试文字。',
+            'political',
+            {
+              reviewSignal: {
+                version: 1,
+                reportedCategories: ['political_compliance'],
+                reportedRuleIds: [],
+                reportedSupportPriority: 'none',
+              },
+            },
+          ],
+          [
+            '普通测试文字。',
+            'psychological',
+            {
+              reviewSignal: {
+                version: 1,
+                reportedCategories: [],
+                reportedRuleIds: [],
+                reportedSupportPriority: 'attention',
+              },
+            },
+          ],
+        ]) {
+          const body = input();
+          body.payload.content = content;
+          const entry = await ready(body);
+          const outcome = await store.finish(entry.claimed, {
+            ...allow(entry),
+            assessment: null,
+            manualReview: {
+              required: true,
+              validation: 'failed',
+              diagnostics: diagnostics
+                ? {
+                    version: 1,
+                    contractVersion: 'freebbs-moderation-contract-2026-10-11-v2',
+                    failureCode: 'category_rule_mismatch',
+                    httpStatus: 200,
+                    ...diagnostics,
+                  }
+                : undefined,
+            },
+          });
+          assert.equal(outcome.state, 'review');
+          assert.equal(outcome.result.assessment, null);
+          assert.equal(outcome.result.reviewFocus[focus], true);
+          assert.equal(outcome.result.policyDecision.recommendedAction, 'hold');
+          const [notices] = await pool.execute(
+            'SELECT title FROM community_notifications WHERE event_key = ?',
+            [`moderation-auto:${entry.claimed.id}:review`],
+          );
+          assert.ok(
+            notices.every((item) =>
+              item.title.includes(focus === 'political' ? '政治内容' : '心理关怀'),
+            ),
+          );
+        }
+      },
+    );
+    await t.test(
+      'political and psychological image or text focus cannot publish and has a distinct notice',
+      async () => {
+        for (const [content, focus] of [
+          ['这是一段关于国家安全法的课程讨论。', 'political'],
+          ['我希望获得心理咨询方面的帮助。', 'psychological'],
+        ]) {
+          const entry = await imageReady(1, content);
+          const result = imageAllow(entry);
+          result.reviewFocus = { political: false, psychological: false };
+          result.policyDecision = { recommendedAction: 'allow' };
+          const outcome = await store.finish(entry.claimed, result);
+          assert.equal(outcome.state, 'review');
+          assert.equal(outcome.result.reviewFocus[focus], true);
+          const [notices] = await pool.execute(
+            'SELECT title FROM community_notifications WHERE event_key = ?',
+            [`moderation-auto:${entry.claimed.id}:review`],
+          );
+          assert.ok(
+            notices.every((item) =>
+              item.title.includes(focus === 'political' ? '政治内容' : '心理关怀'),
+            ),
+          );
+        }
       },
     );
     await t.test(

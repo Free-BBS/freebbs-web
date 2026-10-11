@@ -8,6 +8,8 @@ const {
   IMAGE_CONTRACT_VERSION,
   MAX_RESPONSE_BYTES,
   safeImageError,
+  sanitizeImageDiagnostics,
+  parseModeration,
 } = require('./moderation-image-client');
 const { validateAssessment } = require('../backend/moderation-ai-client');
 const { getPolicyRule, POLICY_VERSION } = require('../backend/moderation-policy');
@@ -110,11 +112,11 @@ test('both models use image-first base64 JSON-object requests without provider-g
     assert.equal(value.policyDecision.recommendedAction, 'hold');
     assert.equal(value.policyDecision.imagesReviewed, false);
     assert.equal(value.policyVersion, POLICY_VERSION);
-    assert.equal(value.imageContractVersion, 'freebbs-moderation-image-test-v2');
+    assert.equal(value.imageContractVersion, 'freebbs-moderation-image-test-v3');
   }
 });
 
-test('both image models receive v2 privacy, attribution and unreadable-image constraints', async () => {
+test('both image models receive v3 privacy, attribution and unreadable-image constraints', async () => {
   for (const model of ['kimi-k2.6', 'qwen3.6-27b']) {
     const h = harness();
     await h.client.assess({ ...INPUT, model });
@@ -130,8 +132,163 @@ test('both image models receive v2 privacy, attribution and unreadable-image con
     assert.match(prompt, /关键内容无法辨认时，decision 必须 needs_review/);
     assert.match(prompt, /categories=\[\]、ruleMatches=\[\]/);
     assert.match(prompt, /不能把截图里被举报者的言论当作发帖者自己的主张/);
+    assert.match(prompt, /"imageIndex":1/);
+    assert.match(prompt, /imageIndex 必须是数字整数/);
+    assert.doesNotMatch(prompt, /"imageIndex":"/);
     assert.equal(h.requests.length, 1);
   }
+});
+
+test('shared parser exports controlled display and safety decisions without altering raw assessment', () => {
+  const value = result();
+  value.imageObservations[0] = {
+    imageIndex: 1,
+    text: '',
+    description: '图片过于模糊，无法可靠读取文字。',
+  };
+  const got = parseModeration(value, { title: '附图', content: '请看附图', imageCount: 1 });
+  assert.deepEqual(got.assessment, value.assessment);
+  assert.equal(got.modelPolicyDecision.recommendedAction, 'allow');
+  assert.equal(got.contentPolicyDecision.recommendedAction, 'hold');
+  assert.equal(got.imageSafety.requiresHumanReview, true);
+  assert.equal(got.policyDecision.canAutomaticallyPublish, false);
+  assert.equal(got.displayAssessment.reason, value.assessment.reason);
+});
+
+test('validation diagnostics identify structure and reference failures without leaking provider fields or values', async () => {
+  const examples = [
+    [() => ({ providerSecret: 'private-data' }), 'result', 'object_keys'],
+    [
+      (v) => {
+        v.imageObservations = {};
+        return v;
+      },
+      'imageObservations',
+      'type',
+    ],
+    [
+      (v) => {
+        v.imageObservations = [];
+        return v;
+      },
+      'imageObservations',
+      'count',
+    ],
+    [
+      (v) => {
+        v.imageObservations[0].imageIndex = 'private-data';
+        return v;
+      },
+      'imageObservations[0].imageIndex',
+      'index',
+    ],
+    [
+      (v) => {
+        v.imageObservations[0].providerSecret = 'private-data';
+        return v;
+      },
+      'imageObservations[0]',
+      'object_keys',
+    ],
+    [
+      (v) => {
+        v.imageObservations[0].description = '';
+        return v;
+      },
+      'imageObservations[0].description',
+      'text',
+    ],
+    [
+      (v) => {
+        v.assessment.ruleMatches = [
+          {
+            ruleId: '隐私-003',
+            evidence: { field: 'image_1', quote: 'private-data' },
+            explanation: '需复核。',
+          },
+        ];
+        return v;
+      },
+      'assessment.ruleMatches[0].evidence.quote',
+      'quote_not_present',
+    ],
+    [
+      (v) => {
+        v.assessment.ruleMatches = [
+          {
+            ruleId: '隐私-003',
+            evidence: { field: 'private-data', quote: '建议' },
+            explanation: '需复核。',
+          },
+        ];
+        return v;
+      },
+      'assessment.ruleMatches[0].evidence.field',
+      'source_field',
+    ],
+    [
+      (v) => {
+        v.assessment.ruleMatches = [
+          {
+            ruleId: '隐私-003',
+            evidence: { field: 'image_1', quote: '建议', providerSecret: 'private-data' },
+            explanation: '需复核。',
+          },
+        ];
+        return v;
+      },
+      'assessment.ruleMatches[0].evidence',
+      'object_keys',
+    ],
+  ];
+  for (const [mutate, path, issue] of examples) {
+    const h = harness({ reply: () => response(mutate(result())) });
+    await assert.rejects(h.client.assess(INPUT), (error) => {
+      const safe = safeImageError(error);
+      assert.equal(safe.diagnostics.validation.path, path);
+      assert.equal(safe.diagnostics.validation.issue, issue);
+      assert.equal(safe.diagnostics.httpStatus, 200);
+      assert.equal(safe.diagnostics.finishReason, 'stop');
+      assert.doesNotMatch(JSON.stringify(safe), /private-data|providerSecret/);
+      return true;
+    });
+    assert.equal(h.requests.length, 1);
+  }
+});
+
+test('diagnostic sanitizer rejects arbitrary paths, keys, types and negative or excessive counts', () => {
+  const value = sanitizeImageDiagnostics({
+    failureCode: 'rule_evidence_invalid',
+    validation: {
+      issue: 'object_keys',
+      path: 'assessment.ruleMatches[0].evidence',
+      missingFields: ['quote', 'private-data'],
+      unexpectedFieldCount: 2,
+      actualType: 'private-data',
+      actualIndex: 2099010048,
+      length: -1,
+      sourceField: 'private-data',
+      quotePresent: false,
+      providerSecret: 'private-data',
+    },
+  });
+  assert.deepEqual(value.validation, {
+    issue: 'object_keys',
+    path: 'assessment.ruleMatches[0].evidence',
+    unexpectedFieldCount: 2,
+    missingFields: ['quote'],
+    quotePresent: false,
+  });
+  assert.equal(
+    sanitizeImageDiagnostics({ validation: { issue: 'object_keys', path: 'private-data' } })
+      .validation,
+    undefined,
+  );
+  assert.equal(
+    sanitizeImageDiagnostics({ validation: { issue: 'private-data', path: 'assessment' } })
+      .validation,
+    undefined,
+  );
 });
 
 test('self-information review retains raw OCR and minimal evidence separately from reasons', async () => {

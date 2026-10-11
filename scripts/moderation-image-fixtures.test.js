@@ -41,16 +41,16 @@ async function removeTestDirectory(directory) {
   await fs.rm(directory, { recursive: true, force: true });
 }
 
-test('twenty-eight synthetic fixtures cover two visual probes and twenty-six moderation cases', async () => {
+test('thirty-one synthetic fixtures cover two visual probes and twenty-nine moderation cases', async () => {
   const value = await suite();
   assert.equal(value.suiteVersion, SUITE_VERSION);
   assert.equal(value.policyVersion, POLICY_VERSION);
   assert.equal(value.policyVersion, policy.version);
   assert.equal(value.syntheticOnly, true);
   assert.match(value.limitation, /不代表真实照片/);
-  assert.equal(value.cases.length, 28);
+  assert.equal(value.cases.length, 31);
   assert.equal(value.cases.filter((item) => item.kind === 'probe').length, 2);
-  assert.equal(value.cases.filter((item) => item.kind === 'moderation').length, 26);
+  assert.equal(value.cases.filter((item) => item.kind === 'moderation').length, 29);
   assert.deepEqual(
     Object.fromEntries(
       ['baseline', 'privacy', 'complex', 'small_text', 'blurred'].map((group) => [
@@ -58,7 +58,7 @@ test('twenty-eight synthetic fixtures cover two visual probes and twenty-six mod
         value.cases.filter((item) => item.group === group).length,
       ]),
     ),
-    { baseline: 10, privacy: 4, complex: 4, small_text: 4, blurred: 4 },
+    { baseline: 11, privacy: 4, complex: 4, small_text: 4, blurred: 6 },
   );
   assert.equal(validateImageFixtures(value), value);
 });
@@ -86,7 +86,9 @@ test('each PNG decodes at its declared size without text or EXIF metadata', asyn
   const images = new Map(
     (await suite()).cases.flatMap((item) => item.images).map((image) => [image.sha256, image]),
   );
-  assert.equal(images.size, 27);
+  assert.equal(images.size, 30);
+  const blankHash = (await suite()).cases.find((item) => item.id === 'image-blank-background')
+    .images[0].sha256;
   for (const image of images.values()) {
     const metadata = await sharp(image.data).metadata();
     assert.equal(metadata.format, 'png');
@@ -95,7 +97,8 @@ test('each PNG decodes at its declared size without text or EXIF metadata', asyn
     assert.equal(metadata.exif, undefined);
     assert.equal(metadata.xmp, undefined);
     const pixels = await sharp(image.data).removeAlpha().raw().toBuffer();
-    assert.ok(new Set(pixels).size > 5, 'image must contain actual visible content');
+    if (image.sha256 === blankHash) assert.deepEqual(new Set(pixels), new Set([255]));
+    else assert.ok(new Set(pixels).size > 5, 'nonblank image must contain actual visible content');
     assert.deepEqual(readPngDimensions(image.data), { width: image.width, height: image.height });
   }
 });
@@ -125,11 +128,14 @@ test('probe answers vary with random input and never appear in transmitted plain
 
 test('moderation cases send neutral titles and text with no annotation or image transcript', async () => {
   for (const item of (await suite()).cases.filter((entry) => entry.kind === 'moderation')) {
-    assert.equal(item.title, '附图说明');
-    assert.equal(item.text, '请结合附图阅读这条帖子。');
+    assert.equal(item.title, item.id === 'image-blank-background' ? '图片背景测试' : '附图说明');
+    assert.equal(
+      item.text,
+      item.id === 'image-blank-background' ? '测试一张纯白背景图片。' : '请结合附图阅读这条帖子。',
+    );
     assert.equal(item.expected.imageText.length, item.images.length);
     for (const entry of item.expected.imageText) {
-      if (item.expected.readability === 'unreadable') {
+      if (['unreadable', 'blank'].includes(item.expected.readability)) {
         assert.equal(entry.text, '');
         assert.equal(entry.fragments, undefined);
         continue;
@@ -215,7 +221,7 @@ test('small text is rendered at 18 pixels and severe blur has no readable origin
     assert.deepEqual(Object.keys(asset).sort(), ['height', 'rendering', 'sha256', 'text', 'width']);
   }
   const severe = (await suite()).cases.filter((item) => item.expected.readability === 'unreadable');
-  assert.equal(severe.length, 2);
+  assert.equal(severe.length, 4);
   for (const item of severe) {
     assert.equal(item.expected.decision, 'needs_review');
     assert.equal(item.expected.recommendedAction, 'hold');
@@ -246,7 +252,7 @@ test('blur images are actual transformed pixels and severe blur removes fine det
   assert.ok(mild > 0.5, 'mild blur retains text edges');
   assert.ok(severe < mild / 10, 'severe blur destroys fine text edges');
   const cases = (await suite()).cases.filter((item) => item.group === 'blurred');
-  assert.equal(new Set(cases.flatMap((item) => item.images.map((image) => image.sha256))).size, 4);
+  assert.equal(new Set(cases.flatMap((item) => item.images.map((image) => image.sha256))).size, 6);
   assert.equal(
     cases.find((item) => item.id === 'image-blur-mild-normal').expected.recommendedAction,
     'allow',
@@ -282,6 +288,41 @@ test('v2 validation rejects leaked unreadable transcripts, group changes and mis
     mutation(changed);
     assert.throws(() => validateImageFixtures(changed), /依据/);
   }
+});
+
+test('v3 keeps fraud alternatives narrow and blank controls independent of unreadable text', async () => {
+  const value = await suite();
+  const allowed = value.cases.filter((item) => item.expected.acceptedVariants?.length);
+  assert.deepEqual(
+    allowed.map((item) => item.id),
+    ['image-fraud', 'image-small-risk'],
+  );
+  for (const item of allowed) {
+    assert.deepEqual(item.expected.acceptedVariants, [
+      {
+        decision: 'high_risk',
+        categories: ['fraud', 'illegal_activity'],
+        ruleIds: ['诈骗-001', '违法交易-001'],
+        recommendedAction: 'block',
+      },
+    ]);
+  }
+  const blank = value.cases.find((item) => item.id === 'image-blank-background');
+  assert.equal(blank.expected.readability, 'blank');
+  assert.equal(blank.expected.recommendedAction, 'allow');
+  assert.equal(blank.text, '测试一张纯白背景图片。');
+  assert.deepEqual(blank.expected.imageText, [{ imageIndex: 1, text: '' }]);
+  for (const id of ['image-blur-text-region-1', 'image-blur-text-region-2']) {
+    const item = value.cases.find((entry) => entry.id === id);
+    assert.equal(item.expected.readability, 'unreadable');
+    assert.equal(item.expected.recommendedAction, 'hold');
+    assert.equal(item.text, '请结合附图阅读这条帖子。');
+  }
+  const modified = cloneSuite(value);
+  modified.cases
+    .find((item) => item.id === 'image-fraud')
+    .expected.acceptedVariants[0].ruleIds.push('威胁-001');
+  assert.throws(() => validateImageFixtures(modified), /质量依据/);
 });
 
 test('multi-image fixture keeps risk in its second image with separate grounding text', async () => {

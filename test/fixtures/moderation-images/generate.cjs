@@ -1,4 +1,4 @@
-// Rebuild only v2 extension PNGs and manifest entries. Run from any directory:
+// Rebuild extension PNGs and manifest entries. Run from any directory:
 // node test/fixtures/moderation-images/generate.cjs
 // Requires repository sharp and the Microsoft YaHei font on the build machine.
 // The desktop evaluator uses committed PNGs and never needs a Chinese font.
@@ -126,6 +126,9 @@ const cases = [
   // retained in manifest text/fragments or scored as readable ground truth.
   { number: 24, style: 'card', title: '讨论区留言', paragraphs: [normal], blur: 'severe' },
   { number: 25, style: 'card', title: '讨论区留言', paragraphs: [threat], blur: 'severe' },
+  { number: 26, style: 'card', title: '讨论区留言', paragraphs: [normal], blur: 'text-obscured' },
+  { number: 27, style: 'card', title: '讨论区留言', paragraphs: [threat], blur: 'text-obscured' },
+  { number: 28, style: 'blank', title: '', paragraphs: [] },
 ];
 
 function escaped(value) {
@@ -136,6 +139,14 @@ function escaped(value) {
 }
 
 function render(item) {
+  if (item.style === 'blank') {
+    return {
+      width: 1200,
+      height: 760,
+      transcript: '',
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760"><rect width="1200" height="760" fill="#fff"/></svg>',
+    };
+  }
   const width = item.style === 'small' ? 1600 : item.style === 'complex' ? 1440 : 1200;
   const height = item.style === 'card' ? 760 : 1000;
   const shapes = [];
@@ -218,7 +229,7 @@ function render(item) {
 async function generate() {
   const manifestFile = path.join(__dirname, 'manifest.json');
   const manifest = JSON.parse(await fs.readFile(manifestFile, 'utf8'));
-  manifest.suiteVersion = 'freebbs-moderation-image-fixtures-v2';
+  manifest.suiteVersion = 'freebbs-moderation-image-fixtures-v3';
   manifest.generator = 'generate.cjs; sharp 0.34.5; Microsoft YaHei; PNG metadata stripped';
   for (const item of cases) {
     const rendered = render(item);
@@ -230,13 +241,21 @@ async function generate() {
         .blur(12)
         .png()
         .toBuffer();
+    if (item.blur === 'text-obscured')
+      data = await sharp(
+        await sharp(data).resize(240, 152, { fit: 'fill' }).blur(2.4).png().toBuffer(),
+      )
+        .resize(rendered.width, rendered.height, { kernel: 'cubic' })
+        .blur(1.6)
+        .png()
+        .toBuffer();
     const filename = `scene-${item.number}.png`;
     await fs.writeFile(path.join(__dirname, filename), data);
     manifest.assets[filename] = {
       sha256: crypto.createHash('sha256').update(data).digest('hex'),
       width: rendered.width,
       height: rendered.height,
-      text: item.blur === 'severe' ? '' : rendered.transcript,
+      text: ['severe', 'text-obscured'].includes(item.blur) ? '' : rendered.transcript,
       ...(item.fragments ? { fragments: item.fragments } : {}),
       rendering: {
         style: item.style,
@@ -246,7 +265,7 @@ async function generate() {
     };
   }
   await fs.writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
-  process.stdout.write('Generated 16 synthetic extension PNGs and v2 manifest.\n');
+  process.stdout.write('Generated 19 synthetic extension PNGs and v3 manifest.\n');
 }
 
 if (require.main === module)

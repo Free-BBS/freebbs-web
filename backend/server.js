@@ -104,9 +104,12 @@ const { createModerationAiClient } = require('./moderation-ai-client');
 const { createModerationAiTest, aiTestEnvironmentEnabled } = require('./moderation-ai-test');
 const { createModerationAudit, ensureModerationAuditSchema } = require('./moderation-audit');
 const { createModerationAutomationStore } = require('./moderation-automation-store');
+const { createAutomaticImageReader } = require('./moderation-auto-images');
+const { createModerationImageClient } = require('./moderation-image-client');
 const {
   createModerationAutomation,
   automationEnvironmentEnabled,
+  imageAutomationEnabled,
 } = require('./moderation-automation');
 const {
   MAX_RESPONSE_BYTES: MAX_AGENT_IMAGE_RESPONSE_BYTES,
@@ -287,6 +290,7 @@ const moderationAutomationStore = createModerationAutomationStore({
   publishSubmission: moderationPublisher,
   notifications,
   isEnabled: () => moderationAutomaticEnabled,
+  readImages: createAutomaticImageReader({ privateDir: config.discussionModerationDir }),
 });
 const moderationAutomation = createModerationAutomation({
   config,
@@ -297,6 +301,12 @@ const moderationAutomation = createModerationAutomation({
     readSettings: (options) => systemSettingsStore.readSettings(options),
     modelOverride: config.discussionModerationAutoModel,
   }),
+  imageClient: {
+    async assess(input) {
+      const settings = await systemSettingsStore.readSettings({ includeSecret: true });
+      return createModerationImageClient({ settings }).assess(input);
+    },
+  },
 });
 const moderationAutomatic = {
   enabled: moderationAutomaticEnabled,
@@ -306,6 +316,9 @@ const moderationAutomatic = {
     paused: !moderationAutomaticEnabled || (await moderationAutomationStore.control()).paused,
     model: config.discussionModerationAutoModel,
     backupModel: config.discussionModerationBackupModel,
+    imagesEnabled: imageAutomationEnabled(config),
+    imageModel: config.discussionModerationImageModel,
+    imageReviewRequired: true,
   }),
 };
 const discussionModeration = createDiscussionModeration({

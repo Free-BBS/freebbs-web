@@ -28,15 +28,17 @@ async function ensureModerationAutomationSchema(pool) {
     schemas.set(
       pool,
       (async () => {
-        const sql = await fs.readFile(
-          path.join(__dirname, '../database/migrations/069_moderation_automation.sql'),
-          'utf8',
-        );
-        for (const statement of sql
-          .split(';')
-          .map((item) => item.trim())
-          .filter(Boolean))
-          await pool.execute(statement);
+        for (const name of ['069_moderation_automation.sql', '070_moderation_image_reviews.sql']) {
+          const sql = await fs.readFile(
+            path.join(__dirname, '../database/migrations', name),
+            'utf8',
+          );
+          for (const statement of sql
+            .split(';')
+            .map((item) => item.trim())
+            .filter(Boolean))
+            await pool.execute(statement);
+        }
       })().catch((error) => {
         schemas.delete(pool);
         throw error;
@@ -73,9 +75,10 @@ function createModerationAutomationStore({
   publishSubmission,
   onPublished,
   notifications,
+  readImages,
   isEnabled = () => false,
   logger = console,
-  leaseMs = 60000,
+  leaseMs = 300000,
 }) {
   if (!Number.isSafeInteger(leaseMs) || leaseMs < 1000 || leaseMs > 300000)
     throw fail('自动审核租约配置无效。');
@@ -178,7 +181,7 @@ function createModerationAutomationStore({
     Number(job.submission_version) === claimed.submissionVersion &&
     job.content_hash === claimed.contentHash;
 
-  async function notify(db, row, job, state) {
+  async function notify(db, row, job, state, result = null) {
     const [reviewers] = await db.execute(
       'SELECT user_id FROM moderation_reviewers WHERE active = 1 ORDER BY user_id FOR SHARE',
     );
@@ -188,20 +191,33 @@ function createModerationAutomationStore({
         ...(row.author_id ? [Number(row.author_id)] : []),
       ]),
     ].sort((a, b) => a - b);
+    const imagePublished = state === 'published' && result?.imagesReviewed && result.imageCount > 0;
+    const focus = [
+      result?.reviewFocus?.political ? '政治内容' : null,
+      result?.reviewFocus?.psychological ? '心理关怀' : null,
+    ]
+      .filter(Boolean)
+      .join('／');
     const data = {
       submissionId: row.id,
       status: state,
       recipients,
-      title:
-        state === 'published'
-          ? '讨论内容已自动发布，请负责人复核'
-          : state === 'withdrawn'
-            ? '讨论内容已由负责人撤回'
-            : '讨论内容需要负责人复核',
-      body:
-        state === 'published'
-          ? '请在审核工作台查看结果；负责人可在发现问题后撤回。'
-          : '请打开审核工作台查看处理状态。',
+      title: imagePublished
+        ? '含图内容已自动发布，请负责人单独复核图片'
+        : focus && state !== 'published' && state !== 'withdrawn'
+          ? `【${focus}】须负责人重点复核`
+          : state === 'published'
+            ? '讨论内容已自动发布，请负责人复核'
+            : state === 'withdrawn'
+              ? '讨论内容已由负责人撤回'
+              : '讨论内容需要负责人复核',
+      body: imagePublished
+        ? '请逐张检查图片，确认后标记已复核；发现问题可撤回整份内容。'
+        : focus && state !== 'published' && state !== 'withdrawn'
+          ? `该内容涉及${focus}，已保留人工审核。心理关怀不等于违规，请负责人查看专门提示。`
+          : state === 'published'
+            ? '请在审核工作台查看结果；负责人可在发现问题后撤回。'
+            : '请打开审核工作台查看处理状态。',
       link: `/moderation?id=${encodeURIComponent(row.id)}`,
       eventKey: `moderation-auto:${job.id}:${state}`,
     };
@@ -282,6 +298,89 @@ function createModerationAutomationStore({
     }
     return null;
   }
+  async function loadBoundImages(db, row, attachmentIds) {
+    if (
+      !Array.isArray(attachmentIds) ||
+      attachmentIds.length > 12 ||
+      attachmentIds.some((id) => typeof id !== 'string' || !UUID.test(id)) ||
+      new Set(attachmentIds).size !== attachmentIds.length
+    )
+      throw fail('审核附件编号不符合预期。', 409);
+    const [bound] = await db.execute(
+      'SELECT *, (expires_at <= NOW(3)) AS expired FROM moderation_attachments WHERE submission_id = ? ORDER BY id FOR UPDATE',
+      [row.id],
+    );
+    if (
+      bound.length !== attachmentIds.length ||
+      bound.some((item) => !attachmentIds.includes(item.id))
+    )
+      throw fail('审核附件绑定已变化。', 409);
+    const ordered = attachmentIds.map((id) => bound.find((item) => item.id === id));
+    for (const item of ordered) {
+      if (
+        !item ||
+        item.author_id == null ||
+        Number(item.author_id) !== Number(row.author_id) ||
+        item.submission_id !== row.id ||
+        item.bound_content_hash !== row.content_hash ||
+        item.published_id != null ||
+        item.purged_at ||
+        Number(item.expired) ||
+        item.file_name !== `${item.id}.webp` ||
+        item.mime_type !== 'image/webp' ||
+        !Number.isSafeInteger(Number(item.byte_size)) ||
+        Number(item.byte_size) < 1 ||
+        Number(item.byte_size) > 4 * 1024 * 1024 ||
+        !/^[a-f0-9]{64}$/.test(item.sha256)
+      )
+        throw fail('审核附件状态已变化。', 409);
+    }
+    if (!ordered.length) return { images: [], descriptors: [] };
+    if (typeof readImages !== 'function') throw fail('图片读取服务暂不可用。', 503);
+    const loaded = await readImages(ordered.map((item) => ({ ...item })));
+    if (
+      !Array.isArray(loaded) ||
+      loaded.length !== ordered.length ||
+      new Set(loaded.map((item) => item?.id)).size !== ordered.length
+    )
+      throw fail('未取得完整审核图片。', 409);
+    const images = ordered.map((item) => {
+      const image = loaded.find((candidate) => candidate?.id === item.id);
+      if (
+        !image ||
+        image.sha256 !== item.sha256 ||
+        image.mimeType !== item.mime_type ||
+        typeof image.dataBase64 !== 'string' ||
+        !image.dataBase64 ||
+        image.dataBase64.length > 6 * 1024 * 1024 ||
+        !/^[A-Za-z0-9+/]+={0,2}$/.test(image.dataBase64)
+      )
+        throw fail('审核图片内容无法验证。', 409);
+      const bytes = Buffer.from(image.dataBase64, 'base64');
+      if (
+        bytes.length !== Number(item.byte_size) ||
+        bytes.toString('base64') !== image.dataBase64 ||
+        crypto.createHash('sha256').update(bytes).digest('hex') !== item.sha256 ||
+        bytes.toString('ascii', 0, 4) !== 'RIFF' ||
+        bytes.toString('ascii', 8, 12) !== 'WEBP'
+      )
+        throw fail('审核图片内容已变化。', 409);
+      return {
+        id: item.id,
+        sha256: item.sha256,
+        mimeType: item.mime_type,
+        dataBase64: image.dataBase64,
+      };
+    });
+    const descriptors = ordered.map((item) => ({
+      id: item.id,
+      sha256: item.sha256,
+      mimeType: item.mime_type,
+      byteSize: Number(item.byte_size),
+      fileName: item.file_name,
+    }));
+    return { images, descriptors };
+  }
   async function localPreview(db, row) {
     const payload = parse(row.payload_json);
     const attachments = parse(row.attachment_ids_json, []);
@@ -292,7 +391,15 @@ function createModerationAutomationStore({
       !Array.isArray(attachments)
     )
       throw fail('稿件数据暂不可用。', 503);
-    const text = normalizePrivacyText(`${payload.title || ''}\n${payload.content}`);
+    const { images, descriptors } = await loadBoundImages(db, row, attachments);
+    // These are already verified local pixels, not user-provided external links.
+    // Keep captions while removing opaque attachment locations from the text copy.
+    const reviewContent = attachments.reduce(
+      (content, id, index) =>
+        content.replaceAll(`/api/moderation/attachments/${id}`, `【本帖图片_${index + 1}】`),
+      payload.content,
+    );
+    const text = normalizePrivacyText(`${payload.title || ''}\n${reviewContent}`);
     const [identities] = await db.execute(
       `SELECT full_name, student_id, email FROM users WHERE (CHAR_LENGTH(TRIM(full_name)) > 0 AND LOCATE(full_name, ?) > 0) OR (CHAR_LENGTH(TRIM(student_id)) > 0 AND LOCATE(student_id, ?) > 0) OR (CHAR_LENGTH(TRIM(email)) > 0 AND LOCATE(email, ?) > 0) LIMIT 501`,
       [text, text, text],
@@ -300,7 +407,7 @@ function createModerationAutomationStore({
     if (identities.length > 500) throw fail('目录命中数量过多，本次转人工审核。', 409);
     const preview = buildPrivacyPreview({
       title: payload.title || '',
-      content: payload.content,
+      content: reviewContent,
       identities,
       attachmentCount: attachments.length,
     });
@@ -308,9 +415,10 @@ function createModerationAutomationStore({
       counts: preview.counts,
       imageCount: preview.imageCount,
       redactorVersion: preview.redactorVersion,
-      inputHash: hash({ title: preview.title, content: preview.content }),
+      images: descriptors,
+      inputHash: hash({ title: preview.title, content: preview.content, images: descriptors }),
     };
-    return { preview, meta };
+    return { preview: { ...preview, images }, meta };
   }
   async function prepare(claimed) {
     return transact(async (db) => {
@@ -367,6 +475,62 @@ function createModerationAutomationStore({
   }
 
   function sanitizeResult(result, meta, row, job, preview) {
+    if (
+      !result?.manualReview &&
+      preview &&
+      meta &&
+      result?.textResult &&
+      result?.inputHash === meta.inputHash &&
+      result?.model === job.model &&
+      result?.policyVersion === job.policy_version &&
+      result.policyVersion === POLICY_VERSION
+    ) {
+      try {
+        const { buildAutomaticResult } = require('./moderation-automation-result');
+        const rebuilt = buildAutomaticResult({
+          textResult: result.textResult,
+          imageResults: result.imageResults || [],
+          snapshot: {
+            ...preview,
+            submissionId: row.id,
+            version: Number(job.submission_version),
+            contentHash: job.content_hash,
+            inputHash: meta.inputHash,
+          },
+          elapsedMs: result.elapsedMs,
+        });
+        if (
+          rebuilt.model !== job.model ||
+          rebuilt.policyVersion !== POLICY_VERSION ||
+          rebuilt.inputHash !== meta.inputHash ||
+          !Number.isSafeInteger(rebuilt.settingsRevision) ||
+          rebuilt.settingsRevision < 0 ||
+          (meta.imageCount > 0 &&
+            rebuilt.policyDecision?.recommendedAction === 'allow' &&
+            !rebuilt.imagesReviewed)
+        )
+          throw fail('机器图片审核结果无效。', 409);
+        return {
+          ...rebuilt,
+          submissionId: row.id,
+          version: Number(job.submission_version),
+          contentHash: job.content_hash,
+          source: 'automatic',
+          executor: 'moderation-agent',
+          inputMode: 'redacted',
+          redactorVersion: meta.redactorVersion,
+          imageCount: meta.imageCount,
+          automaticPublication: false,
+        };
+      } catch {
+        // Keep an invalid combined assessment manual; never fall back to its text-only allow.
+        result = {
+          ...result,
+          assessment: null,
+          manualReview: { required: true, validation: 'failed' },
+        };
+      }
+    }
     let assessment = null;
     try {
       if (
@@ -405,6 +569,29 @@ function createModerationAutomationStore({
           supportReason: assessment.supportReason,
         }
       : null;
+    const diagnostics = sanitizeDiagnostics(result?.manualReview?.diagnostics);
+    const reviewSignal = diagnostics?.reviewSignal;
+    const reviewFocus = require('./moderation-review-focus').getReviewFocus({
+      title: preview?.title || '',
+      content: preview?.content || '',
+      assessments: valid
+        ? [assessment]
+        : reviewSignal
+          ? [
+              {
+                categories: reviewSignal.reportedCategories,
+                ruleMatches: reviewSignal.reportedRuleIds.map((ruleId) => ({ ruleId })),
+                supportPriority: reviewSignal.reportedSupportPriority,
+              },
+            ]
+          : [],
+    });
+    if (reviewFocus.political || reviewFocus.psychological) {
+      if (decision.recommendedAction === 'allow') decision.recommendedAction = 'hold';
+      decision.canAutomaticallyPublish = false;
+      decision.reasons.push('focus_requires_review');
+      decision.reasonLabels.push('政治或心理关怀相关内容须负责人重点复核。');
+    }
     const stored = {
       submissionId: row.id,
       version: Number(job.submission_version),
@@ -428,8 +615,9 @@ function createModerationAutomationStore({
       imageCount: meta?.imageCount || 0,
       imagesReviewed: false,
       automaticPublication: false,
+      reviewFocus,
       assessment: safeAssessment,
-      policyDecision: valid ? decision : normalizePolicyDecision(null),
+      policyDecision: decision,
       policyEvidence: valid ? buildPolicyEvidence(assessment) : [],
     };
     if (!valid || result?.manualReview)
@@ -437,10 +625,13 @@ function createModerationAutomationStore({
         required: true,
         validation:
           result?.manualReview?.validation === 'not_attempted' ? 'not_attempted' : 'failed',
-        ...(sanitizeDiagnostics(result?.manualReview?.diagnostics)
-          ? { diagnostics: sanitizeDiagnostics(result.manualReview.diagnostics) }
-          : {}),
+        ...(diagnostics ? { diagnostics } : {}),
       };
+    if (stored.manualReview && result?.manualReview?.imageDiagnostics) {
+      const { sanitizeImageDiagnostics } = require('./moderation-image-client');
+      const imageDiagnostics = sanitizeImageDiagnostics(result.manualReview.imageDiagnostics);
+      if (imageDiagnostics) stored.manualReview.imageDiagnostics = imageDiagnostics;
+    }
     const codes = [
       'image_requires_review',
       'provider_failure',
@@ -483,6 +674,14 @@ function createModerationAutomationStore({
         /* Local snapshot failure must never permit publication. */
       }
       const stored = sanitizeResult(result, meta, row, job, preview);
+      const freshJob = await readJob(db, job.id);
+      const freshRow = await readSubmission(db, row.id);
+      if (!current(freshRow, freshJob))
+        return {
+          ...(await terminate(db, freshRow, freshJob, 'cancelled', 'submission_changed')),
+          applied: false,
+        };
+      job.lease_expired = freshJob.lease_expired;
       const [reviewers] = await db.execute(
         'SELECT user_id FROM moderation_reviewers WHERE active = 1 ORDER BY user_id FOR SHARE',
       );
@@ -509,9 +708,13 @@ function createModerationAutomationStore({
           stored.assessment.supportPriority === 'none'
         ) {
           target = 'published';
-          reason = 'no_text_risk';
+          reason = meta.imageCount > 0 ? 'no_image_risk' : 'no_text_risk';
         }
         if (stored.assessment.supportPriority !== 'none') reason = 'support_requires_review';
+        if (stored.reviewFocus?.political || stored.reviewFocus?.psychological) {
+          target = 'review';
+          reason = 'focus_requires_review';
+        }
       }
       let published;
       if (target === 'published') {
@@ -519,10 +722,15 @@ function createModerationAutomationStore({
           'SELECT id FROM moderation_attachments WHERE submission_id = ? ORDER BY id FOR UPDATE',
           [row.id],
         );
+        const expectedIds = parse(row.attachment_ids_json, []);
+        const hasImages = attachments.length || expectedIds.length || meta.imageCount > 0;
         if (
-          attachments.length ||
-          parse(row.attachment_ids_json, []).length ||
-          meta.imageCount > 0
+          hasImages &&
+          (!stored.imagesReviewed ||
+            !preview ||
+            attachments.length !== meta.imageCount ||
+            expectedIds.length !== meta.imageCount ||
+            attachments.some((item) => !expectedIds.includes(item.id)))
         ) {
           target = 'review';
           reason = 'images_not_reviewed';
@@ -554,6 +762,17 @@ function createModerationAutomationStore({
             ],
           );
           if (!updated.affectedRows) throw fail('审核记录已到期或状态已变化。', 409);
+          if (hasImages) {
+            const [bound] = await db.execute(
+              `UPDATE moderation_attachments SET published_id = ? WHERE submission_id = ? AND id IN (${expectedIds.map(() => '?').join(',')}) AND bound_content_hash = ? AND published_id IS NULL AND purged_at IS NULL AND expires_at > NOW(3)`,
+              [published.publishedId, row.id, ...expectedIds, row.content_hash],
+            );
+            if (bound.affectedRows !== expectedIds.length) throw fail('发布附件状态已变化。', 409);
+            await db.execute(
+              'INSERT INTO moderation_image_reviews (job_id, submission_id, published_version, expires_at) VALUES (?, ?, ?, ?)',
+              [job.id, row.id, Number(row.version) + 1, row.expires_at],
+            );
+          }
           stored.automaticPublication = true;
         }
       }
@@ -570,7 +789,7 @@ function createModerationAutomationStore({
           job.id,
         ],
       );
-      await notify(db, row, job, target);
+      await notify(db, row, job, target, stored);
       const submission = privateSubmission(await readSubmission(db, row.id));
       if (target === 'published' && !canApply())
         throw fail('自动审核已停止，本次发布未生效。', 409);
@@ -615,6 +834,7 @@ function createModerationAutomationStore({
           "UPDATE moderation_auto_jobs SET result_json = NULL, input_meta_json = NULL, withdrawal_reason = NULL, lease_token = NULL, lease_until = NULL, state = IF(state IN ('queued', 'running'), 'cancelled', state), purged_at = NOW(3) WHERE id = ?",
           [job.id],
         );
+        await db.execute('DELETE FROM moderation_image_reviews WHERE job_id = ?', [job.id]);
       });
     return candidates.length;
   }
@@ -629,6 +849,10 @@ function createModerationAutomationStore({
       );
       if (!job) return null;
       const expired = Boolean(Number(job.expired) || job.purged_at || Number(row.expired));
+      const [[imageReview]] = await db.execute(
+        'SELECT *, (expires_at <= NOW(3)) AS expired FROM moderation_image_reviews WHERE job_id = ?',
+        [job.id],
+      );
       return {
         id: job.id,
         submissionId: row.id,
@@ -644,6 +868,7 @@ function createModerationAutomationStore({
         reasonCode: job.reason_code,
         result: expired ? null : parse(job.result_json),
         expired,
+        imageReview: imageReviewState(row, job, imageReview),
         canWithdraw:
           !expired &&
           job.state === 'published' &&
@@ -737,9 +962,163 @@ function createModerationAutomationStore({
         "UPDATE moderation_auto_jobs SET state = 'withdrawn', reason_code = 'reviewer_withdrawal', withdrawn_by = ?, withdrawal_request_id = ?, withdrawal_hash = ?, withdrawal_reason = ? WHERE id = ?",
         [userId, requestId, signature, reason.trim(), job.id],
       );
+      await db.execute("UPDATE moderation_image_reviews SET state = 'withdrawn' WHERE job_id = ?", [
+        job.id,
+      ]);
       await notify(db, row, job, 'withdrawn');
       return { ...privateSubmission(await readSubmission(db, id)), replayed: false };
     });
+  }
+  function imageReviewState(row, job, record) {
+    const expired = Boolean(
+      Number(row?.expired) ||
+      row?.evidence_purged_at ||
+      Number(job?.expired) ||
+      job?.purged_at ||
+      Number(record?.expired),
+    );
+    const currentPublication =
+      !expired &&
+      record &&
+      job?.state === 'published' &&
+      row?.status === 'approved' &&
+      row.decided_by == null &&
+      row.published_id != null &&
+      row.content_hash === job.content_hash &&
+      Number(row.version) === Number(job.published_version) &&
+      Number(record.published_version) === Number(job.published_version);
+    return {
+      required: Boolean(record),
+      state: record?.state || null,
+      reviewedBy: expired || record?.reviewed_by == null ? null : String(record.reviewed_by),
+      reviewedAt: expired ? null : record?.reviewed_at || null,
+      canConfirm: Boolean(currentPublication && record.state === 'pending'),
+    };
+  }
+  async function listImageReviews({ reviewerId, limit = 50 }) {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
+      throw fail('图片复核列表数量无效。');
+    return transact(async (db) => {
+      await reviewer(db, reviewerId);
+      const [records] = await db.execute(
+        `SELECT s.*, r.job_id, r.state AS image_review_state, r.reviewed_by, r.reviewed_at,
+          r.published_version AS image_published_version, j.published_version AS job_published_version
+         FROM moderation_image_reviews r JOIN moderation_auto_jobs j ON j.id = r.job_id
+         JOIN moderation_submissions s ON s.id = r.submission_id
+         WHERE r.state = 'pending' AND j.state = 'published' AND s.status = 'approved'
+           AND s.decided_by IS NULL AND s.published_id IS NOT NULL AND s.version = j.published_version
+           AND s.version = r.published_version AND s.content_hash = j.content_hash
+           AND s.expires_at > NOW(3) AND j.expires_at > NOW(3) AND r.expires_at > NOW(3)
+           AND s.evidence_purged_at IS NULL AND j.purged_at IS NULL
+         ORDER BY r.created_at, r.job_id LIMIT ${limit}`,
+      );
+      return {
+        items: records.map((row) => ({
+          id: row.id,
+          submissionId: row.id,
+          version: Number(row.version),
+          kind: row.kind,
+          title: parse(row.payload_json, {}).title || '评论',
+          authorId: row.author_id == null ? null : Number(row.author_id),
+          publishedUrl: row.published_url || '',
+          createdAt: row.created_at,
+          expiresAt: row.expires_at,
+          imageReview: {
+            required: true,
+            state: 'pending',
+            reviewedBy: null,
+            reviewedAt: null,
+            canConfirm: true,
+          },
+        })),
+      };
+    });
+  }
+  async function confirmImageReview({ id, reviewerId, expectedVersion, requestId }) {
+    uuid(id);
+    if (
+      !Number.isSafeInteger(expectedVersion) ||
+      expectedVersion < 1 ||
+      typeof requestId !== 'string' ||
+      !/^[A-Za-z0-9_-]{8,64}$/.test(requestId)
+    )
+      throw fail('图片复核请求或版本无效。');
+    const userId = actor(reviewerId);
+    const signature = hash({ id, expectedVersion, action: 'confirm_image_review' });
+    try {
+      return await transact(async (db) => {
+        await reviewer(db, userId);
+        const row = await readSubmission(db, id);
+        if (!row) throw fail('审核记录不存在。', 404);
+        const [[candidate]] = await db.execute(
+          'SELECT id FROM moderation_auto_jobs WHERE submission_id = ? ORDER BY submission_version DESC LIMIT 1',
+          [id],
+        );
+        const job = candidate ? await readJob(db, candidate.id) : null;
+        const [[record]] = job
+          ? await db.execute(
+              'SELECT *, (expires_at <= NOW(3)) AS expired FROM moderation_image_reviews WHERE job_id = ? FOR UPDATE',
+              [job.id],
+            )
+          : [[null]];
+        if (
+          Number(row.expired) ||
+          row.evidence_purged_at ||
+          Number(job?.expired) ||
+          job?.purged_at ||
+          Number(record?.expired)
+        )
+          throw fail('图片复核材料已到期，请通过讨论区管理功能处理。', 410);
+        if (
+          !record ||
+          !job ||
+          record.submission_id !== row.id ||
+          job.state !== 'published' ||
+          row.status !== 'approved' ||
+          row.decided_by != null ||
+          !row.published_id ||
+          row.content_hash !== job.content_hash ||
+          Number(row.version) !== expectedVersion ||
+          Number(job.published_version) !== expectedVersion ||
+          Number(record.published_version) !== expectedVersion ||
+          record.state === 'withdrawn'
+        )
+          throw fail('内容已变化，或不是待复核的自动发布图片。', 409);
+        if (record.review_request_id === requestId && Number(record.reviewed_by) === userId) {
+          if (record.review_hash !== signature) throw fail('相同请求编号对应不同图片复核。', 409);
+          return {
+            id,
+            submissionId: id,
+            version: expectedVersion,
+            imageReview: imageReviewState(row, job, record),
+            replayed: true,
+          };
+        }
+        if (record.state !== 'pending') throw fail('图片已由负责人复核，请刷新记录。', 409);
+        await db
+          .execute(
+            "UPDATE moderation_image_reviews SET state = 'confirmed', reviewed_by = ?, reviewed_at = NOW(3), review_request_id = ?, review_hash = ? WHERE job_id = ? AND state = 'pending' AND expires_at > NOW(3) AND EXISTS (SELECT 1 FROM moderation_submissions WHERE id = ? AND status = 'approved' AND version = ? AND expires_at > NOW(3) AND evidence_purged_at IS NULL) AND EXISTS (SELECT 1 FROM moderation_auto_jobs WHERE id = ? AND state = 'published' AND expires_at > NOW(3) AND purged_at IS NULL)",
+            [userId, requestId, signature, job.id, row.id, expectedVersion, job.id],
+          )
+          .then(([updated]) => {
+            if (updated.affectedRows !== 1) throw fail('图片复核状态已变化。', 409);
+          });
+        const [[confirmed]] = await db.execute(
+          'SELECT * FROM moderation_image_reviews WHERE job_id = ?',
+          [job.id],
+        );
+        return {
+          id,
+          submissionId: id,
+          version: expectedVersion,
+          imageReview: imageReviewState(row, job, confirmed),
+          replayed: false,
+        };
+      });
+    } catch (error) {
+      if (error.code === 'ER_DUP_ENTRY') throw fail('相同请求编号已用于其他图片复核。', 409);
+      throw error;
+    }
   }
   return {
     ensureSchema: () => ensureModerationAutomationSchema(pool),
@@ -751,6 +1130,8 @@ function createModerationAutomationStore({
     purge,
     get,
     withdraw,
+    listImageReviews,
+    confirmImageReview,
     control: () => control(),
     setPaused,
   };

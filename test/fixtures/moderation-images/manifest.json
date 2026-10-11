@@ -1,5 +1,5 @@
 {
-  "suiteVersion": "freebbs-moderation-image-fixtures-v2",
+  "suiteVersion": "freebbs-moderation-image-fixtures-v3",
   "syntheticOnly": true,
   "assets": {
     "card-01.png": {
@@ -249,6 +249,39 @@
         "style": "card",
         "fontPx": 32,
         "blur": "severe"
+      }
+    },
+    "scene-26.png": {
+      "sha256": "752a85128ce7904b96f9a069c9a22a26bc2bf94008793cdd13ef867a34f737c0",
+      "width": 1200,
+      "height": 760,
+      "text": "",
+      "rendering": {
+        "style": "card",
+        "fontPx": 32,
+        "blur": "text-obscured"
+      }
+    },
+    "scene-27.png": {
+      "sha256": "f91da59dce592775fa467dddfbf9aadc0749f028e062b519b3386a4e3ac0a3a5",
+      "width": 1200,
+      "height": 760,
+      "text": "",
+      "rendering": {
+        "style": "card",
+        "fontPx": 32,
+        "blur": "text-obscured"
+      }
+    },
+    "scene-28.png": {
+      "sha256": "42d08388a1504e23238040045ee48935ba83fb8c0f064c263664222ea31c2180",
+      "width": 1200,
+      "height": 760,
+      "text": "",
+      "rendering": {
+        "style": "blank",
+        "fontPx": 32,
+        "blur": "none"
       }
     }
   },

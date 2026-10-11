@@ -2,7 +2,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
-const SUITE_VERSION = 'freebbs-moderation-image-fixtures-v2';
+const SUITE_VERSION = 'freebbs-moderation-image-fixtures-v3';
 const POLICY_VERSION = 'freebbs-policy-2026-10-09-v3';
 const DEFAULT_ASSET_DIRECTORY = path.join(__dirname, '../test/fixtures/moderation-images');
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -256,7 +256,45 @@ MODERATION_CASES.push(
     recommendedAction: 'hold',
     readability: 'unreadable',
   })),
+  ...['26', '27'].map((number, index) => ({
+    ...additionalCase(
+      `image-blur-text-region-${index + 1}`,
+      'blurred',
+      `scene-${number}.png`,
+      '仍能看见文字区域但无法可靠辨读，附图承载正文，应交人工核查清晰原图。',
+    ),
+    decision: 'needs_review',
+    recommendedAction: 'hold',
+    readability: 'unreadable',
+  })),
+  {
+    ...additionalCase(
+      'image-blank-background',
+      'baseline',
+      'scene-28.png',
+      '明确测试纯白背景图，没有待辨读信息，不应仅因无文字而判为风险或强制人工。',
+    ),
+    title: '图片背景测试',
+    text: '测试一张纯白背景图片。',
+    readability: 'blank',
+  },
 );
+
+// The two fraud examples explicitly recruit accomplices. Either the fraud rule
+// alone or this exact additional illegal-activity rule is an acceptable label set.
+// No arbitrary extra rules/categories are accepted by this fixture contract.
+for (const item of MODERATION_CASES) {
+  if (['image-fraud', 'image-small-risk'].includes(item.id)) {
+    item.acceptedVariants = [
+      {
+        decision: 'high_risk',
+        categories: ['fraud', 'illegal_activity'],
+        ruleIds: ['诈骗-001', '违法交易-001'],
+        recommendedAction: 'block',
+      },
+    ];
+  }
+}
 
 function sha256(data) {
   return crypto.createHash('sha256').update(data).digest('hex');
@@ -407,8 +445,8 @@ async function buildImageFixtures(options = {}) {
       id: item.id,
       kind: 'moderation',
       group: item.group || 'baseline',
-      title: '附图说明',
-      text: '请结合附图阅读这条帖子。',
+      title: item.title || '附图说明',
+      text: item.text || '请结合附图阅读这条帖子。',
       description: item.description,
       images,
       expected: {
@@ -418,6 +456,9 @@ async function buildImageFixtures(options = {}) {
         recommendedAction: item.recommendedAction,
         readability: item.readability || 'readable',
         quality: item.quality ? JSON.parse(JSON.stringify(item.quality)) : {},
+        acceptedVariants: item.acceptedVariants
+          ? JSON.parse(JSON.stringify(item.acceptedVariants))
+          : [],
         imageText,
       },
     });
@@ -440,7 +481,7 @@ function validateImageFixtures(suite) {
     suite.policyVersion !== POLICY_VERSION ||
     suite.syntheticOnly !== true ||
     !Array.isArray(suite.cases) ||
-    suite.cases.length !== 28
+    suite.cases.length !== 31
   ) {
     throw new Error('图片测试集结构不符合预期');
   }
@@ -490,8 +531,12 @@ function validateImageFixtures(suite) {
       }
       if (
         item.group !== (original.group || 'baseline') ||
+        item.title !== (original.title || '附图说明') ||
+        item.text !== (original.text || '请结合附图阅读这条帖子。') ||
         item.expected.readability !== (original.readability || 'readable') ||
-        JSON.stringify(item.expected.quality) !== JSON.stringify(original.quality || {})
+        JSON.stringify(item.expected.quality) !== JSON.stringify(original.quality || {}) ||
+        JSON.stringify(item.expected.acceptedVariants) !==
+          JSON.stringify(original.acceptedVariants || [])
       ) {
         throw new Error('审核样例分组或质量依据不符合预期');
       }
@@ -517,7 +562,7 @@ function validateImageFixtures(suite) {
                     fragment.length < 10 ||
                     !entry.text.includes(fragment),
                 ))) ||
-            (item.expected.readability === 'unreadable'
+            (['unreadable', 'blank'].includes(item.expected.readability)
               ? entry.text !== ''
               : entry.text.length < 5),
         )

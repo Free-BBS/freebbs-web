@@ -1031,6 +1031,68 @@ main {
   border-radius: 12px;
   background: #f6fbf8;
 }
+
+.moderation-image-review,
+.moderation-image-result,
+.moderation-focus-political,
+.moderation-focus-psychological {
+  padding: 16px;
+  margin: 16px 0;
+  border: 2px solid #b38a35;
+  border-radius: 12px;
+  background: #fff9e9;
+  color: #594113;
+  overflow-wrap: anywhere;
+}
+.moderation-image-result {
+  border-width: 1px;
+  border-color: #cfd6e4;
+  background: #fff;
+  color: #243247;
+}
+.moderation-focus-political {
+  border-left-width: 7px;
+  border-color: #a35c34;
+  background: #fff1e8;
+  color: #71350f;
+}
+.moderation-focus-psychological {
+  border-left-width: 7px;
+  border-color: #31816b;
+  background: #edf9f4;
+  color: #205947;
+}
+.moderation-image-confirm,
+#moderation-image-queue {
+  min-height: 44px;
+  font-weight: 700;
+}
+.moderation-image-review button {
+  max-width: 100%;
+  white-space: normal;
+}
+@media (prefers-color-scheme: dark) {
+  .moderation-image-review {
+    background: #392e1a;
+    color: #e6c583;
+    border-color: #8c703f;
+  }
+  .moderation-image-result {
+    background: #241d2d;
+    color: #d5bbea;
+    border-color: #51425e;
+  }
+  .moderation-focus-political {
+    background: #38251c;
+    color: #f0c5a7;
+    border-color: #aa7553;
+  }
+  .moderation-focus-psychological {
+    background: #1b352d;
+    color: #a6dfc7;
+    border-color: #4a9b7e;
+  }
+}
 .moderation-support-library > summary {
   cursor: pointer;
   color: #306650;

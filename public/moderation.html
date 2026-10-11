@@ -24,7 +24,7 @@
         <h1 id="moderation-title">内容审核</h1>
         <p>读懂内容，核对依据，作出有记录的决定。</p>
         <div class="moderation-context">
-          <span>讨论区</span><span>文字审核 · 图片人工核查</span><span>负责人最终决定</span>
+          <span>讨论区</span><span>文字与图片审核 · 负责人复核</span><span>负责人最终决定</span>
         </div>
         <p class="moderation-note">
           审核相关数据保存一个月；正常发布的帖子和评论不在此清理范围内。
@@ -40,7 +40,8 @@
         <h2 id="moderation-automation-title">自动审核 · 虚构内容测试</h2>
         <p id="moderation-automation-summary"></p>
         <p>
-          仅处理启用后新提交的虚构测试稿件。符合条件的文字可自动发布；图片、隐私疑点及异常结果交人工。明确违规先暂时拦截，由负责人最终决定。
+          仅处理启用后新提交的虚构测试稿件。文字由 Qwen 审核；启用图片审核后，图片由 Kimi
+          检查。图文均通过的含图稿件先发布，同时进入“图片待复核”；隐私疑点、看不清的图片及异常结果交人工。
         </p>
         <p class="moderation-note">
           GLM 仅供负责人手动试审参考，不会在 Qwen 失败后自动调用。暂停后，尚未完成的任务保留待审。
@@ -62,12 +63,14 @@
             <div class="moderation-toolbar">
               <label for="moderation-status" id="moderation-status-label">状态</label>
               <select id="moderation-status">
-                <option value="pending">待审核</option>
+                <option value="image_review">图片待复核（已自动发布）</option>
+                <option value="pending" selected>待审核</option>
                 <option value="approved">已通过</option>
                 <option value="rejected">未通过</option>
                 <option value="expired">已到期</option>
               </select>
               <button type="button" id="moderation-refresh">刷新列表</button>
+              <button type="button" id="moderation-image-queue" hidden>图片待复核</button>
             </div>
             <section aria-label="提交列表">
               <p id="moderation-list-status" role="status"></p>

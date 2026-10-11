@@ -1,4 +1,4 @@
-const QUALITY_VERSION = 'freebbs-moderation-image-quality-v2';
+const QUALITY_VERSION = 'freebbs-moderation-image-quality-v3';
 const normalize = (value) =>
   String(value || '')
     .normalize('NFKC')
@@ -8,12 +8,24 @@ const consent = /(?:同意|授权|许可|审批|批准)/u;
 
 function isReadabilityUncertainty(value) {
   const text = String(value || '').replace(/(?:并不|并未|没有|并无|不)模糊/gu, '');
+  const missingVisibleInformation =
+    /(?:空白(?:图像|图片|背景)?|全白|无(?:任何)?(?:可见|有效可视)?(?:文字|图形|内容)|没有(?:任何)?(?:可见|可辨认)?(?:文字|图形|内容))/u.test(
+      text,
+    );
+  const cannotVerifyImageContent =
+    /(?:无法|难以|不能)(?:核实|判断|确认|辨识|辨认|识别|读取|验证).{0,24}(?:图片|图像|原图|附图|实际内容|有效信息|有效可视内容|帖子实际意图)/u.test(
+      text,
+    ) || /(?:需|需要).{0,6}(?:确认|核实|查看).{0,8}原图/u.test(text);
   return (
-    /(?:模糊|看不清|不可辨)/u.test(text) ||
+    (missingVisibleInformation && cannotVerifyImageContent) ||
+    /(?:图片|图像|图中|文字|文本|字迹|正文).{0,12}(?:模糊|看不清|不可辨)/u.test(text) ||
+    /^(?:过于|太|很)?(?:模糊|看不清|不可辨)(?:[，。,.]|$)/u.test(text) ||
     /(?:清晰度|分辨率).{0,8}(?:不足|偏低|过低|太低|不够|有限)/u.test(text) ||
     /(?:低|不足的)(?:清晰度|分辨率)/u.test(text) ||
     (/(?:图片|图像|图中|文字|文本|字迹)/u.test(text) &&
-      /(?:无法|难以)(?:可靠|准确|清楚|完整|有效)?(?:地)?(?:辨认|辨识|识别|读取)/u.test(text))
+      /(?:无法|难以)(?:可靠|准确|清楚|完整|有效)?(?:地)?(?:辨认|辨识|识别|读取)(?!身份|作者|学号归属)/u.test(
+        text,
+      ))
   );
 }
 
@@ -22,6 +34,13 @@ function isUnreadableNotice(value) {
   // "blurred" with claimed content. All other nonempty text is flagged for a
   // human to inspect; it is not automatically declared fabricated.
   const compact = normalize(value);
+  if (
+    /^(?:图片|图像|图中)?(?:为|是|呈现为)?(?:全白|纯白|空白)(?:背景|图像|图片)?(?:无|没有)?(?:任何)?(?:可见)?(?:文字|图形|内容)?(?:或图形)?$/u.test(
+      compact,
+    )
+  ) {
+    return true;
+  }
   return (
     compact.length <= 100 &&
     isReadabilityUncertainty(value) &&

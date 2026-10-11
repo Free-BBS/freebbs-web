@@ -3,7 +3,9 @@ const { aiTestEnvironmentEnabled } = require('./moderation-ai-test');
 const { ModerationAiError, validateAssessment } = require('./moderation-ai-client');
 const { sanitizeDiagnostics } = require('./moderation-ai-diagnostics');
 const { POLICY_VERSION } = require('./moderation-policy');
-const { normalizePolicyDecision, buildPolicyEvidence } = require('./moderation-policy-decision');
+const { normalizePolicyDecision } = require('./moderation-policy-decision');
+const { buildAutomaticResult, IMAGE_MODEL } = require('./moderation-automation-result');
+const { getReviewFocus } = require('./moderation-review-focus');
 
 const PRIMARY_MODEL = 'qwen3.6-27b';
 const BACKUP_MODEL = 'glm-5.1';
@@ -17,6 +19,14 @@ function automationEnvironmentEnabled(config = {}) {
     config.discussionModerationAutoTestEnabled === true &&
     (config.discussionModerationAutoModel ?? PRIMARY_MODEL) === PRIMARY_MODEL &&
     (config.discussionModerationBackupModel ?? BACKUP_MODEL) === BACKUP_MODEL,
+  );
+}
+
+function imageAutomationEnabled(config = {}) {
+  return (
+    automationEnvironmentEnabled(config) &&
+    config.discussionModerationAutoImagesEnabled === true &&
+    (config.discussionModerationImageModel ?? IMAGE_MODEL) === IMAGE_MODEL
   );
 }
 
@@ -57,6 +67,7 @@ function responseMetadataValid(response) {
 function createModerationAutomation({
   store,
   client,
+  imageClient,
   config,
   isEnabled = async () => false,
   logger = console,
@@ -96,6 +107,8 @@ function createModerationAutomation({
       busy,
       primaryModel: PRIMARY_MODEL,
       backupModel: BACKUP_MODEL,
+      imageModel: IMAGE_MODEL,
+      imagesEnabled: imageAutomationEnabled(config),
       lastOutcome,
     };
   }
@@ -150,6 +163,7 @@ function createModerationAutomation({
       imageCount: snapshot?.imageCount ?? null,
       imagesReviewed: false,
       automaticPublication: false,
+      reviewFocus: getReviewFocus({ title: snapshot?.title, content: snapshot?.content }),
     };
   }
 
@@ -172,6 +186,10 @@ function createModerationAutomation({
       trusted && responseMetadataValid(error.reviewContext) ? error.reviewContext : null;
     if (diagnostics && !context) delete diagnostics.reviewSignal;
     const result = baseResult(claim, snapshot, startedAt);
+    // Image errors retain only bounded structural diagnostics, never raw replies.
+    const { ModerationImageError, safeImageError } = require('./moderation-image-client');
+    const imageDiagnostics =
+      error instanceof ModerationImageError ? safeImageError(error).diagnostics : null;
     if (context) result.settingsRevision = context.settingsRevision;
     return {
       ...result,
@@ -182,6 +200,7 @@ function createModerationAutomation({
         validation: 'failed',
         // Unknown errors remain a fixed local failure; their contents never persist.
         ...(diagnostics ? { diagnostics } : {}),
+        ...(imageDiagnostics ? { imageDiagnostics } : {}),
       },
     };
   }
@@ -205,7 +224,7 @@ function createModerationAutomation({
             startedAt,
             current(epoch) ? 'worker_paused' : 'worker_stopped',
           );
-        } else if (snapshot.imageCount > 0) {
+        } else if (snapshot.imageCount > 0 && !imageAutomationEnabled(config)) {
           result = notAttempted(claim, snapshot, startedAt, 'image_requires_review');
         } else {
           const input = Object.freeze({
@@ -225,13 +244,66 @@ function createModerationAutomation({
               result.manualReview.validation = 'failed';
             } else {
               const assessment = validateAssessment(response.assessment, input);
-              result = {
-                ...baseResult(claim, snapshot, startedAt),
+              const textResult = {
                 assessment,
+                model: PRIMARY_MODEL,
                 settingsRevision: response.settingsRevision,
-                policyDecision: normalizePolicyDecision(assessment, input),
-                policyEvidence: buildPolicyEvidence(assessment),
+                policyVersion: POLICY_VERSION,
               };
+              const imageResults = [];
+              const textFocus = getReviewFocus({
+                title: snapshot.title,
+                content: snapshot.content,
+                assessments: [assessment],
+              });
+              if (
+                snapshot.imageCount > 0 &&
+                normalizePolicyDecision(assessment, input).recommendedAction === 'allow' &&
+                !textFocus.political &&
+                !textFocus.psychological
+              ) {
+                if (
+                  !Array.isArray(snapshot.images) ||
+                  snapshot.images.length !== snapshot.imageCount ||
+                  snapshot.images.length > 12 ||
+                  typeof imageClient?.assess !== 'function'
+                )
+                  throw new Error('image_snapshot_invalid');
+                for (let offset = 0; offset < snapshot.images.length; offset += 3) {
+                  if (!(await enabled(epoch))) throw new Error('worker_paused');
+                  const batch = snapshot.images.slice(offset, offset + 3);
+                  const imageResponse = await imageClient.assess({
+                    model: IMAGE_MODEL,
+                    title: snapshot.title,
+                    content: snapshot.content,
+                    images: batch.map((image) => ({
+                      mimeType: image.mimeType,
+                      dataBase64: image.dataBase64,
+                    })),
+                  });
+                  imageResults.push({
+                    attachmentIds: batch.map((image) => image.id),
+                    response: imageResponse,
+                  });
+                  const checkedCount = offset + batch.length;
+                  const partial = buildAutomaticResult({
+                    textResult,
+                    imageResults,
+                    snapshot: {
+                      ...snapshot,
+                      imageCount: checkedCount,
+                      images: snapshot.images.slice(0, checkedCount),
+                    },
+                  });
+                  if (partial.policyDecision.recommendedAction !== 'allow') break;
+                }
+              }
+              result = buildAutomaticResult({
+                textResult,
+                imageResults,
+                snapshot,
+                elapsedMs: Math.max(0, Math.round(now() - startedAt)),
+              });
             }
           } catch (error) {
             result = failedResult(claim, snapshot, startedAt, error);
@@ -330,5 +402,6 @@ module.exports = {
   PRIMARY_MODEL,
   BACKUP_MODEL,
   automationEnvironmentEnabled,
+  imageAutomationEnabled,
   createModerationAutomation,
 };

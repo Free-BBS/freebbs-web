@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const {
   institutionConsentClaim,
   isUnreadableNotice,
+  isReadabilityUncertainty,
   checkReasonQuality,
 } = require('./moderation-image-quality');
 
@@ -141,6 +142,7 @@ test('limitation-only OCR placeholders accept modifiers but not an invented tran
     '图片过于模糊，无法识别文字。',
     '第1张图片的文字无法可靠读取，需要查看原图。',
     '【图片字迹无法清楚识别】',
+    '图片为空白背景，无任何可见文字或图形。',
   ])
     assert.equal(isUnreadableNotice(value), true, value);
   for (const value of [
@@ -149,4 +151,21 @@ test('limitation-only OCR placeholders accept modifiers but not an invented tran
     '无法确认学号是否属于本人',
   ])
     assert.equal(isUnreadableNotice(value), false, value);
+});
+
+test('blank-looking damaged images count as uncertainty only when content cannot be verified', () => {
+  const accepted = [
+    '图片1为几乎全白的空白图像，无法判断是上传失败、压缩损坏还是故意隐藏内容，需确认原图是否包含有效信息。',
+    '用户提示需结合附图阅读，但图片无可见文字或图形，无法核实帖子实际意图及是否存在潜在风险。',
+    '图片为空白背景，无法辨识实际内容。',
+  ];
+  for (const value of accepted) assert.equal(isReadabilityUncertainty(value), true, value);
+  for (const value of [
+    '图片为空白背景，没有文字，这是测试背景图。',
+    '图片很清晰，但无法确认作者身份。',
+    '作者身份模糊，无法确认是否本人。',
+    '图片空白，无法确认学号是否属于本人。',
+    '图片清晰，无法辨认身份。',
+  ])
+    assert.equal(isReadabilityUncertainty(value), false, value);
 });

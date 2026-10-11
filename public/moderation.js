@@ -146,6 +146,7 @@
       decisionIntent: null,
       deciding: false,
       imagesReady: false,
+      imageReadyListeners: [],
       nextCursor: '',
       count: 0,
       library: null,
@@ -174,6 +175,8 @@
       state.decisionIntent = null;
       state.deciding = false;
       state.refreshHistory = null;
+      state.imagesReady = false;
+      state.imageReadyListeners = [];
       el('detail').replaceChildren(node('p', '选择一条提交，查看正文和图片。', 'moderation-empty'));
     }
     function formatTime(value) {
@@ -188,6 +191,7 @@
       el('automation-toggle').hidden = true;
       el('automation-toggle').disabled = false;
       el('automation-message').textContent = '';
+      el('image-queue').hidden = true;
       el('queue-note').textContent =
         '机器建议不直接改变发布状态。请核对完整正文与图片，再作出人工决定。';
       clearDetail();
@@ -229,6 +233,10 @@
         image.addEventListener('error', () => {
           image.remove();
           caption.textContent = `图片 ${index + 1} · 无法显示，请刷新后重试`;
+          if (valid(generation) && version === state.detailVersion) {
+            state.imagesReady = false;
+            state.imageReadyListeners.forEach((update) => update());
+          }
         });
         caption.textContent = `图片 ${index + 1}`;
         figure.replaceChildren(image, caption);
@@ -336,6 +344,7 @@
       category_rule_mismatch: '模型风险类别与所选规则不对应',
       support_rule_mismatch: '模型关怀等级与所选规则不对应',
       high_risk_without_block: '模型报告高风险，但所选规则不支持直接拦截',
+      image_observations_invalid: '图片观察记录的结构或序号不符合要求',
     };
     const AUTOMATION_REASON_LABELS = {
       submission_changed: '提交已由人工处理、发生变化或到期，自动任务不再改变发布状态。',
@@ -354,6 +363,9 @@
       snapshot_invalid: '送审内容未能完成校验，未发送给外部模型，交人工处理。',
       assessment_invalid: '机器结果未通过校验，交人工复核。',
       reviewer_withdrawal: '负责人已撤回自动发布内容。',
+      no_image_risk: '图文结果符合发布条件，已发布并进入图片待复核队列。',
+      political_requires_review: '政治敏感相关内容须负责人单独审核。',
+      psychological_requires_review: '心理问题或求助信号须负责人关注；心理关怀不等于违规。',
     };
 
     function isReviewResult(run) {
@@ -440,7 +452,40 @@
         ? FAILURE_LABELS[diagnostics.failureCode]
         : '审核结果未通过校验';
       panel.append(node('p', `待复核原因：${failureLabel}。`));
-      panel.append(node('p', '图片尚未机器审核，请继续人工检查附件。', 'moderation-note'));
+      const imageDiagnostics = run.manualReview?.imageDiagnostics;
+      if (imageDiagnostics && Object.hasOwn(FAILURE_LABELS, imageDiagnostics.failureCode)) {
+        const checks = {
+          object_keys: '字段缺失或出现多余字段',
+          type: '字段类型不符合要求',
+          count: '记录数量不符合要求',
+          index: '图片序号不符合要求',
+          text: '文字长度或格式不符合要求',
+          source_field: '引用来源不符合要求',
+          quote_not_present: '引用不是对应原文中的连续片段',
+          duplicate_rule: '规则重复',
+          assessment_contract: '审核结论未通过校验',
+        };
+        const issue = Object.hasOwn(checks, imageDiagnostics.validation?.issue)
+          ? checks[imageDiagnostics.validation.issue]
+          : '';
+        panel.append(
+          node('h4', '图片结果检查未通过'),
+          node('p', FAILURE_LABELS[imageDiagnostics.failureCode]),
+        );
+        if (issue) panel.append(node('p', `具体问题：${issue}。`));
+        panel.append(node('p', '不将无效结果视为安全；请负责人检查全部原图。'));
+      }
+      panel.append(
+        node(
+          'p',
+          imageDiagnostics
+            ? '图片结果未通过校验，请继续人工检查附件。'
+            : run.imagesReviewed === true
+              ? '图片已完成机器检查，请负责人继续核查附件。'
+              : '图片尚未机器审核，请继续人工检查附件。',
+          'moderation-note',
+        ),
+      );
       return panel;
     }
 
@@ -1057,12 +1102,12 @@
       el('automation').hidden = !visible;
       if (!visible) return;
       el('automation-summary').textContent =
-        `${!automation.enabled ? '自动审核未启用' : automation.paused ? '自动审核已暂停 · 新稿排队待审' : '自动审核运行中'} · 默认模型：${automation.model || '未配置'} · 手动备选：${automation.backupModel || '未配置'}`;
+        `${!automation.enabled ? '自动审核未启用' : automation.paused ? '自动审核已暂停 · 新稿排队待审' : '自动审核运行中'} · 文字模型：${automation.model || '未配置'} · 手动备选：${automation.backupModel || '未配置'} · 图片：${automation.imagesEnabled ? automation.imageModel || 'Kimi' : '未启用机器审核'}`;
       el('automation-toggle').hidden = !state.session.isAdmin || !automation.enabled;
       el('automation-toggle').disabled = state.automationChanging;
       el('automation-toggle').textContent = automation.paused ? '开启自动审核' : '暂停自动审核';
       el('queue-note').textContent = automation.enabled
-        ? '自动审核仅用于虚构测试内容。暂时拦截与待复核稿件仍需负责人最终决定；已自动发布内容可由负责人撤回。'
+        ? '含图自动发布稿件请在“图片待复核”中确认或撤回。暂停自动审核仍可处理复核；政治内容与心理关怀分别提示，须负责人审核。'
         : '机器建议不直接改变发布状态。请核对完整正文与图片，再作出人工决定。';
     }
 
@@ -1105,6 +1150,74 @@
       }
     }
 
+    function imageMachinePanels(result) {
+      const group = node('section', undefined, 'moderation-image-results');
+      group.append(node('h4', '图片机器审核'));
+      (result.imageResults || []).forEach((batch, index) => {
+        const run = batch.response || {};
+        const display = run.displayAssessment;
+        const item = node('article', undefined, 'moderation-image-result');
+        item.append(
+          node(
+            'h4',
+            `第 ${index + 1} 组 · ${run.model || '图片模型'} · ${batch.attachmentIds?.length || 0} 张图片`,
+          ),
+        );
+        if (display) {
+          item.append(node('p', display.reason || '请核查图片。'));
+          for (const match of display.ruleMatches || [])
+            item.append(node('p', `${ruleDisplayId(match.ruleId)}：${match.explanation || ''}`));
+          for (const uncertainty of display.uncertainties || [])
+            item.append(node('p', `待核查：${uncertainty}`, 'moderation-note'));
+          if (display.supportReason) item.append(node('p', display.supportReason));
+        } else item.append(node('p', '未取得可展示的脱敏说明，请负责人检查图片和受限原始证据。'));
+        for (const observation of run.displayObservations || [])
+          item.append(
+            node('p', `本组图片 ${observation.imageIndex}：${observation.description || ''}`),
+          );
+        if (run.imageSafety?.requiresHumanReview)
+          item.append(
+            node('p', '图片关键信息无法可靠核查，必须人工检查。', 'moderation-privacy-warning'),
+          );
+        const raw = disclosure('受限原始 OCR 与引用证据（可能含个人资料）');
+        raw.append(node('p', '仅供负责人核对，不应复制到公开通知。', 'moderation-note'));
+        for (const observation of run.imageObservations || [])
+          raw.append(
+            node('h5', `本组图片 ${observation.imageIndex}`),
+            node('pre', observation.text || '未识别出文字', 'moderation-raw'),
+          );
+        for (const match of run.assessment?.ruleMatches || [])
+          raw.append(
+            node('p', `${ruleDisplayId(match.ruleId)} · ${match.evidence?.field || ''}`),
+            node('blockquote', match.evidence?.quote || ''),
+          );
+        item.append(raw);
+        group.append(item);
+      });
+      return group;
+    }
+
+    function focusPanels(focus) {
+      const group = node('div', undefined, 'moderation-review-focus');
+      if (focus?.political) {
+        const item = node('section', undefined, 'moderation-focus-political');
+        item.append(
+          node('h4', '政治敏感相关内容 · 须负责人审核'),
+          node('p', '请单独核对内容、语境与规则依据；提示本身不等于已经违规。'),
+        );
+        group.append(item);
+      }
+      if (focus?.psychological) {
+        const item = node('section', undefined, 'moderation-focus-psychological');
+        item.append(
+          node('h4', '心理问题与求助 · 负责人关怀复核'),
+          node('p', '请优先关注并核实支持需求。心理关怀不等于违规，不因此处罚求助者。'),
+        );
+        group.append(item);
+      }
+      return group;
+    }
+
     function automationPanel(submission, generation, version) {
       const panel = node('section', undefined, 'moderation-automation-result');
       panel.setAttribute('aria-label', '自动审核记录');
@@ -1129,7 +1242,107 @@
       };
       let loading = false;
       let withdrawing = false;
+      let confirming = false;
       let withdrawalIntent = null;
+      let confirmationIntent = null;
+      function imageReviewPanel(review) {
+        const box = node('section', undefined, 'moderation-image-review');
+        box.append(
+          node(
+            'h4',
+            review.state === 'confirmed'
+              ? '图片已复核'
+              : review.state === 'withdrawn'
+                ? '图片对应内容已撤回'
+                : '图片待复核 · 内容已自动发布',
+          ),
+        );
+        if (review.state === 'confirmed')
+          box.append(
+            node(
+              'p',
+              `负责人已确认图片无问题${review.reviewedAt ? ` · ${formatTime(review.reviewedAt)}` : ''}；如发现问题仍可撤回。`,
+            ),
+          );
+        else if (review.state === 'pending')
+          box.append(
+            node('p', '请逐张检查全部原图。确认无问题会移出待复核队列；发现问题请填写理由撤回。'),
+          );
+        if (
+          review.canConfirm === true &&
+          review.state === 'pending' &&
+          submission.status === 'approved' &&
+          Number.isInteger(submission.version)
+        ) {
+          const button = node('button', '已检查全部图片，确认无问题', 'moderation-image-confirm');
+          button.type = 'button';
+          const status = node('p');
+          status.setAttribute('role', 'status');
+          const sync = () => {
+            if (!current()) return;
+            button.disabled =
+              confirming || withdrawing || !state.imagesReady || !submission.attachments?.length;
+            if ((!state.imagesReady || !submission.attachments?.length) && !confirming)
+              status.textContent = '全部图片加载成功后才能确认；请逐张查看原图。';
+            else if (!confirming) status.textContent = '';
+          };
+          state.imageReadyListeners.push(sync);
+          sync();
+          button.addEventListener('click', async () => {
+            if (
+              !current() ||
+              confirming ||
+              withdrawing ||
+              state.deciding ||
+              !state.imagesReady ||
+              !submission.attachments?.length
+            )
+              return;
+            if (!confirmationIntent) confirmationIntent = cryptoApi.randomUUID();
+            confirming = true;
+            button.disabled = true;
+            refreshButton.disabled = true;
+            status.textContent = '正在保存图片复核结果…';
+            try {
+              const saved = await client.request(
+                `/moderation/submissions/${encodeURIComponent(submission.id)}/image-review`,
+                {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    expectedVersion: submission.version,
+                    requestId: confirmationIntent,
+                  }),
+                },
+              );
+              if (!current()) return;
+              if (
+                String(saved.submissionId || saved.id) !== String(submission.id) ||
+                saved.version !== submission.version ||
+                saved.imageReview?.state !== 'confirmed'
+              )
+                throw new Error('图片复核状态未确认，请刷新详情核对。');
+              el('message').textContent = '图片复核已确认，内容继续发布；发现问题仍可撤回。';
+              await loadList(false);
+              if (current()) await openSubmission(submission.id);
+            } catch (error) {
+              if (!current()) return;
+              if ([409, 410].includes(error.status)) {
+                el('message').textContent = '稿件状态已变化或审核材料到期，请重新核对。';
+                await openSubmission(submission.id);
+              } else status.textContent = `${error.message} 可重试同一确认操作。`;
+            } finally {
+              if (current()) {
+                confirming = false;
+                button.disabled =
+                  withdrawing || !state.imagesReady || !submission.attachments?.length;
+                refreshButton.disabled = false;
+              }
+            }
+          });
+          box.append(button, status);
+        }
+        return box;
+      }
       function withdrawalForm() {
         const form = node('form', undefined, 'moderation-withdrawal');
         const label = node('label', '撤回说明（必填，作者可在提交记录中查看）');
@@ -1145,7 +1358,7 @@
         form.append(label, reason, button, status);
         form.addEventListener('submit', async (event) => {
           event.preventDefault();
-          if (!current() || withdrawing || state.deciding) return;
+          if (!current() || withdrawing || confirming || state.deciding) return;
           const text = reason.value.trim();
           if (!text || text.length > 1000) {
             status.textContent = '请填写 1～1000 字的撤回理由。';
@@ -1191,7 +1404,7 @@
         return form;
       }
       async function refresh() {
-        if (!current() || loading || withdrawing) return;
+        if (!current() || loading || withdrawing || confirming) return;
         loading = true;
         refreshButton.disabled = true;
         content.replaceChildren(node('p', '正在加载自动审核状态…'));
@@ -1236,6 +1449,9 @@
             content.append(
               node('p', '已自动发布稿件可由负责人撤回；此处不提供再次调用模型的手动试审。'),
             );
+          const imageReview = job.imageReview || submission.automation?.imageReview;
+          if (imageReview?.required) content.append(imageReviewPanel(imageReview));
+          if (job.result?.reviewFocus) content.append(focusPanels(job.result.reviewFocus));
           if (job.result) {
             content.append(node('p', '以下为机器自动审核结果，不是负责人最终结论。'));
             if (job.result.assessment) {
@@ -1249,6 +1465,8 @@
               );
             }
             content.append(policyResultPanels(job.result));
+            if (Array.isArray(job.result.imageResults) && job.result.imageResults.length)
+              content.append(imageMachinePanels(job.result));
           }
           if (
             job.canWithdraw === true &&
@@ -1930,12 +2148,14 @@
             showImage(attachment, images, generation, version, index),
           ),
         ).then((loaded) => {
-          if (!valid(generation) || version !== state.detailVersion || !approveButton) return;
+          if (!valid(generation) || version !== state.detailVersion) return;
           state.imagesReady = loaded.every(Boolean);
-          approveButton.disabled = state.deciding || !state.imagesReady;
-          imageStatus.textContent = state.imagesReady
-            ? ''
-            : '有图片未能加载，暂不能通过审核。请刷新后重试。';
+          if (approveButton) approveButton.disabled = state.deciding || !state.imagesReady;
+          if (imageStatus)
+            imageStatus.textContent = state.imagesReady
+              ? ''
+              : '有图片未能加载，暂不能通过审核。请刷新后重试。';
+          state.imageReadyListeners.forEach((update) => update());
         });
         el('detail').focus({ preventScroll: true });
       } catch (error) {
@@ -1957,18 +2177,23 @@
       el('more').disabled = true;
       el('list-status').textContent = '正在加载…';
       try {
-        const path = mine ? '/moderation/mine' : '/moderation/submissions';
+        const imageQueue = !mine && el('status').value === 'image_review';
+        const path = mine
+          ? '/moderation/mine'
+          : imageQueue
+            ? '/moderation/automation/image-reviews'
+            : '/moderation/submissions';
         const params = new URLSearchParams();
-        if (!mine) params.set('status', el('status').value);
+        if (!mine && !imageQueue) params.set('status', el('status').value);
         if (more && state.nextCursor) params.set('before', state.nextCursor);
         const payload = await client.request(`${path}?${params}`);
         if (!valid(generation) || version !== state.listVersion) return;
-        const items = payload.submissions || [];
+        const items = (imageQueue ? payload.items : payload.submissions) || [];
         state.count += items.length;
-        state.nextCursor = payload.nextCursor || '';
+        state.nextCursor = imageQueue ? '' : payload.nextCursor || '';
         el('more').hidden = !state.nextCursor;
         el('list-status').textContent = state.count
-          ? `已显示 ${state.count} 条提交${mine ? '（所有状态）' : ''}`
+          ? `已显示 ${state.count} 条${imageQueue ? '图片待复核稿件（已自动发布）' : '提交'}${mine ? '（所有状态）' : ''}`
           : '暂无符合条件的提交。';
         for (const item of items) {
           const button = node('button', undefined, 'moderation-item');
@@ -1977,7 +2202,7 @@
             node('strong', item.title || (item.kind === 'comment' ? '评论' : '帖子')),
             node(
               'span',
-              `${STATUS_LABELS[item.status] || '未知状态'} · ${formatTime(item.createdAt)}`,
+              `${imageQueue ? '图片待复核 · 已自动发布' : STATUS_LABELS[item.status] || '未知状态'} · ${formatTime(item.createdAt)}`,
               'moderation-meta',
             ),
           );
@@ -2088,6 +2313,7 @@
             : '请结合正文和全部图片作出人工审核决定。';
         renderAutomationStatus();
         el('workspace').hidden = false;
+        el('image-queue').hidden = mine || !session.reviewer;
         el('policy-library').hidden = mine || !session.reviewer;
         el('regression-export').disabled =
           mine || !session.reviewer || session.aiTestEnabled !== true;
@@ -2102,6 +2328,11 @@
       }
     }
     el('refresh').addEventListener('click', () => loadList());
+    el('image-queue').addEventListener('click', () => {
+      if (mine || !state.session?.reviewer) return;
+      el('status').value = 'image_review';
+      loadList();
+    });
     el('automation-toggle').addEventListener('click', changeAutomation);
     el('more').addEventListener('click', () => loadList(false, true));
     el('status').addEventListener('change', () => loadList());

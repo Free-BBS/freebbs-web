@@ -51,6 +51,10 @@ module.exports = {
   ),
   discussionModerationAutoModel: process.env.DISCUSSION_MODERATION_AUTO_MODEL || 'qwen3.6-27b',
   discussionModerationBackupModel: process.env.DISCUSSION_MODERATION_BACKUP_MODEL || 'glm-5.1',
+  discussionModerationAutoImagesEnabled: readBooleanEnvironmentVariable(
+    'DISCUSSION_MODERATION_AUTO_IMAGES_ENABLED',
+  ),
+  discussionModerationImageModel: process.env.DISCUSSION_MODERATION_IMAGE_MODEL || 'kimi-k2.6',
   discussionModerationDir:
     process.env.DISCUSSION_MODERATION_DIR ||
     path.join(

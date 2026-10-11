@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   automationEnvironmentEnabled,
+  imageAutomationEnabled,
   createModerationAutomation,
 } = require('./moderation-automation');
 const { ModerationAiError } = require('./moderation-ai-client');
@@ -47,6 +48,7 @@ function harness() {
   let time = 0;
   let paused = false;
   let provider;
+  let imageProvider;
   let prepare;
   let finish;
   let recover;
@@ -97,6 +99,12 @@ function harness() {
   const options = {
     store,
     client,
+    imageClient: {
+      async assess(input) {
+        calls.push(['imageProvider', structuredClone(input)]);
+        return imageProvider(input);
+      },
+    },
     config,
     isEnabled: async () => !paused,
     now: () => time,
@@ -157,6 +165,9 @@ function harness() {
     setProvider(value) {
       provider = value;
     },
+    setImageProvider(value) {
+      imageProvider = value;
+    },
     setPrepare(value) {
       prepare = value;
     },
@@ -168,6 +179,148 @@ function harness() {
     },
   };
 }
+
+test('image review is explicitly gated and cannot change the text or image model', () => {
+  const config = configuration();
+  assert.equal(imageAutomationEnabled(config), false);
+  config.discussionModerationAutoImagesEnabled = true;
+  assert.equal(imageAutomationEnabled(config), true);
+  config.discussionModerationImageModel = 'qwen3.6-27b';
+  assert.equal(imageAutomationEnabled(config), false);
+  config.discussionModerationImageModel = 'kimi-k2.6';
+  config.apiHost = '0.0.0.0';
+  assert.equal(imageAutomationEnabled(config), false);
+});
+
+const imageSnapshot = (count = 4) => ({
+  imageCount: count,
+  images: Array.from({ length: count }, (_, i) => ({
+    id: `attachment-${i}`,
+    mimeType: 'image/webp',
+    dataBase64: `TEST_IMAGE_BYTES_${i}`,
+  })),
+});
+const imageResponse = (input) => ({
+  assessment: acceptedAssessment(),
+  imageObservations: input.images.map((_, i) => ({
+    imageIndex: i + 1,
+    text: '建议增加插座',
+    description: '文字清楚可读。',
+  })),
+  model: 'kimi-k2.6',
+  settingsRevision: 1,
+  policyVersion: POLICY_VERSION,
+  imageContractVersion: require('./moderation-image-client').IMAGE_CONTRACT_VERSION,
+});
+
+test('automatic images use Qwen for text and one Kimi call per batch of at most three, without persisting pixels', async () => {
+  const h = harness();
+  h.config.discussionModerationAutoImagesEnabled = true;
+  h.setImageProvider(imageResponse);
+  h.add(imageSnapshot());
+  h.worker.start();
+  await h.worker.tick();
+  h.worker.stop();
+  assert.equal(h.calls.filter(([type]) => type === 'provider').length, 1);
+  const batches = h.calls.filter(([type]) => type === 'imageProvider');
+  assert.deepEqual(
+    batches.map(([, input]) => [input.model, input.images.length]),
+    [
+      ['kimi-k2.6', 3],
+      ['kimi-k2.6', 1],
+    ],
+  );
+  assert.equal(h.finished[0].result.policyDecision.recommendedAction, 'allow');
+  assert.equal(h.finished[0].result.imagesReviewed, true);
+  assert.equal(h.finished[0].result.requiresPostPublicationReview, true);
+  assert.doesNotMatch(JSON.stringify(h.finished), /TEST_IMAGE_BYTES|DO_NOT_SAVE/);
+});
+
+test('privacy in original text skips image calls and remains manual', async () => {
+  const h = harness();
+  h.config.discussionModerationAutoImagesEnabled = true;
+  h.add({ ...imageSnapshot(1), counts: { name: 1 } });
+  h.worker.start();
+  await h.worker.tick();
+  h.worker.stop();
+  assert.equal(h.calls.filter(([type]) => type === 'imageProvider').length, 0);
+  assert.equal(h.finished[0].result.policyDecision.recommendedAction, 'hold');
+  assert.equal(h.finished[0].result.assessment.decision, 'no_risk_detected');
+  assert.equal(h.finished[0].result.imagesReviewed, false);
+});
+
+test('image psychological focus stops later batches and is preserved for human attention', async () => {
+  const h = harness();
+  h.config.discussionModerationAutoImagesEnabled = true;
+  h.setImageProvider((input) => {
+    const got = imageResponse(input);
+    got.imageObservations[0].text = '同学最近情绪崩溃，想寻求帮助';
+    return got;
+  });
+  h.add(imageSnapshot());
+  h.worker.start();
+  await h.worker.tick();
+  h.worker.stop();
+  assert.equal(h.calls.filter(([type]) => type === 'imageProvider').length, 1);
+  assert.equal(h.finished[0].result.imagesReviewed, false);
+  assert.equal(h.finished[0].result.reviewFocus.psychological, true);
+  assert.equal(h.finished[0].result.policyDecision.recommendedAction, 'hold');
+  assert.equal(h.finished[0].result.imageResults.length, 1);
+});
+
+test('text political focus holds a pictured post without unnecessary image calls', async () => {
+  const h = harness();
+  h.config.discussionModerationAutoImagesEnabled = true;
+  h.add({ ...imageSnapshot(1), content: '讨论国家安全法的课程作业。' });
+  h.worker.start();
+  await h.worker.tick();
+  h.worker.stop();
+  assert.equal(h.calls.filter(([type]) => type === 'imageProvider').length, 0);
+  assert.equal(h.finished[0].result.reviewFocus.political, true);
+  assert.equal(h.finished[0].result.policyDecision.recommendedAction, 'hold');
+  assert.equal(h.finished[0].result.imagesReviewed, false);
+});
+
+test('pause after the first image batch prevents another call or publication', async () => {
+  const h = harness();
+  h.config.discussionModerationAutoImagesEnabled = true;
+  h.setImageProvider((input) => {
+    h.pause();
+    return imageResponse(input);
+  });
+  h.add(imageSnapshot());
+  h.worker.start();
+  await h.worker.tick();
+  h.worker.stop();
+  assert.equal(h.calls.filter(([type]) => type === 'imageProvider').length, 1);
+  assert.equal(h.finished[0].applied, false);
+  assert.equal(h.finished[0].result.policyDecision.recommendedAction, 'hold');
+});
+
+test('image failures retain sanitized structural diagnostics and never retry the API', async () => {
+  const { ModerationImageError } = require('./moderation-image-client');
+  const h = harness();
+  h.config.discussionModerationAutoImagesEnabled = true;
+  h.setImageProvider(() => {
+    throw new ModerationImageError('image_observations_invalid', {
+      stage: 'validation',
+      rawBody: 'NEVER_SAVE_REPLY',
+      apiKey: 'NEVER_SAVE_KEY',
+    });
+  });
+  h.add(imageSnapshot(1));
+  h.worker.start();
+  await h.worker.tick();
+  h.worker.stop();
+  assert.equal(h.calls.filter(([type]) => type === 'imageProvider').length, 1);
+  assert.equal(h.finished[0].result.policyDecision.recommendedAction, 'hold');
+  assert.equal(h.finished[0].result.manualReview.validation, 'failed');
+  assert.equal(
+    h.finished[0].result.manualReview.imageDiagnostics.failureCode,
+    'image_observations_invalid',
+  );
+  assert.doesNotMatch(JSON.stringify(h.finished), /provider-secret|NEVER_SAVE/);
+});
 
 test('automatic review requires explicit loopback test gates and exact primary/manual backup models', () => {
   assert.equal(automationEnvironmentEnabled(configuration()), true);
