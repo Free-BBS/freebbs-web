@@ -7,6 +7,7 @@ const { spawnSync } = require('node:child_process');
 const manifest = require('../package.json');
 
 const LEARNING_GROUPS = [
+  'test:agent-surfaces',
   'test:learning-workspace',
   'test:course-authoring',
   'test:learning-assessment',
