@@ -1,5 +1,6 @@
 const express = require('express');
 const { getPolicyLibrary } = require('./moderation-policy');
+const { ModerationManualReviewError } = require('./moderation-ai-test');
 
 function toDetail(submission) {
   return {
@@ -221,16 +222,23 @@ function createModerationRouter({
         response.status(400).json({ message: '试审仅接受稿件版本、输入模式、补充信息和模型。' });
         return;
       }
-      response.json({
-        result: await aiTest.run({
-          id: request.params.id,
-          reviewerId: user.id,
-          expectedVersion: body.expectedVersion,
-          inputMode: body.inputMode,
-          extraTerms: body.extraTerms,
-          model: body.model,
-        }),
-      });
+      try {
+        response.json({
+          result: await aiTest.run({
+            id: request.params.id,
+            reviewerId: user.id,
+            expectedVersion: body.expectedVersion,
+            inputMode: body.inputMode,
+            extraTerms: body.extraTerms,
+            model: body.model,
+          }),
+        });
+      } catch (error) {
+        if (!(error instanceof ModerationManualReviewError)) throw error;
+        response
+          .status(error.status)
+          .json({ message: error.message, reviewResult: error.reviewResult });
+      }
     }),
   );
   router.post(

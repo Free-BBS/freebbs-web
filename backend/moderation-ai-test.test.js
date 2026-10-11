@@ -3,6 +3,30 @@ const assert = require('node:assert/strict');
 const express = require('express');
 const { aiTestEnvironmentEnabled, createModerationAiTest } = require('./moderation-ai-test');
 const { createModerationRouter } = require('./moderation-router');
+const { ModerationAiError, POLICY_VERSION } = require('./moderation-ai-client');
+
+function rejectedProvider(status = 502) {
+  const error = new ModerationAiError(
+    status,
+    status === 504 ? 'timeout' : 'high_risk_without_block',
+    {
+      httpStatus: status === 504 ? null : 200,
+      reviewSignal: {
+        version: 1,
+        reportedDecision: 'high_risk',
+        reportedCategories: ['privacy'],
+        reportedRuleIds: ['隐私-003'],
+        reportedSupportPriority: 'none',
+      },
+    },
+  );
+  error.reviewContext = {
+    model: 'fixture-model',
+    settingsRevision: 2,
+    policyVersion: POLICY_VERSION,
+  };
+  return error;
+}
 
 function deferred() {
   let resolve;
@@ -504,4 +528,96 @@ test('real HTTP test route derives identity from auth and rejects body overrides
   assert.equal(catalogResponse.headers.get('cache-control'), 'private, no-store');
   assert.equal((await catalogResponse.json()).defaultModel, 'fixture-model');
   assert.equal(h.calls.filter(([kind]) => kind === 'provider').length, 2);
+  h.setProvider(() => {
+    throw rejectedProvider();
+  });
+  const rejected = await call('reviewer');
+  assert.equal(rejected.status, 502);
+  assert.equal(rejected.headers.get('cache-control'), 'private, no-store');
+  const rejectedBody = await rejected.json();
+  assert.equal(rejectedBody.result, undefined);
+  assert.equal(rejectedBody.reviewResult.assessment, null);
+  assert.equal(rejectedBody.reviewResult.manualReview.required, true);
+  assert.equal(rejectedBody.reviewResult.policyDecision.recommendedAction, 'hold');
+  assert.equal(rejectedBody.reviewResult.automaticPublication, false);
+  assert.equal((await call('admin')).status, 403);
+});
+
+test('rejected and timed out trials are preserved for human review without a successful assessment', async () => {
+  for (const status of [502, 504]) {
+    const h = harness({ audited: true });
+    h.setProvider(() => {
+      throw rejectedProvider(status);
+    });
+    await assert.rejects(h.aiTest.run(h.request), (error) => {
+      assert.equal(error.status, status);
+      const result = error.reviewResult;
+      assert.equal(result.assessment, null);
+      assert.equal(result.manualReview.required, true);
+      assert.equal(result.manualReview.validation, 'failed');
+      assert.equal(result.policyDecision.recommendedAction, 'hold');
+      assert.equal(result.policyDecision.canAutomaticallyPublish, false);
+      assert.equal(result.automaticPublication, false);
+      assert.equal(result.imagesReviewed, false);
+      assert.deepEqual(result.policyEvidence, []);
+      assert.ok(result.runId);
+      assert.equal(Boolean(result.manualReview.diagnostics.reviewSignal), status === 502);
+      return true;
+    });
+    assert.deepEqual(
+      h.calls.map(([kind]) => kind),
+      ['preview', 'prepare', 'provider', 'snapshot', 'record'],
+    );
+    h.setProvider(null);
+    assert.ok((await h.aiTest.run(h.request)).runId);
+  }
+});
+
+test('late failed results obey the same permission, expiry, version and persistence gates', async () => {
+  const scenarios = [
+    [(h) => h.setPending(false), 409],
+    [(h) => h.setAuthorized(false), 403],
+    [(h) => h.setExpired(true), 410],
+    [
+      (h) => {
+        h.snapshot.contentHash = 'b'.repeat(64);
+      },
+      409,
+    ],
+    [
+      (h) => {
+        h.snapshot.version = 2;
+      },
+      409,
+    ],
+  ];
+  for (const [mutate, status] of scenarios) {
+    const h = harness({ audited: true });
+    h.setProvider(() => {
+      mutate(h);
+      throw rejectedProvider();
+    });
+    await assert.rejects(h.aiTest.run(h.request), (error) => {
+      assert.equal(error.status, status);
+      assert.equal(error.reviewResult, undefined);
+      return true;
+    });
+    assert.equal(
+      h.calls.some(([kind]) => kind === 'record'),
+      false,
+    );
+  }
+  const h = harness({ audited: true });
+  h.setProvider(() => {
+    throw rejectedProvider();
+  });
+  h.setRecord(() => {
+    throw Object.assign(new Error('保存失败'), { status: 503 });
+  });
+  await assert.rejects(h.aiTest.run(h.request), (error) => {
+    assert.equal(error.status, 503);
+    assert.equal(error.reviewResult, undefined);
+    return true;
+  });
+  assert.equal(h.calls.filter(([kind]) => kind === 'provider').length, 1);
 });

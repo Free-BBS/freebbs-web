@@ -1,3 +1,5 @@
+const { CATEGORIES, getPolicyRule } = require('./moderation-policy');
+
 const DIAGNOSTICS_VERSION = 1;
 const CONTRACT_VERSION = 'freebbs-moderation-contract-2026-10-11-v2';
 const KNOWN_CONTRACT_VERSIONS = Object.freeze([
@@ -64,6 +66,70 @@ function plainObject(value) {
   );
 }
 
+// These are unverified, enumerated model claims, never an accepted assessment.
+// No reason, quotation, unknown label, reasoning or provider text is retained.
+function sanitizeReviewSignal(value) {
+  try {
+    if (!plainObject(value) || value.version !== 1) return undefined;
+    const known = (items, predicate, maximum) =>
+      Array.isArray(items)
+        ? [
+            ...new Set(
+              items.slice(0, 64).filter((item) => typeof item === 'string' && predicate(item)),
+            ),
+          ].slice(0, maximum)
+        : [];
+    const result = {
+      version: 1,
+      reportedDecision: ['no_risk_detected', 'needs_review', 'high_risk'].includes(
+        value.reportedDecision,
+      )
+        ? value.reportedDecision
+        : null,
+      reportedCategories: known(
+        value.reportedCategories,
+        (item) => CATEGORIES.includes(item),
+        CATEGORIES.length,
+      ),
+      reportedRuleIds: known(
+        value.reportedRuleIds,
+        (item) => item.length <= 80 && Boolean(getPolicyRule(item)),
+        6,
+      ),
+      reportedSupportPriority: ['none', 'attention', 'urgent'].includes(
+        value.reportedSupportPriority,
+      )
+        ? value.reportedSupportPriority
+        : null,
+    };
+    return result.reportedDecision !== null ||
+      result.reportedSupportPriority !== null ||
+      result.reportedCategories.length ||
+      result.reportedRuleIds.length
+      ? result
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function diagnoseReviewSignal(value) {
+  try {
+    if (!plainObject(value)) return undefined;
+    return sanitizeReviewSignal({
+      version: 1,
+      reportedDecision: value.decision,
+      reportedCategories: value.categories,
+      reportedRuleIds: Array.isArray(value.ruleMatches)
+        ? value.ruleMatches.slice(0, 64).map((item) => (plainObject(item) ? item.ruleId : null))
+        : [],
+      reportedSupportPriority: value.supportPriority,
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 // Record only presence of our fixed field names and a bounded count. In
 // particular, a provider's alternative field names and all values stay local.
 function diagnoseAssessmentFields(value) {
@@ -125,6 +191,22 @@ function sanitizeDiagnostics(value) {
       result.jsonSyntaxKind = value.jsonSyntaxKind;
     const assessmentFields = sanitizeAssessmentFields(value.assessmentFields);
     if (assessmentFields) result.assessmentFields = assessmentFields;
+    // Only a completed, parsed assessment can supply these hints. Transport,
+    // refusal, envelope and syntax failures cannot acquire model claims.
+    if (
+      result.httpStatus === 200 &&
+      [
+        'assessment_fields_invalid',
+        'rule_evidence_invalid',
+        'rule_unknown',
+        'category_rule_mismatch',
+        'support_rule_mismatch',
+        'high_risk_without_block',
+      ].includes(result.failureCode)
+    ) {
+      const signal = sanitizeReviewSignal(value.reviewSignal);
+      if (signal) result.reviewSignal = signal;
+    }
     return result;
   } catch {
     return null;
@@ -191,4 +273,6 @@ module.exports = {
   diagnoseContentShape,
   diagnoseJsonSyntax,
   diagnoseAssessmentFields,
+  diagnoseReviewSignal,
+  sanitizeReviewSignal,
 };

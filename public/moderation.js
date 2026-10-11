@@ -100,8 +100,11 @@
       if (token !== getToken()) throw new Error('登录状态已变化，请刷新页面。');
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
+        if (token !== getToken()) throw new Error('登录状态已变化，请刷新页面。');
         const error = new Error(payload.message || '请求失败，请稍后重试。');
         error.status = response.status;
+        if ([502, 504].includes(response.status) && payload.reviewResult)
+          error.reviewResult = payload.reviewResult;
         throw error;
       }
       const payload = image ? await response.blob() : await response.json();
@@ -302,6 +305,118 @@
       human_review: '建议人工核查',
       block: '建议拦截',
     };
+    const FAILURE_LABELS = {
+      configuration_invalid: '审核渠道配置不符合要求',
+      input_invalid: '送审输入不符合要求',
+      model_unavailable: '所选模型不可用',
+      http_error: '模型渠道请求未成功',
+      transport_error: '模型渠道连接失败',
+      timeout: '模型渠道请求超时',
+      response_redirected: '模型响应地址不符合要求',
+      response_body_invalid: '模型响应内容无法读取',
+      response_type_invalid: '模型响应类型不符合要求',
+      response_too_large: '模型响应超过大小限制',
+      response_utf8_invalid: '模型响应编码不符合要求',
+      response_json_invalid: '模型响应格式无法解析',
+      response_envelope_invalid: '模型响应结构不符合要求',
+      message_invalid: '模型消息结构不符合要求',
+      finish_reason_not_stop: '模型返回的结束状态不符合要求',
+      content_json_invalid: '模型审核内容不是有效的结构化结果',
+      assessment_fields_invalid: '模型审核字段或取值不符合要求',
+      rule_evidence_invalid: '模型规则证据未通过校验',
+      rule_unknown: '模型选择了规则库之外的条目',
+      category_rule_mismatch: '模型风险类别与所选规则不对应',
+      support_rule_mismatch: '模型关怀等级与所选规则不对应',
+      high_risk_without_block: '模型报告高风险，但所选规则不支持直接拦截',
+    };
+
+    function isReviewResult(run) {
+      return Boolean(
+        run &&
+        run.assessment === null &&
+        Array.isArray(run.policyEvidence) &&
+        run.policyEvidence.length === 0 &&
+        run.policyDecision?.recommendedAction === 'hold' &&
+        run.policyDecision.canAutomaticallyPublish === false &&
+        run.policyDecision.imagesReviewed === false &&
+        run.manualReview?.required === true &&
+        run.manualReview.validation === 'failed' &&
+        run.manualReview.diagnostics?.version === 1 &&
+        Object.prototype.hasOwnProperty.call(
+          FAILURE_LABELS,
+          run.manualReview.diagnostics.failureCode,
+        ),
+      );
+    }
+
+    function manualReviewPanel(run) {
+      const panel = node('div', undefined, 'moderation-outcome moderation-outcome-hold');
+      panel.append(
+        node('h4', '模型提示待人工复核'),
+        node('p', '输出未通过校验，不能作为有效结论。请负责人结合原稿和当前规则独立复核。'),
+        node('p', '当前保留人工审核，不会自动发布或拦截稿件。'),
+      );
+      const diagnostics = run.manualReview?.diagnostics;
+      const signal =
+        isReviewResult(run) && diagnostics.reviewSignal?.version === 1
+          ? diagnostics.reviewSignal
+          : null;
+      const reportedDecisions = {
+        no_risk_detected: '未报告明确风险（未经校验，不能据此放行）',
+        needs_review: '需要人工核查（尚未核实）',
+        high_risk: '高风险迹象（尚未核实）',
+      };
+      const decision =
+        signal && Object.prototype.hasOwnProperty.call(reportedDecisions, signal.reportedDecision)
+          ? reportedDecisions[signal.reportedDecision]
+          : '';
+      const categories = Array.isArray(signal?.reportedCategories)
+        ? [
+            ...new Set(
+              signal.reportedCategories
+                .slice(0, 64)
+                .filter((id) => currentCategoryEntries().some(([value]) => value === id)),
+            ),
+          ].slice(0, 20)
+        : [];
+      const rules = Array.isArray(signal?.reportedRuleIds)
+        ? [
+            ...new Set(
+              signal.reportedRuleIds
+                .slice(0, 64)
+                .filter((id) => state.library?.rules.some((rule) => rule.id === id)),
+            ),
+          ].slice(0, 6)
+        : [];
+      const support =
+        signal &&
+        Object.prototype.hasOwnProperty.call(SUPPORT_LABELS, signal.reportedSupportPriority)
+          ? SUPPORT_LABELS[signal.reportedSupportPriority]
+          : '';
+      if (!decision && !categories.length && !rules.length && !support)
+        panel.append(node('p', '未取得可用判断，请直接人工审核原稿。'));
+      else {
+        panel.append(node('p', '以下仅为模型上报提示，尚未核实；不代表规则已经适用。'));
+        panel.append(
+          node('p', `模型上报等级：${decision || '未知'}`),
+          node(
+            'p',
+            `模型上报类别（尚未核实）：${categories.length ? categories.map((id) => AI_CATEGORY_LABELS[id]).join('、') : '未保留已知类别，不代表没有风险'}`,
+          ),
+          node(
+            'p',
+            `模型上报规则（尚未核实）：${rules.length ? rules.join('、') : '未保留已知规则，不代表没有违规'}`,
+          ),
+          node('p', `模型上报关怀：${support ? `${support}（尚未核实）` : '未知'}`),
+        );
+      }
+      const failureLabel = isReviewResult(run)
+        ? FAILURE_LABELS[diagnostics.failureCode]
+        : '审核结果未通过校验';
+      panel.append(node('p', `待复核原因：${failureLabel}。`));
+      panel.append(node('p', '图片尚未机器审核，请继续人工检查附件。', 'moderation-note'));
+      return panel;
+    }
 
     function disclosure(title, className) {
       const details = node('details', undefined, className || 'moderation-disclosure');
@@ -534,6 +649,8 @@
     }
 
     function policyResultPanels(run) {
+      if (!run.assessment || run.manualReview?.validation === 'failed')
+        return manualReviewPanel(run);
       const group = node('div', undefined, 'moderation-policy-result');
       const assessment = run.assessment || {};
       const historical = Boolean(
@@ -626,33 +743,43 @@
       const form = node('form', undefined, 'moderation-feedback-form');
       const currentPolicyVersion = state.library.version;
       const historical = run.policyVersion !== currentPolicyVersion;
+      const failed = !run.assessment || run.manualReview?.validation === 'failed';
       const previousFeedback =
         run.feedback?.policyVersion === currentPolicyVersion ? run.feedback : null;
       const initial =
         previousFeedback ||
-        (historical
-          ? { decision: 'needs_review', categories: [], supportPriority: 'none' }
-          : run.assessment) ||
+        (failed
+          ? { decision: '', categories: [], supportPriority: 'none' }
+          : historical
+            ? { decision: 'needs_review', categories: [], supportPriority: 'none' }
+            : run.assessment) ||
         {};
       const initialRuleIds =
         previousFeedback?.ruleIds ||
-        (historical ? [] : (run.assessment?.ruleMatches || []).map((match) => match.ruleId));
+        (historical || failed
+          ? []
+          : (run.assessment?.ruleMatches || []).map((match) => match.ruleId));
       const canWrite = () =>
         current() &&
         state.session?.aiTestEnabled === true &&
         state.library?.version === currentPolicyVersion;
-      const verdictOptions = historical
-        ? { correct: '按当前清单重新复核', escalate: '升级人工核查' }
-        : { agree: '同意机器判断', correct: '纠正机器判断', escalate: '升级人工核查' };
+      const verdictOptions = failed
+        ? { correct: '记录独立人工判断', escalate: '升级人工核查' }
+        : historical
+          ? { correct: '按当前清单重新复核', escalate: '升级人工核查' }
+          : { agree: '同意机器判断', correct: '纠正机器判断', escalate: '升级人工核查' };
       const verdict = selectControl(
         verdictOptions,
-        historical
+        failed || historical
           ? previousFeedback?.verdict === 'escalate'
             ? 'escalate'
             : 'correct'
           : previousFeedback?.verdict || 'agree',
       );
-      const decision = selectControl(DECISION_LABELS, initial.decision);
+      const decision = selectControl(
+        failed ? { '': '请选择人工风险判断', ...DECISION_LABELS } : DECISION_LABELS,
+        initial.decision,
+      );
       const support = selectControl(SUPPORT_LABELS, initial.supportPriority || 'none');
       const categories = node('fieldset', undefined, 'moderation-category-options');
       categories.append(node('legend', '人工确认的风险类别'));
@@ -702,10 +829,12 @@
         node(
           'p',
           previousFeedback
-            ? `已载入按当前清单保存的人工判断。${historical ? '原机器结果为历史版本，不提供直接同意操作。' : '选择“同意机器判断”表示与最初机器结果完全一致。'}`
-            : historical
-              ? '这条机器结果使用历史版本。请按当前禁止清单完整重新复核；旧分类和旧编号未自动填入。'
-              : '尚未保存人工复核；当前字段来自机器判断。',
+            ? `已载入按当前清单保存的人工判断。${failed || historical ? '原机器结果不提供直接同意操作。' : '选择“同意机器判断”表示与最初机器结果完全一致。'}`
+            : failed
+              ? '模型输出未通过校验，请主动选择人工判断并填写依据；模型提示未自动填入复核结论。'
+              : historical
+                ? '这条机器结果使用历史版本。请按当前禁止清单完整重新复核；旧分类和旧编号未自动填入。'
+                : '尚未保存人工复核；当前字段来自机器判断。',
           'moderation-note',
         ),
         field('复核结论', verdict, `${prefix}-verdict`),
@@ -725,7 +854,11 @@
           return;
         }
         if (!Object.prototype.hasOwnProperty.call(verdictOptions, verdict.value)) {
-          status.textContent = '历史结果不能直接同意，请按当前禁止清单重新复核。';
+          status.textContent = '此结果不能直接同意，请按当前禁止清单独立复核。';
+          return;
+        }
+        if (!Object.prototype.hasOwnProperty.call(DECISION_LABELS, decision.value)) {
+          status.textContent = '请主动选择人工风险判断。';
           return;
         }
         if (ruleIds().some((id) => !state.library.rules.some((rule) => rule.id === id))) {
@@ -915,7 +1048,7 @@
           if (!runs.length) content.append(node('p', '暂无已保存的试审记录。', 'moderation-empty'));
           for (const run of runs) {
             const entry = disclosure(
-              `${formatTime(run.createdAt)} · ${run.model} · ${DECISION_LABELS[run.assessment?.decision] || '待核对'}`,
+              `${formatTime(run.createdAt)} · ${run.model} · ${!run.assessment || run.manualReview?.validation === 'failed' ? '模型提示待人工复核' : DECISION_LABELS[run.assessment?.decision] || '待核对'}`,
               'moderation-history-entry',
             );
             entry.append(
@@ -924,7 +1057,10 @@
                 `规则版本：${run.policyVersion || '未记录'} · ${run.inputMode === 'synthetic_original' ? '虚构原文（仅测试）' : '本地脱敏文字'}`,
                 'moderation-meta',
               ),
-              node('p', run.assessment?.reason || ''),
+              node(
+                'p',
+                run.manualReview?.validation === 'failed' ? '' : run.assessment?.reason || '',
+              ),
               policyResultPanels(run),
             );
             if (run.feedback)
@@ -1204,6 +1340,41 @@
         } catch (error) {
           if (responseCurrent()) {
             result.replaceChildren();
+            const review = error.reviewResult;
+            if (
+              [502, 504].includes(error.status) &&
+              isReviewResult(review) &&
+              review.submissionId === submission.id &&
+              review.version === inspectedVersion &&
+              review.inputMode === inputMode &&
+              review.model === requestedModel &&
+              review.imagesReviewed === false &&
+              review.automaticPublication === false &&
+              typeof review.contentHash === 'string' &&
+              /^[a-f0-9]{64}$/.test(review.contentHash) &&
+              (!submission.contentHash || review.contentHash === submission.contentHash) &&
+              Number.isFinite(review.elapsedMs) &&
+              review.elapsedMs >= 0 &&
+              Number.isSafeInteger(review.imageCount) &&
+              review.imageCount >= 0 &&
+              Number.isSafeInteger(review.settingsRevision) &&
+              review.settingsRevision >= 0 &&
+              typeof review.policyVersion === 'string' &&
+              review.policyVersion.length > 0 &&
+              review.policyVersion.length <= 120
+            ) {
+              result.append(
+                node(
+                  'p',
+                  `模型：${review.model} · 耗时：${(review.elapsedMs / 1000).toFixed(1)} 秒`,
+                  'moderation-meta',
+                ),
+                manualReviewPanel(review),
+              );
+              status.textContent = '试审输出未通过校验，已转为人工复核提示。';
+              if (review.runId) state.refreshHistory?.();
+              return;
+            }
             status.textContent =
               error.status === 409
                 ? '提交状态或版本已变化，请刷新后核对。'

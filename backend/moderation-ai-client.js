@@ -15,6 +15,7 @@ const {
   diagnoseContentShape,
   diagnoseJsonSyntax,
   diagnoseAssessmentFields,
+  diagnoseReviewSignal,
 } = require('./moderation-ai-diagnostics');
 
 const BASE_URL = 'https://cloud.infini-ai.com/maas/v1';
@@ -174,6 +175,7 @@ class ModerationAiError extends Error {
       contentShape: details.contentShape,
       jsonSyntaxKind: details.jsonSyntaxKind,
       assessmentFields: details.assessmentFields,
+      reviewSignal: details.reviewSignal,
     });
   }
 }
@@ -374,9 +376,11 @@ function parseAssessment(body, data) {
   } catch (error) {
     if (error instanceof ModerationAiError)
       throw new ModerationAiError(502, error.diagnostics.failureCode, {
+        httpStatus: 200,
         contentShape: diagnoseContentShape(message.content),
         jsonSyntaxKind: 'none',
         assessmentFields: diagnoseAssessmentFields(parsed),
+        reviewSignal: diagnoseReviewSignal(parsed),
       });
     throw error;
   }
@@ -554,15 +558,24 @@ function createModerationAiClient({
     try {
       return await Promise.race([execute(), deadline]);
     } catch (error) {
-      if (timedOut) throw new ModerationAiError(504, 'timeout', { httpStatus });
-      if (error instanceof ModerationAiError)
-        throw new ModerationAiError(error.status, error.diagnostics.failureCode, {
-          httpStatus,
-          contentShape: error.diagnostics.contentShape,
-          jsonSyntaxKind: error.diagnostics.jsonSyntaxKind,
-          assessmentFields: error.diagnostics.assessmentFields,
-        });
-      throw new ModerationAiError(502, 'transport_error', { httpStatus });
+      const failure = timedOut
+        ? new ModerationAiError(504, 'timeout', { httpStatus })
+        : error instanceof ModerationAiError
+          ? new ModerationAiError(error.status, error.diagnostics.failureCode, {
+              httpStatus,
+              contentShape: error.diagnostics.contentShape,
+              jsonSyntaxKind: error.diagnostics.jsonSyntaxKind,
+              assessmentFields: error.diagnostics.assessmentFields,
+              reviewSignal: error.diagnostics.reviewSignal,
+            })
+          : new ModerationAiError(502, 'transport_error', { httpStatus });
+      // Metadata comes from this request's settings snapshot, never the provider.
+      failure.reviewContext = {
+        model,
+        settingsRevision,
+        policyVersion: POLICY_VERSION,
+      };
+      throw failure;
     } finally {
       clearTimeout(timer);
     }
@@ -570,4 +583,4 @@ function createModerationAiClient({
   return { assess, listModels };
 }
 
-module.exports = { createModerationAiClient, CATEGORIES, POLICY_VERSION };
+module.exports = { createModerationAiClient, ModerationAiError, CATEGORIES, POLICY_VERSION };

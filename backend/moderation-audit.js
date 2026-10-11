@@ -2,6 +2,8 @@ const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { POLICY_VERSION, CATEGORIES, getPolicyRule } = require('./moderation-policy');
+const { sanitizeDiagnostics } = require('./moderation-ai-diagnostics');
+const { normalizePolicyDecision } = require('./moderation-policy-decision');
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const DECISIONS = ['no_risk_detected', 'needs_review', 'high_risk'];
@@ -184,6 +186,20 @@ function createModerationAudit({ pool }) {
       policyDecision: result.policyDecision,
       policyEvidence: result.policyEvidence,
     };
+    if (result.manualReview) {
+      const diagnostics = sanitizeDiagnostics(result.manualReview.diagnostics);
+      if (
+        result.manualReview.required !== true ||
+        result.manualReview.validation !== 'failed' ||
+        !diagnostics
+      )
+        throw fail('人工复核提示结构无效，未保存。', 502);
+      // Persist only safe enums and fixed diagnostics; never the rejected body.
+      stored.assessment = null;
+      stored.policyEvidence = [];
+      stored.policyDecision = normalizePolicyDecision(null, input);
+      stored.manualReview = { required: true, validation: 'failed', diagnostics };
+    }
     const serialized = JSON.stringify(stored);
     if (Buffer.byteLength(serialized, 'utf8') > 192 * 1024)
       throw fail('审核结果过大，未保存。', 502);
@@ -264,6 +280,8 @@ function createModerationAudit({ pool }) {
       await submission(db, id);
       const run = await runRow(db, id, runId);
       const runResult = parse(run.result_json);
+      if (body.verdict === 'agree' && (runResult.manualReview || !runResult.assessment))
+        throw fail('机器结果未通过校验，不能同意机器结论；请独立复核后选择纠正或升级核查。', 409);
       if (body.verdict === 'agree' && runResult.policyVersion !== POLICY_VERSION)
         throw fail('该试审结果来自旧版规则，请选择纠正，并按当前禁止清单重新复核。', 409);
       const label = validateLabel(body);

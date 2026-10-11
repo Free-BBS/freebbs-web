@@ -5,6 +5,7 @@ const { isolatedMysqlConfig, assertIsolatedMysql } = require('./test-helpers/iso
 const { ensureSchema, createDiscussionModeration } = require('./discussion-moderation');
 const { createModerationAudit, ensureModerationAuditSchema } = require('./moderation-audit');
 const { POLICY_VERSION } = require('./moderation-policy');
+const { DIAGNOSTICS_VERSION, CONTRACT_VERSION } = require('./moderation-ai-diagnostics');
 const { normalizePolicyDecision, buildPolicyEvidence } = require('./moderation-policy-decision');
 
 test(
@@ -205,6 +206,77 @@ test(
         assert.equal(Number(row.same_expiry), 1);
         assert.equal(Number(row.lifetime), 30 * 24 * 60 * 60);
         await assert.rejects(restarted.history({ id: item.id, reviewerId: 2 }), { status: 403 });
+      },
+    );
+
+    await t.test(
+      'failed claims survive pool restart as manual-only history and require an independent correction',
+      async () => {
+        const item = await submission();
+        item.result.assessment.reason = 'PRIVATE_REJECTED_REASON';
+        item.result.policyDecision = { recommendedAction: 'allow', canAutomaticallyPublish: true };
+        item.result.manualReview = {
+          required: true,
+          validation: 'failed',
+          diagnostics: {
+            version: DIAGNOSTICS_VERSION,
+            contractVersion: CONTRACT_VERSION,
+            failureCode: 'high_risk_without_block',
+            httpStatus: 200,
+            reviewSignal: {
+              version: 1,
+              reportedDecision: 'high_risk',
+              reportedCategories: ['political_compliance', 'PRIVATE_UNKNOWN_CATEGORY'],
+              reportedRuleIds: ['政治内容-001', 'PRIVATE_UNKNOWN_RULE'],
+              reportedSupportPriority: 'none',
+              reason: 'PRIVATE_REJECTED_REASON',
+            },
+          },
+        };
+        await audit.prepare(item);
+        item.runId = await audit.record(item);
+        const history = await restarted.history({ id: item.id, reviewerId: 4 });
+        const [run] = history.runs;
+        assert.equal(run.id, item.runId);
+        assert.equal(run.assessment, null);
+        assert.deepEqual(run.policyEvidence, []);
+        assert.equal(run.policyDecision.recommendedAction, 'hold');
+        assert.equal(run.policyDecision.canAutomaticallyPublish, false);
+        assert.equal(run.automaticPublication, false);
+        assert.equal(run.imagesReviewed, false);
+        assert.deepEqual(run.manualReview.diagnostics.reviewSignal, {
+          version: 1,
+          reportedDecision: 'high_risk',
+          reportedCategories: ['political_compliance'],
+          reportedRuleIds: ['政治内容-001'],
+          reportedSupportPriority: 'none',
+        });
+        assert.doesNotMatch(JSON.stringify(history), /PRIVATE_/);
+        const [[stored]] = await pool.execute(
+          `SELECT r.expires_at = s.expires_at AS same_expiry FROM moderation_ai_runs r
+          JOIN moderation_submissions s ON s.id = r.submission_id WHERE r.id = ?`,
+          [item.runId],
+        );
+        assert.equal(Number(stored.same_expiry), 1);
+        await assert.rejects(restarted.feedback({ ...item, body: feedbackBody() }), {
+          status: 409,
+        });
+        assert.equal(await count('moderation_ai_feedback', 'run_id', item.runId), 0);
+        await restarted.feedback({
+          ...item,
+          body: feedbackBody({
+            ...clearLabel(),
+            verdict: 'correct',
+            note: '按当前规则独立核对，确认原文属于正常讨论。',
+          }),
+        });
+        const corrected = (await audit.history({ id: item.id, reviewerId: 1 })).runs[0];
+        assert.equal(corrected.feedback.decision, 'no_risk_detected');
+        assert.equal(corrected.feedback.policyVersion, POLICY_VERSION);
+        assert.equal(corrected.assessment, null);
+        assert.deepEqual(corrected.manualReview, run.manualReview);
+        assert.equal(corrected.publicationDecision.status, 'pending');
+        assert.equal(await count('moderation_ai_feedback', 'run_id', item.runId), 1);
       },
     );
 

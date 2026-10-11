@@ -478,6 +478,45 @@ test('three consecutive API failures stop only that model, without retries, and 
   assert.doesNotMatch(JSON.stringify(comparison), /private-config/);
 });
 
+test('batch snapshots retain safe model review signals without converting invalid output into a result', async () => {
+  const h = harness({
+    fetchResult: () =>
+      response(
+        assessment({
+          decision: 'high_risk',
+          categories: ['privacy'],
+          reason: PRIVATE,
+        }),
+      ),
+  });
+  const comparison = await h.run({ models: ['glm-5.1'] });
+  assert.equal(h.calls.length, 1);
+  assert.equal(comparison.summary.failed, 1);
+  assert.equal(comparison.summary.validResults, 0);
+  assert.equal(comparison.summary.failedWithReviewSignal, 1);
+  assert.equal(comparison.summary.matchedLabels, 0);
+  assert.equal(comparison.summary.disposition.matched, 0);
+  const result = comparison.models[0].results[0];
+  assert.equal(result.assessment, null);
+  assert.equal(result.error.status, 502);
+  assert.equal(result.error.diagnostics.failureCode, 'high_risk_without_block');
+  assert.deepEqual(result.error.diagnostics.reviewSignal, {
+    version: 1,
+    reportedDecision: 'high_risk',
+    reportedCategories: ['privacy'],
+    reportedRuleIds: [],
+    reportedSupportPriority: 'none',
+  });
+  assert.equal(result.comparisonEvaluation.result, 'error');
+  assert.equal(result.overallEvaluation.humanReviewRequired, true);
+  assert.equal(
+    h.modelSnapshots.at(-1).report.results[0].error.diagnostics.reviewSignal.reportedDecision,
+    'high_risk',
+  );
+  assert.doesNotMatch(JSON.stringify(comparison), /private-config|apiKey|MYSQL_PASSWORD/);
+  assert.doesNotMatch(JSON.stringify(h.modelSnapshots), /private-config|apiKey|MYSQL_PASSWORD/);
+});
+
 test('configuration and report failures prevent paid work or stop all remaining models', async () => {
   for (const extra of [
     { config: config({ MYSQL_PORT: 3306 }) },

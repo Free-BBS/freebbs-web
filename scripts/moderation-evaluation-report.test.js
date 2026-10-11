@@ -319,6 +319,217 @@ test('field diagnostics show fixed Chinese names and unknown count without repor
   assert.equal(report.models[0].metrics.validResults, 0);
 });
 
+test('invalid assessments retain only unverified review signals and remain failed in every metric', () => {
+  const f = fixture('signal-failed');
+  const signal = {
+    version: 1,
+    reportedDecision: 'high_risk',
+    reportedCategories: ['privacy'],
+    reportedRuleIds: ['隐私-003'],
+    reportedSupportPriority: 'urgent',
+  };
+  const error = {
+    status: 502,
+    message: '模型调用或返回格式校验失败。',
+    diagnostics: {
+      version: 1,
+      contractVersion: CONTRACT_VERSION,
+      failureCode: 'high_risk_without_block',
+      httpStatus: 200,
+      reviewSignal: signal,
+    },
+  };
+  const report = buildComparison(
+    plan([f], [row(f, 'no_risk_detected', { assessment: null, error })], {
+      selectedModels: ['model-a'],
+      manifest: { cases: { [f.id]: qualityMetadata(f) } },
+    }),
+  );
+  const result = report.models[0].results[0];
+  assert.deepEqual(result.error.diagnostics.reviewSignal, signal);
+  assert.equal(result.assessment, null);
+  assert.equal(result.comparisonEvaluation.result, 'error');
+  assert.equal(result.overallEvaluation.result, 'error');
+  assert.equal(result.overallEvaluation.humanReviewRequired, true);
+  assert.equal(result.qualityEvaluation.disposition.status, 'unavailable');
+  assert.equal(result.qualityEvaluation.disposition.actualAction, null);
+  assert.equal(result.qualityEvaluation.grounding.status, 'unavailable');
+  assert.equal(report.summary.failed, 1);
+  assert.equal(report.summary.failedWithReviewSignal, 1);
+  assert.equal(report.summary.validResults, 0);
+  assert.equal(report.summary.matchedLabels, 0);
+  assert.equal(report.summary.reviewRequiredResults, 0);
+  assert.equal(report.summary.disposition.matched, 0);
+  assert.equal(report.summary.latency.sampleCount, 0);
+  assert.equal(report.summary.decisionConfusion.no_risk_detected.high_risk, 0);
+  const html = renderHtml(report);
+  assert.match(html, /模型提示待人工复核/);
+  assert.match(html, /高风险（模型声称，未核实）/);
+  assert.match(html, /隐私信息（未核实）/);
+  assert.match(html, /隐私-003（仅为模型提及，未核实是否适用）/);
+  assert.match(html, /紧急关怀（模型声称，未核实）/);
+  assert.match(html, /暂缓并人工复核；不会据此自动发布或自动拦截/);
+  assert.match(html, /仍计为失败，不纳入有效结果、标签匹配或最终处置匹配统计/);
+  assert.match(html, /失败结果中有 1 条保留了模型提示/);
+  assert.match(html, /data-outcome="error" data-overall="error"/);
+});
+
+test('an invalid no-risk claim is also held for human review and never treated as a valid pass', () => {
+  const f = fixture('normal-claim-failed');
+  const error = {
+    status: 502,
+    message: '模型调用或返回格式校验失败。',
+    diagnostics: {
+      version: 1,
+      contractVersion: CONTRACT_VERSION,
+      failureCode: 'assessment_fields_invalid',
+      httpStatus: 200,
+      reviewSignal: {
+        version: 1,
+        reportedDecision: 'no_risk_detected',
+        reportedCategories: [],
+        reportedRuleIds: [],
+        reportedSupportPriority: 'none',
+      },
+    },
+  };
+  const report = buildComparison(
+    plan([f], [row(f, 'no_risk_detected', { assessment: null, error })]),
+  );
+  assert.equal(report.summary.failedWithReviewSignal, 1);
+  assert.equal(report.summary.failed, 1);
+  assert.equal(report.summary.validResults, 0);
+  assert.equal(report.summary.matchedLabels, 0);
+  assert.equal(report.summary.disposition.matched, 0);
+  const html = renderHtml(report);
+  assert.match(html, /未发现风险（模型声称，未核实）/);
+  assert.match(html, /即使模型声称未发现风险，也仍需人工决定/);
+  assert.match(html, /未知：未保留有效的已知类别，不代表无风险/);
+  assert.match(html, /未知：未保留有效的已知规则编号，不代表没有违规/);
+  assert.match(html, /未提示关怀（模型声称，未核实）/);
+});
+
+test('timeouts, empty model objects and legacy failures all require human review without model claims', () => {
+  const errors = [
+    {
+      status: 504,
+      message: '模型调用超时。',
+      diagnostics: {
+        version: 1,
+        contractVersion: CONTRACT_VERSION,
+        failureCode: 'timeout',
+        httpStatus: null,
+      },
+    },
+    {
+      status: 502,
+      message: '模型调用或返回格式校验失败。',
+      diagnostics: {
+        version: 1,
+        contractVersion: CONTRACT_VERSION,
+        failureCode: 'assessment_fields_invalid',
+        httpStatus: 200,
+        assessmentFields: {
+          missingFields: [
+            'decision',
+            'categories',
+            'reason',
+            'ruleMatches',
+            'uncertainties',
+            'supportPriority',
+            'supportReason',
+          ],
+          unknownFieldCount: 0,
+        },
+      },
+    },
+    { status: 502, message: '旧报告未记录诊断信息。' },
+  ];
+  const cases = errors.map((_error, index) => fixture(`no-signal-${index}`));
+  const report = buildComparison(
+    plan(
+      cases,
+      cases.map((f, index) =>
+        row(f, 'no_risk_detected', { assessment: null, error: errors[index] }),
+      ),
+      {
+        selectedModels: ['model-a'],
+        manifest: { cases: Object.fromEntries(cases.map((f) => [f.id, qualityMetadata(f)])) },
+      },
+    ),
+  );
+  assert.equal(report.summary.failed, 3);
+  assert.equal(report.summary.failedWithReviewSignal, 0);
+  assert.equal(report.summary.validResults, 0);
+  assert.equal(report.summary.matchedLabels, 0);
+  assert.equal(report.summary.disposition.matched, 0);
+  for (const result of report.models[0].results) {
+    assert.equal(result.overallEvaluation.humanReviewRequired, true);
+    assert.equal(result.overallEvaluation.result, 'error');
+    assert.equal(result.comparisonEvaluation.result, 'error');
+    assert.equal(result.error.diagnostics?.reviewSignal, undefined);
+    assert.equal(result.qualityEvaluation.disposition.status, 'unavailable');
+    assert.equal(result.qualityEvaluation.disposition.actualAction, null);
+  }
+  assert.doesNotMatch(renderHtml(report), /模型声称|失败结果中有/);
+});
+
+test('review signals omit arbitrary provider text and mark missing recognized fields unknown', () => {
+  const marker = '<img src=x onerror=alert(1)>PRIVATE_REVIEW_SIGNAL';
+  const f = fixture('signal-sanitization');
+  f.title = '<b>虚构样例标题</b>';
+  const error = {
+    status: 502,
+    message: '模型调用或返回格式校验失败。',
+    diagnostics: {
+      version: 1,
+      contractVersion: CONTRACT_VERSION,
+      failureCode: 'assessment_fields_invalid',
+      httpStatus: 200,
+      providerText: marker,
+      reviewSignal: {
+        version: 1,
+        reportedDecision: marker,
+        reportedCategories: ['privacy', marker],
+        reportedRuleIds: [marker],
+        reportedSupportPriority: marker,
+        reason: marker,
+        explanation: marker,
+        rawAssessment: marker,
+      },
+    },
+  };
+  const report = buildComparison(
+    plan([f], [row(f, 'no_risk_detected', { assessment: null, error })]),
+  );
+  const signal = report.models[0].results[0].error.diagnostics.reviewSignal;
+  assert.deepEqual(signal, {
+    version: 1,
+    reportedDecision: null,
+    reportedCategories: ['privacy'],
+    reportedRuleIds: [],
+    reportedSupportPriority: null,
+  });
+  assert.doesNotMatch(
+    JSON.stringify(report),
+    /PRIVATE_REVIEW_SIGNAL|onerror|rawAssessment|providerText/,
+  );
+  const html = renderHtml(report);
+  assert.match(html, /未知：未取得有效等级/);
+  assert.match(html, /未知：未取得有效关怀级别/);
+  assert.match(html, /&lt;b&gt;虚构样例标题&lt;\/b&gt;/);
+  assert.doesNotMatch(
+    html,
+    /PRIVATE_REVIEW_SIGNAL|onerror|rawAssessment|providerText|<b>虚构样例标题/,
+  );
+  const legacy = structuredClone(report);
+  delete legacy.models[0].results[0].error.diagnostics.reviewSignal;
+  const old = buildComparison(legacy);
+  assert.equal(old.summary.failedWithReviewSignal, 0);
+  assert.equal(old.summary.failed, 1);
+  assert.doesNotMatch(renderHtml(old), /模型提示待人工复核|失败结果中有/);
+});
+
 test('old contract diagnostics remain readable without changing their version', () => {
   const oldVersion = 'freebbs-moderation-contract-2026-10-10-v1';
   const f = fixture('old-contract');

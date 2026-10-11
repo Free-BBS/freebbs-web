@@ -9,7 +9,84 @@ const {
   diagnoseContentShape,
   diagnoseJsonSyntax,
   diagnoseAssessmentFields,
+  diagnoseReviewSignal,
+  sanitizeReviewSignal,
 } = require('./moderation-ai-diagnostics');
+
+test('unverified signals retain only known enums and rule identifiers, never free text or invented labels', () => {
+  const signal = diagnoseReviewSignal({
+    decision: 'high_risk',
+    categories: ['privacy', 'private-original', 'privacy', { secret: 'provider-secret' }],
+    ruleMatches: [
+      {
+        ruleId: '隐私-003',
+        evidence: { quote: 'private-original' },
+        explanation: 'provider-secret',
+      },
+      { ruleId: 'UNKNOWN-private-original' },
+    ],
+    supportPriority: 'urgent',
+    reason: 'provider-secret',
+    supportReason: 'private-original',
+    uncertainties: ['provider-secret'],
+    rawReasoning: 'private-original',
+  });
+  assert.deepEqual(signal, {
+    version: 1,
+    reportedDecision: 'high_risk',
+    reportedCategories: ['privacy'],
+    reportedRuleIds: ['隐私-003'],
+    reportedSupportPriority: 'urgent',
+  });
+  assert.deepEqual(sanitizeReviewSignal(signal), signal);
+  assert.doesNotMatch(
+    JSON.stringify(signal),
+    /private-original|provider-secret|evidence|reason|UNKNOWN/,
+  );
+  assert.equal(diagnoseReviewSignal({}), undefined);
+  assert.equal(
+    diagnoseReviewSignal({ decision: 'provider-secret', categories: ['private-original'] }),
+    undefined,
+  );
+  const negative = diagnoseReviewSignal({ decision: 'no_risk_detected' });
+  assert.equal(negative.reportedDecision, 'no_risk_detected');
+  assert.equal(negative.reportedSupportPriority, null);
+  assert.deepEqual(negative.reportedRuleIds, []);
+  assert.equal(sanitizeReviewSignal({ ...signal, version: 2 }), undefined);
+  assert.equal(
+    diagnoseReviewSignal(
+      Object.defineProperty({}, 'decision', {
+        get() {
+          throw new Error('provider-secret');
+        },
+      }),
+    ),
+    undefined,
+  );
+});
+
+test('only parsed assessment failures from HTTP 200 may carry an unverified review signal', () => {
+  const reviewSignal = diagnoseReviewSignal({ decision: 'high_risk' });
+  const parsedFailures = [
+    'assessment_fields_invalid',
+    'rule_evidence_invalid',
+    'rule_unknown',
+    'category_rule_mismatch',
+    'support_rule_mismatch',
+    'high_risk_without_block',
+  ];
+  for (const failureCode of FAILURE_CODES) {
+    const clean = sanitizeDiagnostics(diagnostic({ failureCode, reviewSignal }));
+    assert.equal(Boolean(clean.reviewSignal), parsedFailures.includes(failureCode), failureCode);
+  }
+  for (const httpStatus of [null, 400, 429, 500])
+    assert.equal(
+      sanitizeDiagnostics(
+        diagnostic({ httpStatus, failureCode: 'high_risk_without_block', reviewSignal }),
+      ).reviewSignal,
+      undefined,
+    );
+});
 
 function diagnostic(extra = {}) {
   return {

@@ -184,7 +184,9 @@ function overallEvaluation(row, comparison, quality) {
   return {
     result,
     issues,
-    humanReviewRequired: Boolean(row.assessment && !row.error),
+    // Every recorded result needs a human check, including failures with no
+    // recoverable model claim. Unprocessed cases have no result row here.
+    humanReviewRequired: true,
   };
 }
 
@@ -280,6 +282,10 @@ function metrics(rows, plannedCount) {
       humanReviewRequired: valid.length,
     },
     failed: rows.filter((row) => !row.assessment || row.error).length,
+    failedWithReviewSignal: rows.filter(
+      (row) =>
+        (!row.assessment || row.error) && sanitizeDiagnostics(row.error?.diagnostics)?.reviewSignal,
+    ).length,
     normalEscalations: valid.filter(
       (row) =>
         row.fixture.expectedDecision === 'no_risk_detected' &&
@@ -435,7 +441,28 @@ function renderDiagnostics(value) {
   const fieldDetails = fields
     ? `<p><strong>缺少必需字段（${fields.missingFields.length} 项）：</strong>${e(join(fields.missingFields.map((field) => ASSESSMENT_FIELD_LABELS[field])))}。</p><p><strong>额外字段数量：</strong>${fields.unknownFieldCount === 1000 ? '至少 1000' : fields.unknownFieldCount}。仅记录数量，不保存额外字段名或内容。</p>`
     : '';
-  return `<p><strong>失败位置：</strong>${e(FAILURE_LABELS[diagnostic.failureCode] || '接口校验失败')}。${diagnostic.httpStatus !== null ? ` 供应商响应状态：${diagnostic.httpStatus}。` : ''}</p>${diagnostic.jsonSyntaxKind ? `<p><strong>语法检查：</strong>${e(SYNTAX_LABELS[diagnostic.jsonSyntaxKind])}。</p>` : ''}${fieldDetails}${shape ? `<details><summary>返回格式检查（仅记录形态，不含原文）</summary><ul>${shape}</ul></details>` : ''}`;
+  return `<p><strong>失败位置：</strong>${e(FAILURE_LABELS[diagnostic.failureCode] || '接口校验失败')}。${diagnostic.httpStatus !== null ? ` 供应商响应状态：${diagnostic.httpStatus}。` : ''}</p>${renderReviewSignal(diagnostic.reviewSignal)}${diagnostic.jsonSyntaxKind ? `<p><strong>语法检查：</strong>${e(SYNTAX_LABELS[diagnostic.jsonSyntaxKind])}。</p>` : ''}${fieldDetails}${shape ? `<details><summary>返回格式检查（仅记录形态，不含原文）</summary><ul>${shape}</ul></details>` : ''}`;
+}
+
+function renderReviewSignal(signal) {
+  if (!signal) return '';
+  const decision = {
+    no_risk_detected: '未发现风险（模型声称，未核实）',
+    needs_review: '需要人工核查（模型声称，未核实）',
+    high_risk: '高风险（模型声称，未核实）',
+  };
+  const support = {
+    none: '未提示关怀（模型声称，未核实）',
+    attention: '关注（模型声称，未核实）',
+    urgent: '紧急关怀（模型声称，未核实）',
+  };
+  const categories = signal.reportedCategories?.length
+    ? `${join(signal.reportedCategories.map((category) => CATEGORY_LABELS[category]))}（未核实）`
+    : '未知：未保留有效的已知类别，不代表无风险';
+  const rules = signal.reportedRuleIds?.length
+    ? `${join(signal.reportedRuleIds)}（仅为模型提及，未核实是否适用）`
+    : '未知：未保留有效的已知规则编号，不代表没有违规';
+  return `<div class="notice review-signal"><h4>模型提示待人工复核</h4><p>本次输出未通过校验，以下仅为可识别的模型提示，不能作为有效审核结论。</p><ul><li><strong>原报等级：</strong>${e(decision[signal.reportedDecision] || '未知：未取得有效等级')}</li><li><strong>原报类别：</strong>${e(categories)}</li><li><strong>提及规则：</strong>${e(rules)}</li><li><strong>关怀提示：</strong>${e(support[signal.reportedSupportPriority] || '未知：未取得有效关怀级别')}</li></ul><p><strong>处理要求：</strong>暂缓并人工复核；不会据此自动发布或自动拦截。即使模型声称未发现风险，也仍需人工决定。</p><p class="muted">缺失或未保留的信息均为未知。此项仍计为失败，不纳入有效结果、标签匹配或最终处置匹配统计。</p></div>`;
 }
 
 function renderQuality(row, metadata) {
@@ -495,7 +522,8 @@ function renderEvidenceAnnotations(metadata, grounding) {
 function renderCase(row, model, metadata) {
   const outcome = row.comparisonEvaluation.result;
   const outcomeLabel = { matched: '标签一致', review: '需要复核', error: '调用失败' }[outcome];
-  const actual = row.assessment;
+  const actual = row.error ? null : row.assessment;
+  const reviewSignal = actual ? null : sanitizeDiagnostics(row.error?.diagnostics)?.reviewSignal;
   const alternative = row.comparisonEvaluation.acceptedExpectationIndex > 0;
   const reasons = actual
     ? `<p><strong>模型理由：</strong>${e(actual.reason)}</p>
@@ -504,7 +532,7 @@ function renderCase(row, model, metadata) {
     <p><strong>待核实：</strong>${e(join(actual.uncertainties))}</p>
     <ul>${(actual.ruleMatches || []).map((match) => `<li><strong>${e(match.ruleId)}</strong>：${e(match.explanation || match.reason || '')}<blockquote>${e(match.evidence?.quote || match.quote || '')}</blockquote></li>`).join('')}</ul>`
     : `<p class="error"><strong>调用结果：</strong>${e(row.error?.message || '未返回有效结果')}（${e(row.error?.status || row.error?.code || 'unknown')}）</p>${renderDiagnostics(row.error?.diagnostics)}`;
-  return `<tr class="case-row" data-model="${e(model)}" data-outcome="${outcome}" data-overall="${e(row.overallEvaluation.result)}" data-disposition="${e(row.qualityEvaluation.disposition.status)}" data-grounding="${e(row.qualityEvaluation.grounding.status)}"><td data-label="结果"><span class="badge ${outcome}">${outcomeLabel}</span><small class="${row.qualityEvaluation.disposition.status === 'review' ? 'review' : ''}">${e(label(DISPOSITION_LABELS, row.qualityEvaluation.disposition.status))}</small><small class="${row.qualityEvaluation.grounding.status === 'flagged' ? 'review' : ''}">${e(label(GROUNDING_LABELS, row.qualityEvaluation.grounding.status))}</small>${alternative ? '<small>接受预先标注的替代规则组合</small>' : ''}</td><td data-label="样例"><strong>${e(row.fixture.id)}</strong><small>${e(label(BUCKET_LABELS, metadata?.bucket))}</small></td><td data-label="模型">${e(model)}</td><td data-label="内容与依据"><details><summary>${e(row.fixture.title || row.fixture.content.slice(0, 45))}</summary><div class="case-detail">
+  return `<tr class="case-row" data-model="${e(model)}" data-outcome="${outcome}" data-overall="${e(row.overallEvaluation.result)}" data-disposition="${e(row.qualityEvaluation.disposition.status)}" data-grounding="${e(row.qualityEvaluation.grounding.status)}"><td data-label="结果"><span class="badge ${outcome}">${outcomeLabel}</span>${reviewSignal ? '<small>模型提示待人工复核</small>' : ''}<small class="${row.qualityEvaluation.disposition.status === 'review' ? 'review' : ''}">${e(label(DISPOSITION_LABELS, row.qualityEvaluation.disposition.status))}</small><small class="${row.qualityEvaluation.grounding.status === 'flagged' ? 'review' : ''}">${e(label(GROUNDING_LABELS, row.qualityEvaluation.grounding.status))}</small>${alternative ? '<small>接受预先标注的替代规则组合</small>' : ''}</td><td data-label="样例"><strong>${e(row.fixture.id)}</strong><small>${e(label(BUCKET_LABELS, metadata?.bucket))}</small></td><td data-label="模型">${e(model)}</td><td data-label="内容与依据"><details><summary>${e(row.fixture.title || row.fixture.content.slice(0, 45))}</summary><div class="case-detail">
     <h4>送审文字（全部为虚构样例）</h4><p>${e(row.fixture.title)}</p><pre>${e(row.fixture.content)}</pre>
     <p><strong>主要预期：</strong>${renderExpected(row.fixture)}</p><p><strong>预期依据：</strong>${e(row.fixture.reason)}</p>
     ${metadata?.acceptedExpectations?.length ? `<p><strong>预先允许的替代组合：</strong></p><ul>${metadata.acceptedExpectations.map((item) => `<li>${renderExpected(item)}</li>`).join('')}</ul>` : ''}
@@ -560,6 +588,7 @@ function renderHtml(input) {
   </style></head><body><main><div class="eyebrow">FREEBBS · 审核模型对照</div><h1>同一批样例，不同模型的判断差异</h1><p class="muted">${e(report.policyVersion)} · ${report.suite === 'smoke' ? '小批检查' : '完整样例'} · ${e(label(STATUS_LABELS, report.status))}</p>
   <div class="notice">样例及预期标签为${report.annotationStatus === 'draft_pending_owner_review' ? '初拟版本，需负责人复核' : '输入文件提供的标注'}。标签一致数用于定位差异，不代表真实用户内容准确率。模型理由与例外适用需要人工检查。</div>
   <div class="facts"><div class="fact"><strong>${report.caseCount}</strong>固定样例</div><div class="fact"><strong>${report.selectedModels.length}</strong>计划模型</div><div class="fact"><strong>${report.summary.networkAttempts} / ${report.plannedCalls}</strong>已发请求 / 上限</div><div class="fact"><strong>${report.summary.reviewRequiredResults}</strong>发现差异或核查线索的结果</div><div class="fact"><strong>${report.summary.failed}</strong>调用失败</div></div>
+  ${report.summary.failedWithReviewSignal ? `<p class="notice">失败结果中有 ${report.summary.failedWithReviewSignal} 条保留了模型提示，已纳入人工复核范围；提示均未核实，仍计为失败。展开对应样例查看。</p>` : ''}
   ${report.stopReason || report.error ? `<p class="error">停止原因：${e(report.error?.message || report.stopReason)}</p>` : ''}
   ${report.comparabilityWarnings.map((message) => `<p class="notice">${e(message)}</p>`).join('')}
   <section class="card"><h2>模型对比</h2><div class="table-wrap"><table class="overview"><thead><tr><th>模型</th><th>状态</th><th>已测 / 计划</th><th>标签一致 / 有效</th><th>待复核</th><th>失败</th><th>无风险预期被升级</th><th>保护性关怀复核</th><th>风险预期被判无风险</th><th>关怀级别偏低</th><th>平均耗时</th><th>本批 P95</th></tr></thead><tbody>${rows}</tbody></table></div>

@@ -76,6 +76,85 @@ function fixedError(status) {
   };
 }
 
+test('rejected model opinions remain errors with bounded unverified hints and request-owned metadata', async () => {
+  const rule = getPolicyRule('隐私-003');
+  const invalid = {
+    ...ASSESSMENT,
+    decision: 'high_risk',
+    categories: [rule.category],
+    reason: 'private-original',
+    ruleMatches: [
+      {
+        ruleId: rule.id,
+        evidence: { field: 'content', quote: INPUT.content },
+        explanation: 'provider-secret',
+      },
+    ],
+  };
+  const h = harness({ result: () => jsonResponse(envelope(invalid)) });
+  await assert.rejects(h.client.assess(INPUT), (error) => {
+    fixedError(502)(error);
+    assert.equal(error.diagnostics.failureCode, 'high_risk_without_block');
+    assert.deepEqual(error.diagnostics.reviewSignal, {
+      version: 1,
+      reportedDecision: 'high_risk',
+      reportedCategories: [rule.category],
+      reportedRuleIds: [rule.id],
+      reportedSupportPriority: 'none',
+    });
+    assert.deepEqual(error.reviewContext, {
+      model: 'glm-5.1',
+      settingsRevision: 7,
+      policyVersion: POLICY_VERSION,
+    });
+    assert.equal(error.assessment, undefined);
+    assert.equal(error.policyDecision, undefined);
+    return true;
+  });
+  assert.equal(h.requests.length, 1);
+  for (const candidate of [
+    { ...ASSESSMENT, reason: 'private-original', extra: 'provider-secret' },
+    { decision: 'high_risk', categories: ['privacy', 'private-original'] },
+  ]) {
+    const bad = harness({ result: () => jsonResponse(envelope(candidate)) });
+    await assert.rejects(bad.client.assess(INPUT), (error) => {
+      fixedError(502)(error);
+      assert.equal(error.diagnostics.failureCode, 'assessment_fields_invalid');
+      assert.equal(error.diagnostics.reviewSignal.reportedDecision, candidate.decision);
+      assert.equal(error.assessment, undefined);
+      return true;
+    });
+  }
+});
+
+test('refusal, tool, truncated, HTTP, and syntax failures never extract a model risk hint', async () => {
+  const high = { ...ASSESSMENT, decision: 'high_risk' };
+  const truncated = envelope(high);
+  truncated.choices[0].finish_reason = 'length';
+  const refused = envelope(high);
+  refused.choices[0].message.refusal = 'private-original';
+  const tools = envelope(high);
+  tools.choices[0].message.tool_calls = [{ function: { name: 'provider-secret' } }];
+  const fenced = envelope();
+  fenced.choices[0].message.content = `\u0060\u0060\u0060json\n${JSON.stringify(high)}\n\u0060\u0060\u0060`;
+  for (const make of [
+    () => jsonResponse(truncated),
+    () => jsonResponse(refused),
+    () => jsonResponse(tools),
+    () => jsonResponse(fenced),
+    () => jsonResponse(envelope(high), { status: 400 }),
+  ]) {
+    const h = harness({ result: make });
+    await assert.rejects(h.client.assess(INPUT), (error) => {
+      fixedError(502)(error);
+      assert.equal(error.diagnostics.reviewSignal, undefined);
+      assert.equal(error.assessment, undefined);
+      return true;
+    });
+    assert.equal(h.requests.length, 1);
+  }
+});
+
 test('model listing shares the Max catalog without reading a secret or contacting a provider', async () => {
   for (const modelOverride of ['', 'deployment/custom-model:v2']) {
     const config = settings({ apiKey: undefined, configured: false });

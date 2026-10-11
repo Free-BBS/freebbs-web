@@ -462,6 +462,250 @@ const reloadModels = (h) =>
     .querySelectorAll('button')
     .find((item) => item.textContent === '重新加载模型列表');
 
+const manualReviewResult = (extra = {}) => ({
+  ...aiResponse().result,
+  policyVersion: 'policy-v2',
+  assessment: null,
+  policyEvidence: [],
+  policyDecision: {
+    recommendedAction: 'hold',
+    supportPriority: 'none',
+    reasons: ['invalid_assessment'],
+    reasonLabels: ['模型输出未通过校验'],
+    canAutomaticallyPublish: false,
+    imagesReviewed: false,
+  },
+  manualReview: {
+    required: true,
+    validation: 'failed',
+    diagnostics: {
+      version: 1,
+      contractVersion: 'freebbs-moderation-contract-2026-10-11-v2',
+      failureCode: 'high_risk_without_block',
+      httpStatus: 200,
+      reviewSignal: {
+        version: 1,
+        reportedDecision: 'high_risk',
+        reportedCategories: ['harassment'],
+        reportedRuleIds: ['骚扰-001'],
+        reportedSupportPriority: 'none',
+      },
+    },
+  },
+  ...extra,
+});
+
+test('failed AI trial renders only unverified review signals and preserves manual publication control', async () => {
+  const review = manualReviewResult();
+  const signal = review.manualReview.diagnostics.reviewSignal;
+  signal.reportedCategories.push('<script>category()</script>');
+  signal.reportedRuleIds.push('<script>rule()</script>');
+  signal.reason = '<script>providerReason()</script>';
+  review.policyDecision.reasonLabels.push('<script>unsafeReason()</script>');
+  let calls = 0;
+  const h = harness({
+    aiTestEnabled: true,
+    customFetch: (url, options, defaults) => {
+      if (!url.endsWith('/ai-test')) return defaults(url, options);
+      calls += 1;
+      return calls === 1
+        ? response(
+            {
+              message: '模型返回无效',
+              reviewResult: review,
+              assessment: aiResponse().result.assessment,
+            },
+            502,
+          )
+        : response(aiResponse());
+    },
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  await aiButton(h).click();
+  const detail = h.get('detail');
+  assert.match(detail.textContent, /模型提示待人工复核/);
+  assert.match(detail.textContent, /输出未通过校验，不能作为有效结论/);
+  assert.match(detail.textContent, /高风险迹象（尚未核实）/);
+  assert.match(detail.textContent, /模型上报类别（尚未核实）：骚扰侮辱/);
+  assert.match(detail.textContent, /模型上报规则（尚未核实）：骚扰-001/);
+  assert.match(detail.textContent, /模型：synthetic-test-model · 耗时：1.3 秒/);
+  assert.match(detail.textContent, /所选规则不支持直接拦截/);
+  assert.doesNotMatch(
+    detail.textContent,
+    /文字试审已完成|aiReason|providerReason|unsafeReason|category\(\)|rule\(\)/,
+  );
+  assert.equal(detail.querySelectorAll('script').length, 0);
+  assert.equal(h.decisionAttempts(), 0);
+  assert.equal(h.app.state.selected.status, 'pending');
+  assert.equal(calls, 1);
+  assert.equal(
+    detail.querySelectorAll('button').find((button) => button.dataset.decision === 'approved')
+      .disabled,
+    false,
+  );
+  await aiButton(h).click();
+  assert.equal(calls, 2);
+  assert.match(detail.textContent, /文字试审已完成/);
+  assert.doesNotMatch(detail.textContent, /模型上报等级/);
+});
+
+test('a failed trial with no usable signal explicitly remains without a usable judgment', async () => {
+  const review = manualReviewResult();
+  delete review.manualReview.diagnostics.reviewSignal;
+  review.manualReview.diagnostics.failureCode = 'timeout';
+  const h = harness({
+    aiTestEnabled: true,
+    customFetch: (url, options, defaults) =>
+      url.endsWith('/ai-test')
+        ? response({ message: '超时', reviewResult: review }, 504)
+        : defaults(url, options),
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  await aiButton(h).click();
+  assert.match(h.get('detail').textContent, /未取得可用判断，请直接人工审核原稿/);
+  assert.match(h.get('detail').textContent, /模型渠道请求超时/);
+  assert.doesNotMatch(h.get('detail').textContent, /文字试审已完成|未发现明确禁止内容/);
+  assert.equal(h.decisionAttempts(), 0);
+});
+
+test('partial review signals explicitly mark missing fields and never imply a safe result', async () => {
+  for (const reportedDecision of [null, 'no_risk_detected']) {
+    const review = manualReviewResult();
+    review.manualReview.diagnostics.reviewSignal = {
+      version: 1,
+      reportedDecision,
+      reportedCategories: [],
+      reportedRuleIds: [],
+      reportedSupportPriority: reportedDecision === null ? 'urgent' : null,
+    };
+    const h = harness({
+      aiTestEnabled: true,
+      customFetch: (url, options, defaults) =>
+        url.endsWith('/ai-test')
+          ? response({ message: '未通过', reviewResult: review }, 502)
+          : defaults(url, options),
+    });
+    await h.app.ready;
+    await h.app.openSubmission('s1');
+    await flush();
+    await aiButton(h).click();
+    const text = h.get('detail').textContent;
+    assert.match(text, /未保留已知类别，不代表没有风险/);
+    assert.match(text, /未保留已知规则，不代表没有违规/);
+    if (reportedDecision === null) {
+      assert.match(text, /模型上报等级：未知/);
+      assert.match(text, /模型上报关怀：紧急关注（尚未核实）/);
+    } else {
+      assert.match(text, /未经校验，不能据此放行/);
+      assert.match(text, /模型上报关怀：未知/);
+    }
+    assert.doesNotMatch(text, /文字试审已完成|未发现明确禁止内容/);
+  }
+});
+
+test('failed review envelopes reject mismatched snapshots, unsafe markers and misplaced HTTP payloads', async () => {
+  const mutations = [
+    { submissionId: 'other' },
+    { version: 2 },
+    { contentHash: 'b'.repeat(64) },
+    { inputMode: 'synthetic_original' },
+    { model: 'kimi-k2.6' },
+    { automaticPublication: true },
+    { imagesReviewed: true },
+    { elapsedMs: -1 },
+    { settingsRevision: '7' },
+    { imageCount: -1 },
+    { policyVersion: '' },
+    { assessment: aiResponse().result.assessment },
+    { policyEvidence: [{}] },
+    { policyDecision: { ...manualReviewResult().policyDecision, recommendedAction: 'allow' } },
+    { policyDecision: { ...manualReviewResult().policyDecision, canAutomaticallyPublish: true } },
+    { policyDecision: { ...manualReviewResult().policyDecision, imagesReviewed: true } },
+    { manualReview: { ...manualReviewResult().manualReview, required: false } },
+    { manualReview: { ...manualReviewResult().manualReview, validation: 'passed' } },
+  ];
+  for (const mutation of mutations) {
+    const h = harness({
+      aiTestEnabled: true,
+      customFetch: (url, options, defaults) =>
+        url.endsWith('/ai-test')
+          ? response({ message: '保留人工审核', reviewResult: manualReviewResult(mutation) }, 502)
+          : defaults(url, options),
+    });
+    await h.app.ready;
+    await h.app.openSubmission('s1');
+    await flush();
+    await aiButton(h).click();
+    assert.doesNotMatch(h.get('detail').textContent, /模型上报等级|文字试审已完成/);
+    assert.equal(h.decisionAttempts(), 0);
+  }
+  for (const status of [403, 409, 503]) {
+    const h = harness({
+      aiTestEnabled: true,
+      customFetch: (url, options, defaults) =>
+        url.endsWith('/ai-test')
+          ? response({ message: '保留人工审核', reviewResult: manualReviewResult() }, status)
+          : defaults(url, options),
+    });
+    await h.app.ready;
+    await h.app.openSubmission('s1');
+    await flush();
+    await aiButton(h).click();
+    assert.doesNotMatch(h.get('detail').textContent, /模型上报等级/);
+  }
+});
+
+test('late failed review signals cannot cross changed inputs, snapshots, identities or permissions', async () => {
+  for (const change of [
+    'terms',
+    'model',
+    'mode',
+    'logout',
+    'detail',
+    'reviewer',
+    'capability',
+    'version',
+  ]) {
+    const pending = deferred();
+    const h = harness({
+      aiTestEnabled: true,
+      customFetch: (url, options, defaults) =>
+        url.endsWith('/ai-test') ? pending.promise : defaults(url, options),
+    });
+    await h.app.ready;
+    await h.app.openSubmission('s1');
+    await flush();
+    const button = aiButton(h);
+    const loading = button.click();
+    await button.events.click();
+    assert.equal(aiRequests(h).length, 1);
+    if (change === 'terms') {
+      privacyTerms(h).value = '新词';
+      privacyTerms(h).events.input();
+    } else if (change === 'model') {
+      aiModel(h).value = 'kimi-k2.6';
+      aiModel(h).events.change();
+    } else if (change === 'mode') {
+      aiMode(h).value = 'synthetic_original';
+      aiMode(h).events.change();
+    } else if (change === 'logout') {
+      h.setToken('');
+      await h.app.initialize();
+    } else if (change === 'detail') await h.app.openSubmission('s1');
+    else if (change === 'reviewer') h.app.state.session.reviewer = false;
+    else if (change === 'capability') h.app.state.session.aiTestEnabled = false;
+    else h.app.state.selected.version = 2;
+    pending.resolve(response({ message: '未通过', reviewResult: manualReviewResult() }, 502));
+    await loading;
+    assert.doesNotMatch(h.get('detail').textContent, /模型上报等级/, change);
+    assert.equal(h.decisionAttempts(), 0);
+  }
+});
+
 test('AI trial is available only to an enabled reviewer viewing pending work outside mine', async () => {
   for (const options of [
     {},
@@ -1388,6 +1632,107 @@ function policyHarness(options = {}) {
     },
   });
 }
+
+test('failed historical run requires an independent active judgment and never offers agreement', async () => {
+  const run = { ...manualReviewResult(), id: 'run-1', createdAt: '2026-10-11T00:00:00Z' };
+  const h = policyHarness({
+    run,
+    customFetch: (url, options, fallback) =>
+      url.endsWith('/feedback') ? response({ ok: true }) : fallback(url, options),
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  const detail = h.get('detail');
+  const form = detail
+    .querySelectorAll('form')
+    .find((item) =>
+      item.querySelectorAll('button').some((button) => button.textContent === '保存人工复核记录'),
+    );
+  assert.match(detail.textContent, /模型提示待人工复核/);
+  assert.match(detail.textContent, /高风险迹象（尚未核实）/);
+  assert.equal(control(h, 'select', '-decision').value, '');
+  assert.equal(control(h, 'input', '-rules').value, '');
+  assert.equal(
+    form.querySelectorAll('input').filter((input) => input.type === 'checkbox' && input.checked)
+      .length,
+    0,
+  );
+  assert.deepEqual(
+    control(h, 'select', '-verdict').children.map((option) => option.value),
+    ['correct', 'escalate'],
+  );
+  control(h, 'textarea', '-note').value = '已核查完整上下文，记录人工判断。';
+  await form.events.submit({ preventDefault() {} });
+  assert.match(form.textContent, /请主动选择人工风险判断/);
+  assert.equal(h.requests.filter(({ url }) => url.endsWith('/feedback')).length, 0);
+  control(h, 'select', '-decision').value = 'needs_review';
+  control(h, 'select', '-verdict').value = 'agree';
+  await form.events.submit({ preventDefault() {} });
+  assert.match(form.textContent, /此结果不能直接同意/);
+  assert.equal(h.requests.filter(({ url }) => url.endsWith('/feedback')).length, 0);
+  control(h, 'select', '-verdict').value = 'escalate';
+  await form.events.submit({ preventDefault() {} });
+  const writes = h.requests.filter(({ url }) => url.endsWith('/feedback'));
+  assert.equal(writes.length, 1);
+  assert.equal(JSON.parse(writes[0].options.body).decision, 'needs_review');
+  assert.equal(JSON.parse(writes[0].options.body).verdict, 'escalate');
+  assert.equal(h.decisionAttempts(), 0);
+  assert.equal(aiRequests(h).length, 0);
+});
+
+test('failed history hides injected fields and retained human feedback does not permit machine agreement', async () => {
+  const run = { ...manualReviewResult(), id: 'run-1' };
+  run.manualReview.diagnostics.reviewSignal.reportedDecision = '<script>decision()</script>';
+  run.manualReview.diagnostics.reviewSignal.reportedCategories = ['<script>category()</script>'];
+  run.manualReview.diagnostics.reviewSignal.reportedRuleIds = ['<script>rule()</script>'];
+  run.manualReview.diagnostics.reviewSignal.reportedSupportPriority = '<script>support()</script>';
+  run.manualReview.diagnostics.reason = '<script>reason()</script>';
+  run.feedback = {
+    policyVersion: 'policy-v2',
+    verdict: 'correct',
+    decision: 'needs_review',
+    categories: ['harassment'],
+    ruleIds: ['骚扰-001'],
+    supportPriority: 'none',
+    note: '<script>literalHumanNote()</script>',
+  };
+  const h = policyHarness({ run });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  assert.match(h.get('detail').textContent, /未取得可用判断/);
+  assert.doesNotMatch(
+    h.get('detail').textContent,
+    /decision\(\)|category\(\)|rule\(\)|support\(\)|reason\(\)/,
+  );
+  assert.match(h.get('detail').textContent, /<script>literalHumanNote\(\)<\/script>/);
+  assert.equal(h.get('detail').querySelectorAll('script').length, 0);
+  assert.equal(control(h, 'select', '-decision').value, 'needs_review');
+  assert.equal(control(h, 'input', '-rules').value, '骚扰-001');
+  assert.deepEqual(
+    control(h, 'select', '-verdict').children.map((option) => option.value),
+    ['correct', 'escalate'],
+  );
+});
+
+test('API client cannot retain failed review results after the login changes while parsing the error', async () => {
+  const parsed = deferred();
+  let token = 'old-token';
+  const client = createClient({
+    apiBase: '/api',
+    getToken: () => token,
+    fetch: async () => ({ ok: false, status: 502, json: () => parsed.promise }),
+  });
+  const request = client.request('/moderation/submissions/s1/ai-test');
+  await flush();
+  token = 'new-token';
+  parsed.resolve({ message: '未通过', reviewResult: manualReviewResult() });
+  await assert.rejects(
+    request,
+    (error) => error.message.includes('登录状态已变化') && error.reviewResult === undefined,
+  );
+});
 
 test('rule library and persisted AI history are reviewer-only, including admin outside reviewer registry', async () => {
   for (const options of [

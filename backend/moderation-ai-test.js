@@ -1,4 +1,16 @@
+const { ModerationAiError } = require('./moderation-ai-client');
+const { sanitizeDiagnostics } = require('./moderation-ai-diagnostics');
+const { normalizePolicyDecision } = require('./moderation-policy-decision');
+
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
+
+class ModerationManualReviewError extends Error {
+  constructor(status, result) {
+    super('机器结果未通过校验，已保留人工复核；模型提示尚未核实。');
+    this.status = status;
+    this.reviewResult = result;
+  }
+}
 
 function aiTestEnvironmentEnabled(config) {
   const local = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
@@ -70,7 +82,28 @@ function createModerationAiTest({ service, client, audit, enabled = false }) {
         hasImages: snapshot.imageCount > 0,
         ...(model === undefined ? {} : { model }),
       };
-      const response = await client.assess(input);
+      let response;
+      let providerError;
+      try {
+        response = await client.assess(input);
+      } catch (error) {
+        // Never turn a rejected result into a successful assessment. Only errors
+        // created by our client after a provider attempt have trusted metadata.
+        if (
+          !(error instanceof ModerationAiError) ||
+          ![502, 504].includes(error.status) ||
+          !error.reviewContext ||
+          !sanitizeDiagnostics(error.diagnostics)
+        )
+          throw error;
+        providerError = error;
+        response = {
+          ...error.reviewContext,
+          assessment: null,
+          policyDecision: normalizePolicyDecision(null, input),
+          policyEvidence: [],
+        };
+      }
       // A late provider response cannot restore evidence or supersede a human decision.
       const current = await service.aiTestSnapshot({ id, reviewerId, expectedVersion });
       if (current.contentHash !== snapshot.contentHash)
@@ -91,8 +124,18 @@ function createModerationAiTest({ service, client, audit, enabled = false }) {
         imageCount: snapshot.imageCount,
         imagesReviewed: false,
         automaticPublication: false,
+        ...(providerError
+          ? {
+              manualReview: {
+                required: true,
+                validation: 'failed',
+                diagnostics: sanitizeDiagnostics(providerError.diagnostics),
+              },
+            }
+          : {}),
       };
       if (audit) result.runId = await audit.record({ id, reviewerId, snapshot, input, result });
+      if (providerError) throw new ModerationManualReviewError(providerError.status, result);
       return result;
     } finally {
       running -= 1;
@@ -103,4 +146,4 @@ function createModerationAiTest({ service, client, audit, enabled = false }) {
   return { enabled: Boolean(enabled), run, listModels };
 }
 
-module.exports = { aiTestEnvironmentEnabled, createModerationAiTest };
+module.exports = { aiTestEnvironmentEnabled, createModerationAiTest, ModerationManualReviewError };
