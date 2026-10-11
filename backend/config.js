@@ -46,6 +46,11 @@ module.exports = {
     'DISCUSSION_MODERATION_AI_TEST_ENABLED',
   ),
   discussionModerationAiModel: process.env.DISCUSSION_MODERATION_AI_MODEL || '',
+  discussionModerationAutoTestEnabled: readBooleanEnvironmentVariable(
+    'DISCUSSION_MODERATION_AUTO_TEST_ENABLED',
+  ),
+  discussionModerationAutoModel: process.env.DISCUSSION_MODERATION_AUTO_MODEL || 'qwen3.6-27b',
+  discussionModerationBackupModel: process.env.DISCUSSION_MODERATION_BACKUP_MODEL || 'glm-5.1',
   discussionModerationDir:
     process.env.DISCUSSION_MODERATION_DIR ||
     path.join(

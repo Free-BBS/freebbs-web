@@ -98,6 +98,7 @@ function harness({
   reviewer = true,
   isAdmin = false,
   aiTestEnabled = false,
+  automation,
 } = {}) {
   const elements = new Map();
   const get = (id) => {
@@ -124,7 +125,14 @@ function harness({
   let decisionAttempts = 0;
   const defaults = async (url) => {
     if (url.endsWith('/session'))
-      return response({ enabled: true, reviewer, isAdmin, aiTestEnabled, mode: 'manual' });
+      return response({
+        enabled: true,
+        reviewer,
+        isAdmin,
+        aiTestEnabled,
+        automation,
+        mode: automation?.enabled ? 'automatic_test' : 'manual',
+      });
     if (url.endsWith('/reviewers')) return response({ reviewers: [] });
     if (url.endsWith('/ai-models')) return response(aiCatalog());
     if (url.endsWith('/policies'))
@@ -147,6 +155,7 @@ function harness({
         },
       });
     if (url.endsWith('/ai-history')) return response({ runs: [] });
+    if (url.endsWith('/automation')) return response({ job: null });
     if (/\/(mine|submissions)\?/.test(url)) return response({ submissions: [submission] });
     if (url.endsWith('/s1')) return response({ submission: { ...submission } });
     if (url.includes('/attachments/')) return response({ type: 'image/webp', size: 100 });
@@ -2283,5 +2292,361 @@ test('old backend rule shape cannot become an empty current checklist or enable 
       .get('detail')
       .querySelectorAll('button')
       .some((item) => item.textContent === '保存人工复核记录'),
+  );
+});
+
+const automaticSettings = () => ({
+  enabled: true,
+  paused: true,
+  model: 'qwen3.6-27b',
+  backupModel: 'glm-5.1',
+});
+const automaticJob = (state = 'published') => ({
+  state,
+  model: 'qwen3.6-27b',
+  createdAt: '2026-10-11T00:00:00Z',
+  updatedAt: '2026-10-11T00:00:04Z',
+  reasonCode: state === 'published' ? 'no_text_risk' : 'policy_review',
+  result: null,
+  canWithdraw: state === 'published',
+});
+
+test('automation control is admin-only while reviewers can read status and authors see neither', async () => {
+  for (const role of ['admin', 'reviewer', 'author', 'admin-mine']) {
+    const h = harness({
+      isAdmin: role === 'admin' || role === 'admin-mine',
+      reviewer: role !== 'author',
+      mine: role === 'author' || role === 'admin-mine',
+      automation: automaticSettings(),
+    });
+    await h.app.ready;
+    await h.app.openSubmission('s1');
+    await flush();
+    const reviewing = role === 'admin' || role === 'reviewer';
+    assert.equal(h.get('automation').hidden, !reviewing, role);
+    assert.equal(h.get('automation-toggle').hidden, role !== 'admin', role);
+    assert.equal(
+      h.requests.some(({ url }) => url.endsWith('/automation')),
+      reviewing,
+      role,
+    );
+    if (reviewing) {
+      assert.match(h.get('automation-summary').textContent, /qwen3.6-27b.*glm-5.1/);
+      assert.match(h.get('automation-summary').textContent, /已暂停/);
+    }
+    if (role !== 'admin') {
+      await h.get('automation-toggle').events.click();
+      assert.ok(!h.requests.some(({ url }) => url.endsWith('/automation/control')));
+    }
+  }
+});
+
+test('automation resume is guarded against double clicks and failed pause preserves confirmed state', async () => {
+  const pending = deferred();
+  let controls = 0;
+  const h = harness({
+    isAdmin: true,
+    automation: automaticSettings(),
+    customFetch: (url, options, fallback) => {
+      if (url.endsWith('/automation/control')) {
+        controls += 1;
+        return controls === 1 ? pending.promise : response({ message: '权限已变化' }, 403);
+      }
+      return fallback(url, options);
+    },
+  });
+  await h.app.ready;
+  const button = h.get('automation-toggle');
+  assert.equal(button.textContent, '开启自动审核');
+  const first = button.events.click();
+  await button.events.click();
+  assert.equal(controls, 1);
+  assert.equal(button.disabled, true);
+  pending.resolve(response({ automation: { ...automaticSettings(), paused: false } }));
+  await first;
+  assert.equal(button.textContent, '暂停自动审核');
+  assert.match(h.get('automation-summary').textContent, /运行中/);
+  await button.events.click();
+  assert.match(h.get('automation-message').textContent, /权限已变化/);
+  assert.equal(h.app.state.session.automation.paused, false);
+  assert.equal(button.disabled, false);
+  const calls = h.requests.filter(({ url }) => url.endsWith('/automation/control'));
+  assert.deepEqual(
+    calls.map(({ options }) => JSON.parse(options.body)),
+    [{ paused: false }, { paused: true }],
+  );
+});
+
+test('disabled automation still shows historical jobs but never allows enabling from the browser', async () => {
+  const h = harness({
+    isAdmin: true,
+    automation: { ...automaticSettings(), enabled: false },
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  assert.match(h.get('automation-summary').textContent, /未启用/);
+  assert.equal(h.get('automation-toggle').hidden, true);
+  await h.get('automation-toggle').events.click();
+  assert.ok(h.requests.some(({ url }) => url.endsWith('/automation')));
+  assert.ok(!h.requests.some(({ url }) => url.endsWith('/automation/control')));
+});
+
+test('automatic publication has a required-reason idempotent withdrawal with no approval or trial claim', async () => {
+  const wait = deferred();
+  let attempts = 0;
+  const run = policyRun();
+  run.assessment = {
+    ...run.assessment,
+    decision: 'no_risk_detected',
+    categories: [],
+    ruleMatches: [],
+    uncertainties: [],
+  };
+  run.policyDecision = { ...run.policyDecision, recommendedAction: 'allow' };
+  const h = harness({
+    automation: automaticSettings(),
+    aiTestEnabled: true,
+    customFetch: (url, options, fallback) => {
+      if (url.endsWith('/automation')) return response({ job: { ...automaticJob(), result: run } });
+      if (url.endsWith('/withdraw')) {
+        attempts += 1;
+        if (attempts === 1) return wait.promise;
+        h.submission.status = 'rejected';
+        h.submission.version = 3;
+        return response({ submission: { ...h.submission } });
+      }
+      return fallback(url, options);
+    },
+  });
+  h.submission.status = 'approved';
+  h.submission.version = 2;
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  assert.match(h.get('detail').textContent, /已自动发布/);
+  assert.doesNotMatch(h.get('detail').textContent, /不会自动发布/);
+  assert.ok(
+    !h
+      .get('detail')
+      .querySelectorAll('button')
+      .some(
+        (button) =>
+          button.textContent === '通过并发布' || button.textContent === '调用无问芯穹试审',
+      ),
+  );
+  const form = h
+    .get('detail')
+    .querySelectorAll('form')
+    .find((item) => item.className === 'moderation-withdrawal');
+  const reason = form.querySelectorAll('textarea')[0];
+  await form.events.submit({ preventDefault() {} });
+  assert.equal(attempts, 0);
+  assert.match(form.textContent, /请填写 1～1000 字/);
+  reason.value = '<img src=x> 经核查应撤回';
+  const first = form.events.submit({ preventDefault() {} });
+  await form.events.submit({ preventDefault() {} });
+  assert.equal(attempts, 1);
+  wait.resolve(response({ message: '连接暂时失败' }, 503));
+  await first;
+  assert.match(form.textContent, /可重试同一撤回操作/);
+  await form.events.submit({ preventDefault() {} });
+  const calls = h.requests
+    .filter(({ url }) => url.endsWith('/withdraw'))
+    .map(({ options }) => JSON.parse(options.body));
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[0], calls[1]);
+  assert.equal(calls[0].expectedVersion, 2);
+  assert.equal(calls[0].reason, '<img src=x> 经核查应撤回');
+  assert.match(h.get('message').textContent, /已撤回自动发布/);
+});
+
+test('withdrawal conflict reloads the authoritative submission and removes stale withdrawal', async () => {
+  const h = harness({
+    automation: automaticSettings(),
+    customFetch: (url, options, fallback) => {
+      if (url.endsWith('/automation'))
+        return response({
+          job: automaticJob(h.submission.status === 'approved' ? 'published' : 'withdrawn'),
+        });
+      if (url.endsWith('/withdraw')) {
+        h.submission.status = 'rejected';
+        return response({ message: '提交已变化' }, 409);
+      }
+      return fallback(url, options);
+    },
+  });
+  h.submission.status = 'approved';
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  const form = h
+    .get('detail')
+    .querySelectorAll('form')
+    .find((item) => item.className === 'moderation-withdrawal');
+  form.querySelectorAll('textarea')[0].value = '负责人核查后撤回';
+  await form.events.submit({ preventDefault() {} });
+  await flush();
+  assert.match(h.get('message').textContent, /状态已变化或审核数据已到期/);
+  assert.match(h.get('detail').textContent, /负责人已撤回/);
+  assert.ok(
+    !h
+      .get('detail')
+      .querySelectorAll('form')
+      .some((item) => item.className === 'moderation-withdrawal'),
+  );
+});
+
+test('temporary machine block keeps manual decisions and independent GLM trial selection available', async () => {
+  const h = harness({
+    automation: automaticSettings(),
+    aiTestEnabled: true,
+    customFetch: (url, options, fallback) => {
+      if (url.endsWith('/automation')) return response({ job: automaticJob('blocked') });
+      if (url.endsWith('/ai-models'))
+        return response({
+          defaultModel: 'qwen3.6-27b',
+          models: [
+            { id: 'qwen3.6-27b', label: 'Qwen3.6 27B' },
+            { id: 'glm-5.1', label: 'GLM-5.1' },
+          ],
+        });
+      return fallback(url, options);
+    },
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  assert.match(h.get('detail').textContent, /尚不是最终不予发布/);
+  const model = control(h, 'select', '-ai-model');
+  assert.equal(model.value, 'qwen3.6-27b');
+  assert.ok(model.querySelectorAll('option').some((option) => option.value === 'glm-5.1'));
+  const approve = h
+    .get('detail')
+    .querySelectorAll('button')
+    .find((button) => button.textContent === '通过并发布');
+  assert.equal(approve.disabled, false);
+  assert.ok(
+    h
+      .get('detail')
+      .querySelectorAll('button')
+      .some((button) => button.textContent === '不予发布'),
+  );
+  assert.ok(!h.requests.some(({ url }) => url.endsWith('/ai-test')));
+  await approve.events.click();
+  assert.equal(h.decisionAttempts(), 1);
+});
+
+test('late automatic job and control responses cannot restore data after navigation or logout', async () => {
+  const job = deferred();
+  const controlWait = deferred();
+  const h = harness({
+    automation: automaticSettings(),
+    isAdmin: true,
+    customFetch: (url, options, fallback) => {
+      if (url.endsWith('/s1/automation')) return job.promise;
+      if (url.endsWith('/s2'))
+        return response({ submission: { ...h.submission, id: 's2', title: '第二条稿件' } });
+      if (url.endsWith('/s2/automation')) return response({ job: automaticJob('queued') });
+      if (url.endsWith('/automation/control')) return controlWait.promise;
+      return fallback(url, options);
+    },
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await h.app.openSubmission('s2');
+  job.resolve(response({ job: { ...automaticJob('blocked'), reason: '第一条过期响应' } }));
+  await flush();
+  assert.match(h.get('detail').textContent, /第二条稿件/);
+  assert.doesNotMatch(h.get('detail').textContent, /第一条过期响应/);
+  const changing = h.get('automation-toggle').events.click();
+  h.setToken('');
+  await h.app.initialize();
+  controlWait.resolve(response({ automation: { ...automaticSettings(), paused: false } }));
+  await changing;
+  assert.equal(h.get('automation').hidden, true);
+  assert.equal(h.app.state.session, null);
+  assert.equal(h.get('automation-message').textContent, '');
+});
+
+test('automatic review errors and unverified risk hints stay in the job panel without enabling publication', async () => {
+  const h = harness({
+    automation: automaticSettings(),
+    customFetch: (url, options, fallback) => {
+      if (url.endsWith('/automation'))
+        return response({ job: { ...automaticJob('review'), result: manualReviewResult() } });
+      return fallback(url, options);
+    },
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  assert.match(h.get('detail').textContent, /转人工复核/);
+  assert.match(h.get('detail').textContent, /输出未通过校验/);
+  assert.match(h.get('detail').textContent, /关怀需求不等于违规/);
+  assert.equal(h.submission.status, 'pending');
+  assert.ok(!h.requests.some(({ url }) => url.endsWith('/decision')));
+});
+
+test('an unattempted image job explains that no model was called and preserves the actual store reason', async () => {
+  const h = harness({
+    automation: automaticSettings(),
+    customFetch: (url, options, fallback) => {
+      if (url.endsWith('/automation'))
+        return response({
+          job: {
+            ...automaticJob('review'),
+            reasonCode: 'images_not_reviewed',
+            result: {
+              ...manualReviewResult(),
+              automationReason: 'image_requires_review',
+              manualReview: { required: true, validation: 'not_attempted' },
+            },
+          },
+        });
+      return fallback(url, options);
+    },
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  assert.match(h.get('detail').textContent, /图片尚未完成机器审核，整份稿件交人工检查/);
+  assert.match(h.get('detail').textContent, /未调用模型 · 保留人工审核/);
+  assert.doesNotMatch(h.get('detail').textContent, /输出未通过校验/);
+  assert.ok(!h.requests.some(({ url }) => url.endsWith('/ai-test')));
+});
+
+test('expired withdrawal HTTP410 refreshes and removes the action while explaining discussion management', async () => {
+  let expired = false;
+  const h = harness({
+    automation: automaticSettings(),
+    customFetch: (url, options, fallback) => {
+      if (url.endsWith('/automation'))
+        return response({ job: { ...automaticJob(), canWithdraw: !expired, expired } });
+      if (url.endsWith('/withdraw')) {
+        expired = true;
+        return response({ message: '审核材料已到期' }, 410);
+      }
+      return fallback(url, options);
+    },
+  });
+  h.submission.status = 'approved';
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  const form = h
+    .get('detail')
+    .querySelectorAll('form')
+    .find((item) => item.className === 'moderation-withdrawal');
+  form.querySelectorAll('textarea')[0].value = '负责人核查撤回';
+  await form.events.submit({ preventDefault() {} });
+  await flush();
+  assert.match(h.get('message').textContent, /状态已变化或审核数据已到期/);
+  assert.match(h.get('detail').textContent, /请使用讨论区管理功能/);
+  assert.ok(
+    !h
+      .get('detail')
+      .querySelectorAll('form')
+      .some((item) => item.className === 'moderation-withdrawal'),
   );
 });

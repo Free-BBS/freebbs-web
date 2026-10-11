@@ -25,6 +25,7 @@ function createModerationRouter({
   enabled,
   aiTest,
   audit,
+  automation,
 }) {
   const router = express.Router();
   router.use((_request, response, next) => {
@@ -135,12 +136,53 @@ function createModerationRouter({
   router.get(
     '/session',
     authenticated(async (_request, response, user) => {
+      const automatic = automation ? await automation.status() : null;
       response.json({
         enabled,
         reviewer: await service.isReviewer(user.id),
         isAdmin: Boolean(user.is_admin),
-        mode: enabled ? 'manual' : 'disabled',
+        mode: enabled ? (automatic?.enabled ? 'automatic_test' : 'manual') : 'disabled',
         aiTestEnabled: Boolean(enabled && aiTest?.enabled),
+        ...(automatic ? { automation: automatic } : {}),
+      });
+    }),
+  );
+  router.post(
+    '/automation/control',
+    authenticated(async (request, response, user) => {
+      const body = exactBody(request.body, ['paused']);
+      if (typeof body.paused !== 'boolean')
+        throw Object.assign(new Error('暂停状态必须为布尔值。'), { status: 400 });
+      if (!automation?.enabled)
+        throw Object.assign(new Error('本机自动审核尚未启用。'), { status: 503 });
+      await automation.store.setPaused({ actorId: user.id, paused: body.paused });
+      response.json({ automation: await automation.status() });
+    }),
+  );
+  router.get(
+    '/submissions/:id/automation',
+    authenticated(async (request, response, user) => {
+      if (!automation) throw Object.assign(new Error('自动审核记录暂不可用。'), { status: 503 });
+      response.json({
+        job: await automation.store.get({ id: request.params.id, reviewerId: user.id }),
+      });
+    }),
+  );
+  router.post(
+    '/submissions/:id/withdraw',
+    authenticated(async (request, response, user) => {
+      const body = exactBody(request.body, ['expectedVersion', 'reason', 'requestId']);
+      if (!automation)
+        throw Object.assign(new Error('自动发布撤回功能暂不可用。'), { status: 503 });
+      await automation.store.withdraw({
+        id: request.params.id,
+        reviewerId: user.id,
+        expectedVersion: body.expectedVersion,
+        reason: body.reason,
+        requestId: body.requestId,
+      });
+      response.json({
+        submission: toDetail(await service.detail({ id: request.params.id, userId: user.id })),
       });
     }),
   );

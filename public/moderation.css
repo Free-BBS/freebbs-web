@@ -110,6 +110,47 @@ main {
 .moderation-intro {
   margin-bottom: 24px;
 }
+.moderation-automation,
+.moderation-automation-result {
+  margin: 20px 0;
+  padding: 20px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #f3f7fc;
+  overflow-wrap: anywhere;
+}
+.moderation-automation h2,
+.moderation-automation-result h3 {
+  margin-top: 0;
+}
+#moderation-automation-toggle {
+  background: #6941c6;
+  color: #fff;
+  border-color: #6941c6;
+  font-weight: 700;
+  min-height: 44px;
+}
+#moderation-automation-toggle:hover {
+  background: #5530a8;
+  border-color: #5530a8;
+}
+.moderation-withdrawal {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--moderation-line, #d9e0e9);
+}
+.moderation-withdrawal button {
+  justify-self: start;
+  background: #fff1f2;
+  border-color: #ad5561;
+  color: #872532;
+}
+.moderation-withdrawal textarea {
+  width: 100%;
+  min-height: 90px;
+}
 .moderation-eyebrow {
   color: #52627a;
   margin-bottom: 4px;
@@ -916,6 +957,8 @@ main {
     border-color: #51425e;
   }
   .moderation-context span,
+  .moderation-automation,
+  .moderation-automation-result,
   .moderation-queue,
   .moderation-review-card,
   .moderation-privacy {
@@ -965,6 +1008,11 @@ main {
     border-color: #75404d;
   }
   .moderation-decision [data-decision='rejected'] {
+    background: #33232d;
+    color: #e8aaba;
+    border-color: #74505e;
+  }
+  .moderation-withdrawal button {
     background: #33232d;
     color: #e8aaba;
     border-color: #74505e;

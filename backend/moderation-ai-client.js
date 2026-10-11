@@ -583,4 +583,10 @@ function createModerationAiClient({
   return { assess, listModels };
 }
 
-module.exports = { createModerationAiClient, ModerationAiError, CATEGORIES, POLICY_VERSION };
+module.exports = {
+  createModerationAiClient,
+  ModerationAiError,
+  validateAssessment,
+  CATEGORIES,
+  POLICY_VERSION,
+};

@@ -103,6 +103,11 @@ const { createModerationRouter } = require('./moderation-router');
 const { createModerationAiClient } = require('./moderation-ai-client');
 const { createModerationAiTest, aiTestEnvironmentEnabled } = require('./moderation-ai-test');
 const { createModerationAudit, ensureModerationAuditSchema } = require('./moderation-audit');
+const { createModerationAutomationStore } = require('./moderation-automation-store');
+const {
+  createModerationAutomation,
+  automationEnvironmentEnabled,
+} = require('./moderation-automation');
 const {
   MAX_RESPONSE_BYTES: MAX_AGENT_IMAGE_RESPONSE_BYTES,
   createImageGenerationGate,
@@ -270,15 +275,45 @@ const systemSettingsStore = createSystemSettingsStore({
 });
 const surveyService = createSurveyService(pool);
 const notifications = createNotificationService({ pool, publicWebUrl: config.publicWebUrl });
+const moderationPublisher = createModerationPublisher({
+  createPostPid: createUniqueDiscussionPostPid,
+  awardMagnetic,
+  notifications,
+});
+const moderationAutomaticEnabled = automationEnvironmentEnabled(config);
+const moderationAutomationStore = createModerationAutomationStore({
+  pool,
+  withDatabaseTransaction,
+  publishSubmission: moderationPublisher,
+  notifications,
+  isEnabled: () => moderationAutomaticEnabled,
+});
+const moderationAutomation = createModerationAutomation({
+  config,
+  store: moderationAutomationStore,
+  isEnabled: async () =>
+    moderationAutomaticEnabled && !(await moderationAutomationStore.control()).paused,
+  client: createModerationAiClient({
+    readSettings: (options) => systemSettingsStore.readSettings(options),
+    modelOverride: config.discussionModerationAutoModel,
+  }),
+});
+const moderationAutomatic = {
+  enabled: moderationAutomaticEnabled,
+  store: moderationAutomationStore,
+  status: async () => ({
+    enabled: moderationAutomaticEnabled,
+    paused: !moderationAutomaticEnabled || (await moderationAutomationStore.control()).paused,
+    model: config.discussionModerationAutoModel,
+    backupModel: config.discussionModerationBackupModel,
+  }),
+};
 const discussionModeration = createDiscussionModeration({
   pool,
   withDatabaseTransaction,
   privateDir: config.discussionModerationDir,
-  publishSubmission: createModerationPublisher({
-    createPostPid: createUniqueDiscussionPostPid,
-    awardMagnetic,
-    notifications,
-  }),
+  publishSubmission: moderationPublisher,
+  automation: moderationAutomaticEnabled ? moderationAutomationStore : null,
 });
 const moderationAttachments = createModerationAttachmentStore({
   uploadDir: config.uploadDir,
@@ -297,7 +332,9 @@ const moderationAiTest = createModerationAiTest({
   enabled: aiTestEnvironmentEnabled(config),
   client: createModerationAiClient({
     readSettings: (options) => systemSettingsStore.readSettings(options),
-    modelOverride: config.discussionModerationAiModel,
+    modelOverride: moderationAutomaticEnabled
+      ? config.discussionModerationAutoModel
+      : config.discussionModerationAiModel,
   }),
 });
 const backgroundTasks = createBackgroundTaskService({
@@ -2999,6 +3036,7 @@ app.get('/api/health', async (_request, response) => {
       ...health.body,
       dbHost: config.db.host,
       database: config.db.database,
+      moderationAutomation: await moderationAutomatic.status(),
     });
   } catch (error) {
     response.status(500).json({
@@ -4267,6 +4305,7 @@ app.use(
     enabled: config.discussionModerationEnabled,
     aiTest: moderationAiTest,
     audit: moderationAudit,
+    automation: moderationAutomatic,
   }),
 );
 
@@ -4704,7 +4743,7 @@ app.post('/api/discussion/posts', async (request, response) => {
           requestId: request.body.requestId,
         }),
       );
-      response.status(202).json({ ok: true, message: '已提交人工审核', moderation: submission });
+      response.status(202).json({ ok: true, message: '已提交审核', moderation: submission });
       return;
     }
 
@@ -5164,7 +5203,7 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
       });
       response
         .status(202)
-        .json({ ok: true, message: '已提交人工审核', moderation: submission, maxPending: false });
+        .json({ ok: true, message: '已提交审核', moderation: submission, maxPending: false });
       return;
     }
 
@@ -6577,6 +6616,7 @@ async function start() {
   await ensureWalletLedger(pool);
   await ensureDiscussionModerationSchema(pool);
   await ensureModerationAuditSchema(pool);
+  await moderationAutomationStore.ensureSchema();
   const bicycleRefunds = await refundRanchBicyclePurchases(pool);
   if (bicycleRefunds.refunded) {
     console.log(
@@ -6622,6 +6662,7 @@ async function start() {
   notifications.startWeeklyDigestWorker();
   await backgroundTasks.start();
   surveyService.startWorker();
+  moderationAutomation.start();
   let moderationCleanupRunning = false;
   const cleanupModeration = async () => {
     if (moderationCleanupRunning) return;
@@ -6629,6 +6670,7 @@ async function start() {
     try {
       await discussionModeration.expireAndPurge();
       await moderationAudit.purge();
+      await moderationAutomationStore.purge();
     } catch {
       console.error('审核证据清理暂时失败，将在下次定时检查重试');
     } finally {

@@ -276,6 +276,8 @@ password: free-bbs
 本机测试环境可另行启用[无问芯穹文字试审](docs/moderation-ai-test.md)，用虚构内容验证脱敏与模型建议，最终仍由负责人决定。
 融合版[规则审核工作台](docs/moderation-policy-workbench.md)提供使用中文编号的禁止内容清单、独立关怀提示、逐条证据、人工纠错和回归样例导出；[清单与官方来源](docs/moderation-policy-sources.md)说明法律、本站规则与心理支持指引的适用边界。
 
+[自动审核测试版](docs/moderation-automation-test.md)另设默认关闭的开关，仅用于本机虚构稿件。管理员开启后使用 Qwen3.6-27B；严格通过且无隐私、图片或关怀待核事项的文字可自动发布，负责人收到通知并可撤回。GLM-5.1 保留为手动备选，调用失败转人工，不自动换模型。
+
 ## 当前功能分布
 
 | 功能                   | 前端位置                                                                                               | 后端/数据依赖                             |

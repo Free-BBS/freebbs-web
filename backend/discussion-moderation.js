@@ -195,6 +195,7 @@ function createDiscussionModeration({
   privateDir,
   publishSubmission,
   onPublished,
+  automation,
   logger = console,
 }) {
   const transact = withDatabaseTransaction || ((callback) => transaction(pool, callback));
@@ -322,6 +323,9 @@ function createDiscussionModeration({
         [id, value.contentHash, row.expires_at, attachmentId],
       );
     }
+    // Enqueue in the submission transaction so a crash cannot lose a new job.
+    // Existing submissions and idempotent replays are never backfilled.
+    if (automation) await automation.enqueue(connection, privateSubmission(row));
     const [reviewers] = await connection.execute(
       'SELECT user_id FROM moderation_reviewers WHERE active = 1 ORDER BY user_id',
     );

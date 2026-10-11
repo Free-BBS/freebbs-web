@@ -151,6 +151,7 @@
       library: null,
       policyVersion: 0,
       refreshHistory: null,
+      automationChanging: false,
     };
 
     function node(tag, text, className) {
@@ -182,6 +183,13 @@
     function reset() {
       state.generation += 1;
       state.session = null;
+      state.automationChanging = false;
+      el('automation').hidden = true;
+      el('automation-toggle').hidden = true;
+      el('automation-toggle').disabled = false;
+      el('automation-message').textContent = '';
+      el('queue-note').textContent =
+        '机器建议不直接改变发布状态。请核对完整正文与图片，再作出人工决定。';
       clearDetail();
       el('list').replaceChildren();
       el('more').hidden = true;
@@ -329,6 +337,24 @@
       support_rule_mismatch: '模型关怀等级与所选规则不对应',
       high_risk_without_block: '模型报告高风险，但所选规则不支持直接拦截',
     };
+    const AUTOMATION_REASON_LABELS = {
+      submission_changed: '提交已由人工处理、发生变化或到期，自动任务不再改变发布状态。',
+      no_reviewers: '当前缺少可用负责人，稿件保留待审。',
+      worker_paused: '自动审核已暂停或控制状态变化，本次转人工处理。',
+      worker_stopped: '自动审核服务已停止，本次转人工处理。',
+      lease_expired: '任务执行已超时或被中断，保留人工审核，不自动重发模型请求。',
+      policy_review: '规则建议或结果校验要求人工复核。',
+      clear_rule_violation: '存在明确禁止内容的规则依据，先暂时拦截，由负责人最终决定。',
+      no_text_risk: '文字结果符合自动发布条件，已发布并通知负责人。',
+      support_requires_review: '有需要关注的关怀提示，由负责人跟进；关怀需求不等于违规。',
+      images_not_reviewed: '图片尚未完成机器审核，整份稿件交人工检查。',
+      image_requires_review: '稿件含图片，首版未调用外部模型，交负责人检查文字及全部图片。',
+      provider_failure: '模型未返回可用结果，保留人工审核。',
+      configuration_invalid: '审核渠道配置不可用，保留人工审核。',
+      snapshot_invalid: '送审内容未能完成校验，未发送给外部模型，交人工处理。',
+      assessment_invalid: '机器结果未通过校验，交人工复核。',
+      reviewer_withdrawal: '负责人已撤回自动发布内容。',
+    };
 
     function isReviewResult(run) {
       return Boolean(
@@ -354,7 +380,7 @@
       panel.append(
         node('h4', '模型提示待人工复核'),
         node('p', '输出未通过校验，不能作为有效结论。请负责人结合原稿和当前规则独立复核。'),
-        node('p', '当前保留人工审核，不会自动发布或拦截稿件。'),
+        node('p', '本次失败结果须人工复核，不能据此自动发布或认定违规。'),
       );
       const diagnostics = run.manualReview?.diagnostics;
       const signal =
@@ -649,6 +675,18 @@
     }
 
     function policyResultPanels(run) {
+      if (run.manualReview?.validation === 'not_attempted') {
+        const panel = node('div', undefined, 'moderation-outcome moderation-outcome-hold');
+        panel.append(
+          node('h4', '未调用模型 · 保留人工审核'),
+          node(
+            'p',
+            AUTOMATION_REASON_LABELS[run.automationReason] ||
+              '此任务未取得机器审核结论，请负责人检查原稿。',
+          ),
+        );
+        return panel;
+      }
       if (!run.assessment || run.manualReview?.validation === 'failed')
         return manualReviewPanel(run);
       const group = node('div', undefined, 'moderation-policy-result');
@@ -674,7 +712,7 @@
         banner.append(
           node('p', '本地规则建议', 'moderation-eyebrow'),
           node('h4', ACTION_LABELS[action] || '交人工核查'),
-          node('p', '当前为人工审核阶段，本建议不会自动发布或拦截稿件。'),
+          node('p', '以下为规则建议；实际处置请查看提交状态及自动审核记录。'),
         );
         const support = run.policyDecision.supportPriority || assessment.supportPriority;
         if (support && support !== 'none')
@@ -1011,6 +1049,235 @@
       regression.append(regressionForm);
       wrapper.append(form, regression);
       return wrapper;
+    }
+
+    function renderAutomationStatus() {
+      const automation = state.session?.automation;
+      const visible = !mine && state.session?.reviewer === true && Boolean(automation);
+      el('automation').hidden = !visible;
+      if (!visible) return;
+      el('automation-summary').textContent =
+        `${!automation.enabled ? '自动审核未启用' : automation.paused ? '自动审核已暂停 · 新稿排队待审' : '自动审核运行中'} · 默认模型：${automation.model || '未配置'} · 手动备选：${automation.backupModel || '未配置'}`;
+      el('automation-toggle').hidden = !state.session.isAdmin || !automation.enabled;
+      el('automation-toggle').disabled = state.automationChanging;
+      el('automation-toggle').textContent = automation.paused ? '开启自动审核' : '暂停自动审核';
+      el('queue-note').textContent = automation.enabled
+        ? '自动审核仅用于虚构测试内容。暂时拦截与待复核稿件仍需负责人最终决定；已自动发布内容可由负责人撤回。'
+        : '机器建议不直接改变发布状态。请核对完整正文与图片，再作出人工决定。';
+    }
+
+    async function changeAutomation() {
+      if (
+        mine ||
+        !state.session?.reviewer ||
+        !state.session?.isAdmin ||
+        !state.session?.automation?.enabled ||
+        state.automationChanging
+      )
+        return;
+      const generation = state.generation;
+      const paused = !state.session.automation.paused;
+      state.automationChanging = true;
+      renderAutomationStatus();
+      el('automation-message').textContent = '正在更新自动审核状态…';
+      try {
+        const payload = await client.request('/moderation/automation/control', {
+          method: 'POST',
+          body: JSON.stringify({ paused }),
+        });
+        if (!valid(generation)) return;
+        if (
+          typeof payload.automation?.enabled !== 'boolean' ||
+          payload.automation.paused !== paused
+        )
+          throw new Error('自动审核状态未确认，请刷新页面后核对。');
+        state.session.automation = payload.automation;
+        el('automation-message').textContent = paused
+          ? '已暂停自动审核。新稿继续排队，在途结果交人工处理。'
+          : '已开启自动审核。请仅提交虚构测试内容；上线前已有稿件仍由人工处理。';
+      } catch (error) {
+        if (valid(generation)) el('automation-message').textContent = error.message;
+      } finally {
+        if (valid(generation)) {
+          state.automationChanging = false;
+          renderAutomationStatus();
+        }
+      }
+    }
+
+    function automationPanel(submission, generation, version) {
+      const panel = node('section', undefined, 'moderation-automation-result');
+      panel.setAttribute('aria-label', '自动审核记录');
+      const refreshButton = node('button', '刷新自动状态');
+      refreshButton.type = 'button';
+      const content = node('div');
+      panel.append(node('h3', '自动审核记录'), refreshButton, content);
+      const current = () =>
+        valid(generation) &&
+        version === state.detailVersion &&
+        state.selected === submission &&
+        !mine &&
+        state.session?.reviewer === true;
+      const labels = {
+        queued: '排队待审',
+        running: '机器审核中',
+        review: '转人工复核',
+        blocked: '机器暂时拦截 · 待负责人决定',
+        published: '已自动发布',
+        cancelled: '自动任务已取消',
+        withdrawn: '负责人已撤回',
+      };
+      let loading = false;
+      let withdrawing = false;
+      let withdrawalIntent = null;
+      function withdrawalForm() {
+        const form = node('form', undefined, 'moderation-withdrawal');
+        const label = node('label', '撤回说明（必填，作者可在提交记录中查看）');
+        label.htmlFor = 'moderation-withdraw-reason';
+        const reason = node('textarea');
+        reason.id = 'moderation-withdraw-reason';
+        reason.maxLength = 1000;
+        reason.required = true;
+        const button = node('button', '撤回已自动发布的内容');
+        button.type = 'submit';
+        const status = node('p');
+        status.setAttribute('role', 'status');
+        form.append(label, reason, button, status);
+        form.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          if (!current() || withdrawing || state.deciding) return;
+          const text = reason.value.trim();
+          if (!text || text.length > 1000) {
+            status.textContent = '请填写 1～1000 字的撤回理由。';
+            return;
+          }
+          const key = JSON.stringify([submission.id, submission.version, text]);
+          if (withdrawalIntent?.key !== key)
+            withdrawalIntent = { key, requestId: cryptoApi.randomUUID() };
+          withdrawing = true;
+          button.disabled = true;
+          refreshButton.disabled = true;
+          status.textContent = '正在撤回…';
+          try {
+            await client.request(
+              `/moderation/submissions/${encodeURIComponent(submission.id)}/withdraw`,
+              {
+                method: 'POST',
+                body: JSON.stringify({
+                  expectedVersion: submission.version,
+                  reason: text,
+                  requestId: withdrawalIntent.requestId,
+                }),
+              },
+            );
+            if (!current()) return;
+            el('message').textContent = '已撤回自动发布的内容，撤回理由已保存。';
+            await loadList(false);
+            if (current()) await openSubmission(submission.id);
+          } catch (error) {
+            if (!current()) return;
+            if ([409, 410].includes(error.status)) {
+              el('message').textContent = '提交状态已变化或审核数据已到期，已重新加载，请核对。';
+              await openSubmission(submission.id);
+            } else status.textContent = `${error.message} 可重试同一撤回操作。`;
+          } finally {
+            if (current()) {
+              withdrawing = false;
+              button.disabled = false;
+              refreshButton.disabled = false;
+            }
+          }
+        });
+        return form;
+      }
+      async function refresh() {
+        if (!current() || loading || withdrawing) return;
+        loading = true;
+        refreshButton.disabled = true;
+        content.replaceChildren(node('p', '正在加载自动审核状态…'));
+        try {
+          const { job } = await client.request(
+            `/moderation/submissions/${encodeURIComponent(submission.id)}/automation`,
+          );
+          if (!current()) return;
+          if (job === null) {
+            content.replaceChildren(node('p', '此稿件没有自动审核任务，继续人工审核。'));
+            return;
+          }
+          if (!job || !Object.prototype.hasOwnProperty.call(labels, job.state))
+            throw new Error('自动审核状态无效，请刷新后核对。');
+          content.replaceChildren(
+            node('h4', labels[job.state]),
+            node(
+              'p',
+              `模型：${job.model || '未记录'} · ${formatTime(job.updatedAt || job.completedAt || job.createdAt)}`,
+              'moderation-meta',
+            ),
+            node('p', AUTOMATION_REASON_LABELS[job.reasonCode] || job.reason || ''),
+          );
+          if (job.expired)
+            content.append(
+              node(
+                'p',
+                '审核材料已到期，详细结果已清理；如需处理已发布内容，请使用讨论区管理功能。',
+              ),
+            );
+          if (job.state === 'withdrawn' && job.withdrawal?.reason)
+            content.append(node('p', `撤回说明：${job.withdrawal.reason}`));
+          if (job.state === 'blocked')
+            content.append(
+              node('p', '这是机器的暂时拦截，尚不是最终不予发布；负责人可核查后通过或不予发布。'),
+            );
+          if (job.state === 'review')
+            content.append(
+              node('p', '请独立核对原稿及图片。关怀需求不等于违规，机器异常也不能作为处罚依据。'),
+            );
+          if (job.state === 'published')
+            content.append(
+              node('p', '已自动发布稿件可由负责人撤回；此处不提供再次调用模型的手动试审。'),
+            );
+          if (job.result) {
+            content.append(node('p', '以下为机器自动审核结果，不是负责人最终结论。'));
+            if (job.result.assessment) {
+              content.append(
+                node('p', DECISION_LABELS[job.result.assessment.decision] || '待核对'),
+                node(
+                  'p',
+                  `风险分类：${job.result.assessment.categories?.length ? job.result.assessment.categories.map((id) => AI_CATEGORY_LABELS[id] || '待核对类别').join('、') : '未列出风险类别'}`,
+                ),
+                node('p', job.result.assessment.reason || ''),
+              );
+            }
+            content.append(policyResultPanels(job.result));
+          }
+          if (
+            job.canWithdraw === true &&
+            job.state === 'published' &&
+            submission.status === 'approved' &&
+            Number.isInteger(submission.version)
+          )
+            content.append(withdrawalForm());
+          else if (job.state === 'published' && submission.status === 'pending') {
+            const reload = node('button', '刷新提交详情');
+            reload.type = 'button';
+            reload.addEventListener('click', () => current() && openSubmission(submission.id));
+            content.append(
+              node('p', '内容已自动发布，请刷新详情查看当前发布状态和撤回入口。'),
+              reload,
+            );
+          }
+        } catch (error) {
+          if (current()) content.replaceChildren(node('p', `自动状态未能加载：${error.message}`));
+        } finally {
+          if (current()) {
+            loading = false;
+            refreshButton.disabled = false;
+          }
+        }
+      }
+      refreshButton.addEventListener('click', refresh);
+      refresh();
+      return panel;
     }
 
     function historyPanel(submission, generation, version) {
@@ -1634,7 +1901,9 @@
             node('h3', '负责人最终决定'),
             node(
               'p',
-              '核对内容、图片和依据后再发布。机器试审与复核记录均不会代替此操作。',
+              state.session.automation?.enabled
+                ? '人工决定与自动任务会核对同一稿件版本。请先查看自动状态，再核对内容、图片和依据；机器暂时拦截仍可由负责人处理。'
+                : '核对内容、图片和依据后再发布。机器试审与复核记录均不会代替此操作。',
               'moderation-note',
             ),
             label,
@@ -1645,6 +1914,13 @@
           decisionColumn.append(form);
           el('detail').append(privacyPreviewPanel(submission, generation, version));
         } else decisionColumn.hidden = true;
+        if (
+          !mine &&
+          state.session.reviewer &&
+          state.session.automation &&
+          submission.status !== 'expired'
+        )
+          el('detail').append(automationPanel(submission, generation, version));
         if (!mine && state.session.reviewer && submission.status !== 'expired')
           el('detail').append(historyPanel(submission, generation, version));
         if (attachments.length && imageStatus)
@@ -1807,7 +2083,10 @@
         }
         el('message').textContent = mine
           ? '仅显示你提交的审核记录。'
-          : '请结合正文和全部图片作出人工审核决定。';
+          : session.automation?.enabled
+            ? '自动审核仅用于虚构测试内容。请复核异常和暂时拦截结果，并留意已自动发布内容。'
+            : '请结合正文和全部图片作出人工审核决定。';
+        renderAutomationStatus();
         el('workspace').hidden = false;
         el('policy-library').hidden = mine || !session.reviewer;
         el('regression-export').disabled =
@@ -1823,6 +2102,7 @@
       }
     }
     el('refresh').addEventListener('click', () => loadList());
+    el('automation-toggle').addEventListener('click', changeAutomation);
     el('more').addEventListener('click', () => loadList(false, true));
     el('status').addEventListener('change', () => loadList());
     el('policy-query').addEventListener('input', renderPolicies);
