@@ -35,6 +35,7 @@ import { createKnowledgeRouter } from './modules/knowledge/router.js';
 import { createLiaisonRouter } from './modules/liaison/router.js';
 import { createSportsRouter } from './modules/sports/router.js';
 import { createCollaborationRouter } from './modules/collaboration/router.js';
+import { createOrganizationGroupRouter } from './modules/organization-group/router.js';
 import { createMaterialsRouter } from './modules/collaboration/materials.js';
 import { createConnectorsRouter } from './modules/connectors/router.js';
 import { createPublishingRouter } from './modules/publishing/router.js';
@@ -168,7 +169,7 @@ export function createApp(options: CreateAppOptions = {}) {
       response.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
       response.setHeader(
         'Access-Control-Allow-Headers',
-        'Authorization,Content-Type,X-Demo-User,X-Development-Preview-Uid,X-Request-Id',
+        'Authorization,Content-Type,X-Demo-User,X-Development-Preview-Uid,X-Request-Id,Idempotency-Key',
       );
       if (request.method === 'OPTIONS') {
         response.status(204).end();
@@ -190,6 +191,12 @@ export function createApp(options: CreateAppOptions = {}) {
       activityContentParser(request, response, next);
     } else next();
   });
+  // Bulk rosters and configurable questionnaire answers exceed the small
+  // default JSON limit. Keep this bounded expansion within the ledger API.
+  app.use(
+    `${API_BASE_PATH}/organization-group`,
+    express.json({ limit: '8mb', type: 'application/json' }),
+  );
   app.use(express.json({ limit: '64kb', type: 'application/json' }));
 
   app.get(`${API_BASE_PATH}/health`, (_request, response) => {
@@ -320,6 +327,15 @@ export function createApp(options: CreateAppOptions = {}) {
     }),
   );
   app.use(`${API_BASE_PATH}/community`, createCommunityRouter({ store, authenticate }));
+  app.use(
+    `${API_BASE_PATH}/organization-group`,
+    createOrganizationGroupRouter({
+      authenticate,
+      nodeEnvironment: environment.nodeEnv,
+      uploadDirectory:
+        options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
+    }),
+  );
   app.use(
     `${API_BASE_PATH}/collaboration`,
     createCollaborationRouter({

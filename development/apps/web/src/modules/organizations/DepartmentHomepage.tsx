@@ -147,6 +147,15 @@ export function DepartmentHomepage({
           <Link to={`/organizations/${department.organizationKey}`}>浏览组织 ↗</Link>
         )}
       </header>
+      {department.id === 'youth_league.organization' ? (
+        <Link className="og-department-entry" to="/organizations/youth_league/organization/ledger">
+          <span>
+            <strong>班级活动台账</strong>
+            <small>填写活动记录，查看截止事项与资料</small>
+          </span>
+          <span aria-hidden="true">↗</span>
+        </Link>
+      ) : null}
       {canEdit ? (
         <div className="department-editor">
           <label>
