@@ -572,6 +572,10 @@ main {
   gap: 24px;
   align-items: start;
 }
+.moderation-detail-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+.moderation-content-column,
 .moderation-original {
   min-width: 0;
 }

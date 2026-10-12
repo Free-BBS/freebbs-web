@@ -19,7 +19,7 @@
       </nav>
     </header>
     <main id="moderation-app">
-      <header class="moderation-intro">
+      <header class="moderation-intro" id="moderation-intro" hidden>
         <p class="moderation-eyebrow">FREE BBS / POLICY AUDIT WORKBENCH</p>
         <h1 id="moderation-title">内容审核</h1>
         <p>读懂内容，核对依据，作出有记录的决定。</p>
@@ -30,6 +30,7 @@
           审核相关数据保存一个月；正常发布的帖子和评论不在此清理范围内。
         </p>
       </header>
+      <h1 id="moderation-mine-title" hidden>我的提交</h1>
       <p id="moderation-message" role="status" aria-live="polite"></p>
       <section
         id="moderation-automation"
@@ -43,9 +44,7 @@
           仅处理启用后新提交的虚构测试稿件。文字由 Qwen 审核；启用图片审核后，图片由 Kimi
           检查。图文均通过的含图稿件先发布，同时进入“图片待复核”；隐私疑点、看不清的图片及异常结果交人工。
         </p>
-        <p class="moderation-note">
-          GLM 仅供负责人手动试审参考，不会在 Qwen 失败后自动调用。暂停后，尚未完成的任务保留待审。
-        </p>
+        <p class="moderation-note">自动审核异常时转交人工处理。暂停后，尚未完成的任务保留待审。</p>
         <button type="button" id="moderation-automation-toggle" hidden>暂停自动审核</button>
         <p id="moderation-automation-message" role="status" aria-live="polite"></p>
       </section>
@@ -57,7 +56,7 @@
         <div class="moderation-layout">
           <aside class="moderation-queue" aria-label="审核队列">
             <div class="moderation-section-heading">
-              <span class="moderation-eyebrow">REVIEW QUEUE</span>
+              <span class="moderation-eyebrow" id="moderation-queue-eyebrow">REVIEW QUEUE</span>
               <h2>提交队列</h2>
             </div>
             <div class="moderation-toolbar">
@@ -78,7 +77,7 @@
               <button type="button" id="moderation-more" hidden>加载更多</button>
             </section>
             <p id="moderation-queue-note" class="moderation-note moderation-queue-note">
-              机器建议不直接改变发布状态。请核对完整正文与图片，再作出人工决定。
+              请先查看自动审核状态，再核对完整正文与图片；已自动发布的内容仍可复核和撤回。
             </p>
           </aside>
           <section id="moderation-detail" aria-label="提交详情" tabindex="-1">

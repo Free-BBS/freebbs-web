@@ -44,11 +44,7 @@ body.discussion-page .discussion-scope p {
 }
 
 body.discussion-page .discussion-moderation-links {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 18px;
+  display: contents;
 }
 
 body.discussion-page .discussion-moderation-links[hidden],
@@ -65,6 +61,7 @@ body.discussion-page .discussion-moderation-links a {
 }
 
 body.discussion-page .discussion-scope button,
+body.discussion-page .discussion-scope a.discussion-filter-chip,
 body.discussion-page .discussion-visibility-button {
   min-height: 44px;
   padding: 10px 16px;

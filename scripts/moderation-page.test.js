@@ -310,123 +310,6 @@ test('administrator sees a warning when no reviewer is configured', async () => 
   assert.ok(h.get('reviewer-list').textContent.includes('当前没有审核负责人'));
 });
 
-const privacyResponse = (extra = {}) => ({
-  preview: {
-    submissionId: 's1',
-    version: 1,
-    mode: 'local_preview',
-    externalReady: false,
-    title: '[姓名1]的建议',
-    content: '<script>literal()</script> [电话1]',
-    counts: { name: 1, phone: 1, address: 2 },
-    imageCount: 1,
-    ...extra,
-  },
-});
-const privacyButton = (h) =>
-  h
-    .get('detail')
-    .querySelectorAll('button')
-    .find((button) => button.textContent === '生成本地脱敏预览');
-const privacyTerms = (h) =>
-  h
-    .get('detail')
-    .querySelectorAll('textarea')
-    .find((input) => input.id === 'moderation-privacy-terms');
-
-test('privacy preview sends only the version and added terms locally and renders output literally', async () => {
-  const h = harness({
-    customFetch: (url, options, defaults) =>
-      url.endsWith('/privacy-preview') ? response(privacyResponse()) : defaults(url, options),
-  });
-  await h.app.ready;
-  await h.app.openSubmission('s1');
-  privacyTerms(h).value = '  王小明\n\n 一号楼  ';
-  await privacyButton(h).click();
-  const request = h.requests.find(({ url }) => url.endsWith('/privacy-preview'));
-  assert.deepEqual(JSON.parse(request.options.body), {
-    expectedVersion: 1,
-    extraTerms: ['王小明', '一号楼'],
-  });
-  assert.equal(request.options.method, 'POST');
-  assert.equal(request.options.cache, 'no-store');
-  assert.ok(h.requests.every(({ url }) => url.startsWith('http://localhost:3000/api/')));
-  assert.ok(h.get('detail').textContent.includes('<script>literal()</script> [电话1]'));
-  assert.ok(h.get('detail').textContent.includes('图片内信息尚未处理'));
-  assert.ok(h.get('detail').textContent.includes('未发送给 AI'));
-  assert.ok(h.get('detail').textContent.includes('地址 2 处'));
-  assert.equal(h.decisionAttempts(), 0);
-  assert.equal(h.submission.status, 'pending');
-});
-
-test('privacy preview rejects excessive terms and stale or mislabeled responses', async () => {
-  const h = harness({
-    customFetch: (url, options, defaults) =>
-      url.endsWith('/privacy-preview')
-        ? response(privacyResponse({ version: 2 }))
-        : defaults(url, options),
-  });
-  await h.app.ready;
-  await h.app.openSubmission('s1');
-  privacyTerms(h).value = Array(51).fill('敏感词').join('\n');
-  await privacyButton(h).click();
-  assert.equal(
-    h.requests.some(({ url }) => url.endsWith('/privacy-preview')),
-    false,
-  );
-  privacyTerms(h).value = '';
-  await privacyButton(h).click();
-  assert.ok(h.get('detail').textContent.includes('预览结果无效'));
-  assert.equal(h.get('detail').textContent.includes('[电话1]'), false);
-});
-
-test('editing privacy terms invalidates an in-flight preview and clears the displayed copy', async () => {
-  const pending = deferred();
-  let calls = 0;
-  const h = harness({
-    customFetch: (url, options, defaults) => {
-      if (!url.endsWith('/privacy-preview')) return defaults(url, options);
-      calls += 1;
-      return calls === 1 ? pending.promise : response(privacyResponse());
-    },
-  });
-  await h.app.ready;
-  await h.app.openSubmission('s1');
-  const loading = privacyButton(h).click();
-  privacyTerms(h).value = '新姓名';
-  privacyTerms(h).events.input();
-  pending.resolve(response(privacyResponse()));
-  await loading;
-  assert.equal(h.get('detail').textContent.includes('[电话1]'), false);
-  assert.ok(h.get('detail').textContent.includes('请重新生成预览'));
-  await privacyButton(h).click();
-  assert.ok(h.get('detail').textContent.includes('[电话1]'));
-  privacyTerms(h).events.input();
-  assert.equal(h.get('detail').textContent.includes('[电话1]'), false);
-});
-
-test('logout discards a late privacy preview and approved submissions do not expose its action', async () => {
-  const pending = deferred();
-  const h = harness({
-    customFetch: (url, options, defaults) =>
-      url.endsWith('/privacy-preview') ? pending.promise : defaults(url, options),
-  });
-  await h.app.ready;
-  await h.app.openSubmission('s1');
-  const loading = privacyButton(h).click();
-  h.setToken('');
-  await h.app.initialize();
-  pending.resolve(response(privacyResponse()));
-  await loading;
-  assert.equal(h.get('detail').textContent.includes('[电话1]'), false);
-  assert.equal(privacyButton(h), undefined);
-  h.setToken('reviewer-token');
-  h.submission.status = 'approved';
-  await h.app.initialize();
-  await h.app.openSubmission('s1');
-  assert.equal(privacyButton(h), undefined);
-});
-
 const aiResponse = (extra = {}) => ({
   result: {
     submissionId: 's1',
@@ -449,28 +332,6 @@ const aiResponse = (extra = {}) => ({
     ...extra,
   },
 });
-const aiButton = (h) =>
-  h
-    .get('detail')
-    .querySelectorAll('button')
-    .find((item) => item.textContent === '调用无问芯穹试审');
-const aiMode = (h) =>
-  h
-    .get('detail')
-    .querySelectorAll('select')
-    .find((item) => item.id === 'moderation-ai-input-mode');
-const aiRequests = (h) => h.requests.filter(({ url }) => url.endsWith('/ai-test'));
-const aiModel = (h) =>
-  h
-    .get('detail')
-    .querySelectorAll('select')
-    .find((item) => item.id === 'moderation-ai-model');
-const reloadModels = (h) =>
-  h
-    .get('detail')
-    .querySelectorAll('button')
-    .find((item) => item.textContent === '重新加载模型列表');
-
 const manualReviewResult = (extra = {}) => ({
   ...aiResponse().result,
   policyVersion: 'policy-v2',
@@ -504,681 +365,15 @@ const manualReviewResult = (extra = {}) => ({
   ...extra,
 });
 
-test('failed AI trial renders only unverified review signals and preserves manual publication control', async () => {
-  const review = manualReviewResult();
-  const signal = review.manualReview.diagnostics.reviewSignal;
-  signal.reportedCategories.push('<script>category()</script>');
-  signal.reportedRuleIds.push('<script>rule()</script>');
-  signal.reason = '<script>providerReason()</script>';
-  review.policyDecision.reasonLabels.push('<script>unsafeReason()</script>');
-  let calls = 0;
-  const h = harness({
-    aiTestEnabled: true,
-    customFetch: (url, options, defaults) => {
-      if (!url.endsWith('/ai-test')) return defaults(url, options);
-      calls += 1;
-      return calls === 1
-        ? response(
-            {
-              message: '模型返回无效',
-              reviewResult: review,
-              assessment: aiResponse().result.assessment,
-            },
-            502,
-          )
-        : response(aiResponse());
-    },
-  });
-  await h.app.ready;
-  await h.app.openSubmission('s1');
-  await flush();
-  await aiButton(h).click();
-  const detail = h.get('detail');
-  assert.match(detail.textContent, /模型提示待人工复核/);
-  assert.match(detail.textContent, /输出未通过校验，不能作为有效结论/);
-  assert.match(detail.textContent, /高风险迹象（尚未核实）/);
-  assert.match(detail.textContent, /模型上报类别（尚未核实）：骚扰侮辱/);
-  assert.match(detail.textContent, /模型上报规则（尚未核实）：骚扰-001/);
-  assert.match(detail.textContent, /模型：synthetic-test-model · 耗时：1.3 秒/);
-  assert.match(detail.textContent, /所选规则不支持直接拦截/);
-  assert.doesNotMatch(
-    detail.textContent,
-    /文字试审已完成|aiReason|providerReason|unsafeReason|category\(\)|rule\(\)/,
-  );
-  assert.equal(detail.querySelectorAll('script').length, 0);
-  assert.equal(h.decisionAttempts(), 0);
-  assert.equal(h.app.state.selected.status, 'pending');
-  assert.equal(calls, 1);
-  assert.equal(
-    detail.querySelectorAll('button').find((button) => button.dataset.decision === 'approved')
-      .disabled,
-    false,
-  );
-  await aiButton(h).click();
-  assert.equal(calls, 2);
-  assert.match(detail.textContent, /文字试审已完成/);
-  assert.doesNotMatch(detail.textContent, /模型上报等级/);
-});
-
-test('a failed trial with no usable signal explicitly remains without a usable judgment', async () => {
-  const review = manualReviewResult();
-  delete review.manualReview.diagnostics.reviewSignal;
-  review.manualReview.diagnostics.failureCode = 'timeout';
-  const h = harness({
-    aiTestEnabled: true,
-    customFetch: (url, options, defaults) =>
-      url.endsWith('/ai-test')
-        ? response({ message: '超时', reviewResult: review }, 504)
-        : defaults(url, options),
-  });
-  await h.app.ready;
-  await h.app.openSubmission('s1');
-  await flush();
-  await aiButton(h).click();
-  assert.match(h.get('detail').textContent, /未取得可用判断，请直接人工审核原稿/);
-  assert.match(h.get('detail').textContent, /模型渠道请求超时/);
-  assert.doesNotMatch(h.get('detail').textContent, /文字试审已完成|未发现明确禁止内容/);
-  assert.equal(h.decisionAttempts(), 0);
-});
-
-test('partial review signals explicitly mark missing fields and never imply a safe result', async () => {
-  for (const reportedDecision of [null, 'no_risk_detected']) {
-    const review = manualReviewResult();
-    review.manualReview.diagnostics.reviewSignal = {
-      version: 1,
-      reportedDecision,
-      reportedCategories: [],
-      reportedRuleIds: [],
-      reportedSupportPriority: reportedDecision === null ? 'urgent' : null,
-    };
-    const h = harness({
-      aiTestEnabled: true,
-      customFetch: (url, options, defaults) =>
-        url.endsWith('/ai-test')
-          ? response({ message: '未通过', reviewResult: review }, 502)
-          : defaults(url, options),
-    });
-    await h.app.ready;
-    await h.app.openSubmission('s1');
-    await flush();
-    await aiButton(h).click();
-    const text = h.get('detail').textContent;
-    assert.match(text, /未保留已知类别，不代表没有风险/);
-    assert.match(text, /未保留已知规则，不代表没有违规/);
-    if (reportedDecision === null) {
-      assert.match(text, /模型上报等级：未知/);
-      assert.match(text, /模型上报关怀：紧急关注（尚未核实）/);
-    } else {
-      assert.match(text, /未经校验，不能据此放行/);
-      assert.match(text, /模型上报关怀：未知/);
-    }
-    assert.doesNotMatch(text, /文字试审已完成|未发现明确禁止内容/);
-  }
-});
-
-test('failed review envelopes reject mismatched snapshots, unsafe markers and misplaced HTTP payloads', async () => {
-  const mutations = [
-    { submissionId: 'other' },
-    { version: 2 },
-    { contentHash: 'b'.repeat(64) },
-    { inputMode: 'synthetic_original' },
-    { model: 'kimi-k2.6' },
-    { automaticPublication: true },
-    { imagesReviewed: true },
-    { elapsedMs: -1 },
-    { settingsRevision: '7' },
-    { imageCount: -1 },
-    { policyVersion: '' },
-    { assessment: aiResponse().result.assessment },
-    { policyEvidence: [{}] },
-    { policyDecision: { ...manualReviewResult().policyDecision, recommendedAction: 'allow' } },
-    { policyDecision: { ...manualReviewResult().policyDecision, canAutomaticallyPublish: true } },
-    { policyDecision: { ...manualReviewResult().policyDecision, imagesReviewed: true } },
-    { manualReview: { ...manualReviewResult().manualReview, required: false } },
-    { manualReview: { ...manualReviewResult().manualReview, validation: 'passed' } },
-  ];
-  for (const mutation of mutations) {
-    const h = harness({
-      aiTestEnabled: true,
-      customFetch: (url, options, defaults) =>
-        url.endsWith('/ai-test')
-          ? response({ message: '保留人工审核', reviewResult: manualReviewResult(mutation) }, 502)
-          : defaults(url, options),
-    });
-    await h.app.ready;
-    await h.app.openSubmission('s1');
-    await flush();
-    await aiButton(h).click();
-    assert.doesNotMatch(h.get('detail').textContent, /模型上报等级|文字试审已完成/);
-    assert.equal(h.decisionAttempts(), 0);
-  }
-  for (const status of [403, 409, 503]) {
-    const h = harness({
-      aiTestEnabled: true,
-      customFetch: (url, options, defaults) =>
-        url.endsWith('/ai-test')
-          ? response({ message: '保留人工审核', reviewResult: manualReviewResult() }, status)
-          : defaults(url, options),
-    });
-    await h.app.ready;
-    await h.app.openSubmission('s1');
-    await flush();
-    await aiButton(h).click();
-    assert.doesNotMatch(h.get('detail').textContent, /模型上报等级/);
-  }
-});
-
-test('late failed review signals cannot cross changed inputs, snapshots, identities or permissions', async () => {
-  for (const change of [
-    'terms',
-    'model',
-    'mode',
-    'logout',
-    'detail',
-    'reviewer',
-    'capability',
-    'version',
-  ]) {
-    const pending = deferred();
-    const h = harness({
-      aiTestEnabled: true,
-      customFetch: (url, options, defaults) =>
-        url.endsWith('/ai-test') ? pending.promise : defaults(url, options),
-    });
-    await h.app.ready;
-    await h.app.openSubmission('s1');
-    await flush();
-    const button = aiButton(h);
-    const loading = button.click();
-    await button.events.click();
-    assert.equal(aiRequests(h).length, 1);
-    if (change === 'terms') {
-      privacyTerms(h).value = '新词';
-      privacyTerms(h).events.input();
-    } else if (change === 'model') {
-      aiModel(h).value = 'kimi-k2.6';
-      aiModel(h).events.change();
-    } else if (change === 'mode') {
-      aiMode(h).value = 'synthetic_original';
-      aiMode(h).events.change();
-    } else if (change === 'logout') {
-      h.setToken('');
-      await h.app.initialize();
-    } else if (change === 'detail') await h.app.openSubmission('s1');
-    else if (change === 'reviewer') h.app.state.session.reviewer = false;
-    else if (change === 'capability') h.app.state.session.aiTestEnabled = false;
-    else h.app.state.selected.version = 2;
-    pending.resolve(response({ message: '未通过', reviewResult: manualReviewResult() }, 502));
-    await loading;
-    assert.doesNotMatch(h.get('detail').textContent, /模型上报等级/, change);
-    assert.equal(h.decisionAttempts(), 0);
-  }
-});
-
-test('AI trial is available only to an enabled reviewer viewing pending work outside mine', async () => {
-  for (const options of [
-    {},
-    { aiTestEnabled: true, reviewer: false, search: '?id=s1' },
-    { aiTestEnabled: true, mine: true },
-    { aiTestEnabled: true, reviewer: false, isAdmin: true, mine: true },
-  ]) {
-    const h = harness(options);
-    await h.app.ready;
-    await h.app.openSubmission('s1');
-    assert.equal(aiButton(h), undefined);
-    assert.equal(aiRequests(h).length, 0);
-    assert.equal(
-      h.requests.some(({ url }) => url.endsWith('/ai-models')),
-      false,
-    );
-  }
-  for (const status of ['approved', 'rejected', 'expired']) {
-    const h = harness({ aiTestEnabled: true });
-    h.submission.status = status;
-    await h.app.ready;
-    await h.app.openSubmission('s1');
-    assert.equal(aiButton(h), undefined);
-  }
-  const h = harness({ aiTestEnabled: true });
-  await h.app.ready;
-  await h.app.openSubmission('s1');
-  await flush();
-  assert.ok(aiButton(h));
-  assert.equal(aiModel(h).value, 'synthetic-test-model');
-  assert.equal(aiMode(h).value, 'redacted');
-  assert.deepEqual(
-    aiMode(h).children.map((item) => item.value),
-    ['redacted', 'synthetic_original'],
-  );
-});
-
-test('AI trial sends only the server-owned snapshot version, mode and terms and leaves decisions unchanged', async () => {
-  const h = harness({
-    aiTestEnabled: true,
-    customFetch: (url, options, defaults) =>
-      url.endsWith('/ai-test') ? response(aiResponse()) : defaults(url, options),
-  });
-  await h.app.ready;
-  await h.app.openSubmission('s1');
-  await flush();
-  const before = JSON.stringify(h.app.state.selected);
-  const decisions = h
-    .get('detail')
-    .querySelectorAll('button')
-    .filter((item) => item.dataset.decision);
-  const disabled = decisions.map((item) => item.disabled);
-  privacyTerms(h).value = '  测试姓名\n\n 测试地址  ';
-  await aiButton(h).click();
-  const [{ options }] = aiRequests(h);
-  assert.deepEqual(JSON.parse(options.body), {
-    expectedVersion: 1,
-    inputMode: 'redacted',
-    extraTerms: ['测试姓名', '测试地址'],
-    model: 'synthetic-test-model',
-  });
-  assert.equal(options.method, 'POST');
-  assert.equal(options.headers.Authorization, 'Bearer reviewer-token');
-  assert.equal(options.cache, 'no-store');
-  assert.ok(h.requests.every(({ url }) => url.startsWith('http://localhost:3000/api/')));
-  const text = h.get('detail').textContent;
-  for (const expected of [
-    '未发现明确禁止内容，仍需人工决定',
-    'synthetic-test-model',
-    '1.3 秒',
-    '隐私信息',
-    '<script>aiReason()</script> **literal**',
-    '图片尚未机器审核',
-    '本次发送：本地脱敏后的文字副本',
-    '不会自动发布',
-  ])
-    assert.ok(text.includes(expected), expected);
-  assert.equal(h.get('detail').querySelectorAll('script').length, 0);
-  assert.equal(h.get('detail').querySelectorAll('img').length, 0);
-  assert.equal(JSON.stringify(h.app.state.selected), before);
-  assert.deepEqual(
-    decisions.map((item) => item.disabled),
-    disabled,
-  );
-  assert.equal(h.decisionAttempts(), 0);
-  privacyTerms(h).value = '另一条信息';
-  privacyTerms(h).events.input();
-  assert.equal(h.get('detail').textContent.includes('aiReason'), false);
-  assert.equal(aiRequests(h).length, 1);
-});
-
-test('synthetic-original mode is explicit and input edits never call the provider automatically', async () => {
-  const h = harness({
-    aiTestEnabled: true,
-    customFetch: (url, options, defaults) =>
-      url.endsWith('/ai-test')
-        ? response(
-            aiResponse({
-              inputMode: 'synthetic_original',
-              imageCount: 0,
-              assessment: {
-                decision: 'high_risk',
-                categories: ['threat', 'harassment'],
-                reason: '需要人工核查的合成样例',
-              },
-            }),
-          )
-        : defaults(url, options),
-  });
-  await h.app.ready;
-  await h.app.openSubmission('s1');
-  await flush();
-  aiMode(h).value = 'synthetic_original';
-  aiMode(h).events.change();
-  privacyTerms(h).value = '测试词';
-  privacyTerms(h).events.input();
-  assert.equal(aiRequests(h).length, 0);
-  await aiButton(h).click();
-  assert.equal(JSON.parse(aiRequests(h)[0].options.body).inputMode, 'synthetic_original');
-  assert.ok(h.get('detail').textContent.includes('本次发送：虚构原文（仅测试）'));
-  assert.ok(h.get('detail').textContent.includes('发现高风险迹象，请人工核查'));
-  assert.ok(h.get('detail').textContent.includes('威胁、骚扰侮辱'));
-  aiMode(h).value = 'redacted';
-  aiMode(h).events.change();
-  assert.equal(h.get('detail').textContent.includes('合成样例'), false);
-  assert.equal(aiRequests(h).length, 1);
-});
-
-test('AI trial prevents duplicate calls and discards responses after terms or mode change', async () => {
-  for (const changed of ['terms', 'mode']) {
-    const pending = deferred();
-    const h = harness({
-      aiTestEnabled: true,
-      customFetch: (url, options, defaults) =>
-        url.endsWith('/ai-test') ? pending.promise : defaults(url, options),
-    });
-    await h.app.ready;
-    h.get('policy-category').value = 'sexual_minors';
-    await h.get('policy-refresh').events.click();
-    assert.equal(h.get('policy-category').value, '');
-    await h.app.openSubmission('s1');
-    await flush();
-    const button = aiButton(h);
-    const loading = button.click();
-    assert.equal(button.disabled, true);
-    await button.events.click();
-    if (changed === 'terms') {
-      privacyTerms(h).value = '新测试信息';
-      privacyTerms(h).events.input();
-    } else {
-      aiMode(h).value = 'synthetic_original';
-      aiMode(h).events.change();
-    }
-    assert.equal(aiRequests(h).length, 1);
-    pending.resolve(response(aiResponse()));
-    await loading;
-    assert.equal(h.get('detail').textContent.includes('aiReason'), false);
-    assert.equal(button.disabled, false);
-    assert.ok(h.get('detail').textContent.includes('请手动重新调用'));
-  }
-});
-
-test('late AI responses cannot restore results after logout, detail replacement or capability loss', async () => {
-  for (const change of ['logout', 'detail', 'reviewer', 'capability', 'version']) {
-    const pending = deferred();
-    const h = harness({
-      aiTestEnabled: true,
-      customFetch: (url, options, defaults) =>
-        url.endsWith('/ai-test') ? pending.promise : defaults(url, options),
-    });
-    await h.app.ready;
-    await h.app.openSubmission('s1');
-    await flush();
-    const loading = aiButton(h).click();
-    assert.equal(aiRequests(h).length, 1);
-    if (change === 'logout') {
-      h.setToken('');
-      await h.app.initialize();
-    } else if (change === 'detail') await h.app.openSubmission('s1');
-    else if (change === 'reviewer') h.app.state.session.reviewer = false;
-    else if (change === 'capability') h.app.state.session.aiTestEnabled = false;
-    else h.app.state.selected.version = 2;
-    pending.resolve(response(aiResponse()));
-    await loading;
-    assert.equal(h.get('detail').textContent.includes('aiReason'), false, change);
-    assert.equal(h.decisionAttempts(), 0);
-  }
-});
-
-test('AI trial errors preserve manual decisions and require an explicit click for a retry', async () => {
-  for (const code of [503, 403, 409]) {
-    let calls = 0;
-    const h = harness({
-      aiTestEnabled: true,
-      customFetch: (url, options, defaults) => {
-        if (!url.endsWith('/ai-test')) return defaults(url, options);
-        calls += 1;
-        return calls === 1
-          ? response({ message: '试审模型设置尚未配置' }, code)
-          : response(aiResponse());
-      },
-    });
-    await h.app.ready;
-    await h.app.openSubmission('s1');
-    await flush();
-    await aiButton(h).click();
-    assert.equal(aiButton(h).disabled, false);
-    assert.ok(
-      h
-        .get('detail')
-        .textContent.includes(code === 409 ? '提交状态或版本已变化' : '试审模型设置尚未配置'),
-    );
-    assert.equal(calls, 1);
-    assert.equal(h.app.state.selected.status, 'pending');
-    assert.equal(
-      h
-        .get('detail')
-        .querySelectorAll('button')
-        .find((item) => item.dataset.decision === 'approved').disabled,
-      false,
-    );
-    await aiButton(h).click();
-    assert.equal(calls, 2);
-    assert.ok(h.get('detail').textContent.includes('文字试审已完成'));
-    assert.equal(h.decisionAttempts(), 0);
-  }
-});
-
-test('AI trial rejects excessive terms and mismatched or unsafe response envelopes', async () => {
-  const invalid = [
-    { submissionId: 'other' },
-    { version: 2 },
-    { contentHash: 'b'.repeat(64) },
-    { inputMode: 'synthetic_original' },
-    { model: 'kimi-k2.6' },
-    { imagesReviewed: true },
-    { automaticPublication: true },
-    { assessment: { decision: 'approved', categories: [], reason: 'invalid' } },
-    { assessment: { decision: 'needs_review', categories: ['invented'], reason: 'invalid' } },
-    { assessment: { decision: 'needs_review', categories: [], reason: 'x'.repeat(1001) } },
-  ];
-  for (const payload of invalid) {
-    const h = harness({
-      aiTestEnabled: true,
-      customFetch: (url, options, defaults) =>
-        url.endsWith('/ai-test') ? response(aiResponse(payload)) : defaults(url, options),
-    });
-    await h.app.ready;
-    await h.app.openSubmission('s1');
-    await flush();
-    privacyTerms(h).value = Array(51).fill('词').join('\n');
-    await aiButton(h).click();
-    assert.equal(aiRequests(h).length, 0);
-    privacyTerms(h).value = '';
-    await aiButton(h).click();
-    assert.ok(h.get('detail').textContent.includes('试审结果无效'));
-    assert.equal(h.get('detail').textContent.includes('文字试审已完成'), false);
-    assert.equal(h.decisionAttempts(), 0);
-  }
-});
-
-test('AI model catalog chooses its configured default and selecting another model changes only an explicit trial', async () => {
-  const h = harness({
-    aiTestEnabled: true,
-    customFetch: (url, options, defaults) => {
-      if (url.endsWith('/ai-models'))
-        return response({ ...aiCatalog(), defaultModel: 'kimi-k2.6' });
-      if (url.endsWith('/ai-test'))
-        return response(aiResponse({ model: JSON.parse(options.body).model }));
-      return defaults(url, options);
-    },
-  });
-  await h.app.ready;
-  await h.app.openSubmission('s1');
-  await flush();
-  assert.equal(aiModel(h).value, 'kimi-k2.6');
-  const catalogRequest = h.requests.find(({ url }) => url.endsWith('/ai-models'));
-  assert.equal(catalogRequest.options.method, 'GET');
-  assert.equal(catalogRequest.options.headers.Authorization, 'Bearer reviewer-token');
-  assert.equal(catalogRequest.options.body, undefined);
-  assert.equal(aiRequests(h).length, 0);
-  await aiButton(h).click();
-  assert.equal(JSON.parse(aiRequests(h)[0].options.body).model, 'kimi-k2.6');
-  aiModel(h).value = 'synthetic-test-model';
-  aiModel(h).events.change();
-  assert.equal(h.get('detail').textContent.includes('aiReason'), false);
-  assert.equal(aiRequests(h).length, 1);
-  await aiButton(h).click();
-  assert.equal(JSON.parse(aiRequests(h)[1].options.body).model, 'synthetic-test-model');
-  assert.ok(h.get('detail').textContent.includes('选择仅影响当前详情中的试审'));
-  assert.ok(!h.requests.some(({ url }) => url.endsWith('/ai/models')));
-});
-
-test('missing or failed catalogs disable AI calls and retry only the free catalog request', async () => {
-  const pending = deferred();
-  let loads = 0;
-  const h = harness({
-    aiTestEnabled: true,
-    customFetch: (url, options, defaults) => {
-      if (url.endsWith('/ai-models')) {
-        loads += 1;
-        return loads === 1 ? pending.promise : response(aiCatalog());
-      }
-      return defaults(url, options);
-    },
-  });
-  await h.app.ready;
-  await h.app.openSubmission('s1');
-  assert.equal(aiModel(h).disabled, true);
-  assert.equal(aiButton(h).disabled, true);
-  await aiButton(h).events.click();
-  assert.equal(aiRequests(h).length, 0);
-  pending.resolve(response({ message: '目录暂不可用' }, 503));
-  await flush();
-  assert.equal(aiButton(h).disabled, true);
-  assert.equal(aiModel(h).disabled, true);
-  assert.equal(reloadModels(h).hidden, false);
-  assert.ok(h.get('detail').textContent.includes('目录暂不可用'));
-  await aiButton(h).events.click();
-  await reloadModels(h).click();
-  assert.equal(loads, 2);
-  assert.equal(aiButton(h).disabled, false);
-  assert.equal(aiRequests(h).length, 0);
-});
-
-test('invalid model catalogs stay disabled rather than accepting arbitrary model text', async () => {
-  for (const catalog of [
-    { models: [] },
-    { ...aiCatalog(), defaultModel: 'not-listed' },
-    { ...aiCatalog(), models: [{ id: '', label: 'Invalid' }] },
-  ]) {
-    const h = harness({
-      aiTestEnabled: true,
-      customFetch: (url, options, defaults) =>
-        url.endsWith('/ai-models') ? response(catalog) : defaults(url, options),
-    });
-    await h.app.ready;
-    await h.app.openSubmission('s1');
-    await flush();
-    assert.equal(aiButton(h).disabled, true);
-    assert.equal(reloadModels(h).hidden, false);
-    aiModel(h).value = 'arbitrary-model';
-    await aiButton(h).events.click();
-    assert.equal(aiRequests(h).length, 0);
-  }
-});
-
-test('a successful catalog stays refreshable and refresh immediately clears the previous assessment', async () => {
-  const pending = deferred();
-  let loads = 0;
-  const h = harness({
-    aiTestEnabled: true,
-    customFetch: (url, options, defaults) => {
-      if (url.endsWith('/ai-models')) {
-        loads += 1;
-        return loads === 1 ? response(aiCatalog()) : pending.promise;
-      }
-      if (url.endsWith('/ai-test')) return response(aiResponse());
-      return defaults(url, options);
-    },
-  });
-  await h.app.ready;
-  await h.app.openSubmission('s1');
-  await flush();
-  assert.equal(reloadModels(h).hidden, false);
-  await aiButton(h).click();
-  assert.ok(h.get('detail').textContent.includes('aiReason'));
-  const refreshing = reloadModels(h).click();
-  assert.equal(h.get('detail').textContent.includes('aiReason'), false);
-  assert.equal(aiModel(h).disabled, true);
-  assert.equal(aiButton(h).disabled, true);
-  assert.equal(aiRequests(h).length, 1);
-  pending.resolve(
-    response({
-      defaultModel: 'kimi-k2.6',
-      models: [{ id: 'kimi-k2.6', label: 'Kimi 2.6' }],
-      settingsRevision: 8,
-    }),
-  );
-  await refreshing;
-  assert.equal(aiModel(h).value, 'kimi-k2.6');
-  assert.equal(aiModel(h).children.length, 1);
-  assert.equal(reloadModels(h).hidden, false);
-  assert.equal(aiRequests(h).length, 1);
-});
-
-test('late model catalogs cannot cross logout, account changes, reviewer revocation or detail replacement', async () => {
-  for (const change of ['logout', 'account', 'reviewer', 'detail']) {
-    const pending = deferred();
-    let catalogs = 0;
-    const h = harness({
-      aiTestEnabled: true,
-      customFetch: (url, options, defaults) => {
-        if (url.endsWith('/ai-models')) {
-          catalogs += 1;
-          return catalogs === 1 ? pending.promise : response(aiCatalog());
-        }
-        return defaults(url, options);
-      },
-    });
-    await h.app.ready;
-    await h.app.openSubmission('s1');
-    if (change === 'logout') {
-      h.setToken('');
-      await h.app.initialize();
-    } else if (change === 'account') {
-      h.setToken('another-reviewer');
-      await h.app.initialize();
-      await h.app.openSubmission('s1');
-    } else if (change === 'detail') await h.app.openSubmission('s1');
-    else h.app.state.session.reviewer = false;
-    pending.resolve(
-      response({
-        defaultModel: 'stale-model',
-        models: [{ id: 'stale-model', label: 'Stale model label' }],
-        settingsRevision: 1,
-      }),
-    );
-    await flush();
-    assert.equal(h.get('detail').textContent.includes('Stale model label'), false, change);
-    if (change === 'logout') assert.equal(aiModel(h), undefined);
-    else if (change === 'reviewer') assert.equal(aiModel(h).disabled, true);
-    else assert.equal(aiModel(h).value, 'synthetic-test-model');
-    assert.equal(aiRequests(h).length, 0);
-  }
-});
-
-test('changing model invalidates an in-flight assessment and keeps the changed model for the next explicit call', async () => {
-  const pending = deferred();
-  let calls = 0;
-  const h = harness({
-    aiTestEnabled: true,
-    customFetch: (url, options, defaults) => {
-      if (!url.endsWith('/ai-test')) return defaults(url, options);
-      calls += 1;
-      return calls === 1 ? pending.promise : response(aiResponse({ model: 'kimi-k2.6' }));
-    },
-  });
-  await h.app.ready;
-  await h.app.openSubmission('s1');
-  await flush();
-  const loading = aiButton(h).click();
-  aiModel(h).value = 'kimi-k2.6';
-  aiModel(h).events.change();
-  assert.equal(calls, 1);
-  pending.resolve(response(aiResponse()));
-  await loading;
-  assert.equal(h.get('detail').textContent.includes('aiReason'), false);
-  assert.equal(aiModel(h).value, 'kimi-k2.6');
-  assert.equal(aiButton(h).disabled, false);
-  await aiButton(h).click();
-  assert.equal(JSON.parse(aiRequests(h)[1].options.body).model, 'kimi-k2.6');
-  assert.ok(h.get('detail').textContent.includes('文字试审已完成'));
-});
-
-test('an administrator outside the reviewer registry can manage reviewers from mine without review controls', async () => {
+test('an administrator viewing mine sees only personal submissions without reviewer management', async () => {
   const h = harness({ mine: true, reviewer: false, isAdmin: true });
   await h.app.ready;
   await flush();
   await h.app.openSubmission('s1');
   assert.equal(h.get('review-link').hidden, true);
-  assert.equal(h.get('reviewers').hidden, false);
+  assert.equal(h.get('reviewers').hidden, true);
   assert.equal(h.get('detail').querySelectorAll('button').length, 0);
-  assert.ok(h.requests.some(({ url }) => url.endsWith('/moderation/reviewers')));
+  assert.ok(!h.requests.some(({ url }) => url.endsWith('/moderation/reviewers')));
   assert.ok(!h.requests.some(({ url }) => url.includes('/moderation/submissions?')));
 });
 
@@ -1687,7 +882,7 @@ test('failed historical run requires an independent active judgment and never of
   assert.equal(JSON.parse(writes[0].options.body).decision, 'needs_review');
   assert.equal(JSON.parse(writes[0].options.body).verdict, 'escalate');
   assert.equal(h.decisionAttempts(), 0);
-  assert.equal(aiRequests(h).length, 0);
+  assert.equal(h.requests.filter(({ url }) => url.endsWith('/ai-test')).length, 0);
 });
 
 test('failed history hides injected fields and retained human feedback does not permit machine agreement', async () => {
@@ -2497,7 +1692,7 @@ test('withdrawal conflict reloads the authoritative submission and removes stale
   );
 });
 
-test('temporary machine block keeps manual decisions and independent GLM trial selection available', async () => {
+test('temporary machine block keeps manual decisions without exposing manual trial controls', async () => {
   const h = harness({
     automation: automaticSettings(),
     aiTestEnabled: true,
@@ -2518,9 +1713,9 @@ test('temporary machine block keeps manual decisions and independent GLM trial s
   await h.app.openSubmission('s1');
   await flush();
   assert.match(h.get('detail').textContent, /尚不是最终不予发布/);
-  const model = control(h, 'select', '-ai-model');
-  assert.equal(model.value, 'qwen3.6-27b');
-  assert.ok(model.querySelectorAll('option').some((option) => option.value === 'glm-5.1'));
+  assert.equal(control(h, 'select', '-ai-model'), undefined);
+  assert.doesNotMatch(h.get('detail').textContent, /本地脱敏预览|调用无问芯穹试审/);
+  assert.ok(!h.requests.some(({ url }) => /ai-models|privacy-preview|ai-test/.test(url)));
   const approve = h
     .get('detail')
     .querySelectorAll('button')
@@ -3090,4 +2285,67 @@ test('failed image parsing shows only allowlisted diagnostic descriptions and ne
   assert.match(h.get('detail').textContent, /图片序号不符合要求/);
   assert.match(h.get('detail').textContent, /不将无效结果视为安全/);
   assert.doesNotMatch(h.get('detail').textContent, /PRIVATE_PROVIDER|图片尚未机器审核/);
+});
+
+test('personal view stays free of reviewer sections for authors, reviewers and administrators', async () => {
+  for (const roles of [
+    { reviewer: false, isAdmin: false },
+    { reviewer: true, isAdmin: false },
+    { reviewer: true, isAdmin: true },
+  ]) {
+    const h = harness({
+      mine: true,
+      ...roles,
+      automation: automaticSettings(),
+      aiTestEnabled: true,
+    });
+    await h.app.ready;
+    await h.app.openSubmission('s1');
+    await flush();
+    assert.equal(h.get('intro').hidden, true);
+    assert.equal(h.get('mine-title').hidden, false);
+    for (const id of ['reviewers', 'automation', 'policy-library', 'queue-note', 'queue-eyebrow'])
+      assert.equal(h.get(id).hidden, true, id);
+    assert.ok(
+      !h.requests.some(({ url }) =>
+        /reviewers|policies|ai-history|ai-models|privacy-preview|ai-test|\/automation/.test(url),
+      ),
+    );
+    assert.match(h.get('detail').textContent, /提交者/);
+  }
+});
+
+test('author notification URL adopts the personal layout after session resolution', async () => {
+  const h = harness({ search: '?id=s1', reviewer: false, isAdmin: true });
+  await h.app.ready;
+  assert.equal(h.get('intro').hidden, true);
+  assert.equal(h.get('mine-title').hidden, false);
+  assert.equal(h.get('reviewers').hidden, true);
+  assert.ok(!h.requests.some(({ url }) => url.endsWith('/reviewers')));
+});
+
+test('administrator management remains available in the workbench only', async () => {
+  const h = harness({ isAdmin: true });
+  await h.app.ready;
+  await flush();
+  assert.equal(h.get('intro').hidden, false);
+  assert.equal(h.get('mine-title').hidden, true);
+  assert.equal(h.get('reviewers').hidden, false);
+  assert.ok(h.requests.some(({ url }) => url.endsWith('/reviewers')));
+});
+
+test('post and comment original content immediately precedes automatic results and preserves manual review', async () => {
+  for (const kind of ['post', 'comment']) {
+    const h = harness({ automation: automaticSettings(), aiTestEnabled: true });
+    h.submission.kind = kind;
+    await h.app.ready;
+    await h.app.openSubmission('s1');
+    await flush();
+    const grid = h.get('detail').children[0];
+    assert.equal(grid.children[0].children[0].className, 'moderation-original');
+    assert.equal(grid.children[0].children[1].className, 'moderation-automation-result');
+    assert.match(grid.children[1].textContent, /负责人最终决定/);
+    assert.doesNotMatch(h.get('detail').textContent, /本地脱敏预览|调用无问芯穹试审/);
+    assert.ok(!h.requests.some(({ url }) => /ai-models|privacy-preview|ai-test/.test(url)));
+  }
 });
