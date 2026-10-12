@@ -1709,3 +1709,45 @@ body.discussion-page
   text-decoration: underline;
   text-underline-offset: 4px;
 }
+
+/* Scope navigation uses one appearance for filter buttons and page links,
+   including the final shared theme layers. */
+body.discussion-page
+  .main-content
+  #discussion-scope-controls
+  :is(button.discussion-filter-chip, a.discussion-filter-chip) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px !important;
+  padding: 6px 10px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: var(--ui-accent-soft) !important;
+  color: var(--ui-text) !important;
+  font-family: var(--font-ui) !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  line-height: 1.5 !important;
+  text-decoration: none !important;
+  white-space: nowrap;
+}
+body.discussion-page
+  .main-content
+  #discussion-scope-controls
+  :is(button.discussion-filter-chip, a.discussion-filter-chip):hover {
+  background: var(--ui-surface-soft) !important;
+}
+@media (max-width: 760px) {
+  body.discussion-page .main-content #discussion-scope-controls {
+    flex-wrap: wrap;
+  }
+  body.discussion-page
+    .main-content
+    #discussion-scope-controls
+    :is(button.discussion-filter-chip, a.discussion-filter-chip) {
+    min-height: 44px !important;
+    padding: 6px 8px !important;
+    font-size: 13px !important;
+  }
+}

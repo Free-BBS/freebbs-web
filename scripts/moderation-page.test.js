@@ -901,7 +901,7 @@ test('failed history hides injected fields and retained human feedback does not 
     supportPriority: 'none',
     note: '<script>literalHumanNote()</script>',
   };
-  const h = policyHarness({ run });
+  const h = policyHarness({ run, isAdmin: true });
   await h.app.ready;
   await h.app.openSubmission('s1');
   await flush();
@@ -1312,6 +1312,7 @@ test('retired sexual rules retain their original historical meaning and cannot b
     };
     const h = policyHarness({
       run,
+      isAdmin: true,
       customFetch: async (url, options, fallback) =>
         url.endsWith('/policies')
           ? response({
@@ -1394,7 +1395,7 @@ test('legacy evidence keeps original JSON but shows Chinese historical labels an
     note: '历史说明',
     createdAt: '2026-10-08T01:00:00Z',
   };
-  const h = policyHarness({ run });
+  const h = policyHarness({ run, isAdmin: true });
   await h.app.ready;
   await h.app.openSubmission('s1');
   await flush();
@@ -1445,7 +1446,7 @@ test('a current-version correction on an old run remains editable without enabli
     note: '按新清单重评',
     createdAt: '2026-10-08T01:00:00Z',
   };
-  const h = policyHarness({ run });
+  const h = policyHarness({ run, isAdmin: true });
   await h.app.ready;
   await h.app.openSubmission('s1');
   await flush();
@@ -1526,7 +1527,7 @@ test('automation control is admin-only while reviewers can read status and autho
       role,
     );
     if (reviewing) {
-      assert.match(h.get('automation-summary').textContent, /qwen3.6-27b.*glm-5.1/);
+      assert.match(h.get('automation-models').textContent, /qwen3.6-27b.*glm-5.1/);
       assert.match(h.get('automation-summary').textContent, /已暂停/);
     }
     if (role !== 'admin') {
@@ -1580,7 +1581,7 @@ test('disabled automation still shows historical jobs but never allows enabling 
   await h.app.ready;
   await h.app.openSubmission('s1');
   await flush();
-  assert.match(h.get('automation-summary').textContent, /未启用/);
+  assert.match(h.get('automation-summary').textContent, /未开启/);
   assert.equal(h.get('automation-toggle').hidden, true);
   await h.get('automation-toggle').events.click();
   assert.ok(h.requests.some(({ url }) => url.endsWith('/automation')));
@@ -1777,7 +1778,7 @@ test('automatic review errors and unverified risk hints stay in the job panel wi
   await h.app.openSubmission('s1');
   await flush();
   assert.match(h.get('detail').textContent, /转人工复核/);
-  assert.match(h.get('detail').textContent, /输出未通过校验/);
+  assert.match(h.get('detail').textContent, /未能给出可靠结论/);
   assert.match(h.get('detail').textContent, /关怀需求不等于违规/);
   assert.equal(h.submission.status, 'pending');
   assert.ok(!h.requests.some(({ url }) => url.endsWith('/decision')));
@@ -1807,7 +1808,7 @@ test('an unattempted image job explains that no model was called and preserves t
   await flush();
   assert.match(h.get('detail').textContent, /图片尚未完成机器审核，整份稿件交人工检查/);
   assert.match(h.get('detail').textContent, /未调用模型 · 保留人工审核/);
-  assert.doesNotMatch(h.get('detail').textContent, /输出未通过校验/);
+  assert.doesNotMatch(h.get('detail').textContent, /未能给出可靠结论/);
   assert.ok(!h.requests.some(({ url }) => url.endsWith('/ai-test')));
 });
 
@@ -1913,7 +1914,8 @@ test('image review queue is a distinct reviewer queue and remains available when
   assert.equal(h.get('status').value, 'image_review');
   assert.match(h.get('list').textContent, /图片待复核.*已自动发布/);
   assert.equal(h.get('more').hidden, true);
-  assert.match(h.get('automation-summary').textContent, /已暂停.*qwen3.6-27b.*kimi-k2.6/);
+  assert.match(h.get('automation-summary').textContent, /已暂停/);
+  assert.match(h.get('automation-models').textContent, /qwen3.6-27b.*kimi-k2.6/);
   assert.ok(h.requests.some(({ url }) => url.endsWith('/automation/image-reviews?')));
   for (const options of [{ mine: true }, { reviewer: false }]) {
     const denied = harness({ ...options, automation: automaticSettings() });
@@ -2281,7 +2283,7 @@ test('failed image parsing shows only allowlisted diagnostic descriptions and ne
   await h.app.ready;
   await h.app.openSubmission('s1');
   await flush();
-  assert.match(h.get('detail').textContent, /图片结果检查未通过/);
+  assert.match(h.get('detail').textContent, /图片需要人工检查/);
   assert.match(h.get('detail').textContent, /图片序号不符合要求/);
   assert.match(h.get('detail').textContent, /不将无效结果视为安全/);
   assert.doesNotMatch(h.get('detail').textContent, /PRIVATE_PROVIDER|图片尚未机器审核/);
@@ -2347,5 +2349,23 @@ test('post and comment original content immediately precedes automatic results a
     assert.match(grid.children[1].textContent, /负责人最终决定/);
     assert.doesNotMatch(h.get('detail').textContent, /本地脱敏预览|调用无问芯穹试审/);
     assert.ok(!h.requests.some(({ url }) => /ai-models|privacy-preview|ai-test/.test(url)));
+  }
+});
+
+test('reviewers get actionable status while administrator diagnostics stay out of the main reading flow', async () => {
+  for (const isAdmin of [false, true]) {
+    const h = policyHarness({ isAdmin, automation: automaticSettings() });
+    await h.app.ready;
+    await h.app.openSubmission('s1');
+    await flush();
+    assert.match(h.get('automation-summary').textContent, /已暂停.*等待审核/);
+    assert.doesNotMatch(h.get('automation-summary').textContent, /qwen|glm|kimi|模型/);
+    const technical = h
+      .get('detail')
+      .querySelectorAll('details')
+      .find((item) => item.children[0]?.textContent === '技术排查信息');
+    assert.equal(Boolean(technical), isAdmin);
+    if (technical) assert.notEqual(technical.open, true);
+    assert.match(h.get('detail').textContent, /负责人最终决定/);
   }
 });

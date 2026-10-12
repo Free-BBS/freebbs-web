@@ -395,8 +395,8 @@
       const panel = node('div', undefined, 'moderation-outcome moderation-outcome-hold');
       panel.append(
         node('h4', '模型提示待人工复核'),
-        node('p', '输出未通过校验，不能作为有效结论。请负责人结合原稿和当前规则独立复核。'),
-        node('p', '本次失败结果须人工复核，不能据此自动发布或认定违规。'),
+        node('p', '自动审核未能给出可靠结论，请结合原稿和规则清单人工判断。'),
+        node('p', '这不表示内容违规；完成核查后再决定是否发布。'),
       );
       const diagnostics = run.manualReview?.diagnostics;
       const signal =
@@ -443,11 +443,11 @@
           node('p', `模型上报等级：${decision || '未知'}`),
           node(
             'p',
-            `模型上报类别（尚未核实）：${categories.length ? categories.map((id) => AI_CATEGORY_LABELS[id]).join('、') : '未保留已知类别，不代表没有风险'}`,
+            `模型上报类别（尚未核实）：${categories.length ? categories.map((id) => AI_CATEGORY_LABELS[id]).join('、') : '未能确认具体类别，请结合原文判断'}`,
           ),
           node(
             'p',
-            `模型上报规则（尚未核实）：${rules.length ? rules.join('、') : '未保留已知规则，不代表没有违规'}`,
+            `模型上报规则（尚未核实）：${rules.length ? rules.join('、') : '未能确认适用条目，请核对禁止内容清单'}`,
           ),
           node('p', `模型上报关怀：${support ? `${support}（尚未核实）` : '未知'}`),
         );
@@ -455,7 +455,8 @@
       const failureLabel = isReviewResult(run)
         ? FAILURE_LABELS[diagnostics.failureCode]
         : '审核结果未通过校验';
-      panel.append(node('p', `待复核原因：${failureLabel}。`));
+      const technical = disclosure('查看异常详情');
+      technical.append(node('p', `待复核原因：${failureLabel}。`));
       const imageDiagnostics = run.manualReview?.imageDiagnostics;
       if (imageDiagnostics && Object.hasOwn(FAILURE_LABELS, imageDiagnostics.failureCode)) {
         const checks = {
@@ -472,11 +473,9 @@
         const issue = Object.hasOwn(checks, imageDiagnostics.validation?.issue)
           ? checks[imageDiagnostics.validation.issue]
           : '';
-        panel.append(
-          node('h4', '图片结果检查未通过'),
-          node('p', FAILURE_LABELS[imageDiagnostics.failureCode]),
-        );
-        if (issue) panel.append(node('p', `具体问题：${issue}。`));
+        panel.append(node('h4', '图片需要人工检查'));
+        technical.append(node('p', FAILURE_LABELS[imageDiagnostics.failureCode]));
+        if (issue) technical.append(node('p', `具体问题：${issue}。`));
         panel.append(node('p', '不将无效结果视为安全；请负责人检查全部原图。'));
       }
       panel.append(
@@ -490,6 +489,7 @@
           'moderation-note',
         ),
       );
+      panel.append(technical);
       return panel;
     }
 
@@ -555,7 +555,7 @@
         card.append(
           node(
             'p',
-            '这是当时使用的历史依据，保留用于追溯；不作为当前禁止清单中的条目。原始编号和数据保留在结构化 JSON 中。',
+            '这是当时使用的历史依据，保留用于追溯；不作为当前禁止清单中的条目。原始编号和数据保留在审核记录中。',
             'moderation-note',
           ),
         );
@@ -802,7 +802,7 @@
       }
       for (const uncertainty of assessment.uncertainties || [])
         evidence.append(node('p', `待核查：${uncertainty}`, 'moderation-privacy-warning'));
-      const raw = disclosure('结构化 JSON');
+      const raw = disclosure('技术排查信息');
       raw.append(
         node('p', '仅展示本次审核的结构化结果；不含 API 密钥和供应商原始响应。', 'moderation-note'),
         node(
@@ -821,12 +821,13 @@
           'moderation-json',
         ),
       );
-      group.append(evidence, raw);
+      group.append(evidence);
+      if (state.session?.isAdmin) group.append(raw);
       return group;
     }
 
     function feedbackPanel(submission, run, current, refresh) {
-      const wrapper = disclosure('人工复核与回归样例');
+      const wrapper = disclosure('补充复核记录与测试样例');
       const form = node('form', undefined, 'moderation-feedback-form');
       const currentPolicyVersion = state.library.version;
       const historical = run.policyVersion !== currentPolicyVersion;
@@ -912,7 +913,7 @@
       const sameValues = (first, second) =>
         JSON.stringify([...first].sort()) === JSON.stringify([...second].sort());
       form.append(
-        node('p', '复核记录会保存到本条试审历史；不会改变帖子的发布状态。', 'moderation-note'),
+        node('p', '这里用于补充审核记录；发布或撤回请使用对应的操作按钮。', 'moderation-note'),
         node(
           'p',
           previousFeedback
@@ -1105,8 +1106,13 @@
       const visible = !mine && state.session?.reviewer === true && Boolean(automation);
       el('automation').hidden = !visible;
       if (!visible) return;
-      el('automation-summary').textContent =
-        `${!automation.enabled ? '自动审核未启用' : automation.paused ? '自动审核已暂停 · 新稿排队待审' : '自动审核运行中'} · 文字模型：${automation.model || '未配置'} · 手动备选：${automation.backupModel || '未配置'} · 图片：${automation.imagesEnabled ? automation.imageModel || 'Kimi' : '未启用机器审核'}`;
+      el('automation-summary').textContent = !automation.enabled
+        ? '未开启 · 请人工审核提交内容'
+        : automation.paused
+          ? '已暂停 · 新提交的内容等待审核'
+          : '运行中 · 系统正在自动检查新提交的内容';
+      el('automation-models').textContent =
+        `文字：${automation.model || '未配置'} · 备选配置：${automation.backupModel || '未配置'} · 图片：${automation.imagesEnabled ? automation.imageModel || 'Kimi' : '由负责人检查'}`;
       el('automation-toggle').hidden = !state.session.isAdmin || !automation.enabled;
       el('automation-toggle').disabled = state.automationChanging;
       el('automation-toggle').textContent = automation.paused ? '开启自动审核' : '暂停自动审核';
@@ -1143,7 +1149,7 @@
         state.session.automation = payload.automation;
         el('automation-message').textContent = paused
           ? '已暂停自动审核。新稿继续排队，在途结果交人工处理。'
-          : '已开启自动审核。请仅提交虚构测试内容；上线前已有稿件仍由人工处理。';
+          : '自动审核已开启。此前的待审内容仍需你处理。';
       } catch (error) {
         if (valid(generation)) el('automation-message').textContent = error.message;
       } finally {
@@ -1490,9 +1496,7 @@
               node('p', '请独立核对原稿及图片。关怀需求不等于违规，机器异常也不能作为处罚依据。'),
             );
           if (job.state === 'published')
-            content.append(
-              node('p', '已自动发布稿件可由负责人撤回；此处不提供再次调用模型的手动试审。'),
-            );
+            content.append(node('p', '如发现不适合公开的内容，请填写理由并撤回。'));
           const imageReview = job.imageReview || submission.automation?.imageReview;
           if (imageReview?.required) content.append(imageReviewPanel(imageReview));
           if (job.result?.reviewFocus)
@@ -1553,7 +1557,7 @@
     function historyPanel(submission, generation, version) {
       const panel = node('section', undefined, 'moderation-history');
       panel.append(
-        node('p', 'AUDIT TRAIL', 'moderation-eyebrow'),
+        node('p', '过往处理', 'moderation-eyebrow'),
         node('h3', '历史审核与人工复核记录'),
         node('p', '以下为保存的历史结果，可用于核对过往判断和人工处置。', 'moderation-note'),
       );
@@ -1578,7 +1582,7 @@
           if (!current() || requestId !== requestVersion) return;
           if (!Array.isArray(runs)) throw new Error('审核记录格式无效。');
           content.replaceChildren();
-          if (!runs.length) content.append(node('p', '暂无已保存的试审记录。', 'moderation-empty'));
+          if (!runs.length) content.append(node('p', '暂无历史审核记录。', 'moderation-empty'));
           for (const run of runs) {
             const entry = disclosure(
               `${formatTime(run.createdAt)} · ${run.model} · ${!run.assessment || run.manualReview?.validation === 'failed' ? '模型提示待人工复核' : DECISION_LABELS[run.assessment?.decision] || '待核对'}`,
@@ -1677,7 +1681,7 @@
         let imageStatus;
         const original = node('section', undefined, 'moderation-original');
         original.append(
-          node('p', 'ORIGINAL SUBMISSION', 'moderation-eyebrow'),
+          node('p', '提交内容', 'moderation-eyebrow'),
           title,
           meta,
           author,
@@ -1741,12 +1745,12 @@
           }
           form.addEventListener('submit', (event) => event.preventDefault());
           form.append(
-            node('p', 'HUMAN REVIEW', 'moderation-eyebrow'),
+            node('p', '人工处理', 'moderation-eyebrow'),
             node('h3', '负责人最终决定'),
             node(
               'p',
               state.session.automation?.enabled
-                ? '人工决定与自动任务会核对同一稿件版本。请先查看自动状态，再核对内容、图片和依据；机器暂时拦截仍可由负责人处理。'
+                ? '请结合原文、全部图片和审核依据，决定是否发布。系统暂时拦截的内容也由你作出最终决定。'
                 : '核对内容、图片和依据后再作出人工决定。',
               'moderation-note',
             ),
@@ -1945,7 +1949,7 @@
         el('message').textContent = mine
           ? '仅显示你提交的审核记录。'
           : session.automation?.enabled
-            ? '自动审核仅用于虚构测试内容。请复核异常和暂时拦截结果，并留意已自动发布内容。'
+            ? '请优先处理待审核内容；已发布的图片也需要逐条复核。'
             : '请结合正文和全部图片作出人工审核决定。';
         renderAutomationStatus();
         el('workspace').hidden = false;

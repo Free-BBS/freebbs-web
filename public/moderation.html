@@ -20,11 +20,11 @@
     </header>
     <main id="moderation-app">
       <header class="moderation-intro" id="moderation-intro" hidden>
-        <p class="moderation-eyebrow">FREE BBS / POLICY AUDIT WORKBENCH</p>
+        <p class="moderation-eyebrow">讨论区内容管理</p>
         <h1 id="moderation-title">内容审核</h1>
-        <p>读懂内容，核对依据，作出有记录的决定。</p>
+        <p>查看待审内容，处理风险提醒，并记录审核决定。</p>
         <div class="moderation-context">
-          <span>讨论区</span><span>文字与图片审核 · 负责人复核</span><span>负责人最终决定</span>
+          <span>测试环境</span><span>帖子与评论</span><span>文字与图片审核</span>
         </div>
         <p class="moderation-note">
           审核相关数据保存一个月；正常发布的帖子和评论不在此清理范围内。
@@ -38,13 +38,17 @@
         hidden
         aria-labelledby="moderation-automation-title"
       >
-        <h2 id="moderation-automation-title">自动审核 · 虚构内容测试</h2>
+        <h2 id="moderation-automation-title">自动审核</h2>
         <p id="moderation-automation-summary"></p>
         <p>
-          仅处理启用后新提交的虚构测试稿件。文字由 Qwen 审核；启用图片审核后，图片由 Kimi
-          检查。图文均通过的含图稿件先发布，同时进入“图片待复核”；隐私疑点、看不清的图片及异常结果交人工。
+          请优先处理待审核内容，并在“图片待复核”中检查已发布的图片。涉及政治话题或心理问题的内容，须经负责人审核后发布。
         </p>
-        <p class="moderation-note">自动审核异常时转交人工处理。暂停后，尚未完成的任务保留待审。</p>
+        <p class="moderation-note">暂停后，新提交的内容将等待审核；你仍可进行人工审核。</p>
+        <details class="moderation-disclosure">
+          <summary>运行信息</summary>
+          <p id="moderation-automation-models"></p>
+          <p class="moderation-note">当前为测试环境，请使用虚构内容进行验证。</p>
+        </details>
         <button type="button" id="moderation-automation-toggle" hidden>暂停自动审核</button>
         <p id="moderation-automation-message" role="status" aria-live="polite"></p>
       </section>
@@ -56,7 +60,7 @@
         <div class="moderation-layout">
           <aside class="moderation-queue" aria-label="审核队列">
             <div class="moderation-section-heading">
-              <span class="moderation-eyebrow" id="moderation-queue-eyebrow">REVIEW QUEUE</span>
+              <span class="moderation-eyebrow" id="moderation-queue-eyebrow">待处理内容</span>
               <h2>提交队列</h2>
             </div>
             <div class="moderation-toolbar">
@@ -138,7 +142,7 @@
       </section>
       <section id="moderation-reviewers" hidden aria-labelledby="moderation-reviewers-title">
         <h2 id="moderation-reviewers-title">审核负责人</h2>
-        <p>管理员可管理负责人；审核权限以服务器校验为准。</p>
+        <p>管理员可以添加或移除负责人。只有负责人可以查看和处理审核队列。</p>
         <div id="moderation-reviewer-list"></div>
         <form id="moderation-reviewer-search">
           <label for="moderation-reviewer-query">查找用户</label>
