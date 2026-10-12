@@ -138,6 +138,7 @@ test(
         uncertainties: [],
         supportPriority: 'none',
         supportReason: '',
+        reviewTopics: { political: [], psychological: [] },
       },
       ...extra,
     });
@@ -431,6 +432,7 @@ test(
           uncertainties: [],
           supportPriority: 'none',
           supportReason: '',
+          reviewTopics: { political: [], psychological: [] },
         };
         assert.equal(
           (await store.finish(blocked.claimed, allow(blocked, { assessment: blockedAssessment })))
@@ -455,6 +457,7 @@ test(
           uncertainties: [],
           supportPriority: 'attention',
           supportReason: '需要支持性人工关注。',
+          reviewTopics: { political: [], psychological: [] },
         };
         const outcome = await store.finish(care.claimed, allow(care, { assessment }));
         assert.equal(outcome.state, 'review');
@@ -1093,6 +1096,213 @@ test(
               item.title.includes(focus === 'political' ? '政治内容' : '心理关怀'),
             ),
           );
+        }
+      },
+    );
+    await t.test(
+      'political names remain a manual-review focus when directory privacy redaction removes them',
+      async () => {
+        // A synthetic directory collision verifies that redaction cannot erase the routing signal.
+        await pool.execute("UPDATE users SET full_name = '习近平' WHERE id = 2");
+        try {
+          const body = input();
+          body.payload.content = '课程材料提到了习近平，请问这本书可以在哪里借阅？';
+          const entry = await ready(body);
+          assert.ok(entry.snapshot.counts.name > 0);
+          assert.doesNotMatch(entry.snapshot.content, /习近平/);
+          assert.equal(entry.snapshot.reviewFocus.political, true);
+          assert.equal(entry.snapshot.reviewFocus.psychological, false);
+          const outcome = await store.finish(entry.claimed, {
+            ...allow(entry),
+            assessment: null,
+            automationReason: 'focus_requires_review',
+            manualReview: { required: true, validation: 'not_attempted' },
+            reviewFocus: { political: false, psychological: false },
+          });
+          assert.equal(outcome.state, 'review');
+          assert.equal(outcome.reasonCode, 'focus_requires_review');
+          assert.equal(outcome.result.reviewFocus.political, true);
+          assert.equal(outcome.result.assessment, null);
+          assert.equal(outcome.result.manualReview.validation, 'not_attempted');
+          assert.equal(outcome.result.policyDecision.recommendedAction, 'hold');
+          assert.equal(outcome.result.automaticPublication, false);
+          assert.equal((await row(entry.submission.id)).status, 'pending');
+          const [notices] = await pool.execute(
+            'SELECT title, body FROM community_notifications WHERE event_key = ?',
+            [`moderation-auto:${entry.claimed.id}:review`],
+          );
+          assert.equal(notices.length, 4);
+          assert.ok(notices.every((item) => item.title.includes('政治内容')));
+          assert.doesNotMatch(JSON.stringify(notices), /习近平|借阅/);
+        } finally {
+          await pool.execute('UPDATE users SET full_name = NULL WHERE id = 2');
+        }
+      },
+    );
+    await t.test(
+      'neutral coursework, quoted terms and negations still route by keyword without becoming violations',
+      async () => {
+        for (const [title, content, focus] of [
+          ['政治制度课程资料', '请问课程教材在哪里可以借阅？', 'political'],
+          ['读书笔记', '教材引用了“社会主义”这个词，想请教参考书目。', 'political'],
+          ['教材交流', '这本心理健康教材讲解了情绪调节。', 'psychological'],
+          ['阅读感想', '我没有持续焦虑，只是记录教材中的术语。', 'psychological'],
+        ]) {
+          const body = input();
+          body.payload.title = title;
+          body.payload.content = content;
+          const entry = await ready(body);
+          assert.equal(entry.snapshot.reviewFocus[focus], true);
+          const forged = allow(entry, {
+            reviewFocus: { political: false, psychological: false },
+            policyDecision: { recommendedAction: 'allow', canAutomaticallyPublish: true },
+          });
+          const outcome = await store.finish(entry.claimed, forged);
+          assert.equal(outcome.state, 'review');
+          assert.equal(outcome.reasonCode, 'focus_requires_review');
+          assert.equal(outcome.result.reviewFocus[focus], true);
+          assert.equal(outcome.result.assessment.decision, 'no_risk_detected');
+          assert.deepEqual(outcome.result.assessment.categories, []);
+          assert.deepEqual(outcome.result.assessment.ruleMatches, []);
+          assert.equal(outcome.result.assessment.supportPriority, 'none');
+          assert.equal(outcome.result.policyDecision.recommendedAction, 'hold');
+          assert.equal(outcome.result.automaticPublication, false);
+          const pending = await row(entry.submission.id);
+          assert.equal(pending.status, 'pending');
+          assert.equal(pending.published_id, null);
+        }
+      },
+    );
+    await t.test(
+      'a local-only dual-focus result keeps both prominent notices without claiming a model decision',
+      async () => {
+        const body = input();
+        body.payload.content = '课程同时涉及政治制度与心理健康，请问如何寻找参考教材？';
+        const entry = await ready(body);
+        assert.equal(entry.snapshot.reviewFocus.political, true);
+        assert.equal(entry.snapshot.reviewFocus.psychological, true);
+        const outcome = await store.finish(entry.claimed, {
+          assessment: null,
+          automationReason: 'focus_requires_review',
+          manualReview: { required: true, validation: 'not_attempted' },
+          reviewFocus: { political: false, psychological: false },
+        });
+        assert.equal(outcome.state, 'review');
+        assert.equal(outcome.reasonCode, 'focus_requires_review');
+        assert.equal(outcome.result.reviewFocus.political, true);
+        assert.equal(outcome.result.reviewFocus.psychological, true);
+        assert.equal(outcome.result.assessment, null);
+        assert.equal(outcome.result.manualReview.validation, 'not_attempted');
+        assert.equal(outcome.result.policyDecision.recommendedAction, 'hold');
+        assert.deepEqual(outcome.result.policyEvidence, []);
+        const [notices] = await pool.execute(
+          'SELECT title, body FROM community_notifications WHERE event_key = ?',
+          [`moderation-auto:${entry.claimed.id}:review`],
+        );
+        assert.equal(notices.length, 4);
+        assert.ok(
+          notices.every(
+            (item) => item.title.includes('政治内容') && item.title.includes('心理关怀'),
+          ),
+        );
+        assert.doesNotMatch(JSON.stringify(notices), /参考教材|课程同时/);
+        assert.equal((await row(entry.submission.id)).published_id, null);
+      },
+    );
+    await t.test(
+      'comments use the same strict keyword hold while ordinary parent posts still publish',
+      async () => {
+        const post = await ready();
+        const published = await store.finish(post.claimed, allow(post));
+        assert.equal(published.state, 'published');
+        const postId = Number(published.submission.publishedId);
+        const [[before]] = await pool.execute(
+          'SELECT COUNT(*) AS n FROM discussion_comments WHERE post_id = ?',
+          [postId],
+        );
+        for (const [content, focus] of [
+          ['评论只是引用“习近平”这一姓名，请负责人查看。', 'political'],
+          ['这条评论讨论心理健康教材，与个人求助无关。', 'psychological'],
+        ]) {
+          const entry = await ready(input({ kind: 'comment', payload: { postId, content } }));
+          assert.equal(entry.snapshot.reviewFocus[focus], true);
+          const outcome = await store.finish(
+            entry.claimed,
+            allow(entry, { reviewFocus: { political: false, psychological: false } }),
+          );
+          assert.equal(outcome.state, 'review');
+          assert.equal(outcome.reasonCode, 'focus_requires_review');
+          assert.deepEqual(outcome.result.assessment.categories, []);
+          assert.equal(outcome.result.reviewFocus[focus], true);
+          assert.equal((await row(entry.submission.id)).published_id, null);
+        }
+        const [[after]] = await pool.execute(
+          'SELECT COUNT(*) AS n FROM discussion_comments WHERE post_id = ?',
+          [postId],
+        );
+        assert.equal(Number(after.n), Number(before.n));
+      },
+    );
+    await t.test(
+      'semantic-only topics survive transactional rebuilding and require a distinct human notice',
+      async () => {
+        for (const [focus, content] of [
+          ['political', '讨论这个国家的最高权力应如何交接及受到哪些制约。'],
+          ['psychological', '这几个星期什么都提不起兴趣，想找人聊聊自己的处境。'],
+        ]) {
+          const body = input();
+          body.payload.content = content;
+          const entry = await ready(body);
+          assert.equal(entry.snapshot.reviewFocus[focus], false);
+          const result = allow(entry);
+          result.assessment.reviewTopics[focus] = [
+            {
+              field: 'content',
+              quote: entry.snapshot.content,
+              reason: '存在相关语义，交负责人复核，不认定违规。',
+            },
+          ];
+          result.reviewFocus = { political: false, psychological: false };
+          const outcome = await store.finish(entry.claimed, result);
+          assert.equal(outcome.state, 'review');
+          assert.equal(outcome.result.reviewFocus[focus], true);
+          assert.equal(outcome.result.assessment.supportPriority, 'none');
+          assert.deepEqual(outcome.result.assessment.categories, []);
+          assert.equal(
+            outcome.result.assessment.reviewTopics[focus][0].quote,
+            entry.snapshot.content,
+          );
+          assert.equal((await row(entry.submission.id)).published_id, null);
+          const [notices] = await pool.query(
+            'SELECT title,body FROM community_notifications WHERE link LIKE ?',
+            [`%${entry.submission.id}%`],
+          );
+          assert.ok(
+            notices.some((item) =>
+              item.title.includes(focus === 'political' ? '政治内容' : '心理关怀'),
+            ),
+          );
+          assert.doesNotMatch(JSON.stringify(notices), /最高权力|提不起兴趣/);
+        }
+      },
+    );
+    await t.test(
+      'missing or invented semantic evidence cannot publish through the legacy text result path',
+      async () => {
+        for (const malformed of [false, true]) {
+          const entry = await ready();
+          const result = allow(entry);
+          if (malformed)
+            result.assessment.reviewTopics.political.push({
+              field: 'content',
+              quote: '不存在的证据',
+              reason: '测试',
+            });
+          else delete result.assessment.reviewTopics;
+          const outcome = await store.finish(entry.claimed, result);
+          assert.notEqual(outcome.state, 'published');
+          assert.equal(outcome.result.manualReview.validation, 'failed');
+          assert.equal((await row(entry.submission.id)).published_id, null);
         }
       },
     );

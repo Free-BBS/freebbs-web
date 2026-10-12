@@ -34,6 +34,7 @@ const COUNT_KEYS = Object.freeze([
   'url',
   'address',
 ]);
+const { topicSchema, topicPrompt, validateReviewTopics } = require('./moderation-review-topics');
 const SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -112,15 +113,35 @@ const OUTPUT_CONTRACT = `输出合同版本：${CONTRACT_VERSION}。
 // JSON-object mode guarantees neither this shape nor the rule relationships.
 // Supply the same schema used by schema-capable models, never a default verdict
 // template, and continue to validate every response locally without repair.
-function outputContract(model) {
-  if (SCHEMA_MODELS.has(model)) return OUTPUT_CONTRACT;
-  return `${OUTPUT_CONTRACT}
+function extendedPrompt(prompt, required) {
+  return required
+    ? prompt
+        .replaceAll('supportReason 七个', 'supportReason、reviewTopics 八个')
+        .replaceAll('七个必需字段', '八个必需字段')
+    : prompt;
+}
+function assessmentSchema(required) {
+  return required
+    ? {
+        ...SCHEMA,
+        required: [...SCHEMA.required, 'reviewTopics'],
+        properties: { ...SCHEMA.properties, reviewTopics: topicSchema() },
+      }
+    : SCHEMA;
+}
+function outputContract(model, required = false) {
+  const contract = extendedPrompt(OUTPUT_CONTRACT, required);
+  if (SCHEMA_MODELS.has(model)) return contract;
+  return extendedPrompt(
+    `${contract}
 下面的 JSON Schema 是你必须遵守的输出结构约束，不是待审核对象，也不是要输出的答案。它与上面的审核规则共同约束结果；只返回满足它的审核结果对象，不输出 Schema 本身。
 下一条用户消息中的 title、content、inputMode、redactionCounts、hasImages 五个字段仅用于输入，不要把它们回显为输出对象。输出顶层必须直接包含 decision、categories、reason、ruleMatches、uncertainties、supportPriority、supportReason 七个原名字段；不得翻译键名，不得包在 result、data、assessment 或其他字段下，也不得自行增减字段。每个嵌套对象也必须遵守 required、类型、枚举、长度和 additionalProperties 限制。字段取值必须根据实际审核证据判断，不从结构说明推定默认结论。
 <moderation_output_schema>
-${JSON.stringify(SCHEMA)}
+${JSON.stringify(assessmentSchema(required))}
 </moderation_output_schema>
-仅输出符合以上结构和审核规则的单个 JSON 结果对象。`;
+仅输出符合以上结构和审核规则的单个 JSON 结果对象。`,
+    required,
+  );
 }
 
 // Exact model choices; unknown IDs do not inherit a guessed family setting.
@@ -220,7 +241,7 @@ function inputData({ title, content, inputMode, redactionCounts = {}, hasImages 
   return { title, content, inputMode, redactionCounts: counts, hasImages };
 }
 
-function requestBody(model, data) {
+function requestBody(model, data, required = false) {
   const thinking = DISABLE_THINKING_MODELS.has(model)
     ? { thinking: { type: 'disabled' } }
     : ['glm-5.3', 'glm-5.3-flash', 'kimi-k3'].includes(model)
@@ -233,7 +254,7 @@ function requestBody(model, data) {
     messages: [
       {
         role: 'system',
-        content: `${SYSTEM_PROMPT}\n\n${buildPolicyPrompt()}\n\n${outputContract(model)}`,
+        content: `${extendedPrompt(SYSTEM_PROMPT, required)}\n\n${buildPolicyPrompt()}\n\n${required ? topicPrompt() : ''}\n\n${outputContract(model, required)}`,
       },
       { role: 'user', content: JSON.stringify(data) },
     ],
@@ -244,7 +265,11 @@ function requestBody(model, data) {
     response_format: SCHEMA_MODELS.has(model)
       ? {
           type: 'json_schema',
-          json_schema: { name: 'moderation_assessment', strict: true, schema: SCHEMA },
+          json_schema: {
+            name: 'moderation_assessment',
+            strict: true,
+            schema: assessmentSchema(required),
+          },
         }
       : { type: 'json_object' },
     // M2.x thinking cannot be disabled. Keep it outside the final JSON content.
@@ -267,9 +292,21 @@ function validText(value, maximum, allowEmpty = false) {
   );
 }
 
-function validateAssessment(value, data) {
+function validateAssessment(value, data, { requireReviewTopics = false } = {}) {
+  const hasTopics = plainObject(value) && Object.hasOwn(value, 'reviewTopics');
+  let reviewTopics;
+  if (requireReviewTopics || hasTopics) {
+    try {
+      reviewTopics = validateReviewTopics(value?.reviewTopics, {
+        title: [data.title],
+        content: [data.content],
+      });
+    } catch {
+      throw new ModerationAiError(502, 'review_topics_invalid');
+    }
+  }
   if (
-    !hasExactKeys(value, SCHEMA.required) ||
+    !hasExactKeys(value, hasTopics ? [...SCHEMA.required, 'reviewTopics'] : SCHEMA.required) ||
     !DECISIONS.includes(value.decision) ||
     !Array.isArray(value.categories) ||
     value.categories.length > CATEGORIES.length ||
@@ -336,10 +373,11 @@ function validateAssessment(value, data) {
     uncertainties: [...value.uncertainties],
     supportPriority: value.supportPriority,
     supportReason: value.supportReason,
+    ...(reviewTopics ? { reviewTopics } : {}),
   };
 }
 
-function parseAssessment(body, data) {
+function parseAssessment(body, data, options) {
   if (
     !plainObject(body) ||
     body.error != null ||
@@ -372,7 +410,7 @@ function parseAssessment(body, data) {
     });
   }
   try {
-    return validateAssessment(parsed, data);
+    return validateAssessment(parsed, data, options);
   } catch (error) {
     if (error instanceof ModerationAiError)
       throw new ModerationAiError(502, error.diagnostics.failureCode, {
@@ -479,7 +517,7 @@ function createModerationAiClient({
             Accept: 'application/json',
             Authorization: `Bearer ${apiKey}`,
           },
-          body: JSON.stringify(requestBody(model, data)),
+          body: JSON.stringify(requestBody(model, data, input.requireReviewTopics === true)),
           redirect: 'error',
           cache: 'no-store',
           credentials: 'omit',
@@ -535,7 +573,9 @@ function createModerationAiClient({
             jsonSyntaxKind: diagnoseJsonSyntax(decoded),
           });
         }
-        const assessment = parseAssessment(body, data);
+        const assessment = parseAssessment(body, data, {
+          requireReviewTopics: input.requireReviewTopics === true,
+        });
         return {
           assessment,
           policyDecision: normalizePolicyDecision(assessment, data),

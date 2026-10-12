@@ -34,6 +34,7 @@ const FAILURE_CODES = Object.freeze([
   'finish_reason_not_stop',
   'content_json_invalid',
   'assessment_fields_invalid',
+  'review_topics_invalid',
   'rule_evidence_invalid',
   'rule_unknown',
   'category_rule_mismatch',
@@ -197,6 +198,7 @@ function sanitizeDiagnostics(value) {
       result.httpStatus === 200 &&
       [
         'assessment_fields_invalid',
+        'review_topics_invalid',
         'rule_evidence_invalid',
         'rule_unknown',
         'category_rule_mismatch',

@@ -27,6 +27,7 @@ const acceptedAssessment = () => ({
   uncertainties: [],
   supportPriority: 'none',
   supportReason: '',
+  reviewTopics: { political: [], psychological: [] },
 });
 
 function deferred() {
@@ -384,6 +385,7 @@ test('one redacted Qwen call produces a local decision and evidence without prov
     redactionCounts: {},
     hasImages: false,
     model: 'qwen3.6-27b',
+    requireReviewTopics: true,
   });
   const { result, applied } = h.finished[0];
   assert.equal(applied, true);
@@ -395,6 +397,24 @@ test('one redacted Qwen call produces a local decision and evidence without prov
   assert.deepEqual(result.policyEvidence, []);
   assert.equal(JSON.stringify(result).includes('DO_NOT_SAVE'), false);
   assert.equal(JSON.stringify(result).includes('UNTRUSTED'), false);
+  h.worker.stop();
+});
+
+test('a semantic psychological signal holds even without keywords or a support rule', async () => {
+  const h = harness();
+  const content = '几个星期以来什么都提不起兴趣，想找人聊聊。';
+  h.add({ content });
+  h.response.assessment.reviewTopics.psychological = [
+    { field: 'content', quote: content, reason: '持续困扰与求助语义。' },
+  ];
+  h.worker.start();
+  await h.worker.tick();
+  assert.equal(h.calls.filter(([name]) => name === 'provider').length, 1);
+  const result = h.finished[0].result;
+  assert.equal(result.policyDecision.recommendedAction, 'hold');
+  assert.equal(result.reviewFocus.psychological, true);
+  assert.equal(result.assessment.supportPriority, 'none');
+  assert.deepEqual(result.assessment.categories, []);
   h.worker.stop();
 });
 

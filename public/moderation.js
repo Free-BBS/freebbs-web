@@ -338,6 +338,7 @@
       message_invalid: '模型消息结构不符合要求',
       finish_reason_not_stop: '模型返回的结束状态不符合要求',
       content_json_invalid: '模型审核内容不是有效的结构化结果',
+      review_topics_invalid: '政治或心理话题字段缺失、格式错误或引用依据无效，须人工审核',
       assessment_fields_invalid: '模型审核字段或取值不符合要求',
       rule_evidence_invalid: '模型规则证据未通过校验',
       rule_unknown: '模型选择了规则库之外的条目',
@@ -356,6 +357,8 @@
       clear_rule_violation: '存在明确禁止内容的规则依据，先暂时拦截，由负责人最终决定。',
       no_text_risk: '文字结果符合自动发布条件，已发布并通知负责人。',
       support_requires_review: '有需要关注的关怀提示，由负责人跟进；关怀需求不等于违规。',
+      focus_requires_review:
+        '本地政治或心理关键词触发人工审核，本次未调用模型；负责人通过前不发布。',
       images_not_reviewed: '图片尚未完成机器审核，整份稿件交人工检查。',
       image_requires_review: '稿件含图片，首版未调用外部模型，交负责人检查文字及全部图片。',
       provider_failure: '模型未返回可用结果，保留人工审核。',
@@ -364,8 +367,9 @@
       assessment_invalid: '机器结果未通过校验，交人工复核。',
       reviewer_withdrawal: '负责人已撤回自动发布内容。',
       no_image_risk: '图文结果符合发布条件，已发布并进入图片待复核队列。',
-      political_requires_review: '政治敏感相关内容须负责人单独审核。',
-      psychological_requires_review: '心理问题或求助信号须负责人关注；心理关怀不等于违规。',
+      political_requires_review: '政治相关关键词或信号须负责人单独审核，通过前不发布。',
+      psychological_requires_review:
+        '心理相关关键词或求助信号须负责人审核，通过前不发布；心理关怀不等于违规。',
     };
 
     function isReviewResult(run) {
@@ -1107,7 +1111,7 @@
       el('automation-toggle').disabled = state.automationChanging;
       el('automation-toggle').textContent = automation.paused ? '开启自动审核' : '暂停自动审核';
       el('queue-note').textContent = automation.enabled
-        ? '含图自动发布稿件请在“图片待复核”中确认或撤回。暂停自动审核仍可处理复核；政治内容与心理关怀分别提示，须负责人审核。'
+        ? '含图自动发布稿件请在“图片待复核”中确认或撤回。暂停自动审核仍可处理复核；政治或心理相关关键词一旦触发，须负责人审核，通过前不发布。'
         : '机器建议不直接改变发布状态。请核对完整正文与图片，再作出人工决定。';
     }
 
@@ -1197,22 +1201,62 @@
       return group;
     }
 
-    function focusPanels(focus) {
+    function focusPanels(focus, result = {}) {
       const group = node('div', undefined, 'moderation-review-focus');
+      function appendKeywords(item, category) {
+        const assessments = [
+          result.textResult?.assessment || result.assessment,
+          ...(result.imageResults || []).map((batch) => batch.response?.assessment),
+        ];
+        const evidence = assessments.flatMap(
+          (assessment) => assessment?.reviewTopics?.[category] || [],
+        );
+        if (evidence.length) {
+          item.append(
+            node('p', '触发方式：整句语义判断补充；相关话题不等于违规。', 'moderation-note'),
+          );
+          const details = disclosure('受限语义判断依据（可能含个人资料，仅供负责人核对）');
+          for (const match of evidence)
+            details.append(
+              node('p', `来源：${match.field || ''}`),
+              node('blockquote', match.quote || ''),
+              node('p', match.reason || ''),
+            );
+          item.append(details);
+        }
+        const matches = focus?.keywordMatches?.[category];
+        if (!Array.isArray(matches)) return;
+        const keywords = [
+          ...new Set(matches.filter((value) => typeof value === 'string' && value.trim())),
+        ];
+        if (keywords.length)
+          item.append(node('p', `触发关键词：${keywords.join('、')}`, 'moderation-note'));
+      }
       if (focus?.political) {
         const item = node('section', undefined, 'moderation-focus-political');
         item.append(
           node('h4', '政治敏感相关内容 · 须负责人审核'),
-          node('p', '请单独核对内容、语境与规则依据；提示本身不等于已经违规。'),
+          node('p', '负责人通过前不发布；模型建议通过也不能自动放行。'),
+          node(
+            'p',
+            '相关关键词仅触发人工审核，不等于已经违规。课程、学术、新闻引用或否定表达也不自动豁免；请单独核对语境与规则依据。',
+          ),
         );
+        appendKeywords(item, 'political');
         group.append(item);
       }
       if (focus?.psychological) {
         const item = node('section', undefined, 'moderation-focus-psychological');
         item.append(
           node('h4', '心理问题与求助 · 负责人关怀复核'),
+          node('p', '负责人通过前不发布；模型建议通过也不能自动放行。'),
+          node(
+            'p',
+            '相关关键词仅触发人工审核，不作疾病诊断。课程、学术、引用或否定表达也不自动豁免。',
+          ),
           node('p', '请优先关注并核实支持需求。心理关怀不等于违规，不因此处罚求助者。'),
         );
+        appendKeywords(item, 'psychological');
         group.append(item);
       }
       return group;
@@ -1423,7 +1467,7 @@
             node('h4', labels[job.state]),
             node(
               'p',
-              `模型：${job.model || '未记录'} · ${formatTime(job.updatedAt || job.completedAt || job.createdAt)}`,
+              `${job.result?.manualReview?.validation === 'not_attempted' ? '预设模型（本次未调用）' : '模型'}：${job.model || '未记录'} · ${formatTime(job.updatedAt || job.completedAt || job.createdAt)}`,
               'moderation-meta',
             ),
             node('p', AUTOMATION_REASON_LABELS[job.reasonCode] || job.reason || ''),
@@ -1451,9 +1495,17 @@
             );
           const imageReview = job.imageReview || submission.automation?.imageReview;
           if (imageReview?.required) content.append(imageReviewPanel(imageReview));
-          if (job.result?.reviewFocus) content.append(focusPanels(job.result.reviewFocus));
+          if (job.result?.reviewFocus)
+            content.append(focusPanels(job.result.reviewFocus, job.result));
           if (job.result) {
-            content.append(node('p', '以下为机器自动审核结果，不是负责人最终结论。'));
+            content.append(
+              node(
+                'p',
+                job.result.manualReview?.validation === 'not_attempted'
+                  ? '以下为本地转人工记录，本次未调用模型。'
+                  : '以下为机器自动审核结果，不是负责人最终结论。',
+              ),
+            );
             if (job.result.assessment) {
               content.append(
                 node('p', DECISION_LABELS[job.result.assessment.decision] || '待核对'),

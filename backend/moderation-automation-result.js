@@ -1,7 +1,7 @@
 const { validateAssessment } = require('./moderation-ai-client');
 const { POLICY_VERSION } = require('./moderation-policy');
 const { normalizePolicyDecision, buildPolicyEvidence } = require('./moderation-policy-decision');
-const { getReviewFocus } = require('./moderation-review-focus');
+const { getReviewFocus, mergeReviewFocus } = require('./moderation-review-focus');
 
 const TEXT_MODEL = 'qwen3.6-27b';
 const IMAGE_MODEL = 'kimi-k2.6';
@@ -30,7 +30,9 @@ function buildAutomaticResult({ textResult, imageResults = [], snapshot, elapsed
     snapshot.imageCount > 12
   )
     throw fail();
-  const assessment = validateAssessment(textResult.assessment, snapshot);
+  const assessment = validateAssessment(textResult.assessment, snapshot, {
+    requireReviewTopics: true,
+  });
   const textDecision = normalizePolicyDecision(assessment, {
     hasImages: false,
     redactionCounts: snapshot.counts,
@@ -68,6 +70,7 @@ function buildAutomaticResult({ textResult, imageResults = [], snapshot, elapsed
         title: snapshot.title,
         content: snapshot.content,
         imageCount: batch.attachmentIds.length,
+        requireReviewTopics: true,
       },
     );
     parsedImages.push({
@@ -91,12 +94,15 @@ function buildAutomaticResult({ textResult, imageResults = [], snapshot, elapsed
     ...parsedImages.map((batch) => batch.response.contentPolicyDecision),
   ];
   const allAssessments = [assessment, ...parsedImages.map((batch) => batch.response.assessment)];
-  const reviewFocus = getReviewFocus({
-    title: snapshot.title,
-    content: snapshot.content,
-    assessments: allAssessments,
-    observations: parsedImages.flatMap((batch) => batch.response.imageObservations),
-  });
+  const reviewFocus = mergeReviewFocus(
+    snapshot.reviewFocus,
+    getReviewFocus({
+      title: snapshot.title,
+      content: snapshot.content,
+      assessments: allAssessments,
+      observations: parsedImages.flatMap((batch) => batch.response.imageObservations),
+    }),
+  );
   const priorities = ['none', 'attention', 'urgent'];
   const supportPriority =
     priorities[Math.max(...allAssessments.map((item) => priorities.indexOf(item.supportPriority)))];

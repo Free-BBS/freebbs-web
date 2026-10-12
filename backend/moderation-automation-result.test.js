@@ -12,6 +12,7 @@ const assessment = () => ({
   uncertainties: [],
   supportPriority: 'none',
   supportReason: '',
+  reviewTopics: { political: [], psychological: [] },
 });
 function fixture(count = 4) {
   const snapshot = {

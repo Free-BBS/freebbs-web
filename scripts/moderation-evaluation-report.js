@@ -89,6 +89,7 @@ const FAILURE_LABELS = {
   message_invalid: '接口未提供有效的助手文字消息',
   finish_reason_not_stop: '模型输出未正常完成',
   content_json_invalid: '模型审核正文不是有效的结构化数据',
+  review_topics_invalid: '政治或心理话题字段缺失、格式错误或引用依据无效，须人工审核',
   assessment_fields_invalid: '审核字段、类型或取值不符合约定',
   rule_evidence_invalid: '规则证据不是送审文字中的有效原句',
   rule_unknown: '返回了当前规则库中不存在的规则',

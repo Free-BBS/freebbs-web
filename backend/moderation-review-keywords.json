@@ -1,0 +1,1683 @@
+{
+  "version": "freebbs-review-keywords-2026-10-12-v1",
+  "groups": [
+    {
+      "focus": "political",
+      "keywords": [
+        {
+          "id": "政治001",
+          "term": "习近平",
+          "category": "人物姓名",
+          "canonical": "习近平"
+        },
+        {
+          "id": "政治002",
+          "term": "李强",
+          "category": "人物姓名",
+          "canonical": "李强"
+        },
+        {
+          "id": "政治003",
+          "term": "李克强",
+          "category": "人物姓名",
+          "canonical": "李克强"
+        },
+        {
+          "id": "政治004",
+          "term": "赵乐际",
+          "category": "人物姓名",
+          "canonical": "赵乐际"
+        },
+        {
+          "id": "政治005",
+          "term": "王沪宁",
+          "category": "人物姓名",
+          "canonical": "王沪宁"
+        },
+        {
+          "id": "政治006",
+          "term": "蔡奇",
+          "category": "人物姓名",
+          "canonical": "蔡奇"
+        },
+        {
+          "id": "政治007",
+          "term": "丁薛祥",
+          "category": "人物姓名",
+          "canonical": "丁薛祥"
+        },
+        {
+          "id": "政治008",
+          "term": "李希",
+          "category": "人物姓名",
+          "canonical": "李希"
+        },
+        {
+          "id": "政治009",
+          "term": "胡锦涛",
+          "category": "人物姓名",
+          "canonical": "胡锦涛"
+        },
+        {
+          "id": "政治010",
+          "term": "江泽民",
+          "category": "人物姓名",
+          "canonical": "江泽民"
+        },
+        {
+          "id": "政治011",
+          "term": "邓小平",
+          "category": "人物姓名",
+          "canonical": "邓小平"
+        },
+        {
+          "id": "政治012",
+          "term": "毛泽东",
+          "category": "人物姓名",
+          "canonical": "毛泽东"
+        },
+        {
+          "id": "政治013",
+          "term": "周恩来",
+          "category": "人物姓名",
+          "canonical": "周恩来"
+        },
+        {
+          "id": "政治014",
+          "term": "刘少奇",
+          "category": "人物姓名",
+          "canonical": "刘少奇"
+        },
+        {
+          "id": "政治015",
+          "term": "胡耀邦",
+          "category": "人物姓名",
+          "canonical": "胡耀邦"
+        },
+        {
+          "id": "政治016",
+          "term": "赵紫阳",
+          "category": "人物姓名",
+          "canonical": "赵紫阳"
+        },
+        {
+          "id": "政治017",
+          "term": "朱镕基",
+          "category": "人物姓名",
+          "canonical": "朱镕基"
+        },
+        {
+          "id": "政治018",
+          "term": "温家宝",
+          "category": "人物姓名",
+          "canonical": "温家宝"
+        },
+        {
+          "id": "政治019",
+          "term": "王毅",
+          "category": "人物姓名",
+          "canonical": "王毅"
+        },
+        {
+          "id": "政治020",
+          "term": "何立峰",
+          "category": "人物姓名",
+          "canonical": "何立峰"
+        },
+        {
+          "id": "政治021",
+          "term": "陈文清",
+          "category": "人物姓名",
+          "canonical": "陈文清"
+        },
+        {
+          "id": "政治022",
+          "term": "陈吉宁",
+          "category": "人物姓名",
+          "canonical": "陈吉宁"
+        },
+        {
+          "id": "政治023",
+          "term": "陈敏尔",
+          "category": "人物姓名",
+          "canonical": "陈敏尔"
+        },
+        {
+          "id": "政治024",
+          "term": "张又侠",
+          "category": "人物姓名",
+          "canonical": "张又侠"
+        },
+        {
+          "id": "政治025",
+          "term": "张国清",
+          "category": "人物姓名",
+          "canonical": "张国清"
+        },
+        {
+          "id": "政治026",
+          "term": "袁家军",
+          "category": "人物姓名",
+          "canonical": "袁家军"
+        },
+        {
+          "id": "政治027",
+          "term": "黄坤明",
+          "category": "人物姓名",
+          "canonical": "黄坤明"
+        },
+        {
+          "id": "政治028",
+          "term": "孙中山",
+          "category": "人物姓名",
+          "canonical": "孙中山"
+        },
+        {
+          "id": "政治029",
+          "term": "蒋介石",
+          "category": "人物姓名",
+          "canonical": "蒋介石"
+        },
+        {
+          "id": "政治030",
+          "term": "蔡英文",
+          "category": "人物姓名",
+          "canonical": "蔡英文"
+        },
+        {
+          "id": "政治031",
+          "term": "马英九",
+          "category": "人物姓名",
+          "canonical": "马英九"
+        },
+        {
+          "id": "政治032",
+          "term": "赖清德",
+          "category": "人物姓名",
+          "canonical": "赖清德"
+        },
+        {
+          "id": "政治033",
+          "term": "習近平",
+          "category": "人物写法",
+          "canonical": "习近平"
+        },
+        {
+          "id": "政治034",
+          "term": "Xi Jinping",
+          "category": "人物写法",
+          "canonical": "习近平"
+        },
+        {
+          "id": "政治035",
+          "term": "习大大",
+          "category": "人物称呼",
+          "canonical": "习近平"
+        },
+        {
+          "id": "政治036",
+          "term": "習大大",
+          "category": "人物称呼",
+          "canonical": "习近平"
+        },
+        {
+          "id": "政治037",
+          "term": "Xi Dada",
+          "category": "人物称呼",
+          "canonical": "习近平"
+        },
+        {
+          "id": "政治038",
+          "term": "Papa Xi",
+          "category": "人物称呼",
+          "canonical": "习近平"
+        },
+        {
+          "id": "政治039",
+          "term": "鄧小平",
+          "category": "人物写法",
+          "canonical": "邓小平"
+        },
+        {
+          "id": "政治040",
+          "term": "邓先圣",
+          "category": "人物曾用名",
+          "canonical": "邓小平"
+        },
+        {
+          "id": "政治041",
+          "term": "邓希贤",
+          "category": "人物曾用名",
+          "canonical": "邓小平"
+        },
+        {
+          "id": "政治042",
+          "term": "孫中山",
+          "category": "人物写法",
+          "canonical": "孙中山"
+        },
+        {
+          "id": "政治043",
+          "term": "孙文",
+          "category": "人物曾用名",
+          "canonical": "孙中山"
+        },
+        {
+          "id": "政治044",
+          "term": "孫文",
+          "category": "人物曾用名",
+          "canonical": "孙中山"
+        },
+        {
+          "id": "政治045",
+          "term": "孙逸仙",
+          "category": "人物曾用名",
+          "canonical": "孙中山"
+        },
+        {
+          "id": "政治046",
+          "term": "孫逸仙",
+          "category": "人物曾用名",
+          "canonical": "孙中山"
+        },
+        {
+          "id": "政治047",
+          "term": "中山樵",
+          "category": "人物曾用名",
+          "canonical": "孙中山"
+        },
+        {
+          "id": "政治048",
+          "term": "蔣介石",
+          "category": "人物写法",
+          "canonical": "蒋介石"
+        },
+        {
+          "id": "政治049",
+          "term": "蒋中正",
+          "category": "人物曾用名",
+          "canonical": "蒋介石"
+        },
+        {
+          "id": "政治050",
+          "term": "蔣中正",
+          "category": "人物曾用名",
+          "canonical": "蒋介石"
+        },
+        {
+          "id": "政治051",
+          "term": "Tsai Ing-wen",
+          "category": "人物写法",
+          "canonical": "蔡英文"
+        },
+        {
+          "id": "政治052",
+          "term": "馬英九",
+          "category": "人物写法",
+          "canonical": "马英九"
+        },
+        {
+          "id": "政治053",
+          "term": "Ma Ying-jeou",
+          "category": "人物写法",
+          "canonical": "马英九"
+        },
+        {
+          "id": "政治054",
+          "term": "賴清德",
+          "category": "人物写法",
+          "canonical": "赖清德"
+        },
+        {
+          "id": "政治055",
+          "term": "Lai Ching-te",
+          "category": "人物写法",
+          "canonical": "赖清德"
+        },
+        {
+          "id": "政治056",
+          "term": "国家主席",
+          "category": "政治职务",
+          "canonical": "国家主席"
+        },
+        {
+          "id": "政治057",
+          "term": "国家副主席",
+          "category": "政治职务",
+          "canonical": "国家副主席"
+        },
+        {
+          "id": "政治058",
+          "term": "国家领导人",
+          "category": "政治职务",
+          "canonical": "国家领导人"
+        },
+        {
+          "id": "政治059",
+          "term": "国务院总理",
+          "category": "政治职务",
+          "canonical": "国务院总理"
+        },
+        {
+          "id": "政治060",
+          "term": "中共中央",
+          "category": "政治机构",
+          "canonical": "中国共产党中央委员会"
+        },
+        {
+          "id": "政治061",
+          "term": "中央政治局",
+          "category": "政治机构",
+          "canonical": "中央政治局"
+        },
+        {
+          "id": "政治062",
+          "term": "中央军委",
+          "category": "政治机构",
+          "canonical": "中央军委"
+        },
+        {
+          "id": "政治063",
+          "term": "全国人民代表大会",
+          "category": "政治机构",
+          "canonical": "全国人民代表大会"
+        },
+        {
+          "id": "政治064",
+          "term": "全国人大",
+          "category": "政治机构",
+          "canonical": "全国人民代表大会"
+        },
+        {
+          "id": "政治065",
+          "term": "全国政协",
+          "category": "政治机构",
+          "canonical": "中国人民政治协商会议全国委员会"
+        },
+        {
+          "id": "政治066",
+          "term": "中央政府",
+          "category": "政治机构",
+          "canonical": "中央政府"
+        },
+        {
+          "id": "政治067",
+          "term": "中国共产党中央委员会",
+          "category": "政治机构",
+          "canonical": "中国共产党中央委员会"
+        },
+        {
+          "id": "政治068",
+          "term": "中共中央委员会",
+          "category": "政治机构",
+          "canonical": "中国共产党中央委员会"
+        },
+        {
+          "id": "政治069",
+          "term": "中共中央政治局常委会",
+          "category": "政治机构",
+          "canonical": "中央政治局常务委员会"
+        },
+        {
+          "id": "政治070",
+          "term": "中央政治局常务委员会",
+          "category": "政治机构",
+          "canonical": "中央政治局常务委员会"
+        },
+        {
+          "id": "政治071",
+          "term": "中共中央书记处",
+          "category": "政治机构",
+          "canonical": "中共中央书记处"
+        },
+        {
+          "id": "政治072",
+          "term": "全国人民代表大会常务委员会",
+          "category": "政治机构",
+          "canonical": "全国人民代表大会常务委员会"
+        },
+        {
+          "id": "政治073",
+          "term": "全国人大常委会",
+          "category": "政治机构",
+          "canonical": "全国人民代表大会常务委员会"
+        },
+        {
+          "id": "政治074",
+          "term": "中国人民政治协商会议",
+          "category": "政治机构",
+          "canonical": "中国人民政治协商会议"
+        },
+        {
+          "id": "政治075",
+          "term": "人民政协",
+          "category": "政治机构",
+          "canonical": "中国人民政治协商会议"
+        },
+        {
+          "id": "政治076",
+          "term": "政协全国委员会",
+          "category": "政治机构",
+          "canonical": "中国人民政治协商会议全国委员会"
+        },
+        {
+          "id": "政治077",
+          "term": "中国共产党中央纪律检查委员会",
+          "category": "纪检监察",
+          "canonical": "中国共产党中央纪律检查委员会"
+        },
+        {
+          "id": "政治078",
+          "term": "中央纪委",
+          "category": "纪检监察",
+          "canonical": "中国共产党中央纪律检查委员会"
+        },
+        {
+          "id": "政治079",
+          "term": "国家监察委员会",
+          "category": "纪检监察",
+          "canonical": "国家监察委员会"
+        },
+        {
+          "id": "政治080",
+          "term": "国家监委",
+          "category": "纪检监察",
+          "canonical": "国家监察委员会"
+        },
+        {
+          "id": "政治081",
+          "term": "中共中央统战部",
+          "category": "统战与涉台机构",
+          "canonical": "中共中央统战部"
+        },
+        {
+          "id": "政治082",
+          "term": "中央统战部",
+          "category": "统战与涉台机构",
+          "canonical": "中共中央统战部"
+        },
+        {
+          "id": "政治083",
+          "term": "中共中央台湾工作办公室",
+          "category": "统战与涉台机构",
+          "canonical": "中共中央台湾工作办公室"
+        },
+        {
+          "id": "政治084",
+          "term": "中央台办",
+          "category": "统战与涉台机构",
+          "canonical": "中共中央台湾工作办公室"
+        },
+        {
+          "id": "政治085",
+          "term": "国务院台湾事务办公室",
+          "category": "统战与涉台机构",
+          "canonical": "国务院台湾事务办公室"
+        },
+        {
+          "id": "政治086",
+          "term": "国台办",
+          "category": "统战与涉台机构",
+          "canonical": "国务院台湾事务办公室"
+        },
+        {
+          "id": "政治087",
+          "term": "中共中央总书记",
+          "category": "政治职务",
+          "canonical": "中共中央总书记"
+        },
+        {
+          "id": "政治088",
+          "term": "中央政治局常委",
+          "category": "政治职务",
+          "canonical": "中央政治局常委"
+        },
+        {
+          "id": "政治089",
+          "term": "全国人大常委会委员长",
+          "category": "政治职务",
+          "canonical": "全国人大常委会委员长"
+        },
+        {
+          "id": "政治090",
+          "term": "全国政协主席",
+          "category": "政治职务",
+          "canonical": "全国政协主席"
+        },
+        {
+          "id": "政治091",
+          "term": "中央军委主席",
+          "category": "政治职务",
+          "canonical": "中央军委主席"
+        },
+        {
+          "id": "政治092",
+          "term": "中国共产党",
+          "category": "政党与党务",
+          "canonical": "中国共产党"
+        },
+        {
+          "id": "政治093",
+          "term": "中共",
+          "category": "政党与党务",
+          "canonical": "中国共产党"
+        },
+        {
+          "id": "政治094",
+          "term": "中国国民党",
+          "category": "政党与党务",
+          "canonical": "中国国民党"
+        },
+        {
+          "id": "政治095",
+          "term": "民进党",
+          "category": "政党与党务",
+          "canonical": "民主进步党"
+        },
+        {
+          "id": "政治096",
+          "term": "执政党",
+          "category": "政党与党务",
+          "canonical": "执政党"
+        },
+        {
+          "id": "政治097",
+          "term": "反对党",
+          "category": "政党与党务",
+          "canonical": "反对党"
+        },
+        {
+          "id": "政治098",
+          "term": "党章",
+          "category": "政党与党务",
+          "canonical": "党章"
+        },
+        {
+          "id": "政治099",
+          "term": "党代会",
+          "category": "政党与党务",
+          "canonical": "党代会"
+        },
+        {
+          "id": "政治100",
+          "term": "中国国民党革命委员会",
+          "category": "民主党派",
+          "canonical": "中国国民党革命委员会"
+        },
+        {
+          "id": "政治101",
+          "term": "民革",
+          "category": "民主党派",
+          "canonical": "中国国民党革命委员会"
+        },
+        {
+          "id": "政治102",
+          "term": "中国民主同盟",
+          "category": "民主党派",
+          "canonical": "中国民主同盟"
+        },
+        {
+          "id": "政治103",
+          "term": "民盟",
+          "category": "民主党派",
+          "canonical": "中国民主同盟"
+        },
+        {
+          "id": "政治104",
+          "term": "中国民主建国会",
+          "category": "民主党派",
+          "canonical": "中国民主建国会"
+        },
+        {
+          "id": "政治105",
+          "term": "中国民主促进会",
+          "category": "民主党派",
+          "canonical": "中国民主促进会"
+        },
+        {
+          "id": "政治106",
+          "term": "民进",
+          "category": "民主党派",
+          "canonical": "中国民主促进会"
+        },
+        {
+          "id": "政治107",
+          "term": "中国农工民主党",
+          "category": "民主党派",
+          "canonical": "中国农工民主党"
+        },
+        {
+          "id": "政治108",
+          "term": "农工党",
+          "category": "民主党派",
+          "canonical": "中国农工民主党"
+        },
+        {
+          "id": "政治109",
+          "term": "中国致公党",
+          "category": "民主党派",
+          "canonical": "中国致公党"
+        },
+        {
+          "id": "政治110",
+          "term": "致公党",
+          "category": "民主党派",
+          "canonical": "中国致公党"
+        },
+        {
+          "id": "政治111",
+          "term": "九三学社",
+          "category": "民主党派",
+          "canonical": "九三学社"
+        },
+        {
+          "id": "政治112",
+          "term": "台湾民主自治同盟",
+          "category": "民主党派",
+          "canonical": "台湾民主自治同盟"
+        },
+        {
+          "id": "政治113",
+          "term": "台盟",
+          "category": "民主党派",
+          "canonical": "台湾民主自治同盟"
+        },
+        {
+          "id": "政治114",
+          "term": "民主进步党",
+          "category": "政党与党务",
+          "canonical": "民主进步党"
+        },
+        {
+          "id": "政治115",
+          "term": "政治制度",
+          "category": "政治制度",
+          "canonical": "政治制度"
+        },
+        {
+          "id": "政治116",
+          "term": "政治体制",
+          "category": "政治制度",
+          "canonical": "政治体制"
+        },
+        {
+          "id": "政治117",
+          "term": "人民代表大会制度",
+          "category": "政治制度",
+          "canonical": "人民代表大会制度"
+        },
+        {
+          "id": "政治118",
+          "term": "人民民主专政",
+          "category": "政治制度",
+          "canonical": "人民民主专政"
+        },
+        {
+          "id": "政治119",
+          "term": "民主集中制",
+          "category": "政治制度",
+          "canonical": "民主集中制"
+        },
+        {
+          "id": "政治120",
+          "term": "社会主义制度",
+          "category": "政治制度",
+          "canonical": "社会主义制度"
+        },
+        {
+          "id": "政治121",
+          "term": "资本主义制度",
+          "category": "政治制度",
+          "canonical": "资本主义制度"
+        },
+        {
+          "id": "政治122",
+          "term": "共和制",
+          "category": "政治制度",
+          "canonical": "共和制"
+        },
+        {
+          "id": "政治123",
+          "term": "君主制",
+          "category": "政治制度",
+          "canonical": "君主制"
+        },
+        {
+          "id": "政治124",
+          "term": "君主立宪制",
+          "category": "政治制度",
+          "canonical": "君主立宪制"
+        },
+        {
+          "id": "政治125",
+          "term": "议会制",
+          "category": "政治制度",
+          "canonical": "议会制"
+        },
+        {
+          "id": "政治126",
+          "term": "总统制",
+          "category": "政治制度",
+          "canonical": "总统制"
+        },
+        {
+          "id": "政治127",
+          "term": "一党制",
+          "category": "政治制度",
+          "canonical": "一党制"
+        },
+        {
+          "id": "政治128",
+          "term": "多党制",
+          "category": "政治制度",
+          "canonical": "多党制"
+        },
+        {
+          "id": "政治129",
+          "term": "两党制",
+          "category": "政治制度",
+          "canonical": "两党制"
+        },
+        {
+          "id": "政治130",
+          "term": "三权分立",
+          "category": "政治制度",
+          "canonical": "三权分立"
+        },
+        {
+          "id": "政治131",
+          "term": "宪政",
+          "category": "政治制度",
+          "canonical": "宪政"
+        },
+        {
+          "id": "政治132",
+          "term": "中国共产党领导的多党合作和政治协商制度",
+          "category": "政治制度",
+          "canonical": "中国共产党领导的多党合作和政治协商制度"
+        },
+        {
+          "id": "政治133",
+          "term": "民族区域自治制度",
+          "category": "政治制度",
+          "canonical": "民族区域自治制度"
+        },
+        {
+          "id": "政治134",
+          "term": "基层群众自治制度",
+          "category": "政治制度",
+          "canonical": "基层群众自治制度"
+        },
+        {
+          "id": "政治135",
+          "term": "全过程人民民主",
+          "category": "政治制度",
+          "canonical": "全过程人民民主"
+        },
+        {
+          "id": "政治136",
+          "term": "多党合作和政治协商制度",
+          "category": "政治制度",
+          "canonical": "中国共产党领导的多党合作和政治协商制度"
+        },
+        {
+          "id": "政治137",
+          "term": "社会主义",
+          "category": "政治理论",
+          "canonical": "社会主义"
+        },
+        {
+          "id": "政治138",
+          "term": "共产主义",
+          "category": "政治理论",
+          "canonical": "共产主义"
+        },
+        {
+          "id": "政治139",
+          "term": "资本主义",
+          "category": "政治理论",
+          "canonical": "资本主义"
+        },
+        {
+          "id": "政治140",
+          "term": "马克思主义",
+          "category": "政治理论",
+          "canonical": "马克思主义"
+        },
+        {
+          "id": "政治141",
+          "term": "列宁主义",
+          "category": "政治理论",
+          "canonical": "列宁主义"
+        },
+        {
+          "id": "政治142",
+          "term": "毛泽东思想",
+          "category": "政治理论",
+          "canonical": "毛泽东思想"
+        },
+        {
+          "id": "政治143",
+          "term": "邓小平理论",
+          "category": "政治理论",
+          "canonical": "邓小平理论"
+        },
+        {
+          "id": "政治144",
+          "term": "中国特色社会主义",
+          "category": "政治理论",
+          "canonical": "中国特色社会主义"
+        },
+        {
+          "id": "政治145",
+          "term": "政治意识形态",
+          "category": "政治理论",
+          "canonical": "政治意识形态"
+        },
+        {
+          "id": "政治146",
+          "term": "马克思列宁主义",
+          "category": "政治理论",
+          "canonical": "马克思列宁主义"
+        },
+        {
+          "id": "政治147",
+          "term": "三个代表",
+          "category": "政治理论",
+          "canonical": "三个代表"
+        },
+        {
+          "id": "政治148",
+          "term": "科学发展观",
+          "category": "政治理论",
+          "canonical": "科学发展观"
+        },
+        {
+          "id": "政治149",
+          "term": "习近平新时代中国特色社会主义思想",
+          "category": "政治理论",
+          "canonical": "习近平新时代中国特色社会主义思想"
+        },
+        {
+          "id": "政治150",
+          "term": "四项基本原则",
+          "category": "政治理论",
+          "canonical": "四项基本原则"
+        },
+        {
+          "id": "政治151",
+          "term": "资产阶级自由化",
+          "category": "政治理论",
+          "canonical": "资产阶级自由化"
+        },
+        {
+          "id": "政治152",
+          "term": "政治体制改革",
+          "category": "政治改革与任期",
+          "canonical": "政治体制改革"
+        },
+        {
+          "id": "政治153",
+          "term": "国家主席任期",
+          "category": "政治改革与任期",
+          "canonical": "国家主席任期"
+        },
+        {
+          "id": "政治154",
+          "term": "国家主席任期限制",
+          "category": "政治改革与任期",
+          "canonical": "国家主席任期限制"
+        },
+        {
+          "id": "政治155",
+          "term": "国家主席连任",
+          "category": "政治改革与任期",
+          "canonical": "国家主席连任"
+        },
+        {
+          "id": "政治156",
+          "term": "领导干部职务终身制",
+          "category": "政治改革与任期",
+          "canonical": "领导干部职务终身制"
+        },
+        {
+          "id": "政治157",
+          "term": "国家主权",
+          "category": "主权与国家安全议题",
+          "canonical": "国家主权"
+        },
+        {
+          "id": "政治158",
+          "term": "领土完整",
+          "category": "主权与国家安全议题",
+          "canonical": "领土完整"
+        },
+        {
+          "id": "政治159",
+          "term": "国家统一",
+          "category": "主权与国家安全议题",
+          "canonical": "国家统一"
+        },
+        {
+          "id": "政治160",
+          "term": "一国两制",
+          "category": "主权与国家安全议题",
+          "canonical": "一国两制"
+        },
+        {
+          "id": "政治161",
+          "term": "台湾独立",
+          "category": "主权与国家安全议题",
+          "canonical": "台湾独立"
+        },
+        {
+          "id": "政治162",
+          "term": "台独",
+          "category": "主权与国家安全议题",
+          "canonical": "台湾独立"
+        },
+        {
+          "id": "政治163",
+          "term": "港独",
+          "category": "主权与国家安全议题",
+          "canonical": "港独"
+        },
+        {
+          "id": "政治164",
+          "term": "藏独",
+          "category": "主权与国家安全议题",
+          "canonical": "藏独"
+        },
+        {
+          "id": "政治165",
+          "term": "疆独",
+          "category": "主权与国家安全议题",
+          "canonical": "疆独"
+        },
+        {
+          "id": "政治166",
+          "term": "分裂国家",
+          "category": "主权与国家安全议题",
+          "canonical": "分裂国家"
+        },
+        {
+          "id": "政治167",
+          "term": "颠覆国家政权",
+          "category": "主权与国家安全议题",
+          "canonical": "颠覆国家政权"
+        },
+        {
+          "id": "政治168",
+          "term": "国家安全法",
+          "category": "主权与国家安全议题",
+          "canonical": "国家安全法"
+        },
+        {
+          "id": "政治169",
+          "term": "反分裂国家法",
+          "category": "主权与国家安全议题",
+          "canonical": "反分裂国家法"
+        },
+        {
+          "id": "政治170",
+          "term": "九二共识",
+          "category": "两岸政治议题",
+          "canonical": "九二共识"
+        },
+        {
+          "id": "政治171",
+          "term": "一个中国原则",
+          "category": "两岸政治议题",
+          "canonical": "一个中国原则"
+        },
+        {
+          "id": "政治172",
+          "term": "一中各表",
+          "category": "两岸政治议题",
+          "canonical": "一中各表"
+        },
+        {
+          "id": "政治173",
+          "term": "两岸统一",
+          "category": "两岸政治议题",
+          "canonical": "两岸统一"
+        },
+        {
+          "id": "政治174",
+          "term": "和平统一",
+          "category": "两岸政治议题",
+          "canonical": "和平统一"
+        },
+        {
+          "id": "政治175",
+          "term": "文化大革命",
+          "category": "历史与政治活动",
+          "canonical": "文化大革命"
+        },
+        {
+          "id": "政治176",
+          "term": "文革",
+          "category": "历史与政治活动",
+          "canonical": "文化大革命"
+        },
+        {
+          "id": "政治177",
+          "term": "大跃进",
+          "category": "历史与政治活动",
+          "canonical": "大跃进"
+        },
+        {
+          "id": "政治178",
+          "term": "反右运动",
+          "category": "历史与政治活动",
+          "canonical": "反右运动"
+        },
+        {
+          "id": "政治179",
+          "term": "政治迫害",
+          "category": "历史与政治活动",
+          "canonical": "政治迫害"
+        },
+        {
+          "id": "政治180",
+          "term": "政治运动",
+          "category": "历史与政治活动",
+          "canonical": "政治运动"
+        },
+        {
+          "id": "政治181",
+          "term": "政治审查",
+          "category": "历史与政治活动",
+          "canonical": "政治审查"
+        },
+        {
+          "id": "政治182",
+          "term": "天安门事件",
+          "category": "历史与政治活动",
+          "canonical": "天安门相关历史事件"
+        },
+        {
+          "id": "政治183",
+          "term": "六四事件",
+          "category": "1989年相关议题",
+          "canonical": "1989年相关事件"
+        },
+        {
+          "id": "政治184",
+          "term": "中央文革小组",
+          "category": "文化大革命相关",
+          "canonical": "中央文化革命小组"
+        },
+        {
+          "id": "政治185",
+          "term": "中央文化革命小组",
+          "category": "文化大革命相关",
+          "canonical": "中央文化革命小组"
+        },
+        {
+          "id": "政治186",
+          "term": "红卫兵",
+          "category": "文化大革命相关",
+          "canonical": "红卫兵"
+        },
+        {
+          "id": "政治187",
+          "term": "五一六通知",
+          "category": "文化大革命相关",
+          "canonical": "五一六通知"
+        },
+        {
+          "id": "政治188",
+          "term": "批林批孔",
+          "category": "文化大革命相关",
+          "canonical": "批林批孔"
+        },
+        {
+          "id": "政治189",
+          "term": "六四天安门事件",
+          "category": "1989年相关议题",
+          "canonical": "1989年相关事件"
+        },
+        {
+          "id": "政治190",
+          "term": "八九学运",
+          "category": "1989年相关议题",
+          "canonical": "1989年相关事件"
+        },
+        {
+          "id": "政治191",
+          "term": "八九民运",
+          "category": "1989年相关议题",
+          "canonical": "1989年相关事件"
+        },
+        {
+          "id": "政治192",
+          "term": "1989年春夏之交的政治风波",
+          "category": "1989年相关议题",
+          "canonical": "1989年相关事件"
+        },
+        {
+          "id": "政治193",
+          "term": "坦克人",
+          "category": "1989年相关议题",
+          "canonical": "1989年相关事件"
+        },
+        {
+          "id": "政治194",
+          "term": "Tank Man",
+          "category": "1989年相关议题",
+          "canonical": "1989年相关事件"
+        },
+        {
+          "id": "政治195",
+          "term": "五月三十五",
+          "category": "1989年相关议题",
+          "canonical": "1989年相关事件"
+        },
+        {
+          "id": "政治196",
+          "term": "白纸运动",
+          "category": "2022年相关抗议",
+          "canonical": "2022年白纸运动"
+        },
+        {
+          "id": "政治197",
+          "term": "白纸抗议",
+          "category": "2022年相关抗议",
+          "canonical": "2022年白纸运动"
+        },
+        {
+          "id": "政治198",
+          "term": "White Paper Movement",
+          "category": "2022年相关抗议",
+          "canonical": "2022年白纸运动"
+        },
+        {
+          "id": "政治199",
+          "term": "A4抗议",
+          "category": "2022年相关抗议",
+          "canonical": "2022年白纸运动"
+        },
+        {
+          "id": "政治200",
+          "term": "雨伞运动",
+          "category": "香港2014年相关运动",
+          "canonical": "香港2014年相关运动"
+        },
+        {
+          "id": "政治201",
+          "term": "雨伞革命",
+          "category": "香港2014年相关运动",
+          "canonical": "香港2014年相关运动"
+        },
+        {
+          "id": "政治202",
+          "term": "占领中环",
+          "category": "香港2014年相关运动",
+          "canonical": "香港2014年相关运动"
+        },
+        {
+          "id": "政治203",
+          "term": "和平占中",
+          "category": "香港2014年相关运动",
+          "canonical": "香港2014年相关运动"
+        },
+        {
+          "id": "政治204",
+          "term": "Umbrella Movement",
+          "category": "香港2014年相关运动",
+          "canonical": "香港2014年相关运动"
+        },
+        {
+          "id": "政治205",
+          "term": "Occupy Central",
+          "category": "香港2014年相关运动",
+          "canonical": "香港2014年相关运动"
+        },
+        {
+          "id": "政治206",
+          "term": "反修例运动",
+          "category": "香港2019年相关运动",
+          "canonical": "香港2019年相关运动"
+        },
+        {
+          "id": "政治207",
+          "term": "反送中运动",
+          "category": "香港2019年相关运动",
+          "canonical": "香港2019年相关运动"
+        },
+        {
+          "id": "政治208",
+          "term": "反送中",
+          "category": "香港2019年相关运动",
+          "canonical": "香港2019年相关运动"
+        },
+        {
+          "id": "政治209",
+          "term": "反逃犯条例修订",
+          "category": "香港2019年相关运动",
+          "canonical": "香港2019年相关运动"
+        },
+        {
+          "id": "政治210",
+          "term": "Anti-Extradition Movement",
+          "category": "香港2019年相关运动",
+          "canonical": "香港2019年相关运动"
+        },
+        {
+          "id": "政治211",
+          "term": "习包子",
+          "category": "网络别称与表达",
+          "canonical": "习近平"
+        },
+        {
+          "id": "政治212",
+          "term": "習包子",
+          "category": "网络别称与表达",
+          "canonical": "习近平"
+        },
+        {
+          "id": "政治213",
+          "term": "庆丰帝",
+          "category": "网络别称与表达",
+          "canonical": "习近平"
+        },
+        {
+          "id": "政治214",
+          "term": "慶豐帝",
+          "category": "网络别称与表达",
+          "canonical": "习近平"
+        },
+        {
+          "id": "政治215",
+          "term": "庆丰元年",
+          "category": "网络别称与表达",
+          "canonical": "习近平相关讨论"
+        },
+        {
+          "id": "政治216",
+          "term": "膜蛤",
+          "category": "网络别称与表达",
+          "canonical": "江泽民相关网络文化"
+        },
+        {
+          "id": "政治217",
+          "term": "膜蛤文化",
+          "category": "网络别称与表达",
+          "canonical": "江泽民相关网络文化"
+        },
+        {
+          "id": "政治218",
+          "term": "蛤丝",
+          "category": "网络别称与表达",
+          "canonical": "江泽民相关网络文化"
+        },
+        {
+          "id": "政治219",
+          "term": "习习蛤蛤",
+          "category": "网络别称与表达",
+          "canonical": "习近平与江泽民相关讨论"
+        },
+        {
+          "id": "政治222",
+          "term": "台湾",
+          "category": "宽泛政治概念",
+          "canonical": "台湾（独立触发词）"
+        },
+        {
+          "id": "政治241",
+          "term": "四通桥",
+          "category": "物品及地点",
+          "canonical": "四通桥（独立触发词）"
+        },
+        {
+          "id": "政治243",
+          "term": "8964",
+          "category": "数字和日期",
+          "canonical": "1989年相关表达（独立触发）"
+        },
+        {
+          "id": "政治244",
+          "term": "6.4",
+          "category": "数字和日期",
+          "canonical": "1989年相关表达（独立触发）"
+        },
+        {
+          "id": "政治246",
+          "term": "六四",
+          "category": "数字和日期",
+          "canonical": "1989年相关表达（独立触发）"
+        },
+        {
+          "id": "政治247",
+          "term": "XJP",
+          "category": "字母缩写",
+          "canonical": "XJP（独立触发词）"
+        },
+        {
+          "id": "政治248",
+          "term": "JZM",
+          "category": "字母缩写",
+          "canonical": "JZM（独立触发词）"
+        },
+        {
+          "id": "政治249",
+          "term": "CPC",
+          "category": "字母缩写",
+          "canonical": "CPC（独立触发词）"
+        },
+        {
+          "id": "政治250",
+          "term": "CCP",
+          "category": "字母缩写",
+          "canonical": "CCP（独立触发词）"
+        },
+        {
+          "id": "政治252",
+          "term": "人大",
+          "category": "过短名称与称谓",
+          "canonical": "人大（独立触发词）"
+        }
+      ]
+    },
+    {
+      "focus": "psychological",
+      "keywords": [
+        {
+          "id": "心理001",
+          "term": "心理问题",
+          "category": "心理服务与主题",
+          "canonical": "心理问题"
+        },
+        {
+          "id": "心理002",
+          "term": "心理健康",
+          "category": "心理服务与主题",
+          "canonical": "心理健康"
+        },
+        {
+          "id": "心理003",
+          "term": "心理咨询",
+          "category": "心理服务与主题",
+          "canonical": "心理咨询"
+        },
+        {
+          "id": "心理004",
+          "term": "心理求助",
+          "category": "心理服务与主题",
+          "canonical": "心理求助"
+        },
+        {
+          "id": "心理005",
+          "term": "心理治疗",
+          "category": "心理服务与主题",
+          "canonical": "心理治疗"
+        },
+        {
+          "id": "心理006",
+          "term": "心理辅导",
+          "category": "心理服务与主题",
+          "canonical": "心理辅导"
+        },
+        {
+          "id": "心理007",
+          "term": "心理咨询师",
+          "category": "心理服务与主题",
+          "canonical": "心理咨询师"
+        },
+        {
+          "id": "心理008",
+          "term": "精神健康",
+          "category": "心理服务与主题",
+          "canonical": "精神健康"
+        },
+        {
+          "id": "心理009",
+          "term": "精神卫生",
+          "category": "心理服务与主题",
+          "canonical": "精神卫生"
+        },
+        {
+          "id": "心理010",
+          "term": "精神科",
+          "category": "心理服务与主题",
+          "canonical": "精神科"
+        },
+        {
+          "id": "心理011",
+          "term": "心理压力",
+          "category": "心理服务与主题",
+          "canonical": "心理压力"
+        },
+        {
+          "id": "心理012",
+          "term": "抑郁症",
+          "category": "疾病与症状名称",
+          "canonical": "抑郁症"
+        },
+        {
+          "id": "心理013",
+          "term": "焦虑症",
+          "category": "疾病与症状名称",
+          "canonical": "焦虑症"
+        },
+        {
+          "id": "心理014",
+          "term": "双相情感障碍",
+          "category": "疾病与症状名称",
+          "canonical": "双相情感障碍"
+        },
+        {
+          "id": "心理015",
+          "term": "躁郁症",
+          "category": "疾病与症状名称",
+          "canonical": "躁郁症"
+        },
+        {
+          "id": "心理016",
+          "term": "惊恐发作",
+          "category": "疾病与症状名称",
+          "canonical": "惊恐发作"
+        },
+        {
+          "id": "心理017",
+          "term": "强迫症",
+          "category": "疾病与症状名称",
+          "canonical": "强迫症"
+        },
+        {
+          "id": "心理018",
+          "term": "精神分裂症",
+          "category": "疾病与症状名称",
+          "canonical": "精神分裂症"
+        },
+        {
+          "id": "心理019",
+          "term": "创伤后应激障碍",
+          "category": "疾病与症状名称",
+          "canonical": "创伤后应激障碍"
+        },
+        {
+          "id": "心理020",
+          "term": "进食障碍",
+          "category": "疾病与症状名称",
+          "canonical": "进食障碍"
+        },
+        {
+          "id": "心理021",
+          "term": "人格障碍",
+          "category": "疾病与症状名称",
+          "canonical": "人格障碍"
+        },
+        {
+          "id": "心理022",
+          "term": "情绪崩溃",
+          "category": "情绪与困境表达",
+          "canonical": "情绪与困境表达"
+        },
+        {
+          "id": "心理023",
+          "term": "情绪失控",
+          "category": "情绪与困境表达",
+          "canonical": "情绪与困境表达"
+        },
+        {
+          "id": "心理024",
+          "term": "长期情绪低落",
+          "category": "情绪与困境表达",
+          "canonical": "情绪与困境表达"
+        },
+        {
+          "id": "心理025",
+          "term": "持续焦虑",
+          "category": "情绪与困境表达",
+          "canonical": "情绪与困境表达"
+        },
+        {
+          "id": "心理026",
+          "term": "严重焦虑",
+          "category": "情绪与困境表达",
+          "canonical": "情绪与困境表达"
+        },
+        {
+          "id": "心理027",
+          "term": "社交焦虑",
+          "category": "情绪与困境表达",
+          "canonical": "情绪与困境表达"
+        },
+        {
+          "id": "心理028",
+          "term": "精神内耗",
+          "category": "情绪与困境表达",
+          "canonical": "情绪与困境表达"
+        },
+        {
+          "id": "心理029",
+          "term": "感到绝望",
+          "category": "情绪与困境表达",
+          "canonical": "情绪与困境表达"
+        },
+        {
+          "id": "心理030",
+          "term": "感到无助",
+          "category": "情绪与困境表达",
+          "canonical": "情绪与困境表达"
+        },
+        {
+          "id": "心理031",
+          "term": "撑不下去了",
+          "category": "情绪与困境表达",
+          "canonical": "情绪与困境表达"
+        },
+        {
+          "id": "心理032",
+          "term": "活着没意思",
+          "category": "情绪与困境表达",
+          "canonical": "情绪与困境表达"
+        },
+        {
+          "id": "心理033",
+          "term": "自杀",
+          "category": "自伤、自杀和危机表达",
+          "canonical": "自伤、自杀和危机表达"
+        },
+        {
+          "id": "心理034",
+          "term": "自伤",
+          "category": "自伤、自杀和危机表达",
+          "canonical": "自伤、自杀和危机表达"
+        },
+        {
+          "id": "心理035",
+          "term": "自残",
+          "category": "自伤、自杀和危机表达",
+          "canonical": "自伤、自杀和危机表达"
+        },
+        {
+          "id": "心理036",
+          "term": "轻生",
+          "category": "自伤、自杀和危机表达",
+          "canonical": "自伤、自杀和危机表达"
+        },
+        {
+          "id": "心理037",
+          "term": "想死",
+          "category": "自伤、自杀和危机表达",
+          "canonical": "自伤、自杀和危机表达"
+        },
+        {
+          "id": "心理038",
+          "term": "不想活了",
+          "category": "自伤、自杀和危机表达",
+          "canonical": "自伤、自杀和危机表达"
+        },
+        {
+          "id": "心理039",
+          "term": "不想再活",
+          "category": "自伤、自杀和危机表达",
+          "canonical": "自伤、自杀和危机表达"
+        },
+        {
+          "id": "心理040",
+          "term": "结束自己的生命",
+          "category": "自伤、自杀和危机表达",
+          "canonical": "自伤、自杀和危机表达"
+        },
+        {
+          "id": "心理041",
+          "term": "伤害自己",
+          "category": "自伤、自杀和危机表达",
+          "canonical": "自伤、自杀和危机表达"
+        },
+        {
+          "id": "心理042",
+          "term": "活不下去",
+          "category": "自伤、自杀和危机表达",
+          "canonical": "自伤、自杀和危机表达"
+        },
+        {
+          "id": "心理043",
+          "term": "生无可恋",
+          "category": "自伤、自杀和危机表达",
+          "canonical": "自伤、自杀和危机表达"
+        },
+        {
+          "id": "心理044",
+          "term": "告别这个世界",
+          "category": "自伤、自杀和危机表达",
+          "canonical": "自伤、自杀和危机表达"
+        },
+        {
+          "id": "心理045",
+          "term": "抗抑郁药",
+          "category": "治疗与预防",
+          "canonical": "抗抑郁药"
+        },
+        {
+          "id": "心理046",
+          "term": "抗焦虑药",
+          "category": "治疗与预防",
+          "canonical": "抗焦虑药"
+        },
+        {
+          "id": "心理047",
+          "term": "认知行为疗法",
+          "category": "治疗与预防",
+          "canonical": "认知行为疗法"
+        },
+        {
+          "id": "心理048",
+          "term": "心理危机干预",
+          "category": "治疗与预防",
+          "canonical": "心理危机干预"
+        },
+        {
+          "id": "心理049",
+          "term": "自杀预防",
+          "category": "治疗与预防",
+          "canonical": "自杀预防"
+        }
+      ]
+    }
+  ]
+}

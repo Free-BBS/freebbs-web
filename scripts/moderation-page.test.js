@@ -2616,6 +2616,44 @@ test('an unattempted image job explains that no model was called and preserves t
   assert.ok(!h.requests.some(({ url }) => url.endsWith('/ai-test')));
 });
 
+test('a local keyword handoff explains no model call without presenting an API or validation failure', async () => {
+  const h = harness({
+    automation: automaticSettings(),
+    customFetch: (url, options, fallback) => {
+      if (url.endsWith('/automation'))
+        return response({
+          job: {
+            ...automaticJob('review'),
+            reasonCode: 'focus_requires_review',
+            result: {
+              ...manualReviewResult(),
+              automationReason: 'focus_requires_review',
+              manualReview: { required: true, validation: 'not_attempted' },
+              reviewFocus: {
+                political: true,
+                psychological: false,
+                keywordMatches: { political: ['习近平'], psychological: [] },
+              },
+            },
+          },
+        });
+      return fallback(url, options);
+    },
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  const visible = visibleText(h.get('detail'));
+  assert.match(visible, /本地政治或心理关键词触发人工审核，本次未调用模型/);
+  assert.match(visible, /预设模型（本次未调用）/);
+  assert.match(visible, /以下为本地转人工记录/);
+  assert.match(visible, /未调用模型 · 保留人工审核/);
+  assert.match(visible, /触发关键词：习近平/);
+  assert.doesNotMatch(visible, /输出未通过校验|以下为机器自动审核结果|模型未返回可用结果/);
+  assert.ok(!h.requests.some(({ url }) => url.endsWith('/ai-test') || url.endsWith('/decision')));
+  assert.equal(h.submission.status, 'pending');
+});
+
 test('expired withdrawal HTTP410 refreshes and removes the action while explaining discussion management', async () => {
   let expired = false;
   const h = harness({
@@ -2858,7 +2896,124 @@ test('image result prose uses display copies and raw OCR remains in a closed dis
   assert.match(visible, /政治敏感相关内容 · 须负责人审核/);
   assert.match(visible, /心理问题与求助 · 负责人关怀复核/);
   assert.match(visible, /心理关怀不等于违规/);
+  assert.match(visible, /负责人通过前不发布；模型建议通过也不能自动放行/);
+  assert.doesNotMatch(visible, /触发关键词：/);
   assert.doesNotMatch(visible, /图片尚未机器审核/);
+});
+
+test('strict keyword review shows both focus panels for a text-only result without turning keywords into violations', async () => {
+  const run = policyRun();
+  run.reviewFocus = {
+    political: true,
+    psychological: true,
+    keywordVersion: 'focus-test-v1',
+    keywordMatches: {
+      political: ['习近平', '政治制度'],
+      psychological: ['心理咨询', '抑郁'],
+    },
+  };
+  const h = harness({
+    automation: automaticSettings(),
+    customFetch: (url, options, fallback) => {
+      if (url.endsWith('/automation'))
+        return response({ job: { ...automaticJob('review'), result: run } });
+      return fallback(url, options);
+    },
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  const sections = h.get('detail').querySelectorAll('section');
+  const political = sections.find((item) => item.className === 'moderation-focus-political');
+  const psychological = sections.find(
+    (item) => item.className === 'moderation-focus-psychological',
+  );
+  assert.ok(political);
+  assert.ok(psychological);
+  assert.match(political.textContent, /触发关键词：习近平、政治制度/);
+  assert.match(psychological.textContent, /触发关键词：心理咨询、抑郁/);
+  assert.doesNotMatch(political.textContent, /触发关键词：心理/);
+  assert.doesNotMatch(psychological.textContent, /触发关键词：习近平/);
+  for (const section of [political, psychological]) {
+    assert.match(section.textContent, /负责人通过前不发布/);
+    assert.match(section.textContent, /模型建议通过也不能自动放行/);
+    assert.match(section.textContent, /否定表达也不自动豁免/);
+  }
+  assert.match(political.textContent, /不等于已经违规/);
+  assert.match(psychological.textContent, /不作疾病诊断/);
+  assert.match(psychological.textContent, /不因此处罚求助者/);
+});
+
+test('semantic focus evidence is reviewer-only literal text in a closed disclosure', async () => {
+  const run = policyRun();
+  run.reviewFocus = {
+    psychological: true,
+    political: false,
+    keywordMatches: { political: [], psychological: [] },
+  };
+  run.assessment.reviewTopics = {
+    political: [],
+    psychological: [
+      {
+        field: 'content',
+        quote: '<img src=x onerror=attack()>最近一直很难受',
+        reason: '持续困扰，需要支持复核。',
+      },
+    ],
+  };
+  const h = harness({
+    automation: automaticSettings(),
+    customFetch: (url, options, fallback) =>
+      url.endsWith('/automation')
+        ? response({ job: { ...automaticJob('review'), result: run } })
+        : fallback(url, options),
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  const section = h
+    .get('detail')
+    .querySelectorAll('section')
+    .find((item) => item.className === 'moderation-focus-psychological');
+  assert.match(section.textContent, /整句语义判断补充/);
+  assert.doesNotMatch(section.textContent, /触发关键词/);
+  assert.equal(section.querySelectorAll('img').length, 0);
+  const details = section.querySelectorAll('details')[0];
+  assert.ok(details);
+  assert.notEqual(details.open, true);
+  assert.match(details.textContent, /持续困扰，需要支持复核/);
+});
+
+test('review focus keyword metadata stays plain text and ignores empty or malformed keyword lists', async () => {
+  const run = policyRun();
+  run.reviewFocus = {
+    political: true,
+    psychological: true,
+    keywordMatches: {
+      political: ['<img src=x onerror=attack()>', null, '政治制度', '政治制度', {}, ''],
+      psychological: 'PRIVATE_CONTEXT',
+    },
+  };
+  const h = harness({
+    automation: automaticSettings(),
+    customFetch: (url, options, fallback) => {
+      if (url.endsWith('/automation'))
+        return response({ job: { ...automaticJob('review'), result: run } });
+      return fallback(url, options);
+    },
+  });
+  await h.app.ready;
+  await h.app.openSubmission('s1');
+  await flush();
+  const sections = h.get('detail').querySelectorAll('section');
+  const political = sections.find((item) => item.className === 'moderation-focus-political');
+  const psychological = sections.find(
+    (item) => item.className === 'moderation-focus-psychological',
+  );
+  assert.match(political.textContent, /触发关键词：<img src=x onerror=attack\(\)>、政治制度$/);
+  assert.equal(political.querySelectorAll('img').length, 0);
+  assert.doesNotMatch(political.textContent, /\[object Object\]|null|政治制度、政治制度/);
+  assert.doesNotMatch(psychological.textContent, /触发关键词：|PRIVATE_CONTEXT/);
 });
 
 test('late image confirmation cannot restore content after logout', async () => {

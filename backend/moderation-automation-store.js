@@ -6,6 +6,7 @@ const { normalizePolicyDecision, buildPolicyEvidence } = require('./moderation-p
 const { POLICY_VERSION } = require('./moderation-policy');
 const { sanitizeDiagnostics } = require('./moderation-ai-diagnostics');
 const { validateAssessment } = require('./moderation-ai-client');
+const { getReviewFocus, mergeReviewFocus } = require('./moderation-review-focus');
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const schemas = new WeakMap();
@@ -214,7 +215,7 @@ function createModerationAutomationStore({
       body: imagePublished
         ? '请逐张检查图片，确认后标记已复核；发现问题可撤回整份内容。'
         : focus && state !== 'published' && state !== 'withdrawn'
-          ? `该内容涉及${focus}，已保留人工审核。心理关怀不等于违规，请负责人查看专门提示。`
+          ? `该内容触发${focus}人工审核要求，负责人通过前不发布。关键词或模型提示不等于违规或诊断，请查看专门提示。`
           : state === 'published'
             ? '请在审核工作台查看结果；负责人可在发现问题后撤回。'
             : '请打开审核工作台查看处理状态。',
@@ -411,6 +412,10 @@ function createModerationAutomationStore({
       identities,
       attachmentCount: attachments.length,
     });
+    // Capture routing signals before privacy redaction can replace a name.
+    // Only fixed dictionary matches travel with the worker snapshot, not an
+    // additional copy of the unredacted source or the student's identity.
+    const reviewFocus = getReviewFocus({ title: payload.title || '', content: reviewContent });
     const meta = {
       counts: preview.counts,
       imageCount: preview.imageCount,
@@ -418,7 +423,7 @@ function createModerationAutomationStore({
       images: descriptors,
       inputHash: hash({ title: preview.title, content: preview.content, images: descriptors }),
     };
-    return { preview: { ...preview, images }, meta };
+    return { preview: { ...preview, images, reviewFocus }, meta };
   }
   async function prepare(claimed) {
     return transact(async (db) => {
@@ -475,6 +480,13 @@ function createModerationAutomationStore({
   }
 
   function sanitizeResult(result, meta, row, job, preview) {
+    // Re-evaluate the locked original row. Neither redaction nor a worker's
+    // supplied reviewFocus=false can waive a mandatory human-review route.
+    const original = parse(row.payload_json, {});
+    const originalFocus = getReviewFocus({
+      title: original.title || '',
+      content: original.content || '',
+    });
     if (
       !result?.manualReview &&
       preview &&
@@ -492,6 +504,7 @@ function createModerationAutomationStore({
           imageResults: result.imageResults || [],
           snapshot: {
             ...preview,
+            reviewFocus: originalFocus,
             submissionId: row.id,
             version: Number(job.submission_version),
             contentHash: job.content_hash,
@@ -544,7 +557,7 @@ function createModerationAutomationStore({
         Number.isSafeInteger(result?.settingsRevision) &&
         result.settingsRevision >= 0
       )
-        assessment = validateAssessment(result.assessment, preview);
+        assessment = validateAssessment(result.assessment, preview, { requireReviewTopics: true });
     } catch {
       /* An invalid assessment stays manual; rejected free text is not retained. */
     }
@@ -567,30 +580,46 @@ function createModerationAutomationStore({
           })),
           reason: assessment.reason,
           supportReason: assessment.supportReason,
+          reviewTopics: assessment.reviewTopics,
         }
       : null;
     const diagnostics = sanitizeDiagnostics(result?.manualReview?.diagnostics);
     const reviewSignal = diagnostics?.reviewSignal;
-    const reviewFocus = require('./moderation-review-focus').getReviewFocus({
-      title: preview?.title || '',
-      content: preview?.content || '',
-      assessments: valid
-        ? [assessment]
-        : reviewSignal
-          ? [
-              {
-                categories: reviewSignal.reportedCategories,
-                ruleMatches: reviewSignal.reportedRuleIds.map((ruleId) => ({ ruleId })),
-                supportPriority: reviewSignal.reportedSupportPriority,
-              },
-            ]
-          : [],
-    });
+    const reviewFocus = mergeReviewFocus(
+      originalFocus,
+      getReviewFocus({
+        title: preview?.title || '',
+        content: preview?.content || '',
+        assessments: valid
+          ? [assessment]
+          : reviewSignal
+            ? [
+                {
+                  categories: reviewSignal.reportedCategories,
+                  ruleMatches: reviewSignal.reportedRuleIds.map((ruleId) => ({ ruleId })),
+                  supportPriority: reviewSignal.reportedSupportPriority,
+                },
+              ]
+            : [],
+      }),
+    );
     if (reviewFocus.political || reviewFocus.psychological) {
       if (decision.recommendedAction === 'allow') decision.recommendedAction = 'hold';
       decision.canAutomaticallyPublish = false;
+      if (
+        result?.automationReason === 'focus_requires_review' &&
+        result?.manualReview?.validation === 'not_attempted'
+      ) {
+        decision.reasons = [];
+        decision.reasonLabels = [];
+      }
       decision.reasons.push('focus_requires_review');
-      decision.reasonLabels.push('政治或心理关怀相关内容须负责人重点复核。');
+      if (reviewFocus.political)
+        decision.reasonLabels.push('政治相关关键词或信号触发人工审核，负责人通过前不发布。');
+      if (reviewFocus.psychological)
+        decision.reasonLabels.push(
+          '心理相关关键词或信号触发人工审核，负责人通过前不发布；不等于诊断或违规。',
+        );
     }
     const stored = {
       submissionId: row.id,
@@ -633,6 +662,7 @@ function createModerationAutomationStore({
       if (imageDiagnostics) stored.manualReview.imageDiagnostics = imageDiagnostics;
     }
     const codes = [
+      'focus_requires_review',
       'image_requires_review',
       'provider_failure',
       'configuration_invalid',
@@ -711,10 +741,15 @@ function createModerationAutomationStore({
           reason = meta.imageCount > 0 ? 'no_image_risk' : 'no_text_risk';
         }
         if (stored.assessment.supportPriority !== 'none') reason = 'support_requires_review';
-        if (stored.reviewFocus?.political || stored.reviewFocus?.psychological) {
-          target = 'review';
-          reason = 'focus_requires_review';
-        }
+      }
+      if (
+        !paused &&
+        !Number(job.lease_expired) &&
+        reviewers.length &&
+        (stored.reviewFocus?.political || stored.reviewFocus?.psychological)
+      ) {
+        target = 'review';
+        reason = 'focus_requires_review';
       }
       let published;
       if (target === 'published') {

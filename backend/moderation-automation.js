@@ -5,7 +5,7 @@ const { sanitizeDiagnostics } = require('./moderation-ai-diagnostics');
 const { POLICY_VERSION } = require('./moderation-policy');
 const { normalizePolicyDecision } = require('./moderation-policy-decision');
 const { buildAutomaticResult, IMAGE_MODEL } = require('./moderation-automation-result');
-const { getReviewFocus } = require('./moderation-review-focus');
+const { getReviewFocus, mergeReviewFocus } = require('./moderation-review-focus');
 
 const PRIMARY_MODEL = 'qwen3.6-27b';
 const BACKUP_MODEL = 'glm-5.1';
@@ -163,7 +163,10 @@ function createModerationAutomation({
       imageCount: snapshot?.imageCount ?? null,
       imagesReviewed: false,
       automaticPublication: false,
-      reviewFocus: getReviewFocus({ title: snapshot?.title, content: snapshot?.content }),
+      reviewFocus: mergeReviewFocus(
+        snapshot?.reviewFocus,
+        getReviewFocus({ title: snapshot?.title, content: snapshot?.content }),
+      ),
     };
   }
 
@@ -217,6 +220,10 @@ function createModerationAutomation({
       } else {
         // Store snapshots are copied before any await or model call can mutate them.
         snapshot = structuredClone(snapshot);
+        const localFocus = mergeReviewFocus(
+          snapshot.reviewFocus,
+          getReviewFocus({ title: snapshot.title, content: snapshot.content }),
+        );
         if (!(await enabled(epoch))) {
           result = notAttempted(
             claim,
@@ -224,6 +231,8 @@ function createModerationAutomation({
             startedAt,
             current(epoch) ? 'worker_paused' : 'worker_stopped',
           );
+        } else if (localFocus.political || localFocus.psychological) {
+          result = notAttempted(claim, snapshot, startedAt, 'focus_requires_review');
         } else if (snapshot.imageCount > 0 && !imageAutomationEnabled(config)) {
           result = notAttempted(claim, snapshot, startedAt, 'image_requires_review');
         } else {
@@ -234,6 +243,7 @@ function createModerationAutomation({
             redactionCounts: Object.freeze({ ...snapshot.counts }),
             hasImages: false,
             model: PRIMARY_MODEL,
+            requireReviewTopics: true,
           });
           let response;
           try {
@@ -243,19 +253,25 @@ function createModerationAutomation({
               result = notAttempted(claim, snapshot, startedAt, 'assessment_invalid');
               result.manualReview.validation = 'failed';
             } else {
-              const assessment = validateAssessment(response.assessment, input);
+              const assessment = validateAssessment(response.assessment, input, {
+                requireReviewTopics: true,
+              });
               const textResult = {
                 assessment,
                 model: PRIMARY_MODEL,
+                requireReviewTopics: true,
                 settingsRevision: response.settingsRevision,
                 policyVersion: POLICY_VERSION,
               };
               const imageResults = [];
-              const textFocus = getReviewFocus({
-                title: snapshot.title,
-                content: snapshot.content,
-                assessments: [assessment],
-              });
+              const textFocus = mergeReviewFocus(
+                snapshot.reviewFocus,
+                getReviewFocus({
+                  title: snapshot.title,
+                  content: snapshot.content,
+                  assessments: [assessment],
+                }),
+              );
               if (
                 snapshot.imageCount > 0 &&
                 normalizePolicyDecision(assessment, input).recommendedAction === 'allow' &&
@@ -274,6 +290,7 @@ function createModerationAutomation({
                   const batch = snapshot.images.slice(offset, offset + 3);
                   const imageResponse = await imageClient.assess({
                     model: IMAGE_MODEL,
+                    requireReviewTopics: true,
                     title: snapshot.title,
                     content: snapshot.content,
                     images: batch.map((image) => ({

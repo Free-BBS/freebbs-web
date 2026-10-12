@@ -69,6 +69,7 @@ test('only parsed assessment failures from HTTP 200 may carry an unverified revi
   const reviewSignal = diagnoseReviewSignal({ decision: 'high_risk' });
   const parsedFailures = [
     'assessment_fields_invalid',
+    'review_topics_invalid',
     'rule_evidence_invalid',
     'rule_unknown',
     'category_rule_mismatch',
