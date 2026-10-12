@@ -57,21 +57,26 @@ sudo install -d -o freebbs-backend -g freebbs-backend -m 0700 /var/lib/free-bbs/
 
 ## 3. 开启人工审核，验证正式数据路径
 
-将 `DISCUSSION_MODERATION_ENABLED=true`，`AUTO_ENABLED` 仍为 false。此时新提交会等待人工决定；安排负责人在线，避免正常用户长时间等待。重启后端，运行只读检查：
+将 `DISCUSSION_MODERATION_ENABLED=true`，`AUTO_ENABLED` 仍为 false。此时新提交会等待人工决定；安排负责人在线，避免正常用户长时间等待。先读取修改后的配置运行只读检查：
 
 ```bash
-sudo systemctl restart free-bbs-backend
-curl --fail --silent --show-error http://127.0.0.1:3001/api/health
 sudo bash -c 'set -a; . /etc/free-bbs/free-bbs.env; set +a; exec runuser -u freebbs-backend -- /usr/bin/node /data/www/free-BBS/scripts/moderation-production-preflight.js'
 ```
 
 脚本只查询表名、负责人数量、暂停状态和路径可访问性，不调用模型、不执行迁移、不打印数据库口令/API Key。`--configuration-only` 可跳过数据库连接；退出码 2 表示尚未具备验收条件，不代表脚本写入失败。
 
+确认 `configurationIssues` 为空且 `readyForManualAcceptance=true` 后再重启；若检查未通过，先修正配置或目录权限，保留当前服务运行。
+
+```bash
+sudo systemctl restart free-bbs-backend
+curl --fail --silent --show-error http://127.0.0.1:3001/api/health
+```
+
 在正常 HTTPS 网站验证：普通账号可见“我的提交”、不可见负责人入口；直接访问负责人接口仍被拒绝；提交前有告知、取消保留草稿；负责人能收到通知并查看私有图片，未登录或非授权用户读不到图片；人工通过、拒绝、撤回均正常。
 
 ## 4. 开启自动审核验收
 
-确认供应商安排和数据告知已落实后，再将 `DISCUSSION_MODERATION_PROVIDER_REVIEWED=true`、`DISCUSSION_MODERATION_AUTO_ENABLED=true`，重启后端。再次只读预检查，先确认 `paused=true`、负责人数量大于 0。管理员在工作台开启自动审核。
+确认供应商安排和数据告知已落实后，再将 `DISCUSSION_MODERATION_PROVIDER_REVIEWED=true`、`DISCUSSION_MODERATION_AUTO_ENABLED=true`。先重复上述只读预检查，确认 `readyForAutomaticAcceptance=true`、`paused=true`、负责人数量大于 0，再重启后端并检查健康状态。管理员在工作台开启自动审核。
 
 只用网站管理人员的虚构验收内容各测一次：普通建议、明确违规、政治关键词、心理求助、正常图片、不可读图片。核对 Qwen/Kimi、通知和最终发布状态。含图自动通过后务必验证图片队列与撤回。不要在正式网站跑批量模型评测或把真实学生内容加入测试样例。
 
