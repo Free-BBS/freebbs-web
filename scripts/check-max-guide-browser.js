@@ -31,6 +31,20 @@ const click = (page, selector) => page.locator(selector).setTimeout(10000).click
 
 async function waitStep(page, index, step, { revealed = false } = {}) {
   const started = Date.now();
+  // The course-entry self-report is a real mandatory user choice. QA chooses
+  // explicitly as a learner; production guide code must never choose for them.
+  // After confirmation the deferred guide must resume without refresh/start.
+  if (step.id === 'course-directory') {
+    await page.waitForSelector('.learning-start-dialog[open] [data-learning-start-choice="level"]');
+    assert.equal(await page.$('.max-tour[open]'), null, 'do not cover the learning-start choice');
+    await page.select('.learning-start-dialog[open] [data-learning-start-choice="level"]', 'new');
+    await click(page, '.learning-start-dialog[open] .learning-start-apply');
+    assert.equal(
+      await page.evaluate(() => window.FreeBbsLearningStart.currentPreference()?.level),
+      'new',
+      'the recorded preference must be the learner choice, not a guide default',
+    );
+  }
   const view = revealed ? { ...step, ...step.reveal } : step;
   const expectedEmpty = step.id === 'activities-receipt';
   await page.waitForFunction(
@@ -213,7 +227,11 @@ async function waitStep(page, index, step, { revealed = false } = {}) {
       `${step.id}: ${name} outside viewport: ${JSON.stringify(snapshot)}`,
     );
   }
-  return { ...snapshot, readyMs: Date.now() - started };
+  return {
+    ...snapshot,
+    readyMs: Date.now() - started,
+    ...(step.id === 'course-directory' ? { learnerConfirmedStart: 'new' } : {}),
+  };
 }
 
 async function runScenario(browser, scenario, directory) {
@@ -318,7 +336,13 @@ async function runScenario(browser, scenario, directory) {
     for (const [index, step] of STEPS.entries()) {
       currentStep = step.id;
       const snapshot = await waitStep(page, index, step);
-      readyTimings.push({ id: step.id, readyMs: snapshot.readyMs });
+      readyTimings.push({
+        id: step.id,
+        readyMs: snapshot.readyMs,
+        ...(snapshot.learnerConfirmedStart
+          ? { learnerConfirmedStart: snapshot.learnerConfirmedStart }
+          : {}),
+      });
       if (
         ['world-coming-islands', 'world-mathematics', 'world-island-overview'].includes(step.id)
       ) {
@@ -423,6 +447,14 @@ async function runScenario(browser, scenario, directory) {
           'settings-reading',
           'settings-security',
           'development-status',
+          'discussion-overview-202610',
+          'workbench-overview-202610',
+          'laboratory-overview-202610',
+          'creative-overview-202610',
+          'pbl-overview-202610',
+          'max-overview-202610',
+          'development-overview-202610',
+          'shop-overview-202610',
         ].includes(step.id)
       ) {
         await page.screenshot({ path: path.join(directory, `${scenario.name}-${step.id}.png`) });
@@ -482,19 +514,26 @@ async function runScenario(browser, scenario, directory) {
         body: document.querySelector('#max-tour-body')?.textContent,
         status: document.querySelector('.max-tour-status')?.textContent,
         step: window.freeBbsMaxGuide?.activeStep,
+        learningStart: window.FreeBbsLearningStart?.currentPreference(),
+        visibleDialogs: [...document.querySelectorAll('dialog[open]')].map((node) => ({
+          id: node.id,
+          className: node.className,
+        })),
         viewport: { width: window.innerWidth, height: window.innerHeight, scrollY: window.scrollY },
         card: document.querySelector('.max-tour-card')?.getBoundingClientRect().toJSON(),
         next: document.querySelector('.max-tour .guide-primary')?.getBoundingClientRect().toJSON(),
-        cardStyle: {
-          top: document.querySelector('.max-tour-card')?.style.top,
-          className: document.querySelector('.max-tour-card')?.className,
-          height: getComputedStyle(document.querySelector('.max-tour-card')).height,
-          transform: getComputedStyle(document.querySelector('.max-tour-card')).transform,
-          dialogTop: document.querySelector('.max-tour')?.getBoundingClientRect().top,
-          dialogScrollTop: document.querySelector('.max-tour')?.scrollTop,
-          dialogScrollHeight: document.querySelector('.max-tour')?.scrollHeight,
-          computedTop: getComputedStyle(document.querySelector('.max-tour-card')).top,
-        },
+        cardStyle: document.querySelector('.max-tour-card')
+          ? {
+              top: document.querySelector('.max-tour-card')?.style.top,
+              className: document.querySelector('.max-tour-card')?.className,
+              height: getComputedStyle(document.querySelector('.max-tour-card')).height,
+              transform: getComputedStyle(document.querySelector('.max-tour-card')).transform,
+              dialogTop: document.querySelector('.max-tour')?.getBoundingClientRect().top,
+              dialogScrollTop: document.querySelector('.max-tour')?.scrollTop,
+              dialogScrollHeight: document.querySelector('.max-tour')?.scrollHeight,
+              computedTop: getComputedStyle(document.querySelector('.max-tour-card')).top,
+            }
+          : null,
       }))
       .catch(() => ({}));
     state.frames = await page

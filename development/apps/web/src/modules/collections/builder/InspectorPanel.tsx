@@ -1,10 +1,12 @@
 import type {
+  DepartmentDefinition,
   CollectionField,
   CollectionOutput,
   CollectionRule,
   CollectionSchema,
   TitleValidationConfig,
 } from '@freebbs-development/contracts';
+import { departmentById } from '@freebbs-development/contracts';
 import type { BuilderSelection } from './model.js';
 
 const kindNames: Record<CollectionRule['kind'], string> = {
@@ -21,6 +23,7 @@ const kindNames: Record<CollectionRule['kind'], string> = {
 
 export interface InspectorPanelProps {
   schema: CollectionSchema;
+  publisherDepartments?: readonly DepartmentDefinition[];
   selection: BuilderSelection;
   onSchemaChange: (schema: CollectionSchema) => void;
   onFieldChange: (field: CollectionField) => void;
@@ -43,6 +46,7 @@ export function InspectorPanel({
   onOutputChange,
   onDeleteOutput,
   onDownloadOutput,
+  publisherDepartments = [],
 }: InspectorPanelProps) {
   const field =
     selection.type === 'field' ? schema.fields.find((item) => item.id === selection.id) : undefined;
@@ -89,6 +93,35 @@ export function InspectorPanel({
               onChange={(event) => onSchemaChange({ ...schema, title: event.target.value })}
             />
           </label>
+          {publisherDepartments.length || schema.publisherDepartmentId ? (
+            <label>
+              发布部门
+              <select
+                value={schema.publisherDepartmentId ?? ''}
+                onChange={(event) => {
+                  const next = { ...schema };
+                  if (event.target.value)
+                    next.publisherDepartmentId = event.target.value as DepartmentDefinition['id'];
+                  else delete next.publisherDepartmentId;
+                  onSchemaChange(next);
+                }}
+              >
+                <option value="">选择发布部门</option>
+                {schema.publisherDepartmentId &&
+                !publisherDepartments.some((item) => item.id === schema.publisherDepartmentId) ? (
+                  <option value={schema.publisherDepartmentId} disabled>
+                    {departmentById(schema.publisherDepartmentId)?.name ?? '原发布部门'}
+                    （当前不可发布）
+                  </option>
+                ) : null}
+                {publisherDepartments.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.organizationName} · {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label>
             开场说明
             <textarea
@@ -97,6 +130,40 @@ export function InspectorPanel({
               onChange={(event) => onSchemaChange({ ...schema, description: event.target.value })}
             />
           </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={schema.publicRegistration ?? false}
+              onChange={(event) =>
+                onSchemaChange({ ...schema, publicRegistration: event.target.checked })
+              }
+            />
+            允许无需登录的公开填写
+          </label>
+          <small>
+            发布后生成独立公开链接；公开表单必须不限受众，不使用自动姓名学号字段。访客身份由本人填写。
+          </small>
+          <label>
+            名单投放
+            <select
+              value={schema.recipientMode ?? 'open'}
+              onChange={(event) =>
+                onSchemaChange({
+                  ...schema,
+                  recipientMode: event.target.value as NonNullable<
+                    CollectionSchema['recipientMode']
+                  >,
+                })
+              }
+            >
+              <option value="open">开放填写</option>
+              <option value="named">实名投放（登录姓名学号）</option>
+              <option value="restricted">仅导入名单可填写</option>
+            </select>
+          </label>
+          <small>
+            实名与限制名单通过登录身份核验，不采信答题者自行输入的学号。请保存草稿后到结果页导入名单。
+          </small>
           <div className="builder-inspector-tip">
             <span>⌁</span>
             <p>
@@ -214,6 +281,46 @@ export function InspectorPanel({
                 />
                 允许换行
               </label>
+            </div>
+          ) : rule.kind === 'schedule' &&
+            typeof rule.value === 'object' &&
+            !Array.isArray(rule.value) &&
+            !('mode' in rule.value) ? (
+            <div>
+              {(['start', 'end'] as const).map((boundary) => {
+                const schedule = rule.value as { start?: string; end?: string };
+                const persisted = schedule[boundary];
+                const date = persisted ? new Date(persisted) : null;
+                const localValue =
+                  date && Number.isFinite(date.getTime())
+                    ? new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+                        .toISOString()
+                        .slice(0, 16)
+                    : '';
+                return (
+                  <label key={boundary}>
+                    {boundary === 'start' ? '开放时间' : '截止时间'}
+                    <input
+                      type="datetime-local"
+                      value={localValue}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        onRuleChange(
+                          {
+                            ...rule,
+                            value: {
+                              ...schedule,
+                              [boundary]: value ? new Date(value).toISOString() : '',
+                            },
+                          },
+                          selection.type === 'rule' ? selection.fieldId : undefined,
+                        );
+                      }}
+                    />
+                  </label>
+                );
+              })}
+              <small>按当前浏览器时区填写；保存时转换为统一时间。</small>
             </div>
           ) : typeof rule.value === 'boolean' ? (
             <label className="builder-toggle">

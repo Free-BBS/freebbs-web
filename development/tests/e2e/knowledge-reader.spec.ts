@@ -12,7 +12,7 @@ test('knowledge cards support keyboard reading, refresh and return', async ({ pa
   await expect(page.getByLabel('经验正文')).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
-  await expect(page.locator('.sidebar a[aria-current="page"]')).toHaveText('经验库');
+  await expect(page.locator('.sidebar a[aria-current="page"]')).toHaveText('無尽书桌');
   await page.getByRole('link', { name: '返回经验库' }).click();
   await expect(page).toHaveURL(/\/knowledge$/);
 });
@@ -21,6 +21,7 @@ test('the preview area opens a card while editing stays on the directory', async
   await page.goto('./knowledge');
   const preview = page.locator('.knowledge-card-preview').first();
   await expect(preview).toBeVisible();
+  await preview.scrollIntoViewIfNeeded();
   const bounds = await preview.boundingBox();
   expect(bounds).not.toBeNull();
   await page.mouse.click(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);

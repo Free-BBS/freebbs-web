@@ -192,3 +192,13 @@ body.knowledge-page #knowledge-overview .knowledge-supplementary-card summary sm
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+.course-map-directory-heading > button {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--ui-line, #d4dcdd);
+  border-radius: 10px;
+  background: var(--ui-surface, #fff);
+  color: var(--ui-accent, #0b6572);
+  font: 600 0.95rem / 1.5 var(--font-ui);
+  cursor: pointer;
+}

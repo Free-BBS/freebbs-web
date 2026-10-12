@@ -1,8 +1,8 @@
 // Shared browser/CommonJS manifest. Append release records instead of reusing an
 // existing id: each account keeps a separate receipt for every published tour.
 (() => {
-  const GUIDE_VERSION = 'max-v4';
-  const LEGACY_GUIDE_VERSIONS = Object.freeze(['max-v1', 'max-v2', 'max-v3']);
+  const GUIDE_VERSION = 'max-v5';
+  const LEGACY_GUIDE_VERSIONS = Object.freeze(['max-v1', 'max-v2', 'max-v3', 'max-v4']);
   const RELEASES = Object.freeze([
     Object.freeze({
       id: 'guide-depth-2026-09',
@@ -87,6 +87,27 @@
         '从课程地图阅读知识点',
         '在讨论区交流问题与思路',
         '在工作台安排自己的时间',
+      ]),
+    }),
+    Object.freeze({
+      id: 'guide-pages-2026-10-08',
+      title: '一页一站，按需要认识其他功能',
+      description: '用八个简洁画面认识讨论、计划、实验与社区入口，不自动操作业务。',
+      publishedAt: '2026-10-08',
+      stepIds: Object.freeze([
+        'discussion-overview-202610',
+        'workbench-overview-202610',
+        'laboratory-overview-202610',
+        'creative-overview-202610',
+        'pbl-overview-202610',
+        'max-overview-202610',
+        'development-overview-202610',
+        'shop-overview-202610',
+      ]),
+      highlights: Object.freeze([
+        '学习导引保留，其他页面各用一个画面说明',
+        '区分已有功能与建设中的创意工坊、PBL 和发展端',
+        '可随时暂停、跳站或从手册重看，不代为发布、生成或兑换',
       ]),
     }),
   ]);

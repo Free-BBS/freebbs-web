@@ -26,6 +26,8 @@
     heading.textContent = title;
     node.append(heading);
     const close = document.createElement('button');
+    close.className = 'bbs-action';
+    close.dataset.actionTone = 'secondary';
     close.type = 'button';
     close.textContent = '关闭并清除';
     close.addEventListener('click', clearDialog);
@@ -48,6 +50,8 @@
     text.setAttribute('aria-label', '初始登录信息');
     text.value = `登录地址：${window.location.origin}/login\n用户名：${username}\n初始密码：${password}`;
     const copy = document.createElement('button');
+    copy.className = 'bbs-action';
+    copy.dataset.actionTone = 'secondary';
     copy.type = 'button';
     copy.textContent = '复制登录信息';
     copy.addEventListener('click', async () => {
@@ -68,7 +72,7 @@
     const node = createDialog(`重置教师 ${username} 的密码`);
     const form = document.createElement('form');
     form.innerHTML =
-      '<label class="auth-field"><span>管理员当前密码</span><input name="currentPassword" type="password" autocomplete="current-password" maxlength="128" required /></label><label class="auth-field"><span>教师新初始密码</span><input name="password" type="password" autocomplete="new-password" minlength="6" maxlength="128" required /></label><button type="button" data-generate-password>生成初始密码</button><p role="status" aria-live="polite"></p><button type="submit">确认重置</button>';
+      '<label class="auth-field"><span>管理员当前密码</span><input name="currentPassword" type="password" autocomplete="current-password" maxlength="128" required /></label><label class="auth-field"><span>教师新初始密码</span><input name="password" type="password" autocomplete="new-password" minlength="6" maxlength="128" required /></label><button class="bbs-action" data-action-tone="secondary" type="button" data-generate-password>生成初始密码</button><p role="status" aria-live="polite"></p><button class="bbs-action" data-action-tone="danger" type="submit">确认重置</button>';
     form.querySelector('[data-generate-password]').addEventListener('click', () => {
       const bytes = window.crypto.getRandomValues(new Uint8Array(16));
       form.elements.password.value = Array.from(bytes, (value) =>
@@ -125,6 +129,8 @@
         row.append(identity, label);
         for (const action of ['approve', 'reject']) {
           const button = document.createElement('button');
+          button.className = 'bbs-action';
+          button.dataset.actionTone = action === 'approve' ? 'primary' : 'danger';
           button.type = 'button';
           button.textContent = action === 'approve' ? '批准绑定' : '拒绝申请';
           button.addEventListener('click', async () => {

@@ -172,7 +172,7 @@ async function geometry(page) {
                     '我的工作台',
                     '实验室',
                     '创意工坊',
-                    'PBL计划',
+                    'PBL 计划',
                     '问问 Max',
                     '活动报名（试用）',
                   ],
@@ -286,7 +286,7 @@ async function geometry(page) {
       '我的工作台',
       '实验室',
       '创意工坊',
-      'PBL计划',
+      'PBL 计划',
       '问问 Max',
       '活动报名（试用）',
       '管理员端',
@@ -346,7 +346,19 @@ async function geometry(page) {
     for (const width of [1440, 390]) {
       await page.setViewport({ width, height: 1000 });
       await page.goto(`${origin}/laboratory`, { waitUntil: 'networkidle0' });
-      assert.equal(await page.$$eval('.laboratory-status.is-planned', (nodes) => nodes.length), 4);
+      assert.deepEqual(
+        await page.$$eval('.laboratory-enter', (nodes) =>
+          nodes.map((node) => node.getAttribute('href')),
+        ),
+        [
+          '/circuits',
+          '/tool-workshop',
+          '/code-lab?language=cpp',
+          '/code-lab?language=python',
+          '/code-lab?language=matlab',
+          '/code-lab?language=verilog',
+        ],
+      );
       await Promise.all([
         page.waitForNavigation({ waitUntil: 'networkidle0' }),
         page.click('.laboratory-enter'),

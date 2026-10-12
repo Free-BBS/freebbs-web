@@ -74,8 +74,8 @@
   cursor: pointer;
   border: 1px solid var(--ui-line);
   border-radius: 10px;
-  background: var(--ui-surface-soft);
-  color: var(--ui-text);
+  background: var(--action-fill, var(--ui-surface-soft));
+  color: var(--action-foreground, var(--ui-text));
 }
 .system-settings-rewards-page button:disabled {
   opacity: 0.55;

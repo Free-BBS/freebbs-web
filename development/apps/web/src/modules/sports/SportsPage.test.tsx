@@ -51,10 +51,7 @@ describe('SportsPage', () => {
     expect(request).toHaveBeenCalledTimes(1);
     expect(request).toHaveBeenCalledWith('/sports/teams');
     expect(screen.getByRole('heading', { name: '無体育' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /马杯立刻看/ })).toHaveAttribute(
-      'href',
-      '/sports/matches',
-    );
+    expect(screen.getByRole('link', { name: /懂無帝/ })).toHaveAttribute('href', '/sports/matches');
     expect(screen.getByRole('img', { name: '小羊参加接力跑' })).toBeInTheDocument();
     expect(request.mock.calls.flat().join(' ')).not.toContain('/members');
     expect(request.mock.calls.flat().join(' ')).not.toContain('/checkins');

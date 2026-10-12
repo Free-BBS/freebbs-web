@@ -35,8 +35,8 @@ body.inventory-page .bone-recycling-heading p {
 }
 .bone-text-button {
   border: 1px solid var(--ui-line);
-  background: var(--ui-surface);
-  color: var(--ui-text);
+  background: var(--action-fill, var(--ui-surface));
+  color: var(--action-foreground, var(--ui-text));
   border-radius: 10px;
   padding: 9px 12px;
   font: inherit;
@@ -116,8 +116,8 @@ body.inventory-page .bone-recycling-copy p {
   border: 1px solid transparent;
   padding: 10px 14px;
   border-radius: 11px;
-  background: var(--ui-accent);
-  color: var(--ui-accent-contrast);
+  background: var(--action-fill, var(--ui-accent));
+  color: var(--action-foreground, var(--ui-accent-contrast));
   font: inherit;
   font-size: 12px;
   font-weight: 700;
@@ -127,7 +127,7 @@ body.inventory-page .bone-recycling-copy p {
 /* Scope above the legacy main-content !important rules without changing the shell. */
 body.inventory-page .main-content .bone-sell-button,
 body.inventory-page .bone-sale-dialog .bone-sell-button {
-  color: var(--ui-accent-contrast) !important;
+  color: var(--action-foreground, var(--ui-accent-contrast)) !important;
 }
 body.inventory-page .main-content .bone-eyebrow,
 body.inventory-page .main-content .bone-recycling-copy strong,

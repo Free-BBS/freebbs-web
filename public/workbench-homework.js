@@ -41,6 +41,13 @@
   let syncStatus = '';
   let version = 0;
   let selection = 0;
+  let activeHomework = null;
+  let pendingDetailSelection = 0;
+  let pendingReturnHomework = null;
+  let returnRecheckPending = false;
+  let scopeVersion = 0;
+  let liveRevision = 0;
+  const liveRecords = new Map();
   let observedToken = app.userState.token;
   let observedOwner = app.userState.uid || app.userState.username || '';
   const base = '/workbench/connectors/tsinghua/homework/semesters/';
@@ -82,19 +89,30 @@
   }
   async function request(path, options = {}, blob = false) {
     const { token } = app.userState;
+    const owner = app.userState.uid || app.userState.username || '';
     if (!token || !app.userState.isLoggedIn) throw new Error('请先登录本站。');
     const response = await fetch(`${app.apiBaseUrl}${path}`, {
       ...options,
       credentials: 'include',
       headers: { Authorization: `Bearer ${token}`, ...(options.headers || {}) },
     });
-    if (token !== app.userState.token) throw new Error('账号已切换，请重新打开作业。');
+    if (
+      token !== app.userState.token ||
+      owner !== (app.userState.uid || app.userState.username || '') ||
+      !app.userState.isLoggedIn
+    )
+      throw new Error('账号已切换，请重新打开作业。');
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       throw new Error(error.message || '作业操作失败，请稍后重试。');
     }
     const result = blob ? await response.blob() : await response.json();
-    if (token !== app.userState.token) throw new Error('账号已切换，请重新打开作业。');
+    if (
+      token !== app.userState.token ||
+      owner !== (app.userState.uid || app.userState.username || '') ||
+      !app.userState.isLoggedIn
+    )
+      throw new Error('账号已切换，请重新打开作业。');
     return result;
   }
   function render() {
@@ -136,6 +154,7 @@
   async function load() {
     version += 1;
     const current = version;
+    const requestedLiveRevision = liveRevision;
     items = [];
     syncStatus = '';
     list.replaceChildren();
@@ -148,9 +167,15 @@
     try {
       const payload = await request(`${base}${encode(semester)}`);
       if (current !== version) return;
-      items = payload.items || [];
+      const merged = new Map((payload.items || []).map((item) => [item.sourceReference, item]));
+      for (const [reference, live] of liveRecords) {
+        if (live.revision > requestedLiveRevision)
+          merged.set(reference, { ...merged.get(reference), ...live.item });
+      }
+      items = [...merged.values()];
       syncStatus = payload.syncStatus || 'complete';
       render();
+      window.dispatchEvent(new CustomEvent('freebbs:homework-changed'));
       message.textContent = `${items.length} 项作业 · 同步于 ${date(payload.fetchedAt)}${payload.syncStatus === 'partial' ? ' · 部分同步，列表可能不完整' : ''}。新发布的作业请点击上方“立即同步”。`;
     } catch (error) {
       if (current === version) message.textContent = error.message;
@@ -208,6 +233,8 @@
   async function open(item) {
     selection += 1;
     const current = selection;
+    activeHomework = item;
+    pendingDetailSelection = current;
     detail.replaceChildren();
     detailMessage.textContent = '正在核对学堂详情…';
     document.getElementById('homework-dialog-title').textContent = item.title;
@@ -216,15 +243,23 @@
       const payload = await request(pathFor(item));
       if (current !== selection) return;
       renderDetail(payload.homework, current);
+      rememberLiveHomework(payload.homework);
+      render();
+      window.dispatchEvent(new CustomEvent('freebbs:homework-changed'));
       detailMessage.textContent = '';
     } catch (error) {
       if (current === selection) detailMessage.textContent = error.message;
+    } finally {
+      if (pendingDetailSelection === current) pendingDetailSelection = 0;
     }
   }
   function clear() {
     version += 1;
+    scopeVersion += 1;
+    liveRecords.clear();
     selection += 1;
     items = [];
+    pendingReturnHomework = null;
     syncStatus = '';
     semester = '';
     list.replaceChildren();
@@ -234,10 +269,15 @@
     message.textContent = '连接学堂并同步学期后显示作业。';
   }
   window.addEventListener('freebbs:campus-semester', (event) => {
-    selection += 1;
-    dialog.close();
-    detail.replaceChildren();
-    semester = event.detail?.id || '';
+    const nextSemester = event.detail?.id || '';
+    if (semester !== nextSemester) {
+      scopeVersion += 1;
+      liveRecords.clear();
+      selection += 1;
+      dialog.close();
+      detail.replaceChildren();
+    }
+    semester = nextSemester;
     course.replaceChildren(new Option('全部课程', ''));
     (event.detail?.courses || []).forEach((entry) =>
       course.append(new Option(entry.title, entry.sourceReference)),
@@ -251,7 +291,7 @@
   });
   window.addEventListener('freebbs:session-change', () => {
     const owner = app.userState.uid || app.userState.username || '';
-    if (app.userState.token === observedToken) return;
+    if (app.userState.token === observedToken && owner === observedOwner) return;
     observedToken = app.userState.token;
     if (!observedToken || owner !== observedOwner) clear();
     else {
@@ -272,6 +312,61 @@
   document.getElementById('homework-close').addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', () => {
     selection += 1;
+    activeHomework = null;
     detail.replaceChildren();
   });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    if (dialog.open && activeHomework && !pendingDetailSelection) open(activeHomework);
+    else if (pendingReturnHomework && !returnRecheckPending)
+      recheckReturnedHomework(pendingReturnHomework);
+  });
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('a[href]');
+    if (!link) return;
+    try {
+      const target = new URL(link.href);
+      if (target.origin !== 'https://learn.tsinghua.edu.cn') return;
+      const own = items.find(
+        (item) =>
+          item.providerCourseId === target.searchParams.get('wlkcid') &&
+          item.providerStudentHomeworkId === target.searchParams.get('xszyid'),
+      );
+      if (own) pendingReturnHomework = own;
+    } catch {
+      // Only recognized links belonging to a homework in this user's list count.
+    }
+  });
+  async function recheckReturnedHomework(item) {
+    returnRecheckPending = true;
+    const requestedSemester = semester;
+    const requestedScope = scopeVersion;
+    const requestedToken = app.userState.token;
+    const requestedOwner = app.userState.uid || app.userState.username || '';
+    const isCurrent = () =>
+      requestedScope === scopeVersion &&
+      semester === requestedSemester &&
+      app.userState.isLoggedIn &&
+      requestedToken === app.userState.token &&
+      requestedOwner === (app.userState.uid || app.userState.username || '');
+    try {
+      const payload = await request(pathFor(item));
+      if (!isCurrent()) return;
+      rememberLiveHomework(payload.homework);
+      pendingReturnHomework = null;
+      render();
+      window.dispatchEvent(new CustomEvent('freebbs:homework-changed'));
+    } catch (error) {
+      if (isCurrent()) message.textContent = error.message;
+    } finally {
+      returnRecheckPending = false;
+    }
+  }
+  function rememberLiveHomework(item) {
+    liveRevision += 1;
+    liveRecords.set(item.sourceReference, { revision: liveRevision, item });
+    items = items.map((entry) =>
+      entry.sourceReference === item.sourceReference ? { ...entry, ...item } : entry,
+    );
+  }
 })();

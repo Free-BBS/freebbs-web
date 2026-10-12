@@ -46,7 +46,7 @@
   .discussion-board-chip:active,
   .discussion-filter-chip:active,
   .discussion-reaction-button:active,
-  .settings-logout-button:active {
+  .settings-logout-button:active:where(:not(.bbs-action)) {
     transform: scale(0.96);
   }
 }

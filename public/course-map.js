@@ -56,6 +56,8 @@
     manualExpandedChapters: new Set(),
     manuallyCollapsedChapters: new Set(),
     learningNodeRevealed: false,
+    readerLayout: params.get('layout') === 'directory' ? 'directory' : 'structure',
+    structureController: null,
   };
 
   const canvas = document.getElementById('course-map-canvas');
@@ -177,11 +179,7 @@
   }
 
   function readLocalJson(key) {
-    try {
-      return JSON.parse(localStorage.getItem(key) || 'null');
-    } catch {
-      return null;
-    }
+    return window.FreeBbsLearningProgress?.read(localStorage, key, app?.userState) || {};
   }
 
   function getLearningNodeId() {
@@ -260,11 +258,9 @@
   }
 
   function chapterTitle(chapterId) {
-    if (courseSlug === 'signals' && SIGNALS_CHAPTER_TITLES[chapterId]) {
-      return SIGNALS_CHAPTER_TITLES[chapterId];
-    }
-    const chapterNumber = Number(chapterId.split('-').at(-1));
-    return Number.isFinite(chapterNumber) ? `第 ${chapterNumber} 章` : chapterId;
+    const fallback =
+      courseSlug === 'signals' ? SIGNALS_CHAPTER_TITLES[chapterId] || chapterId : chapterId;
+    return window.FreeBbsLearningContent?.chapterName(state.nodes, chapterId, fallback) || fallback;
   }
 
   function courseChapters() {
@@ -278,7 +274,9 @@
           nodes: [],
         });
       }
-      chaptersById.get(chapterId).nodes.push(node);
+      const chapter = chaptersById.get(chapterId);
+      if (window.FreeBbsLearningContent?.isChapterNode(node)) chapter.overview = node;
+      else chapter.nodes.push(node);
     });
 
     return [...chaptersById.values()]
@@ -613,7 +611,7 @@
               <strong id="course-map-directory-title">${escapeHtml(activeChapter.title)}</strong>
               <i>${activeChapter.nodes.length} 个知识点</i>
             </span>
-            <p>点击知识点，先了解再学习</p>
+            ${activeChapter.overview ? `<button type="button" data-reader-node-id="${escapeHtml(activeChapter.overview.id)}">章节概览与知识网络</button>` : '<p>点击知识点，先了解再学习</p>'}
           </header>
 
           ${
@@ -722,31 +720,15 @@
                   <button type="button" data-course-map-arrow-help-close aria-label="关闭知识关系说明">×</button>
                 </div>
                 <section class="course-map-focus-arrow-help-legend" aria-labelledby="course-map-arrow-help-legend-title">
-                  <h4 id="course-map-arrow-help-legend-title">6类设定的知识点关系</h4>
+                  <h4 id="course-map-arrow-help-legend-title">两类知识点连接</h4>
                   <dl>
                     <div>
-                      <dt>前置 · A → B</dt>
-                      <dd>A 是 B 的前置知识点，箭头由前置知识点指向后续知识点。</dd>
+                      <dt>课程学习顺序 · A → B</dt>
+                      <dd>B 是 A 在课程组维护的学习顺序中的后续知识点。</dd>
                     </div>
                     <div>
-                      <dt>推导 · A → B</dt>
-                      <dd>B 是由 A 推导得到的结果，箭头由推导起点指向推导结果。</dd>
-                    </div>
-                    <div>
-                      <dt>应用 · A → B</dt>
-                      <dd>B 是 A 的应用，箭头由基础知识点指向应用知识点。</dd>
-                    </div>
-                    <div>
-                      <dt>推广 · A → B</dt>
-                      <dd>B 是 A 的推广，箭头由基础或特殊形式指向推广或一般形式。</dd>
-                    </div>
-                    <div>
-                      <dt>对比 · A — B</dt>
-                      <dd>A 与 B 为对比关系；该关系无方向，用差异帮助理解。</dd>
-                    </div>
-                    <div>
-                      <dt>等价 · A — B</dt>
-                      <dd>A 与 B 在关系说明注明的条件下为等价关系；该关系无方向。</dd>
+                      <dt>补充关联 · A — B</dt>
+                      <dd>A 与 B 存在课程组确认的补充关联；该关系不表示学习先后。</dd>
                     </div>
                   </dl>
                 </section>
@@ -952,6 +934,28 @@
   }
 
   function renderReaderMap() {
+    state.structureController?.destroy();
+    state.structureController = null;
+    if (state.readerLayout === 'structure' && window.FreeBbsCourseStructure) {
+      canvas.classList.remove('is-reader-fit');
+      scroller?.classList.remove('is-reader-fit');
+      canvas.style.width = '100%';
+      canvas.style.height = 'auto';
+      canvas.replaceChildren();
+      state.structureController = window.FreeBbsCourseStructure.render({
+        container: canvas,
+        nodes: state.nodes,
+        edges: state.edges,
+        course: state.course,
+        onOpenOverview: (node) =>
+          overviewDrawer?.open(node, state.course, null, () =>
+            state.structureController?.focusNode(node.id),
+          ),
+      });
+      if (state.focusedNodeId) state.structureController.focusNode(state.focusedNodeId);
+      renderReaderHeader();
+      return;
+    }
     const viewModel = readerViewModel();
     const focusedChapter = viewModel.focusedChapterId
       ? viewModel.chapters.find((chapter) => chapter.id === viewModel.focusedChapterId)
@@ -1244,10 +1248,16 @@
   function renderReaderHeader() {
     document.title = `FREE-BBS - ${state.course.name}`;
     document.getElementById('course-reader-title').textContent = state.course.name;
+    const layoutToggle = document.getElementById('course-layout-toggle');
+    if (layoutToggle)
+      layoutToggle.textContent = state.readerLayout === 'structure' ? '目录视图' : '知识图';
     const summary = document.getElementById('course-reader-summary');
     summary.textContent = state.course.summary || state.course.description || '';
     summary.classList.toggle('hidden', !summary.textContent);
-    const learnedCount = state.nodes.filter((node) =>
+    const knowledgeNodes = state.nodes.filter(
+      (node) => !window.FreeBbsLearningContent?.isChapterNode(node),
+    );
+    const learnedCount = knowledgeNodes.filter((node) =>
       getNodeTags(node.id).some((tag) => tag.key === 'learned'),
     ).length;
     const meta = document.getElementById('course-reader-meta');
@@ -1255,7 +1265,7 @@
     [
       state.course.code,
       `${courseChapters().length} 个章节`,
-      `${state.nodes.length} 个知识点`,
+      `${knowledgeNodes.length} 个知识点`,
       learnedCount ? `已学习 ${learnedCount} 个` : '',
     ].forEach((value, index) => {
       if (!value) return;
@@ -1872,6 +1882,17 @@
     };
 
     const focusNode = (nodeId) => {
+      if (
+        window.FreeBbsCourseStructure &&
+        nodeById(nodeId) &&
+        !window.FreeBbsLearningContent?.isChapterNode(nodeById(nodeId))
+      ) {
+        state.focusedNodeId = nodeId;
+        state.readerLayout = 'structure';
+        renderReaderHeader();
+        renderMap();
+        return;
+      }
       if (state.focusedNodeId === nodeId) {
         return;
       }
@@ -2020,6 +2041,12 @@
       }
     });
 
+    document.getElementById('course-layout-toggle')?.addEventListener('click', (event) => {
+      state.readerLayout = state.readerLayout === 'structure' ? 'directory' : 'structure';
+      event.currentTarget.textContent = state.readerLayout === 'structure' ? '目录视图' : '知识图';
+      state.focusedNodeId = '';
+      renderMap();
+    });
     document.getElementById('course-map-directory-link')?.addEventListener('click', (event) => {
       if (!state.focusedNodeId) return;
       event.preventDefault();
@@ -2063,6 +2090,31 @@
     );
   }
 
+  let progressScope = window.FreeBbsLearningProgress?.scopedKey(
+    PROGRESS_STORAGE_KEY,
+    app?.userState,
+  );
+  window.addEventListener('freebbs:session-change', () => {
+    const scope = window.FreeBbsLearningProgress?.scopedKey(PROGRESS_STORAGE_KEY, app?.userState);
+    if (scope === progressScope) return;
+    progressScope = scope;
+    if (!mapPage || !state.course) return;
+    state.progress = readLocalJson(PROGRESS_STORAGE_KEY);
+    state.learningNodeId = getLearningNodeId();
+    state.activeChapterId =
+      chapterIdForNodeId(state.learningNodeId) || courseChapters()[0]?.id || '';
+    renderReaderHeader();
+    renderMap();
+  });
+  window.addEventListener('storage', (event) => {
+    if (event.key !== 'free_bbs_auth_token' && event.key !== null) return;
+    if (!mapPage || !state.course) return;
+    state.progress = {};
+    state.learningNodeId = '';
+    renderReaderHeader();
+    renderMap();
+  });
+
   async function initialize() {
     await app.sessionReady;
     try {
@@ -2081,6 +2133,17 @@
       }
       state.activeChapterId =
         chapterIdForNodeId(state.learningNodeId) || initialChapters[0]?.id || '';
+      const requestedFocus = params.get('focus');
+      if (
+        mapPage &&
+        requestedFocus &&
+        state.nodes.some((node) => node.id === requestedFocus) &&
+        !window.FreeBbsLearningContent?.isChapterNode(nodeById(requestedFocus))
+      ) {
+        state.focusedNodeId = requestedFocus;
+        state.readerLayout = 'structure';
+        state.activeChapterId = chapterIdForNodeId(requestedFocus);
+      }
       if (editorPage && !state.course.canEditMap) {
         renderEditorHeader();
         renderMap();

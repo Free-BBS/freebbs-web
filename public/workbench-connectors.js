@@ -31,6 +31,8 @@
   let directLoginAbortController = null;
   let directLoginPending = false;
   let autoSyncRequested = false;
+  let observedToken = null;
+  let lastForegroundRefreshAt = 0;
 
   function isLoggedIn() {
     const user = app.userState || {};
@@ -501,6 +503,8 @@
     clearCredentialExpiryTimer();
     requestVersion += 1;
     const version = requestVersion;
+    const ownerKey = getOwnerKey();
+    const token = app.userState?.token;
     if (!isLoggedIn()) {
       renderLoggedOut();
       return;
@@ -510,11 +514,21 @@
       const payload = await app.callApi('/workbench/connectors/tsinghua/status', {
         method: 'GET',
       });
-      if (version !== requestVersion) return;
+      if (
+        version !== requestVersion ||
+        ownerKey !== getOwnerKey() ||
+        token !== app.userState?.token
+      )
+        return;
       renderStatus(payload.connector);
       maybeAutoSync(payload.connector);
     } catch (error) {
-      if (version !== requestVersion) return;
+      if (
+        version !== requestVersion ||
+        ownerKey !== getOwnerKey() ||
+        token !== app.userState?.token
+      )
+        return;
       currentConnector = null;
       hideCredentialExpiry();
       elements.state.dataset.state = 'error';
@@ -749,12 +763,26 @@
 
   function syncSession() {
     const ownerKey = getOwnerKey();
-    if (ownerKey === observedOwnerKey) return;
+    const token = app.userState?.token;
+    if (ownerKey === observedOwnerKey && token === observedToken) return;
     closeDirectLoginDialog();
     autoSyncRequested = false;
     observedOwnerKey = ownerKey;
+    observedToken = token;
     loadStatus();
   }
+
+  function refreshForegroundConnection() {
+    if (!isLoggedIn() || document.hidden || Date.now() - lastForegroundRefreshAt < 1000) return;
+    lastForegroundRefreshAt = Date.now();
+    autoSyncRequested = false;
+    loadStatus();
+  }
+  document.addEventListener('visibilitychange', refreshForegroundConnection);
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) refreshForegroundConnection();
+  });
+  window.addEventListener('freebbs:session-change', syncSession);
 
   const authObserver = new MutationObserver(syncSession);
   authObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 
-import { MainSiteHeader } from './MainSiteHeader.js';
+import { MainSiteHeader, mainSiteTypography } from './MainSiteHeader.js';
 
 const user = {
   uid: 'u123456',
@@ -15,10 +15,22 @@ const user = {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   window.localStorage.clear();
 });
 
 describe('MainSiteHeader', () => {
+  it.each(['/events', '/events/activity-night-run'])(
+    'keeps the 萬事屋 shell title on existing activity route %s',
+    (route) => {
+      render(
+        <MemoryRouter initialEntries={[route]}>
+          <MainSiteHeader user={user} authMode="demo" themeMode="light" onToggleTheme={vi.fn()} />
+        </MemoryRouter>,
+      );
+      expect(screen.getByRole('heading', { name: '萬事屋' })).toBeInTheDocument();
+    },
+  );
   it('matches the learning shell controls and shows real balances', async () => {
     window.localStorage.setItem('free_bbs_auth_token', 'test-token');
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -41,7 +53,7 @@ describe('MainSiteHeader', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('heading', { name: '发展端 / 开始探索' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '無界广场' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '全站搜索' })).toHaveAttribute('href', '/search');
     expect(screen.getByRole('link', { name: '设置' })).toHaveAttribute('href', '/settings');
     expect(screen.queryByRole('button', { name: '退出' })).not.toBeInTheDocument();
@@ -156,6 +168,38 @@ describe('MainSiteHeader', () => {
     });
     expect(container.querySelector('.main-site-header')).toHaveStyle({
       '--main-site-ui-font': '"Segoe UI", "Microsoft YaHei", sans-serif',
+    });
+  });
+
+  it.each([
+    'null',
+    '[]',
+    '42',
+    '"text"',
+    '{broken',
+    '{"fontPreset":"__proto__","typeScale":"constructor"}',
+  ])('renders account controls with default typography when saved data is invalid: %s', (raw) => {
+    window.localStorage.setItem('free_bbs_typography_preferences', raw);
+    const { container } = render(
+      <MemoryRouter>
+        <MainSiteHeader user={user} authMode="demo" themeMode="light" onToggleTheme={vi.fn()} />
+      </MemoryRouter>,
+    );
+    expect(container.querySelector('.main-site-header')).toHaveStyle({
+      '--main-site-ui-size': '17.28px',
+      '--main-site-type-scale': '1.08',
+      '--main-site-ui-font': '"HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif',
+    });
+  });
+
+  it('keeps usable typography when accessing localStorage throws', () => {
+    vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => {
+      throw new Error('SecurityError');
+    });
+    expect(mainSiteTypography()).toMatchObject({
+      '--main-site-ui-size': '17.28px',
+      '--main-site-type-scale': '1.08',
+      '--main-site-ui-font': '"HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif',
     });
   });
 

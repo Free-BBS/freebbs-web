@@ -55,6 +55,23 @@ test('the validation job uses repository Node, Python 3 and the shared complete 
   assert.match(ci, /^node --test[^\n]* scripts\/mysql-isolation\.test\.js(?:\s|$)/m);
   assert.match(ci, /^node --check backend\/workbench-schedule-planner\.js\s*$/m);
   assert.match(ci, /^npm run test:workbench\s*$/m);
+  assert.match(ci, /^npm run test:ui-page-migration\s*$/m);
+  const commands = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).scripts;
+  for (const file of [
+    'typography-role-migration',
+    'action-page-migration',
+    'ui-state-page-migration',
+    'ai-dialog-loading',
+    'site-search-state',
+    'surveys-request-contract',
+  ]) {
+    assert.ok(commands['test:ui-page-migration'].includes(`scripts/${file}.test.js`));
+  }
+  for (const file of ['action-page-migration', 'ui-page-migration', 'search-state']) {
+    assert.ok(
+      commands['test:ui-page-migration:browser'].includes(`scripts/check-${file}-browser.js`),
+    );
+  }
 });
 
 test('the MySQL job installs dependencies before running a local socket-only disposable server', () => {

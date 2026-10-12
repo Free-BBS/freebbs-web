@@ -1,4 +1,5 @@
 import type { SocialOrganizationId } from './organizations.js';
+import type { DepartmentId } from './departments.js';
 
 export type RegistrationSource = 'learning_survey' | 'development_activity' | 'native_collection';
 
@@ -70,6 +71,9 @@ export interface CollectionField {
 }
 
 export interface CollectionSchema {
+  publicRegistration?: boolean;
+  recipientMode?: 'open' | 'named' | 'restricted';
+  publisherDepartmentId?: DepartmentId;
   title: string;
   description: string;
   fields: CollectionField[];
@@ -80,6 +84,7 @@ export interface CollectionSchema {
 export type CollectionStatus = 'draft' | 'published' | 'closed' | 'archived';
 
 export interface CollectionFormSummary {
+  publisherDepartmentId?: DepartmentId | null;
   id: string;
   title: string;
   description: string;
@@ -106,11 +111,17 @@ export interface CollectionResponseSummary {
 }
 
 export interface UnifiedRegistration {
+  startsAt?: string | null;
+  endsAt?: string | null;
+  activityStatus?: string;
+  requiresLogin?: boolean;
+  publisherDepartmentId?: DepartmentId | null;
   id: string;
   source: RegistrationSource;
   title: string;
   description: string;
   organizer: string;
+  organizationId?: SocialOrganizationId | null;
   coverUrl: string | null;
   opensAt: string | null;
   closesAt: string | null;

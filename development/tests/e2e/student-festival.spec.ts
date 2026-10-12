@@ -69,12 +69,12 @@ test('consented video can be approved, played, removed and explicitly approved a
   page,
 }, testInfo) => {
   test.setTimeout(60000);
-  const title = `学生节合奏-${Date.now()}`;
+  const title = `电子系春晚合奏-${Date.now()}`;
   await page.goto('./events');
-  await page.getByRole('link', { name: /我要上学生节/ }).click();
+  await page.getByRole('link', { name: /我要上电子系春晚/ }).click();
   await expect(page).toHaveURL(/\/events\/student-festival$/);
   await expect(
-    page.locator('.sidebar .module-nav a[aria-current="page"][href="/development/events"]'),
+    page.locator('.sidebar .module-nav a[aria-current="page"][href="/development/community"]'),
   ).toBeVisible();
   const id = await submit(page, title, true);
   await expect(page.getByRole('article', { name: title, exact: true })).not.toBeVisible();
@@ -88,7 +88,7 @@ test('consented video can be approved, played, removed and explicitly approved a
   await page.getByLabel('Demo user').selectOption('demo-tuanwei-lead');
   await page.getByRole('tab', { name: '投稿审核', exact: true }).click();
   let work = page.getByRole('article', { name: title, exact: true });
-  await work.getByLabel('审核说明').fill('欢迎登上学生节舞台');
+  await work.getByLabel('审核说明').fill('欢迎登上电子系春晚');
   await work.getByRole('button', { name: '通过并展示', exact: true }).click();
   await expect(work.getByRole('button', { name: '撤下展示', exact: true })).toBeVisible();
   await page.getByLabel('Demo user').selectOption('demo-student');

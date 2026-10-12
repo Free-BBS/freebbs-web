@@ -122,8 +122,8 @@ export function SportsPage({ client }: SportsPageProps) {
       <Link className="ma-cup-feature" to="/sports/matches">
         <span className="ma-cup-copy">
           <span className="eyebrow">首发栏目 · 实时赛程</span>
-          <strong>马杯立刻看</strong>
-          <span>左右滑动日期，在时间线上查看正在发生、即将开始和已经结束的比赛。</span>
+          <strong>懂無帝</strong>
+          <span>校园赛事一站关注，查看赛程、实时直播、比赛结果与精彩回放。</span>
           <b>
             进入赛程 <span aria-hidden="true">→</span>
           </b>

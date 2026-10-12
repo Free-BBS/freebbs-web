@@ -32,7 +32,7 @@ const principles = [
 ];
 
 test('workbench guide matches five mixed events and individual or batch confirmation', () => {
-  const copy = STEPS.find((step) => step.id === 'workbench-ai-plan').body;
+  const copy = ARCHIVED_STEPS.find((step) => step.id === 'workbench-ai-plan').body;
   assert.match(copy, /自动识别最多 5 个事件/);
   assert.match(copy, /普通安排与 DDL/);
   assert.match(copy, /逐项修改、分别确认.*全部确认/);
@@ -106,9 +106,21 @@ test('handbook focuses on three core cards and describes other features briefly'
   assert.doesNotMatch(guide, /id="guide-(?:missions|community|economy|horizon)"/);
   assert.deepEqual(
     STATIONS.map((station) => station.label),
-    ['开始', '学习', '讨论', '计划', '其他功能'],
+    [
+      '开始',
+      '学习',
+      '讨论区',
+      '工作台',
+      '实验室',
+      '创意工坊',
+      'PBL 计划',
+      '问问 Max',
+      '发展端',
+      '电磁场商城',
+      '其他功能',
+    ],
   );
-  assert.equal(STEPS.length, 16);
+  assert.equal(STEPS.length, 17);
   for (const tag of guide.matchAll(/<(h1|h2)[^>]*>([\s\S]*?)<\/\1>/g))
     assert.doesNotMatch(text(tag[2]), /。$/);
 });

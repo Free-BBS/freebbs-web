@@ -133,9 +133,13 @@
     type.onchange = update;
     update();
     const remove = el('button', '删除题目', 'secondary');
+    remove.classList.add('bbs-action');
+    remove.dataset.actionTone = 'danger';
     remove.type = 'button';
     remove.onclick = () => card.remove();
     const up = el('button', '上移', 'secondary');
+    up.classList.add('bbs-action');
+    up.dataset.actionTone = 'secondary';
     up.type = 'button';
     up.onclick = () => {
       if (card.previousElementSibling) questions.insertBefore(card, card.previousElementSibling);
@@ -192,8 +196,10 @@
     editor.hidden = false;
     editor.scrollIntoView({ behavior: 'smooth' });
   }
-  function button(text, action, secondary = true) {
+  function button(text, action, secondary = true, tone = secondary ? 'secondary' : 'primary') {
     const node = el('button', text, secondary ? 'secondary' : '');
+    node.classList.add('bbs-action');
+    node.dataset.actionTone = tone;
     const context = capture();
     node.onclick = async () => {
       if (!allowed || !current(context)) return;
@@ -354,19 +360,30 @@
         );
       if (s.repeatDays)
         actions.append(
-          button('停止后续重复', async () => {
-            await request(`/${s.id}/stop-repeat`, 'POST');
-            await load();
-            message('已停止此活动及已生成后续期次的重复发布；已发布期次仍可报名。');
-          }),
+          button(
+            '停止后续重复',
+            async () => {
+              await request(`/${s.id}/stop-repeat`, 'POST');
+              await load();
+              message('已停止此活动及已生成后续期次的重复发布；已发布期次仍可报名。');
+            },
+            true,
+            'danger',
+          ),
         );
       if (['draft', 'published'].includes(s.status))
         actions.append(
-          button('取消本期', async () => {
-            if (!window.confirm('取消后本期不再接受报名或抽签，已有报名将保留。确定取消？')) return;
-            await request(`/${s.id}/cancel`, 'POST');
-            await load();
-          }),
+          button(
+            '取消本期',
+            async () => {
+              if (!window.confirm('取消后本期不再接受报名或抽签，已有报名将保留。确定取消？'))
+                return;
+              await request(`/${s.id}/cancel`, 'POST');
+              await load();
+            },
+            true,
+            'danger',
+          ),
         );
       card.append(actions);
       list.append(card);

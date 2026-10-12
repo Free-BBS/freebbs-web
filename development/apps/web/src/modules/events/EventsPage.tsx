@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { ScopeRef, UserContext } from '@freebbs-development/contracts';
+import { departmentsForRoles, organizationForRole } from '@freebbs-development/contracts';
 import festivalStageCover from '../../assets/events/student-festival-stage.webp';
 import { EditorDrawer } from '../../components/EditorDrawer.js';
 import { ModulePageHeader } from '../../components/ModulePageHeader.js';
@@ -53,6 +54,9 @@ type PageUser = UserContext & { policies?: readonly PagePolicy[] };
 export interface EventsPageProps {
   client?: DevelopmentApi;
   user?: PageUser | null;
+  managementOnly?: boolean;
+  initialCreate?: boolean;
+  createRequest?: number;
 }
 
 const publicScope = { type: 'public', id: '*' } as const;
@@ -126,7 +130,17 @@ function permitted(
   return policies.some((policy) => policy.effect === 'allow');
 }
 
-export function EventsPage({ client, user: suppliedUser }: EventsPageProps) {
+export function canCreateActivity(user: PageUser | null): boolean {
+  return permitted(user, 'events.create', 'activity', publicScope);
+}
+
+export function EventsPage({
+  client,
+  user: suppliedUser,
+  managementOnly = false,
+  initialCreate = false,
+  createRequest = 0,
+}: EventsPageProps) {
   const defaultClient = useMemo(createApiClient, []);
   const activeClient = client ?? defaultClient;
   const auth = useOptionalAuth();
@@ -159,9 +173,24 @@ export function EventsPage({ client, user: suppliedUser }: EventsPageProps) {
   const [createOrganizationId, setCreateOrganizationId] = useState('');
   const [createStanding, setCreateStanding] = useState(false);
   const [supportNotes, setSupportNotes] = useState<Record<string, string>>({});
-  const organizationOptions = (user?.tags ?? [])
-    .map(({ key }) => (key.startsWith('social_org.') ? key.slice('social_org.'.length) : null))
-    .filter((value): value is string => value !== null);
+  const organizationOptions = [
+    ...new Set([
+      ...(user?.tags ?? [])
+        .map(({ key }) => (key.startsWith('social_org.') ? key.slice('social_org.'.length) : null))
+        .filter((value): value is string => value !== null),
+      ...(user?.roles ?? []).flatMap((role) => {
+        const organization = organizationForRole(role);
+        return organization ? [organization.organizationId] : [];
+      }),
+      ...departmentsForRoles(user?.roles ?? []).flatMap((department) =>
+        department.organizationId ? [department.organizationId] : [],
+      ),
+    ]),
+  ];
+  const canCreate = canCreateActivity(user);
+  useEffect(() => {
+    if ((initialCreate || createRequest > 0) && canCreate) setCreateDrawerOpen(true);
+  }, [initialCreate, createRequest, canCreate, user?.uid]);
 
   const loadActivities = useCallback(async () => {
     setLoadError(null);
@@ -354,52 +383,85 @@ export function EventsPage({ client, user: suppliedUser }: EventsPageProps) {
     );
   }
 
-  const canCreate = permitted(user, 'events.create', 'activity', publicScope);
+  const manageableActivities =
+    activities?.filter(
+      (activity) =>
+        !managementOnly ||
+        activity.ownerUid === user?.uid ||
+        (activity.organizationId && organizationOptions.includes(activity.organizationId)) ||
+        permitted(user, 'events.update', 'activity', activity.scope) ||
+        permitted(user, 'events.approve', 'activity', activity.scope),
+    ) ?? null;
 
   return (
-    <section className="module-page" aria-label="無活动">
-      <ModulePageHeader
-        title="無活动"
-        description="发现近期活动，查看安排与报名信息。"
-        actions={
-          <>
-            <FreeBbsMapAction />
-            {canCreate ? (
-              <button type="button" onClick={() => setCreateDrawerOpen(true)}>
-                创建活动
-              </button>
-            ) : null}
-          </>
-        }
-      />
+    <section
+      className={`module-page${managementOnly ? ' activity-management-events' : ''}`}
+      aria-label="萬事屋活动"
+    >
+      {managementOnly ? (
+        <header className="activity-management-section-heading">
+          <div>
+            <h2>常规活动</h2>
+            <p>从草稿到发布，持续更新介绍、动态与复盘。</p>
+          </div>
+          <span className="activity-section-count">{manageableActivities?.length ?? 0} 项活动</span>
+        </header>
+      ) : (
+        <>
+          <ModulePageHeader
+            title="萬事屋"
+            kicker="现有活动"
+            description="发现近期活动，查看安排与报名信息。"
+            actions={
+              <>
+                <Link to="/collections">返回萬事屋</Link>
+                <FreeBbsMapAction />
+                {canCreate ? (
+                  <button type="button" onClick={() => setCreateDrawerOpen(true)}>
+                    创建活动
+                  </button>
+                ) : null}
+              </>
+            }
+          />
 
-      <Link className="festival-entrance" to="/events/student-festival">
-        <div className="festival-entrance-copy">
-          <span className="festival-eyebrow">置顶 · 学生节特别企划</span>
-          <strong>我要上学生节</strong>
-          <p>分享你的节目与创意，让热爱走上舞台。</p>
-        </div>
-        <img
-          className="festival-entrance-cover"
-          src={festivalStageCover}
-          alt="小羊在学生节舞台演唱，台下小羊观众正在观看"
-        />
-        <span className="festival-entrance-arrow" aria-hidden="true">
-          ↗
-        </span>
-      </Link>
+          <Link className="festival-entrance" to="/events/student-festival">
+            <div className="festival-entrance-copy">
+              <span className="festival-eyebrow">置顶 · 春节特别企划</span>
+              <strong>我要上电子系春晚</strong>
+              <p>分享你的节目与创意，让热爱走上舞台。</p>
+            </div>
+            <img
+              className="festival-entrance-cover"
+              src={festivalStageCover}
+              alt="小羊在春晚舞台演唱，台下小羊观众正在观看"
+            />
+            <span className="festival-entrance-arrow" aria-hidden="true">
+              ↗
+            </span>
+          </Link>
 
-      <DailyDiscovery client={activeClient} uid={user?.uid ?? 'guest'} activities={activities} />
+          <DailyDiscovery
+            client={activeClient}
+            uid={user?.uid ?? 'guest'}
+            activities={activities}
+          />
+        </>
+      )}
 
       {feedback !== null && <p role="status">{feedback}</p>}
-      {actionError !== null && <p role="alert">{actionError}</p>}
+      {actionError !== null && editingId === null && !createDrawerOpen && (
+        <p role="alert">{actionError}</p>
+      )}
       {activities === null && loadError === null && <p role="status">正在加载活动…</p>}
       {loadError !== null && <p role="alert">活动加载失败：{loadError}</p>}
-      {activities?.length === 0 && <p>暂无活动</p>}
+      {manageableActivities?.length === 0 && (
+        <p className="activity-muted">暂无可管理的活动，创建后草稿会出现在这里。</p>
+      )}
 
-      {activities !== null && activities.length > 0 ? (
+      {manageableActivities !== null && manageableActivities.length > 0 ? (
         <div className="workbench-grid">
-          {activities.map((activity) => {
+          {manageableActivities.map((activity) => {
             const canUpdate = permitted(user, 'events.update', 'activity', activity.scope);
             const canCreateOwn =
               activity.ownerUid === user?.uid &&
@@ -438,19 +500,19 @@ export function EventsPage({ client, user: suppliedUser }: EventsPageProps) {
               >
                 <header className="event-card-top">
                   <time
-                    className="event-date-stamp"
+                    className={`event-date-stamp${activity.startsAt ? '' : ' is-undated'}`}
                     dateTime={activity.startsAt ?? undefined}
                     aria-label={formatStart(activity.startsAt)}
                   >
                     <span>
                       {activity.startsAt
                         ? new Date(activity.startsAt).getMonth() + 1 + '月'
-                        : '日期'}
+                        : '待定'}
                     </span>
                     <strong>
                       {activity.startsAt
                         ? String(new Date(activity.startsAt).getDate()).padStart(2, '0')
-                        : '待定'}
+                        : '—'}
                     </strong>
                   </time>
                   <div className="event-card-heading">
@@ -465,10 +527,15 @@ export function EventsPage({ client, user: suppliedUser }: EventsPageProps) {
                         <span className="event-standing-label">常设活动</span>
                       ) : null}
                     </div>
-                    <h3 id={headingId}>
-                      <Link to={'/events/' + encodeURIComponent(activity.id)}>
-                        {activity.title}
-                      </Link>
+                    <h3 id={headingId} title={activity.title}>
+                      {managementOnly &&
+                      !['published', 'finished', 'archived'].includes(activity.status) ? (
+                        activity.title
+                      ) : (
+                        <Link to={'/events/' + encodeURIComponent(activity.id)}>
+                          {activity.title}
+                        </Link>
+                      )}
                     </h3>
                   </div>
                 </header>
@@ -503,14 +570,24 @@ export function EventsPage({ client, user: suppliedUser }: EventsPageProps) {
                   </div>
                 </details>
                 <footer className="event-card-footer">
-                  <Link
-                    className="event-detail-link"
-                    to={'/events/' + encodeURIComponent(activity.id)}
-                  >
-                    查看详情与时间线 <span aria-hidden="true">↗</span>
-                  </Link>
+                  {!managementOnly ||
+                  ['published', 'finished', 'archived'].includes(activity.status) ? (
+                    <Link
+                      className="event-detail-link"
+                      to={
+                        managementOnly
+                          ? `/collections/activities/development_activity/${encodeURIComponent(activity.id)}`
+                          : `/events/${encodeURIComponent(activity.id)}`
+                      }
+                    >
+                      {managementOnly ? '编辑页面 · 动态与复盘' : '查看详情与时间线'}{' '}
+                      <span aria-hidden="true">↗</span>
+                    </Link>
+                  ) : (
+                    <span className="activity-muted">发布后可编辑活动页面、动态与复盘</span>
+                  )}
                   {registered ? <span className="event-registration-state">已报名</span> : null}
-                  {activity.status === 'published' && canRegister ? (
+                  {!managementOnly && activity.status === 'published' && canRegister ? (
                     registered && canCancel ? (
                       <button type="button" disabled={busy} onClick={() => void cancel(activity)}>
                         取消报名
@@ -522,8 +599,19 @@ export function EventsPage({ client, user: suppliedUser }: EventsPageProps) {
                     )
                   ) : null}
                 </footer>
-                {canManageCreatorEdge || canApprove || canSupport ? (
-                  <details className="event-card-disclosure event-card-management">
+                {(
+                  managementOnly
+                    ? (canManageCreatorEdge &&
+                        ['draft', 'pending', 'rejected', 'approved'].includes(activity.status)) ||
+                      (canApprove && activity.status === 'pending') ||
+                      canUpdate ||
+                      canSupport
+                    : canManageCreatorEdge || canApprove || canSupport
+                ) ? (
+                  <details
+                    className="event-card-disclosure event-card-management"
+                    open={managementOnly ? true : undefined}
+                  >
                     <summary>管理活动</summary>
                     <div className="event-management-body">
                       {canManageCreatorEdge &&
@@ -604,50 +692,52 @@ export function EventsPage({ client, user: suppliedUser }: EventsPageProps) {
                       </div>
 
                       {canUpdate || canSupport ? (
-                        <section aria-label={`${activity.title}技术支持`}>
-                          <h4>技术支持</h4>
-                          <p>
-                            {activity.technicalSupportStatus === 'not_requested'
-                              ? '尚未申请'
-                              : activity.technicalSupportStatus === 'requested'
-                                ? '等待确认'
-                                : '已确认'}
-                          </p>
-                          {activity.technicalSupportStatus !== 'confirmed' ? (
-                            <label>
-                              支持说明
-                              <input
-                                value={
-                                  supportNotes[activity.id] ?? activity.technicalSupportNote ?? ''
-                                }
-                                onChange={(event) =>
-                                  setSupportNotes((current) => ({
-                                    ...current,
-                                    [activity.id]: event.target.value,
-                                  }))
-                                }
-                              />
-                            </label>
-                          ) : null}
-                          {canUpdate && activity.technicalSupportStatus === 'not_requested' ? (
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => void updateSupport(activity, 'requested')}
-                            >
-                              申请技术支持
-                            </button>
-                          ) : null}
-                          {canSupport && activity.technicalSupportStatus === 'requested' ? (
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => void updateSupport(activity, 'confirmed')}
-                            >
-                              确认技术支持
-                            </button>
-                          ) : null}
-                        </section>
+                        <SupportDisclosure collapsible={managementOnly}>
+                          <section aria-label={`${activity.title}技术支持`}>
+                            <h4>技术支持</h4>
+                            <p>
+                              {activity.technicalSupportStatus === 'not_requested'
+                                ? '尚未申请'
+                                : activity.technicalSupportStatus === 'requested'
+                                  ? '等待确认'
+                                  : '已确认'}
+                            </p>
+                            {activity.technicalSupportStatus !== 'confirmed' ? (
+                              <label>
+                                支持说明
+                                <input
+                                  value={
+                                    supportNotes[activity.id] ?? activity.technicalSupportNote ?? ''
+                                  }
+                                  onChange={(event) =>
+                                    setSupportNotes((current) => ({
+                                      ...current,
+                                      [activity.id]: event.target.value,
+                                    }))
+                                  }
+                                />
+                              </label>
+                            ) : null}
+                            {canUpdate && activity.technicalSupportStatus === 'not_requested' ? (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void updateSupport(activity, 'requested')}
+                              >
+                                申请技术支持
+                              </button>
+                            ) : null}
+                            {canSupport && activity.technicalSupportStatus === 'requested' ? (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void updateSupport(activity, 'confirmed')}
+                              >
+                                确认技术支持
+                              </button>
+                            ) : null}
+                          </section>
+                        </SupportDisclosure>
                       ) : null}
                     </div>
                   </details>
@@ -661,14 +751,20 @@ export function EventsPage({ client, user: suppliedUser }: EventsPageProps) {
       <EditorDrawer
         open={editingId !== null || createDrawerOpen}
         title={editingId === null ? '创建活动草稿' : '编辑活动'}
-        description="活动资料在保存前会保留在此编辑器中。"
+        description="先填写资料并保存草稿，提交审核后发布。发布后的活动页面可以继续编辑介绍、动态与复盘。"
         onClose={() => {
           setEditingId(null);
           setCreateDrawerOpen(false);
         }}
       >
+        {actionError !== null ? (
+          <p className="activity-error" role="alert">
+            {actionError}
+          </p>
+        ) : null}
         {editingId !== null ? (
           <form
+            className="activity-compose-form"
             onSubmit={(event) => {
               const activity = activities?.find(({ id }) => id === editingId);
               if (activity !== undefined) void saveEdit(activity, event);
@@ -737,7 +833,11 @@ export function EventsPage({ client, user: suppliedUser }: EventsPageProps) {
             </button>
           </form>
         ) : (
-          <form onSubmit={createActivity}>
+          <form className="activity-compose-form" onSubmit={createActivity}>
+            <div className="activity-compose-note">
+              <strong>从一个想法开始</strong>
+              <p>活动名称和介绍必填，时间、地点与名额可以稍后补充。</p>
+            </div>
             <label>
               新活动名称
               <input value={createTitle} onChange={(event) => setCreateTitle(event.target.value)} />
@@ -815,7 +915,7 @@ export function EventsPage({ client, user: suppliedUser }: EventsPageProps) {
                 </select>
               </label>
             ) : null}
-            <label>
+            <label className="activity-compose-check">
               <input
                 type="checkbox"
                 checked={createStanding}
@@ -830,5 +930,22 @@ export function EventsPage({ client, user: suppliedUser }: EventsPageProps) {
         )}
       </EditorDrawer>
     </section>
+  );
+}
+
+function SupportDisclosure({
+  collapsible,
+  children,
+}: {
+  collapsible: boolean;
+  children: ReactNode;
+}) {
+  return collapsible ? (
+    <details className="event-support-disclosure">
+      <summary>技术支持</summary>
+      {children}
+    </details>
+  ) : (
+    <>{children}</>
   );
 }

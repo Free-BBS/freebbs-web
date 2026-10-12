@@ -9,7 +9,11 @@
   function stepsFor(version = VERSION) {
     if (!knownVersion(version)) throw new Error('导览版本无效');
     const release = releases.RELEASES.find((item) => item.id === version);
-    if (!release) return version === 'max-v3' ? stations.ARCHIVED_STEPS : STEPS;
+    if (!release) {
+      if (version === 'max-v3') return stations.ARCHIVED_STEPS;
+      if (version === 'max-v4') return stations.LEGACY_V4_STEPS;
+      return STEPS;
+    }
     const ids = release.stepIds || stations.RELEASE_STEP_IDS || [];
     return ids
       .map(
@@ -23,6 +27,7 @@
     return (
       value === VERSION ||
       value === 'max-v3' ||
+      value === 'max-v4' ||
       releases.RELEASES.some((release) => release.id === value)
     );
   }
@@ -1715,7 +1720,7 @@
         else if (!requested && isMember() && AUTO_WELCOME_PATHS.has(path())) {
           // The rebuilt guide starts afresh for every account. Historical
           // receipts remain on the server solely for visits/reward eligibility;
-          // their numeric positions must never be interpreted as v4 positions.
+          // their numeric positions must never be interpreted as v5 positions.
           if (!base.seenAt) automatic = true;
           else if (releases.LATEST_RELEASE) {
             const latest = progressClient(releases.LATEST_RELEASE.id);

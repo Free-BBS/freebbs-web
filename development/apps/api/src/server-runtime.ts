@@ -2,6 +2,7 @@ import type { Server } from 'node:http';
 
 import { createApp } from './app.js';
 import { createStore } from './core/database/create-store.js';
+import { startFeedScheduler } from './modules/connectors/feed.js';
 
 export interface ServerRuntimeDependencies {
   createApp: typeof createApp;
@@ -93,7 +94,11 @@ export async function startServerRuntime({
     throw error;
   }
 
+  const stopFeed = startFeedScheduler(
+    collectionsUploadDirectory ?? process.env.COLLECTIONS_UPLOAD_DIR,
+  );
   const close = onceAsync(async () => {
+    stopFeed();
     try {
       await closeServer(server);
     } finally {

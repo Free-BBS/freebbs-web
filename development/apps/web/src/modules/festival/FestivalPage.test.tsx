@@ -67,6 +67,21 @@ async function fillForm() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('FestivalPage', () => {
+  it('introduces the Spring Festival gala before submission and offers a direct submission entrance', async () => {
+    mount();
+    expect(screen.getByRole('heading', { name: '我要上电子系春晚' })).toBeInTheDocument();
+    const invitation = screen.getByRole('region', { name: '春节相约，让我们的故事上场' });
+    expect(invitation).toHaveTextContent('春节左右发布电子系春晚');
+    expect(invitation).toHaveTextContent('欢迎大家投稿任何题材的素材');
+    expect(screen.getByRole('link', { name: '开始投稿' })).toHaveAttribute(
+      'href',
+      '#festival-submit-heading',
+    );
+    expect(
+      invitation.compareDocumentPosition(screen.getByText('分享你的作品')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
   it('organizes the submission form into clear stages and names the selected video', async () => {
     mount();
     await screen.findByText('分享你的作品');

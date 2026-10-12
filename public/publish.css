@@ -35,8 +35,8 @@ body.publish-page {
   flex-shrink: 0;
 }
 .publish-submit {
-  background: var(--ui-accent, #087f8c) !important;
-  color: white !important;
+  background: var(--action-fill, var(--ui-accent, #087f8c)) !important;
+  color: var(--action-foreground, white) !important;
   border: 0 !important;
   border-radius: 20px !important;
   padding: 10px 24px !important;

@@ -1,4 +1,8 @@
-import { SOCIAL_ORGANIZATION_IDS } from '@freebbs-development/contracts';
+import {
+  SOCIAL_ORGANIZATION_IDS,
+  departmentById,
+  type DepartmentId,
+} from '@freebbs-development/contracts';
 import { z } from 'zod';
 
 const id = z.string().trim().min(1).max(128);
@@ -38,7 +42,47 @@ export const collectionRuleSchema = z
     ]),
     value: ruleValue,
   })
-  .strict();
+  .strict()
+  .superRefine((rule, context) => {
+    const invalid = () =>
+      context.addIssue({ code: z.ZodIssueCode.custom, message: '规则值无效', path: ['value'] });
+    if (
+      ['capacity', 'attempt_limit', 'upload_count', 'file_size'].includes(rule.kind) &&
+      (typeof rule.value !== 'number' || !Number.isSafeInteger(rule.value) || rule.value < 1)
+    )
+      invalid();
+    if (rule.kind === 'required' && typeof rule.value !== 'boolean') invalid();
+    if (rule.kind === 'file_types' && !Array.isArray(rule.value)) invalid();
+    if (
+      rule.kind === 'audience' &&
+      !(typeof rule.value === 'string' || rule.value === true || Array.isArray(rule.value))
+    )
+      invalid();
+    if (rule.kind === 'schedule') {
+      if (
+        !rule.value ||
+        typeof rule.value !== 'object' ||
+        Array.isArray(rule.value) ||
+        'mode' in rule.value
+      ) {
+        invalid();
+        return;
+      }
+      const boundaries = [rule.value.start, rule.value.end].filter((value): value is string =>
+        Boolean(value),
+      );
+      if (
+        boundaries.some((value) => !z.string().datetime({ offset: true }).safeParse(value).success)
+      )
+        invalid();
+      if (
+        rule.value.start &&
+        rule.value.end &&
+        Date.parse(rule.value.start) >= Date.parse(rule.value.end)
+      )
+        invalid();
+    }
+  });
 
 export const collectionFieldSchema = z
   .object({
@@ -65,6 +109,13 @@ export const collectionFieldSchema = z
 
 export const collectionSchema = z
   .object({
+    publicRegistration: z.boolean().optional(),
+    recipientMode: z.enum(['open', 'named', 'restricted']).optional(),
+    publisherDepartmentId: z
+      .string()
+      .refine((id) => departmentById(id) !== undefined)
+      .transform((id) => id as DepartmentId)
+      .optional(),
     title: z.string().trim().min(1).max(200),
     description: z.string().trim().max(5_000),
     fields: z.array(collectionFieldSchema).min(1).max(100),
@@ -83,7 +134,31 @@ export const collectionSchema = z
       .max(12)
       .default([]),
   })
-  .strict();
+  .strict()
+  .superRefine((schema, context) => {
+    const unique = (values: string[], path: (string | number)[]) => {
+      if (new Set(values).size !== values.length)
+        context.addIssue({ code: z.ZodIssueCode.custom, message: '模块或规则重复', path });
+    };
+    unique(
+      schema.fields.map((field) => field.id),
+      ['fields'],
+    );
+    unique(
+      schema.outputs.map((output) => output.id),
+      ['outputs'],
+    );
+    unique(
+      schema.formRules.map((rule) => rule.kind),
+      ['formRules'],
+    );
+    schema.fields.forEach((field, index) =>
+      unique(
+        field.rules.map((rule) => rule.kind),
+        ['fields', index, 'rules'],
+      ),
+    );
+  });
 
 export const formCreateSchema = z
   .object({

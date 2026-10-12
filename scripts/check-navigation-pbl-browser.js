@@ -99,7 +99,19 @@ async function main() {
         page.click('#mobile-learning-menu [href="/laboratory"]'),
       ]);
       assert.equal(new URL(page.url()).pathname, '/laboratory');
-      assert.equal(await page.$$eval('.laboratory-enter', (nodes) => nodes.length), 4);
+      assert.deepEqual(
+        await page.$$eval('.laboratory-enter', (nodes) =>
+          nodes.map((node) => node.getAttribute('href')),
+        ),
+        [
+          '/circuits',
+          '/tool-workshop',
+          '/code-lab?language=cpp',
+          '/code-lab?language=python',
+          '/code-lab?language=matlab',
+          '/code-lab?language=verilog',
+        ],
+      );
       await Promise.all([
         page.waitForNavigation({ waitUntil: 'networkidle0' }),
         page.click('.laboratory-enter[href="/tool-workshop"]'),

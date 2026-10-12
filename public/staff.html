@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <script src="/typography-preferences.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>FREE BBS 工作人员名单 | FREE BBS</title>
     <meta
@@ -170,7 +171,15 @@
               正在加载名录…
             </p>
           </div>
-          <button type="button" class="staff-retry" id="staff-retry" hidden>重新加载名录</button>
+          <button
+            type="button"
+            class="staff-retry bbs-action"
+            data-action-tone="secondary"
+            id="staff-retry"
+            hidden
+          >
+            重新加载名录
+          </button>
           <p class="staff-empty" id="staff-empty" hidden></p>
           <div class="staff-grid" id="staff-grid" aria-busy="true"></div>
           <noscript><p>请启用 JavaScript 查看工作人员名录。</p></noscript>
@@ -203,6 +212,8 @@
     </dialog>
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
+    <script src="/request-runtime.js"></script>
+    <script src="/ui-state.js"></script>
     <script src="/app.js"></script>
     <script src="/notifications.js"></script>
     <script src="/staff.js"></script>

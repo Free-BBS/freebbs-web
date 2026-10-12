@@ -25,14 +25,8 @@
 .development-commerce iframe {
   display: block;
   width: 100%;
-  height: max(700px, calc(100dvh - 230px));
-  border: 1px solid var(--border-subtle);
-  border-radius: 18px;
+  min-height: 360px;
+  border: 0;
+  border-radius: 0;
   background: var(--surface-page);
-}
-
-@media (max-width: 900px) {
-  .development-commerce iframe {
-    height: max(600px, calc(100dvh - 240px));
-  }
 }

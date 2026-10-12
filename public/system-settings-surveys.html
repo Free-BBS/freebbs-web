@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
+    <script src="/typography-preferences.js"></script>
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>报名活动管理 · FREE-BBS</title>
     <link rel="icon" href="/assets/favicon-v2-32.png" />
@@ -83,8 +84,10 @@
         <div id="message" role="status" aria-live="polite"></div>
         <div id="admin-content" class="hidden" data-admin-content hidden>
           <div class="actions">
-            <button id="new-survey">新建活动</button
-            ><button id="refresh" class="secondary">刷新列表</button>
+            <button class="bbs-action" data-action-tone="primary" id="new-survey">新建活动</button
+            ><button id="refresh" class="secondary bbs-action" data-action-tone="quiet">
+              刷新列表
+            </button>
           </div>
           <section id="editor" class="card" hidden>
             <h2 id="editor-title">新建活动</h2>
@@ -169,9 +172,23 @@
               <p class="muted">联系邮箱已内置为必填项，不需要再添加。</p>
               <div id="questions"></div>
               <div class="actions">
-                <button type="button" id="add-question" class="secondary">＋ 添加题目</button
-                ><button type="submit">保存草稿</button
-                ><button type="button" id="close-editor" class="secondary">关闭编辑</button>
+                <button
+                  type="button"
+                  id="add-question"
+                  class="secondary bbs-action"
+                  data-action-tone="secondary"
+                >
+                  ＋ 添加题目</button
+                ><button class="bbs-action" data-action-tone="primary" type="submit">
+                  保存草稿</button
+                ><button
+                  type="button"
+                  id="close-editor"
+                  class="secondary bbs-action"
+                  data-action-tone="secondary"
+                >
+                  关闭编辑
+                </button>
               </div>
             </form>
           </section>
@@ -179,17 +196,34 @@
             <h2>所有活动</h2>
             <div id="survey-list"></div>
             <nav class="actions" aria-label="活动管理分页">
-              <button id="previous-page" class="secondary" disabled>上一页</button>
+              <button
+                id="previous-page"
+                class="secondary bbs-action"
+                data-action-tone="secondary"
+                disabled
+              >
+                上一页
+              </button>
               <span id="page-status" role="status"></span>
-              <button id="next-page" class="secondary" disabled>下一页</button>
+              <button
+                id="next-page"
+                class="secondary bbs-action"
+                data-action-tone="secondary"
+                disabled
+              >
+                下一页
+              </button>
             </nav>
           </section>
           <section id="entries-panel" class="card" hidden>
             <h2>报名详情</h2>
             <p id="draw-audit" class="muted"></p>
             <div class="actions">
-              <button id="export" disabled>导出 CSV</button
-              ><button id="close-entries" class="secondary">关闭详情</button>
+              <button class="bbs-action" data-action-tone="primary" id="export" disabled>
+                导出 CSV</button
+              ><button id="close-entries" class="secondary bbs-action" data-action-tone="secondary">
+                关闭详情
+              </button>
             </div>
             <div id="entries-table" class="table-wrap"></div>
           </section>
@@ -199,6 +233,8 @@
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
     <script src="/surveys-common.js"></script>
+    <script src="/request-runtime.js"></script>
+    <script src="/ui-state.js"></script>
     <script src="/app.js"></script>
     <script src="/notifications.js"></script>
     <script src="/system-settings-surveys.js"></script>

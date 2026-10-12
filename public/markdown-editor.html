@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <script src="/typography-preferences.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>FREE-BBS - Markdown 编辑器</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-v2-32.png" />
@@ -82,7 +83,14 @@
             </div>
             <div class="course-map-actions">
               <a id="markdown-back-link" href="/course-map-editor">返回地图</a>
-              <button id="markdown-save" type="button">保存文档</button>
+              <button
+                class="bbs-action"
+                data-action-tone="primary"
+                id="markdown-save"
+                type="button"
+              >
+                保存文档
+              </button>
             </div>
           </header>
           <nav class="markdown-section-tabs" id="markdown-section-tabs" aria-label="内容分区">
@@ -133,6 +141,8 @@
     <script src="/vendor/katex/dist/contrib/auto-render.min.js"></script>
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
+    <script src="/request-runtime.js"></script>
+    <script src="/ui-state.js"></script>
     <script src="/app.js"></script>
     <script src="/markdown-editor.js"></script>
     <script src="/notifications.js"></script>

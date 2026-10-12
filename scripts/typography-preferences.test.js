@@ -50,8 +50,8 @@ test('knowledge font override is limited to book-style prose and preserves seman
     scoped,
     /^html\[data-font-preset='zhongsong-study'\] body\.knowledge-page #knowledge-body\s*\{[^{}]+\}$/,
   );
-  assert.match(scoped, /--font-zh-body:\s*'FREEBBS Knowledge Serif'/);
-  assert.match(scoped, /--font-zh-body-weight:\s*400/);
+  assert.match(scoped, /--font-zh-body:\s*var\(--font-knowledge-body\)/);
+  assert.match(scoped, /--font-zh-body-weight:\s*var\(--font-knowledge-body-weight\)/);
   assert.doesNotMatch(scoped, /--font-(?:zh-title|zh-ui|math|code|latin)\s*:/);
   assert.doesNotMatch(scoped, /!important/);
   assert.match(
@@ -162,6 +162,9 @@ function createHarness({ raw, storage = new Map(), failReads = false, failWrites
 }
 
 function runShared(harness) {
+  vm.runInContext(readPublic('typography-preferences.js'), harness.context, {
+    filename: 'typography-preferences.js',
+  });
   vm.runInContext(readPublic('typography.js'), harness.context, { filename: 'typography.js' });
   return harness.window.freeBbsTypography;
 }
@@ -169,6 +172,80 @@ function runShared(harness) {
 function preferences(api) {
   return { ...api.getCurrentPreferences() };
 }
+
+test('the shared font contract loads without DOM, storage or theme side effects', () => {
+  const context = vm.createContext({ window: {} });
+  vm.runInContext(readPublic('typography-preferences.js'), context);
+  const contract = context.freeBbsTypographyPreferences;
+  assert.ok(contract);
+  assert.equal(context.window.freeBbsTypographyPreferences, contract);
+  assert.equal(context.window.freeBbsTheme, undefined);
+  assert.equal(contract.STORAGE_KEY, storageKey);
+  assert.deepEqual(Object.keys(contract.presets), [
+    'transistor-lab',
+    'zhongsong-study',
+    'quantum-board',
+    'night-oscilloscope',
+  ]);
+  assert.deepEqual(Object.keys(contract.typeScalePresets), ['standard', 'comfortable', 'large']);
+  assert.equal(Object.isFrozen(contract.presets['transistor-lab'].fonts), true);
+  assert.equal(Object.isFrozen(contract.presets['zhongsong-study'].weights), true);
+  assert.equal(Object.isFrozen(contract.typeScalePresets.comfortable), true);
+  assert.equal(Reflect.set(contract.presets['transistor-lab'].fonts, 'zhBody', 'serif'), false);
+  assert.equal(Reflect.set(contract.typeScalePresets.comfortable, 'rootSize', '200%'), false);
+});
+
+test('all shared roles, reading weights and scales retain their existing values', () => {
+  const harness = createHarness();
+  const api = runShared(harness);
+  const contract = harness.context.freeBbsTypographyPreferences;
+  for (const fontPreset of Object.keys(api.presets)) {
+    for (const [typeScale, rootSize] of [
+      ['standard', '100%'],
+      ['comfortable', '108%'],
+      ['large', '118%'],
+    ]) {
+      const choice = { fontPreset, typeScale };
+      const variables = contract.cssVariables(choice);
+      api.applyPreferences(choice);
+      for (const [role, value] of Object.entries(variables))
+        assert.equal(harness.properties.get(role), value);
+      assert.equal(variables['--type-scale-rem'], rootSize);
+      assert.equal(
+        variables['--font-zh-body-weight'],
+        fontPreset === 'zhongsong-study' ? '300' : '400',
+      );
+      assert.equal(variables['--font-knowledge-body-weight'], '400');
+      assert.equal(
+        variables['--font-knowledge-body'],
+        '"FREEBBS Knowledge Serif", "Noto Serif SC", "STSong", "SimSun", serif',
+      );
+      assert.equal(
+        contract.mainSiteVariables(choice)['--font-ui'],
+        api.presets[fontPreset].fonts.zhUi,
+      );
+      assert.equal(
+        contract.mainSiteVariables(choice)['--font-display'],
+        api.presets[fontPreset].fonts.zhTitle,
+      );
+    }
+  }
+  assert.equal(harness.writes.length, 0);
+});
+
+test('missing font data keeps theme and settings usable without altering saved preferences', () => {
+  const harness = createHarness({ failReads: true, failWrites: true });
+  vm.runInContext(readPublic('typography.js'), harness.context);
+  assert.deepEqual(preferences(harness.window.freeBbsTypography), defaults);
+  assert.equal(harness.window.freeBbsTheme.getCurrentMode(), 'dark');
+  assert.equal(harness.window.freeBbsTheme.applyMode('light'), 'light');
+  const { fontControl, preview } = runAppControls(harness);
+  assert.equal(fontControl.value, defaults.fontPreset);
+  assert.ok(preview.textContent.includes('当前字体'));
+  assert.equal(harness.window.freeBbsTypography.savePreferences(defaults), false);
+  assert.equal(harness.properties.size, 0);
+  assert.equal(harness.writes.length, 0);
+});
 
 function runAppControls(harness) {
   const appSource = readPublic('app.js');
@@ -337,6 +414,14 @@ test('every app and authentication entry loads shared typography once before its
     if (controllerIndex === -1) continue;
     checked += 1;
     const shared = scripts.filter(({ src }) => src === 'typography.js');
+    const schema = scripts.filter(({ src }) => src === 'typography-preferences.js');
+    assert.equal(schema.length, 1, `${file}: load typography-preferences.js exactly once`);
+    assert.ok(
+      scripts.findIndex(({ src }) => src === 'typography-preferences.js') <
+        scripts.findIndex(({ src }) => src === 'typography.js'),
+      `${file}: the data contract must run before appearance initialization`,
+    );
+    assert.doesNotMatch(schema[0].tag, /\b(?:async|defer)\b/);
     assert.equal(shared.length, 1, `${file}: load typography.js exactly once`);
     assert.ok(
       scripts.findIndex(({ src }) => src === 'typography.js') < controllerIndex,
@@ -395,7 +480,7 @@ for (const [file, mode, endpoint] of [
       };
     }
     for (const { src } of pageScripts(page)) {
-      if (src === 'typography.js' || src === 'auth.js') {
+      if (['typography-preferences.js', 'typography.js', 'auth.js'].includes(src)) {
         vm.runInContext(readPublic(src), harness.context, { filename: src });
       }
     }

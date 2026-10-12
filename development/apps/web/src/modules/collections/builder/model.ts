@@ -83,7 +83,7 @@ export function defaultRule(kind: CollectionRuleKind): CollectionRule {
 }
 
 const outputLabels: Record<CollectionOutputKind, { label: string; fileName: string }> = {
-  excel: { label: 'Excel 兼容表格', fileName: '报名结果.csv' },
+  excel: { label: 'Excel 表格', fileName: '报名结果.xlsx' },
   csv: { label: 'CSV 数据表', fileName: '报名结果.csv' },
   json: { label: 'JSON 原始数据', fileName: '报名结果.json' },
   summary: { label: '自动汇总报告', fileName: '报名汇总.csv' },

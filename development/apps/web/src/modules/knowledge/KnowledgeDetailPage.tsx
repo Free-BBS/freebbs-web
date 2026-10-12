@@ -89,7 +89,14 @@ export function KnowledgeDetailPage({
         <article className="knowledge-reading-sheet">
           <header>
             <div className="record-metadata">
-              <span className="record-eyebrow">{entry.category || typeLabels[entry.type]}</span>
+              <span className="record-eyebrow">
+                {[
+                  entry.category === 'general' ? '通用资料' : entry.category,
+                  typeLabels[entry.type],
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
               <StatusBadge status={tone(entry.status)}>{statusLabels[entry.status]}</StatusBadge>
             </div>
             <h2>{entry.title}</h2>
@@ -102,6 +109,9 @@ export function KnowledgeDetailPage({
               ))}
               {entry.maintainedAt ? <span>更新于 {entry.maintainedAt.slice(0, 10)}</span> : null}
               {entry.maintainerUid ? <span>维护人：{entry.maintainerUid}</span> : null}
+              {entry.updatedAt && !entry.maintainedAt ? (
+                <span>更新于 {entry.updatedAt.slice(0, 10)}</span>
+              ) : null}
             </div>
           </header>
           <div className="knowledge-reading-body" aria-label="经验正文">

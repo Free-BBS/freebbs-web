@@ -1,0 +1,208 @@
+.publishing-page {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-ui);
+  max-width: 1180px;
+  margin: auto;
+  padding: 32px clamp(16px, 4vw, 48px);
+  color: var(--color-text);
+}
+.publishing-heading,
+.publishing-shelf {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+}
+.publishing-heading h1 {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: clamp(28px, 4vw, 44px);
+  margin: 12px 0;
+}
+.publishing-heading p,
+.publishing-meta,
+.publishing-card > span {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+}
+.publishing-page button,
+.publishing-shelf > a,
+.publishing-links a {
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 10px 16px;
+  background: var(--surface-muted);
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+}
+.publishing-page button:disabled {
+  opacity: 0.5;
+}
+.publishing-filters,
+.publishing-actions,
+.publishing-links,
+.publishing-tags,
+.publishing-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.publishing-filters {
+  margin: 24px 0;
+}
+.publishing-filters input {
+  flex: 1;
+  min-width: min(100%, 200px);
+}
+.publishing-page input,
+.publishing-page select,
+.publishing-page textarea {
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: inherit;
+  font: inherit;
+  max-width: 100%;
+}
+.publishing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 18px;
+}
+.publishing-card {
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+.publishing-card h2 {
+  line-height: 1.5;
+  font-size: 22px;
+  margin: 16px 0;
+}
+.publishing-card p {
+  color: var(--color-muted);
+  line-height: 1.75;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.publishing-card footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+.publishing-reader,
+.publishing-editor {
+  padding: clamp(20px, 4vw, 40px);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: 18px;
+  margin: 24px 0;
+}
+.publishing-reader h2 {
+  font-size: 32px;
+  overflow-wrap: anywhere;
+}
+.publishing-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.9;
+}
+.publishing-reader img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 700px;
+  margin: 24px auto;
+  border-radius: 12px;
+}
+.publishing-tags span {
+  font-size: 12px;
+  border-radius: 20px;
+  background: var(--surface-muted);
+  padding: 6px 10px;
+}
+.publishing-links,
+.publishing-actions {
+  margin-top: 24px;
+}
+.publishing-actions label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.publishing-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 20px;
+}
+.publishing-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+.publishing-form-grid .wide {
+  grid-column: 1/-1;
+}
+.publishing-editor small {
+  display: block;
+  margin-top: 12px;
+  color: var(--color-muted);
+}
+.publishing-error {
+  padding: 16px;
+  background: var(--surface-muted);
+  border-radius: 12px;
+}
+.publishing-empty {
+  padding: 40px;
+  text-align: center;
+  color: var(--color-muted);
+}
+.publishing-shelf {
+  padding: 24px;
+  background: var(--surface-muted);
+  border-radius: 16px;
+  margin: 24px 0;
+}
+.publishing-shelf h2 {
+  margin: 8px 0;
+}
+.publishing-shelf p {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+.publishing-shelf > a {
+  text-decoration: none;
+}
+@media (max-width: 620px) {
+  .publishing-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .publishing-heading button {
+    width: 100%;
+  }
+  .publishing-reader h2 {
+    font-size: 26px;
+  }
+}

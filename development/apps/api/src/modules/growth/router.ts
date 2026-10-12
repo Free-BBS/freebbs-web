@@ -1,8 +1,19 @@
-import type { ApiEnvelope, GrowthSummary } from '@freebbs-development/contracts';
+import {
+  departmentById,
+  type ApiEnvelope,
+  type GrowthSummary,
+  type CollaborationSpace,
+  type GrowthActivity,
+} from '@freebbs-development/contracts';
 import { Router } from 'express';
+import { resolve } from 'node:path';
 
 import type { AuthenticationResult, AuthHeaders } from '../../core/auth/auth-middleware.js';
 import type { DevelopmentStore } from '../../core/database/types.js';
+import { GROWTH_DOMAINS, growthAchievements } from './achievement-catalog.js';
+import { featureStorage } from '../../core/database/feature-storage.js';
+import type { ImportedExperience } from '../connectors/router.js';
+import { readActivityWorkspace } from '../events/workspace-storage.js';
 
 import type { Response } from 'express';
 
@@ -12,21 +23,12 @@ interface GrowthRouterOptions {
   store: DevelopmentStore;
   authenticate: Authenticate;
   now?: () => Date;
+  uploadDirectory?: string;
 }
-
-const DOMAINS = [
-  { key: 'arts', label: '文艺', organizations: ['arts_center'] },
-  { key: 'sports', label: '体育', organizations: ['sports_center'] },
-  { key: 'liaison', label: '联络', organizations: ['liaison_center'] },
-  { key: 'rights', label: '权益发展', organizations: ['rights_development_center'] },
-  { key: 'tuanwei', label: '团委', organizations: ['tuanwei'] },
-  { key: 'sast', label: '科创', organizations: ['sast'] },
-  { key: 'tms', label: 'TMS', organizations: ['tms'] },
-] as const;
 
 function domainFor(organizationId: string | null | undefined) {
   return (
-    DOMAINS.find((domain) => domain.organizations.some((id) => id === organizationId)) ?? {
+    GROWTH_DOMAINS.find((domain) => domain.organization === organizationId) ?? {
       key: 'other',
       label: '其他',
     }
@@ -44,6 +46,7 @@ export function createGrowthRouter({
   store,
   authenticate,
   now = () => new Date(),
+  uploadDirectory,
 }: GrowthRouterOptions) {
   const router = Router();
 
@@ -58,8 +61,8 @@ export function createGrowthRouter({
     );
     const completed = (
       await Promise.all(
-        registrations.map(async (registration) => {
-          const activity = await store.activities.get(registration.activityId);
+        [...new Set(registrations.map((record) => record.activityId))].map(async (activityId) => {
+          const activity = await store.activities.get(activityId);
           if (activity === null) return null;
           const hasEnded = activity.endsAt && Date.parse(activity.endsAt) <= now().getTime();
           if (
@@ -79,50 +82,86 @@ export function createGrowthRouter({
         }),
       )
     ).filter((activity): activity is NonNullable<typeof activity> => activity !== null);
-    completed.sort((left, right) => (right.endsAt ?? '').localeCompare(left.endsAt ?? ''));
+    const directory = uploadDirectory ?? resolve('.data/collection-uploads');
+    const attendance = (await featureStorage<CollaborationSpace>(directory, 'collaboration').list())
+      .filter((space) => space.kind === 'attendance')
+      .flatMap((space) =>
+        space.entries
+          .filter((entry) => entry.uid === identity.user.uid && entry.reviewStatus === 'approved')
+          .map((entry): GrowthActivity => ({
+            id: `attendance:${space.id}:${entry.id}`,
+            title: space.title,
+            endsAt: entry.updatedAt,
+            domain: space.teamId
+              ? 'sports'
+              : domainFor(departmentById(space.departmentId ?? '')?.organizationId).key,
+            status: 'verified',
+            source: 'verified_attendance',
+          })),
+      );
+    const map = (await featureStorage<ImportedExperience>(directory, 'map-experiences').list())
+      .filter(
+        (entry) =>
+          entry.uid === identity.user.uid && Date.parse(entry.occurredAt) <= now().getTime(),
+      )
+      .map((entry): GrowthActivity => ({
+        id: entry.id,
+        title: entry.title,
+        endsAt: entry.occurredAt,
+        domain: entry.domain,
+        status: 'verified',
+        source: 'map',
+      }));
+    const native: GrowthActivity[] = [];
+    const responses = (await store.collectionResponses.list({ query: identity.user.uid })).filter(
+      (entry) => entry.respondentUid === identity.user.uid && entry.status === 'submitted',
+    );
+    for (const id of new Set(responses.map((entry) => entry.formId))) {
+      const form = await store.collectionForms.get(id);
+      if (!form || form.status === 'draft') continue;
+      const workspace = await readActivityWorkspace(directory, 'native_collection', id);
+      if (
+        !workspace.schedule?.finished &&
+        !(workspace.schedule?.endsAt && Date.parse(workspace.schedule.endsAt) <= now().getTime())
+      )
+        continue;
+      native.push({
+        id: `collection:${id}`,
+        title: form.title,
+        endsAt: workspace.schedule.endsAt ?? null,
+        domain: domainFor(form.organizationId).key,
+        status: 'finished',
+        source: 'registration',
+      });
+    }
+    const activities: GrowthActivity[] = [...completed, ...native, ...attendance, ...map];
+    activities.sort((left, right) => (right.endsAt ?? '').localeCompare(left.endsAt ?? ''));
 
     const byDomain = [
-      ...DOMAINS.map(({ key, label }) => ({ key, label })),
+      ...GROWTH_DOMAINS.map(({ key, label }) => ({ key, label })),
       { key: 'other', label: '其他' },
     ].map(({ key, label }) => ({
       key,
       label,
-      count: completed.filter((activity) => activity.domain === key).length,
+      count: activities.filter((activity) => activity.domain === key).length,
     }));
-    const distinctDomains = byDomain.filter(({ count }) => count > 0).length;
-    const achievements = [
-      {
-        id: 'first-step',
-        title: '初次登场',
-        description: '完成 1 次活动报名经历',
-        progress: completed.length,
-        target: 1,
-      },
-      {
-        id: 'steady-explorer',
-        title: '持续探索',
-        description: '累积 5 次活动报名经历',
-        progress: completed.length,
-        target: 5,
-      },
-      {
-        id: 'multi-domain',
-        title: '跨界体验家',
-        description: '探索 3 个不同领域',
-        progress: distinctDomains,
-        target: 3,
-      },
-    ].map((achievement) => ({
-      ...achievement,
-      unlocked: achievement.progress >= achievement.target,
+    const achievements = growthAchievements(activities).map((entry) => ({
+      ...entry,
+      description: entry.description.replaceAll(
+        '已结束且未取消的活动报名记录',
+        '已结束报名或已核验参与记录',
+      ),
     }));
 
     const summary: GrowthSummary = {
-      total: completed.length,
-      basis: 'completed_registration',
+      total: activities.length,
+      basis: attendance.length + map.length > 0 ? 'mixed_participation' : 'completed_registration',
+      ...(attendance.length + map.length > 0
+        ? { verifiedTotal: attendance.length + map.length }
+        : {}),
       byDomain,
       achievements,
-      activities: completed,
+      activities,
     };
     response.status(200).json({
       data: summary,

@@ -51,15 +51,25 @@ describe('shared module presentation primitives', () => {
   it('renders loading, empty and error async states with appropriate semantics', () => {
     const { rerender } = render(<AsyncState state="loading" loadingLabel="正在加载经验" />);
     expect(screen.getByRole('status')).toHaveTextContent('正在加载经验');
+    expect(screen.getByRole('status')).toHaveAttribute('data-state', 'loading');
+    expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true');
 
     rerender(<AsyncState state="empty" title="暂无经验" description="创建第一条经验。" />);
     expect(screen.getByText('暂无经验').closest('[data-state]')).toHaveAttribute(
       'data-state',
       'empty',
     );
+    expect(screen.getByText('暂无经验').closest('[data-state]')).toHaveAttribute(
+      'aria-busy',
+      'false',
+    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 
     rerender(<AsyncState state="error" title="加载失败" description="请稍后重试。" />);
     expect(screen.getByRole('alert')).toHaveTextContent('加载失败');
+    expect(screen.getByRole('alert')).toHaveAttribute('data-state', 'error');
+    expect(screen.getByRole('alert')).toHaveAttribute('aria-busy', 'false');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('renders responsive records as a named list and owns its async states', () => {

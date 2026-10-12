@@ -25,6 +25,8 @@ test('preview HTML removes external font links and confines the mock bootstrap t
   assert.match(html, /window.location.port !== '3106'/);
   assert.match(html, /qa-only-3106-not-a-real-token/);
   assert.match(html, /src="\/__qa\/panel.js"/);
+  assert.equal(html.split('src="/request-runtime.js"').length - 1, 1);
+  assert.ok(html.indexOf('src="/request-runtime.js"') < html.indexOf('src="/app.js"'));
 });
 
 test('isolated preview serves mock APIs and processes avatars only in memory', async (t) => {
@@ -68,6 +70,7 @@ test('isolated preview serves mock APIs and processes avatars only in memory', a
         assert.equal(fs.readFileSync(path.join(__dirname, '../public', file), 'utf8'), source);
       }
       assert.equal((await (await get('/api/notifications/unread-count')).json()).unreadCount, 0);
+      assert.match(await (await get('/request-runtime.js')).text(), /function requestRuntime/);
       assert.deepEqual((await (await get('/api/course-upload/tokens')).json()).tokens, []);
     },
   );

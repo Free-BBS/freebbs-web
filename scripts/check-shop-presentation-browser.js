@@ -7,6 +7,9 @@ const path = require('node:path');
 const puppeteer = require(process.env.PUPPETEER_MODULE || 'puppeteer');
 const { createOnboardingPreview } = require('./preview-onboarding');
 const { beijingDay } = require('../backend/economy-policy');
+const enabledCatalog = require('../public/data/shop-items.json').items.filter(
+  (item) => item.enabled !== false,
+);
 
 async function loadStorefrontArtwork(page) {
   await page.$$eval('.shop-item-image img', async (images) => {
@@ -135,7 +138,7 @@ async function main() {
           );
           const result = await measure(page);
           assert.equal(result.overflow, 0, `${stage}: page overflow`);
-          assert.equal(result.count, 17, `${stage}: catalog changed`);
+          assert.equal(result.count, enabledCatalog.length, `${stage}: catalog incomplete`);
           assert.equal(result.missingArt, 0, `${stage}: broken art`);
           for (const sign of result.categorySigns) {
             assert.equal(sign.overflow, 0, `${stage}: category overflow ${sign.label}`);

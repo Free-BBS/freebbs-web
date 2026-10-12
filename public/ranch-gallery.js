@@ -262,7 +262,8 @@
       return;
     }
     if (!cloverCount) {
-      window.location.href = '/electromagnetic';
+      if (!window.freeBbsDevelopmentNavigate?.('/electromagnetic'))
+        window.location.href = '/electromagnetic';
       return;
     }
     submit('clover');

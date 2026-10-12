@@ -493,14 +493,26 @@ const rewardWrites = (view) =>
       event.type === 'request' && event.route === '/onboarding/reward' && event.method === 'POST',
   );
 
-test('v4 renders only the five concise chapters and follows core knowledge into discussion', async () => {
+test('v5 renders concise page chapters and follows core knowledge into discussion', async () => {
   const chapterView = fixture({ setup: (value) => value.node('#guide-station-list') });
   await settle();
   assert.deepEqual(
     chapterView.doc
       .querySelectorAll('[data-guide-station]')
       .map((node) => node.dataset.guideStation),
-    ['home', 'world', 'discussion', 'workbench', 'handbook'],
+    [
+      'home',
+      'world',
+      'discussion',
+      'workbench',
+      'laboratory',
+      'creative',
+      'pbl',
+      'max',
+      'development',
+      'shop',
+      'handbook',
+    ],
   );
   const index = indexOf('knowledge-reading');
   const step = STEPS[index];
@@ -513,14 +525,14 @@ test('v4 renders only the five concise chapters and follows core knowledge into 
     },
   });
   await settle();
-  assert.equal(view.controller.snapshot().version, 'max-v4');
+  assert.equal(view.controller.snapshot().version, 'max-v5');
   assert.equal(view.controller.activeStep, index);
   assert.equal(view.doc.getElementById('max-tour-body').textContent, step.body);
   const chapters = view.nodes.find((node) => node.classList.contains('max-tour-stations'));
-  assert.equal(chapters.children.length, 5);
+  assert.equal(chapters.children.length, 11);
   view.next.click();
   await settle();
-  assert.equal(view.server.get(VERSION).step, indexOf('discussion-filters'));
+  assert.equal(view.server.get(VERSION).step, indexOf('discussion-overview-202610'));
   const navigation = view.events.find((event) => event.type === 'navigate');
   assert.equal(new URL(navigation.url, view.win.location.origin).pathname, '/discussion');
   assert.equal(rewardWrites(view).length, 0);
@@ -1616,9 +1628,10 @@ test('archived v3: knowledge companions explains its small toggle before opening
   assert.equal(step.reveal.target, '#knowledge-chat-panel');
 });
 
-test('desktop and mobile discussion composer entries are highlighted without publishing or unmarked navigation', async () => {
-  const index = indexOf('discussion-composer');
-  const step = STEPS[index];
+test('archived v4: desktop and mobile discussion composer entries stay read-only', async () => {
+  const version = 'max-v4';
+  const index = indexOf('discussion-composer', version);
+  const step = stepsFor(version)[index];
   assert.equal(step.target, '#discussion-create-toggle, .mobile-publish');
   assert.deepEqual(step.prepare, [
     {
@@ -1630,8 +1643,8 @@ test('desktop and mobile discussion composer entries are highlighted without pub
   for (const mobile of [false, true]) {
     let entry;
     const view = fixture({
-      href: '/discussion?guideTour=1',
-      states: { [VERSION]: { status: 'in_progress', step: index } },
+      href: '/discussion?guideTour=1&guideVersion=max-v4',
+      states: { [version]: { status: 'in_progress', step: index } },
       setup(value) {
         value.node(step.prepare[0].whenMissing);
         const options = {
@@ -2528,17 +2541,19 @@ test('current and archived course tours prepare the real overview drawer before 
   }
 });
 
-test('the current detail-to-composer transition closes the post reader without opening an editor or publishing', async () => {
-  const index = indexOf('discussion-detail');
-  const next = STEPS[index + 1];
+test('archived v4: detail-to-composer closes the post reader without opening an editor or publishing', async () => {
+  const version = 'max-v4';
+  const previous = stepsFor(version);
+  const index = indexOf('discussion-detail', version);
+  const next = previous[index + 1];
   assert.equal(next.id, 'discussion-composer');
   let closes = 0;
   const view = fixture({
-    href: '/discussion?guideTour=1',
-    states: { [VERSION]: { status: 'in_progress', step: index } },
+    href: '/discussion?guideTour=1&guideVersion=max-v4',
+    states: { [version]: { status: 'in_progress', step: index } },
     setup(value) {
       value.doc.body.classList.add('post-reading');
-      const title = value.node(STEPS[index].target);
+      const title = value.node(previous[index].target);
       const entry = value.node(next.target, {
         tag: 'button',
         click: () => assert.fail('the tour must not open or publish a draft'),

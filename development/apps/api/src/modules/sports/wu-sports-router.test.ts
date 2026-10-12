@@ -33,6 +33,7 @@ describe('無体育 API', () => {
       title: '篮球小组赛',
       ownerUid: 'demo-sports-member',
       result: '电院 72–68 自动化',
+      liveUrl: 'https://example.com/live',
     });
     const list = await request(app)
       .get('/api/development/v1/sports/matches')
@@ -49,6 +50,95 @@ describe('無体育 API', () => {
         location: '操场',
       })
       .expect(403);
+  });
+
+  it('allows own live-link updates without changing other fields and rejects unauthorized edits', async () => {
+    const app = fixture();
+    const created = await request(app)
+      .post('/api/development/v1/sports/matches')
+      .set('X-Demo-User', 'demo-sports-member')
+      .send({
+        title: '决赛',
+        startsAt: '2026-10-08T05:00:00.000Z',
+        endsAt: '2026-10-08T07:00:00.000Z',
+        location: '篮球馆',
+        liveUrl: 'https://example.com/live',
+        replayUrl: 'https://example.com/replay',
+        result: '72–68',
+        coverUrl: 'https://example.com/cover.png',
+      })
+      .expect(201);
+    const original = created.body.data;
+    const path = `/api/development/v1/sports/matches/${original.id}`;
+    const changed = await request(app)
+      .patch(path)
+      .set('X-Demo-User', 'demo-sports-member')
+      .send({ liveUrl: 'https://example.com/new' })
+      .expect(200);
+    expect(changed.body.data).toMatchObject({
+      ...original,
+      liveUrl: 'https://example.com/new',
+      updatedAt: expect.any(String),
+    });
+    await request(app)
+      .patch(path)
+      .set('X-Demo-User', 'demo-student')
+      .send({ liveUrl: 'https://example.com/student' })
+      .expect(403);
+    await request(app)
+      .patch(path)
+      .set('X-Demo-User', 'demo-captain')
+      .send({ liveUrl: 'https://example.com/captain' })
+      .expect(403);
+    await request(app)
+      .patch(path)
+      .set('X-Demo-User', 'demo-sports-lead')
+      .send({ liveUrl: 'https://example.com/lead' })
+      .expect(200);
+  });
+
+  it('rejects unsafe media URLs for creation and updates without changing the match', async () => {
+    const app = fixture();
+    const input = {
+      title: '决赛',
+      startsAt: '2026-10-08T05:00:00.000Z',
+      endsAt: '2026-10-08T07:00:00.000Z',
+      location: '篮球馆',
+      liveUrl: 'https://example.com/live',
+    };
+    const created = await request(app)
+      .post('/api/development/v1/sports/matches')
+      .set('X-Demo-User', 'demo-sports-member')
+      .send(input)
+      .expect(201);
+    const before = await request(app)
+      .get('/api/development/v1/sports/matches')
+      .set('X-Demo-User', 'demo-student')
+      .expect(200);
+    for (const liveUrl of [
+      'javascript:alert(1)',
+      'data:text/html,unsafe',
+      'ftp://example.com/live',
+    ]) {
+      await request(app)
+        .post('/api/development/v1/sports/matches')
+        .set('X-Demo-User', 'demo-sports-member')
+        .send({ ...input, liveUrl })
+        .expect(400);
+      await request(app)
+        .patch(`/api/development/v1/sports/matches/${created.body.data.id}`)
+        .set('X-Demo-User', 'demo-sports-member')
+        .send({ liveUrl })
+        .expect(400);
+    }
+    const list = await request(app)
+      .get('/api/development/v1/sports/matches')
+      .set('X-Demo-User', 'demo-student')
+      .expect(200);
+    expect(list.body.data).toEqual(before.body.data);
+    expect(
+      list.body.data.find((match: { id: string }) => match.id === created.body.data.id),
+    ).toEqual(created.body.data);
   });
 
   it('lets a scoped captain maintain only their team showcase', async () => {
