@@ -41,8 +41,12 @@ html.development-embedded .main-content::before {
 }
 
 /* Standalone pasture pages reserve space for learning-site chrome with fixed insets.
-   In development the outer shell owns that chrome and the scene stays in normal flow. */
-html.development-embedded body:is(.ranch-page, .ranch-gallery-page) .main-content {
+   In development the outer shell owns that chrome and the scene stays in normal flow.
+   Outrank the standalone gallery shell so its height:auto cannot collapse this scene. */
+html.development-embedded body:is(.ranch-page, .ranch-gallery-page) .main-content,
+html.development-embedded
+  body.ranch-gallery-page:not(.auth-page-body)
+  .main-content.ranch-community-main {
   position: relative !important;
   inset: auto !important;
   width: 100% !important;
@@ -56,7 +60,10 @@ html.development-embedded body:is(.ranch-page, .ranch-gallery-page) .main-conten
     padding: 16px !important;
   }
 
-  html.development-embedded body:is(.ranch-page, .ranch-gallery-page) .main-content {
+  html.development-embedded body:is(.ranch-page, .ranch-gallery-page) .main-content,
+  html.development-embedded
+    body.ranch-gallery-page:not(.auth-page-body)
+    .main-content.ranch-community-main {
     height: 640px !important;
     padding: 0 !important;
   }

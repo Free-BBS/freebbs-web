@@ -13,6 +13,21 @@ function Editor({ onUpload }: { onUpload: Parameters<typeof ActivityBlockEditor>
   );
 }
 describe('activity block authoring', () => {
+  it('shows a shared content budget and warns while retaining an oversized draft', () => {
+    const blocks = Array.from({ length: 9 }, (_, index): ActivityContentBlock => ({
+      id: `p${index}`,
+      kind: 'paragraph',
+      text: '中'.repeat(19900),
+      assetId: null,
+      caption: '',
+    }));
+    render(
+      <ActivityBlockEditor blocks={blocks} assets={[]} onChange={vi.fn()} onUpload={vi.fn()} />,
+    );
+    expect(screen.getByText(/正文额度.*512 KiB/)).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(/正文.*超过.*512 KiB/);
+    expect(screen.getByLabelText('段落内容 1')).toHaveValue(blocks[0].text);
+  });
   it('keeps written content while moving, adding and removing sections', () => {
     render(<Editor onUpload={vi.fn()} />);
     fireEvent.change(screen.getByLabelText('段落内容 1'), { target: { value: '我的草稿' } });

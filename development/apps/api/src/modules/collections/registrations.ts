@@ -20,6 +20,8 @@ import { HttpError } from '../../core/errors/http-error.js';
 import { canManageCollection } from './access.js';
 import { readCollectionFeature } from './feature-storage.js';
 import { resolve } from 'node:path';
+import { activityWithWorkspaceSchedule } from '../events/workspace-schedule.js';
+import { readActivityWorkspace } from '../events/workspace-storage.js';
 
 export function actorOrganizations(actor: AuthorizationContext): SocialOrganizationId[] {
   return [
@@ -196,6 +198,7 @@ export async function registrationFromForm(
   const department = publisherDepartmentId ? departmentById(publisherDepartmentId) : undefined;
   const organizationId = department ? department.organizationId : form.organizationId;
   const active = responses.filter((item) => item.formId === form.id && item.status === 'submitted');
+  const { schedule } = await readActivityWorkspace(featureDirectory, 'native_collection', form.id);
   return {
     id: form.id,
     source: 'native_collection',
@@ -208,6 +211,8 @@ export async function registrationFromForm(
     publisherDepartmentId,
     coverUrl: form.coverUrl,
     ...effectiveWindow(form, version.schema),
+    startsAt: schedule?.startsAt ?? null,
+    endsAt: schedule?.endsAt ?? null,
     location: null,
     capacity: effectiveCapacity(form, version.schema),
     registrationCount: active.length + featureState.responses.length,
@@ -237,11 +242,14 @@ export async function listRegistrations(
     .filter((item): item is UnifiedRegistration => item !== null)
     .map((item) => ({
       ...item,
-      startsAt: item.opensAt,
-      endsAt: item.closesAt,
+      startsAt: item.startsAt ?? null,
+      endsAt: item.endsAt ?? null,
       detailsPath: `/collections/registrations?${new URLSearchParams({ focus: `native_collection:${item.id}`, ...(item.status === 'closed' ? { includePast: 'true' } : {}) }).toString()}`,
     }));
-  const events = activities
+  const scheduledActivities = await Promise.all(
+    activities.map((activity) => activityWithWorkspaceSchedule(activity, featureDirectory)),
+  );
+  const events = scheduledActivities
     .filter(
       (activity) =>
         (includePast || activity.status === 'published') &&

@@ -1,5 +1,4 @@
 import {
-  canEditDepartment,
   departmentForRoute,
   type ApiEnvelope,
   type DepartmentDefinition,
@@ -12,6 +11,7 @@ import { TextDecoder } from 'node:util';
 import { z } from 'zod';
 import type { Request, Response } from 'express';
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
+import { canEditDepartmentHome } from '../../core/authorization/scoped-department-edit.js';
 import { HttpError } from '../../core/errors/http-error.js';
 import type { CollectionsRouterOptions } from './router.js';
 import { readDepartmentHome, saveDepartmentHome } from './department-home-storage.js';
@@ -54,14 +54,14 @@ export function createDepartmentRouter(options: CollectionsRouterOptions): Route
     requireStorage();
     send(response, {
       ...(await readDepartmentHome(directory, department.id)),
-      canEdit: canEditDepartment(actor.roles, department.id),
+      canEdit: await canEditDepartmentHome(options.store, actor, department.id),
     });
   });
   router.put(
     `${route}/home`,
     async (request, response, next) => {
       const { actor, department } = await identity(request, response);
-      if (!canEditDepartment(actor.roles, department.id))
+      if (!(await canEditDepartmentHome(options.store, actor, department.id)))
         throw new HttpError(403, 'forbidden', '只有本部门成员可以更新主页');
       requireStorage();
       next();

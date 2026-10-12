@@ -1,5 +1,10 @@
 import { useState } from 'react';
 import type { ActivityContentBlock, ActivityWorkspaceAsset } from '@freebbs-development/contracts';
+import {
+  ACTIVITY_CONTENT_MAX_BYTES,
+  ACTIVITY_CONTENT_LIMIT_MESSAGE,
+  activityContentBytes,
+} from '@freebbs-development/contracts';
 
 interface Props {
   blocks: ActivityContentBlock[];
@@ -18,6 +23,8 @@ export function ActivityBlockEditor({
 }: Props) {
   const [uploading, setUploading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const usedBytes = activityContentBytes(blocks);
+  const overBudget = usedBytes > ACTIVITY_CONTENT_MAX_BYTES;
   function patch(id: string, change: Partial<ActivityContentBlock>) {
     onChange(blocks.map((block) => (block.id === id ? { ...block, ...change } : block)));
   }
@@ -46,6 +53,7 @@ export function ActivityBlockEditor({
           <button
             key={kind}
             type="button"
+            disabled={blocks.length >= 100}
             onClick={() =>
               onChange([
                 ...blocks,
@@ -57,6 +65,14 @@ export function ActivityBlockEditor({
           </button>
         ))}
       </div>
+      <small className="activity-muted">
+        正文额度：{Math.ceil(usedBytes / 1024)} / 512 KiB · 最多 100 个内容块
+      </small>
+      {overBudget ? (
+        <p role="alert" className="activity-error">
+          {ACTIVITY_CONTENT_LIMIT_MESSAGE}
+        </p>
+      ) : null}
       {error ? (
         <p role="alert" className="activity-error">
           {error}

@@ -51,7 +51,7 @@ for (const width of [1280, 390]) {
       .click();
     await expect(page).toHaveURL(new RegExp(`/development/profile\\?uid=${uid}`));
     await page.getByRole('button', { name: '返回发展端', exact: true }).click();
-    await expect(page).toHaveURL(/\/development\/dashboard$/);
+    await expect(page).toHaveURL(/\/development\/community$/);
   });
 }
 

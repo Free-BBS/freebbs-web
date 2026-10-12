@@ -16,6 +16,11 @@ import { activityDate, activityState, localDateTime, timelineDate } from './acti
 import { LearningSurveyRegistration } from './LearningSurveyRegistration.js';
 import { RegistrationGallery } from './RegistrationGallery.js';
 import { sourceLabels } from './source-adapters.js';
+import {
+  ACTIVITY_CONTENT_MAX_BYTES,
+  ACTIVITY_CONTENT_LIMIT_MESSAGE,
+  activityContentBytes,
+} from '@freebbs-development/contracts';
 import '../../styles/activity-workspace.css';
 
 export interface ActivityPageProps {
@@ -111,6 +116,13 @@ export function ActivityPage({ source, activityId, id, client }: ActivityPagePro
     published = false,
   ): Promise<boolean> {
     if (!workspace || busy) return false;
+    if (
+      Array.isArray(payload.blocks) &&
+      activityContentBytes(payload.blocks as ActivityContentBlock[]) > ACTIVITY_CONTENT_MAX_BYTES
+    ) {
+      setError(ACTIVITY_CONTENT_LIMIT_MESSAGE);
+      return false;
+    }
     const current = generation.current;
     setBusy(true);
     setError(null);

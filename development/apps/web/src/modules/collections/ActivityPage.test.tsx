@@ -46,6 +46,24 @@ function show(request: ApiClient['request']) {
   );
 }
 describe('independent activity workspace', () => {
+  it('keeps an oversized introduction draft and avoids a request that cannot be saved', async () => {
+    const intro = Array.from({ length: 9 }, (_, index) => ({
+      ...workspace.intro[0],
+      id: `p-${index}`,
+      text: '中'.repeat(19900),
+    }));
+    const request = vi.fn(async () => ({ ...workspace, intro }));
+    show(request as ApiClient['request']);
+    fireEvent.click(await screen.findByRole('button', { name: '编辑介绍' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存介绍' }));
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole('alert').some((alert) => alert.textContent?.includes('512 KiB')),
+      ).toBe(true),
+    );
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('段落内容 1')).toHaveValue(intro[0].text);
+  });
   it('edits an existing timeline update using its id and the current revision', async () => {
     const update = {
       id: 'update-one',

@@ -1,4 +1,10 @@
 import type { RegistrationSource, UnifiedRegistration } from './collections.js';
+export const ACTIVITY_CONTENT_MAX_BYTES = 512 * 1024;
+export const ACTIVITY_CONTENT_BODY_MAX_BYTES = ACTIVITY_CONTENT_MAX_BYTES + 16 * 1024;
+export const ACTIVITY_CONTENT_LIMIT_MESSAGE = '正文超过 512 KiB，请缩短内容后再保存。';
+export function activityContentBytes(blocks: readonly ActivityContentBlock[]): number {
+  return new TextEncoder().encode(JSON.stringify(blocks)).byteLength;
+}
 export interface ActivityContentBlock {
   id: string;
   kind: 'heading' | 'paragraph' | 'image' | 'video';

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import express from 'express';
 
 import type { ApiEnvelope } from '@freebbs-development/contracts';
+import { ACTIVITY_CONTENT_BODY_MAX_BYTES } from '@freebbs-development/contracts';
 import { loadEnvironment, type AuthMode } from './config/env.js';
 import type { AuthClient } from './core/auth/auth-client.js';
 import { createAuthMiddleware } from './core/auth/auth-middleware.js';
@@ -176,6 +177,19 @@ export function createApp(options: CreateAppOptions = {}) {
     }
     next();
   });
+  const activityContentParser = express.json({
+    limit: ACTIVITY_CONTENT_BODY_MAX_BYTES,
+    type: 'application/json',
+  });
+  app.use(`${API_BASE_PATH}/events/workspaces`, (request, response, next) => {
+    const contentRoute =
+      /^\/(learning_survey|development_activity|native_collection)\/[a-zA-Z0-9_-]{1,128}\/(intro|recaps(?:\/[a-zA-Z0-9_-]{1,128})?)\/?$/.test(
+        request.path,
+      );
+    if (contentRoute && ['PUT', 'POST'].includes(request.method)) {
+      activityContentParser(request, response, next);
+    } else next();
+  });
   app.use(express.json({ limit: '64kb', type: 'application/json' }));
 
   app.get(`${API_BASE_PATH}/health`, (_request, response) => {
@@ -268,7 +282,15 @@ export function createApp(options: CreateAppOptions = {}) {
         : {}),
     }),
   );
-  app.use(`${API_BASE_PATH}/events`, createEventsRouter({ store, authenticate }));
+  app.use(
+    `${API_BASE_PATH}/events`,
+    createEventsRouter({
+      store,
+      authenticate,
+      uploadDirectory:
+        options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
+    }),
+  );
   app.use(
     `${API_BASE_PATH}/collections`,
     createCollectionsRouter({

@@ -1,15 +1,10 @@
-import type {
-  RegistrationSource,
-  UnifiedRegistration,
-  SocialOrganizationId,
-} from '@freebbs-development/contracts';
-import { canEditDepartment, departmentsForRoles } from '@freebbs-development/contracts';
+import type { RegistrationSource, UnifiedRegistration } from '@freebbs-development/contracts';
 import type { DevelopmentStore } from '../../core/database/types.js';
 import type { AuthorizationContext } from '../../core/authorization/policy.js';
 import { HttpError } from '../../core/errors/http-error.js';
-import { canCreateCollection } from '../collections/access.js';
-import { listRegistrations, actorOrganizations } from '../collections/registrations.js';
+import { listRegistrations } from '../collections/registrations.js';
 import { authorize } from '../../core/authorization/authorize.js';
+import { canEditActivityWorkspace } from '../../core/authorization/scoped-department-edit.js';
 export type LearningSurveyResolver = (id: string) => Promise<{
   id: string;
   title: string;
@@ -57,7 +52,12 @@ export async function resolveWorkspaceActivity(
   id: string,
   learning: LearningSurveyResolver,
   uploadDirectory?: string,
-): Promise<{ activity: UnifiedRegistration; ended: boolean; canEdit: boolean }> {
+): Promise<{
+  activity: UnifiedRegistration;
+  ended: boolean;
+  canEdit: boolean;
+  sourceActivityStatus?: string;
+}> {
   if (source === 'learning_survey') {
     const survey = await learning(id);
     const closed =
@@ -103,50 +103,38 @@ export async function resolveWorkspaceActivity(
     (item) => item.source === source && item.id === id,
   );
   if (!activity) throw new HttpError(404, 'activity_not_found', '活动不存在或暂不可查看');
-  const superAdmin = actor.roles.includes('platform.super_admin');
   if (source === 'native_collection') {
-    const department = activity.publisherDepartmentId;
     const form = await store.collectionForms.get(id);
-    const own = department
-      ? canEditDepartment(actor.roles, department)
-      : activity.organizationId != null &&
-        actorOrganizations(actor).includes(activity.organizationId);
-    const denied =
-      authorize(actor, { action: 'events.update', resource: 'activity', scope: form?.scope })
-        .reason === 'explicit-deny';
+    if (!form) throw new HttpError(404, 'activity_not_found', '活动不存在');
     return {
-      activity: { ...activity, startsAt: null, endsAt: null },
+      activity,
       ended: false,
-      canEdit:
-        !denied &&
-        (superAdmin || (canCreateCollection(actor) && (own || form?.ownerUid === actor.uid))),
+      canEdit: await canEditActivityWorkspace(store, actor, {
+        source,
+        id,
+        scope: form.scope,
+        ownerUid: form.ownerUid,
+        departmentId: activity.publisherDepartmentId,
+        organizationId: activity.organizationId,
+      }),
     };
   }
   const record = await store.activities.get(id);
   if (!record) throw new HttpError(404, 'activity_not_found', '活动不存在');
+  const sourceFinished = ['finished', 'archived'].includes(record.status);
   const ended =
-    ['finished', 'archived'].includes(record.status) ||
-    (record.endsAt != null && Date.parse(record.endsAt) <= Date.now());
-  const own =
-    record.organizationId != null &&
-    actorOrganizations(actor).includes(record.organizationId as SocialOrganizationId);
-  const departmentMember = departmentsForRoles(actor.roles).some(
-    (item) => item.organizationId === record.organizationId,
-  );
-  const denied =
-    authorize(actor, { action: 'events.update', resource: 'activity', scope: record.scope })
-      .reason === 'explicit-deny';
+    sourceFinished || (activity.endsAt != null && Date.parse(activity.endsAt) <= Date.now());
   return {
-    activity: {
-      ...activity,
-      startsAt: record.startsAt ?? null,
-      endsAt: record.endsAt ?? null,
-      activityStatus: record.status,
-    },
+    activity,
     ended,
-    canEdit:
-      !denied &&
-      (superAdmin ||
-        (canCreateCollection(actor) && (own || departmentMember || record.ownerUid === actor.uid))),
+    sourceActivityStatus: record.status,
+    canEdit: await canEditActivityWorkspace(store, actor, {
+      source,
+      id,
+      scope: record.scope,
+      ownerUid: record.ownerUid,
+      departmentId: activity.publisherDepartmentId,
+      organizationId: record.organizationId,
+    }),
   };
 }

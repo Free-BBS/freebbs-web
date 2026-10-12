@@ -8,6 +8,11 @@ import type {
   ActivityWorkspace,
   ApiEnvelope,
 } from '@freebbs-development/contracts';
+import {
+  ACTIVITY_CONTENT_MAX_BYTES,
+  ACTIVITY_CONTENT_LIMIT_MESSAGE,
+  activityContentBytes,
+} from '@freebbs-development/contracts';
 import type { AuthenticationResult, AuthHeaders } from '../../core/auth/auth-middleware.js';
 import type { DevelopmentStore } from '../../core/database/types.js';
 import { HttpError } from '../../core/errors/http-error.js';
@@ -50,7 +55,10 @@ const blocks = z
       })
       .strict(),
   )
-  .max(100);
+  .max(100)
+  .refine((value) => activityContentBytes(value) <= ACTIVITY_CONTENT_MAX_BYTES, {
+    message: ACTIVITY_CONTENT_LIMIT_MESSAGE,
+  });
 const introSchema = z.object({ revision, blocks }).strict();
 const updateSchema = z
   .object({
@@ -71,7 +79,13 @@ const recapSchema = z
 function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
   if (!result.success)
-    throw new HttpError(400, 'invalid_request', '内容格式不正确，请检查日期、标题和段落');
+    throw new HttpError(
+      400,
+      'invalid_request',
+      result.error.issues.some(({ message }) => message === ACTIVITY_CONTENT_LIMIT_MESSAGE)
+        ? ACTIVITY_CONTENT_LIMIT_MESSAGE
+        : '内容格式不正确，请检查日期、标题和段落',
+    );
   return result.data;
 }
 function send<T>(response: Response, data: T, status = 200) {
@@ -126,7 +140,7 @@ export function createActivityWorkspaceRouter(options: Options): Router {
     const schedule = saved.schedule;
     if (!schedule) return ctx;
     const ended =
-      ctx.ended ||
+      ['finished', 'archived'].includes(ctx.sourceActivityStatus ?? '') ||
       schedule.finished ||
       (schedule.endsAt !== null && Date.parse(schedule.endsAt) <= Date.now());
     return {
@@ -136,7 +150,20 @@ export function createActivityWorkspaceRouter(options: Options): Router {
         ...ctx.activity,
         startsAt: schedule.startsAt,
         endsAt: schedule.endsAt,
-        activityStatus: ended ? 'finished' : ctx.activity.activityStatus,
+        activityStatus: ended
+          ? ctx.sourceActivityStatus === 'archived'
+            ? 'archived'
+            : 'finished'
+          : (ctx.sourceActivityStatus ?? ctx.activity.activityStatus),
+        ...(ctx.source === 'development_activity'
+          ? {
+              status:
+                ended ||
+                (ctx.activity.closesAt !== null && Date.parse(ctx.activity.closesAt) <= Date.now())
+                  ? ('closed' as const)
+                  : ('open' as const),
+            }
+          : {}),
       },
     };
   }
@@ -150,7 +177,7 @@ export function createActivityWorkspaceRouter(options: Options): Router {
       schedule: saved.schedule ?? {
         startsAt: ctx.activity.startsAt ?? null,
         endsAt: ctx.activity.endsAt ?? null,
-        finished: ctx.ended,
+        finished: ['finished', 'archived'].includes(ctx.sourceActivityStatus ?? ''),
       },
       intro: saved.intro,
       updates: saved.updates,
