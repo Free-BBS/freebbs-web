@@ -147,6 +147,7 @@
   margin: 13px 0 7px;
   font-size: 1.16rem;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 .information-card__body > p {
   display: -webkit-box;
