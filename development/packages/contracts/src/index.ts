@@ -14,3 +14,5 @@ export * from './departments.js';
 export * from './community.js';
 
 export * from './activity-workspace.js';
+export * from './collaboration.js';
+export * from './publishing.js';

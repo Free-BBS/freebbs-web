@@ -7,6 +7,8 @@ import { ApiError, createApiClient, type ApiClient } from '../../core/api/client
 import { formatCollectionDate, isRequired, numericRule } from './collection-utils.js';
 import { loadRegistrationCatalog, sourceLabels } from './source-adapters.js';
 import { LearningSurveyRegistration } from './LearningSurveyRegistration.js';
+import { MediaCapture } from '../../components/MediaCapture.js';
+import { VideoCoverEditor } from '../../components/VideoCoverEditor.js';
 import {
   filterRegistrationsByOrganization,
   parseRegistrationOrganizations,
@@ -18,14 +20,16 @@ export interface RegistrationGalleryProps {
   embedded?: boolean;
 }
 
-function FieldControl({
+export function FieldControl({
   field,
   value,
   onChange,
+  onCover,
 }: {
   field: CollectionField;
   value: unknown;
   onChange: (value: unknown) => void;
+  onCover?: (file: File) => void;
 }) {
   const id = `collection-field-${field.id}`;
   if (field.kind === 'instructions')
@@ -98,25 +102,37 @@ function FieldControl({
   if (['file', 'image', 'video', 'audio'].includes(field.kind)) {
     const count = numericRule(field, 'upload_count') ?? 1;
     return (
-      <input
-        id={id}
-        type="file"
-        multiple={count > 1}
-        accept={
-          field.kind === 'image'
-            ? 'image/*'
-            : field.kind === 'video'
-              ? 'video/*'
-              : field.kind === 'audio'
-                ? 'audio/*'
-                : undefined
-        }
-        required={isRequired(field)}
-        onChange={(event) => {
-          const files = Array.from(event.target.files ?? []).slice(0, count);
-          onChange(count > 1 ? files : (files[0] ?? null));
-        }}
-      />
+      <div>
+        <input
+          id={id}
+          type="file"
+          multiple={count > 1}
+          accept={
+            field.kind === 'image'
+              ? 'image/*'
+              : field.kind === 'video'
+                ? 'video/*'
+                : field.kind === 'audio'
+                  ? 'audio/*'
+                  : undefined
+          }
+          required={isRequired(field) && !value}
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? []).slice(0, count);
+            onChange(count > 1 ? files : (files[0] ?? null));
+          }}
+        />
+        {field.kind === 'audio' || field.kind === 'video' ? (
+          <MediaCapture kind={field.kind} onFile={(file) => onChange(count > 1 ? [file] : file)} />
+        ) : null}
+        {field.kind === 'video' &&
+        (value instanceof File || (Array.isArray(value) && value[0] instanceof File)) ? (
+          <VideoCoverEditor
+            file={value instanceof File ? value : (value[0] as File)}
+            onCover={onCover}
+          />
+        ) : null}
+      </div>
     );
   }
   return (
@@ -369,6 +385,27 @@ export function RegistrationGallery({
                               value={answers[field.id]}
                               onChange={(value) =>
                                 setAnswers((current) => ({ ...current, [field.id]: value }))
+                              }
+                              onCover={
+                                item.schema?.fields.some(
+                                  (candidate) =>
+                                    candidate.kind === 'image' && candidate.label.includes('封面'),
+                                )
+                                  ? (file) => {
+                                      const cover = item.schema!.fields.find(
+                                        (candidate) =>
+                                          candidate.kind === 'image' &&
+                                          candidate.label.includes('封面'),
+                                      )!;
+                                      setAnswers((current) => ({
+                                        ...current,
+                                        [cover.id]:
+                                          (numericRule(cover, 'upload_count') ?? 1) > 1
+                                            ? [file]
+                                            : file,
+                                      }));
+                                    }
+                                  : undefined
                               }
                             />
                           </label>

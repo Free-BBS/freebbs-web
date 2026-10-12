@@ -232,6 +232,21 @@ export function DepartmentHomepage({
         <p role="status">正在加载部门主页…</p>
       ) : null}
       <section className="department-activities" aria-label="相关活动">
+        <nav className="activity-authoring-actions" aria-label="部门协作">
+          <Link to={`/collections/tools?department=${encodeURIComponent(department.id)}`}>
+            时间与资料协作
+          </Link>
+          <Link to={`/collections/publishing?department=${encodeURIComponent(department.id)}`}>
+            部门文章与资料
+          </Link>
+          {canEdit && (
+            <Link
+              to={`/collections/publishing?department=${encodeURIComponent(department.id)}&category=article&create=1`}
+            >
+              撰写部门文章
+            </Link>
+          )}
+        </nav>
         <header>
           <h3>相关活动</h3>
           <div>

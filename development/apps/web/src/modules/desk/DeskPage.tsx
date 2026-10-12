@@ -12,7 +12,7 @@ const books = [
     title: '通知册',
     subtitle: '校园消息 · 正式发布',
     note: '值得留意的每一件事',
-    route: '/desk/information?filter=official',
+    route: '/desk/library/notices',
     module: 'information',
     number: '01',
   },
@@ -30,7 +30,7 @@ const books = [
     title: '经验集',
     subtitle: '流程 · 方法 · 过来人的经验',
     note: '让下一次开始更从容',
-    route: '/desk/knowledge',
+    route: '/desk/library/experience',
     module: 'knowledge',
     number: '03',
   },
@@ -70,11 +70,13 @@ export function DeskPage({
   const navigate = useNavigate();
   const [search] = useSearchParams();
   const reading = Boolean(children);
-  const knowledge = /^(?:\/desk)?\/knowledge(?:\/|$)/.test(location.pathname);
+  const knowledge =
+    location.pathname.includes('/library/experience') ||
+    /^(?:\/desk)?\/knowledge(?:\/|$)/.test(location.pathname);
   const selected = reading
     ? knowledge
       ? 'experience'
-      : search.get('filter') === 'official'
+      : search.get('filter') === 'official' || location.pathname.includes('/library/notices')
         ? 'notices'
         : 'consultations'
     : null;

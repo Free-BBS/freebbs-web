@@ -20,6 +20,8 @@ import { emptyCollectionSchema } from '../collection-utils.js';
 import { FieldLibrary } from './FieldLibrary.js';
 import { FormCanvas } from './FormCanvas.js';
 import { InspectorPanel } from './InspectorPanel.js';
+import { collectionTemplates, instantiateTemplate, type CollectionTemplate } from './templates.js';
+import '../completion.css';
 import {
   addField,
   addOutput,
@@ -68,6 +70,11 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
   const [customModules, setCustomModules] = useState<CollectionModuleDefinition[]>([]);
   const [busy, setBusy] = useState<'save' | 'publish' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [savedTemplates, setSavedTemplates] = useState<CollectionTemplate[]>([]);
+  const [templateChoice, setTemplateChoice] = useState('');
+  const [pendingTemplate, setPendingTemplate] = useState<CollectionTemplate | null>(null);
+  const [templateName, setTemplateName] = useState('');
+  const savedSchema = useRef(JSON.stringify(emptyCollectionSchema));
   const live = useRef(true);
   useEffect(() => {
     live.current = true;
@@ -89,11 +96,14 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
         if (!active) return;
         const roles = auth?.user?.roles ?? [];
         const managesLibrary = canMaintainModuleLibrary(roles);
-        setCanCreate(dashboard.canCreate);
-        setAllowed(dashboard.canCreate || managesLibrary);
+        setCanCreate(dashboard.canCreate || form?.canManage === true);
+        setAllowed(form ? form.canManage : dashboard.canCreate || managesLibrary);
         setCustomModules(modules);
-        if (form?.schema) setSchema({ ...form.schema, outputs: form.schema.outputs ?? [] });
-        else if (!formId && publisherDepartments.length === 1)
+        if (form?.schema) {
+          const loaded = { ...form.schema, outputs: form.schema.outputs ?? [] };
+          setSchema(loaded);
+          savedSchema.current = JSON.stringify(loaded);
+        } else if (!formId && publisherDepartments.length === 1)
           setSchema((current) => ({
             ...current,
             publisherDepartmentId: publisherDepartments[0]!.id,
@@ -107,6 +117,53 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
       active = false;
     };
   }, [api, auth?.user?.roles, formId]);
+  useEffect(() => {
+    let active = true;
+    api.request<CollectionTemplate[]>('/collections/templates').then(
+      (items) => {
+        if (active && Array.isArray(items)) setSavedTemplates(items);
+      },
+      () => undefined,
+    );
+    return () => {
+      active = false;
+    };
+  }, [api]);
+
+  function applyTemplate(template: CollectionTemplate) {
+    const next = instantiateTemplate(template.schema);
+    if (schema.publisherDepartmentId) next.publisherDepartmentId = schema.publisherDepartmentId;
+    setSchema(next);
+    setSelection({ type: 'form' });
+    setPendingTemplate(null);
+    setTemplateChoice('');
+    setMessage('模板已载入，检查内容后保存草稿。');
+  }
+  function chooseTemplate(id: string) {
+    setTemplateChoice(id);
+    const template = [...collectionTemplates, ...savedTemplates].find((item) => item.id === id);
+    if (!template) return;
+    if (JSON.stringify(schema) !== savedSchema.current) setPendingTemplate(template);
+    else applyTemplate(template);
+  }
+  async function saveTemplate() {
+    if (!templateName.trim() || busy) return;
+    setBusy('save');
+    try {
+      const saved = await api.request<CollectionTemplate>('/collections/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: templateName.trim(), schema }),
+      });
+      setSavedTemplates((items) => [...items, saved]);
+      setTemplateName('');
+      setMessage('模板已保存，可供所属部门下次复用。');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '模板保存失败');
+    } finally {
+      setBusy(null);
+    }
+  }
 
   const canManageLibrary = canMaintainModuleLibrary(roles);
 
@@ -223,6 +280,7 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
         if (!live.current) return;
         setMessage('表单已经发布，现在会出现在报名入口。');
       } else setMessage('草稿已经保存。');
+      savedSchema.current = JSON.stringify(schema);
     } catch (error) {
       if (live.current)
         setMessage(error instanceof ApiError ? error.message : '保存失败，请稍后重试。');
@@ -275,6 +333,78 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
           </button>
         </div>
       </header>
+      <div className="collection-template-toolbar">
+        <label>
+          复用部门模板{' '}
+          <select value={templateChoice} onChange={(event) => chooseTemplate(event.target.value)}>
+            <option value="">选择模板</option>
+            <optgroup label="常用模板">
+              {collectionTemplates.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="部门已保存">
+              {savedTemplates.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </label>
+        <input
+          aria-label="新模板名称"
+          value={templateName}
+          onChange={(event) => setTemplateName(event.target.value)}
+          placeholder="模板名称"
+        />
+        <button
+          type="button"
+          disabled={!canCreate || busy !== null || !templateName.trim()}
+          onClick={() => void saveTemplate()}
+        >
+          保存为部门模板
+        </button>
+        {formId && (
+          <Link to={`/collections/results/${encodeURIComponent(formId)}`}>结果与名单</Link>
+        )}
+        {formId && schema.publicRegistration && (
+          <Link
+            to={`/collections/public/${encodeURIComponent(formId)}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            公开填写链接（发布后可用）
+          </Link>
+        )}
+      </div>
+      {pendingTemplate && (
+        <div className="builder-module-dialog-backdrop">
+          <section
+            className="builder-module-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="template-confirm-title"
+          >
+            <h2 id="template-confirm-title">替换未保存的内容？</h2>
+            <p>载入“{pendingTemplate.name}”会替换当前表单。请先保存需要保留的草稿。</p>
+            <button
+              type="button"
+              onClick={() => {
+                setPendingTemplate(null);
+                setTemplateChoice('');
+              }}
+            >
+              保留当前内容
+            </button>
+            <button type="button" onClick={() => applyTemplate(pendingTemplate)}>
+              确认载入模板
+            </button>
+          </section>
+        </div>
+      )}
       <div className="builder-layout">
         <FieldLibrary
           onAddField={(kind, template) => add(kind, undefined, template)}

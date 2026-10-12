@@ -27,6 +27,7 @@ export async function readableWorkspaces(
         workspace.source,
         workspace.activityId,
         learning,
+        directory,
       );
       result.push(workspace);
     } catch (error) {

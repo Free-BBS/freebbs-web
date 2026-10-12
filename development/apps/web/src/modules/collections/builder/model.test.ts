@@ -43,7 +43,7 @@ describe('collection builder model', () => {
   it('creates editable result outputs and a readable title validation preset', () => {
     const withOutput = addOutput(emptyCollectionSchema, 'excel');
     expect(withOutput.outputs).toEqual([
-      expect.objectContaining({ kind: 'excel', label: 'Excel 兼容表格' }),
+      expect.objectContaining({ kind: 'excel', label: 'Excel 表格', fileName: '报名结果.xlsx' }),
     ]);
     expect(defaultRule('title_pattern').value).toMatchObject({
       mode: 'title_validation',

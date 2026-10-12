@@ -19,6 +19,7 @@ describe('workbench route lifecycle', () => {
       if (path === '/collections/forms/existing')
         return {
           id: 'existing',
+          canManage: true,
           schema: { ...emptyCollectionSchema, title: 'Existing department draft' },
         };
       return [];

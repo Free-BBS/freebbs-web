@@ -1,3 +1,4 @@
+import ExcelJS from 'exceljs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -235,10 +236,18 @@ describe('collections API', () => {
     const exported = await request(app)
       .get(`/api/development/v1/collections/forms/${created.body.data.id}/exports/excel-output`)
       .set(member)
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
       .expect(200);
     expect(exported.headers['content-disposition']).toContain('attachment');
-    expect(exported.text).toContain('想说的话');
-    expect(exported.text).toContain('期待参加');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(exported.body);
+    expect(workbook.worksheets[0]?.getCell('C1').value).toBe('想说的话');
+    expect(workbook.worksheets[0]?.getCell('C2').value).toBe('期待参加');
   });
 
   it('applies readable title validation rules with specific feedback', async () => {
@@ -476,10 +485,17 @@ describe('collections API', () => {
     const exported = await request(app)
       .get(`/api/development/v1/collections/forms/${form.id}/exports/excel-output`)
       .set(member)
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
       .expect(200);
-    expect(exported.text).toContain('想说的话');
-    expect(exported.text).not.toContain('未发布的新问题');
-    expect(exported.text).toContain(`"'  =2+2"`);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(exported.body);
+    expect(workbook.worksheets[0]?.getCell('C1').value).toBe('想说的话');
+    expect(workbook.worksheets[0]?.getCell('C2').value).toBe('  =2+2');
   });
 
   it('binds uploads to uploader, form and field and validates canonical metadata', async () => {

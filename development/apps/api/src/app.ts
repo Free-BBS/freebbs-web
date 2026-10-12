@@ -33,6 +33,10 @@ import { createInformationRouter } from './modules/information/router.js';
 import { createKnowledgeRouter } from './modules/knowledge/router.js';
 import { createLiaisonRouter } from './modules/liaison/router.js';
 import { createSportsRouter } from './modules/sports/router.js';
+import { createCollaborationRouter } from './modules/collaboration/router.js';
+import { createMaterialsRouter } from './modules/collaboration/materials.js';
+import { createConnectorsRouter } from './modules/connectors/router.js';
+import { createPublishingRouter } from './modules/publishing/router.js';
 
 import type { ErrorRequestHandler, NextFunction, Request, Response } from 'express';
 
@@ -294,7 +298,54 @@ export function createApp(options: CreateAppOptions = {}) {
     }),
   );
   app.use(`${API_BASE_PATH}/community`, createCommunityRouter({ store, authenticate }));
-  app.use(`${API_BASE_PATH}/growth`, createGrowthRouter({ store, authenticate }));
+  app.use(
+    `${API_BASE_PATH}/collaboration`,
+    createCollaborationRouter({
+      store,
+      authenticate,
+      nodeEnvironment: environment.nodeEnv,
+      uploadDirectory:
+        options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
+    }),
+  );
+  app.use(
+    `${API_BASE_PATH}/collaboration`,
+    createMaterialsRouter({
+      authenticate,
+      nodeEnvironment: environment.nodeEnv,
+      uploadDirectory:
+        options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
+    }),
+  );
+  app.use(
+    `${API_BASE_PATH}/connectors`,
+    createConnectorsRouter({
+      authenticate,
+      environment: environmentSource,
+      nodeEnvironment: environment.nodeEnv,
+      uploadDirectory:
+        options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
+    }),
+  );
+  app.use(
+    `${API_BASE_PATH}/publishing`,
+    createPublishingRouter({
+      store,
+      authenticate,
+      nodeEnvironment: environment.nodeEnv,
+      uploadDirectory:
+        options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
+    }),
+  );
+  app.use(
+    `${API_BASE_PATH}/growth`,
+    createGrowthRouter({
+      store,
+      authenticate,
+      uploadDirectory:
+        options.collectionsUploadDirectory ?? environmentSource.COLLECTIONS_UPLOAD_DIR,
+    }),
+  );
   app.use(`${API_BASE_PATH}/finance`, createFinanceRouter({ store, authenticate }));
   app.use(`${API_BASE_PATH}/knowledge`, createKnowledgeRouter({ store, authenticate }));
   app.use(`${API_BASE_PATH}/information`, createInformationRouter({ store, authenticate }));

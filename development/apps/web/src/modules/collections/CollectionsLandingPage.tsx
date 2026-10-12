@@ -133,6 +133,9 @@ export function CollectionsLandingPage({ client }: CollectionsLandingPageProps) 
           <Link className="collections-activity-link" to="/collections/activities">
             全部活动
           </Link>
+          <Link className="collections-activity-link" to="/collections/tools">
+            协作工具
+          </Link>
           <Link className="collections-wallet" to="/collections/mine" aria-label="我的报名">
             <span aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">

@@ -56,6 +56,7 @@ export async function resolveWorkspaceActivity(
   source: RegistrationSource,
   id: string,
   learning: LearningSurveyResolver,
+  uploadDirectory?: string,
 ): Promise<{ activity: UnifiedRegistration; ended: boolean; canEdit: boolean }> {
   if (source === 'learning_survey') {
     const survey = await learning(id);
@@ -98,7 +99,7 @@ export async function resolveWorkspaceActivity(
       },
     };
   }
-  const activity = (await listRegistrations(store, actor, true)).find(
+  const activity = (await listRegistrations(store, actor, true, uploadDirectory)).find(
     (item) => item.source === source && item.id === id,
   );
   if (!activity) throw new HttpError(404, 'activity_not_found', '活动不存在或暂不可查看');

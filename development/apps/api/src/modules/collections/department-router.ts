@@ -125,9 +125,9 @@ export function createDepartmentRouter(options: CollectionsRouterOptions): Route
   );
   router.get(`${route}/activities`, async (request, response) => {
     const { actor, department } = await identity(request, response);
-    const items = (await listRegistrations(options.store, actor, true)).filter(
-      ({ publisherDepartmentId }) => publisherDepartmentId === department.id,
-    );
+    const items = (
+      await listRegistrations(options.store, actor, true, options.uploadDirectory)
+    ).filter(({ publisherDepartmentId }) => publisherDepartmentId === department.id);
     const payload: DepartmentActivitiesPayload = {
       departmentId: department.id,
       active: items.filter(({ status }) => status !== 'closed'),

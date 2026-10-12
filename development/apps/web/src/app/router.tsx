@@ -46,6 +46,11 @@ import {
   type ModuleStateOverrides,
 } from './module-manifests.js';
 import { OrganizationsPage } from '../modules/organizations/OrganizationsPage.js';
+import { CollaborationPage } from '../modules/collaboration/CollaborationPage.js';
+import { PublicRegistrationPage } from '../modules/collections/PublicRegistrationPage.js';
+import { CollectionResultsPage } from '../modules/collections/CollectionResultsPage.js';
+import { DevelopmentSettingsPage } from '../modules/connectors/DevelopmentSettingsPage.js';
+import { PublishingPage } from '../modules/publishing/PublishingPage.js';
 
 export async function loadModuleStates(): Promise<ModuleStateOverrides> {
   try {
@@ -136,6 +141,22 @@ function DeskRoute({ children }: { children?: ReactNode }) {
   const moduleStates = matches[0]?.data as ModuleStateOverrides | undefined;
   return <DeskPage moduleStates={moduleStates}>{children}</DeskPage>;
 }
+function PublishingBookRoute({ book }: { book: 'notices' | 'experience' }) {
+  const matches = useMatches();
+  const states = matches[0]?.data as ModuleStateOverrides | undefined;
+  const manifest = MODULE_MANIFESTS.find(
+    (module) => module.id === (book === 'notices' ? 'information' : 'knowledge'),
+  )!;
+  return (
+    <DeskRoute>
+      {resolveModuleStatus(manifest, states) === 'enabled' ? (
+        <PublishingPage book={book} />
+      ) : (
+        <p role="status">这本资料册暂未开放。</p>
+      )}
+    </DeskRoute>
+  );
+}
 
 function ProposalPoolRoute() {
   const auth = useAuth();
@@ -215,6 +236,10 @@ function ActivityManagementRoute() {
       initialCreate={search.get('create') === '1'}
     />
   );
+}
+function CollectionResultsRoute() {
+  const auth = useAuth();
+  return <CollectionResultsPage key={auth.demoUser ?? auth.user?.uid} client={auth.client} />;
 }
 function ActivityWorkspaceRoute() {
   const auth = useAuth();
@@ -339,6 +364,7 @@ function AdminRoute() {
 
 export const appRouter = createBrowserRouter(
   [
+    { path: '/collections/public/:collectionId', element: <PublicRegistrationPage /> },
     {
       path: '/',
       element: <AppShellRoute />,
@@ -353,7 +379,10 @@ export const appRouter = createBrowserRouter(
         { path: 'ranch-dye', element: <CommercePage section="ranch-dye" /> },
         { path: 'profile', element: <ProfileRoute /> },
         { path: 'settings', element: <CommercePage section="settings" /> },
+        { path: 'settings/development', element: <DevelopmentSettingsPage /> },
         { path: 'desk', element: <DeskRoute /> },
+        { path: 'desk/library/notices', element: <PublishingBookRoute book="notices" /> },
+        { path: 'desk/library/experience', element: <PublishingBookRoute book="experience" /> },
         {
           path: 'desk/information',
           element: (
@@ -455,12 +484,17 @@ export const appRouter = createBrowserRouter(
         { path: 'events', element: <EventsRoute /> },
         { path: 'events/student-festival', element: <FestivalRoute /> },
         { path: 'collections', element: <CollectionsRoute /> },
+        { path: 'collections/tools', element: <CollaborationPage /> },
+        { path: 'collections/tools/:spaceId', element: <CollaborationPage /> },
+        { path: 'collections/results/:collectionId', element: <CollectionResultsRoute /> },
         { path: 'collections/activities', element: <AllActivitiesRoute /> },
         { path: 'collections/activities/manage', element: <ActivityManagementRoute /> },
         { path: 'collections/activities/:source/:activityId', element: <ActivityWorkspaceRoute /> },
         { path: 'collections/registrations', element: <RegistrationGalleryRoute /> },
         { path: 'collections/mine', element: <MyRegistrationsRoute /> },
         { path: 'collections/showcase', element: <ShowcaseRoute /> },
+        { path: 'collections/publishing', element: <PublishingPage /> },
+        { path: 'collections/publishing/:contentId', element: <PublishingPage /> },
         { path: 'collections/showcase/:articleId', element: <ShowcaseDetailRoute /> },
         { path: 'collections/workbench/:collectionId', element: <CollectionWorkbenchRoute /> },
         { path: 'community', element: <CommunityRoute /> },

@@ -25,6 +25,7 @@ import './styles/community.css';
 import './styles/desk.css';
 import './styles/organizations.css';
 import './styles/typography.css';
+import './styles/media-capture.css';
 
 const rootElement = document.getElementById('root');
 

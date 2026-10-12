@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RoleKey } from '@freebbs-development/contracts';
@@ -16,12 +16,14 @@ function show(old = false) {
     if (path === '/collections/forms/old' && !init)
       return {
         id: 'old',
+        canManage: true,
         schema: { ...emptyCollectionSchema, title: '原有草稿' },
         organizationId: 'rights_development_center',
       };
     if (path === '/collections/forms/created' && !init)
       return {
         id: 'created',
+        canManage: true,
         schema: { ...emptyCollectionSchema, publisherDepartmentId: 'student_union.sports_center' },
       };
     if (path === '/collections/forms' || path.endsWith('/draft')) return { id: 'created' };
@@ -48,10 +50,11 @@ describe('publisher department metadata', () => {
     actor.roles = ['department.sports_member'];
     const request = show();
     expect(await screen.findByLabelText('发布部门')).toHaveValue('student_union.sports_center');
-    expect(screen.getAllByRole('option').map((el) => el.getAttribute('value'))).toEqual([
-      '',
-      'student_union.sports_center',
-    ]);
+    expect(
+      within(screen.getByLabelText('发布部门'))
+        .getAllByRole('option')
+        .map((el) => el.getAttribute('value')),
+    ).toEqual(['', 'student_union.sports_center']);
     fireEvent.click(screen.getByRole('button', { name: '检查并发布' }));
     await waitFor(() =>
       expect(
@@ -97,7 +100,7 @@ describe('publisher department metadata', () => {
     actor.roles = ['platform.super_admin'];
     show();
     await screen.findByLabelText('发布部门');
-    expect(screen.getAllByRole('option')).toHaveLength(21);
+    expect(within(screen.getByLabelText('发布部门')).getAllByRole('option')).toHaveLength(21);
   });
   it('does not publish or rewrite navigation when an identity change unmounts an in-flight create', async () => {
     actor.roles = ['department.sports_member'];
