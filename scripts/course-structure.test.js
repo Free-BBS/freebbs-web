@@ -19,6 +19,7 @@ const {
   relationGroups,
 } = require('../public/course-structure');
 const { isValidNodeId: isValidPublishedNodeId } = require('../backend/course-maps');
+const learningContent = require('../public/learning-content');
 
 const nodes = [
   { id: 'SS-01-00', title: '时域分析', summary: '课程组正式板块概览' },
@@ -125,6 +126,32 @@ test('macro groups prefer real zero-level names and use only explicitly publishe
   assert.equal(model.knowledgeEdges.length, 4);
   assert.equal(isChapterNode({ id: 'SS-01-00' }), true);
   assert.equal(isChapterNode({ id: 'SS-01-01' }), false);
+});
+
+test('structure and directory share actual names instead of empty or ordinal chapter placeholders', () => {
+  const points = [
+    { id: 'CAL-01-000', title: '第 1 章' },
+    { id: 'CAL-01-001', title: '实数', chapterTitle: '第1章' },
+    { id: 'CAL-01-002', title: '数域', chapterTitle: '第1章 实数与实数的运算' },
+    { id: 'CAL-02-000', title: '   ' },
+    { id: 'CAL-02-001', title: '极限', metadata: { '章节/单元': '极限与连续' } },
+    { id: 'CAL-03-001', title: '未知章内容', chapterTitle: '第X章' },
+  ];
+  const chapters = buildModel(points).chapters;
+  assert.deepEqual(
+    chapters.map((chapter) => chapter.title),
+    ['第1章 实数与实数的运算', '极限与连续', 'CAL-03'],
+  );
+  for (const chapter of chapters)
+    assert.equal(chapter.title, learningContent.chapterName(points, chapter.id));
+  assert.equal(learningContent.chapterName(points, 'CAL-03', 'Chapter 3'), 'CAL-03');
+  assert.equal(learningContent.chapterName(points, 'CAL-03', 'Chapter N'), 'CAL-03');
+  assert.equal(learningContent.chapterName(points, 'CAL-03', 'Unit n'), 'CAL-03');
+  assert.equal(learningContent.chapterName(points, 'CAL-03', '第3章'), 'CAL-03');
+  assert.equal(
+    learningContent.chapterName([{ id: 'CAL-01-000', title: '正式章名' }, ...points], 'CAL-01'),
+    '正式章名',
+  );
 });
 test('missing overview is a summary of actual chapter members and creates no fake knowledge node', () => {
   const group = model.chapters.at(-1);
@@ -598,6 +625,7 @@ function readerFixture(inputNodes, inputEdges = []) {
     },
     location: {},
     FreeBbsKnowledgeOverview: require('../public/knowledge-overview'),
+    FreeBbsLearningContent: learningContent,
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, '../public/course-structure.js'), 'utf8'),

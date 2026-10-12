@@ -46,14 +46,15 @@
     for (const raw of String(markdown || '').split(/\r?\n/)) {
       if (!raw.trim() || /^\s*\|?[\s:|-]+\|?\s*$/.test(raw)) continue;
       const heading = /^\s*#{1,6}\s/.test(raw);
-      const line = plain(
-        raw.replace(/^\s*(?:#{1,6}\s*|[-+]\s+)/, '').replace(/^\d+(?:\.\d+)*[.、]?\s+/, ''),
-      );
+      const line = plain(raw.replace(/^\s*(?:#{1,6}\s*|[-+]\s+)/, ''));
       const cells = raw.trim().startsWith('|') ? raw.split('|').slice(1, -1).map(plain) : null;
       const pair =
         cells?.length >= 2 ? [cells[0], cells[1]] : line.match(/^([^：:]+)[：:]\s*(.*)$/)?.slice(1);
       const label = pair ? pair[0] : line;
-      const key = aliases.get(canonical(label));
+      // Numbering belongs to a field label, not a value such as "60 分钟" or "2 / 5".
+      const key =
+        aliases.get(canonical(label)) ||
+        aliases.get(canonical(label.replace(/^\d+(?:\.\d+)*[.、]?\s+/, '')));
       if (key) {
         const value = plain(pair?.[1]);
         if (value) {

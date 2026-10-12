@@ -22,6 +22,46 @@ const required = [
   '参与同学',
 ];
 
+// Keep these small readers portable. Regression tests compare them with the website readers.
+function extractHeading(markdown, labels) {
+  const lines = String(markdown || '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n');
+  let level = 0;
+  let fence = '';
+  const result = [];
+  for (const line of lines) {
+    const marker = line.match(/^\s{0,3}(`{3,}|~{3,})/);
+    if (marker) {
+      if (!fence) [, fence] = marker;
+      else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = '';
+    }
+    const heading = !fence && !marker && line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+    if (heading && level && heading[1].length <= level) break;
+    if (heading && !level && labels.includes(heading[2].trim())) {
+      level = heading[1].length;
+      continue;
+    }
+    if (level) result.push(line);
+  }
+  return result.join('\n').trim();
+}
+
+function authoredChapterName(value, id) {
+  const name = String(value || '')
+    .replace(/[*`]/g, '')
+    .trim();
+  const candidateId = name.split('-').slice(0, 2).join('-');
+  return !name ||
+    /^(?:第\s*(?:\d+|[零〇一二三四五六七八九十百千]+|[Xx]+)\s*章|(?:chapter|unit)\s*(?:\d+|[ivxlcdm]+|n)|\d+)[.、:：。\s-]*$/i.test(
+      name,
+    ) ||
+    name === id ||
+    (candidateId === id && /^[A-Z][A-Z0-9]*-[A-Z0-9]+-0+$/.test(name))
+    ? ''
+    : name;
+}
+
 function parse(source, { allowDemo = false } = {}) {
   const markdown = source
     .replace(/^\uFEFF/, '')
@@ -37,6 +77,7 @@ function parse(source, { allowDemo = false } = {}) {
   let index = -1;
   let title = '';
   let fence = '';
+  let originHeading = false;
   const questionHeadings = new Map();
   for (const line of markdown.split('\n')) {
     const marker = line.match(/^\s{0,3}(`{3,}|~{3,})/);
@@ -54,6 +95,8 @@ function parse(source, { allowDemo = false } = {}) {
       const question = line.match(/^#{3,6}\s+题目\s+([A-Za-z0-9][A-Za-z0-9_.-]{0,119})\s*$/);
       if (question) questionHeadings.set(question[1], (questionHeadings.get(question[1]) || 0) + 1);
     }
+    if (!marker && !fence && index === 1 && /^###\s+知识起源\s*#*\s*$/.test(line))
+      originHeading = true;
     if (index === -1) {
       if (/^#\s+/.test(line) && !title) title = line.replace(/^#\s+/, '').trim();
       else if (line.trim()) throw new Error('开头只保留知识点一级标题。');
@@ -107,8 +150,10 @@ function parse(source, { allowDemo = false } = {}) {
     throw new Error('0级章节节点的末段必须为00；已有普通知识点不得使用全零编号。');
   if (chapterNode && title !== metadata['章节/单元'])
     throw new Error('章节节点名称必须为实际章名。');
-  if (!/^### 知识起源\s*$/m.test(sections.applicationsMarkdown))
-    throw new Error('缺少知识起源小节。');
+  if (!authoredChapterName(metadata['章节/单元'], metadata['章节ID']))
+    throw new Error('章节/单元须填写实际章名，不能只有章序号或章节ID。');
+  if (!originHeading || !extractHeading(sections.applicationsMarkdown, ['知识起源']))
+    throw new Error('知识背景与应用须有非空的“### 知识起源”小节，代码示例中的标题不算。');
   if (!chapterNode && !/^### 练习与思考\s*$/m.test(sections.knowledgeMarkdown))
     throw new Error('缺少练习与思考小节。');
   if (metadata['课程ID'] !== id.split('-')[0]) throw new Error('课程ID与知识点ID前缀不一致。');
@@ -215,4 +260,4 @@ if (require.main === module) {
     process.exitCode = 1;
   }
 }
-module.exports = { parse, prepare };
+module.exports = { parse, prepare, extractHeading, authoredChapterName };

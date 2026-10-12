@@ -25,18 +25,6 @@
     { key: 'learned', label: '已学习', icon: '✓' },
     { key: 'consolidated', label: '已巩固', icon: '◆' },
   ];
-  const SIGNALS_CHAPTER_TITLES = {
-    'SS-01': '信号与系统基础',
-    'SS-02': '连续系统时域分析',
-    'SS-03': 'Fourier 分析',
-    'SS-04': 'Laplace 与连续系统',
-    'SS-05': '系统响应与信号处理',
-    'SS-06': '信号空间与相关分析',
-    'SS-07': '离散系统时域分析',
-    'SS-08': 'z 变换与数字系统',
-    'SS-11': '反馈系统',
-    'SS-12': '状态空间',
-  };
   const state = {
     course: null,
     nodes: [],
@@ -258,9 +246,7 @@
   }
 
   function chapterTitle(chapterId) {
-    const fallback =
-      courseSlug === 'signals' ? SIGNALS_CHAPTER_TITLES[chapterId] || chapterId : chapterId;
-    return window.FreeBbsLearningContent?.chapterName(state.nodes, chapterId, fallback) || fallback;
+    return window.FreeBbsLearningContent?.chapterName(state.nodes, chapterId) || chapterId;
   }
 
   function courseChapters() {

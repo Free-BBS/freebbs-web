@@ -64,8 +64,8 @@
   section.setAttribute('aria-labelledby', 'course-token-title');
   section.innerHTML = `
     <div class="settings-section-heading"><h2 id="course-token-title">课程组 Agent 接入</h2></div>
-    <p>生成个人 Token，让 Agent 将 Markdown 上传为课程地图中的知识点，更新正文、位置和连接，也可上传课程资料与图片。权限随课程负责人分配实时生效。</p>
-    <p class="course-token-links"><a id="course-skill-download" download>下载 Agent Skill</a><a id="course-api-docs" target="_blank" rel="noreferrer">API 使用说明</a></p>
+    <p>下载模板并完成课程组审核后，让 Agent 校验和发布完整知识点稿；也可下载现有作者稿再修改。仅课程资料负责人及管理员有发布权限。</p>
+    <p class="course-token-links"><a id="course-template-download" download>下载课程组模板</a><a id="course-skill-download" download>下载 Agent Skill</a><a id="course-api-docs" target="_blank" rel="noreferrer">下载与发布说明</a></p>
     <form id="course-token-form">
       <div class="settings-grid">
         <label class="auth-field"><span>Token 名称</span><input name="name" maxlength="80" required placeholder="例如：课程备课 Agent" autocomplete="off" /></label>
@@ -81,6 +81,8 @@
     <ul id="course-token-list" class="course-token-list" aria-label="我的课程 Token"></ul>`;
   host.append(section);
   const endpoint = '/course-upload';
+  section.querySelector('#course-template-download').href =
+    '/downloads/freebbs-course-authoring.zip';
   section.querySelector('#course-skill-download').href = `${API_BASE_URL}${endpoint}/skill.zip`;
   section.querySelector('#course-api-docs').href = `${API_BASE_URL}${endpoint}/docs`;
   const message = section.querySelector('#course-token-message');

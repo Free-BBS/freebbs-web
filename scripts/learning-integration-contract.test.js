@@ -22,6 +22,13 @@ const read = (name) => fs.readFileSync(path.join(root, name), 'utf8');
 
 test('the human-learning release has coherent fresh cache keys on every changed page asset', () => {
   const release = '20261010-human-1';
+  const authoringReleases = {
+    'knowledge-overview.js': '20261012-authoring-1',
+    'learning-content.js': '20261012-chapter-names-1',
+    'course-structure.js': '20261012-chapter-names-1',
+    'course-map.js': '20261012-chapter-names-1',
+    'course-upload.js': '20261012-authoring-1',
+  };
   const humanAssets = new Set([
     'human-learning-annotations.css',
     'learning-strategies.js',
@@ -42,6 +49,8 @@ test('the human-learning release has coherent fresh cache keys on every changed 
   ]);
   const assets = {
     'public/knowledge.html': [
+      'knowledge-overview.js',
+      'learning-content.js',
       'knowledge-workspace.css',
       'human-learning-annotations.css',
       'learning-stars.js',
@@ -61,6 +70,8 @@ test('the human-learning release has coherent fresh cache keys on every changed 
       'learning-guide.js',
     ],
     'public/course.html': [
+      'knowledge-overview.js',
+      'learning-content.js',
       'course-structure.css',
       'learning-stars.js',
       'course-structure.js',
@@ -68,7 +79,8 @@ test('the human-learning release has coherent fresh cache keys on every changed 
       'learning-start.js',
       'course-map.js',
     ],
-    'public/course-map-editor.html': ['course-map.js'],
+    'public/course-map-editor.html': ['learning-content.js', 'course-map.js'],
+    'public/settings.html': ['course-upload.js'],
     'public/adminusers.html': ['learning-analytics.js', 'learning-analytics.css'],
     'public/profile.html': ['learning-analytics.js', 'learning-analytics.css'],
   };
@@ -76,7 +88,8 @@ test('the human-learning release has coherent fresh cache keys on every changed 
     const markup = read(file);
     for (const asset of names) {
       const version =
-        asset === 'knowledge.js'
+        authoringReleases[asset] ||
+        (asset === 'knowledge.js'
           ? '20261011-research-2'
           : asset === 'knowledge-workspace.js'
             ? '20261011-research-1'
@@ -88,7 +101,7 @@ test('the human-learning release has coherent fresh cache keys on every changed 
                   ? '20261011-human-2'
                   : annotationAssets.has(asset)
                     ? '20261010-annotation-3'
-                    : release;
+                    : release);
       assert.ok(markup.includes(`="/${asset}?v=${version}"`), `${file}: ${asset}`);
       assert.ok(fs.existsSync(path.join(root, 'public', asset)), `${asset} exists locally`);
     }

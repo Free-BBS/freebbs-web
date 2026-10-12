@@ -1,9 +1,13 @@
 /* Course structure reader. The editor and published graph data remain independent. */
 (function (root, factory) {
-  const api = factory(root);
+  const content =
+    typeof module !== 'undefined' && module.exports
+      ? require('./learning-content')
+      : root?.FreeBbsLearningContent;
+  const api = factory(root, content);
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FreeBbsCourseStructure = api;
-})(typeof window === 'undefined' ? null : window, (root) => {
+})(typeof window === 'undefined' ? null : window, (root, content) => {
   const compare = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true });
   // Match the existing course-map API contract, including legacy two-part and
   // deeper identifiers. Only the explicit zero-level convention marks a chapter.
@@ -61,8 +65,7 @@
         ...group,
         virtual: !group.overview,
         title:
-          group.overview?.title ||
-          group.nodes.find((node) => node.chapterTitle)?.chapterTitle ||
+          content?.chapterName([...group.nodes, group.overview].filter(Boolean), group.id) ||
           group.id,
         nodes: group.nodes.sort((a, b) => compare(a.id, b.id)),
       }));

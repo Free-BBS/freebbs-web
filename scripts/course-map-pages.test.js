@@ -244,7 +244,6 @@ async function initializeReaderFixture({ current = {}, progress = {}, focus = ''
     params: new URLSearchParams({ focus }),
     PROGRESS_STORAGE_KEY: 'progress',
     CURRENT_LEARNING_STORAGE_KEY: 'current',
-    SIGNALS_CHAPTER_TITLES: {},
     mapPage: {},
     editorPage: null,
     URLSearchParams,
@@ -346,6 +345,23 @@ test('production reader zero-level focus selects its real chapter only after ren
   assert.equal(h.state.manualExpandedChapters.size, 0);
   assert.deepEqual(h.renderCalls, ['render', ['selectChapter', 'SS-02']]);
   assert.match(h.html, /id="course-map-directory-title">真正的第二章/);
+});
+
+test('production directory uses published point chapter names when zero-level overviews are absent or unnamed', async () => {
+  const h = await initializeReaderFixture({
+    nodes: [
+      { id: 'SS-01-00', title: '第1章' },
+      { id: 'SS-01-01', title: '信号', chapterTitle: '信号的基本性质' },
+      { id: 'SS-02-01', title: '卷积', chapterTitle: '连续系统时域分析' },
+    ],
+  });
+  assert.match(h.html, /id="course-map-directory-title">信号的基本性质/);
+  assert.doesNotMatch(h.html, />第1章</);
+  const missing = await initializeReaderFixture({
+    nodes: [{ id: 'SS-01-01', title: '不能据此虚构整章名字', chapterTitle: '第1章' }],
+  });
+  assert.match(missing.html, /id="course-map-directory-title">SS-01/);
+  assert.doesNotMatch(missing.html, /id="course-map-directory-title">信号与系统基础/);
 });
 
 test('production reader normal-point focus and unknown focus retain their bounded previous contracts', async () => {

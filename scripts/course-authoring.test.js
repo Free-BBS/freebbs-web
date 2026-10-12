@@ -3,7 +3,13 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const { parse, prepare } = require('../docs/course-authoring/tools/整理知识点.cjs');
+const { execFileSync } = require('node:child_process');
+const {
+  parse,
+  prepare,
+  extractHeading,
+  authoredChapterName,
+} = require('../docs/course-authoring/tools/整理知识点.cjs');
 const { check, relations, layout } = require('../docs/course-authoring/tools/检查课程包.cjs');
 const { validateNodePatch } = require('../backend/course-upload');
 const { splitLegacyKnowledgeDocument } = require('../backend/course-maps');
@@ -30,6 +36,26 @@ test('portable converter exports publishable sections without overwriting files 
   assert.throws(() => prepare(file, options), /已存在/);
   assert.throws(() => prepare(file, { ...options, revision: 'invalid' }), /revision/);
   assert.throws(() => prepare(file, { ...options, x: undefined }), /同时提供/);
+});
+
+test('converter runs outside the repository using only its bundled Node tools', (t) => {
+  const detached = fs.mkdtempSync(path.join(os.tmpdir(), 'freebbs-authoring-detached-'));
+  t.after(() => fs.rmSync(detached, { recursive: true, force: true }));
+  for (const file of ['整理知识点.cjs', '检查自测.cjs'])
+    fs.copyFileSync(path.join(base, 'tools', file), path.join(detached, file));
+  const result = JSON.parse(
+    execFileSync(
+      process.execPath,
+      [
+        path.join(detached, '整理知识点.cjs'),
+        path.join(base, 'examples/知识点/SS-01-01.md'),
+        '--allow-demo',
+      ],
+      { cwd: detached, encoding: 'utf8' },
+    ),
+  );
+  assert.equal(result.checked, true);
+  assert.equal(result.id, 'SS-01-01');
 });
 
 test('README publishing command matches the current upload client', () => {
@@ -263,6 +289,84 @@ test('origin parsing ignores headings inside code and ends before applications',
   );
   assert.equal(content.originMarkdown({ applicationsMarkdown: '只有简介' }), '');
 });
+
+test('portable origin reader has runtime parity for real, empty and fenced headings', () => {
+  for (const markdown of [
+    '只有简介',
+    '### 知识起源\n\n### 应用场景\n这个用途不属于起源。',
+    '```md\n### 知识起源\n假的起源。\n```\n### 应用场景\n用途。',
+    '~~~md\n### 知识起源\n假的起源。\n~~~\n### 知识起源\n真实起源。\n### 应用场景\n用途。',
+    '### 知识起源\r\n真实起源。\r\n#### 子问题\r\n细节。\r\n### 应用场景\r\n用途。',
+    '### 知识起源 ###\n真实起源。\n```md\n### 这是起源内的代码，不终止小节\n```\n### 应用场景\n用途。',
+  ]) {
+    assert.equal(
+      extractHeading(markdown, ['知识起源']),
+      content.extractHeading(markdown, ['知识起源']),
+    );
+    assert.equal(
+      extractHeading(markdown, ['知识起源']),
+      content.originMarkdown({ applicationsMarkdown: markdown }),
+    );
+  }
+});
+
+test('submission requires nonempty origin in its actual applications section, not a code title or following section', () => {
+  const emptyOrigin = source.replace(/(### 知识起源\n)[\s\S]*?(?=### 应用场景)/, '$1\n');
+  assert.throws(() => parseDemo(emptyOrigin), /非空.*知识起源/);
+  for (const fence of ['```', '~~~~']) {
+    const fencedOrigin = source
+      .replace('### 知识起源', `${fence}md\n### 知识起源`)
+      .replace('### 应用场景', `${fence}\n\n### 应用场景`);
+    assert.throws(() => parseDemo(fencedOrigin), /非空.*知识起源/);
+  }
+  const bodyOnlyOrigin = emptyOrigin
+    .replace('### 知识起源\n', '### 起源待编写\n')
+    .replace(
+      '### 定义与适用条件',
+      '### 知识起源\n正文里的起源不能代替背景分区。\n\n### 定义与适用条件',
+    );
+  assert.throws(() => parseDemo(bodyOnlyOrigin), /非空.*知识起源/);
+  const valid = source.replace('### 知识起源', '### 知识起源 ###');
+  assert.equal(parseDemo(valid).id, 'SS-01-01');
+  assert.match(content.originMarkdown(parseDemo(valid).sections), /不必为每一种输入/);
+});
+
+test('portable actual-chapter-name predicate matches map display and rejects ordinals for both levels', () => {
+  const chapter = fs.readFileSync(path.join(base, 'examples/章节/SS-01-00.md'), 'utf8');
+  const originalName = '线性时不变系统的时域分析';
+  const invalidNames = [
+    '第1章',
+    '第 X 章',
+    '第一章：',
+    'Chapter 1',
+    'Chapter IV',
+    'Chapter N',
+    'Unit N',
+    '1',
+    'SS-01',
+    'SS-01-00',
+  ];
+  const validNames = [
+    originalName,
+    '第1章 线性时不变系统',
+    'Chapter 1: Linear Systems',
+    '第 X 章：极限与连续',
+  ];
+  for (const name of [...invalidNames, ...validNames]) {
+    const expected = content.chapterName([{ id: 'SS-01-01', chapterTitle: name }], 'SS-01');
+    assert.equal(authoredChapterName(name, 'SS-01') || 'SS-01', expected);
+    const pointManuscript = source.replace(`章节/单元：${originalName}`, `章节/单元：${name}`);
+    const chapterManuscript = chapter.replaceAll(originalName, name);
+    if (invalidNames.includes(name)) {
+      assert.throws(() => parseDemo(pointManuscript), /实际章名/);
+      assert.throws(() => parseDemo(chapterManuscript), /实际章名/);
+    } else {
+      assert.equal(parseDemo(pointManuscript).metadata['章节/单元'], name);
+      assert.equal(parseDemo(chapterManuscript).title, name);
+    }
+  }
+});
+
 test('course bundle validates chapters and reviewed relationships', () => {
   const result = check(path.join(base, 'examples'), { allowDemo: true });
   assert.equal(result.nodes.length, 5);
