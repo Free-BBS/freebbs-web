@@ -1,5 +1,9 @@
 import { useState } from 'react';
-import { type CollaborationSpace, type CollaborationEntry } from '@freebbs-development/contracts';
+import {
+  isDevelopmentBusinessAdmin,
+  type CollaborationSpace,
+  type CollaborationEntry,
+} from '@freebbs-development/contracts';
 import { useAuth } from '../../core/auth/AuthProvider.js';
 import { iso, localDate } from './collaborationTools.js';
 export function EntryEditor({
@@ -12,6 +16,7 @@ export function EntryEditor({
   onSubmit: (value: Record<string, unknown>) => Promise<boolean>;
 }) {
   const { user } = useAuth();
+  const businessAdministrator = isDevelopmentBusinessAdmin(user?.roles ?? []);
   const previous = ['availability', 'practice'].includes(space.kind)
     ? space.entries.find((entry) => entry.uid === user?.uid)
     : undefined;
@@ -138,7 +143,7 @@ export function EntryEditor({
                 <select
                   disabled={
                     space.ownerUid !== user?.uid &&
-                    !user?.roles.includes('platform.super_admin') &&
+                    !businessAdministrator &&
                     Boolean(
                       column.editRoleKeys?.length &&
                       !column.editRoleKeys.some((role) =>
@@ -159,7 +164,7 @@ export function EntryEditor({
                 <input
                   disabled={
                     space.ownerUid !== user?.uid &&
-                    !user?.roles.includes('platform.super_admin') &&
+                    !businessAdministrator &&
                     Boolean(
                       column.editRoleKeys?.length &&
                       !column.editRoleKeys.some((role) =>
