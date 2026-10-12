@@ -363,6 +363,7 @@
 
 .development-identity-editor {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
   padding: clamp(18px, 2.6vw, 30px);
 }
@@ -673,17 +674,19 @@
   white-space: pre-wrap;
 }
 
-@media (max-width: 1040px) {
-  .development-directory-layout {
-    grid-template-columns: 260px minmax(0, 1fr);
-  }
-
+@media (max-width: 1240px) {
   .identity-access-card {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .access-level-options {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 1040px) {
+  .development-directory-layout {
+    grid-template-columns: 260px minmax(0, 1fr);
   }
 }
 
