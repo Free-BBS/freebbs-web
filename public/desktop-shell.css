@@ -274,7 +274,8 @@
   body.desktop-shell-active .desktop-assets .currency-value {
     color: inherit !important;
     font: inherit !important;
-    font-variant-numeric: tabular-nums;
+    /* The legacy important font shorthand otherwise resets this longhand. */
+    font-variant-numeric: tabular-nums !important;
     overflow-wrap: anywhere;
     max-width: 100%;
   }

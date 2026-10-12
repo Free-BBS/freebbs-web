@@ -18,7 +18,12 @@ async function measure(page) {
     const body = document.getElementById('knowledge-body');
     return {
       count: document.querySelectorAll('#knowledge-history').length,
-      beforeBody: history.nextElementSibling === body,
+      beforeBody: Boolean(
+        [...history.parentElement.children].indexOf(history) <
+        [...history.parentElement.children].indexOf(body),
+      ),
+      sameReadingSection: history.parentElement === body.parentElement,
+      inlineNotesBetween: history.nextElementSibling?.id === 'learning-reading-notes-host',
       outsideBody: !body.contains(history),
       position: getComputedStyle(history).position,
       background: getComputedStyle(history).backgroundColor,
@@ -102,6 +107,13 @@ async function main() {
         await page.waitForFunction(
           () => document.querySelectorAll('#knowledge-body h3').length === 12,
         );
+        // The course now requires a real first-entry learning-start choice.
+        // Confirm it before pointer checks instead of clicking behind the modal.
+        if (await page.$('.learning-start-dialog[open]')) {
+          await page.select('.learning-start-dialog select[name="level"]', 'new');
+          await page.click('.learning-start-dialog .learning-start-apply');
+          await page.waitForSelector('.learning-start-dialog[open]', { hidden: true });
+        }
         await page.evaluate((isDark) => {
           document.body.classList.toggle('theme-dark', isDark);
           document.body.classList.toggle('theme-light', !isDark);
@@ -122,6 +134,8 @@ async function main() {
         const start = await measure(page);
         assert.equal(start.count, 1, label);
         assert.equal(start.beforeBody, true, label);
+        assert.equal(start.sameReadingSection, true, label);
+        assert.equal(start.inlineNotesBetween, true, label);
         assert.equal(start.outsideBody, true, label);
         assert.equal(start.position, 'sticky', label);
         assert.ok(start.title.bottom <= start.history.top, `${label}: after title`);
@@ -144,7 +158,7 @@ async function main() {
         });
         const scrolled = await measure(page);
         assert.ok(
-          Math.abs(scrolled.history.top) < 1,
+          Math.abs(scrolled.history.top - (width <= 620 ? 60 : 0)) < 1,
           `${label}: introduction sticks flush to viewport top`,
         );
         await page.screenshot({ path: path.join(output, `knowledge-reading-${label}.png`) });

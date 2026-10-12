@@ -86,7 +86,7 @@ body.discussion-page .discussion-post-title,
 body.discussion-page .discussion-detail-head h2,
 body.discussion-page .discussion-comments-head h3,
 body.discussion-page .discussion-empty strong {
-  font-family: var(--discussion-font-sans) !important;
+  font-family: var(--font-zh-title) !important;
 }
 
 body.theme-light.discussion-page {
@@ -258,9 +258,9 @@ body.discussion-page .discussion-page-heading > div:first-child {
 body.discussion-page .discussion-page-eyebrow {
   margin: 0 0 8px;
   color: var(--discussion-accent-strong);
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-latin);
   font-size: 0.72rem;
-  font-weight: 800;
+  font-weight: var(--type-weight-heavy);
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }

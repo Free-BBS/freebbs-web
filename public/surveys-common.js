@@ -3,14 +3,18 @@ window.SurveyUI = (() => {
   window.FREEBBS_API_BASE = base;
   async function api(path, method = 'GET', body = undefined) {
     const headers = { 'Content-Type': 'application/json' };
-    const token = localStorage.getItem('free_bbs_auth_token');
+    let token = window.freeBbsApp?.userState?.token || '';
+    try {
+      token = localStorage.getItem('free_bbs_auth_token') || '';
+    } catch {
+      // An active in-memory session remains usable when browser storage is blocked.
+    }
     if (token) headers.Authorization = `Bearer ${token}`;
-    const response = await fetch(`${base}${path}`, {
-      method,
-      headers,
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    });
-    const data = await response.json();
+    const { response, data } = await window.freeBbsRequests.request(
+      `${base}${path}`,
+      { method, headers, ...(body ? { body: JSON.stringify(body) } : {}) },
+      async (result) => ({ response: result, data: await result.json() }),
+    );
     if (!response.ok) {
       const error = new Error(data.message || '请求失败');
       error.status = response.status;

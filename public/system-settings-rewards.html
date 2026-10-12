@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <script src="/typography-preferences.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta
       name="description"
@@ -166,9 +167,25 @@
                   placeholder="输入关键词后点击搜索"
               /></label>
               <div class="reward-toolbar">
-                <button id="reward-search-button" type="button">搜索</button>
-                <button id="reward-select-page" type="button">选择当前结果</button>
-                <button id="reward-clear" type="button">清空选择</button>
+                <button
+                  class="bbs-action"
+                  data-action-tone="primary"
+                  id="reward-search-button"
+                  type="button"
+                >
+                  搜索
+                </button>
+                <button
+                  class="bbs-action"
+                  data-action-tone="quiet"
+                  id="reward-select-page"
+                  type="button"
+                >
+                  选择当前结果
+                </button>
+                <button class="bbs-action" data-action-tone="quiet" id="reward-clear" type="button">
+                  清空选择
+                </button>
               </div>
               <p class="reward-hint" id="reward-search-status" role="status"></p>
               <div id="reward-users" class="reward-users"></div>
@@ -180,20 +197,48 @@
             </fieldset>
             <div class="reward-submit-area">
               <p id="reward-summary" aria-live="polite"></p>
-              <button class="system-settings-submit" id="reward-submit" type="submit">
+              <button
+                class="system-settings-submit bbs-action"
+                data-action-tone="primary"
+                id="reward-submit"
+                type="submit"
+              >
                 预览并确认奖励
               </button>
-              <button id="reward-retry" type="button" hidden>重试当前发放</button>
+              <button
+                class="bbs-action"
+                data-action-tone="secondary"
+                id="reward-retry"
+                type="button"
+                hidden
+              >
+                重试当前发放
+              </button>
               <p id="reward-status" role="status" aria-live="polite"></p>
             </div>
           </form>
           <section class="reward-history" aria-labelledby="reward-history-title">
             <div class="reward-toolbar">
               <h2 id="reward-history-title">发放记录</h2>
-              <button id="reward-history-refresh" type="button">刷新记录</button>
+              <button
+                class="bbs-action"
+                data-action-tone="quiet"
+                id="reward-history-refresh"
+                type="button"
+              >
+                刷新记录
+              </button>
             </div>
             <div id="reward-batches"></div>
-            <button id="reward-history-more" type="button" hidden>加载更早记录</button>
+            <button
+              class="bbs-action"
+              data-action-tone="secondary"
+              id="reward-history-more"
+              type="button"
+              hidden
+            >
+              加载更早记录
+            </button>
           </section>
           <dialog id="reward-confirm" aria-labelledby="reward-confirm-title">
             <h2 id="reward-confirm-title">确认发放奖励</h2>
@@ -201,8 +246,21 @@
             <div id="reward-confirm-list" class="reward-confirm-list"></div>
             <p>确认后立即追加余额并发送站内通知，请核对名单和金额。</p>
             <div class="reward-toolbar">
-              <button id="reward-confirm-cancel" type="button">返回修改</button
-              ><button id="reward-confirm-send" type="button">确认发放</button>
+              <button
+                class="bbs-action"
+                data-action-tone="secondary"
+                id="reward-confirm-cancel"
+                type="button"
+              >
+                返回修改</button
+              ><button
+                class="bbs-action"
+                data-action-tone="primary"
+                id="reward-confirm-send"
+                type="button"
+              >
+                确认发放
+              </button>
             </div>
           </dialog>
         </section>
@@ -211,6 +269,8 @@
 
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
+    <script src="/request-runtime.js"></script>
+    <script src="/ui-state.js"></script>
     <script src="/app.js"></script>
     <script src="/system-settings.js"></script>
     <script src="/admin-rewards.js"></script>

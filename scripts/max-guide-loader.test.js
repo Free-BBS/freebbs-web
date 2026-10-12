@@ -40,7 +40,11 @@ test('independent guide dependencies download in parallel before loading the con
   const complete = context.loadMaxGuide();
   assert.deepEqual(
     scripts.map((item) => item.src),
-    ['/max-guide-releases.js', '/max-guide-stations.js', '/max-guide-geometry.js'],
+    [
+      '/max-guide-releases.js?v=20261008-1',
+      '/max-guide-stations.js?v=20261008-1',
+      '/max-guide-geometry.js?v=20261008-1',
+    ],
   );
   scripts[2].onload();
   scripts[0].onload();
@@ -50,7 +54,7 @@ test('independent guide dependencies download in parallel before loading the con
   await new Promise((resolve) => {
     setImmediate(resolve);
   });
-  assert.equal(scripts[3].src, '/max-guide.js');
+  assert.equal(scripts[3].src, '/max-guide.js?v=20261008-1');
   scripts[3].onload();
   await complete;
   assert.equal(timers.size, 0);
@@ -64,6 +68,45 @@ test('a failed guide dependency never starts a partially initialized controller'
   await assert.rejects(complete, /unavailable/);
   assert.equal(scripts.length, 3);
   assert.equal(scripts[0].removed, true);
+});
+
+test('recovery reuses successful modules and concurrent requests run one controller', async () => {
+  const { context, scripts } = fixture();
+  const first = context.loadMaxGuide();
+  scripts[0].onerror();
+  scripts[1].onload();
+  scripts[2].onload();
+  await assert.rejects(first, /unavailable/);
+  const recovery = context.loadMaxGuide();
+  const concurrent = context.loadMaxGuide();
+  assert.equal(scripts.length, 4, 'only the failed dependency is downloaded again');
+  scripts[3].onload();
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+  assert.equal(scripts.length, 5);
+  scripts[4].onload();
+  await Promise.all([recovery, concurrent]);
+  await context.loadMaxGuide();
+  assert.equal(scripts.length, 5, 'a loaded controller is not injected twice');
+});
+
+test('late timeout callbacks cannot delete a successfully loaded module', async () => {
+  const { context, scripts, timers } = fixture();
+  const first = context.loadMaxGuide();
+  const lateTimeout = [...timers.values()][0];
+  scripts[0].onload();
+  lateTimeout();
+  scripts[1].onload();
+  scripts[2].onload();
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+  scripts[3].onload();
+  await first;
+  await context.loadMaxGuide();
+  assert.equal(scripts.length, 4);
+  assert.notEqual(scripts[0].removed, true);
 });
 test('a stalled guide dependency times out, allowing the ordinary page to remain usable', async () => {
   const { context, scripts, timers } = fixture();

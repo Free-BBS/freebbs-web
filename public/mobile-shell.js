@@ -1,6 +1,7 @@
 (() => {
   if (
     !document.body.classList.contains('auth-page-body') &&
+    !document.querySelector('.course-material-immersive') &&
     !document.documentElement.classList.contains('development-embedded') &&
     document.querySelector('.topbar .user-panel')
   ) {
@@ -22,7 +23,7 @@
   const tools = [
     ['/development', 'star', '发展端'],
     ['/workbench', 'run', '我的工作台'],
-    ['/pbl', 'star', 'PBL计划'],
+    ['/pbl', 'star', 'PBL 计划'],
     ['/surveys', 'calendar', '活动报名（试用）'],
     ['/settings', 'gear', '个人设置'],
   ];

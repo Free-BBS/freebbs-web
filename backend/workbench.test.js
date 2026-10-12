@@ -457,6 +457,37 @@ test('summary scopes all three data sets to the authenticated user', async (t) =
         ];
       }
       if (sql.includes('FROM campus_learn_semester_snapshots')) return [[]];
+      if (sql.includes('FROM campus_homework_snapshots')) {
+        assert.deepEqual(parameters, [7]);
+        assert.match(sql, /c.generation = s.connector_generation/);
+        return [
+          [
+            {
+              homework_json: [
+                {
+                  sourceReference: 'learn:homework:one',
+                  title: '未交作业 DDL',
+                  dueAt: '2026-08-01T08:00:00Z',
+                  status: 'unsubmitted',
+                },
+                {
+                  sourceReference: 'learn:homework:done',
+                  title: '已交作业',
+                  dueAt: '2026-08-01T09:00:00Z',
+                  status: 'submitted',
+                },
+              ],
+            },
+          ],
+        ];
+      }
+      if (
+        sql.includes('FROM campus_schedule_overrides') ||
+        sql.startsWith('SELECT homework_reference')
+      ) {
+        assert.deepEqual(parameters, [7]);
+        return [[]];
+      }
       throw new Error(`Unexpected SQL: ${sql}`);
     },
   };
@@ -473,7 +504,9 @@ test('summary scopes all three data sets to the authenticated user', async (t) =
   assert.equal(payload.importantItems[0].publicId, 'wi_1');
   assert.equal(payload.notifications[0].publicId, 'wn_1');
   assert.equal(payload.scheduleItems[0].publicId, 'ws_1');
-  assert.equal(calls.length, 4);
+  assert.equal(payload.scheduleItems[1].publicId, 'hw:learn:homework:one');
+  assert.equal(payload.scheduleItems.length, 2);
+  assert.equal(calls.length, 7);
   assert.equal(calls[0].parameters[0], 7);
   assert.deepEqual(calls[1].parameters.slice(0, 2), [7, 7]);
   assert.equal(calls[2].parameters[0], 7);

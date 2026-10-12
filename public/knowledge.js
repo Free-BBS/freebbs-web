@@ -75,13 +75,6 @@
     return `/course?course=${encodeURIComponent(courseSlug)}`;
   }
 
-  function orderedKnowledgeNodes(map) {
-    const nodes = Array.isArray(map?.nodes) ? map.nodes : [];
-    return [...nodes].sort((left, right) =>
-      left.id.localeCompare(right.id, undefined, { numeric: true, sensitivity: 'base' }),
-    );
-  }
-
   function setSequenceLink(linkId, titleId, targetNode, emptyLabel) {
     const link = document.getElementById(linkId);
     const title = document.getElementById(titleId);
@@ -108,11 +101,9 @@
   }
 
   function renderKnowledgeSequence(map) {
-    const nodes = orderedKnowledgeNodes(map);
-    const currentIndex = nodes.findIndex((node) => node.id === nodeId);
-    const previousNode = currentIndex > 0 ? nodes[currentIndex - 1] : null;
-    const nextNode =
-      currentIndex >= 0 && currentIndex < nodes.length - 1 ? nodes[currentIndex + 1] : null;
+    const sequence = window.FreeBbsLearningNextSteps?.sequenceNode;
+    const previousNode = sequence?.(map, { id: nodeId }, 'previous') || null;
+    const nextNode = sequence?.(map, { id: nodeId }, 'next') || null;
     setSequenceLink(
       'knowledge-previous-link',
       'knowledge-previous-title',
@@ -128,12 +119,9 @@
   }
 
   function readProgress() {
-    try {
-      const progress = JSON.parse(localStorage.getItem(PROGRESS_STORAGE_KEY) || '{}') || {};
-      return progress && typeof progress === 'object' && !Array.isArray(progress) ? progress : {};
-    } catch {
-      return {};
-    }
+    return (
+      window.FreeBbsLearningProgress?.read(localStorage, PROGRESS_STORAGE_KEY, app?.userState) || {}
+    );
   }
 
   function currentProgressNodeId() {
@@ -155,13 +143,12 @@
 
   function saveCurrentLearningNode(currentNodeId) {
     try {
-      const stored = JSON.parse(localStorage.getItem(CURRENT_LEARNING_STORAGE_KEY) || '{}');
-      const learningByCourse =
-        stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
-      localStorage.setItem(
-        CURRENT_LEARNING_STORAGE_KEY,
-        JSON.stringify({ ...learningByCourse, [courseSlug]: currentNodeId }),
-      );
+      const progress = window.FreeBbsLearningProgress;
+      const stored = progress.read(localStorage, CURRENT_LEARNING_STORAGE_KEY, app?.userState);
+      progress.write(localStorage, CURRENT_LEARNING_STORAGE_KEY, app?.userState, {
+        ...stored,
+        [courseSlug]: currentNodeId,
+      });
     } catch {
       // The knowledge page should remain usable when browser storage is unavailable.
     }
@@ -265,7 +252,12 @@
     progress[courseSlug][progressNodeId] = entry;
 
     try {
-      localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress));
+      window.FreeBbsLearningProgress.write(
+        localStorage,
+        PROGRESS_STORAGE_KEY,
+        app?.userState,
+        progress,
+      );
     } catch {
       setToolsStatus('标签保存失败，请检查浏览器存储权限');
       return;
@@ -274,6 +266,11 @@
     const wasActive = state.tags[tagKey];
     state.tags = nextTags;
     renderTags();
+    page.dispatchEvent(
+      new CustomEvent('knowledge:tags-change', {
+        detail: { tags: { ...state.tags }, changedTag: tagKey },
+      }),
+    );
     const label = KNOWLEDGE_TAGS.find(({ key }) => key === tagKey)?.label || '标签';
     const suffix = tagKey === 'consolidated' && !wasActive ? '，并标记为已学习' : '';
     setToolsStatus(`${wasActive ? '已移除' : '已添加'}「${label}」${suffix}`);
@@ -288,6 +285,37 @@
       button.addEventListener('click', () => toggleKnowledgeTag(button.dataset.knowledgeTag));
     });
   }
+
+  let progressScope = window.FreeBbsLearningProgress?.scopedKey(
+    PROGRESS_STORAGE_KEY,
+    app?.userState,
+  );
+  window.addEventListener('freebbs:session-change', () => {
+    const scope = window.FreeBbsLearningProgress?.scopedKey(PROGRESS_STORAGE_KEY, app?.userState);
+    if (scope === progressScope) return;
+    progressScope = scope;
+    if (!state.node) return;
+    state.tags = getStoredTags();
+    document.querySelectorAll('[data-knowledge-tag]').forEach((button) => {
+      button.disabled = !scope;
+    });
+    renderTags();
+    saveCurrentLearningNode(state.node.id);
+    page.dispatchEvent(
+      new CustomEvent('knowledge:tags-change', { detail: { tags: { ...state.tags } } }),
+    );
+  });
+  window.addEventListener('storage', (event) => {
+    if (event.key !== 'free_bbs_auth_token' && event.key !== null) return;
+    state.tags = { important: false, learned: false, consolidated: false };
+    document.querySelectorAll('[data-knowledge-tag]').forEach((button) => {
+      button.disabled = true;
+    });
+    renderTags();
+    page.dispatchEvent(
+      new CustomEvent('knowledge:tags-change', { detail: { tags: { ...state.tags } } }),
+    );
+  });
 
   function interactionWidthBounds() {
     const min = 320;
@@ -362,6 +390,14 @@
     document.querySelectorAll('[data-knowledge-tool]').forEach((button) => {
       button.addEventListener('click', () => {
         const tool = button.dataset.knowledgeTool;
+        if (page.dataset.learningToolsReady === 'true') {
+          page.dispatchEvent(
+            new CustomEvent('knowledge:tool-select', {
+              detail: { tool, course: courseSlug, point: nodeId },
+            }),
+          );
+          return;
+        }
         const toolLabel = button.querySelector('strong')?.textContent?.trim() || '该工具';
         document.querySelectorAll('[data-knowledge-tool]').forEach((item) => {
           const isActive = item === button;
@@ -546,6 +582,8 @@
         knowledgePointTitle: node.title || '',
         knowledgePointSummary: node.summary || '',
         knowledgePointMarkdown: node.markdown || '',
+        learningStartPreference: window.FreeBbsLearningStart?.currentPreference() || null,
+        learningTask: state.learningTask || null,
       },
     };
   }
@@ -590,25 +628,177 @@
     }
 
     const answerContent = appendChatMessage('assistant', '正在检索课程资料', { loading: true });
+    const sessionToken = app.userState.token;
+    const generation = chatGeneration;
     let answer = '';
     setChatSending(true);
 
     try {
       await app.streamKnowledgeRagResponse(buildKnowledgeChatRequest(prompt), (delta) => {
+        if (app.userState.token !== sessionToken || generation !== chatGeneration) return;
         answer += delta;
         updateChatMessage(answerContent, answer);
       });
+      if (app.userState.token !== sessionToken || generation !== chatGeneration) return;
       if (!answer.trim()) {
         throw new Error('Agent 未返回回答内容');
       }
       state.chatMessages.push({ role: 'user', content: prompt });
       state.chatMessages.push({ role: 'assistant', content: answer });
+      page.dispatchEvent(
+        new CustomEvent('knowledge:answer', { detail: { answer, element: answerContent } }),
+      );
       setChatSending(false);
     } catch (error) {
+      if (app.userState.token !== sessionToken || generation !== chatGeneration) return;
       updateChatMessage(answerContent, `请求失败：${error.message || 'AI 服务暂时不可用'}`);
       setChatSending(false, 'RAG Agent 暂时不可用，请稍后重试');
     }
   }
+
+  // Share only this knowledge point's current, user-visible conversation.
+  window.freeBbsKnowledge = {
+    buildRequest: buildKnowledgeChatRequest,
+    getLearningContext: () => ({
+      tags: { ...state.tags },
+      map: state.map,
+      course: state.course,
+      node: state.node,
+    }),
+  };
+  page.addEventListener('knowledge:open-interaction', (event) => {
+    setChatTab(event.detail?.tab === 'discussion' ? 'discussion' : 'max');
+    setChatOpen(true);
+    const input = document.getElementById('knowledge-chat-input');
+    if (state.chatTab === 'max' && input && !state.chatSending) {
+      if (event.detail?.prompt) input.value = String(event.detail.prompt).slice(0, 8000);
+      input.focus({ preventScroll: true });
+    }
+  });
+  page.addEventListener('knowledge:ask', (event) => {
+    setChatTab('max');
+    submitChatPrompt(event.detail?.prompt);
+  });
+  page.addEventListener('knowledge:show-content', () => setKnowledgeView('reading'));
+  let pendingQuestionNavigation = null;
+  function navigateLearning(detail = {}) {
+    if (detail.view === 'relations') {
+      const query = new URLSearchParams({ course: courseSlug, focus: state.node?.id || nodeId });
+      window.location.assign(`/course?${query}`);
+      return;
+    }
+    page.dispatchEvent(
+      new CustomEvent('knowledge:tool-select', {
+        detail: {
+          tool: [
+            'content',
+            'notes',
+            'feedback',
+            'discussion',
+            'continue',
+            'resources',
+            'contribute',
+          ].includes(detail.tool)
+            ? detail.tool
+            : 'content',
+          preserveView: true,
+        },
+      }),
+    );
+    const quizView = ['practice', 'quick', 'mistakes'].includes(detail.quizView)
+      ? detail.quizView
+      : '';
+    const snapshot = window.FreeBbsLearningAssessment?.getSnapshot?.() || {};
+    const targetQuestion = [
+      ...(snapshot.questions || []),
+      ...(snapshot.practiceQuestions || []),
+    ].find((question) => question.id === detail.questionId);
+    if (detail.tool === 'feedback' && quizView) {
+      window.FreeBbsLearningAssessment?.selectView(
+        quizView,
+        quizView === 'practice'
+          ? {
+              assessmentRole: targetQuestion?.assessmentRole === 'exploration' ? 'exploration' : '',
+            }
+          : undefined,
+      );
+    }
+    if (detail.tool === 'content' || detail.tool === 'notes') setKnowledgeView('reading');
+    state.learningTask = {
+      tool: [
+        'content',
+        'notes',
+        'feedback',
+        'discussion',
+        'continue',
+        'resources',
+        'contribute',
+      ].includes(detail.tool)
+        ? detail.tool
+        : 'content',
+      ...(quizView ? { quizView } : {}),
+      ...(typeof detail.questionId === 'string' &&
+      /^[A-Za-z0-9._:-]{1,120}$/.test(detail.questionId)
+        ? { questionId: detail.questionId }
+        : {}),
+      ...(detail.view === 'origin' ? { view: 'origin' } : {}),
+    };
+    // Heading-only fallback questions can share IDs with reviewed questions but not their role.
+    // Only a server-loaded snapshot resolves the destination permanently.
+    pendingQuestionNavigation =
+      state.learningTask.questionId && (!snapshot.loaded || !targetQuestion) ? { ...detail } : null;
+    window.requestAnimationFrame(() => {
+      if (detail.view === 'origin')
+        document.getElementById('knowledge-history')?.scrollIntoView({ block: 'start' });
+      else if (state.learningTask.questionId) {
+        const question = [...document.querySelectorAll('[data-question-id]')].find(
+          (element) => element.dataset.questionId === state.learningTask.questionId,
+        );
+        question?.scrollIntoView({ block: 'center' });
+      }
+    });
+  }
+  page.addEventListener('knowledge:navigate', (event) => navigateLearning(event.detail));
+  page.addEventListener('knowledge:assessment-updated', (event) => {
+    if (!pendingQuestionNavigation) return;
+    if (event.detail?.loaded !== true) return;
+    const questions = [
+      ...(event.detail?.questions || []),
+      ...(event.detail?.practiceQuestions || []),
+    ];
+    if (questions.some((question) => question.id === pendingQuestionNavigation.questionId))
+      navigateLearning(pendingQuestionNavigation);
+    else pendingQuestionNavigation = null;
+  });
+  document.querySelectorAll('[data-quiz-view]').forEach((button) =>
+    button.addEventListener('click', () => {
+      pendingQuestionNavigation = null;
+      state.learningTask = { tool: 'feedback', quizView: button.dataset.quizView };
+    }),
+  );
+  let chatSessionToken = app?.userState?.token || '';
+  let chatGeneration = 0;
+  function clearChatForSession() {
+    chatGeneration += 1;
+    state.chatMessages = [];
+    state.learningTask = null;
+    pendingQuestionNavigation = null;
+    document.getElementById('knowledge-chat-thread')?.replaceChildren();
+    const input = document.getElementById('knowledge-chat-input');
+    if (input) input.value = '';
+  }
+  window.addEventListener('freebbs:session-change', () => {
+    const token = app?.userState?.token || '';
+    if (token === chatSessionToken) return;
+    chatSessionToken = token;
+    clearChatForSession();
+    setChatSending(false);
+  });
+  window.addEventListener('storage', (event) => {
+    if (event.key !== 'free_bbs_auth_token' && event.key !== null) return;
+    clearChatForSession();
+    setChatSending(true, '账号已在其他页面变更，请刷新后继续对话');
+  });
 
   function setHidden(element, isHidden) {
     if (!element) {
@@ -1517,8 +1707,28 @@
   }
 
   function renderKnowledgeContent(node) {
+    const origin = window.FreeBbsLearningContent?.originMarkdown(node.sections) || '';
+    const history = document.getElementById('knowledge-history-prose');
+    if (history) {
+      history.innerHTML = origin ? app.renderMarkdownContent(origin) : '';
+      app.enhanceMarkdownContent(history);
+    }
+    document.getElementById('knowledge-history-empty')?.toggleAttribute('hidden', Boolean(origin));
+    if (window.FreeBbsLearningContent?.isChapterNode(node))
+      document
+        .getElementById('knowledge-body')
+        ?.before(document.getElementById('knowledge-chapter-network'));
+    if (state.map)
+      window.FreeBbsLearningContent?.renderNetwork(
+        document.getElementById('knowledge-chapter-network'),
+        state.map,
+        node,
+        state.course,
+      );
     const sections = node.sections || {};
-    const markdown = String(sections.knowledgeMarkdown ?? node.markdown ?? '').trim();
+    const markdown = window.FreeBbsLearningContent.stripQuizSource(
+      String(sections.knowledgeMarkdown ?? node.markdown ?? ''),
+    ).trim();
     const basicInfoMarkdown = String(sections.basicInfoMarkdown || '').trim();
     const applicationsMarkdown = String(sections.applicationsMarkdown || '').trim();
     const brief = document.getElementById('knowledge-overview-brief');
@@ -1530,7 +1740,7 @@
     document.getElementById('knowledge-summary').textContent = node.summary || '';
     document.getElementById('knowledge-chat-context').textContent = `${node.id} · ${node.title}`;
     document.getElementById('knowledge-chat-welcome').textContent =
-      `我已经定位到「${node.title}」。你可以让我结合课程资料做直觉解释、提醒易错点，或出一道自测题。`;
+      `一起梳理「${node.title}」。需要时，我可以讲解原理、举例或提示下一步。`;
 
     const body = document.getElementById('knowledge-body');
     body.innerHTML = app.renderMarkdownContent(
@@ -1623,6 +1833,22 @@
       syncDiscussionContext();
       loadDiscussionPosts();
       page.dispatchEvent(new CustomEvent('knowledge:loaded', { detail: { course, node } }));
+      // Apply saved cross-point destinations after peer modules have selected the initial tool.
+      const focus = params.get('focus');
+      const quiz = params.get('quiz');
+      const questionId = params.get('question');
+      if (focus === 'origin' || focus === 'relations' || quiz || questionId) {
+        Promise.resolve().then(() =>
+          navigateLearning({
+            tool: quiz || questionId ? 'feedback' : 'content',
+            ...(focus === 'origin' || focus === 'relations' ? { view: focus } : {}),
+            ...(quiz || questionId
+              ? { quizView: ['practice', 'quick', 'mistakes'].includes(quiz) ? quiz : 'practice' }
+              : {}),
+            ...(questionId ? { questionId } : {}),
+          }),
+        );
+      }
     } catch (error) {
       showPageError(error.message || '知识点加载失败。');
     }

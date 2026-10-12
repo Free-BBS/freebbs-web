@@ -22,6 +22,10 @@ import {
   type MainSiteProfile,
 } from './main-site-api.js';
 import { MainSiteNotifications } from './MainSiteNotifications.js';
+import {
+  MAIN_SITE_TYPOGRAPHY_STORAGE_KEY,
+  readMainSiteTypography,
+} from './main-site-typography.js';
 import { MODULE_MANIFESTS } from './module-manifests.js';
 
 interface MainSiteHeaderProps {
@@ -31,47 +35,10 @@ interface MainSiteHeaderProps {
   onToggleTheme: () => void;
 }
 
-const typographyFonts: Record<string, { title: string; ui: string }> = {
-  'transistor-lab': {
-    title: '"Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif',
-    ui: '"HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif',
-  },
-  'zhongsong-study': {
-    title: '"Source Han Serif SC", "Noto Serif SC", "STZhongsong", "华文中宋", serif',
-    ui: '"Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif',
-  },
-  'quantum-board': {
-    title: '"Noto Serif SC", "Source Han Serif SC", "STZhongsong", serif',
-    ui: '"HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif',
-  },
-  'night-oscilloscope': {
-    title: '"Syne", "Noto Serif SC", "Source Han Serif SC", serif',
-    ui: '"Segoe UI", "Microsoft YaHei", sans-serif',
-  },
-};
-
 export function mainSiteTypography(): CSSProperties {
-  let preferences: { fontPreset?: string; typeScale?: string } = {};
-  try {
-    preferences = JSON.parse(
-      window.localStorage.getItem('free_bbs_typography_preferences') || '{}',
-    );
-  } catch {
-    // Use the main site's default preset when saved preferences are malformed.
-  }
-  const scale =
-    { standard: 16, comfortable: 17.28, large: 18.88 }[preferences.typeScale || 'comfortable'] ||
-    17.28;
-  const fonts =
-    typographyFonts[preferences.fontPreset || 'transistor-lab'] ||
-    typographyFonts['transistor-lab'];
-  return {
-    '--main-site-ui-font': fonts.ui,
-    '--main-site-ui-size': `${scale}px`,
-    '--main-site-type-scale': String(scale / 16),
-    '--font-ui': fonts.ui,
-    '--font-display': fonts.title,
-  } as CSSProperties;
+  return readMainSiteTypography(() =>
+    window.localStorage.getItem(MAIN_SITE_TYPOGRAPHY_STORAGE_KEY),
+  ) as CSSProperties;
 }
 
 function beijingToday(): string {

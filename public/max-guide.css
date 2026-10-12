@@ -167,13 +167,13 @@ body.theme-dark {
     background 0.18s;
 }
 .guide-primary {
-  background: var(--ui-accent);
-  color: var(--ui-accent-contrast) !important;
+  background: var(--action-fill, var(--ui-accent));
+  color: var(--action-foreground, var(--ui-accent-contrast)) !important;
   box-shadow: 0 8px 20px #1648401a;
 }
 .guide-primary:hover {
-  background: var(--ui-accent-hover);
-  transform: translateY(-2px);
+  background: var(--action-hover-fill, var(--ui-accent-hover));
+  transform: var(--action-target-transform, translateY(-2px));
 }
 .guide-secondary {
   background: transparent;

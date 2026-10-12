@@ -71,11 +71,11 @@
         <label class="auth-field"><span>Token 名称</span><input name="name" maxlength="80" required placeholder="例如：课程备课 Agent" autocomplete="off" /></label>
         <label class="auth-field"><span>有效期</span><select name="expiresInDays"><option value="30">30 天</option><option value="90" selected>90 天</option><option value="365">365 天</option></select></label>
       </div>
-      <button class="auth-submit" type="submit">生成 Token</button>
+      <button class="auth-submit bbs-action" data-action-tone="primary" type="submit">生成 Token</button>
     </form>
     <div id="course-token-secret" class="course-token-secret" hidden>
       <label class="auth-field"><span>此 Token 仅展示一次，请立即保存</span><input id="course-token-value" readonly autocomplete="off" spellcheck="false" /></label>
-      <div class="course-token-links"><button type="button" id="course-token-copy">复制 Token</button><button type="button" id="course-token-dismiss">我已保存，隐藏</button></div>
+      <div class="course-token-links"><button class="bbs-action" data-action-tone="secondary" type="button" id="course-token-copy">复制 Token</button><button class="bbs-action" data-action-tone="quiet" type="button" id="course-token-dismiss">我已保存，隐藏</button></div>
     </div>
     <p id="course-token-message" class="auth-message" role="status" aria-live="polite"></p>
     <ul id="course-token-list" class="course-token-list" aria-label="我的课程 Token"></ul>`;
@@ -113,6 +113,8 @@
       item.append(copy);
       if (!token.revokedAt && !expired) {
         const revoke = document.createElement('button');
+        revoke.className = 'bbs-action';
+        revoke.dataset.actionTone = 'danger';
         revoke.type = 'button';
         revoke.textContent = '撤销';
         revoke.setAttribute('aria-label', `撤销 ${token.name}`);

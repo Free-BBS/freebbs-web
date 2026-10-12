@@ -3,85 +3,19 @@
  *
  * This final layer turns the current shell into a small, shared design system.
  * Page-specific styles still own layout and content; this file owns theme
- * tokens, shell alignment, touch sizing, and the intentionally flatter mobile
+ * shell alignment, touch sizing, and the intentionally flatter mobile
  * hierarchy.
+ * Theme colors live in theme-tokens.css; action states live in actions.css.
  */
+
+/* Canonical entry also keeps standalone previews and older pages compatible. */
+@import url('/theme-tokens.css');
+@import url('/actions.css');
+@import url('/ui-state.css');
 
 :root {
   --bbs-shell-width: 216px;
   --bbs-content-gutter: clamp(24px, 3vw, 46px);
-  --ui-page: #f4f6f8;
-  --ui-surface: #ffffff;
-  --ui-surface-raised: #ffffff;
-  --ui-surface-soft: #edf2f3;
-  --ui-input: #ffffff;
-  --ui-text: #071317;
-  --ui-muted: rgba(7, 19, 23, 0.62);
-  --ui-faint: rgba(7, 19, 23, 0.42);
-  --ui-line: rgba(7, 19, 23, 0.12);
-  --ui-line-strong: rgba(7, 19, 23, 0.2);
-  --ui-accent: #075d68;
-  --ui-accent-hover: #064a54;
-  --ui-accent-contrast: #ffffff;
-  --ui-action: #0b5f6c;
-  --ui-action-hover: #084c57;
-  --ui-action-contrast: #ffffff;
-  --ui-reward: #d5a43a;
-  --ui-reward-complete: #bb861e;
-  --ui-reward-soft: #fffdf3;
-  --ui-reward-strong: #ffe9a3;
-  --ui-reward-highlight: #fff1bc;
-  --ui-reward-muted: #8a5b08;
-  --ui-reward-contrast: #704500;
-  --ui-accent-soft: rgba(39, 136, 152, 0.11);
-  --ui-danger: #9b3429;
-  --ui-focus: #087f90;
-  --ui-shadow: 0 16px 42px rgba(6, 54, 65, 0.08);
-}
-
-body.theme-light {
-  --bbs-shell-page: var(--ui-page);
-  --bbs-shell-text: var(--ui-text);
-  --bbs-shell-muted: var(--ui-muted);
-  --minimal-bg: var(--ui-page);
-  --minimal-text: var(--ui-text);
-  --minimal-muted: var(--ui-muted);
-  --minimal-line: var(--ui-line);
-}
-
-body.theme-dark {
-  --ui-page: #0d181d;
-  --ui-surface: #14242b;
-  --ui-surface-raised: #182b33;
-  --ui-surface-soft: #1c3139;
-  --ui-input: #101f25;
-  --ui-text: #edf6f7;
-  --ui-muted: rgba(237, 246, 247, 0.68);
-  --ui-faint: rgba(237, 246, 247, 0.46);
-  --ui-line: rgba(223, 242, 244, 0.13);
-  --ui-line-strong: rgba(223, 242, 244, 0.22);
-  --ui-accent: #72d6df;
-  --ui-accent-hover: #94e4eb;
-  --ui-accent-contrast: #071317;
-  --ui-reward: #d5a43a;
-  --ui-reward-complete: #d5a43a;
-  --ui-reward-soft: #302711;
-  --ui-reward-strong: #493915;
-  --ui-reward-highlight: #3c3015;
-  --ui-reward-muted: #ffe4a0;
-  --ui-reward-contrast: #ffe4a0;
-  --ui-accent-soft: rgba(85, 190, 202, 0.14);
-  --ui-danger: #ff9b8f;
-  --ui-focus: #8de8ee;
-  --ui-shadow: 0 20px 52px rgba(0, 0, 0, 0.24);
-  --bbs-shell-page: var(--ui-page);
-  --bbs-shell-text: var(--ui-text);
-  --bbs-shell-muted: var(--ui-muted);
-  --bbs-shell-line: var(--ui-line);
-  --minimal-bg: var(--ui-page);
-  --minimal-text: var(--ui-text);
-  --minimal-muted: var(--ui-muted);
-  --minimal-line: var(--ui-line);
 }
 
 html {
@@ -285,16 +219,6 @@ body:not(.auth-page-body) .site-footer p {
   color: var(--ui-muted) !important;
 }
 
-:where(a, button, input, select, textarea):focus-visible {
-  outline-color: var(--ui-focus) !important;
-  outline-offset: 3px;
-}
-
-body:not(.auth-page-body) .topbar :where(a, button):focus-visible,
-body:not(.auth-page-body) .mobile-nav :where(a, button):focus-visible {
-  outline-color: #bff8f7 !important;
-}
-
 /* Shared surfaces and fields */
 
 body:not(.auth-page-body) .settings-profile,
@@ -341,14 +265,22 @@ body:not(.auth-page-body) :where(input, textarea)::placeholder {
   color: var(--ui-faint) !important;
 }
 
-body:not(.auth-page-body) .main-content :where(p, li, dd, small),
+body:not(.auth-page-body)
+  .main-content
+  :where(p, li, dd, small):not(:where(.bbs-action, .bbs-action *)):not(
+    :where(.ui-state, .ui-state *)
+  ),
 body:not(.auth-page-body) .discussion-post-card-meta,
 body:not(.auth-page-body) .discussion-detail-meta,
 body:not(.auth-page-body) .discussion-comment-meta {
   color: var(--ui-muted) !important;
 }
 
-body:not(.auth-page-body) .main-content :where(h1, h2, h3, h4, strong, label) {
+body:not(.auth-page-body)
+  .main-content
+  :where(h1, h2, h3, h4, strong, label):not(:where(.bbs-action, .bbs-action *)):not(
+    :where(.ui-state, .ui-state *)
+  ) {
   color: var(--ui-text) !important;
 }
 
@@ -358,7 +290,7 @@ body.system-settings-page .system-settings-kicker {
   font-size: max(0.76rem, 12px);
 }
 
-body.theme-dark:not(.auth-page-body) .main-content :where(a) {
+body.theme-dark:not(.auth-page-body) .main-content :where(a:not(.bbs-action, .bbs-action *)) {
   color: var(--ui-accent) !important;
 }
 
@@ -391,7 +323,7 @@ body:not(.auth-page-body)
     .course-discussion-link
   )
   * {
-  color: var(--ui-action-contrast) !important;
+  color: var(--action-foreground, var(--action-primary-text)) !important;
 }
 
 /* Home */
@@ -878,15 +810,15 @@ body.theme-dark:not(.auth-page-body) .settings-password-form input::placeholder 
 }
 
 body:not(.auth-page-body) .settings-form .auth-submit {
-  border-color: var(--ui-action) !important;
-  background: var(--ui-action) !important;
-  color: var(--ui-action-contrast) !important;
+  border-color: var(--action-stroke, var(--action-primary)) !important;
+  background: var(--action-fill, var(--action-primary)) !important;
+  color: var(--action-foreground, var(--action-primary-text)) !important;
   box-shadow: none !important;
 }
 
 body:not(.auth-page-body) .settings-form .auth-submit:hover {
-  background: var(--ui-action-hover) !important;
-  color: var(--ui-action-contrast) !important;
+  background: var(--action-hover-fill, var(--action-primary-hover)) !important;
+  color: var(--action-foreground, var(--action-primary-text)) !important;
 }
 
 body.system-settings-page .system-settings-menu-item,
@@ -1048,15 +980,15 @@ body.theme-dark.economy-page .shop-inspect-image img {
 
 .auth-page-body .auth-submit {
   min-height: 48px;
-  border-color: var(--ui-action) !important;
-  background: var(--ui-action) !important;
-  color: var(--ui-action-contrast) !important;
+  border-color: var(--action-stroke, var(--action-primary)) !important;
+  background: var(--action-fill, var(--action-primary)) !important;
+  color: var(--action-foreground, var(--action-primary-text)) !important;
 }
 
 .auth-page-body .auth-submit:hover {
-  border-color: var(--ui-action-hover) !important;
-  background: var(--ui-action-hover) !important;
-  color: var(--ui-action-contrast) !important;
+  border-color: var(--action-stroke, var(--action-primary-hover)) !important;
+  background: var(--action-hover-fill, var(--action-primary-hover)) !important;
+  color: var(--action-foreground, var(--action-primary-text)) !important;
 }
 
 .auth-page-body .auth-submit:disabled,
@@ -1119,26 +1051,26 @@ html body.auth-page-body.theme-dark .auth-form input::placeholder {
 html body.auth-page-body .auth-major-fixed,
 html body.auth-page-body .auth-inline-button {
   min-height: 48px;
-  border-color: var(--ui-line-strong) !important;
-  background: var(--ui-surface-soft) !important;
-  color: var(--ui-text) !important;
+  border-color: var(--action-stroke, var(--ui-line-strong)) !important;
+  background: var(--action-fill, var(--ui-surface-soft)) !important;
+  color: var(--action-foreground, var(--ui-text)) !important;
   box-shadow: none !important;
 }
 
 html body.auth-page-body .auth-submit,
 html body.auth-page-body.theme-light .auth-submit,
 html body.auth-page-body.theme-dark .auth-submit {
-  border-color: var(--ui-action) !important;
-  background: var(--ui-action) !important;
-  color: var(--ui-action-contrast) !important;
+  border-color: var(--action-stroke, var(--action-primary)) !important;
+  background: var(--action-fill, var(--action-primary)) !important;
+  color: var(--action-foreground, var(--action-primary-text)) !important;
 }
 
 html body.auth-page-body .auth-submit:hover,
 html body.auth-page-body.theme-light .auth-submit:hover,
 html body.auth-page-body.theme-dark .auth-submit:hover {
-  border-color: var(--ui-action-hover) !important;
-  background: var(--ui-action-hover) !important;
-  color: var(--ui-action-contrast) !important;
+  border-color: var(--action-stroke, var(--action-primary-hover)) !important;
+  background: var(--action-hover-fill, var(--action-primary-hover)) !important;
+  color: var(--action-foreground, var(--action-primary-text)) !important;
 }
 
 /* Responsive hierarchy */
@@ -1850,11 +1782,11 @@ body:not(.world-page) .katex {
   font-family: var(--font-math);
 }
 
-/* Learning-world-linked course titles keep the original Chinese serif look. */
+/* Ordinary course titles follow the selected title role; the Learning World's
+ * editorial scene keeps its existing local typography rules. */
 body:not(.world-page) .course-hero h1,
 body:not(.world-page) .knowledge-header h1 {
-  font-family:
-    'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', 'Noto Serif SC', sans-serif !important;
+  font-family: var(--font-zh-title) !important;
 }
 
 body:not(.auth-page-body) .settings-typography-form {

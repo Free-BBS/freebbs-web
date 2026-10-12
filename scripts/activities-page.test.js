@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const test = require('node:test');
+const requestRuntime = require('../public/request-runtime');
 
 const common = fs.readFileSync('public/surveys-common.js', 'utf8');
 
@@ -14,13 +15,18 @@ test('activity requests use same-origin API on local, HTTPS and custom-port site
   ]) {
     const requests = [];
     const window = { location: new URL(origin) };
+    const fetchFixture = async (url, options) => {
+      requests.push({ url, options });
+      return { ok: true, json: async () => ({ ok: true }) };
+    };
+    window.freeBbsRequests = {
+      request: (input, options, consume) =>
+        requestRuntime.request(input, options, consume, fetchFixture),
+    };
     vm.runInNewContext(common, {
       window,
       localStorage: { getItem: () => 'session-token' },
-      fetch: async (url, options) => {
-        requests.push({ url, options });
-        return { ok: true, json: async () => ({ ok: true }) };
-      },
+      fetch: fetchFixture,
     });
     await window.SurveyUI.api('/surveys');
     await window.SurveyUI.api('/surveys/test/entries', 'POST', { answers: {} });

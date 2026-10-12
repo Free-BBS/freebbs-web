@@ -21,7 +21,7 @@ export function AsyncState({
 }: AsyncStateProps) {
   if (state === 'loading') {
     return (
-      <p className="async-state" role="status">
+      <p className="async-state" data-state="loading" role="status" aria-busy="true">
         {loadingLabel}
       </p>
     );

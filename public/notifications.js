@@ -114,15 +114,18 @@
 
   async function api(path, options = {}) {
     const token = localStorage.getItem(storageKey) || '';
-    const response = await fetch(`${apiBase}${path}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        ...options.headers,
+    const { response, payload } = await window.freeBbsRequests.request(
+      `${apiBase}${path}`,
+      {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          ...options.headers,
+        },
       },
-    });
-    const payload = await response.json().catch(() => ({}));
+      async (result) => ({ response: result, payload: await result.json().catch(() => ({})) }),
+    );
     if (!response.ok) {
       const error = new Error(payload.message || '通知加载失败，请稍后重试');
       error.status = response.status;

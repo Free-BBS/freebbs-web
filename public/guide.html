@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <script src="/typography-preferences.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta
       name="description"
@@ -57,11 +58,17 @@
               <span class="guide-live-dot"></span> MAX'S FIELD GUIDE · 探索手册
             </p>
             <h1 id="guide-title">你好呀，<br />一起把好奇心<br /><em>带得更远</em></h1>
+            <p id="guide-module-status" role="status" hidden></p>
             <p class="guide-hero-description">
               我是 Max，你在 FREE BBS 的学习与探索向导<br />地图装好了，问题也带上了吗？<br />这里没有标准的起跑线，从你想弄懂的那件事开始
             </p>
             <div class="guide-hero-actions">
-              <button class="guide-primary" type="button" data-guide-start>
+              <button
+                class="guide-primary bbs-action"
+                data-action-tone="primary"
+                type="button"
+                data-guide-start
+              >
                 跟 Max 出发 <span aria-hidden="true">↗</span>
               </button>
               <a class="guide-secondary" href="#guide-atlas">我先自己逛逛 ↓</a>
@@ -109,7 +116,14 @@
               <p>快速看看三个主要入口。导引只介绍功能，不发布内容、保存计划或发送 AI 问题</p>
               <p id="guide-release-status" role="status">新功能专门导览 · 与完整导览分别保存</p>
             </div>
-            <button class="guide-primary" type="button" data-guide-release>看看本次更新 ↗</button>
+            <button
+              class="guide-primary bbs-action"
+              data-action-tone="primary"
+              type="button"
+              data-guide-release
+            >
+              看看本次更新 ↗
+            </button>
           </article>
         </section>
         <section id="guide-atlas" class="guide-section" aria-labelledby="guide-atlas-title">
@@ -201,7 +215,8 @@
             </p>
           </div>
           <button
-            class="guide-primary"
+            class="guide-primary bbs-action"
+            data-action-tone="primary"
             id="guide-reward-claim"
             type="button"
             data-guide-reward-claim
@@ -216,13 +231,21 @@
           <span aria-hidden="true">✦</span>
           <h2>准备好了？你的问题，就是下一站</h2>
           <p>走错路也没关系，Max 随时在这里。</p>
-          <button class="guide-primary" type="button" data-guide-start>和 Max 开始探索 ↗</button
+          <button
+            class="guide-primary bbs-action"
+            data-action-tone="primary"
+            type="button"
+            data-guide-start
+          >
+            和 Max 开始探索 ↗</button
           ><a href="/">回到首页</a>
         </footer>
       </main>
     </div>
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
+    <script src="/request-runtime.js"></script>
+    <script src="/ui-state.js"></script>
     <script src="/app.js"></script>
     <script src="/notifications.js"></script>
   </body>

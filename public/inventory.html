@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <script src="/typography-preferences.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <script src="/development-commerce-embed.js"></script>
     <title>FREE-BBS - 仓库</title>
@@ -196,7 +197,12 @@
                 <h2 id="bone-recycling-title">小鱼骨，也有新去处</h2>
                 <p>把牧场里攒下的鱼骨，换成下一次探索的磁元。</p>
               </div>
-              <button id="bone-recycling-refresh" class="bone-text-button" type="button">
+              <button
+                id="bone-recycling-refresh"
+                class="bone-text-button bbs-action"
+                data-action-tone="quiet"
+                type="button"
+              >
                 刷新库存
               </button>
             </header>
@@ -212,7 +218,8 @@
                   <span data-bone-quantity="ordinary_fishbone">库存读取中</span>
                 </div>
                 <button
-                  class="bone-sell-button"
+                  class="bone-sell-button bbs-action"
+                  data-action-tone="primary"
                   data-sell-bone="ordinary_fishbone"
                   type="button"
                   disabled
@@ -230,7 +237,8 @@
                   <span data-bone-quantity="golden_fishbone">库存读取中</span>
                 </div>
                 <button
-                  class="bone-sell-button"
+                  class="bone-sell-button bbs-action"
+                  data-action-tone="primary"
                   data-sell-bone="golden_fishbone"
                   type="button"
                   disabled
@@ -294,7 +302,14 @@
             <option value="all">全部币种</option>
             <option value="electric">仅电元</option>
             <option value="magnetic">仅磁元</option></select
-          ><button id="wallet-ledger-refresh" type="button">刷新</button>
+          ><button
+            class="bbs-action"
+            data-action-tone="quiet"
+            id="wallet-ledger-refresh"
+            type="button"
+          >
+            刷新
+          </button>
         </div>
         <div
           class="wallet-scroll"
@@ -305,7 +320,13 @@
         >
           <p class="wallet-state" id="wallet-ledger-status" role="status"></p>
           <div id="wallet-ledger-list" role="list" aria-label="收支明细"></div>
-          <button id="wallet-ledger-more" class="wallet-more" type="button" hidden>
+          <button
+            id="wallet-ledger-more"
+            class="wallet-more bbs-action"
+            data-action-tone="secondary"
+            type="button"
+            hidden
+          >
             加载更早记录
           </button>
         </div>
@@ -355,8 +376,21 @@
         <p class="bone-sale-warning">确认后将扣除对应鱼骨，这笔收入会记录在钱包账本里。</p>
         <p id="bone-sale-status" role="status"></p>
         <div class="bone-sale-actions">
-          <button id="bone-sale-cancel" class="bone-text-button" type="button">先留着</button
-          ><button id="bone-sale-submit" class="bone-sell-button" type="submit">确认出售</button>
+          <button
+            id="bone-sale-cancel"
+            class="bone-text-button bbs-action"
+            data-action-tone="secondary"
+            type="button"
+          >
+            先留着</button
+          ><button
+            id="bone-sale-submit"
+            class="bone-sell-button bbs-action"
+            data-action-tone="primary"
+            type="submit"
+          >
+            确认出售
+          </button>
         </div>
       </form>
     </dialog>
@@ -364,6 +398,8 @@
     <script src="/username-guard.js"></script>
     <script src="/max-ranch.js"></script>
     <script src="/profile-extras.js"></script>
+    <script src="/request-runtime.js"></script>
+    <script src="/ui-state.js"></script>
     <script src="/app.js"></script>
     <script src="/notifications.js"></script>
     <script src="/wallet-ledger.js"></script>

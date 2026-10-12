@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <script src="/typography-preferences.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>FREE-BBS - 知识点</title>
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
@@ -24,6 +25,9 @@
     <link rel="stylesheet" href="/layout-fixes.css" />
     <link rel="stylesheet" href="/knowledge-editor.css" />
     <link rel="stylesheet" href="/knowledge-overview.css?v=20260930-map-overview-2" />
+    <link rel="stylesheet" href="/knowledge-workspace.css?v=20261003-1" />
+    <link rel="stylesheet" href="/learning-stars.css?v=20261002-1" />
+    <link rel="stylesheet" href="/learning-start.css?v=20261003-1" />
   </head>
   <body class="knowledge-page">
     <div class="page-shell page-shell-settings">
@@ -253,7 +257,7 @@
                 </button>
                 <button type="button" data-knowledge-tool="notes" aria-pressed="false">
                   <span aria-hidden="true">✎</span>
-                  <strong>个人笔记</strong>
+                  <strong>我的批注</strong>
                 </button>
                 <button type="button" data-knowledge-tool="contribute" aria-pressed="false">
                   <span aria-hidden="true">＋</span>
@@ -292,6 +296,12 @@
                 编辑知识点
               </button>
             </header>
+            <div class="learning-reader-controls">
+              <section id="learning-start-selector" aria-label="课程学习起点"></section>
+              <button class="learning-guide-open" id="learning-guide-open" type="button">
+                学习指南
+              </button>
+            </div>
             <p class="knowledge-edit-notice" id="knowledge-edit-notice" role="status" hidden></p>
             <section
               class="knowledge-editor"
@@ -411,8 +421,20 @@
               <footer class="knowledge-editor-footer">
                 <p class="knowledge-editor-status" id="knowledge-editor-status" role="status"></p>
                 <div class="knowledge-editor-actions">
-                  <button id="knowledge-editor-cancel" type="button">取消</button>
-                  <button class="knowledge-editor-save" id="knowledge-editor-save" type="button">
+                  <button
+                    class="bbs-action"
+                    data-action-tone="secondary"
+                    id="knowledge-editor-cancel"
+                    type="button"
+                  >
+                    取消
+                  </button>
+                  <button
+                    class="knowledge-editor-save bbs-action"
+                    data-action-tone="primary"
+                    id="knowledge-editor-save"
+                    type="button"
+                  >
                     保存
                   </button>
                 </div>
@@ -425,8 +447,22 @@
               >
                 <p>还有未保存的修改，是否放弃？</p>
                 <div class="knowledge-editor-actions">
-                  <button id="knowledge-editor-discard-confirm" type="button">放弃修改</button>
-                  <button id="knowledge-editor-discard-keep" type="button">继续编辑</button>
+                  <button
+                    class="bbs-action"
+                    data-action-tone="danger"
+                    id="knowledge-editor-discard-confirm"
+                    type="button"
+                  >
+                    放弃修改
+                  </button>
+                  <button
+                    class="bbs-action"
+                    data-action-tone="secondary"
+                    id="knowledge-editor-discard-keep"
+                    type="button"
+                  >
+                    继续编辑
+                  </button>
                 </div>
               </div>
             </section>
@@ -471,7 +507,12 @@
               <p class="knowledge-overview-empty hidden" id="knowledge-overview-empty">
                 可直接阅读正文。
               </p>
-              <button class="knowledge-overview-start" id="knowledge-start-reading" type="button">
+              <button
+                class="knowledge-overview-start bbs-action"
+                data-action-tone="primary"
+                id="knowledge-start-reading"
+                type="button"
+              >
                 开始阅读正文 <span aria-hidden="true">→</span>
               </button>
             </section>
@@ -485,6 +526,9 @@
                   <h2>正文</h2>
                 </div>
                 <div class="knowledge-reading-actions">
+                  <button class="learning-reading-notes" type="button" data-learning-go="notes">
+                    我的批注
+                  </button>
                   <button
                     class="knowledge-reading-back"
                     id="knowledge-return-overview"
@@ -513,10 +557,328 @@
                 <div class="knowledge-history-content" id="knowledge-history-content">
                   <h2>我们为什么要学习这个知识点？</h2>
                   <p class="knowledge-history-question">为了解决什么问题，出现了这个知识？</p>
-                  <div class="knowledge-history-placeholder" role="status">正在开发</div>
+                  <div class="discussion-markdown-body" id="knowledge-history-prose"></div>
+                  <div
+                    class="knowledge-history-placeholder"
+                    id="knowledge-history-empty"
+                    role="status"
+                  >
+                    本知识点尚未提供起源说明。
+                  </div>
                 </div>
               </aside>
+              <div
+                id="learning-reading-notes-host"
+                class="learning-inline-notes learning-workspace"
+              ></div>
               <div class="discussion-markdown-body course-material-body" id="knowledge-body"></div>
+              <section
+                id="knowledge-chapter-network"
+                class="chapter-network"
+                hidden
+                aria-label="章节知识网络"
+              ></section>
+            </section>
+            <section
+              class="learning-workspace"
+              id="learning-workspace"
+              hidden
+              aria-label="学习工具内容"
+            >
+              <header class="learning-heading">
+                <p class="course-kicker" id="learning-eyebrow" hidden></p>
+                <h2 id="learning-heading" tabindex="-1">继续学习</h2>
+                <p id="learning-description"></p>
+              </header>
+              <p class="learning-session" id="learning-session" role="status"></p>
+              <section data-learning-panel="resources" hidden>
+                <div class="learning-empty">
+                  <h3>学习资源</h3>
+                  <p>暂无相关资料。</p>
+                </div>
+              </section>
+              <section data-learning-panel="feedback" hidden>
+                <div
+                  id="learning-selftest-stars"
+                  class="learning-star-strip"
+                  aria-live="polite"
+                ></div>
+                <div class="learning-section-title">
+                  <nav id="learning-quiz-tabs" class="learning-segments" aria-label="题目分类">
+                    <button type="button" data-quiz-view="practice" aria-pressed="false">
+                      练习题
+                    </button>
+                    <button type="button" data-quiz-view="quick" aria-pressed="true">自测</button>
+                    <button type="button" data-quiz-view="mistakes" aria-pressed="false">
+                      订正
+                    </button>
+                  </nav>
+                  <details class="learning-grading-rules">
+                    <summary>判分规则</summary>
+                    <ul>
+                      <li>按课程组公布的分值与通过标准判定。</li>
+                      <li>多选题全部选对得分；计算题按题目指定的误差范围判定。</li>
+                      <li>主观题等待课程组复核，不提前记为通过或未通过。</li>
+                    </ul>
+                  </details>
+                </div>
+                <p id="learning-quiz-status" class="learning-form-status" role="status"></p>
+                <div id="learning-quiz-list" class="learning-question-list"></div>
+                <div id="learning-quiz-results" class="learning-records" aria-live="polite"></div>
+                <details class="learning-secondary-section" id="learning-reflection-section">
+                  <summary>学习复盘</summary>
+                  <form id="learning-reflection-form" class="learning-card learning-form">
+                    <h3>记录理解与疑问</h3>
+                    <fieldset>
+                      <legend>当前状态</legend>
+                      <div class="learning-options">
+                        <label
+                          ><input
+                            type="radio"
+                            name="feeling"
+                            value="stuck"
+                            checked
+                          />还没理顺</label
+                        >
+                        <label
+                          ><input type="radio" name="feeling" value="getting" />能说出思路</label
+                        >
+                        <label
+                          ><input type="radio" name="feeling" value="practice" />想做点练习</label
+                        >
+                      </div>
+                    </fieldset>
+                    <label
+                      >小结<textarea
+                        name="content"
+                        rows="5"
+                        maxlength="8000"
+                        required
+                        placeholder="理解了什么，哪一步还没想通？"
+                      ></textarea>
+                    </label>
+                    <div class="learning-actions">
+                      <button class="learning-primary" type="submit">保存复盘</button
+                      ><button type="button" data-learning-go="continue">下一步</button>
+                    </div>
+                    <p class="learning-form-status" role="status"></p>
+                  </form>
+                  <div class="learning-section-title">
+                    <h3>我的复盘</h3>
+                    <button type="button" data-learning-refresh>刷新记录</button>
+                  </div>
+                  <div id="learning-reflections" class="learning-records"></div>
+                </details>
+              </section>
+              <section data-learning-panel="continue" hidden>
+                <div class="learning-plan">
+                  <div class="learning-section-title">
+                    <div>
+                      <h3 id="learning-plan-title">下一步</h3>
+                      <p id="learning-plan-reason" class="learning-caption"></p>
+                    </div>
+                    <button type="button" id="learning-open-max">打开 Max</button>
+                  </div>
+                  <ol
+                    id="learning-plan-steps"
+                    class="learning-plan-steps"
+                    aria-label="学习步骤"
+                  ></ol>
+                  <div class="learning-actions">
+                    <button class="learning-primary" id="learning-plan-save" type="button">
+                      保存路径
+                    </button>
+                    <button id="learning-plan-reset" type="button">重新推荐</button>
+                    <span id="learning-plan-total" class="learning-caption"></span>
+                  </div>
+                  <p id="learning-plan-status" class="learning-form-status" role="status"></p>
+                  <p id="learning-plan-tip" class="learning-plan-tip"></p>
+                </div>
+              </section>
+              <section data-learning-panel="notes" hidden>
+                <div class="learning-section-title">
+                  <h3>我的批注</h3>
+                  <button type="button" data-learning-go="content">收起</button>
+                  <button type="button" id="learning-annotation-toggle" aria-pressed="true">
+                    评注已开启
+                  </button>
+                </div>
+                <div
+                  id="learning-annotation-toolbar"
+                  class="learning-annotation-toolbar"
+                  role="toolbar"
+                  aria-label="原文评注工具"
+                  hidden
+                >
+                  <div class="learning-annotation-colors" aria-label="高亮颜色">
+                    <button
+                      type="button"
+                      data-annotation-action="highlight"
+                      data-annotation-color="yellow"
+                      aria-label="黄色高亮"
+                      title="黄色高亮"
+                    ></button>
+                    <button
+                      type="button"
+                      data-annotation-action="highlight"
+                      data-annotation-color="green"
+                      aria-label="绿色高亮"
+                      title="绿色高亮"
+                    ></button>
+                    <button
+                      type="button"
+                      data-annotation-action="highlight"
+                      data-annotation-color="blue"
+                      aria-label="蓝色高亮"
+                      title="蓝色高亮"
+                    ></button>
+                    <button
+                      type="button"
+                      data-annotation-action="highlight"
+                      data-annotation-color="purple"
+                      aria-label="紫色高亮"
+                      title="紫色高亮"
+                    ></button>
+                  </div>
+                  <button type="button" data-annotation-action="underline">下划线</button>
+                  <button type="button" data-annotation-action="comment">评注</button>
+                  <button type="button" data-annotation-action="ask">问 Max</button>
+                  <button type="button" data-annotation-action="correction">纠错</button>
+                  <button type="button" data-annotation-action="remove">取消标注</button>
+                  <label class="learning-annotation-comment-field"
+                    >评注<textarea
+                      id="learning-annotation-comment"
+                      rows="2"
+                      maxlength="8000"
+                      placeholder="写下对这段原文的理解或疑问"
+                    ></textarea>
+                  </label>
+                </div>
+                <p id="learning-annotation-status" class="learning-form-status" role="status"></p>
+                <details class="learning-secondary-section" id="learning-annotation-directory">
+                  <summary>批注目录</summary>
+                  <div id="learning-annotation-list" class="learning-records"></div>
+                </details>
+                <details class="learning-secondary-section" id="learning-note-composer">
+                  <summary>补充笔记</summary>
+                  <form id="learning-note-form" class="learning-card learning-form">
+                    <h3 id="learning-note-form-title">补充笔记</h3>
+                    <label
+                      >标题<input name="title" maxlength="120" placeholder="笔记标题" required
+                    /></label>
+                    <label
+                      >笔记<textarea
+                        name="content"
+                        maxlength="8000"
+                        rows="7"
+                        required
+                        placeholder="自己的解释、补充资料，或保存的 Max 回答"
+                      ></textarea>
+                    </label>
+                    <div class="learning-actions">
+                      <button class="learning-primary" type="submit">保存笔记</button
+                      ><button id="learning-note-cancel" type="button" hidden>取消编辑</button>
+                    </div>
+                    <p class="learning-form-status" role="status"></p>
+                  </form>
+                </details>
+                <div class="learning-section-title">
+                  <h3>这个知识点的笔记</h3>
+                  <button type="button" data-learning-refresh>刷新记录</button>
+                </div>
+                <div id="learning-notes" class="learning-records"></div>
+              </section>
+              <section data-learning-panel="contribute" hidden>
+                <form id="learning-contribution-form" class="learning-card learning-form">
+                  <h3>提交给课程组</h3>
+                  <label
+                    >共建类型<select name="category">
+                      <option value="correction">内容纠错</option>
+                      <option value="improvement">改进建议</option>
+                      <option value="resource">资源投稿</option>
+                    </select></label
+                  >
+                  <label
+                    >简要说明<input name="title" maxlength="120" required placeholder="标题"
+                  /></label>
+                  <label id="learning-contribution-excerpt-field"
+                    >相关原文（可选）<textarea
+                      name="excerpt"
+                      maxlength="600"
+                      rows="2"
+                      placeholder="可从原文选中内容后点击“纠错”"
+                    ></textarea>
+                  </label>
+                  <label id="learning-contribution-scope-field" hidden
+                    >建议方向<select name="scope">
+                      <option value="content">正文内容</option>
+                      <option value="structure">组织结构</option>
+                      <option value="relation">知识点关系</option>
+                      <option value="presentation">学习呈现</option>
+                    </select></label
+                  >
+                  <fieldset id="learning-resource-fields" class="learning-resource-fields" hidden>
+                    <label
+                      >资料级别<select name="resourceLevel">
+                        <option value="knowledge">知识点级资料</option>
+                        <option value="course">课程级资料</option>
+                      </select></label
+                    >
+                    <label
+                      >资料链接<input
+                        name="sourceUrl"
+                        type="url"
+                        maxlength="2048"
+                        placeholder="https://"
+                    /></label>
+                    <label id="learning-resource-coverage-field" hidden
+                      >覆盖范围<input
+                        name="coverage"
+                        maxlength="600"
+                        placeholder="涉及的章节或课程内容"
+                    /></label>
+                    <label
+                      >来源<input
+                        name="resourceSource"
+                        maxlength="600"
+                        placeholder="作者、机构或原始出处"
+                    /></label>
+                    <label
+                      >授权情况<input
+                        name="resourceLicense"
+                        maxlength="600"
+                        placeholder="自有作品、已获授权或开放许可及依据"
+                    /></label>
+                  </fieldset>
+                  <label
+                    >具体建议与依据<textarea
+                      name="content"
+                      maxlength="8000"
+                      rows="5"
+                      required
+                      placeholder="具体内容及依据"
+                    ></textarea>
+                  </label>
+                  <p class="learning-caption">课程组审核后处理。</p>
+                  <button class="learning-primary" type="submit">提交给课程组</button>
+                  <p class="learning-form-status" role="status"></p>
+                </form>
+                <div class="learning-section-title">
+                  <h3>我的提交</h3>
+                  <button type="button" data-learning-refresh>刷新记录</button>
+                </div>
+                <div id="learning-contributions" class="learning-records"></div>
+                <section id="learning-review-section" hidden>
+                  <div class="learning-section-title">
+                    <h3>课程组收件箱</h3>
+                    <button id="learning-review-refresh" type="button">刷新待处理</button>
+                  </div>
+                  <div id="learning-review-records" class="learning-records"></div>
+                </section>
+              </section>
+              <div class="learning-pagination">
+                <button id="learning-load-more" type="button" hidden>加载更早记录</button>
+              </div>
             </section>
             <nav class="knowledge-sequence-navigation" aria-label="前后知识点导航">
               <a class="knowledge-sequence-link is-previous" id="knowledge-previous-link">
@@ -660,7 +1022,14 @@
                   </div>
                   <div class="knowledge-discussion-toolbar-actions">
                     <button id="knowledge-discussion-compose-toggle" type="button">发帖子</button>
-                    <button id="knowledge-discussion-refresh" type="button">刷新</button>
+                    <button
+                      class="bbs-action"
+                      data-action-tone="quiet"
+                      id="knowledge-discussion-refresh"
+                      type="button"
+                    >
+                      刷新
+                    </button>
                     <a id="knowledge-discussion-board-link" href="/discussion">完整讨论区 ↗</a>
                   </div>
                 </header>
@@ -737,11 +1106,17 @@
                       >登录后返回此页</a
                     >
                     <div class="knowledge-discussion-form-actions">
-                      <button id="knowledge-discussion-compose-cancel" type="button">
+                      <button
+                        class="bbs-action"
+                        data-action-tone="secondary"
+                        id="knowledge-discussion-compose-cancel"
+                        type="button"
+                      >
                         返回列表
                       </button>
                       <button
-                        class="knowledge-discussion-publish"
+                        class="knowledge-discussion-publish bbs-action"
+                        data-action-tone="primary"
                         id="knowledge-discussion-compose-submit"
                         type="submit"
                       >
@@ -773,7 +1148,14 @@
                   hidden
                 >
                   <nav class="knowledge-discussion-detail-actions" aria-label="帖子详情操作">
-                    <button id="knowledge-discussion-back" type="button">← 返回帖子列表</button>
+                    <button
+                      class="bbs-action"
+                      data-action-tone="secondary"
+                      id="knowledge-discussion-back"
+                      type="button"
+                    >
+                      ← 返回帖子列表
+                    </button>
                     <a id="knowledge-discussion-post-link" href="/discussion">在讨论区打开 ↗</a>
                   </nav>
                   <div class="knowledge-discussion-detail-heading">
@@ -815,7 +1197,12 @@
                         <span
                           >回复 <strong id="knowledge-discussion-comment-target-name"></strong
                         ></span>
-                        <button id="knowledge-discussion-comment-target-cancel" type="button">
+                        <button
+                          class="bbs-action"
+                          data-action-tone="secondary"
+                          id="knowledge-discussion-comment-target-cancel"
+                          type="button"
+                        >
                           取消回复
                         </button>
                       </div>
@@ -841,7 +1228,8 @@
                       >
                       <div class="knowledge-discussion-form-actions">
                         <button
-                          class="knowledge-discussion-publish"
+                          class="knowledge-discussion-publish bbs-action"
+                          data-action-tone="primary"
                           id="knowledge-discussion-comment-submit"
                           type="submit"
                         >
@@ -882,10 +1270,23 @@
     <script src="/vendor/katex/dist/contrib/auto-render.min.js"></script>
     <script src="/typography.js"></script>
     <script src="/username-guard.js"></script>
+    <script src="/request-runtime.js"></script>
+    <script src="/ui-state.js"></script>
     <script src="/app.js"></script>
-    <script src="/knowledge-overview.js?v=20260929-1"></script>
-    <script src="/knowledge.js?v=20260929-overview-1"></script>
+    <script src="/learning-stars.js?v=20261002-1"></script>
+    <script src="/knowledge-overview.js?v=20261002-stars-1"></script>
+    <script src="/learning-content.js?v=20260930-1"></script>
+    <script src="/learning-progress.js?v=20261001-1"></script>
+    <script src="/learning-analytics.js?v=20261003-1"></script>
+    <script src="/learning-strategies.js?v=20261003-1"></script>
+    <script src="/learning-start.js?v=20261003-1"></script>
+    <script src="/learning-next-steps.js?v=20261003-1"></script>
+    <script src="/knowledge.js?v=20261003-1"></script>
     <script src="/knowledge-history.js"></script>
+    <script src="/learning-assessment.js?v=20261003-1"></script>
+    <script src="/knowledge-annotations.js?v=20261003-1"></script>
+    <script src="/knowledge-workspace.js?v=20261003-1"></script>
+    <script src="/learning-guide.js?v=20261003-1"></script>
     <script src="/knowledge-editor.js"></script>
     <script src="/notifications.js"></script>
   </body>

@@ -28,6 +28,7 @@ const {
   STATIONS,
   ARCHIVED_STEPS,
   ARCHIVED_STATIONS,
+  LEGACY_V4_STEPS,
   RELEASE_STEP_IDS,
 } = require('../public/max-guide-stations');
 
@@ -352,7 +353,7 @@ test('oversized targets retain their entire visible hole and explicitly request 
 test('guide versions resolve current, archived v3 and immutable release catalogues', () => {
   assert.equal(stepsFor(), STEPS);
   assert.equal(stepsFor(VERSION), STEPS);
-  assert.equal(STEPS.length, 16);
+  assert.equal(STEPS.length, 17);
   assert.equal(new Set(STEPS.map((step) => step.id)).size, STEPS.length);
   assert.equal(stepsFor('max-v3'), ARCHIVED_STEPS);
   assert.equal(ARCHIVED_STEPS.length, 58);
@@ -379,7 +380,7 @@ test('guide versions resolve current, archived v3 and immutable release catalogu
     '__proto__',
     '',
     null,
-    ...LEGACY_GUIDE_VERSIONS.filter((id) => id !== 'max-v3'),
+    ...LEGACY_GUIDE_VERSIONS.filter((id) => !['max-v3', 'max-v4'].includes(id)),
   ]) {
     assert.throws(() => stepsFor(version), `unknown client catalogue: ${version}`);
     assert.throws(() => tourUrl(0, version));
@@ -389,18 +390,44 @@ test('guide versions resolve current, archived v3 and immutable release catalogu
   }
 });
 
-test('v4 has five concise chapters and preserves every published v3 numeric position', () => {
-  assert.equal(VERSION, 'max-v4');
+test('v5 has one frame per other page and preserves every published v3 and v4 numeric position', () => {
+  assert.equal(VERSION, 'max-v5');
   assert.deepEqual(
     STATIONS.map((station) => station.id),
-    ['home', 'world', 'discussion', 'workbench', 'handbook'],
+    [
+      'home',
+      'world',
+      'discussion',
+      'workbench',
+      'laboratory',
+      'creative',
+      'pbl',
+      'max',
+      'development',
+      'shop',
+      'handbook',
+    ],
   );
-  assert.equal(STEPS.length, 16);
+  assert.equal(STEPS.length, 17);
+  assert.equal(stepsFor('max-v4'), LEGACY_V4_STEPS);
+  assert.equal(LEGACY_V4_STEPS.length, 16);
   assert.deepEqual(
     STEPS.filter((step, index) => index === 0 || step.station !== STEPS[index - 1].station).map(
       (step) => step.station,
     ),
-    ['home', 'world', 'discussion', 'workbench', 'handbook'],
+    [
+      'home',
+      'world',
+      'discussion',
+      'workbench',
+      'laboratory',
+      'creative',
+      'pbl',
+      'max',
+      'development',
+      'shop',
+      'handbook',
+    ],
   );
   assert.equal(ARCHIVED_STEPS.length, 58);
   const expected = [
@@ -615,7 +642,7 @@ test('archived v3: world overview stations reset concealed planets and never reu
 });
 
 test('workbench guidance follows the visible week or mobile list without changing the chosen view', () => {
-  const step = STEPS.find((entry) => entry.id === 'workbench-week');
+  const step = LEGACY_V4_STEPS.find((entry) => entry.id === 'workbench-week');
   assert.equal(step.target, '#workbench-week-grid, #workbench-schedule-list');
   assert.match(step.body, /手机默认显示列表.*七天视图/);
   assert.equal(step.action, undefined);
@@ -709,7 +736,7 @@ test('archived v3: comment guidance highlights the shared entry instead of a des
 });
 
 test('publishing guidance includes the mobile create menu without navigating or auto-opening it', () => {
-  const step = STEPS.find((entry) => entry.id === 'discussion-composer');
+  const step = LEGACY_V4_STEPS.find((entry) => entry.id === 'discussion-composer');
   assert.equal(step.target, '#discussion-create-toggle, .mobile-publish');
   assert.match(step.body, /手机上先点底部「＋」，再选「发帖」/);
   assert.equal(step.action, undefined);
@@ -764,7 +791,7 @@ test('course guide preparation cannot navigate away while the real map API is pe
     },
   };
   vm.runInNewContext(source, {
-    window: { location, freeBbsApp: app },
+    window: { location, freeBbsApp: app, addEventListener() {} },
     document: doc,
     URLSearchParams,
   });
@@ -786,9 +813,15 @@ test('course guide preparation cannot navigate away while the real map API is pe
 
 test('course overview readiness distinguishes the rendered directory from a focused map or empty canvas', () => {
   const step = STEPS.find((entry) => entry.id === 'course-directory');
-  assert.equal(step.target, '.course-map-directory-layout:has(.course-map-directory-panel)');
+  assert.equal(
+    step.target,
+    '.course-structure-picker, .course-map-directory-layout:has(.course-map-directory-panel)',
+  );
   assert.deepEqual(step.prepare, [
-    { selector: '#course-map-reset-view', whenMissing: '.course-map-directory-panel' },
+    {
+      selector: '#course-map-reset-view',
+      whenMissing: '.course-structure-picker, .course-map-directory-panel',
+    },
   ]);
   assert.notEqual(step.target, '#course-map-canvas', 'the empty loading shell is not a ready map');
 });
@@ -804,7 +837,10 @@ test('station actions and preparation are restricted to an audited read-only vie
     '#world-orbit',
     '#course-map-reset-view',
     '[data-reader-node-id]',
+    '.course-structure-picker [data-course-point-id], [data-reader-node-id]',
     '.course-map-focus-center [data-reader-node-id]',
+    '.course-structure-details .course-structure-primary, .course-map-focus-center [data-reader-node-id]',
+    '.course-structure-details .course-structure-primary, [data-course-map-arrow-help-toggle]',
     '#course-knowledge-overview[open] .knowledge-overview-drawer-footer > button',
     '[data-course-map-arrow-help-toggle]',
     '#knowledge-return-overview',

@@ -49,8 +49,8 @@ body.tool-workshop-page .tool-laboratory-back {
   padding: 8px 12px;
   border: 0;
   border-radius: 6px;
-  background: transparent;
-  color: var(--ui-text);
+  background: var(--action-fill, transparent);
+  color: var(--action-foreground, var(--ui-text));
   font: 600 0.86rem/1.4 var(--font-ui);
   cursor: pointer;
   transition:
@@ -59,11 +59,11 @@ body.tool-workshop-page .tool-laboratory-back {
 }
 .tool-workshop-shell button:hover,
 .tool-viewer button:hover {
-  background: var(--ui-surface-soft);
+  background: var(--action-hover-fill, var(--ui-surface-soft));
 }
 .tool-workshop-shell button:active,
 .tool-viewer button:active {
-  transform: translateY(1px);
+  transform: var(--action-target-transform, translateY(1px));
 }
 .tool-workshop-shell button:disabled {
   opacity: 0.55;
@@ -71,19 +71,19 @@ body.tool-workshop-page .tool-laboratory-back {
 }
 #tool-create-toggle {
   flex-shrink: 0;
-  color: var(--ui-accent);
+  color: var(--action-foreground, var(--ui-accent));
   border: 1px solid var(--ui-line-strong);
 }
 #tool-generate,
 #tool-publish,
 #tool-share-discussion {
-  background: var(--ui-accent);
-  color: #fff;
+  background: var(--action-fill, var(--ui-accent));
+  color: var(--action-foreground, #fff);
 }
 #tool-generate:hover,
 #tool-publish:hover,
 #tool-share-discussion:hover {
-  background: color-mix(in srgb, var(--ui-accent) 85%, black);
+  background: var(--action-hover-fill, color-mix(in srgb, var(--ui-accent) 85%, black));
 }
 .tool-studio {
   display: grid;
@@ -246,7 +246,7 @@ body.theme-light .tool-code-live code.hljs {
 .tool-gallery-toolbar button {
   border-radius: 0;
   border-bottom: 2px solid transparent;
-  color: var(--ui-muted);
+  color: var(--action-foreground, var(--ui-muted));
 }
 .tool-output-tabs button[aria-pressed='true'],
 .tool-gallery-toolbar button[aria-pressed='true'] {

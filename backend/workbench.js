@@ -550,10 +550,11 @@ function createWorkbenchRouter({
       );
 
       const courses = await listCourseSchedules(pool, user.id, range, 'confirmed');
+      const homework = await listHomeworkDeadlines(pool, user.id, range, 'confirmed');
       response.json({
         importantItems: importantRows.map(toImportantItem),
         notifications: notificationRows.map(toNotification),
-        scheduleItems: [...scheduleRows.map(toScheduleItem), ...courses]
+        scheduleItems: [...scheduleRows.map(toScheduleItem), ...courses, ...homework]
           .sort((a, b) => new Date(a.startAt) - new Date(b.startAt))
           .slice(0, 4),
         range: {

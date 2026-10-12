@@ -46,6 +46,8 @@
   const lookup = document.getElementById('lookup-form');
   function resultLink(href = '#lookup') {
     const link = el('a', '查看我的抽签结果 →', 'button activity-result-link');
+    link.classList.add('bbs-action');
+    link.dataset.actionTone = 'secondary';
     link.href = href;
     return link;
   }
@@ -79,6 +81,8 @@
       el('p', receipt, 'receipt'),
     );
     const save = el('button', '下载报名回执');
+    save.classList.add('bbs-action');
+    save.dataset.actionTone = 'secondary';
     save.onclick = () =>
       download(
         'FREE-BBS-报名回执.txt',
@@ -100,6 +104,8 @@
       filters.setAttribute('aria-label', '按报名状态筛选');
       const grid = el('div', undefined, 'activity-grid');
       const more = el('button', '加载更多活动', 'secondary');
+      more.classList.add('bbs-action');
+      more.dataset.actionTone = 'secondary';
       let surveys = [];
       let nextPage = 0;
       let filter = '全部';
@@ -139,6 +145,8 @@
             status(survey) === '报名中' ? '查看活动并报名 ↗' : '查看活动详情 ↗',
             'button',
           );
+          link.classList.add('bbs-action');
+          link.dataset.actionTone = status(survey) === '报名中' ? 'primary' : 'secondary';
           link.href = `/surveys?id=${encodeURIComponent(survey.id)}`;
           card.append(
             badges,
@@ -227,6 +235,8 @@
       const prompt = el('section', undefined, 'card');
       prompt.id = 'activity-login-prompt';
       const link = el('a', '登录后继续报名 →', 'button');
+      link.classList.add('bbs-action');
+      link.dataset.actionTone = 'primary';
       link.href = `/login?next=${encodeURIComponent(`/surveys?id=${id}`)}`;
       prompt.append(
         el('h2', '本活动需要登录后报名'),
@@ -273,6 +283,8 @@
         });
         if (q.type === 'single' && !q.required) {
           const clear = el('button', '清除选择', 'secondary');
+          clear.classList.add('bbs-action');
+          clear.dataset.actionTone = 'quiet';
           clear.type = 'button';
           clear.onclick = () =>
             inputs.forEach((input) => {
@@ -299,6 +311,8 @@
       form.append(field);
     });
     const submit = el('button', '提交报名');
+    submit.classList.add('bbs-action');
+    submit.dataset.actionTone = 'primary';
     submit.type = 'submit';
     form.append(submit);
     // Keep one secret across retries, including a lost response after the server commits.

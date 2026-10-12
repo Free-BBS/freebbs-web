@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <script src="/typography-preferences.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>FREE-BBS - 讨论</title>
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-v2-64.png" />
@@ -267,7 +268,8 @@
                       正在连接讨论区…
                     </p>
                     <button
-                      class="discussion-create-toggle"
+                      class="discussion-create-toggle bbs-action"
+                      data-action-tone="primary"
                       id="discussion-create-toggle"
                       type="button"
                     >
@@ -365,7 +367,13 @@
                       role="status"
                       aria-live="polite"
                     ></p>
-                    <button class="auth-submit discussion-submit" type="submit">发布</button>
+                    <button
+                      class="auth-submit discussion-submit bbs-action"
+                      data-action-tone="primary"
+                      type="submit"
+                    >
+                      发布
+                    </button>
                   </div>
                 </form>
 
@@ -457,6 +465,8 @@
     <script src="/discussion-threads.js"></script>
     <script src="/max-tetris.js?v=20260930-theme-1"></script>
     <script src="/max-image-results.js"></script>
+    <script src="/request-runtime.js"></script>
+    <script src="/ui-state.js"></script>
     <script src="/app.js"></script>
     <script src="/circuit-discussion.js"></script>
     <script src="/notifications.js"></script>

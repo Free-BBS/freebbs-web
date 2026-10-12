@@ -2,19 +2,21 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+
 const app = fs.readFileSync('public/app.js', 'utf8');
 const source = app.slice(
   app.indexOf('async function restoreSession()'),
   app.indexOf('\nasync function loadFortuneConfig()'),
 );
 async function run(status, changed = false) {
-  let stored = 'saved-token',
-    cleared = false,
-    saved = false;
+  let stored = 'saved-token';
+  let cleared = false;
+  let saved = false;
   const context = {
     userState: { token: stored },
     STORAGE_KEY: 'token',
     localStorage: { getItem: () => stored },
+    getStoredAuthToken: () => stored,
     userName: {},
     isSettingsPage: () => false,
     isAdminManagementPage: () => false,
@@ -38,7 +40,7 @@ async function run(status, changed = false) {
     },
   };
   vm.createContext(context);
-  await vm.runInContext(source + '\nrestoreSession()', context);
+  await vm.runInContext(`${source}\nrestoreSession()`, context);
   return { stored, cleared, saved };
 }
 test('navigation abort and temporary auth lookup errors preserve credentials', async () => {

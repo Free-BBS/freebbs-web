@@ -80,6 +80,7 @@ export function CommunityPage({ client, initialPostId }: CommunityPageProps) {
   const [items, setItems] = useState<CommunityFeedItem[]>([]);
   const [trending, setTrending] = useState<CommunityTrendingPayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [error, setError] = useState('');
   const [composerOpen, setComposerOpen] = useState(false);
   const [detail, setDetail] = useState<CommunityThreadDetail | null>(null);
@@ -95,11 +96,12 @@ export function CommunityPage({ client, initialPostId }: CommunityPageProps) {
 
   const loadFeed = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       setItems(await client.request<CommunityFeedItem[]>(`/community/feed?channel=${channel}`));
       setError('');
     } catch {
-      setError('广场内容暂时无法加载，请稍后重试。');
+      setLoadError('广场内容暂时无法加载，请稍后重试。');
     } finally {
       setLoading(false);
     }
@@ -296,16 +298,22 @@ export function CommunityPage({ client, initialPostId }: CommunityPageProps) {
           </button>
         ))}
       </nav>
-      {error ? (
-        <p className="community-alert" role="alert">
-          {error}
+      {loadError || error ? (
+        <p className="community-alert" role="alert" data-state="error" aria-busy="false">
+          {loadError || error}
         </p>
       ) : null}
       <div className="community-layout">
-        <main className="community-feed" aria-live="polite">
-          {loading ? <p className="community-empty">正在收集广场上的新鲜事…</p> : null}
-          {!loading && items.length === 0 ? (
-            <p className="community-empty">这个分区还没有内容，来写下第一条吧。</p>
+        <main className="community-feed" aria-live="polite" aria-busy={loading}>
+          {loading ? (
+            <p className="community-empty" role="status" data-state="loading">
+              正在收集广场上的新鲜事…
+            </p>
+          ) : null}
+          {!loading && !loadError && items.length === 0 ? (
+            <p className="community-empty" role="status" data-state="empty">
+              这个分区还没有内容，来写下第一条吧。
+            </p>
           ) : null}
           {items.map((item) => (
             <CommunityCard
