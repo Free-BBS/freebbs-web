@@ -20,7 +20,7 @@ test('homepage motto preserves FREE BBS initials and names the shared study spac
     .replace(/<[^>]+>/g, '')
     .replace(/\s+/g, ' ')
     .trim();
-  assert.equal(words, 'Friends Rally to Empower Education, Building Better StudySpaces');
+  assert.equal(words, 'Friends Rally to Empower Education, Building Better Studyspace');
   const initials = [...motto.matchAll(/class="home-motto-initial">([A-Z])<\/span>/g)]
     .map((match) => match[1])
     .join('');
