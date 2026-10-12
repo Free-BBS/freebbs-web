@@ -12,7 +12,7 @@ import { MainSiteAuthClient } from './main-site-auth-client.js';
 import type { AuthClient } from './auth-client.js';
 
 describe('authentication middleware', () => {
-  it('uses the development-owned allowlist and permits only leads to preview a real user', async () => {
+  it('uses the development-owned allowlist and permits only explicit administrators to preview a real user', async () => {
     const store = createMemoryStore();
     await store.developmentAccess.create({
       subjectUid: 'u_lead',
@@ -60,6 +60,18 @@ describe('authentication middleware', () => {
       mode: 'main',
       store,
       userDirectory: directory,
+    });
+
+    await expect(
+      authenticate({ authorization: 'Bearer lead', 'x-development-preview-uid': 'u_member' }),
+    ).resolves.toMatchObject({ status: 403, code: 'preview_identity_denied' });
+    await store.roleAssignments.create({
+      subjectUid: 'u_lead',
+      roleKey: 'platform.admin',
+      expiresAt: null,
+      status: 'active',
+      ownerUid: 'test',
+      scope: { type: 'public', id: '*' },
     });
 
     await expect(
@@ -281,6 +293,14 @@ describe('authentication middleware', () => {
       version: 'task-15-test',
       now,
     });
+    await store.roleAssignments.create({
+      subjectUid: 'demo-admin',
+      roleKey: 'platform.admin',
+      expiresAt: null,
+      status: 'active',
+      ownerUid: 'test',
+      scope: { type: 'public', id: '*' },
+    });
     await store.subjects.create({
       uid: 'demo-captain',
       displayName: 'Captain',
@@ -311,7 +331,7 @@ describe('authentication middleware', () => {
       status: 200,
       user: {
         uid: 'demo-admin',
-        roles: ['platform.super_admin'],
+        roles: expect.arrayContaining(['platform.admin', 'platform.super_admin']),
         tags: [],
         policies: expect.any(Array),
       },

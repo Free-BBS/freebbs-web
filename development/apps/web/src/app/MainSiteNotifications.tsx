@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import type {
   ActivityNotification,
   ActivityNotificationInbox,
+  DevelopmentNotification,
 } from '@freebbs-development/contracts';
 import type { AuthMode, ApiClient } from '../core/api/client.js';
-import { mainSiteHref, requestMainSite } from './main-site-api.js';
+
 interface NotificationItem {
   id: string;
   title: string;
@@ -12,27 +13,28 @@ interface NotificationItem {
   link: string;
   readAt: string | null;
   createdAt: string;
-  channel?: 'development';
+  channel: 'system' | 'activity';
   source?: ActivityNotification['source'];
   activityId?: string;
 }
-interface NotificationInbox {
-  notifications: NotificationItem[];
-  unreadCount: number;
-  nextCursor: string | null;
-}
 function safeLink(link: string): string {
-  if (!link.startsWith('/') || link.startsWith('//') || /[\\\s]/.test(link)) return '';
+  if (!/^\/development(?:\/|$)/.test(link) || /[\\\s]/.test(link)) return '';
   return new URL(link, window.location.origin).origin === window.location.origin ? link : '';
 }
-function messageFrom(error: unknown) {
-  return error instanceof Error ? error.message : '通知加载失败，请稍后重试。';
-}
+const messageFrom = (error: unknown) =>
+  error instanceof Error ? error.message : '通知加载失败，请稍后重试。';
+const itemKey = (item: NotificationItem) =>
+  `${item.channel}:${item.source ?? ''}:${item.activityId ?? ''}:${item.id}`;
 function sorted(items: NotificationItem[]) {
-  return [...new Map(items.map((n) => [`${n.channel ?? 'main'}:${n.id}`, n])).values()].sort(
-    (a, b) => b.createdAt.localeCompare(a.createdAt),
+  return [...new Map(items.map((item) => [itemKey(item), item])).values()].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt),
   );
 }
+const systemItems = (items: DevelopmentNotification[]): NotificationItem[] =>
+  items.map((item) => ({ ...item, link: item.link ?? '', channel: 'system' }));
+const activityItems = (items: ActivityNotification[]): NotificationItem[] =>
+  items.map((item) => ({ ...item, channel: 'activity' }));
+
 export function MainSiteNotifications({
   authMode,
   userUid,
@@ -45,66 +47,50 @@ export function MainSiteNotifications({
   const [open, setOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [items, setItems] = useState<NotificationItem[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [developmentCursor, setDevelopmentCursor] = useState<string | null>(null);
+  const [activityCursor, setActivityCursor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const bellRef = useRef<HTMLButtonElement>(null);
   const busyRef = useRef(false);
+  const reads = useRef(new Set<string>());
   const generation = useRef(0);
-  const counts = useRef({ main: 0, development: 0 });
+  const counts = useRef({ system: 0, activity: 0 });
   useEffect(() => {
-    const activeGeneration = ++generation.current;
-    let alive = true;
+    const currentGeneration = ++generation.current;
+    let active = true;
     setOpen(false);
     setUnreadCount(0);
     setItems([]);
-    setCursor(null);
-    setDevelopmentCursor(null);
+    setActivityCursor(null);
     setMessage('');
     setBusy(false);
     busyRef.current = false;
-    counts.current = { main: 0, development: 0 };
+    reads.current.clear();
+    counts.current = { system: 0, activity: 0 };
     const refresh = async () => {
-      if (document.hidden) return;
-      const results = await Promise.allSettled([
-        authMode === 'main'
-          ? requestMainSite<{ unreadCount: number }>('/notifications/unread-count')
-          : Promise.resolve(null),
-        client
-          ? client.request<ActivityNotificationInbox>('/events/notifications')
-          : Promise.resolve(null),
+      if (!client || document.hidden || busyRef.current || reads.current.size) return;
+      const [system, activity] = await Promise.allSettled([
+        client.request<{ unreadCount: number }>('/notifications/unread-count'),
+        client.request<ActivityNotificationInbox>('/events/notifications'),
       ]);
-      if (!alive || generation.current !== activeGeneration) return;
-      const [main, development] = results;
-      if (main.status === 'fulfilled' && main.value && Number.isFinite(main.value.unreadCount))
-        counts.current.main = main.value.unreadCount;
-      if (
-        development.status === 'fulfilled' &&
-        development.value &&
-        Array.isArray(development.value.notifications)
-      ) {
-        counts.current.development = development.value.unreadCount;
-        setItems((current) =>
-          sorted([
-            ...current.filter((n) => n.channel !== 'development'),
-            ...development.value!.notifications.map((n) => ({
-              ...n,
-              channel: 'development' as const,
-            })),
-          ]),
-        );
-        setDevelopmentCursor(development.value.nextCursor);
+      if (!active || generation.current !== currentGeneration) return;
+      if (system.status === 'fulfilled' && Number.isFinite(system.value.unreadCount))
+        counts.current.system = system.value.unreadCount;
+      if (activity.status === 'fulfilled' && Array.isArray(activity.value.notifications)) {
+        counts.current.activity = activity.value.unreadCount;
+        setItems((current) => sorted([...current, ...activityItems(activity.value.notifications)]));
+        setActivityCursor(activity.value.nextCursor);
       }
-      setUnreadCount(counts.current.main + counts.current.development);
+      setUnreadCount(counts.current.system + counts.current.activity);
     };
     void refresh();
     const interval = window.setInterval(() => void refresh(), 30000);
     window.addEventListener('focus', refresh);
     window.addEventListener('freebbs-development-notifications-changed', refresh);
     return () => {
-      alive = false;
+      active = false;
       generation.current++;
       window.clearInterval(interval);
       window.removeEventListener('focus', refresh);
@@ -114,13 +100,14 @@ export function MainSiteNotifications({
   useEffect(() => {
     if (!open) return;
     closeRef.current?.focus();
-    const outside = (e: MouseEvent) => {
-      if (e.target instanceof Node && !rootRef.current?.contains(e.target)) setOpen(false);
+    const outside = (event: MouseEvent) => {
+      if (event.target instanceof Node && !rootRef.current?.contains(event.target)) setOpen(false);
     };
-    const escape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
         setOpen(false);
-        e.preventDefault();
+        bellRef.current?.focus();
+        event.preventDefault();
       }
     };
     document.addEventListener('mousedown', outside);
@@ -131,141 +118,121 @@ export function MainSiteNotifications({
     };
   }, [open]);
   async function loadInbox(append = false) {
-    if (busyRef.current) return;
+    if (!client || busyRef.current) return;
     const activeGeneration = generation.current;
     busyRef.current = true;
     setBusy(true);
     setMessage('正在加载…');
-    const results = await Promise.allSettled([
-      authMode === 'main' && (!append || cursor)
-        ? requestMainSite<NotificationInbox>(
-            `/notifications${append && cursor ? '?before=' + encodeURIComponent(cursor) : ''}`,
-          )
-        : Promise.resolve(null),
-      client && (!append || developmentCursor)
+    const [system, activity] = await Promise.allSettled([
+      !append ? client.request<DevelopmentNotification[]>('/notifications') : Promise.resolve(null),
+      !append || activityCursor
         ? client.request<ActivityNotificationInbox>(
-            `/events/notifications${append && developmentCursor ? '?before=' + encodeURIComponent(developmentCursor) : ''}`,
+            `/events/notifications${append && activityCursor ? `?before=${encodeURIComponent(activityCursor)}` : ''}`,
           )
         : Promise.resolve(null),
     ]);
-    if (generation.current !== activeGeneration) return;
+    if (activeGeneration !== generation.current) return;
     const loaded: NotificationItem[] = [];
     const errors: string[] = [];
-    const [main, development] = results;
-    if (main.status === 'fulfilled' && main.value && Array.isArray(main.value.notifications)) {
-      loaded.push(...main.value.notifications);
-      setCursor(main.value.nextCursor);
-      counts.current.main = main.value.unreadCount;
-    } else if (main.status === 'rejected') errors.push(messageFrom(main.reason));
+    if (system.status === 'fulfilled' && Array.isArray(system.value)) {
+      loaded.push(...systemItems(system.value));
+      counts.current.system = system.value.filter((item) => !item.readAt).length;
+    } else if (system.status === 'rejected') errors.push(messageFrom(system.reason));
     if (
-      development.status === 'fulfilled' &&
-      development.value &&
-      Array.isArray(development.value.notifications)
+      activity.status === 'fulfilled' &&
+      activity.value &&
+      Array.isArray(activity.value.notifications)
     ) {
-      loaded.push(
-        ...development.value.notifications.map((n) => ({ ...n, channel: 'development' as const })),
-      );
-      setDevelopmentCursor(development.value.nextCursor);
-      counts.current.development = development.value.unreadCount;
-    } else if (development.status === 'rejected') errors.push(messageFrom(development.reason));
-    const failedMain = main.status === 'rejected';
-    const failedDevelopment = development.status === 'rejected';
+      loaded.push(...activityItems(activity.value.notifications));
+      counts.current.activity = activity.value.unreadCount;
+      setActivityCursor(activity.value.nextCursor);
+    } else if (activity.status === 'rejected') errors.push(messageFrom(activity.reason));
     setItems((current) =>
       sorted(
         append
           ? [...current, ...loaded]
           : [
-              ...current.filter((n) =>
-                n.channel === 'development' ? failedDevelopment : failedMain,
+              ...current.filter((item) =>
+                item.channel === 'system'
+                  ? system.status === 'rejected'
+                  : activity.status === 'rejected',
               ),
               ...loaded,
             ],
       ),
     );
-    setUnreadCount(counts.current.main + counts.current.development);
-    setMessage(errors.join('；') || (loaded.length || append ? '' : '暂时没有通知'));
+    setUnreadCount(counts.current.system + counts.current.activity);
+    setMessage(errors.join('；') || (!loaded.length && !append ? '暂时没有通知' : ''));
     busyRef.current = false;
     setBusy(false);
   }
   async function markRead(item: NotificationItem) {
+    if (!client || reads.current.has(itemKey(item)) || busyRef.current) return;
     const activeGeneration = generation.current;
-    const link = safeLink(item.link);
-    const channel = item.channel === 'development' ? 'development' : 'main';
+    const key = itemKey(item);
+    reads.current.add(key);
     try {
       if (!item.readAt) {
-        if (channel === 'development')
-          await client?.request(
-            `/events/notifications/${item.source}/${encodeURIComponent(item.activityId ?? '')}/${encodeURIComponent(item.id)}/read`,
-            { method: 'POST' },
-          );
-        else
-          await requestMainSite(`/notifications/${encodeURIComponent(item.id)}/read`, {
-            method: 'POST',
-          });
-        if (generation.current !== activeGeneration) return;
+        const path =
+          item.channel === 'system'
+            ? `/notifications/${encodeURIComponent(item.id)}/read`
+            : `/events/notifications/${item.source}/${encodeURIComponent(item.activityId ?? '')}/${encodeURIComponent(item.id)}/read`;
+        await client.request(path, { method: 'POST' });
+        if (activeGeneration !== generation.current) return;
         setItems((current) =>
-          current.map((n) =>
-            n.id === item.id && n.channel === item.channel
-              ? { ...n, readAt: new Date().toISOString() }
-              : n,
+          current.map((notice) =>
+            itemKey(notice) === key ? { ...notice, readAt: new Date().toISOString() } : notice,
           ),
         );
-        counts.current[channel] = Math.max(0, counts.current[channel] - 1);
-        setUnreadCount(counts.current.main + counts.current.development);
+        counts.current[item.channel] = Math.max(0, counts.current[item.channel] - 1);
+        setUnreadCount(counts.current.system + counts.current.activity);
       }
-      if (generation.current !== activeGeneration) return;
-      if (link) window.location.assign(channel === 'development' ? link : mainSiteHref(link));
-    } catch (error) {
-      if (generation.current === activeGeneration) setMessage(messageFrom(error));
+      if (activeGeneration !== generation.current) return;
+      const link = safeLink(item.link);
+      if (link) window.location.assign(link);
+    } catch (caught) {
+      if (activeGeneration === generation.current) setMessage(messageFrom(caught));
+    } finally {
+      if (activeGeneration === generation.current) reads.current.delete(key);
     }
   }
   async function markAllRead() {
-    if (!unreadCount || busyRef.current) return;
+    if (!client || !unreadCount || busyRef.current || reads.current.size) return;
     const activeGeneration = generation.current;
-    setBusy(true);
     busyRef.current = true;
+    setBusy(true);
     const results = await Promise.allSettled([
-      authMode === 'main'
-        ? requestMainSite('/notifications/read-all', { method: 'POST' })
-        : Promise.resolve(null),
-      client
-        ? client.request('/events/notifications/read-all', { method: 'POST' })
-        : Promise.resolve(null),
+      client.request('/notifications/read-all', { method: 'POST' }),
+      client.request('/events/notifications/read-all', { method: 'POST' }),
     ]);
-    if (generation.current !== activeGeneration) return;
+    if (activeGeneration !== generation.current) return;
     const succeeded = {
-      main: results[0].status === 'fulfilled',
-      development: results[1].status === 'fulfilled',
+      system: results[0].status === 'fulfilled',
+      activity: results[1].status === 'fulfilled',
     };
     const now = new Date().toISOString();
     setItems((current) =>
-      current.map((n) =>
-        succeeded[n.channel === 'development' ? 'development' : 'main']
-          ? { ...n, readAt: n.readAt ?? now }
-          : n,
+      current.map((item) =>
+        succeeded[item.channel] ? { ...item, readAt: item.readAt ?? now } : item,
       ),
     );
-    if (succeeded.main) counts.current.main = 0;
-    if (succeeded.development) counts.current.development = 0;
-    setUnreadCount(counts.current.main + counts.current.development);
+    if (succeeded.system) counts.current.system = 0;
+    if (succeeded.activity) counts.current.activity = 0;
+    setUnreadCount(counts.current.system + counts.current.activity);
     setMessage(
       results
-        .filter((r) => r.status === 'rejected')
-        .map((r) => messageFrom(r.reason))
+        .filter((result) => result.status === 'rejected')
+        .map((result) => messageFrom(result.reason))
         .join('；'),
     );
     setBusy(false);
     busyRef.current = false;
   }
-  const label =
-    authMode === 'main' || client
-      ? unreadCount
-        ? `通知，${unreadCount} 条未读`
-        : '通知，无未读'
-      : '通知';
+  const label = client ? (unreadCount ? `通知，${unreadCount} 条未读` : '通知，无未读') : '通知';
   return (
     <div className="main-site-notifications" ref={rootRef}>
       <button
+        ref={bellRef}
         className="main-site-notification-bell"
         type="button"
         aria-label={label}
@@ -306,7 +273,7 @@ export function MainSiteNotifications({
         >
           <header className="main-site-notification-panel-header">
             <h2>通知</h2>
-            {authMode === 'main' || client ? (
+            {client ? (
               <button
                 type="button"
                 disabled={!unreadCount || busy}
@@ -319,7 +286,10 @@ export function MainSiteNotifications({
               ref={closeRef}
               type="button"
               aria-label="关闭通知"
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                setOpen(false);
+                bellRef.current?.focus();
+              }}
             >
               ×
             </button>
@@ -336,9 +306,9 @@ export function MainSiteNotifications({
               return (
                 <article
                   className={`main-site-notification-item${item.readAt ? '' : ' is-unread'}`}
-                  key={`${item.channel ?? 'main'}:${item.id}`}
+                  key={itemKey(item)}
                 >
-                  <button type="button" onClick={() => void markRead(item)}>
+                  <button type="button" disabled={busy} onClick={() => void markRead(item)}>
                     <strong>{item.title}</strong>
                     <span>{item.body}</span>
                     <time dateTime={Number.isNaN(date.getTime()) ? undefined : date.toISOString()}>
@@ -357,7 +327,7 @@ export function MainSiteNotifications({
               );
             })}
           </div>
-          {cursor || developmentCursor ? (
+          {activityCursor ? (
             <button
               className="main-site-notification-more"
               type="button"

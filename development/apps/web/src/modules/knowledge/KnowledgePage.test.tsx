@@ -17,7 +17,7 @@ const admin: UserContext = {
   displayName: '发展端管理员',
   avatarUrl: null,
   baseRole: 'student',
-  roles: ['platform.super_admin'],
+  roles: ['platform.admin'],
   tags: [],
 };
 

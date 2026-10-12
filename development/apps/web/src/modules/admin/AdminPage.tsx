@@ -19,7 +19,7 @@ export function AdminPage({ client: suppliedClient }: AdminPageProps = {}) {
         <ModulePageHeader
           kicker="DEVELOPMENT ADMIN"
           title="管理员模块"
-          description="从清晰的身份卡片维护发展端用户、组织归属和代表队范围。"
+          description="维护发展端访问名单和负责人任命。"
         />
         <button
           type="button"

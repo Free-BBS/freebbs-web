@@ -291,13 +291,13 @@ describe('AuthProvider', () => {
 });
 
 describe('Can', () => {
-  it('uses presentation-only tag, policy and predicate checks with super-admin override', () => {
+  it('uses presentation-only tag, policy and predicate checks with platform admin override', () => {
     const captain = { ...STUDENT, tags: [{ key: 'sports.team_captain' }] };
     const policyUser = {
       ...STUDENT,
       policies: [{ action: 'clubs.update', effect: 'allow' as const }],
     };
-    const superAdmin = { ...STUDENT, roles: ['platform.super_admin' as const] };
+    const superAdmin = { ...STUDENT, roles: ['platform.admin' as const] };
     const { rerender } = render(
       <Can user={captain} tag="sports.team_captain" fallback="Denied">
         Captain tools

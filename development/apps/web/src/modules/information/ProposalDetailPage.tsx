@@ -63,9 +63,9 @@ function matches(pattern: string, permission: string): boolean {
 }
 
 function canMaintain(user: ProposalUser | null | undefined): boolean {
-  if (user?.roles.includes('platform.super_admin')) return true;
-  const policies = (user?.policies ?? []).filter((policy) =>
-    matches(policy.action, 'information.proposal.manage'),
+  if (user?.roles.includes('platform.admin')) return true;
+  const policies = (user?.policies ?? []).filter(
+    (policy) => policy.action !== '*' && matches(policy.action, 'information.proposal.manage'),
   );
   return (
     !policies.some((policy) => policy.effect === 'deny') &&

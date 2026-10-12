@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import request from 'supertest';
 import type { RoleKey, ScopeRef } from '@freebbs-development/contracts';
 import { createApp } from '../../app.js';
+import { createRoleAssignment } from '../../modules/admin/assignment-service.js';
 import { MainSiteAuthClient } from '../auth/main-site-auth-client.js';
 import { createMemoryStore } from '../database/memory-store.js';
 
@@ -14,6 +15,16 @@ export const publicScope = { type: 'public', id: '*' };
 export async function scopedEditFixture() {
   const directory = await mkdtemp(join(tmpdir(), 'scoped-edit-'));
   const store = createMemoryStore();
+  // The main-mode setup actor is an actual access lead, not a historical role-only member.
+  await store.developmentAccess.create({
+    subjectUid: 'demo-admin',
+    studentId: null,
+    username: 'demo-admin',
+    accessLevel: 'lead',
+    status: 'active',
+    ownerUid: 'demo-admin',
+    scope: publicScope,
+  });
   // Existing production databases do not contain the newly introduced actions.
   for (const permission of await store.permissions.list()) {
     if (['events.workspace.update', 'events.department_home.update'].includes(permission.action))
@@ -40,16 +51,15 @@ export async function scopedEditFixture() {
     previewAllowedUids: [scopedMemberUid, 'demo-admin'],
     collectionsUploadDirectory: directory,
   });
-  // Main authentication creates the subject; privileges are granted through the admin API.
+  // Main authentication creates the target subject. Set up grants through the assignment
+  // service so a lead login does not fill the deliberately absent legacy definitions.
   await request(app).get('/api/development/v1/me').set(memberHeaders).expect(200);
   async function assign(roleKey: RoleKey, scope: ScopeRef = publicScope) {
-    return (
-      await request(app)
-        .post('/api/development/v1/admin/role-assignments')
-        .set('Authorization', 'Bearer demo-admin')
-        .send({ subjectUid: scopedMemberUid, roleKey, scope })
-        .expect(201)
-    ).body.data as { id: string };
+    return createRoleAssignment(
+      store,
+      { subjectUid: scopedMemberUid, roleKey, scope },
+      { actorUid: 'demo-admin' },
+    );
   }
   return {
     app,

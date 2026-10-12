@@ -174,6 +174,8 @@ async function patchRoleStatus(
   status: 'active' | 'inactive',
   actorUid: string,
 ): Promise<RoleRecord> {
+  if (roleKey === 'platform.admin' && status === 'inactive')
+    throw new HttpError(409, 'last_platform_admin', '平台管理员角色必须保持可用');
   return store.transaction(async (transactionStore) => {
     const role = (await transactionStore.roles.listForUpdate({ query: roleKey })).find(
       ({ key }) => key === roleKey,

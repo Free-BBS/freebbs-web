@@ -365,7 +365,7 @@ export class CommunityService {
     payload: CommunityWishConversionInput,
   ) {
     if (!allowed(actor, 'community.wish.convert.request', 'community_wish')) throw forbidden();
-    if (payload.organizationId !== 'tuanwei' && !actor.roles.includes('platform.super_admin')) {
+    if (payload.organizationId !== 'tuanwei' && !actor.roles.includes('platform.admin')) {
       throw forbidden('The selected organization is not available');
     }
     return this.updateWish(actor, postId, async (store, workflow) => {

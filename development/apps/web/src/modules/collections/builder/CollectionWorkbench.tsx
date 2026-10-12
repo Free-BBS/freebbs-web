@@ -41,7 +41,6 @@ function canMaintainModuleLibrary(roles: readonly string[]): boolean {
   return roles.some(
     (role) =>
       role === 'platform.admin' ||
-      role === 'platform.super_admin' ||
       role.startsWith('counselor.') ||
       role === 'student_union.executive_president' ||
       role === 'student_union.presidium' ||
@@ -55,7 +54,7 @@ export function CollectionWorkbench({ client }: { client?: Pick<ApiClient, 'requ
   const api = client ?? fallback;
   const { collectionId } = useParams();
   const roles = auth?.user?.roles ?? [];
-  const publisherDepartments = roles.includes('platform.super_admin')
+  const publisherDepartments = roles.includes('platform.admin')
     ? [...DEPARTMENT_DIRECTORY]
     : departmentsForRoles(roles);
   const [schema, setSchema] = useState<CollectionSchema>(structuredClone(emptyCollectionSchema));

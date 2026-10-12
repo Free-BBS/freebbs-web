@@ -74,6 +74,7 @@ export function createAssignmentsRouter(store: DevelopmentStore): Router {
     const assignmentId = parse(assignmentIdSchema, request.params.assignmentId);
     const assignment = await archiveRoleAssignment(store, assignmentId, {
       actorUid: adminActor(response).uid,
+      allowReservedLeadMutation: false,
     });
     send(response, 200, { id: assignment.id, status: assignment.status, archived: true });
   });

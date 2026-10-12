@@ -9,10 +9,12 @@ export function IdentitySection({
   section,
   roles,
   onRolesChange,
+  labelsForRoles = identityLabels,
 }: {
   section: DevelopmentIdentitySection;
   roles: RoleKey[];
   onRolesChange: (roles: RoleKey[]) => void;
+  labelsForRoles?: (roles: readonly RoleKey[]) => string[];
 }) {
   const [open, setOpen] = useState(false);
   const selectedRoles = new Set(roles);
@@ -41,7 +43,7 @@ export function IdentitySection({
         <span>{section.label}</span>
         <small>
           {selectedInSection.length
-            ? `已选 ${selectedInSection.length} 项 · ${identityLabels(selectedInSection).join('、')}`
+            ? `已选 ${selectedInSection.length} 项 · ${labelsForRoles(selectedInSection).join('、')}`
             : '尚未选择'}
         </small>
       </button>
