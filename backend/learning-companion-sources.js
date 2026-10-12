@@ -6,9 +6,9 @@ function createCompanionSourcesRouter({ requireAuth, store, learningStore, loadN
   const router = express.Router();
   router.get('/sources', async (req, res) => {
     res.set('Cache-Control', 'private, no-store');
-    const user = await requireAuth(req, res);
-    if (!user) return;
     try {
+      const user = await requireAuth(req, res);
+      if (!user) return;
       const context = await loadCompanionContext({
         user,
         store,

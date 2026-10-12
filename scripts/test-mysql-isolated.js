@@ -31,6 +31,7 @@ const TEST_FILES = [
   'backend/course-schedule.mysql.test.js',
   'backend/teacher-accounts.mysql.test.js',
   'backend/schedule-series.mysql.test.js',
+  'backend/learning-research.mysql.test.js',
 ];
 
 function testEnvironment(socketPath, original = process.env) {
@@ -93,13 +94,14 @@ const REQUIRED_MYSQL_TESTS = [
   'isolated MySQL: course migration, settings, resync and connector generation',
   'isolated MySQL verifies teacher accounts, identity ownership, retries and concurrent binding over HTTP',
   'isolated MySQL: series ownership, rules, exceptions, concurrency, rollback and imported resync',
+  'isolated MySQL: learning research migration, owner isolation and concurrent idempotent writes',
 ];
 
-function validateMysqlTestOutput(output) {
+function validateMysqlTestOutput(output, requiredTests = REQUIRED_MYSQL_TESTS) {
   assert.match(output, /^# skipped 0\s*$/m, 'the isolated suite must not skip any test');
   assert.match(output, /^# fail 0\s*$/m, 'the isolated suite must not fail any test');
   const successes = output.split('\n').filter((line) => /^ok \d+ - /.test(line));
-  for (const name of REQUIRED_MYSQL_TESTS) {
+  for (const name of requiredTests) {
     assert.ok(
       successes.some((line) => line.includes(` - ${name}`)),
       `required MySQL test did not run: ${name}`,
@@ -131,7 +133,7 @@ function stopChildTree(child) {
   return Promise.resolve();
 }
 
-function run(command, args, options = {}, verifyTests = false) {
+function run(command, args, options = {}, requiredTests = null) {
   const { signal, ...spawnOptions } = options;
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -141,7 +143,7 @@ function run(command, args, options = {}, verifyTests = false) {
     const child = spawn(command, args, {
       windowsHide: true,
       detached: process.platform !== 'win32',
-      stdio: verifyTests ? ['ignore', 'pipe', 'inherit'] : 'inherit',
+      stdio: requiredTests ? ['ignore', 'pipe', 'inherit'] : 'inherit',
       ...spawnOptions,
     });
     const cancel = () => {
@@ -149,7 +151,7 @@ function run(command, args, options = {}, verifyTests = false) {
     };
     signal?.addEventListener('abort', cancel, { once: true });
     let output = '';
-    if (verifyTests)
+    if (requiredTests)
       child.stdout.on('data', (chunk) => {
         output += chunk.toString();
         process.stdout.write(chunk);
@@ -168,7 +170,7 @@ function run(command, args, options = {}, verifyTests = false) {
         return;
       }
       try {
-        if (verifyTests) validateMysqlTestOutput(output);
+        if (requiredTests) validateMysqlTestOutput(output, requiredTests);
         resolve();
       } catch (error) {
         reject(error);
@@ -182,9 +184,12 @@ function run(command, args, options = {}, verifyTests = false) {
 
 async function main() {
   const workbenchOnly = process.argv.includes('--workbench-only');
-  const testFiles = workbenchOnly
-    ? TEST_FILES.filter((file) => /(?:workbench|course-schedule|schedule-series)/.test(file))
-    : TEST_FILES;
+  const researchOnly = process.argv.includes('--research-only');
+  const testFiles = researchOnly
+    ? TEST_FILES.filter((file) => /learning-research/.test(file))
+    : workbenchOnly
+      ? TEST_FILES.filter((file) => /(?:workbench|course-schedule|schedule-series)/.test(file))
+      : TEST_FILES;
   const root = path.resolve(__dirname, '..');
   // Linux uses a deliberately short fixed parent so the Unix socket fits its length limit.
   const parent = process.platform === 'win32' ? os.tmpdir() : '/tmp';
@@ -262,7 +267,11 @@ async function main() {
         env,
         signal: controller.signal,
       },
-      !workbenchOnly,
+      researchOnly
+        ? REQUIRED_MYSQL_TESTS.filter((name) => /learning research/.test(name))
+        : workbenchOnly
+          ? null
+          : REQUIRED_MYSQL_TESTS,
     );
     success = true;
   } finally {

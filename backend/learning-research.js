@@ -1,5 +1,6 @@
 const express = require('express');
 const crypto = require('node:crypto');
+const { setTimeout: delay } = require('node:timers/promises');
 
 const MODULES = [
   'learning',
@@ -358,24 +359,30 @@ async function ensureLearningResearchTables(pool) {
 }
 function createMysqlResearchStore(pool, { clock = () => new Date() } = {}) {
   async function transaction(work) {
-    const connection = await pool.getConnection();
-    try {
-      await connection.beginTransaction();
-      const result = await work(connection);
-      await connection.commit();
-      return result;
-    } catch (error) {
-      await connection.rollback();
-      throw error;
-    } finally {
-      connection.release();
+    for (let attempt = 0; ; attempt += 1) {
+      const connection = await pool.getConnection();
+      try {
+        await connection.beginTransaction();
+        const result = await work(connection);
+        await connection.commit();
+        return result;
+      } catch (error) {
+        await connection.rollback();
+        // Only a confirmed deadlock rolls back the whole transaction. Never
+        // replay uncertain commits, disconnections or ordinary domain errors.
+        if (error.code !== 'ER_LOCK_DEADLOCK' || attempt >= 2) throw error;
+      } finally {
+        connection.release();
+      }
+      await delay(10 * (attempt + 1));
     }
   }
   async function mutation(userId, value, type, work) {
     return transaction(async (connection) => {
       const now = clock();
       await connection.execute(
-        'INSERT IGNORE INTO learning_research_limits (user_id, window_start, request_count) VALUES (?, ?, 0)',
+        // Take the exclusive row lock immediately, retaining the existing quota.
+        'INSERT INTO learning_research_limits (user_id, window_start, request_count) VALUES (?, ?, 0) ON DUPLICATE KEY UPDATE user_id = user_id',
         [userId, sqlDate(now)],
       );
       const [limits] = await connection.execute(

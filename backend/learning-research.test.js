@@ -525,6 +525,8 @@ test('MySQL feedback mutation persists receipt and quota in one transaction, wit
   assert.equal(result.feedback.id, '55');
   assert.equal(result.duplicate, false);
   assert.deepEqual(events, ['begin', 'commit', 'release']);
+  assert.match(calls[0].sql, /ON DUPLICATE KEY UPDATE user_id = user_id$/);
+  assert.doesNotMatch(calls[0].sql, /INSERT IGNORE|UPDATE window_start|UPDATE request_count/);
   const receipt = calls.find(({ sql }) => /INSERT INTO learning_research_requests/.test(sql));
   assert.equal(receipt.params[0], 7);
   assert.equal(receipt.params[1], value.requestKey);
@@ -579,6 +581,94 @@ test('MySQL quota rejection rolls back without inserting feedback or receipts', 
       /INSERT INTO learning_research_feedback|INSERT INTO learning_research_requests/.test(sql),
     ),
   );
+});
+
+function failingTransactionPool({
+  failures,
+  code = 'ER_LOCK_DEADLOCK',
+  failAt = 'execute',
+  rollbackError,
+} = {}) {
+  const events = [];
+  const error = Object.assign(new Error(code), { code });
+  let connections = 0;
+  const pool = {
+    async getConnection() {
+      connections += 1;
+      const id = connections;
+      let executes = 0;
+      return {
+        async beginTransaction() {
+          events.push(`${id}:begin`);
+        },
+        async execute() {
+          executes += 1;
+          events.push(`${id}:execute`);
+          if (failAt === 'execute' && executes === 2 && id <= failures) throw error;
+          return [{ affectedRows: 1 }];
+        },
+        async commit() {
+          events.push(`${id}:commit`);
+          if (failAt === 'commit' && id <= failures) throw error;
+        },
+        async rollback() {
+          events.push(`${id}:rollback`);
+          if (rollbackError) throw rollbackError;
+        },
+        release() {
+          events.push(`${id}:release`);
+        },
+      };
+    },
+  };
+  return { pool, events, error, connectionCount: () => connections };
+}
+
+test('MySQL deadlocks roll back and release before retrying the complete transaction, at most three times', async () => {
+  const txFixture = failingTransactionPool({ failures: 2 });
+  const store = createMysqlResearchStore(txFixture.pool);
+  assert.equal(await store.removeFeedback(7, '12'), true);
+  assert.equal(txFixture.connectionCount(), 3);
+  assert.deepEqual(
+    txFixture.events.filter((event) => !event.endsWith(':execute')),
+    [
+      '1:begin',
+      '1:rollback',
+      '1:release',
+      '2:begin',
+      '2:rollback',
+      '2:release',
+      '3:begin',
+      '3:commit',
+      '3:release',
+    ],
+  );
+  const exhausted = failingTransactionPool({ failures: Infinity });
+  await assert.rejects(
+    createMysqlResearchStore(exhausted.pool).removeFeedback(7, '12'),
+    (error) => error === exhausted.error,
+  );
+  assert.equal(exhausted.connectionCount(), 3);
+  assert.equal(exhausted.events.filter((event) => event.endsWith(':rollback')).length, 3);
+  assert.equal(exhausted.events.filter((event) => event.endsWith(':release')).length, 3);
+});
+
+test('MySQL transactions do not retry timeouts, domain errors, uncertain commits or failed rollbacks', async () => {
+  for (const options of [
+    { failures: Infinity, code: 'ER_LOCK_WAIT_TIMEOUT' },
+    { failures: Infinity, code: 'ECONNREFUSED' },
+    { failures: Infinity, code: 'RESEARCH_CONFLICT' },
+    { failures: Infinity, code: 'ECONNRESET', failAt: 'commit' },
+    { failures: Infinity, rollbackError: new Error('rollback failed') },
+  ]) {
+    const txFixture = failingTransactionPool(options);
+    await assert.rejects(
+      createMysqlResearchStore(txFixture.pool).removeFeedback(7, '12'),
+      (error) => error === (options.rollbackError || txFixture.error),
+    );
+    assert.equal(txFixture.connectionCount(), 1);
+    assert.equal(txFixture.events.at(-1), '1:release');
+  }
 });
 
 test('study identifiers and scoring keys must be strings, never coerced numbers', () => {

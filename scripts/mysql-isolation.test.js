@@ -155,7 +155,7 @@ test('the isolated runner removes inherited database targets and Node hooks with
   }
 });
 
-test('the isolated runner enables its nineteen named test files with matching database opt-ins', () => {
+test('the isolated runner enables its twenty named test files with matching database opt-ins', () => {
   const expected = [
     'backend/language-lab.mysql.test.js',
     'backend/profile-activity.mysql.test.js',
@@ -176,9 +176,10 @@ test('the isolated runner enables its nineteen named test files with matching da
     'backend/course-schedule.mysql.test.js',
     'backend/teacher-accounts.mysql.test.js',
     'backend/schedule-series.mysql.test.js',
+    'backend/learning-research.mysql.test.js',
   ];
   assert.deepEqual([...TEST_FILES].sort(), expected.sort());
-  assert.equal(new Set(TEST_FILES).size, 19);
+  assert.equal(new Set(TEST_FILES).size, 20);
   for (const file of TEST_FILES)
     assert.equal(fs.existsSync(path.join(__dirname, '..', file)), true);
   const env = testEnvironment(windowsPipe, {});
@@ -201,12 +202,19 @@ test('the isolated runner enables its nineteen named test files with matching da
   assert.equal(env.MYSQL_SOCKET, windowsPipe);
 });
 
-test('the isolated runner requires successful top-level evidence for all nineteen live MySQL tests', () => {
-  assert.equal(REQUIRED_MYSQL_TESTS.length, 19);
+test('the isolated runner requires successful top-level evidence for all twenty live MySQL tests', () => {
+  assert.equal(REQUIRED_MYSQL_TESTS.length, 20);
   const successes = REQUIRED_MYSQL_TESTS.map((name, index) => `ok ${index + 1} - ${name}`);
   const summary = '# fail 0\n# skipped 0\n';
   const complete = `${successes.join('\n')}\n${summary}`;
   assert.doesNotThrow(() => validateMysqlTestOutput(complete));
+  const research = REQUIRED_MYSQL_TESTS.filter((name) => /learning research/.test(name));
+  assert.equal(research.length, 1);
+  assert.doesNotThrow(() => validateMysqlTestOutput(`ok 1 - ${research[0]}\n${summary}`, research));
+  assert.throws(
+    () => validateMysqlTestOutput(summary, research),
+    /required MySQL test did not run/,
+  );
   assert.throws(
     () => validateMysqlTestOutput(`${successes.slice(1).join('\n')}\n${summary}`),
     /required MySQL test did not run/,
