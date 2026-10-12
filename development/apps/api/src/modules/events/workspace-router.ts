@@ -115,6 +115,7 @@ export function createActivityWorkspaceRouter(options: Options): Router {
       source,
       id,
       options.learning,
+      directory,
     );
     if (edit && !resolved.canEdit)
       throw new HttpError(403, 'forbidden', '只有所属组织的社工成员可以编辑活动');
@@ -196,6 +197,7 @@ export function createActivityWorkspaceRouter(options: Options): Router {
           ctx.source,
           ctx.id,
           options.learning,
+          directory,
         )),
       };
       const current = withSchedule(saved, baseCurrent);

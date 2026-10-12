@@ -7,6 +7,7 @@ import { afterEach, expect, it } from 'vitest';
 import { createApp } from '../../app.js';
 import { DemoAuthClient } from '../../core/auth/demo-auth-client.js';
 import { createMemoryStore } from '../../core/database/memory-store.js';
+import { withCollectionFeature } from './feature-storage.js';
 
 const directories: string[] = [];
 afterEach(async () => {
@@ -356,6 +357,95 @@ it('requires login-provided identity for restricted roster and tracks only the m
     { name: '张三', studentId: '00123', completed: true },
   ]);
   expect(recipients.body.data.stats).toEqual({ total: 2, completed: 1, pending: 1 });
+});
+it('uses the configured roster directory for activity detail, following and notifications', async () => {
+  const { store, directory, id } = await fixture(false);
+  const demo = new DemoAuthClient(['demo-rights-member', 'demo-student']);
+  const app = createApp({
+    store,
+    authMode: 'demo',
+    authClient: {
+      async introspect(uid) {
+        const user = await demo.introspect(uid);
+        return user && uid === 'demo-student'
+          ? { ...user, displayName: '张三', studentId: '00123' }
+          : user;
+      },
+    },
+    collectionsUploadDirectory: directory,
+  });
+  await draftSchema(app, id, { recipientMode: 'restricted' });
+  await request(app)
+    .post(`${prefix}/forms/${id}/recipients/import`)
+    .set(member)
+    .attach('file', Buffer.from('姓名,学号\n张三,00123'), '名单.csv')
+    .expect(200);
+  await request(app).post(`${prefix}/forms/${id}/publish`).set(member).send({}).expect(200);
+  const catalog = (await request(app).get(`${prefix}/registrations`).set(student).expect(200)).body
+    .data;
+  expect(catalog.some((item: { id: string }) => item.id === id)).toBe(true);
+  const workspace = `/api/development/v1/events/workspaces/native_collection/${id}`;
+  await request(app).get(workspace).set(student).expect(200);
+  await request(app)
+    .put(`${workspace}/following`)
+    .set(student)
+    .send({ following: true })
+    .expect(200);
+  await request(app)
+    .post(`${workspace}/updates`)
+    .set(member)
+    .send({ revision: 0, label: '开放报名', occursAt: '2026-10-12T09:00:00Z', description: '' })
+    .expect(201);
+  expect(
+    (await request(app).get('/api/development/v1/events/following').set(student).expect(200)).body
+      .data,
+  ).toContainEqual({ source: 'native_collection', activityId: id });
+  const inbox = (
+    await request(app).get('/api/development/v1/events/notifications').set(student).expect(200)
+  ).body.data;
+  expect(inbox.notifications).toHaveLength(1);
+  await request(app)
+    .post('/api/development/v1/events/notifications/read-all')
+    .set(student)
+    .send({})
+    .expect(200);
+  expect(
+    (await request(app).get('/api/development/v1/events/notifications').set(student).expect(200))
+      .body.data.unreadCount,
+  ).toBe(0);
+  await withCollectionFeature(directory, id, async (state) => {
+    state.recipients = [{ name: '李四', studentId: '00456' }];
+  });
+  await request(app).get(workspace).set(student).expect(404);
+  expect(
+    (await request(app).get('/api/development/v1/events/notifications').set(student).expect(200))
+      .body.data.notifications,
+  ).toEqual([]);
+});
+it('includes anonymous registrations in workspace counts from the configured directory', async () => {
+  const { app, id } = await fixture();
+  await request(app).post(`${prefix}/forms/${id}/publish`).set(member).send({}).expect(200);
+  const session = (await request(app).post(`${prefix}/public/forms/${id}/session`).expect(201)).body
+    .data;
+  await request(app)
+    .post(`${prefix}/public/forms/${id}/responses`)
+    .send({ sessionToken: session.sessionToken, answers: { text: '访客报名' } })
+    .expect(201);
+  const workspace = (
+    await request(app)
+      .get(`/api/development/v1/events/workspaces/native_collection/${id}`)
+      .set(student)
+      .expect(200)
+  ).body.data;
+  expect(workspace.activity.registrationCount).toBe(1);
+  const saved = (
+    await request(app)
+      .put(`/api/development/v1/events/workspaces/native_collection/${id}/intro`)
+      .set(member)
+      .send({ revision: 0, blocks: [] })
+      .expect(200)
+  ).body.data;
+  expect(saved.activity.registrationCount).toBe(1);
 });
 it('accepts actual WebM audio recorder MIME parameters and bounds guest sessions', async () => {
   const { app, id } = await fixture();
