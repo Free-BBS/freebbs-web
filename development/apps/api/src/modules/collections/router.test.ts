@@ -1,3 +1,4 @@
+import ExcelJS from 'exceljs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -78,6 +79,54 @@ async function createPublishedForm(
 }
 
 describe('collections API', () => {
+  it('lists only manageable forms including unpublished drafts without exposing another author drafts', async () => {
+    const { app } = fixture();
+    const own = await request(app)
+      .post('/api/development/v1/collections/forms')
+      .set(member)
+      .send({ title: schema.title, description: schema.description, schema })
+      .expect(201);
+    const other = await request(app)
+      .post('/api/development/v1/collections/forms')
+      .set(admin)
+      .send({ title: '另一位同学的草稿', description: '', schema })
+      .expect(201);
+    const mine = await request(app)
+      .get('/api/development/v1/collections/forms')
+      .set(member)
+      .expect(200);
+    expect(mine.body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: own.body.data.id, status: 'draft', canManage: true }),
+      ]),
+    );
+    expect(mine.body.data.some((form: { id: string }) => form.id === other.body.data.id)).toBe(
+      false,
+    );
+    const reader = await request(app)
+      .get('/api/development/v1/collections/forms')
+      .set(student)
+      .expect(200);
+    expect(reader.body.data).toEqual([]);
+    await request(app).get('/api/development/v1/collections/forms').expect(401);
+  });
+
+  it('exposes explicit organization ownership for native and activity registration links', async () => {
+    const { app } = fixture();
+    const form = await createPublishedForm(app);
+    const response = await request(app)
+      .get('/api/development/v1/collections/registrations')
+      .set(student)
+      .expect(200);
+    expect(response.body.data.find((item: { id: string }) => item.id === form.id)).toMatchObject({
+      organizationId: 'rights_development_center',
+    });
+    const activities = response.body.data.filter(
+      (item: { source: string }) => item.source === 'development_activity',
+    );
+    expect(activities.length).toBeGreaterThan(0);
+    expect(activities.every((item: object) => Object.hasOwn(item, 'organizationId'))).toBe(true);
+  });
   it('authenticates asset uploads before parsing multipart bodies', async () => {
     const directory = await uploadDirectory();
     const { app } = fixture(directory);
@@ -187,10 +236,18 @@ describe('collections API', () => {
     const exported = await request(app)
       .get(`/api/development/v1/collections/forms/${created.body.data.id}/exports/excel-output`)
       .set(member)
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
       .expect(200);
     expect(exported.headers['content-disposition']).toContain('attachment');
-    expect(exported.text).toContain('想说的话');
-    expect(exported.text).toContain('期待参加');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(exported.body);
+    expect(workbook.worksheets[0]?.getCell('C1').value).toBe('想说的话');
+    expect(workbook.worksheets[0]?.getCell('C2').value).toBe('期待参加');
   });
 
   it('applies readable title validation rules with specific feedback', async () => {
@@ -428,10 +485,17 @@ describe('collections API', () => {
     const exported = await request(app)
       .get(`/api/development/v1/collections/forms/${form.id}/exports/excel-output`)
       .set(member)
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
       .expect(200);
-    expect(exported.text).toContain('想说的话');
-    expect(exported.text).not.toContain('未发布的新问题');
-    expect(exported.text).toContain(`"'  =2+2"`);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(exported.body);
+    expect(workbook.worksheets[0]?.getCell('C1').value).toBe('想说的话');
+    expect(workbook.worksheets[0]?.getCell('C2').value).toBe('  =2+2');
   });
 
   it('binds uploads to uploader, form and field and validates canonical metadata', async () => {

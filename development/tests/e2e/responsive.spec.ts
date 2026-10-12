@@ -20,7 +20,7 @@ const routes: readonly {
 }[] = [
   {
     path: 'knowledge',
-    heading: 'General',
+    heading: '同学经验库',
     primaryAction: (page) => page.getByRole('button', { name: '新建经验' }),
   },
   {

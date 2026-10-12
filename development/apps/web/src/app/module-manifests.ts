@@ -11,6 +11,7 @@ import liaisonIcon from '../assets/icons/liaison.svg';
 import collectionsIcon from '../assets/icons/collections.svg';
 import communityIcon from '../assets/icons/community.svg';
 import sportsIcon from '../assets/icons/sports.svg';
+import organizationsIcon from '../assets/icons/organizations.svg';
 import {
   hasPresentationPermission,
   isSuperAdmin,
@@ -57,9 +58,9 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
   },
   {
     id: 'information',
-    name: '信息与咨询',
-    description: '公开信息、接受咨询并跟踪反馈处理。',
-    route: '/information',
+    name: '無尽书桌',
+    description: '翻阅校园通知、咨询反馈与经验资料。',
+    route: '/desk',
     icon: informationIcon,
     ownerTeam: '权益发展团队',
     status: 'enabled',
@@ -145,6 +146,20 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
   },
 ] as const;
 
+// The read-only exhibition shares the information module's availability.
+// It does not reuse the retired interest-group module or its write permissions.
+export const ORGANIZATIONS_NAVIGATION: ModuleManifest = {
+  id: 'information',
+  name: '风采展示',
+  description: '走近电子系社工组织，了解部门与相关活动。',
+  route: '/organizations',
+  icon: organizationsIcon,
+  ownerTeam: '平台核心组',
+  status: 'enabled',
+  requiredPermissions: [],
+  order: 5,
+};
+
 export function resolveModuleStatus(
   manifest: ModuleManifest,
   overrides?: ModuleStateOverrides,
@@ -160,6 +175,13 @@ export function resolveModuleStatus(
   }
 
   return override ?? manifest.status;
+}
+
+// Keep compatible activity URLs within their current visible navigation home.
+export function navigationPathname(pathname: string): string {
+  if (/^\/events\/student-festival(?:\/|$)/.test(pathname)) return '/community';
+  if (/^\/events(?:\/|$)/.test(pathname)) return '/collections';
+  return pathname;
 }
 
 export function visibleModuleManifests(

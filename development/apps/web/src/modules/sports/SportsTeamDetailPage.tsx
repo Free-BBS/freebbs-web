@@ -712,6 +712,12 @@ export function SportsTeamDetailPage({
       {(canReadShowcase || canEditShowcase) && (
         <TeamShowcase client={activeClient} teamId={team.id} canEdit={canEditShowcase} />
       )}
+      <Link
+        className="sports-primary-button"
+        to={`/collections/tools?team=${encodeURIComponent(team.id)}&kind=attendance`}
+      >
+        训练打卡与出勤
+      </Link>
       {feedback !== null && <p role="status">{feedback}</p>}
       {canManage ? (
         <TeamOperations

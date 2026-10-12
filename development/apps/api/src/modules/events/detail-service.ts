@@ -1,3 +1,4 @@
+import { canReadPublishedActivity } from '../collections/registrations.js';
 import type { ScopeRef } from '@freebbs-development/contracts';
 
 import { recordAuditEvent } from '../../core/audit/audit-service.js';
@@ -11,6 +12,7 @@ import type {
 } from '../../core/database/types.js';
 import { HttpError } from '../../core/errors/http-error.js';
 import { canUpdateOrganization } from './organization-access.js';
+import { activityWithWorkspaceSchedule } from './workspace-schedule.js';
 
 export interface ActivityMilestoneInput {
   occursAt: string;
@@ -62,7 +64,7 @@ function canManage(actor: AuthorizationContext, record: ActivityRecord): boolean
 
 function canView(actor: AuthorizationContext, record: ActivityRecord): boolean {
   return (
-    (record.status === 'published' && allowed(actor, 'events.read', 'activity', record.scope)) ||
+    canReadPublishedActivity(actor, record) ||
     canManage(actor, record) ||
     (record.status === 'pending' && allowed(actor, 'events.approve', 'activity', record.scope)) ||
     (record.technicalSupportStatus === 'requested' &&
@@ -83,7 +85,10 @@ function fixtureNotFound(): HttpError {
 }
 
 export class ActivityDetailService {
-  constructor(private readonly store: DevelopmentStore) {}
+  constructor(
+    private readonly store: DevelopmentStore,
+    private readonly uploadDirectory?: string,
+  ) {}
 
   async get(actor: AuthorizationContext, activityId: string): Promise<ActivityDetail> {
     const activity = await this.store.activities.get(activityId);
@@ -111,7 +116,13 @@ export class ActivityDetailService {
             percentage: Math.round((completed / milestones.length) * 100),
           };
 
-    return { ...activity, milestones, fixtures, progress, registrationCount };
+    return {
+      ...(await activityWithWorkspaceSchedule(activity, this.uploadDirectory)),
+      milestones,
+      fixtures,
+      progress,
+      registrationCount,
+    };
   }
 
   async createMilestone(

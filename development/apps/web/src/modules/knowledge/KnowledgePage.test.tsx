@@ -1,4 +1,4 @@
-import { render as renderView, screen, within } from '@testing-library/react';
+import { act, render as renderView, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
@@ -34,6 +34,52 @@ const draft = {
 };
 
 describe('KnowledgePage', () => {
+  it('combines type and body search, and orders matching entries by update date', async () => {
+    const request = vi.fn().mockResolvedValue([
+      { ...draft, id: 'older', title: '较早复盘', updatedAt: '2026-01-01' },
+      { ...draft, id: 'faq', type: 'faq', title: '常见问答', updatedAt: '2026-10-01' },
+      { ...draft, id: 'newer', title: '近期复盘', updatedAt: '2026-09-01' },
+    ]);
+    const user = userEvent.setup();
+    render(<KnowledgePage client={{ request } as unknown as ApiClient} user={admin} />);
+    await screen.findByText('近期复盘');
+    await user.click(screen.getByRole('button', { name: '活动复盘' }));
+    await user.type(screen.getByLabelText('搜索'), '记录目标');
+    expect(screen.queryByText('常见问答')).not.toBeInTheDocument();
+    const list = screen.getByRole('list', { name: '经验条目列表' });
+    expect(
+      within(list)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['近期复盘', '较早复盘']);
+    await user.selectOptions(screen.getByLabelText('排序'), 'oldest');
+    expect(
+      within(list)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['较早复盘', '近期复盘']);
+  });
+
+  it('ignores a late response from a previous audience after returning to general', async () => {
+    let resolveSocial!: (value: unknown[]) => void;
+    const social = new Promise<unknown[]>((resolve) => {
+      resolveSocial = resolve;
+    });
+    const request = vi.fn((path: string) =>
+      path.endsWith('social_org') ? social : Promise.resolve([draft]),
+    );
+    const user = userEvent.setup();
+    render(<KnowledgePage client={{ request } as unknown as ApiClient} user={admin} />);
+    await screen.findByText('活动复盘模板');
+    await user.click(screen.getByRole('button', { name: '社工组织' }));
+    await user.click(screen.getByRole('button', { name: '通用资料' }));
+    await screen.findByText('活动复盘模板');
+    await act(async () =>
+      resolveSocial([{ ...draft, id: 'private', audience: 'social_org', title: '组织内部资料' }]),
+    );
+    expect(screen.queryByText('组织内部资料')).not.toBeInTheDocument();
+    expect(screen.getByText('活动复盘模板')).toBeInTheDocument();
+  });
   it('offers a linked preview without rendering the full long body on the directory', async () => {
     const entry = { ...draft, summary: '简短摘要', body: '完整正文'.repeat(150) };
     const request = vi.fn().mockResolvedValue([entry]);

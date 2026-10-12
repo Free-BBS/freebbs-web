@@ -220,3 +220,22 @@
     justify-content: flex-start;
   }
 }
+
+.map-code-panel {
+  margin-top: 24px;
+  text-align: center;
+}
+.map-code-panel img {
+  display: block;
+  width: 100%;
+  max-width: 440px;
+  height: auto;
+  margin: 0 auto 16px;
+  border-radius: 16px;
+  background: #fff;
+}
+.map-code-panel p {
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.8;
+}

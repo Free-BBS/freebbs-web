@@ -22,6 +22,8 @@ const filters: Array<{ value: InformationFeedFilter; label: string }> = [
 export interface InformationHubPageProps {
   client: ApiClient;
   user: UserContext | null;
+  filter?: InformationFeedFilter;
+  onFilterChange?: (filter: InformationFeedFilter) => void;
 }
 
 function canPublish(user: UserContext | null): boolean {
@@ -38,8 +40,14 @@ function canPublish(user: UserContext | null): boolean {
   );
 }
 
-export function InformationHubPage({ client, user }: InformationHubPageProps) {
-  const [filter, setFilter] = useState<InformationFeedFilter>('all');
+export function InformationHubPage({
+  client,
+  user,
+  filter: controlledFilter,
+  onFilterChange,
+}: InformationHubPageProps) {
+  const [localFilter, setFilter] = useState<InformationFeedFilter>('all');
+  const filter = controlledFilter ?? localFilter;
   const [items, setItems] = useState<InformationFeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -212,7 +220,10 @@ export function InformationHubPage({ client, user }: InformationHubPageProps) {
             role="tab"
             type="button"
             aria-selected={filter === option.value}
-            onClick={() => setFilter(option.value)}
+            onClick={() => {
+              if (onFilterChange) onFilterChange(option.value);
+              else setFilter(option.value);
+            }}
           >
             {option.label}
           </button>

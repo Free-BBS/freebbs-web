@@ -1,0 +1,24 @@
+.development-shell-root .site-footer-compact {
+  --ui-line: var(--border-subtle);
+  --ui-muted: var(--color-muted);
+  --ui-accent: #72d6df;
+  --ui-focus: #8de8ee;
+  --bbs-content-gutter: clamp(24px, 3vw, 46px);
+}
+
+body.theme-light .development-shell-root .site-footer-compact {
+  --ui-accent: #075d68;
+  --ui-focus: #087f90;
+}
+
+@media (max-width: 1180px) and (min-width: 901px) {
+  .development-shell-root .site-footer-compact {
+    --bbs-content-gutter: 28px;
+  }
+}
+
+@media (max-width: 900px) {
+  .development-shell-root .site-footer-compact {
+    --bbs-content-gutter: 14px;
+  }
+}

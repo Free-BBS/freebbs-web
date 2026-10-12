@@ -17,6 +17,7 @@ type Authenticate = (headers: AuthHeaders) => Promise<AuthenticationResult>;
 export interface EventsRouterOptions {
   store: DevelopmentStore;
   authenticate: Authenticate;
+  uploadDirectory?: string;
 }
 interface ErrorData {
   error: { code: string; message: string };
@@ -177,8 +178,8 @@ function forbid(response: Response): void {
 
 export function createEventsRouter(options: EventsRouterOptions): Router {
   const router = Router();
-  const service = new EventsService(options.store);
-  const detailService = new ActivityDetailService(options.store);
+  const service = new EventsService(options.store, undefined, options.uploadDirectory);
+  const detailService = new ActivityDetailService(options.store, options.uploadDirectory);
 
   router.use(async (_request, response, next) => {
     try {

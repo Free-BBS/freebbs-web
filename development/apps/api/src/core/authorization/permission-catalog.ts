@@ -1,4 +1,9 @@
-import { ROLE_KEYS, type RoleKey } from '@freebbs-development/contracts';
+import {
+  ROLE_KEYS,
+  departmentsForRoles,
+  organizationForRole,
+  type RoleKey,
+} from '@freebbs-development/contracts';
 import type { PermissionRule, RolePermissionCatalog } from './policy.js';
 
 const rules = (
@@ -321,9 +326,24 @@ export const ROLE_PERMISSION_CATALOG: RolePermissionCatalog = Object.fromEntries
     const inherited = inheritedPermissionProfile(roleKey);
     return [
       roleKey,
-      BASE_ROLE_PERMISSION_CATALOG[roleKey] ??
-        (inherited ? BASE_ROLE_PERMISSION_CATALOG[inherited] : undefined) ??
-        [],
+      [
+        ...(BASE_ROLE_PERMISSION_CATALOG[roleKey] ??
+          (inherited ? BASE_ROLE_PERMISSION_CATALOG[inherited] : undefined) ??
+          []),
+        ...(departmentsForRoles([roleKey]).length > 0
+          ? rules(['events.department_home.update', 'department_home'])
+          : []),
+        ...(organizationForRole(roleKey) !== null ||
+        [
+          'counselor.',
+          'student_union.',
+          'youth_league.',
+          'science_association.',
+          'media_center.',
+        ].some((prefix) => roleKey.startsWith(prefix))
+          ? rules(['events.workspace.update', 'activity'])
+          : []),
+      ],
     ];
   }),
 ) as unknown as RolePermissionCatalog;

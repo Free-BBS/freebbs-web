@@ -11,7 +11,7 @@ export const COMMUNITY_CHANNEL_OPTIONS: ReadonlyArray<{
   { value: 'all', label: '综合' },
   { value: 'daily', label: '校园日常' },
   { value: 'wishes', label: '新生许愿池' },
-  { value: 'student_festival', label: '学生节舞台' },
+  { value: 'student_festival', label: '电子系春晚' },
   { value: 'rights', label: '生权反馈' },
 ];
 

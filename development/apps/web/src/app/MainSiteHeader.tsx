@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 import type { UserContext } from '@freebbs-development/contracts';
@@ -13,7 +13,7 @@ import magnetronIcon from '../assets/main-site/magnetron.svg';
 import moonIcon from '../assets/main-site/moon.svg';
 import shopIcon from '../assets/main-site/shop.svg';
 import sunIcon from '../assets/main-site/sun.svg';
-import type { AuthMode } from '../core/api/client.js';
+import type { AuthMode, ApiClient } from '../core/api/client.js';
 import type { ThemeMode } from '../core/theme/useMainSiteTheme.js';
 import {
   mainSiteHref,
@@ -22,23 +22,16 @@ import {
   type MainSiteProfile,
 } from './main-site-api.js';
 import { MainSiteNotifications } from './MainSiteNotifications.js';
-import {
-  MAIN_SITE_TYPOGRAPHY_STORAGE_KEY,
-  readMainSiteTypography,
-} from './main-site-typography.js';
-import { MODULE_MANIFESTS } from './module-manifests.js';
+import { MODULE_MANIFESTS, navigationPathname } from './module-manifests.js';
+import { mainSiteTypography } from './main-site-typography.js';
+export { mainSiteTypography } from './main-site-typography.js';
 
 interface MainSiteHeaderProps {
   user: UserContext;
   authMode: AuthMode;
   themeMode: ThemeMode;
   onToggleTheme: () => void;
-}
-
-export function mainSiteTypography(): CSSProperties {
-  return readMainSiteTypography(() =>
-    window.localStorage.getItem(MAIN_SITE_TYPOGRAPHY_STORAGE_KEY),
-  ) as CSSProperties;
+  client?: Pick<ApiClient, 'request'>;
 }
 
 function beijingToday(): string {
@@ -46,11 +39,17 @@ function beijingToday(): string {
 }
 
 function developmentTitle(pathname: string): string {
-  if (pathname === '/dashboard' || pathname === '/') return '发展端 / 开始探索';
+  if (/^\/events\/student-festival(?:\/|$)/.test(pathname)) return '我要上电子系春晚';
+  pathname = navigationPathname(pathname);
+  if (pathname === '/dashboard' || pathname === '/') return '無界广场';
   if (pathname.startsWith('/inventory')) return '仓库';
   if (pathname.startsWith('/shop')) return '商店';
   if (pathname.startsWith('/profile')) return '个人主页';
+  if (pathname.startsWith('/ranch-dye')) return '牧场染坊';
+  if (pathname.startsWith('/ranch-gallery')) return '羊群广场';
+  if (pathname.startsWith('/ranch')) return '电子牧场';
   if (pathname.startsWith('/settings')) return '设置';
+  if (pathname.startsWith('/organizations')) return '风采展示';
   return (
     MODULE_MANIFESTS.find(
       (module) => pathname === module.route || pathname.startsWith(`${module.route}/`),
@@ -201,11 +200,17 @@ function Currency({
   );
 }
 
-export function MainSiteHeader({ user, authMode, themeMode, onToggleTheme }: MainSiteHeaderProps) {
+export function MainSiteHeader({
+  user,
+  authMode,
+  themeMode,
+  onToggleTheme,
+  client,
+}: MainSiteHeaderProps) {
   const location = useLocation();
   const savedLocation =
     location.pathname === '/shop' || location.pathname === '/inventory'
-      ? (location.state as { from?: string } | null)?.from || '/dashboard'
+      ? (location.state as { from?: string } | null)?.from || '/community'
       : `${location.pathname}${location.search}`;
   const [profile, setProfile] = useState<MainSiteProfile | null>(null);
   const [checkin, setCheckin] = useState<CheckinSummary | null>(null);
@@ -368,7 +373,7 @@ export function MainSiteHeader({ user, authMode, themeMode, onToggleTheme }: Mai
             >
               <img src={themeMode === 'light' ? moonIcon : sunIcon} alt="" />
             </button>
-            <MainSiteNotifications authMode={authMode} userUid={user.uid} />
+            <MainSiteNotifications authMode={authMode} userUid={user.uid} client={client} />
             <button
               className="main-site-mobile-theme"
               type="button"

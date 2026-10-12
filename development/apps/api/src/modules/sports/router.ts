@@ -76,11 +76,25 @@ const checkinDate = z.string().refine((value) => {
 });
 const createCheckinSchema = z.object({ memberUid: identifier, checkinDate }).strict();
 const nullableUrl = z
-  .union([z.string().trim().url().max(2000), z.literal(''), z.null()])
+  .union([
+    z
+      .string()
+      .trim()
+      .url()
+      .max(2000)
+      .refine((value) => /^https?:\/\//i.test(value)),
+    z.literal(''),
+    z.null(),
+  ])
   .transform((value) => value || null);
 const nullableCoverUrl = z
   .union([
-    z.string().trim().url().max(2000),
+    z
+      .string()
+      .trim()
+      .url()
+      .max(2000)
+      .refine((value) => /^https?:\/\//i.test(value)),
     z.string().regex(/^\/api\/development\/v1\/sports\/media\/images\/[0-9a-f-]{36}\.image$/),
     z.literal(''),
     z.null(),
