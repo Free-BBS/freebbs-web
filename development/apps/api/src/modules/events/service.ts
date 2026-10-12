@@ -199,16 +199,19 @@ export class EventsService {
     const result = await this.store.transaction<TransitionResult<ActivityRecord>>(async (store) => {
       const current = await store.activities.getForUpdate(id);
       if (current === null) return { kind: 'missing' };
-      const from = current.status as ActivityStatus;
-      const approvalEdge = from === 'pending' && (to === 'approved' || to === 'rejected');
+      const storedFrom = current.status as ActivityStatus;
+      const approvalEdge = storedFrom === 'pending' && (to === 'approved' || to === 'rejected');
       const creatorEdge =
-        (from === 'draft' && to === 'pending') || (from === 'rejected' && to === 'draft');
+        (storedFrom === 'draft' && to === 'pending') ||
+        (storedFrom === 'rejected' && to === 'draft');
       const permitted = approvalEdge
         ? can(actor, 'events.approve', current.scope) && canUpdateOrganization(actor, current)
         : creatorEdge
           ? canManage(actor, current)
           : can(actor, 'events.update', current.scope) && canUpdateOrganization(actor, current);
       if (!permitted) return { kind: 'missing' };
+      const from = (await activityWithWorkspaceSchedule(current, this.uploadDirectory))
+        .status as ActivityStatus;
       if (
         !Object.hasOwn(ACTIVITY_TRANSITIONS, from) ||
         !canTransition(ACTIVITY_TRANSITIONS, from, to)
@@ -224,7 +227,10 @@ export class EventsService {
         resourceId: id,
         details: { from, to, outcome: 'accepted', scope: updated.scope },
       });
-      return { kind: 'updated', record: updated };
+      return {
+        kind: 'updated',
+        record: await activityWithWorkspaceSchedule(updated, this.uploadDirectory),
+      };
     });
     if (result.kind === 'missing') throw activityNotFound();
     if (result.kind === 'rejected') {

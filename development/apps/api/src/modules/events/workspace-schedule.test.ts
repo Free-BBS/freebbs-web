@@ -40,6 +40,87 @@ async function fixture(deadline: string | null = null) {
 const future = { startsAt: null, endsAt: '2099-01-01T00:00:00Z', finished: false };
 
 describe('authoritative workspace event schedules over HTTP', () => {
+  it('archives an activity completed in its workspace using the same status shown by management', async () => {
+    const { app, store } = await fixture();
+    await request(app)
+      .put(`${workspace}/schedule`)
+      .set(as('demo-admin'))
+      .send({ revision: 0, ...future, finished: true })
+      .expect(200);
+    const finished = (
+      await request(app)
+        .get(`${root}/events/activities?status=finished`)
+        .set(as('demo-admin'))
+        .expect(200)
+    ).body.data;
+    expect(finished.find((item: { id: string }) => item.id === id)?.status).toBe('finished');
+    const archived = (
+      await request(app)
+        .post(`${event}/transitions`)
+        .set(as('demo-admin'))
+        .send({ to: 'archived' })
+        .expect(200)
+    ).body.data;
+    expect(archived).toMatchObject({ status: 'archived', endsAt: future.endsAt });
+    expect((await store.activities.get(id))?.status).toBe('archived');
+    expect((await request(app).get(event).set(as()).expect(200)).body.data.status).toBe('archived');
+    const cleared = (
+      await request(app)
+        .put(`${workspace}/schedule`)
+        .set(as('demo-admin'))
+        .send({ revision: 1, ...future })
+        .expect(200)
+    ).body.data;
+    expect(cleared).toMatchObject({ ended: true, activity: { activityStatus: 'archived' } });
+    await request(app).post(`${event}/registrations`).set(as()).send({}).expect(409);
+  });
+  it('does not archive a published activity after its workspace completion is cleared', async () => {
+    const { app, store } = await fixture();
+    await request(app)
+      .put(`${workspace}/schedule`)
+      .set(as('demo-admin'))
+      .send({ revision: 0, ...future, finished: true })
+      .expect(200);
+    await request(app)
+      .put(`${workspace}/schedule`)
+      .set(as('demo-admin'))
+      .send({ revision: 1, ...future })
+      .expect(200);
+    await request(app)
+      .post(`${event}/transitions`)
+      .set(as('demo-admin'))
+      .send({ to: 'archived' })
+      .expect(409);
+    expect((await store.activities.get(id))?.status).toBe('published');
+  });
+  it.each(['draft', 'pending', 'approved', 'rejected'] as const)(
+    'does not let a completion overlay bypass the %s workflow',
+    async (status) => {
+      const { app, store } = await fixture();
+      await request(app)
+        .put(`${workspace}/schedule`)
+        .set(as('demo-admin'))
+        .send({ revision: 0, ...future, finished: true })
+        .expect(200);
+      await store.activities.update(id, { status });
+      await request(app)
+        .post(`${event}/transitions`)
+        .set(as('demo-admin'))
+        .send({ to: 'archived' })
+        .expect(409);
+      expect((await store.activities.get(id))?.status).toBe(status);
+    },
+  );
+  it('keeps the original archive authorization after workspace completion', async () => {
+    const { app, store } = await fixture();
+    await request(app)
+      .put(`${workspace}/schedule`)
+      .set(as('demo-admin'))
+      .send({ revision: 0, ...future, finished: true })
+      .expect(200);
+    await request(app).post(`${event}/transitions`).set(as()).send({ to: 'archived' }).expect(404);
+    expect((await store.activities.get(id))?.status).toBe('published');
+  });
   it.each([null, '2099-01-01T00:00:00Z'])(
     'extends an expired published activity with signup deadline %s across every read and registration after restart',
     async (deadline) => {

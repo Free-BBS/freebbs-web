@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Router, type Response } from 'express';
 import multer from 'multer';
@@ -10,8 +10,14 @@ import { HttpError } from '../../core/errors/http-error.js';
 import type { CollectionsRouterOptions } from './router.js';
 import { effectiveWindow, effectiveCapacity, nativeStatus } from './registrations.js';
 import { responseSchema } from './schemas.js';
-import { readCollectionFeature, tokenHash, withCollectionFeature } from './feature-storage.js';
-import { deleteCollectionUpload, readCollectionUpload, storeCollectionUpload } from './uploads.js';
+import {
+  readCollectionFeature,
+  tokenHash,
+  withCollectionFeature,
+  type CollectionFeatureState,
+  type GuestSession,
+} from './feature-storage.js';
+import { readCollectionUpload, storeCollectionUpload } from './uploads.js';
 import { downloadName } from './spreadsheets.js';
 
 type ValidateAnswers = (schema: CollectionSchema, answers: Record<string, unknown>) => void;
@@ -71,6 +77,57 @@ export function createPublicCollectionsRouter(
       throw new HttpError(409, 'collection_closed', '当前表单尚未开放或已经截止');
     return { form, version };
   }
+  async function cleanSessionAssets(state: CollectionFeatureState, session: GuestSession) {
+    const referenced = new Set<string>();
+    for (const record of state.responses.filter((item) => item.sessionHash === session.hash)) {
+      const version = await options.store.collectionVersions.get(record.versionId);
+      // Keep the bookkeeping if the historical schema is unavailable; a later cleanup can retry.
+      if (!version) return false;
+      for (const field of version.schema.fields.filter((field) =>
+        ['file', 'image', 'video', 'audio'].includes(field.kind),
+      )) {
+        const value = record.answers[field.id];
+        for (const candidate of Array.isArray(value) ? value : [value]) {
+          if (!candidate || typeof candidate !== 'object') continue;
+          const asset = session.assets.find(
+            (asset) =>
+              asset.fieldId === field.id && asset.id === (candidate as { id?: unknown }).id,
+          );
+          if (
+            asset &&
+            ['name', 'mimeType', 'sizeBytes', 'url'].every(
+              (key) =>
+                (candidate as Record<string, unknown>)[key] === asset[key as keyof typeof asset],
+            )
+          )
+            referenced.add(asset.id);
+        }
+      }
+    }
+    let entries: string[];
+    try {
+      entries = await readdir(assetDirectory);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return false;
+      entries = [];
+    }
+    const retained: GuestSession['assets'] = [];
+    for (const asset of session.assets) {
+      if (referenced.has(asset.id) || !z.string().uuid().safeParse(asset.id).success) {
+        retained.push(asset);
+        continue;
+      }
+      try {
+        // Paths come only from server-generated IDs and enumerated files, never answer URLs.
+        for (const entry of entries.filter((name) => name.startsWith(`${asset.id}.`)))
+          await rm(join(assetDirectory, entry), { force: true });
+      } catch {
+        retained.push(asset);
+      }
+    }
+    session.assets = retained;
+    return retained.every((asset) => referenced.has(asset.id));
+  }
   router.get('/forms/:formId', async (request, response) => {
     requireStorage();
     const { form, version } = await publicForm(String(request.params.formId));
@@ -97,12 +154,10 @@ export function createPublicCollectionsRouter(
       const now = Date.now(),
         addressHash = tokenHash(request.ip ?? request.socket.remoteAddress ?? 'unknown');
       const expired = state.sessions.filter((session) => now - session.createdAt > 86400000);
-      for (const session of expired)
-        for (const asset of session.assets) {
-          if (!state.responses.some((item) => item.sessionHash === session.hash))
-            await deleteCollectionUpload(assetDirectory, asset.id);
-        }
-      state.sessions = state.sessions.filter((session) => now - session.createdAt <= 86400000);
+      for (const session of expired) {
+        if (await cleanSessionAssets(state, session))
+          state.sessions = state.sessions.filter((item) => item !== session);
+      }
       if (
         state.sessions.length >= 1000 ||
         state.sessions.filter(
@@ -267,6 +322,18 @@ export function createPublicCollectionsRouter(
           return { id: receipt.id, submittedAt: receipt.submittedAt, receiptToken };
         }),
     );
+    // The response and receipt are durable before removing unused draft uploads.
+    // Cleanup failures retain the session metadata for retry and must not reject a saved response.
+    try {
+      await withCollectionFeature(directory, String(request.params.formId), async (state) => {
+        const session = state.sessions.find(
+          (item) => item.hash === tokenHash(input.data.sessionToken),
+        );
+        if (session) await cleanSessionAssets(state, session);
+      });
+    } catch {
+      // Expiry cleanup retries from the last successfully persisted session state.
+    }
     send(response, 201, result);
   });
   async function receipt(value: unknown) {
