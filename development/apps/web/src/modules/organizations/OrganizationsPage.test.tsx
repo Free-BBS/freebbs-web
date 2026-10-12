@@ -71,7 +71,7 @@ describe('organization exhibition', () => {
       }
       expect(
         screen.getByRole('link', {
-          name: organization.organizationIds.length ? '查看组织报名' : '查看活动报名',
+          name: '查看相关活动',
         }),
       ).toHaveAttribute('href', organizationRegistrationPath(organization.organizationIds));
       expect(document.querySelector('.organization-page')).not.toHaveTextContent(positionLabels);
@@ -98,7 +98,7 @@ describe('organization exhibition', () => {
   );
   it('retains the honest all-activity media root link but uses exact media department associations', async () => {
     const view = show('media_center');
-    expect(screen.getByRole('link', { name: '查看活动报名' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '查看相关活动' })).toHaveAttribute(
       'href',
       '/collections/registrations',
     );

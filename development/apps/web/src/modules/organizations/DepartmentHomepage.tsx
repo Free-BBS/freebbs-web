@@ -141,7 +141,7 @@ export function DepartmentHomepage({
         </div>
         {department.id === 'tms.position' ? (
           <Link to="/collections/registrations?organization=tms">
-            查看组织报名 <span aria-hidden="true">↗</span>
+            查看相关活动 <span aria-hidden="true">↗</span>
           </Link>
         ) : (
           <Link to={`/organizations/${department.organizationKey}`}>浏览组织 ↗</Link>
