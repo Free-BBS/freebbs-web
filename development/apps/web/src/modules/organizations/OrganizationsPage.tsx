@@ -162,8 +162,7 @@ export function OrganizationsPage({
                     className="organization-primary-link"
                     to={organizationRegistrationPath(organization.organizationIds)}
                   >
-                    {organization.organizationIds.length ? '查看组织报名' : '查看活动报名'}{' '}
-                    <span aria-hidden="true">↗</span>
+                    查看相关活动 <span aria-hidden="true">↗</span>
                   </Link>
                 </>
               ) : null}
