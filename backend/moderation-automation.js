@@ -1,5 +1,6 @@
 const { performance } = require('node:perf_hooks');
 const { aiTestEnvironmentEnabled } = require('./moderation-ai-test');
+const { productionModeration, productionConfigurationIssues } = require('./moderation-production');
 const { ModerationAiError, validateAssessment } = require('./moderation-ai-client');
 const { sanitizeDiagnostics } = require('./moderation-ai-diagnostics');
 const { POLICY_VERSION } = require('./moderation-policy');
@@ -13,6 +14,14 @@ const POLL_INTERVAL_MS = 1000;
 const MAINTENANCE_INTERVAL_MS = 30000;
 
 function automationEnvironmentEnabled(config = {}) {
+  if (productionModeration(config))
+    return Boolean(
+      config.discussionModerationEnabled &&
+      config.discussionModerationAutoEnabled &&
+      productionConfigurationIssues(config).length === 0,
+    );
+  if (config.discussionModerationEnvironment && config.discussionModerationEnvironment !== 'test')
+    return false;
   return Boolean(
     aiTestEnvironmentEnabled(config) &&
     ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(config.db?.host) &&

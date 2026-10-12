@@ -270,6 +270,8 @@ username: admin
 password: free-bbs
 ```
 
+正式网站接入另见[正式上线与回退步骤](docs/moderation-production-rollout.md)：独立 production 开关支持分离的数据库服务器；提交前确认数据处理说明，私有图片保存到部署目录之外。正式自动审核默认关闭，首次控制状态暂停；测试开关不用于正式部署。
+
 讨论区人工审核的隔离测试开关、私有图片、负责人管理和后续模型接入范围见
 [监管 Agent 首版实施与验收清单](docs/moderation-agent-v1.md)。当前默认关闭新稿件审核；
 设置 `DISCUSSION_MODERATION_ENABLED=true` 后，新帖子和评论先进入审核工作台，人工批准后发布。

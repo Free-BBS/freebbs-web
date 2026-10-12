@@ -48,6 +48,13 @@ const { createMaxCreationIntentRouter } = require('./max-creation-intent');
 const { loadProfileActivity } = require('./profile-activity');
 const config = require('./config');
 const {
+  assertProductionConfiguration,
+  requiredNoticeVersion,
+  noticeFor,
+} = require('./moderation-production');
+
+assertProductionConfiguration(config);
+const {
   createDevelopmentAuthClient,
   createDevelopmentDatabaseConfig,
   createDevelopmentUserDirectory,
@@ -315,6 +322,7 @@ const moderationPublisher = createModerationPublisher({
 });
 const moderationAutomaticEnabled = automationEnvironmentEnabled(config);
 const moderationAutomationStore = createModerationAutomationStore({
+  requiredNoticeVersion: requiredNoticeVersion(config),
   pool,
   withDatabaseTransaction,
   publishSubmission: moderationPublisher,
@@ -343,6 +351,7 @@ const moderationAutomatic = {
   store: moderationAutomationStore,
   status: async () => ({
     enabled: moderationAutomaticEnabled,
+    environment: config.discussionModerationEnvironment,
     paused: !moderationAutomaticEnabled || (await moderationAutomationStore.control()).paused,
     model: config.discussionModerationAutoModel,
     backupModel: config.discussionModerationBackupModel,
@@ -352,6 +361,7 @@ const moderationAutomatic = {
   }),
 };
 const discussionModeration = createDiscussionModeration({
+  requiredNoticeVersion: requiredNoticeVersion(config),
   pool,
   withDatabaseTransaction,
   privateDir: config.discussionModerationDir,
@@ -4389,6 +4399,7 @@ app.use(
     aiTest: moderationAiTest,
     audit: moderationAudit,
     automation: moderationAutomatic,
+    notice: noticeFor(config),
   }),
 );
 
@@ -4824,6 +4835,7 @@ app.post('/api/discussion/posts', async (request, response) => {
           },
           attachmentIds,
           requestId: request.body.requestId,
+          moderationNoticeVersion: request.body.moderationNoticeVersion,
         }),
       );
       response.status(202).json({ ok: true, message: '已提交审核', moderation: submission });
@@ -5282,6 +5294,7 @@ app.post('/api/discussion/posts/:id/comments', async (request, response) => {
           },
           attachmentIds,
           requestId: request.body.requestId,
+          moderationNoticeVersion: request.body.moderationNoticeVersion,
         });
       });
       response

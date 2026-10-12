@@ -77,6 +77,7 @@ function createModerationAutomationStore({
   onPublished,
   notifications,
   readImages,
+  requiredNoticeVersion = null,
   isEnabled = () => false,
   logger = console,
   leaseMs = 300000,
@@ -436,6 +437,13 @@ function createModerationAutomationStore({
         return null;
       }
       if (
+        requiredNoticeVersion &&
+        parse(row.payload_json, {}).moderationNoticeVersion !== requiredNoticeVersion
+      ) {
+        await terminate(db, row, job, 'review', 'notice_required');
+        return null;
+      }
+      if (
         state.paused ||
         state.revision !== Number(job.control_revision) ||
         !(await enabled()) ||
@@ -686,6 +694,11 @@ function createModerationAutomationStore({
           ...(await terminate(db, row, job, 'cancelled', 'submission_changed')),
           applied: false,
         };
+      if (
+        requiredNoticeVersion &&
+        parse(row.payload_json, {}).moderationNoticeVersion !== requiredNoticeVersion
+      )
+        return { ...(await terminate(db, row, job, 'review', 'notice_required')), applied: false };
       const meta = parse(job.input_meta_json);
       let preview = null;
       try {

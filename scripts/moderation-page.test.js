@@ -626,7 +626,10 @@ function submissionHarness() {
         this.type = type;
       }
     },
-    window: { location: { href: '/publish' } },
+    window: {
+      location: { href: '/publish' },
+      FreeBbsModerationNotice: { confirm: async () => undefined },
+    },
   };
   vm.runInNewContext(
     [
@@ -687,6 +690,31 @@ test('submission retries reuse id for identical draft, rotate on edit and clear 
   await h.context.handleDiscussionCommentSubmit(h.event);
   assert.equal(h.requests[3].body.requestId, h.requests[2].body.requestId);
   assert.equal(h.context.moderationSubmissionIntents.size, 0);
+});
+
+test('posts and comments send the accepted notice version; cancellation and account changes send nothing', async () => {
+  for (const handler of ['handleDiscussionComposeSubmit', 'handleDiscussionCommentSubmit']) {
+    const h = submissionHarness();
+    h.context.window.FreeBbsModerationNotice.confirm = async () => {
+      throw new Error('cancelled');
+    };
+    await h.context[handler](h.event);
+    assert.equal(h.requests.length, 0);
+    assert.equal(h.input.value, '@Max hello');
+    h.context.window.FreeBbsModerationNotice.confirm = async () => 'notice-v1';
+    h.fail(true);
+    await h.context[handler](h.event);
+    assert.equal(h.requests[0].body.moderationNoticeVersion, 'notice-v1');
+    h.context.window.FreeBbsModerationNotice.confirm = async () => 'notice-v2';
+    await h.context[handler](h.event);
+    assert.notEqual(h.requests[0].body.requestId, h.requests[1].body.requestId);
+    h.context.window.FreeBbsModerationNotice.confirm = async () => {
+      h.context.userState.token = 'other-user';
+      return 'notice-v2';
+    };
+    await h.context[handler](h.event);
+    assert.equal(h.requests.length, 2);
+  }
 });
 
 function imageHarness() {

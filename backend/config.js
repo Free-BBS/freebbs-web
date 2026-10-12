@@ -42,6 +42,16 @@ module.exports = {
     process.env.SANDBOX_OUTPUT_DIR || path.join(__dirname, '..', '..', 'sandbox', 'outputs'),
   uploadDir: process.env.UPLOAD_DIR || path.join(__dirname, '..', 'database', 'uploads'),
   discussionModerationEnabled: readBooleanEnvironmentVariable('DISCUSSION_MODERATION_ENABLED'),
+  discussionModerationEnvironment: process.env.DISCUSSION_MODERATION_ENVIRONMENT || 'test',
+  discussionModerationAutoEnabled: readBooleanEnvironmentVariable(
+    'DISCUSSION_MODERATION_AUTO_ENABLED',
+  ),
+  discussionModerationProviderReviewed: readBooleanEnvironmentVariable(
+    'DISCUSSION_MODERATION_PROVIDER_REVIEWED',
+  ),
+  discussionModerationNoticeTestEnabled: readBooleanEnvironmentVariable(
+    'DISCUSSION_MODERATION_NOTICE_TEST_ENABLED',
+  ),
   discussionModerationAiTestEnabled: readBooleanEnvironmentVariable(
     'DISCUSSION_MODERATION_AI_TEST_ENABLED',
   ),

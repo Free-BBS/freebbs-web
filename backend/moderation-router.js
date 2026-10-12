@@ -26,6 +26,7 @@ function createModerationRouter({
   aiTest,
   audit,
   automation,
+  notice = { required: false },
 }) {
   const router = express.Router();
   router.use((_request, response, next) => {
@@ -33,6 +34,7 @@ function createModerationRouter({
     response.setHeader('X-Content-Type-Options', 'nosniff');
     next();
   });
+  router.get('/notice', (_request, response) => response.json(notice));
   const authenticated = (handler) => async (request, response) => {
     try {
       const user = await requireAuth(request, response);
@@ -141,7 +143,13 @@ function createModerationRouter({
         enabled,
         reviewer: await service.isReviewer(user.id),
         isAdmin: Boolean(user.is_admin),
-        mode: enabled ? (automatic?.enabled ? 'automatic_test' : 'manual') : 'disabled',
+        mode: enabled
+          ? automatic?.enabled
+            ? automatic.environment === 'production'
+              ? 'automatic'
+              : 'automatic_test'
+            : 'manual'
+          : 'disabled',
         aiTestEnabled: Boolean(enabled && aiTest?.enabled),
         ...(automatic ? { automation: automatic } : {}),
       });

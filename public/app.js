@@ -10335,7 +10335,7 @@ async function handleDiscussionCommentSubmit(event) {
   const submitButton = form.querySelector('[type="submit"]');
   const submittedToken = userState.token;
   const submissionBody = { contentMarkdown, parentCommentId: parentCommentId || undefined };
-  const requestId = moderationSubmissionRequestId('comment', { postId, ...submissionBody });
+  let requestId;
   const submittedUid = userState.uid;
   const submittedVersion = discussionState.sessionVersion;
   const detailRequest = discussionState.postRequestId;
@@ -10366,16 +10366,26 @@ async function handleDiscussionCommentSubmit(event) {
   }
 
   try {
-    const payload = await callApi(
-      `/discussion/posts/${encodeURIComponent(postId)}/comments`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          ...submissionBody,
-          requestId,
-        }),
-      },
-    );
+    if (typeof window.FreeBbsModerationNotice?.confirm !== 'function')
+      throw new Error('审核说明尚未加载，请刷新页面后重试。');
+    const moderationNoticeVersion = await window.FreeBbsModerationNotice.confirm({
+      callApi,
+      isCurrent,
+    });
+    if (!isCurrent()) return;
+    requestId = moderationSubmissionRequestId('comment', {
+      postId,
+      ...submissionBody,
+      moderationNoticeVersion,
+    });
+    const payload = await callApi(`/discussion/posts/${encodeURIComponent(postId)}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({
+        ...submissionBody,
+        requestId,
+        moderationNoticeVersion,
+      }),
+    });
 
     completeModerationSubmission(requestId);
     if (!isCurrent()) return;
@@ -10492,7 +10502,7 @@ async function handleDiscussionComposeSubmit(event) {
     title: discussionComposeTitle.value.trim(),
     contentMarkdown: discussionComposeContent.value,
   };
-  const requestId = moderationSubmissionRequestId('post', submissionBody);
+  let requestId;
   const submitButton =
     discussionComposeForm.querySelector('button[type="submit"]') ||
     document.querySelector('button[form="discussion-compose-form"]');
@@ -10501,11 +10511,25 @@ async function handleDiscussionComposeSubmit(event) {
   if (submitButton) submitButton.disabled = true;
 
   try {
+    const isCurrent = () =>
+      userState.isLoggedIn && userState.uid === submittedUid && userState.token === submittedToken;
+    if (typeof window.FreeBbsModerationNotice?.confirm !== 'function')
+      throw new Error('审核说明尚未加载，请刷新页面后重试。');
+    const moderationNoticeVersion = await window.FreeBbsModerationNotice.confirm({
+      callApi,
+      isCurrent,
+    });
+    if (!isCurrent()) return;
+    requestId = moderationSubmissionRequestId('post', {
+      ...submissionBody,
+      moderationNoticeVersion,
+    });
     const payload = await callApi('/discussion/posts', {
       method: 'POST',
       body: JSON.stringify({
         ...submissionBody,
         requestId,
+        moderationNoticeVersion,
       }),
     });
 

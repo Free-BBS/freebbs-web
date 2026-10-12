@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { canReadPost } = require('./discussion-visibility');
+const { withSubmissionNotice } = require('./moderation-production');
 const { buildPrivacyPreview, normalizePrivacyText } = require('./moderation-privacy');
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -196,6 +197,7 @@ function createDiscussionModeration({
   publishSubmission,
   onPublished,
   automation,
+  requiredNoticeVersion = null,
   logger = console,
 }) {
   const transact = withDatabaseTransaction || ((callback) => transaction(pool, callback));
@@ -274,7 +276,7 @@ function createDiscussionModeration({
   }
 
   async function submit(connection, input) {
-    const value = normalizeSubmission(input);
+    const value = normalizeSubmission(withSubmissionNotice(input, requiredNoticeVersion));
     const id = crypto.randomUUID();
     const [inserted] = await connection.execute(
       `INSERT INTO moderation_submissions

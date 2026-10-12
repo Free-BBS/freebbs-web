@@ -348,6 +348,7 @@
       image_observations_invalid: '图片观察记录的结构或序号不符合要求',
     };
     const AUTOMATION_REASON_LABELS = {
+      notice_required: '未记录当前的数据处理确认，未发送给模型；请由负责人处理。',
       submission_changed: '提交已由人工处理、发生变化或到期，自动任务不再改变发布状态。',
       no_reviewers: '当前缺少可用负责人，稿件保留待审。',
       worker_paused: '自动审核已暂停或控制状态变化，本次转人工处理。',

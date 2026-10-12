@@ -17,6 +17,8 @@ function aiTestEnvironmentEnabled(config) {
   try {
     const url = new URL(config.publicWebUrl);
     return Boolean(
+      (!config.discussionModerationEnvironment ||
+        config.discussionModerationEnvironment === 'test') &&
       config.discussionModerationEnabled &&
       config.discussionModerationAiTestEnabled &&
       local.has(config.apiHost) &&
