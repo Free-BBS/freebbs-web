@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { createLearningAchievementProvider } = require('./achievement-source');
 const { StringDecoder } = require('node:string_decoder');
 const sharp = require('sharp');
 const { createRanchWorldRouter, ensureRanchWorldTables } = require('./ranch-world');
@@ -6535,6 +6536,7 @@ async function start() {
       toUserProfile,
     }),
     userDirectory: createDevelopmentUserDirectory(pool),
+    learningAchievementProvider: createLearningAchievementProvider(pool),
     database: createDevelopmentDatabaseConfig(config.db),
     uploadDirectory: path.join(config.uploadDir, 'development', 'festival'),
     collectionsUploadDirectory: path.join(config.uploadDir, 'development', 'collections'),

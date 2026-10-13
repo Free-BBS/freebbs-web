@@ -1,5 +1,27 @@
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { open, lstat } = require('node:fs/promises');
+const { constants } = require('node:fs');
+
+async function readDevelopmentMapTokenDigest(repositoryRoot) {
+  const filename = path.join(repositoryRoot, '.development-map-token.sha256');
+  let handle;
+  try {
+    const info = await lstat(filename);
+    if (!info.isFile() || info.size > 256) return undefined;
+    handle = await open(filename, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
+    const buffer = Buffer.alloc(257);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    if (bytesRead > 256) return undefined;
+    const digest = buffer.subarray(0, bytesRead).toString('utf8').trim();
+    return /^[a-f0-9]{64}$/.test(digest) ? digest : undefined;
+  } catch {
+    // An unavailable verifier disables Map integration, never the main backend.
+    return undefined;
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+}
 
 function profileToDevelopmentIdentity(profile) {
   return {
@@ -90,6 +112,7 @@ async function loadDevelopmentRuntime({
   collectionsUploadDirectory,
   sportsUploadDirectory,
   developmentRewardProvider,
+  learningAchievementProvider,
 }) {
   const modulePath = path.join(
     repositoryRoot,
@@ -100,6 +123,7 @@ async function loadDevelopmentRuntime({
     'integrated-runtime.js',
   );
   const { createIntegratedDevelopmentRuntime } = await import(pathToFileURL(modulePath).href);
+  const developmentMapTokenDigest = await readDevelopmentMapTokenDigest(repositoryRoot);
   return createIntegratedDevelopmentRuntime({
     authClient,
     userDirectory,
@@ -108,6 +132,8 @@ async function loadDevelopmentRuntime({
     collectionsUploadDirectory,
     sportsUploadDirectory,
     ...(developmentRewardProvider ? { developmentRewardProvider } : {}),
+    ...(learningAchievementProvider ? { learningAchievementProvider } : {}),
+    ...(developmentMapTokenDigest ? { developmentMapTokenDigest } : {}),
   });
 }
 
@@ -133,4 +159,5 @@ module.exports = {
   initializeDevelopmentRuntime,
   loadDevelopmentRuntime,
   profileToDevelopmentIdentity,
+  readDevelopmentMapTokenDigest,
 };

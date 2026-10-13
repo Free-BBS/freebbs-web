@@ -1,4 +1,4 @@
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { isAbsolute, resolve } from 'node:path';
 import { Router } from 'express';
 import { z } from 'zod';
@@ -6,6 +6,7 @@ import type { UserContext } from '@freebbs-development/contracts';
 import { featureStorage } from '../../core/database/feature-storage.js';
 import { isDevelopmentBusinessAdmin } from '@freebbs-development/contracts';
 import { HttpError } from '../../core/errors/http-error.js';
+import { matchesMapBearer, resolveMapTokenDigest } from '../map-bridge/credentials.js';
 import type { CollaborationOptions } from '../collaboration/router.js';
 import {
   connectorStatus,
@@ -50,7 +51,6 @@ export function createConnectorsRouter(
   const environment = options.environment ?? process.env;
   const directory = options.uploadDirectory ?? resolve('.data/collection-uploads');
   const jobs = featureStorage<Job>(directory, 'connector-jobs');
-  const experiences = featureStorage<ImportedExperience>(directory, 'map-experiences');
   function requireStorage() {
     if (
       options.nodeEnvironment === 'production' &&
@@ -58,65 +58,13 @@ export function createConnectorsRouter(
     )
       throw new HttpError(503, 'storage_not_configured', '连接资料存储尚未配置');
   }
-  router.post('/map/experiences', async (request, response) => {
+  router.post('/map/experiences', async (request) => {
     requireStorage();
-    const token = environment.DEVELOPMENT_MAP_INGEST_TOKEN;
-    if (!token) throw new HttpError(503, 'connector_not_configured', 'Map经历接入尚未配置');
-    const supplied = String(request.headers.authorization ?? '').replace(/^Bearer /, '');
-    if (
-      !supplied ||
-      !timingSafeEqual(
-        createHash('sha256').update(supplied).digest(),
-        createHash('sha256').update(token).digest(),
-      )
-    )
+    const digest = resolveMapTokenDigest(environment);
+    if (!digest) throw new HttpError(503, 'connector_not_configured', 'Map经历接入尚未配置');
+    if (!matchesMapBearer(request.headers.authorization, digest))
       throw new HttpError(401, 'invalid_token', '无效的接入令牌');
-    const input = z
-      .object({
-        items: z
-          .array(
-            z
-              .object({
-                id: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
-                uid: z.string().min(1).max(100),
-                title: z.string().trim().min(1).max(160),
-                occurredAt: z.string().datetime(),
-                domain: z.enum([
-                  'arts',
-                  'sports',
-                  'liaison',
-                  'rights',
-                  'tuanwei',
-                  'sast',
-                  'tms',
-                  'other',
-                ]),
-              })
-              .strict(),
-          )
-          .max(100),
-      })
-      .strict()
-      .safeParse(request.body);
-    if (!input.success) throw new HttpError(400, 'invalid_request', '经历数据不符合接入格式');
-    for (const item of input.data.items)
-      await experiences.change(`map:${item.id}`, (previous) => {
-        if (previous && previous.uid !== item.uid)
-          throw new HttpError(409, 'identity_conflict', '同一经历不能更换用户标识');
-        return {
-          record: {
-            ...item,
-            id: `map:${item.id}`,
-            provider: 'map',
-            updatedAt: new Date().toISOString(),
-          },
-          result: null,
-        };
-      });
-    response.json({
-      data: { imported: input.data.items.length },
-      requestId: response.locals.requestId,
-    });
+    throw new HttpError(410, 'map_binding_required', '请绑定账号后使用新的 Map 同步接口');
   });
   router.use(async (request, response, next) => {
     const identity = await options.authenticate(request.headers);

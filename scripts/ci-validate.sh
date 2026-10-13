@@ -36,6 +36,7 @@ test -s public/desktop-elegant.css
 node --test backend/weekly-digest.test.js backend/mailer.test.js
 node --test backend/initialize-once.test.js scripts/static-response.test.js
 node --check backend/server.js
+node --test backend/development-integration.test.js backend/achievement-source.test.js
 node --check backend/background-tasks.js
 node --check backend/workbench-schedule-planner.js
 node --test backend/background-tasks.test.js
