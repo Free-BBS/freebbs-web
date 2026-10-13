@@ -7,6 +7,7 @@ const { POLICY_VERSION } = require('./moderation-policy');
 const { sanitizeDiagnostics } = require('./moderation-ai-diagnostics');
 const { validateAssessment } = require('./moderation-ai-client');
 const { getReviewFocus, mergeReviewFocus } = require('./moderation-review-focus');
+const { sendModerationNotice, notifyAuthor } = require('./moderation-notifications');
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const schemas = new WeakMap();
@@ -187,12 +188,7 @@ function createModerationAutomationStore({
     const [reviewers] = await db.execute(
       'SELECT user_id FROM moderation_reviewers WHERE active = 1 ORDER BY user_id FOR SHARE',
     );
-    const recipients = [
-      ...new Set([
-        ...reviewers.map((item) => Number(item.user_id)),
-        ...(row.author_id ? [Number(row.author_id)] : []),
-      ]),
-    ].sort((a, b) => a - b);
+    const recipients = reviewers.map((item) => Number(item.user_id));
     const imagePublished = state === 'published' && result?.imagesReviewed && result.imageCount > 0;
     const focus = [
       result?.reviewFocus?.political ? '政治内容' : null,
@@ -223,13 +219,14 @@ function createModerationAutomationStore({
       link: `/moderation?id=${encodeURIComponent(row.id)}`,
       eventKey: `moderation-auto:${job.id}:${state}`,
     };
-    if (notifications?.notifyModeration) await notifications.notifyModeration(data, db);
-    else
-      for (const recipient of recipients)
-        await db.execute(
-          `INSERT INTO community_notifications (recipient_id, actor_id, kind, title, body, link, event_key) VALUES (?, NULL, 'moderation', ?, ?, ?, ?) ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
-          [recipient, data.title, data.body, data.link, data.eventKey],
-        );
+    await sendModerationNotice(db, notifications, data);
+    if (['review', 'blocked', 'withdrawn'].includes(state))
+      await notifyAuthor(db, notifications, {
+        id: row.id,
+        authorId: row.author_id,
+        // A machine block is still waiting for a human decision, never a final rejection.
+        status: state === 'withdrawn' ? 'withdrawn' : 'pending',
+      });
   }
   async function terminate(db, row, job, state, reason) {
     await db.execute(
@@ -241,6 +238,9 @@ function createModerationAutomationStore({
   }
   async function enqueue(db, submission) {
     if (!(await enabled()) || submission.replayed || submission.status !== 'pending') return false;
+    // Serialize admission against pause changes. Paused submissions enter the
+    // manual queue directly and never get backfilled when automation resumes.
+    if ((await control(db, true)).paused) return false;
     const id = uuid(submission.id);
     if (
       !Number.isSafeInteger(submission.version) ||

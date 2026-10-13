@@ -212,7 +212,7 @@
       el('export-status').textContent = '';
       el('regression-export').disabled = true;
       el('policy-library').hidden = true;
-      for (const id of ['workspace', 'reviewers', 'tabs', 'review-link']) el(id).hidden = true;
+      for (const id of ['workspace', 'reviewers', 'review-link']) el(id).hidden = true;
     }
 
     async function showImage(attachment, container, generation, version, index) {
@@ -1668,9 +1668,20 @@
           'h2',
           submission.title || (submission.kind === 'comment' ? '评论' : '帖子'),
         );
+        const evidenceExpired =
+          submission.evidenceExpired === true || submission.status === 'expired';
+        const authorStatus =
+          submission.status === 'rejected' && submission.publishedId
+            ? '已撤回'
+            : {
+                pending: '处理中',
+                approved: '已发布',
+                rejected: '未予发布',
+                expired: '相关材料已到期',
+              }[submission.status];
         const meta = node(
           'p',
-          `${STATUS_LABELS[submission.status] || '未知状态'} · ${submission.kind === 'comment' ? '评论' : '帖子'} · ${formatTime(submission.createdAt)}`,
+          `${(mine ? authorStatus : STATUS_LABELS[submission.status]) || '未知状态'} · ${submission.kind === 'comment' ? '评论' : '帖子'} · ${formatTime(submission.createdAt)}`,
           'moderation-meta',
         );
         const author = node('p', `提交者：${submission.author?.username || '用户'}`);
@@ -1697,7 +1708,32 @@
         contentColumn.append(original);
         detailGrid.append(contentColumn, decisionColumn);
         el('detail').replaceChildren(detailGrid);
-        if (submission.reason) original.append(node('p', `审核说明：${submission.reason}`));
+        if (submission.reason) original.append(node('p', `处理说明：${submission.reason}`));
+        if (evidenceExpired)
+          original.append(
+            node(
+              'p',
+              '相关材料已到期，原文、图片及详细处理记录已清理。已正常发布的内容仍可从讨论区查看。',
+              'moderation-note',
+            ),
+          );
+        if (mine) {
+          const help = node('section', undefined, 'moderation-author-help');
+          if (submission.status === 'pending')
+            help.append(
+              node(
+                'p',
+                '内容正在处理。需要进一步处理时，将通过站内通知告知；发布后可在讨论区查看。',
+              ),
+            );
+          const contact = node('a', '联系 FreeBBS 工作组：feedback@free-bbs.cn');
+          contact.href = 'mailto:feedback@free-bbs.cn';
+          help.append(
+            node('p', '如对处理结果有疑问或希望申请复核，请联系我们，并附上本页链接。'),
+            contact,
+          );
+          original.append(help);
+        }
         if (submission.expiresAt)
           original.append(
             node('p', `审核数据到期时间：${formatTime(submission.expiresAt)}`, 'moderation-note'),
@@ -1798,6 +1834,7 @@
     }
 
     async function loadList(clear = true, more = false) {
+      if (mine || !state.session?.reviewer) return;
       const generation = state.generation;
       state.listVersion += 1;
       const version = state.listVersion;
@@ -1810,12 +1847,10 @@
       el('more').disabled = true;
       el('list-status').textContent = '正在加载…';
       try {
-        const imageQueue = !mine && el('status').value === 'image_review';
-        const path = mine
-          ? '/moderation/mine'
-          : imageQueue
-            ? '/moderation/automation/image-reviews'
-            : '/moderation/submissions';
+        const imageQueue = el('status').value === 'image_review';
+        const path = imageQueue
+          ? '/moderation/automation/image-reviews'
+          : '/moderation/submissions';
         const params = new URLSearchParams();
         if (!mine && !imageQueue) params.set('status', el('status').value);
         if (more && state.nextCursor) params.set('before', state.nextCursor);
@@ -1906,11 +1941,15 @@
       }
     }
     function renderViewMode() {
-      const caption = mine ? '我的提交' : '审核工作台';
+      const caption = mine ? '内容处理详情' : '审核工作台';
       document.title = `${caption} | FREE BBS`;
       el('title').textContent = caption;
       el('intro').hidden = mine;
       el('mine-title').hidden = !mine;
+      el('queue').hidden = mine;
+      el('layout').className = mine
+        ? 'moderation-layout moderation-author-layout'
+        : 'moderation-layout';
       el('queue-eyebrow').hidden = mine;
       el('queue-note').hidden = mine;
       el('status').hidden = mine;
@@ -1935,20 +1974,19 @@
           return;
         }
         // Notifications share one detail URL; authors use their own submission view.
-        if (query.get('id') && !session.reviewer) mine = true;
+        if (!session.reviewer) mine = true;
         renderViewMode();
-        el('tabs').hidden = false;
-        el('review-link').hidden = !session.reviewer;
-        el('mine-link').setAttribute('aria-current', mine ? 'page' : 'false');
-        el('review-link').setAttribute('aria-current', mine ? 'false' : 'page');
+        el('review-link').hidden = !mine || !session.reviewer;
         el('reviewers').hidden = mine || !session.isAdmin;
         if (!mine && session.isAdmin) loadReviewers();
-        if (!mine && !session.reviewer) {
-          el('message').textContent = '此页面需要审核负责人权限；你可以查看“我的提交”。';
+        if (mine && !query.get('id')) {
+          const back = node('a', '返回讨论区');
+          back.href = '/discussion';
+          el('message').replaceChildren(node('span', '请从站内通知打开对应内容的处理详情。'), back);
           return;
         }
         el('message').textContent = mine
-          ? '仅显示你提交的审核记录。'
+          ? '这里可查看本条内容的处理状态及说明。'
           : session.automation?.enabled
             ? '请优先处理待审核内容；已发布的图片也需要逐条复核。'
             : '请结合正文和全部图片作出人工审核决定。';
@@ -1959,7 +1997,7 @@
         el('regression-export').disabled =
           mine || !session.reviewer || session.aiTestEnabled !== true;
         if (!mine && session.reviewer) loadPolicies();
-        await loadList();
+        if (!mine) await loadList();
         if (valid(generation) && query.get('id')) await openSubmission(query.get('id'));
       } catch (error) {
         if (valid(generation)) {

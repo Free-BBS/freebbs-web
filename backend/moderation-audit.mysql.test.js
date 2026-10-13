@@ -1,6 +1,8 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const crypto = require('node:crypto');
+const fs = require('node:fs/promises');
+const path = require('node:path');
 const { isolatedMysqlConfig, assertIsolatedMysql } = require('./test-helpers/isolated-mysql');
 const { ensureSchema, createDiscussionModeration } = require('./discussion-moderation');
 const { createModerationAudit, ensureModerationAuditSchema } = require('./moderation-audit');
@@ -29,6 +31,15 @@ test(
     await pool.query(
       "INSERT INTO users (id,username,is_admin) VALUES (1,'reviewer',1),(2,'author',0),(3,'reader',0),(4,'second-reviewer',1)",
     );
+    const notificationSchema = await fs.readFile(
+      path.join(__dirname, '../database/migrations/026_notifications.sql'),
+      'utf8',
+    );
+    for (const statement of notificationSchema
+      .split(';')
+      .map((sql) => sql.trim())
+      .filter(Boolean))
+      await pool.execute(statement);
     await ensureSchema(pool);
     await ensureModerationAuditSchema(pool);
     const service = createDiscussionModeration({

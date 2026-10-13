@@ -507,6 +507,16 @@ main {
   gap: 20px;
   align-items: start;
 }
+#moderation-layout.moderation-author-layout {
+  display: block;
+  max-width: 920px;
+  margin: 0 auto;
+}
+.moderation-author-help {
+  border-top: 1px solid var(--moderation-line, #d9e0e9);
+  padding-top: 16px;
+  margin-top: 20px;
+}
 .moderation-queue {
   padding: 20px 16px;
   border: 1px solid #e2d8f0;

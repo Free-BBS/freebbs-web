@@ -104,7 +104,7 @@
   form.addEventListener('discussion:submitted', () => {
     try {
       sessionStorage.removeItem(key);
-      status.textContent = '已提交审核，可在“我的提交”查看进度';
+      status.textContent = '内容已提交；需要进一步处理时，会通过站内通知告知。';
     } catch {
       /* A disabled draft store must not hide the successful submission. */
     }

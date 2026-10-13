@@ -31,7 +31,7 @@ test(
       "INSERT INTO users (id,username,is_admin) VALUES (1,'admin',1),(2,'author',0),(3,'reviewer',0),(4,'admin2',1)",
     );
     await pool.query(
-      `CREATE TABLE community_notifications (id BIGINT AUTO_INCREMENT PRIMARY KEY, recipient_id BIGINT, actor_id BIGINT, kind VARCHAR(24), title VARCHAR(160), body TEXT, link VARCHAR(500), event_key VARCHAR(190), UNIQUE KEY uq_event (event_key,recipient_id)) ENGINE=InnoDB`,
+      `CREATE TABLE community_notifications (id BIGINT AUTO_INCREMENT PRIMARY KEY, recipient_id BIGINT, actor_id BIGINT, kind VARCHAR(24), title VARCHAR(160), body TEXT, link VARCHAR(500), event_key VARCHAR(190), read_at DATETIME NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_event (event_key,recipient_id)) ENGINE=InnoDB`,
     );
     await pool.query(
       'CREATE TABLE discussion_boards (id BIGINT PRIMARY KEY, slug VARCHAR(64), is_active TINYINT DEFAULT 1) ENGINE=InnoDB',
@@ -210,7 +210,7 @@ test(
     }
 
     await t.test(
-      'control starts paused, only administrators resume, submissions still queue and retries do not duplicate',
+      'paused submissions go directly to manual review and are never automatically backfilled',
       async () => {
         assert.deepEqual(await store.control(), { paused: true, revision: 1 });
         await assert.rejects(store.setPaused({ actorId: 2, paused: false }), { status: 403 });
@@ -221,18 +221,22 @@ test(
         assert.equal(second.replayed, true);
         assert.equal(
           Number((await pool.query('SELECT COUNT(*) AS n FROM moderation_auto_jobs'))[0][0].n),
-          1,
+          0,
         );
         assert.equal(await store.claim(), null);
         assert.deepEqual(await store.setPaused({ actorId: 1, paused: false }), {
           paused: false,
           revision: 2,
         });
-        const claimed = await store.claim();
-        await store.prepare(claimed);
-        await store.finish(claimed, { assessment: null });
+        assert.equal(first.processing, 'review');
+        assert.equal(await store.claim(), null);
+        const [notices] = await pool.execute(
+          'SELECT * FROM community_notifications WHERE event_key = ?',
+          [`moderation-author:${first.id}:pending`],
+        );
+        assert.equal(notices.length, 1);
         await assert.rejects(store.get({ id: first.id, reviewerId: 2 }), { status: 403 });
-        assert.equal((await store.get({ id: first.id, reviewerId: 3 })).state, 'review');
+        assert.equal(await store.get({ id: first.id, reviewerId: 3 }), null);
       },
     );
     await t.test(
@@ -332,10 +336,98 @@ test(
           'SELECT * FROM community_notifications WHERE event_key = ?',
           [`moderation-auto:${entry.claimed.id}:published`],
         );
-        assert.equal(notices.length, 4);
+        assert.equal(notices.length, 3);
+        assert.equal(
+          notices.some((notice) => Number(notice.recipient_id) === 2),
+          false,
+        );
+        assert.equal(
+          (
+            await pool.execute('SELECT id FROM community_notifications WHERE event_key = ?', [
+              `moderation-author:${entry.submission.id}:pending`,
+            ])
+          )[0].length,
+          0,
+        );
         assert.doesNotMatch(JSON.stringify(notices), /自习室|插座|正常建议/);
         const detail = await store.get({ id: entry.submission.id, reviewerId: 3 });
         assert.equal(detail.canWithdraw, true);
+      },
+    );
+    await t.test(
+      'machine queue stays quiet and actual human referral notifies the author exactly once',
+      async () => {
+        const entry = await ready();
+        const authorKey = `moderation-author:${entry.submission.id}:pending`;
+        const initialKeys = [authorKey, `moderation:${entry.submission.id}:pending`];
+        assert.equal(entry.submission.processing, 'automatic');
+        assert.equal(
+          (
+            await pool.execute(
+              'SELECT id FROM community_notifications WHERE event_key IN (?, ?)',
+              initialKeys,
+            )
+          )[0].length,
+          0,
+        );
+        assert.equal((await reviewOne(entry)).state, 'review');
+        await reviewOne(entry);
+        const [authorNotices] = await pool.execute(
+          'SELECT * FROM community_notifications WHERE event_key = ?',
+          [authorKey],
+        );
+        assert.equal(authorNotices.length, 1);
+        assert.equal(Number(authorNotices[0].recipient_id), 2);
+        assert.equal(authorNotices[0].title, '内容正在等待处理');
+        assert.equal(authorNotices[0].link, `/moderation?mine=1&id=${entry.submission.id}`);
+        const [reviewNotices] = await pool.execute(
+          'SELECT * FROM community_notifications WHERE event_key = ?',
+          [`moderation-auto:${entry.claimed.id}:review`],
+        );
+        assert.deepEqual(
+          reviewNotices.map((notice) => Number(notice.recipient_id)).sort(),
+          [1, 3, 4],
+        );
+        await pool.execute(
+          'UPDATE community_notifications SET read_at = NOW() WHERE event_key = ?',
+          [authorKey],
+        );
+        const [[before]] = await pool.execute(
+          'SELECT * FROM community_notifications WHERE event_key = ?',
+          [authorKey],
+        );
+        const published = await service.decide({
+          id: entry.submission.id,
+          reviewerId: 1,
+          decision: 'approved',
+          expectedVersion: 1,
+          requestId: crypto.randomUUID(),
+        });
+        const [[after]] = await pool.execute(
+          'SELECT * FROM community_notifications WHERE event_key = ?',
+          [authorKey],
+        );
+        assert.equal(after.id, before.id);
+        assert.deepEqual(after.read_at, before.read_at);
+        assert.equal(after.title, '内容已发布');
+        assert.equal(after.link, published.publishedUrl);
+      },
+    );
+    await t.test(
+      'reviewer authors still receive their duty notification on automatic publication',
+      async () => {
+        const entry = await ready(input({ authorId: 1 }));
+        await store.finish(entry.claimed, allow(entry));
+        const [notices] = await pool.execute(
+          'SELECT * FROM community_notifications WHERE recipient_id = 1 AND (event_key LIKE ? OR event_key = ?)',
+          [
+            `moderation-author:${entry.submission.id}:%`,
+            `moderation-auto:${entry.claimed.id}:published`,
+          ],
+        );
+        assert.equal(notices.length, 1);
+        assert.match(notices[0].title, /负责人复核/);
+        assert.equal(notices[0].link, `/moderation?id=${entry.submission.id}`);
       },
     );
     await t.test(
@@ -387,9 +479,28 @@ test(
       'pause and resume invalidates older in-flight generation; stopped and disabled workers also hold',
       async () => {
         const entry = await ready();
+        const queued = await submit();
         await store.setPaused({ actorId: 1, paused: true });
+        assert.equal((await job(queued.id)).state, 'queued');
+        const [waiting] = await pool.execute(
+          'SELECT * FROM community_notifications WHERE event_key = ?',
+          [`moderation-author:${queued.id}:pending`],
+        );
+        assert.equal(waiting.length, 0);
+        await store.setPaused({ actorId: 1, paused: true });
+        assert.equal(
+          (
+            await pool.execute('SELECT id FROM community_notifications WHERE event_key = ?', [
+              `moderation-author:${queued.id}:pending`,
+            ])
+          )[0].length,
+          0,
+        );
         await store.setPaused({ actorId: 1, paused: false });
         assert.equal((await store.finish(entry.claimed, allow(entry))).state, 'review');
+        const resumed = await store.claim();
+        assert.equal(resumed.submissionId, queued.id);
+        await store.finish(resumed, { assessment: null });
         const stopped = await ready();
         assert.equal(
           (await store.finish(stopped.claimed, allow(stopped), { canApply: () => false })).state,
@@ -739,7 +850,7 @@ test(
           'SELECT title FROM community_notifications WHERE event_key = ?',
           [`moderation-auto:${entry.claimed.id}:published`],
         );
-        assert.equal(notices.length, 4);
+        assert.equal(notices.length, 3);
         assert.ok(
           notices.every((item) => item.title === '含图内容已自动发布，请负责人单独复核图片'),
         );
@@ -788,13 +899,13 @@ test(
           ),
           false,
         );
-        assert.equal(
-          (
-            await pool.execute('SELECT id FROM community_notifications WHERE event_key = ?', [
-              `moderation-auto:${entry.claimed.id}:published`,
-            ])
-          )[0].length,
-          4,
+        const [confirmedNotices] = await pool.execute(
+          'SELECT recipient_id FROM community_notifications WHERE event_key = ?',
+          [`moderation-auto:${entry.claimed.id}:published`],
+        );
+        assert.deepEqual(
+          confirmedNotices.map((item) => Number(item.recipient_id)).sort(),
+          [1, 3, 4],
         );
         await store.withdraw({
           ...request,
@@ -1131,9 +1242,15 @@ test(
             'SELECT title, body FROM community_notifications WHERE event_key = ?',
             [`moderation-auto:${entry.claimed.id}:review`],
           );
-          assert.equal(notices.length, 4);
+          assert.equal(notices.length, 3);
           assert.ok(notices.every((item) => item.title.includes('政治内容')));
           assert.doesNotMatch(JSON.stringify(notices), /习近平|借阅/);
+          const [authorNotices] = await pool.execute(
+            'SELECT title, body FROM community_notifications WHERE recipient_id = 2 AND event_key = ?',
+            [`moderation-author:${entry.submission.id}:pending`],
+          );
+          assert.equal(authorNotices.length, 1);
+          assert.doesNotMatch(JSON.stringify(authorNotices), /政治内容|心理关怀|习近平|借阅/);
         } finally {
           await pool.execute('UPDATE users SET full_name = NULL WHERE id = 2');
         }
@@ -1199,7 +1316,7 @@ test(
           'SELECT title, body FROM community_notifications WHERE event_key = ?',
           [`moderation-auto:${entry.claimed.id}:review`],
         );
-        assert.equal(notices.length, 4);
+        assert.equal(notices.length, 3);
         assert.ok(
           notices.every(
             (item) => item.title.includes('政治内容') && item.title.includes('心理关怀'),

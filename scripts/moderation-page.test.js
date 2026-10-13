@@ -270,23 +270,24 @@ test('failed or foreign attachment blocks approval while keeping a reasoned reje
   assert.ok(h.get('detail').textContent.includes('请填写未通过原因'));
 });
 
-test('mine shows all states and provides no review decision controls', async () => {
-  const h = harness({ mine: true });
+test('author detail shows only the selected submission and no review decision controls', async () => {
+  const h = harness({ search: '?mine=1&id=s1' });
   await h.app.ready;
   await h.app.openSubmission('s1');
   assert.equal(h.get('detail').querySelectorAll('button').length, 0);
   assert.equal(h.get('status').hidden, true);
-  assert.ok(h.requests.some(({ url }) => url.endsWith('/moderation/mine?')));
+  assert.equal(h.get('queue').hidden, true);
+  assert.ok(!h.requests.some(({ url }) => /\/(mine|submissions)\?/.test(url)));
 });
 
 test('notification detail URL opens the author view without granting review controls', async () => {
   const h = harness({ search: '?id=s1', reviewer: false });
   await h.app.ready;
   assert.equal(h.app.state.selected.id, 's1');
-  assert.equal(h.get('title').textContent, '我的提交');
+  assert.equal(h.get('title').textContent, '内容处理详情');
   assert.equal(h.get('workspace').hidden, false);
   assert.equal(h.get('detail').querySelectorAll('button').length, 0);
-  assert.ok(h.requests.some(({ url }) => url.endsWith('/moderation/mine?')));
+  assert.ok(!h.requests.some(({ url }) => /\/(mine|submissions)\?/.test(url)));
 });
 
 test('notification detail URL opens the review workspace for an active reviewer', async () => {
@@ -301,6 +302,75 @@ test('notification detail URL opens the review workspace for an active reviewer'
       .filter((button) => button.dataset.decision).length,
     2,
   );
+});
+
+test('old personal-list links offer a discussion route without loading any list or reviewer data', async () => {
+  for (const search of ['?mine=1', '']) {
+    const h = harness({ search, reviewer: false, isAdmin: true });
+    await h.app.ready;
+    assert.equal(h.get('workspace').hidden, true);
+    assert.equal(h.get('reviewers').hidden, true);
+    assert.match(h.get('message').textContent, /从站内通知/);
+    assert.equal(h.get('message').querySelectorAll('a')[0].href, '/discussion');
+    assert.deepEqual(
+      h.requests.map(({ url }) => new URL(url).pathname),
+      ['/api/moderation/session'],
+    );
+  }
+});
+
+test('author detail includes private decision reasons, a contact route, withdrawal and expired evidence', async () => {
+  for (const kind of ['post', 'comment']) {
+    const h = harness({ search: '?mine=1&id=s1', reviewer: false });
+    Object.assign(h.submission, {
+      kind,
+      status: 'rejected',
+      reason: '<b>请移除他人联系方式</b>',
+      publishedId: '123',
+    });
+    await h.app.ready;
+    assert.match(h.get('detail').textContent, /已撤回/);
+    assert.match(h.get('detail').textContent, /<b>请移除他人联系方式<\/b>/);
+    assert.match(h.get('detail').textContent, /申请复核/);
+    assert.ok(
+      h
+        .get('detail')
+        .querySelectorAll('a')
+        .some((link) => link.href === 'mailto:feedback@free-bbs.cn'),
+    );
+    Object.assign(h.submission, {
+      status: 'approved',
+      evidenceExpired: true,
+      reason: '',
+      publishedUrl: '/discussion?post=123',
+    });
+    await h.app.openSubmission('s1');
+    assert.match(h.get('detail').textContent, /相关材料已到期/);
+    assert.ok(
+      h
+        .get('detail')
+        .querySelectorAll('a')
+        .some((link) => link.href === '/discussion?post=123'),
+    );
+    assert.ok(
+      !h.requests.some(({ url }) => /\/mine\?|\/submissions\?|\/automation|\/ai-history/.test(url)),
+    );
+  }
+});
+
+test('forbidden notification details never render another author content', async () => {
+  const h = harness({
+    search: '?id=foreign',
+    reviewer: false,
+    customFetch: (url, options, defaults) => {
+      if (url.endsWith('/foreign')) return response({ message: '无权查看该内容。' }, 403);
+      return defaults(url, options);
+    },
+  });
+  await h.app.ready;
+  assert.match(h.get('detail').textContent, /无权查看/);
+  assert.equal(h.app.state.selected, null);
+  assert.doesNotMatch(h.get('detail').textContent, /attack/);
 });
 
 test('administrator sees a warning when no reviewer is configured', async () => {
@@ -505,7 +575,7 @@ function entryHarness(session, customApi) {
   return { host, user, sync: context.syncModerationEntry };
 }
 
-test('discussion navigation exposes author and reviewer destinations according to the current session', async () => {
+test('discussion navigation exposes the workbench only to active reviewers', async () => {
   for (const role of ['author', 'reviewer', 'admin', 'disabled', 'guest']) {
     const h = entryHarness({
       enabled: role !== 'disabled',
@@ -514,20 +584,16 @@ test('discussion navigation exposes author and reviewer destinations according t
     });
     if (role === 'guest') Object.assign(h.user, { isLoggedIn: false, token: '' });
     await h.sync();
-    if (role === 'disabled' || role === 'guest') {
+    if (role !== 'reviewer') {
       assert.equal(h.host.hidden, true, role);
       assert.equal(h.host.children.length, 0, role);
     } else {
       assert.equal(h.host.hidden, false, role);
-      assert.equal(h.host.children[0].textContent, '我的提交');
-      assert.equal(h.host.children[0].href, '/moderation?mine=1');
-      assert.equal(h.host.children.length, role === 'reviewer' ? 2 : 1);
-      if (role === 'reviewer') {
-        assert.equal(h.host.children[1].textContent, '审核工作台');
-        assert.equal(h.host.children[1].href, '/moderation');
-      }
+      assert.equal(h.host.children[0].textContent, '审核工作台');
+      assert.equal(h.host.children[0].href, '/moderation');
+      assert.equal(h.host.children.length, 1);
       await h.sync();
-      assert.equal(h.host.children.length, role === 'reviewer' ? 2 : 1, 'no duplicate links');
+      assert.equal(h.host.children.length, 1, 'no duplicate links');
     }
   }
 });
@@ -553,7 +619,7 @@ test('a temporary session lookup failure can recover on the next navigation sync
   assert.equal(h.host.hidden, true);
   await h.sync();
   assert.equal(h.host.hidden, false);
-  assert.equal(h.host.children.length, 2);
+  assert.equal(h.host.children.length, 1);
 });
 
 function submissionHarness() {
@@ -627,7 +693,8 @@ function submissionHarness() {
       }
     },
     window: {
-      location: { href: '/publish' },
+      location: { href: '/publish', origin: 'http://localhost:3000' },
+      setTimeout() {},
       FreeBbsModerationNotice: { confirm: async () => undefined },
     },
   };
@@ -675,6 +742,80 @@ test('pending post stays on composer and emits submitted rather than published',
   assert.equal(h.context.window.location.href, '/publish');
   assert.deepEqual(h.events, ['discussion:submitted']);
   assert.equal(h.message.children.at(-1).href, '/moderation?mine=1&id=s1');
+});
+
+test('fast automatic publication updates composer feedback without needing an author notice', async () => {
+  const h = submissionHarness();
+  h.context.window.setTimeout = (resolve) => resolve();
+  let checks = 0;
+  h.context.callApi = async () => {
+    checks += 1;
+    return {
+      submission: {
+        status: checks === 1 ? 'pending' : 'approved',
+        publishedUrl: '/discussion?post=p1#comment-c1',
+      },
+    };
+  };
+  h.message.dataset.moderationSubmissionId = 's1';
+  await h.context.observeModerationSubmission('s1', h.message);
+  assert.equal(checks, 2);
+  assert.match(h.message.textContent, /发布成功/);
+  assert.equal(h.message.children.at(-1).href, '/discussion?post=p1#comment-c1');
+  assert.deepEqual(h.events, []);
+});
+
+test('composer refresh is bounded and lookup failures do not claim publication or human review', async () => {
+  for (const failed of [false, true]) {
+    const h = submissionHarness();
+    h.context.window.setTimeout = (resolve) => resolve();
+    let checks = 0;
+    h.context.callApi = async () => {
+      checks += 1;
+      if (failed) throw new Error('offline');
+      return { submission: { status: 'pending' } };
+    };
+    h.message.dataset.moderationSubmissionId = 's1';
+    await h.context.observeModerationSubmission('s1', h.message);
+    assert.equal(checks, failed ? 1 : 10);
+    assert.match(h.message.textContent, /如需进一步处理会通过站内通知告知/);
+    assert.doesNotMatch(h.message.textContent, /发布成功|正在等待人工|我的提交/);
+  }
+});
+
+test('late composer status cannot replace feedback after account change, navigation or another submission', async () => {
+  for (const change of ['account', 'detached', 'submission']) {
+    const h = submissionHarness();
+    h.context.window.setTimeout = (resolve) => resolve();
+    const wait = deferred();
+    h.context.callApi = () => wait.promise;
+    h.message.dataset.moderationSubmissionId = 's1';
+    h.message.textContent = '新内容';
+    const polling = h.context.observeModerationSubmission('s1', h.message);
+    await flush();
+    if (change === 'account') h.context.userState.token = 'another-account';
+    if (change === 'detached') h.message.isConnected = false;
+    if (change === 'submission') h.message.dataset.moderationSubmissionId = 's2';
+    wait.resolve({ submission: { status: 'approved', publishedUrl: '/discussion?post=old' } });
+    await polling;
+    assert.equal(h.message.textContent, '新内容');
+  }
+});
+
+test('composer never links to an external or unexpected publication destination', async () => {
+  for (const publishedUrl of [
+    'https://evil.invalid/discussion',
+    '//evil.invalid/discussion',
+    '/admin/users',
+    '/\\evil.invalid/discussion',
+  ]) {
+    const h = submissionHarness();
+    h.context.window.setTimeout = (resolve) => resolve();
+    h.context.callApi = async () => ({ submission: { status: 'approved', publishedUrl } });
+    h.message.dataset.moderationSubmissionId = 's1';
+    await h.context.observeModerationSubmission('s1', h.message);
+    assert.equal(h.message.children.at(-1).href, '/moderation?mine=1&id=s1');
+  }
 });
 
 test('submission retries reuse id for identical draft, rotate on edit and clear on success', async () => {

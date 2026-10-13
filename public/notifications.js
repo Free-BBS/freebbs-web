@@ -262,7 +262,9 @@
       if (version !== state.sessionVersion) return;
       const changed = payload.unreadCount !== state.unreadCount;
       updateCount(payload.unreadCount);
-      if (changed && !panel.hidden) await loadInbox();
+      // A waiting notice can become published without adding an unread reminder.
+      // Refresh an open inbox even when its unread count stays unchanged.
+      if (!panel.hidden) await loadInbox();
       // Recover an award whose success response was lost, or awarded in another tab.
       if (changed && payload.unreadCount > 0) {
         const inbox = await api('/notifications');

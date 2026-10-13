@@ -4,6 +4,7 @@ const path = require('node:path');
 const { canReadPost } = require('./discussion-visibility');
 const { withSubmissionNotice } = require('./moderation-production');
 const { buildPrivacyPreview, normalizePrivacyText } = require('./moderation-privacy');
+const { sendModerationNotice, notifyAuthor } = require('./moderation-notifications');
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const REQUEST_ID = /^[A-Za-z0-9_-]{8,64}$/;
@@ -147,6 +148,8 @@ function summary(row) {
     kind: row.kind,
     title: expired ? '审核内容已到期' : payload.title || '评论',
     status: expired && row.status === 'pending' ? 'expired' : row.status,
+    evidenceExpired: expired,
+    withdrawn: row.status === 'rejected' && row.published_id != null,
     version: Number(row.version),
     createdAt: row.created_at,
     expiresAt: row.expires_at,
@@ -237,28 +240,16 @@ function createDiscussionModeration({
     if (!rows.length) throw fail('需要管理员权限。', 403);
   }
 
-  async function notify(connection, recipients, { id, status }) {
-    // These notifications intentionally contain no title, excerpt, reason or image URL.
-    const data = {
+  async function notifyReviewers(connection, recipients, id) {
+    return sendModerationNotice(connection, notifications, {
       submissionId: id,
-      status,
+      status: 'pending',
       recipients,
-      title: status === 'pending' ? '有新的讨论内容待审核' : '讨论内容审核状态已更新',
-      body:
-        status === 'pending' ? '请打开审核工作台查看并处理。' : '请在我的送审记录中查看处理结果。',
+      title: '有新的讨论内容待审核',
+      body: '请打开审核工作台查看并处理。',
       link: `/moderation?id=${encodeURIComponent(id)}`,
-      eventKey: `moderation:${id}:${status}`,
-    };
-    if (notifications?.notifyModeration) return notifications.notifyModeration(data, connection);
-    for (const recipient of [...new Set(recipients.map(positiveId))].sort((a, b) => a - b)) {
-      await connection.execute(
-        `INSERT INTO community_notifications
-         (recipient_id, actor_id, kind, title, body, link, event_key)
-         VALUES (?, NULL, 'moderation', ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
-        [recipient, data.title, data.body, data.link, data.eventKey],
-      );
-    }
+      eventKey: `moderation:${id}:pending`,
+    });
   }
 
   async function readRow(executor, id, lock = false) {
@@ -327,16 +318,28 @@ function createDiscussionModeration({
     }
     // Enqueue in the submission transaction so a crash cannot lose a new job.
     // Existing submissions and idempotent replays are never backfilled.
-    if (automation) await automation.enqueue(connection, privateSubmission(row));
+    const queued = automation && (await automation.enqueue(connection, privateSubmission(row)));
     const [reviewers] = await connection.execute(
       'SELECT user_id FROM moderation_reviewers WHERE active = 1 ORDER BY user_id',
     );
-    await notify(
-      connection,
-      reviewers.map((reviewer) => reviewer.user_id),
-      { id, status: 'pending' },
-    );
-    return { ...privateSubmission(row), replayed: false, reviewerCount: reviewers.length };
+    if (!queued) {
+      await notifyReviewers(
+        connection,
+        reviewers.map((reviewer) => reviewer.user_id),
+        id,
+      );
+      await notifyAuthor(connection, notifications, {
+        id,
+        authorId: row.author_id,
+        status: 'pending',
+      });
+    }
+    return {
+      ...privateSubmission(row),
+      replayed: false,
+      reviewerCount: reviewers.length,
+      processing: queued ? 'automatic' : 'review',
+    };
   }
 
   async function decide({
@@ -420,9 +423,11 @@ function createDiscussionModeration({
           [published.publishedId, id],
         );
       }
-      await notify(connection, row.author_id == null ? [] : [row.author_id], {
+      await notifyAuthor(connection, notifications, {
         id,
+        authorId: row.author_id,
         status: decision,
+        publishedUrl: published.publishedUrl,
       });
       return { ...privateSubmission(await readRow(connection, id)), replayed: false };
     }).catch((error) => {
@@ -826,7 +831,11 @@ function createDiscussionModeration({
           [row.id],
         );
         if (wasPending && row.author_id != null)
-          await notify(connection, [row.author_id], { id: row.id, status: 'expired' });
+          await notifyAuthor(connection, notifications, {
+            id: row.id,
+            authorId: row.author_id,
+            status: 'expired',
+          });
         return wasPending ? 'expired' : 'purged';
       });
       if (changed) purged += 1;

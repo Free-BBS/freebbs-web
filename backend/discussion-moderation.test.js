@@ -116,6 +116,7 @@ function decisionHarness(extra = {}) {
       }
       if (
         sql.startsWith('UPDATE moderation_attachments') ||
+        sql.startsWith('UPDATE community_notifications') ||
         sql.startsWith('INSERT INTO community_notifications')
       )
         return [{ affectedRows: 1 }];
@@ -203,8 +204,14 @@ test('approval is idempotent, keeps notification body generic and isolates after
   assert.equal((await h.service.decide(input)).replayed, true);
   assert.equal(h.published(), 1);
   assert.match(h.calls[0].sql, /FOR SHARE/);
-  const notice = h.calls.find((call) => call.sql.startsWith('INSERT INTO community_notifications'));
+  const notice = h.calls.find((call) => call.sql.startsWith('UPDATE community_notifications'));
   assert.ok(notice);
+  assert.equal(
+    h.calls.some((call) => call.sql.startsWith('INSERT INTO community_notifications')),
+    false,
+  );
+  assert.equal(notice.parameters[2], '/discussion?post=p_test');
+  assert.equal(notice.parameters[4], `moderation-author:${h.row.id}:pending`);
   assert.doesNotMatch(JSON.stringify(notice.parameters), /普通正文|待审核帖子/);
   await assert.rejects(h.service.decide({ ...input, decision: 'rejected', reason: '调整决定' }), {
     status: 409,

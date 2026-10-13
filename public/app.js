@@ -3286,13 +3286,75 @@ function completeModerationSubmission(requestId) {
 function showModerationSubmitted(payload, target = discussionComposeMessage) {
   if (payload.moderation?.status !== 'pending') return false;
   if (target) {
-    target.textContent = payload.message || '已提交审核，通过后会出现在讨论区。';
+    target.dataset.moderationSubmissionId = payload.moderation.id;
+    target.textContent = '内容已提交，正在处理，请稍候。';
     const link = document.createElement('a');
     link.href = `/moderation?mine=1&id=${encodeURIComponent(payload.moderation.id)}`;
-    link.textContent = '查看我的提交';
+    link.textContent = '查看处理详情';
     target.append(document.createTextNode(' '), link);
+    observeModerationSubmission(payload.moderation.id, target);
   }
   return true;
+}
+
+async function observeModerationSubmission(id, target) {
+  const token = userState.token;
+  const current = () =>
+    userState.isLoggedIn &&
+    userState.token === token &&
+    target.isConnected !== false &&
+    target.dataset.moderationSubmissionId === id;
+  const detailUrl = `/moderation?mine=1&id=${encodeURIComponent(id)}`;
+  const display = (text, href = detailUrl, caption = '查看处理详情') => {
+    target.textContent = text;
+    const link = document.createElement('a');
+    link.href = href;
+    link.textContent = caption;
+    target.append(document.createTextNode(' '), link);
+  };
+  // A short bounded refresh lets fast publication appear in the composer. Longer
+  // running work continues on the server and reaches the author through notices.
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 1000);
+    });
+    if (!current()) return;
+    try {
+      const result = await callApi(`/moderation/submissions/${encodeURIComponent(id)}`);
+      if (!current()) return;
+      if (result.submission?.status === 'approved') {
+        const published = result.submission.publishedUrl;
+        let safeLink = '';
+        if (
+          typeof published === 'string' &&
+          published.startsWith('/') &&
+          !published.startsWith('//')
+        ) {
+          const parsed = new URL(published, window.location.origin);
+          if (parsed.origin === window.location.origin && parsed.pathname === '/discussion')
+            safeLink = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+        }
+        display('发布成功。', safeLink || detailUrl, safeLink ? '查看已发布内容' : '查看处理详情');
+        return;
+      }
+      if (result.submission?.status === 'rejected') {
+        display(
+          result.submission.publishedId
+            ? '内容已撤回，请查看处理说明。'
+            : '内容未予发布，请查看处理说明。',
+        );
+        return;
+      }
+      if (result.submission?.status === 'expired' || result.submission?.evidenceExpired) {
+        display('相关材料已到期，请查看处理详情。');
+        return;
+      }
+    } catch {
+      // A status lookup failure never changes the outcome of the submission.
+      break;
+    }
+  }
+  if (current()) display('内容正在处理，如需进一步处理会通过站内通知告知。');
 }
 
 async function syncModerationEntry() {
@@ -3310,13 +3372,11 @@ async function syncModerationEntry() {
       moderationEntryToken !== token ||
       userState.token !== token ||
       !userState.isLoggedIn ||
-      !session.enabled
+      !session.enabled ||
+      session.reviewer !== true
     )
       return;
-    for (const [href, label] of [
-      ['/moderation?mine=1', '我的提交'],
-      ...(session.reviewer ? [['/moderation', '审核工作台']] : []),
-    ]) {
+    for (const [href, label] of [['/moderation', '审核工作台']]) {
       const link = document.createElement('a');
       link.href = href;
       link.textContent = label;
@@ -10358,6 +10418,7 @@ async function handleDiscussionCommentSubmit(event) {
   rememberDiscussionCommentDraft(postId, parentCommentId, input?.value || '');
 
   if (message) {
+    message.dataset.moderationSubmissionId = '';
     message.textContent = parentCommentId ? '正在发布回复...' : '正在发布评论...';
   }
   form.setAttribute('aria-busy', 'true');
@@ -10490,6 +10551,7 @@ async function handleDiscussionComposeSubmit(event) {
     return;
   }
 
+  if (discussionComposeMessage) discussionComposeMessage.dataset.moderationSubmissionId = '';
   setDiscussionMessage('正在发布帖子...');
   const submittedUid = userState.uid;
   const submittedToken = userState.token;

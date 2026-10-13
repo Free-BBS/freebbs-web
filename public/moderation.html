@@ -30,7 +30,7 @@
           审核相关数据保存一个月；正常发布的帖子和评论不在此清理范围内。
         </p>
       </header>
-      <h1 id="moderation-mine-title" hidden>我的提交</h1>
+      <h1 id="moderation-mine-title" hidden>内容处理详情</h1>
       <p id="moderation-message" role="status" aria-live="polite"></p>
       <section
         id="moderation-automation"
@@ -52,13 +52,10 @@
         <button type="button" id="moderation-automation-toggle" hidden>暂停自动审核</button>
         <p id="moderation-automation-message" role="status" aria-live="polite"></p>
       </section>
-      <nav class="moderation-tabs" aria-label="审核范围" hidden id="moderation-tabs">
-        <a href="/moderation?mine=1" id="moderation-mine-link">我的提交</a>
-        <a href="/moderation" id="moderation-review-link" hidden>审核工作台</a>
-      </nav>
+      <a href="/moderation" id="moderation-review-link" hidden>返回审核工作台</a>
       <section id="moderation-workspace" hidden>
-        <div class="moderation-layout">
-          <aside class="moderation-queue" aria-label="审核队列">
+        <div class="moderation-layout" id="moderation-layout">
+          <aside class="moderation-queue" id="moderation-queue" aria-label="审核队列">
             <div class="moderation-section-heading">
               <span class="moderation-eyebrow" id="moderation-queue-eyebrow">待处理内容</span>
               <h2>提交队列</h2>

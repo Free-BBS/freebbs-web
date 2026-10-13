@@ -37,7 +37,9 @@ test(
     );
     await pool.query(`CREATE TABLE community_notifications (id BIGINT PRIMARY KEY AUTO_INCREMENT,
     recipient_id BIGINT NOT NULL, actor_id BIGINT NULL, kind VARCHAR(24), title VARCHAR(160),
-    body TEXT, link VARCHAR(500), event_key VARCHAR(190), UNIQUE KEY uq_event (event_key,recipient_id))`);
+    body TEXT, link VARCHAR(500), event_key VARCHAR(190), read_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_event (event_key,recipient_id))`);
     await pool.query(
       `CREATE TABLE discussion_boards (id BIGINT PRIMARY KEY, slug VARCHAR(64), is_active TINYINT DEFAULT 1)`,
     );
@@ -135,7 +137,7 @@ test(
         assert.equal(results.filter((result) => !result.replayed).length, 1);
         assert.equal(await count('moderation_submissions'), 1);
         assert.equal(await count('discussion_posts'), 0);
-        assert.equal(await count('community_notifications'), 2);
+        assert.equal(await count('community_notifications'), 3);
         const [notices] = await pool.query('SELECT body,title FROM community_notifications');
         assert.doesNotMatch(JSON.stringify(notices), /保密待审标题|测试同学/);
         await assert.rejects(
@@ -216,16 +218,17 @@ test(
         const failing = createDiscussionModeration({
           pool,
           publishSubmission,
-          notifications: {
-            async notifyModeration(data, db) {
-              await db.execute(
-                `INSERT INTO community_notifications(recipient_id,kind,title,body,link,event_key)
-          VALUES (2,'moderation','状态更新','请查看记录','/moderation',?)`,
-                [data.eventKey],
-              );
-              throw new Error('injected notification failure');
-            },
-          },
+          withDatabaseTransaction: (callback) =>
+            transact((db) =>
+              callback({
+                execute: async (sql, args) => {
+                  const result = await db.execute(sql, args);
+                  if (sql.startsWith('UPDATE community_notifications'))
+                    throw new Error('injected notification failure');
+                  return result;
+                },
+              }),
+            ),
         });
         await assert.rejects(failing.decide(decision(submission)), /injected notification failure/);
         assert.deepEqual(
@@ -233,6 +236,83 @@ test(
           before,
         );
         assert.equal((await service.detail({ id: submission.id, userId: 2 })).status, 'pending');
+      },
+    );
+
+    await t.test(
+      'human approval updates the existing author notice without another unread reminder',
+      async () => {
+        for (const alreadyRead of [false, true]) {
+          const submission = await submit(input());
+          const key = `moderation-author:${submission.id}:pending`;
+          if (alreadyRead)
+            await pool.execute(
+              'UPDATE community_notifications SET read_at = NOW() WHERE event_key = ?',
+              [key],
+            );
+          const [[before]] = await pool.execute(
+            'SELECT * FROM community_notifications WHERE event_key = ?',
+            [key],
+          );
+          const result = await service.decide(decision(submission));
+          const [[after]] = await pool.execute(
+            'SELECT * FROM community_notifications WHERE event_key = ?',
+            [key],
+          );
+          assert.equal(after.id, before.id);
+          assert.deepEqual(after.read_at, before.read_at);
+          assert.deepEqual(after.created_at, before.created_at);
+          assert.equal(after.title, '内容已发布');
+          assert.equal(after.link, result.publishedUrl);
+          assert.equal(
+            (
+              await pool.execute(
+                'SELECT id FROM community_notifications WHERE recipient_id = 2 AND event_key LIKE ?',
+                [`moderation-author:${submission.id}:%`],
+              )
+            )[0].length,
+            1,
+          );
+        }
+        const missing = await submit(input());
+        await pool.execute('DELETE FROM community_notifications WHERE event_key = ?', [
+          `moderation-author:${missing.id}:pending`,
+        ]);
+        await service.decide(decision(missing));
+        assert.equal(
+          (
+            await pool.execute('SELECT id FROM community_notifications WHERE event_key LIKE ?', [
+              `moderation-author:${missing.id}:%`,
+            ])
+          )[0].length,
+          0,
+        );
+      },
+    );
+
+    await t.test(
+      'an author who is also a reviewer keeps separate author and reviewer notices',
+      async () => {
+        const submission = await submit(input({ authorId: 1 }));
+        const keys = [
+          `moderation:${submission.id}:pending`,
+          `moderation-author:${submission.id}:pending`,
+        ];
+        const [before] = await pool.execute(
+          'SELECT * FROM community_notifications WHERE recipient_id = 1 AND event_key IN (?, ?)',
+          keys,
+        );
+        assert.equal(before.length, 2);
+        await service.decide(decision(submission));
+        const [after] = await pool.execute(
+          'SELECT * FROM community_notifications WHERE recipient_id = 1 AND event_key IN (?, ?)',
+          keys,
+        );
+        assert.equal(
+          after.find((notice) => notice.event_key === keys[0]).title,
+          '有新的讨论内容待审核',
+        );
+        assert.equal(after.find((notice) => notice.event_key === keys[1]).title, '内容已发布');
       },
     );
 
@@ -586,8 +666,9 @@ test(
             admin.id,
           );
           assert.equal(
-            notices.find((notice) => notice.event_key === `moderation:${submission.id}:approved`)
-              ?.recipient_id,
+            notices.find(
+              (notice) => notice.event_key === `moderation-author:${submission.id}:pending`,
+            )?.recipient_id,
             authorId,
           );
         }
