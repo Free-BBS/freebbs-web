@@ -44,6 +44,16 @@ export function isBusinessAdmin(
   return isDevelopmentBusinessAdmin(user);
 }
 
+export function canViewSystemSettings(user: PresentationUser | null | undefined): boolean {
+  return Boolean(
+    isBusinessAdmin(user) &&
+    (!user?.previewing ||
+      (user.developmentAccess === 'lead' &&
+        user.viewer?.canManageDevelopment === true &&
+        user.viewer.canPreviewDevelopment === true)),
+  );
+}
+
 export function hasPresentationPermission(user: PresentationUser, permission: string): boolean {
   if (permission.startsWith('admin.')) return isSuperAdmin(user) && !user.previewing;
   if (isBusinessAdmin(user)) return true;
